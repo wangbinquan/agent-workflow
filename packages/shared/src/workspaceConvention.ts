@@ -8,6 +8,8 @@ export const PLATFORM_WORKSPACE_SUBDIRS = {
   inputs: 'inputs',
   runs: 'runs',
   fusion: 'fusion',
+  // RFC-310 T32 — pipeline evidence bundles（自建门禁大日志的只读物化区）。
+  pipeline: 'pipeline',
 } as const
 
 export type PlatformWorkspaceKind = keyof typeof PLATFORM_WORKSPACE_SUBDIRS
@@ -16,6 +18,23 @@ export const PLATFORM_INPUTS_DIR = `${PLATFORM_WORKSPACE_DIR}/${PLATFORM_WORKSPA
 export const PLATFORM_RUNS_DIR = `${PLATFORM_WORKSPACE_DIR}/${PLATFORM_WORKSPACE_SUBDIRS.runs}`
 export const PLATFORM_FUSION_DIR = `${PLATFORM_WORKSPACE_DIR}/${PLATFORM_WORKSPACE_SUBDIRS.fusion}`
 export const PLATFORM_FUSION_MANIFEST = `${PLATFORM_FUSION_DIR}/result.json`
+export const PLATFORM_PIPELINE_DIR = `${PLATFORM_WORKSPACE_DIR}/${PLATFORM_WORKSPACE_SUBDIRS.pipeline}`
+/** RFC-310 — requirement bundles 固定落 `inputs/requirements/<bundleId>`。 */
+export const PLATFORM_REQUIREMENTS_DIR = `${PLATFORM_INPUTS_DIR}/requirements`
+
+/** requirement bundle 根：`.agent-workflow/inputs/requirements/<bundleId>`。 */
+export function requirementBundlePath(bundleId: string, ...segments: readonly string[]): string {
+  const base = `${PLATFORM_REQUIREMENTS_DIR}/${platformWorkspaceSegment(bundleId)}`
+  if (segments.length === 0) return base
+  return `${base}/${segments.map(platformWorkspaceSegment).join('/')}`
+}
+
+/** pipeline evidence 根：`.agent-workflow/pipeline/<bundleId>`。 */
+export function pipelineBundlePath(bundleId: string, ...segments: readonly string[]): string {
+  const base = `${PLATFORM_PIPELINE_DIR}/${platformWorkspaceSegment(bundleId)}`
+  if (segments.length === 0) return base
+  return `${base}/${segments.map(platformWorkspaceSegment).join('/')}`
+}
 
 /** One safe path segment; callers may not smuggle a second path or traversal. */
 export function platformWorkspaceSegment(raw: string): string {

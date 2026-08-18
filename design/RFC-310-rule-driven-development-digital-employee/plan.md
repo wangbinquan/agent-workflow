@@ -95,21 +95,23 @@ T18 的规则语义 fixtures，已交付）；1B = T13–T20 配置资源 CRUD/A
 
 | 编号 | 任务                                                                                                                    | 依赖            | 状态 |
 | ---- | ----------------------------------------------------------------------------------------------------------------------- | --------------- | ---- |
-| T21  | schema expand：Mission/source/upload-plan/MR claim/wake/fact/decision/action/attempt/effect/feedback/bundle/link tables | T12             | ⏳   |
-| T22  | Mission aggregate + terminal states + orthogonal active/tracking-only mode + exhaustive transitions                     | T21             | ⏳   |
-| T23  | durable mission lease/epoch、OCC、single writable ActionRun、active MR unique claim                                     | T22             | ⏳   |
-| T24  | admission：submission+delivery、idempotency、optional assignment、explicit/rule selection pin                           | T17,T23         | ⏳   |
-| T24a | repository.inspect facts → employee selection receipt → full execution policy/closure pin                               | T24             | ⏳   |
-| T25  | wake dedupe + durable resumeAt/wake conditions/attempt ordinal；restart 不重置 backoff                                  | T23             | ⏳   |
-| T26  | MissionReconciler：terminal → collect → integrity/freshness → guards → policy → intent                                  | T11,T22,T25     | ⏳   |
-| T27  | Decision/Action/effect intent + audit/outbox 同事务，外部执行不进 tx                                                    | T26             | ⏳   |
-| T28  | closed failure taxonomy + effect idempotency/reconcile + cancel/handoff transition fence                                | T27             | ⏳   |
-| T29  | readiness truth table：automation/machine/human/host mergeable 与 regression                                            | T22,T26         | ⏳   |
-| T30  | daemon recovery：悬挂 lease/action/attempt/effect 分类收束                                                              | T23,T28         | ⏳   |
-| T31  | Mission list/detail/trace read models + revision-only WS invalidation                                                   | T24-T30         | ⏳   |
-| T31a | Mission configuration-upgrade preview/apply：settle action、原子 repin closure、bump epoch 与失效 receipts              | T19,T24,T28,T30 | ⏳   |
+| T21  | schema expand：Mission/source/upload-plan/MR claim/wake/fact/decision/action/attempt/effect/feedback/bundle/link tables | T12             | ✅   |
+| T22  | Mission aggregate + terminal states + orthogonal active/tracking-only mode + exhaustive transitions                     | T21             | ✅   |
+| T23  | durable mission lease/epoch、OCC、single writable ActionRun、active MR unique claim                                     | T22             | ✅   |
+| T24  | admission：submission+delivery、idempotency、optional assignment、explicit/rule selection pin                           | T17,T23         | ✅   |
+| T24a | repository.inspect facts → employee selection receipt → full execution policy/closure pin                               | T24             | ✅   |
+| T25  | wake dedupe + durable resumeAt/wake conditions/attempt ordinal；restart 不重置 backoff                                  | T23             | ✅   |
+| T26  | MissionReconciler：terminal → collect → integrity/freshness → guards → policy → intent                                  | T11,T22,T25     | ✅   |
+| T27  | Decision/Action/effect intent + audit/outbox 同事务，外部执行不进 tx                                                    | T26             | ✅   |
+| T28  | closed failure taxonomy + effect idempotency/reconcile + cancel/handoff transition fence                                | T27             | ✅   |
+| T29  | readiness truth table：automation/machine/human/host mergeable 与 regression                                            | T22,T26         | ✅   |
+| T30  | daemon recovery：悬挂 lease/action/attempt/effect 分类收束                                                              | T23,T28         | ✅   |
+| T31  | Mission list/detail/trace read models + revision-only WS invalidation                                                   | T24-T30         | ✅   |
+| T31a | Mission configuration-upgrade preview/apply：settle action、原子 repin closure、bump epoch 与失效 receipts              | T19,T24,T28,T30 | ✅   |
 
 并发测试至少同时争抢同一 Mission、同一 MR、同一 effect；内存 Map 不能作为唯一互斥证据。
+
+交付注记：T31a 的 preview/apply command 已落（HTTP 面与 `development-missions:upgrade` 点随 PR-8 挂载）；permission 先入 launch/read/interact/cancel/retry 五点（RFC-247 反向自检要求点必须被 route 引用，其余四点随对应路由批次）。
 
 ## 5. PR-3：RequirementBundle 与仓库上传 seed
 

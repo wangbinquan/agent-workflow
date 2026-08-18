@@ -1,0 +1,421 @@
+// RFC-310 PR-2 T24/T24a —— admission 链（真实配置 store fixture）。
+//
+// 锁：①四入口（direct 正文-only/文件-only/正文+文件、external）+ HTTP 幂等
+// 重放同 mission；②显式员工无 assignment 可过、无员工 blocked、占位 facts
+// （unknown）下规则选择老实 blocked(selection-indeterminate)；③external 的
+// source 解析：requested key > assignment default > 员工唯一 default；无候选
+// blocked、多候选 awaiting-information → SelectMissionRequirementSource 收敛
+// →重复选幂等、越候选集拒绝；④cancel 无外部 effect 直达 canceled + epoch
+// bump；retry blocked→working；⑤direct 上传目标路径重复/越界在 schema 层拒。
+
+import { describe, expect, test } from 'bun:test'
+import { resolve } from 'node:path'
+
+import { createInMemoryDb } from '../src/db/client'
+import type { DbClient } from '../src/db/client'
+import {
+  createActionTemplate,
+  publishActionTemplate,
+} from '../src/modules/development-automation/application/commands/actionTemplateCommands'
+import { createSqliteActionTemplateStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import {
+  createAutomationPolicy,
+  publishAutomationPolicy,
+  createDigitalEmployee,
+  publishDigitalEmployee,
+  getDigitalEmployeeRevision,
+  getAutomationPolicyRevision,
+} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import {
+  resolveAdmissionAssignment,
+  upsertAssignment,
+} from '../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
+import { createEmployeePublishLookup } from '../src/modules/development-automation/infrastructure/publishLookup'
+import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import {
+  createDevelopmentAdapter,
+  publishDevelopmentAdapter,
+} from '../src/modules/integration/application/developmentAdapterCommands'
+import { createSqliteDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
+import type { AdmissionLookup } from '../src/modules/development-automation/application/ports/admissionLookup'
+import {
+  cancelMission,
+  launchMission,
+  retryBlockedMission,
+  selectMissionRequirementSource,
+  type LaunchDeps,
+} from '../src/modules/development-automation/application/commands/launchMission'
+
+const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+
+interface Fixture {
+  db: DbClient
+  deps: LaunchDeps
+  employees: { single: string; multi: string; none: string }
+  policyId: string
+}
+
+function lookupOf(db: DbClient): AdmissionLookup {
+  return {
+    async resolveAssignment(scope) {
+      const row = await resolveAdmissionAssignment(db, {
+        repositoryId: scope.repositoryId,
+        repositoryGroupId: scope.repositoryGroupId,
+      })
+      if (row === null) return null
+      return {
+        scopeKind: row.scopeKind,
+        employeeId: row.employeeId,
+        employeeRevision: row.employeeRevision,
+        selectionPolicyId: row.selectionPolicyId,
+        selectionPolicyRevision: row.selectionPolicyRevision,
+        executionPolicyId: row.executionPolicyId,
+        executionPolicyRevision: row.executionPolicyRevision,
+        defaultRequirementSourceKey: row.defaultRequirementSourceKey,
+      }
+    },
+    async getEmployeeRevisionContent(id, revision) {
+      const row = await getDigitalEmployeeRevision(db, id, revision)
+      return row === null ? null : JSON.parse(row.contentJson)
+    },
+    async getPolicyRevisionContent(id, revision) {
+      const row = await getAutomationPolicyRevision(db, id, revision)
+      return row === null ? null : JSON.parse(row.contentJson)
+    },
+  }
+}
+
+async function buildFixture(): Promise<Fixture> {
+  const db = createInMemoryDb(MIGRATIONS)
+  const now = () => Date.now()
+  const templates = createSqliteActionTemplateStore(db)
+  const adapters = createSqliteDevelopmentAdapterStore(db)
+
+  const template = createActionTemplate(
+    { store: templates, now },
+    {
+      actorUserId: 'admin',
+      name: 'impl-java',
+      capabilityId: 'change.implement',
+      draft: {
+        schemaVersion: 1,
+        capabilityId: 'change.implement',
+        capabilityContractVersion: 1,
+        labels: [],
+        compatibility: [],
+        executor: { kind: 'agent', agentRef: 'agent-1@1' },
+        runtimeProfileRef: 'rt',
+        promptSupplement: 'x',
+        skillRefs: [],
+        mcpRefs: [],
+        readOnlyResourceRefs: [],
+        contextProfileRef: null,
+        writablePathPolicyRef: null,
+        additionalProtectedPathClasses: [],
+        verificationProfileRef: 'vp',
+        retryDefaults: { sameSession: 2, freshSession: 1 },
+      },
+    },
+  )
+  publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
+
+  const policy = await createAutomationPolicy(db, {
+    name: 'pol',
+    ownerUserId: 'admin',
+    draft: defaultAutomationPolicyContent(),
+  })
+  await publishAutomationPolicy(db, { id: policy.id, publishedBy: 'admin' })
+
+  const adapterActor = { userId: 'admin', actorHasScriptsAuthor: true }
+  const mkAdapter = (name: string) => {
+    const a = createDevelopmentAdapter(adapters, adapterActor, {
+      name,
+      content: {
+        schemaVersion: 1,
+        purpose: 'requirement-source',
+        operations: ['acquire'],
+        contractVersion: 1,
+        executableRef: `adapters/${name}.ts`,
+        parameterSchemaRef: null,
+        connectionRef: null,
+        secretProjection: [],
+        outputBudget: { maxFiles: 8, maxFileBytes: 1_000_000, maxTotalBytes: 4_000_000 },
+        timeoutMs: 30_000,
+      },
+      now: now(),
+    })
+    publishDevelopmentAdapter(adapters, adapterActor, { id: a.id, now: now() })
+    return a.id
+  }
+  const adapterA = mkAdapter('sys-a')
+  const adapterB = mkAdapter('sys-b')
+
+  const lookup = createEmployeePublishLookup(db)
+  const mkEmployee = async (
+    name: string,
+    sources: { sourceKey: string; adapterId: string; isDefault: boolean }[],
+  ) => {
+    const employee = await createDigitalEmployee(db, {
+      name,
+      ownerUserId: 'admin',
+      draft: {
+        schemaVersion: 1,
+        description: name,
+        supportedRepositoryFacts: [],
+        capabilityRoutes: [
+          {
+            capabilityId: 'change.implement',
+            rules: [
+              {
+                ruleId: 'any-java',
+                when: [
+                  { kind: 'set-contains-any', fact: 'repository.languages', values: ['java'] },
+                ],
+                templateRef: { id: template.id, revision: 1 },
+              },
+            ],
+            fallbackTemplateRef: { id: template.id, revision: 1 },
+          },
+        ],
+        requirementSources: sources.map((s) => ({
+          sourceKey: s.sourceKey,
+          adapterRef: { id: s.adapterId, revision: 1 },
+          isDefault: s.isDefault,
+        })),
+        pipelineProviders: [],
+        defaultPolicyRef: { id: policy.id, revision: 1 },
+      },
+    })
+    await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin', lookup })
+    return employee.id
+  }
+
+  const single = await mkEmployee('emp-single', [
+    { sourceKey: 'inhouse', adapterId: adapterA, isDefault: true },
+  ])
+  const multi = await mkEmployee('emp-multi', [
+    { sourceKey: 'sys-a', adapterId: adapterA, isDefault: false },
+    { sourceKey: 'sys-b', adapterId: adapterB, isDefault: false },
+  ])
+  const none = await mkEmployee('emp-none', [])
+
+  const store = createSqliteMissionStore(db)
+  return {
+    db,
+    deps: { store, lookup: lookupOf(db), now },
+    employees: { single, multi, none },
+    policyId: policy.id,
+  }
+}
+
+function directInput(
+  idempotencyKey: string,
+  employeeId: string,
+  body: string | null,
+  uploads: unknown[] = [],
+) {
+  return {
+    idempotencyKey,
+    repositoryId: 'repo-1',
+    repositoryGroupId: null,
+    submission: { kind: 'direct', title: 'Add feature', body, uploads },
+    delivery: { kind: 'create-merge-request' },
+    requestedEmployee: { id: employeeId, revision: 1 },
+    requestedPolicy: null,
+    actorUserId: 'u-1',
+  }
+}
+
+describe('rfc310 pr2 admission', () => {
+  test('direct body-only / files-only / body+files all admit to working; idempotent replay', async () => {
+    const f = await buildFixture()
+    const upload = {
+      fileName: 'spec.md',
+      sha256: 'a'.repeat(64),
+      repositoryTargetPath: 'docs/spec.md',
+    }
+    const bodyOnly = await launchMission(
+      f.deps,
+      directInput('idem-body-only-1', f.employees.single, 'do it'),
+    )
+    expect(bodyOnly).toMatchObject({ status: 'working', created: true, blockCode: null })
+    const filesOnly = await launchMission(
+      f.deps,
+      directInput('idem-files-only-1', f.employees.single, null, [upload]),
+    )
+    expect(filesOnly).toMatchObject({ status: 'working', created: true })
+    const both = await launchMission(
+      f.deps,
+      directInput('idem-both-1', f.employees.single, 'and this', [upload]),
+    )
+    expect(both).toMatchObject({ status: 'working', created: true })
+
+    const replay = await launchMission(
+      f.deps,
+      directInput('idem-body-only-1', f.employees.single, 'do it'),
+    )
+    expect(replay).toMatchObject({ missionId: bodyOnly.missionId, created: false })
+
+    const mission = f.deps.store.getMission(bodyOnly.missionId)!
+    expect(mission.employeeId).toBe(f.employees.single)
+    expect(mission.policyId).toBe(f.policyId)
+    expect(mission.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  test('direct with empty body and no uploads is rejected at the schema layer', async () => {
+    const f = await buildFixture()
+    await expect(
+      launchMission(f.deps, directInput('idem-empty-1', f.employees.single, '   ')),
+    ).rejects.toThrow()
+    const dup = directInput('idem-dup-path-1', f.employees.single, null, [
+      { fileName: 'a.md', sha256: null, repositoryTargetPath: 'docs/a.md' },
+      { fileName: 'b.md', sha256: null, repositoryTargetPath: 'docs/a.md' },
+    ])
+    await expect(launchMission(f.deps, dup)).rejects.toThrow()
+    const traversal = directInput('idem-trav-1', f.employees.single, null, [
+      { fileName: 'x', sha256: null, repositoryTargetPath: '../escape.md' },
+    ])
+    await expect(launchMission(f.deps, traversal)).rejects.toThrow()
+  })
+
+  test('no employee anywhere blocks; explicit employee needs no assignment', async () => {
+    const f = await buildFixture()
+    const noEmployee = await launchMission(f.deps, {
+      ...directInput('idem-no-emp-1', f.employees.single, 'x'),
+      requestedEmployee: null,
+    })
+    expect(noEmployee).toMatchObject({ status: 'blocked', blockCode: 'no-employee-match' })
+
+    const retried = await retryBlockedMission(f.deps, { missionId: noEmployee.missionId })
+    expect(retried.status).toBe('working')
+  })
+
+  test('assignment employee admits without explicit selection', async () => {
+    const f = await buildFixture()
+    await upsertAssignment(f.db, {
+      scopeKind: 'repository',
+      scopeRef: 'repo-1',
+      employee: { id: f.employees.single, revision: 1 },
+      selectionPolicy: null,
+      executionPolicy: null,
+      defaultRequirementSourceKey: null,
+      updatedBy: 'admin',
+    })
+    const result = await launchMission(f.deps, {
+      ...directInput('idem-assign-1', f.employees.single, 'x'),
+      requestedEmployee: null,
+    })
+    expect(result.status).toBe('working')
+    const mission = f.deps.store.getMission(result.missionId)!
+    expect(mission.employeeId).toBe(f.employees.single)
+  })
+
+  test('external: unique default auto-pins; zero sources blocks; multiple candidates await selection', async () => {
+    const f = await buildFixture()
+    const externalInput = (key: string, employeeId: string, sourceKey?: string) => ({
+      idempotencyKey: key,
+      repositoryId: 'repo-1',
+      repositoryGroupId: null,
+      submission: {
+        kind: 'external-reference',
+        externalId: 'REQ-1042',
+        ...(sourceKey ? { sourceKey } : {}),
+      },
+      delivery: { kind: 'create-merge-request' },
+      requestedEmployee: { id: employeeId, revision: 1 },
+      requestedPolicy: null,
+      actorUserId: 'u-1',
+    })
+
+    const auto = await launchMission(f.deps, externalInput('idem-ext-auto-1', f.employees.single))
+    expect(auto.status).toBe('working')
+    expect(f.deps.store.getMission(auto.missionId)!.resolvedSourceKey).toBe('inhouse')
+
+    const zero = await launchMission(f.deps, externalInput('idem-ext-zero-1', f.employees.none))
+    expect(zero).toMatchObject({ status: 'blocked', blockCode: 'requirement-source-unresolved' })
+
+    const multi = await launchMission(f.deps, externalInput('idem-ext-multi-1', f.employees.multi))
+    expect(multi.status).toBe('awaiting-information')
+
+    // 越候选集拒绝；合法选择收敛到 working；重复选择幂等。
+    await expect(
+      selectMissionRequirementSource(f.deps, { missionId: multi.missionId, sourceKey: 'nope' }),
+    ).rejects.toThrow()
+    const selected = await selectMissionRequirementSource(f.deps, {
+      missionId: multi.missionId,
+      sourceKey: 'sys-b',
+    })
+    expect(selected.status).toBe('working')
+    const again = await selectMissionRequirementSource(f.deps, {
+      missionId: multi.missionId,
+      sourceKey: 'sys-b',
+    })
+    expect(again.status).toBe('working')
+
+    const requested = await launchMission(
+      f.deps,
+      externalInput('idem-ext-req-1', f.employees.multi, 'sys-a'),
+    )
+    expect(requested.status).toBe('working')
+    expect(f.deps.store.getMission(requested.missionId)!.resolvedAdapterId).not.toBeNull()
+
+    const badKey = await launchMission(
+      f.deps,
+      externalInput('idem-ext-bad-1', f.employees.multi, 'not-offered'),
+    )
+    expect(badKey).toMatchObject({ status: 'blocked', blockCode: 'requirement-source-unresolved' })
+  })
+
+  test('adopt delivery records the MR ref at admission', async () => {
+    const f = await buildFixture()
+    const result = await launchMission(f.deps, {
+      ...directInput('idem-adopt-1', f.employees.single, 'x'),
+      delivery: { kind: 'adopt-merge-request', mergeRequestRef: 'ep-1/proj-1!42' },
+    })
+    expect(result.status).toBe('working')
+    expect(f.deps.store.getMission(result.missionId)!.adoptedMrRef).toBe('ep-1/proj-1!42')
+  })
+
+  test('cancel with no external effects lands terminal canceled and bumps epoch', async () => {
+    const f = await buildFixture()
+    const launched = await launchMission(
+      f.deps,
+      directInput('idem-cancel-1', f.employees.single, 'x'),
+    )
+    const before = f.deps.store.getMission(launched.missionId)!
+    const result = await cancelMission(f.deps, { missionId: launched.missionId })
+    expect(result).toEqual({ status: 'canceled', pending: false })
+    const after = f.deps.store.getMission(launched.missionId)!
+    expect(after.status).toBe('canceled')
+    expect(after.epoch).toBe(before.epoch + 1)
+    expect(after.transitionFence).toBe('none')
+    expect(after.terminalKind).toBe('canceled')
+    // 终态 absorbing：再 cancel 拒绝。
+    await expect(cancelMission(f.deps, { missionId: launched.missionId })).rejects.toThrow()
+  })
+
+  test('cancel with a dispatched effect stays pending for the reconciler', async () => {
+    const f = await buildFixture()
+    const launched = await launchMission(
+      f.deps,
+      directInput('idem-cancel-2', f.employees.single, 'x'),
+    )
+    const prepared = f.deps.store.prepareEffect({
+      id: 'ef-d1',
+      missionId: launched.missionId,
+      actionRunId: null,
+      effectKind: 'mr.ensure',
+      intentDigest: 'i'.repeat(64),
+      idempotencyKey: 'k-cancel-2',
+      epoch: 0,
+      now: Date.now(),
+    })
+    f.deps.store.markEffectDispatched(prepared.effect.id, Date.now())
+    const result = await cancelMission(f.deps, { missionId: launched.missionId })
+    expect(result.pending).toBe(true)
+    const after = f.deps.store.getMission(launched.missionId)!
+    expect(after.transitionFence).toBe('cancel-pending')
+    expect(after.status).not.toBe('canceled')
+  })
+})

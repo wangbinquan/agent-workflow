@@ -183,6 +183,14 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/code/repository-assignments/:scopeKind' },
   { method: 'POST', path: '/api/code/automation-policies/preview-decision' },
   { method: 'POST', path: '/api/code/digital-employees/preview-selection' },
+  // RFC-310 PR-2 — Mission 生命周期（handoff/attach/resume/upgrade 随后续批次）。
+  { method: 'POST', path: '/api/code/missions' },
+  { method: 'GET', path: '/api/code/missions' },
+  { method: 'GET', path: '/api/code/missions/:id' },
+  { method: 'POST', path: '/api/code/missions/:id/requirement-source' },
+  { method: 'POST', path: '/api/code/missions/:id/cancel' },
+  { method: 'POST', path: '/api/code/missions/:id/retry' },
+  { method: 'GET', path: '/api/code/missions/:id/decision-trace' },
   { method: 'GET', path: '/api/code/work-items' },
   // RFC-304 T61 — the troubleshooting chain's read side.
   { method: 'GET', path: '/api/code/deliveries' },

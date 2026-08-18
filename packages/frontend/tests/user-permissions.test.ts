@@ -38,8 +38,8 @@ describe('RFC-305 user permission view model', () => {
     // them (−8 +4) and added `code-rounds:launch` (+1) ⇒ 78. The user baseline
     // is unchanged at 54 + 1 explicit grant: it lost one read point when the two
     // reads became one, and gained the launch point.
-    expect(model.permissions).toHaveLength(100) // RFC-310 +22
-    expect(model.effectiveCount).toBe(76) // RFC-310：user 基线 54→75，+1 explicit grant
+    expect(model.permissions).toHaveLength(105) // RFC-310 +22+5
+    expect(model.effectiveCount).toBe(81) // RFC-310：user 基线 54→80，+1 explicit grant
     expect(model.additionalCount).toBe(1)
     expect(model.permissions.find((row) => row.permission === 'agents:read')).toMatchObject({
       source: 'baseline',

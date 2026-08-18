@@ -34,6 +34,14 @@
 > permission 78→100（22 点，assignments:update 归 manager 档）、ACL 五类注册、§12.2 路由 + preview/simulate、
 > assignment 三级唯一解析、config package 导入导出 codec、upgrade pure diff planner；端到端 journey 测试
 > （三模板/员工 publish→选择→100 次重放一致）绿。
+> **PR-2（T21–T31a）已完成**：migration 0177（Mission 系列 15 表+transition_fence）、状态机穷举/终态 absorbing/fence
+> 语义、OCC 即 lease（revision+epoch 双冲突码）、MR claim/attempt ordinal/effect 状态机唯一索引兜底、effects 表兼职
+> outbox、admission 四入口全链（幂等/assignment→选择→policy/source 解析/多候选 awaiting-information）、reconciler 单轮
+> 循环（terminal/fence 优先、guards+first-match、run-agent-action 由员工 route 补全后才落库、15 个 arm-not-wired 显式
+> blocked 并注明归属批次）、durable wake（early 不清零 ordinal）、recovery（fence 悬挂/epoch 过期 effect/到期 wake）、
+> readiness 每轮落盘（unknown 永不折算 pass）、T31a preview/apply（原子 repin+bump epoch）、Mission HTTP 七端点+权限
+> 五点（105 点目录）+read models。**CI 修复**：PR-1B 首扫照出 4 个错误码未点名（git ls-files 型守卫的 untracked 盲区
+> 再证）与 e2e 权限计数（105/25）——随本批修复。facts digest 改内容寻址（revision/时间不入 digest）。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 176 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 177 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -443,12 +443,14 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 「矩阵单元格指向漂移」因此不存在；原框架成为各模板的 T64 上游。
     // 顺带把 `anchor_kind` 放宽出 `platform`（平台自己发起的轮次没有代码托管侧
     // 锚点），SQLite 改不了 CHECK，故 code_work_items 与 code_findings 重建）；
+    // RFC-310 PR-2 bump 到 177 with 0177_rfc310_development_missions（Mission/
+    // decision/action/attempt/effect/claim/wake/ledger 系列 15 张表）。
     // RFC-310 PR-1B bump 到 176 with 0176_rfc310_development_config_resources
     // （数字员工配置资源：identity+immutable revisions 双表 ×5 + assignment）。
     // RFC-309 T16 再 bump 到 175 with 0175_rfc309_template_base_snapshot（复制
     // 时留下基线**取值**而非只留摘要——摘要只答得了「改没改」，答不了「是谁改的」，
     // 而三方合并要的正是后者）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(176)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(177)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

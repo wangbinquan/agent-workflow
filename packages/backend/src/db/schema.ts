@@ -4750,3 +4750,393 @@ export const repositoryEmployeeAssignments = sqliteTable(
     ),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// RFC-310 PR-2 —— DevelopmentMission 聚合与 worker（migration 0177）。
+// 行只存 ref/digest/closed enum/计数；raw 正文/日志/diff/host path/credential/
+// webhook body/session id 一概不入库（design §11.1 各表「不存什么」列）。
+// -----------------------------------------------------------------------------
+
+export const developmentMissions = sqliteTable(
+  'development_missions',
+  {
+    id: text('id').primaryKey(), // ULID
+    revision: integer('revision').notNull().default(0),
+    epoch: integer('epoch').notNull().default(0),
+    status: text('status').notNull(),
+    automationMode: text('automation_mode').notNull().default('active'),
+    transitionFence: text('transition_fence').notNull().default('none'),
+    repositoryId: text('repository_id').notNull(),
+    sourceKind: text('source_kind').notNull(),
+    sourceContentDigest: text('source_content_digest'),
+    requestedSourceKey: text('requested_source_key'),
+    externalId: text('external_id'),
+    resolvedSourceKey: text('resolved_source_key'),
+    resolvedAdapterId: text('resolved_adapter_id'),
+    resolvedAdapterRevision: integer('resolved_adapter_revision'),
+    deliveryKind: text('delivery_kind').notNull(),
+    deliveryTargetRef: text('delivery_target_ref'),
+    deliverySourceBranch: text('delivery_source_branch'),
+    adoptedMrRef: text('adopted_mr_ref'),
+    assignmentId: text('assignment_id'),
+    employeeId: text('employee_id'),
+    employeeRevision: integer('employee_revision'),
+    policyId: text('policy_id'),
+    policyRevision: integer('policy_revision'),
+    requirementBundleRef: text('requirement_bundle_ref'),
+    repositoryFactsRef: text('repository_facts_ref'),
+    uploadPlanRef: text('upload_plan_ref'),
+    uploadPlacementRef: text('upload_placement_ref'),
+    uploadPublicationRef: text('upload_publication_ref'),
+    mrClaimId: text('mr_claim_id'),
+    currentActionRunId: text('current_action_run_id'),
+    readinessJson: text('readiness_json'),
+    blockCode: text('block_code'),
+    blockDetail: text('block_detail'),
+    terminalKind: text('terminal_kind'),
+    terminalUploadFulfillment: text('terminal_upload_fulfillment'),
+    terminalAt: integer('terminal_at'),
+    launchIdempotencyKey: text('launch_idempotency_key'),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    launchIdemUq: uniqueIndex('development_missions_launch_idem_unique')
+      .on(t.launchIdempotencyKey)
+      .where(sql`${t.launchIdempotencyKey} IS NOT NULL`),
+    statusIdx: index('idx_development_missions_status').on(t.status),
+    repoIdx: index('idx_development_missions_repo').on(t.repositoryId),
+  }),
+)
+
+export const developmentMissionSources = sqliteTable(
+  'development_mission_sources',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    generation: integer('generation').notNull().default(1),
+    sourceKind: text('source_kind').notNull(),
+    externalId: text('external_id'),
+    adapterId: text('adapter_id'),
+    adapterRevision: integer('adapter_revision'),
+    sourceRevision: text('source_revision'),
+    bundleRef: text('bundle_ref'),
+    manifestDigest: text('manifest_digest'),
+    fileCount: integer('file_count'),
+    totalBytes: integer('total_bytes'),
+    state: text('state').notNull().default('active'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ missionIdx: index('idx_dev_mission_sources_mission').on(t.missionId) }),
+)
+
+export const developmentRepositoryUploadPlans = sqliteTable('development_repository_upload_plans', {
+  id: text('id').primaryKey(),
+  missionId: text('mission_id')
+    .notNull()
+    .references(() => developmentMissions.id),
+  missionRevision: integer('mission_revision').notNull(),
+  repositoryId: text('repository_id').notNull(),
+  baselineSnapshotRef: text('baseline_snapshot_ref').notNull(),
+  baselineSha: text('baseline_sha').notNull(),
+  planDigest: text('plan_digest').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const developmentRepositoryUploadPlanEntries = sqliteTable(
+  'development_repository_upload_plan_entries',
+  {
+    planId: text('plan_id')
+      .notNull()
+      .references(() => developmentRepositoryUploadPlans.id),
+    ordinal: integer('ordinal').notNull(),
+    fileId: text('file_id').notNull(),
+    uploadBlobRef: text('upload_blob_ref').notNull(),
+    uploadSha256: text('upload_sha256').notNull(),
+    repositoryTargetPath: text('repository_target_path').notNull(),
+    contentPolicy: text('content_policy').notNull(),
+    targetFileMode: text('target_file_mode').notNull(),
+    expectedTargetKind: text('expected_target_kind').notNull(),
+    expectedTargetSha256: text('expected_target_sha256'),
+    expectedTargetFileMode: text('expected_target_file_mode'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.planId, t.ordinal] }),
+    targetUq: uniqueIndex('dev_upload_plan_target_unique').on(t.planId, t.repositoryTargetPath),
+  }),
+)
+
+export const developmentRepositoryUploadReceipts = sqliteTable(
+  'development_repository_upload_receipts',
+  {
+    id: text('id').primaryKey(),
+    planId: text('plan_id')
+      .notNull()
+      .references(() => developmentRepositoryUploadPlans.id),
+    baselineSnapshotRef: text('baseline_snapshot_ref').notNull(),
+    receiptKind: text('receipt_kind').notNull(),
+    seedChangeRef: text('seed_change_ref'),
+    seedTreeDigest: text('seed_tree_digest'),
+    fulfillmentKind: text('fulfillment_kind'),
+    commitSha: text('commit_sha'),
+    entriesJson: text('entries_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    receiptUq: uniqueIndex('dev_upload_receipts_unique').on(
+      t.planId,
+      t.baselineSnapshotRef,
+      t.receiptKind,
+    ),
+  }),
+)
+
+export const developmentMrClaims = sqliteTable(
+  'development_mr_claims',
+  {
+    id: text('id').primaryKey(),
+    codeHostEndpointRef: text('code_host_endpoint_ref').notNull(),
+    stableProjectRef: text('stable_project_ref').notNull(),
+    mrIid: text('mr_iid').notNull(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    epoch: integer('epoch').notNull(),
+    headSha: text('head_sha'),
+    state: text('state').notNull().default('active'),
+    createdAt: integer('created_at').notNull(),
+    releasedAt: integer('released_at'),
+  },
+  (t) => ({
+    activeUq: uniqueIndex('dev_mr_claims_active_unique')
+      .on(t.codeHostEndpointRef, t.stableProjectRef, t.mrIid)
+      .where(sql`${t.state} = 'active'`),
+  }),
+)
+
+export const developmentWakeHints = sqliteTable(
+  'development_wake_hints',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    source: text('source').notNull(),
+    deliveryKey: text('delivery_key').notNull(),
+    observedAt: integer('observed_at').notNull(),
+    consumedAt: integer('consumed_at'),
+  },
+  (t) => ({
+    deliveryUq: uniqueIndex('dev_wake_hints_delivery_unique').on(t.missionId, t.deliveryKey),
+  }),
+)
+
+export const developmentDeferredWakes = sqliteTable(
+  'development_deferred_wakes',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    decisionId: text('decision_id').notNull(),
+    reason: text('reason').notNull(),
+    resumeAt: integer('resume_at'),
+    wakeSourcesJson: text('wake_sources_json').notNull(),
+    attemptOrdinal: integer('attempt_ordinal').notNull().default(0),
+    state: text('state').notNull().default('armed'),
+    createdAt: integer('created_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    decisionUq: uniqueIndex('dev_deferred_wakes_decision_unique').on(t.missionId, t.decisionId),
+  }),
+)
+
+export const developmentFactSnapshots = sqliteTable(
+  'development_fact_snapshots',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    missionRevision: integer('mission_revision').notNull(),
+    capturedAt: text('captured_at').notNull(),
+    cellsJson: text('cells_json').notNull(),
+    refsJson: text('refs_json').notNull(),
+    digest: text('digest').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ missionIdx: index('idx_dev_fact_snapshots_mission').on(t.missionId) }),
+)
+
+export const developmentDecisions = sqliteTable(
+  'development_decisions',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    missionRevision: integer('mission_revision').notNull(),
+    policyId: text('policy_id'),
+    policyRevision: integer('policy_revision'),
+    employeeId: text('employee_id'),
+    employeeRevision: integer('employee_revision'),
+    factSnapshotId: text('fact_snapshot_id'),
+    factDigest: text('fact_digest').notNull(),
+    workSetJson: text('work_set_json'),
+    guardTraceJson: text('guard_trace_json').notNull(),
+    ruleTraceJson: text('rule_trace_json').notNull(),
+    selectedJson: text('selected_json').notNull(),
+    canonicalDigest: text('canonical_digest').notNull(),
+    decisionInputDigest: text('decision_input_digest').notNull(),
+    decidedAt: integer('decided_at').notNull(),
+  },
+  (t) => ({
+    inputUq: uniqueIndex('dev_decisions_input_unique').on(t.missionId, t.decisionInputDigest),
+  }),
+)
+
+export const developmentActionRuns = sqliteTable(
+  'development_action_runs',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    missionRevision: integer('mission_revision').notNull(),
+    decisionId: text('decision_id').notNull(),
+    capabilityId: text('capability_id').notNull(),
+    capabilityContractVersion: integer('capability_contract_version').notNull(),
+    templateId: text('template_id'),
+    templateRevision: integer('template_revision'),
+    workSetDigest: text('work_set_digest'),
+    inputFactDigest: text('input_fact_digest').notNull(),
+    baselineRef: text('baseline_ref'),
+    writable: integer('writable').notNull().default(0),
+    status: text('status').notNull(),
+    resultRef: text('result_ref'),
+    failureJson: text('failure_json'),
+    createdAt: integer('created_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    decisionUq: uniqueIndex('dev_action_runs_decision_unique').on(t.decisionId),
+    singleWritableUq: uniqueIndex('dev_action_runs_single_writable')
+      .on(t.missionId)
+      .where(
+        sql`${t.writable} = 1 AND ${t.status} IN ('claimed','materializing','running','validating','awaiting-effect')`,
+      ),
+  }),
+)
+
+export const developmentAgentAttempts = sqliteTable(
+  'development_agent_attempts',
+  {
+    id: text('id').primaryKey(),
+    actionRunId: text('action_run_id')
+      .notNull()
+      .references(() => developmentActionRuns.id),
+    rerunSeq: integer('rerun_seq').notNull(),
+    attemptSeq: integer('attempt_seq').notNull(),
+    executionRef: text('execution_ref'),
+    baselineRef: text('baseline_ref').notNull(),
+    nonceDigest: text('nonce_digest').notNull(),
+    inputDigest: text('input_digest').notNull(),
+    status: text('status').notNull(),
+    rejectionJson: text('rejection_json'),
+    outcomeRef: text('outcome_ref'),
+    createdAt: integer('created_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    ordinalUq: uniqueIndex('dev_agent_attempts_ordinal_unique').on(
+      t.actionRunId,
+      t.rerunSeq,
+      t.attemptSeq,
+    ),
+  }),
+)
+
+export const developmentEffects = sqliteTable(
+  'development_effects',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    actionRunId: text('action_run_id'),
+    effectKind: text('effect_kind').notNull(),
+    intentDigest: text('intent_digest').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    epoch: integer('epoch').notNull(),
+    state: text('state').notNull().default('prepared'),
+    receiptRef: text('receipt_ref'),
+    failureJson: text('failure_json'),
+    createdAt: integer('created_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    idempotencyUq: uniqueIndex('dev_effects_idempotency_unique').on(t.idempotencyKey),
+    missionStateIdx: index('idx_dev_effects_mission_state').on(t.missionId, t.state),
+  }),
+)
+
+export const developmentFeedbackLedger = sqliteTable(
+  'development_feedback_ledger',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    threadRef: text('thread_ref').notNull(),
+    revision: text('revision').notNull(),
+    headSha: text('head_sha').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    authorClass: text('author_class').notNull(),
+    state: text('state').notNull().default('observed'),
+    actionRunId: text('action_run_id'),
+    replyEffectId: text('reply_effect_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    ledgerUq: uniqueIndex('dev_feedback_ledger_unique').on(
+      t.missionId,
+      t.threadRef,
+      t.revision,
+      t.headSha,
+    ),
+  }),
+)
+
+export const developmentBundleRefs = sqliteTable(
+  'development_bundle_refs',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    purpose: text('purpose').notNull(),
+    evidenceRef: text('evidence_ref').notNull(),
+    manifestDigest: text('manifest_digest').notNull(),
+    fileCount: integer('file_count').notNull(),
+    totalBytes: integer('total_bytes').notNull(),
+    retentionState: text('retention_state').notNull().default('active'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ missionIdx: index('idx_dev_bundle_refs_mission').on(t.missionId) }),
+)
+
+export const legacyCodeWorkItemLinks = sqliteTable('legacy_code_work_item_links', {
+  id: text('id').primaryKey(),
+  missionId: text('mission_id')
+    .notNull()
+    .references(() => developmentMissions.id),
+  legacyWorkItemId: text('legacy_work_item_id'),
+  legacyRoundId: text('legacy_round_id'),
+  cutoverReceiptJson: text('cutover_receipt_json').notNull(),
+  createdAt: integer('created_at').notNull(),
+})

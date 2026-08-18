@@ -52,6 +52,7 @@ const EN_RESOURCES = {
   'automation-policies': 'Automation policies',
   'adapter-definitions': 'Development adapters',
   'repository-employee-assignments': 'Repository employee assignments',
+  'development-missions': 'Development missions',
 } satisfies Record<PermissionResource, string>
 
 const ZH_RESOURCES = {
@@ -88,6 +89,7 @@ const ZH_RESOURCES = {
   'automation-policies': '自动化策略',
   'adapter-definitions': '开发适配器',
   'repository-employee-assignments': '仓库员工指派',
+  'development-missions': '研发任务（数字员工）',
 } satisfies Record<PermissionResource, string>
 
 const EN_ACTIONS = {
@@ -109,6 +111,9 @@ const EN_ACTIONS = {
   audit: 'Audit',
   'override-owner': 'Override owner',
   archive: 'Archive',
+  interact: 'Interact',
+  cancel: 'Cancel',
+  retry: 'Retry',
 } satisfies Record<PermissionAction, string>
 
 const ZH_ACTIONS = {
@@ -130,6 +135,9 @@ const ZH_ACTIONS = {
   audit: '审计',
   'override-owner': '覆盖 owner',
   archive: '归档',
+  interact: '交互',
+  cancel: '取消',
+  retry: '重试',
 } satisfies Record<PermissionAction, string>
 
 const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTranslation>>> = {

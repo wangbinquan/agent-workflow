@@ -170,8 +170,11 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // RFC-309 merges the two capability-template layers and adds the manual
   // code-round launch point ⇒ 78 rows. Three merged template writes also move
   // into the user baseline, leaving 24 individually grantable points.
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(78)
-  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(24)
+  // RFC-310: +22 config-resource points (PR-1B) and +5 development-missions
+  // points (PR-2) ⇒ 105 rows; the user preset difference gained exactly one
+  // grantable point (repository-employee-assignments:update) ⇒ 25.
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(105)
+  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(25)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')
   await dialog.getByLabel(/^Password/).fill(password)

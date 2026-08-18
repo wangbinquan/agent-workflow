@@ -208,6 +208,14 @@ export const PERMISSIONS = [
   // being allowed to change a repository's configuration, and should not be
   // granted as a side effect of it.
   'code-rounds:launch',
+  // RFC-310 PR-2 —— DevelopmentMission 生命周期操作面（数字员工任务）。
+  // handoff/attach/resume/upgrade 四点随对应路由批次（PR-7/PR-8）再入目录：
+  // RFC-247 反向自检要求每个点被 RouteMeta 引用，先于路由登记会拒启。
+  'development-missions:launch',
+  'development-missions:read',
+  'development-missions:interact',
+  'development-missions:cancel',
+  'development-missions:retry',
   'tasks:execute',
   // NOTE: no `skills:execute` — no execute-semantics route in the skills domain.
   //
@@ -619,6 +627,26 @@ const permissionCatalog = {
     group: 'repositories',
     risk: 'elevated',
   }),
+  // RFC-310 —— Mission 操作面：五点全员（user 基线，同 code-rounds:launch
+  // 档——USER_EXECUTE 携带 launch/retry，成员制与行级 ACL 是真正边界）；
+  // launch/retry 标 elevated：花模型预算并最终写代码托管。
+  'development-missions:launch': catalogEntry('development-missions:launch', {
+    group: 'repositories',
+    risk: 'elevated',
+  }),
+  'development-missions:read': catalogEntry('development-missions:read', {
+    group: 'repositories',
+  }),
+  'development-missions:interact': catalogEntry('development-missions:interact', {
+    group: 'repositories',
+  }),
+  'development-missions:cancel': catalogEntry('development-missions:cancel', {
+    group: 'repositories',
+  }),
+  'development-missions:retry': catalogEntry('development-missions:retry', {
+    group: 'repositories',
+    risk: 'elevated',
+  }),
   'tasks:execute': catalogEntry('tasks:execute', {
     group: 'tasks',
     risk: 'elevated',
@@ -939,6 +967,9 @@ const USER_EXECUTE: ReadonlyArray<Permission> = [
   // running a workflow, and the whole point of the template merge is that an
   // ordinary group member can pick one and start work.
   'code-rounds:launch',
+  // RFC-310 —— 同 code-rounds:launch 组：launch/retry 是 execute 语义。
+  'development-missions:launch',
+  'development-missions:retry',
   'tasks:execute',
 ]
 
@@ -950,6 +981,10 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   'users:search',
   'tasks:read',
   'tasks:read:own',
+  // RFC-310 —— Mission 成员级交互（launch/retry 在 USER_EXECUTE 组）。
+  'development-missions:read',
+  'development-missions:interact',
+  'development-missions:cancel',
   'tasks:update',
   'account:self',
   // RFC-041 / RFC-099 / RFC-305: memory management is "scope-resource owner or

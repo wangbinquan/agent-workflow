@@ -182,6 +182,9 @@ export const missionFactSnapshotSchema = z
   .strict()
   .superRefine((snapshot, ctx) => {
     for (const [id, cell] of Object.entries(snapshot.cells)) {
+      // `__` 前缀是行投影的内部命名空间（如 `__mr.headSha`）：不进 closed
+      // catalog、predicate 也读不到（catalog 查无此 id ⇒ indeterminate）。
+      if (id.startsWith('__')) continue
       const spec = CATALOG_BY_ID.get(id)
       if (spec === undefined) {
         ctx.addIssue({
@@ -217,18 +220,18 @@ export const missionFactSnapshotSchema = z
     }
   })
 
-/** snapshot 构造：cells 排序后 canonical digest（capturedAt/missionRevision 参与）。 */
+/**
+ * snapshot 构造。digest 是**内容寻址**：只覆盖 cells——capturedAt 与
+ * missionRevision 是记录性元数据，不参与（同 §4.6 receipt id/decidedAt 不进
+ * canonical core 的原则；PR-2 reconciler 实测：若把 revision 掺进 digest，
+ * readiness 落盘 bump revision 后同 facts 的 decision 去重永不命中）。
+ */
 export function buildFactSnapshot(input: {
   missionRevision: number
   capturedAt: string
   cells: Record<string, FactCell<FactCellValue>>
 }): MissionFactSnapshot {
-  const digest = canonicalDigest({
-    schemaVersion: 1,
-    missionRevision: input.missionRevision,
-    capturedAt: input.capturedAt,
-    cells: input.cells,
-  })
+  const digest = canonicalDigest({ schemaVersion: 1, cells: input.cells })
   return {
     schemaVersion: 1,
     missionRevision: input.missionRevision,
