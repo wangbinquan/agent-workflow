@@ -63,7 +63,10 @@ export const CONFIG_KIND_SPECS: Record<ConfigKind, ConfigKindSpec> = {
     i18nKey: 'verificationProfiles',
   },
   adapters: {
-    apiBase: '/api/code/development-adapters',
+    // integration-owned：adapter 属 integration bounded context，端点前缀随
+    // 归属而非随页面（RFC-294）。写成 `/api/code/...` 会 404——PR-8 就是这么
+    // 错的，前后端两个常量之间当时没有任何对账（见 code-config-api-base 测试）。
+    apiBase: '/api/integrations/development-adapters',
     permissionPrefix: 'adapter-definitions',
     i18nKey: 'adapters',
   },

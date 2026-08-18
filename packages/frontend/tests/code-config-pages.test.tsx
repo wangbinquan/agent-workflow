@@ -131,7 +131,7 @@ function installFetch(overrides: {
           overrides.publishStatus ?? 200,
         )
       }
-      if (/\/api\/code\/development-adapters\/[^/]+$/.test(url)) {
+      if (/\/api\/integrations\/development-adapters\/[^/]+$/.test(url)) {
         return json(overrides.detail ?? ADAPTER_DETAIL)
       }
       if (/\/api\/code\/digital-employees\/[^/]+$/.test(url)) {
@@ -171,7 +171,7 @@ function installFetch(overrides: {
       if (url.includes('/api/code/verification-profiles')) {
         return json({ items: [] })
       }
-      if (url.includes('/api/code/development-adapters')) {
+      if (url.includes('/api/integrations/development-adapters')) {
         return json({ items: [ADAPTER_DETAIL] })
       }
       return json({})

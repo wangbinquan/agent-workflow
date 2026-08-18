@@ -806,6 +806,7 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 - **markdown/结构化文本的管线改动必须锁「渲染级」断言**（`render` + `<table>`/`<input>`/`<h1>` 等 DOM 产物 + 无字面 `|`/`===` 泄漏），不能只锁中间字符串 `includes`：评审页 diff 表格碎裂期间字符串层测试全绿、浏览器已烂（2026-07-30 修复的盲区；正例 `markdown-diff-table-render.test.tsx`）。
 - **带 `/g` 的正则严禁做 `.test()`/`.exec()` 成员判定**：`lastIndex` 跨调用残留，同一输入间歇性漏匹配（markdownDiff identical 输入曾产生假 diff）。成员判定用非 global 兄弟正则或 `String.match`；已有 `ANY_MARKER_RE.lastIndex = 0` 手动复位的写法是次选。
 - **删 i18n 键别用「缩进+键名」字符串 `replace`**：`"    generate: 'Generate',\n"` 会命中**更深缩进**的同名键（6 空格行天然包含 4 空格模式），把别人域里的键吃掉并粘连成一行。RFC-247 删 `account.generate` 时误删 `intent.journey.generate`，`tsc` 与 i18n parity 全绿（两文件+类型被对称吃掉），只有一条渲染断言变红。改 i18n 一律**带上下文锚定**（前后各一行一起匹配）并 `assert count == 1`，删完 `git diff | grep '^-'` 逐行过一遍。
+- **设置页新加字段必须登记 `SETTINGS_CONFIG_SCOPE_KEYS`，否则保存被静默丢弃**（RFC-287 T10 踩过一次、RFC-311 又整批踩了 4 个键：`backupProtectedKeepCount` / `eventStreamRetentionDays` / `webhookTriggerFiresRetentionDays` / `taskArchive`）：该常量是每个设置分区**允许写回**的最小白名单，漏登记的键在 PUT 前被剔掉——界面能改、点保存**没有任何报错**、值不落盘，下次进页面又变回旧值。既有测试全都看不见它：bounds parity 只看边界、card surfaces 只看卡片结构、各 tab 渲染测试只看控件在不在，**没有人看「这个键能不能存下去」**。守卫在 `tests/settings-scope-coverage.test.ts`（扫每个 `useTabState(SETTINGS_CONFIG_SCOPE_IDS.x)` 片段里真实读写的 `state.<key>`，与该 scope 白名单对账）；新加旋钮时顺手加一条「改开关 → 点保存 → 断言 PUT body 带这个键」的用户级断言最保险。
 - **`t('缺失.键')` 不报错，直接把 key 当文案渲染**：i18next miss 时返回 key 本身——没有异常、没有 warning，`tsc` 也看不见（键在**类型**里声明了、只是**值**没写，两个 locale 的值块是两处）。测试也抓不到，因为大家都用 testid / role 找按钮。守卫在 `tests/i18n-key-resolution.test.ts`：扫全部 `t('字面量')` 并在两个 locale 里 resolve，同时拒绝解析成对象的键（`t('a.b')` 指到命名空间会渲染 `[object Object]`）。带 `defaultValue` 的豁免；模板字面量键静态不可解，归各组件自己的测试。
 - **用 chrome MCP / CDP 调试 xyflow 画布必须把标签页带到前台**：后台标签 `visibilityState==='hidden'` 时 rAF 与 **ResizeObserver 回调完全冻结**——xyflow 节点测量永远回写不到 store（`nodeLookup` 里 `measured:{}`、无 `handleBounds`），EdgeWrapper 对无 handleBounds 的节点**静默 return null**：现象是「节点都在、console 零警告、边一条不画、fitView 不跑」。这**不是代码回归**，前台打开同页面立即正常。2026-08-05 曾据此几乎误判「全站 xyflow 边渲染回归」，最终 `document.visibilityState` + 手动 `store.updateNodeInternals()` 实验才拆穿。判据：怀疑边不渲染时先在页面里跑 `requestAnimationFrame` 计数，0 触发即假象。
 - **只读 xyflow 图的 edges 千万别放进 `useEdgesState`**：它只在**首渲染** seed 一次——之后 graph 重算（如边类型 checkbox）新边集**永远进不去**；且 xyflow 会在节点短暂未测量时派发 edge-REMOVAL changes，一旦被 `onEdgesChange` 应用，边被永久清空且无人恢复。只读图一律**非受控**：`edges` 直接传 graph 派生的 memo、不传 `onEdgesChange`（`PackageFlow`/`ClassFlow` 现行形态，`structure-graph-render.test.tsx` 源码级锁定）。受控 nodes（measure→layout 需要 `setNodes`）不受此限。
@@ -1198,3 +1199,28 @@ del lines[a:b+1]
    比等 gate 红再回溯便宜得多。反向卷入（把对方未提交的半成品带进自己的 commit）
    的典型症状是 typecheck 报「模块声明了 X 但未导出」：测试半边进了提交树、
    `export` 半边还在对方工作树。
+
+## 前后端各存一份路径常量 + 测试 mock 掉 fetch = 契约漂移无人可见（RFC-310 实测，2026-08-19）
+
+用户报 `no route for /api/code/development-adapters`。根因是五类配置资源的
+CRUD 端点由**一个模板函数**（`mountConfigResource(app, deps, { base })`）生成：
+
+- 后端契约注册表按**字面路径**扫描 `routes/*.ts`，看不见计算出来的路径；
+- 前端把 base 存在自己的常量表（`CONFIG_KIND_SPECS.apiBase`）里，与后端那份
+  没有任何机械联系；
+- 页面测试 mock 掉 `fetch`，**用例自己写 URL 匹配**——前后端写成同一个错值时，
+  测试照样绿（本次实测：测试里的两处 URL 也是错的，和实现一起错，所以一路绿）。
+
+于是一个前缀写错（adapter 归 integration bounded context，真实前缀是
+`/api/integrations/...` 而不是随页面的 `/api/code/...`）就能穿过 typecheck、
+lint、单测、`gate:local` 和 CI，直到用户打开页面看到 404。
+
+**判据**：只要「同一个事实在前后端各存一份」，就必须有一条**读对方源码**的对账
+测试；`mock` 掉的边界永远不构成契约证明。本仓已有两个同款先例——PR-8 的
+`policyFactCatalog`（前端目录静态镜像 + 测试直接 import 后端 domain 对拍）与
+本次的 `code-config-api-base.test.ts`（读后端 `mountConfigResource` 的 base
+字面量逐条比对）。同样按定式做变异检验：把真实事故的错值注回去，确认变红。
+
+**顺带**：计算路径的端点天然逃过契约注册表。发现这类端点时，要么在注册表里
+显式登记（哪怕手写），要么给它补一条别的机械对账——不要只在注释里写一句
+「registry 扫不到，故不在此表」就了事（本次就是这么写的，然后事故从这里漏出去）。
