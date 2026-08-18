@@ -14,9 +14,13 @@
 > （`f64f0db3`/`8ee9fc8d`/`99faae98`/`b8bc7d02`/`1c4d5432`:VirtualList 公共原语〔jsdom 零矩阵双防御〕/tasks+repos
 > 虚拟化/repos 分页 API C7 兼容+180 组合 oracle/usePagedList/useDebouncedValue/WS 合并窗/RelativeTime tooltip
 > 惰性化/workflows 投影瘦身 C2/perf-seed+perf-bench harness）。细节与取舍见 plan.md §交付注记。
-> **待办**：视觉基线刷新（repos.png 表格→网格,darwin 本地刷/linux 走 CI artifact option-A）;bench-results.md
-> 收口（§6 九项验收对照）;PR-6 遗留大件（T19 终态任务自动归档〔用户已拍板方向,默认关〕/T20 维护入口/T21
-> prompt_text 外置）;/code work-items nextCursor 修复避让 RFC-310 前端批中。
+> **基准实测（`bench-results.md`,10 万任务/300 万 runs/980 万事件/3.6GB 库）**：tasks/page 首页 30.2ms、
+> 翻页 29.8ms（目标 <150ms）、cached-repos 分页 6.3ms（<100ms）、reviews/clarify 徽章 0.8/0.6ms（<10ms）全部达标;
+> 实测驱动修掉一个真坑——keyset 断点展开式在绑定参数下触发 TEMP B-TREE 全排序,翻页 197.5ms → 29.8ms（`822a20bf`）。
+> **三处缺口如实记账**：G1 过滤视图仍走旧穷举管线（10 万任务 68 秒 / 一条 SQL / 期间整站冻结;生产量级约 1~2 秒,
+> 建议下个 RFC 扩快路径）;G2 overview 50.7ms、workgroup 徽章 13.2ms 未达 10ms 口径;G3 归档器首轮清 backlog 需多轮 tick。
+> **待办**：PR-6 遗留大件（T19 终态任务自动归档〔用户已拍板方向,默认关〕/T20 维护入口/T21
+> prompt_text 外置）;/code work-items nextCursor 修复避让 RFC-310 前端批中;视觉 win32 基线随下一个 Windows 批。
 >
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
