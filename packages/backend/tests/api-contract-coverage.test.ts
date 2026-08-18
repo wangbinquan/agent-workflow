@@ -232,6 +232,68 @@ describe('API contract registry coverage', () => {
     expect(discoverNonLiteralMounts().sort()).toEqual(known.sort())
   })
 
+  // RFC-310 PR-10 实测：删掉三条 `/api/code` 写路由后本地门禁全绿，CI 的
+  // Playwright 腿红了三条——`e2e/` 既不在任何 package 的 tsconfig include 里，
+  // `gate:local` 也不跑 Playwright，所以 e2e 打一条已删端点在本地是**不可见**的
+  // （docs/dev-gotchas.md 早有此条，本轮仍复发一次）。这条守卫把它拉进本地门禁。
+  //
+  // 只认**明确打 daemon** 的调用（`${daemon.baseUrl}/api/...` / `${baseUrl}/api/...`）：
+  // e2e 里还有打 system-mocks、Gitea、浏览器内相对路径的 fetch，它们与本平台的
+  // 路由注册表无关，扫进来只会逼人往守卫里加豁免。路径中的 `${...}` 段按「任意
+  // 单段」处理（ACL 端点是 `/api/${resource}/${id}/acl` 这种计算形态）。
+  test('every daemon /api call an e2e spec makes still exists in the registry', () => {
+    const e2eDir = resolve(import.meta.dir, '..', '..', '..', 'e2e')
+    const specs = readdirSync(e2eDir).filter((f) => f.endsWith('.ts'))
+    const WILDCARD = '\u0001'
+    const registry = ENDPOINTS.map((e) => ({ method: e.method, segs: e.path.split('/') }))
+    /**
+     * 逐段比较 + method。两侧的「通配段」（注册表的 `:param` / e2e 的 `${...}`）
+     * 匹配任意一段。**method 必须一并核对**——RFC-310 PR-10 删的是
+     * `PUT /api/code/matrix/:repoId` 而 `GET` 同路径仍在，只比 path 的守卫会
+     * 放行那三条 e2e（这正是当时 CI 上红的形态）。
+     */
+    const known = (method: string, called: readonly string[]): boolean =>
+      registry.some(
+        (r) =>
+          r.method === method &&
+          r.segs.length === called.length &&
+          r.segs.every((seg, i) => {
+            const other = called[i]!
+            return seg.startsWith(':') || other === WILDCARD || seg === other
+          }),
+      )
+    /**
+     * 调用动词：`page.request.put(` / `api.delete(` 之类在 URL 之前，或
+     * `{ method: 'PUT' }` 在其后的 init 对象里。都找不到 ⇒ GET（fetch 缺省）。
+     */
+    const methodOf = (src: string, urlStart: number, urlEnd: number): string => {
+      const before = src.slice(Math.max(0, urlStart - 60), urlStart)
+      const verbCall =
+        /\.(get|post|put|delete|patch)\s*\(\s*$|\.(get|post|put|delete|patch)\s*\(\s*`?$/i.exec(
+          before,
+        )
+      if (verbCall) return (verbCall[1] ?? verbCall[2] ?? 'GET').toUpperCase()
+      const after = src.slice(urlEnd, urlEnd + 160)
+      const inInit = /\bmethod\s*:\s*['"`](GET|POST|PUT|DELETE|PATCH)['"`]/i.exec(after)
+      if (inInit) return inInit[1]!.toUpperCase()
+      return 'GET'
+    }
+    const offenders: string[] = []
+    for (const spec of specs) {
+      const src = stripLineComments(readFileSync(join(e2eDir, spec), 'utf8'))
+      for (const m of src.matchAll(/\$\{(?:daemon\.)?baseUrl\}(\/api\/[^'"`\s?]+)/g)) {
+        const raw = m[1]!
+        const called = raw
+          .replace(/\/+$/, '')
+          .split('/')
+          .map((seg) => (seg.includes('${') ? WILDCARD : seg))
+        const method = methodOf(src, m.index!, m.index! + m[0].length)
+        if (!known(method, called)) offenders.push(`${spec}: ${method} ${raw}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
   test('no duplicate registry entries (same method+path twice)', () => {
     const seen = new Map<string, number>()
     for (const e of ENDPOINTS) {
