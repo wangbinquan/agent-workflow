@@ -206,6 +206,13 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/code/missions/:id/resume' },
   { method: 'POST', path: '/api/code/missions/:id/source-refresh/preview' },
   { method: 'POST', path: '/api/code/missions/:id/source-refresh' },
+  // RFC-310 PR-9 — cutover runbook（T97 对账读面 + materialize + 三命令 + adopt）。
+  { method: 'GET', path: '/api/code/cutover' },
+  { method: 'POST', path: '/api/code/cutover/materialize' },
+  { method: 'POST', path: '/api/code/cutover/freeze' },
+  { method: 'POST', path: '/api/code/cutover/flip' },
+  { method: 'POST', path: '/api/code/cutover/rollback' },
+  { method: 'POST', path: '/api/code/cutover/adopt-mr' },
   { method: 'GET', path: '/api/code/work-items' },
   // RFC-304 T61 — the troubleshooting chain's read side.
   { method: 'GET', path: '/api/code/deliveries' },

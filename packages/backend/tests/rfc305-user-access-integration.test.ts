@@ -258,8 +258,9 @@ describe('RFC-305 identity-access integration', () => {
     // What a user still cannot do without a grant is author SCRIPTS — which is
     // a field inside a template rather than a template verb, and is still in
     // this list as `scripts:author`.
-    // RFC-310 +1：repository-employee-assignments:update（manager 档差集）。
-    expect(grants).toHaveLength(25)
+    // RFC-310 +1：repository-employee-assignments:update（manager 档差集）；
+    // PR-9 +1：development-missions:cutover（admin 档 runbook 点）。
+    expect(grants).toHaveLength(26)
     await f.update(0, [...grants])
 
     const actor = await buildInheritedActor(db, f.userId)

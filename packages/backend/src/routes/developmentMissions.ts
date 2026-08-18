@@ -792,36 +792,55 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  for (const command of ['freeze', 'flip', 'rollback'] as const) {
-    registerRoute(
-      app,
-      {
-        method: 'POST',
-        path: `/api/code/cutover/${command}`,
-        permissions: ['development-missions:cutover'],
-        tokenAccess: 'allow',
-        summary:
-          command === 'freeze'
-            ? 'Freeze legacy admission (T99: rounds API + code-round webhooks reject new work)'
-            : command === 'flip'
-              ? 'Flip the writer generation to missions (T101)'
-              : 'Roll back a frozen cutover to pre (T102; refused after flip)',
-      },
-      async (c) => {
-        const result = runCutoverCommand(cutoverDeps, command)
-        if (!result.ok) {
-          throw new ConflictError(
-            result.code === 'cutover-rollback-after-flip'
-              ? 'cutover-rollback-after-flip'
-              : 'cutover-phase-invalid',
-            result.detail,
-          )
-        }
-        log.info('cutover command', { command, userId: actorOf(c).user.id, state: result.state })
-        return c.json({ state: result.state })
-      },
-    )
-  }
+  const runCutoverCommandRoute =
+    (command: 'freeze' | 'flip' | 'rollback') =>
+    async (c: Parameters<Parameters<typeof registerRoute>[2]>[0]) => {
+      const result = runCutoverCommand(cutoverDeps, command)
+      if (!result.ok) {
+        throw new ConflictError(
+          result.code === 'cutover-rollback-after-flip'
+            ? 'cutover-rollback-after-flip'
+            : 'cutover-phase-invalid',
+          result.detail,
+        )
+      }
+      log.info('cutover command', { command, userId: actorOf(c).user.id, state: result.state })
+      return c.json({ state: result.state })
+    }
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/cutover/freeze',
+      permissions: ['development-missions:cutover'],
+      tokenAccess: 'allow',
+      summary: 'Freeze legacy admission (T99: rounds API + code-round webhooks reject new work)',
+    },
+    runCutoverCommandRoute('freeze'),
+  )
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/cutover/flip',
+      permissions: ['development-missions:cutover'],
+      tokenAccess: 'allow',
+      summary: 'Flip the writer generation to missions (T101)',
+    },
+    runCutoverCommandRoute('flip'),
+  )
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/cutover/rollback',
+      permissions: ['development-missions:cutover'],
+      tokenAccess: 'allow',
+      summary: 'Roll back a frozen cutover to pre (T102; refused after flip)',
+    },
+    runCutoverCommandRoute('rollback'),
+  )
 
   registerRoute(
     app,
