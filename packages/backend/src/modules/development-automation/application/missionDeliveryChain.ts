@@ -93,23 +93,34 @@ export function redispatchDelivery(
   policy: AutomationPolicyContent,
   selected: NextDecision,
 ): NextDecision {
-  if (mission.mrClaimId !== null) {
-    if (selected.kind === 'block') {
-      return {
-        kind: 'wait',
-        reason: 'mr-care-not-wired',
-        resumeAt: null,
-        wakeSources: ['webhook', 'manual'],
-        attemptOrdinal: 0,
-      }
-    }
+  if (selected.kind !== 'block') {
+    // claim 存在时把非本链的 block 静止态交给 care（下方 return 分支处理）；
+    // 非 block 决策一律不动。
     return selected
   }
-  if (selected.kind !== 'block') return selected
   const treeOid = knownString(cells, '__action.candidateTreeOid')
-  if (knownString(cells, '__action.candidateState') !== 'derived' || treeOid === null) {
-    return selected
+  const hasDerivedCandidate =
+    knownString(cells, '__action.candidateState') === 'derived' && treeOid !== null
+
+  // MR 已建立且没有待发布的 candidate 进度 → 静止态属 care 链（PR-7）。
+  // T109 抓出：不能对「claim 非空」无条件短路——feedback 修复轮（apply
+  // validated 产生新 treeOid）需要发布链在 watching 阶段再次工作，把修复
+  // verify → commit → push 到 MR 分支；否则 reply 会在修复从未到达 remote
+  // 的情况下发出（reviewer 看到「已解决」但分支纹丝不动）。
+  const deliveryComplete =
+    hasDerivedCandidate &&
+    knownString(cells, '__delivery.publishedTreeOid') === treeOid &&
+    knownString(cells, '__delivery.publishState') === 'pushed'
+  if (mission.mrClaimId !== null && (!hasDerivedCandidate || deliveryComplete)) {
+    return {
+      kind: 'wait',
+      reason: 'mr-care-not-wired',
+      resumeAt: null,
+      wakeSources: ['webhook', 'manual'],
+      attemptOrdinal: 0,
+    }
   }
+  if (!hasDerivedCandidate || treeOid === null) return selected
 
   // 1) verification：policy 要求的 profile 逐个跑齐（treeOid 绑定的进度表）。
   const verified = verifiedProfilesOf(cells, treeOid)
@@ -132,6 +143,7 @@ export function redispatchDelivery(
 
   // 3) MR（adopt-merge-request 的接管属 PR-7；create 之外不派）。
   if (mission.deliveryKind !== 'create-merge-request') return selected
+  if (mission.mrClaimId !== null) return selected
   return { kind: 'ensure-merge-request' }
 }
 

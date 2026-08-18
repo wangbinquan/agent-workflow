@@ -24,7 +24,12 @@ import {
 import { canonicalDigest, canonicalStringify } from '../domain/canonicalJson'
 import { capabilityDefinition, type CapabilityId } from '../domain/capabilityDefinition'
 import { nextDecisionSchema, type NextDecision } from '../domain/decision'
-import { buildFactSnapshot, type FactCellValue, type MissionFactSnapshot } from '../domain/facts'
+import {
+  buildFactSnapshot,
+  FACT_CATALOG,
+  type FactCellValue,
+  type MissionFactSnapshot,
+} from '../domain/facts'
 import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 import type { FactCell } from '../domain/factCell'
 import {
@@ -131,6 +136,19 @@ function projectRowCells(mission: MissionRow): Record<string, FactCell<FactCellV
     'budget.actionRunsRemaining': knownCell(1_000),
     'budget.pipelineRerunsRemaining': knownCell(1_000),
     'budget.commitsRemaining': knownCell(1_000),
+    // PR-10 T109 抓出：无 claim 时 mr 组 fact 若留 unknown，任何引用 mr.* 的
+    // 规则会让引擎 indeterminate 停机派 collect-mr-facts——而采集在无 MR 时
+    // 不可执行，mission 以 deduped block 卡死。domain 语义本就有解：MR 不存在
+    // ⇒ mr fact **not-applicable**（predicate(null) 确定失配，first-match 落到
+    // 下一条规则）。collector 采回的真值照常覆盖本投影（见函数注释）。
+    ...(mission.mrClaimId === null
+      ? Object.fromEntries(
+          FACT_CATALOG.filter((f) => f.group === 'mr' && f.id !== 'mr.exists').map((f) => [
+            f.id,
+            { state: 'not-applicable', reason: 'no-mr-claim' } satisfies FactCell<FactCellValue>,
+          ]),
+        )
+      : {}),
   }
 }
 
@@ -389,6 +407,26 @@ export async function runMissionReconcile(
   // ---- facts 组装 -----------------------------------------------------------
   const cells = projectRowCells(mission)
   mergeCollectedCells(deps, mission, cells)
+  const policy = await loadPolicyContent(deps.lookup, mission)
+
+  // ---- T109 抓出：mr.unhandledFeedbackCount 的事实源是台账，不是 collect 的
+  // 时点快照。apply validated 后行已 selected/addressed，但 cells 里的 count
+  // 仍是采集时的旧值——规则会用陈旧计数重复发射 feedback.apply 直到 budget
+  // 耗尽。claim 存在且 MR facts 已采过时按台账现算覆盖（与 collect 投影同一
+  // 算法 selectableFeedback，两处必然一致）。必须先于 buildFactSnapshot——
+  // snapshot 定格后的覆盖进不了决策输入。
+  if (
+    policy !== null &&
+    mission.mrClaimId !== null &&
+    cells['__mr.factsCollectedAt'] !== undefined
+  ) {
+    cells['mr.unhandledFeedbackCount'] = {
+      state: 'known',
+      value: selectableFeedback(deps.store.listFeedback(mission.id), policy.feedback).length,
+      sourceRevision: 'ledger-live',
+    }
+  }
+
   const unsettled = deps.store.listUnsettledEffects(mission.id)
   const snapshot: MissionFactSnapshot = buildFactSnapshot({
     missionRevision: mission.revision,
@@ -409,7 +447,6 @@ export async function runMissionReconcile(
     ),
     cells,
   )
-  const policy = await loadPolicyContent(deps.lookup, mission)
   if (policy === null) {
     return await commitAndHandle(deps, mission, snapshot, guards, {
       selected: { kind: 'block', reason: 'policy-content-missing' },
@@ -455,6 +492,16 @@ export async function runMissionReconcile(
             }
           : { kind: 'block', reason: `template-route:${routed.reason}` }
     }
+  }
+
+  // ---- mr fact 前置引用翻译（PR-10 T109 抓出）------------------------------
+  // policy 规则在 MR 存在之前引用 mr.* fact 时，引擎按 indeterminate 停机派
+  // collect-mr-facts（引擎纯层不知道 claim）。此时采集不可执行——若放行到
+  // arm 只能 blocked，而 blocked 是执行结果不进决策输入，下一轮同 digest 直接
+  // deduped：mission 永久卡死。在 redispatch 之前把它翻译成 block 静止态，
+  // delivery 链照常接管发布进度，MR ensure 之后规则自然恢复可判。
+  if (selected.kind === 'collect-mr-facts' && mission.mrClaimId === null) {
+    selected = { kind: 'block', reason: 'mr-facts-unavailable:no-mr-claim' }
   }
 
   // ---- requirement 重派（PR-3 T33/T38a）------------------------------------
@@ -921,6 +968,14 @@ async function handleDecision(
         blockMission(deps, mission.id, 'collector-not-wired:merge-request', null)
         return 'blocked'
       }
+      // T109 抓出的健壮性缺陷：policy 规则在 MR 存在之前引用 mr.* fact 时，
+      // 引擎按 indeterminate 停机派本 arm（正确），但此时还没有 claim——
+      // loud throw 会让 mission 以未分类异常卡死。typed block 是静止态，
+      // delivery 链照常接管发布进度；MR ensure 之后规则自然恢复可判。
+      if (mission.mrClaimId === null) {
+        blockMission(deps, mission.id, 'mr-facts-unavailable:no-mr-claim', null)
+        return 'blocked'
+      }
       const collected = await collector.collect({
         missionId: mission.id,
         mrClaimId: mission.mrClaimId,
@@ -1068,6 +1123,20 @@ async function handleDecision(
           const cell = snapshot.cells['__action.candidateRef']
           return cell !== undefined && cell.state === 'known' && typeof cell.value === 'string'
             ? { candidateRef: cell.value }
+            : {}
+        })(),
+        // T109：post-publish 修复轮以已发布 durable commit 为基线（fast-forward
+        // 推回 MR 分支的 parent 前提）；未发布过则缺省首轮语义。
+        ...((): { publishedBaselineSha?: string } => {
+          const pushed = snapshot.cells['__delivery.publishState']
+          const sha = snapshot.cells['__delivery.commitSha']
+          return pushed !== undefined &&
+            pushed.state === 'known' &&
+            pushed.value === 'pushed' &&
+            sha !== undefined &&
+            sha.state === 'known' &&
+            typeof sha.value === 'string'
+            ? { publishedBaselineSha: sha.value }
             : {}
         })(),
         // PR-6 T69：repair 动作挂 pinned pipeline bundle + issue 闭集（新

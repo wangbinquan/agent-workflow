@@ -155,6 +155,10 @@ export interface LaunchAgentAttemptInput {
   /** fresh rerun 的同输入合同：manifest.missionRevision 冻结在 action 创建时
    *  （mission.revision 随结算前进，不冻结会让 rerun 的 inputDigest 漂移）。 */
   readonly missionRevisionPin?: number
+  /** T109：post-publish 修复轮（feedback/pipeline repair）的基线覆盖——已发布
+   *  的 durable commit（`__delivery.commitSha`），修复 candidate 以它为 parent
+   *  才能 fast-forward 推回 MR 分支。缺省 = repo 默认分支 head（首轮语义）。 */
+  readonly publishedBaselineSha?: string
 }
 
 export type LaunchAgentAttemptOutcome =
@@ -198,10 +202,14 @@ export async function launchAgentAttempt(
     }
   }
 
-  const baseline = await ports.actionBaseline!.resolve(mission.repositoryId)
-  if (baseline === null) {
+  const resolvedBaseline = await ports.actionBaseline!.resolve(mission.repositoryId)
+  if (resolvedBaseline === null) {
     return { ok: false, blockCode: 'action-baseline-unavailable', detail: mission.repositoryId }
   }
+  const baseline =
+    input.publishedBaselineSha === undefined
+      ? resolvedBaseline
+      : { repoPath: resolvedBaseline.repoPath, headSha: input.publishedBaselineSha }
 
   // seed：mission 行存 seedTreeDigest；seeds 目录按 planDigest 命名（placement
   // 的落盘约定）——必须经 plan 行换算，直接拿 uploadPlacementRef 当目录名会

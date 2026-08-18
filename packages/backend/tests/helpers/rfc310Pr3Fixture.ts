@@ -85,6 +85,8 @@ export interface Pr3FixtureOptions {
   readonly db?: DbClient
   /** PR-5 T54：员工加 requirement.analyze 只读路由（含专用模板）。 */
   readonly analyzeRoute?: boolean
+  /** PR-10 T109：员工加 mr.feedback.apply 路由（含专用模板）——全旅程 E2E 用。 */
+  readonly feedbackRoute?: boolean
   /** PR-5 T55a：policy 的 no-change 收束模式（默认 program-proof）。 */
   readonly noChangeConfirmation?: 'program-proof' | 'human-confirmation'
   /** 外部源：发布真实 adapter（CLI 子进程）并挂到员工 requirementSources。 */
@@ -208,6 +210,41 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
     analyzeTemplateId = analyzeTemplate.id
   }
 
+  let feedbackTemplateId: string | null = null
+  if (options.feedbackRoute === true) {
+    const feedbackTemplate = createActionTemplate(
+      { store: templates, now },
+      {
+        actorUserId: 'admin',
+        name: 'feedback-generic',
+        capabilityId: 'mr.feedback.apply',
+        draft: {
+          schemaVersion: 1,
+          capabilityId: 'mr.feedback.apply',
+          capabilityContractVersion: 1,
+          labels: [],
+          compatibility: [],
+          executor: { kind: 'agent', agentRef: 'agent-1@1' },
+          runtimeProfileRef: 'rt',
+          promptSupplement: 'apply the review feedback',
+          skillRefs: [],
+          mcpRefs: [],
+          readOnlyResourceRefs: [],
+          contextProfileRef: null,
+          writablePathPolicyRef: null,
+          additionalProtectedPathClasses: [],
+          verificationProfileRef: 'vp',
+          retryDefaults: { sameSession: 2, freshSession: 1 },
+        },
+      },
+    )
+    publishActionTemplate(
+      { store: templates, now },
+      { id: feedbackTemplate.id, actorUserId: 'admin' },
+    )
+    feedbackTemplateId = feedbackTemplate.id
+  }
+
   const policyContent = defaultAutomationPolicyContent()
   const customPolicy = {
     ...policyContent,
@@ -295,6 +332,15 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
                 capabilityId: 'requirement.analyze',
                 rules: [],
                 fallbackTemplateRef: { id: analyzeTemplateId, revision: 1 },
+              },
+            ]),
+        ...(feedbackTemplateId === null
+          ? []
+          : [
+              {
+                capabilityId: 'mr.feedback.apply',
+                rules: [],
+                fallbackTemplateRef: { id: feedbackTemplateId, revision: 1 },
               },
             ]),
       ],
