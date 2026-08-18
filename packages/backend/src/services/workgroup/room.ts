@@ -42,7 +42,6 @@ import {
   workgroupMessages,
   workgroupTaskState,
 } from '@/db/schema'
-import { canViewTask } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { chunkedAll } from '@/util/sqlChunk'
 import { resolveMessageTurnTriggerId } from '@/services/workgroup/context'
