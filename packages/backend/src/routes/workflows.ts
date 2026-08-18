@@ -81,27 +81,38 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'List workflows visible to the caller',
     },
-    async (c) =>
+    async (c) => {
       // Hide the built-in aw-skill-fusion workflow (RFC-101): infrastructure the
       // daemon references by name, not a user list row. Discriminator = reserved
       // name AND __system__ owner — workflows.name is non-unique, so a user-owned
       // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
-      c.json(
-        (
-          await filterVisibleRows(
-            deps.db,
-            actorOf(c),
-            'workflow',
-            excludeBuiltinWorkflows(await listWorkflows(deps.db)),
-          )
-        ).map((wf) => {
-          // RFC-311 (proposal C2): the list carried every workflow's FULL
-          // definition JSON — the transport bulk of this endpoint — while the
-          // list UI only renders a node count. Detail keeps the definition.
-          const { definition, ...rest } = serializeWorkflowFor(wf, workflowReadLensFor(actorOf(c)))
-          return { ...rest, nodeCount: definition.nodes.length }
+      const rows = await filterVisibleRows(
+        deps.db,
+        actorOf(c),
+        'workflow',
+        excludeBuiltinWorkflows(await listWorkflows(deps.db)),
+      )
+      // RFC-311 (proposal C2): the list carried every workflow's FULL definition
+      // JSON — the transport bulk of this endpoint — while the list UI only
+      // renders a node count. Detail keeps the definition.
+      //
+      // `?include=definition` is the ONE opt-in that still needs the graphs:
+      // the workflow editor's call-workflow reference resolver derives a child's
+      // ports from its `inputs` + output nodes (`shared/nodePorts.ts` call-workflow
+      // deriver), and that derivation must not be duplicated server-side. Every
+      // plain list surface (list page, launch pickers, onboarding, memory dialog,
+      // gallery) stays on the slim shape.
+      const withDefinition = c.req.query('include') === 'definition'
+      return c.json(
+        rows.map((wf) => {
+          const serialized = serializeWorkflowFor(wf, workflowReadLensFor(actorOf(c)))
+          const nodeCount = serialized.definition.nodes.length
+          if (withDefinition) return { ...serialized, nodeCount }
+          const { definition: _definition, ...rest } = serialized
+          return { ...rest, nodeCount }
         }),
-      ),
+      )
+    },
   )
 
   registerRoute(

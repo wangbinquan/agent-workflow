@@ -608,7 +608,7 @@ function TaskOperationsList(props: {
           'aria-label': t('tasks.title'),
           'data-testid': 'task-operations-list',
         }}
-        renderItem={(item) => (
+        renderItem={(item, index) => (
           <TaskBranch
             item={item}
             depth={0}
@@ -616,6 +616,8 @@ function TaskOperationsList(props: {
             expanded={props.expanded}
             collapsed={props.collapsed}
             onToggle={props.onToggle}
+            ariaSetsize={props.items.length}
+            ariaPosinset={index + 1}
           />
         )}
         tail={
@@ -646,6 +648,11 @@ interface TaskBranchProps {
   expanded: ReadonlySet<string>
   collapsed: ReadonlySet<string>
   onToggle: (id: string, currentlyOpen: boolean) => void
+  /** RFC-311:窗口化后 DOM 里只有可视行,屏幕阅读器无法自行数出总量/位次。
+   *  这两个值由 VirtualList 的调用点传入,挂在**本行自己的** role="listitem"
+   *  元素上(挂在无 role 的定位包装上会触发 axe aria-allowed-attr)。 */
+  ariaSetsize?: number
+  ariaPosinset?: number
 }
 
 function TaskBranch(props: TaskBranchProps) {
@@ -668,6 +675,8 @@ function TaskBranch(props: TaskBranchProps) {
       }
       style={{ '--task-tree-depth': props.depth } as CSSProperties}
       data-depth={props.depth}
+      aria-setsize={props.ariaSetsize}
+      aria-posinset={props.ariaPosinset}
     >
       <TaskOperationsRow
         item={item}

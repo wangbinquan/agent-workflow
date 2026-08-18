@@ -165,8 +165,12 @@ test('1280px keeps 30+ tasks dense and paginates roots and child branches indepe
   await page.setViewportSize({ width: 1280, height: 800 })
   await openOperations(page)
 
-  const rootItems = page.locator('.task-operations__list > .task-operations__item')
-  await expect(rootItems).toHaveCount(16)
+  // RFC-311 T27:根层列表窗口化后 DOM 只保留可视窗口 ± overscan,"全部已加载
+  // 行都在 DOM 里"不再成立。集合大小改由每行的 aria-setsize 承载(这也正是屏幕
+  // 阅读器在窗口化下读到的总量),它对窗口大小免疫。
+  const rootItems = page.locator('.task-operations__item[data-depth="0"]')
+  await expect(rootItems.first()).toHaveAttribute('aria-setsize', '16')
+  expect(await rootItems.count()).toBeGreaterThan(0)
   const rootBox = await page.getByTestId('task-row-dense-running').boundingBox()
   expect(rootBox).not.toBeNull()
   expect(rootBox!.height).toBeGreaterThanOrEqual(56)
@@ -185,15 +189,26 @@ test('1280px keeps 30+ tasks dense and paginates roots and child branches indepe
   expect(navBox!.x).toBeGreaterThan(ownerBox!.x)
 
   await page.getByRole('button', { name: 'Load more tasks' }).click()
+  await expect(rootItems.first()).toHaveAttribute('aria-setsize', '34')
+  // 第二页的尾行落在窗口之外——滚到底才进 DOM(顺带压住滚动哨兵路径)。
+  await page.locator('.task-operations__list').evaluate((list) => {
+    list.scrollTop = list.scrollHeight
+  })
   await expect(page.getByTestId('task-row-root-page-two-18')).toBeVisible()
-  await expect(rootItems).toHaveCount(34)
 
+  // 回到顶部:branch-many 在第一屏,滚到底后它已被移出窗口。
+  await page.locator('.task-operations__list').evaluate((list) => {
+    list.scrollTop = 0
+  })
+  await expect(page.getByTestId('task-expand-branch-many')).toBeVisible()
   await page.getByTestId('task-expand-branch-many').click()
   await expect(page.getByTestId('task-row-branch-child-01')).toBeVisible()
   const childBox = await page.getByTestId('task-row-branch-child-01').boundingBox()
+  // 子层容器由 <ol> 改为 role="list" 的 div(RFC-311:VirtualList 的 sizer/
+  // 定位 div 不能作 <ol> 子元素,整棵树统一走 role 语义)。
   const childWellBox = await page
     .getByTestId('task-row-branch-child-01')
-    .locator('xpath=ancestor::ol[1]')
+    .locator('xpath=ancestor::*[@role="list"][1]')
     .boundingBox()
   expect(childBox).not.toBeNull()
   expect(childWellBox).not.toBeNull()

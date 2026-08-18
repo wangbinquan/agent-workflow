@@ -60,6 +60,16 @@ describe('RFC-311 C2 — /api/workflows list projection', () => {
     expect('definition' in row).toBe(false)
   })
 
+  test('?include=definition opts back into the full graphs (workflow editor call-ref resolver)', async () => {
+    // 唯一 opt-in 消费者:编辑器的 call-workflow 引用解析器要按子工作流的
+    // inputs + output 节点推导端口(shared/nodePorts.ts 的 call-workflow
+    // deriver),该推导不能在服务端复制一份。
+    const items = (await get('/api/workflows?include=definition')) as Array<Record<string, unknown>>
+    const row = items.find((r) => r.id === 'wf1')!
+    expect(row.nodeCount).toBe(3)
+    expect((row.definition as { nodes: unknown[] }).nodes).toHaveLength(3)
+  })
+
   test('the detail endpoint still returns the full definition (external scripts migrate here)', async () => {
     const item = (await get('/api/workflows/wf1')) as Record<string, unknown>
     // 读路径把定义迁到当前 $schema_version(5);节点/结构不变。

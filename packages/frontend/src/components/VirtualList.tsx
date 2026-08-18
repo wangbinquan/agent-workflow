@@ -139,8 +139,16 @@ export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
               role={props.rowRole}
-              aria-setsize={props.items.length}
-              aria-posinset={virtualRow.index + 1}
+              // aria-setsize/posinset are only ALLOWED on roles that take them
+              // (listitem/option/row/…). When the caller's renderItem owns the
+              // row role, this wrapper is a bare positioning div — putting the
+              // attributes here is an `aria-allowed-attr` violation (axe caught
+              // it on /tasks). Such callers pass the two values into their own
+              // row element instead (see `ariaSetsize`/`ariaPosinset` in
+              // routes/tasks.tsx).
+              {...(props.rowRole === undefined
+                ? {}
+                : { 'aria-setsize': props.items.length, 'aria-posinset': virtualRow.index + 1 })}
               style={style}
             >
               {props.renderItem(item, virtualRow.index)}

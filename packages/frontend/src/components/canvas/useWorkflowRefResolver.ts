@@ -24,8 +24,12 @@ import { useContext, useEffect, useMemo, useState } from 'react'
 import type { Workflow, WorkflowByRef } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 
-/** Cache key shared with the /workflows list page (routes/workflows.tsx). */
-export const WORKFLOWS_QUERY_KEY = ['workflows'] as const
+/** RFC-311 C2: the plain `['workflows']` list no longer carries definitions, and
+ *  this resolver's whole job is reading a child's definition. It owns a sibling
+ *  cache entry fed by the `?include=definition` opt-in; the key stays UNDER the
+ *  `['workflows']` prefix so every existing `invalidateQueries(['workflows'])`
+ *  (useWorkflowSync RULES, /ws/workflows) still refreshes child-port previews. */
+export const WORKFLOWS_QUERY_KEY = ['workflows', 'with-definition'] as const
 
 export interface WorkflowRefResolver {
   /** Passed as `declaredPorts(..., { workflowByRef })` / `computePorts` 4th arg. */
@@ -49,7 +53,8 @@ export function useWorkflowRefResolver(): WorkflowRefResolver {
     // cross-tab edit would leave stale child-port previews behind.
     const observer = new QueryObserver<Workflow[]>(client, {
       queryKey: [...WORKFLOWS_QUERY_KEY],
-      queryFn: ({ signal }) => api.get<Workflow[]>('/api/workflows', undefined, signal),
+      queryFn: ({ signal }) =>
+        api.get<Workflow[]>('/api/workflows', { include: 'definition' }, signal),
     })
     setRows(observer.getCurrentResult().data)
     return observer.subscribe((result) => setRows(result.data))
