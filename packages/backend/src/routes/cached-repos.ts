@@ -43,13 +43,20 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       // RFC-311 T28 / proposal §5 C7:带任一分页参数 → O(页) 封套
       // `{items, nextCursor, facets}`;无参调用保持旧全量 `{items}` 形状
       // (7 个 repo picker 消费方 + 外部脚本零改动)。
+      // 空串视同未传:`?q=`/`?limit=` 这类空值在客户端 buildUrl 里本就会被丢弃,
+      // 服务端若当成"带参"处理,一个外部脚本拼出的空 q 就会从"全量"静默变成
+      // "第一页 50 行"——C7 承诺的无参兼容会被这种边角形态绕过去。
+      const param = (name: string): string | undefined => {
+        const value = c.req.query(name)
+        return value === undefined || value === '' ? undefined : value
+      }
       const raw = {
-        q: c.req.query('q'),
-        view: c.req.query('view'),
-        submodules: c.req.query('submodules'),
-        autoRefresh: c.req.query('auto_refresh'),
-        cursor: c.req.query('cursor'),
-        limit: c.req.query('limit'),
+        q: param('q'),
+        view: param('view'),
+        submodules: param('submodules'),
+        autoRefresh: param('auto_refresh'),
+        cursor: param('cursor'),
+        limit: param('limit'),
       }
       if (Object.values(raw).every((v) => v === undefined)) {
         const items = await listCachedRepos(deps.db)

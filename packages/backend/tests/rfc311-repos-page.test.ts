@@ -381,6 +381,15 @@ describe('RFC-311 T28 — /api/cached-repos C7 双形状', () => {
     expect(body2.items[0]?.id).not.toBe(body.items[0]?.id)
   })
 
+  test('empty-string params are treated as absent (C7 stays intact for `?q=`)', async () => {
+    // 外部脚本拼出的空值不得把全量兼容面悄悄换成分页首页。
+    const res = await get('/api/cached-repos?q=&limit=')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect((body.items as unknown[]).length).toBe(12)
+    expect('nextCursor' in body).toBe(false)
+  })
+
   test('invalid enum values are rejected with 422', async () => {
     expect((await get('/api/cached-repos?view=bogus')).status).toBe(422)
     expect((await get('/api/cached-repos?limit=0')).status).toBe(422)

@@ -73,6 +73,9 @@
 - agents/skills/mcps/plugins/workgroups/memory/users/scheduled/intent/code-missions 各页接入
   VirtualList + 端点分页(数据千级前非必需;memory 审批队列 body 惰性加载优先级最高);
 - 事件"写入即落盘"二期;FTS5 搜索;归档任务恢复工具;T21 若延后在此销账。
+- **`listMissionSummaries`(development-automation 的 mission 列表读模型)目前是全表无分页 `.all()`**
+  ——RFC-310 PR-2 的既有实现,其 RFC 范围内无分页要求,由该 session 移交本性能治理面登记;mission
+  表长起来会复刻 /tasks 的卡顿形态,接入方式与 /repos 同款(keyset + 页内富化 + facets)。
 
 ## 验收清单(收口对照)
 
