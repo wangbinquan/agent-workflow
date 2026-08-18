@@ -678,8 +678,23 @@ async function commitAndHandle(
     })
   })
   if (!inserted.created) {
-    publishReadiness(deps, mission.id)
-    return { kind: 'deduped', decisionId: inserted.decisionId }
+    // T83 crash matrix 抓出的恢复缺陷：链自治 effect（commit/push/mr-ensure/
+    // trigger/rerun/reply）在 dispatched 悬挂时，cells/guards 都没变 ⇒ 决策被
+    // 去重吞 ⇒ handler 永不重放 ⇒ 卡死。悬挂自治 effect 存在时照常执行
+    // handler——重放按 idempotencyKey 撞回同一行、intent digest 对拍后幂等。
+    const hangingSelfSettled = deps.store
+      .listUnsettledEffects(mission.id)
+      .some(
+        (e) =>
+          e.state === 'dispatched' &&
+          (DELIVERY_EFFECT_KINDS.has(e.effectKind) ||
+            PIPELINE_EFFECT_KINDS.has(e.effectKind) ||
+            MR_CARE_EFFECT_KINDS.has(e.effectKind)),
+      )
+    if (!hangingSelfSettled) {
+      publishReadiness(deps, mission.id)
+      return { kind: 'deduped', decisionId: inserted.decisionId }
+    }
   }
 
   const handled = await handleDecision(deps, mission, snapshot, selected, inserted.decisionId)

@@ -307,13 +307,13 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 | T74  | `mr.feedback.apply` capability + exact thread revision semantic validator                          | T47,T73         | ✅   |
 | T75  | platform `mr.feedback.reply` idempotent effect；只回复不 resolve                                   | T28,T74         | ✅   |
 | T76  | MR care default policy 与可配置 feedback/conflict/CI priority                                      | T15,T66,T73     | ✅   |
-| T77  | source-control conflict prepare：只 merge target into source、exact S/T、conflict set              | T59,T72         | ⏳   |
-| T78  | `conflict.repair` edit-conflicts profile + platform finish merge commit + CAS push                 | T43,T47,T77     | ⏳   |
-| T79  | report-only 默认、repair budget/blocked handoff；禁止 rebase/force/ours/theirs shortcut            | T76-T78         | ⏳   |
-| T80  | readiness/handoff/tracking-only + external upload fulfillment/lineage + ready 回退                 | T29,T72,T76     | ⏳   |
+| T77  | source-control conflict prepare：只 merge target into source、exact S/T、conflict set              | T59,T72         | ✅   |
+| T78  | `conflict.repair` edit-conflicts profile + platform finish merge commit + CAS push                 | T43,T47,T77     | 🚧   |
+| T79  | report-only 默认、repair budget/blocked handoff；禁止 rebase/force/ours/theirs shortcut            | T76-T78         | ✅   |
+| T80  | readiness/handoff/tracking-only + external upload fulfillment/lineage + ready 回退                 | T29,T72,T76     | ✅   |
 | T81  | terminal：merged/closed/no-change + upload-unfulfilled；reopen/cancel fence/reconcile              | T30,T72,T80     | 🚧   |
 | T82  | periodic reconcile + webhook loss/replay/out-of-order，所有入口同一 facts path                     | T25,T72,T81     | 🚧   |
-| T83  | crash matrix：question/upload placement/Agent/commit/push+seed 吸收/MR/reply/readiness/transition  | T30,T75,T78-T82 | ⏳   |
+| T83  | crash matrix：question/upload placement/Agent/commit/push+seed 吸收/MR/reply/readiness/transition  | T30,T75,T78-T82 | ✅   |
 | T84  | source/AST/action-catalog 负扫描证明 merge/approve/resolve/custom/force push 不可达                | T7,T75-T83      | ✅   |
 
 ### PR-7 前半交付注记（2026-08-18，T72–T76/T81/T82/T84；T77–T80/T83 待后半）
@@ -347,6 +347,32 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 - **待后半（PR-7b）**：T77–T79 conflict 链（source-control merge-target-into-source prepare + edit-conflicts
   profile + finish commit + CAS push + report-only 默认/budget/禁 rebase-force-ours-theirs）、T80
   handoff/attach/resume/tracking-only + fulfillment 回退、T83 crash matrix。
+
+### PR-7 后半交付注记（2026-08-18，T77/T79/T80/T83；T78 部分）
+
+- **T77**：source-control `conflictMerge.ts`——prepare（临时 clone → merge target into source `--no-commit
+  --no-ff`；干净合并 = `no-conflict` typed 拒【facts 过期信号，重采而非重试】；冲突态保留 markers+MERGE_HEAD）
+  + finish（「已解决」按工作树 marker 内容检测而非索引 unmerged——Agent 无 Git，add 是 finish 的职责；只
+  add 冲突集，顺手改动 `conflict-extra-changes` 拒不收编；平台身份 merge commit 双 parent；零 push——发布
+  归 deliverCandidate CAS）。`bindConflictMergeParticipant` 已入 composition 与两装配点。
+- **T78 部分（🚧）**：conflict 决策面已接（care 链 §4.7 顺序 2：report-only 呈现于 readiness；repair 模式
+  typed block `conflict-repair-agent-surface-not-wired`）；**Agent 执行面欠三件**——workspaceValidator 的
+  edit-conflicts profile（冲突集 writablePrefixes）、orchestrator 的 merge-workspace 物化分支（prepare 的
+  workspace 含 .git，不同于 actionWorkspace）、conflictRefs 闭集注入。validator 的 `conflict-path-outside-
+  markers` code 与 envelope 成员 PR-4 已备。归 PR-8 或专项。
+- **T79**：conflict shortcut 负锁（source-control 禁 `-X ours/theirs`/`--strategy=ours|theirs`/rebase）+
+  T84 主扫描的 force 面 + policy `conflict.mode` 默认 report-only/maxRepairAttempts 既有。
+- **T80**：handoff（bumpEpoch+fence → 撤在途 action → prepared invalidate → dispatched 留 settleFence
+  【handoff 分支 PR-2 已在】→ tracking-only 保留 claim）/ attach（observe 主动校验不信自述 + claim 消歧 +
+  merged/closed 同命令 authoritative terminal + fulfillment 如实）/ resume（MR+pipeline 双面 facts 强制
+  过期 + bumpEpoch + active）。permission +3（handoff/attach 成员档、resume elevated 档），HTTP 三端点+
+  契约登记。路由 deps 未注 agentLauncher ⇒ handoff 不发进程 cancel（台账权威、孤儿收敛兜底）——要真
+  cancel 需 composition 暴露命令，PR-8 一并。
+- **T83**：crash matrix 三窗（commit dispatched 中断重放收敛到 MR+watching / mr-ensure confirmed 后
+  claim 前中断 adopt 不复制 / reply dispatched 中断单次重放）。**抓出并修复一个真实恢复缺陷**：链自治
+  effect 悬挂 dispatched 时 cells/guards 不变 ⇒ 决策去重吞掉 handler ⇒ 永久卡死；修复=去重命中但存在
+  悬挂自治 effect 时照常执行 handler（幂等重放）。
+- **T81/T82 遗留（🚧）**：reopen→新 generation 链、webhook out-of-order 显式矩阵。
 
 ## 10. PR-8：完整配置与活动 UI
 

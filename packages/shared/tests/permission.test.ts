@@ -71,8 +71,9 @@ describe('PERMISSIONS catalog', () => {
     // 各 read/create/update/archive（+20），另 repository-employee-assignments
     // read/update（+2）⇒ **100**。危险字段（adapter 的 executable/secret）沿
     // RFC-309 字段级门先例仍走 `scripts:author`，不新设系统域点。
-    // RFC-310 PR-2 +5（development-missions launch/read/interact/cancel/retry）⇒ 105。
-    expect(PERMISSIONS.length).toBe(105)
+    // RFC-310 PR-2 +5（development-missions launch/read/interact/cancel/retry）⇒ 105；
+    // PR-7b +3（handoff/attach/resume）⇒ 108。
+    expect(PERMISSIONS.length).toBe(108)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -189,6 +190,9 @@ describe('PERMISSIONS catalog', () => {
       'development-missions:interact',
       'development-missions:cancel',
       'development-missions:retry',
+      'development-missions:handoff',
+      'development-missions:attach',
+      'development-missions:resume',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
     // RFC-304 +5（两个模板读 + 三个组层写）⇒ 54。
@@ -196,7 +200,7 @@ describe('PERMISSIONS catalog', () => {
     // 三个模板写点仍在基线里，但含义变了——它们不再蕴含脚本编写权（字段级门）。
     // RFC-310 +21（五资源×4 全入 user 基线 + assignments:read；assignments:update
     // 归 manager 档，对齐 repos:update）⇒ 75。
-    expect(ROLE_PERMISSIONS.user.length).toBe(80) // RFC-310 PR-2 +5（Mission 面全员）
+    expect(ROLE_PERMISSIONS.user.length).toBe(83) // RFC-310 PR-2 +5、PR-7b +3（Mission 面全员）
   })
 
   test('guest preset is exactly public-only reads for the six ACL resource domains', () => {

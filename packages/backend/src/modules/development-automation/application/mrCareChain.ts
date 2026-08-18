@@ -95,6 +95,22 @@ export function redispatchMrCare(
     return { kind: 'collect-mr-facts' }
   }
 
+  // ---- 1.5) conflict（§4.7 顺序 2）：report-only 呈现于 readiness；repair
+  // 模式的 Agent 执行面（edit-conflicts workspace 物化/validator profile）尚未
+  // 接线——诚实 typed block，prepare/finish 端口已备（PR-7b 注记债）。
+  {
+    const conflictCell = cells['mr.conflict']
+    if (
+      conflictCell !== undefined &&
+      conflictCell.state === 'known' &&
+      conflictCell.value === true &&
+      policy.conflict.mode === 'repair' &&
+      selected.kind !== 'block'
+    ) {
+      return { kind: 'block', reason: 'conflict-repair-agent-surface-not-wired' }
+    }
+  }
+
   // ---- 2) apply 结算后的 dispositions：还有未回复的 addressed thread → reply。
   const dispositions = pendingDispositions(cells)
   if (dispositions.length > 0) {

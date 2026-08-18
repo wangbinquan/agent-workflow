@@ -27,6 +27,11 @@ import {
   selectMissionRequirementSource,
   type LaunchDeps,
 } from '@/modules/development-automation/application/commands/launchMission'
+import {
+  attachMergeRequest,
+  handoffMission,
+  resumeMission,
+} from '@/modules/development-automation/application/commands/missionHandover'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import { createRepositoryBaselineResolver } from '@/modules/development-automation/infrastructure/gitBaselineReader'
 import { createSqliteAdmissionLookup } from '@/modules/development-automation/infrastructure/sqliteAdmissionLookup'
@@ -45,6 +50,7 @@ import { composeRequirementSourceRunner } from '@/modules/integration/compositio
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
+  bindConflictMergeParticipant,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
@@ -53,6 +59,7 @@ import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
+  resolveRepoClaimKey,
 } from '@/services/developmentDeliveryDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { ulid } from 'ulid'
@@ -90,6 +97,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     requirementSource: composeRequirementSourceRunner(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant(),
+    conflictMerge: bindConflictMergeParticipant(),
     ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
     ...buildDevelopmentPipelineDeps(deps.db),
     ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
@@ -619,6 +627,80 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
         'x-evidence-truncated': read.truncated ? 'true' : 'false',
         ...(read.nextOffset === null ? {} : { 'x-evidence-next-offset': String(read.nextOffset) }),
       })
+    },
+  )
+  // ---- PR-7b T80：handoff / attach-mr / resume（交接三命令）-----------------
+  const handoverDeps = () => ({
+    store: missionStore,
+    snapshots,
+    ports: { mrEffects: buildDevelopmentDeliveryDeps(deps.db, deps.secretBox).mrEffects },
+    now: () => Date.now(),
+    repoBinding: (repositoryId: string) =>
+      resolveRepoClaimKey(deps.db, deps.secretBox, repositoryId),
+  })
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/missions/:id/handoff',
+      permissions: ['development-missions:handoff'],
+      tokenAccess: 'allow',
+      summary: 'Hand the mission over to a human (automation becomes tracking-only)',
+    },
+    async (c) => {
+      const missionId = c.req.param('id')
+      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
+      const result = await handoffMission(handoverDeps(), { ...body, missionId })
+      log.info('mission handoff', {
+        missionId,
+        userId: actorOf(c).user.id,
+        pending: result.pending,
+      })
+      fireReconcile(missionId)
+      return c.json({ missionId, ...result })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/missions/:id/attach-mr',
+      permissions: ['development-missions:attach'],
+      tokenAccess: 'allow',
+      summary: 'Attach a manually created merge request to a handed-over mission',
+    },
+    async (c) => {
+      const missionId = c.req.param('id')
+      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
+      const result = await attachMergeRequest(handoverDeps(), { ...body, missionId })
+      log.info('mission attach-mr', {
+        missionId,
+        userId: actorOf(c).user.id,
+        mrClaimId: result.mrClaimId,
+      })
+      fireReconcile(missionId)
+      return c.json({ missionId, ...result })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/missions/:id/resume',
+      permissions: ['development-missions:resume'],
+      tokenAccess: 'allow',
+      summary: 'Resume automation on a tracking-only mission (facts refresh first)',
+    },
+    async (c) => {
+      const missionId = c.req.param('id')
+      z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
+      const result = await resumeMission(handoverDeps(), { missionId })
+      log.info('mission resume', { missionId, userId: actorOf(c).user.id })
+      fireReconcile(missionId)
+      return c.json({ missionId, ...result })
     },
   )
 }

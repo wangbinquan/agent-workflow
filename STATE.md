@@ -115,6 +115,14 @@
 > terminal 结算补 fulfillment/action 撤销、webhook→mrClaim 反查→wake hint、T84 负扫描（mission 链路源码级
 > 禁 merge/approve/resolve/force-push+决策 kind 快照）。**待 PR-7b**：T77–T79 conflict 链、T80 handoff/
 > attach/resume、T83 crash matrix。
+> **PR-7 后半（T77/T79/T80/T83；T78 部分）已完成**：fork T：source-control conflict prepare/finish（merge
+> target into source、marker 内容检测已解决、顺手改动拒收、平台身份双 parent commit、零 push、shortcut
+> 负锁）；fork U：handoff/attach/resume 三命令+HTTP+permission 三点（observe 主动校验、claim 消歧、
+> merged/closed 同命令 terminal、fulfillment 如实、resume 双面 facts 强制过期）。主 session：conflict
+> 端口+care 链决策面（repair 模式诚实 block——Agent 执行面欠 edit-conflicts validator/merge-workspace
+> 物化，注记债）、T83 crash matrix 三窗并**修复决策去重吞悬挂 effect 的真实卡死缺陷**（去重命中但有
+> dispatched 自治 effect 时照常重放 handler）。PR-7a 绿证：superseding CI success（2cbfdf7a 含
+> 2f3747f9+c794e734）。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

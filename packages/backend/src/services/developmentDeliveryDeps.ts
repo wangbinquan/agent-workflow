@@ -60,6 +60,23 @@ export function buildDevelopmentDeliveryDeps(
   return { repoRemote, mrEffects }
 }
 
+/**
+ * PR-7b attach —— repositoryId → MR claim 键（provider + decoded project path，
+ * 与 ensure-MR arm 从 correlationRef 拆出的键同形；attach 命令的缺省推导）。
+ */
+export function resolveRepoClaimKey(
+  db: DbClient,
+  secretBox: SecretBox | undefined,
+  repositoryId: string,
+): { readonly codeHostEndpointRef: string; readonly stableProjectRef: string } | null {
+  const binding = resolveRepoBinding(db, secretBox, repositoryId)
+  if (binding === null) return null
+  return {
+    codeHostEndpointRef: binding.provider,
+    stableProjectRef: decodeURIComponent(binding.project),
+  }
+}
+
 /** repositoryId → code-host connection binding（mrEffects 与 MR facts 共用）。 */
 function resolveRepoBinding(
   db: DbClient,

@@ -209,13 +209,17 @@ export const PERMISSIONS = [
   // granted as a side effect of it.
   'code-rounds:launch',
   // RFC-310 PR-2 —— DevelopmentMission 生命周期操作面（数字员工任务）。
-  // handoff/attach/resume/upgrade 四点随对应路由批次（PR-7/PR-8）再入目录：
-  // RFC-247 反向自检要求每个点被 RouteMeta 引用，先于路由登记会拒启。
+  // upgrade 点随 PR-8 配置路由批次再入目录：RFC-247 反向自检要求每个点被
+  // RouteMeta 引用，先于路由登记会拒启。
   'development-missions:launch',
   'development-missions:read',
   'development-missions:interact',
   'development-missions:cancel',
   'development-missions:retry',
+  // RFC-310 PR-7b —— 交接三点随 handoff/attach-mr/resume 路由入目录。
+  'development-missions:handoff',
+  'development-missions:attach',
+  'development-missions:resume',
   'tasks:execute',
   // NOTE: no `skills:execute` — no execute-semantics route in the skills domain.
   //
@@ -647,6 +651,19 @@ const permissionCatalog = {
     group: 'repositories',
     risk: 'elevated',
   }),
+  // RFC-310 PR-7b —— handoff（自动化交人）/attach（挂接外部 MR 继续 tracking）
+  // 是成员级控制面，与 cancel 同档；resume 重启自动化（之后花模型预算并写
+  // 代码托管），与 launch/retry 同标 elevated。
+  'development-missions:handoff': catalogEntry('development-missions:handoff', {
+    group: 'repositories',
+  }),
+  'development-missions:attach': catalogEntry('development-missions:attach', {
+    group: 'repositories',
+  }),
+  'development-missions:resume': catalogEntry('development-missions:resume', {
+    group: 'repositories',
+    risk: 'elevated',
+  }),
   'tasks:execute': catalogEntry('tasks:execute', {
     group: 'tasks',
     risk: 'elevated',
@@ -967,9 +984,11 @@ const USER_EXECUTE: ReadonlyArray<Permission> = [
   // running a workflow, and the whole point of the template merge is that an
   // ordinary group member can pick one and start work.
   'code-rounds:launch',
-  // RFC-310 —— 同 code-rounds:launch 组：launch/retry 是 execute 语义。
+  // RFC-310 —— 同 code-rounds:launch 组：launch/retry 是 execute 语义；
+  // PR-7b 的 resume 重启自动化（重新花预算），同属 execute。
   'development-missions:launch',
   'development-missions:retry',
+  'development-missions:resume',
   'tasks:execute',
 ]
 
@@ -981,10 +1000,13 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   'users:search',
   'tasks:read',
   'tasks:read:own',
-  // RFC-310 —— Mission 成员级交互（launch/retry 在 USER_EXECUTE 组）。
+  // RFC-310 —— Mission 成员级交互（launch/retry/resume 在 USER_EXECUTE 组）。
   'development-missions:read',
   'development-missions:interact',
   'development-missions:cancel',
+  // PR-7b —— 交接控制面与 cancel 同档（不花预算、不外发写）。
+  'development-missions:handoff',
+  'development-missions:attach',
   'tasks:update',
   'account:self',
   // RFC-041 / RFC-099 / RFC-305: memory management is "scope-resource owner or

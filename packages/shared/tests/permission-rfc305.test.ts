@@ -68,7 +68,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
     // 78 points − 7 guest baseline = 71.
     // RFC-304 had made it 74 (81 − 7) when the two template layers were eight
     // points; RFC-309 merged them to four and added `code-rounds:launch`.
-    expect(grantableAdditionalPermissions('guest')).toHaveLength(98) // RFC-310 +22+5
+    expect(grantableAdditionalPermissions('guest')).toHaveLength(101) // RFC-310 +22+5、PR-7b +3
     expect(grantableAdditionalPermissions('guest')).toContain('resource-acl:private')
     expect(grantableAdditionalPermissions('guest')).toContain('tasks:execute')
   })

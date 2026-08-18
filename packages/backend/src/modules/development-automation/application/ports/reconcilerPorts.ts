@@ -534,6 +534,33 @@ export interface MrEffectsPort {
   >
 }
 
+/** PR-7b T77 —— source-control conflict merge（prepare/finish 结构同形）。 */
+export interface ConflictMergePort {
+  prepare(input: {
+    readonly baselineRepoPath: string
+    readonly sourceSha: string
+    readonly targetSha: string
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly workspacePath: string
+        readonly conflictPaths: readonly string[]
+        cleanup(): void
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+  finish(input: {
+    readonly workspacePath: string
+    readonly sourceSha: string
+    readonly targetSha: string
+    readonly conflictPaths: readonly string[]
+    readonly missionId: string
+  }): Promise<
+    | { readonly ok: true; readonly mergeCommitSha: string; readonly treeOid: string }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+}
+
 export interface ReconcilerPorts {
   readonly repositoryFacts?: RepositoryFactsCollectorPort
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
@@ -554,6 +581,7 @@ export interface ReconcilerPorts {
   readonly verificationExecution?: VerificationExecutionPort
   readonly mrEffects?: MrEffectsPort
   readonly uploadPublication?: UploadPublicationPort
+  readonly conflictMerge?: ConflictMergePort
   readonly pipelineEvidence?: PipelineEvidencePort
   readonly pipelineImport?: PipelineImportPort
 }

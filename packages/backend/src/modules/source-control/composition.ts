@@ -18,6 +18,7 @@ import {
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import { deriveChangeCandidate, stageCandidateTree } from './application/changeCandidate'
 import { commitCandidate, pushCandidate } from './application/deliverCandidate'
+import { finishConflictMerge, prepareConflictMerge } from './application/conflictMerge'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
 
 /** RFC-308 temporary composition seam until RFC-294 W5 owns durable WorkspaceRef. */
@@ -110,4 +111,16 @@ export function bindCandidateDeliveryParticipant(): {
   push: typeof pushCandidate
 } {
   return { stage: stageCandidateTree, commit: commitCandidate, push: pushCandidate }
+}
+
+/**
+ * RFC-310 PR-7b T77：conflict merge 的 source-control 半（prepare 保留
+ * conflict markers 供 repair Agent、finish 只收冲突集并以平台身份产 merge
+ * commit）。结构同形注入 development-automation；Mission 侧永不直接调 Git。
+ */
+export function bindConflictMergeParticipant(): {
+  prepare: typeof prepareConflictMerge
+  finish: typeof finishConflictMerge
+} {
+  return { prepare: prepareConflictMerge, finish: finishConflictMerge }
 }

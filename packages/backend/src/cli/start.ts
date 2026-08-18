@@ -20,6 +20,7 @@ import { composeRequirementSourceRunner } from '@/modules/integration/compositio
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
+  bindConflictMergeParticipant,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { ulid } from 'ulid'
@@ -1003,6 +1004,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     requirementSource: composeRequirementSourceRunner(db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant(),
+    conflictMerge: bindConflictMergeParticipant(),
     ...buildDevelopmentDeliveryDeps(db, secretBox),
     ...buildDevelopmentPipelineDeps(db),
     ...buildDevelopmentMrFactsDeps(db, secretBox),
