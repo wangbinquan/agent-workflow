@@ -15,22 +15,23 @@
 // remaining capabilities land with their own PRs, and each is checked by the
 // same assertion the day it is added.
 
-import { ReviewEnvelopeSchema } from '@/modules/code-capability/domain/reviewEnvelope'
-import {
-  CommentFixEnvelopeSchema,
-  COMMENT_FIX_AGENT_SLOT,
-} from '@/modules/code-capability/domain/commentFixEnvelope'
-import {
-  CiFixEnvelopeSchema,
-  CI_FIX_AGENT_SLOT,
-} from '@/modules/code-capability/domain/ciFixEnvelope'
-import {
-  ComprehendEnvelopeSchema,
-  ImplementEnvelopeSchema,
-  COMPREHEND_AGENT_SLOT,
-  IMPLEMENT_AGENT_SLOT,
-} from '@/modules/code-capability/domain/requirementEnvelope'
-import { REVIEW_AGENT_SLOT } from '@/modules/code-capability/application/reviewStage'
+import { z } from 'zod'
+
+// RFC-310 PR-10 T104：执行器与 envelope 校验已随 writer 删除；本目录只剩读面
+// （GET capabilities / stage graph 投影 / 历史 round 渲染）。schema 字段以
+// permissive 占位满足类型（无任何执行者消费），slot 名保留为历史事实常量
+// （与 development-automation/migrationAnalyzer 的对拍锚一致）。
+const RetiredEnvelopeSchema = z.unknown()
+const ReviewEnvelopeSchema = RetiredEnvelopeSchema
+const CommentFixEnvelopeSchema = RetiredEnvelopeSchema
+const CiFixEnvelopeSchema = RetiredEnvelopeSchema
+const ComprehendEnvelopeSchema = RetiredEnvelopeSchema
+const ImplementEnvelopeSchema = RetiredEnvelopeSchema
+const REVIEW_AGENT_SLOT = 'reviewer'
+const COMMENT_FIX_AGENT_SLOT = 'fixer'
+const CI_FIX_AGENT_SLOT = 'ci-fixer'
+const COMPREHEND_AGENT_SLOT = 'analyst'
+const IMPLEMENT_AGENT_SLOT = 'implementer'
 import {
   validateStageContract,
   type CodeCapabilityId,

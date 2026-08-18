@@ -12,15 +12,59 @@
 // resolves "an agent visible to this repo for this slot" would report ready and
 // then fail on the MR, in front of the author.
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { capabilityTemplates } from '@/db/schema'
+import { capabilityTemplates, webhookTriggers } from '@/db/schema'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { parseCodeCapabilityId } from '@/modules/code-capability/domain/stageContract'
 import type { ReadinessInput } from '@/modules/code-capability/domain/templateLayers'
-import { resolveCodeHostEndpointId } from '@/modules/code-capability/composition/mrReviewEnvironment'
-import { findCapabilityTriggerRow } from '@/services/codeCapabilityTrigger'
+import { resolveCodeHostEndpointId } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { resolveAgentForBinding } from '@/services/codeReviewAgentCaller'
+
+/** T104 后内联自 services/codeCapabilityTrigger（读面自持，writer 已删）。 */
+async function findCapabilityTriggerRow(
+  db: DbClient,
+  key: { endpointId: string; repoId: string; capability: string },
+): Promise<{ triggerId: string; events: readonly string[] } | null> {
+  const rows = await db
+    .select({
+      id: webhookTriggers.id,
+      repoScope: webhookTriggers.repoScope,
+      eventTypes: webhookTriggers.eventTypes,
+    })
+    .from(webhookTriggers)
+    .where(
+      and(
+        eq(webhookTriggers.endpointId, key.endpointId),
+        eq(webhookTriggers.launchKind, 'code-round'),
+        eq(webhookTriggers.launchRefId, key.capability),
+      ),
+    )
+  for (const row of rows) {
+    try {
+      const scope: unknown = JSON.parse(row.repoScope)
+      const paths =
+        typeof scope === 'object' && scope !== null
+          ? (scope as { paths?: unknown }).paths
+          : undefined
+      if (Array.isArray(paths) && paths.includes(key.repoId)) {
+        let events: string[] = []
+        try {
+          const parsed: unknown = JSON.parse(row.eventTypes)
+          if (Array.isArray(parsed)) {
+            events = parsed.filter((e): e is string => typeof e === 'string')
+          }
+        } catch {
+          events = []
+        }
+        return { triggerId: row.id, events }
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
 
 /**
  * Capabilities that cannot be woken by anything else.

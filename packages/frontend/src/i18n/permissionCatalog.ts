@@ -44,7 +44,6 @@ const EN_RESOURCES = {
   // manages rather than for the table: "department template" is what the
   // scripts live in, "team template" is what points it at agents and prompts.
   'capability-templates': 'Capability templates',
-  'code-rounds': 'Capability rounds',
   // RFC-310 — digital-employee configuration resources.
   'action-templates': 'Action templates',
   'verification-profiles': 'Verification profiles',
@@ -81,7 +80,6 @@ const ZH_RESOURCES = {
   'memory-distill-jobs': '记忆提炼任务',
   'mcp-runtime-tests': 'MCP 运行测试',
   'capability-templates': '能力模板',
-  'code-rounds': '能力轮次',
   // RFC-310 —— 数字员工配置资源。
   'action-templates': '动作模板',
   'verification-profiles': '验证配置',

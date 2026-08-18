@@ -75,7 +75,6 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // go/no-go. Like the other adapters it does NOT invent provenance — it
       // forwards whatever deps the executor derived from the invoker, so the
       // ownership rule this ratchet protects is unchanged by the fourth kind.
-      'services/codeRoundLaunch.ts': 1,
       // RFC-310 PR-4: the digital-employee host launch adapter (fork J,
       // reviewed in the PR-4 integration pass). Mirrors codeRoundLaunch step
       // for step — anchor seed + synthesized snapshot + StartTaskSchema

@@ -38,30 +38,19 @@ describe('RFC-308 hard-cut source inventory', () => {
     for (const token of forbidden) expect(source.includes(token), token).toBe(false)
   })
 
-  test('both publication consumers delegate candidate selection to source-control', () => {
+  test('the surviving publication consumer delegates candidate selection to source-control', () => {
+    // RFC-310 PR-10 T104/T105：code-capability 的 gitAdapter 随 writer 删除，
+    // 「双消费者」收缩为一个（普通任务 commit/push）。code-capability 只剩读
+    // 面，因此对它的断言从「经 public/participants 委托」变为**零 source-
+    // control / task-execution 依赖**——比原断言更强的收缩证明。
     const ordinary = readFileSync(join(BACKEND_SRC, 'services', 'commitPushRunner.ts'), 'utf8')
-    const code = readFileSync(
-      join(BACKEND_SRC, 'modules', 'code-capability', 'infrastructure', 'gitAdapter.ts'),
-      'utf8',
-    )
     expect(ordinary).toContain('bindRepositoryCommitParticipant')
     expect(ordinary).toContain('.prepare()')
     expect(ordinary).toContain('.publish(')
-    expect(code).toContain('TaskWorkspaceCommitParticipant')
-    expect(code).toContain('deps.taskCommit.freeze(')
-    expect(code).toContain('deps.taskCommit.publish(')
-    expect(code).toContain('deps.taskCommit.release(')
-    expect(code).not.toContain('@/modules/source-control/')
-    const scheduler = readFileSync(join(BACKEND_SRC, 'services', 'scheduler.ts'), 'utf8')
-    expect(scheduler).toContain('bindTaskWorkspaceCommitParticipant')
-    expect(scheduler).toContain('git: createGitAdapter({ taskCommit })')
     const codeCapability = sourceFiles(join(BACKEND_SRC, 'modules', 'code-capability'))
       .map((path) => readFileSync(path, 'utf8'))
       .join('\n')
-    expect(codeCapability).not.toMatch(
-      /modules\/(?:source-control|task-execution)\/(?:application|composition|domain|infrastructure)/,
-    )
-    expect(codeCapability).toContain('@/modules/task-execution/public/participants')
+    expect(codeCapability).not.toMatch(/modules\/(?:source-control|task-execution)\//)
     const taskAdapter = readFileSync(
       join(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'taskWorkspaceCommit.ts'),
       'utf8',
@@ -69,10 +58,8 @@ describe('RFC-308 hard-cut source inventory', () => {
     expect(taskAdapter).toContain('@/modules/source-control/public/participants')
     expect(taskAdapter).not.toContain('@/modules/source-control/composition')
     expect(ordinary).not.toMatch(/modules\/source-control\/(?:application|domain|infrastructure)/)
-    expect(code).not.toContain("['add', '-A']")
-    expect(code).not.toContain("['add', '-A', '--intent-to-add']")
-    expect(code).not.toMatch(/\[\s*'commit'/)
-    expect(code).not.toMatch(/\[\s*'push'/)
-    expect(code).not.toContain("['update-ref'")
+    // 原断言逐条禁止 code-capability 自己跑 git 动词（add/commit/push/
+    // update-ref）；T105 后该模块整体无 git 调用，一条正则覆盖全部。
+    expect(codeCapability).not.toMatch(/runGit|\[\s*'(?:add|commit|push|update-ref)'/)
   })
 })

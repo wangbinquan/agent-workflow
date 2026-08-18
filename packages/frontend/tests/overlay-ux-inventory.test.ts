@@ -197,10 +197,8 @@ const OVERLAY_CALLSITES = {
   // fills each of its AI slots. Before them the matrix could switch a
   // capability on but never point it at a configuration.
   // T63 added the bulk-change dialog: preview → apply → undo, all in one
-  // overlay because they are one decision the author is making.
-  // RFC-309 — two dialogs, not three: the framework and binding creators
-  // merged with the resources they create.
-  'routes/code.tsx': { family: 'resource-management', count: 2 },
+  // RFC-310 PR-10 T104/T105 —— matrix/bulk 与模板创建 Dialog 随 legacy 写面
+  // 删除；/code 只剩读面（activity/metrics），零 overlay。
   // RFC-310 — mission launch dialog（三输入形态）与 requirement 文件预览。
   'routes/code.missions.tsx': { family: 'task-execution', count: 1 },
   // RFC-310 PR-8 T90 — assignment 编辑 Dialog。
@@ -220,7 +218,6 @@ const OVERLAY_CALLSITES = {
   // RFC exists to create.
   // RFC-309 — renamed with its scope: the panel used to pick a capability and
   // then a configuration; it is now handed one template and edits that.
-  'components/code/TemplateFlowEditor.tsx': { family: 'resource-management', count: 1 },
   'routes/reviews.detail.tsx': { family: 'review-and-clarify', count: 1 },
 
   'components/fusion/FuseDialog.tsx': { family: 'memory-and-fusion', count: 1 },

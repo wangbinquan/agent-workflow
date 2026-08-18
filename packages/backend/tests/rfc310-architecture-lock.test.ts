@@ -18,7 +18,7 @@
 // composition.ts → 第 2 条红；public/ 下临时建 misc.ts → 第 1 条红。
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -228,6 +228,87 @@ describe('rfc310 development-automation architecture lock', () => {
         if (re.test(line)) offenders.push(`${label}: ${line.trim()}`)
       }
     })
+    expect(offenders).toEqual([])
+  }, 30_000)
+
+  // ---- PR-10 T104/T105/T108：legacy code-capability 退役棘轮 -----------------
+
+  test('T104/T105: the legacy code-capability writer surface is gone and stays gone', () => {
+    // 一条棘轮同时锁四件事，任一被「顺手加回来」立刻红：
+    //   ①已删的 writer 家族文件不得复活；②生产代码不得再 import 它们；
+    //   ③code-capability 模块内不得出现任何写动词（insert/update/delete）；
+    //   ④shared 权限目录不得再有 code-rounds:launch。
+    const retiredFiles = [
+      'src/services/codeRoundLaunch.ts',
+      'src/services/codeCapabilityWake.ts',
+      'src/services/codeCapabilitySupersede.ts',
+      'src/services/codeCapabilityEnable.ts',
+      'src/services/codeCapabilityTrigger.ts',
+      'src/services/codeCapabilityScripts.ts',
+      'src/services/codeCapabilityHooks.ts',
+      'src/services/codeCapabilityGate.ts',
+      'src/services/codeRoundLease.ts',
+      'src/services/codeCiEventTarget.ts',
+      'src/modules/code-capability/composition',
+      'src/modules/code-capability/ports',
+      'src/modules/code-capability/application/stageEngine.ts',
+      'src/modules/code-capability/application/monitorLoop.ts',
+      'src/modules/code-capability/application/enableCommand.ts',
+      'src/modules/code-capability/application/launchRoundCommand.ts',
+      'src/modules/code-capability/infrastructure/gitAdapter.ts',
+      'src/modules/code-capability/infrastructure/codeHostAdapter.ts',
+    ]
+    const revived = retiredFiles.filter((rel) => existsSync(join(BACKEND_SRC, '..', rel)))
+    expect(revived).toEqual([])
+
+    const legacyRoot = join(BACKEND_SRC, 'modules', 'code-capability')
+    // 唯一豁免：capability-templates 资源自身的 upstream 同步写。该资源仍有
+    // 完整 CRUD 路由（routes/capabilityTemplates.ts），且 migrationAnalyzer
+    // 要读它出迁移报告——它的退役是 PR-10 之后的独立决策，不在 T104/T105
+    // 的 round-writer 删除面内。
+    const writeVerbExempt = new Set(['application/templateUpstreamStatus.ts'])
+    const writeVerbs: string[] = []
+    for (const file of walk(legacyRoot)) {
+      if (writeVerbExempt.has(relative(legacyRoot, file).replaceAll('\\', '/'))) continue
+      const lines = readFileSync(file, 'utf8').split('\n')
+      lines.forEach((line, index) => {
+        if (/^\s*(?:\/\/|\*|\/\*)/.test(line)) return
+        if (/\.(?:insert|update|delete)\(/.test(line)) {
+          writeVerbs.push(`${relative(legacyRoot, file)}:${index + 1}`)
+        }
+      })
+    }
+    expect(writeVerbs).toEqual([])
+
+    const permissions = readFileSync(
+      join(BACKEND_SRC, '..', '..', 'shared', 'src', 'schemas', 'permission.ts'),
+      'utf8',
+    )
+    expect(permissions).not.toContain("'code-rounds:launch'")
+  }, 30_000)
+
+  test('T108: the six writer-private legacy tables have no production consumer left', () => {
+    // 表本身**不 drop**（历史行的审计价值 + T103「查询仍可追溯」；清理随
+    // RFC-311 的保留期治理统一走）。锁的是「零生产读者」——任何重新接上的
+    // 消费者都意味着 writer 在悄悄复活。
+    const writerPrivateTables = [
+      'codeMrLeases',
+      'codeProducedMrs',
+      'codeArtifacts',
+      'codeWorkObservations',
+      'codeFixAttempts',
+      'codePublishIntents',
+    ]
+    const offenders: string[] = []
+    for (const file of walk(BACKEND_SRC)) {
+      if (file.endsWith(join('db', 'schema.ts'))) continue
+      const text = readFileSync(file, 'utf8')
+      for (const table of writerPrivateTables) {
+        if (new RegExp(`\\b${table}\\b`).test(text)) {
+          offenders.push(`${rel(file)} -> ${table}`)
+        }
+      }
+    }
     expect(offenders).toEqual([])
   }, 30_000)
 

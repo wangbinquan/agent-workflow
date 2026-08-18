@@ -474,15 +474,56 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 | 编号 | 任务                                                                                         | 依赖      | 状态 |
 | ---- | -------------------------------------------------------------------------------------------- | --------- | ---- |
-| T104 | 删除 legacy launch/monitor writer、arbitrate/select 决策、任意 hook Mission 路径             | T103      | ⏳   |
-| T105 | 删除旧 repo × capability 写面、五 capability 产品入口、unsafe generic code-host port 消费    | T103      | ⏳   |
-| T106 | digital-employee 路径移除 Git identity 注入并锁检测/回退接线；负扫描 0（env 继承按裁决保留） | T104      | ⏳   |
-| T107 | cross-context internal import 清零；public surface/required ports/field budgets 复核         | T104-T106 | ⏳   |
-| T108 | schema contract：确认 rollback 窗口/backup restore 后 drop 不再使用的 legacy write schema    | T103-T107 | ⏳   |
-| T109 | 系统 mock 全旅程、真实 runtime、Git remote、浏览器、crash/large-log/permission E2E           | 全部      | ⏳   |
-| T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local`    | T109      | ⏳   |
-| T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                      | T110      | ⏳   |
-| T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口              | T111      | ⏳   |
+| T104 | 删除 legacy launch/monitor writer、arbitrate/select 决策、任意 hook Mission 路径             | T103      | ✅   |
+| T105 | 删除旧 repo × capability 写面、五 capability 产品入口、unsafe generic code-host port 消费    | T103      | ✅   |
+| T106 | digital-employee 路径移除 Git identity 注入并锁检测/回退接线；负扫描 0（env 继承按裁决保留） | T104      | ✅   |
+| T107 | cross-context internal import 清零；public surface/required ports/field budgets 复核         | T104-T106 | ✅   |
+| T108 | schema contract：确认 rollback 窗口/backup restore 后 drop 不再使用的 legacy write schema    | T103-T107 | ✅   |
+| T109 | 系统 mock 全旅程、真实 runtime、Git remote、浏览器、crash/large-log/permission E2E           | 全部      | ✅   |
+| T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local`    | T109      | 🚧   |
+| T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                      | T110      | 🚧   |
+| T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口              | T111      | 🚧   |
+
+### PR-10 交付注记（2026-08-18）
+
+- **T109（先行交付）**：`rfc310-t109-full-journey-e2e` 两条旅程——A：requirement →
+  implement → verify → commit → CAS push → MR → watching → 真三读 fence facts → mock 种 human
+  review thread → 台账 selectable → policy 路由 `mr.feedback.apply` → Agent 修复 → 第二轮
+  verify/commit/fast-forward push（clone 对拍分支真实前进）→ reply 真回帖（self marker）→ 外部
+  merged → guard mark-terminal → claim released + effect 台账零悬挂；B：cutover `adoptActiveMr`
+  接管外部已开 MR → watching → 外部 merged → authoritative terminal。**E2E 抓出并修复 4 个生产级
+  缺陷**（mr fact 前置引用卡死 / feedback 计数陈旧重复发射 / 修复轮 candidate 永不发布 /
+  修复轮基线错导致 push 被拒），全部带回归锁。
+- **T104/T105**：`modules/code-capability` 102 → 19 文件（纯读面）。删除面：services writer 家族
+  10 文件、composition/ports 全目录、application/domain/infrastructure 的 writer 74 文件、
+  scheduler 的 `runCodeRoundNode` 区块（~900 行）+ 6 个辅助函数、`/api/code` 三条写路由
+  （PUT matrix / POST matrix/bulk / POST rounds）、webhookDispatch 的 code-round 全链
+  （render/launch/wake/close/receipt）、executor 与 execution types 的 `code-round` 臂、
+  前端 `/code` 的 matrix + templates 两个写面 tab 与 template 详情路由/编辑器/launch 面板、
+  `code-rounds:launch` 权限点（全链计数锁同步）、88 个 writer 测试。**存储层写函数一并清零**
+  （upsert/disable/wants/readCell、openDelivery/advanceDelivery）——读面测试改自持种子
+  （`tests/helpers/legacyCapabilitySeed.ts`），生产不留无调用者的写入口。历史 trigger 行的
+  fire 落 `skipped-trigger-invalid`；新建 code-round trigger 被 `webhook-trigger-kind-retired` 拒。
+- **T106**：负扫描通过——`development-automation` 模块内零 Git identity 注入（architecture lock
+  T7 持续锁定）；Agent 执行面（`agentActionExecution`）不携带 gitUserName/gitUserEmail；平台
+  自身 commit 用 `AW_INTERNAL_GIT_IDENTITY`（平台是 committer，非 Agent 身份），普通任务的
+  RFC-067 identity 路径按裁决保持不动。
+- **T107**：`code-capability` 与 `development-automation` 双向零 cross-context 内部 import
+  （grep 实证 + rfc308 守卫升级为「code-capability 零 source-control/task-execution 依赖 +
+  零 git 动词」，比原「经 public/participants 委托」更强）。
+- **T108 裁决：不 drop 任何 legacy 表**。6 张 writer 私有表（`code_mr_leases` /
+  `code_produced_mrs` / `code_artifacts` / `code_work_observations` / `code_fix_attempts` /
+  `code_publish_intents`）已零生产消费者，但其中 artifacts/observations 带审计价值，drop 是
+  不可逆信息销毁；其余 8 张仍被读面或 migrationAnalyzer 使用。表无 writer 即不再增长，清理更
+  适合随 RFC-311 的保留期治理统一走。新增棘轮锁定「六表零生产消费者」——重新接上任何消费者
+  即红（writer 悄悄复活的唯一信号）。
+- **退役棘轮**（rfc310-architecture-lock 新增两条）：已删 writer 文件不得复活 + code-capability
+  模块零写动词（唯一豁免：capability-templates 资源自身的 upstream 同步写——该资源仍有完整
+  CRUD 路由且被迁移分析器读取，其退役是 PR-10 之后的独立决策）+ shared 目录无 `code-rounds:launch`。
+- **诚实边界（T112 出账）**：①mission 列表读模型仍是全表无分页（`listMissionSummaries` 的
+  `.all()`，PR-2 既有实现）——随 RFC-311 的列表性能治理统一处理，已通报该 session；②legacy
+  `/code` 页保留 activity + metrics 两个读面 tab（历史 round/指标可追溯），其最终退役待
+  legacy 数据保留期到期；③capability-templates 资源整体退役未做（migrationAnalyzer 依赖）。
 
 ## 13. 验收标准到任务映射
 

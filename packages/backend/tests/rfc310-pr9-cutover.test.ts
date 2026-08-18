@@ -173,24 +173,12 @@ describe('RFC-310 PR-9 — the rounds API refuses new legacy work once frozen', 
       body: JSON.stringify({ repoId: 'group/project', templateId: 'tpl', input: {} }),
     })
 
-  test('frozen ⇒ 409 legacy-admission-frozen before body validation; rollback restores', async () => {
-    // pre：入口开放（这里会走到 body 校验 400——只证明不是冻结拒绝）。
-    const before = await post()
-    expect(JSON.stringify(await before.json())).not.toContain('legacy-admission-frozen')
-
+  test('the legacy rounds entry no longer exists at all (T104: stronger than a 409 gate)', async () => {
+    // PR-9 曾以 409 legacy-admission-frozen 冻结该入口；T104 把路由整个删除
+    // ——404 是比 gate 更强的收缩证明，且与 cutover phase 无关（pre 也 404）。
+    expect((await post()).status).toBe(404)
     expect(runCutoverCommand(freshDeps(db), 'freeze').ok).toBe(true)
-    const frozen = await post()
-    expect(frozen.status).toBe(409)
-    expect(JSON.stringify(await frozen.json())).toContain('legacy-admission-frozen')
-
-    expect(runCutoverCommand(freshDeps(db), 'rollback').ok).toBe(true)
-    const after = await post()
-    expect(JSON.stringify(await after.json())).not.toContain('legacy-admission-frozen')
-
-    // flip 之后同样关闭（live 不是回到开放，是切换完成）。
-    expect(runCutoverCommand(freshDeps(db), 'freeze').ok).toBe(true)
-    expect(runCutoverCommand(freshDeps(db), 'flip').ok).toBe(true)
-    expect((await post()).status).toBe(409)
+    expect((await post()).status).toBe(404)
   })
 })
 
@@ -266,27 +254,19 @@ describe('RFC-310 PR-9 — a frozen cutover skips webhook code-round fires', () 
     return triggerId
   }
 
-  test('frozen ⇒ fire lands skipped-legacy-admission-frozen with zero tasks launched', async () => {
-    expect(runCutoverCommand(freshDeps(db), 'freeze').ok).toBe(true)
+  test('a historical code-round trigger row fires as skipped-trigger-invalid, zero tasks (T104 tombstone)', async () => {
+    // PR-9 的 cutover gate（skipped-legacy-admission-frozen）随 writer 一并
+    // 退役：T104 后 code-round fire 无论 cutover phase 一律落
+    // skipped-trigger-invalid 留痕，绝不启动任务。
     const triggerId = await fireCodeRoundDelivery()
     const fires = await db
       .select()
       .from(webhookTriggerFires)
       .where(eq(webhookTriggerFires.triggerId, triggerId))
     expect(fires).toHaveLength(1)
-    expect(fires[0]!.outcome).toBe('skipped-legacy-admission-frozen')
+    expect(fires[0]!.outcome).toBe('skipped-trigger-invalid')
     expect(fires[0]!.taskId).toBeNull()
     expect(await db.select().from(tasks)).toHaveLength(0)
-  })
-
-  test('pre ⇒ the same fire is NOT gated (control: gate does not overreach)', async () => {
-    const triggerId = await fireCodeRoundDelivery()
-    const fires = await db
-      .select()
-      .from(webhookTriggerFires)
-      .where(eq(webhookTriggerFires.triggerId, triggerId))
-    expect(fires).toHaveLength(1)
-    expect(fires[0]!.outcome).not.toBe('skipped-legacy-admission-frozen')
   })
 })
 

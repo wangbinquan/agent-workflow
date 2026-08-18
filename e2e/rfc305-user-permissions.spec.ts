@@ -173,9 +173,13 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // RFC-310: +22 config-resource points (PR-1B) and +5 development-missions
   // points (PR-2) ⇒ 105 rows; the user preset difference gained exactly one
   // grantable point (repository-employee-assignments:update) ⇒ 25.
-  // PR-7b +3 (handoff/attach/resume) ⇒ 108; PR-9 +1 (cutover) ⇒ 109.
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(109)
-  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(25)
+  // PR-7b +3 (handoff/attach/resume) ⇒ 108; PR-9 +1 (cutover) ⇒ 109;
+  // PR-10 −1 (code-rounds:launch retired with the legacy writer) ⇒ 108.
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(108)
+  // PR-9 +1 grantable (development-missions:cutover is admin-tier, so it is a
+  // preset difference); PR-10 −1 row but +0 grantable (code-rounds:launch was
+  // in the user baseline) ⇒ 26.
+  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(26)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')
   await dialog.getByLabel(/^Password/).fill(password)

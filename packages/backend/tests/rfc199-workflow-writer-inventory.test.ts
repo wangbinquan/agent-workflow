@@ -19,7 +19,6 @@ const EXPECTED_WRITERS = {
     // RFC-304: the code-round host anchor seed. Same shape as the other two
     // host seeds — a builtin, empty-definition FK anchor written through
     // serializeWorkflowDefinitionStorageV1, never a user-visible workflow.
-    'services/codeRoundLaunch.ts': 1,
     // RFC-310 PR-4: the digital-employee host anchor seed — the fourth host
     // seed, same builtin FK-anchor shape (lazy idempotent, synthesized
     // single-node snapshot, never user-visible).
@@ -146,7 +145,8 @@ describe('RFC-199 workflow writer inventory', () => {
   })
 
   test('every production insert stores a canonically serialized definition', () => {
-    expect(inventory.insertValueArgs).toHaveLength(5)
+    // RFC-310 PR-10 T104：codeRoundLaunch 随 legacy writer 删除（host workflow 的 insert 点一并消失）。
+    expect(inventory.insertValueArgs).toHaveLength(4)
     for (const { valueArg } of inventory.insertValueArgs) {
       expect(valueArg).not.toBeNull()
       expect(valueArg).toMatch(/\bdefinition\s*:\s*serializeWorkflowDefinitionStorageV1\s*\(/)

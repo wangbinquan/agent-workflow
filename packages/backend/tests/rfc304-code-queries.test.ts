@@ -11,7 +11,6 @@
 //     the resulting readiness, rather than pretending it is now running.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -22,6 +21,7 @@ import {
   codeWorkItems,
   codeWorkRounds,
   webhookEndpoints,
+  webhookTriggers,
 } from '../src/db/schema'
 import {
   ROUNDS_PER_ITEM,
@@ -31,24 +31,13 @@ import {
   createCodeWorkItemProjectionQuery,
   deriveRoundStatus,
 } from '../src/modules/code-capability/application/codeMatrixQuery'
-import { createEnableCommand } from '../src/modules/code-capability/application/enableCommand'
 import { repairActionsFor } from '../src/modules/code-capability/domain/repairActions'
-import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
-
-const READY_FACTS = {
-  hasBinding: true,
-  frameworkExists: true,
-  hasTrigger: true,
-  codeHostConfigured: true,
-  invisibleAgentSlots: [] as string[],
-  requiresWakeSource: false,
-  hasWakeSource: false,
-}
 
 describe('RFC-304 — the capability matrix a page renders', () => {
   let db: DbClient
@@ -94,14 +83,29 @@ describe('RFC-304 — the capability matrix a page renders', () => {
       updatedAt: NOW,
       capability: 'mr-review',
     })
-    const enabled = await createEnableCommand({ db, endpointId: ENDPOINT, now: () => NOW }).enable({
+    // T104/T105 后 writer 已删：读面测试自持种子——平台 trigger 行
+    // （launchKind='code-round'，historical）+ cell 行；readiness 由查询读时
+    // 现算，逐项核对这些真实行。
+    await db.insert(webhookTriggers).values({
+      id: 'tr-cell',
+      name: 'mr-review · group/project',
+      endpointId: ENDPOINT,
+      ownerUserId: 'user-1',
+      repoScope: JSON.stringify({ kind: 'paths', paths: [REPO] }),
+      eventTypes: JSON.stringify(['mr_opened', 'mr_updated']),
+      ignoreUsernames: JSON.stringify([]),
+      launchKind: 'code-round',
+      launchRefId: 'mr-review',
+      launchPayload: JSON.stringify({ capability: 'mr-review' }),
+      autoRegisterRepos: false,
+    })
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
-      enabled: true,
       templateId: 'binding-1',
-      actorUserId: 'user-1',
+      enabled: true,
+      now: NOW,
     })
-    expect(enabled.ok).toBe(true)
 
     const [row] = await createCodeMatrixQuery(db).forRepo(REPO)
     expect(row?.readiness).toBe('ready')
@@ -110,12 +114,11 @@ describe('RFC-304 — the capability matrix a page renders', () => {
   })
 
   test('a misconfigured cell pairs each issue with where to fix it', async () => {
-    await upsertCapabilityCell(db, {
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
       templateId: null,
       enabled: true,
-      facts: { ...READY_FACTS, hasBinding: false, frameworkExists: false },
       dependencyRevision: 1,
       now: NOW,
     })
@@ -133,12 +136,11 @@ describe('RFC-304 — the capability matrix a page renders', () => {
   })
 
   test('another repository’s cells are not returned', async () => {
-    await upsertCapabilityCell(db, {
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
       templateId: null,
       enabled: true,
-      facts: READY_FACTS,
       dependencyRevision: 1,
       now: NOW,
     })
@@ -416,213 +418,6 @@ describe('RFC-304 — a round’s status is derived, not stored', () => {
     expect(deriveRoundStatus(null, 1)).toBe('ended-without-outcome')
   })
 })
-
-describe('RFC-304 — enabling a capability', () => {
-  let db: DbClient
-  beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
-    await db.insert(webhookEndpoints).values({
-      id: ENDPOINT,
-      name: 'gl',
-      provider: 'gitlab',
-      urlToken: 'aw_whk_enable',
-      secretEnc: 'sealed',
-      enabled: true,
-    })
-  })
-  afterEach(() => db.$client.close())
-
-  const command = () => createEnableCommand({ db, endpointId: ENDPOINT, now: () => NOW })
-
-  test('a capability the platform does not ship is REFUSED, not saved', async () => {
-    // Saving it would leave a row in the matrix forever, looking like a feature
-    // that never runs.
-    const result = await command().enable({
-      repoId: REPO,
-      capability: 'mr-invented',
-      enabled: true,
-      actorUserId: 'user-1',
-    })
-    expect(result.ok).toBe(false)
-    expect(!result.ok && result.code).toBe('unknown-capability')
-  })
-
-  test('enabling with prerequisites missing SAVES, and says what is still needed', async () => {
-    // Configuring in whatever order suits you is legitimate. What must not
-    // happen is a switch that reads "on" beside a capability that will never
-    // run, with the person left to infer that from the silence.
-    const result = await command().enable({
-      repoId: REPO,
-      capability: 'mr-review',
-      enabled: true,
-      actorUserId: 'user-1',
-    })
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.row.enabled).toBe(true)
-    expect(result.row.readiness).toBe('misconfigured')
-    expect(result.row.repairActions.length).toBeGreaterThan(0)
-  })
-
-  test('a fully configured repository comes back READY', async () => {
-    const agentId = 'agent-1'
-    await db.insert(agents).values({
-      id: agentId,
-      name: 'reviewer-agent',
-      bodyMd: 'x',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityTemplates).values({
-      id: 'fw-1',
-      name: 'f',
-      capability: 'mr-review',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityTemplates).values({
-      id: 'binding-1',
-      name: 'b',
-      agentBySlotJson: JSON.stringify({ reviewer: agentId }),
-      createdAt: NOW,
-      updatedAt: NOW,
-      capability: 'mr-review',
-    })
-    // Saved twice on purpose — not because one is insufficient (see the
-    // single-save test below), but because re-saving an already-ready cell must
-    // be idempotent rather than knocking it back to misconfigured.
-    await command().enable({
-      repoId: REPO,
-      capability: 'mr-review',
-      enabled: true,
-      templateId: 'binding-1',
-      actorUserId: 'user-1',
-    })
-    const result = await command().enable({
-      repoId: REPO,
-      capability: 'mr-review',
-      enabled: true,
-      templateId: 'binding-1',
-      actorUserId: 'user-1',
-    })
-
-    expect(result.ok).toBe(true)
-    expect(result.ok && result.row.readiness).toBe('ready')
-  })
-
-  test('the matrix RE-DERIVES readiness — a cell does not stay `ready` after its framework is deleted', async () => {
-    // The defect this closes. `forRepo` used to read the STORED readiness
-    // verbatim, and the only writer is `enable` — so a cell's readiness was
-    // whatever was true the last time somebody saved it. Delete the framework
-    // the binding points at, or the agent, or the trigger, and the matrix still
-    // said `ready`. The person only found out when a webhook arrived and
-    // nothing happened, which is the worst possible way to learn it: a `ready`
-    // that cannot run is worse than a red one, because it stops the search.
-    const agentId = 'agent-1'
-    await db.insert(agents).values({
-      id: agentId,
-      name: 'reviewer-agent',
-      bodyMd: 'x',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityTemplates).values({
-      id: 'binding-1',
-      name: 'b',
-      agentBySlotJson: JSON.stringify({ reviewer: agentId }),
-      createdAt: NOW,
-      updatedAt: NOW,
-      capability: 'mr-review',
-    })
-    await command().enable({
-      repoId: REPO,
-      capability: 'mr-review',
-      enabled: true,
-      templateId: 'binding-1',
-      actorUserId: 'user-1',
-    })
-    // Ready as saved — the baseline, so the assertion below cannot pass merely
-    // because this repository was never ready in the first place.
-    const before = await createCodeMatrixQuery(db).forRepo(REPO)
-    expect(before[0]?.readiness).toBe('ready')
-
-    // Somebody removes the TEMPLATE this cell points at. Nothing touches the
-    // cell: no save, no event, no revision bump — which is precisely why a
-    // stored answer goes stale and a derived one cannot.
-    //
-    // RFC-309: this used to delete the framework the binding named, one hop
-    // further away. The merge removed the hop; the property under test — a
-    // `ready` that cannot run is worse than a red one, because it stops the
-    // search — is unchanged.
-    await db.delete(capabilityTemplates).where(eq(capabilityTemplates.id, 'binding-1'))
-
-    const after = await createCodeMatrixQuery(db).forRepo(REPO)
-    expect(after[0]?.readiness).toBe('misconfigured')
-    expect(after[0]?.issues.map((i) => i.code)).toContain('framework-missing')
-    // And it comes with somewhere to go, same as any other issue.
-    expect(after[0]?.repairActions.length).toBeGreaterThan(0)
-  })
-
-  test('the trigger deadlock stays broken: ONE save reaches ready', async () => {
-    // The bug (found 2026-08-16, fixed same day): readiness required a trigger,
-    // and `enableCapability` armed one only for an already-ready cell. So a real
-    // repository could never reach `ready` — save after save, forever
-    // misconfigured with `no-trigger`. Every test passed `hasTrigger: true` by
-    // hand, so nothing was red.
-    //
-    // Asserts ONE save, not two: the two-save version passes even with the
-    // deadlock half-fixed, and "you have to press it twice" is exactly the
-    // symptom a user would report.
-    const agentId = 'agent-solo'
-    await db.insert(agents).values({
-      id: agentId,
-      name: 'reviewer-agent',
-      bodyMd: 'x',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    await db.insert(capabilityTemplates).values({
-      id: 'binding-solo',
-      name: 'b',
-      agentBySlotJson: JSON.stringify({ reviewer: agentId }),
-      createdAt: NOW,
-      updatedAt: NOW,
-      capability: 'mr-review',
-    })
-
-    const result = await command().enable({
-      repoId: 'solo/repo',
-      capability: 'mr-review',
-      enabled: true,
-      templateId: 'binding-solo',
-      actorUserId: 'user-1',
-    })
-
-    expect(result.ok).toBe(true)
-    expect(result.ok && result.row.readiness).toBe('ready')
-    expect(result.ok && result.row.issues).toEqual([])
-  })
-
-  test('disabling reports DISABLED rather than misconfigured', async () => {
-    const result = await command().enable({
-      repoId: REPO,
-      capability: 'mr-review',
-      enabled: false,
-      actorUserId: 'user-1',
-    })
-    expect(result.ok && result.row.readiness).toBe('disabled')
-  })
-})
-
-// RFC-304 T55 — the state view's third level: the model calls themselves.
-//
-// The determinism guard has always written these rows. Nothing read them back,
-// so a stage that succeeded on its fourth try looked exactly like one that
-// succeeded on its first, and the only way to find out was to open a runtime
-// transcript. That is the gap this projection closes, and the tests below are
-// mostly about the two things a naive version gets wrong: the ORDER (retries
-// have to read the way they happened) and the VERDICT (kept verbatim rather
-// than reduced to pass/fail, because different rejections need different fixes).
 describe('RFC-304 T55 — a round’s AI attempts', () => {
   let db: DbClient
 

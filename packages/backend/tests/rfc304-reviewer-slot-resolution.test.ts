@@ -19,21 +19,11 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { capabilityTemplates, agents } from '../src/db/schema'
 import { resolveReviewerAgent } from '../src/services/codeReviewAgentCaller'
-import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const REPO = 'repo-1'
-
-const facts = {
-  hasBinding: true,
-  frameworkExists: true,
-  hasTrigger: true,
-  codeHostConfigured: true,
-  invisibleAgentSlots: [] as string[],
-  requiresWakeSource: false,
-  hasWakeSource: false,
-}
 
 const ask = (db: DbClient) =>
   resolveReviewerAgent(db, { repoId: REPO, capability: 'mr-review', slot: 'reviewer' })
@@ -64,12 +54,11 @@ describe('RFC-304 — resolving the reviewer slot', () => {
       updatedAt: NOW,
       capability: 'mr-review',
     })
-    await upsertCapabilityCell(db, {
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
       templateId: 'binding-1',
       enabled: true,
-      facts,
       dependencyRevision: 1,
       now: NOW,
     })
@@ -108,12 +97,11 @@ describe('RFC-304 — resolving the reviewer slot', () => {
       capability: 'mr-monitor',
     })
     // Written FIRST, so it is the row a repo-only query is most likely to hit.
-    await upsertCapabilityCell(db, {
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-monitor',
       templateId: 'binding-monitor',
       enabled: true,
-      facts,
       dependencyRevision: 1,
       now: NOW,
     })
@@ -134,12 +122,11 @@ describe('RFC-304 — resolving the reviewer slot', () => {
   test('a cell with no binding is a DIFFERENT message from no cell', async () => {
     // Same screen, different field: one means "configure this repo", the other
     // means "you configured it but chose no binding".
-    await upsertCapabilityCell(db, {
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
       templateId: null,
       enabled: true,
-      facts: { ...facts, hasBinding: false },
       dependencyRevision: 1,
       now: NOW,
     })

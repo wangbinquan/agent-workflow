@@ -35,7 +35,6 @@ import {
 import { migrateTriggerRowTemplateToV2, parseTriggerRow } from '@/services/webhook/webhookDispatch'
 import { assertTriggerSaveable } from '@/services/webhook/triggerValidation'
 import { loadConfig } from '@/config'
-import { assertTriggerIsUserOwned } from '@/services/codeCapabilityTrigger'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 export interface WebhookTriggerServiceDeps {
@@ -199,6 +198,14 @@ export async function createWebhookTrigger(
     )
   }
   const body = parsed.data
+  // RFC-310 PR-10 T104：code-round writer 已删除——launchKind 值保留在 shared
+  // enum 只为解析历史行；新建一律拒（fire 只会落 skipped-trigger-invalid）。
+  if (body.launchKind === 'code-round') {
+    throw new ValidationError(
+      'webhook-trigger-kind-retired',
+      'code-round triggers were retired by RFC-310; use development missions',
+    )
+  }
   const endpoint = (
     await deps.db
       .select({ id: webhookEndpoints.id })
@@ -249,10 +256,8 @@ export async function updateWebhookTrigger(
   rawBody: unknown,
 ): Promise<WebhookTrigger> {
   const storedRow = await loadRowOrThrow(deps.db, id)
-  // RFC-304: capability-backed triggers are platform-owned. Editing one here
-  // would let the trigger page and the capability matrix disagree about the
-  // same behaviour, with no indication which one is in force.
-  await assertTriggerIsUserOwned(deps.db, id)
+  // RFC-310 T104：capability trigger 行已是历史遗留（writer 删除），允许用户
+  // 正常编辑/删除以清理。
   const row = await migrateTriggerRowTemplateToV2(deps.db, storedRow)
   requireWrite(actor, row)
   const parsed = UpdateWebhookTriggerSchema.safeParse(rawBody)
@@ -366,9 +371,6 @@ export async function deleteWebhookTrigger(
   id: string,
 ): Promise<void> {
   const row = await loadRowOrThrow(deps.db, id)
-  // RFC-304: deleting a capability's trigger from here would silently switch
-  // the capability off from a screen that never mentions capabilities.
-  await assertTriggerIsUserOwned(deps.db, id)
   requireWrite(actor, row)
   await deps.db.delete(webhookTriggers).where(eq(webhookTriggers.id, row.id))
 }

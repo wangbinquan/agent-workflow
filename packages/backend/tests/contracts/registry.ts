@@ -167,15 +167,12 @@ export const ENDPOINTS: EndpointSpec[] = [
   // 部门层（framework，含以 daemon 身份执行的脚本）刻意不在此面，它走
   // `scripts:author`。
   { method: 'GET', path: '/api/code/matrix/:repoId' },
-  { method: 'PUT', path: '/api/code/matrix/:repoId' },
   // RFC-304 T63 — the same cell change across many repositories. POST rather
   // than PUT because it is not addressed at one resource, and one endpoint with
   // a `preview` flag rather than two so the preview cannot describe something
   // the apply does not do.
-  { method: 'POST', path: '/api/code/matrix/bulk' },
   // RFC-309 — start a round from a template. The entrance RFC-304 promised
   // (T46b) and shipped only the issue-label half of.
-  { method: 'POST', path: '/api/code/rounds' },
   // RFC-310 PR-1B — 数字员工配置（字面路径端点；五资源的模板化 CRUD 端点由
   // mountConfigResource 生成，registry 按字面路径扫描不到，故不在此表）。
   { method: 'GET', path: '/api/code/repository-assignments' },

@@ -22,7 +22,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, capabilityTemplates, webhookEndpoints } from '../src/db/schema'
 import { gatherReadinessFacts } from '../src/modules/code-capability/application/readinessFacts'
 import { deriveReadiness } from '../src/modules/code-capability/domain/templateLayers'
-import { upsertCapabilityCell } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
@@ -74,20 +74,11 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
 
   /** The cell must exist for slot resolution to find its binding. */
   const seedCell = async (templateId: string | null = 'binding-1') => {
-    await upsertCapabilityCell(db, {
+    await seedCapabilityCell(db, {
       repoId: REPO,
       capability: 'mr-review',
       templateId,
       enabled: true,
-      facts: {
-        hasBinding: true,
-        frameworkExists: true,
-        hasTrigger: true,
-        codeHostConfigured: true,
-        invisibleAgentSlots: [],
-        requiresWakeSource: false,
-        hasWakeSource: false,
-      },
       dependencyRevision: 1,
       now: NOW,
     })

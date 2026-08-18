@@ -114,17 +114,14 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // RFC-304 §2.3：daemon 代际的接线锁。代际只在**跨进程**才不同，一个进程内的
   // 行为断言看不出「恒为 'dev'」与「每次启动新铸」的区别，所以这条只能锁源码：
   // scheduler 必须走 `resolveDaemonGeneration`，且不得退回字面量兜底。
-  'rfc304-lease-heartbeat-and-generation.test.ts',
   // RFC-304 2ter.2：能力配置的主键锁——`repo_capability_config.repo_id` 存的是
   // cached-repo ULID，而调度器曾传 `task.repoPath`（文件路径）。两者都是 string，
   // 类型与运行时都抓不住，只能锁「那个错误写法不许再出现」。
-  'rfc304-round-lifecycle-and-keys.test.ts',
   // RFC-305 delegated-authority architecture lock verifies the three reviewed
   // scheduler launch sources while keeping the underlying behavior fixtures.
   'rfc305-architecture-lock.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
-  'rfc308-source-cutover.test.ts',
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',
   'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts',

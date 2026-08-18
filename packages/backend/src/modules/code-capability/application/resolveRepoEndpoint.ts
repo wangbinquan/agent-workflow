@@ -23,7 +23,7 @@
 // Only when two providers both have endpoints does the repository's URL have to
 // break the tie, and only then can it fail to.
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { cachedRepos, codeHostConnections, webhookEndpoints } from '@/db/schema'
 import {
   resolveRepoProvider,
@@ -122,4 +122,38 @@ export async function providerForRepo(
 ): Promise<'gitlab' | 'github' | null> {
   const verdict = await resolveRepoEndpoint(db, repoId)
   return verdict.ok ? verdict.provider : null
+}
+
+/**
+ * Which webhook endpoint this round's identity is keyed to.
+ *
+ * The task row does not carry it (the launch path predates the work item), and
+ * the schema comment records that this table is expected to hold ONE row. So
+ * the single enabled endpoint for the provider is resolved here — and, when
+ * that assumption stops holding, this refuses rather than picking one.
+ *
+ * Picking arbitrarily would be the worst outcome available: the endpoint is a
+ * component of the work item's identity key, so a round keyed to the wrong one
+ * gets its own parallel ledger, invisible to the one the previous rounds wrote.
+ */
+export async function resolveCodeHostEndpointId(
+  db: DbClient,
+  provider: 'gitlab' | 'github',
+): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  const rows = await db
+    .select({ id: webhookEndpoints.id })
+    .from(webhookEndpoints)
+    .where(and(eq(webhookEndpoints.provider, provider), eq(webhookEndpoints.enabled, true)))
+
+  if (rows.length === 1) return { ok: true, id: rows[0]!.id }
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      message: `no enabled ${provider} webhook endpoint is configured, so this round has no identity to key its findings to`,
+    }
+  }
+  return {
+    ok: false,
+    message: `${rows.length} enabled ${provider} webhook endpoints exist and the task does not record which one delivered this event — pick one explicitly rather than letting the round key its ledger to an arbitrary endpoint`,
+  }
 }

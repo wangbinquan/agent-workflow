@@ -72,8 +72,9 @@ describe('PERMISSIONS catalog', () => {
     // read/update（+2）⇒ **100**。危险字段（adapter 的 executable/secret）沿
     // RFC-309 字段级门先例仍走 `scripts:author`，不新设系统域点。
     // RFC-310 PR-2 +5（development-missions launch/read/interact/cancel/retry）⇒ 105；
-    // PR-7b +3（handoff/attach/resume）⇒ 108；PR-9 +1（cutover runbook）⇒ 109。
-    expect(PERMISSIONS.length).toBe(109)
+    // PR-7b +3（handoff/attach/resume）⇒ 108；PR-9 +1（cutover runbook）⇒ 109；
+    // PR-10 T104 −1（code-rounds:launch 随 legacy writer 删除）⇒ 108。
+    expect(PERMISSIONS.length).toBe(108)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -131,7 +132,6 @@ describe('PERMISSIONS catalog', () => {
       // RFC-309 — 从模板发起一轮。与 workflows:execute / tasks:execute 同档，
       // 而不是与 repos:execute（manager+）同档：这件事是「跑一个已配好的东西」，
       // 而模板归一的全部意义就是普通组员能挑一份自己动手。
-      'code-rounds:launch',
       'workgroups:update',
       'workgroups:delete',
       // RFC-247 — schedule create/edit sat behind `tasks:launch` (RFC-165 N1-r3);
@@ -200,7 +200,7 @@ describe('PERMISSIONS catalog', () => {
     // 三个模板写点仍在基线里，但含义变了——它们不再蕴含脚本编写权（字段级门）。
     // RFC-310 +21（五资源×4 全入 user 基线 + assignments:read；assignments:update
     // 归 manager 档，对齐 repos:update）⇒ 75。
-    expect(ROLE_PERMISSIONS.user.length).toBe(83) // RFC-310 PR-2 +5、PR-7b +3（Mission 面全员）
+    expect(ROLE_PERMISSIONS.user.length).toBe(82) // RFC-310 PR-2 +5、PR-7b +3（Mission 面全员）
   })
 
   test('guest preset is exactly public-only reads for the six ACL resource domains', () => {

@@ -23,10 +23,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createCodeDeliveryChainQuery } from '../src/modules/code-capability/application/codeMatrixQuery'
-import {
-  advanceDelivery,
-  openDelivery,
-} from '../src/modules/code-capability/infrastructure/sqliteDeliveryChain'
+import { seedDelivery } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -41,30 +38,22 @@ describe('RFC-304 T61 — reading the delivery chain', () => {
   })
 
   /** One delivery that got as far as `step`, with the given outcome. */
+  // T105 后写面已删：读面测试自持种子（表仍在——历史投递链可追溯）。行的
+  // 终态就是 openDelivery→advanceDelivery 曾写出的最终形状。
   const seed = async (input: {
     correlationId: string
     project: string
     outcome?: { kind: 'dropped' | 'failed'; step: 'matched' | 'routed' | 'queued'; reason: string }
     now: number
-  }): Promise<string> => {
-    const { id } = await openDelivery({
-      db,
+  }): Promise<string> =>
+    await seedDelivery(db, {
       correlationId: input.correlationId,
       stableProjectId: input.project,
+      step: input.outcome?.step ?? 'received',
+      outcome: input.outcome?.kind ?? 'ok',
+      reason: input.outcome?.reason ?? null,
       now: input.now,
     })
-    if (input.outcome !== undefined) {
-      await advanceDelivery({
-        db,
-        deliveryId: id,
-        step: input.outcome.step,
-        outcome: input.outcome.kind,
-        reason: input.outcome.reason,
-        now: input.now + 1,
-      })
-    }
-    return id
-  }
 
   test('what happened on THIS project, newest first', async () => {
     await seed({ correlationId: 'c1', project: 'proj-1', now: 1_000 })

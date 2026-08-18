@@ -207,7 +207,6 @@ export const PERMISSIONS = [
   // spends model budget and writes to a code host, which is not the same act as
   // being allowed to change a repository's configuration, and should not be
   // granted as a side effect of it.
-  'code-rounds:launch',
   // RFC-310 PR-2 —— DevelopmentMission 生命周期操作面（数字员工任务）。
   // upgrade 点随 PR-8 配置路由批次再入目录：RFC-247 反向自检要求每个点被
   // RouteMeta 引用，先于路由登记会拒启。
@@ -629,11 +628,7 @@ const permissionCatalog = {
     risk: 'elevated',
   }),
   'repos:execute': catalogEntry('repos:execute', { group: 'repositories', risk: 'critical' }),
-  'code-rounds:launch': catalogEntry('code-rounds:launch', {
-    group: 'repositories',
-    risk: 'elevated',
-  }),
-  // RFC-310 —— Mission 操作面：五点全员（user 基线，同 code-rounds:launch
+  // RFC-310 —— Mission 操作面：五点全员（user 基线
   // 档——USER_EXECUTE 携带 launch/retry，成员制与行级 ACL 是真正边界）；
   // launch/retry 标 elevated：花模型预算并最终写代码托管。
   'development-missions:launch': catalogEntry('development-missions:launch', {
@@ -991,8 +986,7 @@ const USER_EXECUTE: ReadonlyArray<Permission> = [
   // (manager+): the act is "run this configured thing", the same shape as
   // running a workflow, and the whole point of the template merge is that an
   // ordinary group member can pick one and start work.
-  'code-rounds:launch',
-  // RFC-310 —— 同 code-rounds:launch 组：launch/retry 是 execute 语义；
+  // RFC-310 —— launch/retry 是 execute 语义；
   // PR-7b 的 resume 重启自动化（重新花预算），同属 execute。
   'development-missions:launch',
   'development-missions:retry',

@@ -20,7 +20,6 @@ import { Route as codeAssignmentsRoute } from '@/routes/code.assignments'
 import { Route as codePoliciesRoute } from '@/routes/code.policies'
 import { Route as codePolicyDetailRoute } from '@/routes/code.policies.$id'
 import { Route as codeMissionDetailRoute } from '@/routes/code.missions.$id'
-import { Route as codeTemplateDetailRoute } from '@/routes/code.templates.$id'
 import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '@/routes/mcps'
 import { Route as mcpDetailRoute } from '@/routes/mcps.detail'
 import { Route as mcpNewRoute } from '@/routes/mcps.new'
@@ -143,8 +142,6 @@ const routeTree = rootRoute.addChildren([
   memoryRoute,
   // RFC-101: memory→skill fusion detail + approval gate.
   fusionDetailRoute,
-  // RFC-309: '/code/templates/$id' literal must precede '/code'.
-  codeTemplateDetailRoute,
   // RFC-310 T61: mission detail precedes list precedes '/code'.
   codeMissionDetailRoute,
   codeMissionsRoute,

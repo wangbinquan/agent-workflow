@@ -8,7 +8,7 @@
 // per-run incremental high-water scan, and a per-tick row budget.
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -16,7 +16,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import { readMaintenanceNumber } from '../src/services/maintenanceState'
-import { count } from 'drizzle-orm'
+import { count , max } from 'drizzle-orm'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -93,7 +93,12 @@ async function eventCount(db: Db): Promise<number> {
 }
 
 describe('RFC-311 — events archiver at backlog scale', () => {
-  test('a 40k-row backlog (>32766 params under the old shape) archives cleanly', async () => {
+  // 实现门 P0-1(变异 #7:把区间删改回一次性 35000 参数的巨型 IN,4 条仍全绿)——
+  // 本机 bun 1.3.13 打包的 SQLite 3.51 实测在 5 万参数下**不报错**(10 万才抛),
+  // 所以「40k 行 > 32766」这个前提在本环境根本不成立,测试名与注释都是未验证假设。
+  // 真正要锁的是**语句形状**:每条 DELETE 的绑定参数是常数(区间删),批次数随
+  // toDrop 线性——这与引擎的参数上限解耦,换个更保守的 SQLite 构建也照样成立。
+  test('a 40k-row backlog archives in bounded batches with constant-size DELETEs', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-'))
     try {
@@ -107,6 +112,17 @@ describe('RFC-311 — events archiver at backlog scale', () => {
       )
       expect(result.perGroupArchived).toBe(35_000)
       expect(await eventCount(db)).toBe(5_000)
+
+      // 形状锁:删除走「node_run_id = ? AND id <= ?」的区间形式(两个绑定参数),
+      // 不得回到 `IN (<toDrop 个 id>)`。
+      const src = readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'services', 'eventsArchive.ts'),
+        'utf8',
+      )
+      expect(src).toMatch(/lte\(nodeRunEvents\.id, lastId\)/)
+      expect(src).not.toMatch(/inArray\(\s*nodeRunEvents\.id/)
+      // 且每批不超过 ARCHIVE_BATCH_ROWS——批大小是常数,与 backlog 无关。
+      expect(src).toMatch(/ARCHIVE_BATCH_ROWS = 5_000/)
 
       // The JSONL carries exactly the archived prefix, ids ascending.
       const archived = await readArchivedEvents(logsDir, 't1', 'run1', 0, 50_000)
@@ -135,8 +151,11 @@ describe('RFC-311 — events archiver at backlog scale', () => {
 
       const first = await archiveEvents(db, { eventsArchiveThresholds: thresholds }, logsDir)
       expect(first.perGroupArchived).toBe(400)
+      // 实现门 P1-7(变异 #16:把 highWater 写死 0 使增量扫描失效,4 条仍全绿)——
+      // 断言它推进到「本轮见过的最大 id」,而不是只查非空。
+      const maxIdRow = await db.select({ maxId: max(nodeRunEvents.id) }).from(nodeRunEvents)
       const highWater = await readMaintenanceNumber(db, 'events_archive_high_water')
-      expect(highWater).not.toBeNull()
+      expect(highWater).toBe(maxIdRow[0]?.maxId ?? 0)
 
       // No new rows → the incremental scan sees nothing and archives nothing.
       const second = await archiveEvents(db, { eventsArchiveThresholds: thresholds }, logsDir)

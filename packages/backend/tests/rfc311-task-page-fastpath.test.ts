@@ -22,7 +22,7 @@ import { sql } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
-import { listTaskOperationsPage } from '../src/services/taskOperations'
+import { isDefaultView, listTaskOperationsPage } from '../src/services/taskOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -221,7 +221,33 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'taskOperations.ts'),
       'utf8',
     )
-    expect(src).not.toMatch(/branch_started_at\} AND [a-z]+\.id </)
+    // 注:插值变量是 camelCase(`${parsed.cursor.branchStartedAt}`),此前这条正则
+    // 写成 snake_case 永不匹配 ⇒ 恒真(实现门 P2-9)。
+    expect(src).not.toMatch(/branchStartedAt\} AND [a-z]+\.id </)
     expect(src.match(/branch_started_at, [a-z]+\.id\) < \(/g)).toHaveLength(2)
+  })
+
+  // 实现门 P0-2:oracle 比的是「快路径 vs 旧管线」,一旦 isDefaultView 恒 false 就
+  // 退化成 slow-vs-slow 的恒真比较——RFC 的头号交付可以被静默关掉而 CI 全绿。
+  // 这里直接把分流判据本身锁住(顺带锁 PR-4 的范围修正:受限 actor 不得走快路径)。
+  test('the fast path is actually selected for the admin default view only', () => {
+    const defaults = {
+      view: 'all' as const,
+      statuses: [],
+      subject: 'all' as const,
+      scope: 'all' as const,
+      origin: 'all' as const,
+    }
+    expect(isDefaultView(actor('admin', 'admin'), defaults)).toBe(true)
+    // 受限 actor:分支聚合按可见性裁剪树算,共享物化列答不了它的排序。
+    expect(isDefaultView(actor('alice', 'user'), { ...defaults, scope: 'mine' })).toBe(false)
+    // 任一过滤位被动过就必须回旧管线。
+    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, view: 'active' })).toBe(false)
+    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, statuses: ['running'] })).toBe(
+      false,
+    )
+    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, origin: 'webhook' })).toBe(false)
+    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, subject: 'agent' })).toBe(false)
+    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, q: 'x' })).toBe(false)
   })
 })

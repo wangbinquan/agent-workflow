@@ -10,17 +10,13 @@
 // 任务后各自启动 —— 双任务存活且 fires 链出孤儿。
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { startCodeRoundTask } from '@/services/codeRoundLaunch'
-import { legacyAdmissionAllowedIn } from '@/modules/development-automation/domain/cutover'
-import { createSqliteCutoverStore } from '@/modules/development-automation/infrastructure/sqliteCutoverStore'
 
-import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { type Actor } from '@/auth/actor'
 import { buildInheritedActor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import {
   cachedRepos,
-  repoCapabilityConfig,
   tasks,
   webhookDeliveries,
   webhookMrControlEffects,
@@ -33,21 +29,6 @@ import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import {
-  closeCapabilitiesForDelivery,
-  isTerminalDelivery,
-  wakeCapabilitiesForDelivery,
-} from '@/services/codeCapabilityWake'
-import {
-  advanceDelivery,
-  openDelivery,
-} from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
-import { answerManualInstruction } from '@/modules/code-capability/application/manualReceipt'
-import {
-  triggerSourceOfEvent,
-  type ReceiptState,
-  type TriggerSource,
-} from '@/modules/code-capability/domain/triggerSource'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -80,7 +61,6 @@ import {
   type WebhookLaunchKind,
   type WebhookLaunchPayloadTemplate,
   type WebhookWorkflowPayloadTemplate,
-  type WebhookCodeRoundPayloadTemplate,
   type WebhookWorkgroupPayloadTemplate,
   webhookTriggerContextOf,
   webhookTriggerTerminalPolicyIssue,
@@ -368,24 +348,15 @@ type RenderedLaunch =
   | { kind: 'workflow'; refId: string; payload: StartTask }
   | { kind: 'agent'; refId: string; payload: StartAgentTask & { agentId: string } }
   | { kind: 'workgroup'; refId: string; payload: StartWorkgroupTask & { workgroupId: string } }
-  /**
-   * RFC-304. Carries only the capability: a round reads its MR, commit and diff
-   * from the frozen trigger context, so copying them here would make a second
-   * copy of the same fact — and two copies eventually disagree.
-   */
-  | { kind: 'code-round'; refId: string; capability: string }
-
 /**
- * The launch payload, for the three kinds that have one.
- *
- * `code-round` deliberately carries no payload — its whole input is a
- * capability name plus the frozen trigger context — so callers that want a
- * payload have to say what they expect when there is none. Returning
- * `undefined` rather than widening the union keeps that decision at the call
- * site instead of hiding it behind a cast.
+ * RFC-304. Carries only the capability: a round reads its MR, commit and diff
+ * from the frozen trigger context, so copying them here would make a second
+ * copy of the same fact — and two copies eventually disagree.
  */
+
+/** The launch payload（T104 后三种 kind 全部携带 payload）。 */
 export function renderedLaunchPayload(rendered: RenderedLaunch): unknown {
-  return rendered.kind === 'code-round' ? undefined : rendered.payload
+  return rendered.payload
 }
 
 export function renderWebhookLaunch(
@@ -410,13 +381,6 @@ export function renderWebhookLaunch(
   // scratch 是新建空白 Git 仓，不得把事件仓 branch 误当成 checkout ref。
   const refFields =
     space.kind !== 'scratch' && event.branch !== undefined ? { ref: event.branch } : {}
-  if (trigger.launchKind === 'code-round') {
-    // No template rendering: there is nothing user-authored to render. The
-    // capability name is the whole payload, and the round takes everything else
-    // from the trigger context at `resolve-target`.
-    const t = renderedTemplate as WebhookCodeRoundPayloadTemplate
-    return { kind: 'code-round', refId: trigger.launchRefId, capability: t.capability }
-  }
   if (trigger.launchKind === 'workflow') {
     const t = renderedTemplate as WebhookWorkflowPayloadTemplate
     const inputs: Record<string, string> = {}
@@ -577,42 +541,6 @@ async function launchViaExecutor(
         payload: { ...rendered.payload, expectedWorkgroupId: rendered.refId },
       },
       launchDeps,
-    )
-    return task.id
-  }
-  if (rendered.kind === 'code-round') {
-    // Narrowed, not cast: `ExecutionInvoker` is a union and only its webhook
-    // arm carries the attribution. This function is only ever reached from the
-    // webhook path, so the other arms are a programming error rather than a
-    // runtime case — but saying so beats reading the fields off a union that
-    // does not have them.
-    if (invoker.type !== 'webhook') {
-      throw new Error('a code-round launch must come from a webhook delivery')
-    }
-    // RFC-304: a round is not a workflow launch — it goes through the capability
-    // module's own entry, which mints the round id and freezes the snapshot.
-    // Provenance rides the same webhook attribution as every other fire, which
-    // is the whole reason capabilities were routed through the trigger table.
-    const task = await startCodeRoundTask(
-      {
-        roundId: ulid(),
-        capability: rendered.capability,
-        roundSeq: 1,
-        name: rendered.capability,
-        scratch: true,
-      },
-      {
-        ...launchDeps,
-        // RFC-301 attribution, taken straight off the invoker. This is the
-        // payoff of routing capabilities through the trigger table: the trigger
-        // id, the fire id and the frozen context all already exist here, so a
-        // round is attributable exactly like every other webhook-started task —
-        // no new provenance kind, no synthesized ids.
-        launchProvenance: { kind: 'webhook' as const },
-        webhookTriggerId: invoker.webhookTriggerId,
-        webhookFireId: invoker.webhookFireId,
-        triggerContext: invoker.triggerContext,
-      } as never,
     )
     return task.id
   }
@@ -803,16 +731,10 @@ async function fireTrigger(
       }
     }
 
-    // RFC-310 cutover：freeze/live 后旧 code-round writer 不再收新工作。放在
-    // supersede 之前——冻结期连「取消旧任务」这步都不做（webhook 只留 delivery
-    // 痕 + fire 行，Mission 面经 MR claim 的 wake hint 自行采集，见 routes/
-    // webhooks.ts T82）。仅拦 code-round：agent/workflow/workgroup 触发与
-    // cutover 无关。
-    if (
-      effectiveTrigger.launchKind === 'code-round' &&
-      !legacyAdmissionAllowedIn(createSqliteCutoverStore(db).readState())
-    ) {
-      await recordFire(db, { ...base, outcome: 'skipped-legacy-admission-frozen' })
+    // RFC-310 PR-10 T104：code-round writer 已删除。存量 trigger 行（历史数据）
+    // 的 fire 落 skipped-trigger-invalid 留痕，不再启动任何 round。
+    if (effectiveTrigger.launchKind === 'code-round') {
+      await recordFire(db, { ...base, outcome: 'skipped-trigger-invalid' })
       return
     }
 
@@ -858,14 +780,9 @@ async function fireTrigger(
     // autoRegisterRepos 同取匹配时快照，避免排队期间编辑造成混合代配置。
     let space: RepoResolution | { kind: 'scratch' }
     try {
-      // A code-round always runs in a scratch space: the round fetches the MR
-      // head itself (`prepare-worktree`), so resolving the event's repository
-      // here would clone something the round is about to replace. Its template
-      // carries no `scratch` field at all — the capability decides, not a form.
       space =
-        effectiveTrigger.launchKind === 'code-round' ||
-        ('scratch' in effectiveTrigger.payloadTemplate &&
-          effectiveTrigger.payloadTemplate.scratch === true)
+        'scratch' in effectiveTrigger.payloadTemplate &&
+        effectiveTrigger.payloadTemplate.scratch === true
           ? { kind: 'scratch' }
           : await (deps.resolveRepo ?? resolveRepoForEvent)(
               db,
@@ -923,22 +840,14 @@ async function fireTrigger(
         .where(eq(webhookTriggers.id, triggerId))
     }
     try {
-      // A code-round skips this gate, and not as a shortcut: the gate checks a
-      // USER-SELECTED target (workflow / agent / workgroup) that may have been
-      // deleted or made invisible, plus the rendered payload. A round's target
-      // is a platform-owned stage contract already validated at author time by
-      // `checkBuiltinContracts`, and its payload is one capability name — there
-      // is no user-chosen thing here that could have gone missing.
-      if (rendered.kind !== 'code-round') {
-        await assertScheduledTargetUsable(
-          db,
-          actor,
-          rendered.kind,
-          rendered.payload as unknown as Record<string, unknown>,
-          await deps.getDefaultRuntime(),
-          { kind: 'context', value: webhookTriggerContextOf(event) },
-        )
-      }
+      await assertScheduledTargetUsable(
+        db,
+        actor,
+        rendered.kind,
+        rendered.payload as unknown as Record<string, unknown>,
+        await deps.getDefaultRuntime(),
+        { kind: 'context', value: webhookTriggerContextOf(event) },
+      )
     } catch (err) {
       // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
       // 渲染后的 payload·输入校验。早期实现把两类异常一律记成 skipped-owner-invalid
@@ -1067,316 +976,6 @@ async function recordInvalidPayloadFire(
       .where(eq(webhookTriggers.id, triggerId))
   })
 }
-
-// ---------------------------------------------------------------------------
-// dispatcher
-// ---------------------------------------------------------------------------
-
-/**
- * RFC-304 T40 — a merged or closed merge request ends its capability work.
- *
- * Runs alongside trigger dispatch rather than through it: capabilities are not
- * triggers, and a repository that has switched on MR review has usually written
- * no trigger at all, so a delivery that matches nothing would otherwise leave
- * every work item on that merge request open forever. A stale open item is not
- * inert — a late pipeline event on a merged branch would wake it and start work
- * on code that is already in.
- *
- * Never throws. Closing is bookkeeping; failing a whole delivery over it would
- * trade a stale row for a lost event.
- */
-async function closeCodeCapabilitiesFor(
-  deps: WebhookDispatchDeps,
-  input: { endpoint: WebhookEndpointRow; event: CodeHostEvent },
-): Promise<void> {
-  if (!isTerminalDelivery(input.event.eventType)) return
-  const mrIid = input.event.mrIid ?? ''
-  const projectId = input.event.projectId ?? ''
-  if (mrIid === '' || projectId === '') return
-
-  try {
-    const resolution = await (deps.resolveRepo ?? resolveRepoForEvent)(
-      deps.db,
-      deps.secretBox,
-      input.event,
-      input.endpoint,
-      // Never auto-register on the way out: a repository nobody had registered
-      // when the merge request was open has no capability cells to close, and
-      // registering one because it just got merged is a side effect nobody
-      // asked for.
-      false,
-    )
-    if (resolution.kind !== 'cached') return
-
-    await closeCapabilitiesForDelivery({
-      db: deps.db,
-      repoId: resolution.cachedRepoId,
-      // The endpoint that DELIVERED this, not a lookup by provider: a
-      // deployment with two GitLab instances has two endpoints, and closing the
-      // other one's work item would be closing somebody else's merge request.
-      codeHostEndpointId: input.endpoint.id,
-      stableProjectId: projectId,
-      mrIid,
-      eventType: input.event.eventType,
-      ...(input.event.eventUuid === null ? {} : { eventId: input.event.eventUuid }),
-    })
-  } catch (err) {
-    log.warn('closing code capabilities failed', { error: errText(err) })
-  }
-}
-
-/**
- * RFC-304 §3.1 — wake the capability cells this delivery turns on.
- *
- * Returns whether anything reacted, so the delivery can be marked `matched`
- * rather than `ignored`: a repository whose only automation is a capability
- * matches no trigger, and reporting `ignored` would tell an operator that
- * nothing happened while a round was starting.
- *
- * Never throws. A capability that cannot start must not fail the delivery —
- * other capabilities and any matched triggers still have work to do.
- */
-
-/**
- * Which manual sources open a receipt at INGRESS.
- *
- * Narrower than `isManualInstruction`, deliberately. Labelling an issue is
- * unambiguously an instruction — nobody labels an issue at the platform by
- * accident — and `requirement` then works for a long time saying nothing, which
- * is the "half an hour and no sign of life" case §11.2 describes.
- *
- * A COMMENT is not included, and that is the considered gap. `mr-comment-fix`
- * wakes on any note on the merge request, so acknowledging every one would put
- * a machine reply under every line of an ordinary human conversation — the feed
- * §11.1 exists to prevent, produced by the rule meant to help. That capability
- * already answers for itself: its `declined` path posts an explanation and its
- * applied path posts the change. Narrowing further — recognising a genuine
- * at-mention rather than any comment — needs mention detection that does not
- * exist yet, and guessing at it would be the same over-reach somewhere new.
- */
-function opensReceipt(source: TriggerSource): boolean {
-  return source === 'issue-label'
-}
-
-/**
- * Move an instruction's receipt to its new state, best-effort.
- *
- * One wrapper because the same four fields are addressed from four places, and
- * getting one wrong (the wrong thread, the wrong id, the wrong object kind)
- * fails silently on the far side of the wire.
- */
-async function updateReceipt(
-  db: DbClient,
-  input: { deliveryId: string; endpoint: { id: string }; event: CodeHostEvent },
-  state: ReceiptState,
-): Promise<void> {
-  await answerManualInstruction({
-    db,
-    operationId: input.deliveryId,
-    endpointId: input.endpoint.id,
-    stableProjectId: input.event.projectId ?? null,
-    anchorKind: input.event.mrIid !== undefined ? 'mr' : 'issue',
-    anchorId: input.event.mrIid ?? input.event.issueIid ?? null,
-    state,
-  }).catch((err: unknown) => {
-    // Never fatal: the instruction is being carried out either way, and failing
-    // it because the acknowledgement failed is the wrong way round.
-    log.warn('could not update a manual instruction receipt', { error: errText(err) })
-    return { answered: false as const, reason: 'threw' }
-  })
-}
-
-async function wakeCodeCapabilitiesFor(
-  deps: WebhookDispatchDeps,
-  input: { endpoint: WebhookEndpointRow; event: CodeHostEvent; deliveryId: string },
-): Promise<boolean> {
-  // A terminal delivery closes rather than wakes (T40); that path already ran.
-  if (isTerminalDelivery(input.event.eventType)) return false
-
-  // Hoisted so the catch can reach it. A crash that left the row saying
-  // `received / ok` would be worse than no row at all: it actively tells an
-  // administrator the delivery was fine, which is precisely the misreading the
-  // chain exists to prevent.
-  let chainId: string | null = null
-
-  try {
-    // Cheap existence check BEFORE resolving the repository, and it is load
-    // bearing rather than an optimisation. RFC-268 guarantees that a `scratch`
-    // launch never reaches the repo resolver — a repository that cannot be
-    // resolved must not block one — and resolving here unconditionally would
-    // break that for every deployment, including the overwhelming majority
-    // that have configured no capabilities at all. With no cells anywhere,
-    // this returns before the resolver and the guarantee is untouched.
-    const [anyCell] = await deps.db
-      .select({ id: repoCapabilityConfig.id })
-      .from(repoCapabilityConfig)
-      .where(eq(repoCapabilityConfig.enabled, true))
-      .limit(1)
-    // No chain row either: a deployment with no capabilities configured is not
-    // troubleshooting capability delivery, and one row per webhook on every
-    // such deployment is pure cost.
-    if (anyCell === undefined) return false
-
-    // T61 — the chain starts here, at the first point the delivery is known to
-    // concern capabilities at all. Advanced in place from now on, so the row
-    // always says where this delivery actually got to.
-    const chain = await openDelivery({
-      db: deps.db,
-      correlationId: input.deliveryId,
-      codeHostEndpointId: input.endpoint.id,
-      stableProjectId: input.event.projectId ?? null,
-      anchorKind: input.event.mrIid !== undefined ? 'mr' : 'issue',
-      anchorId: input.event.mrIid ?? input.event.issueIid ?? null,
-    })
-    chainId = chain.id
-
-    const resolution = await (deps.resolveRepo ?? resolveRepoForEvent)(
-      deps.db,
-      deps.secretBox,
-      input.event,
-      input.endpoint,
-      // Capabilities do not auto-register repositories. A cell can only exist
-      // on a repository somebody registered, so there is nothing to wake on one
-      // nobody has.
-      false,
-    )
-    if (resolution.kind !== 'cached') {
-      // Dropped, not failed: a webhook for a repository nobody registered is
-      // the ordinary case, and marking it red would train an administrator to
-      // ignore the colour that means something is broken.
-      await advanceDelivery({
-        db: deps.db,
-        deliveryId: chain.id,
-        step: 'matched',
-        outcome: 'dropped',
-        reason: 'no registered repository matches this event',
-      })
-      return false
-    }
-    await advanceDelivery({
-      db: deps.db,
-      deliveryId: chain.id,
-      step: 'matched',
-      outcome: 'ok',
-    })
-
-    // §11.2 T59/AC-34 — a person who TYPED at the platform gets an answer,
-    // starting now. Created before routing, because "queued behind a lease" and
-    // "nobody is listening" look identical from outside, and re-sending an
-    // instruction into that silence is what this exists to stop.
-    //
-    // The receipt's id IS the correlation id, so the comment a person reads and
-    // the troubleshooting row an administrator greps are provably one event.
-    const triggerSource = triggerSourceOfEvent(input.event.eventType)
-    if (opensReceipt(triggerSource)) {
-      await updateReceipt(deps.db, input, { kind: 'received' })
-    }
-
-    const context = webhookTriggerContextOf(input.event)
-    const result = await wakeCapabilitiesForDelivery({
-      db: deps.db,
-      repoId: resolution.cachedRepoId,
-      eventType: input.event.eventType,
-      ...(input.event.mrIid === undefined ? {} : { mrIid: input.event.mrIid }),
-      ...(input.event.issueIid === undefined ? {} : { issueIid: input.event.issueIid }),
-      ...(input.event.author.username === undefined
-        ? {}
-        : { authorUsername: input.event.author.username }),
-      triggerContext: context,
-      // Empty: this delivery matched no trigger, which is the normal case for a
-      // capability. The round row is the attribution anchor instead (RFC-301
-      // admission, `hasCodeRound`).
-      webhookTriggerId: '',
-      webhookFireId: '',
-      // The endpoint that DELIVERED this — part of a work item's identity. A
-      // lookup by provider would pick the wrong one in a two-instance
-      // deployment and key the round's ledger to somebody else's endpoint.
-      codeHostEndpointId: input.endpoint.id,
-      ...(input.event.eventUuid === null ? {} : { eventId: input.event.eventUuid }),
-      // The platform's own actor: a capability round is started by the
-      // repository's configuration, not by whoever happened to comment.
-      launchDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
-    })
-
-    for (const failure of result.failed) {
-      log.warn('code capability did not start', {
-        capability: failure.capability,
-        error: failure.error,
-      })
-    }
-
-    // The reason is what makes the row worth keeping — "routed" alone moves the
-    // administrator's question rather than answering it.
-    const firstFailure = result.failed[0]
-    const firstStarted = result.started[0]
-    if (firstFailure !== undefined) {
-      await advanceDelivery({
-        db: deps.db,
-        deliveryId: chain.id,
-        step: 'routed',
-        outcome: 'failed',
-        reason: firstFailure.error,
-        capability: firstFailure.capability,
-      })
-      if (opensReceipt(triggerSource)) {
-        await updateReceipt(deps.db, input, { kind: 'failed', detail: firstFailure.error })
-      }
-    } else if (firstStarted !== undefined) {
-      await advanceDelivery({
-        db: deps.db,
-        deliveryId: chain.id,
-        step: 'round',
-        outcome: 'ok',
-        capability: firstStarted.capability,
-        roundId: firstStarted.roundId ?? null,
-      })
-      // Edited, not appended: the same receipt now reads "working on it", so
-      // the exchange still costs the one notification it opened with.
-      if (opensReceipt(triggerSource)) {
-        await updateReceipt(deps.db, input, { kind: 'running', detail: firstStarted.capability })
-      }
-    } else {
-      await advanceDelivery({
-        db: deps.db,
-        deliveryId: chain.id,
-        step: 'routed',
-        outcome: 'dropped',
-        reason: 'no enabled capability wanted this event',
-      })
-      // A dropped instruction is exactly the case this rule exists for. Left
-      // unanswered, the person watches "Got it — queued." forever and concludes
-      // the platform is slow rather than that nothing is listening.
-      if (opensReceipt(triggerSource)) {
-        await updateReceipt(deps.db, input, {
-          kind: 'failed',
-          detail: 'no capability on this repository is set up to handle that',
-        })
-      }
-    }
-
-    return result.started.length > 0 || (result.observed ?? []).length > 0
-  } catch (err) {
-    log.warn('waking code capabilities failed', { error: errText(err) })
-    if (chainId !== null) {
-      // Best-effort, and swallowed on its own failure: this is the error path
-      // already, and a database hiccup here must not replace the original
-      // problem with a different one in the log.
-      try {
-        await advanceDelivery({
-          db: deps.db,
-          deliveryId: chainId,
-          step: 'routed',
-          outcome: 'failed',
-          reason: errText(err),
-        })
-      } catch {
-        /* the log line above is the record of last resort */
-      }
-    }
-    return false
-  }
-}
-
 export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispatcher {
   const streamQueue = new KeyedSerialQueue<string>()
   return {
@@ -1385,7 +984,6 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
       const db = deps.db
       try {
         await markDelivery(db, deliveryId, 'processing')
-        await closeCodeCapabilitiesFor(deps, { endpoint, event })
         const rows = await db
           .select()
           .from(webhookTriggers)
@@ -1445,25 +1043,10 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
           }
           if (matchTrigger(event, parsed.trigger.rule).hit) hits.push(parsed.trigger)
         }
-        // RFC-304 §3.1 — capability cells, BEFORE the no-trigger early return.
-        //
-        // Capabilities are deliberately not triggers, so a repository that
-        // switched on MR review has no trigger row and this delivery matches
-        // nothing. Waking them after the return below would mean they never
-        // woke at all: every stage was built and tested, the matrix was built
-        // and tested, and nothing joined them — no test anywhere goes red for
-        // a join that is simply absent.
-        const woken = await wakeCodeCapabilitiesFor(deps, { endpoint, event, deliveryId })
-
         if (hits.length === 0 && !invalidPayloadMatched) {
           if (controlEffect !== undefined) {
             await markDelivery(db, deliveryId, 'matched', 'terminal-control-accepted')
             deps.terminalControl?.wake(controlEffect.id)
-          } else if (woken) {
-            // Matched, not ignored: a capability reacted. Reporting `ignored`
-            // would tell an operator debugging a quiet repository that nothing
-            // happened, when in fact a round is running.
-            await markDelivery(db, deliveryId, 'matched', 'capability-woken')
           } else {
             await markDelivery(db, deliveryId, 'ignored', 'no-trigger-matched')
           }

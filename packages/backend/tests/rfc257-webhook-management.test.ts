@@ -223,6 +223,19 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
     expect((await call(h.app, h.admin, 'GET', `/api/webhook-triggers/${tid}`)).status).toBe(200)
   })
 
+  test('RFC-310 T104：新建 code-round 触发器被拒（writer 已退役）', async () => {
+    const h = await harness()
+    const ep = await createEndpoint(h.app, h.admin)
+    const res = await call(h.app, h.alice, 'POST', '/api/webhook-triggers', {
+      ...triggerBody(ep.id, h.workflowId),
+      launchKind: 'code-round',
+      launchRefId: 'mr-review',
+      launchPayload: { capability: 'mr-review' },
+    })
+    expect(res.status).toBe(422)
+    expect(JSON.stringify(await res.json())).toContain('webhook-trigger-kind-retired')
+  })
+
   test('保存期校验组（AC-14）：未知变量 / 必填未映射 / enum 映射 / 目标不可见', async () => {
     const h = await harness()
     const ep = await createEndpoint(h.app, h.admin)

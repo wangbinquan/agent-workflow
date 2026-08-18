@@ -575,18 +575,6 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('code-page-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/code.tsx', primitive: 'PageHeader' },
   },
-  // RFC-309 —— 模板详情即流程：`/code/templates/$id`。RFC-307 的独立「流程」
-  // 页签在此 RFC 删除，它问的两个问题（哪条能力、哪份配置）由这条路由回答。
-  '@/routes/code.templates.$id#Route': {
-    surface: '/code/templates/$id',
-    classification: 'standard',
-    owners: [rendered('code-template-detail.test.tsx')],
-    header: {
-      mode: 'direct',
-      sourceFile: 'routes/code.templates.$id.tsx',
-      primitive: 'PageHeader',
-    },
-  },
   // RFC-310 —— DevelopmentMission 列表与详情（launch 三形态 / questions /
   // action / effects / readiness；平台永不自动 merge）。
   '@/routes/code.missions#Route': {

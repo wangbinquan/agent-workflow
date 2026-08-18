@@ -212,16 +212,6 @@ export async function assertTriggerSaveable(
       ? { kind: 'scratch' }
       : { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
   )
-  // Same reasoning as the dispatch-time gate: a code-round's target is a
-  // platform-owned stage contract, not a user-selected resource that could be
-  // missing or invisible, and its payload is one capability name. There is
-  // nothing here for this gate to check.
-  //
-  // It should also be unreachable in practice — code-round triggers are created
-  // by the platform when a capability cell is enabled, never through the
-  // user-facing trigger validation path. Handling it explicitly rather than
-  // asserting it away keeps a future caller from getting a confusing cast error.
-  if (rendered.kind === 'code-round') return
   await assertScheduledTargetUsable(
     db,
     actor,

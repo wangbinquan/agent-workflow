@@ -9,10 +9,6 @@ import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
-import { resumeSupersedingWorkItems } from '@/services/codeCapabilitySupersede'
-import { reclaimCodeLeasesOnBoot } from '@/services/codeRoundLease'
-import { clearStalePublishSections } from '@/modules/code-capability/infrastructure/sqliteWorkItemStore'
-import { recoverPublishIntentsOnBoot } from '@/modules/code-capability/application/recoverPublishIntentsOnBoot'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
@@ -24,7 +20,6 @@ import {
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { ulid } from 'ulid'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
@@ -81,7 +76,6 @@ import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { startCapabilityDataGc } from '@/modules/code-capability/application/dataLifetimeGc'
 import { startPluginGenerationGc } from '@/services/pluginGenerationGc'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
@@ -699,83 +693,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (recoveredDeliveries > 0) {
     log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
   }
-  // RFC-304 §2.2 不变量一: a work item preempted by a new event waits for the
-  // old round's task to die before the replacement starts. If the daemon
-  // restarts inside that window, the in-process wait dies with it and the item
-  // stays `superseding` forever — silently, because a merge request that stops
-  // being reviewed raises nothing. This is that wait, re-armed.
-  // RFC-304 §2.3 崩溃恢复 — void what the previous daemon was holding.
-  //
-  // The generation fence already makes those leases takeable, so nothing is
-  // BLOCKED by skipping this; what it buys is an honest table. A row whose
-  // owning process is gone is not a claim, and leaving it means `/code` reports
-  // a merge request as leased when nothing holds it. Before boot recovery,
-  // because everything after this may start rounds that ask for leases.
-  await reclaimCodeLeasesOnBoot(db, DAEMON_GENERATION)
-    .then((reclaimed) => {
-      if (reclaimed > 0) log.info('reclaimed code MR leases from a previous daemon', { reclaimed })
-    })
-    .catch((err: unknown) => {
-      log.warn('reclaiming code MR leases failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-
-  // RFC-304 §2.2 — clear publish critical sections a dead daemon left claimed.
-  //
-  // The marker is a CAS held across the publish, and the release runs in the
-  // process that took it. A daemon killed mid-publish leaves it set forever:
-  // from then on EVERY event on that merge request may only be registered as a
-  // pending revision, and the work item never advances again. It stalls
-  // silently — a merge request that stops being reviewed raises nothing.
-  //
-  // Before `resumeSupersedingWorkItems`, which can start rounds: clearing after
-  // a live round entered its section would drop a section that IS held.
-  await clearStalePublishSections(db)
-    .then((cleared) => {
-      if (cleared > 0) log.info('cleared publish sections from a previous daemon', { cleared })
-    })
-    .catch((err: unknown) => {
-      log.warn('clearing stale publish sections failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-
-  // RFC-304 §7.2 — reconcile publish batches a dead daemon left mid-flight.
-  //
-  // The per-round path already prevents the harm the design names (a second
-  // round re-posting an already-published batch), because it reconciles before
-  // every publish. What it cannot reach is the merge request that never gets
-  // another round: its intent row stays pending for good and its orphan drafts
-  // sit there, with nobody reviewing it to notice.
-  //
-  // Bounded and best-effort. Each anchor costs one read of its merge request,
-  // so an unbounded sweep would be a slow boot and a burst aimed at the code
-  // host; what it defers is logged rather than silently dropped, and recovers
-  // the ordinary way when a round next runs there.
-  await recoverPublishIntentsOnBoot({ db })
-    .then((result) => {
-      if (result.recovered > 0 || result.deferred > 0) {
-        log.info('reconciled interrupted publish batches', { ...result })
-      }
-    })
-    .catch((err: unknown) => {
-      log.warn('reconciling interrupted publish batches failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-
-  await resumeSupersedingWorkItems({
-    db,
-    launchDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
-  }).catch((err: unknown) => {
-    // Recovery must not keep the daemon from booting: an item left mid-
-    // preemption is repaired by the next delivery either way.
-    log.warn('resuming preempted code work items failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return 0
-  })
+  // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/
+  // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
+  // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
   const webhookDispatcher = createWebhookDispatcher({
     db,
     configPath: Paths.config,
@@ -921,11 +841,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     batchImportCfg.repoBatchImportRetentionMs,
   )
   const pluginGenerationGcTicker = startPluginGenerationGc({ db, pluginsDir: Paths.pluginsDir })
-  // RFC-304 T62 — the capability data sweep. Without this the retention rules
-  // are a policy nobody enforces, and the specific consequence is not slowness:
-  // an administrator eventually deletes rows by hand and takes the finding
-  // ledger — and therefore the adoption numbers — with it.
-  const capabilityDataGcTicker = startCapabilityDataGc({ db })
   // RFC-050: register an ambient provider so enqueueDistillJob callers
   // pick up the current `config.memoryDistillLang` without us having to
   // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
@@ -1262,7 +1177,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     submoduleRefreshTicker.stop()
     unregisterSubmoduleRefreshConfig()
     batchImportGcTicker.stop()
-    capabilityDataGcTicker.stop()
     pluginGenerationGcTicker.stop()
     memoryDistillTicker.stop()
     lifecycleInvariantsTicker.stop()

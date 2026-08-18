@@ -20,9 +20,6 @@
 // same file as a switch a repository owner may flip.
 
 import type { Hono } from 'hono'
-import { z } from 'zod'
-import { ulid } from 'ulid'
-import { actorOf } from '@/auth/actor'
 import {
   createCodeMatrixQuery,
   createCodeDeliveryChainQuery,
@@ -30,58 +27,15 @@ import {
   createCodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/application/codeMatrixQuery'
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
-import { createBulkEnableCommand } from '@/modules/code-capability/application/bulkEnableCommand'
-import { createEnableCommand } from '@/modules/code-capability/application/enableCommand'
-import { createLaunchRoundCommand } from '@/modules/code-capability/application/launchRoundCommand'
-import { LaunchInputSchema } from '@/modules/code-capability/domain/launchInput'
 import {
   CODE_CAPABILITIES,
   parseCodeCapabilityId,
 } from '@/modules/code-capability/domain/stageContract'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { projectStageGraph } from '@/modules/code-capability/domain/stageGraph'
-import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
-import { legacyAdmissionAllowedIn } from '@/modules/development-automation/domain/cutover'
-import { createSqliteCutoverStore } from '@/modules/development-automation/infrastructure/sqliteCutoverStore'
 import { registerRoute } from '@/routes/registry'
-import { startCodeRoundTask } from '@/services/codeRoundLaunch'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import type { AppDeps } from '@/server'
-import { ConflictError, ValidationError } from '@/util/errors'
-import { safeJsonOrThrowInvalid } from '@/util/http'
-
-const EnableBodySchema = z.object({
-  capability: z.string().min(1),
-  enabled: z.boolean(),
-  templateId: z.string().nullable().optional(),
-  triggerConfig: z.record(z.unknown()).optional(),
-})
-
-/**
- * RFC-309 — the launch body.
- *
- * `input` is the discriminated union from the domain, so a payload naming the
- * wrong starting point for its capability is rejected here rather than three
- * stages later with "target could not be resolved".
- */
-const LaunchBodySchema = z.object({
-  repoId: z.string().min(1),
-  templateId: z.string().min(1),
-  input: LaunchInputSchema,
-})
-
-const BulkBodySchema = z.object({
-  // A list, not a selector expression: the design's bulk change is an explicit
-  // write to each named cell, and a server-side selector would put the "which
-  // repositories did this actually match" question back out of the author's
-  // reach — the thing preview exists to answer.
-  repoIds: z.array(z.string().min(1)).min(1),
-  capability: z.string().min(1),
-  enabled: z.boolean(),
-  templateId: z.string().nullable().optional(),
-  /** Defaults to a preview: the safe direction when a caller forgets the flag. */
-  preview: z.boolean().optional(),
-})
+import { ValidationError } from '@/util/errors'
 
 export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
   const matrix = createCodeMatrixQuery(deps.db)
@@ -101,73 +55,6 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => c.json({ rows: await matrix.forRepo(c.req.param('repoId')) }),
   )
-
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/code/matrix/:repoId',
-      permissions: ['repos:update'],
-      tokenAccess: 'allow',
-      summary: 'Enable or disable one capability for a repository',
-    },
-    async (c) => {
-      const parsed = EnableBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError(
-          'code-enable-invalid',
-          parsed.error.issues[0]?.message ?? 'invalid body',
-        )
-      }
-
-      // The endpoint a repository's events arrive on. Resolved here rather than
-      // taken from the request: it is a component of the work item's identity,
-      // and letting a caller name it would let two requests key the same
-      // repository's cells to different endpoints.
-      // Which code host this repository belongs to, and the endpoint its cells
-      // are keyed to. Resolved in the module: `no-routes-to-db` forbids a route
-      // reaching the schema, and this is identity work rather than parsing.
-      //
-      // It used to be hardcoded `'gitlab'`, so a GitHub repository could never
-      // have a capability enabled — the failure even named a provider the
-      // operator had not configured.
-      const endpoint = await resolveRepoEndpoint(deps.db, c.req.param('repoId'))
-      if (!endpoint.ok) throw new ValidationError('code-endpoint-unresolved', endpoint.message)
-
-      const command = createEnableCommand({
-        db: deps.db,
-        endpointId: endpoint.endpointId,
-        provider: endpoint.provider,
-      })
-      const result = await command.enable({
-        repoId: c.req.param('repoId'),
-        capability: parsed.data.capability,
-        enabled: parsed.data.enabled,
-        actorUserId: actorOf(c).user.id,
-        ...(parsed.data.templateId !== undefined ? { templateId: parsed.data.templateId } : {}),
-        ...(parsed.data.triggerConfig !== undefined
-          ? { triggerConfig: parsed.data.triggerConfig }
-          : {}),
-      })
-
-      if (!result.ok) {
-        // Spelled out rather than interpolated. `code-${result.code}` is
-        // ungreppable: nobody can find where `code-unknown-binding` comes from,
-        // and the guard that requires every route error code to be named by a
-        // test cannot see it either — so it would ship untested by default.
-        throw new ValidationError(
-          result.code === 'unknown-capability'
-            ? 'code-unknown-capability'
-            : result.code === 'unknown-binding'
-              ? 'code-unknown-binding'
-              : 'code-forbidden',
-          result.message,
-        )
-      }
-      return c.json({ row: result.row })
-    },
-  )
-
   registerRoute(
     app,
     {
@@ -211,51 +98,6 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
           ...(roundLimit !== undefined ? { roundLimit } : {}),
         }),
       )
-    },
-  )
-
-  // RFC-304 T63 — the same cell write, applied to many repositories at once.
-  //
-  // One endpoint with a `preview` flag rather than two: preview and apply take
-  // exactly the same input and differ only in whether they write, and two
-  // endpoints would let them drift so that the preview describes something the
-  // apply does not do.
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/matrix/bulk',
-      permissions: ['repos:update'],
-      tokenAccess: 'allow',
-      summary: 'Preview or apply one capability change across many repositories',
-    },
-    async (c) => {
-      const parsed = BulkBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError(
-          'code-bulk-invalid',
-          parsed.error.issues[0]?.message ?? 'invalid body',
-        )
-      }
-
-      const result = await createBulkEnableCommand(deps.db).run({
-        repoIds: parsed.data.repoIds,
-        capability: parsed.data.capability,
-        enabled: parsed.data.enabled,
-        actorUserId: actorOf(c).user.id,
-        preview: parsed.data.preview ?? true,
-        ...(parsed.data.templateId !== undefined ? { templateId: parsed.data.templateId } : {}),
-      })
-
-      if (!result.ok) {
-        // Spelled out rather than interpolated, so both codes are greppable and
-        // the route-error guard can see them.
-        throw new ValidationError(
-          result.code === 'unknown-capability' ? 'code-unknown-capability' : 'code-too-many-repos',
-          result.message,
-        )
-      }
-      return c.json(result)
     },
   )
 
@@ -404,99 +246,6 @@ export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
       })
     },
   )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/rounds',
-      permissions: ['code-rounds:launch'],
-      tokenAccess: 'allow',
-      summary: 'Start a capability round from a template (RFC-309)',
-    },
-    // RFC-309 — the entrance RFC-304 promised and did not ship. Until this
-    // route existed the only way to start any round was a real webhook
-    // delivery, so "use this template" had no answer inside the platform.
-    async (c) => {
-      // RFC-310 cutover：freeze/live 后旧 code-round writer 拒新（409）。放在
-      // body 解析前——冻结不是「你的表单有问题」，是入口整体关闭。
-      if (!legacyAdmissionAllowedIn(createSqliteCutoverStore(deps.db).readState())) {
-        throw new ConflictError(
-          'legacy-admission-frozen',
-          'legacy code-round admission is frozen by the RFC-310 cutover; launch a development mission instead',
-        )
-      }
-      const parsed = LaunchBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError(
-          'code-launch-invalid',
-          parsed.error.issues[0]?.message ?? 'invalid body',
-        )
-      }
-      const actor = actorOf(c)
-      const result = await createLaunchRoundCommand(
-        deps.db,
-        Date.now,
-        ulid,
-        // The join that makes the entrance do something. Without it the round
-        // is opened, the receipt looks right, and nothing ever runs — which is
-        // exactly the failure shape RFC-304's own scheduler had for three of
-        // the four capabilities.
-        async (start) =>
-          await startCodeRoundTask(start, {
-            ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
-            db: deps.db,
-            // `direct-json`, not `webhook`. RFC-301's admission rule is about
-            // being ATTRIBUTABLE, and this round is attributable to the person
-            // who pressed the button — there is no delivery, no trigger and no
-            // fire to point at, and claiming `webhook` would put a code-host
-            // event that never happened into the task's launch origin.
-            launchProvenance: {
-              kind: 'direct-json',
-              initiator: actor.source === 'session' ? 'manual' : 'api',
-            },
-          }),
-      ).run({
-        repoId: parsed.data.repoId,
-        templateId: parsed.data.templateId,
-        input: parsed.data.input,
-        actor,
-      })
-      if (!result.ok) {
-        // Spelled out rather than interpolated: `code-${result.code}` is
-        // ungreppable, and the guard that requires every route error code to be
-        // named by a test cannot see it either.
-        throw new ValidationError(
-          result.code === 'repo-unresolvable'
-            ? 'code-launch-repo-unresolvable'
-            : result.code === 'template-not-visible'
-              ? 'code-launch-template-not-found'
-              : result.code === 'template-capability-mismatch'
-                ? 'code-launch-capability-mismatch'
-                : result.code === 'template-incomplete'
-                  ? 'code-launch-template-incomplete'
-                  : result.code === 'round-already-in-flight'
-                    ? 'code-launch-round-in-flight'
-                    : 'code-launch-agent-not-visible',
-          result.message,
-        )
-      }
-      // The receipt (RFC-304 AC-34): a human instruction must come back with
-      // something to follow, immediately.
-      return c.json(
-        {
-          workItemId: result.workItemId,
-          roundId: result.roundId,
-          roundSeq: result.roundSeq,
-          // The thing a person can actually open. A receipt naming only the
-          // round would send them to a page keyed by task id.
-          taskId: result.taskId,
-        },
-        201,
-      )
-    },
-  )
-
   registerRoute(
     app,
     {

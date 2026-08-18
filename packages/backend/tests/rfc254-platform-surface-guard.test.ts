@@ -121,27 +121,6 @@ interface Allowance {
 const ALLOWANCES: readonly Allowance[] = [
   // --- permanent: posix-by-contract ------------------------------------------
   {
-    rule: 'null-device',
-    file: 'modules/code-capability/domain/diffHunks.ts',
-    match: "'/dev/null'",
-    count: 1,
-    why: 'operand is a unified-diff HEADER literal, not a path anything opens — git writes `/dev/null` for an absent side on every platform including Windows, so matching `NUL` there would fail to detect added/deleted files (RFC-304 T25b)',
-  },
-  {
-    rule: 'null-device',
-    file: 'modules/code-capability/domain/mrDiffNormalize.ts',
-    match: "'/dev/null'",
-    count: 2,
-    why: 'the WRITE side of the same contract: synthesizes the `---`/`+++` header the code host omits, and `diffHunks.ts` reads it straight back. Emitting `NUL` on Windows would make the two halves disagree on the same machine, and every added or deleted file would lose its side (RFC-304 T25b)',
-  },
-  {
-    rule: 'null-device',
-    file: 'modules/code-capability/domain/localDiffFiles.ts',
-    match: "'/dev/null'",
-    count: 1,
-    why: 'the READ side of the same contract as `diffHunks.ts`, for a LOCAL `git diff` rather than a code host payload: git writes `--- /dev/null` for an absent side on every platform including Windows, so a self-review that matched `NUL` there would read every added file as having an old side and place its remarks against lines that never existed (RFC-304 §invoke)',
-  },
-  {
     rule: 'posix-path-prefix',
     file: 'util/git.ts',
     match: '`${m}/`',
@@ -203,13 +182,6 @@ const ALLOWANCES: readonly Allowance[] = [
     match: '`${prefixPath}/`',
     count: 1,
     why: 'operands are normalized Git repository URL paths, not filesystem paths — URL and Git wire paths use `/` as a case-sensitive segment separator on every platform',
-  },
-  {
-    rule: 'posix-dirname',
-    file: 'modules/code-capability/domain/splitDiff.ts',
-    match: "lastIndexOf('/')",
-    count: 1,
-    why: 'operand is a diff path from the code host API (GitLab `new_path` / GitHub `filename`) — a repository-relative Git wire path, `/`-separated on every platform and never a filesystem path. `dirname()` would be the wrong tool here: on win32 it also splits on `\\`, which in a Git path is a legal filename character, not a separator (RFC-304 T23)',
   },
   {
     rule: 'posix-dirname',
