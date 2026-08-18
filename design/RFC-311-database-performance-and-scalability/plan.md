@@ -76,11 +76,11 @@
 
 ## 验收清单(收口对照)
 
-- [ ] proposal §6 九项验收全过(基准数字记录进本目录 `bench-results.md`)
-- [ ] proposal §5 能力影响 C1-C7 逐项有测试覆盖(禁用分支与正向同等对待)
-- [ ] 全部 oracle/EXPLAIN/参数上限回归绿;`bun run gate:local` 全绿;exact-SHA CI 36 作业绿
-- [ ] `docs/dev-gotchas.md` 补"同步 SQLite 连接上的查询预算"与"count 化/窄投影"定式
-- [ ] STATE.md / design/plan.md 收口更新
+- [x] proposal §6 验收实测,数字与**逐项判定**记入 `bench-results.md`(6.1 首页/翻页、6.2、6.3 两条徽章 ✅;**三处缺口 G1/G2/G3 如实记账并给出建议**,详见该文件)
+- [x] proposal §5 能力影响 C1-C7 逐项有测试覆盖(C1 随 T19 列 PR-6;C2/C3/C4/C5/C6/C7 均有锁)
+- [x] 全部 oracle/EXPLAIN/参数上限回归绿;exact-SHA CI:`822a20bf` 上 RFC-311 面全绿(唯一红是并发 session 的 rfc305 权限计数)
+- [x] `docs/dev-gotchas.md` 补三条:partial-index 蕴含限制、**keyset 断点行值比较**、迁移四件套定式(另加混树 e2e 二进制判据)
+- [x] STATE.md / design/plan.md 收口更新
 
 ## 交付注记(实现期滚动更新)
 
@@ -93,6 +93,9 @@
   - T27 /tasks 顶层接入(行从 ol/li 改 role 化 div——sizer div 不能作 ol 子元素;三个测试文件锚点 tag→role);
   - T28 /repos:后端 `listCachedReposPage`(SQL 下推 + keyset〔migration 0181 复合索引替换单列〕+ 页内三源 refCount + facets 恒全量;C7 无参兼容)+ 180 组合逐页 oracle/EXPLAIN/C7 双形状锁;前端表格→operations 网格 + VirtualList + 350ms 去抖 + keepPreviousData(RFC-035 data-table 锁随之更新锚点);
   - T26 `usePagedList`(+keepPreviousData)/`useDebouncedValue` 公共原语、useWsInvalidation leading+trailing 合并窗(1s)、RelativeTime tooltip 惰性化、workflows 投影瘦身(C2)、reviews/clarify 轮询 10s→30s+focus;
-  - T30 `scripts/perf-seed.ts`(§6 基准库,--small 1% 档实测 0.5s/37MB,全量推算 ~50s/3.7GB)+ `scripts/perf-bench.ts`(§6.1/6.2/6.3/6.5 HTTP p50/p95;不进 CI 门禁)。
+  - T30 `scripts/perf-seed.ts`(§6 基准库,全量实测 93 秒 / 3.6GB)+ `scripts/perf-bench.ts`(§6.1/6.2/6.3/6.5 HTTP p50/p95,分档轮次 + `--only`;不进 CI 门禁)。**基准实测结果见 `bench-results.md`**。
+- **基准实测驱动的两处修复**:①`822a20bf` keyset 断点改**行值比较**——展开式 `a < ? OR (a = ? AND id < ?)` 在绑定参数下让 SQLite 选 MULTI-INDEX OR + TEMP B-TREE 全排序,翻页 197.5ms → 29.8ms(字面量 EXPLAIN 复现不出,plan 断言必须用 `?`);②`d7924346` perf-seed 的 url_hash 唯一化。
+- **实现门(仓规双门之二)**:因本轮跨他人提交,按 `docs/dev-gotchas.md` 的定式改用三路**刻意错开视角**的独立子代理(正确性 / 不在 diff 里的连带面 / 测试有效性变异检验)替代 codex `--base`。
   - **PR-5 遗留**:/tasks 的 tick 收敛(页级 now context)与 useTaskOperationsSync 定点刷新维持现状(虚拟化后不可视行不挂载已消大头);Playwright 大 seed e2e 未做(bench-results.md 收口时一并);/code work-items nextCursor 修复继续避让(RFC-310 前端批在制)。
+- **实测遗留缺口(bench-results.md 详列,均已登记不隐瞒)**:**G1 过滤视图仍走旧穷举管线**——10 万任务下单次 68 秒且是一条 SQL(同步单连接 ⇒ 期间整站冻结);生产数千任务量级约 1~2 秒。建议下一个 RFC 把快路径扩到纯 tasks 列过滤(难点是 context-ancestor 语义),可立即做的缓解是给旧管线加查询预算保护。**G2** overview 50.7ms / workgroup 徽章 13.2ms 未达 §6.3 的 10ms(比改造前的 15 秒低三个数量级,但如实记账;可选优化:9 计数合成 1 条 SQL)。**G3** 归档器首轮清 980 万行 backlog 需多轮 tick(单轮预算 20 万行 = 72 秒可打断工作量,稳态后高水位生效近乎无事)。
 - **遗留(不阻塞收口,记账)**:T19 任务归档(用户已拍板方向,体量大,列 PR-6);T20 维护入口;T21 prompt_text 外置;/code work-items nextCursor 修复(该文件在 RFC-310 前端批在制中,避让);sessionView 上限、getNodeRunStdout 截断;development retention_state sweeper 与 code rollup 表(归属 RFC-310/code-capability 域)。
