@@ -79,7 +79,10 @@ export async function visibleTaskIdsOf(
       .select({ id: tasks.id })
       .from(tasks)
       .where(
-        and(inArray(tasks.id, chunk), taskAuthorizationCondition(db, defaultTaskAuthorizationRef(), actor)),
+        and(
+          inArray(tasks.id, chunk),
+          taskAuthorizationCondition(db, defaultTaskAuthorizationRef(), actor),
+        ),
       ),
   )
   return new Set(rows.map((row) => row.id))

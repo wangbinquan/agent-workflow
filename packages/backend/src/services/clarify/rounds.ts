@@ -14,7 +14,18 @@
 //   - `freezeAnswerAttributions` / `buildFrozenAttributionSet` —— 提交时点的
 //     归属快照（审计列/只读 UI 用，绝不进 agent prompt）。
 
-import { and, count, desc, eq, inArray, isNotNull, isNull, notInArray, or, type SQL } from 'drizzle-orm'
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  type SQL,
+} from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -203,7 +214,9 @@ export async function listClarifyRoundSummaries(
     .where(clarifyRoundsCondition(filter))
     .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
   let filtered =
-    desiredStatus === 'awaiting_human' ? await baseQuery : await baseQuery.limit(filter.limit ?? 100)
+    desiredStatus === 'awaiting_human'
+      ? await baseQuery
+      : await baseQuery.limit(filter.limit ?? 100)
   // RFC-202 T6: the awaiting_human TODO view must not surface rounds whose
   // task is already terminal — dead tasks' rounds cluttered the inbox forever
   // (audit R8; done/canceled rounds are hard-sealed by the terminal sweep,

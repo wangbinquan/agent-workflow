@@ -24,7 +24,20 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { and, asc, count, desc, eq, gt, inArray, isNull, ne, notExists, notInArray, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  sql,
+} from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import { dbTxSync } from '@/db/txSync'
 import { ulid } from 'ulid'
@@ -1427,10 +1440,7 @@ export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<
     )
     .innerJoin(
       tasks,
-      and(
-        eq(tasks.id, docVersions.taskId),
-        notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-      ),
+      and(eq(tasks.id, docVersions.taskId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
     )
     .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(and(...conditions))

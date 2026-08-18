@@ -129,7 +129,14 @@ export async function buildOverview(
     taskStats,
   ] = await Promise.all([
     gatedCount(actor, 'agents:read', () =>
-      countAclResource(db, actor, 'agent', agentsTable, agentsTable, eq(agentsTable.builtin, false)),
+      countAclResource(
+        db,
+        actor,
+        'agent',
+        agentsTable,
+        agentsTable,
+        eq(agentsTable.builtin, false),
+      ),
     ),
     gatedCount(actor, 'skills:read', () =>
       countAclResource(db, actor, 'skill', skillsTable, skillsTable),
