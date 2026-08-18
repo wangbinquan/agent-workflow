@@ -77,6 +77,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
   'packages/backend/tests/opencode-models.test.ts#skipIf': 1,
   'packages/backend/tests/worktree-submodule-init.test.ts#skipIf': 1,
+  // RFC-310 PR-0：symlink/mkfifo 攻击夹具依赖 POSIX 语义（Windows 造 symlink 需
+  // 特权、无 mkfifo）；其余 sink/预算/traversal 拒绝用例三平台全跑。
+  'packages/backend/tests/rfc310-pr0-evidence-sink-probe.test.ts#skipIf': 1,
 }
 
 interface TestModifierUse {

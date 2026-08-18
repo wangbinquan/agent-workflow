@@ -11,7 +11,9 @@
     "./runtime": "./src/runtime/dispatch.ts",
     "./mcp-stdio": "./src/mcp/stdio.ts",
     "./scip": "./src/scip/cli.ts",
-    "./tool": "./src/tool.ts"
+    "./tool": "./src/tool.ts",
+    "./development/requirement-provider": "./src/development/requirement-provider.ts",
+    "./development/pipeline-provider": "./src/development/pipeline-provider.ts"
   },
   "scripts": {
     "start": "bun run src/cli.ts",
