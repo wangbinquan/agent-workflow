@@ -77,10 +77,38 @@
   ——RFC-310 PR-2 的既有实现,其 RFC 范围内无分页要求,由该 session 移交本性能治理面登记;mission
   表长起来会复刻 /tasks 的卡顿形态,接入方式与 /repos 同款(keyset + 页内富化 + facets)。
 
+## 实现门(三路错开视角)findings 与处置
+
+按 `docs/dev-gotchas.md` 的定式,本轮改动跨了他人提交,故以三路**刻意错开视角**的
+独立子代理替代 codex `--base`:①正确性;②不在 diff 里的连带面(不看 diff,按契约
+反查消费方);③测试有效性(20 组变异实验)。产出与处置:
+
+- **两个 P0(均已修)**:①`bun build --compile` 只打包 mainEntry,worker 不被
+  bundler 追踪 ⇒ **发布版单二进制里备份 100% 不可用**(dev 与测试都走不到)——构建
+  脚本加额外入口 + 任何 worker 失败回退同线程 VACUUM INTO;②C5 把 checkpoint 默认
+  打开后,它与备份的只读快照相撞会阻塞满 busy_timeout(实测 5310ms)且跑在同步主
+  连接上 ⇒ 全站冻结 5 秒,正是 §6.6 要消灭的事——快照期间跳过该拍。
+- **用户可见的真回归(已修)**:tooltip 惰性化存了格式化字符串 ⇒ 虚拟化复用实例后
+  显示过期时间;字节水位使归档常态化而归档 JSONL 丢了 session 列 ⇒ 会话树以子代理
+  为根**渲染出错误结构**;webhook supersede 的唯一事实源被 90 天保留期删掉 ⇒ 同一
+  MR 两个活任务互相踩;事件流水按行时间戳删而宿主计数还在 ⇒ 界面正面宣称
+  「complete · N events」而面板空白、蒸馏「抓取失败」被反转成「没有抓取问题」;
+  /repos 网格化后表头/单元格错位与窄屏 Actions 被裁;branch_started_at 在删除子
+  任务后永久漂移。
+- **8 组变异后测试仍全绿的锁不住点(已补锁)**:快路径可被静默关闭、参数上限锁前提
+  不成立(实测 SQLite 3.51 到 10 万参数才抛)、高水位断言不看值、C6 三条腿可整体
+  关闭、HTTP 层三个过滤参数零覆盖、workgroup 徽章 ACL 零防护(可越权计数泄漏)、
+  config 缓存别名断言打错对象、一条永不匹配的死正则。
+- **登记不修(与用户/后续 RFC 相关)**:repos facets 每页重算无缓存(500 仓 6.3ms,
+  十万仓需按 tasks 同款做短 TTL 缓存);`getNodeRunStdout` 尾部截断仍未做;
+  §6.6「备份进行中 tasks/page P95 <300ms」缺真做备份的计时断言(结构上已由
+  worker + checkpoint 让路成立,但没有测试)。
+
 ## 验收清单(收口对照)
 
 - [x] proposal §6 验收实测,数字与**逐项判定**记入 `bench-results.md`(6.1 首页/翻页、6.2、6.3 两条徽章 ✅;**三处缺口 G1/G2/G3 如实记账并给出建议**,详见该文件)
-- [x] proposal §5 能力影响 C1-C7 逐项有测试覆盖(C1 随 T19 列 PR-6;C2/C3/C4/C5/C6/C7 均有锁)
+- [x] proposal §5 能力影响 C2–C7 逐项有测试覆盖(**C1 未实现也未测**——T19 顺延 PR-6,
+      此前这一行被整体勾上属记账错误,实现门第 3 路指出后更正)
 - [x] 全部 oracle/EXPLAIN/参数上限回归绿;exact-SHA CI:`822a20bf` 上 RFC-311 面全绿(唯一红是并发 session 的 rfc305 权限计数)
 - [x] `docs/dev-gotchas.md` 补三条:partial-index 蕴含限制、**keyset 断点行值比较**、迁移四件套定式(另加混树 e2e 二进制判据)
 - [x] STATE.md / design/plan.md 收口更新
