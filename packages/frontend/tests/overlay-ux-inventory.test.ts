@@ -105,7 +105,9 @@ const OVERLAY_CALLSITES = {
   },
   // OIDC provider form/delete, its RFC-250 dirty-close confirmation, backup
   // restore, and password-login policy confirmation.
-  'routes/settings.tsx': { family: 'access-and-settings', count: 5 },
+  // RFC-311 T19：+1 = 终态任务归档的二次确认（rfc311-task-archive-manual.test.tsx
+  // 断言它的预览数量与「确认后才发 dryRun:false」）。
+  'routes/settings.tsx': { family: 'access-and-settings', count: 6 },
   'routes/users.tsx': { family: 'access-and-settings', count: 2 },
   // RFC-257: endpoint create + one-time secret reveal.
   'components/WebhookEndpointCard.tsx': { family: 'access-and-settings', count: 3 },

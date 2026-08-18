@@ -54,6 +54,7 @@ import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startRetentionSweeper } from '@/services/maintenanceRetention'
+import { recoverInterruptedArchives, startTaskArchiveSweeper } from '@/services/taskArchive'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import {
   finishClaimedWebhookWorkspacePrune,
@@ -807,6 +808,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       webhookTriggerFiresRetentionDays: cfg.webhookTriggerFiresRetentionDays,
     }
   })
+  // RFC-311 T19(proposal C1):终态任务树归档出库。**默认关闭**;开启后整树终态
+  // 且超保留期的任务被导出到 archive/ 并从库删除(前台 404)。boot 先做一次崩溃
+  // 恢复:扫 `.tmp-*` 残留,库里行还在就丢弃重来、行已删就提升为正式目录。
+  void recoverInterruptedArchives(db).catch((err) =>
+    log.warn('archive recovery threw', { error: (err as Error).message }),
+  )
+  const taskArchiveTicker = startTaskArchiveSweeper(db, () => {
+    const cfg = loadConfig(Paths.config)
+    return {
+      enabled: cfg.taskArchive.enabled,
+      retentionDays: cfg.taskArchive.retentionDays,
+      maxTreesPerSweep: cfg.taskArchive.maxTreesPerSweep,
+    }
+  })
   // RFC-213: scheduled backup + retention (disabled by default — backupIntervalMs=0).
   const backupTicker = startBackupScheduler({
     db,
@@ -1182,6 +1197,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     webhookGcTicker.stop()
     archiveTicker.stop()
     retentionTicker.stop()
+    taskArchiveTicker.stop()
     backupTicker.stop()
     walCheckpointTicker.stop()
     submoduleRefreshTicker.stop()

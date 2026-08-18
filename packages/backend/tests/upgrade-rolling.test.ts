@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 181 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 182 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -453,7 +453,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 而三方合并要的正是后者）。
     // RFC-311 T28 bump 到 181 with 0181_rfc311_repos_page_index（/repos 分页
     // keyset 需要 (last_fetched_at, id) 全序,复合索引按前缀规则替换旧单列索引）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(181)
+    // RFC-311 T19 bump 到 182 with 0182_rfc311_task_archive_audit（归档把任务行
+    // 删掉，审计行必须活在任务级联族之外）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(182)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -91,6 +91,9 @@ export const SETTINGS_NUMERIC_BOUNDS = {
   // 而它是**会删文件**的旋钮,首次启动就生效。给它一个设置页入口。0 = 不清理。
   backupProtectedKeepCount: { min: 0, max: 1_000 },
   eventStreamRetentionDays: { min: 0, max: 3_650, unit: 'days' },
+  // RFC-311 T19:归档保留期。0 与 enabled=false 等价(都不归档),旋钮在设置页
+  // 与开关同处一张卡——这是**会把任务从界面上抹掉**的能力,必须显式可见可调。
+  'taskArchive.retentionDays': { min: 0, max: 3_650, unit: 'days' },
   webhookTriggerFiresRetentionDays: { min: 0, max: 3_650, unit: 'days' },
   webhookDeliveryBodyRetentionDays: { min: 1, max: 3_650, unit: 'days' },
   webhookDeliveryRowRetentionDays: { min: 1, max: 3_650, unit: 'days' },

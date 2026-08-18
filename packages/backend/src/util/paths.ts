@@ -81,6 +81,11 @@ export const Paths = {
   get backupsDir() {
     return join(appHome(), 'backups')
   },
+  /** RFC-311 T19：终态任务归档出库后的落盘根目录(每棵任务树一个子目录)。
+   *  归档即从库里删除,界面 404 与不存在同形;这里是唯一的考古入口。 */
+  get taskArchiveDir() {
+    return join(appHome(), 'archive', 'tasks')
+  },
   /**
    * Path to bundled drizzle migrations folder. In dev: backend/db/migrations.
    * In production single-binary build (M5), this resolves to the embedded path

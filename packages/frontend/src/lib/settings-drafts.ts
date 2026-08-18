@@ -92,6 +92,13 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     // RFC-261 (D9') — webhook 投递保留天数
     'webhookDeliveryBodyRetentionDays',
     'webhookDeliveryRowRetentionDays',
+    // RFC-311 实现门 P1-5 的三个保留旋钮 + T19 的终态任务归档。四个键都是本 RFC
+    // 新上设置页的，最初漏登记在这里：界面能改、点保存无报错、值原样被丢掉
+    // （settings-scope-coverage.test.ts 现在会自动发现同类遗漏）。
+    'backupProtectedKeepCount',
+    'eventStreamRetentionDays',
+    'webhookTriggerFiresRetentionDays',
+    'taskArchive',
   ],
   // RFC-210. Registering here is not optional bookkeeping: this list IS the
   // minimal-write allowlist, so a key missing from it gets silently dropped on

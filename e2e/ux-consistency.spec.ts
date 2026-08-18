@@ -336,7 +336,9 @@ test.describe('RFC-198 global UX browser matrix', () => {
       ['systemAgents', 6],
       ['limits', 3],
       ['recovery', 2],
-      ['gc', 4],
+      // RFC-311：GC 分区从 3 张涨到 5 张（+「保留期与清理」+「终态任务归档」），
+      // 加上权限满足时内嵌的 BackupCard = 6。
+      ['gc', 6],
       ['git', 3],
       ['codeHosts', 2],
       ['network', 2],

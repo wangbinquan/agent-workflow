@@ -43,6 +43,8 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
           perNodeRunBytes: value,
         },
       }
+    case 'taskArchive.retentionDays':
+      return { taskArchive: { enabled: false, retentionDays: value } }
     case 'eventsArchiveThresholds.globalBytes':
       return {
         eventsArchiveThresholds: {
@@ -57,7 +59,7 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
 }
 
 describe('Settings numeric bounds parity', () => {
-  test('all 33 Config-backed numeric controls use the shared adapter exactly once', () => {
+  test('all 34 Config-backed numeric controls use the shared adapter exactly once', () => {
     expect(SETTINGS_SOURCE).not.toMatch(/<NumberInput\b/)
     // RFC-287 T10：25 → 28，补齐 maxConcurrentCodeHostCalls / maxActiveChildTasks /
     // maxInvocationDepth 三项配额（此前只能改配置文件）。
@@ -66,7 +68,8 @@ describe('Settings numeric bounds parity', () => {
     // (backupProtectedKeepCount / eventStreamRetentionDays /
     // webhookTriggerFiresRetentionDays)从「只能改 config.json」提到设置页
     // ——C4/C6 承诺的缓解是「可配」，而它们首次启动就生效。
-    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(33)
+    // RFC-311 T19：33 → 34，归档保留期(会让任务从界面消失,必须显式可调)。
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(34)
     for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
       const matches = SETTINGS_SOURCE.match(
         new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),

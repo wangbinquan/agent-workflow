@@ -1079,6 +1079,46 @@ export function GcTab({ config }: TabProps) {
         </div>
       </SettingsCard>
       <SettingsCard
+        title={t('settings.cardGroups.taskArchiveTitle')}
+        hint={t('settings.cardGroups.taskArchiveHint')}
+      >
+        {/* RFC-311 T19(proposal C1,用户拍板)——**开启后任务会从界面上消失**:
+          整树终态且超保留期的任务被导出到 archive/ 并从库删除,详情 404 与不存在
+          同形。默认关闭,文案必须把「不可在线回看」讲清楚。 */}
+        <Switch
+          checked={state.taskArchive?.enabled === true}
+          onChange={(v) =>
+            setState({
+              ...state,
+              taskArchive: {
+                ...(state.taskArchive ?? { retentionDays: 90, maxTreesPerSweep: 50 }),
+                enabled: v,
+              },
+            })
+          }
+          label={t('settingsForm.taskArchiveEnabled')}
+        />
+        <Field
+          label={t('settingsForm.taskArchiveRetentionDays')}
+          hint={t('settingsForm.taskArchiveRetentionDaysHint')}
+        >
+          <SettingsNumberInput
+            setting="taskArchive.retentionDays"
+            value={state.taskArchive?.retentionDays}
+            onChange={(v) =>
+              setState({
+                ...state,
+                taskArchive: {
+                  ...(state.taskArchive ?? { enabled: false, maxTreesPerSweep: 50 }),
+                  retentionDays: v ?? 90,
+                },
+              })
+            }
+          />
+        </Field>
+        <TaskArchiveManualRun retentionDays={state.taskArchive?.retentionDays} />
+      </SettingsCard>
+      <SettingsCard
         title={t('settings.cardGroups.gcWebhooksTitle')}
         hint={t('settings.cardGroups.gcWebhooksHint')}
       >
@@ -1113,6 +1153,105 @@ export function GcTab({ config }: TabProps) {
       </SettingsCard>
       {canRunBackup && <BackupCard canRun={canRunBackup} />}
     </SectionForm>
+  )
+}
+
+interface TaskArchivePreview {
+  retentionDays: number
+  treeCount: number
+  taskCount: number
+}
+
+/**
+ * RFC-311 T19 — 设置页维护区的「按条件批量归档」手动入口(design §7.1)。
+ *
+ * 这个按钮**不可逆地删任务**,所以流程刻意是两段:先 dryRun 预览「会归档几棵树、
+ * 共几个任务」,再由 ConfirmDialog 二次确认才真执行。自动归档开关关着时它照样可用
+ * ——那正是它存在的理由(一次性清历史,而不必长期打开自动归档)。
+ */
+function TaskArchiveManualRun({ retentionDays }: { retentionDays: number | undefined }) {
+  const { t } = useTranslation()
+  const canRun = usePermission('settings:write')
+  const [preview, setPreview] = useState<TaskArchivePreview | null>(null)
+  const [nothing, setNothing] = useState<number | null>(null)
+  const [done, setDone] = useState<{ treeCount: number; taskCount: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  if (!canRun) return null
+
+  const body = retentionDays === undefined ? {} : { retentionDays }
+
+  const runPreview = async () => {
+    setBusy(true)
+    setError(null)
+    setDone(null)
+    setNothing(null)
+    try {
+      const r = await api.post<TaskArchivePreview>('/api/tasks/archive', { ...body, dryRun: true })
+      // 没有可归档的树就别弹一个「确认删除」对话框——它无事可确认。
+      if (r.treeCount === 0) setNothing(r.retentionDays)
+      else setPreview(r)
+    } catch (err) {
+      setError(describeApiError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 抛出去让 ConfirmDialog 保持打开并显示错误;只有成功才关闭。
+  const confirmArchive = async () => {
+    const r = await api.post<{ treeCount: number; taskCount: number }>('/api/tasks/archive', {
+      ...body,
+      dryRun: false,
+    })
+    setDone({ treeCount: r.treeCount, taskCount: r.taskCount })
+    setPreview(null)
+  }
+
+  return (
+    <div className="stack-top--md">
+      <button
+        type="button"
+        className="btn btn--sm"
+        onClick={runPreview}
+        disabled={busy}
+        ref={triggerRef}
+        data-testid="task-archive-run"
+      >
+        {busy ? t('settings.taskArchiveScanning') : t('settings.taskArchiveRunNow')}
+      </button>
+      {done !== null && (
+        <p className="muted settings-hint settings-hint--tight stack-top--sm">
+          {t('settings.taskArchiveDone', { trees: done.treeCount, tasks: done.taskCount })}
+        </p>
+      )}
+      {nothing !== null && (
+        <p className="muted settings-hint settings-hint--tight stack-top--sm">
+          {t('settings.taskArchiveNothing', { days: nothing })}
+        </p>
+      )}
+      {error !== null && <ErrorBanner error={error} />}
+      <ConfirmDialog
+        open={preview !== null}
+        title={t('settings.taskArchiveConfirmTitle')}
+        description={
+          preview === null
+            ? ''
+            : t('settings.taskArchiveConfirmBody', {
+                trees: preview.treeCount,
+                tasks: preview.taskCount,
+                days: preview.retentionDays,
+              })
+        }
+        confirmLabel={t('settings.taskArchiveConfirmAction')}
+        tone="danger"
+        onConfirm={confirmArchive}
+        onClose={() => setPreview(null)}
+        triggerRef={triggerRef}
+      />
+    </div>
   )
 }
 

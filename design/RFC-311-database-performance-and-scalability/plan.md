@@ -113,8 +113,9 @@
 ## 验收清单(收口对照)
 
 - [x] proposal §6 验收实测,数字与**逐项判定**记入 `bench-results.md`(6.1 首页/翻页、6.2、6.3 两条徽章 ✅;**三处缺口 G1/G2/G3 如实记账并给出建议**,详见该文件)
-- [x] proposal §5 能力影响 C2–C7 逐项有测试覆盖(**C1 未实现也未测**——T19 顺延 PR-6,
-      此前这一行被整体勾上属记账错误,实现门第 3 路指出后更正)
+- [x] proposal §5 能力影响 C1–C7 逐项有测试覆盖(C1 随 PR-6/T19 补齐:`rfc311-task-archive.test.ts`
+      11 条锁默认关 / 整树判据 / 原子性两分支 / 有界扫描 / 手动入口 dry-run 与审计行;
+      此前 C1 一行曾被整体勾上属记账错误,实现门第 3 路指出后更正,现按实交付)
 - [x] 全部 oracle/EXPLAIN/参数上限回归绿;exact-SHA CI:`822a20bf` 上 RFC-311 面全绿(唯一红是并发 session 的 rfc305 权限计数)
 - [x] `docs/dev-gotchas.md` 补三条:partial-index 蕴含限制、**keyset 断点行值比较**、迁移四件套定式(另加混树 e2e 二进制判据)
 - [x] STATE.md / design/plan.md 收口更新
@@ -135,4 +136,7 @@
 - **实现门(仓规双门之二)**:因本轮跨他人提交,按 `docs/dev-gotchas.md` 的定式改用三路**刻意错开视角**的独立子代理(正确性 / 不在 diff 里的连带面 / 测试有效性变异检验)替代 codex `--base`。
   - **PR-5 遗留**:/tasks 的 tick 收敛(页级 now context)与 useTaskOperationsSync 定点刷新维持现状(虚拟化后不可视行不挂载已消大头);Playwright 大 seed e2e 未做(bench-results.md 收口时一并);/code work-items nextCursor 修复继续避让(RFC-310 前端批在制)。
 - **实测遗留缺口(bench-results.md 详列,均已登记不隐瞒)**:**G1 过滤视图仍走旧穷举管线**——10 万任务下单次 68 秒且是一条 SQL(同步单连接 ⇒ 期间整站冻结);生产数千任务量级约 1~2 秒。建议下一个 RFC 把快路径扩到纯 tasks 列过滤(难点是 context-ancestor 语义),可立即做的缓解是给旧管线加查询预算保护。**G2** overview 50.7ms / workgroup 徽章 13.2ms 未达 §6.3 的 10ms(比改造前的 15 秒低三个数量级,但如实记账;可选优化:9 计数合成 1 条 SQL)。**G3** 归档器首轮清 980 万行 backlog 需多轮 tick(单轮预算 20 万行 = 72 秒可打断工作量,稳态后高水位生效近乎无事)。
-- **遗留(不阻塞收口,记账)**:T19 任务归档(用户已拍板方向,体量大,列 PR-6);T20 维护入口;T21 prompt_text 外置;/code work-items nextCursor 修复(T29 余项;与 RFC-310 session 明确交接:其 PR-10 只做删除波不塞功能增强,`ActivityPanel`/`WorkItemRounds` 与 `api.get<{items,nextCursor}>` 原样保留、后端 cursor 语义未动,**待 PR-10 落地后由本 RFC 侧按 /repos 同款做法接翻页**);sessionView 上限、getNodeRunStdout 截断;development retention_state sweeper 与 code rollup 表(归属 RFC-310/code-capability 域)。
+- **PR-6 ✅**(T19 终态任务归档,proposal §5 C1 的实现):`services/taskArchive.ts`(整树判据 / manifest+JSONL 导出 / runs·logs **挪移** / 先落盘后删库的原子性 / boot 扫 `.tmp-*` 两分支恢复 / 有界 sweeper,默认**关**)+ `POST /api/tasks/archive`(`settings:write`,**dry-run 是默认**,`dryRun:false` 才执行)+ 设置页维护入口(预览→ConfirmDialog 二次确认)+ `task_archive_audit`(migration 0182;刻意**不进任务级联族**——被记录的任务行马上就没了,审计必须活得比它们久;sweeper 空转不写行以免每小时一条噪音)。
+  - **落地修正(测试驱动,两条都是真 bug)**:①手动入口不能把 `retentionDays=0`(配置语义 = 关)当 cutoff 用——那会把**每一棵终态树**立刻不可逆删掉,现返回 422 `task-archive-retention-unset`;②`SETTINGS_CONFIG_SCOPE_KEYS.gc` **漏登记 4 个键**(`taskArchive` + 实现门 P1-5 的三个保留旋钮),后果是界面能改、点保存无报错、值被静默丢弃。补齐白名单并新增 `tests/settings-scope-coverage.test.ts` 自动对账(扫每个 tab 片段真实读写的 `state.<key>`),已按仓规做变异检验:摘掉任一键即变红。教训进 `docs/dev-gotchas.md` §前端。
+  - 顺带修 `tests/nav-memory-tab.test.tsx` 的 20ms 固定睡眠竞态(d916451c 上 Windows frontend shard 3/3 唯一红,其余 8 shard 绿),改等「请求已发出 + QueryClient 空闲」的确定性锚点。
+- **遗留(不阻塞收口,记账)**:T20 维护入口(opencode-stores 清理 / freelist 提示 / `db compact` CLI);T21 prompt_text 外置;/code work-items nextCursor 修复(T29 余项;与 RFC-310 session 明确交接:其 PR-10 只做删除波不塞功能增强,`ActivityPanel`/`WorkItemRounds` 与 `api.get<{items,nextCursor}>` 原样保留、后端 cursor 语义未动,**待 PR-10 落地后由本 RFC 侧按 /repos 同款做法接翻页**);sessionView 上限、getNodeRunStdout 截断;development retention_state sweeper 与 code rollup 表(归属 RFC-310/code-capability 域)。

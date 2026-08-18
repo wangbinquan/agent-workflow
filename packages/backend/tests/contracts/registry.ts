@@ -574,6 +574,10 @@ export const ENDPOINTS: EndpointSpec[] = [
     },
   },
   { method: 'POST', path: '/api/tasks' },
+  // RFC-311 T19 — settings:write batch archive of settled task trees. Dry-run
+  // by default; `dryRun:false` exports then DELETES, so it is not exercised
+  // with a happy-path body here.
+  { method: 'POST', path: '/api/tasks/archive' },
   // RFC-222 — admin-only hard delete (tasks:delete + type-to-confirm body).
   { method: 'DELETE', path: '/api/tasks/:id' },
   { method: 'POST', path: '/api/tasks/:id/cancel' },

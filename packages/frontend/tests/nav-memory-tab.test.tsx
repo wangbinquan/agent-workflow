@@ -105,13 +105,18 @@ function renderBadge() {
     routeTree: root.addChildren([memory]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
-  return render(
-    <QueryClientProvider client={qc}>
-      {/* Focused test router intentionally differs from the generated app tree. */}
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <RouterProvider router={router as any} />
-    </QueryClientProvider>,
-  )
+  // The client is returned so tests can wait for "all queries settled" instead
+  // of sleeping a fixed number of ms (see the candidate tests below).
+  return {
+    qc,
+    ...render(
+      <QueryClientProvider client={qc}>
+        {/* Focused test router intentionally differs from the generated app tree. */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <RouterProvider router={router as any} />
+      </QueryClientProvider>,
+    ),
+  }
 }
 
 beforeEach(() => {
@@ -162,18 +167,24 @@ describe('MemoryPendingBadge', () => {
       mkSum({ canManage: false }),
       mkSum({ id: 'm2', canManage: false }),
     ])
-    renderBadge()
-    // Allow react-query a tick to consider firing the candidate query.
-    await new Promise((r) => setTimeout(r, 20))
+    const { qc } = renderBadge()
+    // The candidate query is enabled only after /api/auth/me resolves, so a
+    // fixed 20ms sleep raced on loaded runners — this went red on the Windows
+    // frontend shard 3/3 of d916451c while the other 8 shards passed. Anchor on
+    // the request itself, then on "no query still in flight".
+    await waitFor(() => expect(urls.some((u) => u.includes('/api/memories'))).toBe(true))
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
     expect(screen.queryByTestId('nav-memory-badge')).toBeNull()
-    expect(urls.some((u) => u.includes('/api/memories'))).toBe(true)
   })
 
   test('admin with zero pending candidates does not render the badge', async () => {
-    installFetch({ permissions: ['memory:read', 'memory:update'] }, [])
-    renderBadge()
-    // Wait long enough for the actor + candidate fetches to settle.
-    await new Promise((r) => setTimeout(r, 20))
+    const { urls } = installFetch({ permissions: ['memory:read', 'memory:update'] }, [])
+    const { qc } = renderBadge()
+    // Same anchor as above: wait for the candidate fetch and for the client to
+    // go idle, so "no badge" is asserted against settled data rather than
+    // against a fixed sleep that may expire before the fetch even starts.
+    await waitFor(() => expect(urls.some((u) => u.includes('/api/memories'))).toBe(true))
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
     expect(screen.queryByTestId('nav-memory-badge')).toBeNull()
   })
 

@@ -2998,6 +2998,29 @@ export const recoveryEvents = sqliteTable(
   }),
 )
 
+// RFC-311 T19 — task_archive_audit: 谁在什么时候归档了哪些任务树。
+// 归档把任务行导出到 ~/.agent-workflow/archive/tasks/ 后从库里删掉，所以这张表
+// 既不引用 tasks 也不进任务级联族——它必须比被记录的任务活得久。source='sweep'
+// 是 hourly 归档器（actor_user_id 为 null），'manual' 是设置页/API 的手动批量入口
+// （actor_user_id 记操作者）。
+export const taskArchiveAudit = sqliteTable(
+  'task_archive_audit',
+  {
+    id: text('id').primaryKey(),
+    source: text('source').notNull(),
+    actorUserId: text('actor_user_id'),
+    retentionDays: integer('retention_days').notNull(),
+    treeCount: integer('tree_count').notNull(),
+    taskCount: integer('task_count').notNull(),
+    skippedCount: integer('skipped_count').notNull(),
+    rootTaskIdsJson: text('root_task_ids_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    createdIdx: index('idx_task_archive_audit_created').on(t.createdAt),
+  }),
+)
+
 // -----------------------------------------------------------------------------
 // RFC-120 task_questions — per-(clarify question × handler role) tracked entry
 // for the task's "question list / 任务中心". Auto-collected from every clarify

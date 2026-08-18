@@ -293,6 +293,19 @@ export const ConfigSchema = z.object({
   eventStreamRetentionDays: z.number().int().min(0).max(3650).default(30),
   /** webhook_trigger_fires 保留天数。 */
   webhookTriggerFiresRetentionDays: z.number().int().min(0).max(3650).default(90),
+  /**
+   * RFC-311 T19(proposal §5 C1)——终态任务树自动归档出库。**默认关闭**:开启后
+   * 整树终态且超过保留期的任务会被导出到 `~/.agent-workflow/archive/tasks/` 并
+   * **从库里删除**,前台 404 与不存在同形(不提供在线回看)。这是能力收缩型改动,
+   * 用户已就「归档到目录 + 从表删除 + 界面不可见」拍板。
+   */
+  taskArchive: z
+    .object({
+      enabled: z.boolean().default(false),
+      retentionDays: z.number().int().min(0).max(3650).default(90),
+      maxTreesPerSweep: z.number().int().min(1).max(1000).default(50),
+    })
+    .default({ enabled: false, retentionDays: 90, maxTreesPerSweep: 50 }),
 
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
@@ -706,6 +719,7 @@ export const DEFAULT_CONFIG: Config = {
   webhookDeliveryRowRetentionDays: 90,
   eventStreamRetentionDays: 30,
   webhookTriggerFiresRetentionDays: 90,
+  taskArchive: { enabled: false, retentionDays: 90, maxTreesPerSweep: 50 },
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 600_000,
@@ -800,6 +814,13 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     webhookTriggerFiresRetentionDays: boundedSettingsInteger(
       'webhookTriggerFiresRetentionDays',
     ).optional(),
+    taskArchive: z
+      .object({
+        enabled: z.boolean(),
+        retentionDays: boundedSettingsInteger('taskArchive.retentionDays').optional(),
+        maxTreesPerSweep: z.number().int().min(1).max(1000).optional(),
+      })
+      .optional(),
     webhookDeliveryBodyRetentionDays: boundedSettingsInteger(
       'webhookDeliveryBodyRetentionDays',
     ).optional(),
