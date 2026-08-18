@@ -128,7 +128,9 @@ tx(() => {
     const id = `perfrepo${pad(i, 6)}`
     ins.run(
       id,
-      id.slice(0, 8),
+      // url_hash 有 UNIQUE 约束——必须逐行唯一(曾用 id.slice(0,8) 恒为
+      // 'perfrepo',500 行只进 1 行,§6.2 基准失真)。
+      `pr${pad(i, 6)}`,
       `git@example.com:perf/repo-${i}.git`,
       `/cache/perf/repo-${i}`,
       T0 + ((i * 7919) % SPAN),
