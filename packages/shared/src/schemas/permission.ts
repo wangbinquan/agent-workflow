@@ -94,6 +94,12 @@ export const PERMISSIONS = [
   // RFC-260 — 端点与投递审计共用的读点（投递是端点级审计，RFC-257 F-13；
   // replay/写面仍走 system 域的 webhook-endpoints:manage）。
   'webhook-endpoints:read',
+  // RFC-310 — digital-employee configuration resources (five ACL types).
+  'action-templates:read',
+  'verification-profiles:read',
+  'digital-employees:read',
+  'automation-policies:read',
+  'adapter-definitions:read',
   'repos:read',
   'memory:read',
   'tasks:read',
@@ -122,6 +128,11 @@ export const PERMISSIONS = [
   // Framework writes are SYSTEM-domain (below): a framework carries scripts
   // that run as the daemon. Binding writes are ordinary matrix points.
   'capability-templates:create',
+  'action-templates:create',
+  'verification-profiles:create',
+  'digital-employees:create',
+  'automation-policies:create',
+  'adapter-definitions:create',
   'scheduled-tasks:create',
   'webhook-triggers:create',
   'repos:create',
@@ -138,6 +149,14 @@ export const PERMISSIONS = [
   'workflows:update',
   'workgroups:update',
   'capability-templates:update',
+  'action-templates:update',
+  'verification-profiles:update',
+  'digital-employees:update',
+  'automation-policies:update',
+  'adapter-definitions:update',
+  // RFC-310 — assignments are repository configuration (repos:update tier).
+  'repository-employee-assignments:read',
+  'repository-employee-assignments:update',
   'scheduled-tasks:update',
   'webhook-triggers:update',
   'memory:update',
@@ -164,6 +183,16 @@ export const PERMISSIONS = [
   'repos:delete',
   'memory:delete',
   'tasks:delete',
+
+  // RFC-310 — archive verb: these five types never hard-delete (immutable
+  // revisions stay pinned by in-flight missions); archiving is the only
+  // retirement, so the points are named :archive and NOT derived-listed with
+  // DELETE_POINTS' explicit-tick rule.
+  'action-templates:archive',
+  'verification-profiles:archive',
+  'digital-employees:archive',
+  'automation-policies:archive',
+  'adapter-definitions:archive',
 
   // ---------------------------------------------------------------------------
   // Matrix domain — execute.
@@ -340,6 +369,92 @@ const permissionCatalog = {
   'capability-templates:read': catalogEntry('capability-templates:read', {
     group: 'resources',
     constraints: resourceAcl,
+  }),
+  'action-templates:read': catalogEntry('action-templates:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'action-templates:create': catalogEntry('action-templates:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'action-templates:update': catalogEntry('action-templates:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'action-templates:archive': catalogEntry('action-templates:archive', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'verification-profiles:read': catalogEntry('verification-profiles:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'verification-profiles:create': catalogEntry('verification-profiles:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'verification-profiles:update': catalogEntry('verification-profiles:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'verification-profiles:archive': catalogEntry('verification-profiles:archive', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'digital-employees:read': catalogEntry('digital-employees:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'digital-employees:create': catalogEntry('digital-employees:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'digital-employees:update': catalogEntry('digital-employees:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'digital-employees:archive': catalogEntry('digital-employees:archive', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'automation-policies:read': catalogEntry('automation-policies:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'automation-policies:create': catalogEntry('automation-policies:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'automation-policies:update': catalogEntry('automation-policies:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'automation-policies:archive': catalogEntry('automation-policies:archive', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'adapter-definitions:read': catalogEntry('adapter-definitions:read', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'adapter-definitions:create': catalogEntry('adapter-definitions:create', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'adapter-definitions:update': catalogEntry('adapter-definitions:update', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'adapter-definitions:archive': catalogEntry('adapter-definitions:archive', {
+    group: 'resources',
+    constraints: resourceAcl,
+  }),
+  'repository-employee-assignments:read': catalogEntry('repository-employee-assignments:read', {
+    group: 'repositories',
+  }),
+  'repository-employee-assignments:update': catalogEntry('repository-employee-assignments:update', {
+    group: 'repositories',
   }),
   'scheduled-tasks:read': catalogEntry('scheduled-tasks:read', { group: 'tasks' }),
   'webhook-triggers:read': catalogEntry('webhook-triggers:read', { group: 'webhooks' }),
@@ -742,6 +857,12 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   // redacted from non-authors at serialization rather than by withholding the
   // whole read.
   'capability-templates:read',
+  'action-templates:read',
+  'verification-profiles:read',
+  'digital-employees:read',
+  'automation-policies:read',
+  'adapter-definitions:read',
+  'repository-employee-assignments:read',
   'scheduled-tasks:read',
   'repos:read',
   'runtime:read',
@@ -777,6 +898,23 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
   'capability-templates:create',
   'capability-templates:update',
   'capability-templates:delete',
+  // RFC-310 — same shape as capability templates: any user may create/own;
+  // executable fields inside are a separate scripts:author field gate.
+  'action-templates:create',
+  'action-templates:update',
+  'action-templates:archive',
+  'verification-profiles:create',
+  'verification-profiles:update',
+  'verification-profiles:archive',
+  'digital-employees:create',
+  'digital-employees:update',
+  'digital-employees:archive',
+  'automation-policies:create',
+  'automation-policies:update',
+  'automation-policies:archive',
+  'adapter-definitions:create',
+  'adapter-definitions:update',
+  'adapter-definitions:archive',
   'workgroups:update',
   'workgroups:delete',
   // Creating / editing a schedule arms a future launch, so it sat behind
@@ -852,6 +990,7 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   'webhook-triggers:delete',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
+  'repository-employee-assignments:update', // RFC-310 —— 与 repos:update 同档
   'repos:delete',
   'repos:execute',
   'tasks:read:all',

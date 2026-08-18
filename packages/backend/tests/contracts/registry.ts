@@ -176,6 +176,13 @@ export const ENDPOINTS: EndpointSpec[] = [
   // RFC-309 — start a round from a template. The entrance RFC-304 promised
   // (T46b) and shipped only the issue-label half of.
   { method: 'POST', path: '/api/code/rounds' },
+  // RFC-310 PR-1B — 数字员工配置（字面路径端点；五资源的模板化 CRUD 端点由
+  // mountConfigResource 生成，registry 按字面路径扫描不到，故不在此表）。
+  { method: 'GET', path: '/api/code/repository-assignments' },
+  { method: 'PUT', path: '/api/code/repository-assignments' },
+  { method: 'DELETE', path: '/api/code/repository-assignments/:scopeKind' },
+  { method: 'POST', path: '/api/code/automation-policies/preview-decision' },
+  { method: 'POST', path: '/api/code/digital-employees/preview-selection' },
   { method: 'GET', path: '/api/code/work-items' },
   // RFC-304 T61 — the troubleshooting chain's read side.
   { method: 'GET', path: '/api/code/deliveries' },

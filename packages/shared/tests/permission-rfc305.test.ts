@@ -41,6 +41,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
       // inside a template rather than a template verb.
       'webhook-triggers:create',
       'repos:create',
+      'repository-employee-assignments:update', // RFC-310（manager 档差集）
       'webhook-triggers:update',
       'repos:update',
       'webhook-triggers:delete',
@@ -67,7 +68,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
     // 78 points − 7 guest baseline = 71.
     // RFC-304 had made it 74 (81 − 7) when the two template layers were eight
     // points; RFC-309 merged them to four and added `code-rounds:launch`.
-    expect(grantableAdditionalPermissions('guest')).toHaveLength(71)
+    expect(grantableAdditionalPermissions('guest')).toHaveLength(93) // RFC-310 +22
     expect(grantableAdditionalPermissions('guest')).toContain('resource-acl:private')
     expect(grantableAdditionalPermissions('guest')).toContain('tasks:execute')
   })

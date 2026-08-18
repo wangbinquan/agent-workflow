@@ -504,7 +504,21 @@ export const resourceGrants = sqliteTable(
       // RFC-304 added the two capability template layers. No migration: this
       // column is plain `text` in SQL with no CHECK, so the closed set lives
       // in the type system only.
-      enum: ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup', 'capability_template'],
+      enum: [
+        'agent',
+        'skill',
+        'mcp',
+        'plugin',
+        'workflow',
+        'workgroup',
+        'capability_template',
+        // RFC-310 digital-employee configuration resources.
+        'action_template',
+        'verification_profile',
+        'digital_employee',
+        'automation_policy',
+        'development_adapter',
+      ],
     }).notNull(),
     resourceId: text('resource_id').notNull(),
     userId: text('user_id')
@@ -4546,5 +4560,193 @@ export const repoCapabilityConfig = sqliteTable(
     cellUq: uniqueIndex('uniq_repo_capability_cell').on(t.repoId, t.capability),
     templateIdx: index('idx_repo_capability_template').on(t.templateId),
     readinessIdx: index('idx_repo_capability_readiness').on(t.readiness),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-310 development-automation 配置资源（PR-1B，migration 0176）。
+// 形态：identity（ACL + 可变 draft_json）+ immutable revisions（publish 冻结的
+// canonical JSON + digest）。Mission pin revision 行——编辑只产新 revision，
+// 在途 pin 永不漂移（design §3.1/§11.2）。内容 schema 归 domain 层 zod strict
+// codec；这里只存 canonical JSON 文本与 digest。
+// -----------------------------------------------------------------------------
+
+const developmentResourceIdentityColumns = {
+  id: text('id').primaryKey(), // ULID
+  name: text('name').notNull(),
+  draftJson: text('draft_json').notNull(),
+  publishedRevision: integer('published_revision'),
+  ownerUserId: text('owner_user_id'),
+  visibility: text('visibility', { enum: ['private', 'public'] })
+    .notNull()
+    .default('private'),
+  aclRevision: integer('acl_revision').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  archivedAt: integer('archived_at'),
+} as const
+
+export const actionTemplates = sqliteTable(
+  'action_templates',
+  {
+    ...developmentResourceIdentityColumns,
+    capabilityId: text('capability_id').notNull(),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('action_templates_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
+
+export const actionTemplateRevisions = sqliteTable(
+  'action_template_revisions',
+  {
+    templateId: text('template_id')
+      .notNull()
+      .references(() => actionTemplates.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.templateId, t.revision] }) }),
+)
+
+export const verificationProfiles = sqliteTable(
+  'verification_profiles',
+  { ...developmentResourceIdentityColumns },
+  (t) => ({
+    ownerNameUq: uniqueIndex('verification_profiles_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
+
+export const verificationProfileRevisions = sqliteTable(
+  'verification_profile_revisions',
+  {
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => verificationProfiles.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.profileId, t.revision] }) }),
+)
+
+export const digitalEmployees = sqliteTable(
+  'digital_employees',
+  { ...developmentResourceIdentityColumns },
+  (t) => ({
+    ownerNameUq: uniqueIndex('digital_employees_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
+
+export const digitalEmployeeRevisions = sqliteTable(
+  'digital_employee_revisions',
+  {
+    employeeId: text('employee_id')
+      .notNull()
+      .references(() => digitalEmployees.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.employeeId, t.revision] }) }),
+)
+
+export const automationPolicies = sqliteTable(
+  'automation_policies',
+  { ...developmentResourceIdentityColumns },
+  (t) => ({
+    ownerNameUq: uniqueIndex('automation_policies_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
+
+export const automationPolicyRevisions = sqliteTable(
+  'automation_policy_revisions',
+  {
+    policyId: text('policy_id')
+      .notNull()
+      .references(() => automationPolicies.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.policyId, t.revision] }) }),
+)
+
+export const developmentAdapterDefinitions = sqliteTable(
+  'development_adapter_definitions',
+  {
+    ...developmentResourceIdentityColumns,
+    purpose: text('purpose', {
+      enum: ['requirement-source', 'pipeline-gate', 'pipeline-classifier'],
+    }).notNull(),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('development_adapter_definitions_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
+
+export const developmentAdapterDefinitionRevisions = sqliteTable(
+  'development_adapter_definition_revisions',
+  {
+    adapterId: text('adapter_id')
+      .notNull()
+      .references(() => developmentAdapterDefinitions.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.adapterId, t.revision] }) }),
+)
+
+export const repositoryEmployeeAssignments = sqliteTable(
+  'repository_employee_assignments',
+  {
+    id: text('id').primaryKey(), // ULID
+    scopeKind: text('scope_kind', {
+      enum: ['repository', 'repository-group', 'global-default'],
+    }).notNull(),
+    scopeRef: text('scope_ref'),
+    employeeId: text('employee_id'),
+    employeeRevision: integer('employee_revision'),
+    selectionPolicyId: text('selection_policy_id'),
+    selectionPolicyRevision: integer('selection_policy_revision'),
+    executionPolicyId: text('execution_policy_id'),
+    executionPolicyRevision: integer('execution_policy_revision'),
+    defaultRequirementSourceKey: text('default_requirement_source_key'),
+    updatedBy: text('updated_by'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    scopeUq: uniqueIndex('repository_employee_assignments_scope_unique').on(
+      t.scopeKind,
+      sql`COALESCE(${t.scopeRef}, '')`,
+    ),
   }),
 )

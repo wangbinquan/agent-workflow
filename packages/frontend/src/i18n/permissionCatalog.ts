@@ -45,6 +45,13 @@ const EN_RESOURCES = {
   // scripts live in, "team template" is what points it at agents and prompts.
   'capability-templates': 'Capability templates',
   'code-rounds': 'Capability rounds',
+  // RFC-310 — digital-employee configuration resources.
+  'action-templates': 'Action templates',
+  'verification-profiles': 'Verification profiles',
+  'digital-employees': 'Digital employees',
+  'automation-policies': 'Automation policies',
+  'adapter-definitions': 'Development adapters',
+  'repository-employee-assignments': 'Repository employee assignments',
 } satisfies Record<PermissionResource, string>
 
 const ZH_RESOURCES = {
@@ -74,6 +81,13 @@ const ZH_RESOURCES = {
   'mcp-runtime-tests': 'MCP 运行测试',
   'capability-templates': '能力模板',
   'code-rounds': '能力轮次',
+  // RFC-310 —— 数字员工配置资源。
+  'action-templates': '动作模板',
+  'verification-profiles': '验证配置',
+  'digital-employees': '数字员工',
+  'automation-policies': '自动化策略',
+  'adapter-definitions': '开发适配器',
+  'repository-employee-assignments': '仓库员工指派',
 } satisfies Record<PermissionResource, string>
 
 const EN_ACTIONS = {
@@ -94,6 +108,7 @@ const EN_ACTIONS = {
   private: 'View assigned private',
   audit: 'Audit',
   'override-owner': 'Override owner',
+  archive: 'Archive',
 } satisfies Record<PermissionAction, string>
 
 const ZH_ACTIONS = {
@@ -114,6 +129,7 @@ const ZH_ACTIONS = {
   private: '查看获授权私有',
   audit: '审计',
   'override-owner': '覆盖 owner',
+  archive: '归档',
 } satisfies Record<PermissionAction, string>
 
 const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTranslation>>> = {

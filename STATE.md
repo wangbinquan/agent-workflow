@@ -29,7 +29,11 @@
 > provider mock、go/no-go 全 pass。**PR-0 重大发现**：Bun fetch/node:http 对快生产者大响应不背压（128MB 裸读丢 →
 > RSS 680MB，线性）⇒ 大下载定式改 curl 子进程落盘+流式 hash（已进 dev-gotchas）。PR-1 拆 1A/1B：1A（T9–T12 规则内核：
 > capability/fact catalog、fixed guards、first-match+indeterminate 停机、work-set/employee/route 选择、canonical trace
-> +replay oracle 100 次 byte-identical，Java/C++/polyglot fixtures）已完成待推；1B（T13–T20 资源 CRUD/ACL/API）进行中。
+> +replay oracle 100 次 byte-identical，Java/C++/polyglot fixtures）已完成待推；1B（T13–T20）已完成：五类配置资源（ActionTemplate/VerificationProfile/DigitalEmployee/AutomationPolicy/
+> DevelopmentAdapter）identity+immutable revisions 双表 CRUD（migration 0176）、员工 publish 闭包检查（13 种违规）、
+> permission 78→100（22 点，assignments:update 归 manager 档）、ACL 五类注册、§12.2 路由 + preview/simulate、
+> assignment 三级唯一解析、config package 导入导出 codec、upgrade pure diff planner；端到端 journey 测试
+> （三模板/员工 publish→选择→100 次重放一致）绿。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

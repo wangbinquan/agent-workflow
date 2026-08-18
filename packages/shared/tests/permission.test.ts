@@ -66,7 +66,12 @@ describe('PERMISSIONS catalog', () => {
     // 「授予其一必须不等于授予另一」。合并后这条由**字段级**门维持——写
     // `scripts`/`hooks` 仍需 `scripts:author`（它仍在系统域、永不进令牌），
     // 而模板本身降为普通矩阵点，于是「换个 agent」不再要求把 daemon 交出去。
-    expect(PERMISSIONS.length).toBe(78)
+    // RFC-310 PR-1B 数字员工配置资源五类（action-templates / verification-
+    // profiles / digital-employees / automation-policies / adapter-definitions）
+    // 各 read/create/update/archive（+20），另 repository-employee-assignments
+    // read/update（+2）⇒ **100**。危险字段（adapter 的 executable/secret）沿
+    // RFC-309 字段级门先例仍走 `scripts:author`，不新设系统域点。
+    expect(PERMISSIONS.length).toBe(100)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -154,12 +159,37 @@ describe('PERMISSIONS catalog', () => {
       // `webhook-endpoints:manage` + session 响应分层控制。
       'webhook-triggers:read',
       'webhook-endpoints:read',
+      // RFC-310 —— 数字员工配置五资源全员可建（对齐六类 ACL 资源先例，
+      // 行级 ACL 管边界）；assignments 只读入基线，update 归 manager 档。
+      'action-templates:read',
+      'action-templates:create',
+      'action-templates:update',
+      'action-templates:archive',
+      'verification-profiles:read',
+      'verification-profiles:create',
+      'verification-profiles:update',
+      'verification-profiles:archive',
+      'digital-employees:read',
+      'digital-employees:create',
+      'digital-employees:update',
+      'digital-employees:archive',
+      'automation-policies:read',
+      'automation-policies:create',
+      'automation-policies:update',
+      'automation-policies:archive',
+      'adapter-definitions:read',
+      'adapter-definitions:create',
+      'adapter-definitions:update',
+      'adapter-definitions:archive',
+      'repository-employee-assignments:read',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
     // RFC-304 +5（两个模板读 + 三个组层写）⇒ 54。
     // RFC-309 净持平：两个读点并成一个（−1），新增 `code-rounds:launch`（+1）。
     // 三个模板写点仍在基线里，但含义变了——它们不再蕴含脚本编写权（字段级门）。
-    expect(ROLE_PERMISSIONS.user.length).toBe(54)
+    // RFC-310 +21（五资源×4 全入 user 基线 + assignments:read；assignments:update
+    // 归 manager 档，对齐 repos:update）⇒ 75。
+    expect(ROLE_PERMISSIONS.user.length).toBe(75)
   })
 
   test('guest preset is exactly public-only reads for the six ACL resource domains', () => {
@@ -228,6 +258,8 @@ describe('PERMISSIONS catalog', () => {
       'intent:audit',
       'mcp-runtime-tests:audit',
       'webhook-triggers:override-owner',
+      // RFC-310 —— assignments:update 归 manager 档（同 repos:update）。
+      'repository-employee-assignments:update',
     ]
     for (const p of userPresetMissing) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)
@@ -458,6 +490,7 @@ describe('RFC-222 manager role', () => {
     const expected: Permission[] = [
       ...ROLE_PERMISSIONS.user,
       'repos:create',
+      'repository-employee-assignments:update', // RFC-310 —— 与 repos:update 同档
       // RFC-248 设计门二轮 G4：repos 域不在 ACL 模型里，能力全靠这张手工表
       // 授予——漏了 manager 就「建得了仓库组、改不了」且无法给 PAT 授权。
       'repos:update',

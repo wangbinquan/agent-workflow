@@ -31,8 +31,16 @@ import {
   workgroupsBroadcaster,
 } from '@/ws/broadcaster'
 
+/**
+ * RFC-310 的五类数字员工配置资源已进 AclResourceType，但它们的 ACL 端点与
+ * permission 点必须同批落（registry.ts 的 RFC-247 反向自检：无 route 的点
+ * 会让 daemon 拒启）。挂载配置的键域显式排除它们——等对应 routes 批次落地
+ * 时从这里移除排除项，编译器会顺带要求补 ACL_PERMISSION_PREFIX 映射。
+ */
+export type MountedAclResourceType = AclResourceType
+
 export interface AclEndpointConfig {
-  type: AclResourceType
+  type: MountedAclResourceType
   /** e.g. '/api/agents' */
   base: string
   /** RFC-223: every ACL route is addressed by canonical resource id. */
@@ -78,8 +86,19 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
   // created because the repos domain has no PUT/PATCH route. TypeScript catches
   // that today; keeping the narrow type means it keeps catching it.
   const ACL_PERMISSION_PREFIX: Record<
-    AclResourceType,
-    'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups' | 'capability-templates'
+    MountedAclResourceType,
+    | 'agents'
+    | 'skills'
+    | 'mcps'
+    | 'plugins'
+    | 'workflows'
+    | 'workgroups'
+    | 'capability-templates'
+    | 'action-templates'
+    | 'verification-profiles'
+    | 'digital-employees'
+    | 'automation-policies'
+    | 'adapter-definitions'
   > = {
     agent: 'agents',
     skill: 'skills',
@@ -88,6 +107,12 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     workflow: 'workflows',
     workgroup: 'workgroups',
     capability_template: 'capability-templates',
+    // RFC-310 —— 数字员工配置五资源。
+    action_template: 'action-templates',
+    verification_profile: 'verification-profiles',
+    digital_employee: 'digital-employees',
+    automation_policy: 'automation-policies',
+    development_adapter: 'adapter-definitions',
   }
   const resource = ACL_PERMISSION_PREFIX[cfg.type]
 

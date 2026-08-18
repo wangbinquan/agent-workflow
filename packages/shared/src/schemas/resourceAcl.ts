@@ -30,6 +30,16 @@ export const ACL_RESOURCE_TYPES = [
   // `scripts:author` check inside a single row, which is what lets this be one
   // ACL type without handing template owners the daemon.
   'capability_template',
+  // RFC-310 — five digital-employee configuration resources. Same row-level
+  // owner/visibility/grants model; the dangerous fields inside two of them
+  // (verification profile programs, adapter executables/secret projections)
+  // are fenced by field-level `scripts:author` checks, mirroring the
+  // capability_template precedent, so these stay ordinary ACL types.
+  'action_template',
+  'verification_profile',
+  'digital_employee',
+  'automation_policy',
+  'development_adapter',
 ] as const
 
 /**

@@ -58,6 +58,11 @@ import {
   users,
   workflows,
   workgroups,
+  actionTemplates,
+  verificationProfiles,
+  digitalEmployees,
+  automationPolicies,
+  developmentAdapterDefinitions,
 } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -127,6 +132,13 @@ export const ACL_TABLES = {
   workflow: workflows,
   workgroup: workgroups, // RFC-164
   capability_template: capabilityTemplates, // RFC-304 → RFC-309 (merged)
+  // RFC-310 — digital-employee configuration resources (identity tables carry
+  // the ACL columns; immutable revision tables hang off them without ACLs).
+  action_template: actionTemplates,
+  verification_profile: verificationProfiles,
+  digital_employee: digitalEmployees,
+  automation_policy: automationPolicies,
+  development_adapter: developmentAdapterDefinitions,
 } as const
 
 /** RFC-223: these five resource types have owner-scoped display-name uniqueness.
@@ -143,6 +155,12 @@ export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set([
   // 409 every other owner-scoped type gives; without it the constraint still
   // fires, as a raw SQLite error the route reports as a 500.
   'capability_template',
+  // RFC-310 — all five identity tables carry owner+name unique indexes.
+  'action_template',
+  'verification_profile',
+  'digital_employee',
+  'automation_policy',
+  'development_adapter',
 ])
 
 /** RFC-234/RFC-305 — cross-owner Intent audit is a dedicated permission. */

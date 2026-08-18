@@ -74,15 +74,15 @@ T18 的规则语义 fixtures，已交付）；1B = T13–T20 配置资源 CRUD/A
 | T10  | `FactCatalog`、known/not-applicable/unknown/stale、typed predicate AST、canonical codec/hash        | T3       | ✅   |
 | T11  | fixed guards + indeterminate stop/collect + first-match + deterministic WorkSelectionReceipt        | T9,T10   | ✅   |
 | T12  | DecisionTrace/Receipt canonical bytes 与 replay oracle                                              | T11      | ✅   |
-| T13  | `ActionTemplate` immutable revision/ACL/visibility CRUD，锁住不可配置字段                           | T9       | ⏳   |
-| T13a | `VerificationProfile` revision/probe：disposable workspace、程序化结果、可执行字段 `scripts:author` | T9       | ⏳   |
-| T14  | DigitalEmployee 唯一 route selector、template compatibility、readiness/transitive closure           | T13,T13a | ⏳   |
-| T15  | 完整 immutable AutomationPolicy、requirement/delivery groups、有效预算、publish validator           | T10,T11  | ⏳   |
-| T16  | integration-owned `IntegrationAdapterDefinition` typed lifecycle + `scripts:author` 字段门          | T2,T3    | ⏳   |
-| T17  | repository/repo-group employee assignment，显式 > repo > group > facts > fallback 的唯一选择        | T14,T15  | ⏳   |
-| T18  | Java Spring、C++ CMake、polyglot 三套 test fixtures；双义、无 fallback、跨模块阻断                  | T17      | ⏳   |
-| T19  | employee/policy preview/simulate + configuration-upgrade pure diff planner                          | T12,T17  | ⏳   |
-| T20  | 配置 package 导入/导出 immutable revision/upstream provenance；未知 version 拒绝                    | T13-T16  | ⏳   |
+| T13  | `ActionTemplate` immutable revision/ACL/visibility CRUD，锁住不可配置字段                           | T9       | ✅   |
+| T13a | `VerificationProfile` revision/probe：disposable workspace、程序化结果、可执行字段 `scripts:author` | T9       | ✅   |
+| T14  | DigitalEmployee 唯一 route selector、template compatibility、readiness/transitive closure           | T13,T13a | ✅   |
+| T15  | 完整 immutable AutomationPolicy、requirement/delivery groups、有效预算、publish validator           | T10,T11  | ✅   |
+| T16  | integration-owned `IntegrationAdapterDefinition` typed lifecycle + `scripts:author` 字段门          | T2,T3    | ✅   |
+| T17  | repository/repo-group employee assignment，显式 > repo > group > facts > fallback 的唯一选择        | T14,T15  | ✅   |
+| T18  | Java Spring、C++ CMake、polyglot 三套 test fixtures；双义、无 fallback、跨模块阻断                  | T17      | ✅   |
+| T19  | employee/policy preview/simulate + configuration-upgrade pure diff planner                          | T12,T17  | ✅   |
+| T20  | 配置 package 导入/导出 immutable revision/upstream provenance；未知 version 拒绝                    | T13-T16  | ✅   |
 
 验收重点：相同 fixture + policy revision 重放 100 次 canonical result 完全相同；测试中不存在 mock Agent selector。
 
