@@ -23380,6 +23380,10 @@ button.status-chip {
 .repo-operations__list {
   max-height: calc(100vh - 300px);
   min-height: 240px;
+  /* 实现门 P1-8:表头在 scroller 外、行在 scroller 内,行宽会因竖滚动条缩掉
+     ~15px 而表头不缩 —— 超过约 7 个仓就表头/单元格错位。与 .task-operations__list
+     同款预留滚动条槽。 */
+  scrollbar-gutter: stable;
 }
 
 .repo-operations__row {
@@ -23509,7 +23513,10 @@ button.status-chip {
 
   .repo-operations__head,
   .repo-operations__row {
-    grid-template-columns: minmax(250px, 1.55fr) minmax(170px, 0.8fr) 86px auto;
+    /* 实现门 P1-8:原来的最小轨道和(330+210+105 + gap + padding ≈ 725px)在
+       1024/901 带侧栏时超过行宽,Actions 列被裁,而 scroller 的 overflow-x: clip
+       把溢出藏了起来(overflow 自查也照不出来)。窄屏收窄到可容纳的量级。 */
+    grid-template-columns: minmax(200px, 1.55fr) minmax(150px, 0.8fr) 78px auto;
     column-gap: 10px;
   }
 }

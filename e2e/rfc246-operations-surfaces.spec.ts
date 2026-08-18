@@ -47,7 +47,10 @@ async function expectNoHorizontalOverflow(page: Page, listSelector: string): Pro
         const rowsFit =
           list !== null &&
           scrollerRect !== null &&
-          Array.from(list.querySelectorAll<HTMLElement>('tr'))
+          // 实现门 P1-8:/repos 从 <table>/<tr> 改成 role 化 div 网格后,这个
+          // 'tr' 选择器在 /repos 上恒空 ⇒ `[].every()` 恒 true,四个调用点(1024/
+          // 901/390×844/390×568)全部空转。两种形态都取:真表取 tr,网格取行 class。
+          Array.from(list.querySelectorAll<HTMLElement>('tr, .repo-operations__row'))
             .filter((row) => row.getClientRects().length > 0)
             .every((row) => {
               const rect = row.getBoundingClientRect()

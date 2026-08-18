@@ -206,6 +206,33 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       // Explicit non-FK task-scoped delete; the 12 FK tables cascade with the row.
       tx.delete(taskFeedback).where(eq(taskFeedback.taskId, taskId)).run()
       tx.delete(tasks).where(eq(tasks.id, taskId)).run()
+
+      // RFC-311 实现门 P1-6/P2-3:`branch_started_at` 是「子树 max(started_at)」的
+      // 物化值,此前只有铸行点向上推进(单调 MAX),删掉一个子任务后父行会**永久**
+      // 停在被删子树的时间戳上。可观察后果:同一份数据在默认视图(快路径按物化列
+      // 排序)与任一过滤视图(旧管线现算)之间行序不同且永不收敛。
+      // 删除是低频操作,在同一事务里沿父链重算即可闭合(链长同 MAX_TREE_DEPTH)。
+      let cursor: string | null = row.parentTaskId
+      for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
+        const parent = tx
+          .select({
+            id: tasks.id,
+            parentTaskId: tasks.parentTaskId,
+            startedAt: tasks.startedAt,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, cursor))
+          .get()
+        if (parent === undefined) break
+        const childMax = tx
+          .select({ v: sql<number | null>`MAX(${tasks.branchStartedAt})` })
+          .from(tasks)
+          .where(eq(tasks.parentTaskId, parent.id))
+          .get()
+        const recomputed = Math.max(parent.startedAt ?? 0, childMax?.v ?? 0)
+        tx.update(tasks).set({ branchStartedAt: recomputed }).where(eq(tasks.id, parent.id)).run()
+        cursor = parent.parentTaskId
+      }
     })
   } finally {
     release()

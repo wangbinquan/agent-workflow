@@ -89,9 +89,14 @@ afterEach(() => {
 })
 
 describe('<TableViewport> — DOM and type contract', () => {
-  test('children API is exactly a native table ReactElement', () => {
+  test('children API accepts a native table and a role-based grid container', () => {
+    // RFC-311 实现门 P2-10:窗口化列表(/repos、/tasks)用 role="list" + CSS grid
+    // 表达同一形态,原来写死 `'table'` 的类型被 JSX.Element 的 any 放行,真实后果
+    // 是 DEV 每次渲染 warn + ResizeObserver 少观察一个目标(内容宽变化不再重测
+    // 溢出,RFC-198 的键盘可达横向滚动可能永不装配)。契约改为「恰好一个元素子级」。
     type Child = ComponentProps<typeof TableViewport>['children']
-    expectTypeOf<Child>().toEqualTypeOf<ReactElement<ComponentPropsWithoutRef<'table'>, 'table'>>()
+    expectTypeOf<ReactElement<ComponentPropsWithoutRef<'table'>, 'table'>>().toMatchTypeOf<Child>()
+    expectTypeOf<ReactElement>().toMatchTypeOf<Child>()
   })
 
   test('renders stable outer/scroller/hint classes and defaults minWidth to md', () => {
@@ -122,21 +127,32 @@ describe('<TableViewport> — DOM and type contract', () => {
     expect(outer.className).toBe('table-viewport table-viewport--lg')
   })
 
-  test('warns for a non-native direct child in dev/test without throwing', () => {
+  test('warns when the scroller ends up with no element child (dev/test) without throwing', () => {
+    // RFC-311 实现门 P2-10:守卫从「必须是原生 <table>」改成「必须有元素子级」——
+    // 网格容器是合法形态,真正会坏事的是渲染不出元素(ResizeObserver 少一个目标,
+    // 溢出永远测不出来)。组件型子级只要渲染出元素就不再 warn。
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    function CustomTable() {
-      return table('Custom')
+    function EmptyChild() {
+      return null
     }
-    const invalidChild = (<CustomTable />) as unknown as ReactElement<
+    const emptyChild = (<EmptyChild />) as unknown as ReactElement<
       ComponentPropsWithoutRef<'table'>,
       'table'
     >
 
-    expect(() => render(<TableViewport label="Tasks">{invalidChild}</TableViewport>)).not.toThrow()
+    expect(() => render(<TableViewport label="Tasks">{emptyChild}</TableViewport>)).not.toThrow()
     expect(warn).toHaveBeenCalledOnce()
-    expect(warn).toHaveBeenCalledWith(
-      'TableViewport requires exactly one direct native <table> child; wrappers and custom table components are not supported.',
-    )
+    warn.mockClear()
+
+    function CustomTable() {
+      return table('Custom')
+    }
+    const componentChild = (<CustomTable />) as unknown as ReactElement<
+      ComponentPropsWithoutRef<'table'>,
+      'table'
+    >
+    render(<TableViewport label="Tasks">{componentChild}</TableViewport>)
+    expect(warn).not.toHaveBeenCalled()
   })
 
   test('CSS maps every width tier and keeps focus on the real scroll container', () => {

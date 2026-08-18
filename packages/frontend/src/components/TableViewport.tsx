@@ -18,7 +18,13 @@ import {
 export interface TableViewportProps {
   label: string
   minWidth?: 'sm' | 'md' | 'lg'
-  children: ReactElement<ComponentPropsWithoutRef<'table'>, 'table'>
+  /** 一个直接子元素:原生 `<table>`,或 role 化的网格容器(RFC-311 起
+   *  /repos、/tasks 这类窗口化列表用 `role="list"` + CSS grid 表达同一形态)。
+   *  实现门 P2-10:此前类型写死 `'table'`,而 JSX.Element 是 `ReactElement<any,
+   *  any>` 所以 tsc 拦不住——真实后果是 DEV 每次渲染 warn,且 ResizeObserver 少
+   *  观察一个目标(内容宽度变化时不再重测溢出),RFC-198 的键盘可达横向滚动
+   *  可能永不装配。 */
+  children: ReactElement<ComponentPropsWithoutRef<'table'>, 'table'> | ReactElement
 }
 
 interface OverflowState {
@@ -37,23 +43,27 @@ const INITIAL_OVERFLOW_STATE: OverflowState = {
 // remainder as the edge so the fade does not flicker when the browser settles.
 const SCROLL_EDGE_EPSILON = 0.5
 
-function directTableChild(scroller: HTMLDivElement): HTMLTableElement | null {
+/** 被观察的内容元素:原生表格或网格容器都取第一个元素子节点。 */
+function directContentChild(scroller: HTMLDivElement): HTMLElement | null {
   const child = scroller.firstElementChild
-  return child?.tagName === 'TABLE' ? (child as HTMLTableElement) : null
+  return child instanceof HTMLElement ? child : null
 }
 
 export function TableViewport({ label, minWidth = 'md', children }: TableViewportProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [overflow, setOverflow] = useState<OverflowState>(INITIAL_OVERFLOW_STATE)
-  const isNativeTableChild = isValidElement(children) && children.type === 'table'
-
+  // 契约守卫改为**运行时**判据:真正会坏事的不是「子级不是 <table>」(网格容器
+  // 同样能被观察、能溢出),而是「scroller 里根本没有元素子级」——那时
+  // ResizeObserver 少一个目标、溢出永远测不出来。组件型子级只要渲染出元素就没事。
   useEffect(() => {
-    if (import.meta.env.DEV && !isNativeTableChild) {
+    if (!import.meta.env.DEV) return
+    const scroller = scrollerRef.current
+    if (scroller !== null && directContentChild(scroller) === null) {
       console.warn(
-        'TableViewport requires exactly one direct native <table> child; wrappers and custom table components are not supported.',
+        'TableViewport requires exactly one direct element child (a native <table> or a role-based grid container).',
       )
     }
-  }, [isNativeTableChild])
+  }, [children])
 
   const measure = useCallback(() => {
     const scroller = scrollerRef.current
@@ -92,7 +102,7 @@ export function TableViewport({ label, minWidth = 'md', children }: TableViewpor
 
     // The table can grow without changing the scroller's content box (for
     // example after async cell text arrives), so observe both DOM nodes.
-    const table = directTableChild(scroller)
+    const table = directContentChild(scroller)
     if (table !== null) observer.observe(table)
 
     return () => observer.disconnect()

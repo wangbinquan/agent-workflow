@@ -29,6 +29,11 @@ describe('RFC-246 shared operations surfaces', () => {
 
   test('scheduled and repos rows keep the 56px desktop density target', () => {
     expect(CSS).toMatch(/\.operations-table tbody tr\s*\{[^}]*min-height:\s*56px/)
+    // 实现门 P1-8:/repos 的密度随窗口化搬到了 .repo-operations__row,上面那条
+    // `tbody tr` 正则从此只覆盖 /scheduled——删掉 repos 的密度这条测试照样绿。
+    expect(CSS).toMatch(/\.repo-operations__row\s*\{[^}]*min-height:\s*56px/)
+    // 表头在 scroller 外、行在 scroller 内 ⇒ 必须预留滚动条槽,否则错位。
+    expect(CSS).toMatch(/\.repo-operations__list\s*\{[^}]*scrollbar-gutter:\s*stable/)
     expect(CSS).toMatch(/\.scheduled-operations__row\s*\{[^}]*cursor:\s*pointer/)
     expect(CSS).not.toMatch(/\.repo-operations__row\s*\{[^}]*cursor:\s*pointer/)
     expect(CSS).toMatch(/\.operations-toolbar__count\s*\{[^}]*opacity:\s*1/)
