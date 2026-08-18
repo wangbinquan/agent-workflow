@@ -34,9 +34,27 @@ import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
+import {
+  type BackupKind,
+  type BackupManifest,
+  currentAppVersion,
+  readDbMigrationIdentity,
+  writeManifest,
+} from './backupManifest'
+
+const log = createLogger('backup')
+
 /** RFC-311 — see backupVacuumWorker.ts: the copy runs off-thread so the
- *  daemon's synchronous connection keeps serving during a backup. */
-function vacuumIntoOffThread(dbPath: string, dest: string): Promise<void> {
+ *  daemon's synchronous connection keeps serving during a backup.
+ *
+ *  实现门 P0-1:`bun build --compile` 只打包 `mainEntry` 这一个入口,worker 文件
+ *  既不是入口也不被 bundler 追踪,于是**发布版单二进制里 worker 必然
+ *  ModuleNotFound**——备份能力在所有 release 上归零(dev 下 `bun run` 直接解析
+ *  `.ts` 所以测试全绿,二进制 smoke 只跑 `version`)。两道修:①构建脚本把 worker
+ *  加为额外入口(见 scripts/build-binary.ts 的 WORKER_ENTRIES);②这里对**任何**
+ *  worker 失败都回落到同线程 VACUUM INTO——丢的只是「不冻结主线程」这个优化,
+ *  绝不丢备份本身。 */
+function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
   const worker = new Worker(new URL('./backupVacuumWorker.ts', import.meta.url).href)
   return new Promise<void>((resolvePromise, rejectPromise) => {
     const settle = (fn: () => void): void => {
@@ -53,15 +71,47 @@ function vacuumIntoOffThread(dbPath: string, dest: string): Promise<void> {
     worker.postMessage({ dbPath, dest })
   })
 }
-import {
-  type BackupKind,
-  type BackupManifest,
-  currentAppVersion,
-  readDbMigrationIdentity,
-  writeManifest,
-} from './backupManifest'
 
-const log = createLogger('backup')
+/** RFC-311 实现门 P0-2:备份的只读快照会在库上持续 30–90 秒,而 C5 把 WAL
+ *  checkpoint 循环改成了默认开——`PRAGMA wal_checkpoint(TRUNCATE)` 撞上活跃
+ *  reader 时会调 busy handler 并**阻塞整个 busy_timeout(本仓 5 秒)**,而它跑在
+ *  daemon 的同步主连接上,这 5 秒里全站冻结。也就是 §6.6 要消灭的那件事被本 RFC
+ *  的另一半重新引入了。计数器让 checkpoint 循环在快照期间跳过这一拍。 */
+let activeDbSnapshots = 0
+export function isDbSnapshotInProgress(): boolean {
+  return activeDbSnapshots > 0
+}
+
+export async function vacuumIntoOffThread(
+  sqlite: Pick<Database, 'exec'>,
+  dbPath: string,
+  dest: string,
+): Promise<{ offThread: boolean }> {
+  activeDbSnapshots += 1
+  try {
+    return await vacuumIntoOffThreadInner(sqlite, dbPath, dest)
+  } finally {
+    activeDbSnapshots -= 1
+  }
+}
+
+async function vacuumIntoOffThreadInner(
+  sqlite: Pick<Database, 'exec'>,
+  dbPath: string,
+  dest: string,
+): Promise<{ offThread: boolean }> {
+  try {
+    await vacuumIntoWorker(dbPath, dest)
+    return { offThread: true }
+  } catch (error) {
+    // 回落必须是**能力等价**的:同一条 VACUUM INTO,只是跑在主连接上。
+    log.warn('backup vacuum worker unavailable; falling back to the main thread', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    sqlite.exec(`VACUUM INTO '${dest.replaceAll("'", "''")}'`)
+    return { offThread: false }
+  }
+}
 
 export interface BackupOptions {
   db: DbClient
@@ -134,7 +184,7 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
     if (dbFile === '') {
       sqlite.exec(`VACUUM INTO '${dbDest.replaceAll("'", "''")}'`)
     } else {
-      await vacuumIntoOffThread(dbFile, dbDest)
+      await vacuumIntoOffThread(sqlite, dbFile, dbDest)
     }
     contents.db = true
 

@@ -122,6 +122,39 @@ describe('<RelativeTime>', () => {
     expect(screen.getByTestId('rt').textContent).toBe('1 min ago')
   })
 
+  // 实现门 P1-1 回归:tooltip 惰性化最初把**格式化后的字符串**存进 state,
+  // 于是同一个组件实例(虚拟化列表按稳定 key 复用)在 ts 变化后仍显示旧的绝对
+  // 时间——相对文案已更新,tooltip 却在骗人。现在存的是「已展开的那个 ts」。
+  test('the lazy tooltip follows a changing ts instead of caching the first hover', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const { rerender } = render(
+      createElement(RelativeTime, { ts: NOW - 50_000, 'data-testid': 'rt' }),
+    )
+    const el = screen.getByTestId('rt')
+    fireEvent.mouseEnter(el)
+    expect(el.getAttribute('title')).toBe(new Date(NOW - 50_000).toLocaleString())
+
+    rerender(createElement(RelativeTime, { ts: NOW - 5_000, 'data-testid': 'rt' }))
+    // 新 ts 尚未 hover 过 ⇒ 不再展示任何 tooltip(而不是展示旧值)。
+    expect(screen.getByTestId('rt').getAttribute('title')).toBeNull()
+    fireEvent.mouseEnter(screen.getByTestId('rt'))
+    expect(screen.getByTestId('rt').getAttribute('title')).toBe(
+      new Date(NOW - 5_000).toLocaleString(),
+    )
+  })
+
+  test('the absolute time stays reachable without hovering (aria-label)', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    render(createElement(RelativeTime, { ts: NOW - 50_000, 'data-testid': 'rt' }))
+    // <time> 不可聚焦,键盘/读屏用户悬停不了——惰性化不得让他们完全拿不到
+    // 绝对时间。
+    expect(screen.getByTestId('rt').getAttribute('aria-label')).toContain(
+      new Date(NOW - 50_000).toLocaleString(),
+    )
+  })
+
   test('ticker is shared and stops with the last subscriber (unmount clears the interval)', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

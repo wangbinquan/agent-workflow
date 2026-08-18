@@ -10,7 +10,7 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { mkdtempSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -316,6 +316,31 @@ describe('RFC-311 T28 — listCachedReposPage oracle', () => {
     await expect(listCachedReposPage(db, { cursor: '12.' })).rejects.toThrow(ValidationError)
   })
 
+  // 实现门 P2-4:断点必须是行值比较——展开式在**绑定参数**下会退化成
+  // MULTI-INDEX OR + TEMP B-TREE 全排序(字面量 EXPLAIN 看不出来,必须用 ?)。
+  test('the cursor boundary keeps an ordered index seek under bound parameters', () => {
+    const detail = db
+      .all<{ detail: string }>(
+        sql.raw(
+          `EXPLAIN QUERY PLAN SELECT * FROM cached_repos
+             WHERE (last_fetched_at, id) < (?, ?)
+             ORDER BY last_fetched_at DESC, id DESC LIMIT 4`,
+        ),
+      )
+      .map((row) => row.detail)
+      .join('\n')
+    expect(detail).toContain('idx_cached_repos_fetched_id')
+    expect(detail).not.toContain('TEMP B-TREE')
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      'utf8',
+    )
+    // 源码守卫:任何人改回展开式都在这里红(plan 断言本身打的是手写 SQL,
+    // 绑不到实现,见实现门 P2-9 的同类判据)。
+    expect(src).toMatch(/lastFetchedAt\}, \$\{cachedRepos\.id\}\) < \(/)
+    expect(src).not.toMatch(/lastFetchedAt\} = \$\{c\.lastFetchedAt\} and/)
+  })
+
   test('page query drives the keyset index, not a full sort', () => {
     const detail = db
       .all<{ detail: string }>(
@@ -388,6 +413,42 @@ describe('RFC-311 T28 — /api/cached-repos C7 双形状', () => {
     const body = (await res.json()) as Record<string, unknown>
     expect((body.items as unknown[]).length).toBe(12)
     expect('nextCursor' in body).toBe(false)
+  })
+
+  // 实现门 P0-3(变异 #17:路由把 ?submodules / ?auto_refresh 原地丢弃,25 个
+  // 用例全绿)——180 组 oracle 打的是 service 函数,HTTP 层的参数接线此前只锁了
+  // limit/cursor/view。过滤已全部下推服务端,这里漏一个就等于「用户点了筛选、
+  // 后端当没看见」。
+  test('every filter parameter is actually wired through the route', async () => {
+    const all = (await (await get('/api/cached-repos?limit=100')).json()) as {
+      items: Array<{ id: string }>
+    }
+    expect(all.items).toHaveLength(12)
+
+    const withSubs = (await (await get('/api/cached-repos?limit=100&submodules=with')).json()) as {
+      items: Array<{ id: string; hasSubmodules: boolean | null }>
+    }
+    expect(withSubs.items.length).toBeGreaterThan(0)
+    expect(withSubs.items.length).toBeLessThan(12)
+    expect(withSubs.items.every((r) => r.hasSubmodules === true)).toBe(true)
+
+    const never = (await (await get('/api/cached-repos?limit=100&auto_refresh=never')).json()) as {
+      items: Array<{ lastAutoRefreshAt: string | null }>
+    }
+    expect(never.items.length).toBeGreaterThan(0)
+    expect(never.items.length).toBeLessThan(12)
+    expect(never.items.every((r) => r.lastAutoRefreshAt === null)).toBe(true)
+
+    const searched = (await (await get('/api/cached-repos?limit=100&q=gamma')).json()) as {
+      items: Array<{ id: string }>
+    }
+    expect(searched.items.map((r) => r.id).sort()).toEqual(['r01', 'r08'])
+
+    const attention = (await (await get('/api/cached-repos?limit=100&view=attention')).json()) as {
+      items: Array<{ id: string }>
+    }
+    expect(attention.items.length).toBeGreaterThan(0)
+    expect(attention.items.length).toBeLessThan(12)
   })
 
   test('invalid enum values are rejected with 422', async () => {

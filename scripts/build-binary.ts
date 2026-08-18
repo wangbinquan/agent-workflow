@@ -34,6 +34,11 @@ const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 const pluginsDir = join(backendSrc, 'services', 'runtime', 'opencode', 'plugin')
 const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
+// RFC-311 实现门 P0-1:`new Worker(new URL('./x.ts', import.meta.url))` 不被
+// bundler 追踪——worker 必须显式作为**额外入口**参与 --compile,否则发布版单
+// 二进制里它 ModuleNotFound,备份的 off-thread VACUUM 每次都落到回退路径。
+// 新增 worker 时把文件加进这个清单(backup.ts 侧仍保留能力等价的同线程回退)。
+const WORKER_ENTRIES = [join(backendSrc, 'services', 'backupVacuumWorker.ts')]
 // Test-only external executables are owned by the unified system mock package.
 const stubEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')
 const systemMockToolEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'tool.ts')
@@ -315,6 +320,7 @@ async function main(): Promise<void> {
         'bun',
         'build',
         mainEntry,
+        ...WORKER_ENTRIES,
         '--compile',
         '--target=bun',
         '--minify',
@@ -331,6 +337,7 @@ async function main(): Promise<void> {
           'bun',
           'build',
           mainEntry,
+          ...WORKER_ENTRIES,
           '--compile',
           '--target=bun',
           '--minify',

@@ -6,6 +6,7 @@
 // a 0 config disables each stage.
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { count } from 'drizzle-orm'
@@ -18,6 +19,12 @@ import {
   memoryDistillJobs,
   userAccessAudit,
   users,
+  intentSessions,
+  intentTurnEvents,
+  intentTurns,
+  webhookEndpoints,
+  webhookTriggerFires,
+  webhookTriggers,
 } from '../src/db/schema'
 import { runRetentionSweep, type RetentionConfig } from '../src/services/maintenanceRetention'
 
@@ -133,5 +140,117 @@ describe('RFC-311 — retention sweep', () => {
     const swept = await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)
     expect(swept.distillEvents).toBe(2)
     expect(await rowsIn(db, memoryDistillEvents)).toBe(1)
+  })
+})
+
+// 实现门 P0-4(变异 #14:同时关掉 webhook_trigger_fires 与另两条事件腿,3 个用例
+// 全绿)—— proposal §5 C6 承诺六张表,此前只有 memory_distill_events 有正向断言,
+// 而 webhook_trigger_fires 恰恰是审计里增长最快的一张。
+describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
+  async function seedFires(db: Db, ages: readonly number[]): Promise<void> {
+    await db.insert(webhookEndpoints).values({
+      id: 'ep1',
+      name: 'ep',
+      provider: 'gitlab',
+      urlToken: 'tok',
+      secretEnc: 'enc',
+      createdAt: NOW,
+    })
+    await db.insert(webhookTriggers).values({
+      id: 'tr1',
+      name: 'trigger',
+      endpointId: 'ep1',
+      ownerUserId: 'u1',
+      repoScope: '{}',
+      eventTypes: '[]',
+      launchKind: 'workflow',
+      launchRefId: 'wf1',
+      launchPayload: '{}',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    for (const [i, ageDays] of ages.entries()) {
+      await db.insert(webhookTriggerFires).values({
+        id: `fire-${i}`,
+        deliveryId: `d-${i}`,
+        triggerId: 'tr1',
+        streamKey: '/repo|mr:1',
+        outcome: 'launched',
+        firedAt: NOW - ageDays * DAY,
+      })
+    }
+  }
+
+  async function fireCount(db: Db): Promise<number> {
+    const r = await db.select({ n: count() }).from(webhookTriggerFires)
+    return r[0]?.n ?? 0
+  }
+
+  test('rows past the window go, in-window rows stay', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'u1')
+    await seedFires(db, [200, 120, 91, 89, 1])
+    const result = await runRetentionSweep(
+      db,
+      { ...OFF, webhookTriggerFiresRetentionDays: 90 },
+      NOW,
+    )
+    expect(result.webhookTriggerFires).toBe(3)
+    expect(await fireCount(db)).toBe(2)
+  })
+
+  test('0 disables the stage', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'u1')
+    await seedFires(db, [500, 400])
+    const result = await runRetentionSweep(db, OFF, NOW)
+    expect(result.webhookTriggerFires).toBe(0)
+    expect(await fireCount(db)).toBe(2)
+  })
+})
+
+describe('RFC-311 C6 — the other two event streams share the window', () => {
+  test('intent_turn_events past the window go; 0 disables', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'u1')
+    await db
+      .insert(intentSessions)
+      .values({ id: 's1', ownerUserId: 'u1', createdAt: NOW, updatedAt: NOW })
+    await db
+      .insert(intentTurns)
+      .values({ id: 't1', sessionId: 's1', seq: 1, role: 'user', kind: 'message', createdAt: NOW })
+    for (const [i, ageDays] of [90, 45, 31, 29, 1].entries()) {
+      await db.insert(intentTurnEvents).values({
+        turnId: 't1',
+        eventSeq: i,
+        ts: NOW - ageDays * DAY,
+        kind: 'text',
+        payload: '{}',
+        source: 'stream',
+      })
+    }
+    const counted = async (): Promise<number> => {
+      const r = await db.select({ n: count() }).from(intentTurnEvents)
+      return r[0]?.n ?? 0
+    }
+    expect(await counted()).toBe(5)
+    expect((await runRetentionSweep(db, OFF, NOW)).intentTurnEvents).toBe(0)
+    expect(await counted()).toBe(5)
+    const result = await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)
+    expect(result.intentTurnEvents).toBe(3)
+    expect(await counted()).toBe(2)
+  })
+
+  // mcp_runtime_test_events 的 fixture 需要一整条 runtime-test session 链(必填列
+  // 远多于上面两张),行为面由同一个 deleteExpiredByTs 助手覆盖;这里用源码守卫
+  // 锁住「第三条腿仍然接着」——变异 #14 正是把它写死 0 而无人发现。
+  test('all three event streams stay wired into the same window (source lock)', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'maintenanceRetention.ts'),
+      'utf8',
+    )
+    for (const table of ['memoryDistillEvents', 'intentTurnEvents', 'mcpRuntimeTestEvents']) {
+      expect(src).toContain(`deleteExpiredByTs(db, ${table}, cutoff)`)
+    }
   })
 })

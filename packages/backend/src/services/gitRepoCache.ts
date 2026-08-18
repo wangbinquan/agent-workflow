@@ -1257,8 +1257,11 @@ export async function listCachedReposPage(
   const q = options.q?.trim() ?? ''
   if (q !== '') {
     const pattern = `%${escapeLike(q)}%`
+    // COALESCE 到 wire 上真正呈现的值:`url_redacted IS NULL` 的历史行(RFC-204
+    // 迁移前)在列表里显示为 `<url unavailable>`,旧的 JS 过滤能按它命中,而裸
+    // `LIKE` 对 NULL 恒为 NULL 会让这些行永远搜不到——实现门 P2-7。
     conds.push(sql`(
-      ${cachedRepos.urlRedacted} like ${pattern} escape '\\'
+      coalesce(${cachedRepos.urlRedacted}, ${UNAVAILABLE_REPO_URL}) like ${pattern} escape '\\'
       or ${cachedRepos.localPath} like ${pattern} escape '\\'
       or ${cachedRepos.defaultBranch} like ${pattern} escape '\\'
     )`)
@@ -1275,10 +1278,13 @@ export async function listCachedReposPage(
   if (view === 'attention') conds.push(attentionCondition)
   if (options.cursor !== undefined) {
     const c = decodeRepoCursor(options.cursor)
-    conds.push(sql`(
-      ${cachedRepos.lastFetchedAt} < ${c.lastFetchedAt}
-      or (${cachedRepos.lastFetchedAt} = ${c.lastFetchedAt} and ${cachedRepos.id} < ${c.id})
-    )`)
+    // 行值比较,不写展开的 `a < ? OR (a = ? AND id < ?)`:后者在**绑定参数**下
+    // 让 SQLite 选 MULTI-INDEX OR 并回落 `USE TEMP B-TREE FOR ORDER BY`(在
+    // /api/tasks/page 上实测把翻页从 30ms 拖到 197ms)。500 仓的尺度照不出来,
+    // 但十万仓目标下是同一个坑——实现门 P2-4。
+    conds.push(
+      sql`(${cachedRepos.lastFetchedAt}, ${cachedRepos.id}) < (${c.lastFetchedAt}, ${c.id})`,
+    )
   }
 
   const rows = db

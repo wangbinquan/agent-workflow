@@ -12,7 +12,7 @@
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
-import { createBackup } from '@/services/backup'
+import { createBackup, isDbSnapshotInProgress } from '@/services/backup'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { readDbMigrationIdentity, readMigrationAxisFromJournal } from './backupManifest'
@@ -162,39 +162,48 @@ function runPrune(opts: BackupSchedulerOptions, appHome: string): void {
  *  default-off scheduler meant pruneBackups NEVER executed and backups/ grew
  *  without bound. Retention now runs at boot + hourly regardless. */
 export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedulerHandle {
-  if (!opts.intervalMs || opts.intervalMs <= 0) {
-    const appHome = opts.appHome ?? Paths.root
+  const appHome = opts.appHome ?? Paths.root
+  const safePrune = (label: string): void => {
     try {
       runPrune(opts, appHome)
     } catch (err) {
-      log.warn('boot prune threw', { error: (err as Error).message })
+      log.warn(`${label} threw`, { error: (err as Error).message })
     }
-    const pruneHandle = setInterval(() => {
-      try {
-        runPrune(opts, appHome)
-      } catch (err) {
-        log.warn('prune tick threw', { error: (err as Error).message })
-      }
-    }, 3_600_000)
-    ;(pruneHandle as { unref?: () => void }).unref?.()
+  }
+  // Retention runs at boot + hourly **unconditionally**. The first cut of this
+  // still chained it to the backup tick when one was configured, so a machine
+  // whose `createBackup` kept failing (no `tar`, disk full) never pruned at all
+  // — the very L3-2 shape C4 exists to fix, just with a narrower trigger.
+  // Implementation-gate finding P2-1 / mutation #19.
+  safePrune('boot prune')
+  const pruneHandle = setInterval(() => safePrune('prune tick'), 3_600_000)
+  ;(pruneHandle as { unref?: () => void }).unref?.()
+
+  if (!opts.intervalMs || opts.intervalMs <= 0) {
     return { stop: () => clearInterval(pruneHandle) }
   }
-  const appHome = opts.appHome ?? Paths.root
   let running = false // reentrancy guard: a slow createBackup must not overlap
   const handle = setInterval(() => {
     if (running) return
     running = true
     ;(async () => {
       await createBackup({ db: opts.db, kind: 'scheduled', appHome })
-      runPrune(opts, appHome)
     })()
       .catch((err) => log.warn('backup tick threw', { error: (err as Error).message }))
       .finally(() => {
+        // A fresh backup is exactly when the family caps want re-applying, and
+        // it must survive a failed backup — hence `finally`, not the then-path.
+        safePrune('post-backup prune')
         running = false
       })
   }, opts.intervalMs)
   ;(handle as { unref?: () => void }).unref?.()
-  return { stop: () => clearInterval(handle) }
+  return {
+    stop: () => {
+      clearInterval(handle)
+      clearInterval(pruneHandle)
+    },
+  }
 }
 
 /** RFC-213 G4c — one `wal_checkpoint(TRUNCATE)` on the live DB. Exported so the
@@ -202,6 +211,18 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
 export function checkpointWal(db: DbClient): void {
   const sqlite = (db as unknown as { $client: { exec: (s: string) => void } }).$client
   sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+}
+
+/** One checkpoint tick. Returns what it did so the behaviour is testable
+ *  without waiting on a timer.
+ *
+ *  实现门 P0-2:备份持有的只读快照会让 `wal_checkpoint(TRUNCATE)` 阻塞满
+ *  `busy_timeout`(5 秒,实测 5310ms),而它跑在 daemon 的同步主连接上 ⇒ 全站冻结
+ *  5 秒。快照期间直接跳过这一拍:WAL 多长 10 分钟无害,冻结 5 秒不可接受。 */
+export function runWalCheckpointTick(db: DbClient): 'checkpointed' | 'skipped-snapshot' {
+  if (isDbSnapshotInProgress()) return 'skipped-snapshot'
+  checkpointWal(db)
+  return 'checkpointed'
 }
 
 export interface WalCheckpointOptions {
@@ -217,7 +238,7 @@ export function startWalCheckpointLoop(opts: WalCheckpointOptions): BackupSchedu
     if (running) return
     running = true
     try {
-      checkpointWal(opts.db)
+      runWalCheckpointTick(opts.db)
     } catch (err) {
       log.warn('wal checkpoint failed', { error: (err as Error).message })
     } finally {

@@ -11,7 +11,15 @@
 //   - remove the `running` reentrancy guard → the source lock test reds.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pruneBackups, startBackupScheduler } from '../src/services/backupScheduler'
@@ -121,6 +129,36 @@ describe('impl-gate P2-6 — total-size cap over the rotatable set (AC-6)', () =
 })
 
 describe('startBackupScheduler side-effects (AC-6)', () => {
+  // RFC-311 C4 / 实现门 P2-1(变异 #19 曾整段删掉 boot prune 而 24 个用例全绿):
+  // retention 必须 boot 就跑一次,且与「定时备份是否开启」「备份是否成功」全部
+  // 解耦——生产上正是备份链路失败 + prune 挂在其成功分支后,攒出 59 个文件 / 2GB。
+  test.each([
+    ['backup ticker disabled', 0],
+    ['backup ticker enabled', 3_600_000],
+  ])('boot prune runs regardless of the backup ticker (%s)', async (_label, intervalMs) => {
+    const dir = tmp()
+    const backupsDir = join(dir, 'backups')
+    mkdirSync(backupsDir, { recursive: true })
+    for (let i = 0; i < 4; i += 1) {
+      mkBackup(backupsDir, `pre-migration-p${i}.tar.gz`, NOW - (i + 40) * DAY)
+      mkBackup(backupsDir, `scheduled-s${i}.tar.gz`, NOW - (i + 40) * DAY)
+    }
+    const handle = startBackupScheduler({
+      db: {} as never, // the backup tick never fires within this test's window
+      intervalMs,
+      retentionCount: 1,
+      retentionDays: 1,
+      protectedKeepCount: 2,
+      appHome: dir,
+    })
+    await new Promise((r) => setTimeout(r, 60))
+    const left = names(backupsDir)
+    // protected 家族保最新 2 个;rotatable 按 count=1/days=1 收敛到最新 1 个。
+    expect(left.filter((f) => f.startsWith('pre-migration-'))).toHaveLength(2)
+    expect(left.filter((f) => f.startsWith('scheduled-'))).toHaveLength(1)
+    handle.stop()
+  })
+
   test('intervalMs=0 creates no timer and no backups', async () => {
     const dir = tmp()
     const handle = startBackupScheduler({
