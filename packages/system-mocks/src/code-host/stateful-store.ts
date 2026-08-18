@@ -366,7 +366,10 @@ export class CodeHostStore {
   ): StoredComment {
     const mr = this.#requiredMr(project, number)
     const comment = this.#newComment(project, input)
-    const rootId = input.inReplyToId ?? input.threadId
+    // threadId 是「归入哪个 discussion」的显式指定，优先于 inReplyToId（后者只是
+    // 链内指针）：gitlab 的 `POST /discussions/:id/notes` 两者都带，此前 inReplyToId
+    // （裸 comment id）优先会把回复挂成一个新 discussion（RFC-310 PR-7 实测）。
+    const rootId = input.threadId ?? input.inReplyToId
     comment.threadId =
       rootId ?? (project.provider === 'gitlab' ? `discussion-${comment.id}` : comment.id)
     mr.reviewComments.push(comment)

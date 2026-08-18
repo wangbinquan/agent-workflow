@@ -5,7 +5,7 @@
 // select→检查→update 序列；不变量的最终兜底是 0177 的唯一/部分唯一索引——
 // 进程内检查只负责把索引冲突翻译成 typed 结果。
 
-import { and, asc, eq, isNull, lte, or } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, lte, ne, or } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import {
@@ -15,6 +15,7 @@ import {
   developmentDeferredWakes,
   developmentEffects,
   developmentFactSnapshots,
+  developmentFeedbackLedger,
   developmentMissions,
   developmentMissionSources,
   developmentMrClaims,
@@ -25,6 +26,7 @@ import type { DeferredWakeRow } from '../domain/deferredWake'
 import type {
   ActionRunRow,
   EffectRow,
+  FeedbackLedgerRow,
   MissionRow,
   MissionSourceRow,
   MissionStore,
@@ -272,6 +274,70 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
             .run()
         }
         return open.length
+      })
+    },
+
+    upsertFeedbackObservation(input) {
+      try {
+        db.insert(developmentFeedbackLedger)
+          .values({
+            id: input.id,
+            missionId: input.missionId,
+            threadRef: input.threadRef,
+            revision: input.revision,
+            headSha: input.headSha,
+            fingerprint: input.fingerprint,
+            authorClass: input.authorClass,
+            state: 'observed',
+            createdAt: input.now,
+            updatedAt: input.now,
+          })
+          .run()
+        return { created: true }
+      } catch (error) {
+        if (isUniqueViolation(error)) return { created: false }
+        throw error
+      }
+    },
+    listFeedback(missionId) {
+      return db
+        .select()
+        .from(developmentFeedbackLedger)
+        .where(eq(developmentFeedbackLedger.missionId, missionId))
+        .orderBy(asc(developmentFeedbackLedger.createdAt), asc(developmentFeedbackLedger.id))
+        .all() as FeedbackLedgerRow[]
+    },
+    setFeedbackState(input) {
+      db.update(developmentFeedbackLedger)
+        .set({
+          state: input.state,
+          updatedAt: input.now,
+          ...(input.actionRunId === undefined ? {} : { actionRunId: input.actionRunId }),
+          ...(input.replyEffectId === undefined ? {} : { replyEffectId: input.replyEffectId }),
+        })
+        .where(eq(developmentFeedbackLedger.id, input.id))
+        .run()
+    },
+    obsoleteFeedbackForOtherHeads(missionId, currentHeadSha, now) {
+      return db.transaction(() => {
+        const stale = db
+          .select({ id: developmentFeedbackLedger.id })
+          .from(developmentFeedbackLedger)
+          .where(
+            and(
+              eq(developmentFeedbackLedger.missionId, missionId),
+              ne(developmentFeedbackLedger.headSha, currentHeadSha),
+              inArray(developmentFeedbackLedger.state, ['observed', 'selected']),
+            ),
+          )
+          .all()
+        for (const row of stale) {
+          db.update(developmentFeedbackLedger)
+            .set({ state: 'obsolete', updatedAt: now })
+            .where(eq(developmentFeedbackLedger.id, row.id))
+            .run()
+        }
+        return stale.length
       })
     },
 

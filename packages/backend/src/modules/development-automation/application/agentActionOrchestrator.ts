@@ -147,6 +147,11 @@ export interface LaunchAgentAttemptInput {
     readonly totalBytes: number
   }
   readonly pipelineIssueRefs?: readonly string[]
+  /** PR-7 T74：feedback apply 的 (threadRef,revision) 闭集（arm 冻结传入）。 */
+  readonly feedbackSnapshot?: {
+    readonly snapshotRef: string
+    readonly items: readonly { readonly threadRef: string; readonly revision: string }[]
+  }
   /** fresh rerun 的同输入合同：manifest.missionRevision 冻结在 action 创建时
    *  （mission.revision 随结算前进，不冻结会让 rerun 的 inputDigest 漂移）。 */
   readonly missionRevisionPin?: number
@@ -303,7 +308,16 @@ export async function launchAgentAttempt(
             fileCount: input.pipelineBundle.fileCount,
             totalBytes: input.pipelineBundle.totalBytes,
           },
-    feedbackSnapshot: null,
+    feedbackSnapshot:
+      input.feedbackSnapshot === undefined
+        ? null
+        : {
+            snapshotRef: input.feedbackSnapshot.snapshotRef,
+            items: input.feedbackSnapshot.items.map((item) => ({
+              threadRef: item.threadRef,
+              revision: item.revision,
+            })),
+          },
     verificationEvidence: null,
     writablePathClasses: [],
     protectedRoots: [],
@@ -841,6 +855,21 @@ export async function collectAgentAttempt(
     // PR-5 T54：analyze 完成 → 经 validator 的认知结论投影为 agent-validated
     // facts（affectedModuleIds/scopeDisposition），驱动后续 implement 路由。
     ...(envelope.outcome === 'completed' ? projectAnalysisCells(envelope, attempt.id) : {}),
+    // PR-7 T74：feedback apply 结算——thread dispositions 冻结进内部 cells
+    // （care 链据此派 reply 并更新台账；envelope 本体不落 DB）。
+    ...(envelope.outcome === 'changed' && envelope.result.capabilityId === 'mr.feedback.apply'
+      ? {
+          '__feedback.lastDispositions': known(
+            JSON.stringify(
+              envelope.result.feedback.map((f) => ({
+                threadRef: f.threadRef,
+                revision: f.revision,
+                disposition: f.disposition,
+              })),
+            ),
+          ),
+        }
+      : {}),
   })
 
   const disposition =

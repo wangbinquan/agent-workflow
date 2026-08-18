@@ -106,6 +106,15 @@
 > 注入（pinned bundle 挂载 + `gateKey#runRef` issue 闭集）+ 装配（composition pipelineImport 内绑、
 > pipelineEvidence 装配点胶水）。**T71 呈报**：retention GC 未实现（policy retention 字段无消费者、evidence
 > 池只增不减）、GB-scale nightly fixture 未建——归 PR-10/独立 RFC。
+> **PR-7 前半（T72–T76/T81🚧/T82🚧/T84）已完成**：MR care 编排。fork R：integration 三读 fence MR facts
+> collector（head race 整组丢弃/approvals 读不到 null 不伪造/threads 超页 typed 拒）+ reply effect（只回复
+> 绝不 resolve+self marker）+ mock 真 bug 修复；fork S：feedback 台账（store 四方法+fingerprint/authorClass/
+> selectable 纯判定+obsolete 不逆写）+ mr facts 投影（approvalHold null 不产 cell）。主 session：care 链
+> （facts 新鲜度→reply 派发→feedback 规则放行→readiness 推进；链序 delivery→care→pipeline）、collect arm
+> 台账联动、feedback apply 的 manifest.feedbackSnapshot 冻结、reply arm（effect 台账+台账 state 推进）、
+> terminal 结算补 fulfillment/action 撤销、webhook→mrClaim 反查→wake hint、T84 负扫描（mission 链路源码级
+> 禁 merge/approve/resolve/force-push+决策 kind 快照）。**待 PR-7b**：T77–T79 conflict 链、T80 handoff/
+> attach/resume、T83 crash matrix。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

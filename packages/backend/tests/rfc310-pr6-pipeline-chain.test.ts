@@ -98,6 +98,9 @@ function watchingCells(extra: Record<string, FactCell<FactCellValue>> = {}) {
     'requirement.bundleComplete': cell(true),
     '__mr.ref': cell('7'),
     '__mr.headSha': cell(MR_HEAD),
+    // PR-7 care 链在 pipeline 链之前保 MR facts 新鲜：测试聚焦 pipeline 面，
+    // 预置新鲜标记让 care 放行（care 自身的采集链由 pr7 测试锁）。
+    '__mr.factsCollectedAt': cell(String(Date.now() + 60 * 60 * 1000)),
     ...extra,
   }
 }
@@ -377,6 +380,9 @@ async function seedWatchingMission(fx: Pr3Fixture, policyId: string): Promise<st
 
 function fakeObserve(): MrEffectsPort {
   return {
+    async reply() {
+      return { ok: true, noteRef: 'note-1' }
+    },
     async observe() {
       return {
         ok: true,
@@ -555,11 +561,10 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
     expect(cells['pipeline.requiredGatesAllPass']).toMatchObject({ value: true })
 
-    // 轮 4：全过放行 → 回到 mr-care wait（readiness/PR-7 的输入）。
+    // 轮 4：全过 → PR-7 care 链推进 readiness（machine holds 清零）。
     const r4 = await runMissionReconcile(deps, missionId)
     expect((r4 as { selected: NextDecision }).selected).toMatchObject({
-      kind: 'wait',
-      reason: 'mr-care-not-wired',
+      kind: 'publish-readiness',
     })
     expect(PIPELINE_EFFECT_KINDS.has('pipeline-trigger')).toBe(true)
   })
@@ -569,6 +574,9 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     const missionId = await seedWatchingMission(fx, policyId)
     let observeCount = 0
     const racingMr: MrEffectsPort = {
+      async reply() {
+        return { ok: true, noteRef: 'note-1' }
+      },
       async observe() {
         observeCount += 1
         return {

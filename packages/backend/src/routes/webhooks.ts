@@ -26,6 +26,8 @@ import {
   touchEndpointLastDelivery,
   type InsertDeliveryInput,
 } from '@/services/webhook/deliveryStore'
+import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
+import { ulid } from 'ulid'
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
@@ -69,6 +71,7 @@ export function mountWebhookIngressRoutes(
   deps: AppDeps,
   opts?: { limiters?: WebhookRateLimiters },
 ): void {
+  const developmentMissionStore = createSqliteMissionStore(deps.db)
   const secretBox = deps.secretBox
   if (!secretBox || !deps.webhookDispatcher) {
     // 对齐 OIDC 的自我跳过惯例（server.ts:330）：装配缺件时不挂载入站面，
@@ -227,6 +230,30 @@ export function mountWebhookIngressRoutes(
       void touchEndpointLastDelivery(deps.db, endpoint.id, Date.now()).catch(() => {})
       // 异步分发：响应先行（AC-5）。dispatch 内部负责 processing→终态；这里只
       // 兜「dispatch 自身同步抛/整体 reject」的最后一层，标 failed 供 replay。
+      // RFC-310 PR-7 T82：MR webhook → mission wake hint。facts path 不变
+      //（reconciler 主动采集才是真相），webhook 只降延迟；hint 落库幂等
+      //（deliveryKey），30s wake sweep 收取。丢 webhook 只是慢，不是卡死
+      //（watching 的 wait 带 timer 兜底）。
+      if (event.mrIid !== undefined) {
+        try {
+          const claim = developmentMissionStore.findMrClaim({
+            codeHostEndpointRef: providerParam,
+            stableProjectRef: event.repoPath,
+            mrIid: event.mrIid,
+          })
+          if (claim !== null && claim.state === 'active') {
+            developmentMissionStore.recordWakeHint({
+              id: ulid(),
+              missionId: claim.missionId,
+              source: 'webhook',
+              deliveryKey: `webhook:${deliveryId}`,
+              now: Date.now(),
+            })
+          }
+        } catch (err) {
+          log.warn('mission webhook wake hint failed', { deliveryId, error: String(err) })
+        }
+      }
       void dispatcher.dispatch({ deliveryId, endpoint, event }).catch(async (err: unknown) => {
         log.error('webhook dispatch crashed', { deliveryId, error: String(err) })
         await markDelivery(deps.db, deliveryId, 'failed', 'internal-error').catch(() => {})

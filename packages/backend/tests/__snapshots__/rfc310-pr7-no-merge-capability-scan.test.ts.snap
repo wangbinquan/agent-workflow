@@ -1,0 +1,29 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`rfc310 pr7 T84 — no merge/approve/resolve/force-push reachability decision union and capability catalog carry no merge/approve/resolve arm: rfc310-decision-kinds 1`] = `
+[
+  "block",
+  "collect-external-requirement",
+  "collect-mr-facts",
+  "collect-pipeline-evidence",
+  "collect-repository-facts",
+  "collect-requirement-answers",
+  "commit-and-publish-candidate",
+  "ensure-merge-request",
+  "handoff",
+  "mark-ready-to-merge",
+  "mark-terminal",
+  "materialize-direct-requirement",
+  "prepare-change-candidate",
+  "publish-readiness",
+  "publish-requirement-questions",
+  "reply-feedback",
+  "request-human-decision",
+  "rerun-pipeline",
+  "run-agent-action",
+  "run-verification",
+  "seed-repository-uploads",
+  "trigger-pipeline",
+  "wait",
+]
+`;

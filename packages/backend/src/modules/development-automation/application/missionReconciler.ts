@@ -53,6 +53,7 @@ import {
   type CollectAgentAttemptOutcome,
 } from './agentActionOrchestrator'
 import { invalidateInFlightAction } from './actionInvalidation'
+import { feedbackFingerprint, selectableFeedback } from '../domain/feedbackLedger'
 import {
   DELIVERY_EFFECT_KINDS,
   handleCommitAndPublish,
@@ -61,6 +62,12 @@ import {
   redispatchDelivery,
   type DeliveryChainDeps,
 } from './missionDeliveryChain'
+import {
+  MR_CARE_EFFECT_KINDS,
+  handleReplyFeedback,
+  prepareFeedbackSelection,
+  redispatchMrCare,
+} from './mrCareChain'
 import {
   PIPELINE_EFFECT_KINDS,
   handleCollectPipelineEvidence,
@@ -395,7 +402,10 @@ export async function runMissionReconcile(
   const guards = projectGuards(
     mission,
     unsettled.filter(
-      (e) => !DELIVERY_EFFECT_KINDS.has(e.effectKind) && !PIPELINE_EFFECT_KINDS.has(e.effectKind),
+      (e) =>
+        !DELIVERY_EFFECT_KINDS.has(e.effectKind) &&
+        !PIPELINE_EFFECT_KINDS.has(e.effectKind) &&
+        !MR_CARE_EFFECT_KINDS.has(e.effectKind),
     ),
     cells,
   )
@@ -465,6 +475,12 @@ export async function runMissionReconcile(
   // candidate 已派生且规则无话可说时，依 `__delivery.*` 进度派 verification →
   // commit/push → ensure-MR；MR 建立后 block 改写为诚实 wait（MR care 属 PR-7）。
   selected = redispatchDelivery(mission, cells, policy, selected)
+
+  // ---- MR care 链重派（PR-7 T76）--------------------------------------------
+  // facts 新鲜度 → reply 派发 → feedback 规则放行 → readiness 推进；terminal
+  // 由 fixed guard 兜。链序 delivery → care → pipeline：care 先保 facts 新鲜
+  // （__mr.headSha 是 pipeline stale 判定的锚）。
+  selected = redispatchMrCare(deps, mission, cells, policy, selected, { now })
 
   // ---- pipeline evidence 链重派（PR-6 T68）---------------------------------
   // MR 建立后接管发布链落下的静止态：collect（两次 head fence）→ trigger/
@@ -807,11 +823,30 @@ async function handleDecision(
         fence: mission.transitionFence,
       })
       if (!verdict.ok) return 'blocked'
-      const result = deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+      // PR-7 T81（§10.4）：终态结算——在途 Agent action 先撤销（cancel 尽力 +
+      // attempt discarded + run failed），upload fulfillment 按 publication
+      // receipt 如实定格（unfulfilled 不是 success，只是生命周期被外部截断）。
+      if (mission.currentActionRunId !== null) {
+        await invalidateInFlightAction(
+          { store: deps.store, ports: deps.ports, now: deps.now },
+          mission,
+          'input-invalidated',
+        )
+      }
+      const uploadFulfillment =
+        mission.uploadPlanRef === null
+          ? null
+          : mission.uploadPublicationRef !== null
+            ? 'fulfilled'
+            : 'unfulfilled'
+      const fresh = deps.store.getMission(mission.id)
+      if (fresh === null) return 'blocked'
+      const result = deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
         status: to,
         terminalKind: selected.terminal,
         terminalAt: now,
         currentActionRunId: null,
+        terminalUploadFulfillment: uploadFulfillment,
       })
       if (result.ok && mission.mrClaimId !== null) deps.store.releaseMr(mission.mrClaimId, now)
       return 'terminal'
@@ -887,6 +922,42 @@ async function handleDecision(
           state: 'known',
           value: collected.headSha,
           sourceRevision: collected.snapshotRef,
+        }
+      }
+      // PR-7 T73：feedback 台账联动——新 head 先 obsolete 旧 head 的未终结行，
+      // 逐 thread 幂等 upsert（webhook 重放/重复采集不重复起 action），再按
+      // policy 算 selectable 数投影 mr.unhandledFeedbackCount。
+      if (collected.threads !== undefined && collected.headSha !== null) {
+        deps.store.obsoleteFeedbackForOtherHeads(mission.id, collected.headSha, now)
+        for (const thread of collected.threads) {
+          if (thread.resolved) continue
+          deps.store.upsertFeedbackObservation({
+            id: ulid(),
+            missionId: mission.id,
+            threadRef: thread.threadRef,
+            revision: thread.revision,
+            headSha: collected.headSha,
+            fingerprint: feedbackFingerprint({
+              threadRef: thread.threadRef,
+              revision: thread.revision,
+              headSha: collected.headSha,
+              bodyDigest: thread.bodyDigest,
+            }),
+            authorClass: thread.authorClass,
+            now,
+          })
+        }
+        const policyContent = await loadPolicyContent(deps.lookup, mission)
+        if (policyContent !== null) {
+          const selectable = selectableFeedback(
+            deps.store.listFeedback(mission.id),
+            policyContent.feedback,
+          )
+          merged['mr.unhandledFeedbackCount'] = {
+            state: 'known',
+            value: selectable.length,
+            sourceRevision: collected.snapshotRef,
+          }
         }
       }
       const snapshotId = ulid()
@@ -989,6 +1060,26 @@ async function handleDecision(
         ...(selected.capabilityId === 'pipeline.repair'
           ? pipelineRepairInputs(deps, snapshot.cells)
           : {}),
+        // PR-7 T74：feedback apply 的 (threadRef,revision) 闭集——selectable 行
+        // 标 selected 并冻结进 manifest.feedbackSnapshot（validator 双射对拍）。
+        ...(await (async (): Promise<{
+          feedbackSnapshot?: {
+            readonly snapshotRef: string
+            readonly items: readonly { readonly threadRef: string; readonly revision: string }[]
+          }
+        }> => {
+          if (selected.capabilityId !== 'mr.feedback.apply') return {}
+          const feedbackPolicy = await loadPolicyContent(deps.lookup, mission)
+          if (feedbackPolicy === null) return {}
+          const items = prepareFeedbackSelection(
+            { store: deps.store, now: deps.now },
+            mission,
+            feedbackPolicy,
+            actionRunId,
+          )
+          if (items.length === 0) return {}
+          return { feedbackSnapshot: { snapshotRef: canonicalDigest(items), items } }
+        })()),
       })
       if (!launchOutcome.ok) {
         deps.store.settleActionRun({
@@ -1346,9 +1437,17 @@ async function handleDecision(
         runRef: selected.runRef,
       })
     }
+    // ---- MR care arm（PR-7，实现在 mrCareChain.ts）--------------------------
+    case 'reply-feedback': {
+      return await handleReplyFeedback(
+        deliveryDeps(deps),
+        mission,
+        snapshot.cells,
+        selected.feedbackReceiptRef,
+      )
+    }
     // ---- 未到批次的 arm：typed block，绝不静默 ------------------------------
     case 'prepare-change-candidate':
-    case 'reply-feedback':
     case 'handoff':
     case 'mark-ready-to-merge': {
       blockMission(deps, mission.id, `arm-not-wired:${selected.kind}`, null)

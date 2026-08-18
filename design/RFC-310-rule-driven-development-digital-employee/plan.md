@@ -302,19 +302,51 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 
 | 编号 | 任务                                                                                               | 依赖            | 状态 |
 | ---- | -------------------------------------------------------------------------------------------------- | --------------- | ---- |
-| T72  | MR facts collector：head/target/draft/terminal/mergeability/approvals/thread revisions 同 snapshot | T60,T64         | ⏳   |
-| T73  | feedback ledger/fingerprint/self-marker/dedupe/stale revision invalidation                         | T72             | ⏳   |
-| T74  | `mr.feedback.apply` capability + exact thread revision semantic validator                          | T47,T73         | ⏳   |
-| T75  | platform `mr.feedback.reply` idempotent effect；只回复不 resolve                                   | T28,T74         | ⏳   |
-| T76  | MR care default policy 与可配置 feedback/conflict/CI priority                                      | T15,T66,T73     | ⏳   |
+| T72  | MR facts collector：head/target/draft/terminal/mergeability/approvals/thread revisions 同 snapshot | T60,T64         | ✅   |
+| T73  | feedback ledger/fingerprint/self-marker/dedupe/stale revision invalidation                         | T72             | ✅   |
+| T74  | `mr.feedback.apply` capability + exact thread revision semantic validator                          | T47,T73         | ✅   |
+| T75  | platform `mr.feedback.reply` idempotent effect；只回复不 resolve                                   | T28,T74         | ✅   |
+| T76  | MR care default policy 与可配置 feedback/conflict/CI priority                                      | T15,T66,T73     | ✅   |
 | T77  | source-control conflict prepare：只 merge target into source、exact S/T、conflict set              | T59,T72         | ⏳   |
 | T78  | `conflict.repair` edit-conflicts profile + platform finish merge commit + CAS push                 | T43,T47,T77     | ⏳   |
 | T79  | report-only 默认、repair budget/blocked handoff；禁止 rebase/force/ours/theirs shortcut            | T76-T78         | ⏳   |
 | T80  | readiness/handoff/tracking-only + external upload fulfillment/lineage + ready 回退                 | T29,T72,T76     | ⏳   |
-| T81  | terminal：merged/closed/no-change + upload-unfulfilled；reopen/cancel fence/reconcile              | T30,T72,T80     | ⏳   |
-| T82  | periodic reconcile + webhook loss/replay/out-of-order，所有入口同一 facts path                     | T25,T72,T81     | ⏳   |
+| T81  | terminal：merged/closed/no-change + upload-unfulfilled；reopen/cancel fence/reconcile              | T30,T72,T80     | 🚧   |
+| T82  | periodic reconcile + webhook loss/replay/out-of-order，所有入口同一 facts path                     | T25,T72,T81     | 🚧   |
 | T83  | crash matrix：question/upload placement/Agent/commit/push+seed 吸收/MR/reply/readiness/transition  | T30,T75,T78-T82 | ⏳   |
-| T84  | source/AST/action-catalog 负扫描证明 merge/approve/resolve/custom/force push 不可达                | T7,T75-T83      | ⏳   |
+| T84  | source/AST/action-catalog 负扫描证明 merge/approve/resolve/custom/force push 不可达                | T7,T75-T83      | ✅   |
+
+### PR-7 前半交付注记（2026-08-18，T72–T76/T81/T82/T84；T77–T80/T83 待后半）
+
+- **care 编排落位**：`application/mrCareChain.ts`——链序 delivery → care → pipeline（care 先保 MR facts 新鲜，
+  `__mr.headSha` 是 pipeline stale 判定的锚）。facts 缺/超龄（5min 常量 + webhook wake 主信号）→
+  `collect-mr-facts`；apply 结算的 dispositions（orchestrator 冻结 `__feedback.lastDispositions`）逐 thread →
+  `reply-feedback`（effect 台账 `reply:<mission>:<thread>:<revision>`，只回复绝不 resolve，正文含 self marker
+  =missionId）+ 台账 addressed/needs-human 推进；selectable feedback 无规则接手 → 诚实 `wait(feedback-awaiting-
+  policy)`（不代替 policy 决定）；watching + requiredGatesAllPass → `publish-readiness`（既有 arm 推进状态）。
+  terminal 由 fixed guard 派 mark-terminal（不在链内）。
+- **T72**：integration `mrFacts.ts` 三读 fence collector（head 漂移 `mr-facts-head-race` 整组丢弃；threads 单页
+  100 超限 typed 拒不冒充完整；approvals 读不到 = null 不伪造；github REST 无 thread resolve 面 ⇒ resolved 恒
+  false 注明）+ DA `projectMrCells`（approvalHold null 不产 cell——indeterminate 老实停）+ 装配点胶水
+  `buildDevelopmentMrFactsDeps`（claim 行→binding→采集→投影+threads bodyDigest；headSha 缺席不投影）。
+  fork R 顺手修 system-mocks 一个真 bug（gitlab discussions 回复被挂成新 discussion）。
+- **T73**：`development_feedback_ledger` store 四方法 + domain 纯判定（fingerprint/authorClass 三分类/
+  selectable 折叠先于过滤 + batchLimit）；collect arm 联动（新 head obsolete 旧行、幂等 upsert、selectable 数
+  投影 `mr.unhandledFeedbackCount`）。obsolete 只打 observed/selected——已处理事实不逆写。
+- **T74**：feedback 闭集走 **manifest.feedbackSnapshot**（PR-4 validator 双射已就位，不加 closedRefs 字段）；
+  launch arm 对 `mr.feedback.apply` 调 `prepareFeedbackSelection`（行标 selected + (threadRef,revision) 冻结）。
+- **T81 部分（🚧）**：mark-terminal arm 补齐 §10.4 结算——在途 action 撤销（invalidateInFlightAction）+
+  `terminalUploadFulfillment` 如实定格（unfulfilled ≠ success）+ releaseMr；reopen→新 generation 链与
+  cancel/handoff fence 完整矩阵归后半。
+- **T82 部分（🚧）**：webhook ingress → mrClaim 反查 → wake hint（deliveryKey 幂等；facts path 不变——
+  reconciler 主动采集才是真相，丢 webhook 只慢不卡：care/pipeline 的 wait 带 sweep 兜底）；loss/replay/
+  out-of-order 测试矩阵归后半。
+- **T84**：`rfc310-pr7-no-merge-capability-scan`——mission 链路（DA+integration+source-control）源码级禁
+  `mr.merge`/`mr.approve`/`thread.resolve` 字面量、push 语境 force 形态、决策/能力目录 merge 类 arm（决策
+  kind 全集快照）；fork R 另有 mrFacts/mrEnsure 文件级负锁（写端点字面量禁令 + `/approvals` 只读豁免）。
+- **待后半（PR-7b）**：T77–T79 conflict 链（source-control merge-target-into-source prepare + edit-conflicts
+  profile + finish commit + CAS push + report-only 默认/budget/禁 rebase-force-ours-theirs）、T80
+  handoff/attach/resume/tracking-only + fulfillment 回退、T83 crash matrix。
 
 ## 10. PR-8：完整配置与活动 UI
 

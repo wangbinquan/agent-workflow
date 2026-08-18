@@ -24,6 +24,14 @@ export interface MergeRequestFactsCollectorPort {
     readonly snapshotRef: string
     readonly headSha: string | null
     readonly targetSha: string | null
+    /** PR-7 T72/T73：thread 明细（feedback 台账 upsert 的素材；closed 形状）。 */
+    readonly threads?: readonly {
+      readonly threadRef: string
+      readonly revision: string
+      readonly authorClass: 'human' | 'bot' | 'self'
+      readonly resolved: boolean
+      readonly bodyDigest: string
+    }[]
   }>
 }
 
@@ -491,6 +499,20 @@ export interface MrEffectsPort {
           readonly providerCorrelationRef: string
         }
       }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+  /** PR-7 T75：feedback thread 回复（只回复，绝不 resolve；正文含 self marker）。 */
+  reply(
+    repositoryId: string,
+    input: {
+      readonly mrRef: string
+      readonly threadRef: string
+      readonly body: string
+      /** self 循环防护 marker（与 facts 采集同源，建议 missionId）。 */
+      readonly selfMarker: string
+    },
+  ): Promise<
+    | { readonly ok: true; readonly noteRef: string }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
   /** PR-6：pipeline fence 的 MR head/target 读面（单次 mr.get 观察）。 */

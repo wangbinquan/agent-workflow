@@ -14,6 +14,7 @@ import {
   type MrEnsureInput,
   type MrObservation,
 } from '../application/mrEnsure'
+import { replyMergeRequestThread } from '../application/mrFacts'
 
 /**
  * repo URL → 已配置 connection 的 provider/project 匹配（装配点绑定用）。
@@ -89,6 +90,18 @@ export interface RepoCodeHostBindingResolver {
 }
 
 export interface DevelopmentMrEffects {
+  reply(
+    repositoryId: string,
+    input: {
+      readonly mrRef: string
+      readonly threadRef: string
+      readonly body: string
+      readonly selfMarker: string
+    },
+  ): Promise<
+    | { readonly ok: true; readonly noteRef: string }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
   ensure(
     repositoryId: string,
     input: MrEnsureInput,
@@ -121,6 +134,24 @@ export function composeDevelopmentMrEffects(deps: {
       const out = await ensureMergeRequest(bound, input)
       if (!out.ok) return { ok: false, code: out.code, detail: out.detail }
       return { ok: true, mr: out.mr }
+    },
+    async reply(repositoryId, input) {
+      const bound = deps.binding(repositoryId)
+      if (bound === null) {
+        return {
+          ok: false,
+          code: 'code-host-connection-missing',
+          detail: `no code-host binding for repository ${repositoryId}`,
+        }
+      }
+      const out = await replyMergeRequestThread(bound, {
+        mrRef: input.mrRef,
+        threadRef: input.threadRef,
+        body: input.body,
+        selfMarker: input.selfMarker,
+      })
+      if (!out.ok) return { ok: false, code: out.code, detail: out.detail }
+      return { ok: true, noteRef: out.noteRef }
     },
     async observe(repositoryId, mrRef) {
       const bound = deps.binding(repositoryId)

@@ -328,11 +328,11 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect(missionAfterMr.status).toBe('watching')
     expect(missionAfterMr.mrClaimId).not.toBeNull()
 
-    // 轮 9：链完成 → 诚实 wait（MR care 属 PR-7）。
+    // 轮 9：发布链使命完成 → PR-7 care 链接管（首件事：采集 MR facts——真
+    // collector 已装配，打 mock GitLab 三读 fence）。
     const waiting = await automation.reconcile(missionId)
     expect((waiting as { selected: { kind: string; reason?: string } }).selected).toMatchObject({
-      kind: 'wait',
-      reason: 'mr-care-not-wired',
+      kind: 'collect-mr-facts',
     })
 
     // 外部真相：mock 侧新 MR 存在、锚定 mission 分支与 requirement 标题；

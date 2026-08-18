@@ -29,6 +29,7 @@ import type {
   AgentActionLauncherPort,
   CandidateDeliveryPort,
   ChangeCandidatePort,
+  MergeRequestFactsCollectorPort,
   MrEffectsPort,
   PipelineEvidencePort,
   ReconcilerPorts,
@@ -111,6 +112,8 @@ export function composeDevelopmentAutomation(deps: {
   readonly mrEffects?: MrEffectsPort
   /** integration 模块组装的 pipeline provider 执行面；不注入 = pipeline 诚实 blocked。 */
   readonly pipelineEvidence?: PipelineEvidencePort
+  /** 装配点组装的 MR facts 采集面；不注入 = collect-mr-facts 诚实 blocked。 */
+  readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
 }): DevelopmentAutomationModule {
   const now = (): number => Date.now()
   const store = createSqliteMissionStore(deps.db)
@@ -182,6 +185,7 @@ export function composeDevelopmentAutomation(deps: {
       record: (input) => recordUploadPublicationReceipt(deps.db, input),
     },
     ...(deps.pipelineEvidence === undefined ? {} : { pipelineEvidence: deps.pipelineEvidence }),
+    ...(deps.mergeRequestFacts === undefined ? {} : { mergeRequestFacts: deps.mergeRequestFacts }),
     pipelineImport: createPipelineImportAdapter(evidence, PIPELINE_IMPORT_BUDGET),
   }
   const reconcileDeps: ReconcileDeps = { store, lookup, snapshots, ports, now }

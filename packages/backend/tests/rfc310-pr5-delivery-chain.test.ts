@@ -243,6 +243,9 @@ const fakeRemote: RepoRemotePort = {
 
 function fakeMr(created = true): MrEffectsPort {
   return {
+    async reply() {
+      return { ok: true, noteRef: 'note-1' }
+    },
     async observe() {
       return {
         ok: true,
@@ -577,14 +580,17 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     cells = currentCells(fx, seeded.missionId)
     expect(cells['__mr.ref']).toMatchObject({ value: '7' })
 
-    // 轮 4：链完成 → 诚实 wait（MR care 属 PR-7），不谎报故障。
+    // 轮 4：发布链使命完成 → PR-7 care 链接管（MR facts 尚未采集 → 派
+    // collect-mr-facts；care 自身链路由 pr7 测试锁，这里只断言交接发生）。
     const r4 = await runMissionReconcile(deps, seeded.missionId)
     expect(r4).toMatchObject({ kind: 'decided' })
     expect((r4 as { selected: NextDecision }).selected).toMatchObject({
-      kind: 'wait',
-      reason: 'mr-care-not-wired',
+      kind: 'collect-mr-facts',
     })
-    expect(fx.store.getMission(seeded.missionId)!.status).toBe('watching')
+    // collector 未注入 → 诚实 typed block（接线缺席可见，不静默）。
+    expect(fx.store.getMission(seeded.missionId)!.blockCode).toBe(
+      'collector-not-wired:merge-request',
+    )
 
     // effect 台账：全部 confirmed（无悬挂），且只有发布链三类。
     expect(fx.store.listUnsettledEffects(seeded.missionId)).toEqual([])

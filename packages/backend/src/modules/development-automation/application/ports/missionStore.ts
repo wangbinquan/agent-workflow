@@ -120,6 +120,11 @@ export interface AgentAttemptRow {
   readonly preSnapshotRef: string | null
 }
 
+/** RFC-310 PR-7 T73 —— feedback 台账行（design §10.2）。 */
+import type { FeedbackLedgerRow } from '../../domain/feedbackLedger'
+
+export type { FeedbackLedgerRow }
+
 export interface MissionStore {
   /** launchIdempotencyKey 撞唯一索引 ⇒ 返回既有行（HTTP 重试幂等）。 */
   createMission(row: MissionRow): { readonly created: boolean; readonly mission: MissionRow }
@@ -281,6 +286,30 @@ export interface MissionStore {
   getEffect(id: string): EffectRow | null
   listUnsettledEffects(missionId: string): EffectRow[]
   listPreparedEffects(): EffectRow[]
+
+  /** PR-7 T73：feedback 观察入账。撞 (mission,thread,revision,head) 唯一键 =
+   *  已观察过（webhook 重放/重复采集不重复起 action），返回 created:false。 */
+  upsertFeedbackObservation(input: {
+    readonly id: string
+    readonly missionId: string
+    readonly threadRef: string
+    readonly revision: string
+    readonly headSha: string
+    readonly fingerprint: string
+    readonly authorClass: 'human' | 'bot' | 'self'
+    readonly now: number
+  }): { readonly created: boolean }
+  listFeedback(missionId: string): FeedbackLedgerRow[]
+  setFeedbackState(input: {
+    readonly id: string
+    readonly state: 'observed' | 'selected' | 'addressed' | 'needs-human' | 'obsolete'
+    readonly actionRunId?: string | null
+    readonly replyEffectId?: string | null
+    readonly now: number
+  }): void
+  /** 新 head 观察到时：旧 head 的未终结（observed/selected）行标 obsolete。
+   *  thread 被外部 resolve/head 前进只更新事实，不伪造平台曾处理（§10.2）。 */
+  obsoleteFeedbackForOtherHeads(missionId: string, currentHeadSha: string, now: number): number
 
   /** decision + action/effect intents 的同事务原语；回调内禁止任何外部 IO。 */
   inTx<T>(fn: () => T): T

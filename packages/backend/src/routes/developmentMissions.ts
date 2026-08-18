@@ -51,6 +51,7 @@ import { missionIdOfExecutionRef } from '@/modules/development-automation/infras
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
+  buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
 } from '@/services/developmentDeliveryDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -91,6 +92,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     candidateDelivery: bindCandidateDeliveryParticipant(),
     ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
     ...buildDevelopmentPipelineDeps(deps.db),
+    ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
     // PR-4：路由实例与 daemon 实例注入同一形状的 runner（同 db 下语义等价；
     // SYSTEM_USER_ID——数字员工任务是 mission 自动化产物，不是 HTTP actor 的
     // 个人任务）。终态回调落 wake hint（deliveryKey 幂等），30s sweep 收取。

@@ -10,9 +10,15 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
 import type {
+  MergeRequestFactsCollectorPort,
   PipelineEvidencePort,
   RepoRemotePort,
 } from '@/modules/development-automation/application/ports/reconcilerPorts'
+import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
+import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
+import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
+import { developmentMissions, developmentMrClaims } from '@/db/schema'
+import { sha256Hex } from '@/util/hash'
 import { composePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,26 +55,114 @@ export function buildDevelopmentDeliveryDeps(
     },
   }
   const mrEffects = composeDevelopmentMrEffects({
-    binding: (repositoryId) => {
-      const remote = repoRemote.resolve(repositoryId)
-      if (remote === null) return null
-      const connections = resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)
-      if (connections === null) return null
-      const candidates = (['gitlab', 'github'] as const)
-        .map((p) => connections.resolve(p))
-        .filter((c) => c !== null)
-      const matched = matchRepoProvider(remote.remoteUrl, candidates)
-      if (matched === null) return null
-      const connection = connections.resolve(matched.provider)
-      if (connection === null) return null
-      return {
-        provider: matched.provider,
-        project: matched.project,
-        call: { connection, ctx: { ports: {} } },
-      }
-    },
+    binding: (repositoryId) => resolveRepoBinding(db, secretBox, repositoryId),
   })
   return { repoRemote, mrEffects }
+}
+
+/** repositoryId → code-host connection binding（mrEffects 与 MR facts 共用）。 */
+function resolveRepoBinding(
+  db: DbClient,
+  secretBox: SecretBox | undefined,
+  repositoryId: string,
+): ReturnType<Parameters<typeof composeDevelopmentMrEffects>[0]['binding']> {
+  const row = db
+    .select({
+      id: cachedRepos.id,
+      urlEnc: cachedRepos.urlEnc,
+      defaultBranch: cachedRepos.defaultBranch,
+    })
+    .from(cachedRepos)
+    .where(eq(cachedRepos.id, repositoryId))
+    .get()
+  if (row === undefined) return null
+  const url = unsealRepoUrl(row, secretBox, db)
+  if (url === null) return null
+  const connections = resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)
+  if (connections === null) return null
+  const candidates = (['gitlab', 'github'] as const)
+    .map((p) => connections.resolve(p))
+    .filter((c) => c !== null)
+  const matched = matchRepoProvider(url, candidates)
+  if (matched === null) return null
+  const connection = connections.resolve(matched.provider)
+  if (connection === null) return null
+  return {
+    provider: matched.provider,
+    project: matched.project,
+    call: { connection, ctx: { ports: {} } },
+  }
+}
+
+/**
+ * PR-7 T72 —— MR facts collector 的装配胶水：claim 行 → connection binding →
+ * integration 三读 fence 采集 → DA 投影（cells）+ thread 明细（台账素材）。
+ * selfMarker=missionId（与 reply 同源闭合 self 循环防护）。head race /
+ * threads 截断按 loud throw 呈现——arm 不吞（collector 合同：采不到就抛）。
+ */
+export function buildDevelopmentMrFactsDeps(
+  db: DbClient,
+  secretBox: SecretBox | undefined,
+): { readonly mergeRequestFacts: MergeRequestFactsCollectorPort } {
+  return {
+    mergeRequestFacts: {
+      async collect(input) {
+        if (input.mrClaimId === null) {
+          throw new Error(`mission ${input.missionId} has no MR claim to collect facts for`)
+        }
+        const claim = db
+          .select({
+            mrIid: developmentMrClaims.mrIid,
+            stableProjectRef: developmentMrClaims.stableProjectRef,
+          })
+          .from(developmentMrClaims)
+          .where(eq(developmentMrClaims.id, input.mrClaimId))
+          .get()
+        if (claim === undefined) {
+          throw new Error(`mr claim ${input.mrClaimId} not found`)
+        }
+        const missionRow = db
+          .select({ repositoryId: developmentMissions.repositoryId })
+          .from(developmentMissions)
+          .where(eq(developmentMissions.id, input.missionId))
+          .get()
+        if (missionRow === undefined) {
+          throw new Error(`mission ${input.missionId} not found`)
+        }
+        const binding = resolveRepoBinding(db, secretBox, missionRow.repositoryId)
+        if (binding === null) {
+          throw new Error(`no code-host binding for repository ${missionRow.repositoryId}`)
+        }
+        const out = await collectMergeRequestFacts(binding, claim.mrIid, {
+          selfMarker: input.missionId,
+        })
+        if (!out.ok) {
+          throw new Error(`mr facts collect failed: ${out.code}: ${out.detail}`)
+        }
+        const snapshot = out.snapshot
+        // headSha 缺席（provider 未暴露 head）时不投影 mr cells——facts 面
+        // indeterminate 让规则老实停（不伪造 head 锚定的事实）。
+        const snapshotRef = canonicalDigest(snapshot)
+        const now = Date.now()
+        return {
+          cells:
+            snapshot.headSha === null
+              ? {}
+              : projectMrCells({ ...snapshot, headSha: snapshot.headSha }, 0, snapshotRef, now),
+          snapshotRef,
+          headSha: snapshot.headSha,
+          targetSha: snapshot.targetSha,
+          threads: snapshot.threads.map((thread) => ({
+            threadRef: thread.threadRef,
+            revision: thread.revision,
+            authorClass: thread.authorClass,
+            resolved: thread.resolved,
+            bodyDigest: sha256Hex(thread.lastBody),
+          })),
+        }
+      },
+    },
+  }
 }
 
 /**

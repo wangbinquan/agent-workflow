@@ -64,7 +64,7 @@ interface GithubPr {
   readonly base?: { readonly ref?: string }
 }
 
-function normalizedState(input: {
+export function normalizedState(input: {
   readonly provider: CodeHostProvider
   readonly rawState: string
   readonly merged: boolean
@@ -81,11 +81,11 @@ function correlationRef(deps: MrEnsureConnectionDeps, mrRef: string): string {
   return `${deps.provider}:${decodeURIComponent(deps.project)}!${mrRef}`
 }
 
-function callDeps(deps: MrEnsureConnectionDeps): CodeHostCallDeps {
+export function callDeps(deps: MrEnsureConnectionDeps): CodeHostCallDeps {
   return { ...deps.call, projectFallback: { ok: true, value: deps.project } }
 }
 
-function parseJson<T>(body: string): T | null {
+export function parseJson<T>(body: string): T | null {
   try {
     return JSON.parse(body) as T
   } catch {
