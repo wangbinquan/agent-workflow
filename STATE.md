@@ -2,13 +2,21 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 📐 **落档待批 RFC（Draft，2026-08-18）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
+> 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
-> 审计（全部 findings 见该目录 `audit-2026-08-18.md`）与五 PR 修复计划：常驻轮询 count 化（三徽章 15s×tab 全表
-> 物化是最大单点）、窄投影批、周期任务有界化（归档器 >32766 参数死循环、备份主线程 VACUUM INTO 冻结 30-90s）、
-> 20 项索引 + PRAGMA 配置层、数据治理（事件字节水位、终态任务自动归档出库〔默认关〕、备份 prune、退役死数据清理）、
-> tasks/page O(页) 重构 + 前端虚拟化（react-virtual）。用户已四项拍板（保守档事件治理/任务归档不可见/react-virtual/
-> 单 RFC）；能力影响 C1-C7 与三件套整体**待用户批准后才开工**。
+> 审计（全部 findings 见该目录 `audit-2026-08-18.md`）与五 PR 修复计划。用户四项拍板（保守档事件治理/任务归档
+> 不可见/react-virtual/单 RFC）+ 三件套与 C1-C7 全部批准。
+> **进度（2026-08-18，主体已交付）**：PR-1 ✅（`b8688851`+补丁,CI 绿:20 项索引/branch_started_at 物化/PRAGMA
+> 配置层/慢查询计时/三徽章+overview count 化+oracle）;PR-2/2b ✅（`e8ba3bc1`/`7f1fd5fe`:窄投影批/归档器区间删+
+> 高水位〔修 >32766 参数死循环〕/备份 VACUUM INTO 出主线程/prune 独立+保留上限）;PR-3a ✅（`765910a3`:事件字节
+> 水位+保留期 sweeper;user_access_audit/mcp_probes 两处审计误报以测试锁修正）;PR-4 ✅（`51e15833`:/api/tasks/page
+> admin 默认视图 O(页) keyset 快路径+整页序列 oracle;受限 actor 语义经 oracle 证明须留旧管线）;PR-5 ✅
+> （`f64f0db3`/`8ee9fc8d`/`99faae98`/`b8bc7d02`/`1c4d5432`:VirtualList 公共原语〔jsdom 零矩阵双防御〕/tasks+repos
+> 虚拟化/repos 分页 API C7 兼容+180 组合 oracle/usePagedList/useDebouncedValue/WS 合并窗/RelativeTime tooltip
+> 惰性化/workflows 投影瘦身 C2/perf-seed+perf-bench harness）。细节与取舍见 plan.md §交付注记。
+> **待办**：视觉基线刷新（repos.png 表格→网格,darwin 本地刷/linux 走 CI artifact option-A）;bench-results.md
+> 收口（§6 九项验收对照）;PR-6 遗留大件（T19 终态任务自动归档〔用户已拍板方向,默认关〕/T20 维护入口/T21
+> prompt_text 外置）;/code work-items nextCursor 修复避让 RFC-310 前端批中。
 >
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
