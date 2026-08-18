@@ -54,13 +54,18 @@ function stats(samples: number[]): { p50: number; p95: number; max: number } {
   return { p50: at(0.5), p95: at(0.95), max: s[s.length - 1]! }
 }
 
-async function bench(label: string, path: string): Promise<void> {
+/** `--only <子串>`:只跑标签命中的项(慢项单独复测用)。 */
+const ONLY = flag('only')
+
+async function bench(label: string, path: string, rounds: number = ROUNDS): Promise<void> {
+  if (ONLY !== undefined && !label.includes(ONLY)) return
   await timed(path) // 预热(首轮含页缓存冷启动,不计入)
   const samples: number[] = []
-  for (let i = 0; i < ROUNDS; i += 1) samples.push(await timed(path))
+  for (let i = 0; i < rounds; i += 1) samples.push(await timed(path))
   const { p50, p95, max } = stats(samples)
+  const n = rounds === ROUNDS ? '' : `  (n=${rounds})`
   console.log(
-    `${label.padEnd(44)} p50=${p50.toFixed(1).padStart(7)}ms  p95=${p95.toFixed(1).padStart(7)}ms  max=${max.toFixed(1).padStart(7)}ms`,
+    `${label.padEnd(44)} p50=${p50.toFixed(1).padStart(7)}ms  p95=${p95.toFixed(1).padStart(7)}ms  max=${max.toFixed(1).padStart(7)}ms${n}`,
   )
 }
 
@@ -78,7 +83,14 @@ if (firstBody.nextCursor !== null) {
     `/api/tasks/page?limit=50&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
   )
 }
-await bench('§6.1 tasks/page running view', '/api/tasks/page?limit=50&statuses=running')
+// 过滤视图走**旧的穷举管线**(快路径只服务默认视图,见 taskOperations.ts
+// isDefaultView 的裁决)。10 万任务下单次以百秒计,所以只跑 1 轮——这个数字
+// 本身就是 RFC-311 的遗留项证据,不是要优化到 p95 的对象。
+await bench(
+  '§6.1 tasks/page running view (legacy pipeline)',
+  '/api/tasks/page?limit=50&statuses=running',
+  1,
+)
 
 // §6.2 /api/cached-repos 分页。
 await bench('§6.2 cached-repos first page', '/api/cached-repos?limit=50')
