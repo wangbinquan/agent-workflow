@@ -183,6 +183,9 @@ describe('RFC-257 T1 · closed enum 穷尽表（emit 域；改动此表 = 显式
       'skipped-mr-stream-terminal',
       'skipped-mr-stream-identity-missing',
       'skipped-trigger-invalid',
+      // RFC-310 PR-9：cutover freeze/live 后旧 code-round writer 拒新（显式
+      // 决策——legacy 入口冻结要在 fire 历史里可辨识，不混入 launch-failed）。
+      'skipped-legacy-admission-frozen',
     ])
   })
 
