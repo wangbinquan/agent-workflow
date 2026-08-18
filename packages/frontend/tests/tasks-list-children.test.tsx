@@ -183,7 +183,12 @@ describe('/tasks — bounded child branches (RFC-244)', () => {
 
     expect(screen.getByTestId('task-expand-t_visible')).toBeTruthy()
     expect(screen.queryByTestId('task-expand-t_filtered-out')).toBeNull()
-    const branch = row.closest('li')?.querySelector<HTMLOListElement>(':scope > ol')
+    // RFC-311：顶层进 VirtualList 窗口化后,行是 div[role=listitem](sizer div
+    // 不能作 <ol> 子元素),list 语义靠 role 断言——与 §Frontend UI consistency
+    // 「优先 role 锚点」一致。
+    const branch = row
+      .closest('[role="listitem"]')
+      ?.querySelector<HTMLElement>(':scope > [role="list"]')
     expect(branch?.hidden).toBe(true)
     expect(row.closest('table')).toBeNull()
     expect(urls.every((url) => !url.includes('include_children'))).toBe(true)
@@ -220,8 +225,8 @@ describe('/tasks — bounded child branches (RFC-244)', () => {
     const childRow = await screen.findByTestId('task-row-t_kid')
     expect(urls.some((url) => url.includes('parent_id=t_parent'))).toBe(true)
     expect(childRow.classList.contains('task-operations__row--child')).toBe(true)
-    expect(childRow.closest('li')?.getAttribute('data-depth')).toBe('1')
-    expect(childRow.closest('ol.task-operations__children')).not.toBeNull()
+    expect(childRow.closest('[role="listitem"]')?.getAttribute('data-depth')).toBe('1')
+    expect(childRow.closest('[role="list"].task-operations__children')).not.toBeNull()
     expect(arrow.getAttribute('aria-expanded')).toBe('true')
     expect(router.state.location.pathname).toBe('/tasks')
 

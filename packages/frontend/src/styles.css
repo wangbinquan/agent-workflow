@@ -22694,8 +22694,10 @@ button.status-chip {
   min-width: 0;
 }
 
-.task-operations__list > .task-operations__item,
-.task-operations__list > .task-operations__more {
+/* RFC-311:根层行由 VirtualList 定位包装承载,不再是 __list 的直接子级;
+   border 改挂在根行/尾注自身的 class 上。 */
+.task-operations__item--root,
+.task-operations__more {
   border-top: 1px solid var(--border);
 }
 

@@ -183,7 +183,7 @@ describe('/tasks — dense operations list (RFC-244)', () => {
     expect(urls.some((url) => url.includes('/api/tasks/page') && url.includes('limit=50'))).toBe(
       true,
     )
-    expect(row.closest('ol.task-operations__list')).not.toBeNull()
+    expect(row.closest('[role="list"].task-operations__list')).not.toBeNull()
     expect(row.closest('table')).toBeNull()
     expect(row.textContent).toContain('Alice Owner With A Long Display Name')
     expect(row.textContent).toContain('@alice-with-a-long-username')

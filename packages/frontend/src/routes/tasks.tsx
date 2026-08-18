@@ -21,7 +21,6 @@ import { Link, createRoute, useNavigate, useRouterState } from '@tanstack/react-
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -46,6 +45,7 @@ import {
 import { OperationsToolbar } from '@/components/operations/OperationsToolbar'
 import { OwnerLabel } from '@/components/OwnerLabel'
 import { PageHeader } from '@/components/PageHeader'
+import { VirtualList } from '@/components/VirtualList'
 import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
@@ -573,14 +573,16 @@ function TaskOperationsList(props: {
   loadingMore: boolean
 }) {
   const { t } = useTranslation()
-  const listRef = useRef<HTMLOListElement>(null)
-  useLayoutEffect(() => {
-    // React Query can switch immediately to an already-cached filter result,
-    // preserving this exact <ol> node. Reset the result viewport at that
-    // boundary; pagination keeps the same key and therefore the reader's
-    // position.
-    if (listRef.current !== null) listRef.current.scrollTop = 0
-  }, [props.scrollResetKey])
+  // RFC-311 (audit L5/P0-1/P0-3): the root level is windowed — 2000 accumulated
+  // roots used to render ~80k DOM nodes with a 30s clock tick re-rendering all
+  // of them each beat. Each virtual row is one root branch (its expanded
+  // subtree included, measured dynamically), so off-screen rows mount nothing
+  // and their tick subscriptions vanish with them. Scrolling near the end
+  // auto-fetches the next page; the button stays as fallback + a11y target.
+  const { hasNextPage, loadingMore, onLoadMore } = props
+  const reachEnd = useCallback(() => {
+    if (hasNextPage && !loadingMore) onLoadMore()
+  }, [hasNextPage, loadingMore, onLoadMore])
   return (
     <section
       className="task-operations"
@@ -594,25 +596,45 @@ function TaskOperationsList(props: {
         <span>{t('acl.owner')}</span>
         <span />
       </div>
-      <ol className="task-operations__list" ref={listRef} aria-label={t('tasks.title')}>
-        {props.items.map((item) => (
-          <TaskBranch key={item.id} item={item} depth={0} {...props} />
-        ))}
-        {props.hasNextPage && (
-          <li className="task-operations__more">
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={props.loadingMore}
-              onClick={props.onLoadMore}
-            >
-              {props.loadingMore
-                ? t('tasks.operations.loadingMore')
-                : t('tasks.operations.loadMore')}
-            </button>
-          </li>
+      <VirtualList<TaskOperationsListItem>
+        items={props.items}
+        itemKey={(item) => item.id}
+        estimateSize={73}
+        scrollResetKey={props.scrollResetKey}
+        onReachEnd={reachEnd}
+        containerProps={{
+          className: 'task-operations__list',
+          role: 'list',
+          'aria-label': t('tasks.title'),
+          'data-testid': 'task-operations-list',
+        }}
+        renderItem={(item) => (
+          <TaskBranch
+            item={item}
+            depth={0}
+            filters={props.filters}
+            expanded={props.expanded}
+            collapsed={props.collapsed}
+            onToggle={props.onToggle}
+          />
         )}
-      </ol>
+        tail={
+          props.hasNextPage ? (
+            <div className="task-operations__more" role="presentation">
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={props.loadingMore}
+                onClick={props.onLoadMore}
+              >
+                {props.loadingMore
+                  ? t('tasks.operations.loadingMore')
+                  : t('tasks.operations.loadMore')}
+              </button>
+            </div>
+          ) : undefined
+        }
+      />
     </section>
   )
 }
@@ -632,9 +654,18 @@ function TaskBranch(props: TaskBranchProps) {
   const autoExpanded = item.listContext.matchKind === 'context' && !props.collapsed.has(item.id)
   const isExpanded = hasChildren && (props.expanded.has(item.id) || autoExpanded)
   const branchId = `task-children-${encodeURIComponent(item.id).replaceAll('%', '_')}`
+  // RFC-311: list/listitem roles are explicit — the root level lives inside
+  // the VirtualList's positioning wrapper (a role-neutral div between the
+  // role="list" scroller and these rows), where literal <ol>/<li> nesting
+  // would be invalid HTML. Child levels reuse the same shape for symmetry.
   return (
-    <li
-      className="task-operations__item"
+    <div
+      role="listitem"
+      className={
+        props.depth === 0
+          ? 'task-operations__item task-operations__item--root'
+          : 'task-operations__item'
+      }
       style={{ '--task-tree-depth': props.depth } as CSSProperties}
       data-depth={props.depth}
     >
@@ -646,7 +677,8 @@ function TaskBranch(props: TaskBranchProps) {
         onToggle={() => props.onToggle(item.id, isExpanded)}
       />
       {hasChildren && (
-        <ol
+        <div
+          role="list"
           id={branchId}
           className="task-operations__children"
           aria-label={`${item.name}`}
@@ -662,9 +694,9 @@ function TaskBranch(props: TaskBranchProps) {
               onToggle={props.onToggle}
             />
           )}
-        </ol>
+        </div>
       )}
-    </li>
+    </div>
   )
 }
 
@@ -694,46 +726,49 @@ function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOpera
 
   if (query.isLoading) {
     return (
-      <li
+      <div
+        role="listitem"
         className="task-operations__branch-state"
         data-testid={`task-children-loading-${props.parent.id}`}
       >
         <LoadingState size="compact" />
-      </li>
+      </div>
     )
   }
   if (query.error != null && items.length === 0) {
     return (
-      <li
+      <div
+        role="listitem"
         className="task-operations__branch-state"
         data-testid={`task-children-error-${props.parent.id}`}
       >
         <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-      </li>
+      </div>
     )
   }
   if (items.length === 0) {
     return (
-      <li
+      <div
+        role="listitem"
         className="task-operations__branch-state"
         data-testid={`task-children-empty-${props.parent.id}`}
       >
         {t('tasks.noChildTasks')}
-      </li>
+      </div>
     )
   }
   return (
     <>
       {query.error != null && (
-        <li className="task-operations__branch-state">
+        <div role="listitem" className="task-operations__branch-state">
           <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-        </li>
+        </div>
       )}
       {items.map((item) => (
         <TaskBranch key={item.id} item={item} {...props} />
       ))}
       {query.hasNextPage && (
-        <li className="task-operations__more task-operations__more--child">
+        <div role="listitem" className="task-operations__more task-operations__more--child">
           <button
             type="button"
             className="btn btn--sm"
@@ -744,7 +779,7 @@ function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOpera
               ? t('tasks.operations.loadingMoreChildren')
               : t('tasks.operations.loadMoreChildren')}
           </button>
-        </li>
+        </div>
       )}
     </>
   )

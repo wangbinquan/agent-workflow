@@ -8,9 +8,14 @@ const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'ta
 const CSS = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf-8')
 
 describe('routes/tasks.tsx — operations-grid row alignment', () => {
-  test('native ol/li owns hierarchy and no table cell is used', () => {
-    expect(SRC).toContain('<ol className="task-operations__list"')
-    expect(SRC).toContain('className="task-operations__item"')
+  test('list roles own hierarchy and no table cell is used', () => {
+    // RFC-311：顶层列表进 VirtualList 窗口化,容器/行从 <ol>/<li> 改为
+    // role="list"/"listitem" 的 div(sizer div 不能作 <ol> 子元素)——
+    // 层级仍由 list 语义持有,依旧不是表格布局。
+    expect(SRC).toContain('<VirtualList<TaskOperationsListItem>')
+    expect(SRC).toContain("className: 'task-operations__list'")
+    expect(SRC).toContain("role: 'list'")
+    expect(SRC).toContain("'task-operations__item'")
     expect(SRC).not.toContain('<td')
     expect(SRC).not.toContain('<table')
   })
