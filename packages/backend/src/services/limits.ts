@@ -32,7 +32,22 @@ export async function enforceLimits(
   db: DbClient,
   now: number = Date.now(),
 ): Promise<EnforceLimitsResult> {
-  const running = await db.select().from(tasks).where(eq(tasks.status, 'running'))
+  // RFC-311 (audit L1-9): this runs at 1Hz — checkOne consumes exactly five
+  // scalar columns, but the former select() decoded every running task's
+  // workflow_snapshot / inputs / ref_closure_json JSON once per second,
+  // forever. (The token SUM below stays per-tick: it only fires for tasks
+  // with a configured cap and walks idx_node_runs_task; deferring it would
+  // delay the cancel, which is a behavior change this pass must not make.)
+  const running = await db
+    .select({
+      id: tasks.id,
+      maxDurationMs: tasks.maxDurationMs,
+      maxTotalTokens: tasks.maxTotalTokens,
+      runningMs: tasks.runningMs,
+      runningSince: tasks.runningSince,
+    })
+    .from(tasks)
+    .where(eq(tasks.status, 'running'))
   const canceled: string[] = []
 
   for (const t of running) {
@@ -71,7 +86,10 @@ export async function enforceLimits(
 
 async function checkOne(
   db: DbClient,
-  t: typeof tasks.$inferSelect,
+  t: Pick<
+    typeof tasks.$inferSelect,
+    'id' | 'maxDurationMs' | 'maxTotalTokens' | 'runningMs' | 'runningSince'
+  >,
   now: number,
 ): Promise<{ summary: string; message: string } | null> {
   if (typeof t.maxDurationMs === 'number' && t.maxDurationMs > 0) {

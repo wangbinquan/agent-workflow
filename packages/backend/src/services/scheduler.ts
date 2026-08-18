@@ -244,6 +244,7 @@ import {
   pickFreshestRun,
   pickReusableShardRun,
   pickUpstreamSourceRun,
+  type NodeRunRow,
 } from '@/services/freshness'
 import {
   decideScopeOutcome,
@@ -1873,7 +1874,25 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     // the manual board). Runs OUTSIDE lock B (dispatch acquires it internally). A successful
     // redispatch mints pending rows that the deriveFrontier below picks up in the same tick.
     await autoDispatchDeferredQuestions(db, taskId)
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    // RFC-311 (audit L2-4): the frontier consumes six scalar columns; the old
+    // select() decoded every run's prompt_text + iso/inventory JSON on EVERY
+    // scheduler tick (the tick re-enters after each node-run completion), so
+    // long tasks made the scheduler itself the event-loop hog.
+    const rows = await db
+      .select({
+        id: nodeRuns.id,
+        nodeId: nodeRuns.nodeId,
+        status: nodeRuns.status,
+        iteration: nodeRuns.iteration,
+        parentNodeRunId: nodeRuns.parentNodeRunId,
+        mergeState: nodeRuns.mergeState,
+        shardKey: nodeRuns.shardKey,
+        consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
+        supersededByReview: nodeRuns.supersededByReview,
+        wrapperProgressJson: nodeRuns.wrapperProgressJson,
+      })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, taskId))
     const openClarify = await loadOpenClarify(db, taskId)
     // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
     // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
@@ -2489,9 +2508,9 @@ function isLiveStatus(status: string): boolean {
  * rather than once per tick.
  */
 function freshestUpstreamEvidenceId(
-  skippedRow: typeof nodeRuns.$inferSelect,
+  skippedRow: NodeRunRow,
   upstreams: readonly string[],
-  freshestSettled: Map<string, typeof nodeRuns.$inferSelect>,
+  freshestSettled: Map<string, NodeRunRow>,
 ): string | undefined {
   const consumed = parseConsumedJson(skippedRow.consumedUpstreamRunsJson)
   let best: string | undefined
@@ -2504,8 +2523,13 @@ function freshestUpstreamEvidenceId(
   return best
 }
 
+/** RFC-311 — the frontier consumes the freshness column contract (see
+ *  `NodeRunRow` in services/freshness.ts); the per-tick query projects exactly
+ *  those columns instead of dragging prompt_text / iso JSON along. */
+export type FrontierRunRow = NodeRunRow
+
 export function deriveFrontier(
-  rows: ReadonlyArray<typeof nodeRuns.$inferSelect>,
+  rows: ReadonlyArray<FrontierRunRow>,
   definition: WorkflowDefinition,
   scopeNodes: WorkflowNode[],
   scopeIds: Set<string>,
@@ -2523,7 +2547,7 @@ export function deriveFrontier(
   // every non-deferred task → byte-for-byte today's frontier (golden-lock).
   deferredHandlerNodeIds: ReadonlySet<string> = new Set(),
 ): Frontier {
-  const latestPerNode = new Map<string, typeof nodeRuns.$inferSelect>()
+  const latestPerNode = new Map<string, FrontierRunRow>()
   for (const r of rows) {
     if (r.iteration !== iteration) continue
     if (!scopeIds.has(r.nodeId)) continue

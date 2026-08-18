@@ -5685,8 +5685,40 @@ async function listTaskSummaryRows(
       : conditions.length === 1
         ? conditions[0]
         : and(...conditions)
+  // RFC-311 (audit L1-8): exactly the 20 columns rowToSummary consumes. The
+  // former `task: tasks` dragged workflow_snapshot / inputs / ref_closure_json
+  // / trigger_context_json (up to hundreds of KB per row) through SQLite → JS
+  // on every list request — and the homepage polls this endpoint every 10s.
   const rows = await db
-    .select({ task: tasks, workflowName: workflows.name })
+    .select({
+      task: {
+        id: tasks.id,
+        name: tasks.name,
+        workflowId: tasks.workflowId,
+        status: tasks.status,
+        startedAt: tasks.startedAt,
+        finishedAt: tasks.finishedAt,
+        errorSummary: tasks.errorSummary,
+        repoPath: tasks.repoPath,
+        repoUrl: tasks.repoUrl,
+        repoCount: tasks.repoCount,
+        cachedRepoId: tasks.cachedRepoId,
+        spaceKind: tasks.spaceKind,
+        parentTaskId: tasks.parentTaskId,
+        invocationDepth: tasks.invocationDepth,
+        scheduledTaskId: tasks.scheduledTaskId,
+        sourceAgentId: tasks.sourceAgentId,
+        sourceAgentName: tasks.sourceAgentName,
+        workgroupId: tasks.workgroupId,
+        workgroupConfigJson: tasks.workgroupConfigJson,
+        codeRoundId: tasks.codeRoundId,
+        // listTasks 函数体自身的消费（failure code 批查 + 可见性判定），
+        // rowToSummary 不读这两列。
+        failedNodeId: tasks.failedNodeId,
+        ownerUserId: tasks.ownerUserId,
+      },
+      workflowName: workflows.name,
+    })
     .from(tasks)
     .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(where)
@@ -5848,8 +5880,45 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
+  // RFC-311 (audit L2-2): exactly the columns the wire mapper below consumes.
+  // The former select() dragged every row's inventory/runtime/startup/iso/
+  // pre-snapshot/consumed-upstream JSON columns (25 columns, the bulk of the
+  // row's bytes) through SQLite → JS on EVERY detail poll — and the running
+  // `node.status` WS frame retriggers this endpoint ~2×/s per viewer. The wire
+  // never carried those columns; promptText stays because it does.
   const runRows = await db
-    .select()
+    .select({
+      id: nodeRuns.id,
+      taskId: nodeRuns.taskId,
+      nodeId: nodeRuns.nodeId,
+      status: nodeRuns.status,
+      iteration: nodeRuns.iteration,
+      retryIndex: nodeRuns.retryIndex,
+      parentNodeRunId: nodeRuns.parentNodeRunId,
+      childTaskId: nodeRuns.childTaskId,
+      shardKey: nodeRuns.shardKey,
+      wgRound: nodeRuns.wgRound,
+      reviewIteration: nodeRuns.reviewIteration,
+      startedAt: nodeRuns.startedAt,
+      finishedAt: nodeRuns.finishedAt,
+      pid: nodeRuns.pid,
+      exitCode: nodeRuns.exitCode,
+      errorMessage: nodeRuns.errorMessage,
+      failureCode: nodeRuns.failureCode,
+      promptText: nodeRuns.promptText,
+      opencodeSessionId: nodeRuns.opencodeSessionId,
+      rerunCause: nodeRuns.rerunCause,
+      supersededByReview: nodeRuns.supersededByReview,
+      rolledBack: nodeRuns.rolledBack,
+      commitPushJson: nodeRuns.commitPushJson,
+      injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
+      portValidationFailuresJson: nodeRuns.portValidationFailuresJson,
+      tokInput: nodeRuns.tokInput,
+      tokOutput: nodeRuns.tokOutput,
+      tokCacheCreate: nodeRuns.tokCacheCreate,
+      tokCacheRead: nodeRuns.tokCacheRead,
+      tokTotal: nodeRuns.tokTotal,
+    })
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
     .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id))
@@ -6439,7 +6508,32 @@ function frozenWorkgroupGoal(configJson: string | null): string | null {
   return null
 }
 
-function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | null): TaskSummary {
+function rowToSummary(
+  row: Pick<
+    typeof tasks.$inferSelect,
+    | 'id'
+    | 'name'
+    | 'workflowId'
+    | 'status'
+    | 'startedAt'
+    | 'finishedAt'
+    | 'errorSummary'
+    | 'repoPath'
+    | 'repoUrl'
+    | 'repoCount'
+    | 'cachedRepoId'
+    | 'spaceKind'
+    | 'parentTaskId'
+    | 'invocationDepth'
+    | 'scheduledTaskId'
+    | 'sourceAgentId'
+    | 'sourceAgentName'
+    | 'workgroupId'
+    | 'workgroupConfigJson'
+    | 'codeRoundId'
+  >,
+  workflowName: string | null,
+): TaskSummary {
   return {
     id: row.id,
     name: row.name, // RFC-037

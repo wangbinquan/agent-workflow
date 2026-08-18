@@ -34,6 +34,7 @@
 // `lifecycle_alerts` is written.
 
 import { and, eq, gte, inArray, isNull, or } from 'drizzle-orm'
+import { chunkedAll } from '@/util/sqlChunk'
 import { ulid } from 'ulid'
 
 import type {
@@ -558,19 +559,22 @@ export async function reconcileLifecycleAlerts(args: {
 }): Promise<ReconcileLifecycleAlertsResult> {
   const { db, taskIds, findings, now, ownedRules, onAlert, onResolved } = args
   // Load currently-open alerts in scope whose rule is owned by this pass.
+  // RFC-311: chunked (same 32766-bound-parameter hazard as the scope query).
   const openRows =
     taskIds.length === 0 || ownedRules.length === 0
       ? []
-      : await db
-          .select()
-          .from(lifecycleAlerts)
-          .where(
-            and(
-              inArray(lifecycleAlerts.taskId, taskIds),
-              inArray(lifecycleAlerts.rule, ownedRules as string[]),
-              isNull(lifecycleAlerts.resolvedAt),
+      : await chunkedAll(taskIds, (chunk) =>
+          db
+            .select()
+            .from(lifecycleAlerts)
+            .where(
+              and(
+                inArray(lifecycleAlerts.taskId, chunk),
+                inArray(lifecycleAlerts.rule, ownedRules as string[]),
+                isNull(lifecycleAlerts.resolvedAt),
+              ),
             ),
-          )
+        )
 
   const openByKey = new Map<string, (typeof openRows)[number]>()
   for (const r of openRows) openByKey.set(keyOf(r.taskId, r.rule), r)
@@ -776,17 +780,29 @@ export async function runLifecycleInvariants(
   }
 
   // Pre-fetch each task's status + workflow snapshot in one go.
-  const taskRows = await args.db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      snapshot: tasks.workflowSnapshot,
-    })
-    .from(tasks)
-    .where(inArray(tasks.id, taskIds))
+  // RFC-311 (audit L3-9): chunked — the boot `{all:true}` scope passed EVERY
+  // task id as one bound-parameter list, which exceeds SQLite's 32766 limit at
+  // scale (a hard error, not slowness — the invariants pass simply dies).
+  const taskRows = await chunkedAll(taskIds, (chunk) =>
+    args.db
+      .select({
+        id: tasks.id,
+        status: tasks.status,
+        snapshot: tasks.workflowSnapshot,
+      })
+      .from(tasks)
+      .where(inArray(tasks.id, chunk)),
+  )
 
   const findings: LifecycleInvariantFinding[] = []
+  let processed = 0
   for (const t of taskRows) {
+    // RFC-311: the boot-time full scan used to run its ~7 checks × N tasks as
+    // one uninterrupted synchronous stretch (seconds of frozen HTTP/WS right
+    // when users first open the UI). Yield the event loop between batches so
+    // requests interleave; total work is unchanged.
+    processed += 1
+    if (processed % 50 === 0) await new Promise<void>((r) => setTimeout(r, 0))
     const ctx: TaskScanContext = {
       taskId: t.id,
       taskStatus: t.status,

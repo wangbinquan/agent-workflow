@@ -884,6 +884,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     retentionCount: config.backupRetentionCount,
     retentionDays: config.backupRetentionDays,
     maxTotalBytes: config.backupMaxTotalBytes,
+    protectedKeepCount: config.backupProtectedKeepCount,
     appHome: Paths.root,
   })
   // RFC-213 G4c: bound -wal growth. RFC-311 flipped the default ON (10min

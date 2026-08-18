@@ -1211,7 +1211,15 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
 async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {
   const id = c.req.param('id')
   if (!id) return
-  const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1)
+  // RFC-311 (audit L2-3): canViewTask needs three scalar columns; the former
+  // select() decoded the full task row (workflow_snapshot and friends) once
+  // per `/api/tasks/:id/*` request — every events/stdout/node-runs poll paid
+  // for it before the handler then re-read the row a second time.
+  const rows = await deps.db
+    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId, status: tasksTable.status })
+    .from(tasksTable)
+    .where(eq(tasksTable.id, id))
+    .limit(1)
   const row = rows[0]
   if (!row) {
     // Let the per-route 404 handler fire; do not leak existence vs. forbidden.

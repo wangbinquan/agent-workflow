@@ -24,7 +24,7 @@ import {
   parseGitUrl,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -1106,10 +1106,58 @@ export async function countCachedRepos(db: DbClient): Promise<number> {
 
 export async function listCachedRepos(db: DbClient): Promise<CachedRepo[]> {
   const rows = db.select().from(cachedRepos).all()
-  const out: CachedRepo[] = []
-  for (const row of rows) {
-    out.push(rowToCached(row, await refTaskCount(db, row.id)))
+  // RFC-311 (audit L2-6): the per-repo `refTaskCount` loop was 1+N with two
+  // full-table scans INSIDE each iteration — 280 repos × (tasks scan +
+  // scheduled_tasks fully materialized into JS for a substring test) ≈ tens of
+  // millions of row visits per /repos page load. Same three-source semantics
+  // (task_repos ∪ preparation-window tasks ∪ scheduled launch payloads, see
+  // refTaskCount's comments), computed once for ALL repos:
+  const counts = new Map<string, number>()
+  const bump = (repoId: string, n: number): void => {
+    counts.set(repoId, (counts.get(repoId) ?? 0) + n)
   }
+  for (const r of db
+    .select({
+      cachedRepoId: taskRepos.cachedRepoId,
+      n: sql<number>`count(distinct ${taskRepos.taskId})`.as('n'),
+    })
+    .from(taskRepos)
+    .where(isNotNull(taskRepos.cachedRepoId))
+    .groupBy(taskRepos.cachedRepoId)
+    .all()) {
+    if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
+  }
+  for (const r of db
+    .select({ cachedRepoId: tasks.cachedRepoId, n: sql<number>`count(*)`.as('n') })
+    .from(tasks)
+    .where(
+      and(
+        isNotNull(tasks.cachedRepoId),
+        sql`not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})`,
+      ),
+    )
+    .groupBy(tasks.cachedRepoId)
+    .all()) {
+    if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
+  }
+  // One pass over scheduled_tasks (the old shape re-materialized this table
+  // once PER repo). A payload row contributes 1 per distinct mirror id it
+  // mentions — identical to the old `includes('"cachedRepoId":<json>')` probe,
+  // which also matched at most once per (row, repo) pair.
+  const knownIds = new Set(rows.map((row) => row.id))
+  const refPattern = /"cachedRepoId":"([^"\\]+)"/g
+  for (const schedRow of db
+    .select({ launchPayload: scheduledTasks.launchPayload })
+    .from(scheduledTasks)
+    .all()) {
+    const seen = new Set<string>()
+    for (const match of schedRow.launchPayload.matchAll(refPattern)) {
+      const id = match[1]!
+      if (knownIds.has(id)) seen.add(id)
+    }
+    for (const id of seen) bump(id, 1)
+  }
+  const out = rows.map((row) => rowToCached(row, counts.get(row.id) ?? 0))
   // Most recently fetched first.
   out.sort((a, b) =>
     a.lastFetchedAt > b.lastFetchedAt ? -1 : a.lastFetchedAt < b.lastFetchedAt ? 1 : 0,

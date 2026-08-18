@@ -14,7 +14,27 @@
 
 import type { nodeRuns } from '../db/schema'
 
-type NodeRunRow = typeof nodeRuns.$inferSelect
+/**
+ * RFC-311 — the freshness/frontier column contract. Narrowed from the full
+ * row so the scheduler's per-tick query (and the dispatch ledger's four
+ * per-task fetches) can project away prompt_text + the iso/inventory JSON
+ * columns; the compiler points here the moment a frontier consumer starts
+ * needing a column the projections do not carry.
+ */
+export type NodeRunRow = Pick<
+  typeof nodeRuns.$inferSelect,
+  | 'id'
+  | 'nodeId'
+  | 'status'
+  | 'iteration'
+  | 'parentNodeRunId'
+  | 'mergeState'
+  | 'shardKey'
+  | 'consumedUpstreamRunsJson'
+  | 'supersededByReview'
+  // wrapper 行的进度快照（wrapperRevivalEvidence 消费；仅 wrapper 行非空）。
+  | 'wrapperProgressJson'
+>
 
 /**
  * Parse `node_runs.consumed_upstream_runs_json` into a `{ upstreamNodeId:

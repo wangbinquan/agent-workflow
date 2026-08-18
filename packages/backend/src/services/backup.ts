@@ -33,6 +33,26 @@ import { captureWorktrees } from '@/services/worktreeBackup'
 import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
+
+/** RFC-311 — see backupVacuumWorker.ts: the copy runs off-thread so the
+ *  daemon's synchronous connection keeps serving during a backup. */
+function vacuumIntoOffThread(dbPath: string, dest: string): Promise<void> {
+  const worker = new Worker(new URL('./backupVacuumWorker.ts', import.meta.url).href)
+  return new Promise<void>((resolvePromise, rejectPromise) => {
+    const settle = (fn: () => void): void => {
+      worker.terminate()
+      fn()
+    }
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; error?: string }>) => {
+      if (event.data.ok) settle(() => resolvePromise())
+      else settle(() => rejectPromise(new Error(`backup vacuum failed: ${event.data.error}`)))
+    }
+    worker.onerror = (event) => {
+      settle(() => rejectPromise(new Error(`backup vacuum worker error: ${event.message}`)))
+    }
+    worker.postMessage({ dbPath, dest })
+  })
+}
 import {
   type BackupKind,
   type BackupManifest,
@@ -104,7 +124,18 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
       throw new Error('backup: drizzle client does not expose $client')
     }
     const dbDest = join(stagingDir, 'db.sqlite')
-    sqlite.exec(`VACUUM INTO '${dbDest.replaceAll("'", "''")}'`)
+    // RFC-311 (audit L3-1): run the whole-file copy on a worker thread with
+    // its own read-only connection so the daemon's synchronous connection —
+    // and with it every HTTP/WS request — is not frozen for the multi-GB
+    // read+rewrite. In-memory databases (tests) have no file to reopen, so
+    // they keep the historical same-thread path.
+    const dbFile =
+      (sqlite.query('PRAGMA database_list;').get() as { file?: string } | null)?.file ?? ''
+    if (dbFile === '') {
+      sqlite.exec(`VACUUM INTO '${dbDest.replaceAll("'", "''")}'`)
+    } else {
+      await vacuumIntoOffThread(dbFile, dbDest)
+    }
     contents.db = true
 
     // 2. config.json (skip if missing — first-run safety).

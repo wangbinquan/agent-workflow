@@ -260,6 +260,11 @@ export const ConfigSchema = z.object({
    *  0 = no cap (default). Protected kinds (manual / pre-restore /
    *  pre-migration) are never auto-pruned — recorded limitation. */
   backupMaxTotalBytes: z.number().int().nonnegative().default(0),
+  /** RFC-311 (proposal C4): per-family cap for PROTECTED backups — manual and
+   *  each pre-* family keep their newest N tarballs. 0 = never auto-prune
+   *  (the historical behavior); default 10. Retention now also runs at boot +
+   *  hourly even when the scheduled-backup ticker is disabled. */
+  backupProtectedKeepCount: z.number().int().nonnegative().default(10),
 
   // --- RFC-261 webhook 投递保留（D9'）---
   /** 投递 body_json 置空天数（观测/重放窗口）。10 万投递/天的部署下 30 天 body
@@ -675,6 +680,7 @@ export const DEFAULT_CONFIG: Config = {
   backupRetentionCount: 7,
   backupRetentionDays: 30,
   backupMaxTotalBytes: 0,
+  backupProtectedKeepCount: 10,
   // RFC-261 webhook 投递保留
   webhookDeliveryBodyRetentionDays: 30,
   webhookDeliveryRowRetentionDays: 90,

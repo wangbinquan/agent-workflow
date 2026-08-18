@@ -11,7 +11,20 @@
 import type { nodeRuns, taskQuestions } from '@/db/schema'
 import { resolveHandlerRun, type RunLineageView } from '@agent-workflow/shared'
 
-type NodeRunRow = typeof nodeRuns.$inferSelect
+// RFC-311：本 ledger 消费的运行行列合同（dispatch 侧的四处 per-task 查询按此
+// 投影，不再携带 prompt_text / iso JSON 大列;新消费列先在此登记）。
+type NodeRunRow = Pick<
+  typeof nodeRuns.$inferSelect,
+  | 'id'
+  | 'nodeId'
+  | 'status'
+  | 'iteration'
+  | 'parentNodeRunId'
+  | 'shardKey'
+  | 'startedAt'
+  | 'rerunCause'
+  | 'supersededByReview'
+>
 type TaskQuestionRow = typeof taskQuestions.$inferSelect
 
 // RFC-128 P5-BC (§5.2.12 F3) — the rerun-cause class an entry's dispatch mints, derived from its

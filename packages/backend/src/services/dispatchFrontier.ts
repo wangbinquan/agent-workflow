@@ -49,7 +49,9 @@ import type { nodeRuns } from '../db/schema'
 import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
 import { decodeWrapperProgress } from './wrapperProgress'
 
-type NodeRunRow = typeof nodeRuns.$inferSelect
+// RFC-311：收窄到 freshness 的调度列合同（本文件消费 id/nodeId/status/iteration/
+// supersededByReview/wrapperProgressJson，全部 ⊂ 合同），使 tick 投影行可直达。
+import type { NodeRunRow } from '@/services/freshness'
 
 /** The container kinds whose parked rows are resume anchors (exported for
  *  deriveFrontier's wrapper-anchor release and retryNode's ⑥-11 carve-out).

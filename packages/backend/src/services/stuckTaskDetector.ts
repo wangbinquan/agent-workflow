@@ -27,7 +27,7 @@
 // for an operator; remediation stays on the per-incident fixup script
 // pattern that RFC-052 established (see scripts/fixup-rfc052-*).
 
-import { and, eq, inArray, isNull, max } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 
 import {
   TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES,
@@ -159,15 +159,21 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
  * pending tasks that haven't spawned a runner yet.
  */
 async function latestEventTsForTask(db: DbClient, taskId: string): Promise<number | null> {
-  const row = (
-    await db
-      .select({ ts: max(nodeRunEvents.ts) })
-      .from(nodeRunEvents)
-      .innerJoin(nodeRuns, eq(nodeRuns.id, nodeRunEvents.nodeRunId))
-      .where(eq(nodeRuns.taskId, taskId))
-  )[0]
-  if (row === undefined || row.ts === null) return null
-  return row.ts
+  // RFC-311 (audit L3-5): `max(ts)` had no supporting index — every 5min scan
+  // walked EVERY event row of every non-terminal task (row lookups included,
+  // since ts is not in idx_events_node). Event ids are the write order, so
+  // "the newest row's ts per run" answers the same wedge question with one
+  // O(log n) reverse seek per run; parked tasks no longer cost seconds a tick.
+  const runIds = await db
+    .select({ id: nodeRuns.id })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
+  let best: number | null = null
+  for (const run of runIds) {
+    const ts = await latestEventTsForRun(db, run.id)
+    if (ts !== null && (best === null || ts > best)) best = ts
+  }
+  return best
 }
 
 /**
@@ -176,14 +182,17 @@ async function latestEventTsForTask(db: DbClient, taskId: string): Promise<numbe
  * pid went quiet when.
  */
 async function latestEventTsForRun(db: DbClient, nodeRunId: string): Promise<number | null> {
+  // RFC-311: reverse seek on idx_events_node instead of an unindexed max(ts)
+  // over the run's whole event set (see latestEventTsForTask).
   const row = (
     await db
-      .select({ ts: max(nodeRunEvents.ts) })
+      .select({ ts: nodeRunEvents.ts })
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .orderBy(desc(nodeRunEvents.id))
+      .limit(1)
   )[0]
-  if (row === undefined || row.ts === null) return null
-  return row.ts
+  return row?.ts ?? null
 }
 
 async function hasPendingDocVersion(db: DbClient, taskId: string): Promise<boolean> {

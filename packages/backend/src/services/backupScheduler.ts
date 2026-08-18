@@ -33,6 +33,12 @@ export interface PruneOptions {
   now: number
   /** Impl-gate P2-6 — total-size cap over the ROTATABLE set (0/undefined = off). */
   maxTotalBytes?: number
+  /** RFC-311 (proposal C4) — per-family cap for PROTECTED backups (manual
+   *  `agent-workflow-*` and each `pre-*` family keep their newest N;
+   *  0/undefined = never auto-prune them, the historical behavior). Production
+   *  accumulated 59 files / 2GB because every binary upgrade adds a
+   *  pre-migration tarball that nothing ever deleted (audit L3-2). */
+  protectedKeepCount?: number
 }
 
 export interface PruneResult {
@@ -79,6 +85,30 @@ export function pruneBackups(opts: PruneOptions): PruneResult {
     }
   }
 
+  // RFC-311 (C4): protected families rotate too, each keeping its newest N.
+  // Families are pruned independently (a burst of pre-migration backups must
+  // not evict the manual set and vice versa).
+  if (opts.protectedKeepCount !== undefined && opts.protectedKeepCount > 0) {
+    const familyOf = (name: string): string | null => {
+      if (isRotatable(name)) return null
+      if (name.startsWith('agent-workflow-')) return 'manual'
+      const preMatch = /^(pre-[a-z-]+?)-/.exec(name)
+      return preMatch ? preMatch[1]! : 'other-protected'
+    }
+    const byFamily = new Map<string, typeof files>()
+    for (const f of files) {
+      const family = familyOf(f.name)
+      if (family === null) continue
+      const bucket = byFamily.get(family)
+      if (bucket === undefined) byFamily.set(family, [f])
+      else bucket.push(f)
+    }
+    for (const bucket of byFamily.values()) {
+      bucket.sort((a, b) => b.mtime - a.mtime)
+      for (const victim of bucket.slice(opts.protectedKeepCount)) toDelete.push(victim)
+    }
+  }
+
   // Never delete the last backup on disk (protected ones usually survive; this
   // covers the all-rotatable-and-old case).
   if (files.length - toDelete.length <= 0 && toDelete.length > 0) {
@@ -112,9 +142,41 @@ export interface BackupSchedulerHandle {
   stop: () => void
 }
 
-/** Start the periodic backup ticker. intervalMs <= 0 → no-op (disabled). */
+/** RFC-311 — one retention pass, shared by the backup tick and the
+ *  standalone hourly loop. */
+function runPrune(opts: BackupSchedulerOptions, appHome: string): void {
+  pruneBackups({
+    dir: join(appHome, 'backups'),
+    count: opts.retentionCount,
+    days: opts.retentionDays,
+    maxTotalBytes: opts.maxTotalBytes,
+    protectedKeepCount: opts.protectedKeepCount,
+    now: Date.now(),
+  })
+}
+
+/** Start the periodic backup ticker. intervalMs <= 0 disables the BACKUP tick
+ *  only — RFC-311 (audit L3-2): retention used to be chained to it, so the
+ *  default-off scheduler meant pruneBackups NEVER executed and backups/ grew
+ *  without bound. Retention now runs at boot + hourly regardless. */
 export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedulerHandle {
-  if (!opts.intervalMs || opts.intervalMs <= 0) return { stop: () => {} }
+  if (!opts.intervalMs || opts.intervalMs <= 0) {
+    const appHome = opts.appHome ?? Paths.root
+    try {
+      runPrune(opts, appHome)
+    } catch (err) {
+      log.warn('boot prune threw', { error: (err as Error).message })
+    }
+    const pruneHandle = setInterval(() => {
+      try {
+        runPrune(opts, appHome)
+      } catch (err) {
+        log.warn('prune tick threw', { error: (err as Error).message })
+      }
+    }, 3_600_000)
+    ;(pruneHandle as { unref?: () => void }).unref?.()
+    return { stop: () => clearInterval(pruneHandle) }
+  }
   const appHome = opts.appHome ?? Paths.root
   let running = false // reentrancy guard: a slow createBackup must not overlap
   const handle = setInterval(() => {
@@ -122,13 +184,7 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
     running = true
     ;(async () => {
       await createBackup({ db: opts.db, kind: 'scheduled', appHome })
-      pruneBackups({
-        dir: join(appHome, 'backups'),
-        count: opts.retentionCount,
-        days: opts.retentionDays,
-        maxTotalBytes: opts.maxTotalBytes,
-        now: Date.now(),
-      })
+      runPrune(opts, appHome)
     })()
       .catch((err) => log.warn('backup tick threw', { error: (err as Error).message }))
       .finally(() => {

@@ -35,6 +35,39 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+
+// RFC-311 (audit L2-5) — this file's per-task run fetches never consume the
+// heavy columns (prompt_text, iso/inventory/startup JSON, pre-snapshots…), but
+// two of them run INSIDE the dispatch write transaction, so the big-TEXT
+// decode extended write-lock hold time. All four share this light projection;
+// the compiler flags any future consumer of a column missing here.
+const DISPATCH_RUN_COLUMNS = {
+  id: nodeRuns.id,
+  taskId: nodeRuns.taskId,
+  nodeId: nodeRuns.nodeId,
+  status: nodeRuns.status,
+  iteration: nodeRuns.iteration,
+  retryIndex: nodeRuns.retryIndex,
+  parentNodeRunId: nodeRuns.parentNodeRunId,
+  childTaskId: nodeRuns.childTaskId,
+  shardKey: nodeRuns.shardKey,
+  wgRound: nodeRuns.wgRound,
+  reviewIteration: nodeRuns.reviewIteration,
+  mergeState: nodeRuns.mergeState,
+  forceActivated: nodeRuns.forceActivated,
+  startedAt: nodeRuns.startedAt,
+  finishedAt: nodeRuns.finishedAt,
+  pid: nodeRuns.pid,
+  exitCode: nodeRuns.exitCode,
+  errorMessage: nodeRuns.errorMessage,
+  failureCode: nodeRuns.failureCode,
+  opencodeSessionId: nodeRuns.opencodeSessionId,
+  rerunCause: nodeRuns.rerunCause,
+  supersededByReview: nodeRuns.supersededByReview,
+  rolledBack: nodeRuns.rolledBack,
+} as const
+
+type DispatchRunRow = Pick<typeof nodeRuns.$inferSelect, keyof typeof DISPATCH_RUN_COLUMNS>
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
@@ -862,7 +895,11 @@ async function commitDispatchPlan(
         // — re-run BOTH ledger gates inside the tx so a concurrent dispatch / quick-channel answer
         // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
         // runs + output ids ONCE for both.
-        const txRuns = tx.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()
+        const txRuns = tx
+          .select(DISPATCH_RUN_COLUMNS)
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, taskId))
+          .all()
         const txOutputIds: ReadonlySet<string> =
           txRuns.length === 0
             ? new Set<string>()
@@ -1071,8 +1108,9 @@ interface OpenDispatchInputs {
       | 'sourceKind'
     >
   >
-  /** Every node_run of the task. */
-  runs: ReadonlyArray<typeof nodeRuns.$inferSelect>
+  /** Every node_run of the task (RFC-311: the DISPATCH_RUN_COLUMNS projection —
+   *  this gate never reads the heavy prompt/iso columns). */
+  runs: ReadonlyArray<DispatchRunRow>
   /** node_run ids that captured ≥1 <workflow-output> row (the "done == consumed" signal). */
   outputRunIds: ReadonlySet<string>
 }
@@ -1242,7 +1280,10 @@ async function assertNoInFlightDispatch(
       ),
     )
   if (entries.length === 0) return
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const runs = await db
+    .select(DISPATCH_RUN_COLUMNS)
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
@@ -1478,7 +1519,10 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
       ),
     )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const runs = await db
+    .select(DISPATCH_RUN_COLUMNS)
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
   const runById = new Map(runs.map((r) => [r.id, r]))
   const outputRunIds = await runIdsWithOutput(
     db,
@@ -1571,7 +1615,10 @@ async function resolveDesignerBorrowForNode(
   const candidates = entries.filter((e) => effectiveTarget(e) === nodeId)
   if (candidates.length === 0) return CLOSED_LEDGER
 
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const runs = await db
+    .select(DISPATCH_RUN_COLUMNS)
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
