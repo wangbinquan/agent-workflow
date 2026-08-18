@@ -330,6 +330,8 @@ describe('migration 0132 — memories.scope_type 扩到 repo_group', () => {
       .map((r) => r.name)
       .sort()
     expect(idx).toEqual([
+      // RFC-311 0180 补的 created_at 列表索引（性能地基批）。
+      'idx_memories_created',
       'idx_memories_fused_skill_id',
       'idx_memories_scope_status',
       'idx_memories_source',
