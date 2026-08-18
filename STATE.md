@@ -165,7 +165,12 @@
 >   tab 与模板详情路由/code-rounds:launch 权限点/88 个 writer 测试全删，**存储层写函数一并清零**
 >   （读面测试改自持种子 helper）。T106 Git identity 负扫描 0、T107 cross-context import 双向零、
 >   T108 裁决**不 drop 任何 legacy 表**（6 张零消费者表带审计价值，清理随 RFC-311 保留期治理；
->   新增棘轮锁定零消费者 + 已删文件不得复活 + 模块零写动词）。
+>   新增棘轮锁定零消费者 + 已删文件不得复活 + 模块零写动词）。**已落 main**：
+>   `48ba1963`（242 文件、+589/−51407）+ `71415456`（T112 出账：RFC-304/309 逐项转出账表、
+>   AC-1..35 证据索引、六条未竟项）+ `d5a5b59e`（gate 红修复 + 共享树全树操作事故记账）。
+>   T110 绿证：`d5a5b59e` 上 `gate:local` 的 backend 四 shard（520s）+ frontend（6m21s）+
+>   lint/format/depcheck/shared 全绿。T111 按 exact SHA 盯 `d75f0c9b`（含该三 commit 的
+>   superseding commit）的 CI。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：
