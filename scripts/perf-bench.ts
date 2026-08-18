@@ -25,7 +25,8 @@ const flag = (name: string): string | undefined => {
 const DB_PATH = resolve(flag('db') ?? '/tmp/aw-perf/agent-workflow.db')
 const ROUNDS = Number(flag('rounds') ?? 20)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'packages', 'backend', 'db', 'migrations')
-const TOKEN = 'b'.repeat(64)
+// perf-seed 落好的确定性只读 PAT(bootstrap 完成后 daemon token 失效)。
+const TOKEN = `aws_pat_${'ab'.repeat(32)}`
 
 const tmp = mkdtempSync(join(tmpdir(), 'aw-perf-bench-'))
 process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')

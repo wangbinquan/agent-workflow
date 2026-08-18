@@ -100,6 +100,19 @@ tx(() => {
   raw
     .prepare(`INSERT OR IGNORE INTO workflows (id, name, definition) VALUES (?, ?, ?)`)
     .run('perf-wf', 'perf-wf', JSON.stringify({ nodes: [], edges: [], inputs: [] }))
+  // bootstrap 闸门:auth_login_policy.bootstrap_completed_at 为 NULL 时全 API
+  // 403(bootstrap-admin-required),bench 一格都跑不了。
+  raw.prepare(`UPDATE auth_login_policy SET bootstrap_completed_at = ? WHERE id = 'global'`).run(T0)
+  // bench 的凭据:bootstrap 完成后 daemon token 失效,读端点走一枚确定性
+  // PAT(空 scope = 只读,bench 全 GET 正好)。raw token 见 perf-bench.ts。
+  const patRaw = `aws_pat_${'ab'.repeat(32)}`
+  const patHash = new Bun.CryptoHasher('sha256').update(patRaw).digest('hex')
+  raw
+    .prepare(
+      `INSERT OR IGNORE INTO user_pats (id, user_id, name, token_hash, scopes_json, created_at)
+       VALUES ('perf-pat', 'perf-admin', 'perf-bench', ?, '[]', ?)`,
+    )
+    .run(patHash, T0)
 })
 
 // --- repos -------------------------------------------------------------------

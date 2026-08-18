@@ -153,3 +153,49 @@ describe('startBackupScheduler side-effects (AC-6)', () => {
     expect(src.includes('if (running) return')).toBe(true)
   })
 })
+
+// RFC-311 (proposal C4) — protected 家族(manual `agent-workflow-*` 与各
+// `pre-*` 家族)开始真正轮换:各自保留最新 N 个,0/未配置 = 历史行为不清理。
+// 生产曾累积 59 个文件 / 2GB pre-migration tarball(审计 L3-2)。
+describe('pruneBackups protectedKeepCount (RFC-311 C4)', () => {
+  test('each protected family independently keeps its newest N; rotatable set untouched by the knob', () => {
+    const dir = tmp()
+    for (let i = 0; i < 4; i += 1) {
+      mkBackup(dir, `agent-workflow-m${i}.tar.gz`, NOW - (i + 1) * DAY)
+      mkBackup(dir, `pre-migration-p${i}.tar.gz`, NOW - (i + 1) * DAY)
+    }
+    mkBackup(dir, 'pre-restore-r0.tar.gz', NOW - DAY)
+    mkBackup(dir, 'scheduled-s0.tar.gz', NOW - DAY)
+    pruneBackups({ dir, count: 5, days: 30, now: NOW, protectedKeepCount: 2 })
+    expect(names(dir)).toEqual([
+      'agent-workflow-m0.tar.gz',
+      'agent-workflow-m1.tar.gz',
+      'pre-migration-p0.tar.gz',
+      'pre-migration-p1.tar.gz',
+      'pre-restore-r0.tar.gz',
+      'scheduled-s0.tar.gz',
+    ])
+  })
+
+  test('0 / undefined keeps the historical never-auto-prune behavior for protected backups', () => {
+    const dir = tmp()
+    for (let i = 0; i < 4; i += 1) {
+      mkBackup(dir, `agent-workflow-m${i}.tar.gz`, NOW - (i + 20) * DAY)
+      mkBackup(dir, `pre-migration-p${i}.tar.gz`, NOW - (i + 20) * DAY)
+    }
+    pruneBackups({ dir, count: 1, days: 1, now: NOW })
+    expect(names(dir)).toHaveLength(8)
+    pruneBackups({ dir, count: 1, days: 1, now: NOW, protectedKeepCount: 0 })
+    expect(names(dir)).toHaveLength(8)
+  })
+
+  test('never deletes the last backup on disk even when the family cap says so', () => {
+    const dir = tmp()
+    mkBackup(dir, 'pre-migration-only.tar.gz', NOW - 100 * DAY)
+    // protectedKeepCount=1 keeps it anyway; use a second stale one to prove the
+    // guard: cap 1 would delete the older, keeping exactly one file.
+    mkBackup(dir, 'pre-migration-older.tar.gz', NOW - 200 * DAY)
+    pruneBackups({ dir, count: 1, days: 1, now: NOW, protectedKeepCount: 1 })
+    expect(names(dir)).toEqual(['pre-migration-only.tar.gz'])
+  })
+})
