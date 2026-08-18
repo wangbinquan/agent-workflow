@@ -23,7 +23,13 @@
 > ①跳过 Codex 设计门直接进 PR-0（实现门照常）；②**不引入沙箱**——无 OS sandbox/只读 Git view/command broker/env
 > allowlist 重构，no-Git 以「提示词禁止+前后快照事后校验+违规整树回退」强制，凭据与 Git identity 仍零注入；③**不做
 > 网络相关安全动作**（无 outbound deny/allowlist/fence）；④provider 首版=既有 system mock 包新增 requirement/pipeline
-> mock 能力+完整用例防护，真实自研系统 adapter 由使用方自写。按 plan.md 批次实施，当前从 PR-0（T0–T8 go/no-go）开始。
+> mock 能力+完整用例防护，真实自研系统 adapter 由使用方自写。按 plan.md 批次实施。
+> **进度（2026-08-18）**：PR-0（T0–T8）✅ `0324a8ec`——七层骨架+架构锁（变异实证 5 红）、strict codecs+unknown-key
+> harness、检测/回退 probe 6/6（真实子进程攻击全检出、回退 byte-identical）、system-mocks 新增 requirement/pipeline
+> provider mock、go/no-go 全 pass。**PR-0 重大发现**：Bun fetch/node:http 对快生产者大响应不背压（128MB 裸读丢 →
+> RSS 680MB，线性）⇒ 大下载定式改 curl 子进程落盘+流式 hash（已进 dev-gotchas）。PR-1 拆 1A/1B：1A（T9–T12 规则内核：
+> capability/fact catalog、fixed guards、first-match+indeterminate 停机、work-set/employee/route 选择、canonical trace
+> +replay oracle 100 次 byte-identical，Java/C++/polyglot fixtures）已完成待推；1B（T13–T20 资源 CRUD/ACL/API）进行中。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

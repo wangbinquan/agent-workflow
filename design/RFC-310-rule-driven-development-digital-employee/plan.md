@@ -65,14 +65,15 @@ PR-0 只允许测试/probe/architecture scaffolding，不能启动 Mission worke
 ### 目标
 
 用户可以定义多套数字员工、动作实现和规则，并在 fixtures/repository facts 上得到唯一、可解释、可重放的结果；
-此时仍不执行 Agent 或外部副作用。
+此时仍不执行 Agent 或外部副作用。**按同一验收边界拆为 1A/1B**：1A = T9–T12 确定性内核（纯 domain/engine，含
+T18 的规则语义 fixtures，已交付）；1B = T13–T20 配置资源 CRUD/ACL/permission/API（含 T18 的 DB 侧接线）。
 
 | 编号 | 任务                                                                                                | 依赖     | 状态 |
 | ---- | --------------------------------------------------------------------------------------------------- | -------- | ---- |
-| T9   | `CapabilityDefinition` closed catalog + contract versions + fixed stage/workspace/effect metadata   | T3       | ⏳   |
-| T10  | `FactCatalog`、known/not-applicable/unknown/stale、typed predicate AST、canonical codec/hash        | T3       | ⏳   |
-| T11  | fixed guards + indeterminate stop/collect + first-match + deterministic WorkSelectionReceipt        | T9,T10   | ⏳   |
-| T12  | DecisionTrace/Receipt canonical bytes 与 replay oracle                                              | T11      | ⏳   |
+| T9   | `CapabilityDefinition` closed catalog + contract versions + fixed stage/workspace/effect metadata   | T3       | ✅   |
+| T10  | `FactCatalog`、known/not-applicable/unknown/stale、typed predicate AST、canonical codec/hash        | T3       | ✅   |
+| T11  | fixed guards + indeterminate stop/collect + first-match + deterministic WorkSelectionReceipt        | T9,T10   | ✅   |
+| T12  | DecisionTrace/Receipt canonical bytes 与 replay oracle                                              | T11      | ✅   |
 | T13  | `ActionTemplate` immutable revision/ACL/visibility CRUD，锁住不可配置字段                           | T9       | ⏳   |
 | T13a | `VerificationProfile` revision/probe：disposable workspace、程序化结果、可执行字段 `scripts:author` | T9       | ⏳   |
 | T14  | DigitalEmployee 唯一 route selector、template compatibility、readiness/transitive closure           | T13,T13a | ⏳   |
