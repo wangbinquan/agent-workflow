@@ -815,6 +815,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     retentionDays: config.backupRetentionDays,
     maxTotalBytes: config.backupMaxTotalBytes,
     protectedKeepCount: config.backupProtectedKeepCount,
+    // 每拍热读:改了设置不必重启(实现门 P1-5)。
+    loadRetention: () => {
+      const cfg = loadConfig(Paths.config)
+      return {
+        retentionCount: cfg.backupRetentionCount,
+        retentionDays: cfg.backupRetentionDays,
+        maxTotalBytes: cfg.backupMaxTotalBytes,
+        protectedKeepCount: cfg.backupProtectedKeepCount,
+      }
+    },
     appHome: Paths.root,
   })
   // RFC-213 G4c: bound -wal growth. RFC-311 flipped the default ON (10min

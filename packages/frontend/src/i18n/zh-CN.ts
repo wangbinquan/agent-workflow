@@ -1976,6 +1976,8 @@ export interface Resources {
       gcWorktreesHint: string
       gcEventsTitle: string
       gcEventsHint: string
+      gcRetentionTitle: string
+      gcRetentionHint: string
       gcWebhooksTitle: string
       gcWebhooksHint: string
       networkListenerTitle: string
@@ -5310,6 +5312,12 @@ export interface Resources {
     archivePerNodeRunBytesHint: string
     archiveGlobalBytes: string
     archiveGlobalBytesHint: string
+    backupProtectedKeepCount: string
+    backupProtectedKeepCountHint: string
+    eventStreamRetentionDays: string
+    eventStreamRetentionDaysHint: string
+    webhookTriggerFiresRetentionDays: string
+    webhookTriggerFiresRetentionDaysHint: string
     webhookBodyRetention: string
     webhookBodyRetentionHint: string
     webhookRowRetention: string
@@ -8117,6 +8125,8 @@ export const zhCN: Resources = {
       gcWorktreesHint: '在清理前按期限保留已完成任务的工作树。',
       gcEventsTitle: '事件清理',
       gcEventsHint: '按固定周期移除已过期的工作流与投递事件。',
+      gcRetentionTitle: '保留期与清理',
+      gcRetentionHint: '这些旋钮会真的删文件 / 删行,且守护进程启动即生效。0 一律表示不清理。',
       gcWebhooksTitle: 'Webhook 清理',
       gcWebhooksHint: '独立于任务数据保留并清理 Webhook 投递历史。',
       networkListenerTitle: 'Daemon 监听',
@@ -12105,6 +12115,15 @@ export const zhCN: Resources = {
       '按采样平均行宽折算成行数阈值，与行数阈值取更严者。0 = 关闭字节水位。默认 8 MiB。',
     archiveGlobalBytes: '事件归档 — 全局字节水位',
     archiveGlobalBytesHint: '全表事件字节上限（同上折算）。0 = 关闭。默认 256 MiB。',
+    backupProtectedKeepCount: '备份保留 — 每族保留个数',
+    backupProtectedKeepCountHint:
+      '手动备份与各 pre-* 家族各自保留最新 N 个(升级前的 pre-migration 包曾在生产攒到 59 个 / 2GB)。0 = 不自动清理。',
+    eventStreamRetentionDays: '事件流水保留(天)',
+    eventStreamRetentionDaysHint:
+      '蒸馏 / 意图对话 / MCP 运行时测试三张事件表:宿主终态后超过该天数的行会被删除。0 = 不清理。',
+    webhookTriggerFiresRetentionDays: 'Webhook 触发记录保留(天)',
+    webhookTriggerFiresRetentionDaysHint:
+      '超期的触发记录会被删除;其启动的任务仍未终态时该行始终保留(supersede 依赖它)。0 = 不清理。',
     webhookBodyRetention: 'Webhook 投递 body 保留（天）',
     webhookBodyRetentionHint:
       '超期投递的原始 payload 置空（重放不可用），行仍保留。高流量部署可调小以控制磁盘占用。',

@@ -795,6 +795,11 @@ export const ConfigPatchSchema = ConfigSchema.partial()
         globalBytes: boundedSettingsInteger('eventsArchiveThresholds.globalBytes').optional(),
       })
       .optional(),
+    backupProtectedKeepCount: boundedSettingsInteger('backupProtectedKeepCount').optional(),
+    eventStreamRetentionDays: boundedSettingsInteger('eventStreamRetentionDays').optional(),
+    webhookTriggerFiresRetentionDays: boundedSettingsInteger(
+      'webhookTriggerFiresRetentionDays',
+    ).optional(),
     webhookDeliveryBodyRetentionDays: boundedSettingsInteger(
       'webhookDeliveryBodyRetentionDays',
     ).optional(),

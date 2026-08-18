@@ -44,9 +44,12 @@ describe('RFC-299 — every settings surface uses semantic SettingsCard groups',
     expect(count(between(settings, start, end), '<SettingsCard')).toBe(expected)
   })
 
-  test('GC owns three retention cards plus its cardized backup/restore group', () => {
+  test('GC owns four retention cards plus its cardized backup/restore group', () => {
     const gc = between(settings, 'export function GcTab', '// GET /api/restore')
-    expect(count(gc, '<SettingsCard')).toBe(3)
+    // RFC-311 实现门 P1-5:第四张卡是「保留期与清理」——三个会删文件/删行的旋钮
+    // (备份每族保留数 / 事件流水保留 / webhook 触发记录保留)此前只能改
+    // config.json,而 C4/C6 承诺的缓解正是「可配」。
+    expect(count(gc, '<SettingsCard')).toBe(4)
     expect(gc).toContain("usePermission('backup:run')")
     expect(gc).toContain('<BackupCard canRun={canRunBackup} />')
     expect(

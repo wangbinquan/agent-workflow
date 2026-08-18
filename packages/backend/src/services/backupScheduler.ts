@@ -4,7 +4,8 @@
 //   orphan-reconcile loops) that fires createBackup + prunes old ones.
 // - pruneBackups: KEEP a scheduled/auto backup iff it is within the newest N OR
 //   newer than D days; DELETE only when it fails BOTH. Manual + pre-restore +
-//   pre-migration backups are NEVER auto-pruned. Never deletes the last backup.
+//   pre-migration backups rotate per family under `protectedKeepCount`
+//   (RFC-311 C4;0/未配置 = 历史的「永不自动清理」)。Never deletes the last backup.
 // - maybePreMigrationBackup: before boot migrations, raw-copy the DB so a botched
 //   upgrade can be rolled back (rawCopyDb, NOT createBackup — the OLD schema
 //   can't be SELECTed by the NEW binary).
@@ -92,7 +93,10 @@ export function pruneBackups(opts: PruneOptions): PruneResult {
     const familyOf = (name: string): string | null => {
       if (isRotatable(name)) return null
       if (name.startsWith('agent-workflow-')) return 'manual'
-      const preMatch = /^(pre-[a-z-]+?)-/.exec(name)
+      // 实现门 P1-5:`pre-restore-*`(DB 安全副本)与 `pre-restore-fs-*`(文件系统
+      // 包)是**配对**制品,非贪婪前缀会把它们归进同一个家族,修剪时可能拆散配对
+      // ——恢复要两半齐全才有意义。取到第二个连字符前的完整族名。
+      const preMatch = /^(pre-[a-z]+(?:-fs)?)-/.exec(name)
       return preMatch ? preMatch[1]! : 'other-protected'
     }
     const byFamily = new Map<string, typeof files>()
@@ -137,6 +141,16 @@ export interface BackupSchedulerOptions {
   maxTotalBytes?: number
   /** RFC-311 (C4) — see PruneOptions.protectedKeepCount. */
   protectedKeepCount?: number
+  /** RFC-311 实现门 P1-5:保留旋钮**每拍热读**,而不是 boot 时捕获一次。C4 承诺
+   *  的缓解是「上限可配」,但捕获式装配意味着改完必须重启 daemon 才生效——同批的
+   *  归档器/保留 sweeper 都是传 getter 热读,这里不该是另一种约定。返回 undefined
+   *  表示沿用构造时的值。 */
+  loadRetention?: () => {
+    retentionCount?: number
+    retentionDays?: number
+    maxTotalBytes?: number
+    protectedKeepCount?: number
+  }
   appHome?: string
 }
 
@@ -147,12 +161,13 @@ export interface BackupSchedulerHandle {
 /** RFC-311 — one retention pass, shared by the backup tick and the
  *  standalone hourly loop. */
 function runPrune(opts: BackupSchedulerOptions, appHome: string): void {
+  const live = opts.loadRetention?.() ?? {}
   pruneBackups({
     dir: join(appHome, 'backups'),
-    count: opts.retentionCount,
-    days: opts.retentionDays,
-    maxTotalBytes: opts.maxTotalBytes,
-    protectedKeepCount: opts.protectedKeepCount,
+    count: live.retentionCount ?? opts.retentionCount,
+    days: live.retentionDays ?? opts.retentionDays,
+    maxTotalBytes: live.maxTotalBytes ?? opts.maxTotalBytes,
+    protectedKeepCount: live.protectedKeepCount ?? opts.protectedKeepCount,
     now: Date.now(),
   })
 }

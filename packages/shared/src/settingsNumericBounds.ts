@@ -87,6 +87,11 @@ export const SETTINGS_NUMERIC_BOUNDS = {
   // RFC-311：字节维度水位，0 = 关闭（行数阈值继续兜底）。
   'eventsArchiveThresholds.perNodeRunBytes': { min: 0, max: JS_TIMER_MAX_MS },
   'eventsArchiveThresholds.globalBytes': { min: 0, max: JS_TIMER_MAX_MS },
+  // RFC-311 C4(实现门 P1-5):C4 承诺「上限可配」,但此前只能改 config.json——
+  // 而它是**会删文件**的旋钮,首次启动就生效。给它一个设置页入口。0 = 不清理。
+  backupProtectedKeepCount: { min: 0, max: 1_000 },
+  eventStreamRetentionDays: { min: 0, max: 3_650, unit: 'days' },
+  webhookTriggerFiresRetentionDays: { min: 0, max: 3_650, unit: 'days' },
   webhookDeliveryBodyRetentionDays: { min: 1, max: 3_650, unit: 'days' },
   webhookDeliveryRowRetentionDays: { min: 1, max: 3_650, unit: 'days' },
   bindPort: { min: 0, max: 65_535 },

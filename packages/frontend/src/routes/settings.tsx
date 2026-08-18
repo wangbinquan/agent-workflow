@@ -1040,6 +1040,45 @@ export function GcTab({ config }: TabProps) {
         </Field>
       </SettingsCard>
       <SettingsCard
+        title={t('settings.cardGroups.gcRetentionTitle')}
+        hint={t('settings.cardGroups.gcRetentionHint')}
+      >
+        {/* RFC-311 C4/C6(实现门 P1-5):这些旋钮会**删文件/删行**且首次启动就
+          生效,「可配」不能只体现在 config.json 上。0 一律表示不清理。 */}
+        <div className="form-grid form-grid--cols-2">
+          <Field
+            label={t('settingsForm.backupProtectedKeepCount')}
+            hint={t('settingsForm.backupProtectedKeepCountHint')}
+          >
+            <SettingsNumberInput
+              setting="backupProtectedKeepCount"
+              value={state.backupProtectedKeepCount}
+              onChange={(v) => setState({ ...state, backupProtectedKeepCount: v ?? 10 })}
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.eventStreamRetentionDays')}
+            hint={t('settingsForm.eventStreamRetentionDaysHint')}
+          >
+            <SettingsNumberInput
+              setting="eventStreamRetentionDays"
+              value={state.eventStreamRetentionDays}
+              onChange={(v) => setState({ ...state, eventStreamRetentionDays: v ?? 30 })}
+            />
+          </Field>
+          <Field
+            label={t('settingsForm.webhookTriggerFiresRetentionDays')}
+            hint={t('settingsForm.webhookTriggerFiresRetentionDaysHint')}
+          >
+            <SettingsNumberInput
+              setting="webhookTriggerFiresRetentionDays"
+              value={state.webhookTriggerFiresRetentionDays}
+              onChange={(v) => setState({ ...state, webhookTriggerFiresRetentionDays: v ?? 90 })}
+            />
+          </Field>
+        </div>
+      </SettingsCard>
+      <SettingsCard
         title={t('settings.cardGroups.gcWebhooksTitle')}
         hint={t('settings.cardGroups.gcWebhooksHint')}
       >

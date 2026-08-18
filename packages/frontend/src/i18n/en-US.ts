@@ -1921,6 +1921,9 @@ export const enUS: Resources = {
       gcWorktreesHint: 'Retain completed task worktrees for a bounded period before cleanup.',
       gcEventsTitle: 'Event cleanup',
       gcEventsHint: 'Remove expired workflow and delivery events on a predictable schedule.',
+      gcRetentionTitle: 'Retention & cleanup',
+      gcRetentionHint:
+        'These knobs really delete files/rows and take effect as soon as the daemon starts. 0 always means never clean up.',
       gcWebhooksTitle: 'Webhook cleanup',
       gcWebhooksHint: 'Retain and purge webhook delivery history independently from task data.',
       networkListenerTitle: 'Daemon listener',
@@ -6188,6 +6191,15 @@ export const enUS: Resources = {
     archiveGlobalBytes: 'Events archive — global bytes',
     archiveGlobalBytesHint:
       'DB-wide event byte cap (same conversion). 0 disables. Default 256 MiB.',
+    backupProtectedKeepCount: 'Backup retention — keep per family',
+    backupProtectedKeepCountHint:
+      'Manual backups and each pre-* family keep their newest N (production accumulated 59 pre-migration tarballs / 2GB). 0 disables auto-pruning.',
+    eventStreamRetentionDays: 'Event stream retention (days)',
+    eventStreamRetentionDaysHint:
+      'Distill / intent / MCP runtime-test event rows are deleted this long after their host settles. 0 disables.',
+    webhookTriggerFiresRetentionDays: 'Webhook trigger fires retention (days)',
+    webhookTriggerFiresRetentionDaysHint:
+      'Expired fire rows are deleted; a row whose launched task is still non-terminal is always kept (supersede depends on it). 0 disables.',
     webhookBodyRetention: 'Webhook delivery body retention (days)',
     webhookBodyRetentionHint:
       'Raw payloads older than this are pruned (replay unavailable); the rows stay. Lower it on high-volume deployments to cap disk usage.',
