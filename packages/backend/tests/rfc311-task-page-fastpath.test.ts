@@ -194,4 +194,34 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
     const firstIds = new Set(first.items.map((item) => item.id))
     for (const item of second.items) expect(firstIds.has(item.id)).toBe(false)
   })
+
+  // RFC-311 基准实测回归:keyset 断点写成展开的 `a < ? OR (a = ? AND id < ?)`
+  // 时,SQLite 在**绑定参数**下会选 MULTI-INDEX OR 并回落 TEMP B-TREE 排序,
+  // 把全部根行物化排一遍(10 万任务库实测翻页 197ms vs 首页 30ms)。行值形式
+  // `(a, id) < (?, ?)` 才落成一次有序 SEARCH。EXPLAIN 用**字面量**看不出差异
+  // (字面量下反而选对索引),所以这条断言必须用 `?` 占位符。
+  test('the paging boundary keeps an ordered index seek (no TEMP B-TREE)', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const plan = db
+      .all<{ detail: string }>(
+        sql.raw(
+          `EXPLAIN QUERY PLAN SELECT t.id FROM tasks t
+             WHERE (t.parent_task_id IS NULL
+               OR NOT EXISTS (SELECT 1 FROM tasks p WHERE p.id = t.parent_task_id))
+               AND (t.branch_started_at, t.id) < (?, ?)
+             ORDER BY t.branch_started_at DESC, t.id DESC LIMIT 51`,
+        ),
+      )
+      .map((row) => row.detail)
+      .join('\n')
+    expect(plan).toContain('idx_tasks_branch_started_id')
+    expect(plan).not.toContain('TEMP B-TREE')
+    // 源码层守卫:两处断点都必须是行值形式,任何一处退回 OR 展开都在这里红。
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'taskOperations.ts'),
+      'utf8',
+    )
+    expect(src).not.toMatch(/branch_started_at\} AND [a-z]+\.id </)
+    expect(src.match(/branch_started_at, [a-z]+\.id\) < \(/g)).toHaveLength(2)
+  })
 })

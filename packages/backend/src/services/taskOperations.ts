@@ -405,10 +405,9 @@ function branchCtes(rootIds: SQL): SQL {
 
 function pageBoundary(cursor: TaskPageCursorV1 | undefined): SQL {
   if (cursor === undefined) return sql`1 = 1`
-  return sql`(
-    bs.branch_started_at < ${cursor.branchStartedAt}
-    OR (bs.branch_started_at = ${cursor.branchStartedAt} AND bs.id < ${cursor.taskId})
-  )`
+  // 同 fastDefaultRootQuery 的行值形式(见那里的实测注记)。这条作用在旧管线
+  // 已物化的 branch summary 上,规模小得多,但形式保持一致以免两处漂移。
+  return sql`(bs.branch_started_at, bs.id) < (${cursor.branchStartedAt}, ${cursor.taskId})`
 }
 
 function projectedRows(limit: number, cursor: TaskPageCursorV1 | undefined): SQL {
@@ -701,13 +700,16 @@ function fastDefaultRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOper
     { id: sql.raw('p.id'), ownerUserId: sql.raw('p.owner_user_id') },
     actor,
   )
+  // RFC-311(基准实测,10 万任务库):keyset 断点必须写成**行值比较**。
+  // 展开成 `a < ? OR (a = ? AND id < ?)` 时,SQLite 在**绑定参数**下选
+  // MULTI-INDEX OR 并回落 `USE TEMP B-TREE FOR ORDER BY`——把全部 9 万根行
+  // 物化排序一遍(实测翻页 197ms,首页仅 30ms;EXPLAIN 用字面量看不出来,
+  // 字面量下它反而选对索引,这正是这类坑难发现的原因)。行值形式
+  // `(a, id) < (?, ?)` 直接落成一次有序 SEARCH,无临时 B 树。
   const boundary =
     parsed.cursor === undefined
       ? sql`1 = 1`
-      : sql`(
-          t.branch_started_at < ${parsed.cursor.branchStartedAt}
-          OR (t.branch_started_at = ${parsed.cursor.branchStartedAt} AND t.id < ${parsed.cursor.taskId})
-        )`
+      : sql`(t.branch_started_at, t.id) < (${parsed.cursor.branchStartedAt}, ${parsed.cursor.taskId})`
   // Roots: top-level tasks, plus tasks whose parent this actor cannot see
   // (their branch re-roots at the first visible ancestor — same rule the
   // exhaustive pipeline's `roots` CTE applies).
