@@ -199,6 +199,8 @@ describe('unified system mock gateway', () => {
     }
   })
 
+  // 60s：真 npm/pip 子进程安装在 CI 共享 runner 上冷启动可超默认 5s
+  // （2026-08-18 PR-4 CI 实红：pip 5001ms 被 bun 默认超时杀掉，本地恒绿）。
   test('serves installable npm and PyPI artifacts plus the PlantUML renderer contract', async () => {
     await suite.client.seedNpm({
       name: '@mock/hello',
@@ -272,7 +274,7 @@ describe('unified system mock gateway', () => {
     })
     expect(rendered.headers.get('content-type')).toContain('image/svg+xml')
     expect(await rendered.text()).toContain('system mock PlantUML renderer')
-  })
+  }, 60_000)
 })
 
 async function temporaryDirectory(prefix: string): Promise<string> {
