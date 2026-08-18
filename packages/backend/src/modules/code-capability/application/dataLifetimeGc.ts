@@ -19,7 +19,7 @@
 //   whose summary exists is a shrug; losing detail whose summary does not is
 //   the unrecoverable case.
 
-import { and, eq, isNotNull, lt, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { codeAiAttempts, codeArtifacts, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import {
@@ -86,9 +86,15 @@ async function reclaimArtifacts(db: DbClient, limit: number): Promise<number> {
     .limit(limit)
   if (dead.length === 0) return 0
 
-  for (const row of dead) {
-    await db.delete(codeArtifacts).where(eq(codeArtifacts.id, row.id))
-  }
+  // RFC-311: one batched DELETE per pass instead of `limit` autocommit
+  // statements (the batch is bounded by `limit` ≤ 500, far under the 32766
+  // bound-parameter ceiling).
+  await db.delete(codeArtifacts).where(
+    inArray(
+      codeArtifacts.id,
+      dead.map((row) => row.id),
+    ),
+  )
   return dead.length
 }
 
@@ -107,9 +113,12 @@ async function sweepAttempts(db: DbClient, cutoff: number, limit: number): Promi
     .limit(limit)
   if (stale.length === 0) return 0
 
-  for (const row of stale) {
-    await db.delete(codeAiAttempts).where(eq(codeAiAttempts.id, row.id))
-  }
+  await db.delete(codeAiAttempts).where(
+    inArray(
+      codeAiAttempts.id,
+      stale.map((row) => row.id),
+    ),
+  )
   return stale.length
 }
 

@@ -45,7 +45,6 @@ import {
   WRAPPER_NODE_KINDS,
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { nodeRuns } from '../db/schema'
 import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
 import { decodeWrapperProgress } from './wrapperProgress'
 

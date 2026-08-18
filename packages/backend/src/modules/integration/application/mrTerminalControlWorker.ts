@@ -93,12 +93,16 @@ export class MrTerminalControlWorker {
 
   private claimNextDue(): EffectRow | null {
     const now = Date.now()
+    // RFC-311 (audit L3-11): the redundant outer `ne(status,'succeeded')` is
+    // dropped — the inner OR already enumerates the exact claimable statuses
+    // (pending/waiting-launches/retryable ∪ expired leased, all ≠ succeeded),
+    // and a `ne` predicate defeats status-index range planning on this 5s tick
+    // while succeeded history accumulates.
     const candidates = this.db
       .select()
       .from(webhookMrControlEffects)
       .where(
         and(
-          ne(webhookMrControlEffects.status, 'succeeded'),
           lte(webhookMrControlEffects.nextAttemptAt, now),
           or(
             inArray(webhookMrControlEffects.status, ['pending', 'waiting-launches', 'retryable']),

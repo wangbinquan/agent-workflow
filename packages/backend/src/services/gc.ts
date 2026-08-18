@@ -340,8 +340,20 @@ export async function runWorktreeGc(
       : 0
   const onlyMerged = gc.onlyMerged === true
 
+  // RFC-311 (audit L3-10): eight scalar columns — the hourly pass used to
+  // re-materialize every terminal task's FULL row (workflow_snapshot included)
+  // because skipped candidates never leave the candidate set.
   const candidates = await db
-    .select()
+    .select({
+      id: tasks.id,
+      worktreePath: tasks.worktreePath,
+      branch: tasks.branch,
+      baseBranch: tasks.baseBranch,
+      spaceKind: tasks.spaceKind,
+      repoCount: tasks.repoCount,
+      startedAt: tasks.startedAt,
+      finishedAt: tasks.finishedAt,
+    })
     .from(tasks)
     .where(
       and(

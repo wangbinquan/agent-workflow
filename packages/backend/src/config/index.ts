@@ -15,6 +15,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  statSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -40,9 +41,34 @@ const DEPRECATED_RUNTIME_HARDENING_KEYS = [
  * no filesystem mutation must use THIS, because `loadConfig` materializes
  * defaults on a fresh machine.
  */
+/** RFC-311 — mtime+size read cache. Half a dozen background loops call
+ *  loadConfig every tick (scheduled poll 30s, GC/archiver hourly, …), each
+ *  paying readFileSync + JSON.parse + full zod validation for a file that
+ *  rarely changes. In-process writers invalidate explicitly (saveConfigRaw);
+ *  external edits are caught by the stat probe. structuredClone keeps the
+ *  historical "every call returns a private object" contract. */
+const readConfigCache = new Map<string, { mtimeMs: number; size: number; config: Config }>()
+
+/** Exported for saveConfigRaw + tests; safe to call for any path. */
+export function invalidateReadConfigCache(path: string): void {
+  readConfigCache.delete(path)
+}
+
 export function readConfig(path: string): Config | null {
   assertConfigPath(path)
   if (!existsSync(path)) return null
+  let stat: { mtimeMs: number; size: number } | null = null
+  try {
+    stat = statSync(path)
+  } catch {
+    stat = null
+  }
+  if (stat !== null) {
+    const cached = readConfigCache.get(path)
+    if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      return structuredClone(cached.config)
+    }
+  }
 
   let raw: unknown
   try {
@@ -59,6 +85,13 @@ export function readConfig(path: string): Config | null {
   const parsed = ConfigSchema.safeParse(merged)
   if (!parsed.success) {
     throw new Error(`config: validation failed: ${JSON.stringify(parsed.error.issues)}`)
+  }
+  if (stat !== null) {
+    // Cache keyed on the PRE-read stat: a write racing between stat and read
+    // leaves a stale key that simply misses next call (an extra re-read, never
+    // stale data). The cached object is private — callers get clones.
+    readConfigCache.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, config: parsed.data })
+    return structuredClone(parsed.data)
   }
   return parsed.data
 }
@@ -126,6 +159,7 @@ export function saveConfigRaw(path: string, cfg: Config): void {
 
 function saveConfigValueAtomic(path: string, cfg: unknown): void {
   assertConfigPath(path)
+  invalidateReadConfigCache(path) // RFC-311: in-process writers bust the read cache
   mkdirSync(dirname(path), { recursive: true })
   const tmp = join(dirname(path), `.config.json.tmp-${process.pid}-${Date.now()}`)
   // Config may contain provider credentials; keep it private from other local

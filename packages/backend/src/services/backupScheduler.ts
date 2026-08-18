@@ -135,6 +135,8 @@ export interface BackupSchedulerOptions {
   retentionDays: number
   /** Impl-gate P2-6 — see PruneOptions.maxTotalBytes (0 = off). */
   maxTotalBytes?: number
+  /** RFC-311 (C4) — see PruneOptions.protectedKeepCount. */
+  protectedKeepCount?: number
   appHome?: string
 }
 
