@@ -19,10 +19,17 @@
 > 实测驱动修掉一个真坑——keyset 断点展开式在绑定参数下触发 TEMP B-TREE 全排序,翻页 197.5ms → 29.8ms（`822a20bf`）。
 > **三处缺口如实记账**：G1 过滤视图仍走旧穷举管线（10 万任务 68 秒 / 一条 SQL / 期间整站冻结;生产量级约 1~2 秒,
 > 建议下个 RFC 扩快路径）;G2 overview 50.7ms、workgroup 徽章 13.2ms 未达 10ms 口径;G3 归档器首轮清 backlog 需多轮 tick。
-> **待办**：PR-6 遗留大件（T19 终态任务自动归档〔用户已拍板方向,默认关〕/T20 维护入口/T21
-> prompt_text 外置）;/code work-items nextCursor 修复避让 RFC-310 前端批中;视觉 win32 基线随下一个 Windows 批。
+> **PR-6 ✅（T19 终态任务归档 = proposal §5 C1）**：`services/taskArchive.ts`（整树判据/manifest+JSONL 导出/
+> runs·logs 挪移/先落盘后删库/boot `.tmp-*` 两分支恢复/有界 sweeper，**默认关**）+ `POST /api/tasks/archive`
+> （`settings:write`，**dry-run 默认**）+ 设置页预览→二次确认入口 + `task_archive_audit`（migration 0182，刻意
+> 不进任务级联族）。测试驱动逮到两个真 bug 并锁定：①`retentionDays=0`（=关）不得被当成 cutoff 用（否则一次
+> 清空全部终态树），现 422；②`SETTINGS_CONFIG_SCOPE_KEYS.gc` 漏登记 4 个键 ⇒ 设置页改了保存被静默丢弃，补齐
+> 并新增 `tests/settings-scope-coverage.test.ts` 自动对账（已做变异检验）。顺带修 nav-memory-tab 的固定睡眠竞态
+> （d916451c Windows shard 3/3 唯一红）。
+> **待办**：T20 维护入口（opencode-stores 清理/freelist 提示/`db compact` CLI）/T21 prompt_text 外置;
+> /code work-items nextCursor 修复（RFC-310 PR-10 已落，可接手）;视觉 win32 基线随下一个 Windows 批。
 >
-> 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-19）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
 > 平台发布、review/CI/conflict 修复、`waiting-committer` / `ready-to-merge` 回退，直到外部 merged/closed；平台
 > **永不自动 merge/approve/resolve**。所有下一动作、员工与 Java/C++/polyglot ActionTemplate、重试/交人均由

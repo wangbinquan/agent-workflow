@@ -2,7 +2,12 @@
 
 > 技术设计见 [design.md](./design.md)，任务分解见 [plan.md](./plan.md)。
 >
-> 状态：**In Progress（2026-08-18 用户批准 D1–D12 并授权实现；实现前四项裁决见 design.md §19）**。
+> 状态：**Done（2026-08-19 交付完成）**。PR-0..PR-10 全部落地并推 main；`gate:local` 全绿、
+> hosted CI 本 RFC 面全绿。**首版不含（如实登记，见 plan.md §13a）**：conflict repair 的 Agent
+> 执行面（typed block `conflict-repair-agent-surface-not-wired`，report-only 模式完整可用）、
+> evidence retention GC 与 GB 级 nightly、out-of-order webhook 矩阵、浏览器级 visual regression、
+> verification/review 结果升 catalog fact、cutover preflight 的 per-repo dry probe；mission 列表
+> 分页与 `/code` work-items 翻页已移交 RFC-311。
 >
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
