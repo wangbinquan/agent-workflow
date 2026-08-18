@@ -2,6 +2,25 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🧭 **设计中 RFC（Draft，2026-08-18）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+> —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
+> 平台发布、review/CI/conflict 修复、`waiting-committer` / `ready-to-merge` 回退，直到外部 merged/closed；平台
+> **永不自动 merge/approve/resolve**。所有下一动作、员工与 Java/C++/polyglot ActionTemplate、重试/交人均由
+> versioned typed first-match policy 决定，Agent 不参与调度，只在 TaskEngine 唯一执行链内编辑授权业务文件并输出
+> nonce envelope。Agent no-Git/no-code-host 由只读 Git view、OS 写边界、空环境/无凭据、独立 workspace 验证和
+> whole-workspace fresh-session 回退强制；真实 diff/candidate/commit/CAS push/MR/comment/pipeline effect 全归平台。
+> 首版输入支持正文-only、文件-only、正文+文件和外部 ID；直接上传的每个文件必须指定仓库目标路径，同时进入只读
+> RequirementBundle 与 immutable RepositoryUploadPlan，由平台按 frozen baseline 形成 SeedChangeRef，并保证非
+> already-present 文件进入 candidate/commit。外部需求 ID 由 typed adapter 下载多文件到
+> `.agent-workflow/inputs/requirements/<bundleId>`；自建门禁把大日志
+> 流式落到 `.agent-workflow/pipeline/<bundleId>`，DB/prompt 只持 ref/digest。内部以 `development-automation`
+> 取代 `code-capability` 上层模型，跨 context 严格走 RFC-294 exact public/consumer-owned required ports，cutover
+> 不允许同一 MR 双 writer。三轮功能自审补齐了 requirement source 选择与问答闭集决策、new/adopt/attach MR、
+> polyglot 两段选择、`completed-no-change`、unknown/stale 规则停机、pipeline missing trigger、`tracking-only` 人工接管、
+> cancel/handoff transition fence 和 durable wait；用户补充后又纵向复核了上传目标 create/replace CAS、
+> preserve-upload/agent-editable、fresh 重建、首次 publish 后 seed 吸收、no-change、UI preview 与最终 commit 完整性。
+> **当前仅三件套设计，等待用户批准 D1–D12；无生产代码、schema、API 或 worker 改动。**
+
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：
 > ①「流程和模版两个页签什么关系」→ **它们本来就是同一件事被输入了两遍**（一遍是图、一遍是 JSON）。
