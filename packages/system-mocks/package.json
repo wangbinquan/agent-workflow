@@ -14,7 +14,8 @@
     "./tool": "./src/tool.ts",
     "./development/requirement-provider": "./src/development/requirement-provider.ts",
     "./development/pipeline-provider": "./src/development/pipeline-provider.ts",
-    "./development/requirement-adapter-cli": "./src/development/requirement-adapter-cli.ts"
+    "./development/requirement-adapter-cli": "./src/development/requirement-adapter-cli.ts",
+    "./development/pipeline-adapter-cli": "./src/development/pipeline-adapter-cli.ts"
   },
   "scripts": {
     "start": "bun run src/cli.ts",

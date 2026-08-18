@@ -36,6 +36,18 @@
 `AW_PORT_MY_PORT`（同上，保留名）、`AW_PORT_DIFF`（`backend/src/services/scriptPorts.ts`，
 diff 端口的免拷贝特例）。语义契约见 script 节点相关 RFC / 源码；此处只登记名字防漂移。
 
+### development pipeline adapter 上下文族（`backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts` 组装，RFC-310 PR-6）
+
+pipeline-gate adapter 子进程的最小 env 面（空环境构造 + 固定基础变量之外的叠加）：
+
+`AW_PIPELINE_HEAD`（采集/触发/重跑锚定的 MR head sha）、`AW_PIPELINE_TARGET`（collect 的
+target 引用）、`AW_PIPELINE_GATES`（collect/trigger 的 gate key CSV）、`AW_PIPELINE_GATE`
+（rerun 的单 gate key）、`AW_IDEMPOTENCY_KEY`（trigger/rerun 的平台幂等键，provider 幂等面
+与 response-lost adopt 的依据）、`AW_PIPELINE_MOCK_URL`（system-mocks 上游座席，仅测试/装配
+注入；`packages/system-mocks/src/development/pipeline-adapter-cli.ts` 消费，另有测试后门
+`AW_PIPELINE_FIXTURE_JSON` 喂本地 fixture 防「子进程→回环 HTTP」坑）。`AW_ADAPTER_SINK`/
+`AW_EXTERNAL_ID` 等 requirement 族沿用既有登记。
+
 ### 代码能力脚本上下文族（`backend/src/modules/code-capability/application/capabilityScriptRun.ts` 组装，RFC-304）
 
 本族有两类使用者，共用同一套装配（design D4 明令**不得**出现第二套脚本执行实现）：

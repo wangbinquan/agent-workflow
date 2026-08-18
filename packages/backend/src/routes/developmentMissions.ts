@@ -49,11 +49,19 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { buildDevelopmentDeliveryDeps } from '@/services/developmentDeliveryDeps'
+import {
+  buildDevelopmentDeliveryDeps,
+  buildDevelopmentPipelineDeps,
+} from '@/services/developmentDeliveryDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { ulid } from 'ulid'
 import type { AppDeps } from '@/server'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { pipelineEvidenceManifestV1Schema } from '@/modules/development-automation/domain/pipelineManifest'
+import {
+  EVIDENCE_READ_MAX_BYTES,
+  readEvidenceFileRange,
+} from '@/modules/development-automation/application/pipelineEvidenceRead'
 import { safeJsonOrEmpty } from '@/util/http'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -82,6 +90,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant(),
     ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
+    ...buildDevelopmentPipelineDeps(deps.db),
     // PR-4：路由实例与 daemon 实例注入同一形状的 runner（同 db 下语义等价；
     // SYSTEM_USER_ID——数字员工任务是 mission 自动化产物，不是 HTTP actor 的
     // 个人任务）。终态回调落 wake hint（deliveryKey 幂等），30s sweep 收取。
@@ -526,6 +535,88 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
         throw new NotFoundError('mission-not-found', 'mission not found')
       }
       return c.json({ items: getDecisionTrace(deps.db, c.req.param('id')) })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/missions/:id/pipeline-evidence/:sha256',
+      permissions: ['development-missions:read'],
+      tokenAccess: 'allow',
+      summary:
+        'Bounded ranged read of one pipeline evidence file (offset/limit, honest truncation)',
+    },
+    async (c) => {
+      const missionId = c.req.param('id')
+      if (getMissionDetail(deps.db, missionId) === null) {
+        throw new NotFoundError('mission-not-found', 'mission not found')
+      }
+      // bundle↔mission 归属经 cells：collect arm（T65/T68）落
+      // `__pipeline.manifestRef`（manifest 的 evidence blob ref）。缺失 =
+      // 尚未采集，404 而非空 200。
+      const mission = missionStore.getMission(missionId)
+      const cells =
+        mission?.requirementBundleRef == null
+          ? null
+          : snapshots.getCells(mission.requirementBundleRef)
+      const manifestRefCell = cells?.['__pipeline.manifestRef']
+      const manifestRef =
+        manifestRefCell !== undefined &&
+        manifestRefCell.state === 'known' &&
+        typeof manifestRefCell.value === 'string'
+          ? manifestRefCell.value
+          : null
+      if (manifestRef === null) {
+        throw new NotFoundError(
+          'evidence-not-collected',
+          'no pipeline evidence has been collected for this mission yet',
+        )
+      }
+      const manifestBlob = Bun.file(automation.evidence.blobPath(manifestRef))
+      if (!(await manifestBlob.exists())) {
+        throw new NotFoundError('evidence-blob-missing', 'pipeline manifest blob is missing')
+      }
+      let manifestJson: unknown
+      try {
+        manifestJson = JSON.parse(await manifestBlob.text())
+      } catch {
+        throw new NotFoundError('pipeline-manifest-invalid', 'stored pipeline manifest is invalid')
+      }
+      const manifest = pipelineEvidenceManifestV1Schema.safeParse(manifestJson)
+      if (!manifest.success) {
+        throw new NotFoundError('pipeline-manifest-invalid', 'stored pipeline manifest is invalid')
+      }
+      // 只许读本 mission bundle 点名的内容 hash（blob 池全局去重，无此层
+      // 归属检查即任意 mission 可探全池——requirement-files 同款纪律）。
+      const sha256 = c.req.param('sha256')
+      const entry = manifest.data.files.find((file) => file.sha256 === sha256)
+      if (entry === undefined) {
+        throw new NotFoundError(
+          'pipeline-evidence-file-not-found',
+          'the hash is not part of this mission pipeline evidence bundle',
+        )
+      }
+      const offset = Number(c.req.query('offset') ?? '0')
+      const limit = Number(c.req.query('limit') ?? String(EVIDENCE_READ_MAX_BYTES))
+      const read = readEvidenceFileRange(
+        { blobPath: (ref) => automation.evidence.blobPath(ref) },
+        { sha256, offsetBytes: offset, limitBytes: limit },
+      )
+      if (!read.ok) {
+        if (read.code === 'range-invalid') {
+          throw new ValidationError('range-invalid', 'offset/limit must be valid integers')
+        }
+        throw new NotFoundError('evidence-blob-missing', 'evidence blob is missing on disk')
+      }
+      return c.body(read.bytes.slice().buffer as ArrayBuffer, 200, {
+        'content-type': entry.mediaType,
+        'content-length': String(read.bytes.byteLength),
+        'x-evidence-total-bytes': String(read.totalBytes),
+        'x-evidence-truncated': read.truncated ? 'true' : 'false',
+        ...(read.nextOffset === null ? {} : { 'x-evidence-next-offset': String(read.nextOffset) }),
+      })
     },
   )
 }

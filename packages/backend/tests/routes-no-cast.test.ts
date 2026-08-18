@@ -53,6 +53,11 @@ const FILE_LINE_ALLOWLIST = new Set<string>([
   // they're listed so new code doesn't follow the same pattern.
   // RFC-284 T5 改名同步：safeJson → safeJsonOrEmpty（拷贝收口，cast 本身原样待偿）。
   'oidc-auth.ts:const body = (await safeJsonOrEmpty(c.req.raw)) as Record<string, unknown>',
+  // RFC-310 PR-6 T67: Uint8Array.slice().buffer is ArrayBuffer|SharedArrayBuffer in
+  // lib.dom typing; the slice() guarantees a fresh non-shared ArrayBuffer at runtime,
+  // a narrowing TS cannot infer. Not a Zod bypass (bytes come from the platform's
+  // own evidence blob, not user input).
+  'developmentMissions.ts:return c.body(read.bytes.slice().buffer as ArrayBuffer, 200, {',
   // (RFC-099: the tasks.ts assignments PATCH handler that carried the same
   // cast was removed along with the node-assignment mechanism.)
   // (RFC-218: the multipart FormData-entries cast moved out of routes/tasks.ts

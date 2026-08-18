@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { handleCodeHostApi } from './code-host/stateful-http'
+import { PipelineProviderMock, type MockPipelineSeed } from './development/pipeline-provider'
 import {
   RequirementProviderMock,
   type MockRequirementSeed,
@@ -56,6 +57,7 @@ class SystemMockGateway {
   readonly #journal = new RequestJournal()
   readonly #faults = new FaultRegistry()
   readonly #developmentRequirement = new RequirementProviderMock()
+  readonly #developmentPipeline = new PipelineProviderMock()
   readonly #mcp = new McpHttpMock()
   readonly #server: Server
   readonly #controlToken = randomBytes(24).toString('base64url')
@@ -174,6 +176,14 @@ class SystemMockGateway {
       response.end(JSON.stringify({ error: 'unknown-route' }))
       return
     }
+    if (service === 'development-pipeline') {
+      const stripped = url.pathname.replace(/^\/development-pipeline/, '') || '/'
+      if (this.#developmentPipeline.handle(request, response, stripped, body.toString('utf8')))
+        return
+      response.writeHead(404, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: 'unknown-route' }))
+      return
+    }
     if (service === 'gitlab' || service === 'github') {
       await handleCodeHostApi({
         provider: service,
@@ -237,6 +247,7 @@ class SystemMockGateway {
       this.#registries.reset()
       this.#externalHttp.reset()
       this.#developmentRequirement.reset()
+      this.#developmentPipeline.reset()
       this.#faults.clear()
       this.#journal.clear()
       response.writeHead(204)
@@ -271,6 +282,12 @@ class SystemMockGateway {
     }
     if (path === '/development-requirement/seed' && request.method === 'POST') {
       this.#developmentRequirement.seed(parseJsonBody<MockRequirementSeed>(body))
+      response.writeHead(204)
+      response.end()
+      return
+    }
+    if (path === '/development-pipeline/seed' && request.method === 'POST') {
+      this.#developmentPipeline.seed(parseJsonBody<MockPipelineSeed>(body))
       response.writeHead(204)
       response.end()
       return
@@ -364,6 +381,7 @@ function endpointsFor(baseUrl: string): SystemMockEndpoints {
     githubApiBaseUrl: `${baseUrl}/github/api/v3`,
     externalHttpBaseUrl: `${baseUrl}/external`,
     developmentRequirementBaseUrl: `${baseUrl}/development-requirement`,
+    developmentPipelineBaseUrl: `${baseUrl}/development-pipeline`,
     oauthIssuerUrl: `${baseUrl}/oauth`,
     oidcIssuerUrl: `${baseUrl}/oidc`,
     mcpStreamableUrl: `${baseUrl}/mcp`,
@@ -387,6 +405,7 @@ function environmentFor(
     AW_SYSTEM_MOCK_GITHUB_API_BASE_URL: endpoints.githubApiBaseUrl,
     AW_SYSTEM_MOCK_EXTERNAL_HTTP_BASE_URL: endpoints.externalHttpBaseUrl,
     AW_REQUIREMENT_MOCK_URL: endpoints.developmentRequirementBaseUrl,
+    AW_PIPELINE_MOCK_URL: endpoints.developmentPipelineBaseUrl,
     AW_SYSTEM_MOCK_OAUTH_ISSUER_URL: endpoints.oauthIssuerUrl,
     AW_SYSTEM_MOCK_OIDC_ISSUER_URL: endpoints.oidcIssuerUrl,
     AW_SYSTEM_MOCK_MCP_URL: endpoints.mcpStreamableUrl,
@@ -402,6 +421,7 @@ function serviceFor(path: string): SystemMockService {
   if (path.startsWith('/gitlab/api/v4')) return 'gitlab'
   if (path.startsWith('/github/api/v3')) return 'github'
   if (path.startsWith('/development-requirement')) return 'development-requirement'
+  if (path.startsWith('/development-pipeline')) return 'development-pipeline'
   if (path.startsWith('/external')) return 'external'
   if (path.startsWith('/oauth')) return 'oauth'
   if (path.startsWith('/oidc')) return 'oidc'

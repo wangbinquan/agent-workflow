@@ -20,7 +20,7 @@ import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 
 import { sha256Hex } from '@/util/hash'
-import { requirementBundlePath } from '@agent-workflow/shared'
+import { pipelineBundlePath, requirementBundlePath } from '@agent-workflow/shared'
 import {
   canonicalDigest,
   canonicalStringify,
@@ -91,6 +91,8 @@ interface AttemptPreState {
     readonly repositoryModuleIds?: readonly string[]
     /** PR-5 T58：review 对拍锚（launch 冻结）。 */
     readonly candidateRef?: string
+    /** PR-6 T69：pipeline.repair 的 issue 闭集（launch 冻结）。 */
+    readonly pipelineIssueRefs?: readonly string[]
   }
 }
 
@@ -136,6 +138,15 @@ export interface LaunchAgentAttemptInput {
   readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
   /** T58 review 的对拍锚：launch 时冻结的当前 candidateRef（cells 投影）。 */
   readonly candidateRef?: string
+  /** PR-6 T69：pipeline.repair 的 evidence bundle 挂载 + issue 闭集（arm 从
+   *  cells/manifest 算好传入；非 repair 动作缺省）。 */
+  readonly pipelineBundle?: {
+    readonly bundleId: string
+    readonly manifestDigest: string
+    readonly fileCount: number
+    readonly totalBytes: number
+  }
+  readonly pipelineIssueRefs?: readonly string[]
   /** fresh rerun 的同输入合同：manifest.missionRevision 冻结在 action 创建时
    *  （mission.revision 随结算前进，不冻结会让 rerun 的 inputDigest 漂移）。 */
   readonly missionRevisionPin?: number
@@ -205,15 +216,25 @@ export async function launchAgentAttempt(
   const requirementSource = sources
     .filter((s) => s.bundleRef !== null && s.state === 'materialized')
     .sort((a, b) => b.generation - a.generation)[0]
-  const bundles =
-    requirementSource === undefined
+  const bundles = [
+    ...(requirementSource === undefined
       ? []
       : [
           {
             bundleId: requirementSource.bundleRef!,
             mountPath: requirementBundlePath(requirementSource.bundleRef!),
           },
-        ]
+        ]),
+    // PR-6 T69：repair 动作把 pinned pipeline bundle 只读挂进 workspace。
+    ...(input.pipelineBundle === undefined
+      ? []
+      : [
+          {
+            bundleId: input.pipelineBundle.bundleId,
+            mountPath: pipelineBundlePath(input.pipelineBundle.bundleId),
+          },
+        ]),
+  ]
 
   const workspace = await ports.actionWorkspace!.materialize({
     baselineRepoPath: baseline.repoPath,
@@ -272,7 +293,16 @@ export async function launchAgentAttempt(
               originalEvidenceFileId: e.fileId,
             })),
           },
-    pipelineBundle: null,
+    pipelineBundle:
+      input.pipelineBundle === undefined
+        ? null
+        : {
+            bundleId: input.pipelineBundle.bundleId,
+            manifestDigest: input.pipelineBundle.manifestDigest,
+            mountPath: pipelineBundlePath(input.pipelineBundle.bundleId),
+            fileCount: input.pipelineBundle.fileCount,
+            totalBytes: input.pipelineBundle.totalBytes,
+          },
     feedbackSnapshot: null,
     verificationEvidence: null,
     writablePathClasses: [],
@@ -380,6 +410,9 @@ export async function launchAgentAttempt(
       requirementItemRefs,
       repositoryModuleIds,
       ...(input.candidateRef === undefined ? {} : { candidateRef: input.candidateRef }),
+      ...(input.pipelineIssueRefs === undefined
+        ? {}
+        : { pipelineIssueRefs: input.pipelineIssueRefs }),
     },
   }
   const preSnapshotRef = await ports.attemptContext!.save(JSON.stringify(preState))
@@ -698,6 +731,9 @@ export async function collectAgentAttempt(
       ...(preState.closedRefs.candidateRef === undefined
         ? {}
         : { candidateRef: preState.closedRefs.candidateRef }),
+      ...(preState.closedRefs.pipelineIssueRefs === undefined
+        ? {}
+        : { pipelineIssueRefs: preState.closedRefs.pipelineIssueRefs }),
     },
   })
   if (!semantic.ok) {

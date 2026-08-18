@@ -246,15 +246,52 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 
 | 编号 | 任务                                                                                                               | 依赖        | 状态 |
 | ---- | ------------------------------------------------------------------------------------------------------------------ | ----------- | ---- |
-| T63  | PipelineEvidence required port + integration adapter/connection/secret projection                                  | T16,T32     | ⏳   |
-| T64  | head/target pre/post fence + required-gate completeness                                                            | T26,T63     | ⏳   |
-| T65  | PipelineEvidenceManifestV1、safe streaming import、`.agent-workflow/pipeline/<bundleId>` read-only materialization | T34,T63,T64 | ⏳   |
-| T66  | multi-gate status/retryability/failure-category codecs；unknown/partial/unavailable 不通过                         | T10,T65     | ⏳   |
-| T67  | bounded/ranged Agent evidence read，prompt/DB/event size guard                                                     | T65         | ⏳   |
-| T68  | pipeline observe/trigger-if-missing/rerun effects、idempotency、head/独立预算                                      | T28,T66     | ⏳   |
-| T69  | `pipeline.repair` Agent capability + issue-ref validator + new-head evidence invalidation                          | T47,T59,T66 | ⏳   |
-| T70  | runnable provider mock：大流、partial/outage/head race/retry response lost                                         | T63-T69     | ⏳   |
-| T71  | memory/backpressure/retention tests + GB-scale nightly/soak fixture                                                | T65,T67,T70 | ⏳   |
+| T63  | PipelineEvidence required port + integration adapter/connection/secret projection                                  | T16,T32     | ✅   |
+| T64  | head/target pre/post fence + required-gate completeness                                                            | T26,T63     | ✅   |
+| T65  | PipelineEvidenceManifestV1、safe streaming import、`.agent-workflow/pipeline/<bundleId>` read-only materialization | T34,T63,T64 | ✅   |
+| T66  | multi-gate status/retryability/failure-category codecs；unknown/partial/unavailable 不通过                         | T10,T65     | ✅   |
+| T67  | bounded/ranged Agent evidence read，prompt/DB/event size guard                                                     | T65         | ✅   |
+| T68  | pipeline observe/trigger-if-missing/rerun effects、idempotency、head/独立预算                                      | T28,T66     | ✅   |
+| T69  | `pipeline.repair` Agent capability + issue-ref validator + new-head evidence invalidation                          | T47,T59,T66 | ✅   |
+| T70  | runnable provider mock：大流、partial/outage/head race/retry response lost                                         | T63-T69     | ✅   |
+| T71  | memory/backpressure/retention tests + GB-scale nightly/soak fixture                                                | T65,T67,T70 | 🚧   |
+
+### PR-6 交付注记（2026-08-18）
+
+- **编排链落位**：`application/pipelineEvidenceChain.ts`——`redispatchPipeline` 在「MR 已建 + policy 配 gates +
+  静止态（block / wait(mr-care-not-wired)）」时接管：evidence 缺/head 漂移/超龄 → `collect-pipeline-evidence`
+  （两次 head fence：mrEffects.observe 前后各一读 + `judgePipelineFence` 判定，漂移丢弃快照 + 30s backoff
+  cells（`__pipeline.fenceRetryAt`）重采，不 block 不打 provider 风暴）；missing required gate 且
+  trigger-if-missing → `trigger-pipeline`；failing 且 retryability safe + 类别 ⊆ rerunnableCategories + 预算内 →
+  `rerun-pipeline`（exact runRef）；在跑 → 诚实 wait；全过 → 放行（readiness/PR-7 输入）；不可重跑失败 → 规则
+  可路由 `pipeline.repair`（catalog facts 可见），无规则 block(`pipeline-gates-failing:<keys>`)。trigger/rerun 走
+  effects 台账（`PIPELINE_EFFECT_KINDS` 同发布链 guard 豁免；响应丢失由 adapter adopt 语义兜底）；触发/重跑后
+  `__pipeline.collectedAt=0` 强制 recollect。
+- **T63**：integration `developmentAdapterRunner` 扩 pipeline 三 op（`--collect-pipeline/--trigger-pipeline/
+  --rerun-pipeline` + `AW_PIPELINE_*` env）+ `developmentPipelineAdapter`（purpose/operations 运行时对拍，
+  `operation-not-declared` typed 拒）+ `composition/pipelineEvidence.ts`；DA 端口胶水在装配点
+  （`services/developmentDeliveryDeps.ts` buildDevelopmentPipelineDeps：sink 生命周期归平台、receipt 压平）。
+- **T64/T66 判定语义**（fork Q 裁决，测试锁定）：fence 优先级按可达性 `head-moved > target-moved >
+  expected-head-mismatch > provider-head-mismatch`（指令原排序会让 head-moved 数学不可达）；skipped 归
+  failing（非 pass 非进行中的 required gate 一律 failing）；queued/running 两 set 都不进（由 anyRunning+wait
+  兜）；policy required 集是权威（manifest.required 只是 adapter 转述）。provider 无 head 绑定 ⇒ envelope
+  providerHeadSha=null ⇒ completeness 强制 partial（fence 跳过 providerHead 对拍，facts 面恒不 pass）。
+- **T65**：`infrastructure/pipelineEvidenceImport.ts`——文件全集以 `importStagedTree` safe-walk 为准（digest
+  平台重算、envelope 未提及文件照收、引用缺失/ fileId 冲突整体拒）；manifest schema 自检 + canonical digest +
+  本体内容寻址入池（cells `__pipeline.manifestRef`）。target sha 读面属 T72：manifest.targetSha 缺真值时
+  全零哨兵占位（fence 以分支名对拍「引用未变」），T72 后升级。
+- **T67**：`readEvidenceFileRange`（4MiB clamp、截断 receipt totalBytes/nextOffset 不伪装完整）+
+  `GET /:id/pipeline-evidence/:sha256`（manifest 白名单外 404、`x-evidence-*` 三响应头即续读协议）。
+- **T69**：repair 的 launch 注入（pinned bundle 只读挂载 `.agent-workflow/pipeline/<bundleId>` + issue 闭集
+  `<gateKey>#<runRef>` 冻结进 pre-state → collect 侧 validator `issue-ref-outside-bundle` 对拍）；新 head
+  失效走机制自洽（repair→新 candidate→新 push→MR head 变→redispatch 强制 recollect）。
+- **T70**：system-mocks pipeline provider 补全（trigger 幂等/response-lost adopt/rerun 递增/running 409/
+  outage/partial/head-race/64MB 大流）+ `pipeline-adapter-cli`（`AW_PIPELINE_FIXTURE_JSON` 测试后门防
+  「子进程→回环 HTTP」坑）+ suite gateway 集成（`AW_PIPELINE_MOCK_URL`）。
+- **T71 部分（🚧）**：memory/backpressure 已覆盖（64MB 流式断言 + importer budget 拒收）；**retention GC 未
+  实现**——policy `retention.*TtlDays` 目前无消费者，evidence 内容寻址池只增不减（完整 GC 需要全池引用
+  扫描，工程量独立）；GB-scale nightly/soak fixture 未建。两项归 PR-10 收口或独立 RFC，呈用户知悉。
+- **多 provider 路由**：员工 `pipelineProviders` 首版取第一个绑定（providerKey→gate 映射属 PR-7+ 配置面）。
 
 ## 9. PR-7：完整 MR care 与 terminal tracking
 

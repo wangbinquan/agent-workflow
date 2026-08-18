@@ -198,6 +198,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   // RFC-310 PR-3 — requirement bundle 读面 / 平台答复 / 外部源 refresh。
   { method: 'GET', path: '/api/code/missions/:id/requirement-manifest' },
   { method: 'GET', path: '/api/code/missions/:id/requirement-files/:sha256' },
+  { method: 'GET', path: '/api/code/missions/:id/pipeline-evidence/:sha256' },
   { method: 'POST', path: '/api/code/missions/:id/answers' },
   { method: 'POST', path: '/api/code/missions/:id/confirm-no-change' },
   { method: 'POST', path: '/api/code/missions/:id/source-refresh/preview' },

@@ -87,6 +87,17 @@
 > 全真件打 system-mock（真 collector/workspace/candidate/verification 子进程/commit/CAS push/mrEnsure→mock GitLab，
 > mock 侧断言 MR+分支真实存在）。新增坑：部分开发机拦「子进程→回环 HTTP」（git/curl 超时而同进程 fetch 通）——
 > E2E git 面走 mock 磁盘 bare 仓路径，已记 dev-gotchas。PR-4 三缺口顺延 PR-6/专项（plan.md 交付注记）。
+> **PR-6（T63–T71，T71 部分）已完成**：PipelineEvidence 与自建门禁。fork P：integration adapter 三 op
+> （collect/trigger/rerun + purpose/operations 运行时对拍）+ system-mocks provider mock 补全（trigger 幂等/
+> response-lost adopt/outage/partial/head-race/64MB 流）+ pipeline-adapter-cli。fork Q：`pipelineFacts`
+> （catalog 六 leaf 投影 + 两次 head fence 判定，fence 优先级按可达性重排、skipped 归 failing、policy required
+> 集为权威）+ bounded ranged read（4MiB clamp + 截断 receipt + HTTP 面三响应头续读协议）。主 session：
+> `pipelineEvidenceImport`（safe-walk 为准、digest 平台重算、fileId 冲突整体拒、manifest 内容寻址入池）+
+> `pipelineEvidenceChain`（redispatch 接管 watching 静止态：collect→trigger→rerun→repair 路由/放行；fence
+> 失败丢弃快照 + backoff cells 重采；trigger/rerun 走 effects 台账 + 触发后强制 recollect）+ repair launch
+> 注入（pinned bundle 挂载 + `gateKey#runRef` issue 闭集）+ 装配（composition pipelineImport 内绑、
+> pipelineEvidence 装配点胶水）。**T71 呈报**：retention GC 未实现（policy retention 字段无消费者、evidence
+> 池只增不减）、GB-scale nightly fixture 未建——归 PR-10/独立 RFC。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

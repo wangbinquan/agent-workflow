@@ -5,6 +5,7 @@ export const SYSTEM_MOCK_SERVICES = [
   'github',
   'external',
   'development-requirement', // RFC-310 自建需求系统 mock
+  'development-pipeline', // RFC-310 自建流水线门禁 mock（PR-6 T70）
   'oauth',
   'oidc',
   'mcp',
@@ -58,6 +59,8 @@ export interface SystemMockEndpoints {
   externalHttpBaseUrl: string
   /** RFC-310 —— 自建需求系统 mock（adapter CLI 的上游）。 */
   developmentRequirementBaseUrl: string
+  /** RFC-310 —— 自建流水线门禁 mock（pipeline adapter CLI 的上游）。 */
+  developmentPipelineBaseUrl: string
   oauthIssuerUrl: string
   oidcIssuerUrl: string
   mcpStreamableUrl: string

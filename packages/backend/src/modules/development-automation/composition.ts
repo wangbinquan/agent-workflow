@@ -30,6 +30,7 @@ import type {
   CandidateDeliveryPort,
   ChangeCandidatePort,
   MrEffectsPort,
+  PipelineEvidencePort,
   ReconcilerPorts,
   RepoRemotePort,
 } from './application/ports/reconcilerPorts'
@@ -68,6 +69,14 @@ import { verificationProfileContentSchema } from './domain/verificationProfile'
 import { readUploadPlan } from './infrastructure/sqliteUploadPlanStore'
 import { createSqliteUploadSessionStore } from './infrastructure/sqliteUploadSessionStore'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
+import { createPipelineImportAdapter } from './infrastructure/pipelineEvidenceImport'
+
+/** pipeline evidence 平台收编上限（adapter outputBudget 之外的最后防线）。 */
+const PIPELINE_IMPORT_BUDGET = {
+  maxFiles: 10_000,
+  maxFileBytes: 8 * 1024 * 1024 * 1024,
+  maxTotalBytes: 16 * 1024 * 1024 * 1024,
+} as const
 
 export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
@@ -100,6 +109,8 @@ export function composeDevelopmentAutomation(deps: {
   readonly repoRemote?: RepoRemotePort
   /** integration 模块组装的 code-host MR effects；不注入 = ensure-MR 诚实 blocked。 */
   readonly mrEffects?: MrEffectsPort
+  /** integration 模块组装的 pipeline provider 执行面；不注入 = pipeline 诚实 blocked。 */
+  readonly pipelineEvidence?: PipelineEvidencePort
 }): DevelopmentAutomationModule {
   const now = (): number => Date.now()
   const store = createSqliteMissionStore(deps.db)
@@ -170,6 +181,8 @@ export function composeDevelopmentAutomation(deps: {
     uploadPublication: {
       record: (input) => recordUploadPublicationReceipt(deps.db, input),
     },
+    ...(deps.pipelineEvidence === undefined ? {} : { pipelineEvidence: deps.pipelineEvidence }),
+    pipelineImport: createPipelineImportAdapter(evidence, PIPELINE_IMPORT_BUDGET),
   }
   const reconcileDeps: ReconcileDeps = { store, lookup, snapshots, ports, now }
 

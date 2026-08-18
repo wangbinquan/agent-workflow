@@ -243,6 +243,18 @@ const fakeRemote: RepoRemotePort = {
 
 function fakeMr(created = true): MrEffectsPort {
   return {
+    async observe() {
+      return {
+        ok: true,
+        observation: {
+          mrRef: '7',
+          state: 'opened',
+          sourceSha: COMMIT,
+          targetBranch: 'main',
+          webUrl: null,
+        },
+      }
+    },
     async ensure(_repositoryId, _input) {
       return {
         ok: true,

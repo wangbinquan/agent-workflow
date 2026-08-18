@@ -366,6 +366,95 @@ export interface VerificationExecutionPort {
   }>
 }
 
+/** PR-6 T63 —— pipeline collect envelope 的端口 DTO（integration 词表结构同形）。 */
+export interface PipelineCollectEnvelopeDto {
+  readonly providerKey: string
+  /** provider 无 head 绑定（partial）时为 null。 */
+  readonly providerHeadSha: string | null
+  readonly targetSha: string | null
+  readonly completeness: 'complete' | 'partial'
+  readonly gates: readonly {
+    readonly gateKey: string
+    readonly required: boolean
+    readonly status:
+      | 'queued'
+      | 'running'
+      | 'pass'
+      | 'fail'
+      | 'canceled'
+      | 'skipped'
+      | 'unknown'
+      | 'unavailable'
+    readonly runRef: string
+    readonly attempt: number
+    readonly finishedAt: string | null
+    readonly retryability: 'safe' | 'unsafe' | 'unknown'
+    readonly failureCategories: readonly string[]
+    readonly files: readonly { readonly fileId: string; readonly relativePath: string }[]
+  }[]
+  readonly redaction: 'complete' | 'failed'
+}
+
+/** PR-6 T63 —— pipeline provider 执行面（integration adapter 结构同形注入）。 */
+export interface PipelineEvidencePort {
+  collect(input: {
+    readonly adapterBindingRef: string
+    readonly headSha: string
+    readonly targetSha: string
+    readonly gateKeys: readonly string[]
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly envelope: PipelineCollectEnvelopeDto
+        readonly stagedRoot: string
+        cleanup(): void
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+  trigger(input: {
+    readonly adapterBindingRef: string
+    readonly headSha: string
+    readonly gateKeys: readonly string[]
+    readonly idempotencyKey: string
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly runRef: string
+        readonly providerReceiptRef: string
+        readonly adopted: boolean
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+  rerun(input: {
+    readonly adapterBindingRef: string
+    readonly runRef: string
+    readonly gateKey: string
+    readonly headSha: string
+    readonly idempotencyKey: string
+  }): Promise<
+    | {
+        readonly ok: true
+        readonly runRef: string
+        readonly attempt: number
+        readonly providerReceiptRef: string
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+}
+
+/** PR-6 T65 —— staged sink → manifest 的收编面（infrastructure importer 注入）。 */
+export interface PipelineImportPort {
+  import(input: {
+    readonly stagedRoot: string
+    readonly envelope: PipelineCollectEnvelopeDto
+    readonly expectedHeadSha: string
+    readonly expectedTargetSha: string
+  }): Promise<
+    | { readonly ok: true; readonly manifestJson: string; readonly manifestRef: string }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
+}
+
 /** PR-5 T59 —— upload plan 的 publication receipt 落账（push 即 published）。 */
 export interface UploadPublicationPort {
   record(input: {
@@ -404,6 +493,23 @@ export interface MrEffectsPort {
       }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
+  /** PR-6：pipeline fence 的 MR head/target 读面（单次 mr.get 观察）。 */
+  observe(
+    repositoryId: string,
+    mrRef: string,
+  ): Promise<
+    | {
+        readonly ok: true
+        readonly observation: {
+          readonly mrRef: string
+          readonly state: 'opened' | 'merged' | 'closed'
+          readonly sourceSha: string | null
+          readonly targetBranch: string | null
+          readonly webUrl: string | null
+        }
+      }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
 }
 
 export interface ReconcilerPorts {
@@ -426,4 +532,6 @@ export interface ReconcilerPorts {
   readonly verificationExecution?: VerificationExecutionPort
   readonly mrEffects?: MrEffectsPort
   readonly uploadPublication?: UploadPublicationPort
+  readonly pipelineEvidence?: PipelineEvidencePort
+  readonly pipelineImport?: PipelineImportPort
 }

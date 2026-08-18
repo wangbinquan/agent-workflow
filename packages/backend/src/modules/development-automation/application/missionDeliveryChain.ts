@@ -214,7 +214,7 @@ type EffectClaim =
  * 面不自动复活；prepared/dispatched 校验 intent digest（载荷不落表，重建后
  * 对拍——漂移即 fail）后（重）执行。
  */
-function claimDeliveryEffect(
+export function claimDeliveryEffect(
   deps: DeliveryChainDeps,
   mission: MissionRow,
   input: {

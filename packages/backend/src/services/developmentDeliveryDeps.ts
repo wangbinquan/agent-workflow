@@ -9,7 +9,14 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
-import type { RepoRemotePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
+import type {
+  PipelineEvidencePort,
+  RepoRemotePort,
+} from '@/modules/development-automation/application/ports/reconcilerPorts'
+import { composePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   composeDevelopmentMrEffects,
   matchRepoProvider,
@@ -62,4 +69,68 @@ export function buildDevelopmentDeliveryDeps(
     },
   })
   return { repoRemote, mrEffects }
+}
+
+/**
+ * PR-6 T63/T68 —— integration pipeline 执行面 → DA 结构同形端口的装配胶水：
+ * sink 生命周期归平台（collect 的 cleanup 交给消费侧、trigger/rerun 即用即弃）、
+ * AdapterFailureReceipt 压平为 code/detail。
+ */
+export function buildDevelopmentPipelineDeps(db: DbClient): {
+  readonly pipelineEvidence: PipelineEvidencePort
+} {
+  const runner = composePipelineEvidenceRunner(db)
+  const flat = (failure: { code: string; remediation: string }) => ({
+    ok: false as const,
+    code: failure.code,
+    detail: failure.remediation,
+  })
+  return {
+    pipelineEvidence: {
+      async collect(input) {
+        const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-sink-'))
+        const out = await runner.collect({ ...input, sinkPath: parent })
+        if (!out.ok) {
+          rmSync(parent, { recursive: true, force: true })
+          return flat(out.failure)
+        }
+        return {
+          ok: true,
+          envelope: out.envelope,
+          stagedRoot: parent,
+          cleanup: () => rmSync(parent, { recursive: true, force: true }),
+        }
+      },
+      async trigger(input) {
+        const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-trigger-'))
+        try {
+          const out = await runner.trigger({ ...input, sinkPath: parent })
+          if (!out.ok) return flat(out.failure)
+          return {
+            ok: true,
+            runRef: out.envelope.runRef,
+            providerReceiptRef: out.envelope.providerReceiptRef,
+            adopted: out.envelope.adopted,
+          }
+        } finally {
+          rmSync(parent, { recursive: true, force: true })
+        }
+      },
+      async rerun(input) {
+        const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-rerun-'))
+        try {
+          const out = await runner.rerun({ ...input, sinkPath: parent })
+          if (!out.ok) return flat(out.failure)
+          return {
+            ok: true,
+            runRef: out.envelope.runRef,
+            attempt: out.envelope.attempt,
+            providerReceiptRef: out.envelope.providerReceiptRef,
+          }
+        } finally {
+          rmSync(parent, { recursive: true, force: true })
+        }
+      },
+    },
+  }
 }

@@ -76,6 +76,86 @@ export const collectAnswersEnvelopeSchema = z
   })
   .strict()
 
+// ---- pipeline 三 op envelope（PR-6 T63；design §6.1/§6.5）----------------
+// gate status/retryability 词表与 development-automation domain/pipelineManifest.ts
+// 的 gateStatusSchema 同词——跨 context 各自持有（rfc294 preflight 禁止反向
+// import；两边由 backend 测试以样本配对锁定）。adapter stdout 只报文件描述符
+// （relativePath/fileId），实体写进 sink；平台 importer 重新 walk sink 算真
+// digest，adapter 自报 digest/bytes 不作数，所以 envelope 不携带它们。
+const pipelineGateStatus = z.enum([
+  'queued',
+  'running',
+  'pass',
+  'fail',
+  'canceled',
+  'skipped',
+  'unknown',
+  'unavailable',
+])
+const sha40 = z.string().regex(/^[0-9a-f]{40}$/)
+
+export const pipelineCollectEnvelopeSchema = z
+  .object({
+    protocol: z.literal('aw-adapter@1'),
+    operation: z.literal('pipeline.collect'),
+    providerKey: z.string().min(1).max(200),
+    /** provider 无法提供 head 绑定（partial）时为 null——fence 恒不判 pass。 */
+    providerHeadSha: sha40.nullable(),
+    targetSha: sha40.nullable(),
+    completeness: z.enum(['complete', 'partial']),
+    gates: z
+      .array(
+        z
+          .object({
+            gateKey: z.string().min(1).max(200),
+            required: z.boolean(),
+            status: pipelineGateStatus,
+            runRef: z.string().min(1).max(200),
+            attempt: z.number().int().min(1),
+            finishedAt: z.string().datetime({ offset: true }).nullable(),
+            retryability: z.enum(['safe', 'unsafe', 'unknown']),
+            failureCategories: z.array(z.string().min(1).max(100)).max(50),
+            files: z
+              .array(
+                z
+                  .object({
+                    fileId: z.string().min(1).max(200),
+                    relativePath: z.string().min(1).max(1024),
+                  })
+                  .strict(),
+              )
+              .max(1000),
+          })
+          .strict(),
+      )
+      .max(200),
+    redaction: z.enum(['complete', 'failed']),
+  })
+  .strict()
+
+export const pipelineTriggerEnvelopeSchema = z
+  .object({
+    protocol: z.literal('aw-adapter@1'),
+    operation: z.literal('pipeline.trigger'),
+    providerReceiptRef: z.string().min(1).max(200),
+    runRef: z.string().min(1).max(200),
+    headSha: sha40,
+    /** true = 按 idempotencyKey 查到既有 run 并 adopt（未再造第二个）。 */
+    adopted: z.boolean(),
+  })
+  .strict()
+
+export const pipelineRerunEnvelopeSchema = z
+  .object({
+    protocol: z.literal('aw-adapter@1'),
+    operation: z.literal('pipeline.rerun'),
+    providerReceiptRef: z.string().min(1).max(200),
+    runRef: z.string().min(1).max(200),
+    attempt: z.number().int().min(1),
+    headSha: sha40,
+  })
+  .strict()
+
 export interface AdapterRunInput {
   /** published developmentAdapterDefinition 内容（executableRef/timeoutMs/…）。 */
   readonly adapterContent: {
@@ -93,6 +173,25 @@ export interface AdapterRunInput {
         readonly kind: 'answers.collect'
         readonly externalId: string
         readonly correlationRef: string
+      }
+    | {
+        readonly kind: 'pipeline.collect'
+        readonly headSha: string
+        readonly targetSha: string
+        readonly gateKeysCsv: string
+      }
+    | {
+        readonly kind: 'pipeline.trigger'
+        readonly headSha: string
+        readonly gateKeysCsv: string
+        readonly idempotencyKey: string
+      }
+    | {
+        readonly kind: 'pipeline.rerun'
+        readonly runRef: string
+        readonly gateKey: string
+        readonly headSha: string
+        readonly idempotencyKey: string
       }
   readonly stagedRoot: string
   /** 测试/装配注入的额外 env（如 mock 上游 URL）；不含 daemon 环境。 */
@@ -129,16 +228,48 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
     case 'answers.collect':
       argv.push('--collect-answers', input.operation.correlationRef)
       break
+    case 'pipeline.collect':
+      argv.push('--collect-pipeline', input.operation.headSha)
+      break
+    case 'pipeline.trigger':
+      argv.push('--trigger-pipeline', input.operation.headSha)
+      break
+    case 'pipeline.rerun':
+      argv.push('--rerun-pipeline', input.operation.runRef)
+      break
   }
+  const op = input.operation
   const env: Record<string, string> = {
-    // 空环境构造：只给运行所需的最小面。
+    // 空环境构造：只给运行所需的最小面。AW_EXTERNAL_ID 是 requirement 三 op
+    // 专属；pipeline 三 op 用 AW_PIPELINE_* 面。
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
     TMPDIR: process.env.TMPDIR ?? '/tmp',
     AW_ADAPTER_SINK: input.stagedRoot,
-    AW_EXTERNAL_ID: input.operation.externalId,
-    ...(input.operation.kind === 'questions.writeback'
-      ? { AW_ADAPTER_QUESTIONS: input.operation.questionsJson }
+    ...(op.kind === 'acquire' || op.kind === 'questions.writeback' || op.kind === 'answers.collect'
+      ? { AW_EXTERNAL_ID: op.externalId }
+      : {}),
+    ...(op.kind === 'questions.writeback' ? { AW_ADAPTER_QUESTIONS: op.questionsJson } : {}),
+    ...(op.kind === 'pipeline.collect'
+      ? {
+          AW_PIPELINE_HEAD: op.headSha,
+          AW_PIPELINE_TARGET: op.targetSha,
+          AW_PIPELINE_GATES: op.gateKeysCsv,
+        }
+      : {}),
+    ...(op.kind === 'pipeline.trigger'
+      ? {
+          AW_PIPELINE_HEAD: op.headSha,
+          AW_PIPELINE_GATES: op.gateKeysCsv,
+          AW_IDEMPOTENCY_KEY: op.idempotencyKey,
+        }
+      : {}),
+    ...(op.kind === 'pipeline.rerun'
+      ? {
+          AW_PIPELINE_HEAD: op.headSha,
+          AW_PIPELINE_GATE: op.gateKey,
+          AW_IDEMPOTENCY_KEY: op.idempotencyKey,
+        }
       : {}),
     ...(input.extraEnv ?? {}),
   }
@@ -283,6 +414,79 @@ export async function runAnswersCollect(
       'adapter-envelope-schema',
       'never',
       'collect envelope failed strict schema',
+    )
+  }
+  return { ok: true, envelope: parsed.data }
+}
+
+export async function runPipelineCollect(
+  input: AdapterRunInput & {
+    readonly operation: {
+      readonly kind: 'pipeline.collect'
+      readonly headSha: string
+      readonly targetSha: string
+      readonly gateKeysCsv: string
+    }
+  },
+): Promise<AdapterRunResult<z.infer<typeof pipelineCollectEnvelopeSchema>>> {
+  const raw = await runAdapter(input)
+  if (!raw.ok) return raw
+  const parsed = pipelineCollectEnvelopeSchema.safeParse(raw.envelope)
+  if (!parsed.success) {
+    return failure(
+      'contract-violation',
+      'adapter-envelope-schema',
+      'never',
+      'pipeline.collect envelope failed strict schema',
+    )
+  }
+  return { ok: true, envelope: parsed.data }
+}
+
+export async function runPipelineTrigger(
+  input: AdapterRunInput & {
+    readonly operation: {
+      readonly kind: 'pipeline.trigger'
+      readonly headSha: string
+      readonly gateKeysCsv: string
+      readonly idempotencyKey: string
+    }
+  },
+): Promise<AdapterRunResult<z.infer<typeof pipelineTriggerEnvelopeSchema>>> {
+  const raw = await runAdapter(input)
+  if (!raw.ok) return raw
+  const parsed = pipelineTriggerEnvelopeSchema.safeParse(raw.envelope)
+  if (!parsed.success) {
+    return failure(
+      'contract-violation',
+      'adapter-envelope-schema',
+      'never',
+      'pipeline.trigger envelope failed strict schema',
+    )
+  }
+  return { ok: true, envelope: parsed.data }
+}
+
+export async function runPipelineRerun(
+  input: AdapterRunInput & {
+    readonly operation: {
+      readonly kind: 'pipeline.rerun'
+      readonly runRef: string
+      readonly gateKey: string
+      readonly headSha: string
+      readonly idempotencyKey: string
+    }
+  },
+): Promise<AdapterRunResult<z.infer<typeof pipelineRerunEnvelopeSchema>>> {
+  const raw = await runAdapter(input)
+  if (!raw.ok) return raw
+  const parsed = pipelineRerunEnvelopeSchema.safeParse(raw.envelope)
+  if (!parsed.success) {
+    return failure(
+      'contract-violation',
+      'adapter-envelope-schema',
+      'never',
+      'pipeline.rerun envelope failed strict schema',
     )
   }
   return { ok: true, envelope: parsed.data }

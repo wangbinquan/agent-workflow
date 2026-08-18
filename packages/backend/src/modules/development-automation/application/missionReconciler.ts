@@ -25,6 +25,7 @@ import { canonicalDigest, canonicalStringify } from '../domain/canonicalJson'
 import { capabilityDefinition, type CapabilityId } from '../domain/capabilityDefinition'
 import { nextDecisionSchema, type NextDecision } from '../domain/decision'
 import { buildFactSnapshot, type FactCellValue, type MissionFactSnapshot } from '../domain/facts'
+import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 import type { FactCell } from '../domain/factCell'
 import {
   checkMissionTransition,
@@ -60,6 +61,14 @@ import {
   redispatchDelivery,
   type DeliveryChainDeps,
 } from './missionDeliveryChain'
+import {
+  PIPELINE_EFFECT_KINDS,
+  handleCollectPipelineEvidence,
+  handleRerunPipeline,
+  handleTriggerPipeline,
+  loadPipelineManifest,
+  redispatchPipeline,
+} from './pipelineEvidenceChain'
 import type { AdmissionLookup } from './ports/admissionLookup'
 import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from './ports/reconcilerPorts'
@@ -385,7 +394,9 @@ export async function runMissionReconcile(
   // 结算，不进 effect-unsettled guard（否则悬挂行会让 guard 永久 wait）。
   const guards = projectGuards(
     mission,
-    unsettled.filter((e) => !DELIVERY_EFFECT_KINDS.has(e.effectKind)),
+    unsettled.filter(
+      (e) => !DELIVERY_EFFECT_KINDS.has(e.effectKind) && !PIPELINE_EFFECT_KINDS.has(e.effectKind),
+    ),
     cells,
   )
   const policy = await loadPolicyContent(deps.lookup, mission)
@@ -454,6 +465,14 @@ export async function runMissionReconcile(
   // candidate 已派生且规则无话可说时，依 `__delivery.*` 进度派 verification →
   // commit/push → ensure-MR；MR 建立后 block 改写为诚实 wait（MR care 属 PR-7）。
   selected = redispatchDelivery(mission, cells, policy, selected)
+
+  // ---- pipeline evidence 链重派（PR-6 T68）---------------------------------
+  // MR 建立后接管发布链落下的静止态：collect（两次 head fence）→ trigger/
+  // rerun（effect 台账）→ 全过放行 readiness；「在跑」诚实 wait。
+  selected = redispatchPipeline(mission, cells, policy, selected, {
+    now,
+    manifest: loadPipelineManifest(deps, cells),
+  })
 
   return await commitAndHandle(deps, mission, snapshot, guards, { ...evaluation, selected })
 }
@@ -710,6 +729,52 @@ function persistRequirementCells(
   })
 }
 
+/** pipeline.repair 的 launch 附件：pinned bundle 描述 + failing gate 的 issue 闭集。 */
+function pipelineRepairInputs(
+  deps: ReconcileDeps,
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+): {
+  pipelineBundle?: {
+    readonly bundleId: string
+    readonly manifestDigest: string
+    readonly fileCount: number
+    readonly totalBytes: number
+  }
+  pipelineIssueRefs?: readonly string[]
+} {
+  const manifestRef = knownString(cells, '__pipeline.manifestRef')
+  if (manifestRef === null || deps.ports.attemptContext === undefined) return {}
+  const raw = deps.ports.attemptContext.load(manifestRef)
+  if (raw === null) return {}
+  let parsedJson: unknown
+  try {
+    parsedJson = JSON.parse(raw)
+  } catch {
+    return {}
+  }
+  const parsed = pipelineEvidenceManifestV1Schema.safeParse(parsedJson)
+  if (!parsed.success) return {}
+  const manifest = parsed.data
+  const issueRefs = manifest.gates
+    .filter(
+      (gate) =>
+        gate.required &&
+        !gateCountsAsPass(gate.status) &&
+        gate.status !== 'queued' &&
+        gate.status !== 'running',
+    )
+    .map((gate) => `${gate.gateKey}#${gate.runRef}`)
+  return {
+    pipelineBundle: {
+      bundleId: manifest.bundleId,
+      manifestDigest: manifest.manifestDigest,
+      fileCount: manifest.totals.files,
+      totalBytes: manifest.totals.bytes,
+    },
+    pipelineIssueRefs: issueRefs,
+  }
+}
+
 function deliveryDeps(deps: ReconcileDeps): DeliveryChainDeps {
   return {
     store: deps.store,
@@ -919,6 +984,11 @@ async function handleDecision(
             ? { candidateRef: cell.value }
             : {}
         })(),
+        // PR-6 T69：repair 动作挂 pinned pipeline bundle + issue 闭集（新
+        // commit 产生新 head 后 collect 会覆盖 cells，旧 evidence 自然失效）。
+        ...(selected.capabilityId === 'pipeline.repair'
+          ? pipelineRepairInputs(deps, snapshot.cells)
+          : {}),
       })
       if (!launchOutcome.ok) {
         deps.store.settleActionRun({
@@ -1251,12 +1321,34 @@ async function handleDecision(
     case 'ensure-merge-request': {
       return await handleEnsureMergeRequest(deliveryDeps(deps), mission)
     }
+    // ---- pipeline evidence arm（PR-6，实现在 pipelineEvidenceChain.ts）------
+    case 'collect-pipeline-evidence': {
+      return await handleCollectPipelineEvidence(
+        deliveryDeps(deps),
+        deps.lookup,
+        mission,
+        snapshot.cells,
+        selected.gateKeys,
+      )
+    }
+    case 'trigger-pipeline': {
+      return await handleTriggerPipeline(
+        deliveryDeps(deps),
+        deps.lookup,
+        mission,
+        snapshot.cells,
+        selected.gateKeys,
+      )
+    }
+    case 'rerun-pipeline': {
+      return await handleRerunPipeline(deliveryDeps(deps), deps.lookup, mission, snapshot.cells, {
+        gateKey: selected.gateKey,
+        runRef: selected.runRef,
+      })
+    }
     // ---- 未到批次的 arm：typed block，绝不静默 ------------------------------
-    case 'collect-pipeline-evidence':
     case 'prepare-change-candidate':
     case 'reply-feedback':
-    case 'trigger-pipeline':
-    case 'rerun-pipeline':
     case 'handoff':
     case 'mark-ready-to-merge': {
       blockMission(deps, mission.id, `arm-not-wired:${selected.kind}`, null)
