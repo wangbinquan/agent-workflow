@@ -694,6 +694,18 @@ packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状
 
 ## 删端点 / 删能力时，`e2e/` 不在任何本地门禁的覆盖面内（RFC-271 批次 I 实测）
 
+**2026-08-19 复发 + 现已有可执行守卫（RFC-310 PR-10）**：删掉三条 `/api/code`
+写路由后本地全绿、CI 的 Playwright 腿红三条（e2e 仍在打 `PUT
+/api/code/matrix/:repoId`）。这条教训在本文件里已经写了一年多，仍然复发——
+说明「记住它」不管用，得让它在 `gate:local` 里红。现在
+`packages/backend/tests/api-contract-coverage.test.ts` 有一条守卫：扫 e2e 里
+`${daemon.baseUrl}/api/...` 形态的调用，**连 method 一起**比对契约注册表。
+
+**method 是这条守卫的关键**：本次删的是 `PUT`，而同路径的 `GET` 还在——
+只比 path 的版本会把那三条 e2e 全部放行（我第一版就是这样写的，变异检验
+当场打脸）。任何「静态清单类」守卫写完都该做一次变异检验：把真实事故的形态
+注入进去，看它红不红。不红的守卫等于没有。
+
 `e2e/` **不在任何 package 的 `tsconfig.json` `include` 里**（backend 是
 `src|tests|db`，frontend 是 `src|tests|vite/vitest.config`），而 `gate:local`
 **不跑 Playwright**。删掉一条路由后，e2e 里对它的调用 **typecheck 看不见、
