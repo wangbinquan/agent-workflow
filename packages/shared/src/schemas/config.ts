@@ -275,8 +275,21 @@ export const ConfigSchema = z.object({
   /** PRAGMA synchronous mode. FULL trades throughput for stronger power-loss
    *  durability; NORMAL (default) is byte-equivalent to the historical setting. */
   sqliteSynchronous: z.enum(['NORMAL', 'FULL']).default('NORMAL'),
-  /** Periodic `wal_checkpoint(TRUNCATE)` cadence (ms) to bound -wal growth. 0 = off. */
-  walCheckpointIntervalMs: z.number().int().nonnegative().default(0),
+  /** Periodic `wal_checkpoint(TRUNCATE)` cadence (ms) to bound -wal growth.
+   *  0 = off. RFC-311: default ON at 10min — archive/GC delete bursts otherwise
+   *  pile into -wal until a passive checkpoint happens to win. */
+  walCheckpointIntervalMs: z.number().int().nonnegative().default(600_000),
+  /** RFC-311: SQLite page-cache budget (MiB) for the daemon's single
+   *  connection. The engine default (~2MB) makes every wide scan of a
+   *  multi-GB file a cold disk read. */
+  sqlitePageCacheMib: z.number().int().min(2).max(4096).default(128),
+  /** RFC-311: SQLite mmap window (MiB); 0 disables. Unsupported filesystems
+   *  silently fall back to the page cache. */
+  sqliteMmapMib: z.number().int().min(0).max(16384).default(512),
+  /** RFC-311: warn-log any single SQL statement slower than this (ms); 0 = off.
+   *  The daemon's connection is synchronous — one slow statement freezes every
+   *  HTTP/WS request, so regressions must surface themselves. */
+  sqliteSlowQueryMs: z.number().int().min(0).max(60_000).default(50),
 
   // --- GC ---
   /** RFC-300: claim a direct Webhook root task's owned remote/scratch
@@ -667,7 +680,10 @@ export const DEFAULT_CONFIG: Config = {
   webhookDeliveryRowRetentionDays: 90,
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
-  walCheckpointIntervalMs: 0,
+  walCheckpointIntervalMs: 600_000,
+  sqlitePageCacheMib: 128,
+  sqliteMmapMib: 512,
+  sqliteSlowQueryMs: 50,
   webhookTaskWorkspaceAutoCleanup: false,
   worktreeAutoGc: { enabled: false },
   eventsArchiveThresholds: {

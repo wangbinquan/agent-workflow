@@ -405,6 +405,7 @@ export const skillVersions = sqliteTable(
   (t) => ({
     skillVersionIdx: uniqueIndex('uq_skill_versions_skill_v').on(t.skillId, t.versionIndex),
     createdIdx: index('idx_skill_versions_created').on(t.createdAt),
+    fusionIdx: index('idx_skill_versions_fusion').on(t.fusionId), // RFC-311：fusion 溯源反查
   }),
 )
 
@@ -1131,11 +1132,24 @@ export const tasks = sqliteTable(
      * `event_json` 也在该嵌套快照中，并遵循统一的 32 KiB 截断上限。
      */
     triggerContextJson: text('trigger_context_json'),
+    /**
+     * RFC-311：本行为根的子树内 max(started_at) 的物化缓存（纯派生值，迁移
+     * 0180 回填、子任务创建/启动时沿父链向上推进、invariants 校验自愈）。
+     * 任务列表（/api/tasks/page）以 root 行的该值做 keyset 排序取页，取代
+     * 旧实现「全量物化 + 递归聚合后才 LIMIT」的 O(全表) 形状。
+     */
+    branchStartedAt: integer('branch_started_at').notNull().default(0),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
   (t) => ({
     listStartedIdx: index('idx_tasks_list_started_id').on(t.startedAt, t.id),
+    // RFC-311 索引批（migration 0180）：
+    branchStartedIdx: index('idx_tasks_branch_started_id').on(t.branchStartedAt, t.id),
+    cachedRepoIdx: index('idx_tasks_cached_repo').on(t.cachedRepoId),
+    statusFinishedIdx: index('idx_tasks_status_finished').on(t.status, t.finishedAt),
+    sourceAgentIdx: index('idx_tasks_source_agent').on(t.sourceAgentId),
+    codeRoundIdx: index('idx_tasks_code_round').on(t.codeRoundId),
     listStatusStartedIdx: index('idx_tasks_list_status_started_id').on(t.status, t.startedAt, t.id),
     listParentStartedIdx: index('idx_tasks_list_parent_started_id').on(
       t.parentTaskId,
@@ -1993,6 +2007,11 @@ export const nodeRuns = sqliteTable(
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),
     parentIdx: index('idx_node_runs_parent').on(t.parentNodeRunId),
     childTaskIdx: index('idx_node_runs_child_task').on(t.childTaskId), // RFC-243
+    // RFC-311：orphanReconcile(10min)/autoKill(5min)/orphans(boot)/pluginGenerationGc(1h)
+    // 四处周期扫描共用。不能用 partial（WHERE status IN …）：SQLite 的 partial-index
+    // 蕴含判断不认「status='running' ⊂ status IN ('pending','running')」，等值查询
+    // 会退回全表扫（rfc311-perf-foundation plan 断言实测）。普通复合索引换确定命中。
+    statusActiveIdx: index('idx_node_runs_status_active').on(t.status, t.startedAt),
   }),
 )
 
@@ -2127,6 +2146,10 @@ export const docVersions = sqliteTable(
     taskIdx: index('idx_doc_versions_task').on(t.taskId),
     // RFC-079: lookup all members of a multi-doc round in item order.
     reviewItemIdx: index('idx_doc_versions_review_item').on(t.reviewNodeRunId, t.itemIndex),
+    // RFC-311：pending 收件箱（15s 徽章 count + 列表）只触未决行；决策落定即退出索引。
+    pendingCreatedIdx: index('idx_doc_versions_pending_created')
+      .on(t.createdAt)
+      .where(sql`${t.decision} = 'pending'`),
   }),
 )
 
@@ -2735,6 +2758,8 @@ export const memories = sqliteTable(
     scopeStatusIdx: index('idx_memories_scope_status').on(t.scopeType, t.scopeId, t.status),
     statusCreatedIdx: index('idx_memories_status_created').on(t.status, t.createdAt),
     supersedesIdx: index('idx_memories_supersedes').on(t.supersedesId),
+    createdIdx: index('idx_memories_created').on(t.createdAt), // RFC-311：无 status 过滤的列表排序
+
     sourceIdx: index('idx_memories_source').on(t.sourceKind, t.sourceEventId),
     fusedSkillIdx: index('idx_memories_fused_skill_id').on(
       t.fusedIntoSkillId,
@@ -3975,6 +4000,10 @@ export const codeFindings = sqliteTable(
       t.lifecycle,
     ),
     seenIdx: index('idx_code_findings_seen').on(t.stableProjectId, t.lastSeenAt),
+    // RFC-311：指标窗口扫描（external_id 非空 + created_at>=since）按时间裁剪。
+    externalCreatedIdx: index('idx_code_findings_external_created')
+      .on(t.createdAt)
+      .where(sql`${t.externalId} IS NOT NULL`),
   }),
 )
 
@@ -4064,6 +4093,7 @@ export const codeWorkItems = sqliteTable(
       t.anchorId,
     ),
     statusIdx: index('idx_code_work_items_status').on(t.status),
+    createdIdx: index('idx_code_work_items_created').on(t.createdAt), // RFC-311：/code 列表排序早停
     anchorIdx: index('idx_code_work_items_anchor').on(
       t.codeHostEndpointId,
       t.stableProjectId,
@@ -4103,6 +4133,7 @@ export const codeWorkRounds = sqliteTable(
     seqUq: uniqueIndex('uniq_code_work_rounds_seq').on(t.workItemId, t.roundSeq),
     itemIdx: index('idx_code_work_rounds_item').on(t.workItemId),
     taskIdx: index('idx_code_work_rounds_task').on(t.taskId),
+    startedIdx: index('idx_code_work_rounds_started').on(t.startedAt), // RFC-311：指标窗口/GC 汇总
   }),
 )
 
@@ -4183,6 +4214,7 @@ export const codeAiAttempts = sqliteTable(
     ),
     roundIdx: index('idx_code_ai_attempts_round').on(t.roundId),
     statusIdx: index('idx_code_ai_attempts_status').on(t.status),
+    startedIdx: index('idx_code_ai_attempts_started').on(t.startedAt), // RFC-311：30 天 GC 扫描
   }),
 )
 
@@ -4293,6 +4325,10 @@ export const codeArtifacts = sqliteTable(
     digestIdx: index('idx_code_artifacts_digest').on(t.digest),
     itemIdx: index('idx_code_artifacts_item').on(t.workItemId, t.state),
     reclaimIdx: index('idx_code_artifacts_reclaim').on(t.state, t.refCount),
+    // RFC-311：ref_count=0 回收扫描 O(可回收)；重新被引用即退出索引。
+    releasedIdx: index('idx_code_artifacts_released')
+      .on(t.releasedAt)
+      .where(sql`${t.refCount} = 0`),
   }),
 )
 
@@ -4807,6 +4843,11 @@ export const developmentMissions = sqliteTable(
       .where(sql`${t.launchIdempotencyKey} IS NOT NULL`),
     statusIdx: index('idx_development_missions_status').on(t.status),
     repoIdx: index('idx_development_missions_repo').on(t.repositoryId),
+    createdIdx: index('idx_development_missions_created').on(t.createdAt), // RFC-311：列表排序
+    // RFC-311：boot 恢复只扫悬挂 fence 行。
+    fencedIdx: index('idx_development_missions_fenced')
+      .on(t.id)
+      .where(sql`${t.transitionFence} != 'none'`),
   }),
 )
 
@@ -4914,6 +4955,13 @@ export const developmentMrClaims = sqliteTable(
     activeUq: uniqueIndex('dev_mr_claims_active_unique')
       .on(t.codeHostEndpointRef, t.stableProjectRef, t.mrIid)
       .where(sql`${t.state} = 'active'`),
+    // RFC-311：partial unique 无法服务不带 state 谓词的 findMrClaim 查询；
+    // released 历史随 MR 累积后那条查询会退化为全表扫。
+    lookupIdx: index('idx_dev_mr_claims_lookup').on(
+      t.codeHostEndpointRef,
+      t.stableProjectRef,
+      t.mrIid,
+    ),
   }),
 )
 
@@ -4931,6 +4979,10 @@ export const developmentWakeHints = sqliteTable(
   },
   (t) => ({
     deliveryUq: uniqueIndex('dev_wake_hints_delivery_unique').on(t.missionId, t.deliveryKey),
+    // RFC-311：30s reconcile sweep 只扫未消费 hint。
+    unconsumedIdx: index('idx_dev_wake_hints_unconsumed')
+      .on(t.missionId)
+      .where(sql`${t.consumedAt} IS NULL`),
   }),
 )
 
@@ -4952,6 +5004,10 @@ export const developmentDeferredWakes = sqliteTable(
   },
   (t) => ({
     decisionUq: uniqueIndex('dev_deferred_wakes_decision_unique').on(t.missionId, t.decisionId),
+    // RFC-311：30s wake sweep（listDueWakes）只扫 armed 行。
+    dueIdx: index('idx_dev_deferred_wakes_due')
+      .on(t.resumeAt)
+      .where(sql`${t.state} = 'armed'`),
   }),
 )
 
@@ -5059,6 +5115,8 @@ export const developmentAgentAttempts = sqliteTable(
       t.rerunSeq,
       t.attemptSeq,
     ),
+    // RFC-311：agent 执行终态回调按 execution_ref 反查（每次终态一次，原为全表扫）。
+    executionRefIdx: index('idx_dev_agent_attempts_execution_ref').on(t.executionRef),
   }),
 )
 
@@ -5083,6 +5141,10 @@ export const developmentEffects = sqliteTable(
   (t) => ({
     idempotencyUq: uniqueIndex('dev_effects_idempotency_unique').on(t.idempotencyKey),
     missionStateIdx: index('idx_dev_effects_mission_state').on(t.missionId, t.state),
+    // RFC-311：boot 恢复只扫 prepared 悬挂 effect。
+    preparedIdx: index('idx_dev_effects_prepared')
+      .on(t.createdAt)
+      .where(sql`${t.state} = 'prepared'`),
   }),
 )
 
@@ -5169,3 +5231,20 @@ export const missionInputUploads = sqliteTable(
     stateIdx: index('idx_mission_input_uploads_state').on(t.state, t.expiresAt),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// RFC-311 maintenance_state — 维护面 KV（migration 0180）。
+//
+// 承载跨重启的维护性水位与一次性闸门，避免每次都用 O(全表) 查询重新推导：
+//   - events-archive 高水位（上次扫描的 max(id)）与增量行数/字节账本；
+//   - repoCredentials.ensureCredentialsSealed 的「已完成」闸门（原实现每次
+//     boot 和每次 POST /api/backup 都整库重扫做幂等迁移）；
+//   - 事件表平均行宽采样缓存（字节水位 = 采样行宽 × 行数，零写放大）。
+// 业务状态一律不进这张表——它只存"推导得出来、但重推导很贵"的维护缓存,
+// 删掉整表的唯一后果是下一轮维护任务退回慢路径全量重推导。
+// -----------------------------------------------------------------------------
+export const maintenanceState = sqliteTable('maintenance_state', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})

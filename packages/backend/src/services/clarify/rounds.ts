@@ -14,9 +14,12 @@
 //   - `freezeAnswerAttributions` / `buildFrozenAttributionSet` —— 提交时点的
 //     归属快照（审计列/只读 UI 用，绝不进 agent prompt）。
 
-import { desc, eq, inArray } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNotNull, isNull, notInArray, or, type SQL } from 'drizzle-orm'
 
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { taskAuthorizationCondition } from '@/services/taskAuthorization'
+import { chunkedAll } from '@/util/sqlChunk'
 import { dbTxSync } from '@/db/txSync'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import {
@@ -131,20 +134,36 @@ export interface ListClarifyRoundsFilter {
   limit?: number
 }
 
+/** RFC-311 — the shared WHERE for clarify_rounds list surfaces, pushed into
+ *  SQL so the existing (task_id) / (kind,status) indexes actually serve the
+ *  15s inbox poll instead of a full-table scan + JS filter (audit L1-4). */
+function clarifyRoundsCondition(filter: {
+  taskId?: string
+  kind?: 'self' | 'cross' | 'all'
+  status?: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all'
+}): SQL<unknown> | undefined {
+  const desiredKind = filter.kind ?? 'all'
+  const desiredStatus = filter.status ?? 'awaiting_human'
+  const conditions: SQL<unknown>[] = []
+  if (filter.taskId !== undefined) conditions.push(eq(clarifyRounds.taskId, filter.taskId))
+  if (desiredKind !== 'all') conditions.push(eq(clarifyRounds.kind, desiredKind))
+  if (desiredStatus !== 'all') conditions.push(eq(clarifyRounds.status, desiredStatus))
+  return conditions.length > 0 ? and(...conditions) : undefined
+}
+
 export async function listClarifyRounds(
   db: DbClient,
   filter: ListClarifyRoundsFilter = {},
 ): Promise<Array<typeof clarifyRounds.$inferSelect>> {
-  const all = await db.select().from(clarifyRounds).orderBy(desc(clarifyRounds.createdAt))
-  const desiredKind = filter.kind ?? 'all'
-  const desiredStatus = filter.status ?? 'awaiting_human'
-  const filtered = all.filter((r) => {
-    if (filter.taskId !== undefined && r.taskId !== filter.taskId) return false
-    if (desiredKind !== 'all' && r.kind !== desiredKind) return false
-    if (desiredStatus !== 'all' && r.status !== desiredStatus) return false
-    return true
-  })
-  return filter.limit !== undefined ? filtered.slice(0, filter.limit) : filtered
+  // `id desc` secondary key: created_at has millisecond resolution and the old
+  // "SQL order then JS filter" pass had no defined intra-millisecond order;
+  // ULIDs are monotonic within a millisecond, so this pins newest-first.
+  const base = db
+    .select()
+    .from(clarifyRounds)
+    .where(clarifyRoundsCondition(filter))
+    .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
+  return filter.limit !== undefined ? await base.limit(filter.limit) : await base
 }
 
 // ---------------------------------------------------------------------------
@@ -173,15 +192,18 @@ export async function listClarifyRoundSummaries(
   db: DbClient,
   filter: ListClarifyRoundSummariesFilter = {},
 ): Promise<ClarifyRoundSummary[]> {
-  const all = await db.select().from(clarifyRounds).orderBy(desc(clarifyRounds.createdAt))
-  const desiredKind = filter.kind ?? 'all'
   const desiredStatus = filter.status ?? 'awaiting_human'
-  let filtered = all.filter((r) => {
-    if (filter.taskId !== undefined && r.taskId !== filter.taskId) return false
-    if (desiredKind !== 'all' && r.kind !== desiredKind) return false
-    if (desiredStatus !== 'all' && r.status !== desiredStatus) return false
-    return true
-  })
+  // RFC-311: predicates + order pushed into SQL. The awaiting_human branch
+  // must NOT push the limit down — the RFC-202 T6 terminal-task filter below
+  // runs before the window (a page of terminal-task zombies must not displace
+  // actionable rounds); explicit-status queries take the SQL limit directly.
+  const baseQuery = db
+    .select()
+    .from(clarifyRounds)
+    .where(clarifyRoundsCondition(filter))
+    .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
+  let filtered =
+    desiredStatus === 'awaiting_human' ? await baseQuery : await baseQuery.limit(filter.limit ?? 100)
   // RFC-202 T6: the awaiting_human TODO view must not surface rounds whose
   // task is already terminal — dead tasks' rounds cluttered the inbox forever
   // (audit R8; done/canceled rounds are hard-sealed by the terminal sweep,
@@ -208,6 +230,37 @@ export async function listClarifyRoundSummaries(
   const titleByTaskAndNode = await loadNodeTitlesByTask(db, taskIds)
 
   return sliced.map((row) => rowToSummary(row, taskNameByTaskId, titleByTaskAndNode))
+}
+
+/**
+ * RFC-311 — the 15s inbox badge as ONE indexed count(*). Mirrors the old
+ * "listClarifyRoundSummaries({status:'awaiting_human', limit:MAX}) then
+ * filterRoundsByTaskVisibility" pipeline predicate-for-predicate:
+ *   cr.status='awaiting_human'                  (idx_clarify_rounds_kind_status)
+ *   task terminal filter (RFC-202 T6)           — orphan rounds (no task row)
+ *     stay COUNTED, exactly like the JS `st === undefined ||` branch;
+ *   per-actor visibility (RFC-099 D5)           — tasks:read:all counts all
+ *     (orphans included); otherwise owner/collaborator only, and orphans drop
+ *     out, exactly like filterRoundsByTaskVisibility's "look up rows first"
+ *     behavior. Locked by the rfc311-badge-counts oracle test.
+ */
+export async function countAwaitingClarifyRounds(db: DbClient, actor: Actor): Promise<number> {
+  const conditions: SQL<unknown>[] = [
+    eq(clarifyRounds.status, 'awaiting_human'),
+    or(isNull(tasks.id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]))!,
+  ]
+  if (!actor.permissions.has('tasks:read:all')) {
+    conditions.push(isNotNull(tasks.id))
+    conditions.push(
+      taskAuthorizationCondition(db, { id: tasks.id, ownerUserId: tasks.ownerUserId }, actor),
+    )
+  }
+  const rows = await db
+    .select({ n: count() })
+    .from(clarifyRounds)
+    .leftJoin(tasks, eq(tasks.id, clarifyRounds.taskId))
+    .where(and(...conditions))
+  return rows[0]?.n ?? 0
 }
 
 /**
@@ -396,14 +449,17 @@ async function loadTaskNamesByTaskId(
   db: DbClient,
   taskIds: string[],
 ): Promise<Map<string, string>> {
+  // RFC-311: WHERE id IN + two-column projection. The previous shape read the
+  // ENTIRE tasks table (every workflow_snapshot/inputs JSON included) on each
+  // 15s inbox poll and filtered in JS — the single heaviest steady-state load
+  // the audit found (L1-3); `loadTaskStatusesByTaskId` above always had the
+  // correct shape.
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
-  const taskRows = await db.select().from(tasks)
-  const wanted = new Set(taskIds)
-  for (const t of taskRows) {
-    if (!wanted.has(t.id)) continue
-    out.set(t.id, t.name)
-  }
+  const rows = await chunkedAll(taskIds, (ids) =>
+    db.select({ id: tasks.id, name: tasks.name }).from(tasks).where(inArray(tasks.id, ids)),
+  )
+  for (const t of rows) out.set(t.id, t.name)
   return out
 }
 
@@ -411,12 +467,17 @@ async function loadNodeTitlesByTask(
   db: DbClient,
   taskIds: string[],
 ): Promise<Map<string, Map<string, string>>> {
+  // RFC-311: same WHERE id IN fix as loadTaskNamesByTaskId — this variant was
+  // worse still because it JSON.parses every fetched row's workflowSnapshot.
   const out = new Map<string, Map<string, string>>()
   if (taskIds.length === 0) return out
-  const taskRows = await db.select().from(tasks)
-  const wanted = new Set(taskIds)
+  const taskRows = await chunkedAll(taskIds, (ids) =>
+    db
+      .select({ id: tasks.id, workflowSnapshot: tasks.workflowSnapshot })
+      .from(tasks)
+      .where(inArray(tasks.id, ids)),
+  )
   for (const t of taskRows) {
-    if (!wanted.has(t.id)) continue
     const inner = new Map<string, string>()
     try {
       const def = JSON.parse(t.workflowSnapshot) as WorkflowDefinition

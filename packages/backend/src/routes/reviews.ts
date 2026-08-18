@@ -20,13 +20,14 @@ import {
   UpdateReviewCommentBodySchema,
 } from '@agent-workflow/shared'
 import type { TaskActorRole } from '@agent-workflow/shared'
-import { eq, inArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
+import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -118,14 +119,9 @@ async function filterVisibleByTask<T extends { taskId: string }>(
   if (actor.permissions.has('tasks:read:all')) return [...rows]
   const taskIds = [...new Set(rows.map((r) => r.taskId))]
   if (taskIds.length === 0) return []
-  const taskRows = await deps.db
-    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
-    .from(tasksTable)
-    .where(inArray(tasksTable.id, taskIds))
-  const visible = new Set<string>()
-  for (const t of taskRows) {
-    if (await canViewTask(deps.db, actor, t)) visible.add(t.id)
-  }
+  // RFC-311: one indexed membership query instead of one collaborator lookup
+  // per task (this ran on the 15s badge poll — audit L1-10).
+  const visible = await visibleTaskIdsOf(deps.db, actor, taskIds)
   return rows.filter((r) => visible.has(r.taskId))
 }
 
@@ -175,17 +171,10 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-099: badge counts only reviews on tasks visible to the actor.
-      const actor = actorOf(c)
-      if (actor.permissions.has('tasks:read:all')) {
-        return c.json({ count: await countPendingReviews(deps.db) })
-      }
-      // RFC-202 T6: exact count — not truncated by the default list page size.
-      const pending = await listReviewSummaries(deps.db, {
-        status: 'pending',
-        limit: Number.MAX_SAFE_INTEGER,
-      })
-      const visible = await filterVisibleByTask(deps, actor, pending)
-      return c.json({ count: visible.length })
+      // RFC-311: both branches collapse into one indexed count(*) —
+      // countPendingReviews folds the actor's visibility condition in, so the
+      // 15s badge poll no longer materializes doc_versions + three tables.
+      return c.json({ count: await countPendingReviews(deps.db, actorOf(c)) })
     },
   )
 

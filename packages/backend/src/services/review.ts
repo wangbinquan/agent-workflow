@@ -24,7 +24,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNull, ne, notExists, notInArray, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 import { dbTxSync } from '@/db/txSync'
 import { ulid } from 'ulid'
 import type {
@@ -75,6 +76,7 @@ import type {
   ReviewRoundMember,
   ReviewRoundSummary,
 } from '@agent-workflow/shared'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
   agents as agentsTable,
@@ -87,6 +89,8 @@ import {
   workflows,
 } from '@/db/schema'
 import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
+import { taskAuthorizationCondition } from '@/services/taskAuthorization'
+import { chunkedAll } from '@/util/sqlChunk'
 import { pickFreshestRun, pickVisibleUpstreamRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
@@ -1229,9 +1233,9 @@ function parseReviewNodeMeta(
  */
 function assembleReviewSummary(
   dv: typeof docVersions.$inferSelect,
-  run: typeof nodeRuns.$inferSelect,
-  task: typeof tasks.$inferSelect,
-  wf: typeof workflows.$inferSelect,
+  run: Pick<typeof nodeRuns.$inferSelect, 'status' | 'reviewIteration' | 'shardKey'>,
+  task: Pick<typeof tasks.$inferSelect, 'id' | 'name' | 'workflowId' | 'status'>,
+  wf: Pick<typeof workflows.$inferSelect, 'name'>,
   nodeMeta: { title: string; description: string } | undefined,
 ): ReviewSummary {
   const awaitingReview = run.status === 'awaiting_review' && dv.decision === 'pending'
@@ -1288,17 +1292,45 @@ export async function listReviewSummaries(
 
   if (dvRows.length === 0) return []
 
+  // RFC-311: point lookups for exactly the referenced rows. The previous shape
+  // pulled node_runs, tasks and workflows COMPLETE (all columns — prompt_text,
+  // workflow_snapshot, every *_json) and filtered in JS; on the 15s inbox
+  // badge poll that materialized three whole tables per open tab (audit L1-1).
   const nodeRunIds = Array.from(new Set(dvRows.map((r) => r.reviewNodeRunId)))
-  const nodeRunRowsRaw = await db.select().from(nodeRuns)
-  const runById = new Map(
-    nodeRunRowsRaw.filter((r) => nodeRunIds.includes(r.id)).map((r) => [r.id, r]),
+  const nodeRunRows = await chunkedAll(nodeRunIds, (ids) =>
+    db
+      .select({
+        id: nodeRuns.id,
+        status: nodeRuns.status,
+        reviewIteration: nodeRuns.reviewIteration,
+        shardKey: nodeRuns.shardKey,
+      })
+      .from(nodeRuns)
+      .where(inArray(nodeRuns.id, ids)),
   )
+  const runById = new Map(nodeRunRows.map((r) => [r.id, r]))
   const taskIds = Array.from(new Set(dvRows.map((r) => r.taskId)))
-  const taskRowsAll = await db.select().from(tasks)
-  const taskById = new Map(taskRowsAll.filter((r) => taskIds.includes(r.id)).map((r) => [r.id, r]))
-  const workflowIds = Array.from(new Set(Array.from(taskById.values()).map((t) => t.workflowId)))
-  const wfRowsAll = await db.select().from(workflows)
-  const wfById = new Map(wfRowsAll.filter((r) => workflowIds.includes(r.id)).map((r) => [r.id, r]))
+  const taskRows = await chunkedAll(taskIds, (ids) =>
+    db
+      .select({
+        id: tasks.id,
+        name: tasks.name,
+        workflowId: tasks.workflowId,
+        status: tasks.status,
+        workflowSnapshot: tasks.workflowSnapshot,
+      })
+      .from(tasks)
+      .where(inArray(tasks.id, ids)),
+  )
+  const taskById = new Map(taskRows.map((r) => [r.id, r]))
+  const workflowIds = Array.from(new Set(taskRows.map((t) => t.workflowId)))
+  const wfRows = await chunkedAll(workflowIds, (ids) =>
+    db
+      .select({ id: workflows.id, name: workflows.name })
+      .from(workflows)
+      .where(inArray(workflows.id, ids)),
+  )
+  const wfById = new Map(wfRows.map((r) => [r.id, r]))
 
   // Parse each task's workflowSnapshot once to extract the per-review-node
   // human-readable title/description set in the workflow editor. Falls back
@@ -1351,13 +1383,58 @@ export async function listReviewSummaries(
   return isPendingQuery ? out.slice(0, filter.limit ?? 100) : out
 }
 
-export async function countPendingReviews(db: DbClient): Promise<number> {
-  // RFC-202 T6: exact count — must not be truncated by a list page limit.
-  const summaries = await listReviewSummaries(db, {
-    status: 'pending',
-    limit: Number.MAX_SAFE_INTEGER,
-  })
-  return summaries.length
+/**
+ * RFC-311 — badge count as ONE indexed SQL statement. Mirrors the pending
+ * branch of `listReviewSummaries` predicate-for-predicate:
+ *   dv.decision='pending'                       (partial idx_doc_versions_pending_created)
+ *   latest pending version per (run, port)      (NOT EXISTS newer pending sibling)
+ *   run exists ∧ status='awaiting_review'       (awaitingReview requirement)
+ *   task exists ∧ status ∉ TERMINAL             (RFC-202 T6 zombie filter)
+ *   workflow exists                             (assemble skips orphan workflows)
+ * plus the route-level per-actor visibility (`filterVisibleByTask`) folded in
+ * via `taskAuthorizationCondition` when an actor is passed. The oracle test
+ * (rfc311-badge-counts) locks this count to the list+filter pipeline's length.
+ */
+export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<number> {
+  const newer = alias(docVersions, 'dv_newer')
+  const conditions = [
+    eq(docVersions.decision, 'pending'),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(newer)
+        .where(
+          and(
+            eq(newer.reviewNodeRunId, docVersions.reviewNodeRunId),
+            eq(newer.sourcePortName, docVersions.sourcePortName),
+            eq(newer.decision, 'pending'),
+            gt(newer.versionIndex, docVersions.versionIndex),
+          ),
+        ),
+    ),
+  ]
+  if (actor !== undefined) {
+    conditions.push(
+      taskAuthorizationCondition(db, { id: tasks.id, ownerUserId: tasks.ownerUserId }, actor),
+    )
+  }
+  const rows = await db
+    .select({ n: count() })
+    .from(docVersions)
+    .innerJoin(
+      nodeRuns,
+      and(eq(nodeRuns.id, docVersions.reviewNodeRunId), eq(nodeRuns.status, 'awaiting_review')),
+    )
+    .innerJoin(
+      tasks,
+      and(
+        eq(tasks.id, docVersions.taskId),
+        notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+      ),
+    )
+    .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
+    .where(and(...conditions))
+  return rows[0]?.n ?? 0
 }
 
 export async function getReviewDetail(

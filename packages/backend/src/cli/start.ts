@@ -28,6 +28,7 @@ import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
+  buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
 } from '@/services/developmentDeliveryDeps'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
@@ -395,6 +396,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       path: Paths.db,
       migrationsFolder,
       synchronous: config.sqliteSynchronous,
+      // RFC-311 capacity/telemetry pragmas (all settings-configurable).
+      pageCacheMib: config.sqlitePageCacheMib,
+      mmapMib: config.sqliteMmapMib,
+      slowQueryMs: config.sqliteSlowQueryMs,
       skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
     })
   } catch (err) {
@@ -880,7 +885,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     maxTotalBytes: config.backupMaxTotalBytes,
     appHome: Paths.root,
   })
-  // RFC-213 G4c: bound -wal growth (disabled by default — walCheckpointIntervalMs=0).
+  // RFC-213 G4c: bound -wal growth. RFC-311 flipped the default ON (10min
+  // TRUNCATE) — archive/GC deletes otherwise leave the -wal file to absorb
+  // every burst until the next passive checkpoint; 0 still disables.
   const walCheckpointTicker = startWalCheckpointLoop({
     db,
     intervalMs: config.walCheckpointIntervalMs,
@@ -998,6 +1005,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     candidateDelivery: bindCandidateDeliveryParticipant(),
     ...buildDevelopmentDeliveryDeps(db, secretBox),
     ...buildDevelopmentPipelineDeps(db),
+    ...buildDevelopmentMrFactsDeps(db, secretBox),
     agentLauncher: composeAgentActionExecution({
       db,
       startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),

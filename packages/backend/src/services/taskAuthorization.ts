@@ -3,6 +3,7 @@ import { and, eq, inArray, ne, or, sql } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { taskCollaborators, tasks } from '@/db/schema'
+import { chunkedAll } from '@/util/sqlChunk'
 
 /**
  * Minimal column contract used by task-list queries. Accepting SQLWrapper keeps
@@ -55,4 +56,31 @@ export function taskOwnershipScopeCondition(
 
 export function defaultTaskAuthorizationRef(): TaskAuthorizationRef {
   return { id: tasks.id, ownerUserId: tasks.ownerUserId }
+}
+
+/**
+ * RFC-311 — batch twin of `canViewTask` for list/badge surfaces: one indexed
+ * query per id chunk instead of one collaborator lookup per task (the shell
+ * inbox badges ran that N+1 every 15s per open tab). Semantics are identical:
+ * `canViewTask` = tasks:read:all ∨ owner=me ∨ collaborator (its SYSTEM branch
+ * is a subset of owner=me), which is exactly `taskAuthorizationCondition`.
+ * Ids with no task row are absent from the result, matching the callers'
+ * existing "look up rows first, then filter" behavior.
+ */
+export async function visibleTaskIdsOf(
+  db: DbClient,
+  actor: Actor,
+  taskIds: readonly string[],
+): Promise<Set<string>> {
+  if (taskIds.length === 0) return new Set()
+  if (actor.permissions.has('tasks:read:all')) return new Set(taskIds)
+  const rows = await chunkedAll(taskIds, (chunk) =>
+    db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(inArray(tasks.id, chunk), taskAuthorizationCondition(db, defaultTaskAuthorizationRef(), actor)),
+      ),
+  )
+  return new Set(rows.map((row) => row.id))
 }

@@ -43,7 +43,7 @@ import type {
   UpdateResourceAclBody,
   UserPublic,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { and, eq, inArray, ne, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DbClient } from '@/db/client'
@@ -291,6 +291,41 @@ export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<
   if (!hasPrivateResourceAccess(actor)) return false
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   return grantedIds.has(row.id)
+}
+
+/** Column handles a count-only caller passes to {@link visibleRowsCondition}. */
+export interface AclColumnRef {
+  id: SQLWrapper
+  ownerUserId: SQLWrapper
+  visibility: SQLWrapper
+}
+
+/**
+ * RFC-311 — SQL twin of `filterVisibleRows(…).length` for count-only surfaces
+ * (`/api/overview`). Mirrors {@link isVisibleRow} branch-for-branch:
+ * bypass → no condition (undefined); no `resource-acl:private` → public rows
+ * only; otherwise public ∪ owned ∪ granted. `COALESCE(visibility,'public')`
+ * keeps the legacy NULL-visibility rows on the public side, same as the JS
+ * `row.visibility ?? 'public'`. Locked to the list pipeline by the RFC-190
+ * overview oracle test (count must equal the filtered list length per actor).
+ */
+export function visibleRowsCondition(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  cols: AclColumnRef,
+): SQL<unknown> | undefined {
+  if (hasResourceAclBypass(actor)) return undefined
+  const isPublic = sql`COALESCE(${cols.visibility}, 'public') = 'public'`
+  if (!hasPrivateResourceAccess(actor)) return isPublic
+  const granted = inArray(
+    cols.id,
+    db
+      .select({ resourceId: resourceGrants.resourceId })
+      .from(resourceGrants)
+      .where(grantsOfUserWhere(type, actor.user.id)),
+  )
+  return or(isPublic, sql`${cols.ownerUserId} = ${actor.user.id}`, granted)!
 }
 
 /** RFC-203 T6 — delete/rename refusal details, principal-aware (the

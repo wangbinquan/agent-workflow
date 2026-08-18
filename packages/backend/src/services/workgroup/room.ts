@@ -43,6 +43,8 @@ import {
   workgroupTaskState,
 } from '@/db/schema'
 import { canViewTask } from '@/services/taskCollab'
+import { visibleTaskIdsOf } from '@/services/taskAuthorization'
+import { chunkedAll } from '@/util/sqlChunk'
 import { resolveMessageTurnTriggerId } from '@/services/workgroup/context'
 import { gateViewOf, type WorkgroupTaskState } from '@/services/workgroup/state'
 import { resolveRoomPauseReason, safeMentions } from '@/services/workgroup/taskActions'
@@ -368,11 +370,43 @@ export function buildRoomReads(
             )
         : []
     const gateStatusById = new Map(stateRows.map((r) => [r.taskId, r.gateStatus]))
+    // RFC-311: the per-candidate canViewTask (one collaborator query each) and
+    // per-candidate assignments query both ran on the 15s badge poll (audit
+    // L1-5). Batch both: one visibility membership query, one dispatched-cards
+    // query grouped in JS. The zod parse stays per-row — memberIds live inside
+    // the config JSON and the candidate set is bounded by active workgroups.
+    const visibleIds = await visibleTaskIdsOf(
+      deps.db,
+      actor,
+      rows.map((r) => r.id),
+    )
+    const dispatchedByTask = new Map<string, (string | null)[]>()
+    if (visibleIds.size > 0) {
+      const cards = await chunkedAll([...visibleIds], (ids) =>
+        deps.db
+          .select({
+            taskId: workgroupAssignments.taskId,
+            assigneeMemberId: workgroupAssignments.assigneeMemberId,
+          })
+          .from(workgroupAssignments)
+          .where(
+            and(
+              inArray(workgroupAssignments.taskId, ids),
+              eq(workgroupAssignments.status, 'dispatched'),
+            ),
+          ),
+      )
+      for (const card of cards) {
+        const bucket = dispatchedByTask.get(card.taskId)
+        if (bucket === undefined) dispatchedByTask.set(card.taskId, [card.assigneeMemberId])
+        else bucket.push(card.assigneeMemberId)
+      }
+    }
     let deliveries = 0
     let gates = 0
     for (const row of rows) {
       if (row.workgroupConfigJson === null) continue
-      if (!(await canViewTask(deps.db, actor, row))) continue
+      if (!visibleIds.has(row.id)) continue
       let raw: Record<string, unknown>
       try {
         raw = JsonObjectSchema.parse(JSON.parse(row.workgroupConfigJson))
@@ -392,17 +426,8 @@ export function buildRoomReads(
           .map((m) => m.id),
       )
       if (myMemberIds.size === 0) continue
-      const cards = await deps.db
-        .select({ assigneeMemberId: workgroupAssignments.assigneeMemberId })
-        .from(workgroupAssignments)
-        .where(
-          and(
-            eq(workgroupAssignments.taskId, row.id),
-            eq(workgroupAssignments.status, 'dispatched'),
-          ),
-        )
-      deliveries += cards.filter(
-        (c2) => c2.assigneeMemberId !== null && myMemberIds.has(c2.assigneeMemberId),
+      deliveries += (dispatchedByTask.get(row.id) ?? []).filter(
+        (assignee) => assignee !== null && myMemberIds.has(assignee),
       ).length
     }
     return { deliveries, gates, total: deliveries + gates }

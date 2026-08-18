@@ -15,22 +15,29 @@
 // owner∨collaborator; neither → null.
 
 import { isNull, and, count, eq, gte, inArray, type SQL } from 'drizzle-orm'
-import type { OverviewResponse, OverviewTasks, Permission } from '@agent-workflow/shared'
+import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type {
+  AclResourceType,
+  OverviewResponse,
+  OverviewTasks,
+  Permission,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
-import { listAgents } from '@/services/agent'
+import {
+  agents as agentsTable,
+  mcps as mcpsTable,
+  plugins as pluginsTable,
+  scheduledTasks,
+  skills as skillsTable,
+  tasks,
+  workflows as workflowsTable,
+  workgroups as workgroupsTable,
+} from '@/db/schema'
 import { countCachedRepos } from '@/services/gitRepoCache'
-import { listMcps } from '@/services/mcp'
 import { filterMemoriesByScopeVisibility, listMemories } from '@/services/memory'
-import { listPlugins } from '@/services/plugin'
-import { filterVisibleRows } from '@/services/resourceAcl'
-import { canViewScheduledTask, listScheduledTasks } from '@/services/scheduledTasks'
-import { listSkills } from '@/services/skill'
-import { excludeBuiltinAgents, excludeBuiltinWorkflows } from '@/services/systemResources'
+import { visibleRowsCondition, type AclColumnRef } from '@/services/resourceAcl'
 import { taskVisibilityCondition } from '@/services/task'
-import { listWorkflows } from '@/services/workflow'
-import { listWorkgroups } from '@/services/workgroups'
 
 const WINDOW_7D_MS = 7 * 86_400_000
 
@@ -42,6 +49,33 @@ async function gatedCount(
 ): Promise<number | null> {
   if (!actor.permissions.has(perm)) return null
   return await load()
+}
+
+/**
+ * RFC-311 — the six ACL'd resource counts as one indexed `count(*)` each,
+ * replacing "materialize the full list (workflows carried every definition
+ * JSON) and take `.length`" on a 60s × per-tab poll. Semantics stay LOCKED to
+ * the list pipeline via `visibleRowsCondition` (the SQL twin of
+ * `filterVisibleRows`) and the RFC-190 oracle test, which asserts per-actor
+ * equality between these numbers and the actual list endpoints.
+ */
+async function countAclResource(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  table: SQLiteTable,
+  cols: AclColumnRef,
+  extra?: SQL<unknown>,
+): Promise<number> {
+  const conditions: SQL<unknown>[] = []
+  const visibility = visibleRowsCondition(db, actor, type, cols)
+  if (visibility !== undefined) conditions.push(visibility)
+  if (extra !== undefined) conditions.push(extra)
+  const rows = await db
+    .select({ n: count() })
+    .from(table)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+  return rows[0]?.n ?? 0
 }
 
 async function buildTaskStats(
@@ -94,54 +128,44 @@ export async function buildOverview(
     memories,
     taskStats,
   ] = await Promise.all([
-    gatedCount(
-      actor,
-      'agents:read',
-      async () =>
-        (await filterVisibleRows(db, actor, 'agent', excludeBuiltinAgents(await listAgents(db))))
-          .length,
+    gatedCount(actor, 'agents:read', () =>
+      countAclResource(db, actor, 'agent', agentsTable, agentsTable, eq(agentsTable.builtin, false)),
     ),
-    gatedCount(
-      actor,
-      'skills:read',
-      async () => (await filterVisibleRows(db, actor, 'skill', await listSkills(db))).length,
+    gatedCount(actor, 'skills:read', () =>
+      countAclResource(db, actor, 'skill', skillsTable, skillsTable),
     ),
-    gatedCount(
-      actor,
-      'mcps:read',
-      async () => (await filterVisibleRows(db, actor, 'mcp', await listMcps(db))).length,
+    gatedCount(actor, 'mcps:read', () => countAclResource(db, actor, 'mcp', mcpsTable, mcpsTable)),
+    gatedCount(actor, 'plugins:read', () =>
+      countAclResource(db, actor, 'plugin', pluginsTable, pluginsTable),
     ),
-    gatedCount(
-      actor,
-      'plugins:read',
-      async () => (await filterVisibleRows(db, actor, 'plugin', await listPlugins(db))).length,
+    gatedCount(actor, 'workflows:read', () =>
+      countAclResource(
+        db,
+        actor,
+        'workflow',
+        workflowsTable,
+        workflowsTable,
+        eq(workflowsTable.builtin, false),
+      ),
     ),
-    gatedCount(
-      actor,
-      'workflows:read',
-      async () =>
-        (
-          await filterVisibleRows(
-            db,
-            actor,
-            'workflow',
-            excludeBuiltinWorkflows(await listWorkflows(db)),
-          )
-        ).length,
-    ),
-    gatedCount(
-      actor,
-      'workgroups:read',
-      async () =>
-        (await filterVisibleRows(db, actor, 'workgroup', await listWorkgroups(db))).length,
+    gatedCount(actor, 'workgroups:read', () =>
+      countAclResource(db, actor, 'workgroup', workgroupsTable, workgroupsTable),
     ),
     gatedCount(actor, 'repos:read', () => countCachedRepos(db)),
-    gatedCount(
-      actor,
-      'scheduled-tasks:read',
-      async () =>
-        (await listScheduledTasks(db)).filter((row) => canViewScheduledTask(actor, row)).length,
-    ),
+    gatedCount(actor, 'scheduled-tasks:read', async () => {
+      // canViewScheduledTask ≡ tasks:read:all ∨ owner=me (its SYSTEM branch is
+      // a subset of owner=me), so the count pushes down to one indexed query
+      // instead of materializing every row's launch_payload JSON.
+      const rows = await db
+        .select({ n: count() })
+        .from(scheduledTasks)
+        .where(
+          actor.permissions.has('tasks:read:all')
+            ? undefined
+            : eq(scheduledTasks.ownerUserId, actor.user.id),
+        )
+      return rows[0]?.n ?? 0
+    }),
     gatedCount(actor, 'memory:read', async () => {
       const approved = await listMemories(db, { status: 'approved' })
       return (await filterMemoriesByScopeVisibility(db, actor, approved)).length

@@ -44,6 +44,67 @@ export interface OpenDbOptions {
   skipIntegrityCheck?: boolean
   /** RFC-213: PRAGMA synchronous mode (default NORMAL — byte-equivalent to prior). */
   synchronous?: 'NORMAL' | 'FULL'
+  /** RFC-311: PRAGMA cache_size budget in MiB (default 128). The daemon runs a
+   *  single connection over a multi-GB file; SQLite's ~2MB default page cache
+   *  turns every wide scan into cold disk reads. */
+  pageCacheMib?: number
+  /** RFC-311: PRAGMA mmap_size window in MiB (default 512, 0 disables). The
+   *  engine silently falls back to 0 on filesystems without mmap support. */
+  mmapMib?: number
+  /** RFC-311: warn-log any statement slower than this many ms (default 50,
+   *  0 disables). Every statement here runs synchronously on the daemon's
+   *  event loop, so a slow one freezes ALL HTTP/WS — surface them. */
+  slowQueryMs?: number
+}
+
+/**
+ * RFC-311 — slow-statement telemetry for the daemon's synchronous connection.
+ *
+ * bun:sqlite has no query hook, so wrap the two entry points drizzle actually
+ * uses (`prepare` → Statement.all/get/run/values, and `exec`) plus `query`
+ * (bun's cached variant used by our own maintenance code). Timing covers the
+ * synchronous execution only; iterator consumption (`iterate`) is not timed.
+ * Exported for direct unit testing with an injected log sink.
+ */
+export function instrumentSlowStatements(
+  sqlite: Database,
+  thresholdMs: number,
+  logSlow: (ms: number, sql: string) => void = (ms, sql) =>
+    console.warn(`[db-slow] ${ms}ms: ${sql}`),
+): void {
+  if (thresholdMs <= 0) return
+  const clip = (sql: string): string => (sql.length > 300 ? `${sql.slice(0, 300)}…` : sql)
+  const timed = <A extends unknown[], R>(sql: string, fn: (...args: A) => R) => {
+    return (...args: A): R => {
+      const t0 = performance.now()
+      try {
+        return fn(...args)
+      } finally {
+        const ms = performance.now() - t0
+        if (ms >= thresholdMs) logSlow(Math.round(ms), clip(sql))
+      }
+    }
+  }
+  const wrapStatement = (stmt: object, sql: string): object =>
+    new Proxy(stmt, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown
+        if (typeof value !== 'function') return value
+        const bound = (value as (...a: unknown[]) => unknown).bind(target)
+        if (prop === 'all' || prop === 'get' || prop === 'run' || prop === 'values') {
+          return timed(sql, bound)
+        }
+        return bound
+      },
+    })
+  for (const method of ['prepare', 'query'] as const) {
+    const orig = (sqlite[method] as (...a: unknown[]) => object).bind(sqlite)
+    ;(sqlite as unknown as Record<string, unknown>)[method] = (...args: unknown[]) =>
+      wrapStatement(orig(...args), String(args[0]))
+  }
+  const origExec = (sqlite.exec as (...a: unknown[]) => unknown).bind(sqlite)
+  ;(sqlite as unknown as Record<string, unknown>).exec = (...args: unknown[]) =>
+    timed(String(args[0]), origExec)(...args)
 }
 
 /**
@@ -71,6 +132,15 @@ export function openDb(opts: OpenDbOptions): DbClient {
     sqlite.exec('PRAGMA journal_mode = WAL;')
     sqlite.exec(`PRAGMA synchronous = ${opts.synchronous === 'FULL' ? 'FULL' : 'NORMAL'};`)
     sqlite.exec('PRAGMA busy_timeout = 5000;')
+    // RFC-311 — capacity pragmas for a single long-lived connection over a
+    // multi-GB file. Negative cache_size = KiB budget. mmap_size is a request:
+    // unsupported filesystems answer 0 and reads fall back to the page cache.
+    // temp_store=MEMORY keeps recursive-CTE/sort scratch out of disk temp files.
+    const pageCacheMib = Math.max(2, Math.floor(opts.pageCacheMib ?? 128))
+    sqlite.exec(`PRAGMA cache_size = ${-pageCacheMib * 1024};`)
+    const mmapMib = Math.max(0, Math.floor(opts.mmapMib ?? 512))
+    sqlite.exec(`PRAGMA mmap_size = ${mmapMib * 1024 * 1024};`)
+    sqlite.exec('PRAGMA temp_store = MEMORY;')
   } catch (err) {
     throw new DbCorruptionError(opts.path, [err instanceof Error ? err.message : String(err)])
   }
@@ -147,6 +217,9 @@ export function openDb(opts: OpenDbOptions): DbClient {
     } else {
       sqlite.exec('PRAGMA foreign_keys = ON;')
     }
+    // RFC-311 — armed after migrations so one-time upgrade work stays out of
+    // the steady-state slow log.
+    instrumentSlowStatements(sqlite, opts.slowQueryMs ?? 50)
     return db
   } catch (err) {
     // Admission/migration failures happen before the caller owns the client.

@@ -18,7 +18,7 @@ import {
   SubmitClarifyAnswersSchema,
   type TaskActorRole,
 } from '@agent-workflow/shared'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
@@ -28,11 +28,13 @@ import { broadcastClarifyAnsweredForRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
 import {
+  countAwaitingClarifyRounds,
   getClarifyRoundDetail,
   listClarifyRoundSummaries,
   saveClarifyDraft,
 } from '@/services/clarifyRounds'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
+import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { Paths } from '@/util/paths'
@@ -122,14 +124,9 @@ async function filterRoundsByTaskVisibility<T extends { taskId: string }>(
   if (actor.permissions.has('tasks:read:all')) return [...rows]
   const taskIds = [...new Set(rows.map((r) => r.taskId))]
   if (taskIds.length === 0) return []
-  const taskRows = await deps.db
-    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
-    .from(tasksTable)
-    .where(inArray(tasksTable.id, taskIds))
-  const visible = new Set<string>()
-  for (const t of taskRows) {
-    if (await canViewTask(deps.db, actor, t)) visible.add(t.id)
-  }
+  // RFC-311: one indexed membership query instead of one collaborator lookup
+  // per task (this ran on the 15s badge poll — audit L1-10).
+  const visible = await visibleTaskIdsOf(deps.db, actor, taskIds)
   return rows.filter((r) => visible.has(r.taskId))
 }
 
@@ -181,21 +178,11 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-099: badge counts only rounds on tasks visible to the actor.
-      // RFC-202 T6: both branches now count via the SAME clarify_rounds path —
-      // the old admin branch queried the legacy self-clarify table, which
-      // (a) missed every cross-agent round (audit P2: admin badge undercounted)
-      // and (b) kept counting rounds of terminal tasks forever. The uncapped
-      // limit keeps the count exact (never truncated by the list page size).
-      const actor = actorOf(c)
-      const pending = await listClarifyRoundSummaries(deps.db, {
-        status: 'awaiting_human',
-        limit: Number.MAX_SAFE_INTEGER,
-      })
-      if (actor.permissions.has('tasks:read:all')) {
-        return c.json({ count: pending.length })
-      }
-      const visible = await filterRoundsByTaskVisibility(deps, actor, pending)
-      return c.json({ count: visible.length })
+      // RFC-202 T6: terminal tasks' rounds stay out of the count.
+      // RFC-311: one indexed count(*) — the previous shape materialized every
+      // clarify_rounds row (questions/answers JSON included) plus two full
+      // tasks-table scans in its helpers, on a 15s × per-tab poll.
+      return c.json({ count: await countAwaitingClarifyRounds(deps.db, actorOf(c)) })
     },
   )
 
