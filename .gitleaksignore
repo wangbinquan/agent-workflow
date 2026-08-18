@@ -1,32 +1,11 @@
-# Test fixtures that deliberately LOOK like credentials — they exercise the
-# RFC-234 secret scanner / masking pipeline itself (see each file's header).
-# Fingerprints pin the already-committed patches; the lines also carry
-# `gitleaks:allow` so future edits stay clean.
-094f0f2f55ab34e626178c20ebdcc24507cf5c7f:packages/shared/tests/intent-secret-slots.test.ts:generic-api-key:25
-094f0f2f55ab34e626178c20ebdcc24507cf5c7f:packages/backend/tests/rfc234-resolve-bundle.test.ts:github-pat:272
-094f0f2f55ab34e626178c20ebdcc24507cf5c7f:packages/backend/tests/rfc234-dump-builder.test.ts:github-pat:32
-c95836accef7f4b6bef2a3e2933b815ad85fde13:packages/backend/tests/rfc234-system-agent-run.test.ts:generic-api-key:224
-c95836accef7f4b6bef2a3e2933b815ad85fde13:packages/backend/tests/session-capture-sqlite.test.ts:generic-api-key:316
-# RFC-269 代码平台调用节点的测试夹具。它们是**假**凭据（`aw-fixture-…`），
-# 用来验证 token 的密封存储、尾号掩码与「明文不进任何响应」的脱敏路径。
-# 前三条钉的是最初那版夹具（误用了 `glpat-` / `ghp_` 前缀，已改）——它们仍
-# 留在 git 历史里，而 gitleaks detect 扫的是全部历史，改当前文件消不掉。
-# 后三条钉当前这版；行上另有 `gitleaks:allow`，未来编辑不会再复发。
-d96a5c729f71bcdc10531cc8aef6ee7c3885ef94:packages/backend/tests/rfc269-code-host-connections.test.ts:gitlab-pat:29
-d96a5c729f71bcdc10531cc8aef6ee7c3885ef94:packages/backend/tests/rfc269-code-host-execution.test.ts:gitlab-pat:19
-d96a5c729f71bcdc10531cc8aef6ee7c3885ef94:packages/backend/tests/rfc269-code-host-execution.test.ts:generic-api-key:68
-a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-connections.test.ts:generic-api-key:195
-a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-connections.test.ts:generic-api-key:228
-a7d1e3183176a31d733899c31d6613240de6870e:packages/backend/tests/rfc269-code-host-execution.test.ts:generic-api-key:69
-# RFC-277 在同一假凭据后增加 TLS 字段，新提交重新触发了历史指纹；
-# 当前行已改为同行 `gitleaks:allow`，下面只钉已推送的历史 commit。
-af5d0826921bb01e6085194f19c7ae81784ebedc:packages/backend/tests/rfc269-code-host-execution.test.ts:generic-api-key:80
+# gitleaks 历史误报豁免（fingerprint = commit:file:rule:line）。
+#
+# gitleaks detect 扫全历史：源码里已加 `gitleaks:allow` 行内注释只对新 commit
+# 生效，进了历史的匹配必须在这里按 fingerprint 精确豁免。只登记确认过的误报，
+# 每条注明为什么不是 secret；真 secret 一律轮换+清史，不进本文件。
 
-# RFC-271 配置包脱敏投影的测试夹具。它们是**合成**串（`FAKEtok_` / `FAKEq_`），
-# 用来验证 argv 只换命中项、URL 换值后仍是合法 http URL 这两条判据。
-# 下面三条钉的是最初那版夹具（误用了 `ghp_` 前缀、URL query 用了裸 `token=`，
-# 已改）—— 它们仍在 git 历史里，而 gitleaks detect 扫的是全部历史，改当前文件
-# 消不掉。当前版另有行内 `gitleaks:allow`，未来编辑不会再复发。
-3a262cbbdb97f4644bea5290113d6d29f161c88e:packages/shared/tests/rfc271-bundle-secrets.test.ts:generic-api-key:48
-3a262cbbdb97f4644bea5290113d6d29f161c88e:packages/shared/tests/rfc271-bundle-secrets.test.ts:generic-api-key:65
-3a262cbbdb97f4644bea5290113d6d29f161c88e:packages/shared/tests/rfc271-bundle-secrets.test.ts:generic-api-key:93
+# RFC-310 PR-3（66a79be2）：测试字面量撞 generic-api-key 规则——
+# `idempotencyKey: 'idem-forged-actor-1'` / `deliveryKey: 'journey-delivery-1'`
+# 是幂等键/投递去重键的测试值，非凭据。
+66a79be2d746820786ae5260c607fb574744ead6:packages/backend/tests/rfc310-pr3-upload-security.test.ts:generic-api-key:195
+66a79be2d746820786ae5260c607fb574744ead6:packages/backend/tests/rfc310-pr3-journey.test.ts:generic-api-key:614

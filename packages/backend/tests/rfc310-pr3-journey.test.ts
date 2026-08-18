@@ -611,7 +611,7 @@ describe('rfc310 pr3 journey — composition sweeps and recovery', () => {
         id: ulid(),
         missionId,
         source: 'webhook',
-        deliveryKey: 'journey-delivery-1',
+        deliveryKey: 'journey-delivery-1', // gitleaks:allow（幂等/去重键测试值，非凭据）
         now: Date.now(),
       }).accepted,
     ).toBe(true)

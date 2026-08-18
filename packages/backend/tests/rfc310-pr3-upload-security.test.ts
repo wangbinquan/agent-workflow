@@ -192,7 +192,7 @@ describe('rfc310 pr3 upload security — HTTP surface', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          idempotencyKey: 'idem-forged-actor-1',
+          idempotencyKey: 'idem-forged-actor-1', // gitleaks:allow（幂等/去重键测试值，非凭据）
           repositoryId: 'repo-1',
           repositoryGroupId: null,
           submission: {
