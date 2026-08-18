@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🧭 **设计中 RFC（Draft，2026-08-18）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+> 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
 > 平台发布、review/CI/conflict 修复、`waiting-committer` / `ready-to-merge` 回退，直到外部 merged/closed；平台
 > **永不自动 merge/approve/resolve**。所有下一动作、员工与 Java/C++/polyglot ActionTemplate、重试/交人均由
@@ -19,7 +19,11 @@
 > polyglot 两段选择、`completed-no-change`、unknown/stale 规则停机、pipeline missing trigger、`tracking-only` 人工接管、
 > cancel/handoff transition fence 和 durable wait；用户补充后又纵向复核了上传目标 create/replace CAS、
 > preserve-upload/agent-editable、fresh 重建、首次 publish 后 seed 吸收、no-change、UI preview 与最终 commit 完整性。
-> **当前仅三件套设计，等待用户批准 D1–D12；无生产代码、schema、API 或 worker 改动。**
+> **2026-08-18 用户批准 D1–D12 并授权实现，同时做出四项实现前裁决（design.md §19，三件套相关章节已按裁决修订）：**
+> ①跳过 Codex 设计门直接进 PR-0（实现门照常）；②**不引入沙箱**——无 OS sandbox/只读 Git view/command broker/env
+> allowlist 重构，no-Git 以「提示词禁止+前后快照事后校验+违规整树回退」强制，凭据与 Git identity 仍零注入；③**不做
+> 网络相关安全动作**（无 outbound deny/allowlist/fence）；④provider 首版=既有 system mock 包新增 requirement/pipeline
+> mock 能力+完整用例防护，真实自研系统 adapter 由使用方自写。按 plan.md 批次实施，当前从 PR-0（T0–T8 go/no-go）开始。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

@@ -2,7 +2,7 @@
 
 > 技术设计见 [design.md](./design.md)，任务分解见 [plan.md](./plan.md)。
 >
-> 状态：**Draft（2026-08-18，待用户批准）**。本轮只输出设计，不修改生产代码。
+> 状态：**In Progress（2026-08-18 用户批准 D1–D12 并授权实现；实现前四项裁决见 design.md §19）**。
 >
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
@@ -71,10 +71,13 @@ Agent 只负责：理解自然语言、分析代码语义、编写业务文件�
 
 ### 2.3 Agent 没有 Git 和外部副作用权限
 
-- Agent 可以按能力合同读取或编辑授权的业务文件；不能 `git add/commit/push/merge/rebase/reset/checkout`，不能改 refs/index/config/object database。
+- Agent 可以按能力合同读取或编辑授权的业务文件；不得 `git add/commit/push/merge/rebase/reset/checkout`，不得改 refs/index/config/object database。
 - Agent 不持有代码托管、流水线、SSH、Git credential；不能创建/更新 MR、评论、批准、合入或重跑流水线。
 - `commit/push/comment/MR/pipeline retry` 只能由平台 action 执行，并且必须消费已验证 receipt。
-- 禁止不能只写在 prompt 里；运行时隔离、凭据裁剪、只读 Git facade、前后快照与事后验证共同构成边界。
+- **首版强制机制（2026-08-18 用户裁决）**：不引入 OS 沙箱、只读 Git facade、command broker 或网络管控；边界由
+  「prompt protocol block 禁止 + 零凭据/零 Git identity 注入 + 前后快照对拍与事后验证 + 违规整树回退」构成。
+  Agent 对 Git metadata / evidence / 受保护路径的写入不被 OS 阻止，但必被检测为 boundary violation：attempt 作废、
+  workspace 废弃重建，绝不进入 candidate/commit。OS 级隔离与网络边界列为后续增强，另立 RFC。
 
 ### 2.4 Agent 输出必须被 envelope 封死
 
@@ -418,7 +421,7 @@ changed | no-change | needs-information | blocked
 | 仓库 × 能力矩阵单选模板                             | 改为仓库/组 assignment 选择数字员工 + 策略   | 不再维护五个格子；看到一名员工的整体 readiness             | 生成一份迁移草稿，冲突/缺项明确标红，不静默猜                           |
 | 固定三轮 CI campaign                                | 改为规则预算                                 | 默认迁移为 3，但可按类别配置                               | 迁入 policy revision                                                    |
 | 冲突只报告                                          | 增加可选 `conflict.repair`                   | 默认建议启用“merge target into source”；可配置 report-only | 新能力，不自动启用旧配置                                                |
-| Agent 继承普通任务 Git 可达性                       | 强制 no-Git execution profile                | Agent 中依赖 Git 写操作的旧 prompt/hook 会失败             | readiness 预检 + 禁止分支测试；平台承担所有 Git                         |
+| Agent 继承普通任务 Git 可达性                       | no-Git profile：检测+回退（首版无 OS 阻断）  | Agent 中依赖 Git 写操作的旧 prompt/hook 会触发违规回退     | readiness 预检 + 违规检测/回退测试；平台承担所有 Git                    |
 | 通用 code-host action string                        | 收缩为 closed 数字员工 action union          | 数字员工永远无法调用 merge/approve/custom                  | 源码负扫描与 action catalog 测试                                        |
 
 RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们的**产品上层被取代**，不会篡改历史状态。
@@ -430,7 +433,7 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
    其他改动一起 commit/push；默认保持上传字节不被 Agent 改写。
 2. **只给一个需求 ID。** 我在已选仓库的任务入口提交 `REQ-1042`，不再上传正文或附件；Java 数字员工调用内建系统 adapter，把正文、接口文档和验收附件下载为多文件 bundle，分析后不清楚兼容范围，就在原渠道或平台反问。回答后继续，不要求我重新上传材料。
 3. **同一套系统有 Java/C++ 员工。** 仓库事实显示改动落在 CMake 模块，规则命中 `cpp-cmake@4`；另一个 Spring 模块命中 `java-spring@3`。活动页能看到命中的 ruleId 与 facts，不是 Agent 自己选的。
-4. **Agent 写代码但不碰 Git。** Agent 只编辑业务文件并输出 envelope；平台验证真实 diff、跑门禁、创建 candidate，随后由 source-control commit/push。Agent 即使尝试 `git commit` 也会被拒绝、现场回滚并 fresh-session 重跑。
+4. **Agent 写代码但不碰 Git。** Agent 只编辑业务文件并输出 envelope；平台验证真实 diff、跑门禁、创建 candidate，随后由 source-control commit/push。Agent 即使尝试 `git commit`，也会被前后快照对拍检测为违规、现场整树回滚并 fresh-session 重跑，其 Git 写不会进入任何 candidate。
 5. **流水线日志很大。** 自研门禁 adapter 把 2 GB 编译日志下载并整理进 `.agent-workflow/pipeline/<bundleId>/`，prompt 只给 manifest。修复 Agent 按需读相关日志；平台按 run/head/digest 判断结果，绝不把截断日志当完整事实。
 6. **reviewer 提意见后自动跟进。** 新 thread revision 唤醒 Mission；规则选择 feedback 模板，Agent 修改代码，平台验证/提交/推送并回复结果。thread 仍由 committer 决定是否 resolve。
 7. **MR 一度 ready 又变红。** 平台显示 `ready-to-merge`；目标分支更新造成冲突后状态回退，规则选择 conflict repair。修复并重新过门禁后再次 ready。最终 committer 合入，Mission 记录 `merged` 终态。
@@ -483,7 +486,9 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 
 - **AC-9** 每个 Agent stage 都有 nonce、唯一 port、exact schema、closed outcome、semantic validator；无合法 envelope 不产生 action result。
 - **AC-10** 同会话收到精确错误后重试 N 次；耗尽后整个 workspace/session 从 exact baseline 重建并 fresh-session 重跑 M 次。
-- **AC-11** `git add/commit/push/merge/rebase/reset/checkout`、Git metadata 写、evidence 写、受保护路径写均被阻断并由负向测试覆盖。
+- **AC-11** `git add/commit/push/merge/rebase/reset/checkout`、Git metadata 写、evidence 写、受保护路径写均被前后快照
+  对拍检测为 boundary violation：attempt 作废、workspace 整树回退、绝不产生 candidate/commit；负向测试覆盖检测与回退
+  （首版不承诺 OS 级写阻断，见 §2.3）。
 - **AC-12** Agent 不可取得代码托管/流水线/Git credential；任何 Agent 自报 changed files/tests/commit 都由平台事实覆盖。
 - **AC-13** 相对 AgentAttemptBaseline 的 `changed + empty delta`、`no-change + dirty delta`、
   `needs-information + edits`、错误 feedback revision 均被拒绝；action-level no-change 不吞掉 baseline 中尚待发布的 upload seed。

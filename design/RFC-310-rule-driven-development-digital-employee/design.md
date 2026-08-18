@@ -2,7 +2,7 @@
 
 > 产品视角见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)。
 >
-> 状态：**Draft（2026-08-18，待用户批准）**。本文只定义终局合同，不授权实现。
+> 状态：**In Progress（2026-08-18 获用户批准；§19 记录实现前四项裁决，相关章节已按裁决修订）**。
 
 ## 0. 设计裁决与事实基线
 
@@ -28,14 +28,15 @@ bounded context 的确定性 participant 执行。
 | requirement 文档正文直接进入 JSON                                    | `domain/requirementInput.ts:28-70`                                    | 改为 immutable multi-file bundle ref，不把大正文放入 DB/event/prompt               |
 | code-host port 是 `action: string + Record<string,string>`           | `ports/codeHostPort.ts:22-37`                                         | 改为 closed development action union，类型层排除 merge/approve/resolve/custom      |
 | source-control 已提供 path-free candidate/commit/publish participant | `modules/source-control/public/participants.ts:10-47`                 | 直接复用，不另造 Git 实现，也不把路径泄露给 Mission                                |
-| Claude runtime 当前可写 Git metadata 且继承 daemon 环境              | `services/runtime/claudeCode/boundary.ts:107-115`、`spawn.ts:279-305` | 新增 digital-employee no-Git profile；环境从 allowlist 构造而非删减 daemon env     |
+| Claude runtime 当前可写 Git metadata 且继承 daemon 环境              | `services/runtime/claudeCode/boundary.ts:107-115`、`spawn.ts:279-305` | digital-employee profile：不注入 Git identity/凭据，违规靠快照检测+回退（见 §7.6） |
 | `.agent-workflow` 只有 `inputs/runs/fusion` 官方子目录               | `packages/shared/src/workspaceConvention.ts:5-18`                     | 增加 `pipeline`；需求固定在 `inputs/requirements`，两者都受 RFC-308 排除策略保护   |
 
 ### 0.3 不可协商的不变量
 
 1. 同一 Mission/MR 同时最多一个拥有 workspace 写权的 `ActionRun`。
 2. 同一 fact snapshot + policy revision 的规则结果 byte-identical；Agent 不参与调度或模板选择。
-3. Agent 不能写 Git metadata、不能持有代码托管/流水线凭据、不能直接产生外部副作用。
+3. Agent 不持有代码托管/流水线凭据、不能直接产生外部副作用；对 Git metadata / evidence / 受保护路径的任何写入
+   都是 boundary violation——首版靠前后快照检测并整树回退（非 OS 阻断），绝不进入 candidate。
 4. Agent 的输出只是待验证声明；真实 diff、测试、head、gate、评论与 mergeability 均由程序采集。
 5. `ready-to-merge` 可回退，`merged` 只能由外部事实观察产生；平台不存在 merge/approve action。
 6. 跨 bounded context 只走 RFC-294 的 exact `public/*` 或 consumer-owned `required-ports`。
@@ -666,7 +667,7 @@ interface ActionTemplate {
 模板不保存 raw filesystem path、credential 或 runtime object。`promptSupplement` 被放在平台不可覆盖的 protocol
 block **之前**，并经过明确分隔；里面出现“忽略 envelope / 自己提交 / 自己选下一步”不会改变运行合同。
 
-`runtimeProfileRef` 必须声明并通过 digital-employee no-Git probe；`skillRefs/mcpRefs` 只能引用 capability manifest
+`runtimeProfileRef` 必须声明并通过 digital-employee 检测/回退 probe（§7.6）；`skillRefs/mcpRefs` 只能引用 capability manifest
 标记为本地或只读、无外部副作用的资源，不能因此重新取得 requirement/pipeline/code-host connector。context profile
 只能从 CapabilityDefinition 允许的 evidence class 中做子集选择。`writablePathPolicyRef` 只能**收窄** capability 的
 workspace mode，`additionalProtectedPathClasses` 只能增加保护项，二者都不能打开 Git/evidence/platform roots。
@@ -1891,28 +1892,34 @@ source-control
 只有第 8 步成功后才产生 `ChangeCandidateRef`。Agent 的 envelope 验证成功但 workspace 验证失败，整个 attempt
 仍失败，不存在“格式对了就算成功”。
 
-### 7.6 no-Git/no-code-host 的强制层
+### 7.6 no-Git/no-code-host 的强制层（2026-08-18 用户裁决修订）
 
-不能靠 prompt 或 PATH wrapper 单点保证。digital-employee execution profile 同时启用：
+用户在实现批准时裁决：**首版不引入 OS 沙箱、只读 Git view、command broker、环境 allowlist 重构或任何网络管控**；
+no-Git 以「提示词禁止 + 事后校验 + 违规回退」强制。digital-employee execution profile 首版启用：
 
-1. **分离真实 writer**：Agent action workspace 是 baseline 的可写业务 overlay；source-control 的真实 publication
-   workspace、index、refs 与 credential 不进入 Agent namespace。
-2. **只读 Git view**：如 runtime 需要 repo 语义，提供只读 `.git` view + immutable index/object view；
-   `GIT_OPTIONAL_LOCKS=0`，所有 metadata mount 为只读。读 status/diff/log 可用，写 index/refs/config/object 失败。
-3. **OS sandbox**：只允许声明的业务路径写；`.git`/common dir、`.agent-workflow` evidence、runtime settings、
-   output protocol internals与其他 mounts 不可写。绝对路径调用其他 Git binary 也无法越过文件系统边界。
-4. **command broker**：显式拒绝 `git add/commit/push/merge/rebase/reset/checkout/switch/branch/tag/update-ref`、
-   `ssh/scp`、code-host CLI 和 credential helper；但 broker 只是可读错误体验，不是主安全边界。
-5. **空白环境 allowlist**：只注入 runtime 必需值、isolated HOME/TMP、locale 与 action-scoped refs；不复制 daemon
-   environment，不注入 Git author/committer、SSH agent、provider token、pipeline token 或 code-host endpoint secret。
-6. **外部连接收缩**：Agent 没有 integration adapter/MR/pipeline MCP；默认 outbound network deny。若未来增加只读
-   知识连接，必须是新 capability contract，不能复用本 RFC 的执行 profile。
-7. **前后快照**：平台 hash Git metadata view、protected roots、evidence manifests 与 mount topology；退出后逐项对拍。
-8. **独立 diff**：candidate 不信任 Agent 运行的 `git status`，由 source-control 以 pinned baseline 和 overlay 自己计算。
+1. **分离真实 writer**：Agent action workspace 是 baseline 的可写业务 workspace；source-control 的真实 publication
+   workspace 与 candidate/commit/push 机制不进入 Agent 路径。Agent 即使在自己的 workspace 里做出 commit，也只是
+   将被检测丢弃的本地垃圾，不是发布链上的任何输入。
+2. **零凭据/零身份注入**：不注入 Git author/committer identity（收掉现有 `assembleClaudeEnv` 的注入分支）、不提供
+   SSH agent、provider token、pipeline token 或 code-host endpoint secret；integration connection secret 只存在于
+   daemon/adapter 一侧。环境沿用现状继承方式，不做成 allowlist 重构（后续增强）。
+3. **无外部能力挂载**：Agent 不配 integration adapter/MR/pipeline MCP connector；skills/MCP 只能引用模板声明的
+   本地只读资源。不做 OS 级 outbound network 管控（用户裁决：不做网络相关安全动作）。
+4. **prompt protocol block**：不可覆盖的协议块明确禁止 `git add/commit/push/merge/rebase/reset/checkout`、
+   凭据探测与代码托管调用；这是行为约定层，不宣称是安全边界。
+5. **前后快照对拍**：Agent 启动前平台 hash Git metadata（HEAD/refs/index digest）、protected roots、evidence
+   manifests；退出后逐项对拍。任何差异 ⇒ boundary violation ⇒ 按 §7.7 立即作废 attempt、整树废弃重建、fresh-session
+   重跑；violation 现场绝不产生 ChangeCandidate。
+6. **独立 diff**：candidate 不信任 Agent 运行的 `git status` 或自报 changed paths，由 source-control 以 pinned
+   baseline 和真实 overlay 自己计算；`.agent-workflow`、受保护路径出现在 candidate 中固定阻断。
 
-负向测试必须覆盖 PATH 绕过、绝对 Git binary、`git -C`、自设 `GIT_DIR/GIT_INDEX_FILE`、直接写 index/refs/config、
-libgit2/文件 API、修改 evidence、symlink 逃逸、读取 credential env 与访问 code-host endpoint。任何一条成功都阻断
-上线。
+负向测试锁「检测 + 回退」而非「OS 阻断」：Agent 进程执行 `git commit`/写 index/refs/config、修改 evidence、写受
+保护路径后，快照对拍必须稳定捕获、violation receipt 分类正确、workspace 从 exact baseline byte-identical 重建、无
+candidate/commit/push 发生。凭据负向测试仍然成立：daemon 侧 connection secret 与 Git identity 不出现在 Agent env/
+文件/MCP 中。
+
+**后续增强（不在本 RFC 首版）**：OS 级文件系统写边界（Claude Code 自带 sandbox 收紧 / OpenCode 外包 sandbox-exec
+与 bwrap）、只读 `.git` view、outbound network 管控。若引入须另立 RFC 并按能力影响清单呈批。
 
 ### 7.7 两级重试与 whole-workspace 回退
 
@@ -1935,7 +1942,7 @@ fresh rerun 0 / exact baseline B / evidence E / template T / nonce N0
 | ------------------------------------------------------------ | -------------------------------- | ------------------ | ----------------------------------------- |
 | missing/multiple envelope、schema、semantic mismatch         | 允许，给 exact JSON pointer/code | N 次耗尽后允许     | 同会话保留；fresh 时 whole-workspace 重建 |
 | runtime transient 且 sandbox receipt 完整                    | 按 runtime classifier            | 允许               | 不确定完整性时按 fresh 处理               |
-| Git/protected/evidence/credential/network boundary violation | 禁止                             | 允许但计入安全预算 | 立即 kill、revoke、整树废弃               |
+| Git/protected/evidence 写入等 boundary violation（快照检出） | 禁止                             | 允许但计入安全预算 | 立即 kill、revoke、整树废弃               |
 | baseline/evidence digest 不可重建                            | 禁止                             | 禁止               | Mission `blocked(evidence-unavailable)`   |
 | cancel、terminal MR、epoch lost                              | 禁止                             | 禁止               | cancel + discard，不产生 candidate        |
 
@@ -2483,7 +2490,7 @@ worker监听；正式全量 cutover 要等所有目标 repo 就绪。
 - WorkPackage `arbitrate`、AgentPlan `select` 的生产调用；
 - 通用 `CodeHostPort.call({action:string})` 在 development-automation 消费路径；
 - 任意 stage hook 写工作树/自由 injection 的 Mission 路径；
-- Agent runtime 对 Git metadata write allow、Git identity 注入与 daemon environment 继承；
+- digital-employee 路径上的 Git identity 注入（daemon environment 继承按 2026-08-18 裁决保留，不在删除清单）；
 - legacy round launch/monitor writer 和 repo × capability matrix write UI/API；
 - cross-context `code-capability/internal|domain|infrastructure` imports。
 
@@ -2493,17 +2500,17 @@ worker监听；正式全量 cutover 要等所有目标 repo 就绪。
 
 ### 14.1 threat model
 
-| 威胁                                          | 边界                                                                    |
-| --------------------------------------------- | ----------------------------------------------------------------------- |
-| requirement/comment/log 中的 prompt injection | untrusted bundle、protocol block、无外部工具/凭据、规则不读正文         |
-| 恶意 adapter 输出路径/文件                    | one-shot sink、safe walk、budget、atomic import、平台重算 digest        |
-| Agent 尝试 Git/host/pipeline 副作用           | no-Git OS profile、空环境、无 credential/MCP、closed effects、前后快照  |
-| stale head 上发布                             | baseline/head digest + remote CAS + post-effect reconcile               |
-| webhook 重放/乱序/缺失                        | delivery dedupe 只唤醒、主动采集、periodic reconcile                    |
-| policy 规则歧义或被篡改                       | immutable revision、strict AST、publish compile、canonical digest/trace |
-| worker 崩溃重复副作用                         | intent/outbox/idempotency/provider reconcile/epoch fencing              |
-| 大日志拖垮 DB/prompt/memory                   | streaming evidence store、ref-only DB、bounded ranged reads             |
-| 不可见资源通过 trace 泄露                     | authority-filtered preview/query、opaque refs、redacted trace           |
+| 威胁                                          | 边界                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| requirement/comment/log 中的 prompt injection | untrusted bundle、protocol block、无外部工具/凭据、规则不读正文                      |
+| 恶意 adapter 输出路径/文件                    | one-shot sink、safe walk、budget、atomic import、平台重算 digest                     |
+| Agent 尝试 Git/host/pipeline 副作用           | prompt 禁止、零凭据/零 identity、无 connector/MCP、closed effects、快照检测+整树回退 |
+| stale head 上发布                             | baseline/head digest + remote CAS + post-effect reconcile                            |
+| webhook 重放/乱序/缺失                        | delivery dedupe 只唤醒、主动采集、periodic reconcile                                 |
+| policy 规则歧义或被篡改                       | immutable revision、strict AST、publish compile、canonical digest/trace              |
+| worker 崩溃重复副作用                         | intent/outbox/idempotency/provider reconcile/epoch fencing                           |
+| 大日志拖垮 DB/prompt/memory                   | streaming evidence store、ref-only DB、bounded ranged reads                          |
+| 不可见资源通过 trace 泄露                     | authority-filtered preview/query、opaque refs、redacted trace                        |
 
 ### 14.2 audit
 
@@ -2553,16 +2560,19 @@ unknown gate、rule no-match、adapter contract failure、recovery adoption。�
 - public DTO 出现 DbClient/host-or-absolute-path/credential/URL/header/AbortSignal/runtime/session/raw log/body 的
   architecture scan 失败；`RepoRelativePath` 只在声明的 target 字段白名单出现。
 
-### 15.3 no-Git 与 workspace 安全 tests
+### 15.3 no-Git 检测/回退与 workspace tests（按 2026-08-18 裁决）
 
-为每种支持的 Agent runtime 跑真实子进程，不用 mock command result：
+为每种支持的 Agent runtime 跑真实子进程，不用 mock command result；锁的是「检测 + 回退 + 发布链不受污染」，
+不宣称 OS 阻断：
 
-- read-only `git status/diff/log` 可用；所有写 Git 命令失败且 metadata digest 不变；
-- direct file/libgit2、absolute binary、`GIT_DIR`/alternate index、symlink/hardlink/traversal 均失败；
-- daemon secret/Git identity/SSH agent/code-host/pipeline credential 不在 env/files/MCP；
-- requirement/pipeline mounts read-only；业务 allowlist 正向写成功；受保护/非允许路径失败；
-- 上传 seed 只能由平台 placement port 写入；Agent 无法改 `preserve-upload`、删除 `agent-editable` 目标或把 evidence
-  临时文件冒充为仓库目标，fresh rerun 能从 baseline + plan byte-identical 重建；
+- `git status/diff/log` 等只读语义可用，正常路径下 Git metadata 前后 digest 不变；
+- 进程内执行 `git commit`/直写 index/refs/config、修改 evidence、写受保护/非允许路径后，前后快照对拍稳定检出
+  boundary violation，分类 receipt 正确；
+- 平台管理的 connection secret、pipeline/code-host token 与 Git identity 不出现在 Agent env/files/MCP（daemon 环境
+  按现状继承，不承诺全量净化）；
+- 业务 allowlist 内正向写成功并进入真实 diff；violation 现场绝不派生 ChangeCandidate；
+- 上传 seed 只能由平台 placement port 写入；Agent 改 `preserve-upload`、删除 `agent-editable` 目标或把 evidence
+  临时文件冒充为仓库目标均在 workspace validation 拒绝，fresh rerun 能从 baseline + plan byte-identical 重建；
 - invalid envelope 同 session 重试可修正；耗尽后旧 session/workspace 不可达，新现场 byte-identical；
 - boundary violation 跳过 same-session，kill/revoke/discard 后 fresh；耗尽不产生 candidate/commit/push。
 
@@ -2657,3 +2667,17 @@ immutable RepositoryUploadPlan 由平台按 frozen baseline 生成 `SeedChangeRe
 补充复核后的功能判定：目标模型已形成从 admission、资料获取、确定性选择、Agent action、平台发布、MR care、人工接管到
 external terminal 的闭环；未发现仍需由 Agent 自行决定下一动作的合法路径。剩余不确定性属于实施期 contract probe、
 provider 适配和真实 E2E 的可行性验证，由 plan PR-0 及对应批次设置停止条件，不能用实现期临时分支改写本设计。
+
+## 19. 实现前用户裁决（2026-08-18，实现授权时）
+
+用户批准 D1–D12 并授权实现，同时对实现范围做出四项裁决，本文件相关章节已按此修订：
+
+| 裁决          | 内容                                                                                                                                                                            | 落点                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| 设计门        | 跳过 Codex 设计门补跑，直接进入 PR-0；实现门照常在各批 declare done 前跑                                                                                                        | 流程                                         |
+| 执行边界      | **不引入沙箱**：不做 OS sandbox、只读 Git view、command broker、env allowlist 重构；no-Git 以「提示词禁止 + 前后快照事后校验 + 违规整树回退」强制，凭据/Git identity 仍然零注入 | §0.2/§0.3/§7.6/§7.7/§14.1/§15.3、plan PR-0/4 |
+| 网络          | **不做网络相关安全动作**：无 outbound deny、无 allowlist、无网络 fence；LLM 流量（含自定义网关）不受平台干预                                                                    | §7.6                                         |
+| provider 范围 | 首版在既有 system mock 包里新增 requirement/pipeline provider mock 能力并实现完整用例防护；真实自研系统 adapter 由使用方自写，平台交付 adapter 框架 + 编写文档                  | §15.4、plan T6/T36/T70                       |
+
+OS 级隔离与网络边界若未来引入，须另立 RFC 并按能力影响清单呈批；本 RFC 其余合同不因此裁决放松（envelope、
+closed effect union、source-control 独占 Git、快照对拍、回退台账、决策确定性均不变）。

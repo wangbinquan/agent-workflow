@@ -2,7 +2,7 @@
 
 > 产品视角见 [proposal.md](./proposal.md)，技术设计见 [design.md](./design.md)。
 >
-> 状态：**Draft（2026-08-18，待用户批准）**。下列任务全部未授权实施。
+> 状态：**In Progress（2026-08-18 获用户批准，按批次实施；T4/T5/T7/T43/T44/T52/T106 已按 design.md §19 裁决改写）**。
 
 ## 0. 交付原则
 
@@ -41,20 +41,22 @@ PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批�
 
 ### 目标
 
-用最小、不可进入生产的 probe 证明三个高风险前提：RFC-294 的依赖方向能落地；所有正式 runtime 都能做到
-Agent 可写业务文件但不能写 Git/拿凭据；adapter 能以受限 sink 流式写大 evidence。未通过不进入 PR-1。
+用最小、不可进入生产的 probe 证明三个高风险前提：RFC-294 的依赖方向能落地；所有正式 runtime 上「Agent 写
+Git/受保护路径必被前后快照对拍检出、violation 现场可 byte-identical 回退、凭据与 Git identity 零注入」成立
+（2026-08-18 裁决：不引入 OS 沙箱/网络管控，机制为提示词+事后校验+回退）；adapter 能以受限 sink 流式写大
+evidence。未通过不进入 PR-1。
 
-| 编号 | 任务                                                                                                                                                      | 验收                                                                     | 状态 |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---- |
-| T0   | 重新取 exact baseline，生成 code-capability 调用面、stage/hook/script、code-host action、runtime env/Git mount、旧 writer、cross-context import inventory | manifest 有 owner/remove wave，和源码计数对拍                            | ⏳   |
-| T1   | 建 `development-automation` 七层骨架、exact `public/*`/`composition/required-ports` 空白入口和 dependency ledger                                          | 未授权 symbol 为 0；bootstrap only composition scan                      | ⏳   |
-| T2   | 建 consumer-owned required-port contract fixture：integration/task provider adapters 只做 DTO translation                                                 | 禁止 provider import Mission domain/application；禁止 bootstrap 业务分支 | ⏳   |
-| T3   | 定义 strict opaque refs、Fact/Policy/Decision/Agent/Bundle codecs 与 unknown-key mutation harness                                                         | every codec round-trip；新增 unknown field 全红                          | ⏳   |
-| T4   | 为 OpenCode、Claude Code 及所有可选正式 runtime 实作**测试专用** no-Git profile probe                                                                     | 业务 allowlist 正向写成功；Git/metadata/credential/network 负向全失败    | ⏳   |
-| T5   | 验证 read-only Git view：`status/diff/log` 可读，index/refs/config/object/common dir 不可写                                                               | OS/file API/absolute binary/libgit2 同形攻击覆盖                         | ⏳   |
-| T6   | 建 one-shot EvidenceSink + runnable requirement/pipeline provider mock probe，流式生成大文件                                                              | peak memory/DB/prompt 不随日志总大小线性增长；safe-walk 拒绝恶意输出     | ⏳   |
-| T7   | 源码/AST ratchet：禁止 generic code-host action、Agent Git write allow/identity、daemon env inheritance进入新路径                                         | 负 fixture 能让每条 ratchet 打红                                         | ⏳   |
-| T8   | 写 go/no-go 报告：runtime/provider/architecture 每项明确 pass 或 blocker                                                                                  | 任一 blocker ⇒ 后续任务标 `⛔`，不以 TODO 接受                           | ⏳   |
+| 编号 | 任务                                                                                                                                                      | 验收                                                                        | 状态 |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---- |
+| T0   | 重新取 exact baseline，生成 code-capability 调用面、stage/hook/script、code-host action、runtime env/Git mount、旧 writer、cross-context import inventory | manifest 有 owner/remove wave，和源码计数对拍                               | ⏳   |
+| T1   | 建 `development-automation` 七层骨架、exact `public/*`/`composition/required-ports` 空白入口和 dependency ledger                                          | 未授权 symbol 为 0；bootstrap only composition scan                         | ⏳   |
+| T2   | 建 consumer-owned required-port contract fixture：integration/task provider adapters 只做 DTO translation                                                 | 禁止 provider import Mission domain/application；禁止 bootstrap 业务分支    | ⏳   |
+| T3   | 定义 strict opaque refs、Fact/Policy/Decision/Agent/Bundle codecs 与 unknown-key mutation harness                                                         | every codec round-trip；新增 unknown field 全红                             | ⏳   |
+| T4   | 为 OpenCode、Claude Code 实作**测试专用**检测/回退 probe：真实子进程写 Git/evidence/受保护路径后快照对拍检出并回退                                        | 业务路径正向写成功；违规写全部检出且分类正确；workspace byte-identical 重建 | ⏳   |
+| T5   | Git metadata/protected roots/evidence 的前后快照与对拍机制：`status/diff/log` 只读语义可用，写入必被检出                                                  | file API/绝对路径 Git binary/`GIT_DIR` 等同形改动零漏报                     | ⏳   |
+| T6   | 建 one-shot EvidenceSink + runnable requirement/pipeline provider mock probe，流式生成大文件                                                              | peak memory/DB/prompt 不随日志总大小线性增长；safe-walk 拒绝恶意输出        | ⏳   |
+| T7   | 源码/AST ratchet：禁止 generic code-host action 消费与 Git identity 注入进入新 digital-employee 路径（env 继承按裁决保留）                                | 负 fixture 能让每条 ratchet 打红                                            | ⏳   |
+| T8   | 写 go/no-go 报告：runtime/provider/architecture 每项明确 pass 或 blocker                                                                                  | 任一 blocker ⇒ 后续任务标 `⛔`，不以 TODO 接受                              | ⏳   |
 
 PR-0 只允许测试/probe/architecture scaffolding，不能启动 Mission worker、改 production route 或切 writer。
 
@@ -140,23 +142,24 @@ baseline byte-identical 重建，尚不 commit/push。
 把 PR-0 probe 变成 task-execution 的正式 digital-employee profile；Mission 可运行一项受限 Agent capability，验证
 输出与真实 workspace，并完成两级恢复，但仍不 commit/push。
 
-| 编号 | 任务                                                                                                  | 依赖      | 状态 |
-| ---- | ----------------------------------------------------------------------------------------------------- | --------- | ---- |
-| T41  | `AgentActionExecutionPort` + task-execution provider adapter；保持唯一四级 execution chain            | T1,T22    | ⏳   |
-| T42  | path-free baseline/input/seed/workspace/protocol refs 与 task composition binder                      | T37,T41   | ⏳   |
-| T43  | 正式 no-Git runtime profile：separate writer、read-only Git view、OS mounts、command broker           | T4,T5,T42 | ⏳   |
-| T44  | runtime env allowlist/isolated HOME/TMP；移除 Git identity、daemon env、code-host/pipeline credential | T43       | ⏳   |
-| T45  | capability-specific AgentInputManifest + prompt assembler/untrusted delimiter/protocol block          | T9,T42    | ⏳   |
-| T46  | nonce/named-port/strict closed outcome parser；禁止 fake platform facts                               | T3,T45    | ⏳   |
-| T47  | semantic/workspace validator + preserve/editable、mode 与 commit-checkout round-trip consistency      | T46       | ⏳   |
-| T48  | source-control 从 baseline+seed+overlay 派生 candidate；上传 entry/发布后 lineage 不得漏失            | T47       | ⏳   |
-| T49  | same-session structured feedback N 次 + persistent attempt ledger                                     | T46,T47   | ⏳   |
-| T50  | whole-workspace discard/rematerialize + fresh session/new nonce M 次                                  | T42,T49   | ⏳   |
-| T51  | boundary violation 快退、capability revoke、悬挂进程/attempt recovery                                 | T43,T50   | ⏳   |
-| T52  | 所有 runtime 的 no-Git/credential/mount/escape/rollback 真实子进程测试进入常规 gate                   | T43-T51   | ⏳   |
+| 编号 | 任务                                                                                                                       | 依赖      | 状态 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
+| T41  | `AgentActionExecutionPort` + task-execution provider adapter；保持唯一四级 execution chain                                 | T1,T22    | ⏳   |
+| T42  | path-free baseline/input/seed/workspace/protocol refs 与 task composition binder                                           | T37,T41   | ⏳   |
+| T43  | 正式 digital-employee runtime profile：separate writer、快照检测/违规快退接线（无 OS 沙箱，按裁决）                        | T4,T5,T42 | ⏳   |
+| T44  | 移除 digital-employee 路径 Git identity 注入；connection/code-host/pipeline secret 不入 Agent env/文件（env 继承现状保留） | T43       | ⏳   |
+| T45  | capability-specific AgentInputManifest + prompt assembler/untrusted delimiter/protocol block                               | T9,T42    | ⏳   |
+| T46  | nonce/named-port/strict closed outcome parser；禁止 fake platform facts                                                    | T3,T45    | ⏳   |
+| T47  | semantic/workspace validator + preserve/editable、mode 与 commit-checkout round-trip consistency                           | T46       | ⏳   |
+| T48  | source-control 从 baseline+seed+overlay 派生 candidate；上传 entry/发布后 lineage 不得漏失                                 | T47       | ⏳   |
+| T49  | same-session structured feedback N 次 + persistent attempt ledger                                                          | T46,T47   | ⏳   |
+| T50  | whole-workspace discard/rematerialize + fresh session/new nonce M 次                                                       | T42,T49   | ⏳   |
+| T51  | boundary violation 快退、capability revoke、悬挂进程/attempt recovery                                                      | T43,T50   | ⏳   |
+| T52  | 所有 runtime 的检测/回退/credential/rollback 真实子进程测试进入常规 gate                                                   | T43-T51   | ⏳   |
 
-这里的关键完成定义不是“git 命令返回失败”，而是任意写路径攻击后 Git/protected/evidence digest 均不变，旧
-session/workspace capability 已不可达，并且没有 ChangeCandidate。
+这里的关键完成定义不是“git 命令返回失败”（首版无 OS 阻断），而是任意 Git/protected/evidence 写入攻击都被前后
+快照对拍检出为 boundary violation，旧 session/workspace capability 已不可达、现场从 exact baseline byte-identical
+重建，并且没有任何 ChangeCandidate/commit/push 产生。
 
 ## 7. PR-5：第一价值链——requirement 到 MR
 
@@ -267,17 +270,17 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 ## 12. PR-10：收口、删除与发布
 
-| 编号 | 任务                                                                                      | 依赖      | 状态 |
-| ---- | ----------------------------------------------------------------------------------------- | --------- | ---- |
-| T104 | 删除 legacy launch/monitor writer、arbitrate/select 决策、任意 hook Mission 路径          | T103      | ⏳   |
-| T105 | 删除旧 repo × capability 写面、五 capability 产品入口、unsafe generic code-host port 消费 | T103      | ⏳   |
-| T106 | runtime 全面移除新路径的 Git metadata allow/identity/daemon env inheritance；负扫描 0     | T104      | ⏳   |
-| T107 | cross-context internal import 清零；public surface/required ports/field budgets 复核      | T104-T106 | ⏳   |
-| T108 | schema contract：确认 rollback 窗口/backup restore 后 drop 不再使用的 legacy write schema | T103-T107 | ⏳   |
-| T109 | 系统 mock 全旅程、真实 runtime、Git remote、浏览器、crash/large-log/permission E2E        | 全部      | ⏳   |
-| T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local` | T109      | ⏳   |
-| T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                   | T110      | ⏳   |
-| T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口           | T111      | ⏳   |
+| 编号 | 任务                                                                                         | 依赖      | 状态 |
+| ---- | -------------------------------------------------------------------------------------------- | --------- | ---- |
+| T104 | 删除 legacy launch/monitor writer、arbitrate/select 决策、任意 hook Mission 路径             | T103      | ⏳   |
+| T105 | 删除旧 repo × capability 写面、五 capability 产品入口、unsafe generic code-host port 消费    | T103      | ⏳   |
+| T106 | digital-employee 路径移除 Git identity 注入并锁检测/回退接线；负扫描 0（env 继承按裁决保留） | T104      | ⏳   |
+| T107 | cross-context internal import 清零；public surface/required ports/field budgets 复核         | T104-T106 | ⏳   |
+| T108 | schema contract：确认 rollback 窗口/backup restore 后 drop 不再使用的 legacy write schema    | T103-T107 | ⏳   |
+| T109 | 系统 mock 全旅程、真实 runtime、Git remote、浏览器、crash/large-log/permission E2E           | 全部      | ⏳   |
+| T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local`    | T109      | ⏳   |
+| T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                      | T110      | ⏳   |
+| T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口              | T111      | ⏳   |
 
 ## 13. 验收标准到任务映射
 
@@ -321,19 +324,21 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 ## 14. 风险与停止条件
 
-| 风险                                                                          | 预防/停止条件                                                                                            |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 某 runtime 无法同时提供可写业务 overlay 与不可写 Git metadata                 | PR-0 直接 go/no-go；该 runtime 不进入员工可选项，不能降级成 prompt 禁止                                  |
-| 自建 adapter 只能输出无 head/完整性语义                                       | gate 永远 partial；可以诊断/给 Agent看，但不得参与 ready/pass，需扩 provider contract                    |
-| 旧模板大量依赖任意 hook/arbitrate/select                                      | 迁移报告显式 blocked；不自动启用，不用 Agent翻译；由管理员改成 typed rule/adapter                        |
-| source-control 现有 participant 缺 exact remote-head CAS/conflict preparation | 在 source-control owner 扩 bounded offered contract并独立测试；不得在 Mission 调 Git                     |
-| 大 evidence 超磁盘/保留成本                                                   | admission/bundle/Mission budget + streaming + owner-aware GC；超限 block，不截断冒充完整                 |
-| policy 过于复杂导致不可解释                                                   | closed predicates、AST/rule 数硬上限、shadow/no-match publish gate；拒绝通用 DSL                         |
-| cutover 时外部状态持续变化                                                    | freeze旧 writer、epoch/claim、重采 external truth、generation flip；无法取得一致 snapshot 就延期 cutover |
-| ready 定义与代码托管 approval 语义不同                                        | UI 分 machine holds/human holds/host mergeable；只有 host 明确可合入才叫 ready-to-merge                  |
+| 风险                                                                          | 预防/停止条件                                                                                                              |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 快照对拍存在漏检（Agent 的 Git/受保护写未被发现）                             | PR-0 直接 go/no-go：检测机制对已知同形攻击（file API/绝对 binary/`GIT_DIR` 等）必须零漏报，否则该 runtime 不进入员工可选项 |
+| 自建 adapter 只能输出无 head/完整性语义                                       | gate 永远 partial；可以诊断/给 Agent看，但不得参与 ready/pass，需扩 provider contract                                      |
+| 旧模板大量依赖任意 hook/arbitrate/select                                      | 迁移报告显式 blocked；不自动启用，不用 Agent翻译；由管理员改成 typed rule/adapter                                          |
+| source-control 现有 participant 缺 exact remote-head CAS/conflict preparation | 在 source-control owner 扩 bounded offered contract并独立测试；不得在 Mission 调 Git                                       |
+| 大 evidence 超磁盘/保留成本                                                   | admission/bundle/Mission budget + streaming + owner-aware GC；超限 block，不截断冒充完整                                   |
+| policy 过于复杂导致不可解释                                                   | closed predicates、AST/rule 数硬上限、shadow/no-match publish gate；拒绝通用 DSL                                           |
+| cutover 时外部状态持续变化                                                    | freeze旧 writer、epoch/claim、重采 external truth、generation flip；无法取得一致 snapshot 就延期 cutover                   |
+| ready 定义与代码托管 approval 语义不同                                        | UI 分 machine holds/human holds/host mergeable；只有 host 明确可合入才叫 ready-to-merge                                    |
 
 ## 15. 不在本计划内
 
+- OS 级沙箱、只读 Git view、command broker、env allowlist 重构与 outbound 网络管控（2026-08-18 用户裁决：首版为
+  提示词+事后校验+回退，上述项列为后续增强、另立 RFC）；
 - 自动 approve、resolve、merge 或直接维护 main；
 - Agent 自主创建 capability/tool/rule、编辑 stage graph 或选择下一动作；
 - 通用表达式/脚本 policy 与任意 code-host custom action；
