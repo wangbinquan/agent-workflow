@@ -637,7 +637,7 @@ function ReposPage() {
                             {t('repos.operations.loadMore')}
                           </button>
                           {list.isFetchingNextPage ? (
-                            <span role="status" className="muted">
+                            <span role="status" className="sr-only">
                               {t('repos.operations.loadingMore')}
                             </span>
                           ) : null}

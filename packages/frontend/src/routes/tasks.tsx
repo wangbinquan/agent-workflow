@@ -883,7 +883,7 @@ function TaskOperationsList(props: {
                 {t('tasks.operations.loadMore')}
               </button>
               {props.loadingMore ? (
-                <span role="status" className="muted">
+                <span role="status" className="sr-only">
                   {t('tasks.operations.loadingMore')}
                 </span>
               ) : null}
@@ -1044,7 +1044,7 @@ function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOpera
             {t('tasks.operations.loadMoreChildren')}
           </button>
           {query.isFetchingNextPage ? (
-            <span role="status" className="muted">
+            <span role="status" className="sr-only">
               {t('tasks.operations.loadingMoreChildren')}
             </span>
           ) : null}

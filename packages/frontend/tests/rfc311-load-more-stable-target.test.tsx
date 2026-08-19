@@ -17,6 +17,8 @@
 //
 // 加载状态改由按钮的 `aria-busy` + 一条 role="status" 旁白承载，不再靠改按钮文案。
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { TaskOperationsListItem, TaskOperationsRootPage } from '@agent-workflow/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -27,7 +29,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import '../src/i18n'
@@ -178,11 +180,31 @@ describe('RFC-311 — the Load more target survives its own loading state', () =
     fireEvent.click(button)
     expect(gate.cursorRequests.count).toBe(before)
 
+    // 旁白**不能**是可命中的相邻节点：第一版把它落成 <span class="muted">，
+    // webkit 当场报 `<span role="status" …> intercepts pointer events`，点击照样
+    // 落不下去。它只该说给屏幕阅读器听，所以必须是 sr-only（且 sr-only 全局
+    // pointer-events:none，见下面的样式判据）。
+    const tail = button.closest('.task-operations__more')!
+    const status = within(tail as HTMLElement).getByRole('status')
+    expect(status.className, '加载旁白必须 sr-only，否则会挡住它旁边的按钮').toContain('sr-only')
+
     gate.releaseAll()
     await waitFor(() => expect(screen.getByTestId('task-row-t_c')).toBeTruthy())
 
     // 关键不变量:整趟下来是**同一个 DOM 节点**——换节点就是浏览器侧的
     // `element was detached from the DOM, retrying`。
     expect(screen.getByRole('button', { name: 'Load more tasks' })).toBe(button)
+  })
+})
+
+// 上面那条只能断言「用了 sr-only」；sr-only 本身**必须**不吃指针事件，否则同样的
+// 拦截会换个地方复发（它是绝对定位元素，包含块是最近的定位祖先，可能正好压在按钮
+// 的命中点上）。jsdom 不做命中测试，所以这里退到源码层判据兜底。
+describe('RFC-311 — sr-only 永不作为指针目标', () => {
+  test('the sr-only primitive declares pointer-events: none', () => {
+    const css = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf-8')
+    const rule = /\.sr-only\s*\{[^}]*\}/.exec(css)
+    expect(rule, '.sr-only 规则找不到了——判据失效比断言失败更危险').not.toBeNull()
+    expect(rule![0]).toContain('pointer-events: none')
   })
 })
