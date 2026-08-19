@@ -278,6 +278,23 @@ type AdmissionOutcome =
       readonly policyContent: unknown
     }
 
+type RequirementSourceResolution =
+  | {
+      readonly kind: 'selected'
+      readonly source: EmployeeContent['requirementSources'][number]
+      readonly options: readonly string[]
+    }
+  | {
+      readonly kind: 'needs-selection'
+      readonly options: readonly string[]
+    }
+  | {
+      readonly kind: 'blocked'
+      readonly blockCode: 'requirement-source-unresolved'
+      readonly blockDetail: string
+      readonly options: readonly string[]
+    }
+
 /**
  * launch 与 preview 共用的选择器链（design §12.1：preview 必须跑与 launch 同一套
  * repository facts → employee → policy 解析，不得用全局默认替代）。
@@ -402,6 +419,48 @@ async function resolveEmployeeAndPolicy(
     assignment,
     outcome: { kind: 'selected', employee, employeeContent: content, policyRef, policyContent },
   }
+}
+
+/**
+ * External-ID source choice is shared by preview and launch. Keeping this in
+ * one pure helper prevents the UI preflight from claiming one adapter while
+ * the durable Mission freezes another.
+ */
+function resolveRequirementSource(
+  content: EmployeeContent,
+  assignment: AssignmentContext,
+  requestedSourceKey: string | null,
+): RequirementSourceResolution {
+  const candidates = content.requirementSources
+  const options = candidates.map((candidate) => candidate.sourceKey)
+  const byKey = (key: string) => candidates.find((candidate) => candidate.sourceKey === key) ?? null
+  if (requestedSourceKey !== null) {
+    const selected = byKey(requestedSourceKey)
+    return selected === null
+      ? {
+          kind: 'blocked',
+          blockCode: 'requirement-source-unresolved',
+          blockDetail: `requested key '${requestedSourceKey}' not offered by employee`,
+          options,
+        }
+      : { kind: 'selected', source: selected, options }
+  }
+  if (assignment?.defaultRequirementSourceKey != null) {
+    const selected = byKey(assignment.defaultRequirementSourceKey)
+    if (selected !== null) return { kind: 'selected', source: selected, options }
+  }
+  const defaults = candidates.filter((candidate) => candidate.isDefault)
+  if (defaults.length === 1) return { kind: 'selected', source: defaults[0]!, options }
+  if (candidates.length === 1) return { kind: 'selected', source: candidates[0]!, options }
+  if (candidates.length === 0) {
+    return {
+      kind: 'blocked',
+      blockCode: 'requirement-source-unresolved',
+      blockDetail: 'employee offers no requirement source',
+      options,
+    }
+  }
+  return { kind: 'needs-selection', options }
 }
 
 /** 裸 ZodError 到中央 handler 会渲染成 500——统一折成 typed 422（仓内定式）。 */
@@ -568,44 +627,24 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
       }
     } else {
       // requirement source 解析：requested > assignment default > 员工唯一 default。
-      const candidates = outcome.employeeContent.requirementSources
-      const requested = input.submission.sourceKey ?? null
-      const byKey = (key: string) => candidates.find((c) => c.sourceKey === key) ?? null
-      let resolved: (typeof candidates)[number] | null = null
-      if (requested !== null) {
-        resolved = byKey(requested)
-        if (resolved === null) {
-          status = 'blocked'
-          base.blockCode = 'requirement-source-unresolved'
-          base.blockDetail = `requested key '${requested}' not offered by employee`
-        }
-      } else if (
-        assignment?.defaultRequirementSourceKey != null &&
-        byKey(assignment.defaultRequirementSourceKey) !== null
-      ) {
-        resolved = byKey(assignment.defaultRequirementSourceKey)
-      } else {
-        const defaults = candidates.filter((c) => c.isDefault)
-        if (defaults.length === 1) resolved = defaults[0]!
-        else if (candidates.length === 1) resolved = candidates[0]!
-      }
-      if (resolved !== null) {
-        base.resolvedSourceKey = resolved.sourceKey
-        base.resolvedAdapterId = resolved.adapterRef.id
-        base.resolvedAdapterRevision = resolved.adapterRef.revision
+      const source = resolveRequirementSource(
+        outcome.employeeContent,
+        assignment,
+        input.submission.sourceKey ?? null,
+      )
+      if (source.kind === 'selected') {
+        base.resolvedSourceKey = source.source.sourceKey
+        base.resolvedAdapterId = source.source.adapterRef.id
+        base.resolvedAdapterRevision = source.source.adapterRef.revision
         status = 'working'
-      } else if (base.blockCode === null) {
-        if (candidates.length === 0) {
-          status = 'blocked'
-          base.blockCode = 'requirement-source-unresolved'
-          base.blockDetail = 'employee offers no requirement source'
-        } else {
-          // 多候选且无默认：交互选择（AC-5）。
-          status = 'awaiting-information'
-          base.blockDetail = JSON.stringify(candidates.map((c) => c.sourceKey))
-        }
+      } else if (source.kind === 'needs-selection') {
+        // 多候选且无默认：交互选择（AC-5）。
+        status = 'awaiting-information'
+        base.blockDetail = JSON.stringify(source.options)
       } else {
         status = 'blocked'
+        base.blockCode = source.blockCode
+        base.blockDetail = source.blockDetail
       }
     }
   }
@@ -678,6 +717,113 @@ export const previewDirectInputSchema = z
   .superRefine((input, ctx) => {
     refineUploadList(input.uploads, ctx, ['uploads'])
   })
+
+export const previewMissionAdmissionInputSchema = z
+  .object({
+    repositoryId: z.string().min(1),
+    repositoryGroupId: z.string().min(1).nullable(),
+    submission: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('direct') }).strict(),
+      z
+        .object({
+          kind: z.literal('external-reference'),
+          sourceKey: z.string().min(1).max(200).optional(),
+        })
+        .strict(),
+    ]),
+    requestedEmployee: versionedRefSchema.nullable(),
+    requestedPolicy: versionedRefSchema.nullable(),
+    actorUserId: z.string().nullable(),
+  })
+  .strict()
+
+export interface MissionAdmissionPreview {
+  readonly outcome: 'ready' | 'needs-source-selection' | 'blocked'
+  readonly employee: { readonly id: string; readonly revision: number } | null
+  readonly policy: { readonly id: string; readonly revision: number } | null
+  readonly requirementSource: {
+    readonly sourceKey: string
+    readonly adapter: { readonly id: string; readonly revision: number }
+  } | null
+  readonly sourceOptions: readonly string[]
+  readonly block: { readonly code: string; readonly detail: string | null } | null
+}
+
+/**
+ * Side-effect-free configuration preflight for every submission shape. Unlike
+ * the upload disposition preview, this needs no upload sessions and therefore
+ * also explains body-only and external-ID launches before a Mission is
+ * created. Selection and source resolution call the same helpers as launch.
+ */
+export async function previewMissionAdmission(
+  deps: LaunchDeps,
+  rawInput: unknown,
+): Promise<MissionAdmissionPreview> {
+  const input = parseOr422(previewMissionAdmissionInputSchema, rawInput)
+  const { assignment, outcome } = await resolveEmployeeAndPolicy(deps, {
+    repositoryId: input.repositoryId,
+    repositoryGroupId: input.repositoryGroupId,
+    requestedEmployee: input.requestedEmployee,
+    requestedPolicy: input.requestedPolicy,
+    now: deps.now(),
+  })
+  if (outcome.kind === 'blocked') {
+    return {
+      outcome: 'blocked',
+      employee: outcome.employee,
+      policy: null,
+      requirementSource: null,
+      sourceOptions: [],
+      block: { code: outcome.blockCode, detail: outcome.blockDetail },
+    }
+  }
+  const base = {
+    employee: outcome.employee,
+    policy: outcome.policyRef,
+  }
+  if (input.submission.kind === 'direct') {
+    return {
+      outcome: 'ready',
+      ...base,
+      requirementSource: null,
+      sourceOptions: [],
+      block: null,
+    }
+  }
+  const source = resolveRequirementSource(
+    outcome.employeeContent,
+    assignment,
+    input.submission.sourceKey ?? null,
+  )
+  if (source.kind === 'selected') {
+    return {
+      outcome: 'ready',
+      ...base,
+      requirementSource: {
+        sourceKey: source.source.sourceKey,
+        adapter: source.source.adapterRef,
+      },
+      sourceOptions: source.options,
+      block: null,
+    }
+  }
+  if (source.kind === 'needs-selection') {
+    return {
+      outcome: 'needs-source-selection',
+      ...base,
+      requirementSource: null,
+      sourceOptions: source.options,
+      block: null,
+    }
+  }
+  return {
+    outcome: 'blocked',
+    ...base,
+    requirementSource: null,
+    sourceOptions: source.options,
+    block: { code: source.blockCode, detail: source.blockDetail },
+  }
+}
 
 export interface DirectInputPreview {
   readonly employee: { readonly id: string; readonly revision: number }
