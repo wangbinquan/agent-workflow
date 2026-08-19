@@ -2949,6 +2949,17 @@ async function startTaskImpl(
           workspacePrunedAt: earlyError !== null && worktreePath === '' ? now : null,
           // RFC-311：本行自身即其（暂时只有自己的）子树 max(started_at)。
           branchStartedAt: now,
+          // RFC-311 G1：树根一次写定——有父就继承父的根，没父就是自己。
+          // parent_task_id 铸行后不可变，所以这一列此后永不需要更新；过滤视图
+          // 的快路径按它分组（见 taskOperations.ts fastFilteredRootQuery）。
+          rootTaskId:
+            deps.callLaunch?.parentTaskId === undefined
+              ? taskId
+              : (tx
+                  .select({ rootTaskId: tasks.rootTaskId })
+                  .from(tasks)
+                  .where(eq(tasks.id, deps.callLaunch.parentTaskId))
+                  .get()?.rootTaskId ?? deps.callLaunch.parentTaskId),
         })
         .run()
 

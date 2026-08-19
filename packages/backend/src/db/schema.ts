@@ -1141,6 +1141,11 @@ export const tasks = sqliteTable(
      * 旧实现「全量物化 + 递归聚合后才 LIMIT」的 O(全表) 形状。
      */
     branchStartedAt: integer('branch_started_at').notNull().default(0),
+    // RFC-311 G1 — 该任务所属**树根**的 id（顶层任务 = 自身）。parent_task_id
+    // 铸行后不可变，所以这一列一次写定。它让过滤视图的 root 选取从「两条递归
+    // CTE 走全森林」塌缩成一次 `GROUP BY root_task_id`（见 migration 0183 与
+    // services/taskOperations.ts 的 fastFilteredRootQuery）。
+    rootTaskId: text('root_task_id'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },

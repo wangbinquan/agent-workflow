@@ -154,8 +154,8 @@ for (let base = 0; base < args.tasks; base += CHUNK) {
       `INSERT OR IGNORE INTO tasks
          (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path, base_branch, branch,
           status, inputs, started_at, finished_at, running_ms, owner_user_id, launch_origin,
-          parent_task_id, invocation_depth, cached_repo_id, branch_started_at)
-       VALUES (?, ?, 'perf-wf', '{}', ?, ?, 'main', ?, ?, '{}', ?, ?, 0, 'perf-admin', 'manual', ?, ?, ?, ?)`,
+          parent_task_id, invocation_depth, cached_repo_id, branch_started_at, root_task_id)
+       VALUES (?, ?, 'perf-wf', '{}', ?, ?, 'main', ?, ?, '{}', ?, ?, 0, 'perf-admin', 'manual', ?, ?, ?, ?, ?)`,
     )
     for (let i = base; i < hi; i += 1) {
       const id = `perftask${pad(i, 7)}`
@@ -184,6 +184,10 @@ for (let base = 0; base < args.tasks; base += CHUNK) {
           : (i + 1) % 10 === 9 && i + 1 < args.tasks
             ? T0 + (((i + 1) * 104_729) % SPAN) + 60_000
             : startedAt,
+        // RFC-311 G1:批量插入同样要落根,否则**整库未落根**、过滤视图快路径
+        // 会被准入闸门整条挡回旧管线(第一次实测就撞到:66.5 秒那条 db-slow
+        // 正是闸门在按设计工作)。这里树深只有 1,子行的根即其父。
+        parentId ?? id,
       )
     }
   })

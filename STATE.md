@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 📝 **待批 RFC（Draft，2026-08-19）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
+> —— 现状只有 `users.last_login_at`（仅登录仪式写一次），无法回答「此刻在不在线」。判据取**活的 session WS 连接
+> + 60s 宽限期**（二态），零 DB、零 REST 端点、无人在宽限期时零定时器，与 RFC-311「常驻负载归零」同向。新增权限点
+> `users:presence`（默认全员、guest 无、PAT 永不持有）。后台落在 `modules/identity-access/` 分层内；前端新增公共
+> 原语 `PresenceDot`，接线 /users、署名 chip、任务成员面板、工作组花名册（人类成员）四处。**三件套已落档，待用户批准**。
+
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
 > 审计（全部 findings 见该目录 `audit-2026-08-18.md`）与五 PR 修复计划。用户四项拍板（保守档事件治理/任务归档
@@ -26,6 +32,12 @@
 > 清空全部终态树），现 422；②`SETTINGS_CONFIG_SCOPE_KEYS.gc` 漏登记 4 个键 ⇒ 设置页改了保存被静默丢弃，补齐
 > 并新增 `tests/settings-scope-coverage.test.ts` 自动对账（已做变异检验）。顺带修 nav-memory-tab 的固定睡眠竞态
 > （d916451c Windows shard 3/3 唯一红）。
+> **PR-7 ✅（G1/G2/G3 三处基准缺口全修，10 万任务库实测）**：G1 过滤视图快路径 **68,201ms → 62.3ms**
+> （物化 `root_task_id` 让两条递归 CTE 塌缩成一次 GROUP BY；27 组过滤 × 3 actor 逐页逐 id oracle +
+> 两次变异检验；**准入闸门**——库里有一行未落根就整条退回旧管线，宁可慢不可错）；G2 overview
+> **46.5 → 1.8ms**、工作组徽章 **10.5 → 0.6ms**（两条覆盖索引，证实"不该合并 9 条 count"的原判断）；
+> G3 归档器最长单语句 **1,190ms → 76ms**。**过程中踩到并修掉一个更严重的**：G3 第一版分窗让整轮
+> 从 6 秒劣化到 260 秒而 6 条单测全绿——判据「单测证明不了没改坏代价」已落 `docs/dev-gotchas.md`。
 > **待办**：T20 维护入口（opencode-stores 清理/freelist 提示/`db compact` CLI）/T21 prompt_text 外置;
 > /code work-items nextCursor 修复（RFC-310 PR-10 已落，可接手）;视觉 win32 基线随下一个 Windows 批。
 >

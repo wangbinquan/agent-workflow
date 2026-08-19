@@ -248,40 +248,65 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`)
 }
 
-function nonViewCondition(db: DbClient, actor: Actor, filters: TaskOperationsFilters): SQL {
-  const ref = { id: sql.raw('b.id'), ownerUserId: sql.raw('b.owner_user_id') }
+function nonViewCondition(
+  db: DbClient,
+  actor: Actor,
+  filters: TaskOperationsFilters,
+  // 旧管线在已物化的 `base b` 上求值；G1 的快路径直接打 `tasks t`，谓词逐字
+  // 相同、只换别名——两条路径共用这一个函数，避免过滤语义在两处漂移。
+  alias: string = 'b',
+): SQL {
+  const col = (name: string): SQL => sql.raw(`${alias}.${name}`)
+  const ref = { id: col('id'), ownerUserId: col('owner_user_id') }
   const conditions: SQL[] = [
     taskOwnershipScopeCondition(db, ref, actor.user.id, filters.scope) as SQL,
   ]
 
   if (filters.statuses.length > 0) {
-    conditions.push(sql`b.status IN (${list(filters.statuses)})`)
+    conditions.push(sql`${col('status')} IN (${list(filters.statuses)})`)
   }
   if (filters.subject === 'workgroup') {
-    conditions.push(sql`b.workgroup_id IS NOT NULL AND b.workgroup_id <> ''`)
+    conditions.push(sql`${col('workgroup_id')} IS NOT NULL AND ${col('workgroup_id')} <> ''`)
   } else if (filters.subject === 'agent') {
-    conditions.push(sql`(b.workgroup_id IS NULL OR b.workgroup_id = '')`)
-    conditions.push(sql`b.source_agent_name IS NOT NULL AND b.source_agent_name <> ''`)
+    conditions.push(sql`(${col('workgroup_id')} IS NULL OR ${col('workgroup_id')} = '')`)
+    conditions.push(
+      sql`${col('source_agent_name')} IS NOT NULL AND ${col('source_agent_name')} <> ''`,
+    )
   } else if (filters.subject === 'workflow') {
-    conditions.push(sql`(b.workgroup_id IS NULL OR b.workgroup_id = '')`)
-    conditions.push(sql`(b.source_agent_name IS NULL OR b.source_agent_name = '')`)
+    conditions.push(sql`(${col('workgroup_id')} IS NULL OR ${col('workgroup_id')} = '')`)
+    conditions.push(sql`(${col('source_agent_name')} IS NULL OR ${col('source_agent_name')} = '')`)
   }
-  if (filters.origin !== 'all') conditions.push(sql`b.launch_origin = ${filters.origin}`)
+  if (filters.origin !== 'all') conditions.push(sql`${col('launch_origin')} = ${filters.origin}`)
 
   if (filters.q !== undefined) {
     const pattern = `%${escapeLike(filters.q.toLocaleLowerCase('en-US'))}%`
     const escape = '\\'
+    // `base` 里的两个**派生**列在裸 tasks 上不存在，快路径按同一定义还原：
+    // workflow_name 是 workflows 的 JOIN，workgroup_name 是 workgroup_config_json
+    // 的 json_extract（与 baseCtes 逐字同源，改一处必须改两处——由 oracle 锁）。
+    const derived = (name: 'workflow_name' | 'workgroup_name'): SQL => {
+      if (alias === 'b') return col(name)
+      if (name === 'workflow_name') {
+        return sql`(SELECT w_q.name FROM workflows w_q WHERE w_q.id = ${col('workflow_id')})`
+      }
+      return sql`CASE WHEN json_valid(${col('workgroup_config_json')}) THEN
+          CASE WHEN json_type(${col('workgroup_config_json')}, '$.workgroupName') = 'text'
+            THEN NULLIF(json_extract(${col('workgroup_config_json')}, '$.workgroupName'), '')
+            ELSE NULL
+          END
+        ELSE NULL END`
+    }
     conditions.push(sql`(
-      lower(b.name) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(b.id) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(b.workflow_name, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(b.workgroup_name, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(b.source_agent_name, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(b.repo_path, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(b.repo_url, '')) LIKE ${pattern} ESCAPE ${escape}
+      lower(${col('name')}) LIKE ${pattern} ESCAPE ${escape}
+      OR lower(${col('id')}) LIKE ${pattern} ESCAPE ${escape}
+      OR lower(COALESCE(${derived('workflow_name')}, '')) LIKE ${pattern} ESCAPE ${escape}
+      OR lower(COALESCE(${derived('workgroup_name')}, '')) LIKE ${pattern} ESCAPE ${escape}
+      OR lower(COALESCE(${col('source_agent_name')}, '')) LIKE ${pattern} ESCAPE ${escape}
+      OR lower(COALESCE(${col('repo_path')}, '')) LIKE ${pattern} ESCAPE ${escape}
+      OR lower(COALESCE(${col('repo_url')}, '')) LIKE ${pattern} ESCAPE ${escape}
       OR EXISTS (
         SELECT 1 FROM task_repos tr
-        WHERE tr.task_id = b.id
+        WHERE tr.task_id = ${col('id')}
           AND (
             lower(COALESCE(tr.repo_path, '')) LIKE ${pattern} ESCAPE ${escape}
             OR lower(COALESCE(tr.repo_url, '')) LIKE ${pattern} ESCAPE ${escape}
@@ -292,14 +317,17 @@ function nonViewCondition(db: DbClient, actor: Actor, filters: TaskOperationsFil
   return andConditions(conditions)
 }
 
-function viewCondition(view: TaskListView, alias: string = 'nvm'): SQL {
+/** `openAlert` 覆盖 attention 视图里「有未结告警」这一半：旧管线读已物化的
+ *  `open_alert_count`，快路径直接打裸 tasks，只能用 EXISTS 子查询。其余分支
+ *  两条路径逐字相同。 */
+function viewCondition(view: TaskListView, alias: string = 'nvm', openAlert?: SQL): SQL {
   const col = (name: string): SQL => sql.raw(`${alias}.${name}`)
   if (view === 'all') return sql`1 = 1`
   if (view === 'active') return sql`${col('status')} IN (${list(TASK_LIST_ACTIVE_STATUSES)})`
   if (view === 'finished') return sql`${col('status')} IN (${list(TASK_LIST_FINISHED_STATUSES)})`
   return sql`(
     ${col('status')} IN (${list(TASK_LIST_ATTENTION_STATUSES)})
-    OR ${col('open_alert_count')} > 0
+    OR ${openAlert ?? sql`${col('open_alert_count')} > 0`}
   )`
 }
 
@@ -825,19 +853,227 @@ function fastDefaultRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOper
   `
 }
 
+/** RFC-311 G1 —— 过滤视图快路径的准入。与默认视图快路径同一条边界：只服务
+ *  **全可见** actor。受限 actor 的分支聚合按可见性裁剪后的树计算（不可见后代
+ *  既不贡献 recency 也不计数），物化的 root_task_id 是全局树根、答不了那个问题；
+ *  而他们的默认视图在旧管线下本就是 O(自身可见集)，规模由构造保证。
+ *
+ *  与 `isDefaultView` 一样导出：没有直接断言的话，把它整个改成 `false` 会让全部
+ *  测试照绿（oracle 退化成慢-vs-慢），快路径可以被静默关掉而无人察觉。 */
+export function canUseFilteredFastPath(actor: Actor): boolean {
+  return actor.permissions.has('tasks:read:all')
+}
+
+/**
+ * 快路径把 `root_task_id` 当分组键。一旦库里有行没落根（绕过服务层的裸 SQL
+ * 插入、或将来某条迁移漏了回填），那行会被当成**自己的**根静默挂错分支——
+ * 用户看到的是「某个子任务突然自成一行」，没有任何报错。
+ *
+ * 所以每次取页先问一句「还有没有未落根的行」：有就整条退回旧管线，宁可慢、
+ * 不可错。谓词与 `idx_tasks_root_missing` 的部分索引逐字一致，正常库上这是
+ * 一次命中空集的索引探查。
+ */
+export async function hasUnrootedTasks(db: DbClient): Promise<boolean> {
+  const row = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(sql`${tasks.rootTaskId} IS NULL`)
+    .limit(1)
+  return row.length > 0
+}
+
+/**
+ * RFC-311 G1 —— **过滤视图**的 O(匹配集) 快路径（旧管线是 O(全部任务) 且不可打断）。
+ *
+ * 旧管线为了回答「哪些 root 进这一页、怎么排序」，先把全部授权任务物化成 `base`，
+ * 再走两条递归 CTE：向上求「匹配行的祖先闭包」得到合格集 Q，向下从 root 走 Q 得到
+ * 分支成员，最后才 LIMIT。10 万任务库上单次 68 秒，而且是一条 SQL——单连接同步
+ * daemon 上等于整站冻结这么久。
+ *
+ * 等价改写的支点是 migration 0183 物化的 `root_task_id`：对**全可见** actor，
+ * `subtree(root) ∩ Q` 恰好等于「root_task_id = root 且 ∈ Q」的那批行，于是
+ *   - root 集合  = 匹配集按 root_task_id 去重；
+ *   - 排序键     = 每个 root 下**匹配行**的 max(started_at)（旧管线的 branch_started_at 定义）；
+ *   - is_self / matching_descendant_count 都是同一次 GROUP BY 的聚合。
+ * 只有 `qualifying_child_count`（root 的直接子里有多少属于 Q）需要祖先信息，
+ * 但它只对**页内 ≤ limit+1 个 root** 求值：取这些 root 的整棵树后做一次自底向上
+ * 闭包即可，代价与旧管线的全森林递归不在一个量级。
+ *
+ * 受限 actor 仍走旧管线：他们的分支聚合按**可见性裁剪后**的树计算（不可见后代
+ * 既不贡献 recency 也不计数），共享列答不了——与默认视图快路径同一条边界。
+ */
+function fastFilteredRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOperationsQuery): SQL {
+  const authOf = (alias: string): SQL =>
+    taskAuthorizationCondition(
+      db,
+      { id: sql.raw(`${alias}.id`), ownerUserId: sql.raw(`${alias}.owner_user_id`) },
+      actor,
+    )
+  const openAlertExists = sql`EXISTS (
+    SELECT 1 FROM lifecycle_alerts la WHERE la.task_id = t.id AND la.resolved_at IS NULL
+  )`
+  // 合格集的两层：non_view 决定 facets 的分母，再叠 view 得到真正的匹配集。
+  // 与旧管线共用 nonViewCondition / viewCondition，只是换了别名。
+  const nonView = nonViewCondition(db, actor, parsed.filters, 't')
+  const boundary =
+    parsed.cursor === undefined
+      ? sql`1 = 1`
+      : sql`(r.bsa, r.rid) < (${parsed.cursor.branchStartedAt}, ${parsed.cursor.taskId})`
+
+  return sql`
+    WITH RECURSIVE
+    non_view_matches AS MATERIALIZED (
+      SELECT
+        t.id,
+        t.root_task_id AS rid,
+        t.started_at,
+        t.status,
+        ${openAlertExists} AS has_open_alert
+      FROM tasks t
+      WHERE ${authOf('t')} AND ${nonView}
+    ),
+    matches AS MATERIALIZED (
+      SELECT nvm.* FROM non_view_matches nvm
+      WHERE ${viewCondition(parsed.filters.view, 'nvm', sql`nvm.has_open_alert`)}
+    ),
+    roots AS MATERIALIZED (
+      SELECT
+        m.rid AS rid,
+        MAX(m.started_at) AS bsa,
+        MAX(CASE WHEN m.id = m.rid THEN 1 ELSE 0 END) AS is_self,
+        SUM(CASE WHEN m.id <> m.rid THEN 1 ELSE 0 END) AS matching_descendant_count
+      FROM matches m
+      GROUP BY m.rid
+    ),
+    page_roots AS MATERIALIZED (
+      SELECT r.rid, r.bsa, r.is_self, r.matching_descendant_count
+      FROM roots r
+      WHERE ${boundary}
+      ORDER BY r.bsa DESC, r.rid DESC
+      LIMIT ${parsed.limit + 1}
+    ),
+    -- 页内 root 的整棵树。root_task_id 让它是一次索引取回，而不是递归下钻。
+    fam AS MATERIALIZED (
+      SELECT t.id, t.parent_task_id
+      FROM tasks t
+      JOIN page_roots pr ON pr.rid = t.root_task_id
+      WHERE ${authOf('t')}
+    ),
+    -- Q = 匹配行 ∪ 其祖先（自底向上闭包；UNION 去重顺带防成环）。
+    qualified(id) AS (
+      SELECT m.id FROM matches m JOIN page_roots pr ON pr.rid = m.rid
+      UNION
+      SELECT f.parent_task_id FROM qualified q JOIN fam f ON f.id = q.id
+      WHERE f.parent_task_id IS NOT NULL
+    ),
+    child_counts AS (
+      SELECT f.parent_task_id AS rid, COUNT(*) AS qualifying_child_count
+      FROM fam f
+      JOIN qualified q ON q.id = f.id
+      JOIN page_roots pr ON pr.rid = f.parent_task_id
+      GROUP BY f.parent_task_id
+    ),
+    facet_values AS (
+      SELECT
+        COUNT(*) AS facet_all,
+        COALESCE(SUM(CASE WHEN status IN (${list(TASK_LIST_ACTIVE_STATUSES)}) THEN 1 ELSE 0 END), 0)
+          AS facet_active,
+        COALESCE(SUM(CASE
+          WHEN status IN (${list(TASK_LIST_ATTENTION_STATUSES)}) OR has_open_alert
+          THEN 1 ELSE 0 END), 0) AS facet_attention,
+        COALESCE(SUM(CASE WHEN status IN (${list(TASK_LIST_FINISHED_STATUSES)}) THEN 1 ELSE 0 END), 0)
+          AS facet_finished
+      FROM non_view_matches
+    ),
+    paged AS (
+      SELECT
+        t.id,
+        t.name,
+        t.workflow_id,
+        w.name AS workflow_name,
+        t.repo_path,
+        t.repo_url,
+        t.cached_repo_id,
+        t.status,
+        t.started_at,
+        t.running_ms,
+        t.running_since,
+        t.finished_at,
+        t.error_summary,
+        t.failed_node_id,
+        t.repo_count,
+        (
+          SELECT COUNT(*) FROM lifecycle_alerts la
+          WHERE la.task_id = t.id AND la.resolved_at IS NULL
+        ) AS open_alert_count,
+        t.scheduled_task_id,
+        t.launch_origin,
+        t.workgroup_id,
+        CASE WHEN json_valid(t.workgroup_config_json) THEN
+          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') = 'text'
+            THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
+            ELSE NULL
+          END
+        ELSE NULL END AS workgroup_name,
+        t.space_kind,
+        t.parent_task_id,
+        t.invocation_depth,
+        t.source_agent_name,
+        t.source_agent_id,
+        t.owner_user_id,
+        pr.bsa AS branch_started_at,
+        CASE WHEN pr.is_self = 1 THEN 'self' ELSE 'context' END AS match_kind,
+        COALESCE(cc.qualifying_child_count, 0) AS qualifying_child_count,
+        pr.matching_descendant_count
+      FROM page_roots pr
+      JOIN tasks t ON t.id = pr.rid
+      LEFT JOIN workflows w ON w.id = t.workflow_id
+      LEFT JOIN child_counts cc ON cc.rid = pr.rid
+    )
+    SELECT
+      p.*,
+      f.facet_all,
+      f.facet_active,
+      f.facet_attention,
+      f.facet_finished
+    FROM facet_values f
+    LEFT JOIN paged p ON 1 = 1
+    ORDER BY p.branch_started_at DESC, p.id DESC
+  `
+}
+
+/** 只有 oracle 测试会传 'exhaustive'：新快路径一旦上线，比对的「慢侧」如果不
+ *  强制走旧管线，就会被同一条快路径服务，oracle 当场退化成快-vs-快、永远相等。
+ *  生产路径永远是 'auto'。 */
+export interface TaskOperationsPageOptions {
+  pipeline?: 'auto' | 'exhaustive'
+}
+
 export async function listTaskOperationsPage(
   db: DbClient,
   actor: Actor,
   rawQuery: TaskOperationsRawQuery,
+  options: TaskOperationsPageOptions = {},
 ): Promise<TaskOperationsPage> {
   const parsed = parseTaskOperationsQuery(actor, rawQuery)
   if (parsed.parentId !== undefined) await assertVisibleParent(db, actor, parsed.parentId)
 
+  const filteredFastPath =
+    parsed.parentId === undefined &&
+    options.pipeline !== 'exhaustive' &&
+    !isDefaultView(actor, parsed.filters) &&
+    canUseFilteredFastPath(actor) &&
+    !(await hasUnrootedTasks(db))
+
   const rawRows = (await db.all(
     parsed.parentId === undefined
-      ? isDefaultView(actor, parsed.filters)
-        ? fastDefaultRootQuery(db, actor, parsed)
-        : rootQuery(db, actor, parsed)
+      ? options.pipeline === 'exhaustive'
+        ? rootQuery(db, actor, parsed)
+        : isDefaultView(actor, parsed.filters)
+          ? fastDefaultRootQuery(db, actor, parsed)
+          : filteredFastPath
+            ? fastFilteredRootQuery(db, actor, parsed)
+            : rootQuery(db, actor, parsed)
       : childQuery(db, actor, { ...parsed, parentId: parsed.parentId }),
   )) as OperationsSqlRow[]
 

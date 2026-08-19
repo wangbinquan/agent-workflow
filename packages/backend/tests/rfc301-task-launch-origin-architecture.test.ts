@@ -127,7 +127,11 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(7)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
     expect(schema).toContain("launchOrigin: text('launch_origin'")
-    expect(operations).toContain('b.launch_origin = ${filters.origin}')
+    // RFC-311 G1:过滤谓词改成**可换别名**的形式(`col('launch_origin')`),因为
+    // 旧穷举管线在已物化的 `base b` 上求值、新快路径直接打 `tasks t`,两条路径
+    // 必须共用同一份过滤定义——写死 `b.` 前缀就做不到。棘轮跟着挪到新形态:
+    // 它锁的仍是同一件事「launch_origin 的过滤发生在查询层」。
+    expect(operations).toContain("${col('launch_origin')} = ${filters.origin}")
     expect(sharedTaskSchema).not.toMatch(/\blaunchOrigin\b|\blaunch_origin\b/)
 
     for (const file of sourceFiles(resolve(BACKEND_SRC, 'routes'))) {

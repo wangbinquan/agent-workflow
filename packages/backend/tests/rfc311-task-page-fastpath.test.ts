@@ -138,16 +138,24 @@ async function collectPages(
   who: Actor,
   extraQuery: Record<string, string>,
   limit: number,
+  // RFC-311 G1：过滤视图也有了快路径，慢侧必须**显式**钉在旧管线上，否则
+  // 两侧被同一条实现服务，oracle 退化成快-vs-快、恒等。
+  pipeline: 'auto' | 'exhaustive' = 'auto',
 ): Promise<{ items: TaskOperationsListItem[]; facets: unknown }> {
   const items: TaskOperationsListItem[] = []
   let cursor: string | undefined
   let facets: unknown
   for (let page = 0; page < 20; page += 1) {
-    const result = await listTaskOperationsPage(db, who, {
-      ...extraQuery,
-      limit: String(limit),
-      ...(cursor !== undefined ? { cursor } : {}),
-    })
+    const result = await listTaskOperationsPage(
+      db,
+      who,
+      {
+        ...extraQuery,
+        limit: String(limit),
+        ...(cursor !== undefined ? { cursor } : {}),
+      },
+      { pipeline },
+    )
     items.push(...result.items)
     if (result.kind === 'root' && facets === undefined) facets = result.facets
     if (result.nextCursor === null) break
@@ -172,7 +180,7 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
     const allStatuses = TASK_STATUS.join(',')
     for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob')]) {
       const fast = await collectPages(db, who, {}, 7)
-      const slow = await collectPages(db, who, { statuses: allStatuses }, 7)
+      const slow = await collectPages(db, who, { statuses: allStatuses }, 7, 'exhaustive')
       expect(normalize(fast.items)).toEqual(normalize(slow.items))
       expect(fast.facets).toEqual(slow.facets)
       expect(fast.items.length).toBeGreaterThan(0)

@@ -79,6 +79,38 @@ started_at),无法直接用行级索引取页。设计:
 4. 排序键、cursor 封套、wire 形状全部不变(cursor 仍编码 `branchStartedAt+taskId+fingerprint`)。
    等价性:随机树 fixture 上新旧实现整页序列逐字节对比(含 context-match/子树计数/翻页边界)。
 
+### 4.1 过滤视图快路径(G1 补充设计,PR-7)
+
+PR-4 落地后 §4 的快路径只服务「全可见 actor + 全默认过滤」;**任何**状态/来源/主体/搜索过滤都回落
+旧穷举管线,10 万任务库实测单次 68 秒且是一条不可打断的 SQL(单连接同步 daemon ⇒ 整站冻结)。
+`bench-results.md` §G1 把它记为最大缺口并建议「下一个 RFC 做」;本 RFC 在 PR-7 内补做,理由是它与
+PR-4 同端点、同一族改写、**零产品行为变更**(结果集必须逐 id 等价,由 oracle 锁),不构成新的产品面。
+
+**等价支点**:旧管线的分支 = `subtree(root) ∩ Q`,其中 `Q = 匹配集 ∪ 匹配行的祖先`。对全可见 actor,
+这恰好等于「`root_task_id` = 该 root 且 ∈ Q」的行集合。于是:
+
+- 物化 `tasks.root_task_id`(migration 0183,`parent_task_id` 铸行后不可变 ⇒ 一次写定、永不漂移);
+- root 集合 = 匹配集按 `root_task_id` 去重;排序键 = 每组**匹配行**的 `max(started_at)`(注意不是子树
+  全量 max——那是 `branch_started_at` 列的语义,过滤后不成立);`is_self` / `matchingDescendantCount`
+  都是同一次 `GROUP BY` 的聚合;
+- 只有 `qualifyingChildCount` 需要祖先信息,但它只对**页内 ≤limit+1 个 root** 求值:取这些 root 的
+  整棵树(一次 `root_task_id` 索引取回)后做一次自底向上闭包。
+
+于是两条递归 CTE + 全表物化塌缩成「一次按过滤谓词的扫描 + 一次分组」,代价从 O(全部任务) 降到
+O(匹配集)。
+
+**边界(与 PR-4 一致)**:受限 actor 仍走旧管线——他们的分支聚合按可见性裁剪后的树计算(不可见后代
+既不贡献 recency 也不计数),全局 `root_task_id` 答不了那个问题;而他们的默认视图在旧管线下本就是
+O(自身可见集)。
+
+**失败模式与闸门**:`root_task_id` 是分组键,任何**未落根**的行(绕过服务层的裸 SQL 插入、或将来某条
+迁移漏了回填)会被当成自己的根**静默挂错分支**——没有报错、没有日志,用户只看到「某个子任务突然
+自成一行」。因此每次取页先做一次「还有没有未落根的行」的索引探查(部分索引 `idx_tasks_root_missing`),
+有就整条退回旧管线:宁可慢,不可错。这条闸门本身有测试,并做过变异检验(摘掉闸门后该用例当场变红)。
+
+**验收**:`rfc311-task-page-filtered-fastpath.test.ts` —— 27 组过滤 × 3 actor 逐页逐 id + facets 对齐,
+慢侧显式钉在 `pipeline: 'exhaustive'`(不钉的话新快路径会把慢侧一起服务掉,oracle 退化成快-vs-快恒等)。
+
 ## 5. 修复组 D:周期任务与写路径(证据档 L3)
 
 - **事件归档器**(L3-3/4,修死循环 + 有界化):

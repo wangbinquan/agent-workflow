@@ -10,7 +10,7 @@
 // The events endpoint (getNodeRunEvents) transparently falls back to the
 // JSONL file, so the UI sees a single seamless stream.
 
-import { and, asc, count, eq, gt, lte, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Config } from '@agent-workflow/shared'
@@ -39,6 +39,20 @@ const ARCHIVE_BATCH_ROWS = 5_000
 /** 单轮 tick 的归档行数预算：超额留给下一轮，避免单 tick 在同步连接上
  *  连续占用事件循环过久（每批之间已让出）。 */
 const ARCHIVE_TICK_BUDGET_ROWS = 200_000
+/** 单条扫描语句覆盖的 id 区间宽度(RFC-311 G3)。它约束的是**一条语句冻结
+ *  daemon 的时长**,不是本轮总工作量——后者仍由上面的行预算决定。50 万这个
+ *  10 万这个宽度在 10M 事件库上实测约 40ms/条,刚好落在慢查询阈值(50ms)以下;
+ *  500 万时曾实测 210ms/条、无窗时 1190ms/条。 */
+const ARCHIVE_SCAN_WINDOW_IDS = 100_000
+/** 一轮最多考察多少个候选 run。行预算管的是「删多少」,这条管的是「查多少」——
+ *  backlog 首轮的候选量以百万计,没有这条的话一轮会把几百万个 run 全查一遍。 */
+const ARCHIVE_TICK_CANDIDATE_RUNS = 50_000
+/** 单条分组计数语句一次问多少个 run(绑定参数上限之下的安全值)。 */
+const ARCHIVE_COUNT_CHUNK = 5_000
+
+function* chunked<T>(items: readonly T[], size: number): Generator<T[]> {
+  for (let i = 0; i < items.length; i += size) yield items.slice(i, i + size)
+}
 /** maintenance_state 键：per-run pass 的增量扫描水位（上次扫过的 max(id)）。 */
 const HIGH_WATER_KEY = 'events_archive_high_water'
 
@@ -82,7 +96,10 @@ export async function archiveEvents(
   db: DbClient,
   config: { eventsArchiveThresholds: ArchiveThresholds },
   logsDir: string,
+  /** 测试注入:把扫描窗口调小到几十行，才测得出窗口边界有没有漏行。 */
+  opts: { scanWindowIds?: number } = {},
 ): Promise<ArchiveRunResult> {
+  const scanWindowIds = opts.scanWindowIds ?? ARCHIVE_SCAN_WINDOW_IDS
   const { perNodeRunRows, globalRows } = await effectiveRowThresholds(
     db,
     config.eventsArchiveThresholds,
@@ -104,32 +121,63 @@ export async function archiveEvents(
     .select({ m: sql<number | null>`max(${nodeRunEvents.id})` })
     .from(nodeRunEvents)
   const maxId = maxIdRow[0]?.m ?? 0
-  const groups = await db
-    .select({ nodeRunId: nodeRunEvents.nodeRunId, n: count(nodeRunEvents.id) })
-    .from(nodeRunEvents)
-    .where(gt(nodeRunEvents.id, highWater))
-    .groupBy(nodeRunEvents.nodeRunId)
 
-  for (const g of groups) {
-    if (budget <= 0) break
-    // Range count on idx_events_node — O(log n + own rows in index).
-    const ownRow = await db
-      .select({ n: count(nodeRunEvents.id) })
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, g.nodeRunId))
-    const own = ownRow[0]?.n ?? 0
-    if (own <= perNodeRunRows) continue
-    const toDrop = Math.min(own - perNodeRunRows, budget)
-    const file = await archiveOldestForNode(db, g.nodeRunId, toDrop, logsDir)
-    budget -= toDrop
-    if (file !== null) {
-      result.perGroupArchived += toDrop
-      touched.add(file)
+  // RFC-311 G3 —— 扫描按 id 区间**分窗**。此前这条 GROUP BY 的上界是开的:
+  // 首轮(水位=0)等于把整张表扫一遍,10M 事件库实测**单条语句 1.19 秒**——
+  // 而 daemon 只有一条同步连接,这 1.19 秒里整站没有响应。分窗把「单条语句的
+  // 时长」与「本轮总工作量」解耦:每条语句只看一个 id 窗口,轮次总量仍由
+  // ARCHIVE_TICK_BUDGET_ROWS 约束,于是首轮 backlog 变成一串可打断的短语句。
+  let scanFrom = highWater
+  let advancedTo = highWater
+  let candidateBudget = ARCHIVE_TICK_CANDIDATE_RUNS
+  while (scanFrom < maxId && budget > 0 && candidateBudget > 0) {
+    const scanTo = Math.min(maxId, scanFrom + scanWindowIds)
+    // 窗口里出现过新事件的 run 就是候选。注意这里拿的是**候选集**而不是计数:
+    // 同一个 run 会横跨多个窗口,窗口内计数不是它的总量。
+    const candidates = (
+      await db
+        .selectDistinct({ nodeRunId: nodeRunEvents.nodeRunId })
+        .from(nodeRunEvents)
+        .where(and(gt(nodeRunEvents.id, scanFrom), lte(nodeRunEvents.id, scanTo)))
+    ).map((row) => row.nodeRunId)
+
+    // 候选的**总量**分块一次性算。此前是每个候选发一条 count ——分窗之后同一个
+    // run 会被反复问,实测把一轮从 6 秒劣化到 260 秒(10M 事件库)。一条分组
+    // 语句顶一整块候选,既短又不重复。
+    const overs: Array<{ nodeRunId: string; own: number }> = []
+    for (const chunk of chunked(candidates, ARCHIVE_COUNT_CHUNK)) {
+      const rows = await db
+        .select({ nodeRunId: nodeRunEvents.nodeRunId, n: count(nodeRunEvents.id) })
+        .from(nodeRunEvents)
+        .where(inArray(nodeRunEvents.nodeRunId, chunk))
+        .groupBy(nodeRunEvents.nodeRunId)
+      for (const row of rows) {
+        if (row.n > perNodeRunRows) overs.push({ nodeRunId: row.nodeRunId, own: row.n })
+      }
     }
+    candidateBudget -= candidates.length
+
+    for (const over of overs) {
+      if (budget <= 0) break
+      const toDrop = Math.min(over.own - perNodeRunRows, budget)
+      const file = await archiveOldestForNode(db, over.nodeRunId, toDrop, logsDir)
+      budget -= toDrop
+      if (file !== null) {
+        result.perGroupArchived += toDrop
+        touched.add(file)
+      }
+    }
+    // 只有整窗处理完(没被预算截断)才认这一窗:被截断的那一窗下轮重扫,
+    // 宁可重做也不能让水位跳过没处理的行。
+    if (budget <= 0) break
+    advancedTo = scanTo
+    scanFrom = scanTo
   }
   // Advance the watermark only when the pass was not budget-truncated, so
   // deferred work is rescanned rather than silently skipped.
-  if (budget > 0) await writeMaintenanceValue(db, HIGH_WATER_KEY, String(maxId))
+  if (budget > 0 && advancedTo > highWater) {
+    await writeMaintenanceValue(db, HIGH_WATER_KEY, String(advancedTo))
+  }
 
   // --- Global pass --------------------------------------------------------
   // COUNT(*) once per hour is acceptable under the RFC-311 page-cache budget;

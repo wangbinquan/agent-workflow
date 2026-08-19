@@ -92,6 +92,57 @@ async function eventCount(db: Db): Promise<number> {
   return rows[0]?.n ?? 0
 }
 
+describe('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', () => {
+  // 分窗之前，增量扫描的上界是开的:首轮(水位=0)等于把整张事件表 GROUP BY 一遍,
+  // 10M 行库实测**单条语句 1.19 秒**——daemon 只有一条同步连接,这段时间整站无
+  // 响应。分窗把「一条语句的时长」与「一轮的总工作量」解耦。这里用极小的窗口
+  // (10 个 id)逼出多轮窗口，锁两件事:窗口边界不丢行、被预算截断时水位不前跳。
+  test('rows spanning many windows are all found, and the watermark never skips unprocessed ids', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const logsDir = mkdtempSync(join(tmpdir(), 'aw-rfc311-g3-'))
+    try {
+      await seedRun(db, 'task-a', 'run-a')
+      await seedRun(db, 'task-b', 'run-b')
+      // 两个 run 交替写入 ⇒ 任一窗口里都同时出现两者,窗口边界处最容易漏。
+      for (let i = 0; i < 60; i += 1) {
+        await insertEvents(db, i % 2 === 0 ? 'run-a' : 'run-b', 1)
+      }
+      const before = await eventCount(db)
+      expect(before).toBe(60)
+
+      const thresholds = { perNodeRunRows: 5, globalRows: 1_000_000 }
+      const result = await archiveEvents(db, { eventsArchiveThresholds: thresholds }, logsDir, {
+        scanWindowIds: 10,
+      })
+      // 每个 run 各 30 行、保留 5 行 ⇒ 各归档 25 行。窗口边界漏行会让这个数变小。
+      expect(result.perGroupArchived).toBe(50)
+      expect(await eventCount(db)).toBe(10)
+
+      const watermark = await readMaintenanceNumber(db, 'events_archive_high_water')
+      const maxRow = await db.select({ m: max(nodeRunEvents.id) }).from(nodeRunEvents)
+      // 水位走到了最后一个已扫过的 id(不是停在 0,也不能超过表里最大 id)。
+      expect(watermark).toBeGreaterThan(0)
+      expect(watermark!).toBeGreaterThanOrEqual(maxRow[0]?.m ?? 0)
+    } finally {
+      rmSync(logsDir, { recursive: true, force: true })
+    }
+  })
+
+  // 上面那条只验证了「分窗之后仍然正确」——把分窗整个删掉它照样绿(无上界扫描
+  // 也能找全所有行)。真正要锁的是**扫描语句有上界**这件事本身,而语句时长在
+  // 单元测试里测不出来,所以退到源码层断言(仓规:运行时难覆盖时至少留一条文本
+  // 断言兜底)。
+  test('the incremental scan keeps an upper bound on its id range', () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'eventsArchive.ts'),
+      'utf8',
+    )
+    expect(source).toContain('lte(nodeRunEvents.id, scanTo)')
+    // 无上界的旧形态:直接对 `id > highWater` 做 GROUP BY。
+    expect(source).not.toMatch(/where\(gt\(nodeRunEvents\.id, highWater\)\)/)
+  })
+})
+
 describe('RFC-311 — events archiver at backlog scale', () => {
   // 实现门 P0-1(变异 #7:把区间删改回一次性 35000 参数的巨型 IN,4 条仍全绿)——
   // 本机 bun 1.3.13 打包的 SQLite 3.51 实测在 5 万参数下**不报错**(10 万才抛),

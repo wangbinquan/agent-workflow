@@ -163,4 +163,94 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       rmSync(childRoot, { recursive: true, force: true })
     }
   })
+
+  // RFC-311 G1 —— root_task_id 由同一个铸行点一次写定。它是过滤视图快路径的
+  // 分组键:写错 = 该任务从此挂在错误的分支下(或自成一根),而 parent_task_id
+  // 铸行后不可变,所以这一列此后没有任何路径会修正它。
+  test('root_task_id is stamped through the real launch path and chains across depths', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const now = Date.now()
+    await db.insert(users).values({
+      id: 'u1',
+      username: 'u1',
+      displayName: 'u1',
+      role: 'admin',
+      createdAt: now,
+      updatedAt: now,
+    })
+    const wf = ulid()
+    await db.insert(workflows).values({ id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
+
+    const rootDir = mkdtempSync(join(tmpdir(), 'aw-rfc311-root-'))
+    try {
+      // 顶层任务:根是自己。
+      const rootId = ulid()
+      const root = await startTask({ workflowId: wf, name: 'root', inputs: {} } as StartTask, {
+        db,
+        materializedSpace: spaceFor(rootId, rootDir),
+        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+      })
+      expect(await rootTaskIdOf(db, root.id)).toBe(root.id)
+
+      // 子任务的铸行闸门要求父处于 running(既有语义,与本测试无关)。
+      const markRunning = async (taskId: string): Promise<void> => {
+        await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+      }
+      const runOf = async (taskId: string): Promise<string> => {
+        const id = ulid()
+        await db.insert(nodeRuns).values({
+          id,
+          taskId,
+          nodeId: 'n1',
+          status: 'running',
+          startedAt: Date.now(),
+        })
+        return id
+      }
+
+      await markRunning(root.id)
+      const childId = ulid()
+      const child = await startTask({ workflowId: wf, name: 'child', inputs: {} } as StartTask, {
+        db,
+        materializedSpace: spaceFor(childId, rootDir),
+        callLaunch: {
+          parentTaskId: root.id,
+          parentNodeRunId: await runOf(root.id),
+          invocationDepth: 1,
+          frozenSnapshotJson: EMPTY_DEF,
+          refClosureJson: null,
+        },
+      })
+      expect(await rootTaskIdOf(db, child.id)).toBe(root.id)
+
+      // 孙子:继承的是**父的根**,而不是父自己——两者只在深度 ≥2 时才分得开。
+      await markRunning(child.id)
+      const grandchild = await startTask(
+        { workflowId: wf, name: 'grandchild', inputs: {} } as StartTask,
+        {
+          db,
+          materializedSpace: spaceFor(ulid(), rootDir),
+          callLaunch: {
+            parentTaskId: child.id,
+            parentNodeRunId: await runOf(child.id),
+            invocationDepth: 2,
+            frozenSnapshotJson: EMPTY_DEF,
+            refClosureJson: null,
+          },
+        },
+      )
+      expect(await rootTaskIdOf(db, grandchild.id)).toBe(root.id)
+      __setActiveTaskForTesting(undefined)
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true })
+    }
+  })
 })
+
+async function rootTaskIdOf(
+  db: ReturnType<typeof createInMemoryDb>,
+  id: string,
+): Promise<string | null> {
+  const row = await db.select({ rootTaskId: tasks.rootTaskId }).from(tasks).where(eq(tasks.id, id))
+  return row[0]?.rootTaskId ?? null
+}

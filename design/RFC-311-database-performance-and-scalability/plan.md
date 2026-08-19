@@ -140,4 +140,18 @@
   - **落地修正(测试驱动,两条都是真 bug)**:①手动入口不能把 `retentionDays=0`(配置语义 = 关)当 cutoff 用——那会把**每一棵终态树**立刻不可逆删掉,现返回 422 `task-archive-retention-unset`;②`SETTINGS_CONFIG_SCOPE_KEYS.gc` **漏登记 4 个键**(`taskArchive` + 实现门 P1-5 的三个保留旋钮),后果是界面能改、点保存无报错、值被静默丢弃。补齐白名单并新增 `tests/settings-scope-coverage.test.ts` 自动对账(扫每个 tab 片段真实读写的 `state.<key>`),已按仓规做变异检验:摘掉任一键即变红。教训进 `docs/dev-gotchas.md` §前端。
   - **CI 绿证**:`54d1109a` 32/32 全绿(PR-6 三批:`6bcd59ca` 主体 + `03de004c` 收两格红 + `54d1109a` 换 `/repos` linux 视觉基线)。`6bcd59ca` 暴露的两条记账:①`route-error-code-coverage` 红在 `task-archive-invalid` 漏测——**本地三轮 gate 全绿而一提交就红**,因为该守卫用 `git ls-files` 枚举路由文件、看不见 untracked 的新文件(定式与同族另两种「空洞绿」已落 `docs/dev-gotchas.md` §测试/CI 头一条);②`/repos` 视觉基线间歇红,定位为 PR-5 虚拟化的**真实布局抖动**(滚动条时有时无 ⇒ 行内容整体左移 15px;macOS overlay 滚动条不占位,所以本地 45/45 恒绿、复现不了),修的是产品——`VirtualList` 常驻 `scrollbar-gutter: stable`,用户侧筛选/加载时的列宽跳动一并消除。
   - 顺带修 `tests/nav-memory-tab.test.tsx` 的 20ms 固定睡眠竞态(d916451c 上 Windows frontend shard 3/3 唯一红,其余 8 shard 绿),改等「请求已发出 + QueryClient 空闲」的确定性锚点。
+- **PR-7 ✅**(G1/G2/G3 三处基准缺口全修,10 万任务库实测):
+  - **G1 过滤视图快路径 68,201ms → 62.3ms**(约 1100×)。物化 `tasks.root_task_id`(migration 0183)后,
+    旧管线的「向上求祖先闭包 + 向下求分支成员」两条递归 CTE 塌缩成一次 `GROUP BY`;设计与边界见
+    design.md §4.1。等价性由 27 组过滤 × 3 actor 的逐页逐 id oracle 锁定(慢侧显式钉死旧管线,否则
+    退化成快-vs-快恒等),两次变异检验均当场变红。**准入闸门**:库里只要有一行未落根就整条退回旧
+    管线(那行会被静默挂错分支)——基准脚本第一次跑就撞到这条,日志里 66.5 秒的 db-slow 正是闸门在
+    按设计工作;闸门本身也有测试 + 变异检验。回填 10 万行实测 504ms。
+  - **G2 overview 46.5ms → 1.8ms、工作组徽章 10.5ms → 0.6ms**(migration 0184 两条覆盖索引)。证实了
+    第一次观测记下的判断:不该合并 9 条 count(会把索引 seek 换成全表扫),根因是谓词列
+    (`parent_task_id` / `workgroup_id`)不在索引里、每行为读一个字段回表。
+  - **G3 归档器最长单语句 1,190ms → 76ms**(增量扫描按 id 分窗)。**过程中踩了一个更严重的坑并已修**:
+    第一版分窗让整轮从 6 秒劣化到 260 秒(43×)——同一个 node_run 横跨多窗口、每窗重问一次总量,
+    而 6 条单测全绿。正解是每窗只取候选集 + 分块一条分组语句 + 候选预算;判据「单测证明不了没改坏
+    代价」已落 `docs/dev-gotchas.md`。
 - **遗留(不阻塞收口,记账)**:T20 维护入口(opencode-stores 清理 / freelist 提示 / `db compact` CLI);T21 prompt_text 外置;/code work-items nextCursor 修复(T29 余项;与 RFC-310 session 明确交接:其 PR-10 只做删除波不塞功能增强,`ActivityPanel`/`WorkItemRounds` 与 `api.get<{items,nextCursor}>` 原样保留、后端 cursor 语义未动,**待 PR-10 落地后由本 RFC 侧按 /repos 同款做法接翻页**);sessionView 上限、getNodeRunStdout 截断;development retention_state sweeper 与 code rollup 表(归属 RFC-310/code-capability 域)。

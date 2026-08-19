@@ -364,6 +364,10 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **SQLite 的 partial index「蕴含判断」不认 `col = 'x'` ⊂ `col IN ('x','y')`**（2026-08-18 RFC-311 实测）：给 `node_runs` 建 `WHERE status IN ('pending','running')` 的 partial 索引后，`WHERE status = 'running'` 的查询**不会**用它（EXPLAIN 仍 SCAN）——SQLite 只认查询谓词与索引 WHERE **字面等价**或非常有限的蕴含形式。partial 索引想被命中，查询侧谓词要与索引 WHERE 写成同一字面（`= 'pending'` 对 `WHERE decision='pending'` ✓）；谓词形态多样的列（等值/IN 混用）老实建普通复合索引。每个新索引配一条 `EXPLAIN QUERY PLAN` 断言（`rfc311-perf-foundation.test.ts` 模式，先例 `migration-0128-…`），别靠肉眼确信。
 
+- **性能改动的验收必须在有量级的库上跑「整轮墙钟」——单测能证明没改坏语义，证明不了没改坏代价**（2026-08-19 RFC-311 G3 实测）：给归档器的增量扫描按 id 分窗，本意是把一条 1190ms 的 `GROUP BY`（10M 事件库、单连接同步 daemon ⇒ 整站冻结这么久）拆成短语句。单条确实降到 76ms、6 条单测全绿——**但整轮从 6 秒劣化到 260 秒（43×）**。根因是同一个 `node_run` 会横跨多个窗口，而循环里对每个候选都发一条「问总量」的 count，分窗把这件事重复了几十倍；小库上重复几十次仍是毫秒，**单测永远照不出来**。
+  - 判据：凡是**改变语句条数或循环结构**的性能改动（分窗 / 分批 / 拆语句 / 加缓存层），代价函数可能从 O(1) 变成 O(窗口数)。看的是**整轮墙钟**，不是单条语句时长——「单条变短」这个直觉在这里是错的。
+  - 正解形状（本例）：每窗只取**候选集**（`SELECT DISTINCT`），总量用分块的**一条**分组语句问完，再加一条「一轮最多考察多少候选」的预算。改完整轮 6.1 秒、全轮只剩 1 条超阈值语句。
+  - 复跑入口在 `design/RFC-311-*/bench-results.md` §复跑清单（`perf-seed.ts` 93 秒建库 + `perf-bench.ts --only`）。**基准数字进文档时必须标注「在多大规模的库上、什么时候测的」**——否则半年后有人拿它当现状会误判。
 - **keyset 分页的断点必须写成行值比较 `(a, id) < (?, ?)`,不能写展开式 `a < ? OR (a = ? AND id < ?)`**（2026-08-18 RFC-311 十万任务基准库实测）：展开式在**绑定参数**下让 SQLite 选 `MULTI-INDEX OR` 并回落 `USE TEMP B-TREE FOR ORDER BY`——把全部候选行物化排序一遍（实测 `/api/tasks/page` 首页 30ms、翻页 **197ms**；改行值后 41ms）。**最阴的地方:用字面量跑 `EXPLAIN QUERY PLAN` 复现不出来**——字面量下 SQLite 反而选对索引走有序 seek,只有把常量换成 `?` 占位符才看得到 MULTI-INDEX OR + TEMP B-TREE。定式:①断点一律行值形式;②plan 断言**必须用 `?` 占位符**写(先例 `rfc311-task-page-fastpath.test.ts` 的「no TEMP B-TREE」条),另配一条源码层守卫防止有人改回展开式;③排序键与索引列序、DESC/ASC 要对齐,否则同样落临时 B 树。
 - **`when` 接合成轴**（上条 +86400000），别用真实 `Date.now()`——否则 drizzle 对既有安装静默跳过，之后每查 `no such column`，从零建库看不见。
 - **手写多语句要 `--> statement-breakpoint`**（精确这个字面量，仓库迁移器只认它），否则只应用第一条。

@@ -83,14 +83,13 @@ if (firstBody.nextCursor !== null) {
     `/api/tasks/page?limit=50&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
   )
 }
-// 过滤视图走**旧的穷举管线**(快路径只服务默认视图,见 taskOperations.ts
-// isDefaultView 的裁决)。10 万任务下单次以百秒计,所以只跑 1 轮——这个数字
-// 本身就是 RFC-311 的遗留项证据,不是要优化到 p95 的对象。
-await bench(
-  '§6.1 tasks/page running view (legacy pipeline)',
-  '/api/tasks/page?limit=50&statuses=running',
-  1,
-)
+// 过滤视图。RFC-311 G1 之前它走旧的穷举管线,10 万任务下单次 68 秒(一条不可
+// 打断的 SQL ⇒ 整站冻结),所以当时只跑 1 轮;G1 落地后走 root_task_id 分组的
+// 快路径,可以按正常轮次测 p95 了。
+// **注意**:这条只有在库里所有行都落了根时才走快路径——准入闸门发现任何未落根
+// 的行就整条退回旧管线(宁可慢不可错)。若这里又出现几十秒的数字,先查
+// `SELECT count(*) FROM tasks WHERE root_task_id IS NULL`,而不是先怀疑索引。
+await bench('§6.1 tasks/page running view (filtered)', '/api/tasks/page?limit=50&statuses=running')
 
 // §6.2 /api/cached-repos 分页。
 await bench('§6.2 cached-repos first page', '/api/cached-repos?limit=50')
