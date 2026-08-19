@@ -442,6 +442,20 @@ child AND grandchild group-killed`（5537ms）与 `rfc199 start-task-cleanup-inc
   **可操作的解法**：把这类真 spawn / 计时用例的预算从「够快的机器上够用」改成「饱和时也够用」，
   或给 `gate:local` 一个降低并发的开关。在那之前，判据是**分开跑两条车道**（`bun run test:backend`
   与 quality 各自跑）取干净信号 —— 这不是「重跑就过」，因为它换掉的是执行条件而不是结论。
+  **2026-08-19 扩面：`cannot lock ref` 这一支也出现在 GitHub Actions 上，不再只是本机现象。**
+  连续扫 `main` 最近 12 次 CI，命中 2 次、且分别红在**不同用例**上：`f8b2a3a8` 的
+  `RFC-098 B1 … ready downstream node is dispatched WHILE the slow commit session runs`
+  （ubuntu shard 1/4，日志里先出 `WARN [scheduler] merge-back failed nodeId=n2
+error="reset --mixed: … cannot lock ref 'HEAD': is at 5604ee04… but expected 8bcda365…"`）；
+  `dfda2d02` 的 `CLI subcommands (P-1-05) > RFC-300 boot resumes an already-authorized scratch prune`
+  （`cannot lock ref 'refs/heads/agent-workflow/<taskId>'`）。两笔当轮 diff 一个是纯文档、
+  一个与 git/scheduler 零交集；RFC-098 那条本机连跑 **5/5 全绿**。
+  **值得单独想清楚的一点（不只是预算问题）**：报错发生在**产品代码**里（`scheduler` 的 merge-back →
+  `util/git.ts` 的 `reset --mixed`），而 `is at X but expected Y` 的语义是**读到写之间 ref 被别人改了**
+  ——即同一个源仓上有两个并发写者。任务各有 worktree 但共用同一个 `.git`，所以**同仓两个任务同时
+  merge-back 在生产上可复现同一竞争**，不是测试独有。也就是说这里可能藏着一个真缺陷（merge-back
+  缺重试 / 缺串行化），CI 的饱和只是把窗口放大。**下一步**：给 merge-back 的 ref 更新加有界重试并
+  写一条并发 merge-back 的回归用例，再回头判断 CI 这两例是否随之消失。
 
 - ⏳ **`prose-code-mermaid-theme.test.tsx` 的主题切换用例在满载机器上仍会超时（RFC-270 实施期撞上，
   非本 RFC 引入）**。用例 `toggling <html data-theme> dark→light re-invokes MermaidBlock.render with
