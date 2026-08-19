@@ -82,13 +82,14 @@ const ROWS: AdminUserView[] = [
     role: 'admin',
     createdBy: null,
   }),
-  row('me-admin', { username: 'root', displayName: 'Root', role: 'admin' }),
+  row('me-admin', { username: 'root', displayName: 'Root', role: 'admin', lastLoginAt: 2_000 }),
   row('u-alice', { username: 'alice', displayName: 'Alice' }),
   row('u-carol', {
     username: 'carol',
     displayName: 'Carol',
     email: 'carol@example.test',
     hasOidcIdentity: true,
+    lastLoginAt: 9_000,
   }),
   row('u-dave', { username: 'dave', displayName: 'Dave', status: 'disabled' }),
 ]
@@ -219,6 +220,22 @@ describe('/users responsive directory actions', () => {
     fireEvent.click(primary as HTMLButtonElement)
     expect(await screen.findByRole('dialog')).toBeTruthy()
     expect(document.querySelector('#users-create-form')).not.toBeNull()
+  })
+
+  // Newest sign-in first (user request 2026-08-19): Carol (9_000) then Root (2_000),
+  // with the never-signed-in accounts below them in name order.
+  test('lists accounts newest sign-in first and keeps never-signed-in ones last', async () => {
+    installFetch(route)
+    const { container } = renderPage()
+
+    await screen.findByTestId('user-manage-u-alice')
+    const list = screen.getByRole('list', { name: 'Human user accounts' })
+    expect(
+      Array.from(list.querySelectorAll('.user-directory__item')).map((item) =>
+        item.getAttribute('data-user-id'),
+      ),
+    ).toEqual(['u-carol', 'me-admin', 'u-alice', 'u-dave'])
+    expect(container.querySelectorAll('.user-directory__last-login')).toHaveLength(4)
   })
 
   test('creates a password account from labelled controls with an exact payload', async () => {

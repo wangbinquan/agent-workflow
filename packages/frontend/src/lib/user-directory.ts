@@ -108,6 +108,17 @@ function normalize(value: string, locale: string): string {
   return value.normalize('NFKC').toLocaleLowerCase(locale)
 }
 
+/**
+ * Newest sign-in first. Accounts that never signed in carry no timestamp, so they
+ * sink below everyone who has one instead of masquerading as the oldest login.
+ */
+function compareLastLogin(left: number | null, right: number | null): number {
+  if (left === right) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return right - left
+}
+
 export function deriveUserDirectory(
   rows: readonly AdminUserView[],
   filters: UserDirectoryFilters,
@@ -134,6 +145,7 @@ export function deriveUserDirectory(
     .slice()
     .sort(
       (left, right) =>
+        compareLastLogin(left.lastLoginAt, right.lastLoginAt) ||
         collator.compare(left.displayName, right.displayName) ||
         collator.compare(left.username, right.username) ||
         collator.compare(left.id, right.id),

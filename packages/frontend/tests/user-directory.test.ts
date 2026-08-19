@@ -84,7 +84,9 @@ describe('RFC-221 user directory model', () => {
     expect(rows.map((row) => row.id)).toEqual(originalOrder)
   })
 
-  test('sorts stably and distinguishes initial from filtered empty', () => {
+  // Ordering is by newest sign-in first (user request 2026-08-19); the former
+  // name-only order survives as the tiebreak so equal/absent timestamps stay stable.
+  test('orders by newest sign-in, sinks never-signed-in accounts, and distinguishes initial from filtered empty', () => {
     const rows = [
       user('b', { displayName: 'Same' }),
       user('a', { displayName: 'Same' }),
@@ -95,6 +97,18 @@ describe('RFC-221 user directory model', () => {
         (row) => row.id,
       ),
     ).toEqual(['z', 'a', 'b'])
+    expect(
+      deriveUserDirectory(
+        [
+          user('never', { displayName: 'Alpha' }),
+          user('oldest', { displayName: 'Beta', lastLoginAt: 1_000 }),
+          user('newest-z', { displayName: 'Zeta', lastLoginAt: 9_000 }),
+          user('newest-s', { displayName: 'Same', lastLoginAt: 9_000 }),
+        ],
+        { q: '', status: 'all', role: 'all' },
+        'en-US',
+      ).visible.map((row) => row.id),
+    ).toEqual(['newest-s', 'newest-z', 'oldest', 'never'])
     expect(deriveUserDirectory([], { q: '', status: 'all', role: 'all' }, 'en-US').emptyKind).toBe(
       'initial',
     )
