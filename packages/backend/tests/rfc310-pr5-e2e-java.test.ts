@@ -104,7 +104,7 @@ beforeAll(async () => {
       'core/src/main/java/App.java': 'class App {}\n',
     },
   })
-  repoHttpUrl = mockRepoDiskPath(project.repoHttpUrl)
+  repoHttpUrl = mockRepoDiskPath(project.gitTransportUrl)
 
   fx = await buildPr3Fixture()
   // 平台 repo cache = 从 mock remote 的真 clone（collector/baseline/push 的共同锚）。

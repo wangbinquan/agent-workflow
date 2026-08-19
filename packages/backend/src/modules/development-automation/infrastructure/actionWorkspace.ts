@@ -8,6 +8,7 @@
 
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   lstatSync,
@@ -91,6 +92,7 @@ function copyTree(srcRoot: string, destRoot: string): void {
       const dest = join(destRoot, rel)
       mkdirSync(dirname(dest), { recursive: true })
       copyFileSync(abs, dest)
+      chmodSync(dest, st.mode & 0o777)
     }
   }
   if (existsSync(srcRoot)) walk('')
@@ -123,6 +125,14 @@ export async function materializeActionWorkspace(
   if (checkout.exitCode !== 0) {
     rmSync(parent, { recursive: true, force: true })
     throw new Error(`workspace checkout failed: ${checkout.stderr.slice(0, 300)}`)
+  }
+  // Agent actions never publish Git themselves. Remove the inherited clone
+  // remote before execution; the platform's later commit/push stage uses the
+  // mission source-control context, not this disposable action workspace.
+  const removeOrigin = await runGit(ws, ['remote', 'remove', 'origin'])
+  if (removeOrigin.exitCode !== 0) {
+    rmSync(parent, { recursive: true, force: true })
+    throw new Error(`workspace remote removal failed: ${removeOrigin.stderr.slice(0, 300)}`)
   }
   // RFC-308：平台运行物整目录排除（先于任何快照/写入）。
   mkdirSync(join(ws, '.git', 'info'), { recursive: true })

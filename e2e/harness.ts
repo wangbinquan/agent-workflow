@@ -179,6 +179,9 @@ export type StubMode =
   | 'clarify-inline'
   | 'commit'
   | 'cross-clarify'
+  // RFC-310 — capability-aware digital employee Agent stand-in. The daemon,
+  // execution kernel, workspace validator and delivery chain remain real.
+  | 'development'
   | 'intent'
   | 'runtime-scenario'
   | 'slow'

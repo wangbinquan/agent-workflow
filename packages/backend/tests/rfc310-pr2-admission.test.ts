@@ -51,6 +51,7 @@ import type { AdmissionLookup } from '../src/modules/development-automation/appl
 import {
   cancelMission,
   launchMission,
+  previewMissionAdmission,
   retryBlockedMission,
   selectMissionRequirementSource,
   type LaunchDeps,
@@ -493,6 +494,64 @@ describe('rfc310 pr2 admission', () => {
       externalInput('idem-ext-bad-1', f.employees.multi, 'not-offered'),
     )
     expect(badKey).toMatchObject({ status: 'blocked', blockCode: 'requirement-source-unresolved' })
+  })
+
+  test('side-effect-free preview uses the exact launch employee/policy/source chain', async () => {
+    const f = await buildFixture()
+    const common = {
+      repositoryId: 'repo-1',
+      repositoryGroupId: null,
+      requestedPolicy: null,
+      actorUserId: 'u-1',
+    }
+    const direct = await previewMissionAdmission(f.deps, {
+      ...common,
+      submission: { kind: 'direct' },
+      requestedEmployee: { id: f.employees.single, revision: 1 },
+    })
+    expect(direct).toMatchObject({
+      outcome: 'ready',
+      employee: { id: f.employees.single, revision: 1 },
+      policy: { id: f.policyId, revision: 1 },
+      requirementSource: null,
+      block: null,
+    })
+
+    const ambiguous = await previewMissionAdmission(f.deps, {
+      ...common,
+      submission: { kind: 'external-reference' },
+      requestedEmployee: { id: f.employees.multi, revision: 1 },
+    })
+    expect(ambiguous).toMatchObject({
+      outcome: 'needs-source-selection',
+      sourceOptions: ['sys-a', 'sys-b'],
+      block: null,
+    })
+
+    const selected = await previewMissionAdmission(f.deps, {
+      ...common,
+      submission: { kind: 'external-reference', sourceKey: 'sys-b' },
+      requestedEmployee: { id: f.employees.multi, revision: 1 },
+    })
+    expect(selected).toMatchObject({
+      outcome: 'ready',
+      requirementSource: {
+        sourceKey: 'sys-b',
+        adapter: { revision: 1 },
+      },
+    })
+
+    const blocked = await previewMissionAdmission(f.deps, {
+      ...common,
+      submission: { kind: 'direct' },
+      requestedEmployee: null,
+    })
+    expect(blocked).toMatchObject({
+      outcome: 'blocked',
+      employee: null,
+      policy: null,
+      block: { code: 'no-employee-match' },
+    })
   })
 
   test('adopt delivery records the MR ref at admission', async () => {

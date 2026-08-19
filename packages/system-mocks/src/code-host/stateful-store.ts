@@ -79,6 +79,7 @@ export interface StoredProject {
   headSha: string
   repositoryPath: string
   repoHttpUrl: string
+  gitTransportUrl: string
   webUrl: string
   diffOmissions: Record<string, 'binary' | 'too-large'>
   mergeRequests: Map<number, StoredMergeRequest>
@@ -118,6 +119,19 @@ export class CodeHostStore {
         project.provider === provider &&
         (project.projectId === decoded || project.projectPath === decoded),
     )
+  }
+
+  /** Resolve a provider-shaped clone request to the isolated bare repository. */
+  gitRequest(
+    pathname: string,
+  ): { readonly repositoryPath: string; readonly clonePath: string } | null {
+    for (const project of this.#projects.values()) {
+      const clonePath = new URL(project.repoHttpUrl).pathname
+      if (pathname === clonePath || pathname.startsWith(`${clonePath}/`)) {
+        return { repositoryPath: project.repositoryPath, clonePath }
+      }
+    }
+    return null
   }
 
   mergeRequest(project: StoredProject, number: number): StoredMergeRequest | undefined {
@@ -182,6 +196,13 @@ export class CodeHostStore {
     await runChecked('git', ['update-ref', `refs/heads/${defaultBranch}`, baseSha], {
       cwd: repositoryPath,
     })
+    // A bare clone inherits the source worktree's currently checked-out HEAD
+    // (the seeded example change branch). Real provider repositories advertise
+    // their configured default branch instead; repository import relies on
+    // this symref and must therefore see `defaultBranch`.
+    await runChecked('git', ['symbolic-ref', 'HEAD', `refs/heads/${defaultBranch}`], {
+      cwd: repositoryPath,
+    })
 
     const hostPrefix = seed.provider === 'gitlab' ? '/gitlab' : '/github'
     const mr: StoredMergeRequest = {
@@ -200,6 +221,7 @@ export class CodeHostStore {
       reviewComments: [],
       issueComments: [],
     }
+    const providerRepoHttpUrl = `${this.#baseUrl()}/${seed.projectPath}.git`
     const project: StoredProject = {
       provider: seed.provider,
       projectId,
@@ -211,7 +233,8 @@ export class CodeHostStore {
       baseSha,
       headSha,
       repositoryPath,
-      repoHttpUrl: gitRemoteUrl(this.#baseUrl(), this.#gitRoot, repositoryPath),
+      repoHttpUrl: providerRepoHttpUrl,
+      gitTransportUrl: gitRemoteUrl(this.#baseUrl(), this.#gitRoot, repositoryPath),
       webUrl: `${this.#baseUrl()}${hostPrefix}/${seed.projectPath}`,
       diffOmissions: structuredClone(seed.diffOmissions ?? {}),
       mergeRequests: new Map([[number, mr]]),
@@ -664,6 +687,7 @@ function wireProject(project: StoredProject): MockCodeHostProject {
     baseSha: project.baseSha,
     headSha: project.headSha,
     repoHttpUrl: project.repoHttpUrl,
+    gitTransportUrl: project.gitTransportUrl,
     webUrl: project.webUrl,
     mergeRequests: [...project.mergeRequests.values()].map(wireMergeRequest),
     issues: [...project.issues.values()].map(wireIssue),

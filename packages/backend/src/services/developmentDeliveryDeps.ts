@@ -175,6 +175,8 @@ export function buildDevelopmentMrFactsDeps(
             authorClass: thread.authorClass,
             resolved: thread.resolved,
             bodyDigest: sha256Hex(thread.lastBody),
+            body: thread.lastBody,
+            path: thread.path,
           })),
         }
       },

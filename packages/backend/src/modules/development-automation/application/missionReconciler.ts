@@ -58,7 +58,11 @@ import {
   type CollectAgentAttemptOutcome,
 } from './agentActionOrchestrator'
 import { invalidateInFlightAction } from './actionInvalidation'
-import { feedbackFingerprint, selectableFeedback } from '../domain/feedbackLedger'
+import {
+  feedbackFingerprint,
+  selectableFeedback,
+  type FeedbackLedgerRow,
+} from '../domain/feedbackLedger'
 import {
   DELIVERY_EFFECT_KINDS,
   handleCommitAndPublish,
@@ -71,6 +75,7 @@ import {
   MR_CARE_EFFECT_KINDS,
   handleReplyFeedback,
   prepareFeedbackSelection,
+  releaseFeedbackSelection,
   redispatchMrCare,
 } from './mrCareChain'
 import {
@@ -84,6 +89,39 @@ import {
 import type { AdmissionLookup } from './ports/admissionLookup'
 import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from './ports/reconcilerPorts'
+import {
+  handleApprovalObserveDecision,
+  handleApprovalSubmitDecision,
+  handleChildMissionDecision,
+  selectPlaybookStepDecision,
+  settlePlaybookAction,
+  settlePlaybookDecision,
+} from './playbookStepCoordinator'
+
+/**
+ * Review text is provider material, not a rule fact. Keep it in one hidden,
+ * bounded cell so the decision engine only sees the typed count/digest while
+ * a later reconcile can still assemble the exact Agent input. The provider
+ * endpoint itself caps a collection at 100 threads; this second bound prevents
+ * a handful of very large comments from turning every fact snapshot into a
+ * multi-megabyte DB row.
+ */
+export const MR_FEEDBACK_INPUT_MAX_BYTES = 256 * 1024
+export const MR_FEEDBACK_INPUT_CELL = '__mr.feedbackInput'
+export const MR_UNRESOLVED_FEEDBACK_CELL = '__mr.unresolvedFeedback'
+
+interface FeedbackPromptItem {
+  readonly threadRef: string
+  readonly revision: string
+  readonly body: string
+  readonly path: string | null
+}
+
+interface FeedbackPromptSnapshot {
+  readonly snapshotRef: string
+  readonly headSha: string
+  readonly items: readonly FeedbackPromptItem[]
+}
 
 export interface ReconcileDeps {
   readonly store: MissionStore
@@ -117,6 +155,154 @@ export type ReconcileOutcome =
 
 function knownCell(value: FactCellValue): FactCell<FactCellValue> {
   return { state: 'known', value, sourceRevision: 'row' }
+}
+
+function feedbackInputCell(input: {
+  readonly providerSnapshotRef: string
+  readonly headSha: string
+  readonly selected: readonly { readonly threadRef: string; readonly revision: string }[]
+  readonly threads: readonly FeedbackPromptItem[]
+}): FactCell<FactCellValue> {
+  const byRevision = new Map(
+    input.threads.map((thread) => [`${thread.threadRef}\u0000${thread.revision}`, thread]),
+  )
+  const items: FeedbackPromptItem[] = []
+  for (const selected of input.selected) {
+    const found = byRevision.get(`${selected.threadRef}\u0000${selected.revision}`)
+    if (found === undefined) {
+      return {
+        state: 'unknown',
+        reason: `feedback-body-missing:${selected.threadRef}@${selected.revision}`,
+        collectable: true,
+      }
+    }
+    items.push(found)
+  }
+  const core = { headSha: input.headSha, items }
+  const value = canonicalStringify({
+    snapshotRef: canonicalDigest({ providerSnapshotRef: input.providerSnapshotRef, ...core }),
+    ...core,
+  })
+  if (Buffer.byteLength(value, 'utf8') > MR_FEEDBACK_INPUT_MAX_BYTES) {
+    return {
+      state: 'unknown',
+      reason: `feedback-input-over-budget:${MR_FEEDBACK_INPUT_MAX_BYTES}`,
+      collectable: false,
+    }
+  }
+  return { state: 'known', value, sourceRevision: input.providerSnapshotRef }
+}
+
+function unresolvedFeedbackCell(input: {
+  readonly providerSnapshotRef: string
+  readonly headSha: string
+  readonly threads: readonly {
+    readonly threadRef: string
+    readonly revision: string
+    readonly resolved: boolean
+  }[]
+}): FactCell<FactCellValue> {
+  const value = canonicalStringify({
+    headSha: input.headSha,
+    items: input.threads
+      .filter((thread) => !thread.resolved)
+      .map((thread) => ({ threadRef: thread.threadRef, revision: thread.revision })),
+  })
+  if (Buffer.byteLength(value, 'utf8') > MR_FEEDBACK_INPUT_MAX_BYTES) {
+    return {
+      state: 'unknown',
+      reason: `unresolved-feedback-over-budget:${MR_FEEDBACK_INPUT_MAX_BYTES}`,
+      collectable: false,
+    }
+  }
+  return { state: 'known', value, sourceRevision: input.providerSnapshotRef }
+}
+
+function unresolvedNeedsHumanCount(
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+  feedback: readonly FeedbackLedgerRow[],
+): number {
+  const headSha = knownString(cells, '__mr.headSha')
+  const currentRows = feedback.filter(
+    (row) => row.state === 'needs-human' && (headSha === null || row.headSha === headSha),
+  )
+  const cell = cells[MR_UNRESOLVED_FEEDBACK_CELL]
+  if (cell === undefined || cell.state !== 'known' || typeof cell.value !== 'string') {
+    // Old snapshots have no provider unresolved-set projection. Conservatively
+    // retain the human hold until the next MR facts collection upgrades it.
+    return currentRows.length
+  }
+  try {
+    const raw = JSON.parse(cell.value) as { headSha?: unknown; items?: unknown }
+    if (raw.headSha !== headSha || !Array.isArray(raw.items)) return currentRows.length
+    const unresolved = new Set<string>()
+    for (const item of raw.items) {
+      if (
+        item === null ||
+        typeof item !== 'object' ||
+        typeof (item as { threadRef?: unknown }).threadRef !== 'string' ||
+        typeof (item as { revision?: unknown }).revision !== 'string'
+      ) {
+        return currentRows.length
+      }
+      unresolved.add(
+        `${(item as { threadRef: string }).threadRef}\u0000${(item as { revision: string }).revision}`,
+      )
+    }
+    return currentRows.filter((row) => unresolved.has(`${row.threadRef}\u0000${row.revision}`))
+      .length
+  } catch {
+    return currentRows.length
+  }
+}
+
+function readFeedbackPromptSnapshot(
+  cells: Readonly<Record<string, FactCell<FactCellValue>>>,
+  selected: readonly { readonly threadRef: string; readonly revision: string }[],
+): FeedbackPromptSnapshot | null {
+  const cell = cells[MR_FEEDBACK_INPUT_CELL]
+  if (cell === undefined || cell.state !== 'known' || typeof cell.value !== 'string') return null
+  try {
+    const raw = JSON.parse(cell.value) as {
+      snapshotRef?: unknown
+      headSha?: unknown
+      items?: unknown
+    }
+    if (
+      typeof raw.snapshotRef !== 'string' ||
+      typeof raw.headSha !== 'string' ||
+      !Array.isArray(raw.items)
+    ) {
+      return null
+    }
+    const items: FeedbackPromptItem[] = []
+    for (const expected of selected) {
+      const item = raw.items.find(
+        (candidate): candidate is Record<string, unknown> =>
+          candidate !== null &&
+          typeof candidate === 'object' &&
+          (candidate as Record<string, unknown>).threadRef === expected.threadRef &&
+          (candidate as Record<string, unknown>).revision === expected.revision,
+      )
+      if (
+        item === undefined ||
+        typeof item.body !== 'string' ||
+        !(item.path === null || typeof item.path === 'string')
+      ) {
+        return null
+      }
+      items.push({
+        threadRef: expected.threadRef,
+        revision: expected.revision,
+        body: item.body,
+        path: item.path,
+      })
+    }
+    if (items.length !== raw.items.length) return null
+    return { snapshotRef: raw.snapshotRef, headSha: raw.headSha, items }
+  } catch {
+    return null
+  }
 }
 
 /** 行投影 cells；collector 采回的 snapshot cells 覆盖同名项（更权威）。 */
@@ -215,6 +401,7 @@ function readinessInputFrom(
   mission: MissionRow,
   unsettled: readonly EffectRow[],
   cells: Record<string, FactCell<FactCellValue>>,
+  feedback: readonly FeedbackLedgerRow[],
 ): ReadinessInput {
   const enumOf = (id: string): string | null => {
     const cell = cells[id]
@@ -242,7 +429,7 @@ function readinessInputFrom(
     factDigest: '',
     activeAction: mission.currentActionRunId !== null,
     unconfirmedEffects: unsettled.length,
-    unhandledFeedback: 0,
+    unhandledFeedback: knownNumber(cells, 'mr.unhandledFeedbackCount') ?? 0,
     conflict: boolOf('mr.conflict') === true,
     requiredGates: [...requiredGates],
     pipelineComplete: enumOf('pipeline.completeness') !== 'partial',
@@ -251,9 +438,29 @@ function readinessInputFrom(
     uploadFulfillmentPending:
       mission.uploadPlanRef !== null && mission.uploadPublicationRef === null,
     approvalsOutstanding: boolOf('mr.approvalHold') === true ? 1 : 0,
-    unresolvedHumanThreads: 0,
+    unresolvedHumanThreads: unresolvedNeedsHumanCount(cells, feedback),
     committerPolicyHold: false,
     hostMergeable: (enumOf('mr.mergeable') ?? 'unknown') as 'yes' | 'no' | 'unknown',
+  }
+}
+
+function projectLiveFeedbackCount(
+  store: Pick<MissionStore, 'listFeedback'>,
+  mission: MissionRow,
+  cells: Record<string, FactCell<FactCellValue>>,
+  policy: AutomationPolicyContent | null,
+): void {
+  if (
+    policy === null ||
+    mission.mrClaimId === null ||
+    cells['__mr.factsCollectedAt'] === undefined
+  ) {
+    return
+  }
+  cells['mr.unhandledFeedbackCount'] = {
+    state: 'known',
+    value: selectableFeedback(store.listFeedback(mission.id), policy.feedback).length,
+    sourceRevision: 'ledger-live',
   }
 }
 
@@ -364,15 +571,40 @@ async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<Re
   return { kind: 'fence-settled', result: 'tracking-only' }
 }
 
-function publishReadiness(deps: ReconcileDeps, missionId: string): void {
+async function publishReadiness(deps: ReconcileDeps, missionId: string): Promise<void> {
   const mission = deps.store.getMission(missionId)
   if (mission === null || TERMINAL_STATUSES.has(mission.status)) return
   const cells = projectRowCells(mission)
   mergeCollectedCells(deps, mission, cells)
+  projectLiveFeedbackCount(
+    deps.store,
+    mission,
+    cells,
+    await loadPolicyContent(deps.lookup, mission),
+  )
   const unsettled = deps.store.listUnsettledEffects(mission.id)
-  const readiness = computeReadiness(readinessInputFrom(mission, unsettled, cells))
+  const readiness = computeReadiness(
+    readinessInputFrom(mission, unsettled, cells, deps.store.listFeedback(mission.id)),
+  )
+  let projectedStatus: MissionStatus | null = null
+  if (
+    mission.status === 'watching' ||
+    mission.status === 'waiting-committer' ||
+    mission.status === 'ready-to-merge'
+  ) {
+    const candidate = readiness.status === 'working' ? 'watching' : readiness.status
+    if (candidate !== mission.status) {
+      const verdict = checkMissionTransition({
+        from: mission.status,
+        to: candidate,
+        fence: mission.transitionFence,
+      })
+      if (verdict.ok) projectedStatus = candidate
+    }
+  }
   deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     readinessJson: canonicalStringify(readiness),
+    ...(projectedStatus === null ? {} : { status: projectedStatus }),
   })
 }
 
@@ -393,13 +625,16 @@ export async function runMissionReconcile(
     return outcome
   }
 
-  deps.store.consumeWakeHints(mission.id, now)
+  const consumedWakeHints = deps.store.consumeWakeHints(mission.id, now)
 
   // ---- PR-4：进行中 Agent action 的结果收取（guards 之前——active-action
   // guard 会 wait，收取必须先于它；pending 则落回正常流程）。 ----------------
   if (mission.currentActionRunId !== null) {
     const collected = await collectAgentAttempt(deps, mission)
     if (collected.kind !== 'no-op' && collected.kind !== 'still-running') {
+      if (collected.kind === 'action-collected' || collected.kind === 'action-failed') {
+        settlePlaybookAction(deps, collected.actionRunId, collected)
+      }
       return { kind: 'action-collect', result: collected }
     }
   }
@@ -407,6 +642,13 @@ export async function runMissionReconcile(
   // ---- facts 组装 -----------------------------------------------------------
   const cells = projectRowCells(mission)
   mergeCollectedCells(deps, mission, cells)
+  if (deps.ports.playbookSaga !== undefined) {
+    cells['__playbook.sagaDigest'] = {
+      state: 'known',
+      value: deps.ports.playbookSaga.sagaDigest(mission.id),
+      sourceRevision: 'playbook-saga',
+    }
+  }
   const policy = await loadPolicyContent(deps.lookup, mission)
 
   // ---- T109 抓出：mr.unhandledFeedbackCount 的事实源是台账，不是 collect 的
@@ -415,15 +657,17 @@ export async function runMissionReconcile(
   // 耗尽。claim 存在且 MR facts 已采过时按台账现算覆盖（与 collect 投影同一
   // 算法 selectableFeedback，两处必然一致）。必须先于 buildFactSnapshot——
   // snapshot 定格后的覆盖进不了决策输入。
-  if (
-    policy !== null &&
-    mission.mrClaimId !== null &&
-    cells['__mr.factsCollectedAt'] !== undefined
-  ) {
-    cells['mr.unhandledFeedbackCount'] = {
+  projectLiveFeedbackCount(deps.store, mission, cells, policy)
+
+  // Make an external invalidation part of the audited decision input. Merely
+  // swapping the selected decision below is insufficient: decisionInputDigest
+  // dedupes before the arm runs, so a wake against an otherwise identical
+  // snapshot would still collapse into the preceding wait decision.
+  if (consumedWakeHints > 0 && mission.mrClaimId !== null) {
+    cells['__wake.mrFactsInvalidatedAt'] = {
       state: 'known',
-      value: selectableFeedback(deps.store.listFeedback(mission.id), policy.feedback).length,
-      sourceRevision: 'ledger-live',
+      value: String(now),
+      sourceRevision: `wake-hints:${consumedWakeHints}`,
     }
   }
 
@@ -494,6 +738,26 @@ export async function runMissionReconcile(
     }
   }
 
+  // The feedback prompt freezes exact provider text for one selectable batch.
+  // After that batch settles, the live ledger can expose the next batch while
+  // the old prompt still names only the previous revisions. Refresh MR facts
+  // before launching so Agent input never drifts from the selected ledger rows.
+  if (selected.kind === 'run-agent-action' && selected.capabilityId === 'mr.feedback.apply') {
+    const selectedRows = selectableFeedback(deps.store.listFeedback(mission.id), policy.feedback)
+    const promptCell = cells[MR_FEEDBACK_INPUT_CELL]
+    const prompt = readFeedbackPromptSnapshot(
+      cells,
+      selectedRows.map((row) => ({ threadRef: row.threadRef, revision: row.revision })),
+    )
+    if (
+      selectedRows.length > 0 &&
+      prompt === null &&
+      (promptCell === undefined || promptCell.state !== 'unknown' || promptCell.collectable)
+    ) {
+      selected = { kind: 'collect-mr-facts' }
+    }
+  }
+
   // ---- mr fact 前置引用翻译（PR-10 T109 抓出）------------------------------
   // policy 规则在 MR 存在之前引用 mr.* fact 时，引擎按 indeterminate 停机派
   // collect-mr-facts（引擎纯层不知道 claim）。此时采集不可执行——若放行到
@@ -502,6 +766,16 @@ export async function runMissionReconcile(
   // delivery 链照常接管发布进度，MR ensure 之后规则自然恢复可判。
   if (selected.kind === 'collect-mr-facts' && mission.mrClaimId === null) {
     selected = { kind: 'block', reason: 'mr-facts-unavailable:no-mr-claim' }
+  }
+
+  // A webhook/manual wake is an invalidation signal, not merely a request to
+  // rerun the same decision over the same still-fresh snapshot. Without this
+  // translation a review comment arriving inside MR_FACTS_STALE_MS consumes
+  // its durable hint, reproduces the previous wait decision, and is then lost
+  // until another unrelated event happens. Only replace a rule-level block:
+  // an already selected action and fixed-guard waits keep their priority.
+  if (consumedWakeHints > 0 && mission.mrClaimId !== null && selected.kind === 'block') {
+    selected = { kind: 'collect-mr-facts' }
   }
 
   // ---- requirement 重派（PR-3 T33/T38a）------------------------------------
@@ -536,6 +810,14 @@ export async function runMissionReconcile(
     now,
     manifest: loadPipelineManifest(deps, cells),
   })
+
+  // Published business steps are a deterministic overlay after the platform
+  // chains have derived all exact inputs. They may run only when every fixed
+  // guard passed; terminal/fence/active-action/authority waits remain supreme.
+  if (evaluation.guardTrace.every((node) => node.outcome === 'pass')) {
+    const playbookDecision = await selectPlaybookStepDecision(deps, mission, snapshot)
+    if (playbookDecision !== null) selected = playbookDecision
+  }
 
   return await commitAndHandle(deps, mission, snapshot, guards, { ...evaluation, selected })
 }
@@ -739,13 +1021,14 @@ async function commitAndHandle(
             MR_CARE_EFFECT_KINDS.has(e.effectKind)),
       )
     if (!hangingSelfSettled) {
-      publishReadiness(deps, mission.id)
+      await publishReadiness(deps, mission.id)
       return { kind: 'deduped', decisionId: inserted.decisionId }
     }
   }
 
   const handled = await handleDecision(deps, mission, snapshot, selected, inserted.decisionId)
-  publishReadiness(deps, mission.id)
+  settlePlaybookDecision(deps, selected, inserted.decisionId, handled)
+  await publishReadiness(deps, mission.id)
   return { kind: 'decided', decisionId: inserted.decisionId, selected, handled }
 }
 
@@ -999,6 +1282,11 @@ async function handleDecision(
       // policy 算 selectable 数投影 mr.unhandledFeedbackCount。
       if (collected.threads !== undefined && collected.headSha !== null) {
         deps.store.obsoleteFeedbackForOtherHeads(mission.id, collected.headSha, now)
+        merged[MR_UNRESOLVED_FEEDBACK_CELL] = unresolvedFeedbackCell({
+          providerSnapshotRef: collected.snapshotRef,
+          headSha: collected.headSha,
+          threads: collected.threads,
+        })
         for (const thread of collected.threads) {
           if (thread.resolved) continue
           deps.store.upsertFeedbackObservation({
@@ -1028,6 +1316,23 @@ async function handleDecision(
             value: selectable.length,
             sourceRevision: collected.snapshotRef,
           }
+          // The old implementation persisted only bodyDigest. That proved a
+          // comment existed but left mr.feedback.apply with no review text to
+          // act on; the scripted T109 launcher happened to know the requested
+          // edit out of band. Freeze the exact selectable revisions and their
+          // bounded provider text in a hidden cell. It never enters public
+          // facts or policy predicates; launch renders it as untrusted data.
+          merged[MR_FEEDBACK_INPUT_CELL] = feedbackInputCell({
+            providerSnapshotRef: collected.snapshotRef,
+            headSha: collected.headSha,
+            selected: selectable,
+            threads: collected.threads.map((thread) => ({
+              threadRef: thread.threadRef,
+              revision: thread.revision,
+              body: thread.body,
+              path: thread.path,
+            })),
+          })
         }
       }
       const snapshotId = ulid()
@@ -1144,28 +1449,56 @@ async function handleDecision(
         ...(selected.capabilityId === 'pipeline.repair'
           ? pipelineRepairInputs(deps, snapshot.cells)
           : {}),
+        ...(selected.problemInput === undefined ? {} : { problemInput: selected.problemInput }),
+        ...(selected.approvalInput === undefined ? {} : { approvalInput: selected.approvalInput }),
+        ...(selected.retryBudget === undefined ? {} : { retryBudget: selected.retryBudget }),
         // PR-7 T74：feedback apply 的 (threadRef,revision) 闭集——selectable 行
         // 标 selected 并冻结进 manifest.feedbackSnapshot（validator 双射对拍）。
         ...(await (async (): Promise<{
           feedbackSnapshot?: {
             readonly snapshotRef: string
-            readonly items: readonly { readonly threadRef: string; readonly revision: string }[]
+            readonly items: readonly FeedbackPromptItem[]
           }
         }> => {
           if (selected.capabilityId !== 'mr.feedback.apply') return {}
           const feedbackPolicy = await loadPolicyContent(deps.lookup, mission)
           if (feedbackPolicy === null) return {}
-          const items = prepareFeedbackSelection(
+          const selectable = selectableFeedback(
+            deps.store.listFeedback(mission.id),
+            feedbackPolicy.feedback,
+          )
+          const promptSnapshot = readFeedbackPromptSnapshot(snapshot.cells, selectable)
+          // Missing/mismatched bodies are a hard input boundary. Do not mark
+          // ledger rows selected; launchAgentAttempt will return the typed
+          // feedback-snapshot-content-missing block and a later recollect can
+          // repair the input without orphaning the feedback rows.
+          if (promptSnapshot === null) return {}
+          const selectedRefs = prepareFeedbackSelection(
             { store: deps.store, now: deps.now },
             mission,
             feedbackPolicy,
             actionRunId,
           )
-          if (items.length === 0) return {}
-          return { feedbackSnapshot: { snapshotRef: canonicalDigest(items), items } }
+          if (selectedRefs.length === 0) return {}
+          const byRef = new Map(
+            promptSnapshot.items.map((item) => [`${item.threadRef}\u0000${item.revision}`, item]),
+          )
+          const items = selectedRefs.map((item) =>
+            byRef.get(`${item.threadRef}\u0000${item.revision}`),
+          )
+          if (items.some((item) => item === undefined)) return {}
+          return {
+            feedbackSnapshot: {
+              snapshotRef: promptSnapshot.snapshotRef,
+              items: items as FeedbackPromptItem[],
+            },
+          }
         })()),
       })
       if (!launchOutcome.ok) {
+        if (selected.capabilityId === 'mr.feedback.apply') {
+          releaseFeedbackSelection({ store: deps.store, now: deps.now }, mission.id, actionRunId)
+        }
         deps.store.settleActionRun({
           id: actionRunId,
           status: 'failed',
@@ -1194,32 +1527,8 @@ async function handleDecision(
       return 'action-launched'
     }
     case 'publish-readiness': {
-      // readiness 在 commitAndHandle 尾部统一重算；此处只做状态推进。
-      const fresh = deps.store.getMission(mission.id)
-      if (fresh === null) return 'readiness-published'
-      const cells = projectRowCells(fresh)
-      mergeCollectedCells(deps, fresh, cells)
-      const readiness = computeReadiness(
-        readinessInputFrom(fresh, deps.store.listUnsettledEffects(fresh.id), cells),
-      )
-      if (
-        readiness.status !== fresh.status &&
-        (fresh.status === 'watching' ||
-          fresh.status === 'waiting-committer' ||
-          fresh.status === 'ready-to-merge')
-      ) {
-        const to = readiness.status === 'working' ? 'watching' : readiness.status
-        if (to !== fresh.status) {
-          const verdict = checkMissionTransition({
-            from: fresh.status,
-            to,
-            fence: fresh.transitionFence,
-          })
-          if (verdict.ok) {
-            deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { status: to })
-          }
-        }
-      }
+      // commitAndHandle 尾部统一重算 readinessJson + 业务状态。单一投影点
+      // 同时覆盖显式 publish-readiness、pipeline wait 和 webhook invalidation。
       return 'readiness-published'
     }
     // ---- requirement 取件/物化（PR-3 T33/T35）--------------------------------
@@ -1520,6 +1829,28 @@ async function handleDecision(
         gateKey: selected.gateKey,
         runRef: selected.runRef,
       })
+    }
+    // ---- published employee collaboration / approval saga (PR-12) ----------
+    case 'invoke-child-mission': {
+      if (deps.ports.playbookSaga === undefined || deps.ports.childMissions === undefined) {
+        blockMission(deps, mission.id, 'child-mission-port-not-wired', null)
+        return 'blocked'
+      }
+      return await handleChildMissionDecision(deps, mission, selected, decisionId)
+    }
+    case 'submit-approval': {
+      if (deps.ports.playbookSaga === undefined || deps.ports.approvalGateway === undefined) {
+        blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
+        return 'blocked'
+      }
+      return await handleApprovalSubmitDecision(deps, mission, selected, decisionId)
+    }
+    case 'observe-approval': {
+      if (deps.ports.playbookSaga === undefined || deps.ports.approvalGateway === undefined) {
+        blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
+        return 'blocked'
+      }
+      return await handleApprovalObserveDecision(deps, mission, selected, decisionId)
     }
     // ---- MR care arm（PR-7，实现在 mrCareChain.ts）--------------------------
     case 'reply-feedback': {

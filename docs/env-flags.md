@@ -34,7 +34,9 @@
 `AW_OUTPUT_MODE`、`AW_REPOS_JSON`、`AW_PORT_NAMES`、`AW_PORT_<NAME>`、
 `AW_PORT_FILE_<NAME>`（大端口落盘间接层，`packages/shared/src/scriptNode.ts`）、
 `AW_PORT_MY_PORT`（同上，保留名）、`AW_PORT_DIFF`（`backend/src/services/scriptPorts.ts`，
-diff 端口的免拷贝特例）。语义契约见 script 节点相关 RFC / 源码；此处只登记名字防漂移。
+diff 端口的免拷贝特例）、`AW_PORT_PROMPT`（RFC-310 PR-11 数字员工 program 步骤：合成的
+script host 快照只有 `prompt` 一个输入端口，程序从这里拿平台提示词——见
+`backend/src/modules/task-execution/domain/digitalEmployeeHost.ts`）。语义契约见 script 节点相关 RFC / 源码；此处只登记名字防漂移。
 
 ### development pipeline adapter 上下文族（`backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts` 组装，RFC-310 PR-6）
 
@@ -47,6 +49,21 @@ target 引用）、`AW_PIPELINE_GATES`（collect/trigger 的 gate key CSV）、`
 注入；`packages/system-mocks/src/development/pipeline-adapter-cli.ts` 消费，另有测试后门
 `AW_PIPELINE_FIXTURE_JSON` 喂本地 fixture 防「子进程→回环 HTTP」坑）。`AW_ADAPTER_SINK`/
 `AW_EXTERNAL_ID` 等 requirement 族沿用既有登记。
+
+### development approval adapter 上下文族（同 `developmentAdapterRunner.ts` 组装，RFC-310 PR-12）
+
+外部审批 gateway adapter 子进程的最小 env 面（与 pipeline 族同一个空环境构造，按 op 叠加）：
+
+`AW_APPROVAL_STEP_RUN`（submit：发起该审批的 step run 引用）、`AW_APPROVAL_DRAFT_REF`
+（submit：Agent/script 准备好的审批材料 blob 引用——平台只传引用，不传正文）、
+`AW_APPROVAL_DEADLINE`（submit：平台侧 deadline，供 provider 呈现，不由 provider 决定）、
+`AW_APPROVAL_INTENT_DIGEST`（submit：意图内容寻址指纹，重放对拍用）、
+`AW_IDEMPOTENCY_KEY`（submit/lookup 共用的平台幂等键——response-lost 后按它 lookup 认领，
+绝不重复提交）、`AW_APPROVAL_CORRELATION_REF`（observe：provider 回执的关联引用）、
+`AW_APPROVAL_MOCK_URL`（system-mocks 上游座席，仅测试/装配注入；由
+`backend/src/modules/integration/composition/approvalGateway.ts` 从平台进程 env 透传给子进程，
+`packages/system-mocks/src/development/approval-adapter-cli.ts` 消费。真实 adapter 走
+connectionRef，不依赖此透传）。
 
 ### 代码能力脚本上下文族（`backend/src/modules/code-capability/application/capabilityScriptRun.ts` 组装，RFC-304）
 

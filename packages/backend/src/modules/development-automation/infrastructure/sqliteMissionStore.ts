@@ -513,6 +513,8 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
         capabilityId: row.capabilityId,
         writable: row.writable === 1,
         status: row.status,
+        resultRef: row.resultRef,
+        failureJson: row.failureJson,
       } satisfies ActionRunRow
     },
 

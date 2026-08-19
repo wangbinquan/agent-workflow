@@ -94,7 +94,14 @@ describe('rfc310 pr2 reconciler', () => {
   test('missing launcher is a typed block, never a silent skip', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-nolaunch-1')
-    const deps = f.deps({ repositoryFacts: repoCollector })
+    // PR-11 起 launcher 的接线判定按模板 executor 分流（agent / script），不再是
+    // 「所有端口之前」的总闸。要证明缺 launcher 仍是 typed block，就必须把其余端口
+    // 全接好、只摘掉 agent launcher；否则先撞上 action-baseline-not-wired，这条测
+    // 试测的就不是它名字说的那件事了。
+    const { agentLauncher: _omittedLauncher, ...portsWithoutLauncher } = fakeAgentActionPorts({
+      db: f.db,
+    })
+    const deps = f.deps({ repositoryFacts: repoCollector, ...portsWithoutLauncher })
 
     await runMissionReconcile(deps, missionId)
     const second = await runMissionReconcile(deps, missionId)

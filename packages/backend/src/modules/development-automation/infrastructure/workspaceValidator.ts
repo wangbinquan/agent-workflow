@@ -91,6 +91,7 @@ export interface WorkspaceValidationInput {
   /** 与 pre 拍摄相同的 label→绝对路径映射（重拍 after 用）。 */
   readonly protectedRoots: Record<string, string>
   readonly protectedSkipPrefixes?: readonly string[]
+  readonly protectedSkipPrefixesByRoot?: Readonly<Record<string, readonly string[]>>
   /** materialize 完成时拍的业务树快照（= action baseline 的现场形态）。 */
   readonly preBusinessTree: ReadonlyMap<string, string>
   readonly outcome: 'changed' | 'no-change' | 'needs-information' | 'blocked'
@@ -122,6 +123,7 @@ export function validateWorkspaceOutcome(
   // 5) protected roots 对拍（必须最先跑：一旦违规现场即不可信，后续不看）。
   const after = snapshotProtectedRoots(input.protectedRoots, {
     skipPrefixes: input.protectedSkipPrefixes,
+    skipPrefixesByRoot: input.protectedSkipPrefixesByRoot,
   })
   const protectedViolations: SnapshotViolation[] = diffProtectedRoots(input.preProtected, after)
   if (protectedViolations.length > 0) {

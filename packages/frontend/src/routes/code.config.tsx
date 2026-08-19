@@ -18,21 +18,26 @@ import {
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextInput } from '@/components/Form'
+import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
-import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 import { usePermission } from '@/hooks/useActor'
+import { AGENT_CAPABILITY_IDS } from '@/data/policyFactCatalog'
+import {
+  buildInitialEmployeePlaybook,
+  type EmployeePreset,
+  type PublishedResourceOption,
+} from '@/components/code/employeePlaybook'
 import { Route as RootRoute } from './__root'
 
 // 族清单同样只存一份（shared）——页签顺序、路由参数校验与后端契约测试遍历的
@@ -83,18 +88,6 @@ export function isConfigKind(value: string): value is ConfigKind {
   return (CONFIG_KINDS as readonly string[]).includes(value)
 }
 
-/** Agent capability id 闭集（backend capabilityDefinition AGENT_CAPABILITY_IDS
- *  的前端镜像；模板创建时的必填选择）。 */
-export const AGENT_CAPABILITY_IDS = [
-  'requirement.analyze',
-  'change.implement',
-  'change.review',
-  'mr.feedback.apply',
-  'pipeline.repair',
-  'verification.repair',
-  'conflict.repair',
-] as const
-
 export interface ConfigIdentityRow {
   id: string
   name: string
@@ -106,17 +99,31 @@ export interface ConfigIdentityRow {
   archivedAt: number | null
   capabilityId?: string
   purpose?: string
+  description?: string
+  businessStatus?: 'enabled' | 'disabled'
+  stepCount?: number
+}
+
+interface ConfigListSearch extends Record<string, unknown> {
+  create?: boolean
+}
+
+export function validateConfigListSearch(search: Record<string, unknown>): ConfigListSearch {
+  const { create: _create, ...adjacent } = search
+  return search.create === true || search.create === '1' ? { ...adjacent, create: true } : adjacent
 }
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/code/config/$kind',
+  validateSearch: validateConfigListSearch,
   component: ConfigListPage,
 })
 
 function ConfigListPage(): ReactElement {
   const { t } = useTranslation()
   const params = Route.useParams()
+  const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const kind: ConfigKind = isConfigKind(params.kind) ? params.kind : 'employees'
   const spec = CONFIG_KIND_SPECS[kind]
@@ -128,99 +135,282 @@ function ConfigListPage(): ReactElement {
   })
 
   const [createOpen, setCreateOpen] = useState(false)
+  useEffect(() => {
+    if (search.create === true && canCreate) setCreateOpen(true)
+  }, [canCreate, kind, search.create])
+  const closeCreate = (): void => {
+    setCreateOpen(false)
+    if (search.create === true) {
+      void navigate({ search: (previous) => ({ ...previous, create: undefined }), replace: true })
+    }
+  }
 
   return (
-    <div className="page">
-      <PageHeader
-        title={t('code.config.title')}
-        back={<Link to="/code">{t('code.missions.backToCode')}</Link>}
-        actions={
-          canCreate ? (
-            <button
-              type="button"
-              className="btn btn--sm btn--primary"
-              onClick={() => setCreateOpen(true)}
-              data-testid="config-create-open"
-            >
-              {t('code.config.create')}
-            </button>
-          ) : null
-        }
-      >
-        <p className="page__subtitle">{t('code.config.subtitle')}</p>
-      </PageHeader>
+    <div className={`page page--operations code-config-page code-config-page--${kind}`}>
+      <div className="operations-surface">
+        <PageHeader
+          title={
+            kind === 'employees'
+              ? t('code.employeePlaybook.employeesTitle')
+              : t(`code.config.kind.${spec.i18nKey}`)
+          }
+          className="operations-surface__header"
+          actions={
+            canCreate ? (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                onClick={() => setCreateOpen(true)}
+                data-testid="config-create-open"
+              >
+                {t('code.config.create')}
+              </button>
+            ) : null
+          }
+        >
+          <p className="operations-surface__subtitle">
+            {kind === 'employees'
+              ? t('code.employeePlaybook.employeesSubtitle')
+              : t('code.config.technicalSubtitle')}
+          </p>
+        </PageHeader>
 
-      <Segmented<ConfigKind>
-        value={kind}
-        ariaLabel={t('code.config.kindSwitch')}
-        testidPrefix="config-kind"
-        onChange={(next) => {
-          void navigate({ to: '/code/config/$kind', params: { kind: next } })
-        }}
-        options={CONFIG_KINDS.map((k) => ({
-          value: k,
-          label: t(`code.config.kind.${CONFIG_KIND_SPECS[k].i18nKey}`),
-        }))}
-      />
+        {list.isLoading ? <LoadingState /> : null}
+        {list.isError ? <ErrorBanner error={list.error} /> : null}
+        {list.data !== undefined && list.data.items.length === 0 ? (
+          <EmptyState
+            title={
+              kind === 'employees'
+                ? t('code.employeePlaybook.employeesEmpty')
+                : t('code.config.emptyTitle')
+            }
+            description={
+              kind === 'employees'
+                ? t('code.employeePlaybook.employeesEmptyHint')
+                : t('code.config.emptyBody')
+            }
+            action={
+              canCreate ? (
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  {t('code.employeePlaybook.createEmployee')}
+                </button>
+              ) : undefined
+            }
+          />
+        ) : null}
 
-      {list.isLoading ? <LoadingState /> : null}
-      {list.isError ? <ErrorBanner error={list.error} /> : null}
-      {list.data !== undefined && list.data.items.length === 0 ? (
-        <EmptyState title={t('code.config.emptyTitle')} description={t('code.config.emptyBody')} />
-      ) : null}
-
-      {list.data !== undefined && list.data.items.length > 0 ? (
-        <TableViewport label={t('code.config.title')}>
-          <table data-testid="config-list">
-            <thead>
-              <tr>
-                <th>{t('code.config.colName')}</th>
-                <th>{t('code.config.colDetail')}</th>
-                <th>{t('code.config.colRevision')}</th>
-                <th>{t('code.config.colVisibility')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.items.map((row) => (
-                <tr key={row.id} data-testid={`config-row-${row.id}`}>
-                  <td>
-                    <Link
-                      to="/code/config/$kind/$id"
-                      params={{ kind, id: row.id }}
-                      data-testid={`config-link-${row.id}`}
-                    >
-                      {row.name}
-                    </Link>
-                  </td>
-                  <td>{row.capabilityId ?? row.purpose ?? '—'}</td>
-                  <td>
-                    {row.publishedRevision === null ? (
-                      <StatusChip kind="warn" size="sm">
-                        {t('code.config.notPublished')}
-                      </StatusChip>
-                    ) : (
-                      <code>v{row.publishedRevision}</code>
-                    )}
-                    {row.archivedAt !== null ? (
-                      <StatusChip kind="neutral" size="sm">
-                        {t('code.config.archived')}
-                      </StatusChip>
-                    ) : null}
-                  </td>
-                  <td>{row.visibility}</td>
+        {list.data !== undefined && list.data.items.length > 0 ? (
+          <TableViewport label={t('code.config.title')}>
+            <table data-testid="config-list">
+              <thead>
+                <tr>
+                  <th>{t('code.config.colName')}</th>
+                  <th>
+                    {kind === 'employees'
+                      ? t('code.employeePlaybook.colSteps')
+                      : t('code.config.colDetail')}
+                  </th>
+                  <th>{t('code.config.colRevision')}</th>
+                  <th>
+                    {kind === 'employees'
+                      ? t('code.employeePlaybook.colStatus')
+                      : t('code.config.colVisibility')}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableViewport>
-      ) : null}
+              </thead>
+              <tbody>
+                {list.data.items.map((row) => (
+                  <tr key={row.id} data-testid={`config-row-${row.id}`}>
+                    <td>
+                      <Link
+                        to="/code/config/$kind/$id"
+                        params={{ kind, id: row.id }}
+                        data-testid={`config-link-${row.id}`}
+                      >
+                        {row.name}
+                      </Link>
+                      {kind === 'employees' &&
+                      row.description !== undefined &&
+                      row.description !== '' ? (
+                        <p className="operations-surface__subtitle">{row.description}</p>
+                      ) : null}
+                    </td>
+                    <td>
+                      {kind === 'employees'
+                        ? t('code.employeePlaybook.stepCount', { count: row.stepCount ?? 0 })
+                        : (row.capabilityId ?? row.purpose ?? '—')}
+                    </td>
+                    <td>
+                      {row.publishedRevision === null ? (
+                        <StatusChip kind="warn" size="sm">
+                          {t('code.config.notPublished')}
+                        </StatusChip>
+                      ) : (
+                        <code>v{row.publishedRevision}</code>
+                      )}
+                      {row.archivedAt !== null ? (
+                        <StatusChip kind="neutral" size="sm">
+                          {t('code.config.archived')}
+                        </StatusChip>
+                      ) : null}
+                    </td>
+                    <td>
+                      {kind === 'employees' ? (
+                        <StatusChip
+                          kind={row.businessStatus === 'disabled' ? 'neutral' : 'success'}
+                          size="sm"
+                        >
+                          {row.businessStatus === 'disabled'
+                            ? t('code.employeePlaybook.disabled')
+                            : t('code.employeePlaybook.enabledShort')}
+                        </StatusChip>
+                      ) : (
+                        row.visibility
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableViewport>
+        ) : null}
 
-      {createOpen ? <CreateDialog kind={kind} onClose={() => setCreateOpen(false)} /> : null}
+        {createOpen ? <CreateDialog kind={kind} onClose={closeCreate} /> : null}
+      </div>
     </div>
   )
 }
 
 function CreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactElement {
+  return props.kind === 'employees' ? (
+    <EmployeeCreateDialog onClose={props.onClose} />
+  ) : (
+    <TechnicalCreateDialog kind={props.kind} onClose={props.onClose} />
+  )
+}
+
+function EmployeeCreateDialog(props: { onClose: () => void }): ReactElement {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const navigate = Route.useNavigate()
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [preset, setPreset] = useState<EmployeePreset>('general')
+  const [policyId, setPolicyId] = useState('')
+  const policies = useQuery<{ items: PublishedResourceOption[] }>({
+    queryKey: ['code-policies'],
+    queryFn: ({ signal }) => api.get('/api/code/automation-policies', undefined, signal),
+  })
+  const templates = useQuery<{ items: PublishedResourceOption[] }>({
+    queryKey: ['code-config', 'action-templates'],
+    queryFn: ({ signal }) => api.get('/api/code/action-templates', undefined, signal),
+  })
+  const publishedPolicies = (policies.data?.items ?? []).filter(
+    (policy) => policy.publishedRevision !== null,
+  )
+  const effectivePolicyId = policyId || publishedPolicies[0]?.id || ''
+  const selectedPolicy = publishedPolicies.find((policy) => policy.id === effectivePolicyId)
+  const implementations = (templates.data?.items ?? []).filter(
+    (template) => template.publishedRevision !== null,
+  )
+
+  const create = useMutation({
+    mutationFn: () => {
+      if (selectedPolicy === undefined) throw new Error(t('code.employeePlaybook.noRuleSet'))
+      return api.post(
+        CONFIG_KIND_SPECS.employees.apiBase,
+        buildDevelopmentConfigCreateBody({
+          kind: 'employees',
+          name,
+          employeeDraft: buildInitialEmployeePlaybook({
+            description,
+            preset,
+            policy: selectedPolicy,
+            implementations,
+          }),
+        }),
+      ) as Promise<ConfigIdentityRow>
+    },
+    onSuccess: (created) => {
+      void qc.invalidateQueries({ queryKey: ['code-config', 'employees'] })
+      props.onClose()
+      void navigate({
+        to: '/code/config/$kind/$id',
+        params: { kind: 'employees', id: created.id },
+      })
+    },
+  })
+
+  return (
+    <Dialog
+      open
+      title={t('code.employeePlaybook.createEmployee')}
+      closeOnOverlayClick={false}
+      onClose={props.onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn--sm" onClick={props.onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            disabled={name.trim() === '' || selectedPolicy === undefined || create.isPending}
+            onClick={() => create.mutate()}
+            data-testid="config-create-submit"
+          >
+            {create.isPending
+              ? t('code.config.creating')
+              : t('code.employeePlaybook.createAndConfigure')}
+          </button>
+        </>
+      }
+    >
+      {create.isError ? <ErrorBanner error={create.error} /> : null}
+      <p>{t('code.employeePlaybook.createHint')}</p>
+      <Field label={t('code.config.name')} required>
+        <TextInput value={name} onChange={setName} data-testid="config-create-name" />
+      </Field>
+      <Field label={t('code.config.description')}>
+        <TextArea value={description} onChange={setDescription} rows={3} />
+      </Field>
+      <Field label={t('code.employeePlaybook.preset')}>
+        <Select
+          value={preset}
+          onChange={(value) => setPreset(value as EmployeePreset)}
+          options={[
+            { value: 'general', label: t('code.employeePlaybook.presetGeneral') },
+            { value: 'java', label: t('code.employeePlaybook.presetJava') },
+            { value: 'cpp', label: t('code.employeePlaybook.presetCpp') },
+          ]}
+        />
+      </Field>
+      {publishedPolicies.length === 0 ? (
+        <ErrorBanner error={new Error(t('code.employeePlaybook.noRuleSet'))} />
+      ) : (
+        <Field
+          label={t('code.employeePlaybook.ruleSet')}
+          hint={t('code.employeePlaybook.ruleSetHint')}
+        >
+          <Select
+            value={effectivePolicyId}
+            onChange={setPolicyId}
+            options={publishedPolicies.map((policy) => ({ value: policy.id, label: policy.name }))}
+          />
+        </Field>
+      )}
+      <p className="form-field__hint">
+        {t('code.employeePlaybook.detectedExecutors', { count: implementations.length })}
+      </p>
+    </Dialog>
+  )
+}
+
+function TechnicalCreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactElement {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const navigate = Route.useNavigate()

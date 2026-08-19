@@ -54,6 +54,32 @@ function protectedRootsOf(workspacePath: string): Record<string, string> {
   }
 }
 
+/**
+ * TaskEngine owns these paths across one whole attempt: RFC-130 creates and
+ * removes isolated worktrees, snapshots full state into its private ref
+ * namespace, and refreshes the common object store/index/config. They cannot
+ * identify an Agent-side Git command in an attempt-wide byte snapshot.
+ *
+ * The runner therefore enforces the Agent's no-Git contract over the exact
+ * child-process window (HEAD, refs, index and config semantic state). Keep the
+ * evidence root completely unfiltered here.
+ */
+export const PLATFORM_OWNED_GIT_METADATA_PREFIXES = [
+  'ORIG_HEAD',
+  'agent-workflow',
+  'config',
+  'config.worktree',
+  'index',
+  'logs',
+  'objects',
+  'refs/agent-workflow',
+  'worktrees',
+] as const
+
+const PROTECTED_SKIP_PREFIXES_BY_ROOT = {
+  'git-meta': PLATFORM_OWNED_GIT_METADATA_PREFIXES,
+} as const
+
 interface SerializedPreState {
   readonly protected: {
     readonly digest: string
@@ -82,7 +108,11 @@ export function createWorkspaceValidationAdapter(): WorkspaceValidationPort {
   return {
     capturePreState(workspacePath) {
       const pre: SerializedPreState = {
-        protected: serializeProtected(snapshotProtectedRoots(protectedRootsOf(workspacePath))),
+        protected: serializeProtected(
+          snapshotProtectedRoots(protectedRootsOf(workspacePath), {
+            skipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
+          }),
+        ),
         business: [...businessTreeSnapshot(workspacePath).entries()],
       }
       return JSON.stringify(pre)
@@ -93,6 +123,7 @@ export function createWorkspaceValidationAdapter(): WorkspaceValidationPort {
         workspacePath: input.workspacePath,
         preProtected: reviveProtected(pre.protected),
         protectedRoots: protectedRootsOf(input.workspacePath),
+        protectedSkipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
         preBusinessTree: new Map(pre.business),
         outcome: input.outcome,
         workspaceMode: input.workspaceMode as CapabilityWorkspaceMode,

@@ -8,11 +8,14 @@
 // 侧）。
 
 import { beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { deriveChangeCandidate } from '../src/modules/source-control/application/changeCandidate'
+import {
+  deriveChangeCandidate,
+  stageCandidateTree,
+} from '../src/modules/source-control/application/changeCandidate'
 import {
   candidateReceiptRef,
   checkForbiddenCandidatePaths,
@@ -226,24 +229,28 @@ describe('rfc310 pr4 T48 — change candidate derivation', () => {
         {
           targetPath: 'docs/spec.md',
           contentPolicy: 'preserve-upload' as const,
+          fileMode: 'regular' as const,
           disposition: 'create' as const,
           uploadSha256: sha256Hex(uploadContent),
         },
         {
           targetPath: 'dist/generated.md',
           contentPolicy: 'preserve-upload' as const,
+          fileMode: 'regular' as const,
           disposition: 'create' as const,
           uploadSha256: sha256Hex('from upload\n'),
         },
         {
           targetPath: 'notes/draft.md',
           contentPolicy: 'agent-editable' as const,
+          fileMode: 'regular' as const,
           disposition: 'create' as const,
           uploadSha256: sha256Hex('original upload\n'),
         },
         {
           targetPath: 'src/keep.ts',
           contentPolicy: 'preserve-upload' as const,
+          fileMode: 'regular' as const,
           disposition: 'already-present' as const,
           uploadSha256: sha256Hex('export const keep = 1\n'),
         },
@@ -304,6 +311,51 @@ describe('rfc310 pr4 T48 — change candidate derivation', () => {
     if (missing.ok) return
     expect(missing.code).toBe('upload-entry-missing-from-diff')
 
+    // A feedback/pipeline repair is based on the platform-published mission
+    // commit, where the original create/replace upload is already present.
+    // It remains covered by digest/existence lineage, but does not have to be
+    // rewritten in every incremental repair diff.
+    const publishedRepo = mkdtempSync(join(tmpdir(), 'rfc310-published-upload-'))
+    git(publishedRepo, 'init', '-q')
+    writeFileSync(join(publishedRepo, 'README.md'), '# baseline\n')
+    writeFileSync(join(publishedRepo, '.gitignore'), 'dist/\n')
+    mkdirSync(join(publishedRepo, 'src'), { recursive: true })
+    writeFileSync(join(publishedRepo, 'src', 'keep.ts'), 'export const keep = 1\n')
+    mkdirSync(join(publishedRepo, 'docs'), { recursive: true })
+    writeFileSync(join(publishedRepo, 'docs', 'spec.md'), uploadContent)
+    git(publishedRepo, 'add', '-A')
+    git(
+      publishedRepo,
+      '-c',
+      'user.email=t48@test',
+      '-c',
+      'user.name=t48',
+      'commit',
+      '-q',
+      '-m',
+      'platform-published upload',
+    )
+    const afterPublication = await deriveChangeCandidate({
+      baselineRepoPath: publishedRepo,
+      baselineSha: git(publishedRepo, 'rev-parse', 'HEAD').trim(),
+      overlayRoot: makeOverlay({
+        'README.md': '# repaired after publication\n',
+        '.gitignore': 'dist/\n',
+        'src/keep.ts': 'export const keep = 1\n',
+        'docs/spec.md': uploadContent,
+      }),
+      excludePolicyDigest: 'x'.repeat(64),
+      agentOutcomeRef: 'outcome-8b',
+      uploadsAlreadyPublished: true,
+      uploadPlan: { planDigest: plan.planDigest, entries: [plan.entries[0]!] },
+    })
+    expect(afterPublication.ok).toBe(true)
+    if (!afterPublication.ok) return
+    expect(afterPublication.receipt.changed.modified).toEqual(['README.md'])
+    expect(afterPublication.receipt.uploadLineage?.finalDigests).toEqual([
+      { targetPath: 'docs/spec.md', sha256: sha256Hex(uploadContent) },
+    ])
+
     // already-present 目标被改动 = 伪装 changed ⇒ 作废。
     const masquerade = await deriveChangeCandidate({
       baselineRepoPath: baselineRepo,
@@ -320,6 +372,33 @@ describe('rfc310 pr4 T48 — change candidate derivation', () => {
     expect(masquerade.ok).toBe(false)
     if (masquerade.ok) return
     expect(masquerade.code).toBe('upload-already-present-changed')
+  })
+
+  test('explicit executable upload mode is pinned in both verification workspace and tree index', async () => {
+    const overlay = makeOverlay({
+      'README.md': '# baseline\n',
+      '.gitignore': 'dist/\n',
+      'src/keep.ts': 'export const keep = 1\n',
+      'verify.sh': '#!/bin/sh\nexit 0\n',
+    })
+    const staged = await stageCandidateTree({
+      baselineRepoPath: baselineRepo,
+      baselineSha: headSha(),
+      overlayRoot: overlay,
+      uploadPlan: {
+        entries: [{ targetPath: 'verify.sh', disposition: 'create', fileMode: 'executable' }],
+      },
+    })
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    try {
+      if (process.platform !== 'win32') {
+        expect(statSync(join(staged.ws, 'verify.sh')).mode & 0o111).not.toBe(0)
+      }
+      expect(git(staged.ws, 'ls-files', '--stage', '--', 'verify.sh')).toStartWith('100755 ')
+    } finally {
+      staged.cleanup()
+    }
   })
 })
 
@@ -345,6 +424,7 @@ describe('rfc310 pr4 T48 — pure verdict functions', () => {
         {
           targetPath: 'notes/gone.md',
           contentPolicy: 'agent-editable',
+          fileMode: 'regular',
           disposition: 'create',
           uploadSha256: null,
         },

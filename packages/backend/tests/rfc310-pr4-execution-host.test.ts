@@ -89,8 +89,18 @@ async function buildHarness(): Promise<Harness> {
   mkdirSync(join(workspacePath, '.git', 'info'), { recursive: true })
   writeFileSync(join(workspacePath, '.git', 'info', 'exclude'), '.agent-workflow/\n')
   writeFileSync(join(workspacePath, 'seed.md'), 'uncommitted seed overlay\n')
-  mkdirSync(join(workspacePath, '.agent-workflow', 'inputs'), { recursive: true })
-  writeFileSync(join(workspacePath, '.agent-workflow', 'inputs', 'req.md'), 'requirement\n')
+  const requirementMount = join(
+    workspacePath,
+    '.agent-workflow',
+    'inputs',
+    'requirements',
+    'bundle-1',
+  )
+  mkdirSync(requirementMount, { recursive: true })
+  writeFileSync(
+    join(requirementMount, 'requirement-manifest.json'),
+    '{"files":[{"fileId":"req-1"}]}\n',
+  )
 
   const agent = await createAgent(db, {
     name: 'de-impl',
@@ -151,6 +161,7 @@ function launchInput(h: Harness, actionRunId: string) {
     prompt: 'implement the thing (protocol block goes here)',
     workspacePath: h.workspacePath,
     baselineSha: h.baselineSha,
+    platformInputPaths: ['.agent-workflow/inputs/requirements/bundle-1'],
     wallTimeMs: null,
   }
 }
@@ -174,6 +185,10 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
       {
         MOCK_OPENCODE_OUTPUTS: JSON.stringify({ [DIGITAL_EMPLOYEE_RESULT_PORT]: frame }),
         MOCK_OPENCODE_CAPTURE_ENV_TO: envLog,
+        MOCK_OPENCODE_REQUIRE_FILES: JSON.stringify({
+          '.agent-workflow/inputs/requirements/bundle-1/requirement-manifest.json':
+            '{"files":[{"fileId":"req-1"}]}\n',
+        }),
       },
       () => r.launch(launchInput(h, 'ar-done-1')),
     )
@@ -192,19 +207,32 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     expect(row.workflowId).toBe(DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID)
     expect(row.worktreePath).toBe(h.workspacePath)
     expect(row.spaceKind).toBe('internal')
+    expect(JSON.parse(row.platformInputPathsJson!)).toEqual([
+      '.agent-workflow/inputs/requirements/bundle-1',
+    ])
     expect(row.gitUserName ?? null).toBeNull()
     expect(row.autoCommitPush).toBe(false)
     expect(existsSync(join(h.workspacePath, 'seed.md'))).toBe(true)
-    expect(existsSync(join(h.workspacePath, '.agent-workflow', 'inputs', 'req.md'))).toBe(true)
+    expect(
+      existsSync(
+        join(
+          h.workspacePath,
+          '.agent-workflow',
+          'inputs',
+          'requirements',
+          'bundle-1',
+          'requirement-manifest.json',
+        ),
+      ),
+    ).toBe(true)
 
-    // 真子进程证词（T43 现状语义，如实锁定）：RFC-130 给每个 agent 节点一个
+    // 真子进程证词（T43）：RFC-130 给每个 agent 节点一个
     // 从 canonical 全量快照分支出的 iso worktree，agent 的 cwd 是
     // `<appHome>/iso/<taskId>/<nodeRunId>`——**不是** action workspace 本体；
     // 成功后业务 delta 由平台 merge-back 回 canonical，失败即 discard。
     // 这意味着 agent 从不直接触碰 action workspace 的 .git（比 §7.6 的检测+
-    // 回退更强的一层），但也意味着 `.agent-workflow/` evidence mounts（git
-    // excluded）**不进快照、不进 iso**——evidence 对 agent 的可见性要走
-    // forcedContainerPaths / DA 侧另行物化（PR-4 集成决策，见 fork 报告）。
+    // 回退更强的一层）；launch-frozen platformInputPaths 则经真实快照把 Git
+    // ignored evidence 带入该 cwd（上面的 REQUIRE_FILES 已按原文验证）。
     const captured = JSON.parse(readFileSync(envLog, 'utf8').trim().split('\n')[0]!) as Record<
       string,
       string | null
@@ -230,6 +258,28 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     expect(snap.taskStatus).toBe('failed')
     expect(snap.resultText).toBeNull()
     expect(snap.errorMessage).not.toBeNull()
+  })
+
+  test('Agent 子进程 commit 被 exact-window no-Git audit 拒绝且不 merge-back', async () => {
+    const r = runner(h)
+    const launched = await withEnv(
+      {
+        MOCK_OPENCODE_GIT_COMMIT: '1',
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({
+          [DIGITAL_EMPLOYEE_RESULT_PORT]: '{"protocolVersion":1}',
+        }),
+      },
+      () => r.launch(launchInput(h, 'ar-git-mutation-1')),
+    )
+    expect(launched.ok).toBe(true)
+    if (!launched.ok) return
+
+    const snap = await r.fetchOutcome(launched.executionRef)
+    expect(snap.kind).toBe('exited')
+    if (snap.kind !== 'exited') return
+    expect(snap.taskStatus).toBe('failed')
+    expect(snap.errorMessage).toContain('agent-git-mutation-forbidden')
+    expect(existsSync(join(h.workspacePath, 'agent-git-mutation.txt'))).toBe(false)
   })
 
   test('launch 前置校验：agent 缺失 / 端口未声明 / workspace 缺失 / sha 非法 → typed failure', async () => {
@@ -262,6 +312,18 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
 
     const bad4 = await r.launch({ ...launchInput(h, 'ar-v4'), baselineSha: 'nope' })
     expect(!bad4.ok && bad4.failure.code).toBe('de-baseline-invalid')
+
+    const bad5 = await r.launch({
+      ...launchInput(h, 'ar-v5'),
+      platformInputPaths: ['README.md'],
+    })
+    expect(!bad5.ok && bad5.failure.code).toBe('de-input-mount-invalid')
+
+    const bad6 = await r.launch({
+      ...launchInput(h, 'ar-v6'),
+      platformInputPaths: ['.agent-workflow/inputs/missing'],
+    })
+    expect(!bad6.ok && bad6.failure.code).toBe('de-input-mount-missing')
   })
 
   test('cancel：运行中 TERM→取消；重复 cancel = already-terminal；未知 ref = not-found', async () => {

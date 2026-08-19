@@ -9,6 +9,7 @@
 // （workspace validator 之外的纵深防御：candidate 树只承载常规文件）。
 
 import {
+  chmodSync,
   copyFileSync,
   lstatSync,
   mkdirSync,
@@ -46,6 +47,8 @@ export interface DeriveChangeCandidateInput {
     readonly planDigest: string
     readonly entries: readonly UploadLineageEntry[]
   } | null
+  /** Upload entries are already present in this platform-published baseline. */
+  readonly uploadsAlreadyPublished?: boolean
   readonly runGit?: RepositoryGit
 }
 
@@ -92,6 +95,7 @@ function copyOverlay(srcRoot: string, destRoot: string): { symlink: string | nul
       const dest = join(destRoot, rel)
       mkdirSync(dirname(dest), { recursive: true })
       copyFileSync(abs, dest)
+      chmodSync(dest, st.mode & 0o777)
     }
   }
   walk('')
@@ -119,7 +123,7 @@ export async function stageCandidateTree(input: {
   readonly baselineSha: string
   readonly overlayRoot: string
   readonly uploadPlan?: {
-    readonly entries: readonly Pick<UploadLineageEntry, 'targetPath' | 'disposition'>[]
+    readonly entries: readonly Pick<UploadLineageEntry, 'targetPath' | 'disposition' | 'fileMode'>[]
   } | null
   readonly runGit?: RepositoryGit
 }): Promise<
@@ -167,9 +171,21 @@ export async function stageCandidateTree(input: {
     // 目标缺失不在这里定性——交给 lineage 验证给出 typed code。
     const st = lstatSync(join(ws, entry.targetPath), { throwIfNoEntry: false })
     if (!st || !st.isFile()) continue
+    chmodSync(join(ws, entry.targetPath), entry.fileMode === 'executable' ? 0o755 : 0o644)
     const forced = await runGit(ws, ['add', '-f', '--', entry.targetPath])
     if (forced.exitCode !== 0) {
       return fail('candidate-workspace-failed', forced.stderr.slice(0, 300))
+    }
+    // `core.filemode=false` (notably Windows) must not erase the explicit
+    // repository upload contract. Pin the index mode independently of host FS.
+    const indexedMode = await runGit(ws, [
+      'update-index',
+      entry.fileMode === 'executable' ? '--chmod=+x' : '--chmod=-x',
+      '--',
+      entry.targetPath,
+    ])
+    if (indexedMode.exitCode !== 0) {
+      return fail('candidate-workspace-failed', indexedMode.stderr.slice(0, 300))
     }
   }
   const writeTree = await runGit(ws, ['write-tree'])
@@ -237,6 +253,7 @@ export async function deriveChangeCandidate(
     if (input.uploadPlan != null) {
       const verdict = verifyUploadLineage(input.uploadPlan.entries, {
         changed: changedPathSet(summary),
+        alreadyPublished: input.uploadsAlreadyPublished,
         blobSha256Of: (targetPath) => {
           const abs = join(ws, targetPath)
           const st = lstatSync(abs, { throwIfNoEntry: false })

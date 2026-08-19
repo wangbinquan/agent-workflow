@@ -102,6 +102,8 @@ export interface ActionRunRow {
   readonly capabilityId: string
   readonly writable: boolean
   readonly status: string
+  readonly resultRef: string | null
+  readonly failureJson: string | null
 }
 
 /** RFC-310 PR-4 —— attempt 台账读侧行（重试编排与恢复扫描共用）。 */

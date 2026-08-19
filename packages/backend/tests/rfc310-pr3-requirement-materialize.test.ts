@@ -14,6 +14,7 @@
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 
+import { developmentBundleRefs } from '../src/db/schema'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import { retryBlockedMission } from '../src/modules/development-automation/application/commands/launchMission'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
@@ -48,6 +49,18 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     })
     expect(stashed.ok).toBe(true)
     if (stashed.ok) expect(stashed.submissionRef).toBe(mission.sourceContentDigest!)
+    const replay = await fx.materializer.stashDirectSubmission({
+      missionId,
+      submission: SUBMISSION,
+    })
+    expect(replay).toEqual(stashed)
+    expect(
+      fx.db
+        .select()
+        .from(developmentBundleRefs)
+        .all()
+        .filter((row) => row.missionId === missionId && row.purpose === 'direct-submission'),
+    ).toHaveLength(1)
   })
 
   test('full direct chain: materialize → platform manifest → repo facts → action launch', async () => {
@@ -90,6 +103,16 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(manifest.files[0]!.role).toBe('body')
     const { manifestDigest: _omit, ...core } = manifest
     expect(canonicalDigest(core)).toBe(manifest.manifestDigest)
+    const manifestMount = fx.materializer.getRequirementManifestMount(
+      missionId,
+      manifest.manifestDigest,
+    )!
+    expect(manifestMount.fileIds).toEqual(manifest.files.map((file) => file.fileId))
+    const manifestBundle = fx.evidence.getBundle(manifestMount.bundleId)!
+    expect(manifestBundle.entries.map((entry) => entry.relativePath)).toEqual([
+      'requirement-manifest.json',
+    ])
+    expect(fx.materializer.getRequirementManifestMount(missionId, '0'.repeat(64))).toBeNull()
     const bundle = fx.evidence.getBundle(materialized.bundleRef!)!
     expect(bundle.entries).toHaveLength(1)
     expect(readFileSync(fx.evidence.blobPath(bundle.entries[0]!.sha256), 'utf8')).toBe(

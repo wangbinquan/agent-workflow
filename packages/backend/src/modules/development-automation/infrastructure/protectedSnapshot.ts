@@ -57,12 +57,20 @@ function walk(
 /** 对若干受保护 roots（label → 绝对路径）做稳定快照。root 不存在时记为空集（出现即 added）。 */
 export function snapshotProtectedRoots(
   roots: Record<string, string>,
-  opts: { readonly skipPrefixes?: readonly string[] } = {},
+  opts: {
+    readonly skipPrefixes?: readonly string[]
+    /**
+     * Label-specific platform-owned paths. This is intentionally separate
+     * from `skipPrefixes`: callers can exempt TaskEngine's mutable Git
+     * bookkeeping without weakening the evidence root.
+     */
+    readonly skipPrefixesByRoot?: Readonly<Record<string, readonly string[]>>
+  } = {},
 ): ProtectedRootSnapshot {
-  const skipPrefixes = opts.skipPrefixes ?? []
   const entries = new Map<string, Map<string, string>>()
   for (const label of Object.keys(roots).sort()) {
     const files = new Map<string, string>()
+    const skipPrefixes = [...(opts.skipPrefixes ?? []), ...(opts.skipPrefixesByRoot?.[label] ?? [])]
     walk(roots[label]!, '', files, skipPrefixes)
     entries.set(label, files)
   }

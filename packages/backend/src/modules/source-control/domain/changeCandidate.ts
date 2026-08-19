@@ -50,6 +50,7 @@ export function checkForbiddenCandidatePaths(
 export interface UploadLineageEntry {
   readonly targetPath: string
   readonly contentPolicy: 'preserve-upload' | 'agent-editable'
+  readonly fileMode: 'regular' | 'executable'
   /** placement 计算的 disposition（plan 的 create/replace/already-present）。 */
   readonly disposition: 'create' | 'replace' | 'already-present'
   /** 上传 evidence 的内容 digest；agent-editable 目标允许 null（最终 digest 由验证回填）。 */
@@ -85,6 +86,13 @@ export function verifyUploadLineage(
     readonly changed: ReadonlySet<string>
     /** candidate 树内目标文件的内容 digest；不存在 ⇒ null。 */
     readonly blobSha256Of: (targetPath: string) => string | null
+    /**
+     * The baseline is a platform-published mission commit that already
+     * fulfilled this upload plan. Repair rounds still verify existence and
+     * content policy, but must not require every original create/replace entry
+     * to reappear in the new incremental diff.
+     */
+    readonly alreadyPublished?: boolean
   },
 ): UploadLineageVerdict {
   const finalDigests: { targetPath: string; sha256: string }[] = []
@@ -95,7 +103,7 @@ export function verifyUploadLineage(
       }
       continue
     }
-    if (!facts.changed.has(entry.targetPath)) {
+    if (!facts.changed.has(entry.targetPath) && facts.alreadyPublished !== true) {
       return { ok: false, code: 'upload-entry-missing-from-diff', targetPath: entry.targetPath }
     }
     const actual = facts.blobSha256Of(entry.targetPath)

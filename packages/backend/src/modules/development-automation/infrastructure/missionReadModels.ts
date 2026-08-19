@@ -8,10 +8,12 @@ import { desc, eq, sql } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import {
+  cachedRepos,
   developmentDecisions,
   developmentEffects,
-  developmentMissions,
   developmentMissionSources,
+  developmentMissions,
+  developmentMrClaims,
 } from '@/db/schema'
 
 export interface MissionSummaryView {
@@ -142,6 +144,72 @@ export function getMissionDetail(
     sources,
     readiness: row.readinessJson === null ? null : (JSON.parse(row.readinessJson) as unknown),
     blockDetail: row.blockDetail,
+  }
+}
+
+/**
+ * RFC-310 PR-13 —— MR 链接拼装（纯函数，无 IO）。
+ *
+ * 平台只知道仓库地址与 MR iid：GitHub 走 `/pull/<iid>`，其余（GitLab 形态）走
+ * `/-/merge_requests/<iid>`。非 http(s) 的地址（ssh / 本地 bare 仓 / 空）一律返回
+ * `null`，由调用方呈现"链接不可用"，绝不拼出一个打不开的地址冒充可用。
+ */
+export function mergeRequestHref(input: {
+  repositoryUrl: string | null
+  endpointRef: string
+  mrIid: string
+}): string | null {
+  if (input.repositoryUrl === null || !/^https?:\/\//i.test(input.repositoryUrl)) return null
+  const base = input.repositoryUrl.replace(/\.git(?:[?#].*)?$/, '').replace(/\/$/, '')
+  const github =
+    input.endpointRef.toLowerCase().includes('github') ||
+    (() => {
+      try {
+        return new URL(base).hostname.toLowerCase().includes('github')
+      } catch {
+        return false
+      }
+    })()
+  return github ? `${base}/pull/${input.mrIid}` : `${base}/-/merge_requests/${input.mrIid}`
+}
+
+/** RFC-310 PR-13 —— Mission 详情的 MR 投影（iid / 外部状态 / 可打开的链接）。 */
+export interface MissionMergeRequestView {
+  iid: string
+  state: string
+  href: string | null
+}
+
+/**
+ * RFC-310 PR-13 —— Mission 详情的 MR 投影。
+ *
+ * 路由层不得直接读库（depcheck `no-routes-to-db`），因此 claim 与仓库地址这两次点查
+ * 连同 href 拼装一并落在读模型里；路由只消费结果。无 claim ⇒ `null`（尚未建 MR）。
+ */
+export function getMissionMergeRequestView(
+  db: DbClient,
+  missionId: string,
+  repositoryId: string,
+): MissionMergeRequestView | null {
+  const claim = db
+    .select()
+    .from(developmentMrClaims)
+    .where(eq(developmentMrClaims.missionId, missionId))
+    .get()
+  if (claim === undefined) return null
+  const repository = db
+    .select({ urlRedacted: cachedRepos.urlRedacted })
+    .from(cachedRepos)
+    .where(eq(cachedRepos.id, repositoryId))
+    .get()
+  return {
+    iid: claim.mrIid,
+    state: claim.state,
+    href: mergeRequestHref({
+      repositoryUrl: repository?.urlRedacted ?? null,
+      endpointRef: claim.codeHostEndpointRef,
+      mrIid: claim.mrIid,
+    }),
   }
 }
 

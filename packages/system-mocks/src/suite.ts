@@ -7,6 +7,7 @@ import { join } from 'node:path'
 
 import { handleCodeHostApi } from './code-host/stateful-http'
 import { PipelineProviderMock, type MockPipelineSeed } from './development/pipeline-provider'
+import { ApprovalProviderMock, type MockApprovalSeed } from './development/approval-provider'
 import {
   RequirementProviderMock,
   type MockRequirementSeed,
@@ -58,6 +59,7 @@ class SystemMockGateway {
   readonly #faults = new FaultRegistry()
   readonly #developmentRequirement = new RequirementProviderMock()
   readonly #developmentPipeline = new PipelineProviderMock()
+  readonly #developmentApproval = new ApprovalProviderMock()
   readonly #mcp = new McpHttpMock()
   readonly #server: Server
   readonly #controlToken = randomBytes(24).toString('base64url')
@@ -141,7 +143,8 @@ class SystemMockGateway {
   async #handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', this.#baseUrl)
     const body = await readRequestBody(request)
-    const service = serviceFor(url.pathname)
+    const codeHostGit = this.#codeHosts.gitRequest(url.pathname)
+    const service = codeHostGit === null ? serviceFor(url.pathname) : 'git'
     this.#journal.add(service, {
       method: request.method ?? 'GET',
       path: url.pathname,
@@ -163,7 +166,8 @@ class SystemMockGateway {
         url,
         body,
         gitRoot: this.#gitRoot,
-        routePrefix: '/git',
+        routePrefix: codeHostGit?.clonePath ?? '/git',
+        ...(codeHostGit === null ? {} : { repositoryPath: codeHostGit.repositoryPath }),
       })
       await this.#codeHosts.syncRefsFromGit()
       return
@@ -179,6 +183,14 @@ class SystemMockGateway {
     if (service === 'development-pipeline') {
       const stripped = url.pathname.replace(/^\/development-pipeline/, '') || '/'
       if (this.#developmentPipeline.handle(request, response, stripped, body.toString('utf8')))
+        return
+      response.writeHead(404, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: 'unknown-route' }))
+      return
+    }
+    if (service === 'development-approval') {
+      const stripped = url.pathname.replace(/^\/development-approval/, '') || '/'
+      if (this.#developmentApproval.handle(request, response, stripped, body.toString('utf8')))
         return
       response.writeHead(404, { 'content-type': 'application/json' })
       response.end(JSON.stringify({ error: 'unknown-route' }))
@@ -248,6 +260,7 @@ class SystemMockGateway {
       this.#externalHttp.reset()
       this.#developmentRequirement.reset()
       this.#developmentPipeline.reset()
+      this.#developmentApproval.reset()
       this.#faults.clear()
       this.#journal.clear()
       response.writeHead(204)
@@ -288,6 +301,12 @@ class SystemMockGateway {
     }
     if (path === '/development-pipeline/seed' && request.method === 'POST') {
       this.#developmentPipeline.seed(parseJsonBody<MockPipelineSeed>(body))
+      response.writeHead(204)
+      response.end()
+      return
+    }
+    if (path === '/development-approval/seed' && request.method === 'POST') {
+      this.#developmentApproval.seed(parseJsonBody<MockApprovalSeed>(body))
       response.writeHead(204)
       response.end()
       return
@@ -361,6 +380,7 @@ class SystemMockGateway {
       faults: this.#faults.list(),
       codeHosts: this.#codeHosts.list(),
       externalHttp: this.#externalHttp.snapshot(),
+      approvals: this.#developmentApproval.snapshot(),
       oidc: this.#oidc.snapshot(),
       oauth: this.#oauth.snapshot(),
       packages: this.#registries.snapshot(),
@@ -382,6 +402,7 @@ function endpointsFor(baseUrl: string): SystemMockEndpoints {
     externalHttpBaseUrl: `${baseUrl}/external`,
     developmentRequirementBaseUrl: `${baseUrl}/development-requirement`,
     developmentPipelineBaseUrl: `${baseUrl}/development-pipeline`,
+    developmentApprovalBaseUrl: `${baseUrl}/development-approval`,
     oauthIssuerUrl: `${baseUrl}/oauth`,
     oidcIssuerUrl: `${baseUrl}/oidc`,
     mcpStreamableUrl: `${baseUrl}/mcp`,
@@ -406,6 +427,7 @@ function environmentFor(
     AW_SYSTEM_MOCK_EXTERNAL_HTTP_BASE_URL: endpoints.externalHttpBaseUrl,
     AW_REQUIREMENT_MOCK_URL: endpoints.developmentRequirementBaseUrl,
     AW_PIPELINE_MOCK_URL: endpoints.developmentPipelineBaseUrl,
+    AW_APPROVAL_MOCK_URL: endpoints.developmentApprovalBaseUrl,
     AW_SYSTEM_MOCK_OAUTH_ISSUER_URL: endpoints.oauthIssuerUrl,
     AW_SYSTEM_MOCK_OIDC_ISSUER_URL: endpoints.oidcIssuerUrl,
     AW_SYSTEM_MOCK_MCP_URL: endpoints.mcpStreamableUrl,
@@ -422,6 +444,7 @@ function serviceFor(path: string): SystemMockService {
   if (path.startsWith('/github/api/v3')) return 'github'
   if (path.startsWith('/development-requirement')) return 'development-requirement'
   if (path.startsWith('/development-pipeline')) return 'development-pipeline'
+  if (path.startsWith('/development-approval')) return 'development-approval'
   if (path.startsWith('/external')) return 'external'
   if (path.startsWith('/oauth')) return 'oauth'
   if (path.startsWith('/oidc')) return 'oidc'

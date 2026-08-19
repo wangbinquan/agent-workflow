@@ -13,9 +13,15 @@ import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
 import { Route as codeRoute } from '@/routes/code'
+import {
+  LegacyRoute as legacyCodeOutcomesRoute,
+  Route as runOutcomesRoute,
+} from '@/routes/code.outcomes'
+import { Route as codeExecutorsRoute } from '@/routes/code.executors'
 import { Route as codeConfigRoute } from '@/routes/code.config'
 import { Route as codeConfigDetailRoute } from '@/routes/code.config.detail'
 import { Route as codeMissionsRoute } from '@/routes/code.missions'
+import { Route as codeMissionNewRoute } from '@/routes/code.missions.new'
 import { Route as codeAssignmentsRoute } from '@/routes/code.assignments'
 import { Route as codePoliciesRoute } from '@/routes/code.policies'
 import { Route as codePolicyDetailRoute } from '@/routes/code.policies.$id'
@@ -142,7 +148,11 @@ const routeTree = rootRoute.addChildren([
   memoryRoute,
   // RFC-101: memory→skill fusion detail + approval gate.
   fusionDetailRoute,
-  // RFC-310 T61: mission detail precedes list precedes '/code'.
+  // RFC-310: literal mission wizard precedes dynamic detail, then list/code.
+  legacyCodeOutcomesRoute,
+  runOutcomesRoute,
+  codeExecutorsRoute,
+  codeMissionNewRoute,
   codeMissionDetailRoute,
   codeMissionsRoute,
   codeAssignmentsRoute,

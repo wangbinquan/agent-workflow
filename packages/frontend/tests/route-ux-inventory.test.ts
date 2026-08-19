@@ -568,22 +568,52 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('rfc257-webhook-pages-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/webhooks.tsx', primitive: 'PageHeader' },
   },
-  // RFC-304 — `/code` 能力矩阵与活动视图（两 tab）。
+  // RFC-310 — `/code` 只构建数字员工能力；实际执行统一进入 `/tasks`。
   '@/routes/code#Route': {
     surface: '/code',
     classification: 'standard',
     owners: [rendered('code-page-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/code.tsx', primitive: 'PageHeader' },
   },
+  '@/routes/code.outcomes#Route': {
+    surface: '/outcomes',
+    classification: 'standard',
+    owners: [rendered('code-page-inline.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.outcomes.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  '@/routes/code.outcomes#LegacyRoute': {
+    surface: '/code/outcomes',
+    classification: 'redirect',
+    owners: [source('code-page-inline.test.tsx')],
+  },
+  '@/routes/code.executors#Route': {
+    surface: '/code/executors',
+    classification: 'standard',
+    owners: [rendered('code-executor-library.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/code.executors.tsx',
+      primitive: 'PageHeader',
+    },
+  },
   // RFC-310 —— DevelopmentMission 列表与详情（launch 三形态 / questions /
   // action / effects / readiness；平台永不自动 merge）。
   '@/routes/code.missions#Route': {
     surface: '/code/missions',
+    classification: 'redirect',
+    owners: [source('code-missions-page.test.tsx')],
+  },
+  '@/routes/code.missions.new#Route': {
+    surface: '/code/missions/new',
     classification: 'standard',
     owners: [rendered('code-missions-page.test.tsx')],
     header: {
       mode: 'direct',
-      sourceFile: 'routes/code.missions.tsx',
+      sourceFile: 'routes/code.missions.new.tsx',
       primitive: 'PageHeader',
     },
   },

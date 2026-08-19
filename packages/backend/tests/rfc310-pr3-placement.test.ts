@@ -8,7 +8,16 @@
 // configuration/PortOutcome，不抛穿。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -88,6 +97,7 @@ function entryOf(
   sha: string,
   target: string,
   expected: ResolvedPlanEntry['expectedTarget'],
+  targetFileMode: 'regular' | 'executable' = 'regular',
 ): ResolvedPlanEntry {
   return {
     ordinal,
@@ -96,7 +106,7 @@ function entryOf(
     uploadSha256: sha,
     repositoryTargetPath: target,
     contentPolicy: 'preserve-upload',
-    targetFileMode: 'regular',
+    targetFileMode,
     expectedTarget: expected,
   }
 }
@@ -161,6 +171,22 @@ describe('rfc310 pr3 upload placement', () => {
     const rebuilt = await placeUploadSeed(r.deps, { planId: 'p2' })
     expect(rebuilt.seedTreeDigest).toBe(first.seedTreeDigest)
     expect(readFileSync(seedFile, 'utf8')).toBe('stable content\n')
+  })
+
+  test('executable mode is materialized and participates in the immutable seed digest', async () => {
+    const r = rig()
+    const sha = await r.putBlob('executable body\n')
+    r.plant('p-mode', [entryOf(0, 'u-exec', sha, 'verify.sh', { kind: 'absent' }, 'executable')])
+    const first = await placeUploadSeed(r.deps, { planId: 'p-mode' })
+    const seedFile = join(r.seedsRoot, 'digest-p-mode', 'verify.sh')
+    if (process.platform !== 'win32') {
+      expect(statSync(seedFile).mode & 0o111).not.toBe(0)
+      chmodSync(seedFile, 0o644)
+      expect(seedTreeDigestOf(join(r.seedsRoot, 'digest-p-mode'))).not.toBe(first.seedTreeDigest)
+      const rebuilt = await placeUploadSeed(r.deps, { planId: 'p-mode' })
+      expect(rebuilt.seedTreeDigest).toBe(first.seedTreeDigest)
+      expect(statSync(seedFile).mode & 0o111).not.toBe(0)
+    }
   })
 
   test('all already-present ⇒ null seed + baseline-observed fulfillment at the baseline sha', async () => {

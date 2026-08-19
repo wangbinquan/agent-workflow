@@ -81,6 +81,12 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // funnel; provenance comes from the injected startDeps (SYSTEM user at
       // both assembly sites), never invented here.
       'modules/task-execution/composition/agentActionExecution.ts': 1,
+      // RFC-310 PR-11: the digital-employee *program* host launch adapter. Same
+      // adapter shape as agentActionExecution above (synthesized immutable host
+      // snapshot + borrowed worktree + StartTaskSchema funnel); provenance again
+      // comes from the injected startDeps and is only defaulted when the caller
+      // supplied none, so a program step cannot claim an origin of its own.
+      'modules/task-execution/composition/scriptActionExecution.ts': 1,
       'services/execution/executor.ts': 1,
       'services/fusion.ts': 2,
       'services/task.ts': 1,

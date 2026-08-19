@@ -13,11 +13,11 @@
 // （DA 侧自己записыв wake hint——本模块不写 development_* 表）。
 //
 // T43 separate-writer/disposable 语义：action workspace 由 development-
-// automation 物化后**原样**作为任务工作区传入——internalSource（RFC-165 F4
-// 内部面，space_kind='internal'、GC 排除）+ preCreatedWorktree（cleanup
-// 'borrowed'：任务终态不删目录，废弃/重建归 DA 的 whole-workspace 回退）。
-// 不 worktree-add：seed/evidence 是未提交 overlay，git worktree 只带 commit
-// 树会把它们全部丢掉。
+// automation 物化后**原样**作为任务 canonical 工作区传入——internalSource
+// （RFC-165 F4 内部面，space_kind='internal'、GC 排除）+
+// preCreatedWorktree（cleanup 'borrowed'：任务终态不删目录，废弃/重建归 DA
+// 的 whole-workspace 回退）。Agent 节点仍走 RFC-130 隔离；launch-frozen
+// platformInputPaths 让 Git-ignored requirement/pipeline mounts 进入每次快照。
 //
 // T44 零 Git identity/零凭据：StartTask 不携带 gitUserName/gitUserEmail
 // （spawn 装配的「either empty ⇒ skip」分支即不注入，RFC-067 普通任务路径
@@ -47,6 +47,7 @@ import { getAgentById } from '@/services/agent'
 import { getExecutionOutcome, watchExecutionTerminal } from '@/services/execution/executor'
 import { initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
+import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 
 /** DA 侧 OperationFailureReceipt 的结构同形（不跨 context import）。 */
 export interface AgentExecutionFailure {
@@ -70,6 +71,8 @@ export interface DigitalEmployeeLaunchInput {
   readonly workspacePath: string
   /** exact baseline sha（40-hex；对拍/展示用，不再 checkout）。 */
   readonly baselineSha: string
+  /** DA 已物化的只读 requirement/pipeline mount roots。 */
+  readonly platformInputPaths: readonly string[]
   /** 墙钟预算；null = 不限（沿用任务默认限额）。 */
   readonly wallTimeMs: number | null
 }
@@ -161,6 +164,26 @@ export function composeAgentActionExecution(deps: {
           'action workspace is missing or not a git checkout; rematerialize it',
         )
       }
+      const platformInputPaths = normalizeTaskPlatformInputPaths(input.platformInputPaths)
+      if (platformInputPaths === null) {
+        return fail(
+          'contract-violation',
+          'de-input-mount-invalid',
+          'never',
+          'platform input mounts must be bounded roots below .agent-workflow/inputs or .agent-workflow/pipeline',
+        )
+      }
+      const missingInputPath = platformInputPaths.find(
+        (path) => !existsSync(join(input.workspacePath, path)),
+      )
+      if (missingInputPath !== undefined) {
+        return fail(
+          'configuration',
+          'de-input-mount-missing',
+          'after-configuration',
+          `platform input mount '${missingInputPath}' is missing; rematerialize the action workspace`,
+        )
+      }
       const agent = await getAgentById(db, input.agentId)
       if (agent === null) {
         return fail(
@@ -206,6 +229,7 @@ export function composeAgentActionExecution(deps: {
             repoPath: input.workspacePath,
             baseBranch: input.baselineSha,
           },
+          platformInputPaths,
           preCreatedWorktree: {
             taskId,
             worktreePath: input.workspacePath,

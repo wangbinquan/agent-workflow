@@ -35,6 +35,16 @@ export interface SemanticRejection {
     | 'analysis-empty-modules'
     | 'review-candidate-mismatch'
     | 'review-finding-duplicate'
+    | 'problem-producer-mismatch'
+    | 'problem-evidence-mismatch'
+    | 'problem-type-outside-catalog'
+    | 'problem-subject-outside-evidence'
+    | 'problem-subject-missing'
+    | 'problem-ref-duplicate'
+    | 'approval-step-mismatch'
+    | 'approval-type-mismatch'
+    | 'approval-evidence-outside-input'
+    | 'approval-scope-outside-input'
   readonly jsonPointer: string | null
   readonly expected: string | null
   readonly observedSummary: string
@@ -174,6 +184,99 @@ export function runCapabilitySemanticValidator(input: {
           })
         }
         seenFindings.add(finding.findingId)
+      }
+    }
+    if (result.capabilityId === 'problem.classify') {
+      const evidence = manifest.problemEvidence
+      if (evidence === undefined) {
+        return fail('validator-input-missing', 'problem evidence descriptor was not provided')
+      }
+      if (result.producerId !== evidence.producerId) {
+        return fail('problem-producer-mismatch', `producer '${result.producerId}'`, {
+          expected: evidence.producerId,
+          jsonPointer: '/result/producerId',
+        })
+      }
+      if (
+        result.evidenceDigest !== evidence.evidenceDigest ||
+        result.headSha !== evidence.headSha
+      ) {
+        return fail(
+          'problem-evidence-mismatch',
+          'problem result is not bound to the exact evidence/head',
+        )
+      }
+      const allowedTypes = new Set(evidence.allowedTypeIds)
+      const allowedSubjects = new Set(evidence.subjectRefs)
+      const covered = new Set<string>()
+      const problemRefs = new Set<string>()
+      for (const [index, problem] of result.problems.entries()) {
+        if (problemRefs.has(problem.problemRef)) {
+          return fail('problem-ref-duplicate', `problemRef '${problem.problemRef}' repeated`, {
+            jsonPointer: `/result/problems/${index}/problemRef`,
+          })
+        }
+        problemRefs.add(problem.problemRef)
+        if (!allowedTypes.has(problem.typeId)) {
+          return fail('problem-type-outside-catalog', `typeId '${problem.typeId}' is not allowed`, {
+            jsonPointer: `/result/problems/${index}/typeId`,
+          })
+        }
+        for (const subject of problem.subjectRefs) {
+          if (!allowedSubjects.has(subject)) {
+            return fail(
+              'problem-subject-outside-evidence',
+              `subject '${subject}' is not an input`,
+              {
+                jsonPointer: `/result/problems/${index}/subjectRefs`,
+              },
+            )
+          }
+          covered.add(subject)
+        }
+      }
+      if (result.complete) {
+        const missing = evidence.requiredSubjectRefs.find((subject) => !covered.has(subject))
+        if (missing !== undefined) {
+          return fail(
+            'problem-subject-missing',
+            `required subject '${missing}' is not classified`,
+            {
+              jsonPointer: '/result/problems',
+            },
+          )
+        }
+      }
+    }
+    if (result.capabilityId === 'approval.prepare') {
+      const context = manifest.approvalContext
+      if (context === undefined) {
+        return fail('validator-input-missing', 'approval context was not provided')
+      }
+      if (result.stepRunRef !== context.stepRunRef) {
+        return fail('approval-step-mismatch', `step '${result.stepRunRef}'`, {
+          expected: context.stepRunRef,
+          jsonPointer: '/result/stepRunRef',
+        })
+      }
+      if (result.approvalType !== context.approvalType) {
+        return fail('approval-type-mismatch', `approval type '${result.approvalType}'`, {
+          expected: context.approvalType,
+          jsonPointer: '/result/approvalType',
+        })
+      }
+      const evidence = new Set(context.evidenceRefs)
+      const unknownEvidence = result.evidenceRefs.find((item) => !evidence.has(item))
+      if (unknownEvidence !== undefined) {
+        return fail(
+          'approval-evidence-outside-input',
+          `evidence '${unknownEvidence}' is not allowed`,
+        )
+      }
+      const scopes = new Set(context.requestedScopes)
+      const unknownScope = result.requestedScopes.find((item) => !scopes.has(item))
+      if (unknownScope !== undefined) {
+        return fail('approval-scope-outside-input', `scope '${unknownScope}' is not allowed`)
       }
     }
     return { ok: true }

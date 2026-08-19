@@ -28,11 +28,14 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       '/workflows',
       '/workgroups',
       '/intent',
+      '/code',
+      '/code/executors',
+      '/code/assignments',
       '/tasks',
+      '/outcomes',
       '/scheduled',
       '/repos',
       '/webhooks',
-      '/code',
       '/memory',
     ])
   })
@@ -44,6 +47,10 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(navPermissionForPath('/tasks/new/confirm')).toBe('tasks:execute')
     expect(navPermissionForPath('/repos')).toBe('repos:read')
     expect(navPermissionForPath('/agents/agent_1')).toBe('agents:read')
+    expect(navPermissionForPath('/code')).toBe('digital-employees:read')
+    expect(navPermissionForPath('/code/executors')).toBe('action-templates:read')
+    expect(navPermissionForPath('/code/assignments')).toBe('repository-employee-assignments:read')
+    expect(navPermissionForPath('/outcomes')).toBe('development-missions:read')
     expect(navPermissionForPath('/')).toBeNull()
     expect(navPermissionForPath('/account')).toBeNull()
   })
@@ -59,12 +66,15 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       // RFC-234 — intent builder rides the workflow icon (it authors
       // workflows/workgroups; no dedicated glyph yet).
       ['/intent', 'workflow'],
+      ['/code', 'agent'],
+      ['/code/executors', 'workgroup'],
+      ['/code/assignments', 'repo'],
       ['/tasks', 'task'],
+      ['/outcomes', 'task'],
       ['/scheduled', 'schedule'],
       ['/repos', 'repo'],
       // RFC-257 UI 修订：webhook 配置单页（adminOnly 项，ShellNavigation 过滤）。
       ['/webhooks', 'webhook'],
-      ['/code', 'repo'],
       ['/memory', 'memory'],
     ])
   })
@@ -171,6 +181,39 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(resolveActiveNav('/tasks').activeGroup).toBe('tasks')
     expect(resolveActiveNav('/tasks/abc').activeGroup).toBe('tasks')
     expect(resolveActiveNav('/repos').activeGroup).toBe('tasks')
+  })
+
+  test('digital employee construction stays separate from runtime and outcomes', () => {
+    expect(resolveActiveNav('/code')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'digitalEmployees',
+      activeItemTo: '/code',
+    })
+    expect(resolveActiveNav('/code/config/employees/employee-1')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'digitalEmployees',
+      activeItemTo: '/code',
+    })
+    expect(resolveActiveNav('/code/executors')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'digitalEmployees',
+      activeItemTo: '/code/executors',
+    })
+    expect(resolveActiveNav('/code/assignments')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'digitalEmployees',
+      activeItemTo: '/code/assignments',
+    })
+    expect(resolveActiveNav('/outcomes')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'tasks',
+      activeItemTo: '/outcomes',
+    })
   })
 
   test('/settings and any settings sub-path activates the gear, nothing else', () => {

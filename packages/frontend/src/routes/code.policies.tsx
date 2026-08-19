@@ -56,7 +56,6 @@ function PoliciesPage(): ReactElement {
     <div className="page">
       <PageHeader
         title={t('code.policies.title')}
-        back={<Link to="/code">{t('code.policies.backToCode')}</Link>}
         actions={
           canCreate ? (
             <button

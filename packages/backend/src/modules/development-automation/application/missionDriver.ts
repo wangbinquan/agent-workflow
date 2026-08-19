@@ -38,9 +38,11 @@ export interface MissionDriveOutcome {
 function continuationOf(outcome: ReconcileOutcome): boolean {
   if (outcome.kind === 'action-collect') {
     // A settled Agent result changes the durable facts/candidate and the next
-    // platform-owned step can run immediately. A fresh retry has already
-    // launched another process, while failure is a stable operator boundary.
-    return outcome.result.kind === 'action-collected'
+    // platform-owned or playbook-owned step can run immediately. A fresh retry
+    // has already launched another process. A failed playbook action must also
+    // get one more reconcile so its explicit failure target is applied; legacy
+    // actions have already blocked the Mission and converge on that next pass.
+    return outcome.result.kind === 'action-collected' || outcome.result.kind === 'action-failed'
   }
   if (outcome.kind !== 'decided') return false
   return (
@@ -95,4 +97,30 @@ export async function driveMission(
     })
   }
   return { steps: maxSteps, stop: 'step-budget', last }
+}
+
+/**
+ * RFC-310 PR-12 —— 延迟绑定的 drive 句柄。
+ *
+ * child Mission participant 要能驱动子 Mission，而它自己又是 `ReconcileDeps` 的一部分：
+ * 装配期两者必然有一个先于另一个存在。「先声明指针、装配完成后再绑定、未绑定即拒」
+ * 是这条互引用关系的生命周期语义，属应用层；composition 只做 `bind`
+ * （RFC-294 §2 装配层不写业务分支，由 `rfc310-architecture-lock` 机械锁定）。
+ */
+export function createDeferredMissionDrive(): {
+  readonly bind: (deps: ReconcileDeps) => void
+  readonly drive: (missionId: string) => Promise<MissionDriveOutcome>
+} {
+  let bound: ReconcileDeps | null = null
+  return {
+    bind: (deps: ReconcileDeps): void => {
+      bound = deps
+    },
+    drive: async (missionId: string): Promise<MissionDriveOutcome> => {
+      const deps = bound
+      // 装配未完成就被调用 = 接线漏了一步，绝不静默空转。
+      if (deps === null) throw new Error('development-automation-composition-incomplete')
+      return driveMission(deps, missionId)
+    },
+  }
 }

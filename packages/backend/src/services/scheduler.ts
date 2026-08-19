@@ -6363,6 +6363,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // outside its isolation. repos[].repoPath stays the source repo (an origin
         // reference, not a cwd); repos[].worktreePath becomes the per-repo iso.
         worktreePath: isoHandle.repos[0]?.isoWorktreePath ?? task.worktreePath,
+        // Trusted platform-input mounts identify a digital-employee action.
+        // Its Agent may edit business files but Git lifecycle is platform-only.
+        ...(task.platformInputPathsJson !== null
+          ? { gitMutationPolicy: 'read-only' as const }
+          : {}),
         // RFC-067: thread per-task Git commit identity through to the runner
         // so `git commit` invocations inside the agent inherit the
         // task-scoped author + committer. Both NULL → runner skips

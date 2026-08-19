@@ -9,4 +9,10 @@ export {
   type MockPipelineSeed,
   type StartedPipelineProviderMock,
 } from './development/pipeline-provider'
+export {
+  ApprovalProviderMock,
+  type MockApprovalRecord,
+  type MockApprovalSeed,
+  type MockApprovalStatus,
+} from './development/approval-provider'
 export * from './types'

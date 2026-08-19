@@ -2,8 +2,8 @@
 //
 // PR-2：launch/list/get/requirement-source/cancel/retry/decision-trace 七端点。
 // PR-3：装配 composeDevelopmentAutomation（evidence/materializer/reconciler）——
-// direct 正文在 launch 成功后由本层 stash 为 evidence（失败即补偿 cancel，
-// 不留「已创建但正文丢失」的半吊子 mission）；mutation 成功后 fire-and-forget
+// direct 正文在 launch 成功后由本层幂等 stash 为 evidence；响应丢失或首次
+// evidence 写失败可用同一 launch key 重放并续跑原 mission。mutation 成功后 fire-and-forget
 // 一轮 reconcile（进度保证仍由 daemon 的 30s wake sweep 兜底，这里只降延迟）；
 // 新增 requirement manifest / 逐文件 ranged 读 / answers / source-refresh
 // preview·apply 端点。handoff/attach/resume/upgrade 与其 permission 点随
@@ -37,6 +37,7 @@ import { insertUploadPlan } from '@/modules/development-automation/infrastructur
 import {
   getDecisionTrace,
   getMissionDetail,
+  getMissionMergeRequestView,
   listMissionEffects,
   listMissionSummaries,
   listMissionSummariesPage,
@@ -51,6 +52,8 @@ import {
   bindConflictMergeParticipant,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
@@ -82,6 +85,7 @@ import {
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { readFileSync } from 'node:fs'
+import { projectMissionJourney } from '@/modules/development-automation/domain/journeyProjection'
 
 const log = createLogger('development-missions')
 
@@ -153,6 +157,23 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
         fireReconcile(missionId)
       },
     }),
+    scriptLauncher: composeScriptActionExecution({
+      db: deps.db,
+      startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+      onTerminal: (executionRef) => {
+        const missionId = missionIdOfExecutionRef(deps.db, executionRef)
+        if (missionId === null) return
+        missionStore.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'agent-execution',
+          deliveryKey: `script-exec:${executionRef}`,
+          now: Date.now(),
+        })
+        fireReconcile(missionId)
+      },
+    }),
+    approvalGateway: composeApprovalGatewayRunner(deps.db),
   })
   const launchDeps: LaunchDeps = {
     store: missionStore,
@@ -187,12 +208,12 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
 
   /**
    * launch 成功后的装配步骤（requirementMaterializer 契约）：direct 正文/上传
-   * 语义按 mission 冻结的 digest stash 为 evidence。stash 失败 = mission 无法
-   * 继续（materialize 永远差正文）——补偿 cancel 后对外报错，不返回 201。
+   * 语义按 mission 冻结的 digest stash 为 evidence。函数内容幂等，因而 launch
+   * 响应丢失或 evidence 短暂失败后可对原 mission 安全重放。
    */
-  const stashDirectAfterLaunch = async (raw: unknown, missionId: string): Promise<void> => {
+  const stashDirectAfterLaunch = async (raw: unknown, missionId: string): Promise<boolean> => {
     const parsed = launchMissionInputSchema.safeParse(raw)
-    if (!parsed.success || parsed.data.submission.kind !== 'direct') return
+    if (!parsed.success || parsed.data.submission.kind !== 'direct') return false
     const submission = parsed.data.submission
     const stashed = await automation.materializer.stashDirectSubmission({
       missionId,
@@ -214,21 +235,12 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       },
     })
     if (!stashed.ok) {
-      try {
-        await cancelMission(launchDeps, { missionId })
-      } catch (err) {
-        log.warn('stash compensation cancel failed', {
-          missionId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-      // 失败码透传（digest-mismatch 等由 materializer 测试点名；HTTP 面上这些
-      // 分支在单请求内不可构造——stash 与 launch 同一 handler、无外部竞态窗口）。
       throw new ConflictError(
         stashed.failure.code,
         `direct submission stash failed: ${stashed.failure.remediation}`,
       )
     }
+    return true
   }
 
   registerRoute(
@@ -246,8 +258,17 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       // actorUserId 永远 server-authoritative——覆盖 body 里的任何自报值。
       const input = { ...body, actorUserId: actor.user.id }
       const result = await launchMission(launchDeps, input)
-      if (result.created) {
-        await stashDirectAfterLaunch(input, result.missionId)
+      const directStashed = await stashDirectAfterLaunch(input, result.missionId)
+      if (!result.created && directStashed) {
+        const mission = missionStore.getMission(result.missionId)
+        if (
+          mission?.status === 'blocked' &&
+          mission.blockCode === 'requirement-acquire-failed:direct-submission-not-staged'
+        ) {
+          await retryBlockedMission(launchDeps, { missionId: result.missionId })
+        }
+      }
+      if (result.created || directStashed) {
         fireReconcile(result.missionId)
       }
       return c.json(result, result.created ? 201 : 200)
@@ -366,6 +387,42 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
         pendingQuestionSetRef === null
           ? null
           : automation.materializer.loadQuestionSet(pendingQuestionSetRef)
+      const mergeRequest = getMissionMergeRequestView(deps.db, missionId, detail.repositoryId)
+      const collaborationReceipts = automation.collaboration(missionId)
+      const activeChild = [...collaborationReceipts.children]
+        .reverse()
+        .find(
+          (child) =>
+            !child.completionSatisfied &&
+            child.childMissionId !== null &&
+            !['blocked', 'handoff', 'canceled', 'closed-unmerged'].includes(child.status ?? ''),
+        )
+      const activeApproval = [...collaborationReceipts.approvals]
+        .reverse()
+        .find((approval) => approval.status === 'submitting' || approval.status === 'pending')
+      const collaboration =
+        activeApproval !== undefined &&
+        (activeChild === undefined || activeApproval.updatedAt >= (activeChild.observedAt ?? 0))
+          ? {
+              kind: 'approval' as const,
+              href:
+                activeApproval.externalRequestRef !== null &&
+                /^https?:\/\//.test(activeApproval.externalRequestRef)
+                  ? activeApproval.externalRequestRef
+                  : null,
+              resumeAt: activeApproval.nextObserveAt,
+              deadlineAt: activeApproval.deadlineAt,
+              needsHuman: activeApproval.status === 'pending',
+            }
+          : activeChild === undefined
+            ? null
+            : {
+                kind: 'child-mission' as const,
+                href: `/code/missions/${encodeURIComponent(activeChild.childMissionId!)}`,
+                resumeAt: null,
+                deadlineAt: activeChild.deadlineAt,
+              }
+      const actor = actorOf(c)
       return c.json({
         ...detail,
         questions:
@@ -384,6 +441,23 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
           clarificationState: knownString('requirement.clarificationState'),
         },
         effects: listMissionEffects(deps.db, missionId),
+        collaboration: collaborationReceipts,
+        mergeRequest,
+        journey: projectMissionJourney({
+          missionId,
+          status: detail.status,
+          automationMode: detail.automationMode,
+          transitionFence: detail.transitionFence,
+          blockCode: detail.blockCode,
+          hasQuestions: questions !== null,
+          hasMergeRequest: mergeRequest !== null,
+          mergeRequestHref: mergeRequest?.href ?? null,
+          canInteract: actor.permissions.has('development-missions:interact'),
+          canRetry: actor.permissions.has('development-missions:retry'),
+          canAttach: actor.permissions.has('development-missions:attach'),
+          canResume: actor.permissions.has('development-missions:resume'),
+          collaboration,
+        }),
         // PR-8 T92：pipeline evidence 摘要投影（manifest 从内容寻址 blob 读回；
         // 大字节仍走 ranged 端点，这里只出 gates/files 目录级摘要）。
         pipeline: ((): unknown => {

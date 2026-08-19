@@ -159,6 +159,7 @@ interface CandidateContext {
     readonly entries: readonly {
       readonly targetPath: string
       readonly disposition: 'create' | 'replace' | 'already-present'
+      readonly fileMode: 'regular' | 'executable'
     }[]
   } | null
 }

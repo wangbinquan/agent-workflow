@@ -9,7 +9,7 @@
 // revision（运行中 mission 仍 pin 旧 revision——页面顶栏如实标注）。
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, Link } from '@tanstack/react-router'
+import { createRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -214,7 +214,6 @@ function PolicyDetailPage(): ReactElement {
     <div className="page">
       <PageHeader
         title={policy.name}
-        back={<Link to="/code/policies">{t('code.policies.backToList')}</Link>}
         actions={
           canUpdate ? (
             <div className="page__actions">

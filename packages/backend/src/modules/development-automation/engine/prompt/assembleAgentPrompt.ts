@@ -70,6 +70,17 @@ function mountLines(manifest: AgentInputManifestV1): string[] {
   return lines
 }
 
+function actionContextLines(manifest: AgentInputManifestV1): string[] {
+  const lines: string[] = []
+  if (manifest.problemEvidence !== undefined) {
+    lines.push(`- Problem classification context: ${JSON.stringify(manifest.problemEvidence)}`)
+  }
+  if (manifest.approvalContext !== undefined) {
+    lines.push(`- Approval preparation context: ${JSON.stringify(manifest.approvalContext)}`)
+  }
+  return lines
+}
+
 function protocolBlock(manifest: AgentInputManifestV1): string {
   const p = manifest.protocol
   return [
@@ -85,7 +96,7 @@ function protocolBlock(manifest: AgentInputManifestV1): string {
     `- schema: ${p.outcomeSchemaId}`,
     `- "protocolVersion": 1, "nonce": "${p.nonce}", "port": "${p.port}",`,
     `- "actionRunRef": "${manifest.actionRunRef}", "inputDigest": "${manifest.inputDigest}", "capabilityId": "${manifest.capabilityId}",`,
-    '- "outcome": one of "changed" | "no-change" | "needs-information" | "blocked", with the matching "result" payload.',
+    '- "outcome": one of "changed" | "completed" | "no-change" | "needs-information" | "blocked", as allowed by the capability schema, with the matching "result" payload.',
     '',
     'Hard rules:',
     '- Print at most one frame. Zero frames or multiple frames fail the attempt.',
@@ -112,6 +123,10 @@ export function assembleAgentPrompt(input: AgentPromptInput): string {
     sections.push('', '# Action template guidance', '', input.templateSupplement.trim())
   }
   sections.push('', '# Workspace inputs', '', ...mountLines(input.manifest))
+  const actionContext = actionContextLines(input.manifest)
+  if (actionContext.length > 0) {
+    sections.push('', '# Bound action context (platform-authored)', '', ...actionContext)
+  }
   if (input.untrustedIndex.length > 0) {
     sections.push(
       '',

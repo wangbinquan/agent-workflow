@@ -12,6 +12,7 @@
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
+import { launchAgentAttempt } from '../src/modules/development-automation/application/agentActionOrchestrator'
 import { decodeAgentAttemptBaselineRef } from '../src/modules/development-automation/domain/agentAttempt'
 import type {
   AgentActionLauncherPort,
@@ -20,6 +21,7 @@ import type {
 import type { RepositoryFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
+import { createSqliteActionTemplateStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 
 setDefaultTimeout(120_000)
 
@@ -35,20 +37,28 @@ function scriptedLauncher(): {
   prompts: string[]
   outcomes: Map<string, AgentExecutionSnapshot>
   launched: string[]
+  platformInputPaths: string[][]
+  workspacePaths: string[]
 } {
   const prompts: string[] = []
   const launched: string[] = []
   const outcomes = new Map<string, AgentExecutionSnapshot>()
+  const platformInputPaths: string[][] = []
+  const workspacePaths: string[] = []
   let seq = 0
   return {
     prompts,
     launched,
     outcomes,
+    platformInputPaths,
+    workspacePaths,
     port: {
       async launch(input) {
         seq += 1
         const executionRef = `exec-${seq}`
         prompts.push(input.prompt)
+        platformInputPaths.push([...input.platformInputPaths])
+        workspacePaths.push(input.workspacePath)
         launched.push(executionRef)
         return { ok: true, executionRef }
       },
@@ -180,6 +190,9 @@ describe('rfc310 pr4 — attempt orchestration (launch half)', () => {
     // prompt 组装含 facts 摘要与不可覆盖协议块。
     expect(scripted.prompts[0]).toContain('repository.languages')
     expect(scripted.prompts[0]).toContain('# Output protocol (non-overridable')
+    expect(scripted.platformInputPaths).toHaveLength(1)
+    expect(scripted.platformInputPaths[0]).toHaveLength(1)
+    expect(scripted.platformInputPaths[0]![0]).toMatch(/^\.agent-workflow\/inputs\/requirements\//)
   })
 
   test('missing execution ports are typed blocks (not silent skips)', async () => {
@@ -257,6 +270,25 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     })
     const { missionId, actionRunId } = await launchToAction(fx, deps, 'orc-retry-1')
 
+    // A newer source generation arriving while the Agent is running must not
+    // change a fresh-session retry into a different task.
+    fx.store.insertMissionSource({
+      id: 'source-drift-after-launch',
+      missionId,
+      generation: 99,
+      sourceKind: 'direct',
+      externalId: null,
+      adapterId: null,
+      adapterRevision: null,
+      sourceRevision: 'unexpected-new-revision',
+      bundleRef: 'unexpected-new-bundle',
+      manifestDigest: 'f'.repeat(64),
+      fileCount: 1,
+      totalBytes: 10,
+      state: 'materialized',
+      createdAt: Date.now(),
+    })
+
     // 坏 envelope（frame 缺失）→ planNextAttempt(protocol)：sameSession=0 ⇒
     // fresh rerun（template retryDefaults.freshSession=1 ⇒ rerunSeq 1 可用）。
     scripted.outcomes.set('exec-1', doneWithFrame('exec-1', 'no frame at all'))
@@ -288,6 +320,130 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     expect(mission.blockCode).toBe('agent-contract-exhausted')
     expect(mission.currentActionRunId).toBeNull()
     expect(fx.store.getActionRun(actionRunId)!.status).toBe('failed')
+  })
+
+  test('feedback protocol retry rebuilds from the exact frozen comment body', async () => {
+    const fx = await buildPr3Fixture({ feedbackRoute: true })
+    const scripted = scriptedLauncher()
+    const deps = fx.deps({
+      repositoryFacts: repoCollector,
+      ...fakeAgentActionPorts({ db: fx.db, overrides: { agentLauncher: scripted.port } }),
+    })
+    const { missionId, actionRunId: priorRunId } = await launchToAction(
+      fx,
+      deps,
+      'orc-feedback-retry-1',
+    )
+    fx.store.settleActionRun({
+      id: priorRunId,
+      status: 'settled',
+      resultRef: null,
+      failureJson: null,
+      now: Date.now(),
+    })
+    let mission = fx.store.getMission(missionId)!
+    expect(
+      fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+        currentActionRunId: null,
+      }).ok,
+    ).toBe(true)
+    mission = fx.store.getMission(missionId)!
+
+    const template = createSqliteActionTemplateStore(fx.db)
+      .list()
+      .find((row) => row.extra.capabilityId === 'mr.feedback.apply')
+    expect(template?.publishedRevision).toBe(1)
+    const feedbackDecision = fx.store.insertDecision({
+      id: 'feedback-retry-decision',
+      missionId,
+      missionRevision: mission.revision,
+      policyId: mission.policyId,
+      policyRevision: mission.policyRevision,
+      employeeId: mission.employeeId,
+      employeeRevision: mission.employeeRevision,
+      factSnapshotId: null,
+      factDigest: 'd'.repeat(64),
+      workSetJson: null,
+      guardTraceJson: '[]',
+      ruleTraceJson: '[]',
+      selectedJson: JSON.stringify({ capabilityId: 'mr.feedback.apply' }),
+      canonicalDigest: 'c'.repeat(64),
+      decisionInputDigest: 'b'.repeat(64),
+      now: Date.now(),
+    })
+    const feedbackRunId = 'feedback-retry-action-run'
+    expect(
+      fx.store.createActionRun({
+        id: feedbackRunId,
+        missionId,
+        missionRevision: mission.revision,
+        decisionId: feedbackDecision.decisionId,
+        capabilityId: 'mr.feedback.apply',
+        capabilityContractVersion: 1,
+        templateId: template!.id,
+        templateRevision: 1,
+        workSetDigest: null,
+        inputFactDigest: 'e'.repeat(64),
+        baselineRef: null,
+        writable: true,
+        now: Date.now(),
+      }).ok,
+    ).toBe(true)
+    expect(
+      fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+        currentActionRunId: feedbackRunId,
+      }).ok,
+    ).toBe(true)
+    mission = fx.store.getMission(missionId)!
+
+    const first = await launchAgentAttempt(deps, mission, {
+      actionRunId: feedbackRunId,
+      capabilityId: 'mr.feedback.apply',
+      templateId: template!.id,
+      templateRevision: 1,
+      rerunSeq: 0,
+      factsSummary: [],
+      missionRevisionPin: mission.revision,
+      feedbackSnapshot: {
+        snapshotRef: 'feedback-snapshot-1',
+        items: [
+          {
+            threadRef: 'thread-1',
+            revision: 'revision-7',
+            body: 'Rename the public method and keep binary compatibility.\nAdd a regression test.',
+            path: 'src/App.java',
+          },
+        ],
+      },
+      retryBudget: { sameSession: 1, freshSession: 1 },
+    })
+    expect(first.ok).toBe(true)
+    if (!first.ok) return
+    scripted.outcomes.set(first.executionRef, doneWithFrame(first.executionRef, 'no frame'))
+
+    const retried = await runMissionReconcile(deps, missionId)
+    expect(retried.kind).toBe('action-collect')
+    if (retried.kind !== 'action-collect') return
+    expect(retried.result).toMatchObject({ kind: 'action-retry', rerunSeq: 0 })
+
+    const attempts = fx.store.listAttempts(feedbackRunId)
+    expect(attempts).toHaveLength(2)
+    expect(attempts.map((attempt) => [attempt.rerunSeq, attempt.attemptSeq])).toEqual([
+      [0, 0],
+      [0, 1],
+    ])
+    expect(attempts[1]!.inputDigest).toBe(attempts[0]!.inputDigest)
+    expect(attempts[1]!.nonceDigest).not.toBe(attempts[0]!.nonceDigest)
+    expect(scripted.workspacePaths.at(-1)).toBe(scripted.workspacePaths.at(-2))
+    const feedbackPrompts = scripted.prompts.filter((prompt) =>
+      prompt.includes('review feedback thread-1@revision-7'),
+    )
+    expect(feedbackPrompts).toHaveLength(2)
+    expect(feedbackPrompts[1]).toContain(
+      'Rename the public method and keep binary compatibility.\nAdd a regression test.',
+    )
+    expect(feedbackPrompts[1]).toContain('previous attempt rejection')
+    expect(feedbackPrompts[1]).toContain('frame-missing')
   })
 
   test('boundary violation → attempt discarded (never same-session) + fresh rerun', async () => {

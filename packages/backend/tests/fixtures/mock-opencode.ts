@@ -51,6 +51,13 @@
 //                                    (value-or-null). RFC-310 PR-4 T44: digital-employee
 //                                    launches prove zero Git-identity injection while
 //                                    RFC-067 workflow launches prove injection survives.
+//   MOCK_OPENCODE_REQUIRE_FILES      JSON object of cwd-relative path -> exact UTF-8
+//                                    content. Exits 2 when a file is absent or differs;
+//                                    RFC-310 uses it to prove ignored platform inputs
+//                                    crossed the real node-isolation boundary.
+//   MOCK_OPENCODE_GIT_COMMIT         '1' makes the child create and commit one file;
+//                                    RFC-310 uses it to prove the runner's exact-window
+//                                    no-Git audit rejects semantic Git mutations.
 //   MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO  path; if set, the mock writes the RAW
 //                                    OPENCODE_CONFIG_CONTENT string verbatim (overwrite,
 //                                    not append). RFC-073 tests assert the TOP-LEVEL
@@ -233,6 +240,48 @@ if (env.MOCK_OPENCODE_CAPTURE_ENV_TO) {
   } catch (e) {
     fail(`MOCK_OPENCODE_CAPTURE_ENV_TO write failed: ${(e as Error).message}`)
   }
+}
+
+if (env.MOCK_OPENCODE_REQUIRE_FILES) {
+  let expected: unknown
+  try {
+    expected = JSON.parse(env.MOCK_OPENCODE_REQUIRE_FILES)
+  } catch {
+    fail('MOCK_OPENCODE_REQUIRE_FILES is not valid JSON')
+  }
+  if (expected === null || typeof expected !== 'object' || Array.isArray(expected)) {
+    fail('MOCK_OPENCODE_REQUIRE_FILES must be an object')
+  }
+  for (const [path, content] of Object.entries(expected as Record<string, unknown>)) {
+    if (typeof content !== 'string') fail(`expected content for '${path}' must be a string`)
+    let actual: string
+    try {
+      actual = readFileSync(join(process.cwd(), path), 'utf8')
+    } catch (error) {
+      fail(`required file '${path}' is unavailable: ${(error as Error).message}`)
+    }
+    if (actual !== content) fail(`required file '${path}' has unexpected content`)
+  }
+}
+
+if (env.MOCK_OPENCODE_GIT_COMMIT === '1') {
+  writeFileSync(join(process.cwd(), 'agent-git-mutation.txt'), 'must never merge back\n')
+  const add = Bun.spawnSync({ cmd: ['git', 'add', 'agent-git-mutation.txt'], cwd: process.cwd() })
+  if (add.exitCode !== 0) fail(`mock git add failed: ${add.stderr.toString()}`)
+  const commit = Bun.spawnSync({
+    cmd: [
+      'git',
+      '-c',
+      'user.name=Mock Agent',
+      '-c',
+      'user.email=mock-agent@example.invalid',
+      'commit',
+      '-m',
+      'forbidden agent commit',
+    ],
+    cwd: process.cwd(),
+  })
+  if (commit.exitCode !== 0) fail(`mock git commit failed: ${commit.stderr.toString()}`)
 }
 
 if (env.MOCK_OPENCODE_CAPTURE_CONFIG_TO) {

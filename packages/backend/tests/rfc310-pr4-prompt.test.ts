@@ -36,6 +36,7 @@ describe('rfc310 pr4 — prompt assembly', () => {
     expect(block).toContain(TEST_NONCE)
     expect(block).toContain('"port": "agent-result"')
     expect(block).toContain('change.implement#output@1')
+    expect(block).toContain('"changed" | "completed" | "no-change"')
     expect(block).toContain('git add/commit/push/merge/rebase/reset/checkout')
     expect(block).toContain('Never probe for credentials')
     expect(block).toContain('changedPaths, commitSha, pushed, testsPassed or mergeable')
@@ -92,5 +93,32 @@ describe('rfc310 pr4 — prompt assembly', () => {
     expect(prompt).toContain('`docs/spec.md` (regular, preserve-upload): do NOT modify')
     expect(prompt).toContain('`docs/notes.md` (regular, agent-editable): you may edit')
     expect(prompt).toContain('Protected roots (never write): `.agent-workflow`')
+  })
+
+  test('problem and approval executors receive the exact closed action context', () => {
+    const prompt = assemble({
+      problemEvidence: {
+        producerId: 'pipeline-classifier',
+        evidenceDigest: '1'.repeat(64),
+        headSha: '2'.repeat(40),
+        allowedTypeIds: ['compile'],
+        subjectRefs: ['gate:compile'],
+        requiredSubjectRefs: ['gate:compile'],
+      },
+      approvalContext: {
+        stepRunRef: 'approval-step-1',
+        approvalType: 'gate-rollout',
+        evidenceRefs: ['child-ready-receipt'],
+        requestedScopes: ['deploy:test'],
+      },
+    })
+    expect(prompt).toContain('# Bound action context (platform-authored)')
+    expect(prompt).toContain('"producerId":"pipeline-classifier"')
+    expect(prompt).toContain('"requiredSubjectRefs":["gate:compile"]')
+    expect(prompt).toContain('"stepRunRef":"approval-step-1"')
+    expect(prompt).toContain('"approvalType":"gate-rollout"')
+    expect(prompt.indexOf('# Bound action context')).toBeLessThan(
+      prompt.indexOf('# Output protocol (non-overridable'),
+    )
   })
 })

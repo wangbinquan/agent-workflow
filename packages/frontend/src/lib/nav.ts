@@ -10,7 +10,7 @@
 import type { Permission } from '@agent-workflow/shared'
 import type { ResourceIconKey } from '@/components/icons/resourceIcons'
 
-export type GroupKey = 'agents' | 'workflows' | 'tasks' | 'memory'
+export type GroupKey = 'agents' | 'workflows' | 'digitalEmployees' | 'tasks' | 'memory'
 
 export interface SubNavItem {
   to: string
@@ -69,10 +69,40 @@ export const NAV_GROUPS: NavGroupEntry[] = [
     ],
   },
   {
+    key: 'digitalEmployees',
+    i18nKey: 'nav.group.digitalEmployees',
+    subnav: [
+      {
+        to: '/code',
+        i18nKey: 'nav.digitalEmployees',
+        icon: 'agent',
+        permission: 'digital-employees:read',
+      },
+      {
+        to: '/code/executors',
+        i18nKey: 'nav.executors',
+        icon: 'workgroup',
+        permission: 'action-templates:read',
+      },
+      {
+        to: '/code/assignments',
+        i18nKey: 'nav.employeeAssignments',
+        icon: 'repo',
+        permission: 'repository-employee-assignments:read',
+      },
+    ],
+  },
+  {
     key: 'tasks',
     i18nKey: 'nav.group.tasks',
     subnav: [
       { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task', permission: 'tasks:read' },
+      {
+        to: '/outcomes',
+        i18nKey: 'nav.employeeOutcomes',
+        icon: 'task',
+        permission: 'development-missions:read',
+      },
       {
         to: '/scheduled',
         i18nKey: 'nav.scheduled',
@@ -88,9 +118,6 @@ export const NAV_GROUPS: NavGroupEntry[] = [
         icon: 'webhook',
         permission: 'webhook-endpoints:read',
       },
-      // RFC-304 — `/code` 的读面按 `repos:read`：能力矩阵就是仓库配置的一部分。
-      // 页内的写动作各自按 `repos:update` 渲染，导航模型不携带角色概念。
-      { to: '/code', i18nKey: 'nav.code', icon: 'repo', permission: 'repos:read' },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so
@@ -125,12 +152,10 @@ export function navPermissionForPath(pathname: string): Permission | null {
       return override.permission
     }
   }
-  for (const group of NAV_GROUPS) {
-    for (const item of group.subnav) {
-      if (pathname === item.to || pathname.startsWith(item.to + '/')) return item.permission
-    }
-  }
-  return null
+  const matches = NAV_GROUPS.flatMap((group) => group.subnav).filter(
+    (item) => pathname === item.to || pathname.startsWith(item.to + '/'),
+  )
+  return matches.sort((a, b) => b.to.length - a.to.length)[0]?.permission ?? null
 }
 
 export interface ActiveNav {
@@ -163,16 +188,16 @@ export function resolveActiveNav(pathname: string): ActiveNav {
   if (pathname === '/settings' || pathname.startsWith('/settings/')) {
     return { onHome: false, onSettings: true, activeGroup: null, activeItemTo: null }
   }
-  for (const g of NAV_GROUPS) {
-    for (const sub of g.subnav) {
-      if (pathname === sub.to || pathname.startsWith(sub.to + '/')) {
-        return {
-          onHome: false,
-          onSettings: false,
-          activeGroup: g.key,
-          activeItemTo: sub.to,
-        }
-      }
+  const matches = NAV_GROUPS.flatMap((group) => group.subnav.map((sub) => ({ group, sub }))).filter(
+    ({ sub }) => pathname === sub.to || pathname.startsWith(sub.to + '/'),
+  )
+  const match = matches.sort((a, b) => b.sub.to.length - a.sub.to.length)[0]
+  if (match !== undefined) {
+    return {
+      onHome: false,
+      onSettings: false,
+      activeGroup: match.group.key,
+      activeItemTo: match.sub.to,
     }
   }
   // Detail-route fallbacks for paths not enumerated in NAV_GROUPS.

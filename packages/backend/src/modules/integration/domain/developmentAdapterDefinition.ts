@@ -15,6 +15,7 @@ export const DEVELOPMENT_ADAPTER_PURPOSES = [
   'requirement-source',
   'pipeline-gate',
   'pipeline-classifier',
+  'approval-gateway',
 ] as const
 export type DevelopmentAdapterPurpose = (typeof DEVELOPMENT_ADAPTER_PURPOSES)[number]
 
@@ -26,6 +27,9 @@ export const DEVELOPMENT_ADAPTER_OPERATIONS = [
   'trigger',
   'rerun',
   'classify',
+  'submit',
+  'lookup-by-idempotency-key',
+  'observe',
 ] as const
 export type DevelopmentAdapterOperation = (typeof DEVELOPMENT_ADAPTER_OPERATIONS)[number]
 
@@ -89,6 +93,10 @@ const PURPOSE_OPERATIONS: Record<
   },
   'pipeline-gate': { required: ['collect'], optional: ['trigger', 'rerun'] },
   'pipeline-classifier': { required: ['classify'], optional: [] },
+  'approval-gateway': {
+    required: ['submit', 'lookup-by-idempotency-key', 'observe'],
+    optional: [],
+  },
 }
 
 /** purpose/operations 对拍（design §3.3）：违规清单（空 = 合法）。 */

@@ -101,6 +101,7 @@ export class CodeHostStore {
       headSha,
       repositoryPath,
       repoHttpUrl: gitRemoteUrl(this.#baseUrl(), this.#gitRoot, repositoryPath),
+      gitTransportUrl: gitRemoteUrl(this.#baseUrl(), this.#gitRoot, repositoryPath),
       webUrl: `${this.#baseUrl()}${hostPrefix}/${seed.projectPath}`,
       baseFiles: structuredClone(baseFiles),
       headFiles: effectiveHeadFiles,

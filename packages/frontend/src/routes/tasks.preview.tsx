@@ -6,11 +6,10 @@
 // as in the review pane. The markdown body is rebuilt from the URL search:
 //   - file source   `?path=<worktree-rel>`   → GET worktree-file (shared cache)
 //   - inline port    `?runId=&port=`          → value from the node-runs outputs
-// A "← 返回" link goes back to the owning task detail.
 
 import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useQuery } from '@tanstack/react-query'
-import { createRoute, Link } from '@tanstack/react-router'
+import { createRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { NodeRunOutput, TaskNodeRuns, WorktreeFileResponse } from '@agent-workflow/shared'
 import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
@@ -61,16 +60,6 @@ export function TaskMarkdownPreviewPage() {
   return (
     <div className="page page--md-preview">
       <PageHeader
-        back={
-          <Link
-            to="/tasks/$id"
-            params={{ id }}
-            className="btn btn--sm"
-            data-testid="md-preview-back"
-          >
-            ← {t('taskPreview.back')}
-          </Link>
-        }
         title={
           <span className="md-preview__title" title={title}>
             {title}

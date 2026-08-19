@@ -153,7 +153,7 @@ beforeAll(async () => {
       'core/src/main/java/App.java': 'class App {}\n',
     },
   })
-  repoUrl = mockRepoDiskPath(project.repoHttpUrl)
+  repoUrl = mockRepoDiskPath(project.gitTransportUrl)
 
   fx = await buildPr3Fixture({ feedbackRoute: true })
   const repoPath = join(HOME, 'repo-cache')
@@ -268,6 +268,8 @@ beforeAll(async () => {
           authorClass: thread.authorClass,
           resolved: thread.resolved,
           bodyDigest: sha256Hex(thread.lastBody),
+          body: thread.lastBody,
+          path: thread.path,
         })),
       }
     },
@@ -523,6 +525,15 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
       () => fx.store.listFeedback(missionId).some((r) => r.state === 'addressed'),
       { max: 14, label: 'feedback-applied-and-replied' },
     )
+
+    // The feedback Agent must receive the actual review material through its
+    // bounded untrusted-data input. The old scripted harness knew this edit out
+    // of band, so the journey stayed green even though a real Agent saw only a
+    // thread id + digest and could not possibly address the comment.
+    const feedbackLaunch = launches.find((launch) => launch.capabilityId === 'mr.feedback.apply')
+    expect(feedbackLaunch).toBeDefined()
+    expect(feedbackLaunch!.prompt).toContain('review feedback')
+    expect(feedbackLaunch!.prompt).toContain('Please greet the reviewer properly.')
 
     // 真回帖落在 mock：review comments 里出现平台回复（self marker 可辨识）。
     {

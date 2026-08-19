@@ -180,6 +180,13 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/code/repository-assignments/:scopeKind' },
   { method: 'POST', path: '/api/code/automation-policies/preview-decision' },
   { method: 'POST', path: '/api/code/digital-employees/preview-selection' },
+  // RFC-310 PR-11/PR-13 —— 业务说明书聚合面与零配置操作链：一次读/写完整
+  // playbook（内部 ActionTemplate/VerificationProfile/policy 闭包由平台编译），
+  // validate 只编译不落库，setup-journey 是服务端拥有的"下一步"投影。
+  { method: 'GET', path: '/api/code/digital-employees/:id/playbook' },
+  { method: 'PUT', path: '/api/code/digital-employees/:id/playbook' },
+  { method: 'POST', path: '/api/code/digital-employees/:id/playbook/validate' },
+  { method: 'GET', path: '/api/code/setup-journey' },
   // RFC-310 PR-2 — Mission 生命周期（handoff/attach/resume/upgrade 随后续批次）。
   { method: 'POST', path: '/api/code/missions' },
   { method: 'GET', path: '/api/code/missions' },

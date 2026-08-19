@@ -251,6 +251,8 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
     const analyzeRound = await runMissionReconcile(deps, missionId)
     expect(analyzeRound.kind === 'decided' && analyzeRound.handled).toBe('action-launched')
     expect(scripted.capabilities).toEqual(['requirement.analyze'])
+    expect(scripted.prompts[0]).toContain('Do not modify any file.')
+    expect(scripted.prompts[0]).toContain('"changed" | "completed" | "no-change"')
 
     // Agent 交回 analyze 结论：core 受影响、scope ready。
     const prompt = scripted.prompts[0]!

@@ -1349,7 +1349,7 @@ describe('RFC-254 T28b — dispatcher', () => {
    *            if the marker stops being emitted (the branch then runs and the
    *            skipped-node assertions go red).
    */
-  const POST_PORT_MODES = new Set(['branch'])
+  const POST_PORT_MODES = new Set(['branch', 'development'])
 
   test('every ported mode has a golden, and every golden has a mode', () => {
     // A mode with no recording is unproven; a recording with no mode is a

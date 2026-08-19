@@ -72,8 +72,7 @@ describe('TaskMarkdownPreviewPage', () => {
     renderRoute('/tasks/T1/preview?path=docs/report.md')
     expect(await screen.findByRole('heading', { name: 'Hello' })).toBeTruthy()
     expect(await screen.findByRole('table')).toBeTruthy()
-    // The back link targets the task detail.
-    expect(screen.getByTestId('md-preview-back')).toBeTruthy()
+    expect(screen.queryByTestId('md-preview-back')).toBeNull()
   })
 
   test('inline-port mode rebuilds body from node-runs outputs', async () => {
@@ -117,7 +116,7 @@ describe('TaskMarkdownPreviewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
     expect(await screen.findByRole('heading', { name: 'Hello' })).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByTestId('md-preview-back').getAttribute('href')).toContain('/tasks/T1')
+    expect(screen.queryByTestId('md-preview-back')).toBeNull()
   })
 
   test('file stale refetch failure keeps rendered markdown and retry refreshes it', async () => {

@@ -64,6 +64,8 @@ const ALL_PERMS = [
   'action-templates:archive',
   'verification-profiles:read',
   'verification-profiles:create',
+  'verification-profiles:update',
+  'verification-profiles:archive',
   'adapter-definitions:read',
   'adapter-definitions:create',
   'adapter-definitions:update',
@@ -115,6 +117,40 @@ const TEMPLATE_ROW = {
   capabilityId: 'change.implement',
 }
 
+const TEMPLATE_DETAIL = {
+  ...TEMPLATE_ROW,
+  draft: {
+    schemaVersion: 1,
+    capabilityId: 'change.implement',
+    capabilityContractVersion: 1,
+    labels: ['java'],
+    compatibility: [],
+    executor: { kind: 'agent', agentRef: 'agent-java' },
+    runtimeProfileRef: 'runtime-java',
+    promptSupplement: 'Follow the service conventions.',
+    skillRefs: ['skill-java'],
+    mcpRefs: [],
+    readOnlyResourceRefs: [],
+    contextProfileRef: null,
+    writablePathPolicyRef: null,
+    additionalProtectedPathClasses: [],
+    verificationProfileRef: 'verify-java',
+    retryDefaults: { sameSession: 1, freshSession: 1 },
+  },
+}
+
+const VERIFICATION_DETAIL = {
+  ...EMPLOYEE_ROW,
+  id: '01VERIFY00000000000000001',
+  name: 'java-gate',
+  draft: {
+    schemaVersion: 1,
+    stopPolicy: 'first-failure',
+    maxParallel: 1,
+    steps: [],
+  },
+}
+
 const ADAPTER_DETAIL = {
   ...EMPLOYEE_ROW,
   id: '01ADP0000000000000000001',
@@ -162,13 +198,20 @@ function installFetch(overrides: {
       if (/\/api\/integrations\/development-adapters\/[^/]+$/.test(url)) {
         return json(overrides.detail ?? ADAPTER_DETAIL)
       }
-      if (/\/api\/code\/digital-employees\/[^/]+$/.test(url)) {
+      if (/\/api\/code\/digital-employees\/[^/]+(?:\/playbook)?$/.test(url)) {
         return json(
           overrides.detail ?? {
             ...EMPLOYEE_ROW,
             draft: EMPLOYEE_DRAFT,
+            playbook: EMPLOYEE_DRAFT,
           },
         )
+      }
+      if (/\/api\/code\/action-templates\/[^/]+$/.test(url)) {
+        return json(overrides.detail ?? TEMPLATE_DETAIL)
+      }
+      if (/\/api\/code\/verification-profiles\/[^/]+$/.test(url)) {
+        return json(overrides.detail ?? VERIFICATION_DETAIL)
       }
       if (url.includes('/api/code/digital-employees') && method === 'POST') {
         return json({ ...EMPLOYEE_ROW, id: '01EMPNEW' }, 201)
@@ -353,15 +396,15 @@ describe('/code/config detail', () => {
     const panel = await screen.findByTestId('config-publish-violations')
     expect(panel.textContent).toContain('template-missing')
     expect(panel.textContent).toContain('policy-missing')
-    // routes 摘要也在（capability 路由表）。
-    expect(screen.getByTestId('config-employee-routes').textContent).toContain('change.implement')
-    // versioned ref 渲染成 `id@vN`：既证明没有把对象塞进 JSX（React #31 白屏），
-    // 也证明没有静默退化成「—」（那会让用户以为没绑定）。
+    // 业务详情只讲员工职责；template/profile/ref 退到默认收起的技术区。
     const employeeCard = screen.getByTestId('config-summary-employee')
-    expect(employeeCard.textContent).toContain('01TPL0000000000000000001@v1')
-    expect(employeeCard.textContent).toContain('pol-1@v1')
-    expect(employeeCard.textContent).toContain('jira → 01ADP0001@v2 (default)')
-    expect(employeeCard.textContent).toContain('gitlab-ci → 01ADP0002@v1')
+    expect(employeeCard.textContent).toContain('Handles Java services')
+    expect(screen.queryByTestId('config-employee-routes')).toBeNull()
+    const advanced = screen.getByTestId('config-draft-advanced')
+    expect(advanced.hasAttribute('open')).toBe(false)
+    expect(screen.getByTestId('config-draft-json').textContent).toContain(
+      '01TPL0000000000000000001',
+    )
   })
 
   test('adapter edit entry is hidden without scripts:author; secret keys show names only', async () => {
@@ -386,6 +429,74 @@ describe('/code/config detail', () => {
     await renderConfig(`/code/config/adapters/${ADAPTER_DETAIL.id}`)
     await screen.findByTestId('config-summary-adapter')
     expect(await screen.findByTestId('config-edit-open')).toBeTruthy()
+  })
+
+  test('edits an employee through business steps and keeps JSON behind an advanced fold', async () => {
+    const rec = installFetch({})
+    await renderConfig(`/code/config/employees/${EMPLOYEE_ROW.id}`)
+    fireEvent.click(await screen.findByTestId('config-edit-open'))
+
+    expect(await screen.findByTestId('employee-playbook-editor')).toBeTruthy()
+    expect(screen.getByTestId('config-edit-advanced').hasAttribute('open')).toBe(false)
+    fireEvent.change(screen.getByTestId('config-edit-description'), {
+      target: { value: 'Owns Java delivery from requirement to merge-ready MR.' },
+    })
+    fireEvent.click(screen.getByTestId('employee-step-add'))
+    fireEvent.click(screen.getByTestId('config-edit-save'))
+
+    await waitFor(() => {
+      const put = rec.calls.find(
+        (call) =>
+          call.method === 'PUT' &&
+          call.url.includes('/api/code/digital-employees/') &&
+          call.url.endsWith('/playbook'),
+      )
+      expect(put).toBeTruthy()
+      expect(put!.body).toMatchObject({
+        playbook: {
+          description: 'Owns Java delivery from requirement to merge-ready MR.',
+          defaultPolicyRef: { id: 'pol-1', revision: 1 },
+          steps: [
+            {
+              displayName: 'Step 1',
+              producer: { kind: 'platform', capabilityId: 'repository.inspect' },
+            },
+          ],
+        },
+      })
+    })
+  })
+
+  test('provides guided editors for template, verification, and adapter contracts', async () => {
+    const template = installFetch({ detail: TEMPLATE_DETAIL })
+    await renderConfig(`/code/config/action-templates/${TEMPLATE_ROW.id}`)
+    fireEvent.click(await screen.findByTestId('config-edit-open'))
+    expect(await screen.findByTestId('config-guided-editor-template')).toBeTruthy()
+    fireEvent.change(screen.getByTestId('config-template-executor-ref'), {
+      target: { value: 'agent-java-21' },
+    })
+    fireEvent.click(screen.getByTestId('config-edit-save'))
+    await waitFor(() =>
+      expect(template.calls.find((call) => call.method === 'PUT')?.body).toMatchObject({
+        draft: { executor: { kind: 'agent', agentRef: 'agent-java-21' } },
+      }),
+    )
+
+    cleanup()
+    installFetch({ detail: VERIFICATION_DETAIL })
+    await renderConfig(`/code/config/verification-profiles/${VERIFICATION_DETAIL.id}`)
+    fireEvent.click(await screen.findByTestId('config-edit-open'))
+    expect(await screen.findByTestId('config-guided-editor-verification')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('config-step-add'))
+    expect(screen.getByTestId('config-step-0-program')).toBeTruthy()
+
+    cleanup()
+    installFetch({ detail: ADAPTER_DETAIL })
+    await renderConfig(`/code/config/adapters/${ADAPTER_DETAIL.id}`)
+    fireEvent.click(await screen.findByTestId('config-edit-open'))
+    expect(await screen.findByTestId('config-guided-editor-adapter')).toBeTruthy()
+    expect(screen.getByTestId('config-adapter-executable')).toBeTruthy()
+    expect(screen.getByTestId('config-adapter-timeout')).toBeTruthy()
   })
 })
 

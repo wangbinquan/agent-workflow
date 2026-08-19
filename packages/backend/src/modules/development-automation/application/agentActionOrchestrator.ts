@@ -11,10 +11,12 @@
 // 任一失败按 §7.7 分类（planNextAttempt）：fresh rerun = 整树废弃 + exact
 // 输入重物化 + 新 nonce；耗尽 = blocked(agent-contract-exhausted)。
 //
-// 已知缺口（如实呈报，PR-5 接续）：same-session 结构化反馈需要 runner 的
-// session-continue 面（host-task 形态一次性），当前 sameSession 预算强制 0，
-// 协议/语义失败直接走 fresh rerun；requirement evidence 树在 iso 隔离 cwd 内
-// 不可见（三个候选机制记 plan.md），prompt 以 untrusted index 携带需求正文。
+// same-scene retry starts a new bounded host task against the same disposable
+// workspace and adds the exact rejection as trusted platform feedback. Once
+// that budget is exhausted, fresh-session retry discards the whole workspace
+// and rebuilds it from the frozen input.
+// requirement/pipeline bundles 作为 platformInputPaths 冻结到 task row，节点
+// 隔离快照逐轮 force-include；workspace protected-root 对拍保持只读边界。
 
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
@@ -55,8 +57,43 @@ export const ATTEMPT_WORKSPACE_BUDGET = {
   maxTotalBytes: 64 * 1024 * 1024,
 } as const
 
-/** same-session 反馈通道未接（runner 无 continue 面）：预算强制 0 ⇒ 恒走 fresh。 */
+/** Legacy policy actions retain the historical fresh-only default. */
 export const SAME_SESSION_BUDGET_PR4 = 0
+
+interface FeedbackAttemptSnapshot {
+  readonly snapshotRef: string
+  readonly items: readonly {
+    readonly threadRef: string
+    readonly revision: string
+    readonly body: string
+    readonly path: string | null
+  }[]
+}
+
+/**
+ * A fresh session rebuilds the workspace but reuses the exact frozen input.
+ * These values are the non-secret material needed to reproduce the first
+ * manifest/prompt; reading mutable Mission projections again would silently
+ * turn a retry into a different task.
+ */
+interface FrozenAttemptReplay {
+  readonly baselineRepoPath: string
+  readonly baselineSha: string
+  readonly seedRef: string | null
+  readonly requirementBundle: AgentInputManifestV1['requirementBundle']
+  readonly repositoryUploads: AgentInputManifestV1['repositoryUploads']
+  readonly pipelineBundle: AgentInputManifestV1['pipelineBundle']
+  readonly requirementItemRefs: readonly string[]
+  readonly preservePaths: readonly string[]
+  readonly editablePaths: readonly string[]
+  readonly untrustedIndex: readonly { readonly label: string; readonly text: string }[]
+  readonly taskBrief: string
+  readonly feedbackSnapshot?: FeedbackAttemptSnapshot
+  readonly candidateRef?: string
+  readonly pipelineIssueRefs?: readonly string[]
+  /** Exact content + manifest + pipeline evidence mounts from the first launch. */
+  readonly evidenceBundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
+}
 
 interface AttemptPreState {
   readonly schemaVersion: 1
@@ -65,7 +102,8 @@ interface AttemptPreState {
   readonly capabilityId: string
   readonly templateId: string
   readonly templateRevision: number
-  readonly agentId: string
+  readonly agentId: string | null
+  readonly scriptRef: string | null
   readonly templateSupplement: string | null
   readonly budget: AttemptBudget
   readonly baselineRepoPath: string
@@ -85,6 +123,7 @@ interface AttemptPreState {
   readonly untrustedIndex: readonly { readonly label: string; readonly text: string }[]
   readonly taskBrief: string
   readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
+  readonly feedbackSnapshot?: FeedbackAttemptSnapshot
   readonly closedRefs: {
     readonly requirementItemRefs: readonly string[]
     /** PR-5 T54：repository module catalog（analyze affectedModuleRefs 闭集）。 */
@@ -98,7 +137,6 @@ interface AttemptPreState {
 
 function requiredPortsMissing(deps: ReconcileDeps): string | null {
   const ports = deps.ports
-  if (ports.agentLauncher === undefined) return 'agent-launcher-not-wired'
   if (ports.actionBaseline === undefined) return 'action-baseline-not-wired'
   if (ports.actionWorkspace === undefined) return 'action-workspace-not-wired'
   if (ports.attemptContext === undefined) return 'attempt-context-not-wired'
@@ -148,10 +186,23 @@ export interface LaunchAgentAttemptInput {
   }
   readonly pipelineIssueRefs?: readonly string[]
   /** PR-7 T74：feedback apply 的 (threadRef,revision) 闭集（arm 冻结传入）。 */
-  readonly feedbackSnapshot?: {
-    readonly snapshotRef: string
-    readonly items: readonly { readonly threadRef: string; readonly revision: string }[]
+  readonly feedbackSnapshot?: FeedbackAttemptSnapshot
+  readonly problemInput?: {
+    readonly producerId: string
+    readonly evidenceDigest: string
+    readonly headSha: string
+    readonly allowedTypeIds: readonly string[]
+    readonly subjectRefs: readonly string[]
+    readonly requiredSubjectRefs: readonly string[]
   }
+  readonly approvalInput?: {
+    readonly stepRunRef: string
+    readonly approvalType: string
+    readonly evidenceRefs: readonly string[]
+    readonly requestedScopes: readonly string[]
+  }
+  /** Business playbook step override. Legacy policy actions omit this. */
+  readonly retryBudget?: AttemptBudget
   /** fresh rerun 的同输入合同：manifest.missionRevision 冻结在 action 创建时
    *  （mission.revision 随结算前进，不冻结会让 rerun 的 inputDigest 漂移）。 */
   readonly missionRevisionPin?: number
@@ -159,6 +210,8 @@ export interface LaunchAgentAttemptInput {
    *  的 durable commit（`__delivery.commitSha`），修复 candidate 以它为 parent
    *  才能 fast-forward 推回 MR 分支。缺省 = repo 默认分支 head（首轮语义）。 */
   readonly publishedBaselineSha?: string
+  /** Internal fresh-session replay seam; callers launching a new action omit it. */
+  readonly frozenReplay?: FrozenAttemptReplay
 }
 
 export type LaunchAgentAttemptOutcome =
@@ -176,6 +229,15 @@ export async function launchAgentAttempt(
 ): Promise<LaunchAgentAttemptOutcome> {
   const missing = requiredPortsMissing(deps)
   if (missing !== null) return { ok: false, blockCode: missing, detail: null }
+  const feedbackSnapshot = input.frozenReplay?.feedbackSnapshot ?? input.feedbackSnapshot
+  if (input.capabilityId === 'mr.feedback.apply' && feedbackSnapshot === undefined) {
+    return {
+      ok: false,
+      blockCode: 'feedback-snapshot-content-missing',
+      detail:
+        'the selected review revisions have no exact comment body snapshot; recollect MR facts',
+    }
+  }
   const ports = deps.ports
 
   const rawTemplate = ports.actionTemplates!.content(input.templateId, input.templateRevision)
@@ -194,30 +256,48 @@ export async function launchAgentAttempt(
       detail: `${input.templateId}@${input.templateRevision}`,
     }
   }
-  if (template.data.executor.kind !== 'agent') {
+  if (template.data.executor.kind === 'workgroup') {
     return {
       ok: false,
-      blockCode: 'action-executor-not-agent',
+      blockCode: 'action-executor-not-supported',
       detail: template.data.executor.kind,
     }
   }
+  if (template.data.executor.kind === 'agent' && ports.agentLauncher === undefined) {
+    return { ok: false, blockCode: 'agent-launcher-not-wired', detail: null }
+  }
+  if (template.data.executor.kind === 'script' && ports.scriptLauncher === undefined) {
+    return { ok: false, blockCode: 'script-launcher-not-wired', detail: null }
+  }
 
-  const resolvedBaseline = await ports.actionBaseline!.resolve(mission.repositoryId)
-  if (resolvedBaseline === null) {
+  const resolvedBaseline =
+    input.frozenReplay === undefined
+      ? await ports.actionBaseline!.resolve(mission.repositoryId)
+      : null
+  if (input.frozenReplay === undefined && resolvedBaseline === null) {
     return { ok: false, blockCode: 'action-baseline-unavailable', detail: mission.repositoryId }
   }
   const baseline =
-    input.publishedBaselineSha === undefined
-      ? resolvedBaseline
-      : { repoPath: resolvedBaseline.repoPath, headSha: input.publishedBaselineSha }
+    input.frozenReplay !== undefined
+      ? {
+          repoPath: input.frozenReplay.baselineRepoPath,
+          headSha: input.frozenReplay.baselineSha,
+        }
+      : input.publishedBaselineSha === undefined
+        ? resolvedBaseline!
+        : { repoPath: resolvedBaseline!.repoPath, headSha: input.publishedBaselineSha }
 
   // seed：mission 行存 seedTreeDigest；seeds 目录按 planDigest 命名（placement
   // 的落盘约定）——必须经 plan 行换算，直接拿 uploadPlacementRef 当目录名会
   // 静默空 seed（fork 缝合实测）。
-  let seedRef: string | null = null
+  let seedRef: string | null = input.frozenReplay?.seedRef ?? null
   let uploadEntries: ReturnType<NonNullable<ReconcileDeps['ports']['uploadPlanReader']>['read']> =
     null
-  if (mission.uploadPlanRef !== null && mission.uploadPlacementRef !== null) {
+  if (
+    input.frozenReplay === undefined &&
+    mission.uploadPlanRef !== null &&
+    mission.uploadPlacementRef !== null
+  ) {
     uploadEntries = ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null
     if (uploadEntries === null) {
       return { ok: false, blockCode: 'upload-plan-unreadable', detail: mission.uploadPlanRef }
@@ -225,26 +305,72 @@ export async function launchAgentAttempt(
     seedRef = uploadEntries.planDigest
   }
 
-  const sources = deps.store.listMissionSources(mission.id)
+  const sources = input.frozenReplay === undefined ? deps.store.listMissionSources(mission.id) : []
   const requirementSource = sources
     .filter((s) => s.bundleRef !== null && s.state === 'materialized')
     .sort((a, b) => b.generation - a.generation)[0]
-  const bundles = [
-    ...(requirementSource === undefined
+  const requirementBundle =
+    input.frozenReplay !== undefined
+      ? input.frozenReplay.requirementBundle
+      : requirementSource === undefined
+        ? null
+        : {
+            bundleId: requirementSource.bundleRef!,
+            manifestDigest: requirementSource.manifestDigest!,
+            mountPath: requirementBundlePath(requirementSource.bundleRef!),
+            fileCount: requirementSource.fileCount ?? 0,
+            totalBytes: requirementSource.totalBytes ?? 0,
+          }
+  const pipelineBundle =
+    input.frozenReplay !== undefined
+      ? input.frozenReplay.pipelineBundle
+      : input.pipelineBundle === undefined
+        ? null
+        : {
+            bundleId: input.pipelineBundle.bundleId,
+            manifestDigest: input.pipelineBundle.manifestDigest,
+            mountPath: pipelineBundlePath(input.pipelineBundle.bundleId),
+            fileCount: input.pipelineBundle.fileCount,
+            totalBytes: input.pipelineBundle.totalBytes,
+          }
+  const requirementManifestMount =
+    input.frozenReplay !== undefined || requirementBundle === null
+      ? null
+      : (ports.requirementMaterialize?.getRequirementManifestMount(
+          mission.id,
+          requirementBundle.manifestDigest,
+        ) ?? null)
+  if (
+    input.frozenReplay === undefined &&
+    requirementBundle !== null &&
+    requirementManifestMount === null
+  ) {
+    return {
+      ok: false,
+      blockCode: 'requirement-manifest-mount-unavailable',
+      detail: requirementBundle.manifestDigest,
+    }
+  }
+  const bundles = input.frozenReplay?.evidenceBundles ?? [
+    ...(requirementBundle === null
       ? []
       : [
           {
-            bundleId: requirementSource.bundleRef!,
-            mountPath: requirementBundlePath(requirementSource.bundleRef!),
+            bundleId: requirementBundle.bundleId,
+            mountPath: requirementBundle.mountPath,
+          },
+          {
+            bundleId: requirementManifestMount!.bundleId,
+            mountPath: requirementBundle.mountPath,
           },
         ]),
     // PR-6 T69：repair 动作把 pinned pipeline bundle 只读挂进 workspace。
-    ...(input.pipelineBundle === undefined
+    ...(pipelineBundle === null
       ? []
       : [
           {
-            bundleId: input.pipelineBundle.bundleId,
-            mountPath: pipelineBundlePath(input.pipelineBundle.bundleId),
+            bundleId: pipelineBundle.bundleId,
+            mountPath: pipelineBundle.mountPath,
           },
         ]),
   ]
@@ -264,13 +390,17 @@ export async function launchAgentAttempt(
   }
 
   const preservePaths =
+    input.frozenReplay?.preservePaths ??
     uploadEntries?.entries
       .filter((e) => e.contentPolicy === 'preserve-upload' && e.disposition !== 'already-present')
-      .map((e) => e.targetPath) ?? []
+      .map((e) => e.targetPath) ??
+    []
   const editablePaths =
+    input.frozenReplay?.editablePaths ??
     uploadEntries?.entries
       .filter((e) => e.contentPolicy === 'agent-editable' && e.disposition !== 'already-present')
-      .map((e) => e.targetPath) ?? []
+      .map((e) => e.targetPath) ??
+    []
 
   const definition = capabilityDefinition(input.capabilityId as CapabilityId)
   const nonce = randomBytes(24).toString('hex')
@@ -282,51 +412,54 @@ export async function launchAgentAttempt(
     templateRevision: input.templateRevision,
     missionRevision: input.missionRevisionPin ?? mission.revision,
     baseHeadSha: baseline.headSha,
-    requirementBundle:
-      requirementSource === undefined
-        ? null
-        : {
-            bundleId: requirementSource.bundleRef!,
-            manifestDigest: requirementSource.manifestDigest!,
-            mountPath: requirementBundlePath(requirementSource.bundleRef!),
-            fileCount: requirementSource.fileCount ?? 0,
-            totalBytes: requirementSource.totalBytes ?? 0,
-          },
+    requirementBundle,
     repositoryUploads:
-      uploadEntries === null || uploadEntries.entries.length === 0
-        ? null
-        : {
-            planDigest: uploadEntries.planDigest,
-            placementDigest: mission.uploadPlacementRef!,
-            entries: uploadEntries.entries.map((e) => ({
-              ordinal: e.ordinal,
-              targetPath: e.targetPath,
-              contentPolicy: e.contentPolicy,
-              fileMode: e.fileMode,
-              originalEvidenceFileId: e.fileId,
-            })),
-          },
-    pipelineBundle:
-      input.pipelineBundle === undefined
-        ? null
-        : {
-            bundleId: input.pipelineBundle.bundleId,
-            manifestDigest: input.pipelineBundle.manifestDigest,
-            mountPath: pipelineBundlePath(input.pipelineBundle.bundleId),
-            fileCount: input.pipelineBundle.fileCount,
-            totalBytes: input.pipelineBundle.totalBytes,
-          },
+      input.frozenReplay !== undefined
+        ? input.frozenReplay.repositoryUploads
+        : uploadEntries === null || uploadEntries.entries.length === 0
+          ? null
+          : {
+              planDigest: uploadEntries.planDigest,
+              placementDigest: mission.uploadPlacementRef!,
+              entries: uploadEntries.entries.map((e) => ({
+                ordinal: e.ordinal,
+                targetPath: e.targetPath,
+                contentPolicy: e.contentPolicy,
+                fileMode: e.fileMode,
+                originalEvidenceFileId: e.fileId,
+              })),
+            },
+    pipelineBundle,
     feedbackSnapshot:
-      input.feedbackSnapshot === undefined
+      feedbackSnapshot === undefined
         ? null
         : {
-            snapshotRef: input.feedbackSnapshot.snapshotRef,
-            items: input.feedbackSnapshot.items.map((item) => ({
+            snapshotRef: feedbackSnapshot.snapshotRef,
+            items: feedbackSnapshot.items.map((item) => ({
               threadRef: item.threadRef,
               revision: item.revision,
             })),
           },
     verificationEvidence: null,
+    ...(input.problemInput === undefined
+      ? {}
+      : {
+          problemEvidence: {
+            ...input.problemInput,
+            allowedTypeIds: [...input.problemInput.allowedTypeIds],
+            subjectRefs: [...input.problemInput.subjectRefs],
+            requiredSubjectRefs: [...input.problemInput.requiredSubjectRefs],
+          },
+        }),
+    ...(input.approvalInput === undefined
+      ? {}
+      : {
+          approvalContext: {
+            ...input.approvalInput,
+            evidenceRefs: [...input.approvalInput.evidenceRefs],
+            requestedScopes: [...input.approvalInput.requestedScopes],
+          },
+        }),
     writablePathClasses: [],
     protectedRoots: [],
   }
@@ -355,8 +488,7 @@ export async function launchAgentAttempt(
 
   // coverage 闭集：requirement manifest 的 fileId 集（semantic validator 对拍）。
   const requirementItemRefs =
-    ports.requirementMaterialize?.getRequirementManifest(mission.id)?.files.map((f) => f.fileId) ??
-    []
+    input.frozenReplay?.requirementItemRefs ?? requirementManifestMount?.fileIds ?? []
   // analyze 的 module catalog 闭集：launch 时从 facts 摘要冻结（repository.moduleIds
   // 是 known string-set 时其 value 已在 factsSummary 序列化——直接从入参 cells 冻结
   // 更准确，但 arm 只传 factsSummary；此处从 JSON 摘要还原，投影失败取空集）。
@@ -371,25 +503,44 @@ export async function launchAgentAttempt(
     }
   })()
 
-  const source = sources[0]
-  const untrustedIndex: { label: string; text: string }[] = []
-  if (mission.sourceKind === 'direct') {
-    untrustedIndex.push({
-      label: 'requirement',
-      text: `direct submission (digest ${mission.sourceContentDigest ?? 'n/a'})`,
-    })
-  } else if (source !== undefined && source.externalId !== null) {
-    untrustedIndex.push({
-      label: 'requirement',
-      text: `external ${source.externalId} @ ${source.sourceRevision ?? 'unknown'}`,
-    })
+  const untrustedIndex: { label: string; text: string }[] =
+    input.frozenReplay === undefined ? [] : [...input.frozenReplay.untrustedIndex]
+  if (input.frozenReplay === undefined) {
+    const source = sources[0]
+    if (mission.sourceKind === 'direct') {
+      untrustedIndex.push({
+        label: 'requirement',
+        text: `direct submission (digest ${mission.sourceContentDigest ?? 'n/a'})`,
+      })
+    } else if (source !== undefined && source.externalId !== null) {
+      untrustedIndex.push({
+        label: 'requirement',
+        text: `external ${source.externalId} @ ${source.sourceRevision ?? 'unknown'}`,
+      })
+    }
+    for (const feedback of feedbackSnapshot?.items ?? []) {
+      untrustedIndex.push({
+        label: `review feedback ${feedback.threadRef}@${feedback.revision}${
+          feedback.path === null ? '' : ` (${feedback.path})`
+        }`,
+        text: feedback.body,
+      })
+    }
   }
 
-  const taskBrief = [
-    `Capability: ${input.capabilityId} (contract v${definition.contractVersion}).`,
-    `Repository baseline: ${baseline.headSha}.`,
-    'Implement the requirement inside this workspace. Edit business files only.',
-  ].join('\n')
+  const taskBrief =
+    input.frozenReplay?.taskBrief ??
+    [
+      `Capability: ${input.capabilityId} (contract v${definition.contractVersion}).`,
+      `Repository baseline: ${baseline.headSha}.`,
+      definition.workspaceMode === 'read-only'
+        ? 'Inspect the repository and mounted evidence, then return the capability result. Do not modify any file.'
+        : definition.workspaceMode === 'edit-business-files'
+          ? 'Perform this capability inside the workspace. Edit business files only; Git and platform input paths remain read-only.'
+          : definition.workspaceMode === 'edit-conflicts'
+            ? 'Resolve only the pinned conflict work set. Do not perform Git operations or edit platform input paths.'
+            : 'Return the capability result without modifying workspace files.',
+    ].join('\n')
   const factsSummary = input.factsSummary
   const prompt = assembleAgentPrompt({
     taskBrief,
@@ -406,11 +557,13 @@ export async function launchAgentAttempt(
     capabilityId: input.capabilityId,
     templateId: input.templateId,
     templateRevision: input.templateRevision,
-    agentId: agentIdOf(template.data.executor.agentRef),
+    agentId:
+      template.data.executor.kind === 'agent' ? agentIdOf(template.data.executor.agentRef) : null,
+    scriptRef: template.data.executor.kind === 'script' ? template.data.executor.scriptRef : null,
     templateSupplement: template.data.promptSupplement,
     budget: {
-      sameSession: SAME_SESSION_BUDGET_PR4,
-      freshSession: template.data.retryDefaults.freshSession,
+      sameSession: input.retryBudget?.sameSession ?? SAME_SESSION_BUDGET_PR4,
+      freshSession: input.retryBudget?.freshSession ?? template.data.retryDefaults.freshSession,
     },
     baselineRepoPath: baseline.repoPath,
     baselineSha: baseline.headSha,
@@ -428,26 +581,36 @@ export async function launchAgentAttempt(
     untrustedIndex,
     taskBrief,
     factsSummary,
+    ...(feedbackSnapshot === undefined ? {} : { feedbackSnapshot }),
     closedRefs: {
       requirementItemRefs,
       repositoryModuleIds,
-      ...(input.candidateRef === undefined ? {} : { candidateRef: input.candidateRef }),
-      ...(input.pipelineIssueRefs === undefined
+      ...(input.frozenReplay?.candidateRef === undefined && input.candidateRef === undefined
         ? {}
-        : { pipelineIssueRefs: input.pipelineIssueRefs }),
+        : { candidateRef: input.frozenReplay?.candidateRef ?? input.candidateRef! }),
+      ...(input.frozenReplay?.pipelineIssueRefs === undefined &&
+      input.pipelineIssueRefs === undefined
+        ? {}
+        : {
+            pipelineIssueRefs: input.frozenReplay?.pipelineIssueRefs ?? input.pipelineIssueRefs!,
+          }),
     },
   }
   const preSnapshotRef = await ports.attemptContext!.save(JSON.stringify(preState))
 
-  const launched = await ports.agentLauncher!.launch({
+  const launchCommon = {
     actionRunId: input.actionRunId,
     capabilityId: input.capabilityId,
-    agentId: preState.agentId,
     prompt,
     workspacePath: workspace.workspacePath,
     baselineSha: baseline.headSha,
+    platformInputPaths: [...new Set(bundles.map((bundle) => bundle.mountPath))],
     wallTimeMs: null,
-  })
+  }
+  const launched =
+    preState.scriptRef === null
+      ? await ports.agentLauncher!.launch({ ...launchCommon, agentId: preState.agentId! })
+      : await ports.scriptLauncher!.launch({ ...launchCommon, scriptRef: preState.scriptRef })
   if (!launched.ok) {
     discard()
     return {
@@ -476,7 +639,8 @@ export async function launchAgentAttempt(
   if (!claim.ok) {
     // ordinal 撞行 = 并发 reconciler 已抢先 launch；本次执行成为多余进程，
     // 直接取消（launcher 幂等 cancel），不 block mission。
-    await ports.agentLauncher!.cancel(launched.executionRef)
+    if (preState.scriptRef === null) await ports.agentLauncher!.cancel(launched.executionRef)
+    else await ports.scriptLauncher!.cancel(launched.executionRef)
     discard()
     return { ok: false, blockCode: 'attempt-ordinal-taken', detail: null }
   }
@@ -502,10 +666,20 @@ export type CollectAgentAttemptOutcome =
 function parsePreState(json: string | null): AttemptPreState | null {
   if (json === null) return null
   try {
-    const value = JSON.parse(json) as AttemptPreState
-    return value.schemaVersion === 1 ? value : null
+    const value = JSON.parse(json) as AttemptPreState & { scriptRef?: string | null }
+    return value.schemaVersion === 1 ? { ...value, scriptRef: value.scriptRef ?? null } : null
   } catch {
     return null
+  }
+}
+
+function releaseFeedbackRows(deps: ReconcileDeps, missionId: string, actionRunId: string): void {
+  const run = deps.store.getActionRun(actionRunId)
+  if (run?.capabilityId !== 'mr.feedback.apply') return
+  const now = deps.now()
+  for (const row of deps.store.listFeedback(missionId)) {
+    if (row.state !== 'selected' || row.actionRunId !== actionRunId) continue
+    deps.store.setFeedbackState({ id: row.id, state: 'observed', actionRunId: null, now })
   }
 }
 
@@ -516,6 +690,7 @@ function settleRunAndBlock(
   blockCode: string,
   detail: string | null,
 ): void {
+  releaseFeedbackRows(deps, mission.id, actionRunId)
   deps.store.settleActionRun({
     id: actionRunId,
     status: 'failed',
@@ -531,7 +706,16 @@ function settleRunAndBlock(
     now: deps.now(),
   })
   clearCurrentAction(deps.store, mission)
-  blockMissionDirect(deps, mission.id, blockCode, detail)
+  // A playbook step owns its failure branch. Blocking the whole Mission here
+  // would bypass the employee's onRejected/onExpired/onExhausted rule and turn
+  // the Agent into an implicit scheduler. Legacy policy actions keep their
+  // historical Mission-level boundary.
+  if (
+    deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
+    deps.ports.playbookSaga === undefined
+  ) {
+    blockMissionDirect(deps, mission.id, blockCode, detail)
+  }
 }
 
 function clearCurrentAction(store: MissionStore, mission: MissionRow): void {
@@ -602,19 +786,19 @@ export async function collectAgentAttempt(
   mission: MissionRow,
 ): Promise<CollectAgentAttemptOutcome> {
   const ports = deps.ports
-  const launcher = ports.agentLauncher
   const actionRunId = mission.currentActionRunId
-  if (launcher === undefined || actionRunId === null) return { kind: 'no-op' }
+  if (actionRunId === null) return { kind: 'no-op' }
   const attempts = deps.store.listAttempts(actionRunId)
   const attempt = attempts[attempts.length - 1]
   if (attempt === undefined) return { kind: 'no-op' }
   if (attempt.status !== 'claimed' && attempt.status !== 'running') return { kind: 'no-op' }
   if (attempt.executionRef === null) return { kind: 'no-op' }
 
+  const preState = parsePreState(ports.attemptContext?.load(attempt.preSnapshotRef ?? '') ?? null)
+  const launcher = preState?.scriptRef === null ? ports.agentLauncher : ports.scriptLauncher
+  if (launcher === undefined) return { kind: 'no-op' }
   const snapshot = await launcher.fetchOutcome(attempt.executionRef)
   if (snapshot.kind === 'pending') return { kind: 'still-running' }
-
-  const preState = parsePreState(ports.attemptContext?.load(attempt.preSnapshotRef ?? '') ?? null)
   const now = deps.now()
 
   const failAttempt = async (
@@ -629,7 +813,99 @@ export async function collectAgentAttempt(
       outcomeRef: null,
       now,
     })
-    // 现场按分类处置：boundary/fresh 都整树废弃（same-session 通道未接）。
+    const plan = planNextAttempt({
+      failure,
+      budget: preState?.budget ?? { sameSession: 0, freshSession: 1 },
+      rerunSeq: attempt.rerunSeq,
+      attemptSeq: attempt.attemptSeq,
+    })
+    if (plan.kind === 'same-session' && preState !== null) {
+      const nonce = randomBytes(24).toString('hex')
+      const manifest = agentInputManifestV1Schema.safeParse({
+        ...preState.manifestSansNonce,
+        protocol: {
+          nonce,
+          port: 'agent-result',
+          outcomeSchemaId: preState.manifestSansNonce.protocol.outcomeSchemaId,
+        },
+      })
+      if (!manifest.success || manifest.data.inputDigest !== attempt.inputDigest) {
+        try {
+          ports.actionWorkspace?.discard(preState.workspacePath)
+        } catch {
+          // GC 兜底。
+        }
+        settleRunAndBlock(
+          deps,
+          mission,
+          actionRunId,
+          'same-scene-manifest-unrebuildable',
+          manifest.success ? 'input digest drifted' : (manifest.error.issues[0]?.message ?? null),
+        )
+        return {
+          kind: 'action-failed',
+          actionRunId,
+          blockCode: 'same-scene-manifest-unrebuildable',
+        }
+      }
+      const prompt = assembleAgentPrompt({
+        taskBrief: `${preState.taskBrief}\n\nRetry the same scene. Correct the previous result and emit a new exact envelope; do not use Git.`,
+        factsSummary: preState.factsSummary,
+        templateSupplement: preState.templateSupplement,
+        manifest: manifest.data,
+        untrustedIndex: [
+          ...preState.untrustedIndex,
+          {
+            label: 'previous attempt rejection',
+            text: `${detailForBlock}: ${JSON.stringify(rejection).slice(0, 4_000)}`,
+          },
+        ],
+      })
+      const launchCommon = {
+        actionRunId,
+        capabilityId: preState.capabilityId,
+        prompt,
+        workspacePath: preState.workspacePath,
+        baselineSha: preState.baselineSha,
+        platformInputPaths: [...new Set(preState.bundles.map((bundle) => bundle.mountPath))],
+        wallTimeMs: null,
+      }
+      const launched =
+        preState.scriptRef === null
+          ? await ports.agentLauncher!.launch({ ...launchCommon, agentId: preState.agentId! })
+          : await ports.scriptLauncher!.launch({ ...launchCommon, scriptRef: preState.scriptRef })
+      if (launched.ok) {
+        const claim = deps.store.claimAttempt({
+          id: ulid(),
+          actionRunId,
+          rerunSeq: plan.rerunSeq,
+          attemptSeq: plan.attemptSeq,
+          executionRef: launched.executionRef,
+          baselineRef: attempt.baselineRef,
+          nonceDigest: nonceDigestOf(nonce),
+          inputDigest: manifest.data.inputDigest,
+          preSnapshotRef: attempt.preSnapshotRef,
+          now: deps.now(),
+        })
+        if (claim.ok) {
+          return { kind: 'action-retry', actionRunId, rerunSeq: plan.rerunSeq }
+        }
+        if (preState.scriptRef === null) await ports.agentLauncher!.cancel(launched.executionRef)
+        else await ports.scriptLauncher!.cancel(launched.executionRef)
+      }
+      try {
+        ports.actionWorkspace?.discard(preState.workspacePath)
+      } catch {
+        // GC 兜底。
+      }
+      const blockCode = launched.ok
+        ? 'attempt-ordinal-taken'
+        : `same-scene-launch-failed:${launched.failure.code}`
+      settleRunAndBlock(deps, mission, actionRunId, blockCode, detailForBlock)
+      return { kind: 'action-failed', actionRunId, blockCode }
+    }
+    // Fresh retry and every terminal failure discard the complete scene. A
+    // boundary violation can therefore never leak a tainted workspace forward.
     if (preState !== null) {
       try {
         ports.actionWorkspace?.discard(preState.workspacePath)
@@ -637,12 +913,6 @@ export async function collectAgentAttempt(
         // GC 兜底。
       }
     }
-    const plan = planNextAttempt({
-      failure,
-      budget: preState?.budget ?? { sameSession: 0, freshSession: 1 },
-      rerunSeq: attempt.rerunSeq,
-      attemptSeq: attempt.attemptSeq,
-    })
     if (plan.kind === 'fresh-session' && preState !== null) {
       const relaunched = await launchAgentAttempt(deps, mission, {
         actionRunId,
@@ -652,6 +922,35 @@ export async function collectAgentAttempt(
         rerunSeq: plan.rerunSeq,
         factsSummary: preState.factsSummary,
         missionRevisionPin: preState.manifestSansNonce.missionRevision,
+        ...(preState.manifestSansNonce.problemEvidence === undefined
+          ? {}
+          : { problemInput: preState.manifestSansNonce.problemEvidence }),
+        ...(preState.manifestSansNonce.approvalContext === undefined
+          ? {}
+          : { approvalInput: preState.manifestSansNonce.approvalContext }),
+        frozenReplay: {
+          baselineRepoPath: preState.baselineRepoPath,
+          baselineSha: preState.baselineSha,
+          seedRef: preState.seedRef,
+          requirementBundle: preState.manifestSansNonce.requirementBundle,
+          repositoryUploads: preState.manifestSansNonce.repositoryUploads,
+          pipelineBundle: preState.manifestSansNonce.pipelineBundle,
+          requirementItemRefs: preState.closedRefs.requirementItemRefs,
+          preservePaths: preState.preservePaths,
+          editablePaths: preState.editablePaths,
+          untrustedIndex: preState.untrustedIndex,
+          taskBrief: preState.taskBrief,
+          ...(preState.feedbackSnapshot === undefined
+            ? {}
+            : { feedbackSnapshot: preState.feedbackSnapshot }),
+          ...(preState.closedRefs.candidateRef === undefined
+            ? {}
+            : { candidateRef: preState.closedRefs.candidateRef }),
+          ...(preState.closedRefs.pipelineIssueRefs === undefined
+            ? {}
+            : { pipelineIssueRefs: preState.closedRefs.pipelineIssueRefs }),
+          evidenceBundles: preState.bundles,
+        },
       })
       if (relaunched.ok) return { kind: 'action-retry', actionRunId, rerunSeq: plan.rerunSeq }
       settleRunAndBlock(deps, mission, actionRunId, relaunched.blockCode, relaunched.detail)
@@ -803,6 +1102,7 @@ export async function collectAgentAttempt(
       excludePolicyDigest: sha256Hex('rfc308:platform-workspace-exclude@1'),
       agentOutcomeRef: attempt.id,
       protectedRoots: [],
+      uploadsAlreadyPublished: mission.uploadPublicationRef !== null,
       uploadPlan:
         mission.uploadPlanRef !== null
           ? (ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null)
@@ -822,18 +1122,26 @@ export async function collectAgentAttempt(
     candidateUploadLineage = derived.receipt.uploadLineage
   }
 
+  const structuredResultRef =
+    envelope.outcome === 'completed' &&
+    (envelope.result.capabilityId === 'problem.classify' ||
+      envelope.result.capabilityId === 'approval.prepare')
+      ? await ports.attemptContext!.save(JSON.stringify(envelope.result))
+      : null
+  const actionResultRef = candidateRef ?? structuredResultRef
+
   // 结算：attempt validated + run validated + cells + 清 currentActionRunId。
   deps.store.settleAttempt({
     id: attempt.id,
     status: 'validated',
     rejectionJson: null,
-    outcomeRef: candidateRef,
+    outcomeRef: actionResultRef,
     now,
   })
   deps.store.settleActionRun({
     id: actionRunId,
     status: 'settled',
-    resultRef: candidateRef,
+    resultRef: actionResultRef,
     failureJson: null,
     now,
   })
@@ -848,6 +1156,17 @@ export async function collectAgentAttempt(
     'action.lastCapability': known(preState.capabilityId),
     '__action.runId': known(actionRunId),
     ...(candidateRef === null ? {} : { '__action.candidateRef': known(candidateRef) }),
+    ...(structuredResultRef === null
+      ? {}
+      : envelope.outcome === 'completed' && envelope.result.capabilityId === 'problem.classify'
+        ? {
+            '__problem.setRef': known(structuredResultRef),
+            '__problem.evidenceDigest': known(envelope.result.evidenceDigest),
+            '__problem.typeIds': known(
+              [...new Set(envelope.result.problems.map((problem) => problem.typeId))].sort(),
+            ),
+          }
+        : { '__approval.draftRef': known(structuredResultRef) }),
     // PR-5 发布链（missionDeliveryChain）的接管信号与 stage 重放对拍锚：
     // candidateState='derived' + treeOid 由 redispatchDelivery 读取。
     ...(candidateRef === null || candidateTreeOid === null
@@ -891,15 +1210,24 @@ export async function collectAgentAttempt(
             ? ('needs-information' as const)
             : ('agent-blocked' as const)
 
+  if (preState.capabilityId === 'mr.feedback.apply' && envelope.outcome !== 'changed') {
+    releaseFeedbackRows(deps, mission.id, actionRunId)
+  }
+
   if (envelope.outcome === 'blocked') {
     // completed（read-only 分析）不 block：scopeDisposition facts 已就位，
     // 下轮规则立即据此路由 implement / no-change gate。
-    blockMissionDirect(
-      deps,
-      mission.id,
-      `agent-blocked:${envelope.result.code}`,
-      envelope.result.explanation,
-    )
+    if (
+      deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
+      deps.ports.playbookSaga === undefined
+    ) {
+      blockMissionDirect(
+        deps,
+        mission.id,
+        `agent-blocked:${envelope.result.code}`,
+        envelope.result.explanation,
+      )
+    }
   } else if (envelope.outcome === 'needs-information') {
     // Agent 问题集入台账（origin 'agent'、平台渠道），下轮 reconcile 的澄清
     // 重派会 publish → awaiting-information → answers 闭环 → 重新选动作。
@@ -914,7 +1242,11 @@ export async function collectAgentAttempt(
         choices: null,
       })),
     })
-    if (stashed === undefined || !stashed.ok) {
+    if (
+      (stashed === undefined || !stashed.ok) &&
+      (deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
+        deps.ports.playbookSaga === undefined)
+    ) {
       blockMissionDirect(deps, mission.id, 'agent-questions-stash-failed', null)
     }
   } else if (envelope.outcome === 'no-change') {
@@ -924,7 +1256,12 @@ export async function collectAgentAttempt(
     // 落 cells，下轮 reconcile 由发布链（missionDeliveryChain redispatch）
     // 接管 verification → commit/publish → MR。completed（read-only 分析）
     // 也不 block：scopeDisposition facts 就位后规则立即续路由。
-    blockMissionDirect(deps, mission.id, 'action-stage-complete:no-change', candidateRef)
+    if (
+      deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
+      deps.ports.playbookSaga === undefined
+    ) {
+      blockMissionDirect(deps, mission.id, 'action-stage-complete:no-change', candidateRef)
+    }
   }
 
   return { kind: 'action-collected', actionRunId, disposition }

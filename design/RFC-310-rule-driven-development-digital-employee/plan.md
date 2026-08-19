@@ -2,8 +2,10 @@
 
 > 产品视角见 [proposal.md](./proposal.md)，技术设计见 [design.md](./design.md)。
 >
-> 状态：**Done（2026-08-19 交付完成）**。PR-0..PR-10 全部落地并推 main；`gate:local` 全绿、
-> hosted CI 本 RFC 面全绿。**首版不含（如实登记，见 plan.md §13a）**：conflict repair 的 Agent
+> 状态：**In Progress（2026-08-19 按用户补充重新打开）**。PR-0..PR-10 的原范围已落地；本轮新增
+> PR-11（业务化员工说明书、问题生产/处理与统一 UI）和 PR-12（跨仓 child Mission / 外部审批 saga）。
+> 用户于 2026-08-19 进一步要求完整 User Case 操作链和同页下一步，本计划新增 PR-13；RFC 增补后已获完整实现授权。
+> **原首版不含（如实登记，见 plan.md §13a）**：conflict repair 的 Agent
 > 执行面（typed block `conflict-repair-agent-surface-not-wired`，report-only 模式完整可用）、
 > evidence retention GC 与 GB 级 nightly、out-of-order webhook 矩阵、浏览器级 visual regression、
 > verification/review 结果升 catalog fact、cutover preflight 的 per-repo dry probe；mission 列表
@@ -25,19 +27,22 @@
 
 ## 1. 批次总览
 
-| PR/批次 | 名称                     | 用户可验证结果                                                                          | 依赖      |
-| ------- | ------------------------ | --------------------------------------------------------------------------------------- | --------- |
-| PR-0    | 合同与安全 go/no-go      | RFC-294 import ratchet、no-Git 真实 runtime probe、bundle streaming/provider probe 可行 | RFC 批准  |
-| PR-1    | 规则与配置内核           | Java/C++/polyglot 员工和 policy 可发布、模拟、确定性选中，无 Agent 决策                 | PR-0      |
-| PR-2    | Mission 聚合与 worker    | Mission 可 launch/reconcile/block/cancel；lease/OCC/outbox/crash 恢复成立               | PR-1      |
-| PR-3    | Requirement 与上传 seed  | 正文/带目标路径上传/外部 ID 统一成 bundle；上传由平台形成可重建仓库 seed                | PR-2      |
-| PR-4    | AgentAttempt no-Git      | Agent 按 envelope 工作；错误同会话重试，耗尽 whole-workspace fresh rerun                | PR-0,PR-2 |
-| PR-5    | 第一价值链               | requirement → Java 实现 → program verify → platform commit/push/MR → watching           | PR-3,PR-4 |
-| PR-6    | PipelineEvidence         | 自建门禁程序与大日志 bundle、exact-head 多 gate、rerun/repair                           | PR-5      |
-| PR-7    | MR care                  | feedback/CI/conflict/readiness 回退与持续看护到外部 terminal；永不 merge                | PR-6      |
-| PR-8    | 完整配置与活动 UI        | 数字员工/动作/策略/适配器/仓库 assignment 和 Mission trace 全部可配置可解释             | PR-5,PR-7 |
-| PR-9    | RFC-304/309 迁移 cutover | 配置迁移报告、active MR 单 writer 接管、legacy 只读、无双 writer                        | PR-8      |
-| PR-10   | 收口与发布               | 删除 legacy writer/决策脚本/unsafe runtime 路径，真实 E2E、完整 gate、文档账目          | PR-9      |
+| PR/批次 | 名称                     | 用户可验证结果                                                                                     | 依赖        |
+| ------- | ------------------------ | -------------------------------------------------------------------------------------------------- | ----------- |
+| PR-0    | 合同与安全 go/no-go      | RFC-294 import ratchet、no-Git 真实 runtime probe、bundle streaming/provider probe 可行            | RFC 批准    |
+| PR-1    | 规则与配置内核           | Java/C++/polyglot 员工和 policy 可发布、模拟、确定性选中，无 Agent 决策                            | PR-0        |
+| PR-2    | Mission 聚合与 worker    | Mission 可 launch/reconcile/block/cancel；lease/OCC/outbox/crash 恢复成立                          | PR-1        |
+| PR-3    | Requirement 与上传 seed  | 正文/带目标路径上传/外部 ID 统一成 bundle；上传由平台形成可重建仓库 seed                           | PR-2        |
+| PR-4    | AgentAttempt no-Git      | Agent 按 envelope 工作；错误同现场新 host task 重试，耗尽 whole-workspace fresh rerun              | PR-0,PR-2   |
+| PR-5    | 第一价值链               | requirement → Java 实现 → program verify → platform commit/push/MR → watching                      | PR-3,PR-4   |
+| PR-6    | PipelineEvidence         | 自建门禁程序与大日志 bundle、exact-head 多 gate、rerun/repair                                      | PR-5        |
+| PR-7    | MR care                  | feedback/CI/conflict/readiness 回退与持续看护到外部 terminal；永不 merge                           | PR-6        |
+| PR-8    | 完整配置与活动 UI        | 数字员工/动作/策略/适配器/仓库 assignment 和 Mission trace 全部可配置可解释                        | PR-5,PR-7   |
+| PR-9    | RFC-304/309 迁移 cutover | 配置迁移报告、active MR 单 writer 接管、legacy 只读、无双 writer                                   | PR-8        |
+| PR-10   | 收口与发布               | 删除 legacy writer/决策脚本/unsafe runtime 路径，真实 E2E、完整 gate、文档账目                     | PR-9        |
+| PR-11   | 业务员工说明书与问题处理 | 只配置“哪一步由谁做”；问题类型/生产者/处理者可定义，技术资源退到高级配置，页面统一 operations 风格 | PR-10       |
+| PR-12   | 跨员工与外部审批 saga    | 可幂等调用另一仓数字员工，Agent 准备+程序提交/等待审批，durable join/recovery 全链成立             | PR-11       |
+| PR-13   | 无指导 User Case 操作链  | 零配置到 MR merged 每页都有服务端下一步、同页主动作和连续导航；浏览器只按高亮动作走通              | PR-11,PR-12 |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -168,18 +173,22 @@ baseline byte-identical 重建，尚不 commit/push。
 | T46  | nonce/named-port/strict closed outcome parser；禁止 fake platform facts                                                    | T3,T45    | ✅   |
 | T47  | semantic/workspace validator + preserve/editable、mode 与 commit-checkout round-trip consistency                           | T46       | ✅   |
 | T48  | source-control 从 baseline+seed+overlay 派生 candidate；上传 entry/发布后 lineage 不得漏失                                 | T47       | ✅   |
-| T49  | same-session structured feedback N 次 + persistent attempt ledger                                                          | T46,T47   | 🚧   |
+| T49  | same-scene 新 host task structured feedback N 次 + persistent attempt ledger                                               | T46,T47   | ✅   |
 | T50  | whole-workspace discard/rematerialize + fresh session/new nonce M 次                                                       | T42,T49   | ✅   |
 | T51  | boundary violation 快退、capability revoke、悬挂进程/attempt recovery                                                      | T43,T50   | ✅   |
 | T52  | 所有 runtime 的检测/回退/credential/rollback 真实子进程测试进入常规 gate                                                   | T43-T51   | ✅   |
 
-交付注记（2026-08-18，PR-4 完工；T49 部分——见末条）：
+交付注记（2026-08-18，PR-4 完工；T49 后续于 2026-08-19 补齐）：
 
 - **执行链（T41/T43/T44，fork J）**：digital-employee host task（codeRoundLaunch 同款 anchor+synthesized snapshot+StartTaskSchema funnel；`internalSource`+`preCreatedWorktree{cleanup:'borrowed'}`）；`modules/task-execution/composition/agentActionExecution.ts` 组装 `{launch,fetchOutcome,cancel}` runner，executionRef=taskId（durable）；终态 `onTerminal` 回调由装配点反查（`missionIdOfExecutionRef`）落 wake hint。零 Git identity/零凭据：StartTask 不带 gitUserName/Email（spawn either-empty-skip 分支即不注入；RFC-067 普通任务注入面不动，对照组测试锁双向）。真 mock-opencode 子进程 9 测（done/协议缺失/四类 launch 校验/cancel 幂等/interrupted 经普通 reapOrphanRuns 收敛）。
 - **域内合同（T45/T46/T47 + T42/T49 域半，fork K）**：AgentInputManifestV1（content-addressed，digest 排除 nonce）、prompt assembler（固定顺序+untrusted delimiter 哨兵转义+英文不可覆盖 protocol block）、`<agent-result nonce>` 信封 exactly-one parser（**nonce 对拍 digest 化**——collect 轮平台只有 attempt.nonceDigest，明文由 Agent 回显）、capability semantic validator（coverage 双射/feedback 恰一 disposition/闭集/read-only 禁 changed）、workspace validator（protectedSnapshot 生产化+escape/预算/outcome↔现场一致性）、attempt 状态机+`ab1:` baseline codec+structured feedback。
 - **T48 candidate（source-control）**：临时 clone 独立 diff（`write-tree` oid 即内容寻址身份；gitignore 尊重 + 上传目标 `add -f` 保全；`.agent-workflow/` 按 RFC-308 exclude 语义从 overlay 排除——journey 实红修正：evidence mount 是平台放的，不是业务变更；baseline 里 tracked 平台路径进 diff 仍固定阻断）、上传 lineage 四规则、同输入 byte-identical。`bindChangeCandidateParticipant` 组装、DA 以结构同形端口消费。
 - **编排（orchestrator，主 session）**：launch 半（baseline→workspace(+seed planDigest 换算——mission 行存 seedTreeDigest 而 seeds 目录名是 planDigest，fork 缝合 bug 已修)→manifest/nonce/prompt→launcher→台账+pre-state evidence blob〔migration 0179 `pre_snapshot_ref`〕）；collect 半（reconcile 顶部插桩，guards 之前）：§7.5 全流水线→§7.7 `planNextAttempt` 分类（boundary=discarded+整树废弃+fresh；协议/语义→fresh；耗尽=blocked(agent-contract-exhausted)）；fresh rerun 同输入合同（missionRevision 冻结在 action 创建时、nonce 不入 digest）；validated 结算=candidate cell+run settled+currentActionRunId 清+**诚实 `action-stage-complete:<outcome>` block**（verification/发布链属 PR-5/PR-6，不静默重复启动作）；needs-information→agent 问题集入台账→既有澄清闭环（publish→awaiting-information→answers）。coverage 闭集从 requirement manifest 冻结进 pre-state。
-- **已知缺口/偏离（呈报）**：①**T49 same-session 结构化反馈 N 次未接**——host-task 形态一次性、runner 无 session-continue 面，sameSession 预算强制 0、协议失败直走 fresh；PR-5 需给 runner 增 continue 面后接通。②**requirement evidence 树在 RFC-130 iso 隔离 cwd 内不可见**（`.agent-workflow/` git-excluded 不进快照分支）——prompt 以 untrusted index 携带需求语境；三个候选机制（forcedContainerPaths 注入面 / runtime staging 挂点 / DE host iso 禁用面）随 PR-5 T42 余项专项拍板。③`AgentActionLauncherPort.launch` 经内部端口直传 workspacePath（不入 DB/prompt/event）；§7.2 严格 path-free 化同随 PR-5。④对拍现场 = action workspace（agent 真实 cwd 是 iso worktree，其污染由 task-execution merge-back/discard 机制先行隔离；回流 action workspace 的任何 Git/protected/evidence 差异由快照对拍检出）。
+- **后续收口（2026-08-19）**：T49 不要求 runtime session continuation。每次 same-scene retry 都针对同一 disposable
+  workspace 启动新 host task，重建 exact frozen input，注入上一次拒绝 receipt，使用新 nonce 并保留独立 attempt ordinal；
+  耗尽后才 whole-workspace fresh-scene 重建。requirement/pipeline platform input 以受限 `.agent-workflow/inputs` /
+  `.agent-workflow/pipeline` mount 明确带入 host task，不再只有 prompt index。内部 launch 仍在 composition 边界传短命 workspacePath，
+  但不入 DB/prompt/event/public DTO；这是已批准的 provider-adapter 实现细节，不是业务合同。
 
 这里的关键完成定义不是“git 命令返回失败”（首版无 OS 阻断），而是任意 Git/protected/evidence 写入攻击都被前后
 快照对拍检出为 boundary violation，旧 session/workspace capability 已不可达、现场从 exact baseline byte-identical
@@ -238,8 +247,8 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
   workspace/validator、真 git candidate、真 verification 子进程、真 durable commit + CAS push、真 mrEnsure
   打 system-mock GitLab API），mock 侧断言 MR/分支真实存在。git 面用 mock 服务端磁盘 bare 仓路径
   （部分开发机拦「子进程→回环 HTTP」，见 dev-gotchas）。
-- **本批遗留（除既有 PR-5 债外）**：same-session continue 面、evidence-in-iso 三候选拍板、launch 端口
-  path-free 化——原 PR-5 注记项均未消化，顺延 PR-6/专项；`change.implement` 的 route-selected 多模板
+- **当时本批遗留（已被 2026-08-19 后续收口取代）**：same-scene 重试、evidence-in-host-task 和内部 launch path 边界；
+  最终语义见 PR-4 “后续收口”，不再要求 runtime session continuation。`change.implement` 的 route-selected 多模板
   路由已具备（L 交付 analyze route 先例），文件-only direct candidate 走 uploadPlan+seed 链已在 T48/T59
   覆盖。
 
@@ -543,7 +552,7 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | AC-7 bundle traversal/symlink/budget/read-only          | T34,T39,T52,T65                                              |
 | AC-8 exact-head、partial/unknown 不 pass                | T64,T66,T72,T80                                              |
 | AC-9 nonce/port/schema/outcome/validator                | T45-T47                                                      |
-| AC-10 同会话重试 + whole-workspace fresh                | T49-T51                                                      |
+| AC-10 同现场新 host task 重试 + whole-workspace fresh   | T49-T51                                                      |
 | AC-11 Git/protected/evidence write 阻断                 | T43,T47,T52                                                  |
 | AC-12 无 credential，Agent 自报不作事实                 | T44,T46-T48,T52                                              |
 | AC-13 outcome 与真实 workspace 对拍                     | T47,T48                                                      |
@@ -569,6 +578,11 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | AC-33 durable wait/backoff/remediation                  | T25,T28,T30,T83                                              |
 | AC-34 cancel reconcile/adopt pushability                | T24,T28,T59,T60,T81,T83                                      |
 | AC-35 上传计划/seed/candidate/fulfillment 完整性        | T21,T36,T36a,T37-T40,T42,T47,T48,T56,T59,T61,T62,T80,T81,T83 |
+| AC-36 业务员工说明书与统一 operations UI                | T113,T114,T118-T121                                          |
+| AC-37 问题类型/producer closed envelope                 | T113,T115,T116                                               |
+| AC-38 Agent/script handler 与确定性处理规则             | T115-T117                                                    |
+| AC-39 child Mission/跨仓/幂等/join                      | T122-T124,T128-T129,T131-T132                                |
+| AC-40 审批 prepare/submit/observe/durable wait          | T125-T132                                                    |
 
 ## 13a. T112 交付出账（2026-08-18）
 
@@ -617,16 +631,16 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 `/goal` 要求"最终使用 system mock 进行完整的 E2E 用例构建进行功能自证和防护"。
 本节给出**可复跑的账**，而不是"跑过了"的口头结论。
 
-| 面 | 用例 | mock 面 | 实跑结果 |
-|---|---|---|---|
-| MR 全生命周期（create-MR 起点 → 外部 merged 终态） | `rfc310-t109-full-journey-e2e` 旅程 A | `startSystemMockSuite` code-host（真 bare 仓 + GitLab REST） | 2/2 绿 · 5.8s |
-| adopt 外部已开 MR → 权威终态 | 同上 旅程 B | 同上 | ↑ 同批 |
-| Java polyglot 全链（clone→facts→workspace→candidate→verification 子进程） | `rfc310-pr5-e2e-java` | 同上 | 9/9 绿（四文件合计） |
-| `mr.ensure` 幂等 / 绑定错配 typed 拒 | `rfc310-pr5-mr-ensure` | 同上 | ↑ |
-| MR facts 三读 fence / authorClass 三分类 / 回帖 | `rfc310-pr7-mr-facts` | 同上 | ↑ |
-| 外部需求 ID（真 adapter 子进程 ↔ requirement provider mock） | `rfc310-pr3-journey` + `rfc310-pr3-adapter-runner` | requirement-provider + requirement-adapter-cli | 19/19 绿（三文件合计） |
-| 自建门禁 collect/trigger/rerun（真 CLI 子进程 ↔ pipeline provider mock） | `rfc310-pr6-pipeline-adapter` | pipeline-provider + pipeline-adapter-cli | ↑ |
-| **RFC-310 全量** | `tests/rfc310-*.test.ts` | —— | **69 文件 / 417 用例 / 2350 断言全绿 · 46s** |
+| 面                                                                        | 用例                                               | mock 面                                                      | 实跑结果                                     |
+| ------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------- |
+| MR 全生命周期（create-MR 起点 → 外部 merged 终态）                        | `rfc310-t109-full-journey-e2e` 旅程 A              | `startSystemMockSuite` code-host（真 bare 仓 + GitLab REST） | 2/2 绿 · 5.8s                                |
+| adopt 外部已开 MR → 权威终态                                              | 同上 旅程 B                                        | 同上                                                         | ↑ 同批                                       |
+| Java polyglot 全链（clone→facts→workspace→candidate→verification 子进程） | `rfc310-pr5-e2e-java`                              | 同上                                                         | 9/9 绿（四文件合计）                         |
+| `mr.ensure` 幂等 / 绑定错配 typed 拒                                      | `rfc310-pr5-mr-ensure`                             | 同上                                                         | ↑                                            |
+| MR facts 三读 fence / authorClass 三分类 / 回帖                           | `rfc310-pr7-mr-facts`                              | 同上                                                         | ↑                                            |
+| 外部需求 ID（真 adapter 子进程 ↔ requirement provider mock）              | `rfc310-pr3-journey` + `rfc310-pr3-adapter-runner` | requirement-provider + requirement-adapter-cli               | 19/19 绿（三文件合计）                       |
+| 自建门禁 collect/trigger/rerun（真 CLI 子进程 ↔ pipeline provider mock）  | `rfc310-pr6-pipeline-adapter`                      | pipeline-provider + pipeline-adapter-cli                     | ↑                                            |
+| **RFC-310 全量**                                                          | `tests/rfc310-*.test.ts`                           | ——                                                           | **69 文件 / 417 用例 / 2350 断言全绿 · 46s** |
 
 **索引可执行化**：新增 `rfc310-ac-evidence-index` 守卫——上面的 AC 证据索引点名的每个
 测试文件必须真实存在、AC-1..35 必须逐条有证据、且失败关闭。变异实测三种形态全部检出
@@ -655,12 +669,12 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 Done 之后用户在 UI 上连报两条，顺查又照出两条同族缺陷。四条同一个根因族，一并记账：
 
-| # | 症状 | 根因 | 处置 |
-|---|------|------|------|
-| 1 | `/code/config/adapters` 整页 404 | 前端端点前缀写成 `/api/code/...`；adapter 属 integration bounded context，实际挂 `/api/integrations/...` | `f9ff00da` + 读后端源码对账的 `code-config-api-base.test.ts` |
-| 2 | adapter 建不出来（`Invalid literal value, expected 1`） | 后端 create 期 strict parse，前端只交 `{name, purpose}` | `438f350d`，后并入下方共用契约 |
-| 3 | 建完数字员工点"发布" → **500 internal-error** | `publishDigitalEmployee` 裸 `schema.parse`，空草稿的 ZodError 被兜底成 500 | `safeParse` + `digital-employee-draft-invalid`（422） |
-| 4 | policy 详情页存下不合法 JSON 后点"发布" → **500** | `publishAutomationPolicy` 同款裸 parse，且 `revise` 对草稿完全宽容 ⇒ 发布是唯一校验点 | `safeParse` + `automation-policy-draft-invalid`（422） |
+| #   | 症状                                                    | 根因                                                                                                     | 处置                                                         |
+| --- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1   | `/code/config/adapters` 整页 404                        | 前端端点前缀写成 `/api/code/...`；adapter 属 integration bounded context，实际挂 `/api/integrations/...` | `f9ff00da` + 读后端源码对账的 `code-config-api-base.test.ts` |
+| 2   | adapter 建不出来（`Invalid literal value, expected 1`） | 后端 create 期 strict parse，前端只交 `{name, purpose}`                                                  | `438f350d`，后并入下方共用契约                               |
+| 3   | 建完数字员工点"发布" → **500 internal-error**           | `publishDigitalEmployee` 裸 `schema.parse`，空草稿的 ZodError 被兜底成 500                               | `safeParse` + `digital-employee-draft-invalid`（422）        |
+| 4   | policy 详情页存下不合法 JSON 后点"发布" → **500**       | `publishAutomationPolicy` 同款裸 parse，且 `revise` 对草稿完全宽容 ⇒ 发布是唯一校验点                    | `safeParse` + `automation-policy-draft-invalid`（422）       |
 
 **结构性处置**（不是逐个打补丁）：载荷构造与端点 base 提进
 `packages/shared/src/developmentConfigCreate.ts`，创建对话框与
@@ -685,18 +699,91 @@ mission 重试后推进到 `working`、readiness `automationReady: true`。**未
 
 **又逮到三个缺陷**（全部"点开就见"，typecheck / lint / 单测 / e2e / CI 无一拦住）：
 
-| # | 症状 | 根因 |
-|---|------|------|
-| 5 | `/code/assignments` 点「新建指派」整页 error boundary | 四条 useQuery 把 `{items:[…]}` 声明成裸数组 ⇒ **该页从未能用**，而它正是 mission 解析员工的必经配置 |
-| 6 | 员工详情存草稿后整页白屏（React #31） | versioned ref `{id,revision}` 被当字符串塞进 JSX |
-| 7 | 员工「默认策略」永远显示「—」 | 同 6 的另一半：`refText` 只认字符串，遇对象**静默退化**（不报错，只是说谎） |
-| 8 | 「点击创建，弹窗就消失了，什么都没变化」（用户实报） | 遮罩盖满视口，页头那颗**同名**「创建」只是透过遮罩可见、实际点不到；那一下命中遮罩 → 默认 `closeOnOverlayClick` 关闭 → 已填内容静默丢弃且不发请求。装输入的五个弹窗（配置创建 / 草稿编辑 / mission 发起 / 指派 / 策略创建）统一改 `closeOnOverlayClick={false}` |
+| #   | 症状                                                  | 根因                                                                                                                                                                                                                                                            |
+| --- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5   | `/code/assignments` 点「新建指派」整页 error boundary | 四条 useQuery 把 `{items:[…]}` 声明成裸数组 ⇒ **该页从未能用**，而它正是 mission 解析员工的必经配置                                                                                                                                                             |
+| 6   | 员工详情存草稿后整页白屏（React #31）                 | versioned ref `{id,revision}` 被当字符串塞进 JSX                                                                                                                                                                                                                |
+| 7   | 员工「默认策略」永远显示「—」                         | 同 6 的另一半：`refText` 只认字符串，遇对象**静默退化**（不报错，只是说谎）                                                                                                                                                                                     |
+| 8   | 「点击创建，弹窗就消失了，什么都没变化」（用户实报）  | 遮罩盖满视口，页头那颗**同名**「创建」只是透过遮罩可见、实际点不到；那一下命中遮罩 → 默认 `closeOnOverlayClick` 关闭 → 已填内容静默丢弃且不发请求。装输入的五个弹窗（配置创建 / 草稿编辑 / mission 发起 / 指派 / 策略创建）统一改 `closeOnOverlayClick={false}` |
 
 三处共同结构：**测试 fixture 照着前端的错误假设造数据**（裸数组 / `'id@rev'` 字符串），与实现
 互相印证，于是全绿。处置除修复外，补了两层机械链接：fixture 由后端 domain schema `safeParse`
 裁定；列表端点形状守卫（判据表逐条 curl 真实 daemon 实测——启发式版本曾把 `/api/agents` 这类
 真·裸数组误判，差点要求改正确的代码——并常驻一条判据函数自检用例）。顺带把 missions /
 assignments 两处列表的仓库 ULID 显示为仓库地址。
+
+## 13b. PR-11：业务员工说明书、问题生产与统一界面
+
+### 目标
+
+业务用户只定义“哪一步在什么条件下由谁做，成功/失败后去哪”；Java/C++ 是预置起点。动作模板、验证 profile、adapter、
+资源 ID/revision 和 JSON 不再是员工创建/详情的必经概念。MR 问题类型、生产者和处理者都属于员工 revision，并且 Agent/
+script 只生产本步结果，不选择下一步。
+
+| 编号 | 任务                                                                                                                     | 依赖         | 状态 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------ | ------------ | ---- |
+| T113 | `EmployeePlaybookContentV1` strict codec、步骤/跳转/重试/问题类型/producer/handler 与 canonical compiler                 | T14,T19      | ✅   |
+| T114 | 聚合 `GET/PUT/validate/preview/publish /digital-employees/:id/playbook`；一次命令保存并冻结完整 closure                  | T113         | ✅   |
+| T115 | Action implementation 扩 script executor；仍经 TaskEngine→Wrapper→NodeExecutor→Kernel，统一 envelope/workspace validator | T41,T113     | ✅   |
+| T116 | `ProblemSetEnvelopeV1`、只读 Agent/script producer、closed type/subject/head/evidence validator 与稳定工作集             | T67,T73,T113 | ✅   |
+| T117 | handling rule 按 type+facts 选 Agent/script；same/fresh retry、fallback、重采/重验闭环                                   | T115,T116    | ✅   |
+| T118 | 员工创建向导：基本信息→范围→步骤→问题处理→外部协作→完成标准；只显示业务名称                                              | T114         | ✅   |
+| T119 | 员工详情改“说明书”：负责范围、步骤、问题处理、连接、仓库、运行摘要；技术 closure 仅高级折叠                              | T114         | ✅   |
+| T120 | `/code`、员工列表/详情统一 `/repos`/`/webhooks` operations 骨架；移除 hero/旧活动图，任务归 `/tasks`、成效归 `/outcomes` | T118,T119    | ✅   |
+| T121 | business i18n、只读权限、responsive、route/inventory、真实浏览器逐页视觉/交互回归                                        | T118-T120    | 🚧   |
+
+## 13c. PR-12：跨仓 child Mission 与外部审批 saga
+
+### 目标
+
+门禁问题可按员工步骤调用另一名数字员工在另一仓维护独立 MR，再由 Agent 准备审批材料、程序幂等提交、短程序观察并
+durable wait；父任务按 all/any/quorum 与明确 deadline 分支继续，不占用 Agent 会话，也不让提示词递归调 Agent。
+
+| 编号 | 任务                                                                                                                     | 依赖      | 状态 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------ | --------- | ---- |
+| T122 | step-run/mission-link/approval-saga/join 表、唯一索引、OCC 状态机、migration/backup/restore                              | T113      | ✅   |
+| T123 | `ChildMissionIntent/Receipt` exact codec、标准 admission participant、target repo/employee 权限与独立 workspace/MR claim | T122      | ✅   |
+| T124 | parent-child 幂等 create/adopt/observe、completion condition、ancestry/depth/child/wall-time budget 与动态环阻断         | T123      | ✅   |
+| T125 | `ApprovalRequestDraftEnvelope` Agent/script prepare 与 semantic validator；无 credential、不能直接 submit                | T115,T122 | ✅   |
+| T126 | integration `approval-gateway` adapter：submit + lookup-by-idempotency-key + observe closed receipt                      | T125      | ✅   |
+| T127 | pending→deferred wake；webhook correlation 只记 hint，timer 每次短 observe；重启保 deadline/ordinal                      | T126      | ✅   |
+| T128 | all/any/quorum join、deadline/rejected/expired/unavailable/partial 分支、迟到 receipt observation-only                   | T124,T127 | ✅   |
+| T129 | cancel/handoff/terminal fence：不擅自删 child MR/审批；已 dispatch 先结算，剩余观察继续可见                              | T124,T128 | ✅   |
+| T130 | 员工编辑器的“调用其他员工/提交审批/等待审批/汇合”步骤卡与发布路径预演                                                    | T118,T128 | ✅   |
+| T131 | stateful approval system mock + 第二 Git remote；响应丢失、乱序、重启、重复 webhook、reject/timeout 矩阵                 | T126-T129 | 🚧   |
+| T132 | 全 E2E：父仓红灯→child 仓 MR ready→审批 approved→父门禁重跑→父 MR ready；full gate + exact-SHA CI                        | T130,T131 | 🚧   |
+
+## 13d. PR-13：服务端 Journey 与无指导操作链
+
+### 目标
+
+用户不需要知道资源层级或阅读说明；从任意业务页面都能看到当前位置、下一步、负责人和触发/阻断原因。人需要操作时主按钮
+与表单同页，系统自动工作时明确写“无需你操作”与下一次 wake，设置成功自动进入后继页面。
+
+| 编号 | 任务                                                                                                                  | 依赖      | 状态 |
+| ---- | --------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
+| T133 | `JourneyProjectionV1` strict codec、employee-setup/mission-delivery 纯 projector、projection digest 与权限降级        | T113,T122 | ✅   |
+| T134 | setup/read Mission API 返回 journey；mutation 返回 nextLocation，closed command catalog 执行时重验 revision/authority | T133      | ✅   |
+| T135 | 共用 `JourneyNextAction`（步骤、当前位置、负责人、唯一主动作、自动 wake/deadline）及 responsive/accessibility         | T134      | ✅   |
+| T136 | `/code` 零配置决策：创建员工→发布→设置范围→首项工作；移除 hero/活动图并统一 operations 骨架                           | T135      | ✅   |
+| T137 | 员工创建后直达说明书；详情 readiness/发布/范围/发任务连续动作，技术 JSON 权限折叠                                     | T114,T135 | ✅   |
+| T138 | assignment 保存后同页显示“发起任务”；新建 Mission Stepper 说出后一步，成功直达详情                                    | T135      | ✅   |
+| T139 | Mission 顶部 journey 覆盖回答/来源/自动执行/child/approval/blocked/tracking/ready/merged，动作与表单同页              | T128,T135 | ✅   |
+| T140 | E2E-A 零配置首次上手；E2E-B 跨仓+审批+ready+merged；每停点断言 current/next/owner，刷新与重启不丢                     | T136-T139 | 🚧   |
+
+### 本轮三次实现自审（2026-08-19）
+
+本表只审功能闭环，不把安全审计混入结论。每轮都以可执行回归锁住发现，不以页面说明代替实现。
+
+| 轮次              | 纵向检查                                                                                                        | 实际发现                                                                                                          | 修复与回归证据                                                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. 无指导操作链   | 从侧栏进入、创建员工、逐步选执行者、指派仓库、发任务、看任务与成效；检查每页下一步是否同屏                      | 旧页面模板仍渲染机械返回按钮；成效沿用能力构建样式；员工详情发布动作不直观；导航测试仍锁旧分组                    | RFC-310 页面 `PageHeader back` 清零；顶层固定“编排 → 数字员工 → 运行与仓库”；`/outcomes` 使用 operations 骨架；路由、导航、overlay 与页面回归锁住无返回按钮和归属                    |
+| 2. 规则与生命周期 | 成功/失败跳转、producer/handler fallback、join、child、审批、handoff/terminal receipt 从头重放                  | 失败专用步骤会被数组顺序误当独立入口；已结算 producer 会继续 fall-through；旧 Mission DTO 缺 `journey` 时详情白屏 | 只从显式边进入被引用步骤；producer 使用 decision/settled/none 三态；旧 DTO 降级到原位 resume/attach；child/approval/handoff/terminal 用例锁定                                        |
+| 3. 重启与数据     | daemon 重建 composition、审批 pending→approved、不同 revision 调用环、上传 seed、pipeline 大结果、本地 evidence | 审批等待虽落库但缺“重建端口后继续”的直接证明；`A@1 → B@1 → A@2` 可绕过按 revision 比较的递归阻断                  | 用同一 SQLite 重新创建 saga store 后继续观察并保留 ordinal/deadline；动态环按 employee identity 阻断而非 revision；system mock 锁响应丢失幂等 adoption、两仓隔离和大日志本地文件合同 |
+
+当前本地证据：四 workspace typecheck 与全仓 lint 通过；不监听端口的本轮 RFC-310 后端回归 122 项通过
+（含 playbook/saga 10 项），界面定向与棘轮回归 20 文件 110 项通过。需要监听本机端口的 system mock / Playwright 旅程因当前受限
+执行环境不能创建 listener，仍由 T131/T132/T140 的 hosted exact-SHA CI 收口，因此三项维持 `🚧`，不提前登记完成。
 
 ## 14. 风险与停止条件
 

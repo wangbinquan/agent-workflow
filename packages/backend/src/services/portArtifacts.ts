@@ -31,7 +31,8 @@ import { checkLexicalThenRealpath } from '@/util/safePath'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns } from '@/db/schema'
+import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import { parseTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 import { createLogger } from '@/util/log'
 import { toPortableRelativePath } from '@/util/platformExec'
 import { sha256Hex } from '@/util/hash'
@@ -529,12 +530,26 @@ export function subsetArchiveJson(
  * wrapper final 由调用方重聚合，design §4.5）。
  */
 export async function forcedPortPathsForTask(db: DbClient, taskId: string): Promise<string[]> {
+  const task = await db
+    .select({
+      spaceKind: tasks.spaceKind,
+      platformInputPathsJson: tasks.platformInputPathsJson,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .get()
   const rows = await db
     .select({ archiveJson: nodeRunOutputs.archiveJson })
     .from(nodeRunOutputs)
     .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
     .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRunOutputs.archiveJson)))
   const out = new Set<string>()
+  if (task?.platformInputPathsJson !== null && task?.platformInputPathsJson !== undefined) {
+    if (task.spaceKind !== 'internal') {
+      throw new Error('non-internal task carries a platform input path roster')
+    }
+    for (const path of parseTaskPlatformInputPaths(task.platformInputPathsJson)) out.add(path)
+  }
   for (const r of rows) {
     const arch = parseArchiveJson(r.archiveJson)
     if (arch === null) continue

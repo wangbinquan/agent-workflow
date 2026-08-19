@@ -1,9 +1,9 @@
 // RFC-310 PR-5 T61 — Mission 列表/详情页。
 //
 // 锁的是页面对使用者的回答，而不是标记存在性：①列表把 mission 状态与阻塞码
-// 如实示人（「开单 ≠ 在跑」的诚实边界是产品语义）；②launch 表单三形态提交出
-// **正确的 API 载荷**（idempotencyKey 固定、direct 正文、员工 pin 已发布
-// revision）；③详情页在 awaiting-information 时渲染问题并提交完整答案集
+// 如实示人（「开单 ≠ 在跑」的诚实边界是产品语义）；②全页向导逐步解释并用
+// server-authoritative preflight 选出员工/策略后，提交**正确的 API 载荷**
+// （idempotencyKey 固定、direct 正文、员工 pin 已发布 revision）；③详情页在 awaiting-information 时渲染问题并提交完整答案集
 // （提交即冻结——不许漏答，按钮 gating 锁住）。
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -20,6 +20,7 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 import { missionStatusKind } from '../src/routes/code.missions'
+import { missionGuidance } from '../src/routes/code.missions.$id'
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -84,7 +85,15 @@ const MISSION_DETAIL = {
       state: 'materialized',
     },
   ],
-  readiness: { status: 'working' },
+  readiness: {
+    evaluatedForHead: 'a'.repeat(40),
+    factDigest: 'b'.repeat(64),
+    automationReady: false,
+    hostMergeable: 'unknown',
+    machineHolds: [{ kind: 'facts-incomplete', detail: 'pipeline evidence partial' }],
+    humanHolds: [],
+    status: 'working',
+  },
   questions: {
     questionSetRef: 'qs-1',
     origin: 'agent',
@@ -101,6 +110,32 @@ const MISSION_DETAIL = {
     clarificationState: 'questions-published',
   },
   effects: [],
+  mergeRequest: null,
+  journey: {
+    schemaVersion: 1,
+    journey: 'mission-delivery',
+    current: { key: 'implement', ordinal: 2, total: 5, detailKey: 'missionImplementDetail' },
+    next: {
+      key: 'retryMission',
+      kind: 'command',
+      detailKey: 'retryMissionDetail',
+      owner: 'current-user',
+      href: `/code/missions/${MISSION_ROW.id}`,
+      command: 'retry',
+      available: true,
+      unavailableReason: null,
+      wake: { source: null, resumeAt: null, deadlineAt: null, descriptionKey: null },
+    },
+    steps: [
+      { key: 'intake', state: 'done', owner: 'platform', href: null },
+      { key: 'implement', state: 'blocked', owner: 'platform', href: null },
+      { key: 'publish', state: 'pending', owner: 'platform', href: null },
+      { key: 'review', state: 'pending', owner: 'platform', href: null },
+      { key: 'merged', state: 'pending', owner: 'committer', href: null },
+    ],
+    reasonRefs: ['collector-not-wired:repository'],
+    projectionRevision: 'mission-test-blocked',
+  },
 }
 
 function installFetch(overrides: {
@@ -127,6 +162,9 @@ function installFetch(overrides: {
       if (url.includes('/api/code/digital-employees')) {
         return json({ items: [{ id: 'emp-1', name: 'Java 员工', publishedRevision: 3 }] })
       }
+      if (url.includes('/api/code/automation-policies')) {
+        return json({ items: [{ id: 'pol-1', name: '默认研发策略', publishedRevision: 2 }] })
+      }
       if (url.includes('/requirement-manifest')) {
         return json(
           { error: { code: 'requirement-manifest-not-found', message: 'none' } },
@@ -139,6 +177,38 @@ function installFetch(overrides: {
           status: 'working',
           answerRevision: 'a'.repeat(64),
         })
+      }
+      if (url.endsWith('/api/code/missions/preview') && method === 'POST') {
+        return json({
+          outcome: 'ready',
+          employee: { id: 'emp-1', revision: 3 },
+          policy: { id: 'pol-1', revision: 2 },
+          requirementSource: null,
+          sourceOptions: [],
+          block: null,
+        })
+      }
+      if (url.endsWith('/api/code/mission-input-uploads') && method === 'POST') {
+        return json({ uploadRef: 'upload-1', bytes: 9, sha256: 'f'.repeat(64) }, 201)
+      }
+      if (url.endsWith('/api/code/missions/direct-input/preview') && method === 'POST') {
+        return json({
+          employee: { id: 'emp-1', revision: 3 },
+          policy: { id: 'pol-1', revision: 2 },
+          baseline: { snapshotRef: 'git:abc', sha: 'a'.repeat(40) },
+          dispositions: [
+            {
+              repositoryTargetPath: 'docs/input.md',
+              disposition: 'create',
+              effectiveCollisionMode: 'create-only',
+              effectiveContentPolicy: 'preserve-upload',
+              blockedReason: null,
+            },
+          ],
+        })
+      }
+      if (url.includes('/api/code/mission-input-uploads/') && method === 'DELETE') {
+        return json({ ok: true })
       }
       if (/\/api\/code\/missions\/[^/]+$/.test(url)) {
         return json(overrides.detail ?? MISSION_DETAIL)
@@ -157,20 +227,31 @@ function installFetch(overrides: {
 
 async function renderMissions(initial: string) {
   const listPage = await import('../src/routes/code.missions')
+  const newPage = await import('../src/routes/code.missions.new')
   const detailPage = await import('../src/routes/code.missions.$id')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const listRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/code/missions',
-    component: listPage.Route.options.component,
+    beforeLoad: listPage.redirectMissionListToTasks,
+  })
+  const tasksRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/tasks',
+    component: () => <div data-testid="unified-task-list" />,
   })
   const detailRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/code/missions/$missionId',
     component: detailPage.Route.options.component,
   })
+  const newRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/code/missions/new',
+    component: newPage.Route.options.component,
+  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([detailRoute, listRoute]),
+    routeTree: rootRoute.addChildren([newRoute, detailRoute, listRoute, tasksRoute]),
     history: createMemoryHistory({ initialEntries: [initial] }),
   })
   render(
@@ -194,37 +275,60 @@ describe('missionStatusKind', () => {
     expect(missionStatusKind('canceled')).toBe('neutral')
     expect(missionStatusKind('working')).toBe('info')
   })
+
+  test('guidance leads with the user-visible next step, not an internal status code', () => {
+    expect(
+      missionGuidance({
+        status: 'awaiting-information',
+        automationMode: 'active',
+        questions: null,
+      }),
+    ).toMatchObject({ tone: 'warning', title: 'answersTitle' })
+    expect(
+      missionGuidance({ status: 'ready-to-merge', automationMode: 'active', questions: null }),
+    ).toMatchObject({ tone: 'success', title: 'readyTitle' })
+    expect(
+      missionGuidance({ status: 'watching', automationMode: 'active', questions: null }),
+    ).toMatchObject({ tone: 'info', title: 'watchingTitle' })
+  })
 })
 
 describe('/code/missions list', () => {
-  test('renders missions with honest block codes and links to detail', async () => {
+  test('redirects the retired second inbox to the unified digital-employee task list', async () => {
     installFetch({})
-    await renderMissions('/code/missions')
-    await screen.findByTestId('mission-list')
-    expect(screen.getByText('collector-not-wired:repository')).toBeTruthy()
-    expect(screen.getByRole('link', { name: '00000001' })).toBeTruthy()
-    // 仓库列给的是地址而不是 ULID：实走 UI 时这一格显示 `01M0BQX6…`，
-    // 用户看不出是哪个仓（同页的发起对话框已经按地址显示，列表却没有）。
-    expect(screen.getByText('https://git.test/team/app')).toBeTruthy()
-    expect(screen.queryByText('repo-1')).toBeNull()
+    const router = await renderMissions('/code/missions')
+    await screen.findByTestId('unified-task-list')
+    expect(router.state.location.pathname).toBe('/tasks')
+    expect(router.state.location.search).toEqual({ category: 'digital-employee' })
   })
 
-  test('launch dialog submits a direct-body mission with a pinned employee revision', async () => {
+  test('guided launch preflights and submits a direct-body mission with a pinned employee revision', async () => {
     const rec = installFetch({ missions: [] })
-    await renderMissions('/code/missions')
-    fireEvent.click(await screen.findByTestId('mission-launch-open'))
-
-    // repository + employee 选择（公共 Select 是按钮+弹层）。
-    // 公共 Select 的 option 用 mouseDown（保焦点）而非 click。
+    await renderMissions('/code/missions/new')
+    await screen.findByTestId('mission-launch-wizard')
+    // Step 1: repository + delivery (new MR is the explicit default).
     fireEvent.click(await screen.findByTestId('mission-repo-select'))
     fireEvent.mouseDown(await screen.findByRole('option', { name: /git\.test/ }))
-    fireEvent.click(screen.getByTestId('mission-employee-select'))
-    fireEvent.mouseDown(await screen.findByRole('option', { name: /Java 员工/ }))
+    fireEvent.click(screen.getByTestId('stepper-next'))
 
+    // Step 2: one direct input supports body and files together; this case is body-only.
     fireEvent.change(screen.getByTestId('mission-title'), { target: { value: 'Add feature' } })
     fireEvent.change(screen.getByTestId('mission-body'), { target: { value: 'do the thing' } })
+    fireEvent.click(screen.getByTestId('stepper-next'))
 
+    // Step 3: choose an exact published employee revision instead of assignment resolution.
+    fireEvent.click(screen.getByTestId('mission-employee-choice-explicit'))
+    fireEvent.click(await screen.findByTestId('mission-employee-select'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /Java 员工/ }))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+
+    // Step 4: launch is fenced until the server resolves employee/policy via
+    // the exact admission selector used by the durable launch command.
     const submit = screen.getByTestId('mission-launch-submit')
+    expect(submit.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByTestId('mission-preflight'))
+    await screen.findByTestId('mission-preflight-ready')
+
     await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false))
     fireEvent.click(submit)
 
@@ -241,6 +345,61 @@ describe('/code/missions list', () => {
       expect((call!.body as { idempotencyKey: string }).idempotencyKey).toMatch(/^ui-/)
     })
   })
+
+  test('one direct journey accepts body plus files and freezes every repository placement field', async () => {
+    const rec = installFetch({ missions: [] })
+    await renderMissions('/code/missions/new')
+    await screen.findByTestId('mission-launch-wizard')
+
+    fireEvent.click(screen.getByTestId('mission-repo-select'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /git\.test/ }))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+
+    fireEvent.change(screen.getByTestId('mission-title'), { target: { value: 'Ship guide' } })
+    fireEvent.change(screen.getByTestId('mission-body'), {
+      target: { value: 'Commit the attached guide and keep its exact bytes.' },
+    })
+    const file = new File(['guide v1'], 'guide.md', { type: 'text/markdown', lastModified: 7 })
+    fireEvent.change(screen.getByTestId('mission-upload-files'), { target: { files: [file] } })
+    fireEvent.change(await screen.findByTestId('mission-upload-target-0'), {
+      target: { value: 'docs/input.md' },
+    })
+    fireEvent.click(screen.getByTestId('stepper-next'))
+
+    // Assignment resolution remains a first-class path; no explicit employee
+    // is sent, but preflight still reports the exact resolved revision.
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    fireEvent.click(screen.getByTestId('mission-preflight'))
+    await screen.findByTestId('mission-upload-preview')
+    fireEvent.click(screen.getByTestId('mission-launch-submit'))
+
+    await waitFor(() => {
+      const call = rec.calls.find(
+        (candidate) =>
+          candidate.method === 'POST' &&
+          /\/api\/code\/missions$/.test(new URL(candidate.url).pathname),
+      )
+      expect(call).toBeTruthy()
+      expect(call!.body).toMatchObject({
+        repositoryId: 'repo-1',
+        requestedEmployee: null,
+        submission: {
+          kind: 'direct',
+          title: 'Ship guide',
+          body: 'Commit the attached guide and keep its exact bytes.',
+          uploads: [
+            {
+              uploadRef: 'upload-1',
+              repositoryTargetPath: 'docs/input.md',
+              collisionMode: 'create-only',
+              contentPolicy: 'preserve-upload',
+              fileMode: 'regular',
+            },
+          ],
+        },
+      })
+    })
+  })
 })
 
 describe('/code/missions/$missionId detail', () => {
@@ -250,6 +409,9 @@ describe('/code/missions/$missionId detail', () => {
 
     await screen.findByTestId('mission-block')
     expect(screen.getByText('collector-not-wired:repository')).toBeTruthy()
+    expect(screen.getByTestId('mission-guidance')).toBeTruthy()
+    expect(screen.getByTestId('mission-readiness')).toBeTruthy()
+    expect(screen.getByText(/External facts are incomplete/)).toBeTruthy()
 
     // 两题只答一题 ⇒ 提交仍 disabled（提交即冻结，必须齐）。
     const submit = await screen.findByTestId('mission-answers-submit')

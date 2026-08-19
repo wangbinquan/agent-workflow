@@ -9,6 +9,7 @@
 
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   lstatSync,
@@ -32,7 +33,7 @@ import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { UploadPlacementPort } from '../application/ports/reconcilerPorts'
 import type { EvidenceStore } from './evidenceStore'
 
-/** seed 树的稳定内容 digest（相对路径排序 + 每文件 sha256）。 */
+/** seed 树的稳定内容 digest（相对路径排序 + 文件模式 + 每文件 sha256）。 */
 export function seedTreeDigestOf(root: string): string {
   const hash = createHash('sha256')
   const files: string[] = []
@@ -47,8 +48,11 @@ export function seedTreeDigestOf(root: string): string {
   }
   if (existsSync(root)) walk('')
   for (const rel of files.sort()) {
-    const content = readFileSync(join(root, rel))
+    const path = join(root, rel)
+    const st = lstatSync(path)
+    const content = readFileSync(path)
     hash.update(`${rel}\n`)
+    hash.update((st.mode & 0o111) !== 0 ? 'executable\n' : 'regular\n')
     hash.update(createHash('sha256').update(content).digest('hex'))
     hash.update('\n')
   }
@@ -149,6 +153,7 @@ export async function placeUploadSeed(
       const dest = join(staging, entry.repositoryTargetPath)
       mkdirSync(dirname(dest), { recursive: true })
       copyFileSync(src, dest)
+      chmodSync(dest, entry.targetFileMode === 'executable' ? 0o755 : 0o644)
     }
     renameSync(staging, seedRoot)
   }

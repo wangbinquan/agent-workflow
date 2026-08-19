@@ -82,19 +82,35 @@ describe('unified system mock gateway', () => {
       expect(project.projectId).toBe(provider === 'gitlab' ? '1000' : '1001')
       const clone = await temporaryDirectory(`system-mock-${provider}-clone-`)
       await runChecked('git', ['clone', '-q', project.repoHttpUrl, clone])
-      expect(await readFile(join(clone, 'README.md'), 'utf8')).toBe('head\n')
+      expect(
+        await runChecked('git', ['ls-remote', '--symref', project.repoHttpUrl, 'HEAD']),
+      ).toContain('ref: refs/heads/main\tHEAD')
+      expect(await readFile(join(clone, 'README.md'), 'utf8')).toBe('base\n')
 
       const apiBase =
         provider === 'gitlab' ? suite.endpoints.gitlabApiBaseUrl : suite.endpoints.githubApiBaseUrl
+      const headers: Record<string, string> =
+        provider === 'gitlab'
+          ? { 'private-token': SYSTEM_MOCK_CODE_HOST_TOKEN }
+          : { authorization: `Bearer ${SYSTEM_MOCK_CODE_HOST_TOKEN}` }
       const response = await fetch(`${apiBase}/user`, {
-        headers:
-          provider === 'gitlab'
-            ? { 'private-token': SYSTEM_MOCK_CODE_HOST_TOKEN }
-            : { authorization: `Bearer ${SYSTEM_MOCK_CODE_HOST_TOKEN}` },
+        headers,
       })
       expect(response.status).toBe(200)
       const identity = (await response.json()) as Record<string, unknown>
       expect(identity[provider === 'gitlab' ? 'username' : 'login']).toBe('system-mock-user')
+
+      const mrPath =
+        provider === 'gitlab'
+          ? `/projects/${encodeURIComponent(project.projectPath)}/merge_requests/${String(project.number)}`
+          : `/repos/${project.projectPath}/pulls/${String(project.number)}`
+      const mr = (await (await fetch(`${apiBase}${mrPath}`, { headers })).json()) as Record<
+        string,
+        unknown
+      >
+      expect(provider === 'gitlab' ? mr.detailed_merge_status : mr.mergeable_state).toBe(
+        provider === 'gitlab' ? 'mergeable' : 'clean',
+      )
     }
   })
 

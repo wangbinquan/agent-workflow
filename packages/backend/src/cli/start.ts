@@ -19,6 +19,8 @@ import {
   bindConflictMergeParticipant,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -972,8 +974,46 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           deliveryKey: `agent-exec:${executionRef}`,
           now: Date.now(),
         })
+        void developmentAutomation
+          .drive(missionId)
+          .then((outcome) => {
+            if (outcome.stop === 'step-budget') {
+              log.warn('development mission drive reached its bounded step budget', {
+                missionId,
+                steps: outcome.steps,
+              })
+            }
+          })
+          .catch((err: unknown) => {
+            log.warn('development mission drive after Agent terminal failed', {
+              missionId,
+              err: err instanceof Error ? err.message : String(err),
+            })
+          })
       },
     }),
+    scriptLauncher: composeScriptActionExecution({
+      db,
+      startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+      onTerminal: (executionRef) => {
+        const missionId = missionIdOfExecutionRef(db, executionRef)
+        if (missionId === null) return
+        developmentMissionStore.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'agent-execution',
+          deliveryKey: `script-exec:${executionRef}`,
+          now: Date.now(),
+        })
+        void developmentAutomation.drive(missionId).catch((err: unknown) => {
+          log.warn('development mission drive after Script terminal failed', {
+            missionId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+      },
+    }),
+    approvalGateway: composeApprovalGatewayRunner(db),
   })
   try {
     const recovered = await developmentAutomation.recover()

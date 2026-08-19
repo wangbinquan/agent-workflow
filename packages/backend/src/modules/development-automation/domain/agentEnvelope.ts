@@ -144,6 +144,38 @@ export const agentReadOnlyResultSchema = z.discriminatedUnion('capabilityId', [
         .max(200),
     })
     .strict(),
+  z
+    .object({
+      capabilityId: z.literal('problem.classify'),
+      producerId: z.string().min(1).max(120),
+      evidenceDigest: z.string().regex(/^[0-9a-f]{64}$/),
+      headSha: z.string().regex(/^[0-9a-f]{40}$/),
+      complete: z.boolean(),
+      problems: z
+        .array(
+          z
+            .object({
+              problemRef: z.string().min(1).max(200),
+              typeId: z.string().min(1).max(120),
+              subjectRefs: z.array(z.string().min(1).max(500)).min(1).max(200),
+              summary: z.string().min(1).max(2_000),
+            })
+            .strict(),
+        )
+        .max(500),
+    })
+    .strict(),
+  z
+    .object({
+      capabilityId: z.literal('approval.prepare'),
+      stepRunRef: z.string().min(1),
+      approvalType: z.string().min(1).max(120),
+      title: z.string().min(1).max(500),
+      bodyArtifactRef: z.string().min(1).max(500),
+      evidenceRefs: z.array(z.string().min(1).max(500)).max(100),
+      requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+    })
+    .strict(),
 ])
 
 export const agentOutcomeEnvelopeSchema = z

@@ -57,14 +57,14 @@ bounded context 的新总控层。
 
 ### 1.1 bounded context 职责
 
-| Context                              | 唯一拥有                                                                                                                                                         | 明确不拥有                                                                          |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `development-automation`             | Mission/ActionRun 状态机、CapabilityDefinition、ActionTemplate、DigitalEmployeeTemplate、AutomationPolicy 语义、规则解释、readiness、反馈处理台账、effect intent | Git 实现、Agent spawn、code-host HTTP、pipeline provider 协议、credential、绝对路径 |
-| `task-execution`                     | AgentAttempt 的 Task/NodeRun 执行、session/runtime/取消、受限 workspace mount、唯一四级执行链                                                                    | Mission 下一步、模板选择、MR readiness、Git commit/push                             |
-| `source-control`                     | repository/workspace、immutable snapshot、ChangeCandidate、exclude policy、commit、exact-head publish、conflict workspace 准备                                   | 需求语义、review 规则、MR API、Agent session                                        |
-| `integration`                        | requirement/pipeline/code-host provider 协议、连接与 credential、webhook ingress、outbound adapter execution                                                     | Mission 状态、policy 决策、Agent 选择、Git mutation                                 |
-| `resource-catalog` / identity-access | 资源可见性、owner/ACL、request/effect authority                                                                                                                  | 数字员工业务字段、Mission 状态转移                                                  |
-| `platform/contracts`                 | clock/id/transaction/outbox/job/evidence-store 等中性机制                                                                                                        | 任何 Mission、MR、policy 或 capability DTO                                          |
+| Context                              | 唯一拥有                                                                                                                                                     | 明确不拥有                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `development-automation`             | Mission/ActionRun 状态机、数字员工 playbook/问题类型/规则编译、CapabilityDefinition、内部执行实现 revision、规则解释、readiness、反馈处理台账、effect intent | Git 实现、Agent/script spawn、code-host HTTP、pipeline provider 协议、credential、绝对路径 |
+| `task-execution`                     | AgentAttempt/ScriptAttempt 的 Task/NodeRun 执行、session/runtime/取消、受限 workspace mount、唯一四级执行链                                                  | Mission 下一步、生产者/处理者选择、MR readiness、Git commit/push                           |
+| `source-control`                     | repository/workspace、immutable snapshot、ChangeCandidate、exclude policy、commit、exact-head publish、conflict workspace 准备                               | 需求语义、review 规则、MR API、Agent session                                               |
+| `integration`                        | requirement/pipeline/code-host provider 协议、连接与 credential、webhook ingress、outbound adapter execution                                                 | Mission 状态、policy 决策、Agent 选择、Git mutation                                        |
+| `resource-catalog` / identity-access | 资源可见性、owner/ACL、request/effect authority                                                                                                              | 数字员工业务字段、Mission 状态转移                                                         |
+| `platform/contracts`                 | clock/id/transaction/outbox/job/evidence-store 等中性机制                                                                                                    | 任何 Mission、MR、policy 或 capability DTO                                                 |
 
 `development-automation` 是 RFC-304 `code-capability` 的语义替代和最终改名，不并存为第十五个 mega-context。
 迁移期间可以保留一个只做调用转发的 legacy facade，但不得有状态、业务分支或第二套 writer，并在同一 cutover
@@ -283,6 +283,17 @@ export interface AgentActionExecutionPort {
 export interface RepositoryUploadPlacementPort {
   place(input: RepositoryUploadPlacementIntent): Promise<RepositoryUploadPlacementReceipt>
 }
+
+export interface ChildMissionPort {
+  createOrAdopt(input: ChildMissionIntent): Promise<ChildMissionReceipt>
+  observe(input: ChildMissionObserveIntent): Promise<ChildMissionReceipt>
+}
+
+export interface ApprovalGatewayPort {
+  submit(input: ApprovalSubmitIntent): Promise<ApprovalReceipt>
+  lookupByIdempotencyKey(input: ApprovalLookupIntent): Promise<ApprovalReceipt | null>
+  observe(input: ApprovalObserveIntent): Promise<ApprovalObservationReceipt>
+}
 ```
 
 这些 port 的 DTO 只能含 opaque ref、closed union、digest、revision、budget 和 authority capability；禁止
@@ -296,6 +307,10 @@ workspace、推导 candidate 和接触 Git 的 owner。
 application 从自己的 immutable plan 构造 exact placement intent（plan/digest、snapshot ref、按序 entry/blob ref/逻辑
 target/expected state/mode/content policy）；provider adapter 不反向查询 development DB，也不只拿 planRef 后跨 owner 偷读表。
 evidence/source-control 的组合只发生在 bootstrap 登记的 adapter 内，业务分支仍由 consumer 决定。
+
+`ChildMissionPort` 是同一 bounded context 的 application-to-application exact participant：它只能消费验证后的 child intent，
+内部仍调用标准 Mission admission command，不能直接插行或复制父 workspace。`ApprovalGatewayPort` 由 integration provider
+adapter 实现；DTO 只有 opaque ref、closed status、revision 与 digest，不携带 provider URL/token/header 或审批正文。
 
 `DevelopmentCodeHostEffect` 是闭集：
 
@@ -570,7 +585,7 @@ webhook 丢失的恢复通道；它也必须走同一采集和决策路径，不
 
 ## 3. 能力与配置资源
 
-### 3.1 六类资源，不混成一张万能表
+### 3.1 一个业务 authoring aggregate，内部资源仍按 owner 分开
 
 | 定义                           | owner                       | 是否用户可新建                        | 能改变什么                                                                                               |
 | ------------------------------ | --------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -581,8 +596,113 @@ webhook 丢失的恢复通道；它也必须走同一采集和决策路径，不
 | `DigitalEmployeeTemplate`      | development-automation      | 是                                    | 多 capability route、adapter binding、默认 policy 与适用仓库 facts                                       |
 | `AutomationPolicy`             | development-automation      | 是                                    | admission、first-match action、feedback/pipeline/conflict/retry/readiness/notification/retention         |
 
-产品界面把 adapter 作为数字员工配置的一部分展示，但数据所有权不说谎：数字员工只保存一个 pinned
-`AdapterDefinitionRef` 和用途绑定；可执行程序、credential 与连接仍留在 integration。
+产品的唯一 authoring aggregate 是 `EmployeePlaybook`。页面不再把表中四种内部资源做成并列业务导航；它读取和保存
+“员工负责范围 + 有序步骤 + 问题类型 + producer/handler + 失败处理”。`development-automation` application command
+把这份业务草稿编译为 closed policy/capability route，并在发布时一次验证完整引用闭包。adapter 的程序、credential 与连接
+仍由 integration 拥有，员工只 pin 一个已发布引用；前端不得通过多次独立 PUT 假装一次原子保存。
+
+```ts
+interface EmployeePlaybookContentV1 {
+  readonly schemaVersion: 1
+  readonly description: string
+  readonly supportedRepositoryFacts: readonly FactPredicate[]
+  readonly steps: readonly EmployeeStepDefinition[]
+  readonly problemTypes: readonly ProblemTypeDefinition[]
+  readonly problemProducers: readonly ProblemProducerDefinition[]
+  readonly problemHandlers: readonly ProblemHandlingRule[]
+  // 内部编译依赖；业务页只显示已解析的业务名称
+  readonly capabilityRoutes: readonly CapabilityRoute[]
+  readonly requirementSources: readonly RequirementSourceBinding[]
+  readonly pipelineProviders: readonly PipelineProviderBinding[]
+  readonly defaultPolicyRef: VersionedResourceRef
+}
+
+interface EmployeeStepDefinition {
+  readonly stepId: string
+  readonly displayName: string
+  readonly description: string
+  readonly when: readonly FactPredicate[]
+  readonly producer: StepProducerRef
+  readonly input: StepInputMapping
+  readonly onSuccess: StepTarget
+  readonly join: StepJoinRule | null
+  readonly onFailure: StepFailureRule
+}
+
+type StepProducerRef =
+  | { readonly kind: 'platform'; readonly capabilityId: CapabilityId }
+  | { readonly kind: 'agent'; readonly implementationRef: VersionedResourceRef }
+  | { readonly kind: 'script'; readonly implementationRef: VersionedResourceRef }
+  | {
+      readonly kind: 'digital-employee'
+      readonly employeeRef: VersionedResourceRef
+      readonly repository: TargetRepositoryRule
+      readonly completion: 'automation-ready' | 'ready-to-merge' | 'merged' | 'completed'
+      readonly deadlineMs: number
+    }
+  | {
+      readonly kind: 'approval-prepare'
+      readonly executor: 'agent' | 'script'
+      readonly implementationRef: VersionedResourceRef
+      readonly approvalType: string
+    }
+  | {
+      readonly kind: 'approval-submit'
+      readonly adapterRef: VersionedResourceRef
+    }
+  | {
+      readonly kind: 'approval-observe'
+      readonly adapterRef: VersionedResourceRef
+      readonly pollIntervalMs: number
+      readonly deadlineMs: number
+      readonly webhookSourceKey: string | null
+    }
+
+type StepInputMapping =
+  | { readonly kind: 'mission-requirement' }
+  | { readonly kind: 'selected-problems' }
+  | { readonly kind: 'step-output'; readonly stepId: string }
+  | {
+      readonly kind: 'compose'
+      readonly sources: readonly { readonly name: string; readonly stepId: string }[]
+    }
+
+type StepTarget = NextStepRef | 'reconcile' | 'complete' | 'block' | 'handoff'
+
+interface StepJoinRule {
+  readonly groupId: string
+  readonly mode: 'all' | 'any' | 'quorum'
+  readonly quorum: number | null
+  readonly memberStepIds: readonly string[]
+  readonly deadlineMs: number
+  readonly onDeadline: StepTarget
+  readonly onPartial: StepTarget
+}
+
+type TargetRepositoryRule =
+  | { readonly kind: 'fixed'; readonly repositoryId: string }
+  | { readonly kind: 'fact'; readonly factId: TargetRepositoryFactId }
+
+interface StepFailureRule {
+  readonly retry: { readonly sameScene: number; readonly freshScene: number }
+  readonly onExhausted: StepTarget
+  readonly onRejected: StepTarget | null
+  readonly onExpired: StepTarget | null
+}
+```
+
+同一纯编译器供发布、预演和运行使用：`compileEmployeePlaybook(playbook, resolvedRefs) → CompiledEmployeeClosure`。
+编译结果含有 exact employee/policy/implementation/connection revision、规范化规则和 digest；Mission 只 pin 编译结果，
+不会在运行时再次把多份草稿拼起来。对旧表的兼容 API 只供高级管理员和迁移工具使用，业务页面调用
+`/api/code/digital-employees/:id/playbook` 聚合投影与 application command。
+
+编译器必须把每个业务步骤展开为 closed `StepExecutionPlan`，并验证 step id 唯一、所有跳转存在、成功/失败分支闭合、
+输入来源先于消费者、join 成员同组且无重复、quorum 合法、fallback 无环且同 problem type、所有 wait 有
+deadline 与 wake source。被 `onSuccess/onFailure/join/verify` 引用的步骤只能沿对应边进入；没有被引用的步骤是独立入口，
+用于“首次开发”或“有新检视意见/红门禁时响应”这类事实触发职责。运行时绝不能因为数组顺序把成功步骤落入失败
+恢复步骤；也不得在生产者已结算后隐式换用下一个生产者。静态可见的调用环直接拒绝；目标仓库来自 fact 时只能使用
+catalog 中标记为 `repository-ref` 的闭集 fact。技术资源 revision、capability ID、adapter purpose 和脚本权限仍在编译结果中，
+但不会回显为业务表单的必填术语。
 
 ### 3.2 CapabilityDefinition
 
@@ -610,7 +730,11 @@ ActionRun 继续按旧 validator 结算。
 interface IntegrationAdapterDefinition {
   readonly id: string
   readonly revision: number
-  readonly purpose: 'requirement-source' | 'pipeline-gate' | 'pipeline-classifier'
+  readonly purpose:
+    | 'requirement-source'
+    | 'pipeline-gate'
+    | 'pipeline-classifier'
+    | 'approval-gateway'
   readonly operations: readonly AdapterOperation[]
   readonly contractVersion: number
   readonly executableRef: string
@@ -627,7 +751,8 @@ interface IntegrationAdapterDefinition {
 
 `AdapterOperation` 也是 closed union，并与 purpose 对拍：requirement source 可声明 `acquire`，以及可选的
 `questions.writeback + answers.collect` 配对；pipeline gate 可声明 `collect` 和可选 `trigger/rerun`；classifier
-只有 `classify`。只有 writeback、没有 answer collection 的 adapter 不能被发布为“原渠道澄清可用”；没有声明的
+只有 `classify`；approval gateway 必须成对声明 `submit + lookup-by-idempotency-key`，并可声明 `observe` 与 webhook
+correlation codec。只有 writeback、没有 answer collection 的 adapter 不能被发布为“原渠道澄清可用”；没有声明的
 写操作不会因为 executable 实际支持就变得可达。
 
 `secretProjection` 是 integration owner 校验过的 secret key 闭集，保存时拒绝未知项；worker 运行 adapter 时
@@ -654,6 +779,11 @@ interface ActionTemplate {
   readonly executor:
     | { readonly kind: 'agent'; readonly agentRef: VersionedResourceRef }
     | { readonly kind: 'workgroup'; readonly workgroupRef: VersionedResourceRef }
+    | {
+        readonly kind: 'script'
+        readonly language: 'python' | 'bash' | 'node'
+        readonly scriptRef: VersionedResourceRef
+      }
   readonly runtimeProfileRef: VersionedResourceRef
   readonly promptSupplement: string
   readonly skillRefs: readonly VersionedResourceRef[]
@@ -668,6 +798,11 @@ interface ActionTemplate {
   readonly aclRevision: number
 }
 ```
+
+`ActionTemplate` 是内部执行实现 revision；产品只显示 `displayName`（“Java 修改实现”“C++ 编译修复程序”）。script
+implementation 与 Agent implementation 走同一 capability 输入/输出 schema、workspace mode、pre/post snapshot 和
+candidate 验证。script 由 TaskEngine 合成 script node 执行，不能从 Mission reconciler 直接 spawn；它的 stdout 也必须是
+nonce/inputDigest 绑定的唯一 outcome envelope，不能 commit/push 或返回下一步。
 
 模板不保存 raw filesystem path、credential 或 runtime object。`promptSupplement` 被放在平台不可覆盖的 protocol
 block **之前**，并经过明确分隔；里面出现“忽略 envelope / 自己提交 / 自己选下一步”不会改变运行合同。
@@ -1158,6 +1293,181 @@ Decision commit 与 ActionIntent/effect intent 在一个 DB transaction 中完�
 
 ### 4.8 失败分类、durable wait 与 handoff
 
+这里必须区分两件事：**业务问题**（MR 为什么需要处理）和**执行故障**（某次 Agent/script/adapter 为什么没跑成）。
+前者由员工可配置 producer 产出并进入处理规则；后者使用平台 closed taxonomy 决定重试/阻断，不能混成一个字符串。
+
+#### 4.8.1 MR 业务问题、producer 与 handler
+
+```ts
+interface ProblemTypeDefinition {
+  readonly typeId: string
+  readonly displayName: string
+  readonly evidenceDomain: 'pipeline' | 'verification' | 'feedback' | 'conflict' | 'mr'
+  readonly repairable: boolean
+  readonly priority: number
+  readonly unknownFallback: boolean
+}
+
+interface ProblemProducerDefinition {
+  readonly producerId: string
+  readonly displayName: string
+  readonly kind: 'agent' | 'script'
+  readonly implementationRef: VersionedResourceRef
+  readonly evidenceDomains: readonly ProblemTypeDefinition['evidenceDomain'][]
+  readonly allowedTypeIds: readonly string[]
+  readonly when: readonly FactPredicate[]
+  readonly retry: { readonly sameScene: number; readonly freshScene: number }
+  readonly fallbackProducerId: string | null
+}
+
+interface ProblemHandlingRule {
+  readonly ruleId: string
+  readonly typeId: string
+  readonly when: readonly FactPredicate[]
+  readonly handler:
+    | { readonly kind: 'agent'; readonly implementationRef: VersionedResourceRef }
+    | { readonly kind: 'script'; readonly implementationRef: VersionedResourceRef }
+  readonly verifyStepIds: readonly string[]
+  readonly retry: { readonly sameScene: number; readonly freshScene: number }
+  readonly fallbackRuleId: string | null
+}
+```
+
+producer 输入不是 provider JSON、评论全文或命令行参数，而是 exact-head 的只读 evidence descriptor + 本 employee revision
+的 `allowedTypeIds`。Agent producer 使用 read-only workspace；script producer 使用 readonly script node。两者输出同一个
+小 envelope：
+
+```ts
+interface ProblemSetEnvelopeV1 {
+  readonly protocolVersion: 1
+  readonly nonce: string
+  readonly actionRunRef: string
+  readonly inputDigest: string
+  readonly producerId: string
+  readonly evidenceDigest: string
+  readonly headSha: string
+  readonly complete: boolean
+  readonly problems: readonly {
+    readonly problemRef: string
+    readonly typeId: string
+    readonly subjectRefs: readonly string[]
+    readonly summary: string
+  }[]
+}
+```
+
+semantic validator 必须证明：header 与 frozen input 一致；`typeId` 属于 producer allowlist 和员工 problem catalog；
+`subjectRefs` 属于 pipeline gate / verification failure / feedback revision / conflict hunk 的输入闭集；required subject 全覆盖或
+`complete=false`；`problemRef` 唯一且 canonical digest 可重放。只有通过后才投影 `problem.typeIds`、`problem.refsByType`
+等 typed facts。自由 summary 只用于诊断，不参与规则。
+
+规则解释器按 `(type priority, subjectRef, problemRef)` 生成 `ProblemWorkSelectionReceipt`，再按有序 handling rules 选唯一
+handler。script/Agent handler 都只得到选中的 problem refs、exact evidence 和 capability envelope；不允许自己扩展工作集、
+选下一个 handler 或宣称验证通过。真实 workspace delta 经 source-control participant 推导，程序化 verification 后重采 MR/
+pipeline 证据。unknown/no-match 固定 block/handoff；只有发布时已验证的 fallback producer/rule 才可切换。
+
+#### 4.8.2 子数字员工、跨仓库与外部审批 saga
+
+跨仓修复和外部审批不是 Agent tool call，而是 `DevelopmentMission` 拥有的持久化 saga。父 Mission 只创建 intent、读取
+receipt 和按员工说明书汇合；子员工继续走完整的 admission → TaskEngine → source-control → MR care 链，审批程序继续走
+integration required port。任何一步都不能共享父 Mission 的可写 workspace、Agent session、Git branch 或 MR claim。
+
+```ts
+interface ChildMissionIntent {
+  readonly parentMissionRef: MissionRevisionRef
+  readonly parentStepRunRef: StepRunRef
+  readonly targetRepositoryRef: RepositoryRef
+  readonly targetEmployeeRef: VersionedResourceRef
+  readonly inputEnvelopeRef: TypedArtifactRef
+  readonly completion: 'automation-ready' | 'ready-to-merge' | 'merged' | 'completed'
+  readonly deadlineAt: string
+  readonly idempotencyKey: string
+  readonly ancestry: readonly DevelopmentMissionRef[]
+}
+
+interface ChildMissionReceipt {
+  readonly intentDigest: string
+  readonly childMissionRef: DevelopmentMissionRef
+  readonly childRevision: number
+  readonly observedStatus: MissionStatus
+  readonly completionSatisfied: boolean
+  readonly outputEnvelopeRef: TypedArtifactRef | null
+  readonly observedAt: string
+}
+
+interface ApprovalRequestDraftEnvelopeV1 {
+  readonly protocol: 'aw-approval-request-draft@1'
+  readonly nonce: string
+  readonly stepRunRef: StepRunRef
+  readonly inputDigest: string
+  readonly approvalType: string
+  readonly title: string
+  readonly bodyArtifactRef: TypedArtifactRef
+  readonly evidenceRefs: readonly TypedArtifactRef[]
+  readonly requestedScopes: readonly string[]
+}
+
+interface ApprovalSubmitIntent {
+  readonly stepRunRef: StepRunRef
+  readonly adapterRef: VersionedResourceRef
+  readonly validatedDraftRef: TypedArtifactRef
+  readonly deadlineAt: string
+  readonly idempotencyKey: string
+}
+
+interface ApprovalReceipt {
+  readonly intentDigest: string
+  readonly correlationRef: string
+  readonly externalRequestRef: string
+  readonly submittedRevision: string
+  readonly submittedAt: string
+}
+
+interface ApprovalObservationReceipt {
+  readonly correlationRef: string
+  readonly observedRevision: string
+  readonly status: 'pending' | 'approved' | 'rejected' | 'expired' | 'unavailable'
+  readonly evidenceRef: TypedArtifactRef | null
+  readonly observedAt: string
+}
+```
+
+父子 Mission 的幂等键固定为
+`digest(parentMissionId, parentEpoch, stepId, stepAttempt, targetRepositoryRef, employeeRevision, inputDigest)`。重放先按键查询
+既有 child，绝不再次 launch。创建 child 时同时写 `development_mission_links` 与 child admission intent；两者必须同事务
+提交。目标 employee/repository/policy 权限、目标仓可写性和调用预算在创建前全部重验。`ancestry` 只存 opaque mission ref；
+静态调用图检查之外，运行时拒绝 ancestry 重复、超过最大深度或超过父 Mission 的总 child 数/总 wall-time 预算。
+
+child 达到配置的 completion 只产生一个 observation receipt，不把 child diff 合并进父 workspace。若 child 在另一仓产生
+MR，父任务最多引用其 MR/receipt；该 MR 仍由其 committer 审核合入。父任务取消或 handoff 时只 fence 新 child intent，
+已经创建的 child 默认转 tracking-only 并继续观测；只有员工说明书显式声明且调用方拥有 child cancel 权时才能发送独立
+cancel 命令，绝不因父状态变化删除 child branch/MR。
+
+审批固定拆成三步：
+
+1. `approval.prepare` 是 Agent 或 script 的只读/有限写动作，只能产出 `ApprovalRequestDraftEnvelopeV1`；semantic validator
+   对拍 nonce、input digest、evidence allowlist 和 approval type，Agent 无 credential，无法提交。
+2. `approval.submit` 是 integration effect。adapter purpose 必须为 `approval-gateway` 且声明 `submit + lookup-by-idempotency-key`；
+   响应丢失先 lookup/adopt，只有能证明未提交才能重发。
+3. `approval.observe` 是一次短调用，adapter 必须声明 `observe`。返回 `pending` 时保存 receipt 后 arm durable wake，释放
+   script/Agent/工作区；webhook 只记 correlation wake hint，reconcile 后重新 observe 权威状态。没有 webhook 时按配置的
+   `resumeAt` 周期短调用，绝不保持长驻进程。
+
+`approved` 只满足这一审批步骤，不等于 MR approval，也不解锁平台的 merge/approve 能力；`rejected/expired/unavailable`
+按 `StepFailureRule` 精确分支。多 child/审批汇合由 `development_step_joins` 保存每个成员的 exact receipt revision，按
+`all | any | quorum(n)` 纯函数求值。`any/quorum` 达成后剩余成员不被伪造为成功；它们转 observation-only，最终状态仍进入
+任务详情。deadline 到达时只执行已发布的 `onDeadline/onPartial`，缺失分支固定 block。
+
+RFC-294 落位：
+
+- `development-automation/domain` 拥有 step/child/join/saga 状态机与纯编译器；application 拥有 create/adopt/observe intent；
+- `task-execution` 仍是 Agent/script 的唯一执行链，不知道“审批”或“父子任务”的业务语义；
+- `integration` 拥有 `ApprovalGatewayPort` 的 provider adapter、connection、credential 与 provider codec；
+- `source-control` 分别管理父子仓各自 workspace/candidate/MR，不提供跨仓可写 workspace；
+- bootstrap 只注入 `ChildMissionPort`/`ApprovalGatewayPort`，不得写按 step kind 分支的业务代码。
+
+#### 4.8.3 平台执行故障
+
 所有 program/adapter/task/source-control/effect 失败先映射到 closed receipt：
 
 ```ts
@@ -1639,9 +1949,11 @@ interface PipelineEvidenceManifestV1 {
 }
 ```
 
-`PipelineFailureCategory` 是配置/adapter contract 允许的 closed catalog，例如 `compile`、`link`、`unit-test`、
-`integration-test`、`static-analysis`、`infrastructure-transient`、`policy`、`unknown`。分类只是 fact；policy 再决定
-允许 rerun、选哪份 repair template 或交人。
+`failureCategories` 是 provider 能权威给出时的原始分类；它必须映射到员工 revision 的 ProblemType catalog。provider
+不能分类或只给 `unknown` 时，规则选择一个 script/只读 Agent ProblemProducer 读取同一 bundle，产出经 §4.8.1 校验的
+`ProblemSetEnvelope`。例如可定义 `compile`、`link`、`unit-test`、`integration-test`、`static-analysis`、
+`infrastructure-transient`、`policy`；分类只是 fact，ProblemHandlingRule 再决定安全 rerun、选哪位 Agent/程序修复或交人。
+不得由 pipeline repair Agent 一边读日志一边自行发明类型和选择处理策略。
 
 ### 6.4 大结果处理
 
@@ -1653,7 +1965,7 @@ interface PipelineEvidenceManifestV1 {
 - `.agent-workflow/pipeline` 永远命中 RFC-308 exclude profile；source-control candidate preview 若见其 staged/tracked
   历史，固定拒绝发布并给出迁移诊断。
 
-### 6.5 rerun 与 repair
+### 6.5 rerun、问题生产与 repair
 
 required gate 没有任何 run 时不是 `rerun`。PipelinePolicy 为每个 gate 配
 `observe-only | trigger-if-missing`：前者按 deadline wait/handoff，后者调用 `trigger(expectedHead,target,gateKeys,
@@ -1662,6 +1974,11 @@ idempotencyKey)`。adapter 必须声明 trigger operation；receipt 绑定新 ru
 
 `pipeline.rerun` 只接受已有 `runRef + gateKey + expectedHead + idempotencyKey`，且 adapter 返回 provider receipt。
 固定拒绝：unknown retryability、非当前 head、超过 budget、policy gate、已 running、provider 没有幂等保证。
+
+不满足安全 rerun 的 gate 进入问题生产阶段：优先使用 provider 的可信类型映射；否则按员工规则选择唯一 producer。
+同一 evidence digest 已有合法 ProblemSetReceipt 时直接复用。handler 修改并经验证后必须重新 collect 新 head 的 pipeline
+bundle；旧 ProblemSetReceipt 只保留审计，不得跨 head 复用。一个 bundle 同时含多类问题时，work selection 按员工优先级
+稳定分批，后一批必须在前一批发布并重采后重新判断，不能把陈旧的全部问题一次塞给 Agent。
 
 trigger 与 rerun 有独立预算、backoff 和 failure receipt；pipeline 一直 queued/running 到 deadline 后进入 wait/handoff，
 不会把“还没跑完”交给 repair Agent。
@@ -1928,33 +2245,38 @@ candidate/commit/push 发生。凭据负向测试仍然成立：daemon 侧 conne
 
 ### 7.7 两级重试与 whole-workspace 回退
 
+`sameScene` 是业务概念：平台钉住同一份 frozen input、baseline、evidence 和一个 disposable workspace，
+把上一次验证错误作为结构化反馈再执行一次。机制上每次都启动新的 host Task/Agent 进程、使用新 nonce 并留下独立 receipt；
+不依赖 runtime 的隐式会话 continuation。`freshScene` 则丢弃整个现场，从 exact baseline 重建。
+
 ```text
-fresh rerun 0 / exact baseline B / evidence E / template T / nonce N0
-  ├─ attempt 0 → protocol/semantic error → structured feedback, same session/workspace
-  ├─ attempt 1 → protocol/semantic error → structured feedback, same session/workspace
-  └─ same-session budget exhausted
-       → terminate session
+fresh scene 0 / exact baseline B / evidence E / template T / nonce N0
+  ├─ same-scene attempt 0 → protocol/semantic error → exact structured feedback
+  ├─ same-scene attempt 1 → new host task + same workspace/input + new nonce
+  └─ same-scene budget exhausted
+       → terminate the current host task
        → revoke all mount/output capabilities
        → discard WHOLE action workspace (not git reset)
        → rematerialize exact B + E + T
        → preflight hashes
-       → fresh rerun 1 / new nonce N1 / no old feedback
+       → fresh scene 1 / new nonce N1 / no old feedback
 ```
 
 分类：
 
-| 失败                                                         | 同会话                           | fresh session      | 现场                                      |
+| 失败                                                         | 同现场新 host task               | 全新现场           | 现场                                      |
 | ------------------------------------------------------------ | -------------------------------- | ------------------ | ----------------------------------------- |
-| missing/multiple envelope、schema、semantic mismatch         | 允许，给 exact JSON pointer/code | N 次耗尽后允许     | 同会话保留；fresh 时 whole-workspace 重建 |
+| missing/multiple envelope、schema、semantic mismatch         | 允许，给 exact JSON pointer/code | N 次耗尽后允许     | 同现场保留；fresh 时 whole-workspace 重建 |
 | runtime transient 且 sandbox receipt 完整                    | 按 runtime classifier            | 允许               | 不确定完整性时按 fresh 处理               |
 | Git/protected/evidence 写入等 boundary violation（快照检出） | 禁止                             | 允许但计入安全预算 | 立即 kill、revoke、整树废弃               |
 | baseline/evidence digest 不可重建                            | 禁止                             | 禁止               | Mission `blocked(evidence-unavailable)`   |
 | cancel、terminal MR、epoch lost                              | 禁止                             | 禁止               | cancel + discard，不产生 candidate        |
 
-反馈不是自由文本：`{code,jsonPointer,expected,observedSummary,retryOrdinal}`，且不会包含 secret/raw log。fresh
-session 不继承旧 session feedback，避免把不存在的上下文变成新指令。
+反馈不是自由文本：`{code,jsonPointer,expected,observedSummary,retryOrdinal}`，且不会包含 secret/raw log。全新
+现场不继承旧现场反馈，避免把不存在的上下文变成新指令。
 
-fresh-session 预算耗尽后 ActionRun 失败，Mission 进入 `blocked(agent-contract-exhausted)`；平台不 commit/push
+fresh-scene 预算耗尽后 ActionRun 失败，再按步骤已发布的 `onFailure.onExhausted` 继续；只有目标是 `block`
+才进入具名阻断。平台不 commit/push
 半成品。daemon 启动恢复先把失去 task ownership 的 attempt 结算 `interrupted`，确认旧进程死亡和 workspace
 capability 已 revoke 后才能重建。
 
@@ -2233,6 +2555,10 @@ terminal transition 同时在 authoritative terminal tree 上结算 upload fulfi
 | `development_agent_attempts`             | action、rerun/attempt ordinal unique、execution ref、nonce digest、rejection/outcome refs                                                      | raw stdout/prompt/token                    |
 | `development_effects`                    | effect kind、intent digest、idempotency key unique、epoch、state、receipt ref                                                                  | open action params、credential             |
 | `development_feedback_ledger`            | mission/thread/revision/head unique、fingerprint/state/action/reply refs                                                                       | 未裁剪全文；正文留 integration evidence    |
+| `development_step_runs`                  | mission/employee revision/step/attempt/input digest unique、kind/state、deadline、output/failure ref                                           | Agent session、workspace path、审批正文    |
+| `development_mission_links`              | parent step run + target repo/employee/input digest unique、child mission、completion condition、latest observation                            | child workspace/diff                       |
+| `development_approval_sagas`             | step run、adapter/draft/submit intent digest、idempotency key unique、correlation/external refs、latest authoritative status/revision          | credential、审批正文/provider response     |
+| `development_step_joins`                 | mission/group/member step unique、all/any/quorum/deadline、member receipt revision、settled result                                             | in-memory promise/barrier                  |
 | `development_bundle_refs`                | purpose、evidence ref、manifest digest、bytes/count、retention state                                                                           | 文件内容、host path                        |
 | `action_template_revisions`              | immutable semantic config + ACL/resource refs                                                                                                  | executable adapter/secret                  |
 | `digital_employee_revisions`             | immutable capability routes + adapter refs + policy ref                                                                                        | adapter program body                       |
@@ -2255,6 +2581,10 @@ IntegrationAdapterDefinition 的表仍归 integration module；runtime/agent/wor
 - `(action_run_id, rerun_seq, attempt_seq)` 唯一，ordinal 只在 transaction 中分配。
 - `(mission_id, decision_input_digest)` 可去重同一 snapshot 的重复 reconcile；新 policy/head/fact ref 必须改变 digest。
 - `(mission_id, decision_id)` deferred wake 唯一；新外部 wake 可提前唤醒但不清零 attempt/backoff，settle 后才关闭。
+- `(mission_id, employee_revision, step_id, attempt_ordinal, input_digest)` step run 唯一；同一输入重放只能 adopt，不能再起执行者。
+- `(parent_step_run_id, target_repository_ref, target_employee_revision, input_digest)` child link 唯一；child id 创建后不可替换。
+- approval submit idempotency key 全局唯一；correlation ref 可换 revision 不能换业务申请，observe 只接受 revision 前进。
+- `(mission_id, join_group_id, member_step_id)` join member 唯一；settled join 不因迟到 receipt 逆转，迟到结果仅追加审计。
 - effect idempotency key 由 `mission/action/effect-kind/intent-digest` canonical derive，provider receipt 另存。
 - policy/employee/template revision immutable；所有引用都有 FK/restrict 或 owner-provided blocker participant，不能删悬挂。
 
@@ -2273,6 +2603,9 @@ outbox。禁止在 transaction 内：spawn Agent、读/写 filesystem、Git、HT
 | decision commit 前                   | Mission DB                                      | 无 intent，重新 evaluate 相同 snapshot                                                           |
 | decision + outbox 后、dispatch 前    | outbox                                          | claim 同一 idempotency key 并执行                                                                |
 | durable wait 期间 daemon 重启        | deferred wake + managed job registry            | 按原 resumeAt/ordinal 恢复；已过期立即 wake，不重置 backoff                                      |
+| child create/observe 响应丢失        | mission link idempotency key + child Mission DB | 先按 key adopt；已有 child 只重采状态，不再 launch                                               |
+| approval submit 响应丢失             | approval saga key + provider lookup             | lookup/adopt receipt；仅权威证明不存在时才按原 intent 重发                                       |
+| approval pending 期间重启            | approval saga + deferred wake + correlation     | 释放执行资源；按 webhook/timer wake 后短 observe，保留原 deadline/ordinal                        |
 | upload placement 中断/回执丢失       | plan + baseline + source-control seed digest    | 废弃未知临时 workspace；从 exact baseline 幂等重建，绝不叠加写                                   |
 | Agent running                        | task ownership + process/session registry       | 先终止/确认已死，settle interrupted，revoke capability，再按预算恢复                             |
 | frame valid、workspace validate 前   | action workspace snapshot                       | ownership 仍有效才重新 validate；不重新问 Agent                                                  |
@@ -2357,6 +2690,7 @@ authority、range、redaction 与字节上限；绝不返回 host path。WS 只�
 /api/code/action-templates       typed create/revise/preview/publish/archive
 /api/code/verification-profiles  typed create/revise/probe/publish/archive
 /api/code/digital-employees      typed create/revise/validate/publish/archive
+/api/code/digital-employees/:id/playbook  business aggregate read/revise/validate/preview/publish
 /api/code/automation-policies    typed create/revise/simulate/publish/archive
 /api/integrations/development-adapters  typed adapter lifecycle (integration owns)
 /api/code/repository-assignments typed repo/repo-group employee assignment
@@ -2365,6 +2699,11 @@ authority、range、redaction 与字节上限；绝不返回 host path。WS 只�
 `simulate` 接受受限 fixture/ref，不接任意 database query。它返回匹配 ruleId、facts digest、unmatched reason 与
 readiness，不执行 action。配置导入/导出保留 immutable revision/upstream provenance；导入 unknown contract version
 只能 preview/refuse，不能降级忽略字段。
+
+业务前端只调用 `playbook` 聚合端点。read 返回解析后的业务名称、步骤图、问题类型/生产者/处理者、连接状态与编译诊断；
+revise 是一次 application command，不能让浏览器分别改 employee/policy/template/adapter 后留下半套配置。preview 必须列出
+所有可达路径、child/approval join、失败/超时分支与确切 unresolved dependency；publish 在一个事务里冻结 playbook 与完整
+compiled closure digest。旧四族 CRUD 只保留给拥有高级技术配置权限的管理员/迁移工具，不出现在员工创建和详情主导航。
 
 ### 12.3 权限
 
@@ -2378,6 +2717,9 @@ digital-employees:read/create/update/archive
 automation-policies:read/create/update/archive
 adapter-definitions:read/create/update/archive
 repository-employee-assignments:read/update
+digital-employee-technical-resources:read/update
+development-approvals:submit/observe
+development-child-missions:launch/read
 ```
 
 语义补充：
@@ -2390,22 +2732,39 @@ repository-employee-assignments:read/update
 - 临时 upload/preview 沿用 `development-missions:launch` 且绑定 actor + repository scope；uploadRef 不是 bearer capability，
   另一个用户即使得到 ref 也不能读取、preview、claim 或删除。
 - worker 使用 family-scoped internal effect capability；HTTP/PAT/WS/MCP 不能直接取得。
+- child launch 与 approval submit/observe 只发给 Mission worker 的 scoped internal capability；普通业务用户配置步骤不自动
+  获得目标仓库或审批连接权限，publish/admission 必须证明运行主体的 exact scope。
 - `merged` 不是 permission；系统没有任何 endpoint 让上述权限间接调用 merge。
 
 闭集 permission catalog、角色默认值、session/PAT/API/WS/frontend projection 必须同批闭环；不能只给表单加 checkbox。
 
 ### 12.4 页面信息架构
 
-`/code` 建议从“五个能力页”调整为：
+`/code` 采用与 `/repos`、`/webhooks` 相同的 `page--operations → operations-surface → PageHeader + 标准卡片/表格`
+骨架，不保留 hero、活动拓扑图或独立视觉语言。顶层信息架构按“定义与运行分开”固定为：
 
-1. **任务/Missions**：可写正文、上传文件或提交外部 ID；每个上传行必须填写仓库目标文件路径，并预览
-   create/replace/already-present、有效内容策略与阻断原因；看从 admission 到 MR terminal 的单条时间线。
-2. **数字员工**：Java/C++/polyglot 员工列表；详情展示能力覆盖、ActionTemplate route、adapter、默认 policy 与 readiness。
-3. **动作模板**：按 capability 管理多个实现；清楚显示平台锁定项、skills/MCP、路径收缩与验证 profile。
-4. **策略**：rule builder、顺序、固定 guard、预算、MR care/readiness；有 fixture/replay 模拟器。
-5. **适配器**：需求源与门禁 provider readiness、contract version、secret projection 名称、最近 probe；不显示 secret。
-6. **验证配置**：build/test 程序、隔离/网络/超时和证据选择；可执行字段显式标高风险权限。
-7. **仓库配置**：一个仓库/组选择一名员工和可选 policy override，不再维护五格模板矩阵。
+1. **数字员工**（位于“编排”和“运行与仓库”之间）只放能力构建：
+   - **能力编排** `/code`：列表、创建和编辑数字员工说明书；Java/C++/polyglot 只是创建预置；
+   - **执行者库** `/code/executors`：查看可选 Agent、script、其他数字员工和审批系统；
+   - **仓库使用范围** `/code/assignments`：仓库/组选择一名已发布员工，不再维护五格模板矩阵。
+2. **运行与仓库**收纳所有执行事实：
+   - **任务** `/tasks`：数字员工 Mission 与普通编排任务统一管理，提供“数字员工”分类筛选；旧
+     `/code/missions` 只做兼容跳转。数字员工任务可写正文、上传带仓库目标路径的文件或提交外部 ID，并跟踪到 MR terminal；
+   - **成效** `/outcomes`：按员工和时间展示已交付/准备合入/阻断/平均恢复轮次，全部来自平台 receipt；
+   - 定时任务、仓库和 Webhook 保持本组既有位置。
+
+任何数字员工、任务或成效页都不放“← 返回”这类机械导航按钮。用户通过稳定的左侧分类定位，并通过同页
+`JourneyNextAction` 继续当前 User Case；不得用返回列表代替“下一步”。
+
+员工详情是“员工说明书”，默认只展示：负责什么、按哪几步工作、每一步何时触发/谁执行/成功失败去哪、能识别哪些问题及
+谁修、会调用哪些其他员工/审批、在哪些仓生效。可以放一张小型运行摘要并链接到 `/outcomes?employee=...`，但完整成效统计
+只属于“运行与仓库”。业务页面的执行者选择器显示“Java 开发 Agent”“C++
+编译修复程序”“门禁配置员工”“发布审批系统”等已发布业务名称，不显示 `ActionTemplate`、`VerificationProfile`、
+`adapter/profile`、资源 ID/revision 或 JSON。高级管理员可以展开“技术实现”查看解析后的依赖和编译 receipt，但它不是业务
+配置的必经路径。
+
+每次新增步骤、问题生产者或问题处理者时，执行者是该规则卡的必填项。选择器可直接查找“执行者库”中已发布对象，
+也可在当前员工编辑页打开内嵌创建对话框，创建、发布后立即回填本步；整个过程不离开当前员工草稿。
 
 Mission 详情必须能回答：
 
@@ -2421,6 +2780,101 @@ Mission 详情必须能回答：
 - 为什么 waiting/blocked/ready，以及下一次自动 wake 条件。
 
 “Agent 说完成了”不作为 UI 状态；只能显示“envelope validated”“workspace validated”“candidate prepared”等平台 receipt。
+
+#### 12.4.1 服务端拥有的 JourneyProjection
+
+页面不能用散落的 `if (status)` 各自猜下一步。application 层从 committed aggregate、配置 closure、assignment、MR claim、
+step run、child link、approval saga、readiness 和 actor authority 生成同一投影：
+
+```ts
+interface JourneyProjectionV1 {
+  readonly schemaVersion: 1
+  readonly journey: 'employee-setup' | 'mission-delivery'
+  readonly current: {
+    readonly key: string
+    readonly label: string
+    readonly ordinal: number
+    readonly total: number
+    readonly detail: string
+  }
+  readonly next: {
+    readonly kind:
+      | 'navigate'
+      | 'command'
+      | 'form'
+      | 'automatic-wake'
+      | 'external-human'
+      | 'complete'
+    readonly label: string
+    readonly detail: string
+    readonly owner:
+      | 'current-user'
+      | 'committer'
+      | 'platform'
+      | 'digital-employee'
+      | 'external-system'
+    readonly href: string | null
+    readonly command: string | null
+    readonly available: boolean
+    readonly unavailableReason: string | null
+    readonly wake: {
+      readonly source: 'webhook' | 'timer' | 'child-mission' | 'approval' | 'mr-facts' | null
+      readonly resumeAt: number | null
+      readonly deadlineAt: number | null
+      readonly description: string | null
+    }
+  }
+  readonly steps: readonly {
+    readonly key: string
+    readonly label: string
+    readonly state: 'done' | 'current' | 'next' | 'pending' | 'blocked' | 'skipped'
+    readonly owner: JourneyProjectionV1['next']['owner']
+    readonly href: string | null
+  }[]
+  readonly reasonRefs: readonly string[]
+  readonly projectionRevision: string
+}
+```
+
+`projectionRevision` 覆盖所有输入 revision/digest；HTTP/WS 只传该投影，不传可被客户端重新解释的内部状态组合。command
+必须来自 closed catalog 并在执行时重验 actor/aggregate revision；`href` 只能是平台路由或 code-host/approval owner 返回的
+已校验业务 URL。没有权限时仍返回下一步语义，但 `available=false + unavailableReason`，不能把按钮静默藏掉让用户以为流程
+结束。
+
+#### 12.4.2 User Case 状态表
+
+| Journey          | 当前判据                     | 当前页             | 下一步 owner/kind                                          | 同页动作或自动条件                                   |
+| ---------------- | ---------------------------- | ------------------ | ---------------------------------------------------------- | ---------------------------------------------------- |
+| employee-setup   | 无 employee                  | `/code`            | current-user/navigate                                      | “创建数字员工”                                       |
+| employee-setup   | employee draft/unpublished   | 员工详情           | current-user/form 或 command                               | “完善工作方式”或 validate 后“发布”                   |
+| employee-setup   | published、无 assignment     | 员工详情           | current-user/navigate                                      | “设置使用范围”，带 employee 预选参数                 |
+| employee-setup   | published、有 assignment     | 员工详情或 `/code` | current-user/navigate                                      | “交给它第一项工作”                                   |
+| mission-delivery | launch draft                 | 新建任务           | current-user/form                                          | Stepper 当前步；footer 始终显示后一步名称            |
+| mission-delivery | requirement/source ambiguous | 任务详情           | current-user/form                                          | 来源选择/回答表单就在 NextAction 下                  |
+| mission-delivery | runnable action              | 任务详情           | platform/automatic-wake                                    | 当前 executor + outbox/attempt；无需人工             |
+| mission-delivery | child active                 | 父任务详情         | digital-employee/automatic-wake                            | child 链接、completion、deadline；可下钻但父页不丢链 |
+| mission-delivery | approval pending             | 父任务详情         | external-system 或 committer/automatic-wake/external-human | 申请号、审批入口、observe resumeAt/deadline          |
+| mission-delivery | blocked/retryable            | 任务详情           | current-user/command                                       | 确切 remediation；`retry` 同区块                     |
+| mission-delivery | tracking-only、无 MR         | 任务详情           | current-user/form                                          | attach MR 表单同页打开                               |
+| mission-delivery | ready/waiting committer      | 任务详情           | committer/external-human                                   | MR 入口、remaining human holds；不出现平台 merge     |
+| mission-delivery | merged/terminal              | 任务详情           | platform/complete                                          | 终态 receipt + 查看成效/再发任务                     |
+
+设置型流程每次成功 mutation 返回 `nextLocation` 与新的 projection revision；客户端优先按它导航，刷新后也能由 read projection
+重建。Mission 状态 mutation 仍留在详情页并刷新投影，避免操作后跳走而看不到是否生效。
+
+#### 12.4.3 页面组合
+
+`JourneyNextAction` 是 `/code`、员工详情、仓库使用范围、新建任务和 Mission 详情共用的展示组件。它固定在 PageHeader 后、
+长内容前，移动端仍在首屏；主按钮只允许一个，取消/handoff/高级动作保持次级。组件同时渲染简短步骤条，因此用户永远看见
+“已完成什么、现在在哪里、后面还有什么”。
+
+- `/code` 只计算一项全局 setup action；任务收件箱另列需要人处理和 waiting committer，不与 setup 抢主按钮。
+- 员工详情先显示说明书和 readiness；技术 closure/JSON 仅 `digital-employee-technical-resources:read` 或兼容期
+  `scripts:author` 可见的折叠区。
+- 新建任务 Stepper 的“下一步”文案必须说出目标步骤，而不是通用“继续”；预检失败直接给回需修改的步骤。
+- Mission 详情先展示 journey、问题/阻断表单、child/approval 协作；evidence、decision/effect/raw readiness 全部下沉到
+  “运行证据”折叠区。
+- MR ready 时主动作只有“打开 MR 供 committer 检视”；merged 时主动作是“查看成效”或“再交一项工作”，永不生成 merge。
 
 ### 12.5 配置的发布流程
 
@@ -2549,6 +3003,9 @@ unknown gate、rule no-match、adapter contract failure、recovery adoption。�
 - selection fixtures：显式员工且无 assignment、Java、C++、polyglot、同级冲突、无 fallback、跨模块阻断；
 - RepositoryUploadPlan：路径 canonicalization/case-fold collision、create/replace/already-present 真值表、entry 顺序与
   plan digest 重放、file mode 默认/覆盖、baseline 变化失效、created/replaced 禁 no-change；
+- EmployeePlaybook：step/jump/join 图闭合、静态/动态 child 环、all/any/quorum 真值表、deadline/partial 分支、同输入编译
+  100 次 closure digest 一致；
+- ProblemSet/handler：type/subject/head/evidence 闭集、complete 覆盖、稳定工作集排序、unknown/no-match/fallback；
 - readiness truth table：pass/fail/running/unknown/unavailable/partial、human holds、head/target 变化。
 
 ### 15.2 contract/mutation tests
@@ -2557,6 +3014,8 @@ unknown gate、rule no-match、adapter contract failure、recovery adoption。�
 - `DevelopmentCodeHostEffect` 编译期/源码负扫描无 merge/approve/resolve/custom；
 - CapabilityDefinition 与 template 不允许覆盖 workspace/protocol/stage/effect；
 - adapter stdout nextAction/agent/ready 字段拒绝；
+- child/approval envelope unknown key、错误 ancestry/input digest、重复 idempotency key、observe revision 回退、pending 无
+  wake/deadline、Agent draft 直接提交等越界全部拒绝；
 - Agent envelope missing/multiple/wrong nonce/port/action/input/capability/extra key/outcome mismatch 全覆盖；
 - source-selection/QuestionSet/AnswerSet 的 stale revision、错误 candidate key、重复 publish/collect 与 crash replay；
 - direct body-only/files-only/body+files codec、upload artifact claim/TTL、preview 与 launch head race、placement receipt、
@@ -2590,6 +3049,8 @@ unknown gate、rule no-match、adapter contract failure、recovery adoption。�
 - pipeline：多 gate、大流式日志、partial、unknown、provider outage、missing run trigger/rerun idempotency、响应丢失、
   head race、target race；
 - code-host：signed webhook 重放/乱序/丢失、threads revision、mergeability/approval/conflict/merged/closed；
+- approval：submit 成功响应丢失后 lookup adopt、pending→approved/rejected/expired、webhook 重放/丢失、observe outage 与
+  revision 乱序；
 - effect：create/comment/push 已成功但响应丢失，reconcile 能 adopt 且不重复。
 
 大日志 CI 不必每次落真实 2 GB，但要用流式 generator 证明峰值内存与 DB/prompt size 不随总日志线性增长；nightly/
@@ -2621,6 +3082,8 @@ soak 跑 GB 级 fixture，常规 gate 跑小尺寸同形 fixture并锁 chunk/ran
     全项相同 digest+mode 不造空 commit，但任一 created/replaced 时绝不误进 `completed-no-change`。
 18. upload plan 在 publish 前 handoff → 人工 commit/attach active 或 terminal MR → authoritative tree 满足时生成
     external fulfillment 并继续跟踪；目标缺失/错误时拒绝把 MR 当成交付，且不向 terminal MR 补写。
+19. 当前仓 pipeline fail → 问题类型命中 → 调用另一仓数字员工 → child MR ready → Agent 准备审批草稿 → 程序提交审批 →
+    daemon 重启后程序短 observe → approved → 原门禁重跑 → 父 MR ready；重复 reconcile/webhook 不复制 child/审批。
 
 ### 15.6 全仓门禁
 

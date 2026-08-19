@@ -40,6 +40,8 @@ export interface StepperProps {
    * Ignored on the last step, where `finalActions` replaces Next.
    */
   nextEnabled?: boolean
+  /** Business-specific destination label; defaults to the generic “Next”. */
+  nextLabel?: ReactNode
   /** Terminal action buttons rendered instead of Next on the LAST step. */
   finalActions?: ReactNode
   /** Freeze wizard navigation while the owning form has an in-flight save. */
@@ -56,6 +58,7 @@ export function Stepper({
   children,
   onNavigate,
   nextEnabled = true,
+  nextLabel,
   finalActions,
   navigationDisabled = false,
   className,
@@ -113,7 +116,7 @@ export function Stepper({
             disabled={navigationDisabled || !nextEnabled}
             onClick={() => onNavigate(current + 1)}
           >
-            {t('stepper.next')}
+            {nextLabel ?? t('stepper.next')}
           </button>
         ) : (
           finalActions

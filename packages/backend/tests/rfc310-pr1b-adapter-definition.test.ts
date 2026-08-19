@@ -76,6 +76,14 @@ describe('rfc310 adapter content contract', () => {
         content({ purpose: 'pipeline-classifier', operations: ['classify'] }),
       ),
     ).toEqual([])
+    expect(
+      validateAdapterContract(
+        content({
+          purpose: 'approval-gateway',
+          operations: ['submit', 'lookup-by-idempotency-key', 'observe'],
+        }),
+      ),
+    ).toEqual([])
     expect(developmentAdapterContentSchema.safeParse({ ...content(), extra: 1 }).success).toBe(
       false,
     )
@@ -110,6 +118,11 @@ describe('rfc310 adapter content contract', () => {
     [
       'gate missing collect',
       content({ purpose: 'pipeline-gate', operations: ['trigger'] }),
+      'missing-required-operation',
+    ],
+    [
+      'approval gateway missing idempotency lookup',
+      content({ purpose: 'approval-gateway', operations: ['submit', 'observe'] }),
       'missing-required-operation',
     ],
     ['duplicate operation', content({ operations: ['acquire', 'acquire'] }), 'duplicate-operation'],

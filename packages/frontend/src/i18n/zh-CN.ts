@@ -374,6 +374,10 @@ export interface Resources {
     repos: string
     webhooks: string
     code: string
+    digitalEmployees: string
+    executors: string
+    employeeAssignments: string
+    employeeOutcomes: string
     settings: string
     brand: string
     openMenu: string
@@ -382,6 +386,7 @@ export interface Resources {
     group: {
       agents: string
       workflows: string
+      digitalEmployees: string
       tasks: string
       // RFC-041 PR4 follow-up: single-item "记忆" group header.
       memory: string
@@ -1343,10 +1348,98 @@ export interface Resources {
   code: {
     title: string
     subtitle: string
+    journey: Record<string, unknown>
+    employeePlaybook: Record<string, unknown>
+    build: Record<string, unknown>
+    executors: Record<string, unknown>
+    control: {
+      eyebrow: string
+      headline: string
+      description: string
+      inbox: string
+      outcomes: string
+      startWork: string
+      checking: string
+      setupReady: string
+      setupNeeded: string
+      setupTitle: string
+      unavailable: string
+      readyCount: string
+      actionNeeded: string
+      employeeTitle: string
+      employeeBody: string
+      policyTitle: string
+      policyBody: string
+      assignmentTitle: string
+      assignmentBody: string
+      operationsTitle: string
+      operationsBody: string
+      readyMissions: string
+    }
+    operations: {
+      eyebrow: string
+      title: string
+      subtitle: string
+      allMissions: string
+      attentionTitle: string
+      attentionHint: string
+      readyTitle: string
+      readyHint: string
+      noActiveTitle: string
+      noActiveBody: string
+      stageAria: string
+      employeeFallback: string
+      blockedReason: string
+      awaitingInput: string
+      missionUpdated: string
+      missionUpdatedUnknown: string
+      stage: Record<
+        'intake' | 'develop' | 'publish' | 'care',
+        {
+          title: string
+          body: string
+          empty: string
+        }
+      >
+    }
+    outcomes: {
+      title: string
+      employeeTitle: string
+      subtitle: string
+      backToCode: string
+      backToTasks: string
+      showAll: string
+      historyTitle: string
+      historyHint: string
+      emptyTitle: string
+      emptyBody: string
+      colMission: string
+      colResult: string
+      colEmployee: string
+      colRepository: string
+      colCompleted: string
+      employeeFallback: string
+      summaryAria: string
+      summary: Record<
+        'merged' | 'noChange' | 'closed' | 'failed',
+        {
+          title: string
+          body: string
+        }
+      >
+      capabilityTitle: string
+      employeeSummaryTitle: string
+      employeeSummaryOpen: string
+      employeeSummaryHint: string
+      employeeActive: string
+      employeeReady: string
+      employeeDelivered: string
+    }
     tab: { matrix: string; activity: string; metrics: string; templates: string }
     config: {
       title: string
       subtitle: string
+      technicalSubtitle: string
       kindSwitch: string
       kind: {
         employees: string
@@ -1419,6 +1512,70 @@ export interface Resources {
       budgetText: string
       timeout: string
       scriptsAuthorHint: string
+      editor: {
+        identitySection: string
+        versionedRefHint: string
+        resourceId: string
+        revision: string
+        routesHint: string
+        routeNumber: string
+        fallbackHint: string
+        rulesPreserved: string
+        addRoute: string
+        requirementSourcesHint: string
+        sourceNumber: string
+        sourceKey: string
+        adapterRef: string
+        defaultSource: string
+        addSource: string
+        pipelineProvidersHint: string
+        providerNumber: string
+        providerKey: string
+        addProvider: string
+        executionSection: string
+        capabilityLocked: string
+        contractVersion: string
+        executorKind: string
+        agent: string
+        workgroup: string
+        workgroupRef: string
+        runtimeProfile: string
+        resourcesSection: string
+        labels: string
+        skills: string
+        mcps: string
+        readOnlyResources: string
+        contextProfile: string
+        writablePathPolicy: string
+        protectedPathClasses: string
+        sameSessionRetries: string
+        freshSessionRetries: string
+        verificationStrategy: string
+        firstFailure: string
+        collectAll: string
+        maxParallel: string
+        verificationStepsHint: string
+        stepNumber: string
+        argsRef: string
+        networkProfile: string
+        exitCodeInvalid: string
+        evidenceSelectorsPreserved: string
+        addStep: string
+        adapterProgramSection: string
+        operationsHint: string
+        parameterSchema: string
+        secretKeysHint: string
+        outputBudgetHint: string
+        maxFiles: string
+        maxFileBytes: string
+        maxTotalBytes: string
+        advancedReadOnly: string
+        advancedJson: string
+        advancedJsonHint: string
+        applyAdvanced: string
+        applyAdvancedFirst: string
+        draftMustBeObject: string
+      }
     }
     assignments: {
       title: string
@@ -1506,6 +1663,15 @@ export interface Resources {
       noEffects: string
       colEffect: string
       colCreated: string
+      collaborationTitle: string
+      childMissionTitle: string
+      collaborationPending: string
+      childMissionCreating: string
+      openChildMission: string
+      approvalTitle: string
+      openApproval: string
+      approvalWaiting: string
+      collaborationDeadline: string
       readinessTitle: string
       noReadiness: string
       handoff: string
@@ -1539,6 +1705,10 @@ export interface Resources {
       evidenceLoadMore: string
       colGate: string
       colRun: string
+      status: Record<string, string>
+      wizard: Record<string, string | Record<string, string>>
+      guidance: Record<string, string>
+      readiness: Record<string, string | Record<string, string>>
     }
     policies: {
       title: string
@@ -2420,6 +2590,7 @@ export interface Resources {
     open: string
     edit: string
     delete: string
+    remove: string
     deleteResourceActionHint: string
     save: string
     saved: string
@@ -3611,6 +3782,13 @@ export interface Resources {
       scope: { mine: string; shared: string; all: string }
       originLabel: string
       origin: { all: string; manual: string; scheduled: string; webhook: string; api: string }
+      categoryLabel: string
+      category: { all: string; orchestration: string; 'digital-employee': string }
+      newDigitalEmployee: string
+      digitalEmployeeSection: string
+      digitalEmployeeSectionHint: string
+      digitalEmployeeTask: string
+      digitalEmployeeOwner: string
       applyFilters: string
       resultCount: string
       addedCount: string
@@ -6730,6 +6908,10 @@ export const zhCN: Resources = {
     repos: '远端仓',
     webhooks: 'Webhook',
     code: '代码',
+    digitalEmployees: '能力编排',
+    executors: '执行者库',
+    employeeAssignments: '适用仓库',
+    employeeOutcomes: '运行成效',
     settings: '设置',
     brand: 'Agent Workflow',
     openMenu: '打开导航菜单',
@@ -6737,6 +6919,7 @@ export const zhCN: Resources = {
     group: {
       agents: '能力资源',
       workflows: '编排',
+      digitalEmployees: '数字员工',
       tasks: '运行与仓库',
       memory: '知识',
     },
@@ -7492,12 +7675,446 @@ export const zhCN: Resources = {
     },
   },
   code: {
-    title: '代码能力',
-    subtitle: '每个仓库启用了哪些能力，以及它们做过什么',
+    title: '数字员工',
+    subtitle: '构建可复用的员工能力与规则化工作方式；实际执行统一进入任务管理',
+    build: {
+      title: '数字员工能力构建',
+      employees: {
+        title: '员工工作说明书',
+        body: '定义每一步业务动作、具体执行者、重试方式与确定的下一步。',
+      },
+      executors: {
+        title: '执行者库',
+        body: '集中维护步骤可选择的 AI、程序、其他数字员工与外部系统。',
+      },
+      assignments: {
+        title: '适用仓库',
+        body: '指定每个仓库或仓库组使用哪名已发布员工与规则。',
+      },
+      outcomes: {
+        title: '成效',
+        body: '根据已完成任务和能力信号持续调整员工策略。',
+      },
+      runtimeTitle: '实际执行与其他任务统一管理',
+      runtimeBody: '发起、阻塞处理、MR 看护与合入生命周期都在任务列表的“数字员工”分类中完成。',
+      openTasks: '查看数字员工任务',
+    },
+    executors: {
+      title: '执行者库',
+      subtitle: '这里是每个员工步骤都能直接选择的完整执行者清单。',
+      back: '← 数字员工',
+      addAi: '新增 AI 执行者',
+      addProgram: '新增程序',
+      addEmployee: '新增数字员工',
+      addSystem: '新增外部系统',
+      ai: {
+        title: 'AI 执行者',
+        body: '在明确输入输出封套内执行的 Agent 实现。',
+        empty: '还没有已发布 AI 执行者',
+      },
+      program: {
+        title: '程序',
+        body: '由平台任务引擎运行的确定性脚本。',
+        empty: '还没有已发布程序执行者',
+      },
+      employee: {
+        title: '可调用数字员工',
+        body: '可接手 child 任务的已发布员工，也可在另一仓库工作。',
+        empty: '还没有可调用数字员工',
+      },
+      system: {
+        title: '外部系统',
+        body: '负责需求取件、流水线门禁、审批提交与观察的程序。',
+        empty: '还没有已发布外部系统',
+      },
+      platform: {
+        title: '平台内建动作',
+        body: '平台固定执行，无需单独创建资源，也不能由 AI 改写。',
+      },
+    },
+    journey: {
+      progress: '完整操作进度',
+      current: '当前位置 · 第 {{current}} / {{total}} 步',
+      nextAction: '下一步',
+      owner: '负责人：{{owner}}',
+      ownerName: {
+        'current-user': '你',
+        committer: 'Committer',
+        platform: '平台',
+        'digital-employee': '其他数字员工',
+        'external-system': '外部系统',
+      },
+      noActionRequired: '无需你操作，系统会自动继续',
+      unavailable: '当前账号缺少权限：{{reason}}',
+      resumeAt: '预计 {{time}} 再次检查',
+      deadlineAt: '最晚等待到 {{time}}',
+      step: {
+        'employee-setup': {
+          define: '定义员工',
+          publish: '发布员工',
+          assign: '设置使用范围',
+          launch: '交付第一项工作',
+        },
+        'mission-delivery': {
+          intake: '接收需求',
+          develop: '开发与修复',
+          publish: '验证并发布',
+          care: '看护 MR',
+          merged: '确认合入',
+        },
+      },
+      next: {
+        createEmployee: '创建数字员工',
+        employeeArchived: '创建新的数字员工',
+        configureAndPublish: '完善这名员工的工作方式',
+        publishEmployee: '发布这名数字员工',
+        assignRepository: '设置它服务哪些仓库',
+        launchFirstMission: '交给它第一项工作',
+        answerQuestions: '回答数字员工的问题',
+        waitChildMission: '等待另一名数字员工完成',
+        openApproval: '打开审批并完成审核',
+        waitApproval: '等待审批系统结果',
+        retryMission: '修复原因后重试',
+        attachMergeRequest: '挂接人工创建的 MR',
+        resumeAutomation: '恢复自动开发',
+        reviewAndMerge: '打开 MR 检视并合入',
+        watchMergeRequest: '持续看护 MR',
+        continueAutomatically: '继续自动开发',
+        settleTransition: '结算正在进行的操作',
+        viewOutcome: '查看本次成效',
+        viewNoChangeOutcome: '查看无需修改的结果',
+        launchAnotherMission: '再交一项工作',
+      },
+      detail: {
+        setupDefineDetail: '先定义这名员工负责什么、收到工作后按哪几步执行。',
+        setupPublishDetail: '检查工作步骤与连接，发布后才能被仓库选择。',
+        setupAssignDetail: '把已发布员工绑定到仓库、仓库组或全局默认范围。',
+        setupLaunchDetail: '配置已就绪，可以提交正文、文件或外部需求 ID。',
+        createEmployeeDetail: '选择通用、Java 或 C++ 预置；创建后会直接进入完整工作说明书。',
+        employeeArchivedDetail: '这名员工已归档，创建新员工后继续设置。',
+        configureAndPublishDetail: '补齐有序步骤、问题处理、跨仓协作和系统连接，再发布不可变修订。',
+        publishEmployeeDetail: '所有规则和依赖已校验，可以发布并进入仓库使用范围设置。',
+        assignRepositoryDetail: '选择仓库或仓库组，保存后即可从同页发起第一项工作。',
+        launchFirstMissionDetail: '可写正文、上传带目标路径的文件，或只提交外部系统 ID。',
+        missionIntakeDetail: '平台正在取得并冻结需求材料，歧义时会在这里要求你选择。',
+        missionDevelopDetail: '数字员工按已发布步骤处理，Agent 或程序只生产当前步骤结果。',
+        missionPublishDetail: '平台验证真实工作区，再提交、推送并创建或更新 MR。',
+        missionCareDetail: '平台持续采集检视意见、流水线和审批状态，按规则修复。',
+        missionMergedDetail: '平台已经观察到权威合入事实，生命周期结束。',
+        terminalCompleteDetail: '完整执行记录与成效已保留，平台不再写入该 MR。',
+        terminalStoppedDetail: '该任务已经停止；可以查看记录或再发起一项工作。',
+        settleTransitionDetail: '平台先核对已发出的副作用，再安全完成取消或交接。',
+        answerQuestionsDetail: '答案表单就在下方；提交后会冻结进下一轮输入并自动继续。',
+        waitChildMissionDetail:
+          '另一仓库的独立任务正在推进；父任务不占用 Agent，会按完成条件自动恢复。',
+        openApprovalDetail: '审批材料已提交，需有权限的审核人完成外部审批；平台继续观察结果。',
+        waitApprovalDetail: '申请号和 deadline 已持久化；平台按 webhook 或定时短轮询取得权威状态。',
+        retryMissionDetail: '先按阻断原因修复配置或外部状态，再从确定现场恢复。',
+        attachMergeRequestDetail: '填写已有 MR，平台核对仓库、分支和 head 后继续生命周期看护。',
+        resumeAutomationDetail: '重新采集当前事实并按已发布规则恢复写入，不沿用交接前的旧现场。',
+        reviewAndMergeDetail:
+          '自动化条件已经满足；平台永不自动合入，由 committer 做最终检视与合入。',
+        watchMergeRequestDetail: '无需手工刷新；新意见、红门禁、冲突或合入事件都会唤醒规则。',
+        continueAutomaticallyDetail: '无需你操作；平台正在执行规则选定的下一步。',
+      },
+      wake: {
+        settleTransitionWake: '外部副作用结算后自动更新',
+        waitChildMissionWake: 'child 任务状态或 deadline 变化时自动继续',
+        waitApprovalWake: '审批 webhook 或定时观察时自动继续',
+        waitMergeWake: '代码托管合入事件或主动采集时更新',
+        watchMergeRequestWake: '新 webhook 或定期事实采集时自动继续',
+        continueAutomaticallyWake: '当前动作完成或到达恢复时间时自动继续',
+      },
+    },
+    employeePlaybook: {
+      employeesTitle: '数字员工',
+      employeesSubtitle: '用业务步骤定义它收到工作后怎么做；平台严格按规则执行。',
+      createEmployee: '创建数字员工',
+      createAndConfigure: '创建并查看工作说明书',
+      createHint: '选择最接近的预置，平台会生成完整步骤；创建后直接进入下一步。',
+      employeesEmpty: '还没有数字员工',
+      employeesEmptyHint: '先创建一名员工，随后发布并设置它服务的仓库。',
+      basics: '负责什么',
+      preset: '擅长的项目类型',
+      presetGeneral: '通用研发',
+      presetJava: 'Java 项目',
+      presetCpp: 'C / C++ 项目',
+      ruleSet: '业务规则集',
+      ruleSetHint: '规则决定何时执行、重试和停止；AI 不选择下一步。',
+      chooseRuleSet: '选择已发布规则集',
+      noRuleSet: '请先发布一套业务规则集',
+      detectedExecutors: '将使用 {{count}} 个已发布执行者生成初始步骤。',
+      enabled: '允许接收新工作',
+      enabledShort: '启用',
+      disabled: '停用',
+      colSteps: '工作步骤',
+      colStatus: '接单状态',
+      stepCount: '{{count}} 步',
+      steps: '收到任务后怎么做',
+      stepsHint: '步骤从上到下执行；每一步只说明何时做、谁来做、成功或失败后去哪。',
+      addStep: '增加一步',
+      stepNumber: '第 {{number}} 步',
+      stepName: '步骤名称',
+      stepDescription: '这一步完成什么',
+      trigger: '什么时候执行',
+      triggerAlways: '到达这一步就执行',
+      triggerRequirementReady: '需求材料完整时',
+      triggerReviewFeedback: '收到未处理检视意见时',
+      triggerPipelineFailed: '流水线门禁失败时',
+      triggerMergeConflict: 'MR 发生冲突时',
+      executorType: '由谁完成',
+      executor: '具体执行者',
+      executorPlatform: '平台固定动作',
+      executorAgent: 'AI Agent',
+      executorScript: '程序 / 脚本',
+      executorEmployee: '另一名数字员工（可跨仓）',
+      executorApprovalPrepare: '准备审批材料（Agent 或程序）',
+      executorApprovalSubmit: '提交审批（程序）',
+      executorApprovalObserve: '等待审批（程序）',
+      chooseExecutor: '选择已发布执行者',
+      createExecutor: '新增执行者',
+      openExecutorLibrary: '查看执行者库',
+      createPublishAndSelect: '创建、发布并选中',
+      inlineExecutorHint:
+        '执行者会在当前页面创建并发布，然后直接选给这一步，不会丢失数字员工草稿。',
+      executorName: '执行者业务名称',
+      executorAbility: '它能完成的工作',
+      selectAgent: 'AI Agent',
+      programLanguage: '程序语言',
+      programPath: '已发布程序路径或引用',
+      executorInstructions: '执行要求',
+      approvalProgramPath: '审批连接程序',
+      approvalProgramHint: '程序需要实现提交、按幂等键查询和审批状态观察。',
+      capabilityRequirementAnalyze: '理解并梳理需求',
+      capabilityChangeImplement: '实现代码修改',
+      capabilityChangeReview: '检查本次修改',
+      capabilityVerificationRepair: '修复本地验证失败',
+      capabilityFeedbackApply: '处理 MR 检视意见',
+      capabilityPipelineRepair: '修复流水线门禁',
+      capabilityConflictRepair: '修复合并冲突',
+      capabilityExternalReview: '执行外部 MR 检视',
+      capabilityProblemClassify: '识别并分类问题',
+      capabilityApprovalPrepare: '准备审批材料',
+      platformAction: '平台动作',
+      childEmployee: '调用的数字员工',
+      chooseEmployee: '选择已发布数字员工',
+      targetRepository: '它工作的目标仓库',
+      childCompletion: '等待到什么状态',
+      completionAutomationReady: '自动化工作完成',
+      completionReadyToMerge: 'child MR 随时可合入',
+      completionMerged: 'child MR 已合入',
+      completionCompleted: 'child 任务已完成',
+      approvalDraftExecutor: '审批材料由谁准备',
+      approvalType: '审批业务类型',
+      approvalSystem: '审批系统',
+      chooseApprovalSystem: '选择已发布审批系统',
+      pollMinutes: '每隔多少分钟检查',
+      deadlineHours: '最长等待小时数',
+      sameSceneRetries: '保留现场重试次数',
+      freshSceneRetries: '回退现场重做次数',
+      whenRetriesExhausted: '多次失败后',
+      afterSuccess: '这一步成功后',
+      continueByRules: '回到规则判断',
+      finishCurrentPlaybook: '结束本次工作步骤',
+      whenRejected: '外部请求被拒绝时',
+      whenExpired: '等待超时时',
+      useExhaustedAction: '沿用上面的失败动作',
+      waitForSeveralSteps: '等多项步骤结果齐备后再继续',
+      stepsToWaitFor: '需要等待的步骤',
+      waitCondition: '满足什么条件继续',
+      waitAll: '所选步骤全部成功',
+      waitAny: '任一步骤成功',
+      waitQuorum: '达到指定成功数量',
+      quorumCount: '需要成功的数量',
+      whenJoinDeadline: '到达截止时间时',
+      whenJoinPartial: '已经不可能满足条件时',
+      blockAndAskHuman: '阻断并说明原因',
+      handoffToHuman: '交给人工并继续跟踪',
+      moveUp: '上移一步',
+      moveDown: '下移一步',
+      problems: '遇到 MR 或流水线问题时',
+      problemsHint: '先定义问题类型，再指定谁识别、谁修复；未匹配的问题不会让 AI 猜。',
+      problemTypes: '1. 可以识别的问题类型',
+      problemTypeNumber: '问题类型 {{number}}',
+      problemName: '业务名称',
+      evidenceSource: '从哪里发现',
+      evidencePipeline: '流水线门禁',
+      evidenceVerification: '本地验证',
+      evidenceFeedback: 'MR 检视意见',
+      evidenceConflict: '分支冲突',
+      evidenceMr: 'MR 状态',
+      priority: '处理优先级',
+      repairable: '允许自动修复',
+      unknownFallback: '作为无法分类时的明确兜底',
+      newProblemType: '问题类型 {{number}}',
+      addProblemType: '增加问题类型',
+      problemProducers: '2. 谁负责识别问题',
+      problemProducerNumber: '问题识别者 {{number}}',
+      producerName: '识别者名称',
+      producerCanReport: '允许产出哪些类型',
+      newProducer: '问题识别者 {{number}}',
+      addProducer: '增加识别者',
+      problemHandlers: '3. 每类问题由谁修',
+      problemHandlerNumber: '修复规则 {{number}}',
+      problemType: '问题类型',
+      verifyAfterRepair: '修复后重新执行',
+      addHandler: '增加修复规则',
+      connections: '使用哪些业务系统',
+      connectionsHint: '这里只选择系统业务名称；具体程序与密钥由平台管理员发布。',
+      requirementSystem: '需求 / 问题系统',
+      pipelineSystem: '流水线门禁系统',
+      noConnection: '暂不连接',
+      manualTitle: '工作说明书',
+      responsibility: '负责范围',
+      sequenceTitle: '标准工作顺序',
+      noBusinessSteps: '尚未配置工作步骤。',
+      triggerLabel: '触发：{{trigger}}',
+      executorLabel: '执行：{{executor}}',
+      successLabel: '成功后：{{target}}',
+      failureLabel: '失败后重试 {{same}} + {{fresh}} 次，再 {{target}}',
+      problemsSummary: '问题识别与修复',
+      noProblems: '没有配置自动问题分类；未知问题将阻断并交人。',
+      externalCollaboration: '跨仓与审批',
+      noExternalCollaboration: '没有跨仓数字员工或外部审批步骤。',
+      connectionsSummary: '业务系统连接',
+      assignmentSummary: '使用范围',
+      assignmentCount: '已在 {{count}} 个范围生效',
+      readyToPublish: '规则校验通过，可以发布',
+      needsAttention: '还有 {{count}} 项需要完善',
+      technicalDetails: '高级：技术实现与完整配置',
+      success: '成功后',
+      failure: '失败后',
+      unavailableResource: '所选资源不可用或无权查看',
+      unconfigured: '尚未配置',
+      problemFlow: '识别：{{producer}} · 修复：{{handler}}',
+      childWaitSummary: '目标仓库：{{repository}} · 等待：{{completion}}',
+      target: {
+        reconcile: '回到平台，按最新事实继续',
+        complete: '完成任务',
+        block: '阻断并说明原因',
+        handoff: '交给人工并继续跟踪',
+      },
+      completion: {
+        'automation-ready': '自动化工作完成',
+        'ready-to-merge': 'MR 随时可合入',
+        merged: 'MR 已合入',
+        completed: '任务完成',
+      },
+      platform: {
+        requirement_acquire: '下载并冻结需求材料',
+        repository_inspect: '检查仓库事实',
+        pipeline_collect: '采集流水线门禁和日志',
+        verification_run: '运行程序化验证',
+        change_publish: '提交并推送变更',
+        mr_ensure: '创建或更新 MR',
+        mr_collect: '采集 MR 状态和检视意见',
+        pipeline_rerun: '重跑失败门禁',
+        pipeline_trigger: '触发缺失流水线',
+        readiness_evaluate: '判断 MR 是否随时可合入',
+      },
+    },
+    control: {
+      eyebrow: '规则驱动的 AI 研发同事',
+      headline: '你给出需求，数字员工让 MR 始终保持可合入',
+      description:
+        '平台按已发布的员工能力、执行策略与仓库指派运行；Agent 只在封套边界内修改文件，提交、推送、MR 与门禁看护由平台执行。',
+      inbox: '任务收件箱',
+      outcomes: '成效',
+      startWork: '交给数字员工',
+      checking: '正在检查配置',
+      setupReady: '已可接单',
+      setupNeeded: '先完成能力配置',
+      setupTitle: '数字员工启用清单',
+      unavailable: '无权查看',
+      readyCount: '已就绪 {{count}}',
+      actionNeeded: '待配置',
+      employeeTitle: '1. 定义员工能力',
+      employeeBody: '选择 C++、Java 等模板，绑定 Agent、验证、需求取件和流水线门禁程序。',
+      policyTitle: '2. 发布执行策略',
+      policyBody: '定义何时执行、如何重试、预算与停机条件；所有决策都可追溯到规则。',
+      assignmentTitle: '3. 指派到仓库',
+      assignmentBody: '按仓库、仓库组或全局默认绑定已发布员工和策略。',
+      operationsTitle: '4. 看护任务与 MR',
+      operationsBody: '当前 {{count}} 条运行中任务；平台追踪反馈、流水线、冲突与最终合入。',
+      readyMissions: '{{count}} 条 MR 可合入',
+    },
+    operations: {
+      eyebrow: '实时看护',
+      title: '当前任务，按负责阶段归位',
+      subtitle: '每一项都能下钻处理；历史结果不再混在控制中心里。',
+      allMissions: '打开任务收件箱',
+      attentionTitle: '需要人工处理',
+      attentionHint: '这些任务必须先补充信息或解除明确阻塞，自动化才能继续。',
+      readyTitle: '等待 committer 合入',
+      readyHint: '自动化工作已经完成；平台继续看护，由 committer 决定何时合入。',
+      noActiveTitle: '当前没有运行中的任务',
+      noActiveBody: '有需求时，直接交给数字员工即可。',
+      stageAria: '进行中任务阶段',
+      employeeFallback: '按仓库指派的数字员工',
+      blockedReason: '阻塞：{{reason}}',
+      awaitingInput: '等待补充所需信息',
+      missionUpdated: '{{time}} 更新',
+      missionUpdatedUnknown: '更新时间不可用',
+      stage: {
+        intake: {
+          title: '1. 需求取件',
+          body: '获取文件、澄清输入并冻结需求包。',
+          empty: '当前没有需求停在这里。',
+        },
+        develop: {
+          title: '2. 开发与修复',
+          body: '执行受封套约束的 Agent 动作并校验输出。',
+          empty: '当前没有 Agent 动作在执行。',
+        },
+        publish: {
+          title: '3. 验证与发布',
+          body: '程序化验证、提交、推送并创建或更新 MR。',
+          empty: '当前没有候选变更在发布。',
+        },
+        care: {
+          title: '4. MR 看护',
+          body: '跟踪流水线门禁与检视意见，直到 MR 随时可合入。',
+          empty: '当前没有 MR 需要自动看护。',
+        },
+      },
+    },
+    outcomes: {
+      title: '运行成效',
+      employeeTitle: '{{employee}} 的成效',
+      subtitle: '用历史任务结果和能力信号调整数字员工与执行策略。',
+      backToCode: '← 数字员工',
+      backToTasks: '← 数字员工任务',
+      showAll: '查看全部员工',
+      historyTitle: '任务结果历史',
+      historyHint: '终态结果留在这里；运行中的工作统一在任务列表中管理。',
+      emptyTitle: '还没有已完成任务',
+      emptyBody: '任务进入生命周期终态后，结果会出现在这里。',
+      colMission: '任务',
+      colResult: '结果',
+      colEmployee: '数字员工',
+      colRepository: '仓库',
+      colCompleted: '完成时间',
+      employeeFallback: '按仓库指派的数字员工',
+      summaryAria: '任务成效摘要',
+      summary: {
+        merged: { title: '已合入', body: 'committer 审核并合入了准备好的 MR。' },
+        noChange: { title: '无需变更', body: '需求已满足，并经规则要求的确认收束。' },
+        closed: { title: '未合入关闭', body: '任务取消或 MR 未合入即关闭。' },
+        failed: { title: '失败', body: '进入终态失败，需要调整能力或流程。' },
+      },
+      capabilityTitle: '能力成效信号',
+      employeeSummaryTitle: '该员工的任务成效',
+      employeeSummaryOpen: '查看成效',
+      employeeSummaryHint: '该已发布员工产生的实时负载与终态结果。',
+      employeeActive: ' 条进行中',
+      employeeReady: ' 条可合入',
+      employeeDelivered: ' 条已交付',
+    },
     tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
     config: {
       title: '员工配置',
       subtitle: '数字员工、动作模板、验证 profile 与 adapter',
+      technicalSubtitle: '高级技术资源；仅供平台管理员维护执行实现与系统连接。',
       kindSwitch: '配置类型',
       kind: {
         employees: '数字员工',
@@ -7572,6 +8189,71 @@ export const zhCN: Resources = {
       timeout: '超时',
       scriptsAuthorHint:
         '编辑 adapter 草稿需要 scripts:author 权限（可执行程序与密钥投影是 daemon 级字段）。',
+      editor: {
+        identitySection: '员工定位与默认策略',
+        versionedRefHint: '引用已发布的精确修订，任务运行后不会随新草稿漂移。',
+        resourceId: '资源 ID',
+        revision: '发布修订',
+        routesHint: '为每项能力指定兜底模板；高级事实规则在页底 JSON 中编辑。',
+        routeNumber: '能力路由 {{number}}',
+        fallbackHint: '规则都不匹配时使用的已发布动作模板。',
+        rulesPreserved: '已保留 {{count}} 条高级选择规则。',
+        addRoute: '添加能力路由',
+        requirementSourcesHint: '允许输入外部需求 ID 时，在这里绑定程序化取件 Adapter。',
+        sourceNumber: '需求源 {{number}}',
+        sourceKey: '需求源 key',
+        adapterRef: 'Adapter 精确修订',
+        defaultSource: '作为默认需求源',
+        addSource: '添加需求源',
+        pipelineProvidersHint:
+          '绑定自建系统的门禁采集程序；大日志由平台落入 .agent-workflow/pipeline。',
+        providerNumber: '门禁源 {{number}}',
+        providerKey: '门禁 provider key',
+        addProvider: '添加门禁源',
+        executionSection: '执行者与运行合同',
+        capabilityLocked: '能力在创建模板时确定，此处只读。',
+        contractVersion: '能力合同版本',
+        executorKind: '执行形式',
+        agent: '单 Agent',
+        workgroup: '工作组',
+        workgroupRef: '工作组引用',
+        runtimeProfile: '运行时 profile',
+        resourcesSection: '知识、工具与工作区边界',
+        labels: '标签',
+        skills: 'Skill 引用',
+        mcps: 'MCP 引用',
+        readOnlyResources: '只读资源',
+        contextProfile: '上下文 profile（可选）',
+        writablePathPolicy: '可写路径策略（可选）',
+        protectedPathClasses: '附加受保护路径类',
+        sameSessionRetries: '同会话重试',
+        freshSessionRetries: '全新会话重跑',
+        verificationStrategy: '验证策略',
+        firstFailure: '首个失败即停止',
+        collectAll: '执行并汇总全部步骤',
+        maxParallel: '最大并行步骤',
+        verificationStepsHint: '每步由程序退出码裁定，不让 Agent 根据日志文字自行判断。',
+        stepNumber: '验证步骤 {{number}}',
+        argsRef: '参数引用（可选）',
+        networkProfile: '网络 profile',
+        exitCodeInvalid: '请输入 0–255 之间的整数退出码。',
+        evidenceSelectorsPreserved: '已保留 {{count}} 个高级证据选择器。',
+        addStep: '添加验证步骤',
+        adapterProgramSection: '外部系统程序与操作',
+        operationsHint: '必需操作已锁定；只能启用该用途允许的附加操作。',
+        parameterSchema: '参数 schema 引用（可选）',
+        secretKeysHint: '只配置注入的密钥名称，密钥值不进入该资源。',
+        outputBudgetHint: '程序输出会先落入任务临时目录，超出这里的文件数或字节预算即拒绝收编。',
+        maxFiles: '最大文件数',
+        maxFileBytes: '单文件最大字节',
+        maxTotalBytes: '总字节上限',
+        advancedReadOnly: '高级：查看完整草稿',
+        advancedJson: '高级：编辑完整 JSON',
+        advancedJsonHint: '仅在配置事实谓词、证据选择器等高级字段时使用。修改后必须先应用回表单。',
+        applyAdvanced: '应用 JSON 到表单',
+        applyAdvancedFirst: '请先将高级 JSON 应用回表单，再保存。',
+        draftMustBeObject: '草稿顶层必须是 JSON 对象。',
+      },
     },
     assignments: {
       title: '员工指派',
@@ -7659,6 +8341,15 @@ export const zhCN: Resources = {
       noEffects: '还没有副作用记录。',
       colEffect: '副作用',
       colCreated: '创建时间',
+      collaborationTitle: '外部协作',
+      childMissionTitle: '调起的数字员工',
+      collaborationPending: '正在创建',
+      childMissionCreating: '平台正在幂等创建子任务。',
+      openChildMission: '打开子任务',
+      approvalTitle: '外部审批',
+      openApproval: '打开审批单',
+      approvalWaiting: '平台正在等待外部审批结果。',
+      collaborationDeadline: '截止时间：{{time}}',
       readinessTitle: '就绪度',
       noReadiness: '还没有就绪度快照。',
       handoff: '交接',
@@ -7694,6 +8385,152 @@ export const zhCN: Resources = {
       evidenceLoadMore: '继续加载',
       colGate: '门禁',
       colRun: '运行',
+      status: {
+        admitting: '正在校验准入规则',
+        'awaiting-information': '等待补充信息',
+        working: '数字员工处理中',
+        publishing: '正在交付变更',
+        watching: '持续看护 MR',
+        'ready-to-merge': '随时可合入',
+        'waiting-committer': '等待 Committer 合入',
+        blocked: '需要处理',
+        'completed-no-change': '确认无需变更',
+        merged: '已合入',
+        'closed-unmerged': '已关闭未合入',
+        canceled: '已取消',
+        failed: '失败',
+      },
+      wizard: {
+        title: '交给数字员工',
+        subtitle: '说明要做什么，确认规则与交付方式；之后平台会持续开发并看护 MR，直到合入。',
+        stepRepository: '仓库与交付',
+        stepRequirement: '需求或问题',
+        stepAutomation: '员工与规则',
+        stepReview: '预检并启动',
+        continueTo: '下一步：{{step}}',
+        repositoryWhyTitle: '先确认工作边界',
+        repositoryWhyBody:
+          '数字员工只在所选仓库的隔离工作区修改业务文件；commit、push、MR 和流水线由平台按规则执行。',
+        deliveryLabel: '如何交付变更',
+        deliveryCreate: '创建新的 MR',
+        deliveryCreateHint: '平台创建分支与 MR，并持续处理检视和流水线意见。',
+        deliveryAdopt: '接管已有 MR',
+        deliveryAdoptHint: '从已有 MR 的当前 head 继续处理并看护生命周期。',
+        targetRef: '目标分支（可选）',
+        targetRefHint: '留空时使用仓库默认分支。',
+        mergeRequestRef: '已有 MR 引用',
+        mergeRequestRefHint: '填写代码托管系统中的 MR 编号或平台可识别引用。',
+        directLabel: '直接描述或上传文件',
+        directHint: '正文、文件可任选，也可以同时提供；上传文件会按指定路径随提交进入仓库。',
+        externalLabel: '从内建系统读取 ID',
+        externalHint: '数字员工通过已配置的需求源程序下载该 ID 对应的多文件需求包。',
+        bodyHint: '可粘贴完整需求、问题现象、验收标准；若已上传文件，正文可以留空。',
+        filesHint: '每个文件必须明确仓库路径、碰撞方式以及 Agent 是否可编辑。',
+        filesDropTitle: '拖入需求附件或待提交文件',
+        filesDropBody: '文件先暂存；预检通过并启动后，才会绑定到本次任务。',
+        filesChoose: '选择文件',
+        fileTarget: '提交到仓库路径',
+        collisionMode: '目标已存在时',
+        collisionCreate: '只允许新建',
+        collisionReplace: '精确替换现有文件',
+        contentPolicy: '数字员工对文件的权限',
+        contentPreserve: '原样保留',
+        contentPreserveHint: 'Agent 不得修改、移动或删除此文件。',
+        contentEditable: '允许继续编辑',
+        contentEditableHint: 'Agent 可修改内容，但不得删除或改变文件模式。',
+        executable: '作为可执行文件提交',
+        executableHint: '策略必须允许 executable 模式，预检会给出最终判定。',
+        externalInfoTitle: 'ID 不是正文',
+        externalInfoBody:
+          '平台先用数字员工绑定的需求源 Adapter 程序化下载多文件内容，再把内容以只读需求包交给 Agent。',
+        rulesTitle: 'AI 不决定流程，规则决定',
+        rulesBody:
+          '员工选择、动作顺序、重试、流水线门禁与就绪判定都来自已发布策略；Agent 只在一次动作的输入/输出边界内完成工作。',
+        employeeAuto: '按仓库指派自动选择',
+        employeeAutoHint: '使用仓库 → 仓库组 → 全局默认的确定性优先级。',
+        employeeExplicit: '本次指定数字员工',
+        employeeExplicitHint: '将已发布员工的精确版本固定到本任务。',
+        employeePublished: '已发布数字员工',
+        assignmentResolved: '由仓库指派在预检时确定',
+        assignmentHint: '预检会显示最终选中的员工与策略；没有可用指派时不会允许启动。',
+        openAssignments: '查看员工指派',
+        policyOverride: '执行策略覆盖（可选）',
+        policyOverrideHint: '通常使用员工默认策略；只有本任务需要特殊规则时才覆盖。',
+        employeeDefaultPolicy: '使用员工默认策略',
+        manageEmployees: '管理数字员工',
+        managePolicies: '管理自动化策略',
+        reviewRepository: '工作与交付',
+        reviewRequirement: '输入内容',
+        reviewAutomation: '自动化规则',
+        preflight: '运行配置与文件预检',
+        preflightAgain: '重新预检',
+        preflightRunning: '正在预检…',
+        preflightRequiredTitle: '启动前还差一次预检',
+        preflightRequiredBody:
+          '平台将按启动时的同一条规则链解析员工、策略和需求源，并在仓库当前 baseline 上验证每个上传目标。',
+        preflightBlocked: '当前配置无法启动',
+        sourceSelectionTitle: '需要明确选择需求源',
+        sourceSelectionPlaceholder: '选择已绑定的需求源…',
+        uploadBlockedTitle: '存在不能提交的文件目标',
+        uploadBlockedBody: '按表格中的原因返回修改文件路径或策略，然后重新预检。',
+        preflightReady: '规则与文件边界已确认',
+        preflightReadyBody: '将固定员工 {{employee}} 与策略 {{policy}}，启动后由平台持续推进。',
+        uploadPlanTitle: '文件提交计划',
+        baselineSha: '依据仓库当前 baseline {{sha}} 计算；启动时仍会原子重验。',
+        disposition: '预检结果',
+        dispositionValue: {
+          create: '新建',
+          replace: '替换',
+          'already-present': '内容已存在',
+          blocked: '阻塞',
+        },
+        launch: '启动并交给数字员工',
+      },
+      guidance: {
+        mergedTitle: '任务生命周期已完成',
+        mergedBody: 'MR 已由 Committer 合入；平台停止写入并保留完整任务轨迹。',
+        readyTitle: 'MR 已经随时可合入',
+        readyBody: '自动化门禁已清零。平台不会自动合入，接下来由 Committer 审核并合入。',
+        answersTitle: '数字员工需要你补充信息',
+        answersBody: '回答下方问题后，平台会把答案冻结进下一轮输入并自动继续。',
+        blockedTitle: '有一个确定性条件阻止继续',
+        blockedBody: '查看下方阻塞原因，修复配置或外部状态后点击重试；平台不会自行猜测。',
+        handoffTitle: '当前由人工接管',
+        handoffBody: '平台只跟踪生命周期，不再写入；确认外部状态后可恢复自动化或挂接 MR。',
+        watchingTitle: '数字员工正在看护 MR',
+        watchingBody: '平台持续采集检视意见、流水线门禁和 head 变化，并按策略触发修复。',
+        terminalTitle: '任务已停止',
+        terminalBody: '平台不再执行写操作；时间线与证据仍可供复核。',
+        workingTitle: '数字员工正在推进任务',
+        workingBody: '平台正在按已发布规则选择并执行下一动作，无需人工轮询。',
+        deliveryCreated: '平台创建 MR',
+        deliveryAdopted: '接管已有 MR',
+      },
+      readiness: {
+        automation: '自动化就绪度',
+        ready: '机器条件已全部满足',
+        inProgress: '仍有机器条件待处理',
+        hostMergeable: '托管平台可合入性',
+        head: '判定对应的 head',
+        machineHolds: '平台仍需处理',
+        humanHolds: '需要 Committer 处理',
+        none: '无',
+        advanced: '高级：原始就绪回执',
+        mergeable: { yes: '可合入', no: '不可合入', unknown: '尚未确认' },
+        hold: {
+          'active-action': 'Agent 动作仍在运行',
+          'unconfirmed-effect': '平台副作用尚未确认',
+          'unhandled-feedback': '仍有检视意见待处理',
+          conflict: '与目标分支存在冲突',
+          'required-gate-not-pass': '必需流水线门禁未通过',
+          'facts-incomplete': '外部事实尚未完整采集',
+          'head-mismatch': '证据对应旧 head',
+          'upload-fulfillment-pending': '上传文件尚未完成提交',
+          'approval-required': '仍需批准',
+          'thread-unresolved': '仍有人工检视线程未解决',
+          'committer-policy-hold': '策略要求 Committer 最终确认',
+        },
+      },
     },
     policies: {
       title: '自动化策略',
@@ -8671,6 +9508,7 @@ export const zhCN: Resources = {
     open: '打开',
     edit: '编辑',
     delete: '删除',
+    remove: '移除',
     deleteResourceActionHint: '永久删除此资源。',
     save: '保存',
     saved: '已保存',
@@ -10326,6 +11164,17 @@ export const zhCN: Resources = {
         webhook: 'Webhook 触发',
         api: 'API 启动',
       },
+      categoryLabel: '任务分类',
+      category: {
+        all: '全部任务',
+        orchestration: '编排任务',
+        'digital-employee': '数字员工',
+      },
+      newDigitalEmployee: '交给数字员工',
+      digitalEmployeeSection: '数字员工任务',
+      digitalEmployeeSectionHint: '需求、自动开发、MR 看护与合入生命周期',
+      digitalEmployeeTask: '数字员工任务',
+      digitalEmployeeOwner: '数字员工',
       applyFilters: '应用筛选',
       resultCount: '共显示 {{count}} 个任务分支',
       addedCount: '已追加 {{count}} 个任务分支',

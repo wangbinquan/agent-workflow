@@ -10,6 +10,14 @@
 import type { FactCellValue } from '../../domain/facts'
 import type { FactCell } from '../../domain/factCell'
 import type { OperationFailureReceipt } from '../../domain/operationFailure'
+import type {
+  ApprovalObservationReceipt,
+  ApprovalReceipt,
+  ApprovalSubmitIntent,
+  ChildMissionIntent,
+  ChildMissionReceipt,
+} from '../../domain/stepSaga'
+import type { PlaybookSagaStore } from './playbookSagaStore'
 
 export interface RepositoryFactsCollectorPort {
   collect(input: { readonly missionId: string; readonly repositoryId: string }): Promise<{
@@ -31,6 +39,13 @@ export interface MergeRequestFactsCollectorPort {
       readonly authorClass: 'human' | 'bot' | 'self'
       readonly resolved: boolean
       readonly bodyDigest: string
+      /**
+       * Exact review material for this revision. It is carried only into the
+       * internal fact snapshot / Agent untrusted-data block; rules continue to
+       * see the digest/count facts, never free-form provider text.
+       */
+      readonly body: string
+      readonly path: string | null
     }[]
   }>
 }
@@ -73,12 +88,62 @@ export interface AgentActionLauncherPort {
     readonly prompt: string
     readonly workspacePath: string
     readonly baselineSha: string
+    /** Exact read-only requirement/pipeline mount roots visible inside Agent isolation. */
+    readonly platformInputPaths: readonly string[]
     readonly wallTimeMs: number | null
   }): Promise<PortOutcome<{ readonly executionRef: string }>>
   fetchOutcome(executionRef: string): Promise<AgentExecutionSnapshot>
   cancel(executionRef: string): Promise<{
     readonly settled: 'canceled' | 'already-terminal' | 'not-found'
   }>
+}
+
+/** TaskEngine-backed script implementation; the scriptRef resolves to an exact
+ * immutable workflow definition and returns the same envelope port as Agent. */
+export interface ScriptActionLauncherPort {
+  launch(input: {
+    readonly actionRunId: string
+    readonly capabilityId: string
+    readonly scriptRef: string
+    readonly prompt: string
+    readonly workspacePath: string
+    readonly baselineSha: string
+    readonly platformInputPaths: readonly string[]
+    readonly wallTimeMs: number | null
+  }): Promise<PortOutcome<{ readonly executionRef: string }>>
+  fetchOutcome(executionRef: string): Promise<AgentExecutionSnapshot>
+  cancel(executionRef: string): Promise<{
+    readonly settled: 'canceled' | 'already-terminal' | 'not-found'
+  }>
+}
+
+export interface ChildMissionPort {
+  createOrAdopt(input: ChildMissionIntent): Promise<ChildMissionReceipt>
+  observe(input: {
+    readonly childMissionRef: string
+    readonly completion: ChildMissionIntent['completion']
+    readonly intentDigest: string
+  }): Promise<ChildMissionReceipt>
+}
+
+export interface ApprovalGatewayPort {
+  submit(
+    input: ApprovalSubmitIntent,
+  ): Promise<
+    | { readonly ok: true; readonly receipt: ApprovalReceipt }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
+  >
+  lookupByIdempotencyKey(input: {
+    readonly adapterRef: ApprovalSubmitIntent['adapterRef']
+    readonly idempotencyKey: string
+  }): Promise<ApprovalReceipt | null>
+  observe(input: {
+    readonly adapterRef: ApprovalSubmitIntent['adapterRef']
+    readonly correlationRef: string
+  }): Promise<
+    | { readonly ok: true; readonly receipt: ApprovalObservationReceipt }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
+  >
 }
 
 export interface UploadPlacementPort {
@@ -130,6 +195,11 @@ export interface RequirementMaterializePort {
     readonly title: string
     readonly files: readonly { readonly fileId: string }[]
   } | null
+  /** Exact platform-generated manifest document to mount beside requirement files. */
+  getRequirementManifestMount(
+    missionId: string,
+    manifestDigest: string,
+  ): { readonly bundleId: string; readonly fileIds: readonly string[] } | null
   /** PR-4：Agent needs-information 的问题集入台账（origin 'agent'）。 */
   stashQuestionSet(input: {
     readonly missionId: string
@@ -218,11 +288,13 @@ export interface ChangeCandidatePort {
     readonly excludePolicyDigest: string
     readonly agentOutcomeRef: string
     readonly protectedRoots?: readonly string[]
+    readonly uploadsAlreadyPublished?: boolean
     readonly uploadPlan?: {
       readonly planDigest: string
       readonly entries: readonly {
         readonly targetPath: string
         readonly contentPolicy: 'preserve-upload' | 'agent-editable'
+        readonly fileMode: 'regular' | 'executable'
         readonly disposition: 'create' | 'replace' | 'already-present'
         readonly uploadSha256: string | null
       }[]
@@ -306,6 +378,7 @@ export interface CandidateDeliveryPort {
       readonly entries: readonly {
         readonly targetPath: string
         readonly disposition: 'create' | 'replace' | 'already-present'
+        readonly fileMode: 'regular' | 'executable'
       }[]
     } | null
   }): Promise<
@@ -323,6 +396,7 @@ export interface CandidateDeliveryPort {
       readonly entries: readonly {
         readonly targetPath: string
         readonly disposition: 'create' | 'replace' | 'already-present'
+        readonly fileMode: 'regular' | 'executable'
       }[]
     } | null
   }): Promise<
@@ -566,6 +640,10 @@ export interface ReconcilerPorts {
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
   readonly effectExecutor?: MissionEffectExecutorPort
   readonly agentLauncher?: AgentActionLauncherPort
+  readonly scriptLauncher?: ScriptActionLauncherPort
+  readonly playbookSaga?: PlaybookSagaStore
+  readonly childMissions?: ChildMissionPort
+  readonly approvalGateway?: ApprovalGatewayPort
   readonly uploadPlacement?: UploadPlacementPort
   readonly requirementMaterialize?: RequirementMaterializePort
   readonly actionBaseline?: ActionBaselinePort

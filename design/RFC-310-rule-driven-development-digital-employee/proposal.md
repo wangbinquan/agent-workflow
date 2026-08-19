@@ -27,7 +27,7 @@
 7. 平台**绝不自动合入、绝不自动批准**，只跟踪到 committer 在外部系统完成合入。
 
 RFC-304/309 的**上层产品模型被替换**，但其已验证底座不推倒重写：固定且版本化的阶段合同、nonce
-envelope、同会话重试/新会话重跑台账、任务执行内核、MR lease、发布意图、source-control 的
+envelope、同现场新 host task 重试/全新现场重跑台账、任务执行内核、MR lease、发布意图、source-control 的
 candidate/commit/publish 与 `.agent-workflow` 排除规则继续复用。
 
 一句话概括新边界：
@@ -105,21 +105,28 @@ Agent 只负责：理解自然语言、分析代码语义、编写业务文件�
 
 ## 3. 业务对象
 
-| 对象                      | 定义                                                                                      | 谁能改                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `CapabilityDefinition`    | 平台内置、版本化的可执行能力合同：输入、阶段、Agent 权限、输出、验证、失效与副作用边界    | 仅产品代码随 RFC 升版                    |
-| `AdapterDefinition`       | 外部系统程序适配：需求取件、门禁采集、日志分类等；只产 typed facts/evidence，不作业务决策 | `scripts:author` + 资源写权              |
-| `VerificationProfile`     | 本地 build/test 程序、隔离、超时与证据选择；程序化产生 VerificationReceipt                | profile owner；改程序需 `scripts:author` |
-| `ActionTemplate`          | 某项 Agent 能力的具体实现，例如 `change.implement/cpp-cmake@4`                            | 模板资源 owner                           |
-| `DigitalEmployeeTemplate` | 一名数字员工的能力包：ActionTemplate 路由、适配器引用、默认策略                           | 模板资源 owner                           |
-| `AutomationPolicy`        | 触发、选择、动作优先级、重试、门禁、反馈、冲突、通知和保留规则                            | 策略资源 owner                           |
-| `DevelopmentMission`      | 一次需求/问题到 MR 外部终态的业务聚合根                                                   | 平台命令按 authority/OCC 修改            |
-| `ActionRun`               | Mission 的一次确定性动作，固定 capability/template/facts/baseline                         | Mission engine                           |
-| `AgentAttempt`            | 一次 Agent 会话尝试；同会话重试与 fresh-session 重跑均有独立序号和 receipt                | Task execution + Mission engine          |
-| `RepositoryUploadPlan`    | 上传 blob、仓库目标路径、碰撞方式、内容策略与冻结基线前提                                 | 平台从用户输入生成；后续不可变           |
-| `ChangeCandidate`         | 平台从上传 seed 与可选 Agent 业务改动的真实工作区推导的候选改动                           | source-control 生成，Mission 引用        |
+| 对象                      | 定义                                                                                       | 谁能改                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `CapabilityDefinition`    | 平台内置、版本化的可执行能力合同：输入、阶段、Agent 权限、输出、验证、失效与副作用边界     | 仅产品代码随 RFC 升版                    |
+| `AdapterDefinition`       | 外部系统程序适配：需求取件、门禁采集、日志分类等；只产 typed facts/evidence，不作业务决策  | `scripts:author` + 资源写权              |
+| `VerificationProfile`     | 本地 build/test 程序、隔离、超时与证据选择；程序化产生 VerificationReceipt                 | profile owner；改程序需 `scripts:author` |
+| `ActionTemplate`          | 某项 Agent 能力的具体实现，例如 `change.implement/cpp-cmake@4`                             | 模板资源 owner                           |
+| `DigitalEmployeeTemplate` | 一名数字员工的能力包：ActionTemplate 路由、适配器引用、默认策略                            | 模板资源 owner                           |
+| `AutomationPolicy`        | 触发、选择、动作优先级、重试、门禁、反馈、冲突、通知和保留规则                             | 策略资源 owner                           |
+| `ProblemTypeDefinition`   | 员工可识别的问题类型，例如编译、单测、静态检查、检视意见和冲突；定义证据合同与未知类型回退 | 数字员工 owner                           |
+| `ProblemProducer`         | 从冻结的 MR/门禁/验证证据产出 typed `ProblemSetEnvelope`；实现可以是只读 Agent 或程序      | 数字员工 owner；程序实现需脚本写权       |
+| `ProblemHandlingRule`     | `问题类型 + typed facts → 处理者` 的有序规则；处理者可以是 Agent 或程序                    | 数字员工 owner                           |
+| `DevelopmentMission`      | 一次需求/问题到 MR 外部终态的业务聚合根                                                    | 平台命令按 authority/OCC 修改            |
+| `ActionRun`               | Mission 的一次确定性动作，固定 capability/template/facts/baseline                          | Mission engine                           |
+| `AgentAttempt`            | 一次独立 host task；同现场与 fresh-scene 尝试均有独立序号和 receipt                        | Task execution + Mission engine          |
+| `RepositoryUploadPlan`    | 上传 blob、仓库目标路径、碰撞方式、内容策略与冻结基线前提                                  | 平台从用户输入生成；后续不可变           |
+| `ChangeCandidate`         | 平台从上传 seed 与可选 Agent 业务改动的真实工作区推导的候选改动                            | source-control 生成，Mission 引用        |
 
-`CapabilityDefinition` 与 `ActionTemplate` 必须分开：前者定义**能做什么且边界是什么**，后者定义**这套 Java/C++ 员工如何实现它**。模板不能改变能力 schema、阶段顺序、权限、下一动作或合入边界。
+`CapabilityDefinition` 与执行实现必须分开：前者定义**能做什么且边界是什么**，后者定义**这套 Java/C++ 员工如何实现它**。实现不能改变能力 schema、阶段顺序、权限、下一动作或合入边界。
+
+上述 `ActionTemplate`、`VerificationProfile`、`AdapterDefinition` 是发布编译器和 bounded context 使用的技术资源，
+不是业务用户必须先理解的产品导航。产品主对象只有“数字员工”：用户在一张员工说明书里配置步骤、触发条件、
+执行者、问题类型和失败处理；发布时平台把它编译并 pin 到这些内部资源的精确 revision。
 
 ## 4. Mission 生命周期
 
@@ -205,6 +212,10 @@ Mission 只允许一个可写 ActionRun。只读分析可以在不可变 snapsho
 
 ## 6. 数字员工与策略配置项
 
+产品配置面只回答五个业务问题：**这名员工负责哪里、收到什么、按哪几步做、遇到哪类问题交给谁、何时算完成**。
+主界面不得要求用户理解 `ActionTemplate`、`VerificationProfile`、`adapter`、`profile` 或资源 ID/revision；这些内容只在
+管理员的“高级技术配置”中以解析后的名称展示。Java、C++ 等是可复制的员工预置方案，不是新的能力 ID。
+
 ### 6.1 DigitalEmployeeTemplate
 
 一套 Java 或 C++ 数字员工至少配置：
@@ -217,7 +228,78 @@ Mission 只允许一个可写 ActionRun。只读分析可以在不可变 snapsho
 - 默认 `AutomationPolicy` revision；
 - 可用性检查结果：缺模板、缺 adapter、agent 不可见、合同版本不兼容时逐条列出。
 
-### 6.2 ActionTemplate
+### 6.2 执行步骤
+
+每个数字员工保存一份有序、可预演的员工说明书。每步配置：
+
+- 业务名称与说明，例如“理解需求”“实现修改”“识别 MR 问题”“按类型修复”“验证”“更新 MR”；
+- `when` 条件，条件只读 closed typed facts；上一条命中后下一步由规则明确给出；
+- 生产者：`platform | agent | script | digital-employee`，另有 `approval` 组合步骤。Agent/程序/子员工只执行本步，
+  不能输出下一步；
+- 输入 envelope、输出 envelope、workspace mode、允许产生的 effect、验证方式；
+- 成功后步骤、失败类型、同现场重试、全新现场重跑、回退步骤与交人条件；
+- 没有匹配、同级多匹配、输出越界或回退未配置时一律阻断，不让平台或 Agent 猜。
+
+产品编辑器用“当……时 → 由谁执行 → 成功后…… / 失败后……”规则卡表达；发布预览按真实求值顺序展示完整路径，
+并用样例任务做命中演练。底层 `AutomationPolicy.actionPriority`、capability route 和精确资源 revision 由发布编译器产生，
+不要求业务用户手工拼接。
+
+### 6.3 MR 问题类型、生产者与处理规则
+
+MR 看护中的流水线失败、验证失败、合并冲突和检视意见统一投影为 `ProblemSetEnvelope`：
+
+```ts
+interface ProblemSetEnvelopeV1 {
+  readonly protocol: 'aw-problem-set@1'
+  readonly producerRef: string
+  readonly evidenceDigest: string
+  readonly headSha: string
+  readonly complete: boolean
+  readonly problems: readonly {
+    readonly problemRef: string
+    readonly typeId: string
+    readonly subjectRefs: readonly string[]
+    readonly summary: string
+  }[]
+}
+```
+
+- **问题类型**由员工定义，至少含稳定 `typeId`、业务名称、适用证据域、是否可修复和 unknown 回退；例如
+  `compile`、`unit-test`、`static-analysis`、`review-change-requested`、`merge-conflict`。
+- **问题生产者**可以是 script 或只读 Agent。它只读 exact head 对应的 evidence bundle，只能产出配置允许的 typeId；
+  平台校验 evidence digest、subject 闭集、覆盖性、唯一 problemRef 和 envelope 后才形成 fact。
+- **问题处理规则**按稳定顺序把 `typeId + repository/module/gate facts` 映射到一个修复生产者。修复生产者也可以是
+  Agent 或 script；两者都不能 commit/push，业务改动由平台从真实 workspace 推导并统一验证、提交和推送。
+- 多问题由程序按 `(type priority, subjectRef, problemRef)` 生成工作集；规则明确逐类还是成批处理，Agent 不挑问题。
+- producer/handler 输出错误时按规则同现场重试；耗尽后从 exact baseline 重建现场。只有规则显式配置了下一 producer/
+  handler 才能换实现，否则阻断并交人。
+- 每轮固定为“采集证据 → 产出问题 → 规则选处理者 → 修复 → 程序化验证 → 重采”；unknown 不得当作已修复或通过。
+
+### 6.4 调用其他数字员工与外部审批
+
+一条员工说明书可以跨仓库、跨系统等待，但不允许 Agent 自己递归启动 Agent 或持有会话轮询：
+
+- `invoke-employee` 步骤配置目标仓库解析规则、目标员工 exact revision、输入 envelope 映射、完成条件、子任务预算和
+  失败/超时分支。平台以 `(parentMission, stepAttempt, targetRepository, employeeRevision, inputDigest)` 幂等创建 child
+  Mission；父子各有独立 workspace、branch、MR claim 和生命周期，只传 typed envelope/artifact ref。
+- `approval.prepare` 可由 Agent 读取冻结证据并产出 `ApprovalRequestDraftEnvelope`；它不持有审批系统 credential。
+- `approval.submit` 由 script/integration effect 消费已验证 draft，按 idempotency key 向外部系统提交并返回
+  `ApprovalReceipt(correlationRef, externalRequestRef, submittedRevision)`；响应丢失时先按 key 查询 adopt。
+- `approval.observe` 是短执行程序：按 correlation ref 返回 `pending | approved | rejected | expired | unavailable` 及
+  authoritative revision。`pending` 转成 durable wait，释放 Agent/script/仓库资源，由 webhook 或 `resumeAt` 再次唤醒，
+  绝不保持一个轮询进程或 Agent 会话。
+- 多个 child/approval 依赖必须配置 `all | any | quorum(n)` join、deadline、拒绝/超时/部分成功分支；没有分支就阻断。
+- publish compiler 拒绝静态可见的调用环和没有 deadline/wake source 的等待；运行时还以最大调用深度、总 child budget
+  和 ancestry receipt 阻止动态环。父 Mission 取消/hand off 不擅自关闭外部审批或 child MR，只停止新写并继续结算真相。
+
+典型规则链：`修当前仓 → 调用门禁配置员工修改另一仓 → 准备审批 → 程序提交审批 → 程序等待批准 → 重跑当前门禁`。
+
+### 6.5 负责范围与系统连接
+
+员工说明书同时选择服务的仓库/仓库组、需求输入方式和门禁系统。界面显示连接的业务名称；外部 ID 下载程序、
+门禁采集程序、大日志目录、credential connection 等 integration 字段留在管理员技术配置。员工只 pin 已发布连接。
+
+### 6.6 执行实现（内部 ActionTemplate）
 
 可配置：
 
@@ -227,12 +309,12 @@ Mission 只允许一个可写 ActionRun。只读分析可以在不可变 snapsho
 - runtime/profile、skills、MCP、只读参考目录；
 - 本能力允许的业务文件路径和受保护路径；
 - 本地 build/test profile；
-- bounded same-session/fresh-session retry 默认值；
+- bounded same-scene/fresh-scene retry 默认值（内部字段兼容名为 `sameSession/freshSession`）；
 - context assembly 与 evidence 选择规则。
 
 不可配置：stage 顺序、input/output schema、nonce、workspace mode、Git 权限、代码托管权限、semantic validators、下一动作、是否合入。
 
-### 6.3 AutomationPolicy
+### 6.7 规则编译结果（内部 AutomationPolicy）
 
 | 策略组                | 配置项                                                                                                |
 | --------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -252,7 +334,7 @@ Mission 只允许一个可写 ActionRun。只读分析可以在不可变 snapsho
 | Evidence retention    | RequirementBundle/PipelineBundle/AgentAttempt/ActionRun 的 active 与 terminal TTL                     |
 | Configuration upgrade | 新 Mission 默认生效；在途 employee/policy 闭包升级必须显式、预览失效面并原子重新 pin                  |
 
-### 6.4 固定策略，不开放配置
+### 6.8 固定策略，不开放配置
 
 以下不是“默认值”，而是产品宪法：不自动 merge/approve、不让 Agent 改 Git或调用代码托管、不接受无 envelope 输出、不把 unknown gate 当 pass、不对 stale head 发布、不 force push、不自动 resolve 人类 review thread。
 
@@ -445,6 +527,38 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 8. **接管已有 MR 或无需改动。** 用户可指定已有 MR，让 Mission 从其当前 head 开始看护；若需求经程序证明
    已满足，则以 `completed-no-change` 结束，不创建空 commit/空 MR。已关闭 MR 后来 reopen 时建立链接的新 Mission
    generation，不篡改旧终态历史。
+9. **同一个红灯由不同专家处理。** 门禁采集后，程序生产者把编译日志归为 `compile`，只读 Agent 生产者把另一个
+   复杂失败归为 `api-contract`；两份结果都先通过 closed envelope 校验。员工规则把前者交给 C++ 修复程序、后者交给
+   Java Agent。修复者只处理平台分配的问题集合，完成后平台重跑验证并重采证据；未知类型直接交人，不随便挑一个 Agent。
+10. **门禁依赖另一仓和外部审批。** 当前 MR 的门禁报配置缺失后，规则调用“门禁配置员工”在另一仓建立 child Mission；
+    child MR ready 后，Agent 只生成审批材料，程序幂等提交审批并持久化申请号。父 Mission 在不占用 Agent 的情况下等待
+    authoritative approved receipt，随后重跑原门禁；daemon 重启、重复 webhook 都不会再建 child 或重复提交审批。
+
+### 12.1 无指导操作链
+
+上述故事不以“后台能力存在”为完成。每条 User Case 都必须在产品上形成连续、可恢复、无需另查文档的操作链：
+
+| User Case          | 进入页面          | 同页必须看见                                                         | 唯一推荐的下一步                                 | 完成出口                                   |
+| ------------------ | ----------------- | -------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
+| 首次启用           | `/code`           | 当前缺少员工、发布或仓库使用范围中的哪一项，以及后续完整四步         | 创建数字员工                                     | 可直接发起第一条任务                       |
+| 创建员工           | 员工创建/详情     | 预置生成的负责范围、顺序步骤、问题处理、外部协作、连接和完成标准     | 完善并发布；发布后立即设置使用范围               | 已发布且至少绑定一个仓库/组                |
+| 正文/文件任务      | 新建任务          | 仓库 → 正文/文件及目标路径 → 员工 → 预检四步，当前步和后一步一直可见 | 完成当前步；预检后发起                           | 自动进入刚创建的任务详情                   |
+| 外部 ID 任务       | 新建任务/任务详情 | 需求系统业务名称、ID、材料下载状态；仅在歧义时出现来源选择           | 选择来源或无需操作等待下载                       | 材料完整后自动进入开发                     |
+| 自动开发和 MR 看护 | 任务详情          | 当前阶段、当前执行者、平台下一次自动动作/唤醒条件、MR readiness      | 无需人工时明确显示“系统自动继续”                 | MR 随时可由 committer 合入                 |
+| 回答/阻断恢复      | 任务详情          | 为什么停、谁能解除、表单或恢复动作本身，不把动作藏在页头             | 回答、重试、挂接 MR 或恢复自动化之一             | 回到自动执行链                             |
+| 跨仓数字员工       | 父任务详情        | child 仓库、员工、child MR、完成条件、当前状态和父任务为何等待       | 默认无人工动作；child 阻断时直达 child           | child receipt 满足规则后父任务自动继续     |
+| 外部审批           | 父任务详情        | 准备、提交、等待三个独立步骤，审批系统/申请号/状态/deadline          | pending 时显示自动观察；需要人审批时显示审批入口 | approved/rejected/expired 按已配置分支继续 |
+| MR ready 到合入    | 任务详情          | machine holds=0、剩余 human holds、MR 入口、平台永不自动合入         | committer 检视并合入                             | 平台观察到 merged 后生命周期终结           |
+
+所有页面统一使用一个“下一步”区块，固定显示 `当前位置 / 下一步 / 负责人 / 触发条件或阻断原因`。如果负责人是平台、
+其他数字员工或外部系统，区块明确说“无需你操作”并给出下一次观察条件；如果负责人是当前用户或 committer，主按钮就在
+该区块内，不能只放在页头、时间线末尾或另一个页面。创建/保存成功必须导航到链路下一页，不能把用户丢回列表猜下一步。
+技术 ID、revision、adapter/profile 和 JSON 不参与这条主路径。
+
+顶层导航固定增加“数字员工”分类，位于“编排”和“运行与仓库”之间。它只收纳能力编排、执行者库和仓库使用范围；
+实际 Mission 一律进入 `/tasks` 统一管理并可按“数字员工”筛选，成效进入“运行与仓库”下的 `/outcomes`。新产品页不放机械
+“← 返回”按钮；用左侧导航定位、用同页“下一步”继续 User Case。每一步/问题生产者/处理者的执行者必须当场选择；缺少时可在
+当前员工页内嵌创建、发布并自动回填，不丢失已编辑草稿。
 
 ## 13. 目标与非目标
 
@@ -453,6 +567,8 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - 从直接正文、上传文件、正文加文件或外部 ID 到一个持续维护的 MR，形成单一 Mission 生命周期。
 - 决策可配置、可预演、可解释、可回放；同 facts + 同 policy revision 得到同 decision。
 - 支持多套 Java/C++/polyglot 数字员工和能力级路由。
+- 业务用户只在数字员工说明书中配置步骤、问题类型、生产者和处理规则；技术资源由发布编译器管理。
+- MR 问题生产与修复均支持 Agent 或程序实现，并共享 exact input/output envelope、工作区验证和现场回退合同。
 - 自建需求系统、流水线系统通过 typed program adapter 接入。
 - 大材料落本地 evidence bundle，Agent 按需读，平台持久化 ref/digest 而非大正文。
 - Agent no-Git/no-code-host，输出/工作区/重试/回退均有可执行合同。
@@ -490,7 +606,8 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 ### 14.3 Agent 边界
 
 - **AC-9** 每个 Agent stage 都有 nonce、唯一 port、exact schema、closed outcome、semantic validator；无合法 envelope 不产生 action result。
-- **AC-10** 同会话收到精确错误后重试 N 次；耗尽后整个 workspace/session 从 exact baseline 重建并 fresh-session 重跑 M 次。
+- **AC-10** 同现场的新 host task 收到精确错误后重试 N 次；每次有新 nonce/独立 receipt。耗尽后整个 workspace
+  从 exact baseline 重建并 fresh-scene 重跑 M 次。
 - **AC-11** `git add/commit/push/merge/rebase/reset/checkout`、Git metadata 写、evidence 写、受保护路径写均被前后快照
   对拍检测为 boundary violation：attempt 作废、workspace 整树回退、绝不产生 candidate/commit；负向测试覆盖检测与回退
   （首版不承诺 OS 级写阻断，见 §2.3）。
@@ -545,10 +662,30 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   会被拒绝，`agent-editable` 仍要求目标路径存在；相同 digest 不制造空 commit。首次 publish receipt 明确标记 seed 已被
   commit 吸收，后续 MR care 不重复应用计划；Git mode/ignore/filter 不得让 entry 漏失或不可还原，push 成功但回执丢失
   可从 remote tree 补账而不重复提交。
+- **AC-36** 数字员工主界面只出现负责范围、执行步骤、触发条件、执行者、问题类型、失败处理和启停状态；创建与详情
+  不出现必须理解的 `ActionTemplate`、`VerificationProfile`、`adapter/profile`、裸资源 ID 或 JSON。管理员可在折叠的
+  高级技术配置中查看编译结果；页面骨架和交互复用仓库/Webhook 的 operations 视觉体系。
+- **AC-37** 问题类型为员工 revision 内的稳定闭集；script/只读 Agent 生产者对 exact head/evidence digest 产出同一
+  `ProblemSetEnvelope`。未知 type、遗漏 required subject、重复 problemRef、陈旧 head 或不完整输出均不形成事实。
+- **AC-38** 每个可修复问题类型都有显式有序处理规则，handler 可为 Agent 或 script；两者都不 commit/push，真实
+  workspace delta 由平台验证并发布。多问题工作集顺序可回放，无规则不猜；重试耗尽按 exact baseline 重建，只有配置了
+  fallback producer/handler 才切换实现。
+- **AC-39** `invoke-employee` 幂等建立独立 child Mission，父子分别 pin 仓库/员工/策略并只通过 typed envelope/artifact
+  ref 交换结果；重复 reconcile 不重复建 child，静态/动态环和深度/child budget 耗尽得到具名阻断。join 的 all/any/quorum、
+  deadline、部分成功和取消/handoff 行为全部由规则定义。
+- **AC-40** 审批准备、提交、等待拆成独立步骤：Agent 只能产 draft；script/effect 按 idempotency key 提交并可查询 adopt；
+  observe 每次短执行并返回 closed status。pending 写 durable wait + webhook/resumeAt，重启不重复申请、不占用执行会话；
+  rejected/expired/unavailable 精确进入所配分支。
+- **AC-41** 首次空环境、创建员工、发布、仓库绑定、任务发起、等待自动执行、人工回答/恢复、跨仓 child、外部审批、
+  committer 合入十条页面状态都有同页“下一步”投影；负责人是人时动作按钮同区块可达，负责人是系统时显示自动 wake 条件。
+  创建/保存后自动进入下一页，任一状态都不存在必须依赖说明文档才能发现的后继动作。
+- **AC-42** User Case 浏览器 E2E 从零配置开始，只按页面当前高亮动作即可走到第一条 Mission；另一条 E2E 覆盖父仓门禁失败 →
+  child 仓 MR ready → 审批 pending/approved → 父门禁重跑 → 父 MR ready → 外部 merged。每一停点断言当前位置、下一步、
+  负责人和可执行动作，刷新/daemon 重启后投影不丢失。
 
-## 15. 本轮请求批准的设计决策
+## 15. 本轮已批准的设计决策
 
-批准 RFC-310 表示接受以下目标，不表示授权实现：
+用户已在 2026-08-19 明确要求“在 RFC-310 增补设计，然后完整实现”。以下决策既是设计基线，也是本轮实现授权边界：
 
 - **D1**：用 `DevelopmentMission` 取代“五条能力各自一个 WorkItem”，`mr-monitor` 降为 Mission reconciler。
 - **D2**：用声明式、typed、first-match 规则取代 `arbitrate/select` 脚本的业务决策权。
@@ -566,5 +703,15 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **D12**：直接上传文件不仅是 Agent 只读附件；每个文件必须指定仓库目标路径，并由平台按 RepositoryUploadPlan 写入
   业务 overlay，随其他改动一起 commit/push。默认 create-only、保持上传字节，覆盖或允许 Agent 编辑都必须显式声明；
   首次 publish 后 seed 被 commit 吸收，MR 后续动作只跟踪 lineage，不重复落盘。
+- **D13**：产品 authoring aggregate 是一名数字员工及其有序步骤；ActionTemplate、VerificationProfile、AdapterDefinition
+  和 AutomationPolicy 降为发布编译器使用的内部 revision，不作为业务用户的一级导航与术语。
+- **D14**：MR/门禁/验证/冲突统一使用可配置 ProblemType + ProblemProducer + ProblemHandlingRule；producer 与 handler
+  均可选 Agent 或 script，但下一步选择、问题排序、验证、Git 和 MR 副作用仍只归平台规则与 participants。
+- **D15**：步骤模型支持幂等调用其他数字员工以及 Agent-prepare + script-submit/observe 的外部审批 saga；child Mission、
+  approval receipt 和 durable wait 都是一等状态，禁止用长驻 Agent/脚本轮询或提示词内隐式递归代替。
+- **D16**：每个 User Case 必须由服务端事实投影出唯一“下一步”；主动作与解释同页可见，创建/保存后连续导航。页面不能让
+  用户从资源列表、技术详情或活动图中自行推断后继动作。
+- **D17**：顶层“数字员工”只管能力构建；Mission 并入任务列表，成效归“运行与仓库”。数字员工/任务/成效页不放机械返回按钮；
+  每个需要执行者的配置点都可在同页选择或创建执行者。
 
-实现必须在本 RFC 获得用户显式批准后才能开始。
+实现按 [plan.md](./plan.md) 的 PR-11/PR-12/PR-13 验收边界完成后才可将本 RFC 再次置为 Done。

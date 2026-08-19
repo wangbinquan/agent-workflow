@@ -469,6 +469,14 @@ export function createRequirementMaterializer(
       if (mission === null) {
         return fail('configuration', 'mission-not-found', 'never', 'mission row disappeared')
       }
+      if (mission.sourceKind !== 'direct') {
+        return fail(
+          'contract-violation',
+          'direct-submission-kind-mismatch',
+          'never',
+          'cannot attach a direct submission to an external-reference mission',
+        )
+      }
       const digest = directSubmissionDigest(input.submission)
       if (mission.sourceContentDigest !== null && mission.sourceContentDigest !== digest) {
         return fail(
@@ -477,6 +485,13 @@ export function createRequirementMaterializer(
           'never',
           'stashed submission does not match the digest frozen at launch',
         )
+      }
+      const existing = latestBundleRef(input.missionId, 'direct-submission')
+      if (existing?.manifestDigest === digest) {
+        const raw = readJsonDoc(existing.evidenceRef, 'submission.json')
+        if (raw !== null && directSubmissionDigest(raw as DirectSubmissionDoc) === digest) {
+          return { ok: true, submissionRef: digest }
+        }
       }
       const doc = await importJsonDoc('submission.json', input.submission)
       insertBundleRef({
@@ -782,6 +797,32 @@ export function createRequirementMaterializer(
       if (doc === null) return null
       const parsed = requirementBundleManifestV1Schema.safeParse(doc)
       return parsed.success ? parsed.data : null
+    },
+
+    getRequirementManifestMount(missionId, manifestDigest) {
+      const row =
+        db
+          .select()
+          .from(developmentBundleRefs)
+          .where(
+            and(
+              eq(developmentBundleRefs.missionId, missionId),
+              eq(developmentBundleRefs.purpose, 'requirement-manifest'),
+              eq(developmentBundleRefs.manifestDigest, manifestDigest),
+            ),
+          )
+          .orderBy(desc(developmentBundleRefs.createdAt), desc(developmentBundleRefs.id))
+          .limit(1)
+          .get() ?? null
+      if (row === null) return null
+      const doc = readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
+      if (doc === null) return null
+      const parsed = requirementBundleManifestV1Schema.safeParse(doc)
+      if (!parsed.success || parsed.data.manifestDigest !== manifestDigest) return null
+      return {
+        bundleId: row.evidenceRef,
+        fileIds: parsed.data.files.map((file) => file.fileId),
+      }
     },
 
     async previewExternalRefresh(missionId) {

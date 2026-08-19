@@ -114,6 +114,26 @@ export const agentInputManifestV1Schema = z
     pipelineBundle: readonlyMountDescriptorSchema.nullable(),
     feedbackSnapshot: feedbackSnapshotDescriptorSchema.nullable(),
     verificationEvidence: verificationEvidenceDescriptorSchema.nullable(),
+    problemEvidence: z
+      .object({
+        producerId: z.string().min(1).max(120),
+        evidenceDigest: sha256,
+        headSha: z.string().regex(/^[0-9a-f]{40}$/),
+        allowedTypeIds: z.array(z.string().min(1).max(120)).min(1).max(100),
+        subjectRefs: z.array(z.string().min(1).max(500)).min(1).max(500),
+        requiredSubjectRefs: z.array(z.string().min(1).max(500)).max(500),
+      })
+      .strict()
+      .optional(),
+    approvalContext: z
+      .object({
+        stepRunRef: z.string().min(1),
+        approvalType: z.string().min(1).max(120),
+        evidenceRefs: z.array(z.string().min(1).max(500)).max(100),
+        requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+      })
+      .strict()
+      .optional(),
     /** repository inspector 归类的可写路径类标签（解析成前缀在平台侧）。 */
     writablePathClasses: z.array(z.string().min(1)),
     protectedRoots: z.array(logicalRootSchema),

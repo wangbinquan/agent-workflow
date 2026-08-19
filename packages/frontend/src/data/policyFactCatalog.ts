@@ -118,6 +118,8 @@ export const AGENT_CAPABILITY_IDS = [
   'pipeline.repair',
   'conflict.repair',
   'mr.review.external',
+  'problem.classify',
+  'approval.prepare',
 ] as const
 
 /** 产品硬上限镜像（NumberInput 的 max 提示；后端 publish validator 是权威）。 */

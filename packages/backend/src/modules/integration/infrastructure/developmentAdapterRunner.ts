@@ -156,6 +156,52 @@ export const pipelineRerunEnvelopeSchema = z
   })
   .strict()
 
+const approvalReceiptFields = {
+  intentDigest: z.string().regex(/^[0-9a-f]{64}$/),
+  correlationRef: z.string().min(1).max(500),
+  externalRequestRef: z.string().min(1).max(500),
+  submittedRevision: z.string().min(1).max(500),
+  submittedAt: z.string().datetime({ offset: true }),
+} as const
+
+export const approvalSubmitEnvelopeSchema = z
+  .object({
+    protocol: z.literal('aw-adapter@1'),
+    operation: z.literal('approval.submit'),
+    ...approvalReceiptFields,
+  })
+  .strict()
+
+export const approvalLookupEnvelopeSchema = z.discriminatedUnion('found', [
+  z
+    .object({
+      protocol: z.literal('aw-adapter@1'),
+      operation: z.literal('approval.lookup'),
+      found: z.literal(true),
+      ...approvalReceiptFields,
+    })
+    .strict(),
+  z
+    .object({
+      protocol: z.literal('aw-adapter@1'),
+      operation: z.literal('approval.lookup'),
+      found: z.literal(false),
+    })
+    .strict(),
+])
+
+export const approvalObserveEnvelopeSchema = z
+  .object({
+    protocol: z.literal('aw-adapter@1'),
+    operation: z.literal('approval.observe'),
+    correlationRef: z.string().min(1).max(500),
+    observedRevision: z.string().min(1).max(500),
+    status: z.enum(['pending', 'approved', 'rejected', 'expired', 'unavailable']),
+    evidenceRef: z.string().min(1).max(500).nullable(),
+    observedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+
 export interface AdapterRunInput {
   /** published developmentAdapterDefinition 内容（executableRef/timeoutMs/…）。 */
   readonly adapterContent: {
@@ -193,6 +239,16 @@ export interface AdapterRunInput {
         readonly headSha: string
         readonly idempotencyKey: string
       }
+    | {
+        readonly kind: 'approval.submit'
+        readonly stepRunRef: string
+        readonly draftRef: string
+        readonly deadlineAt: string
+        readonly idempotencyKey: string
+        readonly intentDigest: string
+      }
+    | { readonly kind: 'approval.lookup'; readonly idempotencyKey: string }
+    | { readonly kind: 'approval.observe'; readonly correlationRef: string }
   readonly stagedRoot: string
   /** 测试/装配注入的额外 env（如 mock 上游 URL）；不含 daemon 环境。 */
   readonly extraEnv?: Record<string, string>
@@ -237,6 +293,15 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
     case 'pipeline.rerun':
       argv.push('--rerun-pipeline', input.operation.runRef)
       break
+    case 'approval.submit':
+      argv.push('--submit-approval', input.operation.stepRunRef)
+      break
+    case 'approval.lookup':
+      argv.push('--lookup-approval', input.operation.idempotencyKey)
+      break
+    case 'approval.observe':
+      argv.push('--observe-approval', input.operation.correlationRef)
+      break
   }
   const op = input.operation
   const env: Record<string, string> = {
@@ -271,6 +336,17 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
           AW_IDEMPOTENCY_KEY: op.idempotencyKey,
         }
       : {}),
+    ...(op.kind === 'approval.submit'
+      ? {
+          AW_APPROVAL_STEP_RUN: op.stepRunRef,
+          AW_APPROVAL_DRAFT_REF: op.draftRef,
+          AW_APPROVAL_DEADLINE: op.deadlineAt,
+          AW_IDEMPOTENCY_KEY: op.idempotencyKey,
+          AW_APPROVAL_INTENT_DIGEST: op.intentDigest,
+        }
+      : {}),
+    ...(op.kind === 'approval.lookup' ? { AW_IDEMPOTENCY_KEY: op.idempotencyKey } : {}),
+    ...(op.kind === 'approval.observe' ? { AW_APPROVAL_CORRELATION_REF: op.correlationRef } : {}),
     ...(input.extraEnv ?? {}),
   }
 
@@ -490,4 +566,58 @@ export async function runPipelineRerun(
     )
   }
   return { ok: true, envelope: parsed.data }
+}
+
+export async function runApprovalSubmit(
+  input: AdapterRunInput & {
+    readonly operation: Extract<AdapterRunInput['operation'], { kind: 'approval.submit' }>
+  },
+): Promise<AdapterRunResult<z.infer<typeof approvalSubmitEnvelopeSchema>>> {
+  const raw = await runAdapter(input)
+  if (!raw.ok) return raw
+  const parsed = approvalSubmitEnvelopeSchema.safeParse(raw.envelope)
+  return parsed.success
+    ? { ok: true, envelope: parsed.data }
+    : failure(
+        'contract-violation',
+        'adapter-envelope-schema',
+        'never',
+        'approval.submit envelope failed strict schema',
+      )
+}
+
+export async function runApprovalLookup(
+  input: AdapterRunInput & {
+    readonly operation: Extract<AdapterRunInput['operation'], { kind: 'approval.lookup' }>
+  },
+): Promise<AdapterRunResult<z.infer<typeof approvalLookupEnvelopeSchema>>> {
+  const raw = await runAdapter(input)
+  if (!raw.ok) return raw
+  const parsed = approvalLookupEnvelopeSchema.safeParse(raw.envelope)
+  return parsed.success
+    ? { ok: true, envelope: parsed.data }
+    : failure(
+        'contract-violation',
+        'adapter-envelope-schema',
+        'never',
+        'approval.lookup envelope failed strict schema',
+      )
+}
+
+export async function runApprovalObserve(
+  input: AdapterRunInput & {
+    readonly operation: Extract<AdapterRunInput['operation'], { kind: 'approval.observe' }>
+  },
+): Promise<AdapterRunResult<z.infer<typeof approvalObserveEnvelopeSchema>>> {
+  const raw = await runAdapter(input)
+  if (!raw.ok) return raw
+  const parsed = approvalObserveEnvelopeSchema.safeParse(raw.envelope)
+  return parsed.success
+    ? { ok: true, envelope: parsed.data }
+    : failure(
+        'contract-violation',
+        'adapter-envelope-schema',
+        'never',
+        'approval.observe envelope failed strict schema',
+      )
 }

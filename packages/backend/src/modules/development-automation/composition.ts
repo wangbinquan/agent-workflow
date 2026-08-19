@@ -13,12 +13,12 @@
 import { join } from 'node:path'
 
 import type { DbClient } from '@/db/client'
+import { runMissionReconcile, type ReconcileOutcome } from './application/missionReconciler'
 import {
-  runMissionReconcile,
-  type ReconcileDeps,
-  type ReconcileOutcome,
-} from './application/missionReconciler'
-import { driveMission, type MissionDriveOutcome } from './application/missionDriver'
+  createDeferredMissionDrive,
+  driveMission,
+  type MissionDriveOutcome,
+} from './application/missionDriver'
 import { recoverMissions } from './application/missionRecovery'
 import { confirmNoChange, type ConfirmNoChangeResult } from './application/commands/confirmNoChange'
 import {
@@ -33,6 +33,7 @@ import {
 import { sweepMissionWakes } from './application/missionWakeSweep'
 import type {
   AgentActionLauncherPort,
+  ApprovalGatewayPort,
   CandidateDeliveryPort,
   ChangeCandidatePort,
   ConflictMergePort,
@@ -41,6 +42,7 @@ import type {
   PipelineEvidencePort,
   ReconcilerPorts,
   RepoRemotePort,
+  ScriptActionLauncherPort,
 } from './application/ports/reconcilerPorts'
 import {
   createAttemptContextStore,
@@ -63,6 +65,8 @@ import {
   missionEpochsOf,
 } from './infrastructure/sqliteReconcilerReaders'
 import { createSqliteMissionStore } from './infrastructure/sqliteMissionStore'
+import { createSqlitePlaybookSagaStore } from './infrastructure/sqlitePlaybookSagaStore'
+import { createChildMissionParticipant } from './infrastructure/childMissionParticipant'
 import {
   createSqliteActionTemplateStore,
   createSqliteVerificationProfileStore,
@@ -89,6 +93,25 @@ const PIPELINE_IMPORT_BUDGET = {
 export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
   readonly evidence: EvidenceStore
+  /** Business-safe child/approval receipts for Mission detail and journey projection. */
+  collaboration(missionId: string): {
+    readonly children: readonly {
+      readonly stepRunId: string
+      readonly childMissionId: string | null
+      readonly status: string | null
+      readonly completionSatisfied: boolean
+      readonly observedAt: number | null
+      readonly deadlineAt: number | null
+    }[]
+    readonly approvals: readonly {
+      readonly stepRunId: string
+      readonly externalRequestRef: string | null
+      readonly status: string
+      readonly nextObserveAt: number | null
+      readonly deadlineAt: number
+      readonly updatedAt: number
+    }[]
+  }
   reconcile(missionId: string): Promise<ReconcileOutcome>
   /** Advance settled platform steps until the next real asynchronous boundary. */
   drive(missionId: string): Promise<MissionDriveOutcome>
@@ -115,6 +138,10 @@ export function composeDevelopmentAutomation(deps: {
   readonly requirementSource?: RequirementSourceRunnerDep
   /** task-execution 模块组装的 agent 执行 runner；不注入 = 动作发射诚实 blocked。 */
   readonly agentLauncher?: AgentActionLauncherPort
+  /** task-execution 模块组装的 program 执行 runner；与 Agent 共用 envelope 收口。 */
+  readonly scriptLauncher?: ScriptActionLauncherPort
+  /** integration 模块组装的外部审批网关；提交/查询/观察均为幂等短调用。 */
+  readonly approvalGateway?: ApprovalGatewayPort
   /** source-control 模块组装的 candidate 派生；不注入 = changed 结算诚实 blocked。 */
   readonly changeCandidate?: ChangeCandidatePort
   /** source-control 模块组装的发布链（stage/commit/push）；不注入 = 发布诚实 blocked。 */
@@ -148,6 +175,17 @@ export function composeDevelopmentAutomation(deps: {
   const seedsRoot = join(deps.appHome, 'evidence', 'seeds')
   const templates = createSqliteActionTemplateStore(deps.db)
   const verificationProfiles = createSqliteVerificationProfileStore(deps.db)
+  const playbookSaga = createSqlitePlaybookSagaStore(deps.db)
+  // Child Mission 的 drive 回调与本模块互相引用，但不会在装配期间执行；先
+  // 声明完整依赖，再由标准 admission/materialization 路径创建或接续子任务。
+  const missionDrive = createDeferredMissionDrive()
+  const childMissions = createChildMissionParticipant({
+    launch: { store, lookup, now },
+    store,
+    materializer,
+    drive: missionDrive.drive,
+    now,
+  })
   const ports: ReconcilerPorts = {
     requirementMaterialize: materializer,
     uploadPlacement: createUploadPlacementProvider({
@@ -157,6 +195,10 @@ export function composeDevelopmentAutomation(deps: {
       now,
     }),
     ...(deps.agentLauncher === undefined ? {} : { agentLauncher: deps.agentLauncher }),
+    ...(deps.scriptLauncher === undefined ? {} : { scriptLauncher: deps.scriptLauncher }),
+    ...(deps.approvalGateway === undefined ? {} : { approvalGateway: deps.approvalGateway }),
+    playbookSaga,
+    childMissions,
     ...(deps.changeCandidate === undefined ? {} : { changeCandidate: deps.changeCandidate }),
     actionBaseline: { resolve: resolveActionBaseline(deps.db) },
     actionWorkspace: {
@@ -204,11 +246,30 @@ export function composeDevelopmentAutomation(deps: {
     ...(deps.conflictMerge === undefined ? {} : { conflictMerge: deps.conflictMerge }),
     pipelineImport: createPipelineImportAdapter(evidence, PIPELINE_IMPORT_BUDGET),
   }
-  const reconcileDeps: ReconcileDeps = { store, lookup, snapshots, ports, now }
+  const reconcileDeps = { store, lookup, snapshots, ports, now }
+  missionDrive.bind(reconcileDeps)
 
   return {
     materializer,
     evidence,
+    collaboration: (missionId) => ({
+      children: playbookSaga.listMissionLinks(missionId).map((link) => ({
+        stepRunId: link.parentStepRunId,
+        childMissionId: link.childMissionId,
+        status: link.latestStatus,
+        completionSatisfied: link.completionSatisfied,
+        observedAt: link.observedAt,
+        deadlineAt: playbookSaga.getStepRun(link.parentStepRunId)?.deadlineAt ?? null,
+      })),
+      approvals: playbookSaga.listApprovalSagas(missionId).map((approval) => ({
+        stepRunId: approval.stepRunId,
+        externalRequestRef: approval.externalRequestRef,
+        status: approval.latestStatus,
+        nextObserveAt: approval.nextObserveAt,
+        deadlineAt: approval.deadlineAt,
+        updatedAt: approval.updatedAt,
+      })),
+    }),
     reconcile: (missionId) => runMissionReconcile(reconcileDeps, missionId),
     drive: (missionId) => driveMission(reconcileDeps, missionId),
     confirmNoChange: (rawInput) => confirmNoChange(reconcileDeps, rawInput),

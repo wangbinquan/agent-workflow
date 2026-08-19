@@ -63,6 +63,12 @@ import { buildFactSnapshot } from '@/modules/development-automation/domain/facts
 import { factCellSchema } from '@/modules/development-automation/domain/factCell'
 import { nextDecisionSchema } from '@/modules/development-automation/domain/decision'
 import { factPredicateSchema } from '@/modules/development-automation/domain/predicate'
+import {
+  compileEmployeePlaybook,
+  digitalEmployeeContentSchema,
+  validateDigitalEmployeeForPublish,
+} from '@/modules/development-automation/domain/digitalEmployee'
+import { projectEmployeeSetupJourney } from '@/modules/development-automation/domain/journeyProjection'
 import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
@@ -105,7 +111,9 @@ const createBodySchema = z
     name: z.string().min(1).max(200),
     draft: z.unknown().optional(),
     capabilityId: z.string().min(1).optional(),
-    purpose: z.enum(['requirement-source', 'pipeline-gate', 'pipeline-classifier']).optional(),
+    purpose: z
+      .enum(['requirement-source', 'pipeline-gate', 'pipeline-classifier', 'approval-gateway'])
+      .optional(),
   })
   .strict()
 
@@ -282,7 +290,30 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
     handlers: {
       list: async (actor) =>
         (await filterVisibleRows(deps.db, actor, 'action_template', templateStore.list())).map(
-          (r) => ({ ...identityView(r), capabilityId: r.extra.capabilityId }),
+          (r) => {
+            const published =
+              r.publishedRevision === null
+                ? null
+                : templateStore.getRevision(r.id, r.publishedRevision)
+            let executorKind: 'agent' | 'workgroup' | 'script' | null = null
+            if (published !== null) {
+              const content = JSON.parse(published.contentJson) as {
+                executor?: { kind?: unknown }
+              }
+              if (
+                content.executor?.kind === 'agent' ||
+                content.executor?.kind === 'workgroup' ||
+                content.executor?.kind === 'script'
+              ) {
+                executorKind = content.executor.kind
+              }
+            }
+            return {
+              ...identityView(r),
+              capabilityId: r.extra.capabilityId,
+              executorKind,
+            }
+          },
         ),
       get: async (actor, id) => {
         const row = await requireVisible(deps, actor, 'action_template', templateStore.getById(id))
@@ -394,7 +425,19 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
             'digital_employee',
             await listDigitalEmployees(deps.db),
           )
-        ).map((r) => identityView(r)),
+        ).map((r) => {
+          const draft = JSON.parse(r.draftJson) as {
+            description?: unknown
+            businessStatus?: unknown
+            steps?: unknown
+          }
+          return {
+            ...identityView(r),
+            description: typeof draft.description === 'string' ? draft.description : '',
+            businessStatus: draft.businessStatus === 'disabled' ? 'disabled' : 'enabled',
+            stepCount: Array.isArray(draft.steps) ? draft.steps.length : 0,
+          }
+        }),
       get: async (actor, id) => {
         const row = await requireVisible(
           deps,
@@ -434,6 +477,181 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
       },
     },
   })
+
+  // ---- business playbook aggregate + setup journey (PR-11/PR-13) ----------
+  // The generic CRUD remains an advanced compatibility surface. Business UI
+  // reads/writes one employee playbook and receives the same server-owned
+  // next-action projection used by /code.
+  const employeePlaybookBody = z
+    .object({
+      name: z.string().min(1).max(200).optional(),
+      playbook: z.unknown(),
+    })
+    .strict()
+
+  const playbookProjection = async (actor: Actor, id: string) => {
+    const row = await requireVisible(
+      deps,
+      actor,
+      'digital_employee',
+      await getDigitalEmployee(deps.db, id),
+    )
+    const parsed = digitalEmployeeContentSchema.safeParse(JSON.parse(row.draftJson))
+    const violations = parsed.success
+      ? validateDigitalEmployeeForPublish(parsed.data, createEmployeePublishLookup(deps.db))
+      : parsed.error.issues.map((issue) => ({
+          code: 'playbook-schema-invalid',
+          where: issue.path.join('/'),
+          detail: issue.message,
+        }))
+    const assignments = await listAssignments(deps.db)
+    const hasAssignment = assignments.some((assignment) => assignment.employeeId === id)
+    return {
+      ...identityView(row),
+      playbook: JSON.parse(row.draftJson) as unknown,
+      compiled: parsed.success ? compileEmployeePlaybook(parsed.data) : null,
+      violations,
+      readyToPublish: parsed.success && violations.length === 0,
+      assignmentCount: assignments.filter((assignment) => assignment.employeeId === id).length,
+      journey: projectEmployeeSetupJourney({
+        employee: {
+          id,
+          publishedRevision: row.publishedRevision,
+          archived: row.archivedAt !== null,
+          hasAssignment,
+        },
+        canCreate: actor.permissions.has('digital-employees:create'),
+        canUpdate: actor.permissions.has('digital-employees:update'),
+        canAssign: actor.permissions.has('repository-employee-assignments:update'),
+        canLaunch: actor.permissions.has('development-missions:launch'),
+        readyToPublish: parsed.success && violations.length === 0,
+      }),
+    }
+  }
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/digital-employees/:id/playbook',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'Read one business digital-employee playbook with validation and next action',
+    },
+    async (c) => c.json(await playbookProjection(actorOf(c), c.req.param('id'))),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/code/digital-employees/:id/playbook',
+      permissions: ['digital-employees:update'],
+      tokenAccess: 'allow',
+      summary: 'Revise one complete business digital-employee playbook',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const id = c.req.param('id')
+      await requireVisible(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+      const body = employeePlaybookBody.parse(await safeJsonOrEmpty(c.req.raw))
+      // Reject an incomplete browser write before replacing the previous draft;
+      // cross-resource closure violations remain visible and publish-blocking.
+      digitalEmployeeContentSchema.parse(body.playbook)
+      await reviseDigitalEmployeeDraft(deps.db, {
+        id,
+        draft: body.playbook,
+        ...(body.name === undefined ? {} : { name: body.name }),
+      })
+      return c.json({ ok: true, nextLocation: `/code/config/employees/${encodeURIComponent(id)}` })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/code/digital-employees/:id/playbook/validate',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'Validate and compile the current business digital-employee playbook',
+    },
+    async (c) => {
+      const projection = await playbookProjection(actorOf(c), c.req.param('id'))
+      return c.json({
+        readyToPublish: projection.readyToPublish,
+        violations: projection.violations,
+        compiled: projection.compiled,
+        journey: projection.journey,
+      })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/setup-journey',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'Read the single next action for first-time digital-employee setup',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const visible = await filterVisibleRows(
+        deps.db,
+        actor,
+        'digital_employee',
+        await listDigitalEmployees(deps.db),
+      )
+      const assignments = await listAssignments(deps.db)
+      const hasAssignment = (id: string): boolean =>
+        assignments.some((assignment) => assignment.employeeId === id)
+      const requestedEmployee = c.req.query('employee')
+      const selected =
+        (requestedEmployee === undefined
+          ? undefined
+          : visible.find((employee) => employee.id === requestedEmployee)) ??
+        visible.find(
+          (employee) => employee.archivedAt === null && employee.publishedRevision === null,
+        ) ??
+        visible.find(
+          (employee) =>
+            employee.archivedAt === null &&
+            employee.publishedRevision !== null &&
+            !hasAssignment(employee.id),
+        ) ??
+        visible.find((employee) => employee.archivedAt === null) ??
+        visible[0] ??
+        null
+      const selectedDraft =
+        selected === null
+          ? null
+          : digitalEmployeeContentSchema.safeParse(JSON.parse(selected.draftJson))
+      const selectedReadyToPublish =
+        selectedDraft?.success === true &&
+        validateDigitalEmployeeForPublish(selectedDraft.data, createEmployeePublishLookup(deps.db))
+          .length === 0
+      return c.json(
+        projectEmployeeSetupJourney({
+          employee:
+            selected === null
+              ? null
+              : {
+                  id: selected.id,
+                  publishedRevision: selected.publishedRevision,
+                  archived: selected.archivedAt !== null,
+                  hasAssignment: hasAssignment(selected.id),
+                },
+          canCreate: actor.permissions.has('digital-employees:create'),
+          canUpdate: actor.permissions.has('digital-employees:update'),
+          canAssign: actor.permissions.has('repository-employee-assignments:update'),
+          canLaunch: actor.permissions.has('development-missions:launch'),
+          readyToPublish: selectedReadyToPublish,
+        }),
+      )
+    },
+  )
 
   // ---- automation policies -------------------------------------------------
   mountConfigResource(app, deps, {

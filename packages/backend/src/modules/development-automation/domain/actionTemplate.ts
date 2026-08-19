@@ -29,6 +29,13 @@ export const actionTemplateContentSchema = z
     executor: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('agent'), agentRef: resourceRef }).strict(),
       z.object({ kind: z.literal('workgroup'), workgroupRef: resourceRef }).strict(),
+      z
+        .object({
+          kind: z.literal('script'),
+          language: z.enum(['bash', 'python', 'node']),
+          scriptRef: resourceRef,
+        })
+        .strict(),
     ]),
     runtimeProfileRef: resourceRef,
     /** 领域知识补充；放在不可覆盖 protocol block 之前，不能改变运行合同（§3.4）。 */

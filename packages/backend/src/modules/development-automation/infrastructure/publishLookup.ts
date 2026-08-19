@@ -11,6 +11,7 @@ import {
   actionTemplateRevisions,
   automationPolicyRevisions,
   developmentAdapterDefinitionRevisions,
+  digitalEmployeeRevisions,
 } from '@/db/schema'
 import type { EmployeePublishLookup } from '../domain/digitalEmployee'
 
@@ -60,6 +61,19 @@ export function createEmployeePublishLookup(db: DbClient): EmployeePublishLookup
       if (row === undefined) return null
       const content = JSON.parse(row.contentJson) as { purpose?: unknown }
       return typeof content.purpose === 'string' ? { purpose: content.purpose } : null
+    },
+    getEmployee(employeeId, revision) {
+      const row = db
+        .select({ employeeId: digitalEmployeeRevisions.employeeId })
+        .from(digitalEmployeeRevisions)
+        .where(
+          and(
+            eq(digitalEmployeeRevisions.employeeId, employeeId),
+            eq(digitalEmployeeRevisions.revision, revision),
+          ),
+        )
+        .get()
+      return row === undefined ? null : { exists: true }
     },
   }
 }

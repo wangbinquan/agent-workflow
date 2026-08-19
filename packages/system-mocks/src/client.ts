@@ -1,4 +1,5 @@
 import type { MockPipelineSeed } from './development/pipeline-provider'
+import type { MockApprovalSeed } from './development/approval-provider'
 import type { MockQuestionSetRecord, MockRequirementSeed } from './development/requirement-provider'
 import type {
   MockCodeHostMutationInput,
@@ -100,6 +101,10 @@ export class SystemMockClient {
   }
   async seedDevelopmentPipeline(seed: MockPipelineSeed): Promise<void> {
     await this.#request('POST', '/development-pipeline/seed', seed)
+  }
+
+  async seedDevelopmentApproval(seed: MockApprovalSeed): Promise<void> {
+    await this.#request('POST', '/development-approval/seed', seed)
   }
 
   async seedRequirementAnswers(input: {

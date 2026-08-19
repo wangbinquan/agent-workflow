@@ -8,7 +8,8 @@
 // resumeAt NULL 的 wake 永不因时间 due（listDueWakes 语义），平台渠道
 // awaiting-answers 的 wait-wake 不会被这里空转。
 
-import { runMissionReconcile, type ReconcileDeps } from './missionReconciler'
+import { driveMission } from './missionDriver'
+import type { ReconcileDeps } from './missionReconciler'
 
 export interface WakeSweepReaders {
   listUnconsumedWakeHintMissionIds(): string[]
@@ -22,13 +23,13 @@ export async function sweepMissionWakes(
   let reconciled = 0
   for (const wake of deps.store.listDueWakes(now)) {
     if (deps.store.fireWake(wake.id, now)) {
-      await runMissionReconcile(deps, wake.missionId)
+      await driveMission(deps, wake.missionId)
       reconciled += 1
     }
   }
   for (const missionId of readers.listUnconsumedWakeHintMissionIds()) {
-    const outcome = await runMissionReconcile(deps, missionId)
-    if (outcome.kind !== 'not-found') reconciled += 1
+    const outcome = await driveMission(deps, missionId)
+    if (outcome.stop !== 'not-found') reconciled += 1
   }
   return { reconciled }
 }

@@ -146,7 +146,7 @@ type ScriptKind = 'entry' | 'collect' | 'classify' | 'arbitrate' | 'select'
 const SCRIPT_ADAPTER_PURPOSE: Readonly<
   Record<
     'entry' | 'collect' | 'classify',
-    'requirement-source' | 'pipeline-gate' | 'pipeline-classifier'
+    'requirement-source' | 'pipeline-gate' | 'pipeline-classifier' | 'approval-gateway'
   >
 > = {
   entry: 'requirement-source',

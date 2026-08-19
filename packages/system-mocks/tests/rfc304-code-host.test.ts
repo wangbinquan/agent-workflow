@@ -269,7 +269,14 @@ describe('RFC-304 code-host state', () => {
       headFiles: { 'README.md': 'head one\n' },
     })
     const clone = await temporaryDirectory('system-mock-push-')
-    await runChecked('git', ['clone', '-q', project.repoHttpUrl, clone])
+    await runChecked('git', [
+      'clone',
+      '-q',
+      '--branch',
+      project.headBranch,
+      project.repoHttpUrl,
+      clone,
+    ])
     await runChecked('git', ['config', 'user.email', 'push@mock.test'], { cwd: clone })
     await runChecked('git', ['config', 'user.name', 'Push Test'], { cwd: clone })
     await writeFile(join(clone, 'README.md'), 'head two\n')

@@ -101,6 +101,7 @@ import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
+import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
@@ -540,6 +541,13 @@ export interface StartTaskDeps {
    * fusion's approval flow needs the dirs to survive terminal states).
    */
   internalSource?: { kind: 'local-path'; repoPath: string; baseBranch: string }
+  /**
+   * RFC-310: trusted platform input mount roots frozen onto the task row. These
+   * paths are force-included in every RFC-130 isolation snapshot so ignored
+   * requirement/pipeline evidence remains visible to Agent nodes. Internal
+   * launch dependency only; public StartTask inputs cannot set this contract.
+   */
+  platformInputPaths?: readonly string[]
   /**
    * RFC-036 — launcher user id. NULL falls back to the legacy single-user
    * behavior (ownerUserId stays NULL; no collab/assignment rows written).
@@ -2322,6 +2330,19 @@ async function startTaskImpl(
   deps: StartTaskDeps,
   ownership: StartTaskOwnership,
 ): Promise<Task> {
+  const platformInputPaths = normalizeTaskPlatformInputPaths(deps.platformInputPaths ?? [])
+  if (platformInputPaths === null) {
+    throw new ValidationError(
+      'task-platform-input-paths-invalid',
+      'platform input paths must be bounded roots below .agent-workflow/inputs or .agent-workflow/pipeline',
+    )
+  }
+  if (platformInputPaths.length > 0 && deps.internalSource === undefined) {
+    throw new ValidationError(
+      'task-platform-input-paths-not-internal',
+      'platform input paths are only supported for trusted internal task launches',
+    )
+  }
   deps.sourceTerminationAdmission?.()
   if (deps.sourceTerminationLaunchSignal?.aborted === true) {
     throw new ConflictError(
@@ -2912,6 +2933,8 @@ async function startTaskImpl(
           // task row once, so a later UPDATE is observably too late.
           triggerContextJson:
             deps.triggerContext === undefined ? null : JSON.stringify(deps.triggerContext),
+          platformInputPathsJson:
+            platformInputPaths.length === 0 ? null : JSON.stringify(platformInputPaths),
           sourceTerminationBinding: sourceTerminationSnapshot?.binding ?? null,
           sourceTerminationLaunchRev: sourceTerminationSnapshot?.launchRevision ?? null,
           sourceTerminationFence: sourceTerminationSnapshot?.fence ?? null,

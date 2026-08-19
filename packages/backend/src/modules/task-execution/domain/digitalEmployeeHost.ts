@@ -18,6 +18,7 @@ export const DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME = '__digital_employee_host__'
 /** 与 agent host `__agent_main__` 同族的命名，node_runs dump 里一眼可辨。 */
 export const DIGITAL_EMPLOYEE_INPUT_NODE_ID = '__de_input__'
 export const DIGITAL_EMPLOYEE_AGENT_NODE_ID = '__de_agent__'
+export const DIGITAL_EMPLOYEE_SCRIPT_NODE_ID = '__de_script__'
 export const DIGITAL_EMPLOYEE_OUTPUT_NODE_ID = '__de_output__'
 export const DIGITAL_EMPLOYEE_PROMPT_KEY = 'prompt'
 
@@ -104,6 +105,80 @@ export function synthesizeDigitalEmployeeHostSnapshot(input: DigitalEmployeeHost
         source: {
           nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
           portName: DIGITAL_EMPLOYEE_RESULT_PORT,
+        },
+        target: {
+          nodeId: DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_RESULT_PORT,
+        },
+      },
+    ],
+  }
+}
+
+export interface DigitalEmployeeScriptHostSnapshotInput {
+  readonly language: 'python' | 'bash' | 'node'
+  readonly script: string
+  readonly dependencies: readonly string[]
+  readonly env: Readonly<Record<string, string>>
+  readonly readonly: boolean
+}
+
+/**
+ * Script implementations travel through the same TaskEngine host as Agent
+ * implementations. The authored program is frozen into the task snapshot,
+ * receives the platform prompt through AW_PORT_PROMPT, and must emit the exact
+ * `agent-result` output envelope. No direct Bun.spawn shortcut exists here.
+ */
+export function synthesizeDigitalEmployeeScriptHostSnapshot(
+  input: DigitalEmployeeScriptHostSnapshotInput,
+): { $schema_version: number; inputs: unknown[]; nodes: unknown[]; edges: unknown[] } {
+  return {
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
+    inputs: [
+      {
+        kind: 'text',
+        key: DIGITAL_EMPLOYEE_PROMPT_KEY,
+        label: 'Digital employee prompt',
+        required: true,
+        multiline: true,
+      },
+    ],
+    nodes: [
+      { id: DIGITAL_EMPLOYEE_INPUT_NODE_ID, kind: 'input', inputKey: DIGITAL_EMPLOYEE_PROMPT_KEY },
+      {
+        id: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
+        kind: 'script',
+        language: input.language,
+        script: input.script,
+        dependencies: [...input.dependencies],
+        env: { ...input.env },
+        readonly: input.readonly,
+      },
+      {
+        id: DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
+        kind: 'output',
+        ports: [
+          {
+            name: DIGITAL_EMPLOYEE_RESULT_PORT,
+            bind: {
+              nodeId: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
+              portName: 'stdout',
+            },
+          },
+        ],
+      },
+    ],
+    edges: [
+      {
+        id: 'e_de_script_prompt',
+        source: { nodeId: DIGITAL_EMPLOYEE_INPUT_NODE_ID, portName: DIGITAL_EMPLOYEE_PROMPT_KEY },
+        target: { nodeId: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID, portName: DIGITAL_EMPLOYEE_PROMPT_KEY },
+      },
+      {
+        id: 'e_de_script_result',
+        source: {
+          nodeId: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
+          portName: 'stdout',
         },
         target: {
           nodeId: DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,

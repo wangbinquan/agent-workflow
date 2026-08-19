@@ -45,6 +45,7 @@ export const ADAPTER_PURPOSES = [
   'requirement-source',
   'pipeline-gate',
   'pipeline-classifier',
+  'approval-gateway',
 ] as const
 
 export type AdapterPurpose = (typeof ADAPTER_PURPOSES)[number]
@@ -57,6 +58,7 @@ export const ADAPTER_REQUIRED_OPERATIONS: Record<AdapterPurpose, readonly string
   'requirement-source': ['acquire'],
   'pipeline-gate': ['collect'],
   'pipeline-classifier': ['classify'],
+  'approval-gateway': ['submit', 'lookup-by-idempotency-key', 'observe'],
 }
 
 /** 新建 adapter 的最小合法内容里的预算 / 超时缺省（都在 schema 上下界内）。 */
@@ -74,9 +76,13 @@ export interface DevelopmentConfigCreateInput {
   name: string
   /** action-template 必填：capability 闭集里的一个 id。 */
   capabilityId?: string
+  /** action-template: guided same-page creator may submit a publishable draft. */
+  actionTemplateDraft?: Record<string, unknown>
   /** adapter 必填：purpose + 可执行引用（占位值等于产出一个说不出话的资源）。 */
   purpose?: AdapterPurpose
   executableRef?: string
+  /** employees: business playbook draft assembled by the guided creator. */
+  employeeDraft?: Record<string, unknown>
 }
 
 /**
@@ -90,8 +96,15 @@ export function buildDevelopmentConfigCreateBody(
   input: DevelopmentConfigCreateInput,
 ): Record<string, unknown> {
   const base: Record<string, unknown> = { name: input.name }
+  if (input.kind === 'employees') {
+    return input.employeeDraft === undefined ? base : { ...base, draft: input.employeeDraft }
+  }
   if (input.kind === 'action-templates') {
-    return { ...base, capabilityId: input.capabilityId }
+    return {
+      ...base,
+      capabilityId: input.capabilityId,
+      ...(input.actionTemplateDraft === undefined ? {} : { draft: input.actionTemplateDraft }),
+    }
   }
   if (input.kind === 'adapters') {
     const purpose = input.purpose ?? ADAPTER_PURPOSES[0]

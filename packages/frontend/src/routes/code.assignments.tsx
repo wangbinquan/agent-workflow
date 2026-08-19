@@ -7,7 +7,7 @@
 // 配置面版本：不让用户把跑不起来的组合存出去）。
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { createRoute } from '@tanstack/react-router'
@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Select } from '@/components/Select'
 import { TableViewport } from '@/components/TableViewport'
 import { TextInput } from '@/components/Form'
+import { JourneyNextAction, type JourneyProjection } from '@/components/code/JourneyNextAction'
 import { Route as RootRoute } from './__root'
 
 interface AssignmentRow {
@@ -44,14 +45,34 @@ interface IdentityRow {
 
 const SCOPE_ORDER = ['global-default', 'repository-group', 'repository'] as const
 
+interface AssignmentSearch extends Record<string, unknown> {
+  employee?: string
+  create?: boolean
+}
+
+export function validateAssignmentSearch(search: Record<string, unknown>): AssignmentSearch {
+  const { employee: _employee, create: _create, ...adjacent } = search
+  return {
+    ...adjacent,
+    ...(typeof search.employee === 'string' && search.employee !== ''
+      ? { employee: search.employee }
+      : {}),
+    ...(search.create === true || search.create === '1' ? { create: true } : {}),
+  }
+}
+
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/code/assignments',
+  validateSearch: validateAssignmentSearch,
   component: CodeAssignmentsPage,
 })
 
 export function CodeAssignmentsPage(): ReactElement {
   const { t } = useTranslation()
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const [journeyEmployeeId] = useState(search.employee ?? null)
   const queryClient = useQueryClient()
   const assignments = useQuery<{ items: AssignmentRow[] }>({
     queryKey: ['code-assignments'],
@@ -78,7 +99,38 @@ export function CodeAssignmentsPage(): ReactElement {
     queryKey: ['repo-groups-for-assignments'],
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
   })
+  const journey = useQuery<JourneyProjection>({
+    queryKey: ['digital-employee-setup-journey', journeyEmployeeId],
+    queryFn: ({ signal }) =>
+      api.get(
+        journeyEmployeeId === null
+          ? '/api/code/setup-journey'
+          : `/api/code/setup-journey?employee=${encodeURIComponent(journeyEmployeeId)}`,
+        undefined,
+        signal,
+      ),
+  })
   const [editing, setEditing] = useState<AssignmentRow | null>(null)
+  useEffect(() => {
+    if (search.create !== true || editing !== null) return
+    setEditing({
+      scopeKind: 'repository',
+      scopeRef: null,
+      employeeId: search.employee ?? null,
+      employeeRevision: null,
+      selectionPolicyId: null,
+      selectionPolicyRevision: null,
+      executionPolicyId: null,
+      executionPolicyRevision: null,
+      defaultRequirementSourceKey: null,
+    })
+  }, [editing, search.create, search.employee])
+  const closeEditor = (): void => {
+    setEditing(null)
+    if (search.create === true || search.employee !== undefined) {
+      void navigate({ search: {}, replace: true })
+    }
+  }
   const remove = useMutation({
     mutationFn: (row: AssignmentRow) =>
       api.delete(
@@ -123,109 +175,142 @@ export function CodeAssignmentsPage(): ReactElement {
   }
 
   return (
-    <div className="page" data-testid="code-assignments-page">
-      <PageHeader
-        title={t('code.assignments.title')}
-        meta={t('code.assignments.description')}
-        actions={
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            onClick={() =>
-              setEditing({
-                scopeKind: 'repository',
-                scopeRef: null,
-                employeeId: null,
-                employeeRevision: null,
-                selectionPolicyId: null,
-                selectionPolicyRevision: null,
-                executionPolicyId: null,
-                executionPolicyRevision: null,
-                defaultRequirementSourceKey: null,
-              })
-            }
-            data-testid="assignment-create"
-          >
-            {t('code.assignments.create')}
-          </button>
-        }
-      />
-      {remove.isError ? <ErrorBanner error={remove.error} /> : null}
-      {items.length === 0 ? (
-        <EmptyState title={t('code.assignments.empty')} />
-      ) : (
-        SCOPE_ORDER.map((scope) => {
-          const rows = items.filter((r) => r.scopeKind === scope)
-          if (rows.length === 0) return null
-          return (
-            <section key={scope} className="page__section">
-              <h3>{t(`code.assignments.scope.${scope}`)}</h3>
-              <TableViewport label={t(`code.assignments.scope.${scope}`)}>
-                <table className="table" data-testid={`assignments-${scope}`}>
-                  <thead>
-                    <tr>
-                      <th>{t('code.assignments.colScope')}</th>
-                      <th>{t('code.assignments.colEmployee')}</th>
-                      <th>{t('code.assignments.colSelectionPolicy')}</th>
-                      <th>{t('code.assignments.colExecutionPolicy')}</th>
-                      <th>{t('code.assignments.colSourceKey')}</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={`${row.scopeKind}:${row.scopeRef ?? 'global'}`}>
-                        <td>{scopeLabel(row)}</td>
-                        <td>
-                          {employeeName(row.employeeId)}
-                          {unpublishedWarnings(row).map((w) => (
-                            <span key={w} className="chip chip--warn" title={w}>
-                              ⚠
-                            </span>
-                          ))}
-                        </td>
-                        <td>{policyName(row.selectionPolicyId)}</td>
-                        <td>{policyName(row.executionPolicyId)}</td>
-                        <td>{row.defaultRequirementSourceKey ?? '—'}</td>
-                        <td className="page__actions">
-                          <button
-                            type="button"
-                            className="btn btn--xs"
-                            onClick={() => setEditing(row)}
-                          >
-                            {t('common.edit')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn--xs btn--danger"
-                            onClick={() => remove.mutate(row)}
-                          >
-                            {t('common.delete')}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TableViewport>
-            </section>
-          )
-        })
-      )}
-      {editing !== null ? (
-        <AssignmentDialog
-          row={editing}
-          employees={employees.data?.items ?? []}
-          policies={policies.data?.items ?? []}
-          repos={repos.data?.items ?? []}
-          groups={groups.data?.items ?? []}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null)
-            void queryClient.invalidateQueries({ queryKey: ['code-assignments'] })
-          }}
+    <div
+      className="page page--operations code-assignments-page"
+      data-testid="code-assignments-page"
+    >
+      <div className="operations-surface">
+        <PageHeader
+          title={t('code.assignments.title')}
+          className="operations-surface__header"
+          actions={
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              onClick={() =>
+                setEditing({
+                  scopeKind: 'repository',
+                  scopeRef: null,
+                  employeeId: null,
+                  employeeRevision: null,
+                  selectionPolicyId: null,
+                  selectionPolicyRevision: null,
+                  executionPolicyId: null,
+                  executionPolicyRevision: null,
+                  defaultRequirementSourceKey: null,
+                })
+              }
+              data-testid="assignment-create"
+            >
+              {t('code.assignments.create')}
+            </button>
+          }
         />
-      ) : null}
+        <div className="employee-manual-panel">
+          {journey.data !== undefined ? <JourneyNextAction journey={journey.data} /> : null}
+          {remove.isError ? <ErrorBanner error={remove.error} /> : null}
+          {items.length === 0 ? (
+            <EmptyState
+              title={t('code.assignments.empty')}
+              description={t('code.journey.detail.assignRepositoryDetail')}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() =>
+                    setEditing({
+                      scopeKind: 'repository',
+                      scopeRef: null,
+                      employeeId: search.employee ?? null,
+                      employeeRevision: null,
+                      selectionPolicyId: null,
+                      selectionPolicyRevision: null,
+                      executionPolicyId: null,
+                      executionPolicyRevision: null,
+                      defaultRequirementSourceKey: null,
+                    })
+                  }
+                >
+                  {t('code.assignments.create')}
+                </button>
+              }
+            />
+          ) : (
+            SCOPE_ORDER.map((scope) => {
+              const rows = items.filter((r) => r.scopeKind === scope)
+              if (rows.length === 0) return null
+              return (
+                <section key={scope} className="page__section">
+                  <h3>{t(`code.assignments.scope.${scope}`)}</h3>
+                  <TableViewport label={t(`code.assignments.scope.${scope}`)}>
+                    <table className="table" data-testid={`assignments-${scope}`}>
+                      <thead>
+                        <tr>
+                          <th>{t('code.assignments.colScope')}</th>
+                          <th>{t('code.assignments.colEmployee')}</th>
+                          <th>{t('code.assignments.colSelectionPolicy')}</th>
+                          <th>{t('code.assignments.colExecutionPolicy')}</th>
+                          <th>{t('code.assignments.colSourceKey')}</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={`${row.scopeKind}:${row.scopeRef ?? 'global'}`}>
+                            <td>{scopeLabel(row)}</td>
+                            <td>
+                              {employeeName(row.employeeId)}
+                              {unpublishedWarnings(row).map((w) => (
+                                <span key={w} className="chip chip--warn" title={w}>
+                                  ⚠
+                                </span>
+                              ))}
+                            </td>
+                            <td>{policyName(row.selectionPolicyId)}</td>
+                            <td>{policyName(row.executionPolicyId)}</td>
+                            <td>{row.defaultRequirementSourceKey ?? '—'}</td>
+                            <td className="page__actions">
+                              <button
+                                type="button"
+                                className="btn btn--xs"
+                                onClick={() => setEditing(row)}
+                              >
+                                {t('common.edit')}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn--xs btn--danger"
+                                onClick={() => remove.mutate(row)}
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </TableViewport>
+                </section>
+              )
+            })
+          )}
+          {editing !== null ? (
+            <AssignmentDialog
+              row={editing}
+              employees={employees.data?.items ?? []}
+              policies={policies.data?.items ?? []}
+              repos={repos.data?.items ?? []}
+              groups={groups.data?.items ?? []}
+              onClose={closeEditor}
+              onSaved={() => {
+                closeEditor()
+                void queryClient.invalidateQueries({ queryKey: ['code-assignments'] })
+                void queryClient.invalidateQueries({ queryKey: ['digital-employee-setup-journey'] })
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

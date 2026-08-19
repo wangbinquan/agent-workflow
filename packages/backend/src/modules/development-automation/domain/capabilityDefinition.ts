@@ -30,6 +30,8 @@ export const AGENT_CAPABILITY_IDS = [
   'pipeline.repair',
   'conflict.repair',
   'mr.review.external',
+  'problem.classify',
+  'approval.prepare',
 ] as const
 
 export const PLATFORM_EFFECT_CAPABILITY_IDS = [
@@ -139,6 +141,8 @@ export const CAPABILITY_DEFINITIONS: readonly CapabilityDefinition[] = [
   def('pipeline.repair', 'agent', 'edit-business-files'),
   def('conflict.repair', 'agent', 'edit-conflicts'),
   def('mr.review.external', 'agent', 'read-only'),
+  def('problem.classify', 'agent', 'read-only'),
+  def('approval.prepare', 'agent', 'read-only'),
   def('change.publish', 'platform-effect', 'none', [
     'source.prepare-candidate',
     'source.commit',

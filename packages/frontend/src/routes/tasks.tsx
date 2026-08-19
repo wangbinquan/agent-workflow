@@ -8,6 +8,7 @@ import {
   TASK_STATUS,
   canonicalTaskStatuses,
   parseTaskStatusList,
+  taskMatchesListView,
   type TaskListOrigin,
   type TaskListScope,
   type TaskListSubject,
@@ -17,6 +18,7 @@ import {
   type TaskOperationsPage,
   type TaskStatus,
 } from '@agent-workflow/shared'
+import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   useCallback,
@@ -25,11 +27,13 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactElement,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/Dialog'
+import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
@@ -61,6 +65,10 @@ import { taskOperationsDuration } from '@/lib/task-operations-duration'
 import { describeTaskFailure } from '@/lib/task-failure'
 import { taskRepoDisplayName } from '@/lib/task-repo-name'
 import { Route as RootRoute } from './__root'
+import { missionStatusKind, missionStatusLabel, type MissionSummary } from './code.missions'
+
+type TaskCategory = 'all' | 'orchestration' | 'digital-employee'
+const TASK_CATEGORIES = ['all', 'orchestration', 'digital-employee'] as const
 
 interface TasksSearch {
   view?: Exclude<TaskListView, 'all'>
@@ -69,6 +77,7 @@ interface TasksSearch {
   subject?: Exclude<TaskListSubject, 'all'>
   scope?: TaskListScope
   origin?: Exclude<TaskListOrigin, 'all'>
+  category?: Exclude<TaskCategory, 'all'>
 }
 
 function canonicalSearch(raw: Record<string, unknown>): TasksSearch {
@@ -114,6 +123,13 @@ function canonicalSearch(raw: Record<string, unknown>): TasksSearch {
   ) {
     out.origin = raw.origin as Exclude<TaskListOrigin, 'all'>
   }
+  if (
+    typeof raw.category === 'string' &&
+    raw.category !== 'all' &&
+    (TASK_CATEGORIES as readonly string[]).includes(raw.category)
+  ) {
+    out.category = raw.category as Exclude<TaskCategory, 'all'>
+  }
   return out
 }
 
@@ -125,6 +141,7 @@ function taskSearchParams(search: TasksSearch): URLSearchParams {
   if (search.subject !== undefined) params.set('subject', search.subject)
   if (search.scope !== undefined) params.set('scope', search.scope)
   if (search.origin !== undefined) params.set('origin', search.origin)
+  if (search.category !== undefined) params.set('category', search.category)
   return params
 }
 
@@ -135,7 +152,16 @@ function taskSearchParamsFromHref(href: string): URLSearchParams {
 function taskSearchFromHref(href: string): TasksSearch {
   const params = taskSearchParamsFromHref(href)
   const raw: Record<string, unknown> = {}
-  for (const key of ['view', 'q', 'statuses', 'status', 'subject', 'scope', 'origin'] as const) {
+  for (const key of [
+    'view',
+    'q',
+    'statuses',
+    'status',
+    'subject',
+    'scope',
+    'origin',
+    'category',
+  ] as const) {
     const values = params.getAll(key)
     if (values.length > 0) raw[key] = values.at(-1)
   }
@@ -162,6 +188,7 @@ interface FilterDraft {
   subject: TaskListSubject
   scope: TaskListScope
   origin: TaskListOrigin
+  category: TaskCategory
 }
 
 function dedupeItems(pages: TaskOperationsPage[] | undefined): TaskOperationsListItem[] {
@@ -198,11 +225,13 @@ function TasksPage() {
   )
   const actor = useActor()
   const canReadAll = usePermission('tasks:read:all')
+  const canReadDigitalEmployees = usePermission('development-missions:read')
   const actorReady =
     actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const defaultScope: TaskListScope = canReadAll ? 'all' : 'mine'
   const effectiveScope: TaskListScope =
     search.scope === 'all' && !canReadAll ? 'mine' : (search.scope ?? defaultScope)
+  const category: TaskCategory = search.category ?? 'all'
 
   useEffect(() => {
     if (!actorReady || actor.data === null) return
@@ -238,13 +267,42 @@ function TasksPage() {
     }),
     [effectiveScope, search.origin, search.q, search.subject, search.view, statuses],
   )
-  const filterFingerprint = JSON.stringify(filters)
-  const query = useTaskOperationsPage(filters, undefined, actorReady && actor.data !== null)
+  const filterFingerprint = JSON.stringify({ filters, category })
+  const taskQueryEnabled = actorReady && actor.data !== null && category !== 'digital-employee'
+  const query = useTaskOperationsPage(filters, undefined, taskQueryEnabled)
   const sync = useTaskOperationsSync()
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
+  const digitalMissions = useQuery<{ items: MissionSummary[] }>({
+    queryKey: ['code-missions', 'task-operations'],
+    queryFn: ({ signal }) => api.get('/api/code/missions', undefined, signal),
+    enabled:
+      actorReady && actor.data !== null && canReadDigitalEmployees && category !== 'orchestration',
+    refetchInterval: 10_000,
+  })
+  const missionItems = useMemo(
+    () =>
+      filterDigitalEmployeeMissions(digitalMissions.data?.items ?? [], {
+        view: filters.view,
+        statuses: filters.statuses,
+        query: filters.q,
+      }),
+    [digitalMissions.data?.items, filters.q, filters.statuses, filters.view],
+  )
   const rootPage = query.data?.pages.find((page) => page.kind === 'root')
-  const facets =
+  const taskFacets =
     rootPage?.kind === 'root' ? rootPage.facets : { all: 0, active: 0, attention: 0, finished: 0 }
+  const missionFacets = digitalEmployeeFacets(digitalMissions.data?.items ?? [])
+  const facets =
+    category === 'digital-employee'
+      ? missionFacets
+      : category === 'orchestration'
+        ? taskFacets
+        : {
+            all: taskFacets.all + missionFacets.all,
+            active: taskFacets.active + missionFacets.active,
+            attention: taskFacets.attention + missionFacets.attention,
+            finished: taskFacets.finished + missionFacets.finished,
+          }
 
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
@@ -293,6 +351,7 @@ function TasksPage() {
     subject: filters.subject,
     scope: filters.scope,
     origin: filters.origin,
+    category,
   })
   const openFilters = () => {
     setDraft({
@@ -300,6 +359,7 @@ function TasksPage() {
       subject: filters.subject,
       scope: filters.scope,
       origin: filters.origin,
+      category,
     })
     setFiltersOpen(true)
   }
@@ -307,7 +367,8 @@ function TasksPage() {
     Number(filters.statuses.length > 0) +
     Number(filters.subject !== 'all') +
     Number(filters.scope !== defaultScope) +
-    Number(filters.origin !== 'all')
+    Number(filters.origin !== 'all') +
+    Number(category !== 'all')
   const hasAnyFilter = filters.view !== 'all' || filters.q !== undefined || filterDimensionCount > 0
 
   const clearFilters = () => {
@@ -324,33 +385,65 @@ function TasksPage() {
         subject: draft.subject === 'all' ? undefined : draft.subject,
         scope: draft.scope === defaultScope ? undefined : draft.scope,
         origin: draft.origin === 'all' ? undefined : draft.origin,
+        category: draft.category === 'all' ? undefined : draft.category,
       },
     })
     setFiltersOpen(false)
   }
 
-  const isLoading = actor.isLoading || query.isLoading
+  const isLoading =
+    actor.isLoading ||
+    (category !== 'digital-employee' && query.isLoading) ||
+    (category !== 'orchestration' && canReadDigitalEmployees && digitalMissions.isLoading)
   const initialEmpty =
-    !isLoading && query.error == null && items.length === 0 && facets.all === 0 && !hasAnyFilter
-  const noMatches = !isLoading && query.error == null && items.length === 0 && !initialEmpty
+    !isLoading &&
+    query.error == null &&
+    digitalMissions.error == null &&
+    items.length === 0 &&
+    missionItems.length === 0 &&
+    facets.all === 0 &&
+    !hasAnyFilter
+  const noMatches =
+    !isLoading &&
+    query.error == null &&
+    digitalMissions.error == null &&
+    items.length === 0 &&
+    missionItems.length === 0 &&
+    !initialEmpty
   const newTaskAction = (
-    <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
-      {t('tasks.newButton')}
-    </Link>
+    <div className="page-header__actions">
+      <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
+        {t('tasks.newButton')}
+      </Link>
+      <Link
+        to="/code/missions/new"
+        className="btn btn--primary"
+        data-testid="tasks-new-digital-employee"
+      >
+        {t('tasks.operations.newDigitalEmployee')}
+      </Link>
+    </div>
   )
   const previousResult = useRef<{ fingerprint: string; count: number } | null>(null)
   useEffect(() => {
     if (isLoading || query.error != null || liveRegion === null) return
     const previous = previousResult.current
     if (previous === null || previous.fingerprint !== filterFingerprint) {
-      liveRegion.announce(t('tasks.operations.resultCount', { count: items.length }))
-    } else if (items.length > previous.count) {
       liveRegion.announce(
-        t('tasks.operations.addedCount', { count: items.length - previous.count }),
+        t('tasks.operations.resultCount', { count: items.length + missionItems.length }),
+      )
+    } else if (items.length + missionItems.length > previous.count) {
+      liveRegion.announce(
+        t('tasks.operations.addedCount', {
+          count: items.length + missionItems.length - previous.count,
+        }),
       )
     }
-    previousResult.current = { fingerprint: filterFingerprint, count: items.length }
-  }, [filterFingerprint, isLoading, items.length, liveRegion, query.error, t])
+    previousResult.current = {
+      fingerprint: filterFingerprint,
+      count: items.length + missionItems.length,
+    }
+  }, [filterFingerprint, isLoading, items.length, liveRegion, missionItems.length, query.error, t])
 
   return (
     <div className="page page--operations page--task-operations">
@@ -417,6 +510,12 @@ function TasksPage() {
           {query.error != null && (
             <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
           )}
+          {digitalMissions.error != null && category !== 'orchestration' && (
+            <ErrorBanner
+              error={digitalMissions.error}
+              onRetry={() => void digitalMissions.refetch()}
+            />
+          )}
         </FeedbackStack>
         {isLoading && <LoadingState data-testid="tasks-loading" />}
         {initialEmpty && (
@@ -441,7 +540,11 @@ function TasksPage() {
           />
         )}
 
-        {items.length > 0 && (
+        {missionItems.length > 0 && category !== 'orchestration' && (
+          <DigitalEmployeeTaskList items={missionItems} />
+        )}
+
+        {items.length > 0 && category !== 'digital-employee' && (
           <TaskOperationsList
             items={items}
             filters={filters}
@@ -465,7 +568,13 @@ function TasksPage() {
         canReadAll={canReadAll}
         onApply={applyFilters}
         onClear={() =>
-          setDraft({ statuses: [], subject: 'all', scope: defaultScope, origin: 'all' })
+          setDraft({
+            statuses: [],
+            subject: 'all',
+            scope: defaultScope,
+            origin: 'all',
+            category: 'all',
+          })
         }
       />
     </div>
@@ -511,6 +620,17 @@ function TaskListFilterDialog(props: {
       }
     >
       <div className="form-grid task-list-filter-dialog">
+        <Field label={t('tasks.operations.categoryLabel')} group>
+          <Segmented<TaskCategory>
+            value={props.draft.category}
+            onChange={(category) => props.onChange({ ...props.draft, category })}
+            ariaLabel={t('tasks.operations.categoryLabel')}
+            options={TASK_CATEGORIES.map((category) => ({
+              value: category,
+              label: t(`tasks.operations.category.${category}`),
+            }))}
+          />
+        </Field>
         <Field label={t('tasks.operations.statuses')} group>
           <MultiSelect
             value={props.draft.statuses}
@@ -557,6 +677,131 @@ function TaskListFilterDialog(props: {
         </Field>
       </div>
     </Dialog>
+  )
+}
+
+function digitalEmployeeTaskStatus(status: string): TaskStatus {
+  if (status === 'admitting') return 'pending'
+  if (status === 'awaiting-information') return 'awaiting_human'
+  if (status === 'ready-to-merge' || status === 'waiting-committer') return 'awaiting_review'
+  if (status === 'merged' || status === 'completed-no-change') return 'done'
+  if (status === 'closed-unmerged' || status === 'canceled') return 'canceled'
+  if (status === 'blocked' || status === 'failed') return 'failed'
+  return 'running'
+}
+
+function filterDigitalEmployeeMissions(
+  missions: MissionSummary[],
+  filters: { view: TaskListView; statuses: TaskStatus[]; query?: string },
+): MissionSummary[] {
+  const query = filters.query?.toLocaleLowerCase('en-US')
+  return missions.filter((mission) => {
+    const status = digitalEmployeeTaskStatus(mission.status)
+    if (filters.statuses.length > 0 && !filters.statuses.includes(status)) return false
+    if (!taskMatchesListView(filters.view, status)) return false
+    if (query === undefined) return true
+    return [
+      mission.id,
+      mission.repositoryId,
+      mission.externalId ?? '',
+      mission.blockCode ?? '',
+      mission.employeeId ?? '',
+    ].some((value) => value.toLocaleLowerCase('en-US').includes(query))
+  })
+}
+
+function digitalEmployeeFacets(missions: MissionSummary[]): {
+  all: number
+  active: number
+  attention: number
+  finished: number
+} {
+  const statuses = missions.map((mission) => digitalEmployeeTaskStatus(mission.status))
+  return {
+    all: statuses.length,
+    active: statuses.filter((status) => taskMatchesListView('active', status)).length,
+    attention: statuses.filter((status) => taskMatchesListView('attention', status)).length,
+    finished: statuses.filter((status) => taskMatchesListView('finished', status)).length,
+  }
+}
+
+function DigitalEmployeeTaskList(props: { items: MissionSummary[] }): ReactElement {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  return (
+    <section
+      className="task-operations task-operations--digital-employee"
+      aria-label={t('tasks.operations.digitalEmployeeSection')}
+      data-testid="digital-employee-task-list"
+    >
+      <div className="task-operations__section-title">
+        <strong>{t('tasks.operations.digitalEmployeeSection')}</strong>
+        <span>{t('tasks.operations.digitalEmployeeSectionHint')}</span>
+      </div>
+      <div className="task-operations__head" aria-hidden="true">
+        <span>{t('tasks.operations.columns.task')}</span>
+        <span>{t('tasks.operations.columns.execution')}</span>
+        <span>{t('tasks.operations.columns.time')}</span>
+        <span>{t('acl.owner')}</span>
+        <span />
+      </div>
+      <div className="task-operations__list" role="list">
+        {props.items.map((mission) => (
+          <div
+            key={mission.id}
+            role="listitem"
+            className="task-operations__row"
+            data-testid={`digital-employee-task-${mission.id}`}
+            onClick={(event) => {
+              if (shouldRowNavigate(event)) {
+                void navigate({
+                  to: '/code/missions/$missionId',
+                  params: { missionId: mission.id },
+                })
+              }
+            }}
+          >
+            <div className="task-operations__cell task-operations__task">
+              <span className="task-operations__expand-spacer" aria-hidden="true" />
+              <div className="task-operations__task-copy">
+                <div className="task-operations__name-line">
+                  <Link
+                    to="/code/missions/$missionId"
+                    params={{ missionId: mission.id }}
+                    className="data-table__link task-operations__name"
+                  >
+                    {mission.externalId ?? t('tasks.operations.digitalEmployeeTask')}
+                  </Link>
+                  <StatusChip kind="info" size="sm">
+                    {t('tasks.operations.category.digital-employee')}
+                  </StatusChip>
+                </div>
+                <div className="task-operations__meta">
+                  <code>{mission.repositoryId}</code>
+                  <span aria-hidden="true">·</span>
+                  <code>{mission.id.slice(-8)}</code>
+                </div>
+              </div>
+            </div>
+            <div className="task-operations__cell task-operations__execution">
+              <StatusChip kind={missionStatusKind(mission.status)} size="sm">
+                {missionStatusLabel(t, mission.status)}
+              </StatusChip>
+              {mission.blockCode === null ? null : <small>{mission.blockCode}</small>}
+            </div>
+            <div className="task-operations__cell task-operations__time">
+              <RelativeTime ts={mission.updatedAt} />
+            </div>
+            <div className="task-operations__cell task-operations__owner">
+              {t('tasks.operations.digitalEmployeeOwner')}
+            </div>
+            <div className="task-operations__cell task-operations__chevron" aria-hidden="true">
+              <OperationsChevronIcon />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

@@ -71,6 +71,7 @@ describe('rfc310 pr3 action workspace', () => {
     // 冻结在历史 sha：内容是 v1，不是当前 HEAD 的 v2。
     expect(readFileSync(join(ws.workspacePath, 'README.md'), 'utf8')).toBe('hello v1\n')
     expect(await git(ws.workspacePath, ['rev-parse', 'HEAD'])).toBe(baseline.firstSha)
+    expect(await git(ws.workspacePath, ['remote'])).toBe('')
     expect(readFileSync(join(ws.workspacePath, '.git/info/exclude'), 'utf8')).toContain(
       '.agent-workflow/',
     )

@@ -6,6 +6,7 @@ export const SYSTEM_MOCK_SERVICES = [
   'external',
   'development-requirement', // RFC-310 自建需求系统 mock
   'development-pipeline', // RFC-310 自建流水线门禁 mock（PR-6 T70）
+  'development-approval', // RFC-310 外部审批系统 mock（submit/lookup/observe）
   'oauth',
   'oidc',
   'mcp',
@@ -61,6 +62,8 @@ export interface SystemMockEndpoints {
   developmentRequirementBaseUrl: string
   /** RFC-310 —— 自建流水线门禁 mock（pipeline adapter CLI 的上游）。 */
   developmentPipelineBaseUrl: string
+  /** RFC-310 —— 外部审批系统 mock（审批提交与状态观察）。 */
+  developmentApprovalBaseUrl: string
   oauthIssuerUrl: string
   oidcIssuerUrl: string
   mcpStreamableUrl: string
@@ -192,7 +195,10 @@ export interface MockCodeHostProject {
   headBranch: string
   baseSha: string
   headSha: string
+  /** Provider-shaped URL used by product repository discovery and real Git clients. */
   repoHttpUrl: string
+  /** Internal transport URL whose path maps directly to the mock's bare repository. */
+  gitTransportUrl: string
   webUrl: string
   mergeRequests: MockCodeHostMergeRequest[]
   issues: MockCodeHostIssue[]
@@ -326,6 +332,17 @@ export interface SystemMockSnapshot {
   faults: MockFaultRule[]
   codeHosts: MockCodeHostProject[]
   externalHttp: MockHttpRouteSnapshot[]
+  approvals: Array<{
+    idempotencyKey: string
+    correlationRef: string
+    externalRequestRef: string
+    submittedRevision: string
+    submittedAt: string
+    statuses: Array<'pending' | 'approved' | 'rejected' | 'expired' | 'unavailable'>
+    observationIndex: number
+    lostResponseSent: boolean
+    intentDigest: string
+  }>
   oidc: {
     tokenMode: MockOidcTokenMode
     users: MockOidcUser[]

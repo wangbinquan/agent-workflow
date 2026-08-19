@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { resolve, sep } from 'node:path'
+import { basename, dirname, resolve, sep } from 'node:path'
 
 import { runProcess } from '../core/process'
 
@@ -10,11 +10,20 @@ export async function handleGitSmartHttp(input: {
   body: Buffer
   gitRoot: string
   routePrefix: string
+  /** Optional provider-shaped alias resolved by the code-host store. */
+  repositoryPath?: string
 }): Promise<void> {
-  const rawPath = decodeURIComponent(input.url.pathname.slice(input.routePrefix.length) || '/')
+  const effectiveGitRoot =
+    input.repositoryPath === undefined ? input.gitRoot : dirname(input.repositoryPath)
+  const rawPath =
+    input.repositoryPath === undefined
+      ? decodeURIComponent(input.url.pathname.slice(input.routePrefix.length) || '/')
+      : `/${basename(input.repositoryPath)}${decodeURIComponent(
+          input.url.pathname.slice(input.routePrefix.length),
+        )}`
   const relativePath = rawPath.replace(/^\/+/, '')
-  const resolved = resolve(input.gitRoot, relativePath.split('/').join(sep))
-  if (resolved !== input.gitRoot && !resolved.startsWith(`${input.gitRoot}${sep}`)) {
+  const resolved = resolve(effectiveGitRoot, relativePath.split('/').join(sep))
+  if (resolved !== effectiveGitRoot && !resolved.startsWith(`${effectiveGitRoot}${sep}`)) {
     input.response.writeHead(400)
     input.response.end('git path escapes mock root')
     return
@@ -24,7 +33,7 @@ export async function handleGitSmartHttp(input: {
     input: input.body,
     env: {
       ...process.env,
-      GIT_PROJECT_ROOT: input.gitRoot,
+      GIT_PROJECT_ROOT: effectiveGitRoot,
       GIT_HTTP_EXPORT_ALL: '1',
       GIT_HTTP_RECEIVE_PACK: '1',
       PATH_INFO: `/${relativePath}`,

@@ -201,9 +201,15 @@ const OVERLAY_CALLSITES = {
   // capability on but never point it at a configuration.
   // T63 added the bulk-change dialog: preview → apply → undo, all in one
   // RFC-310 PR-10 T104/T105 —— matrix/bulk 与模板创建 Dialog 随 legacy 写面
-  // 删除；/code 只剩读面（activity/metrics），零 overlay。
-  // RFC-310 — mission launch dialog（三输入形态）与 requirement 文件预览。
-  'routes/code.missions.tsx': { family: 'task-execution', count: 1 },
+  // 删除；/code 数字员工构建页与 /outcomes 运行成效页均为零 overlay。
+  // RFC-310 — mission creation moved from a cramped dialog to a full-page
+  // Stepper; the list now has no overlay.
+  // RFC-310 PR-11 — each employee step can create its executor inline without
+  // abandoning the employee draft.
+  'components/code/DigitalEmployeePlaybookEditor.tsx': {
+    family: 'resource-management',
+    count: 1,
+  },
   // RFC-310 PR-8 T90 — assignment 编辑 Dialog。
   'routes/code.assignments.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 PR-8 T87 — policy 创建对话框。
@@ -212,7 +218,7 @@ const OVERLAY_CALLSITES = {
   'routes/code.missions.$id.tsx': { family: 'task-execution', count: 2 },
   // RFC-310 PR-8 — 配置资源的创建 Dialog（列表）与编辑/ACL Dialog + 归档
   // ConfirmDialog（详情）。
-  'routes/code.config.tsx': { family: 'resource-management', count: 1 },
+  'routes/code.config.tsx': { family: 'resource-management', count: 2 },
   'routes/code.config.detail.tsx': { family: 'resource-management', count: 3 },
   // RFC-307 — the stage drawer. An overlay rather than an inline panel because
   // it is a focused edit on ONE step of a sequence the user is looking at: the

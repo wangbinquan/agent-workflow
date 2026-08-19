@@ -147,9 +147,20 @@ export function redispatchMrCare(
   }
 
   // ---- 4) machine holds 清零 → readiness 推进（arm 内做 status 转移）。
-  if (knownString(cells, 'pipeline.completeness') !== null && mission.status === 'watching') {
+  // A policy with no required gates has no pipeline evidence to collect. The
+  // previous unconditional `pipeline.completeness` prerequisite left these
+  // happy-path missions in `watching` even when the authoritative readiness
+  // receipt already said `ready-to-merge`.
+  if (mission.status === 'watching') {
+    const hasRequiredPipelineGates = policy.pipeline.gates.some((gate) => gate.required)
+    if (!hasRequiredPipelineGates) return { kind: 'publish-readiness' }
     const allPass = cells['pipeline.requiredGatesAllPass']
-    if (allPass !== undefined && allPass.state === 'known' && allPass.value === true) {
+    if (
+      knownString(cells, 'pipeline.completeness') !== null &&
+      allPass !== undefined &&
+      allPass.state === 'known' &&
+      allPass.value === true
+    ) {
       return { kind: 'publish-readiness' }
     }
   }
@@ -249,4 +260,30 @@ export function prepareFeedbackSelection(
     deps.store.setFeedbackState({ id: row.id, state: 'selected', actionRunId, now })
   }
   return rows.map((row) => ({ threadRef: row.threadRef, revision: row.revision }))
+}
+
+/**
+ * A selection is a lease for one Agent action, not a terminal disposition.
+ * If that action never launches or settles without a feedback disposition,
+ * return its rows to observed so retry/reconfiguration can process the same
+ * exact revisions instead of leaving them permanently invisible.
+ */
+export function releaseFeedbackSelection(
+  deps: Pick<DeliveryChainDeps, 'store' | 'now'>,
+  missionId: string,
+  actionRunId: string,
+): number {
+  const rows = deps.store
+    .listFeedback(missionId)
+    .filter((row) => row.state === 'selected' && row.actionRunId === actionRunId)
+  const now = deps.now()
+  for (const row of rows) {
+    deps.store.setFeedbackState({
+      id: row.id,
+      state: 'observed',
+      actionRunId: null,
+      now,
+    })
+  }
+  return rows.length
 }

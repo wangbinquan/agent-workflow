@@ -14,6 +14,8 @@ import { ulid } from 'ulid'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import {
   MR_FACTS_STALE_MS,
+  prepareFeedbackSelection,
+  releaseFeedbackSelection,
   redispatchMrCare,
 } from '../src/modules/development-automation/application/mrCareChain'
 import type { MissionRow } from '../src/modules/development-automation/application/ports/missionStore'
@@ -53,6 +55,99 @@ const WAIT_MR_CARE: NextDecision = {
 }
 
 describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
+  // Regression: a feedback selection is only an action-scoped lease. Launch
+  // or contract failure must make the exact revision selectable again instead
+  // of leaving it permanently hidden in `selected`.
+  test('feedback action selection is released back to observed by exact action run', async () => {
+    const fx = await buildPr3Fixture()
+    const now = 10_000_000
+    fx.store.createMission({
+      id: 'm-selection-lease',
+      revision: 0,
+      epoch: 0,
+      status: 'watching',
+      automationMode: 'active',
+      transitionFence: 'none',
+      repositoryId: 'repo-selection-lease',
+      sourceKind: 'direct',
+      sourceContentDigest: 'b'.repeat(64),
+      requestedSourceKey: null,
+      externalId: null,
+      resolvedSourceKey: null,
+      resolvedAdapterId: null,
+      resolvedAdapterRevision: null,
+      deliveryKind: 'create-merge-request',
+      deliveryTargetRef: null,
+      deliverySourceBranch: 'aw/mission/selection-lease',
+      adoptedMrRef: null,
+      assignmentId: null,
+      employeeId: null,
+      employeeRevision: null,
+      policyId: fx.policyId,
+      policyRevision: 1,
+      requirementBundleRef: null,
+      repositoryFactsRef: null,
+      uploadPlanRef: null,
+      uploadPlacementRef: null,
+      uploadPublicationRef: null,
+      mrClaimId: 'claim-selection-lease',
+      currentActionRunId: null,
+      readinessJson: null,
+      blockCode: null,
+      blockDetail: null,
+      terminalKind: null,
+      terminalUploadFulfillment: null,
+      terminalAt: null,
+      launchIdempotencyKey: 'idem-selection-lease',
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    const mission = fx.store.getMission('m-selection-lease')!
+    fx.store.upsertFeedbackObservation({
+      id: 'fb-selection-lease',
+      missionId: mission.id,
+      threadRef: 'th-selection',
+      revision: '1:7',
+      headSha: MR_HEAD,
+      fingerprint: 'a'.repeat(64),
+      authorClass: 'human',
+      now,
+    })
+
+    expect(
+      prepareFeedbackSelection(
+        { store: fx.store, now: () => now + 1 },
+        mission,
+        defaultAutomationPolicyContent(),
+        'run-feedback-1',
+      ),
+    ).toEqual([{ threadRef: 'th-selection', revision: '1:7' }])
+    expect(fx.store.listFeedback(mission.id)[0]).toMatchObject({
+      state: 'selected',
+      actionRunId: 'run-feedback-1',
+    })
+
+    expect(
+      releaseFeedbackSelection(
+        { store: fx.store, now: () => now + 2 },
+        mission.id,
+        'a-different-run',
+      ),
+    ).toBe(0)
+    expect(
+      releaseFeedbackSelection(
+        { store: fx.store, now: () => now + 3 },
+        mission.id,
+        'run-feedback-1',
+      ),
+    ).toBe(1)
+    expect(fx.store.listFeedback(mission.id)[0]).toMatchObject({
+      state: 'observed',
+      actionRunId: null,
+    })
+  })
+
   test('takeover, staleness, reply dispatch, feedback wait, readiness push', async () => {
     const fx = await buildPr3Fixture()
     const policy = defaultAutomationPolicyContent()
@@ -108,6 +203,12 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
         { now },
       ),
     ).toMatchObject({ kind: 'wait', reason: 'feedback-awaiting-policy' })
+
+    // No required pipeline gates means there is no pipeline snapshot to wait
+    // for. Fresh MR facts with no feedback must publish readiness immediately.
+    expect(redispatchMrCare(deps, mission, fresh, policy, WAIT_MR_CARE, { now })).toEqual({
+      kind: 'publish-readiness',
+    })
 
     // dispositions 未回复 → reply-feedback（台账行定位）。
     const missionId = 'm-care'
@@ -172,11 +273,12 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     expect(
       redispatchMrCare(deps, mission, withDispositions, policy, WAIT_MR_CARE, { now }),
     ).toEqual({ kind: 'reply-feedback', feedbackReceiptRef: 'fb-1' })
-    // 已 addressed 的行不再重复派。
+    // 已 addressed 的行不再重复派；无 required pipeline gate 时直接推进
+    // readiness，而不是停回永远不会再被唤醒的 wait。
     fx.store.setFeedbackState({ id: 'fb-1', state: 'addressed', now })
     expect(
       redispatchMrCare(deps, mission, withDispositions, policy, WAIT_MR_CARE, { now }),
-    ).toEqual(WAIT_MR_CARE)
+    ).toEqual({ kind: 'publish-readiness' })
 
     // machine holds 清零（watching + allPass）→ publish-readiness。
     expect(
@@ -282,12 +384,16 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
     }
 
     const replies: unknown[] = []
+    let collectCount = 0
+    let humanResolved = false
     const collector: MergeRequestFactsCollectorPort = {
       async collect() {
+        collectCount += 1
         return {
           cells: {
             'mr.exists': cell(true),
             'mr.draft': cell(false),
+            'mr.mergeable': cell('yes'),
             'mr.terminalState': cell('active'),
             '__mr.factsCollectedAt': cell(String(Date.now())),
           },
@@ -299,8 +405,10 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
               threadRef: 'th-a',
               revision: '1:10',
               authorClass: 'human',
-              resolved: false,
+              resolved: humanResolved,
               bodyDigest: 'b'.repeat(64),
+              body: 'Please update the implementation.',
+              path: 'src/App.java',
             },
             {
               threadRef: 'th-bot',
@@ -308,6 +416,8 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
               authorClass: 'bot',
               resolved: false,
               bodyDigest: 'c'.repeat(64),
+              body: 'A second review note.',
+              path: null,
             },
           ],
         }
@@ -340,10 +450,26 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
     // MR 采集结果与 repository facts 合并写入 repositoryFactsRef（arm 裁量注释）。
     const cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.repositoryFactsRef!)!
     expect(cells['mr.unhandledFeedbackCount']).toMatchObject({ value: 1 })
+    expect(cells['__mr.unresolvedFeedback']).toMatchObject({ state: 'known' })
 
     // 重复采集不重复建行（webhook 重放语义）。
     await runMissionReconcile(deps, missionId) // 轮 2 大概率 wait（facts 新鲜）
     expect(fx.store.listFeedback(missionId)).toHaveLength(2)
+
+    // Webhook 是事实失效信号。即使上一份 MR snapshot 仍在 freshness TTL 内，
+    // 也必须重新采集；否则 hint 被消费后相同 wait 决策去重，新评论会永久漏掉。
+    fx.store.recordWakeHint({
+      id: ulid(),
+      missionId,
+      source: 'webhook',
+      deliveryKey: 'webhook:new-review-inside-freshness-window',
+      now: now + 1,
+    })
+    const wakeRefresh = await runMissionReconcile(deps, missionId)
+    expect((wakeRefresh as { selected: NextDecision }).selected).toEqual({
+      kind: 'collect-mr-facts',
+    })
+    expect(collectCount).toBe(2)
 
     // 结算 dispositions（模拟 apply validated）→ care 派 reply → effect + 台账。
     const humanRow = rows.find((r) => r.threadRef === 'th-a')!
@@ -379,5 +505,56 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
     expect(settled.state).toBe('addressed')
     expect(settled.replyEffectId).not.toBeNull()
     expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
+
+    // `needs-human` is a human readiness hold, not a completed machine fix.
+    // It must remove the mission from ready-to-merge until the provider says
+    // that exact thread revision is resolved.
+    fx.store.setFeedbackState({ id: humanRow.id, state: 'needs-human', now: now + 2 })
+    {
+      const m = fx.store.getMission(missionId)!
+      const merged = {
+        ...fx.snapshots.getCells(m.requirementBundleRef!)!,
+        '__feedback.lastDispositions': cell(
+          JSON.stringify([{ threadRef: 'th-a', revision: '1:10', disposition: 'needs-human' }]),
+        ),
+      }
+      const id3 = ulid()
+      fx.store.insertFactSnapshot({
+        id: id3,
+        missionId,
+        missionRevision: m.revision,
+        capturedAt: new Date().toISOString().replace('Z', '+00:00'),
+        cellsJson: canonicalStringify(merged),
+        refsJson: '{}',
+        digest: canonicalDigest(merged),
+        now: now + 2,
+      })
+      fx.store.occUpdate(m.id, m.revision, m.epoch, { requirementBundleRef: id3 })
+    }
+    await runMissionReconcile(deps, missionId)
+    const held = fx.store.getMission(missionId)!
+    expect(held.status).toBe('waiting-committer')
+    expect(JSON.parse(held.readinessJson!)).toMatchObject({
+      automationReady: true,
+      status: 'waiting-committer',
+      humanHolds: [{ kind: 'thread-unresolved', detail: '1 thread(s)' }],
+    })
+
+    humanResolved = true
+    fx.store.recordWakeHint({
+      id: ulid(),
+      missionId,
+      source: 'webhook',
+      deliveryKey: 'webhook:human-thread-resolved',
+      now: now + 3,
+    })
+    await runMissionReconcile(deps, missionId)
+    const released = fx.store.getMission(missionId)!
+    expect(released.status).toBe('ready-to-merge')
+    expect(JSON.parse(released.readinessJson!)).toMatchObject({
+      automationReady: true,
+      status: 'ready-to-merge',
+      humanHolds: [],
+    })
   })
 })

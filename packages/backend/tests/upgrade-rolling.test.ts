@@ -461,7 +461,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 四张卡片与工作组徽章的谓词列进索引，免掉每行回表）。
     // RFC-311 T21 bump 到 185 with 0185_rfc311_node_run_prompt_path（prompt 正文
     // 外置到文件，行里只留路径；旧行不回填，读点双读）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(185)
+    // RFC-310 PR-12 bump 到 187 with 0186_rfc310_task_platform_inputs（任务级平台
+    // 输入挂载名册，Agent 隔离工作树里强制入快照）+ 0187_rfc310_playbook_sagas
+    // （step-run / mission-link / approval-saga / step-join 四张表）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(187)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

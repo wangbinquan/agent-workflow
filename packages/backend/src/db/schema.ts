@@ -1135,6 +1135,13 @@ export const tasks = sqliteTable(
      */
     triggerContextJson: text('trigger_context_json'),
     /**
+     * RFC-310: immutable JSON string[] of trusted, container-relative platform
+     * input mount roots. Requirement/pipeline evidence is Git-ignored, so every
+     * node isolation snapshot force-includes this roster. Only an internal
+     * StartTask dependency may set it; it is intentionally absent from Task DTOs.
+     */
+    platformInputPathsJson: text('platform_input_paths_json'),
+    /**
      * RFC-311：本行为根的子树内 max(started_at) 的物化缓存（纯派生值，迁移
      * 0180 回填、子任务创建/启动时沿父链向上推进、invariants 校验自愈）。
      * 任务列表（/api/tasks/page）以 root 行的该值做 keyset 排序取页，取代
@@ -4769,7 +4776,7 @@ export const developmentAdapterDefinitions = sqliteTable(
   {
     ...developmentResourceIdentityColumns,
     purpose: text('purpose', {
-      enum: ['requirement-source', 'pipeline-gate', 'pipeline-classifier'],
+      enum: ['requirement-source', 'pipeline-gate', 'pipeline-classifier', 'approval-gateway'],
     }).notNull(),
   },
   (t) => ({
@@ -5227,6 +5234,138 @@ export const developmentBundleRefs = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => ({ missionIdx: index('idx_dev_bundle_refs_mission').on(t.missionId) }),
+)
+
+// RFC-310 PR-12 — durable business-step / child-Mission / approval saga state.
+// Raw evidence, workspaces, provider payloads and credentials remain in their
+// owning stores; these rows contain only refs, digests and closed states.
+export const developmentStepRuns = sqliteTable(
+  'development_step_runs',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    employeeId: text('employee_id').notNull(),
+    employeeRevision: integer('employee_revision').notNull(),
+    stepId: text('step_id').notNull(),
+    attempt: integer('attempt').notNull().default(0),
+    inputDigest: text('input_digest').notNull(),
+    producerKind: text('producer_kind').notNull(),
+    state: text('state').notNull().default('claimed'),
+    decisionId: text('decision_id'),
+    actionRunId: text('action_run_id'),
+    deadlineAt: integer('deadline_at'),
+    outputRef: text('output_ref'),
+    outputRevision: text('output_revision'),
+    failureCategory: text('failure_category'),
+    failureCode: text('failure_code'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    replayUq: uniqueIndex('dev_step_runs_replay_unique').on(
+      t.missionId,
+      t.employeeId,
+      t.employeeRevision,
+      t.stepId,
+      t.attempt,
+      t.inputDigest,
+    ),
+    missionStateIdx: index('idx_dev_step_runs_mission_state').on(t.missionId, t.state),
+    actionIdx: index('idx_dev_step_runs_action').on(t.actionRunId),
+  }),
+)
+
+export const developmentMissionLinks = sqliteTable(
+  'development_mission_links',
+  {
+    id: text('id').primaryKey(),
+    parentMissionId: text('parent_mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    parentStepRunId: text('parent_step_run_id')
+      .notNull()
+      .references(() => developmentStepRuns.id),
+    targetRepositoryId: text('target_repository_id').notNull(),
+    targetEmployeeId: text('target_employee_id').notNull(),
+    targetEmployeeRevision: integer('target_employee_revision').notNull(),
+    inputDigest: text('input_digest').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    childMissionId: text('child_mission_id').references(() => developmentMissions.id),
+    completion: text('completion').notNull(),
+    state: text('state').notNull().default('creating'),
+    latestChildRevision: integer('latest_child_revision'),
+    latestStatus: text('latest_status'),
+    completionSatisfied: integer('completion_satisfied').notNull().default(0),
+    outputRef: text('output_ref'),
+    observedAt: integer('observed_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    idempotencyUq: uniqueIndex('dev_mission_links_idem_unique').on(t.idempotencyKey),
+    parentIdx: index('idx_dev_mission_links_parent').on(t.parentMissionId),
+    childUq: uniqueIndex('dev_mission_links_child_unique').on(t.childMissionId),
+  }),
+)
+
+export const developmentApprovalSagas = sqliteTable(
+  'development_approval_sagas',
+  {
+    id: text('id').primaryKey(),
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    stepRunId: text('step_run_id')
+      .notNull()
+      .references(() => developmentStepRuns.id),
+    adapterId: text('adapter_id').notNull(),
+    adapterRevision: integer('adapter_revision').notNull(),
+    draftRef: text('draft_ref').notNull(),
+    submitIntentDigest: text('submit_intent_digest').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    correlationRef: text('correlation_ref'),
+    externalRequestRef: text('external_request_ref'),
+    submittedRevision: text('submitted_revision'),
+    latestStatus: text('latest_status').notNull().default('submitting'),
+    observedRevision: text('observed_revision'),
+    evidenceRef: text('evidence_ref'),
+    deadlineAt: integer('deadline_at').notNull(),
+    attemptOrdinal: integer('attempt_ordinal').notNull().default(0),
+    nextObserveAt: integer('next_observe_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    idempotencyUq: uniqueIndex('dev_approval_sagas_idem_unique').on(t.idempotencyKey),
+    missionIdx: index('idx_dev_approval_sagas_mission').on(t.missionId),
+    correlationIdx: index('idx_dev_approval_sagas_correlation').on(t.correlationRef),
+  }),
+)
+
+export const developmentStepJoins = sqliteTable(
+  'development_step_joins',
+  {
+    missionId: text('mission_id')
+      .notNull()
+      .references(() => developmentMissions.id),
+    groupId: text('group_id').notNull(),
+    memberStepId: text('member_step_id').notNull(),
+    mode: text('mode').notNull(),
+    quorum: integer('quorum'),
+    deadlineAt: integer('deadline_at').notNull(),
+    memberState: text('member_state').notNull().default('pending'),
+    receiptRevision: text('receipt_revision'),
+    settledResult: text('settled_result'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.missionId, t.groupId, t.memberStepId] }),
+    pendingIdx: index('idx_dev_step_joins_pending').on(t.missionId, t.settledResult),
+  }),
 )
 
 export const legacyCodeWorkItemLinks = sqliteTable('legacy_code_work_item_links', {

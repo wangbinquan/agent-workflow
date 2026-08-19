@@ -3,8 +3,9 @@
 // 锁：①同 snapshot 三读 fence——两次 mr.get 之间 head 变化即 `mr-facts-head-race`
 // 整组丢弃（不缝合跨 head 的两半事实）；②threads 采集与 authorClass 三分类
 // （human / bot 后缀 / self-marker），revision 随 note 追加而变；③读不到的面
-// 不伪造（mock 无 merge_status/approvals ⇒ mergeableState='unknown'、
-// approvalHold=null）；④reply 只回复不 resolve，正文自动附隐形 self-marker，
+// 不伪造——mock 自 PR-12 起如实暴露 provider 的 merge status（种子分支无冲突 ⇒
+// mergeableState='mergeable'），但**不**暴露 approvals，于是 approvalHold 仍是
+// null 而不是被折算成"没有阻塞"；④reply 只回复不 resolve，正文自动附隐形 self-marker，
 // 再采集时该 thread 归 'self'（防 feedback 自循环）；⑤源码级负面锁：facts/
 // reply 文件不可出现 resolve/approve/merge 的 action 或 API path（平台永不
 // merge/approve/resolve 的 §10 纪律，对拍 T84 负扫描）。
@@ -114,8 +115,9 @@ for (const provider of ['gitlab', 'github'] as const) {
         headSha: project.headSha,
         state: 'opened',
         draft: false,
-        // mock 不暴露 merge_status/approvals：不伪造。
-        mergeableState: 'unknown',
+        // mock 暴露 provider 的 merge status（种子分支无冲突），但不暴露 approvals：
+        // 前者如实读出，后者读不到就留 null，绝不折算成"无人阻塞"。
+        mergeableState: 'mergeable',
         approvalHold: null,
         mergedCommitSha: null,
       })

@@ -10,6 +10,7 @@
 // Agent attempt 的 interrupted 结算属 task-execution 联动，归 PR-4 T51。
 
 import { runMissionReconcile, type ReconcileDeps } from './missionReconciler'
+import { driveMission } from './missionDriver'
 
 export interface RecoveryReaders {
   listFencedMissionIds(): string[]
@@ -52,15 +53,17 @@ export async function recoverMissions(
   // 2) fence 悬挂：同一 reconcile settle 路径收束。
   for (const missionId of readers.listFencedMissionIds()) {
     const outcome = await runMissionReconcile(deps, missionId)
-    if (outcome.kind === 'fence-settled') settledFences += 1
-    else if (outcome.kind === 'fence-pending') pendingFences += 1
+    if (outcome.kind === 'fence-settled') {
+      settledFences += 1
+      await driveMission(deps, missionId)
+    } else if (outcome.kind === 'fence-pending') pendingFences += 1
   }
 
   // 3) 到期 wake：fire（ordinal 不清零）后走正常 reconcile。
   for (const wake of deps.store.listDueWakes(now)) {
     if (deps.store.fireWake(wake.id, now)) {
       firedWakes += 1
-      await runMissionReconcile(deps, wake.missionId)
+      await driveMission(deps, wake.missionId)
     }
   }
 

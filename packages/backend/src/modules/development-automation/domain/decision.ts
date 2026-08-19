@@ -8,12 +8,27 @@
 import { z } from 'zod'
 
 const ref = z.string().min(1)
+const stepRunRef = { stepRunRef: ref.optional() } as const
 
 export const nextDecisionSchema = z
   .discriminatedUnion('kind', [
-    z.object({ kind: z.literal('materialize-direct-requirement'), submissionRef: ref }).strict(),
-    z.object({ kind: z.literal('collect-external-requirement'), adapterBindingRef: ref }).strict(),
-    z.object({ kind: z.literal('seed-repository-uploads'), uploadPlanRef: ref }).strict(),
+    z
+      .object({
+        kind: z.literal('materialize-direct-requirement'),
+        submissionRef: ref,
+        ...stepRunRef,
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('collect-external-requirement'),
+        adapterBindingRef: ref,
+        ...stepRunRef,
+      })
+      .strict(),
+    z
+      .object({ kind: z.literal('seed-repository-uploads'), uploadPlanRef: ref, ...stepRunRef })
+      .strict(),
     z
       .object({
         kind: z.literal('publish-requirement-questions'),
@@ -28,12 +43,13 @@ export const nextDecisionSchema = z
         adapterBindingRef: ref,
       })
       .strict(),
-    z.object({ kind: z.literal('collect-repository-facts') }).strict(),
-    z.object({ kind: z.literal('collect-mr-facts') }).strict(),
+    z.object({ kind: z.literal('collect-repository-facts'), ...stepRunRef }).strict(),
+    z.object({ kind: z.literal('collect-mr-facts'), ...stepRunRef }).strict(),
     z
       .object({
         kind: z.literal('collect-pipeline-evidence'),
         gateKeys: z.array(z.string().min(1)).min(1),
+        ...stepRunRef,
       })
       .strict(),
     z
@@ -42,31 +58,100 @@ export const nextDecisionSchema = z
         capabilityId: z.string().min(1),
         templateRef: ref,
         workSetRef: ref,
+        problemInput: z
+          .object({
+            producerId: z.string().min(1).max(120),
+            evidenceDigest: z.string().regex(/^[0-9a-f]{64}$/),
+            headSha: z.string().regex(/^[0-9a-f]{40}$/),
+            allowedTypeIds: z.array(z.string().min(1).max(120)).min(1).max(100),
+            subjectRefs: z.array(ref).min(1).max(500),
+            requiredSubjectRefs: z.array(ref).max(500),
+          })
+          .strict()
+          .optional(),
+        approvalInput: z
+          .object({
+            stepRunRef: ref,
+            approvalType: z.string().min(1).max(120),
+            evidenceRefs: z.array(ref).max(100),
+            requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+          })
+          .strict()
+          .optional(),
+        retryBudget: z
+          .object({
+            sameSession: z.number().int().min(0).max(10),
+            freshSession: z.number().int().min(0).max(5),
+          })
+          .strict()
+          .optional(),
+        ...stepRunRef,
       })
       .strict(),
-    z.object({ kind: z.literal('run-verification'), profileRef: ref }).strict(),
+    z.object({ kind: z.literal('run-verification'), profileRef: ref, ...stepRunRef }).strict(),
+    z
+      .object({
+        kind: z.literal('invoke-child-mission'),
+        stepRunRef: ref,
+        targetRepositoryRef: ref,
+        targetEmployeeRef: z.object({ id: ref, revision: z.number().int().positive() }).strict(),
+        inputEnvelopeRef: ref,
+        completion: z.enum(['automation-ready', 'ready-to-merge', 'merged', 'completed']),
+        deadlineAt: z.string().datetime({ offset: true }),
+        idempotencyKey: z.string().regex(/^[0-9a-f]{64}$/),
+        ancestry: z.array(ref).max(8),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('submit-approval'),
+        stepRunRef: ref,
+        adapterRef: z.object({ id: ref, revision: z.number().int().positive() }).strict(),
+        validatedDraftRef: ref,
+        deadlineAt: z.string().datetime({ offset: true }),
+        idempotencyKey: z.string().regex(/^[0-9a-f]{64}$/),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal('observe-approval'),
+        stepRunRef: ref,
+        approvalSagaRef: ref,
+        pollIntervalMs: z.number().int().min(5_000),
+      })
+      .strict(),
     z
       .object({
         kind: z.literal('request-human-decision'),
         gate: z.literal('no-change-confirmation'),
       })
       .strict(),
-    z.object({ kind: z.literal('prepare-change-candidate') }).strict(),
+    z.object({ kind: z.literal('prepare-change-candidate'), ...stepRunRef }).strict(),
     z
       .object({
         kind: z.literal('commit-and-publish-candidate'),
         publicationMode: z.enum(['new-branch', 'fast-forward']),
+        ...stepRunRef,
       })
       .strict(),
-    z.object({ kind: z.literal('ensure-merge-request') }).strict(),
+    z.object({ kind: z.literal('ensure-merge-request'), ...stepRunRef }).strict(),
     z.object({ kind: z.literal('reply-feedback'), feedbackReceiptRef: ref }).strict(),
     z
-      .object({ kind: z.literal('trigger-pipeline'), gateKeys: z.array(z.string().min(1)).min(1) })
+      .object({
+        kind: z.literal('trigger-pipeline'),
+        gateKeys: z.array(z.string().min(1)).min(1),
+        ...stepRunRef,
+      })
       .strict(),
     z
-      .object({ kind: z.literal('rerun-pipeline'), gateKey: z.string().min(1), runRef: ref })
+      .object({
+        kind: z.literal('rerun-pipeline'),
+        gateKey: z.string().min(1),
+        runRef: ref,
+        ...stepRunRef,
+      })
       .strict(),
-    z.object({ kind: z.literal('publish-readiness') }).strict(),
+    z.object({ kind: z.literal('publish-readiness'), ...stepRunRef }).strict(),
     z
       .object({
         kind: z.literal('wait'),

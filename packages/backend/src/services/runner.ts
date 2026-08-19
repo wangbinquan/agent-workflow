@@ -130,10 +130,59 @@ import {
   type RuntimeSessionLeaseToken,
 } from '@/services/runtimeSessionLease'
 import { sha256Hex } from '@/util/hash'
+import { runGit, type GitRunResult } from '@/util/git'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
 export type { SkillSource, ResolvedSkill } from './runtime/types'
+
+interface GitControlSnapshot {
+  readonly head: string
+  readonly symbolicHead: string
+  readonly index: string
+  readonly refs: string
+  readonly localConfig: string
+  readonly worktreeConfig: string
+}
+
+function digestGitObservation(result: GitRunResult, stdout = result.stdout): string {
+  return sha256Hex(`${result.exitCode}\0${stdout}\0${result.stderr}`)
+}
+
+/**
+ * Capture semantic Git control state around the exact Agent child window.
+ * Read-only commands such as `git status` may refresh index stat data, so the
+ * index observation deliberately hashes `ls-files --stage`, not `.git/index`
+ * bytes. Platform-private refs are excluded; TaskEngine owns that namespace.
+ */
+async function captureGitControlSnapshot(cwd: string): Promise<GitControlSnapshot> {
+  const [head, symbolicHead, index, refs, localConfig, worktreeConfig] = await Promise.all([
+    runGit(cwd, ['rev-parse', '--verify', 'HEAD']),
+    runGit(cwd, ['symbolic-ref', '--quiet', 'HEAD']),
+    runGit(cwd, ['ls-files', '--stage', '-z']),
+    runGit(cwd, ['for-each-ref', '--format=%(refname) %(objectname)']),
+    runGit(cwd, ['config', '--local', '--null', '--list']),
+    runGit(cwd, ['config', '--worktree', '--null', '--list']),
+  ])
+  const publicRefs = refs.stdout
+    .split('\n')
+    .filter((line) => !line.startsWith('refs/agent-workflow/'))
+    .join('\n')
+  return {
+    head: digestGitObservation(head),
+    symbolicHead: digestGitObservation(symbolicHead),
+    index: digestGitObservation(index),
+    refs: digestGitObservation(refs, publicRefs),
+    localConfig: digestGitObservation(localConfig),
+    worktreeConfig: digestGitObservation(worktreeConfig),
+  }
+}
+
+function changedGitControlFields(before: GitControlSnapshot, after: GitControlSnapshot): string[] {
+  return (Object.keys(before) as Array<keyof GitControlSnapshot>).filter(
+    (field) => before[field] !== after[field],
+  )
+}
 
 export interface RunNodeOptions {
   taskId: string
@@ -152,6 +201,8 @@ export interface RunNodeOptions {
   inputs: Record<string, string>
   /** opencode subprocess cwd = task worktree. */
   worktreePath: string
+  /** Enforce that the Agent subprocess cannot mutate Git control state. */
+  gitMutationPolicy?: 'read-only'
   /** Template variable substitutions for {{__repo_path__}} etc. */
   templateMeta: {
     repoPath: string
@@ -1573,6 +1624,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     //    past the DRAIN deadline degrades to evidence loss on a finished run
     //    (real exitCode kept, `drainTimedOut`); a child that survives SIGKILL
     //    past the REAP deadline comes back `unreaped` (→ childUnkillable below).
+    const gitControlBefore =
+      opts.gitMutationPolicy === 'read-only'
+        ? await captureGitControlSnapshot(opts.worktreePath)
+        : undefined
     const runResult = await runAgentProcess({
       cmd,
       cwd: opts.worktreePath,
@@ -1615,6 +1670,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       },
       log,
     })
+    let gitMutationViolation: string | undefined
+    if (gitControlBefore !== undefined && runResult.outcome !== 'unreaped') {
+      const gitControlAfter = await captureGitControlSnapshot(opts.worktreePath)
+      const changedFields = changedGitControlFields(gitControlBefore, gitControlAfter)
+      if (changedFields.length > 0) {
+        gitMutationViolation = `changed Git control fields: ${changedFields.join(', ')}`
+        log.warn('agent-git-mutation-forbidden', {
+          nodeRunId: opts.nodeRunId,
+          taskId: opts.taskId,
+          changedFields,
+        })
+      }
+    }
     const spawnedPid = runResult.pid
     const childUnkillable = runResult.outcome === 'unreaped'
     const spawnFailed = runResult.outcome === 'spawn-failed'
@@ -1765,6 +1833,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         failureCode = 'runtime-session-identity-invalid'
       }
       errorMessage = `child-unkillable: pid ${spawnedPid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
+    } else if (gitMutationViolation !== undefined) {
+      status = 'failed'
+      errorMessage = `agent-git-mutation-forbidden: ${gitMutationViolation}`
     } else if (terminalResultError !== undefined) {
       // The runtime told us WHY it stopped. Report that instead of the generic
       // "no envelope", and treat it as permanent: auth / quota / gateway
