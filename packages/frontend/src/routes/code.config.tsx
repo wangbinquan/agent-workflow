@@ -7,6 +7,15 @@
 // 同一个创建 Dialog，per-kind 只差列补充与创建时的最小必填（模板要
 // capabilityId、adapter 要 purpose）。draft 内容的深度编辑在详情页。
 
+import {
+  ADAPTER_PURPOSES,
+  ADAPTER_REQUIRED_OPERATIONS,
+  DEVELOPMENT_CONFIG_API_BASE,
+  DEVELOPMENT_CONFIG_KINDS,
+  buildDevelopmentConfigCreateBody,
+  type AdapterPurpose,
+  type DevelopmentConfigKind,
+} from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useState, type ReactElement } from 'react'
@@ -26,13 +35,10 @@ import { TableViewport } from '@/components/TableViewport'
 import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
-export const CONFIG_KINDS = [
-  'employees',
-  'action-templates',
-  'verification-profiles',
-  'adapters',
-] as const
-export type ConfigKind = (typeof CONFIG_KINDS)[number]
+// 族清单同样只存一份（shared）——页签顺序、路由参数校验与后端契约测试遍历的
+// 是同一个数组，不会出现"前端多了一族 / 少了一族"这种只有用户点得出来的漂移。
+export const CONFIG_KINDS = DEVELOPMENT_CONFIG_KINDS
+export type ConfigKind = DevelopmentConfigKind
 
 export interface ConfigKindSpec {
   /** 后端 CRUD base（ACL 面同 base + /:id/acl）。 */
@@ -46,27 +52,28 @@ export interface ConfigKindSpec {
   i18nKey: 'employees' | 'actionTemplates' | 'verificationProfiles' | 'adapters'
 }
 
+// apiBase 一律取自 shared 的单一事实源（`DEVELOPMENT_CONFIG_API_BASE`）——
+// 这里不再各写一份字面量。adapter 是唯一前缀与页面归属不同的资源（integration
+// bounded context），PR-8 在此处写成 `/api/code/...` 导致整页 404；现在这一列
+// 与后端挂载点由 code-config-api-base 测试逐条对账。
 export const CONFIG_KIND_SPECS: Record<ConfigKind, ConfigKindSpec> = {
   employees: {
-    apiBase: '/api/code/digital-employees',
+    apiBase: DEVELOPMENT_CONFIG_API_BASE.employees,
     permissionPrefix: 'digital-employees',
     i18nKey: 'employees',
   },
   'action-templates': {
-    apiBase: '/api/code/action-templates',
+    apiBase: DEVELOPMENT_CONFIG_API_BASE['action-templates'],
     permissionPrefix: 'action-templates',
     i18nKey: 'actionTemplates',
   },
   'verification-profiles': {
-    apiBase: '/api/code/verification-profiles',
+    apiBase: DEVELOPMENT_CONFIG_API_BASE['verification-profiles'],
     permissionPrefix: 'verification-profiles',
     i18nKey: 'verificationProfiles',
   },
   adapters: {
-    // integration-owned：adapter 属 integration bounded context，端点前缀随
-    // 归属而非随页面（RFC-294）。写成 `/api/code/...` 会 404——PR-8 就是这么
-    // 错的，前后端两个常量之间当时没有任何对账（见 code-config-api-base 测试）。
-    apiBase: '/api/integrations/development-adapters',
+    apiBase: DEVELOPMENT_CONFIG_API_BASE.adapters,
     permissionPrefix: 'adapter-definitions',
     i18nKey: 'adapters',
   },
@@ -87,26 +94,6 @@ export const AGENT_CAPABILITY_IDS = [
   'verification.repair',
   'conflict.repair',
 ] as const
-
-const ADAPTER_PURPOSES = ['requirement-source', 'pipeline-gate', 'pipeline-classifier'] as const
-
-/**
- * purpose → **必需** operations（后端 `PURPOSE_OPERATIONS[...].required` 的镜像；
- * 可选项在详情页的 JSON 编辑器里加）。adapter 与其它四类不同：后端在 create 期
- * 就 strict parse——「可执行引用不允许以草稿形态潜伏」，所以创建对话框必须一次
- * 交出完整合法内容，不能先建空壳。
- */
-const ADAPTER_REQUIRED_OPERATIONS: Record<(typeof ADAPTER_PURPOSES)[number], readonly string[]> = {
-  'requirement-source': ['acquire'],
-  'pipeline-gate': ['collect'],
-  'pipeline-classifier': ['classify'],
-}
-
-/** 新建 adapter 的最小合法内容里的预算/超时缺省（都在 schema 上下界内）。 */
-const ADAPTER_DEFAULTS = {
-  outputBudget: { maxFiles: 200, maxFileBytes: 32 * 1024 * 1024, maxTotalBytes: 256 * 1024 * 1024 },
-  timeoutMs: 120_000,
-} as const
 
 export interface ConfigIdentityRow {
   id: string
@@ -240,35 +227,25 @@ function CreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactEl
   const spec = CONFIG_KIND_SPECS[props.kind]
   const [name, setName] = useState('')
   const [capabilityId, setCapabilityId] = useState<string>(AGENT_CAPABILITY_IDS[1])
-  const [purpose, setPurpose] = useState<(typeof ADAPTER_PURPOSES)[number]>(ADAPTER_PURPOSES[0])
+  const [purpose, setPurpose] = useState<AdapterPurpose>(ADAPTER_PURPOSES[0])
   // executableRef 由**用户**填：机械造一个占位值等于产出一个说不出话的资源
   // （迁移分析器对同一字段做过同样的裁决——宁可标 manual-authoring-required）。
   const [executableRef, setExecutableRef] = useState('')
 
   const create = useMutation({
+    // 载荷由 shared 的共用契约产出（不在页面里即兴拼）——后端契约测试拿同一个
+    // 函数打真实 app，前后端形状不可能对不上。
     mutationFn: () =>
-      api.post(spec.apiBase, {
-        name,
-        ...(props.kind === 'action-templates' ? { capabilityId } : {}),
-        ...(props.kind === 'adapters'
-          ? {
-              purpose,
-              // 完整最小内容：后端 create 期 strict parse，缺一个字段整条拒。
-              draft: {
-                schemaVersion: 1,
-                contractVersion: 1,
-                purpose,
-                operations: ADAPTER_REQUIRED_OPERATIONS[purpose],
-                executableRef: executableRef.trim(),
-                parameterSchemaRef: null,
-                connectionRef: null,
-                secretProjection: [],
-                outputBudget: ADAPTER_DEFAULTS.outputBudget,
-                timeoutMs: ADAPTER_DEFAULTS.timeoutMs,
-              },
-            }
-          : {}),
-      }) as Promise<ConfigIdentityRow>,
+      api.post(
+        spec.apiBase,
+        buildDevelopmentConfigCreateBody({
+          kind: props.kind,
+          name,
+          capabilityId,
+          purpose,
+          executableRef,
+        }),
+      ) as Promise<ConfigIdentityRow>,
     onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: ['code-config', props.kind] })
       props.onClose()
@@ -324,7 +301,7 @@ function CreateDialog(props: { kind: ConfigKind; onClose: () => void }): ReactEl
           <Field label={t('code.config.purpose')} required>
             <Select
               value={purpose}
-              onChange={(v) => setPurpose(v as (typeof ADAPTER_PURPOSES)[number])}
+              onChange={(v) => setPurpose(v as AdapterPurpose)}
               options={ADAPTER_PURPOSES.map((p) => ({ value: p, label: p }))}
               ariaLabel={t('code.config.purpose')}
               data-testid="config-create-purpose"

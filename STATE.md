@@ -178,6 +178,18 @@
 >   T110 绿证：`d5a5b59e` 上 `gate:local` 的 backend 四 shard（520s）+ frontend（6m21s）+
 >   lint/format/depcheck/shared 全绿。T111 按 exact SHA 盯 `d75f0c9b`（含该三 commit 的
 >   superseding commit）的 CI。
+>   **交付后修复（2026-08-19，用户实报两条 + 顺查两条）**：①`/code/config/adapters` 整页 404
+>   （前端端点前缀写成 `/api/code/...`，adapter 属 integration context 应为 `/api/integrations/...`）
+>   `f9ff00da`；②adapter 建不出来（后端 create 期 strict parse，前端只交 `{name,purpose}`）
+>   `438f350d`。两条同一根因——**前端造载荷、后端校载荷，中间零机械联系**，页面测试 mock 掉 fetch
+>   后两边一起错也全绿。正解不是「对账两份常量」而是**共用一份 + 真实重放**：载荷构造与端点 base
+>   提进 `shared/developmentConfigCreate.ts`，创建对话框与后端契约测试调**同一个函数**，后者打
+>   `createApp` 起的真实 app。该契约测试当场又照出两处同族缺陷：③`publishDigitalEmployee` 与
+>   ④`publishAutomationPolicy` 用裸 `schema.parse`，草稿不合法（UI 建出来的员工正是空草稿起步、
+>   policy 的 revise 对草稿完全宽容）时 ZodError 被兜底成 **500 internal-error**，改 `safeParse` +
+>   具名 422（`digital-employee-draft-invalid` / `automation-policy-draft-invalid`）。顺带堵掉
+>   e2e↔注册表守卫的两个空洞绿（不递归 / 不失败关闭，反事实实测：平铺版对子目录里的坏 spec
+>   7 pass 0 fail 直接放行）。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

@@ -123,7 +123,20 @@ export async function publishDigitalEmployee(
   if (identity === null || identity.archivedAt !== null) {
     throw new NotFoundError('digital-employee-not-found', 'digital employee not found')
   }
-  const content = digitalEmployeeContentSchema.parse(JSON.parse(identity.draftJson))
+  // 草稿不合法是**用户可达的常规路径**（UI 建出来的员工以空草稿起步，内容在
+  // 详情页深编），不是内部错误：裸 `.parse` 抛 ZodError 会被兜底成 500
+  // internal-error，用户点一下"发布"就看见崩溃而不是"缺哪些字段"。同族的
+  // action template / verification profile 都走 safeParse + 具名 ValidationError，
+  // 这里对齐（回归锁见 tests/rfc310-config-create-contract.test.ts）。
+  const parsed = digitalEmployeeContentSchema.safeParse(JSON.parse(identity.draftJson))
+  if (!parsed.success) {
+    throw new ValidationError(
+      'digital-employee-draft-invalid',
+      parsed.error.issues[0]?.message ?? 'invalid draft',
+      { issues: parsed.error.issues.slice(0, 10) },
+    )
+  }
+  const content = parsed.data
   const violations = validateDigitalEmployeeForPublish(content, input.lookup)
   if (violations.length > 0) {
     throw new ValidationError('digital-employee-publish-blocked', 'publish closure check failed', {
@@ -244,7 +257,18 @@ export async function publishAutomationPolicy(
   if (identity === null || identity.archivedAt !== null) {
     throw new NotFoundError('automation-policy-not-found', 'automation policy not found')
   }
-  const content = automationPolicyContentSchema.parse(JSON.parse(identity.draftJson))
+  // 同 publishDigitalEmployee：revise 对草稿完全宽容（详情页可以存任意 JSON），
+  // 所以**发布**就是唯一的校验点，且它是用户可达的常规路径——裸 `.parse` 会把
+  // "少了个字段"变成 500 internal-error。具名 422 才说得清缺什么。
+  const parsed = automationPolicyContentSchema.safeParse(JSON.parse(identity.draftJson))
+  if (!parsed.success) {
+    throw new ValidationError(
+      'automation-policy-draft-invalid',
+      parsed.error.issues[0]?.message ?? 'invalid draft',
+      { issues: parsed.error.issues.slice(0, 10) },
+    )
+  }
+  const content = parsed.data
   const violations = validatePolicyForPublish(content)
   if (violations.length > 0) {
     throw new ValidationError('automation-policy-publish-blocked', 'policy publish checks failed', {

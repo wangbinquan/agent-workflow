@@ -40,10 +40,24 @@ interface DiscoveredRoute {
   source: string
 }
 
+/**
+ * 递归列出 `.ts`。**必须递归**：平铺 `readdirSync` 遇到子目录只会静默跳过，
+ * 而扫描器扫不到的文件就是"守卫恒绿"——这类空洞绿比没有守卫更坏，因为它
+ * 让人以为覆盖住了。射程内今天恰好没有子目录，正因如此更要现在就递归：
+ * 等有人第一次建子目录时，没有任何信号会提醒他守卫已经瞎了。
+ */
+function listTsFilesRecursive(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...listTsFilesRecursive(p))
+    else if (entry.name.endsWith('.ts')) out.push(p)
+  }
+  return out
+}
+
 function listRouteFiles(): string[] {
-  return readdirSync(ROUTES_DIR)
-    .filter((f) => f.endsWith('.ts'))
-    .map((f) => join(ROUTES_DIR, f))
+  return listTsFilesRecursive(ROUTES_DIR)
 }
 
 function stripLineComments(src: string): string {
@@ -243,7 +257,7 @@ describe('API contract registry coverage', () => {
   // 单段」处理（ACL 端点是 `/api/${resource}/${id}/acl` 这种计算形态）。
   test('every daemon /api call an e2e spec makes still exists in the registry', () => {
     const e2eDir = resolve(import.meta.dir, '..', '..', '..', 'e2e')
-    const specs = readdirSync(e2eDir).filter((f) => f.endsWith('.ts'))
+    const specs = listTsFilesRecursive(e2eDir)
     const WILDCARD = '\u0001'
     const registry = ENDPOINTS.map((e) => ({ method: e.method, segs: e.path.split('/') }))
     /**
@@ -279,18 +293,24 @@ describe('API contract registry coverage', () => {
       return 'GET'
     }
     const offenders: string[] = []
+    let scannedCalls = 0
     for (const spec of specs) {
-      const src = stripLineComments(readFileSync(join(e2eDir, spec), 'utf8'))
+      const src = stripLineComments(readFileSync(spec, 'utf8'))
       for (const m of src.matchAll(/\$\{(?:daemon\.)?baseUrl\}(\/api\/[^'"`\s?]+)/g)) {
+        scannedCalls += 1
         const raw = m[1]!
         const called = raw
           .replace(/\/+$/, '')
           .split('/')
           .map((seg) => (seg.includes('${') ? WILDCARD : seg))
         const method = methodOf(src, m.index!, m.index! + m[0].length)
-        if (!known(method, called)) offenders.push(`${spec}: ${method} ${raw}`)
+        if (!known(method, called)) offenders.push(`${basename(spec)}: ${method} ${raw}`)
       }
     }
+    // 失败关闭：spec 目录挪走、后缀改名、`${baseUrl}` 换写法……任一发生都会让
+    // 上面的循环空转，而空转的守卫是绿的。这两条下界把"扫了个寂寞"变成红。
+    expect(specs.length).toBeGreaterThan(0)
+    expect(scannedCalls).toBeGreaterThan(20)
     expect(offenders).toEqual([])
   })
 

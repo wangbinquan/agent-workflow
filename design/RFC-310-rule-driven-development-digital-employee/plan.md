@@ -626,6 +626,27 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
    的 preflight + policy simulator 覆盖）；T99 的「cancel 运行中旧 rounds」与 T103 的 soak
    只读化是 runbook 人工步骤。
 
+### 交付后修复（2026-08-19）
+
+Done 之后用户在 UI 上连报两条，顺查又照出两条同族缺陷。四条同一个根因族，一并记账：
+
+| # | 症状 | 根因 | 处置 |
+|---|------|------|------|
+| 1 | `/code/config/adapters` 整页 404 | 前端端点前缀写成 `/api/code/...`；adapter 属 integration bounded context，实际挂 `/api/integrations/...` | `f9ff00da` + 读后端源码对账的 `code-config-api-base.test.ts` |
+| 2 | adapter 建不出来（`Invalid literal value, expected 1`） | 后端 create 期 strict parse，前端只交 `{name, purpose}` | `438f350d`，后并入下方共用契约 |
+| 3 | 建完数字员工点"发布" → **500 internal-error** | `publishDigitalEmployee` 裸 `schema.parse`，空草稿的 ZodError 被兜底成 500 | `safeParse` + `digital-employee-draft-invalid`（422） |
+| 4 | policy 详情页存下不合法 JSON 后点"发布" → **500** | `publishAutomationPolicy` 同款裸 parse，且 `revise` 对草稿完全宽容 ⇒ 发布是唯一校验点 | `safeParse` + `automation-policy-draft-invalid`（422） |
+
+**结构性处置**（不是逐个打补丁）：载荷构造与端点 base 提进
+`packages/shared/src/developmentConfigCreate.ts`，创建对话框与
+`packages/backend/tests/rfc310-config-create-contract.test.ts` 调**同一个函数**，后者打
+`createApp` 起的真实 app 做四族 create→read→publish 全走一遍。前后端不再各存一份，
+漂移无处可藏；③④ 正是这条测试补上后**当场照出**的。
+
+**教训已落 `docs/dev-gotchas.md`**：①mock 掉的边界不构成契约证明，同一事实在两处 ⇒ 首选
+共用一份 + 真实重放；②同族资源里只要有一个走裸 `.parse`，它就是那个把用户可达的校验失败
+变成 500 的（服务层 ZodError 没有 422 兜底，只有路由层解析请求体那一处有）。
+
 ## 14. 风险与停止条件
 
 | 风险                                                                          | 预防/停止条件                                                                                                              |

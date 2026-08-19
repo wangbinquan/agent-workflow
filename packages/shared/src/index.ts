@@ -159,3 +159,7 @@ export * from './webhookTemplate'
 // RFC-262 — upload 文件名净化与落点判重的纯函数面。启动表单提交前与 daemon
 // 收到 multipart 后跑的是同一套规则，两边不可能给出不同判定。零依赖叶子。
 export * from './uploadNaming'
+// RFC-310 — 数字员工配置资源「新建」的前后端共用契约：端点 base + 各族最小
+// 完整请求体的纯函数。创建对话框调它发请求，后端契约测试调它打真实 app，
+// 两边不可能对不上（此前对不上两次，都是用户在 UI 上撞出来的）。
+export * from './developmentConfigCreate'
