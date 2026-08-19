@@ -1966,6 +1966,23 @@ expect(commitRow!.status).toBe('done')` → `failed`，与 2026-08-14 记录的 
   status` 与该节点全部 node_run 行（含 `rerun_cause`），一次就能在方向 1 与方向 2
   （缺同步点）之间分出胜负。
 
+## `unified system mock gateway` 的 npm 用例在 CI 上 30s 超时（2026-08-20 首见，1 次）
+
+**现象**：`packages/system-mocks` 的
+`unified system mock gateway > serves installable npm and PyPI artifacts plus the PlantUML renderer contract`
+在 CI 的「Lint + Typecheck + Format + Shared + system mock tests」格红，报
+`error: npm timed out after 30000ms`（`packages/system-mocks/src/core/process.ts:36`）。
+run 32281928236，SHA `1e12aaad`。该用例会 **spawn 真实 `npm`** 打本地 mock registry。
+
+**归属已排除（同码不同果）**：`1e12aaad` 是 RFC-313（agent 线重试预算 / 形状判定 +
+shared prompt/config + 前端设置项），与 npm / PyPI / PlantUML 零接触；本地 33 pass；
+该格在此前 7 次 main run 全绿；而**含同一 commit** 的后继提交 `40d75558`
+（run 32283591822）该格**恢复绿**。同一份代码两种结果 ⇒ 环境因素，不是代码回归。
+
+**待观察**：目前仅 1 次，不足以定性。若再现，先看是 `npm` 自身握手慢还是 mock gateway
+起得慢——两者的修法不同（前者抬 `timeoutMs` / 加 `--prefer-offline`，后者是就绪探测缺失）。
+在此之前**不要**盲目抬超时：那只会把偶发变稀，与本文件对 rfc098 的同款处置原则一致。
+
 ## `worktree-submodule-init` 的 `beforeEach` 会超时（2026-08-14 登记，非本轮改动引入）
 
 **现象**：`RUN_GIT_NETWORK=1` 且与另外 3 个网络门控套件**同进程**跑时，
