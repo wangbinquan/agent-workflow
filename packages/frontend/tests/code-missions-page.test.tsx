@@ -203,6 +203,10 @@ describe('/code/missions list', () => {
     await screen.findByTestId('mission-list')
     expect(screen.getByText('collector-not-wired:repository')).toBeTruthy()
     expect(screen.getByRole('link', { name: '00000001' })).toBeTruthy()
+    // 仓库列给的是地址而不是 ULID：实走 UI 时这一格显示 `01M0BQX6…`，
+    // 用户看不出是哪个仓（同页的发起对话框已经按地址显示，列表却没有）。
+    expect(screen.getByText('https://git.test/team/app')).toBeTruthy()
+    expect(screen.queryByText('repo-1')).toBeNull()
   })
 
   test('launch dialog submits a direct-body mission with a pinned employee revision', async () => {

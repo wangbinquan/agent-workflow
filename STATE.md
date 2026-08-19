@@ -190,6 +190,16 @@
 >   具名 422（`digital-employee-draft-invalid` / `automation-policy-draft-invalid`）。顺带堵掉
 >   e2e↔注册表守卫的两个空洞绿（不递归 / 不失败关闭，反事实实测：平铺版对子目录里的坏 spec
 >   7 pass 0 fail 直接放行）。
+>   **前台实走验收（2026-08-19，用户要求"自己从前台走一遍关键流程"）**：起独立 home 的 daemon
+>   + 内嵌前端逐页操作，走通 adapter 建/发布、员工建/空草稿发布具名 422、policy 发布、仓库导入、
+>   mission 发起（如实 blocked）、模板与员工授权发布、指派绑定、mission 重试推进到 `working`。
+>   一趟又逮到三个"点开就见、门禁全拦不住"的缺陷：⑤`/code/assignments`「新建指派」整页白屏
+>   （四条 useQuery 把 `{items}` 声明成裸数组 ⇒ 该页从未能用，而它正是 mission 解析员工的必经配置）；
+>   ⑥员工详情存草稿后白屏（versioned ref `{id,revision}` 被当字符串塞进 JSX，React #31）；
+>   ⑦同因导致「默认策略」静默显示成「—」（不报错，只是说谎）。三处的共同结构是**测试 fixture
+>   照着前端的错误假设造数据、与实现互相印证**，故全绿。处置：修复三处 + fixture 改由后端 domain
+>   schema 裁定（`safeParse` 对拍）+ 新增列表端点形状守卫（判据表逐条 curl 真实 daemon 实测，
+>   并常驻一条判据函数自检）+ 两处列表把仓库 ULID 显示为地址。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

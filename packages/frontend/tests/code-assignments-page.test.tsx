@@ -91,20 +91,28 @@ function installFetch(overrides: { assignments?: unknown[] } = {}): Recorded {
       if (url.includes('/api/code/repository-assignments/') && method === 'DELETE') {
         return json({ ok: true })
       }
+      // 这四个都是**列表端点**，真实响应是 `{ items: [...] }`（后端
+      // mountConfigResource / cached-repos / repo-groups 全同一形状）。
+      // 此处曾经 mock 成裸数组，与页面里写错的类型**一起错**，于是
+      // `新建指派` 整页 error boundary（`props.repos.map is not a function`）
+      // 一路绿到用户点开为止。mock 必须照抄真实形状，否则这条测试保护的
+      // 是「前端自己的幻觉」而不是契约。
       if (url.includes('/api/code/digital-employees')) {
-        return json([
-          { id: 'emp-1', name: 'Java 员工', publishedRevision: 3 },
-          { id: 'emp-draft', name: '草稿员工', publishedRevision: null },
-        ])
+        return json({
+          items: [
+            { id: 'emp-1', name: 'Java 员工', publishedRevision: 3 },
+            { id: 'emp-draft', name: '草稿员工', publishedRevision: null },
+          ],
+        })
       }
       if (url.includes('/api/code/automation-policies')) {
-        return json([{ id: 'pol-1', name: '默认策略', publishedRevision: 2 }])
+        return json({ items: [{ id: 'pol-1', name: '默认策略', publishedRevision: 2 }] })
       }
       if (url.includes('/api/cached-repos')) {
-        return json([{ id: 'repo-1', urlRedacted: 'https://git.test/team/app' }])
+        return json({ items: [{ id: 'repo-1', urlRedacted: 'https://git.test/team/app' }] })
       }
       if (url.includes('/api/repo-groups')) {
-        return json([{ id: 'grp-1', name: '后端组' }])
+        return json({ items: [{ id: 'grp-1', name: '后端组' }] })
       }
       return json({ error: { code: 'not-found', message: url } }, 404)
     },
@@ -141,6 +149,9 @@ describe('/code/assignments', () => {
     const repoSection = await screen.findByTestId('assignments-repository')
     expect(repoSection.textContent).toContain('Java 员工')
     expect(repoSection.textContent).toContain('默认策略')
+    // 范围列同样给地址而不是 ULID（本页已经取到 cached-repos）。
+    expect(repoSection.textContent).toContain('https://git.test/team/app')
+    expect(repoSection.textContent).not.toContain('repo-1')
     // 未发布员工的 global 行带警示 chip。
     const globalSection = await screen.findByTestId('assignments-global-default')
     expect(globalSection.querySelectorAll('.chip--warn').length).toBeGreaterThan(0)

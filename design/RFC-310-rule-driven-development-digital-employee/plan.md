@@ -647,6 +647,31 @@ Done 之后用户在 UI 上连报两条，顺查又照出两条同族缺陷。�
 共用一份 + 真实重放；②同族资源里只要有一个走裸 `.parse`，它就是那个把用户可达的校验失败
 变成 500 的（服务层 ZodError 没有 422 兜底，只有路由层解析请求体那一处有）。
 
+### 前台实走验收（2026-08-19）
+
+按用户要求「自己从前台走一遍关键流程」：起独立 home 的 daemon + 内嵌前端逐页操作。
+
+**走通的**：adapter 创建→发布；员工创建→空草稿发布得到具名 422（不再 500）；policy 创建→
+发布 v1；仓库导入（`file://` 本地仓）；mission 发起（无员工时如实 `blocked / no-employee-match`，
+时间线记 `block: policy-content-missing`）；动作模板与员工授权 JSON→发布 v1；指派绑定员工+策略；
+mission 重试后推进到 `working`、readiness `automationReady: true`。**未走**：Agent 真正执行那一段
+（需要已配置的 runtime 二进制），以及 MR/pipeline 的真实外部系统——它们由 T109 的 system-mock
+全旅程 E2E 覆盖。
+
+**又逮到三个缺陷**（全部"点开就见"，typecheck / lint / 单测 / e2e / CI 无一拦住）：
+
+| # | 症状 | 根因 |
+|---|------|------|
+| 5 | `/code/assignments` 点「新建指派」整页 error boundary | 四条 useQuery 把 `{items:[…]}` 声明成裸数组 ⇒ **该页从未能用**，而它正是 mission 解析员工的必经配置 |
+| 6 | 员工详情存草稿后整页白屏（React #31） | versioned ref `{id,revision}` 被当字符串塞进 JSX |
+| 7 | 员工「默认策略」永远显示「—」 | 同 6 的另一半：`refText` 只认字符串，遇对象**静默退化**（不报错，只是说谎） |
+
+三处共同结构：**测试 fixture 照着前端的错误假设造数据**（裸数组 / `'id@rev'` 字符串），与实现
+互相印证，于是全绿。处置除修复外，补了两层机械链接：fixture 由后端 domain schema `safeParse`
+裁定；列表端点形状守卫（判据表逐条 curl 真实 daemon 实测——启发式版本曾把 `/api/agents` 这类
+真·裸数组误判，差点要求改正确的代码——并常驻一条判据函数自检用例）。顺带把 missions /
+assignments 两处列表的仓库 ULID 显示为仓库地址。
+
 ## 14. 风险与停止条件
 
 | 风险                                                                          | 预防/停止条件                                                                                                              |

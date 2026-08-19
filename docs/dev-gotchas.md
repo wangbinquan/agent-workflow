@@ -1266,3 +1266,37 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
   解析**用户手写且写入路径故意宽容**的内容（五类配置资源的 draft 正是如此——
   `revise` 收任意 JSON），那么第一个校验点就是用户点得到的按钮，必须具名 422。
   按这条判据扫全后端的 `.parse(JSON.parse(...))`，命中的就只有上面两处。
+
+**同日第三次复发，形态升级为「测试与实现互相印证的假绿」**（2026-08-19，用户要求
+「自己从前台走一遍关键流程」时实撞）。起了独立 home 的 daemon + 内嵌前端逐页操作，
+一趟走出两个整页崩溃、一个静默说谎，全部是同一根因的不同长相：
+
+| 现象 | 前端假设 | 真实形状 |
+|---|---|---|
+| `/code/assignments` 点「新建指派」白屏 `e.repos.map is not a function` | 四条 useQuery 声明成裸数组 | 列表端点回 `{ items: [...] }` |
+| 员工详情存草稿后白屏 React error #31 | `fallbackTemplateRef` 是字符串 | domain `versionedRef` = `{ id, revision }` |
+| 员工「默认策略」永远显示「—」 | `refText` 只认字符串 | 同上（对象 → 静默退化，**不报错，只是说谎**） |
+
+三处的共同结构是**测试与实现一起错**：页面测试 mock 掉 fetch、fixture 照着前端的
+错误假设造数据（裸数组、`'id@rev'` 字符串），于是两边互相印证、全绿到用户点开为止。
+**这比单纯漏测更难发现——测试越多越像有覆盖。**
+
+- **fixture 必须被生产者的 schema 裁定，不能由消费者的想象来写**。落地方式：前端
+  测试直接按相对路径 import 后端 domain schema，对 fixture 跑一次 `safeParse`
+  （本仓已有先例：`code-policy-pages.test.tsx` 拿后端 domain 对拍 fact catalog）。
+  变异检验：把旧的字符串形态喂进去，schema 会逐字段点名——那正是事故形态。
+- **判据表宁可实测、不要启发式**。给「哪些端点回 `{items}`」写扫描器时，第一版
+  从后端源码推，结果把 `/api/agents`（真·裸数组）误判成 items 形状，差点让人去
+  **改正确的代码**。改成逐条 curl 真实 daemon 建表 + 守卫内常驻一条判据函数自检
+  用例（它当场照出判据函数漏掉单行 interface 的洞）。
+- **`api.get<T>` 的 T 是给编译器讲的故事**：`api.get` 回 `unknown`，泛型是作者
+  自己填的断言，填错了 TypeScript 一声不吭。需要真保障就上运行时 `Schema.parse`
+  （RFC-311 的 `/repos`、`/tasks` 走的就是这条路，形状不符当场抛且 mock 造错也红）。
+- **实践**：交付一个有 UI 的 RFC，**自己起 daemon 从前台走一遍关键流程**。本轮
+  三个缺陷没有一个能被 typecheck / lint / 单测 / e2e / CI 拦住，全部是"点开就见"。
+  起法：`AGENT_WORKFLOW_HOME=~/aw-<slug>`（别放 `/tmp` symlink 下）+
+  `bun run build && bun run build:binary` 后跑 dist 里的二进制（vite dev 的
+  `.daemon.info` 只认默认 home，且端口固定，多人并发时会串到别人的 daemon）。
+  首个管理员用 CLI 建（`user create --admin --password`），会话用
+  `POST /api/auth/login` 换 token 后以 `#aw_session=<token>` 片段注入前端——
+  全程不必在浏览器里手输凭据。

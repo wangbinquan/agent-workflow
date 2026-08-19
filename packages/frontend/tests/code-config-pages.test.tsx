@@ -23,6 +23,9 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 import { publishViolationsOf } from '../src/routes/code.config.detail'
+// 直接引后端 domain schema 给 fixture 做裁定（同 code-policy-pages 的既有做法：
+// 前端不 import 后端包，测试可以按相对路径引 domain 纯模块）。
+import { digitalEmployeeContentSchema } from '../../backend/src/modules/development-automation/domain/digitalEmployee'
 import { ApiError } from '../src/api/client'
 
 beforeEach(() => {
@@ -77,6 +80,31 @@ const EMPLOYEE_ROW = {
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
   archivedAt: null,
+}
+
+/**
+ * 员工草稿 fixture。**形状由后端 domain schema 裁定**（下方有一条用例直接拿
+ * `digitalEmployeeContentSchema` 解析它）——此前这里的 versioned ref 写成
+ * `'id@rev'` 字符串，与页面里同样写错的类型一起错，于是真实数据一进来就
+ * React error #31 白屏，而测试全绿。fixture 与生产形状之间必须有机械链接，
+ * 否则"测试越多越像有覆盖"。
+ */
+const EMPLOYEE_DRAFT = {
+  schemaVersion: 1,
+  description: 'Handles Java services',
+  supportedRepositoryFacts: [],
+  capabilityRoutes: [
+    {
+      capabilityId: 'change.implement',
+      rules: [],
+      fallbackTemplateRef: { id: '01TPL0000000000000000001', revision: 1 },
+    },
+  ],
+  requirementSources: [
+    { sourceKey: 'jira', adapterRef: { id: '01ADP0001', revision: 2 }, isDefault: true },
+  ],
+  pipelineProviders: [{ providerKey: 'gitlab-ci', adapterRef: { id: '01ADP0002', revision: 1 } }],
+  defaultPolicyRef: { id: 'pol-1', revision: 1 },
 }
 
 const TEMPLATE_ROW = {
@@ -138,21 +166,7 @@ function installFetch(overrides: {
         return json(
           overrides.detail ?? {
             ...EMPLOYEE_ROW,
-            draft: {
-              schemaVersion: 1,
-              description: 'Handles Java services',
-              supportedRepositoryFacts: [],
-              capabilityRoutes: [
-                {
-                  capabilityId: 'change.implement',
-                  rules: [],
-                  fallbackTemplateRef: '01TPL0000000000000000001@1',
-                },
-              ],
-              requirementSources: [],
-              pipelineProviders: [],
-              defaultPolicyRef: 'pol-1@1',
-            },
+            draft: EMPLOYEE_DRAFT,
           },
         )
       }
@@ -341,6 +355,13 @@ describe('/code/config detail', () => {
     expect(panel.textContent).toContain('policy-missing')
     // routes 摘要也在（capability 路由表）。
     expect(screen.getByTestId('config-employee-routes').textContent).toContain('change.implement')
+    // versioned ref 渲染成 `id@vN`：既证明没有把对象塞进 JSX（React #31 白屏），
+    // 也证明没有静默退化成「—」（那会让用户以为没绑定）。
+    const employeeCard = screen.getByTestId('config-summary-employee')
+    expect(employeeCard.textContent).toContain('01TPL0000000000000000001@v1')
+    expect(employeeCard.textContent).toContain('pol-1@v1')
+    expect(employeeCard.textContent).toContain('jira → 01ADP0001@v2 (default)')
+    expect(employeeCard.textContent).toContain('gitlab-ci → 01ADP0002@v1')
   })
 
   test('adapter edit entry is hidden without scripts:author; secret keys show names only', async () => {
@@ -365,5 +386,15 @@ describe('/code/config detail', () => {
     await renderConfig(`/code/config/adapters/${ADAPTER_DETAIL.id}`)
     await screen.findByTestId('config-summary-adapter')
     expect(await screen.findByTestId('config-edit-open')).toBeTruthy()
+  })
+})
+
+describe('fixtures are pinned to the backend domain shape', () => {
+  test('the employee draft fixture parses as real DigitalEmployeeContent', () => {
+    // 这条就是缺失的机械链接：fixture 一旦漂回"前端以为的形状"（例如把
+    // versioned ref 写成 `'id@rev'` 字符串），这里当场红，而不是等用户在
+    // 真实页面上撞出 React error #31 白屏。
+    const parsed = digitalEmployeeContentSchema.safeParse(EMPLOYEE_DRAFT)
+    expect(parsed.success ? [] : parsed.error.issues.map((i) => i.path.join('.'))).toEqual([])
   })
 })

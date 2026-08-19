@@ -71,6 +71,14 @@ function MissionsPage(): ReactElement {
     queryFn: ({ signal }) => api.get('/api/code/missions', undefined, signal),
     refetchInterval: 10_000,
   })
+  // 仓库列显示地址而不是 ULID：任务列表里一串 `01M0BQX6…` 说不出是哪个仓，
+  // 而这份数据本来就在（与发起对话框同一个 query key，命中缓存不额外发请求）。
+  const repos = useQuery<{ items: { id: string; urlRedacted: string | null }[] }>({
+    queryKey: ['cached-repos'],
+    queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
+  })
+  const repoLabel = (id: string): string =>
+    repos.data?.items.find((r) => r.id === id)?.urlRedacted ?? id
 
   const [launchOpen, setLaunchOpen] = useState(false)
 
@@ -130,7 +138,7 @@ function MissionsPage(): ReactElement {
                       {mission.status}
                     </StatusChip>
                   </td>
-                  <td>{mission.repositoryId}</td>
+                  <td>{repoLabel(mission.repositoryId)}</td>
                   <td>
                     {mission.sourceKind === 'direct'
                       ? t('code.missions.sourceDirect')

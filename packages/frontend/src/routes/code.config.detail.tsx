@@ -259,8 +259,26 @@ function DraftSummary(props: { kind: ConfigKind; draft: unknown }): ReactElement
   return <AdapterSummary draft={draft} />
 }
 
+/**
+ * 资源引用的显示文本。两种形态都要认：
+ *   · 裸字符串 —— template 的 `agentRef` / `verificationProfileRef`、adapter 的
+ *     `executableRef` 等（domain 里就是 `z.string()`）；
+ *   · **versioned ref** `{ id, revision }` —— employee 的 `defaultPolicyRef`、
+ *     `fallbackTemplateRef`、`adapterRef` 等（domain `versionedRef`）。
+ *
+ * 只认字符串的旧版有两个后果，实走 UI 时都撞到了：把对象塞进 `<code>{…}</code>`
+ * 直接 React error #31 整页白屏；而走 refText 的那些位置则**静默显示成「—」**
+ * ——用户看到"没绑定"，实际上绑定得好好的。后者更坏：不报错，只是说谎。
+ */
 function refText(value: unknown): string {
-  return typeof value === 'string' && value.length > 0 ? value : '—'
+  if (typeof value === 'string') return value.length > 0 ? value : '—'
+  if (value !== null && typeof value === 'object') {
+    const ref = value as { id?: unknown; revision?: unknown }
+    if (typeof ref.id === 'string' && ref.id.length > 0) {
+      return typeof ref.revision === 'number' ? `${ref.id}@v${ref.revision}` : ref.id
+    }
+  }
+  return '—'
 }
 
 function EmployeeSummary(props: { draft: Record<string, unknown> }): ReactElement {
@@ -295,7 +313,9 @@ function EmployeeSummary(props: { draft: Record<string, unknown> }): ReactElemen
                 const r = route as {
                   capabilityId?: string
                   rules?: unknown[]
-                  fallbackTemplateRef?: string | null
+                  // versioned ref（`{id, revision}`），不是字符串——直接塞进
+                  // JSX 会 React error #31 白屏。
+                  fallbackTemplateRef?: unknown
                 }
                 return (
                   <tr key={r.capabilityId ?? index}>
@@ -304,7 +324,7 @@ function EmployeeSummary(props: { draft: Record<string, unknown> }): ReactElemen
                     </td>
                     <td>{Array.isArray(r.rules) ? r.rules.length : 0}</td>
                     <td>
-                      <code>{r.fallbackTemplateRef ?? '—'}</code>
+                      <code>{refText(r.fallbackTemplateRef)}</code>
                     </td>
                   </tr>
                 )
@@ -325,8 +345,8 @@ function EmployeeSummary(props: { draft: Record<string, unknown> }): ReactElemen
             ? '—'
             : sources
                 .map((s) => {
-                  const b = s as { sourceKey?: string; isDefault?: boolean }
-                  return `${b.sourceKey ?? '?'}${b.isDefault === true ? ' (default)' : ''}`
+                  const b = s as { sourceKey?: string; isDefault?: boolean; adapterRef?: unknown }
+                  return `${b.sourceKey ?? '?'} → ${refText(b.adapterRef)}${b.isDefault === true ? ' (default)' : ''}`
                 })
                 .join(', ')}
         </dd>
@@ -334,7 +354,12 @@ function EmployeeSummary(props: { draft: Record<string, unknown> }): ReactElemen
         <dd>
           {providers.length === 0
             ? '—'
-            : providers.map((p) => (p as { providerKey?: string }).providerKey ?? '?').join(', ')}
+            : providers
+                .map((p) => {
+                  const b = p as { providerKey?: string; adapterRef?: unknown }
+                  return `${b.providerKey ?? '?'} → ${refText(b.adapterRef)}`
+                })
+                .join(', ')}
         </dd>
       </dl>
     </Card>

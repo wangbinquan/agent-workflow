@@ -57,19 +57,24 @@ export function CodeAssignmentsPage(): ReactElement {
     queryKey: ['code-assignments'],
     queryFn: ({ signal }) => api.get('/api/code/repository-assignments', undefined, signal),
   })
-  const employees = useQuery<IdentityRow[]>({
+  // 这四个端点**都**回 `{ items: [...] }`（列表端点的统一形状），不是裸数组。
+  // 曾经这里四条全写成裸数组：类型上编译得过（`api.get` 回 unknown），运行时
+  // 一进对话框就 `props.repos.map is not a function` 整页 error boundary
+  // ——即「新建指派」从未能用。页面测试 mock 掉 fetch、自己造裸数组，所以
+  // 一路绿到用户点开为止（同 RFC-310 那两个 adapter bug 的形态）。
+  const employees = useQuery<{ items: IdentityRow[] }>({
     queryKey: ['code-employees-identity'],
     queryFn: ({ signal }) => api.get('/api/code/digital-employees', undefined, signal),
   })
-  const policies = useQuery<IdentityRow[]>({
+  const policies = useQuery<{ items: IdentityRow[] }>({
     queryKey: ['code-policies-identity'],
     queryFn: ({ signal }) => api.get('/api/code/automation-policies', undefined, signal),
   })
-  const repos = useQuery<{ id: string; urlRedacted: string | null }[]>({
+  const repos = useQuery<{ items: { id: string; urlRedacted: string | null }[] }>({
     queryKey: ['cached-repos-for-assignments'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
   })
-  const groups = useQuery<{ id: string; name: string }[]>({
+  const groups = useQuery<{ items: { id: string; name: string }[] }>({
     queryKey: ['repo-groups-for-assignments'],
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
   })
@@ -88,17 +93,28 @@ export function CodeAssignmentsPage(): ReactElement {
   if (assignments.isError) return <ErrorBanner error={assignments.error} />
   const items = assignments.data?.items ?? []
   const employeeName = (id: string | null): string =>
-    id === null ? '—' : (employees.data?.find((e) => e.id === id)?.name ?? id)
+    id === null ? '—' : (employees.data?.items.find((e) => e.id === id)?.name ?? id)
   const policyName = (id: string | null): string =>
-    id === null ? '—' : (policies.data?.find((p) => p.id === id)?.name ?? id)
+    id === null ? '—' : (policies.data?.items.find((p) => p.id === id)?.name ?? id)
+  // 范围列显示仓库地址 / 仓库组名，而不是一串 ULID——数据本页已经取到了。
+  const scopeLabel = (row: AssignmentRow): string => {
+    if (row.scopeRef === null) return t('code.assignments.globalScope')
+    if (row.scopeKind === 'repository') {
+      return repos.data?.items.find((r) => r.id === row.scopeRef)?.urlRedacted ?? row.scopeRef
+    }
+    if (row.scopeKind === 'repository-group') {
+      return groups.data?.items.find((g) => g.id === row.scopeRef)?.name ?? row.scopeRef
+    }
+    return row.scopeRef
+  }
   const unpublishedWarnings = (row: AssignmentRow): string[] => {
     const warnings: string[] = []
-    const emp = employees.data?.find((e) => e.id === row.employeeId)
+    const emp = employees.data?.items.find((e) => e.id === row.employeeId)
     if (row.employeeId !== null && emp !== undefined && emp.publishedRevision === null) {
       warnings.push(t('code.assignments.warnEmployeeUnpublished'))
     }
     for (const pid of [row.selectionPolicyId, row.executionPolicyId]) {
-      const pol = policies.data?.find((p) => p.id === pid)
+      const pol = policies.data?.items.find((p) => p.id === pid)
       if (pid !== null && pol !== undefined && pol.publishedRevision === null) {
         warnings.push(t('code.assignments.warnPolicyUnpublished'))
       }
@@ -159,7 +175,7 @@ export function CodeAssignmentsPage(): ReactElement {
                   <tbody>
                     {rows.map((row) => (
                       <tr key={`${row.scopeKind}:${row.scopeRef ?? 'global'}`}>
-                        <td>{row.scopeRef ?? t('code.assignments.globalScope')}</td>
+                        <td>{scopeLabel(row)}</td>
                         <td>
                           {employeeName(row.employeeId)}
                           {unpublishedWarnings(row).map((w) => (
@@ -199,10 +215,10 @@ export function CodeAssignmentsPage(): ReactElement {
       {editing !== null ? (
         <AssignmentDialog
           row={editing}
-          employees={employees.data ?? []}
-          policies={policies.data ?? []}
-          repos={repos.data ?? []}
-          groups={groups.data ?? []}
+          employees={employees.data?.items ?? []}
+          policies={policies.data?.items ?? []}
+          repos={repos.data?.items ?? []}
+          groups={groups.data?.items ?? []}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
