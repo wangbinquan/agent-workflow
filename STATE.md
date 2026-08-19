@@ -2,13 +2,18 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 📝 **待批 RFC（Draft，2026-08-19）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
-> —— 现状只有 `users.last_login_at`（仅登录仪式写一次），无法回答「此刻在不在线」。判据取**活的 session WS 连接
-> + 60s 宽限期**（二态）。**对 DB 净影响为零**：presence 自身零读写、零 REST 端点、宽限期空时零定时器，且
-> **不新开 WS 通道**（帧挂已常驻的 `/ws/authority`，每标签页连接数不变——连接本身有 DB 价格：升级 5 读 2 写、
-> 全量复核每连接 3 读）；另顺手修升级路径重复查询（5 读 2 写 → 3 读 1 写，对所有 WS 连接生效）。新增权限点
-> `users:presence`（默认全员、guest 无、PAT 永不持有）。后台落在 `modules/identity-access/` 分层内；前端新增公共
-> 原语 `PresenceDot`，接线 /users、署名 chip、任务成员面板、工作组花名册（人类成员）四处。**三件套已落档，待用户批准**。
+> 📝 **待批 RFC（Draft v4，2026-08-19）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
+> —— 现状只有 `users.last_login_at`（仅登录仪式写一次），无法回答「此刻在不在线」。判据取**活的 session WS
+> 连接 + 60s 宽限期**（二态），帧挂已常驻的 `/ws/authority`（不新增连接——连接本身有 DB 价格：升级 5 读 2 写、
+> 全量复核每连接 3 读、**7 个**触发点）。**成本如实记账**：presence 模块自身零 DB，但每帧每订阅者要付 RFC-305
+> 出站 fence 的一次主键点查（`ws/registry.ts:1015-1035`），故 500ms 合并窗口为必需；fence 内存镜像化已交接
+> RFC-311 登记为后续项。权限点 `users:presence` **不进 baseline**、走新建默认授予的显式 grant + 存量 backfill
+> （admin 天然持有不处理；PAT 永不持有）。
+> **设计门已跑三轮**（记录三份在 RFC 目录）：v1 → 15 条、v2 → N1-N7、v3 → R3-1…R3-7 + 10 条实现歧义，
+> 三轮均判不可进入实现。**v4 做了结构性简化**：同步协议由边沿触发改为**电平触发**（任一复核结束后若仍持权即
+> 重发快照，撤权交客户端自清），**净删除** `presence.revoked` / `sendFencedDirect` / revision CAS /
+> `previousActor` / `presenceGranted` 五个机制，并把 I1-I10 写成 §13 实现合同。**第四轮门进行中，待用户批准**。
+> ⚠️ RFC 三件套目前仍是**未追踪**状态（`design/RFC-312-user-online-presence/`），本条链接的目标尚未上主干。
 
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
@@ -40,10 +45,21 @@
 > **46.5 → 1.8ms**、工作组徽章 **10.5 → 0.6ms**（两条覆盖索引，证实"不该合并 9 条 count"的原判断）；
 > G3 归档器最长单语句 **1,190ms → 76ms**。**过程中踩到并修掉一个更严重的**：G3 第一版分窗让整轮
 > 从 6 秒劣化到 260 秒而 6 条单测全绿——判据「单测证明不了没改坏代价」已落 `docs/dev-gotchas.md`。
-> **最新可准入落地**：G4 + T20 维护入口与 T21 `prompt_text/prompt_path` 分档外置、永久双读已进入 `main`；
-> /code work-items nextCursor 已由 RFC-310 PR-10 交付。后续 `7c542729/9ec2a469` 增加 mission keyset/limit 与 admission
-> preview 源码，但当前 tip 的 clean backend typecheck 仍缺 `DevelopmentAutomationModule.drive`，故记为 NOT-CLEAN pending
-> delta，不计 landed；分页也须补 `(created_at,id)` 复合索引/EXPLAIN 与前端分页消费后才能声称最坏 O(page)。剩余证据按
+> **最新落地（2026-08-19 收口）**：G4（备份并发计时断言 + `/repos` facets 短 TTL 缓存）、T20（`opencode-stores`
+> 清理 / freelist 提示 / `db compact` CLI）、T21（node_run prompt 按 4 KiB 阈值外置 + **永久双读**，旧行不回填）、
+> `/api/code/missions` keyset 分页（双形状，无参保持旧 `{items}`）均已进入 `main`，**exact-SHA CI `9797093d` /
+> `46244ffd` 各 31/31 全绿**。此前本段记的两条已失效，就地更正：①「NOT-CLEAN pending delta——缺
+> `DevelopmentAutomationModule.drive`」已由 `e9b8aa76` 修复；该红的成因是 `7c542729` 按仓规把并发 session 在制的
+> 路由整份提上主干，而它引用的定义留在对方**未提交 / 未追踪**文件里（同形态另一处 `previewMissionAdmission` 由
+> `9ec2a469` 修），判据已从「人眼扫新增引用」升级为 commit-tree + 分离 worktree 一轮问干净，落
+> `docs/dev-gotchas.md`；②「/code work-items nextCursor 已由 RFC-310 PR-10 交付」**不成立**——后端一直返回
+> `nextCursor`，前端 `routes/code.tsx` 的 `ActivityPanel` 取到即丢弃，至今未接。
+> **两项未完成，均带解除条件**（详见 RFC-311 `plan.md` §未完成项，不是「以后再说」）：①`/code` 与 mission 列表的
+> **前端**翻页——`code.tsx` / `code.missions.tsx` 正被 RFC-310 session 重写且改后版本引用未追踪文件，混提必然
+> 第三次打红主干，解除条件是这两个文件 `git status` 干净；②`development_missions` 缺 `(created_at, id)` 复合索引
+> ——绑定参数 EXPLAIN 实测 `USE TEMP B-TREE FOR LAST TERM OF ORDER BY`，常态仍 O(页)、**最坏退化成全排序**，
+> 故「最坏 O(page)」暂不能声称；加索引要动 `_journal.json`，而树上有未追踪的 `0186`，此刻提 journal 会让 daemon
+> 直接起不来（该风险分档已落 `docs/dev-gotchas.md`），解除条件是对方 `0186` 落主干后追 `0187`。剩余证据按
 > RFC-311 自身 plan 收口，不把它们误记成 RFC-294 的 wave exit。
 >
 > ✅ **已完成 RFC（Done，2026-08-19）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
