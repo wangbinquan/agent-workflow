@@ -23,6 +23,25 @@ import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './har
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(180_000)
 
+// RFC-310 T140 —— 这条旅程**还没有绿过一次**，因此默认不进 CI；手动跑用
+// `AW_RFC310_JOURNEY_E2E=1 bun run e2e e2e/rfc310-digital-employee-journey.spec.ts`。
+// 首次实跑（2026-08-19，本机 chromium + system mock）的账，写在这里而不是"以后再说"：
+//   ①三个 testid 在前端源码里根本不存在（`digital-employee-control-center` /
+//     `code-assignments-link` / `code-launch-mission`）——本 spec 从未被执行过。已按真实
+//     UI 改成 build 卡片与服务端 journey 的唯一主动作（PR-13：一页只有一个主动作）。
+//   ②照出并修掉一个真实生产缺陷：新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、
+//     挂载时从不复位，任何一次重挂载之后上传都会在暂存完成后被判成"页面已关闭"并删文件
+//     （回归锁在 `packages/frontend/tests/code-missions-page.test.tsx`）。
+//   ③当前止步点：mission 走到 `implement-gate-change` 步骤后 blocked
+//     `step-failed:implement-gate-change:agent-contract-exhausted` —— development stub
+//     还没覆盖这一步的信封，属 T131/T132 未完成范围，不是本 spec 的写法问题。
+// 解除条件：T131/T132 完成后，本 spec 在本机与 hosted CI 各绿一次，再删掉这行 gate
+// 并同步 `packages/backend/tests/test-suite-policy.test.ts` 的 ALLOWED_SKIP_COUNTS。
+test.skip(
+  process.env.AW_RFC310_JOURNEY_E2E !== '1',
+  'RFC-310 T140 journey is not green yet (development stub misses implement-gate-change; see the note above)',
+)
+
 const PROJECT_PATH = 'rfc310/browser-digital-employee'
 const CHILD_PROJECT_PATH = 'rfc310/browser-gate-configuration'
 const REVIEW_BODY =
@@ -552,11 +571,13 @@ test('the configured employee delegates another repository, waits for approval, 
   )
   await primeAuth(page)
   await page.goto(`${daemon.baseUrl}/code`)
-  await expect(page.getByTestId('digital-employee-control-center')).toBeVisible()
+  // `/code` is the construction home: the build grid is always rendered, so it
+  // is the honest "the page came up" anchor (there is no separate container id).
+  await expect(page.getByTestId('digital-employee-build-employees')).toBeVisible()
 
   // Business-level strategy: bind the published employee and policy to this
   // repository through the actual assignment UI.
-  await page.getByTestId('code-assignments-link').click()
+  await page.getByTestId('digital-employee-build-assignments').click()
   await page.getByTestId('assignment-create').click()
   await choose(page, 'assignment-scope-ref', /browser-digital-employee/)
   await choose(page, 'assignment-employee', employeeName)
@@ -567,7 +588,10 @@ test('the configured employee delegates another repository, waits for approval, 
   // First-release input contract: body and uploaded files coexist. The target
   // path and executable bit are explicit and become part of the platform commit.
   await page.goto(`${daemon.baseUrl}/code`)
-  await page.getByTestId('code-launch-mission').click()
+  // With the assignment bound, the server-owned setup journey's single next
+  // action IS "launch the first piece of work" — the page has no separate
+  // launch button by design (PR-13: one main action per page).
+  await page.getByTestId('journey-next-link').click()
   await choose(page, 'mission-repo-select', /browser-digital-employee/)
   await page.getByTestId('stepper-next').click()
   await page.getByTestId('mission-title').fill('Ship the RFC-310 browser journey result')

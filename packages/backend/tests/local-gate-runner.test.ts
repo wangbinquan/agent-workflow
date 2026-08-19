@@ -484,6 +484,9 @@ describe('local full-gate plan', () => {
       'run format:check',
       'run depcheck',
       'run test:shared',
+      // RFC-310 PR-11/12/13 收口补齐：CI 的 lint job 一直跑 system mock 用例，本地
+      // 门禁没有，于是一条红的 mock 用例可以全绿地推上主干（实撞一次）。
+      'run test:system-mocks',
       'run test:frontend:gate',
     ])
   })

@@ -339,6 +339,7 @@ export interface SystemMockSnapshot {
     submittedRevision: string
     submittedAt: string
     statuses: Array<'pending' | 'approved' | 'rejected' | 'expired' | 'unavailable'>
+    /** 观察次数计数器（不是 `statuses` 的下标）：越界后返回值 clamp 在最后一个状态，计数继续增长。 */
     observationIndex: number
     lostResponseSent: boolean
     intentDigest: string

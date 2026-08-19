@@ -26,6 +26,10 @@ export const LOCAL_GATE_LANES: LocalGateLane[] = [
       { label: 'format check', args: ['run', 'format:check'] },
       { label: 'dependency rules', args: ['run', 'depcheck'] },
       { label: 'shared tests', args: ['run', 'test:shared'] },
+      // CI 的 lint job 一直在跑 system mock 用例，本地门禁却没有——RFC-310 PR-11/12/13
+      // 那批就是这样把一条红的 mock 用例推上主干、由 CI 才告知（gate 全绿、CI 红一格）。
+      // 这一格约 18s，与其余 quality 命令同一条串行车道。
+      { label: 'system mock tests', args: ['run', 'test:system-mocks'] },
       // Two workers keep the 6,313-test suite bounded beside four isolated
       // backend shards. The ordinary test:frontend command stays unrestricted.
       { label: 'frontend tests', args: ['run', 'test:frontend:gate'] },

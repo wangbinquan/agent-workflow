@@ -735,6 +735,33 @@ packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状
   每类各写一条断言并配**反向锁**（「目标缺失仍是 skipped-\* 且失败水位不动」），否则下一次
   重构很容易把两条并回一条。
 
+## 新写的 e2e spec 不跑一次就等于没写（RFC-310 T140 实测，2026-08-19）
+
+一条 21 个 `getByTestId` 的浏览器旅程 spec 随批次提交、计划里注明「由 hosted CI 收口」。
+提交前真跑一次，**头三个 testid 在前端源码里根本不存在**——写它的人从未执行过它。
+判据便宜到没有理由不做：`grep -o "getByTestId('[^']*')" <spec> | sort -u` 逐个回 grep
+`packages/frontend/src`，注意**动态拼接**的（`data-testid={\`x-${i}\`}`）要按前缀比对，
+否则会把存在的报成缺失。
+
+- **「本机跑不了、CI 会替我跑」通常是错的**：同一棵树上 system mock 套件与编译后 daemon +
+  Playwright 都能起 listener。把「跑不了」写进计划的后果不是延后验证，是**没人再去验证**。
+- **真跑一次的回报是复利**：这次往后走两步就照出一个生产缺陷——`useRef` 当「已卸载」标志位
+  只在 cleanup 置 true、**挂载时不复位**，于是 `<StrictMode>` 的 setup→cleanup→setup（同一实例、
+  ref 不重建）之后，那个页面永久认为自己已经关闭。单测想复现必须**在 `<StrictMode>` 里渲染**：
+  「render → cleanup → render」是新实例、新 ref，写出来是空洞绿（我第一版就是，变异检验当场打脸）。
+- **一条从未绿过的 spec 不该直接进 CI**：默认关（env 开关）+ spec 顶部写清首跑账与解除条件 +
+  把 skip 登记进 `packages/backend/tests/test-suite-policy.test.ts` 的 `ALLOWED_SKIP_COUNTS`，
+  比让主干红着诚实，也比悄悄删掉它诚实。
+
+## `gate:local` 不跑 system mock 用例（2026-08-19 实撞）
+
+`scripts/local-gate.ts` 的 quality 车道原本是 typecheck / lint / format / depcheck /
+shared / frontend，**没有 `test:system-mocks`**，而 CI 的 lint job 一直在跑它。于是
+`packages/system-mocks/tests/*` 里的红用例可以在 `gate:local` 全绿的情况下推上主干，
+CI 红一格才知道。已把它补进 quality 车道（约 18s），车道断言在
+`packages/backend/tests/local-gate-runner.test.ts`。定式：**本地门禁与 CI 的命令集有差集时，
+差集里的东西迟早会以「本地全绿 + CI 红」的形式找上门**——发现一处就补一处，别靠记忆绕过。
+
 ## 删端点 / 删能力时，`e2e/` 不在任何本地门禁的覆盖面内（RFC-271 批次 I 实测）
 
 **2026-08-19 复发 + 现已有可执行守卫（RFC-310 PR-10）**：删掉三条 `/api/code`

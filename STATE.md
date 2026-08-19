@@ -15,6 +15,19 @@
 > `previousActor` / `presenceGranted` 五个机制，并把 I1-I10 写成 §13 实现合同。**第四轮门进行中，待用户批准**。
 > ⚠️ RFC 三件套目前仍是**未追踪**状态（`design/RFC-312-user-online-presence/`），本条链接的目标尚未上主干。
 
+> 📝 **待批 RFC（Draft，2026-08-19）：[RFC-313 信封重试的会话升级](design/RFC-313-envelope-retry-session-escalation/proposal.md)**
+> —— RFC-042 的同会话追问只按上一次 attempt 的形态二选一，重试预算是一条直线烧下去的。于是最典型的场景——agent 每次
+> 正常退出、每次说话、每次不吐信封——**3 次重试全落在同一个越来越长的会话里**，一次干净重启都不会发生，而每次纠错提示
+> 还在加剧根因（上下文到顶 / 模型陷在循环里；两个 driver 都不上报 context-limit，框架无信号可判）。本 RFC 补上缺失的
+> 那一档：同会话接续达 `defaultNodeRetries` 即**升级**（丢树重分叉 + 新 nonce + 全新会话 + 完整 prompt + 按 reason 定制的
+> 简短告知，仿 workgroup errorNotice），升级次数由新增 `sessionRestartBudget` 约束（默认 1）。attempt 硬上限改为
+> `(1+followupBudget)×(1+restartBudget)`，默认 8；**设为 0 时公式退化为 4、逐字等于落地前**，即关闭开关。判定抽成纯函数
+> `decideRetryShape` 进 `FOLLOWUP_POLICY` 所在的共享 policy 家族（RFC-294：task-execution / NodeExecutor，判据单源、状态
+> 留执行器；状态适配仍寄居 `scheduler.ts` 的债显式记账）。零 migration、不新增列 / rerun cause。script / workgroup /
+> intent / dw 四线等价于 `followupBudget=0`，只统一概念常量、**不改其代码**。用户已逐项拍板：双预算 8 次、升级丢弃磁盘
+> 成果、FOLLOWUP_POLICY 全表适用、带重启告知、只写审计事件不新增 cause。**待设计门 + 用户批准后方可进入实现**。
+> ⚠️ RFC 三件套目前仍是**未追踪**状态（`design/RFC-313-envelope-retry-session-escalation/`）。
+
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
 > 审计（全部 findings 见该目录 `audit-2026-08-18.md`）与五 PR 修复计划。用户四项拍板（保守档事件治理/任务归档
@@ -268,6 +281,18 @@
 >   当前受限执行环境起不了 listener，由 hosted exact-SHA CI 收口，不提前登记完成。
 >   本次提交**不含**并行 RFC-312 presence 的任何改动（identity-access / ws / shared 权限点 / 前端
 >   `PresenceDot` 等仍在对方工作树）；i18n 与 styles.css 两个混改文件只提本 RFC 的部分。
+>   **推完之后的两条实测更正（同日收口，见 `docs/dev-gotchas.md` 两条新条目）**：
+>   ①`gate:local` **从不跑 system mock 用例**（CI 的 lint job 跑），于是本批一条红的
+>   `rfc310-approval` 用例（`observationIndex` 是观察次数计数器、不是 statuses 下标）在本地全绿地
+>   推了上去、CI 红一格——已修用例并把 `test:system-mocks` 补进 quality 车道（含车道断言）。
+>   ②计划里「本机受限执行环境起不了 listener」**不成立**：同一棵树上 system mock 与编译后 daemon +
+>   Playwright 都跑得起来。真跑 T140 旅程一次，立刻照出三个**前端根本不存在**的 testid（这条 spec
+>   写完从未被执行过），修正锚点后又照出一个真实生产缺陷——新建 Mission 向导的 `disposedRef` 只在
+>   cleanup 置 true、挂载时不复位，`<StrictMode>` 的 setup→cleanup→setup 之后上传永远被判成
+>   「页面已关闭」并删文件（回归锁用 StrictMode 渲染 + 变异实证；「卸载后重挂载」写法是空洞绿）。
+>   旅程当前止步于 development stub 未覆盖 `implement-gate-change`（T131/T132 范围），故该 spec
+>   进仓但**默认关**（`AW_RFC310_JOURNEY_E2E=1` 手动开，skip 已登记进 `test-suite-policy` 的
+>   `ALLOWED_SKIP_COUNTS`），解除条件写在 spec 顶部与 RFC plan.md。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

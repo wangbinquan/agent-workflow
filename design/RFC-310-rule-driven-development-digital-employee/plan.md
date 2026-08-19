@@ -781,9 +781,36 @@ durable wait；父任务按 all/any/quorum 与明确 deadline 分支继续，不
 | 2. 规则与生命周期 | 成功/失败跳转、producer/handler fallback、join、child、审批、handoff/terminal receipt 从头重放                  | 失败专用步骤会被数组顺序误当独立入口；已结算 producer 会继续 fall-through；旧 Mission DTO 缺 `journey` 时详情白屏 | 只从显式边进入被引用步骤；producer 使用 decision/settled/none 三态；旧 DTO 降级到原位 resume/attach；child/approval/handoff/terminal 用例锁定                                        |
 | 3. 重启与数据     | daemon 重建 composition、审批 pending→approved、不同 revision 调用环、上传 seed、pipeline 大结果、本地 evidence | 审批等待虽落库但缺“重建端口后继续”的直接证明；`A@1 → B@1 → A@2` 可绕过按 revision 比较的递归阻断                  | 用同一 SQLite 重新创建 saga store 后继续观察并保留 ordinal/deadline；动态环按 employee identity 阻断而非 revision；system mock 锁响应丢失幂等 adoption、两仓隔离和大日志本地文件合同 |
 
-当前本地证据：四 workspace typecheck 与全仓 lint 通过；不监听端口的本轮 RFC-310 后端回归 122 项通过
-（含 playbook/saga 10 项），界面定向与棘轮回归 20 文件 110 项通过。需要监听本机端口的 system mock / Playwright 旅程因当前受限
-执行环境不能创建 listener，仍由 T131/T132/T140 的 hosted exact-SHA CI 收口，因此三项维持 `🚧`，不提前登记完成。
+当前本地证据（2026-08-19 提交时复核并**就地更正**上一版记载）：完整 `bun run gate:local` 全绿
+（backend 四分片 + typecheck / lint / format / depcheck / shared / frontend，7m26s，0 fail），
+system mock 用例 33/33 绿。
+
+**更正一：上一版写的「当前受限执行环境不能创建 listener」不成立。** 本机可以起 listener——同一棵树上
+system mock 套件（`rfc310-pr7-mr-facts` 等）与编译后 daemon + Playwright 都真跑起来了。把「跑不了」
+写进计划的直接后果是**没人去跑**，于是下面这些只有真跑才会暴露的东西一路留到了提交前。
+
+**更正二：`gate:local` 从来不跑 system mock 用例**（CI 的 lint job 跑）。本轮据此推上去的
+`rfc310-approval` 有一条红用例（`observationIndex` 期望 2、实际 3——它是**观察次数计数器**不是
+statuses 下标），CI 一格红才发现。已修用例并把 `test:system-mocks` 补进 `scripts/local-gate.ts`
+的 quality 车道（连同 `local-gate-runner` 的车道断言）。
+
+**T140 首次实跑账**（`AW_RFC310_JOURNEY_E2E=1` 手动开，spec 顶部有同一份记录）：
+1. 三个 testid 在前端源码里**根本不存在**（`digital-employee-control-center` /
+   `code-assignments-link` / `code-launch-mission`）⇒ 这条 spec 写完从未被执行过；已按真实 UI
+   改成 build 卡片与服务端 journey 的唯一主动作。
+2. 照出并修掉一个**真实生产缺陷**：新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时
+   从不复位，于是 `<StrictMode>` 的 setup→cleanup→setup（同一实例、ref 不重建）之后，上传永远在
+   暂存完成后被判成「页面已关闭」、文件被删、preflight 报错。回归锁在
+   `packages/frontend/tests/code-missions-page.test.tsx`（StrictMode 渲染 + 变异实证：去掉复位那一行
+   即红；早先那版「卸载后重挂载」写法是**空洞绿**，因为新实例的 ref 本来就是干净的）。
+3. 当前止步点：mission 推进到 `implement-gate-change` 后 blocked
+   `step-failed:implement-gate-change:agent-contract-exhausted`——development stub 还没覆盖这一步的
+   信封，属 T131/T132 未完成范围。
+
+因此 T121/T131/T132/T140 维持 `🚧`；T140 的 spec 已进仓但**默认关**（`AW_RFC310_JOURNEY_E2E=1` 手动开，
+skip 已登记进 `packages/backend/tests/test-suite-policy.test.ts` 的 `ALLOWED_SKIP_COUNTS`），解除条件是
+T131/T132 完成后本机与 hosted CI 各绿一次。把一条从未绿过的 spec 直接放进 CI 只会把主干打红，而
+「hosted CI 会替我跑」不是把它写绿的理由。
 
 ## 14. 风险与停止条件
 

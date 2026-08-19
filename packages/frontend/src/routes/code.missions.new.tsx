@@ -243,13 +243,18 @@ function MissionLaunchPage(): ReactElement {
   useEffect(() => {
     uploadedRef.current = uploaded
   }, [uploaded])
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // 必须在挂载时重置：cleanup 把它置 true 后从不复位，于是任何一次重挂载
+    // （StrictMode 的双调用、路由 search 变化导致的重建）都会让这个页面**永久**
+    // 认为自己已经关闭——之后每次 preflight 都在上传完成后把文件删掉并抛
+    // "mission launch page closed while uploads were staging"，而页面明明还开着。
+    // RFC-310 T140 的浏览器旅程实跑抓到这条。
+    disposedRef.current = false
+    return () => {
       disposedRef.current = true
       if (!launchedRef.current) deleteUploads(uploadedRef.current)
-    },
-    [],
-  )
+    }
+  }, [])
 
   const ensureUploaded = async (): Promise<UploadedDraft[]> => {
     if (uploadDrafts.length === 0) return []

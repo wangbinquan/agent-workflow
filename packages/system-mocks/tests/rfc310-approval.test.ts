@@ -97,8 +97,11 @@ describe('RFC-310 approval system mock', () => {
     expect((await adapter(['--observe-approval', correlationRef])).body?.status).toBe('pending')
     expect((await adapter(['--observe-approval', correlationRef])).body?.status).toBe('approved')
     expect((await adapter(['--observe-approval', correlationRef])).body?.status).toBe('approved')
+    // observationIndex 是**观察次数**计数器，不是 statuses 的下标：三次 observe ⇒ 3。
+    // 被 clamp 的是"这次返回哪个状态"（越界后恒定停在最后一个），计数器照常前进，
+    // observedRevision 因此每次都变——平台据此判断"这是一份新的观察结果"。
     expect((await restartedClient.snapshot()).approvals).toMatchObject([
-      { correlationRef, observationIndex: 2 },
+      { correlationRef, observationIndex: 3 },
     ])
   })
 

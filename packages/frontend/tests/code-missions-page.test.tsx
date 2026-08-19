@@ -7,6 +7,7 @@
 // （提交即冻结——不许漏答，按钮 gating 锁住）。
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { StrictMode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
@@ -225,7 +226,7 @@ function installFetch(overrides: {
   return rec
 }
 
-async function renderMissions(initial: string) {
+async function renderMissions(initial: string, options: { strict?: boolean } = {}) {
   const listPage = await import('../src/routes/code.missions')
   const newPage = await import('../src/routes/code.missions.new')
   const detailPage = await import('../src/routes/code.missions.$id')
@@ -254,14 +255,18 @@ async function renderMissions(initial: string) {
     routeTree: rootRoute.addChildren([newRoute, detailRoute, listRoute, tasksRoute]),
     history: createMemoryHistory({ initialEntries: [initial] }),
   })
-  render(
+  const tree = (
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <RouterProvider router={router as any} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  // `strict` 复现真实入口 `main.tsx` 的 <StrictMode>：effect 会 setup → cleanup →
+  // setup，且**同一个组件实例**（ref 不重建）。用 mount/unmount 两次是复现不了的，
+  // 那会拿到全新的 ref。
+  render(options.strict === true ? <StrictMode>{tree}</StrictMode> : tree)
   return router
 }
 
@@ -399,6 +404,43 @@ describe('/code/missions list', () => {
         },
       })
     })
+  })
+
+  // 回归锁：`disposedRef` 的 cleanup 只置 true、从不在挂载时复位，于是**任何一次
+  // 重挂载**（StrictMode 双调用、路由重建）之后，上传永远在暂存完成后被判为
+  // "页面已关闭"、文件被删、preflight 报 mission launch page closed while uploads
+  // were staging——而页面明明还开着。RFC-310 T140 的浏览器旅程实跑抓到这条；这里
+  // 用「渲染→卸载→再渲染」在单测里复现同一条时序。
+  test('a StrictMode double-mounted launch page still stages uploads instead of declaring itself closed', async () => {
+    const rec = installFetch({ missions: [] })
+    await renderMissions('/code/missions/new', { strict: true })
+    await screen.findByTestId('mission-launch-wizard')
+
+    fireEvent.click(screen.getByTestId('mission-repo-select'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /git\.test/ }))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    fireEvent.change(screen.getByTestId('mission-title'), { target: { value: 'Ship guide' } })
+    fireEvent.change(screen.getByTestId('mission-body'), {
+      target: { value: 'Commit the attached guide and keep its exact bytes.' },
+    })
+    const file = new File(['guide v1'], 'guide.md', { type: 'text/markdown', lastModified: 7 })
+    fireEvent.change(screen.getByTestId('mission-upload-files'), { target: { files: [file] } })
+    fireEvent.change(await screen.findByTestId('mission-upload-target-0'), {
+      target: { value: 'docs/input.md' },
+    })
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    fireEvent.click(screen.getByTestId('stepper-next'))
+    fireEvent.click(screen.getByTestId('mission-preflight'))
+
+    // 预检走完 = 上传被采纳；同时确认没有把刚暂存的文件又删掉。
+    await screen.findByTestId('mission-upload-preview')
+    expect(
+      rec.calls.some(
+        (candidate) =>
+          candidate.method === 'DELETE' &&
+          /\/api\/code\/mission-input-uploads/.test(new URL(candidate.url).pathname),
+      ),
+    ).toBe(false)
   })
 })
 
