@@ -1948,6 +1948,24 @@ CI 上加一次性诊断输出（失败时 dump `git status` 与该节点全部 
 
 **不属于任何进行中 RFC 的连带面**，不应计入其收官判据。
 
+### 2026-08-20 补：**本地复现了**（推翻上面「未复现」那半，给出复现配方）
+
+RFC-313 收官时在**分离 worktree**（`git worktree add --detach` 到自己的 commit，只含被
+追踪内容）里跑 `gate:local`，该用例红在**同一条断言** `:357
+expect(commitRow!.status).toBe('done')` → `failed`，与 2026-08-14 记录的 CI 形态逐字一致。
+
+- **复现条件**：满载。`gate:local` 会把 backend 四个 shard 与 quality 车道（含 5 分钟的
+  frontend 全量）并发跑满机器；同一文件**单独跑 3/3 稳定绿**。所以它不是「随机」，是
+  **负载相关**——这条足以让下一个接手的人不必再从「间歇/随机」这个错误起点出发。
+- **归属可排除**：本次提交（RFC-313）改的是 agent 线的重试预算与形状判定，而
+  ①该用例零失败注入、任务以 `done` 收场 ⇒ `shouldRetry` 结构上不触发；②commit 会话由
+  `maybeRunCommitPush` 直接铸行、**不经 attempt 循环**、不读任何重试预算。两条都不可达
+  ⇒ 与上面「纯 markdown 提交也红」互为佐证：该失败与代码改动无关。
+- **对上面「待验证方向 1」的直接推进**：既然是负载相关，「n1 被 spawn 两次」更像是超时后
+  的重派而非会话重试。下一步建议按 §处置原则 里那条一次性诊断做——失败时 dump `git
+  status` 与该节点全部 node_run 行（含 `rerun_cause`），一次就能在方向 1 与方向 2
+  （缺同步点）之间分出胜负。
+
 ## `worktree-submodule-init` 的 `beforeEach` 会超时（2026-08-14 登记，非本轮改动引入）
 
 **现象**：`RUN_GIT_NETWORK=1` 且与另外 3 个网络门控套件**同进程**跑时，
