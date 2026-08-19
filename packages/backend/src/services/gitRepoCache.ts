@@ -521,6 +521,8 @@ export async function ensureCachedRepoIdentity(
     }
     const id = ulid()
     const box = deps.secretBox
+    // 新增仓会改 all / unused facet ⇒ 让缓存立刻失效。
+    invalidateRepoFacetsCache()
     deps.db
       .insert(cachedRepos)
       .values({
@@ -954,6 +956,8 @@ export async function resolveCachedRepo(
         .values({ id, createdAt: ts, ...rowValues })
         .run()
     }
+    // 克隆落库(新增或补全身份行)同样会动 facets。
+    invalidateRepoFacetsCache()
     // ⚠️ 后续一律用 `rowId` 而不是 `id`。
     //
     // 四轮门抓到的自伤:三轮门为修 UNIQUE 竞态加了「INSERT 前复读并领养」,`UPDATE`
@@ -1208,6 +1212,39 @@ function decodeRepoCursor(raw: string): { lastFetchedAt: number; id: string } {
 
 /** scheduled_tasks 引用面:整表单遍抽取 payload 里提到的镜像 id(与
  *  listCachedRepos 同一 regex 语义)。行数以十计,不参与分页缩放。 */
+/**
+ * RFC-311 G4 —— `/repos` 每页都要付的两笔全量成本的短 TTL 缓存。
+ *
+ * 一笔是 `scheduledReferencedRepoIds`:它**全表扫 scheduled_tasks 并对每行的
+ * launch payload 跑正则**;另一笔是 facets 的三条 count(其中 referenced 对每行
+ * 做两次 EXISTS)。两者都与过滤条件无关、恒为全量视角,却按「每翻一页」重算——
+ * 500 仓下 6.3ms 照不出来,十万仓下滚动哨兵自动翻页会把它放大成每屏一次。
+ *
+ * 语义代价:新增/删除仓、或新增引用某仓的定时任务后,facets 与 referenced 视图
+ * 最多滞后一个 TTL。这是计数 chip 与视图归类,不是事实源,可接受;写路径(刷新/
+ * 删除仓)显式失效,所以本进程自己的写立刻可见。
+ */
+const REPO_FACETS_TTL_MS = 5_000
+interface RepoFacetsCacheEntry {
+  expiresAt: number
+  epoch: number
+  schedIds: Set<string>
+  facets: { all: number; referenced: number; attention: number; unused: number }
+}
+/** 按 **db 实例**键控,不是一个模块级单例:生产只有一个库、两种写法没差别,但测试
+ *  里每个用例各建一个内存库,单例会让上一个库的计数泄漏进下一个库,变成「换个测试
+ *  顺序就飘」的那类坑。WeakMap 顺带免掉生命周期管理。 */
+const repoFacetsCache = new WeakMap<object, RepoFacetsCacheEntry>()
+
+/** 写路径调用:让下一次读立刻重算(本进程内的写不该被自己的缓存挡住)。
+ *  不传 db 时清空当前进程已知的那一份(测试用)。 */
+export function invalidateRepoFacetsCache(db?: DbClient): void {
+  if (db !== undefined) repoFacetsCache.delete(db as unknown as object)
+  else repoFacetsCacheEpoch += 1
+}
+/** 无参失效用的世代号:WeakMap 无法枚举,用世代号让所有既有条目一次性作废。 */
+let repoFacetsCacheEpoch = 0
+
 function scheduledReferencedRepoIds(db: DbClient): Set<string> {
   const ids = new Set<string>()
   const refPattern = /"cachedRepoId":"([^"\\]+)"/g
@@ -1251,7 +1288,13 @@ export async function listCachedReposPage(
   options: CachedRepoPageOptions = {},
 ): Promise<CachedRepoPage> {
   const limit = Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT))
-  const schedIds = scheduledReferencedRepoIds(db)
+  const cacheKey = db as unknown as object
+  const entry = repoFacetsCache.get(cacheKey)
+  const cachedFacets =
+    entry !== undefined && entry.expiresAt > Date.now() && entry.epoch === repoFacetsCacheEpoch
+      ? entry
+      : null
+  const schedIds = cachedFacets?.schedIds ?? scheduledReferencedRepoIds(db)
 
   const conds: ReturnType<typeof sql>[] = []
   const q = options.q?.trim() ?? ''
@@ -1360,13 +1403,25 @@ export async function listCachedReposPage(
       .all()
     return r[0]?.count ?? 0
   }
-  const all = countWhere()
-  const referenced = countWhere(referencedCondition(schedIds))
-  const facets = {
-    all,
-    referenced,
-    attention: countWhere(attentionCondition),
-    unused: all - referenced,
+  const facets =
+    cachedFacets?.facets ??
+    (() => {
+      const all = countWhere()
+      const referenced = countWhere(referencedCondition(schedIds))
+      return {
+        all,
+        referenced,
+        attention: countWhere(attentionCondition),
+        unused: all - referenced,
+      }
+    })()
+  if (cachedFacets === null) {
+    repoFacetsCache.set(cacheKey, {
+      expiresAt: Date.now() + REPO_FACETS_TTL_MS,
+      epoch: repoFacetsCacheEpoch,
+      schedIds,
+      facets,
+    })
   }
 
   return {
@@ -1403,6 +1458,8 @@ export async function refreshCachedRepo(
   id: string,
   opts?: { touchRecency?: boolean },
 ): Promise<RefreshCachedRepoResult> {
+  // 刷新会动 last_fetched_at / submodule 同步态 ⇒ attention facet 可能翻转。
+  invalidateRepoFacetsCache()
   const rows = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()
   const row = rows[0]
   if (!row) {
@@ -1563,6 +1620,7 @@ export async function deleteCachedRepo(
   id: string,
   options: DeleteCachedRepoOptions = {},
 ): Promise<{ deletedLocalPath: string }> {
+  invalidateRepoFacetsCache()
   const rows = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()
   const row = rows[0]
   if (!row) {

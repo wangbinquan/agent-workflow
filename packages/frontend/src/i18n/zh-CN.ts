@@ -1981,6 +1981,8 @@ export interface Resources {
       gcRetentionTitle: string
       gcRetentionHint: string
       taskArchiveTitle: string
+      diskReclaimTitle: string
+      diskReclaimHint: string
       taskArchiveHint: string
       gcWebhooksTitle: string
       gcWebhooksHint: string
@@ -2024,6 +2026,14 @@ export interface Resources {
     backupTitle: string
     backupHint: string
     backupCreate: string
+    diskRetiredStores: string
+    diskNothingToReclaim: string
+    diskFreelist: string
+    diskCompactHint: string
+    diskCleanup: string
+    diskCleanupConfirmAction: string
+    diskCleanupConfirmTitle: string
+    diskCleanupConfirmBody: string
     taskArchiveRunNow: string
     taskArchiveScanning: string
     taskArchiveNothing: string
@@ -8145,6 +8155,8 @@ export const zhCN: Resources = {
       gcRetentionTitle: '保留期与清理',
       gcRetentionHint: '这些旋钮会真的删文件 / 删行,且守护进程启动即生效。0 一律表示不清理。',
       taskArchiveTitle: '终态任务归档(会让任务从界面消失)',
+      diskReclaimTitle: '可回收空间',
+      diskReclaimHint: '退役目录与数据库内部空洞的盘点;删除不可撤销。',
       taskArchiveHint:
         '把久远的已完成任务整树导出到归档目录并从库中删除,以控制数据库体积。默认关闭。',
       gcWebhooksTitle: 'Webhook 清理',
@@ -8193,6 +8205,15 @@ export const zhCN: Resources = {
     backupHint:
       '将 db.sqlite + config.json + skills/ + workflows YAML 打包为 tarball，存放到 ~/.agent-workflow/backups/。不含 worktrees / runs / logs / token。',
     backupCreate: '创建备份',
+    diskRetiredStores: '退役运行时存储目录',
+    diskNothingToReclaim: '无(目录不存在)',
+    diskFreelist: '数据库内部可回收 {{reclaimable}}(文件总大小 {{total}})',
+    diskCompactHint: '回收数据库内部空间需停机执行:',
+    diskCleanup: '删除退役目录',
+    diskCleanupConfirmAction: '永久删除',
+    diskCleanupConfirmTitle: '删除退役运行时存储?',
+    diskCleanupConfirmBody:
+      '将永久删除 {{path}}({{size}})。它是运行时加固退役后遗留的死数据,平台已无任何代码读写它;删除不可撤销。',
     taskArchiveRunNow: '立即归档…',
     taskArchiveScanning: '扫描中…',
     taskArchiveNothing: '没有可归档的任务树(保留期 {{days}} 天以内的都保留)。',

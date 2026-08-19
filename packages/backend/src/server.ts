@@ -49,6 +49,7 @@ import { mountFusionRoutes } from '@/routes/fusions'
 import { mountIntentSessionRoutes } from '@/routes/intentSessions'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
+import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
@@ -348,6 +349,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
   mountTaskRoutes(app, deps)
   mountTaskArchiveRoutes(app, deps) // RFC-311 T19
+  mountMaintenanceDiskRoutes(app, deps) // RFC-311 T20
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
   mountCodeHostRoutes(app, deps) // RFC-269

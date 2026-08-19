@@ -578,6 +578,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   // by default; `dryRun:false` exports then DELETES, so it is not exercised
   // with a happy-path body here.
   { method: 'POST', path: '/api/tasks/archive' },
+  // RFC-311 T20 — settings:write disk maintenance. The cleanup POST deletes a
+  // directory, so it is registered without a happy-path body.
+  { method: 'GET', path: '/api/maintenance/disk' },
+  { method: 'POST', path: '/api/maintenance/disk/cleanup' },
   // RFC-222 — admin-only hard delete (tasks:delete + type-to-confirm body).
   { method: 'DELETE', path: '/api/tasks/:id' },
   { method: 'POST', path: '/api/tasks/:id/cancel' },

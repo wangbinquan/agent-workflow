@@ -1152,6 +1152,7 @@ export function GcTab({ config }: TabProps) {
         </div>
       </SettingsCard>
       {canRunBackup && <BackupCard canRun={canRunBackup} />}
+      <DiskReclaimCard />
     </SectionForm>
   )
 }
@@ -1268,6 +1269,95 @@ interface RestoreFailedInfo {
   dir: string
   failedAt: number | null
   error: string | null
+}
+
+interface DiskReclaimReport {
+  items: Array<{ id: string; path: string; exists: boolean; bytes: number; entries: number }>
+  dbFreelistBytes: number
+  dbFileBytes: number
+}
+
+/**
+ * RFC-311 T20 —— 可回收空间。两笔:
+ *   - `opencode-stores/`:RFC-276 退役留下的**零引用死数据**(审计在本机量到 2.9GB),
+ *     没有任何东西会清理它,只能人工确认后删;
+ *   - DB 内部空洞(`freelist_count × page_size`):归档/保留期清理删掉的页留在文件里,
+ *     只有 VACUUM 能还给文件系统——而 VACUUM 持写锁重写整库,几 GB 上是分钟级,
+ *     所以这里**只报告不提供一键**,回收走 `agent-workflow db compact`(停机执行)。
+ */
+function DiskReclaimCard() {
+  const { t } = useTranslation()
+  const canRun = usePermission('settings:write')
+  const qc = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const report = useQuery<DiskReclaimReport>({
+    queryKey: ['maintenance-disk'],
+    queryFn: ({ signal }) => api.get('/api/maintenance/disk', undefined, signal),
+    enabled: canRun,
+    retry: false,
+  })
+  if (!canRun) return null
+  // 防御式取值:载荷缺失/形状不对时这张卡片只该显示「无可回收」,而不是让
+  // `undefined.find` 把整个设置页炸成 error boundary(同一形态的事故今天在
+  // /code/assignments 上真实发生过)。
+  const stores = report.data?.items?.find((i) => i.id === 'retired-runtime-stores')
+
+  const confirmCleanup = async () => {
+    await api.post('/api/maintenance/disk/cleanup', {})
+    await qc.invalidateQueries({ queryKey: ['maintenance-disk'] })
+    setConfirming(false)
+  }
+
+  return (
+    <SettingsCard
+      title={t('settings.cardGroups.diskReclaimTitle')}
+      hint={t('settings.cardGroups.diskReclaimHint')}
+    >
+      {report.error !== null && report.error !== undefined && <ErrorBanner error={report.error} />}
+      <p className="settings-hint settings-hint--tight">
+        {t('settings.diskRetiredStores')}
+        {': '}
+        {stores === undefined || !stores.exists
+          ? t('settings.diskNothingToReclaim')
+          : `${formatMb(stores.bytes)} · ${stores.path}`}
+      </p>
+      <p className="settings-hint settings-hint--tight">
+        {t('settings.diskFreelist', {
+          reclaimable: formatMb(report.data?.dbFreelistBytes ?? 0),
+          total: formatMb(report.data?.dbFileBytes ?? 0),
+        })}
+      </p>
+      <p className="muted settings-hint settings-hint--tight">
+        {t('settings.diskCompactHint')} <code>agent-workflow db compact</code>
+      </p>
+      <button
+        type="button"
+        className="btn btn--sm btn--danger"
+        ref={triggerRef}
+        disabled={stores === undefined || !stores.exists}
+        onClick={() => setConfirming(true)}
+        data-testid="disk-cleanup-open"
+      >
+        {t('settings.diskCleanup')}
+      </button>
+      <ConfirmDialog
+        open={confirming}
+        title={t('settings.diskCleanupConfirmTitle')}
+        description={t('settings.diskCleanupConfirmBody', {
+          size: formatMb(stores?.bytes ?? 0),
+          path: stores?.path ?? '',
+        })}
+        // 确认钮与触发钮**不能同名**:同一棵树里两个「删除退役目录」既让用户分不清
+        // 自己点的是哪一个,也让按 role+name 找元素的测试直接歧义。
+        confirmLabel={t('settings.diskCleanupConfirmAction')}
+        tone="danger"
+        onConfirm={confirmCleanup}
+        onClose={() => setConfirming(false)}
+        triggerRef={triggerRef}
+      />
+    </SettingsCard>
+  )
 }
 
 function formatMb(bytes: number): string {

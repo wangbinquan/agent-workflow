@@ -14,6 +14,7 @@ import { runGitCredentialSubcommand } from './services/gitCredential'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
+import { dbCompactCommand } from './cli/dbCompact'
 import { doctorCommand, formatDoctor } from './cli/doctor'
 import { migrateCommand } from './cli/migrate'
 import { migrationReportCommand } from './cli/migrationReport'
@@ -96,6 +97,19 @@ async function main(): Promise<void> {
       const result = await doctorCommand()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
+      break
+    }
+
+    // RFC-311 T20 —— 停机回收 DB 内部空洞。只提供 CLI:VACUUM 持写锁重写整库,
+    // 几 GB 上是分钟级,跑在 daemon 的单条同步连接上等于全站冻结那么久。
+    case 'db': {
+      if (Bun.argv[3] !== 'compact') {
+        console.error('usage: agent-workflow db compact')
+        process.exit(2)
+      }
+      const result = dbCompactCommand()
+      process.stdout.write(result.output)
+      if (result.status !== 'ok') process.exit(1)
       break
     }
 
@@ -201,6 +215,9 @@ async function main(): Promise<void> {
         '  config set <key> <value>          update a config field; value is parsed as JSON if possible',
       )
       console.log('  migrate                           apply pending DB migrations')
+      console.log(
+        '  db compact                        reclaim free pages (VACUUM; daemon must be stopped)',
+      )
       console.log(
         '  migration-report [--json]         RFC-310 legacy asset migration analysis (read-only)',
       )

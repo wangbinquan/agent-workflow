@@ -1928,6 +1928,9 @@ export const enUS: Resources = {
       gcRetentionHint:
         'These knobs really delete files/rows and take effect as soon as the daemon starts. 0 always means never clean up.',
       taskArchiveTitle: 'Settled-task archive (removes tasks from the UI)',
+      diskReclaimTitle: 'Reclaimable space',
+      diskReclaimHint:
+        'Retired directories and free pages inside the database. Deletion cannot be undone.',
       taskArchiveHint:
         'Export long-settled task trees to the archive directory and delete them from the database to bound its size. Off by default.',
       gcWebhooksTitle: 'Webhook cleanup',
@@ -1976,6 +1979,15 @@ export const enUS: Resources = {
     backupHint:
       'Bundles db.sqlite + config.json + skills/ + workflows YAML into a tarball under ~/.agent-workflow/backups/. Excludes worktrees, runs, logs, token.',
     backupCreate: 'Create backup',
+    diskRetiredStores: 'Retired runtime store directory',
+    diskNothingToReclaim: 'none (directory absent)',
+    diskFreelist: 'Reclaimable inside the database: {{reclaimable}} (file total {{total}})',
+    diskCompactHint: 'Reclaiming space inside the database needs the daemon stopped:',
+    diskCleanup: 'Delete retired directory',
+    diskCleanupConfirmAction: 'Delete permanently',
+    diskCleanupConfirmTitle: 'Delete the retired runtime store?',
+    diskCleanupConfirmBody:
+      'This permanently deletes {{path}} ({{size}}). It is dead data left behind by the runtime-hardening retirement — no platform code reads or writes it any more. This cannot be undone.',
     taskArchiveRunNow: 'Archive now…',
     taskArchiveScanning: 'Scanning…',
     taskArchiveNothing: 'No task tree is old enough to archive (retention: {{days}} days).',

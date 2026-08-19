@@ -87,6 +87,17 @@ function install(opts: { permissions: string[]; treeCount: number; taskCount: nu
       }
       // BackupCard(GcTab 内嵌)解构 data.failed[0]。
       if (s.includes('/api/restore/pending')) return json({ pending: null, failed: [] })
+      // DiskReclaimCard(同在 GcTab)——给它真实形状,否则这条测试测的是
+      // 「兜底路径」而不是产品路径。
+      if (s.includes('/api/maintenance/disk')) {
+        return json({
+          items: [
+            { id: 'retired-runtime-stores', path: '/home/.agent-workflow/opencode-stores', exists: false, bytes: 0, entries: 0 },
+          ],
+          dbFreelistBytes: 0,
+          dbFileBytes: 1024,
+        })
+      }
       return json({})
     },
   )

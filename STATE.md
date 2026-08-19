@@ -4,7 +4,9 @@
 
 > 📝 **待批 RFC（Draft，2026-08-19）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
 > —— 现状只有 `users.last_login_at`（仅登录仪式写一次），无法回答「此刻在不在线」。判据取**活的 session WS 连接
-> + 60s 宽限期**（二态），零 DB、零 REST 端点、无人在宽限期时零定时器，与 RFC-311「常驻负载归零」同向。新增权限点
+> + 60s 宽限期**（二态）。**对 DB 净影响为零**：presence 自身零读写、零 REST 端点、宽限期空时零定时器，且
+> **不新开 WS 通道**（帧挂已常驻的 `/ws/authority`，每标签页连接数不变——连接本身有 DB 价格：升级 5 读 2 写、
+> 全量复核每连接 3 读）；另顺手修升级路径重复查询（5 读 2 写 → 3 读 1 写，对所有 WS 连接生效）。新增权限点
 > `users:presence`（默认全员、guest 无、PAT 永不持有）。后台落在 `modules/identity-access/` 分层内；前端新增公共
 > 原语 `PresenceDot`，接线 /users、署名 chip、任务成员面板、工作组花名册（人类成员）四处。**三件套已落档，待用户批准**。
 

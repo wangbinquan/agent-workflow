@@ -18,7 +18,11 @@ import { ulid } from 'ulid'
 import type { CachedRepo } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, scheduledTasks, taskRepos, tasks, users, workflows } from '../src/db/schema'
-import { listCachedRepos, listCachedReposPage } from '../src/services/gitRepoCache'
+import {
+  invalidateRepoFacetsCache,
+  listCachedRepos,
+  listCachedReposPage,
+} from '../src/services/gitRepoCache'
 import { createApp } from '../src/server'
 import { ValidationError } from '../src/util/errors'
 
@@ -456,5 +460,33 @@ describe('RFC-311 T28 — /api/cached-repos C7 双形状', () => {
     expect((await get('/api/cached-repos?limit=0')).status).toBe(422)
     expect((await get('/api/cached-repos?limit=999')).status).toBe(422)
     expect((await get('/api/cached-repos?cursor=broken')).status).toBe(422)
+  })
+
+  // RFC-311 G4 —— facets 与 scheduled 引用集是**每页都要付的全量成本**(前者三条
+  // count、其中 referenced 每行两次 EXISTS;后者全表扫 scheduled_tasks 并对 JSON
+  // 跑正则),而两者都与过滤无关、恒为全量视角。加了短 TTL 缓存后,这条锁两件事:
+  // ①TTL 内确实走缓存(否则加了等于没加);②写路径显式失效,本进程自己的写不会被
+  // 自己的缓存挡住(否则用户删了仓、计数还挂着旧值,像"没删掉")。
+  test('facets are served from a short-TTL cache that write paths invalidate', async () => {
+    const first = (await (await get('/api/cached-repos?limit=1')).json()) as {
+      facets: { all: number }
+    }
+    expect(first.facets.all).toBe(12)
+
+    // 绕过写路径(不触发失效)直接插一行:TTL 内应仍看到旧计数。
+    db.run(
+      sql.raw(`INSERT INTO cached_repos (id, url_hash, url_redacted, local_path, last_fetched_at, created_at)
+               VALUES ('r99', 'hash-r99', 'git@github.com:acme/late.git', '/repos/late', ${T0}, ${T0})`),
+    )
+    const cached = (await (await get('/api/cached-repos?limit=1')).json()) as {
+      facets: { all: number }
+    }
+    expect(cached.facets.all, 'TTL 内应命中缓存').toBe(12)
+
+    invalidateRepoFacetsCache()
+    const fresh = (await (await get('/api/cached-repos?limit=1')).json()) as {
+      facets: { all: number }
+    }
+    expect(fresh.facets.all, '失效后必须重算').toBe(13)
   })
 })
