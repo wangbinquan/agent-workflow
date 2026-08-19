@@ -2,18 +2,15 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 📝 **待批 RFC（Draft v4，2026-08-19）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
-> —— 现状只有 `users.last_login_at`（仅登录仪式写一次），无法回答「此刻在不在线」。判据取**活的 session WS
-> 连接 + 60s 宽限期**（二态），帧挂已常驻的 `/ws/authority`（不新增连接——连接本身有 DB 价格：升级 5 读 2 写、
-> 全量复核每连接 3 读、**7 个**触发点）。**成本如实记账**：presence 模块自身零 DB，但每帧每订阅者要付 RFC-305
-> 出站 fence 的一次主键点查（`ws/registry.ts:1015-1035`），故 500ms 合并窗口为必需；fence 内存镜像化已交接
-> RFC-311 登记为后续项。权限点 `users:presence` **不进 baseline**、走新建默认授予的显式 grant + 存量 backfill
-> （admin 天然持有不处理；PAT 永不持有）。
-> **设计门已跑三轮**（记录三份在 RFC 目录）：v1 → 15 条、v2 → N1-N7、v3 → R3-1…R3-7 + 10 条实现歧义，
-> 三轮均判不可进入实现。**v4 做了结构性简化**：同步协议由边沿触发改为**电平触发**（任一复核结束后若仍持权即
-> 重发快照，撤权交客户端自清），**净删除** `presence.revoked` / `sendFencedDirect` / revision CAS /
-> `previousActor` / `presenceGranted` 五个机制，并把 I1-I10 写成 §13 实现合同。**第四轮门进行中，待用户批准**。
-> ⚠️ RFC 三件套目前仍是**未追踪**状态（`design/RFC-312-user-online-presence/`），本条链接的目标尚未上主干。
+> 🚧 **进行中 RFC：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
+> —— **核心已落地并推送**（`bb2beece`，50 文件 / 37 条新测试 / `gate:local` 全绿）+ 迁移 `0188` 补存量
+> user/manager 的 `users:presence` grant。判据是**活的 session WS 连接 + 60s 宽限期**（二态），
+> 走**独立 `/ws/presence` 通道**（整连接级权限门 + `rerunUpgradeGate`，无 frameGate）——权限被收回时
+> 既有复核直接关连接、客户端重连即可，**不需要任何服务端重同步协议**。权限点不进静态 preset
+> （RFC-305 无 deny 集，进了就永远收不回来），走建号默认授予的显式 grant；admin 由动态全量 baseline 天然持有。
+> **设计门跑了七轮、约 59 条 finding 且不收敛**，按用户拍板砍回核心 + 五条有源码实证的护栏；
+> 被砍条目逐条记在 RFC 目录 `plan.md §4.3`（**是裁决不是遗漏**），七份门记录同目录留档。
+> **剩余**：三处界面接线（任务成员面板只读分支 / `UserPicker` 可管理分支 / 花名册人类成员行）、实现门。
 
 > 📝 **待批 RFC（Draft，2026-08-19）：[RFC-313 信封重试的会话升级](design/RFC-313-envelope-retry-session-escalation/proposal.md)**
 > —— RFC-042 的同会话追问只按上一次 attempt 的形态二选一，重试预算是一条直线烧下去的。于是最典型的场景——agent 每次
@@ -26,7 +23,6 @@
 > 留执行器；状态适配仍寄居 `scheduler.ts` 的债显式记账）。零 migration、不新增列 / rerun cause。script / workgroup /
 > intent / dw 四线等价于 `followupBudget=0`，只统一概念常量、**不改其代码**。用户已逐项拍板：双预算 8 次、升级丢弃磁盘
 > 成果、FOLLOWUP_POLICY 全表适用、带重启告知、只写审计事件不新增 cause。**待设计门 + 用户批准后方可进入实现**。
-> ⚠️ RFC 三件套目前仍是**未追踪**状态（`design/RFC-313-envelope-retry-session-escalation/`）。
 
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
