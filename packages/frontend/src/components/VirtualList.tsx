@@ -129,6 +129,13 @@ export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
       style={{
         ...(props.height !== undefined ? { height: props.height } : {}),
         overflowY: 'auto',
+        // 滚动条槽位常驻:窗口化列表的总高度是**测量出来的**（estimateSize 先给
+        // 一个估计值，行测量完再修正），于是「这一刻要不要滚动条」在渲染早期是
+        // 不稳定的。经典滚动条（Linux/Windows）一出现就吃掉 ~15px 宽度，行内容
+        // 随之整体左移——用户看到的是筛选/加载时列宽跳动，CI 上看到的是 /repos
+        // 视觉基线间歇性红（macOS 的 overlay 滚动条不占位，所以本地永远复现不了）。
+        // gutter 常驻让布局与滚动条出现与否无关。
+        scrollbarGutter: 'stable',
         position: 'relative',
       }}
     >

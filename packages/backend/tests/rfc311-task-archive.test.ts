@@ -417,6 +417,28 @@ describe('RFC-311 T19 — 手动批量归档入口与审计行', () => {
     expect((await auditRows(db))[0]!.retentionDays).toBe(90)
   })
 
+  test('载荷不合法时 422 task-archive-invalid,而不是拿默认值蒙混执行', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))
+    const app = appWith(db, home)
+    await seedBase(db)
+    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
+
+    // 天数不是整数 / 棵数越界 / dryRun 不是布尔——三种都必须拒绝:这条路径的
+    // 「宽容解析」等于拿一个没人要求过的参数去做不可逆删除。
+    for (const bad of [
+      { retentionDays: 1.5, dryRun: false },
+      { retentionDays: 90, maxTrees: 0, dryRun: false },
+      { retentionDays: 90, dryRun: 'yes' },
+    ]) {
+      const res = await post(app, bad)
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as { code: string }).code).toBe('task-archive-invalid')
+    }
+    expect(await taskCount(db)).toBe(1)
+    expect(await auditRows(db)).toHaveLength(0)
+  })
+
   test('配置成 0(=不归档)时手动入口拒绝执行,而不是把 0 天当成「全归档」', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-manual-'))

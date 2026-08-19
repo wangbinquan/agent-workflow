@@ -4,6 +4,9 @@
 
 ## 测试 / CI
 
+- **本地门禁对「本批新增的文件」可能整批假绿——用 `git ls-files` 枚举源码的守卫看不见 untracked 文件**（2026-08-19 实测，RFC-311 T19）：`tests/route-error-code-coverage.test.ts` 这类守卫先 `git ls-files -- 'src/routes/*.ts'` 再扫描，而**未跟踪的新文件不在输出里**。我连跑三轮 `gate:local` 全绿，`git commit` 之后 CI 立刻红在「新错误码没有测试点名」——同一台机器、同一份代码，差别只是文件从 untracked 变成 tracked。同类枚举式守卫（端点↔契约注册表、卡片计数、AST ratchet…）都吃这一口。
+  - 定式：**新增文件的批次，跑门禁前先 `git add -N <新文件>`**（intent-to-add，只登记路径不入暂存内容），让所有 `git ls-files` 类扫描立刻看见它们；批次全绿再正常 `git add` 提交。
+  - 判据：本地绿、推上去红，且红的那条守卫「按文件枚举」——先查它怎么列文件，而不是先怀疑环境差异。
 - **分离 worktree 里用 `ln -s` 借 node_modules，会让「跨包解析」类的用例假红（2026-08-17 实测）**：
   为了绕开他人在共享树上的在途改动，我 `git worktree add` 了一份只含自己改动的树，node_modules
   用软链指回主树。3/4 分片绿，第 4 片红在 `rfc199-…-ratchet`：它用 TS compiler program 找语义
@@ -800,6 +803,7 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。
 - **视觉基线刷新前先 `build:binary -- --include-e2e`**——**少了这个 flag 就白刷**：e2e harness 跑的是 `dist/agent-workflow-e2e-*`（`e2e/harness.ts:defaultBinaryPath`），而裸 `build:binary` 只产 `dist/agent-workflow-<platform>`。拿旧 e2e 二进制刷出来的是**旧页面**的图，且测试还会「通过」；判据是「删掉 png 重生成后与旧图字节完全相同」（RFC-248 实测踩到）。旧 dist 同样刷出「通过但错误」的图；`-g` 只刷单 scene；linux 基线取 CI artifact 不本地生成；`--update-snapshots` 对已存在 png 静默 no-op，必变 scene 先 `rm`。settings.png 只截默认(runtime) tab——子 tab 内改动无需刷基线。
+- **窗口化列表必须常驻 `scrollbar-gutter: stable`，否则 Linux 视觉基线会间歇性红、用户会看到列宽跳动**（2026-08-19 实测，RFC-311）：虚拟列表的总高度是**测量出来的**（`estimateSize` 先给估计值、行测量完再修正），所以「这一刻要不要滚动条」在渲染早期不稳定。经典滚动条（Linux/Windows）一出现就吃掉 ~15px，容器内所有行整体左移；`/repos` 视觉基线因此在同一份代码上红-绿-红交替，差异图表现为**滚动容器外的表头不动、容器内的行内容整体偏移**（这是判据）。**macOS 是 overlay 滚动条、不占布局**，所以本地视觉套件恒绿、永远复现不了——只有 Linux CI 会红。修法是给滚动容器加 `scrollbar-gutter: stable`（`components/VirtualList.tsx` 现行形态，`virtual-list.test.tsx` 锁定），让布局与滚动条出现与否无关；改完 linux 基线要按既有规矩从 CI artifact 取新图。
 - **LAN http = 非安全上下文**：`crypto.subtle`/`navigator.clipboard`/`randomUUID` 皆 `undefined`；「保存卡死/复制无效」先敲 `window.isSecureContext`（防线 `lib/sha256.ts`+`lib/clipboard.ts`+守卫）。
 - **改 `tasks.status.*` 文案的两把暗锁**：zh 域禁「等待人工」子串（`node-run-duration-no-manual-marker` 守卫按 `JSON.stringify(tasks)` 子串扫）；en `awaiting_human` 被 `e2e/task-lifecycle-states.spec.ts` 锁死 `'Awaiting input'`。
 - **`.tabs--segment` 换行兜底只在 `.auth-page` 域**；RFC-219 picker 分类条须横向滚动+箭头（全局化曾双层红）。

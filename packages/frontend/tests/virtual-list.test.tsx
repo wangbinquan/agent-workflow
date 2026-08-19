@@ -107,6 +107,16 @@ describe('VirtualList', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
   })
 
+  test('滚动容器常驻滚动条槽位——布局不随「这一刻有没有滚动条」跳动', async () => {
+    // 回归锁:窗口化列表的总高度是测量出来的,渲染早期「要不要滚动条」不稳定。
+    // 经典滚动条(Linux/Windows)一出现就吃掉 ~15px,行内容整体左移——用户看到
+    // 列宽跳动,CI 上表现为 /repos 视觉基线间歇性红(2026-08-19 实测:同一提交
+    // 红-绿-红交替,且 macOS overlay 滚动条不占位所以本地永远复现不了)。
+    renderList(50)
+    await screen.findByTestId('row-it-0')
+    expect(screen.getByTestId('vl').style.scrollbarGutter).toBe('stable')
+  })
+
   test('the sentinel also fires when the content is too short to scroll', async () => {
     // 实现门 P2-8:视口比首页高、或过滤后只剩几行但仍有 nextCursor 时,onScroll
     // 永远不会触发——不带兜底按钮的调用方会静默无法翻页。
