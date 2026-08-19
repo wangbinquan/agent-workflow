@@ -335,6 +335,8 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
   - **`gate:local` 跑在工作树上，因此会看见未追踪文件；CI 看不见——两者不一致本身就是个坑**。我留在树上的临时探针 `packages/backend/probe-mission-plan.ts` 会让门禁在 format 上红而 CI 一路全绿（症状离原因很远，容易误判成自己刚改的东西）。
     **处置不是「记得 rm」，是换跑法**：过门禁一律在上文那个 `commit-tree` 物化出的分离 worktree 里跑。那棵树是从 **git 对象**建出来的，**结构上只含被追踪内容**——别人的未追踪文件与你自己没打算提的东西都不在里面，因此这个坑天然不可达。并发 session 实测佐证：它按此跑法过了六轮门禁，`probe-mission-plan.ts` **一次都没出现过**，而同期我的工作树门禁被它红着。
     附带收益有两条：①门禁看到的就是 **CI 将要看到的那份 checkout**；②共享树上他人的半成品不会污染你的结果——**红了就一定是你的**。
+    **但它有代价，而且这个代价一旦普及就没人兜着了**：物化树门禁回答的是「我要推的这份内容，CI 会不会绿」，它**不再回答「这棵共享树健康吗」**——这是两个问题。本次那个探针之所以被发现，纯粹是因为**还有人在工作树上跑门禁**；等所有人都换成物化树，这条发现渠道就关闭了。（我自己正是在物化树里过的门禁，全绿，因此**看不见**自己留下的垃圾，只在别人的工作树门禁里现形。）
+    **配套判据（成本极低，别省）**：提交前额外看一眼 `git status --porcelain | grep '^??'`——**只确认没有你自己的临时产物遗留**（`rm` 因 cwd 漂移变成空操作是实际发生过的形态；同族的还有忘了 `git worktree remove` 的门禁树），不去清理别人的东西，因此与仓规「他人未追踪文件不要主动 add」不冲突。
   - 已经跑了怎么办：别手改回去（容易改出第三种形态）。把 `git diff <file>` 存成 patch，只截出**不属于本次工作**的那个 hunk，`git apply -R` 反向撤掉即可，其余改动原样保留。
 - **实现别在工作树里停留太久——长事务本身就是可被误伤的暴露面**（2026-08-14，与上一条配对的另一半，由被误伤的那个 session 提出）。这次事故里「我 `git add` 整个共享文档」是**直接**原因，但「对方的实现 + 它的 backlog 销账在工作树里放了很久」是让那个窗口存在的原因。两条纪律性质不同、缺一不可：只有前者，遇到下一个不看 `git status` 的写入方照样中招；只有后者，长事务照样留窗口。**定式**：把「实现 + 它的文档销账」攒成同一个 commit 再离开编辑态，别让文档先落、代码后落。
 - **接到跨 session 关于远端状态的断言，先自己 `git fetch` 核一遍再据此决策**（同一天，双向各救了一次）。我把「已 push」当成既成事实通报出去，实际那次 push **根本没执行**（动作排在门禁之后，我却按已完成叙述）；对方两次 fetch 才发现不对。反过来他们的转述也被独立复核纠正过一次。**判据**：凡涉及「远端有什么」的话，说之前先 `git rev-parse origin/main`，听之后先 `git fetch && git merge-base --is-ancestor <sha> origin/main`。这条与「推理出错」不同——它是把没做的事报告成做了，对协作方的伤害是让他们基于一个不存在的状态决策。
@@ -395,6 +397,24 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **同一物理 checkout 跑两个并发 session 时，`git add <整个文件>` 会把对方在该文件里的「半截改动」连同你的提交推上 main——而且本地一切全绿、只有 CI 炸**（2026-08-18 RFC-311 PR-1 实撞）：我提交 `cli/start.ts`（只想带自己的 openDb 参数）时，文件里还有并发 RFC-310 session 加的 `import { buildDevelopmentMrFactsDeps }`，其**导出**还在对方工作树没提交。本地 typecheck / gate 全绿（工作树里导出存在），CI 的单二进制 build 直接 `No matching export` 红。同日对方也以同样方式让 `user-permissions` 前端测试红（权限目录改了一半）。**判据**：本地绿 + CI 在你没改过的链路上红 ⇒ 第一嫌疑是「共享树半截依赖」，`git show HEAD:<file> | grep <符号>` 对比工作树即可实锤。**定式**：提交前对每个要 add 的**代码**文件跑 `git diff HEAD -- <file>` 逐 hunk 认领（共享索引文件的既有定式同样适用于代码文件）；发现对方 hunk 时优先等对方提交或只挑自己的 hunk（`git add -p`）。
 - **`bun run gate:local` 的 format/lint 车道存在缓存性漏报，收口不能只信它**（2026-08-18 两连撞）：PR-1 的 gate 全绿，CI 的 `prettier --check` 却红了 5 个文件；补完格式后下一轮 CI 又红出 gate 没报的 `no-unused-vars`。两次都是「gate 期间文件处于被本地格式化钩子/缓存遮蔽的状态」。**定式**：push 前对**本次改动的文件清单**显式跑一遍 `bunx prettier --check <files>` 和 `bunx eslint <files> --max-warnings 0`，几秒钟，能挡住这两类「本地绿 CI 红」。
+
+## 新增配置键（RFC-313 实测，2026-08-20）
+
+- **`ConfigSchema` 是全必填**。新增一个 required-with-default 的键时，**存量
+  `~/.agent-workflow/config.json` 里没有它**——之所以升级后 daemon 仍能启动，靠的是
+  `config/index.ts` 的 `mergeDefaults(raw)` 在 `safeParse` **之前**回填 `DEFAULT_CONFIG`。
+  这条顺序是所有升级用户的启动前提，改动它等于让全体升级者的 daemon 拒启动。加键时
+  一并补两样：①`packages/shared/tests/fixtures/config-versions/*.json` 两个 fixture
+  （否则 `compat-config-versions` 立刻红）；②一条**直接构造缺该键的存量文件**、断言
+  回填生效的用例（fixture 补齐后就不再覆盖这条性质了，别让它裸奔）。
+- 别忘了 `packages/frontend/src/lib/settings-drafts.ts` 的**最小写入白名单**：漏登记的键
+  在保存时被静默丢掉——表单看着改了、点了保存、零报错，值没落盘。
+- **两个相乘的旋钮要各自算总账**。RFC-313 的 attempt 上限是
+  `(1+defaultNodeRetries)×(1+sessionRestartBudget)`：两项边界（50 / 10）单看都不离谱，
+  乘起来 561，会撞上 `schedulerAssembly.ts` 的 `ASSEMBLY_MAX_ATTEMPTS=100` 保险丝——
+  而那条保险丝的报错写的是「spec bug」，用它去接住一个**配置选择**只会把运维引到
+  错误方向排查。正解是让导出上限的函数**自钳**到一个显著低于保险丝的天花板，使保险丝
+  在任何配置组合下不可达，并用一条测试锁住两个常量的大小关系。
 
 ## 迁移（Drizzle + bun:sqlite）
 
@@ -1372,3 +1392,25 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
   首个管理员用 CLI 建（`user create --admin --password`），会话用
   `POST /api/auth/login` 换 token 后以 `#aw_session=<token>` 片段注入前端——
   全程不必在浏览器里手输凭据。
+
+## 「探测端口 → 关闭 → 再绑定」在并发分片下会被抢走（2026-08-19 门禁实撞）
+
+`gate:local` 的 backend 车道跑 **4 个并发 shard**，机器上还常有别的 session 在跑自己的门禁。
+凡是走「`net.createServer().listen(0)` 拿到端口号 → `close()` → 再拿这个号去
+`Bun.serve({ port })`」的测试，**probe 关闭到重新绑定之间有一个真实窗口**，任何并发进程都
+可能先一步占住它。
+
+现场：`packages/backend/tests/rfc269-webhook-code-host-context-e2e.test.ts:105-117`。用例红在
+`expect(terminal).toMatchObject({ outcome: { status: 'done' } })`，实际收到
+`code-host-http-error: POST /api/v4/projects/…/notes → HTTP 503`。**决定性判据是那个桩对任何
+请求都返回 `201`——它根本产不出 503**，所以那个 503 必然来自**占了同一端口的别的服务**。
+单跑 3/3 绿，只在分片并发下偶发红。
+
+- 现有三处在用：上面那个测试、`rfc238-mcp-runtime-test-real-e2e.test.ts`、`e2e/harness.ts`。
+- 为什么会有这个 pattern：源码注释写明 **Bun 1.3.13 在 macOS 上拒绝 `Bun.serve({ port: 0 })`**，
+  没法直接让 Bun 去要临时端口，只好借 node 探一个。
+- **排查提示（这条最省时间）**：被抢的那一半才报 `EADDRINUSE`；**先绑成功、而对面连到了别人**
+  这一半只会看到「语义离谱的响应码」。所以一旦看到**桩不可能返回的状态码**，先怀疑端口串了，
+  别去追业务逻辑。
+- 想根治就得让绑定与占用不可分割（拿着 probe 的 fd 直接交给服务器，或换成 unix socket），
+  单纯缩小窗口只是把概率调低。
