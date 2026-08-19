@@ -136,11 +136,13 @@ describe('RFC-311 T20 · 可回收空间卡片', () => {
   })
 
   test('目录不存在时按钮禁用(不给一个只会白发请求的按钮)', async () => {
-    install({ items: [{ ...PRESENT.items[0], exists: false, bytes: 0 }], dbFreelistBytes: 0, dbFileBytes: 10 })
+    install({
+      items: [{ ...PRESENT.items[0], exists: false, bytes: 0 }],
+      dbFreelistBytes: 0,
+      dbFileBytes: 10,
+    })
     renderGc()
-    const open = (await waitFor(() =>
-      screen.getByTestId('disk-cleanup-open'),
-    )) as HTMLButtonElement
+    const open = (await waitFor(() => screen.getByTestId('disk-cleanup-open'))) as HTMLButtonElement
     expect(open.disabled).toBe(true)
     expect(screen.getByText(/none \(directory absent\)/i)).toBeTruthy()
   })
@@ -150,9 +152,7 @@ describe('RFC-311 T20 · 可回收空间卡片', () => {
     // 同一 tab 里的归档入口、备份卡片一起带走。
     install({})
     renderGc()
-    const open = (await waitFor(() =>
-      screen.getByTestId('disk-cleanup-open'),
-    )) as HTMLButtonElement
+    const open = (await waitFor(() => screen.getByTestId('disk-cleanup-open'))) as HTMLButtonElement
     expect(open.disabled).toBe(true)
     // 同 tab 的其它卡片照常在(证明没有整页崩)。
     expect(screen.getByTestId('settings-webhook-row-retention')).toBeTruthy()

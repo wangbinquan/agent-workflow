@@ -72,7 +72,10 @@ function dirSize(dir: string): { bytes: number; entries: number } {
 }
 
 /** 只读盘点。不动任何文件。 */
-export function reportDiskReclaimable(db: DbClient, appHome: string = Paths.root): DiskReclaimReport {
+export function reportDiskReclaimable(
+  db: DbClient,
+  appHome: string = Paths.root,
+): DiskReclaimReport {
   const storePath = join(appHome, RETIRED_STORE_DIR)
   const exists = existsSync(storePath)
   const measured = exists ? dirSize(storePath) : { bytes: 0, entries: 0 }

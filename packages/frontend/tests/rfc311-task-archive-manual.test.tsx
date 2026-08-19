@@ -92,7 +92,13 @@ function install(opts: { permissions: string[]; treeCount: number; taskCount: nu
       if (s.includes('/api/maintenance/disk')) {
         return json({
           items: [
-            { id: 'retired-runtime-stores', path: '/home/.agent-workflow/opencode-stores', exists: false, bytes: 0, entries: 0 },
+            {
+              id: 'retired-runtime-stores',
+              path: '/home/.agent-workflow/opencode-stores',
+              exists: false,
+              bytes: 0,
+              entries: 0,
+            },
           ],
           dbFreelistBytes: 0,
           dbFileBytes: 1024,

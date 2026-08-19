@@ -283,6 +283,11 @@ function AssignmentDialog(props: {
     <Dialog
       open
       title={t('code.assignments.dialogTitle')}
+      /* 装着用户输入的弹窗不接受"点遮罩关闭"：遮罩盖满视口，页头那颗同名
+         按钮只是透过半透明遮罩看得见、其实点不到，那一下会命中遮罩并把已填
+         内容静默丢弃（用户实报：「点击创建，弹窗就消失了，什么都没变化」）。
+         ESC / 取消 / × 三条关闭路径保留。 */
+      closeOnOverlayClick={false}
       onClose={props.onClose}
       footer={
         <>

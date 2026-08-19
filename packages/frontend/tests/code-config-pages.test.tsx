@@ -398,3 +398,33 @@ describe('fixtures are pinned to the backend domain shape', () => {
     expect(parsed.success ? [] : parsed.error.issues.map((i) => i.path.join('.'))).toEqual([])
   })
 })
+
+describe('/code/config create dialog — a stray overlay click must not discard input', () => {
+  test('clicking the overlay keeps the dialog open and the typed name intact', async () => {
+    // 用户实报：「我点击创建，弹窗就消失了，什么都没变化」。真相是页头那颗
+    // 同名「创建」按钮在遮罩之下——看得见、点不到，那一下命中的是遮罩，于是
+    // 走了"点遮罩关闭"，已填的名字被静默丢弃、也没有发出任何请求。
+    // 装着用户输入的弹窗一律不接受遮罩关闭（本仓既有先例：AgentPortDialog /
+    // tasks.new），ESC / 取消 / × 三条路径保留。
+    installFetch({})
+    await renderConfig('/code/config/employees')
+    fireEvent.click(await screen.findByTestId('config-create-open'))
+    const name = await screen.findByTestId('config-create-name')
+    fireEvent.change(name, { target: { value: '不该被丢掉的名字' } })
+
+    const overlay = document.querySelector('.dialog__overlay')
+    expect(overlay).not.toBeNull()
+    // Dialog 的关闭判据是 mousedown 落在遮罩本身（e.target === overlay）。
+    fireEvent.mouseDown(overlay!)
+
+    // 弹窗仍在、输入仍在、没有发出创建请求。
+    expect(screen.queryByTestId('config-create-submit')).not.toBeNull()
+    expect((screen.getByTestId('config-create-name') as HTMLInputElement).value).toBe(
+      '不该被丢掉的名字',
+    )
+    const posts = (
+      globalThis.fetch as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls.filter((c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST')
+    expect(posts).toEqual([])
+  })
+})
