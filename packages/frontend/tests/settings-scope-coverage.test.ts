@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
-import { SETTINGS_CONFIG_SCOPE_KEYS } from '../src/lib/settings-drafts'
+import { SETTINGS_CONFIG_SCOPE_IDS, SETTINGS_CONFIG_SCOPE_KEYS } from '../src/lib/settings-drafts'
 
 const SOURCE = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'settings.tsx'),
@@ -28,7 +28,12 @@ function tabSlices(): Array<{ scope: string; body: string }> {
   for (const m of SOURCE.matchAll(anchor)) {
     hits.push({ scope: m[1]!, index: m.index! })
   }
-  expect(hits.length, 'settings.tsx must still declare config-scoped tabs').toBeGreaterThan(0)
+  // 失败关闭:扫描面必须**恰好**覆盖全部已声明的 scope。只断言 `> 0` 的话,
+  // 某个 tab 挪进 components/settings/*.tsx 之类的新文件后,这条守卫会静默地
+  // 少覆盖一个分区而依旧全绿——枚举式守卫最常见的空洞绿形态。
+  expect([...new Set(hits.map((h) => h.scope))].sort()).toEqual(
+    Object.keys(SETTINGS_CONFIG_SCOPE_IDS).sort(),
+  )
   return hits.map((hit, i) => ({
     scope: hit.scope,
     body: SOURCE.slice(hit.index, hits[i + 1]?.index ?? SOURCE.length),
