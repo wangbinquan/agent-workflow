@@ -138,11 +138,13 @@ describe('RFC-305 identity-access integration', () => {
     expect(
       db.$client.query('SELECT role, access_revision FROM users WHERE id = ?').get(f.userId),
     ).toEqual({ role: 'user', access_revision: 0 })
+    // RFC-312 —— 新建 user/manager 默认拿到一条 `users:presence` grant（建号时发放，可按账号收回），
+    // 所以回滚的目标态不是空集，而是建号完成态。本用例锁的是**原子性**，不是集合内容。
     expect(
       db.$client
         .query('SELECT permission FROM user_permission_grants WHERE user_id = ?')
         .all(f.userId),
-    ).toEqual([])
+    ).toEqual([{ permission: 'users:presence' }])
   })
 
   test('post-commit targeted refresh failure is observable without rolling back access', async () => {
@@ -210,7 +212,12 @@ describe('RFC-305 identity-access integration', () => {
       .run(f.userId, 'scripts:author', f.adminId, 1)
 
     const current = await composeIdentityAccess(db).resolveAuthority.execute(f.userId)
-    expect(current?.additionalPermissions).toEqual(['settings:write', 'scripts:author'])
+    // RFC-312 —— 新建 user/manager 默认拿到一条 `users:presence` grant（建号时发放，可按账号收回），故此处多一项。
+    expect(current?.additionalPermissions).toEqual([
+      'users:presence',
+      'settings:write',
+      'scripts:author',
+    ])
   })
 
   test('session and existing PAT gain/revoke only their current account cap', async () => {
@@ -260,7 +267,8 @@ describe('RFC-305 identity-access integration', () => {
     // this list as `scripts:author`.
     // RFC-310 +1：repository-employee-assignments:update（manager 档差集）；
     // PR-9 +1：development-missions:cutover（admin 档 runbook 点）。
-    expect(grants).toHaveLength(26)
+    // RFC-312 +1：`users:presence` 不进 user 静态 preset（进了就永远收不回来），故成为差集项。
+    expect(grants).toHaveLength(27)
     await f.update(0, [...grants])
 
     const actor = await buildInheritedActor(db, f.userId)
@@ -284,14 +292,14 @@ describe('RFC-305 identity-access integration', () => {
     })
     expect(invited.status).toBe('invited')
     expect(await buildInheritedActor(db, invited.id)).toBeNull()
-    expect(grantsFor(db, invited.id)).toEqual(['scripts:author'])
+    expect(grantsFor(db, invited.id).sort()).toEqual(['scripts:author', 'users:presence'])
 
     await patchUser(db, invited.id, { status: 'active' }, 2_000, f.adminId)
     const active = await buildInheritedActor(db, invited.id)
     expect(active?.permissions.has('scripts:author')).toBe(true)
     await patchUser(db, invited.id, { status: 'disabled' }, 2_001, f.adminId)
     expect(await buildInheritedActor(db, invited.id)).toBeNull()
-    expect(grantsFor(db, invited.id)).toEqual(['scripts:author'])
+    expect(grantsFor(db, invited.id).sort()).toEqual(['scripts:author', 'users:presence'])
   })
 
   test('audit records actor, exact diff and revision without profile or credential values', async () => {

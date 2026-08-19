@@ -23,6 +23,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { UserMenu } from '@/components/UserMenu'
 import { useActor, useCurrentPermissions, usePermission } from '@/hooks/useActor'
 import { useAuthoritySync } from '@/hooks/useAuthoritySync'
+import { usePresenceSubscription } from '@/hooks/usePresence'
 import { navPermissionForPath, resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
 import { setInboxOpen, toggleInboxOpen, useInboxOpen } from '@/stores/inbox'
 import { CompactTopBar } from './CompactTopBar'
@@ -63,6 +64,8 @@ interface AppShellProps {
 
 export function AppShell({ pathname, children }: AppShellProps) {
   useAuthoritySync()
+  // RFC-312 —— 全站唯一的 presence 订阅点。无 users:presence 时不建立连接。
+  usePresenceSubscription()
   const actor = useActor()
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)

@@ -96,10 +96,11 @@ const ALL_KINDS: WsChannelKind[] = [
   'scheduled-tasks', // RFC-159
   'intent-sessions', // RFC-234
   'mcp-runtime-tests', // RFC-238
+  'presence', // RFC-312
 ]
 
 describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
-  test('registry keys are exactly the eleven channels (and WS_CHANNEL_KINDS mirrors them)', () => {
+  test('registry keys are exactly the twelve channels (and WS_CHANNEL_KINDS mirrors them)', () => {
     expect(Object.keys(WS_CHANNELS).sort()).toEqual([...ALL_KINDS].sort())
     expect([...WS_CHANNEL_KINDS].sort()).toEqual([...ALL_KINDS].sort())
     for (const kind of ALL_KINDS) {
@@ -202,9 +203,12 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS['intent-sessions'].aclBypassShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['mcp-runtime-tests'].aclBypassShortCircuit).not.toBe(true)
     expect(WS_CHANNELS.authority.aclBypassShortCircuit).not.toBe(true)
-    // onOpenExtra (replay) only on task.
+    // onOpenExtra: task 的 `?since` 重放；RFC-312 起 presence 也有一个——
+    // 连接建立即点对点发一次全量在线快照（不是重放，但同属"open 时的额外一步"）。
+    // 这条锁的意义是"谁有 open 钩子"必须显式登记，新增通道不得默默带上一个。
     expect(WS_CHANNELS.task.onOpenExtra).toBeDefined()
-    for (const kind of ALL_KINDS.filter((k) => k !== 'task')) {
+    expect(WS_CHANNELS.presence.onOpenExtra).toBeDefined()
+    for (const kind of ALL_KINDS.filter((k) => k !== 'task' && k !== 'presence')) {
       expect(WS_CHANNELS[kind].onOpenExtra).toBeUndefined()
     }
   })

@@ -247,6 +247,8 @@ export const PERMISSIONS = [
   'users:read',
   'users:write',
   'users:search',
+  // RFC-312 —— 看到他人在线状态。系统域点：PAT 永不持有。
+  'users:presence',
   'settings:read',
   'settings:write',
   'oidc:read',
@@ -682,6 +684,11 @@ const permissionCatalog = {
     token: 'never',
   }),
   'users:search': catalogEntry('users:search', { group: 'platform', token: 'never' }),
+  // RFC-312 —— 刻意**不进任何静态 preset**：RFC-305 的有效权限是 role ∪ additional 且没有
+  // deny 集，baseline 里的点在写入侧会被判 user-permission-redundant，等于永远无法按账号收回。
+  // 因此它走「新建默认授予的显式 grant + 存量 backfill」。admin 由动态 baseline
+  // （admin: [...PERMISSIONS]）自动包含，那一档不需要也无法单独收回。
+  'users:presence': catalogEntry('users:presence', { group: 'platform', token: 'never' }),
   'settings:read': catalogEntry('settings:read', {
     group: 'platform',
     token: 'never',
@@ -784,6 +791,7 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   'users:read',
   'users:write',
   'users:search',
+  'users:presence',
   'settings:read',
   'settings:write',
   'oidc:read',

@@ -365,6 +365,12 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/composition',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/public/types',
+      // RFC-312 —— presence 通道的 onOpenExtra 需要 presence 的 command/query。
+      // 与既有三处（auth/actor.ts、server.ts、services/users.ts）同型：composeIdentityAccess
+      // 按 db 实例缓存，取到的是 public 用例而非模块内部。
+      // 更干净的做法是把实例经 adapter deps 注入，但 `onOpenExtra(ws, params, db)` 的签名是
+      // 注册表全局的，为一个通道改它会波及所有通道——留作后续 seam，不在本 RFC 承担。
+      'packages/backend/src/ws/registry.ts -> @/modules/identity-access/composition',
     ])
   })
 

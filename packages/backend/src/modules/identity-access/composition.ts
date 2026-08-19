@@ -1,6 +1,14 @@
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
+import { TrackUserPresence } from './application/commands/trackUserPresence'
+import { GetUserPresence } from './application/queries/getUserPresence'
+import {
+  InMemoryUserPresenceStore,
+  PerformanceMonotonicClock,
+  TimeoutPresenceTimer,
+} from './infrastructure/inMemoryPresence'
 import { CreateManagedUser } from './application/commands/createManagedUser'
 import { UpdateUserAccess } from './application/commands/updateUserAccess'
 import {
@@ -34,6 +42,10 @@ export interface IdentityAccessModule {
   readonly getUserAccess: GetUserAccess
   readonly resolveAuthority: ResolveAuthority
   readonly diagnostics: IdentityAccessDiagnostics
+  /** RFC-312 —— presence 写侧（由 WS 连接开/关驱动）。 */
+  readonly trackUserPresence: TrackUserPresence
+  /** RFC-312 —— presence 读侧（快照 / 单点查询）。 */
+  readonly getUserPresence: GetUserPresence
 }
 
 const modules = new WeakMap<object, IdentityAccessModule>()
@@ -63,6 +75,28 @@ export function composeIdentityAccess(db: DbClient): IdentityAccessModule {
       })
     },
   }
+  // RFC-312 —— presence 全部落在进程内存：不建表、不查库、不轮询。
+  // 变更出口只有这一条接线（bootstrap 装配，唯一实现）：合并窗口刷出 → 广播 presence.changed。
+  const presenceStore = new InMemoryUserPresenceStore()
+  const presenceClock = new PerformanceMonotonicClock()
+  const trackUserPresence = new TrackUserPresence({
+    store: presenceStore,
+    graceTimer: new TimeoutPresenceTimer(),
+    batchTimer: new TimeoutPresenceTimer(),
+    clock: presenceClock,
+    observer: {
+      presenceChanged(changes) {
+        const [head, ...rest] = changes
+        if (head === undefined) return
+        presenceBroadcaster.broadcast(PRESENCE_CHANNEL, {
+          type: 'presence.changed',
+          changes: [head, ...rest],
+        })
+      },
+    },
+  })
+  const getUserPresence = new GetUserPresence(presenceStore, presenceClock)
+
   const module: IdentityAccessModule = Object.freeze({
     contexts: new DirectOperationContextFactory(factoryDeps),
     delegatedAuthority: new ResolveDelegatedAuthority(resolveAuthority),
@@ -81,6 +115,8 @@ export function composeIdentityAccess(db: DbClient): IdentityAccessModule {
       observer: observability,
     }),
     getUserAccess: new GetUserAccess(repository),
+    trackUserPresence,
+    getUserPresence,
     resolveAuthority,
     diagnostics: observability,
   })

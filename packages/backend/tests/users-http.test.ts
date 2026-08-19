@@ -241,7 +241,9 @@ describe('/api/users (users:read/users:write capabilities)', () => {
       additionalPermissions: string[]
       accessRevision: number
     }
-    expect(initial.additionalPermissions).toEqual(['scripts:author'])
+    // RFC-312 —— 建号时默认写入一条 `users:presence` grant（user/manager 档），
+    // 与调用方显式勾选的权限取并集后一起落库、一起进审计。
+    expect(initial.additionalPermissions).toEqual(['users:presence', 'scripts:author'])
     expect(initial.accessRevision).toBe(0)
 
     const updated = await reqAs(h.app, h.adminToken, `/api/users/${initial.id}`, {

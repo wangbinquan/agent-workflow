@@ -229,8 +229,9 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
   const kinds = Object.keys(WS_CHANNELS) as WsChannelKind[]
 
   test('the registry is non-empty and every kind is present', () => {
-    // RFC-305 adds the authenticated app-wide authority revision channel.
-    expect(kinds.length).toBe(11)
+    // RFC-305 adds the authenticated app-wide authority revision channel;
+    // RFC-312 adds `presence`（独立通道，users:presence 升级门 + rerunUpgradeGate）。
+    expect(kinds.length).toBe(12)
     for (const kind of kinds) expect(WS_CHANNELS[kind].kind).toBe(kind)
   })
 

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import type { AdminUserView } from '@agent-workflow/shared'
 import { EmptyState } from '@/components/EmptyState'
 import { TextInput } from '@/components/Form'
+import { PresenceDot } from '@/components/PresenceDot'
+import { usePresenceOf } from '@/hooks/usePresence'
 import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
@@ -154,6 +156,8 @@ function UserDirectoryRow({
   onManage: (user: AdminUserView, trigger: HTMLButtonElement) => void
 }): ReactElement {
   const { t } = useTranslation()
+  // RFC-312 —— undefined（无权限 / 快照未到）时 PresenceDot 渲染 null，行布局与今天一致。
+  const presence = usePresenceOf(user.id)
   const role = USER_ROLE_PRESENTATION[user.role]
   const status = USER_STATUS_PRESENTATION[user.status]
   const ownership = user.hasOidcIdentity
@@ -186,6 +190,7 @@ function UserDirectoryRow({
           {t(status.labelKey)}
         </StatusChip>
         <span className="account-meta-chip">{ownership}</span>
+        <PresenceDot online={presence} />
         <span className="user-directory__last-login">
           {user.lastLoginAt === null ? (
             t('users.neverSignedIn')

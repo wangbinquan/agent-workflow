@@ -116,6 +116,7 @@ const EN_ACTIONS = {
   attach: 'Attach',
   resume: 'Resume',
   cutover: 'Cut over',
+  presence: 'See online status of',
 } satisfies Record<PermissionAction, string>
 
 const ZH_ACTIONS = {
@@ -144,10 +145,16 @@ const ZH_ACTIONS = {
   attach: '挂接',
   resume: '恢复',
   cutover: '切换',
+  presence: '查看在线状态：',
 } satisfies Record<PermissionAction, string>
 
 const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTranslation>>> = {
   'en-US': {
+    'users:presence': {
+      label: 'See who is online',
+      description:
+        'See the real-time online status of other users. Holders receive the full list of currently online accounts, not just the people on the page in front of them.',
+    },
     'tasks:read:own': {
       label: 'View own tasks',
       description: 'View tasks you own or participate in, subject to task membership.',
@@ -201,6 +208,11 @@ const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTransl
     },
   },
   'zh-CN': {
+    'users:presence': {
+      label: '查看谁在线',
+      description:
+        '查看其他用户的实时在线状态。持有者会收到当前全部在线账号的名单，而不只是眼前界面上那几个人。',
+    },
     'tasks:read:own': {
       label: '查看自己的任务',
       description: '查看自己拥有或参与的任务，仍受任务成员范围约束。',

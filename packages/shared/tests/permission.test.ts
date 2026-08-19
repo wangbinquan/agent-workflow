@@ -74,7 +74,10 @@ describe('PERMISSIONS catalog', () => {
     // RFC-310 PR-2 +5（development-missions launch/read/interact/cancel/retry）⇒ 105；
     // PR-7b +3（handoff/attach/resume）⇒ 108；PR-9 +1（cutover runbook）⇒ 109；
     // PR-10 T104 −1（code-rounds:launch 随 legacy writer 删除）⇒ 108。
-    expect(PERMISSIONS.length).toBe(108)
+    // RFC-312 +1（`users:presence` —— 看到他人在线状态；系统域点，PAT 永不持有，
+    // 且**不进 user/manager/guest 静态 preset**：它走"新建默认授予的显式 grant"，
+    // 放进 preset 会让它永远无法按账号收回）⇒ **109**。
+    expect(PERMISSIONS.length).toBe(109)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -227,7 +230,7 @@ describe('PERMISSIONS catalog', () => {
     }
   })
 
-  test('user preset excludes exactly its 28 individually grantable differences', () => {
+  test('user preset excludes exactly its 29 individually grantable differences', () => {
     const userPresetMissing: Permission[] = [
       // RFC-099/RFC-305: repos stay OUT of the ownership ACL model — the repos
       // write verbs are absent from the user preset but individually grantable.
@@ -241,6 +244,8 @@ describe('PERMISSIONS catalog', () => {
       'development-missions:cutover',
       'users:read',
       'users:write',
+      // RFC-312 —— 刻意不进 user 预设：它靠建号时的默认 grant 发放，因而**可按账号收回**。
+      'users:presence',
       'settings:read',
       'settings:write',
       'oidc:read',

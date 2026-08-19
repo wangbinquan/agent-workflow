@@ -7,6 +7,8 @@
 //   - unresolvable id        → shortened id (user row deleted)
 
 import { useTranslation } from 'react-i18next'
+import { PresenceDot } from '@/components/PresenceDot'
+import { usePresenceOf } from '@/hooks/usePresence'
 import type { UserPublic } from '@agent-workflow/shared'
 
 // RFC-222 — 'manager' added: a resource admin acting on a task is attributed
@@ -24,6 +26,9 @@ interface AttributionChipProps {
 
 export function AttributionChip({ userId, role, user, className }: AttributionChipProps) {
   const { t } = useTranslation()
+  // RFC-312 —— 历史行（null / 'local' / '__system__'）与未解析 id 一律返回 undefined ⇒ 不渲染点，
+  // 否则水化后这些非真实用户会被显示成"离线"。
+  const presence = usePresenceOf(userId)
   const isLegacy = userId === null || userId === undefined || userId === 'local'
   const name = isLegacy ? t('attribution.localHistoric') : (user?.displayName ?? shortenId(userId))
   const roleLabel =
@@ -38,6 +43,7 @@ export function AttributionChip({ userId, role, user, className }: AttributionCh
             : null
   return (
     <span className={`chip chip--tight attribution-chip${className ? ` ${className}` : ''}`}>
+      <PresenceDot online={presence} />
       {name}
       {roleLabel !== null && (
         <span className={`attribution-chip__role attribution-chip__role--${role}`}>

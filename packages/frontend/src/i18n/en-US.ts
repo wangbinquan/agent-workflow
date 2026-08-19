@@ -2246,6 +2246,11 @@ export const enUS: Resources = {
       guest: 'guest',
     },
   },
+  // RFC-312 —— 在线状态
+  presence: {
+    online: 'Online',
+    offline: 'Offline',
+  },
   users: {
     title: 'Users',
     new: 'New user',

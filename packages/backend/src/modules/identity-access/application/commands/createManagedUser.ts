@@ -1,4 +1,5 @@
 import { normalizeAdditionalPermissionsForWrite } from '@agent-workflow/shared'
+import { initialGrantsForRole } from '../../domain/initialGrants'
 import { canonicalStoredAccess } from '../../domain/userAccessPolicy'
 import type { AdminUserAccessView, ManagedUserStatus } from '../../public/types'
 import { UserAccessError as AccessError } from '../../public/types'
@@ -43,9 +44,17 @@ export class CreateManagedUser {
   ): Promise<AdminUserAccessView> {
     try {
       const contextMeta = trustedContextMetadata(context)
+      // RFC-312 —— 建号默认授权与调用方显式勾选取**并集**，再统一规范化。
+      // 规范化会去重、并对该角色 baseline 已含的点报错，所以策略必须只返回"可授予"的点
+      // （initialGrantsForRole 对 admin 返回空正是为此）。
       const additionalPermissions = normalizeAdditionalPermissionsForWrite({
         role: command.role,
-        additionalPermissions: command.additionalPermissions,
+        additionalPermissions: [
+          ...command.additionalPermissions,
+          ...initialGrantsForRole(command.role).filter(
+            (p: Permission) => !command.additionalPermissions.includes(p),
+          ),
+        ],
       })
       const view = this.deps.transactions.run((transaction) => {
         const actorUserId = subjectRefOf(context.authority).userId

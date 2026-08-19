@@ -39,6 +39,7 @@ import { and, asc, eq, gt } from 'drizzle-orm'
 import type {
   IntentSessionWsMessage,
   McpRuntimeTestWsMessage,
+  PresenceWsMessage,
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
@@ -50,6 +51,7 @@ import type {
   WsControlMessage,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { DbClient } from '@/db/client'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import {
@@ -80,7 +82,9 @@ import {
   INTENT_SESSIONS_CHANNEL,
   intentSessionsBroadcaster,
   MCP_RUNTIME_TESTS_CHANNEL,
+  PRESENCE_CHANNEL,
   mcpRuntimeTestsBroadcaster,
+  presenceBroadcaster,
   SCHEDULED_TASK_CHANNEL,
   scheduledTaskBroadcaster,
   REPO_IMPORT_CHANNEL,
@@ -121,6 +125,7 @@ export interface ChannelParamsByKind {
   'scheduled-tasks': { kind: 'scheduled-tasks' }
   'intent-sessions': { kind: 'intent-sessions' }
   'mcp-runtime-tests': { kind: 'mcp-runtime-tests' }
+  presence: { kind: 'presence' }
 }
 
 export interface ChannelMessageByKind {
@@ -135,6 +140,7 @@ export interface ChannelMessageByKind {
   'scheduled-tasks': ScheduledTaskWsMessage
   'intent-sessions': IntentSessionWsMessage
   'mcp-runtime-tests': McpRuntimeTestWsMessage
+  presence: PresenceWsMessage
 }
 
 /** Process-local metadata delivered beside frames; never part of JSON wire. */
@@ -150,6 +156,7 @@ export interface ChannelBroadcastContextByKind {
   'scheduled-tasks': never
   'intent-sessions': never
   'mcp-runtime-tests': McpRuntimeTestBroadcastContext
+  presence: never
 }
 
 export type WsChannelKind = keyof ChannelParamsByKind
@@ -198,6 +205,16 @@ export interface WsConnectionData {
   actor: Actor
   /** RFC-212 — credential fingerprint used by the revalidation pass. */
   credential: WsCredential
+  /**
+   * RFC-312 —— presence 的**单次释放句柄**。
+   *
+   * 为什么是句柄而不是布尔标记：同一条连接的释放路径今天就会被调用两次——
+   * `closeConnection` 同步 untrack 一次，Bun 的 close 回调里 `handleClose` 再来一次。
+   * 现状是 `Set.delete` 所以幂等；换成引用计数后天真实现会**扣两次**，
+   * 结果是"关掉一个标签页，人就整体离线"。释放侧先清空本字段再调用，
+   * 任何重入顺序下都只可能执行一次。
+   */
+  releasePresence?: () => void
   /**
    * RFC-212 — set synchronously right before `ws.close()`, so a frame that
    * arrives between the close call and Bun's async close callback is dropped.
@@ -316,6 +333,38 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
     p: ChannelParamsByKind[K],
     db: DbClient,
   ) => Promise<void>
+}
+
+/**
+ * RFC-312 —— 释放该连接占用的 presence 计数，**最多执行一次**。
+ *
+ * 先清空句柄再调用：`closeConnection` 与 Bun 的 close 回调都会走到这里，
+ * 天真实现会把引用计数扣两次（症状是"关掉一个标签页，人就整体离线"）。
+ * 清空在前、调用在后，任何重入顺序下都只可能执行一次。
+ */
+export function releasePresence(ws: ServerWebSocket<WsConnectionData>): void {
+  const release = ws.data.releasePresence
+  ws.data.releasePresence = undefined
+  release?.()
+}
+
+/**
+ * RFC-312 —— 登记 presence 并装上释放句柄。**只在连接尚未进入关闭流程时登记**。
+ *
+ * 为什么要查 `closing`：`handleOpen` 在 epoch 复核那一步可能 `await`，客户端完全可能
+ * 在这期间就关闭——此时 `handleClose` 已经跑过、句柄还不存在，等 await 回来再登记就
+ * **永远不会有第二次 close 回调来释放它**，该用户会永久在线且没有任何宽限定时器能回收。
+ */
+export function installPresence(
+  ws: ServerWebSocket<WsConnectionData>,
+  userId: string,
+  presence: { opened(userId: string): void; closed(userId: string): void },
+): void {
+  if (ws.data.closing) return
+  presence.opened(userId)
+  ws.data.releasePresence = () => presence.closed(userId)
+  // 双保险：若在 opened() 与装句柄之间连接已被标记关闭，立即对消。
+  if (ws.data.closing) releasePresence(ws)
 }
 
 // -----------------------------------------------------------------------------
@@ -836,6 +885,43 @@ export const WS_CHANNELS: WsChannelRegistry = {
     frameGate: async (ctx, _msg, deliveryContext) =>
       deliveryContext?.kind === 'mcp-runtime-test-owner' &&
       deliveryContext.ownerUserId === ctx.actor.user.id,
+  },
+  // RFC-312 —— 在线状态。整条连接在升级时就被 `users:presence` 挡住，因此**没有 frameGate**：
+  // 这一条直接消掉了"逐帧权限判定会连坐过滤控制帧"的整类问题。权限被收回时
+  // rerunUpgradeGate 会关掉连接（4403），客户端据此清空 store——服务端不需要任何重同步协议。
+  presence: {
+    kind: 'presence',
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'none', why: 'no frameGate — whole-connection permission gate at upgrade' },
+      rerunUpgradeGate: true,
+    },
+    helloName: () => 'presence',
+    pathRe: /^\/ws\/presence$/,
+    parse: () => ({ kind: 'presence' }),
+    broadcaster: presenceBroadcaster,
+    channelKeyOf: () => PRESENCE_CHANNEL,
+    upgradeGate: async (_db, actor) =>
+      actor.permissions.has('users:presence')
+        ? true
+        : {
+            code: 'permission-required',
+            message: 'presence channel requires users:presence',
+          },
+    // 登记 + 快照都在这里，理由有二：
+    //   ①presence 只统计 /ws/presence 连接，这本来就是**通道自己的事**，
+    //     放进 server.ts 会长出 per-channel 分支（rfc152-ws-task-channel 的 ratchet 正是防这个）；
+    //   ②`onOpenExtra` 跑在升级门与 handleOpen 的 epoch 复核**之后**，
+    //     满足"登记必须在完整鉴权之后"——否则升级途中被撤销的连接会制造一次假上线并挂满宽限期。
+    // 取快照与发送之间**不得有 await**：否则会出现"增量先到被前端丢弃、旧快照后到"的永久陈旧。
+    onOpenExtra: async (ws, _p, db) => {
+      const { trackUserPresence, getUserPresence } = composeIdentityAccess(db)
+      // 只认 session 凭据：PAT / daemon token 是"脚本在跑"，不是"人在看"。
+      if (ws.data.credential.kind === 'session') {
+        installPresence(ws, ws.data.actor.user.id, trackUserPresence)
+      }
+      sendJson(ws, { type: 'presence.snapshot', online: getUserPresence.snapshot() }, db)
+    },
   },
 }
 

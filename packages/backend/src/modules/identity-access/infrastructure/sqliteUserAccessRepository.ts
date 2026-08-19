@@ -6,6 +6,7 @@ import {
   type Role,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { initialGrantsForRole } from '../domain/initialGrants'
 import { users } from '@/db/schema'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import type { TransactionScope } from '@/platform/persistence/transactionScope'
@@ -151,13 +152,27 @@ export function insertInitialUserAccessInTransaction(
       schemaVersion: 1,
       accessRevision: 0,
     })
+    // RFC-312 —— 这条路径（OIDC 自助建号 / bootstrap 首管理员）此前**一条 grant 都不插**，
+    // 于是"新建非 guest 默认授予"在这里被静默绕过：OIDC 默认角色若配成 user，
+    // 新账号是 active user 却拿不到 users:presence，开着界面也不会被同事看到在线。
+    // 默认授权与审计**共用同一个数组**——否则会出现"权限生效了但审计查不到是谁给的"。
+    const initialGrants = initialGrantsForRole(provision.user.role)
+    for (const permission of initialGrants) {
+      participant.insertGrant({
+        userId: provision.user.id,
+        // 系统默认授予（不是某个操作者点的），与显式授予在归属上可区分。
+        grantedByUserId: null,
+        permission,
+        grantedAt: provision.user.createdAt,
+      })
+    }
     participant.appendAudit({
       ...provision.audit,
       targetUserId: provision.user.id,
       correlationId: provision.audit.operationId,
       beforeRole: provision.user.role,
       afterRole: provision.user.role,
-      addedPermissions: [],
+      addedPermissions: initialGrants,
       removedPermissions: [],
       accessRevision: 0,
       createdAt: provision.user.createdAt,

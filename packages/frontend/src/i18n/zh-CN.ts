@@ -1147,6 +1147,11 @@ export interface Resources {
     }
   }
   // RFC-036 — /users admin page.
+  // RFC-312 —— 在线状态
+  presence: {
+    online: string
+    offline: string
+  }
   users: {
     title: string
     new: string
@@ -6511,6 +6516,10 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  presence: {
+    online: '在线',
+    offline: '离线',
+  },
   permissions: buildPermissionCatalogResources('zh-CN'),
   tabBar: {
     scrollStart: '向前查看更多分区',

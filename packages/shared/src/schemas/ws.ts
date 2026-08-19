@@ -471,6 +471,31 @@ export const McpRuntimeTestWsMessageSchema = z
 export type McpRuntimeTestWsMessage = z.infer<typeof McpRuntimeTestWsMessageSchema>
 
 // -----------------------------------------------------------------------------
+// RFC-312 —— presence（用户在线状态）。
+//
+// 只有两个变体：连接建立时一次全量 `presence.snapshot`，之后是合并窗口刷出的
+// `presence.changed` 增量。**没有"撤权"帧**——权限被收回时整条连接会被既有的
+// rerunUpgradeGate 关掉（4403），客户端据此清空自己的 store，不需要任何服务端重同步协议。
+// -----------------------------------------------------------------------------
+
+export const PresenceWsMessageSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('presence.snapshot'),
+      /** 当前在线的 userId 全集。规模 = 在线人数，与用户表规模无关。 */
+      online: z.array(z.string()),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('presence.changed'),
+      changes: z.array(z.object({ userId: z.string(), online: z.boolean() }).strict()).nonempty(),
+    })
+    .strict(),
+])
+export type PresenceWsMessage = z.infer<typeof PresenceWsMessageSchema>
+
+// -----------------------------------------------------------------------------
 // Server → client control frames common to every channel.
 // -----------------------------------------------------------------------------
 
@@ -513,4 +538,6 @@ export const WS_PATHS = {
   intentSessions: '/ws/intent-sessions',
   /** RFC-238 — MCP runtime-test locator stream (creator only). */
   mcpRuntimeTests: '/ws/mcp-runtime-tests',
+  /** RFC-312 — 在线状态流（`users:presence` 升级门；整条连接级鉴权，无 frameGate）。 */
+  presence: '/ws/presence',
 } as const

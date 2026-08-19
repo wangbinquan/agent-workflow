@@ -41,6 +41,7 @@ import {
   trackConnection,
   untrackConnection,
   WS_CLOSE_AUTH_REVOKED,
+  WS_CLOSE_NOT_VISIBLE,
 } from './connections'
 
 const log = createLogger('ws.server')
@@ -234,6 +235,13 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
         return
       }
       ws.data.actor = fresh
+      // RFC-312 —— epoch 变了意味着复核期间权限可能已经变化，只重解析 actor 不够：
+      // 必须用新 actor 重跑本通道的完整升级门，否则"已失权但恰好卡在升级中"的连接会漏网。
+      const verdict = await checkUpgradeGate(deps.db, fresh, ch)
+      if (verdict !== true) {
+        closeConnection(ws, WS_CLOSE_NOT_VISIBLE, verdict.code)
+        return
+      }
     }
     // RFC-152/RFC-305 — gatedSubscribe (ACL-bypass shortcut → frameGate → error ⇒
     // drop) + hello frame + onOpenExtra (task `?since` replay), all driven

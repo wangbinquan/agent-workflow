@@ -28,6 +28,7 @@ import type { DbClient } from '@/db/client'
 import { createLogger, type Logger } from '@/util/log'
 import {
   checkUpgradeGate,
+  releasePresence,
   erasedSpecOf,
   setExpiredCredentialHandler,
   type WsConnectionData,
@@ -77,6 +78,7 @@ export function trackConnection(ws: ServerWebSocket<WsConnectionData>): void {
 /** Called from `handleClose`. Idempotent — a double close must not throw. */
 export function untrackConnection(ws: ServerWebSocket<WsConnectionData>): void {
   live.delete(ws)
+  releasePresence(ws)
 }
 
 /**

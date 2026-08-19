@@ -51,6 +51,9 @@ describe('RFC-305 exhaustive permission catalog', () => {
       'development-missions:cutover', // RFC-310 PR-9（admin 档 runbook 点）
       'users:read',
       'users:write',
+      // RFC-312 —— `users:presence` 不进 user 静态 preset，因而是可逐项授予/收回的差集项。
+      // 这正是它不放 baseline 的目的：RFC-305 没有 deny 集，进了 preset 就永远收不回来。
+      'users:presence',
       'settings:read',
       'settings:write',
       'oidc:read',
@@ -69,7 +72,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
     // 78 points − 7 guest baseline = 71.
     // RFC-304 had made it 74 (81 − 7) when the two template layers were eight
     // points; RFC-309 merged them to four and added `code-rounds:launch`.
-    expect(grantableAdditionalPermissions('guest')).toHaveLength(101) // RFC-310 +22+5、PR-7b +3、PR-9 +1、PR-10 −1（code-rounds:launch 删除）
+    expect(grantableAdditionalPermissions('guest')).toHaveLength(102) // RFC-310 +22+5、PR-7b +3、PR-9 +1、PR-10 −1（code-rounds:launch 删除）；RFC-312 +1（users:presence 对 guest 亦可显式授予）
     expect(grantableAdditionalPermissions('guest')).toContain('resource-acl:private')
     expect(grantableAdditionalPermissions('guest')).toContain('tasks:execute')
   })

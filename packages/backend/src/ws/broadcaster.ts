@@ -87,6 +87,7 @@ export const MEMORY_DISTILL_JOB_CHANNEL: ChannelKey = 'memory-distill-jobs'
 export const SCHEDULED_TASK_CHANNEL: ChannelKey = 'scheduled-tasks' // RFC-159
 export const INTENT_SESSIONS_CHANNEL: ChannelKey = 'intent-sessions' // RFC-234
 export const MCP_RUNTIME_TESTS_CHANNEL: ChannelKey = 'mcp-runtime-tests' // RFC-238
+export const PRESENCE_CHANNEL: ChannelKey = 'presence' // RFC-312
 
 import type {
   IntentSessionWsMessage,
@@ -94,6 +95,7 @@ import type {
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
+  PresenceWsMessage,
   RepoImportWsMessage,
   TaskWsMessage,
   TasksListWsMessage,
@@ -177,6 +179,8 @@ export const mcpRuntimeTestsBroadcaster = new TypedBroadcaster<
   McpRuntimeTestWsMessage,
   McpRuntimeTestBroadcastContext
 >() // RFC-238
+/** RFC-312 —— 在线状态。只广播 presence.changed；snapshot 在 onOpenExtra 里点对点发。 */
+export const presenceBroadcaster = new TypedBroadcaster<PresenceWsMessage>()
 
 /** Reset all broadcasters — only used in tests between cases. */
 export function resetBroadcastersForTests(): void {
