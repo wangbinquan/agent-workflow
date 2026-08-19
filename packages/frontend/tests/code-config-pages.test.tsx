@@ -539,3 +539,27 @@ describe('/code/config create dialog — a stray overlay click must not discard 
     expect(posts).toEqual([])
   })
 })
+
+// 回归锁（RFC-310 T140 实测）：`/code` 首屏主动作的 href 是 `?create=1`，而
+// TanStack 的默认 search 解析会 JSON.parse 每个值 ⇒ 到达路由时是**数字 1**。
+// 只认 `true` / `'1'` 的版本会把它整个丢掉：点主动作只落到列表页、创建对话框
+// 不开、且不报任何错——零配置操作链的第一跳静默断掉。
+describe('RFC-310 deep-link create flags survive TanStack search parsing', () => {
+  test('the employee list accepts every shape `?create=` can arrive in', async () => {
+    const { validateConfigListSearch } = await import('../src/routes/code.config')
+    expect(validateConfigListSearch({ create: 1 })).toEqual({ create: true })
+    expect(validateConfigListSearch({ create: '1' })).toEqual({ create: true })
+    expect(validateConfigListSearch({ create: true })).toEqual({ create: true })
+    expect(validateConfigListSearch({ create: 'true' })).toEqual({ create: true })
+    expect(validateConfigListSearch({ create: 0 })).toEqual({})
+    expect(validateConfigListSearch({ create: 'no', keep: 'me' })).toEqual({ keep: 'me' })
+  })
+
+  test('the assignment page accepts the same shapes', async () => {
+    const { validateAssignmentSearch } = await import('../src/routes/code.assignments')
+    expect(validateAssignmentSearch({ create: 1 })).toMatchObject({ create: true })
+    expect(validateAssignmentSearch({ create: '1' })).toMatchObject({ create: true })
+    expect(validateAssignmentSearch({ create: true })).toMatchObject({ create: true })
+    expect(validateAssignmentSearch({ create: 0 })).not.toMatchObject({ create: true })
+  })
+})

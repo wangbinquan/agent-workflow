@@ -520,6 +520,29 @@ describe('rfc310 pr5 — verification arm', () => {
     const badRef = await runArm(fx, d.missionId, { verifyOk: true, profileRef: 'unit' })
     expect(badRef.blocks[0]!.code).toBe('verification-profile-ref-invalid:unit')
   })
+
+  // 回归锁（RFC-310 PR-11/12 多步说明书）：candidate 的现场必须绑在**产出它的
+  // 那个 run** 上。`__action.runId` 是"最近一次动作"，read-only 动作
+  // （approval.prepare / problem.classify / review …）会覆盖它却不产 candidate；
+  // 拿它去找现场就会用一个没有业务改动的 workspace 重放 stage，得到与记录不同的
+  // tree ⇒ 假的 candidate-tree-drift。T140 旅程实测：父任务在审批步骤之后必撞。
+  test('a later read-only action does not steal the candidate context from its producing run', async () => {
+    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const seeded = await seedDeliveredMission(fx)
+    persistCellsSnapshot(fx, seeded.missionId, {
+      ...currentCells(fx, seeded.missionId),
+      // 审批准备动作跑完：runId 换人，candidate 三件套仍指向 implement 那一轮。
+      '__action.runId': cell(`run-approval-${seeded.missionId}`),
+      '__action.candidateRunId': cell(seeded.runId),
+      'action.lastCapability': cell('approval.prepare'),
+    })
+    const passed = await runArm(fx, seeded.missionId, { verifyOk: true })
+    expect(passed.blocks).toEqual([])
+    expect(passed.outcome).toBe('collected')
+    expect(currentCells(fx, seeded.missionId)['__delivery.verifiedTreeOid']).toMatchObject({
+      value: TREE,
+    })
+  })
 })
 
 // -------------------------------------- ③ 完整轮次：commit → push → MR → wait

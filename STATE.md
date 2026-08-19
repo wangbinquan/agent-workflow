@@ -277,6 +277,26 @@
 >   当前受限执行环境起不了 listener，由 hosted exact-SHA CI 收口，不提前登记完成。
 >   本次提交**不含**并行 RFC-312 presence 的任何改动（identity-access / ws / shared 权限点 / 前端
 >   `PresenceDot` 等仍在对方工作树）；i18n 与 styles.css 两个混改文件只提本 RFC 的部分。
+>   **T131/T132/T140 收口（2026-08-20）**：两条浏览器旅程真跑绿——`rfc310-zero-config-onboarding`
+>   （零配置账号只按每页高亮动作走到「首件工作」，每停点断言 current/next/owner，刷新与 daemon 重启
+>   各断言一次不丢）与 `rfc310-digital-employee-journey`（浏览器发起带上传的 Mission → 跨仓 child
+>   Mission ready → 审批 prepare/submit/observe → 父仓 commit/push/MR → 真实 review 事件驱动修复轮与
+>   回帖 → committer merge → merged → `/outcomes` 可见；连跑两次 3.0m/3.1m 稳定）。后者的 skip 闸门
+>   已删除，`test-suite-policy` 的 ALLOWED_SKIP_COUNTS 同步减一。
+>   **首跑一次就照出四个生产缺陷**（全部带回归锁，逐条见 RFC plan.md §13d 末的账表）：
+>   ①声明「吃 mission 需求」的步骤在需求物化成 bundle **之前**就被派发 ⇒ Agent 在没有任何需求上下文的
+>   工作区里被拉起（说明书只写「这一步吃需求」，物化是平台的事，不能要求作者插一个 requirement.acquire）；
+>   ②该步骤的身份取了 requirement **fact 快照**指针（每写一次 cell 就换 id）⇒ 每轮重算身份、重新认领
+>   run、重新拉起 Agent——实测同一步骤 110 次 succeeded、110 次 Agent 执行，下一步永远轮不到（活锁）；
+>   ③read-only 动作（`approval.prepare`）覆盖 `__action.runId`，发布链据此找 candidate 现场 ⇒ 用没有
+>   业务改动的 workspace 重放 stage，得到**假的** `candidate-tree-drift`（多步说明书必然触发）；
+>   ④`/code` 首屏主动作的 href 是 `?create=1`，TanStack 默认 search 解析 JSON.parse 每个值 ⇒ 到达路由
+>   时是**数字 1**，而 RFC-310 两条新路由只认 `true`/`'1'` ⇒ 零配置操作链第一跳静默断掉（既有
+>   `workflows.tsx`/`tasks.new.tsx` 的同名开关本来就三种都认）。
+>   **计划里两处错记就地更正**：「本机受限执行环境起不了 listener」不成立（同一棵树上 system mock 与
+>   编译后 daemon + Playwright 都跑得起来）；`gate:local` 从不跑 system mock 用例（已补进 quality 车道）。
+>   **仅剩 T121**：业务 i18n / 只读权限 / responsive 已由 PR-8 的 inventory 棘轮覆盖，缺的是逐页**视觉
+>   基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线须在 CI 侧生成。
 >   **推完之后的两条实测更正（同日收口，见 `docs/dev-gotchas.md` 两条新条目）**：
 >   ①`gate:local` **从不跑 system mock 用例**（CI 的 lint job 跑），于是本批一条红的
 >   `rfc310-approval` 用例（`observationIndex` 是观察次数计数器、不是 statuses 下标）在本地全绿地

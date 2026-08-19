@@ -108,6 +108,7 @@ async function setup(
     ReconcilerPorts,
     'requirementMaterialize' | 'playbookSaga' | 'actionTemplates'
   > = {},
+  options: { requirementMaterialized?: boolean } = {},
 ): Promise<{
   deps: ReconcileDeps
   mission: NonNullable<ReturnType<ReconcileDeps['store']['getMission']>>
@@ -141,6 +142,26 @@ async function setup(
     defaultPolicyRef: ref(fx.policyId),
     ...contentPatch,
   }
+  // 生产里 direct 需求会先被物化成 bundle（平台的事，见 playbookStepCoordinator
+  // 的 mission-requirement 前置检查）。这些用例锁的是**步骤路由**，所以在这里把
+  // 那一步的结果直接摆好；「没物化就派发」这条路由本身另有专门用例。
+  if (options.requirementMaterialized !== false)
+    fx.store.insertMissionSource({
+      id: `src-${mission.id}`,
+      missionId: mission.id,
+      generation: 1,
+      sourceKind: 'direct',
+      externalId: null,
+      adapterId: null,
+      adapterRevision: null,
+      sourceRevision: 'test-1',
+      bundleRef: `bundle-${mission.id}`,
+      manifestDigest: 'a'.repeat(64),
+      fileCount: 1,
+      totalBytes: 12,
+      state: 'materialized',
+      createdAt: Date.now(),
+    })
   const saga = createSqlitePlaybookSagaStore(fx.db)
   const base = fx.deps({
     ...extraPorts,
@@ -209,6 +230,59 @@ describe('employee step routing', () => {
 
     expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toBeNull()
     expect(env.saga.listStepRuns(env.mission.id).map((run) => run.stepId)).toEqual(['attempt'])
+  })
+
+  // 回归锁：业务说明书只写「这一步吃 mission 需求」，把需求变成可挂载 bundle 是
+  // 平台的事。少了这一道，Agent 会在**没有任何需求上下文**的工作区里被拉起 ——
+  // RFC-310 T140 的浏览器旅程实跑就死在这里（严格的 stub 直接 exit 2，最终
+  // `step-failed:...:agent-contract-exhausted`；宽松的实现则会照着空需求交付）。
+  test('a step that eats the mission requirement materializes it before dispatching', async () => {
+    const env = await setup(
+      { steps: [agentStep('attempt', 'complete', 'recover')] },
+      {},
+      {},
+      { requirementMaterialized: false },
+    )
+    const first = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
+    expect(first).toMatchObject({ kind: 'materialize-direct-requirement' })
+    // 物化属于平台，不占任何业务步骤的 run —— 说明书里那一步还没开始。
+    expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(0)
+
+    env.deps.store.insertMissionSource({
+      id: `src-late-${env.mission.id}`,
+      missionId: env.mission.id,
+      generation: 1,
+      sourceKind: 'direct',
+      externalId: null,
+      adapterId: null,
+      adapterRevision: null,
+      sourceRevision: 'test-1',
+      bundleRef: `bundle-${env.mission.id}`,
+      manifestDigest: 'b'.repeat(64),
+      fileCount: 1,
+      totalBytes: 12,
+      state: 'materialized',
+      createdAt: Date.now(),
+    })
+    expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toMatchObject({
+      kind: 'run-agent-action',
+    })
+  })
+
+  // 回归锁：步骤身份必须内容寻址到需求 bundle。用 mission.requirementBundleRef
+  // （requirement *fact 快照*指针，每写一次 cell 就换 id）会让同一步骤每轮算出
+  // 新身份 ⇒ 每轮重新认领 run + 重新拉起 Agent。T140 旅程实测过这个活锁：
+  // 同一步骤 110 次 succeeded、110 次 Agent 执行，下一步永远轮不到。
+  test('the requirement-fed step keeps one identity when the requirement fact snapshot is rewritten', async () => {
+    const env = await setup({ steps: [agentStep('attempt', 'complete', 'recover')] })
+    expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toMatchObject({
+      kind: 'run-agent-action',
+    })
+    expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(1)
+
+    const rewritten = { ...env.mission, requirementBundleRef: `fact-snapshot-${Date.now()}` }
+    await selectPlaybookStepDecision(env.deps, rewritten, env.snapshot)
+    expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(1)
   })
 
   test('exhaustion follows the configured recovery step without blocking the Mission', async () => {

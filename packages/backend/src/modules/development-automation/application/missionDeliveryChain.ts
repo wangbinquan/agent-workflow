@@ -175,7 +175,11 @@ function loadCandidateContext(
   cells: Cells,
 ): CandidateContext | { readonly failCode: string } {
   const treeOid = knownString(cells, '__action.candidateTreeOid')
-  const runId = knownString(cells, '__action.runId')
+  // candidate 的现场绑定在**产出它的那个 run** 上；`__action.runId` 只是"最近一次
+  // 动作"，read-only 动作会覆盖它而不产 candidate。旧行没有 candidateRunId，退回
+  // runId 与落地前逐字等价（那时每个 mission 只有一个产 candidate 的动作）。
+  const runId =
+    knownString(cells, '__action.candidateRunId') ?? knownString(cells, '__action.runId')
   if (treeOid === null || runId === null) return { failCode: 'candidate-context-missing:cells' }
   if (deps.ports.attemptContext === undefined) {
     return { failCode: 'delivery-port-missing:attemptContext' }

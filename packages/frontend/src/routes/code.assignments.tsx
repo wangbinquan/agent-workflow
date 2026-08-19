@@ -57,7 +57,10 @@ export function validateAssignmentSearch(search: Record<string, unknown>): Assig
     ...(typeof search.employee === 'string' && search.employee !== ''
       ? { employee: search.employee }
       : {}),
-    ...(search.create === true || search.create === '1' ? { create: true } : {}),
+    // 同 code.config.tsx：`?create=1` 会被解析成数字 1（TanStack 默认 JSON.parse）。
+    ...(search.create === true || search.create === 1 || search.create === '1'
+      ? { create: true }
+      : {}),
   }
 }
 

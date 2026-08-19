@@ -21,26 +21,27 @@ import { defaultAutomationPolicyContent } from '../packages/backend/src/modules/
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
 
 test.describe.configure({ mode: 'serial' })
-test.setTimeout(180_000)
+// 跨 mission 的每一跳都可能等一整个 wake sweep（`DAEMON_CADENCE.developmentWakeSweep`
+// = 30s，durable wait + 定时 observe 是 RFC-310 的既定设计，不是这里的临时慢）。
+// 本旅程有「子 Mission ready → 审批提交 → 审批 approved → 父门禁重跑 → 父 MR ready」
+// 四五跳，预算按最坏路径给足；给不足只会得到一条与实现无关的假红。
+test.setTimeout(600_000)
 
-// RFC-310 T140 —— 这条旅程**还没有绿过一次**，因此默认不进 CI；手动跑用
-// `AW_RFC310_JOURNEY_E2E=1 bun run e2e e2e/rfc310-digital-employee-journey.spec.ts`。
-// 首次实跑（2026-08-19，本机 chromium + system mock）的账，写在这里而不是"以后再说"：
-//   ①三个 testid 在前端源码里根本不存在（`digital-employee-control-center` /
-//     `code-assignments-link` / `code-launch-mission`）——本 spec 从未被执行过。已按真实
-//     UI 改成 build 卡片与服务端 journey 的唯一主动作（PR-13：一页只有一个主动作）。
-//   ②照出并修掉一个真实生产缺陷：新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、
-//     挂载时从不复位，任何一次重挂载之后上传都会在暂存完成后被判成"页面已关闭"并删文件
-//     （回归锁在 `packages/frontend/tests/code-missions-page.test.tsx`）。
-//   ③当前止步点：mission 走到 `implement-gate-change` 步骤后 blocked
-//     `step-failed:implement-gate-change:agent-contract-exhausted` —— development stub
-//     还没覆盖这一步的信封，属 T131/T132 未完成范围，不是本 spec 的写法问题。
-// 解除条件：T131/T132 完成后，本 spec 在本机与 hosted CI 各绿一次，再删掉这行 gate
-// 并同步 `packages/backend/tests/test-suite-policy.test.ts` 的 ALLOWED_SKIP_COUNTS。
-test.skip(
-  process.env.AW_RFC310_JOURNEY_E2E !== '1',
-  'RFC-310 T140 journey is not green yet (development stub misses implement-gate-change; see the note above)',
-)
+// RFC-310 T132/T140-B —— 跨仓 + 外部审批 + ready + merged 的完整交付旅程。
+//
+// 2026-08-20 首次跑绿（本机 chromium + system mock，约 3 分钟，连跑两次稳定）。
+// 首跑照出并修掉的四处，留在这里当账：
+//   ①三个 testid 在前端根本不存在（`digital-employee-control-center` /
+//     `code-assignments-link` / `code-launch-mission`）——这条 spec 写完从未被执行过；
+//   ②新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时不复位，
+//     `<StrictMode>` 双调用后上传永远被判成"页面已关闭"（回归锁在 code-missions-page.test.tsx）；
+//   ③声明「吃 mission 需求」的步骤在需求物化前就被派发，Agent 拿到的是**空需求**；
+//     且该步骤的身份用了 requirement *fact 快照*指针，每轮都变 ⇒ 同一步骤活锁重跑
+//     110 次（两条都锁在 rfc310-playbook-coordinator.test.ts）；
+//   ④read-only 动作（approval.prepare）覆盖了 `__action.runId`，发布链据此找 candidate
+//     现场 ⇒ 假的 `candidate-tree-drift`（锁在 rfc310-pr5-delivery-chain.test.ts）。
+// 跨 mission 的每一跳最多等一个 wake sweep（30s，durable wait 是既定设计），所以
+// 本 spec 的预算按最坏路径给足；给不足只会得到一条与实现无关的假红。
 
 const PROJECT_PATH = 'rfc310/browser-digital-employee'
 const CHILD_PROJECT_PATH = 'rfc310/browser-gate-configuration'
@@ -53,6 +54,7 @@ let project: MockCodeHostProject
 let childProject: MockCodeHostProject
 let childRepositoryId = ''
 let employeeName = ''
+let employeeId = ''
 let policyName = ''
 let webhook: { urlToken: string; secret: string }
 
@@ -335,7 +337,7 @@ async function seedDigitalEmployee(): Promise<void> {
     },
   })
 
-  await publishResource<{ id: string }>('/api/code/digital-employees', {
+  const parentEmployee = await publishResource<{ id: string }>('/api/code/digital-employees', {
     name: employeeName,
     draft: {
       schemaVersion: 1,
@@ -464,6 +466,7 @@ async function seedDigitalEmployee(): Promise<void> {
       defaultPolicyRef: { id: policy.id, revision: policy.revision },
     },
   })
+  employeeId = parentEmployee.id
 }
 
 async function primeAuth(page: Page): Promise<void> {
@@ -486,7 +489,7 @@ async function waitFor<T>(
   label: string,
   read: () => Promise<T>,
   ready: (value: T) => boolean,
-  timeoutMs = 60_000,
+  timeoutMs = 120_000,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs
   let last: T | undefined
@@ -576,8 +579,13 @@ test('the configured employee delegates another repository, waits for approval, 
   await expect(page.getByTestId('digital-employee-build-employees')).toBeVisible()
 
   // Business-level strategy: bind the published employee and policy to this
-  // repository through the actual assignment UI.
+  // repository through the actual assignment UI. The scope comes from the
+  // employee we just published (`?employee=`), exactly like the product's own
+  // 员工详情 → 设置范围 链路 —— an unscoped `/code` shortcut would let the
+  // server-owned journey pick *any* configured employee (there are two here),
+  // which is fine for a first-time user but is not what this journey asserts.
   await page.getByTestId('digital-employee-build-assignments').click()
+  await page.goto(`${daemon.baseUrl}/code/assignments?employee=${employeeId}`)
   await page.getByTestId('assignment-create').click()
   await choose(page, 'assignment-scope-ref', /browser-digital-employee/)
   await choose(page, 'assignment-employee', employeeName)
@@ -587,10 +595,8 @@ test('the configured employee delegates another repository, waits for approval, 
 
   // First-release input contract: body and uploaded files coexist. The target
   // path and executable bit are explicit and become part of the platform commit.
-  await page.goto(`${daemon.baseUrl}/code`)
-  // With the assignment bound, the server-owned setup journey's single next
-  // action IS "launch the first piece of work" — the page has no separate
-  // launch button by design (PR-13: one main action per page).
+  // T138: 绑定保存后**同页**就出现「发起任务」——它是这一页的唯一主动作，
+  // 且带着刚绑定的那名员工（PR-13：一页一个主动作，服务端给出下一步）。
   await page.getByTestId('journey-next-link').click()
   await choose(page, 'mission-repo-select', /browser-digital-employee/)
   await page.getByTestId('stepper-next').click()
@@ -649,13 +655,14 @@ test('the configured employee delegates another repository, waits for approval, 
       state.approval !== undefined &&
       state.mission.collaboration.children.some((child) => child.completionSatisfied) &&
       state.mission.collaboration.approvals.length > 0,
-    90_000,
+    240_000,
   )
   const childReceipt = delegated.mission.collaboration.children[0]!
   expect(childReceipt.childMissionId).not.toBeNull()
-  expect(delegated.host.mergeRequests[0]?.sourceBranch).toBe(
-    `aw/mission/${childReceipt.childMissionId}`,
-  )
+  const childBranch = `aw/mission/${childReceipt.childMissionId}`
+  // 子仓里除了平台开的这条，还有 seedCodeHost 自带的 `system-mock-change`：
+  // 按分支名找，别按下标——下标断言只是在断言 mock 的种子顺序。
+  expect(delegated.host.mergeRequests.map((mr) => mr.sourceBranch)).toContain(childBranch)
 
   await page.reload()
   await expect(page.getByTestId('mission-collaboration')).toBeVisible()
@@ -696,9 +703,11 @@ test('the configured employee delegates another repository, waits for approval, 
   )!
   expect(approvalAfterResume.externalRequestRef).toBe(delegated.approval!.externalRequestRef)
   expect(approvalAfterResume.observationIndex).toBeGreaterThanOrEqual(2)
+  // 平台对子仓恰好开一条 MR：重复 observe / 重启不得再开一条（幂等的可见判据）。
   expect(
-    (await mocks.snapshot()).codeHosts.find((row) => row.projectPath === CHILD_PROJECT_PATH)
-      ?.mergeRequests,
+    (await mocks.snapshot()).codeHosts
+      .find((row) => row.projectPath === CHILD_PROJECT_PATH)
+      ?.mergeRequests.filter((mr) => mr.sourceBranch === childBranch),
   ).toHaveLength(1)
   await waitFor(
     'initial ready-to-merge state',
@@ -744,7 +753,7 @@ test('the configured employee delegates another repository, waits for approval, 
         mr.reviewComments.some((comment) => comment.body.includes(`aw-self:${missionId}`))
       )
     },
-    90_000,
+    180_000,
   )
   const repairedMr = repairedHost.mergeRequests.find((row) => row.number === firstMr.number)!
   expect(repairedMr.headSha).not.toBe(firstMr.headSha)

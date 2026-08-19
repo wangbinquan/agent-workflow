@@ -62,10 +62,6 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // Explicitly billed/provider-backed and activated only by the local
   // pre-release package script; ordinary CI must keep both drivers skipped.
   'e2e/release-runtime.spec.ts#skip': 2,
-  // RFC-310 T140：整条数字员工浏览器旅程尚未绿过一次（development stub 缺
-  // implement-gate-change 的信封，属 T131/T132 未完成范围）。默认关、
-  // `AW_RFC310_JOURNEY_E2E=1` 手动开；spec 顶部记着首跑账与解除条件。
-  'e2e/rfc310-digital-employee-journey.spec.ts#skip': 1,
   'e2e/rfc250-visual-states.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,

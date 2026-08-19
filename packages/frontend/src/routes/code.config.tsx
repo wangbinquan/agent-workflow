@@ -110,7 +110,14 @@ interface ConfigListSearch extends Record<string, unknown> {
 
 export function validateConfigListSearch(search: Record<string, unknown>): ConfigListSearch {
   const { create: _create, ...adjacent } = search
-  return search.create === true || search.create === '1' ? { ...adjacent, create: true } : adjacent
+  // `?create=1` 经 TanStack 的默认解析（JSON.parse 每个值）会变成**数字 1**，不是
+  // 字符串 '1'。少认这一种，`/code` 的首屏主动作（href 正是 `?create=1`）点进来
+  // 就只落到列表页、对话框不开——零配置操作链的第一跳当场断掉，而且不报错。
+  // 既有 `workflows.tsx` / `tasks.new.tsx` 的同名开关本来就三种都认。
+  const create = search.create
+  return create === true || create === 1 || create === '1' || create === 'true'
+    ? { ...adjacent, create: true }
+    : adjacent
 }
 
 export const Route = createRoute({

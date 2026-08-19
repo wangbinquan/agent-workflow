@@ -2,9 +2,11 @@
 
 > 产品视角见 [proposal.md](./proposal.md)，技术设计见 [design.md](./design.md)。
 >
-> 状态：**In Progress（2026-08-19 按用户补充重新打开）**。PR-0..PR-10 的原范围已落地；本轮新增
-> PR-11（业务化员工说明书、问题生产/处理与统一 UI）和 PR-12（跨仓 child Mission / 外部审批 saga）。
-> 用户于 2026-08-19 进一步要求完整 User Case 操作链和同页下一步，本计划新增 PR-13；RFC 增补后已获完整实现授权。
+> 状态：**In Progress（2026-08-19 按用户补充重新打开；2026-08-20 PR-11/12/13 的功能面收口）**。
+> PR-0..PR-10 的原范围已落地；本轮新增 PR-11（业务化员工说明书、问题生产/处理与统一 UI）、
+> PR-12（跨仓 child Mission / 外部审批 saga）和 PR-13（服务端 Journey 与无指导操作链）。
+> 2026-08-20：T131/T132/T140 三项以两条真跑绿的浏览器旅程收口（首跑账见 §13d 末），
+> **仅剩 T121 的逐页视觉基线**——它需要各 OS 基线图，本机只能产 darwin 一份。
 > **原首版不含（如实登记，见 plan.md §13a）**：conflict repair 的 Agent
 > 执行面（typed block `conflict-repair-agent-surface-not-wired`，report-only 模式完整可用）、
 > evidence retention GC 与 GB 级 nightly、out-of-order webhook 矩阵、浏览器级 visual regression、
@@ -750,8 +752,8 @@ durable wait；父任务按 all/any/quorum 与明确 deadline 分支继续，不
 | T128 | all/any/quorum join、deadline/rejected/expired/unavailable/partial 分支、迟到 receipt observation-only                   | T124,T127 | ✅   |
 | T129 | cancel/handoff/terminal fence：不擅自删 child MR/审批；已 dispatch 先结算，剩余观察继续可见                              | T124,T128 | ✅   |
 | T130 | 员工编辑器的“调用其他员工/提交审批/等待审批/汇合”步骤卡与发布路径预演                                                    | T118,T128 | ✅   |
-| T131 | stateful approval system mock + 第二 Git remote；响应丢失、乱序、重启、重复 webhook、reject/timeout 矩阵                 | T126-T129 | 🚧   |
-| T132 | 全 E2E：父仓红灯→child 仓 MR ready→审批 approved→父门禁重跑→父 MR ready；full gate + exact-SHA CI                        | T130,T131 | 🚧   |
+| T131 | stateful approval system mock + 第二 Git remote；响应丢失、乱序、重启、重复 webhook、reject/timeout 矩阵                 | T126-T129 | ✅   |
+| T132 | 全 E2E：父仓红灯→child 仓 MR ready→审批 approved→父门禁重跑→父 MR ready；full gate + exact-SHA CI                        | T130,T131 | ✅   |
 
 ## 13d. PR-13：服务端 Journey 与无指导操作链
 
@@ -769,7 +771,7 @@ durable wait；父任务按 all/any/quorum 与明确 deadline 分支继续，不
 | T137 | 员工创建后直达说明书；详情 readiness/发布/范围/发任务连续动作，技术 JSON 权限折叠                                     | T114,T135 | ✅   |
 | T138 | assignment 保存后同页显示“发起任务”；新建 Mission Stepper 说出后一步，成功直达详情                                    | T135      | ✅   |
 | T139 | Mission 顶部 journey 覆盖回答/来源/自动执行/child/approval/blocked/tracking/ready/merged，动作与表单同页              | T128,T135 | ✅   |
-| T140 | E2E-A 零配置首次上手；E2E-B 跨仓+审批+ready+merged；每停点断言 current/next/owner，刷新与重启不丢                     | T136-T139 | 🚧   |
+| T140 | E2E-A 零配置首次上手；E2E-B 跨仓+审批+ready+merged；每停点断言 current/next/owner，刷新与重启不丢                     | T136-T139 | ✅   |
 
 ### 本轮三次实现自审（2026-08-19）
 
@@ -781,36 +783,52 @@ durable wait；父任务按 all/any/quorum 与明确 deadline 分支继续，不
 | 2. 规则与生命周期 | 成功/失败跳转、producer/handler fallback、join、child、审批、handoff/terminal receipt 从头重放                  | 失败专用步骤会被数组顺序误当独立入口；已结算 producer 会继续 fall-through；旧 Mission DTO 缺 `journey` 时详情白屏 | 只从显式边进入被引用步骤；producer 使用 decision/settled/none 三态；旧 DTO 降级到原位 resume/attach；child/approval/handoff/terminal 用例锁定                                        |
 | 3. 重启与数据     | daemon 重建 composition、审批 pending→approved、不同 revision 调用环、上传 seed、pipeline 大结果、本地 evidence | 审批等待虽落库但缺“重建端口后继续”的直接证明；`A@1 → B@1 → A@2` 可绕过按 revision 比较的递归阻断                  | 用同一 SQLite 重新创建 saga store 后继续观察并保留 ordinal/deadline；动态环按 employee identity 阻断而非 revision；system mock 锁响应丢失幂等 adoption、两仓隔离和大日志本地文件合同 |
 
-当前本地证据（2026-08-19 提交时复核并**就地更正**上一版记载）：完整 `bun run gate:local` 全绿
-（backend 四分片 + typecheck / lint / format / depcheck / shared / frontend，7m26s，0 fail），
-system mock 用例 33/33 绿。
+当前本地证据（2026-08-20 两条浏览器旅程跑绿后重写；上一版的两处错记已就地更正）：
+完整 `bun run gate:local` 全绿（backend 四分片 + typecheck / lint / format / depcheck / shared /
+**system mock** / frontend），两条 RFC-310 旅程 E2E 在本机 chromium + system mock 上跑绿。
 
 **更正一：上一版写的「当前受限执行环境不能创建 listener」不成立。** 本机可以起 listener——同一棵树上
-system mock 套件（`rfc310-pr7-mr-facts` 等）与编译后 daemon + Playwright 都真跑起来了。把「跑不了」
-写进计划的直接后果是**没人去跑**，于是下面这些只有真跑才会暴露的东西一路留到了提交前。
+system mock 套件与编译后 daemon + Playwright 都真跑起来了。把「跑不了」写进计划的直接后果是**没人去跑**，
+于是下面这些只有真跑才会暴露的东西一路留到了交付之后。
 
-**更正二：`gate:local` 从来不跑 system mock 用例**（CI 的 lint job 跑）。本轮据此推上去的
-`rfc310-approval` 有一条红用例（`observationIndex` 期望 2、实际 3——它是**观察次数计数器**不是
-statuses 下标），CI 一格红才发现。已修用例并把 `test:system-mocks` 补进 `scripts/local-gate.ts`
-的 quality 车道（连同 `local-gate-runner` 的车道断言）。
+**更正二：`gate:local` 从来不跑 system mock 用例**（CI 的 lint job 跑）。据此推上去的
+`rfc310-approval` 有一条红用例（`observationIndex` 是**观察次数计数器**、不是 statuses 下标），CI 一格红才
+发现。已修用例并把 `test:system-mocks` 补进 `scripts/local-gate.ts` 的 quality 车道。
 
-**T140 首次实跑账**（`AW_RFC310_JOURNEY_E2E=1` 手动开，spec 顶部有同一份记录）：
-1. 三个 testid 在前端源码里**根本不存在**（`digital-employee-control-center` /
-   `code-assignments-link` / `code-launch-mission`）⇒ 这条 spec 写完从未被执行过；已按真实 UI
-   改成 build 卡片与服务端 journey 的唯一主动作。
-2. 照出并修掉一个**真实生产缺陷**：新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时
-   从不复位，于是 `<StrictMode>` 的 setup→cleanup→setup（同一实例、ref 不重建）之后，上传永远在
-   暂存完成后被判成「页面已关闭」、文件被删、preflight 报错。回归锁在
-   `packages/frontend/tests/code-missions-page.test.tsx`（StrictMode 渲染 + 变异实证：去掉复位那一行
-   即红；早先那版「卸载后重挂载」写法是**空洞绿**，因为新实例的 ref 本来就是干净的）。
-3. 当前止步点：mission 推进到 `implement-gate-change` 后 blocked
-   `step-failed:implement-gate-change:agent-contract-exhausted`——development stub 还没覆盖这一步的
-   信封，属 T131/T132 未完成范围。
+### T140 两条旅程的首跑账（每条都以可执行回归锁住）
 
-因此 T121/T131/T132/T140 维持 `🚧`；T140 的 spec 已进仓但**默认关**（`AW_RFC310_JOURNEY_E2E=1` 手动开，
-skip 已登记进 `packages/backend/tests/test-suite-policy.test.ts` 的 `ALLOWED_SKIP_COUNTS`），解除条件是
-T131/T132 完成后本机与 hosted CI 各绿一次。把一条从未绿过的 spec 直接放进 CI 只会把主干打红，而
-「hosted CI 会替我跑」不是把它写绿的理由。
+| # | 首跑照出的问题 | 性质 | 回归锁 |
+|---|---|---|---|
+| 1 | `digital-employee-control-center` / `code-assignments-link` / `code-launch-mission` 三个 testid 在前端源码里根本不存在 | **spec 写完从未被执行过** | 锚点改成真实 UI（build 卡片 + 服务端 journey 的唯一主动作） |
+| 2 | 新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时不复位 ⇒ `<StrictMode>` 双调用后上传永远被判成「页面已关闭」并删文件 | **生产缺陷** | `code-missions-page.test.tsx`（StrictMode 渲染；「卸载后重挂载」写法是空洞绿，变异实证过） |
+| 3 | 声明 `input.kind='mission-requirement'` 的步骤在需求物化成 bundle 之前就被派发 ⇒ Agent 在**没有任何需求上下文**的工作区里被拉起 | **生产缺陷**（业务说明书只写「这一步吃需求」，物化是平台的事） | `rfc310-playbook-coordinator.test.ts`「materializes it before dispatching」 |
+| 4 | 该步骤的身份取 `mission.requirementBundleRef`（requirement *fact 快照*指针，每写一次 cell 就换 id）⇒ 每轮重算身份、重新认领 run、重新拉起 Agent | **生产缺陷（活锁）**：实测同一步骤 110 次 succeeded、110 次 Agent 执行，links/approvals 全为 0 | 同上「keeps one identity when the requirement fact snapshot is rewritten」 |
+| 5 | read-only 动作（`approval.prepare`）覆盖 `__action.runId`，发布链据此找 candidate 现场 ⇒ 用没有业务改动的 workspace 重放 stage，得到假的 `candidate-tree-drift` | **生产缺陷**（多步说明书必然触发） | `rfc310-pr5-delivery-chain.test.ts`「does not steal the candidate context from its producing run」 |
+| 6 | `/code` 首屏主动作的 href 是 `?create=1`，而 TanStack 默认 search 解析会 JSON.parse 每个值 ⇒ 到达路由时是**数字 1**，只认 `true`/`'1'` 的版本整个丢掉 ⇒ 零配置操作链第一跳静默断掉 | **生产缺陷** | `code-config-pages.test.tsx`「deep-link create flags survive TanStack search parsing」 |
+
+E2E 侧另有两条**用例自身**的错（记下来免得再犯）：`aria-current="step"` 挂在 `li` 本身，用
+`filter({has})` 一个都匹配不上、再 `.or().first()` 就退化成「第一步」；以及不显式传 `home` 时
+harness 视其为自己的临时目录，`stop()` 会连库一起删——「重启不丢」那一段于是在空库上跑。
+
+### 两条旅程覆盖什么
+
+- `e2e/rfc310-zero-config-onboarding.spec.ts`（**E2E-A**）：零配置账号只按每页高亮的那一个动作走完
+  创建员工 → 发布 → 设置范围 → 发起首个任务，每一停点断言 current/next/owner，并各断言一次
+  **刷新不丢**与 **daemon 重启不丢**。
+- `e2e/rfc310-digital-employee-journey.spec.ts`（**E2E-B / T132**）：浏览器发起带上传的 Mission →
+  父仓实现 → 跨仓 child Mission ready-to-merge → 审批 prepare/submit/observe → 父仓 commit/push/MR →
+  真实 review 事件驱动的修复轮与回帖 → committer merge → merged 终态 → `/outcomes` 可见。
+  本机连跑两次稳定（3.0m / 3.1m）。
+
+T131 的矩阵按项对账：响应丢失后幂等认领、同 key 只认同一 intent、rejected/expired/unavailable 三态、
+传输故障不冒充回执、重启（客户端重建）后台账不丢，均在 `packages/system-mocks/tests/rfc310-approval.test.ts`；
+第二 Git remote 与「平台只对子仓开一条 MR」由 E2E-B 断言；重复投递的幂等在 `development_wake_hints` 的
+delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 的 observation-only 在
+`rfc310-playbook-coordinator.test.ts` 的 join 用例。
+
+**仍未完成：T121**（业务 i18n / 只读权限 / responsive 已随 PR-8 的 inventory 棘轮覆盖，缺的是
+**逐页视觉基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线得在 CI 侧生成，
+故不在本轮登记完成）。
 
 ## 14. 风险与停止条件
 

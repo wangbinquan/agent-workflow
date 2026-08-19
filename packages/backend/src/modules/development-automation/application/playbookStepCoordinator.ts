@@ -85,8 +85,25 @@ function stepInput(
   const store = deps.ports.playbookSaga
   if (store === undefined) return null
   if (input.kind === 'mission-requirement') {
-    const ref = mission.requirementBundleRef ?? mission.sourceContentDigest
-    return ref === null ? null : { ref, digest: canonicalDigest({ kind: input.kind, ref }) }
+    // 身份必须**内容寻址到需求 bundle**，不能用 mission.requirementBundleRef ——
+    // 那是 requirement *fact 快照*指针，每写一次 requirement cell 就换一个 id。
+    // 用它做 input digest 会让同一个步骤每轮都算出新身份 ⇒ 每轮重新认领 run、
+    // 重新拉起 Agent，永远推进不到下一步（T140 旅程实测：同一步骤 110 次
+    // succeeded、110 次 Agent 执行，links/approvals 全为 0）。
+    // 需求换代（refresh / 重新取件）会给出新的 bundleRef，那时重跑才是对的。
+    const source = deps.store
+      .listMissionSources(mission.id)
+      .filter((row) => row.state === 'materialized' && row.bundleRef !== null)
+      .sort((a, b) => b.generation - a.generation)[0]
+    if (source === undefined) return null
+    return {
+      ref: source.bundleRef!,
+      digest: canonicalDigest({
+        kind: input.kind,
+        ref: source.bundleRef,
+        manifestDigest: source.manifestDigest,
+      }),
+    }
   }
   if (input.kind === 'selected-problems') {
     const ref = knownString(snapshot, '__problem.setRef')
@@ -608,6 +625,40 @@ async function problemHandlerDecision(
   return null
 }
 
+/**
+ * RFC-310 PR-11 —— 需求取件/物化决策（direct 物化 / external 取件）。
+ *
+ * 两个调用方共用：①显式的 `requirement.acquire` 平台步骤（带 stepRunRef）；
+ * ②任何 `input.kind === 'mission-requirement'` 的步骤在**派发之前**的前置检查
+ * （不带 stepRunRef——那一步还没认领 run，物化本身不属于任何业务步骤）。
+ */
+function requirementAcquisitionDecision(mission: MissionRow, stepRunRef?: string): NextDecision {
+  const bind = stepRunRef === undefined ? {} : { stepRunRef }
+  if (mission.sourceKind === 'direct') {
+    return mission.sourceContentDigest === null
+      ? { kind: 'block', reason: 'direct-submission-digest-missing' }
+      : {
+          kind: 'materialize-direct-requirement',
+          submissionRef: mission.sourceContentDigest,
+          ...bind,
+        }
+  }
+  return mission.resolvedAdapterId === null || mission.resolvedAdapterRevision === null
+    ? { kind: 'block', reason: 'requirement-adapter-unresolved' }
+    : {
+        kind: 'collect-external-requirement',
+        adapterBindingRef: `${mission.resolvedAdapterId}@${mission.resolvedAdapterRevision}`,
+        ...bind,
+      }
+}
+
+/** 需求是否已经物化成 bundle（orchestrator 挂载 requirement mount 的同一判据）。 */
+function hasMaterializedRequirement(deps: ReconcileDeps, missionId: string): boolean {
+  return deps.store
+    .listMissionSources(missionId)
+    .some((source) => source.state === 'materialized' && source.bundleRef !== null)
+}
+
 function platformDecision(
   mission: MissionRow,
   snapshot: MissionFactSnapshot,
@@ -620,22 +671,7 @@ function platformDecision(
 ): NextDecision | null {
   switch (capabilityId) {
     case 'requirement.acquire':
-      if (mission.sourceKind === 'direct') {
-        return mission.sourceContentDigest === null
-          ? { kind: 'block', reason: 'direct-submission-digest-missing' }
-          : {
-              kind: 'materialize-direct-requirement',
-              submissionRef: mission.sourceContentDigest,
-              stepRunRef: run.id,
-            }
-      }
-      return mission.resolvedAdapterId === null || mission.resolvedAdapterRevision === null
-        ? { kind: 'block', reason: 'requirement-adapter-unresolved' }
-        : {
-            kind: 'collect-external-requirement',
-            adapterBindingRef: `${mission.resolvedAdapterId}@${mission.resolvedAdapterRevision}`,
-            stepRunRef: run.id,
-          }
+      return requirementAcquisitionDecision(mission, run.id)
     case 'repository.inspect':
       return { kind: 'collect-repository-facts', stepRunRef: run.id }
     case 'mr.collect':
@@ -810,6 +846,14 @@ async function inspectStep(
 ): Promise<StepInspection> {
   const store = deps.ports.playbookSaga!
   if (!matches(snapshot, step.when)) return { kind: 'unavailable' }
+  // 声明「吃 mission 需求」的步骤，在需求真正物化成 bundle 之前不得派发：
+  // 业务说明书只写「这一步吃需求」，把需求变成可挂载的 bundle 是平台的事
+  // （不能要求作者额外插一个 requirement.acquire 步骤）。少了这一道，Agent 会
+  // 在**没有任何需求上下文**的工作区里被拉起——严格的实现直接失败、宽松的实现
+  // 会照着空需求交付，两种都是静默错误。
+  if (step.input.kind === 'mission-requirement' && !hasMaterializedRequirement(deps, mission.id)) {
+    return { kind: 'decision', decision: requirementAcquisitionDecision(mission) }
+  }
   const input = stepExecutionInput(deps, mission, snapshot, step)
   if (input === null) return { kind: 'unavailable' }
 

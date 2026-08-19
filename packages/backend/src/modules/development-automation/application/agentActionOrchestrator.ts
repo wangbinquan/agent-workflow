@@ -1174,6 +1174,13 @@ export async function collectAgentAttempt(
       : {
           '__action.candidateState': known('derived'),
           '__action.candidateTreeOid': known(candidateTreeOid),
+          // 这条 candidate 是**哪个 run** 产出的。`__action.runId` 记的是"最近一次
+          // 动作"，read-only 动作（approval.prepare / problem.classify / review …）
+          // 同样会覆盖它却不产 candidate；发布链若拿 runId 去找 candidate 的现场，
+          // 就会用一个**没有业务改动的 workspace** 重放 stage，得到与记录不同的
+          // tree ⇒ 假的 `candidate-tree-drift`（T140 旅程实测：父任务在审批步骤
+          // 之后必然撞上）。所以 candidate 的现场必须自带 run 身份。
+          '__action.candidateRunId': known(actionRunId),
         }),
     // push 后记 upload publication receipt 的 lineage（finalDigests）在此冻结。
     ...(candidateUploadLineage === null
