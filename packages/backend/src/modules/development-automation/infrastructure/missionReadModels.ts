@@ -4,7 +4,7 @@
 // 详情附 source/upload/decision 摘要，trace 回 canonical guard/rule trace。
 // 不返回 host path/nonce/secret/raw 正文（§12.4）。
 
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import {
@@ -65,6 +65,52 @@ export function listMissionSummaries(db: DbClient): MissionSummaryView[] {
     .orderBy(desc(developmentMissions.createdAt))
     .all()
     .map(summaryOf)
+}
+
+/** 分页游标:与 /repos、/tasks 同款——**行值比较**的 keyset,不是 offset。 */
+export interface MissionPageCursor {
+  createdAt: number
+  id: string
+}
+
+export interface MissionPage {
+  items: MissionSummaryView[]
+  nextCursor: MissionPageCursor | null
+}
+
+/**
+ * RFC-311(自 RFC-310 移交)—— mission 列表的 O(页) 读法。
+ *
+ * 原实现是全表 `.all()`:mission 表长起来会复刻 `/tasks` 在十万任务下的卡顿形态
+ * （一次取回全部行 + 全部投影），而这条路径跑在 daemon 唯一的同步连接上。
+ *
+ * 排序键 `(created_at DESC, id DESC)`;断点写成**行值比较** `(a, id) < (?, ?)`——
+ * 展开成 `a < ? OR (a = ? AND id < ?)` 会让 SQLite 在绑定参数下选 MULTI-INDEX OR
+ * 并回落 TEMP B-TREE 全排序（RFC-311 在 10 万任务库上实测过这一条,判据见
+ * `docs/dev-gotchas.md`）。
+ */
+export function listMissionSummariesPage(
+  db: DbClient,
+  opts: { limit: number; cursor?: MissionPageCursor },
+): MissionPage {
+  const boundary =
+    opts.cursor === undefined
+      ? sql`1 = 1`
+      : sql`(${developmentMissions.createdAt}, ${developmentMissions.id}) < (${opts.cursor.createdAt}, ${opts.cursor.id})`
+  const rows = db
+    .select()
+    .from(developmentMissions)
+    .where(boundary)
+    .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
+    .limit(opts.limit + 1)
+    .all()
+  const hasMore = rows.length > opts.limit
+  const page = hasMore ? rows.slice(0, opts.limit) : rows
+  const last = page[page.length - 1]
+  return {
+    items: page.map(summaryOf),
+    nextCursor: hasMore && last !== undefined ? { createdAt: last.createdAt, id: last.id } : null,
+  }
 }
 
 export function getMissionDetail(

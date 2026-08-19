@@ -164,7 +164,7 @@ describe('CLI subcommands (P-1-05)', () => {
     })
 
     try {
-      await waitForReady(child.stdout, 10_000)
+      await waitForReady(child.stdout, 10_000, child.stderr)
 
       // status sees the daemon, /health is reachable.
       const status = await statusCommand()
@@ -223,7 +223,7 @@ describe('CLI subcommands (P-1-05)', () => {
       stderr: 'pipe',
     })
     try {
-      await waitForReady(child.stdout, 10_000)
+      await waitForReady(child.stdout, 10_000, child.stderr)
       expect(existsSync(scratch)).toBe(false)
       const verified = new Database(join(tmp, 'db.sqlite'), { readonly: true })
       expect(
@@ -276,7 +276,7 @@ describe('CLI subcommands (P-1-05)', () => {
       stderr: 'pipe',
     })
     try {
-      await waitForReady(child.stdout, 10_000)
+      await waitForReady(child.stdout, 10_000, child.stderr)
       const infoPath = join(tmp, '.daemon.info')
       expect(existsSync(infoPath)).toBe(true)
       const info = JSON.parse(readFileSync(infoPath, 'utf-8')) as Record<string, unknown>
@@ -313,26 +313,51 @@ describe('CLI subcommands (P-1-05)', () => {
   })
 })
 
+/**
+ * `stderr` 是**诊断必需**,不是可选:daemon 崩溃时把原因写在 stderr,而这里只
+ * 读 stdout。2026-08-19 CI 上「daemon exited before ready」红过一次,失败信息里
+ * 只有到「pre-migration backup written」为止的 stdout,真正的错误一个字都没有,
+ * 本地又复现不出来——查不下去正是因为这个盲区。传进来就一起打出来。
+ */
 async function waitForReady(
   stdout: ReadableStream<Uint8Array>,
   timeoutMs: number,
+  stderr?: ReadableStream<Uint8Array>,
 ): Promise<{ url: string; token: string }> {
   const reader = stdout.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let errBuffer = ''
+  const errReader = stderr?.getReader()
+  if (errReader !== undefined) {
+    void (async () => {
+      const errDecoder = new TextDecoder()
+      try {
+        for (;;) {
+          const { value, done } = await errReader.read()
+          if (done) break
+          errBuffer += errDecoder.decode(value, { stream: true })
+        }
+      } catch {
+        /* best-effort diagnostics */
+      }
+    })()
+  }
+  const withStderr = (message: string): string =>
+    errBuffer === '' ? message : `${message}\n--- stderr ---\n${errBuffer}`
   const deadline = Date.now() + timeoutMs
 
   try {
     while (Date.now() < deadline) {
       const { value, done } = await reader.read()
-      if (done) throw new Error('daemon exited before ready:\n' + buffer)
+      if (done) throw new Error(withStderr('daemon exited before ready:\n' + buffer))
       buffer += decoder.decode(value, { stream: true })
       const m = buffer.match(/(http:\/\/[0-9.]+:\d+\/)\?token=([0-9a-f]+)/)
       if (m && m[1] !== undefined && m[2] !== undefined) {
         return { url: m[1], token: m[2] }
       }
     }
-    throw new Error(`timed out within ${timeoutMs}ms; stdout so far:\n${buffer}`)
+    throw new Error(withStderr(`timed out within ${timeoutMs}ms; stdout so far:\n${buffer}`))
   } finally {
     reader.releaseLock()
   }

@@ -22,6 +22,7 @@ import {
   cancelMission,
   launchMission,
   launchMissionInputSchema,
+  previewMissionAdmission,
   previewDirectInput,
   retryBlockedMission,
   selectMissionRequirementSource,
@@ -38,6 +39,8 @@ import {
   getMissionDetail,
   listMissionEffects,
   listMissionSummaries,
+  listMissionSummariesPage,
+  type MissionPageCursor,
 } from '@/modules/development-automation/infrastructure/missionReadModels'
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import type { OperationFailureReceipt } from '@/modules/development-automation/domain/operationFailure'
@@ -93,6 +96,29 @@ function refreshFailureError(failure: OperationFailureReceipt): DomainError {
   return new ConflictError(failure.code, failure.remediation)
 }
 
+/** 游标编码:与 /repos 同款的 base64url 封套——对调用方不透明,服务端可换实现。 */
+function encodeMissionCursor(cursor: MissionPageCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf-8').toString('base64url')
+}
+
+/** 用 Zod 而不是类型断言:游标是**外部输入**,`as` 会把随后的校验变成装饰
+ *  (RFC-054 W1-7 守卫锁的正是这一点)。 */
+const MissionCursorSchema = z.object({
+  createdAt: z.number().int().nonnegative(),
+  id: z.string().min(1),
+})
+
+function decodeMissionCursor(raw: string): MissionPageCursor | null {
+  try {
+    const parsed = MissionCursorSchema.safeParse(
+      JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8')),
+    )
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}
+
 export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
   const uploadSessions = createSqliteUploadSessionStore(deps.db)
   const snapshots = createSqliteFactSnapshotReader(deps.db)
@@ -109,7 +135,8 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
     // PR-4：路由实例与 daemon 实例注入同一形状的 runner（同 db 下语义等价；
     // SYSTEM_USER_ID——数字员工任务是 mission 自动化产物，不是 HTTP actor 的
-    // 个人任务）。终态回调落 wake hint（deliveryKey 幂等），30s sweep 收取。
+    // 个人任务）。终态回调落 wake hint（deliveryKey 幂等）并立即续跑；30s
+    // sweep 仍是进程退出/瞬时失败后的 durable 兜底。
     agentLauncher: composeAgentActionExecution({
       db: deps.db,
       startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
@@ -123,6 +150,7 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
           deliveryKey: `agent-exec:${executionRef}`,
           now: Date.now(),
         })
+        fireReconcile(missionId)
       },
     }),
   })
@@ -139,12 +167,22 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
   }
 
   const fireReconcile = (missionId: string): void => {
-    void automation.reconcile(missionId).catch((err: unknown) => {
-      log.warn('mission reconcile after route mutation failed', {
-        missionId,
-        err: err instanceof Error ? err.message : String(err),
+    void automation
+      .drive(missionId)
+      .then((outcome) => {
+        if (outcome.stop === 'step-budget') {
+          log.warn('mission drive reached its bounded step budget', {
+            missionId,
+            steps: outcome.steps,
+          })
+        }
       })
-    })
+      .catch((err: unknown) => {
+        log.warn('mission drive after route mutation failed', {
+          missionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      })
   }
 
   /**
@@ -220,6 +258,27 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
     app,
     {
       method: 'POST',
+      path: '/api/code/missions/preview',
+      permissions: ['development-missions:launch'],
+      tokenAccess: 'allow',
+      summary:
+        'Preview employee, policy and requirement-source admission without creating a mission',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
+      const result = await previewMissionAdmission(launchDeps, {
+        ...body,
+        actorUserId: actor.user.id,
+      })
+      return c.json(result)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
       path: '/api/code/missions/direct-input/preview',
       permissions: ['development-missions:launch'],
       tokenAccess: 'allow',
@@ -240,9 +299,39 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       path: '/api/code/missions',
       permissions: ['development-missions:read'],
       tokenAccess: 'allow',
-      summary: 'List development missions',
+      summary: 'List development missions (paged when `limit`/`cursor` is given)',
     },
-    async (c) => c.json({ items: listMissionSummaries(deps.db) }),
+    async (c) => {
+      // RFC-311(自 RFC-310 移交)—— 双形状,与 `/api/cached-repos` 同款:
+      // 无参调用保持旧的 `{items}` 全量形状(既有消费点零改动),带任一分页参数
+      // 才切 `{items, nextCursor}` 封套。全表 `.all()` 在 mission 表长起来后会
+      // 复刻 /tasks 的卡顿形态,而它跑在 daemon 唯一的同步连接上。
+      const limitRaw = c.req.query('limit')
+      const cursorRaw = c.req.query('cursor')
+      if (limitRaw === undefined && cursorRaw === undefined) {
+        return c.json({ items: listMissionSummaries(deps.db) })
+      }
+      const limit = limitRaw === undefined ? 50 : Number(limitRaw)
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+        throw new ValidationError('mission-limit-invalid', `'${String(limitRaw)}' is not a limit`)
+      }
+      let cursor: MissionPageCursor | undefined
+      if (cursorRaw !== undefined) {
+        const parsed = decodeMissionCursor(cursorRaw)
+        if (parsed === null) {
+          throw new ValidationError('mission-cursor-invalid', 'cursor is not decodable')
+        }
+        cursor = parsed
+      }
+      const page = listMissionSummariesPage(deps.db, {
+        limit,
+        ...(cursor !== undefined ? { cursor } : {}),
+      })
+      return c.json({
+        items: page.items,
+        nextCursor: page.nextCursor === null ? null : encodeMissionCursor(page.nextCursor),
+      })
+    },
   )
 
   registerRoute(

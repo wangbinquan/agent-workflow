@@ -4,6 +4,7 @@
 
 ## 测试 / CI
 
+- **起真进程做验收时,失败信息必须同时打印 stderr——只读 stdout 会让崩溃「无因可查」**（2026-08-19 实撞）：`tests/cli.test.ts` 的 `waitForReady` 只读 daemon 的 stdout，于是 CI 上一次「daemon exited before ready」的报错里，只有到「pre-migration backup written」为止的正常日志，**真正的错误一个字都没有**（它写在 stderr）；本地又复现不出来，等于线索归零。判据：**任何 `Bun.spawn` + 等待就绪的测试助手，失败路径都要把 stderr 一并附上**——正常路径不需要它，恰恰是失败路径唯一需要它。修法见该文件 `waitForReady` 的第三个参数（后台异步读 stderr、失败时拼进 message）。
 - **本地门禁对「本批新增的文件」可能整批假绿——用 `git ls-files` 枚举源码的守卫看不见 untracked 文件**（2026-08-19 实测，RFC-311 T19）：`tests/route-error-code-coverage.test.ts` 这类守卫先 `git ls-files -- 'src/routes/*.ts'` 再扫描，而**未跟踪的新文件不在输出里**。我连跑三轮 `gate:local` 全绿，`git commit` 之后 CI 立刻红在「新错误码没有测试点名」——同一台机器、同一份代码，差别只是文件从 untracked 变成 tracked。同类枚举式守卫（端点↔契约注册表、卡片计数、AST ratchet…）都吃这一口。
   - 定式：**新增文件的批次，跑门禁前先 `git add -N <新文件>`**（intent-to-add，只登记路径不入暂存内容），让所有 `git ls-files` 类扫描立刻看见它们；批次全绿再正常 `git add` 提交。
   - 判据：本地绿、推上去红，且红的那条守卫「按文件枚举」——先查它怎么列文件，而不是先怀疑环境差异。
@@ -469,6 +470,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 - **`gate:local` 全绿 ≠ CI 会绿：有一批测试被环境开关门控，本地门禁一个都不跑**（RFC-287 T14 二轮实测，被这条坑了一次 CI 往返）。`describe.skipIf(!RUN_GIT_NETWORK)` 目前挡着 4 个后端套件（`git-repo-cache-submodule` / `worktree-submodule-init` / 两个 `mcp-probe-*-integration`），CI 会设这个变量、本地不会。症状极具迷惑性：固定快照门禁 backend 10198 全绿，推上去 CI 的 ubuntu 与 macOS **同一分片双双红**（双 OS 同红本身就说明是确定性失败而非环境抖动）。**判据**：改动若触及 git 远端 / 子模块 / MCP 探针这些「需要真网络或真 git 协议」的面，推之前补跑一次 `RUN_GIT_NETWORK=1 bun test <那几个文件>`；用 `grep -rln "skipIf(!RUN_GIT_NETWORK" tests/` 把清单取全，别凭记忆。同理还有 `skipIf(process.platform …)` 的 17 处平台门控——那些只能靠 CI 的双 OS 矩阵兜。
 - **多路评审要刻意错开「看什么」，而不是只切范围**（RFC-287 T14 两轮实证）。第一轮我按半场切了两路 Codex——范围不同，但**视角相同：都在看 diff**。结果两路**同时漏掉**一条 P0 安全问题：G7 把空 `worktreePath` 从罕见终态变成每个准备中任务的正常状态，`resolve('')` 返回进程 cwd 于是「任务还没有工作树」被当成「工作树 = daemon 的工作目录」——那段代码**一行没改**，不在 diff 里，看 diff 的评审天然看不见。第二轮我另起两路刻意错开的视角，产出立刻不同：**「不在 diff 里的连带面」**（先列出本轮放宽了取值范围的值，再反查所有消费方）挖出 2 条 P0；**「测试有效性」**（对每条新断言做变异，问「实现变得更正确时它会不会红」）挖出 5 条零预言力断言，其中一条是「重试 X = 重跑 X」把实现换成裸 `return` 仍全绿。**判据**：切多路时先问「这几路会不会因为同一个盲区一起漏」；至少留一路不看 diff、一路专审测试本身。
   - **为什么自查补不上这一课——自查用的还是当初得出结论的那套视角**（2026-08-15 两个并发 session 互相纠错四次后归纳）。四次里**被纠正的一方每次都处在「已经复查过、并且确信自己对」的状态**：一方判定 e2e 失败机制时套用了首次的形态去解释 retry1（两次机制其实不同），另一方写「文档格式没门禁保障」时假设「没被 prettier 覆盖」就是原因（实际覆盖了也没用，prettier 不管全半角）。**问题不在谁不够仔细，在于复查时复用的正是产生那个结论的视角——同一套视角查一百遍也翻不出来，换一双眼睛一眼就看见。** 所以「我再仔细看一遍」不是这类错误的解药，**换视角**才是；这也是上面那条要求刻意错开视角、而不是要求评审更认真的原因。人与人之间的交叉纠错和多路评审是同一个机制在不同尺度上生效。
+- **后台跑 `codex exec` 必须 `< /dev/null`，否则永久卡在读 stdin**（2026-08-19 实撞，RFC-312 设计门第二轮白等 50 分钟）。`codex exec [PROMPT]` 除了位置参数还会读 stdin（有管道就把它当 `<stdin>` 块附加到提示词后面）；在「Bash `run_in_background:true` 里跑前台 `--wait`」这个本仓推荐姿势下，stdin 是一条**永不 EOF** 的管道，于是它一直等。**症状与已知的两种僵尸都不同**：进程活着、0% CPU、**日志只有一行 `Reading additional input from stdin...`**（banner / workdir / session id 一个都没打）、`~/.codex/sessions` 下**没有属于它的 rollout**——因为线程压根没起。判据：日志停在那一行且无 rollout ⇒ 是 stdin 卡死，不是模型慢，等再久也不会动。**定式**：后台起 review 一律写成 `codex exec … < /dev/null > out.log 2>&1`；起完立刻 `grep "session id" out.log` 确认 banner 出来了再去等。同一条命令加上 `< /dev/null` 后 secs 级就打出 banner。
 - **多路 Codex 门必须串行启动，起完一路要核实 job 真的注册上了**（RFC-287 T14 第二轮实测）。同一 workspace 的 job 列表存在 `~/.claude/plugins/data/codex-openai-codex/state/<ws>/state.json` 的 `jobs` 数组里，是**读-改-写**。并行起两路 rescue agent 时后写的会把先写的那条覆盖掉，随后 jobs 目录被重建成空——两个 job **一个都没跑**。最坑的是它**不报错**：两路 agent 都正常返回「Codex Task started as task-xxx」，你以为在跑，实际等到超时才发现。定式：起一路 → `cat state.json` 确认 `jobs` 里有它 → 再起下一路；轮询脚本里加「job 文件消失」的分支，别只判 `status != running`（文件没了时那个判断恒真，会误报成"完成"）。
 - **Codex 的 job registry 按 `workspaceRoot` 分目录——从分离 worktree 起的 job 不在主仓那个目录里**（RFC-287 三轮门实测，差点误判成「重启没注册上」）。路径是 `~/.claude/plugins/data/codex-openai-codex/state/<workspace-slug>/jobs/`，而 slug 由 workspaceRoot 派生：主仓是 `agent-workflow-<hash>`，pin 到 `scratchpad/gate-r3d` 的 worktree 就变成 `gate-r3d-<hash>`。而本仓的强制定式恰恰是**从分离 worktree 跑 review**，所以这是常态不是例外。症状：agent 报「started as task-xxx」，你去主仓那个 jobs 目录一看文件不存在，正要判它是上文那条「并发覆盖导致 job 丢失」。**判据**：先 `find ~/.claude/plugins/data/codex-openai-codex -name "*<jobid>*"` 全局找一遍，确认真不存在再下结论；轮询脚本里的 `$D` 也要按你实际的 workspaceRoot 取，别写死主仓那个。
 
@@ -1261,9 +1263,9 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
 即兴拼载荷，后端在 create 期 strict parse，两边各自绿着，合起来是坏的。
 
 - 把载荷构造提成 `packages/shared` 的纯函数（本次 `buildDevelopmentConfigCreateBody`
-  + `DEVELOPMENT_CONFIG_API_BASE`），**前端调它发请求，后端测试调它打 `createApp`
-  起的真实 HTTP app**（真 DB、真路由、真 Zod）。这样漂移不再需要"对账"去发现——
-  两边根本没有第二份可漂。
+  - `DEVELOPMENT_CONFIG_API_BASE`），**前端调它发请求，后端测试调它打 `createApp`
+    起的真实 HTTP app**（真 DB、真路由、真 Zod）。这样漂移不再需要"对账"去发现——
+    两边根本没有第二份可漂。
 - 判据升级：`mock` 掉的边界不构成契约证明；**读对方源码的对账**是次优解（适用于
   真的不能共用的镜像，如前端不 import 后端包的 fact catalog）；**共用一份 + 真实
   重放**才是首选。
@@ -1284,11 +1286,11 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
 「自己从前台走一遍关键流程」时实撞）。起了独立 home 的 daemon + 内嵌前端逐页操作，
 一趟走出两个整页崩溃、一个静默说谎，全部是同一根因的不同长相：
 
-| 现象 | 前端假设 | 真实形状 |
-|---|---|---|
-| `/code/assignments` 点「新建指派」白屏 `e.repos.map is not a function` | 四条 useQuery 声明成裸数组 | 列表端点回 `{ items: [...] }` |
-| 员工详情存草稿后白屏 React error #31 | `fallbackTemplateRef` 是字符串 | domain `versionedRef` = `{ id, revision }` |
-| 员工「默认策略」永远显示「—」 | `refText` 只认字符串 | 同上（对象 → 静默退化，**不报错，只是说谎**） |
+| 现象                                                                   | 前端假设                       | 真实形状                                      |
+| ---------------------------------------------------------------------- | ------------------------------ | --------------------------------------------- |
+| `/code/assignments` 点「新建指派」白屏 `e.repos.map is not a function` | 四条 useQuery 声明成裸数组     | 列表端点回 `{ items: [...] }`                 |
+| 员工详情存草稿后白屏 React error #31                                   | `fallbackTemplateRef` 是字符串 | domain `versionedRef` = `{ id, revision }`    |
+| 员工「默认策略」永远显示「—」                                          | `refText` 只认字符串           | 同上（对象 → 静默退化，**不报错，只是说谎**） |
 
 三处的共同结构是**测试与实现一起错**：页面测试 mock 掉 fetch、fixture 照着前端的
 错误假设造数据（裸数组、`'id@rev'` 字符串），于是两边互相印证、全绿到用户点开为止。

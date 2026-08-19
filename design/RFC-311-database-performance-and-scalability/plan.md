@@ -73,6 +73,20 @@
 - agents/skills/mcps/plugins/workgroups/memory/users/scheduled/intent/code-missions 各页接入
   VirtualList + 端点分页(数据千级前非必需;memory 审批队列 body 惰性加载优先级最高);
 - 事件"写入即落盘"二期;FTS5 搜索;归档任务恢复工具;T21 若延后在此销账。
+- **WS 广播的出站 fence 每帧每订阅者一次同步 SELECT**(由并发的 RFC-312 session 顺路挖出并明确让给本 RFC):
+  `ws/registry.ts:1015-1035` 的 `authorityRevisionCurrent` 在 `sendJson` 里**无条件**跑
+  `SELECT status, access_revision FROM users WHERE id = ?`,且走 `db.$client` 同步查询——对**所有**广播
+  通道生效(tasks-list / workflows / memories / 任务详情),量级是「帧数 × 订阅者数」,随开着的 tab 数走。
+  本 RFC 治的 L1/L2 是**查询形状**,这条是**常驻读频次**,同族但未覆盖。做法:由 identity-access 单写者
+  维护内存镜像,整条归零。**本轮不做**——已交付面已经很大,再塞一个 WS 出站 fence 改造风险与收益不匹配。
+- **WS 升级重复解析同一 token**(同上来源):`ws/server.ts:134` 的 `resolveActor` 与 `:200` 的
+  `buildWsCredential` 各跑一遍 `lookupActiveSession`,每次升级 5 读 + **2 次** `UPDATE last_used_at`;
+  `:196-200` 的注释自己写着「同一个 token 刚被 resolveActor 消费过」。已与 RFC-312 session 约定:
+  它在其必经路径上,由该 RFC 顺手修;若它决定不做则回落本清单。
+- **两处前端分页接入**(后端均已就位,只差消费端):①`/api/code/missions` 已支持 `?limit&cursor` 双形状
+  (本 RFC 已交付),`routes/code.missions.tsx` 仍取全量;②`/api/code/work-items` 后端**早就返回**
+  `nextCursor`,`routes/code.tsx:244` 取到了却丢掉、只渲染首页。两处接入方式同 `/repos`
+  (`usePagedList` + 滚动哨兵)。本轮未做的原因是这两个文件当时正被并发 session 编辑(仓规:不碰在制文件)。
 - **`listMissionSummaries`(development-automation 的 mission 列表读模型)目前是全表无分页 `.all()`**
   ——RFC-310 PR-2 的既有实现,其 RFC 范围内无分页要求,由该 session 移交本性能治理面登记;mission
   表长起来会复刻 /tasks 的卡顿形态,接入方式与 /repos 同款(keyset + 页内富化 + facets)。
