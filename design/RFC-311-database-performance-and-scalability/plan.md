@@ -85,8 +85,9 @@
   它在其必经路径上,由该 RFC 顺手修;若它决定不做则回落本清单。
 - **两处前端分页接入**(后端均已就位,只差消费端):①`/api/code/missions` 已支持 `?limit&cursor` 双形状
   (本 RFC 已交付),`routes/code.missions.tsx` 仍取全量;②`/api/code/work-items` 后端**早就返回**
-  `nextCursor`,`routes/code.tsx:244` 取到了却丢掉、只渲染首页。两处接入方式同 `/repos`
-  (`usePagedList` + 滚动哨兵)。本轮未做的原因是这两个文件当时正被并发 session 编辑(仓规:不碰在制文件)。
+  `nextCursor`,`routes/code.tsx` 的 `ActivityPanel` 取到了却丢掉、只渲染首页(RFC-310 前端批重写后
+  行号已漂移到 `:392-398`,按 `ActivityPanel` 定位)。两处接入方式同 `/repos`(`usePagedList` + 滚动哨兵)。
+  本轮未做的原因见下文§未完成项第 1 条——不是排期,是这两个文件在制且引用未追踪文件。
 - **`listMissionSummaries`(development-automation 的 mission 列表读模型)目前是全表无分页 `.all()`**
   ——RFC-310 PR-2 的既有实现,其 RFC 范围内无分页要求,由该 session 移交本性能治理面登记;mission
   表长起来会复刻 /tasks 的卡顿形态,接入方式与 /repos 同款(keyset + 页内富化 + facets)。
@@ -168,4 +169,47 @@
     第一版分窗让整轮从 6 秒劣化到 260 秒(43×)——同一个 node_run 横跨多窗口、每窗重问一次总量,
     而 6 条单测全绿。正解是每窗只取候选集 + 分块一条分组语句 + 候选预算;判据「单测证明不了没改坏
     代价」已落 `docs/dev-gotchas.md`。
-- **遗留(不阻塞收口,记账)**:T20 维护入口(opencode-stores 清理 / freelist 提示 / `db compact` CLI);T21 prompt_text 外置;/code work-items nextCursor 修复(T29 余项;与 RFC-310 session 明确交接:其 PR-10 只做删除波不塞功能增强,`ActivityPanel`/`WorkItemRounds` 与 `api.get<{items,nextCursor}>` 原样保留、后端 cursor 语义未动,**待 PR-10 落地后由本 RFC 侧按 /repos 同款做法接翻页**);sessionView 上限、getNodeRunStdout 截断;development retention_state sweeper 与 code rollup 表(归属 RFC-310/code-capability 域)。
+- **G4 + T20 + T21 ✅**(`dfda2d02` 及此前若干批):G4 = 备份并发计时断言 + `/repos` facets 短 TTL 缓存;
+  T20 = `opencode-stores` 退役清理 / freelist 提示 / `agent-workflow db compact` CLI(拒绝在 daemon 存活时跑);
+  T21 = node_run prompt 正文按 **4 KiB 阈值**外置到 `runs/{taskId}/prompts/{nodeRunId}.md` + **永久双读**(旧行不回填)。
+  T21 两处落地修正:①设计里的 `runs/{taskId}/{nodeRunId}/prompt.md` 会被 runner 的 `rmSync(runRoot)` 连带删掉,改挂
+  `prompts/` 同级目录;②守卫第一版做成文件级判据、变异检验证明**锁不住**(import 还在就恒绿),改成行级 +
+  把已解析字段改名 `promptBody`,让「列」与「正文」在类型层分得开。
+
+- **mission 分页 ✅ 后端 / ⛔ 前端**:`listMissionSummariesPage` + `GET /api/code/missions` 双形状(无参保持旧
+  `{items}`,带 `limit`/`cursor` 才 `{items,nextCursor}`)已随 `7c542729` 落地,逐页序列 === 旧全量顺序、
+  行值断点、三个 422 错误码逐条点名(`e9b8aa76` 补)。
+
+### 未完成项(逐条带**解除条件**,不是"以后再说")
+
+1. **`/code` work-items 与 mission 列表的前端翻页接入**(T29 余项)。**当前不可做**,不是排期问题:
+   `packages/frontend/src/routes/code.tsx`(+187)与 `code.missions.tsx`(−283 重写)正被 RFC-310 session
+   改着,且改后的版本**引用未追踪文件**(`code.missions.new.tsx` / `components/code/DevelopmentConfigEditor.tsx`
+   等)。按仓规「同一文件混改一起提」提这两个文件,会把引用提上主干而定义留在对方工作树里——**本轮已经因此
+   两次打红主干**(`previewMissionAdmission`、`automation.drive`),不能第三次。
+   **解除条件**:RFC-310 session 提交这批前端文件之后,`git status --porcelain packages/frontend/src/routes/code*.tsx`
+   干净;届时按 `/repos` 同款做法接 `usePagedList` + `VirtualList`。
+   代码位置:`code.tsx:392-398` 拿到了 `nextCursor` 但直接丢弃。
+
+2. **`development_missions` 缺 `(created_at, id)` 复合索引**(RFC-294 session 复核时提出,**实测证实**)。
+   现状 EXPLAIN(绑定参数,非字面量):
+
+   ```
+   keyset page: SEARCH development_missions USING INDEX idx_development_missions_created (created_at<?)
+                USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+   first page:  SCAN   development_missions USING INDEX idx_development_missions_created
+                USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+   ```
+
+   `LAST TERM` 只对**同一 created_at 组内**排序,所以常态(毫秒时间戳、并列极少)仍是 O(页);但**最坏情况**
+   (大量行共享同一 created_at)会退化成全排序,因此「最坏 O(页)」这句话现在还不能声称。
+   **当前不可做**:加索引要走迁移四件套,而 `db/migrations/meta/_journal.json` 已被 RFC-310 session 改过、
+   其 `0186_rfc310_task_platform_inputs.sql` **尚未追踪**。此刻提 journal = 提一个指向不存在 .sql 的条目,
+   **daemon 直接起不来**(比构建红一档)。
+   **解除条件**:对方的 `0186` 落进主干后,本 RFC 追一条 `0187_rfc311_mission_page_index.sql`
+   (`CREATE INDEX idx_development_missions_created_id ON development_missions(created_at, id)`)+ 一条
+   EXPLAIN 断言(**必须用 `?` 绑定参数**,字面量复现不出该计划)+ 顺带把 `listMissionSummariesPage`
+   的 `select()` 收窄成 `summaryOf` 真正用到的 18 列(现在把 `readiness_json` / `block_detail` 一起读了)。
+
+3. **其余记账**:`sessionView` 上限、`getNodeRunStdout` 尾部截断;development `retention_state` sweeper 与
+   code rollup 表(归属 RFC-310 / code-capability 域);视觉 win32 基线随下一个 Windows 批。
