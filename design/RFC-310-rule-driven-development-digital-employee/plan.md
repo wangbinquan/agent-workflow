@@ -612,6 +612,31 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 - **AC-27/28/29/30/32**（polyglot 两阶段、no-change、review、readiness、tracking-only）：
   `rfc310-pr5-analyze` / `rfc310-pr5-no-change` / `rfc310-pr5-review` / `rfc310-pr7b-handover`。
 
+### system mock E2E 自证的复跑账（2026-08-19 逐条实跑）
+
+`/goal` 要求"最终使用 system mock 进行完整的 E2E 用例构建进行功能自证和防护"。
+本节给出**可复跑的账**，而不是"跑过了"的口头结论。
+
+| 面 | 用例 | mock 面 | 实跑结果 |
+|---|---|---|---|
+| MR 全生命周期（create-MR 起点 → 外部 merged 终态） | `rfc310-t109-full-journey-e2e` 旅程 A | `startSystemMockSuite` code-host（真 bare 仓 + GitLab REST） | 2/2 绿 · 5.8s |
+| adopt 外部已开 MR → 权威终态 | 同上 旅程 B | 同上 | ↑ 同批 |
+| Java polyglot 全链（clone→facts→workspace→candidate→verification 子进程） | `rfc310-pr5-e2e-java` | 同上 | 9/9 绿（四文件合计） |
+| `mr.ensure` 幂等 / 绑定错配 typed 拒 | `rfc310-pr5-mr-ensure` | 同上 | ↑ |
+| MR facts 三读 fence / authorClass 三分类 / 回帖 | `rfc310-pr7-mr-facts` | 同上 | ↑ |
+| 外部需求 ID（真 adapter 子进程 ↔ requirement provider mock） | `rfc310-pr3-journey` + `rfc310-pr3-adapter-runner` | requirement-provider + requirement-adapter-cli | 19/19 绿（三文件合计） |
+| 自建门禁 collect/trigger/rerun（真 CLI 子进程 ↔ pipeline provider mock） | `rfc310-pr6-pipeline-adapter` | pipeline-provider + pipeline-adapter-cli | ↑ |
+| **RFC-310 全量** | `tests/rfc310-*.test.ts` | —— | **69 文件 / 417 用例 / 2350 断言全绿 · 46s** |
+
+**索引可执行化**：新增 `rfc310-ac-evidence-index` 守卫——上面的 AC 证据索引点名的每个
+测试文件必须真实存在、AC-1..35 必须逐条有证据、且失败关闭。变异实测三种形态全部检出
+（证据文件改名 / glob 家族消失 / 漏登一条 AC）。此前这份索引没有任何东西守着：PR-10 一波
+退役删了 88 个测试文件，索引指向失效不会有任何信号，"自证"会悄悄退化成"曾经自证过"。
+
+**未由 system mock E2E 覆盖的部分（如实登记）**：Agent 进程本身在所有 E2E 里都是桩
+（真实 runtime 二进制不参与——这是 T62/T109 harness 的既定边界，"除 Agent 外全真件"）；
+浏览器级视觉回归属 T93 余量。
+
 ### 未竟项（如实登记，不阻塞 Done）
 
 1. **T78 conflict repair 的 Agent 执行面**（edit-conflicts validator / merge-workspace 物化 /

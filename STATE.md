@@ -200,6 +200,12 @@
 >   照着前端的错误假设造数据、与实现互相印证**，故全绿。处置：修复三处 + fixture 改由后端 domain
 >   schema 裁定（`safeParse` 对拍）+ 新增列表端点形状守卫（判据表逐条 curl 真实 daemon 实测，
 >   并常驻一条判据函数自检）+ 两处列表把仓库 ULID 显示为地址。
+>   **system mock E2E 自证复跑账（2026-08-19）**：T109 两旅程 2/2、四个 suite 型 E2E 9/9、
+>   provider-mock 型（requirement / pipeline 真 adapter 子进程）19/19、**RFC-310 全量 69 文件
+>   417 用例 2350 断言全绿（46s）**；账落 plan.md §「system mock E2E 自证的复跑账」。同时把
+>   AC 证据索引**可执行化**（新增 `rfc310-ac-evidence-index` 守卫：点名的测试文件必须存在、
+>   AC-1..35 逐条有证据、失败关闭；变异实测改名/家族消失/漏登三形态全检出）——此前索引无人守，
+>   PR-10 删 88 个测试文件时它失效也不会有信号。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：
