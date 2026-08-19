@@ -495,11 +495,18 @@ test('guest browser exposes public resources without mutation or task affordance
     '/workflows',
     '/workgroups',
     '/intent',
+    // RFC-310 PR-11：数字员工从 tasks 组里的一个 `/code` 条目升为独立分组（说明书 /
+    // 执行器库 / 仓库范围三条），`/outcomes` 进运行组。这条清单是**完整产品地图**的
+    // 快照——guest 照样看得见全部条目，只是无权目标页为空且不发请求（RFC-305 的
+    // stable-nav 契约），所以导航改版必须同步改它。
+    '/code',
+    '/code/executors',
+    '/code/assignments',
     '/tasks',
+    '/outcomes',
     '/scheduled',
     '/repos',
     '/webhooks',
-    '/code',
     '/memory',
   ])
 
