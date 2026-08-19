@@ -824,10 +824,13 @@ function TaskOperationsList(props: {
   // subtree included, measured dynamically), so off-screen rows mount nothing
   // and their tick subscriptions vanish with them. Scrolling near the end
   // auto-fetches the next page; the button stays as fallback + a11y target.
-  const { hasNextPage, loadingMore, onLoadMore } = props
-  const reachEnd = useCallback(() => {
-    if (hasNextPage && !loadingMore) onLoadMore()
-  }, [hasNextPage, loadingMore, onLoadMore])
+  // RFC-311：**显式的翻页按钮在场时，不再挂滚动哨兵**。两者写的是同一份状态，
+  // 会互相抢：为了点按钮而把它滚进视口，那一下就触发了哨兵，最后一页到达后
+  // `hasNextPage` 转 false，按钮在指针底下**合法卸载**——webkit e2e 上稳定复现为
+  // `element was detached from the DOM` 直到超时（chromium 因为有 scroll anchoring
+  // 且时序更快而侥幸躲过）。一个会在你伸手时消失的按钮，对真人和键盘用户同样是
+  // 缺陷。按钮已 sticky 钉在列表底沿、随时够得着，由它独占翻页即可；无限滚动若要
+  // 回归，需要一个不与按钮争的设计（见 RFC-311 plan 的登记）。
   return (
     <section
       className="task-operations"
@@ -846,7 +849,6 @@ function TaskOperationsList(props: {
         itemKey={(item) => item.id}
         estimateSize={73}
         scrollResetKey={props.scrollResetKey}
-        onReachEnd={reachEnd}
         containerProps={{
           className: 'task-operations__list',
           role: 'list',
@@ -867,7 +869,7 @@ function TaskOperationsList(props: {
         )}
         tail={
           props.hasNextPage ? (
-            <div className="task-operations__more" role="presentation">
+            <div className="task-operations__more" role="listitem">
               {/* RFC-311：可及名固定、且**不 disabled**。距底 400px 的滚动哨兵会在
                   用户/浏览器把本按钮滚进视口时先一步触发翻页，若此刻改文案或禁用，
                   按名字拿到的句柄当场失配（webkit e2e 症状是 element detached 活锁），

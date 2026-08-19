@@ -1,11 +1,10 @@
 // RFC-311 —— 「Load more」按钮在加载期间必须是**同一个、可点的** DOM 节点。
 //
 // 为什么存在：PR-5 把 /tasks 与 /repos 窗口化后，VirtualList 带了一个距底 400px
-// 的滚动哨兵（`onReachEnd`），而 Load more 按钮就挂在最底部的 `tail` 槽位。于是
-// 任何人（Playwright 或真人）为了点它把它滚进视口，都必然先落进哨兵阈值 → 自动
-// 翻页 → `loadingMore=true` → 按钮**换名**（Load more tasks → Loading…）**并
-// disabled**。按名字拿到的句柄当场失配，浏览器侧的症状是
-// `element was detached from the DOM, retrying` 循环到超时：
+// 的滚动哨兵（`onReachEnd`），而 Load more 按钮就挂在最底部的 `tail` 槽位。两者写
+// 的是**同一份状态**，于是任何人（Playwright 或真人）为了点它把它滚进视口，那一下
+// 就触发了哨兵：最后一页到达后 `hasNextPage` 转 false，按钮在指针底下**合法卸载**。
+// 浏览器侧的症状是 `element was detached from the DOM, retrying` 循环到超时：
 //   e2e-webkit-nightly 32229170740（sha d4e7e514）shard 2/4，
 //   rfc244-task-operations.spec.ts:162 与 :267 双双 15s 超时。
 //   chromium 侥幸没复现——它常常不需要滚动就点到了，所以主 CI 一直是绿的。
@@ -15,7 +14,8 @@
 //   2. 加载中**不 disabled**——disabled 会吞掉点击，且键盘用户焦点会被弹走；
 //   3. 加载前后是**同一个 DOM 节点**（identity 相等）——这正是「detached」的反面。
 //
-// 加载状态改由按钮的 `aria-busy` + 一条 role="status" 旁白承载，不再靠改按钮文案。
+// 定案：**显式按钮在场时不再挂哨兵**（本地 webkit 实跑 8/8 绿，且零视觉基线变更）；
+// 加载状态改由按钮的 `aria-busy` + 一条 sr-only 旁白承载，不再靠改文案 / disabled。
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -168,17 +168,27 @@ describe('RFC-311 — the Load more target survives its own loading state', () =
     )
     await renderTasks()
 
-    // 哨兵已经把第二页发出去了，所以这一刻按钮**正处于加载中**——旧实现下它叫
-    // 「Loading more tasks…」且 disabled，这一行拿不到，测试在此变红。
+    // 没有哨兵抢跑：按钮以**空闲**形态出现，翻页只由这一次点击驱动。
     const button = await screen.findByRole('button', { name: 'Load more tasks' })
-    await waitFor(() => expect(gate.cursorRequests.count).toBeGreaterThan(0))
-    expect(button.getAttribute('aria-busy'), '加载态应由 aria-busy 承载').toBe('true')
-    expect(button.hasAttribute('disabled'), 'disabled 会吞掉点击并弹走键盘焦点').toBe(false)
+    expect(button.hasAttribute('disabled')).toBe(false)
+    expect(button.getAttribute('aria-busy')).toBeNull()
+    // 尾部必须是 listitem：容器是 role="list"，塞一个非 listitem 的可聚焦子元素
+    // 会触发 axe `aria-required-children`（critical）。此前哨兵抢先加载完、尾部
+    // 早已卸载，反而把这条违规**遮住**了，webkit 实跑才暴露出来。
+    expect(button.closest('[role="listitem"]'), '翻页尾部必须是 listitem').not.toBeNull()
 
-    // 加载中点击是安全的空操作（不重复发页）。
-    const before = gate.cursorRequests.count
     fireEvent.click(button)
-    expect(gate.cursorRequests.count).toBe(before)
+    await waitFor(() => expect(gate.cursorRequests.count).toBe(1))
+
+    // 加载中：名字不变、仍可点、且**还是同一个节点**。
+    const during = screen.getByRole('button', { name: 'Load more tasks' })
+    expect(during, 'DOM 身份必须保持——换节点就是浏览器侧的 element detached').toBe(button)
+    expect(during.getAttribute('aria-busy'), '加载态应由 aria-busy 承载').toBe('true')
+    expect(during.hasAttribute('disabled'), 'disabled 会吞掉点击并弹走键盘焦点').toBe(false)
+
+    // 加载中再点是安全的空操作（不重复发页）。
+    fireEvent.click(during)
+    expect(gate.cursorRequests.count).toBe(1)
 
     // 旁白**不能**是可命中的相邻节点：第一版把它落成 <span class="muted">，
     // webkit 当场报 `<span role="status" …> intercepts pointer events`，点击照样
@@ -190,9 +200,6 @@ describe('RFC-311 — the Load more target survives its own loading state', () =
 
     gate.releaseAll()
     await waitFor(() => expect(screen.getByTestId('task-row-t_c')).toBeTruthy())
-
-    // 关键不变量:整趟下来是**同一个 DOM 节点**——换节点就是浏览器侧的
-    // `element was detached from the DOM, retrying`。
     expect(screen.getByRole('button', { name: 'Load more tasks' })).toBe(button)
   })
 })

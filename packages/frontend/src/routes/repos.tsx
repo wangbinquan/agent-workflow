@@ -613,9 +613,6 @@ function ReposPage() {
                     itemKey={(item) => item.id}
                     estimateSize={72}
                     scrollResetKey={JSON.stringify(pageFilters)}
-                    onReachEnd={() => {
-                      if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage()
-                    }}
                     rowRole="listitem"
                     containerProps={{
                       className: 'repo-operations__list',
@@ -624,7 +621,7 @@ function ReposPage() {
                     }}
                     tail={
                       list.hasNextPage ? (
-                        <div className="repo-operations__more" role="presentation">
+                        <div className="repo-operations__more" role="listitem">
                           {/* 同 /tasks：名字固定 + 不 disabled，见 RFC-311 的注记。 */}
                           <button
                             type="button"
