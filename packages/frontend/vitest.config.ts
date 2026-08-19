@@ -33,7 +33,13 @@ export default defineConfig({
     // <100ms and never approaches them on any runner, while a genuinely hung
     // test still fails, only a few seconds later. So the headroom is applied
     // uniformly on every platform rather than branching on process.platform.
-    testTimeout: 20000,
-    hookTimeout: 20000,
+    //
+    // 20000 → 30000（2026-08-19，5e3bbcd3 实测）：windows shard 3/3 上
+    // `gallery-page` 的一条**极轻**用例（单 item 渲染 + 几条同步断言，无网络、
+    // 无计时器）撞了 20s 顶。该轮 runner 病态慢——整个 shard 的 setup 就花了
+    // 223s、全套 238s（平常 30~60s），即慢约 10x 而非上面写的 2~4x。同一轮
+    // 2327/2328 用例通过，被判死的那条没有任何时序反模式可修：天花板本身太低。
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 })
