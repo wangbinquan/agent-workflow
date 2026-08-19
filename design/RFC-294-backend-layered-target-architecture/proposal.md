@@ -1,17 +1,19 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
-- 目标架构状态：Draft（2026-08-13，待用户批准）
-- 迁移事实：Out-of-order in progress（2026-08-14 二次刷新；RFC-287、RFC-297～303 已按各自范围落地，
-  RFC-288/289 已关闭且未实现；不代表 RFC-294 任一 wave 已获批或完成）
+- 目标架构状态：Draft（2026-08-19 刷新；仍待用户批准 D1～D9）
+- 迁移事实：Out-of-order in progress（RFC-287、RFC-297～311 已按各自范围形成多条 production vertical slice；
+  RFC-288/289 已关闭且未实现；这些落点均不等于 RFC-294 任一完整 wave 已获批或完成）
 - 性质：目标架构总纲 + 迁移治理合同；本次刷新只改设计文档，不修改生产代码
-- 当前仓库头：committed `HEAD=origin/main=10ee54ba3f3aaa433fd072cfa791f89dd4698225`；RFC-288/289 关闭提交为
-  `b6d325a4`。`3030d36e` 是已发布的 RFC-287 第四轮 production 行为与量化祖先锚；其后的提交只增加 RFC-294 文档、测试与 E2E
-  hardening，没有完成任何 RFC-294 production wave。本五份 Draft 架构文档仍是共享工作树 WIP。量化与下一步
-  顺序以 `plan.md` §1/§3.2 为准，开工 W0-R 时仍须重钉干净、已发布的 exact SHA
+- 当前 committed tip：`HEAD=origin/main=9ec2a4694e3c0d6d15bcc11792ee99ae7c07b614`；但该 tip 的 clean backend
+  typecheck 仍因 `DevelopmentAutomationModule.drive` 缺口失败，因此标为 **NOT-CLEAN / inadmissible**，不得计作 landed
+  architecture 或行为 oracle。最后可准入、可复跑的量化基线仍为 `dfda2d027016b026be9ca632d3b97333aa1c602b`，已包含
+  RFC-304～311 的生产改造（含 RFC-311 G4、T20、T21）。`7c542729/9ec2a469` 的 mission keyset/limit 分页与 admission
+  preview 仅记 pending source delta；共享工作树中的 RFC-312 与后续 UI/runtime 改动也不计入 landed architecture。量化与
+  下一步顺序以 `plan.md` §1/§3.2 为准；每个实施 wave 开工时仍须重钉新的干净、已发布 exact SHA
 - 直接输入：
   - `design/system-commons-unification-audit-2026-08-12.md`
   - `design/task-execution-architecture-audit-2026-08-03.md`
-  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-303
+  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-311
 
 ## 1. 摘要裁决
 
@@ -71,18 +73,24 @@ RFC-280/282/284/285/292 已经完成了多块重要归一：agent spawn、资源
 ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等都已经有单一事实源。当前问题不再是
 “完全没有抽象”，而是抽象停在了机制层，尚未形成稳定的后台层次架构。
 
-截至本 RFC 基线：
+截至最后可准入、可复跑的 `dfda2d02` 量化基线（当前 committed tip `9ec2a469` 另按 NOT-CLEAN 偏差记账）：
 
-| 指标                      |                                                 当前值 | 说明                                                                              |
-| ------------------------- | -----------------------------------------------------: | --------------------------------------------------------------------------------- |
-| backend TypeScript 源文件 |                                                    460 | `packages/backend/src/**/*.ts`                                                    |
-| `services/` 内实现文件    |                                                    343 | 其中根目录平铺 176 个、一级子目录 14 个                                           |
-| `scheduler.ts`            |                                               9,847 行 | 同时承载图引擎、wrapper、fanout、装配、状态与广播                                 |
-| `task.ts`                 |                                               4,951 行 | 同时承载入口、物化、控制面、读模型、恢复和 active registry                        |
-| 最大资源/协作文件         | `review.ts` 3,483 行、`workflow.validator.ts` 3,435 行 | 边界与策略仍按历史调用路径沉积                                                    |
-| route→DB 值级文件         |                                                     15 | 另有 1 个 `DbClient` type-only import；transport 仍可绕过 application/use-case 层 |
-| 值级 SCC                  |                               backend 5 个 / 全仓 7 个 | backend 含 task、git、agent、MCP/server、workflow 五族                            |
-| `KNOWN_VIOLATIONS`        |                                                     36 | 含值级环、route→db、util→services 等已记账债务                                    |
+| 指标                              |                   当前值 | 说明                                                                       |
+| --------------------------------- | -----------------------: | -------------------------------------------------------------------------- |
+| backend TypeScript 源文件         |                      676 | `packages/backend/src/**/*.ts`                                             |
+| `services/` 内实现文件            |                      362 | 其中根目录平铺 192 个                                                      |
+| `modules/**` production TS        |   182 / 7 个现存 context | `development-automation` 90 个；其余见 `plan.md` §1                        |
+| `scheduler.ts`                    |                10,513 行 | 仍同时承载图引擎、wrapper、fanout、装配、状态与广播                        |
+| `task.ts`                         |                 6,692 行 | 仍同时承载入口、物化、控制面、读模型、恢复和 active registry               |
+| route→DB 值级文件                 |                       15 | transport 仍可绕过 application/use-case 层                                 |
+| route/MCP `AppDeps` consumer 文件 |                       52 | transport 仍反向依赖 composition root                                      |
+| 值级 SCC                          | backend 5 个 / 全仓 7 个 | 依赖图形状未因目录增长而完成收口                                           |
+| `KNOWN_VIOLATIONS`                |                       35 | task 6、git 5、其余环 6、services→routes 1、route→DB 15、util→upper 2      |
+| production `setInterval(`         |          28 处 / 23 文件 | 另有 34 个 token 命中；W0-R 必须按 job/worker/execution-local 重建正式分母 |
+
+RFC-305/306/308/310/311 已经证明目标方向可落地：identity authority、branch activation、source-control participant、
+development mission 以及 archive/retention 都已有真实纵切。但“聚合与行为已落”“模块内分层已落”“跨 context exact
+surface 与 consumer 已切完”是三种不同状态；当前没有一个 RFC-294 wave 满足完整退出门。
 
 典型结构性裂缝已经产生正确性问题，而不仅是“代码不好看”：
 
@@ -122,8 +130,9 @@ ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等
 
 | 模块                         | 唯一拥有的能力                                                                                               |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `identity-access`            | user/OIDC/session/token、role/permission、可信 Actor 构造与认证审计                                          |
+| `identity-access`            | user/OIDC/session/token、role/permission、opaque request/transaction authority 与认证审计                    |
 | `task-execution`             | Task/NodeRun 生命周期、调度、恢复、运行态 ownership、wrapper/fanout、执行身份与 provenance                   |
+| `development-automation`     | DevelopmentMission/ActionRun/AgentAttempt、确定性策略与配置资源、evidence/effect intent、MR 生命周期编排     |
 | `resource-catalog`           | agent/skill/MCP/plugin/workflow/workgroup 六个聚合子模块；共享 ACL/ref/revision/catalog kernel               |
 | `collaboration`              | review/clarify/question 等 human gate、授权、park/release/rerun 命令                                         |
 | `knowledge-evolution`        | memory→skill fusion aggregate、融合决策/provenance，以及 skill restore 时 fused-membership 不变量            |
@@ -141,6 +150,10 @@ ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等
 
 `resource-catalog` 内共享的是 ACL/ref/revision/catalog 小内核，不是一个 `switch(resourceType)` 万能 CRUD；
 六类资源各自保留独立 aggregate、command 和不变量。
+
+RFC-304 的 `code-capability` 不再是目标态 active writer context：RFC-310 已把五条能力的写模型切到
+`development-automation`。当前残留 19 个 production 文件只作为历史查询/兼容资源岛；其中 capability template 同步仍是
+活跃兼容例外，必须在 retention/owner 决策后迁走或退役，不能借兼容名义恢复 code-round writer。
 
 ### G3：执行链形成四级内核
 

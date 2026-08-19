@@ -40,8 +40,11 @@
 > **46.5 → 1.8ms**、工作组徽章 **10.5 → 0.6ms**（两条覆盖索引，证实"不该合并 9 条 count"的原判断）；
 > G3 归档器最长单语句 **1,190ms → 76ms**。**过程中踩到并修掉一个更严重的**：G3 第一版分窗让整轮
 > 从 6 秒劣化到 260 秒而 6 条单测全绿——判据「单测证明不了没改坏代价」已落 `docs/dev-gotchas.md`。
-> **待办**：T20 维护入口（opencode-stores 清理/freelist 提示/`db compact` CLI）/T21 prompt_text 外置;
-> /code work-items nextCursor 修复（RFC-310 PR-10 已落，可接手）;视觉 win32 基线随下一个 Windows 批。
+> **最新可准入落地**：G4 + T20 维护入口与 T21 `prompt_text/prompt_path` 分档外置、永久双读已进入 `main`；
+> /code work-items nextCursor 已由 RFC-310 PR-10 交付。后续 `7c542729/9ec2a469` 增加 mission keyset/limit 与 admission
+> preview 源码，但当前 tip 的 clean backend typecheck 仍缺 `DevelopmentAutomationModule.drive`，故记为 NOT-CLEAN pending
+> delta，不计 landed；分页也须补 `(created_at,id)` 复合索引/EXPLAIN 与前端分页消费后才能声称最坏 O(page)。剩余证据按
+> RFC-311 自身 plan 收口，不把它们误记成 RFC-294 的 wave exit。
 >
 > ✅ **已完成 RFC（Done，2026-08-19）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
@@ -55,8 +58,9 @@
 > already-present 文件进入 candidate/commit。外部需求 ID 由 typed adapter 下载多文件到
 > `.agent-workflow/inputs/requirements/<bundleId>`；自建门禁把大日志
 > 流式落到 `.agent-workflow/pipeline/<bundleId>`，DB/prompt 只持 ref/digest。内部以 `development-automation`
-> 取代 `code-capability` 上层模型，跨 context 严格走 RFC-294 exact public/consumer-owned required ports，cutover
-> 不允许同一 MR 双 writer。三轮功能自审补齐了 requirement source 选择与问答闭集决策、new/adopt/attach MR、
+> 取代 `code-capability` 上层模型且完成单 writer cutover；RFC-294 exact public/consumer-owned required-port 仍是后续
+> W4-E8/W5 的架构收口项，当前 22-option `ReconcilerPorts`/legacy composition 不冒充已经完成。三轮功能自审补齐了
+> requirement source 选择与问答闭集决策、new/adopt/attach MR、
 > polyglot 两段选择、`completed-no-change`、unknown/stale 规则停机、pipeline missing trigger、`tracking-only` 人工接管、
 > cancel/handoff transition fence 和 durable wait；用户补充后又纵向复核了上传目标 create/replace CAS、
 > preserve-upload/agent-editable、fresh 重建、首次 publish 后 seed 吸收、no-change、UI preview 与最终 commit 完整性。
@@ -414,7 +418,7 @@
 
 > 🔒 **已关闭（2026-08-14，用户决定；两者均未实现、零生产改动）：RFC-288 + RFC-289** —— **RFC-288**（[task↔scheduler 环拆解](design/RFC-288-task-scheduler-cycle-untangle/proposal.md)）连过三轮设计门（第二轮两半场 P0×8/P1×7/P2×1；第三轮三路错开视角 P0×5/P1×11/P2×5），findings 全部处置后范围收敛到「四件合同的 owner/consumer/import 拓扑 + 断环」——**而这正是当时 RFC-294（pin `be31dd62`）§16.2 已逐条规定、§5.3 已逐字定义接口、旧 DAG 曾排期（`W1 → gate → W2`）的内容**，收敛到正确形状后该文档不再承载 294 之外的设计信息。叠加当时的实现硬前置未到、而源码锚两天内烂了三轮（`da706b19`→`01d2160e`→`6e8c4f9f`，每轮全量重锚），继续维护行级 inventory 到开工必然重写，故关闭。**九条不随锚烂掉的结论已写进 proposal 顶部**（最要紧的四条：合同必须携带 `OwnershipToken`/epoch——taskId-only 的 `requestStop` 经实测会**误杀继任者**；`abortAll(reason)` 不可选，丢 reason 会把 daemon 停机从可恢复 `interrupted` 降级成 `canceled`〔此后 RFC-287 并发面审计在生产代码里抓到同形态真回归，任务永久楔死，可见非纸面推演〕；kick 是**四点**含 RFC-287 AC-11 的 `retryRepoPreparation`；解环最小充分集＝断 A1+B1+B2/B3/B4+E3，**C1/C2 转静态与 materialization 拆分都不必做**）。六条 depcheck 账目的 `removeWhen` 已按 RFC-247 关闭时的同一做法**转出至 RFC-294 §16.2 / W2**，当前 successor 是 W0-R + P0-D 后另立的新号 implementation RFC，不再执行旧 gate。**RFC-289**（[fanout 内链](design/RFC-289-fanout-inner-chain/proposal.md)）**产品目标不被否定**，被否定的是当前设计——RFC-294 §5.3 已裁决其「child 上游限定为当前 wrapperRunId」与既有跨 generation replay 保留原 parent 不能同时成立、且所依赖的 consumed gate 并不存在；只有该产品能力在 **W7 NodeRun identity** 之后重新获批，才按 §5.3 五条另立新号，否则保持挡板并跳过可选 W8。两份文档均**保留不删**，作为将来实现/重写的输入。**教训（已在 proposal 顶部与本条各记一份）**：①别用**仓库级指标**（「零值级 SCC」）当单个 RFC 的验收标准——它是范围吸引子，三轮里把三族环→git 5 节点含 `util/git` 分层倒置→MCP 三环逐次吸进来，而环只是症状、边界才是目标；②判据「**不跨 context**」（留在本 bounded context 内＝该刀可做，跨到别的 context＝属对应波次）能自动回答「要不要顺手做」，避免把波次归属反复变成选择题。
 
-> 🧭 **架构总纲刷新（Draft，2026-08-14）：[RFC-294 后台最终层次架构与能力归一](design/RFC-294-backend-layered-target-architecture/proposal.md)** —— 目标仍是 **bounded-context feature-first + 模块内分层**：inbound adapter → application command/query → TaskEngine/WrapperRuntime/NodeExecutor → ExecutionKernel → domain/ports，infrastructure 实现 ports，bootstrap 唯一装配；跨 context 只开放 exact public/required contracts，并以 symbol/method/recursive-field consumer ledger、type-taint、capability forge 与 god-port 门约束最小信息量。RFC-287 已 Done，其 assembly 与 G4～G7 行为进入兼容 oracle，物理归位/ownership/event/source-control residual 分别转入 W2/P0-D/W3/W4-W5。RFC-288/289 均已 CLOSED、未实现、零生产改动：288 的九条稳定结论和六条环债转入 RFC-294 W2，W0-R+P0-D 后另立新号轻量 implementation RFC；289 的旧 plan 永久停用，产品目标待 W7 identity/provenance 后另立新号，未获批时保持挡板并跳过可选 W8，不阻塞核心 W9。当前 committed `HEAD=origin/main=10ee54ba`；`3030d36e` 保留为 RFC-287 第四轮 production 行为与量化祖先锚，其后仅新增已发布的 RFC-294 文档/测试/E2E hardening，没有 RFC-294 production wave 完成退出门。RFC-297～303 已提前形成局部落点，但七份 architecture manifest、durable ownership、四合同解环、canonical outbox、context cutover、NodeRun v2 等退出门均未完成。**下一步是 W0-R 零行为机器基线与 P0-D 设计并行，W0-R 最小 capability gate 后实施 P0-D，再进入新号 W2 RFC；RFC-294 目标决策和每个行为波次仍需独立批准。**
+> 🧭 **架构总纲刷新（Draft，2026-08-19）：[RFC-294 后台最终层次架构与能力归一](design/RFC-294-backend-layered-target-architecture/proposal.md)** —— observed committed tip 为 `HEAD=origin/main=9ec2a469`，但 clean backend typecheck 仍红，故最后可准入/量化基线保持 `dfda2d02`；共享树未提交的 RFC-312 / UI-runtime WIP 不计 landed。目标仍是 **bounded-context feature-first + 模块内分层** 与 bootstrap 唯一装配；跨 context 只开放 exact public/required contracts。RFC-305 已落 identity-access 单写/CAS/audit/opaque authority，RFC-306 已落 branch domain，RFC-308 已落 source-control vertical slice，RFC-310 已把 active execution writer 从 code-capability 切到新的 `development-automation`（90 files；legacy code-capability 19 files 为 history/template compatibility，其中仅 `capability_templates` upstream merge 是有账临时 writer），RFC-311 已落 PR-1～PR-7 + G4 + T20/T21 的 query/archive/retention/maintenance 与 NodeRun prompt 分档外置/永久双读；`7c542729/9ec2a469` 的 mission paging/preview 仅记 pending source delta。它们是能力/domain/internal-layering 的真实输入，不是整波退出：当前 `modules/**=182/7 contexts`、`KNOWN=35`、route→DB=15、AppDeps consumer files=52、`setInterval(`=28/23 files；七份 architecture manifest 仍为 0，P0-D durable ownership、W2 四合同/六环、W3 canonical outbox、W4 inbound/public cutover、W5 SCC/WorkspaceRef、W7 NodeRun v2/provenance、W9 managed background/artifact lifecycle 仍未完成。`code-round` 只作历史判别并 fail-closed，数字员工复用普通 agent host task，W2 不得重建其 executor。**下一步先修复 committed tip 并取得 clean containing SHA，再把已落 preflight pilot 扩成 W0-R canonical manifests/global layer+inbound gate，并与 P0-D 设计并行；W0-R 最小门后实施 P0-D，再进入新号 W2 RFC。RFC-294 D1～D9 与每个行为波次仍需独立批准。**
 
 > ✅ **已完成 RFC（Done，2026-08-13）：[RFC-293 Intent 持续迭代工作台](design/RFC-293-intent-workbench-working-context/proposal.md)** —— 用户最终裁决只做纯功能与 UX：详情页全宽、左右 pane 独立滚动；工作上下文统一批量管理，空闲应用后自动生成、运行中排队自动续跑或停止后立即刷新；questions 与资源建议一次处理；提交前可反复完善，提交后以检查点继续；current draft 可废弃重跑且不回滚已提交资源。**Intent 继续复用现有普通 system-agent runtime/profile/配置与全部能力；没有增加 sealed/sandbox runtime、credential/auth adapter、containment、capture quarantine、历史清洗或任何 Intent-only 能力收缩。** 1800px/1080px/390×844 浏览器验收与 RFC-293 E2E 已通过，`bun run gate:local` 全绿；实现提交 `53c57080` 已推送且 exact-SHA CI `31641274578`、visual `31641274690`、Windows `31641274650`、integration `31641274736` 全部成功。
 
