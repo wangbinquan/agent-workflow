@@ -117,8 +117,23 @@ describe('RFC-311 — mission list paging === the legacy full listing', () => {
     const firstIds = new Set(first.items.map((m) => m.id))
     for (const item of second.items) expect(firstIds.has(item.id)).toBe(false)
 
-    expect((await get('/api/code/missions?limit=0')).status).toBe(422)
-    expect((await get('/api/code/missions?limit=999')).status).toBe(422)
-    expect((await get('/api/code/missions?cursor=not-base64url-json')).status).toBe(422)
+    // 逐条**点名 code**,而不只看 422:`route-error-code-coverage` 守卫要求每个新
+    // 错误码在测试里出现过字面量——否则「换了个码」这种回归无人接住(422 还是 422)。
+    const failure = async (path: string): Promise<{ status: number; code: string }> => {
+      const res = await get(path)
+      return { status: res.status, code: ((await res.json()) as { code: string }).code }
+    }
+    expect(await failure('/api/code/missions?limit=0')).toEqual({
+      status: 422,
+      code: 'mission-limit-invalid',
+    })
+    expect(await failure('/api/code/missions?limit=999')).toEqual({
+      status: 422,
+      code: 'mission-limit-invalid',
+    })
+    expect(await failure('/api/code/missions?cursor=not-base64url-json')).toEqual({
+      status: 422,
+      code: 'mission-cursor-invalid',
+    })
   })
 })

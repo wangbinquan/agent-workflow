@@ -18,6 +18,7 @@ import {
   type ReconcileDeps,
   type ReconcileOutcome,
 } from './application/missionReconciler'
+import { driveMission, type MissionDriveOutcome } from './application/missionDriver'
 import { recoverMissions } from './application/missionRecovery'
 import { confirmNoChange, type ConfirmNoChangeResult } from './application/commands/confirmNoChange'
 import {
@@ -89,6 +90,8 @@ export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
   readonly evidence: EvidenceStore
   reconcile(missionId: string): Promise<ReconcileOutcome>
+  /** Advance settled platform steps until the next real asynchronous boundary. */
+  drive(missionId: string): Promise<MissionDriveOutcome>
   /** T55a：no-change 人工确认（唯一能进入 completed-no-change 的通道）。 */
   confirmNoChange(rawInput: unknown): Promise<ConfirmNoChangeResult>
   /** 平台渠道答题（T55：新 revision 会失效 in-flight action）。 */
@@ -207,6 +210,7 @@ export function composeDevelopmentAutomation(deps: {
     materializer,
     evidence,
     reconcile: (missionId) => runMissionReconcile(reconcileDeps, missionId),
+    drive: (missionId) => driveMission(reconcileDeps, missionId),
     confirmNoChange: (rawInput) => confirmNoChange(reconcileDeps, rawInput),
     handoff: (rawInput) => handoffMission(reconcileDeps, rawInput),
     attachMr: (rawInput) => attachMergeRequest(reconcileDeps, rawInput),

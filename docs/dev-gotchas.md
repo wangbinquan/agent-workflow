@@ -301,6 +301,17 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 - **混合文件可以一起提，但要先确认它引用的符号是否也在别人未提交的改动里**（2026-08-19 实撞，与上一条同源）：我按仓规把一个双方同改的路由文件整份提交，里面带着对方新加的路由——而它 `import` 的函数定义在**另一个尚未提交的文件**里。于是主干只拿到了「引用」没拿到「定义」，`bun build --compile` 在 CI 两个 job 上直接失败（`No matching export … for import`）。**本地全程绿**：工作树里有对方未提交的那一半，构建看不出缺口，只有干净 checkout 才暴露。
   - 判据：提交混合文件前，对其中**不属于自己**的新增引用（import / 新符号）扫一眼——`rg -n "export.*<符号>" ` 看定义在哪个文件，那个文件在不在本次提交里。
   - 「同一文件混改一起提」这条规则的前提是**那份改动自洽**；跨文件的定义-引用对被拆开时，规则本身不保护你。
+  - **人眼扫一遍不够——同一批提交里它漏了第二处**（同日续撞）：第一处 `previewMissionAdmission` 修好推上去，CI 下一格又红在同一形态的另一处（路由里对方新写的 `automation.drive(...)`，定义在未提交的 `composition.ts` + **未追踪**的 `missionDriver.ts`）。一次一处地被 CI 教，等于每处付一轮 20 分钟。
+  - **机械判据（首选，采纳自并发 session 的建议）**：把**即将推的那棵树**做成一个临时 commit，开分离 worktree pin 上去，在里面跑 typecheck / build——干净 checkout 天然只有你提的那部分，缺定义当场全部报出来，一轮问完。这与本仓已有的「共享树上过门禁要用 pin 到自己 commit 的分离 worktree」是同一条定式的延伸；本地绿只说明**你的工作树**里那半份未提交的改动补上了缺口。
+    ```sh
+    export GIT_INDEX_FILE=/tmp/idx; git read-tree HEAD; git add -- <本次要提的路径…>
+    T=$(git write-tree); unset GIT_INDEX_FILE; C=$(git commit-tree "$T" -p HEAD -m tmp)
+    git worktree add --detach /tmp/wt "$C"
+    cd /tmp/wt && bun install --frozen-lockfile   # 1546 包约 1 秒，别图省事软链（见下）
+    # 再跑 typecheck / lint / format / depcheck / bun build / 目标测试
+    ```
+  - **别用「软链主树 node_modules」省掉那 1 秒**：workspace 包（`node_modules/@agent-workflow/shared` 等）会被链回**主树**路径，于是任何按「仓库根的相对路径」判定的检查全部误报——实测 `depcheck` 报出一条根本不存在的 `no-circular`（路径长成 `../../../../../../../Users/…`，匹配不上 `KNOWN_VIOLATIONS`），`rfc199-workflow-validation-context-ratchet` 报「少了两个 shared 源文件」。两条都是假红，且**看起来非常像真回归**，排查代价远超那 1 秒。
+  - **补齐缺失定义 > 从主干删掉对方的引用**：后者要求提交一个与工作树不同的 blob（对方的行还在树上），操作面危险且等于替对方决定；前者只是把定义-引用对重新合拢，语义零改动。提完照旧通报作者。
 - **共享树上永远用 `git commit -- <paths>`；裸 `git commit -m` 提交的是整个索引，会静默带走别人 `git add` 过的文件**（2026-08-19 实撞，一手教训）：我用 `git add <我的三个文件> && git commit -m …` 提一批 prettier 修复，结果 commit stat 里出现 **9 个文件**——多出来的 6 个是并发 session 已 `git add`、尚未 commit 的在制改动（五个弹窗 + 一个测试文件），连同他们**还没跑完全量门禁**的状态一起上了主干。
   - 机理：`git add` 只是往索引里放东西，`git commit` 提的是**索引全部内容**，不是「我刚 add 的那些」。共享树上索引是共用的，所以别人 add 过什么，你就替他提什么。**全程没有任何提示**。
   - 症状与判据：提交后 `git show --stat HEAD` 里出现自己没碰过的文件——所以**每次 commit 后都要看一眼 stat 的文件数**是否等于自己的预期（本仓已有的「共享树全树操作」条讲的是 `git add -A` 之害，这条是它的孪生形态：即使精确 `git add`，commit 仍是全索引）。
