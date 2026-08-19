@@ -181,7 +181,10 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // PR-9 +1 grantable (development-missions:cutover is admin-tier, so it is a
   // preset difference); PR-10 −1 row but +0 grantable (code-rounds:launch was
   // in the user baseline) ⇒ 26.
-  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(26)
+  // RFC-312 +1 grantable (`users:presence`)：它**不进 user 静态 preset**（RFC-305 没有
+  // deny 集，进了就永远无法按账号收回），所以既 +1 行、也 +1 可勾选 ⇒ 27。
+  // 这两处计数必须一起改——上一轮只改了行数，CI 在第一处就停下，第二处直到下一次 run 才现形。
+  await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(27)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')
   await dialog.getByLabel(/^Password/).fill(password)
