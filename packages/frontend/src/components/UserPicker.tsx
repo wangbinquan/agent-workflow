@@ -17,7 +17,15 @@
 // "inside the dialog" (Dialog.tsx isFocusInsideDialog).
 
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState, type AriaAttributes, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type AriaAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -41,6 +49,12 @@ interface UserPickerProps {
   'aria-required'?: AriaAttributes['aria-required']
   'aria-invalid'?: AriaAttributes['aria-invalid']
   testidPrefix?: string
+  /**
+   * RFC-312 —— 已选 chip 名字前的可选装饰（当前唯一用途是在线点）。
+   * 做成插槽而不是把 presence 写死进来：UserPicker 是通用组件，
+   * 不该知道"在线状态"这回事；调用方传什么就渲染什么。
+   */
+  renderAdornment?: (userId: string) => ReactNode
 }
 
 export function UserPicker({
@@ -57,6 +71,7 @@ export function UserPicker({
   'aria-required': ariaRequired,
   'aria-invalid': ariaInvalid,
   testidPrefix,
+  renderAdornment,
 }: UserPickerProps) {
   const { t } = useTranslation()
   const [input, setInput] = useState('')
@@ -209,6 +224,7 @@ export function UserPicker({
       >
         {value.map((u) => (
           <span key={u.id} className="chip">
+            {renderAdornment?.(u.id)}
             {u.displayName}
             <button
               type="button"

@@ -27,10 +27,10 @@
 import type { ServerWebSocket } from 'bun'
 import type { Actor } from '@/auth/actor'
 import {
-  buildWsCredential,
   extractUpgradeToken,
   reresolveActor,
-  resolveActor,
+  resolveActorWithWsCredential,
+  type WsCredentialWithExpiry,
 } from '@/auth/session'
 import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
@@ -131,8 +131,14 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // awaits below) is detectable at open time.
     const upgradeEpoch = currentRevalidationEpoch()
     let actor: Actor | null = null
+    // RFC-312 T0 —— 一次解析同时拿到 actor 与凭据指纹。此前这里解析一遍、下面
+    // `buildWsCredential` 对同一个 token 再解析一遍，于是每次升级查 5 次、**写两次**
+    // `last_used_at`（rolling renewal 被执行了两遍）。合并后 3 读 1 写，对所有 WS 连接生效。
+    let credential: WsCredentialWithExpiry = { kind: 'daemon' }
     try {
-      actor = await resolveActor(deps.db, queryToken, daemonTokenBuf)
+      const resolved = await resolveActorWithWsCredential(deps.db, queryToken, daemonTokenBuf)
+      actor = resolved.actor
+      credential = resolved.credential
     } catch (err) {
       log.warn('upgrade-token-resolve-threw', {
         err: err instanceof Error ? err.message : String(err),
@@ -198,7 +204,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       // re-checked when a credential is revoked; also carries the credential's
       // expiry for the zero-DB frame-path expiry check. Computed from the same
       // token resolveActor just consumed.
-      credential: await buildWsCredential(deps.db, queryToken),
+      credential,
       closing: false,
       revalidating: false,
       upgradeEpoch,

@@ -1865,6 +1865,9 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 
 | 日期                  | 结论    | 失败用例                                                                        |
 | --------------------- | ------- | ------------------------------------------------------------------------------- |
+| 08-19                 | failure | `rfc244-task-operations.spec.ts:162/:267`（click 超时）+ `rfc294-…:491`（exitCode），shard 2/4 |
+| 08-18                 | success | —                                                                               |
+| 08-17（两次）         | failure | `rfc250-*` / `rfc304-*` 四条 / **`rfc294-…:491`**，分片各不相同                 |
 | 08-14                 | failure | `intent-builder.spec.ts:126` RFC-293 workbench（shard 1/4 + 2/4）               |
 | 08-13                 | failure | `rfc295-runtime-parameter-picker.spec.ts:132` Webhook Agent picker（1/4 + 3/4） |
 | 08-12                 | success | —                                                                               |
@@ -1886,6 +1889,15 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 （按钮从未出现，不是 detach），说明该 spec 至少还有第二个竞态未解。
 
 **不属于任何进行中 RFC 的连带面**，不应计入其收官判据。
+
+**2026-08-19 补一条反面教训（本条目正是为防它而立，我还是踩了）**：当晚红的三条里，
+`rfc244-task-operations.spec.ts` 两条恰好落在**刚被虚拟化改写的任务列表**上
+（`99faae98` VirtualList + `/tasks` 窗口化，2026-08-18 落地），断言面又正是 `aria-setsize`
+与分页点击——看上去"指向明确"。但同一晚的第三条 `rfc294-…:491` **在 08-17 就红过**，
+那时虚拟化还没落地；而 08-17 两次红的 spec 集合与 08-19 毫无交集。
+**判据**：`event=schedule` 的 nightly 红，单晚的 spec 集合**不构成归因**——必须先与本表
+历史比对、确认该 spec 是否在相关改动之前就红过，再谈"某条改动引入"。
+按 commit 相邻性下结论，会把人派去查一段没问题的代码。
 
 ## `rfc098-commitpush-nonblocking` B1 用例 CI 间歇红（2026-08-14 登记；**未复现、根因未定、非 flaky-waiver**）
 

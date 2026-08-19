@@ -464,7 +464,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-310 PR-12 bump 到 187 with 0186_rfc310_task_platform_inputs（任务级平台
     // 输入挂载名册，Agent 隔离工作树里强制入快照）+ 0187_rfc310_playbook_sagas
     // （step-run / mission-link / approval-saga / step-join 四张表）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(187)
+    // RFC-312 bump 到 188 with 0188_rfc312_users_presence_grant（给存量 user/manager
+    // 补一条 `users:presence` 显式 grant；admin 由动态全量 baseline 天然持有故跳过，
+    // guest 与 __system__ 亦跳过。新建用户不依赖它——三条建号路径共用同一策略）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(188)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

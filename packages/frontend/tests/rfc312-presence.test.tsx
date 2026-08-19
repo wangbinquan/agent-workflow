@@ -7,7 +7,11 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { PresenceDot } from '../src/components/PresenceDot'
+import { UserPicker } from '../src/components/UserPicker'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   applyPresenceChanges,
   applyPresenceSnapshot,
@@ -92,5 +96,41 @@ describe('rfc312 PresenceDot', () => {
 
     render(<PresenceDot online={false} />)
     expect(screen.getByRole('img').className).toContain('presence-dot--offline')
+  })
+})
+
+describe('rfc312 接线点', () => {
+  test('UserPicker 的 adornment 插槽：每个已选 chip 前渲染一次', () => {
+    applyPresenceSnapshot(['u1'])
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <UserPicker
+          value={[
+            { id: 'u1', username: 'alice', displayName: 'Alice', role: 'user', status: 'active' },
+            { id: 'u2', username: 'bob', displayName: 'Bob', role: 'user', status: 'active' },
+          ]}
+          onChange={() => {}}
+          renderAdornment={(userId) => <PresenceDot online={usePresenceOf(userId)} />}
+        />
+      </QueryClientProvider>,
+    )
+    // u1 在线、u2 离线——两个都渲染，靠 aria-label 区分，不靠颜色
+    const dots = screen.getAllByRole('img')
+    expect(dots).toHaveLength(2)
+    expect(dots.map((d) => d.className).sort()).toEqual([
+      'presence-dot presence-dot--offline',
+      'presence-dot presence-dot--online',
+    ])
+  })
+
+  test('花名册只给人类成员挂点——agent 成员的忙碌/空闲是另一回事（源码级锁）', () => {
+    const src = readFileSync(
+      resolve(import.meta.dirname, '../src/components/workgroup/room/RoomSideCards.tsx'),
+      'utf8',
+    )
+    // 这条锁的是"别有人顺手把点挂到 agent 行上"：agent 没有"在线"这个概念，
+    // 它的 working/awaiting/queued/idle 由 RFC-182 的执行态 chip 表达，两者语义正交。
+    expect(src).toMatch(/memberType === 'human'/)
+    expect(src).toMatch(/HumanPresenceDot/)
   })
 })

@@ -12,6 +12,8 @@ import { Card } from '@/components/Card'
 import { ClampedText } from '@/components/ClampedText'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { PresenceDot } from '@/components/PresenceDot'
+import { usePresenceOf } from '@/hooks/usePresence'
 import { StatusChip } from '@/components/StatusChip'
 import { FcTaskListCard } from '@/components/workgroup/room/FcTaskListCard'
 import { RunStatusRow } from '@/components/workgroup/room/RunStatusRow'
@@ -106,6 +108,11 @@ function RoomSideCardsInner({
                   </button>
                 ) : (
                   <span className="workgroup-room__member-name">@{m.displayName}</span>
+                )}
+                {/* RFC-312 —— 只有人类成员有"在线"这回事；agent 成员的忙碌/空闲是
+                    另一回事（RFC-182 的执行态 chip），两者同屏但语义正交。 */}
+                {m.memberType === 'human' && m.userId !== null && (
+                  <HumanPresenceDot userId={m.userId} />
                 )}
                 {m.id === data.config.leaderMemberId && (
                   <StatusChip kind="info" size="sm">
@@ -356,4 +363,9 @@ function switchesSummary(
   if (resolved.directMessages) on.push(t('workgroups.fieldDirectMessages'))
   if (resolved.blackboard) on.push(t('workgroups.fieldBlackboard'))
   return on.length > 0 ? on.join(' · ') : t('common.emDash')
+}
+
+/** hook 不能在 map 回调里调用，包一层。 */
+function HumanPresenceDot({ userId }: { userId: string }) {
+  return <PresenceDot online={usePresenceOf(userId)} />
 }

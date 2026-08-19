@@ -20893,6 +20893,10 @@ button.status-chip {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+  /* RFC-311：只读给屏幕阅读器的文本**永远不能**成为指针目标。它是绝对定位的
+     1px 元素，包含块是最近的定位祖先，因此可能正好压在某个按钮的命中点上——
+     webkit e2e 实测过这种「span intercepts pointer events」导致点击永远落不下去。 */
+  pointer-events: none;
 }
 
 /* RFC-210 — "old sha → new sha" pair and the per-submodule result list. Both
@@ -25922,4 +25926,13 @@ button.status-chip {
 }
 .presence-dot--offline {
   background: var(--color-border-strong, #b8bfc7);
+}
+
+/* RFC-311：按钮自身承载「进行中」的视觉反馈。此前 /tasks 与 /repos 的 Load more
+   靠**换文案 + disabled** 表达加载态，结果是按名字定位的句柄当场失配、键盘焦点被
+   弹走（webkit e2e 活锁）。放在按钮自身上既不改可及名、也不会像相邻节点那样拦住
+   自己的命中点。 */
+.btn[aria-busy='true'] {
+  opacity: 0.7;
+  cursor: progress;
 }

@@ -93,36 +93,79 @@ export type WsCredentialFingerprint =
   | { readonly kind: 'session' | 'pat'; readonly hash: string }
   | { readonly kind: 'daemon' }
 
-/**
- * RFC-212 — the fingerprint a live WebSocket stores, carrying the credential's
- * expiry so the frame path can close a silently-expired connection with zero DB
- * (natural expiry has no write hook to fire a revocation). Reads the expiry once
- * at upgrade time; the actor itself is resolved separately by `resolveActor`.
- */
-export async function buildWsCredential(
-  db: DbClient,
-  raw: string,
-): Promise<WsCredentialWithExpiry> {
-  if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
-    const resolved = await lookupActiveSession(db, raw)
-    return {
-      kind: 'session',
-      hash: hashSessionToken(raw),
-      expiresAt: resolved?.session.expiresAt ?? null,
-    }
-  }
-  if (raw.startsWith(PAT_TOKEN_PREFIX)) {
-    const resolved = await lookupActivePatByHash(db, hashPatToken(raw), Date.now(), {
-      touch: false,
-    })
-    return { kind: 'pat', hash: hashPatToken(raw), expiresAt: resolved?.expiresAt ?? null }
-  }
-  return { kind: 'daemon' }
-}
-
 export type WsCredentialWithExpiry =
   | { readonly kind: 'session' | 'pat'; readonly hash: string; readonly expiresAt: number | null }
   | { readonly kind: 'daemon' }
+
+/**
+ * WS 升级专用：**一次解析同时产出 actor 与凭据指纹**。
+ *
+ * 为什么要有这个函数：`tryUpgrade` 原本先 `resolveActor(db, token)` 再
+ * `buildWsCredential(db, token)`，两者**对同一个 token 各跑一遍 lookup**——
+ * session 因此每次升级查 4 次、**写两次 `last_used_at`**（rolling renewal 被执行了两遍）。
+ * `ws/server.ts` 那行注释自己就写着 "Computed from the same token resolveActor just consumed"，
+ * 只是没把结果传下来。合并后每次升级 **5 读 2 写 → 3 读 1 写**，对所有 WS 连接生效。
+ *
+ * 语义与拆开时逐字一致：
+ *   · session —— lookup 仍 touch 一次（原本两次里保留一次，rolling renewal 不受影响）；
+ *   · PAT —— 原本 actor 侧 touch、凭据侧 `touch:false`，合并后仍恰好 touch 一次；
+ *   · 凭据在 token 无效时也会返回（hash 是纯函数，expiry 为 null），调用方按 actor === null 判 401。
+ */
+export interface ResolvedUpgradeIdentity {
+  readonly actor: Actor | null
+  readonly credential: WsCredentialWithExpiry
+}
+
+export async function resolveActorWithWsCredential(
+  db: DbClient,
+  raw: string,
+  daemonTokenBuf: Buffer,
+  now: number = Date.now(),
+): Promise<ResolvedUpgradeIdentity> {
+  if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
+    const resolved = await lookupActiveSession(db, raw, now)
+    const credential = {
+      kind: 'session' as const,
+      hash: hashSessionToken(raw),
+      expiresAt: resolved?.session.expiresAt ?? null,
+    }
+    if (!resolved) return { actor: null, credential }
+    return {
+      actor: await buildCurrentActor(db, { userId: resolved.user.id, source: 'session' }),
+      credential,
+    }
+  }
+  if (raw.startsWith(PAT_TOKEN_PREFIX)) {
+    const resolved = await lookupActivePat(db, raw, now)
+    const credential = {
+      kind: 'pat' as const,
+      hash: hashPatToken(raw),
+      expiresAt: resolved?.expiresAt ?? null,
+    }
+    if (!resolved) return { actor: null, credential }
+    return {
+      actor: await buildCurrentActor(db, {
+        userId: resolved.user.id,
+        source: 'pat',
+        patScopes: resolved.scopes as ReadonlyArray<Permission>,
+        patPurpose: resolved.purpose,
+        patId: resolved.patId,
+      }),
+      credential,
+    }
+  }
+  // Legacy daemon token —— 与 resolveActor 同判据，凭据无需查库。
+  if (!safeEqual(Buffer.from(raw, 'utf8'), daemonTokenBuf)) {
+    return { actor: null, credential: { kind: 'daemon' } }
+  }
+  if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db)) {
+    return { actor: null, credential: { kind: 'daemon' } }
+  }
+  return {
+    actor: await buildCurrentActor(db, { userId: SYSTEM_USER_ID, source: 'daemon' }),
+    credential: { kind: 'daemon' },
+  }
+}
 
 export async function resolveActor(
   db: DbClient,

@@ -147,3 +147,64 @@ AC-20（0/-1/抛错三测 + 修复再失败关连接）/ AC-21（缓存 `validUn
 - [ ] Codex **设计门第七轮**（v7）findings 处置完毕 —— 或用户判定收手
 - [ ] Codex **实现门**（declare done 前）findings 处置完毕
 - [ ] 推送后按 exact SHA 查 CI 绿
+
+---
+
+## 4. 交付注记（2026-08-19，`bb2beece` + 后续）
+
+### 4.1 范围裁决：七轮门之后砍回核心
+
+设计门跑了**七轮、累计约 59 条 finding**，且第二轮起每轮稳定 6–9 条、**没有收敛趋势**。
+把 finding 按来源归类后事情就清楚了：
+
+| 来源 | 占比 | 例子 |
+| --- | --- | --- |
+| presence 核心逻辑本身 | ~10% | 引用计数双重释放、宽限期该用单调时钟 |
+| **接进本仓既有机制** | ~40% | RFC-305 出站 fence 每帧一次同步查询、RFC-212 复核冻结与无排序保证、权限模型无 deny 集、OIDC 建号绕过、迁移 journal 是共享文件 |
+| **为回应前一轮 finding 而新加的机制** | ~30% | 配额→租约→线性化→拒绝协议→重连包络；per-socket worker；dirty 协议 |
+| 文档措辞与 AC 可证伪性 | ~20% | 真值表与测试文本打架、AC 允许空实现通过 |
+
+第三类是**自造的**：每消一条 finding 就加一个机制，那个机制随即开始生自己的 finding。
+用户据此拍板：**只做核心 + 有源码实证支撑的护栏**，其余砍掉。本注记是那次裁决的落账。
+
+### 4.2 已实现（`bb2beece`，50 文件、37 条新测试；`gate:local` 全绿）
+
+- domain 状态机（引用计数 + 60s 宽限 + **单调时钟**）
+- application：仅派生态翻转才广播、500ms 合并窗口（存**初态+末态**）、grace 与 batch **两枚独立定时器**、query 零参
+- `/ws/presence` **独立通道**：`users:presence` 整连接级升级门 + `rerunUpgradeGate`、**无 frameGate**、
+  `onOpenExtra` 登记 + 发全量快照
+- 连接层：**单次释放句柄**、登记在 epoch 复核**且重跑完整升级门之后**
+- 权限点 `users:presence`（不进静态 preset，admin 由动态 baseline 天然持有）+ 三条建号路径共用的默认授予策略
+- 前端 store 三态 + `PresenceDot` + 接线 `/users` 与全站署名 chip
+- 迁移 `0188_rfc312_users_presence_grant`：存量 user/manager 的 backfill
+
+### 4.3 **明确不做**（v7 里有、本次刻意砍掉）
+
+以下条目**不是遗漏，是裁决**。要恢复其中任何一条，请先说明它对应的真实故障，而不是引用某轮 finding 编号：
+
+| v7 条目 | 砍掉的理由 |
+| --- | --- |
+| `PresenceAdmissionLease` 连接配额（Q=8、30/min） | 属于对既有 WS 层的加固，收益覆盖全部通道，不该由"显示小圆点"来扛；真要做应独立立 RFC |
+| dirty + drain 丢帧修复链（含重试上限、四种入口） | 简化为：**presence 发送失败就关连接**，客户端重连自然拿新快照。少一套状态机 |
+| per-socket worker 七项合同（requestedEpoch/processedEpoch/awaited-tail…） | 同上——那是 RFC-212 复核机制的加固 |
+| `taskCollab` no-op 写不触发复核 | 真实缺口（普通用户可放大），但**属于既有仓的问题**，独立修更清楚 |
+| 快照序列化缓存 + 容量预算（AC-25/28） | 当前规模下无实测诉求；等真有量级压力再按实测做 |
+| 可观测性合同（AC-26 五侧字段） | 同上，先上线再按真实排障需要补 |
+| T0：WS 升级路径去重（5 读 2 写 → 3 读 1 写） | 与 presence 无关的既有浪费；**已告知并发的 RFC-311 session 可自行取用** |
+| 其余三处接线（任务成员面板只读分支 / `UserPicker` 可管理分支 / 花名册人类成员行） | 待前两处观感确认后再铺，避免五处一起返工 |
+
+### 4.4 已按"有意更新"处理的既有锁（9 条）
+
+WS_PATHS 双射 11→12、通道计数 11→12、`onOpenExtra` 穷举锁扩为 task+presence、
+权限总数 108→109、user 预设差集 28→29、guest 可授予 101→102、前端权限目录 108→109、
+迁移总数 187→188、RFC-305 架构锁登记 `ws/registry.ts -> identity-access/composition`，
+以及五处因"新建用户默认多一条 grant"而更新的夹具期望。**没有一条是放宽判据或删除断言。**
+
+### 4.5 实现过程中被既有防线抓到的两次
+
+1. `rfc152-ws-task-channel` 的源级 ratchet 禁止 `server.ts` 出现任何 `.kind ===` 分支，
+   我写的 `credential.kind === 'session'` 被拦。虽属正则误伤，但**没有放宽 ratchet**——
+   把登记搬进 presence 通道自己的 spec（presence 本就只统计这一个通道的连接，那才是它该在的地方）。
+2. 通道测试里快照发不出去，因为夹具只造了 Actor 对象、DB 里没有 users 行，
+   **RFC-305 的出站 fence 查不到就丢帧**。这实证了 design §8.2 记的那笔账：
+   presence 的 DB 成本 = 每帧每订阅者一次主键点查。

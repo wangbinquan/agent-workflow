@@ -17,6 +17,8 @@ import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { currentActorAtRequest, useActor, useAuthSessionRevision } from '@/hooks/useActor'
 import { getAuthSessionRevision } from '@/stores/auth'
+import { PresenceDot } from '@/components/PresenceDot'
+import { usePresenceOf } from '@/hooks/usePresence'
 import { Dialog } from '../Dialog'
 import { UserPicker } from '../UserPicker'
 
@@ -240,15 +242,15 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
             }}
             excludeIds={data.ownerUserId !== null ? [data.ownerUserId] : []}
             testidPrefix="members-users"
+            // RFC-312 —— 可管理分支的成员由 UserPicker 渲染，只接面板会让 owner 看不到点。
+            renderAdornment={(userId) => <MemberPresenceDot userId={userId} />}
           />
         ) : data.users.length === 0 ? (
           <span className="muted">{t('members.noUsers')}</span>
         ) : (
           <span className="acl-panel__value">
             {data.users.map((u) => (
-              <span key={u.id} className="chip">
-                {u.displayName}
-              </span>
+              <MemberChip key={u.id} userId={u.id} displayName={u.displayName} />
             ))}
           </span>
         )}
@@ -329,4 +331,19 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
       </Dialog>
     </div>
   )
+}
+
+/** RFC-312 —— 成员 chip 带在线点。单独抽出来是因为 hook 不能在 map 回调里调用。 */
+function MemberChip({ userId, displayName }: { userId: string; displayName: string }) {
+  return (
+    <span className="chip">
+      <PresenceDot online={usePresenceOf(userId)} />
+      {displayName}
+    </span>
+  )
+}
+
+/** hook 不能在 render prop 的内联回调里直接调用，包一层组件。 */
+function MemberPresenceDot({ userId }: { userId: string }) {
+  return <PresenceDot online={usePresenceOf(userId)} />
 }

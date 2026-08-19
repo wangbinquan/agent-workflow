@@ -175,7 +175,9 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // grantable point (repository-employee-assignments:update) ⇒ 25.
   // PR-7b +3 (handoff/attach/resume) ⇒ 108; PR-9 +1 (cutover) ⇒ 109;
   // PR-10 −1 (code-rounds:launch retired with the legacy writer) ⇒ 108.
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(108)
+  // RFC-312 +1 (`users:presence`) ⇒ 109. 它**不进任何静态 preset**（RFC-305 没有 deny 集，
+  // 进了就永远无法按账号收回），只作为可授予项出现在目录里 —— 所以行数 +1、生效数不变。
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(109)
   // PR-9 +1 grantable (development-missions:cutover is admin-tier, so it is a
   // preset difference); PR-10 −1 row but +0 grantable (code-rounds:launch was
   // in the user baseline) ⇒ 26.
@@ -498,7 +500,7 @@ test('guest browser exposes public resources without mutation or task affordance
     // RFC-310 PR-11：数字员工从 tasks 组里的一个 `/code` 条目升为独立分组（说明书 /
     // 执行器库 / 仓库范围三条），`/outcomes` 进运行组。这条清单是**完整产品地图**的
     // 快照——guest 照样看得见全部条目，只是无权目标页为空且不发请求（RFC-305 的
-    // stable-nav 契约），所以导航改版必须同步改它。
+    // stable-nav 契约），所以导航改版必然要同步改它。
     '/code',
     '/code/executors',
     '/code/assignments',
