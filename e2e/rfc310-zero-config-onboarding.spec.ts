@@ -25,7 +25,8 @@ import { startDaemon, type DaemonHandle } from './harness'
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(300_000)
 
-const PROJECT_PATH = 'rfc310/zero-config-onboarding'
+// 同 journey spec：每次运行（含 retry）用新路径，避免 `already seeded` 把真实失败盖掉。
+const PROJECT_PATH = `rfc310/zero-config-onboarding-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
 let daemon: DaemonHandle
 let mocks: SystemMockClient
