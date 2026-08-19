@@ -297,6 +297,11 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 ## git / 多人协作（共享工作树）
 
+- **共享树上永远用 `git commit -- <paths>`；裸 `git commit -m` 提交的是整个索引，会静默带走别人 `git add` 过的文件**（2026-08-19 实撞，一手教训）：我用 `git add <我的三个文件> && git commit -m …` 提一批 prettier 修复，结果 commit stat 里出现 **9 个文件**——多出来的 6 个是并发 session 已 `git add`、尚未 commit 的在制改动（五个弹窗 + 一个测试文件），连同他们**还没跑完全量门禁**的状态一起上了主干。
+  - 机理：`git add` 只是往索引里放东西，`git commit` 提的是**索引全部内容**，不是「我刚 add 的那些」。共享树上索引是共用的，所以别人 add 过什么，你就替他提什么。**全程没有任何提示**。
+  - 症状与判据：提交后 `git show --stat HEAD` 里出现自己没碰过的文件——所以**每次 commit 后都要看一眼 stat 的文件数**是否等于自己的预期（本仓已有的「共享树全树操作」条讲的是 `git add -A` 之害，这条是它的孪生形态：即使精确 `git add`，commit 仍是全索引）。
+  - 定式：**`git commit -- <path1> <path2> …`**（pathspec 形式）只提指定路径、不动索引里其余部分；提交信息照旧只描述自己的改动。
+  - 事后处置：**不要为署名去 revert**。内容如果逐字正确，revert + 重提只是在共享主干上多一轮冲突面和多一轮 CI，功能零收益；正确做法是立刻通报对方（他们可能正等着自己的门禁结果决定推不推），由代码作者决定向前修还是补文档说明。
 - **共享树上的 typecheck / 测试结果不是任何 SHA 的属性，是别人键盘的瞬时快照**（2026-08-14 双向实撞，两个 session 各栽一次）。同事在共享树上跑 typecheck 想判「main 红不红」，撞到的那条错误 40 秒后自己消失了——因为我当时正在实时改那一行。共享树上的红有**三种**来源：你的改动、他人的未提交改动、以及**正在被编辑的中间态**；第三种会自愈，最能骗人。**判据**：要判某条 SHA 红不红，只能在 pin 到它的**干净 checkout**（分离 worktree 或 CI）上跑；CI 绿本身就是最省事的权威证据。
 - **在共享树上做「这条红是不是我的」对照实验，必须把**全部**未提交改动一起隔离，不能只 stash 你认得的那几个文件**（同一天，我犯的那半）。我用 `git stash push -- <我改过的文件>` 跑了一次 typecheck，红还在，据此判定「与我无关」并给同事发了归属信——错的：树上还留着**他**未提交的另一个文件，那才是真来源，所以两次跑的其实是**同一个污染态**，根本不是对照。用一个没控住变量的对照下归属结论比不做更糟，因为它给你虚假的确信。**定式**：要么 `git stash -u` 全隔离后再跑，要么直接开 pin 到目标 SHA 的干净 worktree（首选，零风险）。
 - **对共享索引类文档（`docs/audit-backlog.md` / `STATE.md` / `design/plan.md`）做 `git add <整个文件>`，会把他人**正在编辑中**的半成品推上 main**（2026-08-14 实撞，后果比「带走别人已完成的改动」重一档）。我只想往 backlog 追加一段，`git add docs/audit-backlog.md` 就把第三个 session 的五条 RFC-247 收口记录一并带走了。**真正的危害不是内容混在一起**（仓规允许混提），而是那几条写的是「**已修**」而对应代码**还在对方工作树里没提交**——于是 main 上的文档声称三件事已修，实现却不在 main 上，任何人读文档都会被误导。**定式**：动共享索引前先 `git status --porcelain <该文件>`，若它已被改动，要么先确认那些改动是你自己的，要么改用 `git add -p` 只挑自己的 hunk（这类文件通常是纯追加，挑 hunk 很干净），要么等对方提交后再追加。**判据**：`git diff --cached <该文件> | grep -c "^-"`——纯追加应当是 0；非 0 就说明你动了别人的行。
@@ -808,6 +813,10 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 
 ## 前端
 
+- **弹窗打开后，页头那颗同名按钮"看得见但点不到"——用户点它 = 静默丢弃已填内容**（2026-08-19 用户实报，RFC-310）：症状是「我点击创建，弹窗就消失了，什么都没变化」。真相是 `Dialog` 的遮罩盖满视口，页头那颗**同名**「创建」（打开弹窗用的那颗）只是透过半透明遮罩可见，点下去命中的是遮罩本身 → 走 `closeOnOverlayClick` 默认的 true → `onClose()`，输入被丢弃且**不发任何请求**（判据：库里一行没多，说明根本没走到提交）。手会去够页头那颗，因为用户就是从那儿点开的。
+  - 定式：**装着用户输入的弹窗一律 `closeOnOverlayClick={false}`**（本仓既有先例：`AgentPortDialog` / `tasks.new`），ESC / 取消 / × 三条关闭路径保留。纯展示型弹窗不受此限。
+  - 回归锁的写法：`fireEvent.mouseDown(document.querySelector('.dialog__overlay'))` 后断言三件事——弹窗仍在、输入值仍在、**没有 POST 发出**（只断言前两条会漏掉"关了但请求发出去了"的另一种坏）。守卫要配正向对照：同一个 Dialog 不传该 prop 时 mousedown **必须**触发 onClose，否则你锁的可能是别的原因。
+  - 判据（下次遇到类似"点了没反应"）：先查**那一下到底点在谁身上**。遮罩是全屏的，任何"页面上仍可见的按钮"在弹窗开着时都点不到；症状是「弹窗消失 + 数据零变化 + 无网络请求」时，几乎一定是误触遮罩而不是提交失败。
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。
 - **视觉基线刷新前先 `build:binary -- --include-e2e`**——**少了这个 flag 就白刷**：e2e harness 跑的是 `dist/agent-workflow-e2e-*`（`e2e/harness.ts:defaultBinaryPath`），而裸 `build:binary` 只产 `dist/agent-workflow-<platform>`。拿旧 e2e 二进制刷出来的是**旧页面**的图，且测试还会「通过」；判据是「删掉 png 重生成后与旧图字节完全相同」（RFC-248 实测踩到）。旧 dist 同样刷出「通过但错误」的图；`-g` 只刷单 scene；linux 基线取 CI artifact 不本地生成；`--update-snapshots` 对已存在 png 静默 no-op，必变 scene 先 `rm`。settings.png 只截默认(runtime) tab——子 tab 内改动无需刷基线。
 - **窗口化列表必须常驻 `scrollbar-gutter: stable`，否则 Linux 视觉基线会间歇性红、用户会看到列宽跳动**（2026-08-19 实测，RFC-311）：虚拟列表的总高度是**测量出来的**（`estimateSize` 先给估计值、行测量完再修正），所以「这一刻要不要滚动条」在渲染早期不稳定。经典滚动条（Linux/Windows）一出现就吃掉 ~15px，容器内所有行整体左移；`/repos` 视觉基线因此在同一份代码上红-绿-红交替，差异图表现为**滚动容器外的表头不动、容器内的行内容整体偏移**（这是判据）。**macOS 是 overlay 滚动条、不占布局**，所以本地视觉套件恒绿、永远复现不了——只有 Linux CI 会红。修法是给滚动容器加 `scrollbar-gutter: stable`（`components/VirtualList.tsx` 现行形态，`virtual-list.test.tsx` 锁定），让布局与滚动条出现与否无关；改完 linux 基线要按既有规矩从 CI artifact 取新图。

@@ -690,6 +690,7 @@ mission 重试后推进到 `working`、readiness `automationReady: true`。**未
 | 5 | `/code/assignments` 点「新建指派」整页 error boundary | 四条 useQuery 把 `{items:[…]}` 声明成裸数组 ⇒ **该页从未能用**，而它正是 mission 解析员工的必经配置 |
 | 6 | 员工详情存草稿后整页白屏（React #31） | versioned ref `{id,revision}` 被当字符串塞进 JSX |
 | 7 | 员工「默认策略」永远显示「—」 | 同 6 的另一半：`refText` 只认字符串，遇对象**静默退化**（不报错，只是说谎） |
+| 8 | 「点击创建，弹窗就消失了，什么都没变化」（用户实报） | 遮罩盖满视口，页头那颗**同名**「创建」只是透过遮罩可见、实际点不到；那一下命中遮罩 → 默认 `closeOnOverlayClick` 关闭 → 已填内容静默丢弃且不发请求。装输入的五个弹窗（配置创建 / 草稿编辑 / mission 发起 / 指派 / 策略创建）统一改 `closeOnOverlayClick={false}` |
 
 三处共同结构：**测试 fixture 照着前端的错误假设造数据**（裸数组 / `'id@rev'` 字符串），与实现
 互相印证，于是全绿。处置除修复外，补了两层机械链接：fixture 由后端 domain schema `safeParse`
