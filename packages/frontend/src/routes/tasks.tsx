@@ -868,16 +868,25 @@ function TaskOperationsList(props: {
         tail={
           props.hasNextPage ? (
             <div className="task-operations__more" role="presentation">
+              {/* RFC-311：可及名固定、且**不 disabled**。距底 400px 的滚动哨兵会在
+                  用户/浏览器把本按钮滚进视口时先一步触发翻页，若此刻改文案或禁用，
+                  按名字拿到的句柄当场失配（webkit e2e 症状是 element detached 活锁），
+                  键盘焦点也会被弹走。加载态改由 aria-busy + 旁白承载。 */}
               <button
                 type="button"
                 className="btn btn--sm"
-                disabled={props.loadingMore}
-                onClick={props.onLoadMore}
+                aria-busy={props.loadingMore || undefined}
+                onClick={() => {
+                  if (!props.loadingMore) props.onLoadMore()
+                }}
               >
-                {props.loadingMore
-                  ? t('tasks.operations.loadingMore')
-                  : t('tasks.operations.loadMore')}
+                {t('tasks.operations.loadMore')}
               </button>
+              {props.loadingMore ? (
+                <span role="status" className="muted">
+                  {t('tasks.operations.loadingMore')}
+                </span>
+              ) : null}
             </div>
           ) : undefined
         }
@@ -1023,16 +1032,22 @@ function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOpera
       ))}
       {query.hasNextPage && (
         <div role="listitem" className="task-operations__more task-operations__more--child">
+          {/* 同根列表：名字固定 + 不 disabled，见 RFC-311 的注记。 */}
           <button
             type="button"
             className="btn btn--sm"
-            disabled={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
+            aria-busy={query.isFetchingNextPage || undefined}
+            onClick={() => {
+              if (!query.isFetchingNextPage) void query.fetchNextPage()
+            }}
           >
-            {query.isFetchingNextPage
-              ? t('tasks.operations.loadingMoreChildren')
-              : t('tasks.operations.loadMoreChildren')}
+            {t('tasks.operations.loadMoreChildren')}
           </button>
+          {query.isFetchingNextPage ? (
+            <span role="status" className="muted">
+              {t('tasks.operations.loadingMoreChildren')}
+            </span>
+          ) : null}
         </div>
       )}
     </>

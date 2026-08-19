@@ -625,16 +625,22 @@ function ReposPage() {
                     tail={
                       list.hasNextPage ? (
                         <div className="repo-operations__more" role="presentation">
+                          {/* 同 /tasks：名字固定 + 不 disabled，见 RFC-311 的注记。 */}
                           <button
                             type="button"
                             className="btn btn--sm"
-                            disabled={list.isFetchingNextPage}
-                            onClick={() => void list.fetchNextPage()}
+                            aria-busy={list.isFetchingNextPage || undefined}
+                            onClick={() => {
+                              if (!list.isFetchingNextPage) void list.fetchNextPage()
+                            }}
                           >
-                            {list.isFetchingNextPage
-                              ? t('repos.operations.loadingMore')
-                              : t('repos.operations.loadMore')}
+                            {t('repos.operations.loadMore')}
                           </button>
+                          {list.isFetchingNextPage ? (
+                            <span role="status" className="muted">
+                              {t('repos.operations.loadingMore')}
+                            </span>
+                          ) : null}
                         </div>
                       ) : null
                     }
