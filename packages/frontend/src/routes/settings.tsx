@@ -580,6 +580,17 @@ function LimitsTab({ config }: TabProps) {
             onChange={(v) => setState({ ...state, defaultNodeRetries: v ?? 0 })}
           />
         </Field>
+        <Field
+          label={t('settingsForm.sessionRestartBudget')}
+          required
+          hint={t('settingsForm.sessionRestartBudgetHint')}
+        >
+          <SettingsNumberInput
+            setting="sessionRestartBudget"
+            value={state.sessionRestartBudget}
+            onChange={(v) => setState({ ...state, sessionRestartBudget: v ?? 0 })}
+          />
+        </Field>
         <Field label={t('settingsForm.largeOutputThreshold')} required>
           <SettingsNumberInput
             setting="largeOutputThresholdBytes"

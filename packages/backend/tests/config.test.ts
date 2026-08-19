@@ -154,6 +154,23 @@ describe('config load/save', () => {
     writeFileSync(path, JSON.stringify({ $schema_version: 1, maxConcurrentNodes: 6 }))
     expect(loadConfig(path).defaultNodeRetries).toBe(3)
   })
+
+  // RFC-313: 会话重启预算与 defaultNodeRetries 同族——required-with-default。真正
+  // 要锁的兼容性质是「**升级前写下的 config.json 里没有这个键**，daemon 仍要照常
+  // 启动」：ConfigSchema 是全必填，靠 mergeDefaults 在校验前回填。这条用例直接构造
+  // 那种存量文件，防止日后有人把回填顺序改掉（那会让每个升级用户的 daemon 拒启动）。
+  test('RFC-313 legacy config (missing sessionRestartBudget) backfills to 1', () => {
+    writeFileSync(path, JSON.stringify({ $schema_version: 1, defaultNodeRetries: 3 }))
+    expect(loadConfig(path).sessionRestartBudget).toBe(1)
+  })
+
+  test('RFC-313 sessionRestartBudget accepts 0（关闭升级）但拒负数 / 小数', () => {
+    loadConfig(path)
+    expect(applyConfigPatch(path, { sessionRestartBudget: 0 }).sessionRestartBudget).toBe(0)
+    expect(applyConfigPatch(path, { sessionRestartBudget: 2 }).sessionRestartBudget).toBe(2)
+    expect(() => applyConfigPatch(path, { sessionRestartBudget: -1 })).toThrow(ValidationError)
+    expect(() => applyConfigPatch(path, { sessionRestartBudget: 1.5 })).toThrow(ValidationError)
+  })
 })
 
 // 2026-07-15 repo-root tempfile leak regression. Many route tests pass

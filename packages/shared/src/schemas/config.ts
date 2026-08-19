@@ -195,6 +195,11 @@ export const ConfigSchema = z.object({
   // override). nonnegative (not positive) — retries:0 is a valid explicit
   // "no retries"; default 3 matches RFC-042's former hard-coded fallback.
   defaultNodeRetries: z.number().int().nonnegative(),
+  // RFC-313: 同会话追问链触顶后，允许整体换一个干净会话重来几次。与
+  // defaultNodeRetries 正交——后者是「同一会话内追问几次」，本项是「换几次会话」。
+  // 两者共同决定单节点 attempt 硬上限 (1+defaultNodeRetries)×(1+sessionRestartBudget)。
+  // 0 = 关闭升级，上限退化成 1+defaultNodeRetries，逐字等于 RFC-313 落地前。
+  sessionRestartBudget: z.number().int().nonnegative(),
 
   // --- RFC-253 script nodes ---
   /**
@@ -693,6 +698,7 @@ export const DEFAULT_CONFIG: Config = {
   // so every node has a hard-timeout floor; was defined-but-never-threaded before.
   defaultPerNodeTimeoutMs: 30 * 60 * 1000, // 30 min
   defaultNodeRetries: 3, // RFC-115 — was RFC-042's hard-coded `?? 3` in scheduler
+  sessionRestartBudget: 1, // RFC-313 — 默认给一次干净重启；0 = 关闭
   scriptInterpreters: {}, // RFC-253 — empty ⇒ resolve every language from PATH
   scriptDepsInstallTimeoutMs: 10 * 60 * 1000,
   scriptEnvTtlDays: 30,
@@ -774,6 +780,7 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     defaultPerTaskMaxTotalTokens: boundedSettingsInteger('defaultPerTaskMaxTotalTokens').optional(),
     defaultPerNodeTimeoutMs: boundedSettingsInteger('defaultPerNodeTimeoutMs').optional(),
     defaultNodeRetries: boundedSettingsInteger('defaultNodeRetries').optional(),
+    sessionRestartBudget: boundedSettingsInteger('sessionRestartBudget').optional(),
     largeOutputThresholdBytes: boundedSettingsInteger('largeOutputThresholdBytes').optional(),
     maxConcurrentNodes: boundedSettingsInteger('maxConcurrentNodes').optional(),
     maxConcurrentScriptNodes: boundedSettingsInteger('maxConcurrentScriptNodes').optional(),

@@ -154,6 +154,9 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget now comes from runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
+          // RFC-313 AC-5: 本文件锁的是 RFC-042 的契约，即「升级开关关闭时」的行为。
+          // 显式置 0 让它继续充当那份不变量证据——断言一个字未改。
+          sessionRestartBudget: 0,
         }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -202,6 +205,9 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget now comes from runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
+          // RFC-313 AC-5: 本文件锁的是 RFC-042 的契约，即「升级开关关闭时」的行为。
+          // 显式置 0 让它继续充当那份不变量证据——断言一个字未改。
+          sessionRestartBudget: 0,
         }),
     )
     const argvs = readArgvLog(h.argvLog)
@@ -239,6 +245,9 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: explicit no-retry path — global budget 0 (was node.retries: 0).
           defaultNodeRetries: 0,
+          // RFC-313 AC-5: 本文件锁的是 RFC-042 的契约，即「升级开关关闭时」的行为。
+          // 显式置 0 让它继续充当那份不变量证据——断言一个字未改。
+          sessionRestartBudget: 0,
         }),
     )
     const argvs = readArgvLog(h.argvLog)
@@ -272,6 +281,9 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget now comes from runTask opts (was node.retries: 3).
           defaultNodeRetries: 3,
+          // RFC-313 AC-5: 本文件锁的是 RFC-042 的契约，即「升级开关关闭时」的行为。
+          // 显式置 0 让它继续充当那份不变量证据——断言一个字未改。
+          sessionRestartBudget: 0,
         }),
     )
     const argvs = readArgvLog(h.argvLog)

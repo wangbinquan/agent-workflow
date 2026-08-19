@@ -33,6 +33,10 @@ restartBudget  = config.sessionRestartBudget          （新增，默认 1）
 
 `shouldRetry` 里的 `maxRetries` 由常量改为 `totalCap - 1`。**这是 attempt 数量的唯一权威**；`followupBudget` / `restartBudget` 决定的是每一次重试**长什么形状**，而不是还能不能再来一次。
 
+**必须点明的后果**：上限是**乘积、与失败种类无关**。升级预算只在真的发生主动升级时被消耗（崩溃不吃它，AC-6），但一个每次都崩溃、因而永远走不到升级的节点，attempt 上限同样从 `1+F` 变成 `(1+F)×(1+R)`——默认即 4→8。这正是 `proposal.md` 成本表里那一行的完整含义。
+
+考虑过、**否决**了「只在真的升级时才追加预算」的动态形式（`k < F + restartsUsed×(1+F)`）：它的意图更贴合本 RFC 的论证，但骨架的调用序是 `shouldRetry`（同步、无 DB）先于 `keepIf`（异步、做形状判定），于是动态式必须靠「链已触顶且尚有升级预算」这类**对下一次判定的预测**来放行，边界行为随即变得反直觉——早期的一次崩溃会从后续接续链的额度里扣走一格（`k` 是全局序号），而改成按会话计数又会让「每次崩溃都重置」退化成无界自旋。一个乘积上限、一处权威，是这里更诚实的取舍。
+
 ### 2.2 三态判定（纯函数）
 
 新增一个纯函数，与 `FOLLOWUP_POLICY` 同族放在 `shared/src/prompt.ts`：
@@ -119,9 +123,9 @@ let pendingRestartReason: EnvelopeFollowupReason | undefined
 
 `decideFollowupForRetry`（`:5836`）改为：算出既有的 `EnvelopeFollowupDecision` 后交给 `decideRetryShape`，按 shape 落三件事——设置 `followupDecision` / `followupResumeSessionId`（仅 `followup`）、设置 `pendingRestartReason`（仅 `restart`）、返回「是否留树」（仅 `followup` 为真）。**函数签名与返回语义不变**（仍是 `keepIf` 要的 `Promise<boolean>`），骨架的调用序契约因此原样成立。
 
-`prepareRetryAttempt`（`:5879`）在既有 `[rfc042/envelope-followup]` 事件分支旁增加一支：`pendingRestartReason !== undefined` 时写 `[rfc313/session-restart]`，payload `{ rfc: 'RFC-313', reason, chainLen, restartsUsed, retryAttempt }`。**新行的 `cause` 仍是 `process-retry`**（用户拍板，见 §5.2 为什么这也是更安全的选择）。既有的「followup 时才把 `envelopeNonce` 抄到新行」（`:5906`）无需改动——`restart` 的 `followupDecision.followup` 为 false，于是自动铸新 nonce。
+`prepareRetryAttempt`（`:5879`）在既有 `[rfc042/envelope-followup]` 事件分支旁增加一支：`pendingRestartReason !== undefined` 时写 `[rfc313/session-restart]`，payload `{ rfc: 'RFC-313', reason, abandonedAfterFollowups, restartsUsed, retryAttempt }`（第三个字段记的是**放弃那个会话时的实际链长**——升级的触发条件就是链长追平预算，判定后链计数已归零、事后读不到，故按事实取名）。**新行的 `cause` 仍是 `process-retry`**（用户拍板，见 §5.2 为什么这也是更安全的选择）。既有的「followup 时才把 `envelopeNonce` 抄到新行」（`:5906`）无需改动——`restart` 的 `followupDecision.followup` 为 false，于是自动铸新 nonce。
 
-`runOneAttempt` 里把 `pendingRestartReason` 读进 `runNode` 的入参并**立即清空**（一次性消费；只有紧随升级的那一次 attempt 带告知）。
+`runOneAttempt` 只**读** `pendingRestartReason` 并透进 `runNode` 入参。**实现期改进**：让 `decideFollowupForRetry`（即 `keepIf`）成为它的**唯一写者**——每轮开头无条件复位、再按形状赋值。原设计的「读走即清」在 spawn 侧留了一个写点，一旦某轮提前返回就会把上一轮的告知漏进下一轮；单写者从结构上消掉了这个窗口。
 
 ### 3.4 runner（`services/runner.ts`）
 
@@ -149,7 +153,7 @@ restarts    0    0      0      0      1        1      1      1
 ## 5. 与既有机制的交互
 
 ### 5.1 RFC-122 `clarifyModeFlip`（`scheduler.ts:6409` 附近）
-STOP 开关翻转会让接续走完整 `renderUserPrompt`，但它**保树、且 `followupDecision.followup` 仍为 true**（`keepIf` 在它之前就返回了 true）。因此 flip **不是**升级：不丢树、不消耗 `restartBudget`、不带告知、`chainLen` 照常 +1。两条路径各有独立测试，不得合并。
+STOP 开关翻转会让接续走完整 `renderUserPrompt`，但它**保树、且 `followupDecision.followup` 仍为 true**（`keepIf` 在它之前就返回了 true）。因此 flip **不是**升级：不丢树、不消耗 `restartBudget`、不带告知、`chainLen` 照常 +1。**实现期核实**：本 RFC 对翻转路径是恒等变换（只在 `followupDecision.followup` 为 false 时改变行为），既有 RFC-122 套件即回归锁，见 §8 第 11 条的裁决。
 
 ### 5.2 RFC-026 inline clarify resume（`scheduler.ts:6065`）
 `decideResumeSessionId` 只在 `isClarifyRerun` 为真时给出 session，而重试行一律 `cause='process-retry'`、不在 gate-2 集合内（`runner.ts:6300` 附近的注释已明写这一不变量）。所以升级那一次的 `effectiveResumeSessionId` 会落到 `undefined` —— **确实是全新会话**。这正是「沿用 `process-retry` 而不新铸 cause」在安全上更优的原因：新增 cause 就得重新论证它是否落进 gate-2 集合，否则可能意外把一个 clarify 会话 resume 进本该干净的重启里。AC-2 用「spawn 参数里无 resume」直接断言这条，不靠推理。
@@ -161,7 +165,7 @@ STOP 开关翻转会让接续走完整 `renderUserPrompt`，但它**保树、且
 `exitCode !== 0` ⇒ RFC-042 判据落空 ⇒ `fresh` ⇒ 链归零、重启预算不动。这是 AC-6，也是「崩溃不该吃掉聪明重启的机会」这条产品判断的落点。
 
 ### 5.5 fanout 分片与 loop
-形状判定完全在单个 node dispatch 的闭包内，分片各自独立计数；fail-all-after-join 与 loop 触顶语义不变。
+**实现期核实修正**：fanout 的分片与聚合器**不走 agent 线的 attempt 循环**——它们各有一个独立重试循环（`scheduler.ts` `dispatchFanoutShard` / `dispatchFanoutAggregator`），且其文档注释明写 *fanout retries use fresh sessions*，即本来就没有同会话接续，已经是本模型下 `followupBudget = 0` 的退化形态。因此本 RFC **不改动它们**（预算仍单读 `defaultNodeRetries`）。fail-all-after-join 与 loop 触顶语义不变。
 
 ### 5.6 `retryNode` 人工重试 / daemon 重启
 两者都会重新进入 `runOneNode`，闭包状态自然从零开始——与今天 attempt 计数的语义一致（`retryIndex` 仍持久化并单调递增，8 次 attempt 的 `retry_index` 为 0..7）。**本 RFC 不持久化链长与重启数**：它们只在一次 dispatch 内有意义。
@@ -177,7 +181,7 @@ script（`scheduler.ts:4679`，每次换新树）、workgroup（`turnExecution.t
 | 失败 | 表现 | 处置 |
 | --- | --- | --- |
 | 升级时 iso 重建失败 | `onIsoRecreateFailure`（`scheduler.ts:6565`）已有分支 | 沿用：`iso-recreate-failed` 收场，不新增路径 |
-| 配置给出荒谬值（如 `defaultNodeRetries=50` + `restartBudget=10`） | `totalCap = 561`，远超骨架的 `ASSEMBLY_MAX_ATTEMPTS` 保险丝 | 保险丝会响亮抛出。**因此 `sessionRestartBudget` 上限收在 10，并在 design 与设置页 hint 里写明两个旋钮共同决定上限**；同时补一条测试断言默认与边界组合下 `totalCap <= ASSEMBLY_MAX_ATTEMPTS` |
+| 配置给出荒谬值（如 `defaultNodeRetries=50` + `restartBudget=10`） | 乘积 561 远超骨架的 `ASSEMBLY_MAX_ATTEMPTS`（=100）保险丝 | **实现修正**：仅把 `sessionRestartBudget` 上限收在 10 **不足以**挡住（51×11 仍是 561）。因此 `retryAttemptCap` 自身钳到新增的 `RETRY_ATTEMPT_CAP_CEILING`（=64），使该函数成为全函数、任何配置组合都产不出能触发保险丝的上限——保险丝的报错写的是「spec bug」，用它接住一个**配置选择**只会把运维引到错误方向。两常量的大小关系由 `rfc313-session-escalation.test.ts` 直接断言（为此 `ASSEMBLY_MAX_ATTEMPTS` 改为导出）|
 | 升级后模型仍不吐信封 | 走完会话 B 的接续预算后 `shouldRetry` 拒绝 | 节点 `failed`，`errorMessage` 保持现状语义（人类可读；机器读被 RFC-145 源码守卫禁止） |
 | 状态被误改（链长/重启数在某处被重置） | 形状判定失真 | 纯函数 + `next` 状态返回，调用点只做赋值；单测覆盖状态迁移矩阵 |
 
@@ -204,12 +208,14 @@ script（`scheduler.ts:4679`，每次换新树）、workgroup（`turnExecution.t
 7. `priorSessionAbandoned` 缺省时 `renderUserPrompt` 输出与改动前**逐字节相同**（黄金锁）。
 
 **scheduler 集成（`backend` 侧，新文件 `rfc313-session-escalation.test.ts`）**
-8. 主场景：agent 每次 `exitCode=0` + 有 text + 无信封 → 恰好 8 行 `node_runs`；第 0-3 行同一 `session_id` 与同一 `envelope_nonce`；第 4 行 `envelope_nonce` 不同、spawn 参数里**无** `--session` / `--resume`、iso 路径与前 4 行不同、prompt 含告知段与协议块；第 5-7 行复用会话 B。
+8. **实现期记账——「丢树重建」这一项由既有路径承接**：升级把 `keepIf` 返回 false，而「keepIf=false ⇒ `discardIso` + `iso.create()`」是骨架里**早已存在**的那条（崩溃后的 `fresh` 重试走的就是它），其真实工作树语义由 `rfc092-followup-chain-rollback.test.ts`（fresh→followup 保树→fresh 重试回到基线 X）直接锁定。本 RFC 没有新增工作树机制，故不重复搭一套真 git 仓的夹具；集成用例沿用既有 followup 套件的 passthrough 搭台，改证**会话**换没换（native session id 前后不同 + argv 无 resume 参数 + nonce 换新），那才是升级的新语义。
+
+   主场景：agent 每次 `exitCode=0` + 有 text + 无信封 → 恰好 8 行 `node_runs`；第 0-3 行同一 `session_id` 与同一 `envelope_nonce`；第 4 行 `envelope_nonce` 不同、spawn 参数里**无** `--session` / `--resume`、iso 路径与前 4 行不同、prompt 含告知段与协议块；第 5-7 行复用会话 B。
 9. AC-5 关闭开关：`sessionRestartBudget=0` 下 attempt 序列 / session 复用 / iso 处置与现有 RFC-042 测试的期望完全一致（**复用现有测试作为不变量，不修改它们**）。
 10. AC-6 崩溃：`exitCode≠0` 插在链中 → 链归零、`restartsUsed` 未增长、后续仍能发生一次真升级。
-11. AC-8 clarify 翻转：flip 那次保树、保会话、无告知、`restartsUsed` 不变。
+11. **实现期裁决**：AC-8（clarify 模式翻转不算升级）不新写集成用例——翻转分支读的是 `followupDecision.followup`，本 RFC 只在它为 false 时改变行为，对翻转路径是恒等变换。既有 RFC-122 套件即回归锁（T9 跑全绿为准），新写一条只会重复它们的搭台。
 12. AC-9 审计：升级行上恰有一条 `[rfc313/session-restart]` 事件且 payload 字段齐全；非升级行没有。
-13. 记忆 / 清单：升级那次重新注入（`injected_memories_json` 非空且为**当次**快照，而非继承）。
+13. **实现期裁决（如实记账）**：记忆注入 / 清单物化**没有**单独立测——它们由 `followupMode === undefined` 这一个既有开关驱动，升级 attempt 与首发 attempt 走的是**逐字相同**的那条分支（本 RFC 一行未改），没有新增可回归面。真正需要证明的是「升级那次确实走了完整渲染路径」，由第 8 条的 prompt 断言直接覆盖（含节点模板正文 + 协议块 + 告知段）。
 
 **源码层兜底断言**
 14. `decideRetryShape` 全仓只有一个定义点，且 `scheduler.ts` 里不出现第二处 `restartsUsed +=`（防止有人日后在别处偷偷加预算）。

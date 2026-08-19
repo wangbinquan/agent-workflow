@@ -34,6 +34,11 @@ import {
   DAEMON_SHUTDOWN_ABORT_REASON,
   FANOUT_DONE_PORT_NAME,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
+  DEFAULT_SESSION_RESTART_BUDGET,
+  decideRetryShape,
+  retryAttemptCap,
+  type RetryShapeState,
+  type EnvelopeFollowupOutcome,
   channelEdgeDataflowSkip,
   NODE_KIND,
   NODE_KIND_BEHAVIORS,
@@ -334,6 +339,11 @@ export interface RunTaskOptions {
    */
   defaultNodeRetries?: number
   /**
+   * RFC-313: 同会话追问链触顶后允许整体换几次干净会话（from config.sessionRestartBudget）。
+   * 与 defaultNodeRetries 相乘决定 attempt 硬上限，见 shared `retryAttemptCap`。
+   */
+  sessionRestartBudget?: number
+  /**
    * RFC-253 — administrator interpreter overrides for script nodes. Absent
    * entries resolve from the daemon's PATH.
    */
@@ -439,6 +449,7 @@ export const INHERITABLE_RUN_CONFIG_KEYS = [
   'appHome',
   'defaultPerNodeTimeoutMs',
   'defaultNodeRetries',
+  'sessionRestartBudget',
   'defaultRuntime',
   'maxConcurrentNodes',
   'maxConcurrentScriptNodes',
@@ -1627,24 +1638,15 @@ export interface PreviousAttemptShape {
   }>
 }
 
-export type EnvelopeFollowupDecision =
-  | {
-      followup: true
-      /** RFC-145: 6-value render domain, single-sourced in shared/prompt.ts. */
-      reason: EnvelopeFollowupReason
-      /**
-       * Failures payload to thread into the runner / shared renderer when
-       * reason is 'port-validation'. Empty array for the other reasons (and
-       * for the degraded-mode port-validation case described above).
-       */
-      failures: ReadonlyArray<{
-        port: string
-        kind: string
-        subReason: string
-        detail?: string
-      }>
-    }
-  | { followup: false }
+/**
+ * RFC-042 的续跑判定结论。
+ *
+ * RFC-313 起它就是 shared 的 `EnvelopeFollowupOutcome` 本身，不再在这里重述一遍
+ * 结构：`decideRetryShape`（形状判定）要消费同一个值，两处各写一份同形类型只会
+ * 让它们悄悄漂移。渲染域 `reason` 与 `failures` 元素（`PortValidationFailure`）
+ * 的单一事实源都在 shared/prompt.ts。
+ */
+export type EnvelopeFollowupDecision = EnvelopeFollowupOutcome
 
 /**
  * RFC-145: table lookup replaces the old 7-branch order-sensitive
@@ -5713,7 +5715,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // same-session follow-up before the task is failed. RFC-115: the per-node
   // `retries` override is removed — the budget is the global
   // config.defaultNodeRetries (shared default only for mock/unwired callers).
-  const maxRetries = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
+  //
+  // RFC-313: 预算从一个数变成两个维度——`followupBudget` 是「同一个会话内还能追问
+  // 几次」，`restartBudget` 是「这个会话被判定为无可救药后还能整体换几次干净会话」。
+  // `maxRetries` 由二者的乘积公式导出，且是 attempt 数量的**唯一权威**：两个预算
+  // 决定的是每次重试长什么形状（见 decideFollowupForRetry），不是还能不能再来一次。
+  // restartBudget=0 时 retryAttemptCap 退化成 1+followupBudget，逐字等于 RFC-313 前。
+  const followupBudget = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
+  const restartBudget = opts.sessionRestartBudget ?? DEFAULT_SESSION_RESTART_BUDGET
+  const maxRetries = retryAttemptCap(followupBudget, restartBudget) - 1
 
   // RFC-005: when this node is being re-run because a downstream review node
   // was rejected/iterated, surface the rendered comments / rejection reason
@@ -5828,6 +5838,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // onNextAttempt / spawn 读到的一定是本轮的决策。
   let followupDecision: EnvelopeFollowupDecision = { followup: false }
   let followupResumeSessionId: string | undefined
+  // RFC-313: 重试形状的跨 attempt 状态（只在本次 dispatch 的闭包内有意义，不持久化
+  // ——daemon 重启 / 人工 retryNode 都会重新进入执行器并从零开始，与既有 attempt
+  // 计数语义一致）。`pendingRestartReason` 只有 `decideFollowupForRetry` 一个写者
+  // （每轮先复位再按形状赋值），spawn 侧只读——于是「上一轮的告知漏进这一轮」这个
+  // 窗口从结构上就不存在。
+  let retryShapeState: RetryShapeState = { followupChainLen: 0, restartsUsed: 0 }
+  let pendingRestartReason: EnvelopeFollowupReason | undefined
 
   /**
    * 每次重试前奏：算 RFC-042 续跑决策。它同时**就是**「要不要留用同一棵树」的判据
@@ -5836,6 +5853,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   const decideFollowupForRetry = async (prev: RunResult | null): Promise<boolean> => {
     followupDecision = { followup: false }
     followupResumeSessionId = undefined
+    // 本函数是 pendingRestartReason 的唯一写者：每轮先复位，再按形状赋值，
+    // 这样 spawn 侧只读不清，也就不存在「上一轮的告知漏进这一轮」的窗口。
+    pendingRestartReason = undefined
     if (prev !== null) {
       const textCountRow = await db
         .select({ c: sql<number>`count(*)` })
@@ -5864,11 +5884,29 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         agentTextCount: Number(textCountRow[0]?.c ?? 0),
         ...(priorFailures !== null ? { portValidationFailures: priorFailures } : {}),
       })
-      if (followupDecision.followup) {
+      // RFC-313: RFC-042 的五条判据（上一行）只回答「这次失败可不可以在同一个会话里
+      // 改」；能改**不代表还应该继续在这个会话里改**——上下文已经打满 / 模型陷在
+      // 循环里时，追问是零收益甚至负收益的自旋（每条纠错提示还在加剧根因）。形状由
+      // 共享纯函数在判据之上再判一层：链未触顶 → 接续；触顶且有升级预算 → 主动换
+      // 一个干净会话重来；判据落空 → 维持既有的全新会话重试（不吃升级预算）。
+      const { shape, next } = decideRetryShape({
+        followup: followupDecision,
+        state: retryShapeState,
+        followupBudget,
+        restartBudget,
+      })
+      retryShapeState = next
+      if (shape.kind === 'followup') {
         followupResumeSessionId = prev.sessionId ?? undefined
+      } else {
+        // 升级 / 全新会话都不发短提示：把 RFC-042 的决策收回，后续所有「followup
+        // 才做」的动作（抄 envelopeNonce、带 resumeSessionId、跳过记忆注入与清单）
+        // 因此自动不做——这正是本 RFC 改动面极小的原因。
+        followupDecision = { followup: false }
+        pendingRestartReason = shape.kind === 'restart' ? shape.reason : undefined
       }
     }
-    // 续跑 ⇒ 留用同一棵树（D17）；换新会话 ⇒ 骨架负责丢弃 + 重建。
+    // 续跑 ⇒ 留用同一棵树（D17）；换新会话（升级或崩溃后重来）⇒ 骨架负责丢弃 + 重建。
     return followupDecision.followup
   }
 
@@ -5948,6 +5986,28 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               })}`,
             })
           }
+        }
+
+        // RFC-313: 主动会话升级的审计行。写在**新铸的那一行**上（与 rfc042 的续跑
+        // 事件同址同形），于是任务详情页的事件流里，「接续」与「换脑重来」是两条可
+        // 区分的痕迹——用户拍板不新增 rerun cause，事件流就是唯一的区分面。
+        // 与上面的 followup 分支互斥：升级时 followupDecision 已被收回成 false。
+        if (pendingRestartReason !== undefined) {
+          await db.insert(nodeRunEvents).values({
+            nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: `[rfc313/session-restart] ${JSON.stringify({
+              rfc: 'RFC-313',
+              reason: pendingRestartReason,
+              // 升级的触发条件**就是**链长追平预算，所以这里的 followupBudget 即
+              // 放弃那个会话时的实际链长（判定后 retryShapeState.followupChainLen
+              // 已被归零，事后读不到）。字段名按「它记录的事实」取。
+              abandonedAfterFollowups: followupBudget,
+              restartsUsed: retryShapeState.restartsUsed,
+              retryAttempt: attempt,
+            })}`,
+          })
         }
       }
     }
@@ -6428,6 +6488,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                   : {}),
               },
             }
+          : {}),
+        // RFC-313: 本次 attempt 是主动会话升级后的第一次运行 ⇒ 让渲染器在完整
+        // prompt 的协议块之后追加一段简短告知。与 promptMode.followup 天然互斥
+        // （升级时 followupDecision 已被 decideFollowupForRetry 收回成 false），
+        // 所以短提示与告知永远不会同时出现。
+        ...(pendingRestartReason !== undefined
+          ? { priorSessionAbandonedReason: pendingRestartReason }
           : {}),
         // RFC-148: the clarify quartet is ONE ClarifyChannel value now —
         // wiring family (parser cap) × this-run directive (enforcement)

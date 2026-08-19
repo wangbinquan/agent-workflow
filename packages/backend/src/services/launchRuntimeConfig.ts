@@ -83,6 +83,7 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
   defaultPerNodeTimeoutMs?: number
   defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
   defaultNodeRetries?: number // RFC-115: global per-node retry budget
+  sessionRestartBudget?: number // RFC-313: 同会话追问链触顶后允许换几次干净会话
   mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
   maxActiveChildTasks?: number // RFC-243 §3.2: global active-child-task cap
   maxInvocationDepth?: number // RFC-243 §3.2: invocation-chain depth ceiling
@@ -110,6 +111,7 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     defaultPerNodeTimeoutMs?: number
     defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
     defaultNodeRetries?: number // RFC-115: global per-node retry budget
+    sessionRestartBudget?: number // RFC-313
     claudeCodePath?: string // RFC-112: built-in claude binary (config.claudeCodePath)
     mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
     maxActiveChildTasks?: number // RFC-243
@@ -164,6 +166,8 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     if (cfg.defaultRuntime !== undefined) out.defaultRuntime = cfg.defaultRuntime
     // RFC-115: global per-node retry budget (no `> 0` guard — 0 disables retries).
     if (cfg.defaultNodeRetries !== undefined) out.defaultNodeRetries = cfg.defaultNodeRetries
+    // RFC-313: 会话升级预算（同样没有 `> 0` 守卫——0 是「关闭升级」这个显式选择）。
+    if (cfg.sessionRestartBudget !== undefined) out.sessionRestartBudget = cfg.sessionRestartBudget
     // RFC-253: administrator interpreter overrides + dependency build budget.
     if (cfg.scriptInterpreters !== undefined && Object.keys(cfg.scriptInterpreters).length > 0)
       out.scriptInterpreters = cfg.scriptInterpreters

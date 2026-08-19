@@ -5473,6 +5473,8 @@ export interface Resources {
     perNodeTimeout: string
     nodeRetries: string
     nodeRetriesHint: string
+    sessionRestartBudget: string
+    sessionRestartBudgetHint: string
     autoResumeOnBoot: string
     autoResumeOnBootHint: string
     autoRepairS4: string
@@ -12971,6 +12973,9 @@ export const zhCN: Resources = {
     perNodeTimeout: '单节点超时 (ms)',
     nodeRetries: '默认节点重试次数',
     nodeRetriesHint: '每个节点可恢复失败的重试预算（0 = 不重试）。默认 3。',
+    sessionRestartBudget: '会话重启预算',
+    sessionRestartBudgetHint:
+      '同一会话内的追问用尽后，允许整体换一个干净会话重来几次（0 = 关闭，行为回到只在同一会话里追问）。单节点最坏尝试次数 =（1 + 重试次数）×（1 + 本项）。默认 1。',
     autoResumeOnBoot: '启动时自动续跑被中断的任务',
     autoResumeOnBootHint:
       '默认关闭。开启后 daemon 启动时自动续跑因重启而中断的任务（穿熔断/隔离/租约/审计）。',

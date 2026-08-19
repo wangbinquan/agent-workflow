@@ -618,6 +618,10 @@ describe('runTask: linear DAG (M1)', () => {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget via runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
+          // RFC-313: attempt 上限是两个预算的**乘积**，默认的会话重启预算会把
+          // 「retries=1 → 2 次」变成 4 次。本用例锁的是重试预算本身的语义，
+          // 置 0 让它继续只锁那件事——断言一个字未改。
+          sessionRestartBudget: 0,
         }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

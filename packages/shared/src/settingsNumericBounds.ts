@@ -35,6 +35,9 @@ export const SETTINGS_NUMERIC_BOUNDS = {
     unit: 'ms',
   },
   defaultNodeRetries: { min: 0, max: 50 },
+  // RFC-313: 上限刻意收在 10 —— 它与 defaultNodeRetries 相乘决定 attempt 硬上限
+  // ((1+F)×(1+R))，两个旋钮同时开大会撞上装配骨架的 ASSEMBLY_MAX_ATTEMPTS 保险丝。
+  sessionRestartBudget: { min: 0, max: 10 },
   largeOutputThresholdBytes: {
     min: 1_024,
     max: 268_435_456,

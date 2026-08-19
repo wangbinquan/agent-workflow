@@ -20,6 +20,7 @@
 import type {
   ClarifyChannel,
   PromptMode,
+  EnvelopeFollowupReason,
   Agent,
   ClarifyPromptContext,
   ClarifyQuestion,
@@ -446,6 +447,13 @@ export interface RunNodeOptions {
    * { kind: 'initial' } semantics.
    */
   promptMode?: PromptMode
+  /**
+   * RFC-313: 本次运行是**主动会话升级**后的第一次 attempt——上一个 runtime 会话的
+   * 同会话追问链触顶、被整体放弃，这是在全新会话里从头重来。仅作用于完整 prompt
+   * 路径（`promptMode` 非 followup 时），让渲染器在协议块后追加一段简短告知。
+   * 与 followup 分支互斥：调度器在判定升级时已把 RFC-042 的续跑决策收回。
+   */
+  priorSessionAbandonedReason?: EnvelopeFollowupReason
   /**
    * RFC-041 PR3: per-scope token budget for memory inject. Optional —
    * scheduler/daemon reads `config.memoryInjectionBudget` and passes it
@@ -900,6 +908,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // renderer projects mandatory-ask-back and the RFC-122 stop notice
           // from it.
           ...(opts.clarifyChannel !== undefined ? { clarifyChannel: opts.clarifyChannel } : {}),
+          // RFC-313: 会话升级后的告知。只可能出现在这条完整 prompt 路径上——
+          // followup 分支在上面的三元里，两者天然互斥。
+          ...(opts.priorSessionAbandonedReason !== undefined
+            ? { priorSessionAbandoned: { reason: opts.priorSessionAbandonedReason } }
+            : {}),
         })
 
   // Write the prompt FIRST (no status change). RFC-053: the status flip

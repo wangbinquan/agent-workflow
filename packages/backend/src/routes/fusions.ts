@@ -37,7 +37,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
     // hung fusion agent is bounded like any other node. RFC-115: also thread
     // the global retry budget + default runtime (Codex F3) into the fusion task.
-    const { defaultPerNodeTimeoutMs, defaultNodeRetries, defaultRuntime } =
+    const { defaultPerNodeTimeoutMs, defaultNodeRetries, sessionRestartBudget, defaultRuntime } =
       resolveLaunchRuntimeConfig(deps.configPath)
     return {
       db: deps.db,
@@ -45,6 +45,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       configPath: deps.configPath,
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),
+      ...(sessionRestartBudget !== undefined ? { sessionRestartBudget } : {}),
       ...(defaultRuntime !== undefined ? { defaultRuntime } : {}),
     }
   }

@@ -12,17 +12,18 @@
 > 被砍条目逐条记在 RFC 目录 `plan.md §4.3`（**是裁决不是遗漏**），七份门记录同目录留档。
 > **剩余**：三处界面接线（任务成员面板只读分支 / `UserPicker` 可管理分支 / 花名册人类成员行）、实现门。
 
-> 📝 **待批 RFC（Draft，2026-08-19）：[RFC-313 信封重试的会话升级](design/RFC-313-envelope-retry-session-escalation/proposal.md)**
-> —— RFC-042 的同会话追问只按上一次 attempt 的形态二选一，重试预算是一条直线烧下去的。于是最典型的场景——agent 每次
-> 正常退出、每次说话、每次不吐信封——**3 次重试全落在同一个越来越长的会话里**，一次干净重启都不会发生，而每次纠错提示
-> 还在加剧根因（上下文到顶 / 模型陷在循环里；两个 driver 都不上报 context-limit，框架无信号可判）。本 RFC 补上缺失的
-> 那一档：同会话接续达 `defaultNodeRetries` 即**升级**（丢树重分叉 + 新 nonce + 全新会话 + 完整 prompt + 按 reason 定制的
-> 简短告知，仿 workgroup errorNotice），升级次数由新增 `sessionRestartBudget` 约束（默认 1）。attempt 硬上限改为
-> `(1+followupBudget)×(1+restartBudget)`，默认 8；**设为 0 时公式退化为 4、逐字等于落地前**，即关闭开关。判定抽成纯函数
-> `decideRetryShape` 进 `FOLLOWUP_POLICY` 所在的共享 policy 家族（RFC-294：task-execution / NodeExecutor，判据单源、状态
-> 留执行器；状态适配仍寄居 `scheduler.ts` 的债显式记账）。零 migration、不新增列 / rerun cause。script / workgroup /
-> intent / dw 四线等价于 `followupBudget=0`，只统一概念常量、**不改其代码**。用户已逐项拍板：双预算 8 次、升级丢弃磁盘
-> 成果、FOLLOWUP_POLICY 全表适用、带重启告知、只写审计事件不新增 cause。**待设计门 + 用户批准后方可进入实现**。
+> ✅ **已完成 RFC（Done，2026-08-20）：[RFC-313 信封重试的会话升级](design/RFC-313-envelope-retry-session-escalation/proposal.md)**
+> —— 补上 RFC-042 缺的那一档：同会话追问链触顶即**升级**（丢树从 canonical 重分叉 + 新 nonce + 全新会话 + 完整
+> prompt + 按 reason 定制的简短告知），升级次数由新增 `sessionRestartBudget`（默认 1）约束。attempt 上限
+> `(1+defaultNodeRetries)×(1+sessionRestartBudget)`，默认 8；**设为 0 逐字回到落地前**，即关闭开关。
+> 判定是共享纯函数 `decideRetryShape`，scheduler 只留状态适配（`keepIf` 是升级原因的唯一写者）。
+> **实现期三条值得记的**：①`retryAttemptCap` 必须自钳到 `RETRY_ATTEMPT_CAP_CEILING=64`——两个设置项是**相乘**的，
+> 各自边界（50 / 10）单看都不离谱、乘起来 561 会撞装配骨架的 `ASSEMBLY_MAX_ATTEMPTS` spec-bug 保险丝，用那条
+> 保险丝去接住一个**配置选择**会把运维引到错误方向；②上限是乘积、**与失败种类无关**，所以纯崩溃节点也 4→8
+> （已立测钉死，并在 design §2.1 写明否决动态式的理由：骨架调用序 `shouldRetry` 先于 `keepIf`，动态式只能靠预测
+> 放行，早期崩溃会从后续接续链额度里扣走一格）；③`ConfigSchema` 是全必填，新增 required-with-default 键靠
+> `mergeDefaults` 在校验前回填才不会让存量 config.json 拒启动——为此补了直接构造存量文件的回归用例。
+> 既有 RFC-042/049 契约测试按 AC-5 显式置 0 继续当不变量证据，**断言一字未改**。
 
 > 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
@@ -277,26 +278,6 @@
 >   当前受限执行环境起不了 listener，由 hosted exact-SHA CI 收口，不提前登记完成。
 >   本次提交**不含**并行 RFC-312 presence 的任何改动（identity-access / ws / shared 权限点 / 前端
 >   `PresenceDot` 等仍在对方工作树）；i18n 与 styles.css 两个混改文件只提本 RFC 的部分。
->   **T131/T132/T140 收口（2026-08-20）**：两条浏览器旅程真跑绿——`rfc310-zero-config-onboarding`
->   （零配置账号只按每页高亮动作走到「首件工作」，每停点断言 current/next/owner，刷新与 daemon 重启
->   各断言一次不丢）与 `rfc310-digital-employee-journey`（浏览器发起带上传的 Mission → 跨仓 child
->   Mission ready → 审批 prepare/submit/observe → 父仓 commit/push/MR → 真实 review 事件驱动修复轮与
->   回帖 → committer merge → merged → `/outcomes` 可见；连跑两次 3.0m/3.1m 稳定）。后者的 skip 闸门
->   已删除，`test-suite-policy` 的 ALLOWED_SKIP_COUNTS 同步减一。
->   **首跑一次就照出四个生产缺陷**（全部带回归锁，逐条见 RFC plan.md §13d 末的账表）：
->   ①声明「吃 mission 需求」的步骤在需求物化成 bundle **之前**就被派发 ⇒ Agent 在没有任何需求上下文的
->   工作区里被拉起（说明书只写「这一步吃需求」，物化是平台的事，不能要求作者插一个 requirement.acquire）；
->   ②该步骤的身份取了 requirement **fact 快照**指针（每写一次 cell 就换 id）⇒ 每轮重算身份、重新认领
->   run、重新拉起 Agent——实测同一步骤 110 次 succeeded、110 次 Agent 执行，下一步永远轮不到（活锁）；
->   ③read-only 动作（`approval.prepare`）覆盖 `__action.runId`，发布链据此找 candidate 现场 ⇒ 用没有
->   业务改动的 workspace 重放 stage，得到**假的** `candidate-tree-drift`（多步说明书必然触发）；
->   ④`/code` 首屏主动作的 href 是 `?create=1`，TanStack 默认 search 解析 JSON.parse 每个值 ⇒ 到达路由
->   时是**数字 1**，而 RFC-310 两条新路由只认 `true`/`'1'` ⇒ 零配置操作链第一跳静默断掉（既有
->   `workflows.tsx`/`tasks.new.tsx` 的同名开关本来就三种都认）。
->   **计划里两处错记就地更正**：「本机受限执行环境起不了 listener」不成立（同一棵树上 system mock 与
->   编译后 daemon + Playwright 都跑得起来）；`gate:local` 从不跑 system mock 用例（已补进 quality 车道）。
->   **仅剩 T121**：业务 i18n / 只读权限 / responsive 已由 PR-8 的 inventory 棘轮覆盖，缺的是逐页**视觉
->   基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线须在 CI 侧生成。
 >   **推完之后的两条实测更正（同日收口，见 `docs/dev-gotchas.md` 两条新条目）**：
 >   ①`gate:local` **从不跑 system mock 用例**（CI 的 lint job 跑），于是本批一条红的
 >   `rfc310-approval` 用例（`observationIndex` 是观察次数计数器、不是 statuses 下标）在本地全绿地

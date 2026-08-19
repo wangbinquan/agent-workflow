@@ -388,6 +388,15 @@ export interface RenderPromptInput {
    * fenced user-input value of its own.
    */
   hasExternalUntrustedInput?: boolean
+  /**
+   * RFC-313 — 本次 attempt 是**主动会话升级**后的第一次运行：上一个 runtime 会话
+   * 的同会话追问链触顶、被整体放弃，这是在一个全新会话里从头重来。渲染器据此在
+   * 协议块之后追加一段简短告知（{@link renderSessionRestartNotice}），否则新会话
+   * 完全不知道前面发生过什么、很可能原样再犯。
+   *
+   * 缺省（绝大多数 attempt）时输出与本字段引入前**逐字节相同**。
+   */
+  priorSessionAbandoned?: { reason: EnvelopeFollowupReason }
 }
 
 export class PromptTemplateRefError extends Error {
@@ -778,7 +787,14 @@ export function renderUserPrompt(input: RenderPromptInput): string {
       input.agentBranchPorts,
     )
   }
-  const rendered = body + sections + trailing
+  // RFC-313: 主动会话升级后的告知，追加在协议块**之后**——最靠近回复位置的
+  // 内容最显著，且它要引用"上方指定的回复格式"。非升级 attempt 恒为空串，
+  // 因此对既有渲染是零字节影响。
+  const restartNotice =
+    input.priorSessionAbandoned !== undefined
+      ? renderSessionRestartNotice(input.priorSessionAbandoned.reason)
+      : ''
+  const rendered = body + sections + trailing + restartNotice
   if (
     nonce.length === 0 ||
     (!hasAwInputFence(rendered, nonce) && input.hasExternalUntrustedInput !== true)
@@ -1230,6 +1246,193 @@ export function followupPolicyForFailure(
  * (`defaultNodeRetries`) still win where offered.
  */
 export const DEFAULT_PROTOCOL_RETRY_BUDGET = 3
+
+/**
+ * RFC-313 — 默认允许的**主动会话升级**次数。
+ *
+ * 与 {@link DEFAULT_PROTOCOL_RETRY_BUDGET} 是正交的两个维度：后者是「同一个
+ * runtime 会话内还能追问几次」，本常量是「这个会话被判定为无可救药后，还能整体
+ * 换一个干净会话重来几次」。两者共同决定单次 dispatch 的 attempt 硬上限，见
+ * {@link retryAttemptCap}。
+ *
+ * 取 1 的理由：RFC-313 §背景——同会话追问在「上下文已经打满 / 模型陷在循环里」
+ * 这类根因下是零收益的自旋（每次纠错提示还在加剧根因），一次干净重启就能把它
+ * 从「必然失败」变成「有机会」；而第二次重启的边际收益远低于它翻倍的成本。
+ * 设为 0 即完全关闭本机制——`retryAttemptCap` 退化成 `1 + followupBudget`，
+ * 逐字等于 RFC-313 落地前的行为。
+ */
+export const DEFAULT_SESSION_RESTART_BUDGET = 1
+
+/**
+ * RFC-313 — 单次 dispatch 的 attempt 硬上限（含首发）。
+ *
+ * `(1 + followupBudget) × (1 + restartBudget)`，再钳到
+ * {@link RETRY_ATTEMPT_CAP_CEILING}：每个会话最多跑「1 次首发 + followupBudget 次
+ * 追问」，而会话最多有 `1 + restartBudget` 个。**这是 attempt 数量的唯一权威**
+ * ——两个预算决定的是每次重试「长什么形状」，不是还能不能再来一次（调度器的
+ * `shouldRetry` 只认这个上限）。
+ */
+export function retryAttemptCap(followupBudget: number, restartBudget: number): number {
+  const product = (1 + normalizeBudget(followupBudget)) * (1 + normalizeBudget(restartBudget))
+  return Math.min(product, RETRY_ATTEMPT_CAP_CEILING)
+}
+
+/**
+ * RFC-313 — attempt 上限的绝对天花板。
+ *
+ * 两个旋钮是**相乘**的，各自的边界（`defaultNodeRetries` 最大 50、
+ * `sessionRestartBudget` 最大 10）单看都不离谱，乘起来却是 561 次 attempt —— 会撞上
+ * 装配骨架的 `ASSEMBLY_MAX_ATTEMPTS` 保险丝，而那条保险丝的报错写的是「spec bug」，
+ * 用它来接住一个**配置选择**只会把运维引到错误的方向去排查。
+ *
+ * 所以把钳制放在这里：`retryAttemptCap` 是全总的，任何配置组合都产不出能触发保险丝
+ * 的上限。取 64 是因为它显著低于保险丝（100）、又远高于任何现实预算（默认 8），
+ * 于是「钳制生效」只可能发生在明显荒谬的配置上。两者的大小关系由
+ * `packages/backend/tests/rfc313-session-escalation.test.ts` 直接断言，防止某天调
+ * 保险丝时把这条关系弄反。
+ */
+export const RETRY_ATTEMPT_CAP_CEILING = 64
+
+function normalizeBudget(v: number): number {
+  return Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : 0
+}
+
+/**
+ * RFC-313 — 跨 attempt 携带的重试形状状态。只在**一次 dispatch 的闭包内**有意义，
+ * 不持久化：daemon 重启 / 人工 retryNode 都会重新进入执行器并从零开始，与既有
+ * attempt 计数的语义一致。
+ */
+export interface RetryShapeState {
+  /** 当前 runtime 会话内已连续发生的接续（同会话追问）次数。 */
+  followupChainLen: number
+  /** 已用掉的主动升级次数。 */
+  restartsUsed: number
+}
+
+/**
+ * RFC-313 — 下一次重试长什么形状。
+ *
+ * - `followup`：RFC-042 的同会话追问——**留用**同一棵隔离工作树、复用会话与
+ *   `envelopeNonce`、只发一段短纠错提示。
+ * - `restart`：主动升级——丢弃工作树并从 canonical 重新分叉、铸新 nonce、开全新
+ *   会话、重发完整 prompt 并追加 {@link renderSessionRestartNotice} 的告知。
+ * - `fresh`：RFC-313 之前就有的「全新会话重试」（崩溃 / 无 session / 无输出 /
+ *   失败码不在 `FOLLOWUP_POLICY` 里）。物理动作与 `restart` 相同，但**不消耗
+ *   升级预算、也不带告知**——那些场景里「上一轮协议失败」这个事实并不成立
+ *   （模型可能一个字都没产出），告知它反而是误导。
+ */
+export type RetryShape =
+  | {
+      kind: 'followup'
+      reason: EnvelopeFollowupReason
+      failures: ReadonlyArray<PortValidationFailure>
+    }
+  | { kind: 'restart'; reason: EnvelopeFollowupReason }
+  | { kind: 'fresh' }
+
+/**
+ * RFC-313 — {@link decideRetryShape} 的上游输入：RFC-042 五条判据的既有结论。
+ *
+ * scheduler 的 `EnvelopeFollowupDecision` 现在**就是本类型的别名**（判定要被
+ * `decideRetryShape` 消费，而 shared 不能反向 import backend，所以定义落在这边；
+ * 两处各写一份同形类型只会让它们悄悄漂移）。**本类型不重新实现那五条判据**
+ * ——判据的单一事实源仍是 backend 的 `decideEnvelopeFollowup`，这里只描述它的结论。
+ */
+export type EnvelopeFollowupOutcome =
+  | {
+      followup: true
+      reason: EnvelopeFollowupReason
+      failures: ReadonlyArray<PortValidationFailure>
+    }
+  | { followup: false }
+
+/**
+ * RFC-313 — 重试形状的唯一判定点（纯函数，无副作用；状态经 `next` 回传，调用方
+ * 只做赋值）。判定表见 `design/RFC-313-envelope-retry-session-escalation/design.md` §2.2。
+ *
+ * **防御分支说明**：「链已触顶 + 升级预算已尽」在 {@link retryAttemptCap} 的硬顶下
+ * **不可达**——要到达它至少需要 `(1+F)·R + 1 + F = (1+F)(R+1) = cap` 次 attempt，
+ * 而第 `cap` 次的重试判定早已被调度器的 `shouldRetry` 拒掉（崩溃只会让它更不可达：
+ * 崩溃消耗 attempt 却不消耗升级预算）。既然不可达，该分支就以「**绝不静默发放没有
+ * 预算的升级**」为准绳退回 `followup`（今天的行为）；若退回 `fresh`，一旦上面的
+ * 算术哪天被改错，就会白送一次不计账的换树换会话。
+ */
+export function decideRetryShape(input: {
+  /** RFC-042 既有判定的结果，原样传入。 */
+  followup: EnvelopeFollowupOutcome
+  state: RetryShapeState
+  followupBudget: number
+  restartBudget: number
+}): { shape: RetryShape; next: RetryShapeState } {
+  const followupBudget = normalizeBudget(input.followupBudget)
+  const restartBudget = normalizeBudget(input.restartBudget)
+  const { followupChainLen, restartsUsed } = input.state
+
+  // RFC-042 判据落空：维持既有的「全新会话重试」。链归零（新会话没有历史），
+  // 升级预算**不动**——崩溃不是主动放弃，不该吃掉那次聪明重启的机会。
+  if (!input.followup.followup) {
+    return { shape: { kind: 'fresh' }, next: { followupChainLen: 0, restartsUsed } }
+  }
+
+  const { reason, failures } = input.followup
+  const keepFollowingUp = {
+    shape: { kind: 'followup' as const, reason, failures },
+    next: { followupChainLen: followupChainLen + 1, restartsUsed },
+  }
+  if (followupChainLen < followupBudget) return keepFollowingUp
+  if (restartsUsed < restartBudget) {
+    return {
+      shape: { kind: 'restart', reason },
+      next: { followupChainLen: 0, restartsUsed: restartsUsed + 1 },
+    }
+  }
+  return keepFollowingUp
+}
+
+/**
+ * RFC-313 — 干净重启后附在**完整 prompt 末尾**的简短告知（仿 workgroup 的
+ * `errorNotice` 形态）。不带它的话新会话完全不知道前面发生过什么，很可能原样
+ * 再犯一遍。
+ *
+ * 与 {@link renderEnvelopeFollowupPrompt} 刻意**不复用**：那份是「在同一个会话里
+ * 改错」，可以说「按本会话之前指定的格式」；这份面对的是一个没有任何历史的新会话，
+ * 只能指向当前 prompt 里就在上方的协议块。
+ *
+ * 文案为框架常量、**零用户可控插值**（入参只有一个枚举），因此不经 `fenceUntrusted`；
+ * 也刻意不引用上一次 attempt 的任何字节——机器读 `errorMessage` 是 RFC-145 明令
+ * 禁止的，这里不开这个口子。
+ */
+export function renderSessionRestartNotice(reason: EnvelopeFollowupReason): string {
+  const what = ((): string => {
+    switch (reason) {
+      case 'envelope-missing':
+        return 'ended its replies without the required `<workflow-output>` envelope'
+      case 'envelope-port-malformed':
+        return 'emitted `<port name="...">` tags that were never closed with a literal `</port>`'
+      case 'port-validation':
+        return 'emitted ports whose content failed the declared output-kind validation'
+      case 'branch-marker':
+        return 'marked ports `active="false"` illegally — only a port declared as a branch port may carry that marker, and its value must be exactly `true` or `false`'
+      case 'both-present':
+        return 'emitted BOTH `<workflow-output>` and `<workflow-clarify>` when exactly one is allowed'
+      case 'clarify-malformed':
+        return 'emitted a `<workflow-clarify>` envelope whose JSON body could not be parsed'
+      case 'clarify-required':
+        return 'failed to ask back with a `<workflow-clarify>` envelope while this node was in mandatory ask-back mode'
+      default: {
+        const exhausted: never = reason
+        throw new Error(`unreachable envelope followup reason: ${String(exhausted)}`)
+      }
+    }
+  })()
+  return (
+    `\n\n---\n**Note on an earlier attempt.** An earlier session was given this same task ` +
+    `and repeatedly ${what}. That session was abandoned; you are starting over in a clean ` +
+    `session with no memory of it. Do the work, then follow the reply-format rules specified ` +
+    `above exactly — the framework reads ONLY that closing block, so a reply without a ` +
+    `well-formed one discards everything you did.`
+  )
+}
 
 export interface EnvelopeFollowupInput {
   /** RFC-200: nonce of the session-owning run; absent preserves legacy bytes. */

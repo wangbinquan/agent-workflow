@@ -472,6 +472,12 @@ export interface StartTaskDeps {
    */
   defaultNodeRetries?: number
   /**
+   * RFC-313: 同会话追问链触顶后允许整体换几次干净会话（config.sessionRestartBudget），
+   * 与 defaultNodeRetries 走同一条 runtimeConfigOpts → RunTaskOptions 管道。
+   * 省略 → scheduler `?? DEFAULT_SESSION_RESTART_BUDGET`。
+   */
+  sessionRestartBudget?: number
+  /**
    * RFC-115 (Codex F3): global default runtime NAME (config.defaultRuntime),
    * threaded via runtimeConfigOpts → RunTaskOptions. Before RFC-115 this was
    * resolved by resolveLaunchRuntimeConfig but NEVER forwarded from here, so
@@ -1186,6 +1192,7 @@ export function runtimeConfigOpts(
     | 'codeHostResponseMaxBytes'
     | 'defaultPerNodeTimeoutMs'
     | 'defaultNodeRetries'
+    | 'sessionRestartBudget'
     | 'defaultRuntime'
     | 'maxActiveChildTasks'
     | 'maxInvocationDepth'
@@ -1256,6 +1263,9 @@ export function runtimeConfigOpts(
     // resume / retry / fusion entry gets all three consistently.
     ...(deps.defaultPerNodeTimeoutMs !== undefined
       ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+      : {}),
+    ...(deps.sessionRestartBudget !== undefined
+      ? { sessionRestartBudget: deps.sessionRestartBudget }
       : {}),
     ...(deps.defaultNodeRetries !== undefined
       ? { defaultNodeRetries: deps.defaultNodeRetries }

@@ -6905,6 +6905,9 @@ export const enUS: Resources = {
     perNodeTimeout: 'Per-node timeout (ms)',
     nodeRetries: 'Default node retries',
     nodeRetriesHint: 'Recoverable-failure retry budget per node (0 disables). Default 3.',
+    sessionRestartBudget: 'Session restart budget',
+    sessionRestartBudgetHint:
+      'How many times a node may abandon an unrecoverable runtime session and start over in a clean one, once same-session follow-ups are used up (0 disables). Worst-case attempts per node = (1 + retries) × (1 + this). Default 1.',
     autoResumeOnBoot: 'Auto-resume interrupted tasks on boot',
     autoResumeOnBootHint:
       'Default off. When on, the daemon re-drives tasks interrupted by a restart at boot (gated by breaker / quarantine / lease / audit).',

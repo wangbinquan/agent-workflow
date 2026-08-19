@@ -44,6 +44,8 @@ const DISPOSITION = {
   configPath: 'inherit',
   defaultPerNodeTimeoutMs: 'inherit',
   defaultNodeRetries: 'inherit',
+  // RFC-313: 与重试预算同族的全局执行策略，子任务同样继承。
+  sessionRestartBudget: 'inherit',
   defaultRuntime: 'inherit',
   maxConcurrentNodes: 'inherit',
   maxConcurrentScriptNodes: 'inherit',
@@ -114,6 +116,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
       configPath: '/cfg.json',
       defaultPerNodeTimeoutMs: 1,
       defaultNodeRetries: 2,
+      sessionRestartBudget: 1,
       defaultRuntime: 'opencode',
       maxConcurrentNodes: 3,
       maxConcurrentScriptNodes: 4,

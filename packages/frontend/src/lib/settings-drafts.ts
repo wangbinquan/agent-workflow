@@ -64,6 +64,8 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'defaultPerTaskMaxTotalTokens',
     'defaultPerNodeTimeoutMs',
     'defaultNodeRetries',
+    // RFC-313：与 defaultNodeRetries 同族的执行策略；漏登记会被静默丢掉（见下方注释）。
+    'sessionRestartBudget',
     'largeOutputThresholdBytes',
     'maxConcurrentNodes',
     'maxConcurrentScriptNodes',

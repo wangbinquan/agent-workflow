@@ -135,6 +135,10 @@ async function runScenario(
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         ...(retries !== undefined ? { defaultNodeRetries: retries } : {}),
+        // RFC-313 AC-5: 本文件锁的是 RFC-042 的 fallback=3 契约，即升级开关关闭时的
+        // attempt 数。置 0 让它继续充当那份不变量证据——断言一个字未改。开关打开后的
+        // 上限（乘积）由 rfc313-session-escalation.test.ts 单独锁。
+        sessionRestartBudget: 0,
       }),
   )
   const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

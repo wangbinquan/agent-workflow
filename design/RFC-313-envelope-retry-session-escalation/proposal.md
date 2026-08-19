@@ -67,6 +67,6 @@ RFC-042 把「模型没按信封输出」识别成可在**同会话内修复**�
 - **AC-6（崩溃不吃重启预算）**：链中途出现 `exitCode !== 0` 的 attempt 时，接续链计数归零、但 `sessionRestartBudget` 不被消耗；后续仍可发生一次真正的升级（整体仍受 AC-4 硬顶约束）。
 - **AC-7（不可重试失败不升级）**：`runtime-result-error` 与 `processUnreaped` 的现有「不重试」语义不变——它们既不触发接续也不触发升级（回归锁：`shouldRetryNodeFailure` 的既有测试保持绿）。
 - **AC-8（clarify 模式翻转不算升级）**：RFC-122 的 `clarifyModeFlip`（STOP 开关翻转导致走完整 prompt）**保树、保会话**、不消耗重启预算——它与升级是两条互不相干的路径，各有独立测试。
-- **AC-9（审计可读）**：每次升级在**新铸的那一行**上写一条 `[rfc313/session-restart]` 事件，payload 含 `reason` / `chainLen` / `restartsUsed` / `retryAttempt`；不新增 rerun cause，不改 `node_runs` 结构。
+- **AC-9（审计可读）**：每次升级在**新铸的那一行**上写一条 `[rfc313/session-restart]` 事件，payload 含 `reason` / `abandonedAfterFollowups` / `restartsUsed` / `retryAttempt`；不新增 rerun cause，不改 `node_runs` 结构。
 - **AC-10（设置面）**：`sessionRestartBudget` 出现在设置页执行策略区、与 `defaultNodeRetries` 同组，边界 0–10，默认 1；未设置的存量部署取默认 1（即存量任务的最坏成本从 4 次涨到 8 次——已在上表逐项呈确认）。
 - **AC-11（其它线零改动）**：script / workgroup / intent / dw 四条线的执行路径不出现在本 RFC 的 diff 里（共享常量族的纯新增除外）。

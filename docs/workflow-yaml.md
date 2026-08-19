@@ -138,6 +138,17 @@ resolved from upstream edges). Retry and timeout are daemon-wide execution
 settings, not node fields: `config.defaultNodeRetries` and
 `config.defaultPerNodeTimeoutMs` apply uniformly to every agent run.
 
+Retries have two dimensions (RFC-313). `config.defaultNodeRetries` is how many times a
+failed attempt may be re-asked **inside the same runtime session** (the model exited
+cleanly, said something, and only botched the envelope — a short repair prompt resumes
+that session and keeps its isolated worktree). `config.sessionRestartBudget` is how many
+times a node may give up on that session entirely and start over in a **clean** one:
+fresh worktree branched from canonical, fresh envelope nonce, the full prompt re-rendered
+plus a short note telling the new session what the abandoned one kept getting wrong. The
+worst-case attempt count per node is `(1 + defaultNodeRetries) × (1 + sessionRestartBudget)`
+— 8 by default. Set `sessionRestartBudget: 0` to disable escalation entirely; the cap then
+degrades to `1 + defaultNodeRetries`, exactly the pre-RFC-313 behavior.
+
 In the visual editor, runtime templates use one field-adjacent **Insert parameter** picker instead
 of an always-expanded token list. It classifies current-node inputs, task runtime values, and
 Webhook trigger context separately; every option shows a readable label, canonical token, and

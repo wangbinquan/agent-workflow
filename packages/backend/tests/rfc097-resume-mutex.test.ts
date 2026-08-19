@@ -198,6 +198,9 @@ function deps(h: Harness, mockPath: string) {
     appHome: h.appHome,
     binaryOverride: ['bun', 'run', mockPath],
     defaultNodeRetries: 0,
+    // RFC-313: 同理——attempt 上限是乘积，默认的会话重启预算会让 defaultNodeRetries=0
+    // 仍跑 2 次，fail-mock 就不再是 one-shot，count-* 预言随即失真（实测 'x' → 'xx'）。
+    sessionRestartBudget: 0,
   }
 }
 

@@ -148,6 +148,9 @@ describe('RFC-049 scheduler port-validation follow-up integration', () => {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
           // RFC-115: retry budget via runTask opts (was node.retries: 1).
           defaultNodeRetries: 1,
+          // RFC-313 AC-5: 本用例锁的是 RFC-049 的同会话续跑契约（审计行 + --session）。
+          // 置 0 关掉会话升级，让它继续只锁自己那件事——断言一个字未改。
+          sessionRestartBudget: 0,
         }),
     )
 

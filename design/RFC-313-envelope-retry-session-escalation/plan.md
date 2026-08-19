@@ -16,7 +16,7 @@
 | **RFC-313-T8** | `rfc313-session-escalation.test.ts`：主场景 8 行断言、崩溃不吃预算、clarify 翻转不算升级、审计事件、记忆重注入（design §8 第 8、10-13 条） | T6 T7 | 集成测试 5 组 |
 | **RFC-313-T9** | 关闭开关等价性：`sessionRestartBudget=0` 跑既有 RFC-042 / RFC-122 / malformed-port 测试全绿且**不修改其断言**；必要时只在测试 harness 里补默认值（design §8 第 9 条 / AC-5） | T6 T7 | 回归证据 |
 | **RFC-313-T10** | 源码层兜底断言：`decideRetryShape` 单定义点、`scheduler.ts` 内 `restartsUsed +=` 唯一、告知段单出口（design §8 第 14-15 条） | T6 | source-grep 测试 |
-| **RFC-313-T11** | 文档：`docs/env-flags.md` / 设置说明补 `sessionRestartBudget`；在共享常量族注释里写清其它四条线 = `followupBudget 0` 的退化形态（G5） | T4 T6 | 文档 |
+| **RFC-313-T11** | 文档：`docs/workflow-yaml.md` 的重试段补两个维度与关闭开关；`docs/dev-gotchas.md` 沉淀「新增配置键」通用坑（全必填 + `mergeDefaults` 回填 + 前端最小写入白名单 + 相乘旋钮撞保险丝）；共享常量族注释写清其它四条线 = `followupBudget 0` 的退化形态（G5）。**实现期修正**：`docs/env-flags.md` 只登记 `AW_*` / `AGENT_WORKFLOW_*` 环境变量，config 键不属于它，原列此文件是笔误 | T4 T6 | 文档 |
 | **RFC-313-T12** | 索引登记：`design/plan.md` RFC 索引追加一行、`STATE.md` 顶部「进行中 RFC」一行 | — | 索引 |
 
 ## 关键顺序约束

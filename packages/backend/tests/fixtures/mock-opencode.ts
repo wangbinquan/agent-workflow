@@ -73,6 +73,16 @@
 //                                    so the runner captures it into RunResult.sessionId.
 //                                    Default ULID-style synthetic id when set to '1';
 //                                    any other value is treated as the literal id.
+//   MOCK_OPENCODE_SESSION_ID_FOLLOWS_RESUME
+//                                    '1' makes the emitted session id behave like a REAL
+//                                    runtime's: echo back the `--session <id>` value when
+//                                    resuming, mint a FRESH unique id when not. Without
+//                                    it the mock emits one fixed id for every invocation,
+//                                    so a genuinely-new session collides with the previous
+//                                    id's single-writer lease (`runtime-session-conflict`)
+//                                    and the run fails for a reason the test never meant
+//                                    to exercise. RFC-313 needs it because its whole point
+//                                    is that an escalated attempt runs in a NEW session.
 //   MOCK_OPENCODE_EMIT_SESSION_AGENT optional agent-name filter for the session
 //                                    event when one scheduler test spawns several
 //                                    agents under the same environment.
@@ -393,10 +403,18 @@ if (
   (env.MOCK_OPENCODE_EMIT_SESSION_AGENT === undefined ||
     env.MOCK_OPENCODE_EMIT_SESSION_AGENT === argv[agentFlagIdx + 1])
 ) {
-  const sessionID =
+  const base =
     env.MOCK_OPENCODE_EMIT_SESSION_ID === '1'
       ? 'opc_mock_session_01'
       : env.MOCK_OPENCODE_EMIT_SESSION_ID
+  // RFC-313: 真实 runtime 的 session id 是「续跑就沿用、新开就新铸」。默认仍是固定
+  // id（既有测试依赖它），置位后才切到这个更忠实的形态。
+  const resumeIdx = argv.indexOf('--session')
+  const resumedId = resumeIdx >= 0 ? argv[resumeIdx + 1] : undefined
+  const sessionID =
+    env.MOCK_OPENCODE_SESSION_ID_FOLLOWS_RESUME !== '1'
+      ? base
+      : (resumedId ?? `${base}_${Date.now().toString(36)}_${process.pid}`)
   process.stdout.write(
     JSON.stringify({ type: 'session.created', sessionID, timestamp: Date.now() }) + '\n',
   )

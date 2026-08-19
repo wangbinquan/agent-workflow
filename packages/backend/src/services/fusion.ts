@@ -99,6 +99,7 @@ export interface FusionDeps {
   defaultPerNodeTimeoutMs?: number
   /** RFC-115: global per-node retry budget, threaded into the fusion task. */
   defaultNodeRetries?: number
+  sessionRestartBudget?: number // RFC-313
   /** RFC-115 (Codex F3): global default runtime NAME, threaded into the fusion task. */
   defaultRuntime?: string
   /** Deterministic seed-git failure injection for ownership regression tests. */
@@ -633,6 +634,9 @@ export async function createFusion(
       // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
       ...(deps.defaultPerNodeTimeoutMs !== undefined
         ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+        : {}),
+      ...(deps.sessionRestartBudget !== undefined
+        ? { sessionRestartBudget: deps.sessionRestartBudget }
         : {}),
       ...(deps.defaultNodeRetries !== undefined
         ? { defaultNodeRetries: deps.defaultNodeRetries }
@@ -1592,6 +1596,9 @@ export async function rejectFusion(
         // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
         ...(deps.defaultPerNodeTimeoutMs !== undefined
           ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+          : {}),
+        ...(deps.sessionRestartBudget !== undefined
+          ? { sessionRestartBudget: deps.sessionRestartBudget }
           : {}),
         ...(deps.defaultNodeRetries !== undefined
           ? { defaultNodeRetries: deps.defaultNodeRetries }
