@@ -1,7 +1,8 @@
 // RFC-122 — integration: a self-clarify node with a 'stop' override dispatches
 // WITHOUT the mandatory ask-back protocol (and WITH the STOP CLARIFYING trailer),
 // driven through the REAL scheduler (runTask) + the REAL unified answer driver
-// (autoDispatchClarifyRound), reading the actual node_run.promptText the runner wrote.
+// (autoDispatchClarifyRound), reading the prompt the runner actually wrote
+// (RFC-311 T21: 超阈值的正文在文件里, 一律走 readNodeRunPrompt 双读).
 //
 //   - golden-lock: no override row ⇒ the designer's first dispatch carries the
 //     MANDATORY ASK-BACK preamble (today's behavior, byte-for-byte).
@@ -19,6 +20,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
@@ -300,8 +302,8 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     const first = (await designerTop(c.db, task.id))[0]
-    expect(first?.promptText ?? '').toContain(MANDATORY)
-    expect(first?.promptText ?? '').not.toContain(STOP_TRAILER)
+    expect(readNodeRunPrompt(first, join(c.appHome, 'runs')) ?? '').toContain(MANDATORY)
+    expect(readNodeRunPrompt(first, join(c.appHome, 'runs')) ?? '').not.toContain(STOP_TRAILER)
     // No override row was ever created.
     expect(await listNodeClarifyDirectives(c.db, task.id)).toEqual({})
   })
@@ -337,7 +339,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
     const rerun = (await designerTop(c.db, task.id))[0]
-    const prompt = rerun?.promptText ?? ''
+    const prompt = readNodeRunPrompt(rerun, join(c.appHome, 'runs')) ?? ''
     expect(prompt).toContain(STOP_TRAILER)
     expect(prompt).toContain(OUTPUT_PROTO)
     expect(prompt).not.toContain(MANDATORY)
@@ -381,10 +383,10 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
     // DEFAULT directive (the stub is now paused on the sentinel).
     const attempt0 = await poll(async () => {
       const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 0)
-      return r?.promptText ? r : undefined
+      return readNodeRunPrompt(r, join(c.appHome, 'runs')) !== null ? r : undefined
     })
-    expect(attempt0.promptText ?? '').toContain(MANDATORY)
-    expect(attempt0.promptText ?? '').not.toContain(STOP_TRAILER)
+    expect(readNodeRunPrompt(attempt0, join(c.appHome, 'runs')) ?? '').toContain(MANDATORY)
+    expect(readNodeRunPrompt(attempt0, join(c.appHome, 'runs')) ?? '').not.toContain(STOP_TRAILER)
 
     // Flip the toggle to STOP, THEN release attempt 0 (→ crash → process-retry).
     await setNodeClarifyDirective(c.db, task.id, 'designer', 'stop', 'u1')
@@ -393,12 +395,12 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
     // attempt 1 (retry_index 1, cause=process-retry) must reflect the NEW value.
     const attempt1 = await poll(async () => {
       const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 1)
-      return r?.promptText ? r : undefined
+      return readNodeRunPrompt(r, join(c.appHome, 'runs')) !== null ? r : undefined
     })
     expect(attempt1.rerunCause).toBe('process-retry')
-    expect(attempt1.promptText ?? '').toContain(STOP_TRAILER)
-    expect(attempt1.promptText ?? '').toContain(OUTPUT_PROTO)
-    expect(attempt1.promptText ?? '').not.toContain(MANDATORY)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').toContain(STOP_TRAILER)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').toContain(OUTPUT_PROTO)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').not.toContain(MANDATORY)
 
     // Let the background scheduler settle (attempt 1 outputs → done) before
     // afterEach removes the worktree, so its final writes don't race the rmSync.
@@ -446,25 +448,27 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
 
     const attempt0 = await poll(async () => {
       const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 0)
-      return r?.promptText ? r : undefined
+      return readNodeRunPrompt(r, join(c.appHome, 'runs')) !== null ? r : undefined
     })
     // Precondition: attempt 0 ran clarify-only (no output protocol in its prompt).
-    expect(attempt0.promptText ?? '').toContain(MANDATORY)
-    expect(attempt0.promptText ?? '').not.toContain(OUTPUT_PROTO)
+    expect(readNodeRunPrompt(attempt0, join(c.appHome, 'runs')) ?? '').toContain(MANDATORY)
+    expect(readNodeRunPrompt(attempt0, join(c.appHome, 'runs')) ?? '').not.toContain(OUTPUT_PROTO)
 
     await setNodeClarifyDirective(c.db, task.id, 'designer', 'stop', 'u1')
     writeFileSync(join(c.stateDir, 'go'), '1')
 
     const attempt1 = await poll(async () => {
       const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 1)
-      return r?.promptText ? r : undefined
+      return readNodeRunPrompt(r, join(c.appHome, 'runs')) !== null ? r : undefined
     })
     // The bypass: the FULL output protocol + STOP CLARIFYING (not the short
     // "format previously specified in this session" follow-up re-anchor).
-    expect(attempt1.promptText ?? '').toContain(STOP_TRAILER)
-    expect(attempt1.promptText ?? '').toContain(OUTPUT_PROTO)
-    expect(attempt1.promptText ?? '').not.toContain(MANDATORY)
-    expect(attempt1.promptText ?? '').not.toContain('previously specified in this session')
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').toContain(STOP_TRAILER)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').toContain(OUTPUT_PROTO)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').not.toContain(MANDATORY)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').not.toContain(
+      'previously specified in this session',
+    )
 
     await poll(async () => {
       const s = await taskStatus(c.db, task.id)
@@ -499,8 +503,10 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
     // The follow-up path (clarify-mode) — NOT the full renderUserPrompt: it re-
     // anchors on the format "previously specified in this session" and does NOT
     // emit a STOP notice.
-    expect(attempt1?.promptText ?? '').toContain('previously specified in this session')
-    expect(attempt1?.promptText ?? '').not.toContain(STOP_TRAILER)
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').toContain(
+      'previously specified in this session',
+    )
+    expect(readNodeRunPrompt(attempt1, join(c.appHome, 'runs')) ?? '').not.toContain(STOP_TRAILER)
     // Golden-lock: the same-session follow-up RESUMES the captured session
     // 'ses_gl' (`--session ses_gl`) — byte-for-byte today's behavior.
     const glTrace = readTrace(c.stateDir, 'designer').find((e) => e.callIndex === 1)

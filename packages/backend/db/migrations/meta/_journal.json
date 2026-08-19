@@ -1289,6 +1289,13 @@
       "when": 1788537612043,
       "tag": "0184_rfc311_overview_covering_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "6",
+      "when": 1788537612044,
+      "tag": "0185_rfc311_node_run_prompt_path",
+      "breakpoints": true
     }
   ]
 }

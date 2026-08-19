@@ -37,6 +37,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -368,8 +369,8 @@ describe('review-iterate rerun drops prior clarify Q&A from the prompt', () => {
       .filter((r) => r.retryIndex >= 1)
     expect(tops.length).toBeGreaterThanOrEqual(1)
     const fresh = tops.sort((a, b) => b.retryIndex - a.retryIndex)[0]!
-    expect(fresh.promptText).not.toBeNull()
-    const prompt = fresh.promptText!
+    expect(readNodeRunPrompt(fresh)).not.toBeNull()
+    const prompt = readNodeRunPrompt(fresh)!
 
     // CORE assertion: the prior clarify Q&A is dropped.
     //   - `Which database?` was the question text rendered into questionsBlock.

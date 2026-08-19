@@ -24,6 +24,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
@@ -621,9 +622,13 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     )[0]
     // RFC-132 (PR-C): the designer's cross Q&A rides the SINGLE flat `## Clarify Q&A` block (§5 ②b) —
     // no separate `## External Feedback` / `### From '...'` section.
-    expect(designerRow?.promptText ?? '').toContain('## Clarify Q&A')
-    expect(designerRow?.promptText ?? '').not.toContain('## External Feedback')
-    expect(designerRow?.promptText ?? '').toContain('Why?')
+    expect(readNodeRunPrompt(designerRow, join(h.appHome, 'runs')) ?? '').toContain(
+      '## Clarify Q&A',
+    )
+    expect(readNodeRunPrompt(designerRow, join(h.appHome, 'runs')) ?? '').not.toContain(
+      '## External Feedback',
+    )
+    expect(readNodeRunPrompt(designerRow, join(h.appHome, 'runs')) ?? '').toContain('Why?')
   })
 
   // RFC-074 PR-C regression lock — bad case from production task
@@ -737,7 +742,9 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // The rerun prompt MUST carry the prior cross-clarify Q&A so the questioner
     // does not re-ask. RED today: cci=0 → isQuestionerCrossClarifyRerun gate
     // drops it. GREEN once PR-C makes the gate session-state-based.
-    expect(rerun.promptText ?? '').toContain('CCQ_TITLE_MARKER_为何')
+    expect(readNodeRunPrompt(rerun, join(h.appHome, 'runs')) ?? '').toContain(
+      'CCQ_TITLE_MARKER_为何',
+    )
   })
 })
 

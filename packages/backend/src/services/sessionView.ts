@@ -20,6 +20,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
 import { readArchivedEvents } from '@/services/eventsArchive'
+import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
@@ -56,6 +57,8 @@ export async function getSessionTree(
       taskId: nodeRuns.taskId,
       nodeId: nodeRuns.nodeId,
       promptText: nodeRuns.promptText,
+      // RFC-311 T21:新行正文在文件里,取路径供双读还原。
+      promptPath: nodeRuns.promptPath,
       startedAt: nodeRuns.startedAt,
       opencodeSessionId: nodeRuns.opencodeSessionId,
       retryIndex: nodeRuns.retryIndex,
@@ -89,13 +92,13 @@ export async function getSessionTree(
   // as a separate user message in the merged conversation flow.
   const inlineSiblings = await loadInlineSiblings(db, taskId, run)
   const targetNodeRunIds = inlineSiblings.map((s) => s.id)
-  const promptText = inlineSiblings[0]!.promptText
+  const promptText = inlineSiblings[0]!.promptBody
   const startedAt = inlineSiblings[0]!.startedAt
   const extraUserPrompts: Array<{ text: string; ts: number }> = []
   for (let i = 1; i < inlineSiblings.length; i++) {
     const s = inlineSiblings[i]!
-    if (s.promptText !== null && s.promptText !== '') {
-      extraUserPrompts.push({ text: s.promptText, ts: s.startedAt ?? 0 })
+    if (s.promptBody !== null && s.promptBody !== '') {
+      extraUserPrompts.push({ text: s.promptBody, ts: s.startedAt ?? 0 })
     }
   }
 
@@ -157,9 +160,12 @@ export async function getSessionTree(
   return { tree }
 }
 
+/** RFC-311 T21:字段刻意**不叫** promptText——那个名字从此只指数据库那一列。
+ *  这里装的是已经过 `readNodeRunPrompt` 双读解析的正文,改名让「读了列」与
+ *  「读了正文」在类型层就分得开,守卫因此可以简单地禁掉一切 `.promptText` 读。 */
 interface InlineSiblingRow {
   id: string
-  promptText: string | null
+  promptBody: string | null
   startedAt: number | null
   retryIndex: number
 }
@@ -176,6 +182,7 @@ async function loadInlineSiblings(
   run: {
     id: string
     promptText: string | null
+    promptPath: string | null
     startedAt: number | null
     opencodeSessionId: string | null
     retryIndex: number
@@ -185,7 +192,7 @@ async function loadInlineSiblings(
     return [
       {
         id: run.id,
-        promptText: run.promptText,
+        promptBody: readNodeRunPrompt(run),
         startedAt: run.startedAt,
         retryIndex: run.retryIndex,
       },
@@ -195,6 +202,7 @@ async function loadInlineSiblings(
     .select({
       id: nodeRuns.id,
       promptText: nodeRuns.promptText,
+      promptPath: nodeRuns.promptPath,
       startedAt: nodeRuns.startedAt,
       retryIndex: nodeRuns.retryIndex,
     })
@@ -204,7 +212,7 @@ async function loadInlineSiblings(
     return [
       {
         id: run.id,
-        promptText: run.promptText,
+        promptBody: readNodeRunPrompt(run),
         startedAt: run.startedAt,
         retryIndex: run.retryIndex,
       },
@@ -215,7 +223,14 @@ async function loadInlineSiblings(
   // later clarify rounds / retries (minted later, larger id) append in order.
   // This replaces the retired (clarifyIteration, retryIndex, startedAt) sort.
   rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  return rows
+  // RFC-311 T21:行里带的是列或路径,统一在出口处双读还原成正文,调用方(会话
+  // 视图把首条当主 prompt、其余当追加轮次)看到的形状不变。
+  return rows.map((r) => ({
+    id: r.id,
+    promptBody: readNodeRunPrompt(r),
+    startedAt: r.startedAt,
+    retryIndex: r.retryIndex,
+  }))
 }
 
 interface SnapshotNode {

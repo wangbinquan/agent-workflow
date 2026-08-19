@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -571,8 +572,12 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const continueRerun = (await topLevel(c.db, task.id, 'designer')).sort((a, b) =>
       a.id < b.id ? 1 : -1,
     )[0]
-    expect(continueRerun?.promptText ?? '').toContain('OPTIONAL clarify channel')
-    expect(continueRerun?.promptText ?? '').not.toContain('You MUST end your reply with a')
+    expect(readNodeRunPrompt(continueRerun, join(c.appHome, 'runs')) ?? '').toContain(
+      'OPTIONAL clarify channel',
+    )
+    expect(readNodeRunPrompt(continueRerun, join(c.appHome, 'runs')) ?? '').not.toContain(
+      'You MUST end your reply with a',
+    )
 
     // answer clarify #2 → designer reruns, emits output v2 → review awaiting v2
     await autoDispatchClarifyRound({

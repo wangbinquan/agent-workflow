@@ -1737,7 +1737,11 @@ export const nodeRuns = sqliteTable(
      * boundary (rerun_cause precedent). Backend-internal (not in the DTO).
      */
     failureCode: text('failure_code'),
-    promptText: text('prompt_text'), // actual user prompt sent to opencode
+    promptText: text('prompt_text'), // actual user prompt sent to opencode (legacy rows)
+    // RFC-311 T21 —— prompt 正文外置到 `runs/{taskId}/{nodeRunId}/prompt.md`。
+    // 新行只写这一列、`prompt_text` 留空；旧行反过来（不回填）。读点一律走
+    // `services/nodeRunPrompt.ts` 的双读，不要直接读任一列。
+    promptPath: text('prompt_path'),
     // RFC-200 (T1): per-run envelope nonce. Generated (crypto random) + persisted
     // at dispatch; the protocol block emits `<workflow-output nonce="…">` and the
     // parser (T3) only accepts THIS run's nonce, so an echoed/forged bare envelope

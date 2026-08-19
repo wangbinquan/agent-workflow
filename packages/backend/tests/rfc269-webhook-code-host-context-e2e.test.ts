@@ -18,6 +18,7 @@ import {
   parseIntentChangeset,
   type CodeHostEvent,
 } from '@agent-workflow/shared'
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { buildActor } from '../src/auth/actor'
 import { createSecretBox } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -445,8 +446,10 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     })
     expect(JSON.parse(task.triggerContextJson!)).not.toHaveProperty('comment_text')
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id)).limit(1))[0]!
-    expect(run.promptText).toContain('fix-the-trigger-regression')
-    expect(run.promptText).not.toContain('{{trigger.webhook.comment_text}}')
+    expect(readNodeRunPrompt(run, join(appHome, 'runs'))).toContain('fix-the-trigger-regression')
+    expect(readNodeRunPrompt(run, join(appHome, 'runs'))).not.toContain(
+      '{{trigger.webhook.comment_text}}',
+    )
   } finally {
     if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
     else process.env.AGENT_WORKFLOW_HOME = previousHome

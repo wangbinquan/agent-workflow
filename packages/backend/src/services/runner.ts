@@ -46,6 +46,8 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
+
+import { storeNodeRunPrompt } from '@/services/nodeRunPrompt'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
@@ -459,7 +461,9 @@ export interface RunResult {
    * of parsing errorMessage prefixes. Absent = no machine-readable shape.
    */
   failureCode?: FailureCode
-  /** The exact user prompt sent to opencode (also written to node_runs.promptText). */
+  /** The exact user prompt sent to opencode. RFC-311 T21: 正文落在
+   *  `runs/{taskId}/prompts/{nodeRunId}.md`,行里只留路径(读点走
+   *  services/nodeRunPrompt.ts 的双读)。 */
   prompt: string
   /**
    * RFC-193: repo0-relative source paths of the validated path-shaped port
@@ -847,10 +851,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           ...(opts.clarifyChannel !== undefined ? { clarifyChannel: opts.clarifyChannel } : {}),
         })
 
-  // Write promptText FIRST (no status change). RFC-053: the status flip
+  // Write the prompt FIRST (no status change). RFC-053: the status flip
   // pending → running goes through transitionNodeRunStatus below.
+  // RFC-311 T21:正文外置到 `runs/{taskId}/{nodeRunId}/prompt.md`,行里只留路径
+  // (prompt_text 平均 ~6KB、占 node_runs 表 57%,而它只在详情页/会话视图被读)。
+  // 落盘失败会回落成写列——prompt 是执行事实,宁可行胖也不能丢。
   // rfc053-allow-direct-status-write -- writing non-status field
-  await opts.db.update(nodeRuns).set({ promptText: prompt }).where(eq(nodeRuns.id, opts.nodeRunId))
+  await opts.db
+    .update(nodeRuns)
+    .set(storeNodeRunPrompt(opts.taskId, opts.nodeRunId, prompt, join(opts.appHome, 'runs')))
+    .where(eq(nodeRuns.id, opts.nodeRunId))
   // RFC-053: mark-running enforces pending → running.
   await transitionNodeRunStatus({
     db: opts.db,

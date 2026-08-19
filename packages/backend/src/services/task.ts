@@ -94,6 +94,7 @@ import {
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
+import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
@@ -5941,6 +5942,8 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       errorMessage: nodeRuns.errorMessage,
       failureCode: nodeRuns.failureCode,
       promptText: nodeRuns.promptText,
+      // RFC-311 T21:新行的正文在文件里,这里取路径、下面双读还原。
+      promptPath: nodeRuns.promptPath,
       opencodeSessionId: nodeRuns.opencodeSessionId,
       rerunCause: nodeRuns.rerunCause,
       supersededByReview: nodeRuns.supersededByReview,
@@ -6077,7 +6080,7 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       childTaskId: r.childTaskId ?? null,
       supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
       rolledBack: r.rolledBack ?? null,
-      promptText: r.promptText,
+      promptText: readNodeRunPrompt(r),
       tokInput: r.tokInput,
       tokOutput: r.tokOutput,
       tokTotal: r.tokTotal,

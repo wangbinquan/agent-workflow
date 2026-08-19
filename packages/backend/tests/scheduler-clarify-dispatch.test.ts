@@ -35,6 +35,7 @@ import { monotonicFactory } from 'ulid'
 // the rerun and flake the assertion. A shared monotonicFactory guarantees the
 // later-seeded rerun always sorts freshest — mirrors scheduler-clarify-mid-batch.test.ts.
 const ulid = monotonicFactory()
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
@@ -470,8 +471,8 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const rerunRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]!
     expect(rerunRow.status).toBe('done')
     // RFC-132 (PR-C): the flat `## Clarify Q&A` block carries the answer as an equal peer.
-    expect(rerunRow.promptText ?? '').toContain('Clarify Q&A')
-    expect(rerunRow.promptText ?? '').toContain('Postgres')
+    expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Clarify Q&A')
+    expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Postgres')
   })
 
   // Regression: prior to the isFresherNodeRun comparator, the latest-row
@@ -612,7 +613,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // The fresh rerun must actually run — not be shadowed by the retry=6 row.
     const rerunRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]!
     expect(rerunRow.status).toBe('done')
-    expect(rerunRow.promptText ?? '').toContain('Postgres')
+    expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Postgres')
 
     // And the task must reach done via the rerun, not by short-circuiting on
     // the stale retry=6 done row.
@@ -759,8 +760,8 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const fresh = dRuns[0]!
     expect(fresh.id).not.toBe(rerunId)
     expect(fresh.status).toBe('done')
-    expect(fresh.promptText ?? '').toContain('Clarify Q&A')
-    expect(fresh.promptText ?? '').toContain('Postgres')
+    expect(readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? '').toContain('Clarify Q&A')
+    expect(readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? '').toContain('Postgres')
   })
 
   // RFC-100 (Codex review #2 / documented limitation-1 fix): a 'stop' (finalize)
@@ -885,8 +886,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       .sort((a, b) => b.retryIndex - a.retryIndex)[0]!
     expect(fresh.id).not.toBe(rerunId)
     // RELEASED: the revived finalize round got the output format, NOT ask-back.
-    expect(fresh.promptText ?? '').toContain('You MUST end your reply with a')
-    expect(fresh.promptText ?? '').not.toContain('MANDATORY ASK-BACK (clarify) mode')
+    expect(readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? '').toContain(
+      'You MUST end your reply with a',
+    )
+    expect(readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? '').not.toContain(
+      'MANDATORY ASK-BACK (clarify) mode',
+    )
     // And it actually finalized (output accepted, not clarify-required looped).
     expect(fresh.status).toBe('done')
   })
@@ -1086,7 +1091,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const fresh = dRuns[0]!
     expect(fresh.id).not.toBe(ci2Id)
     expect(fresh.status).toBe('done')
-    const prompt = fresh.promptText ?? ''
+    const prompt = readNodeRunPrompt(fresh, join(h.appHome, 'runs')) ?? ''
     // RFC-132 (PR-C): both rounds render as EQUAL peers in the single flat `## Clarify Q&A` block —
     // no `### Round N` grouping. Both answers still accumulate (derived aging keeps both un-aged).
     expect(prompt).toContain('## Clarify Q&A')

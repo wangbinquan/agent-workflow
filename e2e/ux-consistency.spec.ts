@@ -337,8 +337,12 @@ test.describe('RFC-198 global UX browser matrix', () => {
       ['limits', 3],
       ['recovery', 2],
       // RFC-311：GC 分区从 3 张涨到 5 张（+「保留期与清理」+「终态任务归档」），
-      // 加上权限满足时内嵌的 BackupCard = 6。
-      ['gc', 6],
+      // 加上权限满足时内嵌的 BackupCard = 6；T20 再 +1 =「可回收空间」维护卡片
+      // （退役目录体积 + DB freelist + 删除入口）= 7。
+      // ⚠️ 这张表是**唯一**说明「为什么是这个数」的地方：加/删 settings 卡片必须
+      // 同步改这里，而本 spec 只在 CI 的 Playwright 腿跑（gate:local 不含 e2e），
+      // 所以本地全绿也照样会在 CI 红。
+      ['gc', 7],
       ['git', 3],
       ['codeHosts', 2],
       ['network', 2],

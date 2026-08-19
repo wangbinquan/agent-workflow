@@ -9,6 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runGit } from '../src/util/git'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
@@ -490,9 +491,9 @@ describe('runTask: linear DAG (M1)', () => {
     // The agent node's prompt should contain both inputs separated by ---.
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const aRun = runs.find((r) => r.nodeId === 'a')
-    expect(aRun?.promptText).toContain('AAA')
-    expect(aRun?.promptText).toContain('BBB')
-    expect(aRun?.promptText).toContain('---')
+    expect(readNodeRunPrompt(aRun, join(h.appHome, 'runs'))).toContain('AAA')
+    expect(readNodeRunPrompt(aRun, join(h.appHome, 'runs'))).toContain('BBB')
+    expect(readNodeRunPrompt(aRun, join(h.appHome, 'runs'))).toContain('---')
   })
 
   test('two read-only agents at the same level run in parallel under the global semaphore', async () => {

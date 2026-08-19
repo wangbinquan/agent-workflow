@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { eq } from 'drizzle-orm'
+import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
@@ -330,8 +331,10 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
       (candidate) => candidate.nodeId === 'echoer',
     )!
-    expect(run.promptText).toContain('please-fix-from-webhook')
-    expect(run.promptText).not.toContain('{{trigger.webhook.comment_text}}')
+    expect(readNodeRunPrompt(run, join(appHome, 'runs'))).toContain('please-fix-from-webhook')
+    expect(readNodeRunPrompt(run, join(appHome, 'runs'))).not.toContain(
+      '{{trigger.webhook.comment_text}}',
+    )
   })
 
   test('materializeWorktree returns earlyError on bad repo', async () => {

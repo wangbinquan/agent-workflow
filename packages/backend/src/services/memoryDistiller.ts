@@ -37,6 +37,7 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { getRuntimeDriver } from '@/services/runtime'
 import { runAgentProcess } from '@/services/execution/agentProcess'
 import { Paths } from '@/util/paths'
@@ -449,6 +450,8 @@ async function loadClarifyTranscripts(
     .select({
       id: nodeRuns.id,
       promptText: nodeRuns.promptText,
+      // RFC-311 T21:新行的正文在文件里(见 services/nodeRunPrompt.ts 的双读)。
+      promptPath: nodeRuns.promptPath,
       startedAt: nodeRuns.startedAt,
       opencodeSessionId: nodeRuns.opencodeSessionId,
     })
@@ -503,7 +506,7 @@ async function loadClarifyTranscripts(
       // transcript content itself carries the context the distiller needs.
       const tree = parseSessionTree({
         rootSessionId: run.opencodeSessionId,
-        promptText: run.promptText,
+        promptText: readNodeRunPrompt(run),
         startedAt: run.startedAt,
         primaryAgentName: 'agent',
         events,
