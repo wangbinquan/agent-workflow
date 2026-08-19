@@ -62,7 +62,7 @@
 > 直接起不来（该风险分档已落 `docs/dev-gotchas.md`），解除条件是对方 `0186` 落主干后追 `0187`。剩余证据按
 > RFC-311 自身 plan 收口，不把它们误记成 RFC-294 的 wave exit。
 >
-> ✅ **已完成 RFC（Done，2026-08-19）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+> 🚧 **进行中 RFC（In Progress，2026-08-19 按用户补充重新打开）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
 > 平台发布、review/CI/conflict 修复、`waiting-committer` / `ready-to-merge` 回退，直到外部 merged/closed；平台
 > **永不自动 merge/approve/resolve**。所有下一动作、员工与 Java/C++/polyglot ActionTemplate、重试/交人均由
@@ -240,6 +240,34 @@
 >   AC 证据索引**可执行化**（新增 `rfc310-ac-evidence-index` 守卫：点名的测试文件必须存在、
 >   AC-1..35 逐条有证据、失败关闭；变异实测改名/家族消失/漏登三形态全检出）——此前索引无人守，
 >   PR-10 删 88 个测试文件时它失效也不会有信号。
+>   **PR-11/12/13（2026-08-19 按用户补充重新打开，已落 main `a762a707`）**：
+>   ①**业务说明书**——`EmployeePlaybookContentV1` strict codec + canonical compiler，业务只写「哪一步
+>   在什么条件下由谁做、成功/失败去哪」，内部 ActionTemplate / VerificationProfile / policy 闭包由平台
+>   编译；聚合面 `GET/PUT/validate /digital-employees/:id/playbook` 一次命令冻结完整 closure；action
+>   implementation 扩 script executor（仍走 TaskEngine→Wrapper→NodeExecutor→Kernel、共用 envelope 与
+>   workspace validator）；`ProblemSetEnvelopeV1` 只读 producer 只产本步问题、不选下一步。
+>   ②**跨仓 child Mission 与外部审批 saga**（migration 0187 四张表 + 幂等唯一索引 + OCC）：幂等
+>   create/adopt/observe、ancestry/depth/child/wall-time 预算与按 employee identity 的动态环阻断
+>   （`A@1 → B@1 → A@2` 同样拦）；Agent/script 只 prepare 审批材料（无凭据、不能直接 submit），平台经
+>   integration `approval-gateway` adapter 幂等 submit / lookup-by-idempotency-key / observe，pending→
+>   deferred wake、重启保 deadline/ordinal、all/any/quorum join 与 cancel/handoff/terminal fence。
+>   ③**服务端 Journey**（`JourneyProjectionV1` 纯 projector）：读面带 journey、mutation 带 nextLocation，
+>   共用 `JourneyNextAction` 让每页只有一个主动作；migration 0186 给任务加平台输入挂载名册
+>   （不进公共 Task DTO / StartTask wire body）。
+>   **提交前跑全套 `gate:local` 抓出 11 项**——上一轮只跑了 typecheck / lint / 定向用例，其中 **9 项
+>   只有全量门禁看得见**：装配层业务分支（child drive 与 ReconcileDeps 互引用的延迟绑定守卫上提到
+>   application，RFC-294 §2 架构锁）、路由直接读库（mission 详情的 MR 投影迁进 `missionReadModels`，
+>   depcheck `no-routes-to-db`）、e2e spec 自起子进程（改走 `e2e/command.ts` 有界 runGit），六处登记面
+>   （API 契约表 4 端点 / env-flags 7 个 `AW_APPROVAL_*`+`AW_PORT_PROMPT` / RFC-301 startTask 白名单 /
+>   RFC-254 posix 允许表 / 迁移总数 185→187 / decision kinds 快照 +3），以及两条行为对账：①「缺 launcher
+>   是 typed block」用例在 launcher 判定按 executor 分流后先撞 `action-baseline-not-wired`，已改为接好其余
+>   端口只摘 launcher；②system mock 自本批起如实暴露 provider merge status，mr-facts 期望
+>   `unknown → mergeable`，approvals 仍不暴露、`approvalHold` 保持 null。
+>   **定式**：「typecheck + lint + 定向用例全绿」不构成可提交的证据（已进 `docs/dev-gotchas.md` 同族条目
+>   的适用范围）。T121 / T131 / T132 / T140 维持 🚧——需要监听本机端口的 system mock / Playwright 旅程在
+>   当前受限执行环境起不了 listener，由 hosted exact-SHA CI 收口，不提前登记完成。
+>   本次提交**不含**并行 RFC-312 presence 的任何改动（identity-access / ws / shared 权限点 / 前端
+>   `PresenceDot` 等仍在对方工作树）；i18n 与 styles.css 两个混改文件只提本 RFC 的部分。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：
