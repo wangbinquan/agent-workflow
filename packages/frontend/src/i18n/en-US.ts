@@ -756,6 +756,14 @@ export const enUS: Resources = {
       },
     },
     employeePlaybook: {
+      // 落库内容而非渲染期文案：创建向导按创建者语言把它写进说明书 draft。
+      standardStep: {
+        requirementAnalyze: 'Understand the requirement',
+        changeImplement: 'Implement the change',
+        changeReview: 'Review the change',
+        mrFeedbackApply: 'Apply review feedback',
+        pipelineRepair: 'Repair the pipeline',
+      },
       employeesTitle: 'Digital employees',
       employeesSubtitle:
         'Define how work proceeds in business steps; the platform follows the rules exactly.',

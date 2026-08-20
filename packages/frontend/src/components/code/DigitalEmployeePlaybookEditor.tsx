@@ -1029,6 +1029,7 @@ function InlineExecutorCreateDialog(props: {
               preset,
               policy: selectedPolicy,
               implementations: published(props.implementations),
+              stepName: (nameKey) => t(`code.employeePlaybook.standardStep.${nameKey}`),
             }),
           }),
         )

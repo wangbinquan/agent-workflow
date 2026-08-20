@@ -31,6 +31,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 
+import { defaultAutomationPolicyContent } from '../packages/backend/src/modules/development-automation/domain/automationPolicy'
 import { startDaemon, type DaemonHandle } from './harness'
 import { runSqlite } from './command'
 import { routePopulatedInbox } from './inbox-fixtures'
@@ -39,9 +40,10 @@ import {
   routeOperationsSurfaceFixtures,
 } from './operations-surface-fixtures'
 import { routeTaskOperationsFixture } from './task-operations-fixtures'
+import { routeCodeSurfaceFixtures } from './code-surface-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 36
+const EXPECTED_VISUAL_SCENE_COUNT = 44
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -223,6 +225,74 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
     throw new Error(`visual-regression: failed to seed ${path} (${response.status})`)
   }
   return response.json()
+}
+
+/**
+ * RFC-310 —— 员工详情场景的技术闭包：Agent + 验证 profile + 动作模板 + 规则集，
+ * 全部**已发布**。创建向导要求「至少一个已发布的动作模板 + 一个已发布的规则集」
+ * 才给得出可发布的初始说明书；少任何一个，详情页锁到的就是一页违规提示。
+ */
+async function seedEmployeeClosure(): Promise<void> {
+  const agent = (await postJson('/api/agents', {
+    name: 'visual-employee-agent',
+    description: 'Capability-bound Agent for the RFC-310 employee detail scene.',
+    outputs: ['agent-result'],
+    runtime: 'opencode',
+    bodyMd: '',
+  })) as { id: string }
+  const publish = async (
+    base: string,
+    body: unknown,
+  ): Promise<{ id: string; revision: number }> => {
+    const created = (await postJson(base, body)) as { id: string }
+    const published = (await postJson(`${base}/${created.id}/publish`, {})) as { revision: number }
+    return { id: created.id, revision: published.revision }
+  }
+  const verification = await publish('/api/code/verification-profiles', {
+    name: 'Repository verification',
+    draft: {
+      schemaVersion: 1,
+      steps: [
+        {
+          stepId: 'no-op',
+          programRef: 'repo:pom.xml',
+          argsRef: null,
+          timeoutMs: 30_000,
+          networkProfileRef: 'none@1',
+          successExitCodes: [0],
+          evidenceSelectors: [{ kind: 'stdout-tail', value: 4096 }],
+        },
+      ],
+      stopPolicy: 'first-failure',
+      maxParallel: 1,
+    },
+  })
+  await publish('/api/code/action-templates', {
+    name: 'Java implement change',
+    capabilityId: 'change.implement',
+    draft: {
+      schemaVersion: 1,
+      capabilityId: 'change.implement',
+      capabilityContractVersion: 1,
+      labels: ['java'],
+      compatibility: [],
+      executor: { kind: 'agent', agentRef: agent.id },
+      runtimeProfileRef: 'opencode',
+      promptSupplement: 'Implement the immutable requirement bundle.',
+      skillRefs: [],
+      mcpRefs: [],
+      readOnlyResourceRefs: [],
+      contextProfileRef: null,
+      writablePathPolicyRef: null,
+      additionalProtectedPathClasses: [],
+      verificationProfileRef: `${verification.id}@${verification.revision}`,
+      retryDefaults: { sameSession: 1, freshSession: 1 },
+    },
+  })
+  await publish('/api/code/automation-policies', {
+    name: 'Default delivery rules',
+    draft: defaultAutomationPolicyContent(),
+  })
 }
 
 async function seedResources(): Promise<SeededResources> {
@@ -984,6 +1054,127 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(operations).toHaveScreenshot('table-edge.png', COMPONENT_SNAPSHOT_OPTS)
     await page.getByRole('heading', { name: /tasks/i }).first().scrollIntoViewIfNeeded()
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
+  })
+
+  // RFC-310 T121 —— 数字员工业务页的逐页视觉回归。
+  //
+  // 这一族在此之前**一张基线都没有**：`/code/*` 是 RFC-310 交付的整个业务面，
+  // 却只有功能断言（点得动、跳得对），没有任何一处锁住"它长什么样"。于是像
+  // 步骤条塌成一行、空状态丢掉主动作、执行器三栏挤成一栏这类改动，功能测试
+  // 全绿而用户直接看到。数据全部走 `code-surface-fixtures` 的固定 JSON——真实
+  // 数据里的 ULID 与相对时间会让基线一天都活不下去。
+  //
+  // 不含 `/code/outcomes` 与员工详情页：2026-08-20 这两页正被 RFC-311 并发改写。
+  test('/code employee setup journey (mid-journey, light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code`)
+    await expect(page.getByTestId('journey-next-action')).toBeVisible()
+    // 步骤条真的画到了第 3 步——否则截到的是"投影还没回来"的那一帧。
+    await expect(
+      page.getByTestId('journey-next-action').locator('li[aria-current="step"]'),
+    ).toContainText('Set scope')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-home.png', SNAPSHOT_OPTS)
+  })
+
+  test('/code/config/employees populated list (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code/config/employees`)
+    await expect(page.getByTestId('config-list')).toBeVisible()
+    await expect(page.getByTestId('config-row-emp-docs-draft')).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-employees.png', SNAPSHOT_OPTS)
+  })
+
+  // 零配置首屏是真实用户见到的第一页，且与有内容态是两套完全不同的布局。
+  test('/code/config/employees empty state (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page, { employees: 'empty' })
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code/config/employees`)
+    await expect(page.locator('.empty-state')).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-employees-empty.png', SNAPSHOT_OPTS)
+  })
+
+  test('/code/executors library (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code/executors`)
+    await expect(page.locator('.executor-library-grid')).toBeVisible()
+    await expect(page.getByText('Run repository formatter', { exact: true })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-executors.png', SNAPSHOT_OPTS)
+  })
+
+  test('/code/policies list (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code/policies`)
+    await expect(page.getByText('Default delivery rules', { exact: true })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-policies.png', {
+      ...SNAPSHOT_OPTS,
+      // Updated 列走 `toLocaleString()`，渲染结果随**机器时区**变化（本机 +08 与 CI 的
+      // UTC 差一天）。各平台各存基线本可掩盖它，但代价是「换个时区的人重生成 darwin
+      // 基线」会得到一堆看不懂的 diff。遮掉它：列宽仍在图里，布局回归照样看得见，
+      // 只有那串与本 lock 无关的本地化文本被排除。
+      mask: [page.locator('[data-testid="policy-list"] tbody td:nth-child(4)')],
+    })
+  })
+
+  test('/code/assignments list (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code/assignments`)
+    await expect(page.getByText('Firmware repositories', { exact: true })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-assignments.png', SNAPSHOT_OPTS)
+  })
+
+  test('/outcomes run outcomes (populated, light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await routeCodeSurfaceFixtures(page)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/outcomes`)
+    await expect(page.getByTestId('code-outcome-history')).toBeVisible()
+    // RFC-311 的两个新形状都必须真的在图里：服务端 counts（22 ≠ 已加载的 6 行）
+    // 与 keyset 翻页的「加载更多」。
+    await expect(page.getByRole('button', { name: 'Load more' })).toBeVisible()
+    await expect(page.getByTestId('capability-outcomes')).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-outcomes.png', {
+      ...SNAPSHOT_OPTS,
+      // 同 policies：完成时间走 `toLocaleString()`，随机器时区变化。
+      mask: [page.locator('[data-testid="code-outcome-history"] tbody td:nth-child(5)')],
+    })
+  })
+
+  // 员工详情页**不走 route 夹具**：它的 playbook 投影（步骤、执行器、违规项、
+  // readyToPublish、journey）是服务端算出来的一整套闭包，手写夹具既写不准也会
+  // 随后端演进悄悄失真。这里播真资源、走真创建向导，锁的就是用户看到的那一页。
+  test('/code/config/employees detail (seeded playbook, light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await seedEmployeeClosure()
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/code/config/employees?create=1`)
+    await page.getByTestId('config-create-name').fill('Java delivery employee')
+    await page.getByTestId('config-create-submit').click()
+    await page.waitForURL(/\/code\/config\/employees\/[0-9A-Z]+$/)
+    await expect(page.getByRole('heading', { name: 'Java delivery employee' })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('code-employee-detail.png', {
+      ...SNAPSHOT_OPTS,
+      // 播出来的 ULID 与「刚刚创建」的相对时间是这一页仅有的非确定性来源。
+      mask: [page.locator('code'), page.locator('time')],
+    })
   })
 
   test('RFC-195 inbox empty dialog (light)', async ({ page }) => {

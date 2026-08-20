@@ -338,6 +338,7 @@ function EmployeeCreateDialog(props: { onClose: () => void }): ReactElement {
             preset,
             policy: selectedPolicy,
             implementations,
+            stepName: (nameKey) => t(`code.employeePlaybook.standardStep.${nameKey}`),
           }),
         }),
       ) as Promise<ConfigIdentityRow>

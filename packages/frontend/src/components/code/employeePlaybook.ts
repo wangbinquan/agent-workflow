@@ -29,12 +29,21 @@ export type BusinessProducerKind =
   | 'approval-submit'
   | 'approval-observe'
 
+/**
+ * 创建向导预置的标准步骤。
+ *
+ * `displayName` 是**落库内容**（写进说明书 draft），不是渲染期文案——所以它必须在
+ * 创建那一刻按创建者的语言取值，而不能写死。此前这里是五个中文字面量，于是英文界面
+ * 创建出来的员工，工作步骤名是中文：整页英文里孤零零一行「实现修改」。这条是 RFC-310
+ * T121 的 `/code/config/employees` 详情页视觉基线**第一次截图就照出来的**——功能测试
+ * 从不看文字属于哪种语言。
+ */
 export const STANDARD_CAPABILITY_STEPS = [
-  { capabilityId: 'requirement.analyze', displayName: '理解需求' },
-  { capabilityId: 'change.implement', displayName: '实现修改' },
-  { capabilityId: 'change.review', displayName: '检查修改' },
-  { capabilityId: 'mr.feedback.apply', displayName: '处理检视意见' },
-  { capabilityId: 'pipeline.repair', displayName: '修复流水线' },
+  { capabilityId: 'requirement.analyze', nameKey: 'requirementAnalyze' },
+  { capabilityId: 'change.implement', nameKey: 'changeImplement' },
+  { capabilityId: 'change.review', nameKey: 'changeReview' },
+  { capabilityId: 'mr.feedback.apply', nameKey: 'mrFeedbackApply' },
+  { capabilityId: 'pipeline.repair', nameKey: 'pipelineRepair' },
 ] as const
 
 export const PLATFORM_ACTIONS = [
@@ -167,6 +176,16 @@ export function buildInitialEmployeePlaybook(input: {
   preset: EmployeePreset
   policy: PublishedResourceOption
   implementations: readonly PublishedResourceOption[]
+  /**
+   * 按 `STANDARD_CAPABILITY_STEPS[].nameKey` 取步骤名。**必填**而不是给个默认值：默认值
+   * 会让任何漏改的调用点静默继续写死一种语言，而编译错误会把调用点逐个点出来。
+   *
+   * 传 nameKey 而不是 capabilityId，是因为 capabilityId 带点（`change.implement`），而
+   * i18n 的 key 一旦含点就会被 `tests/i18n-batch-extraction.test.ts` 的扁平化按路径拆开
+   * ——它在 bundle 里找不到那一层，报「leaf 不是字符串」。（页面上却看着是好的：i18next
+   * 的 `ignoreJSONStructure` 会在嵌套查找失败后再试一次扁平 key，于是这个坑只在门禁里现形。）
+   */
+  stepName: (nameKey: string) => string
 }): Record<string, unknown> {
   const selected = STANDARD_CAPABILITY_STEPS.flatMap((spec, index) => {
     const implementation = input.implementations.find(
@@ -178,7 +197,7 @@ export function buildInitialEmployeePlaybook(input: {
     return [
       {
         stepId: `step-${index + 1}-${spec.capabilityId.replaceAll('.', '-')}`,
-        displayName: spec.displayName,
+        displayName: input.stepName(spec.nameKey),
         description: '',
         when:
           spec.capabilityId === 'mr.feedback.apply'

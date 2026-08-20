@@ -922,6 +922,52 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 - e2e 里装载 fixture 应走**公开 API**，不要 import backend 的服务函数——那会让 e2e
   依赖一条产品上可能已不存在的路径，下次删它时 e2e 又红在与被测行为无关的地方。
 
+## 诊断字符串要穿过好几道截断才到人眼前——补了信息不等于信息到得了（RFC-310 实测，2026-08-20）
+
+现场：windows 那格的 Agent 动作红着，上层能拿到的全部信息是 `opencode exited with code 1`。
+补了「非零退出时把 stderr 尾巴拼进 `errorMessage`」之后再跑一轮 CI，拿到手的是——**一截压缩过的
+bundle 源码碎片**，真正的 `error: <message>` 一个字都没有。等于白跑一轮。
+
+两道截断各切掉了一半：
+
+1. **尾巴按总字节取尾 ⇒ 单个超长行能把整个窗口占满。** bundle 里的源码行是压缩过的
+   **单行几十 KB**；Bun 打印未捕获异常时会把那一行原样吐到 stderr。只按总长度留最后 2KB，留下的
+   就全是那一行的尾巴，写在它前面的错因整个被挤出去。**定式**：行式日志的滚动尾巴要**逐行先裁头**
+   再拼（`clampTailLine`，保留行首——错因写在前面），一行吃不掉后续行的位置。
+2. **下游又按头部截断一次。** `stepFailureDetail` 把 remediation `slice(0, 500)` 才写进
+   `blockDetail`；`opencode exited with code 1; stderr tail: ` 这个前缀就占掉 41 字，剩下 459 字正好
+   停在源码碎片中间。上游留了 2KB，到人眼前只剩 459 字——**而两处都不知道对方存在**。
+
+**判据**：给失败回执补诊断信息时，从产生点到人看见的那块 UI，把沿途每一处 `slice` / 尾巴 / 列宽
+数一遍；只要有两处以上独立截断，就得算一遍「最坏情况下人能看到哪一段」。别只验证「字段里有东西了」。
+
+**顺带一条形状债**：`errorMessage` 的形状是跨层契约。它从 `opencode exited with code N` 变成
+`…; stderr tail: …` 之后，`e2e/` 里三处 `toBe('… exited with code N')` 精确等值断言当场全红——
+而 `gate:local` 不跑 Playwright，本地是全绿的（主干因此连红四轮，两个并发 session 各排查了一轮
+才证明「不是我的」）。改任何会上浮到 UI / 回执的字符串形状前，先
+`grep -rn '<旧形状片段>' e2e/ packages/*/tests/`；断言本身也该写成**前缀锁**
+（`toMatch(/^… exited with code 23(;|$)/)`）而不是等值，让「后面允许追加诊断」成为契约的一部分。
+
+**判据收一层（三次实撞归纳，2026-08-20）**：「e2e 不在本地门禁覆盖面」已经以三种形态咬过人——
+删端点、改执行策略默认值、改错误消息的组成。三者的共同点是**都没动 API、也没动测试**，所以任何
+「改了什么就跑什么」的直觉都不会触发去跑 e2e。可操作的判据是：**凡是改动会进入「被断言的字符串
+或形状」的，就要跑一次 e2e**。`errorMessage` / `blockDetail` / `failureCode` 这类字段最阴——
+实现者眼里是「给人看的日志」，测试眼里是**契约**。
+
+## i18n 的 leaf key 不能带点：页面上看着好好的，门禁里才现形（RFC-310 T121 实测，2026-08-20）
+
+给创建向导的预置步骤名做 i18n 时，我按 capabilityId 起了 key：
+`code.employeePlaybook.standardStep['change.implement']`。**页面渲染完全正确**——i18next 的
+`ignoreJSONStructure` 会在按 `.` 逐层查找失败之后，再拿整串当扁平 key 试一次，于是取到了值。
+
+红在门禁：`packages/frontend/tests/i18n-batch-extraction.test.ts` 的 bundle 对拍会把两份 bundle
+**按点扁平化**，于是它看到的路径是 `…standardStep.change.implement`，在对象里当然找不到那一层，
+报「leaf 不是字符串」。
+
+**定式**：i18n 的 leaf key 一律 camelCase、**不含点**；要按带点的标识符（capabilityId、
+mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一个 `nameKey` 字段做映射，别用
+标识符本身当 key。**判据**：本地页面对、门禁报「leaf 不是字符串」⇒ 先看那个 key 是不是带点。
+
 ## 给模型的 prompt 就是生产代码（RFC-234 intentDoc 实测）
 
 - **prompt 要过实现门，理由和代码一样硬**：2026-08-08 那轮 Codex 实现门报的 7 条里，两条 P1 **都在 doc 里**，不在代码里——INTENT.md 不是文档，是生成模型唯一读到的规格，一句措辞不当等价于一个 API 契约写错。

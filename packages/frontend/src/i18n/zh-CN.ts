@@ -7838,6 +7838,14 @@ export const zhCN: Resources = {
       },
     },
     employeePlaybook: {
+      // 落库内容而非渲染期文案：创建向导按创建者语言把它写进说明书 draft。
+      standardStep: {
+        requirementAnalyze: '理解需求',
+        changeImplement: '实现修改',
+        changeReview: '检查修改',
+        mrFeedbackApply: '处理检视意见',
+        pipelineRepair: '修复流水线',
+      },
       employeesTitle: '数字员工',
       employeesSubtitle: '用业务步骤定义它收到工作后怎么做；平台严格按规则执行。',
       createEmployee: '创建数字员工',

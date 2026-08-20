@@ -230,6 +230,35 @@
 > `domain/verificationFacts.ts`，前端静态镜像同步。**「还没跑」与「通过了」分开**是这组的硬边界。
 > 发布链那条 block 保留——它是没有规则接手时的兜底，不是唯一出口（同 pipeline 形态）。
 > review 那半仍欠且**卡在持久化**：`mr.review.external` 的 findings 根本不落库，要先定存储形态。
+> **T71 retention 收口（2026-08-20）**：policy 的 `retention.*TtlDays` 从 PR-1a 起就在 schema 里、
+> 设置页能改，却**一个消费者都没有**——终态 Mission 的台账与证据只增不减，字段让人以为清理在发生。
+> 补了 `infrastructure/retentionSweeper.ts` + 模块面 `sweepRetention()`，挂 hourly（`DAEMON_CADENCE`）：
+> 已结算 attempt 按 `attemptLedgerTtlDays` 真删（本模块增长最快的表），`development_bundle_refs`
+> 按 `requirementBundleTerminalTtlDays` 标 `expired`（**标记不是删除**：可逆、可见）。四条边界锁在
+> `rfc310-retention-sweep.test.ts`。**evidence blob 的物理清扫有意不做**：本仓没有覆盖全部生产者的
+> 引用索引（pipeline bundle 根本没有 DB 指针行），删 blob 等于按猜测删证据；`expiredBundleRefsPending`
+> 把这笔债报成数字。GB 级 soak：`rfc310-evidence-soak.test.ts`（`RUN_EVIDENCE_SOAK=1`，默认 2GiB，
+> 本机实跑 187s 绿）+ `evidence-soak-nightly.yml`——64MB 那条**证不了它想证的东西**，全缓冲实现在
+> 64MB 下也只多吃 64MB；2GiB 配 128MB 常数上限才有 16 倍分辨力。
+>
+> **T121 逐页视觉基线收口（2026-08-20）**：`/code` 八个业务页进 `visual-regression.spec.ts`
+> （场景 36→44）：首页导航停在第 3 步（四种步骤态同框）、员工列表有内容 + 空状态、执行器库、
+> 规则集、指派、`/outcomes`，以及**播真资源走真创建向导**的员工详情页（它的 playbook 投影是服务端
+> 闭包，手写夹具写不准）。其余六页走 `e2e/code-surface-fixtures.ts` 的固定 JSON——真实行里的 ULID
+> 与相对时间会让基线活不过一天。`toLocaleString()` 的列按 `mask` 遮掉（列宽仍在图里，只排除随机器
+> 时区变化的文本）。darwin 基线本机已产并连跑绿；linux 基线按 README Option A 由 nightly 收割
+> （**首轮预期红**并上传 actual PNG）。**第一次截图就照出一个真 bug**：创建向导预置的步骤名是五个
+> 中文字面量而它是**落库内容**，英文界面创建出来的员工整页英文里孤零零一行「实现修改」——功能测试
+> 从不看文字属于哪种语言。已修（`stepName` 必填，让编译器点出全部调用点 + i18n 文案 + CJK 泄漏锁）。
+>
+> **可观测性收口（2026-08-20）**：子进程非零退出的 `errorMessage` 现在带 stderr 尾巴——裸退出码
+> 不可归因（windows 那格红了一整天，上层只拿得到 `opencode exited with code 1`）。实撞发现「补了
+> 信息 ≠ 信息到得了人眼前」：尾巴按总字节取尾时，bundle 那种单行几十 KB 的源码行一行就占满窗口，
+> 把错因整个挤出去；下游 `stepFailureDetail` 又 `slice(0,500)` 取头。两处互不知情、各切一半。
+> 已修：逐行先裁头再拼尾巴（`clampTailLine`），`MAX_STEP_FAILURE_DETAIL_CHARS` 500→2000。教训进
+> `docs/dev-gotchas.md`。同批把 `errorMessage` 的三处 e2e **精确等值**断言改成前缀锁——形状一变
+> 它们全红，而 `gate:local` 不跑 Playwright，本地全绿。
+>
 > **PR-8（T85–T92；T93 部分）已完成**：完整配置与活动 UI。fork V：参数化配置四族页（violations 逐条/
 > 字段级权限/secret 只名不值）；fork W：policy rule builder（first-match 显式序、谓词控件化、组合子
 > JSON 保真）+ simulator（preview-decision→trace 逐条+no-match 诊断）+ 前端目录静态镜像的后端直接

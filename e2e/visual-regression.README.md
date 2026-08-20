@@ -1,7 +1,7 @@
-# visual-regression — 49 pixel baselines
+# visual-regression — 57 pixel baselines
 
 Specs: `e2e/visual-regression.spec.ts` and `e2e/rfc250-visual-states.spec.ts`. Baselines live in each
-spec's `*-snapshots/` directory. Coverage belongs to RFC-054/198/199/219/246/249/250/299.
+spec's `*-snapshots/` directory. Coverage belongs to RFC-054/198/199/219/246/249/250/299/310.
 
 ## How the gate works
 
@@ -19,16 +19,16 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 
 ## Scenes covered
 
-| Viewport         | Scenes                                                                                                                                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1536×900 desktop | workflow editor with palette and inspector rails                                                                                                                                                            |
-| 1440×900 desktop | RFC-249 repository-group editor with 20 flat repos and a selected three-level node                                                                                                                          |
-| 1280×800 desktop | auth, agents, workflows, repos, memory, settings Runtime, settings System Agents, onboarding, seeded homepage, tasks, three inbox states, editor light/dark, open runtime-parameter picker, dynamic preview |
-| 1179×800 compact | workflow editor palette and inspector side modals, plus the RFC-219 50-Agent Human category in dark mode                                                                                                    |
-| 736×900 compact  | RFC-249 repository-group inline node settings                                                                                                                                                               |
-| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings Network, settings OIDC card dialog, task detail, editor modes, open Webhook runtime-parameter picker, RFC-249 batch mode           |
+| Viewport         | Scenes                                                                                                                                                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1536×900 desktop | workflow editor with palette and inspector rails                                                                                                                                                                                                                                                                          |
+| 1440×900 desktop | RFC-249 repository-group editor with 20 flat repos and a selected three-level node                                                                                                                                                                                                                                        |
+| 1280×800 desktop | auth, agents, workflows, repos, memory, settings Runtime, settings System Agents, onboarding, seeded homepage, tasks, three inbox states, editor light/dark, open runtime-parameter picker, dynamic preview, and the RFC-310 `/code` pages (setup journey, employees populated + empty, executors, policies, assignments) |
+| 1179×800 compact | workflow editor palette and inspector side modals, plus the RFC-219 50-Agent Human category in dark mode                                                                                                                                                                                                                  |
+| 736×900 compact  | RFC-249 repository-group inline node settings                                                                                                                                                                                                                                                                             |
+| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings Network, settings OIDC card dialog, task detail, editor modes, open Webhook runtime-parameter picker, RFC-249 batch mode                                                                                                                         |
 
-The canonical suite has 36 scenes: 35 own a full-page baseline, while the genuine-empty
+The canonical suite has 44 scenes: 43 own a full-page baseline, while the genuine-empty
 workflow scene keeps the existing EmptyState component lock separate from the platform-demo
 gallery. Five focused locator baselines lock mobile navigation open, a real overflowing
 TableViewport edge, that empty state, a Dialog footer, and the deterministic dynamic-workflow
@@ -38,7 +38,7 @@ RFC-250 adds nine populated high-risk baselines: PAT permission matrix and maske
 Wizard dirty guard at desktop and 390px; complex Workflow readable and explicit-overview cameras;
 Clarify local-only durability; grouped Changes navigation; and Agent resource-integrity feedback.
 Five are full-page locks and four are focused dialog/panel locks. Together with the canonical
-suite's 35 full-page and five focused baselines, the entry point compares 49 PNGs.
+suite's 43 full-page and five focused baselines, the entry point compares 57 PNGs.
 
 RFC-250 also deliberately refreshes six canonical baselines. `mobile-settings-network` records the
 44px coarse/mobile Switch target. The five `workflow-editor-*` baselines record readable-first
@@ -48,6 +48,15 @@ and post-layout focus that keeps an explicitly selected node visible after the I
 RFC-295 refreshes the five selected-Agent editor baselines after removing the always-expanded
 Webhook token wall. It also adds a desktop open-picker scene and a 390px Webhook Agent open-picker
 scene so the classified label/token/explanation rows, portal placement, and mobile clamp are locked.
+
+RFC-310 T121 adds eight `/code` (digital-employee) scenes: the setup-journey home stopped mid-journey,
+the employee list populated and empty, the executor library, the policy list, the assignment list, run
+outcomes, and one employee detail page. Six of them take their data from `e2e/code-surface-fixtures.ts`
+(route interception with fixed JSON) because the real rows carry ULIDs and relative timestamps that no
+pixel baseline can survive. The employee detail scene deliberately does NOT: its playbook projection is
+a server-computed closure (steps, executors, violations, readiness, journey) that a hand-written fixture
+would silently misrepresent, so that scene seeds real published resources and walks the real create
+wizard. Locale-formatted timestamp columns are masked — they render differently per machine timezone.
 
 RFC-299 refreshes Runtime and 390px Network after promoting every settings group to the shared
 SettingsCard shell. It adds a desktop System Agents scene and a 390px dark OIDC dialog scene so the

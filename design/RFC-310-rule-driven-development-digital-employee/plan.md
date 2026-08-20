@@ -5,11 +5,13 @@
 > 状态：**In Progress（2026-08-19 按用户补充重新打开；2026-08-20 PR-11/12/13 的功能面收口）**。
 > PR-0..PR-10 的原范围已落地；本轮新增 PR-11（业务化员工说明书、问题生产/处理与统一 UI）、
 > PR-12（跨仓 child Mission / 外部审批 saga）和 PR-13（服务端 Journey 与无指导操作链）。
-> 2026-08-20：T131/T132/T140 三项以两条真跑绿的浏览器旅程收口（首跑账见 §13d 末），
-> **仅剩 T121 的逐页视觉基线**——它需要各 OS 基线图，本机只能产 darwin 一份。
-> **原首版不含（如实登记，见 plan.md §13a）**：evidence retention GC 与 GB 级 nightly、
-> 浏览器级 visual regression、verification/review 结果升 catalog fact、cutover preflight 的
-> per-repo dry probe；mission 列表分页与 `/code` work-items 翻页已移交 RFC-311。
+> 2026-08-20：T131/T132/T140 三项以两条真跑绿的浏览器旅程收口（首跑账见 §13d 末）；
+> 同日 T71（retention GC + GB 级 soak）与 T121（`/code` 逐页视觉基线）收口——T121 的
+> darwin 基线本机已产并连跑绿，linux 基线按 README 的 Option A 由 nightly 收割。
+> **原首版不含（如实登记，见 plan.md §13a）**：cutover preflight 的 per-repo dry probe、
+> review 结果升 catalog fact（卡在 findings 尚未落库）、evidence blob 的物理清扫（缺引用索引）；
+> mission 列表分页与 `/code` work-items 翻页已移交 RFC-311。evidence retention GC 与 GB 级
+> nightly（T71）、`/code` 逐页像素基线（T121）、verification 结果升 catalog fact 已于 2026-08-20 补齐。
 > 2026-08-20 补齐：out-of-order webhook 矩阵（T82）、conflict repair 的 Agent 执行面（T78）。
 
 ## 0. 交付原则
@@ -270,7 +272,7 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
 | T68  | pipeline observe/trigger-if-missing/rerun effects、idempotency、head/独立预算                                      | T28,T66     | ✅   |
 | T69  | `pipeline.repair` Agent capability + issue-ref validator + new-head evidence invalidation                          | T47,T59,T66 | ✅   |
 | T70  | runnable provider mock：大流、partial/outage/head race/retry response lost                                         | T63-T69     | ✅   |
-| T71  | memory/backpressure/retention tests + GB-scale nightly/soak fixture                                                | T65,T67,T70 | 🚧   |
+| T71  | memory/backpressure/retention tests + GB-scale nightly/soak fixture                                                | T65,T67,T70 | ✅   |
 
 ### PR-6 交付注记（2026-08-18）
 
@@ -304,9 +306,28 @@ expected-head-mismatch > provider-head-mismatch`（指令原排序会让 head-mo
 - **T70**：system-mocks pipeline provider 补全（trigger 幂等/response-lost adopt/rerun 递增/running 409/
   outage/partial/head-race/64MB 大流）+ `pipeline-adapter-cli`（`AW_PIPELINE_FIXTURE_JSON` 测试后门防
   「子进程→回环 HTTP」坑）+ suite gateway 集成（`AW_PIPELINE_MOCK_URL`）。
-- **T71 部分（🚧）**：memory/backpressure 已覆盖（64MB 流式断言 + importer budget 拒收）；**retention GC 未
-  实现**——policy `retention.*TtlDays` 目前无消费者，evidence 内容寻址池只增不减（完整 GC 需要全池引用
-  扫描，工程量独立）；GB-scale nightly/soak fixture 未建。两项归 PR-10 收口或独立 RFC，呈用户知悉。
+- **T71（✅，2026-08-20 收口）**：memory/backpressure 早已覆盖（64MB 流式断言 + importer budget 拒收）；
+  本轮补齐 retention GC 的**消费者**与 GB 级 soak：
+  - `infrastructure/retentionSweeper.ts` + 模块面 `sweepRetention()`，挂
+    `DAEMON_CADENCE.developmentRetentionSweep`（hourly，与既有上传 GC 同节拍）。逐条**终态**
+    Mission 按其**钉住的 policy** 取 TTL：已结算 `development_agent_attempts` 超 `attemptLedgerTtlDays` 真删（本模块增长
+    最快的表，每次重试一行）；`development_bundle_refs` 超 `requirementBundleTerminalTtlDays` 标
+    `retention_state='expired'`（**标记不是删除**：可逆、可见）。单轮 200 条 Mission 上限。
+  - 四条边界锁在 `tests/rfc310-retention-sweep.test.ts`：终态+过期被处理 / 终态未到期一字节不动 /
+    非终态多老都不动 / 终态上的**未结算** attempt 不删（那是需要有人看的异常，不该被保留期抹掉）。
+  - GB 级 soak：`tests/rfc310-evidence-soak.test.ts`（`RUN_EVIDENCE_SOAK=1` 打开，默认 2GiB）复用
+    PR-0 那根子进程探针，断言换成**绝对常数**上限（峰值增幅 < 128MB，与总量无关）；
+    `.github/workflows/evidence-soak-nightly.yml` 每日 08:30 UTC 跑。本机 2GiB 实跑 187s 绿。
+    立它的理由写在文件头：64MB 那条**证不了它想证的东西**——全缓冲实现在 64MB 下也只多吃 64MB，
+    仍落在阈值噪音里；2GiB 配 128MB 上限才有 16 倍分辨力。
+- **T71 未做、且本轮有意不做的一半：evidence blob / manifest 的物理清扫。** 这不是工程量问题，是
+  **判据缺失**：blob 内容寻址、跨 bundle 共享，而本仓没有覆盖全部生产者的引用索引——①pipeline
+  evidence bundle 直接写 EvidenceStore，**没有任何 DB 指针行**；②attempt 的 `pre_snapshot_ref` 只被
+  attempt 行引用；③`development_bundle_refs` 只覆盖 requirement 一族。在这个前提下写删 blob 的
+  sweeper 等于**按猜测删证据**，而这些证据正是 blocked 诊断与审计要用的。正解：先建一张覆盖全部
+  生产者的引用表（`owner_kind`/`owner_id` → `evidence_ref`），零引用才可清，存量无法回填的标 legacy
+  永不清扫。独立一波，未立 RFC。`sweepRetention()` 的返回值里 `expiredBundleRefsPending` 就是这笔债的
+  数字，让它可见而不是沉默地涨。
 - **多 provider 路由**：员工 `pipelineProviders` 首版取第一个绑定（providerKey→gate 映射属 PR-7+ 配置面）。
 
 ## 9. PR-7：完整 MR care 与 terminal tracking
@@ -655,8 +676,11 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 ### 未竟项（如实登记，不阻塞 Done）
 
-1. **T71 retention GC + GB 级 nightly**、**T93 浏览器级 visual regression**（T109 覆盖了
-   功能面 E2E，未做像素快照）。〔T78 / T81 / T82 已于 2026-08-20 补齐，见对应收口注记。〕
+1. **T93 的像素快照余量**：T121 已把 `/code` 的八个业务页锁进 `visual-regression.spec.ts`
+   （见 §T121 收口注记），T93 名下仍未拍快照的是 PR-8 那批**运维视角**页面的更细状态
+   （错误恢复态、只读权限态的逐态快照）——功能面 E2E 由 T109 覆盖。
+   〔T71 / T78 / T81 / T82 / T121 已于 2026-08-20 补齐，见对应收口注记；T71 只余 evidence blob
+   的物理清扫，卡在缺一张覆盖全部生产者的引用索引——理由与正解见 §8 的 T71 收口注记。〕
 3. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
 4. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
 5. **review 结果尚未升为 catalog fact**（verification 那半已于 2026-08-20 补齐，见对应收口注记）
@@ -752,7 +776,7 @@ script 只生产本步结果，不选择下一步。
 | T118 | 员工创建向导：基本信息→范围→步骤→问题处理→外部协作→完成标准；只显示业务名称                                              | T114         | ✅   |
 | T119 | 员工详情改“说明书”：负责范围、步骤、问题处理、连接、仓库、运行摘要；技术 closure 仅高级折叠                              | T114         | ✅   |
 | T120 | `/code`、员工列表/详情统一 `/repos`/`/webhooks` operations 骨架；移除 hero/旧活动图，任务归 `/tasks`、成效归 `/outcomes` | T118,T119    | ✅   |
-| T121 | business i18n、只读权限、responsive、route/inventory、真实浏览器逐页视觉/交互回归                                        | T118-T120    | 🚧   |
+| T121 | business i18n、只读权限、responsive、route/inventory、真实浏览器逐页视觉/交互回归                                        | T118-T120    | ✅   |
 
 ## 13c. PR-12：跨仓 child Mission 与外部审批 saga
 
@@ -860,9 +884,31 @@ delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 
 2. e2e 的 system mock `seedCodeHost` 对同名项目返回 500 `already seeded`，Playwright 重试那一轮会
    先死在 beforeAll 上、把真正的失败盖掉。已改为每次运行生成新项目路径（两条 spec 都改了）。
 
-**仍未完成：T121**（业务 i18n / 只读权限 / responsive 已随 PR-8 的 inventory 棘轮覆盖，缺的是
-**逐页视觉基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线得在 CI 侧生成，
-故不在本轮登记完成）。
+### T121 收口注记（2026-08-20）—— `/code` 八个业务页的逐页视觉基线
+
+业务 i18n / 只读权限 / responsive 早随 PR-8 的 inventory 棘轮覆盖；缺的一直是**逐页视觉基线**。
+本轮补齐，`e2e/visual-regression.spec.ts` 的场景数 36 → 44：
+
+- **六页走 route 夹具**（`e2e/code-surface-fixtures.ts`，固定 JSON 顶掉列表端点）：`/code` 首页
+  导航（**停在第 3 步**，这样 done / current / next / pending 四态同框，零配置那版只画得出第一步）、
+  员工列表（有内容 + 空状态两张，空状态是真实用户见到的第一页且布局完全不同）、执行器库、
+  规则集列表、指派列表、`/outcomes`。真实数据里全是 ULID 与相对时间，播出来的页面每次跑都不一样，
+  像素基线一天都活不下去。
+- **员工详情页故意不用夹具**：它的 playbook 投影（步骤、执行器、违规项、readyToPublish、journey）
+  是服务端算出来的一整套闭包，手写夹具既写不准、也会随后端演进悄悄失真。这一张播真资源、走真
+  创建向导，锁的就是用户看到的那一页。
+- **时区**：`toLocaleString()` 的列（policies 的 Updated、outcomes 的 Completed）按 Playwright
+  的 `mask` 遮掉——列宽仍在图里，布局回归照样看得见，只有那串随机器时区变化的本地化文本被排除。
+- **`/code/outcomes` 与员工详情页此前被 RFC-311 并发改写**，一度按「不给对方制造必然返工」跳过；
+  RFC-311 于 `88f714b7` 收口为 Done 后按新形态补上（服务端 counts、keyset 翻页的「加载更多」）。
+- darwin 基线本机已产并**连跑绿**；linux 基线按 `e2e/visual-regression.README.md` 的 Option A
+  由 hosted nightly 收割（首轮**预期红**并上传 actual PNG，逐张人审后再提交）。
+
+**这一轮基线第一次截图就照出一个真 bug**：创建向导预置的工作步骤名（`STANDARD_CAPABILITY_STEPS`
+的 `displayName`）是五个**中文字面量**，而它是**落库内容**——于是英文界面创建出来的员工，整页英文里
+孤零零一行「实现修改」。功能测试从不看文字属于哪种语言，只有像素基线看得见。已修：`displayName`
+改由调用方按语言给（`stepName` 必填，让编译器点出全部调用点），文案进 i18n；回归锁在
+`packages/frontend/tests/code-employee-playbook.test.tsx`（含「本模块不得漏出任何 CJK 字符」）。
 
 ### verification fact 收口注记（2026-08-20）—— 让 `verification.repair` 排得上
 

@@ -50,12 +50,31 @@ const implementations: PublishedResourceOption[] = [
 }))
 
 describe('employee playbook defaults', () => {
+  // 2026-08-20 回归：`displayName` 是**落库内容**，创建那一刻就定死了。此前它是五个
+  // 中文字面量，于是英文界面创建出来的员工，工作步骤名是中文——整页英文里孤零零一行
+  // 「实现修改」。功能测试从不看文字属于哪种语言，是 RFC-310 T121 的详情页视觉基线
+  // 第一次截图照出来的。这条锁住「名字由调用方按语言给」，而不是由本模块写死。
+  test('step display names come from the caller, not a hard-coded language', () => {
+    const draft = buildInitialEmployeePlaybook({
+      description: '',
+      preset: 'java',
+      policy: { id: 'policy-1', name: 'Rules', publishedRevision: 2 },
+      implementations,
+      stepName: (nameKey) => `EN ${nameKey}`,
+    })
+    const names = (draft.steps as Array<Record<string, unknown>>).map((step) => step.displayName)
+    expect(names).toContain('EN changeImplement')
+    // 一个中日韩字符都不该从本模块里漏出来。
+    expect(names.every((name) => !/[\u4e00-\u9fff]/.test(String(name)))).toBe(true)
+  })
+
   test('chains one-shot delivery work and keeps review/pipeline repair reactive', () => {
     const draft = buildInitialEmployeePlaybook({
       description: 'Java employee',
       preset: 'java',
       policy: { id: 'policy-1', name: 'Rules', publishedRevision: 2 },
       implementations,
+      stepName: (nameKey) => `name:${nameKey}`,
     })
     const steps = draft.steps as Array<Record<string, unknown>>
     const byImplementation = new Map(
