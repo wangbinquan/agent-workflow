@@ -1605,7 +1605,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // A one-shot binding so onStderrLine can reference it before its decl below.
 
     const persistStderrLine = async (line: string): Promise<void> => {
-      stderrTailBuf = appendBoundedTail(stderrTailBuf, line, MAX_STDERR_TAIL_CHARS)
+      stderrTailBuf = appendBoundedTail(stderrTailBuf, clampTailLine(line), MAX_STDERR_TAIL_CHARS)
       await persistRunnerWrite('node-run-event/stderr', () =>
         opts.db.insert(nodeRunEvents).values({
           nodeRunId: opts.nodeRunId,
@@ -2687,6 +2687,21 @@ export const MAX_AGENT_TEXT_CHARS = 8 * 1024 * 1024
  * 「找不到 X」，又不至于让一个刷屏的子进程把失败回执撑成日志转储。
  */
 export const MAX_STDERR_TAIL_CHARS = 2 * 1024
+
+/**
+ * 单行进入 stderr 尾巴前的裁剪长度。**这不是美观问题，是归因问题**：runtime 崩溃时
+ * stderr 的形状是「第一行是错因，随后是被打印的源码行」，而 bundle 里的源码行是压缩过
+ * 的**单行几十 KB**。只按总长度取尾巴的话，那一行会把错因整个挤出窗口——2026-08-20 的
+ * windows CI 实撞：拿到手的 tail 全是 minified 源码片段，真正的 error 消息一个字都没留下。
+ * 逐行先裁头，再拼尾巴，窗口里就能同时容下错因与其后若干行栈。
+ */
+export const MAX_STDERR_TAIL_LINE_CHARS = 320
+
+/** 长行裁到 `maxChars` 并标注被丢弃的字符数（保留**行首**：错因写在前面）。 */
+export function clampTailLine(line: string, maxChars = MAX_STDERR_TAIL_LINE_CHARS): string {
+  if (line.length <= maxChars) return line
+  return `${line.slice(0, maxChars)}…(+${line.length - maxChars} chars)`
+}
 
 /**
  * Append `addition` (newline-joined) to `current`, keeping only the last

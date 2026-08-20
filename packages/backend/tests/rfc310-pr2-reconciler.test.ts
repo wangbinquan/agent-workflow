@@ -15,6 +15,7 @@ import { ulid } from 'ulid'
 
 import {
   runMissionReconcile,
+  MAX_STEP_FAILURE_DETAIL_CHARS,
   stepFailureDetail,
   type ReconcileDeps,
 } from '../src/modules/development-automation/application/missionReconciler'
@@ -294,6 +295,24 @@ describe('rfc310 step-failed block detail', () => {
     expect(stepFailureDetail(deps, 'm-1', 'step-failed:implement:agent-contract-exhausted')).toBe(
       'opencode exited with code 2',
     )
+  })
+
+  // 2026-08-20 windows 实撞：上一条只证明「remediation 上浮了」，没证明**上浮的那截
+  // 够用**。当时的 500 字上限刚好把 `opencode exited with code 1; stderr tail: ` 前缀
+  // 加一小段压缩源码碎片塞满，真正的 `error: <message>` 落在窗口外——CI 白跑一轮。
+  test('keeps enough of a runtime crash receipt that the cause survives (2026-08-20 regression)', () => {
+    const crash = [
+      'opencode exited with code 1; stderr tail:',
+      `var J=1;${'q'.repeat(360)}…(+39640 chars)`,
+      'error: Cannot find module "node:foo"',
+      '      at <anonymous> (stub.js:1:1)',
+    ].join('\n')
+    const deps = depsWith([{ stepId: 'implement', failureCode: 'x', actionRunId: 'run-1' }], {
+      'run-1': { failureJson: JSON.stringify({ code: 'x', remediation: crash }) },
+    })
+    const detail = stepFailureDetail(deps, 'm-1', 'step-failed:implement:x')
+    expect(detail).toContain('error: Cannot find module "node:foo"')
+    expect(detail!.length).toBeLessThanOrEqual(MAX_STEP_FAILURE_DETAIL_CHARS)
   })
 
   test('stays null instead of inventing text when there is nothing to say', () => {

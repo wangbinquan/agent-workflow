@@ -13,7 +13,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
   appendBoundedTail,
+  clampTailLine,
   MAX_AGENT_TEXT_CHARS,
+  MAX_STDERR_TAIL_CHARS,
+  MAX_STDERR_TAIL_LINE_CHARS,
   MAX_STREAM_LINE_CHARS,
 } from '../src/services/runner'
 // RFC-282 E1a — the runner's `pumpLines` twin was src-dead (every stream goes
@@ -116,5 +119,41 @@ describe('appendBoundedTail — rolling agent-text cap (B4-runtime-6)', () => {
   test('the production cap leaves ample room for a realistic envelope', () => {
     // 8 MiB dwarfs any real <workflow-output> block.
     expect(MAX_AGENT_TEXT_CHARS).toBeGreaterThanOrEqual(1024 * 1024)
+  })
+})
+
+// RFC-310 T132 后续 —— 2026-08-20 windows CI 实撞：stderr 尾巴拿到手了，里面却全是
+// 压缩过的 minified 源码片段，真正的 error 消息一个字都没有。原因是 bundle 的源码行
+// 是**单行几十 KB**，只按总长度取尾巴时它一行就把窗口占满、把写在最前面的错因整个挤
+// 出去——「有尾巴」于是等于「仍然不可归因」，白改一轮。
+// 这组用例锁的就是那次的形状：逐行先裁头，长行不得吃掉后续行的位置。
+describe('clampTailLine — 单行不得吃掉整个 stderr 尾巴窗口', () => {
+  test('short lines pass through byte-for-byte', () => {
+    expect(clampTailLine('error: ENOENT no such file or directory')).toBe(
+      'error: ENOENT no such file or directory',
+    )
+  })
+
+  test('a long line keeps its HEAD (the cause is written first) and says how much was dropped', () => {
+    const line = `error: boom${'x'.repeat(5_000)}`
+    const clamped = clampTailLine(line)
+    expect(clamped.startsWith('error: boom')).toBe(true)
+    expect(clamped.length).toBeLessThan(MAX_STDERR_TAIL_LINE_CHARS + 32)
+    expect(clamped).toContain('chars)')
+  })
+
+  test('a minified source line cannot evict the error message that preceded it', () => {
+    // 复刻实撞形状：第 1 行是错因，第 2 行是 40KB 的 bundle 源码行。
+    let buf = ''
+    for (const line of [
+      'error: Cannot find module "node:foo"',
+      `var J=1,$=2;${'q'.repeat(40_000)}`,
+      '      at <anonymous> (stub.js:1:1)',
+    ]) {
+      buf = appendBoundedTail(buf, clampTailLine(line), MAX_STDERR_TAIL_CHARS)
+    }
+    expect(buf).toContain('error: Cannot find module "node:foo"')
+    expect(buf).toContain('at <anonymous>')
+    expect(buf.length).toBeLessThanOrEqual(2 * MAX_STDERR_TAIL_CHARS)
   })
 })

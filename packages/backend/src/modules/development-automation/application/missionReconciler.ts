@@ -1057,6 +1057,17 @@ async function commitAndHandle(
  * 失败回执的 `remediation` 里（例如 "opencode exited with code 2"）。T140 的 windows
  * 腿就是因此定位不了。这里按 reason 反查那次失败的 step run → action run → 回执。
  */
+/**
+ * `blockDetail` 里 remediation 的长度上限。
+ *
+ * 原值 500 是 2026-08-20 windows 那轮**白跑一次 CI** 的直接原因：runtime 崩溃的回执是
+ * `opencode exited with code 1; stderr tail: …`，而 500 字头部只够放下前缀 + 一小截
+ * stderr——真正的 `error: <message>` 正好落在窗口外，拿到手的 blockDetail 全是压缩源码
+ * 碎片。同一模块里 rejection 明细的上限本来就是 4000（agentActionOrchestrator.ts），
+ * 500 才是这里的异类。放宽到 2000：够装一条崩溃栈，仍远小于把日志整篇灌进 UI。
+ */
+export const MAX_STEP_FAILURE_DETAIL_CHARS = 2_000
+
 export function stepFailureDetail(
   deps: ReconcileDeps,
   missionId: string,
@@ -1083,7 +1094,7 @@ export function stepFailureDetail(
     return null
   }
   const remediation = typeof parsed.remediation === 'string' ? parsed.remediation.trim() : ''
-  return remediation === '' ? null : remediation.slice(0, 500)
+  return remediation === '' ? null : remediation.slice(0, MAX_STEP_FAILURE_DETAIL_CHARS)
 }
 
 function blockMission(
