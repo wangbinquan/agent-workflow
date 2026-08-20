@@ -1317,6 +1317,13 @@
       "when": 1788537612047,
       "tag": "0188_rfc312_users_presence_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "6",
+      "when": 1788537612048,
+      "tag": "0189_rfc311_perf_guard_indexes",
+      "breakpoints": true
     }
   ]
 }

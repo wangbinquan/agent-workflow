@@ -844,6 +844,12 @@ export const cachedRepos = sqliteTable(
     // RFC-311 T28（migration 0181）:分页排序键 (last_fetched_at, id) 的复合
     // 索引,keyset 断点要求全序;按前缀规则覆盖并替换了旧单列索引。
     lastFetchedIdIdx: index('idx_cached_repos_fetched_id').on(t.lastFetchedAt, t.id),
+    // RFC-311：/repos facets 的「子模块同步失败」计数是两列等值谓词，无索引时
+    // 每次翻页都裸表扫描（性能防护网实测）。
+    submoduleHealthIdx: index('idx_cached_repos_submodule_health').on(
+      t.hasSubmodules,
+      t.lastSubmoduleSyncOk,
+    ),
   }),
 )
 
@@ -1652,6 +1658,9 @@ export const taskRepos = sqliteTable(
     // RFC-204: refTaskCount / the cache-delete guard evaluate this once per
     // listed cache row — unindexed it degenerates into repeated full scans.
     cachedRepoIdIdx: index('idx_task_repos_cached_repo_id').on(t.cachedRepoId),
+    // RFC-311：页内富化按 cached_repo_id 分组数 distinct task_id；单列索引给不出
+    // 有序输入 ⇒ TEMP B-TREE。并进 task_id 后分组沿索引完成且成为覆盖索引。
+    cachedRepoTaskIdx: index('idx_task_repos_cached_repo_task').on(t.cachedRepoId, t.taskId),
   }),
 )
 
@@ -4886,6 +4895,9 @@ export const developmentMissions = sqliteTable(
     statusIdx: index('idx_development_missions_status').on(t.status),
     repoIdx: index('idx_development_missions_repo').on(t.repositoryId),
     createdIdx: index('idx_development_missions_created').on(t.createdAt), // RFC-311：列表排序
+    // RFC-311：keyset 排序键是 (created_at DESC, id DESC)；单列索引让同一时间戳内
+    // 的次序退回临时排序，最坏情况（大量行共享同一 created_at）退化成全排序。
+    createdIdIdx: index('idx_development_missions_created_id').on(t.createdAt, t.id),
     // RFC-311：boot 恢复只扫悬挂 fence 行。
     fencedIdx: index('idx_development_missions_fenced')
       .on(t.id)

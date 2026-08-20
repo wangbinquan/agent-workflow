@@ -467,7 +467,11 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-312 bump 到 188 with 0188_rfc312_users_presence_grant（给存量 user/manager
     // 补一条 `users:presence` 显式 grant；admin 由动态全量 baseline 天然持有故跳过，
     // guest 与 __system__ 亦跳过。新建用户不依赖它——三条建号路径共用同一策略）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(188)
+    // RFC-311 bump 到 189 with 0189_rfc311_perf_guard_indexes（三条索引，全部由
+    // tests/rfc311-perf-guards.test.ts 在 EXPLAIN 里实测出 TEMP B-TREE / 裸表 SCAN
+    // 后补的：mission keyset 的 (created_at,id)、/repos 子模块健康 facet、页内富化
+    // 的 (cached_repo_id,task_id) 分组）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(189)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {
