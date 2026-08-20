@@ -43,17 +43,16 @@ test.setTimeout(600_000)
 // 跨 mission 的每一跳最多等一个 wake sweep（30s，durable wait 是既定设计），所以
 // 本 spec 的预算按最坏路径给足；给不足只会得到一条与实现无关的假红。
 
-// Windows 腿暂缓：darwin 与 hosted linux 均绿（本机连跑两次 3.0m/3.1m，CI 的
-// ubuntu/macos 两格 ✓），但 windows-latest 上 Agent 动作以
-// `step-failed:implement-parent-change:agent-contract-exhausted` 收场，原因**尚未定位**——
-// CI 日志不带 stub 的 stderr，而 mission 的 blockDetail 目前是 null（attempt 失败里的
-// remediation 没有上浮到 block，这条可观测性缺口已记进 RFC plan.md）。
-// 与其让主干在 windows 一格恒红、或凭猜测改 stub，这里显式停在 windows 并写清解除条件：
-// 拿到 stub stderr（本机 Windows 验收或给 block 带上 remediation 后的下一轮 CI）再定位。
-test.skip(
-  process.platform === 'win32',
-  'RFC-310 journey: agent action fails on windows for a not-yet-diagnosed reason (darwin + hosted linux are green)',
-)
+// Windows 腿：**解除暂缓**（2026-08-20）。此前停跑的理由是「原因尚未定位，而
+// blockDetail 是 null，CI 日志里看不到任何可用信息」——那条可观测性缺口已在
+// `239e8237` 修好：step-failed 的 block 现在带上 attempt 失败回执的 remediation，
+// 而本 spec 的等待器抛的正是 `mission blocked: ${blockCode}: ${blockDetail}`。
+// 也就是说当初写下的解除条件（「给 block 带上 remediation 后的下一轮 CI」）已经
+// 满足，继续停跑就变成了「用 skip 掩盖一个现在**能**查清的问题」。
+//
+// 保留原始症状供比对：windows-latest 上 Agent 动作曾以
+// `step-failed:implement-parent-change:agent-contract-exhausted` 收场；darwin 与
+// hosted linux 一直是绿的（本机连跑两次 3.0m/3.1m，CI 的 ubuntu/macos 两格 ✓）。
 
 // 每次运行（含 Playwright 的 retry）用新的项目路径：system mock 的 `seedCodeHost`
 // 对同名项目返回 500 `already seeded`，于是重试那一轮会先死在 beforeAll 上，把**真正的**
