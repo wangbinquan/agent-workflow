@@ -7,6 +7,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
+import { NAV_GROUPS } from '@/lib/nav'
+
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../../..')
 
@@ -15,6 +17,29 @@ function repoFile(path: string): string {
 }
 
 describe('RFC-198 visual infrastructure source gates', () => {
+  // The shell-settle anchor in the visual spec must be the LAST nav row: the
+  // sidebar's height is only final once that row has rendered, and a screenshot
+  // taken earlier is short by one row in every scene that shows the sidebar.
+  //
+  // A stale anchor does not fail — it goes *flaky*, and the diff looks like an
+  // unrelated pixel shift, so it is discovered weeks later by whoever happens to
+  // be reading a red run. It has rotted once already (RFC-310 inserted a whole
+  // `digitalEmployees` group ahead of the tasks group, demoting the pinned
+  // `/code` row to the middle). Deriving the expectation from NAV_GROUPS turns
+  // that silent rot into a red the same commit that appends a nav row.
+  test('the visual shell-settle anchor is the last NAV_GROUPS row', () => {
+    const source = repoFile('e2e/visual-regression.spec.ts')
+    const body = source.slice(source.indexOf('async function waitForStableAuthenticatedShell'))
+    const settle = body.slice(0, body.indexOf('\n}'))
+    // The *last* anchor in the settle helper is the one that decides when the
+    // sidebar is done; asserting mere presence would stay green while an
+    // earlier row silently became the real anchor.
+    const anchors = [...settle.matchAll(/a\[href="([^"]+)"\]/g)].map((m) => m[1])
+    const lastGroup = NAV_GROUPS[NAV_GROUPS.length - 1]!
+    const lastRow = lastGroup.subnav[lastGroup.subnav.length - 1]!
+    expect(anchors[anchors.length - 1]).toBe(lastRow.to)
+  })
+
   test('visual spec declares exactly 36 counted scenes', () => {
     const source = repoFile('e2e/visual-regression.spec.ts')
     expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 36')
