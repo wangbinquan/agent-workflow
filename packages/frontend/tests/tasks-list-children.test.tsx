@@ -157,7 +157,11 @@ async function renderPage() {
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
-  return router
+  // RFC-311：把 QueryClient 也交出去。两跳（根页 → 自动展开 → 子页）的用例不能靠
+  // `findByTestId` 的**默认 1000ms** 兜底——那是固定超时竞争，在最慢的 runner 上必然
+  // 越线（实撞：windows shard 2/3 唯一红，8225ms；本机 12/12 全过，越快的机器越照不出）。
+  // 有了 client 就能等「请求已发出 + 所有查询空闲」这个确定性锚点。
+  return { router, client }
 }
 
 describe('/tasks — bounded child branches (RFC-244)', () => {
@@ -218,7 +222,7 @@ describe('/tasks — bounded child branches (RFC-244)', () => {
       },
     })
     const urls = installFetch(rootPage([parent]), (_url) => childPage(parent.id, [kid]))
-    const router = await renderPage()
+    const { router } = await renderPage()
     const arrow = await screen.findByTestId('task-expand-t_parent')
 
     fireEvent.click(arrow)
@@ -246,12 +250,34 @@ describe('/tasks — bounded child branches (RFC-244)', () => {
         branchStartedAt: Date.now(),
       },
     })
-    installFetch(rootPage([context]), () =>
+    const urls = installFetch(rootPage([context]), () =>
       childPage(context.id, [item('matching-child', { parentTaskId: context.id })]),
     )
-    await renderPage()
+    const { client } = await renderPage()
 
-    const child = await screen.findByTestId('task-row-t_matching-child')
+    // 这条用例在 windows shard 上红过一次（8225ms，ubuntu/macos 同 shard 全绿，job 96341991820）。
+    // CI 的 DOM dump 显示根行、展开箭头、`aria-expanded="true"` 全都对——自动展开确实发生了，
+    // 只是子页数据没在全局 `asyncUtilTimeout: 5000`（tests/setup.ts）内到达。
+    //
+    // 真因是**预算分配**，不是这条用例本身慢：同文件手动展开那条的等待天然分成两段——
+    // 先 `findByTestId(arrow)` 等根数据（吃一份 5s），click 之后再 `findByTestId(child)`
+    // 等子数据（再吃一份 5s）。而自动展开这条只有一次 `findByTestId`，却要用**同一份 5s**
+    // 覆盖「根查询 → 识别 context root → 自动展开 → 子查询」整条三跳链。windows runner 实测
+    // 慢约 10x，于是只有它撞墙，其余用例（95–272ms）都够用。
+    //
+    // 两件事一起做，缺一不可：
+    //   1. **确定性锚点**——先等子页请求真的发出去（证明展开发生了），再等所有查询空闲
+    //      （证明数据已到位）。这同时把三跳链拆回多段，与同文件其他用例的结构对齐。
+    //   2. **显式预算**——锚点本身仍走 waitFor，默认吃的就是那 5 秒；不显式抬高，锚点再确定
+    //      也照样在同一堵墙上撞死。testTimeout 是 30s，这里留 15s 余量。
+    const SLOW_RUNNER_BUDGET = { timeout: 15_000 }
+    await waitFor(() => {
+      expect(urls.some((u) => u.includes(`parent_id=${context.id}`))).toBe(true)
+    }, SLOW_RUNNER_BUDGET)
+    await waitFor(() => {
+      expect(client.isFetching()).toBe(0)
+    }, SLOW_RUNNER_BUDGET)
+    const child = await screen.findByTestId('task-row-t_matching-child', {}, SLOW_RUNNER_BUDGET)
     expect(child).toBeTruthy()
     const arrow = screen.getByTestId('task-expand-t_context')
     expect(arrow.getAttribute('aria-expanded')).toBe('true')
@@ -316,7 +342,7 @@ describe('/tasks — bounded child branches (RFC-244)', () => {
     const page = rootPage([item('scroll-anchor')])
     page.nextCursor = 'next-root'
     const urls = installFetch(page, (url) => childPage(url.searchParams.get('parent_id')!, []))
-    const router = await renderPage()
+    const { router } = await renderPage()
     await screen.findByTestId('task-row-t_scroll-anchor')
 
     // Populate the second filter's cache first. Returning to the already-cached

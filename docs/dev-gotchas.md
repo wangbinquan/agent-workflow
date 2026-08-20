@@ -43,6 +43,12 @@
   定式：**要退出码就别接管道**——`bun run gate:local > gate.log 2>&1`，事后再 `tail` 看日志；
   非要接管道就 `set -o pipefail` 或显式读 `${PIPESTATUS[0]}`。
   判据：一条本该跑好几分钟的门禁「秒回 exit 0」、或输出文件是 0 字节而退出码是 0 ⇒ 就是这个坑。
+  **更隐蔽的第二形态：门禁根本没跑，也是 exit 0**（2026-08-20 又踩一次，同一个坑）——`gate:local` 有
+  跨 worktree 的单实例锁，同机另一棵树在跑时它**立刻返回 2**（`scripts/local-gate.ts` 的
+  `runLocalGate` 捕获 `LocalGateAlreadyRunningError` 后 `return 2`），那个 2 同样被 `tail` 吞成 0。
+  与「门禁红了」相比它更难发现：唯一线索是日志里一行 `[gate] LocalGateAlreadyRunningError: …`，
+  夹在 `bun install` 的输出后面像条噪声，而**没有任何测试结果**——正因为一条都没跑。
+  所以上面那条判据要连着用：**既看退出码，也看日志里到底有没有跑出测试计数**。
 
 - **在「状态写库」与「读者能看到」之间插一次网络调用，就是给所有等这个状态的人开了一个窗口（2026-08-17 实测，本地 328 全绿、CI 三个分片红）**：
   给轮次终局加了一步「更新 MR 上的回执」，顺手放在了工作项状态转移**之前**。本地
@@ -998,6 +1004,11 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
 ## 跨平台（RFC-254 实测）
 
 - **`mkdirSync(dirname(p), { recursive: true })` 对「裸文件名」是一颗只在 Windows 上炸的雷**（2026-08-20 实撞，RFC-310）：`dirname('a.txt')` 是 `'.'`，而 `mkdirSync('.', { recursive: true })` 在 POSIX 上是 **no-op**、在 Windows 上**抛 `EEXIST: file already exists, mkdir '.'`**。这个写法几乎人人都在用，且在本机、在 CI 的 ubuntu/macos 两格全绿——只有 windows 那格红，症状还只是一个未捕获异常的退出码。**定式**：写之前先判 `dirname` 是不是 `'.'`/`''`，是就别建（本仓的单点是 `packages/system-mocks/src/runtime/mode-development.ts` 的 `parentDirToCreate`）。**回归锁要挑对断言面**：「在临时目录里写个文件不抛异常」这种测试在 POSIX 上用旧代码照样绿——一条在出问题的平台之外永远为真的断言不叫回归防护，要锁的是纯判据（裸文件名 ⇒ 不该有目录要建）。
+- **windows runner 慢约 10x ⇒ 前端用例会撞上全局 `asyncUtilTimeout: 5000`，而真因往往是「预算分配」不是「这条慢」**（2026-08-20 实撞，RFC-311）：`tasks-list-children` 的一条用例在 windows 那格红在 `Unable to find [data-testid=…]`、耗时 **8225ms**，ubuntu/macos 同 shard 全绿。看报错像「子行没渲染出来」，但 CI 的 DOM dump 显示根行、展开箭头、`aria-expanded="true"` **全都对**——自动展开确实发生了，只是第二跳的数据没在 5 秒内到。
+  - **真因不是它比别人慢，是它把整条链挤进了一份预算**：同文件「手动展开」那条的等待天然分成两段——先 `findByTestId(arrow)` 等根数据（吃一份 5s），click 之后再 `findByTestId(child)` 等子数据（再吃一份 5s）。而「自动展开」这条只有**一次** `findByTestId`，却要用**同一份 5s** 覆盖「根查询 → 识别 context root → 自动展开 → 子查询」整条三跳链。在慢 10x 的机器上只有它撞墙，其余用例（95–272ms）都够用。
+  - 判据：**红在「找不到元素」但 DOM dump 里前置状态全对 + 只有 windows 红** ⇒ 先数这条用例用**几次** `findBy*`/`waitFor` 覆盖了**几跳**异步。一次覆盖多跳的就是嫌疑犯。别去改组件。
+  - 定式：**确定性锚点与显式预算，两件事缺一不可**。①锚点——先等「请求真的发出去」再等 `client.isFetching() === 0`，既把「等够了吗」从猜变成可判定，又把多跳链拆回多段、与同文件其他用例结构对齐；②预算——锚点本身仍走 `waitFor`，默认吃的就是那 5 秒，不显式抬高则锚点再确定也照样撞同一堵墙。本仓 `testTimeout` 是 30s，多跳用例给 15s 余量即可（`tests/tasks-list-children.test.tsx:SLOW_RUNNER_BUDGET`）。
+  - 出处：`packages/frontend/tests/setup.ts` 的 `configure({ asyncUtilTimeout: 5000 })` 管住所有 `findBy*` / `waitFor` 的默认预算，`vitest.config.ts` 的 `testTimeout: 30000` 是外层上限——两个数字要一起看才知道还有多少余量可抬。
 - **`node:path` 的默认导出是「宿主口味」，解析别的平台的路径必须显式 `path.win32` / `path.posix`**：在 macOS 上 `dirname('C:\\Program Files\\Git\\cmd\\git.exe')` 返回 `'.'`（它看不见反斜杠分隔符），于是「从 git 推导 bash 路径」「把 git 目录加进受控 PATH」这类逻辑会静默算出垃圾值而不报错。RFC-254 里同一个陷阱在两处独立出现，是**测试**先抓到的（生产代码 typecheck 全绿）。凡是处理「另一个平台的路径字符串」，一律 `win32.dirname` / `win32.join`。
 - **Windows 上「存在某个 `bash.exe`」从来不是充分证据**：`System32\bash.exe` 是 **WSL 启动器**，裸 `which('bash')` 找到它会把脚本跑进另一个操作系统、面对另一份文件系统视图；windows-2025 runner 上还额外装着 MSYS2 的第三个 bash。正解是从 `git` 推导（`<root>\cmd\git.exe` → `<root>\bin\bash.exe`，OpenCode 自己就这么做），推不出来就显式失败、不猜路径。
 - **POSIX 上「agent 有 git」是白拿的，别的平台不是**：受控 PATH 写 `/usr/bin:/bin` 时 `git` 顺带就在里面，所以从来没人设计过它；Windows 把 git 装在 `C:\Program Files\Git\cmd`，不在任何系统目录下 ⇒ 只用系统目录拼的受控 PATH 会让 agent 的每一次 git 调用都失败。**通用判据**：受控/白名单式 PATH 每加一个平台，都要重新问一遍「这个平台上，我依赖的每个工具分别在哪」，而不是套用另一个平台的目录表。
