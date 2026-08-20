@@ -257,6 +257,12 @@
 > **POSIX 上 no-op、Windows 上抛**。已修（`parentDirToCreate` 单点 + 纯判据回归锁；「在临时目录里
 > 写个文件不抛异常」那种测试在 POSIX 上用旧代码照样绿，不叫回归防护）。这条真因是**三轮观测叠加**
 > 才看见的：blockDetail 恒 null → 只有裸退出码 → 尾巴被两道互不知情的截断各切一半。
+> **修掉之后 windows 仍红，但停在完全不同的地方**（`a329393a`）：已走过 implement / 委派 / 审批
+> （child `ready-to-merge`、`APP-00001` approved），父 Mission 停在 `working` + `revision 20` +
+> `machineHolds: upload-fulfillment-pending「upload plan not published」`、无 effect 无 action run。
+> 首跑与 retry 停在同一 revision、同一 hold（两条不同 mission）⇒ 确定性停机而非 windows 慢；
+> 同 shard 的 E2E-A 在 windows 上是绿的。已给 spec 的 `waitFor` 加 `diagnose`，超时时额外取
+> `decision-trace` 拼进异常——mission JSON 只说明「它停了」，轨迹才说明「为什么没派下一步」。
 >
 > **可观测性收口（2026-08-20）**：子进程非零退出的 `errorMessage` 现在带 stderr 尾巴——裸退出码
 > 不可归因（windows 那格红了一整天，上层只拿得到 `opencode exited with code 1`）。实撞发现「补了

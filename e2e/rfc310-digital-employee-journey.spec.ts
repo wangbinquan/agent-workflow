@@ -500,11 +500,20 @@ async function choose(page: Page, testId: string, option: string | RegExp): Prom
   await page.getByRole('option', { name: option }).click()
 }
 
+/**
+ * `diagnose` 在**超时那一刻**再取一次证据，拼进异常消息。
+ *
+ * 为什么要有它：这条 spec 只在 hosted windows 上红，而 CI 日志里唯一能拿到的就是这条
+ * 异常消息——本机复现不了，VM 也不一定连得上。光有 mission JSON 只能看出「它停住了」，
+ * 看不出「reconciler 为什么什么都没派」。决策轨迹正是那半，且只有超时时才值得取。
+ * 2026-08-20 的 windows 定位就是靠一轮一轮往这条消息里补证据做出来的。
+ */
 async function waitFor<T>(
   label: string,
   read: () => Promise<T>,
   ready: (value: T) => boolean,
   timeoutMs = 120_000,
+  diagnose?: () => Promise<unknown>,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs
   let last: T | undefined
@@ -513,7 +522,13 @@ async function waitFor<T>(
     if (ready(last)) return last
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
-  throw new Error(`${label} did not settle; last=${JSON.stringify(last)}`)
+  const extra =
+    diagnose === undefined
+      ? ''
+      : `; diagnose=${JSON.stringify(
+          await diagnose().catch((error: unknown) => `diagnose-failed: ${String(error)}`),
+        )}`
+  throw new Error(`${label} did not settle; last=${JSON.stringify(last)}${extra}`)
 }
 
 function branchFile(branch: string, path: string): { content: string; mode: string } {
@@ -710,6 +725,10 @@ test('the configured employee delegates another repository, waits for approval, 
       }
     },
     (state) => state.host.mergeRequests.some((mr) => mr.sourceBranch === branch),
+    120_000,
+    // 停住时把 reconciler 的决策轨迹一并带出来：mission JSON 只说明「它停了」，
+    // 轨迹才说明「为什么没派下一步」。
+    () => requestJson(`/api/code/missions/${missionId}/decision-trace`),
   )
   const firstHost = firstState.host
   const firstMr = firstHost.mergeRequests.find((mr) => mr.sourceBranch === branch)!

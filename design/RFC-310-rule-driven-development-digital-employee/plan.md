@@ -892,6 +892,19 @@ code 1`——而 stub 自己的失败是 exit 2，连「是不是 stub 的问题
 定式已进 gotchas：**给失败回执补诊断信息时，从产生点到人看见的那块 UI，沿途每一处截断都要数一遍**
 ——「字段里有东西了」不等于「信息到得了人眼前」。
 
+**修掉 EEXIST 之后的下一站（2026-08-20 `a329393a` 实跑，如实登记）**：windows 那格**仍红，但停在了
+完全不同的地方**，且已经走过原先炸掉的那一步——`implement-parent-change` 通过、`delegate-gate-change`
+拿到 child mission `ready-to-merge`（`completionSatisfied: true`）、审批 `APP-00001` **approved**。
+父 Mission 随后停在 `status: working`、`revision: 20`：
+`readiness.machineHolds = [{ kind: 'upload-fulfillment-pending', detail: 'upload plan not published' }]`，
+`uploadPublicationRef: null`，`effects: []`，`currentActionRunId: null`，平台侧 MR 始终没建出来。
+判据：**首跑与 retry 两次停在同一个 revision、同一个 hold**（两条不同 mission），所以是确定性停机而不是
+windows 慢；同 shard 的 E2E-A（零配置上手）在 windows 上是**绿**的，ubuntu / macos 两格全绿。
+处置：给 spec 的 `waitFor` 加了可选 `diagnose`，超时那一刻额外取一次
+`/api/code/missions/:id/decision-trace` 拼进异常消息——mission JSON 只说明「它停了」，
+决策轨迹才说明「reconciler 为什么没派下一步」。本机复现不了（只在 hosted windows 上出现）、
+验收 VM 当前也连不上，所以仍走「补一处观测 → 看下一轮」这条路，与前三轮同法。
+
 顺带记两条这次暴露的**可观测性缺口**（不阻塞，但下一轮谁碰谁顺手修）：
 1. ~~playbook 的 `step-failed:*` block 只带 reason 串~~ **已修（2026-08-20）**：
    `stepFailureDetail` 按 reason 反查失败的 step run → action run → attempt 回执，把
