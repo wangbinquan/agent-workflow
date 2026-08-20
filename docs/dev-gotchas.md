@@ -4,6 +4,10 @@
 
 ## 测试 / CI
 
+- **门禁在跑的时候别在同一台机器上另跑 `bun test`——有 5s 硬超时的用例会成批假红**（2026-08-20 实撞三次）：同一轮里先后收到 `rfc098-process-governance`、`scheduler-clarify-dispatch`、`rfc193-port-artifacts`（archive-at-emit）的红，**三条单跑全绿**，且失败耗时都是 ~5.2s——正好压在那些用例的 5s 超时上。成因是 backend 四分片本来就吃满 CPU，我又在共享树里并行跑单文件测试。
+  - 判据：失败耗时高度一致且贴着某个硬超时 + 改动面与该用例无关 + 单跑绿 ⇒ 资源竞争，不是回归。**但别就此放行**：先单跑确认，再看这一轮门禁里有没有同族的真红被淹没（RFC-304 PR-2 那条「并发红与自己的红同时出现」是同一个坑的另一半）。
+  - 定式：门禁跑起来之后就等它，要验证别的用例就等门禁结束，或者把它放进另一台机器/另一棵树并接受它同样会互相抢。
+
 - **起真进程做验收时,失败信息必须同时打印 stderr——只读 stdout 会让崩溃「无因可查」**（2026-08-19 实撞）：`tests/cli.test.ts` 的 `waitForReady` 只读 daemon 的 stdout，于是 CI 上一次「daemon exited before ready」的报错里，只有到「pre-migration backup written」为止的正常日志，**真正的错误一个字都没有**（它写在 stderr）；本地又复现不出来，等于线索归零。判据：**任何 `Bun.spawn` + 等待就绪的测试助手，失败路径都要把 stderr 一并附上**——正常路径不需要它，恰恰是失败路径唯一需要它。修法见该文件 `waitForReady` 的第三个参数（后台异步读 stderr、失败时拼进 message）。
 - **本地门禁对「本批新增的文件」可能整批假绿——用 `git ls-files` 枚举源码的守卫看不见 untracked 文件**（2026-08-19 实测，RFC-311 T19）：`tests/route-error-code-coverage.test.ts` 这类守卫先 `git ls-files -- 'src/routes/*.ts'` 再扫描，而**未跟踪的新文件不在输出里**。我连跑三轮 `gate:local` 全绿，`git commit` 之后 CI 立刻红在「新错误码没有测试点名」——同一台机器、同一份代码，差别只是文件从 untracked 变成 tracked。同类枚举式守卫（端点↔契约注册表、卡片计数、AST ratchet…）都吃这一口。
   - 定式：**新增文件的批次，跑门禁前先 `git add -N <新文件>`**（intent-to-add，只登记路径不入暂存内容），让所有 `git ls-files` 类扫描立刻看见它们；批次全绿再正常 `git add` 提交。
