@@ -11,8 +11,20 @@
 
 ## 验收清单
 
-- [ ] AC-1…AC-5（proposal §5）
-- [ ] 零视觉基线漂移（或按仓规刷新并注明）
+- [x] AC-1…AC-5（proposal §5）—— 2026-08-20 复验：AC-1 / AC-2 / AC-4 三条锁
+      （`rfc286-f1-dead-class-extinction` + `rfc286-f2-download-convergence` +
+      `task-sync-rules`）在当日 HEAD 重跑 **18/18 绿**；AC-3 的 parse 对拍锚
+      （`rfc271-resource-package-hardening` 内 `PackagePreviewSchema.parse` /
+      `PackageImportReceiptSchema.parse`）**12/12 绿**；AC-5 见下条。
+- [x] 零视觉基线漂移 —— 本 RFC 八个提交（`f2c97b41` … `afa0d4f3`）**零** snapshot /
+      `.png` 文件改动，无需按仓规刷新基线；含全部 RFC-286 提交的 `53c57080`
+      （`afa0d4f3` 为其祖先）CI **40/40 全绿**，其中
+      `Playwright visual regression (ubuntu)` = success。
+
+> **收口（2026-08-20）**：`design/plan.md` 索引状态由 In Progress 置 **Done**。
+> 此前滞留 In Progress 的唯一原因是状态行自留的「待门禁/CI 复验后置 Done」无人回填
+> ——代码 2026-08-13 当天即已全部落主干，本次只是把复验证据补齐并回填状态，
+> 未产生任何生产改动。
 
 ## 实施记录（2026-08-13）
 

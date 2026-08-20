@@ -2,6 +2,32 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ✅ **已完成 RFC（Done，2026-08-20 复验收口）：[RFC-286 前端数据层收敛与死 class 修复](design/RFC-286-frontend-data-layer-and-dead-classes/proposal.md)**
+> —— **零生产改动的记账收口**。代码 2026-08-13 当天即已全部落主干（F1-F4 五批 + T5 双路实现门
+> findings 全处置，末笔 `afa0d4f3`），但索引状态行自留的「待门禁/CI 复验后置 Done」始终无人回填，
+> 于是在 In Progress 上滞留了 7 天——**这是本仓状态面唯一一处「代码已完工、状态没跟上」的滞留**。
+> 本次逐条复验后置 Done：含全部 RFC-286 提交的 `53c57080`（`afa0d4f3` 为其祖先）CI **40/40 全绿**，
+> 其中 `Playwright visual regression (ubuntu)` = success；八个提交**零** snapshot / `.png` 改动
+> ⇒ AC-5 零基线漂移、无需按仓规刷新基线；当日 HEAD 重跑 AC-1 / AC-2 / AC-4 三条锁
+> （`rfc286-f1-dead-class-extinction` + `rfc286-f2-download-convergence` + `task-sync-rules`）**18/18 绿**，
+> AC-3 的 parse 对拍锚（`rfc271-resource-package-hardening` 内 `PackagePreviewSchema.parse` /
+> `PackageImportReceiptSchema.parse`）**12/12 绿**。RFC 目录 `plan.md` 的验收清单两项已勾选并附证据。
+>
+> **顺带做的全量状态对账**（回答「还有哪些 RFC 没进终态」）：`design/plan.md` RFC 索引现 **310 行**
+> （309 个数字编号 + `RFC-172b`），表行与 `design/RFC-*` 目录**一一对应**、既无游离行也无未登记目录；
+> 状态分布 **Done 304 · Superseded 2 · In Progress 1 · CLOSED 2 · Draft 1**。即 RFC-286 收口后，
+> **非终态只剩 [RFC-310](design/RFC-310-rule-driven-development-digital-employee/proposal.md)（In Progress）
+> 与 [RFC-294](design/RFC-294-backend-layered-target-architecture/proposal.md)（Draft，后台分层目标架构总纲，
+> D1–D9 待批、各波次退出门未满足）**。另有两条**登记口径**问题需要后来者知道：RFC-288 / RFC-289 的状态取值写作
+> `CLOSED`，**不在** CLAUDE.md 规定的四选一（Draft / In Progress / Done / Superseded）内——二者已于
+> 2026-08-14 由用户裁决「未实现即关闭、零生产改动」，实质是终态，但任何按四态扫描「哪些 RFC 没收口」的检查
+> 都会把它俩持续伪报为未收口（正是当初立四选一硬约定要避免的情况），建议下次触及时改写为 **Superseded**
+> 并把后继写进状态文本（分别是 RFC-294 §16.2 / W2、与排在 W7 NodeRun identity 之后的新号 RFC）。
+> 编号空洞 **RFC-061 / 084 / 265 / 296** 均非在途：061·084 当年被并行协作者占用（084 让位给 RFC-085）、
+> 265 已在表内注明「该编号不再排期、不复用」、296 只是一份 2026-08-13 被撤出工作树的原型
+> （教训留在 `docs/dev-gotchas.md:1092`），三件套从未存在。
+
+
 > ✅ **已完成 RFC（Done，2026-08-20）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
 > —— 把「只有最后登录时间」补成「此刻在不在线」。判据是**活的 session WS 连接 + 60s 宽限期**（二态），
 > 走**独立 `/ws/presence` 通道**（整连接级权限门 + `rerunUpgradeGate`，无 frameGate）——权限被收回时既有复核
@@ -124,6 +150,15 @@
 > （无任何 CI 在 Windows 上跑视觉套件，43 张 `*-win32.png` 无人比对），已转仓级 backlog。
 >
 > 🚧 **进行中 RFC（In Progress，2026-08-19 按用户补充重新打开）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+>
+> **2026-08-20 新方向（Draft，设计已收口，未进入实现）**：用户确认上层产品是可程序化定制员工类型的
+> “数字员工操作系统”，不是一条研发 Mission 长工作流。RFC-310 proposal/design §0A 与 plan §13e 已记录
+> Context Graph、Attention 自动订阅、Event Center、按订阅激活的短 Observer Script、Employee Event Queue、
+> Reaction、跨仓 EmployeeChannel/Join，以及复用现有 Envelope Agent/Script、TaskEngine、source-control 和平台
+> code-host Connection/Token 的执行边界。产品配置固定为“数字员工 → 数字员工分类 → 工作项 → 工具”：阶段仅作固定
+> 生命周期背景，每个工作项 pin 确定性 WorkContract，每类有独立节点工具箱，员工只配置岗位模板/名称启停/范围/工具绑定，
+> 重试统一在“设置 → 执行策略”。现有 PR-0..PR-13 是迁移底座；PR-14..PR-18/T142..T164 未授权实现。
+> **下一步是用户批准目标设计并授权实现后，先同步 RFC-294 和重取 live baseline；不要按旧步骤/执行者库模型继续补 UI。**
 >
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
