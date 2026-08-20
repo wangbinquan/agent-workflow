@@ -200,6 +200,15 @@ export interface RequirementMaterializePort {
     missionId: string,
     manifestDigest: string,
   ): { readonly bundleId: string; readonly fileIds: readonly string[] } | null
+  /**
+   * PR-7b T81 —— reopen 派生的新 Mission 继承原 Mission 的需求证据。复制的是
+   * **指针行**（direct-submission / requirement-bundle / requirement-manifest），
+   * evidence blob 本身内容寻址、原地共享，不产生第二份数据。返回复制条数。
+   */
+  carryOverRequirementEvidence(input: {
+    readonly fromMissionId: string
+    readonly toMissionId: string
+  }): number
   /** PR-4：Agent needs-information 的问题集入台账（origin 'agent'）。 */
   stashQuestionSet(input: {
     readonly missionId: string

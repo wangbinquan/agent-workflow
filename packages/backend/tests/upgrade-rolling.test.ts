@@ -473,7 +473,11 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 的 (cached_repo_id,task_id) 分组）。
     // RFC-311 bump 到 190 with 0190_rfc311_live_tasks_index（巡检 sweep 的活任务
     // 部分索引，替掉每小时一次的 tasks 裸全表扫描）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(190)
+    // RFC-310 bump 到 191 with 0191_rfc310_mission_reopen_lineage（T81/design §10.4：
+    // 外部 reopen 已关闭的 MR 时终态不逆转，另建带链接的新 Mission generation——
+    // 这一列就是那条链接。不复用 development_mission_links：它的 parent_step_run_id
+    // NOT NULL，而 reopen 不由任何 playbook step 触发）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(191)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

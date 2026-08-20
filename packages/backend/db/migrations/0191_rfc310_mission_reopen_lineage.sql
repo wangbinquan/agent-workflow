@@ -1,0 +1,11 @@
+-- RFC-310 T81（design §10.4）—— 外部把已关闭的 MR 重新打开时，**终态不逆转**：
+-- `closed-unmerged` 的那条 Mission 保持终态，平台另建一条**带链接的新 Mission
+-- generation** 去接管当前 MR/head。这一列就是那条链接：新 Mission 记住自己是从
+-- 哪条终态 Mission 派生的。
+--
+-- 为什么不复用 `development_mission_links`：那张表是 PR-12 的 child Mission 面，
+-- `parent_step_run_id` NOT NULL——reopen 不由任何 playbook step 触发，硬塞进去就得
+-- 伪造一个 step run，等于让台账说一件没发生的事。
+--
+-- 可空：绝大多数 Mission 不是 reopen 派生的；存量行一律 NULL，无需回填。
+ALTER TABLE `development_missions` ADD `reopened_from_mission_id` text REFERENCES `development_missions`(`id`);

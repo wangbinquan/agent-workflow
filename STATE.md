@@ -196,6 +196,15 @@
 > 预算后会以完全误导的 `agent-contract-exhausted` 收场。care 链三条 policy 边界（触顶
 > `conflict-needs-committer` / report-only 却路由了 repair 的 `conflict-repair-disabled-by-policy` /
 > 没配规则的 `wait(conflict-repair-not-routed)`）都在 takeover **之前**判。
+> **T81 reopen 收口（2026-08-20）**：design §10.4 那句「reopen 不让 terminal aggregate 逆转，
+> 而是建立链接的新 Mission generation」此前完全没接——终态 Mission 在 reconcile 顶部直接
+> `terminal-noop`，reopen 投递被静默吞掉。现在：迁移 `0191` 加
+> `development_missions.reopened_from_mission_id`，`commands/reopenMission.ts` 在**收到 wake hint
+> 时**（不是每轮 sweep）采一次 MR facts，外部真的 active 才派生一条 adopt 模式的后继，原终态
+> 逐字不动。四个刻意选择：继承钉住的 employee/policy（否则一次无关指派变更能中途接管在跑的
+> 外部 MR）、`direct` 继承需求证据、`external` 重新采集（工单可能已变）、幂等靠
+> `reopen:{id}` 唯一索引双重兜底。重新 claim 之所以成立，是因为 `dev_mr_claims_active_unique`
+> 是 `WHERE state='active'` 的部分索引。**残留**：该链接只驱动行为，未上 UI/API DTO。
 > **PR-8（T85–T92；T93 部分）已完成**：完整配置与活动 UI。fork V：参数化配置四族页（violations 逐条/
 > 字段级权限/secret 只名不值）；fork W：policy rule builder（first-match 显式序、谓词控件化、组合子
 > JSON 保真）+ simulator（preview-decision→trace 逐条+no-match 诊断）+ 前端目录静态镜像的后端直接

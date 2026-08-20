@@ -53,6 +53,16 @@ export interface MissionRow {
   readonly terminalKind: string | null
   readonly terminalUploadFulfillment: string | null
   readonly terminalAt: number | null
+  /**
+   * RFC-310 T81（design §10.4）—— 外部 reopen 已关闭的 MR 时**终态不逆转**：原
+   * `closed-unmerged` 那条保持终态，平台另建一条新 Mission generation 接管当前
+   * MR/head，这一列记住它派生自哪条。
+   *
+   * 声明为可选而不是 `string | null`：该列可空且默认 NULL，「不写」与「写 null」
+   * 是同一个事实，可选让既有 9 处 `createMission` 调用点一个字都不用改。读侧
+   * 一律从 DB 取到显式 null。
+   */
+  readonly reopenedFromMissionId?: string | null
   readonly launchIdempotencyKey: string | null
   readonly createdBy: string | null
   readonly createdAt: number
@@ -156,6 +166,19 @@ export interface MissionStore {
     readonly now: number
   }): { readonly ok: true } | { readonly ok: false; readonly code: 'mr-owned-by-another-mission' }
   releaseMr(claimId: string, now: number): void
+  /**
+   * PR-7b T81 —— 按 claim id 回读 MR 身份三元组。终态释放的是 claim 的 state，
+   * 行本身保留，所以 reopen 时仍能从这里拿到 (endpoint, project, iid) 去重新 claim；
+   * `findMrClaim` 只能反向查（已知三元组问归属），给不出这个方向。
+   */
+  getMrClaim(claimId: string): {
+    readonly id: string
+    readonly codeHostEndpointRef: string
+    readonly stableProjectRef: string
+    readonly mrIid: string
+    readonly missionId: string
+    readonly state: string
+  } | null
   /** claim 撞唯一后的消歧读面：该 (endpoint,project,iid) 现归谁。 */
   findMrClaim(input: {
     readonly codeHostEndpointRef: string

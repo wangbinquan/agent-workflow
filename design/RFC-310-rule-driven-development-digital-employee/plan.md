@@ -326,8 +326,8 @@ expected-head-mismatch > provider-head-mismatch`（指令原排序会让 head-mo
 | T78  | `conflict.repair` edit-conflicts profile + platform finish merge commit + CAS push                 | T43,T47,T77     | ✅   |
 | T79  | report-only 默认、repair budget/blocked handoff；禁止 rebase/force/ours/theirs shortcut            | T76-T78         | ✅   |
 | T80  | readiness/handoff/tracking-only + external upload fulfillment/lineage + ready 回退                 | T29,T72,T76     | ✅   |
-| T81  | terminal：merged/closed/no-change + upload-unfulfilled；reopen/cancel fence/reconcile              | T30,T72,T80     | 🚧   |
-| T82  | periodic reconcile + webhook loss/replay/out-of-order，所有入口同一 facts path                     | T25,T72,T81     | 🚧   |
+| T81  | terminal：merged/closed/no-change + upload-unfulfilled；reopen/cancel fence/reconcile              | T30,T72,T80     | ✅   |
+| T82  | periodic reconcile + webhook loss/replay/out-of-order，所有入口同一 facts path                     | T25,T72,T81     | ✅   |
 | T83  | crash matrix：question/upload placement/Agent/commit/push+seed 吸收/MR/reply/readiness/transition  | T30,T75,T78-T82 | ✅   |
 | T84  | source/AST/action-catalog 负扫描证明 merge/approve/resolve/custom/force push 不可达                | T7,T75-T83      | ✅   |
 
@@ -383,10 +383,11 @@ policy)`（不代替 policy 决定）；watching + requiredGatesAllPass → `pub
   claim 前中断 adopt 不复制 / reply dispatched 中断单次重放）。**抓出并修复一个真实恢复缺陷**：链自治
   effect 悬挂 dispatched 时 cells/guards 不变 ⇒ 决策去重吞掉 handler ⇒ 永久卡死；修复=去重命中但存在
   悬挂自治 effect 时照常执行 handler（幂等重放）。
-- **T81/T82 遗留（🚧）**：reopen→新 generation 链。**webhook out-of-order 显式矩阵已补**
-  （2026-08-20，`rfc310-pr7-webhook-order-matrix.test.ts`）：同一个受控 code host 跑按序 /
-  乱序迟到 / 重放三种投递序，断言收敛终态一致、迟到序不对陈旧评论派 reply、重放只被接受一次；
-  变异实证——把采集结果钉死成 `active`（模拟「信 payload」）用例立刻红。
+- **T81/T82（✅，2026-08-20 补齐）**：**webhook out-of-order 显式矩阵**
+  （`rfc310-pr7-webhook-order-matrix.test.ts`）：同一个受控 code host 跑按序 / 乱序迟到 / 重放
+  三种投递序，断言收敛终态一致、迟到序不对陈旧评论派 reply、重放只被接受一次；变异实证——把
+  采集结果钉死成 `active`（模拟「信 payload」）用例立刻红。**reopen→新 generation 链**见下方
+  「T81 reopen 收口注记」。
 
 ## 10. PR-8：完整配置与活动 UI
 
@@ -654,7 +655,7 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 ### 未竟项（如实登记，不阻塞 Done）
 
 1. **T71 retention GC + GB 级 nightly**、**T93 浏览器级 visual regression**（T109 覆盖了
-   功能面 E2E，未做像素快照）。〔T78 与 T82 已于 2026-08-20 补齐，见「T78 收口注记」。〕
+   功能面 E2E，未做像素快照）。〔T78 / T81 / T82 已于 2026-08-20 补齐，见对应收口注记。〕
 3. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
 4. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
 5. **verification/review 结果尚未升为 catalog fact**——repair/review 规则排程的前置。
@@ -859,6 +860,41 @@ delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 
 **仍未完成：T121**（业务 i18n / 只读权限 / responsive 已随 PR-8 的 inventory 棘轮覆盖，缺的是
 **逐页视觉基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线得在 CI 侧生成，
 故不在本轮登记完成）。
+
+### T81 reopen 收口注记（2026-08-20）—— 外部 reopen 建带链接的新 generation
+
+design §10.4 只有一句话：「后续 reopen 不让 terminal aggregate 逆转，而是由 admission policy
+建立链接的新 Mission generation、重新 claim 当前 MR/head」。此前完全没接——终态 Mission 在
+`runMissionReconcile` 顶部直接 `consumeWakeHints` + `terminal-noop`，reopen 投递被静默吞掉。
+
+落点：迁移 `0191_rfc310_mission_reopen_lineage`（`development_missions.reopened_from_mission_id`）
++ `application/commands/reopenMission.ts` + reconciler 终态分支的探针 + 新 outcome
+`mission-reopened`。**不复用 `development_mission_links`**：它的 `parent_step_run_id` NOT NULL，
+而 reopen 不由任何 playbook step 触发，硬塞进去等于让台账说一件没发生的事。
+
+四个刻意的选择（都在代码注释里写了理由，这里只列结论）：
+
+| 选择 | 理由 |
+| --- | --- |
+| 触发只认 wake hint，不在每轮 sweep 探 | 终态 Mission 只增不减；每轮探一次 = 成本随历史线性增长、收益为零 |
+| **继承**原 Mission 钉住的 employee/policy，不重跑 assignment 选择器 | 否则一次无关的指派变更可以中途接管一条**正在进行的外部 MR**，那是运维事故不是特性 |
+| `direct` 继承需求证据（复制 `development_bundle_refs` 指针行，blob 内容寻址共享）并直接 `materialized` | 正文只存在于平台自己的 evidence 里，不继承就永远物化不出需求 |
+| `external-reference` **重新采集**（source 留 `active`） | 工单在 MR 关闭期间很可能已经变了，照搬旧快照 = 让新一轮基于过期需求干活 |
+
+幂等靠 `launchIdempotencyKey = reopen:{closedMissionId}`，且是**双重**的：命令入口先查一次，
+真正的护栏是该列的唯一索引（并发两条投递同时到达时 `createMission` 撞回既有行）。重新 claim
+能成立是因为 `dev_mr_claims_active_unique` 是 `WHERE state='active'` 的**部分**索引——终态释放
+的是 state、行本身保留，所以 (endpoint, project, iid) 三元组还能从旧 claim 行读回来（为此给
+store 加了 `getMrClaim`；既有的 `findMrClaim` 只能反向查）。
+
+回归锁 `rfc310-pr7b-reopen-generation.test.ts` 三条：正向（原终态字段逐字不动 / 后继带链接 +
+adopt + 继承配置 / 重新 claim 成功且旧 claim 仍 released / 幂等第二次投递不再派生）、
+「投递了但外部仍 closed ⇒ 什么都不发生」、「external 不继承旧快照」。前两条做过变异核对
+（去掉 `hints > 0` 门、把 direct/external 分档改成一视同仁，各自当场红）。
+
+**如实登记的残留**：`reopenedFromMissionId` 目前只驱动行为、**未上 UI/API DTO**（列表投影按
+RFC-311 的性能判据只取 18 列，详情 DTO 与契约登记属 PR-8 的 UI 面）；接手时若要在时间线上
+显示「本任务由 X 重开派生」，加的是读模型与契约登记，不需要动本次的写侧。
 
 ### T78 收口注记（2026-08-20）—— conflict repair 的 Agent 执行面
 

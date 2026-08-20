@@ -464,6 +464,31 @@ export function createRequirementMaterializer(
   }
 
   return {
+    // RFC-310 T81 —— reopen 的新 Mission 继承原 Mission 的需求证据。只复制
+    // `development_bundle_refs` 的指针行：evidence blob 内容寻址，两条 Mission
+    // 指向同一份，既不复制字节也不需要重新下载外部来源。
+    carryOverRequirementEvidence(input) {
+      const purposes: BundleRefPurpose[] = [
+        'direct-submission',
+        'requirement-bundle',
+        'requirement-manifest',
+      ]
+      let copied = 0
+      for (const purpose of purposes) {
+        const row = latestBundleRef(input.fromMissionId, purpose)
+        if (row === null) continue
+        insertBundleRef({
+          missionId: input.toMissionId,
+          purpose,
+          evidenceRef: row.evidenceRef,
+          manifestDigest: row.manifestDigest,
+          fileCount: row.fileCount,
+          totalBytes: row.totalBytes,
+        })
+        copied += 1
+      }
+      return copied
+    },
     async stashDirectSubmission(input) {
       const mission = store.getMission(input.missionId)
       if (mission === null) {

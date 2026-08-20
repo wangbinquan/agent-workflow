@@ -55,6 +55,8 @@ function continuationOf(outcome: ReconcileOutcome): boolean {
 function stopOf(outcome: ReconcileOutcome): MissionDriveStop {
   if (outcome.kind === 'not-found') return 'not-found'
   if (outcome.kind === 'terminal-noop') return 'terminal'
+  // T81：本条 Mission 仍是终态——后继是**另一条** Mission，本条的推进到此为止。
+  if (outcome.kind === 'mission-reopened') return 'terminal'
   if (outcome.kind === 'deduped') return 'fixed-point'
   if (outcome.kind === 'fence-settled') {
     return outcome.result === 'canceled' ? 'terminal' : 'async-boundary'

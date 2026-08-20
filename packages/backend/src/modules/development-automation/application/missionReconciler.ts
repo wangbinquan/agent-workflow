@@ -58,6 +58,7 @@ import {
   type CollectAgentAttemptOutcome,
 } from './agentActionOrchestrator'
 import { invalidateInFlightAction } from './actionInvalidation'
+import { reopenClosedMission } from './commands/reopenMission'
 import {
   feedbackFingerprint,
   selectableFeedback,
@@ -134,6 +135,8 @@ export interface ReconcileDeps {
 export type ReconcileOutcome =
   | { readonly kind: 'not-found' }
   | { readonly kind: 'terminal-noop' }
+  /** T81/§10.4：终态未逆转，另建了一条带链接的新 Mission generation 接管该 MR。 */
+  | { readonly kind: 'mission-reopened'; readonly successorMissionId: string }
   | { readonly kind: 'fence-pending'; readonly unsettled: number }
   | { readonly kind: 'fence-settled'; readonly result: 'canceled' | 'tracking-only' }
   | { readonly kind: 'deduped'; readonly decisionId: string }
@@ -617,7 +620,20 @@ export async function runMissionReconcile(
   const now = deps.now()
 
   if (TERMINAL_STATUSES.has(mission.status)) {
-    deps.store.consumeWakeHints(mission.id, now)
+    const hints = deps.store.consumeWakeHints(mission.id, now)
+    // T81（design §10.4）：终态**不逆转**，但外部把已关闭的 MR 重新打开时要另建
+    // 一条带链接的后继去接管它。只在真的收到投递（wake hint）时探一次——终态
+    // Mission 只增不减，每轮 sweep 都对 code host 探一次的话，成本随历史线性增长
+    // 而收益为零。
+    if (hints > 0 && mission.terminalKind === 'closed-unmerged') {
+      const reopened = await reopenClosedMission(
+        { store: deps.store, ports: deps.ports, now: deps.now },
+        mission,
+      )
+      if (reopened.kind === 'created') {
+        return { kind: 'mission-reopened', successorMissionId: reopened.missionId }
+      }
+    }
     return { kind: 'terminal-noop' }
   }
   if (mission.transitionFence !== 'none') {

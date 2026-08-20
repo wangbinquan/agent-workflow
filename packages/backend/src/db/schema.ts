@@ -4888,6 +4888,12 @@ export const developmentMissions = sqliteTable(
     terminalKind: text('terminal_kind'),
     terminalUploadFulfillment: text('terminal_upload_fulfillment'),
     terminalAt: integer('terminal_at'),
+    /**
+     * RFC-310 T81（design §10.4）—— 外部 reopen 已关闭的 MR 时**终态不逆转**：
+     * 原 `closed-unmerged` 那条保持终态，平台另建一条新 Mission generation 接管
+     * 当前 MR/head，这一列记住它派生自哪一条。绝大多数 Mission 为 NULL。
+     */
+    reopenedFromMissionId: text('reopened_from_mission_id'),
     launchIdempotencyKey: text('launch_idempotency_key'),
     createdBy: text('created_by'),
     createdAt: integer('created_at').notNull(),
