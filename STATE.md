@@ -2,15 +2,44 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
-> —— **核心已落地并推送**（`bb2beece`，50 文件 / 37 条新测试 / `gate:local` 全绿）+ 迁移 `0188` 补存量
-> user/manager 的 `users:presence` grant。判据是**活的 session WS 连接 + 60s 宽限期**（二态），
-> 走**独立 `/ws/presence` 通道**（整连接级权限门 + `rerunUpgradeGate`，无 frameGate）——权限被收回时
-> 既有复核直接关连接、客户端重连即可，**不需要任何服务端重同步协议**。权限点不进静态 preset
-> （RFC-305 无 deny 集，进了就永远收不回来），走建号默认授予的显式 grant；admin 由动态全量 baseline 天然持有。
-> **设计门跑了七轮、约 59 条 finding 且不收敛**，按用户拍板砍回核心 + 五条有源码实证的护栏；
-> 被砍条目逐条记在 RFC 目录 `plan.md §4.3`（**是裁决不是遗漏**），七份门记录同目录留档。
-> **剩余**：三处界面接线（任务成员面板只读分支 / `UserPicker` 可管理分支 / 花名册人类成员行）、实现门。
+> ✅ **已完成 RFC（Done，2026-08-20）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
+> —— 把「只有最后登录时间」补成「此刻在不在线」。判据是**活的 session WS 连接 + 60s 宽限期**（二态），
+> 走**独立 `/ws/presence` 通道**（整连接级权限门 + `rerunUpgradeGate`，无 frameGate）——权限被收回时既有复核
+> 直接关连接、客户端重连即可，**不需要任何服务端重同步协议**。权限点 `users:presence` 不进任何静态 preset
+> （RFC-305 无 deny 集，进了就永远收不回来），新建走 `initialGrantsForRole` 显式发放、存量走迁移 `0188`；
+> admin 由动态全量 baseline 天然持有，PAT 永不持有。接线五处：/users、署名 chip、任务成员面板只读与可管理
+> 两分支、工作组花名册人类成员，与 RFC-182 花名册既有的**执行态** presence 正交共存。
+>
+> **两道门的账**：设计门跑了**七轮、约 59 条 finding 且不收敛**，按用户拍板砍回核心 + 五条有源码实证的护栏，
+> 被砍条目逐条记在 RFC 目录 `plan.md §4.3`（**是裁决不是遗漏**），七份门记录同目录留档。实现门跑出
+> **12 条 finding（4×P1 / 6×P2 / 2×P3）全部处置**（`1905471f`，13 文件 / +694−62 / 9 条新测试，
+> **每条测试都做了变异检验**——把修复退回去必须立刻红）。
+>
+> **四条 P1 都是「既有测试全绿却依然存在」的缺陷**，值得后来者记住形态：
+> ①`handleClose` 从不置 `closing`——该标志此前**只在服务端主动关的 `closeConnection` 里置位**，
+> 客户端/传输层关那条路径漏了，于是 `installPresence` 的守卫**写了却从不生效**，而那段守卫的文档注释
+> 逐字描述的正是它要挡的竞态；后果是客户端在 epoch 复核 await 期间断开 ⇒ 该用户**永久在线**。
+> ②复核冻结期间的帧被 `return` **丢弃**，注释却写作 "held back"——既无队列也无重放，而 presence 是
+> **累积式增量流**，丢一帧就永久错到该用户下次翻转。③`sendJson` 忽略 Bun `ws.send()` 返回的 0（= 帧被丢弃）。
+> ④前端 store 是模块级、清空只在 `useEffect`（commit 之后），切账号时新身份的**首次已提交渲染**仍读得到
+> 上一个账号的在线名单——presence 在权限点后面，这是跨账号泄漏。
+>
+> **三条设计方向经用户逐条拍板**：①**自愈而非改共享机制**——通道新增 `resync` 钩子（数据，不是
+> `kind === 'presence'` 分支），复核解冻与 send 被丢两处共用，**未声明该钩子的通道行为逐字不变**并有用例锁死；
+> ②**代次绑定而非 effect 清空**——store 记住水化它的认证代次，代次不符**结构上读不出来**；
+> ③**归因拆开**——系统默认 grant 记 `granted_by_user_id = NULL`（与 `0188` 存量行一致），操作者显式勾选才记操作者。
+>
+> **两条顺带的通用收益**：`MANAGER_PRESET_MISSING_PERMISSIONS` 由硬编码清单改为从 `ROLE_PERMISSIONS` **派生**
+> （原先常量与锁它的测试各硬编码一份同样过时的名单，两边一起假绿）；`app-shell-layout.test.tsx` 的
+> `@/hooks/useActor` 全量工厂 mock 改为 `importOriginal` **局部** mock（全量工厂一旦被测子树用到任何未列出的
+> 导出就整片 18 条全红，报错与被测行为无关）。
+>
+> **验收判据是「失败集相等」而非「等一个绿」**，因为后者当时不可得：主干被并发 session 的 `c44f1dab`
+> （给 `errorMessage` 追加 stderr 尾巴）撞红三处 `toBe` 精确等值断言，持续红着。故改用更严的判据——
+> `1905471f` 的失败集必须**逐条等于**推送前主干 `88f714b7` 的失败集（两边同为
+> `business-workflow-scenarios:676` / `rfc294-webhook-runtime-failures:496` / `webhook-mr-runtime-races:1028`），
+> 且 24 个非 Playwright job 全绿 ⇒ 本 RFC 引入**零条新失败**。等绿会被他人的红无限期挡住，
+> 也会诱使人把自己的红混进既有清单；集合相等不会。（那三条已由作者以前缀锁修复并推送。）
 
 > ✅ **已完成 RFC（Done，2026-08-20）：[RFC-313 信封重试的会话升级](design/RFC-313-envelope-retry-session-escalation/proposal.md)**
 > —— 补上 RFC-042 缺的那一档：同会话追问链触顶即**升级**（丢树从 canonical 重分叉 + 新 nonce + 全新会话 + 完整
