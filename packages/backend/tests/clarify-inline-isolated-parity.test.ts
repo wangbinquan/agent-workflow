@@ -183,6 +183,11 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
             db: h.db,
             appHome: h.appHome,
             binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+            // RFC-313: 本用例会让节点**跑满重试**（clarify-required / review 重做链都属
+            // 可续跑失败），而 attempt 上限现在是 (1+defaultNodeRetries)×(1+sessionRestartBudget)。
+            // 默认的会话重启预算把次数翻倍、耗时显著上抬，满载时越过单例超时硬顶。本文件锁的
+            // 不是重试形状，置 0 保持原有次数——断言一字未改。
+            sessionRestartBudget: 0,
           }),
       )
       const sessionRow = (
@@ -217,6 +222,11 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
             db: h.db,
             appHome: h.appHome,
             binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+            // RFC-313: 本用例会让节点**跑满重试**（clarify-required / review 重做链都属
+            // 可续跑失败），而 attempt 上限现在是 (1+defaultNodeRetries)×(1+sessionRestartBudget)。
+            // 默认的会话重启预算把次数翻倍、耗时显著上抬，满载时越过单例超时硬顶。本文件锁的
+            // 不是重试形状，置 0 保持原有次数——断言一字未改。
+            sessionRestartBudget: 0,
           }),
       )
       const lines = existsSync(h.argvPath)
