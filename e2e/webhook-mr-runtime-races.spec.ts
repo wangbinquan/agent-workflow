@@ -1040,7 +1040,8 @@ test('runtime crash settles before a later close, which only adds the terminal f
       (row) => row.status === 'failed',
       'runtime crash before close',
     )
-    expect(failed.errorMessage).toBe('claude-code exited with code 23')
+    // 前缀锁：exit code 在行首，其后可跟 T132 的 `; stderr tail: …`。
+    expect(failed.errorMessage).toMatch(/^claude-code exited with code 23(;|$)/)
     await waitForPidGone(crashingPid, 'crash-first runtime')
     const failedExecution = await nodeRuns(crashing.task.id)
     const failedRuntimeRuns = failedExecution.runs.filter((run) => run.nodeId === 'runtime')
@@ -1049,8 +1050,8 @@ test('runtime crash settles before a later close, which only adds the terminal f
       status: 'failed',
       exitCode: 23,
       failureCode: null,
-      errorMessage: 'claude-code exited with code 23',
     })
+    expect(failedRuntimeRuns[0]?.errorMessage).toMatch(/^claude-code exited with code 23(;|$)/)
     expect(failedExecution.outputs.filter((row) => row.port === 'answer')).toEqual([])
 
     const close = await postIngress(fixture, 'close', 'webhook-mr-crash-first-close')

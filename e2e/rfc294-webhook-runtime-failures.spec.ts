@@ -529,7 +529,10 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       expect(failedRuns.map((run) => run.status)).toEqual(['failed', 'failed'])
       expect(failedRuns.map((run) => run.exitCode)).toEqual([23, 23])
       expect(
-        failedRuns.every((run) => run.errorMessage === `${protocol} exited with code 23`),
+        // 前缀锁：exit code 必须在行首，其后可跟 T132 的 `; stderr tail: …`。
+        failedRuns.every(
+          (run) => run.errorMessage?.startsWith(`${protocol} exited with code 23`) === true,
+        ),
       ).toBe(true)
       expect(failedData.outputs.filter((row) => row.port === 'answer')).toEqual([])
       await expectProcessesReaped(failedRuns)

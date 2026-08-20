@@ -698,7 +698,9 @@ test('文档批处理与合规审阅：任一分片失败时不生成草稿、�
   expect(failedReviewer?.promptText).toContain('docs/unsourced-policy.md')
   expect(failedReviewer?.promptText).not.toContain('docs/customer-policy.md')
   expect(failedReviewer?.promptText).toContain('RETENTION_OWNER_REQUIRED')
-  expect(failedReviewer?.errorMessage).toBe('opencode exited with code 14')
+  // 退出码仍然锁死在**行首**；后面允许跟 `; stderr tail: …`（RFC-310 T132 起，非零
+  // 退出会把 stderr 尾巴拼进 errorMessage，否则一个裸退出码不可归因）。
+  expect(failedReviewer?.errorMessage).toMatch(/^opencode exited with code 14(;|$)/)
   expect((await readWorktree(task.id, 'docs/unsourced-policy.md')).content).not.toContain('Source:')
   expect(runsFor(completed, 'compliance_aggregator')).toHaveLength(0)
   expect(runsFor(completed, 'publisher')).toHaveLength(0)
