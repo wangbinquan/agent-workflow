@@ -1236,6 +1236,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // amortizes the copy cost. See design/test-guard-audit-2026-07-21 gap
     // B4-runtime-6 / Top-14.
     let agentTextBuf = ''
+    // RFC-310 T132 实撞：子进程非零退出时 errorMessage 只有「<runtime> exited with
+    // code N」，stderr 虽然逐行落进 node_run_events，却**不在任何失败回执里**。
+    // 于是 windows 那格的 Agent 动作红了整整一天，能拿到的信息只有一个退出码——
+    // 没有 stderr 就没有归因，只能靠猜或靠本机复现。这里留一份有界尾巴，只在
+    // 退出码非零时拼进 errorMessage（成功路径一个字节都不多带）。
+    let stderrTailBuf = ''
     const appendAgentText = (s: string): void => {
       agentTextBuf = appendBoundedTail(agentTextBuf, s, MAX_AGENT_TEXT_CHARS)
     }
@@ -1599,6 +1605,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // A one-shot binding so onStderrLine can reference it before its decl below.
 
     const persistStderrLine = async (line: string): Promise<void> => {
+      stderrTailBuf = appendBoundedTail(stderrTailBuf, line, MAX_STDERR_TAIL_CHARS)
       await persistRunnerWrite('node-run-event/stderr', () =>
         opts.db.insert(nodeRunEvents).values({
           nodeRunId: opts.nodeRunId,
@@ -1880,7 +1887,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       errorMessage = `node-timeout: exceeded ${opts.timeoutMs ?? 0}ms`
     } else if (exitCode !== 0) {
       status = 'failed'
-      errorMessage = `${runtime} exited with code ${exitCode}` // RFC-111 P3: name the actual runtime
+      // RFC-111 P3: name the actual runtime. RFC-310 T132: 附上 stderr 尾巴——
+      // 一个裸退出码是不可归因的，而这条消息往往是操作者与上层（如
+      // development-automation 的 blockDetail）唯一能看到的东西。
+      const stderrTail = stderrTailBuf.trim()
+      errorMessage =
+        stderrTail.length === 0
+          ? `${runtime} exited with code ${exitCode}`
+          : `${runtime} exited with code ${exitCode}; stderr tail: ${stderrTail}`
     } else {
       status = 'done'
     }
@@ -2667,6 +2681,12 @@ export const MAX_STREAM_LINE_CHARS = MANAGED_PROCESS_MAX_LINE_CHARS
  * appendAgentText in runNode / gap B4-runtime-6.
  */
 export const MAX_AGENT_TEXT_CHARS = 8 * 1024 * 1024
+/**
+ * 非零退出时拼进 errorMessage 的 stderr 尾巴上限。取 2KB 是因为它要进 DB 的
+ * `tasks.error_message` 并一路上浮到 UI / blockDetail：够看清一条崩溃栈或一句
+ * 「找不到 X」，又不至于让一个刷屏的子进程把失败回执撑成日志转储。
+ */
+export const MAX_STDERR_TAIL_CHARS = 2 * 1024
 
 /**
  * Append `addition` (newline-joined) to `current`, keeping only the last

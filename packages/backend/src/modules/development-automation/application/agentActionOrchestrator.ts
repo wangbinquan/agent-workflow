@@ -1058,10 +1058,19 @@ export async function collectAgentAttempt(
     )
   }
   if (snapshot.taskStatus === 'failed' && snapshot.resultText === null) {
+    // errorMessage 优先于 errorSummary：前者带 runtime 的 stderr 尾巴（runner 在
+    // 非零退出时拼上），后者只有一句分类。blockDetail 往往是操作者唯一能看到的
+    // 东西——RFC-310 T132 的 windows 那格就是因为这里只上浮 summary，红了一整天
+    // 而可用信息只有一个退出码。
+    const detail = snapshot.errorMessage ?? snapshot.errorSummary
     return await failAttempt(
       'runtime-transient',
-      { code: 'execution-failed', errorSummary: snapshot.errorSummary },
-      snapshot.errorSummary ?? 'execution-failed',
+      {
+        code: 'execution-failed',
+        errorSummary: snapshot.errorSummary,
+        errorMessage: snapshot.errorMessage,
+      },
+      detail ?? 'execution-failed',
     )
   }
 

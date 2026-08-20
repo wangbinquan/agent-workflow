@@ -328,6 +328,69 @@ describe('runNode', () => {
     expect(result.errorMessage).toContain('exited with code 7')
   })
 
+  // RFC-310 T132 实撞：一个裸退出码是**不可归因的**。windows 那格的 Agent 动作红了
+  // 一整天，上层（development-automation 的 blockDetail）能拿到的全部信息就是
+  // 「opencode exited with code 1」——stderr 虽然逐行落进 node_run_events，却不在
+  // 任何失败回执里，于是只能靠猜或靠本机复现。非零退出时把 stderr 尾巴拼进
+  // errorMessage，这条路径才自带归因。
+  test('non-zero exit carries a bounded stderr tail in errorMessage', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_EXIT_CODE: '1',
+        MOCK_OPENCODE_SKIP_ENVELOPE: '1',
+        MOCK_OPENCODE_STDERR: 'stub-development-agent: requirement bundle manifest is not mounted',
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+        }),
+    )
+    expect(result.status).toBe('failed')
+    expect(result.errorMessage).toContain('exited with code 1')
+    expect(result.errorMessage).toContain('stderr tail:')
+    expect(result.errorMessage).toContain('requirement bundle manifest is not mounted')
+  })
+
+  // 成功路径一个字节都不多带：尾巴只在非零退出时拼接。
+  test('a clean exit never carries a stderr tail even when the child wrote to stderr', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_STDERR: 'warming up',
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ answer: 'ok' }),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+        }),
+    )
+    expect(result.status).toBe('done')
+    expect(result.errorMessage ?? '').not.toContain('stderr tail:')
+  })
+
   test('stderr lines captured into node_run_events with kind=stderr', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
