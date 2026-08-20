@@ -131,7 +131,14 @@
 - [x] proposal §5 能力影响 C1–C7 逐项有测试覆盖(C1 随 PR-6/T19 补齐:`rfc311-task-archive.test.ts`
       11 条锁默认关 / 整树判据 / 原子性两分支 / 有界扫描 / 手动入口 dry-run 与审计行;
       此前 C1 一行曾被整体勾上属记账错误,实现门第 3 路指出后更正,现按实交付)
-- [x] 全部 oracle/EXPLAIN/参数上限回归绿;exact-SHA CI:`822a20bf` 上 RFC-311 面全绿(唯一红是并发 session 的 rfc305 权限计数)
+- [x] 全部 oracle/EXPLAIN/参数上限回归绿;exact-SHA CI 证据分两段——基准期 `822a20bf` 上 RFC-311 面全绿
+      (唯一红是并发 session 的 rfc305 权限计数);收口期 `63b77e17` **32/32 全绿**,末条修复 `453022b6`
+      **28 success / 0 failure**、windows 四格全绿(含此前红的 frontend shard 2/3),3 个 e2e shard 为
+      `cancelled`(并发 push 取消,非失败,按仓规改看含它的 superseding commit)
+- [x] **windows 回归已闭环**:T25/T27 窗口化(`99faae98`)让 `tasks-list-children` 的自动展开用例在 windows
+      红了(8225ms);真因是**预算分配**——同文件手动展开那条天然分两段各吃一份全局 `asyncUtilTimeout: 5000`,
+      自动展开这条却用同一份 5s 覆盖三跳链,而 windows runner 慢约 10x。`453022b6` 以「确定性锚点(等请求
+      发出 + 等 `isFetching()===0`,把三跳拆回多段)+ 显式 15s 预算」修复,真机 CI 验证通过
 - [x] `docs/dev-gotchas.md` 补三条:partial-index 蕴含限制、**keyset 断点行值比较**、迁移四件套定式(另加混树 e2e 二进制判据)
 - [x] STATE.md / design/plan.md 收口更新
 - [x] **前端无界消费全部收口**（三处：/tasks 的 10 秒轮询全量、员工产出摘要、/outcomes），
@@ -249,92 +256,5 @@ SCAN(是 keyset 首页应有形态,第一版误报过);注入 `sqlite_stat1` 伪
 **仍登记的扩面项(不阻塞收口)**:注册表覆盖面(徽章/详情/webhook 列表);文本棘轮的漏检面
 (裸 SQL / `.get()` / 动态构建器);`sqlite_stat1` 注入未做成常驻判据;前端渲染性能零覆盖;
 同步连接阻塞时长无判据(只有墙钟能测,进门禁必 flaky)。
-
-## 验收清单(收口对照)
-
-- [x] proposal §6 验收实测,数字与**逐项判定**记入 `bench-results.md`(6.1 首页/翻页、6.2、6.3 两条徽章 ✅;**三处缺口 G1/G2/G3 如实记账并给出建议**,详见该文件)
-- [x] proposal §5 能力影响 C1–C7 逐项有测试覆盖(C1 随 PR-6/T19 补齐:`rfc311-task-archive.test.ts`
-      11 条锁默认关 / 整树判据 / 原子性两分支 / 有界扫描 / 手动入口 dry-run 与审计行;
-      此前 C1 一行曾被整体勾上属记账错误,实现门第 3 路指出后更正,现按实交付)
-- [x] 全部 oracle/EXPLAIN/参数上限回归绿;exact-SHA CI:`822a20bf` 上 RFC-311 面全绿(唯一红是并发 session 的 rfc305 权限计数)
-- [x] `docs/dev-gotchas.md` 补三条:partial-index 蕴含限制、**keyset 断点行值比较**、迁移四件套定式(另加混树 e2e 二进制判据)
-- [x] STATE.md / design/plan.md 收口更新
-
-## 交付注记(实现期滚动更新)
-
-- **PR-1 ✅**(`b8688851` + 格式/lint 补丁 `a606bcd3`/`2cbfdf7a`,CI 绿证 `2cbfdf7a` 31 checks):T1-T8 全交付。落地修正:`idx_node_runs_status_active` 因 SQLite partial-index 蕴含限制(`= ⊄ IN`,实测)改普通复合索引,判据进 dev-gotchas 与 foundation plan 断言。
-- **PR-2 ✅**(`60a84f2f`→rebase `e8ba3bc1`)+ **PR-2b ✅**(`7f1fd5fe`):T9-T16 主体。取舍:limits 的 token SUM 不降频(避免取消延迟的行为变化,投影后成本已可控);**T15 的 seal 闸门延后**(400 行凭据擦洗函数,改错代价>>收益;安全检查段本就须每次执行);invariants 七规则集合化延后(分块+让出已消坏死与长冻结)。
-- **PR-3a ✅**:T17 字节水位(采样折算,行数阈值取 min)+ T18 保留 sweeper。**两处审计误报经落地检验修正并以测试锁定**:`user_access_audit` 带 append-only 触发器(RFC-305 防篡改),不清理;`mcp_probes` 是 UNIQUE(mcp_id) 的 upsert 单行表,非流水。proposal §5 C6 按此勘误(其余四表照批生效)。
-- **PR-4 ✅**:T22-T24。**范围修正(oracle 实测驱动)**:fast path 仅服务 `tasks:read:all` + 全默认过滤——受限 actor 的分支聚合(含排序键)按可见性裁剪树计算,共享物化列无法回答其排序;受限 actor 默认视图 = O(自身可见集),旧管线即可。admin 默认视图(生产 2000 任务卡顿主场景)O(页)。维护点挂唯一铸行点(task.ts)同事务向上传播;invariants 自愈规则与真启动路径集成断言列遗留(oracle 已锁回填算法=快路径假设)。
-- **PR-5 ✅**(`f64f0db3` + `99faae98` + `b8bc7d02` + `1c4d5432`;另 `8ee9fc8d` 补 T17 settings 控件与 bounds parity):T25-T30 主体交付——
-  - T25 `components/VirtualList.tsx`(@tanstack/react-virtual 包装;两处 jsdom/塌陷防御都包装官方实现:observeElementRect 丢弃 0×0 测量〔core 挂载时同步 getBoundingClientRect 覆盖 initialRect〕、measureElement 量 0 回退 estimateSize〔否则超视口列表塌缩〕;rowRole/tail/scrollResetKey/onReachEnd 哨兵)+ 6 条单测含 jsdom 零矩阵回归锁;
-  - T27 /tasks 顶层接入(行从 ol/li 改 role 化 div——sizer div 不能作 ol 子元素;三个测试文件锚点 tag→role);
-  - T28 /repos:后端 `listCachedReposPage`(SQL 下推 + keyset〔migration 0181 复合索引替换单列〕+ 页内三源 refCount + facets 恒全量;C7 无参兼容)+ 180 组合逐页 oracle/EXPLAIN/C7 双形状锁;前端表格→operations 网格 + VirtualList + 350ms 去抖 + keepPreviousData(RFC-035 data-table 锁随之更新锚点);
-  - T26 `usePagedList`(+keepPreviousData)/`useDebouncedValue` 公共原语、useWsInvalidation leading+trailing 合并窗(1s)、RelativeTime tooltip 惰性化、workflows 投影瘦身(C2)、reviews/clarify 轮询 10s→30s+focus;
-  - T30 `scripts/perf-seed.ts`(§6 基准库,全量实测 93 秒 / 3.6GB)+ `scripts/perf-bench.ts`(§6.1/6.2/6.3/6.5 HTTP p50/p95,分档轮次 + `--only`;不进 CI 门禁)。**基准实测结果见 `bench-results.md`**。
-- **基准实测驱动的两处修复**:①`822a20bf` keyset 断点改**行值比较**——展开式 `a < ? OR (a = ? AND id < ?)` 在绑定参数下让 SQLite 选 MULTI-INDEX OR + TEMP B-TREE 全排序,翻页 197.5ms → 29.8ms(字面量 EXPLAIN 复现不出,plan 断言必须用 `?`);②`d7924346` perf-seed 的 url_hash 唯一化。
-- **实现门(仓规双门之二)**:因本轮跨他人提交,按 `docs/dev-gotchas.md` 的定式改用三路**刻意错开视角**的独立子代理(正确性 / 不在 diff 里的连带面 / 测试有效性变异检验)替代 codex `--base`。
-  - **PR-5 遗留**:/tasks 的 tick 收敛(页级 now context)与 useTaskOperationsSync 定点刷新维持现状(虚拟化后不可视行不挂载已消大头);Playwright 大 seed e2e 未做(bench-results.md 收口时一并);/code work-items nextCursor 修复继续避让(RFC-310 前端批在制)。
-- **实测遗留缺口(bench-results.md 详列,均已登记不隐瞒)**:**G1 过滤视图仍走旧穷举管线**——10 万任务下单次 68 秒且是一条 SQL(同步单连接 ⇒ 期间整站冻结);生产数千任务量级约 1~2 秒。建议下一个 RFC 把快路径扩到纯 tasks 列过滤(难点是 context-ancestor 语义),可立即做的缓解是给旧管线加查询预算保护。**G2** overview 50.7ms / workgroup 徽章 13.2ms 未达 §6.3 的 10ms(比改造前的 15 秒低三个数量级,但如实记账;可选优化:9 计数合成 1 条 SQL)。**G3** 归档器首轮清 980 万行 backlog 需多轮 tick(单轮预算 20 万行 = 72 秒可打断工作量,稳态后高水位生效近乎无事)。
-- **PR-6 ✅**(T19 终态任务归档,proposal §5 C1 的实现):`services/taskArchive.ts`(整树判据 / manifest+JSONL 导出 / runs·logs **挪移** / 先落盘后删库的原子性 / boot 扫 `.tmp-*` 两分支恢复 / 有界 sweeper,默认**关**)+ `POST /api/tasks/archive`(`settings:write`,**dry-run 是默认**,`dryRun:false` 才执行)+ 设置页维护入口(预览→ConfirmDialog 二次确认)+ `task_archive_audit`(migration 0182;刻意**不进任务级联族**——被记录的任务行马上就没了,审计必须活得比它们久;sweeper 空转不写行以免每小时一条噪音)。
-  - **落地修正(测试驱动,两条都是真 bug)**:①手动入口不能把 `retentionDays=0`(配置语义 = 关)当 cutoff 用——那会把**每一棵终态树**立刻不可逆删掉,现返回 422 `task-archive-retention-unset`;②`SETTINGS_CONFIG_SCOPE_KEYS.gc` **漏登记 4 个键**(`taskArchive` + 实现门 P1-5 的三个保留旋钮),后果是界面能改、点保存无报错、值被静默丢弃。补齐白名单并新增 `tests/settings-scope-coverage.test.ts` 自动对账(扫每个 tab 片段真实读写的 `state.<key>`),已按仓规做变异检验:摘掉任一键即变红。教训进 `docs/dev-gotchas.md` §前端。
-  - **CI 绿证**:`54d1109a` 32/32 全绿(PR-6 三批:`6bcd59ca` 主体 + `03de004c` 收两格红 + `54d1109a` 换 `/repos` linux 视觉基线)。`6bcd59ca` 暴露的两条记账:①`route-error-code-coverage` 红在 `task-archive-invalid` 漏测——**本地三轮 gate 全绿而一提交就红**,因为该守卫用 `git ls-files` 枚举路由文件、看不见 untracked 的新文件(定式与同族另两种「空洞绿」已落 `docs/dev-gotchas.md` §测试/CI 头一条);②`/repos` 视觉基线间歇红,定位为 PR-5 虚拟化的**真实布局抖动**(滚动条时有时无 ⇒ 行内容整体左移 15px;macOS overlay 滚动条不占位,所以本地 45/45 恒绿、复现不了),修的是产品——`VirtualList` 常驻 `scrollbar-gutter: stable`,用户侧筛选/加载时的列宽跳动一并消除。
-  - 顺带修 `tests/nav-memory-tab.test.tsx` 的 20ms 固定睡眠竞态(d916451c 上 Windows frontend shard 3/3 唯一红,其余 8 shard 绿),改等「请求已发出 + QueryClient 空闲」的确定性锚点。
-- **PR-7 ✅**(G1/G2/G3 三处基准缺口全修,10 万任务库实测):
-  - **G1 过滤视图快路径 68,201ms → 62.3ms**(约 1100×)。物化 `tasks.root_task_id`(migration 0183)后,
-    旧管线的「向上求祖先闭包 + 向下求分支成员」两条递归 CTE 塌缩成一次 `GROUP BY`;设计与边界见
-    design.md §4.1。等价性由 27 组过滤 × 3 actor 的逐页逐 id oracle 锁定(慢侧显式钉死旧管线,否则
-    退化成快-vs-快恒等),两次变异检验均当场变红。**准入闸门**:库里只要有一行未落根就整条退回旧
-    管线(那行会被静默挂错分支)——基准脚本第一次跑就撞到这条,日志里 66.5 秒的 db-slow 正是闸门在
-    按设计工作;闸门本身也有测试 + 变异检验。回填 10 万行实测 504ms。
-  - **G2 overview 46.5ms → 1.8ms、工作组徽章 10.5ms → 0.6ms**(migration 0184 两条覆盖索引)。证实了
-    第一次观测记下的判断:不该合并 9 条 count(会把索引 seek 换成全表扫),根因是谓词列
-    (`parent_task_id` / `workgroup_id`)不在索引里、每行为读一个字段回表。
-  - **G3 归档器最长单语句 1,190ms → 76ms**(增量扫描按 id 分窗)。**过程中踩了一个更严重的坑并已修**:
-    第一版分窗让整轮从 6 秒劣化到 260 秒(43×)——同一个 node_run 横跨多窗口、每窗重问一次总量,
-    而 6 条单测全绿。正解是每窗只取候选集 + 分块一条分组语句 + 候选预算;判据「单测证明不了没改坏
-    代价」已落 `docs/dev-gotchas.md`。
-- **G4 + T20 + T21 ✅**(`dfda2d02` 及此前若干批):G4 = 备份并发计时断言 + `/repos` facets 短 TTL 缓存;
-  T20 = `opencode-stores` 退役清理 / freelist 提示 / `agent-workflow db compact` CLI(拒绝在 daemon 存活时跑);
-  T21 = node_run prompt 正文按 **4 KiB 阈值**外置到 `runs/{taskId}/prompts/{nodeRunId}.md` + **永久双读**(旧行不回填)。
-  T21 两处落地修正:①设计里的 `runs/{taskId}/{nodeRunId}/prompt.md` 会被 runner 的 `rmSync(runRoot)` 连带删掉,改挂
-  `prompts/` 同级目录;②守卫第一版做成文件级判据、变异检验证明**锁不住**(import 还在就恒绿),改成行级 +
-  把已解析字段改名 `promptBody`,让「列」与「正文」在类型层分得开。
-
-- **mission 分页 ✅ 后端 / ⛔ 前端**:`listMissionSummariesPage` + `GET /api/code/missions` 双形状(无参保持旧
-  `{items}`,带 `limit`/`cursor` 才 `{items,nextCursor}`)已随 `7c542729` 落地,逐页序列 === 旧全量顺序、
-  行值断点、三个 422 错误码逐条点名(`e9b8aa76` 补)。
-
-### 未完成项(逐条带**解除条件**,不是"以后再说")
-
-1. **`/code` work-items 与 mission 列表的前端翻页接入**(T29 余项)。**当前不可做**,不是排期问题:
-   `packages/frontend/src/routes/code.tsx`(+187)与 `code.missions.tsx`(−283 重写)正被 RFC-310 session
-   改着,且改后的版本**引用未追踪文件**(`code.missions.new.tsx` / `components/code/DevelopmentConfigEditor.tsx`
-   等)。按仓规「同一文件混改一起提」提这两个文件,会把引用提上主干而定义留在对方工作树里——**本轮已经因此
-   两次打红主干**(`previewMissionAdmission`、`automation.drive`),不能第三次。
-   **解除条件**:RFC-310 session 提交这批前端文件之后,`git status --porcelain packages/frontend/src/routes/code*.tsx`
-   干净;届时按 `/repos` 同款做法接 `usePagedList` + `VirtualList`。
-   代码位置:`code.tsx:392-398` 拿到了 `nextCursor` 但直接丢弃。
-
-2. **`development_missions` 缺 `(created_at, id)` 复合索引 ✅ 已解除(2026-08-20)**。原受阻理由是
-   `_journal.json` 里有 RFC-310 未追踪的 `0186` 条目,此刻提 journal 会让 daemon 起不来;该条目已随
-   RFC-310 落主干(journal 双侧 188、零未追踪),遂随 `0189_rfc311_perf_guard_indexes` 一并补上。
-   顺带记一条方法论:这条债**不是靠记账想起来的,是被新的性能防护网独立重新发现的**——说明
-   「结构性防护 + 每条读路径普适判据」比「人肉登记待办」更可靠。
-   仍留的小项:`listMissionSummariesPage` 的 `select()` 尚未收窄成 `summaryOf` 真正用到的 18 列
-   (现在把 `readiness_json` / `block_detail` 一起读了);它不改变计划形状,故防护网不报,属投影层优化。
-
-3. **性能防护网(`tests/rfc311-perf-guards.test.ts`)—— 用户 2026-08-20 要求「增加全面的防护用例」**。
-   缺口:CI 既有的 `Perf microbenchmark gate` 只跑纯 CPU 函数,**数据库面零覆盖**;既有计划断言把 SQL
-   字面量抄进测试,只锁得住抄进去那一条。做法:`tests/helpers/statementRecorder.ts` 录制被测代码
-   **实际执行**的每条语句 + 绑定参数,再逐条审计,新增查询自动进入审计面。三条确定性不变量:
-   ①语句条数不随行数增长(N+1 的充要形态,4 行 vs 40 行必须相等);②每条 SELECT 的 EXPLAIN 不含
-   裸表 `SCAN` 或 `USE TEMP B-TREE`(用绑定参数跑);③绑定参数 ≤ 900。
-   落地即抓出三条真缺陷并修掉(见 `0189`)。判据经两处实测校准:SQLite 把有序索引扫描也叫 SCAN
-   (`SCAN t USING COVERING INDEX ix`,是 keyset 首页应有形态,第一版误报过);注入 `sqlite_stat1`
-   伪装 100 万行对拍,计划与 40 行一致,故小库判据可信。变异检验 3/3。
-   **后续**:注册表目前覆盖 5 条读路径(tasks 默认/过滤视图、repos、missions、overview);
-   徽章三件套、node-runs 详情、webhook 投递列表等应陆续加入——加一行的成本远低于再来一次审计。
-
-4. **其余记账**:`sessionView` 上限、`getNodeRunStdout` 尾部截断;development `retention_state` sweeper 与
-   code rollup 表(归属 RFC-310 / code-capability 域);视觉 win32 基线随下一个 Windows 批。
+**归属划分记账**:development 的 `retention_state` sweeper 与 code rollup 表虽在 T18 里被点到,
+但归 RFC-310 / code-capability 域,不由本 RFC 收口(此条自旧版§未完成项第 4 条移入,避免随重复段删除而丢失)。

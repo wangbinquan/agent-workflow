@@ -64,13 +64,22 @@
 > `9ec2a469` 修），判据已从「人眼扫新增引用」升级为 commit-tree + 分离 worktree 一轮问干净，落
 > `docs/dev-gotchas.md`；②「/code work-items nextCursor 已由 RFC-310 PR-10 交付」**不成立**——后端一直返回
 > `nextCursor`，前端 `routes/code.tsx` 的 `ActivityPanel` 取到即丢弃，至今未接。
-> **两项未完成，均带解除条件**（详见 RFC-311 `plan.md` §未完成项，不是「以后再说」）：①`/code` 与 mission 列表的
-> **前端**翻页——`code.tsx` / `code.missions.tsx` 正被 RFC-310 session 重写且改后版本引用未追踪文件，混提必然
-> 第三次打红主干，解除条件是这两个文件 `git status` 干净；②`development_missions` 缺 `(created_at, id)` 复合索引
-> ——绑定参数 EXPLAIN 实测 `USE TEMP B-TREE FOR LAST TERM OF ORDER BY`，常态仍 O(页)、**最坏退化成全排序**，
-> 故「最坏 O(page)」暂不能声称；加索引要动 `_journal.json`，而树上有未追踪的 `0186`，此刻提 journal 会让 daemon
-> 直接起不来（该风险分档已落 `docs/dev-gotchas.md`），解除条件是对方 `0186` 落主干后追 `0187`。剩余证据按
-> RFC-311 自身 plan 收口，不把它们误记成 RFC-294 的 wave exit。
+> **上述两项均已解除（2026-08-20 复核，逐项给出实际处置路径，不是「默认过期」）**：①`/code` 与 mission 列表的
+> **前端**翻页——`code.missions.tsx` 已被 RFC-310 退役成**重定向兼容路由**（`beforeLoad` 转
+> `/tasks?category=digital-employee`），也就是本 RFC 收口时做了服务端过滤 + facets + keyset 翻页的那个统一
+> 列表，故不是「对象消失后没人管」而是**合并进了已翻页化的列表**；`code.tsx` 的 `ActivityPanel` 连同前端对
+> `work-items` 的消费点已随同一次重写删除（现仓内 `grep ActivityPanel` / `grep work-items` 前端零命中），
+> 上一段记的「取到即丢弃」随之失效。②`development_missions` 的 `(created_at, id)` 复合索引**已落**——
+> `0189_rfc311_perf_guard_indexes.sql` 的 `idx_development_missions_created_id` + `schema.ts` 同名声明，
+> `USE TEMP B-TREE FOR LAST TERM OF ORDER BY` 随之消除，「最坏 O(page)」现在可以声称。
+> **windows 回归及其修复（2026-08-20）**：T25/T27 把 `/tasks` 列表窗口化（`99faae98`）后，
+> `tasks-list-children` 的 `context roots auto-expand` 在 windows shard 红了（8225ms，ubuntu/macos 同 shard
+> 全绿）。真因不是这条用例慢，而是**预算分配**：同文件手动展开那条天然分两段等待（各吃一份全局
+> `asyncUtilTimeout: 5000`），自动展开这条却用同一份 5s 覆盖「根查询 → 识别 context root → 自动展开 →
+> 子查询」整条三跳链，而 windows runner 慢约 10x。`453022b6` 以「确定性锚点（等请求发出 + 等
+> `isFetching()===0`，把三跳拆回多段）+ 显式 15s 预算」修复，判据与定式落 `docs/dev-gotchas.md`。
+> **exact-SHA 证据**：`453022b6` 的 CI **28 success / 0 failure**，windows 四格全绿（含此前红的 shard 2/3）；
+> 3 个 e2e shard 为 `cancelled`（并发 push 取消，非失败），按仓规改看含它的 superseding commit。
 > **收口（2026-08-20）**：三处前端无界消费全部处理完——`/tasks` 的数字员工列表此前**10 秒一轮取全量**，
 > 现由服务端过滤 + facets 下推 + keyset 翻页（等价性由 **64 组过滤 × 逐页 oracle** 锁定）；员工产出摘要与
 > `/outcomes` 是**聚合型**，不能直接接分页（统计会随翻页增长且永远偏小，比慢更糟），改为服务端 `counts`
