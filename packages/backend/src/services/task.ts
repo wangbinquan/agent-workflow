@@ -6262,6 +6262,16 @@ export async function getNodeRunEvents(
  * raw `payload` ordered by id ascending, joined with `\n`. Stderr events
  * are excluded — those live on the Events tab.
  */
+/**
+ * RFC-311 T13：stdout 只回**最后 1 MiB**。与本仓既有的 worktreeDiff 1 MiB 预算同量级，
+ * 保持一个用户能记住的数字；行数上限是内存侧的第二道闸（单行也可能很大）。
+ */
+export const STDOUT_TAIL_BUDGET_BYTES = 1024 * 1024
+export const STDOUT_TAIL_ROW_CAP = 50_000
+/** 截断必须**说出来**——静默丢日志会让人以为节点没输出过那段。 */
+export const STDOUT_OMITTED_MARKER =
+  '[… earlier output omitted: this view shows the most recent 1 MiB …]'
+
 export async function getNodeRunStdout(
   db: DbClient,
   taskId: string,
@@ -6282,16 +6292,71 @@ export async function getNodeRunStdout(
   }
   // Archived (oldest) lines come first, live DB rows last. Stderr is dropped
   // from both sides — that channel lives on the Events tab.
+  //
+  // RFC-311 T13：**保尾 + 有界读**。此前这里把「全部归档 + 全部 DB 事件」拼成一个
+  // 字符串返回（归档侧还传了 `Number.MAX_SAFE_INTEGER`），长跑节点的 stdout 可以是
+  // 几十 MB——它跑在 daemon 唯一的同步连接上，一次请求就能把全站顶住，而调试日志的
+  // 读者要的从来是**最后那段**。
+  //
+  // 读法本身也必须有界，否则"先全读进内存再截断"只省了网络、没省内存：
+  //   1. DB 侧倒序取，累到预算即停（这就是尾巴）；
+  //   2. 尾巴被 DB 填满 ⇒ 归档严格更旧，**根本不读**；
+  //   3. 没填满才读归档，并给行数上限；上限命中说明归档很大，此时**整段标为省略**，
+  //      而不是拿最旧的一段来充数——归档读取器只能从头顺读，取不到它的尾巴，
+  //      拿错的一端拼在尾巴前面比明说省略更误导。
   const logsDir = opts.logsDir ?? Paths.logsDir
-  const archived = await readArchivedEvents(logsDir, taskId, nodeRunId, 0, Number.MAX_SAFE_INTEGER)
-  const archivedTexts = archived.filter((a) => a.kind !== 'stderr').map((a) => a.payload)
-  const rows = await db
+  const tail: string[] = []
+  let bytes = 0
+  let omitted = false
+  const push = (text: string): boolean => {
+    const size = Buffer.byteLength(text, 'utf-8') + 1
+    if (bytes + size > STDOUT_TAIL_BUDGET_BYTES) return false
+    tail.push(text)
+    bytes += size
+    return true
+  }
+
+  const dbRows = await db
     .select({ payload: nodeRunEvents.payload, kind: nodeRunEvents.kind })
     .from(nodeRunEvents)
     .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    .orderBy(asc(nodeRunEvents.id))
-  const dbTexts = rows.filter((r) => r.kind !== 'stderr').map((r) => r.payload)
-  return [...archivedTexts, ...dbTexts].join('\n')
+    .orderBy(desc(nodeRunEvents.id))
+    .limit(STDOUT_TAIL_ROW_CAP + 1)
+  const dbHitCap = dbRows.length > STDOUT_TAIL_ROW_CAP
+  for (const row of dbHitCap ? dbRows.slice(0, STDOUT_TAIL_ROW_CAP) : dbRows) {
+    if (row.kind === 'stderr') continue
+    if (!push(row.payload)) {
+      omitted = true
+      break
+    }
+  }
+  if (dbHitCap) omitted = true
+
+  if (!omitted) {
+    const archived = await readArchivedEvents(
+      logsDir,
+      taskId,
+      nodeRunId,
+      0,
+      STDOUT_TAIL_ROW_CAP + 1,
+    )
+    if (archived.length > STDOUT_TAIL_ROW_CAP) {
+      omitted = true
+    } else {
+      for (let i = archived.length - 1; i >= 0; i -= 1) {
+        const entry = archived[i]!
+        if (entry.kind === 'stderr') continue
+        if (!push(entry.payload)) {
+          omitted = true
+          break
+        }
+      }
+    }
+  }
+
+  tail.reverse()
+  const body = tail.join('\n')
+  return omitted ? `${STDOUT_OMITTED_MARKER}\n${body}` : body
 }
 
 /**
