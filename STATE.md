@@ -124,6 +124,55 @@
 > （无任何 CI 在 Windows 上跑视觉套件，43 张 `*-win32.png` 无人比对），已转仓级 backlog。
 >
 > 🚧 **进行中 RFC（In Progress，2026-08-19 按用户补充重新打开）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+>
+> ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
+>
+> **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；
+> `evidence-soak-nightly` 绿（2GiB soak 在 CI 实跑 108s，不是静默 skip——已核）。
+>
+> **本轮落地（按时间序，均已推 main 且门禁全绿）**
+>
+> | commit | 内容 |
+> | --- | --- |
+> | `c2ee672a` | verification 结果升 catalog fact（三个 leaf + 新 group `verification`），`verification.repair` 终于排得上 |
+> | `c44f1dab` | 子进程非零退出把 stderr 尾巴带进 `errorMessage`（裸退出码不可归因） |
+> | `0267dc86` | 三处 e2e 退出码断言改**前缀锁**（`c44f1dab` 改了形状 ⇒ 精确等值全红，主干曾连红四轮） |
+> | `ebafbf50` | 诊断字符串沿途**两道互不知情的截断**（逐行裁头 `clampTailLine`；`MAX_STEP_FAILURE_DETAIL_CHARS` 500→2000） |
+> | `a4b7ac3e` | **T71**：retention sweeper + hourly + 四条边界锁；GB 级 soak + nightly；顺带修 sink 的迟到 stream error 判红整个 shard |
+> | `a6ca84ed` | **T121**：`/code` 八页视觉场景（36→44）+ darwin 基线；照出并修掉「英文界面创建出中文步骤名」 |
+> | `52d9a7ca` | T121：收割 8 张 hosted ubuntu 基线（逐张人审，45 passed / 8 failed 正好是新场景） |
+> | `a329393a` | windows 真因：`mkdir '.'` 的 EEXIST（POSIX no-op / Windows 抛）+ `parentDirToCreate` 单点 + 纯判据回归锁 |
+> | `402387fe` | 旅程超时时带出 `decision-trace`（mission JSON 只说明「停了」） |
+> | `892c1bf3` | E2E-B 在 win32 **带判据重新停跑**（夹具是 POSIX-only：`#!/bin/sh` + `100755` 断言） |
+>
+> **仍未做（真活，不是账）**
+>
+> 1. **T111 的两半**：hosted CI exact SHA 已做到（`892c1bf3` 31/31）；**发布 / 升级 / rollback runbook**
+>    与**运维 dashboards / alerts** 从未产出。`design.md:2919` 只有一段 *cutover* runbook（迁移步骤，
+>    不是发布回滚的运维文档）。⚠️ dashboards/alerts 依赖使用方实际的监控栈，**先问用户**再动手，
+>    否则只会造出一份没人会用的文档。
+> 2. **T93 的像素快照余量**：T121 覆盖的是 `/code` 八个业务页；PR-8 那批**运维视角**页面的
+>    错误恢复态 / 只读权限态逐态快照仍没拍。
+>
+> **只是账没销（活已干完，改状态即可）**
+>
+> - **T110** 已置 ✅（2026-08-20 多轮 `gate:local` 全绿 + hosted CI exact-SHA 31/31）。
+> - **T112** 仍 🚧：`design/plan.md` 的 RFC-310 索引条目已随本轮更新；剩下的是 T111 完工后的最终出账。
+>
+> **两个等用户裁决的取舍（已登记 `docs/audit-backlog.md`，不要自行选路）**
+>
+> 1. 平台是否支持 Windows 上的 `repo:` 验证程序——`createRepoScriptResolver` 返回 `argv: [abs]` 直接
+>    spawn、不带解释器。三条路：显式 `interpreterRef` / 按 shebang 找 bash / 明确声明 POSIX-only。
+> 2. 仓里 **43 张 `*-win32.png` 无人比对**——加一条 Windows 视觉 job，还是删掉并在 config 里显式排除。
+>
+> **首版不含（如实登记，不阻塞 Done）**：evidence blob 物理清扫（缺覆盖全部生产者的引用索引，删了等于
+> 按猜测删证据）、review 结果升 catalog fact（卡在 `mr.review.external` 的 findings 不落库）、
+> cutover 的 per-repo dry probe；mission 列表分页与 `/code` work-items 翻页已转 RFC-311（已 Done）。
+>
+> **本轮方法论已进 `docs/dev-gotchas.md`**（仓是唯一事实源）：①诊断字符串沿途每一处截断都要数一遍
+> ——「字段里有东西了」≠「信息到得了人眼前」；②`mkdirSync(dirname(p))` 对裸文件名是只在 Windows 上炸的雷；
+> ③i18n 的 leaf key 不能带点（页面对、门禁红）；④凡是改动会进入「被断言的字符串/形状」的，就要跑一次 e2e。
+>
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
 > 平台发布、review/CI/conflict 修复、`waiting-committer` / `ready-to-merge` 回退，直到外部 merged/closed；平台
 > **永不自动 merge/approve/resolve**。所有下一动作、员工与 Java/C++/polyglot ActionTemplate、重试/交人均由

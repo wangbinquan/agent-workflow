@@ -517,9 +517,20 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | T107 | cross-context internal import 清零；public surface/required ports/field budgets 复核         | T104-T106 | ✅   |
 | T108 | schema contract：确认 rollback 窗口/backup restore 后 drop 不再使用的 legacy write schema    | T103-T107 | ✅   |
 | T109 | 系统 mock 全旅程、真实 runtime、Git remote、浏览器、crash/large-log/permission E2E           | 全部      | ✅   |
-| T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local`    | T109      | 🚧   |
+| T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local`    | T109      | ✅   |
 | T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                      | T110      | 🚧   |
 | T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口              | T111      | 🚧   |
+
+- **T110（✅，2026-08-20）**：`bun run gate:local` 本日多轮全绿（最后一轮 9m37s），hosted CI
+  exact-SHA `892c1bf3` **31/31 全绿**，`visual-regression-nightly` 53 passed、
+  `evidence-soak-nightly` 绿。本行此前 🚧 只是账没销。
+- **T111 剩余（🚧，精确范围）**：`hosted CI exact SHA` 已满足（同上）。**未做的是另外两半**——
+  ①**发布 / 升级 / rollback runbook**：`design.md:2919` 只有一段 *cutover* runbook（迁移步骤），
+  没有发布回滚的运维文档；②**运维 dashboards / alerts**：一个字都没有。⚠️ dashboards/alerts 的形态
+  取决于使用方实际的监控栈，**先与用户确认再动手**，否则产出的是一份没人会用的文档。
+- **T112 剩余（🚧）**：AC 证据索引（§13a）与 `docs/dev-gotchas.md` 收口已随各波次滚动更新，
+  `design/plan.md` 的 RFC-310 索引条目已于 2026-08-20 更新为当前真值。**剩下的是 T111 完工后的
+  最终出账**——它依赖 T111，故不先行置 ✅。
 
 ### PR-10 交付注记（2026-08-18）
 
