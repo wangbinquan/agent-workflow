@@ -33,4 +33,6 @@ export const DAEMON_CADENCE = {
   developmentWakeSweep: 30_000,
   /** RFC-310 未 claim mission 上传的 TTL 回收。 */
   developmentUploadGc: HOUR_MS,
+  /** RFC-310 T71 —— 终态 Mission 的 retention 执行（台账清理 + 证据过期标记）。 */
+  developmentRetentionSweep: HOUR_MS,
 } as const satisfies Record<string, number>

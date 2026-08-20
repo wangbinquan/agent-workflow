@@ -69,6 +69,10 @@ import {
   missionEpochsOf,
 } from './infrastructure/sqliteReconcilerReaders'
 import { createSqliteMissionStore } from './infrastructure/sqliteMissionStore'
+import {
+  sweepDevelopmentRetention,
+  type RetentionSweepResult,
+} from './infrastructure/retentionSweeper'
 import { createSqlitePlaybookSagaStore } from './infrastructure/sqlitePlaybookSagaStore'
 import { createChildMissionParticipant } from './infrastructure/childMissionParticipant'
 import {
@@ -131,6 +135,12 @@ export interface DevelopmentAutomationModule {
   sweepWakes(): Promise<{ reconciled: number }>
   /** hourly：未 claim 上传的 TTL 回收。 */
   sweepUploads(): { swept: number }
+  /**
+   * RFC-310 T71 —— hourly retention 执行：终态 Mission 的已结算 attempt 台账按
+   * `attemptLedgerTtlDays` 清理、证据指针按 `requirementBundleTerminalTtlDays`
+   * 标 expired。**不删 evidence blob**（缺完整引用索引，见 retentionSweeper 顶注）。
+   */
+  sweepRetention(): Promise<RetentionSweepResult>
   /** daemon 启动恢复：fence 悬挂 / epoch 过期 effect / 到期 wake。 */
   recover(): Promise<{ settledFences: number; invalidatedEffects: number; firedWakes: number }>
 }
@@ -302,6 +312,12 @@ export function composeDevelopmentAutomation(deps: {
         listUnconsumedWakeHintMissionIds: () => listUnconsumedWakeHintMissionIds(deps.db),
       }),
     sweepUploads: () => ({ swept: uploads.sweepExpired(now()) }),
+    sweepRetention: () =>
+      sweepDevelopmentRetention(
+        deps.db,
+        { getPolicyRevisionContent: (id, rev) => lookup.getPolicyRevisionContent(id, rev) },
+        now(),
+      ),
     recover: () =>
       recoverMissions(reconcileDeps, {
         listFencedMissionIds: () => listFencedMissionIds(deps.db),

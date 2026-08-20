@@ -86,6 +86,16 @@ export class OneShotEvidenceSink {
     const hash = createHash('sha256')
     let bytes = 0
     const stream = createWriteStream(abs, { flags: 'wx' })
+    // `createWriteStream` 的 open 是**异步**的。预算在 open 落地之前就抛出时，
+    // stream 已经被 destroy，而迟到的 open 失败仍会以 'error' 事件发出——没有监听者
+    // 的 'error' 是**进程级**未处理错误。2026-08-20 实撞：afterAll 已经删掉了临时根，
+    // 迟到的 open 于是 ENOENT，bun 报「Unhandled error between tests」把整个 shard
+    // 判红，而指的文件属于一条早已通过的用例，归因成本极高。这个监听器把它收进
+    // 本次 Promise，永不外泄。
+    let streamError: Error | null = null
+    stream.on('error', (err: Error) => {
+      streamError = err
+    })
     try {
       for await (const chunk of iterateStream(source)) {
         bytes += chunk.byteLength
@@ -95,10 +105,19 @@ export class OneShotEvidenceSink {
           throw new Error('budget: total too large')
         hash.update(chunk)
         if (!stream.write(chunk)) {
-          await new Promise<void>((resolve) => stream.once('drain', resolve))
+          // 出错时也必须解开等待：只等 'drain' 的话，一个写失败的流会让这里永远挂住。
+          await new Promise<void>((resolve, reject) => {
+            stream.once('drain', resolve)
+            stream.once('error', reject)
+          })
         }
       }
       await new Promise<void>((resolve, reject) => {
+        if (streamError !== null) {
+          reject(streamError)
+          return
+        }
+        stream.once('error', reject)
         stream.end((err?: Error | null) => (err ? reject(err) : resolve()))
       })
     } catch (error) {

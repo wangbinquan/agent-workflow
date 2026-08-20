@@ -1,0 +1,75 @@
+# RFC-310 T71 —— 证据落盘的 GB 级 soak（nightly）。
+#
+# 为什么单独一格而不是并进 CI：这条要下载 2GB、占 2GB 临时磁盘、跑几十秒到几
+# 分钟。每次 push 都付这笔钱不值得；而不跑它，「峰值内存不随日志线性增长」这条
+# 判据就只在 64MB 尺度上被验证过——那个尺度**证不了它想证的东西**（一个偷偷全
+# 缓冲的实现在 64MB 下也只多吃 64MB，仍然落在阈值噪音里）。真正会把 daemon 打死
+# 的是 CI 里 GB 级的构建日志，所以判据必须在 GB 尺度上跑，只是不必每次都跑。
+#
+# 触发：
+#   * schedule —— 每日 08:30 UTC（visual nightly 之前 30 分钟，错开 runner）。
+#   * workflow_dispatch —— 手动，可临时改尺寸复跑。
+#   * push / pull_request —— 只在证据落盘链路本身被改动时。
+#
+# 断言在 packages/backend/tests/rfc310-evidence-soak.test.ts：峰值 RSS 增幅必须
+# 落在**绝对常数**上限内，与总字节数无关。
+
+name: evidence-soak-nightly
+
+on:
+  schedule:
+    - cron: '30 8 * * *'
+  workflow_dispatch:
+    inputs:
+      bytes:
+        description: 'Soak size in bytes (default 2 GiB)'
+        required: false
+        default: '2147483648'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/backend/tests/rfc310-evidence-soak.test.ts'
+      - 'packages/backend/tests/fixtures/rfc310-stream-probe.ts'
+      - 'packages/backend/tests/helpers/rfc310EvidenceSink.ts'
+      - 'packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts'
+      - 'packages/system-mocks/src/development/pipeline-provider.ts'
+      - '.github/workflows/evidence-soak-nightly.yml'
+  pull_request:
+    paths:
+      - 'packages/backend/tests/rfc310-evidence-soak.test.ts'
+      - 'packages/backend/tests/fixtures/rfc310-stream-probe.ts'
+      - 'packages/backend/tests/helpers/rfc310EvidenceSink.ts'
+      - 'packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts'
+      - 'packages/system-mocks/src/development/pipeline-provider.ts'
+      - '.github/workflows/evidence-soak-nightly.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence-soak:
+    name: Evidence sink GB-scale soak (ubuntu)
+    runs-on: ubuntu-24.04
+    # 2GB 下载 + 流式 hash，冷 runner 上留足余量；同时避免卡死时吃满 Actions 默认的六小时。
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Report free disk before the soak
+        # 磁盘不够时失败信息要是「盘满了」，而不是一条看不懂的 curl 退出码。
+        run: df -h /
+
+      - name: Run the GB-scale evidence soak
+        env:
+          RUN_EVIDENCE_SOAK: '1'
+          EVIDENCE_SOAK_BYTES: ${{ github.event.inputs.bytes || '2147483648' }}
+        run: bun test packages/backend/tests/rfc310-evidence-soak.test.ts

@@ -1049,6 +1049,24 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }, DAEMON_CADENCE.developmentUploadGc)
   developmentUploadGcTimer.unref?.()
 
+  // RFC-310 T71 —— retention 的执行者。此前 policy 的 `retention.*TtlDays` 一个
+  // 消费者都没有：字段在、设置页能改，而终态 Mission 的台账与证据只增不减。
+  const developmentRetentionTimer = setInterval(() => {
+    void developmentAutomation
+      .sweepRetention()
+      .then((result) => {
+        if (result.prunedAttempts > 0 || result.markedBundleRefs > 0) {
+          log.info('mission retention swept', { ...result })
+        }
+      })
+      .catch((err: unknown) => {
+        log.warn('mission retention sweep failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      })
+  }, DAEMON_CADENCE.developmentRetentionSweep)
+  developmentRetentionTimer.unref?.()
+
   const intentGcTimer = setInterval(() => {
     try {
       const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24

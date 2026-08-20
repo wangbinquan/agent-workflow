@@ -84,6 +84,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // RFC-310 PR-0：symlink/mkfifo 攻击夹具依赖 POSIX 语义（Windows 造 symlink 需
   // 特权、无 mkfifo）；其余 sink/预算/traversal 拒绝用例三平台全跑。
   'packages/backend/tests/rfc310-pr0-evidence-sink-probe.test.ts#skipIf': 1,
+  // RFC-310 T71：GB 级 soak 默认关（成本），由 evidence-soak-nightly 那格打开。
+  // 它的 RUN_EVIDENCE_SOAK 已登记在 REQUIRED_GATE_ACTIVATIONS 里，不是无人执行的 skip。
+  'packages/backend/tests/rfc310-evidence-soak.test.ts#skipIf': 1,
 }
 
 interface TestModifierUse {
@@ -109,6 +112,15 @@ interface GateActivationCheck {
 const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
   RUN_CHAOS: [{ file: '.github/workflows/ci.yml', marker: "RUN_CHAOS: '1'" }],
   RUN_GIT_NETWORK: [{ file: '.github/workflows/ci.yml', marker: "RUN_GIT_NETWORK: '1'" }],
+  // RFC-310 T71：GB 级证据落盘 soak。默认关是成本决定（2GB 下载 + 2GB 临时磁盘），
+  // 不是可靠性存疑——所以它必须有一条真在跑的自动化路径，否则就是个永远不执行的
+  // 断言。nightly 那格就是它的执行者。
+  RUN_EVIDENCE_SOAK: [
+    {
+      file: '.github/workflows/evidence-soak-nightly.yml',
+      marker: "RUN_EVIDENCE_SOAK: '1'",
+    },
+  ],
   RUN_GIT_PROTOCOLS: [
     { file: '.github/workflows/git-protocols-e2e.yml', marker: "RUN_GIT_PROTOCOLS: '1'" },
   ],

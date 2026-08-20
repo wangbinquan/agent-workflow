@@ -181,6 +181,33 @@ describe('rfc310 pr0 evidence sink probe', () => {
     )
   })
 
+  // 2026-08-20 实撞的回归：`createWriteStream` 的 open 是异步的，写失败晚于调用点
+  // 到达。旧实现只在 'drain' 上等待、且没有 'error' 监听者，于是这种迟到的失败要么
+  // 让 addFile 永久挂住，要么变成**进程级**未处理错误——bun 报「Unhandled error
+  // between tests」，把整个 shard 判红，指的还是一条早已通过的用例。
+  // 这里用「目标路径是一个目录」制造一个确定性的异步 open 失败（EISDIR）。
+  test('C2: a late asynchronous stream failure rejects addFile instead of escaping the promise', async () => {
+    const staged = join(ROOT, 'staged-late-error')
+    mkdirSync(join(staged, 'collides'), { recursive: true })
+    const sink = new OneShotEvidenceSink(staged, BUDGET)
+    await expect(
+      sink.addFile(
+        'collides',
+        (async function* () {
+          yield new TextEncoder().encode('payload')
+        })(),
+      ),
+    ).rejects.toThrow()
+    // 失败不占预算：sink 仍能继续收合法文件。
+    const ok = await sink.addFile(
+      'fine.txt',
+      (async function* () {
+        yield new TextEncoder().encode('fine')
+      })(),
+    )
+    expect(ok.bytes).toBe(4)
+  })
+
   test.skipIf(process.platform === 'win32')(
     'C2: safe import rejects symlinks and non-regular files in the staged tree',
     async () => {
