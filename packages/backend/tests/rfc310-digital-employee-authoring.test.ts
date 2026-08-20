@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+import { createSession } from '@/auth/sessionStore'
 import { createInMemoryDb } from '@/db/client'
 import {
   developmentEmployeeRuntimeCodec,
@@ -12,11 +13,13 @@ import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { inspectDigitalEmployeeWorkflowDefinition } from '@/modules/digital-employee/composition/defaultRequiredPorts'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { buildDigitalEmployeeFixedPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { createApp } from '@/server'
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { listAgents } from '@/services/agent'
+import { createUser } from '@/services/users'
 import {
   designEmployeeTypePackage,
   testEmployeeTypePackage,
@@ -87,6 +90,53 @@ function fixtureModule() {
 }
 
 describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
+  test('HTTP names malformed type refs and empty or declared-oversized uploads', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-authoring-route-errors-'))
+    roots.push(appHome)
+    const app = createApp({
+      token: 'a'.repeat(64),
+      configPath: join(appHome, 'config.json'),
+      appHome,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db,
+    })
+    const admin = await createUser(db, {
+      username: 'authoring-route-admin',
+      displayName: 'Authoring Route Admin',
+      role: 'admin',
+      password: 'longEnoughPassword',
+    })
+    const session = await createSession({ db, userId: admin.id })
+    const authorization = { Authorization: `Bearer ${session.token}` }
+
+    const malformedType = await app.request('/api/digital-employee-types/development', {
+      headers: authorization,
+    })
+    expect(malformedType.status).toBe(422)
+    expect(await malformedType.json()).toMatchObject({ code: 'employee-type-ref-invalid' })
+
+    const emptyUpload = await app.request('/api/digital-employee-input-uploads', {
+      method: 'POST',
+      headers: authorization,
+      body: new Uint8Array(),
+    })
+    expect(emptyUpload.status).toBe(422)
+    expect(await emptyUpload.json()).toMatchObject({ code: 'employee-upload-empty' })
+
+    const oversizedUpload = await app.request('/api/digital-employee-input-uploads', {
+      method: 'POST',
+      headers: {
+        ...authorization,
+        'content-length': String(32 * 1024 * 1024 + 1),
+      },
+      body: new Uint8Array([1]),
+    })
+    expect(oversizedUpload.status).toBe(422)
+    expect(await oversizedUpload.json()).toMatchObject({ code: 'employee-upload-too-large' })
+  })
+
   test('pure migrations stay resource-empty and daemon seeding installs Agent templates once', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     expect(await listAgents(db)).toEqual([])

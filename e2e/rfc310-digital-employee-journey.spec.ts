@@ -1,95 +1,69 @@
-// RFC-310 browser journey: a human configures a repository assignment and
-// submits body + repository-bound files through the SPA. From that point on,
-// the compiled daemon owns the lifecycle: Agent action, verification, commit,
-// push, MR creation, review repair/reply, and terminal merge tracking.
-
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+// RFC-310 browser journey for the current Digital Employee OS.
+//
+// The browser owns the user boundary: a published employee is visible on the
+// fixed responsibility map, body and repository-bound files can be assigned,
+// and the resulting stateful case appears in the unified task list. The full
+// external-ID -> MR -> cross-repository employee -> approval -> large pipeline
+// evidence -> repair -> merged lifecycle is covered by the backend system-mock
+// E2E, where those deterministic participants can be asserted without UI races.
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { runGit } from './command'
+import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 
-import {
-  SYSTEM_MOCK_CODE_HOST_TOKEN,
-  SystemMockClient,
-  type MockCodeHostProject,
-} from '@agent-workflow/system-mocks'
-
-import { defaultAutomationPolicyContent } from '../packages/backend/src/modules/development-automation/domain/automationPolicy'
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
 
 test.describe.configure({ mode: 'serial' })
-// 跨 mission 的每一跳都可能等一整个 wake sweep（`DAEMON_CADENCE.developmentWakeSweep`
-// = 30s，durable wait + 定时 observe 是 RFC-310 的既定设计，不是这里的临时慢）。
-// 本旅程有「子 Mission ready → 审批提交 → 审批 approved → 父门禁重跑 → 父 MR ready」
-// 四五跳，预算按最坏路径给足；给不足只会得到一条与实现无关的假红。
-test.setTimeout(600_000)
+test.setTimeout(300_000)
 
-// RFC-310 T132/T140-B —— 跨仓 + 外部审批 + ready + merged 的完整交付旅程。
-//
-// 2026-08-20 首次跑绿（本机 chromium + system mock，约 3 分钟，连跑两次稳定）。
-// 首跑照出并修掉的四处，留在这里当账：
-//   ①三个 testid 在前端根本不存在（`digital-employee-control-center` /
-//     `code-assignments-link` / `code-launch-mission`）——这条 spec 写完从未被执行过；
-//   ②新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时不复位，
-//     `<StrictMode>` 双调用后上传永远被判成"页面已关闭"（回归锁在 code-missions-page.test.tsx）；
-//   ③声明「吃 mission 需求」的步骤在需求物化前就被派发，Agent 拿到的是**空需求**；
-//     且该步骤的身份用了 requirement *fact 快照*指针，每轮都变 ⇒ 同一步骤活锁重跑
-//     110 次（两条都锁在 rfc310-playbook-coordinator.test.ts）；
-//   ④read-only 动作（approval.prepare）覆盖了 `__action.runId`，发布链据此找 candidate
-//     现场 ⇒ 假的 `candidate-tree-drift`（锁在 rfc310-pr5-delivery-chain.test.ts）。
-// 跨 mission 的每一跳最多等一个 wake sweep（30s，durable wait 是既定设计），所以
-// 本 spec 的预算按最坏路径给足；给不足只会得到一条与实现无关的假红。
+interface ExactRef {
+  id: string
+  revision: number
+}
 
-// Windows 腿：**重新停跑，但这次理由是查清的、且是结构性的**（2026-08-20）。
-//
-// 2026-08-19 的停跑理由是「原因尚未定位」——那是个可观测性缺口，不是判据，所以本轮
-// 先解除停跑、连查三轮把它查到了底（每一轮都补掉一处「有信息但到不了人眼前」：
-// blockDetail 恒 null → 只有裸退出码 → stderr 尾巴被两道互不知情的截断各切一半）。
-//
-// 查到两颗雷，第一颗已修，第二颗**不是 bug 而是这条 spec 的夹具本身只在 POSIX 上成立**：
-//   ① `mkdirSync(dirname('digital-employee-result.txt'), { recursive: true })` ——
-//      `dirname` 是 `'.'`，POSIX 上 no-op、Windows 上抛 `EEXIST`。已修（`a329393a`，
-//      `parentDirToCreate` 单点 + 纯判据回归锁）。
-//   ② 修掉①之后 windows 走得更远（implement 通过、child mission ready-to-merge、
-//      审批 approved），停在 `run-verification`（决策轨迹实证：`selected.kind =
-//      'run-verification'`，mission 停在 revision 20，hold 为 upload-fulfillment-pending）。
-//      根因是本 spec 上传的验证程序是 `#!/bin/sh` 脚本、并断言其 git mode 为 `100755`，
-//      而平台解析 `repo:<path>` 后是**直接 spawn 该路径**（verificationRunner.ts 的
-//      `createRepoScriptResolver` 返回 `argv: [abs]`，不带解释器）——Windows 上没有
-//      shebang 语义，`.sh` 根本不可执行，`100755` 也不是 Windows 检出的概念。
-//
-// 也就是说：**即便平台将来支持 Windows 上的验证程序，这条 spec 的夹具也仍然只在
-// POSIX 上成立**，它要换一套夹具才谈得上跑在 windows 上。所以这里停跑的是「这条
-// spec 的这套夹具」，不是「windows 上的数字员工旅程」。平台该不该支持 Windows 的
-// `repo:` 验证程序（需要一套解释器策略）是产品问题，已登记 `docs/audit-backlog.md`。
-//
-// 解除条件（写死，便于下一个人判断）：这条 spec 换成跨平台的验证程序夹具、并去掉
-// `100755` 断言之后，才谈得上重新在 windows 上跑。
-//
-// 同 shard 的 E2E-A（`rfc310-zero-config-onboarding.spec.ts`）在 windows 上是**绿**的，
-// 所以停的不是"数字员工在 windows 上不能用"。
+interface EmployeeTypePackage {
+  authoringManifest: {
+    workItems: Array<{
+      workItemRef: string
+      workContractRef: { contractId: string; version: number }
+      toolRoleGroups: Array<{
+        roleRef: string
+        bindingSlots: Array<{ slotRef: string; required: boolean }>
+      }>
+    }>
+  }
+  workContracts: Array<{
+    contractId: string
+    version: number
+    allowedToolKinds: Array<'agent' | 'workflow' | 'program'>
+    requiredConnectionPurpose: string | null
+  }>
+}
 
-// 每次运行（含 Playwright 的 retry）用新的项目路径：system mock 的 `seedCodeHost`
-// 对同名项目返回 500 `already seeded`，于是重试那一轮会先死在 beforeAll 上，把**真正的**
-// 失败原因盖掉——第一次 windows 红就是这样只剩一条"already seeded"可看。
-const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-const PROJECT_PATH = `rfc310/browser-digital-employee-${RUN_TAG}`
-const CHILD_PROJECT_PATH = `rfc310/browser-gate-configuration-${RUN_TAG}`
-const REVIEW_BODY =
-  'Please document the public behavior in the delivered result.\nKeep this exact acceptance wording.'
+interface AgentChoice {
+  id: string
+  updatedAt: number
+  frontmatterExtra: { digitalEmployeeTemplate?: string }
+}
+
+interface ToolDraft {
+  id: string
+  validationReceipt: {
+    status: 'valid' | 'invalid'
+    checks: Array<{ code: string; ok: boolean; detail: string }>
+  }
+}
+
+const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
+const TYPE_REF = 'development@1'
+const PROGRAM_FIXTURE =
+  'printf \'<workflow-output nonce="%s"><port name="result">{"schemaVersion":1,"ok":true}</port></workflow-output>\\n\' "$AW_ENVELOPE_NONCE"'
 
 let daemon: DaemonHandle
 let mocks: SystemMockClient
-let project: MockCodeHostProject
-let childProject: MockCodeHostProject
-let childRepositoryId = ''
+let repositoryId = ''
 let employeeName = ''
-let employeeId = ''
-let policyName = ''
-let webhook: { urlToken: string; secret: string }
 
 function requiredEnv(name: string): string {
   const value = process.env[name]
@@ -116,18 +90,6 @@ async function requestJson<T>(
   return (text === '' ? undefined : JSON.parse(text)) as T
 }
 
-async function publishResource<T extends { id: string }>(
-  base: string,
-  body: Record<string, unknown>,
-): Promise<T & { revision: number }> {
-  const created = await requestJson<T>(base, { method: 'POST', body })
-  const published = await requestJson<{ revision: number }>(`${base}/${created.id}/publish`, {
-    method: 'POST',
-    body: {},
-  })
-  return { ...created, revision: published.revision }
-}
-
 async function importRepository(repoUrl: string): Promise<string> {
   let batch = await requestJson<{
     batchId: string
@@ -142,151 +104,19 @@ async function importRepository(repoUrl: string): Promise<string> {
   if (batch.state !== 'completed' || batch.rows.some((row) => row.status !== 'done')) {
     throw new Error(`repository import failed: ${JSON.stringify(batch.rows)}`)
   }
-  const repos = await requestJson<{ items: Array<{ id: string; urlRedacted: string | null }> }>(
-    '/api/cached-repos',
-  )
-  const repo = repos.items.find((row) => row.urlRedacted === repoUrl)
-  if (repo === undefined) throw new Error(`imported repository ${repoUrl} is missing`)
-  return repo.id
+  const repositories = await requestJson<{
+    items: Array<{ id: string; urlRedacted: string | null }>
+  }>('/api/cached-repos')
+  const repository = repositories.items.find((candidate) => candidate.urlRedacted === repoUrl)
+  if (repository === undefined) throw new Error(`imported repository ${repoUrl} is missing`)
+  return repository.id
 }
 
-async function seedDigitalEmployee(): Promise<void> {
-  const suffix = Date.now().toString(36)
-  employeeName = `Java MR caretaker ${suffix}`
-  policyName = `Rule-driven delivery ${suffix}`
-
-  const agent = await requestJson<{ id: string }>('/api/agents', {
+async function createPublishedApprovalAdapter(): Promise<ExactRef> {
+  const draft = await requestJson<{ id: string }>('/api/integrations/development-adapters', {
     method: 'POST',
     body: {
-      name: `rfc310-browser-agent-${suffix}`,
-      description: 'Capability-bound Agent used by the RFC-310 browser journey.',
-      outputs: ['agent-result'],
-      runtime: 'opencode',
-      bodyMd: '',
-    },
-  })
-
-  const verification = await publishResource<{ id: string }>('/api/code/verification-profiles', {
-    name: `Repository verification ${suffix}`,
-    draft: {
-      schemaVersion: 1,
-      steps: [
-        {
-          stepId: 'uploaded-check',
-          programRef: 'repo:verify.sh',
-          argsRef: null,
-          timeoutMs: 30_000,
-          networkProfileRef: 'none@1',
-          successExitCodes: [0],
-          evidenceSelectors: [{ kind: 'stdout-tail', value: 4096 }],
-        },
-      ],
-      stopPolicy: 'first-failure',
-      maxParallel: 1,
-    },
-  })
-
-  const templateDraft = (
-    capabilityId: 'change.implement' | 'mr.feedback.apply' | 'approval.prepare',
-  ) => ({
-    schemaVersion: 1,
-    capabilityId,
-    capabilityContractVersion: 1,
-    labels: ['java', 'browser-e2e'],
-    compatibility: [],
-    executor: { kind: 'agent', agentRef: agent.id },
-    runtimeProfileRef: 'opencode',
-    promptSupplement:
-      capabilityId === 'change.implement'
-        ? 'Implement the immutable requirement bundle.'
-        : capabilityId === 'mr.feedback.apply'
-          ? 'Apply every exact review feedback revision supplied by the platform.'
-          : 'Prepare the exact external approval request from the bound evidence.',
-    skillRefs: [],
-    mcpRefs: [],
-    readOnlyResourceRefs: [],
-    contextProfileRef: null,
-    writablePathPolicyRef: null,
-    additionalProtectedPathClasses: [],
-    verificationProfileRef: `${verification.id}@${verification.revision}`,
-    retryDefaults: { sameSession: 1, freshSession: 1 },
-  })
-  const implement = await publishResource<{ id: string }>('/api/code/action-templates', {
-    name: `Java implementation ${suffix}`,
-    capabilityId: 'change.implement',
-    draft: templateDraft('change.implement'),
-  })
-  const feedback = await publishResource<{ id: string }>('/api/code/action-templates', {
-    name: `MR feedback repair ${suffix}`,
-    capabilityId: 'mr.feedback.apply',
-    draft: templateDraft('mr.feedback.apply'),
-  })
-  const approvalPrepare = await publishResource<{ id: string }>('/api/code/action-templates', {
-    name: `Gate approval preparation ${suffix}`,
-    capabilityId: 'approval.prepare',
-    draft: templateDraft('approval.prepare'),
-  })
-
-  const basePolicy = defaultAutomationPolicyContent()
-  const policy = await publishResource<{ id: string }>('/api/code/automation-policies', {
-    name: policyName,
-    draft: {
-      ...basePolicy,
-      requirement: {
-        ...basePolicy.requirement,
-        upload: { ...basePolicy.requirement.upload, allowExecutableFileMode: true },
-      },
-      actionPriority: {
-        rules: [
-          {
-            ruleId: 'repair-human-feedback-first',
-            when: [
-              { kind: 'number-compare', fact: 'mr.unhandledFeedbackCount', op: 'gt', value: 0 },
-            ],
-            capabilityId: 'mr.feedback.apply',
-          },
-          {
-            ruleId: 'implement-java-once',
-            when: [
-              { kind: 'boolean-is', fact: 'requirement.bundleComplete', value: true },
-              { kind: 'set-contains-any', fact: 'repository.languages', values: ['java'] },
-              { kind: 'enum-equals', fact: 'action.lastOutcome', value: 'none' },
-            ],
-            capabilityId: 'change.implement',
-          },
-        ],
-      },
-      verification: {
-        requiredProfileRefs: [`${verification.id}@${verification.revision}`],
-        stopPolicy: 'first-failure',
-      },
-    },
-  })
-
-  const childPolicy = await publishResource<{ id: string }>('/api/code/automation-policies', {
-    name: `Gate repository delivery ${suffix}`,
-    draft: {
-      ...basePolicy,
-      actionPriority: {
-        rules: [
-          {
-            ruleId: 'implement-gate-repository-once',
-            when: [
-              { kind: 'boolean-is', fact: 'requirement.bundleComplete', value: true },
-              { kind: 'enum-equals', fact: 'action.lastOutcome', value: 'none' },
-            ],
-            capabilityId: 'change.implement',
-          },
-        ],
-      },
-      verification: { requiredProfileRefs: [], stopPolicy: 'first-failure' },
-    },
-  })
-
-  const approvalAdapter = await publishResource<{ id: string }>(
-    '/api/integrations/development-adapters',
-    {
-      name: `Gate approval system ${suffix}`,
+      name: `Browser approval system ${RUN_TAG}`,
       purpose: 'approval-gateway',
       draft: {
         schemaVersion: 1,
@@ -305,201 +135,126 @@ async function seedDigitalEmployee(): Promise<void> {
         timeoutMs: 30_000,
       },
     },
+  })
+  const published = await requestJson<{ revision: number }>(
+    `/api/integrations/development-adapters/${encodeURIComponent(draft.id)}/publish`,
+    { method: 'POST', body: {} },
+  )
+  return { id: draft.id, revision: published.revision }
+}
+
+async function seedPublishedEmployee(): Promise<void> {
+  const typePackage = await requestJson<EmployeeTypePackage>(
+    `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}`,
+  )
+  const agents = await requestJson<AgentChoice[]>('/api/agents/builtins/digital-employee-templates')
+  const agent =
+    agents.find(
+      (candidate) => candidate.frontmatterExtra.digitalEmployeeTemplate === 'code-writing',
+    ) ?? agents[0]
+  if (agent === undefined) throw new Error('built-in Digital Employee Agent templates are missing')
+  const approvalAdapterRef = await createPublishedApprovalAdapter()
+  const bindings: Array<{
+    workItemRef: string
+    slotRef: string
+    registrationRef: ExactRef
+  }> = []
+
+  for (const item of typePackage.authoringManifest.workItems) {
+    const contract = typePackage.workContracts.find(
+      (candidate) =>
+        candidate.contractId === item.workContractRef.contractId &&
+        candidate.version === item.workContractRef.version,
+    )
+    if (contract === undefined) throw new Error(`missing work contract for ${item.workItemRef}`)
+    for (const role of item.toolRoleGroups) {
+      for (const slot of role.bindingSlots) {
+        if (!slot.required) continue
+        const implementation = contract.allowedToolKinds.includes('agent')
+          ? {
+              kind: 'agent' as const,
+              agentRef: { id: agent.id, revision: agent.updatedAt },
+            }
+          : contract.allowedToolKinds.includes('program')
+            ? {
+                kind: 'program' as const,
+                runtimeKind: 'bash' as const,
+                source: PROGRAM_FIXTURE,
+                parameterValues: {},
+                runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+              }
+            : null
+        if (implementation === null) {
+          throw new Error(`${item.workItemRef}/${slot.slotRef} has no browser fixture executor`)
+        }
+        const draft = await requestJson<ToolDraft>(
+          `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}/work-items/${encodeURIComponent(item.workItemRef)}/tools`,
+          {
+            method: 'POST',
+            body: {
+              displayName: `${item.workItemRef}/${slot.slotRef}`,
+              description: 'Current Digital Employee OS browser fixture',
+              roleRef: role.roleRef,
+              implementation,
+              connectionRef:
+                contract.requiredConnectionPurpose === null ? null : approvalAdapterRef,
+            },
+          },
+        )
+        if (draft.validationReceipt.status !== 'valid') {
+          throw new Error(
+            `tool ${item.workItemRef}/${slot.slotRef} invalid: ${JSON.stringify(draft.validationReceipt.checks)}`,
+          )
+        }
+        const published = await requestJson<{ ref: ExactRef }>(
+          `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}/work-items/${encodeURIComponent(item.workItemRef)}/tools/${encodeURIComponent(draft.id)}/publish`,
+          { method: 'POST', body: {} },
+        )
+        bindings.push({
+          workItemRef: item.workItemRef,
+          slotRef: slot.slotRef,
+          registrationRef: published.ref,
+        })
+      }
+    }
+  }
+
+  const job = await requestJson<{ id: string }>(
+    `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}/job-templates`,
+    {
+      method: 'POST',
+      body: {
+        name: `Browser development role ${RUN_TAG}`,
+        description: 'One deterministic tool binding for every required work-item slot.',
+        defaultToolBindings: bindings,
+        defaultCollaborationBindings: [],
+      },
+    },
+  )
+  const jobRef = await requestJson<{ ref: ExactRef }>(
+    `/api/digital-employee-job-templates/${encodeURIComponent(job.id)}/publish`,
+    { method: 'POST', body: {} },
   )
 
-  const failure = (
-    onExhausted: string,
-    onRejected: string | null = null,
-    onExpired: string | null = null,
-  ) => ({
-    retry: { sameScene: 1, freshScene: 1 },
-    onExhausted,
-    onRejected,
-    onExpired,
-  })
-
-  const childEmployee = await publishResource<{ id: string }>('/api/code/digital-employees', {
-    name: `Gate configuration maintainer ${suffix}`,
-    draft: {
-      schemaVersion: 1,
-      description:
-        'Maintains the independent gate configuration repository and leaves its MR ready.',
-      businessStatus: 'enabled',
-      supportedRepositoryFacts: [],
-      steps: [
-        {
-          stepId: 'implement-gate-change',
-          displayName: 'Implement the gate repository change',
-          description: '',
-          when: [],
-          producer: {
-            kind: 'agent',
-            implementationRef: { id: implement.id, revision: implement.revision },
-          },
-          input: { kind: 'mission-requirement' },
-          onSuccess: 'reconcile',
-          join: null,
-          onFailure: failure('block'),
-        },
-      ],
-      problemTypes: [],
-      problemProducers: [],
-      problemHandlers: [],
-      capabilityRoutes: [
-        {
-          capabilityId: 'change.implement',
-          rules: [],
-          fallbackTemplateRef: { id: implement.id, revision: implement.revision },
-        },
-      ],
-      requirementSources: [],
-      pipelineProviders: [],
-      defaultPolicyRef: { id: childPolicy.id, revision: childPolicy.revision },
+  employeeName = `Browser development employee ${RUN_TAG}`
+  const employee = await requestJson<{ id: string }>(
+    `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}/employees`,
+    {
+      method: 'POST',
+      body: {
+        name: employeeName,
+        jobTemplateRef: jobRef.ref,
+        enabled: true,
+        workScope: { kind: 'repository', repositoryId },
+        toolOverrides: [],
+        collaborationOverrides: [],
+      },
     },
+  )
+  await requestJson(`/api/digital-employees/${encodeURIComponent(employee.id)}/publish`, {
+    method: 'POST',
+    body: {},
   })
-
-  await requestJson('/api/code/repository-assignments', {
-    method: 'PUT',
-    body: {
-      scopeKind: 'repository',
-      scopeRef: childRepositoryId,
-      employee: { id: childEmployee.id, revision: childEmployee.revision },
-      selectionPolicy: null,
-      executionPolicy: { id: childPolicy.id, revision: childPolicy.revision },
-      defaultRequirementSourceKey: null,
-    },
-  })
-
-  const parentEmployee = await publishResource<{ id: string }>('/api/code/digital-employees', {
-    name: employeeName,
-    draft: {
-      schemaVersion: 1,
-      description: 'Java delivery employee that implements requirements and tends MR feedback.',
-      businessStatus: 'enabled',
-      supportedRepositoryFacts: [],
-      steps: [
-        {
-          stepId: 'implement-parent-change',
-          displayName: 'Implement the parent repository change',
-          description: '',
-          when: [],
-          producer: {
-            kind: 'agent',
-            implementationRef: { id: implement.id, revision: implement.revision },
-          },
-          input: { kind: 'mission-requirement' },
-          onSuccess: 'delegate-gate-change',
-          join: null,
-          onFailure: failure('block'),
-        },
-        {
-          stepId: 'delegate-gate-change',
-          displayName: 'Ask the gate configuration employee',
-          description: 'Create and wait for an independent child MR in the gate repository.',
-          when: [],
-          producer: {
-            kind: 'digital-employee',
-            employeeRef: { id: childEmployee.id, revision: childEmployee.revision },
-            repository: { kind: 'fixed', repositoryId: childRepositoryId },
-            completion: 'ready-to-merge',
-            deadlineMs: 120_000,
-          },
-          input: { kind: 'step-output', stepId: 'implement-parent-change' },
-          onSuccess: 'prepare-gate-approval',
-          join: null,
-          onFailure: failure('block'),
-        },
-        {
-          stepId: 'prepare-gate-approval',
-          displayName: 'Prepare the gate approval',
-          description: 'The Agent produces a bounded draft without approval credentials.',
-          when: [],
-          producer: {
-            kind: 'approval-prepare',
-            executor: 'agent',
-            implementationRef: { id: approvalPrepare.id, revision: approvalPrepare.revision },
-            approvalType: 'gate-configuration-rollout',
-          },
-          input: { kind: 'step-output', stepId: 'delegate-gate-change' },
-          onSuccess: 'submit-gate-approval',
-          join: null,
-          onFailure: failure('block'),
-        },
-        {
-          stepId: 'submit-gate-approval',
-          displayName: 'Submit the gate approval',
-          description: 'A configured program submits the validated draft idempotently.',
-          when: [],
-          producer: {
-            kind: 'approval-submit',
-            adapterRef: { id: approvalAdapter.id, revision: approvalAdapter.revision },
-          },
-          input: { kind: 'step-output', stepId: 'prepare-gate-approval' },
-          onSuccess: 'wait-gate-approval',
-          join: null,
-          onFailure: failure('block'),
-        },
-        {
-          stepId: 'wait-gate-approval',
-          displayName: 'Wait for the gate approval',
-          description: 'A short program observes authoritative approval state on each wake.',
-          when: [],
-          producer: {
-            kind: 'approval-observe',
-            adapterRef: { id: approvalAdapter.id, revision: approvalAdapter.revision },
-            pollIntervalMs: 5_000,
-            deadlineMs: 120_000,
-            webhookSourceKey: 'gate-approval',
-          },
-          input: { kind: 'step-output', stepId: 'submit-gate-approval' },
-          onSuccess: 'reconcile',
-          join: null,
-          onFailure: failure('block', 'handoff', 'block'),
-        },
-        {
-          stepId: 'repair-review-feedback',
-          displayName: 'Repair review feedback',
-          description: '',
-          when: [{ kind: 'number-compare', fact: 'mr.unhandledFeedbackCount', op: 'gt', value: 0 }],
-          producer: {
-            kind: 'agent',
-            implementationRef: { id: feedback.id, revision: feedback.revision },
-          },
-          input: { kind: 'mission-requirement' },
-          onSuccess: 'reconcile',
-          join: null,
-          onFailure: failure('block'),
-        },
-      ],
-      problemTypes: [],
-      problemProducers: [],
-      problemHandlers: [],
-      capabilityRoutes: [
-        {
-          capabilityId: 'change.implement',
-          rules: [],
-          fallbackTemplateRef: { id: implement.id, revision: implement.revision },
-        },
-        {
-          capabilityId: 'mr.feedback.apply',
-          rules: [],
-          fallbackTemplateRef: { id: feedback.id, revision: feedback.revision },
-        },
-        {
-          capabilityId: 'approval.prepare',
-          rules: [],
-          fallbackTemplateRef: {
-            id: approvalPrepare.id,
-            revision: approvalPrepare.revision,
-          },
-        },
-      ],
-      requirementSources: [],
-      pipelineProviders: [],
-      defaultPolicyRef: { id: policy.id, revision: policy.revision },
-    },
-  })
-  employeeId = parentEmployee.id
 }
 
 async function primeAuth(page: Page): Promise<void> {
@@ -513,67 +268,12 @@ async function primeAuth(page: Page): Promise<void> {
   )
 }
 
-async function choose(page: Page, testId: string, option: string | RegExp): Promise<void> {
-  await page.getByTestId(testId).click()
-  await page.getByRole('option', { name: option }).click()
-}
-
-/**
- * `diagnose` 在**超时那一刻**再取一次证据，拼进异常消息。
- *
- * 为什么要有它：这条 spec 只在 hosted windows 上红，而 CI 日志里唯一能拿到的就是这条
- * 异常消息——本机复现不了，VM 也不一定连得上。光有 mission JSON 只能看出「它停住了」，
- * 看不出「reconciler 为什么什么都没派」。决策轨迹正是那半，且只有超时时才值得取。
- * 2026-08-20 的 windows 定位就是靠一轮一轮往这条消息里补证据做出来的。
- */
-async function waitFor<T>(
-  label: string,
-  read: () => Promise<T>,
-  ready: (value: T) => boolean,
-  timeoutMs = 120_000,
-  diagnose?: () => Promise<unknown>,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs
-  let last: T | undefined
-  while (Date.now() < deadline) {
-    last = await read()
-    if (ready(last)) return last
-    await new Promise((resolve) => setTimeout(resolve, 250))
-  }
-  const extra =
-    diagnose === undefined
-      ? ''
-      : `; diagnose=${JSON.stringify(
-          await diagnose().catch((error: unknown) => `diagnose-failed: ${String(error)}`),
-        )}`
-  throw new Error(`${label} did not settle; last=${JSON.stringify(last)}${extra}`)
-}
-
-function branchFile(branch: string, path: string): { content: string; mode: string } {
-  const root = mkdtempSync(join(tmpdir(), 'rfc310-browser-branch-'))
-  try {
-    const checkout = join(root, 'checkout')
-    // 一律走 e2e/command.ts 的有界、非交互 runGit（root-test-entrypoint 守卫：
-    // spec 里自起子进程会让一个卡住的调用拖死整个 Playwright shard）。
-    runGit(['clone', '-q', '--branch', branch, project.repoHttpUrl, checkout])
-    const content = readFileSync(join(checkout, path), 'utf8')
-    const mode = runGit(['ls-tree', branch, path], checkout).trim().split(/\s+/)[0]!
-    return { content, mode }
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-}
-
 test.beforeAll(async () => {
   mocks = new SystemMockClient(
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL'),
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_TOKEN'),
   )
-  const retainedHome = process.env.AW_RFC310_E2E_HOME
-  daemon = await startDaemon({
-    stubMode: 'development',
-    ...(retainedHome === undefined ? {} : { home: retainedHome }),
-  })
+  daemon = await startDaemon({ stubMode: 'development' })
   await requestJson('/api/code-hosts/gitlab', {
     method: 'PUT',
     body: {
@@ -581,271 +281,81 @@ test.beforeAll(async () => {
       token: SYSTEM_MOCK_CODE_HOST_TOKEN,
     },
   })
-  project = await mocks.seedCodeHost({
+  const project = await mocks.seedCodeHost({
     provider: 'gitlab',
     projectPath: PROJECT_PATH,
-    title: 'RFC-310 digital employee browser journey',
+    title: 'RFC-310 current Digital Employee OS browser journey',
     defaultBranch: 'main',
     baseFiles: {
-      'pom.xml': '<project><modelVersion>4.0.0</modelVersion></project>\n',
-      'src/main/java/App.java': 'class App {}\n',
+      'README.md': '# Browser journey repository\n',
+      'src/App.java': 'class App {}\n',
     },
   })
-  childProject = await mocks.seedCodeHost({
-    provider: 'gitlab',
-    projectPath: CHILD_PROJECT_PATH,
-    title: 'RFC-310 delegated gate configuration',
-    defaultBranch: 'main',
-    baseFiles: {
-      'pom.xml': '<project><modelVersion>4.0.0</modelVersion></project>\n',
-      'gates/parent.yml': 'enabled: false\n',
-    },
-  })
-  await importRepository(project.repoHttpUrl)
-  childRepositoryId = await importRepository(childProject.repoHttpUrl)
-  await seedDigitalEmployee()
-  webhook = await requestJson('/api/webhook-endpoints', {
-    method: 'POST',
-    body: { name: 'RFC-310 browser MR lifecycle', provider: 'gitlab' },
-  })
+  repositoryId = await importRepository(project.repoHttpUrl)
+  await seedPublishedEmployee()
 })
 
 test.afterAll(async () => {
-  if (daemon !== undefined) await daemon.stop()
+  await daemon?.stop()
 })
 
-test('the configured employee delegates another repository, waits for approval, and keeps the parent MR ready until merge', async ({
+test('body and repository-bound files enter a stateful employee case and the unified task list', async ({
   page,
 }) => {
-  test.skip(
-    process.platform === 'win32',
-    'POSIX-only fixture: the uploaded verification program is a #!/bin/sh script asserted at git mode 100755, and repo: programs are spawned directly (no interpreter). See the header comment for the full evidence.',
-  )
-  const preexistingApprovalKeys = new Set(
-    (await mocks.snapshot()).approvals.map((approval) => approval.idempotencyKey),
-  )
   await primeAuth(page)
-  await page.goto(`${daemon.baseUrl}/code`)
-  // `/code` is the construction home: the build grid is always rendered, so it
-  // is the honest "the page came up" anchor (there is no separate container id).
-  await expect(page.getByTestId('digital-employee-build-employees')).toBeVisible()
 
-  // Business-level strategy: bind the published employee and policy to this
-  // repository through the actual assignment UI. The scope comes from the
-  // employee we just published (`?employee=`), exactly like the product's own
-  // 员工详情 → 设置范围 链路 —— an unscoped `/code` shortcut would let the
-  // server-owned journey pick *any* configured employee (there are two here),
-  // which is fine for a first-time user but is not what this journey asserts.
-  await page.getByTestId('digital-employee-build-assignments').click()
-  await page.goto(`${daemon.baseUrl}/code/assignments?employee=${employeeId}`)
-  await page.getByTestId('assignment-create').click()
-  await choose(page, 'assignment-scope-ref', /browser-digital-employee/)
-  await choose(page, 'assignment-employee', employeeName)
-  await choose(page, 'assignment-execution-policy', policyName)
-  await page.getByTestId('assignment-save').click()
-  await expect(page.getByTestId('assignments-repository')).toContainText(employeeName)
+  await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
+  await expect(page.getByTestId('digital-employee-responsibility-graph')).toBeVisible()
+  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+  await expect(page.getByText(employeeName, { exact: true })).toBeVisible()
 
-  // First-release input contract: body and uploaded files coexist. The target
-  // path and executable bit are explicit and become part of the platform commit.
-  // T138: 绑定保存后**同页**就出现「发起任务」——它是这一页的唯一主动作，
-  // 且带着刚绑定的那名员工（PR-13：一页一个主动作，服务端给出下一步）。
-  await page.getByTestId('journey-next-link').click()
-  await choose(page, 'mission-repo-select', /browser-digital-employee/)
-  await page.getByTestId('stepper-next').click()
-  await page.getByTestId('mission-title').fill('Ship the RFC-310 browser journey result')
+  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/new`)
+  await expect(
+    page.getByRole('heading', { name: 'Assign work to a digital employee' }),
+  ).toBeVisible()
+  await expect(page.getByRole('combobox').first()).toHaveAccessibleName(employeeName)
+  const repositoryPicker = page.getByRole('combobox').nth(1)
+  await expect(repositoryPicker).toBeVisible()
+  await repositoryPicker.click()
+  await page.getByRole('option', { name: new RegExp(PROJECT_PATH) }).click()
+  await page.getByRole('radio', { name: 'Request and files', exact: true }).click()
   await page
-    .getByTestId('mission-body')
-    .fill('Implement the requested change and keep the uploaded verification program in git.')
-  await page.getByTestId('mission-upload-files').setInputFiles({
-    name: 'verify.sh',
-    mimeType: 'text/x-shellscript',
-    buffer: Buffer.from('#!/bin/sh\nset -eu\ntest -s digital-employee-result.txt\n'),
+    .getByLabel('Requirement or problem body')
+    .fill('Implement the requested change and keep the supplied acceptance document in Git.')
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'acceptance.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('# Acceptance\nThe change is ready for committer review.\n'),
   })
-  await page.getByTestId('mission-upload-target-0').fill('verify.sh')
-  await page.getByTestId('mission-upload-executable-0').click()
-  await page.getByTestId('stepper-next').click()
-  await page.getByTestId('stepper-next').click()
-  await page.getByTestId('mission-preflight').click()
-  await expect(page.getByTestId('mission-preflight-ready')).toBeVisible()
-  await page.getByTestId('mission-launch-submit').click()
-  await page.waitForURL(/\/code\/missions\/[0-9A-Z]+$/)
-  const missionId = page.url().split('/').at(-1)!
-  const branch = `aw/mission/${missionId}`
+  await page
+    .getByRole('textbox', { name: 'Repository target path *', exact: true })
+    .fill('docs/acceptance.md')
 
-  const delegated = await waitFor(
-    'delegated child MR and submitted approval',
-    async () => {
-      const [snapshot, mission] = await Promise.all([
-        mocks.snapshot(),
-        requestJson<{
-          status: string
-          blockCode: string | null
-          blockDetail: string | null
-          collaboration: {
-            children: Array<{
-              childMissionId: string | null
-              status: string | null
-              completionSatisfied: boolean
-            }>
-            approvals: Array<{ externalRequestRef: string | null; status: string }>
-          }
-        }>(`/api/code/missions/${missionId}`),
-      ])
-      if (mission.status === 'blocked') {
-        throw new Error(`mission blocked: ${mission.blockCode}: ${mission.blockDetail}`)
-      }
-      return {
-        host: snapshot.codeHosts.find((row) => row.projectPath === CHILD_PROJECT_PATH)!,
-        approval: snapshot.approvals.find(
-          (row) => !preexistingApprovalKeys.has(row.idempotencyKey),
-        ),
-        mission,
-      }
-    },
-    (state) =>
-      state.host.mergeRequests.length > 0 &&
-      state.approval !== undefined &&
-      state.mission.collaboration.children.some((child) => child.completionSatisfied) &&
-      state.mission.collaboration.approvals.length > 0,
-    240_000,
+  const launchRequest = page.waitForRequest(
+    (request) =>
+      request.method() === 'POST' &&
+      /\/api\/digital-employees\/[^/]+\/cases$/.test(new URL(request.url()).pathname),
   )
-  const childReceipt = delegated.mission.collaboration.children[0]!
-  expect(childReceipt.childMissionId).not.toBeNull()
-  const childBranch = `aw/mission/${childReceipt.childMissionId}`
-  // 子仓里除了平台开的这条，还有 seedCodeHost 自带的 `system-mock-change`：
-  // 按分支名找，别按下标——下标断言只是在断言 mock 的种子顺序。
-  expect(delegated.host.mergeRequests.map((mr) => mr.sourceBranch)).toContain(childBranch)
-
-  await page.reload()
-  await expect(page.getByTestId('mission-collaboration')).toBeVisible()
-  await expect(page.getByTestId('mission-collaboration')).toContainText('Called digital employee')
-  await expect(page.getByTestId('mission-collaboration')).toContainText('External approval')
-
-  // The approval request identity is platform-derived, so the mock switches
-  // the already-created request's future authoritative observations only after
-  // discovering that exact key. The request itself is never recreated.
-  await mocks.seedDevelopmentApproval({
-    idempotencyKey: delegated.approval!.idempotencyKey,
-    statuses: ['pending', 'approved'],
+  await page.getByRole('button', { name: 'Assign work', exact: true }).click()
+  const submitted = await launchRequest
+  expect(submitted.postDataJSON()).toMatchObject({
+    kind: 'body-and-files',
+    target: { repositoryId },
+    body: 'Implement the requested change and keep the supplied acceptance document in Git.',
+    uploads: [{ targetPath: 'docs/acceptance.md' }],
   })
 
-  const firstState = await waitFor(
-    'platform-created MR',
-    async () => {
-      const [snapshot, mission] = await Promise.all([
-        mocks.snapshot(),
-        requestJson<{ status: string; blockCode: string | null; blockDetail: string | null }>(
-          `/api/code/missions/${missionId}`,
-        ),
-      ])
-      if (mission.status === 'blocked') {
-        throw new Error(`mission blocked: ${mission.blockCode}: ${mission.blockDetail}`)
-      }
-      return {
-        host: snapshot.codeHosts.find((row) => row.projectPath === PROJECT_PATH)!,
-        mission,
-      }
-    },
-    (state) => state.host.mergeRequests.some((mr) => mr.sourceBranch === branch),
-    120_000,
-    // 停住时把 reconciler 的决策轨迹一并带出来：mission JSON 只说明「它停了」，
-    // 轨迹才说明「为什么没派下一步」。
-    () => requestJson(`/api/code/missions/${missionId}/decision-trace`),
-  )
-  const firstHost = firstState.host
-  const firstMr = firstHost.mergeRequests.find((mr) => mr.sourceBranch === branch)!
-  const approvalAfterResume = (await mocks.snapshot()).approvals.find(
-    (row) => row.idempotencyKey === delegated.approval!.idempotencyKey,
-  )!
-  expect(approvalAfterResume.externalRequestRef).toBe(delegated.approval!.externalRequestRef)
-  expect(approvalAfterResume.observationIndex).toBeGreaterThanOrEqual(2)
-  // 平台对子仓恰好开一条 MR：重复 observe / 重启不得再开一条（幂等的可见判据）。
-  expect(
-    (await mocks.snapshot()).codeHosts
-      .find((row) => row.projectPath === CHILD_PROJECT_PATH)
-      ?.mergeRequests.filter((mr) => mr.sourceBranch === childBranch),
-  ).toHaveLength(1)
-  await waitFor(
-    'initial ready-to-merge state',
-    () =>
-      requestJson<{ status: string; blockCode: string | null }>(`/api/code/missions/${missionId}`),
-    (mission) =>
-      ['ready-to-merge', 'waiting-committer', 'watching'].includes(mission.status) &&
-      mission.blockCode === null,
-  )
-  const firstResult = branchFile(branch, 'digital-employee-result.txt')
-  expect(firstResult.content).toContain('Implemented by the RFC-310 digital employee system mock')
-  expect(branchFile(branch, 'verify.sh').mode).toBe('100755')
+  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
+  const caseId = page.url().split('/').at(-1)!
+  await expect(page.getByRole('heading', { name: employeeName, exact: true })).toBeVisible()
+  await expect(page.getByTestId('digital-employee-responsibility-graph')).toBeVisible()
+  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+  await expect(page.getByText('Work context', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Current responsibility and full lifecycle', { exact: true }),
+  ).toBeVisible()
 
-  // Runtime belongs to the unified task surface, not to a second inbox or a
-  // decorative RFC-304 activity graph under capability construction.
   await page.goto(`${daemon.baseUrl}/tasks?category=digital-employee`)
   await expect(page.getByTestId('digital-employee-task-list')).toBeVisible()
-  await expect(page.getByTestId(`digital-employee-task-${missionId}`)).toBeVisible()
-  await expect(page.getByTestId('code-panel-activity')).toHaveCount(0)
-
-  // A human review event carries the exact multi-line body into the bounded
-  // Agent input. The daemon must repair, push a new head and reply by itself.
-  const reviewDelivery = await mocks.deliverWebhook({
-    provider: 'gitlab',
-    callbackUrl: `${daemon.baseUrl}/webhooks/gitlab/${webhook.urlToken}`,
-    secret: webhook.secret,
-    projectPath: PROJECT_PATH,
-    number: firstMr.number,
-    event: 'review_comment_created',
-    body: REVIEW_BODY,
-    actor: { id: 99, username: 'human-reviewer', name: 'Human Reviewer' },
-  })
-  expect(reviewDelivery.status).toBe(200)
-
-  const repairedHost = await waitFor(
-    'feedback repair and platform reply',
-    async () => (await mocks.snapshot()).codeHosts.find((row) => row.projectPath === PROJECT_PATH)!,
-    (host) => {
-      const mr = host.mergeRequests.find((row) => row.number === firstMr.number)
-      return (
-        mr !== undefined &&
-        mr.headSha !== firstMr.headSha &&
-        mr.reviewComments.some((comment) => comment.body.includes(`aw-self:${missionId}`))
-      )
-    },
-    180_000,
-  )
-  const repairedMr = repairedHost.mergeRequests.find((row) => row.number === firstMr.number)!
-  expect(repairedMr.headSha).not.toBe(firstMr.headSha)
-  const repairedResult = branchFile(branch, 'digital-employee-result.txt').content
-  expect(repairedResult).toContain('Applied review feedback: Please document the public behavior')
-  expect(repairedResult).toContain('Keep this exact acceptance wording.')
-
-  // The platform never merges. A committer merge event is authoritative; the
-  // mission only tracks it to terminal and leaves the audit trail visible.
-  const mergeDelivery = await mocks.deliverWebhook({
-    provider: 'gitlab',
-    callbackUrl: `${daemon.baseUrl}/webhooks/gitlab/${webhook.urlToken}`,
-    secret: webhook.secret,
-    projectPath: PROJECT_PATH,
-    number: firstMr.number,
-    event: 'mr_merged',
-    actor: { id: 100, username: 'committer', name: 'Repository Committer' },
-  })
-  expect(mergeDelivery.status).toBe(200)
-  await waitFor(
-    'merged mission terminal',
-    () => requestJson<{ status: string }>(`/api/code/missions/${missionId}`),
-    (mission) => mission.status === 'merged',
-  )
-
-  await page.goto(`${daemon.baseUrl}/code/missions/${missionId}`)
-  await expect(page.getByTestId('mission-guidance')).toContainText(
-    'The mission lifecycle is complete',
-  )
-  await expect(page.getByText('Merged', { exact: true })).toBeVisible()
-
-  // Terminal history belongs to outcomes, and the retained mission result is
-  // visible there after the committer event rather than remaining on /code.
-  await page.goto(`${daemon.baseUrl}/outcomes`)
-  await expect(page.getByTestId('run-outcomes-page')).toBeVisible()
-  const outcomeHistory = page.getByTestId('code-outcome-history')
-  await expect(outcomeHistory.getByText(missionId.slice(-8), { exact: true })).toBeVisible()
-  await expect(outcomeHistory.getByText('Merged', { exact: true })).toBeVisible()
+  await expect(page.getByTestId(`digital-employee-task-${caseId}`)).toBeVisible()
 })

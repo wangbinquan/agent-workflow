@@ -43,7 +43,7 @@ import { routeTaskOperationsFixture } from './task-operations-fixtures'
 import { routeCodeSurfaceFixtures } from './code-surface-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 44
+const EXPECTED_VISUAL_SCENE_COUNT = 46
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -1056,27 +1056,60 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
   })
 
-  // RFC-310 T121 —— 数字员工业务页的逐页视觉回归。
-  //
-  // 这一族在此之前**一张基线都没有**：`/code/*` 是 RFC-310 交付的整个业务面，
-  // 却只有功能断言（点得动、跳得对），没有任何一处锁住"它长什么样"。于是像
-  // 步骤条塌成一行、空状态丢掉主动作、执行器三栏挤成一栏这类改动，功能测试
-  // 全绿而用户直接看到。数据全部走 `code-surface-fixtures` 的固定 JSON——真实
-  // 数据里的 ULID 与相对时间会让基线一天都活不下去。
-  //
-  // 不含 `/code/outcomes` 与员工详情页：2026-08-20 这两页正被 RFC-311 并发改写。
-  test('/code employee setup journey (mid-journey, light)', async ({ page }) => {
+  // RFC-310 —— 当前数字员工入口的逐页视觉回归。分类、固定职责全景、节点工具箱和
+  // 增加工具弹窗必须同屏保持上下文；旧 `/code/config/*` 深链继续作为兼容读面覆盖，
+  // 但 `/code` 首页已经由单写切换重定向到这里，不再记录已废弃的 journey 像素。
+  test('/digital-employees type catalog (light)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
-    await routeCodeSurfaceFixtures(page)
     await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/code`)
-    await expect(page.getByTestId('journey-next-action')).toBeVisible()
-    // 步骤条真的画到了第 3 步——否则截到的是"投影还没回来"的那一帧。
-    await expect(
-      page.getByTestId('journey-next-action').locator('li[aria-current="step"]'),
-    ).toContainText('Set scope')
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees`)
+    await expect(page.getByTestId('digital-employee-type-list')).toBeVisible()
+    await expect(page.getByTestId('digital-employee-type-development')).toBeVisible()
     await waitForStableAuthenticatedShell(page)
-    await expect(page).toHaveScreenshot('code-home.png', SNAPSHOT_OPTS)
+    await expect(page).toHaveScreenshot('digital-employees.png', SNAPSHOT_OPTS)
+  })
+
+  test('/digital-employees fixed responsibility toolbox (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await primeAuth(page)
+    await page.goto(
+      `${requireDaemon().baseUrl}/digital-employees/development%401?view=toolbox&workItem=analyze-implement`,
+    )
+    const graph = page.getByTestId('digital-employee-responsibility-graph')
+    await expect(graph).toBeVisible()
+    await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+    const toolbox = page.getByTestId('employee-node-toolbox')
+    await expect(toolbox).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    // The app shell scrolls its main pane internally. Component shots lock the
+    // fully expanded 18-node map and the selected node panel without clipping
+    // either at the viewport boundary; the functional journey locks that they
+    // are on the same page and that clicking the node selects this panel.
+    await expect(graph).toHaveScreenshot(
+      'digital-employee-responsibility-map.png',
+      COMPONENT_SNAPSHOT_OPTS,
+    )
+    await expect(toolbox).toHaveScreenshot(
+      'digital-employee-node-toolbox.png',
+      COMPONENT_SNAPSHOT_OPTS,
+    )
+  })
+
+  test('/digital-employees add work-item tool dialog (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await primeAuth(page)
+    await page.goto(
+      `${requireDaemon().baseUrl}/digital-employees/development%401?view=toolbox&workItem=analyze-implement`,
+    )
+    const toolbox = page.getByTestId('employee-node-toolbox')
+    await expect(toolbox).toBeVisible()
+    await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
+    await dialog.getByRole('textbox', { name: /Tool name/ }).fill('Implement Java changes')
+    await dialog.getByRole('combobox').click()
+    await page.getByRole('option', { name: 'Built in · Code writing', exact: true }).click()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('digital-employee-tool-dialog.png', SNAPSHOT_OPTS)
   })
 
   test('/code/config/employees populated list (light)', async ({ page }) => {
