@@ -211,7 +211,13 @@ export async function revalidateAllConnections(
     }
     // Survived the pass with a refreshed actor — unfreeze so the broadcast path
     // delivers again (impl-gate: the frame freeze is only for the pass duration).
-    if (!ws.data.closing) ws.data.revalidating = false
+    if (!ws.data.closing) {
+      ws.data.revalidating = false
+      // RFC-312 实现门 P1 —— 冻结期间到达的帧是被**丢弃**的，不是排队。累积式增量流
+      // （presence）因此会永久停在旧状态。让通道自己声明如何重同步（数据而非分支）；
+      // 没有累积状态的通道不实现该钩子，行为逐字不变。
+      erasedSpecOf(ws.data.channel.kind).resync?.(ws, deps.db)
+    }
   }
   if (stats.closedAuth > 0 || stats.closedGate > 0) {
     deps.log.info('ws-revalidate', { reason, ...stats })
@@ -222,7 +228,13 @@ export async function revalidateAllConnections(
 function sendAuthorityChanged(ws: ServerWebSocket<WsConnectionData>, revision: number): void {
   const frame: WsControlMessage = { type: 'authority.changed', revision }
   try {
-    ws.send(JSON.stringify(frame))
+    // RFC-312 实现门 P2 —— Bun 用**返回 0 表示这一帧被丢弃**（背压 / 已关闭）。此前只
+    // catch 异常，于是"通知被丢"与"通知送达"不可分：客户端收不到失效信号、`/me` 不刷新，
+    // 却又因为不认 4403 而一路重连。丢弃与抛出后果相同，处置也相同——按本函数既有裁决
+    // 关掉连接，让客户端重连并重新解析权限。
+    if (ws.send(JSON.stringify(frame)) === 0) {
+      closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'authority-notification-dropped')
+    }
   } catch {
     closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'authority-notification-failed')
   }

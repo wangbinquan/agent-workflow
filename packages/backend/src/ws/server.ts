@@ -256,6 +256,14 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   }
 
   function handleClose(ws: ServerWebSocket<ConnectionData>): void {
+    // RFC-312 实现门 P1 —— **必须先置 `closing`**。`installPresence` 的守卫（registry.ts）
+    // 依赖它来挡住「客户端在 handleOpen 的 epoch 复核 await 期间断开」这条竞态：那时
+    // handleClose 已经跑完、presence 句柄还不存在（releasePresence 是空操作），await 回来
+    // 后若 `closing` 仍为 false 就会照常登记，而**再也不会有第二次 close 回调来释放它**
+    // ⇒ 该用户永久在线、宽限定时器也回收不掉（connections 恒 ≥ 1）。
+    // 此前只有服务端主动关的 `closeConnection` 置位，传输层/客户端关这条路径漏了，
+    // 于是那段守卫写了却从不生效。
+    ws.data.closing = true
     untrackConnection(ws)
     try {
       ws.data.unsubscribe()

@@ -18,6 +18,10 @@ import {
   resetPresence,
   usePresenceOf,
 } from '../src/hooks/usePresence'
+// RFC-312 实现门 P1 —— store 现在绑定认证代次。测试与生产读**同一个**访问器，
+// 而不是硬编码一个数字，否则代次语义一改测试就会假绿。
+import { getAuthSessionRevision } from '../src/stores/auth'
+const REV = () => getAuthSessionRevision()
 
 function Probe({ id }: { id: string | null }) {
   const online = usePresenceOf(id)
@@ -35,7 +39,7 @@ describe('rfc312 presence store', () => {
   })
 
   test('收到快照后：在名单里 = true，不在名单里 = false（确定的离线）', () => {
-    applyPresenceSnapshot(['u1'])
+    applyPresenceSnapshot(['u1'], REV())
     const { rerender } = render(<Probe id="u1" />)
     expect(screen.getByTestId('probe').textContent).toBe('true')
     rerender(<Probe id="u2" />)
@@ -43,27 +47,27 @@ describe('rfc312 presence store', () => {
   })
 
   test('快照到达前的增量被丢弃（不得用半截状态冒充真值）', () => {
-    applyPresenceChanges([{ userId: 'u1', online: true }])
+    applyPresenceChanges([{ userId: 'u1', online: true }], REV())
     render(<Probe id="u1" />)
     expect(screen.getByTestId('probe').textContent).toBe('unknown')
   })
 
   test('增量在水化后正常生效（上线与下线两向）', () => {
-    applyPresenceSnapshot([])
+    applyPresenceSnapshot([], REV())
     const { rerender } = render(<Probe id="u1" />)
     expect(screen.getByTestId('probe').textContent).toBe('false')
 
-    applyPresenceChanges([{ userId: 'u1', online: true }])
+    applyPresenceChanges([{ userId: 'u1', online: true }], REV())
     rerender(<Probe id="u1" />)
     expect(screen.getByTestId('probe').textContent).toBe('true')
 
-    applyPresenceChanges([{ userId: 'u1', online: false }])
+    applyPresenceChanges([{ userId: 'u1', online: false }], REV())
     rerender(<Probe id="u1" />)
     expect(screen.getByTestId('probe').textContent).toBe('false')
   })
 
   test('reset（断线 / 登出 / 失权）回到 unknown，而不是把所有人显示成离线', () => {
-    applyPresenceSnapshot(['u1'])
+    applyPresenceSnapshot(['u1'], REV())
     const { rerender } = render(<Probe id="u1" />)
     expect(screen.getByTestId('probe').textContent).toBe('true')
 
@@ -73,7 +77,7 @@ describe('rfc312 presence store', () => {
   })
 
   test('非真实用户 id（历史行 / 系统行 / null）恒为 unknown', () => {
-    applyPresenceSnapshot(['u1'])
+    applyPresenceSnapshot(['u1'], REV())
     for (const id of ['local', '__system__', '', null]) {
       const { unmount } = render(<Probe id={id} />)
       expect(screen.getByTestId('probe').textContent).toBe('unknown')
@@ -101,7 +105,7 @@ describe('rfc312 PresenceDot', () => {
 
 describe('rfc312 接线点', () => {
   test('UserPicker 的 adornment 插槽：每个已选 chip 前渲染一次', () => {
-    applyPresenceSnapshot(['u1'])
+    applyPresenceSnapshot(['u1'], REV())
     render(
       <QueryClientProvider client={new QueryClient()}>
         <UserPicker

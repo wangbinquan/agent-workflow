@@ -232,6 +232,8 @@ export interface WsConnectionData {
    * the running subscription during every `await` inside the serial rescan.
    */
   revalidating: boolean
+  /** RFC-312 —— `sendJson` 补发快照时的重入守卫（见该函数注释）。 */
+  resyncing?: boolean
   /**
    * RFC-212 impl-gate finding 2 (Codex 2026-07-22): the revocation epoch captured
    * at the START of this connection's upgrade (before resolveActor). If it differs
@@ -333,6 +335,21 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
     p: ChannelParamsByKind[K],
     db: DbClient,
   ) => Promise<void>
+  /**
+   * RFC-312 实现门 P1 —— **复核解冻后的重同步**。
+   *
+   * 为什么需要：`revalidating` 期间到达的帧是被**丢弃**的（`gatedSubscribe` 里一个
+   * `return`），注释虽写作 "held back"，但既没有队列也没有重放。对 task/authority 这类
+   * "收到即去 refetch" 的通道无所谓；对**累积式增量流**（presence）则是永久损坏：丢掉
+   * 一条 `presence.changed` 后，订阅者会一直把该用户显示成旧状态，直到他下次翻转。
+   *
+   * 所以声明成通道自己的数据（与 `upgradeGate` / `frameGate` 同构），而不是在复核循环里
+   * 写 `kind === 'presence'` 分支。通道若无累积状态就不实现它。
+   *
+   * **两个触发点**：①复核解冻后（冻结期丢帧）；②`sendJson` 检测到 Bun 把帧丢了。
+   * 未实现该钩子的通道在两处都逐字维持原行为——②处此前就是忽略返回值。
+   */
+  resync?: (ws: ServerWebSocket<WsConnectionData>, db: DbClient) => void
 }
 
 /**
@@ -922,6 +939,14 @@ export const WS_CHANNELS: WsChannelRegistry = {
       }
       sendJson(ws, { type: 'presence.snapshot', online: getUserPresence.snapshot() }, db)
     },
+    // RFC-312 实现门 P1 —— 复核冻结期间的 `presence.changed` 会被丢弃（见
+    // `resync` 的类型注释），而 presence 是累积式增量流，丢一帧就永久
+    // 错到该用户下次翻转。解冻后重发一次**全量快照**：它是幂等的、与开连接时走的是同一
+    // 条 `applyPresenceSnapshot` 路径，因此不需要任何新的重放协议或客户端分支。
+    resync: (ws, db) => {
+      const { getUserPresence } = composeIdentityAccess(db)
+      sendJson(ws, { type: 'presence.snapshot', online: getUserPresence.snapshot() }, db)
+    },
   },
 }
 
@@ -958,6 +983,7 @@ interface ErasedChannelSpec {
     p: AnyChannelParams,
     db: DbClient,
   ) => Promise<void>
+  resync?: (ws: ServerWebSocket<WsConnectionData>, db: DbClient) => void
 }
 
 type AnyBroadcastContext = ChannelBroadcastContextByKind[WsChannelKind]
@@ -1100,7 +1126,24 @@ function sendJson(
 ): void {
   if (!authorityRevisionCurrent(ws, db)) return
   try {
-    ws.send(JSON.stringify(msg))
+    // RFC-312 实现门 P1 —— Bun 的 `ws.send()` 用**返回 0 表示这一帧被丢弃**（背压 / 已关闭），
+    // 此前这里只 catch 异常、完全忽略返回值，于是丢弃是静默的。对"收到即 refetch"的通道
+    // 无所谓；对累积式增量流则是永久损坏。让通道自己声明如何重同步：**没实现 `resync` 的
+    // 通道逐字维持原行为**（照旧忽略），只有 presence 会补发一次全量快照。
+    const written = ws.send(JSON.stringify(msg))
+    if (written === 0) {
+      const spec = erasedSpecOf(ws.data.channel.kind)
+      // 重入守卫：补发的快照本身也可能被丢（背压未缓解）。只尝试一次，避免在压力下自激；
+      // 仍失败就留在陈旧态，等下一帧成功时再自愈。
+      if (spec.resync !== undefined && !ws.data.resyncing) {
+        ws.data.resyncing = true
+        try {
+          spec.resync(ws, db)
+        } finally {
+          ws.data.resyncing = false
+        }
+      }
+    }
   } catch (err) {
     log.warn('send failed', {
       error: err instanceof Error ? err.message : String(err),

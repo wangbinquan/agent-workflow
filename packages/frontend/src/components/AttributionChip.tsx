@@ -26,9 +26,12 @@ interface AttributionChipProps {
 
 export function AttributionChip({ userId, role, user, className }: AttributionChipProps) {
   const { t } = useTranslation()
-  // RFC-312 —— 历史行（null / 'local' / '__system__'）与未解析 id 一律返回 undefined ⇒ 不渲染点，
-  // 否则水化后这些非真实用户会被显示成"离线"。
-  const presence = usePresenceOf(userId)
+  // RFC-312 —— 历史行（null / 'local' / '__system__'）由 usePresenceOf 的哨兵表返回 undefined。
+  // 但那张表只认哨兵值：**一个形态正常却查不到的 id**（lookup 尚未解析、或用户已被删除）
+  // 拿到的是 `false`，于是会给一个可能不存在的人画上"离线"点——实现门 P2 指出的正是这个。
+  // 判据用 `user`：五个调用点都从 lookup map 传它，未解析即 undefined ⇒ 传 undefined 进去，
+  // 得到"未知"而不是"离线"，与本组件"未知就不渲染任何东西"的既有契约一致。
+  const presence = usePresenceOf(user === undefined ? undefined : userId)
   const isLegacy = userId === null || userId === undefined || userId === 'local'
   const name = isLegacy ? t('attribution.localHistoric') : (user?.displayName ?? shortenId(userId))
   const roleLabel =

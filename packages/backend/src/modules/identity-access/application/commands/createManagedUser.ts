@@ -47,6 +47,14 @@ export class CreateManagedUser {
       // RFC-312 —— 建号默认授权与调用方显式勾选取**并集**，再统一规范化。
       // 规范化会去重、并对该角色 baseline 已含的点报错，所以策略必须只返回"可授予"的点
       // （initialGrantsForRole 对 admin 返回空正是为此）。
+      // RFC-312 实现门 P2 —— **系统默认授予与操作者显式勾选必须分开归因**。
+      // 合并成一个数组后统一记成操作者，审计里会显示"管理员显式授予了 users:presence"，
+      // 而迁移 0188 给存量行写的是 NULL（系统）——同一个权限点两条来路两种归因。
+      // 这里先把"纯系统默认"的那部分单独留存，写 grant 时据此归因为 NULL。
+      const explicitlyRequested = new Set<Permission>(command.additionalPermissions)
+      const systemDefaults = new Set<Permission>(
+        initialGrantsForRole(command.role).filter((p: Permission) => !explicitlyRequested.has(p)),
+      )
       const additionalPermissions = normalizeAdditionalPermissionsForWrite({
         role: command.role,
         additionalPermissions: [
@@ -83,7 +91,12 @@ export class CreateManagedUser {
           transaction.insertGrant({
             userId: command.id,
             permission,
-            grantedByUserId: contextMeta.source === 'cli' ? null : actorUserId,
+            // 系统默认授予 ⇒ NULL（与 0188 backfill 一致）；操作者显式勾选 ⇒ 操作者。
+            grantedByUserId: systemDefaults.has(permission)
+              ? null
+              : contextMeta.source === 'cli'
+                ? null
+                : actorUserId,
             grantedAt: context.now,
           })
         }

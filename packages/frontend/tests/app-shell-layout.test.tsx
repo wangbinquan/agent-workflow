@@ -1,5 +1,6 @@
 // RFC-198 PR2 — rendered responsive-shell and focus lifecycle contract.
 
+import type * as UseActorModule from '@/hooks/useActor'
 import { useEffect, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -108,7 +109,12 @@ vi.mock('@/components/LanguageSwitch', async () => {
   }
 })
 
-vi.mock('@/hooks/useActor', () => ({
+// RFC-312 实现门 —— 改为**局部** mock：本文件只想伪造下面三个 actor 派生的读点，
+// 其余导出（例如 `useAuthSessionRevision`，它是 stores/auth 的薄包装、与 actor 无关）
+// 应当保持真实。原先的全量工厂一旦被测子树用到任何**未列出**的导出就整片 18 条全红，
+// 报错还是 "No X export is defined on the mock"，与被测行为毫无关系。
+vi.mock('@/hooks/useActor', async (importOriginal) => ({
+  ...(await importOriginal<typeof UseActorModule>()),
   usePermission: (permission: string) =>
     harness.permissions === null
       ? harness.permissionAllowed

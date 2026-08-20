@@ -44,6 +44,14 @@ export interface UseWebSocketOptions {
 // loop; clear it and let the app fall back to the login flow (mirrors the HTTP
 // 401 handling in api/client.ts).
 const WS_CLOSE_AUTH_REVOKED = 4401
+/**
+ * RFC-312 实现门 P2 —— 后端 `WS_CLOSE_NOT_VISIBLE`（connections.ts:51）。含义与 4401 不同：
+ * **凭据仍然有效，只是这条通道所需的权限被收回了**（例如 `users:presence`）。所以不能
+ * `clearToken()` 把人踢去登录，正确处置是让 `/me` 失效，`usePermission` 随即转 false、
+ * 订阅方自己停订。此前只认 4401，于是 4403 走到默认分支一路重连——而控制帧
+ * `authority.changed` 又可能在发送时被丢，两者叠加就是永久 403 循环且 `/me` 永不刷新。
+ */
+const WS_CLOSE_NOT_VISIBLE = 4403
 const BASE_BACKOFF_MS = 500
 const MAX_BACKOFF_MS = 30_000
 
@@ -210,6 +218,11 @@ function connect(conn: SharedConn): void {
     // surfaces the login flow. connect() already no-ops on a null token, so
     // the scheduled reconnect below becomes a harmless 2s recheck.
     if (e?.code === WS_CLOSE_AUTH_REVOKED) clearToken()
+    // 权限被收回（而非凭据失效）：刷新 /me。关闭码是比控制帧更可靠的信道——
+    // 帧可能在背压下被丢，关闭码不会。
+    else if (e?.code === WS_CLOSE_NOT_VISIBLE) {
+      void appQueryClient.invalidateQueries({ queryKey: ACTOR_QUERY_KEY })
+    }
     scheduleReconnect(conn)
   })
   ws.addEventListener('error', () => {

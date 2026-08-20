@@ -558,22 +558,16 @@ describe('RFC-222 manager role', () => {
   })
 
   test('manager preset differences are ∈ admin and ∉ manager (and ∉ user)', () => {
+    // RFC-312 实现门 P3 —— 断言**性质**而不是抄一份清单。原先两边各硬编码一份同样过时的
+    // 名单（都漏了 `users:presence`），于是常量失真而测试照样绿。改成与 preset 对账后，
+    // 任何新增的、不进 manager preset 的权限点都会被自动纳入，无需有人记得来改这里。
     expect([...MANAGER_PRESET_MISSING_PERMISSIONS].sort()).toEqual(
-      [
-        'users:read',
-        'users:write',
-        'settings:read',
-        'settings:write',
-        'oidc:read',
-        'oidc:configure',
-        'backup:run',
-        'tasks:delete',
-        'webhook-endpoints:manage',
-        'intent:audit',
-        'mcp-runtime-tests:audit',
-        'webhook-triggers:override-owner',
-      ].sort(),
+      PERMISSIONS.filter((p) => !presetHasPermission('manager', p)).sort(),
     )
+    // 具体锚点：这几条历来在差集里，任何一条掉出来都说明 preset 被动过。
+    for (const p of ['users:read', 'settings:write', 'backup:run', 'users:presence'] as const) {
+      expect(MANAGER_PRESET_MISSING_PERMISSIONS).toContain(p)
+    }
     for (const p of MANAGER_PRESET_MISSING_PERMISSIONS) {
       expect(presetHasPermission('admin', p)).toBe(true)
       expect(presetHasPermission('manager', p)).toBe(false)

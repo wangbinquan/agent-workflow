@@ -1228,21 +1228,15 @@ export const USER_PRESET_MISSING_PERMISSIONS: ReadonlyArray<Permission> = PERMIS
 /**
  * Snapshot helper: points absent from the default `manager` preset. They remain
  * individually grantable; this list describes defaults, not an authorization class.
+ *
+ * RFC-312 实现门 P3 —— **改为从 `ROLE_PERMISSIONS` 派生，不再手抄**。原先是一份硬编码
+ * 清单，于是任何新增的、不进 manager preset 的权限点都会让它悄悄失真：`users:presence`
+ * 就漏在外面，而锁它的测试同样硬编码了同一份错清单，两边一起假绿。派生之后它自我维护，
+ * 加权限点不需要记得来改这里。
  */
-export const MANAGER_PRESET_MISSING_PERMISSIONS: ReadonlyArray<Permission> = [
-  'users:read',
-  'users:write',
-  'settings:read',
-  'settings:write',
-  'oidc:read',
-  'oidc:configure',
-  'backup:run',
-  'tasks:delete',
-  'webhook-endpoints:manage',
-  'intent:audit',
-  'mcp-runtime-tests:audit',
-  'webhook-triggers:override-owner',
-]
+export const MANAGER_PRESET_MISSING_PERMISSIONS: ReadonlyArray<Permission> = Object.freeze(
+  PERMISSIONS.filter((p) => !ROLE_PERMISSIONS.manager.includes(p)),
+)
 
 // -----------------------------------------------------------------------------
 // RFC-247 — token grant resolution. THE formula; auth/actor.ts calls this and
