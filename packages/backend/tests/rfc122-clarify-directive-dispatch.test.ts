@@ -609,9 +609,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     for (const i of reads) {
       const inAttemptBody = i > attemptFnIdx
       const inKeepIf = i > keepIfIdx && i < prepareIdx
-      expect(inAttemptBody || inKeepIf, `directive 读点 @${i} 落在 per-attempt 区域之外`).toBe(
-        true,
-      )
+      expect(inAttemptBody || inKeepIf, `directive 读点 @${i} 落在 per-attempt 区域之外`).toBe(true)
     }
     // 反向：读点不得落在窗口外的一次性前奏里（那正是「提到循环外缓存」的形状）。
     const windowIdx = src.indexOf('const windowOut = await runAssembly<')
