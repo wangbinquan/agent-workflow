@@ -499,6 +499,18 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
         .where(eq(developmentActionRuns.id, input.id))
         .run()
     },
+    countActionRuns(missionId, capabilityId) {
+      return db
+        .select()
+        .from(developmentActionRuns)
+        .where(
+          and(
+            eq(developmentActionRuns.missionId, missionId),
+            eq(developmentActionRuns.capabilityId, capabilityId),
+          ),
+        )
+        .all().length
+    },
     getActionRun(id) {
       const row = db
         .select()

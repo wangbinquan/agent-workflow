@@ -147,6 +147,28 @@ export async function materializeActionWorkspace(
   return { workspacePath: ws, businessTreeDigest: businessTreeDigestOf(ws) }
 }
 
+/**
+ * PR-7b T78 —— 采纳平台在别处准备好的 workspace（conflict merge 的 prepare
+ * 产物：含 .git 与 MERGE_HEAD，无法用 materialize 从 exact 输入重建）。只补
+ * evidence bundle 挂载与 businessTreeDigest；业务树原样保留——冲突现场的
+ * marker 就是 Agent 要解的输入。
+ */
+export function adoptActionWorkspace(
+  deps: Pick<WorkspaceDeps, 'evidence'>,
+  input: {
+    readonly workspacePath: string
+    readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
+  },
+): MaterializedWorkspace {
+  for (const bundle of input.bundles) {
+    deps.evidence.materializeBundle(bundle.bundleId, join(input.workspacePath, bundle.mountPath))
+  }
+  return {
+    workspacePath: input.workspacePath,
+    businessTreeDigest: businessTreeDigestOf(input.workspacePath),
+  }
+}
+
 /** 整树回退：废弃 workspace（含其父临时目录）。 */
 export function discardWorkspace(workspacePath: string): void {
   rmSync(dirname(workspacePath), { recursive: true, force: true })

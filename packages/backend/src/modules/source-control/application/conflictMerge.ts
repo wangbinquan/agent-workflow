@@ -9,10 +9,11 @@
 // Git；push 不在本文件——finish 只产本地 merge commit，发布仍走
 // deliverCandidate 的 exact-head CAS 面。
 
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import { AW_INTERNAL_GIT_IDENTITY, runGit as defaultRunGit } from '@/util/git'
 import type { RepositoryGit } from './repositoryCommit'
 
@@ -39,10 +40,22 @@ export async function prepareConflictMerge(input: {
   readonly baselineRepoPath: string
   readonly sourceSha: string
   readonly targetSha: string
+  /**
+   * workspace 宿主根。生产必须落 appHome 之下——RFC-308 的 exclude participant
+   * 对平台家外的 worktree 抛 owner-mismatch，交给 Agent 的 task 会起不来
+   * （actionWorkspace 同款约束）；缺省 tmpdir 仅供不派 Agent 的 merge 单测。
+   */
+  readonly workspacesRoot?: string
   readonly runGit?: RepositoryGit
 }): Promise<PrepareConflictMergeResult> {
   const runGit = input.runGit ?? defaultRunGit
-  const parent = mkdtempSync(join(tmpdir(), 'aw-conflict-'))
+  let parent: string
+  if (input.workspacesRoot === undefined) {
+    parent = mkdtempSync(join(tmpdir(), 'aw-conflict-'))
+  } else {
+    mkdirSync(input.workspacesRoot, { recursive: true })
+    parent = mkdtempSync(join(input.workspacesRoot, 'conflict-'))
+  }
   const ws = join(parent, 'ws')
   const cleanup = (): void => rmSync(parent, { recursive: true, force: true })
   const fail = (
@@ -67,6 +80,16 @@ export async function prepareConflictMerge(input: {
   if (checkout.exitCode !== 0) {
     return fail('conflict-workspace-failed', checkout.stderr.slice(0, 300))
   }
+  // repair Agent 拿到的现场必须与普通 action workspace 同形，否则它不能直接
+  // 交给 Agent 跑：①无 remote（Agent 永不自己发布 Git，clone 继承的 origin
+  // 先摘掉）；②RFC-308 平台运行物整目录 exclude（先于任何快照/写入，否则
+  // finish 的 `status --porcelain` 会把平台自己的运行物当成 Agent 顺手改动）。
+  const removeOrigin = await runGit(ws, ['remote', 'remove', 'origin'])
+  if (removeOrigin.exitCode !== 0) {
+    return fail('conflict-workspace-failed', removeOrigin.stderr.slice(0, 300))
+  }
+  mkdirSync(join(ws, '.git', 'info'), { recursive: true })
+  writeFileSync(join(ws, '.git', 'info', 'exclude'), `${PLATFORM_WORKSPACE_DIR}/\n`)
 
   const merge = await runGit(ws, ['merge', '--no-commit', '--no-ff', input.targetSha], {
     env: { ...AW_INTERNAL_GIT_IDENTITY },
@@ -124,6 +147,27 @@ export async function finishConflictMerge(input: {
 }): Promise<FinishConflictMergeResult> {
   const runGit = input.runGit ?? defaultRunGit
   const ws = input.workspacePath
+
+  // 幂等重入：merge commit 已经产出（HEAD 的两个 parent 恰是 S/T、MERGE_HEAD
+  // 已清）就原样回执。发布是 finish 之后的独立一步，进程在两步之间挂掉时
+  // 收口侧会重入本函数——不认这个已完成态的话，重入必然撞 `nothing to
+  // commit` 并把一次**已经解好的**冲突判成失败。
+  if (!existsSync(join(ws, '.git', 'MERGE_HEAD'))) {
+    const first = await runGit(ws, ['rev-parse', '--verify', 'HEAD^1'])
+    const second = await runGit(ws, ['rev-parse', '--verify', 'HEAD^2'])
+    if (
+      first.exitCode === 0 &&
+      second.exitCode === 0 &&
+      first.stdout.trim() === input.sourceSha &&
+      second.stdout.trim() === input.targetSha
+    ) {
+      const head = await runGit(ws, ['rev-parse', 'HEAD'])
+      const tree = await runGit(ws, ['rev-parse', 'HEAD^{tree}'])
+      if (head.exitCode === 0 && tree.exitCode === 0) {
+        return { ok: true, mergeCommitSha: head.stdout.trim(), treeOid: tree.stdout.trim() }
+      }
+    }
+  }
 
   // 「已解决」看**工作树内容**而不是索引态：Agent 写完解决内容时索引仍是
   // unmerged（add 是 finish 的职责，不是 Agent 的——Agent 无 Git）。残留

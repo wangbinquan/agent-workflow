@@ -148,6 +148,143 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     })
   })
 
+  // T78：conflict repair 的三条 policy 边界。它们都不在 takeover 里——规则命中
+  // conflict.repair 时 selected 根本不是静止态，放进 takeover 就永远轮不到。
+  test('conflict repair honours policy mode, repair budget and rule routing', async () => {
+    const fx = await buildPr3Fixture()
+    const base = defaultAutomationPolicyContent()
+    const now = 10_000_000
+    const missionId = 'm-conflict-policy'
+    fx.store.createMission({
+      id: missionId,
+      revision: 0,
+      epoch: 0,
+      status: 'watching',
+      automationMode: 'active',
+      transitionFence: 'none',
+      repositoryId: 'repo-conflict-policy',
+      sourceKind: 'direct',
+      sourceContentDigest: 'c'.repeat(64),
+      requestedSourceKey: null,
+      externalId: null,
+      resolvedSourceKey: null,
+      resolvedAdapterId: null,
+      resolvedAdapterRevision: null,
+      deliveryKind: 'create-merge-request',
+      deliveryTargetRef: null,
+      deliverySourceBranch: 'aw/mission/conflict-policy',
+      adoptedMrRef: null,
+      assignmentId: null,
+      employeeId: null,
+      employeeRevision: null,
+      policyId: fx.policyId,
+      policyRevision: 1,
+      requirementBundleRef: null,
+      repositoryFactsRef: null,
+      uploadPlanRef: null,
+      uploadPlacementRef: null,
+      uploadPublicationRef: null,
+      mrClaimId: 'claim-conflict-policy',
+      currentActionRunId: null,
+      readinessJson: null,
+      blockCode: null,
+      blockDetail: null,
+      terminalKind: null,
+      terminalUploadFulfillment: null,
+      terminalAt: null,
+      launchIdempotencyKey: 'idem-conflict-policy',
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    const mission = fx.store.getMission(missionId)!
+    const deps = { store: fx.store }
+    const freshCells = {
+      'mr.conflict': cell(true),
+      '__mr.factsCollectedAt': cell(String(now)),
+    }
+    const repair: NextDecision = {
+      kind: 'run-agent-action',
+      capabilityId: 'conflict.repair',
+      templateRef: 'tpl-conflict@1',
+      workSetRef: 'ws-1',
+    }
+    const repairPolicy = { ...base, conflict: { mode: 'repair' as const, maxRepairAttempts: 1 } }
+
+    // 预算未触顶 → 规则的选择原样放行。
+    expect(
+      redispatchMrCare(deps, mission, freshCells, repairPolicy, repair, { now: now + 1 }),
+    ).toEqual(repair)
+
+    // report-only 与「规则路由 conflict.repair」互相矛盾 → 诚实 typed block，
+    // 既不默默照做也不默默跳过。
+    expect(
+      redispatchMrCare(
+        deps,
+        mission,
+        freshCells,
+        { ...base, conflict: { mode: 'report-only', maxRepairAttempts: 1 } },
+        repair,
+        { now: now + 1 },
+      ),
+    ).toEqual({ kind: 'block', reason: 'conflict-repair-disabled-by-policy' })
+
+    // 平台已经替人试满 maxRepairAttempts（失败的那次也算）→ 交回 committer。
+    fx.store.createActionRun({
+      id: 'run-conflict-1',
+      missionId,
+      missionRevision: 0,
+      decisionId: 'dec-conflict-1',
+      capabilityId: 'conflict.repair',
+      capabilityContractVersion: 1,
+      templateId: 'tpl-conflict',
+      templateRevision: 1,
+      workSetDigest: null,
+      inputFactDigest: 'd'.repeat(64),
+      baselineRef: null,
+      writable: true,
+      now,
+    })
+    fx.store.settleActionRun({
+      id: 'run-conflict-1',
+      status: 'failed',
+      resultRef: null,
+      failureJson: '{}',
+      now,
+    })
+    expect(
+      redispatchMrCare(deps, mission, freshCells, repairPolicy, repair, { now: now + 2 }),
+    ).toEqual({ kind: 'block', reason: 'conflict-needs-committer' })
+
+    // 但 facts 过期时不判终局：陈旧的 conflict=true 先重采，别把人推给一个
+    // 可能已经不存在的冲突。
+    expect(
+      redispatchMrCare(
+        deps,
+        mission,
+        { 'mr.conflict': cell(true), '__mr.factsCollectedAt': cell(String(now)) },
+        repairPolicy,
+        repair,
+        { now: now + MR_FACTS_STALE_MS + 1 },
+      ),
+    ).toEqual(repair)
+
+    // 组织开了 repair 但没配 conflict.repair 规则 → 诚实等待，不代替 policy
+    // 决定「要不要修」（与 feedback 同款边界）。预算此时已触顶，所以先降回
+    // 一个还没试过的 Mission 视角：换 capability 的历史不算 repair 次数。
+    const other = fx.store.getMission(missionId)!
+    expect(
+      redispatchMrCare(
+        deps,
+        other,
+        freshCells,
+        { ...base, conflict: { mode: 'repair', maxRepairAttempts: 5 } },
+        WAIT_MR_CARE,
+        { now: now + 3 },
+      ),
+    ).toMatchObject({ kind: 'wait', reason: 'conflict-repair-not-routed' })
+  })
+
   test('takeover, staleness, reply dispatch, feedback wait, readiness push', async () => {
     const fx = await buildPr3Fixture()
     const policy = defaultAutomationPolicyContent()

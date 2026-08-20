@@ -48,6 +48,7 @@ import type { FactCellValue } from '../domain/facts'
 import { assembleAgentPrompt } from '../engine/prompt/assembleAgentPrompt'
 import { parseAgentFrame } from '../engine/envelope/parseAgentFrame'
 import { runCapabilitySemanticValidator } from '../engine/envelope/semanticValidators'
+import { publishConflictRepair } from './conflictRepairDelivery'
 import type { MissionRow, MissionStore } from './ports/missionStore'
 import type { ReconcileDeps } from './missionReconciler'
 
@@ -91,6 +92,8 @@ interface FrozenAttemptReplay {
   readonly feedbackSnapshot?: FeedbackAttemptSnapshot
   readonly candidateRef?: string
   readonly pipelineIssueRefs?: readonly string[]
+  /** PR-7b T78：conflict repair 的 exact 合并两端（fresh rerun 以同 S/T 重造现场）。 */
+  readonly conflict?: { readonly sourceSha: string; readonly targetSha: string }
   /** Exact content + manifest + pipeline evidence mounts from the first launch. */
   readonly evidenceBundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
 }
@@ -124,10 +127,14 @@ interface AttemptPreState {
   readonly taskBrief: string
   readonly factsSummary: readonly { readonly factId: string; readonly value: string }[]
   readonly feedbackSnapshot?: FeedbackAttemptSnapshot
+  /** PR-7b T78：conflict repair 的合并意图（launch 冻结的 exact S/T）。 */
+  readonly conflict?: { readonly sourceSha: string; readonly targetSha: string }
   readonly closedRefs: {
     readonly requirementItemRefs: readonly string[]
     /** PR-5 T54：repository module catalog（analyze affectedModuleRefs 闭集）。 */
     readonly repositoryModuleIds?: readonly string[]
+    /** PR-7b T78：平台标记的冲突集（validator writablePrefixes + 语义闭集）。 */
+    readonly conflictPaths?: readonly string[]
     /** PR-5 T58：review 对拍锚（launch 冻结）。 */
     readonly candidateRef?: string
     /** PR-6 T69：pipeline.repair 的 issue 闭集（launch 冻结）。 */
@@ -187,6 +194,8 @@ export interface LaunchAgentAttemptInput {
   readonly pipelineIssueRefs?: readonly string[]
   /** PR-7 T74：feedback apply 的 (threadRef,revision) 闭集（arm 冻结传入）。 */
   readonly feedbackSnapshot?: FeedbackAttemptSnapshot
+  /** PR-7b T78：conflict repair 的 exact 合并两端（arm 从 __mr.* cells 冻结）。 */
+  readonly conflictInput?: { readonly sourceSha: string; readonly targetSha: string }
   readonly problemInput?: {
     readonly producerId: string
     readonly evidenceDigest: string
@@ -375,12 +384,58 @@ export async function launchAgentAttempt(
         ]),
   ]
 
-  const workspace = await ports.actionWorkspace!.materialize({
-    baselineRepoPath: baseline.repoPath,
-    baselineSha: baseline.headSha,
-    seedRef,
-    bundles,
-  })
+  const definition = capabilityDefinition(input.capabilityId as CapabilityId)
+
+  // PR-7b T78 —— edit-conflicts 的现场不是 materialize 能重建的：它是
+  // source-control 「merge target into source」跑出来的**冲突态** worktree
+  // （保留 markers + MERGE_HEAD），业务树就是 Agent 要解的输入。所以这一档
+  // 走 prepare → adopt：workspace 由 source-control 造，action 侧只补 evidence
+  // 挂载与 digest。seed overlay 一律不叠——上传落点属发布链，混进冲突现场会
+  // 被 finish 的「冲突集之外不得有改动」如实拒掉。
+  let conflictPaths: readonly string[] | null = null
+  let conflictPin: { readonly sourceSha: string; readonly targetSha: string } | undefined
+  let workspace: { readonly workspacePath: string; readonly businessTreeDigest: string }
+  if (definition.workspaceMode === 'edit-conflicts') {
+    if (ports.conflictMerge === undefined) {
+      return { ok: false, blockCode: 'conflict-merge-not-wired', detail: null }
+    }
+    const conflict = input.frozenReplay?.conflict ?? input.conflictInput
+    if (conflict === undefined) {
+      return {
+        ok: false,
+        blockCode: 'conflict-heads-unavailable',
+        detail: 'mission facts carry no exact MR source/target head',
+      }
+    }
+    const prepared = await ports.conflictMerge.prepare({
+      baselineRepoPath: baseline.repoPath,
+      sourceSha: conflict.sourceSha,
+      targetSha: conflict.targetSha,
+    })
+    if (!prepared.ok) {
+      // `no-conflict` 不是重试信号而是**事实过期**信号（mr.conflict 已不成立）：
+      // 同样 typed block，由下一轮 MR facts 重采推翻它，绝不在此静默放行。
+      return {
+        ok: false,
+        blockCode: `conflict-prepare-failed:${prepared.code}`,
+        detail: prepared.detail,
+      }
+    }
+    conflictPaths = prepared.conflictPaths
+    conflictPin = conflict
+    seedRef = null
+    workspace = ports.actionWorkspace!.adopt({
+      workspacePath: prepared.workspacePath,
+      bundles,
+    })
+  } else {
+    workspace = await ports.actionWorkspace!.materialize({
+      baselineRepoPath: baseline.repoPath,
+      baselineSha: baseline.headSha,
+      seedRef,
+      bundles,
+    })
+  }
   const discard = (): void => {
     try {
       ports.actionWorkspace!.discard(workspace.workspacePath)
@@ -402,7 +457,6 @@ export async function launchAgentAttempt(
       .map((e) => e.targetPath) ??
     []
 
-  const definition = capabilityDefinition(input.capabilityId as CapabilityId)
   const nonce = randomBytes(24).toString('hex')
   const manifestCore = {
     schemaVersion: 1 as const,
@@ -582,9 +636,11 @@ export async function launchAgentAttempt(
     taskBrief,
     factsSummary,
     ...(feedbackSnapshot === undefined ? {} : { feedbackSnapshot }),
+    ...(conflictPin === undefined ? {} : { conflict: conflictPin }),
     closedRefs: {
       requirementItemRefs,
       repositoryModuleIds,
+      ...(conflictPaths === null ? {} : { conflictPaths }),
       ...(input.frozenReplay?.candidateRef === undefined && input.candidateRef === undefined
         ? {}
         : { candidateRef: input.frozenReplay?.candidateRef ?? input.candidateRef! }),
@@ -949,6 +1005,9 @@ export async function collectAgentAttempt(
           ...(preState.closedRefs.pipelineIssueRefs === undefined
             ? {}
             : { pipelineIssueRefs: preState.closedRefs.pipelineIssueRefs }),
+          // fresh rerun 用同一对 S/T 重造冲突现场——冲突集因此逐字相同，
+          // 换一对头就是换了一件事，不是重试。
+          ...(preState.conflict === undefined ? {} : { conflict: preState.conflict }),
           evidenceBundles: preState.bundles,
         },
       })
@@ -1055,6 +1114,9 @@ export async function collectAgentAttempt(
       ...(preState.closedRefs.pipelineIssueRefs === undefined
         ? {}
         : { pipelineIssueRefs: preState.closedRefs.pipelineIssueRefs }),
+      ...(preState.closedRefs.conflictPaths === undefined
+        ? {}
+        : { conflictPaths: preState.closedRefs.conflictPaths }),
     },
   })
   if (!semantic.ok) {
@@ -1068,7 +1130,9 @@ export async function collectAgentAttempt(
     // completed（read-only 完成）对现场的要求与 no-change 相同：必须 clean。
     outcome: envelope.outcome === 'completed' ? 'no-change' : envelope.outcome,
     workspaceMode: capabilityDefinition(preState.capabilityId as CapabilityId).workspaceMode,
-    writablePrefixes: [],
+    // edit-conflicts 的写允许集就是平台标记的冲突集（design §8.5 步骤 3）。
+    // 其它档保持空集 = 由 workspaceMode 自身决定边界。
+    writablePrefixes: preState.closedRefs.conflictPaths ?? [],
     preservePaths: preState.preservePaths,
     editablePaths: preState.editablePaths,
     budget: ATTEMPT_WORKSPACE_BUDGET,
@@ -1094,7 +1158,69 @@ export async function collectAgentAttempt(
   let candidateUploadLineage: {
     readonly finalDigests: readonly { readonly targetPath: string; readonly sha256: string }[]
   } | null = null
-  if (envelope.outcome === 'changed') {
+  // PR-7b T78：conflict repair 走不了 candidate 那条路——它的产物是一个双
+  // parent 的 merge commit，不是 baseline 上的 overlay diff。收口与发布合成
+  // 一步（§8.5 步骤 5-6），成功后 MR head 即刻变化，facts 必须重采。
+  let conflictReceipt: { readonly pushedSha: string; readonly branch: string } | null = null
+  if (envelope.outcome === 'changed' && preState.capabilityId === 'conflict.repair') {
+    const pin = preState.conflict
+    if (pin === undefined) {
+      return await failAttempt(
+        'evidence-unavailable',
+        { code: 'conflict-pin-unavailable' },
+        'conflict-pin-unavailable',
+      )
+    }
+    const published = await publishConflictRepair(
+      {
+        store: deps.store,
+        ports: deps.ports,
+        now: deps.now,
+        persistCells: (_missionId, patch) => persistActionCells(deps, mission, patch),
+        block: (missionId, code, detail) => blockMissionDirect(deps, missionId, code, detail),
+      },
+      mission,
+      {
+        actionRunId,
+        workspacePath: preState.workspacePath,
+        sourceSha: pin.sourceSha,
+        targetSha: pin.targetSha,
+        conflictPaths: preState.closedRefs.conflictPaths ?? [],
+      },
+    )
+    if (!published.ok) {
+      if (published.code === 'conflict-head-changed') {
+        // §8.5 步骤 6：S/T 在 Agent 干活期间变了 = **现场过期**，不是 Agent
+        // 没做对。所以它不进 agent-contract 重试预算（同一个现场再跑一遍必
+        // 然再撞一次，只会白烧一次预算，最后以 agent-contract-exhausted 这个
+        // 完全误导的 code 收场）：整树废弃、facts 判过期，下一轮重采后由规则
+        // 重新决定还要不要修。
+        deps.store.settleAttempt({
+          id: attempt.id,
+          status: 'discarded',
+          rejectionJson: JSON.stringify({ code: published.code, detail: published.detail }),
+          outcomeRef: null,
+          now,
+        })
+        try {
+          ports.actionWorkspace?.discard(preState.workspacePath)
+        } catch {
+          // GC 兜底。
+        }
+        persistActionCells(deps, mission, {
+          '__mr.factsCollectedAt': { state: 'known', value: '0', sourceRevision: attempt.id },
+        })
+        settleRunAndBlock(deps, mission, actionRunId, published.code, published.detail)
+        return { kind: 'action-failed', actionRunId, blockCode: published.code }
+      }
+      return await failAttempt(
+        published.kind === 'boundary' ? 'boundary-violation' : 'protocol',
+        { code: published.code, detail: published.detail },
+        published.code,
+      )
+    }
+    conflictReceipt = { pushedSha: published.pushedSha, branch: published.branch }
+  } else if (envelope.outcome === 'changed') {
     const derived = await ports.changeCandidate!.derive({
       baselineRepoPath: preState.baselineRepoPath,
       baselineSha: preState.baselineSha,
@@ -1182,6 +1308,20 @@ export async function collectAgentAttempt(
           // 之后必然撞上）。所以 candidate 的现场必须自带 run 身份。
           '__action.candidateRunId': known(actionRunId),
         }),
+    // PR-7b T78：conflict repair 的收口回执。`__delivery.pushedSha` 必须一起
+    // 前进——MR source head 已经是这个 merge commit，后续任何 fast-forward
+    // 发布都以它为 CAS 期望值；停在旧 candidate sha 上会直接推不上去。
+    // `__mr.factsCollectedAt` 归零把 MR facts 显式判为过期：head 变了，
+    // mr.conflict/mergeable 全部要重采（design §8.5 步骤 6 的同一条纪律）。
+    ...(conflictReceipt === null
+      ? {}
+      : {
+          '__conflict.mergedSha': known(conflictReceipt.pushedSha),
+          '__delivery.publishState': known('pushed'),
+          '__delivery.pushedSha': known(conflictReceipt.pushedSha),
+          '__delivery.sourceBranch': known(conflictReceipt.branch),
+          '__mr.factsCollectedAt': known('0'),
+        }),
     // push 后记 upload publication receipt 的 lineage（finalDigests）在此冻结。
     ...(candidateUploadLineage === null
       ? {}
@@ -1231,7 +1371,11 @@ export async function collectAgentAttempt(
       blockMissionDirect(
         deps,
         mission.id,
-        `agent-blocked:${envelope.result.code}`,
+        // design §8.5：语义上解不掉的冲突就是要人来合——不把它伪装成一次
+        // 普通的 agent-blocked，交接对象（committer）写在 block code 里。
+        preState.capabilityId === 'conflict.repair'
+          ? 'conflict-needs-committer'
+          : `agent-blocked:${envelope.result.code}`,
         envelope.result.explanation,
       )
     }

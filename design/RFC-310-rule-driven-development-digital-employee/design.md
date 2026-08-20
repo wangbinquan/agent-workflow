@@ -3,11 +3,11 @@
 > 产品视角见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)。
 >
 > 状态：**Done（2026-08-19 交付完成）**。PR-0..PR-10 全部落地并推 main；`gate:local` 全绿、
-> hosted CI 本 RFC 面全绿。**首版不含（如实登记，见 plan.md §13a）**：conflict repair 的 Agent
-> 执行面（typed block `conflict-repair-agent-surface-not-wired`，report-only 模式完整可用）、
-> evidence retention GC 与 GB 级 nightly、out-of-order webhook 矩阵、浏览器级 visual regression、
-> verification/review 结果升 catalog fact、cutover preflight 的 per-repo dry probe；mission 列表
-> 分页与 `/code` work-items 翻页已移交 RFC-311。
+> hosted CI 本 RFC 面全绿。**首版不含（如实登记，见 plan.md §13a）**：evidence retention GC 与
+> GB 级 nightly、浏览器级 visual regression、verification/review 结果升 catalog fact、
+> cutover preflight 的 per-repo dry probe；mission 列表分页与 `/code` work-items 翻页已移交
+> RFC-311。2026-08-20 补齐：out-of-order webhook 矩阵（T82）、conflict repair 的 Agent
+> 执行面（T78）。
 
 ## 0. 设计裁决与事实基线
 

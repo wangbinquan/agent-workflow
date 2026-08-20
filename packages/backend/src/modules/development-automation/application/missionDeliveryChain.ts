@@ -31,6 +31,9 @@ import type { ReconcilerPorts } from './ports/reconcilerPorts'
 export const DELIVERY_EFFECT_KINDS: ReadonlySet<string> = new Set([
   'candidate-commit',
   'candidate-push',
+  // PR-7b T78：conflict repair 的 merge commit push（orchestrator 收口时同轮
+  // 结算；悬挂行同样按 idempotencyKey 撞回重放，不进 effect-unsettled guard）。
+  'conflict-push',
   'mr-ensure',
 ])
 

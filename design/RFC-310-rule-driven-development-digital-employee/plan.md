@@ -7,11 +7,10 @@
 > PR-12（跨仓 child Mission / 外部审批 saga）和 PR-13（服务端 Journey 与无指导操作链）。
 > 2026-08-20：T131/T132/T140 三项以两条真跑绿的浏览器旅程收口（首跑账见 §13d 末），
 > **仅剩 T121 的逐页视觉基线**——它需要各 OS 基线图，本机只能产 darwin 一份。
-> **原首版不含（如实登记，见 plan.md §13a）**：conflict repair 的 Agent
-> 执行面（typed block `conflict-repair-agent-surface-not-wired`，report-only 模式完整可用）、
-> evidence retention GC 与 GB 级 nightly、out-of-order webhook 矩阵、浏览器级 visual regression、
-> verification/review 结果升 catalog fact、cutover preflight 的 per-repo dry probe；mission 列表
-> 分页与 `/code` work-items 翻页已移交 RFC-311。
+> **原首版不含（如实登记，见 plan.md §13a）**：evidence retention GC 与 GB 级 nightly、
+> 浏览器级 visual regression、verification/review 结果升 catalog fact、cutover preflight 的
+> per-repo dry probe；mission 列表分页与 `/code` work-items 翻页已移交 RFC-311。
+> 2026-08-20 补齐：out-of-order webhook 矩阵（T82）、conflict repair 的 Agent 执行面（T78）。
 
 ## 0. 交付原则
 
@@ -324,7 +323,7 @@ expected-head-mismatch > provider-head-mismatch`（指令原排序会让 head-mo
 | T75  | platform `mr.feedback.reply` idempotent effect；只回复不 resolve                                   | T28,T74         | ✅   |
 | T76  | MR care default policy 与可配置 feedback/conflict/CI priority                                      | T15,T66,T73     | ✅   |
 | T77  | source-control conflict prepare：只 merge target into source、exact S/T、conflict set              | T59,T72         | ✅   |
-| T78  | `conflict.repair` edit-conflicts profile + platform finish merge commit + CAS push                 | T43,T47,T77     | 🚧   |
+| T78  | `conflict.repair` edit-conflicts profile + platform finish merge commit + CAS push                 | T43,T47,T77     | ✅   |
 | T79  | report-only 默认、repair budget/blocked handoff；禁止 rebase/force/ours/theirs shortcut            | T76-T78         | ✅   |
 | T80  | readiness/handoff/tracking-only + external upload fulfillment/lineage + ready 回退                 | T29,T72,T76     | ✅   |
 | T81  | terminal：merged/closed/no-change + upload-unfulfilled；reopen/cancel fence/reconcile              | T30,T72,T80     | 🚧   |
@@ -371,11 +370,7 @@ policy)`（不代替 policy 决定）；watching + requiredGatesAllPass → `pub
   - finish（「已解决」按工作树 marker 内容检测而非索引 unmerged——Agent 无 Git，add 是 finish 的职责；只
     add 冲突集，顺手改动 `conflict-extra-changes` 拒不收编；平台身份 merge commit 双 parent；零 push——发布
     归 deliverCandidate CAS）。`bindConflictMergeParticipant` 已入 composition 与两装配点。
-- **T78 部分（🚧）**：conflict 决策面已接（care 链 §4.7 顺序 2：report-only 呈现于 readiness；repair 模式
-  typed block `conflict-repair-agent-surface-not-wired`）；**Agent 执行面欠三件**——workspaceValidator 的
-  edit-conflicts profile（冲突集 writablePrefixes）、orchestrator 的 merge-workspace 物化分支（prepare 的
-  workspace 含 .git，不同于 actionWorkspace）、conflictRefs 闭集注入。validator 的 `conflict-path-outside-
-markers` code 与 envelope 成员 PR-4 已备。归 PR-8 或专项。
+- **T78（✅，2026-08-20 补齐）**：见下方「T78 收口注记」。
 - **T79**：conflict shortcut 负锁（source-control 禁 `-X ours/theirs`/`--strategy=ours|theirs`/rebase）+
   T84 主扫描的 force 面 + policy `conflict.mode` 默认 report-only/maxRepairAttempts 既有。
 - **T80**：handoff（bumpEpoch+fence → 撤在途 action → prepared invalidate → dispatched 留 settleFence
@@ -658,11 +653,8 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 ### 未竟项（如实登记，不阻塞 Done）
 
-1. **T78 conflict repair 的 Agent 执行面**（edit-conflicts validator / merge-workspace 物化 /
-   conflictRefs 注入）——当前 repair 模式 typed block `conflict-repair-agent-surface-not-wired`，
-   端口已备；report-only 模式完整可用。
-2. **T71 retention GC + GB 级 nightly**、**T82 out-of-order webhook 矩阵**、**T93 浏览器级
-   visual regression**（T109 覆盖了功能面 E2E，未做像素快照）。
+1. **T71 retention GC + GB 级 nightly**、**T93 浏览器级 visual regression**（T109 覆盖了
+   功能面 E2E，未做像素快照）。〔T78 与 T82 已于 2026-08-20 补齐，见「T78 收口注记」。〕
 3. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
 4. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
 5. **verification/review 结果尚未升为 catalog fact**——repair/review 规则排程的前置。
@@ -846,6 +838,41 @@ delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 
 **仍未完成：T121**（业务 i18n / 只读权限 / responsive 已随 PR-8 的 inventory 棘轮覆盖，缺的是
 **逐页视觉基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线得在 CI 侧生成，
 故不在本轮登记完成）。
+
+### T78 收口注记（2026-08-20）—— conflict repair 的 Agent 执行面
+
+首版把 repair 模式停在 typed block `conflict-repair-agent-surface-not-wired`：source-control 的
+prepare/finish 已在（T77），缺的是「怎么把那个冲突现场交给 Agent、以及解完之后怎么发布」。本次按
+design §8.5 的六步逐条接完：
+
+| 步 | 落点                                                                                                        |
+| -- | ----------------------------------------------------------------------------------------------------------- |
+| ①  | `__mr.targetSha` 投影进 cells（此前只落 refsJson，决策面读不到 T，合并方向无法在 launch 时冻结）              |
+| ②  | `run-agent-action` arm 在 `workspaceMode === 'edit-conflicts'` 时从 `__mr.headSha`/`__mr.targetSha` 冻结 S/T |
+| ③  | launch 走 `conflictMerge.prepare` → `actionWorkspace.adopt`（**不**走 materialize：现场含 .git/MERGE_HEAD，重建不出来）；seed overlay 一律不叠；validator 的 `writablePrefixes` = 平台标记的冲突集 |
+| ④  | 收口的语义闭集 `closedRefs.conflictPaths` 注入 `conflict.repair` validator（`conflict-path-outside-markers` PR-4 已备）|
+| ⑤  | `conflictRepairDelivery.publishConflictRepair`：finish 双 parent merge commit → `candidateDelivery.push` 对 **S** 的 exact-head CAS（effect 台账 `conflict-push`）|
+| ⑥  | push 撞 `remote-head-changed` ⇒ typed `conflict-head-changed`：整树废弃 + facts 判过期，**不进 agent-contract 重试预算**（同一现场重跑必然再撞，只会烧完预算后以完全误导的 `agent-contract-exhausted` 收场）|
+
+care 链同步接三条 policy 边界（都在 takeover **之前**判——规则命中 conflict.repair 时 selected 不是
+静止态，放进 takeover 就永远轮不到）：`maxRepairAttempts` 触顶 ⇒ `blocked(conflict-needs-committer)`
+（含失败轮，且只在无在途动作 + facts 新鲜时判）；report-only 却路由了 conflict.repair ⇒
+`blocked(conflict-repair-disabled-by-policy)`；repair 模式但组织没配规则 ⇒ `wait(conflict-repair-not-routed)`。
+Agent 自己交 `blocked` outcome 时 block code 也收敛为 `conflict-needs-committer`（design §8.5 的措辞）。
+
+顺带补两处只在生产才会暴露的接线：`prepareConflictMerge` 现在摘 origin + 写 RFC-308 exclude 并接受
+`workspacesRoot`（现场要交给 Agent 跑，就必须与普通 action workspace 同形、且落 appHome 之下，否则
+RFC-308 的 owner 门直接让 task 起不来）；push 成功后 `__delivery.pushedSha` 必须一起前进——MR source
+head 已经是这个 merge commit，后续任何 fast-forward 发布都以它为 CAS 期望值。
+
+新增 `countActionRuns(missionId, capabilityId)`（预算算的是「平台替人试了几次」，失败轮尤其要算）。
+回归锁：`rfc310-pr7b-conflict-repair-journey.test.ts`（真 git + 真 bare remote 的三条——正向双 parent
+CAS 发布 / 越界改动被 **workspace 对拍**判 `write-outside-allowlist` 且远端纹丝不动 / S 被人推动后
+CAS 拒绝且不覆盖别人的提交）、`rfc310-pr7b-conflict-merge.test.ts` 的现场形态与 finish 幂等重入、
+`rfc310-pr7-mr-care-chain.test.ts` 的三条 policy 边界。
+
+**如实登记的残留**：conflict repair 只走 exact S/T 的一次性现场，没有「解到一半保存进度」的形态；
+repair 预算按 Mission 全生命周期累计（不按 head 重置）——两者都是当前的有意选择，不是遗漏。
 
 ## 14. 风险与停止条件
 

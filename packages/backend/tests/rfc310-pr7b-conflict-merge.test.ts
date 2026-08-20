@@ -9,7 +9,7 @@
 // 语义解决（T79 负锁；force push 面由 rfc310-pr7-no-merge-capability-scan 锁）。
 
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
@@ -140,6 +140,57 @@ describe('rfc310 pr7b T77 — conflict merge prepare/finish', () => {
       targetSha: clean.targetSha,
     })
     expect(cleanPrep).toMatchObject({ ok: false, code: 'no-conflict' })
+  })
+
+  // T78：prepare 出来的现场要**直接交给 Agent 跑**，所以它必须与普通 action
+  // workspace 同形。少了这两条中的任何一条都不会当场报错，而是在生产上以别的
+  // 面目出现：留着 origin 等于给 Agent 留了一条自己发布的路；没有 RFC-308
+  // exclude，平台自己写进 `.agent-workflow/` 的运行物会被 finish 的
+  // 「冲突集之外不得有改动」判成 Agent 越界。
+  test('T78: prepared workspace is Agent-ready — hosted under the given root, no remote, RFC-308 exclude', async () => {
+    const { repo, sourceSha, targetSha } = conflictRepo({
+      file: 'X.txt',
+      content: 'line1-from-target\n',
+    })
+    const root = join(mkdtempSync(join(tmpdir(), 'rfc310-t78-home-')), 'workspaces', 'conflicts')
+    const prepared = await prepareConflictMerge({
+      baselineRepoPath: repo,
+      sourceSha,
+      targetSha,
+      workspacesRoot: root,
+    })
+    expect(prepared.ok).toBe(true)
+    if (!prepared.ok) return
+    expect(prepared.workspacePath.startsWith(root)).toBe(true)
+    expect(git(prepared.workspacePath, 'remote').trim()).toBe('')
+    expect(readFileSync(join(prepared.workspacePath, '.git', 'info', 'exclude'), 'utf8')).toContain(
+      '.agent-workflow/',
+    )
+    // 平台运行物落进现场也不该成为「Agent 顺手改动」。
+    mkdirSync(join(prepared.workspacePath, '.agent-workflow', 'inputs'), { recursive: true })
+    writeFileSync(join(prepared.workspacePath, '.agent-workflow', 'inputs', 'x.md'), 'platform\n')
+    writeFileSync(join(prepared.workspacePath, 'X.txt'), 'line1-merged\n')
+    const finished = await finishConflictMerge({
+      workspacePath: prepared.workspacePath,
+      sourceSha,
+      targetSha,
+      conflictPaths: prepared.conflictPaths,
+      missionId: 'm-t78-shape',
+    })
+    expect(finished.ok).toBe(true)
+    if (!finished.ok) return
+
+    // 幂等重入：收口与发布是两步，进程在两步之间挂掉后必须能原样回执，
+    // 而不是撞 `nothing to commit` 把一次已经解好的冲突判成失败。
+    const again = await finishConflictMerge({
+      workspacePath: prepared.workspacePath,
+      sourceSha,
+      targetSha,
+      conflictPaths: prepared.conflictPaths,
+      missionId: 'm-t78-shape',
+    })
+    expect(again).toEqual(finished)
+    prepared.cleanup()
   })
 
   test('T79 negative lock: no conflict shortcut anywhere in source-control', () => {

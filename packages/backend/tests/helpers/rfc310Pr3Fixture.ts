@@ -64,7 +64,7 @@ export const ADAPTER_CLI = Bun.resolveSync(
 export interface Pr3PolicyRule {
   readonly ruleId: string
   readonly when: readonly unknown[]
-  readonly capabilityId: 'change.implement' | 'requirement.analyze'
+  readonly capabilityId: 'change.implement' | 'requirement.analyze' | 'conflict.repair'
 }
 
 /** 默认规则：requirement.bundleComplete → 才轮到 repository.languages → 动作。 */
@@ -87,6 +87,13 @@ export interface Pr3FixtureOptions {
   readonly analyzeRoute?: boolean
   /** PR-10 T109：员工加 mr.feedback.apply 路由（含专用模板）——全旅程 E2E 用。 */
   readonly feedbackRoute?: boolean
+  /** PR-7b T78：员工加 conflict.repair 路由（含专用模板）——冲突收敛旅程用。 */
+  readonly conflictRoute?: boolean
+  /** PR-7b T78：conflict policy（缺省沿用 default 的 report-only）。 */
+  readonly conflictPolicy?: {
+    readonly mode: 'report-only' | 'repair'
+    readonly maxRepairAttempts?: number
+  }
   /** PR-5 T55a：policy 的 no-change 收束模式（默认 program-proof）。 */
   readonly noChangeConfirmation?: 'program-proof' | 'human-confirmation'
   /** 外部源：发布真实 adapter（CLI 子进程）并挂到员工 requirementSources。 */
@@ -245,6 +252,41 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
     feedbackTemplateId = feedbackTemplate.id
   }
 
+  let conflictTemplateId: string | null = null
+  if (options.conflictRoute === true) {
+    const conflictTemplate = createActionTemplate(
+      { store: templates, now },
+      {
+        actorUserId: 'admin',
+        name: 'conflict-generic',
+        capabilityId: 'conflict.repair',
+        draft: {
+          schemaVersion: 1,
+          capabilityId: 'conflict.repair',
+          capabilityContractVersion: 1,
+          labels: [],
+          compatibility: [],
+          executor: { kind: 'agent', agentRef: 'agent-1@1' },
+          runtimeProfileRef: 'rt',
+          promptSupplement: 'resolve the marked conflicts only',
+          skillRefs: [],
+          mcpRefs: [],
+          readOnlyResourceRefs: [],
+          contextProfileRef: null,
+          writablePathPolicyRef: null,
+          additionalProtectedPathClasses: [],
+          verificationProfileRef: 'vp',
+          retryDefaults: { sameSession: 0, freshSession: 0 },
+        },
+      },
+    )
+    publishActionTemplate(
+      { store: templates, now },
+      { id: conflictTemplate.id, actorUserId: 'admin' },
+    )
+    conflictTemplateId = conflictTemplate.id
+  }
+
   const policyContent = defaultAutomationPolicyContent()
   const customPolicy = {
     ...policyContent,
@@ -253,6 +295,14 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
       noChangeConfirmation: options.noChangeConfirmation ?? 'program-proof',
     },
     actionPriority: { rules: [...(options.rules ?? DEFAULT_PR3_RULES)] },
+    conflict:
+      options.conflictPolicy === undefined
+        ? policyContent.conflict
+        : {
+            mode: options.conflictPolicy.mode,
+            maxRepairAttempts:
+              options.conflictPolicy.maxRepairAttempts ?? policyContent.conflict.maxRepairAttempts,
+          },
   }
   const policy = await createAutomationPolicy(db, {
     name: 'pol-pr3',
@@ -341,6 +391,15 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
                 capabilityId: 'mr.feedback.apply',
                 rules: [],
                 fallbackTemplateRef: { id: feedbackTemplateId, revision: 1 },
+              },
+            ]),
+        ...(conflictTemplateId === null
+          ? []
+          : [
+              {
+                capabilityId: 'conflict.repair',
+                rules: [],
+                fallbackTemplateRef: { id: conflictTemplateId, revision: 1 },
               },
             ]),
       ],

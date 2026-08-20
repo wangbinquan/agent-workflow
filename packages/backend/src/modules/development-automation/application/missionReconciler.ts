@@ -1320,6 +1320,16 @@ async function handleDecision(
           sourceRevision: collected.snapshotRef,
         }
       }
+      // PR-7b T78：conflict repair 的 merge 方向由 (S=source head, T=target
+      // head) 两端唯一确定。S 早已投影，T 此前只落 refsJson——决策面读不到，
+      // repair 就无法在 launch 时冻结 exact 的合并意图。
+      if (collected.targetSha !== null) {
+        merged['__mr.targetSha'] = {
+          state: 'known',
+          value: collected.targetSha,
+          sourceRevision: collected.snapshotRef,
+        }
+      }
       // PR-7 T73：feedback 台账联动——新 head 先 obsolete 旧 head 的未终结行，
       // 逐 thread 幂等 upsert（webhook 重放/重复采集不重复起 action），再按
       // policy 算 selectable 数投影 mr.unhandledFeedbackCount。
@@ -1492,6 +1502,16 @@ async function handleDecision(
         ...(selected.capabilityId === 'pipeline.repair'
           ? pipelineRepairInputs(deps, snapshot.cells)
           : {}),
+        // PR-7b T78：conflict repair 的 exact 合并两端。缺任一端不猜——
+        // launch 会以 conflict-heads-unavailable 诚实停住，由 MR facts 重采补齐。
+        ...((): { conflictInput?: { sourceSha: string; targetSha: string } } => {
+          if (definition.workspaceMode !== 'edit-conflicts') return {}
+          const source = knownString(snapshot.cells, '__mr.headSha')
+          const target = knownString(snapshot.cells, '__mr.targetSha')
+          return source === null || target === null
+            ? {}
+            : { conflictInput: { sourceSha: source, targetSha: target } }
+        })(),
         ...(selected.problemInput === undefined ? {} : { problemInput: selected.problemInput }),
         ...(selected.approvalInput === undefined ? {} : { approvalInput: selected.approvalInput }),
         ...(selected.retryBudget === undefined ? {} : { retryBudget: selected.retryBudget }),

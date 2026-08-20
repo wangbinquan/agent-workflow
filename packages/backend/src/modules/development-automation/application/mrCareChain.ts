@@ -79,35 +79,65 @@ export function redispatchMrCare(
   context: { readonly now: number },
 ): NextDecision {
   if (mission.mrClaimId === null) return selected
+
+  const collectedAtRaw = knownString(cells, '__mr.factsCollectedAt')
+  const collectedAt = collectedAtRaw === null ? null : Number.parseInt(collectedAtRaw, 10)
+  const factsFresh =
+    collectedAt !== null &&
+    Number.isFinite(collectedAt) &&
+    context.now - collectedAt <= MR_FACTS_STALE_MS
+  const conflictCell = cells['mr.conflict']
+  const conflicted =
+    conflictCell !== undefined && conflictCell.state === 'known' && conflictCell.value === true
+
+  // ---- 0) conflict repair 预算（§4.7 顺序 2 / §8.5）：repair 是平台替人试，
+  // 次数封顶是 policy 级硬边界，必须**先于 takeover 判定**——规则命中
+  // conflict.repair 时 selected 根本不是静止态，放到下面就永远轮不到它，
+  // maxRepairAttempts 形同虚设。触顶交回人（committer），不再自动重试。
+  // 只在没有在途动作时判：正在跑的那一轮已经计入 count，不能反过来把它自己
+  // 掐死；facts 过期时也不判，先重采（陈旧的 conflict=true 不该造成终局）。
+  if (
+    conflicted &&
+    factsFresh &&
+    policy.conflict.mode === 'repair' &&
+    mission.currentActionRunId === null &&
+    deps.store.countActionRuns(mission.id, 'conflict.repair') >= policy.conflict.maxRepairAttempts
+  ) {
+    return { kind: 'block', reason: 'conflict-needs-committer' }
+  }
+
+  // ---- 0b) report-only 与「规则路由 conflict.repair」是互相矛盾的配置：
+  // 前者的语义就是平台**不**自动解冲突。既不能默默照做（越过 policy 的明示
+  // 意愿），也不能默默跳过（规则会每轮重选、无声空转）——诚实 typed block。
+  if (
+    conflicted &&
+    policy.conflict.mode === 'report-only' &&
+    selected.kind === 'run-agent-action' &&
+    selected.capabilityId === 'conflict.repair'
+  ) {
+    return { kind: 'block', reason: 'conflict-repair-disabled-by-policy' }
+  }
+
   const takeover =
     selected.kind === 'block' ||
     (selected.kind === 'wait' && selected.reason === 'mr-care-not-wired')
   if (!takeover) return selected
 
   // ---- 1) facts 缺/过期 → collect（terminal/feedback/readiness 都以它为锚）。
-  const collectedAtRaw = knownString(cells, '__mr.factsCollectedAt')
-  const collectedAt = collectedAtRaw === null ? null : Number.parseInt(collectedAtRaw, 10)
-  if (
-    collectedAt === null ||
-    !Number.isFinite(collectedAt) ||
-    context.now - collectedAt > MR_FACTS_STALE_MS
-  ) {
-    return { kind: 'collect-mr-facts' }
-  }
+  if (!factsFresh) return { kind: 'collect-mr-facts' }
 
-  // ---- 1.5) conflict（§4.7 顺序 2）：report-only 呈现于 readiness；repair
-  // 模式的 Agent 执行面（edit-conflicts workspace 物化/validator profile）尚未
-  // 接线——诚实 typed block，prepare/finish 端口已备（PR-7b 注记债）。
-  {
-    const conflictCell = cells['mr.conflict']
-    if (
-      conflictCell !== undefined &&
-      conflictCell.state === 'known' &&
-      conflictCell.value === true &&
-      policy.conflict.mode === 'repair' &&
-      selected.kind !== 'block'
-    ) {
-      return { kind: 'block', reason: 'conflict-repair-agent-surface-not-wired' }
+  // ---- 1.5) conflict（§4.7 顺序 2）：report-only 只呈现于 readiness，不拦路。
+  // repair 模式由规则路由 conflict.repair（能力面 T78 已接：prepare → Agent 解
+  // 冲突集 → finish 双 parent merge commit → 对 S 的 exact-head CAS push）。
+  // 走到这里说明规则没选出动作 = 组织没配 conflict.repair 规则：诚实等待，
+  // 不代替 policy 决定「要不要修」（与下面 feedback 同款边界）。
+  if (conflicted && policy.conflict.mode === 'repair' && selected.kind !== 'block') {
+    return {
+      kind: 'wait',
+      reason: 'conflict-repair-not-routed',
+      resumeAt: null,
+      wakeSources: ['webhook', 'manual'],
+      attemptOrdinal: 0,
     }
   }
 

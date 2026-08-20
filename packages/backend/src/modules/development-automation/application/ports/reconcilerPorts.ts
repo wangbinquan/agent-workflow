@@ -255,6 +255,15 @@ export interface ActionWorkspacePort {
     readonly seedRef: string | null
     readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
   }): Promise<{ readonly workspacePath: string; readonly businessTreeDigest: string }>
+  /**
+   * PR-7b T78 —— 采纳一个**平台在别处准备好的** workspace（当前唯一来源是
+   * conflict merge 的 prepare：它含 .git/MERGE_HEAD，不能由 materialize 重建）。
+   * 只补 action 侧的挂载与 digest，不动业务树；discard 与 materialize 同路。
+   */
+  adopt(input: {
+    readonly workspacePath: string
+    readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
+  }): { readonly workspacePath: string; readonly businessTreeDigest: string }
   discard(workspacePath: string): void
 }
 
@@ -614,6 +623,8 @@ export interface ConflictMergePort {
     readonly baselineRepoPath: string
     readonly sourceSha: string
     readonly targetSha: string
+    /** 装配点注入的 workspace 宿主根（appHome 之下）；application 层不传。 */
+    readonly workspacesRoot?: string
   }): Promise<
     | {
         readonly ok: true

@@ -48,7 +48,11 @@ import {
   createAttemptContextStore,
   createWorkspaceValidationAdapter,
 } from './infrastructure/attemptSupport'
-import { discardWorkspace, materializeActionWorkspace } from './infrastructure/actionWorkspace'
+import {
+  adoptActionWorkspace,
+  discardWorkspace,
+  materializeActionWorkspace,
+} from './infrastructure/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
 import { resolveActionBaseline } from './infrastructure/gitBaselineReader'
 import {
@@ -207,6 +211,7 @@ export function composeDevelopmentAutomation(deps: {
           { evidence, seedsRoot, workspacesRoot: join(deps.appHome, 'workspaces', 'actions') },
           input,
         ),
+      adopt: (input) => adoptActionWorkspace({ evidence }, input),
       discard: discardWorkspace,
     },
     uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
@@ -243,7 +248,21 @@ export function composeDevelopmentAutomation(deps: {
     },
     ...(deps.pipelineEvidence === undefined ? {} : { pipelineEvidence: deps.pipelineEvidence }),
     ...(deps.mergeRequestFacts === undefined ? {} : { mergeRequestFacts: deps.mergeRequestFacts }),
-    ...(deps.conflictMerge === undefined ? {} : { conflictMerge: deps.conflictMerge }),
+    // conflict workspace 的宿主根同样必须落 appHome 之下（RFC-308 owner 门；
+    // 见 actionWorkspace）——application 层不知道 appHome，装配点补齐。
+    ...(deps.conflictMerge === undefined
+      ? {}
+      : {
+          conflictMerge: {
+            prepare: (input: Parameters<ConflictMergePort['prepare']>[0]) =>
+              deps.conflictMerge!.prepare({
+                ...input,
+                workspacesRoot: join(deps.appHome, 'workspaces', 'conflicts'),
+              }),
+            finish: (input: Parameters<ConflictMergePort['finish']>[0]) =>
+              deps.conflictMerge!.finish(input),
+          },
+        }),
     pipelineImport: createPipelineImportAdapter(evidence, PIPELINE_IMPORT_BUDGET),
   }
   const reconcileDeps = { store, lookup, snapshots, ports, now }

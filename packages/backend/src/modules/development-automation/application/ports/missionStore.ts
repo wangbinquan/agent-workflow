@@ -245,6 +245,12 @@ export interface MissionStore {
     readonly now: number
   }): void
   getActionRun(id: string): ActionRunRow | null
+  /**
+   * PR-7b T78 —— 某能力在本 Mission 上已经开过几次动作（含失败与在途）。
+   * conflict repair 的 `maxRepairAttempts` 封顶靠它：预算算的是「平台替人
+   * 试了几次」，失败的那几次尤其要算进去，否则封顶形同虚设。
+   */
+  countActionRuns(missionId: string, capabilityId: string): number
 
   claimAttempt(input: {
     readonly id: string

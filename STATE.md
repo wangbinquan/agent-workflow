@@ -178,7 +178,7 @@
 > terminal 结算补 fulfillment/action 撤销、webhook→mrClaim 反查→wake hint、T84 负扫描（mission 链路源码级
 > 禁 merge/approve/resolve/force-push+决策 kind 快照）。**待 PR-7b**：T77–T79 conflict 链、T80 handoff/
 > attach/resume、T83 crash matrix。
-> **PR-7 后半（T77/T79/T80/T83；T78 部分）已完成**：fork T：source-control conflict prepare/finish（merge
+> **PR-7 后半（T77/T79/T80/T83；T78 见下方 2026-08-20 收口）已完成**：fork T：source-control conflict prepare/finish（merge
 > target into source、marker 内容检测已解决、顺手改动拒收、平台身份双 parent commit、零 push、shortcut
 > 负锁）；fork U：handoff/attach/resume 三命令+HTTP+permission 三点（observe 主动校验、claim 消歧、
 > merged/closed 同命令 terminal、fulfillment 如实、resume 双面 facts 强制过期）。主 session：conflict
@@ -186,6 +186,16 @@
 > 物化，注记债）、T83 crash matrix 三窗并**修复决策去重吞悬挂 effect 的真实卡死缺陷**（去重命中但有
 > dispatched 自治 effect 时照常重放 handler）。PR-7a 绿证：superseding CI success（2cbfdf7a 含
 > 2f3747f9+c794e734）。
+> **T78 收口（2026-08-20）**：conflict repair 的 Agent 执行面按 design §8.5 六步接完（详见 plan.md
+> 「T78 收口注记」）。launch 走 `conflictMerge.prepare → actionWorkspace.adopt`（现场含 .git/MERGE_HEAD，
+> materialize 重建不出来）、`writablePrefixes` = 平台标记的冲突集、收口是 `finish` 双 parent merge commit +
+> 对 **S** 的 exact-head CAS push。两条只在生产才暴露的接线一并补上：prepare 现在摘 origin + 写 RFC-308
+> exclude 且落 appHome 之下（否则 owner 门让 task 起不来）；push 成功后 `__delivery.pushedSha` 必须前进
+> （MR head 已是 merge commit，后续 fast-forward 发布拿它当 CAS 期望值）。`remote-head-changed` 归
+> typed `conflict-head-changed` 且**不进 agent-contract 重试预算**——同一个过期现场重跑必然再撞，烧完
+> 预算后会以完全误导的 `agent-contract-exhausted` 收场。care 链三条 policy 边界（触顶
+> `conflict-needs-committer` / report-only 却路由了 repair 的 `conflict-repair-disabled-by-policy` /
+> 没配规则的 `wait(conflict-repair-not-routed)`）都在 takeover **之前**判。
 > **PR-8（T85–T92；T93 部分）已完成**：完整配置与活动 UI。fork V：参数化配置四族页（violations 逐条/
 > 字段级权限/secret 只名不值）；fork W：policy rule builder（first-match 显式序、谓词控件化、组合子
 > JSON 保真）+ simulator（preview-decision→trace 逐条+no-match 诊断）+ 前端目录静态镜像的后端直接
