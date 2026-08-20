@@ -410,7 +410,15 @@ describe('RFC-311 性能防护 —— 防护面本身不许缩水', () => {
 // 判据是文本启发式，**会漏也会误**：漏掉裸 SQL、`.get()`、动态拼接的构建器；也可能
 // 把确实有界（上游已按主键取过）的链算进来。它的价值不在精确，而在**单调**——同一
 // 把尺子量出来的数只要不涨，就没有新的无界读进来。
-const UNBOUNDED_READ_RATCHET = 38
+// 39：+1 来自 `missionReadModels.missionFacets` 的分组聚合
+// （`select(status, count(*)).from(developmentMissions).groupBy(status)`）。它**不是**
+// 无界读——返回行数被状态枚举封顶（≤13 行），而且它位于已注册路径
+// `/api/code/missions` 之内，受不变量④a（单条语句取回行数有上界）实际保护。这是文本
+// 启发式的过度计数：它看得见 `.all()`，看不见 `group by` 把结果收敛成了枚举基数，也
+// 看不见这条路径已经在注册表里。按本条自己写的处置口径「连同理由调整棘轮值」处理。
+// 注意 group by 并不天然安全——按高基数列分组（如 cached_repo_id）仍是无界的，所以
+// 没有把 `groupBy` 一刀切地从判据里豁免。
+const UNBOUNDED_READ_RATCHET = 39
 
 describe('RFC-311 性能防护 —— 未受保护的无界读只许减不许增', () => {
   test('no new unbounded .all() reads on growing tables', () => {

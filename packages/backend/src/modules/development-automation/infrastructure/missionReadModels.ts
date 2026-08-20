@@ -4,7 +4,15 @@
 // 详情附 source/upload/decision 摘要，trace 回 canonical guard/rule trace。
 // 不返回 host path/nonce/secret/raw 正文（§12.4）。
 
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+
+import {
+  DIGITAL_EMPLOYEE_MISSION_STATUSES,
+  digitalEmployeeTaskStatus,
+  taskMatchesListView,
+  type TaskListView,
+  type TaskStatus,
+} from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import {
@@ -85,6 +93,33 @@ export interface MissionPageCursor {
 export interface MissionPage {
   items: MissionSummaryView[]
   nextCursor: MissionPageCursor | null
+  /**
+   * 四个视图桶的计数，**算在全集上**（不受 view / statuses / q 影响）——与 /tasks 的
+   * facets 同语义，也与此前前端 `digitalEmployeeFacets(全量)` 的行为逐字一致。
+   */
+  facets: { all: number; active: number; attention: number; finished: number }
+}
+
+export interface MissionPageFilters {
+  view?: TaskListView
+  statuses?: readonly TaskStatus[]
+  /** 大小写不敏感子串，匹配 id / repositoryId / externalId / blockCode / employeeId。 */
+  q?: string
+}
+
+/**
+ * 把 view + statuses 反解成**mission 状态集合**——服务端不去 SQL 里重写映射逻辑，
+ * 而是拿 shared 里那张唯一的表把每个 mission 状态算一遍，取命中的那些。这样两端
+ * 不可能漂移，代价是一次 13 元素的常数级枚举。
+ */
+export function missionStatusesFor(filters: MissionPageFilters): string[] {
+  const wanted = filters.statuses ?? []
+  const view = filters.view ?? 'all'
+  return DIGITAL_EMPLOYEE_MISSION_STATUSES.filter((missionStatus) => {
+    const status = digitalEmployeeTaskStatus(missionStatus)
+    if (wanted.length > 0 && !wanted.includes(status)) return false
+    return taskMatchesListView(view, status)
+  })
 }
 
 /**
@@ -100,16 +135,34 @@ export interface MissionPage {
  */
 export function listMissionSummariesPage(
   db: DbClient,
-  opts: { limit: number; cursor?: MissionPageCursor },
+  opts: { limit: number; cursor?: MissionPageCursor } & MissionPageFilters,
 ): MissionPage {
   const boundary =
     opts.cursor === undefined
       ? sql`1 = 1`
       : sql`(${developmentMissions.createdAt}, ${developmentMissions.id}) < (${opts.cursor.createdAt}, ${opts.cursor.id})`
+  const statuses = missionStatusesFor(opts)
+  // 空集合意味着这组过滤在语义上排除了一切——早退，别去发一条 `IN ()`。
+  const statusCond =
+    statuses.length === DIGITAL_EMPLOYEE_MISSION_STATUSES.length
+      ? sql`1 = 1`
+      : inArray(developmentMissions.status, statuses)
+  const needle = opts.q?.trim().toLocaleLowerCase('en-US')
+  const qCond =
+    needle === undefined || needle === ''
+      ? sql`1 = 1`
+      : sql`(lower(${developmentMissions.id}) like ${`%${needle}%`}
+          or lower(${developmentMissions.repositoryId}) like ${`%${needle}%`}
+          or lower(coalesce(${developmentMissions.externalId}, '')) like ${`%${needle}%`}
+          or lower(coalesce(${developmentMissions.blockCode}, '')) like ${`%${needle}%`}
+          or lower(coalesce(${developmentMissions.employeeId}, '')) like ${`%${needle}%`})`
+  if (statuses.length === 0) {
+    return { items: [], nextCursor: null, facets: missionFacets(db) }
+  }
   const rows = db
     .select(SUMMARY_COLUMNS)
     .from(developmentMissions)
-    .where(boundary)
+    .where(and(boundary, statusCond, qCond))
     .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
     .limit(opts.limit + 1)
     .all()
@@ -119,7 +172,29 @@ export function listMissionSummariesPage(
   return {
     items: page.map(summaryOf),
     nextCursor: hasMore && last !== undefined ? { createdAt: last.createdAt, id: last.id } : null,
+    facets: missionFacets(db),
   }
+}
+
+/**
+ * 四个视图桶的计数。**一条按状态分组的语句**，不是四条 count——分组结果在内存里按
+ * shared 的同一张映射表折算，避免把 view 语义复制进 SQL。
+ */
+function missionFacets(db: DbClient): MissionPage['facets'] {
+  const rows = db
+    .select({ status: developmentMissions.status, n: sql<number>`count(*)` })
+    .from(developmentMissions)
+    .groupBy(developmentMissions.status)
+    .all()
+  const facets = { all: 0, active: 0, attention: 0, finished: 0 }
+  for (const row of rows) {
+    const status = digitalEmployeeTaskStatus(row.status)
+    facets.all += row.n
+    if (taskMatchesListView('active', status)) facets.active += row.n
+    if (taskMatchesListView('attention', status)) facets.attention += row.n
+    if (taskMatchesListView('finished', status)) facets.finished += row.n
+  }
+  return facets
 }
 
 export function getMissionDetail(

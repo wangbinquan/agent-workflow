@@ -17,6 +17,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+import { taskMatchesListView } from '@agent-workflow/shared'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { developmentMissions, users } from '../src/db/schema'
 import {
@@ -50,6 +52,50 @@ async function seed(db: DbClient, count: number): Promise<void> {
       deliveryKind: 'merge-request',
       // 每三行共享一个 created_at ⇒ 逼出「同一时间戳内的次序」这条边界:
       // 只有 (created_at, id) 的行值断点才能在这里既不重复也不漏。
+      createdAt: T0 + Math.floor(i / 3) * 1_000,
+      updatedAt: T0 + i,
+    })
+  }
+}
+
+/** 状态/文本都铺开的种子——否则过滤组合大半命中空集，对拍等于没跑。 */
+async function seedVaried(db: DbClient, count: number): Promise<void> {
+  await db.insert(users).values({
+    id: 'u1',
+    username: 'u1',
+    displayName: 'u1',
+    role: 'admin',
+    createdAt: T0,
+    updatedAt: T0,
+  })
+  const statuses = [
+    'admitting',
+    'awaiting-information',
+    'working',
+    'publishing',
+    'watching',
+    'ready-to-merge',
+    'waiting-committer',
+    'blocked',
+    'completed-no-change',
+    'merged',
+    'closed-unmerged',
+    'canceled',
+    'failed',
+  ]
+  for (let i = 0; i < count; i += 1) {
+    await db.insert(developmentMissions).values({
+      id: `m${String(i).padStart(3, '0')}`,
+      revision: 1,
+      status: statuses[i % statuses.length]!,
+      automationMode: 'auto',
+      transitionFence: 'none',
+      repositoryId: `repo-${i % 3}`,
+      sourceKind: 'direct-input',
+      deliveryKind: 'merge-request',
+      externalId: i % 4 === 0 ? `EXT-${i}` : null,
+      blockCode: i % 5 === 0 ? `block-${i}` : null,
+      employeeId: i % 6 === 0 ? `emp-${i}` : null,
       createdAt: T0 + Math.floor(i / 3) * 1_000,
       updatedAt: T0 + i,
     })
@@ -135,5 +181,97 @@ describe('RFC-311 — mission list paging === the legacy full listing', () => {
       status: 422,
       code: 'mission-cursor-invalid',
     })
+    expect(await failure('/api/code/missions?view=nope')).toEqual({
+      status: 422,
+      code: 'mission-view-invalid',
+    })
+    expect(await failure('/api/code/missions?statuses=not-a-status')).toEqual({
+      status: 422,
+      code: 'mission-statuses-invalid',
+    })
+  })
+})
+
+// RFC-311 —— 服务端过滤/facets 必须**逐条等于**此前前端那份实现。
+//
+// 背景：`/tasks` 的数字员工分类此前取**全量** mission 再在前端
+// `filterDigitalEmployeeMissions` + `digitalEmployeeFacets`。要接分页就必须把过滤与
+// 计数下推服务端，而"下推"最容易悄悄改语义（少一个状态、大小写不敏感漏了一列、
+// facets 跟着过滤走）。所以这里把**旧的前端实现原样写进测试当预言**，逐组合对拍。
+//
+// 预言故意写成朴素的 JS filter：它不共享被测代码的任何一行，两者一致才有意义。
+
+function oracleTaskStatus(status: string): string {
+  if (status === 'admitting') return 'pending'
+  if (status === 'awaiting-information') return 'awaiting_human'
+  if (status === 'ready-to-merge' || status === 'waiting-committer') return 'awaiting_review'
+  if (status === 'merged' || status === 'completed-no-change') return 'done'
+  if (status === 'closed-unmerged' || status === 'canceled') return 'canceled'
+  if (status === 'blocked' || status === 'failed') return 'failed'
+  return 'running'
+}
+// 视图判定**直接复用 shared 的 `taskMatchesListView`**——旧前端用的就是它，不是
+// 另一份实现。预言真正要独立转写的是搬家的那部分：mission 状态映射 + 过滤循环。
+// （第一版我把三个桶按记忆手写进预言，`ACTIVE` 漏了 awaiting_review/awaiting_human，
+// 于是预言自己先错了。凡是"照记忆重写一遍"的预言都有这个风险；能复用单一事实源
+// 的部分就别重写。）
+function oracleFilter(
+  rows: Array<Record<string, unknown>>,
+  f: { view: string; statuses: string[]; q?: string },
+): Array<Record<string, unknown>> {
+  const q = f.q?.toLocaleLowerCase('en-US')
+  return rows.filter((m) => {
+    const status = oracleTaskStatus(String(m.status))
+    if (f.statuses.length > 0 && !f.statuses.includes(status)) return false
+    if (!taskMatchesListView(f.view as never, status as never)) return false
+    if (q === undefined) return true
+    return [m.id, m.repositoryId, m.externalId ?? '', m.blockCode ?? '', m.employeeId ?? ''].some(
+      (v) => String(v).toLocaleLowerCase('en-US').includes(q),
+    )
+  })
+}
+
+describe('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', () => {
+  test('64 组过滤逐页对拍，且 facets 恒为全集计数', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedVaried(db, 40)
+    const all = listMissionSummaries(db) as unknown as Array<Record<string, unknown>>
+
+    const views = ['all', 'active', 'attention', 'finished']
+    const statusSets: string[][] = [[], ['running'], ['done', 'failed'], ['awaiting_review']]
+    const queries: Array<string | undefined> = [undefined, 'repo-1', 'EMP', 'zzz-no-match']
+
+    let combos = 0
+    for (const view of views) {
+      for (const statuses of statusSets) {
+        for (const q of queries) {
+          combos += 1
+          const expected = oracleFilter(all, { view, statuses, ...(q !== undefined ? { q } : {}) })
+          // 逐页取完，验证分页只是把同一序列切开
+          const got: string[] = []
+          let cursor: undefined | { createdAt: number; id: string }
+          for (let guard = 0; guard < 200; guard += 1) {
+            const page = listMissionSummariesPage(db, {
+              limit: 7,
+              view: view as never,
+              statuses: statuses as never,
+              ...(q !== undefined ? { q } : {}),
+              ...(cursor !== undefined ? { cursor } : {}),
+            })
+            got.push(...page.items.map((m) => m.id))
+            // facets 恒等于全集计数,不随过滤变化
+            expect(page.facets.all, `facets.all 应恒为全集(${view}/${statuses}/${q})`).toBe(
+              all.length,
+            )
+            if (page.nextCursor === null) break
+            cursor = page.nextCursor
+          }
+          expect(got, `组合 view=${view} statuses=[${statuses}] q=${q}`).toEqual(
+            expected.map((m) => String(m.id)),
+          )
+        }
+      }
+    }
+    expect(combos).toBe(64)
   })
 })

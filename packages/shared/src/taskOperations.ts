@@ -152,6 +152,39 @@ export function taskMatchesListView(
   return ATTENTION.has(status) || hasOpenAlert
 }
 
+/**
+ * RFC-311：数字员工 mission 状态 → 任务状态的映射。**从前端搬到 shared**，因为
+ * `/api/code/missions` 的服务端过滤要按同一张表把 view/statuses 翻译成 mission
+ * 状态集合——两边各写一份必然漂移，而漂移的症状是「列表少了几条」这种没人会当成
+ * bug 的东西。
+ */
+export function digitalEmployeeTaskStatus(status: string): TaskStatus {
+  if (status === 'admitting') return 'pending'
+  if (status === 'awaiting-information') return 'awaiting_human'
+  if (status === 'ready-to-merge' || status === 'waiting-committer') return 'awaiting_review'
+  if (status === 'merged' || status === 'completed-no-change') return 'done'
+  if (status === 'closed-unmerged' || status === 'canceled') return 'canceled'
+  if (status === 'blocked' || status === 'failed') return 'failed'
+  return 'running'
+}
+
+/** mission 状态全集——服务端把 view/statuses 反解成它的子集时的枚举面。 */
+export const DIGITAL_EMPLOYEE_MISSION_STATUSES = [
+  'admitting',
+  'awaiting-information',
+  'working',
+  'publishing',
+  'watching',
+  'ready-to-merge',
+  'waiting-committer',
+  'blocked',
+  'completed-no-change',
+  'merged',
+  'closed-unmerged',
+  'canceled',
+  'failed',
+] as const
+
 /** Canonical TASK_STATUS ordering for URL/query status sets. */
 export function canonicalTaskStatuses(values: readonly TaskStatus[]): TaskStatus[] {
   const wanted = new Set(values)

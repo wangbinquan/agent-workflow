@@ -112,6 +112,20 @@ const MissionCursorSchema = z.object({
   id: z.string().min(1),
 })
 
+const MissionViewSchema = z.enum(['all', 'active', 'attention', 'finished'])
+const MissionStatusesSchema = z.array(
+  z.enum([
+    'pending',
+    'running',
+    'done',
+    'failed',
+    'canceled',
+    'interrupted',
+    'awaiting_review',
+    'awaiting_human',
+  ]),
+)
+
 function decodeMissionCursor(raw: string): MissionPageCursor | null {
   try {
     const parsed = MissionCursorSchema.safeParse(
@@ -329,8 +343,32 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       // 复刻 /tasks 的卡顿形态,而它跑在 daemon 唯一的同步连接上。
       const limitRaw = c.req.query('limit')
       const cursorRaw = c.req.query('cursor')
-      if (limitRaw === undefined && cursorRaw === undefined) {
+      const viewRaw = c.req.query('view')
+      const statusesRaw = c.req.query('statuses')
+      const qRaw = c.req.query('q')
+      const paged =
+        limitRaw !== undefined ||
+        cursorRaw !== undefined ||
+        viewRaw !== undefined ||
+        statusesRaw !== undefined ||
+        qRaw !== undefined
+      if (!paged) {
         return c.json({ items: listMissionSummaries(deps.db) })
+      }
+      // RFC-311：view / statuses / q 与 /tasks 同名同义——服务端按 shared 里那张
+      // 唯一的 mission→task 状态映射反解，前端不再取全量自己过滤。
+      const viewParsed = MissionViewSchema.safeParse(viewRaw ?? 'all')
+      if (!viewParsed.success) {
+        throw new ValidationError('mission-view-invalid', `'${String(viewRaw)}' is not a view`)
+      }
+      const statusesParsed = MissionStatusesSchema.safeParse(
+        statusesRaw === undefined || statusesRaw === '' ? [] : statusesRaw.split(','),
+      )
+      if (!statusesParsed.success) {
+        throw new ValidationError(
+          'mission-statuses-invalid',
+          `'${String(statusesRaw)}' is not a status set`,
+        )
       }
       const limit = limitRaw === undefined ? 50 : Number(limitRaw)
       if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
@@ -346,6 +384,9 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       }
       const page = listMissionSummariesPage(deps.db, {
         limit,
+        view: viewParsed.data,
+        statuses: statusesParsed.data,
+        ...(qRaw !== undefined && qRaw !== '' ? { q: qRaw } : {}),
         ...(cursor !== undefined ? { cursor } : {}),
       })
       return c.json({

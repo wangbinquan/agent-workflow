@@ -8,7 +8,6 @@ import {
   TASK_STATUS,
   canonicalTaskStatuses,
   parseTaskStatusList,
-  taskMatchesListView,
   type TaskListOrigin,
   type TaskListScope,
   type TaskListSubject,
@@ -18,7 +17,7 @@ import {
   type TaskOperationsPage,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   useCallback,
@@ -272,26 +271,49 @@ function TasksPage() {
   const query = useTaskOperationsPage(filters, undefined, taskQueryEnabled)
   const sync = useTaskOperationsSync()
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
-  const digitalMissions = useQuery<{ items: MissionSummary[] }>({
-    queryKey: ['code-missions', 'task-operations'],
-    queryFn: ({ signal }) => api.get('/api/code/missions', undefined, signal),
+  // RFC-311：过滤与 facets **下推服务端**（`view` / `statuses` / `q` 与 /tasks 同名
+  // 同义），并按 keyset 翻页。此前是取**全量** mission 再在前端过滤——mission 表长
+  // 起来后，这条 10 秒一轮的轮询会把整张表搬到浏览器，正是本 RFC 要消灭的形态。
+  // 服务端等价性由 `rfc311-mission-page.test.ts` 的 64 组逐页 oracle 锁定。
+  const missionQuery = useInfiniteQuery({
+    queryKey: ['code-missions', 'task-operations', filters.view, filters.statuses, filters.q],
+    initialPageParam: null as string | null,
     enabled:
       actorReady && actor.data !== null && canReadDigitalEmployees && category !== 'orchestration',
     refetchInterval: 10_000,
+    queryFn: ({ pageParam, signal }) =>
+      api.get<{
+        items: MissionSummary[]
+        nextCursor: string | null
+        facets: { all: number; active: number; attention: number; finished: number }
+      }>(
+        '/api/code/missions',
+        {
+          limit: 50,
+          view: filters.view,
+          statuses: filters.statuses.length > 0 ? filters.statuses.join(',') : undefined,
+          q: filters.q,
+          cursor: pageParam ?? undefined,
+        },
+        signal,
+      ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   })
   const missionItems = useMemo(
-    () =>
-      filterDigitalEmployeeMissions(digitalMissions.data?.items ?? [], {
-        view: filters.view,
-        statuses: filters.statuses,
-        query: filters.q,
-      }),
-    [digitalMissions.data?.items, filters.q, filters.statuses, filters.view],
+    () => (missionQuery.data?.pages ?? []).flatMap((page) => page.items),
+    [missionQuery.data?.pages],
   )
   const rootPage = query.data?.pages.find((page) => page.kind === 'root')
   const taskFacets =
     rootPage?.kind === 'root' ? rootPage.facets : { all: 0, active: 0, attention: 0, finished: 0 }
-  const missionFacets = digitalEmployeeFacets(digitalMissions.data?.items ?? [])
+  // facets 由服务端给（算在全集上，不随 view/statuses/q 变），与旧的
+  // `digitalEmployeeFacets(全量)` 语义逐字一致。
+  const missionFacets = missionQuery.data?.pages[0]?.facets ?? {
+    all: 0,
+    active: 0,
+    attention: 0,
+    finished: 0,
+  }
   const facets =
     category === 'digital-employee'
       ? missionFacets
@@ -394,11 +416,11 @@ function TasksPage() {
   const isLoading =
     actor.isLoading ||
     (category !== 'digital-employee' && query.isLoading) ||
-    (category !== 'orchestration' && canReadDigitalEmployees && digitalMissions.isLoading)
+    (category !== 'orchestration' && canReadDigitalEmployees && missionQuery.isLoading)
   const initialEmpty =
     !isLoading &&
     query.error == null &&
-    digitalMissions.error == null &&
+    missionQuery.error == null &&
     items.length === 0 &&
     missionItems.length === 0 &&
     facets.all === 0 &&
@@ -406,7 +428,7 @@ function TasksPage() {
   const noMatches =
     !isLoading &&
     query.error == null &&
-    digitalMissions.error == null &&
+    missionQuery.error == null &&
     items.length === 0 &&
     missionItems.length === 0 &&
     !initialEmpty
@@ -510,11 +532,8 @@ function TasksPage() {
           {query.error != null && (
             <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
           )}
-          {digitalMissions.error != null && category !== 'orchestration' && (
-            <ErrorBanner
-              error={digitalMissions.error}
-              onRetry={() => void digitalMissions.refetch()}
-            />
+          {missionQuery.error != null && category !== 'orchestration' && (
+            <ErrorBanner error={missionQuery.error} onRetry={() => void missionQuery.refetch()} />
           )}
         </FeedbackStack>
         {isLoading && <LoadingState data-testid="tasks-loading" />}
@@ -541,7 +560,12 @@ function TasksPage() {
         )}
 
         {missionItems.length > 0 && category !== 'orchestration' && (
-          <DigitalEmployeeTaskList items={missionItems} />
+          <DigitalEmployeeTaskList
+            items={missionItems}
+            hasNextPage={missionQuery.hasNextPage}
+            loadingMore={missionQuery.isFetchingNextPage}
+            onLoadMore={() => void missionQuery.fetchNextPage()}
+          />
         )}
 
         {items.length > 0 && category !== 'digital-employee' && (
@@ -680,52 +704,12 @@ function TaskListFilterDialog(props: {
   )
 }
 
-function digitalEmployeeTaskStatus(status: string): TaskStatus {
-  if (status === 'admitting') return 'pending'
-  if (status === 'awaiting-information') return 'awaiting_human'
-  if (status === 'ready-to-merge' || status === 'waiting-committer') return 'awaiting_review'
-  if (status === 'merged' || status === 'completed-no-change') return 'done'
-  if (status === 'closed-unmerged' || status === 'canceled') return 'canceled'
-  if (status === 'blocked' || status === 'failed') return 'failed'
-  return 'running'
-}
-
-function filterDigitalEmployeeMissions(
-  missions: MissionSummary[],
-  filters: { view: TaskListView; statuses: TaskStatus[]; query?: string },
-): MissionSummary[] {
-  const query = filters.query?.toLocaleLowerCase('en-US')
-  return missions.filter((mission) => {
-    const status = digitalEmployeeTaskStatus(mission.status)
-    if (filters.statuses.length > 0 && !filters.statuses.includes(status)) return false
-    if (!taskMatchesListView(filters.view, status)) return false
-    if (query === undefined) return true
-    return [
-      mission.id,
-      mission.repositoryId,
-      mission.externalId ?? '',
-      mission.blockCode ?? '',
-      mission.employeeId ?? '',
-    ].some((value) => value.toLocaleLowerCase('en-US').includes(query))
-  })
-}
-
-function digitalEmployeeFacets(missions: MissionSummary[]): {
-  all: number
-  active: number
-  attention: number
-  finished: number
-} {
-  const statuses = missions.map((mission) => digitalEmployeeTaskStatus(mission.status))
-  return {
-    all: statuses.length,
-    active: statuses.filter((status) => taskMatchesListView('active', status)).length,
-    attention: statuses.filter((status) => taskMatchesListView('attention', status)).length,
-    finished: statuses.filter((status) => taskMatchesListView('finished', status)).length,
-  }
-}
-
-function DigitalEmployeeTaskList(props: { items: MissionSummary[] }): ReactElement {
+function DigitalEmployeeTaskList(props: {
+  items: MissionSummary[]
+  hasNextPage: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
+}): ReactElement {
   const { t } = useTranslation()
   const navigate = useNavigate()
   return (
@@ -800,6 +784,27 @@ function DigitalEmployeeTaskList(props: { items: MissionSummary[] }): ReactEleme
             </div>
           </div>
         ))}
+        {props.hasNextPage && (
+          <div className="task-operations__more" role="listitem">
+            {/* 与 /tasks 根列表同款：可及名固定、永不 disabled，加载态由 aria-busy +
+                sr-only 旁白承载（见 RFC-311 关于点击目标不能从指针底下消失的注记）。 */}
+            <button
+              type="button"
+              className="btn btn--sm"
+              aria-busy={props.loadingMore || undefined}
+              onClick={() => {
+                if (!props.loadingMore) props.onLoadMore()
+              }}
+            >
+              {t('tasks.operations.loadMore')}
+            </button>
+            {props.loadingMore ? (
+              <span role="status" className="sr-only">
+                {t('tasks.operations.loadingMore')}
+              </span>
+            ) : null}
+          </div>
+        )}
       </div>
     </section>
   )
