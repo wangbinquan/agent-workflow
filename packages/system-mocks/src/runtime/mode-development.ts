@@ -28,6 +28,27 @@ import {
 const NAME = 'stub-development-agent'
 const RESULT_PATH = 'digital-employee-result.txt'
 
+/**
+ * 需要预先创建的父目录；`null` 表示不需要建。
+ *
+ * `mkdirSync(dirname(p), { recursive: true })` 是个几乎人人都在用的惯用写法，但对
+ * **裸文件名**它是一颗只在 Windows 上炸的雷：`dirname('a.txt')` 是 `'.'`，而
+ * `mkdirSync('.', { recursive: true })` 在 POSIX 上是 no-op、在 Windows 上**抛
+ * EEXIST**。2026-08-20 实撞：RFC-310 的全旅程 E2E 在 windows 那格红了两天，症状是
+ * `opencode exited with code 1`——一个未捕获异常，而 stub 自己的失败是 exit 2，所以
+ * 连"是不是 stub 的问题"都判断不了。真因 `EEXIST: file already exists, mkdir '.'`
+ * 是给非零退出的回执补上 stderr 尾巴之后才第一次看见的。
+ */
+export function parentDirToCreate(filePath: string): string | null {
+  const dir = dirname(filePath)
+  return dir === '.' || dir === '' ? null : dir
+}
+
+function ensureParentDir(filePath: string): void {
+  const dir = parentDirToCreate(filePath)
+  if (dir !== null) mkdirSync(dir, { recursive: true })
+}
+
 interface RequirementManifest {
   files?: Array<{ fileId?: unknown }>
 }
@@ -159,7 +180,7 @@ export function run(argv: readonly string[]): void {
   const identity = promptIdentity(call.prompt)
 
   if (identity.capabilityId === 'change.implement') {
-    mkdirSync(dirname(RESULT_PATH), { recursive: true })
+    ensureParentDir(RESULT_PATH)
     writeFileSync(RESULT_PATH, 'Implemented by the RFC-310 digital employee system mock.\n', 'utf8')
     emitAgentResult(outerOpen, identity, {
       capabilityId: identity.capabilityId,

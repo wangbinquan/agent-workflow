@@ -251,6 +251,13 @@
 > 中文字面量而它是**落库内容**，英文界面创建出来的员工整页英文里孤零零一行「实现修改」——功能测试
 > 从不看文字属于哪种语言。已修（`stepName` 必填，让编译器点出全部调用点 + i18n 文案 + CJK 泄漏锁）。
 >
+> **windows 腿真因定位（2026-08-20 `a6ca84ed`）**：RFC-310 全旅程 E2E 的 windows 格红了两天，
+> 真因是 `EEXIST: file already exists, mkdir '.'`——development stub 写
+> `mkdirSync(dirname('digital-employee-result.txt'), { recursive: true })`，`dirname` 是 `'.'`，
+> **POSIX 上 no-op、Windows 上抛**。已修（`parentDirToCreate` 单点 + 纯判据回归锁；「在临时目录里
+> 写个文件不抛异常」那种测试在 POSIX 上用旧代码照样绿，不叫回归防护）。这条真因是**三轮观测叠加**
+> 才看见的：blockDetail 恒 null → 只有裸退出码 → 尾巴被两道互不知情的截断各切一半。
+>
 > **可观测性收口（2026-08-20）**：子进程非零退出的 `errorMessage` 现在带 stderr 尾巴——裸退出码
 > 不可归因（windows 那格红了一整天，上层只拿得到 `opencode exited with code 1`）。实撞发现「补了
 > 信息 ≠ 信息到得了人眼前」：尾巴按总字节取尾时，bundle 那种单行几十 KB 的源码行一行就占满窗口，

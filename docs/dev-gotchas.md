@@ -997,6 +997,7 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
 
 ## 跨平台（RFC-254 实测）
 
+- **`mkdirSync(dirname(p), { recursive: true })` 对「裸文件名」是一颗只在 Windows 上炸的雷**（2026-08-20 实撞，RFC-310）：`dirname('a.txt')` 是 `'.'`，而 `mkdirSync('.', { recursive: true })` 在 POSIX 上是 **no-op**、在 Windows 上**抛 `EEXIST: file already exists, mkdir '.'`**。这个写法几乎人人都在用，且在本机、在 CI 的 ubuntu/macos 两格全绿——只有 windows 那格红，症状还只是一个未捕获异常的退出码。**定式**：写之前先判 `dirname` 是不是 `'.'`/`''`，是就别建（本仓的单点是 `packages/system-mocks/src/runtime/mode-development.ts` 的 `parentDirToCreate`）。**回归锁要挑对断言面**：「在临时目录里写个文件不抛异常」这种测试在 POSIX 上用旧代码照样绿——一条在出问题的平台之外永远为真的断言不叫回归防护，要锁的是纯判据（裸文件名 ⇒ 不该有目录要建）。
 - **`node:path` 的默认导出是「宿主口味」，解析别的平台的路径必须显式 `path.win32` / `path.posix`**：在 macOS 上 `dirname('C:\\Program Files\\Git\\cmd\\git.exe')` 返回 `'.'`（它看不见反斜杠分隔符），于是「从 git 推导 bash 路径」「把 git 目录加进受控 PATH」这类逻辑会静默算出垃圾值而不报错。RFC-254 里同一个陷阱在两处独立出现，是**测试**先抓到的（生产代码 typecheck 全绿）。凡是处理「另一个平台的路径字符串」，一律 `win32.dirname` / `win32.join`。
 - **Windows 上「存在某个 `bash.exe`」从来不是充分证据**：`System32\bash.exe` 是 **WSL 启动器**，裸 `which('bash')` 找到它会把脚本跑进另一个操作系统、面对另一份文件系统视图；windows-2025 runner 上还额外装着 MSYS2 的第三个 bash。正解是从 `git` 推导（`<root>\cmd\git.exe` → `<root>\bin\bash.exe`，OpenCode 自己就这么做），推不出来就显式失败、不猜路径。
 - **POSIX 上「agent 有 git」是白拿的，别的平台不是**：受控 PATH 写 `/usr/bin:/bin` 时 `git` 顺带就在里面，所以从来没人设计过它；Windows 把 git 装在 `C:\Program Files\Git\cmd`，不在任何系统目录下 ⇒ 只用系统目录拼的受控 PATH 会让 agent 的每一次 git 调用都失败。**通用判据**：受控/白名单式 PATH 每加一个平台，都要重新问一遍「这个平台上，我依赖的每个工具分别在哪」，而不是套用另一个平台的目录表。

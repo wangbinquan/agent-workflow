@@ -872,9 +872,25 @@ delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 
 
 **hosted CI 实跑结果（2026-08-19 `cc615ed1`）**：两条旅程在 **ubuntu 与 macos 两格全绿**；
 **windows 一格红**——E2E-B 的 Agent 动作以 `step-failed:implement-parent-change:agent-contract-exhausted`
-收场，**原因尚未定位**：CI 日志不带 stub 的 stderr，而当时 mission 的 `blockDetail` 恒为 `null`（该缺口已于 2026-08-20 修复，见下）。
-处置：该 spec 显式 `test.skip(process.platform === 'win32', …)` 并登记进 `ALLOWED_SKIP_COUNTS`，
+收场，当时**原因无法定位**：CI 日志不带 stub 的 stderr，而 mission 的 `blockDetail` 恒为 `null`。
+处置：该 spec 曾显式 `test.skip(process.platform === 'win32', …)` 并登记进 `ALLOWED_SKIP_COUNTS`，
 解除条件写在 spec 顶部（拿到 stub stderr 后定位）。E2E-A 在 windows 上是绿的。
+
+**windows 真因定位（2026-08-20，`a6ca84ed`）**：停跑已解除，真因是
+`EEXIST: file already exists, mkdir '.'`——development stub 的 `change.implement` 分支写
+`mkdirSync(dirname('digital-employee-result.txt'), { recursive: true })`，而 `dirname` 是 `'.'`：
+**POSIX 上是 no-op，Windows 上抛 EEXIST**。已修（`parentDirToCreate` 单点 + 纯判据回归锁
+`packages/system-mocks/tests/rfc310-windows-mkdir.test.ts`），通用教训进 `docs/dev-gotchas.md` §跨平台。
+
+**这条真因是三轮观测叠加才看见的，每一轮都补掉了一处「有信息但到不了人眼前」**：
+① `blockDetail` 恒 null ⇒ 上层只有一个 typed block code（`239e8237` 修）；
+② 有了 remediation，但**子进程的 stderr 从不进任何失败回执** ⇒ 只有裸退出码 `opencode exited with
+code 1`——而 stub 自己的失败是 exit 2，连「是不是 stub 的问题」都判断不了（`c44f1dab` 修）；
+③ 有了 stderr 尾巴，拿到手却全是压缩过的 bundle 源码碎片——尾巴按总字节取尾时，bundle 那种单行
+几十 KB 的源码行一行就占满窗口；下游 `stepFailureDetail` 又 `slice(0,500)` 取头。**两处互不知情、
+各切一半**（`ebafbf50` 修：逐行先裁头 + 500→2000）。
+定式已进 gotchas：**给失败回执补诊断信息时，从产生点到人看见的那块 UI，沿途每一处截断都要数一遍**
+——「字段里有东西了」不等于「信息到得了人眼前」。
 
 顺带记两条这次暴露的**可观测性缺口**（不阻塞，但下一轮谁碰谁顺手修）：
 1. ~~playbook 的 `step-failed:*` block 只带 reason 串~~ **已修（2026-08-20）**：
