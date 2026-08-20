@@ -471,7 +471,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // tests/rfc311-perf-guards.test.ts 在 EXPLAIN 里实测出 TEMP B-TREE / 裸表 SCAN
     // 后补的：mission keyset 的 (created_at,id)、/repos 子模块健康 facet、页内富化
     // 的 (cached_repo_id,task_id) 分组）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(189)
+    // RFC-311 bump 到 190 with 0190_rfc311_live_tasks_index（巡检 sweep 的活任务
+    // 部分索引，替掉每小时一次的 tasks 裸全表扫描）。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(190)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

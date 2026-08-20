@@ -37,32 +37,39 @@ export interface MissionSummaryView {
   updatedAt: number
 }
 
-function summaryOf(row: typeof developmentMissions.$inferSelect): MissionSummaryView {
-  return {
-    id: row.id,
-    revision: row.revision,
-    status: row.status,
-    automationMode: row.automationMode,
-    transitionFence: row.transitionFence,
-    repositoryId: row.repositoryId,
-    sourceKind: row.sourceKind,
-    externalId: row.externalId,
-    resolvedSourceKey: row.resolvedSourceKey,
-    deliveryKind: row.deliveryKind,
-    employeeId: row.employeeId,
-    employeeRevision: row.employeeRevision,
-    policyId: row.policyId,
-    policyRevision: row.policyRevision,
-    blockCode: row.blockCode,
-    terminalKind: row.terminalKind,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }
+/**
+ * RFC-311：列表只投影 `MissionSummaryView` 真正用到的 18 列。此前是 `select()` 全行，
+ * 于是每一行都跟着把 `readiness_json` / `block_detail` 读出来——它们只在详情页用，
+ * 却让列表付溢出页的代价（性能防护网的「列表不碰重列」判据抓到）。
+ */
+const SUMMARY_COLUMNS = {
+  id: developmentMissions.id,
+  revision: developmentMissions.revision,
+  status: developmentMissions.status,
+  automationMode: developmentMissions.automationMode,
+  transitionFence: developmentMissions.transitionFence,
+  repositoryId: developmentMissions.repositoryId,
+  sourceKind: developmentMissions.sourceKind,
+  externalId: developmentMissions.externalId,
+  resolvedSourceKey: developmentMissions.resolvedSourceKey,
+  deliveryKind: developmentMissions.deliveryKind,
+  employeeId: developmentMissions.employeeId,
+  employeeRevision: developmentMissions.employeeRevision,
+  policyId: developmentMissions.policyId,
+  policyRevision: developmentMissions.policyRevision,
+  blockCode: developmentMissions.blockCode,
+  terminalKind: developmentMissions.terminalKind,
+  createdAt: developmentMissions.createdAt,
+  updatedAt: developmentMissions.updatedAt,
+} as const
+
+function summaryOf(row: MissionSummaryView): MissionSummaryView {
+  return row
 }
 
 export function listMissionSummaries(db: DbClient): MissionSummaryView[] {
   return db
-    .select()
+    .select(SUMMARY_COLUMNS)
     .from(developmentMissions)
     .orderBy(desc(developmentMissions.createdAt))
     .all()
@@ -100,7 +107,7 @@ export function listMissionSummariesPage(
       ? sql`1 = 1`
       : sql`(${developmentMissions.createdAt}, ${developmentMissions.id}) < (${opts.cursor.createdAt}, ${opts.cursor.id})`
   const rows = db
-    .select()
+    .select(SUMMARY_COLUMNS)
     .from(developmentMissions)
     .where(boundary)
     .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))

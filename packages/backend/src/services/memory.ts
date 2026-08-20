@@ -18,7 +18,7 @@
 // a separate concern owned by this module: see canViewMemory / canManageMemory
 // (RFC-099 D12), which follow the scope resource's ACL.
 
-import { and, desc, eq, gt, inArray, like, or } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, like, or, getTableColumns } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -82,6 +82,11 @@ function parseTags(s: string): string[] {
     return []
   }
 }
+
+/** RFC-311：摘要路径的窄投影——除 `bodyMd` 外的全部列（新增列自动跟随）。 */
+const SUMMARY_COLUMNS = Object.fromEntries(
+  Object.entries(getTableColumns(memories)).filter(([k]) => k !== 'bodyMd'),
+) as Omit<ReturnType<typeof getTableColumns<typeof memories>>, 'bodyMd'>
 
 function rowToMemory(row: MemoryRow): Memory {
   return MemorySchema.parse({
@@ -225,6 +230,52 @@ export async function listMemories(
     conds.push(or(titleLike, bodyLike)!)
   }
   const where = conds.length > 0 ? and(...conds) : undefined
+  // RFC-311：**摘要路径不读正文**。`toSummary` 本来就把 `bodyMd` 丢掉，而此前 SQL 走的
+  // 是 `select()` 全行——每一行都跟着把 markdown 正文读出来再在 JS 里扔掉。
+  // /api/overview 的记忆计数正是这条路径：为了出一个数字，把整张表的正文搬了一遍
+  // （性能防护网的「列表不碰重列」判据抓到）。`filter.search` 的 LIKE 在 WHERE 里，
+  // 不需要正文出现在投影中。
+  //
+  // 摘要路径**不经过 `rowToMemory`**：那一步用 `MemorySchema` 校验完整记忆，正文非空
+  // 是其不变量，拿占位符去凑会把「读得少」变成「写得假」。这里从窄行直接构造摘要。
+  const wantBody = options.includeBody === true
+  if (!wantBody) {
+    const narrow = (await (where
+      ? db.select(SUMMARY_COLUMNS).from(memories).where(where).orderBy(desc(memories.createdAt))
+      : db.select(SUMMARY_COLUMNS).from(memories).orderBy(desc(memories.createdAt)))) as Array<
+      Omit<MemoryRow, 'bodyMd'>
+    >
+    let summaries = narrow.map((r) => ({ row: r, tags: parseTags(r.tags) }))
+    if (filter.tag !== undefined) {
+      const needle = filter.tag
+      summaries = summaries.filter((x) => x.tags.includes(needle))
+    }
+    const jobIds = new Set<string>()
+    for (const { row } of summaries) {
+      if (row.status === 'candidate' && row.distillJobId !== null) jobIds.add(row.distillJobId)
+    }
+    const langs = await loadJobOutputLangs(db, [...jobIds])
+    return summaries.map(({ row, tags }) => ({
+      id: row.id,
+      scopeType: row.scopeType,
+      scopeId: row.scopeId,
+      title: row.title,
+      status: row.status,
+      tags,
+      approvedAt: row.approvedAt,
+      version: row.version,
+      distillAction: row.distillAction,
+      fusedIntoSkill: row.fusedIntoSkill ?? null,
+      fusedIntoSkillId: row.fusedIntoSkillId ?? null,
+      fusedIntoSkillVersion: row.fusedIntoSkillVersion ?? null,
+      outputLang:
+        row.status === 'candidate'
+          ? row.distillJobId === null
+            ? null
+            : (langs.get(row.distillJobId) ?? null)
+          : null,
+    })) as MemorySummary[]
+  }
   const rows = (await (where
     ? db.select().from(memories).where(where).orderBy(desc(memories.createdAt))
     : db.select().from(memories).orderBy(desc(memories.createdAt)))) as MemoryRow[]
@@ -233,22 +284,7 @@ export async function listMemories(
     const needle = filter.tag
     items = items.filter((m) => m.tags.includes(needle))
   }
-  if (options.includeBody === true) return items
-  // RFC-050: for the cheap summary path, batch-lookup output_lang on the
-  // distill jobs that produced this row's CANDIDATES. We deliberately
-  // skip the lookup for non-candidate rows because toSummary itself
-  // discards the value (approved / archived / superseded / rejected are
-  // language-less "facts" by design).
-  const candidateJobIds = new Set<string>()
-  for (const m of items) {
-    if (m.status === 'candidate' && m.distillJobId !== null) candidateJobIds.add(m.distillJobId)
-  }
-  const langByJob = await loadJobOutputLangs(db, [...candidateJobIds])
-  return items.map((m) =>
-    toSummary(m, {
-      outputLang: m.distillJobId === null ? null : (langByJob.get(m.distillJobId) ?? null),
-    }),
-  )
+  return items
 }
 
 async function loadJobOutputLangs(

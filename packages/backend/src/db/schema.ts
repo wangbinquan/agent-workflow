@@ -1163,6 +1163,11 @@ export const tasks = sqliteTable(
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
   (t) => ({
+    // RFC-311：巡检 sweep 的起手式只要活任务 id；部分索引即覆盖索引，
+    // 体积远小于 tasks 宽行（性能防护网把 sweep 纳入计划审计后实测）。
+    liveIdx: index('idx_tasks_live')
+      .on(t.id)
+      .where(sql`${t.deletedAt} is null`),
     listStartedIdx: index('idx_tasks_list_started_id').on(t.startedAt, t.id),
     // RFC-311 索引批（migration 0180）：
     branchStartedIdx: index('idx_tasks_branch_started_id').on(t.branchStartedAt, t.id),

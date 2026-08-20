@@ -33,11 +33,18 @@
 // 规模取小了会把「返回 min(limit, N)」这种正确行为误判成增长——前两版判据先后栽在
 // 这两处（4/40 太小、80/200 对过滤视图仍太小）。
 //
+//   5. **列表查询不碰重列**：行数有界、走索引，仍可能每行搬回 10KB——RFC-311 审计
+//      的 L2「窄投影」正是这一类（node_runs 平均每行 10.5KB，其中 prompt_text 占
+//      57%，而它只在详情页被读）。重列**按命名派生**而非人工枚举（`*_json` /
+//      `*_snapshot` / `*_text` / stdout / inputs / outputs…），所以新加的列自动纳入，
+//      判据不会因为有人忘了登记而失效。
+//
 // 另：计划审计**不只看 SELECT**。历史上最恶劣的一次是归档器的 DELETE（无界 IN 撞
 // 32766 上限死循环），写语句的计划同样要审。
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
@@ -51,7 +58,9 @@ import {
   workflows,
 } from '../src/db/schema'
 import { listMissionSummariesPage } from '../src/modules/development-automation/infrastructure/missionReadModels'
+import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
+import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { buildOverview } from '../src/services/overview'
 import { listTaskOperationsPage } from '../src/services/taskOperations'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
@@ -73,6 +82,8 @@ const UNBOUNDED_TABLES = [
 ] as const
 
 const MAX_BOUND_PARAMS = 900
+/** 单条语句一次最多取回多少行——分块的证据。超过它说明这一拍把表整片搬了。 */
+const MAX_CHUNK_ROWS = 5_000
 
 function actorOf(id: string, role: 'admin' | 'user' = 'admin'): Actor {
   return buildActor({
@@ -156,7 +167,36 @@ async function seed(db: DbClient, n: number): Promise<void> {
 
 interface GuardedPath {
   readonly name: string
+  /**
+   * - `list`：分页/计数读面，受全部五条约束。
+   * - `sweep`：周期维护（归档器、巡检…）。它**天生就是 O(全表)**——那正是它的职责，
+   *   所以豁免「取回行数不随库增长」；但**每一拍必须分块**，因此仍受「单条语句取回
+   *   行数有上界」「绑定参数有界」「计划不许裸扫」约束。历史上最恶劣的一次事故正是
+   *   归档器把无界 id 列表塞进 `IN (…)` 撞 32766 上限死循环。
+   * - `detail`：详情读面，按定义要读重列，豁免第五条。
+   */
+  readonly kind?: 'list' | 'sweep' | 'detail'
+  /**
+   * 仅 sweep 可用：**每行允许发多少条语句**的上界。写在这里等于公开承认「这条路径
+   * 还是 O(行数) 条语句」，并把它钉成只许降不许升的棘轮——比让它豁免诚实，也比假装
+   * 它是 O(1) 有用。填这个字段必须同时写清为什么还没消。
+   */
+  readonly maxStatementsPerRow?: number
   run(db: DbClient): Promise<unknown>
+}
+
+/**
+ * 重列：按**命名约定**派生，不是人工清单——新加的 `*_json` 自动是重列，判据不会
+ * 因为有人忘了登记而悄悄失效。
+ */
+function heavyColumns(): string[] {
+  const schema = readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts'), 'utf-8')
+  const cols = new Set(Array.from(schema.matchAll(/text\('([a-z0-9_]+)'\)/g), (m) => m[1]!))
+  return [...cols].filter(
+    (c) =>
+      /(_json|_snapshot|_text|_body|_md|_yaml)$/.test(c) ||
+      ['stdout', 'stderr', 'inputs', 'outputs', 'definition'].includes(c),
+  )
 }
 
 /**
@@ -183,6 +223,40 @@ const GUARDED: GuardedPath[] = [
   {
     name: '/api/overview — 计数面板',
     run: (db) => buildOverview(db, actorOf('admin')),
+  },
+  // 周期任务：历史事故密度最高的地方（归档器无界 IN 撞 32766 死循环、备份 VACUUM
+  // 全站冻结 30-90 秒），而它们此前一条都没被防护网跑到。
+  {
+    name: '事件归档器（小时级 sweep）',
+    kind: 'sweep',
+    run: async (db) => {
+      const logsDir = mkdtempSync(join(tmpdir(), 'aw-perf-guard-logs-'))
+      try {
+        return await archiveEvents(
+          db,
+          {
+            eventsArchiveThresholds: {
+              perNodeRunRows: 5,
+              globalRows: 10,
+              perNodeRunBytes: 0,
+              globalBytes: 0,
+            },
+          },
+          logsDir,
+        )
+      } finally {
+        rmSync(logsDir, { recursive: true, force: true })
+      }
+    },
+  },
+  {
+    name: '生命周期不变量巡检（sweep）',
+    kind: 'sweep',
+    // 实测 500 行发 1503 条 ≈ 3.0 条/行——这是 RFC-311 T14 明确**延后**的那笔债
+    // （「invariants 七规则集合化延后；分块 + 让出已消掉坏死与长冻结」）。分块已经
+    // 让它不再冻结主连接，但每条规则仍逐任务查一次。集合化之前，先把比率钉住。
+    maxStatementsPerRow: 3.1,
+    run: (db) => runLifecycleInvariants({ db, scope: { all: true } }),
   },
 ]
 
@@ -223,24 +297,60 @@ describe('RFC-311 性能防护 —— 每条受防护读路径的四条结构性
       // ① N+1：语句条数必须与行数无关。
       const summarize = (s: RecordedStatement[]): string[] =>
         s.map((x) => x.sql.replace(/\s+/g, ' ').slice(0, 90))
-      expect(
-        large.length,
-        `语句条数随行数增长（${SMALL} 行 ${small.length} 条 → ${LARGE} 行 ${large.length} 条）= N+1。\n` +
-          `${LARGE} 行时执行的语句：\n${summarize(large).join('\n')}`,
-      ).toBe(small.length)
+      if (path.maxStatementsPerRow === undefined) {
+        expect(
+          large.length,
+          `语句条数随行数增长（${SMALL} 行 ${small.length} 条 → ${LARGE} 行 ${large.length} 条）= N+1。\n` +
+            `${LARGE} 行时执行的语句：\n${summarize(large).join('\n')}`,
+        ).toBe(small.length)
+      } else {
+        // 已知仍是 O(行数) 条的 sweep：钉住比率，只许降不许升。
+        const perRow = large.length / LARGE
+        expect(
+          perRow,
+          `每行语句数从记录的 ${path.maxStatementsPerRow} 涨到了 ${perRow.toFixed(2)}` +
+            `（${LARGE} 行发了 ${large.length} 条）。这条路径本就欠着集合化，别让它更差。`,
+        ).toBeLessThanOrEqual(path.maxStatementsPerRow)
+      }
 
-      // ④ 体量：取回的行数不随库里行数增长。这是「无界结果集」唯一的可靠信号——
-      //    它与①正交：①数的是**发了几条**，④数的是**搬回来多少行**。
-      const rowsOf = (s: RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
+      // ④a 分块：任何**单条**语句一次取回的行数有上界。对 sweep 这是唯一可查的
+      //     「有没有分块」信号；对 list 它是④的兜底。
+      const widest = large.reduce((m, x) => Math.max(m, x.rows), 0)
       expect(
-        rowsOf(large),
-        `取回行数随库增长（${SMALL} 行库取回 ${rowsOf(small)} 行 → ${LARGE} 行库取回 ${rowsOf(large)} 行）：\n` +
-          `这条路径没有上界，库长大就会把整张表搬进内存（RFC-311 的立项动机）。\n` +
-          large
-            .filter((x) => x.rows > 0)
-            .map((x) => `  ${x.rows} 行 ← ${x.sql.replace(/\s+/g, ' ').slice(0, 110)}`)
-            .join('\n'),
-      ).toBe(rowsOf(small))
+        widest,
+        `有语句一次取回 ${widest} 行——这一拍把表整片搬进了内存，没有分块。`,
+      ).toBeLessThanOrEqual(MAX_CHUNK_ROWS)
+
+      // ④b 体量：取回的**总**行数不随库里行数增长。这是「无界结果集」唯一的可靠
+      //     信号，与①正交（①数**发了几条**，④数**搬回来多少行**）。
+      //     sweep 豁免——它的职责就是遍历全表，见 GuardedPath.kind 的注释。
+      const rowsOf = (s: RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
+      if ((path.kind ?? 'list') !== 'sweep')
+        expect(
+          rowsOf(large),
+          `取回行数随库增长（${SMALL} 行库取回 ${rowsOf(small)} 行 → ${LARGE} 行库取回 ${rowsOf(large)} 行）：\n` +
+            `这条路径没有上界，库长大就会把整张表搬进内存（RFC-311 的立项动机）。\n` +
+            large
+              .filter((x) => x.rows > 0)
+              .map((x) => `  ${x.rows} 行 ← ${x.sql.replace(/\s+/g, ' ').slice(0, 110)}`)
+              .join('\n'),
+        ).toBe(rowsOf(small))
+
+      // ⑤ 列表查询不碰重列（详情路径豁免——它本来就是去读正文的）。
+      if ((path.kind ?? 'list') === 'list') {
+        const heavy = heavyColumns()
+        const touched = new Set<string>()
+        for (const stmt of large) {
+          for (const col of heavy) {
+            if (new RegExp(`"${col}"`).test(stmt.sql)) touched.add(col)
+          }
+        }
+        expect(
+          [...touched].sort(),
+          `列表路径读了重列：这些字段只在详情页用，却让每一行都跟着读溢出页\n` +
+            `（RFC-311 审计的 L2「窄投影」类）。把投影收窄到列表 DTO 真正用到的列。`,
+        ).toEqual([])
+      }
 
       // ③ 绑定参数有界（SQLite 硬上限 32766，无界 IN(…) 会在生产上直接抛）。
       const worst = large.reduce((m, s) => Math.max(m, s.params), 0)
