@@ -473,7 +473,12 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         // Each failed node gets exactly one automatic retry.  2.5s leaves
         // headroom for a cold compiled-stub spawn while remaining below the
         // timeout scenario's 4s late output.
-        configOverrides: { defaultNodeRetries: 1, defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS },
+        configOverrides: {
+          defaultNodeRetries: 1,
+          // RFC-313: 上限已是两个预算的乘积；置 0 保持「1+defaultNodeRetries」的既有计数。
+          sessionRestartBudget: 0,
+          defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+        },
       })
       endpoint = await postJson('/api/webhook-endpoints', {
         name: `${protocol}-runtime-failure-endpoint`,

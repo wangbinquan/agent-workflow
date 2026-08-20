@@ -310,7 +310,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
     cd /tmp/wt && bun install --frozen-lockfile   # 1546 包约 1 秒，别图省事软链（见下）
     # 再跑 typecheck / lint / format / depcheck / bun build / 目标测试
     ```
-  - **别用「软链主树 node_modules」省掉那 1 秒**：workspace 包（`node_modules/@agent-workflow/shared` 等）会被链回**主树**路径，于是任何按「仓库根的相对路径」判定的检查全部误报——实测 `depcheck` 报出一条根本不存在的 `no-circular`（路径长成 `../../../../../../../Users/…`，匹配不上 `KNOWN_VIOLATIONS`），`rfc199-workflow-validation-context-ratchet` 报「少了两个 shared 源文件」。两条都是假红，且**看起来非常像真回归**，排查代价远超那 1 秒。
+  - **别用「软链主树 node_modules」省掉那 1 秒**：workspace 包（`node_modules/@agent-workflow/shared` 等）会被链回**主树**路径，于是任何按「仓库根的相对路径」判定的检查全部误报——实测 `depcheck` 报出一条根本不存在的 `no-circular`（路径长成 `../../../../../../../Users/…`，匹配不上 `KNOWN_VIOLATIONS`），`rfc199-workflow-validation-context-ratchet` 报「少了两个 shared 源文件」。两条都是假红，且**看起来非常像真回归**，排查代价远超那 1 秒。**软链且连 `bun install` 一起省掉时，症状会伪装成「仓库被破坏」**（2026-08-19 又撞一次）：本仓依赖实际装在 `packages/*/node_modules`（顶层只有 24 项；`zod` 是 `packages/shared/node_modules/zod` → `node_modules/.bun/zod@3.25.76` 的软链），只软链顶层等于各包一个都没有，于是 typecheck 一片 `TS2307: Cannot find module 'zod' / 'jose' / 'protobufjs'`、frontend 直接 `exit code 127`。我当场误判成「谁把 node_modules 清了」，还差点在共享主仓上做多余的修复动作。**判别式（一条命令，先跑它再谈别的）**：`ls -d packages/*/node_modules | wc -l`——是 `0` 就是**你自己这棵树没装**，不是仓库坏了；主仓那边同一条命令应当是 `4`。
   - **但真正的正解是第三条路：别把那个文件带上去**（事后由 RFC-310 session 指出，我当时只想到"补完"和"让主干红着"两条）。「补齐缺失定义」是止血，代价是**你替一份没人验过的代码盖了章**——这次补完的 300 多行，事后追作者才发现在线的那位并不是它的作者，全仓 `git log -S` 显示那些符号的**首次出现就是我的 commit**，于是没有任何人能说清它跑没跑过门禁。遇到这种情形，宁可自己那部分晚提一轮：先把该文件从本次提交里摘掉、找到作者、由他连同定义一起提。
   - **补齐缺失定义 > 从主干删掉对方的引用**（当第三条路走不通、主干已经红着时的次优解）：后者要求提交一个与工作树不同的 blob（对方的行还在树上），操作面危险且等于替对方决定；前者只是把定义-引用对重新合拢，语义零改动。提完必须通报，并在 commit message 里写明「这些行非本人所写、未经其作者门禁」。
 - **共享树上永远用 `git commit -- <paths>`；裸 `git commit -m` 提交的是整个索引，会静默带走别人 `git add` 过的文件**（2026-08-19 实撞，一手教训）：我用 `git add <我的三个文件> && git commit -m …` 提一批 prettier 修复，结果 commit stat 里出现 **9 个文件**——多出来的 6 个是并发 session 已 `git add`、尚未 commit 的在制改动（五个弹窗 + 一个测试文件），连同他们**还没跑完全量门禁**的状态一起上了主干。
@@ -799,6 +799,21 @@ CI 红一格才知道。已把它补进 quality 车道（约 18s），车道断�
 只比 path 的版本会把那三条 e2e 全部放行（我第一版就是这样写的，变异检验
 当场打脸）。任何「静态清单类」守卫写完都该做一次变异检验：把真实事故的形态
 注入进去，看它红不红。不红的守卫等于没有。
+
+**2026-08-20 又一种形态：改「执行策略默认值」同样绕过整个本地门禁（RFC-313 实测）。**
+上面那条守卫盯的是 API 契约，而这次一行 API 都没动——只是给执行策略加了个**默认值非 0**
+的新旋钮（`sessionRestartBudget: 1`），于是单节点 attempt 上限从 `1+retries` 变成
+`(1+retries)×(1+restarts)`。**任何按 attempt 次数 / mock 调用次数断言的用例都会被翻倍**：
+本地 `gate:local` 里撞出 5 个 backend 文件（当场修掉），推上去后 CI 的 Playwright 腿又红
+4 条——`workflow-matrix` 的「耗尽重试预算」「超时套用到每次重试」、`runtime-scenario-matrix`
+的同族两条。**e2e 不在 `gate:local` 覆盖面内，所以本地全绿照不到它们。**
+
+可执行的做法（比"记住"有效）：
+- 改动**执行策略默认值**时，先 `grep -rn "defaultNodeRetries" e2e/ packages/*/tests` 把所有
+  显式钉住该策略的地方列出来——它们钉住它，正是因为要断言次数；逐处补上新旋钮的中性值
+  （这里是 `sessionRestartBudget: 0`），断言一个字都不用动。
+- 推之前对这类改动**本地实跑一次相关 e2e**：`bun run build:binary:e2e` 后
+  `bunx playwright test <spec> --project=chromium -g "<用例名>"`，两分钟的事，比让 CI 替你发现快得多。
 
 `e2e/` **不在任何 package 的 `tsconfig.json` `include` 里**（backend 是
 `src|tests|db`，frontend 是 `src|tests|vite/vitest.config`），而 `gate:local`

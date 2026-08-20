@@ -610,7 +610,12 @@ test.beforeAll(async () => {
   daemon = await startDaemon({
     stubMode: 'runtime-scenario',
     extraEnv: { SCENARIO_PLAN_FILE: planFile, SCENARIO_STATE_DIR: stateDir },
-    configOverrides: { defaultNodeRetries: 0, defaultPerNodeTimeoutMs: 150_000 },
+    configOverrides: {
+      defaultNodeRetries: 0,
+      // RFC-313: 上限已是两个预算的乘积；置 0 保持「1+defaultNodeRetries」的既有计数。
+      sessionRestartBudget: 0,
+      defaultPerNodeTimeoutMs: 150_000,
+    },
   })
   endpoint = await postJson<EndpointRow>('/api/webhook-endpoints', {
     name: 'Webhook MR runtime races',
@@ -1111,7 +1116,12 @@ if (process.platform !== 'win32') {
       home: preservedHome,
       stubMode: 'runtime-scenario',
       extraEnv: { SCENARIO_PLAN_FILE: planFile, SCENARIO_STATE_DIR: stateDir },
-      configOverrides: { defaultNodeRetries: 0, defaultPerNodeTimeoutMs: 150_000 },
+      configOverrides: {
+        defaultNodeRetries: 0,
+        // RFC-313: 上限已是两个预算的乘积；置 0 保持「1+defaultNodeRetries」的既有计数。
+        sessionRestartBudget: 0,
+        defaultPerNodeTimeoutMs: 150_000,
+      },
     })
 
     const recovered = await waitForTerminalControl(close.deliveryId, 50_000)

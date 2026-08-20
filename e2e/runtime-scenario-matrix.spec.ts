@@ -467,6 +467,10 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         // both attempts still prove the hard deadline and late-output fence.
         configOverrides: {
           defaultNodeRetries: 1,
+          // RFC-313: 本处钉住重试预算是为了断言 attempt 次数。attempt 上限现在是两个预算的
+          // **乘积** (1+defaultNodeRetries)×(1+sessionRestartBudget)，重启预算默认 1 会让这些
+          // 计数全部翻倍；置 0 即退化成 1+defaultNodeRetries，逐字等于 RFC-313 落地前。
+          sessionRestartBudget: 0,
           defaultPerNodeTimeoutMs: RUNTIME_SCENARIO_TIMEOUT_MS,
         },
       })
