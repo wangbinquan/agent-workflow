@@ -12972,10 +12972,13 @@ export const zhCN: Resources = {
     perTaskTokens: '单 task 最大 token 数',
     perNodeTimeout: '单节点超时 (ms)',
     nodeRetries: '默认节点重试次数',
-    nodeRetriesHint: '每个节点可恢复失败的重试预算（0 = 不重试）。默认 3。',
+    nodeRetriesHint:
+      '单个 runtime 会话内可恢复失败的重试预算。默认 3。注意它**不再**单独决定总次数——' +
+      '与下面的「会话重启预算」相乘才是单节点最坏尝试次数；只把本项设为 0、而重启预算仍为 1 时，' +
+      '失败节点仍会跑 2 次。要真正「只跑一次」需两项都设为 0。',
     sessionRestartBudget: '会话重启预算',
     sessionRestartBudgetHint:
-      '同一会话内的追问用尽后，允许整体换一个干净会话重来几次（0 = 关闭，行为回到只在同一会话里追问）。单节点最坏尝试次数 =（1 + 重试次数）×（1 + 本项）。默认 1。',
+      '同一会话内的追问用尽后，允许整体换一个干净会话重来几次（0 = 关闭，行为回到只在同一会话里追问）。单节点最坏尝试次数 =（1 + 重试次数）×（1 + 本项），并硬性封顶 99 次。默认 1。',
     autoResumeOnBoot: '启动时自动续跑被中断的任务',
     autoResumeOnBootHint:
       '默认关闭。开启后 daemon 启动时自动续跑因重启而中断的任务（穿熔断/隔离/租约/审计）。',

@@ -125,6 +125,50 @@ describe('RFC-313 decideRetryShape — 三态判定表', () => {
     expect(out.shape.kind).toBe('restart')
   })
 
+  test('待处理的 clarify 模式翻转压过升级：链触顶也不 restart（实现门 P1-1）', () => {
+    // 为什么这条存在：升级会**丢隔离工作树 + 扣升级预算**，而一次 STOP 翻转按 RFC-122
+    // 的处置应当「保树 + 走完整 prompt」。keepIf 跑在 spawn 之前，链顶恰逢翻转时若不
+    // 压制，用户的一次正常翻转会被执行成升级——AC-8 违反，且未合并的磁盘成果被丢掉。
+    const atCap = { followupChainLen: 3, restartsUsed: 0 }
+    const escalates = decideRetryShape({
+      followup: followupable(),
+      state: atCap,
+      followupBudget: 3,
+      restartBudget: 1,
+    })
+    expect(escalates.shape.kind).toBe('restart') // 没有翻转时照常升级
+
+    const suppressed = decideRetryShape({
+      followup: followupable(),
+      state: atCap,
+      followupBudget: 3,
+      restartBudget: 1,
+      suppressRestart: true,
+    })
+    expect(suppressed.shape.kind).toBe('followup') // 翻转赢
+    expect(suppressed.next.restartsUsed).toBe(0) // 预算一格未动
+    expect(suppressed.next.followupChainLen).toBe(4) // 按 followup 记账 ⇒ 升级只是推迟一轮
+  })
+
+  test('suppressRestart 只压制 restart，不改变 followup / fresh 两态', () => {
+    const belowCap = decideRetryShape({
+      followup: followupable(),
+      state: FRESH_START,
+      followupBudget: 3,
+      restartBudget: 1,
+      suppressRestart: true,
+    })
+    expect(belowCap.shape.kind).toBe('followup')
+    const crashed = decideRetryShape({
+      followup: notFollowupable,
+      state: { followupChainLen: 3, restartsUsed: 0 },
+      followupBudget: 3,
+      restartBudget: 1,
+      suppressRestart: true,
+    })
+    expect(crashed.shape).toEqual({ kind: 'fresh' })
+  })
+
   test('关闭开关：restartBudget=0 → 任何状态都产不出 restart', () => {
     for (const chain of [0, 1, 3, 10]) {
       const out = decideRetryShape({
@@ -161,6 +205,17 @@ describe('RFC-313 retryAttemptCap — attempt 硬上限', () => {
     expect(
       retryAttemptCap(DEFAULT_PROTOCOL_RETRY_BUDGET, DEFAULT_SESSION_RESTART_BUDGET),
     ).toBeLessThan(RETRY_ATTEMPT_CAP_CEILING)
+  })
+
+  test('天花板 = 保险丝−1：此前能正常工作的配置在 R=0 下逐字不变（实现门 P2-3）', () => {
+    // 原先取 64 会把 `F=64,R=0`（裸改 config.json 可达，设置页上限 50 达不到）从 65 次
+    // 悄悄截成 64 次——一个没人要的行为变更，也让「R=0 等价于落地前」出现例外。
+    // 取「保险丝−1」后：凡是在 RFC-313 之前能跑完的配置，其 attempt 数必然 ≤ 99
+    // （否则当时就已经撞保险丝了），因此钳制对它们全部是恒等的。
+    expect(RETRY_ATTEMPT_CAP_CEILING).toBe(99)
+    for (const F of [0, 3, 50, 63, 64, 98]) {
+      expect(retryAttemptCap(F, 0)).toBe(1 + F) // 逐字等于落地前的 1+retries
+    }
   })
 
   test('全组合模拟：永远失败时的 attempt 总数恰为 (1+F)×(1+R)', () => {

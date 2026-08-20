@@ -20,7 +20,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { countAgentTextEvents, runTask } from '../src/services/scheduler'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
 import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 
@@ -321,6 +321,39 @@ describe('RFC-313 会话升级', () => {
       expect(payloads.some((p) => p.includes('[rfc313/session-restart]'))).toBe(false)
     }
   }, 120_000)
+
+  test('框架审计事件不得被算作「模型说过话」（实现门 P1-2 回归锁）', async () => {
+    // 红→绿的那条红：三个框架审计事件（rfc042/rfc049/rfc313）与模型输出共用
+    // kind='text'，且都写在**新铸的那一行**上。不排除的话，第 1 次之后每一次 attempt
+    // 的计数恒 ≥1 ⇒ RFC-042「模型必须说过话」的判据当场失效 ⇒ 一个一个字都没吐的
+    // 会话会被错误地续跑（复用脏树 + 旧 nonce + 短提示），而正解是换新会话重来。
+    const taskId = await seedTask(h, singleAgentDef(await seedAgent(h.db, 'a1')))
+    const runId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: runId,
+      taskId,
+      nodeId: 'n1',
+      status: 'failed',
+      retryIndex: 0,
+      iteration: 0,
+      createdAt: Date.now(),
+    })
+    const ev = (payload: string) => ({
+      nodeRunId: runId,
+      ts: Date.now(),
+      kind: 'text' as const,
+      payload,
+    })
+    // 只有框架审计行 ⇒ 模型其实一个字没说 ⇒ 计数必须是 0
+    await h.db.insert(nodeRunEvents).values(ev('[rfc313/session-restart] {"rfc":"RFC-313"}'))
+    await h.db.insert(nodeRunEvents).values(ev('[rfc042/envelope-followup] {"rfc":"RFC-042"}'))
+    await h.db.insert(nodeRunEvents).values(ev('[rfc049/port-validation-followup] {"port":"x"}'))
+    expect(await countAgentTextEvents(h.db, runId)).toBe(0)
+
+    // 模型真说了话就必须算上（防止过滤写成把所有 text 都吃掉）
+    await h.db.insert(nodeRunEvents).values(ev('I finished the audit but forgot the envelope.'))
+    expect(await countAgentTextEvents(h.db, runId)).toBe(1)
+  })
 
   test('attempt 天花板严格低于装配骨架的 spec-bug 保险丝', () => {
     // 两个设置项相乘（50 × 10 = 561）会撞上保险丝，而保险丝的报错写的是「spec bug」

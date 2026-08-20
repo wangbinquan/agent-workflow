@@ -78,7 +78,7 @@ import {
   estimateShardTotal,
   findBoundaryEdgesToInner,
 } from '@/services/fanout'
-import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, notLike, sql } from 'drizzle-orm'
 // RFC-253 — script node execution.
 import { mkdirSync } from 'node:fs'
 import {
@@ -1658,6 +1658,37 @@ export type EnvelopeFollowupDecision = EnvelopeFollowupOutcome
  * runner distinguishes malformed-port vs port-validation at the source
  * (parse layer vs validation layer — mutually exclusive by construction).
  */
+/**
+ * RFC-313 实现门 P1-2 —— 框架自写的 `kind='text'` 审计事件的统一载荷前缀。
+ *
+ * 它们（`[rfc042/envelope-followup]` / `[rfc049/port-validation-followup]` /
+ * `[rfc313/session-restart]`）与模型输出共用 `kind='text'`，因此「这一轮模型说过话吗」
+ * 的计数必须把它们排除，否则判据恒真。三个 producer 与本前缀的一致性由
+ * `packages/backend/tests/rfc313-source-locks.test.ts` 断言。
+ */
+export const FRAMEWORK_AUDIT_EVENT_PREFIX = '[rfc'
+
+/**
+ * RFC-313 实现门 P1-2 —— 「这一轮模型自己说过话吗」的计数。
+ *
+ * 抽成函数而不是内联查询，是为了让它**可直测**：内联在 `runOneNode` 闭包里的版本只能
+ * 靠源码锁间接保护，而这条判据一旦失真，RFC-042 的续跑判据与 RFC-313 的形状判定会一起
+ * 走偏（详见 {@link FRAMEWORK_AUDIT_EVENT_PREFIX}）。
+ */
+export async function countAgentTextEvents(db: DbClient, nodeRunId: string): Promise<number> {
+  const row = await db
+    .select({ c: sql<number>`count(*)` })
+    .from(nodeRunEvents)
+    .where(
+      and(
+        eq(nodeRunEvents.nodeRunId, nodeRunId),
+        eq(nodeRunEvents.kind, 'text'),
+        notLike(nodeRunEvents.payload, `${FRAMEWORK_AUDIT_EVENT_PREFIX}%`),
+      ),
+    )
+  return Number(row[0]?.c ?? 0)
+}
+
 export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFollowupDecision {
   if (prev.status !== 'failed') return { followup: false }
   if (prev.exitCode !== 0) return { followup: false }
@@ -5845,6 +5876,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // 窗口从结构上就不存在。
   let retryShapeState: RetryShapeState = { followupChainLen: 0, restartsUsed: 0 }
   let pendingRestartReason: EnvelopeFollowupReason | undefined
+  // RFC-313 实现门 P1-1：上一次 attempt 观察到的 STOP 开关值（undefined = 还没有过
+  // attempt）。用它在 keepIf 里判断「本轮有没有待处理的模式翻转」——依据是紧邻上面
+  // 那条既有不变量：**retry 循环内只有 nodeStopOverride 逐 attempt 变化，所以
+  // 「翻转」⟺「开关变了」**。因此这里不是把 effectiveHasClarifyChannel 再导一遍
+  // （那会是第二处导出、必然漂移），而是复用同一个 `getNodeClarifyDirectiveRow` 源。
+  let priorAttemptStopOverride: boolean | undefined
 
   /**
    * 每次重试前奏：算 RFC-042 续跑决策。它同时**就是**「要不要留用同一棵树」的判据
@@ -5857,10 +5894,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     // 这样 spawn 侧只读不清，也就不存在「上一轮的告知漏进这一轮」的窗口。
     pendingRestartReason = undefined
     if (prev !== null) {
-      const textCountRow = await db
-        .select({ c: sql<number>`count(*)` })
-        .from(nodeRunEvents)
-        .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), eq(nodeRunEvents.kind, 'text')))
+      // RFC-313 实现门 P1-2：**框架自写的审计事件也是 kind='text'**（rfc042 续跑、
+      // rfc049 端口校验、rfc313 会话升级三处，都写在**新铸的那一行**上），所以不过滤
+      // 的话第 1 次之后每一次 attempt 的计数恒 ≥1 —— RFC-042 那条「模型必须说过话」
+      // 的判据在第 2 次起就失效了（这是 RFC-042 就有的缺陷，RFC-313 只是多加了一个
+      // producer；按用户拍板在本 RFC 内一并修，因为整条形状判定正架在这个判据上）。
+      // 排除判据是载荷前缀：框架审计载荷一律以 `[rfc` 开头，由 rfc313-source-locks
+      // 的断言钉死。误伤面是保守的——万一模型的正文真以 `[rfc` 开头，结果只是这一轮
+      // 退回 fresh（换会话重来），不会错误地续跑一个没说过话的会话。
+      const agentTextCount = await countAgentTextEvents(db, nodeRunId)
       // RFC-049: read the structured port-validation failures the prior
       // attempt's runner persisted (NULL → undefined; malformed JSON →
       // null via parsePortValidationFailuresJson, then coerced to
@@ -5881,7 +5923,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         exitCode: prev.exitCode,
         failureCode: prev.failureCode ?? null,
         sessionId: prev.sessionId ?? null,
-        agentTextCount: Number(textCountRow[0]?.c ?? 0),
+        agentTextCount,
         ...(priorFailures !== null ? { portValidationFailures: priorFailures } : {}),
       })
       // RFC-313: RFC-042 的五条判据（上一行）只回答「这次失败可不可以在同一个会话里
@@ -5889,11 +5931,21 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       // 循环里时，追问是零收益甚至负收益的自旋（每条纠错提示还在加剧根因）。形状由
       // 共享纯函数在判据之上再判一层：链未触顶 → 接续；触顶且有升级预算 → 主动换
       // 一个干净会话重来；判据落空 → 维持既有的全新会话重试（不吃升级预算）。
+      // RFC-313 实现门 P1-1：升级会丢树 + 扣预算，而一次待处理的 STOP 翻转按 RFC-122
+      // 应当「保树 + 走完整 prompt」。keepIf 跑在 spawn 之前，若不在这里看一眼开关，
+      // 链顶恰逢翻转时升级会抢先生效，把用户的正常翻转执行成升级（AC-8 违反 + 未合并
+      // 成果丢失）。只读这一个值、只在挂了 clarify 通道时读。
+      const stopOverrideNow = hasClarifyChannel
+        ? (await getNodeClarifyDirectiveRow(db, taskId, node.id))?.directive === 'stop'
+        : false
+      const clarifyFlipPending =
+        priorAttemptStopOverride !== undefined && stopOverrideNow !== priorAttemptStopOverride
       const { shape, next } = decideRetryShape({
         followup: followupDecision,
         state: retryShapeState,
         followupBudget,
         restartBudget,
+        ...(clarifyFlipPending ? { suppressRestart: true } : {}),
       })
       retryShapeState = next
       if (shape.kind === 'followup') {
@@ -6298,6 +6350,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       const clarifyModeFlip =
         followupDecision.followup && priorAttemptClarifyActive !== effectiveHasClarifyChannel
       priorAttemptClarifyActive = effectiveHasClarifyChannel
+      // RFC-313 实现门 P1-1：与上一行同址更新——两个「上一次 attempt 的观察值」必须
+      // 在同一个点写，否则它们会各自漂移到不同的 attempt 边界上。
+      priorAttemptStopOverride = nodeStopOverride
       // RFC-119 / RFC-132 (PR-C) / RFC-141: generalized prior-output for ANY rerun — review
       // reject/iterate (supersede→canceled), manual retry, cascade, resume, clarify-answer,
       // mandatory ask-back rounds, override handoffs, AND the cross-clarify designer (whose

@@ -6904,10 +6904,14 @@ export const enUS: Resources = {
     perTaskTokens: 'Per-task max total tokens',
     perNodeTimeout: 'Per-node timeout (ms)',
     nodeRetries: 'Default node retries',
-    nodeRetriesHint: 'Recoverable-failure retry budget per node (0 disables). Default 3.',
+    nodeRetriesHint:
+      'Recoverable-failure retry budget WITHIN one runtime session. Default 3. It no longer sets the ' +
+      'total on its own — worst-case attempts per node is this multiplied by the session restart ' +
+      'budget below, so 0 here with a restart budget of 1 still runs a failing node twice. Set both ' +
+      'to 0 for a single attempt.',
     sessionRestartBudget: 'Session restart budget',
     sessionRestartBudgetHint:
-      'How many times a node may abandon an unrecoverable runtime session and start over in a clean one, once same-session follow-ups are used up (0 disables). Worst-case attempts per node = (1 + retries) × (1 + this). Default 1.',
+      'How many times a node may abandon an unrecoverable runtime session and start over in a clean one, once same-session follow-ups are used up (0 disables). Worst-case attempts per node = (1 + retries) × (1 + this), hard-capped at 99. Default 1.',
     autoResumeOnBoot: 'Auto-resume interrupted tasks on boot',
     autoResumeOnBootHint:
       'Default off. When on, the daemon re-drives tasks interrupted by a restart at boot (gated by breaker / quarantine / lease / audit).',

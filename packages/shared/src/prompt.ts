@@ -1286,12 +1286,15 @@ export function retryAttemptCap(followupBudget: number, restartBudget: number): 
  * 用它来接住一个**配置选择**只会把运维引到错误的方向去排查。
  *
  * 所以把钳制放在这里：`retryAttemptCap` 是全总的，任何配置组合都产不出能触发保险丝
- * 的上限。取 64 是因为它显著低于保险丝（100）、又远高于任何现实预算（默认 8），
- * 于是「钳制生效」只可能发生在明显荒谬的配置上。两者的大小关系由
+ * 的上限。**取值 = 保险丝 − 1**（实现门 P2-3 修正，原为 64）：这样每一个在 RFC-313
+ * 之前**能正常工作**的配置（其 attempt 数必然 ≤ 99，否则当时就已经撞保险丝了）在钳制
+ * 下逐字不变，「`sessionRestartBudget=0` 等价于落地前」因此没有例外；同时任何组合仍
+ * 够不到保险丝。64 那版会把 `F=64,R=0`（裸改 config.json 可达，设置页上限 50 达不到）
+ * 从 65 次悄悄截成 64 次——一个没人要的行为变更。两者的大小关系由
  * `packages/backend/tests/rfc313-session-escalation.test.ts` 直接断言，防止某天调
  * 保险丝时把这条关系弄反。
  */
-export const RETRY_ATTEMPT_CAP_CEILING = 64
+export const RETRY_ATTEMPT_CAP_CEILING = 99
 
 function normalizeBudget(v: number): number {
   return Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : 0
@@ -1363,6 +1366,16 @@ export function decideRetryShape(input: {
   state: RetryShapeState
   followupBudget: number
   restartBudget: number
+  /**
+   * RFC-313 实现门 P1-1：本轮存在**待处理的 clarify 模式翻转**（用户在上一次 attempt
+   * 运行期间切了 STOP）。此时升级必须让位——翻转是用户的显式意图，且 RFC-122 对它的
+   * 处置是「保树 + 完整 prompt」；若让升级抢先，一次正常的翻转会被执行成丢树 + 扣
+   * 升级预算（违反 AC-8，且丢掉未合并的磁盘成果）。
+   *
+   * 只压制 `restart`：`followup` 与 `fresh` 都不受影响。压制后本轮按 `followup` 记账
+   * （链长 +1），于是**下一轮**若翻转已消化仍会正常升级——升级只是被推迟一次，不会丢。
+   */
+  suppressRestart?: boolean
 }): { shape: RetryShape; next: RetryShapeState } {
   const followupBudget = normalizeBudget(input.followupBudget)
   const restartBudget = normalizeBudget(input.restartBudget)
@@ -1380,6 +1393,9 @@ export function decideRetryShape(input: {
     next: { followupChainLen: followupChainLen + 1, restartsUsed },
   }
   if (followupChainLen < followupBudget) return keepFollowingUp
+  // 待处理的模式翻转压过升级（见 suppressRestart 的 doc）。放在预算检查**之前**，
+  // 这样被压制的那一轮连预算都不会被读，更不会被扣。
+  if (input.suppressRestart === true) return keepFollowingUp
   if (restartsUsed < restartBudget) {
     return {
       shape: { kind: 'restart', reason },
