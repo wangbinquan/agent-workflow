@@ -1860,11 +1860,17 @@ async function handleDecision(
     }
     // ---- 发布链 arm（PR-5，实现在 missionDeliveryChain.ts）------------------
     case 'run-verification': {
+      const policy = await loadPolicyContent(deps.lookup, mission)
+      if (policy === null) {
+        blockMission(deps, mission.id, 'policy-content-missing', null)
+        return 'blocked'
+      }
       return await handleRunVerification(
         deliveryDeps(deps),
         mission,
         snapshot.cells,
         selected.profileRef,
+        policy.verification.requiredProfileRefs,
       )
     }
     case 'commit-and-publish-candidate': {

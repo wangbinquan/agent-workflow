@@ -24,6 +24,7 @@ import type { FactCellValue } from '../domain/facts'
 import type { FactCell } from '../domain/factCell'
 import { checkMissionTransition } from '../domain/mission'
 import { verificationProfileContentSchema } from '../domain/verificationProfile'
+import { projectVerificationCells } from '../domain/verificationFacts'
 import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
 import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
@@ -309,6 +310,11 @@ export async function handleRunVerification(
   mission: MissionRow,
   cells: Cells,
   profileRef: string,
+  /**
+   * T58 余项：投影 catalog fact 需要知道 policy 要求哪些 profile——「required 全过」
+   * 与「跑过的都过了」是两件事，只有前者能作为发布放行判据。
+   */
+  requiredProfileRefs: readonly string[],
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (
@@ -380,6 +386,10 @@ export async function handleRunVerification(
       '__delivery.verifiedTreeOid': knownCell(ctx.treeOid, receipt.receiptDigest),
       '__delivery.verifiedProfiles': knownCell(JSON.stringify(verified), receipt.receiptDigest),
       '__delivery.verificationReceiptRef': knownCell(receipt.receiptDigest, receipt.receiptDigest),
+      // T58 余项：同一份结果同时升为 catalog fact，规则谓词才读得到。只写内部
+      // cells 的话 `verification.repair` 永远排不上——失败一律以下面那条 typed
+      // block 收场，组织连「失败就派修复」都写不出来。
+      ...projectVerificationCells(verified, requiredProfileRefs, receipt.receiptDigest),
     },
     { kind: 'delivery-verification', profileRef, treeOid: ctx.treeOid },
   )

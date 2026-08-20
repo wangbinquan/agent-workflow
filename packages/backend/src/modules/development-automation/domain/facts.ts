@@ -24,7 +24,14 @@ export type DecisionPhase = 'admission-selection' | 'action-decision' | 'readine
 
 export interface FactLeafSpec {
   readonly id: string
-  readonly group: 'repository' | 'requirement' | 'mr' | 'pipeline' | 'action' | 'budget'
+  readonly group:
+    | 'repository'
+    | 'requirement'
+    | 'mr'
+    | 'pipeline'
+    | 'verification'
+    | 'action'
+    | 'budget'
   readonly type: FactValueType
   /** enum 的 closed vocabulary；其他类型为 null。 */
   readonly vocabulary: readonly string[] | null
@@ -122,6 +129,17 @@ export const FACT_CATALOG: readonly FactLeafSpec[] = [
   leaf('pipeline.missingRequiredGateKeys', 'pipeline', 'string-set', { phases: POST_ADMISSION }),
   leaf('pipeline.anyRunning', 'pipeline', 'boolean', { phases: POST_ADMISSION }),
   // action（prior action 台账投影）
+  // verification（RFC-310 T58 余项收口，2026-08-20）：平台自跑的 verification
+  // profile 结果此前只落 `__delivery.*` 内部 cells，规则谓词读不到——于是
+  // `verification.repair` 这条能力**存在却永远排不上**，失败一律以 typed block
+  // `verification-failed:<profile>` 收场。升进 catalog 后，规则可以像 pipeline
+  // 那样按结果路由修复；没有规则接手时链上那条 block 仍是兜底（同 pipeline 形态）。
+  leaf('verification.lastOutcome', 'verification', 'enum', {
+    vocabulary: ['not-run', 'passed', 'failed'],
+    phases: POST_ADMISSION,
+  }),
+  leaf('verification.allRequiredPassed', 'verification', 'boolean', { phases: POST_ADMISSION }),
+  leaf('verification.failedProfileRefs', 'verification', 'string-set', { phases: POST_ADMISSION }),
   leaf('action.pendingKind', 'action', 'enum', {
     vocabulary: ['none', 'agent', 'program', 'effect'],
     phases: POST_ADMISSION,

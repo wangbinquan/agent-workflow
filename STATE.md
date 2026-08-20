@@ -209,6 +209,14 @@
 > 释放，判据已抽成纯函数 `domain/webhookWake.ts`；②`findMrClaim` 不定序，而 reopen 让「同一条
 > MR 多行 claim」成为常态，改为 active 优先、同态取最新。**残留**：该链接只驱动行为，未上
 > UI/API DTO。
+> **verification fact 收口（2026-08-20）**：`verification.repair` 从 PR-4 起 capability/envelope/
+> validator 就齐了却**永远排不上**——结果只写 `__delivery.*` 内部 cells，规则谓词读不到，于是
+> 失败一律以 typed block `verification-failed:<profile>` 收场，组织连「失败就派修复」都写不出来
+> （policy publish 期会被 catalog 以 unknown-fact 拒）。补了三个 leaf（新 group `verification`：
+> `lastOutcome` / `allRequiredPassed` / `failedProfileRefs`，均 POST_ADMISSION），投影为纯函数
+> `domain/verificationFacts.ts`，前端静态镜像同步。**「还没跑」与「通过了」分开**是这组的硬边界。
+> 发布链那条 block 保留——它是没有规则接手时的兜底，不是唯一出口（同 pipeline 形态）。
+> review 那半仍欠且**卡在持久化**：`mr.review.external` 的 findings 根本不落库，要先定存储形态。
 > **PR-8（T85–T92；T93 部分）已完成**：完整配置与活动 UI。fork V：参数化配置四族页（violations 逐条/
 > 字段级权限/secret 只名不值）；fork W：policy rule builder（first-match 显式序、谓词控件化、组合子
 > JSON 保真）+ simulator（preview-decision→trace 逐条+no-match 诊断）+ 前端目录静态镜像的后端直接

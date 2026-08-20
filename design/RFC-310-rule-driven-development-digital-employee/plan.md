@@ -230,10 +230,11 @@ PR-5 必须证明 Agent 无 Git：commit/push receipt 的调用栈只能来自 s
   （claimMr，撞唯一经 `findMrClaim` 消歧自我重放）后链使命完成：block 改写为诚实 `wait(mr-care-not-wired)`
   （MR care 属 PR-7），mission `publishing→watching`。
 - **T58 范围**：review 的 envelope/validator 契约完整（read-only completed union 成员、reviewedCandidateRef
-  必须命中 launch 冻结的当前 candidateRef、findingId 唯一、findings 是素材不是裁决）；**链驱动的自动 review
-  排程与 `verification.repair` 规则闭环同欠一个前置**——verification/review 结果尚未升为 catalog fact，规则
-  谓词读不到（`__delivery.*` 是内部 cells）。verification failed 现为 typed block
-  （`verification-failed:<profile>`）。fact 升级 + repair/review 排程记 PR-6。
+  必须命中 launch 冻结的当前 candidateRef、findingId 唯一、findings 是素材不是裁决）。
+  **verification 的 fact 升级已于 2026-08-20 补齐**（见下方「verification fact 收口注记」）；
+  review 结果的 fact 化仍欠——原因不是没做，而是**没有可投影的数据**：`mr.review.external`
+  的 findings 目前不落库（collect 侧的 `structuredResultRef` 只覆盖 `problem.classify` /
+  `approval.prepare`），要先决定 findings 的持久化形态才谈得上升 fact。如实登记，不假装。
 - **verification**：policy `verification.requiredProfileRefs` 逐个派发（treeOid 绑定进度表）；执行器
   `infrastructure/verificationRunner.ts`（exit code ∈ successExitCodes 唯一判据、stdout/stderr 直连文件、
   TERM→KILL、file-glob evidence 进内容寻址 blob）；profile 解析 `repo:<相对路径>` 形态（受管 scripts 资源表
@@ -658,7 +659,9 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
    功能面 E2E，未做像素快照）。〔T78 / T81 / T82 已于 2026-08-20 补齐，见对应收口注记。〕
 3. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
 4. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
-5. **verification/review 结果尚未升为 catalog fact**——repair/review 规则排程的前置。
+5. **review 结果尚未升为 catalog fact**（verification 那半已于 2026-08-20 补齐，见对应收口注记）
+   ——卡点不是投影而是持久化：`mr.review.external` 的 findings 目前根本不落库，要先定 findings
+   的存储形态。
 6. **cutover preflight 的 per-repo dry decision probe** 未做独立命令（能力由 `GET /api/code/cutover`
    的 preflight + policy simulator 覆盖）；T99 的「cancel 运行中旧 rounds」与 T103 的 soak
    只读化是 runbook 人工步骤。
@@ -860,6 +863,34 @@ delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 
 **仍未完成：T121**（业务 i18n / 只读权限 / responsive 已随 PR-8 的 inventory 棘轮覆盖，缺的是
 **逐页视觉基线**——visual regression 需要各 OS 基线图，本机只能产 darwin 一份，Linux 基线得在 CI 侧生成，
 故不在本轮登记完成）。
+
+### verification fact 收口注记（2026-08-20）—— 让 `verification.repair` 排得上
+
+`verification.repair` 这条能力从 PR-4 起就齐了（capability 定义、envelope 成员、semantic
+validator 全在），但它**永远排不上**：verification 的结果只写进 `__delivery.verifiedProfiles`
+这类内部 cells，而规则谓词只能读 closed catalog 里登记的 fact。于是无论跑挂了什么，发布链一律
+以 typed block `verification-failed:<profile>` 收场——组织连「失败就派修复」这条最基本的规则都
+**写不出来**（写了会在 policy publish 期被 catalog 以 `unknown-fact` 拒掉）。
+
+补的是三个 leaf（新 group `verification`，均 POST_ADMISSION）：
+
+| fact | 口径 |
+| --- | --- |
+| `verification.lastOutcome` | `not-run` / `passed` / `failed`；描述**已有结果**的整体成色 |
+| `verification.allRequiredPassed` | policy 要求的每个 profile 都 passed 才为 true；**没跑完算 false** |
+| `verification.failedProfileRefs` | 只收 failed，不含未跑的 |
+
+「还没跑」与「通过了」必须分开——这与 pipeline 那组是同一条硬边界，也是这次特意用两个 fact
+（`allRequiredPassed` + `failedProfileRefs`）而不是一个的原因：跑挂了进集合，没跑完只体现在
+布尔为 false 而集合为空。
+
+投影是纯函数 `domain/verificationFacts.ts`，在既有的 `__delivery.*` 落盘处同时写入；发布链那条
+block **保留不动**——它是「没有规则接手时」的兜底，不是唯一出口（与 pipeline 完全同形：
+`redispatchDelivery` 只在 `selected.kind === 'block'` 时接管，规则命中就轮不到它）。
+
+前端 `data/policyFactCatalog.ts` 的静态镜像同步（`code-policy-pages.test.tsx` 有集合相等对拍）。
+回归锁 `rfc310-verification-facts.test.ts` 五条 + 发布链用例里的真实链路断言；变异核对：去掉
+投影那一行，链路断言当场红。
 
 ### T81 reopen 收口注记（2026-08-20）—— 外部 reopen 建带链接的新 generation
 

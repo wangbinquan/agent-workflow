@@ -480,6 +480,7 @@ describe('rfc310 pr5 — verification arm', () => {
       mission,
       currentCells(fx, missionId),
       opts.profileRef ?? 'unit@1',
+      [opts.profileRef ?? 'unit@1'],
     )
     return { blocks, outcome }
   }
@@ -501,6 +502,9 @@ describe('rfc310 pr5 — verification arm', () => {
           : '{}',
       ),
     ).toEqual({ 'unit@1': 'passed' })
+    // T58 余项：同一份结果同时升为 catalog fact，规则谓词才读得到。
+    expect(cellsA['verification.allRequiredPassed']).toMatchObject({ value: true })
+    expect(cellsA['verification.lastOutcome']).toMatchObject({ value: 'passed' })
 
     // fail → verification-failed:<ref> + failed 进度（redispatch 不再重派同 profile）。
     const b = await seedDeliveredMission(fx)
@@ -508,6 +512,12 @@ describe('rfc310 pr5 — verification arm', () => {
     expect(failed.outcome).toBe('blocked')
     expect(failed.blocks[0]!.code).toBe('verification-failed:unit@1')
     expect(fx.store.getMission(b.missionId)!.status).toBe('blocked')
+    // 失败同样升 fact——这正是「失败就派 verification.repair」那条规则的读面。
+    // block 仍然存在：它是**没有规则接手时**的兜底，不是唯一出口（同 pipeline 形态）。
+    const cellsB = currentCells(fx, b.missionId)
+    expect(cellsB['verification.lastOutcome']).toMatchObject({ value: 'failed' })
+    expect(cellsB['verification.allRequiredPassed']).toMatchObject({ value: false })
+    expect(cellsB['verification.failedProfileRefs']).toMatchObject({ value: ['unit@1'] })
 
     // stage 出来的树与记录不符 → candidate-tree-drift（绝不验证错误的树）。
     const c = await seedDeliveredMission(fx)

@@ -52,6 +52,13 @@ export const POLICY_FACT_CATALOG: readonly FactCatalogEntry[] = [
   { id: 'pipeline.failureCategories', type: 'string-set', vocabulary: null },
   { id: 'pipeline.missingRequiredGateKeys', type: 'string-set', vocabulary: null },
   { id: 'pipeline.anyRunning', type: 'boolean', vocabulary: null },
+  {
+    id: 'verification.lastOutcome',
+    type: 'enum',
+    vocabulary: ['not-run', 'passed', 'failed'],
+  },
+  { id: 'verification.allRequiredPassed', type: 'boolean', vocabulary: null },
+  { id: 'verification.failedProfileRefs', type: 'string-set', vocabulary: null },
   { id: 'action.pendingKind', type: 'enum', vocabulary: ['none', 'agent', 'program', 'effect'] },
   {
     id: 'action.lastOutcome',
