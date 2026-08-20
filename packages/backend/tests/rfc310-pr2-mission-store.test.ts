@@ -132,6 +132,45 @@ describe('rfc310 pr2 mission store', () => {
     })
   })
 
+  // T81 的 reopen 链让「同一条 MR 有多行 claim」从异常变成常态（每重开一次多一行），
+  // 而唯一索引只约束 `state='active'`。此前 findMrClaim 不定序，多行时返回哪一行
+  // 由 SQLite 说了算——而它的调用方（webhook 反查、claim 撞车消歧）恰恰只关心
+  // 「现在归谁」。
+  test('findMrClaim prefers the active row when released history exists', () => {
+    const { store, missionId } = newStore()
+    const other = missionRow()
+    store.createMission(other)
+    const claim = {
+      codeHostEndpointRef: 'ep-9',
+      stableProjectRef: 'proj-9',
+      mrIid: '99',
+      headSha: null,
+      now: 1_000,
+    }
+    expect(store.claimMr({ ...claim, id: 'c-old', missionId, epoch: 0 })).toEqual({ ok: true })
+    store.releaseMr('c-old', 1_100)
+    expect(
+      store.claimMr({ ...claim, id: 'c-new', missionId: other.id, epoch: 0, now: 1_200 }),
+    ).toEqual({ ok: true })
+
+    const found = store.findMrClaim({
+      codeHostEndpointRef: 'ep-9',
+      stableProjectRef: 'proj-9',
+      mrIid: '99',
+    })
+    expect(found).toEqual({ id: 'c-new', missionId: other.id, state: 'active' })
+
+    // 全部 released 时退化为「取最新」，而不是随机一条。
+    store.releaseMr('c-new', 1_300)
+    expect(
+      store.findMrClaim({
+        codeHostEndpointRef: 'ep-9',
+        stableProjectRef: 'proj-9',
+        mrIid: '99',
+      }),
+    ).toEqual({ id: 'c-new', missionId: other.id, state: 'released' })
+  })
+
   test('wake hints dedupe by delivery key; consume marks them', () => {
     const { store, missionId } = newStore()
     const a = store.recordWakeHint({

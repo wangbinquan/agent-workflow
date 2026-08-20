@@ -5,7 +5,7 @@
 // select→检查→update 序列；不变量的最终兜底是 0177 的唯一/部分唯一索引——
 // 进程内检查只负责把索引冲突翻译成 typed 结果。
 
-import { and, asc, eq, inArray, isNull, lte, ne, or } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import {
@@ -235,6 +235,10 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
       return row ?? null
     },
     findMrClaim(input) {
+      // 同一条 MR 可以有多行：唯一索引只约束 `state='active'`，released 的历史
+      // 会累积——T81 的 reopen 链更是**每重开一次就多一行**。所以这里必须显式
+      // 定序：active 优先，同态取最新。不定序时 SQLite 返回哪一行是未定义的，
+      // 而这个读面的调用方（webhook 反查、claim 撞车消歧）恰恰只关心「现在归谁」。
       const row = db
         .select({
           id: developmentMrClaims.id,
@@ -248,6 +252,11 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
             eq(developmentMrClaims.stableProjectRef, input.stableProjectRef),
             eq(developmentMrClaims.mrIid, input.mrIid),
           ),
+        )
+        .orderBy(
+          sql`case when ${developmentMrClaims.state} = 'active' then 0 else 1 end`,
+          desc(developmentMrClaims.createdAt),
+          desc(developmentMrClaims.id),
         )
         .get()
       return row ?? null

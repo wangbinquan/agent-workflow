@@ -204,7 +204,11 @@
 > 逐字不动。四个刻意选择：继承钉住的 employee/policy（否则一次无关指派变更能中途接管在跑的
 > 外部 MR）、`direct` 继承需求证据、`external` 重新采集（工单可能已变）、幂等靠
 > `reopen:{id}` 唯一索引双重兜底。重新 claim 之所以成立，是因为 `dev_mr_claims_active_unique`
-> 是 `WHERE state='active'` 的部分索引。**残留**：该链接只驱动行为，未上 UI/API DTO。
+> 是 `WHERE state='active'` 的部分索引。**收口后自查出两处接线缺陷并当场修掉**：①整条链原本
+> 在生产上是死代码——webhook 入口只对 `active` claim 落 wake hint，而 MR 关闭时 claim 正好被
+> 释放，判据已抽成纯函数 `domain/webhookWake.ts`；②`findMrClaim` 不定序，而 reopen 让「同一条
+> MR 多行 claim」成为常态，改为 active 优先、同态取最新。**残留**：该链接只驱动行为，未上
+> UI/API DTO。
 > **PR-8（T85–T92；T93 部分）已完成**：完整配置与活动 UI。fork V：参数化配置四族页（violations 逐条/
 > 字段级权限/secret 只名不值）；fork W：policy rule builder（first-match 显式序、谓词控件化、组合子
 > JSON 保真）+ simulator（preview-decision→trace 逐条+no-match 诊断）+ 前端目录静态镜像的后端直接

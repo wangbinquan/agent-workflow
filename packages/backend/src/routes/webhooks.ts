@@ -32,6 +32,7 @@ import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
 import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
+import { shouldWakeForWebhook } from '@/modules/development-automation/domain/webhookWake'
 
 const log = createLogger('webhook-ingress')
 
@@ -241,10 +242,23 @@ export function mountWebhookIngressRoutes(
             stableProjectRef: event.repoPath,
             mrIid: event.mrIid,
           })
-          if (claim !== null && claim.state === 'active') {
+          // 判据是纯函数（`domain/webhookWake.ts`）：它现在有两档——active 与
+          // 「released 但 Mission 是 closed-unmerged」（后者正是 T81 的 reopen
+          // 信号，不唤醒的话 reconciler 的 reopen 探针永远等不到触发）。
+          // terminalKind 只在 claim 非 active 时才读，避免在热路径上多打一次库。
+          const terminalKind =
+            claim === null || claim.state === 'active'
+              ? null
+              : (developmentMissionStore.getMission(claim.missionId)?.terminalKind ?? null)
+          if (
+            shouldWakeForWebhook({
+              claimState: claim?.state ?? null,
+              missionTerminalKind: terminalKind,
+            })
+          ) {
             developmentMissionStore.recordWakeHint({
               id: ulid(),
-              missionId: claim.missionId,
+              missionId: claim!.missionId,
               source: 'webhook',
               deliveryKey: `webhook:${deliveryId}`,
               now: Date.now(),

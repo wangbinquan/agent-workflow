@@ -14,12 +14,15 @@
 //   direct 继承需求证据并直接 materialized，external 留 active 交给既有链重采。
 
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import type { MergeRequestFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
+import { shouldWakeForWebhook } from '../src/modules/development-automation/domain/webhookWake'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -150,6 +153,44 @@ async function seedClosedMission(
   })
   return { claimId }
 }
+
+describe('rfc310 pr7b T81 — the reopen signal actually reaches the probe', () => {
+  // 这一组锁的是**接线**而不是逻辑：reopen 探针只在收到 wake hint 时才跑，而
+  // webhook 入口原先只对 `active` 的 claim 落 hint。MR 关闭时平台释放了 claim，
+  // 于是「外部重开」这件事在生产上永远产生不了 hint——整条链会是死代码。
+  test('a released claim on a closed-unmerged mission still wakes; other released ones do not', () => {
+    // active：正常在跑，照常唤醒。
+    expect(shouldWakeForWebhook({ claimState: 'active', missionTerminalKind: null })).toBe(true)
+    // released + closed-unmerged：这就是 reopen 信号，必须唤醒。
+    expect(
+      shouldWakeForWebhook({ claimState: 'released', missionTerminalKind: 'closed-unmerged' }),
+    ).toBe(true)
+    // released + merged：终态不接受重开。
+    expect(shouldWakeForWebhook({ claimState: 'released', missionTerminalKind: 'merged' })).toBe(
+      false,
+    )
+    // released 但 Mission 未终态（handoff 后 tracking-only 之类）：不该被 webhook 拽回来。
+    expect(shouldWakeForWebhook({ claimState: 'released', missionTerminalKind: null })).toBe(false)
+    // 平台根本不认识这条 MR。
+    expect(shouldWakeForWebhook({ claimState: null, missionTerminalKind: null })).toBe(false)
+  })
+
+  test('the webhook route decides through that predicate, not an inline condition', () => {
+    // 纯函数好断言，但它得真的被调用——源码层兜底，防止有人把逻辑抄回路由里。
+    const route = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'routes', 'webhooks.ts'),
+      'utf8',
+    )
+    expect(route).toContain('shouldWakeForWebhook({')
+    // 修复前那条内联判据的确切形态——它把 released 的 claim 一律挡在门外。
+    expect(route).not.toContain("claim !== null && claim.state === 'active'")
+    // 而且 hint 必须落在该判据的分支里，不是它旁边。
+    const at = route.indexOf('shouldWakeForWebhook({')
+    const record = route.indexOf('recordWakeHint({', at)
+    expect(record).toBeGreaterThan(at)
+    expect(record - at).toBeLessThan(400)
+  })
+})
 
 describe('rfc310 pr7b T81 — external reopen creates a linked successor generation', () => {
   test('reopened MR spawns one adopt-mode successor; the closed mission stays terminal', async () => {

@@ -892,6 +892,20 @@ adopt + 继承配置 / 重新 claim 成功且旧 claim 仍 released / 幂等第�
 「投递了但外部仍 closed ⇒ 什么都不发生」、「external 不继承旧快照」。前两条做过变异核对
 （去掉 `hints > 0` 门、把 direct/external 分档改成一视同仁，各自当场红）。
 
+**收口后当场自查出的两处接线缺陷**（写在这里是因为它们比功能本身更容易复发）：
+
+1. **整条链原本在生产上是死代码**。reopen 探针只在收到 wake hint 时才跑，而 webhook 入口
+   （`routes/webhooks.ts`）原先只对 `state='active'` 的 claim 落 hint——MR 关闭时平台正好
+   释放了 claim，于是「外部重开」这件事**永远产生不了 hint**。判据抽成纯函数
+   `domain/webhookWake.ts::shouldWakeForWebhook`：active 唤醒；released 且 Mission 是
+   `closed-unmerged` 唤醒（这就是 reopen 信号）；其余不唤醒（merged 不接受重开、
+   handoff 后 tracking-only 不该被 webhook 拽回来）。路由改为调它，并留一条源码层断言防止
+   有人把逻辑抄回去。
+2. **`findMrClaim` 此前不定序**。T81 让「同一条 MR 有多行 claim」从异常变成常态（每重开一次
+   多一行），而唯一索引只约束 `state='active'`。不定序时多行返回哪一条由 SQLite 说了算，
+   而它的调用方只关心「现在归谁」。改为 active 优先、同态取最新；变异核对：去掉 orderBy
+   当场红。
+
 **如实登记的残留**：`reopenedFromMissionId` 目前只驱动行为、**未上 UI/API DTO**（列表投影按
 RFC-311 的性能判据只取 18 列，详情 DTO 与契约登记属 PR-8 的 UI 面）；接手时若要在时间线上
 显示「本任务由 X 重开派生」，加的是读模型与契约登记，不需要动本次的写侧。
