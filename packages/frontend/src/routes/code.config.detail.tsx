@@ -307,28 +307,45 @@ function ConfigDetailPage(): ReactElement {
   )
 }
 
+const TERMINAL_MISSION_STATUSES = [
+  'merged',
+  'completed-no-change',
+  'closed-unmerged',
+  'canceled',
+  'failed',
+] as const
+
 function EmployeeOutcomeSummary({ employeeId }: { employeeId: string }): ReactElement {
   const { t } = useTranslation()
-  const missions = useQuery<{ items: MissionSummary[] }>({
-    queryKey: ['code-missions'],
-    queryFn: ({ signal }) => api.get('/api/code/missions', undefined, signal),
+  // RFC-311：只要四个数字，就**一行都不搬**。此前这里 `api.get('/api/code/missions')`
+  // 取回整张表再 `filter().length`——mission 表长起来后，光是为了渲染一张摘要卡片就
+  // 要把全部 mission 送到浏览器。服务端按 employeeId 收敛后回 `counts`（按原始
+  // mission 状态分组，行数被枚举封顶），四个数字全部由它派生。
+  const missions = useQuery<{ counts: Record<string, number> }>({
+    queryKey: ['code-missions', 'employee-outcome', employeeId],
+    queryFn: ({ signal }) => api.get('/api/code/missions', { employeeId, limit: 1 }, signal),
+  })
+  // 历史只展示最近 5 条终态——独立的一次**有界**请求，而不是把全量取回来再 slice(0,5)。
+  const recent = useQuery<{ items: MissionSummary[] }>({
+    queryKey: ['code-missions', 'employee-outcome-recent', employeeId],
+    queryFn: ({ signal }) =>
+      api.get(
+        '/api/code/missions',
+        { employeeId, missionStatuses: TERMINAL_MISSION_STATUSES.join(','), limit: 5 },
+        signal,
+      ),
   })
   if (missions.isPending) return <LoadingState />
   if (missions.isError) return <ErrorBanner error={missions.error} />
 
-  const mine = (missions.data?.items ?? []).filter((mission) => mission.employeeId === employeeId)
-  const terminal = mine.filter((mission) =>
-    ['merged', 'completed-no-change', 'closed-unmerged', 'canceled', 'failed'].includes(
-      mission.status,
-    ),
-  )
-  const active = mine.length - terminal.length
-  const ready = mine.filter(
-    (mission) => mission.status === 'ready-to-merge' || mission.status === 'waiting-committer',
-  ).length
-  const delivered = terminal.filter(
-    (mission) => mission.status === 'merged' || mission.status === 'completed-no-change',
-  ).length
+  const counts = missions.data?.counts ?? {}
+  const sum = (keys: readonly string[]): number =>
+    keys.reduce((total, key) => total + (counts[key] ?? 0), 0)
+  const mineCount = Object.values(counts).reduce((a, b) => a + b, 0)
+  const terminalCount = sum(TERMINAL_MISSION_STATUSES)
+  const active = mineCount - terminalCount
+  const ready = sum(['ready-to-merge', 'waiting-committer'])
+  const delivered = sum(['merged', 'completed-no-change'])
 
   return (
     <Card
@@ -355,9 +372,9 @@ function EmployeeOutcomeSummary({ employeeId }: { employeeId: string }): ReactEl
           {t('code.outcomes.employeeDelivered')}
         </span>
       </div>
-      {terminal.length > 0 ? (
+      {(recent.data?.items?.length ?? 0) > 0 ? (
         <ul className="employee-outcome-summary__history">
-          {terminal.slice(0, 5).map((mission) => (
+          {(recent.data?.items ?? []).map((mission) => (
             <li key={mission.id}>
               <Link to="/code/missions/$missionId" params={{ missionId: mission.id }}>
                 {mission.id.slice(-8)}

@@ -189,6 +189,10 @@ describe('RFC-311 — mission list paging === the legacy full listing', () => {
       status: 422,
       code: 'mission-statuses-invalid',
     })
+    expect(await failure('/api/code/missions?missionStatuses=not-a-mission-status')).toEqual({
+      status: 422,
+      code: 'mission-raw-statuses-invalid',
+    })
   })
 })
 
@@ -273,5 +277,47 @@ describe('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', ()
       }
     }
     expect(combos).toBe(64)
+  })
+})
+
+describe('RFC-311 — employeeId / missionStatuses 过滤与 counts', () => {
+  test('counts 算在过滤集上，且原始状态过滤不会把 blocked 混进终态', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedVaried(db, 40)
+    const all = listMissionSummaries(db)
+
+    // ① employeeId 收敛：counts 的总和 === 该员工的 mission 数
+    const employeeId = all.find((m) => m.employeeId !== null)?.employeeId ?? null
+    expect(employeeId).not.toBeNull()
+    const scoped = listMissionSummariesPage(db, { limit: 1, employeeId: employeeId! })
+    const scopedTotal = Object.values(scoped.counts).reduce((a, b) => a + b, 0)
+    expect(scopedTotal).toBe(all.filter((m) => m.employeeId === employeeId).length)
+    // facets 仍是全集语义，不随过滤走
+    expect(scoped.facets.all).toBe(all.length)
+
+    // ② 终态集合必须用**原始 mission 状态**表达：blocked 映射成 failed，
+    //    若用任务状态 statuses=failed 会把 blocked 一起捞进来。
+    const TERMINAL = [
+      'merged',
+      'completed-no-change',
+      'closed-unmerged',
+      'canceled',
+      'failed',
+    ] as const
+    const terminal = listMissionSummariesPage(db, { limit: 200, missionStatuses: TERMINAL })
+    expect(terminal.items.map((m) => m.id).sort()).toEqual(
+      all
+        .filter((m) => (TERMINAL as readonly string[]).includes(m.status))
+        .map((m) => m.id)
+        .sort(),
+    )
+    expect(
+      terminal.items.some((m) => m.status === 'blocked'),
+      'blocked 不是终态，不该出现在终态过滤里',
+    ).toBe(false)
+
+    // 反证：用任务状态表达会捞到 blocked——这正是必须新增原始状态过滤的理由
+    const byTaskStatus = listMissionSummariesPage(db, { limit: 200, statuses: ['failed'] })
+    expect(byTaskStatus.items.some((m) => m.status === 'blocked')).toBe(true)
   })
 })

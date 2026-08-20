@@ -16,6 +16,8 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 
+import { DIGITAL_EMPLOYEE_MISSION_STATUSES } from '@agent-workflow/shared'
+
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import {
@@ -113,6 +115,7 @@ const MissionCursorSchema = z.object({
 })
 
 const MissionViewSchema = z.enum(['all', 'active', 'attention', 'finished'])
+const RawMissionStatusesSchema = z.array(z.enum(DIGITAL_EMPLOYEE_MISSION_STATUSES))
 const MissionStatusesSchema = z.array(
   z.enum([
     'pending',
@@ -346,12 +349,16 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       const viewRaw = c.req.query('view')
       const statusesRaw = c.req.query('statuses')
       const qRaw = c.req.query('q')
+      const employeeRaw = c.req.query('employeeId')
+      const missionStatusesRaw = c.req.query('missionStatuses')
       const paged =
         limitRaw !== undefined ||
         cursorRaw !== undefined ||
         viewRaw !== undefined ||
         statusesRaw !== undefined ||
-        qRaw !== undefined
+        qRaw !== undefined ||
+        employeeRaw !== undefined ||
+        missionStatusesRaw !== undefined
       if (!paged) {
         return c.json({ items: listMissionSummaries(deps.db) })
       }
@@ -360,6 +367,17 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       const viewParsed = MissionViewSchema.safeParse(viewRaw ?? 'all')
       if (!viewParsed.success) {
         throw new ValidationError('mission-view-invalid', `'${String(viewRaw)}' is not a view`)
+      }
+      const missionStatusesParsed = RawMissionStatusesSchema.safeParse(
+        missionStatusesRaw === undefined || missionStatusesRaw === ''
+          ? []
+          : missionStatusesRaw.split(','),
+      )
+      if (!missionStatusesParsed.success) {
+        throw new ValidationError(
+          'mission-raw-statuses-invalid',
+          `'${String(missionStatusesRaw)}' is not a mission status set`,
+        )
       }
       const statusesParsed = MissionStatusesSchema.safeParse(
         statusesRaw === undefined || statusesRaw === '' ? [] : statusesRaw.split(','),
@@ -387,6 +405,10 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
         view: viewParsed.data,
         statuses: statusesParsed.data,
         ...(qRaw !== undefined && qRaw !== '' ? { q: qRaw } : {}),
+        ...(employeeRaw !== undefined && employeeRaw !== '' ? { employeeId: employeeRaw } : {}),
+        ...(missionStatusesParsed.data.length > 0
+          ? { missionStatuses: missionStatusesParsed.data }
+          : {}),
         ...(cursor !== undefined ? { cursor } : {}),
       })
       return c.json({

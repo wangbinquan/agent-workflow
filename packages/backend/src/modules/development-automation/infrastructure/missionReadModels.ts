@@ -4,7 +4,7 @@
 // 详情附 source/upload/decision 摘要，trace 回 canonical guard/rule trace。
 // 不返回 host path/nonce/secret/raw 正文（§12.4）。
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 
 import {
   DIGITAL_EMPLOYEE_MISSION_STATUSES,
@@ -98,6 +98,13 @@ export interface MissionPage {
    * facets 同语义，也与此前前端 `digitalEmployeeFacets(全量)` 的行为逐字一致。
    */
   facets: { all: number; active: number; attention: number; finished: number }
+  /**
+   * RFC-311：**过滤集**上按原始 mission 状态分组的计数（与 facets 的全集语义相对）。
+   * 它让「只要几个数」的消费者一行都不用搬——员工产出摘要要的四个数字全部由它
+   * 派生，此前那条路径是把整张表取回浏览器再 filter().length。
+   * 行数被状态枚举封顶（≤13），与表大小无关。
+   */
+  counts: Record<string, number>
 }
 
 export interface MissionPageFilters {
@@ -105,6 +112,14 @@ export interface MissionPageFilters {
   statuses?: readonly TaskStatus[]
   /** 大小写不敏感子串，匹配 id / repositoryId / externalId / blockCode / employeeId。 */
   q?: string
+  /** RFC-311：按数字员工收敛——此前 /outcomes 与员工详情都取全量再在前端筛。 */
+  employeeId?: string
+  /**
+   * RFC-311：**原始 mission 状态**过滤，不能用上面的 `statuses` 代替。
+   * 任务状态映射把 `blocked` 与 `failed` 并成同一个 `failed`，而 `blocked` **不是**
+   * 终态——/outcomes 要的「终态集合」用 `statuses` 表达会多出 blocked 的行。
+   */
+  missionStatuses?: readonly string[]
 }
 
 /**
@@ -147,6 +162,12 @@ export function listMissionSummariesPage(
     statuses.length === DIGITAL_EMPLOYEE_MISSION_STATUSES.length
       ? sql`1 = 1`
       : inArray(developmentMissions.status, statuses)
+  const employeeCond =
+    opts.employeeId === undefined ? sql`1 = 1` : eq(developmentMissions.employeeId, opts.employeeId)
+  const missionStatusCond =
+    opts.missionStatuses === undefined || opts.missionStatuses.length === 0
+      ? sql`1 = 1`
+      : inArray(developmentMissions.status, [...opts.missionStatuses])
   const needle = opts.q?.trim().toLocaleLowerCase('en-US')
   const qCond =
     needle === undefined || needle === ''
@@ -156,13 +177,14 @@ export function listMissionSummariesPage(
           or lower(coalesce(${developmentMissions.externalId}, '')) like ${`%${needle}%`}
           or lower(coalesce(${developmentMissions.blockCode}, '')) like ${`%${needle}%`}
           or lower(coalesce(${developmentMissions.employeeId}, '')) like ${`%${needle}%`})`
+  const filters = and(statusCond, qCond, employeeCond, missionStatusCond)!
   if (statuses.length === 0) {
-    return { items: [], nextCursor: null, facets: missionFacets(db) }
+    return { items: [], nextCursor: null, facets: missionFacets(db), counts: {} }
   }
   const rows = db
     .select(SUMMARY_COLUMNS)
     .from(developmentMissions)
-    .where(and(boundary, statusCond, qCond))
+    .where(and(boundary, filters))
     .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
     .limit(opts.limit + 1)
     .all()
@@ -173,7 +195,21 @@ export function listMissionSummariesPage(
     items: page.map(summaryOf),
     nextCursor: hasMore && last !== undefined ? { createdAt: last.createdAt, id: last.id } : null,
     facets: missionFacets(db),
+    counts: missionCounts(db, filters),
   }
+}
+
+/** 过滤集上按原始 mission 状态分组的计数。一条 group by，行数被枚举封顶。 */
+function missionCounts(db: DbClient, where: SQL): Record<string, number> {
+  const rows = db
+    .select({ status: developmentMissions.status, n: sql<number>`count(*)` })
+    .from(developmentMissions)
+    .where(where)
+    .groupBy(developmentMissions.status)
+    .all()
+  const out: Record<string, number> = {}
+  for (const row of rows) out[row.status] = row.n
+  return out
 }
 
 /**

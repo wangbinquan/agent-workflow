@@ -416,9 +416,12 @@ describe('RFC-311 性能防护 —— 防护面本身不许缩水', () => {
 // `/api/code/missions` 之内，受不变量④a（单条语句取回行数有上界）实际保护。这是文本
 // 启发式的过度计数：它看得见 `.all()`，看不见 `group by` 把结果收敛成了枚举基数，也
 // 看不见这条路径已经在注册表里。按本条自己写的处置口径「连同理由调整棘轮值」处理。
+// 40：再 +1，同因——`missionCounts`（过滤集上按状态分组的计数，服务端聚合下推之后
+// 新增）。它同样被状态枚举封顶，同样在已注册路径内。
 // 注意 group by 并不天然安全——按高基数列分组（如 cached_repo_id）仍是无界的，所以
-// 没有把 `groupBy` 一刀切地从判据里豁免。
-const UNBOUNDED_READ_RATCHET = 39
+// 没有把 `groupBy` 一刀切地从判据里豁免；每次上调都必须像这样写明**为什么这一处是
+// 有界的**，而不是简单地把数字改大。
+const UNBOUNDED_READ_RATCHET = 40
 
 describe('RFC-311 性能防护 —— 未受保护的无界读只许减不许增', () => {
   test('no new unbounded .all() reads on growing tables', () => {

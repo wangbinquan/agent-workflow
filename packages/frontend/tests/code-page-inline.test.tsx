@@ -142,19 +142,32 @@ function installFetch() {
       return json({ items: [{ id: 'repo-1', urlRedacted: 'team/service' }] })
     }
     if (url.pathname === '/api/code/missions') {
-      return json({
-        items: [
-          mission('mission-admitting', 'admitting'),
-          mission('mission-ready', 'ready-to-merge'),
-          mission('mission-blocked', 'blocked', { blockCode: 'pipeline-gate-failed' }),
-          mission('mission-working', 'working'),
-          mission('mission-publishing', 'publishing'),
-          mission('mission-watching', 'watching'),
-          mission('mission-merged', 'merged'),
-          mission('mission-no-change', 'completed-no-change'),
-          mission('mission-failed', 'failed', { employeeId: 'employee-2' }),
-        ],
+      // RFC-311：过滤已经下推到服务端，所以这个假服务端必须**照真契约过滤**——
+      // 返回固定全量等于让测试验证一段已经不存在的前端行为。
+      const employeeId = url.searchParams.get('employeeId')
+      const missionStatuses = url.searchParams.get('missionStatuses')?.split(',') ?? null
+      const rows = [
+        mission('mission-admitting', 'admitting'),
+        mission('mission-ready', 'ready-to-merge'),
+        mission('mission-blocked', 'blocked', { blockCode: 'pipeline-gate-failed' }),
+        mission('mission-working', 'working'),
+        mission('mission-publishing', 'publishing'),
+        mission('mission-watching', 'watching'),
+        mission('mission-merged', 'merged'),
+        mission('mission-no-change', 'completed-no-change'),
+        mission('mission-failed', 'failed', { employeeId: 'employee-2' }),
+      ].filter((row) => {
+        const m = row as { employeeId: string | null; status: string }
+        if (employeeId !== null && m.employeeId !== employeeId) return false
+        if (missionStatuses !== null && !missionStatuses.includes(m.status)) return false
+        return true
       })
+      const counts: Record<string, number> = {}
+      for (const row of rows) {
+        const status = (row as { status: string }).status
+        counts[status] = (counts[status] ?? 0) + 1
+      }
+      return json({ items: rows, nextCursor: null, counts })
     }
     if (url.pathname === '/api/code/metrics') {
       return json({
