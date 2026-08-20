@@ -1966,6 +1966,35 @@ expect(commitRow!.status).toBe('done')` → `failed`，与 2026-08-14 记录的 
   status` 与该节点全部 node_run 行（含 `rerun_cause`），一次就能在方向 1 与方向 2
   （缺同步点）之间分出胜负。
 
+### 2026-08-20 再补：链上**确实有**「先探后用」的两步式，窗口已定位到 file:line
+
+由并发 session 提示去查的（他们刚治好一条同形的端口竞态：症状是语义离谱的响应码而非
+`EADDRINUSE`，且「负载高才现形、单跑必绿」）。**这条提醒纠正了我上一段的表述重心**：
+「负载相关」不是「环境慢」的证据，恰恰是**存在窗口的竞态**的特征——把它读成环境问题
+会把下一个人引回死路。
+
+**窗口（源码核实，非猜测）**：`maybeRunCommitPush` 的顺序是
+①`services/scheduler.ts:2146` `git status --porcelain` 探脏 → `:2154` 干净就 `continue`；
+②中间**跑掉一整个 commit-message agent 会话**（时长只受节点超时约束；在本用例里它是
+桩里那个自旋等 `started-n2` 标记、上限 10s 的握手，见测试 `:86-95`）；
+③`modules/source-control/application/repositoryCommit.ts:229` 才真正 `git commit`，
+且**提交前不再复检**工作树是否仍脏。②的时长就是窗口宽度——**负载越重窗口越宽**。
+
+**为什么与已证伪的 A2 不矛盾**：A2 是「**关掉同步点** + 会话 0 靠 delay 变慢」。关掉同步点
+后会话 0 不会被**停在窗口中间**，窗口自然小；而真实红态的配置是同步点**开着**的
+（`CP_COMMIT_WAIT_FOR_AGENT='n2'` + 10s 上限），会话 0 停在②里等 n2 起来，同时 n2 的完成
+又会触发**第二个** commit 会话（`CP_COMMIT_DELAYS[1]=1500`）。A2 从未覆盖这个变体。
+
+**还有一处独立缺陷（不解决竞态也该修）**：git 的「nothing to commit」是 **exit 1 +
+提示走 stdout + stderr 为空**，而 `repositoryCommit.ts:236` 只判 `exitCode !== 0` 就一律
+按硬失败处置 ⇒ 一次良性的空提交被报成 `git commit failed`（正是 CI 日志里那条
+`stderr=` 为空的 WARN）。对**自动**提交推送而言「没东西可提交」本就不是错误。单修这一条
+就能把这条间歇红降级成 no-op，且与竞态的修法互不冲突。
+
+**决定性实验（未跑，留给接手的人）**：保留同步点、把会话 1 的延迟从 1500ms 调到 0，
+并在 `git commit` 前后各打一次 `git status --porcelain` + `git log -1`。若会话 0 报的
+「nothing to commit」发生在会话 1 已提交之后，本节机理即坐实。
+
 ## `unified system mock gateway` 的 npm 用例在 CI 上 30s 超时（2026-08-20 首见，1 次）
 
 **现象**：`packages/system-mocks` 的
