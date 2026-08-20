@@ -12973,7 +12973,7 @@ export const zhCN: Resources = {
     perNodeTimeout: '单节点超时 (ms)',
     nodeRetries: '默认节点重试次数',
     nodeRetriesHint:
-      '单个 runtime 会话内可恢复失败的重试预算。默认 3。注意它**不再**单独决定总次数——' +
+      '单个 runtime 会话内可恢复失败的重试预算。默认 3。注意它不再单独决定总次数——' +
       '与下面的「会话重启预算」相乘才是单节点最坏尝试次数；只把本项设为 0、而重启预算仍为 1 时，' +
       '失败节点仍会跑 2 次。要真正「只跑一次」需两项都设为 0。',
     sessionRestartBudget: '会话重启预算',
