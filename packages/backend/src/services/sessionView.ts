@@ -10,7 +10,7 @@
 // tree client-side from raw event rows. Here we just do the IO and
 // pass-through.
 
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import {
   isAgentNodeKind,
   parseSessionTree,
@@ -27,6 +27,14 @@ import { Paths } from '@/util/paths'
 /** 会话树是「读全历史」的视图,但仍要有界:单个 node_run 的归档回读封顶,
  *  避免一次请求把整份 JSONL 拉进内存(实现门 P1-2 的同源约束)。 */
 const ARCHIVED_SESSION_EVENT_CAP = 20_000
+/**
+ * RFC-311 T13：DB 侧事件的两段上限。
+ * - PREFIX 只为**定根**：`deriveRootSessionId` 只需要最早那几条带 sessionId 的事件，
+ *   给足余量即可，不必大。
+ * - TAIL 承载用户实际要看的近期内容，与归档侧上限同量级。
+ */
+const SESSION_ROOT_PREFIX_CAP = 500
+const SESSION_TAIL_CAP = 20_000
 
 /**
  * Workflow node kinds for which an opencode session exists (everything
@@ -41,6 +49,8 @@ export async function getSessionTree(
   db: DbClient,
   taskId: string,
   nodeRunId: string,
+  /** 测试注入:把两段上限调到几十条，才测得出「超限时根还对不对」。 */
+  caps: { rootPrefix?: number; tail?: number } = {},
 ): Promise<{ tree: SessionTree }> {
   const taskRows = await db
     .select({ snapshot: tasks.workflowSnapshot })
@@ -103,18 +113,41 @@ export async function getSessionTree(
   }
 
   const logsDir = Paths.logsDir
-  const rows = await db
-    .select({
-      id: nodeRunEvents.id,
-      ts: nodeRunEvents.ts,
-      kind: nodeRunEvents.kind,
-      sessionId: nodeRunEvents.sessionId,
-      parentSessionId: nodeRunEvents.parentSessionId,
-      payload: nodeRunEvents.payload,
-    })
-    .from(nodeRunEvents)
-    .where(inArray(nodeRunEvents.nodeRunId, targetNodeRunIds))
-    .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
+  // RFC-311 T13：DB 侧此前**无上限**（归档侧早就有 ARCHIVED_SESSION_EVENT_CAP）。
+  // 长会话下这条查询会把该任务的全部事件一次性取回，跑在 daemon 唯一的同步连接上。
+  //
+  // 但这里**不能像 stdout 那样只保尾**：紧接着的注释已经记着，会话前半段一旦缺失，
+  // `deriveRootSessionId` 会退化成「取残留事件里的第一个 sessionId」（通常是子代理），
+  // 整棵树就以子代理为根渲染——不是少了历史，是渲染出**错误结构**。
+  // 所以取两段：**最早 PREFIX 条**（定根用，必须在）+ **最新 TAIL 条**（近期内容），
+  // 中间那段在超限时舍弃。两条查询各自有界，合并后按 (ts, id) 去重排序。
+  const columns = {
+    id: nodeRunEvents.id,
+    ts: nodeRunEvents.ts,
+    kind: nodeRunEvents.kind,
+    sessionId: nodeRunEvents.sessionId,
+    parentSessionId: nodeRunEvents.parentSessionId,
+    payload: nodeRunEvents.payload,
+  }
+  const where = inArray(nodeRunEvents.nodeRunId, targetNodeRunIds)
+  const [prefix, tailDesc] = await Promise.all([
+    db
+      .select(columns)
+      .from(nodeRunEvents)
+      .where(where)
+      .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
+      .limit(caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP),
+    db
+      .select(columns)
+      .from(nodeRunEvents)
+      .where(where)
+      .orderBy(desc(nodeRunEvents.ts), desc(nodeRunEvents.id))
+      .limit(caps.tail ?? SESSION_TAIL_CAP),
+  ])
+  const byId = new Map<number, (typeof prefix)[number]>()
+  for (const row of prefix) byId.set(row.id, row)
+  for (const row of tailDesc) byId.set(row.id, row)
+  const rows = [...byId.values()].sort((a, b) => (a.ts === b.ts ? a.id - b.id : a.ts - b.ts))
 
   // 实现门 P1-4:RFC-311 的字节水位把事件归档从「生产从未触发」变成长会话常态,
   // 而这条路径此前只读 DB——归档掉的前半段会话一旦消失,deriveRootSessionId 会
