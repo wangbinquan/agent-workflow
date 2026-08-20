@@ -25,7 +25,7 @@
 > `mergeDefaults` 在校验前回填才不会让存量 config.json 拒启动——为此补了直接构造存量文件的回归用例。
 > 既有 RFC-042/049 契约测试按 AC-5 显式置 0 继续当不变量证据，**断言一字未改**。
 
-> 🚧 **进行中 RFC（In Progress，2026-08-18 获批）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-20 交付完成）：[RFC-311 数据库性能治理与十万级列表渲染](design/RFC-311-database-performance-and-scalability/proposal.md)**
 > —— 生产 2.2GB 库/数千任务/十万 webhook 投递下「所有操作都慢」+「/tasks 2000 行、/repos 280 行渲染慢」的六路
 > 审计（全部 findings 见该目录 `audit-2026-08-18.md`）与五 PR 修复计划。用户四项拍板（保守档事件治理/任务归档
 > 不可见/react-virtual/单 RFC）+ 三件套与 C1-C7 全部批准。
@@ -71,6 +71,19 @@
 > 故「最坏 O(page)」暂不能声称；加索引要动 `_journal.json`，而树上有未追踪的 `0186`，此刻提 journal 会让 daemon
 > 直接起不来（该风险分档已落 `docs/dev-gotchas.md`），解除条件是对方 `0186` 落主干后追 `0187`。剩余证据按
 > RFC-311 自身 plan 收口，不把它们误记成 RFC-294 的 wave exit。
+> **收口（2026-08-20）**：三处前端无界消费全部处理完——`/tasks` 的数字员工列表此前**10 秒一轮取全量**，
+> 现由服务端过滤 + facets 下推 + keyset 翻页（等价性由 **64 组过滤 × 逐页 oracle** 锁定）；员工产出摘要与
+> `/outcomes` 是**聚合型**，不能直接接分页（统计会随翻页增长且永远偏小，比慢更糟），改为服务端 `counts`
+> 与原始 mission 状态过滤——后者不可用任务状态代替：映射把 `blocked` 与 `failed` 并成同一个 `failed`，
+> 而 blocked **不是**终态，测试里有反证锁住。另把两条无界读有界化：`getNodeRunStdout` 保尾且**读取**也有界
+> （尾巴被 DB 填满就不读归档），会话树取「最早 500 条定根 + 最新 20000 条」两段——**不能只保尾**，前半段
+> 缺失会让 `deriveRootSessionId` 拿子代理当根、整棵树渲染出错误结构。
+> **新增性能防护网**（`tests/rfc311-perf-guards.test.ts` + `helpers/statementRecorder.ts`）：不枚举而是**录制**
+> 被测代码实际执行的每条 SQL 再逐条审计，新增查询自动进入审计面；五条确定性不变量（语句数不随行数增长 /
+> 无裸表 SCAN 与 TEMP B-TREE / 参数 ≤900 / 取回行数有界 / 列表不碰重列）+ 未受保护无界读棘轮。它落地即
+> 抓出四类真缺陷：三条索引缺口（`0189`）、巡检 sweep 的裸表扫描（`0190`）、mission 列表读 `readiness_json`、
+> **`/api/overview` 为了出一个计数把整张表的 markdown 正文搬了一遍**。win32 视觉基线经查**非本 RFC 义务**
+> （无任何 CI 在 Windows 上跑视觉套件，43 张 `*-win32.png` 无人比对），已转仓级 backlog。
 >
 > 🚧 **进行中 RFC（In Progress，2026-08-19 按用户补充重新打开）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 > —— 本轮按用户要求结合 RFC-294 重做产品上层：一条 `DevelopmentMission` 从需求/问题或外部 ID 贯穿实现、
