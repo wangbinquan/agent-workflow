@@ -554,7 +554,7 @@ function ReposPage() {
               clearLabel={t('common.clearFilters')}
               onClear={clearFilters}
               testidPrefix="repos"
-              disabled={list.isLoading}
+              busy={list.isLoading}
               searchRef={searchRef}
               filterButtonRef={filterButtonRef}
             />

@@ -33,7 +33,15 @@ interface OperationsToolbarProps<V extends string> {
   clearLabel: string
   onClear: () => void
   testidPrefix: string
-  disabled?: boolean
+  /**
+   * 列表正在加载。**只置 `aria-busy`，绝不 `disabled`**（RFC-312 e2e 实撞）：
+   * 被禁用的控件会**离开 tab 序**，于是「搜索框 → Tab → 筛选按钮」在加载窗口里
+   * 落到别处，键盘用户的焦点被凭空弹走。这与 69b17787 修 Load more 按钮的是同一
+   * 类缺陷（那次症状是 webkit e2e 活锁），此处是它的第二个现场。
+   * 本工具条的三个控件在加载期间动作都是安全的（切视图＝改 URL、输入＝改草稿、
+   * 开筛选＝开弹层），没有需要靠禁用来挡的重复提交，故直接保持可用。
+   */
+  busy?: boolean
   searchRef?: RefObject<HTMLInputElement | null>
   filterButtonRef?: RefObject<HTMLButtonElement | null>
 }
@@ -57,13 +65,12 @@ function FilterIcon() {
 
 export function OperationsToolbar<V extends string>(props: OperationsToolbarProps<V>) {
   return (
-    <div className="operations-toolbar">
+    <div className="operations-toolbar" aria-busy={props.busy === true ? true : undefined}>
       <Segmented<V>
         className="list-view-switch"
         value={props.view}
         onChange={props.onViewChange}
         ariaLabel={props.viewAria}
-        disabled={props.disabled}
         rootTestid={`${props.testidPrefix}-views`}
         options={props.views.map((view) => ({
           value: view.value,
@@ -89,7 +96,6 @@ export function OperationsToolbar<V extends string>(props: OperationsToolbarProp
             placeholder={props.searchPlaceholder}
             aria-label={props.searchLabel}
             className="operations-toolbar__search"
-            disabled={props.disabled}
             inputRef={props.searchRef}
             data-testid={`${props.testidPrefix}-search`}
           />
@@ -99,7 +105,6 @@ export function OperationsToolbar<V extends string>(props: OperationsToolbarProp
           type="button"
           className="btn btn--sm operations-toolbar__filter"
           aria-label={props.filterLabel}
-          disabled={props.disabled}
           onClick={props.onOpenFilters}
           data-testid={`${props.testidPrefix}-filter-button`}
         >

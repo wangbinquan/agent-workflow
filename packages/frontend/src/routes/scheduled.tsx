@@ -158,7 +158,7 @@ function ScheduledPage() {
             clearLabel={t('common.clearFilters')}
             onClear={clearFilters}
             testidPrefix="scheduled"
-            disabled={isLoading}
+            busy={isLoading}
             searchRef={searchRef}
             filterButtonRef={filterButtonRef}
           />

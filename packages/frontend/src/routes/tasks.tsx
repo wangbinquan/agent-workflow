@@ -500,7 +500,7 @@ function TasksPage() {
             clearLabel={t('common.clearFilters')}
             onClear={clearFilters}
             testidPrefix="tasks"
-            disabled={isLoading}
+            busy={isLoading}
             searchRef={searchRef}
             filterButtonRef={filterButtonRef}
           />
