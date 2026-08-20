@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createServer } from 'node:net'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
@@ -52,21 +51,6 @@ async function waitFor(check: () => boolean | Promise<boolean>, timeoutMs = 12_0
   }
 }
 
-async function allocateLoopbackPort(): Promise<number> {
-  const probe = createServer()
-  await new Promise<void>((resolveListen, rejectListen) => {
-    probe.once('error', rejectListen)
-    probe.listen({ host: '127.0.0.1', port: 0, exclusive: true }, resolveListen)
-  })
-  const address = probe.address()
-  const port = typeof address === 'object' && address !== null ? address.port : null
-  await new Promise<void>((resolveClose, rejectClose) => {
-    probe.close((error) => (error === undefined ? resolveClose() : rejectClose(error)))
-  })
-  if (port === null) throw new Error('failed to allocate loopback port')
-  return port
-}
-
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
@@ -96,10 +80,16 @@ describe('RFC-238 real process multi-turn fixture', () => {
         params: Record<string, unknown>
       }> = []
       let counter = 0
-      const port = await allocateLoopbackPort()
+      // RFC-312 门禁实撞（2026-08-19）：这里原先走「node 探一个临时端口 → close() →
+      // 再拿这个号 Bun.serve」，probe 关闭到重新绑定之间有真实窗口，4 个并发 shard 下
+      // 会被别的进程抢走——本用例因此偶发红在 `code-host-http-error … HTTP 503`，而本文件
+      // 的桩对任何请求都只回 201、根本产不出 503（判据：503 来自占了同一端口的别人）。
+      // 原注释称「Bun 1.3.13 在 macOS 上拒绝 Bun.serve({ port: 0 })」——**实测已不成立**
+      // （同版本 bun 上 `Bun.serve({port:0})` 正常返回分配到的端口），故改为让 Bun 自己要
+      // 端口、下游一律读 `server.port`：绑定与占用不可分割，窗口从根上消失。
       const server = Bun.serve({
         hostname: '127.0.0.1',
-        port,
+        port: 0,
         async fetch(request) {
           const authorization = request.headers.get('authorization')
           if (authorization !== 'Bearer rfc238-fixture-secret') {
