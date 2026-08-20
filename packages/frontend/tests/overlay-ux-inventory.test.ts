@@ -214,6 +214,8 @@ const OVERLAY_CALLSITES = {
   'routes/code.assignments.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 PR-8 T87 — policy 创建对话框。
   'routes/code.policies.tsx': { family: 'resource-management', count: 1 },
+  // RFC-310 Digital Employee OS: add tool, job template and employee.
+  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 3 },
   // RFC-310 PR-8 — +attach-MR dialog（T80 挂接命令的输入面）。
   'routes/code.missions.$id.tsx': { family: 'task-execution', count: 2 },
   // RFC-310 PR-8 — 配置资源的创建 Dialog（列表）与编辑/ACL Dialog + 归档

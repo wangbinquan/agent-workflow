@@ -28,9 +28,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       '/workflows',
       '/workgroups',
       '/intent',
-      '/code',
-      '/code/executors',
-      '/code/assignments',
+      '/digital-employees',
       '/tasks',
       '/outcomes',
       '/scheduled',
@@ -47,9 +45,10 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(navPermissionForPath('/tasks/new/confirm')).toBe('tasks:execute')
     expect(navPermissionForPath('/repos')).toBe('repos:read')
     expect(navPermissionForPath('/agents/agent_1')).toBe('agents:read')
-    expect(navPermissionForPath('/code')).toBe('digital-employees:read')
-    expect(navPermissionForPath('/code/executors')).toBe('action-templates:read')
-    expect(navPermissionForPath('/code/assignments')).toBe('repository-employee-assignments:read')
+    expect(navPermissionForPath('/digital-employees')).toBe('digital-employees:read')
+    expect(navPermissionForPath('/digital-employees/development%40v1')).toBe(
+      'digital-employees:read',
+    )
     expect(navPermissionForPath('/outcomes')).toBe('development-missions:read')
     expect(navPermissionForPath('/')).toBeNull()
     expect(navPermissionForPath('/account')).toBeNull()
@@ -66,9 +65,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       // RFC-234 — intent builder rides the workflow icon (it authors
       // workflows/workgroups; no dedicated glyph yet).
       ['/intent', 'workflow'],
-      ['/code', 'agent'],
-      ['/code/executors', 'workgroup'],
-      ['/code/assignments', 'repo'],
+      ['/digital-employees', 'agent'],
       ['/tasks', 'task'],
       ['/outcomes', 'task'],
       ['/scheduled', 'schedule'],
@@ -184,29 +181,17 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
   })
 
   test('digital employee construction stays separate from runtime and outcomes', () => {
-    expect(resolveActiveNav('/code')).toEqual({
+    expect(resolveActiveNav('/digital-employees')).toEqual({
       onHome: false,
       onSettings: false,
       activeGroup: 'digitalEmployees',
-      activeItemTo: '/code',
+      activeItemTo: '/digital-employees',
     })
-    expect(resolveActiveNav('/code/config/employees/employee-1')).toEqual({
+    expect(resolveActiveNav('/digital-employees/development%40v1')).toEqual({
       onHome: false,
       onSettings: false,
       activeGroup: 'digitalEmployees',
-      activeItemTo: '/code',
-    })
-    expect(resolveActiveNav('/code/executors')).toEqual({
-      onHome: false,
-      onSettings: false,
-      activeGroup: 'digitalEmployees',
-      activeItemTo: '/code/executors',
-    })
-    expect(resolveActiveNav('/code/assignments')).toEqual({
-      onHome: false,
-      onSettings: false,
-      activeGroup: 'digitalEmployees',
-      activeItemTo: '/code/assignments',
+      activeItemTo: '/digital-employees',
     })
     expect(resolveActiveNav('/outcomes')).toEqual({
       onHome: false,

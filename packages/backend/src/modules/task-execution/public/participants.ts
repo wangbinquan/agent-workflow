@@ -84,3 +84,20 @@ export interface TaskWorkspaceCommitParticipant {
   }): Promise<TaskWorkspaceCommitPublishResult>
   release(input: { ref: string }): Promise<{ ok: true } | { ok: false; error: string }>
 }
+
+export type DigitalEmployeeExecutionResult =
+  | { readonly kind: 'pending'; readonly executionRef: string }
+  | { readonly kind: 'completed'; readonly executionRef: string; readonly outputJson: string }
+  | {
+      readonly kind: 'failed'
+      readonly executionRef: string
+      readonly errorCode: string
+      readonly errorDetail: string
+    }
+
+/** Exact TaskEngine lane used by the Digital Employee OS. */
+export interface DigitalEmployeeExecutionParticipant {
+  launch(planJson: string, attemptJson: string): Promise<{ readonly executionRef: string }>
+  inspect(executionRef: string): Promise<DigitalEmployeeExecutionResult>
+  cancel(executionRef: string): Promise<void>
+}

@@ -155,6 +155,17 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/webhook-deliveries/:id' },
   { method: 'POST', path: '/api/webhook-deliveries/:id/replay' },
 
+  // RFC-310 Digital Employee OS — the Event Center is a shared platform
+  // mechanism.  It owns localized event catalogs, durable subscriptions and
+  // on-demand observer cycles; employee types only consume these contracts.
+  { method: 'GET', path: '/api/event-center/catalog' },
+  { method: 'GET', path: '/api/event-center/subscriptions' },
+  { method: 'GET', path: '/api/event-center/observers' },
+  { method: 'POST', path: '/api/event-center/subscriptions' },
+  { method: 'DELETE', path: '/api/event-center/subscriptions/:id' },
+  { method: 'POST', path: '/api/event-center/observations' },
+  { method: 'POST', path: '/api/event-center/observers/run-due' },
+
   // RFC-269 — 代码平台连接（出站凭据面）。全部 admin（settings:*）且
   // tokenAccess:'never'：一枚 PAT 既读不到 base URL 也改不了 token。
   { method: 'GET', path: '/api/code-hosts' },
@@ -255,6 +266,49 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/capability-templates/:id/acl' },
   { method: 'PUT', path: '/api/capability-templates/:id/acl' },
 
+  // RFC-310 Digital Employee OS — the authoring hierarchy is intentionally
+  // fixed at employee area -> employee type -> work item -> tool.  Tool routes
+  // therefore always carry both the exact type revision and work-item ref;
+  // there is no global tool picker or stage-selection endpoint.
+  { method: 'POST', path: '/api/digital-employee-input-uploads' },
+  { method: 'DELETE', path: '/api/digital-employee-input-uploads/:uploadRef' },
+  { method: 'GET', path: '/api/digital-employee-types' },
+  { method: 'GET', path: '/api/digital-employees/migration-status' },
+  { method: 'GET', path: '/api/employee-cases' },
+  { method: 'GET', path: '/api/employee-cases/:id' },
+  { method: 'POST', path: '/api/digital-employees/:id/cases' },
+  { method: 'POST', path: '/api/employee-cases/:id/policy-upgrade-preview' },
+  { method: 'POST', path: '/api/employee-cases/policy-upgrade-apply' },
+  { method: 'POST', path: '/api/employee-cases/:id/resume' },
+  { method: 'POST', path: '/api/employee-cases/:id/terminate' },
+  { method: 'POST', path: '/api/employee-cases/worker/run-one' },
+  { method: 'GET', path: '/api/digital-employee-types/:typeRef' },
+  { method: 'GET', path: '/api/digital-employee-types/:typeRef/authoring-manifest' },
+  {
+    method: 'GET',
+    path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools',
+  },
+  {
+    method: 'POST',
+    path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools',
+  },
+  {
+    method: 'POST',
+    path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId/retire',
+  },
+  { method: 'GET', path: '/api/digital-employee-types/:typeRef/job-templates' },
+  { method: 'POST', path: '/api/digital-employee-types/:typeRef/job-templates' },
+  { method: 'PUT', path: '/api/digital-employee-job-templates/:id' },
+  { method: 'POST', path: '/api/digital-employee-job-templates/:id/publish' },
+  { method: 'GET', path: '/api/digital-employee-types/:typeRef/employees' },
+  { method: 'POST', path: '/api/digital-employee-types/:typeRef/employees' },
+  { method: 'GET', path: '/api/digital-employees' },
+  { method: 'GET', path: '/api/digital-employees/:id' },
+  { method: 'PUT', path: '/api/digital-employees/:id' },
+  { method: 'POST', path: '/api/digital-employees/:id/publish' },
+  { method: 'GET', path: '/api/settings/digital-employee-execution-policy' },
+  { method: 'POST', path: '/api/settings/digital-employee-execution-policy/revisions' },
+
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },
   { method: 'POST', path: '/api/auth/oidc/:slug/login/start', public: true },
@@ -297,6 +351,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     },
   },
   { method: 'GET', path: '/api/agents/builtins/skill-merger' },
+  { method: 'GET', path: '/api/agents/builtins/digital-employee-templates' },
   { method: 'POST', path: '/api/agents' },
   { method: 'POST', path: '/api/agents/import-resolve' },
   { method: 'PUT', path: '/api/agents/:id' },

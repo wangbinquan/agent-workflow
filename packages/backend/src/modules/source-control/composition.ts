@@ -18,8 +18,23 @@ import {
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import { deriveChangeCandidate, stageCandidateTree } from './application/changeCandidate'
 import { commitCandidate, pushCandidate } from './application/deliverCandidate'
-import { finishConflictMerge, prepareConflictMerge } from './application/conflictMerge'
+import {
+  discardConflictMergeWorkspace,
+  finishConflictMerge,
+  inspectConflictMerge,
+  prepareConflictMerge,
+} from './application/conflictMerge'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
+import {
+  checkpointEmployeeCaseWorkspace,
+  discardEmployeeCaseWorkspace,
+  importEmployeeWorkspaceCommit,
+  fetchEmployeeWorkspaceRemoteHead,
+  materializeEmployeeCaseWorkspace,
+  rematerializeEmployeeCaseWorkspace,
+  resolveEmployeeWorkspaceBaseline,
+  restoreEmployeeCaseWorkspace,
+} from './application/employeeCaseWorkspace'
 
 /** RFC-308 temporary composition seam until RFC-294 W5 owns durable WorkspaceRef. */
 export function bindWorkspaceExcludeParticipant(input: {
@@ -120,7 +135,37 @@ export function bindCandidateDeliveryParticipant(): {
  */
 export function bindConflictMergeParticipant(): {
   prepare: typeof prepareConflictMerge
+  inspect: typeof inspectConflictMerge
   finish: typeof finishConflictMerge
+  discard: typeof discardConflictMergeWorkspace
 } {
-  return { prepare: prepareConflictMerge, finish: finishConflictMerge }
+  return {
+    prepare: prepareConflictMerge,
+    inspect: inspectConflictMerge,
+    finish: finishConflictMerge,
+    discard: discardConflictMergeWorkspace,
+  }
+}
+
+/** RFC-310 OS path binder for a durable, single-writer employee Case scene. */
+export function bindEmployeeCaseWorkspaceParticipant(): {
+  materialize: typeof materializeEmployeeCaseWorkspace
+  rematerialize: typeof rematerializeEmployeeCaseWorkspace
+  fetchRemoteHead: typeof fetchEmployeeWorkspaceRemoteHead
+  checkpoint: typeof checkpointEmployeeCaseWorkspace
+  restore: typeof restoreEmployeeCaseWorkspace
+  discard: typeof discardEmployeeCaseWorkspace
+  resolveBaseline: typeof resolveEmployeeWorkspaceBaseline
+  importCommit: typeof importEmployeeWorkspaceCommit
+} {
+  return {
+    materialize: materializeEmployeeCaseWorkspace,
+    rematerialize: rematerializeEmployeeCaseWorkspace,
+    fetchRemoteHead: fetchEmployeeWorkspaceRemoteHead,
+    checkpoint: checkpointEmployeeCaseWorkspace,
+    restore: restoreEmployeeCaseWorkspace,
+    discard: discardEmployeeCaseWorkspace,
+    resolveBaseline: resolveEmployeeWorkspaceBaseline,
+    importCommit: importEmployeeWorkspaceCommit,
+  }
 }

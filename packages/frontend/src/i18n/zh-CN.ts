@@ -2123,6 +2123,7 @@ export interface Resources {
       runtime: string
       systemAgents: string
       limits: string
+      digitalEmployee: string
       recovery: string
       gc: string
       git: string
@@ -2173,6 +2174,7 @@ export interface Resources {
     tabRuntime: string
     tabSystemAgents: string
     tabLimits: string
+    tabDigitalEmployee: string
     tabRecovery: string
     tabGc: string
     tabGit: string
@@ -6919,7 +6921,7 @@ export const zhCN: Resources = {
     repos: '远端仓',
     webhooks: 'Webhook',
     code: '代码',
-    digitalEmployees: '能力编排',
+    digitalEmployees: '数字员工',
     executors: '执行者库',
     employeeAssignments: '适用仓库',
     employeeOutcomes: '运行成效',
@@ -8978,6 +8980,7 @@ export const zhCN: Resources = {
       runtime: '注册命令运行时并选择默认项。',
       systemAgents: '设置内置自动化 Agent 的运行时与输出规则。',
       limits: '设置任务、token、超时与并发边界。',
+      digitalEmployee: '统一设置所有数字员工的失败重试、等待期限与人工接管规则。',
       recovery: '创建备份并配置恢复行为。',
       gc: '控制数据保留与自动清理。',
       git: '控制平台代理提交排除、submodule 与后台刷新。',
@@ -9029,6 +9032,7 @@ export const zhCN: Resources = {
     tabRuntime: '运行时',
     tabSystemAgents: '系统 Agent',
     tabLimits: '限额',
+    tabDigitalEmployee: '数字员工执行策略',
     tabRecovery: '恢复',
     tabGc: 'GC',
     tabGit: 'Git',

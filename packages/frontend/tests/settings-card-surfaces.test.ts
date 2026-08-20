@@ -32,7 +32,8 @@ function count(source: string, token: string): number {
 
 describe('RFC-299 — every settings surface uses semantic SettingsCard groups', () => {
   test.each([
-    ['limits', 'function LimitsTab', 'function RecoveryTab', 3],
+    ['limits', 'function LimitsTab', 'interface DigitalEmployeeExecutionPolicy', 3],
+    ['digital employee', 'function DigitalEmployeePolicyTab', '// RFC-108 T24', 2],
     ['recovery', 'function RecoveryTab', 'function GitTab', 2],
     ['git', 'function GitTab', 'export function GcTab', 3],
     ['network', 'export function NetworkTab', 'export function AppearanceTab', 2],

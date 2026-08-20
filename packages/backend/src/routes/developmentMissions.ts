@@ -140,7 +140,13 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
   }
 }
 
-export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
+export function mountDevelopmentMissionRoutes(
+  app: Hono,
+  deps: AppDeps,
+  cutover: { readonly legacyAdmissionsEnabled: () => boolean } = {
+    legacyAdmissionsEnabled: () => true,
+  },
+): void {
   const uploadSessions = createSqliteUploadSessionStore(deps.db)
   const snapshots = createSqliteFactSnapshotReader(deps.db)
   const missionStore = createSqliteMissionStore(deps.db)
@@ -270,6 +276,12 @@ export function mountDevelopmentMissionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Launch a development mission (direct body/uploads or external id)',
     },
     async (c) => {
+      if (!cutover.legacyAdmissionsEnabled()) {
+        throw new ConflictError(
+          'legacy-mission-admission-retired',
+          'new work must be launched through a published Digital Employee; existing Missions remain available until they reach terminal state',
+        )
+      }
       const actor = actorOf(c)
       const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
       // actorUserId 永远 server-authoritative——覆盖 body 里的任何自报值。

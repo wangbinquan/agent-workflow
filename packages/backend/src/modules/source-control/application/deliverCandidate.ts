@@ -14,13 +14,17 @@
 // ref/远端）上是否已有 tree==treeOid 且 parent==baseline 的 commit，有则复用。
 
 import { runGit as defaultRunGit, AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
-import { candidateCommitMessage } from '../domain/deliveryPolicy'
+import {
+  candidateCommitMessage,
+  missionGitRefComponent,
+  type DeliveryContextEnvelope,
+} from '../domain/deliveryPolicy'
 import { stageCandidateTree } from './changeCandidate'
 import type { RepositoryGit } from './repositoryCommit'
 
 /** baseline 镜像里承载 candidate commit 的内部 ref（durable、不污染分支命名空间）。 */
 export function missionCandidateRef(missionId: string): string {
-  return `refs/aw/mission/${missionId.toLowerCase()}/candidate`
+  return `refs/aw/mission/${missionGitRefComponent(missionId)}/candidate`
 }
 
 async function commitTreeIdentityOf(
@@ -46,6 +50,8 @@ export interface CommitCandidateInput {
   readonly missionId: string
   /** Agent 提供的 summary 素材；message 由平台模板包裹。 */
   readonly summarySource: string
+  /** Platform-owned portable recovery hint; never supplied by the Agent. */
+  readonly contextEnvelope?: DeliveryContextEnvelope
   readonly uploadPlan?: {
     readonly entries: readonly {
       readonly targetPath: string
@@ -115,6 +121,7 @@ export async function commitCandidate(input: CommitCandidateInput): Promise<Comm
     const message = candidateCommitMessage({
       missionId: input.missionId,
       summarySource: input.summarySource,
+      ...(input.contextEnvelope === undefined ? {} : { contextEnvelope: input.contextEnvelope }),
     })
     const committed = await runGit(
       staged.ws,

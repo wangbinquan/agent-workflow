@@ -13,6 +13,13 @@
 > mission 列表分页与 `/code` work-items 翻页已移交 RFC-311。evidence retention GC 与 GB 级
 > nightly（T71）、`/code` 逐页像素基线（T121）、verification 结果升 catalog fact 已于 2026-08-20 补齐。
 > 2026-08-20 补齐：out-of-order webhook 矩阵（T82）、conflict repair 的 Agent 执行面（T78）。
+>
+> **2026-08-21 数字员工 OS 实现（待 hosted 验证）**：proposal/design §0A 的 Context、
+> Attention、Event Center、Observer、Employee Event Queue、Reaction、Employee Channel 与现有 Envelope/Script/
+> code-host/Token 底座复用设计，并确定“数字员工 → 数字员工分类 → 工作项 → 工具”、工作项 WorkContract、分类工具箱、
+> 全局执行策略和通用确定性职责图均已实现；PR-14..PR-18 的功能与 system-mock E2E 已收口。完整 `gate:local`
+> 于 2026-08-21 全绿（后端四个随机化分片；frontend 6660；shared 2219；system-mock 35），当前仅剩 exact-SHA hosted CI
+> 的发布验证。
 
 ## 0. 交付原则
 
@@ -30,22 +37,27 @@
 
 ## 1. 批次总览
 
-| PR/批次 | 名称                     | 用户可验证结果                                                                                     | 依赖        |
-| ------- | ------------------------ | -------------------------------------------------------------------------------------------------- | ----------- |
-| PR-0    | 合同与安全 go/no-go      | RFC-294 import ratchet、no-Git 真实 runtime probe、bundle streaming/provider probe 可行            | RFC 批准    |
-| PR-1    | 规则与配置内核           | Java/C++/polyglot 员工和 policy 可发布、模拟、确定性选中，无 Agent 决策                            | PR-0        |
-| PR-2    | Mission 聚合与 worker    | Mission 可 launch/reconcile/block/cancel；lease/OCC/outbox/crash 恢复成立                          | PR-1        |
-| PR-3    | Requirement 与上传 seed  | 正文/带目标路径上传/外部 ID 统一成 bundle；上传由平台形成可重建仓库 seed                           | PR-2        |
-| PR-4    | AgentAttempt no-Git      | Agent 按 envelope 工作；错误同现场新 host task 重试，耗尽 whole-workspace fresh rerun              | PR-0,PR-2   |
-| PR-5    | 第一价值链               | requirement → Java 实现 → program verify → platform commit/push/MR → watching                      | PR-3,PR-4   |
-| PR-6    | PipelineEvidence         | 自建门禁程序与大日志 bundle、exact-head 多 gate、rerun/repair                                      | PR-5        |
-| PR-7    | MR care                  | feedback/CI/conflict/readiness 回退与持续看护到外部 terminal；永不 merge                           | PR-6        |
-| PR-8    | 完整配置与活动 UI        | 数字员工/动作/策略/适配器/仓库 assignment 和 Mission trace 全部可配置可解释                        | PR-5,PR-7   |
-| PR-9    | RFC-304/309 迁移 cutover | 配置迁移报告、active MR 单 writer 接管、legacy 只读、无双 writer                                   | PR-8        |
-| PR-10   | 收口与发布               | 删除 legacy writer/决策脚本/unsafe runtime 路径，真实 E2E、完整 gate、文档账目                     | PR-9        |
-| PR-11   | 业务员工说明书与问题处理 | 只配置“哪一步由谁做”；问题类型/生产者/处理者可定义，技术资源退到高级配置，页面统一 operations 风格 | PR-10       |
-| PR-12   | 跨员工与外部审批 saga    | 可幂等调用另一仓数字员工，Agent 准备+程序提交/等待审批，durable join/recovery 全链成立             | PR-11       |
-| PR-13   | 无指导 User Case 操作链  | 零配置到 MR merged 每页都有服务端下一步、同页主动作和连续导航；浏览器只按高亮动作走通              | PR-11,PR-12 |
+| PR/批次 | 名称                        | 用户可验证结果                                                                                                                                | 依赖        |
+| ------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| PR-0    | 合同与安全 go/no-go         | RFC-294 import ratchet、no-Git 真实 runtime probe、bundle streaming/provider probe 可行                                                       | RFC 批准    |
+| PR-1    | 规则与配置内核              | Java/C++/polyglot 员工和 policy 可发布、模拟、确定性选中，无 Agent 决策                                                                       | PR-0        |
+| PR-2    | Mission 聚合与 worker       | Mission 可 launch/reconcile/block/cancel；lease/OCC/outbox/crash 恢复成立                                                                     | PR-1        |
+| PR-3    | Requirement 与上传 seed     | 正文/带目标路径上传/外部 ID 统一成 bundle；上传由平台形成可重建仓库 seed                                                                      | PR-2        |
+| PR-4    | AgentAttempt no-Git         | Agent 按 envelope 工作；错误同现场新 host task 重试，耗尽 whole-workspace fresh rerun                                                         | PR-0,PR-2   |
+| PR-5    | 第一价值链                  | requirement → Java 实现 → program verify → platform commit/push/MR → watching                                                                 | PR-3,PR-4   |
+| PR-6    | PipelineEvidence            | 自建门禁程序与大日志 bundle、exact-head 多 gate、rerun/repair                                                                                 | PR-5        |
+| PR-7    | MR care                     | feedback/CI/conflict/readiness 回退与持续看护到外部 terminal；永不 merge                                                                      | PR-6        |
+| PR-8    | 完整配置与活动 UI           | 数字员工/动作/策略/适配器/仓库 assignment 和 Mission trace 全部可配置可解释                                                                   | PR-5,PR-7   |
+| PR-9    | RFC-304/309 迁移 cutover    | 配置迁移报告、active MR 单 writer 接管、legacy 只读、无双 writer                                                                              | PR-8        |
+| PR-10   | 收口与发布                  | 删除 legacy writer/决策脚本/unsafe runtime 路径，真实 E2E、完整 gate、文档账目                                                                | PR-9        |
+| PR-11   | 业务员工说明书与问题处理    | 只配置“哪一步由谁做”；问题类型/生产者/处理者可定义，技术资源退到高级配置，页面统一 operations 风格                                            | PR-10       |
+| PR-12   | 跨员工与外部审批 saga       | 可幂等调用另一仓数字员工，Agent 准备+程序提交/等待审批，durable join/recovery 全链成立                                                        | PR-11       |
+| PR-13   | 无指导 User Case 操作链     | 零配置到 MR merged 每页都有服务端下一步、同页主动作和连续导航；浏览器只按高亮动作走通                                                         | PR-11,PR-12 |
+| PR-14   | OS 合同、Context 与分类 SDK | 建通用 employee type/job template/definition/Case/Context、WorkItem/WorkContract 和分类工具注册，RFC-294 owner 与 exact public contracts 闭合 | 新 §0A 获批 |
+| PR-15   | Event Center 与 Attention   | Event/Source/Subscription、按订阅激活 Observer、Delivery 与 Case 队列完整可恢复                                                               | PR-14       |
+| PR-16   | Reaction 与执行底座接线     | ReactionPlan 只复用已有 Workflow/Agent/Script、source-control 与平台注册 code-host/Token 能力                                                 | PR-14,PR-15 |
+| PR-17   | Employee Channel            | 跨仓员工调用、typed return、milestone、all/any/quorum、deadline/cancel/recovery 成为 OS 公共能力                                              | PR-14-PR-16 |
+| PR-18   | 类型包迁移与通用配置界面    | 现有 Mission/MR care 迁入研发类型包并切单 writer；分类/工作项工具箱/最小员工配置/设置页与完整旅程验收                                         | PR-14-PR-17 |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -525,7 +537,7 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
   exact-SHA `892c1bf3` **31/31 全绿**，`visual-regression-nightly` 53 passed、
   `evidence-soak-nightly` 绿。本行此前 🚧 只是账没销。
 - **T111 剩余（🚧，精确范围）**：`hosted CI exact SHA` 已满足（同上）。**未做的是另外两半**——
-  ①**发布 / 升级 / rollback runbook**：`design.md:2919` 只有一段 *cutover* runbook（迁移步骤），
+  ①**发布 / 升级 / rollback runbook**：`design.md:2919` 只有一段 _cutover_ runbook（迁移步骤），
   没有发布回滚的运维文档；②**运维 dashboards / alerts**：一个字都没有。⚠️ dashboards/alerts 的形态
   取决于使用方实际的监控栈，**先与用户确认再动手**，否则产出的是一份没人会用的文档。
 - **T112 剩余（🚧）**：AC 证据索引（§13a）与 `docs/dev-gotchas.md` 收口已随各波次滚动更新，
@@ -692,12 +704,12 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
    （错误恢复态、只读权限态的逐态快照）——功能面 E2E 由 T109 覆盖。
    〔T71 / T78 / T81 / T82 / T121 已于 2026-08-20 补齐，见对应收口注记；T71 只余 evidence blob
    的物理清扫，卡在缺一张覆盖全部生产者的引用索引——理由与正解见 §8 的 T71 收口注记。〕
-3. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
-4. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
-5. **review 结果尚未升为 catalog fact**（verification 那半已于 2026-08-20 补齐，见对应收口注记）
+2. **mission 列表全表无分页**（`listMissionSummaries`）——已移交 RFC-311 性能治理面。
+3. **`/code` work-items 的 nextCursor 未接翻页**——已与 RFC-311 session 交接（其 T29 余项）。
+4. **review 结果尚未升为 catalog fact**（verification 那半已于 2026-08-20 补齐，见对应收口注记）
    ——卡点不是投影而是持久化：`mr.review.external` 的 findings 目前根本不落库，要先定 findings
    的存储形态。
-6. **cutover preflight 的 per-repo dry decision probe** 未做独立命令（能力由 `GET /api/code/cutover`
+5. **cutover preflight 的 per-repo dry decision probe** 未做独立命令（能力由 `GET /api/code/cutover`
    的 preflight + policy simulator 覆盖）；T99 的「cancel 运行中旧 rounds」与 T103 的 soak
    只读化是 runbook 人工步骤。
 
@@ -852,14 +864,14 @@ system mock 套件与编译后 daemon + Playwright 都真跑起来了。把「�
 
 ### T140 两条旅程的首跑账（每条都以可执行回归锁住）
 
-| # | 首跑照出的问题 | 性质 | 回归锁 |
-|---|---|---|---|
-| 1 | `digital-employee-control-center` / `code-assignments-link` / `code-launch-mission` 三个 testid 在前端源码里根本不存在 | **spec 写完从未被执行过** | 锚点改成真实 UI（build 卡片 + 服务端 journey 的唯一主动作） |
-| 2 | 新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时不复位 ⇒ `<StrictMode>` 双调用后上传永远被判成「页面已关闭」并删文件 | **生产缺陷** | `code-missions-page.test.tsx`（StrictMode 渲染；「卸载后重挂载」写法是空洞绿，变异实证过） |
-| 3 | 声明 `input.kind='mission-requirement'` 的步骤在需求物化成 bundle 之前就被派发 ⇒ Agent 在**没有任何需求上下文**的工作区里被拉起 | **生产缺陷**（业务说明书只写「这一步吃需求」，物化是平台的事） | `rfc310-playbook-coordinator.test.ts`「materializes it before dispatching」 |
-| 4 | 该步骤的身份取 `mission.requirementBundleRef`（requirement *fact 快照*指针，每写一次 cell 就换 id）⇒ 每轮重算身份、重新认领 run、重新拉起 Agent | **生产缺陷（活锁）**：实测同一步骤 110 次 succeeded、110 次 Agent 执行，links/approvals 全为 0 | 同上「keeps one identity when the requirement fact snapshot is rewritten」 |
-| 5 | read-only 动作（`approval.prepare`）覆盖 `__action.runId`，发布链据此找 candidate 现场 ⇒ 用没有业务改动的 workspace 重放 stage，得到假的 `candidate-tree-drift` | **生产缺陷**（多步说明书必然触发） | `rfc310-pr5-delivery-chain.test.ts`「does not steal the candidate context from its producing run」 |
-| 6 | `/code` 首屏主动作的 href 是 `?create=1`，而 TanStack 默认 search 解析会 JSON.parse 每个值 ⇒ 到达路由时是**数字 1**，只认 `true`/`'1'` 的版本整个丢掉 ⇒ 零配置操作链第一跳静默断掉 | **生产缺陷** | `code-config-pages.test.tsx`「deep-link create flags survive TanStack search parsing」 |
+| #   | 首跑照出的问题                                                                                                                                                                     | 性质                                                                                           | 回归锁                                                                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1   | `digital-employee-control-center` / `code-assignments-link` / `code-launch-mission` 三个 testid 在前端源码里根本不存在                                                             | **spec 写完从未被执行过**                                                                      | 锚点改成真实 UI（build 卡片 + 服务端 journey 的唯一主动作）                                        |
+| 2   | 新建 Mission 向导的 `disposedRef` 只在 cleanup 置 true、挂载时不复位 ⇒ `<StrictMode>` 双调用后上传永远被判成「页面已关闭」并删文件                                                 | **生产缺陷**                                                                                   | `code-missions-page.test.tsx`（StrictMode 渲染；「卸载后重挂载」写法是空洞绿，变异实证过）         |
+| 3   | 声明 `input.kind='mission-requirement'` 的步骤在需求物化成 bundle 之前就被派发 ⇒ Agent 在**没有任何需求上下文**的工作区里被拉起                                                    | **生产缺陷**（业务说明书只写「这一步吃需求」，物化是平台的事）                                 | `rfc310-playbook-coordinator.test.ts`「materializes it before dispatching」                        |
+| 4   | 该步骤的身份取 `mission.requirementBundleRef`（requirement *fact 快照*指针，每写一次 cell 就换 id）⇒ 每轮重算身份、重新认领 run、重新拉起 Agent                                    | **生产缺陷（活锁）**：实测同一步骤 110 次 succeeded、110 次 Agent 执行，links/approvals 全为 0 | 同上「keeps one identity when the requirement fact snapshot is rewritten」                         |
+| 5   | read-only 动作（`approval.prepare`）覆盖 `__action.runId`，发布链据此找 candidate 现场 ⇒ 用没有业务改动的 workspace 重放 stage，得到假的 `candidate-tree-drift`                    | **生产缺陷**（多步说明书必然触发）                                                             | `rfc310-pr5-delivery-chain.test.ts`「does not steal the candidate context from its producing run」 |
+| 6   | `/code` 首屏主动作的 href 是 `?create=1`，而 TanStack 默认 search 解析会 JSON.parse 每个值 ⇒ 到达路由时是**数字 1**，只认 `true`/`'1'` 的版本整个丢掉 ⇒ 零配置操作链第一跳静默断掉 | **生产缺陷**                                                                                   | `code-config-pages.test.tsx`「deep-link create flags survive TanStack search parsing」             |
 
 E2E 侧另有两条**用例自身**的错（记下来免得再犯）：`aria-current="step"` 挂在 `li` 本身，用
 `filter({has})` 一个都匹配不上、再 `.or().first()` 就退化成「第一步」；以及不显式传 `home` 时
@@ -933,6 +945,7 @@ POSIX-only）是**产品能力取舍**，已登记 `docs/audit-backlog.md` 待�
 不是「数字员工在 windows 上不能用」。
 
 顺带记两条这次暴露的**可观测性缺口**（不阻塞，但下一轮谁碰谁顺手修）：
+
 1. ~~playbook 的 `step-failed:*` block 只带 reason 串~~ **已修（2026-08-20）**：
    `stepFailureDetail` 按 reason 反查失败的 step run → action run → attempt 回执，把
    `remediation`（如 "opencode exited with code 2"）落到 `blockDetail`；取不到就保持 null
@@ -976,11 +989,11 @@ validator 全在），但它**永远排不上**：verification 的结果只写�
 
 补的是三个 leaf（新 group `verification`，均 POST_ADMISSION）：
 
-| fact | 口径 |
-| --- | --- |
-| `verification.lastOutcome` | `not-run` / `passed` / `failed`；描述**已有结果**的整体成色 |
+| fact                             | 口径                                                              |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `verification.lastOutcome`       | `not-run` / `passed` / `failed`；描述**已有结果**的整体成色       |
 | `verification.allRequiredPassed` | policy 要求的每个 profile 都 passed 才为 true；**没跑完算 false** |
-| `verification.failedProfileRefs` | 只收 failed，不含未跑的 |
+| `verification.failedProfileRefs` | 只收 failed，不含未跑的                                           |
 
 「还没跑」与「通过了」必须分开——这与 pipeline 那组是同一条硬边界，也是这次特意用两个 fact
 （`allRequiredPassed` + `failedProfileRefs`）而不是一个的原因：跑挂了进集合，没跑完只体现在
@@ -1001,18 +1014,19 @@ design §10.4 只有一句话：「后续 reopen 不让 terminal aggregate 逆�
 `runMissionReconcile` 顶部直接 `consumeWakeHints` + `terminal-noop`，reopen 投递被静默吞掉。
 
 落点：迁移 `0191_rfc310_mission_reopen_lineage`（`development_missions.reopened_from_mission_id`）
-+ `application/commands/reopenMission.ts` + reconciler 终态分支的探针 + 新 outcome
-`mission-reopened`。**不复用 `development_mission_links`**：它的 `parent_step_run_id` NOT NULL，
-而 reopen 不由任何 playbook step 触发，硬塞进去等于让台账说一件没发生的事。
+
+- `application/commands/reopenMission.ts` + reconciler 终态分支的探针 + 新 outcome
+  `mission-reopened`。**不复用 `development_mission_links`**：它的 `parent_step_run_id` NOT NULL，
+  而 reopen 不由任何 playbook step 触发，硬塞进去等于让台账说一件没发生的事。
 
 四个刻意的选择（都在代码注释里写了理由，这里只列结论）：
 
-| 选择 | 理由 |
-| --- | --- |
-| 触发只认 wake hint，不在每轮 sweep 探 | 终态 Mission 只增不减；每轮探一次 = 成本随历史线性增长、收益为零 |
-| **继承**原 Mission 钉住的 employee/policy，不重跑 assignment 选择器 | 否则一次无关的指派变更可以中途接管一条**正在进行的外部 MR**，那是运维事故不是特性 |
-| `direct` 继承需求证据（复制 `development_bundle_refs` 指针行，blob 内容寻址共享）并直接 `materialized` | 正文只存在于平台自己的 evidence 里，不继承就永远物化不出需求 |
-| `external-reference` **重新采集**（source 留 `active`） | 工单在 MR 关闭期间很可能已经变了，照搬旧快照 = 让新一轮基于过期需求干活 |
+| 选择                                                                                                   | 理由                                                                              |
+| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 触发只认 wake hint，不在每轮 sweep 探                                                                  | 终态 Mission 只增不减；每轮探一次 = 成本随历史线性增长、收益为零                  |
+| **继承**原 Mission 钉住的 employee/policy，不重跑 assignment 选择器                                    | 否则一次无关的指派变更可以中途接管一条**正在进行的外部 MR**，那是运维事故不是特性 |
+| `direct` 继承需求证据（复制 `development_bundle_refs` 指针行，blob 内容寻址共享）并直接 `materialized` | 正文只存在于平台自己的 evidence 里，不继承就永远物化不出需求                      |
+| `external-reference` **重新采集**（source 留 `active`）                                                | 工单在 MR 关闭期间很可能已经变了，照搬旧快照 = 让新一轮基于过期需求干活           |
 
 幂等靠 `launchIdempotencyKey = reopen:{closedMissionId}`，且是**双重**的：命令入口先查一次，
 真正的护栏是该列的唯一索引（并发两条投递同时到达时 `createMission` 撞回既有行）。重新 claim
@@ -1049,14 +1063,14 @@ RFC-311 的性能判据只取 18 列，详情 DTO 与契约登记属 PR-8 的 UI
 prepare/finish 已在（T77），缺的是「怎么把那个冲突现场交给 Agent、以及解完之后怎么发布」。本次按
 design §8.5 的六步逐条接完：
 
-| 步 | 落点                                                                                                        |
-| -- | ----------------------------------------------------------------------------------------------------------- |
-| ①  | `__mr.targetSha` 投影进 cells（此前只落 refsJson，决策面读不到 T，合并方向无法在 launch 时冻结）              |
-| ②  | `run-agent-action` arm 在 `workspaceMode === 'edit-conflicts'` 时从 `__mr.headSha`/`__mr.targetSha` 冻结 S/T |
-| ③  | launch 走 `conflictMerge.prepare` → `actionWorkspace.adopt`（**不**走 materialize：现场含 .git/MERGE_HEAD，重建不出来）；seed overlay 一律不叠；validator 的 `writablePrefixes` = 平台标记的冲突集 |
-| ④  | 收口的语义闭集 `closedRefs.conflictPaths` 注入 `conflict.repair` validator（`conflict-path-outside-markers` PR-4 已备）|
-| ⑤  | `conflictRepairDelivery.publishConflictRepair`：finish 双 parent merge commit → `candidateDelivery.push` 对 **S** 的 exact-head CAS（effect 台账 `conflict-push`）|
-| ⑥  | push 撞 `remote-head-changed` ⇒ typed `conflict-head-changed`：整树废弃 + facts 判过期，**不进 agent-contract 重试预算**（同一现场重跑必然再撞，只会烧完预算后以完全误导的 `agent-contract-exhausted` 收场）|
+| 步  | 落点                                                                                                                                                                                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ①   | `__mr.targetSha` 投影进 cells（此前只落 refsJson，决策面读不到 T，合并方向无法在 launch 时冻结）                                                                                                             |
+| ②   | `run-agent-action` arm 在 `workspaceMode === 'edit-conflicts'` 时从 `__mr.headSha`/`__mr.targetSha` 冻结 S/T                                                                                                 |
+| ③   | launch 走 `conflictMerge.prepare` → `actionWorkspace.adopt`（**不**走 materialize：现场含 .git/MERGE_HEAD，重建不出来）；seed overlay 一律不叠；validator 的 `writablePrefixes` = 平台标记的冲突集           |
+| ④   | 收口的语义闭集 `closedRefs.conflictPaths` 注入 `conflict.repair` validator（`conflict-path-outside-markers` PR-4 已备）                                                                                      |
+| ⑤   | `conflictRepairDelivery.publishConflictRepair`：finish 双 parent merge commit → `candidateDelivery.push` 对 **S** 的 exact-head CAS（effect 台账 `conflict-push`）                                           |
+| ⑥   | push 撞 `remote-head-changed` ⇒ typed `conflict-head-changed`：整树废弃 + facts 判过期，**不进 agent-contract 重试预算**（同一现场重跑必然再撞，只会烧完预算后以完全误导的 `agent-contract-exhausted` 收场） |
 
 care 链同步接三条 policy 边界（都在 takeover **之前**判——规则命中 conflict.repair 时 selected 不是
 静止态，放进 takeover 就永远轮不到）：`maxRepairAttempts` 触顶 ⇒ `blocked(conflict-needs-committer)`
@@ -1077,6 +1091,77 @@ CAS 拒绝且不覆盖别人的提交）、`rfc310-pr7b-conflict-merge.test.ts` 
 
 **如实登记的残留**：conflict repair 只走 exact S/T 的一次性现场，没有「解到一半保存进度」的形态；
 repair 预算按 Mission 全生命周期累计（不按 head 重置）——两者都是当前的有意选择，不是遗漏。
+
+## 13e. PR-14～PR-18：数字员工操作系统实现
+
+### 目标与实施记录
+
+把 RFC-310 从“研发 Mission 的步骤编排”提升为可程序化注册代码、设计、测试等员工类型的公共数字员工 OS。旧实现是
+迁移来源：Envelope、Script、TaskEngine、source-control、代码平台调用、Connection/Token、evidence 与 MR care 均优先
+复用；禁止在新模块复制执行器、Git、Token 或 provider adapter。
+
+本节已于 2026-08-21 获得实现和直接提交授权。实施前置项的实际结果：
+
+1. proposal/design §0A 的目标设计与四层配置层级经用户逐轮确认；
+2. RFC-294 bounded-context owner、最小 public surface 与 migration residual 已同步，专项 exact dependency manifest 可执行对拍；
+3. live baseline 与旧 writer/poller/wake/child/executor/Token 调用面完成盘点，切换采用“冻结新 Mission admission、存量 drain”，不做不可证明的在途机械 adoption。
+
+### 提议任务
+
+| 编号  | 任务                                                                                                                                                               | 依赖                | 状态 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- | ---- |
+| T141  | 在 proposal/design/plan 落 OS、四层配置层级、WorkContract、分类工具箱、全局执行策略、确定性职责图与执行底座复用的规范修订                                          | 用户本轮确认        | ✅   |
+| T142  | 钉住 live baseline，盘点 Mission/wake/resumeAt/poll/child/link/join/mr-care/TaskEngine/source-control/code-host/Token 全调用面                                     | 设计批准            | ✅   |
+| T143  | 更新 RFC-294 owner 清单与 dependency manifests：新增 `digital-employee`、`event-center`，禁止 bootstrap/类型分支与跨 context internal import                       | T142                | ✅   |
+| T144  | Employee Type Package SDK：strict codecs/compiler、WorkItem/WorkContract、AuthoringManifest、JobTemplate、员工 definition 与程序化发布 API                         | T143                | ✅   |
+| T144a | 分类工具注册：`type + work item + contract` 闭合 API、Agent/Workflow required ports、ProgramTool 规范/Script 接线、fixture receipt、岗位默认与员工 override        | T144                | ✅   |
+| T144b | 全局执行策略 revision：same/fresh-scene、backoff、round/case budget、deadline/handoff，Case admission pin 与显式 upgrade                                           | T143,T144           | ✅   |
+| T145  | EmployeeCase、ContextRecord/Link、artifact refs、ExternalContextBinding、OCC/lease/outbox/backup-restore                                                           | T144                | ✅   |
+| T146  | Context Assembler/materializer：外部 ID/上传/证据只传 refs，MR/commit Context Envelope 的 adoption/recovery 对拍                                                   | T145                | ✅   |
+| T147  | Event Type/Source catalog、i18n 显示名/说明、Subscription、EventRecord/Delivery strict contracts 与 Webhook/internal-event ingestion                               | T143,T145           | ✅   |
+| T148  | ObserverActivation：0→1 激活、1→0 draining、batch subjects、cursor/lease/backoff、baseline scan、hybrid dedupe、restart recovery                                   | T147                | ✅   |
+| T149  | AttentionRule pure compiler + desired/actual reconcile；Context transition 后自动订阅/取消且 crash 不漏看                                                          | T145,T147,T148      | ✅   |
+| T150  | EmployeeCase durable queue：priority/tie-break、dedupe/coalesce/obsolete、单 active Round、terminal fence 与事实重采                                               | T147,T149           | ✅   |
+| T151  | ReactionRule/Round/Plan：按当前工作项 deterministic 选 exact tool registration，输入输出合同、validator、Case global policy 与 effect closure 全 pin               | T144a,T144b,T150    | ✅   |
+| T152  | 接现有 TaskEngine→WrapperRuntime→NodeExecutor→Kernel；证明 Agent no-Git/no-code-host、Script exact envelope，零第二 executor                                       | T151                | ✅   |
+| T153  | 复用 source-control candidate/commit/CAS push 与 integration code-host Connection/Token；typed intent/receipt、adopt/recovery、merge/approve 不可达                | T151,T152           | ✅   |
+| T154  | EmployeeInvocation/Channel/Result Envelope、child Case create/adopt、parent DelegationContext 与公开 milestone 订阅                                                | T145,T149,T151      | ✅   |
+| T155  | all/any/quorum、deadline/partial/failure、ancestry/depth/budget/cycle、ready receipt 重验、parent cancel 默认 detach                                               | T154                | ✅   |
+| T156  | 公共运行投影：本地化 Event、Case Context/关注/队列/Reaction/Observer/child channel 与同页下一步，隐藏业务页 machine ID                                             | T144-T155           | ✅   |
+| T157  | 迁移 analyzer 报告存量 Mission/MR claim/child/approval；无法证明可机械映射时显式阻断，不伪造影子 adoption                                                          | T142-T156           | ✅   |
+| T158  | writer generation 单切：冻结旧 Mission 新 admission、存量 claim 原 writer drain；新 Case 独占新 admission，禁止 active adoption 与同 MR 双 writer                  | T157                | ✅   |
+| T159  | 设计、测试两个最小类型包 fixture + proposal §0A.11 研发完整 type package，证明 OS core 与前端无 `if type === development`                                          | T144-T158           | ✅   |
+| T161  | 数字员工通用 IA：`/digital-employees` 分类目录与每类“员工/工具箱/适用范围”页签，复用 operations 外观，旧 `/code`/executors/assignments 跳转迁移                    | T144,T156           | ✅   |
+| T162  | 单一固定职责图四模式：toolbox/job-template/employee/runtime 共用 workItem identity 与布局；生命周期背景、全量节点、合同 receipt；无 edge drag/阶段下拉/全局 picker | T144a,T159,T161     | ✅   |
+| T163  | 岗位模板与最小员工编辑器：模板只存默认工具；员工只存分类/模板/名称启停/范围/工具覆盖；缺工具深链并恢复草稿；无 Event/Context/effect/retry                          | T144a,T161,T162     | ✅   |
+| T164  | “设置 → 执行策略”与显式 active Case upgrade；节点/工具/分类/员工 DTO 负扫描 retry 字段为零                                                                         | T144b,T156,T161     | ✅   |
+| T160  | 真实 E2E：分类工具注册→员工发布→任务；主动轮询0/1订阅、Webhook+poll去重、MR自动关注、红灯修复、跨仓返回、审批、committer merge、重启/乱序/重复矩阵                 | T148-T159,T161-T164 | ✅   |
+
+### 功能自审记录
+
+| 轮次                          | 自审问题                                                                 | 发现                                                                                                          | 处置与回归证据                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 第一轮：真实集成闭环          | 从外部问题 ID 到父/子真实 MR、门禁、审批、committer 合入是否只靠生产接线 | 审批 intent canonical digest 不一致；Case ID 污染 Git ref/path；同 MR 的后续门禁采集重复创建 Pipeline Context | 统一 canonical digest；引入稳定 identity/ref 编码；重复采集更新现有 Context；全旅程 system-mock E2E 走真 bare remote、真 adapter CLI 与大日志               |
+| 第二轮：跨阶段 Context 可移植 | 创建 MR 后，数字员工能否仅凭 MR/commit 恢复问题来源并自动关注下一阶段    | commit/MR 没有最小 recoverable Context Envelope，阶段间仍依赖本地 Case 记忆                                   | commit message 与 MR description 同写 Case/Context/schema/work-item envelope；external subject binding 可反查 Case；delivery policy 与 system-mock E2E 锁定 |
+| 第三轮：业务运行可读性        | 用户能否在同页看懂“现在发生了什么、关注什么、下一步是什么”               | 运行页误用员工配置模式，waiting 状态和 machine ID/state 直接暴露                                              | 改用 runtime graph；本地化事件/状态/下一步；业务页隐藏 raw Case/Event/round/channel ID；UI contract 锁定无阶段下拉、无连线拖拽、同节点工具入口              |
+| 第四轮：RFC-294 边界          | 新 OS 是否又长出跨域内部 import、万能 Event port 或 bootstrap 类型分支   | integration observer 穿透 development internal；Event participant 膨胀到 6 方法                               | approval subject 改走 exact public contract；观察控制与 Case 订阅/投递拆口；`os-architecture-manifest.json` 与 RFC-294 preflight 双棘轮全绿                 |
+| 第五轮：配置闭包与规模        | 四层 authoring 是否能在真实路由、升级与大量存量任务下保持确定且有界       | 37 个新端点漏 API 契约；迁移报告三次无界读取；schema migration 写入业务资源会污染纯升级；递归 JSON 类型压垮路由推导 | 全量补 registry；报告改成精确计数+最多 100 条明细和批量聚合；内置 Agent 改由 boot 幂等播种；序列化投影先校验再原样响应；57 条聚焦回归与完整本地门禁全绿       |
+
+### 批次停止条件
+
+- Event Center 或 Context 被塞回 `development-automation` 内部，只能服务代码员工；
+- 数字员工/Observer 绕过现有 TaskExecution 自己 spawn Agent/Script；
+- 新增第二套 repository token、code-host adapter、Git commit/push 或 Workflow runtime；
+- 订阅依赖一次性尾调用而不能从 Context 重建；
+- 父员工同步持有进程等待子员工，或父 Agent 直接 spawn 子 Agent；
+- Event payload/DB/prompt 承载完整流水线大日志；
+- 旧 Mission 与新 EmployeeCase 同时写同一 MR；
+- 开发员工专用字段进入通用 OS core 或通用 UI 出现 `if type === development`；
+- 工具箱退化为无分类/工作项/WorkContract 的全局执行者列表，或员工 picker 直接读取底层资源库；
+- 增加工具仍要求选择阶段/工作项，或职责图允许拖拽连线、改变类型包拓扑；
+- Event machine ID 作为业务主文案，或 Event 与工作项用同义标题重复表达；
+- retry/fresh-scene/backoff/budget 出现在分类、工作项、工具或员工 DTO/UI 中，而不是唯一全局执行策略；
+- 通用 employee/assignment/invocation DTO 硬编码 repository，或新分类仍必须经过 `/code` canonical route。
 
 ## 14. 风险与停止条件
 
@@ -1100,5 +1185,4 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 - 通用表达式/脚本 policy 与任意 code-host custom action；
 - 将 requirement/pipeline 大正文迁入数据库或 prompt；
 - 多个可写 Agent 对同一 workspace 并发后自动融合；
-- per-hunk 自动分片、跨多个 MR 的 release train、主干红灯自动修复；
-- 在 RFC 获批前实施任何上述任务。
+- per-hunk 自动分片、跨多个 MR 的 release train、主干红灯自动修复。

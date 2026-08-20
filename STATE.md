@@ -151,14 +151,16 @@
 >
 > 🚧 **进行中 RFC（In Progress，2026-08-19 按用户补充重新打开）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 >
-> **2026-08-20 新方向（Draft，设计已收口，未进入实现）**：用户确认上层产品是可程序化定制员工类型的
-> “数字员工操作系统”，不是一条研发 Mission 长工作流。RFC-310 proposal/design §0A 与 plan §13e 已记录
-> Context Graph、Attention 自动订阅、Event Center、按订阅激活的短 Observer Script、Employee Event Queue、
-> Reaction、跨仓 EmployeeChannel/Join，以及复用现有 Envelope Agent/Script、TaskEngine、source-control 和平台
-> code-host Connection/Token 的执行边界。产品配置固定为“数字员工 → 数字员工分类 → 工作项 → 工具”：阶段仅作固定
-> 生命周期背景，每个工作项 pin 确定性 WorkContract，每类有独立节点工具箱，员工只配置岗位模板/名称启停/范围/工具绑定，
-> 重试统一在“设置 → 执行策略”。现有 PR-0..PR-13 是迁移底座；PR-14..PR-18/T142..T164 未授权实现。
-> **下一步是用户批准目标设计并授权实现后，先同步 RFC-294 和重取 live baseline；不要按旧步骤/执行者库模型继续补 UI。**
+> **2026-08-21 数字员工 OS 实现（功能完成，待 hosted 验证）**：用户确认上层产品是可程序化定制员工类型的
+> “数字员工操作系统”，不是一条研发 Mission 长工作流。RFC-310 PR-14..PR-18/T142..T164 已实现 Context Graph、
+> Attention 自动订阅、Event Center、按订阅激活的短 Observer、Employee Event Queue、Reaction、跨仓
+> EmployeeChannel/Join，以及对现有 Envelope Agent/Script、TaskEngine、source-control 和平台 code-host
+> Connection/Token 的确定性复用。配置唯一层级是“数字员工 → 数字员工分类 → 工作项 → 工具”：分类工具箱直接复用
+> 固定全景职责图，点击哪个工作项就展示并增加该节点工具，阶段仅作背景且没有阶段下拉；员工只配置岗位模板、名称启停、
+> 范围与节点工具绑定，重试统一在“设置 → 执行策略”。内置代码编写、问题定位、流水线修复 Agent 由启动时幂等播种；
+> 外部 ID/多文件、指定上库路径上传、流水线大日志、MR 评论/红灯冲突、跨员工/跨仓与外部审批均有生产接线及 system-mock E2E。
+> **本地证据**：2026-08-21 `bun run gate:local` 9m28s 全绿——四个后端随机化分片全部通过，frontend 6660、shared 2219、
+> system-mock 35，typecheck/lint/format/depcheck 全绿。下一步仅为精确提交、推送与 exact-SHA hosted CI 终态验证。
 >
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >

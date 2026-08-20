@@ -35,4 +35,6 @@ export const DAEMON_CADENCE = {
   developmentUploadGc: HOUR_MS,
   /** RFC-310 T71 —— 终态 Mission 的 retention 执行（台账清理 + 证据过期标记）。 */
   developmentRetentionSweep: HOUR_MS,
+  /** RFC-310 Digital Employee OS durable Event → Reaction driver. */
+  digitalEmployeeOs: 1_000,
 } as const satisfies Record<string, number>

@@ -8,6 +8,668 @@
 > cutover preflight 的 per-repo dry probe；mission 列表分页与 `/code` work-items 翻页已移交
 > RFC-311。2026-08-20 补齐：out-of-order webhook 矩阵（T82）、conflict repair 的 Agent
 > 执行面（T78）。
+>
+> **2026-08-21 数字员工操作系统实现（待 hosted 验证）**：§0A 定义“数字员工操作系统”目标架构，并优先于
+> 后文与其冲突的 Mission-local step/wake/poll/child 模型。后文继续保留已交付实现的源码合同和迁移证据；不得把
+> 保留文本理解为新 OS 目标仍选择有序步骤作为主抽象。数字员工分类、工作项合同、分类节点工具箱、最小业务配置、
+> Event Center、Context/Reaction/Channel 与通用 UI 已落生产代码；RFC-294 owner/exact dependency 专项账本已同步，
+> 完整 `gate:local` 已于 2026-08-21 全绿，当前仅剩 exact-SHA hosted CI 的发布验证。
+
+## 0A. 数字员工操作系统目标架构
+
+### 0A.1 分层与依赖裁决
+
+新目标在 RFC-294 feature-first 分层上增加两个公共 bounded context，并把现有 `development-automation` 收缩为首个
+员工类型包：
+
+```text
+external webhook / scheduled observation / internal domain event
+                           │
+                           ▼
+                     event-center
+          catalog → subscription → observation
+                 → event record → delivery
+                           │
+                           ▼
+                    digital-employee
+        context graph → attention reconcile → case queue
+                 → reaction rule → reaction round
+                 → invocation/channel/join
+                           │
+                           ▼
+                     task-execution
+       TaskEngine → WrapperRuntime → NodeExecutor → Kernel
+                │             │              │
+                ▼             ▼              ▼
+             Agent          Script     platform participants
+                                             │
+                         source-control / integration
+```
+
+目标 owner 与跨 context 合同：
+
+| Context                  | 唯一拥有                                                                                                                                                                                                         | 只通过                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `digital-employee`       | employee type/job template/definition revision、WorkItem tool registration/ProgramTool spec、EmployeeCase、ContextRecord/Link、AttentionRule、CaseInboxItem、ReactionRule/Round、EmployeeInvocation/Channel/Join | `public/{commands,queries,participants,events,types}`    |
+| `event-center`           | EventType/Source catalog、Subscription、ObserverActivation、EventRecord、transport Delivery 与 observation cursor/lease                                                                                          | `public/{commands,queries,participants,events,types}`    |
+| `development-automation` | 代码员工类型包、代码领域 context/event schema、两类职责、问题分类/处理与默认 attention/reaction/invocation contract                                                                                              | `digital-employee` 的 type-package registration contract |
+| `task-execution`         | 已有 Task/NodeRun、Workflow/Agent/Script 执行与恢复                                                                                                                                                              | exact execution participant；OS 不直接 spawn             |
+| `resource-catalog`       | Agent/Workflow 等已发布资源的 ACL/ref/revision                                                                                                                                                                   | exact resource refs/queries                              |
+| `integration`            | Webhook/provider、代码平台与自建系统调用、Connection/Token 解封                                                                                                                                                  | Event Source adapter 与 typed platform call participant  |
+| `source-control`         | workspace、candidate、diff、commit、CAS push                                                                                                                                                                     | 既有 path-free participants                              |
+| `platform`               | tx/outbox/clock/job/process/lease/durable-queue kernel                                                                                                                                                           | 中性机制；不拥有员工/Event业务规则                       |
+
+`digital-employee` 和 `event-center` 不得读取 `development-automation` 内部表或 import 代码员工 domain。类型包只能通过
+注册合同提供 schema、pure rule/compiler 与 tool requirements；bootstrap 只装配，不按员工类型写 `if`。
+
+产品“工具箱”是按“数字员工分类 + 工作项 + 工作合同”建立的注册与聚合 read model：Agent/Workflow 工具引用
+resource-catalog 资源；ProgramTool 的版本化程序规范属于该工作项注册并复用现有 Script executor；外部 Adapter/Connection
+只引用 integration 资源。工具箱不取得底层资源写模型或 secret ownership。其他数字员工通过 EmployeeInvocation/Channel
+协作，不作为普通工具注册。
+
+### 0A.2 三层定义与运行模型
+
+```ts
+interface EmployeeTypePackageV1 {
+  readonly typeId: string
+  readonly version: number
+  readonly authoringManifestRef: VersionedResourceRef
+  readonly workScopeContractRef: VersionedResourceRef
+  readonly contextTypes: readonly ContextTypeRegistration[]
+  readonly eventTypes: readonly EmployeeEventRegistration[]
+  readonly workItems: readonly WorkItemDefinition[]
+  readonly workContracts: readonly WorkContractDefinition[]
+  readonly attentionRules: readonly AttentionRuleDefinition[]
+  readonly reactionRules: readonly ReactionRuleDefinition[]
+  readonly invocationContracts: readonly InvocationContractDefinition[]
+  readonly resultContracts: readonly ResultContractDefinition[]
+  readonly supportedExecutionPolicyContract: VersionedResourceRef
+}
+
+interface EmployeeJobTemplateRevision {
+  readonly jobTemplateRef: VersionedResourceRef
+  readonly typePackageRef: VersionedResourceRef
+  readonly displayNameKey: string
+  readonly defaultToolBindings: readonly WorkItemToolBinding[]
+}
+
+interface EmployeeWorkScopeRevision {
+  readonly workScopeRef: VersionedResourceRef
+  readonly employeeTypeRef: VersionedResourceRef
+  readonly scopeContractRef: VersionedResourceRef
+  readonly displaySummary: string
+  readonly encodedScopeRef: ArtifactRef // 由 type-package exact codec 铸造，不是开放 JSON
+}
+
+interface DigitalEmployeeDefinitionRevision {
+  readonly employeeRef: VersionedResourceRef
+  readonly typePackageRef: VersionedResourceRef
+  readonly jobTemplateRef: VersionedResourceRef
+  readonly displayName: string
+  readonly enabled: boolean
+  readonly workScopeRef: VersionedResourceRef
+  readonly exactToolBindings: readonly WorkItemToolBinding[]
+  readonly compiledClosureDigest: string
+}
+
+interface EmployeeCase {
+  readonly caseId: string
+  readonly employeeRef: VersionedResourceRef
+  readonly primaryContextRef: ContextRef
+  readonly executionPolicyRef: VersionedResourceRef
+  readonly revision: number
+  readonly state: 'active' | 'waiting' | 'blocked' | 'terminal'
+  readonly terminalKind: string | null
+}
+```
+
+类型包由代码发布并提供闭集 schema/编译器；岗位模板只预选该分类工作项已注册的工具；员工 definition 由业务用户通过
+UI/API 配置并冻结 exact tool registrations。EmployeeCase 是运行实例，并 pin 全局执行策略 revision。definition 或全局策略
+更新只影响新 Case，在途升级必须显式 preview/apply 并重新计算 Context、Attention、pending Delivery、execution 与 invocation
+失效面。
+
+`workScopeContractRef` 同时提供 strict codec、业务表单 manifest、assignment overlap/priority validator 与显示摘要生成器。
+研发类型把它实现为仓库/仓库组，设计/测试类型可使用其他 scope；`digital-employee` core 只持有 opaque exact revision，不能出现
+`repositoryId` 类型分支。EmployeeInvocation 同样传 `targetWorkScopeRef`，由目标类型包验证，而不是通用 core 强制目标是仓库。
+
+### 0A.3 Context Graph
+
+```ts
+interface ContextRecordV1 {
+  readonly contextId: string
+  readonly caseId: string
+  readonly typeId: string
+  readonly schemaVersion: number
+  readonly revision: number
+  readonly state: unknown // 由 type-package exact codec 铸造，不开放 Record<string, unknown>
+  readonly artifactRefs: readonly ArtifactRef[]
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+interface ContextLinkV1 {
+  readonly caseId: string
+  readonly from: ContextRef
+  readonly relation:
+    | 'derived-from'
+    | 'handles'
+    | 'delivers'
+    | 'tracks'
+    | 'delegates-to'
+    | 'supersedes'
+  readonly to: ContextRef
+}
+
+interface ExternalContextBindingV1 {
+  readonly subjectType: string
+  readonly subjectRef: string
+  readonly caseRef: EmployeeCaseRef
+  readonly contextRef: ContextRef
+  readonly bindingRevision: number
+}
+```
+
+Context 是当前权威状态，不采用“必须从全量 Event log 重建”的 Event Sourcing。Context 间只存 typed link；大文件只存
+artifact ref。Agent Input Envelope 由 type package 的 Context Assembler 从 pinned Context revisions 物化，不能直接把
+开放 JSON 当 prompt。
+
+MR 描述/commit trailer 只携带最小可恢复 envelope：
+
+```text
+Agent-Workflow-Case: <EmployeeCaseRef>
+Agent-Workflow-Context: <IssueHandlingContextRef>
+Agent-Workflow-Schema: issue-handling.v1
+Work-Item: <external subject ref>
+```
+
+权威 lookup 顺序为 `ExternalContextBinding(subject) → Context store`；外部消息仅用于 adoption/recovery。squash、rebase、
+编辑描述或截断消息不得改变平台已绑定的 Context identity。
+
+### 0A.4 AttentionRule 与订阅对账
+
+```ts
+interface AttentionRuleDefinition {
+  readonly ruleId: string
+  readonly when: {
+    readonly contextTypeId: string
+    readonly predicates: readonly TypedContextPredicate[]
+  }
+  readonly subscriptions: readonly {
+    readonly eventTypeId: string
+    readonly subjectFrom: TypedContextProjection
+    readonly sourceProfileRef: VersionedResourceRef | null
+    readonly deliveryClass: string
+  }[]
+}
+
+interface DesiredSubscriptionV1 {
+  readonly caseRef: EmployeeCaseRef
+  readonly attentionRuleRef: VersionedRuleRef
+  readonly sourceContextRef: ContextRevisionRef
+  readonly eventTypeRef: EventTypeRef
+  readonly subjectRef: string
+  readonly sourceProfileRef: VersionedResourceRef | null
+  readonly deliveryClass: string
+}
+```
+
+每次 Context transaction 提交 `ContextChanged` outbox event。Attention reconciler 以 employee revision + ContextGraph 纯计算
+完整 desired set，再与 Event Center actual set 幂等 diff。subscription identity 至少绑定
+`case + rule revision + source context + event type + subject`，重复 reconcile 不产生重复订阅；Context terminal/解绑或规则
+不再匹配时取消。不能把订阅创建写成某个 Reaction 的不可恢复尾调用。
+
+新订阅创建成功只表示 durable desired/actual state 已落库；ObserverActivation 异步启动。首次 baseline observation 是
+订阅合同的一部分，保证创建订阅前丢失的 Webhook 不造成永久漏看。
+
+### 0A.5 Event Center contracts
+
+```ts
+interface EventTypeDefinitionV1 {
+  readonly eventTypeId: string
+  readonly version: number
+  readonly subjectTypeId: string
+  readonly payloadSchemaId: string
+  readonly displayNameKey: string
+  readonly descriptionKey: string
+  readonly localizationBundleRef: VersionedResourceRef
+}
+
+interface EventSourceDefinitionV1 {
+  readonly sourceRef: VersionedResourceRef
+  readonly eventTypeRefs: readonly EventTypeRef[]
+  readonly mode: 'push' | 'poll' | 'hybrid' | 'stream'
+  readonly observerScriptRef: VersionedResourceRef | null
+  readonly observationProfiles: readonly VersionedResourceRef[]
+  readonly supportsBatchSubjects: boolean
+}
+
+interface EventSubscriptionV1 {
+  readonly subscriptionId: string
+  readonly subscriberRef: EventSubscriberRef
+  readonly eventTypeRef: EventTypeRef
+  readonly subjectRef: string
+  readonly subscriptionCauseRef: string
+  readonly state: 'active' | 'cancelled'
+  readonly activationEpoch: number
+}
+
+interface EventRecordV1 {
+  readonly eventId: string
+  readonly eventTypeRef: EventTypeRef
+  readonly subjectRef: string
+  readonly sourceRef: VersionedResourceRef
+  readonly sourceEventKey: string
+  readonly sourceRevision: string
+  readonly occurredAt: string
+  readonly observedAt: string
+  readonly payloadRef: ArtifactRef | null
+  readonly summary: unknown // exact event codec
+}
+
+interface EventDeliveryV1 {
+  readonly deliveryId: string
+  readonly eventRef: EventRef
+  readonly subscriptionRef: EventSubscriptionRef
+  readonly subscriberRef: EventSubscriberRef
+  readonly state: 'pending' | 'published' | 'acknowledged' | 'dead-letter'
+  readonly deliveryClass: string
+  readonly createdAt: string
+}
+```
+
+`sourceEventKey + sourceRevision` 在同一 source/subject/type 下唯一，使 Webhook 重放与 hybrid poll 去重。Event Center 只做
+schema validation、identity、dedupe、subscription fan-out 与 delivery lifecycle，不解释“review 比 pipeline 优先”等员工
+业务语义。
+
+`EventSubscriberRef` 与 `subscriptionCauseRef` 是 Event Center 铸造的 opaque string refs；Event Center 不 import
+`EmployeeCaseRef` 或 `ContextRevisionRef`。digital-employee adapter 把 Case/Attention 来源编码为 opaque subscriber/cause，
+并在自己的 owner 内保存可逆绑定。
+
+transport Delivery 提交后通过 outbox 至少一次发布。digital-employee 以 `deliveryId` 为唯一键幂等接收，创建自己的
+`CaseInboxItem` 后回 ack；Event Center 的 Delivery 只记录传输是否被订阅者接收，不承担员工优先级、coalesce、obsolete
+或 Reaction settle 语义。
+
+内部可订阅事件通过拥有者的 committed domain event/outbox 接入，不要求 Observer。不是所有模块私有事件都自动注册；
+只有 type package 或公共 owner 显式发布的稳定 Event Type 才进入 Event Center。
+
+Event Type publish 必须验证产品支持 locale 的显示名与说明均可解析，并定义 fallback locale。`eventTypeId` 只用于合同、日志检索和
+技术详情；业务画布、任务活动和队列默认只显示本地化名称与说明。Event 文案回答“为什么唤醒”，工作项文案回答“员工接下来做什么”；
+例如事件“收到新工作”和工作项“准备工作材料”可以同时存在，但不得把 `work.accept` 与“受理并取得工作材料”当作两层同义标题重复展示。
+
+### 0A.6 ObserverActivation 与短执行 Script
+
+```ts
+interface ObserverActivationV1 {
+  readonly activationId: string
+  readonly sourceRef: VersionedResourceRef
+  readonly connectionRef: VersionedResourceRef
+  readonly observationScopeKey: string
+  readonly observationProfileRef: VersionedResourceRef
+  readonly leaseEpoch: number
+  readonly cursorRef: ArtifactRef | null
+  readonly nextRunAt: string | null
+  readonly state: 'active' | 'draining' | 'stopped' | 'degraded'
+}
+
+interface ObserverInputEnvelopeV1 {
+  readonly activationRef: ObserverActivationRef
+  readonly subjects: readonly string[]
+  readonly cursorRef: ArtifactRef | null
+  readonly connectionRef: VersionedResourceRef
+  readonly deadlineAt: string
+  readonly artifactDirectory: string
+}
+
+interface ObserverOutputEnvelopeV1 {
+  readonly observations: readonly ObservationEnvelopeV1[]
+  readonly nextCursorRef: ArtifactRef | null
+  readonly sourceWatermark: string | null
+  readonly observedAt: string
+}
+```
+
+Activation key 为 `source + connection + observation scope + profile`，有效 subscriptions 引用数从实际订阅推导而非作为
+第二事实源。0→1 激活；1→0 进入 draining 并停止未来调度。默认执行模型是通过现有 Script NodeExecutor 启动一次短
+Run，而非长驻进程：Run 结束后按仍有效订阅和 backoff 计算 nextRunAt。服务重启按 durable lease/cursor 恢复；迟到输出
+必须以 activation epoch 和当前 subscription state 重新校验后再 fan-out。
+
+Observer 只产 Observation，不修改 Context、不启动 Agent、不选择 Reaction、不做 Git/代码平台副作用。流水线完整日志
+等大材料由 evidence collector materialize 到 `.agent-workflow/pipeline/<bundleId>`；Observer 可返回 artifact ref，但不得
+把大正文塞入 Event summary。
+
+### 0A.7 EmployeeCase queue 与 ReactionRound
+
+```ts
+interface CaseInboxItemV1 {
+  readonly caseId: string
+  readonly deliveryRef: EventDeliveryRef
+  readonly eventRef: EventRef
+  readonly deliveryClass: string
+  readonly state: 'pending' | 'claimed' | 'settled' | 'coalesced' | 'obsolete'
+  readonly acceptedAt: string
+}
+
+interface ReactionRuleDefinition {
+  readonly ruleId: string
+  readonly eventTypeRef: EventTypeRef
+  readonly requiredContextTypes: readonly string[]
+  readonly predicates: readonly TypedFactPredicate[]
+  readonly workItemRef: WorkItemRef
+  readonly workContractRef: WorkContractRef
+  readonly toolBindingSlotRef: ToolBindingSlotRef
+  readonly allowedEffectKinds: readonly string[]
+}
+
+interface ReactionRoundV1 {
+  readonly roundId: string
+  readonly caseRef: EmployeeCaseRevisionRef
+  readonly deliveryRef: EventDeliveryRef
+  readonly employeeRef: VersionedResourceRef
+  readonly ruleRef: VersionedRuleRef
+  readonly workItemRef: WorkItemRef
+  readonly selectedToolRegistrationRef: VersionedResourceRef
+  readonly executionPolicyRef: VersionedResourceRef
+  readonly inputContextRefs: readonly ContextRevisionRef[]
+  readonly state: 'planned' | 'running' | 'settling' | 'completed' | 'failed' | 'obsolete'
+  readonly executionRef: TaskExecutionRef | null
+  readonly outputContextRefs: readonly ContextRevisionRef[]
+}
+```
+
+首版每 Case 单 active round；cross-case 并行受员工/平台额度控制。同一输入快照在 Round 内不可变，新 Delivery 只进入下一轮。
+队列排序由 pinned type package 的事件优先级规则纯计算，稳定 tie-breaker 至少含业务 priority、occurredAt、eventId。业务用户
+不能在员工实例中重排规则。普通事件不抢占已运行
+Round；merged/closed 等 terminal observation 在任何新写 Effect dispatch 前由事实刷新建立 transition fence。
+
+队列在每次 pending/coalesced/obsolete/claimed/settled commit 后发布 revision-only invalidation，任务页重取统一 projection，展示
+当前 Round 与重新排序后的后续待办。新高优先级 Delivery 只影响下一次 claim，不修改 active Round 的 frozen input；terminal
+delivery 通过 transition fence 在下一次外部写前优先结算，而不是粗暴杀死结果未知的 Effect。
+
+Event 是“为什么醒来”，不是当前事实。Reaction planner 必须先按 type package collector 取得同一 logical snapshot，再用
+typed rules 判断 Event 是否仍适用；过时 delivery 标 obsolete，不把 stale webhook payload 当事实。
+
+### 0A.8 EmployeeInvocation、Channel 与 Join
+
+```ts
+interface EmployeeInvocationV1 {
+  readonly invocationId: string
+  readonly parentCaseRef: EmployeeCaseRef
+  readonly parentRoundRef: ReactionRoundRef
+  readonly targetEmployeeRef: VersionedResourceRef
+  readonly targetWorkScopeRef: EmployeeWorkScopeRef
+  readonly inputEnvelopeRef: ArtifactRef
+  readonly inputDigest: string
+  readonly completionContractRef: VersionedResourceRef
+  readonly deadlineAt: string
+  readonly childCaseRef: EmployeeCaseRef | null
+  readonly state: 'requested' | 'accepted' | 'waiting' | 'satisfied' | 'failed' | 'detached'
+}
+
+interface EmployeeChannelV1 {
+  readonly channelId: string
+  readonly invocationRef: EmployeeInvocationRef
+  readonly parentCaseRef: EmployeeCaseRef
+  readonly childCaseRef: EmployeeCaseRef
+  readonly correlationRef: string
+  readonly resultContractRef: VersionedResourceRef
+}
+
+interface EmployeeResultEnvelopeV1 {
+  readonly invocationRef: EmployeeInvocationRef
+  readonly childCaseRef: EmployeeCaseRef
+  readonly milestoneType: string
+  readonly childContextRefs: readonly ContextRevisionRef[]
+  readonly artifactRefs: readonly ArtifactRef[]
+  readonly externalReceiptRefs: readonly ArtifactRef[]
+}
+```
+
+幂等键至少包含 `parent case + parent round/rule + target employee revision + target work scope + input digest`。父 Case 的
+DelegationContext、invocation、channel intent 与 waiting transition 同事务提交；child creation 由 outbox 后置并按 key
+create/adopt，不能出现父已等待但无可恢复 invocation。
+
+目标员工可以 exact 指定，或由目标分类的 WorkScope assignment 规则解析；进入 invocation 前必须冻结唯一 revision，
+无匹配/多匹配阻断。子 Case 接收 `employee.work.assigned` Event 并独立运行；父 Case 通过 AttentionRule 订阅 child 的公开
+milestone/completed/blocked/failed Event。Result Envelope 校验 invocation、schema、child context revision 与 completion
+predicate 后形成 receipt，再唤醒父 Case。
+
+`ready-to-merge` 等可回退 milestone 的 receipt 必须绑定 exact child context revision/MR head，父执行外部 Effect 前重验；
+`merged` 等单调终态可直接满足终态 completion contract。多 child join 由 OS 通用支持 `all | any | quorum(n)`、deadline、
+partial/rejected/expired 分支。父 cancel/handoff 默认 detach，不擅自关闭 child MR；只有显式 propagation policy 才请求取消。
+
+### 0A.9 执行与 Effect 边界
+
+数字员工 OS 只生成并提交闭合 `ReactionExecutionPlan`，不实现 executor：
+
+```ts
+interface ReactionExecutionPlanV1 {
+  readonly roundRef: ReactionRoundRef
+  readonly inputContextRefs: readonly ContextRevisionRef[]
+  readonly triggeringEventRef: EventRef
+  readonly workItemRef: WorkItemRef
+  readonly workContractRef: WorkContractRef
+  readonly toolRegistrationRef: VersionedResourceRef
+  readonly implementationRef: VersionedResourceRef // Agent/Workflow ref；Program 使用 registration revision 本身
+  readonly inputSchemaId: string // copied from exact WorkContract revision
+  readonly outputSchemaId: string // copied from exact WorkContract revision
+  readonly semanticValidatorId: string // copied from exact WorkContract revision
+  readonly executionPolicyRef: VersionedResourceRef // global policy pinned by Case
+  readonly allowedEffectKinds: readonly string[]
+}
+```
+
+- Agent 与 Script 都经现有 Envelope、nonce/schema/semantic validator、same-scene/fresh-scene ledger 和唯一
+  TaskEngine→WrapperRuntime→NodeExecutor→ExecutionKernel 路径；
+- Agent 可编辑合同允许的业务文件但不得修改 Git、commit/push、调用代码平台、调用员工或选择下一动作；
+- Script 也必须输出 exact Envelope；Observer/collector/validator/确定性 handler 都是 Script 的受限用途；
+- Workflow 只是现有节点组合；OS 不复制 Workflow executor；
+- workspace diff/candidate/commit/CAS push 走 `source-control`；
+- MR/pipeline/comment 等读写形成 closed `CodeHostCallIntent`，由 `integration` 使用已有 repository binding、Connection 与
+  Token registry 执行并返回 idempotent Receipt。Token 不进入 Context、Event 或 Agent/Script Envelope；
+- `merge`/`approve` 即使存在于底层平台，也不进入代码员工 allowed effect closure。
+
+模型输出不承诺字节确定；系统承诺 tool selection、input snapshot、output contract、validator、retry/fallback 与外部
+Effect closure 由 frozen type rule + exact tool registration + Case execution policy 唯一决定。Agent/Script 产出的 Context patch/effect suggestion 在 owner validator 铸成 receipt
+前均不是事实，也不能直接修改 Context。
+
+### 0A.10 事务、恢复与投影不变量
+
+1. Context mutation、case revision、domain event 与 attention-reconcile outbox 同事务提交；
+2. Event Record 与 fan-out delivery 同一 owner transaction，重复 observation 不重复 delivery；
+3. committed Delivery 至少一次送达；digital-employee 按 deliveryId 幂等创建 CaseInboxItem，再在本 owner transaction 内
+   claim inbox item + 创建 ReactionRound，并用 expected case revision/lease epoch 保证同 Case 单 active round；
+4. execution settle、validated receipt、Context patch intent 与 Effect intent 先持久化，外部调用在事务外执行并可查询 adopt；
+5. Effect receipt 回写后才更新 Context；崩溃恢复不凭“本地未确认”推断“外部未发生”；
+6. subscription/activation/channel 都是 durable aggregate，服务重启不依赖内存 Map；
+7. WS/UI 只消费 committed projection：员工当前 Context、正在关注什么、Event Queue、Reaction Round、child channel 与
+   下一步必须同页可见；
+8. terminal fence 先停止新写，再结算已 dispatch Effect，最后取消关注、释放 workspace/claim；代码员工永不自动 merge。
+
+### 0A.11 从当前 RFC-310 实现迁移
+
+当前已交付实现是迁移输入，不是删除后重写：
+
+| 当前实现                                                                | 迁移目标                                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DevelopmentMission`                                                    | 映射/迁移为 code employee `EmployeeCase` + typed Context Graph；保留外部 identity/provenance     |
+| `development_wake_hints`                                                | 迁入 EventRecord/Subscription/Delivery；不再只消费 count                                         |
+| `resumeAt`、approval/step `pollIntervalMs`                              | 迁入 Event Source + ObserverActivation；Mission 不驱动专用轮询                                   |
+| `EmployeePlaybookContentV1.steps/onSuccess`                             | 编译/迁移成 fixed lifecycle background 上的 AttentionRule/ReactionRule；无法机械映射显式 blocked |
+| `ChildMissionIntent/Receipt`、mission link/join                         | 提升为 OS 级 EmployeeInvocation/Channel/Join，并保留 idempotency/provenance                      |
+| `mrCareChain`、pipeline evidence、feedback ledger                       | 保留为代码员工 collectors/reaction handlers，改由标准 Event Delivery 唤醒                        |
+| AgentAttempt、script executor、candidate/commit/publish、code-host call | 原样复用执行与 Effect 底座，不造第二套 runtime/Token/Git                                         |
+
+迁移必须先双读验证/影子投影，再按 Case writer generation 单切；不能让旧 Mission reconciler 与新 Reaction Engine 同时写
+同一 MR。RFC-294 的 bounded-context 清单、依赖棘轮和 composition inventory 必须先更新并获批，之后才能实现生产代码。
+
+### 0A.12 Authoring manifest 与运行投影
+
+Employee Type Package 还必须注册一个只描述业务布局、不承载执行决定的 `EmployeeAuthoringManifestV1`：
+
+```ts
+interface ToolRoleGroupV1 {
+  readonly roleRef: ToolRoleRef
+  readonly labelKey: string
+  readonly descriptionKey: string
+  readonly order: number
+  readonly bindingSlots: readonly {
+    readonly slotRef: ToolBindingSlotRef
+    readonly labelKey: string
+    readonly required: boolean
+    readonly cardinality: 'exactly-one' | 'zero-or-one'
+  }[]
+}
+
+interface EmployeeAuthoringManifestV1 {
+  readonly lifecycleRegions: readonly {
+    readonly regionId: string
+    readonly labelKey: string
+    readonly descriptionKey: string
+    readonly order: number
+  }[]
+  readonly workItems: readonly {
+    readonly workItemRef: WorkItemRef
+    readonly regionId: string
+    readonly order: number
+    readonly labelKey: string
+    readonly descriptionKey: string
+    readonly workContractRef: WorkContractRef
+    readonly materialSummaryKey: string
+    readonly completionStandardKey: string
+    readonly nodeKind: 'business-tool' | 'system' | 'collaboration'
+    readonly toolRoleGroups: readonly ToolRoleGroupV1[]
+  }[]
+}
+```
+
+画布拓扑从 manifest + employee definition 纯投影：生命周期 region 固定、工作项位置固定、全量展开，不提供 edge drag、
+stage selector 或任意 topology mutation。阶段只作为背景 region；工作项是唯一可点击配置节点。业务工具节点只允许从当前分类、
+当前工作项、exact WorkContract 下的已发布工具注册中选择；系统节点只读，协作节点进入 EmployeeInvocation 配置。Event、closed
+predicate、Context mapping、Effect 与 failure/retry policy 都由类型包编译，不出现在员工实例编辑器。前端通用组件不得按
+`development` 类型分支，类型差异只能来自 manifest 和注册的业务文案/codec。
+
+运行投影至少提供：
+
+```ts
+interface EmployeeCaseRuntimeProjectionV1 {
+  readonly caseRef: EmployeeCaseRevisionRef
+  readonly contexts: readonly ContextSummary[]
+  readonly attention: readonly SubscriptionSummary[]
+  readonly inbox: readonly CaseInboxSummary[]
+  readonly activeRound: ReactionRoundSummary | null
+  readonly observerHealth: readonly ObserverHealthSummary[]
+  readonly channels: readonly EmployeeChannelSummary[]
+  readonly deliverables: readonly DeliverableSummary[]
+  readonly nextAction: JourneyNextAction | null
+}
+```
+
+`/tasks` 统一承载 Case/Reaction 的实际运行；员工定义页只负责能力构建。所有状态和下一动作同页可见，不使用机械返回按钮。
+Event Center 另提供 event catalog/source/subscription/observer health 投影；业务 author 看到事件业务名和主动/被动/混合观察
+方式，只有具备技术权限者能展开 Script/Connection/provider revision。
+
+### 0A.13 分类工具箱、工作合同与全局执行策略
+
+产品层级固定为：`数字员工 → 数字员工分类 → 工作项 → 工具`。技术对象如下：
+
+```ts
+interface WorkContractV1 {
+  readonly workContractId: string
+  readonly version: number
+  readonly inputSchemaId: string
+  readonly outputSchemaId: string
+  readonly materialSummaryKey: string
+  readonly completionStandardKey: string
+  readonly allowedToolKinds: readonly ('agent' | 'workflow' | 'program')[]
+  readonly allowedEffectKinds: readonly string[]
+  readonly semanticValidatorId: string
+  readonly fixtureSuiteRef: VersionedResourceRef
+}
+
+interface TypeToolRegistrationV1 {
+  readonly registrationRef: VersionedResourceRef
+  readonly employeeTypeRef: VersionedResourceRef
+  readonly workItemRef: WorkItemRef
+  readonly workContractRef: WorkContractRef
+  readonly roleRef: ToolRoleRef // 类型包闭集定义，例如研发类型的 recognizer / repairer
+  readonly displayName: string
+  readonly description: string
+  readonly implementation:
+    | { readonly kind: 'agent'; readonly agentRef: VersionedResourceRef }
+    | { readonly kind: 'workflow'; readonly workflowRef: VersionedResourceRef }
+    | {
+        readonly kind: 'program'
+        readonly runtimeKind: 'shell' | 'node' | 'python'
+        readonly executableArtifactRef: ArtifactRef
+        readonly executableDigest: string
+        readonly parameterValuesRef: ArtifactRef | null
+        readonly runtimeProfileRef: VersionedResourceRef
+      }
+  readonly connectionRef: VersionedResourceRef | null
+  readonly validationReceiptRef: ArtifactRef
+  readonly state: 'draft' | 'published' | 'retired'
+}
+
+interface WorkItemToolBinding {
+  readonly workItemRef: WorkItemRef
+  readonly slotRef: ToolBindingSlotRef
+  readonly registrationRef: VersionedResourceRef
+}
+
+interface GlobalExecutionPolicyRevisionV1 {
+  readonly policyRef: VersionedResourceRef
+  readonly sameSceneAttempts: number
+  readonly freshSceneAttempts: number
+  readonly backoffProfileRef: VersionedResourceRef
+  readonly roundBudgetRef: VersionedResourceRef
+  readonly caseBudgetRef: VersionedResourceRef
+  readonly externalWaitDeadlineProfileRef: VersionedResourceRef
+  readonly handoffRuleRef: VersionedResourceRef
+}
+```
+
+`digital-employee` 拥有 `TypeToolRegistration`、ProgramTool 程序规范和员工工具绑定；Agent/Workflow 的 definition、ACL 与
+revision 继续由 resource-catalog typed owner 拥有，Adapter/Connection/Token 继续由 integration 拥有。Agent/Workflow 注册发布
+时通过 required port 读取 exact resource projection；ProgramTool 发布 executable/参数字段额外要求 `scripts:author`，程序内容
+进入 immutable artifact 并只由既有 Script executor 消费。三种工具都运行 WorkContract fixture 并持久化 validation receipt；
+底层资源更新不会原地改变注册，必须新建 registration revision。一个实现注册到不同工作项时分别验证。
+
+验证器按工具种类展开真实执行闭包：Agent 必须支持 exact envelope/runtime profile；Workflow 的所有可达节点、输出口和 effect
+必须被 WorkContract closure 覆盖，不能只看工作流名称；ProgramTool 必须在 Script executor fixture 上产出 exact envelope。验证失败
+返回工作项、role、slot、资源 revision 和不相容原因，UI 直接显示在节点工具列表，不能等首个 Case 才暴露。
+
+工具箱查询以 `(employeeTypeRef, workItemRef, workContractRef)` 为必填闭合键，禁止无工作项的全局查询作为员工选择器后端。
+建议 public API：
+
+```text
+GET  /api/digital-employee-types
+GET  /api/digital-employee-types/:typeRef/authoring-manifest
+GET  /api/digital-employee-types/:typeRef/work-items/:workItemRef/tools
+POST /api/digital-employee-types/:typeRef/work-items/:workItemRef/tools
+POST /api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:registrationRef/validate
+POST /api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:registrationRef/publish
+GET  /api/settings/digital-employee-execution-policy
+POST /api/settings/digital-employee-execution-policy/revisions
+```
+
+创建工具注册的 URL 已提供 type/work item，服务端从 manifest 解析 exact WorkContract；请求体重复提交不同的 type、work item 或
+contract 一律拒绝，避免前端隐藏字段漂移。工作项为 `system` 时 POST 固定返回 typed 4xx。员工发布编译器只接受当前分类下
+`published` 且合同相容的 registration；岗位模板和员工覆盖都引用 registration revision，不直接引用底层 executor。
+
+`roleRef` 与 `slotRef` 均是类型包闭集：工具注册必须选择当前工作项存在的 role；岗位模板/员工绑定必须选择该 role 下存在的 slot。
+普通工作项通常只有一个 `primary/default` slot；研发“处理流水线”可在“问题识别”role 下声明识别 slot，并在“问题修复”role 下按
+compile/unit-test/static-analysis 等问题类型声明多个业务化 slot。ReactionRule 直接引用 slot，用户只为槽位选工具，不编写
+`problem type → tool` predicate。required slot 缺失、同 slot 多绑定或 registration role 不符均在 publish 拒绝。
+
+重试/fresh-scene/backoff/budget 只有 `GlobalExecutionPolicyRevision` 一个 owner 和一个设置入口。Case admission pin exact revision；
+Reaction、tool registration、job template 和 employee definition 都没有 retry 字段。在途升级经显式 preview/apply，不能因管理员
+发布新策略而静默改变正在看护 MR 的 Case。
+
+版本与退役规则固定如下：Type Package 或 WorkContract 升版不会继承旧 registration 的兼容性；新分类 revision 必须生成新的
+registration validation receipt，再发布对应岗位模板/员工 revision。`retired` registration 不出现在 picker，也阻断引用它的新
+员工发布和新 Case admission；已经 active 的 Case 保留 frozen registration，在底层 exact resource 仍可解析且 authority 有效时继续，
+不可用则进入具名 dependency block，禁止自动换同名工具。Agent/Workflow archive、ACL/Connection 变化在 readiness/admission 与每轮
+freeze 重验；任何替换都经 employee/Case upgrade preview/apply，不做名字匹配 fallback。
 
 ## 0. 设计裁决与事实基线
 
@@ -584,6 +1246,10 @@ claim mission lease + epoch
 webhook 丢失的恢复通道；它也必须走同一采集和决策路径，不能有“定时器专用逻辑”。
 
 ## 3. 能力与配置资源
+
+> **Legacy implementation record（非目标 authoring 模型）**：§3.1-§3.8 记录 2026-08-19 已交付 Mission/EmployeePlaybook
+> 实现，供迁移、兼容 API 和 cutover 对照。新数字员工 OS 的规范性定义以 §0A.2、§0A.12、§0A.13 为准：不得继续把
+> `EmployeePlaybook.steps`、`ActionTemplate`、`VerificationProfile`、`AutomationPolicy` 或节点 retry 暴露为业务配置。
 
 ### 3.1 一个业务 authoring aggregate，内部资源仍按 owner 分开
 
@@ -2630,7 +3296,8 @@ validator 拥有。reference count 至少覆盖 active Mission、ActionRun、blo
 
 ### 12.1 Mission API
 
-用户面对的产品路由继续是 `/code`，内部 context 改名不强迫用户学习架构术语。typed HTTP 入口：
+已交付研发 Mission 的 HTTP 路由在迁移期继续使用 `/api/code/missions`；新公共能力构建页面使用
+`/digital-employees`，不能把通用 OS 永久锁进代码专用 `/code`。typed Mission HTTP 入口：
 
 ```text
 POST   /api/code/mission-input-uploads
@@ -2687,23 +3354,27 @@ authority、range、redaction 与字节上限；绝不返回 host path。WS 只�
 ### 12.2 配置 API
 
 ```text
-/api/code/action-templates       typed create/revise/preview/publish/archive
-/api/code/verification-profiles  typed create/revise/probe/publish/archive
-/api/code/digital-employees      typed create/revise/validate/publish/archive
-/api/code/digital-employees/:id/playbook  business aggregate read/revise/validate/preview/publish
-/api/code/automation-policies    typed create/revise/simulate/publish/archive
-/api/integrations/development-adapters  typed adapter lifecycle (integration owns)
-/api/code/repository-assignments typed repo/repo-group employee assignment
+/api/digital-employee-types
+/api/digital-employee-types/:typeRef/authoring-manifest
+/api/digital-employee-types/:typeRef/job-templates  typed create/revise/validate/publish/archive
+/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools
+/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:registrationRef/validate
+/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:registrationRef/publish
+/api/digital-employees                    typed create/revise/validate/publish/archive
+/api/digital-employees/:employeeRef/tool-bindings
+/api/digital-employee-assignments         typed type-defined work-scope employee assignment
+/api/settings/digital-employee-execution-policy
+/api/integrations/development-adapters    typed adapter lifecycle (integration owns)
 ```
 
-`simulate` 接受受限 fixture/ref，不接任意 database query。它返回匹配 ruleId、facts digest、unmatched reason 与
-readiness，不执行 action。配置导入/导出保留 immutable revision/upstream provenance；导入 unknown contract version
-只能 preview/refuse，不能降级忽略字段。
+工具注册 create/validate/publish 必须从 URL 和已发布 manifest 解析 type/work item/WorkContract；请求体不能覆盖这些归属。
+员工 revise 是一次 application command，原子保存名称/启停、岗位模板、负责范围和 exact tool bindings；不能让浏览器逐资源 PUT
+后留下半套定义。`simulate` 只用于技术预览，接受受限 fixture/ref，返回工作项、注册、ruleId、facts digest 与 unmatched reason，
+不执行工具。
 
-业务前端只调用 `playbook` 聚合端点。read 返回解析后的业务名称、步骤图、问题类型/生产者/处理者、连接状态与编译诊断；
-revise 是一次 application command，不能让浏览器分别改 employee/policy/template/adapter 后留下半套配置。preview 必须列出
-所有可达路径、child/approval join、失败/超时分支与确切 unresolved dependency；publish 在一个事务里冻结 playbook 与完整
-compiled closure digest。旧四族 CRUD 只保留给拥有高级技术配置权限的管理员/迁移工具，不出现在员工创建和详情主导航。
+配置导入/导出保留 immutable revision/upstream provenance；unknown contract version 只能 preview/refuse，不能降级忽略字段。
+旧 `/api/code/action-templates`、`verification-profiles`、`automation-policies` 和 `digital-employees/:id/playbook` 在迁移期只读或供迁移
+工具调用；业务前端不得调用，完成 cutover 后删除 writer。
 
 ### 12.3 权限
 
@@ -2711,12 +3382,13 @@ compiled closure digest。旧四族 CRUD 只保留给拥有高级技术配置权
 
 ```text
 development-missions:launch/read/interact/cancel/retry/handoff/attach/resume/upgrade
-action-templates:read/create/update/archive
-verification-profiles:read/create/update/archive
+digital-employee-types:read/publish
+digital-employee-toolboxes:read/create/update/publish/archive
+digital-employee-job-templates:read/create/update/publish/archive
 digital-employees:read/create/update/archive
-automation-policies:read/create/update/archive
+global-execution-policies:read/create/update/publish/archive
 adapter-definitions:read/create/update/archive
-repository-employee-assignments:read/update
+digital-employee-assignments:read/update
 digital-employee-technical-resources:read/update
 development-approvals:submit/observe
 development-child-missions:launch/read
@@ -2726,8 +3398,8 @@ development-child-missions:launch/read
 
 - publish/revise executable adapter 同时要求 integration 资源写权与 `scripts:author`；更新普通员工 route 不因此获得
   daemon code execution 权。
-- policy preview 仍按 actor 过滤 employee/template/adapter；不能通过 trace 探测不可见资源。
-- launch 时校验 Mission actor 对 repo、employee、policy、所有 transitive refs 可用；每个 ActionRun freeze 前重验当前
+- type/tool/employee preview 仍按 actor 过滤 employee/registration/implementation/adapter；不能通过 trace 探测不可见资源。
+- launch 时校验 Mission actor 对 repo、employee/type/tool/global-policy closure、所有 transitive refs 可用；每个 ActionRun freeze 前重验当前
   effect authority和 connection scope，但执行仍用已 pin revision。
 - 临时 upload/preview 沿用 `development-missions:launch` 且绑定 actor + repository scope；uploadRef 不是 bearer capability，
   另一个用户即使得到 ref 也不能读取、preview、claim 或删除。
@@ -2740,31 +3412,76 @@ development-child-missions:launch/read
 
 ### 12.4 页面信息架构
 
-`/code` 采用与 `/repos`、`/webhooks` 相同的 `page--operations → operations-surface → PageHeader + 标准卡片/表格`
-骨架，不保留 hero、活动拓扑图或独立视觉语言。顶层信息架构按“定义与运行分开”固定为：
+`/digital-employees` 采用与 `/repos`、`/webhooks` 相同的 `page--operations → operations-surface → PageHeader + 标准卡片/表格`
+骨架，不保留 hero、旧活动拓扑图或独立视觉语言。新的确定性职责图是 authoring 主控件，不是运行活动装饰。
 
-1. **数字员工**（位于“编排”和“运行与仓库”之间）只放能力构建：
-   - **能力编排** `/code`：列表、创建和编辑数字员工说明书；Java/C++/polyglot 只是创建预置；
-   - **执行者库** `/code/executors`：查看可选 Agent、script、其他数字员工和审批系统；
-   - **仓库使用范围** `/code/assignments`：仓库/组选择一名已发布员工，不再维护五格模板矩阵。
+顶层信息架构按“定义与运行分开”固定为：
+
+1. **数字员工**（位于“编排”和“运行与仓库”之间）只放能力构建。进入 `/digital-employees` 先看到数字员工分类；每个分类使用同一三个页签：
+   - **员工** `/digital-employees/:typeId/employees`：创建和管理该分类的具体数字员工；同页次级“岗位模板”管理默认工具组合；
+   - **工具箱** `/digital-employees/:typeId/toolbox`：按该分类职责图的工作项管理工具；
+   - **适用范围** `/digital-employees/:typeId/assignments`：按该分类的 WorkScopeContract 绑定已发布员工；研发分类投影为仓库/仓库组。
 2. **运行与仓库**收纳所有执行事实：
    - **任务** `/tasks`：数字员工 Mission 与普通编排任务统一管理，提供“数字员工”分类筛选；旧
      `/code/missions` 只做兼容跳转。数字员工任务可写正文、上传带仓库目标路径的文件或提交外部 ID，并跟踪到 MR terminal；
    - **成效** `/outcomes`：按员工和时间展示已交付/准备合入/阻断/平均恢复轮次，全部来自平台 receipt；
    - 定时任务、仓库和 Webhook 保持本组既有位置。
 
+分类不是研发专用 hard-code。`/digital-employees` 从 Type Catalog 投影研发、设计、测试等分类卡片；进入分类后，页签、画布、
+工作项、WorkScope 表单和文案全由 `EmployeeAuthoringManifestV1`/WorkScopeContract 驱动。旧 `/code` 兼容跳转到研发分类员工页，
+旧 `/code/executors` 跳到研发分类工具箱，旧 `/code/assignments` 跳到研发分类适用范围，不再渲染全局执行者列表。
+
 任何数字员工、任务或成效页都不放“← 返回”这类机械导航按钮。用户通过稳定的左侧分类定位，并通过同页
 `JourneyNextAction` 继续当前 User Case；不得用返回列表代替“下一步”。
 
-员工详情是“员工说明书”，默认只展示：负责什么、按哪几步工作、每一步何时触发/谁执行/成功失败去哪、能识别哪些问题及
-谁修、会调用哪些其他员工/审批、在哪些仓生效。可以放一张小型运行摘要并链接到 `/outcomes?employee=...`，但完整成效统计
-只属于“运行与仓库”。业务页面的执行者选择器显示“Java 开发 Agent”“C++
-编译修复程序”“门禁配置员工”“发布审批系统”等已发布业务名称，不显示 `ActionTemplate`、`VerificationProfile`、
-`adapter/profile`、资源 ID/revision 或 JSON。高级管理员可以展开“技术实现”查看解析后的依赖和编译 receipt，但它不是业务
-配置的必经路径。
+#### 12.4.0 确定性职责图与分类工具箱
 
-每次新增步骤、问题生产者或问题处理者时，执行者是该规则卡的必填项。选择器可直接查找“执行者库”中已发布对象，
-也可在当前员工编辑页打开内嵌创建对话框，创建、发布后立即回填本步；整个过程不离开当前员工草稿。
+职责图始终全量展开。生命周期区域是固定、低对比度的视觉背景，工作项节点按 manifest 固定在区域中；不提供连线拖拽、节点新增、
+阶段下拉、折叠分支或自由布局。节点卡只显示业务名称、材料摘要、产出/完成标准和工具状态，不显示 Event ID、Context、Effect、
+retry 或内部 revision。
+
+分类“工具箱”页是四层层级的实际落点：
+
+```text
+数字员工 / 研发数字员工 / 工具箱
+┌ 接收工作 ─────────┬ 完成交付 ─────────┬ 持续关注 ─────────┐
+│ [准备工作材料]    │ [需求开发] [提交MR] │ [处理检视] [处理流水线] │
+└───────────────────┴────────────────────┴────────────────────────┘
+                         点击工作项
+                              ↓
+右侧：该工作项的输入｜输出｜完成标准｜工具列表｜[增加工具]
+```
+
+同一 `EmployeeAuthoringManifestV1` 画布有四个严格模式，不能复制成四套各自维护的图：
+
+| 模式           | URL/页面              | 节点右侧唯一可写内容            | 只读内容                                        |
+| -------------- | --------------------- | ------------------------------- | ----------------------------------------------- |
+| `toolbox`      | 分类“工具箱”          | 注册/验证/发布当前工作项工具    | WorkContract、角色/槽位、已有工具状态           |
+| `job-template` | 分类“员工 → 岗位模板” | 为 slot 选择默认 registration   | 职责、合同、可选工具兼容范围                    |
+| `employee`     | 员工创建/详情         | 必要时覆盖模板默认 registration | 模板默认、职责、合同、发布诊断                  |
+| `runtime`      | `/tasks/:caseRef`     | 无；动作来自 JourneyNextAction  | 当前/待办/完成节点、实际工具、事件原因、receipt |
+
+四种模式共享 workItem key、几何布局、业务文案和选中态 URL codec；只替换 inspector codec。刷新、深链或从缺失工具返回草稿时，
+必须回到同一 workItem。前端不得为岗位模板/员工/任务复制或重新排序节点。
+
+- 点击节点即确定 `type + work item + contract`；工具列表查询不得省略这三个条件。
+- “增加工具”可选择已有 Agent/Workflow，或直接定义当前节点的 ProgramTool；按工作项允许的角色分组，外部连接仅在工具需要时出现。
+- 表单不允许再次选择阶段或工作项；不能在这里新建/改写底层 Agent 或 Workflow，ProgramTool 则只在这里定义并要求程序写权。
+- 保存后先显示合同校验结果；通过后才能发布。系统节点只展示平台行为和 receipt，无“增加工具”。
+- “处理流水线”一个工作项内可分“问题识别工具 / 问题修复工具”；问题类型路由由分类包固定，不把流程重新拆成自由连线图。
+
+员工创建/详情复用同一职责图，但配置更少：选分类和岗位模板后，只填写名称、启停、负责范围，并为有覆盖需要的工作项选择一个
+已发布工具。节点右侧显示“当前工具 / 模板默认 / 可选兼容工具”和只读输入输出合同。缺少工具时动作跳到
+`/digital-employees/:typeId/toolbox?workItem=:workItemRef&returnTo=:draftRef`；工具发布后返回草稿，不能在员工页弹出底层资源创建器。
+
+“岗位模板”编辑器也复用职责图，但节点右侧只有“默认工具”；模板只保存名称/说明和 `WorkItemToolBinding[]`，不能改职责、合同、
+事件或规则。已发布模板 revision 不原地修改；新模板 revision 不静默改写已有员工，员工显式采用新版时预览默认工具变化并保留/重算
+自己的 override。
+
+可以放一张小型运行摘要并链接到 `/outcomes?employee=...`，但完整成效统计只属于“运行与仓库”。业务选择器显示“Java 开发
+Agent”“C++ 编译修复程序”等业务名称，不显示 `ActionTemplate`、`VerificationProfile`、`adapter/profile`、资源 ID/revision
+或 JSON。其他员工和审批作为协作节点/通道呈现，不混进普通工具列表。高级管理员可以展开“技术实现”查看解析后的依赖和编译
+receipt，但它不是业务配置的必经路径。
 
 Mission 详情必须能回答：
 
@@ -2843,33 +3560,37 @@ interface JourneyProjectionV1 {
 
 #### 12.4.2 User Case 状态表
 
-| Journey          | 当前判据                     | 当前页             | 下一步 owner/kind                                          | 同页动作或自动条件                                   |
-| ---------------- | ---------------------------- | ------------------ | ---------------------------------------------------------- | ---------------------------------------------------- |
-| employee-setup   | 无 employee                  | `/code`            | current-user/navigate                                      | “创建数字员工”                                       |
-| employee-setup   | employee draft/unpublished   | 员工详情           | current-user/form 或 command                               | “完善工作方式”或 validate 后“发布”                   |
-| employee-setup   | published、无 assignment     | 员工详情           | current-user/navigate                                      | “设置使用范围”，带 employee 预选参数                 |
-| employee-setup   | published、有 assignment     | 员工详情或 `/code` | current-user/navigate                                      | “交给它第一项工作”                                   |
-| mission-delivery | launch draft                 | 新建任务           | current-user/form                                          | Stepper 当前步；footer 始终显示后一步名称            |
-| mission-delivery | requirement/source ambiguous | 任务详情           | current-user/form                                          | 来源选择/回答表单就在 NextAction 下                  |
-| mission-delivery | runnable action              | 任务详情           | platform/automatic-wake                                    | 当前 executor + outbox/attempt；无需人工             |
-| mission-delivery | child active                 | 父任务详情         | digital-employee/automatic-wake                            | child 链接、completion、deadline；可下钻但父页不丢链 |
-| mission-delivery | approval pending             | 父任务详情         | external-system 或 committer/automatic-wake/external-human | 申请号、审批入口、observe resumeAt/deadline          |
-| mission-delivery | blocked/retryable            | 任务详情           | current-user/command                                       | 确切 remediation；`retry` 同区块                     |
-| mission-delivery | tracking-only、无 MR         | 任务详情           | current-user/form                                          | attach MR 表单同页打开                               |
-| mission-delivery | ready/waiting committer      | 任务详情           | committer/external-human                                   | MR 入口、remaining human holds；不出现平台 merge     |
-| mission-delivery | merged/terminal              | 任务详情           | platform/complete                                          | 终态 receipt + 查看成效/再发任务                     |
+| Journey          | 当前判据                     | 当前页               | 下一步 owner/kind                                          | 同页动作或自动条件                                   |
+| ---------------- | ---------------------------- | -------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| employee-setup   | 未选分类                     | `/digital-employees` | current-user/navigate                                      | “进入数字员工分类”                                   |
+| employee-setup   | 分类所需工具缺失             | 分类工具箱           | current-user/form 或 command                               | 选中缺失工作项并“增加工具”                           |
+| employee-setup   | 工具 draft/unpublished       | 分类工具箱           | current-user/command                                       | 显示合同结果后“发布工具”                             |
+| employee-setup   | 无 employee                  | 分类员工页           | current-user/navigate                                      | “创建数字员工”                                       |
+| employee-setup   | employee draft/unpublished   | 员工详情             | current-user/form 或 command                               | “填写名称与范围”或 validate 后“发布”                 |
+| employee-setup   | published、无 assignment     | 员工详情             | current-user/navigate                                      | “设置使用范围”，带 employee 预选参数                 |
+| employee-setup   | published、有 assignment     | 员工详情或分类页     | current-user/navigate                                      | “交给它第一项工作”                                   |
+| mission-delivery | launch draft                 | 新建任务             | current-user/form                                          | Stepper 当前步；footer 始终显示后一步名称            |
+| mission-delivery | requirement/source ambiguous | 任务详情             | current-user/form                                          | 来源选择/回答表单就在 NextAction 下                  |
+| mission-delivery | runnable action              | 任务详情             | platform/automatic-wake                                    | 当前 executor + outbox/attempt；无需人工             |
+| mission-delivery | child active                 | 父任务详情           | digital-employee/automatic-wake                            | child 链接、completion、deadline；可下钻但父页不丢链 |
+| mission-delivery | approval pending             | 父任务详情           | external-system 或 committer/automatic-wake/external-human | 申请号、审批入口、observe resumeAt/deadline          |
+| mission-delivery | blocked/retryable            | 任务详情             | current-user/command                                       | 确切 remediation；`retry` 同区块                     |
+| mission-delivery | tracking-only、无 MR         | 任务详情             | current-user/form                                          | attach MR 表单同页打开                               |
+| mission-delivery | ready/waiting committer      | 任务详情             | committer/external-human                                   | MR 入口、remaining human holds；不出现平台 merge     |
+| mission-delivery | merged/terminal              | 任务详情             | platform/complete                                          | 终态 receipt + 查看成效/再发任务                     |
 
 设置型流程每次成功 mutation 返回 `nextLocation` 与新的 projection revision；客户端优先按它导航，刷新后也能由 read projection
 重建。Mission 状态 mutation 仍留在详情页并刷新投影，避免操作后跳走而看不到是否生效。
 
 #### 12.4.3 页面组合
 
-`JourneyNextAction` 是 `/code`、员工详情、仓库使用范围、新建任务和 Mission 详情共用的展示组件。它固定在 PageHeader 后、
+`JourneyNextAction` 是 `/digital-employees`、分类工具箱、员工详情、适用范围、新建任务和 Mission 详情共用的展示组件。它固定在 PageHeader 后、
 长内容前，移动端仍在首屏；主按钮只允许一个，取消/handoff/高级动作保持次级。组件同时渲染简短步骤条，因此用户永远看见
 “已完成什么、现在在哪里、后面还有什么”。
 
-- `/code` 只计算一项全局 setup action；任务收件箱另列需要人处理和 waiting committer，不与 setup 抢主按钮。
-- 员工详情先显示说明书和 readiness；技术 closure/JSON 仅 `digital-employee-technical-resources:read` 或兼容期
+- `/digital-employees` 只计算一项全局 setup action；分类卡显示员工数、工具合同满足度和适用范围，不混入运行活动。
+- 分类工具箱以固定职责图为主内容；工作项选中态、右侧工具列表和下一步在刷新/深链后保持一致。
+- 员工详情先显示最小定义和职责图工具绑定；技术 closure/JSON 仅 `digital-employee-technical-resources:read` 或兼容期
   `scripts:author` 可见的折叠区。
 - 新建任务 Stepper 的“下一步”文案必须说出目标步骤，而不是通用“继续”；预检失败直接给回需修改的步骤。
 - Mission 详情先展示 journey、问题/阻断表单、child/approval 协作；evidence、decision/effect/raw readiness 全部下沉到
@@ -2878,15 +3599,17 @@ interface JourneyProjectionV1 {
 
 ### 12.5 配置的发布流程
 
-草稿可编辑，只有 `validate → preview fixtures → publish immutable revision` 后才能被新 Mission 选择。发布前报告：
+三个发布边界互不混淆：
 
-- capability/contract/agent/runtime/adapter 闭包；
-- rule shadowing、同级冲突、无 fallback、不可达 branch；
-- Java/C++/polyglot fixture 的选中结果；
-- fixed safety rule 无法覆盖的证明；
-- required gate/provider mapping 完整性；
-- no-Git runtime probe 与 adapter probe 的最近 receipt；
-- 从上个 revision 的 breaking diff 和受影响 repository assignments。
+1. **分类包发布**：`compile → event i18n/contract/rule fixture → publish immutable type revision`。报告所有工作项合同、事件文案、
+   rule shadowing/冲突/无 fallback、不可达 reaction、协作环和 required provider mapping。
+2. **工作项工具发布**：`select implementation → validate exact WorkContract fixture → publish immutable registration`。报告底层资源
+   ACL/revision、input/output/schema/semantic validation、no-Git 或 program probe、Connection scope 与 tool role compatibility。
+3. **员工发布**：`select job template → bind tools/scope → compile closure → publish immutable employee revision`。报告每个业务工作项
+   exact registration、缺失/多义、Java/C++/polyglot fixture、适用范围和从上一版变更影响。
+
+全局执行策略在“设置”独立发布。它的变更报告 same/fresh-scene、退避、总预算和 handoff 差异，但不触发分类/工具/员工 revision
+重写；新 Case admission 时 pin。任何发布都返回 typed validation receipt 与下一步位置。
 
 ## 13. RFC-304/309 迁移与 cutover
 
@@ -2897,19 +3620,19 @@ interface JourneyProjectionV1 {
 
 ### 13.2 配置映射
 
-| legacy                                              | 迁移产物                                              | 自动程度                                                                     |
-| --------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `capability_templates` 的 agent/prompt/runtime 字段 | 对应 capability 的 `ActionTemplate` draft             | 可机械复制，但因新 no-Git/output contract 必须 validate 后人工 publish       |
-| `requirement` template                              | `change.implement`/`requirement.analyze` drafts       | 需要拆分 slot；未覆盖的 slot 标缺失                                          |
-| `mr-comment-fix` template                           | `mr.feedback.apply` draft                             | agent/prompt 可迁，旧输出/路径权限不兼容                                     |
-| `ci-fix` template                                   | `pipeline.repair` draft                               | agent/prompt 可迁，需绑定 PipelineAdapter 与新 evidence contract             |
-| `mr-review` template                                | `change.review` 或 `mr.review.external` draft         | 必须选择用途，不能静默复制成两份 active                                      |
-| `mr-monitor` template/config                        | AutomationPolicy draft + MR provider binding          | monitor 本身不再是 ActionTemplate                                            |
-| repo × capability matrix                            | 一份 DigitalEmployee draft + repo assignment proposal | 只有五格组成闭包且无冲突时可生成；仍不自动发布                               |
-| fixed 3 CI campaigns                                | retry policy default `3`                              | 机械迁入版本化 policy                                                        |
-| entry/collect/classify scripts                      | typed adapter migration candidates                    | contract/probe 通过后才能发布                                                |
-| arbitrate/select scripts                            | migration report 中的“必须人工改写规则”               | 不执行脚本、不让 AI猜等价规则                                                |
-| pre/post hooks                                      | 按用途分类的未迁移项                                  | 只允许映射到明确 adapter/prompt supplement；写树/中止/自由注入 hook 默认拒绝 |
+| legacy                                              | 迁移产物                                                    | 自动程度                                                                     |
+| --------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `capability_templates` 的 agent/prompt/runtime 字段 | 研发分类对应工作项的 `TypeToolRegistration` draft           | 可复制底层 ref；必须通过新 WorkContract/no-Git fixture 后人工 publish        |
+| `requirement` template                              | “准备工作材料”或“需求开发”工作项工具 draft                  | 按旧用途拆分；无法证明归属时标阻断                                           |
+| `mr-comment-fix` template                           | “处理检视意见”工作项的 repairer registration draft          | 底层 ref 可迁，旧输出/路径权限不兼容                                         |
+| `ci-fix` template                                   | “处理流水线”工作项的 recognizer/repairer registration draft | 必须明确角色并绑定 Pipeline source 与 evidence contract                      |
+| `mr-review` template                                | “开发自检”或外部 review 工具 draft                          | 必须选择一个工作项，不能静默复制成两份 active                                |
+| `mr-monitor` template/config                        | 类型包 Attention/Reaction 迁移输入                          | monitor 本身不产生工具注册                                                   |
+| repo × capability matrix                            | 研发员工 draft + job template proposal + assignment         | 工作项闭包唯一时可生成；仍不自动发布                                         |
+| fixed 3 CI campaigns                                | 全局执行策略 draft 的 fresh/same-scene 基线                 | 机械迁入全局设置，不写入节点、工具或员工                                     |
+| entry/collect/classify scripts                      | typed adapter migration candidates                          | contract/probe 通过后才能发布                                                |
+| arbitrate/select scripts                            | migration report 中的“必须人工改写规则”                     | 不执行脚本、不让 AI猜等价规则                                                |
+| pre/post hooks                                      | 按用途分类的未迁移项                                        | 只允许映射到明确 adapter/prompt supplement；写树/中止/自由注入 hook 默认拒绝 |
 
 原模板的 id、owner、visibility、ACL、upstream provenance 尽可能保留在 migration draft；但“保留身份”不等于
 “旧 contract 继续能跑”。每项 draft 带 `migrationStatus/blockedReasons/sourceDigest`。
@@ -3091,6 +3814,23 @@ soak 跑 GB 级 fixture，常规 gate 跑小尺寸同形 fixture并锁 chunk/ran
 frontend tests、真实 runtime security probes、system-mock E2E 与完整 `bun run gate:local`。发布后 hosted CI 必须按 exact
 SHA 终态验证；取消或被 successor 覆盖的 run 不能当 pass。
 
+### 15.7 数字员工分类、工作合同与工具箱功能验收
+
+1. Type Package contract tests：研发、设计、测试三个 fixture 的同一 `EmployeeAuthoringManifestV1` codec 均可渲染，且不需
+   frontend type switch；缺工作项合同、事件 locale 文案或系统节点误声明工具能力时 publish 拒绝。
+2. WorkContract tests：input/output/schema/semantic validator/allowed tool kind 任一不匹配时工具注册拒绝；底层资源新 revision
+   不漂移旧 registration；同一实现注册到两个工作项分别产出 validation receipt。
+3. Toolbox API tests：所有 list/create/validate/publish 都以 type + work item + contract 闭合；body 伪造归属拒绝，system node
+   create 返回 typed 4xx，无工作项的全局工具查询不能用于员工 picker。
+4. Employee compile tests：岗位模板默认工具和员工 override 只解析当前分类/工作项的 published registration；缺失、多主工具无
+   rule、retired/invisible/incompatible registration 全部给出工作项级诊断。
+5. Global policy tests：Reaction plan 的 same/fresh-scene/backoff/budget 只来自 Case pin revision；工具、分类、岗位模板和员工 DTO
+   均无 retry 字段；发布新策略不改变 active Case，显式 upgrade 才生效。
+6. Frontend component/E2E：从 `/digital-employees` 选分类 → 工具箱点工作项 → 注册已有 Agent/Workflow 或定义 ProgramTool → 合同校验并发布 → 创建员工
+   → 选岗位模板/范围 → 发布。全程无阶段下拉、edge drag、Event/Context/effect/retry 和裸 ID；节点/列表/返回草稿深链可刷新恢复。
+7. i18n tests：Event Catalog 的支持 locale 均能解析显示名/说明，fallback 稳定；业务活动只显示事件业务文案，技术权限展开后才见
+   machine ID；事件“为何唤醒”与工作项“做什么”的文案字段分别渲染。
+
 ## 16. 被否决的方案
 
 | 方案                                                                 | 否决原因                                                                               |
@@ -3107,10 +3847,14 @@ SHA 终态验证；取消或被 successor 覆盖的 run 不能当 pass。
 | 自动 resolve/approve/merge                                           | 越过 committer 审核责任；用户已明确平台只维持可合入并跟踪                              |
 | v1/v2 双 writer 渐进运行同一 MR                                      | 产生重复 commit/comment、互相抢 head，无法通过幂等 key 修复业务竞争                    |
 | generic adapter `{action, params}`                                   | 无法在类型层证明 merge/approve/custom 不可达，也会把 provider 细节泄入业务层           |
+| 全局“执行者库”直接供所有员工节点选择                                 | 丢失分类、工作项和 WorkContract 归属，错误实现只能到运行时才暴露                       |
+| 增加工具时再次选择阶段/工作项                                        | 当前节点已确定归属，重复选择会制造 UI 状态与真实合同不一致                             |
+| 在员工/节点/工具上各自配置 retry                                     | 产生多层覆盖和在途漂移；无法解释某次 attempt 实际采用哪套策略                          |
+| 在员工实例中配置 Event、Context、Effect 和流程边                     | 把程序化类型定义泄漏给业务用户，重新退化为任意工作流编辑器                             |
 
 ## 17. 本轮批准门
 
-本设计将 proposal §15 的 D1–D12 具体化。用户批准前只允许继续评审/修订 RFC；不允许创建 migration、schema、
+本设计将 proposal §15 的 D1–D27 具体化。新 OS 实现门批准前只允许继续评审/修订 RFC；不允许创建 migration、schema、
 runtime profile、API/UI 或 worker 实现。批准后也按 [plan.md](./plan.md) 的切片逐批交付，第一批先建立架构/
 安全 ratchet 和可运行 contract probe，不直接打开生产 Mission writer。
 
@@ -3149,3 +3893,17 @@ provider 适配和真实 E2E 的可行性验证，由 plan PR-0 及对应批次�
 
 OS 级隔离与网络边界若未来引入，须另立 RFC 并按能力影响清单呈批；本 RFC 其余合同不因此裁决放松（envelope、
 closed effect union、source-control 独占 Git、快照对拍、回退台账、决策确定性均不变）。
+
+## 20. 数字员工 OS 配置设计三轮功能自审（2026-08-20）
+
+本轮只审功能可用性、确定性和横向扩展，不宣称完成独立安全审计。
+
+| 自审轮次                                 | 从哪个 User Case 反推                                                               | 发现的功能断点                                                                                                               | 已收口的设计                                                                                                                                                                     |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 第一轮：从空分类到员工可发布             | 管理员如何给研发分类的“处理流水线”增加识别/修复工具，再建立 Java/C++ 岗位并创建员工 | 全局执行者列表无法表达工具属于哪个节点；增加工具再选阶段会漂移；Program/脚本没有明确的产品定义点；岗位模板能选却没有管理入口 | 唯一四层层级；工具 API 强制 type+work item+contract；Agent/Workflow 引用原库，ProgramTool 直接在节点工具箱定义并复用 Script executor；岗位模板在分类“员工”页次级管理             |
+| 第二轮：Event 到 Reaction 再到下一次关注 | 评论与红门禁同时到达时，如何按优先级逐轮处理；工具失败、合同升版或退役时如何恢复    | Event 与工作项曾重复表达动作；节点 failure/retry 会与全局策略冲突；同名/retired 工具可能被运行时静默替换                     | Event 只说明唤醒原因且国际化；工作项说明职责动作；队列优先级由类型包冻结；Case pin 全局策略和 exact registration；退役/升版只能显式 upgrade，不按名称 fallback                   |
+| 第三轮：设计/测试员工复用                | 把研发分类替换为设计或测试分类，通用 core/UI 是否仍成立                             | `repositoryScopeRef`、固定工具角色和 `/code` canonical route 把研发概念泄漏进公共 OS                                         | 改为 type-defined WorkScopeContract、opaque ToolRoleRef 和 `/digital-employees` canonical route；研发仓库范围仅是一个 type codec；三个 fixture 类型共用 manifest/画布/工具箱组件 |
+
+三轮后，业务配置闭包为：分类包程序化定义职责、合同、事件和规则；分类工具箱为每个工作项准备合格工具；岗位模板预选默认
+工具；具体员工只选择模板、名称/启停、适用范围和必要覆盖；运行 Case pin 员工/type/tool/global-policy revision。任一层缺失都在
+validate/publish/admission 给出工作项级诊断，不推迟到 Agent 运行时猜测。

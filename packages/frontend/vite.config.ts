@@ -6,7 +6,8 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const infoPath = path.join(homedir(), '.agent-workflow', '.daemon.info')
+const appHome = process.env.AGENT_WORKFLOW_HOME ?? path.join(homedir(), '.agent-workflow')
+const infoPath = path.join(appHome, '.daemon.info')
 
 // `bun run --filter '*' dev` launches backend and frontend in parallel. Vite
 // resolves its proxy target once at config-load time, so if it reads

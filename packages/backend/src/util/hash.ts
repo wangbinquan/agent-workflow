@@ -9,10 +9,28 @@
 
 import { createHash } from 'node:crypto'
 
+export interface Sha256DigestBuilder {
+  update(input: string | Uint8Array): void
+  digestHex(): string
+}
+
 export function sha1Hex(input: string | Uint8Array): string {
   return createHash('sha1').update(input).digest('hex')
 }
 
 export function sha256Hex(input: string | Uint8Array): string {
   return createHash('sha256').update(input).digest('hex')
+}
+
+/** Streaming/multi-part SHA-256 without spreading node:crypto construction. */
+export function createSha256DigestBuilder(): Sha256DigestBuilder {
+  const hash = createHash('sha256')
+  return {
+    update(input) {
+      hash.update(input)
+    },
+    digestHex() {
+      return hash.digest('hex')
+    },
+  }
 }

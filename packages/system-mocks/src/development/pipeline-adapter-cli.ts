@@ -5,9 +5,9 @@
 // AW_PIPELINE_MOCK_URL。它从 pipeline mock 拉门禁状态并把日志逐个下载进
 // sink，最后向 stdout 输出一行 `aw-adapter@1` envelope。
 //
-// 下载用 fetch 流式写文件（`Bun.write(file, response)`）：mock 日志默认 KB
-// 级，不触发大响应背压问题；GB 级日志的真实 adapter 应改用 curl 子进程落盘
-// （PR-0 教训，见 dev-gotchas「Bun fetch 对快生产者大响应不背压」）。
+// 日志下载统一交给 curl 子进程直接流式落盘。Bun fetch + Bun.write(Response)
+// 面对快速生产者的大响应会失去背压并可能永久等待；system-mock E2E 使用 MB
+// 级日志锁住这里，生产自建 adapter 也应沿用同一流式策略。
 //
 // AW_PIPELINE_FIXTURE_JSON：测试后门——部分开发机的安全策略拦「子进程→回环
 // HTTP」（dev-gotchas 2026-08-18 条目），backend 集成测试可用本地 fixture
@@ -44,9 +44,17 @@ function isoNow(): string {
 
 async function fetchToFile(url: string, dest: string): Promise<void> {
   mkdirSync(dirname(dest), { recursive: true })
-  const res = await fetch(url)
-  if (res.status !== 200) throw new Error(`log fetch failed: ${res.status}`)
-  await Bun.write(dest, res)
+  const process = Bun.spawn({
+    cmd: ['curl', '-sS', '--fail', '-o', dest, url],
+    stdout: 'ignore',
+    stderr: 'pipe',
+  })
+  const exitCode = await process.exited
+  if (exitCode !== 0) {
+    throw new Error(
+      `log download failed (${exitCode}): ${await new Response(process.stderr).text()}`,
+    )
+  }
 }
 
 async function collectPipeline(headSha: string): Promise<number> {

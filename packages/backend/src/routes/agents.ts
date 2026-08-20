@@ -62,6 +62,7 @@ import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
 import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
 import { safeJsonOrEmpty } from '@/util/http'
+import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
 /**
  * RFC-117: true iff the raw PUT body sets ONLY `runtime` (no other key). Lets the
@@ -107,6 +108,26 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       const list = excludeBuiltinAgents(await listAgents(deps.db))
       return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
     },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/agents/builtins/digital-employee-templates',
+      permissions: ['agents:read'],
+      tokenAccess: 'allow',
+      summary: 'Built-in code-writing, diagnosis and pipeline-repair agent templates',
+    },
+    async (c) =>
+      c.json(
+        await filterVisibleRows(
+          deps.db,
+          actorOf(c),
+          'agent',
+          await listDigitalEmployeeAgentTemplates(deps.db),
+        ),
+      ),
   )
 
   registerRoute(

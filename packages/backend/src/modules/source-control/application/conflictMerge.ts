@@ -11,7 +11,7 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import { AW_INTERNAL_GIT_IDENTITY, runGit as defaultRunGit } from '@/util/git'
@@ -124,12 +124,78 @@ export type FinishConflictMergeResult =
       readonly detail: string
     }
 
+export type InspectConflictMergeResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false
+      readonly code: 'conflict-unresolved' | 'conflict-extra-changes' | 'finish-failed'
+      readonly detail: string
+    }
+
 /** porcelain 行 → 涉及的路径（rename 形态两侧都算）。 */
 function porcelainPaths(line: string): string[] {
   const body = line.slice(3)
   const arrow = body.indexOf(' -> ')
   if (arrow >= 0) return [body.slice(0, arrow), body.slice(arrow + 4)]
   return [body]
+}
+
+/**
+ * Read-only half of conflict finish. The Agent execution boundary calls this
+ * before its envelope is accepted, so validation cannot accidentally create a
+ * commit for an invalid envelope. The deterministic platform work item calls
+ * `finishConflictMerge` only after settlement accepted that envelope.
+ */
+export async function inspectConflictMerge(input: {
+  readonly workspacePath: string
+  readonly conflictPaths: readonly string[]
+  readonly runGit?: RepositoryGit
+}): Promise<InspectConflictMergeResult> {
+  const runGit = input.runGit ?? defaultRunGit
+  const markerLine = /^(<{7}|={7}|>{7})( |$)/m
+  const remaining = input.conflictPaths.filter((path) => {
+    const abs = join(input.workspacePath, path)
+    if (!existsSync(abs)) return false
+    try {
+      return markerLine.test(readFileSync(abs, 'utf8'))
+    } catch {
+      return false
+    }
+  })
+  if (remaining.length > 0) {
+    return {
+      ok: false,
+      code: 'conflict-unresolved',
+      detail: `unresolved conflicts: ${[...remaining].sort().join(', ')}`,
+    }
+  }
+
+  const allowed = new Set(input.conflictPaths)
+  const status = await runGit(input.workspacePath, ['status', '--porcelain'])
+  if (status.exitCode !== 0) {
+    return { ok: false, code: 'finish-failed', detail: status.stderr.slice(0, 300) }
+  }
+  const extras = status.stdout
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .flatMap(porcelainPaths)
+    .filter((path) => !allowed.has(path))
+  if (extras.length > 0) {
+    return {
+      ok: false,
+      code: 'conflict-extra-changes',
+      detail: `workspace has changes outside the conflict set: ${[...new Set(extras)].sort().join(', ')}`,
+    }
+  }
+  return { ok: true }
+}
+
+/** Remove one platform-created conflict scene after its commit was published. */
+export function discardConflictMergeWorkspace(input: { readonly workspacePath: string }): void {
+  if (basename(input.workspacePath) !== 'ws') {
+    throw new Error('conflict workspace cleanup refused an unexpected path')
+  }
+  rmSync(dirname(input.workspacePath), { recursive: true, force: true })
 }
 
 /**
@@ -170,44 +236,13 @@ export async function finishConflictMerge(input: {
   }
 
   // 「已解决」看**工作树内容**而不是索引态：Agent 写完解决内容时索引仍是
-  // unmerged（add 是 finish 的职责，不是 Agent 的——Agent 无 Git）。残留
-  // conflict marker 行（<<<<<<< / ======= / >>>>>>>）即未解决；文件被删除
-  // 视为「以删除解决」（porcelain D 属冲突集，add 收口）。
-  const markerLine = /^(<{7}|={7}|>{7})( |$)/m
-  const remaining = input.conflictPaths.filter((path) => {
-    const abs = join(ws, path)
-    if (!existsSync(abs)) return false
-    try {
-      return markerLine.test(readFileSync(abs, 'utf8'))
-    } catch {
-      return false // 二进制冲突：无 marker 概念，内容以工作树现状为准。
-    }
+  // unmerged（add 是 finish 的职责，不是 Agent 的——Agent 无 Git）。
+  const inspected = await inspectConflictMerge({
+    workspacePath: ws,
+    conflictPaths: input.conflictPaths,
+    runGit,
   })
-  if (remaining.length > 0) {
-    return {
-      ok: false,
-      code: 'conflict-unresolved',
-      detail: `unresolved conflicts: ${[...remaining].sort().join(', ')}`,
-    }
-  }
-
-  const allowed = new Set(input.conflictPaths)
-  const status = await runGit(ws, ['status', '--porcelain'])
-  if (status.exitCode !== 0) {
-    return { ok: false, code: 'finish-failed', detail: status.stderr.slice(0, 300) }
-  }
-  const extras = status.stdout
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .flatMap(porcelainPaths)
-    .filter((path) => !allowed.has(path))
-  if (extras.length > 0) {
-    return {
-      ok: false,
-      code: 'conflict-extra-changes',
-      detail: `workspace has changes outside the conflict set: ${[...new Set(extras)].sort().join(', ')}`,
-    }
-  }
+  if (!inspected.ok) return inspected
 
   if (input.conflictPaths.length > 0) {
     const add = await runGit(ws, ['add', '--', ...input.conflictPaths])

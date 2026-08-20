@@ -17,10 +17,12 @@ import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
+  bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -28,6 +30,7 @@ import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
+  resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
@@ -98,6 +101,28 @@ import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'no
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
+import { composeEventCenter } from '@/modules/event-center/composition'
+import {
+  activateDigitalEmployeeOsWriter,
+  composeDigitalEmployee,
+  createEmployeeInputArtifactStore,
+  createReactionExecutionAdapter,
+  refreshDigitalEmployeeWriterState,
+  startDigitalEmployeeOsWorker,
+} from '@/modules/digital-employee/composition'
+import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import {
+  developmentEmployeeRuntimeCodec,
+  developmentEmployeeTypePackage,
+} from '@/modules/development-automation/composition/employeeTypePackage'
+import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import {
+  composeDevelopmentApprovalEventObserver,
+  composeDevelopmentCodeHostEventObserver,
+  composeDevelopmentEmployeeEventObserver,
+} from '@/modules/integration/composition/digitalEmployeeEventObserver'
+import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 
 export interface StartOptions {
   port?: number
@@ -610,6 +635,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // RFC-310: business templates are platform resources, not schema data. Seed
+  // them after DB admission so pure migrations remain free of resource rows.
+  await ensureDigitalEmployeeAgentTemplates(db)
+
   // 5e-bis. RFC-307: sample content, ONCE per install. Marker-gated rather
   // than existence-gated — a user who deletes the samples means it, and
   // re-seeding on the next restart would be the platform arguing. Never fatal:
@@ -706,6 +735,21 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
     terminalControl: webhookTerminalControl,
   })
+  const developmentApprovalGateway = composeApprovalGatewayRunner(db)
+  const employeeWriterState = activateDigitalEmployeeOsWriter(db)
+  log.info('digital employee writer activated', { ...employeeWriterState })
+  const employeeHttpEventCenter = composeEventCenter({
+    db,
+    typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    observer: composeDevelopmentEmployeeEventObserver({
+      codeHost: composeDevelopmentCodeHostEventObserver({
+        binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
+      }),
+      approval: composeDevelopmentApprovalEventObserver({
+        gateway: developmentApprovalGateway,
+      }),
+    }),
+  })
 
   // 7. HTTP server.
   const app = createApp({
@@ -721,6 +765,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     secretBox,
     webhookDispatcher,
     webhookTerminalControl,
+    digitalEmployeeEventCenter: employeeHttpEventCenter,
   })
 
   const bindHost = opts.host ?? config.bindHost
@@ -1013,23 +1058,30 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         })
       },
     }),
-    approvalGateway: composeApprovalGatewayRunner(db),
+    approvalGateway: developmentApprovalGateway,
   })
-  try {
-    const recovered = await developmentAutomation.recover()
-    if (
-      recovered.settledFences > 0 ||
-      recovered.invalidatedEffects > 0 ||
-      recovered.firedWakes > 0
-    ) {
-      log.info('development mission recovery on boot', recovered)
+  if (
+    employeeWriterState.mode === 'legacy-draining' ||
+    employeeWriterState.legacyAdmissionsEnabled
+  ) {
+    try {
+      const recovered = await developmentAutomation.recover()
+      if (
+        recovered.settledFences > 0 ||
+        recovered.invalidatedEffects > 0 ||
+        recovered.firedWakes > 0
+      ) {
+        log.info('draining legacy development mission recovery on boot', recovered)
+      }
+    } catch (err) {
+      log.warn('legacy development mission boot recovery failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
     }
-  } catch (err) {
-    log.warn('development mission boot recovery failed', {
-      err: err instanceof Error ? err.message : String(err),
-    })
   }
   const developmentWakeTimer = setInterval(() => {
+    const writer = refreshDigitalEmployeeWriterState(db)
+    if (writer.mode === 'os-active' && !writer.legacyAdmissionsEnabled) return
     void developmentAutomation.sweepWakes().catch((err: unknown) => {
       log.warn('development wake sweep failed', {
         err: err instanceof Error ? err.message : String(err),
@@ -1066,6 +1118,96 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       })
   }, DAEMON_CADENCE.developmentRetentionSweep)
   developmentRetentionTimer.unref?.()
+
+  // RFC-310 OS runtime: the HTTP composition is intentionally stateless and
+  // may be recreated by tests; the daemon owns the one durable driver that
+  // gives Event Center, Case outbox/queue, Reaction planning and TaskEngine
+  // settlement bounded turns. All business state and leases remain in SQLite.
+  const employeeInputArtifacts = createEmployeeInputArtifactStore(
+    join(Paths.root, 'artifacts', 'employee-inputs'),
+  )
+  const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
+    db,
+    appHome: Paths.root,
+    inputArtifacts: employeeInputArtifacts,
+    sourceControl: bindEmployeeCaseWorkspaceParticipant(),
+    conflictMerge: bindConflictMergeParticipant(),
+  })
+  const employeeEventCenter = composeEventCenter({
+    db,
+    typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    observer: composeDevelopmentEmployeeEventObserver({
+      codeHost: composeDevelopmentCodeHostEventObserver({
+        binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
+      }),
+      approval: composeDevelopmentApprovalEventObserver({
+        gateway: developmentApprovalGateway,
+      }),
+    }),
+  })
+  const employeeDelivery = buildDevelopmentDeliveryDeps(db, secretBox)
+  const employeeOs = composeDigitalEmployee({
+    db,
+    appHome: Paths.root,
+    typePackages: [developmentEmployeeTypePackage],
+    inputArtifacts: employeeInputArtifacts,
+    connectionCatalog: composeDevelopmentToolConnectionCatalog(db),
+    runtime: {
+      eventCenter: employeeEventCenter.participant,
+      codecs: [developmentEmployeeRuntimeCodec],
+      execution: createReactionExecutionAdapter(
+        composeDigitalEmployeeExecution({
+          db,
+          appHome: Paths.root,
+          startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+          workspace: employeeWorkspace,
+        }),
+      ),
+      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        db,
+        appHome: Paths.root,
+        approvalGateway: developmentApprovalGateway,
+        ...employeeDelivery,
+        conflictMerge: bindConflictMergeParticipant(),
+        sourceControl: {
+          ...bindChangeCandidateParticipant(),
+          ...bindCandidateDeliveryParticipant(),
+          ...bindEmployeeCaseWorkspaceParticipant(),
+        },
+      }),
+    },
+  })
+  if (employeeOs.runtime === null) {
+    throw new Error('digital employee runtime composition unexpectedly unavailable')
+  }
+  const employeeOsWorker = startDigitalEmployeeOsWorker({
+    dependencies: {
+      eventCenter: employeeEventCenter.worker,
+      runtime: employeeOs.runtime.worker,
+    },
+    intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
+    onError: (err) => {
+      log.warn('digital employee OS cycle failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    },
+    onCycle: (result) => {
+      if (result.steps >= 32) {
+        log.warn('digital employee OS cycle reached its bounded step budget', { ...result })
+      }
+    },
+  })
+  const employeeInputGcTimer = setInterval(() => {
+    try {
+      const swept = employeeOs.inputUploads.sweepExpired()
+      if (swept > 0) log.info('digital employee input uploads swept', { swept })
+    } catch (err) {
+      log.warn('digital employee input upload sweep failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }, DAEMON_CADENCE.developmentUploadGc)
+  employeeInputGcTimer.unref?.()
 
   const intentGcTimer = setInterval(() => {
     try {
@@ -1270,6 +1412,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     heartbeatKillTicker.stop()
     orphanReconcileTicker.stop()
     scheduledTaskTicker.stop()
+    employeeOsWorker.stop()
+    clearInterval(developmentWakeTimer)
+    clearInterval(developmentUploadGcTimer)
+    clearInterval(developmentRetentionTimer)
+    clearInterval(employeeInputGcTimer)
     await webhookTerminalControl.stop()
     removeDaemonInfo()
     server.stop(true)

@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 185 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 192 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -473,11 +473,12 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 的 (cached_repo_id,task_id) 分组）。
     // RFC-311 bump 到 190 with 0190_rfc311_live_tasks_index（巡检 sweep 的活任务
     // 部分索引，替掉每小时一次的 tasks 裸全表扫描）。
-    // RFC-310 bump 到 191 with 0191_rfc310_mission_reopen_lineage（T81/design §10.4：
+    // RFC-310 bump 到 192：0191 是 Mission reopen lineage；0192 是数字员工
+    // OS authoring/Event Center/Context/queue/channel 与单 writer 持久化面。
     // 外部 reopen 已关闭的 MR 时终态不逆转，另建带链接的新 Mission generation——
     // 这一列就是那条链接。不复用 development_mission_links：它的 parent_step_run_id
     // NOT NULL，而 reopen 不由任何 playbook step 触发）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(191)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(192)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -544,6 +544,26 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'specialized',
     owners: [rendered('tasks-new-wizard.test.tsx')],
   },
+  '@/routes/employee-cases.new#Route': {
+    surface: '/tasks/employee-cases/new',
+    classification: 'standard',
+    owners: [source('rfc310-digital-employee-ui-contract.test.ts')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/employee-cases.new.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  '@/routes/employee-cases.$caseId#Route': {
+    surface: '/tasks/employee-cases/$caseId',
+    classification: 'standard',
+    owners: [source('rfc310-digital-employee-ui-contract.test.ts')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/employee-cases.$caseId.tsx',
+      primitive: 'PageHeader',
+    },
+  },
   '@/routes/scheduled.$id#Route': {
     surface: '/scheduled/$id',
     classification: 'standard',
@@ -569,6 +589,26 @@ export const ROUTE_UX_INVENTORY = {
     header: { mode: 'direct', sourceFile: 'routes/webhooks.tsx', primitive: 'PageHeader' },
   },
   // RFC-310 — `/code` 只构建数字员工能力；实际执行统一进入 `/tasks`。
+  '@/routes/digital-employees#Route': {
+    surface: '/digital-employees',
+    classification: 'standard',
+    owners: [source('rfc310-digital-employee-ui-contract.test.ts')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/digital-employees.tsx',
+      primitive: 'PageHeader',
+    },
+  },
+  '@/routes/digital-employees.$typeRef#Route': {
+    surface: '/digital-employees/$typeRef',
+    classification: 'standard',
+    owners: [source('rfc310-digital-employee-ui-contract.test.ts')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/digital-employees.$typeRef.tsx',
+      primitive: 'PageHeader',
+    },
+  },
   '@/routes/code#Route': {
     surface: '/code',
     classification: 'standard',

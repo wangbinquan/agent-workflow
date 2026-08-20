@@ -10,6 +10,7 @@ import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { webhookDeliveries, webhookEndpoints } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
+import type { EventCenterModule } from '../src/modules/event-center/composition'
 import { createWebhookRateLimiters } from '../src/services/webhook/rateLimiter'
 import { recoverInterruptedDeliveries } from '../src/services/webhook/deliveryStore'
 import { eq } from 'drizzle-orm'
@@ -41,6 +42,7 @@ async function harness(opts?: {
   dispatcher?: WebhookDispatcher
   enabled?: boolean
   omitDispatcher?: boolean
+  digitalEmployeeEventCenter?: EventCenterModule
 }): Promise<{
   db: DbClient
   app: ReturnType<typeof createApp>
@@ -64,6 +66,9 @@ async function harness(opts?: {
     db,
     secretBox: box,
     ...(opts?.omitDispatcher ? {} : { webhookDispatcher: opts?.dispatcher ?? fake.dispatcher }),
+    ...(opts?.digitalEmployeeEventCenter === undefined
+      ? {}
+      : { digitalEmployeeEventCenter: opts.digitalEmployeeEventCenter }),
   })
   return { db, app, calls: fake.calls }
 }
@@ -163,6 +168,46 @@ describe('RFC-257 T5 · 状态码语义矩阵', () => {
 })
 
 describe('RFC-257 T5 · 三段式与去重', () => {
+  test('MR webhook delegates its low-latency hint to Event Center observer control', async () => {
+    const nudges: Array<{ id: string; revision: number }> = []
+    const digitalEmployeeEventCenter = {
+      observerControl: {
+        nudgeSource(ref: { id: string; revision: number }) {
+          nudges.push(ref)
+          return true
+        },
+      },
+      participant: {},
+      commands: {},
+      queries: {},
+      worker: {},
+    } as unknown as EventCenterModule
+    const { app } = await harness({ digitalEmployeeEventCenter })
+
+    const push = await post(app, URL_OK, pushBody(), H_OK)
+    expect(push.status).toBe(200)
+    expect(nudges).toEqual([])
+
+    const pipeline = await post(
+      app,
+      URL_OK,
+      JSON.stringify({
+        object_kind: 'pipeline',
+        user: { username: 'aw-bot' },
+        project: JSON.parse(pushBody()).project,
+        object_attributes: { id: 1, ref: 'feature/x', status: 'failed', sha: 'abc' },
+        merge_request: { iid: 42, source_branch: 'feature/x', target_branch: 'main' },
+      }),
+      {
+        'x-gitlab-token': SECRET,
+        'x-gitlab-event': 'Pipeline Hook',
+        'x-gitlab-event-uuid': 'uuid-pipeline-nudge',
+      },
+    )
+    expect(pipeline.status).toBe(200)
+    expect(nudges).toEqual([{ id: 'development.code-host-state', revision: 1 }])
+  })
+
   test('接收成功：200 + received 行 + dispatcher 收到分发（AC-5 前半）', async () => {
     const { app, db, calls } = await harness()
     const res = await post(app, URL_OK, pushBody(), H_OK)

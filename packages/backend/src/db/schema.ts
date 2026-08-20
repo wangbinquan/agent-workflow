@@ -81,8 +81,8 @@ export const agents = sqliteTable(
       .notNull()
       .default('public'), // legacy storage fallback; not the product create default
     aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
-    // RFC-104: framework-seeded built-in marker. Set ONLY by seedFusionResources
-    // (the RFC-101 rows); never writable via any HTTP path (absent from
+    // RFC-104: framework-seeded built-in marker. Set only by platform resource
+    // seeders (fusion and digital-employee templates); never writable via HTTP (absent from
     // Create*/Update* schemas). isBuiltinRow reads it for the read-only lock
     // (assertNotBuiltin) + list-hide (excludeBuiltin*). Immutable identity anchor:
     // survives owner/visibility drift, unlike the old owner+name heuristic.
@@ -1079,6 +1079,8 @@ export const tasks = sqliteTable(
      * RFC-294 is trying to remove.
      */
     codeRoundId: text('code_round_id'),
+    /** RFC-310 OS: one task is one exact Employee Reaction attempt. */
+    digitalEmployeeRoundId: text('digital_employee_round_id'),
     /**
      * RFC-175 (§2e): the launching agent's STABLE `agents.id` at launch time
      * (alongside the name soft-link). Lets "relaunch" faithfully verify the
@@ -1175,6 +1177,7 @@ export const tasks = sqliteTable(
     statusFinishedIdx: index('idx_tasks_status_finished').on(t.status, t.finishedAt),
     sourceAgentIdx: index('idx_tasks_source_agent').on(t.sourceAgentId),
     codeRoundIdx: index('idx_tasks_code_round').on(t.codeRoundId),
+    digitalEmployeeRoundIdx: index('idx_tasks_digital_employee_round').on(t.digitalEmployeeRoundId),
     listStatusStartedIdx: index('idx_tasks_list_status_started_id').on(t.status, t.startedAt, t.id),
     listParentStartedIdx: index('idx_tasks_list_parent_started_id').on(
       t.parentTaskId,
@@ -4816,6 +4819,895 @@ export const developmentAdapterDefinitionRevisions = sqliteTable(
   (t) => ({ pk: primaryKey({ columns: [t.adapterId, t.revision] }) }),
 )
 
+// -----------------------------------------------------------------------------
+// RFC-310 OS authoring model (migration 0192).
+//
+// These tables are intentionally separate from the legacy RFC-310
+// `digital_employees` long-Mission configuration. The canonical product model
+// is type package -> work item -> tool, with job templates and employee
+// definitions pinning immutable tool revisions. Smooth upgrade only adds the
+// new tables; cutover does not need to reinterpret existing rows.
+// -----------------------------------------------------------------------------
+
+export const employeeTypePackages = sqliteTable(
+  'employee_type_packages',
+  {
+    typeId: text('type_id').notNull(),
+    revision: integer('revision').notNull(),
+    descriptorJson: text('descriptor_json').notNull(),
+    descriptorDigest: text('descriptor_digest').notNull(),
+    state: text('state', { enum: ['published', 'retired'] })
+      .notNull()
+      .default('published'),
+    registeredAt: integer('registered_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.typeId, t.revision] }),
+    stateIdx: index('idx_employee_type_packages_state').on(t.state, t.typeId, t.revision),
+  }),
+)
+
+export const employeeToolRegistrations = sqliteTable(
+  'employee_tool_registrations',
+  {
+    id: text('id').primaryKey(),
+    typeId: text('type_id').notNull(),
+    typeRevision: integer('type_revision').notNull(),
+    workItemRef: text('work_item_ref').notNull(),
+    draftJson: text('draft_json').notNull(),
+    publishedRevision: integer('published_revision'),
+    ownerUserId: text('owner_user_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    retiredAt: integer('retired_at'),
+  },
+  (t) => ({
+    nodeIdx: index('idx_employee_tools_node').on(
+      t.typeId,
+      t.typeRevision,
+      t.workItemRef,
+      t.retiredAt,
+    ),
+  }),
+)
+
+export const employeeToolRegistrationRevisions = sqliteTable(
+  'employee_tool_registration_revisions',
+  {
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => employeeToolRegistrations.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    validationReceiptJson: text('validation_receipt_json').notNull(),
+    state: text('state', { enum: ['published', 'retired'] })
+      .notNull()
+      .default('published'),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.toolId, t.revision] }),
+    stateIdx: index('idx_employee_tool_revisions_state').on(t.state, t.toolId, t.revision),
+  }),
+)
+
+export const employeeJobTemplates = sqliteTable(
+  'employee_job_templates',
+  {
+    id: text('id').primaryKey(),
+    typeId: text('type_id').notNull(),
+    typeRevision: integer('type_revision').notNull(),
+    name: text('name').notNull(),
+    draftJson: text('draft_json').notNull(),
+    publishedRevision: integer('published_revision'),
+    ownerUserId: text('owner_user_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    archivedAt: integer('archived_at'),
+  },
+  (t) => ({
+    typeNameUq: uniqueIndex('employee_job_templates_type_name_unique').on(
+      t.typeId,
+      t.typeRevision,
+      t.name,
+    ),
+  }),
+)
+
+export const employeeJobTemplateRevisions = sqliteTable(
+  'employee_job_template_revisions',
+  {
+    templateId: text('template_id')
+      .notNull()
+      .references(() => employeeJobTemplates.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.templateId, t.revision] }) }),
+)
+
+export const employeeWorkScopeRevisions = sqliteTable(
+  'employee_work_scope_revisions',
+  {
+    scopeId: text('scope_id').notNull(),
+    revision: integer('revision').notNull(),
+    typeId: text('type_id').notNull(),
+    typeRevision: integer('type_revision').notNull(),
+    encodedScopeJson: text('encoded_scope_json').notNull(),
+    displaySummary: text('display_summary').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    createdAt: integer('created_at').notNull(),
+    createdBy: text('created_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.scopeId, t.revision] }) }),
+)
+
+export const employeeDefinitions = sqliteTable(
+  'employee_definitions',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    typeId: text('type_id').notNull(),
+    typeRevision: integer('type_revision').notNull(),
+    draftJson: text('draft_json').notNull(),
+    publishedRevision: integer('published_revision'),
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('private'),
+    aclRevision: integer('acl_revision').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    archivedAt: integer('archived_at'),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('employee_definitions_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+    typeIdx: index('idx_employee_definitions_type').on(t.typeId, t.typeRevision, t.archivedAt),
+  }),
+)
+
+export const employeeDefinitionRevisions = sqliteTable(
+  'employee_definition_revisions',
+  {
+    employeeId: text('employee_id')
+      .notNull()
+      .references(() => employeeDefinitions.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.employeeId, t.revision] }) }),
+)
+
+export const employeeExecutionPolicyRevisions = sqliteTable(
+  'employee_execution_policy_revisions',
+  {
+    revision: integer('revision').primaryKey(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  () => ({}),
+)
+
+export const employeeOsSettings = sqliteTable('employee_os_settings', {
+  singletonKey: text('singleton_key').primaryKey(),
+  executionPolicyRevision: integer('execution_policy_revision')
+    .notNull()
+    .references(() => employeeExecutionPolicyRevisions.revision),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export const employeeInputUploads = sqliteTable(
+  'employee_input_uploads',
+  {
+    id: text('id').primaryKey(),
+    actorUserId: text('actor_user_id'),
+    originalName: text('original_name').notNull(),
+    bytes: integer('bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    blobRef: text('blob_ref').notNull(),
+    uploadIdempotencyKey: text('upload_idempotency_key'),
+    state: text('state', { enum: ['pending', 'claimed'] })
+      .notNull()
+      .default('pending'),
+    claimedByCaseId: text('claimed_by_case_id'),
+    expiresAt: integer('expires_at').notNull(),
+    createdAt: integer('created_at').notNull(),
+    claimedAt: integer('claimed_at'),
+  },
+  (t) => ({
+    actorIdempotencyUq: uniqueIndex('employee_input_uploads_actor_idempotency_unique')
+      .on(sql`COALESCE(${t.actorUserId}, '')`, t.uploadIdempotencyKey)
+      .where(sql`${t.uploadIdempotencyKey} IS NOT NULL`),
+    expiryIdx: index('idx_employee_input_uploads_expiry').on(t.state, t.expiresAt),
+  }),
+)
+
+// RFC-310 Digital Employee OS event center (migration 0192). Event records
+// contain only bounded summaries/artifact refs; large pipeline output never
+// enters SQLite. Observer activation is derived from durable subscriptions,
+// so restart recovery does not depend on an in-memory timer registry.
+export const eventSources = sqliteTable(
+  'event_sources',
+  {
+    sourceId: text('source_id').notNull(),
+    revision: integer('revision').notNull(),
+    descriptorJson: text('descriptor_json').notNull(),
+    descriptorDigest: text('descriptor_digest').notNull(),
+    state: text('state', { enum: ['published', 'retired'] })
+      .notNull()
+      .default('published'),
+    registeredAt: integer('registered_at').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.sourceId, t.revision] }) }),
+)
+
+export const eventTypeCatalog = sqliteTable(
+  'event_type_catalog',
+  {
+    eventTypeId: text('event_type_id').notNull(),
+    revision: integer('revision').notNull(),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    descriptorJson: text('descriptor_json').notNull(),
+    descriptorDigest: text('descriptor_digest').notNull(),
+    state: text('state', { enum: ['published', 'retired'] })
+      .notNull()
+      .default('published'),
+    registeredAt: integer('registered_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.eventTypeId, t.revision] }),
+    sourceIdx: index('idx_event_type_source').on(t.sourceId, t.sourceRevision, t.state),
+  }),
+)
+
+export const eventSubscriptions = sqliteTable(
+  'event_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    eventTypeId: text('event_type_id').notNull(),
+    eventTypeRevision: integer('event_type_revision').notNull(),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectRef: text('subject_ref').notNull(),
+    subscriberKind: text('subscriber_kind').notNull(),
+    subscriberRef: text('subscriber_ref').notNull(),
+    activeIdentityKey: text('active_identity_key'),
+    state: text('state', { enum: ['active', 'cancelled'] })
+      .notNull()
+      .default('active'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    cancelledAt: integer('cancelled_at'),
+  },
+  (t) => ({
+    activeIdentityUq: uniqueIndex('event_subscriptions_active_identity_unique')
+      .on(t.activeIdentityKey)
+      .where(sql`${t.activeIdentityKey} IS NOT NULL`),
+    fanoutIdx: index('idx_event_subscriptions_fanout').on(
+      t.eventTypeId,
+      t.eventTypeRevision,
+      t.subjectType,
+      t.subjectRef,
+      t.state,
+    ),
+    subscriberIdx: index('idx_event_subscriptions_subscriber').on(
+      t.subscriberKind,
+      t.subscriberRef,
+      t.state,
+    ),
+  }),
+)
+
+export const observerActivations = sqliteTable(
+  'observer_activations',
+  {
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    subscriberCount: integer('subscriber_count').notNull().default(0),
+    state: text('state', { enum: ['idle', 'active', 'draining', 'blocked'] })
+      .notNull()
+      .default('idle'),
+    generation: integer('generation').notNull().default(0),
+    wakeEpoch: integer('wake_epoch').notNull().default(0),
+    cursorJson: text('cursor_json'),
+    leaseOwner: text('lease_owner'),
+    leaseEpoch: integer('lease_epoch').notNull().default(0),
+    leaseExpiresAt: integer('lease_expires_at'),
+    nextScanAt: integer('next_scan_at'),
+    lastScanAt: integer('last_scan_at'),
+    lastSuccessAt: integer('last_success_at'),
+    lastErrorCode: text('last_error_code'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.sourceId, t.sourceRevision] }),
+    dueIdx: index('idx_observer_activations_due').on(t.state, t.nextScanAt, t.leaseExpiresAt),
+  }),
+)
+
+export const eventObserverRuns = sqliteTable(
+  'event_observer_runs',
+  {
+    id: text('id').primaryKey(),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    generation: integer('generation').notNull(),
+    leaseEpoch: integer('lease_epoch').notNull(),
+    wakeEpoch: integer('wake_epoch').notNull(),
+    cursorBeforeJson: text('cursor_before_json'),
+    cursorAfterJson: text('cursor_after_json'),
+    state: text('state', { enum: ['running', 'completed', 'failed', 'obsolete'] }).notNull(),
+    observationCount: integer('observation_count').notNull().default(0),
+    startedAt: integer('started_at').notNull(),
+    finishedAt: integer('finished_at'),
+    errorCode: text('error_code'),
+    errorDetail: text('error_detail'),
+  },
+  (t) => ({
+    sourceIdx: index('idx_event_observer_runs_source').on(
+      t.sourceId,
+      t.sourceRevision,
+      t.startedAt,
+    ),
+  }),
+)
+
+export const eventRecords = sqliteTable(
+  'event_records',
+  {
+    id: text('id').primaryKey(),
+    eventTypeId: text('event_type_id').notNull(),
+    eventTypeRevision: integer('event_type_revision').notNull(),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectRef: text('subject_ref').notNull(),
+    occurredAt: integer('occurred_at').notNull(),
+    observedAt: integer('observed_at').notNull(),
+    dedupeKey: text('dedupe_key').notNull(),
+    summaryJson: text('summary_json').notNull(),
+    payloadArtifactRef: text('payload_artifact_ref'),
+  },
+  (t) => ({
+    sourceDedupeUq: uniqueIndex('event_records_source_dedupe_unique').on(
+      t.sourceId,
+      t.sourceRevision,
+      t.dedupeKey,
+    ),
+    subjectIdx: index('idx_event_records_subject').on(t.subjectType, t.subjectRef, t.occurredAt),
+  }),
+)
+
+export const eventDeliveries = sqliteTable(
+  'event_deliveries',
+  {
+    id: text('id').primaryKey(),
+    eventId: text('event_id')
+      .notNull()
+      .references(() => eventRecords.id),
+    subscriptionId: text('subscription_id')
+      .notNull()
+      .references(() => eventSubscriptions.id),
+    subscriberKind: text('subscriber_kind').notNull(),
+    subscriberRef: text('subscriber_ref').notNull(),
+    deliveryClass: text('delivery_class').notNull(),
+    priority: integer('priority').notNull(),
+    state: text('state', { enum: ['pending', 'accepted'] })
+      .notNull()
+      .default('pending'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    acceptedAt: integer('accepted_at'),
+  },
+  (t) => ({
+    eventSubscriptionUq: uniqueIndex('event_deliveries_event_subscription_unique').on(
+      t.eventId,
+      t.subscriptionId,
+    ),
+    pendingIdx: index('idx_event_deliveries_pending').on(
+      t.subscriberKind,
+      t.subscriberRef,
+      t.state,
+      t.priority,
+      t.createdAt,
+    ),
+  }),
+)
+
+export const employeeOsWriterState = sqliteTable('employee_os_writer_state', {
+  id: text('id').primaryKey(),
+  activeGeneration: integer('active_generation').notNull(),
+  mode: text('mode', { enum: ['pre-cutover', 'legacy-draining', 'os-active'] }).notNull(),
+  legacyAdmissionsEnabled: integer('legacy_admissions_enabled', { mode: 'boolean' }).notNull(),
+  legacyOpenMissionCount: integer('legacy_open_mission_count').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+export const employeeCases = sqliteTable(
+  'employee_cases',
+  {
+    id: text('id').primaryKey(),
+    employeeId: text('employee_id').notNull(),
+    employeeRevision: integer('employee_revision').notNull(),
+    typeId: text('type_id').notNull(),
+    typeRevision: integer('type_revision').notNull(),
+    primaryContextId: text('primary_context_id').notNull(),
+    executionPolicyRevision: integer('execution_policy_revision').notNull(),
+    state: text('state', { enum: ['active', 'waiting', 'blocked', 'terminal'] })
+      .notNull()
+      .default('active'),
+    terminalKind: text('terminal_kind'),
+    blockReason: text('block_reason'),
+    currentWorkItemRef: text('current_work_item_ref'),
+    activeRoundId: text('active_round_id'),
+    revision: integer('revision').notNull().default(1),
+    writerGeneration: integer('writer_generation').notNull().default(1),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    terminalAt: integer('terminal_at'),
+  },
+  (t) => ({
+    employeeStateIdx: index('idx_employee_cases_employee_state').on(
+      t.employeeId,
+      t.employeeRevision,
+      t.state,
+      t.updatedAt,
+    ),
+  }),
+)
+
+export const employeeCaseWorkspaces = sqliteTable(
+  'employee_case_workspaces',
+  {
+    caseId: text('case_id')
+      .primaryKey()
+      .references(() => employeeCases.id),
+    repositoryId: text('repository_id').notNull(),
+    cachedRepoId: text('cached_repo_id').notNull(),
+    baselineSha: text('baseline_sha').notNull(),
+    targetBranch: text('target_branch').notNull(),
+    sourceBranch: text('source_branch').notNull(),
+    remoteHeadSha: text('remote_head_sha'),
+    state: text('state', { enum: ['active', 'published', 'released'] })
+      .notNull()
+      .default('active'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    repoStateIdx: index('idx_employee_case_workspaces_repo_state').on(
+      t.repositoryId,
+      t.state,
+      t.updatedAt,
+    ),
+  }),
+)
+
+export const employeeContextRecords = sqliteTable(
+  'employee_context_records',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    typeId: text('type_id').notNull(),
+    schemaVersion: integer('schema_version').notNull(),
+    currentRevision: integer('current_revision').notNull(),
+    lifecycleState: text('lifecycle_state', { enum: ['active', 'waiting', 'terminal'] }).notNull(),
+    stateJson: text('state_json').notNull(),
+    artifactRefsJson: text('artifact_refs_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    caseTypeIdx: index('idx_employee_context_case_type').on(t.caseId, t.typeId, t.lifecycleState),
+  }),
+)
+
+export const employeeContextRevisions = sqliteTable(
+  'employee_context_revisions',
+  {
+    contextId: text('context_id')
+      .notNull()
+      .references(() => employeeContextRecords.id),
+    revision: integer('revision').notNull(),
+    stateJson: text('state_json').notNull(),
+    artifactRefsJson: text('artifact_refs_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.contextId, t.revision] }) }),
+)
+
+export const employeeContextLinks = sqliteTable(
+  'employee_context_links',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    fromContextId: text('from_context_id').notNull(),
+    relation: text('relation', {
+      enum: ['derived-from', 'handles', 'delivers', 'tracks', 'delegates-to', 'supersedes'],
+    }).notNull(),
+    toContextId: text('to_context_id').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    identityUq: uniqueIndex('employee_context_links_identity_unique').on(
+      t.caseId,
+      t.fromContextId,
+      t.relation,
+      t.toContextId,
+    ),
+  }),
+)
+
+export const employeeExternalContextBindings = sqliteTable(
+  'employee_external_context_bindings',
+  {
+    subjectType: text('subject_type').notNull(),
+    subjectRef: text('subject_ref').notNull(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    contextId: text('context_id')
+      .notNull()
+      .references(() => employeeContextRecords.id),
+    bindingRevision: integer('binding_revision').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.subjectType, t.subjectRef] }) }),
+)
+
+export const employeeAttentionBindings = sqliteTable(
+  'employee_attention_bindings',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    contextId: text('context_id')
+      .notNull()
+      .references(() => employeeContextRecords.id),
+    contextRevision: integer('context_revision').notNull(),
+    eventTypeId: text('event_type_id').notNull(),
+    eventTypeRevision: integer('event_type_revision').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectRef: text('subject_ref').notNull(),
+    desiredIdentityKey: text('desired_identity_key').notNull(),
+    eventSubscriptionId: text('event_subscription_id'),
+    state: text('state', {
+      enum: ['desired', 'active', 'cancel-requested', 'cancelled'],
+    })
+      .notNull()
+      .default('desired'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    desiredIdentityUq: uniqueIndex('employee_attention_desired_identity_unique').on(
+      t.desiredIdentityKey,
+    ),
+    caseStateIdx: index('idx_employee_attention_case_state').on(t.caseId, t.state, t.updatedAt),
+  }),
+)
+
+export const employeeOsOutbox = sqliteTable(
+  'employee_os_outbox',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id').references(() => employeeCases.id),
+    kind: text('kind', {
+      enum: [
+        'event-subscribe',
+        'event-unsubscribe',
+        'event-observe',
+        'execution-launch',
+        'platform-work-item-execute',
+        'invocation-create',
+      ],
+    }).notNull(),
+    payloadJson: text('payload_json').notNull(),
+    dedupeKey: text('dedupe_key').notNull(),
+    state: text('state', { enum: ['pending', 'claimed', 'completed', 'failed'] })
+      .notNull()
+      .default('pending'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    claimedBy: text('claimed_by'),
+    claimExpiresAt: integer('claim_expires_at'),
+    lastError: text('last_error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    dedupeUq: uniqueIndex('employee_os_outbox_dedupe_unique').on(t.dedupeKey),
+    dueIdx: index('idx_employee_os_outbox_due').on(t.state, t.nextAttemptAt, t.claimExpiresAt),
+  }),
+)
+
+export const employeeCaseInbox = sqliteTable(
+  'employee_case_inbox',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    deliveryId: text('delivery_id').notNull(),
+    eventId: text('event_id').notNull(),
+    eventTypeId: text('event_type_id').notNull(),
+    eventTypeRevision: integer('event_type_revision').notNull(),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectRef: text('subject_ref').notNull(),
+    deliveryClass: text('delivery_class').notNull(),
+    priority: integer('priority').notNull(),
+    occurredAt: integer('occurred_at').notNull(),
+    summary: text('summary').notNull(),
+    payloadArtifactRef: text('payload_artifact_ref'),
+    state: text('state', {
+      enum: ['pending', 'claimed', 'settled', 'coalesced', 'obsolete'],
+    })
+      .notNull()
+      .default('pending'),
+    roundId: text('round_id'),
+    acceptedAt: integer('accepted_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    deliveryUq: uniqueIndex('employee_case_inbox_delivery_unique').on(t.deliveryId),
+    queueIdx: index('idx_employee_case_inbox_queue').on(
+      t.caseId,
+      t.state,
+      t.priority,
+      t.occurredAt,
+      t.eventId,
+    ),
+  }),
+)
+
+export const employeeReactionRounds = sqliteTable(
+  'employee_reaction_rounds',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    caseRevision: integer('case_revision').notNull(),
+    inboxId: text('inbox_id').references(() => employeeCaseInbox.id),
+    employeeId: text('employee_id').notNull(),
+    employeeRevision: integer('employee_revision').notNull(),
+    ruleId: text('rule_id').notNull(),
+    workItemRef: text('work_item_ref').notNull(),
+    workContractId: text('work_contract_id').notNull(),
+    workContractVersion: integer('work_contract_version').notNull(),
+    toolId: text('tool_id'),
+    toolRevision: integer('tool_revision'),
+    executionPolicyRevision: integer('execution_policy_revision').notNull(),
+    inputContextRefsJson: text('input_context_refs_json').notNull(),
+    planJson: text('plan_json').notNull(),
+    state: text('state', {
+      enum: ['planned', 'running', 'settling', 'completed', 'failed', 'obsolete'],
+    })
+      .notNull()
+      .default('planned'),
+    executionRef: text('execution_ref'),
+    outputJson: text('output_json'),
+    attemptOrdinal: integer('attempt_ordinal').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    settledAt: integer('settled_at'),
+  },
+  (t) => ({
+    inboxUq: uniqueIndex('employee_reaction_rounds_inbox_unique').on(t.inboxId),
+    oneActiveUq: uniqueIndex('employee_reaction_rounds_one_active')
+      .on(t.caseId)
+      .where(sql`${t.state} IN ('planned', 'running', 'settling')`),
+    executionIdx: index('idx_employee_reaction_rounds_execution').on(t.executionRef, t.state),
+  }),
+)
+
+export const employeeRoundWorkspaceStates = sqliteTable(
+  'employee_round_workspace_states',
+  {
+    roundId: text('round_id')
+      .notNull()
+      .references(() => employeeReactionRounds.id),
+    attemptOrdinal: integer('attempt_ordinal').notNull(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    baselineSha: text('baseline_sha').notNull(),
+    preStateJson: text('pre_state_json').notNull(),
+    checkpointDigest: text('checkpoint_digest').notNull(),
+    validationJson: text('validation_json'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.roundId, t.attemptOrdinal] }),
+    caseIdx: index('idx_employee_round_workspace_case').on(t.caseId, t.createdAt),
+  }),
+)
+
+export const employeeChangeCandidates = sqliteTable(
+  'employee_change_candidates',
+  {
+    candidateRef: text('candidate_ref').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    roundId: text('round_id')
+      .notNull()
+      .references(() => employeeReactionRounds.id),
+    baselineSha: text('baseline_sha').notNull(),
+    treeOid: text('tree_oid').notNull(),
+    receiptJson: text('receipt_json').notNull(),
+    summarySource: text('summary_source').notNull(),
+    state: text('state', { enum: ['prepared', 'committed', 'published', 'obsolete'] })
+      .notNull()
+      .default('prepared'),
+    commitSha: text('commit_sha'),
+    pushReceiptJson: text('push_receipt_json'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    roundUq: uniqueIndex('employee_change_candidates_round_unique').on(t.roundId),
+    caseStateIdx: index('idx_employee_change_candidates_case_state').on(
+      t.caseId,
+      t.state,
+      t.updatedAt,
+    ),
+  }),
+)
+
+export const employeeInvocations = sqliteTable(
+  'employee_invocations',
+  {
+    id: text('id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    parentCaseId: text('parent_case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    parentRoundId: text('parent_round_id')
+      .notNull()
+      .references(() => employeeReactionRounds.id),
+    targetEmployeeId: text('target_employee_id').notNull(),
+    targetEmployeeRevision: integer('target_employee_revision').notNull(),
+    targetWorkScopeRefJson: text('target_work_scope_ref_json').notNull(),
+    inputEnvelopeRef: text('input_envelope_ref').notNull(),
+    inputDigest: text('input_digest').notNull(),
+    completionContractRefJson: text('completion_contract_ref_json').notNull(),
+    deadlineAt: integer('deadline_at').notNull(),
+    childCaseId: text('child_case_id'),
+    state: text('state', {
+      enum: ['requested', 'accepted', 'waiting', 'satisfied', 'failed', 'detached'],
+    })
+      .notNull()
+      .default('requested'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    idempotencyUq: uniqueIndex('employee_invocations_idempotency_unique').on(t.idempotencyKey),
+    parentStateIdx: index('idx_employee_invocations_parent_state').on(
+      t.parentCaseId,
+      t.state,
+      t.deadlineAt,
+    ),
+  }),
+)
+
+export const employeeChannels = sqliteTable(
+  'employee_channels',
+  {
+    id: text('id').primaryKey(),
+    invocationId: text('invocation_id')
+      .notNull()
+      .references(() => employeeInvocations.id),
+    parentCaseId: text('parent_case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    childCaseId: text('child_case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    correlationRef: text('correlation_ref').notNull(),
+    resultContractRefJson: text('result_contract_ref_json').notNull(),
+    state: text('state', { enum: ['open', 'satisfied', 'failed', 'detached'] })
+      .notNull()
+      .default('open'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    invocationUq: uniqueIndex('employee_channels_invocation_unique').on(t.invocationId),
+  }),
+)
+
+export const employeeChannelResults = sqliteTable(
+  'employee_channel_results',
+  {
+    id: text('id').primaryKey(),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => employeeChannels.id),
+    milestoneType: text('milestone_type').notNull(),
+    envelopeJson: text('envelope_json').notNull(),
+    envelopeDigest: text('envelope_digest').notNull(),
+    monotonic: integer('monotonic', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    identityUq: uniqueIndex('employee_channel_results_identity_unique').on(
+      t.channelId,
+      t.milestoneType,
+      t.envelopeDigest,
+    ),
+  }),
+)
+
+export const employeeApprovalSagas = sqliteTable(
+  'employee_approval_sagas',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id),
+    submitRoundId: text('submit_round_id')
+      .notNull()
+      .references(() => employeeReactionRounds.id),
+    adapterId: text('adapter_id').notNull(),
+    adapterRevision: integer('adapter_revision').notNull(),
+    validatedDraftRef: text('validated_draft_ref').notNull(),
+    deadlineAt: text('deadline_at').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    intentDigest: text('intent_digest').notNull(),
+    correlationRef: text('correlation_ref'),
+    externalRequestRef: text('external_request_ref'),
+    submittedRevision: text('submitted_revision'),
+    submittedAt: text('submitted_at'),
+    latestStatus: text('latest_status', {
+      enum: ['prepared', 'pending', 'approved', 'rejected', 'expired', 'unavailable'],
+    })
+      .notNull()
+      .default('prepared'),
+    observedRevision: text('observed_revision'),
+    evidenceRef: text('evidence_ref'),
+    observedAt: text('observed_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    idempotencyUq: uniqueIndex('employee_approval_sagas_idempotency_unique').on(t.idempotencyKey),
+    correlationUq: uniqueIndex('employee_approval_sagas_correlation_unique')
+      .on(t.adapterId, t.adapterRevision, t.correlationRef)
+      .where(sql`${t.correlationRef} is not null`),
+    caseStateIdx: index('idx_employee_approval_sagas_case_state').on(
+      t.caseId,
+      t.latestStatus,
+      t.updatedAt,
+    ),
+  }),
+)
+
 export const repositoryEmployeeAssignments = sqliteTable(
   'repository_employee_assignments',
   {
@@ -4909,6 +5801,11 @@ export const developmentMissions = sqliteTable(
     // RFC-311：keyset 排序键是 (created_at DESC, id DESC)；单列索引让同一时间戳内
     // 的次序退回临时排序，最坏情况（大量行共享同一 created_at）退化成全排序。
     createdIdIdx: index('idx_development_missions_created_id').on(t.createdAt, t.id),
+    // RFC-310 OS cutover refreshes the legacy drain count and bounded report;
+    // terminal history must not be scanned on every daemon cadence.
+    openIdx: index('idx_development_missions_open')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.terminalAt} IS NULL`),
     // RFC-311：boot 恢复只扫悬挂 fence 行。
     fencedIdx: index('idx_development_missions_fenced')
       .on(t.id)

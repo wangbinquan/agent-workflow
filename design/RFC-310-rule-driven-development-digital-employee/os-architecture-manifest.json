@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "contexts": {
+    "digital-employee": {
+      "owner": "employee type, job template, employee definition, case, context, attention, reaction and employee channel",
+      "topLevelEntries": [
+        "application",
+        "composition",
+        "composition.ts",
+        "domain",
+        "infrastructure",
+        "public"
+      ],
+      "publicEntries": ["commands.ts", "events.ts", "queries.ts", "types.ts"],
+      "externalImports": [
+        "cli/start.ts -> composition",
+        "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
+        "routes/digitalEmployees.ts -> composition",
+        "server.ts -> composition"
+      ]
+    },
+    "event-center": {
+      "owner": "event and source catalog, subscription, observer activation, observation cursor, event record and delivery",
+      "topLevelEntries": [
+        "application",
+        "composition",
+        "composition.ts",
+        "domain",
+        "infrastructure",
+        "public"
+      ],
+      "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
+      "externalImports": [
+        "cli/start.ts -> composition",
+        "modules/digital-employee/application/ports/runtimeStore.ts -> public/types",
+        "modules/digital-employee/application/runtimeService.ts -> public/participants",
+        "modules/digital-employee/composition.ts -> public/participants",
+        "routes/eventCenter.ts -> composition",
+        "server.ts -> composition"
+      ]
+    }
+  },
+  "genericTypeLiteralBan": "development"
+}

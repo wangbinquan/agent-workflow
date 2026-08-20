@@ -169,6 +169,8 @@ const TRUE_TAB_CALLSITES = [
   'components/workflow-editor/WorkflowNodePicker.tsx::{categoryTabsId}',
   'routes/agents.new.tsx::agents-create',
   'routes/auth.tsx::auth-method',
+  'routes/digital-employees.$typeRef.tsx::digital-employee-type-sections',
+  'routes/digital-employees.tsx::digital-employees-sections',
   'routes/intent.detail.tsx::intent-workspace',
   'routes/mcps.detail.tsx::mcps-detail',
   'routes/mcps.new.tsx::mcps-create',

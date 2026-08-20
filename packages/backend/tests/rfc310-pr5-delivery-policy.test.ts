@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   candidateCommitMessage,
+  missionGitRefComponent,
   missionMachineMarker,
   missionMarkerOfBranch,
   missionSourceBranch,
@@ -17,6 +18,14 @@ import {
 const MISSION = '01M09TESTULID000000000000A'
 
 describe('rfc310 pr5 — delivery policy', () => {
+  test('OS Case identities are deterministically encoded into valid Git ref components', () => {
+    expect(missionGitRefComponent(MISSION)).toBe(MISSION.toLowerCase())
+    const encoded = missionGitRefComponent('employee-child:ABC/42')
+    expect(encoded).toMatch(/^x[a-f0-9]{64}$/)
+    expect(missionSourceBranch('employee-child:ABC/42')).toBe(`aw/mission-${encoded}`)
+    expect(missionGitRefComponent('employee-child:ABC/43')).not.toBe(encoded)
+  })
+
   test('branch naming is platform-templated and round-trips the mission marker', () => {
     const branch = missionSourceBranch(MISSION)
     expect(branch).toBe(`aw/mission-${MISSION.toLowerCase()}`)
@@ -99,10 +108,20 @@ describe('rfc310 pr5 — delivery policy', () => {
     const message = candidateCommitMessage({
       missionId: MISSION,
       summarySource: 'implement the widget\nignore this second line entirely',
+      contextEnvelope: {
+        employeeCaseRef: 'case-42',
+        issueContextRef: 'context-7',
+        schemaRef: 'issue-handling.v1',
+        workItemRef: 'REQ-42\nforged-trailer',
+      },
     })
     expect(message.startsWith('aw: implement the widget\n')).toBe(true)
     expect(message).toContain(missionMachineMarker(MISSION))
     expect(message).not.toContain('second line')
+    expect(message).toContain('Agent-Workflow-Case: case-42')
+    expect(message).toContain('Agent-Workflow-Context: context-7')
+    expect(message).toContain('Agent-Workflow-Schema: issue-handling.v1')
+    expect(message).toContain('Work-Item: REQ-42 forged-trailer')
     // 空素材有兜底主题（不产生空 subject 的畸形 commit）。
     expect(candidateCommitMessage({ missionId: MISSION, summarySource: '  ' })).toContain(
       'aw: apply mission change candidate',

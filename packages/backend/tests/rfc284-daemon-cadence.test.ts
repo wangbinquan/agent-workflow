@@ -22,6 +22,8 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       // RFC-310 T71 新增（非调参）：终态 Mission 的 retention 执行，与其它 GC 同
       // 走 hourly 节拍。
       developmentRetentionSweep: 3_600_000,
+      // RFC-310 OS：durable Event → Reaction driver 1Hz。
+      digitalEmployeeOs: 1_000,
     })
   })
 })

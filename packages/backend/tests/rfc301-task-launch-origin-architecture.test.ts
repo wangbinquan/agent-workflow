@@ -87,6 +87,11 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // comes from the injected startDeps and is only defaulted when the caller
       // supplied none, so a program step cannot claim an origin of its own.
       'modules/task-execution/composition/scriptActionExecution.ts': 1,
+      // RFC-310 OS: one reviewed adapter owns both legal TaskEngine launches:
+      // a selected existing Workflow, or the synthesized exact Agent/Program
+      // host. Both freeze the employee round id and forward injected provenance;
+      // neither route nor Agent can call startTask directly.
+      'modules/task-execution/composition/digitalEmployeeExecution.ts': 2,
       'services/execution/executor.ts': 1,
       'services/fusion.ts': 2,
       'services/task.ts': 1,

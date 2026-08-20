@@ -73,22 +73,10 @@ export const NAV_GROUPS: NavGroupEntry[] = [
     i18nKey: 'nav.group.digitalEmployees',
     subnav: [
       {
-        to: '/code',
+        to: '/digital-employees',
         i18nKey: 'nav.digitalEmployees',
         icon: 'agent',
         permission: 'digital-employees:read',
-      },
-      {
-        to: '/code/executors',
-        i18nKey: 'nav.executors',
-        icon: 'workgroup',
-        permission: 'action-templates:read',
-      },
-      {
-        to: '/code/assignments',
-        i18nKey: 'nav.employeeAssignments',
-        icon: 'repo',
-        permission: 'repository-employee-assignments:read',
       },
     ],
   },

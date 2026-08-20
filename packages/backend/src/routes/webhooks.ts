@@ -228,6 +228,25 @@ export function mountWebhookIngressRoutes(
 
       const deliveryId = insert.deliveryId
       deps.webhookTerminalControl?.wake(insert.effectId)
+      // RFC-310 OS: webhook is only a low-latency hint. It never writes review,
+      // pipeline, conflict or lifecycle truth into the employee queue. When at
+      // least one Case subscribes to the hybrid source, nudge its durable
+      // observer; that program re-reads authoritative code-host facts and emits
+      // the typed, priority-ordered events. With zero subscribers this is a
+      // no-op, preserving the Event Center's on-demand polling contract.
+      if (event.mrIid !== undefined) {
+        try {
+          deps.digitalEmployeeEventCenter?.observerControl.nudgeSource({
+            id: 'development.code-host-state',
+            revision: 1,
+          })
+        } catch (err) {
+          log.warn('digital employee event observer nudge failed', {
+            deliveryId,
+            error: String(err),
+          })
+        }
+      }
       void touchEndpointLastDelivery(deps.db, endpoint.id, Date.now()).catch(() => {})
       // 异步分发：响应先行（AC-5）。dispatch 内部负责 processing→终态；这里只
       // 兜「dispatch 自身同步抛/整体 reject」的最后一层，标 failed 供 replay。

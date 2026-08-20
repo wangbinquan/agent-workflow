@@ -4,6 +4,7 @@
 
 import { Hono } from 'hono'
 import type { WorkflowRevision } from '@agent-workflow/shared'
+import { dirname, join } from 'node:path'
 import { actorOf, tryActorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
@@ -57,6 +58,8 @@ import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
 import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
+import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
+import { mountEventCenterRoutes } from '@/routes/eventCenter'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import { mountCodeRoutes } from '@/routes/code'
 import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
@@ -71,6 +74,39 @@ import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler } from '@/util/errors'
 import { createLogger } from '@/util/log'
+import {
+  composeDigitalEmployee,
+  createEmployeeInputArtifactStore,
+  createReactionExecutionAdapter,
+  readDigitalEmployeeWriterState,
+} from '@/modules/digital-employee/composition'
+import {
+  developmentEmployeeRuntimeCodec,
+  developmentEmployeeTypePackage,
+} from '@/modules/development-automation/composition/employeeTypePackage'
+import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
+import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import {
+  buildDevelopmentDeliveryDeps,
+  resolveDevelopmentRepoBinding,
+} from '@/services/developmentDeliveryDeps'
+import {
+  composeDevelopmentApprovalEventObserver,
+  composeDevelopmentCodeHostEventObserver,
+  composeDevelopmentEmployeeEventObserver,
+} from '@/modules/integration/composition/digitalEmployeeEventObserver'
+import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import {
+  bindCandidateDeliveryParticipant,
+  bindChangeCandidateParticipant,
+  bindConflictMergeParticipant,
+  bindEmployeeCaseWorkspaceParticipant,
+} from '@/modules/source-control/composition'
 
 /**
  * Narrow in-process dependency seams for route tests that exercise diagnostics
@@ -97,6 +133,12 @@ export interface AppDeps {
   token: string
   /** Absolute path to config.json (lets tests use a temp file). */
   configPath: string
+  /**
+   * Root used for immutable digital-employee program artifacts and isolated
+   * contract fixtures. Production derives it from configPath; tests may pin a
+   * dedicated directory without touching the process-global Paths singleton.
+   */
+  appHome?: string
   /**
    * Absolute path to the daemon run-info file (host/port/url the daemon is
    * actually bound to). Optional — defaults to `Paths.daemonInfo` in the route;
@@ -128,6 +170,12 @@ export interface AppDeps {
   webhookDispatcher?: WebhookDispatcher
   /** RFC-303 durable launch guard + terminal effect worker. */
   webhookTerminalControl?: MrTerminalControl
+  /**
+   * RFC-310 OS: production shares this durable Event Center composition with
+   * webhook ingress so passive code-host hints can wake the subscribed poller.
+   * Route tests may omit it and use the local DB-backed composition below.
+   */
+  digitalEmployeeEventCenter?: EventCenterModule
   /**
    * RFC-269 — outbound `fetch` seam for code-host calls (connection tests and
    * the call-node executor). Production omits it and the real `fetch` is used;
@@ -321,6 +369,64 @@ export function createApp(deps: AppDeps): Hono {
  * for the dispatcher), while authorization belongs to the route declarations.
  */
 export function mountApiRoutes(app: Hono, deps: AppDeps): void {
+  const appHome = deps.appHome ?? dirname(deps.configPath)
+  const inputArtifacts = createEmployeeInputArtifactStore(
+    join(appHome, 'artifacts', 'employee-inputs'),
+  )
+  const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
+  const approvalGateway = composeApprovalGatewayRunner(deps.db)
+  const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
+    db: deps.db,
+    appHome,
+    inputArtifacts,
+    sourceControl: bindEmployeeCaseWorkspaceParticipant(),
+    conflictMerge: bindConflictMergeParticipant(),
+  })
+  const eventCenter =
+    deps.digitalEmployeeEventCenter ??
+    composeEventCenter({
+      db: deps.db,
+      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      observer: composeDevelopmentEmployeeEventObserver({
+        codeHost: composeDevelopmentCodeHostEventObserver({
+          binding: (repositoryId) =>
+            resolveDevelopmentRepoBinding(deps.db, deps.secretBox, repositoryId),
+        }),
+        approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
+      }),
+    })
+  const digitalEmployee = composeDigitalEmployee({
+    db: deps.db,
+    appHome,
+    typePackages: [developmentEmployeeTypePackage],
+    inputArtifacts,
+    connectionCatalog: composeDevelopmentToolConnectionCatalog(deps.db),
+    runtime: {
+      eventCenter: eventCenter.participant,
+      codecs: [developmentEmployeeRuntimeCodec],
+      execution: createReactionExecutionAdapter(
+        composeDigitalEmployeeExecution({
+          db: deps.db,
+          appHome,
+          startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+          workspace: developmentWorkspace,
+        }),
+      ),
+      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        db: deps.db,
+        appHome,
+        approvalGateway,
+        ...developmentDelivery,
+        conflictMerge: bindConflictMergeParticipant(),
+        sourceControl: {
+          ...bindChangeCandidateParticipant(),
+          ...bindCandidateDeliveryParticipant(),
+          ...bindEmployeeCaseWorkspaceParticipant(),
+        },
+      }),
+    },
+  })
+
   mountConfigRoutes(app, deps)
   mountDaemonRoutes(app, deps)
   mountPlantumlRoutes(app, deps)
@@ -355,8 +461,12 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountCodeHostRoutes(app, deps) // RFC-269
   mountCodeRoutes(app, deps) // RFC-304 T31b
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
+  mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
+  mountDigitalEmployeeRoutes(app, digitalEmployee) // RFC-310 Digital Employee OS
   mountDevelopmentConfigRoutes(app, deps) // RFC-310 PR-1B
-  mountDevelopmentMissionRoutes(app, deps) // RFC-310 PR-2
+  mountDevelopmentMissionRoutes(app, deps, {
+    legacyAdmissionsEnabled: () => readDigitalEmployeeWriterState(deps.db).legacyAdmissionsEnabled,
+  }) // RFC-310 legacy drain facade
   mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9

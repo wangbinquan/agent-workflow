@@ -13,6 +13,8 @@ import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
 import { Route as codeRoute } from '@/routes/code'
+import { Route as digitalEmployeesRoute } from '@/routes/digital-employees'
+import { Route as digitalEmployeeTypeRoute } from '@/routes/digital-employees.$typeRef'
 import {
   LegacyRoute as legacyCodeOutcomesRoute,
   Route as runOutcomesRoute,
@@ -37,6 +39,8 @@ import { Route as skillDetailRoute } from '@/routes/skills.detail'
 import { Route as skillNewRoute } from '@/routes/skills.new'
 import { Route as tasksRoute } from '@/routes/tasks'
 import { TaskWizardRoute as taskWizardRoute } from '@/routes/tasks.new'
+import { Route as employeeCaseNewRoute } from '@/routes/employee-cases.new'
+import { Route as employeeCaseDetailRoute } from '@/routes/employee-cases.$caseId'
 import { Route as intentSessionsRoute } from '@/routes/intent'
 import { Route as intentSessionDetailRoute } from '@/routes/intent.detail'
 import { Route as scheduledRoute } from '@/routes/scheduled'
@@ -123,6 +127,9 @@ const routeTree = rootRoute.addChildren([
   workgroupLaunchRedirect,
   workgroupDetailRoute,
   workgroupsRoute,
+  // RFC-310: digital employee case literals precede the generic task detail.
+  employeeCaseNewRoute,
+  employeeCaseDetailRoute,
   // RFC-105: '/tasks/$id/preview' (longer literal) before '/tasks/$id'.
   taskPreviewRoute,
   taskDetailRoute,
@@ -148,6 +155,8 @@ const routeTree = rootRoute.addChildren([
   memoryRoute,
   // RFC-101: memory→skill fusion detail + approval gate.
   fusionDetailRoute,
+  digitalEmployeeTypeRoute,
+  digitalEmployeesRoute,
   // RFC-310: literal mission wizard precedes dynamic detail, then list/code.
   legacyCodeOutcomesRoute,
   runOutcomesRoute,

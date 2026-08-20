@@ -132,6 +132,8 @@ surface 与 consumer 已切完”是三种不同状态；当前没有一个 RFC-
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `identity-access`            | user/OIDC/session/token、role/permission、opaque request/transaction authority 与认证审计                    |
 | `task-execution`             | Task/NodeRun 生命周期、调度、恢复、运行态 ownership、wrapper/fanout、执行身份与 provenance                   |
+| `digital-employee`           | 员工类型/岗位/员工定义、EmployeeCase、Context/Attention/Reaction、员工调用通道与确定性职责执行               |
+| `event-center`               | Event/Source catalog、Subscription、ObserverActivation、observation cursor、EventRecord 与 Delivery          |
 | `development-automation`     | DevelopmentMission/ActionRun/AgentAttempt、确定性策略与配置资源、evidence/effect intent、MR 生命周期编排     |
 | `resource-catalog`           | agent/skill/MCP/plugin/workflow/workgroup 六个聚合子模块；共享 ACL/ref/revision/catalog kernel               |
 | `collaboration`              | review/clarify/question 等 human gate、授权、park/release/rerun 命令                                         |
@@ -154,6 +156,12 @@ surface 与 consumer 已切完”是三种不同状态；当前没有一个 RFC-
 RFC-304 的 `code-capability` 不再是目标态 active writer context：RFC-310 已把五条能力的写模型切到
 `development-automation`。当前残留 19 个 production 文件只作为历史查询/兼容资源岛；其中 capability template 同步仍是
 活跃兼容例外，必须在 retention/owner 决策后迁走或退役，不能借兼容名义恢复 code-round writer。
+
+RFC-310 的 2026-08-21 架构修订进一步把**通用、有状态的数字员工机制**从代码领域中拆出：
+`digital-employee` 只拥有 Context + Event 驱动的员工职责运行模型，`event-center` 只拥有按订阅激活的事件观察与投递；
+`development-automation` 收缩为首个代码员工类型包，负责研发 Context/Event schema、职责规则和默认工具需求。三者不得以
+共享表、内部 import 或 bootstrap `if type === development` 重新耦合。该 vertical slice 的临时 exact owner/import 账本在
+RFC-310 `os-architecture-manifest.json`；它不替代本 RFC W0-R 尚待建立的全仓七份 canonical manifest。
 
 ### G3：执行链形成四级内核
 

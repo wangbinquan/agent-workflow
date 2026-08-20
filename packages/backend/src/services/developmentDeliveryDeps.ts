@@ -36,7 +36,41 @@ import { eq } from 'drizzle-orm'
 export function buildDevelopmentDeliveryDeps(
   db: DbClient,
   secretBox: SecretBox | undefined,
-): { readonly repoRemote: RepoRemotePort; readonly mrEffects: DevelopmentMrEffects } {
+): {
+  readonly repoRemote: RepoRemotePort
+  readonly mrEffects: DevelopmentMrEffects
+  readonly mrFacts: {
+    collect(
+      repositoryId: string,
+      mrRef: string,
+      selfMarker: string,
+    ): Promise<
+      | {
+          readonly ok: true
+          readonly snapshot: {
+            readonly state: 'opened' | 'merged' | 'closed'
+            readonly headSha: string | null
+            readonly targetSha: string | null
+            readonly targetBranch: string | null
+            readonly draft: boolean
+            readonly mergeableState: 'mergeable' | 'conflict' | 'unknown'
+            readonly approvalHold: boolean | null
+            readonly mergedCommitSha: string | null
+            readonly unresolvedReviewCount: number
+            readonly reviewThreads: readonly {
+              readonly threadRef: string
+              readonly revision: string
+              readonly authorClass: 'human' | 'bot' | 'self'
+              readonly resolved: boolean
+              readonly body: string
+              readonly path: string | null
+            }[]
+          }
+        }
+      | { readonly ok: false; readonly code: string; readonly detail: string }
+    >
+  }
+} {
   const repoRemote: RepoRemotePort = {
     resolve(repositoryId) {
       const row = db
@@ -55,9 +89,47 @@ export function buildDevelopmentDeliveryDeps(
     },
   }
   const mrEffects = composeDevelopmentMrEffects({
-    binding: (repositoryId) => resolveRepoBinding(db, secretBox, repositoryId),
+    binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
   })
-  return { repoRemote, mrEffects }
+  const mrFacts = {
+    async collect(repositoryId: string, mrRef: string, selfMarker: string) {
+      const binding = resolveDevelopmentRepoBinding(db, secretBox, repositoryId)
+      if (binding === null) {
+        return {
+          ok: false as const,
+          code: 'code-host-connection-missing',
+          detail: `no code-host binding for repository ${repositoryId}`,
+        }
+      }
+      const result = await collectMergeRequestFacts(binding, mrRef, { selfMarker })
+      if (!result.ok) return result
+      return {
+        ok: true as const,
+        snapshot: {
+          state: result.snapshot.state,
+          headSha: result.snapshot.headSha,
+          targetSha: result.snapshot.targetSha,
+          targetBranch: result.snapshot.targetBranch,
+          draft: result.snapshot.draft,
+          mergeableState: result.snapshot.mergeableState,
+          approvalHold: result.snapshot.approvalHold,
+          mergedCommitSha: result.snapshot.mergedCommitSha,
+          unresolvedReviewCount: result.snapshot.threads.filter(
+            (thread) => !thread.resolved && thread.authorClass !== 'self',
+          ).length,
+          reviewThreads: result.snapshot.threads.map((thread) => ({
+            threadRef: thread.threadRef,
+            revision: thread.revision,
+            authorClass: thread.authorClass,
+            resolved: thread.resolved,
+            body: thread.lastBody,
+            path: thread.path,
+          })),
+        },
+      }
+    },
+  }
+  return { repoRemote, mrEffects, mrFacts }
 }
 
 /**
@@ -69,7 +141,7 @@ export function resolveRepoClaimKey(
   secretBox: SecretBox | undefined,
   repositoryId: string,
 ): { readonly codeHostEndpointRef: string; readonly stableProjectRef: string } | null {
-  const binding = resolveRepoBinding(db, secretBox, repositoryId)
+  const binding = resolveDevelopmentRepoBinding(db, secretBox, repositoryId)
   if (binding === null) return null
   return {
     codeHostEndpointRef: binding.provider,
@@ -78,7 +150,7 @@ export function resolveRepoClaimKey(
 }
 
 /** repositoryId → code-host connection binding（mrEffects 与 MR facts 共用）。 */
-function resolveRepoBinding(
+export function resolveDevelopmentRepoBinding(
   db: DbClient,
   secretBox: SecretBox | undefined,
   repositoryId: string,
@@ -146,7 +218,7 @@ export function buildDevelopmentMrFactsDeps(
         if (missionRow === undefined) {
           throw new Error(`mission ${input.missionId} not found`)
         }
-        const binding = resolveRepoBinding(db, secretBox, missionRow.repositoryId)
+        const binding = resolveDevelopmentRepoBinding(db, secretBox, missionRow.repositoryId)
         if (binding === null) {
           throw new Error(`no code-host binding for repository ${missionRow.repositoryId}`)
         }

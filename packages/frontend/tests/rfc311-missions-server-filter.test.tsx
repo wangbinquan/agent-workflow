@@ -38,7 +38,7 @@ afterEach(() => {
 const actorPayload = {
   user: { id: 'admin', username: 'admin', displayName: 'Admin', role: 'admin', status: 'active' },
   source: 'session',
-  permissions: ['tasks:read:all', 'development-missions:read'],
+  permissions: ['tasks:read:all', 'development-missions:read', 'digital-employees:read'],
   linkedIdentities: [],
   pats: [],
 }
@@ -54,7 +54,7 @@ function installFetch(): string[] {
         headers: { 'content-type': 'application/json' },
       })
     if (url.pathname === '/api/auth/me') return json(actorPayload)
-    if (url.pathname === '/api/code/missions')
+    if (url.pathname === '/api/employee-cases')
       return json({
         items: [],
         nextCursor: null,
@@ -108,14 +108,14 @@ describe('RFC-311 — /tasks 的数字员工列表走服务端过滤，不再取
     await renderTasks('?category=digital-employee&view=attention')
 
     await waitFor(() => {
-      expect(urls.some((u) => u.startsWith('/api/code/missions'))).toBe(true)
+      expect(urls.some((u) => u.startsWith('/api/employee-cases'))).toBe(true)
     })
-    const missionUrls = urls.filter((u) => u.startsWith('/api/code/missions'))
+    const missionUrls = urls.filter((u) => u.startsWith('/api/employee-cases'))
 
     // ③ 裸全量形态必须绝迹——它是这次改动之前的样子。
     expect(
-      missionUrls.filter((u) => u === '/api/code/missions'),
-      '出现了不带任何参数的 /api/code/missions ⇒ 又在取全量了',
+      missionUrls.filter((u) => u === '/api/employee-cases'),
+      '出现了不带任何参数的 /api/employee-cases ⇒ 又在取全量了',
     ).toEqual([])
 
     // ① 服务端过滤 + 分页的证据
@@ -130,7 +130,7 @@ describe('RFC-311 — /tasks 的数字员工列表走服务端过滤，不再取
     const urls = installFetch()
     await renderTasks('?category=digital-employee&view=finished')
     await waitFor(() => {
-      expect(urls.some((u) => u.includes('/api/code/missions'))).toBe(true)
+      expect(urls.some((u) => u.includes('/api/employee-cases'))).toBe(true)
     })
     expect(urls.some((u) => u.includes('view=finished'))).toBe(true)
     expect(urls.some((u) => u.includes('view=attention'))).toBe(false)

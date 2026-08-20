@@ -129,6 +129,7 @@ export type SettingsTab =
   // pulled out of Limits (commit-push) and the removed Memory tab (distiller).
   | 'systemAgents'
   | 'limits'
+  | 'digitalEmployee'
   | 'recovery'
   | 'gc'
   | 'git'
@@ -143,6 +144,7 @@ export const SETTINGS_TABS = [
   'runtime',
   'systemAgents',
   'limits',
+  'digitalEmployee',
   'recovery',
   'gc',
   'git',
@@ -176,6 +178,7 @@ function configScopeForSettingsTab(tab: SettingsTab): SettingsConfigScopeId | un
     case 'rendering':
       return SETTINGS_CONFIG_SCOPE_IDS.rendering
     case 'runtime':
+    case 'digitalEmployee':
     case 'authentication':
     // RFC-269: 凭据不在 config.json 里（DB + secretBox），所以没有 config scope。
     // eslint-disable-next-line no-fallthrough -- 空 case 串联，无语句可落空
@@ -336,6 +339,11 @@ function SettingsPage() {
       label: t('settings.sectionGroups.reliability'),
       items: [
         {
+          key: 'digitalEmployee',
+          label: t('settings.tabDigitalEmployee'),
+          description: t('settings.sectionDescriptions.digitalEmployee'),
+        },
+        {
           key: 'recovery',
           label: t('settings.tabRecovery'),
           description: t('settings.sectionDescriptions.recovery'),
@@ -416,6 +424,7 @@ function SettingsPage() {
           <SystemAgentsTab config={config.data} fusionDraft={fusionDraft} />
         )}
         {tab === 'limits' && <LimitsTab config={config.data} />}
+        {tab === 'digitalEmployee' && <DigitalEmployeePolicyTab />}
         {tab === 'recovery' && <RecoveryTab config={config.data} />}
         {tab === 'git' && <GitTab config={config.data} />}
         {tab === 'gc' && <GcTab config={config.data} />}
@@ -695,6 +704,241 @@ function LimitsTab({ config }: TabProps) {
         </Field>
       </SettingsCard>
     </SectionForm>
+  )
+}
+
+interface DigitalEmployeeExecutionPolicy {
+  schemaVersion: 1
+  sameSceneAttempts: number
+  freshSceneAttempts: number
+  initialBackoffMs: number
+  maxBackoffMs: number
+  roundBudgetMs: number
+  caseBudgetMs: number
+  externalWaitDeadlineMs: number
+  handoffOnExhausted: boolean
+}
+
+interface DigitalEmployeeExecutionPolicyView {
+  revision: number
+  content: DigitalEmployeeExecutionPolicy
+  contentDigest: string
+  publishedAt: number
+}
+
+function DigitalEmployeePolicyTab() {
+  const { i18n } = useTranslation()
+  const zh = (i18n.resolvedLanguage ?? i18n.language).startsWith('zh')
+  const canUpdate = usePermission('digital-employees:update')
+  const qc = useQueryClient()
+  const query = useQuery<DigitalEmployeeExecutionPolicyView>({
+    queryKey: ['settings', 'digital-employee-execution-policy'],
+    queryFn: ({ signal }) =>
+      api.get('/api/settings/digital-employee-execution-policy', undefined, signal),
+  })
+  const [draft, setDraft] = useState<DigitalEmployeeExecutionPolicy | null>(null)
+  useEffect(() => {
+    if (query.data !== undefined && draft === null) setDraft(query.data.content)
+  }, [draft, query.data])
+  const save = useMutation({
+    mutationFn: (content: DigitalEmployeeExecutionPolicy) =>
+      api.post<DigitalEmployeeExecutionPolicyView>(
+        '/api/settings/digital-employee-execution-policy/revisions',
+        content,
+      ),
+    onSuccess: async (next) => {
+      setDraft(next.content)
+      qc.setQueryData(['settings', 'digital-employee-execution-policy'], next)
+      await qc.invalidateQueries({
+        queryKey: ['settings', 'digital-employee-execution-policy'],
+      })
+    },
+  })
+
+  if (query.isPending || draft === null) return <LoadingState />
+  if (query.isError) return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
+
+  const source = query.data.content
+  const dirty = JSON.stringify(source) !== JSON.stringify(draft)
+  const valid =
+    Number.isInteger(draft.sameSceneAttempts) &&
+    draft.sameSceneAttempts >= 0 &&
+    draft.sameSceneAttempts <= 20 &&
+    Number.isInteger(draft.freshSceneAttempts) &&
+    draft.freshSceneAttempts >= 0 &&
+    draft.freshSceneAttempts <= 20 &&
+    draft.initialBackoffMs >= 0 &&
+    draft.maxBackoffMs >= draft.initialBackoffMs &&
+    draft.roundBudgetMs >= 1_000 &&
+    draft.caseBudgetMs >= draft.roundBudgetMs &&
+    draft.externalWaitDeadlineMs >= 1_000
+  const updateNumber = (
+    key: keyof DigitalEmployeeExecutionPolicy,
+    value: string,
+    multiplier = 1,
+  ) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return
+    setDraft((current) =>
+      current === null ? current : { ...current, [key]: Math.round(parsed * multiplier) },
+    )
+  }
+
+  return (
+    <div>
+      <div className="form-grid">
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          title={
+            zh
+              ? `当前使用策略版本 ${query.data.revision}`
+              : `Current policy revision ${query.data.revision}`
+          }
+        >
+          {zh
+            ? '这里是所有数字员工唯一的失败处理入口。已启动的任务固定使用启动时的版本，避免运行途中规则漂移。'
+            : 'This is the only failure-policy entry for every employee. Running cases keep the revision frozen at launch.'}
+        </NoticeBanner>
+        <SettingsCard
+          title={zh ? 'Agent 输出失败后怎么重试' : 'Retry invalid Agent output'}
+          hint={
+            zh
+              ? '先带着错误现场在同一执行现场重试；仍失败，再回到干净现场重新执行。'
+              : 'Retry with the captured error in the same scene first, then restart from a clean scene.'
+          }
+        >
+          <div className="form-grid form-grid--cols-2">
+            <Field label={zh ? '保留现场重试次数' : 'Same-scene retries'} required>
+              <TextInput
+                type="number"
+                value={String(draft.sameSceneAttempts)}
+                onChange={(value) => updateNumber('sameSceneAttempts', value)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+            <Field label={zh ? '回退干净现场重试次数' : 'Fresh-scene retries'} required>
+              <TextInput
+                type="number"
+                value={String(draft.freshSceneAttempts)}
+                onChange={(value) => updateNumber('freshSceneAttempts', value)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+            <Field label={zh ? '首次重试等待（秒）' : 'Initial retry delay (seconds)'} required>
+              <TextInput
+                type="number"
+                value={String(draft.initialBackoffMs / 1_000)}
+                onChange={(value) => updateNumber('initialBackoffMs', value, 1_000)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+            <Field label={zh ? '最长重试等待（秒）' : 'Maximum retry delay (seconds)'} required>
+              <TextInput
+                type="number"
+                value={String(draft.maxBackoffMs / 1_000)}
+                onChange={(value) => updateNumber('maxBackoffMs', value, 1_000)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+          </div>
+          <Switch
+            checked={draft.handoffOnExhausted}
+            onChange={(checked) => setDraft({ ...draft, handoffOnExhausted: checked })}
+            label={zh ? '重试用尽后转人工处理' : 'Hand off to a person after retries are exhausted'}
+            hint={
+              zh
+                ? '任务会保留错误现场并进入“需要处理”，不会悄悄结束。'
+                : 'The task preserves the failure scene and enters Needs attention.'
+            }
+            disabled={!canUpdate || save.isPending}
+          />
+        </SettingsCard>
+        <SettingsCard
+          title={zh ? '工作与等待期限' : 'Work and waiting deadlines'}
+          hint={
+            zh
+              ? '这些是平台统一边界，不在员工、岗位或工作项中重复配置。'
+              : 'These platform-wide boundaries are not repeated on employees, jobs or work items.'
+          }
+        >
+          <div className="form-grid form-grid--cols-2">
+            <Field
+              label={zh ? '单个工作项最长时间（分钟）' : 'Maximum work-item time (minutes)'}
+              required
+            >
+              <TextInput
+                type="number"
+                value={String(draft.roundBudgetMs / 60_000)}
+                onChange={(value) => updateNumber('roundBudgetMs', value, 60_000)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+            <Field
+              label={zh ? '一个任务最长生命周期（天）' : 'Maximum case lifetime (days)'}
+              required
+            >
+              <TextInput
+                type="number"
+                value={String(draft.caseBudgetMs / 86_400_000)}
+                onChange={(value) => updateNumber('caseBudgetMs', value, 86_400_000)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+            <Field
+              label={
+                zh
+                  ? '等待外部协作或审批最长时间（天）'
+                  : 'External collaboration or approval wait (days)'
+              }
+              required
+            >
+              <TextInput
+                type="number"
+                value={String(draft.externalWaitDeadlineMs / 86_400_000)}
+                onChange={(value) => updateNumber('externalWaitDeadlineMs', value, 86_400_000)}
+                disabled={!canUpdate || save.isPending}
+              />
+            </Field>
+          </div>
+        </SettingsCard>
+      </div>
+      <div className="form-actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!canUpdate || !dirty || !valid || save.isPending}
+          onClick={() => save.mutate(draft)}
+        >
+          {save.isPending
+            ? zh
+              ? '正在发布…'
+              : 'Publishing…'
+            : zh
+              ? '发布新策略版本'
+              : 'Publish policy revision'}
+        </button>
+        {save.isSuccess ? (
+          <span className="form-actions__ok">{zh ? '已发布' : 'Published'}</span>
+        ) : null}
+        {save.isError ? (
+          <span className="form-actions__error">{describeApiError(save.error)}</span>
+        ) : null}
+      </div>
+      {!canUpdate ? (
+        <p className="muted">
+          {zh
+            ? '你可以查看策略，但没有修改数字员工的权限。'
+            : 'You can view this policy but cannot change digital employees.'}
+        </p>
+      ) : !valid ? (
+        <p className="muted">
+          {zh
+            ? '请检查次数、等待时间和期限之间的关系。'
+            : 'Check retry counts, delays and deadlines.'}
+        </p>
+      ) : null}
+    </div>
   )
 }
 

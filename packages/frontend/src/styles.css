@@ -113,6 +113,574 @@
   --focus-ring-gutter: 4px;
 }
 
+/* RFC-310 Digital Employee OS — one fixed responsibility map in every mode. */
+.employee-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  padding: 4px 0 24px;
+}
+
+.employee-type-card {
+  display: grid;
+  gap: 10px;
+  min-height: 250px;
+  padding: 22px;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.employee-type-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.employee-type-card__eyebrow,
+.employee-node-panel__eyebrow {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.employee-type-card > strong {
+  font-size: 20px;
+}
+
+.employee-type-card > p,
+.employee-summary-card p,
+.employee-node-panel header p,
+.employee-map-section__heading p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.employee-type-card dl {
+  display: flex;
+  gap: 24px;
+  margin: auto 0 0;
+}
+
+.employee-type-card dl > div {
+  display: grid;
+  gap: 2px;
+}
+
+.employee-type-card dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.employee-type-card dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.employee-type-card__open {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.digital-employee-type-page .tabs-viewport {
+  margin: 4px 0 18px;
+}
+
+.employee-map-section {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.employee-map-section__heading,
+.employee-node-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.employee-map-section__heading h2,
+.employee-node-panel h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.employee-map-section__legend {
+  flex: none;
+  padding: 6px 9px;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.employee-graph-shell {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    radial-gradient(
+        circle at 1px 1px,
+        color-mix(in srgb, var(--border) 62%, transparent) 1px,
+        transparent 0
+      )
+      0 0 / 18px 18px,
+    var(--bg);
+}
+
+.employee-graph {
+  display: block;
+  width: 100%;
+  min-height: 480px;
+  max-height: 72vh;
+}
+
+.employee-graph__region-bg {
+  stroke: color-mix(in srgb, var(--border) 75%, transparent);
+  stroke-width: 1;
+}
+
+.employee-graph__region-bg--0 {
+  fill: color-mix(in srgb, var(--accent) 5%, var(--panel));
+}
+
+.employee-graph__region-bg--1 {
+  fill: color-mix(in srgb, var(--success) 5%, var(--panel));
+}
+
+.employee-graph__region-bg--2 {
+  fill: color-mix(in srgb, var(--warn-fg) 5%, var(--panel));
+}
+
+.employee-graph__region-title {
+  fill: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.employee-graph__region-description {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.employee-graph__edges path {
+  fill: none;
+  opacity: 0.46;
+  stroke: color-mix(in srgb, var(--muted) 56%, transparent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+}
+
+.employee-graph__edges .employee-graph__edge--loop {
+  stroke-dasharray: 5 4;
+}
+
+.employee-graph__edges .employee-graph__edge--active {
+  opacity: 1;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.employee-graph marker path {
+  fill: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+
+.employee-graph .employee-graph__arrow--active path {
+  fill: var(--accent);
+}
+
+.employee-graph-node {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: 3px 8px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+  text-align: left;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 2px 7px rgb(0 0 0 / 7%);
+  cursor: pointer;
+}
+
+.employee-graph-node:hover,
+.employee-graph-node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.employee-graph-node[data-node-kind='system'] {
+  border-style: dashed;
+}
+
+.employee-graph-node > strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-graph-node > span:not(.employee-graph-node__kind) {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.employee-graph-node__kind {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.employee-graph-node small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.employee-node-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.employee-node-panel > header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.work-item-contract-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.work-item-contract-card > div {
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg);
+}
+
+.work-item-contract-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.work-item-contract-card p {
+  margin: 5px 0 0;
+  line-height: 1.45;
+}
+
+.node-tool-list,
+.employee-card-list {
+  display: grid;
+  gap: 9px;
+}
+
+.node-tool-row,
+.employee-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.node-tool-row > div,
+.employee-summary-card > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.node-tool-row span,
+.node-tool-row small {
+  color: var(--muted);
+}
+
+.node-tool-list__empty {
+  margin: 0;
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 11px;
+}
+
+.employee-summary-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-dialog-form {
+  display: grid;
+  gap: 15px;
+}
+
+.employee-dialog-form > label,
+.employee-dialog-form__row > label,
+.job-binding-list > label {
+  display: grid;
+  gap: 6px;
+}
+
+.employee-dialog-form label > span,
+.employee-dialog-form legend {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.employee-dialog-form input,
+.employee-dialog-form textarea,
+.employee-dialog-form select,
+.job-binding-list select {
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.employee-dialog-form textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.employee-dialog-form__code {
+  min-height: 220px !important;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.employee-dialog-form__row {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 12px;
+}
+
+.employee-case-create-grid,
+.employee-case-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.employee-case-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-block: var(--space-4);
+}
+
+.employee-case-upload-list,
+.employee-case-artifacts {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.employee-case-json {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--border) 28%, var(--panel));
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.employee-case-artifacts code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.employee-case-context-description {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+}
+
+.employee-case-context-facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.employee-case-context-facts > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.32fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.employee-case-context-facts dt {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.employee-case-context-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.employee-case-technical-details {
+  margin-top: var(--space-3);
+}
+
+.employee-case-technical-details > summary {
+  width: fit-content;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--font-sm);
+}
+
+.employee-case-technical-details[open] > summary {
+  margin-bottom: var(--space-2);
+}
+
+.employee-case-selected-contract {
+  margin-top: var(--space-3);
+}
+
+.event-center-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.event-center-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.event-center-summary .card__body > strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.employee-dialog-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.employee-kind-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 7px;
+}
+
+.employee-kind-choices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.employee-kind-choices input {
+  width: auto;
+}
+
+.job-binding-list {
+  display: grid;
+  gap: 10px;
+  max-height: 46vh;
+  padding: 2px;
+  overflow: auto;
+}
+
+.job-binding-list > label {
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr);
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.job-binding-list > label > span {
+  display: grid;
+  gap: 2px;
+}
+
+.job-binding-list small {
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .employee-map-section__heading,
+  .employee-node-panel > header,
+  .node-tool-row,
+  .employee-summary-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .employee-map-section__legend {
+    align-self: flex-start;
+  }
+
+  .employee-graph {
+    min-height: 320px;
+  }
+
+  .work-item-contract-card,
+  .employee-dialog-form__row,
+  .employee-case-create-grid,
+  .employee-case-detail-grid,
+  .event-center-summary,
+  .employee-kind-choices,
+  .job-binding-list > label {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* P-5-04 dark theme — applied when the resolved theme is dark, which the
    useTheme hook writes to <html data-theme="dark|light">. We do the resolution
    in JS (config.theme = system|light|dark, "system" follows

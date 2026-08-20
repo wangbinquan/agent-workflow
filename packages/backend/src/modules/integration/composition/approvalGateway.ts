@@ -4,9 +4,12 @@ import { createApprovalExecutionAdapter } from '../infrastructure/developmentApp
 import { createDbAdapterBindingResolver } from '../infrastructure/developmentRequirementSourceAdapter'
 import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
 
-export function composeApprovalGatewayRunner(db: DbClient) {
+export function composeApprovalGatewayRunner(
+  db: DbClient,
+  options: { readonly approvalMockUrl?: string } = {},
+) {
   const store = createSqliteDevelopmentAdapterStore(db)
-  const mockUrl = process.env.AW_APPROVAL_MOCK_URL
+  const mockUrl = options.approvalMockUrl ?? process.env.AW_APPROVAL_MOCK_URL
   const execution = createApprovalExecutionAdapter({
     resolveBinding: createDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),

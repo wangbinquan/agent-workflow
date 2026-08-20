@@ -55,6 +55,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { TASK_ICON } from '@/components/icons/resourceIcons'
+import { localized, type LocalizedText } from '@/components/digital-employees/types'
 import { useActor, usePermission } from '@/hooks/useActor'
 import { useNowTick } from '@/hooks/useNowTick'
 import { useTaskOperationsPage } from '@/hooks/useTaskOperationsPage'
@@ -64,7 +65,44 @@ import { taskOperationsDuration } from '@/lib/task-operations-duration'
 import { describeTaskFailure } from '@/lib/task-failure'
 import { taskRepoDisplayName } from '@/lib/task-repo-name'
 import { Route as RootRoute } from './__root'
-import { missionStatusKind, missionStatusLabel, type MissionSummary } from './code.missions'
+
+interface EmployeeCaseSummary {
+  id: string
+  revision: number
+  state: 'active' | 'waiting' | 'blocked' | 'terminal'
+  terminalKind: string | null
+  blockReason: string | null
+  employeeName: string
+  typeName: LocalizedText
+  subjectRef: string
+  targetRef: string | null
+  currentWorkItemRef: string | null
+  currentWorkItemName: LocalizedText | null
+  activeRound: null | {
+    id: string
+    state: string
+    workItemRef: string
+    attemptOrdinal: number
+  }
+  pendingEventCount: number
+  openChannelCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+function caseStatesFromTaskStatuses(
+  statuses: readonly TaskStatus[],
+): EmployeeCaseSummary['state'][] | undefined {
+  if (statuses.length === 0) return undefined
+  const states = new Set<EmployeeCaseSummary['state']>()
+  for (const status of statuses) {
+    if (status === 'pending' || status === 'running') states.add('active')
+    else if (status === 'awaiting_human' || status === 'awaiting_review') states.add('waiting')
+    else if (status === 'failed' || status === 'interrupted') states.add('blocked')
+    else states.add('terminal')
+  }
+  return [...states]
+}
 
 type TaskCategory = 'all' | 'orchestration' | 'digital-employee'
 const TASK_CATEGORIES = ['all', 'orchestration', 'digital-employee'] as const
@@ -224,7 +262,7 @@ function TasksPage() {
   )
   const actor = useActor()
   const canReadAll = usePermission('tasks:read:all')
-  const canReadDigitalEmployees = usePermission('development-missions:read')
+  const canReadDigitalEmployees = usePermission('digital-employees:read')
   const actorReady =
     actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
   const defaultScope: TaskListScope = canReadAll ? 'all' : 'mine'
@@ -271,27 +309,23 @@ function TasksPage() {
   const query = useTaskOperationsPage(filters, undefined, taskQueryEnabled)
   const sync = useTaskOperationsSync()
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
-  // RFC-311：过滤与 facets **下推服务端**（`view` / `statuses` / `q` 与 /tasks 同名
-  // 同义），并按 keyset 翻页。此前是取**全量** mission 再在前端过滤——mission 表长
-  // 起来后，这条 10 秒一轮的轮询会把整张表搬到浏览器，正是本 RFC 要消灭的形态。
-  // 服务端等价性由 `rfc311-mission-page.test.ts` 的 64 组逐页 oracle 锁定。
-  const missionQuery = useInfiniteQuery({
-    queryKey: ['code-missions', 'task-operations', filters.view, filters.statuses, filters.q],
+  const caseQuery = useInfiniteQuery({
+    queryKey: ['employee-cases', 'task-operations', filters.view, filters.statuses, filters.q],
     initialPageParam: null as string | null,
     enabled:
       actorReady && actor.data !== null && canReadDigitalEmployees && category !== 'orchestration',
     refetchInterval: 10_000,
     queryFn: ({ pageParam, signal }) =>
       api.get<{
-        items: MissionSummary[]
+        items: EmployeeCaseSummary[]
         nextCursor: string | null
         facets: { all: number; active: number; attention: number; finished: number }
       }>(
-        '/api/code/missions',
+        '/api/employee-cases',
         {
           limit: 50,
           view: filters.view,
-          statuses: filters.statuses.length > 0 ? filters.statuses.join(',') : undefined,
+          states: caseStatesFromTaskStatuses(filters.statuses)?.join(','),
           q: filters.q,
           cursor: pageParam ?? undefined,
         },
@@ -299,16 +333,16 @@ function TasksPage() {
       ),
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   })
-  const missionItems = useMemo(
-    () => (missionQuery.data?.pages ?? []).flatMap((page) => page.items),
-    [missionQuery.data?.pages],
+  const caseItems = useMemo(
+    () => (caseQuery.data?.pages ?? []).flatMap((page) => page.items),
+    [caseQuery.data?.pages],
   )
   const rootPage = query.data?.pages.find((page) => page.kind === 'root')
   const taskFacets =
     rootPage?.kind === 'root' ? rootPage.facets : { all: 0, active: 0, attention: 0, finished: 0 }
   // facets 由服务端给（算在全集上，不随 view/statuses/q 变），与旧的
   // `digitalEmployeeFacets(全量)` 语义逐字一致。
-  const missionFacets = missionQuery.data?.pages[0]?.facets ?? {
+  const caseFacets = caseQuery.data?.pages[0]?.facets ?? {
     all: 0,
     active: 0,
     attention: 0,
@@ -316,14 +350,14 @@ function TasksPage() {
   }
   const facets =
     category === 'digital-employee'
-      ? missionFacets
+      ? caseFacets
       : category === 'orchestration'
         ? taskFacets
         : {
-            all: taskFacets.all + missionFacets.all,
-            active: taskFacets.active + missionFacets.active,
-            attention: taskFacets.attention + missionFacets.attention,
-            finished: taskFacets.finished + missionFacets.finished,
+            all: taskFacets.all + caseFacets.all,
+            active: taskFacets.active + caseFacets.active,
+            attention: taskFacets.attention + caseFacets.attention,
+            finished: taskFacets.finished + caseFacets.finished,
           }
 
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
@@ -416,21 +450,21 @@ function TasksPage() {
   const isLoading =
     actor.isLoading ||
     (category !== 'digital-employee' && query.isLoading) ||
-    (category !== 'orchestration' && canReadDigitalEmployees && missionQuery.isLoading)
+    (category !== 'orchestration' && canReadDigitalEmployees && caseQuery.isLoading)
   const initialEmpty =
     !isLoading &&
     query.error == null &&
-    missionQuery.error == null &&
+    caseQuery.error == null &&
     items.length === 0 &&
-    missionItems.length === 0 &&
+    caseItems.length === 0 &&
     facets.all === 0 &&
     !hasAnyFilter
   const noMatches =
     !isLoading &&
     query.error == null &&
-    missionQuery.error == null &&
+    caseQuery.error == null &&
     items.length === 0 &&
-    missionItems.length === 0 &&
+    caseItems.length === 0 &&
     !initialEmpty
   const newTaskAction = (
     <div className="page-header__actions">
@@ -438,7 +472,7 @@ function TasksPage() {
         {t('tasks.newButton')}
       </Link>
       <Link
-        to="/code/missions/new"
+        to="/tasks/employee-cases/new"
         className="btn btn--primary"
         data-testid="tasks-new-digital-employee"
       >
@@ -452,20 +486,20 @@ function TasksPage() {
     const previous = previousResult.current
     if (previous === null || previous.fingerprint !== filterFingerprint) {
       liveRegion.announce(
-        t('tasks.operations.resultCount', { count: items.length + missionItems.length }),
+        t('tasks.operations.resultCount', { count: items.length + caseItems.length }),
       )
-    } else if (items.length + missionItems.length > previous.count) {
+    } else if (items.length + caseItems.length > previous.count) {
       liveRegion.announce(
         t('tasks.operations.addedCount', {
-          count: items.length + missionItems.length - previous.count,
+          count: items.length + caseItems.length - previous.count,
         }),
       )
     }
     previousResult.current = {
       fingerprint: filterFingerprint,
-      count: items.length + missionItems.length,
+      count: items.length + caseItems.length,
     }
-  }, [filterFingerprint, isLoading, items.length, liveRegion, missionItems.length, query.error, t])
+  }, [caseItems.length, filterFingerprint, isLoading, items.length, liveRegion, query.error, t])
 
   return (
     <div className="page page--operations page--task-operations">
@@ -532,8 +566,8 @@ function TasksPage() {
           {query.error != null && (
             <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
           )}
-          {missionQuery.error != null && category !== 'orchestration' && (
-            <ErrorBanner error={missionQuery.error} onRetry={() => void missionQuery.refetch()} />
+          {caseQuery.error != null && category !== 'orchestration' && (
+            <ErrorBanner error={caseQuery.error} onRetry={() => void caseQuery.refetch()} />
           )}
         </FeedbackStack>
         {isLoading && <LoadingState data-testid="tasks-loading" />}
@@ -559,12 +593,12 @@ function TasksPage() {
           />
         )}
 
-        {missionItems.length > 0 && category !== 'orchestration' && (
+        {caseItems.length > 0 && category !== 'orchestration' && (
           <DigitalEmployeeTaskList
-            items={missionItems}
-            hasNextPage={missionQuery.hasNextPage}
-            loadingMore={missionQuery.isFetchingNextPage}
-            onLoadMore={() => void missionQuery.fetchNextPage()}
+            items={caseItems}
+            hasNextPage={caseQuery.hasNextPage}
+            loadingMore={caseQuery.isFetchingNextPage}
+            onLoadMore={() => void caseQuery.fetchNextPage()}
           />
         )}
 
@@ -705,13 +739,30 @@ function TaskListFilterDialog(props: {
 }
 
 function DigitalEmployeeTaskList(props: {
-  items: MissionSummary[]
+  items: EmployeeCaseSummary[]
   hasNextPage: boolean
   loadingMore: boolean
   onLoadMore: () => void
 }): ReactElement {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const language = i18n.resolvedLanguage ?? i18n.language
+  const zh = language.startsWith('zh')
   const navigate = useNavigate()
+  const status = (item: EmployeeCaseSummary) => {
+    if (item.state === 'terminal') {
+      return {
+        kind: 'success' as const,
+        label: item.terminalKind ?? (zh ? '已结束' : 'Finished'),
+      }
+    }
+    if (item.state === 'blocked') {
+      return { kind: 'danger' as const, label: zh ? '需要处理' : 'Needs attention' }
+    }
+    if (item.state === 'waiting') {
+      return { kind: 'warn' as const, label: zh ? '等待事件' : 'Waiting for event' }
+    }
+    return { kind: 'info' as const, label: zh ? '工作中' : 'Working' }
+  }
   return (
     <section
       className="task-operations task-operations--digital-employee"
@@ -730,60 +781,67 @@ function DigitalEmployeeTaskList(props: {
         <span />
       </div>
       <div className="task-operations__list" role="list">
-        {props.items.map((mission) => (
-          <div
-            key={mission.id}
-            role="listitem"
-            className="task-operations__row"
-            data-testid={`digital-employee-task-${mission.id}`}
-            onClick={(event) => {
-              if (shouldRowNavigate(event)) {
-                void navigate({
-                  to: '/code/missions/$missionId',
-                  params: { missionId: mission.id },
-                })
-              }
-            }}
-          >
-            <div className="task-operations__cell task-operations__task">
-              <span className="task-operations__expand-spacer" aria-hidden="true" />
-              <div className="task-operations__task-copy">
-                <div className="task-operations__name-line">
-                  <Link
-                    to="/code/missions/$missionId"
-                    params={{ missionId: mission.id }}
-                    className="data-table__link task-operations__name"
-                  >
-                    {mission.externalId ?? t('tasks.operations.digitalEmployeeTask')}
-                  </Link>
-                  <StatusChip kind="info" size="sm">
-                    {t('tasks.operations.category.digital-employee')}
-                  </StatusChip>
-                </div>
-                <div className="task-operations__meta">
-                  <code>{mission.repositoryId}</code>
-                  <span aria-hidden="true">·</span>
-                  <code>{mission.id.slice(-8)}</code>
+        {props.items.map((employeeCase) => {
+          const caseStatus = status(employeeCase)
+          return (
+            <div
+              key={employeeCase.id}
+              role="listitem"
+              className="task-operations__row"
+              data-testid={`digital-employee-task-${employeeCase.id}`}
+              onClick={(event) => {
+                if (shouldRowNavigate(event)) {
+                  void navigate({
+                    to: '/tasks/employee-cases/$caseId',
+                    params: { caseId: employeeCase.id },
+                  })
+                }
+              }}
+            >
+              <div className="task-operations__cell task-operations__task">
+                <span className="task-operations__expand-spacer" aria-hidden="true" />
+                <div className="task-operations__task-copy">
+                  <div className="task-operations__name-line">
+                    <Link
+                      to="/tasks/employee-cases/$caseId"
+                      params={{ caseId: employeeCase.id }}
+                      className="data-table__link task-operations__name"
+                    >
+                      {employeeCase.subjectRef}
+                    </Link>
+                    <StatusChip kind="info" size="sm">
+                      {t('tasks.operations.category.digital-employee')}
+                    </StatusChip>
+                  </div>
+                  <div className="task-operations__meta">
+                    <span>{localized(employeeCase.typeName, language)}</span>
+                    <span aria-hidden="true">·</span>
+                    <code>{employeeCase.targetRef ?? employeeCase.id.slice(-8)}</code>
+                  </div>
                 </div>
               </div>
+              <div className="task-operations__cell task-operations__execution">
+                <StatusChip kind={caseStatus.kind} size="sm">
+                  {caseStatus.label}
+                </StatusChip>
+                <small>
+                  {employeeCase.currentWorkItemName === null
+                    ? employeeCase.blockReason
+                    : localized(employeeCase.currentWorkItemName, language)}
+                </small>
+              </div>
+              <div className="task-operations__cell task-operations__time">
+                <RelativeTime ts={employeeCase.updatedAt} />
+              </div>
+              <div className="task-operations__cell task-operations__owner">
+                {employeeCase.employeeName}
+              </div>
+              <div className="task-operations__cell task-operations__chevron" aria-hidden="true">
+                <OperationsChevronIcon />
+              </div>
             </div>
-            <div className="task-operations__cell task-operations__execution">
-              <StatusChip kind={missionStatusKind(mission.status)} size="sm">
-                {missionStatusLabel(t, mission.status)}
-              </StatusChip>
-              {mission.blockCode === null ? null : <small>{mission.blockCode}</small>}
-            </div>
-            <div className="task-operations__cell task-operations__time">
-              <RelativeTime ts={mission.updatedAt} />
-            </div>
-            <div className="task-operations__cell task-operations__owner">
-              {t('tasks.operations.digitalEmployeeOwner')}
-            </div>
-            <div className="task-operations__cell task-operations__chevron" aria-hidden="true">
-              <OperationsChevronIcon />
-            </div>
-          </div>
-        ))}
+          )
+        })}
         {props.hasNextPage && (
           <div className="task-operations__more" role="listitem">
             {/* 与 /tasks 根列表同款：可及名固定、永不 disabled，加载态由 aria-busy +

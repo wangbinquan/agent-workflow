@@ -103,15 +103,16 @@ route/service/CLI→module 的 63 条非 exact 边（62 条指向 domain/applica
 
 ### 1.3 RFC-304～311 landed reconciliation
 
-| landed slice                                | 对目标架构的确定输入                                                                                             | 仍归 RFC-294 后续波次的 residual                                                                                             |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| RFC-304/307/309                             | 历史 code-capability 行为与查询 oracle                                                                           | RFC-310 已退役 writer/executor；只保留 history/template compatibility，不得在 W2 恢复 code-round                             |
-| RFC-305                                     | identity-access role+grant 单写、access revision CAS/audit、opaque direct/delegated authority、WS revision fence | full `Actor.permissions` 消费、public→infrastructure export、非 bootstrap composition 归 W4-E0/W9                            |
-| RFC-306                                     | branch activation、`skipped`、join/consumed semantics                                                            | scheduler callpoint、selected generation 与 NodeRun provenance 归 W2/W7                                                      |
-| RFC-308                                     | source-control exclude/candidate/commit/CAS publish/conflict participants                                        | composition path binder、repo/cache/workspace owner 与 SCC 清零归 W5                                                         |
-| RFC-310                                     | `development-automation` 聚合/单写/内部层次、普通 agent host task、mission effect ledger/worker                  | exact public/required SPI 生产切换、inbound/bootstrap、WorkspaceRef 与 managed background 归 W2/W3/W4/W5/W9                  |
-| RFC-311 committed PR-1～PR-7 + G4 + T20/T21 | index/query/archive/retention/maintenance 与 NodeRun prompt 大正文分档外置/永久双读 behavior oracle              | prompt 仍在 root flat service；task query/provenance 与相对 artifact lifecycle 归 W4/W7/W9                                   |
-| `7c542729/9ec2a469` pending source delta    | mission keyset/limit query 与 admission preview 的源码形状；不计 landed oracle                                   | containing repair SHA 须 clean typecheck/build/test；mission 还须复合索引/EXPLAIN、前端分页消费及 W4-E8 public-query cutover |
+| landed slice                                | 对目标架构的确定输入                                                                                             | 仍归 RFC-294 后续波次的 residual                                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| RFC-304/307/309                             | 历史 code-capability 行为与查询 oracle                                                                           | RFC-310 已退役 writer/executor；只保留 history/template compatibility，不得在 W2 恢复 code-round                                 |
+| RFC-305                                     | identity-access role+grant 单写、access revision CAS/audit、opaque direct/delegated authority、WS revision fence | full `Actor.permissions` 消费、public→infrastructure export、非 bootstrap composition 归 W4-E0/W9                                |
+| RFC-306                                     | branch activation、`skipped`、join/consumed semantics                                                            | scheduler callpoint、selected generation 与 NodeRun provenance 归 W2/W7                                                          |
+| RFC-308                                     | source-control exclude/candidate/commit/CAS publish/conflict participants                                        | composition path binder、repo/cache/workspace owner 与 SCC 清零归 W5                                                             |
+| RFC-310                                     | `development-automation` 聚合/单写/内部层次、普通 agent host task、mission effect ledger/worker                  | exact public/required SPI 生产切换、inbound/bootstrap、WorkspaceRef 与 managed background 归 W2/W3/W4/W5/W9                      |
+| RFC-310 OS 修订（2026-08-21）               | `digital-employee` Case/Context/Attention/Reaction/Channel + `event-center` 按订阅 observer/delivery；研发类型包 | 专项 exact manifest 已锁且无跨域 internal import；全仓 canonical manifests、route public cutover、managed worker 仍归 W0-R/W4/W9 |
+| RFC-311 committed PR-1～PR-7 + G4 + T20/T21 | index/query/archive/retention/maintenance 与 NodeRun prompt 大正文分档外置/永久双读 behavior oracle              | prompt 仍在 root flat service；task query/provenance 与相对 artifact lifecycle 归 W4/W7/W9                                       |
+| `7c542729/9ec2a469` pending source delta    | mission keyset/limit query 与 admission preview 的源码形状；不计 landed oracle                                   | containing repair SHA 须 clean typecheck/build/test；mission 还须复合索引/EXPLAIN、前端分页消费及 W4-E8 public-query cutover     |
 
 统一判定：上表只说明 capability/domain/internal-layering 已有真实落点；没有一行单独满足 W0-R～W9 的整波退出门。
 
@@ -651,6 +652,11 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
       目前只作为 pending source delta：先经 containing repair SHA 通过 clean gates，再保持 wire/selector oracle；分页还须补
       `(created_at,id)` 复合索引与绑定参数 EXPLAIN、大 tie-group 负测、前端分页消费，之后才能宣称最坏 O(页)。route 最终只调
       public query，不再 deep import application/infrastructure 或自行 compose module。
+- [ ] **E9 digital-employee / event-center**：以 RFC-310 OS 已落的 Case/Context/Attention/Reaction/Channel 与
+      catalog/subscription/observer/delivery 作为行为 oracle；保留 `os-architecture-manifest.json` 对两个 context 的唯一 owner、
+      root/public entrypoint 和全量 external import exact 对拍，任何模块内穿透、bootstrap 类型分支或 >5 方法 public port 都阻断；
+      route 从 composition view 迁到 public command/query，Event observer 进入 W9 managed job registry，类型包只经注册合同接入，
+      不把研发 Context/Event schema 或仓库范围复制进通用 OS。
 
 **W4 全局退出门**（所有 C/E、对应 B adapter 与 D root contraction 汇合后）：route→DB `15→0`；AppDeps imports `52→0`；
 services→routes `1→0`；MCP/server SCC 消失；

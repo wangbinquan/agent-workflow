@@ -291,7 +291,7 @@ export function commitAgentCreateInTx(tx: DbTxSync, p: PreparedAgentCreate): voi
       bodyMd: input.bodyMd,
       // RFC-231: user resources are private; framework built-ins stay public.
       ...initialAcl,
-      // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+      // RFC-104: built-in marker — only platform-owned seeders pass builtin:true;
       // never set via any HTTP path (CreateAgentSchema omits it).
       builtin: p.builtin,
       createdAt: now,

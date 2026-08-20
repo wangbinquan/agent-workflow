@@ -6,12 +6,25 @@
 // collision)；不允许覆盖/删除未知 ref——本文件只产判定，任何 ref 写动作都在
 // application 层且只走「新建或 fast-forward」。
 
+import { stableGitRefComponent } from '@/util/gitRef'
+
 export const MISSION_BRANCH_PREFIX = 'aw/mission-'
 const SUFFIX_LIMIT = 9
 
-/** 平台生成的 source branch：`aw/mission-<missionId 小写>`（ULID 字符集是合法 ref 字符）。 */
+/**
+ * Business Case identities are not Git ref components: OS child identities,
+ * for example, contain `:`. Preserve the readable legacy form when it is a
+ * small closed-safe token; otherwise use a full deterministic digest. The
+ * original identity remains in the commit/MR machine marker, so the ref never
+ * becomes the identity authority.
+ */
+export function missionGitRefComponent(missionId: string): string {
+  return stableGitRefComponent(missionId)
+}
+
+/** 平台生成的 source branch：`aw/mission-<合法稳定 component>`。 */
 export function missionSourceBranch(missionId: string): string {
-  return `${MISSION_BRANCH_PREFIX}${missionId.toLowerCase()}`
+  return `${MISSION_BRANCH_PREFIX}${missionGitRefComponent(missionId)}`
 }
 
 /** 从 branch 名反解 mission marker；非本平台命名 ⇒ null。 */
@@ -26,6 +39,27 @@ export function missionMarkerOfBranch(branch: string): string | null {
 /** commit message / MR body 里的机器 marker（§9.3）。 */
 export function missionMachineMarker(missionId: string): string {
   return `[aw-mission:${missionId}]`
+}
+
+export interface DeliveryContextEnvelope {
+  readonly employeeCaseRef: string
+  readonly issueContextRef: string
+  readonly schemaRef: 'issue-handling.v1'
+  readonly workItemRef: string
+}
+
+export function renderDeliveryContextEnvelope(envelope: DeliveryContextEnvelope): string {
+  const line = (value: string): string =>
+    value
+      .replace(/[\r\n]+/g, ' ')
+      .trim()
+      .slice(0, 1_000)
+  return [
+    `Agent-Workflow-Case: ${line(envelope.employeeCaseRef)}`,
+    `Agent-Workflow-Context: ${line(envelope.issueContextRef)}`,
+    `Agent-Workflow-Schema: ${envelope.schemaRef}`,
+    `Work-Item: ${line(envelope.workItemRef)}`,
+  ].join('\n')
 }
 
 export interface ExistingBranchFact {
@@ -88,8 +122,13 @@ export function resolveSourceBranch(input: ResolveSourceBranchInput): SourceBran
 export function candidateCommitMessage(input: {
   readonly missionId: string
   readonly summarySource: string
+  readonly contextEnvelope?: DeliveryContextEnvelope
 }): string {
   const firstLine = input.summarySource.split('\n')[0]!.trim().slice(0, 72)
   const subject = firstLine.length === 0 ? 'apply mission change candidate' : firstLine
-  return `aw: ${subject}\n\nMission: ${input.missionId}\n${missionMachineMarker(input.missionId)}\n`
+  const context =
+    input.contextEnvelope === undefined
+      ? ''
+      : `\n${renderDeliveryContextEnvelope(input.contextEnvelope)}\n`
+  return `aw: ${subject}\n\nMission: ${input.missionId}\n${missionMachineMarker(input.missionId)}${context}\n`
 }

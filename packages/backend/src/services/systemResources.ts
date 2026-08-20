@@ -8,7 +8,7 @@
 // exist in the tables. They are infrastructure, not user-managed rows.
 //
 // RFC-104: a row's built-in identity is the immutable `builtin` column, set
-// ONLY by seedFusionResources and absent from every Create*/Update* HTTP schema
+// ONLY by platform-owned seeders and absent from every Create*/Update* HTTP schema
 // (so no external caller can flip it). This REPLACES the old
 // `owner_user_id === '__system__' && reserved-name` heuristic, which keyed the
 // hide (and any lock built on it) off the owner — so transferring a built-in's

@@ -5,7 +5,7 @@
 // second mission inbox here would recreate two competing task concepts.
 
 import { useQuery } from '@tanstack/react-query'
-import { createRoute, Link } from '@tanstack/react-router'
+import { createRoute, Link, redirect } from '@tanstack/react-router'
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -33,6 +33,9 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/code',
   validateSearch: validateCodeSearch,
+  beforeLoad: () => {
+    throw redirect({ to: '/digital-employees' })
+  },
   component: CodePage,
 })
 

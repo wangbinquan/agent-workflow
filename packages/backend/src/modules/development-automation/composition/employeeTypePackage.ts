@@ -1,0 +1,2456 @@
+// RFC-310 OS revision -- the development employee is a type package, not the
+// owner of the digital-employee runtime. Bootstrap registers this descriptor
+// through digital-employee's public contract; the OS never imports this module.
+
+import { z } from 'zod'
+
+import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
+
+import type {
+  EmployeeTypeCollaborationCodec,
+  EmployeeTypePackageRegistration,
+  EmployeeTypeContextCodec,
+  EmployeeTypeReactionCodec,
+} from '@/modules/digital-employee/public/types'
+
+type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
+  EmployeeTypeReactionCodec &
+  EmployeeTypeCollaborationCodec
+
+interface LocalizedText {
+  readonly 'zh-CN': string
+  readonly 'en-US': string
+}
+
+interface ExactResourceRef {
+  readonly id: string
+  readonly revision: number
+}
+
+interface WorkContract {
+  readonly contractId: string
+  readonly version: number
+  readonly inputSchemaId: string
+  readonly outputSchemaId: string
+  readonly materialSummary: LocalizedText
+  readonly completionStandard: LocalizedText
+  readonly allowedToolKinds: readonly ('agent' | 'workflow' | 'program')[]
+  readonly allowedEffectKinds: readonly string[]
+  readonly requiredConnectionPurpose: string | null
+  readonly workspacePolicy: {
+    readonly mode: 'write' | 'read-only' | 'none'
+    readonly businessChangeOnOk: 'required' | 'forbidden' | 'optional'
+    readonly writablePrefixes: readonly string[]
+    readonly platformWritePrefixes: readonly ('inputs/requirements' | 'pipeline')[]
+  }
+  readonly semanticValidatorId: string
+  readonly fixtureSuiteRef: ExactResourceRef
+}
+
+type ToolImplementation =
+  | { readonly kind: 'agent'; readonly agentRef: ExactResourceRef }
+  | { readonly kind: 'workflow'; readonly workflowRef: ExactResourceRef }
+  | {
+      readonly kind: 'program'
+      readonly runtimeKind: 'bash' | 'node' | 'python'
+      readonly executableArtifactRef: string
+      readonly executableDigest: string
+      readonly parameterValuesRef: string | null
+      readonly runtimeProfileRef: ExactResourceRef
+    }
+
+interface ContractValidationCheck {
+  readonly code: string
+  readonly ok: boolean
+  readonly detail: string
+}
+
+const text = (zh: string, en: string): LocalizedText => ({ 'zh-CN': zh, 'en-US': en })
+const typeRef = { typeId: 'development', revision: 1 } as const
+const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
+
+const scopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('repository'), repositoryId: z.string().min(1).max(200) }).strict(),
+  z
+    .object({ kind: z.literal('repository-group'), repositoryGroupId: z.string().min(1).max(200) })
+    .strict(),
+  z.object({ kind: z.literal('global') }).strict(),
+])
+
+const contract = (
+  contractId: string,
+  input: string,
+  output: string,
+  materialZh: string,
+  materialEn: string,
+  completionZh: string,
+  completionEn: string,
+  allowedToolKinds: WorkContract['allowedToolKinds'],
+  allowedEffectKinds: readonly string[],
+  workspacePolicy: WorkContract['workspacePolicy'],
+  requiredConnectionPurpose: string | null = null,
+): WorkContract => ({
+  contractId,
+  version: 1,
+  inputSchemaId: input,
+  outputSchemaId: output,
+  materialSummary: text(materialZh, materialEn),
+  completionStandard: text(completionZh, completionEn),
+  allowedToolKinds: [...allowedToolKinds],
+  allowedEffectKinds: [...allowedEffectKinds],
+  requiredConnectionPurpose,
+  workspacePolicy,
+  semanticValidatorId: `${contractId}.validator`,
+  fixtureSuiteRef,
+})
+
+const WRITE_REQUIRED = {
+  mode: 'write',
+  businessChangeOnOk: 'required',
+  writablePrefixes: [],
+  platformWritePrefixes: [],
+} as const satisfies WorkContract['workspacePolicy']
+const WRITE_MATERIALS = {
+  mode: 'write',
+  businessChangeOnOk: 'optional',
+  writablePrefixes: [],
+  platformWritePrefixes: ['inputs/requirements'],
+} as const satisfies WorkContract['workspacePolicy']
+const READ_ONLY = {
+  mode: 'read-only',
+  businessChangeOnOk: 'forbidden',
+  writablePrefixes: [],
+  platformWritePrefixes: [],
+} as const satisfies WorkContract['workspacePolicy']
+const READ_PIPELINE = {
+  mode: 'read-only',
+  businessChangeOnOk: 'forbidden',
+  writablePrefixes: [],
+  platformWritePrefixes: ['pipeline'],
+} as const satisfies WorkContract['workspacePolicy']
+const NO_WORKSPACE = {
+  mode: 'none',
+  businessChangeOnOk: 'forbidden',
+  writablePrefixes: [],
+  platformWritePrefixes: [],
+} as const satisfies WorkContract['workspacePolicy']
+
+const contracts: WorkContract[] = [
+  contract(
+    'development.prepare-materials',
+    'development.work-request.v1',
+    'development.requirement-context.v1',
+    '需求正文、附件或外部问题单引用',
+    'Requirement body, attachments, or an external work-item reference',
+    '形成完整、可追溯的需求上下文和仓库文件落点',
+    'A complete traceable requirement context and repository file placement plan exists',
+    ['agent', 'workflow', 'program'],
+    [],
+    WRITE_MATERIALS,
+  ),
+  contract(
+    'development.analyze-implement',
+    'development.requirement-context.v1',
+    'development.change-proposal.v1',
+    '需求上下文、仓库快照和已有诊断证据',
+    'Requirement context, repository snapshot, and existing diagnostics',
+    '输出符合 envelope 的修改提案和验证说明，不执行 Git 或代码平台操作',
+    'Produces an envelope-valid change proposal and verification notes without Git or code-host effects',
+    ['agent', 'workflow'],
+    [],
+    WRITE_REQUIRED,
+  ),
+  contract(
+    'development.prepare-change',
+    'development.change-proposal.v1',
+    'development.change-candidate.v1',
+    '已验证的修改提案',
+    'Validated change proposal',
+    '平台形成可提交的 change candidate',
+    'The platform has produced a committable change candidate',
+    [],
+    ['source-control.candidate'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.publish-mr',
+    'development.change-candidate.v1',
+    'development.merge-request-context.v1',
+    'Change candidate 与目标分支事实',
+    'Change candidate and target branch facts',
+    '平台完成 commit、CAS push 并创建或更新 MR 上下文',
+    'The platform commits, CAS-pushes, and creates or updates the merge-request context',
+    [],
+    ['source-control.commit', 'source-control.push', 'code-host.merge-request.ensure'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.observe-mr',
+    'development.merge-request-context.v1',
+    'development.merge-request-facts.v1',
+    '当前 MR、review、流水线和冲突关注范围',
+    'Current merge request, review, pipeline, and conflict attention',
+    '刷新同一 head 的权威 MR 事实并淘汰过时事件',
+    'Refreshes authoritative same-head MR facts and obsoletes stale events',
+    [],
+    [],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.classify-feedback',
+    'development.review-evidence.v1',
+    'development.problem-set.v1',
+    '未处理的 MR 检视意见和当前代码上下文',
+    'Unhandled merge-request review feedback and current code context',
+    '只产出类型化问题集合，不选择下一动作',
+    'Produces only a typed problem set and does not select the next action',
+    ['agent', 'workflow', 'program'],
+    [],
+    READ_ONLY,
+  ),
+  contract(
+    'development.repair-feedback',
+    'development.problem-set.v1',
+    'development.change-proposal.v1',
+    '类型化检视问题、对应代码和评论上下文',
+    'Typed review problems with corresponding code and comment context',
+    '修复所有分配问题并输出修改 envelope',
+    'Repairs every assigned problem and emits a change envelope',
+    ['agent', 'workflow', 'program'],
+    [],
+    WRITE_REQUIRED,
+  ),
+  contract(
+    'development.collect-pipeline',
+    'development.merge-request-context.v1',
+    'development.pipeline-evidence.v1',
+    'MR head、流水线标识和已注册系统连接',
+    'MR head, pipeline identity, and registered system connection',
+    '程序化取得完整门禁状态，大日志落入 pipeline evidence 目录',
+    'Programmatically obtains complete gate state and stores large logs in pipeline evidence',
+    ['program', 'workflow'],
+    [],
+    READ_PIPELINE,
+  ),
+  contract(
+    'development.classify-pipeline',
+    'development.pipeline-evidence.v1',
+    'development.problem-set.v1',
+    '结构化门禁结果和大日志 artifact 引用',
+    'Structured gate results and large-log artifact references',
+    '产出闭集流水线问题类型，未知项明确进入兜底类型',
+    'Produces closed pipeline problem types with explicit unknown fallback',
+    ['agent', 'workflow', 'program'],
+    [],
+    READ_ONLY,
+  ),
+  contract(
+    'development.repair-pipeline',
+    'development.problem-set.v1',
+    'development.change-proposal.v1',
+    '按错误类型分组的问题、日志引用和当前代码',
+    'Problems grouped by failure type, log references, and current code',
+    '对应槽位工具修复问题并输出修改 envelope',
+    'The bound slot tool repairs the problem and emits a change envelope',
+    ['agent', 'workflow', 'program'],
+    [],
+    WRITE_REQUIRED,
+  ),
+  contract(
+    'development.repair-conflict',
+    'development.conflict-context.v1',
+    'development.change-proposal.v1',
+    '平台准备的冲突现场、父提交和冲突文件集合',
+    'Platform-prepared conflict scene, parent commits, and conflict file set',
+    '只修改授权冲突文件并输出 envelope',
+    'Modifies only authorized conflict files and emits an envelope',
+    ['agent', 'workflow', 'program'],
+    [],
+    WRITE_REQUIRED,
+  ),
+  contract(
+    'development.delegate',
+    'employee.invocation-request.v1',
+    'employee.invocation-result.v1',
+    '目标员工、工作范围和类型化输入 envelope',
+    'Target employee, work scope, and typed input envelope',
+    '异步子员工返回可重验结果，父员工不持有等待进程',
+    'An asynchronous child employee returns a revalidatable result without a waiting parent process',
+    [],
+    ['employee.invocation.create'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.evaluate-ready',
+    'development.merge-request-facts.v1',
+    'development.readiness.v1',
+    '同一 head 的机器门禁、人工门禁和代码平台 mergeability',
+    'Same-head machine gates, human gates, and code-host mergeability',
+    '给出可解释的 ready-to-merge 判定，平台不自动合入',
+    'Produces an explainable ready-to-merge result without automatic merge',
+    [],
+    [],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.wait-merge',
+    'development.readiness.v1',
+    'development.terminal.v1',
+    'ready-to-merge MR 与生命周期关注范围',
+    'Ready-to-merge MR and lifecycle attention',
+    '持续跟踪到外部 merged 或 closed 终态',
+    'Tracks until the external merged or closed terminal state',
+    [],
+    [],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.publish-conflict',
+    'development.change-proposal.v1',
+    'development.merge-request-context.v1',
+    '已通过平台边界校验的冲突修复现场和固定父提交',
+    'A boundary-validated conflict scene with pinned parent commits',
+    '平台生成双父 merge commit、CAS 推送并刷新 MR head',
+    'The platform creates a two-parent merge commit, CAS-pushes it, and refreshes the MR head',
+    [],
+    ['source-control.commit', 'source-control.push'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.prepare-approval',
+    'development.delegated-result.v1',
+    'development.approval-draft.v1',
+    '协同结果、审批类型和审批系统连接',
+    'Collaboration result, approval type, and approval-system connection',
+    '形成严格审批草稿引用；Agent 不持有凭据且不能直接提交',
+    'Produces a strict approval draft reference without credentials or direct submission',
+    ['agent', 'workflow', 'program'],
+    [],
+    READ_ONLY,
+    'approval-gateway',
+  ),
+  contract(
+    'development.submit-approval',
+    'development.approval-draft.v1',
+    'development.approval-receipt.v1',
+    '已校验审批草稿和固定审批系统连接',
+    'Validated approval draft and pinned approval-system connection',
+    '平台按幂等键提交或认领既有审批，并保存 correlation receipt',
+    'The platform submits or adopts the approval by idempotency key and stores its correlation receipt',
+    [],
+    ['external-approval.submit'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.observe-approval',
+    'development.approval-receipt.v1',
+    'development.approval-observation.v1',
+    '审批 correlation、截止时间和最新权威 revision',
+    'Approval correlation, deadline, and latest authoritative revision',
+    '短调用取得 pending、approved、rejected、expired 或 unavailable 终态',
+    'A short call returns pending, approved, rejected, expired, or unavailable',
+    [],
+    ['external-approval.observe'],
+    NO_WORKSPACE,
+  ),
+]
+
+const primaryRole = (
+  labelZh: string,
+  labelEn: string,
+  descriptionZh: string,
+  descriptionEn: string,
+) => [
+  {
+    roleRef: 'primary',
+    label: text(labelZh, labelEn),
+    description: text(descriptionZh, descriptionEn),
+    order: 0,
+    bindingSlots: [
+      {
+        slotRef: 'default',
+        label: text('默认工具', 'Default tool'),
+        description: text('此工作项的确定性执行工具', 'Deterministic executor for this work item'),
+        required: true,
+        cardinality: 'exactly-one' as const,
+      },
+    ],
+  },
+]
+
+const pipelineRepairSlots = [
+  ['compile', '编译错误', 'Compile failures'],
+  ['unit-test', '单元测试错误', 'Unit-test failures'],
+  ['integration-test', '集成测试错误', 'Integration-test failures'],
+  ['static-analysis', '静态检查错误', 'Static-analysis failures'],
+  ['environment', '环境与依赖错误', 'Environment and dependency failures'],
+  ['unknown', '未知错误兜底', 'Unknown failure fallback'],
+] as const
+
+const pipelineFailureTypeSchema = z.enum([
+  'compile',
+  'unit-test',
+  'integration-test',
+  'static-analysis',
+  'environment',
+  'external-dependency',
+  'unknown',
+])
+
+const pipelineRepairPriority = pipelineRepairSlots.map(([slotRef]) => slotRef)
+const pipelineFailurePriority = [...pipelineRepairPriority, 'external-dependency'] as const
+
+const runtimePackage = {
+  descriptor: {
+    schemaVersion: 1,
+    typeRef,
+    displayName: text('开发数字员工', 'Development employee'),
+    description: text(
+      '负责需求开发、问题定位并提交 MR；随后持续看护检视、流水线和冲突，直到 MR 外部合入或关闭。',
+      'Develops requirements, diagnoses problems, opens a merge request, and then watches reviews, pipelines, and conflicts until external merge or close.',
+    ),
+    workScopeContractId: 'development.repository-scope.v1',
+    workScopeAuthoring: {
+      schemaVersion: 1,
+      label: text('负责范围', 'Responsibility scope'),
+      description: text(
+        '决定这名员工可以受理哪些仓库的工作。',
+        'Determines which repositories this employee may accept work for.',
+      ),
+      variants: [
+        {
+          kind: 'repository',
+          label: text('单个仓库', 'Repository'),
+          description: text('只负责一个代码仓库', 'Owns work for one repository'),
+          fields: [
+            {
+              fieldRef: 'repositoryId',
+              label: text('仓库', 'Repository'),
+              description: text('从平台已有仓库中选择', 'Choose an existing platform repository'),
+              inputKind: 'repository-picker',
+              required: true,
+              placeholder: text('请选择仓库', 'Choose a repository'),
+            },
+          ],
+        },
+        {
+          kind: 'repository-group',
+          label: text('仓库组', 'Repository group'),
+          description: text('负责一个仓库组中的工作', 'Owns work for a repository group'),
+          fields: [
+            {
+              fieldRef: 'repositoryGroupId',
+              label: text('仓库组', 'Repository group'),
+              description: text('从平台已有仓库组中选择', 'Choose an existing repository group'),
+              inputKind: 'repository-group-picker',
+              required: true,
+              placeholder: text('请选择仓库组', 'Choose a repository group'),
+            },
+          ],
+        },
+        {
+          kind: 'global',
+          label: text('全局默认', 'Global default'),
+          description: text(
+            '作为没有更具体匹配时的默认员工',
+            'Acts as the default when no narrower scope matches',
+          ),
+          fields: [],
+        },
+      ],
+    },
+    workIntakeAuthoring: {
+      schemaVersion: 1,
+      label: text('交给员工一项工作', 'Give the employee work'),
+      description: text(
+        '可以写正文、上传并指定入库路径，或提交外部需求/问题 ID。',
+        'Provide a body, upload files with repository target paths, or submit an external requirement or issue ID.',
+      ),
+      targetFields: [
+        {
+          fieldRef: 'repositoryId',
+          label: text('目标仓库', 'Target repository'),
+          description: text(
+            '这项工作最终修改并提交到哪个仓库',
+            'Repository that will receive the resulting change',
+          ),
+          inputKind: 'repository-picker',
+          required: true,
+          placeholder: text('请选择目标仓库', 'Choose the target repository'),
+        },
+      ],
+      acceptedKinds: ['body', 'files', 'body-and-files', 'external-id'],
+      body: {
+        label: text('需求或问题正文', 'Requirement or problem body'),
+        description: text(
+          '说明目标、现象和验收条件',
+          'Describe the goal, symptoms, and acceptance criteria',
+        ),
+        placeholder: text('写下需要完成的工作…', 'Describe the work to be completed…'),
+        maxBytes: 2 * 1024 * 1024,
+      },
+      files: {
+        label: text('随代码提交的文件', 'Files committed with the change'),
+        description: text(
+          '每个文件都必须指定仓库相对目标路径。',
+          'Every file must have an explicit repository-relative target path.',
+        ),
+        maxFiles: 200,
+        maxFileBytes: 32 * 1024 * 1024,
+        targetPathRequired: true,
+      },
+      externalId: {
+        label: text('外部需求或问题 ID', 'External requirement or issue ID'),
+        description: text(
+          '由当前工作项配置的取得工具下载对应多文件',
+          'The current work item acquisition tool downloads the referenced multi-file work item',
+        ),
+        placeholder: text('例如 ISSUE-1234', 'For example ISSUE-1234'),
+      },
+    },
+    workContracts: contracts,
+    authoringManifest: {
+      schemaVersion: 1,
+      lifecycleRegions: [
+        {
+          regionId: 'delivery',
+          label: text('需求开发与问题定位', 'Delivery and diagnosis'),
+          description: text(
+            '目标是形成一个可看护的 MR',
+            'Produces a merge request that can be watched',
+          ),
+          order: 0,
+        },
+        {
+          regionId: 'care',
+          label: text('MR 看护与修绿', 'MR care and repair'),
+          description: text(
+            '响应 review、流水线、冲突和生命周期事件，保持随时可合入',
+            'Reacts to review, pipeline, conflict, and lifecycle events to keep the MR merge-ready',
+          ),
+          order: 1,
+        },
+      ],
+      workItems: [
+        {
+          workItemRef: 'prepare-materials',
+          regionId: 'delivery',
+          order: 10,
+          label: text('准备工作材料', 'Prepare work materials'),
+          description: text(
+            '取得正文、附件或外部问题单多文件',
+            'Acquire body, attachments, or external work-item files',
+          ),
+          workContractRef: { contractId: 'development.prepare-materials', version: 1 },
+          materialSummary: contracts[0]!.materialSummary,
+          completionStandard: contracts[0]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '材料取得',
+            'Material acquisition',
+            '取得并规范化工作材料',
+            'Acquire and normalize work materials',
+          ),
+          nextWorkItemRefs: ['analyze-implement'],
+        },
+        {
+          workItemRef: 'analyze-implement',
+          regionId: 'delivery',
+          order: 20,
+          label: text('分析并实现', 'Analyze and implement'),
+          description: text(
+            '理解需求或定位问题并形成代码修改',
+            'Understand the request or diagnose the problem and produce code changes',
+          ),
+          workContractRef: { contractId: 'development.analyze-implement', version: 1 },
+          materialSummary: contracts[1]!.materialSummary,
+          completionStandard: contracts[1]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '实现者',
+            'Implementer',
+            '完成分析和代码实现',
+            'Analyze and implement the change',
+          ),
+          nextWorkItemRefs: ['repair-pipeline', 'prepare-change', 'delegate'],
+        },
+        {
+          workItemRef: 'prepare-change',
+          regionId: 'delivery',
+          order: 30,
+          label: text('形成修改候选', 'Prepare change candidate'),
+          description: text(
+            '平台校验 envelope 和工作区差异',
+            'The platform validates the envelope and workspace delta',
+          ),
+          workContractRef: { contractId: 'development.prepare-change', version: 1 },
+          materialSummary: contracts[2]!.materialSummary,
+          completionStandard: contracts[2]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['publish-mr'],
+        },
+        {
+          workItemRef: 'publish-mr',
+          regionId: 'delivery',
+          order: 40,
+          label: text('提交 MR', 'Publish merge request'),
+          description: text(
+            '平台负责 commit、CAS push 与 MR 创建',
+            'The platform owns commit, CAS push, and MR creation',
+          ),
+          workContractRef: { contractId: 'development.publish-mr', version: 1 },
+          materialSummary: contracts[3]!.materialSummary,
+          completionStandard: contracts[3]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['observe-mr'],
+        },
+        {
+          workItemRef: 'observe-mr',
+          regionId: 'care',
+          order: 50,
+          label: text('关注 MR 状态', 'Observe merge request'),
+          description: text(
+            '自动订阅或主动扫描 review、流水线、冲突和生命周期',
+            'Automatically subscribe to or scan review, pipeline, conflict, and lifecycle state',
+          ),
+          workContractRef: { contractId: 'development.observe-mr', version: 1 },
+          materialSummary: contracts[4]!.materialSummary,
+          completionStandard: contracts[4]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: [
+            'classify-feedback',
+            'collect-pipeline',
+            'repair-conflict',
+            'evaluate-ready',
+            'wait-merge',
+          ],
+        },
+        {
+          workItemRef: 'classify-feedback',
+          regionId: 'care',
+          order: 60,
+          label: text('识别检视问题', 'Classify review feedback'),
+          description: text(
+            '把检视意见转换为闭集问题类型',
+            'Convert review feedback into closed problem types',
+          ),
+          workContractRef: { contractId: 'development.classify-feedback', version: 1 },
+          materialSummary: contracts[5]!.materialSummary,
+          completionStandard: contracts[5]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '问题识别者',
+            'Problem recognizer',
+            '只生产问题集合',
+            'Produces only a problem set',
+          ),
+          nextWorkItemRefs: ['repair-feedback'],
+        },
+        {
+          workItemRef: 'repair-feedback',
+          regionId: 'care',
+          order: 70,
+          label: text('修复检视问题', 'Repair review feedback'),
+          description: text(
+            '按问题集合修改代码并重新发布',
+            'Modify code for the problem set and republish',
+          ),
+          workContractRef: { contractId: 'development.repair-feedback', version: 1 },
+          materialSummary: contracts[6]!.materialSummary,
+          completionStandard: contracts[6]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '问题修复者',
+            'Problem repairer',
+            '修复检视问题',
+            'Repair review problems',
+          ),
+          nextWorkItemRefs: ['prepare-change'],
+        },
+        {
+          workItemRef: 'collect-pipeline',
+          regionId: 'care',
+          order: 80,
+          label: text('取得流水线门禁', 'Collect pipeline gates'),
+          description: text(
+            '调用自建系统程序取得详细门禁和大日志',
+            'Call system-specific programs for detailed gates and large logs',
+          ),
+          workContractRef: { contractId: 'development.collect-pipeline', version: 1 },
+          materialSummary: contracts[7]!.materialSummary,
+          completionStandard: contracts[7]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '门禁采集器',
+            'Gate collector',
+            '程序化取得门禁事实',
+            'Programmatically collect gate facts',
+          ),
+          nextWorkItemRefs: ['classify-pipeline', 'observe-mr'],
+        },
+        {
+          workItemRef: 'classify-pipeline',
+          regionId: 'care',
+          order: 90,
+          label: text('识别流水线问题', 'Classify pipeline failures'),
+          description: text(
+            '从结构化结果和日志引用生产问题集合',
+            'Produce a problem set from structured results and log references',
+          ),
+          workContractRef: { contractId: 'development.classify-pipeline', version: 1 },
+          materialSummary: contracts[8]!.materialSummary,
+          completionStandard: contracts[8]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '问题识别者',
+            'Problem recognizer',
+            '识别流水线失败类型',
+            'Recognize pipeline failure types',
+          ),
+          nextWorkItemRefs: ['repair-pipeline', 'delegate'],
+        },
+        {
+          workItemRef: 'repair-pipeline',
+          regionId: 'care',
+          order: 100,
+          label: text('修复流水线问题', 'Repair pipeline failures'),
+          description: text(
+            '不同错误类型使用对应的 Agent、Workflow 或程序',
+            'Use the bound Agent, Workflow, or program for each failure type',
+          ),
+          workContractRef: { contractId: 'development.repair-pipeline', version: 1 },
+          materialSummary: contracts[9]!.materialSummary,
+          completionStandard: contracts[9]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: [
+            {
+              roleRef: 'repairer',
+              label: text('问题修复', 'Problem repair'),
+              description: text(
+                '每种流水线错误类型绑定一个修复工具',
+                'Bind one repair tool for each pipeline failure type',
+              ),
+              order: 0,
+              bindingSlots: pipelineRepairSlots.map(([slotRef, zh, en]) => ({
+                slotRef,
+                label: text(zh, en),
+                description: text(`处理${zh}`, `Handles ${en.toLowerCase()}`),
+                required: slotRef === 'unknown',
+                cardinality:
+                  slotRef === 'unknown' ? ('exactly-one' as const) : ('zero-or-one' as const),
+              })),
+            },
+          ],
+          nextWorkItemRefs: ['prepare-change', 'delegate'],
+        },
+        {
+          workItemRef: 'repair-conflict',
+          regionId: 'care',
+          order: 110,
+          label: text('修复代码冲突', 'Repair merge conflict'),
+          description: text(
+            '在平台准备的冲突现场中修复授权文件',
+            'Repair authorized files in a platform-prepared conflict scene',
+          ),
+          workContractRef: { contractId: 'development.repair-conflict', version: 1 },
+          materialSummary: contracts[10]!.materialSummary,
+          completionStandard: contracts[10]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '冲突修复者',
+            'Conflict repairer',
+            '修复代码冲突',
+            'Repair merge conflicts',
+          ),
+          nextWorkItemRefs: ['publish-conflict'],
+        },
+        {
+          workItemRef: 'publish-conflict',
+          regionId: 'care',
+          order: 115,
+          label: text('发布冲突修复', 'Publish conflict repair'),
+          description: text(
+            '平台生成 merge commit、CAS 推送并刷新 MR head',
+            'The platform creates the merge commit, CAS-pushes it, and refreshes the MR head',
+          ),
+          workContractRef: { contractId: 'development.publish-conflict', version: 1 },
+          materialSummary: contracts[14]!.materialSummary,
+          completionStandard: contracts[14]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['observe-mr'],
+        },
+        {
+          workItemRef: 'delegate',
+          regionId: 'care',
+          order: 120,
+          label: text('协同其他数字员工', 'Collaborate with another employee'),
+          description: text(
+            '异步调起其他员工并等待事件返回',
+            'Invoke another employee asynchronously and wait for an event result',
+          ),
+          workContractRef: { contractId: 'development.delegate', version: 1 },
+          materialSummary: contracts[11]!.materialSummary,
+          completionStandard: contracts[11]!.completionStandard,
+          nodeKind: 'collaboration',
+          collaborationContractId: 'development.cross-repository-work',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['prepare-approval'],
+        },
+        {
+          workItemRef: 'prepare-approval',
+          regionId: 'care',
+          order: 122,
+          label: text('准备外部审批', 'Prepare external approval'),
+          description: text(
+            '根据协同结果形成审批材料；执行工具不持有审批系统凭据',
+            'Prepare approval material from collaboration results without approval credentials',
+          ),
+          workContractRef: { contractId: 'development.prepare-approval', version: 1 },
+          materialSummary: contracts[15]!.materialSummary,
+          completionStandard: contracts[15]!.completionStandard,
+          nodeKind: 'business-tool',
+          toolRoleGroups: primaryRole(
+            '审批材料准备者',
+            'Approval material preparer',
+            '生成确定性的审批草稿 envelope',
+            'Produce a deterministic approval-draft envelope',
+          ),
+          nextWorkItemRefs: ['submit-approval'],
+        },
+        {
+          workItemRef: 'submit-approval',
+          regionId: 'care',
+          order: 124,
+          label: text('提交外部审批', 'Submit external approval'),
+          description: text(
+            '平台通过已注册审批程序按幂等键提交或认领审批',
+            'Use the registered approval program to submit or adopt an approval idempotently',
+          ),
+          workContractRef: { contractId: 'development.submit-approval', version: 1 },
+          materialSummary: contracts[16]!.materialSummary,
+          completionStandard: contracts[16]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['observe-approval'],
+        },
+        {
+          workItemRef: 'observe-approval',
+          regionId: 'care',
+          order: 126,
+          label: text('等待外部审批', 'Wait for external approval'),
+          description: text(
+            '事件中心按关注范围启动短轮询；无人关注时自动停止',
+            'Event Center runs short observations only while the approval is subscribed',
+          ),
+          workContractRef: { contractId: 'development.observe-approval', version: 1 },
+          materialSummary: contracts[17]!.materialSummary,
+          completionStandard: contracts[17]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['collect-pipeline'],
+        },
+        {
+          workItemRef: 'evaluate-ready',
+          regionId: 'care',
+          order: 130,
+          label: text('判断是否随时可合入', 'Evaluate merge readiness'),
+          description: text(
+            '区分机器门禁、人工门禁和代码平台可合入状态',
+            'Separate machine gates, human gates, and code-host mergeability',
+          ),
+          workContractRef: { contractId: 'development.evaluate-ready', version: 1 },
+          materialSummary: contracts[12]!.materialSummary,
+          completionStandard: contracts[12]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['wait-merge', 'observe-mr'],
+        },
+        {
+          workItemRef: 'wait-merge',
+          regionId: 'care',
+          order: 140,
+          label: text('等待审核合入', 'Wait for committer merge'),
+          description: text(
+            '平台不自动合入，只跟踪到外部 merged 或 closed',
+            'The platform never auto-merges and only tracks external merge or close',
+          ),
+          workContractRef: { contractId: 'development.wait-merge', version: 1 },
+          materialSummary: contracts[13]!.materialSummary,
+          completionStandard: contracts[13]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['observe-mr'],
+        },
+      ],
+    },
+    contextTypes: [
+      {
+        typeId: 'development.issue-handling',
+        schemaVersion: 1,
+        displayName: text('需求或问题上下文', 'Requirement or problem context'),
+        description: text(
+          '保存工作材料、目标和来源追踪',
+          'Stores work materials, target, and provenance',
+        ),
+        projectionFields: [
+          { path: 'subjectRef', label: text('工作对象', 'Work item'), format: 'text' },
+          { path: 'request.body', label: text('需求正文', 'Request body'), format: 'text' },
+          { path: 'request.externalId', label: text('外部编号', 'External ID'), format: 'text' },
+          {
+            path: 'request.uploads',
+            label: text('随代码提交的文件', 'Committed files'),
+            format: 'count',
+          },
+        ],
+      },
+      {
+        typeId: 'development.change-candidate',
+        schemaVersion: 1,
+        displayName: text('修改候选上下文', 'Change candidate context'),
+        description: text(
+          '保存平台独立计算的差异、树身份与发布状态',
+          'Stores the platform-derived delta, tree identity, and publication state',
+        ),
+        projectionFields: [
+          { path: 'changedPaths', label: text('修改文件', 'Changed files'), format: 'count' },
+          { path: 'baselineSha', label: text('基线提交', 'Baseline'), format: 'short-hash' },
+        ],
+      },
+      {
+        typeId: 'development.merge-request',
+        schemaVersion: 1,
+        displayName: text('MR 上下文', 'Merge request context'),
+        description: text(
+          '保存 MR 身份、head 与关注范围',
+          'Stores merge-request identity, head, and attention',
+        ),
+        projectionFields: [
+          { path: 'mergeRequestRef', label: text('MR', 'MR'), format: 'text' },
+          { path: 'headSha', label: text('当前提交', 'Current commit'), format: 'short-hash' },
+          { path: 'readyToMerge', label: text('随时可合入', 'Ready to merge'), format: 'boolean' },
+        ],
+      },
+      {
+        typeId: 'development.pipeline',
+        schemaVersion: 1,
+        displayName: text('流水线上下文', 'Pipeline context'),
+        description: text(
+          '保存门禁摘要和大日志 artifact 引用',
+          'Stores gate summaries and large-log artifact references',
+        ),
+        projectionFields: [
+          { path: 'status', label: text('门禁结果', 'Gate result'), format: 'text' },
+          { path: 'failureTypes', label: text('失败类型', 'Failure types'), format: 'list' },
+          { path: 'headSha', label: text('对应提交', 'Commit'), format: 'short-hash' },
+        ],
+      },
+      {
+        typeId: 'development.problem-set',
+        schemaVersion: 1,
+        displayName: text('待处理问题集合', 'Problem set'),
+        description: text(
+          '保存检视或流水线问题类型、证据引用与尚未处理的工具槽位',
+          'Stores review or pipeline problem types, evidence references, and remaining tool slots',
+        ),
+        projectionFields: [
+          { path: 'problems', label: text('待处理问题', 'Open problems'), format: 'count' },
+          { path: 'remainingTypes', label: text('剩余类型', 'Remaining types'), format: 'list' },
+        ],
+      },
+      {
+        typeId: 'development.delegation',
+        schemaVersion: 1,
+        displayName: text('协同上下文', 'Delegation context'),
+        description: text(
+          '保存跨员工调用与返回结果',
+          'Stores cross-employee invocation and result',
+        ),
+        projectionFields: [
+          { path: 'status', label: text('协作状态', 'Collaboration status'), format: 'text' },
+          { path: 'members', label: text('协作员工', 'Collaborating employees'), format: 'count' },
+        ],
+      },
+      {
+        typeId: 'development.approval',
+        schemaVersion: 1,
+        displayName: text('外部审批上下文', 'External approval context'),
+        description: text(
+          '保存审批草稿、幂等提交回执、correlation、截止时间和最新观察状态',
+          'Stores the approval draft, idempotent submission receipt, correlation, deadline, and latest observed state',
+        ),
+        projectionFields: [
+          { path: 'status', label: text('审批状态', 'Approval status'), format: 'text' },
+          { path: 'externalRequestRef', label: text('审批单', 'Approval request'), format: 'text' },
+          { path: 'deadlineAt', label: text('等待截止', 'Wait deadline'), format: 'timestamp' },
+        ],
+      },
+    ],
+    eventSources: [
+      {
+        sourceId: 'development.work-ingress',
+        version: 1,
+        displayName: text('工作入口', 'Work ingress'),
+        description: text(
+          '接收正文、上传文件或外部问题单取得结果',
+          'Receives body, uploaded files, or acquired external work items',
+        ),
+        observationMode: 'passive',
+        observerProgramRef: null,
+        pollIntervalMs: 60_000,
+        batchSize: 100,
+      },
+      {
+        sourceId: 'development.code-host-state',
+        version: 1,
+        displayName: text('MR 状态观察', 'Merge-request state observation'),
+        description: text(
+          '组合 webhook 与按需短轮询，取得 review、流水线、冲突和生命周期事实',
+          'Combines webhooks with on-demand short polling for review, pipeline, conflict, and lifecycle facts',
+        ),
+        observationMode: 'hybrid',
+        observerProgramRef: { id: 'builtin:development-code-host-observer', revision: 1 },
+        pollIntervalMs: 30_000,
+        batchSize: 100,
+      },
+      {
+        sourceId: 'employee.channel',
+        version: 1,
+        displayName: text('数字员工协同通道', 'Digital employee collaboration channel'),
+        description: text(
+          '传递子员工公开里程碑与完成结果',
+          'Carries child employee milestones and completion results',
+        ),
+        observationMode: 'passive',
+        observerProgramRef: null,
+        pollIntervalMs: 60_000,
+        batchSize: 100,
+      },
+      {
+        sourceId: 'development.approval-state',
+        version: 1,
+        displayName: text('外部审批状态观察', 'External approval state observation'),
+        description: text(
+          '只在有数字员工关注审批时启动已注册程序进行短轮询',
+          'Runs the registered short observer only while an employee subscribes to the approval',
+        ),
+        observationMode: 'hybrid',
+        observerProgramRef: { id: 'builtin:development-approval-observer', revision: 1 },
+        pollIntervalMs: 30_000,
+        batchSize: 100,
+      },
+    ],
+    eventTypes: [
+      {
+        eventTypeId: 'development.work-received',
+        version: 1,
+        subjectTypeId: 'work-request',
+        payloadSchemaId: 'development.work-request.event.v1',
+        displayName: text('收到新工作', 'New work received'),
+        description: text(
+          '有新的需求、问题或上传材料需要处理',
+          'A new requirement, problem, or uploaded material needs handling',
+        ),
+        deliveryClass: 'work',
+        priority: 500,
+        preemptsContinuation: false,
+        sourceRef: { id: 'development.work-ingress', revision: 1 },
+      },
+      {
+        eventTypeId: 'development.review-updated',
+        version: 1,
+        subjectTypeId: 'merge-request',
+        payloadSchemaId: 'development.review.event.v1',
+        displayName: text('MR 检视意见有更新', 'MR review feedback updated'),
+        description: text(
+          '出现新的或发生变化的检视意见',
+          'New or changed review feedback is available',
+        ),
+        deliveryClass: 'review',
+        priority: 900,
+        preemptsContinuation: true,
+        sourceRef: { id: 'development.code-host-state', revision: 1 },
+      },
+      {
+        eventTypeId: 'development.pipeline-updated',
+        version: 1,
+        subjectTypeId: 'merge-request',
+        payloadSchemaId: 'development.pipeline.event.v1',
+        displayName: text('流水线状态有更新', 'Pipeline status updated'),
+        description: text(
+          'MR 当前 head 的门禁或日志发生变化',
+          'Gates or logs changed for the current MR head',
+        ),
+        deliveryClass: 'pipeline',
+        priority: 700,
+        preemptsContinuation: false,
+        sourceRef: { id: 'development.code-host-state', revision: 1 },
+      },
+      {
+        eventTypeId: 'development.conflict-updated',
+        version: 1,
+        subjectTypeId: 'merge-request',
+        payloadSchemaId: 'development.conflict.event.v1',
+        displayName: text('MR 冲突状态有更新', 'MR conflict state updated'),
+        description: text(
+          '目标分支变化导致冲突出现或消失',
+          'Target branch changes introduced or cleared a conflict',
+        ),
+        deliveryClass: 'conflict',
+        priority: 800,
+        preemptsContinuation: true,
+        sourceRef: { id: 'development.code-host-state', revision: 1 },
+      },
+      {
+        eventTypeId: 'development.lifecycle-updated',
+        version: 1,
+        subjectTypeId: 'merge-request',
+        payloadSchemaId: 'development.lifecycle.event.v1',
+        displayName: text('MR 生命周期有更新', 'MR lifecycle updated'),
+        description: text(
+          'MR 已合入、关闭、重新打开或 head 发生变化',
+          'The MR was merged, closed, reopened, or moved to another head',
+        ),
+        deliveryClass: 'terminal',
+        priority: 1_000,
+        preemptsContinuation: true,
+        sourceRef: { id: 'development.code-host-state', revision: 1 },
+      },
+      {
+        eventTypeId: 'development.employee-result',
+        version: 1,
+        subjectTypeId: 'employee-invocation',
+        payloadSchemaId: 'employee.invocation-result.v1',
+        displayName: text('协同员工返回结果', 'Collaborating employee returned a result'),
+        description: text(
+          '被调起的数字员工返回了可重验的里程碑或终态结果',
+          'An invoked employee returned a revalidatable milestone or terminal result',
+        ),
+        deliveryClass: 'collaboration',
+        priority: 600,
+        preemptsContinuation: false,
+        sourceRef: { id: 'employee.channel', revision: 1 },
+      },
+      {
+        eventTypeId: 'development.approval-updated',
+        version: 1,
+        subjectTypeId: 'external-approval',
+        payloadSchemaId: 'development.approval-observation.v1',
+        displayName: text('外部审批状态有更新', 'External approval status updated'),
+        description: text(
+          '审批系统返回了新的权威 revision 或终态',
+          'The approval system returned a new authoritative revision or terminal state',
+        ),
+        deliveryClass: 'approval',
+        priority: 850,
+        preemptsContinuation: true,
+        sourceRef: { id: 'development.approval-state', revision: 1 },
+      },
+    ],
+    attentionRules: [
+      {
+        ruleId: 'watch-merge-request',
+        contextTypeId: 'development.merge-request',
+        whenState: 'active',
+        subscriptions: [
+          {
+            eventTypeId: 'development.review-updated',
+            subjectPath: '$.mergeRequestRef',
+            sourceProfileRef: null,
+            deliveryClass: 'review',
+          },
+          {
+            eventTypeId: 'development.pipeline-updated',
+            subjectPath: '$.mergeRequestRef',
+            sourceProfileRef: null,
+            deliveryClass: 'pipeline',
+          },
+          {
+            eventTypeId: 'development.conflict-updated',
+            subjectPath: '$.mergeRequestRef',
+            sourceProfileRef: null,
+            deliveryClass: 'conflict',
+          },
+          {
+            eventTypeId: 'development.lifecycle-updated',
+            subjectPath: '$.mergeRequestRef',
+            sourceProfileRef: null,
+            deliveryClass: 'terminal',
+          },
+        ],
+      },
+      {
+        ruleId: 'watch-delegation',
+        contextTypeId: 'development.delegation',
+        whenState: 'active',
+        subscriptions: [
+          {
+            eventTypeId: 'development.employee-result',
+            subjectPath: '$.invocationRef',
+            sourceProfileRef: null,
+            deliveryClass: 'collaboration',
+          },
+        ],
+      },
+      {
+        ruleId: 'watch-external-approval',
+        contextTypeId: 'development.approval',
+        whenState: 'active',
+        subscriptions: [
+          {
+            eventTypeId: 'development.approval-updated',
+            subjectPath: '$.subjectRef',
+            sourceProfileRef: null,
+            deliveryClass: 'approval',
+          },
+        ],
+      },
+    ],
+    reactionRules: [
+      {
+        ruleId: 'start-work',
+        eventTypeId: 'development.work-received',
+        requiredContextTypes: ['development.issue-handling'],
+        workItemRef: 'prepare-materials',
+        slotRef: 'default',
+        allowedEffectKinds: [],
+      },
+      {
+        ruleId: 'handle-review',
+        eventTypeId: 'development.review-updated',
+        requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
+        workItemRef: 'classify-feedback',
+        slotRef: 'default',
+        allowedEffectKinds: [],
+      },
+      {
+        ruleId: 'handle-pipeline',
+        eventTypeId: 'development.pipeline-updated',
+        requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
+        workItemRef: 'collect-pipeline',
+        slotRef: 'default',
+        allowedEffectKinds: [],
+      },
+      {
+        ruleId: 'handle-conflict',
+        eventTypeId: 'development.conflict-updated',
+        requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
+        workItemRef: 'repair-conflict',
+        slotRef: 'default',
+        allowedEffectKinds: [],
+      },
+      {
+        ruleId: 'handle-lifecycle',
+        eventTypeId: 'development.lifecycle-updated',
+        requiredContextTypes: ['development.merge-request'],
+        workItemRef: 'observe-mr',
+        slotRef: 'system',
+        allowedEffectKinds: [],
+      },
+      {
+        ruleId: 'handle-employee-result',
+        eventTypeId: 'development.employee-result',
+        requiredContextTypes: ['development.delegation'],
+        workItemRef: 'delegate',
+        slotRef: 'collaboration',
+        allowedEffectKinds: [],
+      },
+      {
+        ruleId: 'handle-approval-update',
+        eventTypeId: 'development.approval-updated',
+        requiredContextTypes: ['development.approval'],
+        workItemRef: 'observe-approval',
+        slotRef: 'system',
+        allowedEffectKinds: ['external-approval.observe'],
+      },
+    ],
+    invocationContracts: [
+      {
+        contractId: 'development.cross-repository-work',
+        inputSchemaId: 'development.delegated-work.v1',
+        resultSchemaId: 'development.delegated-result.v1',
+        milestoneEventTypeIds: ['development.employee-result'],
+      },
+    ],
+  },
+
+  parseWorkScope(input: unknown): unknown {
+    return scopeSchema.parse(input)
+  },
+
+  summarizeWorkScope(scope: unknown, locale: 'zh-CN' | 'en-US'): string {
+    const parsed = scopeSchema.parse(scope)
+    if (parsed.kind === 'global')
+      return locale === 'zh-CN' ? '全局默认范围' : 'Global default scope'
+    if (parsed.kind === 'repository') {
+      return locale === 'zh-CN'
+        ? `仓库：${parsed.repositoryId}`
+        : `Repository: ${parsed.repositoryId}`
+    }
+    return locale === 'zh-CN'
+      ? `仓库组：${parsed.repositoryGroupId}`
+      : `Repository group: ${parsed.repositoryGroupId}`
+  },
+
+  validateContractFixture(input: {
+    readonly contract: WorkContract
+    readonly implementation: ToolImplementation
+  }): readonly ContractValidationCheck[] {
+    const checks: ContractValidationCheck[] = [
+      {
+        code: 'tool-kind-allowed',
+        ok: input.contract.allowedToolKinds.includes(input.implementation.kind),
+        detail: input.contract.allowedToolKinds.includes(input.implementation.kind)
+          ? `${input.implementation.kind} is allowed`
+          : `${input.implementation.kind} is not allowed by ${input.contract.contractId}`,
+      },
+      {
+        code: 'input-schema-declared',
+        ok: input.contract.inputSchemaId.length > 0,
+        detail: input.contract.inputSchemaId,
+      },
+      {
+        code: 'output-schema-declared',
+        ok: input.contract.outputSchemaId.length > 0,
+        detail: input.contract.outputSchemaId,
+      },
+      {
+        code: 'semantic-validator-declared',
+        ok: input.contract.semanticValidatorId.length > 0,
+        detail: input.contract.semanticValidatorId,
+      },
+    ]
+    if (input.implementation.kind === 'program') {
+      checks.push({
+        code: 'program-artifact-digest',
+        ok: /^[a-f0-9]{64}$/.test(input.implementation.executableDigest),
+        detail: input.implementation.executableArtifactRef,
+      })
+    }
+    return checks
+  },
+}
+
+export const developmentEmployeeTypePackage: EmployeeTypePackageRegistration = {
+  descriptorJson: JSON.stringify(runtimePackage.descriptor),
+  parseWorkScopeJson(inputJson) {
+    return JSON.stringify(runtimePackage.parseWorkScope(JSON.parse(inputJson) as unknown))
+  },
+  summarizeWorkScopeJson(scopeJson, locale) {
+    return runtimePackage.summarizeWorkScope(JSON.parse(scopeJson) as unknown, locale)
+  },
+  validateContractFixtureJson(requestJson) {
+    const request = JSON.parse(requestJson) as {
+      readonly contract: WorkContract
+      readonly implementation: ToolImplementation
+    }
+    return JSON.stringify(runtimePackage.validateContractFixture(request))
+  },
+}
+
+const uploadSeedSchema = z
+  .object({
+    artifactRef: z.string().min(1).max(1_000),
+    targetPath: z
+      .string()
+      .min(1)
+      .max(1_000)
+      .refine(
+        (value) =>
+          !value.startsWith('/') &&
+          !/^[a-zA-Z]:[\\/]/.test(value) &&
+          !value.includes('\\') &&
+          value
+            .split('/')
+            .every((segment) => segment !== '' && segment !== '.' && segment !== '..'),
+      )
+      .refine((value) => {
+        const root = value.split('/')[0]?.toLowerCase()
+        return root !== '.git' && root !== PLATFORM_WORKSPACE_DIR
+      }),
+    originalName: z.string().min(1).max(500),
+  })
+  .strict()
+
+const issueHandlingContextSchema = z
+  .object({
+    status: z.enum(['active', 'waiting', 'terminal']),
+    subjectRef: z.string().min(1).max(1_000),
+    repositoryRef: z.string().min(1).max(500),
+    request: z
+      .object({
+        kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
+        body: z
+          .string()
+          .min(1)
+          .max(2 * 1024 * 1024)
+          .nullable(),
+        externalId: z.string().min(1).max(500).nullable(),
+        uploads: z.array(uploadSeedSchema).max(200),
+      })
+      .strict(),
+    materialArtifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const needsBody = value.request.kind === 'body' || value.request.kind === 'body-and-files'
+    const needsFiles = value.request.kind === 'files' || value.request.kind === 'body-and-files'
+    if (needsBody && value.request.body === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'body is required for this intake kind',
+      })
+    }
+    if (needsFiles && value.request.uploads.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'uploads are required for this intake kind',
+      })
+    }
+    if (value.request.kind === 'external-id' && value.request.externalId === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'externalId is required' })
+    }
+  })
+
+const reviewThreadContextSchema = z
+  .object({
+    threadRef: z.string().min(1).max(500),
+    revision: z.string().min(1).max(500),
+    authorClass: z.enum(['human', 'bot', 'self']),
+    resolved: z.boolean(),
+    body: z.string().max(32_000),
+    path: z.string().min(1).max(1_000).nullable(),
+  })
+  .strict()
+
+const mergeRequestContextSchema = z
+  .object({
+    status: z.enum(['active', 'merged', 'closed']),
+    mergeRequestRef: z.string().min(1).max(1_000),
+    headSha: z.string().regex(/^[a-f0-9]{40}$/),
+    issueHandlingContextRef: z.string().min(1).max(500),
+    readyToMerge: z.boolean(),
+    factsHeadSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable()
+      .default(null),
+    targetSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable()
+      .default(null),
+    draft: z.boolean().default(false),
+    mergeableState: z.enum(['mergeable', 'conflict', 'unknown']).default('unknown'),
+    approvalHold: z.boolean().nullable().default(null),
+    unresolvedReviewCount: z.number().int().nonnegative().default(0),
+    reviewThreads: z.array(reviewThreadContextSchema).max(100).default([]),
+    repositoryRef: z.string().min(1).max(500).nullable().default(null),
+    providerMrRef: z.string().min(1).max(500).nullable().default(null),
+    sourceBranch: z.string().min(1).max(500).nullable().default(null),
+    targetBranch: z.string().min(1).max(500).nullable().default(null),
+    webUrl: z.string().url().nullable().default(null),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const actionableReviews = (value.reviewThreads ?? []).filter(
+      (thread) => !thread.resolved && thread.authorClass !== 'self',
+    ).length
+    if (value.unresolvedReviewCount !== actionableReviews) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'unresolvedReviewCount does not match actionable reviewThreads',
+      })
+    }
+  })
+
+const changeCandidateContextSchema = z
+  .object({
+    status: z.enum(['prepared', 'committed', 'published', 'obsolete']),
+    candidateRef: z.string().regex(/^[a-f0-9]{64}$/),
+    baselineSha: z.string().regex(/^[a-f0-9]{40}$/),
+    treeOid: z.string().regex(/^[a-f0-9]{40,64}$/),
+    summarySource: z.string().min(1).max(5_000),
+    changedPaths: z.array(z.string().min(1).max(1_000)).max(5_000),
+    commitSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable(),
+  })
+  .strict()
+
+const pipelineContextSchema = z
+  .object({
+    status: z.enum(['pending', 'passed', 'failed']),
+    mergeRequestRef: z.string().min(1).max(1_000),
+    headSha: z.string().regex(/^[a-f0-9]{40}$/),
+    evidenceArtifactRef: z.string().regex(/^\.agent-workflow\/pipeline\/[a-zA-Z0-9._-]+\//),
+    failureTypes: z.array(pipelineFailureTypeSchema),
+  })
+  .strict()
+
+const problemTypeSchema = z.union([z.literal('review'), pipelineFailureTypeSchema])
+
+const problemSetContextSchema = z
+  .object({
+    status: z.enum(['active', 'resolved']),
+    source: z.enum(['review', 'pipeline']),
+    headSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable(),
+    remainingTypes: z.array(problemTypeSchema).max(20),
+    problems: z
+      .array(
+        z
+          .object({
+            problemId: z.string().min(1).max(500),
+            type: problemTypeSchema,
+            summary: z.string().min(1).max(2_000),
+            evidenceArtifactRefs: z.array(z.string().min(1).max(1_000)).max(100),
+          })
+          .strict(),
+      )
+      .max(500),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const allowed =
+      value.source === 'review' ? new Set(['review']) : new Set(pipelineFailurePriority)
+    const seen = new Set<string>()
+    for (const type of value.remainingTypes) {
+      if (!allowed.has(type)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${type} is invalid for ${value.source}`,
+        })
+      }
+      if (seen.has(type)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate remaining type: ${type}` })
+      }
+      seen.add(type)
+    }
+    if (value.status === 'resolved' && value.remainingTypes.length !== 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'resolved problem set still has remaining types',
+      })
+    }
+    if (value.status === 'active' && value.remainingTypes.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'active problem set has no remaining type',
+      })
+    }
+  })
+
+const delegationContextSchema = z
+  .object({
+    status: z.enum(['requested', 'waiting', 'satisfied', 'failed']),
+    groupRef: z.string().min(1).max(500),
+    joinMode: z.enum(['all', 'any', 'quorum']),
+    quorum: z.number().int().positive().nullable(),
+    members: z
+      .array(
+        z
+          .object({
+            memberRef: z.string().min(1).max(160),
+            invocationRef: z.string().min(1).max(500),
+            targetEmployeeRef: z.string().min(1).max(500),
+            state: z.enum(['waiting', 'satisfied', 'failed', 'detached']),
+            resultArtifactRefs: z.array(z.string().min(1).max(1_000)).max(200),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(16),
+    resultArtifactRefs: z.array(z.string().min(1).max(1_000)).max(200),
+  })
+  .strict()
+
+export const approvalContextSchema = z
+  .object({
+    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'expired', 'unavailable']),
+    approvalType: z.string().min(1).max(120),
+    adapterRef: z
+      .object({ id: z.string().min(1).max(500), revision: z.number().int().positive() })
+      .strict(),
+    validatedDraftRef: z.string().min(1).max(500),
+    subjectRef: z.string().min(1).max(1_000).nullable(),
+    deadlineAt: z.string().datetime({ offset: true }).nullable(),
+    idempotencyKey: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
+    correlationRef: z.string().min(1).max(500).nullable(),
+    externalRequestRef: z.string().min(1).max(500).nullable(),
+    submittedRevision: z.string().min(1).max(500).nullable(),
+    observedRevision: z.string().min(1).max(500).nullable(),
+    evidenceRef: z.string().min(1).max(1_000).nullable(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.status !== 'draft') {
+      for (const [key, field] of [
+        ['subjectRef', value.subjectRef],
+        ['deadlineAt', value.deadlineAt],
+        ['idempotencyKey', value.idempotencyKey],
+        ['correlationRef', value.correlationRef],
+        ['externalRequestRef', value.externalRequestRef],
+        ['submittedRevision', value.submittedRevision],
+      ] as const) {
+        if (field === null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required` })
+        }
+      }
+    }
+  })
+
+const contextSchemas: Record<string, z.ZodTypeAny> = {
+  'development.issue-handling': issueHandlingContextSchema,
+  'development.change-candidate': changeCandidateContextSchema,
+  'development.merge-request': mergeRequestContextSchema,
+  'development.pipeline': pipelineContextSchema,
+  'development.problem-set': problemSetContextSchema,
+  'development.delegation': delegationContextSchema,
+  'development.approval': approvalContextSchema,
+}
+
+const reactionOutputSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    roundRef: z.string().min(1),
+    executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
+    status: z.enum(['ok', 'needs-input', 'blocked']),
+    summary: z.string().min(1).max(5_000),
+    contextPatches: z
+      .array(
+        z
+          .object({
+            contextId: z.string().min(1).max(200).nullable(),
+            contextTypeId: z.string().min(1).max(200),
+            schemaVersion: z.number().int().positive(),
+            expectedRevision: z.number().int().positive().nullable(),
+            lifecycleState: z.enum(['active', 'waiting', 'terminal']),
+            stateJson: z
+              .string()
+              .min(2)
+              .max(2 * 1024 * 1024),
+            artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+          })
+          .strict(),
+      )
+      .max(50),
+    effectSuggestions: z.array(z.string().min(1).max(200)).max(50),
+    artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+  })
+  .strict()
+
+const reactionInputEnvelopeSchema = z.object({ contextsJson: z.string().min(2) }).passthrough()
+
+const reactionContextRecordSchema = z
+  .object({ typeId: z.string().min(1), stateJson: z.string().min(2) })
+  .passthrough()
+
+const initialCaseRequestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    caseRef: z.string().min(1).max(200),
+    employeeRef: z
+      .object({ id: z.string().min(1).max(200), revision: z.number().int().positive() })
+      .strict(),
+    workScopeJson: z.string().min(2),
+    receivedAt: z.number().int().nonnegative(),
+    intake: z
+      .object({
+        kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
+        target: z.record(z.string(), z.string()),
+        body: z.string().min(1).nullable(),
+        externalId: z.string().min(1).nullable(),
+        idempotencyKey: z.string().min(1).max(500),
+        uploads: z.array(
+          z
+            .object({
+              uploadRef: z.string().min(1),
+              blobRef: z.string().min(1),
+              sha256: z.string().regex(/^[a-f0-9]{64}$/),
+              bytes: z.number().int().positive(),
+              originalName: z.string().min(1),
+              targetPath: z.string().min(1),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+  })
+  .strict()
+
+const invokedCaseRequestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    invocationRef: z.string().min(1),
+    parentCaseRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
+    targetEmployeeRef: z
+      .object({ id: z.string().min(1), revision: z.number().int().positive() })
+      .strict(),
+    targetWorkScopeJson: z.string().min(2),
+    inputEnvelopeJson: z.string().min(2),
+    receivedAt: z.number().int().nonnegative(),
+  })
+  .strict()
+
+const invocationOutputRequestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    roundRef: z.string().min(1),
+    executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
+    invocationRef: z.string().min(1),
+    targetEmployeeRef: z
+      .object({ id: z.string().min(1), revision: z.number().int().positive() })
+      .strict(),
+    invocations: z
+      .array(
+        z
+          .object({
+            memberRef: z.string().min(1),
+            invocationRef: z.string().min(1),
+            targetEmployeeRef: z
+              .object({ id: z.string().min(1), revision: z.number().int().positive() })
+              .strict(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(16)
+      .optional(),
+    joinMode: z.enum(['all', 'any', 'quorum']).optional(),
+    quorum: z.number().int().positive().nullable().optional(),
+    contextsJson: z.string().min(2),
+    resultEnvelopeJson: z.string().min(2).optional(),
+    joinResultEnvelopeJson: z.string().min(2).optional(),
+  })
+  .strict()
+
+const employeeChannelResultSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    invocationRef: z.string().min(1),
+    channelRef: z.string().min(1),
+    childCaseRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
+    state: z.enum(['satisfied', 'failed']),
+    terminalKind: z.string().min(1),
+    summary: z.string().min(1),
+    contextRefs: z.array(
+      z.object({ id: z.string().min(1), revision: z.number().int().positive() }).strict(),
+    ),
+    artifactRefs: z.array(z.string().min(1)),
+  })
+  .strict()
+
+const employeeInvocationJoinResultSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    groupRef: z.string().min(1),
+    joinMode: z.enum(['all', 'any', 'quorum']),
+    quorum: z.number().int().positive().nullable(),
+    state: z.enum(['waiting', 'satisfied', 'failed']),
+    summary: z.string().min(1),
+    members: z
+      .array(
+        z
+          .object({
+            memberRef: z.string().min(1),
+            invocationRef: z.string().min(1),
+            targetEmployeeRef: z
+              .object({ id: z.string().min(1), revision: z.number().int().positive() })
+              .strict(),
+            state: z.enum(['waiting', 'satisfied', 'failed', 'detached']),
+            resultEnvelopeJson: z.string().min(2).nullable(),
+          })
+          .strict(),
+      )
+      .min(1),
+    artifactRefs: z.array(z.string().min(1)),
+  })
+  .strict()
+
+export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
+  typeId: 'development',
+  buildInitialCaseJson(requestJson) {
+    const request = initialCaseRequestSchema.parse(JSON.parse(requestJson) as unknown)
+    const scope = scopeSchema.parse(JSON.parse(request.workScopeJson) as unknown)
+    const repositoryRef = request.intake.target.repositoryId
+    if (repositoryRef === undefined || repositoryRef.length === 0) {
+      throw new Error('development work intake requires a target repository')
+    }
+    if (scope.kind === 'repository' && scope.repositoryId !== repositoryRef) {
+      throw new Error('target repository is outside the employee responsibility scope')
+    }
+    const artifactRefs = request.intake.uploads.map((upload) => `employee-input:${upload.blobRef}`)
+    const subjectRef =
+      request.intake.kind === 'external-id'
+        ? `${repositoryRef}:${request.intake.externalId!}`
+        : `case:${request.caseRef}`
+    const primaryContext = issueHandlingContextSchema.parse({
+      status: 'active',
+      subjectRef,
+      repositoryRef,
+      request: {
+        kind: request.intake.kind,
+        body: request.intake.body,
+        externalId: request.intake.externalId,
+        uploads: request.intake.uploads.map((upload) => ({
+          artifactRef: `employee-input:${upload.blobRef}`,
+          targetPath: upload.targetPath,
+          originalName: upload.originalName,
+        })),
+      },
+      materialArtifactRefs: artifactRefs,
+    })
+    const summary =
+      request.intake.kind === 'external-id'
+        ? `收到外部工作 ${request.intake.externalId}`
+        : (request.intake.body?.slice(0, 500) ??
+          `收到 ${request.intake.uploads.length} 个待提交文件`)
+    return JSON.stringify({
+      employeeRef: request.employeeRef,
+      primaryContextTypeId: 'development.issue-handling',
+      primaryContextSchemaVersion: 1,
+      primaryContextState: 'active',
+      primaryContextJson: JSON.stringify(primaryContext),
+      artifactRefs,
+      workSubject: { typeId: 'work-request', subjectRef },
+      initialEventTypeRef: { id: 'development.work-received', revision: 1 },
+      initialEventSourceRef: { id: 'development.work-ingress', revision: 1 },
+      initialEventDedupeKey: request.intake.idempotencyKey,
+      initialEventSummary: summary,
+    })
+  },
+  buildInvokedCaseJson(requestJson) {
+    const request = invokedCaseRequestSchema.parse(JSON.parse(requestJson) as unknown)
+    const scope = scopeSchema.parse(JSON.parse(request.targetWorkScopeJson) as unknown)
+    const parentEnvelope = z
+      .object({ contextsJson: z.string().min(2) })
+      .passthrough()
+      .parse(JSON.parse(request.inputEnvelopeJson) as unknown)
+    const parentContexts = z
+      .array(z.object({ typeId: z.string(), stateJson: z.string() }).passthrough())
+      .parse(JSON.parse(parentEnvelope.contextsJson) as unknown)
+    const parentIssueContext = parentContexts.find(
+      (context) => context.typeId === 'development.issue-handling',
+    )
+    if (parentIssueContext === undefined) {
+      throw new Error('delegated development work requires an issue-handling context')
+    }
+    const parentIssue = issueHandlingContextSchema.parse(
+      JSON.parse(parentIssueContext.stateJson) as unknown,
+    )
+    const repositoryRef =
+      scope.kind === 'repository' ? scope.repositoryId : parentIssue.repositoryRef
+    const primaryContext = issueHandlingContextSchema.parse({
+      ...parentIssue,
+      status: 'active',
+      subjectRef: `invocation:${request.invocationRef}`,
+      repositoryRef,
+    })
+    return JSON.stringify({
+      employeeRef: request.targetEmployeeRef,
+      primaryContextTypeId: 'development.issue-handling',
+      primaryContextSchemaVersion: 1,
+      primaryContextState: 'active',
+      primaryContextJson: JSON.stringify(primaryContext),
+      artifactRefs: parentIssue.materialArtifactRefs,
+      workSubject: {
+        typeId: 'work-request',
+        subjectRef: `invocation:${request.invocationRef}`,
+      },
+      initialEventTypeRef: { id: 'development.work-received', revision: 1 },
+      initialEventSourceRef: { id: 'development.work-ingress', revision: 1 },
+      initialEventDedupeKey: `employee-invocation:${request.invocationRef}`,
+      initialEventSummary: `协同工作 ${request.invocationRef}`,
+    })
+  },
+  buildInvocationStartedOutputJson(requestJson) {
+    const request = invocationOutputRequestSchema.parse(JSON.parse(requestJson) as unknown)
+    const invocations = request.invocations ?? [
+      {
+        memberRef: 'primary',
+        invocationRef: request.invocationRef,
+        targetEmployeeRef: request.targetEmployeeRef,
+      },
+    ]
+    const contexts = z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            revision: z.number().int().positive(),
+            typeId: z.string().min(1),
+          })
+          .passthrough(),
+      )
+      .parse(JSON.parse(request.contextsJson) as unknown)
+    const current = contexts.find((context) => context.typeId === 'development.delegation')
+    return JSON.stringify({
+      schemaVersion: 1,
+      roundRef: request.roundRef,
+      executionNonce: request.executionNonce,
+      status: 'needs-input',
+      summary: `已调起 ${invocations.length} 名协同员工，等待结果`,
+      contextPatches: [
+        {
+          contextId: current?.id ?? null,
+          contextTypeId: 'development.delegation',
+          schemaVersion: 1,
+          expectedRevision: current?.revision ?? null,
+          lifecycleState: 'waiting',
+          stateJson: JSON.stringify({
+            status: 'waiting',
+            groupRef: request.roundRef,
+            joinMode: request.joinMode ?? 'all',
+            quorum: request.quorum ?? null,
+            members: invocations.map((invocation) => ({
+              memberRef: invocation.memberRef,
+              invocationRef: invocation.invocationRef,
+              targetEmployeeRef: `${invocation.targetEmployeeRef.id}@${invocation.targetEmployeeRef.revision}`,
+              state: 'waiting',
+              resultArtifactRefs: [],
+            })),
+            resultArtifactRefs: [],
+          }),
+          artifactRefs: [],
+        },
+      ],
+      effectSuggestions: ['employee.invocation.create'],
+      artifactRefs: [],
+    })
+  },
+  buildInvocationResultOutputJson(requestJson) {
+    const request = invocationOutputRequestSchema.parse(JSON.parse(requestJson) as unknown)
+    if (request.joinResultEnvelopeJson === undefined) {
+      throw new Error('employee invocation join result envelope is missing')
+    }
+    if (request.resultEnvelopeJson !== undefined) {
+      employeeChannelResultSchema.parse(JSON.parse(request.resultEnvelopeJson) as unknown)
+    }
+    const result = employeeInvocationJoinResultSchema.parse(
+      JSON.parse(request.joinResultEnvelopeJson) as unknown,
+    )
+    const contexts = z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            revision: z.number().int().positive(),
+            typeId: z.string().min(1),
+          })
+          .passthrough(),
+      )
+      .parse(JSON.parse(request.contextsJson) as unknown)
+    const delegation = contexts.find((context) => context.typeId === 'development.delegation')
+    if (delegation === undefined) throw new Error('delegation context is missing')
+    return JSON.stringify({
+      schemaVersion: 1,
+      roundRef: request.roundRef,
+      executionNonce: request.executionNonce,
+      status:
+        result.state === 'satisfied'
+          ? 'ok'
+          : result.state === 'waiting'
+            ? 'needs-input'
+            : 'blocked',
+      summary: result.summary,
+      contextPatches: [
+        {
+          contextId: delegation.id,
+          contextTypeId: 'development.delegation',
+          schemaVersion: 1,
+          expectedRevision: delegation.revision,
+          lifecycleState: result.state === 'waiting' ? 'waiting' : 'terminal',
+          stateJson: JSON.stringify({
+            status: result.state,
+            groupRef: result.groupRef,
+            joinMode: result.joinMode,
+            quorum: result.quorum,
+            members: result.members.map((member) => {
+              const envelope =
+                member.resultEnvelopeJson === null
+                  ? null
+                  : employeeChannelResultSchema.parse(
+                      JSON.parse(member.resultEnvelopeJson) as unknown,
+                    )
+              return {
+                memberRef: member.memberRef,
+                invocationRef: member.invocationRef,
+                targetEmployeeRef: `${member.targetEmployeeRef.id}@${member.targetEmployeeRef.revision}`,
+                state: member.state,
+                resultArtifactRefs: envelope?.artifactRefs ?? [],
+              }
+            }),
+            resultArtifactRefs: result.artifactRefs,
+          }),
+          artifactRefs: result.artifactRefs,
+        },
+      ],
+      effectSuggestions: [],
+      artifactRefs: result.artifactRefs,
+    })
+  },
+  validateContextJson(contextTypeId, stateJson) {
+    const schema = contextSchemas[contextTypeId]
+    if (schema === undefined) throw new Error(`unsupported development context: ${contextTypeId}`)
+    return JSON.stringify(schema.parse(JSON.parse(stateJson) as unknown))
+  },
+  resolveAttentionSubjectsJson(contextTypeId, stateJson) {
+    if (contextTypeId === 'development.merge-request') {
+      const state = mergeRequestContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status !== 'active') return '[]'
+      return JSON.stringify(
+        [
+          'development.review-updated',
+          'development.pipeline-updated',
+          'development.conflict-updated',
+          'development.lifecycle-updated',
+        ].map((eventTypeId) => ({
+          eventTypeRef: { id: eventTypeId, revision: 1 },
+          subject: { typeId: 'merge-request', subjectRef: state.mergeRequestRef },
+        })),
+      )
+    }
+    if (contextTypeId === 'development.delegation') {
+      const state = delegationContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status === 'satisfied' || state.status === 'failed') return '[]'
+      return JSON.stringify(
+        state.members
+          .filter((member) => member.state === 'waiting')
+          .map((member) => ({
+            eventTypeRef: { id: 'development.employee-result', revision: 1 },
+            subject: { typeId: 'employee-invocation', subjectRef: member.invocationRef },
+          })),
+      )
+    }
+    if (contextTypeId === 'development.approval') {
+      const state = approvalContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status !== 'pending' || state.subjectRef === null) return '[]'
+      return JSON.stringify([
+        {
+          eventTypeRef: { id: 'development.approval-updated', revision: 1 },
+          subject: { typeId: 'external-approval', subjectRef: state.subjectRef },
+        },
+      ])
+    }
+    return '[]'
+  },
+  selectReactionToolSlotJson(requestJson) {
+    const request = z
+      .object({
+        schemaVersion: z.literal(1),
+        workItemRef: z.string().min(1),
+        defaultSlotRef: z.string().min(1),
+        contextsJson: z.string().min(2),
+      })
+      .strict()
+      .parse(JSON.parse(requestJson) as unknown)
+    if (request.workItemRef !== 'repair-pipeline') {
+      return JSON.stringify({ slotRef: request.defaultSlotRef })
+    }
+    const contexts = z
+      .array(z.object({ typeId: z.string(), stateJson: z.string() }).passthrough())
+      .parse(JSON.parse(request.contextsJson) as unknown)
+    const problemContext = [...contexts]
+      .reverse()
+      .find((context) => context.typeId === 'development.problem-set')
+    if (problemContext === undefined) {
+      return JSON.stringify({ slotRef: request.defaultSlotRef })
+    }
+    const problemSet = problemSetContextSchema.parse(
+      JSON.parse(problemContext.stateJson) as unknown,
+    )
+    const selected = pipelineRepairPriority.find((type) => problemSet.remainingTypes.includes(type))
+    return JSON.stringify({ slotRef: selected ?? request.defaultSlotRef })
+  },
+  assembleReactionInputJson(requestJson) {
+    const request = z
+      .object({
+        schemaVersion: z.literal(1),
+        roundRef: z.string().min(1),
+        executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
+        workItemRef: z.string().min(1),
+        toolSlotRef: z.string().min(1),
+        connectionRef: z
+          .object({ id: z.string().min(1), revision: z.number().int().positive() })
+          .strict()
+          .nullable()
+          .default(null),
+        inputSchemaId: z.string().min(1),
+        outputSchemaId: z.string().min(1),
+        eventJson: z.string().min(2),
+        contextsJson: z.string().min(2),
+      })
+      .strict()
+      .parse(JSON.parse(requestJson) as unknown)
+    const contexts = z
+      .array(z.object({ typeId: z.string(), stateJson: z.string() }).passthrough())
+      .parse(JSON.parse(request.contextsJson) as unknown)
+    const issue = contexts.find((context) => context.typeId === 'development.issue-handling')
+    const executionEnvironment =
+      issue === undefined
+        ? { kind: 'scratch' as const }
+        : {
+            kind: 'cached-repository' as const,
+            cachedRepoId: issueHandlingContextSchema.parse(JSON.parse(issue.stateJson) as unknown)
+              .repositoryRef,
+          }
+    return JSON.stringify({
+      ...request,
+      workInstructions:
+        request.workItemRef === 'prepare-approval'
+          ? 'Produce one development.approval context patch with status=draft. adapterRef must exactly equal connectionRef, approvalType must be gate-change, validatedDraftRef must identify the strict approval draft envelope, and all submission/observation fields must be null. Do not submit the approval and do not access credentials.'
+          : request.workItemRef === 'collect-pipeline'
+            ? 'Write complete gate evidence and large logs under the supplied .agent-workflow/pipeline Case directory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes.'
+            : request.workItemRef === 'classify-pipeline'
+              ? 'Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes drawn only from compile, unit-test, integration-test, static-analysis, environment, external-dependency, unknown. external-dependency means a separately configured digital employee must act first.'
+              : request.workItemRef === 'repair-pipeline'
+                ? `Repair every problem assigned to deterministic slot ${request.toolSlotRef}; do not choose another tool or slot. The platform will mark that slot complete after an ok result.`
+                : request.workItemRef === 'classify-feedback'
+                  ? 'Read development.merge-request.reviewThreads. Upsert development.problem-set with source=review, remainingTypes=["review"], and exactly one typed problem for every unresolved non-self review thread. Each problemId must equal that review threadRef; do not add, omit, or merge threads.'
+                  : request.workItemRef === 'prepare-materials'
+                    ? 'For an external ID, programmatically download all source files into the supplied .agent-workflow/inputs/requirements Case directory. Do not write Git metadata.'
+                    : 'Follow the frozen work contract and return only its deterministic result.',
+      executionEnvironmentJson: JSON.stringify(executionEnvironment),
+    })
+  },
+  validateReactionOutputJson(requestJson) {
+    const request = z
+      .object({
+        schemaVersion: z.literal(1),
+        workItemRef: z.string().min(1),
+        toolSlotRef: z.string().min(1),
+        connectionRef: z
+          .object({ id: z.string().min(1), revision: z.number().int().positive() })
+          .strict()
+          .nullable()
+          .default(null),
+        inputEnvelopeJson: z.string().min(2),
+        outputJson: z.string().min(2),
+      })
+      .strict()
+      .parse(JSON.parse(requestJson) as unknown)
+    const output = reactionOutputSchema.parse(JSON.parse(request.outputJson) as unknown)
+    const inputEnvelope = reactionInputEnvelopeSchema.parse(
+      JSON.parse(request.inputEnvelopeJson) as unknown,
+    )
+    const inputContexts = z
+      .array(reactionContextRecordSchema)
+      .parse(JSON.parse(inputEnvelope.contextsJson) as unknown)
+    const inputState = <T>(typeId: string, schema: z.ZodType<T>): T | null => {
+      const context = inputContexts.find((candidate) => candidate.typeId === typeId)
+      return context === undefined ? null : schema.parse(JSON.parse(context.stateJson) as unknown)
+    }
+    const patchState = <T>(typeId: string, schema: z.ZodType<T>): T | null => {
+      const patch = output.contextPatches.find((candidate) => candidate.contextTypeId === typeId)
+      return patch === undefined ? null : schema.parse(JSON.parse(patch.stateJson) as unknown)
+    }
+    if (output.status === 'ok') {
+      const requiredContextType =
+        request.workItemRef === 'prepare-approval'
+          ? 'development.approval'
+          : request.workItemRef === 'collect-pipeline'
+            ? 'development.pipeline'
+            : request.workItemRef === 'classify-pipeline' ||
+                request.workItemRef === 'classify-feedback'
+              ? 'development.problem-set'
+              : null
+      if (
+        requiredContextType !== null &&
+        !output.contextPatches.some((patch) => patch.contextTypeId === requiredContextType)
+      ) {
+        throw new Error(
+          `${request.workItemRef} must produce a ${requiredContextType} context patch`,
+        )
+      }
+      if (request.workItemRef === 'prepare-materials') {
+        const issue = inputState('development.issue-handling', issueHandlingContextSchema)
+        if (
+          issue?.request.kind === 'external-id' &&
+          patchState('development.issue-handling', issueHandlingContextSchema) === null
+        ) {
+          throw new Error(
+            'prepare-materials must update the issue context for an external work item',
+          )
+        }
+      }
+      if (request.workItemRef === 'prepare-approval') {
+        const approval = patchState('development.approval', approvalContextSchema)
+        if (
+          approval === null ||
+          approval.status !== 'draft' ||
+          request.connectionRef === null ||
+          approval.adapterRef.id !== request.connectionRef.id ||
+          approval.adapterRef.revision !== request.connectionRef.revision
+        ) {
+          throw new Error(
+            'prepare-approval must produce a draft bound to the frozen approval connection',
+          )
+        }
+      }
+      if (request.workItemRef === 'collect-pipeline') {
+        const mergeRequest = inputState('development.merge-request', mergeRequestContextSchema)
+        const pipeline = patchState('development.pipeline', pipelineContextSchema)
+        if (mergeRequest === null || pipeline === null) {
+          throw new Error('collect-pipeline requires the current MR and a pipeline patch')
+        }
+        if (
+          pipeline.mergeRequestRef !== mergeRequest.mergeRequestRef ||
+          pipeline.headSha !== mergeRequest.headSha
+        ) {
+          throw new Error('pipeline evidence does not belong to the current MR head')
+        }
+        if (
+          (pipeline.status === 'passed' && pipeline.failureTypes.length > 0) ||
+          (pipeline.status === 'pending' && pipeline.failureTypes.length > 0) ||
+          (pipeline.status === 'failed' && pipeline.failureTypes.length === 0)
+        ) {
+          throw new Error('pipeline status and failureTypes disagree')
+        }
+      }
+      if (
+        request.workItemRef === 'classify-pipeline' ||
+        request.workItemRef === 'classify-feedback'
+      ) {
+        const problemSet = patchState('development.problem-set', problemSetContextSchema)
+        if (problemSet === null || problemSet.status !== 'active') {
+          throw new Error(`${request.workItemRef} must produce an active problem set`)
+        }
+        const expectedSource = request.workItemRef === 'classify-pipeline' ? 'pipeline' : 'review'
+        if (problemSet.source !== expectedSource) {
+          throw new Error(`${request.workItemRef} produced the wrong problem source`)
+        }
+        const mergeRequest = inputState('development.merge-request', mergeRequestContextSchema)
+        const pipeline = inputState('development.pipeline', pipelineContextSchema)
+        const expectedHead =
+          expectedSource === 'pipeline' ? pipeline?.headSha : mergeRequest?.headSha
+        if (expectedHead === undefined || problemSet.headSha !== expectedHead) {
+          throw new Error(`${request.workItemRef} problem set is stale for the current head`)
+        }
+        const remaining = new Set(problemSet.remainingTypes)
+        if (
+          problemSet.problems.length === 0 ||
+          problemSet.problems.some((problem) => !remaining.has(problem.type)) ||
+          problemSet.remainingTypes.some(
+            (type) => !problemSet.problems.some((problem) => problem.type === type),
+          )
+        ) {
+          throw new Error('problem set types and problem records do not form a closed set')
+        }
+        if (request.workItemRef === 'classify-feedback') {
+          if (mergeRequest === null) {
+            throw new Error('classify-feedback requires the current MR context')
+          }
+          const expectedThreadRefs = (mergeRequest.reviewThreads ?? [])
+            .filter((thread) => !thread.resolved && thread.authorClass !== 'self')
+            .map((thread) => thread.threadRef)
+            .sort()
+          const producedThreadRefs = problemSet.problems.map((problem) => problem.problemId).sort()
+          if (
+            expectedThreadRefs.length !== producedThreadRefs.length ||
+            expectedThreadRefs.some((threadRef, index) => producedThreadRefs[index] !== threadRef)
+          ) {
+            throw new Error(
+              'classify-feedback must cover each unresolved non-self review thread exactly once',
+            )
+          }
+        }
+      }
+    }
+    return JSON.stringify(output)
+  },
+  resolveReactionSettlementJson(requestJson) {
+    const request = z
+      .object({
+        schemaVersion: z.literal(1),
+        workItemRef: z.string().min(1),
+        toolSlotRef: z.string().min(1),
+        outputJson: z.string().min(2),
+        contextsJson: z.string().min(2),
+        allowedNextWorkItemRefs: z.array(z.string().min(1)).max(20),
+      })
+      .strict()
+      .parse(JSON.parse(requestJson) as unknown)
+    const output = reactionOutputSchema.parse(JSON.parse(request.outputJson) as unknown)
+    const contexts = z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            revision: z.number().int().positive(),
+            typeId: z.string().min(1),
+            stateJson: z.string().min(2),
+            artifactRefs: z.array(z.string()).default([]),
+          })
+          .passthrough(),
+      )
+      .parse(JSON.parse(request.contextsJson) as unknown)
+    const settlementPatches = [...output.contextPatches]
+    const proposedState = (typeId: string): unknown => {
+      const patch = [...output.contextPatches]
+        .reverse()
+        .find((candidate) => candidate.contextTypeId === typeId)
+      if (patch !== undefined) return JSON.parse(patch.stateJson) as unknown
+      const current = contexts.find((candidate) => candidate.typeId === typeId)
+      return current === undefined ? null : (JSON.parse(current.stateJson) as unknown)
+    }
+
+    let nextWorkItemRef: string | null =
+      request.allowedNextWorkItemRefs.length === 1 ? request.allowedNextWorkItemRefs[0]! : null
+    const deterministicDefault: Readonly<Record<string, string>> = {
+      'analyze-implement': 'prepare-change',
+    }
+    if (nextWorkItemRef === null) {
+      nextWorkItemRef = deterministicDefault[request.workItemRef] ?? null
+    }
+    let caseState: 'active' | 'waiting' | 'blocked' | 'terminal' = 'active'
+    let terminalKind: string | null = null
+    if (output.status === 'blocked') {
+      caseState = 'blocked'
+      nextWorkItemRef = null
+    } else if (output.status === 'needs-input') {
+      caseState = 'waiting'
+      nextWorkItemRef = null
+    } else if (request.workItemRef === 'collect-pipeline') {
+      const pipeline = pipelineContextSchema.nullable().parse(proposedState('development.pipeline'))
+      if (pipeline?.status === 'pending') {
+        caseState = 'waiting'
+        nextWorkItemRef = null
+      } else {
+        nextWorkItemRef = pipeline?.status === 'passed' ? 'observe-mr' : 'classify-pipeline'
+      }
+    } else if (request.workItemRef === 'classify-pipeline') {
+      const problemSet = problemSetContextSchema.parse(proposedState('development.problem-set'))
+      if (problemSet.status !== 'active') {
+        throw new Error('failed pipeline classification must produce an active problem set')
+      }
+      nextWorkItemRef = problemSet.remainingTypes.includes('external-dependency')
+        ? 'delegate'
+        : 'repair-pipeline'
+    } else if (request.workItemRef === 'repair-feedback') {
+      const current = contexts.find((context) => context.typeId === 'development.problem-set')
+      if (current === undefined) throw new Error('review repair has no problem-set context')
+      const problemSet = problemSetContextSchema.parse(proposedState('development.problem-set'))
+      if (problemSet.source !== 'review') {
+        throw new Error('repair-feedback received a non-review problem set')
+      }
+      const resolved = problemSetContextSchema.parse({
+        ...problemSet,
+        status: 'resolved',
+        remainingTypes: [],
+      })
+      const replacement = {
+        contextId: current.id,
+        contextTypeId: 'development.problem-set',
+        schemaVersion: 1,
+        expectedRevision: current.revision,
+        lifecycleState: 'terminal' as const,
+        stateJson: JSON.stringify(resolved),
+        artifactRefs: current.artifactRefs,
+      }
+      const existingPatch = settlementPatches.findIndex(
+        (patch) => patch.contextTypeId === 'development.problem-set',
+      )
+      if (existingPatch === -1) settlementPatches.push(replacement)
+      else settlementPatches[existingPatch] = replacement
+      nextWorkItemRef = 'prepare-change'
+    } else if (request.workItemRef === 'repair-pipeline') {
+      const current = contexts.find((context) => context.typeId === 'development.problem-set')
+      if (current === undefined) throw new Error('pipeline repair has no problem-set context')
+      const problemSet = problemSetContextSchema.parse(proposedState('development.problem-set'))
+      const remainingTypes = problemSet.remainingTypes.filter(
+        (type) => type !== request.toolSlotRef,
+      )
+      const normalized = problemSetContextSchema.parse({
+        ...problemSet,
+        status: remainingTypes.length === 0 ? 'resolved' : 'active',
+        remainingTypes,
+      })
+      const replacement = {
+        contextId: current.id,
+        contextTypeId: 'development.problem-set',
+        schemaVersion: 1,
+        expectedRevision: current.revision,
+        lifecycleState: remainingTypes.length === 0 ? ('terminal' as const) : ('active' as const),
+        stateJson: JSON.stringify(normalized),
+        artifactRefs: current.artifactRefs,
+      }
+      const existingPatch = settlementPatches.findIndex(
+        (patch) => patch.contextTypeId === 'development.problem-set',
+      )
+      if (existingPatch === -1) settlementPatches.push(replacement)
+      else settlementPatches[existingPatch] = replacement
+      nextWorkItemRef = remainingTypes.length === 0 ? 'prepare-change' : 'repair-pipeline'
+    } else if (request.workItemRef === 'evaluate-ready') {
+      const mergeRequest = mergeRequestContextSchema
+        .nullable()
+        .parse(proposedState('development.merge-request'))
+      if (mergeRequest?.readyToMerge === true) {
+        nextWorkItemRef = 'wait-merge'
+      } else {
+        caseState = 'waiting'
+        nextWorkItemRef = null
+      }
+    } else if (request.workItemRef === 'delegate') {
+      const delegation = delegationContextSchema
+        .nullable()
+        .parse(proposedState('development.delegation'))
+      if (delegation?.status === 'satisfied') {
+        nextWorkItemRef = 'prepare-approval'
+      } else if (delegation?.status === 'failed') {
+        caseState = 'blocked'
+        nextWorkItemRef = null
+      } else {
+        caseState = 'waiting'
+        nextWorkItemRef = null
+      }
+    } else if (request.workItemRef === 'observe-mr' || request.workItemRef === 'wait-merge') {
+      const mergeRequest = mergeRequestContextSchema
+        .nullable()
+        .parse(proposedState('development.merge-request'))
+      if (mergeRequest?.status === 'merged' || mergeRequest?.status === 'closed') {
+        caseState = 'terminal'
+        terminalKind = mergeRequest.status
+        nextWorkItemRef = null
+      } else if (request.workItemRef === 'observe-mr') {
+        caseState = 'active'
+        nextWorkItemRef = 'evaluate-ready'
+      } else {
+        caseState = 'waiting'
+        nextWorkItemRef = null
+      }
+    } else if (request.allowedNextWorkItemRefs.length === 0) {
+      caseState = 'waiting'
+      nextWorkItemRef = null
+    } else if (nextWorkItemRef === null) {
+      throw new Error(
+        `development work item ${request.workItemRef} requires a deterministic continuation rule`,
+      )
+    }
+    if (nextWorkItemRef !== null && !request.allowedNextWorkItemRefs.includes(nextWorkItemRef)) {
+      throw new Error(
+        `development continuation escaped manifest: ${request.workItemRef} -> ${nextWorkItemRef}`,
+      )
+    }
+    return JSON.stringify({
+      schemaVersion: 1,
+      caseState,
+      terminalKind,
+      blockReason: caseState === 'blocked' ? output.summary : null,
+      nextWorkItemRef,
+      summary: output.summary,
+      contextPatches: settlementPatches,
+      effectSuggestions: output.effectSuggestions,
+      artifactRefs: output.artifactRefs,
+    })
+  },
+}

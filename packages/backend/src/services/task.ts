@@ -654,7 +654,7 @@ export interface StartTaskDeps {
    * kind 判别保持 'workflow'（snapshot 自带 output 节点，RFC-243 outcome
    * 投影零新增分支）。与其他 launch payload 互斥（同一任务只属一个执行主体）。
    */
-  digitalEmployeeLaunch?: { actionRunId: string; snapshotJson: string }
+  digitalEmployeeLaunch?: { actionRunId: string; snapshotJson?: string }
   /**
    * RFC-199 T6.5 deterministic race seam. Production callers never set this;
    * backend regressions use it to linearize workflow delete/version writers
@@ -2889,6 +2889,7 @@ async function startTaskImpl(
             deps.digitalEmployeeLaunch?.snapshotJson ??
             JSON.stringify(workflow.definition),
           workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
+          digitalEmployeeRoundId: deps.digitalEmployeeLaunch?.actionRunId ?? null,
           repoPath: headRepoPath,
           // RFC-054 W3-4 KNOWN_GAP fix: never persist the credentialed URL.
           // gitRepoCache has already used the cleartext form to clone (line
