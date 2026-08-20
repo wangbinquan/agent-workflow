@@ -265,6 +265,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -319,6 +325,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -359,6 +371,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -399,6 +417,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -465,6 +489,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -523,6 +553,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -607,6 +643,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -665,6 +707,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -749,6 +797,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -808,6 +862,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -877,6 +937,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
@@ -940,6 +1006,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
     const round1Sess = (
@@ -1014,6 +1086,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
     const allSess = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -1081,6 +1159,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         db: h.db,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        // RFC-313: 本文件的 clarify 用例会让节点**跑满重试**（`mock stubbornly
+        // re-emitting output across followup retries`），而 attempt 上限现在是
+        // (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算把 4 次
+        // 变 8 次、耗时抬约 31%，满载时越过单例 5s 硬顶。本文件锁的是 clarify 派发
+        // 语义、不锁重试形状，置 0 保持原有次数——断言一个字未改。
+        sessionRestartBudget: 0,
       }),
     )
 
