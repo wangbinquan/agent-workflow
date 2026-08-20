@@ -13,7 +13,11 @@
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
+import {
+  runMissionReconcile,
+  stepFailureDetail,
+  type ReconcileDeps,
+} from '../src/modules/development-automation/application/missionReconciler'
 import type {
   AgentActionLauncherPort,
   RepositoryFactsCollectorPort,
@@ -248,5 +252,59 @@ describe('rfc310 pr2 reconciler', () => {
         (h) => h.kind === 'required-gate-not-pass' && h.detail.includes('unknown'),
       ),
     ).toBe(true)
+  })
+})
+
+// 回归锁：`step-failed:*` 的 block 必须把 attempt 回执里的 remediation 上浮到
+// mission 的 blockDetail。少了它，界面上只有一个 `agent-contract-exhausted`，
+// 运维与排查 CI 的人都无从下手——RFC-310 T140 的 windows 腿正是因此定位不了。
+describe('rfc310 step-failed block detail', () => {
+  const depsWith = (
+    stepRuns: ReadonlyArray<Record<string, unknown>>,
+    actionRuns: Record<string, { failureJson: string | null }>,
+  ): ReconcileDeps =>
+    ({
+      store: {
+        getActionRun: (id: string) =>
+          actionRuns[id] === undefined ? null : { id, ...actionRuns[id] },
+      },
+      ports: { playbookSaga: { listStepRuns: () => stepRuns } },
+    }) as unknown as ReconcileDeps
+
+  test('lifts the attempt receipt remediation onto the blocked mission', () => {
+    const deps = depsWith(
+      [
+        { stepId: 'implement', failureCode: 'other', actionRunId: 'run-old' },
+        {
+          stepId: 'implement',
+          failureCode: 'agent-contract-exhausted',
+          actionRunId: 'run-1',
+        },
+      ],
+      {
+        'run-1': {
+          failureJson: JSON.stringify({
+            category: 'agent-contract',
+            code: 'agent-contract-exhausted',
+            remediation: 'opencode exited with code 2',
+          }),
+        },
+      },
+    )
+    expect(stepFailureDetail(deps, 'm-1', 'step-failed:implement:agent-contract-exhausted')).toBe(
+      'opencode exited with code 2',
+    )
+  })
+
+  test('stays null instead of inventing text when there is nothing to say', () => {
+    const noRemediation = depsWith(
+      [{ stepId: 'implement', failureCode: 'x', actionRunId: 'run-1' }],
+      { 'run-1': { failureJson: JSON.stringify({ code: 'x' }) } },
+    )
+    expect(stepFailureDetail(noRemediation, 'm-1', 'step-failed:implement:x')).toBeNull()
+    // 非 step-failed 的 block（配置缺失、端口未接线等）不走这条路径。
+    expect(stepFailureDetail(noRemediation, 'm-1', 'requirement-port-not-wired')).toBeNull()
+    // 台账里没有对应的失败步骤 ⇒ 不猜。
+    expect(stepFailureDetail(noRemediation, 'm-1', 'step-failed:other:x')).toBeNull()
   })
 })

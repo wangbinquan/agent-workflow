@@ -1032,6 +1032,44 @@ async function commitAndHandle(
   return { kind: 'decided', decisionId: inserted.decisionId, selected, handled }
 }
 
+/**
+ * RFC-310 —— `step-failed:<stepId>:<code>` 这类 block 的**人读细节**。
+ *
+ * 决策本体只带 reason 串（它是 canonical decision trace 的一部分，不能塞自由文本），
+ * 而 mission 行的 `blockDetail` 正是给人看的那一栏。少了它，界面上只有一个
+ * `agent-contract-exhausted` —— 运维（和排查 CI 的人）无从下手：真正的话在 attempt
+ * 失败回执的 `remediation` 里（例如 "opencode exited with code 2"）。T140 的 windows
+ * 腿就是因此定位不了。这里按 reason 反查那次失败的 step run → action run → 回执。
+ */
+export function stepFailureDetail(
+  deps: ReconcileDeps,
+  missionId: string,
+  reason: string,
+): string | null {
+  // 用正则而不是 split/join：failureCode 本身可能含 `:`（如 `step-failed:s:a:b`），
+  // 而 `.join(':')` 会被 RFC-254 的平台面守卫当成 PATH 列表拼接（Windows 上 `:` 是
+  // 盘符分隔符）—— 这里拼的是决策 reason，不是路径，索性不用那个形状。
+  const match = /^step-failed:([^:]+):(.+)$/.exec(reason)
+  if (match === null) return null
+  const stepId = match[1]!
+  const failureCode = match[2]!
+  const runs = deps.ports.playbookSaga?.listStepRuns(missionId) ?? []
+  const failed = [...runs]
+    .reverse()
+    .find((run) => run.stepId === stepId && run.failureCode === failureCode)
+  if (failed === undefined || failed.actionRunId === null) return null
+  const actionRun = deps.store.getActionRun(failed.actionRunId)
+  if (actionRun === null || actionRun.failureJson === null) return null
+  let parsed: { remediation?: unknown }
+  try {
+    parsed = JSON.parse(actionRun.failureJson) as { remediation?: unknown }
+  } catch {
+    return null
+  }
+  const remediation = typeof parsed.remediation === 'string' ? parsed.remediation.trim() : ''
+  return remediation === '' ? null : remediation.slice(0, 500)
+}
+
 function blockMission(
   deps: ReconcileDeps,
   missionId: string,
@@ -1197,7 +1235,12 @@ async function handleDecision(
       return 'terminal'
     }
     case 'block': {
-      blockMission(deps, mission.id, selected.reason, null)
+      blockMission(
+        deps,
+        mission.id,
+        selected.reason,
+        stepFailureDetail(deps, mission.id, selected.reason),
+      )
       return 'blocked'
     }
     case 'wait': {
