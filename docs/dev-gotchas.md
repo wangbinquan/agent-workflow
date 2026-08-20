@@ -788,6 +788,19 @@ packages/backend/src/db/schema.ts` 把真实列读一遍，别信自己对形状
 - **一条从未绿过的 spec 不该直接进 CI**：默认关（env 开关）+ spec 顶部写清首跑账与解除条件 +
   把 skip 登记进 `packages/backend/tests/test-suite-policy.test.ts` 的 `ALLOWED_SKIP_COUNTS`，
   比让主干红着诚实，也比悄悄删掉它诚实。
+- **改动既有 spec 的选择器同样要真跑一次，而且「源码层守卫绿了」不能替代它**（2026-08-20 实撞，
+  同一天内我自己踩的第二个形态）。我把视觉套件的 settle 锚点从 `a[href="/code"]` 改成
+  `a[href="/memory"]`，并加了一条源码守卫「spec 里的锚点 == `NAV_GROUPS` 末行的 `to`」——**守卫
+  当场全绿**，因为两边写的都是 `/memory`。但**渲染出来的 href 是 `/memory?tab=all`**（该路由带
+  稳定默认搜索参数），精确匹配的 locator 匹配不到任何元素，于是每个场景都干等满 15s 可见性
+  超时：下一轮 CI 从 `2 failed` 变成 **`26 failed`**，跑时从 1.5 分钟涨到 8.3 分钟。
+  **教训不是「守卫没用」，是守卫锁错了面**：源码层断言只能证明「两处字符串一致」，它**看不见
+  DOM**。凡是改选择器/等待条件的，唯一有效的验证是**用真浏览器跑一次**（本机 `bun run
+  build:binary:e2e` + `bun run test:visual -- --grep '<单个场景>'` 就够，几分钟）。判据也简单：
+  看失败是 `toHaveScreenshot` 还是 `toBeVisible` 超时——前者说明等待条件成立、只是像素不同（正常），
+  后者说明**选择器根本没匹配上**。
+  修法用前缀匹配 `a[href^="/memory"]`，并把「必须是前缀匹配」也写进守卫——否则下一个人会「顺手」
+  改回精确匹配，而那一次同样不会被守卫拦下。
 
 ## `gate:local` 不跑 system mock 用例（2026-08-19 实撞）
 
@@ -984,7 +997,10 @@ RFC-271 批次 I 删了 `POST /api/workflows/import` 与 `GET /api/workflows/:id
 - **integration-opencode 撞新 runner 镜像红 = 环境非代码（2026-07-30 实锤）**：RFC-227 real-binary 用例在 `requireRootOwnedBwrap` 抛 `provider-parent-unsafe`（bwrap 祖先链逐级 root-owned + 无 group/other-write 判定），只发生在 ubuntu-22.04 镜像 **20260726.241.1**；同一 commit（def3d252）attempt 1 新镜像红、attempt 2 旧镜像 20260720.234.2 绿，且 `sealedSubprocess.ts`/该测试/workflow yml 在窗口内零提交——同代码双镜像对照实锤镜像内 bwrap 路径祖先属主/权限漂移。处置：`gh run rerun` 换镜像可过；根治需失败时打印祖先链逐级 uid/mode 诊断后针对性适配（勿放松判定），撞到新镜像的红先按本条归因、别追代码。
 
 - **视觉回归「N 个失败」≠「N 张要改」——同一 test 内的 `toHaveScreenshot` 是短路的**：首个断言失败即中止该 test，后面的截图**根本不会执行**，因此改完第一张，第二张才在下一轮 CI 浮出来。2026-08-01 连踩三次：`table-edge` 遮住 `tasks.png`、`dynamic-workflow-preview-canvas` 遮住 `dynamic-workflow-preview`，每轮只暴露一张，白推三次。改基线前先 `awk '/^  test\(/{t=$0} /toHaveScreenshot\(/{print t" -> "$0}' e2e/visual-regression.spec.ts` 清点同 test 多截图的位置（当前只有 `/tasks list` 与 `dynamic-workflow preview` 两处），把同组的一次性处理完。
-- **视觉回归一轮 CI 只会告诉你**一部分**要改的图——`maxFailures` 会让剩下的「根本没跑」**（2026-08-20 实撞）。RFC-310 的侧栏新增分组让全站基线一起失效，那次 hosted run 的结尾是 `25 failed / **7 did not run** / 13 passed`——`7 did not run` 意味着**没有它们的实拍 PNG 可取**。所以「下载 artifact → 逐张审 → 提基线 → 再跑一次绿」这条 README 流程在**全站级**变更下天然是多轮的，第二轮才会把那 7 张浮出来。别把第一轮的 25 当成全集去估工作量，也别在第一轮绿不了时怀疑自己漏了什么。（与上一条的区别：那条是**同一个 test 内**多张 `toHaveScreenshot` 的短路，这条是**整次 run** 的失败上限。）
+- **视觉回归一轮 CI 只会告诉你一部分要改的图——`test.describe.configure({ mode: 'serial' })` 会让同组后续用例「根本没跑」**（2026-08-20 实撞并两轮验证）。RFC-310 的侧栏新增分组让全站基线一起失效，第一轮 hosted run 结尾是 `25 failed / **7 did not run** / 13 passed`；刷完 25 张后第二轮是 `2 failed / **6 did not run** / 37 passed`。`did not run` 的那些**没有实拍 PNG 可取**，所以「下载 artifact → 逐张审 → 提基线 → 再跑」这条 README 流程在全站级变更下天生是多轮的。
+  **机制不是 `maxFailures`**（本仓 `playwright.config.ts` 与视觉 workflow 都没设过它，我第一次记账时想当然写成了它，是错的）：`e2e/rfc250-visual-states.spec.ts:531` 有 `test.describe.configure({ mode: 'serial' })`，组内 9 个用例**一个失败即中止其余**。第二轮里 `task-wizard-dirty-desktop` 失败 → 同组剩下 **6** 个未跑，与报告数字逐字吻合。
+  **推论**：serial 组里若有 K 张基线要刷，最坏情况就是 **K 轮 CI**（每轮只暴露一张）。估工期时按组内待刷张数算轮数，别按「首轮报了几个 failed」算。判据：`grep -n "describe.configure" e2e/*.spec.ts` 先看哪些视觉 spec 是 serial 的。
+
 - **视觉基线会在阈值之下无声漂移数周，然后被一次正当的大改动一次性引爆**（2026-08-20 查清，与并发 session 联合排查）。门禁是 `maxDiffPixelRatio: 0.002`——1280×800 上等于**允许 2048 像素**。于是任何改动只要落在这个额度内就**永远不会红**，基线也就永远不会被刷：本次 `homepage` 磁贴的 Agents/Workflows 计数早在 08-17（RFC-307 引入示例数据）就从 1/1 变成了 2/3，但那只有 **255 像素**（两个数字的字形）= 0.025%，于是它带着一张 **07-28** 的基线一路绿到 08-19。直到 RFC-310 给侧栏加了一个导航分组（约 5000 像素）把总量顶过阈值，**三周前那笔早该记账的差异才和新差异一起浮出来**。
   同一次里 `inbox-*`(139/156px)、`workflow-editor-1280-inspector-dark`(117px)、`dynamic-workflow-preview`(469px)、`settings`(1190px) 全是同一形态的陈年欠账；只有 `tasks`(9060px = 0.88%) 自己就超阈值，而它恰好也来自同一个 commit。
   **推论一（归因）**：视觉红的差异**不必然全部来自被怀疑的那次改动**。归因前先看基线图自己有多老——`git log -1 --format='%h %ad' --date=short -- e2e/<spec>-snapshots/<scene>-chromium-linux.png`；基线若比嫌疑窗口还老，**整个搜索区间就是错的**。我们两人一共提了三个假设（跨用例累积播种 / 某 commit 改了 harness 启动参数 / `seedDemoContent` 曾经抛异常），全部错在默认答案落在窗口内。

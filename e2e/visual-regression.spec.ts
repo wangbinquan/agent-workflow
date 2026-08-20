@@ -138,7 +138,7 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   // failing one at 09:19 (visual-regression-nightly, 2026-08-16) — one nav row
   // of vertical shift in every scene that shows the sidebar.
   //
-  // ⚠️ This anchor must equal the last `NAV_GROUPS` row. Pinning anything else
+  // ⚠️ This anchor must track the last `NAV_GROUPS` row. Pinning anything else
   // silently reopens the race, and the failure shows up as an unrelated-looking
   // pixel diff in whichever scenes happen to run. It rotted exactly once
   // already: RFC-310 inserted a whole `digitalEmployees` group ahead of the
@@ -147,8 +147,14 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   // produces flakiness rather than a red, `e2e-visual-infrastructure.test.ts`
   // now derives the expected href from `NAV_GROUPS` and fails the moment the
   // nav model and this line disagree.
+  //
+  // Prefix match, not equality: a nav row's rendered href may carry the route's
+  // stable default search params (Memory renders `/memory?tab=all`), so an
+  // exact `[href="/memory"]` matches nothing and every scene sits out the full
+  // 15s visibility timeout before failing. That is not a hypothetical — the
+  // first version of this fix did exactly that and turned 2 red scenes into 26.
   await expect(
-    page.locator('[data-testid^="shell-navigation-"]:visible a[href="/memory"]'),
+    page.locator('[data-testid^="shell-navigation-"]:visible a[href^="/memory"]'),
   ).toBeVisible()
   await page.waitForLoadState('networkidle')
 }

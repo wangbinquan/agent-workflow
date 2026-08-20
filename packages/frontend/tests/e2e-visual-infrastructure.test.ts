@@ -34,10 +34,16 @@ describe('RFC-198 visual infrastructure source gates', () => {
     // The *last* anchor in the settle helper is the one that decides when the
     // sidebar is done; asserting mere presence would stay green while an
     // earlier row silently became the real anchor.
-    const anchors = [...settle.matchAll(/a\[href="([^"]+)"\]/g)].map((m) => m[1])
+    const anchors = [...settle.matchAll(/a\[href\^?="([^"]+)"\]/g)].map((m) => m[1])
     const lastGroup = NAV_GROUPS[NAV_GROUPS.length - 1]!
     const lastRow = lastGroup.subnav[lastGroup.subnav.length - 1]!
     expect(anchors[anchors.length - 1]).toBe(lastRow.to)
+    // Prefix match is mandatory, not stylistic: a row's rendered href may carry
+    // the route's stable default search params (`/memory?tab=all`), and an
+    // exact-href locator then matches nothing — every scene burns the full
+    // visibility timeout and fails. This assertion exists because that is what
+    // happened: 2 red scenes became 26 on the very next run.
+    expect(settle).toContain(`a[href^="${lastRow.to}"]`)
   })
 
   test('visual spec declares exactly 36 counted scenes', () => {
