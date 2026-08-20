@@ -16,6 +16,12 @@ export interface RecordedStatement {
   readonly sql: string
   /** 绑定参数个数——SQLite 有 32766 的硬上限，无界 `IN (…)` 会在生产上直接抛。 */
   readonly params: number
+  /**
+   * 这条语句**取回了多少行**。查询形状对了不代表体量对了：一条走索引、只发一次的
+   * `SELECT` 照样可以把整张表搬进内存（旧的 `listMissionSummaries` 就是），而它在
+   * 只看计划的判据下完全干净。行数是唯一能把「无界结果集」这一类抓出来的信号。
+   */
+  readonly rows: number
 }
 
 export interface StatementRecording {
@@ -52,8 +58,10 @@ export function recordStatements(sqlite: Database): StatementRecording {
         const bound = (value as (...a: unknown[]) => unknown).bind(target)
         if (prop === 'all' || prop === 'get' || prop === 'run' || prop === 'values') {
           return (...args: unknown[]) => {
-            statements.push({ sql, params: countParams(args) })
-            return bound(...args)
+            const out = bound(...args)
+            const rows = Array.isArray(out) ? out.length : out === undefined || out === null ? 0 : 1
+            statements.push({ sql, params: countParams(args), rows })
+            return out
           }
         }
         return bound
@@ -69,7 +77,7 @@ export function recordStatements(sqlite: Database): StatementRecording {
   const origExec = (sqlite.exec as (...a: unknown[]) => unknown).bind(sqlite)
   originals.set('exec', sqlite.exec)
   ;(sqlite as unknown as Record<string, unknown>).exec = (...args: unknown[]) => {
-    statements.push({ sql: String(args[0]), params: Math.max(0, args.length - 1) })
+    statements.push({ sql: String(args[0]), params: Math.max(0, args.length - 1), rows: 0 })
     return origExec(...args)
   }
 
