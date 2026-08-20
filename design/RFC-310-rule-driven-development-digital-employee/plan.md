@@ -388,7 +388,10 @@ markers` code 与 envelope 成员 PR-4 已备。归 PR-8 或专项。
   claim 前中断 adopt 不复制 / reply dispatched 中断单次重放）。**抓出并修复一个真实恢复缺陷**：链自治
   effect 悬挂 dispatched 时 cells/guards 不变 ⇒ 决策去重吞掉 handler ⇒ 永久卡死；修复=去重命中但存在
   悬挂自治 effect 时照常执行 handler（幂等重放）。
-- **T81/T82 遗留（🚧）**：reopen→新 generation 链、webhook out-of-order 显式矩阵。
+- **T81/T82 遗留（🚧）**：reopen→新 generation 链。**webhook out-of-order 显式矩阵已补**
+  （2026-08-20，`rfc310-pr7-webhook-order-matrix.test.ts`）：同一个受控 code host 跑按序 /
+  乱序迟到 / 重放三种投递序，断言收敛终态一致、迟到序不对陈旧评论派 reply、重放只被接受一次；
+  变异实证——把采集结果钉死成 `active`（模拟「信 payload」）用例立刻红。
 
 ## 10. PR-8：完整配置与活动 UI
 
@@ -828,14 +831,15 @@ delivery-key 唯一性（`rfc310-pr2-mission-store.test.ts`）；迟到 receipt 
 
 **hosted CI 实跑结果（2026-08-19 `cc615ed1`）**：两条旅程在 **ubuntu 与 macos 两格全绿**；
 **windows 一格红**——E2E-B 的 Agent 动作以 `step-failed:implement-parent-change:agent-contract-exhausted`
-收场，**原因尚未定位**：CI 日志不带 stub 的 stderr，而 mission 的 `blockDetail` 目前是 `null`。
+收场，**原因尚未定位**：CI 日志不带 stub 的 stderr，而当时 mission 的 `blockDetail` 恒为 `null`（该缺口已于 2026-08-20 修复，见下）。
 处置：该 spec 显式 `test.skip(process.platform === 'win32', …)` 并登记进 `ALLOWED_SKIP_COUNTS`，
 解除条件写在 spec 顶部（拿到 stub stderr 后定位）。E2E-A 在 windows 上是绿的。
 
 顺带记两条这次暴露的**可观测性缺口**（不阻塞，但下一轮谁碰谁顺手修）：
-1. playbook 的 `step-failed:*` block 只带 reason 串，attempt 失败里的 `remediation`
-   （如 "opencode exited with code 2"）与 stderr tail 都没有上浮到 `blockDetail` ⇒ 运维在界面上
-   看到这个 block **无从下手**，本次 windows 定位也因此卡住。
+1. ~~playbook 的 `step-failed:*` block 只带 reason 串~~ **已修（2026-08-20）**：
+   `stepFailureDetail` 按 reason 反查失败的 step run → action run → attempt 回执，把
+   `remediation`（如 "opencode exited with code 2"）落到 `blockDetail`；取不到就保持 null
+   而不是编一句。下一次 windows 腿再红时，mission 详情与 e2e 报错里会直接带上原因。
 2. e2e 的 system mock `seedCodeHost` 对同名项目返回 500 `already seeded`，Playwright 重试那一轮会
    先死在 beforeAll 上、把真正的失败盖掉。已改为每次运行生成新项目路径（两条 spec 都改了）。
 
