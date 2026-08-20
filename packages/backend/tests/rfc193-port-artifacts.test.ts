@@ -517,6 +517,12 @@ async function runToEnd(h: Harness, taskId: string): Promise<void> {
     taskId,
     appHome: h.appHome,
     binaryOverride: ['bun', 'run', h.mockPath],
+    // RFC-313: 本文件锁的是 archive-at-emit 的产物语义，与重试形状无关；而 attempt
+    // 上限现在是 (1+defaultNodeRetries)×(1+sessionRestartBudget)，默认的会话重启预算
+    // 会让「永远失败」的用例从 4 次变 8 次、撑爆 5s 的用例超时预算（case 3b 实撞：
+    // RFC-313 落地前 22 pass、落地后该条超时，A/B 各 3 次稳定复现）。置 0 关掉升级，
+    // 断言一个字未改。
+    sessionRestartBudget: 0,
   })
 }
 

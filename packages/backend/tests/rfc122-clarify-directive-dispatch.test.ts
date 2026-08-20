@@ -583,14 +583,42 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     // RFC-287 T7 改锚：重试循环从 `for (let attempt = retryIndex; …)` 变成骨架驱动
     // ——每轮调一次 `runOneAttempt(k)`。「在循环体内」于是等价于「在该函数体内」。
     // 不变量与射程都没变，只是边界的名字变了。
+    // RFC-313 改锚（**意图不变，判据变强**）：本条原先取 `indexOf` 的**首个**命中，
+    // 隐含「全文件只有一个读点」。RFC-313 在 `keepIf`（decideFollowupForRetry）里新增
+    // 了第二个合法读点——它同样是**每轮重试各读一次**，用来判断「本轮有没有待处理的
+    // STOP 翻转」以压制会话升级（否则链顶恰逢翻转时升级会抢先、丢树+扣预算）。首个命中
+    // 于是落在 runOneAttempt 之前，原写法转红，但不变量并未失守。
+    // 新判据逐点定位：**每一个**读点都必须落在某个 per-attempt 区域内（机身函数，或
+    // 每轮重试都会被调用的 keepIf 回调），任何落在两者之外的读点即为「提到边界外缓存」
+    // ——那正是本条要拦的回归，而这个版本比「首个命中在某位置之后」拦得更严。
     const attemptFnIdx = src.indexOf('const runOneAttempt = async')
-    const readIdx = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)')
+    const keepIfIdx = src.indexOf('const decideFollowupForRetry = async')
+    const prepareIdx = src.indexOf('const prepareRetryAttempt = async')
     expect(attemptFnIdx, '每 attempt 机身函数应存在（重试边界）').toBeGreaterThan(0)
-    expect(readIdx).toBeGreaterThan(attemptFnIdx)
+    expect(keepIfIdx, 'keepIf 回调应存在（每轮重试各调一次）').toBeGreaterThan(0)
+    const reads: number[] = []
+    for (let i = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)'); i >= 0; ) {
+      reads.push(i)
+      i = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)', i + 1)
+    }
+    expect(reads.length, '至少要有一个 directive 读点').toBeGreaterThan(0)
+    expect(
+      reads.some((i) => i > attemptFnIdx),
+      '机身函数内必须仍有一个读点（每 attempt 重读最新 toggle）',
+    ).toBe(true)
+    for (const i of reads) {
+      const inAttemptBody = i > attemptFnIdx
+      const inKeepIf = i > keepIfIdx && i < prepareIdx
+      expect(inAttemptBody || inKeepIf, `directive 读点 @${i} 落在 per-attempt 区域之外`).toBe(
+        true,
+      )
+    }
     // 反向：读点不得落在窗口外的一次性前奏里（那正是「提到循环外缓存」的形状）。
     const windowIdx = src.indexOf('const windowOut = await runAssembly<')
     expect(windowIdx).toBeGreaterThan(0)
-    expect(readIdx).toBeLessThan(windowIdx)
+    // RFC-313 改锚：由「那一个读点」推广到「每一个读点」——两个合法读点都在回调
+    // 定义里（keepIf / 机身函数），都排在 runAssembly 调用点之前。
+    for (const i of reads) expect(i).toBeLessThan(windowIdx)
   })
 
   test('same-session follow-up is bypassed when the STOP toggle flips the mode', () => {

@@ -21,6 +21,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { countAgentTextEvents, runTask } from '../src/services/scheduler'
+import { mintNodeRun } from '../src/services/nodeRunMint'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
 import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 
@@ -328,15 +329,15 @@ describe('RFC-313 会话升级', () => {
     // 的计数恒 ≥1 ⇒ RFC-042「模型必须说过话」的判据当场失效 ⇒ 一个一个字都没吐的
     // 会话会被错误地续跑（复用脏树 + 旧 nonce + 短提示），而正解是换新会话重来。
     const taskId = await seedTask(h, singleAgentDef(await seedAgent(h.db, 'a1')))
-    const runId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: runId,
+    // 用仓内既有的铸行原语而不是手写 INSERT：手写行既缺必填列（nodePath 等），
+    // 也会与真实铸行逐渐漂移。
+    const runId = await mintNodeRun(h.db, {
       taskId,
       nodeId: 'n1',
       status: 'failed',
+      cause: 'process-retry',
       retryIndex: 0,
       iteration: 0,
-      createdAt: Date.now(),
     })
     const ev = (payload: string) => ({
       nodeRunId: runId,

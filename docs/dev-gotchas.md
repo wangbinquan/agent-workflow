@@ -852,6 +852,12 @@ CI 红一格才知道。已把它补进 quality 车道（约 18s），车道断�
 - 改动**执行策略默认值**时，先 `grep -rn "defaultNodeRetries" e2e/ packages/*/tests` 把所有
   显式钉住该策略的地方列出来——它们钉住它，正是因为要断言次数；逐处补上新旋钮的中性值
   （这里是 `sessionRestartBudget: 0`），断言一个字都不用动。
+- **受影响的不只是「断言次数」的用例，还有带时间预算的用例**（RFC-313 实现门期实撞）。
+  `rfc193-port-artifacts` 的 case 3b 一个次数都没断言，但它让一个「永远失败」的节点跑到底、
+  并给了 5s 的用例超时；attempt 从 4 变 8 直接撞爆它。更阴的是它**不是稳定红**：第一轮
+  隔离门禁里它侥幸跑绿了，下一轮才红。**归属判据用 A/B 而不是重跑**：在改动落地前的
+  commit 上开一棵 pin worktree（记得先 `bun install`，否则报的是 `Cannot find package`
+  而不是真实结果），同一条用例各跑 3 次：落地前 3/3 绿、落地后 3/3 红，归属就没有争议了。
 - 推之前对这类改动**本地实跑一次相关 e2e**：`bun run build:binary:e2e` 后
   `bunx playwright test <spec> --project=chromium -g "<用例名>"`，两分钟的事，比让 CI 替你发现快得多。
 

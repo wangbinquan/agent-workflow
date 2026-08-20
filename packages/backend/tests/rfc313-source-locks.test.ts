@@ -81,6 +81,8 @@ describe('RFC-313 源码层锁', () => {
     expect(scheduler).toContain(
       'notLike(nodeRunEvents.payload, `${FRAMEWORK_AUDIT_EVENT_PREFIX}%`)',
     )
-    expect(occurrences(scheduler, 'FRAMEWORK_AUDIT_EVENT_PREFIX')).toBe(2) // 定义 + 唯一用点
+    // 同样数**真实代码用点**而不是文本命中——doc 里的 {@link} 提及是正常的。
+    expect(occurrences(scheduler, 'export const FRAMEWORK_AUDIT_EVENT_PREFIX')).toBe(1)
+    expect(occurrences(scheduler, '${FRAMEWORK_AUDIT_EVENT_PREFIX}%')).toBe(1)
   })
 })
