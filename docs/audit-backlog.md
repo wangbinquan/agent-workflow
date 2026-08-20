@@ -1988,8 +1988,31 @@ expect(commitRow!.status).toBe('done')` → `failed`，与 2026-08-14 记录的 
 **还有一处独立缺陷（不解决竞态也该修）**：git 的「nothing to commit」是 **exit 1 +
 提示走 stdout + stderr 为空**，而 `repositoryCommit.ts:236` 只判 `exitCode !== 0` 就一律
 按硬失败处置 ⇒ 一次良性的空提交被报成 `git commit failed`（正是 CI 日志里那条
-`stderr=` 为空的 WARN）。对**自动**提交推送而言「没东西可提交」本就不是错误。单修这一条
-就能把这条间歇红降级成 no-op，且与竞态的修法互不冲突。
+`stderr=` 为空的 WARN）。对**自动**提交推送而言「没东西可提交」本就不是错误。
+
+**这条 git 行为的复现命令（2026-08-19 实测，别再重推一遍）**：
+
+```sh
+d=$(mktemp -d); cd "$d"; git init -q .; git config user.email t@t; git config user.name t
+echo x > a.txt; git add a.txt; git commit -q -m first
+git commit -m empty 2>/tmp/e.err 1>/tmp/e.out; echo "exit=$?"   # exit=1
+wc -c < /tmp/e.err        # 0 ← stderr 确实为空
+head -2 /tmp/e.out        # On branch main / nothing to commit, working tree clean
+```
+
+**必须用文件捕获，别用 `2>&1 1>/dev/null | wc -c` 那个顺手写法**：zsh 的 MULTIOS 会让它把
+**stdout 也漏进管道**，于是「stderr 字节数」量出 53 而不是 0，看起来像是推翻了上面的结论。
+我第一版复现命令就是这么写的，跑出 53 才发现说谎的是命令不是事实（bash 下行为又不同，
+所以这个坑跨 shell 不一致、更该避开）。
+
+**但「单修这条即可止血、与竞态修法互不冲突」这个判断有异议，接手前先读**（2026-08-19，
+由 RFC-310 session 提出，本条原作者与转述者均认同其分量）：把 `exitCode=1 + 空 stderr`
+判成 no-op，与「commit 前复检工作树」**是同一个决策的两半**。单修前者确实能降级这条间歇
+红，**但它同时把「我以为有东西要提交、结果没有」从可见变成不可见——而那正是竞态留下的
+唯一痕迹**。若竞态的正解是「commit 前重新 `status --porcelain`，仍干净就明确走 no-op
+分支」，那么 `:236` 那条判断根本不该放行空提交，而是**应当永远不被触发**。结论：这两条
+宜由**同一个人在同一刀里**决定，接手竞态的人顺带处置 `:236` 才是对的形状；单独把 `:236`
+改成 no-op 属于**以牺牲可观测性换绿**，不推荐作为独立动作。
 
 **决定性实验（未跑，留给接手的人）**：保留同步点、把会话 1 的延迟从 1500ms 调到 0，
 并在 `git commit` 前后各打一次 `git status --porcelain` + `git log -1`。若会话 0 报的
