@@ -2157,3 +2157,16 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
   两条路：①给 Windows 加一条视觉 job（成本是 runner 时间 + 又一份要维护的基线）；②删掉这 43 张并在
   `playwright.config.ts` 里把 win32 排除掉，让"没有基线"成为显式事实而不是沉默的存量。
   **这是仓级取舍，不属于任何单个 RFC**，故登记在此。RFC-311 原本挂着「刷 win32 基线」一项，据此销账。
+
+- ⏳ **RFC-310 的验证程序 `repo:<path>` 在 Windows 上不可执行——需要一套解释器策略**（2026-08-20 查证，
+  RFC-310 windows 腿定位时转出）。判据：`modules/development-automation/infrastructure/verificationRunner.ts`
+  的 `createRepoScriptResolver` 把 `repo:<相对路径>` 解析成 workspace 内绝对路径后返回 `argv: [abs]`
+  ——**直接 spawn，不带解释器**。POSIX 上靠 shebang 生效；Windows 没有 shebang 语义，`.sh` 根本不可执行
+  （只有 `.exe`/`.bat`/`.cmd` 能这么起）。实证：RFC-310 的全旅程 E2E 在 windows 上走到
+  `selected.kind = 'run-verification'` 之后就停住不动（决策轨迹实测，mission 停在同一 revision、
+  同一 `upload-fulfillment-pending` hold，首跑与 retry 一致）。
+  三条路：①profile 里显式声明解释器（`interpreterRef` / argv 前缀），跨平台但要动 schema 与既有 profile；
+  ②Windows 上按 shebang 找 bash（本仓已有「从 git 推导 bash」的既成做法，见 dev-gotchas §跨平台），
+  隐式但不改契约；③明确声明验证程序是 POSIX-only 能力，在文档与 UI 上说清楚。
+  **这是产品能力取舍，需要用户裁决**，故未自行选路。相关的 E2E-B 已带着这条判据在 win32 上停跑
+  （解除条件写在 `e2e/rfc310-digital-employee-journey.spec.ts` 顶部）；同 shard 的 E2E-A 在 windows 上是绿的。

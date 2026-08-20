@@ -62,10 +62,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // Explicitly billed/provider-backed and activated only by the local
   // pre-release package script; ordinary CI must keep both drivers skipped.
   'e2e/release-runtime.spec.ts#skip': 2,
-  // RFC-310 T132/T140-B 的 windows 停跑已于 2026-08-20 解除：当初写下的解除条件
-  // （「给 block 带上 remediation 后的下一轮 CI」）在 `239e8237` 已经满足，spec 的
-  // 等待器现在会把 `blockCode: blockDetail` 一起抛出来。继续停跑等于用 skip 掩盖
-  // 一个现在能查清的问题。
+  // RFC-310 T132/T140-B 的 windows 停跑于 2026-08-20 先解除、连查三轮查到底后**重新
+  // 停跑**，理由已从「原因尚未定位」换成一条结构性判据：本 spec 上传的验证程序是
+  // `#!/bin/sh` 脚本、还断言其 git mode 为 `100755`，而平台解析 `repo:<path>` 后是
+  // 直接 spawn 该路径（不带解释器）——**这套夹具本身只在 POSIX 上成立**，即便平台将来
+  // 支持 windows 的验证程序也一样。解除条件写在 spec 顶部（换跨平台夹具 + 去掉 100755
+  // 断言）。查证链路与产品问题见 `docs/audit-backlog.md`。
+  'e2e/rfc310-digital-employee-journey.spec.ts#skip': 1,
   'e2e/rfc250-visual-states.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,

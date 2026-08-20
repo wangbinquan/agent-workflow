@@ -905,6 +905,22 @@ windows 慢；同 shard 的 E2E-A（零配置上手）在 windows 上是**绿**�
 决策轨迹才说明「reconciler 为什么没派下一步」。本机复现不了（只在 hosted windows 上出现）、
 验收 VM 当前也连不上，所以仍走「补一处观测 → 看下一轮」这条路，与前三轮同法。
 
+**决策轨迹给出了答案（`72eda83b` 实跑）**：十条 guard **全 pass**（含 `upload-fulfillment`），
+两条规则都 not-matched，`selected = { kind: 'run-verification', profileRef: '…@1' }`
+——也就是说 reconciler **派了活**，卡住的是验证本身。根因结构性：本 spec 上传的验证程序是
+`#!/bin/sh` 脚本、且断言其 git mode 为 `100755`，而平台解析 `repo:<path>` 之后是**直接 spawn
+该路径**（`infrastructure/verificationRunner.ts` 的 `createRepoScriptResolver` 返回
+`argv: [abs]`，不带解释器）。POSIX 上靠 shebang 生效；Windows 没有 shebang 语义，`.sh` 不可执行，
+`100755` 也不是 Windows 检出的概念。
+
+**处置（限定一轮兑现）**：E2E-B 在 win32 上**重新停跑**，但停跑理由已从「原因尚未定位」换成一条
+结构性判据——**这套夹具本身只在 POSIX 上成立**，即便平台将来支持 Windows 的验证程序也一样；解除
+条件写死在 spec 顶部（换跨平台验证程序夹具 + 去掉 `100755` 断言）。平台该不该支持 Windows 的
+`repo:` 验证程序（需要一套解释器策略：显式 `interpreterRef` / 按 shebang 找 bash / 明确声明
+POSIX-only）是**产品能力取舍**，已登记 `docs/audit-backlog.md` 待用户裁决，未自行选路。
+同 shard 的 E2E-A（零配置上手）在 windows 上是**绿**的——停的是这条 spec 的这套夹具，
+不是「数字员工在 windows 上不能用」。
+
 顺带记两条这次暴露的**可观测性缺口**（不阻塞，但下一轮谁碰谁顺手修）：
 1. ~~playbook 的 `step-failed:*` block 只带 reason 串~~ **已修（2026-08-20）**：
    `stepFailureDetail` 按 reason 反查失败的 step run → action run → attempt 回执，把

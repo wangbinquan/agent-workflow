@@ -301,6 +301,13 @@
 > 首跑与 retry 停在同一 revision、同一 hold（两条不同 mission）⇒ 确定性停机而非 windows 慢；
 > 同 shard 的 E2E-A 在 windows 上是绿的。已给 spec 的 `waitFor` 加 `diagnose`，超时时额外取
 > `decision-trace` 拼进异常——mission JSON 只说明「它停了」，轨迹才说明「为什么没派下一步」。
+> **轨迹给出了答案**（`72eda83b`）：十条 guard 全 pass、`selected = run-verification` ⇒ reconciler
+> 派了活，卡住的是验证本身。根因结构性：spec 上传的验证程序是 `#!/bin/sh` 脚本且断言 git mode
+> `100755`，而平台解析 `repo:<path>` 后**直接 spawn 该路径、不带解释器**（`verificationRunner.ts`
+> 的 `createRepoScriptResolver`）——Windows 无 shebang 语义。**E2E-B 因此在 win32 重新停跑**，
+> 但理由已从「原因尚未定位」换成结构性判据（这套夹具只在 POSIX 上成立），解除条件写死在 spec 顶部；
+> 平台是否支持 Windows 的 `repo:` 验证程序属产品取舍，已登记 `docs/audit-backlog.md` 待裁决。
+> 同 shard 的 E2E-A 在 windows 上是绿的。
 >
 > **可观测性收口（2026-08-20）**：子进程非零退出的 `errorMessage` 现在带 stderr 尾巴——裸退出码
 > 不可归因（windows 那格红了一整天，上层只拿得到 `opencode exited with code 1`）。实撞发现「补了

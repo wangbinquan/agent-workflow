@@ -43,16 +43,34 @@ test.setTimeout(600_000)
 // 跨 mission 的每一跳最多等一个 wake sweep（30s，durable wait 是既定设计），所以
 // 本 spec 的预算按最坏路径给足；给不足只会得到一条与实现无关的假红。
 
-// Windows 腿：**解除暂缓**（2026-08-20）。此前停跑的理由是「原因尚未定位，而
-// blockDetail 是 null，CI 日志里看不到任何可用信息」——那条可观测性缺口已在
-// `239e8237` 修好：step-failed 的 block 现在带上 attempt 失败回执的 remediation，
-// 而本 spec 的等待器抛的正是 `mission blocked: ${blockCode}: ${blockDetail}`。
-// 也就是说当初写下的解除条件（「给 block 带上 remediation 后的下一轮 CI」）已经
-// 满足，继续停跑就变成了「用 skip 掩盖一个现在**能**查清的问题」。
+// Windows 腿：**重新停跑，但这次理由是查清的、且是结构性的**（2026-08-20）。
 //
-// 保留原始症状供比对：windows-latest 上 Agent 动作曾以
-// `step-failed:implement-parent-change:agent-contract-exhausted` 收场；darwin 与
-// hosted linux 一直是绿的（本机连跑两次 3.0m/3.1m，CI 的 ubuntu/macos 两格 ✓）。
+// 2026-08-19 的停跑理由是「原因尚未定位」——那是个可观测性缺口，不是判据，所以本轮
+// 先解除停跑、连查三轮把它查到了底（每一轮都补掉一处「有信息但到不了人眼前」：
+// blockDetail 恒 null → 只有裸退出码 → stderr 尾巴被两道互不知情的截断各切一半）。
+//
+// 查到两颗雷，第一颗已修，第二颗**不是 bug 而是这条 spec 的夹具本身只在 POSIX 上成立**：
+//   ① `mkdirSync(dirname('digital-employee-result.txt'), { recursive: true })` ——
+//      `dirname` 是 `'.'`，POSIX 上 no-op、Windows 上抛 `EEXIST`。已修（`a329393a`，
+//      `parentDirToCreate` 单点 + 纯判据回归锁）。
+//   ② 修掉①之后 windows 走得更远（implement 通过、child mission ready-to-merge、
+//      审批 approved），停在 `run-verification`（决策轨迹实证：`selected.kind =
+//      'run-verification'`，mission 停在 revision 20，hold 为 upload-fulfillment-pending）。
+//      根因是本 spec 上传的验证程序是 `#!/bin/sh` 脚本、并断言其 git mode 为 `100755`，
+//      而平台解析 `repo:<path>` 后是**直接 spawn 该路径**（verificationRunner.ts 的
+//      `createRepoScriptResolver` 返回 `argv: [abs]`，不带解释器）——Windows 上没有
+//      shebang 语义，`.sh` 根本不可执行，`100755` 也不是 Windows 检出的概念。
+//
+// 也就是说：**即便平台将来支持 Windows 上的验证程序，这条 spec 的夹具也仍然只在
+// POSIX 上成立**，它要换一套夹具才谈得上跑在 windows 上。所以这里停跑的是「这条
+// spec 的这套夹具」，不是「windows 上的数字员工旅程」。平台该不该支持 Windows 的
+// `repo:` 验证程序（需要一套解释器策略）是产品问题，已登记 `docs/audit-backlog.md`。
+//
+// 解除条件（写死，便于下一个人判断）：这条 spec 换成跨平台的验证程序夹具、并去掉
+// `100755` 断言之后，才谈得上重新在 windows 上跑。
+//
+// 同 shard 的 E2E-A（`rfc310-zero-config-onboarding.spec.ts`）在 windows 上是**绿**的，
+// 所以停的不是"数字员工在 windows 上不能用"。
 
 // 每次运行（含 Playwright 的 retry）用新的项目路径：system mock 的 `seedCodeHost`
 // 对同名项目返回 500 `already seeded`，于是重试那一轮会先死在 beforeAll 上，把**真正的**
@@ -599,6 +617,10 @@ test.afterAll(async () => {
 test('the configured employee delegates another repository, waits for approval, and keeps the parent MR ready until merge', async ({
   page,
 }) => {
+  test.skip(
+    process.platform === 'win32',
+    'POSIX-only fixture: the uploaded verification program is a #!/bin/sh script asserted at git mode 100755, and repo: programs are spawned directly (no interpreter). See the header comment for the full evidence.',
+  )
   const preexistingApprovalKeys = new Set(
     (await mocks.snapshot()).approvals.map((approval) => approval.idempotencyKey),
   )
