@@ -210,7 +210,12 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
     additionalPermissions: string[]
     accessRevision: number
   }
-  expect(created.additionalPermissions).toEqual(['scripts:author'])
+  // RFC-312：新建 user/manager 由 `initialGrantsForRole` **显式发放** `users:presence`
+  // （它不进任何静态 preset——RFC-305 没有 deny 集，进了 baseline 就永远无法按账号收回），
+  // 所以建号回执里必然多这一项。顺序与服务端一致，另见 packages/backend/tests/users-http.test.ts:246。
+  // 这是同一个改动在本文件里的**第三处**计数/集合断言（另两处见 :180 / :187）——
+  // 以后再加权限点，先把这三处一起过一遍，别一次只修一处等 CI 逐个报。
+  expect(created.additionalPermissions).toEqual(['users:presence', 'scripts:author'])
   expect(created.accessRevision).toBe(0)
   await expect(dialog).toHaveCount(0)
 
