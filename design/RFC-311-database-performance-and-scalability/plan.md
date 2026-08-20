@@ -191,25 +191,25 @@
    干净;届时按 `/repos` 同款做法接 `usePagedList` + `VirtualList`。
    代码位置:`code.tsx:392-398` 拿到了 `nextCursor` 但直接丢弃。
 
-2. **`development_missions` 缺 `(created_at, id)` 复合索引**(RFC-294 session 复核时提出,**实测证实**)。
-   现状 EXPLAIN(绑定参数,非字面量):
+2. **`development_missions` 缺 `(created_at, id)` 复合索引 ✅ 已解除(2026-08-20)**。原受阻理由是
+   `_journal.json` 里有 RFC-310 未追踪的 `0186` 条目,此刻提 journal 会让 daemon 起不来;该条目已随
+   RFC-310 落主干(journal 双侧 188、零未追踪),遂随 `0189_rfc311_perf_guard_indexes` 一并补上。
+   顺带记一条方法论:这条债**不是靠记账想起来的,是被新的性能防护网独立重新发现的**——说明
+   「结构性防护 + 每条读路径普适判据」比「人肉登记待办」更可靠。
+   仍留的小项:`listMissionSummariesPage` 的 `select()` 尚未收窄成 `summaryOf` 真正用到的 18 列
+   (现在把 `readiness_json` / `block_detail` 一起读了);它不改变计划形状,故防护网不报,属投影层优化。
 
-   ```
-   keyset page: SEARCH development_missions USING INDEX idx_development_missions_created (created_at<?)
-                USE TEMP B-TREE FOR LAST TERM OF ORDER BY
-   first page:  SCAN   development_missions USING INDEX idx_development_missions_created
-                USE TEMP B-TREE FOR LAST TERM OF ORDER BY
-   ```
+3. **性能防护网(`tests/rfc311-perf-guards.test.ts`)—— 用户 2026-08-20 要求「增加全面的防护用例」**。
+   缺口:CI 既有的 `Perf microbenchmark gate` 只跑纯 CPU 函数,**数据库面零覆盖**;既有计划断言把 SQL
+   字面量抄进测试,只锁得住抄进去那一条。做法:`tests/helpers/statementRecorder.ts` 录制被测代码
+   **实际执行**的每条语句 + 绑定参数,再逐条审计,新增查询自动进入审计面。三条确定性不变量:
+   ①语句条数不随行数增长(N+1 的充要形态,4 行 vs 40 行必须相等);②每条 SELECT 的 EXPLAIN 不含
+   裸表 `SCAN` 或 `USE TEMP B-TREE`(用绑定参数跑);③绑定参数 ≤ 900。
+   落地即抓出三条真缺陷并修掉(见 `0189`)。判据经两处实测校准:SQLite 把有序索引扫描也叫 SCAN
+   (`SCAN t USING COVERING INDEX ix`,是 keyset 首页应有形态,第一版误报过);注入 `sqlite_stat1`
+   伪装 100 万行对拍,计划与 40 行一致,故小库判据可信。变异检验 3/3。
+   **后续**:注册表目前覆盖 5 条读路径(tasks 默认/过滤视图、repos、missions、overview);
+   徽章三件套、node-runs 详情、webhook 投递列表等应陆续加入——加一行的成本远低于再来一次审计。
 
-   `LAST TERM` 只对**同一 created_at 组内**排序,所以常态(毫秒时间戳、并列极少)仍是 O(页);但**最坏情况**
-   (大量行共享同一 created_at)会退化成全排序,因此「最坏 O(页)」这句话现在还不能声称。
-   **当前不可做**:加索引要走迁移四件套,而 `db/migrations/meta/_journal.json` 已被 RFC-310 session 改过、
-   其 `0186_rfc310_task_platform_inputs.sql` **尚未追踪**。此刻提 journal = 提一个指向不存在 .sql 的条目,
-   **daemon 直接起不来**(比构建红一档)。
-   **解除条件**:对方的 `0186` 落进主干后,本 RFC 追一条 `0187_rfc311_mission_page_index.sql`
-   (`CREATE INDEX idx_development_missions_created_id ON development_missions(created_at, id)`)+ 一条
-   EXPLAIN 断言(**必须用 `?` 绑定参数**,字面量复现不出该计划)+ 顺带把 `listMissionSummariesPage`
-   的 `select()` 收窄成 `summaryOf` 真正用到的 18 列(现在把 `readiness_json` / `block_detail` 一起读了)。
-
-3. **其余记账**:`sessionView` 上限、`getNodeRunStdout` 尾部截断;development `retention_state` sweeper 与
+4. **其余记账**:`sessionView` 上限、`getNodeRunStdout` 尾部截断;development `retention_state` sweeper 与
    code rollup 表(归属 RFC-310 / code-capability 域);视觉 win32 基线随下一个 Windows 批。
