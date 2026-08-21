@@ -184,6 +184,27 @@ export interface ToolRegistration {
   updatedAt: number
 }
 
+export type ToolAuthoringImplementation =
+  | { kind: 'agent'; agentRef: ExactRef }
+  | { kind: 'workflow'; workflowRef: ExactRef }
+  | {
+      kind: 'program'
+      runtimeKind: 'bash' | 'node' | 'python'
+      source: string
+      parameterValues?: Record<string, string | number | boolean>
+      runtimeProfileRef: ExactRef
+    }
+
+export interface ToolAuthoringView extends ToolRegistration {
+  body: {
+    displayName: string
+    description: string
+    roleRef: string
+    implementation: ToolAuthoringImplementation
+    connectionRef?: ExactRef | null
+  }
+}
+
 export interface JobTemplate {
   id: string
   name: string

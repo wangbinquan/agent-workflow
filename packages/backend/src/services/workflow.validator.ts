@@ -3367,7 +3367,7 @@ export function extractTemplateVars(template: string): string[] {
     ref.kind === 'local'
       ? [ref.name]
       : ref.kind === 'trigger'
-        ? [`trigger.webhook.${ref.field}`]
+        ? [`trigger.${ref.source}.${ref.field}`]
         : [],
   )
 }

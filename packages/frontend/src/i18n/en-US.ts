@@ -428,6 +428,7 @@ export const enUS: Resources = {
     clarify: 'Clarify',
     repos: 'Repos',
     webhooks: 'Webhooks',
+    events: 'Event Center',
     code: 'Code',
     digitalEmployees: 'Digital employees',
     executors: 'Executor library',
@@ -2627,9 +2628,8 @@ export const enUS: Resources = {
     sectionDescriptions: {
       runtime: 'Register command runtimes and choose the default.',
       systemAgents: 'Choose runtimes and output rules for built-in automation.',
-      limits: 'Set task, token, timeout, and concurrency guardrails.',
-      digitalEmployee:
-        'Set retry, waiting and human-handoff rules shared by every digital employee.',
+      limits:
+        'Set task, token, timeout, concurrency, and retry guardrails shared by workflows and digital employees.',
       recovery: 'Create backups and configure recovery behavior.',
       gc: 'Control retention and automatic cleanup.',
       git: 'Control platform commit exclusions, submodules, and background refresh.',
@@ -2643,6 +2643,9 @@ export const enUS: Resources = {
       limitsBudgetsTitle: 'Task budgets',
       limitsBudgetsHint:
         'Bound the time, tokens, steps, and discussion rounds available to one task.',
+      limitsSharedRetryTitle: 'This is also the only retry setting for digital employees',
+      limitsSharedRetryHint:
+        'Node retries and session restarts apply to workflows and digital employees. A digital employee case freezes the current values when it starts, so running work does not drift after a settings change.',
       limitsConcurrencyTitle: 'Concurrency & throughput',
       limitsConcurrencyHint:
         'Control how much work the daemon and each workflow may run in parallel.',
@@ -2687,7 +2690,6 @@ export const enUS: Resources = {
     tabRuntime: 'Runtime',
     tabSystemAgents: 'System agents',
     tabLimits: 'Limits',
-    tabDigitalEmployee: 'Digital employee policy',
     tabRecovery: 'Recovery',
     tabGc: 'GC',
     tabGit: 'Git',
@@ -4489,7 +4491,7 @@ export const enUS: Resources = {
     eyebrow: 'Decide when to run',
     title: 'Trigger rules',
     subtitle:
-      'Choose the repos and events to respond to, then select a workflow, agent, or workgroup to launch.',
+      'Choose the repos and events to respond to, then select an orchestration or digital employee to launch.',
     new: 'New rule',
     empty: 'No trigger rules yet',
     emptyDescription:
@@ -4524,11 +4526,18 @@ export const enUS: Resources = {
     discardDescription: 'This rule has not been saved. Closing now will lose your changes.',
     discardAction: 'Discard changes',
     columns: { name: 'Name', rule: 'Rule', target: 'Target', state: 'State' },
-    kinds: { workflow: 'Workflow', agent: 'Agent', workgroup: 'Workgroup' },
+    kinds: {
+      workflow: 'Workflow',
+      agent: 'Agent',
+      workgroup: 'Workgroup',
+      'digital-employee': 'Digital employee',
+    },
     kindDescriptions: {
       workflow: 'Run a full orchestration for multi-stage work such as audits or repairs.',
       agent: 'Start one agent directly for a focused, fast task.',
       workgroup: 'Let several members collaborate on the same goal.',
+      'digital-employee':
+        'Hand the event to a stateful employee that owns the work and follows subsequent events.',
     },
     spaces: { eventRepo: 'Event repository', scratch: 'Temporary workspace' },
     spaceDescriptions: {
@@ -4649,6 +4658,9 @@ export const enUS: Resources = {
         'Webhook events cannot provide this input. Choose another target or adjust the workflow.',
       description: 'Task prompt template',
       goal: 'Workgroup goal template',
+      employeeUnsupportedTitle: 'This employee cannot accept event-driven work',
+      employeeUnsupportedBody:
+        'Its published intake contract only accepts uploaded files. Choose an employee that accepts text or an external work ID.',
       agentDescriptionHint:
         'This Agent declares no input ports. A Webhook launch uses this template as its task prompt.',
       agentInputHint:
@@ -4742,7 +4754,14 @@ export const enUS: Resources = {
       autoRegisterLabel:
         'Allow the platform to clone and register event repos that are not imported yet',
     },
-    firesColumns: { stream: 'Stream', outcome: 'Outcome', time: 'Time' },
+    firesColumns: {
+      stream: 'Stream',
+      outcome: 'Outcome',
+      result: 'Started work',
+      task: 'Task',
+      employeeCase: 'Employee case',
+      time: 'Time',
+    },
   },
   webhookDeliveries: {
     eyebrow: 'Observe and troubleshoot',
@@ -4992,6 +5011,7 @@ export const enUS: Resources = {
         all: 'All origins',
         manual: 'Manual',
         scheduled: 'Scheduled',
+        event: 'Event Center',
         webhook: 'Webhook',
         api: 'API',
       },

@@ -8,9 +8,6 @@
  */
 
 export interface DigitalEmployeeOsWorkerDependencies {
-  readonly eventCenter: {
-    runOneDueObserver(): Promise<'completed' | 'failed' | 'obsolete' | 'idle'>
-  }
   readonly runtime: {
     runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
     pumpOneDelivery(): boolean
@@ -22,7 +19,6 @@ export interface DigitalEmployeeOsWorkerDependencies {
 
 export interface DigitalEmployeeOsCycleResult {
   readonly steps: number
-  readonly observerRuns: number
   readonly deliveries: number
   readonly plannedRounds: number
   readonly outboxSettlements: number
@@ -38,7 +34,6 @@ export async function runDigitalEmployeeOsCycle(
   if (!Number.isSafeInteger(maxSteps) || maxSteps <= 0) {
     throw new Error('digital employee worker maxSteps must be a positive integer')
   }
-  let observerRuns = 0
   let deliveries = 0
   let plannedRounds = 0
   let outboxSettlements = 0
@@ -47,12 +42,6 @@ export async function runDigitalEmployeeOsCycle(
   let steps = 0
   for (; steps < maxSteps; steps += 1) {
     let progressed = false
-    const observation = await deps.eventCenter.runOneDueObserver()
-    if (observation !== 'idle') {
-      observerRuns += 1
-      progressed = true
-    }
-
     if (deps.runtime.publishOneChannelResult() === 'completed') {
       channelResults += 1
       progressed = true
@@ -83,20 +72,13 @@ export async function runDigitalEmployeeOsCycle(
   }
   return {
     steps,
-    observerRuns,
     deliveries,
     plannedRounds,
     outboxSettlements,
     executionSettlements,
     channelResults,
     madeProgress:
-      observerRuns +
-        deliveries +
-        plannedRounds +
-        outboxSettlements +
-        executionSettlements +
-        channelResults >
-      0,
+      deliveries + plannedRounds + outboxSettlements + executionSettlements + channelResults > 0,
   }
 }
 

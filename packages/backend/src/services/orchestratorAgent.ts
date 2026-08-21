@@ -16,9 +16,7 @@
 import type {
   Agent,
   CapabilitySource,
-  CodeHostEventType,
   DwTokenBinding,
-  WebhookTemplateVar,
   WorkflowDefinition,
   WorkflowValidationIssue,
   WorkflowValidationResult,
@@ -30,7 +28,7 @@ import {
   fenceUntrusted,
   perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
-  webhookTriggerToken,
+  triggerToken,
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 
@@ -117,7 +115,7 @@ export function buildOrchestratorAgent(): Agent {
       '- For each node, write a `promptTemplate`: the instruction that node’s agent',
       '  receives. It may reference an upstream node’s output with `{{portName}}`',
       '  (the port must be an output the upstream agent declares).',
-      '- A webhook-triggered task may also use ONLY the canonical trigger tokens',
+      '- An event-triggered task may also use ONLY the canonical trigger tokens',
       '  explicitly listed by the user prompt. Never invent a trigger source/field,',
       '  and never turn trigger fields into workflow inputs or input nodes.',
       '- Declare each node’s inputs: which upstream node+port feeds each consumed',
@@ -195,10 +193,11 @@ export function buildOrchestratorPrompt(opts: {
   rejectionComment?: string | undefined
   /** Per-run envelope nonce; empty keeps legacy prompt bytes. */
   envelopeNonce?: string | undefined
-  /** Names only; actual webhook values must never enter the orchestrator prompt. */
-  webhookContext?: {
-    eventType: CodeHostEventType
-    availableFields: readonly WebhookTemplateVar[]
+  /** Names only; actual event values must never enter the orchestrator prompt. */
+  triggerContext?: {
+    namespace: string
+    definitionId: string
+    availableFields: readonly string[]
   } | null
 }): string {
   const nonce = opts.envelopeNonce ?? ''
@@ -215,20 +214,22 @@ export function buildOrchestratorPrompt(opts: {
     fenceUntrusted('dynamic-workflow-goal', opts.goal.trim(), nonce),
     '',
   )
-  if (opts.webhookContext === undefined || opts.webhookContext === null) {
+  if (opts.triggerContext === undefined || opts.triggerContext === null) {
     lines.push(
-      '## Webhook trigger context',
+      '## Event trigger context',
       '',
-      'This task has NO webhook trigger context. Do not generate any `trigger.*` reference.',
+      'This task has NO event trigger context. Do not generate any `trigger.*` reference.',
       'Do not synthesize workflow inputs as a substitute for missing trigger context.',
       '',
     )
   } else {
-    const tokens = opts.webhookContext.availableFields.map(webhookTriggerToken).join(', ')
+    const tokens = opts.triggerContext.availableFields
+      .map((field) => triggerToken(opts.triggerContext!.namespace, field))
+      .join(', ')
     lines.push(
-      '## Webhook trigger context',
+      '## Event trigger context',
       '',
-      `This task has webhook event type \`${opts.webhookContext.eventType}\`.`,
+      `This task was started by event definition \`${opts.triggerContext.definitionId}\`.`,
       `Only these canonical trigger tokens are available: ${tokens}.`,
       'Their actual values are intentionally not shown. Use a token only when the workflow needs',
       'that runtime event value; never create workflow inputs, input nodes, root parameters or',

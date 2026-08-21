@@ -216,6 +216,14 @@ const OVERLAY_CALLSITES = {
   'routes/code.policies.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 Digital Employee OS: add tool, job template and employee.
   'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 3 },
+  // RFC-310 Event Center: custom polling-source authoring stays in one shared
+  // Dialog while source/catalog/delivery browsing remains inline.
+  'routes/events.tsx': { family: 'resource-management', count: 1 },
+  // RFC-310 Event Center: response-rule creation is one guided shared Dialog.
+  'components/events/EventResponseRulesPanel.tsx': {
+    family: 'resource-management',
+    count: 1,
+  },
   // RFC-310 PR-8 — +attach-MR dialog（T80 挂接命令的输入面）。
   'routes/code.missions.$id.tsx': { family: 'task-execution', count: 2 },
   // RFC-310 PR-8 — 配置资源的创建 Dialog（列表）与编辑/ACL Dialog + 归档

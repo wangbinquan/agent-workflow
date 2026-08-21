@@ -160,11 +160,26 @@ export const ENDPOINTS: EndpointSpec[] = [
   // on-demand observer cycles; employee types only consume these contracts.
   { method: 'GET', path: '/api/event-center/catalog' },
   { method: 'GET', path: '/api/event-center/subscriptions' },
+  { method: 'GET', path: '/api/event-center/subscriptions/page' },
   { method: 'GET', path: '/api/event-center/observers' },
+  { method: 'GET', path: '/api/event-center/deliveries' },
+  { method: 'GET', path: '/api/event-center/deliveries/page' },
+  { method: 'GET', path: '/api/event-center/events/page' },
   { method: 'POST', path: '/api/event-center/subscriptions' },
   { method: 'DELETE', path: '/api/event-center/subscriptions/:id' },
+  { method: 'GET', path: '/api/event-center/response-rules' },
+  { method: 'POST', path: '/api/event-center/response-rules' },
+  { method: 'PUT', path: '/api/event-center/response-rules/:id' },
+  { method: 'DELETE', path: '/api/event-center/response-rules/:id' },
   { method: 'POST', path: '/api/event-center/observations' },
   { method: 'POST', path: '/api/event-center/observers/run-due' },
+  { method: 'GET', path: '/api/event-center/sources' },
+  { method: 'POST', path: '/api/event-center/sources' },
+  { method: 'GET', path: '/api/event-center/sources/:id' },
+  { method: 'PUT', path: '/api/event-center/sources/:id' },
+  { method: 'POST', path: '/api/event-center/sources/:id/validate' },
+  { method: 'POST', path: '/api/event-center/sources/:id/publish' },
+  { method: 'POST', path: '/api/event-center/sources/:id/retire' },
 
   // RFC-269 — 代码平台连接（出站凭据面）。全部 admin（settings:*）且
   // tokenAccess:'never'：一枚 PAT 既读不到 base URL 也改不了 token。
@@ -296,6 +311,14 @@ export const ENDPOINTS: EndpointSpec[] = [
     path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools',
   },
   {
+    method: 'GET',
+    path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId',
+  },
+  {
+    method: 'PUT',
+    path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId',
+  },
+  {
     method: 'POST',
     path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId/retire',
   },
@@ -309,8 +332,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/digital-employees/:id' },
   { method: 'PUT', path: '/api/digital-employees/:id' },
   { method: 'POST', path: '/api/digital-employees/:id/publish' },
-  { method: 'GET', path: '/api/settings/digital-employee-execution-policy' },
-  { method: 'POST', path: '/api/settings/digital-employee-execution-policy/revisions' },
 
   // ---- oidc-auth (mixed: providers list + login flow are public) ----
   { method: 'GET', path: '/api/auth/oidc/providers', public: true },

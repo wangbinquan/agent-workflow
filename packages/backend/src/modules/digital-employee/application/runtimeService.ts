@@ -1,7 +1,9 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { retryAttemptCap } from '@agent-workflow/shared'
 
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
+import type { EventObservationInput } from '@/modules/event-center/public/types'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type {
@@ -9,11 +11,13 @@ import type {
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
 } from '../public/types'
+import { employeeInvocationResultObservation } from '../public/events'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
   EmployeeTypeCollaborationCodec
 import type { DigitalEmployeeAuthoringStore } from './ports/authoringStore'
+import type { ExecutionPolicyRevisionRecord } from './ports/authoringStore'
 import type {
   AttentionBindingRecord,
   EmployeeOutboxRecord,
@@ -54,19 +58,6 @@ const subscribePayloadSchema = z
     eventTypeRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
     subject: z.object({ typeId: z.string().min(1), subjectRef: z.string().min(1) }),
     caseId: z.string().min(1),
-  })
-  .strict()
-
-const observePayloadSchema = z
-  .object({
-    bindingId: z.string().min(1),
-    sourceRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
-    eventTypeRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
-    subject: z.object({ typeId: z.string().min(1), subjectRef: z.string().min(1) }),
-    occurredAt: z.number().int().nonnegative(),
-    dedupeKey: z.string().min(1),
-    summary: z.string().min(1),
-    payloadArtifactRef: z.string().min(1).nullable(),
   })
   .strict()
 
@@ -122,6 +113,7 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly inputArtifacts: EmployeeInputArtifactPort
   readonly runtimeCodecs: readonly EmployeeTypeRuntimeCodec[]
   readonly executionContracts: ExecutionContractParticipant
+  readonly resolveExecutionPolicy?: () => ExecutionPolicyRevisionRecord
   readonly now?: () => number
   readonly id?: () => string
   readonly workerId?: string
@@ -148,6 +140,7 @@ export class DigitalEmployeeRuntimeService {
   readonly #inputUploads: EmployeeInputUploadStore
   readonly #inputArtifacts: EmployeeInputArtifactPort
   readonly #executionContracts: ExecutionContractParticipant
+  readonly #resolveExecutionPolicy: () => ExecutionPolicyRevisionRecord
   readonly #codecs = new Map<string, EmployeeTypeRuntimeCodec>()
   readonly #now: () => number
   readonly #id: () => string
@@ -163,6 +156,13 @@ export class DigitalEmployeeRuntimeService {
     this.#inputUploads = deps.inputUploads
     this.#inputArtifacts = deps.inputArtifacts
     this.#executionContracts = deps.executionContracts
+    this.#resolveExecutionPolicy =
+      deps.resolveExecutionPolicy ??
+      (() => {
+        const policy = this.#authoringStore.getCurrentExecutionPolicy()
+        if (policy === null) throw new Error('global execution policy is not initialized')
+        return policy
+      })
     this.#now = deps.now ?? Date.now
     this.#id = deps.id ?? ulid
     this.#workerId = deps.workerId ?? `digital-employee-${ulid()}`
@@ -201,7 +201,15 @@ export class DigitalEmployeeRuntimeService {
     readonly employeeId: string
     readonly intake: unknown
     readonly actorUserId: string | null
+    readonly eventOrigin?: {
+      readonly eventSubscriptionId: string
+      readonly eventDeliveryId: string
+    }
   }): EmployeeCaseRecord {
+    if (input.eventOrigin !== undefined) {
+      const existing = this.#store.findCaseByEventDelivery(input.eventOrigin.eventDeliveryId)
+      if (existing !== null) return existing
+    }
     const employee = this.#authoringStore.getEmployeeDefinition(input.employeeId)
     if (employee === null || employee.archivedAt !== null || employee.publishedRevision === null) {
       throw new NotFoundError(
@@ -273,6 +281,7 @@ export class DigitalEmployeeRuntimeService {
     return this.launchCase(launch, {
       caseId,
       now,
+      eventOrigin: input.eventOrigin ?? null,
       uploadClaims: uploads.map((upload) => ({
         uploadRef: upload.id,
         actorUserId: input.actorUserId,
@@ -287,6 +296,10 @@ export class DigitalEmployeeRuntimeService {
     admission?: {
       readonly caseId: string
       readonly now: number
+      readonly eventOrigin: {
+        readonly eventSubscriptionId: string
+        readonly eventDeliveryId: string
+      } | null
       readonly uploadClaims: readonly {
         readonly uploadRef: string
         readonly actorUserId: string | null
@@ -322,19 +335,14 @@ export class DigitalEmployeeRuntimeService {
         'the primary context type or schema version is not registered by this employee type',
       )
     }
-    const initialEvent = typePackage.descriptor.eventTypes.find(
-      (event) =>
-        event.eventTypeId === launch.initialEventTypeRef.id &&
-        event.version === launch.initialEventTypeRef.revision,
+    const workStartItem = findWorkItem(
+      typePackage.descriptor,
+      typePackage.descriptor.workStartWorkItemRef,
     )
-    if (
-      initialEvent === undefined ||
-      !sameRef(initialEvent.sourceRef, launch.initialEventSourceRef) ||
-      initialEvent.subjectTypeId !== launch.workSubject.typeId
-    ) {
+    if (workStartItem === null) {
       throw new ValidationError(
-        'employee-initial-event-invalid',
-        'the initial event, source, and subject do not match the employee type package',
+        'employee-work-start-invalid',
+        'the employee type does not expose a valid deterministic first work item',
       )
     }
     if (
@@ -353,13 +361,11 @@ export class DigitalEmployeeRuntimeService {
       launch.primaryContextTypeId,
       launch.primaryContextJson,
     )
-    const policy = this.#authoringStore.getCurrentExecutionPolicy()
-    if (policy === null) throw new Error('global execution policy is not initialized')
+    const policy = this.#resolveExecutionPolicy()
 
     const now = admission?.now ?? this.#now()
     const caseId = admission?.caseId ?? this.#id()
     const contextId = this.#id()
-    const attentionId = this.#id()
     const caseRecord: EmployeeCaseRecord = {
       id: caseId,
       employeeRef: launch.employeeRef,
@@ -369,7 +375,7 @@ export class DigitalEmployeeRuntimeService {
       state: 'active',
       terminalKind: null,
       blockReason: null,
-      currentWorkItemRef: null,
+      currentWorkItemRef: workStartItem.workItemRef,
       activeRoundId: null,
       revision: 1,
       writerGeneration: 1,
@@ -389,56 +395,6 @@ export class DigitalEmployeeRuntimeService {
       createdAt: now,
       updatedAt: now,
     }
-    const attention: AttentionBindingRecord = {
-      id: attentionId,
-      caseId,
-      contextId,
-      contextRevision: 1,
-      eventTypeRef: launch.initialEventTypeRef,
-      subject: launch.workSubject,
-      desiredIdentityKey: `attention:${runtimeDigest({
-        caseId,
-        contextId,
-        eventTypeRef: launch.initialEventTypeRef,
-        subject: launch.workSubject,
-      })}`,
-      eventSubscriptionId: null,
-      state: 'desired',
-      createdAt: now,
-      updatedAt: now,
-    }
-    const subscribePayload = {
-      bindingId: attentionId,
-      eventTypeRef: launch.initialEventTypeRef,
-      subject: launch.workSubject,
-      caseId,
-    }
-    const subscribeOutbox: EmployeeOutboxRecord = {
-      id: this.#id(),
-      caseId,
-      kind: 'event-subscribe',
-      payloadJson: JSON.stringify(subscribePayload),
-      dedupeKey: `event-subscribe:${runtimeDigest(subscribePayload)}`,
-      attemptCount: 0,
-    }
-    const observePayload = {
-      bindingId: attentionId,
-      sourceRef: launch.initialEventSourceRef,
-      eventTypeRef: launch.initialEventTypeRef,
-      subject: launch.workSubject,
-      occurredAt: now,
-      dedupeKey: launch.initialEventDedupeKey,
-      summary: launch.initialEventSummary,
-      payloadArtifactRef: null,
-    }
-    const observeOutbox: EmployeeOutboxRecord = {
-      id: this.#id(),
-      caseId,
-      kind: 'event-observe',
-      payloadJson: JSON.stringify(observePayload),
-      dedupeKey: `event-observe:${runtimeDigest(observePayload)}`,
-      attemptCount: 0,
-    }
     this.#store.createCase({
       caseRecord,
       primaryContext: context,
@@ -447,9 +403,7 @@ export class DigitalEmployeeRuntimeService {
         artifactRefs: context.artifactRefs,
       }),
       externalSubject: launch.workSubject,
-      initialAttention: attention,
-      subscribeOutbox,
-      observeOutbox,
+      eventOrigin: admission?.eventOrigin ?? null,
       uploadClaims: admission?.uploadClaims ?? [],
     })
     return caseRecord
@@ -1274,7 +1228,7 @@ export class DigitalEmployeeRuntimeService {
             'target type codec changed the frozen target employee revision',
           )
         }
-        this.launchCase(launch, { caseId: childCaseId, now, uploadClaims: [] })
+        this.launchCase(launch, { caseId: childCaseId, now, eventOrigin: null, uploadClaims: [] })
       }
       this.#store.acceptInvocation({
         invocationId,
@@ -1368,6 +1322,16 @@ export class DigitalEmployeeRuntimeService {
         summary: envelope.summary,
         payloadArtifactRef: null,
       })
+      this.#eventCenter.observe(
+        employeeInvocationResultObservation({
+          invocationRef: candidate.channel.invocationId,
+          state: envelope.state,
+          terminalKind: envelope.terminalKind,
+          summary: envelope.summary,
+          envelopeDigest,
+          occurredAt,
+        }),
+      )
     }
     this.#store.settleChannelResult({
       result: {
@@ -1395,7 +1359,11 @@ export class DigitalEmployeeRuntimeService {
     if (outbox === null) return 'idle'
     try {
       const ownedCase = outbox.caseId === null ? null : this.#store.getCase(outbox.caseId)
-      if (ownedCase?.state === 'terminal' && outbox.kind !== 'event-unsubscribe') {
+      if (
+        ownedCase?.state === 'terminal' &&
+        outbox.kind !== 'event-unsubscribe' &&
+        outbox.kind !== 'event-publish'
+      ) {
         this.#store.completeOutbox(outbox.id, this.#workerId, now)
         return 'completed'
       }
@@ -1414,23 +1382,8 @@ export class DigitalEmployeeRuntimeService {
           subscriber: { kind: 'employee-case', subscriberRef: payload.caseId },
         })
         this.#store.activateAttention(payload.bindingId, receipt.subscriptionId, now)
-      } else if (outbox.kind === 'event-observe') {
-        const payload = observePayloadSchema.parse(JSON.parse(outbox.payloadJson) as unknown)
-        const binding = this.#store
-          .listAttention(outbox.caseId ?? '')
-          .find((candidate) => candidate.id === payload.bindingId)
-        if (binding?.state !== 'active') {
-          throw new Error('initial event waits for its durable subscription')
-        }
-        this.#eventCenter.observe({
-          sourceRef: payload.sourceRef,
-          eventTypeRef: payload.eventTypeRef,
-          subject: payload.subject,
-          occurredAt: payload.occurredAt,
-          dedupeKey: payload.dedupeKey,
-          summary: payload.summary,
-          payloadArtifactRef: payload.payloadArtifactRef,
-        })
+      } else if (outbox.kind === 'event-publish') {
+        this.#eventCenter.observe(JSON.parse(outbox.payloadJson) as EventObservationInput)
       } else if (outbox.kind === 'event-unsubscribe') {
         const payload = unsubscribePayloadSchema.parse(JSON.parse(outbox.payloadJson) as unknown)
         this.#eventCenter.unsubscribe(payload.subscriptionId)
@@ -1487,8 +1440,10 @@ export class DigitalEmployeeRuntimeService {
         caseRecord === null
           ? this.#authoringStore.getCurrentExecutionPolicy()
           : this.#authoringStore.getExecutionPolicyRevision(caseRecord.executionPolicyRevision)
-      const maxAttempts =
-        (policy?.content.sameSceneAttempts ?? 1) + (policy?.content.freshSceneAttempts ?? 1)
+      const maxAttempts = retryAttemptCap(
+        policy?.content.sameSceneAttempts ?? 1,
+        policy?.content.freshSceneAttempts ?? 1,
+      )
       const terminal = outbox.attemptCount >= Math.max(1, maxAttempts)
       const initial = policy?.content.initialBackoffMs ?? 1_000
       const maximum = policy?.content.maxBackoffMs ?? 60_000
@@ -1546,12 +1501,23 @@ export class DigitalEmployeeRuntimeService {
     for (const caseRecord of this.#store.listCases()) {
       const deliveries = this.#eventCenter.pendingDeliveries(
         { kind: 'employee-case', subscriberRef: caseRecord.id },
-        1,
+        100,
       )
-      const delivery = deliveries[0]
-      if (delivery === undefined) continue
-      this.#store.acceptDelivery(caseRecord.id, this.#id(), delivery, this.#now())
-      this.#eventCenter.acceptDelivery(delivery.deliveryId)
+      if (deliveries.length === 0) continue
+      const descriptor = this.#descriptor(caseRecord)
+      for (const delivery of deliveries) {
+        const rule = descriptor.reactionRules.find(
+          (candidate) => candidate.eventTypeId === delivery.eventTypeRef.id,
+        )
+        this.#store.acceptDelivery(
+          caseRecord.id,
+          this.#id(),
+          delivery,
+          rule?.priority ?? 0,
+          this.#now(),
+        )
+        this.#eventCenter.acceptDelivery(delivery.deliveryId)
+      }
       return true
     }
     return false
@@ -1586,24 +1552,18 @@ export class DigitalEmployeeRuntimeService {
       if (caseRecord.currentWorkItemRef !== null && continuationItem === null) {
         throw new Error(`case points to missing work item: ${caseRecord.currentWorkItemRef}`)
       }
-      const pendingEvent =
+      const pendingRule =
         pendingInbox === undefined
           ? undefined
-          : descriptor.eventTypes.find(
-              (event) =>
-                event.eventTypeId === pendingInbox.eventTypeRef.id &&
-                event.version === pendingInbox.eventTypeRef.revision,
+          : descriptor.reactionRules.find(
+              (candidate) => candidate.eventTypeId === pendingInbox.eventTypeRef.id,
             )
       const eventPreemptsContinuation =
-        continuationItem !== null && pendingEvent?.preemptsContinuation === true
+        continuationItem !== null && pendingRule?.preemptsContinuation === true
       const selectedContinuation = eventPreemptsContinuation ? null : continuationItem
       const inbox = selectedContinuation === null ? pendingInbox : undefined
       const rule =
-        selectedContinuation !== null || inbox === undefined
-          ? null
-          : (descriptor.reactionRules.find(
-              (candidate) => candidate.eventTypeId === inbox.eventTypeRef.id,
-            ) ?? null)
+        selectedContinuation !== null || inbox === undefined ? null : (pendingRule ?? null)
       if (selectedContinuation === null && inbox === undefined) continue
       if (selectedContinuation === null && rule === null) {
         this.#store.markInbox(inbox!.id, 'obsolete', this.#now())
@@ -1868,10 +1828,15 @@ export class DigitalEmployeeRuntimeService {
     const policy = this.#authoringStore.getExecutionPolicyRevision(round.executionPolicyRevision)
     if (policy === null) throw new Error('pinned execution policy disappeared')
     const boundaryFailure = errorCode.startsWith('workspace-boundary-')
+    const attemptsPerScene = policy.content.sameSceneAttempts + 1
     const nextOrdinal = boundaryFailure
-      ? Math.max(round.attemptOrdinal + 1, policy.content.sameSceneAttempts + 1)
+      ? Math.max(
+          round.attemptOrdinal + 1,
+          (Math.floor(round.attemptOrdinal / attemptsPerScene) + 1) * attemptsPerScene,
+        )
       : round.attemptOrdinal + 1
-    const retryBudget = policy.content.sameSceneAttempts + policy.content.freshSceneAttempts
+    const retryBudget =
+      retryAttemptCap(policy.content.sameSceneAttempts, policy.content.freshSceneAttempts) - 1
     const errorJson = JSON.stringify({
       kind: 'failed',
       executionRef: round.executionRef,
@@ -1880,7 +1845,7 @@ export class DigitalEmployeeRuntimeService {
     })
     if (nextOrdinal <= retryBudget) {
       const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
-      const mode = nextOrdinal <= policy.content.sameSceneAttempts ? 'same-scene' : 'fresh-scene'
+      const mode = nextOrdinal % attemptsPerScene === 0 ? 'fresh-scene' : 'same-scene'
       const now = this.#now()
       const retryDelay = Math.min(
         policy.content.maxBackoffMs,

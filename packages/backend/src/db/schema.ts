@@ -1035,6 +1035,11 @@ export const tasks = sqliteTable(
     // (stamped inside the task INSERT); soft links, no FK — mirrors RFC-159.
     webhookTriggerId: text('webhook_trigger_id'),
     webhookFireId: text('webhook_fire_id'),
+    /** RFC-310: source-neutral Event Center attribution for new event launches. */
+    eventSubscriptionId: text('event_subscription_id'),
+    eventDeliveryId: text('event_delivery_id'),
+    /** Monotonic owner revision used by the transactional lifecycle-event outbox. */
+    lifecycleEventRevision: integer('lifecycle_event_revision').notNull().default(1),
     /**
      * RFC-303: opaque, task-owned source termination snapshot. The binding is
      * frozen by the launch guard and inherited by every child; it is never
@@ -1192,6 +1197,10 @@ export const tasks = sqliteTable(
     workflowIdx: index('idx_tasks_workflow').on(t.workflowId, t.startedAt),
     schedTaskIdx: index('idx_tasks_scheduled_task').on(t.scheduledTaskId), // RFC-159
     webhookTriggerIdx: index('idx_tasks_webhook_trigger').on(t.webhookTriggerId), // RFC-257
+    eventSubscriptionIdx: index('idx_tasks_event_subscription').on(t.eventSubscriptionId),
+    eventDeliveryUq: uniqueIndex('idx_tasks_event_delivery_unique')
+      .on(t.eventDeliveryId)
+      .where(sql`${t.eventDeliveryId} IS NOT NULL`),
     sourceTerminationIdx: index('idx_tasks_source_termination').on(
       t.sourceTerminationBinding,
       t.sourceTerminationLaunchRev,
@@ -1297,7 +1306,7 @@ export const webhookTriggers = sqliteTable(
     commandPrefix: text('command_prefix'), // note-event command; NULL = none
     ignoreUsernames: text('ignore_usernames').notNull().default('[]'), // JSON string[]
     launchKind: text('launch_kind', {
-      enum: ['workflow', 'agent', 'workgroup', 'code-round'],
+      enum: ['workflow', 'agent', 'workgroup', 'digital-employee', 'code-round'],
     }).notNull(),
     launchRefId: text('launch_ref_id').notNull(), // workflowId/agentId/workgroupId（单一事实源）
     launchPayload: text('launch_payload').notNull(), // JSON 模板封套（webhookPayloadTemplateSchemaFor）
@@ -1395,6 +1404,7 @@ export const webhookTriggerFires = sqliteTable(
     }).notNull(),
     supersededTaskId: text('superseded_task_id'), // 本次 fire 取消的旧任务
     taskId: text('task_id'),
+    employeeCaseId: text('employee_case_id'),
     error: text('error'),
     firedAt: integer('fired_at')
       .notNull()
@@ -5039,6 +5049,39 @@ export const employeeInputUploads = sqliteTable(
 // contain only bounded summaries/artifact refs; large pipeline output never
 // enters SQLite. Observer activation is derived from durable subscriptions,
 // so restart recovery does not depend on an in-memory timer registry.
+export const customEventSourceDefinitions = sqliteTable(
+  'custom_event_source_definitions',
+  {
+    id: text('id').primaryKey(),
+    draftJson: text('draft_json').notNull(),
+    publishedRevision: integer('published_revision'),
+    ownerUserId: text('owner_user_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    retiredAt: integer('retired_at'),
+  },
+  (t) => ({ stateIdx: index('idx_custom_event_sources_state').on(t.retiredAt, t.updatedAt) }),
+)
+
+export const customEventSourceRevisions = sqliteTable(
+  'custom_event_source_revisions',
+  {
+    sourceId: text('source_id')
+      .notNull()
+      .references(() => customEventSourceDefinitions.id),
+    revision: integer('revision').notNull(),
+    contentJson: text('content_json').notNull(),
+    contentDigest: text('content_digest').notNull(),
+    validationReceiptJson: text('validation_receipt_json').notNull(),
+    publishedAt: integer('published_at').notNull(),
+    publishedBy: text('published_by'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.sourceId, t.revision] }),
+    stateIdx: index('idx_custom_event_source_revisions').on(t.sourceId, t.revision),
+  }),
+)
+
 export const eventSources = sqliteTable(
   'event_sources',
   {
@@ -5063,6 +5106,11 @@ export const eventTypeCatalog = sqliteTable(
     sourceRevision: integer('source_revision').notNull(),
     descriptorJson: text('descriptor_json').notNull(),
     descriptorDigest: text('descriptor_digest').notNull(),
+    catalogVisibility: text('catalog_visibility', {
+      enum: ['public', 'internal', 'compatibility'],
+    })
+      .notNull()
+      .default('public'),
     state: text('state', { enum: ['published', 'retired'] })
       .notNull()
       .default('published'),
@@ -5071,6 +5119,45 @@ export const eventTypeCatalog = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.eventTypeId, t.revision] }),
     sourceIdx: index('idx_event_type_source').on(t.sourceId, t.sourceRevision, t.state),
+  }),
+)
+
+/**
+ * Task-owned transactional publication outbox. The task status CAS and this
+ * row commit together; the Event Center worker later publishes the immutable
+ * observation and marks only this outbox row complete.
+ */
+export const taskLifecycleEventOutbox = sqliteTable(
+  'task_lifecycle_event_outbox',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id),
+    taskRevision: integer('task_revision').notNull(),
+    observationJson: text('observation_json').notNull(),
+    state: text('state', { enum: ['pending', 'claimed', 'completed', 'dead-letter'] })
+      .notNull()
+      .default('pending'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    claimedBy: text('claimed_by'),
+    claimExpiresAt: integer('claim_expires_at'),
+    lastError: text('last_error'),
+    createdAt: integer('created_at').notNull(),
+    completedAt: integer('completed_at'),
+    deadLetterAt: integer('dead_letter_at'),
+  },
+  (t) => ({
+    taskRevisionUq: uniqueIndex('task_lifecycle_event_outbox_task_revision_unique').on(
+      t.taskId,
+      t.taskRevision,
+    ),
+    dueIdx: index('idx_task_lifecycle_event_outbox_due').on(
+      t.state,
+      t.nextAttemptAt,
+      t.claimExpiresAt,
+    ),
   }),
 )
 
@@ -5086,6 +5173,15 @@ export const eventSubscriptions = sqliteTable(
     subjectRef: text('subject_ref').notNull(),
     subscriberKind: text('subscriber_kind').notNull(),
     subscriberRef: text('subscriber_ref').notNull(),
+    mode: text('mode', { enum: ['exact', 'filtered'] })
+      .notNull()
+      .default('exact'),
+    originKind: text('origin_kind'),
+    originRef: text('origin_ref'),
+    definitionRevision: text('definition_revision'),
+    displayNameJson: text('display_name_json'),
+    selectorKind: text('selector_kind'),
+    selectorJson: text('selector_json'),
     activeIdentityKey: text('active_identity_key'),
     state: text('state', { enum: ['active', 'cancelled'] })
       .notNull()
@@ -5110,6 +5206,48 @@ export const eventSubscriptions = sqliteTable(
       t.subscriberRef,
       t.state,
     ),
+    modeIdx: index('idx_event_subscriptions_mode').on(t.mode, t.state, t.updatedAt),
+    auditIdx: index('idx_event_subscriptions_audit').on(t.mode, t.updatedAt, t.id),
+  }),
+)
+
+/**
+ * Source-neutral filtered subscriptions that start work. Legacy Webhook rules
+ * remain adapter-owned and are projected through the same Event Center SPI;
+ * new sources use this owner-neutral definition instead of a Webhook table.
+ */
+export const eventResponseRules = sqliteTable(
+  'event_response_rules',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    ownerUserId: text('owner_user_id').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    sourceId: text('source_id').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    eventTypeId: text('event_type_id').notNull(),
+    eventTypeRevision: integer('event_type_revision').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectMatch: text('subject_match', { enum: ['all', 'exact', 'prefix'] })
+      .notNull()
+      .default('all'),
+    subjectPattern: text('subject_pattern'),
+    targetJson: text('target_json').notNull(),
+    lastFiredAt: integer('last_fired_at'),
+    lastStatus: text('last_status', { enum: ['launched', 'failed'] }),
+    lastError: text('last_error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    eventIdx: index('idx_event_response_rules_event').on(
+      t.enabled,
+      t.sourceId,
+      t.sourceRevision,
+      t.eventTypeId,
+      t.eventTypeRevision,
+    ),
+    ownerIdx: index('idx_event_response_rules_owner').on(t.ownerUserId, t.updatedAt),
   }),
 )
 
@@ -5190,6 +5328,8 @@ export const eventRecords = sqliteTable(
       t.dedupeKey,
     ),
     subjectIdx: index('idx_event_records_subject').on(t.subjectType, t.subjectRef, t.occurredAt),
+    auditIdx: index('idx_event_records_audit').on(t.observedAt, t.id),
+    sourceAuditIdx: index('idx_event_records_source_audit').on(t.sourceId, t.observedAt, t.id),
   }),
 )
 
@@ -5206,13 +5346,17 @@ export const eventDeliveries = sqliteTable(
     subscriberKind: text('subscriber_kind').notNull(),
     subscriberRef: text('subscriber_ref').notNull(),
     deliveryClass: text('delivery_class').notNull(),
-    priority: integer('priority').notNull(),
-    state: text('state', { enum: ['pending', 'accepted'] })
+    state: text('state', { enum: ['pending', 'claimed', 'accepted', 'dead-letter'] })
       .notNull()
       .default('pending'),
     attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    claimedBy: text('claimed_by'),
+    claimExpiresAt: integer('claim_expires_at'),
+    lastError: text('last_error'),
     createdAt: integer('created_at').notNull(),
     acceptedAt: integer('accepted_at'),
+    deadLetterAt: integer('dead_letter_at'),
   },
   (t) => ({
     eventSubscriptionUq: uniqueIndex('event_deliveries_event_subscription_unique').on(
@@ -5223,8 +5367,14 @@ export const eventDeliveries = sqliteTable(
       t.subscriberKind,
       t.subscriberRef,
       t.state,
-      t.priority,
+      t.nextAttemptAt,
       t.createdAt,
+    ),
+    dueIdx: index('idx_event_deliveries_due').on(
+      t.subscriberKind,
+      t.state,
+      t.nextAttemptAt,
+      t.claimExpiresAt,
     ),
   }),
 )
@@ -5267,6 +5417,26 @@ export const employeeCases = sqliteTable(
       t.employeeRevision,
       t.state,
       t.updatedAt,
+    ),
+  }),
+)
+
+/** Source-neutral event delivery provenance for an event-started Case. */
+export const employeeCaseEventOrigins = sqliteTable(
+  'employee_case_event_origins',
+  {
+    caseId: text('case_id')
+      .primaryKey()
+      .references(() => employeeCases.id),
+    eventSubscriptionId: text('event_subscription_id').notNull(),
+    eventDeliveryId: text('event_delivery_id').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    deliveryUq: uniqueIndex('employee_case_event_origins_delivery_unique').on(t.eventDeliveryId),
+    subscriptionIdx: index('idx_employee_case_event_origins_subscription').on(
+      t.eventSubscriptionId,
+      t.createdAt,
     ),
   }),
 )
@@ -5417,7 +5587,7 @@ export const employeeOsOutbox = sqliteTable(
       enum: [
         'event-subscribe',
         'event-unsubscribe',
-        'event-observe',
+        'event-publish',
         'execution-launch',
         'platform-work-item-execute',
         'invocation-create',

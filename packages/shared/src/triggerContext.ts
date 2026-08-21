@@ -1,4 +1,4 @@
-// RFC-292 — neutral, source-shaped trigger context.
+// RFC-292/RFC-310 — neutral, source-shaped trigger context.
 //
 // This module is deliberately outside codeHost/: webhook is a task launch
 // source, while code-host-call, agent prompts, workgroup goals and review
@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import {
   CodeHostEventTypeSchema,
+  WEBHOOK_EVENT_VAR_MATRIX,
   WEBHOOK_TEMPLATE_VARS,
   type CodeHostEventType,
   type WebhookTemplateVar,
@@ -39,10 +40,22 @@ export type WebhookTriggerFields = Readonly<
 export type CodeContextFields = Omit<WebhookTriggerFields, 'event_type'> &
   Partial<Pick<WebhookTriggerFields, 'event_type'>>
 
+export const TRIGGER_NAMESPACE_RE = /^[a-z][a-z0-9_-]{0,63}$/
+export const TRIGGER_FIELD_RE = /^[a-z][a-z0-9_-]{0,127}$/
+
+export interface TriggerParameterContract {
+  /** Author-facing namespace in `trigger.<namespace>.<field>`. */
+  readonly namespace: string
+  /** Immutable event-type-owned definition that declared the injected fields. */
+  readonly definitionRef: { readonly id: string; readonly revision: number }
+  /** Fields structurally available for this exact event, including empty values. */
+  readonly availableFields: readonly string[]
+}
+
 export interface TriggerContext {
-  readonly trigger: {
-    readonly webhook: WebhookTriggerFields
-  }
+  readonly trigger: Readonly<Record<string, Readonly<Record<string, string>>>>
+  /** Absent only on pre-RFC-310 in-memory/serialized Webhook fixtures. */
+  readonly contract?: TriggerParameterContract
 }
 
 const optionalWebhookFields = Object.fromEntries(
@@ -59,15 +72,87 @@ export const WebhookTriggerFieldsSchema = z
   })
   .strict() as z.ZodType<WebhookTriggerFields>
 
-export const TriggerContextSchema = z
+const triggerParameterContractSchema = z
   .object({
-    trigger: z
-      .object({
-        webhook: WebhookTriggerFieldsSchema,
-      })
+    namespace: z.string().regex(TRIGGER_NAMESPACE_RE),
+    definitionRef: z
+      .object({ id: z.string().min(1).max(200), revision: z.number().int().positive() })
       .strict(),
+    availableFields: z
+      .array(z.string().regex(TRIGGER_FIELD_RE))
+      .min(1)
+      .max(256)
+      .transform((fields) => [...new Set(fields)]),
   })
-  .strict() as z.ZodType<TriggerContext>
+  .strict()
+
+const canonicalTriggerContextSchema = z
+  .object({
+    trigger: z.record(
+      z.string().regex(TRIGGER_NAMESPACE_RE),
+      z.record(z.string().regex(TRIGGER_FIELD_RE), z.string().max(64 * 1024)),
+    ),
+    contract: triggerParameterContractSchema,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const namespaces = Object.keys(value.trigger)
+    if (namespaces.length !== 1 || namespaces[0] !== value.contract.namespace) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'trigger context must contain exactly its declared namespace',
+        path: ['trigger'],
+      })
+      return
+    }
+    const fields = value.trigger[value.contract.namespace] ?? {}
+    for (const field of Object.keys(fields)) {
+      if (!value.contract.availableFields.includes(field)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `trigger value is not declared by its contract: ${field}`,
+          path: ['trigger', value.contract.namespace, field],
+        })
+      }
+    }
+  })
+
+/**
+ * Canonical runtime contract. Its shape is source-neutral; the legacy
+ * Webhook-only forms are accepted only by `parseTriggerContextJson` below.
+ */
+const legacyNestedTriggerContextSchema = z
+  .object({ trigger: z.object({ webhook: WebhookTriggerFieldsSchema }).strict() })
+  .strict()
+  .superRefine((value, ctx) => {
+    const fields = value.trigger.webhook
+    const available = WEBHOOK_EVENT_VAR_MATRIX[fields.event_type]
+    for (const field of Object.keys(fields)) {
+      if (!available.includes(field as WebhookTemplateVar)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `trigger value is unavailable for ${fields.event_type}: ${field}`,
+          path: ['trigger', 'webhook', field],
+        })
+      }
+    }
+  })
+  .transform((value): TriggerContext => {
+    const fields = value.trigger.webhook
+    return {
+      trigger: { webhook: fields },
+      contract: {
+        namespace: 'webhook',
+        definitionRef: { id: `code-host.webhook.${fields.event_type}`, revision: 1 },
+        availableFields: WEBHOOK_EVENT_VAR_MATRIX[fields.event_type],
+      },
+    }
+  })
+
+export const TriggerContextSchema = z.union([
+  canonicalTriggerContextSchema,
+  legacyNestedTriggerContextSchema,
+]) as z.ZodType<TriggerContext>
 
 export type ParsedTriggerContext =
   | { readonly kind: 'none' }
@@ -96,17 +181,34 @@ export function parseTriggerContextJson(raw: string | null | undefined): ParsedT
     return { kind: 'ok', value: canonical.data, migratedFromFlat: false }
   }
 
+  const historicalNested = legacyNestedTriggerContextSchema.safeParse(decoded)
   const historicalFlat = WebhookTriggerFieldsSchema.safeParse(decoded)
-  if (!historicalFlat.success) return { kind: 'invalid' }
+  const fields = historicalNested.success
+    ? webhookFieldsOf(historicalNested.data)
+    : historicalFlat.success
+      ? historicalFlat.data
+      : null
+  if (fields === null) return { kind: 'invalid' }
   return {
     kind: 'ok',
-    value: { trigger: { webhook: historicalFlat.data } },
-    migratedFromFlat: true,
+    value: webhookContext(fields),
+    migratedFromFlat: historicalFlat.success,
   }
 }
 
 export function webhookFieldsOf(context: TriggerContext): WebhookTriggerFields {
-  return context.trigger.webhook
+  return WebhookTriggerFieldsSchema.parse(context.trigger.webhook)
+}
+
+function webhookContext(fields: WebhookTriggerFields): TriggerContext {
+  return TriggerContextSchema.parse({
+    trigger: { webhook: fields },
+    contract: {
+      namespace: 'webhook',
+      definitionRef: { id: `code-host.webhook.${fields.event_type}`, revision: 1 },
+      availableFields: WEBHOOK_EVENT_VAR_MATRIX[fields.event_type],
+    },
+  })
 }
 
 /** Deterministic, value-free editor/test preview context. */
@@ -117,5 +219,42 @@ export function sampleWebhookTriggerContext(): TriggerContext {
       `<trigger.webhook.${field}>`,
     ]),
   ) as Partial<Record<Exclude<WebhookTemplateVar, 'event_type'>, string>>
-  return { trigger: { webhook: { event_type: 'note', ...fields } } }
+  return webhookContext({ event_type: 'note', ...fields })
+}
+
+export function triggerContextValue(
+  context: TriggerContext,
+  source: string,
+  field: string,
+): string {
+  const contract = triggerContextContract(context)
+  if (contract === null || contract.namespace !== source) return ''
+  return context.trigger[source]?.[field] ?? ''
+}
+
+export function triggerContextContract(context: TriggerContext): TriggerParameterContract | null {
+  if (context.contract !== undefined) return context.contract
+  const webhook = WebhookTriggerFieldsSchema.safeParse(context.trigger.webhook)
+  if (!webhook.success) return null
+  return {
+    namespace: 'webhook',
+    definitionRef: { id: `code-host.webhook.${webhook.data.event_type}`, revision: 1 },
+    availableFields: WEBHOOK_EVENT_VAR_MATRIX[webhook.data.event_type],
+  }
+}
+
+export function createTriggerContext(input: {
+  readonly namespace: string
+  readonly definitionRef: { readonly id: string; readonly revision: number }
+  readonly availableFields: readonly string[]
+  readonly values: Readonly<Record<string, string>>
+}): TriggerContext {
+  return TriggerContextSchema.parse({
+    trigger: { [input.namespace]: input.values },
+    contract: {
+      namespace: input.namespace,
+      definitionRef: input.definitionRef,
+      availableFields: input.availableFields,
+    },
+  })
 }

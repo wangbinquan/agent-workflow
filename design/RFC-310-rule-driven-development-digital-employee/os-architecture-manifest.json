@@ -14,13 +14,15 @@
       "publicEntries": ["commands.ts", "events.ts", "queries.ts", "types.ts"],
       "externalImports": [
         "cli/start.ts -> composition",
+        "cli/start.ts -> public/events",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
         "routes/digitalEmployees.ts -> composition",
-        "server.ts -> composition"
+        "server.ts -> composition",
+        "server.ts -> public/events"
       ]
     },
     "event-center": {
-      "owner": "event and source catalog, subscription, observer activation, observation cursor, event record and delivery",
+      "owner": "event and source catalog, response rule, subscription, observer activation, observation cursor, event record and delivery",
       "topLevelEntries": [
         "application",
         "composition",
@@ -34,9 +36,18 @@
         "cli/start.ts -> composition",
         "modules/digital-employee/application/ports/runtimeStore.ts -> public/types",
         "modules/digital-employee/application/runtimeService.ts -> public/participants",
+        "modules/digital-employee/application/runtimeService.ts -> public/types",
         "modules/digital-employee/composition.ts -> public/participants",
+        "modules/digital-employee/public/events.ts -> public/types",
+        "modules/integration/application/adapters/event-center-adapter.ts -> composition/required-ports",
+        "modules/integration/public/events.ts -> public/types",
+        "modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts -> public/participants",
+        "modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts -> public/types",
+        "modules/task-execution/public/events.ts -> public/types",
         "routes/eventCenter.ts -> composition",
-        "server.ts -> composition"
+        "server.ts -> composition",
+        "services/webhook/dispatcherTypes.ts -> public/types",
+        "services/webhook/webhookDispatch.ts -> public/types"
       ]
     },
     "execution-contract": {

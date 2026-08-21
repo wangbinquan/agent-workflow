@@ -14,8 +14,6 @@ export function minimalEmployeeTypePackage(input: {
 }): EmployeeTypePackageRegistration {
   const workItemRef = `${input.typeId}-work`
   const contextTypeId = `${input.typeId}.work`
-  const sourceId = `${input.typeId}.work-ingress`
-  const eventTypeId = `${input.typeId}.work-received`
   const contractId = `${input.typeId}.perform-work`
   const descriptor = {
     schemaVersion: 1,
@@ -61,6 +59,7 @@ export function minimalEmployeeTypePackage(input: {
         placeholder: text('不可用', 'Unavailable'),
       },
     },
+    workStartWorkItemRef: workItemRef,
     authoringManifest: {
       schemaVersion: 1,
       lifecycleRegions: [
@@ -137,43 +136,10 @@ export function minimalEmployeeTypePackage(input: {
         ],
       },
     ],
-    eventSources: [
-      {
-        sourceId,
-        version: 1,
-        displayName: text('工作入口', 'Work ingress'),
-        description: text('接收新工作', 'Receives new work'),
-        observationMode: 'passive',
-        observerProgramRef: null,
-        pollIntervalMs: 60_000,
-        batchSize: 100,
-      },
-    ],
-    eventTypes: [
-      {
-        eventTypeId,
-        version: 1,
-        subjectTypeId: `${input.typeId}-request`,
-        payloadSchemaId: `${input.typeId}.event.v1`,
-        displayName: text('收到工作', 'Work received'),
-        description: text('开始履行职责', 'Starts the duty'),
-        deliveryClass: 'work',
-        priority: 100,
-        preemptsContinuation: false,
-        sourceRef: { id: sourceId, revision: 1 },
-      },
-    ],
+    eventSources: [],
+    eventTypes: [],
     attentionRules: [],
-    reactionRules: [
-      {
-        ruleId: `${input.typeId}-perform-work`,
-        eventTypeId,
-        requiredContextTypes: [contextTypeId],
-        workItemRef,
-        slotRef: 'primary',
-        allowedEffectKinds: [],
-      },
-    ],
+    reactionRules: [],
     invocationContracts: [],
   }
 

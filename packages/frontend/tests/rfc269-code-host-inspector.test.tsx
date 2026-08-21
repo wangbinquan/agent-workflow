@@ -12,11 +12,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   WORKFLOW_SCHEMA_VERSION,
+  WEBHOOK_TEMPLATE_VARS,
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { CodeHostCallEdit } from '../src/components/canvas/inspector/CodeHostCallEdit'
 import type { InspectorChangeMeta } from '../src/components/canvas/inspector/historyMeta'
+import type { RuntimeTriggerParameterContract } from '../src/components/runtime-parameters/catalog'
 
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({
@@ -53,6 +55,27 @@ const DEFINITION: WorkflowDefinition = {
   edges: [],
 }
 
+const TRIGGER_CONTRACTS: RuntimeTriggerParameterContract[] = [
+  {
+    namespace: 'webhook',
+    definitionRef: { id: 'code-host.webhook.note', revision: 1 },
+    sourceLabel: 'Code-host webhook',
+    groupLabel: 'Code-host event',
+    fields: WEBHOOK_TEMPLATE_VARS.map((fieldId) => ({
+      fieldId,
+      label:
+        fieldId === 'comment_thread_id'
+          ? 'Comment thread ID'
+          : fieldId === 'event_json'
+            ? 'Event JSON'
+            : fieldId === 'mr_iid'
+              ? 'MR / PR number'
+              : fieldId,
+      description: `Code-host event field ${fieldId}`,
+    })),
+  },
+]
+
 function renderEdit(
   n: WorkflowNode = node(),
   definition: WorkflowDefinition = { ...DEFINITION, nodes: [n] },
@@ -64,6 +87,7 @@ function renderEdit(
       node={n}
       agents={[]}
       definition={definition}
+      triggerContracts={TRIGGER_CONTRACTS}
       onPatch={(next, meta) => {
         patched.push(next)
         metas.push(meta)

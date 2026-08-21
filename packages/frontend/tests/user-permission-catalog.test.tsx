@@ -35,10 +35,9 @@ describe('RFC-305 UserPermissionCatalog', () => {
     expect(scripts.checked).toBe(false)
     fireEvent.click(scripts)
     expect(scripts.checked).toBe(true)
-    // 54 baseline (RFC-304 added the two template reads and the three group-layer
-    // writes) + the one explicitly ticked `scripts:author`. RFC-310 PR-10
-    // retired `code-rounds:launch` from the user baseline ⇒ 83.
-    expect(screen.getByText(/83 effective/i)).toBeTruthy()
+    // Event Center contributes one read plus three authoring points to the
+    // user preset; the explicitly ticked `scripts:author` remains additive.
+    expect(screen.getByText(/87 effective/i)).toBeTruthy()
   })
 
   test('search keeps selection while hiding non-matching rows', () => {

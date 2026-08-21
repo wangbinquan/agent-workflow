@@ -15,12 +15,15 @@ export type TaskLaunchProvenance =
       initiator: DirectTaskInitiator
     }
   | { kind: 'schedule' }
+  | { kind: 'event' }
   | { kind: 'webhook' }
 
 export interface RootTaskLaunchMetadata {
   scheduledTaskId?: string
   webhookTriggerId?: string
   webhookFireId?: string
+  eventSubscriptionId?: string
+  eventDeliveryId?: string
   hasTriggerContext: boolean
   /**
    * RFC-304 — this launch is a capability ROUND, anchored by its round row.
@@ -37,6 +40,7 @@ export interface RootTaskLaunchMetadata {
 export interface TaskLaunchAdmissionIssue {
   code:
     | 'task-launch-schedule-metadata-invalid'
+    | 'task-launch-event-metadata-invalid'
     | 'task-launch-webhook-metadata-invalid'
     | 'task-launch-direct-metadata-invalid'
   message: string
@@ -44,6 +48,7 @@ export interface TaskLaunchAdmissionIssue {
 
 export function deriveTaskLaunchOrigin(provenance: TaskLaunchProvenance): TaskLaunchOrigin {
   if (provenance.kind === 'schedule') return 'scheduled'
+  if (provenance.kind === 'event') return 'event'
   if (provenance.kind === 'webhook') return 'webhook'
   return provenance.initiator
 }
@@ -69,17 +74,38 @@ export function taskLaunchAdmissionIssue(
   const hasSchedule = nonEmpty(metadata.scheduledTaskId)
   const hasWebhookTrigger = nonEmpty(metadata.webhookTriggerId)
   const hasWebhookFire = nonEmpty(metadata.webhookFireId)
-  const hasAnyWebhookField =
-    present(metadata.webhookTriggerId) ||
-    present(metadata.webhookFireId) ||
-    metadata.hasTriggerContext
+  const hasWebhookAttribution =
+    present(metadata.webhookTriggerId) || present(metadata.webhookFireId)
+  const hasAnyWebhookField = hasWebhookAttribution || metadata.hasTriggerContext
+  const hasEventSubscription = nonEmpty(metadata.eventSubscriptionId)
+  const hasEventDelivery = nonEmpty(metadata.eventDeliveryId)
+  const hasEventAttribution =
+    present(metadata.eventSubscriptionId) || present(metadata.eventDeliveryId)
+  const hasAnyEventField = hasEventAttribution || metadata.hasTriggerContext
 
   if (provenance.kind === 'schedule') {
-    if (!hasSchedule || hasAnyWebhookField) {
+    if (!hasSchedule || hasAnyWebhookField || hasAnyEventField) {
       return {
         code: 'task-launch-schedule-metadata-invalid',
         message:
           'schedule launch provenance requires a non-empty scheduledTaskId and forbids webhook attribution/context',
+      }
+    }
+    return null
+  }
+
+  if (provenance.kind === 'event') {
+    if (
+      present(metadata.scheduledTaskId) ||
+      hasWebhookAttribution ||
+      !hasEventSubscription ||
+      !hasEventDelivery ||
+      !metadata.hasTriggerContext
+    ) {
+      return {
+        code: 'task-launch-event-metadata-invalid',
+        message:
+          'event launch provenance requires non-empty subscription/delivery ids and canonical trigger context, and forbids schedule/Webhook compatibility attribution',
       }
     }
     return null
@@ -101,7 +127,12 @@ export function taskLaunchAdmissionIssue(
     // ordinary trigger launch still needs BOTH ids, so a lost fire id does not
     // slip through by claiming to be a capability.
     const anchored = (hasWebhookTrigger && hasWebhookFire) || metadata.hasCodeRound === true
-    if (present(metadata.scheduledTaskId) || !anchored || !metadata.hasTriggerContext) {
+    if (
+      present(metadata.scheduledTaskId) ||
+      hasEventAttribution ||
+      !anchored ||
+      !metadata.hasTriggerContext
+    ) {
       return {
         code: 'task-launch-webhook-metadata-invalid',
         message:
@@ -111,7 +142,7 @@ export function taskLaunchAdmissionIssue(
     return null
   }
 
-  if (present(metadata.scheduledTaskId) || hasAnyWebhookField) {
+  if (present(metadata.scheduledTaskId) || hasAnyWebhookField || hasAnyEventField) {
     return {
       code: 'task-launch-direct-metadata-invalid',
       message: `${provenance.kind} launch provenance forbids scheduled/webhook root attribution`,

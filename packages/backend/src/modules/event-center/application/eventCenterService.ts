@@ -1,8 +1,21 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { createTriggerContext } from '@agent-workflow/shared'
 
-import { NotFoundError, ValidationError } from '@/util/errors'
-import type { EventObserverProgramPort } from '../composition/required-ports'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import type {
+  CustomEventObserverProgramPort,
+  EventDeliveryConsumerPort,
+  EventDeliveryRetryLimitsPort,
+  EventObserverProgramPort,
+  EventRoutingSubscriptionDirectoryPort,
+} from '../composition/required-ports'
+import type { CustomEventSourceStorePort } from './ports/customEventSourceStore'
+import {
+  customEventSourceDraftDigest,
+  customEventSourceDraftSchema,
+  customEventTypeId,
+} from '../domain/customEventSource'
 import {
   eventContentDigest,
   eventExactRefSchema,
@@ -11,9 +24,12 @@ import {
   eventSubjectSchema,
   eventSubscriberSchema,
   eventTypeDescriptorSchema,
+  eventTypeContentDigest,
   observerBatchSchema,
   subscriptionIdentity,
 } from '../domain/model'
+import type { EventDeliveryStatusRecord } from '../domain/model'
+import type { EventObservationInput } from '../public/types'
 import type { EventStorePort } from './ports/eventStore'
 
 const packageEventCatalogSchema = z.object({
@@ -22,6 +38,7 @@ const packageEventCatalogSchema = z.object({
     z.object({
       sourceId: z.string().min(1),
       version: z.number().int().positive(),
+      ownerTypeId: z.string().min(1).optional(),
       displayName: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
       description: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
       observationMode: z.enum(['passive', 'active', 'hybrid']),
@@ -39,37 +56,72 @@ const packageEventCatalogSchema = z.object({
       displayName: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
       description: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
       deliveryClass: z.string().min(1),
-      priority: z.number().int(),
+      priority: z.number().int().min(0).max(100_000).optional(),
       sourceRef: eventExactRefSchema,
+      catalogVisibility: z.enum(['public', 'internal', 'compatibility']).optional(),
+      triggerParameters: z
+        .object({
+          namespace: z.string().min(1),
+          fields: z.array(
+            z
+              .object({
+                fieldId: z.string().min(1),
+                displayName: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
+                description: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
+              })
+              .strict(),
+          ),
+        })
+        .strict()
+        .nullable()
+        .optional(),
     }),
   ),
 })
 
 export interface EventCenterServiceDependencies {
   readonly store: EventStorePort
+  readonly customSources: CustomEventSourceStorePort
   readonly typePackageDescriptorJsons: readonly string[]
   readonly observer: EventObserverProgramPort
+  readonly customObserver: CustomEventObserverProgramPort
+  readonly routingSubscriptions: EventRoutingSubscriptionDirectoryPort
+  readonly deliveryConsumers: readonly EventDeliveryConsumerPort[]
+  readonly deliveryRetryLimits: EventDeliveryRetryLimitsPort
   readonly now?: () => number
   readonly id?: () => string
   readonly workerId?: string
   readonly observerLeaseMs?: number
+  readonly deliveryLeaseMs?: number
 }
 
 export class EventCenterService {
   readonly #store: EventStorePort
+  readonly #customSources: CustomEventSourceStorePort
   readonly #observer: EventObserverProgramPort
+  readonly #customObserver: CustomEventObserverProgramPort
+  readonly #routingSubscriptions: EventRoutingSubscriptionDirectoryPort
+  readonly #deliveryConsumers: readonly EventDeliveryConsumerPort[]
+  readonly #deliveryRetryLimits: EventDeliveryRetryLimitsPort
   readonly #now: () => number
   readonly #id: () => string
   readonly #workerId: string
   readonly #observerLeaseMs: number
+  readonly #deliveryLeaseMs: number
 
   constructor(deps: EventCenterServiceDependencies) {
     this.#store = deps.store
+    this.#customSources = deps.customSources
     this.#observer = deps.observer
+    this.#customObserver = deps.customObserver
+    this.#routingSubscriptions = deps.routingSubscriptions
+    this.#deliveryConsumers = deps.deliveryConsumers
+    this.#deliveryRetryLimits = deps.deliveryRetryLimits
     this.#now = deps.now ?? Date.now
     this.#id = deps.id ?? ulid
     this.#workerId = deps.workerId ?? `event-center-${ulid()}`
     this.#observerLeaseMs = deps.observerLeaseMs ?? 60_000
+    this.#deliveryLeaseMs = deps.deliveryLeaseMs ?? 60_000
 
     for (const descriptorJson of deps.typePackageDescriptorJsons) {
       const catalog = packageEventCatalogSchema.parse(JSON.parse(descriptorJson) as unknown)
@@ -78,7 +130,7 @@ export class EventCenterService {
         const descriptor = eventSourceDescriptorSchema.parse({
           schemaVersion: 1,
           sourceRef: { id: source.sourceId, revision: source.version },
-          ownerTypeId: catalog.typeRef.typeId,
+          ownerTypeId: source.ownerTypeId ?? catalog.typeRef.typeId,
           displayName: source.displayName,
           description: source.description,
           observationMode: source.observationMode,
@@ -99,14 +151,18 @@ export class EventCenterService {
           displayName: eventType.displayName,
           description: eventType.description,
           deliveryClass: eventType.deliveryClass,
-          priority: eventType.priority,
+          ...(eventType.priority === undefined ? {} : { priority: eventType.priority }),
+          ...(eventType.catalogVisibility === undefined
+            ? {}
+            : { catalogVisibility: eventType.catalogVisibility }),
+          triggerParameters: eventType.triggerParameters ?? null,
         })
         if (this.#store.getSource(descriptor.sourceRef) === null) {
           throw new Error(
             `event type ${descriptor.eventTypeRef.id} references missing source ${descriptor.sourceRef.id}@${descriptor.sourceRef.revision}`,
           )
         }
-        this.#store.registerEventType(descriptor, eventContentDigest(descriptor), now)
+        this.#store.registerEventType(descriptor, eventTypeContentDigest(descriptor), now)
       }
     }
   }
@@ -136,6 +192,12 @@ export class EventCenterService {
     const source = this.#store.getSource(eventType.sourceRef)
     if (source === null) {
       throw new NotFoundError('event-source-not-found', 'event source is unavailable')
+    }
+    if (!this.#customSources.acceptsNewSubscriptions(source.sourceRef)) {
+      throw new ConflictError(
+        'event-source-retired',
+        `event source is retired: ${source.sourceRef.id}@${source.sourceRef.revision}`,
+      )
     }
     const result = this.#store.subscribe({
       id: this.#id(),
@@ -196,8 +258,20 @@ export class EventCenterService {
     return this.#store.nudgeObserver(sourceRef, this.#now())
   }
 
-  observe(input: unknown) {
-    const observation = eventObservationSchema.parse(input)
+  observe(input: EventObservationInput) {
+    let routingFacts: unknown = null
+    if (input.routingFactsJson !== undefined && input.routingFactsJson !== null) {
+      try {
+        routingFacts = JSON.parse(input.routingFactsJson) as unknown
+      } catch {
+        throw new ValidationError(
+          'event-routing-facts-invalid',
+          'event routing facts must be valid JSON',
+        )
+      }
+    }
+    const { routingFactsJson: _routingFactsJson, ...transport } = input
+    const observation = eventObservationSchema.parse({ ...transport, routingFacts })
     const eventType = this.#store.getEventType(observation.eventTypeRef)
     if (eventType === null) {
       throw new NotFoundError('event-type-not-found', 'event type is unavailable')
@@ -223,6 +297,8 @@ export class EventCenterService {
       eventType,
       observedAt: this.#now(),
       nextId: this.#id,
+      routingSubscriptions: this.#matchedRoutingSubscriptions(observation),
+      triggerContext: this.#triggerContext(eventType, observation),
     })
   }
 
@@ -238,15 +314,271 @@ export class EventCenterService {
   }
 
   listCatalog() {
-    return { sources: this.#store.listSources(), eventTypes: this.#store.listEventTypes() }
+    const subscriptionCounts = new Map(this.#store.activeSubscriptionCountsBySource())
+    for (const subscription of this.#routingSubscriptions.list()) {
+      if (subscription.state !== 'active') continue
+      const key = `${subscription.sourceRef.id}@${subscription.sourceRef.revision}`
+      subscriptionCounts.set(key, (subscriptionCounts.get(key) ?? 0) + 1)
+    }
+    const eventTypes = this.#store
+      .listEventTypes()
+      .filter((eventType) => (eventType.catalogVisibility ?? 'public') === 'public')
+    const publicSourceKeys = new Set(
+      eventTypes.map((eventType) => `${eventType.sourceRef.id}@${eventType.sourceRef.revision}`),
+    )
+    return {
+      sources: this.#store
+        .listSources()
+        .filter((source) =>
+          publicSourceKeys.has(`${source.sourceRef.id}@${source.sourceRef.revision}`),
+        )
+        .map((source) => ({
+          ...source,
+          subscriptionCount:
+            subscriptionCounts.get(`${source.sourceRef.id}@${source.sourceRef.revision}`) ?? 0,
+        })),
+      eventTypes,
+    }
   }
 
   listSubscriptions(subscriberRef?: string) {
-    return this.#store.listSubscriptions(subscriberRef)
+    const exact = this.#store.listSubscriptions(subscriberRef)
+    const filtered = this.#filteredSubscriptions(subscriberRef)
+    return [...exact, ...filtered].sort((left, right) => right.updatedAt - left.updatedAt)
+  }
+
+  listSubscriptionPage(input: { page: number; limit: number; subscriberRef?: string }) {
+    const filtered = this.#filteredSubscriptions(input.subscriberRef)
+    const offset = (input.page - 1) * input.limit
+    // At most every filtered definition can sort ahead of the requested page.
+    // Fetch only that bounded displacement window from the large exact ledger,
+    // then merge the complete (already materialized) routing directory in
+    // memory. No scan of the exact subscription table is needed.
+    const exactOffset = Math.max(0, offset - filtered.length)
+    const exact = this.#store.listSubscriptionPage({
+      limit: input.limit + filtered.length,
+      offset: exactOffset,
+      ...(input.subscriberRef === undefined ? {} : { subscriberRef: input.subscriberRef }),
+    })
+    const merged = [...exact.items, ...filtered].sort((left, right) => {
+      const byTime = right.updatedAt - left.updatedAt
+      return byTime === 0 ? right.id.localeCompare(left.id) : byTime
+    })
+    const total = exact.total + filtered.length
+    return {
+      items: merged.slice(offset - exactOffset, offset - exactOffset + input.limit),
+      total,
+      page: input.page,
+      pageCount: Math.max(1, Math.ceil(total / input.limit)),
+    }
+  }
+
+  #filteredSubscriptions(subscriberRef?: string) {
+    return this.#routingSubscriptions
+      .list()
+      .filter(
+        (subscription) =>
+          subscriberRef === undefined || subscription.subscriber.subscriberRef === subscriberRef,
+      )
+      .map((subscription) => ({
+        id: subscription.id,
+        mode: 'filtered' as const,
+        sourceRef: subscription.sourceRef,
+        eventTypeRefs: subscription.eventTypeRefs,
+        subjectTypeId: subscription.subjectTypeId,
+        subscriber: subscription.subscriber,
+        origin: {
+          kind: 'routing-rule' as const,
+          ref: subscription.id,
+          definitionRevision: subscription.definitionRevision,
+        },
+        displayName: subscription.displayName,
+        selector: subscription.selector,
+        state: subscription.state,
+        createdAt: subscription.createdAt,
+        updatedAt: subscription.updatedAt,
+      }))
+  }
+
+  listDeliveryStatuses(limit = 200) {
+    return this.#store.listDeliveryStatusPage({ limit, offset: 0 }).items
+  }
+
+  listDeliveryStatusPage(input: {
+    page: number
+    limit: number
+    state?: EventDeliveryStatusRecord['state']
+    subscriberRef?: string
+  }) {
+    const result = this.#store.listDeliveryStatusPage({
+      limit: input.limit,
+      offset: (input.page - 1) * input.limit,
+      ...(input.state === undefined ? {} : { state: input.state }),
+      ...(input.subscriberRef === undefined ? {} : { subscriberRef: input.subscriberRef }),
+    })
+    return {
+      ...result,
+      page: input.page,
+      pageCount: Math.max(1, Math.ceil(result.total / input.limit)),
+    }
+  }
+
+  listEventRecordPage(input: { page: number; limit: number; sourceId?: string }) {
+    const result = this.#store.listEventRecordPage({
+      limit: input.limit,
+      offset: (input.page - 1) * input.limit,
+      ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
+    })
+    return {
+      ...result,
+      page: input.page,
+      pageCount: Math.max(1, Math.ceil(result.total / input.limit)),
+    }
   }
 
   observerHealth() {
     return this.#store.listObserverActivations()
+  }
+
+  listCustomSources() {
+    return this.#customSources.list().map((record) => {
+      const draftDigest = customEventSourceDraftDigest(record.draft)
+      return {
+        id: record.id,
+        displayName: record.draft.displayName,
+        description: record.draft.description,
+        pollIntervalMs: record.draft.pollIntervalMs,
+        batchSize: record.draft.batchSize,
+        ingestionMode: record.draft.ingestionMode,
+        eventTypeCount: record.draft.eventTypes.length,
+        publishedRevision: record.publishedRevision,
+        state:
+          record.retiredAt !== null
+            ? ('retired' as const)
+            : record.publishedRevision === null
+              ? ('draft' as const)
+              : record.publishedDigest === draftDigest
+                ? ('published' as const)
+                : ('changed' as const),
+        updatedAt: record.updatedAt,
+      }
+    })
+  }
+
+  getCustomSource(id: string) {
+    const record = this.#customSources.get(id)
+    if (record === null) {
+      throw new NotFoundError(
+        'custom-event-source-not-found',
+        `custom event source not found: ${id}`,
+      )
+    }
+    return record
+  }
+
+  createCustomSource(input: unknown, ownerUserId: string | null) {
+    const draft = customEventSourceDraftSchema.parse(input)
+    return this.#customSources.create({ id: this.#id(), draft, ownerUserId, now: this.#now() })
+  }
+
+  updateCustomSource(id: string, input: unknown) {
+    const draft = customEventSourceDraftSchema.parse(input)
+    const updated = this.#customSources.update({ id, draft, now: this.#now() })
+    if (updated === null) {
+      const existing = this.#customSources.get(id)
+      if (existing === null) {
+        throw new NotFoundError(
+          'custom-event-source-not-found',
+          `custom event source not found: ${id}`,
+        )
+      }
+      throw new ConflictError('custom-event-source-retired', 'retired event sources are read-only')
+    }
+    return updated
+  }
+
+  async validateCustomSource(id: string) {
+    const record = this.getCustomSource(id)
+    if (record.retiredAt !== null) {
+      throw new ConflictError('custom-event-source-retired', 'retired event sources are read-only')
+    }
+    const revision = (record.publishedRevision ?? 0) + 1
+    try {
+      return await this.#customObserver.validate({
+        sourceRef: { id, revision },
+        draft: record.draft,
+        now: this.#now(),
+      })
+    } catch (error) {
+      throw new ValidationError(
+        'custom-event-source-fixture-failed',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
+
+  async publishCustomSource(id: string, actorUserId: string | null) {
+    const record = this.getCustomSource(id)
+    if (record.retiredAt !== null) {
+      throw new ConflictError('custom-event-source-retired', 'retired event sources are read-only')
+    }
+    const revision = (record.publishedRevision ?? 0) + 1
+    const sourceRef = { id, revision }
+    const receipt = await this.validateCustomSource(id)
+    const digest = customEventSourceDraftDigest(record.draft)
+    if (receipt.draftDigest !== digest) {
+      throw new ConflictError(
+        'custom-event-source-draft-changed',
+        'event source draft changed while its fixture was running',
+      )
+    }
+    const source = eventSourceDescriptorSchema.parse({
+      schemaVersion: 1,
+      sourceRef,
+      ownerTypeId: 'event-center.custom',
+      displayName: record.draft.displayName,
+      description: record.draft.description,
+      observationMode: 'active',
+      observerProgramRef: sourceRef,
+      pollIntervalMs: record.draft.pollIntervalMs,
+      batchSize: record.draft.batchSize,
+    })
+    const eventTypes = record.draft.eventTypes.map((event) =>
+      eventTypeDescriptorSchema.parse({
+        schemaVersion: 1,
+        eventTypeRef: { id: customEventTypeId(id, event.eventKey), revision },
+        sourceRef,
+        ownerTypeId: 'event-center.custom',
+        subjectTypeId: event.subjectTypeId,
+        payloadSchemaId: event.payloadSchemaId,
+        displayName: event.displayName,
+        description: event.description,
+        deliveryClass: event.deliveryClass,
+        triggerParameters: event.triggerParameters,
+      }),
+    )
+    return this.#customSources.publish({
+      id,
+      revision,
+      draft: record.draft,
+      digest,
+      validationReceipt: receipt,
+      source,
+      eventTypes,
+      actorUserId,
+      now: this.#now(),
+    })
+  }
+
+  retireCustomSource(id: string) {
+    if (!this.#customSources.retire(id, this.#now())) {
+      if (this.#customSources.get(id) === null) {
+        throw new NotFoundError(
+          'custom-event-source-not-found',
+          `custom event source not found: ${id}`,
+        )
+      }
+    }
   }
 
   async runOneDueObserver(): Promise<'completed' | 'failed' | 'obsolete' | 'idle'> {
@@ -258,8 +590,10 @@ export class EventCenterService {
     })
     if (run === null) return 'idle'
     try {
+      const custom = this.#customSources.getPublished(run.source.sourceRef)
+      const observer = custom === null ? this.#observer : this.#customObserver
       const batch = observerBatchSchema.parse(
-        await this.#observer.run({
+        await observer.run({
           source: run.source,
           subjects: run.subjects,
           cursorJson: run.cursorJson,
@@ -297,7 +631,13 @@ export class EventCenterService {
             'observer returned an unregistered event type for this source',
           )
         }
-        return { eventId: this.#id(), observation, eventType }
+        return {
+          eventId: this.#id(),
+          observation,
+          eventType,
+          routingSubscriptions: this.#matchedRoutingSubscriptions(observation),
+          triggerContext: this.#triggerContext(eventType, observation),
+        }
       })
       return this.#store.settleObserver({
         run,
@@ -319,5 +659,156 @@ export class EventCenterService {
         errorDetail: error instanceof Error ? error.message.slice(0, 2_000) : String(error),
       })
     }
+  }
+
+  async runOneNotification(
+    deliveryId?: string,
+  ): Promise<'completed' | 'retried' | 'dead-letter' | 'idle'> {
+    const subscriberKinds = [
+      ...new Set(this.#deliveryConsumers.map((consumer) => consumer.subscriberKind)),
+    ]
+    const delivery = this.#store.claimNotificationDelivery({
+      ...(deliveryId === undefined ? {} : { deliveryId }),
+      subscriberKinds,
+      now: this.#now(),
+      leaseOwner: this.#workerId,
+      leaseMs: this.#deliveryLeaseMs,
+    })
+    if (delivery === null) return 'idle'
+
+    const consumer = this.#deliveryConsumers.find(
+      (candidate) =>
+        candidate.subscriberKind === delivery.subscriber.kind &&
+        candidate.canConsume(delivery.subscriber.subscriberRef),
+    )
+    if (consumer === undefined) {
+      this.#settleDelivery({
+        deliveryId: delivery.deliveryId,
+        state: 'dead-letter',
+        nextAttemptAt: this.#now(),
+        error: `event delivery consumer unavailable: ${delivery.subscriber.kind}/${delivery.subscriber.subscriberRef}`,
+      })
+      return 'dead-letter'
+    }
+
+    try {
+      await consumer.consume(delivery)
+      this.#settleDelivery({
+        deliveryId: delivery.deliveryId,
+        state: 'accepted',
+        nextAttemptAt: this.#now(),
+        error: null,
+      })
+      return 'completed'
+    } catch (error) {
+      const limits = this.#deliveryRetryLimits.current()
+      const maxAttempts =
+        1 +
+        Math.max(0, Math.trunc(limits.defaultNodeRetries)) +
+        Math.max(0, Math.trunc(limits.sessionRestartBudget))
+      const terminal = delivery.attemptCount >= maxAttempts
+      const now = this.#now()
+      const nextAttemptAt = terminal
+        ? now
+        : now + Math.min(30_000, 1_000 * 2 ** Math.max(0, delivery.attemptCount - 1))
+      this.#settleDelivery({
+        deliveryId: delivery.deliveryId,
+        state: terminal ? 'dead-letter' : 'pending',
+        nextAttemptAt,
+        error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),
+      })
+      return terminal ? 'dead-letter' : 'retried'
+    }
+  }
+
+  #settleDelivery(input: {
+    readonly deliveryId: string
+    readonly state: 'accepted' | 'pending' | 'dead-letter'
+    readonly nextAttemptAt: number
+    readonly error: string | null
+  }): void {
+    if (
+      !this.#store.settleNotificationDelivery({
+        ...input,
+        leaseOwner: this.#workerId,
+        now: this.#now(),
+      })
+    ) {
+      throw new ConflictError(
+        'event-delivery-lease-lost',
+        `event delivery lease was lost: ${input.deliveryId}`,
+      )
+    }
+  }
+
+  #matchedRoutingSubscriptions(observation: z.infer<typeof eventObservationSchema>) {
+    const matches = this.#routingSubscriptions.match(observation)
+    const seen = new Set<string>()
+    return matches.map((match) => {
+      const definition = match.definition
+      eventExactRefSchema.parse(definition.sourceRef)
+      eventExactRefSchema.parse(match.eventTypeRef)
+      eventSubscriberSchema.parse(definition.subscriber)
+      z.string().min(1).max(500).parse(match.materializedSubscriptionId)
+      if (definition.state !== 'active') {
+        throw new ValidationError(
+          'event-routing-subscription-inactive',
+          `routing directory matched an inactive subscription: ${definition.id}`,
+        )
+      }
+      if (
+        definition.sourceRef.id !== observation.sourceRef.id ||
+        definition.sourceRef.revision !== observation.sourceRef.revision ||
+        match.eventTypeRef.id !== observation.eventTypeRef.id ||
+        match.eventTypeRef.revision !== observation.eventTypeRef.revision ||
+        definition.subjectTypeId !== observation.subject.typeId ||
+        !definition.eventTypeRefs.some(
+          (ref) =>
+            ref.id === observation.eventTypeRef.id &&
+            ref.revision === observation.eventTypeRef.revision,
+        )
+      ) {
+        throw new ValidationError(
+          'event-routing-subscription-mismatch',
+          `routing directory returned a mismatched subscription: ${definition.id}`,
+        )
+      }
+      if (seen.has(match.materializedSubscriptionId)) {
+        throw new ValidationError(
+          'event-routing-subscription-duplicate',
+          `routing directory returned duplicate materialization: ${match.materializedSubscriptionId}`,
+        )
+      }
+      seen.add(match.materializedSubscriptionId)
+      return match
+    })
+  }
+
+  #triggerContext(
+    eventType: z.infer<typeof eventTypeDescriptorSchema>,
+    observation: z.infer<typeof eventObservationSchema>,
+  ) {
+    const contract = eventType.triggerParameters
+    if (contract === null) {
+      if (observation.triggerParameters !== null) {
+        throw new ValidationError(
+          'event-trigger-parameters-undeclared',
+          `event type does not declare trigger parameters: ${eventType.eventTypeRef.id}`,
+        )
+      }
+      return null
+    }
+    if (observation.triggerParameters === null) {
+      throw new ValidationError(
+        'event-trigger-parameters-missing',
+        `event observation is missing trigger parameters: ${eventType.eventTypeRef.id}`,
+      )
+    }
+    return createTriggerContext({
+      namespace: contract.namespace,
+      definitionRef: eventType.eventTypeRef,
+      availableFields: contract.fields.map((field) => field.fieldId),
+      values: observation.triggerParameters,
+    })
   }
 }

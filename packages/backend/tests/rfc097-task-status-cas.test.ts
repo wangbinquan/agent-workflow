@@ -84,9 +84,9 @@ async function statusOf(db: DbClient, taskId: string): Promise<string> {
 }
 
 /**
- * 真并发模拟：返回一个 db 代理，第一次 `.update(...)` 被调用时（即 helper
- * 已完成 SELECT + 双闸校验、正要发 CAS UPDATE 的瞬间）先同步执行竞争写者，
- * 再放行原 UPDATE——其 `WHERE status = from` 谓词必然 miss（affected=0）。
+ * 真并发模拟：返回一个 db 代理，第一次 `.transaction(...)` 被调用时（即 helper
+ * 已完成 SELECT + 双闸校验、正要进入包含 CAS 与 lifecycle outbox 的原子事务）
+ * 先同步执行竞争写者，再放行原事务——其 `WHERE status = from` 谓词必然 miss。
  * bun:sqlite 全同步（.run() 立即落库），时序 100% 确定。
  */
 function dbWithCompetingWriter(real: DbClient, sabotage: () => void): DbClient {
@@ -94,7 +94,7 @@ function dbWithCompetingWriter(real: DbClient, sabotage: () => void): DbClient {
   return new Proxy(real, {
     get(target, prop, receiver) {
       const v = Reflect.get(target, prop, receiver) as unknown
-      if (prop === 'update' && typeof v === 'function') {
+      if (prop === 'transaction' && typeof v === 'function') {
         return (...args: unknown[]) => {
           if (!fired) {
             fired = true

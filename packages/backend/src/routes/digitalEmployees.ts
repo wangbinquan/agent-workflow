@@ -30,6 +30,21 @@ function actorId(c: Parameters<typeof actorOf>[0]): string | null {
   return actorOf(c).user.id
 }
 
+function actorForToolAuthoring(c: Parameters<typeof actorOf>[0], body: unknown) {
+  const toolKind = z
+    .object({ implementation: z.object({ kind: z.string() }).passthrough() })
+    .passthrough()
+    .parse(body).implementation.kind
+  const actor = actorOf(c)
+  if (toolKind === 'program' && !actor.permissions.has('scripts:author')) {
+    throw new ForbiddenError(
+      'scripts-author-required',
+      'authoring a ProgramTool requires scripts:author',
+    )
+  }
+  return actor
+}
+
 export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeModule): void {
   const maxUploadBytes = 32 * 1024 * 1024
 
@@ -342,6 +357,25 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
   registerRoute(
     app,
     {
+      method: 'GET',
+      path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId',
+      permissions: ['digital-employees:update'],
+      tokenAccess: 'allow',
+      summary: 'Read the editable authoring body for one work-item tool registration',
+    },
+    async (c) =>
+      c.json(
+        await module.queries.getToolAuthoring({
+          typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
+          workItemRef: c.req.param('workItemRef'),
+          toolId: c.req.param('toolId'),
+        }),
+      ),
+  )
+
+  registerRoute(
+    app,
+    {
       method: 'POST',
       path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools',
       permissions: ['digital-employees:update'],
@@ -350,17 +384,7 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
     },
     async (c) => {
       const body = await safeJsonOrEmpty(c.req.raw)
-      const toolKind = z
-        .object({ implementation: z.object({ kind: z.string() }).passthrough() })
-        .passthrough()
-        .parse(body).implementation.kind
-      const actor = actorOf(c)
-      if (toolKind === 'program' && !actor.permissions.has('scripts:author')) {
-        throw new ForbiddenError(
-          'scripts-author-required',
-          'creating a ProgramTool requires scripts:author',
-        )
-      }
+      const actor = actorForToolAuthoring(c, body)
       const created = await module.commands.createTool({
         typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
         workItemRef: c.req.param('workItemRef'),
@@ -368,6 +392,29 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
         actorUserId: actor.user.id,
       })
       return c.json(created, 201)
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId',
+      permissions: ['digital-employees:update'],
+      tokenAccess: 'allow',
+      summary: 'Correct one stable tool registration before publishing its next revision',
+    },
+    async (c) => {
+      const body = await safeJsonOrEmpty(c.req.raw)
+      actorForToolAuthoring(c, body)
+      return c.json(
+        await module.commands.updateTool({
+          typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
+          workItemRef: c.req.param('workItemRef'),
+          toolId: c.req.param('toolId'),
+          body,
+        }),
+      )
     },
   )
 
@@ -580,36 +627,5 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
           actorUserId: actorId(c),
         }),
       }),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/settings/digital-employee-execution-policy',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'Read the one global digital employee execution policy',
-    },
-    (c) => c.json(module.queries.getExecutionPolicy()),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/settings/digital-employee-execution-policy/revisions',
-      permissions: ['digital-employees:update'],
-      tokenAccess: 'allow',
-      summary: 'Publish a global digital employee execution policy revision',
-    },
-    async (c) =>
-      c.json(
-        module.commands.publishExecutionPolicy({
-          body: await safeJsonOrEmpty(c.req.raw),
-          actorUserId: actorId(c),
-        }),
-        201,
-      ),
   )
 }

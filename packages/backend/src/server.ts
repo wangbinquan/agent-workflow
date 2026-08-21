@@ -26,7 +26,11 @@ import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
-import type { WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
+import {
+  supportsEventCenterCodeHostDelivery,
+  supportsEventCenterWorkStart,
+  type WebhookDispatcher,
+} from '@/services/webhook/dispatcherTypes'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { mountMcpRoutes } from '@/routes/mcps'
@@ -74,6 +78,7 @@ import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler } from '@/util/errors'
+import { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import {
   composeDigitalEmployee,
@@ -94,6 +99,7 @@ import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { createDevelopmentMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import {
   buildDevelopmentDeliveryDeps,
   resolveDevelopmentRepoBinding,
@@ -105,6 +111,14 @@ import {
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import {
+  createCodeHostWebhookDeliveryConsumer,
+  createCodeHostWebhookRoutingDirectory,
+} from '@/modules/integration/composition'
+import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
+import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
+import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
+import type { DeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -180,6 +194,8 @@ export interface AppDeps {
    * Route tests may omit it and use the local DB-backed composition below.
    */
   digitalEmployeeEventCenter?: EventCenterModule
+  /** Bootstrap-local late binding that makes orchestration and Employee Case peer work targets. */
+  digitalEmployeeWorkStart?: DeferredDigitalEmployeeWorkStart
   /**
    * RFC-269 — outbound `fetch` seam for code-host calls (connection tests and
    * the call-node executor). Production omits it and the real `fetch` is used;
@@ -220,10 +236,71 @@ export interface AppDeps {
   }
 }
 
+function composeApplicationEventCenter(deps: AppDeps): EventCenterModule {
+  const approvalGateway = composeApprovalGatewayRunner(deps.db)
+  const missionContinuation = createDevelopmentMissionCodeHostEventContinuation(deps.db)
+  const codeHostDeliveryDispatcher =
+    deps.webhookDispatcher !== undefined &&
+    supportsEventCenterCodeHostDelivery(deps.webhookDispatcher)
+      ? deps.webhookDispatcher
+      : null
+  const eventWorkStarter =
+    deps.webhookDispatcher !== undefined && supportsEventCenterWorkStart(deps.webhookDispatcher)
+      ? deps.webhookDispatcher
+      : null
+  return composeEventCenter({
+    db: deps.db,
+    typePackageDescriptorJsons: [
+      developmentEmployeeTypePackage.descriptorJson,
+      codeHostEventCatalogJson,
+      taskLifecycleEventCatalogJson,
+      digitalEmployeeLifecycleEventCatalogJson,
+    ],
+    observer: composeDevelopmentEmployeeEventObserver({
+      codeHost: composeDevelopmentCodeHostEventObserver({
+        binding: (repositoryId) =>
+          resolveDevelopmentRepoBinding(deps.db, deps.secretBox, repositoryId),
+      }),
+      approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
+    }),
+    routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
+    ...(eventWorkStarter === null
+      ? {}
+      : {
+          automationWorkStart: {
+            launch: (input) => eventWorkStarter.dispatchEventTarget(input),
+          },
+        }),
+    deliveryConsumers:
+      codeHostDeliveryDispatcher === null
+        ? []
+        : [
+            createCodeHostWebhookDeliveryConsumer(
+              deps.db,
+              codeHostDeliveryDispatcher,
+              missionContinuation,
+            ),
+          ],
+    deliveryRetryLimits: {
+      current() {
+        const config = loadConfig(deps.configPath)
+        return {
+          defaultNodeRetries: config.defaultNodeRetries,
+          sessionRestartBudget: config.sessionRestartBudget,
+        }
+      },
+    },
+  })
+}
+
 export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
   const identityAccess = composeIdentityAccess(deps.db)
+  const effectiveDeps: AppDeps =
+    deps.digitalEmployeeEventCenter === undefined
+      ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
+      : deps
 
   app.use('*', async (c, next) => {
     const started = performance.now()
@@ -233,12 +310,12 @@ export function createApp(deps: AppDeps): Hono {
   })
 
   // Public routes (no auth).
-  mountHealthRoutes(app, deps, identityAccess.diagnostics)
+  mountHealthRoutes(app, effectiveDeps, identityAccess.diagnostics)
   // RFC-247 D18 — discovery must answer before any credential exists.
-  mountWellKnownRoutes(app, deps)
+  mountWellKnownRoutes(app, effectiveDeps)
   // RFC-257 — code-host webhook ingress. Public by design (caller is GitLab);
   // authenticated by per-endpoint secret + URL token inside the handler.
-  mountWebhookIngressRoutes(app, deps)
+  mountWebhookIngressRoutes(app, effectiveDeps)
 
   // Authenticated routes — three-track auth (RFC-036): session token / PAT /
   // legacy daemon token. Daemon token still maps to the seeded __system__
@@ -312,12 +389,12 @@ export function createApp(deps: AppDeps): Hono {
   // disagree in EITHER direction, which is what makes the guarantee real
   // rather than aspirational.
 
-  mountApiRoutes(app, deps)
+  mountApiRoutes(app, effectiveDeps)
 
   // RFC-247 §4.1 — the MCP transport. Mounted after the REST table (it builds a
   // second, actor-injected copy of that table for tool dispatch) and inside the
   // /api/* auth scope, so the credential is resolved before it is inspected.
-  mountMcpTransport(app, deps)
+  mountMcpTransport(app, effectiveDeps)
 
   // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
   // Placed after every mount and before the SPA fallback so it sees the real
@@ -392,24 +469,21 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     registrations: developmentExecutionContractRegistrations,
     implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
   })
-  const eventCenter =
-    deps.digitalEmployeeEventCenter ??
-    composeEventCenter({
-      db: deps.db,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
-      observer: composeDevelopmentEmployeeEventObserver({
-        codeHost: composeDevelopmentCodeHostEventObserver({
-          binding: (repositoryId) =>
-            resolveDevelopmentRepoBinding(deps.db, deps.secretBox, repositoryId),
-        }),
-        approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
-      }),
-    })
+  const eventCenter = deps.digitalEmployeeEventCenter ?? composeApplicationEventCenter(deps)
   const digitalEmployee = composeDigitalEmployee({
     db: deps.db,
     appHome,
     typePackages: [developmentEmployeeTypePackage],
     executionContracts,
+    retryLimits: {
+      current() {
+        const config = loadConfig(deps.configPath)
+        return {
+          defaultNodeRetries: config.defaultNodeRetries,
+          sessionRestartBudget: config.sessionRestartBudget,
+        }
+      },
+    },
     inputArtifacts,
     connectionCatalog: composeDevelopmentToolConnectionCatalog(deps.db),
     runtime: {
@@ -438,6 +512,19 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
       }),
     },
   })
+  if (deps.digitalEmployeeWorkStart !== undefined && digitalEmployee.runtime !== null) {
+    deps.digitalEmployeeWorkStart.bind({
+      launch(input) {
+        const result = digitalEmployee.runtime!.commands.launchWork({
+          employeeId: input.employeeId,
+          intake: input.intake,
+          actorUserId: input.actorUserId,
+          eventOrigin: input.origin,
+        })
+        return { caseId: result.caseRef.id }
+      },
+    })
+  }
 
   mountConfigRoutes(app, deps)
   mountDaemonRoutes(app, deps)

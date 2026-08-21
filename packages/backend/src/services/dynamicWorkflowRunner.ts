@@ -25,10 +25,10 @@ import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   DW_VALIDATION_CODES,
   DwGeneratedWorkflowSchema,
-  WEBHOOK_EVENT_VAR_MATRIX,
   dwGeneratedToWorkflowDef,
   fenceUntrusted,
   parseTriggerContextJson,
+  triggerContextContract,
   WorkgroupRuntimeConfigSchema,
   type Agent,
   type DwState,
@@ -357,14 +357,17 @@ export async function runDynamicWorkflowGenerate(
         goal: config.goal,
         pool: members,
         ...(dw.rejectionComment !== undefined ? { rejectionComment: dw.rejectionComment } : {}),
-        webhookContext:
-          state.triggerSource.kind === 'ok'
-            ? {
-                eventType: state.triggerSource.value.trigger.webhook.event_type,
-                availableFields:
-                  WEBHOOK_EVENT_VAR_MATRIX[state.triggerSource.value.trigger.webhook.event_type],
+        triggerContext: (() => {
+          if (state.triggerSource.kind !== 'ok') return null
+          const contract = triggerContextContract(state.triggerSource.value)
+          return contract === null
+            ? null
+            : {
+                namespace: contract.namespace,
+                definitionId: contract.definitionRef.id,
+                availableFields: contract.availableFields,
               }
-            : null,
+        })(),
         envelopeNonce,
       }) +
       (errorNotice !== null

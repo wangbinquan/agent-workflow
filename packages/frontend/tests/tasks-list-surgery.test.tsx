@@ -253,7 +253,7 @@ describe('/tasks — dense operations list (RFC-244)', () => {
       within(originGroup)
         .getAllByRole('radio')
         .map((radio) => radio.textContent),
-    ).toEqual(['All origins', 'Manual', 'Scheduled', 'Webhook', 'API'])
+    ).toEqual(['All origins', 'Manual', 'Scheduled', 'Event Center', 'Webhook', 'API'])
 
     const statusInput = within(dialog).getByRole('combobox', { name: /exact status/i })
     fireEvent.focus(statusInput)

@@ -1,6 +1,8 @@
-// RFC-257 T6 — 异步分流服务（五步流水线的 [2]-[5]，design §0/§4/§5）。
-// 契约：接手 received 行后推进 processing → 终态（matched / ignored / failed）；
-// 每个命中触发器一条 fires 行。启动唯一收口 = startExecution（RFC-243 门面，
+// RFC-257 T6 — Webhook response execution service（design §0/§4/§5）。
+// 生产入口只使用 dispatchSubscription：一条 Event Center Delivery 精确执行一条
+// 已匹配规则，绝不重扫 endpoint，也不修改共享 Webhook audit 状态。旧 dispatch
+// 仅为存量嵌入方/回归夹具保留。每个执行结果仍写一条 fires 行；启动唯一收口 =
+// startExecution（RFC-243 门面，
 // 本文件在 rfc243-executor-facade.test.ts 的 CALL_FACES 清单内——设计门 F-7：
 // 该锁是硬编码清单，新调用面必须显式登记）。
 //
@@ -19,12 +21,19 @@ import {
   cachedRepos,
   tasks,
   webhookDeliveries,
+  webhookEndpoints,
   webhookMrControlEffects,
   webhookTriggerFires,
   webhookTriggers,
   webhookTriggerStreams,
 } from '@/db/schema'
-import type { WebhookDispatcher, WebhookEndpointRow } from '@/services/webhook/dispatcherTypes'
+import type {
+  EventCenterAutomationWorkStarter,
+  EventCenterCodeHostDeliveryDispatcher,
+  WebhookDispatcher,
+  WebhookEndpointRow,
+} from '@/services/webhook/dispatcherTypes'
+import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
 import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
@@ -56,7 +65,9 @@ import {
   type StartAgentTask,
   type StartTask,
   type StartWorkgroupTask,
+  type TriggerContext,
   type WebhookAgentPayloadTemplate,
+  type WebhookDigitalEmployeePayloadTemplate,
   type WebhookFireOutcome,
   type WebhookLaunchKind,
   type WebhookLaunchPayloadTemplate,
@@ -76,6 +87,12 @@ import type {
   ProtectedMrLaunchGuard,
 } from '@/modules/integration/public/mrTerminalControl'
 import { DomainError } from '@/util/errors'
+import type {
+  DigitalEmployeeWorkStartPort,
+  WorkStartReceipt,
+  WorkStartTarget,
+} from '@/modules/integration/public/participants'
+import type { EventResponseTarget } from '@/modules/event-center/public/types'
 
 const log = createLogger('webhook-dispatch')
 
@@ -89,12 +106,18 @@ export type WebhookDispatchDeps = {
    * 测试接缝（fireSchedule 的 buildLaunch 注入同款先例）：缺省走真实现——
    * launch = startExecution 门面、cancel = cancelExecution。生产装配不传。
    */
-  launch?: (actor: Actor, rendered: RenderedLaunch, invoker: ExecutionInvoker) => Promise<string>
+  launch?: (
+    actor: Actor,
+    rendered: RenderedLaunch,
+    invoker: ExecutionInvoker,
+  ) => Promise<string | WorkStartReceipt>
   cancel?: (taskId: string) => Promise<unknown>
   /** RFC-268 测试接缝：证明 scratch 在 repo resolver 入口之前即完成分流。 */
   resolveRepo?: typeof resolveRepoForEvent
   /** RFC-303 bootstrap-owned durable guard/effect controller. */
   terminalControl?: MrTerminalControl
+  /** Source-neutral peer of Task start; bound after the Digital Employee owner composes. */
+  digitalEmployeeWorkStart?: DigitalEmployeeWorkStartPort
 }
 
 // ---------------------------------------------------------------------------
@@ -344,10 +367,75 @@ function fireTaskName(triggerName: string, event: CodeHostEvent): string {
   return `[${triggerName}] ${anchor}`.slice(0, 255)
 }
 
-type RenderedLaunch =
-  | { kind: 'workflow'; refId: string; payload: StartTask }
-  | { kind: 'agent'; refId: string; payload: StartAgentTask & { agentId: string } }
-  | { kind: 'workgroup'; refId: string; payload: StartWorkgroupTask & { workgroupId: string } }
+type RenderedLaunch = WorkStartTarget
+
+function renderEventResponseTarget(
+  target: EventResponseTarget,
+  context: TriggerContext,
+): RenderedLaunch {
+  const render = (value: string) => renderTemplate(value, context)
+  if (target.kind === 'workflow') {
+    return {
+      kind: 'workflow',
+      refId: target.refId,
+      payload: {
+        workflowId: target.refId,
+        name: render(target.nameTemplate),
+        inputs: Object.fromEntries(
+          Object.entries(target.inputs).map(([key, value]) => [key, render(value)]),
+        ),
+        scratch: true,
+      },
+    }
+  }
+  if (target.kind === 'agent') {
+    return {
+      kind: 'agent',
+      refId: target.refId,
+      payload: {
+        agentId: target.refId,
+        name: render(target.nameTemplate),
+        allowClarify: true,
+        ...(target.descriptionTemplate === null
+          ? {}
+          : { description: render(target.descriptionTemplate) }),
+        ...(Object.keys(target.inputs).length === 0
+          ? {}
+          : {
+              inputs: Object.fromEntries(
+                Object.entries(target.inputs).map(([key, value]) => [key, render(value)]),
+              ),
+            }),
+        scratch: true,
+      },
+    }
+  }
+  if (target.kind === 'workgroup') {
+    return {
+      kind: 'workgroup',
+      refId: target.refId,
+      payload: {
+        workgroupId: target.refId,
+        name: render(target.nameTemplate),
+        goal: render(target.goalTemplate),
+        scratch: true,
+      },
+    }
+  }
+  return {
+    kind: 'digital-employee',
+    refId: target.refId,
+    intake: {
+      kind: target.intakeKind,
+      target: Object.fromEntries(
+        Object.entries(target.target).map(([key, value]) => [key, render(value)]),
+      ),
+      body: target.intakeKind === 'body' ? render(target.valueTemplate) : null,
+      externalId: target.intakeKind === 'external-id' ? render(target.valueTemplate) : null,
+      uploads: [],
+    },
+  }
+}
 /**
  * RFC-304. Carries only the capability: a round reads its MR, commit and diff
  * from the frozen trigger context, so copying them here would make a second
@@ -356,7 +444,7 @@ type RenderedLaunch =
 
 /** The launch payload（T104 后三种 kind 全部携带 payload）。 */
 export function renderedLaunchPayload(rendered: RenderedLaunch): unknown {
-  return rendered.payload
+  return rendered.kind === 'digital-employee' ? rendered.intake : rendered.payload
 }
 
 export function renderWebhookLaunch(
@@ -437,6 +525,20 @@ export function renderWebhookLaunch(
       } as unknown as StartAgentTask & { agentId: string },
     }
   }
+  if (trigger.launchKind === 'digital-employee') {
+    const t = renderedTemplate as WebhookDigitalEmployeePayloadTemplate
+    return {
+      kind: 'digital-employee',
+      refId: trigger.launchRefId,
+      intake: {
+        kind: t.intakeKind,
+        target: t.target,
+        body: t.intakeKind === 'body' ? (t.body ?? null) : null,
+        externalId: t.intakeKind === 'external-id' ? (t.externalId ?? null) : null,
+        uploads: [],
+      },
+    }
+  }
   const t = renderedTemplate as WebhookWorkgroupPayloadTemplate
   return {
     kind: 'workgroup',
@@ -473,6 +575,7 @@ async function recordFire(
     outcome: WebhookFireOutcome
     supersededTaskId?: string | null
     taskId?: string | null
+    employeeCaseId?: string | null
     error?: string | null
   },
 ): Promise<void> {
@@ -484,6 +587,7 @@ async function recordFire(
     outcome: input.outcome,
     supersededTaskId: input.supersededTaskId ?? null,
     taskId: input.taskId ?? null,
+    employeeCaseId: input.employeeCaseId ?? null,
     error: input.error ?? null,
   })
 }
@@ -498,7 +602,30 @@ async function launchViaExecutor(
   rendered: RenderedLaunch,
   invoker: ExecutionInvoker,
   guard?: ProtectedMrLaunchGuard,
-): Promise<string> {
+): Promise<WorkStartReceipt> {
+  if (rendered.kind === 'digital-employee') {
+    if (deps.digitalEmployeeWorkStart === undefined || invoker.type !== 'event') {
+      throw new ValidationError(
+        'digital-employee-work-start-unavailable',
+        'digital employee event work-start is unavailable',
+      )
+    }
+    return {
+      kind: 'digital-employee',
+      ...deps.digitalEmployeeWorkStart.launch({
+        employeeId: rendered.refId,
+        intake: {
+          ...rendered.intake,
+          idempotencyKey: `event-delivery:${invoker.eventDeliveryId}`,
+        },
+        actorUserId: actor.user.id,
+        origin: {
+          eventSubscriptionId: invoker.eventSubscriptionId,
+          eventDeliveryId: invoker.eventDeliveryId,
+        },
+      }),
+    }
+  }
   const launchDeps = {
     ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
@@ -528,7 +655,7 @@ async function launchViaExecutor(
       },
       launchDeps,
     )
-    return task.id
+    return { kind: 'orchestration', taskId: task.id }
   }
   if (rendered.kind === 'workgroup') {
     const task = await startExecution(
@@ -542,7 +669,7 @@ async function launchViaExecutor(
       },
       launchDeps,
     )
-    return task.id
+    return { kind: 'orchestration', taskId: task.id }
   }
   const task = await startExecution(
     deps.db,
@@ -550,7 +677,7 @@ async function launchViaExecutor(
     { kind: 'workflow', refId: rendered.refId, invoker, payload: rendered.payload },
     launchDeps,
   )
-  return task.id
+  return { kind: 'orchestration', taskId: task.id }
 }
 
 async function fireTrigger(
@@ -561,16 +688,52 @@ async function fireTrigger(
     endpoint: WebhookEndpointRow
     event: CodeHostEvent
     trigger: ParsedTrigger
+    fireId?: string
+    eventSubscriptionId?: string
+    eventDeliveryId?: string
+    triggerContext?: TriggerContext
   },
 ): Promise<void> {
   const { event, trigger } = input
   const streamKey = streamKeyOf(event)
-  const fireId = ulid()
+  const fireId = input.fireId ?? ulid()
   const triggerId = trigger.row.id
   await queue.run(`${triggerId}|${streamKey}`, async () => {
     const now = Date.now()
     const db = deps.db
     const base = { fireId, deliveryId: input.deliveryId, triggerId, streamKey }
+
+    // A durable Event Center delivery is also the launch idempotency key. If
+    // the process stopped after task creation but before delivery settlement,
+    // retry adopts the existing task instead of launching a second one.
+    const existingFire = db
+      .select({ id: webhookTriggerFires.id })
+      .from(webhookTriggerFires)
+      .where(
+        and(
+          eq(webhookTriggerFires.deliveryId, input.deliveryId),
+          eq(webhookTriggerFires.triggerId, triggerId),
+        ),
+      )
+      .limit(1)
+      .get()
+    if (existingFire !== undefined) return
+    if (input.fireId !== undefined) {
+      const existingTask = db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          input.eventDeliveryId === undefined
+            ? eq(tasks.webhookFireId, fireId)
+            : eq(tasks.eventDeliveryId, input.eventDeliveryId),
+        )
+        .limit(1)
+        .get()
+      if (existingTask !== undefined) {
+        await recordFire(db, { ...base, outcome: 'launched', taskId: existingTask.id })
+        return
+      }
+    }
 
     // 匹配后启动前可能被并发禁用：互斥段内复查（outcome: skipped-trigger-disabled）。
     const fresh = (
@@ -693,7 +856,10 @@ async function fireTrigger(
     }
 
     let launchGuard: ProtectedMrLaunchGuard | undefined
-    if (protectedDecision.kind === 'protected') {
+    if (
+      protectedDecision.kind === 'protected' &&
+      effectiveTrigger.launchKind !== 'digital-employee'
+    ) {
       if (
         deliveryFact?.streamKey !== protectedDecision.identity.streamKey ||
         deliveryFact.revision === null ||
@@ -781,8 +947,9 @@ async function fireTrigger(
     let space: RepoResolution | { kind: 'scratch' }
     try {
       space =
-        'scratch' in effectiveTrigger.payloadTemplate &&
-        effectiveTrigger.payloadTemplate.scratch === true
+        effectiveTrigger.launchKind === 'digital-employee' ||
+        ('scratch' in effectiveTrigger.payloadTemplate &&
+          effectiveTrigger.payloadTemplate.scratch === true)
           ? { kind: 'scratch' }
           : await (deps.resolveRepo ?? resolveRepoForEvent)(
               db,
@@ -840,14 +1007,16 @@ async function fireTrigger(
         .where(eq(webhookTriggers.id, triggerId))
     }
     try {
-      await assertScheduledTargetUsable(
-        db,
-        actor,
-        rendered.kind,
-        rendered.payload as unknown as Record<string, unknown>,
-        await deps.getDefaultRuntime(),
-        { kind: 'context', value: webhookTriggerContextOf(event) },
-      )
+      if (rendered.kind !== 'digital-employee') {
+        await assertScheduledTargetUsable(
+          db,
+          actor,
+          rendered.kind,
+          rendered.payload as unknown as Record<string, unknown>,
+          await deps.getDefaultRuntime(),
+          { kind: 'context', value: webhookTriggerContextOf(event) },
+        )
+      }
     } catch (err) {
       // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
       // 渲染后的 payload·输入校验。早期实现把两类异常一律记成 skipped-owner-invalid
@@ -877,23 +1046,45 @@ async function fireTrigger(
 
     // 启动（唯一收口 startExecution；渲染后的全量校验 = launch 服务既有校验，
     // 失败即 launch-failed —— design §4.2「payload-invalid」不在此重复实现）。
-    const invoker: ExecutionInvoker = {
-      type: 'webhook',
-      webhookTriggerId: triggerId,
-      webhookFireId: fireId,
-      // RFC-269: compute before launch and publish with the initial task row.
-      // RFC-292: full nested source context, including bounded event_json.
-      triggerContext: webhookTriggerContextOf(event),
-      ...(launchGuard === undefined ? {} : { sourceTerminationSnapshot: launchGuard.snapshot }),
-    }
+    const invoker: ExecutionInvoker =
+      input.eventSubscriptionId !== undefined && input.eventDeliveryId !== undefined
+        ? {
+            type: 'event',
+            eventSubscriptionId: input.eventSubscriptionId,
+            eventDeliveryId: input.eventDeliveryId,
+            triggerContext: input.triggerContext ?? webhookTriggerContextOf(event),
+            ...(launchGuard === undefined
+              ? {}
+              : { sourceTerminationSnapshot: launchGuard.snapshot }),
+          }
+        : {
+            type: 'webhook',
+            webhookTriggerId: triggerId,
+            webhookFireId: fireId,
+            triggerContext: webhookTriggerContextOf(event),
+            ...(launchGuard === undefined
+              ? {}
+              : { sourceTerminationSnapshot: launchGuard.snapshot }),
+          }
     try {
-      const taskId =
+      const rawReceipt =
         deps.launch !== undefined
           ? await deps.launch(actor, rendered, invoker)
           : await launchViaExecutor(deps, actor, rendered, invoker, launchGuard)
-      launchGuard?.taskCommitted(taskId)
-      launchGuard?.launchSettled(taskId)
-      await recordFire(db, { ...base, outcome: 'launched', supersededTaskId, taskId })
+      const receipt: WorkStartReceipt =
+        typeof rawReceipt === 'string' ? { kind: 'orchestration', taskId: rawReceipt } : rawReceipt
+      if (receipt.kind === 'orchestration') {
+        launchGuard?.taskCommitted(receipt.taskId)
+        launchGuard?.launchSettled(receipt.taskId)
+      }
+      await recordFire(db, {
+        ...base,
+        outcome: 'launched',
+        supersededTaskId,
+        ...(receipt.kind === 'orchestration'
+          ? { taskId: receipt.taskId }
+          : { employeeCaseId: receipt.caseId }),
+      })
       await writeStream(circuit.effectiveCount + 1, true)
       await db
         .update(webhookTriggers)
@@ -901,7 +1092,7 @@ async function fireTrigger(
           lastFiredAt: now,
           lastStatus: 'launched',
           lastError: null,
-          lastTaskId: taskId,
+          lastTaskId: receipt.kind === 'orchestration' ? receipt.taskId : null,
           consecutiveFailures: 0,
           updatedAt: now,
         })
@@ -976,7 +1167,9 @@ async function recordInvalidPayloadFire(
       .where(eq(webhookTriggers.id, triggerId))
   })
 }
-export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispatcher {
+export function createWebhookDispatcher(
+  deps: WebhookDispatchDeps,
+): WebhookDispatcher & EventCenterCodeHostDeliveryDispatcher & EventCenterAutomationWorkStarter {
   const streamQueue = new KeyedSerialQueue<string>()
   return {
     async dispatch(input) {
@@ -1063,6 +1256,100 @@ export function createWebhookDispatcher(deps: WebhookDispatchDeps): WebhookDispa
         log.error('webhook dispatch failed', { deliveryId, error: errText(err) })
         await markDelivery(db, deliveryId, 'failed', 'internal-error').catch(() => {})
       }
+    },
+    async dispatchSubscription(input) {
+      const db = deps.db
+      const delivery = db
+        .select()
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.id, input.deliveryId))
+        .limit(1)
+        .get()
+      if (delivery === undefined || delivery.bodyJson === null || delivery.bodyJson === '') {
+        throw new Error(`webhook delivery is unavailable: ${input.deliveryId}`)
+      }
+      const endpoint = db
+        .select()
+        .from(webhookEndpoints)
+        .where(eq(webhookEndpoints.id, delivery.endpointId))
+        .limit(1)
+        .get()
+      if (endpoint === undefined) {
+        throw new Error(`webhook endpoint is unavailable: ${delivery.endpointId}`)
+      }
+      const adapter = CODE_HOST_ADAPTERS[endpoint.provider]
+      if (adapter === undefined) {
+        throw new Error(`webhook provider is unavailable: ${endpoint.provider}`)
+      }
+      let body: unknown
+      try {
+        body = JSON.parse(delivery.bodyJson) as unknown
+      } catch {
+        throw new Error(`webhook delivery body is invalid: ${input.deliveryId}`)
+      }
+      const normalized = adapter.normalize(replayHeaders(adapter, delivery.gitlabEventHeader), body)
+      if (!normalized.ok) {
+        throw new Error(`webhook delivery cannot be normalized: ${normalized.detail}`)
+      }
+      const event = normalized.event
+      const row = db
+        .select()
+        .from(webhookTriggers)
+        .where(
+          and(eq(webhookTriggers.id, input.triggerId), eq(webhookTriggers.endpointId, endpoint.id)),
+        )
+        .limit(1)
+        .get()
+      if (row === undefined || !row.enabled) return
+      const canonicalRow = await migrateTriggerRowTemplateToV2(db, row)
+      const parsed = parseTriggerRow(canonicalRow)
+      if (!parsed.ok || !matchTrigger(event, parsed.trigger.rule).hit) return
+      await fireTrigger(deps, streamQueue, {
+        deliveryId: input.deliveryId,
+        endpoint,
+        event,
+        trigger: parsed.trigger,
+        fireId: input.eventDeliveryId,
+        eventSubscriptionId: input.eventSubscriptionId,
+        eventDeliveryId: input.eventDeliveryId,
+        triggerContext: input.triggerContext,
+      })
+      const rootDeliveryId = delivery.replayedFromDeliveryId ?? input.deliveryId
+      const controlEffect = db
+        .select({ id: webhookMrControlEffects.id })
+        .from(webhookMrControlEffects)
+        .where(eq(webhookMrControlEffects.deliveryId, rootDeliveryId))
+        .limit(1)
+        .get()
+      if (controlEffect !== undefined) {
+        deps.terminalControl?.wake(controlEffect.id)
+      }
+    },
+    async dispatchEventTarget(input) {
+      const actor = await buildInheritedActor(deps.db, input.ownerUserId, 'event')
+      if (actor === null) {
+        throw new ValidationError(
+          'event-response-owner-invalid',
+          `event response owner is missing or inactive: ${input.ownerUserId}`,
+        )
+      }
+      const rendered = renderEventResponseTarget(input.target, input.triggerContext)
+      if (rendered.kind !== 'digital-employee') {
+        await assertScheduledTargetUsable(
+          deps.db,
+          actor,
+          rendered.kind,
+          rendered.payload as unknown as Record<string, unknown>,
+          await deps.getDefaultRuntime(),
+          { kind: 'context', value: input.triggerContext },
+        )
+      }
+      return launchViaExecutor(deps, actor, rendered, {
+        type: 'event',
+        eventSubscriptionId: input.eventSubscriptionId,
+        eventDeliveryId: input.eventDeliveryId,
+        triggerContext: input.triggerContext,
+      })
     },
   }
 }

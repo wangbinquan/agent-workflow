@@ -161,6 +161,7 @@ const stubConnectionCatalog: ToolConnectionCatalogPort = {
 }
 const stubProgramArtifacts: ProgramArtifactPort = {
   put: () => Promise.reject(new Error('program artifacts unused in this test')),
+  read: () => null,
 }
 const unreachableExecutionContracts: ExecutionContractParticipant = {
   list: () => [],

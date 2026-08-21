@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { CodeHostEvent } from '@agent-workflow/shared'
+import { webhookTriggerContextOf, type CodeHostEvent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
@@ -227,7 +227,7 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
         mr_ref: { kind: 'event-branch' as const },
         title: {
           kind: 'template' as const,
-          template: 'MR {{trigger.webhook.mr_iid}}: {{trigger.webhook.mr_title}}',
+          template: 'MR {{trigger.webhook.mr_iid}}: {{trigger.webhook.pipeline_status}}',
         },
       },
     },
@@ -245,7 +245,7 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
     expect(p['ref']).toBe('feature/x')
     const inputs = p['inputs'] as Record<string, string>
     expect(JSON.parse(inputs['mr_ref']!)).toEqual({ kind: 'branch', ref: 'feature/x' })
-    expect(inputs['title']).toBe('MR 42: Fix NPE')
+    expect(inputs['title']).toBe('MR 42: failed')
   })
   test('agent：description 插值 + expected 防 ABA 由 launch 层补', () => {
     const r = renderWebhookLaunch(
@@ -834,5 +834,92 @@ describe('RFC-257 · gate 失败归因（launch-failed vs skipped-owner-invalid�
       await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, t)).limit(1)
     )[0]!
     expect(row.consecutiveFailures).toBe(0)
+  })
+})
+
+describe('RFC-310 Event Center WorkStart · Digital Employee', () => {
+  test('one EventDelivery starts one Case with exact provenance and records the Case result', async () => {
+    const h = await harness()
+    const triggerId = await insertTrigger(h, {
+      launchKind: 'digital-employee',
+      launchRefId: 'employee-1',
+      launchPayload: JSON.stringify({
+        intakeKind: 'body',
+        target: { repositoryId: '{{trigger.webhook.repo_path}}' },
+        body: '修复流水线 {{trigger.webhook.pipeline_id}}',
+      }),
+      autoRegisterRepos: false,
+    })
+    const event = ev()
+    const deliveryId = await insertReceivedDelivery(h, event)
+    await h.db
+      .update(webhookDeliveries)
+      .set({
+        gitlabEventHeader: 'Pipeline Hook',
+        bodyJson: JSON.stringify({
+          object_kind: 'pipeline',
+          user: { username: 'aw-bot' },
+          project: {
+            path_with_namespace: 'platform/api',
+            git_http_url: HTTP_URL,
+            git_ssh_url: SSH_URL,
+          },
+          object_attributes: {
+            id: 1001,
+            ref: 'feature/x',
+            status: 'failed',
+            sha: 'abc123',
+          },
+          merge_request: { iid: 42, source_branch: 'feature/x', target_branch: 'main' },
+        }),
+      })
+      .where(eq(webhookDeliveries.id, deliveryId))
+    const starts: unknown[] = []
+    const { launch: _testLaunch, ...baseDeps } = h.deps
+    const dispatcher = createWebhookDispatcher({
+      ...baseDeps,
+      digitalEmployeeWorkStart: {
+        launch(input) {
+          starts.push(input)
+          return { caseId: 'case-1' }
+        },
+      },
+    })
+    const dispatch = {
+      deliveryId,
+      triggerId,
+      eventSubscriptionId: 'subscription-1',
+      eventDeliveryId: 'event-delivery-1',
+      triggerContext: webhookTriggerContextOf(event),
+    }
+    await dispatcher.dispatchSubscription!(dispatch)
+    await dispatcher.dispatchSubscription!(dispatch)
+
+    expect(starts).toEqual([
+      {
+        employeeId: 'employee-1',
+        intake: {
+          kind: 'body',
+          target: { repositoryId: 'platform/api' },
+          body: '修复流水线 1001',
+          externalId: null,
+          uploads: [],
+          idempotencyKey: 'event-delivery:event-delivery-1',
+        },
+        actorUserId: h.ownerId,
+        origin: {
+          eventSubscriptionId: 'subscription-1',
+          eventDeliveryId: 'event-delivery-1',
+        },
+      },
+    ])
+    expect(await firesOf(h, triggerId)).toMatchObject([
+      {
+        id: 'event-delivery-1',
+        outcome: 'launched',
+        taskId: null,
+        employeeCaseId: 'case-1',
+      },
+    ])
   })
 })

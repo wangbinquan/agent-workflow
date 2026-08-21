@@ -250,10 +250,22 @@ describe('RFC-295 stable webhook sink families', () => {
         goal: 'G',
         workingBranch: 'B',
       }),
+      ...collectWebhookTemplateSurfaces('digital-employee', {
+        intakeKind: 'body',
+        target: { repository: 'T' },
+        body: 'D',
+      }),
+      ...collectWebhookTemplateSurfaces('digital-employee', {
+        intakeKind: 'external-id',
+        externalId: 'E',
+      }),
     ].map((surface) => surface.authorityKey)
 
-    expect([...new Set([...workflowAuthorities, ...webhookAuthorities])].sort()).toEqual(
-      [...RUNTIME_TEMPLATE_AUTHORITY_KEYS].sort(),
+    const sourceOwnedAuthorities = [...new Set([...workflowAuthorities, ...webhookAuthorities])]
+    expect(sourceOwnedAuthorities.sort()).toEqual(
+      [...RUNTIME_TEMPLATE_AUTHORITY_KEYS]
+        .filter((authority) => !authority.startsWith('event:'))
+        .sort(),
     )
   })
 })

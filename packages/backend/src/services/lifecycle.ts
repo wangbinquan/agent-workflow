@@ -34,7 +34,7 @@ import {
   nextNodeRunStatus,
   isTerminalNodeRunStatus,
 } from '@agent-workflow/shared'
-import { nodeRuns, tasks } from '@/db/schema'
+import { nodeRuns, taskLifecycleEventOutbox, tasks } from '@/db/schema'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
@@ -309,6 +309,7 @@ import { notifyTaskTerminal } from '@/services/execution/executionWatch'
 // RFC-243 §3.2: child-task budget bookkeeping (leaf module, no-op until a call
 // node initializes the daemon singleton).
 import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
+import { taskLifecycleObservation } from '@/modules/task-execution/public/events'
 
 // RFC-108 T2 (AR-19 / 01-LIFE-08): the terminal-task-status set now lives in
 // @agent-workflow/shared (symmetric with node_run) so the frontend imports the
@@ -318,6 +319,32 @@ export { TERMINAL_TASK_STATUSES }
 
 export function isTerminalTaskStatus(s: string): boolean {
   return (TERMINAL_TASK_STATUSES as readonly string[]).includes(s)
+}
+
+/** Write the public lifecycle fact in the same transaction as its owner row. */
+export function enqueueTaskLifecycleEventTx(
+  tx: DbTxSync,
+  input: {
+    readonly taskId: string
+    readonly revision: number
+    readonly previousStatus: TaskStatus | null
+    readonly status: TaskStatus
+    readonly occurredAt: number
+  },
+): void {
+  tx.insert(taskLifecycleEventOutbox)
+    .values({
+      id: `task-lifecycle:${input.taskId}:${input.revision}`,
+      taskId: input.taskId,
+      taskRevision: input.revision,
+      observationJson: JSON.stringify(taskLifecycleObservation(input)),
+      state: 'pending',
+      attemptCount: 0,
+      nextAttemptAt: input.occurredAt,
+      createdAt: input.occurredAt,
+    })
+    .onConflictDoNothing()
+    .run()
 }
 
 /** Whitelisted companion columns (mirrors NodeRunStatusUpdateExtra; explicit
@@ -369,6 +396,7 @@ export class ConcurrentTaskTransition extends ConflictError {
 export type TerminalWorkspacePrunePolicy = (
   row: {
     webhookTriggerId: string | null
+    eventSubscriptionId: string | null
     spaceKind: (typeof tasks.$inferSelect)['spaceKind']
     workspacePruningAt: number | null
     workspacePruneCause: (typeof tasks.$inferSelect)['workspacePruneCause']
@@ -433,11 +461,13 @@ export async function setTaskStatus(args: {
       status: tasks.status,
       worktreePath: tasks.worktreePath,
       webhookTriggerId: tasks.webhookTriggerId,
+      eventSubscriptionId: tasks.eventSubscriptionId,
       spaceKind: tasks.spaceKind,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePruneCause: tasks.workspacePruneCause,
       workspacePrunedAt: tasks.workspacePrunedAt,
       sourceTerminationFence: tasks.sourceTerminationFence,
+      lifecycleEventRevision: tasks.lifecycleEventRevision,
     })
     .from(tasks)
     .where(eq(tasks.id, args.taskId))
@@ -522,6 +552,7 @@ export async function setTaskStatus(args: {
       requestWorkspacePrune = terminalWorkspacePrunePolicy(
         {
           webhookTriggerId: row.webhookTriggerId,
+          eventSubscriptionId: row.eventSubscriptionId,
           spaceKind: row.spaceKind,
           workspacePruningAt: row.workspacePruningAt,
           workspacePruneCause: row.workspacePruneCause,
@@ -560,6 +591,7 @@ export async function setTaskStatus(args: {
         ...(requestWorkspacePrune
           ? { workspacePruningAt: now, workspacePruneCause: 'webhook-terminal' as const }
           : {}),
+        lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
       })
       .where(
         and(
@@ -575,21 +607,21 @@ export async function setTaskStatus(args: {
             : []),
         ),
       )
-      .returning({ id: tasks.id })
-  if (args.onTransitionTx !== undefined) {
-    dbTxSync(args.db, (tx) => {
-      const updated = writeStatus(tx).all()
-      if (updated.length === 0) {
-        throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
-      }
-      args.onTransitionTx?.(tx, transition)
-    })
-  } else {
-    const updated = await writeStatus(args.db)
+      .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision })
+  dbTxSync(args.db, (tx) => {
+    const updated = writeStatus(tx).all()
     if (updated.length === 0) {
       throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
     }
-  }
+    enqueueTaskLifecycleEventTx(tx, {
+      taskId: args.taskId,
+      revision: updated[0]!.lifecycleEventRevision,
+      previousStatus: from,
+      status: args.to,
+      occurredAt: now,
+    })
+    args.onTransitionTx?.(tx, transition)
+  })
   // RFC-202 T2: unrevivable terminal statuses sweep the task's open human
   // gates (clarify rounds / review parks) so they leave the inbox for good.
   // Registered as a callback (cli/start.ts assembly) because lifecycle.ts is

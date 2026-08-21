@@ -5,6 +5,7 @@ export type PrincipalSource = 'session' | 'pat' | 'daemon' | 'cli' | 'system'
 export type DelegatedSource =
   | 'schedule'
   | 'webhook'
+  | 'event'
   | 'call-workflow'
   | 'call-workgroup'
   | 'code-host'

@@ -88,7 +88,9 @@ const genericExecutionContracts: ExecutionContractParticipant = {
   },
 }
 
-function fixtureModule() {
+function fixtureModule(retryLimits?: {
+  current(): { defaultNodeRetries: number; sessionRestartBudget: number }
+}) {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc310-os-authoring-'))
   roots.push(appHome)
   let ordinal = 0
@@ -97,6 +99,7 @@ function fixtureModule() {
     appHome,
     typePackages: [developmentEmployeeTypePackage],
     executionContracts: developmentExecutionContracts(),
+    ...(retryLimits === undefined ? {} : { retryLimits }),
     id: () => `resource-${++ordinal}`,
     now: () => 1_000 + ordinal,
     connectionCatalog: {
@@ -358,9 +361,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       manifest.workItems.find((item) => item.workItemRef === 'publish-conflict'),
     ).toMatchObject({ nodeKind: 'system', nextWorkItemRefs: ['observe-mr'] })
     expect(
-      typePackage.eventTypes
-        .filter((event) => event.preemptsContinuation)
-        .map((event) => event.eventTypeId),
+      typePackage.reactionRules
+        .filter((rule) => rule.preemptsContinuation)
+        .map((rule) => rule.eventTypeId),
     ).toEqual([
       'development.review-updated',
       'development.conflict-updated',
@@ -963,8 +966,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     ).toThrow('unresolvedReviewCount does not match actionable reviewThreads')
   })
 
-  test('system nodes reject tools and execution retry policy has one global owner', async () => {
-    const module = fixtureModule()
+  test('system nodes reject tools and employee retries are derived from global Limits', async () => {
+    let limits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
+    const module = fixtureModule({ current: () => limits })
     const typeRef = { typeId: 'development', revision: 2 }
     await expect(
       module.commands.createTool({
@@ -982,29 +986,15 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
     const initial = module.queries.getExecutionPolicy()
     expect(initial.revision).toBe(1)
-    const updated = module.commands.publishExecutionPolicy({
-      actorUserId: 'admin-1',
-      body: {
-        ...initial.content,
-        sameSceneAttempts: 3,
-        freshSceneAttempts: 4,
-      },
-    })
+    expect(initial.content.sameSceneAttempts).toBe(3)
+    expect(initial.content.freshSceneAttempts).toBe(1)
+
+    limits = { defaultNodeRetries: 5, sessionRestartBudget: 2 }
+    const updated = module.queries.getExecutionPolicy()
     expect(updated.revision).toBe(2)
-    expect(updated.content.sameSceneAttempts).toBe(3)
-    expect(updated.content.freshSceneAttempts).toBe(4)
-    expect(() =>
-      module.commands.publishExecutionPolicy({
-        actorUserId: 'admin-1',
-        body: { ...updated.content, initialBackoffMs: 2_000, maxBackoffMs: 1_000 },
-      }),
-    ).toThrow('maximum backoff must be greater than or equal to initial backoff')
-    expect(() =>
-      module.commands.publishExecutionPolicy({
-        actorUserId: 'admin-1',
-        body: { ...updated.content, roundBudgetMs: 2_000, caseBudgetMs: 1_000 },
-      }),
-    ).toThrow('case budget must be greater than or equal to round budget')
+    expect(updated.content.sameSceneAttempts).toBe(5)
+    expect(updated.content.freshSceneAttempts).toBe(2)
+    expect(module.queries.getExecutionPolicy().revision).toBe(2)
   })
 
   test('a work-item connection must resolve to the exact required provider purpose', async () => {
@@ -1053,6 +1043,118 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         expect.objectContaining({ code: 'required-connection-available', ok: true }),
       ]),
     )
+  })
+
+  // Regression: a failed contract check used to leave one invalid registration,
+  // while the correction submitted from the still-open dialog called create
+  // again. The toolbox then showed two same-name rows with different IDs and
+  // offered no way to repair either one. Corrections must stay on one stable
+  // registration identity and successful republishes advance only its revision.
+  test('tool corrections reuse one registration id and publish immutable revisions', async () => {
+    const module = fixtureModule()
+    const typeRef = { typeId: 'development', revision: 2 }
+    const body = {
+      displayName: '审批工具',
+      description: '先以缺失连接制造可纠正的失败草稿。',
+      roleRef: 'primary',
+      implementation: {
+        kind: 'agent' as const,
+        agentRef: { id: 'builtin:approval-draft-agent', revision: 1 },
+      },
+      connectionRef: null,
+    }
+    const failed = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'prepare-approval',
+      actorUserId: 'author-1',
+      body,
+    })
+    expect(failed.validationReceipt.status).toBe('invalid')
+
+    const corrected = await module.commands.updateTool({
+      typeRef,
+      workItemRef: 'prepare-approval',
+      toolId: failed.id,
+      body: {
+        ...body,
+        description: '补齐连接后沿用原 registration id。',
+        connectionRef: { id: 'approval-adapter', revision: 7 },
+      },
+    })
+    expect(corrected.id).toBe(failed.id)
+    expect(corrected.validationReceipt.status).toBe('valid')
+    expect(module.queries.listTools(typeRef, 'prepare-approval')).toHaveLength(1)
+    expect(
+      await module.commands.publishTool({
+        typeRef,
+        workItemRef: 'prepare-approval',
+        toolId: failed.id,
+        actorUserId: 'author-1',
+      }),
+    ).toEqual({ id: failed.id, revision: 1 })
+
+    await module.commands.updateTool({
+      typeRef,
+      workItemRef: 'prepare-approval',
+      toolId: failed.id,
+      body: {
+        ...body,
+        description: '发布后的二次编辑仍使用同一个 registration id。',
+        connectionRef: { id: 'approval-adapter', revision: 7 },
+      },
+    })
+    expect(
+      await module.commands.publishTool({
+        typeRef,
+        workItemRef: 'prepare-approval',
+        toolId: failed.id,
+        actorUserId: 'author-1',
+      }),
+    ).toEqual({ id: failed.id, revision: 2 })
+    expect(module.queries.listTools(typeRef, 'prepare-approval')).toMatchObject([
+      { id: failed.id, publishedRevision: 2 },
+    ])
+  })
+
+  test('Program tool editor round-trips source and parameters from immutable artifacts', async () => {
+    const module = fixtureModule()
+    const typeRef = { typeId: 'development', revision: 2 }
+    const created = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'prepare-materials',
+      actorUserId: 'author-1',
+      body: {
+        displayName: '材料脚本',
+        description: '程序工具也必须能二次编辑。',
+        roleRef: 'primary',
+        implementation: {
+          kind: 'program',
+          runtimeKind: 'python',
+          source: 'print("first")\n',
+          parameterValues: { mode: 'strict', retries: 2, enabled: true },
+          runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+        },
+      },
+    })
+
+    expect(
+      await module.queries.getToolAuthoring({
+        typeRef,
+        workItemRef: 'prepare-materials',
+        toolId: created.id,
+      }),
+    ).toMatchObject({
+      id: created.id,
+      body: {
+        displayName: '材料脚本',
+        implementation: {
+          kind: 'program',
+          runtimeKind: 'python',
+          source: 'print("first")\n',
+          parameterValues: { mode: 'strict', retries: 2, enabled: true },
+        },
+      },
+    })
   })
 
   test('Workflow and Agent execution boundaries reject hidden platform effects', () => {

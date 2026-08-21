@@ -16,9 +16,12 @@
 //   transition).
 //
 //   Cascade: the 12 FK-cascade tables clear automatically (foreign_keys=ON).
-//   task_feedback is deleted explicitly (no FK, task-scoped). memory_distill_jobs
-//   / recovery_events / lifecycle_repair_audit are RETAINED (memory / DR /
-//   append-only audit — they outlive the task, dangling taskId is intended).
+//   task_feedback is deleted explicitly (no FK, task-scoped). Pending task
+//   lifecycle publication rows are also purged explicitly: their FK prevents a
+//   hard delete and a deleted task is no longer a valid Event Center subject.
+//   memory_distill_jobs / recovery_events / lifecycle_repair_audit are RETAINED
+//   (memory / DR / append-only audit — they outlive the task, dangling taskId
+//   is intended).
 //
 //   Disk cleanup is best-effort AFTER the tx: worktree + snapshot refs + scratch.
 //   Anything that fails (or a crash between tx-commit and cleanup) is swept by
@@ -37,7 +40,13 @@ import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { taskCollaborators, taskFeedback, taskRepos, tasks } from '@/db/schema'
+import {
+  taskCollaborators,
+  taskFeedback,
+  taskLifecycleEventOutbox,
+  taskRepos,
+  tasks,
+} from '@/db/schema'
 import { isTaskActive } from '@/services/task'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -203,8 +212,15 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
         }
         return { taskId: item.id, visibleUserIds }
       })
-      // Explicit non-FK task-scoped delete; the 12 FK tables cascade with the row.
+      // Explicit task-scoped deletes; the remaining FK tables cascade with the
+      // task row. Lifecycle publication rows deliberately use a restrictive FK
+      // so no generic task deletion can silently orphan an Event Center fact.
       tx.delete(taskFeedback).where(eq(taskFeedback.taskId, taskId)).run()
+      if (cascadeIds.length > 0) {
+        tx.delete(taskLifecycleEventOutbox)
+          .where(inArray(taskLifecycleEventOutbox.taskId, cascadeIds))
+          .run()
+      }
       tx.delete(tasks).where(eq(tasks.id, taskId)).run()
 
       // RFC-311 实现门 P1-6/P2-3:`branch_started_at` 是「子树 max(started_at)」的

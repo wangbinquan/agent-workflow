@@ -373,6 +373,7 @@ export interface Resources {
     clarify: string
     repos: string
     webhooks: string
+    events: string
     code: string
     digitalEmployees: string
     executors: string
@@ -2123,7 +2124,6 @@ export interface Resources {
       runtime: string
       systemAgents: string
       limits: string
-      digitalEmployee: string
       recovery: string
       gc: string
       git: string
@@ -2136,6 +2136,8 @@ export interface Resources {
     cardGroups: {
       limitsBudgetsTitle: string
       limitsBudgetsHint: string
+      limitsSharedRetryTitle: string
+      limitsSharedRetryHint: string
       limitsConcurrencyTitle: string
       limitsConcurrencyHint: string
       limitsLoggingTitle: string
@@ -2174,7 +2176,6 @@ export interface Resources {
     tabRuntime: string
     tabSystemAgents: string
     tabLimits: string
-    tabDigitalEmployee: string
     tabRecovery: string
     tabGc: string
     tabGit: string
@@ -3435,8 +3436,18 @@ export interface Resources {
     discardDescription: string
     discardAction: string
     columns: { name: string; rule: string; target: string; state: string }
-    kinds: { workflow: string; agent: string; workgroup: string }
-    kindDescriptions: { workflow: string; agent: string; workgroup: string }
+    kinds: {
+      workflow: string
+      agent: string
+      workgroup: string
+      'digital-employee': string
+    }
+    kindDescriptions: {
+      workflow: string
+      agent: string
+      workgroup: string
+      'digital-employee': string
+    }
     spaces: { eventRepo: string; scratch: string }
     spaceDescriptions: { eventRepo: string; scratch: string }
     inputKinds: { text: string; files: string; enum: string; git: string; upload: string }
@@ -3520,6 +3531,8 @@ export interface Resources {
       unmappable: string
       description: string
       goal: string
+      employeeUnsupportedTitle: string
+      employeeUnsupportedBody: string
       agentDescriptionHint: string
       agentInputHint: string
       agentInputListHint: string
@@ -3558,7 +3571,14 @@ export interface Resources {
       autoRegister: string
       autoRegisterLabel: string
     }
-    firesColumns: { stream: string; outcome: string; time: string }
+    firesColumns: {
+      stream: string
+      outcome: string
+      result: string
+      task: string
+      employeeCase: string
+      time: string
+    }
   }
   webhookDeliveries: {
     eyebrow: string
@@ -3788,7 +3808,14 @@ export interface Resources {
       scopeLabel: string
       scope: { mine: string; shared: string; all: string }
       originLabel: string
-      origin: { all: string; manual: string; scheduled: string; webhook: string; api: string }
+      origin: {
+        all: string
+        manual: string
+        scheduled: string
+        event: string
+        webhook: string
+        api: string
+      }
       categoryLabel: string
       category: { all: string; orchestration: string; 'digital-employee': string }
       newDigitalEmployee: string
@@ -6924,6 +6951,7 @@ export const zhCN: Resources = {
     clarify: '反问',
     repos: '远端仓',
     webhooks: 'Webhook',
+    events: '事件中心',
     code: '代码',
     digitalEmployees: '数字员工',
     executors: '执行者库',
@@ -8983,8 +9011,7 @@ export const zhCN: Resources = {
     sectionDescriptions: {
       runtime: '注册命令运行时并选择默认项。',
       systemAgents: '设置内置自动化 Agent 的运行时与输出规则。',
-      limits: '设置任务、token、超时与并发边界。',
-      digitalEmployee: '统一设置所有数字员工的失败重试、等待期限与人工接管规则。',
+      limits: '统一设置工作流与数字员工的任务、token、超时、并发和重试边界。',
       recovery: '创建备份并配置恢复行为。',
       gc: '控制数据保留与自动清理。',
       git: '控制平台代理提交排除、submodule 与后台刷新。',
@@ -8997,6 +9024,9 @@ export const zhCN: Resources = {
     cardGroups: {
       limitsBudgetsTitle: '任务预算',
       limitsBudgetsHint: '统一限制单个任务可用的时长、token、步骤与讨论轮次。',
+      limitsSharedRetryTitle: '这里也是数字员工唯一的重试设置',
+      limitsSharedRetryHint:
+        '节点重试次数和会话重启预算同时用于工作流与数字员工。数字员工任务启动时会固化当时的值，运行中的任务不会随设置变更漂移。',
       limitsConcurrencyTitle: '并发与吞吐',
       limitsConcurrencyHint: '控制 daemon 与单个工作流可以并行执行的工作量。',
       limitsLoggingTitle: '日志保留',
@@ -9036,7 +9066,6 @@ export const zhCN: Resources = {
     tabRuntime: '运行时',
     tabSystemAgents: '系统 Agent',
     tabLimits: '限额',
-    tabDigitalEmployee: '数字员工执行策略',
     tabRecovery: '恢复',
     tabGc: 'GC',
     tabGit: 'Git',
@@ -10721,7 +10750,7 @@ export const zhCN: Resources = {
   webhookTriggers: {
     eyebrow: '决定何时运行',
     title: '触发规则',
-    subtitle: '选择哪些仓库与事件需要响应，再指定要启动的工作流、Agent 或工作组。',
+    subtitle: '选择哪些仓库与事件需要响应，再指定要启动的编排或数字员工。',
     new: '新建规则',
     empty: '还没有触发规则',
     emptyDescription: '先准备一个接收端点，再创建规则，决定事件命中后启动什么工作。',
@@ -10755,11 +10784,17 @@ export const zhCN: Resources = {
     discardDescription: '当前规则还没有保存，关闭后这些修改会丢失。',
     discardAction: '放弃修改',
     columns: { name: '名称', rule: '规则', target: '目标', state: '状态' },
-    kinds: { workflow: '工作流', agent: 'Agent', workgroup: '工作组' },
+    kinds: {
+      workflow: '工作流',
+      agent: 'Agent',
+      workgroup: '工作组',
+      'digital-employee': '数字员工',
+    },
     kindDescriptions: {
       workflow: '运行完整编排，适合审计、修复等多阶段流程。',
       agent: '直接启动一个 Agent，适合单一、快速任务。',
       workgroup: '让多个成员协作处理同一个目标。',
+      'digital-employee': '把事件交给有状态的数字员工，由它接手工作并持续关注后续事件。',
     },
     spaces: { eventRepo: '事件仓库', scratch: '临时工作区' },
     spaceDescriptions: {
@@ -10862,6 +10897,9 @@ export const zhCN: Resources = {
       unmappable: 'Webhook 事件不能提供这种输入，请改用其他目标或调整工作流。',
       description: '任务提示词模板',
       goal: '工作组目标模板',
+      employeeUnsupportedTitle: '该数字员工不能接收事件任务',
+      employeeUnsupportedBody:
+        '它发布的受理契约只支持上传文件；请选择可接收正文或外部工作 ID 的数字员工。',
       agentDescriptionHint: '该 Agent 没有声明输入端口；Webhook 启动时把这段模板作为任务提示词。',
       agentInputHint: '{{kind}} 输入。Webhook 启动时把渲染后的文本传给端口；{{description}}',
       agentInputListHint: '{{kind}} 输入。每行一项，运行时按换行分隔；{{description}}',
@@ -10943,7 +10981,14 @@ export const zhCN: Resources = {
       autoRegister: '自动注册仓库',
       autoRegisterLabel: '事件仓库尚未导入时，允许平台自动拉取并登记',
     },
-    firesColumns: { stream: '流', outcome: '结果', time: '时间' },
+    firesColumns: {
+      stream: '流',
+      outcome: '结果',
+      result: '已启动工作',
+      task: '编排任务',
+      employeeCase: '数字员工任务',
+      time: '时间',
+    },
   },
   webhookDeliveries: {
     eyebrow: '观察与排障',
@@ -11188,6 +11233,7 @@ export const zhCN: Resources = {
         all: '全部来源',
         manual: '手动启动',
         scheduled: '定时启动',
+        event: '事件中心触发',
         webhook: 'Webhook 触发',
         api: 'API 启动',
       },

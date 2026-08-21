@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
+import { TriggerContextSchema } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import {
@@ -13,8 +14,11 @@ import {
 import type { EventStorePort, ObservationStoreReceipt } from '../application/ports/eventStore'
 import {
   eventSourceDescriptorSchema,
+  eventTypeContentDigest,
   eventTypeDescriptorSchema,
   type EventDeliveryRecord,
+  type EventDeliveryStatusRecord,
+  type EventRecordAuditRecord,
   type EventExactRef,
   type EventSubject,
   type EventSubscriber,
@@ -35,6 +39,14 @@ function typeWhere(ref: EventExactRef) {
 }
 
 function subscriptionRecord(row: typeof eventSubscriptions.$inferSelect): EventSubscriptionRecord {
+  const origin =
+    row.originKind === null || row.originRef === null || row.definitionRevision === null
+      ? null
+      : {
+          kind: row.originKind,
+          ref: row.originRef,
+          definitionRevision: row.definitionRevision,
+        }
   return {
     id: row.id,
     eventTypeRef: { id: row.eventTypeId, revision: row.eventTypeRevision },
@@ -44,10 +56,94 @@ function subscriptionRecord(row: typeof eventSubscriptions.$inferSelect): EventS
       kind: row.subscriberKind as EventSubscriber['kind'],
       subscriberRef: row.subscriberRef,
     },
+    mode: row.mode,
+    origin,
+    displayName:
+      row.displayNameJson === null
+        ? null
+        : (JSON.parse(row.displayNameJson) as EventSubscriptionRecord['displayName']),
+    selector:
+      row.selectorKind === null || row.selectorJson === null
+        ? null
+        : {
+            kind: row.selectorKind,
+            config: JSON.parse(row.selectorJson) as NonNullable<
+              EventSubscriptionRecord['selector']
+            >['config'],
+          },
     state: row.state,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     cancelledAt: row.cancelledAt,
+  }
+}
+
+function eventDocument(summaryJson: string): {
+  readonly summary: string
+  readonly routingFacts: EventDeliveryRecord['routingFacts']
+  readonly triggerContext: EventDeliveryRecord['triggerContext']
+} {
+  const parsed = JSON.parse(summaryJson) as {
+    summary: string
+    routingFacts?: EventDeliveryRecord['routingFacts']
+    triggerContext?: unknown
+  }
+  return {
+    summary: parsed.summary,
+    routingFacts: parsed.routingFacts ?? null,
+    triggerContext:
+      parsed.triggerContext === undefined || parsed.triggerContext === null
+        ? null
+        : TriggerContextSchema.parse(parsed.triggerContext),
+  }
+}
+
+function loadDeliveryRecord(db: DbClient, deliveryId: string): EventDeliveryRecord | null {
+  const row = db
+    .select({
+      deliveryId: eventDeliveries.id,
+      eventId: eventDeliveries.eventId,
+      subscriptionId: eventDeliveries.subscriptionId,
+      subscriberKind: eventDeliveries.subscriberKind,
+      subscriberRef: eventDeliveries.subscriberRef,
+      eventTypeId: eventRecords.eventTypeId,
+      eventTypeRevision: eventRecords.eventTypeRevision,
+      sourceId: eventRecords.sourceId,
+      sourceRevision: eventRecords.sourceRevision,
+      subjectType: eventRecords.subjectType,
+      subjectRef: eventRecords.subjectRef,
+      deliveryClass: eventDeliveries.deliveryClass,
+      occurredAt: eventRecords.occurredAt,
+      summaryJson: eventRecords.summaryJson,
+      payloadArtifactRef: eventRecords.payloadArtifactRef,
+      attemptCount: eventDeliveries.attemptCount,
+      createdAt: eventDeliveries.createdAt,
+    })
+    .from(eventDeliveries)
+    .innerJoin(eventRecords, eq(eventRecords.id, eventDeliveries.eventId))
+    .where(eq(eventDeliveries.id, deliveryId))
+    .get()
+  if (row === undefined) return null
+  const document = eventDocument(row.summaryJson)
+  return {
+    deliveryId: row.deliveryId,
+    eventId: row.eventId,
+    subscriptionId: row.subscriptionId,
+    subscriber: {
+      kind: row.subscriberKind as EventSubscriber['kind'],
+      subscriberRef: row.subscriberRef,
+    },
+    eventTypeRef: { id: row.eventTypeId, revision: row.eventTypeRevision },
+    sourceRef: { id: row.sourceId, revision: row.sourceRevision },
+    subject: { typeId: row.subjectType, subjectRef: row.subjectRef },
+    deliveryClass: row.deliveryClass,
+    occurredAt: row.occurredAt,
+    summary: document.summary,
+    payloadArtifactRef: row.payloadArtifactRef,
+    routingFacts: document.routingFacts,
+    triggerContext: document.triggerContext,
+    attemptCount: row.attemptCount,
+    createdAt: row.createdAt,
   }
 }
 
@@ -100,6 +196,19 @@ function rotatingSubjectBatch(
 export function createSqliteEventStore(db: DbClient): EventStorePort {
   return {
     registerSource(descriptor, digest, now) {
+      const existing = db
+        .select({ digest: eventSources.descriptorDigest })
+        .from(eventSources)
+        .where(sourceWhere(descriptor.sourceRef))
+        .get()
+      if (existing !== undefined) {
+        if (existing.digest !== digest) {
+          throw new Error(
+            `immutable event source revision conflict: ${descriptor.sourceRef.id}@${descriptor.sourceRef.revision}`,
+          )
+        }
+        return
+      }
       db.insert(eventSources)
         .values({
           sourceId: descriptor.sourceRef.id,
@@ -109,14 +218,37 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
           state: 'published',
           registeredAt: now,
         })
-        .onConflictDoUpdate({
-          target: [eventSources.sourceId, eventSources.revision],
-          set: { descriptorJson: JSON.stringify(descriptor), descriptorDigest: digest },
-        })
         .run()
     },
 
     registerEventType(descriptor, digest, now) {
+      const existing = db
+        .select({
+          descriptorJson: eventTypeCatalog.descriptorJson,
+          digest: eventTypeCatalog.descriptorDigest,
+        })
+        .from(eventTypeCatalog)
+        .where(typeWhere(descriptor.eventTypeRef))
+        .get()
+      if (existing !== undefined) {
+        const existingDescriptor = eventTypeDescriptorSchema.parse(
+          JSON.parse(existing.descriptorJson) as unknown,
+        )
+        if (eventTypeContentDigest(existingDescriptor) !== digest) {
+          throw new Error(
+            `immutable event type revision conflict: ${descriptor.eventTypeRef.id}@${descriptor.eventTypeRef.revision}`,
+          )
+        }
+        db.update(eventTypeCatalog)
+          .set({
+            descriptorJson: JSON.stringify(descriptor),
+            descriptorDigest: digest,
+            catalogVisibility: descriptor.catalogVisibility ?? 'public',
+          })
+          .where(typeWhere(descriptor.eventTypeRef))
+          .run()
+        return
+      }
       db.insert(eventTypeCatalog)
         .values({
           eventTypeId: descriptor.eventTypeRef.id,
@@ -125,17 +257,9 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
           sourceRevision: descriptor.sourceRef.revision,
           descriptorJson: JSON.stringify(descriptor),
           descriptorDigest: digest,
+          catalogVisibility: descriptor.catalogVisibility ?? 'public',
           state: 'published',
           registeredAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [eventTypeCatalog.eventTypeId, eventTypeCatalog.revision],
-          set: {
-            sourceId: descriptor.sourceRef.id,
-            sourceRevision: descriptor.sourceRef.revision,
-            descriptorJson: JSON.stringify(descriptor),
-            descriptorDigest: digest,
-          },
         })
         .run()
     },
@@ -149,9 +273,14 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
 
     getEventType(ref) {
       const row = db.select().from(eventTypeCatalog).where(typeWhere(ref)).get()
-      return row === undefined
-        ? null
-        : eventTypeDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown)
+      if (row === undefined) return null
+      const descriptor = eventTypeDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown)
+      return eventTypeDescriptorSchema.parse({
+        ...descriptor,
+        ...(row.catalogVisibility === 'public'
+          ? { catalogVisibility: undefined }
+          : { catalogVisibility: row.catalogVisibility }),
+      })
     },
 
     listSources() {
@@ -171,7 +300,17 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .where(eq(eventTypeCatalog.state, 'published'))
         .orderBy(asc(eventTypeCatalog.eventTypeId), desc(eventTypeCatalog.revision))
         .all()
-        .map((row) => eventTypeDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown))
+        .map((row) => {
+          const descriptor = eventTypeDescriptorSchema.parse(
+            JSON.parse(row.descriptorJson) as unknown,
+          )
+          return eventTypeDescriptorSchema.parse({
+            ...descriptor,
+            ...(row.catalogVisibility === 'public'
+              ? { catalogVisibility: undefined }
+              : { catalogVisibility: row.catalogVisibility }),
+          })
+        })
     },
 
     subscribe(input) {
@@ -200,6 +339,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             subjectRef: input.subject.subjectRef,
             subscriberKind: input.subscriber.kind,
             subscriberRef: input.subscriber.subscriberRef,
+            mode: 'exact',
             activeIdentityKey: input.identityKey,
             state: 'active',
             createdAt: input.now,
@@ -235,9 +375,9 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
               subscriberKind: input.subscriber.kind,
               subscriberRef: input.subscriber.subscriberRef,
               deliveryClass: input.eventType.deliveryClass,
-              priority: input.eventType.priority,
               state: 'pending',
               attemptCount: 0,
+              nextAttemptAt: input.now,
               createdAt: input.now,
             })
             .onConflictDoNothing()
@@ -303,6 +443,13 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             subjectRef: input.subject.subjectRef,
             subscriberKind: input.subscriber.kind,
             subscriberRef: input.subscriber.subscriberRef,
+            mode: 'exact',
+            originKind: null,
+            originRef: null,
+            definitionRevision: null,
+            displayNameJson: null,
+            selectorKind: null,
+            selectorJson: null,
             activeIdentityKey: input.identityKey,
             state: 'active',
             createdAt: input.now,
@@ -319,7 +466,13 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       const current = db
         .select()
         .from(eventSubscriptions)
-        .where(and(eq(eventSubscriptions.id, id), eq(eventSubscriptions.state, 'active')))
+        .where(
+          and(
+            eq(eventSubscriptions.id, id),
+            eq(eventSubscriptions.mode, 'exact'),
+            eq(eventSubscriptions.state, 'active'),
+          ),
+        )
         .get()
       if (current === undefined) return null
 
@@ -404,17 +557,57 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
     },
 
     listSubscriptions(subscriberRef) {
-      const condition =
+      const subscriberCondition =
         subscriberRef === undefined
-          ? undefined
+          ? sql`1 = 1`
           : eq(eventSubscriptions.subscriberRef, subscriberRef)
       return db
         .select()
         .from(eventSubscriptions)
-        .where(condition)
+        .where(and(eq(eventSubscriptions.mode, 'exact'), subscriberCondition))
         .orderBy(desc(eventSubscriptions.createdAt))
         .all()
         .map(subscriptionRecord)
+    },
+
+    listSubscriptionPage(input) {
+      const where = and(
+        eq(eventSubscriptions.mode, 'exact'),
+        ...(input.subscriberRef === undefined
+          ? []
+          : [eq(eventSubscriptions.subscriberRef, input.subscriberRef)]),
+      )
+      const total = db
+        .select({ count: sql<number>`count(*)` })
+        .from(eventSubscriptions)
+        .where(where)
+        .get()!.count
+      const items = db
+        .select()
+        .from(eventSubscriptions)
+        .where(where)
+        .orderBy(desc(eventSubscriptions.updatedAt), desc(eventSubscriptions.id))
+        .limit(Math.max(1, Math.min(100_000, input.limit)))
+        .offset(Math.max(0, input.offset))
+        .all()
+        .map(subscriptionRecord)
+      return { items, total }
+    },
+
+    activeSubscriptionCountsBySource() {
+      return new Map(
+        db
+          .select({
+            sourceId: eventSubscriptions.sourceId,
+            sourceRevision: eventSubscriptions.sourceRevision,
+            count: sql<number>`count(*)`,
+          })
+          .from(eventSubscriptions)
+          .where(and(eq(eventSubscriptions.mode, 'exact'), eq(eventSubscriptions.state, 'active')))
+          .groupBy(eventSubscriptions.sourceId, eventSubscriptions.sourceRevision)
+          .all()
+          .map((row) => [`${row.sourceId}@${row.sourceRevision}`, row.count] as const),
+      )
     },
 
     recordObservation(input) {
@@ -430,16 +623,22 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         )
         .get()
       if (existing !== undefined) {
-        const deliveryCount = db
+        const deliveries = db
           .select({ id: eventDeliveries.id })
           .from(eventDeliveries)
           .where(eq(eventDeliveries.eventId, existing.id))
-          .all().length
-        return { eventId: existing.id, duplicate: true, deliveryCount }
+          .all()
+        return {
+          eventId: existing.id,
+          duplicate: true,
+          deliveryCount: deliveries.length,
+          deliveryIds: deliveries.map((delivery) => delivery.id),
+        }
       }
 
       return db.transaction((tx): ObservationStoreReceipt => {
-        tx.insert(eventRecords)
+        const inserted = tx
+          .insert(eventRecords)
           .values({
             id: input.eventId,
             eventTypeId: input.observation.eventTypeRef.id,
@@ -451,15 +650,49 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             occurredAt: input.observation.occurredAt,
             observedAt: input.observedAt,
             dedupeKey: input.observation.dedupeKey,
-            summaryJson: JSON.stringify({ summary: input.observation.summary }),
+            summaryJson: JSON.stringify({
+              summary: input.observation.summary,
+              routingFacts: input.observation.routingFacts,
+              triggerContext: input.triggerContext,
+            }),
             payloadArtifactRef: input.observation.payloadArtifactRef,
           })
-          .run()
-        const subscriptions = tx
+          .onConflictDoNothing()
+          .returning({ id: eventRecords.id })
+          .get()
+        if (inserted === undefined) {
+          const duplicate = tx
+            .select({ id: eventRecords.id })
+            .from(eventRecords)
+            .where(
+              and(
+                eq(eventRecords.sourceId, input.observation.sourceRef.id),
+                eq(eventRecords.sourceRevision, input.observation.sourceRef.revision),
+                eq(eventRecords.dedupeKey, input.observation.dedupeKey),
+              ),
+            )
+            .get()
+          if (duplicate === undefined) {
+            throw new Error('event observation conflict did not expose the existing event')
+          }
+          const deliveries = tx
+            .select({ id: eventDeliveries.id })
+            .from(eventDeliveries)
+            .where(eq(eventDeliveries.eventId, duplicate.id))
+            .all()
+          return {
+            eventId: duplicate.id,
+            duplicate: true,
+            deliveryCount: deliveries.length,
+            deliveryIds: deliveries.map((delivery) => delivery.id),
+          }
+        }
+        const exactSubscriptions = tx
           .select()
           .from(eventSubscriptions)
           .where(
             and(
+              eq(eventSubscriptions.mode, 'exact'),
               eq(eventSubscriptions.eventTypeId, input.observation.eventTypeRef.id),
               eq(eventSubscriptions.eventTypeRevision, input.observation.eventTypeRef.revision),
               eq(eventSubscriptions.subjectType, input.observation.subject.typeId),
@@ -468,25 +701,67 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             ),
           )
           .all()
+        const filteredSubscriptions: Array<typeof eventSubscriptions.$inferSelect> = []
+        for (const match of input.routingSubscriptions) {
+          const definition = match.definition
+          tx.insert(eventSubscriptions)
+            .values({
+              id: match.materializedSubscriptionId,
+              eventTypeId: match.eventTypeRef.id,
+              eventTypeRevision: match.eventTypeRef.revision,
+              sourceId: definition.sourceRef.id,
+              sourceRevision: definition.sourceRef.revision,
+              subjectType: input.observation.subject.typeId,
+              subjectRef: input.observation.subject.subjectRef,
+              subscriberKind: definition.subscriber.kind,
+              subscriberRef: definition.subscriber.subscriberRef,
+              mode: 'filtered',
+              originKind: 'routing-rule',
+              originRef: definition.id,
+              definitionRevision: definition.definitionRevision,
+              displayNameJson: JSON.stringify(definition.displayName),
+              selectorKind: definition.selector.kind,
+              selectorJson: JSON.stringify(definition.selector.config),
+              activeIdentityKey: null,
+              state: 'active',
+              createdAt: definition.createdAt,
+              updatedAt: definition.updatedAt,
+              cancelledAt: null,
+            })
+            .onConflictDoNothing()
+            .run()
+          const row = tx
+            .select()
+            .from(eventSubscriptions)
+            .where(eq(eventSubscriptions.id, match.materializedSubscriptionId))
+            .get()
+          if (row !== undefined) filteredSubscriptions.push(row)
+        }
+        const subscriptions = [...exactSubscriptions, ...filteredSubscriptions]
+        const deliveryIds: string[] = []
         for (const subscription of subscriptions) {
+          const deliveryId = input.nextId()
           tx.insert(eventDeliveries)
             .values({
-              id: input.nextId(),
+              id: deliveryId,
               eventId: input.eventId,
               subscriptionId: subscription.id,
               subscriberKind: subscription.subscriberKind,
               subscriberRef: subscription.subscriberRef,
               deliveryClass: input.eventType.deliveryClass,
-              priority: input.eventType.priority,
               state: 'pending',
+              attemptCount: 0,
+              nextAttemptAt: input.observedAt,
               createdAt: input.observedAt,
             })
             .run()
+          deliveryIds.push(deliveryId)
         }
         return {
           eventId: input.eventId,
           duplicate: false,
           deliveryCount: subscriptions.length,
+          deliveryIds,
         }
       })
     },
@@ -506,10 +781,10 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
           subjectType: eventRecords.subjectType,
           subjectRef: eventRecords.subjectRef,
           deliveryClass: eventDeliveries.deliveryClass,
-          priority: eventDeliveries.priority,
           occurredAt: eventRecords.occurredAt,
           summaryJson: eventRecords.summaryJson,
           payloadArtifactRef: eventRecords.payloadArtifactRef,
+          attemptCount: eventDeliveries.attemptCount,
           createdAt: eventDeliveries.createdAt,
         })
         .from(eventDeliveries)
@@ -521,11 +796,12 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             eq(eventDeliveries.state, 'pending'),
           ),
         )
-        .orderBy(desc(eventDeliveries.priority), asc(eventRecords.occurredAt), asc(eventRecords.id))
+        .orderBy(asc(eventRecords.occurredAt), asc(eventRecords.id))
         .limit(Math.max(1, Math.min(1_000, limit)))
         .all()
-        .map(
-          (row): EventDeliveryRecord => ({
+        .map((row): EventDeliveryRecord => {
+          const document = eventDocument(row.summaryJson)
+          return {
             deliveryId: row.deliveryId,
             eventId: row.eventId,
             subscriptionId: row.subscriptionId,
@@ -537,19 +813,151 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             sourceRef: { id: row.sourceId, revision: row.sourceRevision },
             subject: { typeId: row.subjectType, subjectRef: row.subjectRef },
             deliveryClass: row.deliveryClass,
-            priority: row.priority,
             occurredAt: row.occurredAt,
-            summary: (JSON.parse(row.summaryJson) as { summary: string }).summary,
+            summary: document.summary,
             payloadArtifactRef: row.payloadArtifactRef,
+            routingFacts: document.routingFacts,
+            triggerContext: document.triggerContext,
+            attemptCount: row.attemptCount,
             createdAt: row.createdAt,
+          }
+        })
+    },
+
+    listDeliveryStatusPage(input) {
+      const where = and(
+        ...(input.state === undefined ? [] : [eq(eventDeliveries.state, input.state)]),
+        ...(input.subscriberRef === undefined
+          ? []
+          : [eq(eventDeliveries.subscriberRef, input.subscriberRef)]),
+      )
+      const total = db
+        .select({ count: sql<number>`count(*)` })
+        .from(eventDeliveries)
+        .where(where)
+        .get()!.count
+      const items = db
+        .select({
+          deliveryId: eventDeliveries.id,
+          eventId: eventDeliveries.eventId,
+          subscriptionId: eventDeliveries.subscriptionId,
+          subscriberKind: eventDeliveries.subscriberKind,
+          subscriberRef: eventDeliveries.subscriberRef,
+          eventTypeId: eventRecords.eventTypeId,
+          eventTypeRevision: eventRecords.eventTypeRevision,
+          subjectType: eventRecords.subjectType,
+          subjectRef: eventRecords.subjectRef,
+          state: eventDeliveries.state,
+          attemptCount: eventDeliveries.attemptCount,
+          nextAttemptAt: eventDeliveries.nextAttemptAt,
+          claimedBy: eventDeliveries.claimedBy,
+          claimExpiresAt: eventDeliveries.claimExpiresAt,
+          lastError: eventDeliveries.lastError,
+          createdAt: eventDeliveries.createdAt,
+          acceptedAt: eventDeliveries.acceptedAt,
+          deadLetterAt: eventDeliveries.deadLetterAt,
+        })
+        .from(eventDeliveries)
+        .innerJoin(eventRecords, eq(eventRecords.id, eventDeliveries.eventId))
+        .where(where)
+        .orderBy(desc(eventDeliveries.createdAt), desc(eventDeliveries.id))
+        .limit(Math.max(1, Math.min(200, input.limit)))
+        .offset(Math.max(0, input.offset))
+        .all()
+        .map(
+          (row): EventDeliveryStatusRecord => ({
+            deliveryId: row.deliveryId,
+            eventId: row.eventId,
+            subscriptionId: row.subscriptionId,
+            subscriber: {
+              kind: row.subscriberKind as EventSubscriber['kind'],
+              subscriberRef: row.subscriberRef,
+            },
+            eventTypeRef: { id: row.eventTypeId, revision: row.eventTypeRevision },
+            subject: { typeId: row.subjectType, subjectRef: row.subjectRef },
+            state: row.state,
+            attemptCount: row.attemptCount,
+            nextAttemptAt: row.nextAttemptAt,
+            claimedBy: row.claimedBy,
+            claimExpiresAt: row.claimExpiresAt,
+            lastError: row.lastError,
+            createdAt: row.createdAt,
+            acceptedAt: row.acceptedAt,
+            deadLetterAt: row.deadLetterAt,
           }),
         )
+      return { items, total }
+    },
+
+    listEventRecordPage(input) {
+      const where = and(
+        eq(eventTypeCatalog.catalogVisibility, 'public'),
+        ...(input.sourceId === undefined ? [] : [eq(eventRecords.sourceId, input.sourceId)]),
+      )
+      const total = db
+        .select({ count: sql<number>`count(*)` })
+        .from(eventRecords)
+        .innerJoin(
+          eventTypeCatalog,
+          and(
+            eq(eventTypeCatalog.eventTypeId, eventRecords.eventTypeId),
+            eq(eventTypeCatalog.revision, eventRecords.eventTypeRevision),
+          ),
+        )
+        .where(where)
+        .get()!.count
+      const items = db
+        .select({
+          eventId: eventRecords.id,
+          eventTypeId: eventRecords.eventTypeId,
+          eventTypeRevision: eventRecords.eventTypeRevision,
+          sourceId: eventRecords.sourceId,
+          sourceRevision: eventRecords.sourceRevision,
+          subjectType: eventRecords.subjectType,
+          subjectRef: eventRecords.subjectRef,
+          occurredAt: eventRecords.occurredAt,
+          observedAt: eventRecords.observedAt,
+          summaryJson: eventRecords.summaryJson,
+          payloadArtifactRef: eventRecords.payloadArtifactRef,
+        })
+        .from(eventRecords)
+        .innerJoin(
+          eventTypeCatalog,
+          and(
+            eq(eventTypeCatalog.eventTypeId, eventRecords.eventTypeId),
+            eq(eventTypeCatalog.revision, eventRecords.eventTypeRevision),
+          ),
+        )
+        .where(where)
+        .orderBy(desc(eventRecords.observedAt), desc(eventRecords.id))
+        .limit(Math.max(1, Math.min(200, input.limit)))
+        .offset(Math.max(0, input.offset))
+        .all()
+        .map(
+          (row): EventRecordAuditRecord => ({
+            eventId: row.eventId,
+            eventTypeRef: { id: row.eventTypeId, revision: row.eventTypeRevision },
+            sourceRef: { id: row.sourceId, revision: row.sourceRevision },
+            subject: { typeId: row.subjectType, subjectRef: row.subjectRef },
+            occurredAt: row.occurredAt,
+            observedAt: row.observedAt,
+            summary: eventDocument(row.summaryJson).summary,
+            payloadArtifactRef: row.payloadArtifactRef,
+          }),
+        )
+      return { items, total }
     },
 
     acceptDelivery(deliveryId, now) {
       const result = db
         .update(eventDeliveries)
-        .set({ state: 'accepted', acceptedAt: now })
+        .set({
+          state: 'accepted',
+          acceptedAt: now,
+          claimedBy: null,
+          claimExpiresAt: null,
+          lastError: null,
+        })
         .where(and(eq(eventDeliveries.id, deliveryId), eq(eventDeliveries.state, 'pending')))
         .run()
       if (changes(result) === 1) return true
@@ -560,6 +968,75 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
           .where(and(eq(eventDeliveries.id, deliveryId), eq(eventDeliveries.state, 'accepted')))
           .get() !== undefined
       )
+    },
+
+    claimNotificationDelivery(input) {
+      if (input.subscriberKinds.length === 0) return null
+      const due = or(
+        and(eq(eventDeliveries.state, 'pending'), lte(eventDeliveries.nextAttemptAt, input.now)),
+        and(
+          eq(eventDeliveries.state, 'claimed'),
+          or(
+            isNull(eventDeliveries.claimExpiresAt),
+            lte(eventDeliveries.claimExpiresAt, input.now),
+          ),
+        ),
+      )
+      const candidates = db
+        .select({ id: eventDeliveries.id })
+        .from(eventDeliveries)
+        .where(
+          and(
+            inArray(eventDeliveries.subscriberKind, input.subscriberKinds),
+            due,
+            ...(input.deliveryId === undefined ? [] : [eq(eventDeliveries.id, input.deliveryId)]),
+          ),
+        )
+        .orderBy(asc(eventDeliveries.nextAttemptAt), asc(eventDeliveries.createdAt))
+        .limit(input.deliveryId === undefined ? 20 : 1)
+        .all()
+      for (const candidate of candidates) {
+        const claimed = changes(
+          db
+            .update(eventDeliveries)
+            .set({
+              state: 'claimed',
+              attemptCount: sql`${eventDeliveries.attemptCount} + 1`,
+              claimedBy: input.leaseOwner,
+              claimExpiresAt: input.now + input.leaseMs,
+              lastError: null,
+            })
+            .where(and(eq(eventDeliveries.id, candidate.id), due))
+            .run(),
+        )
+        if (claimed === 1) return loadDeliveryRecord(db, candidate.id)
+      }
+      return null
+    },
+
+    settleNotificationDelivery(input) {
+      const terminal = input.state !== 'pending'
+      const result = db
+        .update(eventDeliveries)
+        .set({
+          state: input.state,
+          nextAttemptAt: input.nextAttemptAt,
+          claimedBy: null,
+          claimExpiresAt: null,
+          lastError: input.error,
+          acceptedAt: input.state === 'accepted' ? input.now : null,
+          deadLetterAt: input.state === 'dead-letter' ? input.now : null,
+          ...(terminal ? {} : { acceptedAt: null, deadLetterAt: null }),
+        })
+        .where(
+          and(
+            eq(eventDeliveries.id, input.deliveryId),
+            eq(eventDeliveries.state, 'claimed'),
+            eq(eventDeliveries.claimedBy, input.leaseOwner),
+          ),
+        )
+        .run()
+      return changes(result) === 1
     },
 
     listObserverActivations() {
@@ -635,6 +1112,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
           .from(eventSubscriptions)
           .where(
             and(
+              eq(eventSubscriptions.mode, 'exact'),
               eq(eventSubscriptions.sourceId, candidate.sourceId),
               eq(eventSubscriptions.sourceRevision, candidate.sourceRevision),
               eq(eventSubscriptions.state, 'active'),
@@ -767,7 +1245,8 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             )
             .get()
           if (existing !== undefined) continue
-          tx.insert(eventRecords)
+          const inserted = tx
+            .insert(eventRecords)
             .values({
               id: item.eventId,
               eventTypeId: item.observation.eventTypeRef.id,
@@ -779,15 +1258,23 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
               occurredAt: item.observation.occurredAt,
               observedAt: input.now,
               dedupeKey: item.observation.dedupeKey,
-              summaryJson: JSON.stringify({ summary: item.observation.summary }),
+              summaryJson: JSON.stringify({
+                summary: item.observation.summary,
+                routingFacts: item.observation.routingFacts,
+                triggerContext: item.triggerContext,
+              }),
               payloadArtifactRef: item.observation.payloadArtifactRef,
             })
-            .run()
-          const subscriptions = tx
+            .onConflictDoNothing()
+            .returning({ id: eventRecords.id })
+            .get()
+          if (inserted === undefined) continue
+          const exactSubscriptions = tx
             .select()
             .from(eventSubscriptions)
             .where(
               and(
+                eq(eventSubscriptions.mode, 'exact'),
                 eq(eventSubscriptions.eventTypeId, item.observation.eventTypeRef.id),
                 eq(eventSubscriptions.eventTypeRevision, item.observation.eventTypeRef.revision),
                 eq(eventSubscriptions.subjectType, item.observation.subject.typeId),
@@ -796,6 +1283,43 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
               ),
             )
             .all()
+          const filteredSubscriptions: Array<typeof eventSubscriptions.$inferSelect> = []
+          for (const match of item.routingSubscriptions) {
+            const definition = match.definition
+            tx.insert(eventSubscriptions)
+              .values({
+                id: match.materializedSubscriptionId,
+                eventTypeId: match.eventTypeRef.id,
+                eventTypeRevision: match.eventTypeRef.revision,
+                sourceId: definition.sourceRef.id,
+                sourceRevision: definition.sourceRef.revision,
+                subjectType: item.observation.subject.typeId,
+                subjectRef: item.observation.subject.subjectRef,
+                subscriberKind: definition.subscriber.kind,
+                subscriberRef: definition.subscriber.subscriberRef,
+                mode: 'filtered',
+                originKind: 'routing-rule',
+                originRef: definition.id,
+                definitionRevision: definition.definitionRevision,
+                displayNameJson: JSON.stringify(definition.displayName),
+                selectorKind: definition.selector.kind,
+                selectorJson: JSON.stringify(definition.selector.config),
+                activeIdentityKey: null,
+                state: 'active',
+                createdAt: definition.createdAt,
+                updatedAt: definition.updatedAt,
+                cancelledAt: null,
+              })
+              .onConflictDoNothing()
+              .run()
+            const row = tx
+              .select()
+              .from(eventSubscriptions)
+              .where(eq(eventSubscriptions.id, match.materializedSubscriptionId))
+              .get()
+            if (row !== undefined) filteredSubscriptions.push(row)
+          }
+          const subscriptions = [...exactSubscriptions, ...filteredSubscriptions]
           for (const subscription of subscriptions) {
             tx.insert(eventDeliveries)
               .values({
@@ -805,8 +1329,9 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
                 subscriberKind: subscription.subscriberKind,
                 subscriberRef: subscription.subscriberRef,
                 deliveryClass: item.eventType.deliveryClass,
-                priority: item.eventType.priority,
                 state: 'pending',
+                attemptCount: 0,
+                nextAttemptAt: input.now,
                 createdAt: input.now,
               })
               .run()

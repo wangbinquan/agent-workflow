@@ -44,7 +44,8 @@ async function harness() {
   const bob = await mkUser(db, 'bob', 'user')
   const dispatched: string[] = []
   const dispatcher: WebhookDispatcher = {
-    dispatch: async (input) => {
+    dispatch: async () => {},
+    dispatchSubscription: async (input) => {
       dispatched.push(input.deliveryId)
     },
   }
@@ -610,6 +611,17 @@ describe('RFC-257 T9 · 投递观测与重放', () => {
   test('replay 三规则：rejected 409 / body-gone 409 / 正常 → 新行 received + dispatcher（AC-16）', async () => {
     const h = await harness()
     const ep = await createEndpoint(h.app, h.admin)
+    expect(
+      (
+        await call(
+          h.app,
+          h.alice,
+          'POST',
+          '/api/webhook-triggers',
+          triggerBody(ep.id, h.workflowId, { eventTypes: ['push'] }),
+        )
+      ).status,
+    ).toBe(201)
     const rejected = await seedDelivery(h.db, ep.id, { status: 'rejected' })
     expect(
       (await call(h.app, h.admin, 'POST', `/api/webhook-deliveries/${rejected}/replay`)).status,

@@ -98,13 +98,11 @@ export const NAV_GROUPS: NavGroupEntry[] = [
         permission: 'scheduled-tasks:read',
       },
       { to: '/repos', i18nKey: 'nav.repos', icon: 'repo', permission: 'repos:read' },
-      // RFC-260/RFC-305：读面由 `webhook-endpoints:read` 控制；配置动作在页内
-      // 按各自具体权限显示，导航模型不携带角色概念。
       {
-        to: '/webhooks',
-        i18nKey: 'nav.webhooks',
+        to: '/events',
+        i18nKey: 'nav.events',
         icon: 'webhook',
-        permission: 'webhook-endpoints:read',
+        permission: 'event-sources:read',
       },
     ],
   },
@@ -196,6 +194,10 @@ export function resolveActiveNav(pathname: string): ActiveNav {
   // /fusions/:id detail deep-link keeps the Memory group highlighted.
   if (pathname.startsWith('/fusions')) {
     return { onHome: false, onSettings: false, activeGroup: 'memory', activeItemTo: null }
+  }
+  // `/webhooks` is a compatibility URL that redirects into Event Center.
+  if (pathname.startsWith('/webhooks')) {
+    return { onHome: false, onSettings: false, activeGroup: 'tasks', activeItemTo: '/events' }
   }
   return { onHome: false, onSettings: false, activeGroup: null, activeItemTo: null }
 }

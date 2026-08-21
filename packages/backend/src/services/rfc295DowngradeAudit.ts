@@ -208,7 +208,12 @@ function scanDefinition(
       }
 
       if (ref.kind !== 'trigger') continue
-      const dependency = { field: ref.field, nodeId: surface.nodeId, pointer: surface.pointer }
+      const dependency = {
+        source: ref.source,
+        field: ref.field,
+        nodeId: surface.nodeId,
+        pointer: surface.pointer,
+      }
       const dependencyIssue = evaluateTriggerDependencies([dependency], origin.triggerSource)[0]
       if (dependencyIssue === undefined) continue
       const code: Rfc295DowngradeIssueCode =

@@ -33,7 +33,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       '/outcomes',
       '/scheduled',
       '/repos',
-      '/webhooks',
+      '/events',
       '/memory',
     ])
   })
@@ -50,6 +50,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       'digital-employees:read',
     )
     expect(navPermissionForPath('/outcomes')).toBe('development-missions:read')
+    expect(navPermissionForPath('/events')).toBe('event-sources:read')
     expect(navPermissionForPath('/')).toBeNull()
     expect(navPermissionForPath('/account')).toBeNull()
   })
@@ -70,8 +71,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       ['/outcomes', 'task'],
       ['/scheduled', 'schedule'],
       ['/repos', 'repo'],
-      // RFC-257 UI 修订：webhook 配置单页（adminOnly 项，ShellNavigation 过滤）。
-      ['/webhooks', 'webhook'],
+      ['/events', 'webhook'],
       ['/memory', 'memory'],
     ])
   })
@@ -174,10 +174,16 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     })
   })
 
-  test('/tasks + /repos both belong to the tasks group', () => {
+  test('/tasks + /repos + /events belong to the tasks group', () => {
     expect(resolveActiveNav('/tasks').activeGroup).toBe('tasks')
     expect(resolveActiveNav('/tasks/abc').activeGroup).toBe('tasks')
     expect(resolveActiveNav('/repos').activeGroup).toBe('tasks')
+    expect(resolveActiveNav('/events')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'tasks',
+      activeItemTo: '/events',
+    })
   })
 
   test('digital employee construction stays separate from runtime and outcomes', () => {

@@ -1,0 +1,1986 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createRoute, Link } from '@tanstack/react-router'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { api } from '@/api/client'
+import type { LocalizedText } from '@/components/digital-employees/types'
+import { localized } from '@/components/digital-employees/types'
+import { Card } from '@/components/Card'
+import { ConfirmButton } from '@/components/ConfirmButton'
+import { Dialog } from '@/components/Dialog'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { Field, NumberInput, TextArea, TextInput } from '@/components/Form'
+import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { Pagination } from '@/components/Pagination'
+import { PageHeader } from '@/components/PageHeader'
+import { FilterBar, FilterField } from '@/components/FilterBar'
+import { Segmented } from '@/components/Segmented'
+import { Select } from '@/components/Select'
+import { StatusChip } from '@/components/StatusChip'
+import { TabBar, tabDomIds } from '@/components/TabBar'
+import { WebhookEndpointCard } from '@/components/WebhookEndpointCard'
+import { DeliveriesPanel } from '@/components/webhooks/DeliveriesPanel'
+import { TriggersPanel } from '@/components/webhooks/TriggersPanel'
+import { EventResponseRulesPanel } from '@/components/events/EventResponseRulesPanel'
+import { useActor, usePermission } from '@/hooks/useActor'
+import { Route as RootRoute } from './__root'
+
+export type EventCenterTab = 'overview' | 'sources' | 'subscriptions' | 'deliveries'
+
+interface EventsSearch extends Record<string, unknown> {
+  tab?: EventCenterTab
+}
+
+function isEventCenterTab(value: unknown): value is EventCenterTab {
+  return (
+    value === 'overview' ||
+    value === 'sources' ||
+    value === 'subscriptions' ||
+    value === 'deliveries'
+  )
+}
+
+export function validateEventsSearch(search: Record<string, unknown>): EventsSearch {
+  const { tab: _tab, webhookTab: _legacyWebhookTab, ...adjacent } = search
+  return {
+    ...adjacent,
+    ...(isEventCenterTab(search.tab) ? { tab: search.tab } : {}),
+  }
+}
+
+export const Route = createRoute({
+  getParentRoute: () => RootRoute,
+  path: '/events',
+  validateSearch: validateEventsSearch,
+  component: EventsPage,
+})
+
+type ExactRef = { id: string; revision: number }
+
+interface EventPage<T> {
+  items: T[]
+  total: number
+  page: number
+  pageCount: number
+}
+
+interface EventCatalog {
+  sources: Array<{
+    sourceRef: ExactRef
+    displayName: LocalizedText
+    description: LocalizedText
+    observationMode: 'passive' | 'active' | 'hybrid'
+    pollIntervalMs: number
+    subscriptionCount: number
+  }>
+  eventTypes: Array<{
+    eventTypeRef: ExactRef
+    sourceRef: ExactRef
+    subjectTypeId: string
+    displayName: LocalizedText
+    description: LocalizedText
+    triggerParameters: {
+      namespace: string
+      fields: Array<{
+        fieldId: string
+        displayName: LocalizedText
+        description: LocalizedText
+      }>
+    } | null
+  }>
+}
+
+interface ExactEventSubscription {
+  id: string
+  mode: 'exact'
+  eventTypeRef: ExactRef
+  sourceRef: ExactRef
+  subject: { typeId: string; subjectRef: string }
+  subscriber: {
+    kind: 'employee-case' | 'employee-invocation' | 'automation' | 'system'
+    subscriberRef: string
+  }
+  state: 'active' | 'cancelled'
+  createdAt: number
+  updatedAt: number
+}
+
+interface FilteredEventSubscription {
+  id: string
+  mode: 'filtered'
+  sourceRef: ExactRef
+  eventTypeRefs: ExactRef[]
+  subjectTypeId: string
+  subscriber: {
+    kind: 'employee-case' | 'employee-invocation' | 'automation' | 'system'
+    subscriberRef: string
+  }
+  displayName: LocalizedText
+  selector: { kind: string; config: unknown }
+  state: 'active' | 'paused' | 'invalid'
+  createdAt: number
+  updatedAt: number
+}
+
+type EventSubscription = ExactEventSubscription | FilteredEventSubscription
+
+interface EventDeliveryStatus {
+  deliveryId: string
+  eventId: string
+  subscriptionId: string
+  subscriber: EventSubscription['subscriber']
+  eventTypeRef: ExactRef
+  subject: { typeId: string; subjectRef: string }
+  state: 'pending' | 'claimed' | 'accepted' | 'dead-letter'
+  attemptCount: number
+  nextAttemptAt: number
+  lastError: string | null
+  createdAt: number
+}
+
+interface EventRecordAudit {
+  eventId: string
+  eventTypeRef: ExactRef
+  sourceRef: ExactRef
+  subject: { typeId: string; subjectRef: string }
+  occurredAt: number
+  observedAt: number
+  summary: string
+  payloadArtifactRef: string | null
+}
+
+type SubscriptionView = 'rules' | 'audit'
+type DeliveryView = 'consumer' | 'source' | 'webhook'
+type DeliveryStateFilter = 'all' | EventDeliveryStatus['state']
+const EVENT_AUDIT_PAGE_SIZE = 50
+
+interface ObserverHealth {
+  sourceRef: ExactRef
+  subscriberCount: number
+  state: 'idle' | 'active' | 'draining' | 'blocked'
+  nextScanAt: number | null
+  lastSuccessAt: number | null
+  lastErrorCode: string | null
+}
+
+interface CustomSourceSummary {
+  id: string
+  displayName: LocalizedText
+  description: LocalizedText
+  pollIntervalMs: number
+  batchSize: number
+  ingestionMode: 'state-change' | 'occurrence'
+  eventTypeCount: number
+  publishedRevision: number | null
+  state: 'draft' | 'changed' | 'published' | 'retired'
+  updatedAt: number
+}
+
+interface CustomEventTypeDraft {
+  eventKey: string
+  subjectTypeId: string
+  payloadSchemaId: string
+  displayName: LocalizedText
+  description: LocalizedText
+  deliveryClass: string
+  triggerParameters: {
+    namespace: string
+    fields: CustomTriggerFieldDraft[]
+  } | null
+  fixtureSubjectRef: string
+}
+
+interface CustomTriggerFieldDraft {
+  editorKey: string
+  fieldId: string
+  displayName: LocalizedText
+  description: LocalizedText
+}
+
+type CustomEventTypePayload = Omit<
+  CustomEventTypeDraft,
+  'fixtureSubjectRef' | 'triggerParameters'
+> & {
+  triggerParameters: {
+    namespace: string
+    fields: Array<Omit<CustomTriggerFieldDraft, 'editorKey'>>
+  } | null
+}
+
+interface CustomSourceDraft {
+  schemaVersion: 1
+  displayName: LocalizedText
+  description: LocalizedText
+  pollIntervalMs: number
+  batchSize: number
+  ingestionMode: 'state-change' | 'occurrence'
+  program: { language: 'bash' | 'node' | 'python'; source: string; timeoutMs: number }
+  eventTypes: CustomEventTypePayload[]
+  fixture: {
+    subjects: Array<{ typeId: string; subjectRef: string }>
+    cursorJson: string | null
+  }
+}
+
+interface CustomSourceAuthoring {
+  id: string
+  draft: CustomSourceDraft
+  publishedRevision: number | null
+  retiredAt: number | null
+}
+
+function sameRef(left: ExactRef, right: ExactRef): boolean {
+  return left.id === right.id && left.revision === right.revision
+}
+
+function nodeStarter(): string {
+  return `import { readFileSync } from 'node:fs'
+
+const input = JSON.parse(readFileSync(process.env.AW_EVENT_INPUT_FILE, 'utf8'))
+const observations = input.subjects.map((subject) => ({
+  eventKey: 'status.changed',
+  subjectRef: subject.subjectRef,
+  occurredAt: new Date().toISOString(),
+  sourceEventKey: subject.subjectRef,
+  sourceEventRevision: 'replace-with-stable-source-revision',
+  summary: \`\${subject.subjectRef} changed\`,
+  triggerParameters: { item_id: subject.subjectRef },
+}))
+
+console.log(JSON.stringify({
+  protocol: 'aw-event-observer@1',
+  cursor: input.cursor,
+  observations,
+}))`
+}
+
+function initialEvent(eventKey = 'status.changed'): CustomEventTypeDraft {
+  return {
+    eventKey,
+    subjectTypeId: 'work.item',
+    payloadSchemaId: 'event.summary',
+    displayName: { 'zh-CN': '', 'en-US': '' },
+    description: { 'zh-CN': '', 'en-US': '' },
+    deliveryClass: 'work.status',
+    triggerParameters: null,
+    fixtureSubjectRef: '',
+  }
+}
+
+let nextTriggerFieldEditorKey = 1
+
+function initialTriggerField(): CustomTriggerFieldDraft {
+  return {
+    editorKey: `trigger-field-${nextTriggerFieldEditorKey++}`,
+    fieldId: '',
+    displayName: { 'zh-CN': '', 'en-US': '' },
+    description: { 'zh-CN': '', 'en-US': '' },
+  }
+}
+
+function triggerNamespaceFromEventKey(eventKey: string): string {
+  const normalized = eventKey
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  if (normalized === '') return 'event'
+  return /^[a-z]/.test(normalized) ? normalized : `event_${normalized}`
+}
+
+function nextEventKey(events: readonly CustomEventTypeDraft[]): string {
+  const existing = new Set(events.map((event) => event.eventKey))
+  let ordinal = 1
+  while (existing.has(`event.${ordinal}`)) ordinal += 1
+  return `event.${ordinal}`
+}
+
+function initialDraft(): {
+  displayName: LocalizedText
+  description: LocalizedText
+  pollIntervalSeconds: number
+  batchSize: number
+  ingestionMode: 'state-change' | 'occurrence'
+  language: 'bash' | 'node' | 'python'
+  source: string
+  timeoutSeconds: number
+  cursorJson: string
+  eventTypes: CustomEventTypeDraft[]
+} {
+  return {
+    displayName: { 'zh-CN': '', 'en-US': '' },
+    description: { 'zh-CN': '', 'en-US': '' },
+    pollIntervalSeconds: 60,
+    batchSize: 50,
+    ingestionMode: 'state-change',
+    language: 'node',
+    source: nodeStarter(),
+    timeoutSeconds: 30,
+    cursorJson: '',
+    eventTypes: [initialEvent()],
+  }
+}
+
+function sourceStateLabel(state: CustomSourceSummary['state'], zh: boolean): string {
+  if (state === 'draft') return zh ? '草稿' : 'Draft'
+  if (state === 'changed') return zh ? '有未发布修改' : 'Unpublished changes'
+  if (state === 'published') return zh ? '已发布' : 'Published'
+  return zh ? '已退役' : 'Retired'
+}
+
+function sourceStateKind(state: CustomSourceSummary['state']): 'neutral' | 'warn' | 'success' {
+  if (state === 'published') return 'success'
+  if (state === 'changed') return 'warn'
+  return 'neutral'
+}
+
+function EventsPage(): ReactElement {
+  const { i18n } = useTranslation()
+  const language = i18n.resolvedLanguage ?? i18n.language
+  const zh = language.startsWith('zh')
+  const actor = useActor()
+  const canCreateSource = usePermission('event-sources:create')
+  const canUpdateSource = usePermission('event-sources:update')
+  const canAuthorScripts = usePermission('scripts:author')
+  const canArchive = usePermission('event-sources:archive')
+  const canManageEndpoints = usePermission('webhook-endpoints:manage')
+  const canCreate = canCreateSource && canAuthorScripts
+  const canUpdate = canUpdateSource && canAuthorScripts
+  const qc = useQueryClient()
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const tab: EventCenterTab = search.tab ?? 'overview'
+  const panelIds = tabDomIds('event-center', tab)
+  const [editor, setEditor] = useState<string | 'new' | null>(null)
+  const [subscriptionView, setSubscriptionView] = useState<SubscriptionView>('rules')
+  const [subscriptionPage, setSubscriptionPage] = useState(1)
+  const [subscriptionSubscriber, setSubscriptionSubscriber] = useState('')
+  const [deliveryView, setDeliveryView] = useState<DeliveryView>('consumer')
+  const [deliveryPage, setDeliveryPage] = useState(1)
+  const [deliveryState, setDeliveryState] = useState<DeliveryStateFilter>('all')
+  const [deliverySubscriber, setDeliverySubscriber] = useState('')
+  const [sourceAuditPage, setSourceAuditPage] = useState(1)
+  const [sourceAuditSource, setSourceAuditSource] = useState('')
+
+  const catalog = useQuery<EventCatalog>({
+    queryKey: ['event-center', 'catalog'],
+    queryFn: ({ signal }) => api.get('/api/event-center/catalog', undefined, signal),
+  })
+  const customSources = useQuery<{ items: CustomSourceSummary[] }>({
+    queryKey: ['event-center', 'custom-sources'],
+    queryFn: ({ signal }) => api.get('/api/event-center/sources', undefined, signal),
+  })
+  const subscriptions = useQuery<EventPage<EventSubscription>>({
+    queryKey: ['event-center', 'subscriptions', subscriptionPage, subscriptionSubscriber.trim()],
+    queryFn: ({ signal }) => {
+      const subscriber = subscriptionSubscriber.trim()
+      return api.get(
+        `/api/event-center/subscriptions/page?page=${subscriptionPage}&limit=${EVENT_AUDIT_PAGE_SIZE}${subscriber === '' ? '' : `&subscriberRef=${encodeURIComponent(subscriber)}`}`,
+        undefined,
+        signal,
+      )
+    },
+    placeholderData: keepPreviousData,
+    refetchInterval: 5_000,
+  })
+  const observers = useQuery<{ items: ObserverHealth[] }>({
+    queryKey: ['event-center', 'observers'],
+    queryFn: ({ signal }) => api.get('/api/event-center/observers', undefined, signal),
+    refetchInterval: 5_000,
+  })
+  const deliveries = useQuery<EventPage<EventDeliveryStatus>>({
+    queryKey: [
+      'event-center',
+      'deliveries',
+      deliveryPage,
+      deliveryState,
+      deliverySubscriber.trim(),
+    ],
+    queryFn: ({ signal }) => {
+      const subscriber = deliverySubscriber.trim()
+      return api.get(
+        `/api/event-center/deliveries/page?page=${deliveryPage}&limit=${EVENT_AUDIT_PAGE_SIZE}${deliveryState === 'all' ? '' : `&state=${deliveryState}`}${subscriber === '' ? '' : `&subscriberRef=${encodeURIComponent(subscriber)}`}`,
+        undefined,
+        signal,
+      )
+    },
+    placeholderData: keepPreviousData,
+    refetchInterval: 5_000,
+  })
+  const sourceEvents = useQuery<EventPage<EventRecordAudit>>({
+    queryKey: ['event-center', 'events', sourceAuditPage, sourceAuditSource],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/event-center/events/page?page=${sourceAuditPage}&limit=${EVENT_AUDIT_PAGE_SIZE}${sourceAuditSource === '' ? '' : `&sourceId=${encodeURIComponent(sourceAuditSource)}`}`,
+        undefined,
+        signal,
+      ),
+    placeholderData: keepPreviousData,
+    refetchInterval: 5_000,
+  })
+  const retire = useMutation({
+    mutationFn: (id: string) => api.post(`/api/event-center/sources/${id}/retire`),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['event-center'] })
+    },
+  })
+
+  useEffect(() => {
+    if (subscriptions.data !== undefined && subscriptionPage > subscriptions.data.pageCount) {
+      setSubscriptionPage(subscriptions.data.pageCount)
+    }
+  }, [subscriptionPage, subscriptions.data])
+  useEffect(() => {
+    if (deliveries.data !== undefined && deliveryPage > deliveries.data.pageCount) {
+      setDeliveryPage(deliveries.data.pageCount)
+    }
+  }, [deliveries.data, deliveryPage])
+  useEffect(() => {
+    if (sourceEvents.data !== undefined && sourceAuditPage > sourceEvents.data.pageCount) {
+      setSourceAuditPage(sourceEvents.data.pageCount)
+    }
+  }, [sourceAuditPage, sourceEvents.data])
+
+  if (
+    catalog.isPending ||
+    customSources.isPending ||
+    subscriptions.isPending ||
+    observers.isPending ||
+    deliveries.isPending ||
+    sourceEvents.isPending ||
+    actor.isLoading
+  ) {
+    return <LoadingState />
+  }
+  const error =
+    catalog.error ??
+    customSources.error ??
+    subscriptions.error ??
+    observers.error ??
+    deliveries.error ??
+    sourceEvents.error
+  if (error !== null) return <ErrorBanner error={error} />
+  if (
+    catalog.data === undefined ||
+    customSources.data === undefined ||
+    subscriptions.data === undefined ||
+    observers.data === undefined ||
+    deliveries.data === undefined ||
+    sourceEvents.data === undefined
+  ) {
+    return <LoadingState />
+  }
+
+  const activeSubscriptionCount = catalog.data.sources.reduce(
+    (total, source) => total + source.subscriptionCount,
+    0,
+  )
+  const eventName = (ref: ExactRef): string => {
+    const event = catalog.data.eventTypes.find((candidate) => sameRef(candidate.eventTypeRef, ref))
+    return event === undefined ? ref.id : localized(event.displayName, language)
+  }
+  const sourceName = (ref: ExactRef): string => {
+    const source = catalog.data.sources.find((candidate) => sameRef(candidate.sourceRef, ref))
+    return source === undefined ? ref.id : localized(source.displayName, language)
+  }
+  const subscriptionState = (subscription: EventSubscription): string => {
+    if (subscription.state === 'active') return zh ? '有效' : 'Active'
+    if (subscription.state === 'paused') return zh ? '已暂停' : 'Paused'
+    if (subscription.state === 'invalid') return zh ? '配置失效' : 'Invalid'
+    return zh ? '已取消' : 'Cancelled'
+  }
+
+  return (
+    <div className="page page--operations event-center-page" data-testid="event-center-page">
+      <div className="operations-surface">
+        <PageHeader className="operations-surface__header" title={zh ? '事件中心' : 'Event Center'}>
+          <p className="operations-surface__subtitle">
+            {zh
+              ? '平台统一管理事件来源、事件目录、订阅与按需轮询；数字员工、工作流和集成都可以复用。'
+              : 'Manage sources, event types, subscriptions, and on-demand polling for employees, workflows, and integrations.'}
+          </p>
+        </PageHeader>
+
+        <TabBar<EventCenterTab>
+          active={tab}
+          onSelect={(next) => void navigate({ search: (previous) => ({ ...previous, tab: next }) })}
+          ariaLabel={zh ? '事件中心功能' : 'Event Center sections'}
+          idPrefix="event-center"
+          rootTestid="event-center-tab"
+          className="repo-kind-tabs"
+          tabs={[
+            {
+              key: 'overview',
+              testid: 'event-center-tab-overview',
+              label: <span className="repo-kind-tabs__label">{zh ? '事件总览' : 'Overview'}</span>,
+            },
+            {
+              key: 'sources',
+              testid: 'event-center-tab-sources',
+              label: <span className="repo-kind-tabs__label">{zh ? '事件来源' : 'Sources'}</span>,
+            },
+            {
+              key: 'subscriptions',
+              testid: 'event-center-tab-subscriptions',
+              label: (
+                <span className="repo-kind-tabs__label">{zh ? '实时订阅' : 'Subscriptions'}</span>
+              ),
+            },
+            {
+              key: 'deliveries',
+              testid: 'event-center-tab-deliveries',
+              label: (
+                <span className="repo-kind-tabs__label">{zh ? '投递记录' : 'Deliveries'}</span>
+              ),
+            },
+          ]}
+        />
+
+        <div
+          className="digital-employee-surface__body event-center-page__body"
+          role="tabpanel"
+          id={panelIds.panelId}
+          aria-labelledby={panelIds.tabId}
+        >
+          {tab === 'sources' ? (
+            <NoticeBanner
+              tone="info"
+              title={zh ? '推送和轮询共用一条事件通道' : 'Push and polling share one event channel'}
+            >
+              {zh
+                ? 'Webhook 负责接收和验签，自定义脚本负责按需观察；两者都只发布标准事件。主动来源有订阅才轮询，没人关注就停止。'
+                : 'Webhooks receive and verify pushes; custom programs observe on demand. Both publish the same standard events, and active sources poll only while subscribed.'}
+            </NoticeBanner>
+          ) : null}
+
+          {tab === 'subscriptions' ? (
+            <NoticeBanner
+              tone="info"
+              title={zh ? '一条事件可以同时交给多个消费者' : 'One event may reach many consumers'}
+            >
+              {zh
+                ? '每个订阅都会生成自己的投递。任一数字员工或编排确认后，只完成自己的投递，不会删除事件，也不会影响其他订阅者。'
+                : 'Every subscription gets its own delivery. Acknowledging one delivery never deletes the event or changes another subscriber’s state.'}
+            </NoticeBanner>
+          ) : null}
+
+          {tab === 'deliveries' ? (
+            <NoticeBanner
+              tone="info"
+              title={zh ? '事件与投递分别追踪' : 'Events and deliveries are tracked separately'}
+            >
+              {zh
+                ? '事件 ID 表示同一次事实；投递 ID 表示某个订阅者的处理进度。重试、确认和处理失败都只作用于投递。'
+                : 'The event ID identifies one fact; each delivery ID tracks one subscriber. Retry, acknowledgement, and terminal failure are delivery-scoped.'}
+            </NoticeBanner>
+          ) : null}
+
+          {tab === 'overview' ? (
+            <div className="event-center-summary">
+              <Card title={zh ? '已登记事件' : 'Registered events'}>
+                <strong>{catalog.data.eventTypes.length}</strong>
+              </Card>
+              <Card title={zh ? '有效订阅' : 'Active subscriptions'}>
+                <strong>{activeSubscriptionCount}</strong>
+              </Card>
+              <Card title={zh ? '待处理投递' : 'Pending deliveries'}>
+                <strong>
+                  {
+                    deliveries.data.items.filter(
+                      (item) => item.state === 'pending' || item.state === 'claimed',
+                    ).length
+                  }
+                </strong>
+              </Card>
+              <Card title={zh ? '运行中的观察器' : 'Running observers'}>
+                <strong>
+                  {observers.data.items.filter((item) => item.state === 'active').length}
+                </strong>
+              </Card>
+            </div>
+          ) : null}
+
+          {tab === 'overview' ? (
+            <section className="employee-node-panel">
+              <header>
+                <div>
+                  <span className="employee-node-panel__eyebrow">
+                    {zh ? '事件总目录' : 'Event directory'}
+                  </span>
+                  <h2>
+                    {zh ? '事件从哪里来，会发生什么' : 'Where events come from and what they emit'}
+                  </h2>
+                  <p>
+                    {zh
+                      ? '按来源展开全部事件；来源显示真实有效订阅数，子项显示可注入任务的参数合同。'
+                      : 'Every source is fully expanded. Sources show active subscriptions and child events show injectable task contracts.'}
+                  </p>
+                </div>
+              </header>
+              <ul
+                className="event-source-tree"
+                role="tree"
+                aria-label={zh ? '事件来源与事件目录' : 'Event sources and event types'}
+                data-testid="event-source-tree"
+              >
+                {catalog.data.sources.map((source) => {
+                  const health = observers.data.items.find((item) =>
+                    sameRef(item.sourceRef, source.sourceRef),
+                  )
+                  const events = catalog.data.eventTypes
+                    .filter((event) => sameRef(event.sourceRef, source.sourceRef))
+                    .sort((left, right) =>
+                      left.eventTypeRef.id.localeCompare(right.eventTypeRef.id),
+                    )
+                  const mode =
+                    source.observationMode === 'passive'
+                      ? zh
+                        ? '实时推送'
+                        : 'Push'
+                      : source.observationMode === 'active'
+                        ? zh
+                          ? '按需轮询'
+                          : 'On-demand polling'
+                        : zh
+                          ? '推送 + 轮询'
+                          : 'Push + polling'
+                  return (
+                    <li
+                      key={`${source.sourceRef.id}@${source.sourceRef.revision}`}
+                      className="event-source-tree__source"
+                      role="treeitem"
+                      aria-expanded="true"
+                    >
+                      <div className="event-source-tree__source-row">
+                        <div>
+                          <strong>{localized(source.displayName, language)}</strong>
+                          <span>{localized(source.description, language)}</span>
+                          <small>
+                            {mode} · {source.subscriptionCount}{' '}
+                            {zh ? '个有效订阅' : 'active subscriptions'}
+                          </small>
+                        </div>
+                        <StatusChip
+                          kind={
+                            health?.state === 'blocked'
+                              ? 'danger'
+                              : health?.state === 'active'
+                                ? 'success'
+                                : 'neutral'
+                          }
+                        >
+                          {health?.state === 'blocked'
+                            ? zh
+                              ? '观察异常'
+                              : 'Observer blocked'
+                            : health?.state === 'active'
+                              ? zh
+                                ? '正在轮询'
+                                : 'Polling'
+                              : source.observationMode === 'passive'
+                                ? zh
+                                  ? '等待推送'
+                                  : 'Awaiting push'
+                                : zh
+                                  ? '按需停止'
+                                  : 'Stopped on demand'}
+                        </StatusChip>
+                      </div>
+                      <ul className="event-source-tree__events" role="group">
+                        {events.map((event) => (
+                          <li
+                            key={`${event.eventTypeRef.id}@${event.eventTypeRef.revision}`}
+                            className="event-source-tree__event"
+                            role="treeitem"
+                          >
+                            <strong>{localized(event.displayName, language)}</strong>
+                            <span>{localized(event.description, language)}</span>
+                            <small>
+                              {event.triggerParameters === null
+                                ? zh
+                                  ? '仅唤醒已有关注，不注入任务参数'
+                                  : 'Wakes existing attention without task parameters'
+                                : `trigger.${event.triggerParameters.namespace}.* · ${event.triggerParameters.fields.length} ${zh ? '个任务参数' : 'task parameters'}`}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ) : null}
+
+          {tab === 'sources' ? (
+            <>
+              <section className="employee-node-panel event-source-section">
+                <header>
+                  <div>
+                    <span className="employee-node-panel__eyebrow">
+                      {zh ? '推送接入' : 'Push ingress'}
+                    </span>
+                    <h2>{zh ? 'Webhook 推送来源' : 'Webhook push sources'}</h2>
+                    <p>
+                      {zh
+                        ? '端点只负责接收、验签和原始入站审计，标准事件随后进入同一事件中心。'
+                        : 'Endpoints only receive, verify, and audit ingress before publishing standard events.'}
+                    </p>
+                  </div>
+                </header>
+                <WebhookEndpointCard canManage={canManageEndpoints} />
+              </section>
+
+              <section className="employee-node-panel event-source-section">
+                <header>
+                  <div>
+                    <span className="employee-node-panel__eyebrow">
+                      {zh ? '主动观察' : 'Active observation'}
+                    </span>
+                    <h2>{zh ? '自定义轮询来源' : 'Custom polling sources'}</h2>
+                    <p>
+                      {zh
+                        ? '定义“去哪里看、多久看一次、会产生什么事件”；发布前平台会执行真实样例。'
+                        : 'Define where to observe, how often, and which events are produced. A real fixture runs before publish.'}
+                    </p>
+                  </div>
+                  {canCreate ? (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => setEditor('new')}
+                      data-testid="event-source-new"
+                    >
+                      {zh ? '新增事件来源' : 'New event source'}
+                    </button>
+                  ) : null}
+                </header>
+                {retire.isError ? <ErrorBanner error={retire.error} /> : null}
+                {customSources.data.items.length === 0 ? (
+                  <EmptyState
+                    title={zh ? '还没有自定义事件来源' : 'No custom event sources'}
+                    description={
+                      zh
+                        ? '内建来源仍然可用；需要接入自建系统时新增一个轮询来源。'
+                        : 'Built-in sources remain available. Add a polling source for an internal system.'
+                    }
+                  />
+                ) : (
+                  <div className="node-tool-list" data-testid="event-source-list">
+                    {customSources.data.items.map((source) => (
+                      <article key={source.id} className="node-tool-row event-source-row">
+                        <div>
+                          <strong>{localized(source.displayName, language)}</strong>
+                          <span>{localized(source.description, language)}</span>
+                          <small>
+                            {zh
+                              ? `每 ${Math.round(source.pollIntervalMs / 1_000)} 秒 · 批量 ${source.batchSize} · ${source.eventTypeCount} 种事件`
+                              : `Every ${Math.round(source.pollIntervalMs / 1_000)}s · batch ${source.batchSize} · ${source.eventTypeCount} events`}
+                          </small>
+                        </div>
+                        <div className="event-source-row__actions">
+                          <StatusChip kind={sourceStateKind(source.state)}>
+                            {sourceStateLabel(source.state, zh)}
+                            {source.publishedRevision === null
+                              ? ''
+                              : ` · v${source.publishedRevision}`}
+                          </StatusChip>
+                          {canUpdate && source.state !== 'retired' ? (
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              onClick={() => setEditor(source.id)}
+                            >
+                              {zh ? '编辑' : 'Edit'}
+                            </button>
+                          ) : null}
+                          {canArchive && source.state !== 'retired' ? (
+                            <ConfirmButton
+                              size="sm"
+                              variant="danger"
+                              label={zh ? '退役' : 'Retire'}
+                              confirmLabel={zh ? '确认退役' : 'Confirm retire'}
+                              confirmationKey={source.id}
+                              onConfirm={() => retire.mutateAsync(source.id)}
+                            />
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          ) : null}
+
+          {tab === 'subscriptions' ? (
+            <>
+              <div className="event-center-view-switcher">
+                <div>
+                  <strong>{zh ? '订阅管理' : 'Subscription management'}</strong>
+                  <span>
+                    {zh
+                      ? '配置响应规则与查看运行订阅分开呈现，万级清单不会把编辑入口推到页面底部。'
+                      : 'Rule authoring and runtime audit are separate views, so large lists never bury authoring.'}
+                  </span>
+                </div>
+                <Segmented<SubscriptionView>
+                  value={subscriptionView}
+                  onChange={setSubscriptionView}
+                  ariaLabel={zh ? '订阅页面视图' : 'Subscription page view'}
+                  testidPrefix="event-subscription-view"
+                  options={[
+                    { value: 'rules', label: zh ? '响应规则' : 'Response rules' },
+                    { value: 'audit', label: zh ? '订阅审计' : 'Subscription audit' },
+                  ]}
+                />
+              </div>
+
+              {subscriptionView === 'rules' ? (
+                <div className="event-response-rule-sections">
+                  <section className="employee-node-panel">
+                    <header>
+                      <div>
+                        <span className="employee-node-panel__eyebrow">
+                          {zh ? '响应规则' : 'Response rules'}
+                        </span>
+                        <h2>
+                          {zh ? '事件发生后启动哪项工作' : 'Choose work to start for an event'}
+                        </h2>
+                        <p>
+                          {zh
+                            ? '目录中任何带任务输入契约的公开事件都可以选择，来源是 Webhook、轮询还是平台内部发布都不影响配置。'
+                            : 'Any public catalog event with a task-input contract is selectable, regardless of whether it arrived by webhook, polling, or an internal publisher.'}
+                        </p>
+                      </div>
+                    </header>
+                    <EventResponseRulesPanel
+                      catalog={catalog.data}
+                      language={language}
+                      canManage={canUpdateSource}
+                    />
+                  </section>
+
+                  <section className="employee-node-panel event-response-compatibility">
+                    <header>
+                      <div>
+                        <span className="employee-node-panel__eyebrow">
+                          {zh ? '兼容配置' : 'Compatibility'}
+                        </span>
+                        <h2>
+                          {zh
+                            ? '现有代码平台 Webhook 规则'
+                            : 'Existing code-platform Webhook rules'}
+                        </h2>
+                        <p>
+                          {zh
+                            ? '保留仓库、分支和评论命令等代码平台专用条件。新规则优先使用上方标准事件响应。'
+                            : 'Keeps code-platform-specific repository, branch, and comment-command filters. Prefer standard event responses for new rules.'}
+                        </p>
+                      </div>
+                    </header>
+                    <TriggersPanel />
+                  </section>
+                </div>
+              ) : (
+                <section className="employee-node-panel">
+                  <header>
+                    <div>
+                      <span className="employee-node-panel__eyebrow">
+                        {zh ? '统一订阅' : 'Unified subscriptions'}
+                      </span>
+                      <h2>{zh ? '谁在等待什么' : 'Who is waiting for what'}</h2>
+                      <p>
+                        {zh
+                          ? '数字员工的精确关注和编排的条件响应统一分页，每个订阅独立获得投递。'
+                          : 'Exact employee attention and filtered automation responses are paged together and receive independent deliveries.'}
+                      </p>
+                    </div>
+                  </header>
+                  <FilterBar ariaLabel={zh ? '订阅审计筛选' : 'Subscription audit filters'}>
+                    <FilterField label={zh ? '消费者标识' : 'Subscriber ID'}>
+                      <TextInput
+                        type="search"
+                        value={subscriptionSubscriber}
+                        onChange={(value) => {
+                          setSubscriptionSubscriber(value)
+                          setSubscriptionPage(1)
+                        }}
+                        placeholder={zh ? '精确输入消费者标识' : 'Exact subscriber ID'}
+                        aria-label={
+                          zh ? '按消费者标识筛选订阅' : 'Filter subscriptions by subscriber ID'
+                        }
+                        data-testid="event-subscription-subscriber-filter"
+                      />
+                    </FilterField>
+                  </FilterBar>
+                  <p className="event-center-audit__total">
+                    {zh
+                      ? `共 ${subscriptions.data.total} 条订阅`
+                      : `${subscriptions.data.total} subscriptions`}
+                  </p>
+                  <div className="node-tool-list" data-testid="event-subscription-list">
+                    {subscriptions.data.items.length === 0 ? (
+                      <p className="node-tool-list__empty">
+                        {zh ? '当前筛选下没有订阅。' : 'No subscriptions match this filter.'}
+                      </p>
+                    ) : (
+                      subscriptions.data.items.map((subscription) => {
+                        const exact = subscription.mode === 'exact'
+                        const title = exact
+                          ? eventName(subscription.eventTypeRef)
+                          : localized(subscription.displayName, language)
+                        const detail = exact
+                          ? `${subscription.subject.typeId} · ${subscription.subject.subjectRef}`
+                          : `${subscription.subjectTypeId} · ${subscription.eventTypeRefs.map(eventName).join('、')}`
+                        return (
+                          <article
+                            key={`${subscription.mode}:${subscription.id}`}
+                            className="node-tool-row"
+                          >
+                            <div>
+                              <strong>{title}</strong>
+                              <span>{detail}</span>
+                              <small>
+                                {sourceName(subscription.sourceRef)} ·{' '}
+                                {exact
+                                  ? zh
+                                    ? '精确关注'
+                                    : 'Exact attention'
+                                  : zh
+                                    ? '条件响应'
+                                    : 'Filtered response'}{' '}
+                                · {subscription.subscriber.kind}/
+                                {subscription.subscriber.subscriberRef}
+                              </small>
+                            </div>
+                            <div className="event-source-row__actions">
+                              <StatusChip
+                                kind={
+                                  subscription.state === 'active'
+                                    ? 'success'
+                                    : subscription.state === 'invalid'
+                                      ? 'danger'
+                                      : 'neutral'
+                                }
+                              >
+                                {subscriptionState(subscription)}
+                              </StatusChip>
+                              {exact && subscription.subscriber.kind === 'employee-case' ? (
+                                <Link
+                                  to="/tasks/employee-cases/$caseId"
+                                  params={{ caseId: subscription.subscriber.subscriberRef }}
+                                  className="btn btn--sm"
+                                >
+                                  {zh ? '查看任务' : 'View task'}
+                                </Link>
+                              ) : null}
+                            </div>
+                          </article>
+                        )
+                      })
+                    )}
+                  </div>
+                  {subscriptions.data.total > 0 ? (
+                    <Pagination
+                      page={subscriptionPage}
+                      pageCount={subscriptions.data.pageCount}
+                      onPageChange={setSubscriptionPage}
+                      data-testid="event-subscription-pagination"
+                    />
+                  ) : null}
+                </section>
+              )}
+            </>
+          ) : null}
+
+          {tab === 'deliveries' ? (
+            <>
+              <div className="event-center-view-switcher">
+                <div>
+                  <strong>{zh ? '投递与来源审计' : 'Delivery and ingress audit'}</strong>
+                  <span>
+                    {zh
+                      ? '消费者处理状态和原始来源证据各自分页，不在同一条纵向长页中堆叠。'
+                      : 'Consumer state and raw ingress evidence are independently paged views.'}
+                  </span>
+                </div>
+                <Segmented<DeliveryView>
+                  value={deliveryView}
+                  onChange={setDeliveryView}
+                  ariaLabel={zh ? '投递页面视图' : 'Delivery page view'}
+                  testidPrefix="event-delivery-view"
+                  options={[
+                    { value: 'consumer', label: zh ? '订阅投递' : 'Subscription deliveries' },
+                    { value: 'source', label: zh ? '事件记录' : 'Source events' },
+                    { value: 'webhook', label: zh ? 'Webhook 入站' : 'Webhook ingress' },
+                  ]}
+                />
+              </div>
+
+              {deliveryView === 'consumer' ? (
+                <section className="employee-node-panel">
+                  <header>
+                    <div>
+                      <span className="employee-node-panel__eyebrow">
+                        {zh ? '订阅投递' : 'Subscription deliveries'}
+                      </span>
+                      <h2>{zh ? '每个消费者的处理状态' : 'Processing state per consumer'}</h2>
+                    </div>
+                  </header>
+                  <FilterBar ariaLabel={zh ? '订阅投递筛选' : 'Subscription delivery filters'}>
+                    <Segmented<DeliveryStateFilter>
+                      value={deliveryState}
+                      onChange={(value) => {
+                        setDeliveryState(value)
+                        setDeliveryPage(1)
+                      }}
+                      ariaLabel={zh ? '按处理状态筛选' : 'Filter by processing state'}
+                      options={[
+                        { value: 'all', label: zh ? '全部' : 'All' },
+                        { value: 'pending', label: zh ? '待处理' : 'Pending' },
+                        { value: 'claimed', label: zh ? '处理中' : 'Processing' },
+                        { value: 'accepted', label: zh ? '已确认' : 'Accepted' },
+                        { value: 'dead-letter', label: zh ? '处理失败' : 'Failed' },
+                      ]}
+                    />
+                    <FilterField label={zh ? '消费者标识' : 'Subscriber ID'}>
+                      <TextInput
+                        type="search"
+                        value={deliverySubscriber}
+                        onChange={(value) => {
+                          setDeliverySubscriber(value)
+                          setDeliveryPage(1)
+                        }}
+                        placeholder={zh ? '精确输入消费者标识' : 'Exact subscriber ID'}
+                        aria-label={
+                          zh ? '按消费者标识筛选投递' : 'Filter deliveries by subscriber ID'
+                        }
+                        data-testid="event-delivery-subscriber-filter"
+                      />
+                    </FilterField>
+                  </FilterBar>
+                  <p className="event-center-audit__total">
+                    {zh
+                      ? `共 ${deliveries.data.total} 条投递`
+                      : `${deliveries.data.total} deliveries`}
+                  </p>
+                  <div className="node-tool-list" data-testid="event-delivery-list">
+                    {deliveries.data.items.length === 0 ? (
+                      <p className="node-tool-list__empty">
+                        {zh ? '还没有事件投递。' : 'No event deliveries yet.'}
+                      </p>
+                    ) : (
+                      deliveries.data.items.map((delivery) => (
+                        <article key={delivery.deliveryId} className="node-tool-row">
+                          <div>
+                            <strong>{eventName(delivery.eventTypeRef)}</strong>
+                            <span>
+                              {delivery.subject.subjectRef} → {delivery.subscriber.kind}/
+                              {delivery.subscriber.subscriberRef}
+                            </span>
+                            <small>
+                              {zh ? '事件' : 'Event'} {delivery.eventId} ·{' '}
+                              {zh ? '投递' : 'Delivery'} {delivery.deliveryId} ·{' '}
+                              {zh ? '尝试' : 'attempts'} {delivery.attemptCount}
+                              {delivery.lastError === null ? '' : ` · ${delivery.lastError}`}
+                            </small>
+                          </div>
+                          <StatusChip
+                            kind={
+                              delivery.state === 'accepted'
+                                ? 'success'
+                                : delivery.state === 'dead-letter'
+                                  ? 'danger'
+                                  : delivery.state === 'claimed'
+                                    ? 'warn'
+                                    : 'neutral'
+                            }
+                          >
+                            {delivery.state === 'accepted'
+                              ? zh
+                                ? '已确认'
+                                : 'Accepted'
+                              : delivery.state === 'dead-letter'
+                                ? zh
+                                  ? '处理失败'
+                                  : 'Failed'
+                                : delivery.state === 'claimed'
+                                  ? zh
+                                    ? '处理中'
+                                    : 'Processing'
+                                  : zh
+                                    ? '待处理'
+                                    : 'Pending'}
+                          </StatusChip>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                  {deliveries.data.total > 0 ? (
+                    <Pagination
+                      page={deliveryPage}
+                      pageCount={deliveries.data.pageCount}
+                      onPageChange={setDeliveryPage}
+                      data-testid="event-delivery-pagination"
+                    />
+                  ) : null}
+                </section>
+              ) : deliveryView === 'source' ? (
+                <section className="employee-node-panel">
+                  <header>
+                    <div>
+                      <span className="employee-node-panel__eyebrow">
+                        {zh ? '全局事件记录' : 'Global source events'}
+                      </span>
+                      <h2>{zh ? '所有来源已经发布的事实' : 'Facts published by every source'}</h2>
+                      <p>
+                        {zh
+                          ? '这里记录 Webhook、轮询、任务和数字员工发布的标准事件，不限定为代码平台。'
+                          : 'This audit contains standard events from webhooks, polling, tasks, and digital employees—not only code platforms.'}
+                      </p>
+                    </div>
+                  </header>
+                  <FilterBar ariaLabel={zh ? '事件记录筛选' : 'Source event filters'}>
+                    <FilterField label={zh ? '事件来源' : 'Event source'}>
+                      <Select
+                        value={sourceAuditSource}
+                        onChange={(value) => {
+                          setSourceAuditSource(value)
+                          setSourceAuditPage(1)
+                        }}
+                        options={[
+                          { value: '', label: zh ? '全部来源' : 'All sources' },
+                          ...catalog.data.sources.map((source) => ({
+                            value: source.sourceRef.id,
+                            label: localized(source.displayName, language),
+                          })),
+                        ]}
+                        ariaLabel={zh ? '按事件来源筛选' : 'Filter by event source'}
+                        data-testid="event-source-audit-filter"
+                      />
+                    </FilterField>
+                  </FilterBar>
+                  <p className="event-center-audit__total">
+                    {zh
+                      ? `共 ${sourceEvents.data.total} 条事件`
+                      : `${sourceEvents.data.total} source events`}
+                  </p>
+                  <div className="node-tool-list" data-testid="event-source-audit-list">
+                    {sourceEvents.data.items.length === 0 ? (
+                      <p className="node-tool-list__empty">
+                        {zh ? '当前筛选下还没有事件。' : 'No source events match this filter.'}
+                      </p>
+                    ) : (
+                      sourceEvents.data.items.map((event) => (
+                        <article key={event.eventId} className="node-tool-row">
+                          <div>
+                            <strong>{eventName(event.eventTypeRef)}</strong>
+                            <span>{event.summary}</span>
+                            <small>
+                              {sourceName(event.sourceRef)} · {event.subject.typeId}/
+                              {event.subject.subjectRef} ·{' '}
+                              {new Date(event.observedAt).toLocaleString()}
+                            </small>
+                          </div>
+                          <StatusChip kind="neutral">{zh ? '已入库' : 'Recorded'}</StatusChip>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                  {sourceEvents.data.total > 0 ? (
+                    <Pagination
+                      page={sourceAuditPage}
+                      pageCount={sourceEvents.data.pageCount}
+                      onPageChange={setSourceAuditPage}
+                      data-testid="event-source-audit-pagination"
+                    />
+                  ) : null}
+                </section>
+              ) : (
+                <section className="employee-node-panel">
+                  <header>
+                    <div>
+                      <span className="employee-node-panel__eyebrow">
+                        {zh ? 'Webhook 入站审计' : 'Webhook ingress audit'}
+                      </span>
+                      <h2>
+                        {zh
+                          ? '验签、归一化与重放证据'
+                          : 'Verification, normalization, and replay evidence'}
+                      </h2>
+                      <p>
+                        {zh
+                          ? '这是 Webhook 适配器自己的原始接入证据，不代表全局事件来源。'
+                          : 'This is raw ingress evidence owned by the Webhook adapter, not the global source-event audit.'}
+                      </p>
+                    </div>
+                  </header>
+                  <DeliveriesPanel canReplay={canManageEndpoints} />
+                </section>
+              )}
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {editor !== null ? (
+        <EventSourceEditor
+          sourceId={editor === 'new' ? null : editor}
+          language={language}
+          onClose={() => setEditor(null)}
+          onSaved={async () => {
+            await qc.invalidateQueries({ queryKey: ['event-center'] })
+          }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function EventSourceEditor(props: {
+  sourceId: string | null
+  language: string
+  onClose: () => void
+  onSaved: () => Promise<void>
+}): ReactElement {
+  const zh = props.language.startsWith('zh')
+  const [form, setForm] = useState(initialDraft)
+  const [workingId, setWorkingId] = useState(props.sourceId)
+  const [action, setAction] = useState<'save' | 'validate' | 'publish' | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [validation, setValidation] = useState<string | null>(null)
+  const authoring = useQuery<CustomSourceAuthoring>({
+    queryKey: ['event-center', 'custom-source', props.sourceId],
+    queryFn: ({ signal }) =>
+      api.get(`/api/event-center/sources/${props.sourceId ?? ''}`, undefined, signal),
+    enabled: props.sourceId !== null,
+  })
+  const authoringLoading = props.sourceId !== null && authoring.isPending
+
+  useEffect(() => {
+    if (authoring.data === undefined) return
+    const draft = authoring.data.draft
+    setForm({
+      displayName: draft.displayName,
+      description: draft.description,
+      pollIntervalSeconds: draft.pollIntervalMs / 1_000,
+      batchSize: draft.batchSize,
+      ingestionMode: draft.ingestionMode,
+      language: draft.program.language,
+      source: draft.program.source,
+      timeoutSeconds: draft.program.timeoutMs / 1_000,
+      cursorJson: draft.fixture.cursorJson ?? '',
+      eventTypes: draft.eventTypes.map((event) => ({
+        ...event,
+        triggerParameters:
+          event.triggerParameters === null
+            ? null
+            : {
+                ...event.triggerParameters,
+                fields: event.triggerParameters.fields.map((field) => ({
+                  ...field,
+                  editorKey: `trigger-field-${nextTriggerFieldEditorKey++}`,
+                })),
+              },
+        fixtureSubjectRef:
+          draft.fixture.subjects.find((subject) => subject.typeId === event.subjectTypeId)
+            ?.subjectRef ?? '',
+      })),
+    })
+    setWorkingId(authoring.data.id)
+  }, [authoring.data])
+
+  const body = useMemo<CustomSourceDraft>(() => {
+    const subjects = new Map<string, string>()
+    for (const event of form.eventTypes) {
+      if (!subjects.has(event.subjectTypeId)) {
+        subjects.set(event.subjectTypeId, event.fixtureSubjectRef)
+      }
+    }
+    return {
+      schemaVersion: 1,
+      displayName: form.displayName,
+      description: form.description,
+      pollIntervalMs: Math.round(form.pollIntervalSeconds * 1_000),
+      batchSize: Math.round(form.batchSize),
+      ingestionMode: form.ingestionMode,
+      program: {
+        language: form.language,
+        source: form.source,
+        timeoutMs: Math.round(form.timeoutSeconds * 1_000),
+      },
+      eventTypes: form.eventTypes.map(
+        ({ fixtureSubjectRef: _fixtureSubjectRef, triggerParameters, ...event }) => ({
+          ...event,
+          triggerParameters:
+            triggerParameters === null
+              ? null
+              : {
+                  namespace: triggerParameters.namespace,
+                  fields: triggerParameters.fields.map(
+                    ({ editorKey: _editorKey, ...field }) => field,
+                  ),
+                },
+        }),
+      ),
+      fixture: {
+        subjects: [...subjects].map(([typeId, subjectRef]) => ({ typeId, subjectRef })),
+        cursorJson: form.cursorJson.trim() === '' ? null : form.cursorJson,
+      },
+    }
+  }, [form])
+
+  const valid =
+    form.displayName['zh-CN'].trim() !== '' &&
+    form.displayName['en-US'].trim() !== '' &&
+    form.description['zh-CN'].trim() !== '' &&
+    form.description['en-US'].trim() !== '' &&
+    form.pollIntervalSeconds >= 1 &&
+    form.batchSize >= 1 &&
+    form.timeoutSeconds >= 1 &&
+    form.source.trim() !== '' &&
+    form.eventTypes.length > 0 &&
+    form.eventTypes.every(
+      (event) =>
+        event.eventKey.trim() !== '' &&
+        event.subjectTypeId.trim() !== '' &&
+        event.payloadSchemaId.trim() !== '' &&
+        event.deliveryClass.trim() !== '' &&
+        event.displayName['zh-CN'].trim() !== '' &&
+        event.displayName['en-US'].trim() !== '' &&
+        event.description['zh-CN'].trim() !== '' &&
+        event.description['en-US'].trim() !== '' &&
+        event.fixtureSubjectRef.trim() !== '' &&
+        (event.triggerParameters === null ||
+          (event.triggerParameters.namespace.trim() !== '' &&
+            event.triggerParameters.fields.length > 0 &&
+            event.triggerParameters.fields.every(
+              (field) =>
+                field.fieldId.trim() !== '' &&
+                field.displayName['zh-CN'].trim() !== '' &&
+                field.displayName['en-US'].trim() !== '' &&
+                field.description['zh-CN'].trim() !== '' &&
+                field.description['en-US'].trim() !== '',
+            ))),
+    )
+
+  async function saveDraft(): Promise<string> {
+    const id = workingId
+    const saved =
+      id === null
+        ? await api.post<CustomSourceAuthoring>('/api/event-center/sources', body)
+        : await api.put<CustomSourceAuthoring>(`/api/event-center/sources/${id}`, body)
+    setWorkingId(saved.id)
+    await props.onSaved()
+    return saved.id
+  }
+
+  async function run(next: 'save' | 'validate' | 'publish'): Promise<void> {
+    setAction(next)
+    setError(null)
+    setValidation(null)
+    try {
+      const id = await saveDraft()
+      if (next === 'validate') {
+        const receipt = await api.post<{ observationCount: number }>(
+          `/api/event-center/sources/${id}/validate`,
+        )
+        setValidation(
+          zh
+            ? `真实样例通过，脚本输出 ${receipt.observationCount} 条事件。`
+            : `Fixture passed with ${receipt.observationCount} observations.`,
+        )
+      } else if (next === 'publish') {
+        await api.post(`/api/event-center/sources/${id}/publish`)
+        await props.onSaved()
+        props.onClose()
+      } else {
+        setValidation(zh ? '草稿已保存。' : 'Draft saved.')
+      }
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setAction(null)
+    }
+  }
+
+  function updateEvent(index: number, patch: Partial<CustomEventTypeDraft>): void {
+    setForm((current) => ({
+      ...current,
+      eventTypes: current.eventTypes.map((event, eventIndex) =>
+        eventIndex === index ? { ...event, ...patch } : event,
+      ),
+    }))
+  }
+
+  function updateTriggerField(
+    eventIndex: number,
+    fieldIndex: number,
+    patch: Partial<NonNullable<CustomEventTypeDraft['triggerParameters']>['fields'][number]>,
+  ): void {
+    setForm((current) => ({
+      ...current,
+      eventTypes: current.eventTypes.map((event, index) => {
+        if (index !== eventIndex || event.triggerParameters === null) return event
+        return {
+          ...event,
+          triggerParameters: {
+            ...event.triggerParameters,
+            fields: event.triggerParameters.fields.map((field, index) =>
+              index === fieldIndex ? { ...field, ...patch } : field,
+            ),
+          },
+        }
+      }),
+    }))
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={props.onClose}
+      title={
+        props.sourceId === null
+          ? zh
+            ? '新增事件来源'
+            : 'New event source'
+          : zh
+            ? '编辑事件来源'
+            : 'Edit event source'
+      }
+      size="lg"
+      dismissDisabled={action !== null}
+      panelClassName="event-source-editor"
+      footer={
+        <>
+          <button type="button" className="btn" onClick={props.onClose} disabled={action !== null}>
+            {zh ? '取消' : 'Cancel'}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={!valid || action !== null || authoringLoading}
+            onClick={() => void run('save')}
+          >
+            {action === 'save' ? (zh ? '保存中…' : 'Saving…') : zh ? '保存草稿' : 'Save draft'}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={!valid || action !== null || authoringLoading}
+            onClick={() => void run('validate')}
+            data-testid="event-source-validate"
+          >
+            {action === 'validate'
+              ? zh
+                ? '验证中…'
+                : 'Validating…'
+              : zh
+                ? '运行样例'
+                : 'Run fixture'}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={!valid || action !== null || authoringLoading}
+            onClick={() => void run('publish')}
+            data-testid="event-source-publish"
+          >
+            {action === 'publish'
+              ? zh
+                ? '验证并发布中…'
+                : 'Validating and publishing…'
+              : zh
+                ? '验证并发布'
+                : 'Validate & publish'}
+          </button>
+        </>
+      }
+    >
+      {authoringLoading ? <LoadingState /> : null}
+      {authoring.isError ? <ErrorBanner error={authoring.error} /> : null}
+      {error !== null ? <ErrorBanner error={error} /> : null}
+      {validation !== null ? (
+        <NoticeBanner tone="success" title={zh ? '契约成立' : 'Contract verified'} size="compact">
+          {validation}
+        </NoticeBanner>
+      ) : null}
+
+      <div className="employee-dialog-form event-source-editor__form">
+        <section className="event-source-editor__section">
+          <div>
+            <span className="employee-node-panel__eyebrow">
+              {zh ? '基本信息' : 'Source profile'}
+            </span>
+            <h3>{zh ? '这个来源是什么' : 'Describe the source'}</h3>
+            <p>
+              {zh
+                ? '名称与说明会显示给所有订阅者。'
+                : 'Names and descriptions are visible to every subscriber.'}
+            </p>
+          </div>
+          <div className="event-source-editor__grid">
+            <Field label={zh ? '名称' : 'Name'} required>
+              <TextInput
+                value={localized(form.displayName, props.language)}
+                placeholder={zh ? '例如：内部问题状态' : 'For example: Internal issue status'}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    displayName: { 'zh-CN': value, 'en-US': value },
+                  }))
+                }
+              />
+            </Field>
+            <Field label={zh ? '轮询周期（秒）' : 'Poll interval (seconds)'} required>
+              <NumberInput
+                value={form.pollIntervalSeconds}
+                min={1}
+                max={86_400}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, pollIntervalSeconds: value ?? 1 }))
+                }
+              />
+            </Field>
+            <div className="event-source-editor__wide">
+              <Field label={zh ? '描述' : 'Description'} required>
+                <TextArea
+                  rows={2}
+                  value={localized(form.description, props.language)}
+                  placeholder={
+                    zh
+                      ? '说明这个来源观察哪个系统、用于发现什么变化'
+                      : 'Describe the system observed and the changes this source detects'
+                  }
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      description: { 'zh-CN': value, 'en-US': value },
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+            <Field
+              label={zh ? '什么情况算一条新事件' : 'What counts as a new event'}
+              hint={
+                zh
+                  ? '两种规则都由平台生成去重键，脚本不能直接写事件库。'
+                  : 'The platform generates dedupe identities in both modes; scripts never write the event store.'
+              }
+              group
+            >
+              <Select
+                value={form.ingestionMode}
+                onChange={(value) => setForm((current) => ({ ...current, ingestionMode: value }))}
+                options={[
+                  {
+                    value: 'state-change',
+                    label: zh ? '按状态版本去重' : 'Deduplicate state revisions',
+                    description: zh
+                      ? '同一个业务对象的同一版本只入库一次。'
+                      : 'Store one event for each stable source revision.',
+                  },
+                  {
+                    value: 'occurrence',
+                    label: zh ? '按发生实例去重' : 'Deduplicate occurrences',
+                    description: zh
+                      ? '每次发生都需要来源侧稳定 occurrence ID。'
+                      : 'Each occurrence needs a stable source-side occurrence ID.',
+                  },
+                ]}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="event-source-editor__section">
+          <div className="event-source-editor__section-heading">
+            <div>
+              <span className="employee-node-panel__eyebrow">
+                {zh ? '事件合同' : 'Event contracts'}
+              </span>
+              <h3>{zh ? '这个来源会产生什么事件' : 'Define emitted events'}</h3>
+              <p>
+                {zh
+                  ? '每种事件都有确定的 subject 和业务文案。'
+                  : 'Every event has an exact subject type and business description.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() =>
+                setForm((current) => ({
+                  ...current,
+                  eventTypes: [
+                    ...current.eventTypes,
+                    initialEvent(nextEventKey(current.eventTypes)),
+                  ],
+                }))
+              }
+            >
+              {zh ? '增加事件种类' : 'Add event type'}
+            </button>
+          </div>
+          <div className="event-source-editor__events">
+            {form.eventTypes.map((event, index) => (
+              <div className="event-source-editor__event" key={`${index}:${event.eventKey}`}>
+                <div className="event-source-editor__event-title">
+                  <strong>{zh ? `事件 ${index + 1}` : `Event ${index + 1}`}</strong>
+                  {form.eventTypes.length > 1 ? (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          eventTypes: current.eventTypes.filter(
+                            (_, itemIndex) => itemIndex !== index,
+                          ),
+                        }))
+                      }
+                    >
+                      {zh ? '移除' : 'Remove'}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="event-source-editor__grid">
+                  <Field label={zh ? '事件名称' : 'Event name'} required>
+                    <TextInput
+                      value={localized(event.displayName, props.language)}
+                      placeholder={
+                        zh ? '例如：问题状态发生变化' : 'For example: Issue status changed'
+                      }
+                      onChange={(value) =>
+                        updateEvent(index, {
+                          displayName: { 'zh-CN': value, 'en-US': value },
+                        })
+                      }
+                    />
+                  </Field>
+                  <div className="event-source-editor__wide">
+                    <Field label={zh ? '事件描述' : 'Event description'} required>
+                      <TextArea
+                        rows={2}
+                        value={localized(event.description, props.language)}
+                        placeholder={
+                          zh
+                            ? '说明什么变化发生时应生成这类事件'
+                            : 'Describe the change that produces this event'
+                        }
+                        onChange={(value) =>
+                          updateEvent(index, {
+                            description: { 'zh-CN': value, 'en-US': value },
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+                </div>
+                <details className="event-source-editor__technical-details">
+                  <summary>
+                    {zh ? '平台生成的技术标识' : 'Platform-generated technical identifiers'}
+                  </summary>
+                  <dl>
+                    <div>
+                      <dt>eventKey</dt>
+                      <dd>
+                        <code>{event.eventKey}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>subjectType</dt>
+                      <dd>
+                        <code>{event.subjectTypeId}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>payloadSchema</dt>
+                      <dd>
+                        <code>{event.payloadSchemaId}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>deliveryClass</dt>
+                      <dd>
+                        <code>{event.deliveryClass}</code>
+                      </dd>
+                    </div>
+                  </dl>
+                </details>
+                <div className="event-source-editor__parameter-contract">
+                  <div className="event-source-editor__section-heading">
+                    <div>
+                      <strong>{zh ? '任务触发参数' : 'Work-start parameters'}</strong>
+                      <p>
+                        {zh
+                          ? '只填写任务真正需要的值；每个参数的完整注入路径会实时显示。'
+                          : 'Declare only values a task needs. Every full injection path is shown live.'}
+                      </p>
+                    </div>
+                    {event.triggerParameters === null ? (
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() =>
+                          updateEvent(index, {
+                            triggerParameters: {
+                              namespace: triggerNamespaceFromEventKey(event.eventKey),
+                              fields: [initialTriggerField()],
+                            },
+                          })
+                        }
+                      >
+                        {zh ? '声明任务参数' : 'Declare parameters'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() => updateEvent(index, { triggerParameters: null })}
+                      >
+                        {zh ? '不注入任务参数' : 'Remove parameter contract'}
+                      </button>
+                    )}
+                  </div>
+                  {event.triggerParameters !== null ? (
+                    <>
+                      <div className="event-source-editor__grid">
+                        <Field label={zh ? '参数命名空间' : 'Parameter namespace'} required>
+                          <TextInput
+                            value={event.triggerParameters.namespace}
+                            placeholder={zh ? '例如：issue' : 'For example: issue'}
+                            onChange={(value) =>
+                              updateEvent(index, {
+                                triggerParameters: {
+                                  ...event.triggerParameters!,
+                                  namespace: value,
+                                },
+                              })
+                            }
+                          />
+                        </Field>
+                        <div className="event-source-editor__wide">
+                          <small>
+                            {zh
+                              ? `同一事件的参数共用此前缀：trigger.${event.triggerParameters.namespace || '<命名空间>'}.*`
+                              : `Parameters of this event share this prefix: trigger.${event.triggerParameters.namespace || '<namespace>'}.*`}
+                          </small>
+                        </div>
+                      </div>
+                      <div className="event-source-editor__parameter-list">
+                        {event.triggerParameters.fields.map((field, fieldIndex) => (
+                          <div className="event-source-editor__parameter" key={field.editorKey}>
+                            <div className="event-source-editor__event-title">
+                              <strong>
+                                {zh ? `参数 ${fieldIndex + 1}` : `Parameter ${fieldIndex + 1}`}
+                              </strong>
+                              {event.triggerParameters!.fields.length > 1 ? (
+                                <button
+                                  type="button"
+                                  className="btn btn--sm"
+                                  onClick={() =>
+                                    updateEvent(index, {
+                                      triggerParameters: {
+                                        ...event.triggerParameters!,
+                                        fields: event.triggerParameters!.fields.filter(
+                                          (_, index) => index !== fieldIndex,
+                                        ),
+                                      },
+                                    })
+                                  }
+                                >
+                                  {zh ? '移除' : 'Remove'}
+                                </button>
+                              ) : null}
+                            </div>
+                            <code className="event-source-editor__parameter-path">
+                              {`trigger.${event.triggerParameters!.namespace}.${field.fieldId || (zh ? '<参数键>' : '<parameter-key>')}`}
+                            </code>
+                            <div className="event-source-editor__grid">
+                              <Field label={zh ? '参数键' : 'Parameter key'} required>
+                                <TextInput
+                                  value={field.fieldId}
+                                  placeholder={
+                                    zh
+                                      ? '例如：issue_id；脚本按这个键输出'
+                                      : 'For example: issue_id; the program emits this key'
+                                  }
+                                  onChange={(value) =>
+                                    updateTriggerField(index, fieldIndex, { fieldId: value })
+                                  }
+                                />
+                              </Field>
+                              <Field
+                                label={zh ? '显示名称（界面用）' : 'Display name (UI only)'}
+                                required
+                              >
+                                <TextInput
+                                  value={localized(field.displayName, props.language)}
+                                  placeholder={zh ? '例如：问题单 ID' : 'For example: Issue ID'}
+                                  onChange={(value) =>
+                                    updateTriggerField(index, fieldIndex, {
+                                      displayName: { 'zh-CN': value, 'en-US': value },
+                                    })
+                                  }
+                                />
+                              </Field>
+                              <div className="event-source-editor__wide">
+                                <Field label={zh ? '参数说明' : 'Parameter description'} required>
+                                  <TextInput
+                                    value={localized(field.description, props.language)}
+                                    placeholder={
+                                      zh
+                                        ? '说明任务拿到这个值后可以做什么'
+                                        : 'Explain how a task can use this value'
+                                    }
+                                    onChange={(value) =>
+                                      updateTriggerField(index, fieldIndex, {
+                                        description: { 'zh-CN': value, 'en-US': value },
+                                      })
+                                    }
+                                  />
+                                </Field>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() =>
+                          updateEvent(index, {
+                            triggerParameters: {
+                              ...event.triggerParameters!,
+                              fields: [...event.triggerParameters!.fields, initialTriggerField()],
+                            },
+                          })
+                        }
+                      >
+                        {zh ? '增加任务参数' : 'Add parameter'}
+                      </button>
+                    </>
+                  ) : (
+                    <small>
+                      {zh
+                        ? '这个事件只能唤醒已存在的关注者，不向新任务注入全局参数。'
+                        : 'This event may wake existing subscribers but injects no global parameters into new work.'}
+                    </small>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="event-source-editor__section">
+          <div>
+            <span className="employee-node-panel__eyebrow">
+              {zh ? '执行程序' : 'Observer program'}
+            </span>
+            <h3>{zh ? '轮询脚本' : 'Polling program'}</h3>
+            <p>
+              {zh
+                ? '平台把输入写入 AW_EVENT_INPUT_FILE；stdout 只能输出一个 aw-event-observer@1 JSON envelope。'
+                : 'The platform writes input to AW_EVENT_INPUT_FILE. Stdout must contain one aw-event-observer@1 JSON envelope.'}
+            </p>
+          </div>
+          <NoticeBanner
+            tone="info"
+            title={zh ? '固定执行边界' : 'Fixed execution boundary'}
+            size="compact"
+          >
+            <code>
+              {zh
+                ? '输入：sourceRef + subjects + cursor + deadlineAt；输出：eventKey + subjectRef + occurredAt + sourceEventKey + sourceEventRevision + summary + 已声明的 triggerParameters。'
+                : 'Input: sourceRef + subjects + cursor + deadlineAt. Output: eventKey + subjectRef + occurredAt + sourceEventKey + sourceEventRevision + summary + declared triggerParameters.'}
+            </code>
+          </NoticeBanner>
+          <div className="event-source-editor__grid">
+            <Field
+              label={zh ? '验证对象 ID' : 'Fixture object ID'}
+              hint={
+                zh
+                  ? '填写一个在来源系统中真实存在的对象；发布前平台会用它运行一次脚本。'
+                  : 'Enter a real object from the source system. The platform runs the program against it before publish.'
+              }
+              required
+            >
+              <TextInput
+                value={form.eventTypes[0]?.fixtureSubjectRef ?? ''}
+                placeholder={zh ? '例如：ISSUE-1234' : 'For example: ISSUE-1234'}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    eventTypes: current.eventTypes.map((event) => ({
+                      ...event,
+                      fixtureSubjectRef: value,
+                    })),
+                  }))
+                }
+              />
+            </Field>
+            <Field label={zh ? '脚本语言' : 'Program language'} group required>
+              <Select
+                value={form.language}
+                onChange={(value) => setForm((current) => ({ ...current, language: value }))}
+                options={[
+                  { value: 'node', label: 'Node.js' },
+                  { value: 'python', label: 'Python' },
+                  { value: 'bash', label: 'Bash' },
+                ]}
+              />
+            </Field>
+            <Field label={zh ? '单次超时（秒）' : 'Run timeout (seconds)'} required>
+              <NumberInput
+                value={form.timeoutSeconds}
+                min={1}
+                max={1_800}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, timeoutSeconds: value ?? 1 }))
+                }
+              />
+            </Field>
+          </div>
+          <details className="event-source-editor__technical-details">
+            <summary>{zh ? '执行技术参数' : 'Execution technical settings'}</summary>
+            <p>
+              {zh
+                ? `平台当前每批最多传入 ${form.batchSize} 个关注对象，事件去重模式为 ${form.ingestionMode}。`
+                : `The platform currently passes at most ${form.batchSize} subjects per batch with ${form.ingestionMode} deduplication.`}
+            </p>
+          </details>
+          <Field label={zh ? '脚本正文' : 'Program source'} required>
+            <TextArea
+              rows={18}
+              monospace
+              value={form.source}
+              onChange={(value) => setForm((current) => ({ ...current, source: value }))}
+              data-testid="event-source-program"
+            />
+          </Field>
+          <Field
+            label={zh ? '样例 Cursor（可选 JSON）' : 'Fixture cursor (optional JSON)'}
+            hint={
+              zh
+                ? '验证成功后的生产游标由平台持久化。'
+                : 'The platform persists production cursors after successful runs.'
+            }
+          >
+            <TextArea
+              rows={3}
+              monospace
+              value={form.cursorJson}
+              onChange={(value) => setForm((current) => ({ ...current, cursorJson: value }))}
+            />
+          </Field>
+        </section>
+      </div>
+    </Dialog>
+  )
+}

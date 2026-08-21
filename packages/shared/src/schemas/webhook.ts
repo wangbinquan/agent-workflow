@@ -172,7 +172,13 @@ export type WebhookRepoScope = z.infer<typeof WebhookRepoScopeSchema>
 // 启用一个「仓库 × 能力」单元格时由平台自动建行、停用时撤行，用户在触发器页只读
 // 可见。走触发器表而不是另起一条唤醒通路，是为了白拿既有的 fire 记录、stream key、
 // supersede 与熔断：同一个 MR 连推三次必须取消前两轮，那套逻辑已经在这里了。
-export const WEBHOOK_LAUNCH_KINDS = ['workflow', 'agent', 'workgroup', 'code-round'] as const
+export const WEBHOOK_LAUNCH_KINDS = [
+  'workflow',
+  'agent',
+  'workgroup',
+  'digital-employee',
+  'code-round',
+] as const
 export const WebhookLaunchKindSchema = z.enum(WEBHOOK_LAUNCH_KINDS)
 export type WebhookLaunchKind = z.infer<typeof WebhookLaunchKindSchema>
 
@@ -473,6 +479,46 @@ export const WebhookWorkgroupPayloadTemplateSchema = z
   .superRefine(refineWebhookTemplateSpace)
 export type WebhookWorkgroupPayloadTemplate = z.infer<typeof WebhookWorkgroupPayloadTemplateSchema>
 
+/** Event-driven Digital Employee intake. Files remain an explicit upload flow. */
+export const WebhookDigitalEmployeePayloadTemplateSchema = z
+  .object({
+    intakeKind: z.enum(['body', 'external-id']),
+    target: z.record(z.string().min(1).max(160), z.string().max(65_536)).default({}),
+    body: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2 * 1024 * 1024)
+      .optional(),
+    externalId: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.intakeKind === 'body' && value.body === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['body'], message: 'body-required' })
+    }
+    if (value.intakeKind === 'body' && value.externalId !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['externalId'],
+        message: 'external-id-not-allowed',
+      })
+    }
+    if (value.intakeKind === 'external-id' && value.externalId === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['externalId'],
+        message: 'external-id-required',
+      })
+    }
+    if (value.intakeKind === 'external-id' && value.body !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['body'], message: 'body-not-allowed' })
+    }
+  })
+export type WebhookDigitalEmployeePayloadTemplate = z.infer<
+  typeof WebhookDigitalEmployeePayloadTemplateSchema
+>
+
 /**
  * RFC-304 code-round 的载荷模板。
  *
@@ -495,6 +541,7 @@ export type WebhookLaunchPayloadTemplate =
   | WebhookWorkflowPayloadTemplate
   | WebhookAgentPayloadTemplate
   | WebhookWorkgroupPayloadTemplate
+  | WebhookDigitalEmployeePayloadTemplate
   | WebhookCodeRoundPayloadTemplate
 
 /** save/edit/fire 共用的封套选择器（对齐 scheduledPayloadSchemaFor 的单选择器模式）。 */
@@ -506,9 +553,11 @@ export function webhookPayloadTemplateSchemaFor(
       ? WebhookWorkflowPayloadTemplateSchema
       : kind === 'agent'
         ? WebhookAgentPayloadTemplateSchema
-        : kind === 'code-round'
-          ? WebhookCodeRoundPayloadTemplateSchema
-          : WebhookWorkgroupPayloadTemplateSchema
+        : kind === 'digital-employee'
+          ? WebhookDigitalEmployeePayloadTemplateSchema
+          : kind === 'code-round'
+            ? WebhookCodeRoundPayloadTemplateSchema
+            : WebhookWorkgroupPayloadTemplateSchema
   return schema as unknown as z.ZodType<WebhookLaunchPayloadTemplate, z.ZodTypeDef, unknown>
 }
 

@@ -13,6 +13,11 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import {
+  digitalEmployeeLifecycleEventCatalogJson,
+  EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
+  EMPLOYEE_LIFECYCLE_SOURCE_REF,
+} from '@/modules/digital-employee/public/events'
+import {
   evaluateEmployeeInvocationGuard,
   evaluateEmployeeInvocationJoin,
   MAX_CHILD_INVOCATIONS_PER_CASE,
@@ -121,12 +126,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
     ).toThrow('outside member cardinality')
   })
 
-  test('new work is delivered through outbox/event queue and deterministically freezes one reaction round', async () => {
+  test('WorkStart directly fixes the first work item while lifecycle facts remain durable and multicast', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-case-runtime-'))
     roots.push(appHome)
     let now = 30_000
     let ordinal = 0
+    let retryLimits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
     let corruptOutputsRemaining = 3
     let executionOutput = {
       status: 'ok',
@@ -140,7 +146,10 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const nextId = () => `resource-${String(++ordinal).padStart(4, '0')}`
     const eventCenter = composeEventCenter({
       db,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      typePackageDescriptorJsons: [
+        developmentEmployeeTypePackage.descriptorJson,
+        digitalEmployeeLifecycleEventCatalogJson,
+      ],
       now: () => now,
       id: nextId,
     })
@@ -176,6 +185,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       appHome,
       typePackages: [developmentEmployeeTypePackage],
       executionContracts,
+      retryLimits: { current: () => retryLimits },
       now: () => now,
       id: nextId,
       connectionCatalog: {
@@ -490,10 +500,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
       }),
       artifactRefs: ['input-artifact-1'],
       workSubject: { typeId: 'work-request', subjectRef: 'REQ-42' },
-      initialEventTypeRef: { id: 'development.work-received', revision: 1 },
-      initialEventSourceRef: { id: 'development.work-ingress', revision: 1 },
-      initialEventDedupeKey: 'work:REQ-42:v1',
-      initialEventSummary: '收到需求 REQ-42',
     })
     expect(launched.state).toBe('active')
     expect(JSON.parse(launched.projectionJson)).toMatchObject({
@@ -507,22 +513,47 @@ describe('RFC-310 stateful employee Case runtime', () => {
           },
         },
       ],
-      attention: [{ state: 'desired' }],
+      attention: [],
     })
 
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
-    expect(await runtime.worker.runOneOutbox()).toBe('completed')
-    expect(runtime.worker.pumpOneDelivery()).toBe(true)
+    const lifecycleSubscribers = ['case-auditor', 'case-parent'].map((subscriberRef) => ({
+      kind: 'system' as const,
+      subscriberRef,
+    }))
+    for (const subscriber of lifecycleSubscribers) {
+      eventCenter.participant.subscribe({
+        eventTypeRef: EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
+        subject: { typeId: 'digital-employee.case', subjectRef: launched.caseRef.id },
+        subscriber,
+      })
+    }
+    const auditorLifecycle = eventCenter.participant.pendingDeliveries(lifecycleSubscribers[0]!, 10)
+    const parentLifecycle = eventCenter.participant.pendingDeliveries(lifecycleSubscribers[1]!, 10)
+    expect(auditorLifecycle).toHaveLength(1)
+    expect(parentLifecycle).toHaveLength(1)
+    expect(auditorLifecycle[0]).toMatchObject({
+      eventTypeRef: EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
+      sourceRef: EMPLOYEE_LIFECYCLE_SOURCE_REF,
+      subject: { typeId: 'digital-employee.case', subjectRef: launched.caseRef.id },
+    })
+    expect(auditorLifecycle[0]!.eventId).toBe(parentLifecycle[0]!.eventId)
+    expect(auditorLifecycle[0]!.deliveryId).not.toBe(parentLifecycle[0]!.deliveryId)
+    eventCenter.participant.acceptDelivery(auditorLifecycle[0]!.deliveryId)
+    expect(eventCenter.participant.pendingDeliveries(lifecycleSubscribers[0]!, 10)).toEqual([])
+    expect(eventCenter.participant.pendingDeliveries(lifecycleSubscribers[1]!, 10)).toHaveLength(1)
+    expect(await runtime.worker.runOneOutbox()).toBe('idle')
+    expect(runtime.worker.pumpOneDelivery()).toBe(false)
     const roundId = runtime.worker.planOneReaction()
     expect(roundId).not.toBeNull()
     let projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
     expect(projection.activeRound).toMatchObject({
       id: roundId,
-      ruleId: 'start-work',
+      ruleId: 'continue-prepare-materials',
       workItemRef: 'prepare-materials',
       executionPolicyRevision: 1,
     })
-    expect(projection.inbox).toMatchObject([{ state: 'claimed', roundId }])
+    expect(projection.inbox).toEqual([])
 
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
     expect(launchedPlans).toHaveLength(1)
@@ -544,18 +575,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
       { ordinal: 0, mode: 'initial' },
       { ordinal: 1, mode: 'same-scene' },
       { ordinal: 2, mode: 'same-scene' },
-      { ordinal: 3, mode: 'fresh-scene' },
+      { ordinal: 3, mode: 'same-scene' },
     ])
     expect(await runtime.worker.inspectOneExecution()).toBe('completed')
     projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
     expect(projection.activeRound).toBeUndefined()
     expect(projection.rounds[0]).toMatchObject({ state: 'completed' })
-    expect(projection.inbox[0]).toMatchObject({ state: 'settled' })
+    expect(projection.inbox).toEqual([])
     expect(projection.case).toMatchObject({
       state: 'active',
       currentWorkItemRef: 'analyze-implement',
     })
-    expect(projection.attention[0]).toMatchObject({ state: 'cancel-requested' })
+    expect(projection.attention).toEqual([])
 
     const analyzeRound = runtime.worker.planOneReaction()
     expect(analyzeRound).not.toBeNull()
@@ -760,8 +791,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const observeMrEvent = (eventTypeId: string, dedupeKey: string) => {
       now += 1
       eventCenter.commands.observe({
-        sourceRef: { id: 'development.code-host-state', revision: 1 },
-        eventTypeRef: { id: eventTypeId, revision: 1 },
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        eventTypeRef: {
+          id: eventTypeId,
+          revision: eventTypeId === 'development.pipeline-check-due' ? 1 : 2,
+        },
         subject: { typeId: 'merge-request', subjectRef: 'repo-1!42' },
         occurredAt: now,
         dedupeKey,
@@ -769,8 +803,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
         payloadArtifactRef: null,
       })
     }
-    observeMrEvent('development.pipeline-updated', 'pipeline-red:1')
-    observeMrEvent('development.pipeline-updated', 'pipeline-red:2')
+    observeMrEvent('development.pipeline-check-due', 'pipeline-red:1')
+    observeMrEvent('development.pipeline-check-due', 'pipeline-red:2')
     observeMrEvent('development.review-updated', 'review-comment:1')
     for (let index = 0; index < 12; index += 1) runtime.worker.pumpOneDelivery()
     projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
@@ -778,11 +812,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       projection.inbox
         .filter((item: { state: string }) => item.state === 'pending')
         .map((item: { eventTypeRef: { id: string } }) => item.eventTypeRef.id),
-    ).toEqual(['development.review-updated', 'development.pipeline-updated'])
+    ).toEqual(['development.review-updated', 'development.pipeline-check-due'])
     expect(
       projection.inbox.filter(
         (item: { state: string; eventTypeRef: { id: string } }) =>
-          item.state === 'coalesced' && item.eventTypeRef.id === 'development.pipeline-updated',
+          item.state === 'coalesced' && item.eventTypeRef.id === 'development.pipeline-check-due',
       ),
     ).toHaveLength(1)
 
@@ -814,48 +848,29 @@ describe('RFC-310 stateful employee Case runtime', () => {
       // Drain the lifecycle preemption settlement.
     }
 
-    const currentPolicy = module.queries.getExecutionPolicy()
-    module.commands.publishExecutionPolicy({
-      actorUserId: 'admin',
-      body: {
-        ...currentPolicy.content,
-        sameSceneAttempts: 5,
-        roundBudgetMs: 1_000,
-        caseBudgetMs: 1_000,
-      },
+    retryLimits = { defaultNodeRetries: 5, sessionRestartBudget: 2 }
+    const updatedPolicy = module.queries.getExecutionPolicy()
+    expect(updatedPolicy).toMatchObject({
+      revision: 2,
+      content: { sameSceneAttempts: 5, freshSceneAttempts: 2 },
     })
-    const preview = runtime.commands.previewPolicyUpgrade(launched.caseRef.id, 2)
+    const preview = runtime.commands.previewPolicyUpgrade(
+      launched.caseRef.id,
+      updatedPolicy.revision,
+    )
     const upgraded = runtime.commands.applyPolicyUpgrade(preview)
     expect(JSON.parse(upgraded.projectionJson).case.executionPolicyRevision).toBe(2)
-    expect(runtime.worker.planOneReaction()).toBeNull()
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
-    expect(projection.case).toMatchObject({
-      state: 'blocked',
-      blockReason: 'case-budget-exhausted',
-    })
-    expect(
-      JSON.parse(runtime.commands.resume(launched.caseRef.id).projectionJson).case,
-    ).toMatchObject({
-      state: 'active',
-      blockReason: null,
-    })
 
     const terminal = runtime.commands.terminate(launched.caseRef.id, 'merged')
     expect(terminal.state).toBe('terminal')
     now += 1
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
 
+    retryLimits = { defaultNodeRetries: 0, sessionRestartBudget: 0 }
     const latestPolicy = module.queries.getExecutionPolicy()
-    module.commands.publishExecutionPolicy({
-      actorUserId: 'admin',
-      body: {
-        ...latestPolicy.content,
-        sameSceneAttempts: 0,
-        freshSceneAttempts: 0,
-        roundBudgetMs: 2 * 60 * 60 * 1_000,
-        caseBudgetMs: 30 * 24 * 60 * 60 * 1_000,
-        handoffOnExhausted: false,
-      },
+    expect(latestPolicy).toMatchObject({
+      revision: 3,
+      content: { sameSceneAttempts: 0, freshSceneAttempts: 0 },
     })
     corruptOutputsRemaining = 1
     const terminalOnFailure = runtime.commands.launch({
@@ -877,24 +892,20 @@ describe('RFC-310 stateful employee Case runtime', () => {
       }),
       artifactRefs: [],
       workSubject: { typeId: 'work-request', subjectRef: 'REQ-43' },
-      initialEventTypeRef: { id: 'development.work-received', revision: 1 },
-      initialEventSourceRef: { id: 'development.work-ingress', revision: 1 },
-      initialEventDedupeKey: 'work:REQ-43:v1',
-      initialEventSummary: '收到需求 REQ-43',
     })
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Drain initial attention before executing the terminal failure fixture.
     }
-    expect(runtime.worker.pumpOneDelivery()).toBe(true)
+    expect(runtime.worker.pumpOneDelivery()).toBe(false)
     expect(runtime.worker.planOneReaction()).not.toBeNull()
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
     expect(await runtime.worker.inspectOneExecution()).toBe('failed')
     expect(
       JSON.parse(runtime.queries.getCase(terminalOnFailure.caseRef.id).projectionJson).case,
     ).toMatchObject({
-      state: 'terminal',
-      terminalKind: 'execution-failed',
-      blockReason: null,
+      state: 'blocked',
+      terminalKind: null,
+      blockReason: expect.stringContaining('execution-envelope-invalid'),
     })
 
     executionOutput = {
@@ -904,5 +915,26 @@ describe('RFC-310 stateful employee Case runtime', () => {
       effectSuggestions: [],
       artifactRefs: [],
     }
+
+    const eventOrigin = {
+      eventSubscriptionId: 'automation-subscription-1',
+      eventDeliveryId: 'automation-delivery-1',
+    }
+    const eventWork = {
+      employeeId: employee.id,
+      intake: {
+        kind: 'body' as const,
+        target: { repositoryId: 'repo-1' },
+        body: '由统一事件投递启动数字员工',
+        externalId: null,
+        uploads: [],
+        idempotencyKey: 'event-delivery:automation-delivery-1',
+      },
+      actorUserId: null,
+      eventOrigin,
+    }
+    const firstEventLaunch = runtime.commands.launchWork(eventWork)
+    const repeatedEventLaunch = runtime.commands.launchWork(eventWork)
+    expect(repeatedEventLaunch.caseRef.id).toBe(firstEventLaunch.caseRef.id)
   })
 })

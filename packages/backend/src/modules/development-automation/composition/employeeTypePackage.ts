@@ -73,6 +73,17 @@ interface ContractValidationCheck {
 }
 
 const text = (zh: string, en: string): LocalizedText => ({ 'zh-CN': zh, 'en-US': en })
+const triggerContract = (
+  namespace: string,
+  fields: readonly (readonly [fieldId: string, zh: string, en: string])[],
+) => ({
+  namespace,
+  fields: fields.map(([fieldId, zh, en]) => ({
+    fieldId,
+    displayName: text(zh, en),
+    description: text(zh, en),
+  })),
+})
 const typeRef = { typeId: 'development', revision: 2 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 
@@ -999,6 +1010,7 @@ const runtimePackage = {
         placeholder: text('例如 ISSUE-1234', 'For example ISSUE-1234'),
       },
     },
+    workStartWorkItemRef: 'prepare-materials',
     workContracts: contracts,
     authoringManifest: {
       schemaVersion: 1,
@@ -1564,25 +1576,13 @@ const runtimePackage = {
     ],
     eventSources: [
       {
-        sourceId: 'development.work-ingress',
+        sourceId: 'code-host.activity',
         version: 1,
-        displayName: text('工作入口', 'Work ingress'),
+        ownerTypeId: 'integration.code-host',
+        displayName: text('代码平台', 'Code platform'),
         description: text(
-          '接收正文、上传文件或外部问题单取得结果',
-          'Receives body, uploaded files, or acquired external work items',
-        ),
-        observationMode: 'passive',
-        observerProgramRef: null,
-        pollIntervalMs: 60_000,
-        batchSize: 100,
-      },
-      {
-        sourceId: 'development.code-host-state',
-        version: 1,
-        displayName: text('MR 状态观察', 'Merge-request state observation'),
-        description: text(
-          '组合 webhook 与按需短轮询，取得 review、流水线、冲突和生命周期事实',
-          'Combines webhooks with on-demand short polling for review, pipeline, conflict, and lifecycle facts',
+          '通过 Webhook 实时接收变化，并在有人关注时用短轮询补齐权威状态。',
+          'Receives real-time changes through webhooks and reconciles authoritative state by short polling while subscribed.',
         ),
         observationMode: 'hybrid',
         observerProgramRef: { id: 'builtin:development-code-host-observer', revision: 1 },
@@ -1618,23 +1618,8 @@ const runtimePackage = {
     ],
     eventTypes: [
       {
-        eventTypeId: 'development.work-received',
-        version: 1,
-        subjectTypeId: 'work-request',
-        payloadSchemaId: 'development.work-request.event.v1',
-        displayName: text('收到新工作', 'New work received'),
-        description: text(
-          '有新的需求、问题或上传材料需要处理',
-          'A new requirement, problem, or uploaded material needs handling',
-        ),
-        deliveryClass: 'work',
-        priority: 500,
-        preemptsContinuation: false,
-        sourceRef: { id: 'development.work-ingress', revision: 1 },
-      },
-      {
         eventTypeId: 'development.review-updated',
-        version: 1,
+        version: 2,
         subjectTypeId: 'merge-request',
         payloadSchemaId: 'development.review.event.v1',
         displayName: text('MR 检视意见有更新', 'MR review feedback updated'),
@@ -1643,28 +1628,13 @@ const runtimePackage = {
           'New or changed review feedback is available',
         ),
         deliveryClass: 'review',
-        priority: 900,
-        preemptsContinuation: true,
-        sourceRef: { id: 'development.code-host-state', revision: 1 },
-      },
-      {
-        eventTypeId: 'development.pipeline-updated',
-        version: 1,
-        subjectTypeId: 'merge-request',
-        payloadSchemaId: 'development.pipeline.event.v1',
-        displayName: text('流水线状态有更新', 'Pipeline status updated'),
-        description: text(
-          'MR 当前 head 的门禁或日志发生变化',
-          'Gates or logs changed for the current MR head',
-        ),
-        deliveryClass: 'pipeline',
-        priority: 700,
-        preemptsContinuation: false,
-        sourceRef: { id: 'development.code-host-state', revision: 1 },
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        catalogVisibility: 'internal',
+        triggerParameters: null,
       },
       {
         eventTypeId: 'development.conflict-updated',
-        version: 1,
+        version: 2,
         subjectTypeId: 'merge-request',
         payloadSchemaId: 'development.conflict.event.v1',
         displayName: text('MR 冲突状态有更新', 'MR conflict state updated'),
@@ -1673,13 +1643,13 @@ const runtimePackage = {
           'Target branch changes introduced or cleared a conflict',
         ),
         deliveryClass: 'conflict',
-        priority: 800,
-        preemptsContinuation: true,
-        sourceRef: { id: 'development.code-host-state', revision: 1 },
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        catalogVisibility: 'internal',
+        triggerParameters: null,
       },
       {
         eventTypeId: 'development.lifecycle-updated',
-        version: 1,
+        version: 2,
         subjectTypeId: 'merge-request',
         payloadSchemaId: 'development.lifecycle.event.v1',
         displayName: text('MR 生命周期有更新', 'MR lifecycle updated'),
@@ -1688,9 +1658,24 @@ const runtimePackage = {
           'The MR was merged, closed, reopened, or moved to another head',
         ),
         deliveryClass: 'terminal',
-        priority: 1_000,
-        preemptsContinuation: true,
-        sourceRef: { id: 'development.code-host-state', revision: 1 },
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        catalogVisibility: 'internal',
+        triggerParameters: null,
+      },
+      {
+        eventTypeId: 'development.pipeline-check-due',
+        version: 1,
+        subjectTypeId: 'merge-request',
+        payloadSchemaId: 'development.pipeline-check-due.v1',
+        displayName: text('MR 门禁复核到期', 'MR gate recheck due'),
+        description: text(
+          '下一次主动门禁复核时间已经到达，只用于唤醒正在关注此 MR 的数字员工',
+          'The next active gate recheck is due; this only wakes employees already watching the MR',
+        ),
+        deliveryClass: 'pipeline',
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        catalogVisibility: 'internal',
+        triggerParameters: null,
       },
       {
         eventTypeId: 'development.employee-result',
@@ -1704,8 +1689,9 @@ const runtimePackage = {
         ),
         deliveryClass: 'collaboration',
         priority: 600,
-        preemptsContinuation: false,
         sourceRef: { id: 'employee.channel', revision: 1 },
+        catalogVisibility: 'internal',
+        triggerParameters: null,
       },
       {
         eventTypeId: 'development.approval-updated',
@@ -1719,8 +1705,25 @@ const runtimePackage = {
         ),
         deliveryClass: 'approval',
         priority: 850,
-        preemptsContinuation: true,
         sourceRef: { id: 'development.approval-state', revision: 1 },
+        catalogVisibility: 'internal',
+        triggerParameters: null,
+      },
+      {
+        eventTypeId: 'approval.status.changed',
+        version: 1,
+        subjectTypeId: 'external-approval',
+        payloadSchemaId: 'approval.status-change.v1',
+        displayName: text('外部审批状态已变化', 'External approval status changed'),
+        description: text(
+          '外部审批系统返回了新的权威状态或修订',
+          'An external approval system returned a new authoritative status or revision',
+        ),
+        deliveryClass: 'approval-business-event',
+        sourceRef: { id: 'development.approval-state', revision: 1 },
+        triggerParameters: triggerContract('approval', [
+          ['subject_ref', '审批对象', 'Approval subject'],
+        ]),
       },
     ],
     attentionRules: [
@@ -1736,7 +1739,7 @@ const runtimePackage = {
             deliveryClass: 'review',
           },
           {
-            eventTypeId: 'development.pipeline-updated',
+            eventTypeId: 'development.pipeline-check-due',
             subjectPath: '$.mergeRequestRef',
             sourceProfileRef: null,
             deliveryClass: 'pipeline',
@@ -1784,16 +1787,10 @@ const runtimePackage = {
     ],
     reactionRules: [
       {
-        ruleId: 'start-work',
-        eventTypeId: 'development.work-received',
-        requiredContextTypes: ['development.issue-handling'],
-        workItemRef: 'prepare-materials',
-        slotRef: 'default',
-        allowedEffectKinds: [],
-      },
-      {
         ruleId: 'handle-review',
         eventTypeId: 'development.review-updated',
+        priority: 900,
+        preemptsContinuation: true,
         requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
         workItemRef: 'classify-feedback',
         slotRef: 'default',
@@ -1801,7 +1798,9 @@ const runtimePackage = {
       },
       {
         ruleId: 'handle-pipeline',
-        eventTypeId: 'development.pipeline-updated',
+        eventTypeId: 'development.pipeline-check-due',
+        priority: 700,
+        preemptsContinuation: false,
         requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
         workItemRef: 'collect-pipeline',
         slotRef: 'default',
@@ -1810,6 +1809,8 @@ const runtimePackage = {
       {
         ruleId: 'handle-conflict',
         eventTypeId: 'development.conflict-updated',
+        priority: 800,
+        preemptsContinuation: true,
         requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
         workItemRef: 'repair-conflict',
         slotRef: 'default',
@@ -1818,6 +1819,8 @@ const runtimePackage = {
       {
         ruleId: 'handle-lifecycle',
         eventTypeId: 'development.lifecycle-updated',
+        priority: 1_000,
+        preemptsContinuation: true,
         requiredContextTypes: ['development.merge-request'],
         workItemRef: 'observe-mr',
         slotRef: 'system',
@@ -1826,6 +1829,8 @@ const runtimePackage = {
       {
         ruleId: 'handle-employee-result',
         eventTypeId: 'development.employee-result',
+        priority: 600,
+        preemptsContinuation: false,
         requiredContextTypes: ['development.delegation'],
         workItemRef: 'delegate',
         slotRef: 'collaboration',
@@ -1834,6 +1839,8 @@ const runtimePackage = {
       {
         ruleId: 'handle-approval-update',
         eventTypeId: 'development.approval-updated',
+        priority: 850,
+        preemptsContinuation: true,
         requiredContextTypes: ['development.approval'],
         workItemRef: 'observe-approval',
         slotRef: 'system',
@@ -2383,11 +2390,6 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       },
       materialArtifactRefs: artifactRefs,
     })
-    const summary =
-      request.intake.kind === 'external-id'
-        ? `收到外部工作 ${request.intake.externalId}`
-        : (request.intake.body?.slice(0, 500) ??
-          `收到 ${request.intake.uploads.length} 个待提交文件`)
     return JSON.stringify({
       employeeRef: request.employeeRef,
       primaryContextTypeId: 'development.issue-handling',
@@ -2396,10 +2398,6 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       primaryContextJson: JSON.stringify(primaryContext),
       artifactRefs,
       workSubject: { typeId: 'work-request', subjectRef },
-      initialEventTypeRef: { id: 'development.work-received', revision: 1 },
-      initialEventSourceRef: { id: 'development.work-ingress', revision: 1 },
-      initialEventDedupeKey: request.intake.idempotencyKey,
-      initialEventSummary: summary,
     })
   },
   buildInvokedCaseJson(requestJson) {
@@ -2440,10 +2438,6 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         typeId: 'work-request',
         subjectRef: `invocation:${request.invocationRef}`,
       },
-      initialEventTypeRef: { id: 'development.work-received', revision: 1 },
-      initialEventSourceRef: { id: 'development.work-ingress', revision: 1 },
-      initialEventDedupeKey: `employee-invocation:${request.invocationRef}`,
-      initialEventSummary: `协同工作 ${request.invocationRef}`,
     })
   },
   buildInvocationStartedOutputJson(requestJson) {
@@ -2583,12 +2577,12 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       if (state.status !== 'active') return '[]'
       return JSON.stringify(
         [
-          'development.review-updated',
-          'development.pipeline-updated',
-          'development.conflict-updated',
-          'development.lifecycle-updated',
-        ].map((eventTypeId) => ({
-          eventTypeRef: { id: eventTypeId, revision: 1 },
+          { id: 'development.review-updated', revision: 2 },
+          { id: 'development.pipeline-check-due', revision: 1 },
+          { id: 'development.conflict-updated', revision: 2 },
+          { id: 'development.lifecycle-updated', revision: 2 },
+        ].map((eventTypeRef) => ({
+          eventTypeRef,
           subject: { typeId: 'merge-request', subjectRef: state.mergeRequestRef },
         })),
       )

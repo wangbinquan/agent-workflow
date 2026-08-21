@@ -1,11 +1,15 @@
 import type {
   EventDeliveryEnvelope,
   EventExactRef,
+  EventObservationInput,
+  EventObservationReceipt,
   EventSubjectRef,
   EventSubscriberRef,
   EventSubscriptionReceipt,
 } from './types'
-import type { EventObservationCommandPort } from './commands'
+export interface EventObservationParticipant {
+  observe(input: EventObservationInput): EventObservationReceipt
+}
 
 export interface EventSubscriptionParticipant {
   subscribe(input: {
@@ -32,4 +36,4 @@ export interface EventDeliveryParticipant {
  */
 export type EventCenterParticipant = EventSubscriptionParticipant &
   EventDeliveryParticipant &
-  EventObservationCommandPort
+  EventObservationParticipant

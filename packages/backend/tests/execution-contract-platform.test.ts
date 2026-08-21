@@ -92,7 +92,7 @@ describe('platform execution contracts', () => {
           connectionRef: null,
           inputSchemaId: 'development.work-request.v1',
           outputSchemaId: 'development.requirement-context.v1',
-          eventJson: JSON.stringify({ eventTypeId: 'development.work-received' }),
+          eventJson: JSON.stringify({ kind: 'work-item-continuation' }),
           contextsJson: JSON.stringify([
             {
               typeId: 'development.issue-handling',

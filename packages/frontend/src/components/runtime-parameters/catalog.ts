@@ -1,10 +1,7 @@
 import {
-  WEBHOOK_VAR_GROUPS,
-  availableVarsFor,
   runtimeBuiltinParametersFor,
-  webhookTriggerToken,
   parseTemplate,
-  type CodeHostEventType,
+  triggerToken,
   type RuntimeBuiltinSurface,
   type WebhookTemplateVar,
 } from '@agent-workflow/shared'
@@ -42,8 +39,22 @@ export interface RuntimeParameterEntry {
 export interface RuntimeParameterCatalogContext {
   readonly audience: RuntimeParameterAudience
   readonly surface: RuntimeParameterSurface
-  readonly eventTypes?: readonly CodeHostEventType[]
+  readonly triggerContracts?: readonly RuntimeTriggerParameterContract[]
   readonly t: (key: string, options?: Record<string, unknown>) => string
+}
+
+export interface RuntimeTriggerParameterContract {
+  readonly namespace: string
+  readonly definitionRef: { readonly id: string; readonly revision: number }
+  readonly sourceLabel: string
+  readonly groupLabel?: string
+  readonly sourceDescription?: string
+  readonly fields: readonly {
+    readonly fieldId: string
+    readonly label: string
+    readonly description: string
+    readonly aliases?: readonly string[]
+  }[]
 }
 
 export interface RuntimeParameterProvider {
@@ -74,41 +85,43 @@ function parameterPath(
   return { scope, type, source, group, field }
 }
 
-function webhookEntries(context: RuntimeParameterCatalogContext): RuntimeParameterEntry[] {
-  const available = context.eventTypes === undefined ? null : availableVarsFor(context.eventTypes)
+function eventTriggerEntries(context: RuntimeParameterCatalogContext): RuntimeParameterEntry[] {
   const scope = context.t('runtimeParameters.scope.global')
   const type = context.t('runtimeParameters.type.trigger')
-  const source = context.t('runtimeParameters.source.webhook')
-  return WEBHOOK_VAR_GROUPS.flatMap((group) => {
-    const groupLabel = context.t(
-      group.key === 'api'
-        ? 'runtimeParameters.group.webhookApi'
-        : 'runtimeParameters.group.webhookContext',
-    )
-    return group.vars.flatMap((field) => {
-      if (available !== null && !available.has(field)) return []
-      return [
-        {
-          id: `global:trigger:webhook:${group.key}:${field}`,
-          token: webhookTriggerToken(field),
-          label: context.t(`runtimeParameters.webhookLabels.${field}`),
-          description: [
-            context.t(`webhookTriggers.fields.vars.${field}`),
-            ...(context.audience === 'workflow-inspector'
-              ? [context.t('runtimeParameters.optionalWebhook')]
-              : []),
-          ].join(' '),
-          path: parameterPath('global', 'trigger', 'webhook', group.key, field),
-          pathLabels: [scope, type, source, groupLabel],
-          aliases: [field, `trigger.webhook.${field}`],
-        },
-      ]
-    })
-  })
+  return (context.triggerContracts ?? []).flatMap((contract) =>
+    contract.fields.map((field) => ({
+      id: `global:trigger:${contract.definitionRef.id}@${contract.definitionRef.revision}:${contract.namespace}:${field.fieldId}`,
+      token: triggerToken(contract.namespace, field.fieldId),
+      label: field.label,
+      description: [
+        field.description,
+        ...(contract.sourceDescription === undefined ? [] : [contract.sourceDescription]),
+      ].join(' '),
+      path: parameterPath(
+        'global',
+        'trigger',
+        contract.namespace,
+        `${contract.definitionRef.id}@${contract.definitionRef.revision}`,
+        field.fieldId,
+      ),
+      pathLabels: [
+        scope,
+        type,
+        contract.sourceLabel,
+        contract.groupLabel ?? contract.sourceLabel,
+      ] as const,
+      aliases: [
+        field.fieldId,
+        `trigger.${contract.namespace}.${field.fieldId}`,
+        contract.definitionRef.id,
+        ...(field.aliases ?? []),
+      ],
+    })),
+  )
 }
 
-const WEBHOOK_PROVIDER: RuntimeParameterProvider = {
-  id: 'trigger:webhook',
+const EVENT_TRIGGER_PROVIDER: RuntimeParameterProvider = {
+  id: 'trigger:event-center',
   audiences: ['workflow-inspector', 'webhook-launch'],
   surfaces: [
     'agent-prompt',
@@ -117,7 +130,7 @@ const WEBHOOK_PROVIDER: RuntimeParameterProvider = {
     'code-host',
     'webhook-launch',
   ],
-  entries: webhookEntries,
+  entries: eventTriggerEntries,
 }
 
 function runtimeTaskEntries(context: RuntimeParameterCatalogContext): RuntimeParameterEntry[] {
@@ -154,7 +167,7 @@ const RUNTIME_TASK_PROVIDER: RuntimeParameterProvider = {
 }
 
 export const DEFAULT_RUNTIME_PARAMETER_PROVIDERS: readonly RuntimeParameterProvider[] = [
-  WEBHOOK_PROVIDER,
+  EVENT_TRIGGER_PROVIDER,
   RUNTIME_TASK_PROVIDER,
 ]
 

@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import { sha256Hex } from '@/util/hash'
 import {
+  DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF,
   decodeDevelopmentApprovalSubject,
   type DevelopmentApprovalSubject,
 } from '@/modules/development-automation/public/types'
@@ -95,9 +96,9 @@ export function buildDevelopmentCodeHostFacts(snapshot: MrFactsSnapshot) {
           },
         ]),
     {
-      eventTypeId: 'development.pipeline-updated',
+      eventTypeId: 'development.pipeline-check-due',
       payload: { headSha: snapshot.headSha },
-      summary: 'MR head 已确认，程序化门禁采集可以刷新',
+      summary: 'MR 门禁主动复核周期已到达',
     },
   ] as const
 }
@@ -109,8 +110,23 @@ const cursorFactCodeByEventType = {
   'development.lifecycle-updated': 'l',
   'development.review-updated': 'r',
   'development.conflict-updated': 'c',
-  'development.pipeline-updated': 'p',
+  'development.pipeline-check-due': 'p',
 } as const satisfies Record<DevelopmentCodeHostFact['eventTypeId'], CursorFactCode>
+
+const codeHostFactRevisionByEventType = {
+  'development.lifecycle-updated': 2,
+  'development.review-updated': 2,
+  'development.conflict-updated': 2,
+  'development.pipeline-check-due': 1,
+} as const satisfies Record<DevelopmentCodeHostFact['eventTypeId'], number>
+
+function codeHostFactRevision(eventTypeId: string): number {
+  const revision = (codeHostFactRevisionByEventType as Readonly<Record<string, number>>)[
+    eventTypeId
+  ]
+  if (revision === undefined) throw new Error(`unknown development code-host fact: ${eventTypeId}`)
+  return revision
+}
 
 const observerCursorEntrySchema = z
   .object({
@@ -175,7 +191,7 @@ export function advanceDevelopmentCodeHostObserverCursor(input: {
         continue
       }
       const digest = sha256Hex(canonicalJson(fact.payload))
-      const periodicRefresh = eventTypeId === 'development.pipeline-updated'
+      const periodicRefresh = eventTypeId === 'development.pipeline-check-due'
       if (!periodicRefresh && prior?.d === digest) {
         nextSubject[code] = prior
         continue
@@ -216,7 +232,7 @@ export function composeDevelopmentCodeHostEventObserver(input: {
       readonly subjects: readonly ObserverSubject[]
       readonly cursorJson: string | null
     }) {
-      if (request.source.sourceRef.id !== 'development.code-host-state') {
+      if (request.source.sourceRef.id !== 'code-host.activity') {
         return { schemaVersion: 1 as const, cursorJson: request.cursorJson, observations: [] }
       }
       const observations: Array<{
@@ -268,7 +284,10 @@ export function composeDevelopmentCodeHostEventObserver(input: {
           throw new Error(`observer subject disappeared: ${change.subjectRef}`)
         observations.push({
           sourceRef: request.source.sourceRef,
-          eventTypeRef: { id: change.fact.eventTypeId, revision: 1 },
+          eventTypeRef: {
+            id: change.fact.eventTypeId,
+            revision: codeHostFactRevision(change.fact.eventTypeId),
+          },
           subject,
           occurredAt,
           dedupeKey: change.dedupeKey,
@@ -341,6 +360,7 @@ export function composeDevelopmentApprovalEventObserver(input: {
         dedupeKey: string
         summary: string
         payloadArtifactRef: null
+        triggerParameters?: { subject_ref: string }
       }> = []
       for (const subject of request.subjects) {
         if (subject.typeId !== 'external-approval') continue
@@ -357,17 +377,29 @@ export function composeDevelopmentApprovalEventObserver(input: {
         if (prior?.digest === digest) continue
         const sequence = (prior?.sequence ?? 0) + 1
         subjects[key] = { digest, sequence }
+        const occurredAt = now()
+        const summary =
+          observed.receipt.status === 'pending'
+            ? '外部审批仍在等待处理'
+            : `外部审批状态更新为 ${observed.receipt.status}`
         observations.push({
           sourceRef: request.source.sourceRef,
           eventTypeRef: { id: 'development.approval-updated', revision: 1 },
           subject,
-          occurredAt: now(),
+          occurredAt,
           dedupeKey: `development-approval-observer:${key}:${sequence}:${digest}`,
-          summary:
-            observed.receipt.status === 'pending'
-              ? '外部审批仍在等待处理'
-              : `外部审批状态更新为 ${observed.receipt.status}`,
+          summary,
           payloadArtifactRef: null,
+        })
+        observations.push({
+          sourceRef: request.source.sourceRef,
+          eventTypeRef: DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF,
+          subject,
+          occurredAt,
+          dedupeKey: `approval-status-changed:${key}:${sequence}:${digest}`,
+          summary,
+          payloadArtifactRef: null,
+          triggerParameters: { subject_ref: subject.subjectRef },
         })
       }
       return {

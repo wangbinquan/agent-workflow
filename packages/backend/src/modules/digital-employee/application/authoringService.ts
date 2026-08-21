@@ -35,7 +35,6 @@ import {
   type EmployeeTypeRef,
   type EmployeeTypeRuntimePackage,
   type ExactResourceRef,
-  type GlobalExecutionPolicy,
   type ToolImplementation,
   type ToolRegistrationContent,
   type ToolValidationReceipt,
@@ -235,16 +234,12 @@ export class DigitalEmployeeAuthoringService {
       })
     }
 
-    if (this.#store.getCurrentExecutionPolicy() === null) {
-      const now = this.#now()
-      this.#store.publishExecutionPolicy({
-        revision: 1,
-        content: DEFAULT_GLOBAL_EXECUTION_POLICY,
-        contentDigest: contentDigest(DEFAULT_GLOBAL_EXECUTION_POLICY),
-        publishedAt: now,
-        publishedBy: null,
-      })
-    }
+    this.#store.ensureExecutionPolicy({
+      content: DEFAULT_GLOBAL_EXECUTION_POLICY,
+      contentDigest: contentDigest(DEFAULT_GLOBAL_EXECUTION_POLICY),
+      publishedAt: this.#now(),
+      publishedBy: null,
+    })
   }
 
   #runtime(ref: EmployeeTypeRef): EmployeeTypeRuntimePackage {
@@ -291,6 +286,76 @@ export class DigitalEmployeeAuthoringService {
       executableDigest: artifact.executableDigest,
       parameterValuesRef: artifact.parameterValuesRef,
       runtimeProfileRef: authored.runtimeProfileRef,
+    }
+  }
+
+  #exactTool(input: {
+    readonly typeRef: EmployeeTypeRef
+    readonly workItemRef: string
+    readonly toolId: string
+  }): ToolDraftRecord {
+    const tool = this.#store.getTool(input.toolId)
+    if (
+      tool === null ||
+      !sameType(tool.typeRef, input.typeRef) ||
+      tool.workItemRef !== input.workItemRef ||
+      tool.retiredAt !== null
+    ) {
+      throw new NotFoundError(
+        'employee-tool-not-found',
+        `tool registration not found: ${input.toolId}`,
+      )
+    }
+    return tool
+  }
+
+  async #prepareToolDraft(input: {
+    readonly typeRef: EmployeeTypeRef
+    readonly workItemRef: string
+    readonly body: unknown
+  }): Promise<{
+    readonly content: ToolRegistrationContent
+    readonly validationReceipt: ToolValidationReceipt
+  }> {
+    const runtime = this.#runtime(input.typeRef)
+    const item = findWorkItem(runtime.descriptor, input.workItemRef)
+    if (item === null) {
+      throw new NotFoundError(
+        'employee-work-item-not-found',
+        `work item not found: ${input.workItemRef}`,
+      )
+    }
+    if (item.nodeKind !== 'business-tool') {
+      throw new ConflictError(
+        'employee-work-item-does-not-accept-tools',
+        `${input.workItemRef} is a ${item.nodeKind} node`,
+      )
+    }
+    const body = createToolRegistrationBodySchema.parse(input.body)
+    const role = findToolRole(item, body.roleRef)
+    if (role === null) {
+      throw new ValidationError(
+        'employee-tool-role-invalid',
+        `${body.roleRef} is not defined by ${input.workItemRef}`,
+      )
+    }
+    const contract = findWorkContract(runtime.descriptor, item.workContractRef)
+    if (contract === null) throw new Error(`type package lost contract for ${item.workItemRef}`)
+    const implementation = await this.#materializeImplementation(body.implementation)
+    const content = toolRegistrationContentSchema.parse({
+      schemaVersion: 1,
+      typeRef: input.typeRef,
+      workItemRef: item.workItemRef,
+      workContractRef: item.workContractRef,
+      roleRef: role.roleRef,
+      displayName: body.displayName,
+      description: body.description,
+      implementation,
+      connectionRef: body.connectionRef ?? null,
+    })
+    return {
+      content,
+      validationReceipt: await this.#validateTool(runtime, content),
     }
   }
 
@@ -371,48 +436,12 @@ export class DigitalEmployeeAuthoringService {
     body: unknown
     ownerUserId: string | null
   }): Promise<ToolDraftRecord> {
-    const runtime = this.#runtime(input.typeRef)
-    const item = findWorkItem(runtime.descriptor, input.workItemRef)
-    if (item === null) {
-      throw new NotFoundError(
-        'employee-work-item-not-found',
-        `work item not found: ${input.workItemRef}`,
-      )
-    }
-    if (item.nodeKind !== 'business-tool') {
-      throw new ConflictError(
-        'employee-work-item-does-not-accept-tools',
-        `${input.workItemRef} is a ${item.nodeKind} node`,
-      )
-    }
-    const body = createToolRegistrationBodySchema.parse(input.body)
-    const role = findToolRole(item, body.roleRef)
-    if (role === null) {
-      throw new ValidationError(
-        'employee-tool-role-invalid',
-        `${body.roleRef} is not defined by ${input.workItemRef}`,
-      )
-    }
-    const contract = findWorkContract(runtime.descriptor, item.workContractRef)
-    if (contract === null) throw new Error(`type package lost contract for ${item.workItemRef}`)
-    const implementation = await this.#materializeImplementation(body.implementation)
-    const content = toolRegistrationContentSchema.parse({
-      schemaVersion: 1,
-      typeRef: input.typeRef,
-      workItemRef: item.workItemRef,
-      workContractRef: item.workContractRef,
-      roleRef: role.roleRef,
-      displayName: body.displayName,
-      description: body.description,
-      implementation,
-      connectionRef: body.connectionRef ?? null,
-    })
-    const validationReceipt = await this.#validateTool(runtime, content)
+    const { content, validationReceipt } = await this.#prepareToolDraft(input)
     const now = this.#now()
     const record: ToolDraftRecord = {
       id: this.#id(),
       typeRef: input.typeRef,
-      workItemRef: item.workItemRef,
+      workItemRef: input.workItemRef,
       content,
       validationReceipt,
       publishedRevision: null,
@@ -433,24 +462,62 @@ export class DigitalEmployeeAuthoringService {
     return this.#store.listTools(typeRef, workItemRef)
   }
 
+  async getToolAuthoring(input: {
+    readonly typeRef: EmployeeTypeRef
+    readonly workItemRef: string
+    readonly toolId: string
+  }): Promise<{ readonly record: ToolDraftRecord; readonly body: CreateToolRegistrationBody }> {
+    const record = this.#exactTool(input)
+    const implementation: CreateToolRegistrationBody['implementation'] =
+      record.content.implementation.kind === 'program'
+        ? (() => {
+            const artifact = this.#programArtifacts.read(record.content.implementation)
+            if (artifact === null) {
+              throw new ConflictError(
+                'employee-program-artifact-unavailable',
+                `program source is unavailable for tool registration: ${record.id}`,
+              )
+            }
+            return {
+              kind: 'program' as const,
+              runtimeKind: record.content.implementation.runtimeKind,
+              source: artifact.source,
+              parameterValues: artifact.parameterValues ?? undefined,
+              runtimeProfileRef: record.content.implementation.runtimeProfileRef,
+            }
+          })()
+        : record.content.implementation
+    return {
+      record,
+      body: createToolRegistrationBodySchema.parse({
+        displayName: record.content.displayName,
+        description: record.content.description,
+        roleRef: record.content.roleRef,
+        implementation,
+        connectionRef: record.content.connectionRef,
+      }),
+    }
+  }
+
+  async updateTool(input: {
+    readonly typeRef: EmployeeTypeRef
+    readonly workItemRef: string
+    readonly toolId: string
+    readonly body: unknown
+  }): Promise<ToolDraftRecord> {
+    const existing = this.#exactTool(input)
+    const { content, validationReceipt } = await this.#prepareToolDraft(input)
+    this.#store.updateToolValidation(existing.id, content, validationReceipt, this.#now())
+    return this.#exactTool(input)
+  }
+
   async validateTool(input: {
     typeRef: EmployeeTypeRef
     workItemRef: string
     toolId: string
   }): Promise<ToolDraftRecord> {
     const runtime = this.#runtime(input.typeRef)
-    const tool = this.#store.getTool(input.toolId)
-    if (
-      tool === null ||
-      !sameType(tool.typeRef, input.typeRef) ||
-      tool.workItemRef !== input.workItemRef ||
-      tool.retiredAt !== null
-    ) {
-      throw new NotFoundError(
-        'employee-tool-not-found',
-        `tool registration not found: ${input.toolId}`,
-      )
-    }
+    const tool = this.#exactTool(input)
     const receipt = await this.#validateTool(runtime, tool.content)
     this.#store.updateToolValidation(tool.id, tool.content, receipt, this.#now())
     const updated = this.#store.getTool(tool.id)
@@ -487,17 +554,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   retireTool(input: { typeRef: EmployeeTypeRef; workItemRef: string; toolId: string }): void {
-    const tool = this.#store.getTool(input.toolId)
-    if (
-      tool === null ||
-      !sameType(tool.typeRef, input.typeRef) ||
-      tool.workItemRef !== input.workItemRef
-    ) {
-      throw new NotFoundError(
-        'employee-tool-not-found',
-        `tool registration not found: ${input.toolId}`,
-      )
-    }
+    const tool = this.#exactTool(input)
     this.#store.retireTool(tool.id, this.#now())
   }
 
@@ -854,28 +911,25 @@ export class DigitalEmployeeAuthoringService {
     return current
   }
 
-  publishExecutionPolicy(input: { body: unknown; actorUserId: string | null }): {
-    revision: number
-    content: GlobalExecutionPolicy
-    contentDigest: string
-  } {
-    const content = globalExecutionPolicySchema.parse(input.body)
-    if (content.maxBackoffMs < content.initialBackoffMs) {
-      throw new ValidationError(
-        'employee-execution-policy-invalid',
-        'maxBackoffMs must be greater than or equal to initialBackoffMs',
-      )
-    }
-    const current = this.getExecutionPolicy()
-    const revision = current.revision + 1
-    const digest = contentDigest(content)
-    this.#store.publishExecutionPolicy({
-      revision,
-      content,
-      contentDigest: digest,
-      publishedAt: this.#now(),
-      publishedBy: input.actorUserId,
+  /**
+   * Materialize the current Settings -> Limits retry values as an immutable
+   * runtime snapshot. Identical limits reuse the existing revision, so this is
+   * safe to call at every case admission.
+   */
+  ensureExecutionPolicyFromLimits(input: {
+    readonly defaultNodeRetries: number
+    readonly sessionRestartBudget: number
+  }) {
+    const content = globalExecutionPolicySchema.parse({
+      ...DEFAULT_GLOBAL_EXECUTION_POLICY,
+      sameSceneAttempts: input.defaultNodeRetries,
+      freshSceneAttempts: input.sessionRestartBudget,
     })
-    return { revision, content, contentDigest: digest }
+    return this.#store.ensureExecutionPolicy({
+      content,
+      contentDigest: contentDigest(content),
+      publishedAt: this.#now(),
+      publishedBy: null,
+    })
   }
 }

@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   TRIGGER_CONTEXT_FIELDS,
   StartTaskSchema,
+  WEBHOOK_EVENT_VAR_MATRIX,
   WEBHOOK_TEMPLATE_VARS,
   collectTriggerDependencies,
   collectWorkflowTemplateSurfaces,
+  createTriggerContext,
   evaluateTriggerDependencies,
   extractTemplateRefs,
   migrateWebhookPayloadTemplateToV2,
@@ -30,6 +32,13 @@ const CONTEXT: TriggerContext = {
   },
 }
 
+const NORMALIZED_CONTEXT = createTriggerContext({
+  namespace: 'webhook',
+  definitionRef: { id: 'code-host.webhook.note', revision: 1 },
+  availableFields: WEBHOOK_EVENT_VAR_MATRIX.note,
+  values: CONTEXT.trigger.webhook!,
+})
+
 describe('RFC-292 template scanner', () => {
   test('canonical trigger, local refs, spans and first-occurrence dedupe', () => {
     const text = 'a {{ port }} b {{trigger.webhook.mr_iid}} c {{foo.bar}} {{ port }}'
@@ -42,11 +51,15 @@ describe('RFC-292 template scanner', () => {
     expect(text.slice(trigger.span.start, trigger.span.end)).toBe('{{trigger.webhook.mr_iid}}')
   })
 
-  test('legacy, unknown and malformed trigger-looking forms fail closed', () => {
+  test('generic namespaces stay open while built-in vocabularies and malformed forms fail closed', () => {
+    expect(extractTemplateRefs('{{trigger.other.mr_iid}}')).toMatchObject([
+      { kind: 'trigger', source: 'other', field: 'mr_iid' },
+    ])
+    expect(extractTemplateRefs('{{trigger.webhook.nope}}')).toMatchObject([
+      { kind: 'invalid', reason: 'unknown-trigger-field' },
+    ])
     const cases = [
       ['{{trigger.mr_iid}}', 'legacy-trigger-ref'],
-      ['{{trigger.other.mr_iid}}', 'unknown-trigger-source'],
-      ['{{trigger.webhook.nope}}', 'unknown-trigger-field'],
       ['{{trigger.webhook}}', 'malformed-trigger-path'],
       ['{{trigger.webhook.mr.iid}}', 'malformed-trigger-path'],
       ['{{trigger.webhook.mr_iid', 'unclosed-trigger-ref'],
@@ -89,12 +102,17 @@ describe('RFC-292 trigger context', () => {
     expect(parseTriggerContextJson(null)).toEqual({ kind: 'none' })
     expect(parseTriggerContextJson(JSON.stringify(CONTEXT))).toEqual({
       kind: 'ok',
-      value: CONTEXT,
+      value: NORMALIZED_CONTEXT,
       migratedFromFlat: false,
     })
     expect(parseTriggerContextJson('{"event_type":"note","mr_iid":"42"}')).toEqual({
       kind: 'ok',
-      value: { trigger: { webhook: { event_type: 'note', mr_iid: '42' } } },
+      value: createTriggerContext({
+        namespace: 'webhook',
+        definitionRef: { id: 'code-host.webhook.note', revision: 1 },
+        availableFields: WEBHOOK_EVENT_VAR_MATRIX.note,
+        values: { event_type: 'note', mr_iid: '42' },
+      }),
       migratedFromFlat: true,
     })
     expect(parseTriggerContextJson('{')).toEqual({ kind: 'invalid' })
@@ -206,6 +224,15 @@ describe('RFC-292 workflow template inventory and migration', () => {
     expect(evaluateTriggerDependencies(dependencies, { kind: 'context', value: CONTEXT })).toEqual(
       [],
     )
+    expect(
+      evaluateTriggerDependencies(dependencies, {
+        kind: 'contracts',
+        contracts: [
+          { namespace: 'scheduler', availableFields: ['scheduled_at'] },
+          { namespace: 'webhook', availableFields: ['comment_text', 'mr_iid'] },
+        ],
+      }),
+    ).toEqual([])
   })
 })
 

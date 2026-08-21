@@ -19,7 +19,6 @@ import type {
   CodeHostTemplateContext,
   CodeHostTransform,
   TriggerContext,
-  WebhookTemplateVar,
 } from '@agent-workflow/shared'
 import {
   CODE_HOST_BODY_MAX,
@@ -248,16 +247,18 @@ function codeHostTriggerPreflight(
   spec: CodeHostCallSpec,
   context: TriggerContext | null,
 ): Extract<CodeHostCallOutcome, { ok: false }> | null {
-  const fields = new Set<WebhookTemplateVar>()
+  const refs = new Map<string, { source: string; field: string }>()
   for (const text of templateTextsOf(spec)) {
     for (const ref of extractCodeHostVars(text)) {
       if (ref.kind === 'invalid') {
         return fail('code-host-param-invalid', 'code-host template contains an invalid reference')
       }
-      if (ref.kind === 'trigger') fields.add(ref.name)
+      if (ref.kind === 'trigger') {
+        refs.set(`${ref.source}\u0000${ref.name}`, { source: ref.source, field: ref.name })
+      }
     }
   }
-  if (fields.size === 0) return null
+  if (refs.size === 0) return null
   if (context === null) {
     return fail('trigger-context-missing', 'code-host call requires webhook trigger context')
   }
@@ -265,8 +266,9 @@ function codeHostTriggerPreflight(
   if (!parsed.success) {
     return fail('trigger-context-invalid', 'the frozen task trigger context is invalid')
   }
-  const dependencies = [...fields].map((field) => ({
-    field,
+  const dependencies = [...refs.values()].map((ref) => ({
+    source: ref.source,
+    field: ref.field,
     nodeId: 'code-host-call',
     pointer: '/runtime/code-host-call',
   }))

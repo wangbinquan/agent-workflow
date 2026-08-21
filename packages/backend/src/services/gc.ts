@@ -211,7 +211,7 @@ export async function finishClaimedWebhookWorkspacePrune(
           and(
             eq(tasks.id, taskId),
             inArray(tasks.status, ['done', 'canceled']),
-            isNotNull(tasks.webhookTriggerId),
+            or(isNotNull(tasks.eventSubscriptionId), isNotNull(tasks.webhookTriggerId)),
             inArray(tasks.spaceKind, ['remote', 'scratch']),
             isNotNull(tasks.workspacePruningAt),
             eq(tasks.workspacePruneCause, 'webhook-terminal'),
@@ -263,7 +263,7 @@ export async function runClaimedWebhookWorkspacePrunes(
     .where(
       and(
         inArray(tasks.status, ['done', 'canceled']),
-        isNotNull(tasks.webhookTriggerId),
+        or(isNotNull(tasks.eventSubscriptionId), isNotNull(tasks.webhookTriggerId)),
         inArray(tasks.spaceKind, ['remote', 'scratch']),
         isNotNull(tasks.workspacePruningAt),
         eq(tasks.workspacePruneCause, 'webhook-terminal'),

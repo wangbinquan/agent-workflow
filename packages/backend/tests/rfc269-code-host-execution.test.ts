@@ -360,7 +360,7 @@ describe('RFC-269 / RFC-292 触发上下文', () => {
         params: { mr: '1', body: '{{trigger.webhook.mr_title}}' },
       },
       glDeps({
-        ctx: { ports: {}, triggerContext: context('push', { mr_title: 'must-not-be-used' }) },
+        ctx: { ports: {}, triggerContext: context('push') },
         fetchImpl,
       }),
     )
@@ -920,7 +920,7 @@ describe('RFC-269 源码层锁', () => {
       'utf8',
     )
     expect(promptSrc).toContain('renderTemplateRefs')
-    expect(promptSrc).toContain('triggerContext.trigger.webhook')
+    expect(promptSrc).toContain('triggerContextValue(input.triggerContext, ref.source, ref.field)')
 
     const callSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'codeHost', 'call.ts'),

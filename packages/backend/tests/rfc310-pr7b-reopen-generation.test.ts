@@ -23,6 +23,7 @@ import type { MergeRequestFactsCollectorPort } from '../src/modules/development-
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { shouldWakeForWebhook } from '../src/modules/development-automation/domain/webhookWake'
+import { createDevelopmentMissionCodeHostEventContinuation } from '../src/modules/development-automation/composition'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -175,20 +176,54 @@ describe('rfc310 pr7b T81 — the reopen signal actually reaches the probe', () 
     expect(shouldWakeForWebhook({ claimState: null, missionTerminalKind: null })).toBe(false)
   })
 
-  test('the webhook route decides through that predicate, not an inline condition', () => {
-    // 纯函数好断言，但它得真的被调用——源码层兜底，防止有人把逻辑抄回路由里。
+  test('the Event Center continuation owns the predicate and the Webhook route stays decoupled', () => {
+    // 纯函数好断言，但它得真的被调用。现在该职责属于 Event Center 的消费者
+    // adapter；Webhook ingress 只发布事件，不能重新跨界写 Mission 表。
     const route = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'webhooks.ts'),
       'utf8',
     )
-    expect(route).toContain('shouldWakeForWebhook({')
-    // 修复前那条内联判据的确切形态——它把 released 的 claim 一律挡在门外。
-    expect(route).not.toContain("claim !== null && claim.state === 'active'")
-    // 而且 hint 必须落在该判据的分支里，不是它旁边。
-    const at = route.indexOf('shouldWakeForWebhook({')
-    const record = route.indexOf('recordWakeHint({', at)
+    const continuation = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'development-automation',
+        'infrastructure',
+        'missionCodeHostEventContinuation.ts',
+      ),
+      'utf8',
+    )
+    expect(route).not.toContain('development-automation')
+    expect(continuation).toContain('shouldWakeForWebhook({')
+    expect(continuation).not.toContain("claim !== null && claim.state === 'active'")
+    const at = continuation.indexOf('shouldWakeForWebhook({')
+    const record = continuation.indexOf('recordWakeHint({', at)
     expect(record).toBeGreaterThan(at)
-    expect(record - at).toBeLessThan(400)
+    expect(record - at).toBeLessThan(1_000)
+  })
+
+  test('a matching Event Center continuation records one idempotent wake hint', async () => {
+    const fx = await buildPr3Fixture()
+    const missionId = 'm-event-center-reopen-wake'
+    await seedClosedMission(fx, missionId)
+    const continuation = createDevelopmentMissionCodeHostEventContinuation(fx.db)
+
+    expect(
+      continuation.match({ provider: 'endpoint-1', repoPath: 'project-1', mrIid: '77' }),
+    ).toMatchObject({ continuationRef: missionId })
+    continuation.consume({
+      continuationRef: missionId,
+      eventDeliveryId: 'event-delivery-reopen-1',
+      occurredAt: 30_000_001,
+    })
+    continuation.consume({
+      continuationRef: missionId,
+      eventDeliveryId: 'event-delivery-reopen-1',
+      occurredAt: 30_000_002,
+    })
+    expect(fx.store.consumeWakeHints(missionId, 30_000_003)).toBe(1)
   })
 })
 

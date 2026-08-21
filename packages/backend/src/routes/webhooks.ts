@@ -3,11 +3,12 @@
 // 只在 /api/* 上挂鉴权），公开性经 registerRoute publicReason 显式声明并被
 // assertRouteMetaCoverage 启动自检锁定。
 //
-// 三段式（D23）：同步段做 限流→端点查找→body 上限→验签→解析→去重→插
-// received 行→**立即 200**；分发（supersede 的 cancel 轮询最多 5s、auto-register
-// clone 分钟级）交给注入的 dispatcher 异步跑——GitLab 与 GitHub 均 ~10s 超时且
-// 失败**不自动重试**（设计门 F-4/F-6；GitHub 官方文档同证，RFC-259），同步分发
-// 必然超时且重投无门。
+// 三段式（D23）：同步段做 限流→端点查找→body 上限→验签→解析→去重→原始
+// audit 与 immutable Event/Delivery 落库；随后即返回 200。subscriber 消费
+// （supersede 的 cancel 轮询最多 5s、auto-register clone 分钟级）由 Event Center
+// 异步跑——GitLab 与 GitHub 均 ~10s 超时且失败不自动重试（设计门 F-4/F-6）。
+// Event publish 失败会把原始行置 failed，释放 provider UUID 供人工 Resend 修复；
+// publish 已成功但响应丢失时，稳定 UUID 只会命中同一 Event。
 //
 // 状态码语义（design §3.3，proposal D20）：凡「平台侧决定不处理」一律 200——
 // 对 GitLab 回 4xx/5xx 会累积 auto-disable，把几百仓共用的唯一 group hook 整个
@@ -26,13 +27,12 @@ import {
   touchEndpointLastDelivery,
   type InsertDeliveryInput,
 } from '@/services/webhook/deliveryStore'
-import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
-import { ulid } from 'ulid'
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
 import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
-import { shouldWakeForWebhook } from '@/modules/development-automation/domain/webhookWake'
+import { codeHostEventObservations } from '@/modules/integration/public/events'
+import { supportsEventCenterCodeHostDelivery } from '@/services/webhook/dispatcherTypes'
 
 const log = createLogger('webhook-ingress')
 
@@ -72,14 +72,18 @@ export function mountWebhookIngressRoutes(
   deps: AppDeps,
   opts?: { limiters?: WebhookRateLimiters },
 ): void {
-  const developmentMissionStore = createSqliteMissionStore(deps.db)
   const secretBox = deps.secretBox
-  if (!secretBox || !deps.webhookDispatcher) {
+  const eventCenter = deps.digitalEmployeeEventCenter
+  if (
+    !secretBox ||
+    !deps.webhookDispatcher ||
+    !supportsEventCenterCodeHostDelivery(deps.webhookDispatcher) ||
+    eventCenter === undefined
+  ) {
     // 对齐 OIDC 的自我跳过惯例（server.ts:330）：装配缺件时不挂载入站面，
     // 管理面（批次二）会以显式错误提示，而不是留一个必 500 的公开路由。
     return
   }
-  const dispatcher = deps.webhookDispatcher
   const acceptVerifiedDelivery = composeVerifiedWebhookDeliveryAcceptance(deps.db)
   const limiters = opts?.limiters ?? createWebhookRateLimiters()
 
@@ -216,28 +220,69 @@ export function mountWebhookIngressRoutes(
         eventHeader: baseRow.gitlabEventHeader ?? null,
         objectKind: objectKind || null,
       })
+      const deliveryId = insert.deliveryId
+      deps.webhookTerminalControl?.wake(insert.effectId)
+      // The verified adapter is now only a publisher. Both exact Digital
+      // Employee Attention and filtered start rules are materialized by the
+      // Event Center; ingress never calls a task launcher directly.
+      let published: { deliveryCount: number; deliveryIds: readonly string[] }
+      try {
+        const occurredAt = Date.now()
+        const receipts = codeHostEventObservations({
+          endpointId: endpoint.id,
+          deliveryId,
+          event,
+          occurredAt,
+        }).map((observation) => eventCenter.commands.observe(observation))
+        published = {
+          deliveryCount: receipts.reduce((total, receipt) => total + receipt.deliveryCount, 0),
+          deliveryIds: receipts.flatMap((receipt) => receipt.deliveryIds),
+        }
+      } catch (error) {
+        // Failed/rejected rows do not occupy the provider UUID dedupe index.
+        // Therefore a code-host resend can repair a publish failure instead of
+        // being acknowledged as a duplicate that never reached Event Center.
+        if (insert.kind === 'inserted') {
+          await markDelivery(deps.db, deliveryId, 'failed', 'internal-error').catch(() => {})
+        }
+        throw error
+      }
+      for (const eventDeliveryId of published.deliveryIds) {
+        void eventCenter.worker.runOneNotification(eventDeliveryId).catch((error: unknown) => {
+          log.error('event notification delivery failed', {
+            deliveryId,
+            eventDeliveryId,
+            error: String(error),
+          })
+        })
+      }
+      if (published.deliveryCount > 0) {
+        // The legacy webhook row is now only an ingress/routing audit. Per-rule
+        // success, retry, and dead-letter state belongs to independent Event
+        // Deliveries and must never overwrite this shared row.
+        await markDelivery(deps.db, deliveryId, 'matched')
+      } else if (insert.effectId !== null) {
+        await markDelivery(deps.db, deliveryId, 'matched', 'terminal-control-accepted')
+      } else {
+        await markDelivery(deps.db, deliveryId, 'ignored', 'no-trigger-matched')
+      }
       if (insert.kind === 'duplicate') {
-        deps.webhookTerminalControl?.wake(insert.effectId)
-        // 同 UUID 重投（GitLab Resend / 网络重放）：不重复分发，回原行。
+        // Re-publish is idempotent by provider UUID and also nudges any durable
+        // Event Delivery left pending by a response loss or process restart.
+        // Re-applying the routing audit repairs a prior response/status-write
+        // failure without changing per-subscriber delivery state.
         return c.json({
-          deliveryId: insert.deliveryId,
+          deliveryId,
           status: 'duplicate',
           attemptCount: insert.attemptCount,
         })
       }
-
-      const deliveryId = insert.deliveryId
-      deps.webhookTerminalControl?.wake(insert.effectId)
-      // RFC-310 OS: webhook is only a low-latency hint. It never writes review,
-      // pipeline, conflict or lifecycle truth into the employee queue. When at
-      // least one Case subscribes to the hybrid source, nudge its durable
-      // observer; that program re-reads authoritative code-host facts and emits
-      // the typed, priority-ordered events. With zero subscribers this is a
-      // no-op, preserving the Event Center's on-demand polling contract.
+      // Transitional authoritative-state observers retain a nudge: this does
+      // not dispatch the Webhook; it merely advances a subscribed active source.
       if (event.mrIid !== undefined) {
         try {
           deps.digitalEmployeeEventCenter?.observerControl.nudgeSource({
-            id: 'development.code-host-state',
+            id: 'code-host.activity',
             revision: 1,
           })
         } catch (err) {
@@ -248,49 +293,6 @@ export function mountWebhookIngressRoutes(
         }
       }
       void touchEndpointLastDelivery(deps.db, endpoint.id, Date.now()).catch(() => {})
-      // 异步分发：响应先行（AC-5）。dispatch 内部负责 processing→终态；这里只
-      // 兜「dispatch 自身同步抛/整体 reject」的最后一层，标 failed 供 replay。
-      // RFC-310 PR-7 T82：MR webhook → mission wake hint。facts path 不变
-      //（reconciler 主动采集才是真相），webhook 只降延迟；hint 落库幂等
-      //（deliveryKey），30s wake sweep 收取。丢 webhook 只是慢，不是卡死
-      //（watching 的 wait 带 timer 兜底）。
-      if (event.mrIid !== undefined) {
-        try {
-          const claim = developmentMissionStore.findMrClaim({
-            codeHostEndpointRef: providerParam,
-            stableProjectRef: event.repoPath,
-            mrIid: event.mrIid,
-          })
-          // 判据是纯函数（`domain/webhookWake.ts`）：它现在有两档——active 与
-          // 「released 但 Mission 是 closed-unmerged」（后者正是 T81 的 reopen
-          // 信号，不唤醒的话 reconciler 的 reopen 探针永远等不到触发）。
-          // terminalKind 只在 claim 非 active 时才读，避免在热路径上多打一次库。
-          const terminalKind =
-            claim === null || claim.state === 'active'
-              ? null
-              : (developmentMissionStore.getMission(claim.missionId)?.terminalKind ?? null)
-          if (
-            shouldWakeForWebhook({
-              claimState: claim?.state ?? null,
-              missionTerminalKind: terminalKind,
-            })
-          ) {
-            developmentMissionStore.recordWakeHint({
-              id: ulid(),
-              missionId: claim!.missionId,
-              source: 'webhook',
-              deliveryKey: `webhook:${deliveryId}`,
-              now: Date.now(),
-            })
-          }
-        } catch (err) {
-          log.warn('mission webhook wake hint failed', { deliveryId, error: String(err) })
-        }
-      }
-      void dispatcher.dispatch({ deliveryId, endpoint, event }).catch(async (err: unknown) => {
-        log.error('webhook dispatch crashed', { deliveryId, error: String(err) })
-        await markDelivery(deps.db, deliveryId, 'failed', 'internal-error').catch(() => {})
-      })
       return c.json({ deliveryId, status: 'received' })
     },
   )

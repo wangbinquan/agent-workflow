@@ -90,6 +90,10 @@ import { readUploadPlan } from './infrastructure/sqliteUploadPlanStore'
 import { createSqliteUploadSessionStore } from './infrastructure/sqliteUploadSessionStore'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
 import { createPipelineImportAdapter } from './infrastructure/pipelineEvidenceImport'
+import { createSqliteMissionCodeHostEventContinuation } from './infrastructure/missionCodeHostEventContinuation'
+
+export const createDevelopmentMissionCodeHostEventContinuation =
+  createSqliteMissionCodeHostEventContinuation
 
 /** pipeline evidence 平台收编上限（adapter outputBudget 之外的最后防线）。 */
 const PIPELINE_IMPORT_BUDGET = {

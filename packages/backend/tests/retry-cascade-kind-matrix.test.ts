@@ -275,50 +275,16 @@ async function seedLiveChildForCallRow(
 /** Keep one task moving between cancelable states before every task-cancel CAS. */
 function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): DbClient {
   let nextStatus: 'awaiting_human' | 'awaiting_review' = 'awaiting_review'
-  const wrapBuilder = (builder: object, taskUpdate: boolean, cancelUpdate: boolean): object => {
-    const proxy: object = new Proxy(builder, {
-      get(target, property) {
-        if (property === 'then' && taskUpdate && cancelUpdate) {
-          return (
-            onFulfilled?: ((value: unknown) => unknown) | null,
-            onRejected?: ((reason: unknown) => unknown) | null,
-          ) => {
-            onAttempt()
-            const status = nextStatus
-            nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-            return db
-              .update(tasks)
-              .set({ status })
-              .where(eq(tasks.id, taskId))
-              .then(() => Promise.resolve(target as unknown as PromiseLike<unknown>))
-              .then(onFulfilled, onRejected)
-          }
-        }
-        const value = Reflect.get(target, property, target)
-        if (typeof value !== 'function') return value
-        return (...args: unknown[]) => {
-          const next = Reflect.apply(value, target, args) as unknown
-          const armsCancel =
-            property === 'set' &&
-            typeof args[0] === 'object' &&
-            args[0] !== null &&
-            (args[0] as { status?: unknown }).status === 'canceled'
-          return typeof next === 'object' && next !== null
-            ? wrapBuilder(next, taskUpdate, cancelUpdate || armsCancel)
-            : next
-        }
-      },
-    })
-    return proxy
-  }
-
   return new Proxy(db, {
     get(target, property) {
       const value = Reflect.get(target, property, target)
-      if (property !== 'update' || typeof value !== 'function') return value
+      if (property !== 'transaction' || typeof value !== 'function') return value
       return (...args: unknown[]) => {
-        const builder = Reflect.apply(value, target, args) as object
-        return wrapBuilder(builder, args[0] === tasks, false)
+        onAttempt()
+        const status = nextStatus
+        nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
+        db.update(tasks).set({ status }).where(eq(tasks.id, taskId)).run()
+        return Reflect.apply(value, target, args)
       }
     },
   }) as DbClient
@@ -443,15 +409,31 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     let taskUpdateCount = 0
     const flakyDb = new Proxy(h.db, {
       get(target, prop) {
-        if (prop === 'update') {
-          return ((table: unknown) => {
-            if (table === tasks) {
-              taskUpdateCount += 1
-              // #1 = retry ownership CAS; #2 = child cancellation; #3 = fail-close.
-              if (taskUpdateCount === 2) throw new Error('injected child cancel write failure')
-            }
-            return (target.update as (t: unknown) => unknown)(table)
-          }) as DbClient['update']
+        if (prop === 'transaction') {
+          return ((
+            callback: (tx: Parameters<Parameters<DbClient['transaction']>[0]>[0]) => unknown,
+          ) =>
+            target.transaction((tx) =>
+              callback(
+                new Proxy(tx, {
+                  get(txTarget, txProp) {
+                    const value = Reflect.get(txTarget, txProp, txTarget)
+                    if (txProp !== 'update' || typeof value !== 'function') return value
+                    return (table: unknown) => {
+                      if (table === tasks) {
+                        taskUpdateCount += 1
+                        // #1 = retry ownership CAS; #2 = child cancellation;
+                        // #3 = fail-close.
+                        if (taskUpdateCount === 2) {
+                          throw new Error('injected child cancel write failure')
+                        }
+                      }
+                      return Reflect.apply(value, txTarget, [table]) as unknown
+                    }
+                  },
+                }),
+              ),
+            )) as DbClient['transaction']
         }
         const value = Reflect.get(target, prop, target) as unknown
         return typeof value === 'function' ? value.bind(target) : value
@@ -501,7 +483,9 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       }),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
-    expect(cancelCasAttempts).toBe(8)
+    // Two earlier owner transactions also cross the same injected boundary;
+    // the child itself still exhausts all eight cancellation attempts.
+    expect(cancelCasAttempts).toBe(10)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(parent.status).toBe('failed')

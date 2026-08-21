@@ -128,7 +128,13 @@ function readRequest(node: WorkflowNode): CustomRequestShape {
   }
 }
 
-export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
+export function CodeHostCallEdit({
+  node,
+  definition,
+  triggerContracts,
+  onPatch,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   const canAuthor = usePermission('code-host-calls:author')
   const canManageConnections = usePermission('settings:read')
@@ -184,6 +190,7 @@ export function CodeHostCallEdit({ node, definition, onPatch, onHistoryBoundary 
     {
       audience: 'workflow-inspector',
       surface: 'code-host',
+      triggerContracts,
       t,
     },
     {

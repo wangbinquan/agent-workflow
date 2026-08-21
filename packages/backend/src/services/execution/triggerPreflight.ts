@@ -53,15 +53,15 @@ export function assertTriggerPreflight(args: {
     throw new ValidationError(issue.code, 'the frozen task trigger context is invalid')
   }
   if (issue.code === 'trigger-context-missing') {
-    throw new ValidationError(issue.code, 'workflow requires webhook trigger context', {
-      source: 'webhook',
+    throw new ValidationError(issue.code, 'workflow requires event trigger context', {
+      source: issue.dependency.source,
       field: issue.dependency.field,
       nodeId: issue.dependency.nodeId,
       pointer: issue.dependency.pointer,
     })
   }
   throw new ValidationError(issue.code, 'workflow trigger field is unavailable for this event', {
-    source: 'webhook',
+    source: issue.dependency.source,
     field: issue.dependency.field,
     ...(issue.eventType === undefined ? {} : { eventType: issue.eventType }),
     nodeId: issue.dependency.nodeId,

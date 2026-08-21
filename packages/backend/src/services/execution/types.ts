@@ -37,6 +37,13 @@ export type ExecutionInvoker =
   | { type: 'user'; launchKind: 'direct-json' | 'direct-multipart' }
   | { type: 'scheduled'; scheduledTaskId: string }
   | { type: 'node'; parentTaskId: string; parentNodeRunId: string; invocationDepth: number }
+  | {
+      type: 'event'
+      eventSubscriptionId: string
+      eventDeliveryId: string
+      triggerContext: TriggerContext
+      sourceTerminationSnapshot?: SourceTerminationSnapshot
+    }
   // RFC-257 — a webhook trigger fire (stamps tasks.webhook_trigger_id /
   // webhook_fire_id, same run-history-attribution discipline as `scheduled`).
   // RFC-269: triggerContext is execution input, not post-launch metadata. It

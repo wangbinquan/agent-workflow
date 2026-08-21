@@ -162,10 +162,10 @@ describe('RFC-290 NumberInput range hint', () => {
     })
     const optedOut = bounded.filter(({ tag }) => tag.includes('rangeHint={false}'))
 
-    // 16 → 32: the RFC-310 guided resource editor and employee playbook add
-    // sixteen bounded retry/verification/adapter/join inputs. All show hints.
-    expect(bounded).toHaveLength(32)
-    expect(bounded.length - optedOut.length).toBe(31)
+    // RFC-310 Event Center adds two bounded observer fields on top of the
+    // guided employee/resource inputs. Every authoring field keeps its hint.
+    expect(bounded).toHaveLength(34)
+    expect(bounded.length - optedOut.length).toBe(33)
     expect(optedOut.map(({ file }) => file)).toEqual(['components/Pagination.tsx'])
   })
 })

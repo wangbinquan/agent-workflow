@@ -588,6 +588,12 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('rfc257-webhook-pages-inline.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/webhooks.tsx', primitive: 'PageHeader' },
   },
+  '@/routes/events#Route': {
+    surface: '/events',
+    classification: 'standard',
+    owners: [source('rfc310-event-center-ui-contract.test.ts')],
+    header: { mode: 'direct', sourceFile: 'routes/events.tsx', primitive: 'PageHeader' },
+  },
   // RFC-310 — `/code` 只构建数字员工能力；实际执行统一进入 `/tasks`。
   '@/routes/digital-employees#Route': {
     surface: '/digital-employees',

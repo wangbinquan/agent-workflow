@@ -14,11 +14,12 @@ import type {
 import {
   WEBHOOK_EVENT_VAR_MATRIX,
   WebhookAgentPayloadTemplateSchema,
+  WebhookDigitalEmployeePayloadTemplateSchema,
   WebhookWorkflowPayloadTemplateSchema,
   WebhookWorkgroupPayloadTemplateSchema,
 } from './schemas/webhook'
 import { extractTemplateRefs, renderTemplateRefs, webhookTriggerToken } from './templateRef'
-import { isWebhookTriggerField, type TriggerContext } from './triggerContext'
+import { isWebhookTriggerField, triggerContextValue, type TriggerContext } from './triggerContext'
 import { webhookTemplateAuthorityKey, type WebhookTemplateAuthorityKey } from './templateAuthority'
 
 /** {{trigger.webhook.event_json}} 的截断上限（字符）。< 65536 的注入面上限，留出模板其余文字余量。 */
@@ -53,8 +54,11 @@ export function extractTemplateVars(text: string): {
   const known = new Set<WebhookTemplateVar>()
   const unknown = new Set<string>()
   for (const ref of extractTemplateRefs(text)) {
-    if (ref.kind === 'trigger') known.add(ref.field)
-    else if (ref.kind === 'local') unknown.add(ref.name)
+    if (ref.kind === 'trigger' && ref.source === 'webhook' && isWebhookTriggerField(ref.field)) {
+      known.add(ref.field)
+    } else if (ref.kind === 'trigger') {
+      unknown.add(ref.raw)
+    } else if (ref.kind === 'local') unknown.add(ref.name)
     else unknown.add(ref.raw)
   }
   return { known: [...known], unknown: [...unknown] }
@@ -134,7 +138,7 @@ export function eventVarsOf(event: CodeHostEvent): Record<WebhookTemplateVar, st
 export function renderTemplate(text: string, context: TriggerContext): string {
   const rendered = renderTemplateRefs(text, (ref) => {
     if (ref.kind !== 'trigger') return ''
-    return context.trigger.webhook[ref.field] ?? ''
+    return triggerContextValue(context, ref.source, ref.field)
   })
   if (rendered.invalid.length > 0) {
     throw new Error(`invalid webhook template ref: ${rendered.invalid[0]!.reason}`)
@@ -156,6 +160,9 @@ export type WebhookTemplateSink =
   | 'agent-description'
   | 'agent-input'
   | 'workgroup-goal'
+  | 'employee-body'
+  | 'employee-external-id'
+  | 'employee-target'
 
 function pointerPart(value: string): string {
   return value.replaceAll('~', '~0').replaceAll('/', '~1')
@@ -196,6 +203,15 @@ export function collectWebhookTemplateSurfaces(
       add('agent-input', `/inputs/${pointerPart(key)}`, text)
     }
     add('working-branch', '/workingBranch', parsed.workingBranch)
+    return out
+  }
+  if (kind === 'digital-employee') {
+    const parsed = WebhookDigitalEmployeePayloadTemplateSchema.parse(payload)
+    for (const [key, text] of Object.entries(parsed.target)) {
+      add('employee-target', `/target/${pointerPart(key)}`, text)
+    }
+    add('employee-body', '/body', parsed.body)
+    add('employee-external-id', '/externalId', parsed.externalId)
     return out
   }
 
@@ -271,6 +287,26 @@ export function mapWebhookTemplateSurfaces(
       ...(parsed.workingBranch === undefined
         ? {}
         : { workingBranch: rewrite('working-branch', '/workingBranch', parsed.workingBranch) }),
+    }
+  }
+  if (kind === 'digital-employee') {
+    const parsed = WebhookDigitalEmployeePayloadTemplateSchema.parse(payload)
+    return {
+      ...parsed,
+      target: Object.fromEntries(
+        Object.entries(parsed.target).map(([key, text]) => [
+          key,
+          rewrite('employee-target', `/target/${pointerPart(key)}`, text),
+        ]),
+      ),
+      ...(parsed.body === undefined
+        ? {}
+        : { body: rewrite('employee-body', '/body', parsed.body) }),
+      ...(parsed.externalId === undefined
+        ? {}
+        : {
+            externalId: rewrite('employee-external-id', '/externalId', parsed.externalId),
+          }),
     }
   }
 

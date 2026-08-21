@@ -1,6 +1,4 @@
-import type { EventObservationInput, EventObservationReceipt } from './types'
+import type { EventObservationParticipant } from './participants'
 
 /** Verified webhook/internal ingress narrows to this one idempotent command. */
-export interface EventObservationCommandPort {
-  observe(input: EventObservationInput): EventObservationReceipt
-}
+export type EventObservationCommandPort = EventObservationParticipant

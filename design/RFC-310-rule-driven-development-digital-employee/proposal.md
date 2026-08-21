@@ -12,7 +12,7 @@
 > **2026-08-21 数字员工操作系统实现（待 hosted 验证）**：用户确认产品目标升级为“数字员工操作系统”，
 > 本文新增 §0A 作为目标产品模型；它优先于本文后续与其冲突的 `DevelopmentMission`、有序步骤、Mission-local
 > wake/poll 与 child Mission 特例。PR-14..PR-18 已实现公共 `digital-employee` / `event-center`、研发类型包、
-> 分类节点工具箱、固定全景画布、全局执行策略、跨员工通道与单 writer 切换。完整 `gate:local` 已于
+> 分类节点工具箱、固定全景画布、共享限额快照、跨员工通道与单 writer 切换。完整 `gate:local` 已于
 > 2026-08-21 以四个随机化后端分片、frontend 6660、shared 2219、system-mock 35 全绿；当前仅剩 exact-SHA hosted CI
 > 的发布验证，最终证据写入 plan/STATE。
 >
@@ -88,7 +88,7 @@ EmployeeCase = ContextGraph
              + EventQueue
              + ReactionRounds
              + EmployeeChannels
-             + GlobalExecutionPolicyRevision
+             + ExecutionPolicySnapshot
 ```
 
 这里的“工具”是人类工作语义中的工具，不是新的执行器：Agent、Workflow、程序、平台内置能力分别仍由原 owner 定义和
@@ -133,17 +133,54 @@ Event Center 是公共产品能力，严格区分：
 
 - **Event Type**：发生了什么，定义稳定技术 ID、国际化业务名称与描述、subject type 与 payload schema；
 - **Event Source**：如何观察，支持 `push | poll | hybrid | stream`；
-- **Subscription**：哪个 EmployeeCase 关注哪类 Event、哪个 subject；
+- **Subscription**：哪个消费者关注哪类 Event；既支持 EmployeeCase 对 exact subject 的关注，也支持 Workflow/Agent/系统动作的确定性筛选规则；
 - **Event Record**：一次不可变、可去重的标准事件；
-- **Event Delivery**：按订阅投递给某个 EmployeeCase 的队列项。
+- **Event Delivery**：按订阅投递给某个消费者的独立队列项。
+
+Event Center 是数字员工 OS 所依赖的**全局平台能力**，而不是“数字员工”导航下的子功能。工作流、Webhook、仓库集成、
+审批系统以及未来的设计/测试员工都可以注册来源、发布事件或建立订阅；数字员工页面只投影“这名员工正在关注什么”，
+全局来源、目录、订阅、投递和观察器健康统一在“运行与仓库 → 事件中心”管理。
+
+Webhook 与自定义轮询不是两套事件机制，只是两种 Publisher adapter：Webhook 端点负责公开入口、验签、provider payload
+归一化与原始投递审计；轮询来源负责按合同运行一次短 Observer。两者随后都向同一个 Event Center 发布 strict Event
+Envelope，并复用同一套事件类型注册、identity/dedupe、Subscription matching、durable Delivery 和 subscriber adapter。
+同一个业务事实不得因为分别被 Webhook 和轮询观察到就注册两个公开 Event Type；来源的 `hybrid` 能力表达“可由两种方式观察”。
+历史 Webhook event matrix 只作为既有代码平台 selector 的 compatibility fact 留在内部路由，不进入公开事件目录，也不能被新的
+来源无关响应规则选择。
+早期构建若已经把 `code-host.webhook@1` 及 `code-host.webhook.*` 持久化成第二套公开目录，升级迁移必须保留不可变历史行、
+但把其可见性降为 compatibility；公开目录按稳定来源只呈现 `code-host.activity@1`，不能让同一组代码平台事实因为升级残留
+再次出现两棵 Webhook 目录。
+代码平台另行注册来源无关的公开业务事实，例如“分支已推送”“MR 已创建”“流水线失败”“工作项已标记”；Webhook 验签后的
+归一化结果同时发布一条 compatibility occurrence 和一条 public business fact。数字员工为补漏而产生的“门禁复核到期”、
+“权威状态已观察”等 attention signal 标记为 `internal`，可以驱动已有 Case，但既不进入公开目录，也不能被配置成新工作入口。
+升级时不得篡改已经登记的事件修订：旧 `work-received`、MR snapshot、员工协同和审批 wake-up 统一降为 internal 历史合同；
+仍在运行的 MR Attention/Subscription 与 ObserverActivation 迁到 `code-host.activity` 的新 exact revision。审批和员工协同继续向
+旧 Case 发布原内部事件，同时额外发布 `approval.status.changed`、`platform.employee-invocation.result-returned` 公开业务事实。
+这样存量 Case 不失联，新响应规则也不会依赖员工类型私有事件。公开目录只返回至少拥有一个 public Event Type 的来源，退役或
+纯内部来源不会留下空分组。
+Webhook 的既有“触发规则”在产品上迁为 `filtered` Subscription：事件类型、仓库范围、分支、命令和忽略作者是确定性
+selector，Workflow/Agent/Workgroup 是 subscriber target。数字员工 Attention 是 `exact` Subscription：事件类型与 subject
+精确绑定，并负责主动 Observer 的 0→1/1→0 引用计数。运行审计把两种订阅统一呈现；创作区以来源无关响应规则为主，
+既有 Webhook 专用条件作为明确标注的兼容配置保留，不再限制其他公开事件的选择。
+
+Event Center 的 Event/Delivery 不携带业务优先级，也不决定“评论还是流水线先处理”。每个订阅者在自己的已发布规则中解释
+同一批 Delivery：数字员工从 pinned `ReactionRule.priority` 计算 Case 队列顺序；其他 subscriber 可以有各自确定性调度规则。
+因此事件来源创作、事件类型和 Event Center 订阅表单均不出现优先级字段。
 
 Event Center 决定事件应投递给谁；员工的版本化规则决定同一案件中先处理哪个。相同外部 revision 被 Webhook 与轮询
 同时发现时只形成一个标准 Event，但可向多个订阅者分别投递。
 
+这里采用**多播而不是竞争消费**。`EventRecord` 是不可变事实，不存在全局“已消费”位；发布事务以当时命中的每个
+`Subscription` 分别创建一条 `EventDelivery`，并由 `(eventId, subscriptionId)` 唯一约束保证重放不重复。每条 Delivery
+独立持有 `pending/claimed/accepted/dead-letter`、lease、attempt 和 error。消费者确认的对象必须是 `deliveryId`，确认 A
+不能删除 Event、不能改变 B 的 Delivery，也不能阻止尚未运行的 C。一个消费者失败或进入死信时，其他 Delivery 继续调度。
+事件中心页面同时展示 Event ID 与 Delivery ID，使“同一个事实、多个处理进度”可见。
+
 程序化 ID 只用于 API、存储、去重和高级技术详情，不能成为业务 UI 的主文案。每个 Event Type 必须随类型包或公共
 owner 注册所有受支持语言的 `displayNameKey + descriptionKey`；缺少任一语言时拒绝发布。运行队列显示“收到新的检视
-意见——MR 中出现尚未处理的评论”，而不是 `review.comment.created`。事件名称描述“为什么员工被唤醒”，工作项名称
-描述“员工要做什么”；例如事件“收到新工作”触发工作项“准备工作材料”，不得在同一区域重复展示两份同义信息。
+意见——MR 中出现尚未处理的评论”，而不是 `review.comment.created`。事件名称描述“已经发生了什么”，工作项名称
+描述“员工要做什么”。`WorkStart` 是创建一份新工作的命令，不是已发生事实，因此不得注册“收到新工作”一类入口事件；
+启动成功后的 Case/Task 状态变化才可由 owner outbox 发布为 lifecycle Event。
 
 主动轮询遵循“有订阅才激活、无人订阅就停止”的产品语义，但默认不为每个订阅保持一个长驻脚本进程。平台按
 `EventSourceRef + ConnectionRef + ObservationScope + ObservationProfile` 合并为 `ObserverActivation`：
@@ -158,6 +195,52 @@ owner 注册所有受支持语言的 `displayNameKey + descriptionKey`；缺少�
 
 问题单、流水线和审批的大文件由 Context materializer/evidence collector 下载到约定临时目录；例如流水线材料进入
 `.agent-workflow/pipeline/<bundleId>`。Event 只保存 subject、revision、摘要和 artifact ref，不承载大日志。
+
+除类型包和平台内建来源外，首版支持业务方注册**自定义轮询来源**。用户只配置来源名称与说明、轮询周期、批量大小、
+事件种类以及一个已受平台契约约束的 Script。Script 通过平台生成的 input JSON 文件获得 exact source、订阅 subjects、cursor
+和 deadline，只能在 stdout 返回一个 `aw-event-observer@1` envelope；它不能直接写事件表、指定另一个 source/type、投递订阅者
+或启动数字员工。平台在发布前用同一执行器跑真实样例并验证 envelope，运行时把业务 event key 映射到已发布 exact Event Type，
+按配置的“状态版本去重 / 发生实例去重”规则生成 identity，再统一入库和 fan-out。草稿、已发布 revision 与退役状态均可追溯；
+修改脚本、周期或事件合同会发布新 revision，既有订阅继续 pin 原 revision。Webhook endpoint 与自定义轮询来源统一显示在
+“事件来源”，实时订阅统一显示 exact Attention 和 filtered automation rule；来源类型只影响采集方式，不另起发布/通知链。
+
+每个 Event Type 可选声明一个版本化 `TriggerParameterContract`：命名空间、字段 ID、国际化名称和说明。Publisher 只能提交
+该合同声明的字符串字段，Event Center 在入库前 exact 校验并冻结为通用 `TriggerContext`：
+
+```text
+trigger.<namespace>.<field>
+contract = { definitionRef, namespace, availableFields }
+```
+
+任务核心、模板解析器、Agent/Workflow/CodeHost consumer 只认识这个中立合同，不认识 Webhook。代码平台的公开事实注册
+`trigger.code_host.repo_path/mr_iid/issue_iid`；自建来源可以注册 `trigger.issue.issue_id`，未来定时来源可以注册
+`trigger.schedule.scheduled_at`。编辑器从 Event Center catalog 动态生成参数选择器，删除或升级 Event Type 合同后，订阅发布
+预检按 exact revision 失败，不靠前端猜字段。历史 `trigger.webhook.*` 数据仅在代码平台 adapter/迁移兼容层解释，不形成第二套
+公开事件分类。
+自定义来源编辑器在每个事件类型下显式配置一次 namespace，并实时渲染 `trigger.<namespace>.<fieldId>`；`fieldId` 是脚本输出、
+合同校验和任务模板引用使用的稳定机器键，国际化显示名称只服务目录与配置提示。namespace 不得由前端隐藏后固定成
+`custom_event`。参数编辑行必须使用不进入发布合同的稳定 editor identity，修改 `fieldId` 不能触发行重建或丢失输入焦点。
+
+Event Delivery 的 automation subscriber 进入统一 `WorkStart` 边界。边界的 target 是封闭联合：
+
+```text
+orchestration = workflow | agent | workgroup
+digital-employee = employee definition + typed intake mapping
+```
+
+二者在“由事件开始一份工作”上对等：都消费相同 `eventId/subscriptionId/deliveryId/TriggerContext`、以 Delivery 作为幂等键，
+都由订阅 owner 身份重新执行 ACL/可用性校验；区别只在结果分别是 `TaskRef` 与 `EmployeeCaseRef`。Event Center 不 import
+编排或数字员工内部实现，只调用注册的 subscriber adapter。数字员工既可以因 filtered Subscription 创建新 Case，也可以因
+exact Attention Delivery 唤醒已有 Case；不能把“创建”和“继续”混成依赖事件名称的隐式判断。
+
+`WorkStart` 本身是 source-neutral command，不经过 EventRecord/Subscription 绕一圈。用户手工创建工作、API 创建工作以及
+Event Delivery 响应最终都调用同一命令边界；只有 Event Delivery 场景额外冻结 `eventSubscriptionId/eventDeliveryId` 作为
+幂等与来源审计。这样“工作入口”不会出现在事件目录，首次工作项由员工类型包的 `workStartWorkItemRef` 确定。
+
+平台任务和数字员工自身的 committed lifecycle 也通过内建 Publisher 注册为 Event Type，例如
+`platform.task.status-changed`、`platform.employee-case.state-changed`、
+`platform.employee-invocation.result-returned`。业务事务只写 owner outbox，Event Center Publisher 异步发布；因此一个员工
+拉起另一个员工、等待其完成后返回，使用的仍是普通 Subscription/Delivery，不另造同步调用栈或专用通知总线。
 
 ### 0A.4 Employee Event Queue 与 Reaction
 
@@ -175,8 +258,9 @@ Effect 前形成 transition fence，普通低优先级事件不得覆盖终态�
 
 ReactionRule 用 typed Event、Context facts 和闭集 predicate 选择唯一工作合同及其 exact Tool Binding 与允许 Effect。
 ReactionRule、队列优先级与业务失败分支由员工类型包程序化定义；业务用户不在员工页面配置事件、规则顺序或重试。
-执行失败后的同现场重试、全新现场恢复、backoff 与停止条件来自平台全局 `ExecutionPolicyRevision`，由“设置 → 执行策略”
-统一维护并在 Case/Reaction 中精确 pin。无匹配、多匹配、事实不完整均显式阻断，不让 AI 自主选择下一步。
+执行失败后的同现场与全新现场次数只读取“设置 → 限额”的既有字段；Case admission 把当时值物化为内部
+`ExecutionPolicyRevision` 并精确 pin。固定 backoff 与停止条件属于平台运行合同，不形成第二份配置。无匹配、多匹配、
+事实不完整均显式阻断，不让 AI 自主选择下一步。
 
 ### 0A.5 数字员工之间的持久事件通道
 
@@ -287,7 +371,7 @@ Agent/Script 注入与解析。平台统一提供：
   只能输出同一 exact JSON object；编辑器显示起始代码和字段说明；
 - Workflow 由平台检查必需输入、结果口、可达节点和 Effect closure；
 - 工具保存/发布前运行兼容检查与 fixture；每轮结算前再次对拍 contract revision、`roundRef`、`executionNonce`、字段闭集和
-  semantic validator。失败返回具名现场给全局执行策略重试，不让各员工类型复制解析器。
+  semantic validator。失败返回具名现场并按 Case pin 的限额快照重试，不让各员工类型复制解析器。
 
 业务用户创建员工时只配置：员工分类、岗位模板、名称/启停、适用范围，以及没有被模板填满的工作项工具绑定。普通工作项只需
 选择一个工具；问题处理工作项按分类包声明的“识别工具 / 修复工具”槽位选择工具，`问题类型 → 槽位` 路由仍由分类包固定；
@@ -321,7 +405,7 @@ Event Center、Context 存储、队列、Token、Git 或执行器实现。
 Event Center 提供事件目录、Event Source、当前订阅和 Observer health 的公共可观察面。业务用户只看可理解的 Event
 名称、描述与观察方式；原始 ID、Observer Script、Connection、Token 和 provider 细节只在有权限的技术详情中出现。
 
-### 0A.10 分类工具箱、工作项归属与全局执行策略
+### 0A.10 分类工具箱、工作项归属与共享限额快照
 
 “数字员工”按程序化注册的员工分类（技术对象为 Employee Type）组织，每个分类拥有自己的员工、工具箱与适用范围：
 
@@ -355,9 +439,10 @@ Event Center 提供事件目录、Event Source、当前订阅和 Observer health
 流水线问题等需要两类参与者的工作项，可在同一节点下按“识别工具 / 修复工具”展示，但仍属于同一工作项，不引入新的业务
 资源层。员工节点选择器只读取本节点的 `TypeToolRegistration`；不兼容项根本不显示，不能靠运行时试错。
 
-“设置 → 执行策略”维护一个版本化的平台全局策略，统一 Agent/Workflow/ProgramTool 的协议错误重试、fresh-scene 恢复、
-边界违规处理、程序 transient backoff、外部 Effect unknown-result reconcile 与预算上限。员工、岗位模板、工作项和工具均
-不得覆盖这些字段。策略更新默认只影响新 EmployeeCase；在途 Case 必须显式 preview/apply 并记录新旧 policy revision。
+重试不新增“数字员工执行策略”设置入口。平台直接读取“设置 → 限额”中已有的 `defaultNodeRetries` 与
+`sessionRestartBudget`，在 EmployeeCase admission 时物化为不可变 `ExecutionPolicyRevision` 快照；同一组限额复用同一 revision。
+Agent/Workflow/ProgramTool 的合同错误、same-scene 尝试与 fresh-scene 恢复共用这两个限额，员工、岗位模板、工作项和工具均
+不得覆盖。限额修改只影响新 Case；在途 Case 继续使用已 pin 快照，避免一次全局设置保存改变正在看护 MR 的执行语义。
 
 ### 0A.11 首个研发数字员工分类的确定性职责图
 
@@ -494,7 +579,7 @@ Agent 只负责：理解自然语言、分析代码语义、编写业务文件�
 
 ### 2.6 所有执行都钉住版本和事实
 
-每个 Mission 固定：数字员工 revision、策略 revision、能力合同 version、每次动作的 ActionTemplate revision、需求 bundle revision、仓库基线、MR head、pipeline run 与 evidence digest。配置更新只影响新 Mission；在途 Mission 的升级必须是显式命令并重新评估下游失效面。
+每个 Mission 固定：数字员工 revision、执行限额快照 revision、能力合同 version、每次动作的 ActionTemplate revision、需求 bundle revision、仓库基线、MR head、pipeline run 与 evidence digest。配置更新只影响新 Mission；在途 Mission 的升级必须是显式命令并重新评估下游失效面。
 
 ## 3. 业务对象
 
@@ -697,7 +782,7 @@ interface ProblemSetEnvelopeV1 {
 - **问题处理规则**按稳定顺序把 `typeId + repository/module/gate facts` 映射到一个修复生产者。修复生产者也可以是
   Agent 或 script；两者都不能 commit/push，业务改动由平台从真实 workspace 推导并统一验证、提交和推送。
 - 多问题由程序按 `(type priority, subjectRef, problemRef)` 生成工作集；规则明确逐类还是成批处理，Agent 不挑问题。
-- producer/handler 输出错误时按全局执行策略同现场重试；耗尽后从 exact baseline 重建现场。只有分类包的确定性规则显式配置了
+- producer/handler 输出错误时按 Case pin 的限额快照同现场重试；耗尽后从 exact baseline 重建现场。只有分类包的确定性规则显式配置了
   下一 producer/handler 才能换实现，否则阻断并交人。
 - 每轮固定为“采集证据 → 产出问题 → 规则选处理者 → 修复 → 程序化验证 → 重采”；unknown 不得当作已修复或通过。
 
@@ -724,14 +809,14 @@ manifest 允许的目标员工/审批目标与适用范围，以下输入映射�
 
 典型规则链：`修当前仓 → 调用门禁配置员工修改另一仓 → 准备审批 → 程序提交审批 → 程序等待批准 → 重跑当前门禁`。
 
-### 6.6 负责范围、系统连接与全局执行策略
+### 6.6 负责范围、系统连接与共享限额快照
 
 员工说明书同时选择服务的仓库/仓库组、需求输入方式和门禁系统。界面显示连接的业务名称；外部 ID 下载程序、
 门禁采集程序、大日志目录、credential connection 等 integration 字段留在管理员技术配置。员工只 pin 已发布连接。
 
-重试、fresh-scene 回退、退避、单轮/总预算、外部等待 deadline 与最终 handoff 统一位于“设置 → 执行策略”。策略发布为不可变
-`GlobalExecutionPolicyRevision`，新建 Case 默认 pin 最新已发布版本；在途 Case 不被静默改变，只有显式预览影响并升级才切换。
-分类、工作项、工具注册和具体员工页面都不重复出现重试配置。
+数字员工不再拥有单独的重试设置页。same-scene 重试与 fresh-scene 次数直接取“设置 → 限额”的已有字段，Case admission
+把当时数值冻结为内部 `ExecutionPolicyRevision`；固定 backoff、外部等待 reconcile 与最终 handoff 是平台运行合同，不作为
+另一份用户策略重复开放。分类、工作项、工具注册和具体员工页面都不出现重试配置，在途 Case 也不会随限额保存静默漂移。
 
 ### 6.7 发布编译结果（平台内部）
 
@@ -750,7 +835,7 @@ manifest 允许的目标员工/审批目标与适用范围，以下输入映射�
 | Conflict              | `repair` 或 `report-only`、最多尝试次数；repair 固定 merge target into source，禁止 rebase/force push |
 | Delivery / MR         | 新建或接管已有 MR、目标分支、源分支命名/碰撞、draft、远端 human push 后的重新基线策略                 |
 | Verification          | 必需 profile/step、超时/并发/失败证据策略；可执行程序归 VerificationProfile，Agent 自报不作事实       |
-| Retry/budget          | pin 的全局执行策略 revision、Agent/动作/effect 预算、backoff/deadline、总 token/时长/提交次数         |
+| Retry/budget          | pin 的“设置 → 限额”快照、Agent/动作/effect 预算、固定 backoff/deadline、总 token/时长/提交次数        |
 | Readiness             | required gates、允许的 warning、未处理 feedback 判据；核心安全条件不可关闭                            |
 | Notification          | 自动触发静默、人工指令 receipt、总览评论复用、告警升级对象和频率                                      |
 | Evidence retention    | RequirementBundle/PipelineBundle/AgentAttempt/ActionRun 的 active 与 terminal TTL                     |
@@ -907,7 +992,7 @@ changed | no-change | needs-information | blocked
 
 ### 9.4 重试与现场回退
 
-- 本节所有 N/M、退避和总预算均来自 Case 已 pin 的 `GlobalExecutionPolicyRevision`，任何分类、工作项、工具或员工实例都不能覆盖。
+- 本节所有 N/M 来自 Case admission 时按“设置 → 限额”物化并 pin 的 `ExecutionPolicyRevision`；固定退避与总预算属于平台合同，任何分类、工作项、工具或员工实例都不能覆盖。
 - 协议/schema/semantic 错误：把精确错误反馈给**同一 session**，最多 N 次；保留上下文与当前 workspace。
 - N 次仍失败：销毁 session 和整个 action workspace，从 `AgentAttemptBaseline` 重新物化相同代码、相同 evidence digests、相同模板 revision；新 session 使用新 nonce，不继承旧 session 错误。
 - Git/权限/受保护路径边界违规：立即杀 session、废弃 workspace，直接进入 fresh-session 恢复，不在已受污染的 session 继续。
@@ -918,8 +1003,8 @@ changed | no-change | needs-information | blocked
 
 - `development-missions:launch/read/interact/cancel/retry/handoff/attach/resume/upgrade`：Mission 操作；`interact` 覆盖选择
   需求源与提交澄清答案，`upgrade` 只授权在途配置升级命令；每次仍按当前 actor 重授权。
-- `digital-employee-types:*`、`digital-employee-toolboxes:*`、`digital-employees:*`、`global-execution-policies:*`：分类包、
-  分类工具注册、具体员工和全局执行策略分别授权；注册 Agent/Workflow 不自动获得底层资源写权，发布 ProgramTool 的 executable
+- `digital-employee-types:*`、`digital-employee-toolboxes:*`、`digital-employees:*`：分类包、分类工具注册和具体员工分别授权；
+  重试限额复用既有设置权限，不新增数字员工策略权限。注册 Agent/Workflow 不自动获得底层资源写权，发布 ProgramTool 的 executable
   字段还必须通过 `scripts:author`。
 - `adapter-definitions:*` 之外，写 executable/secret mapping 仍需 `scripts:author`；但 adapter 只得到声明的 secret projection，不再继承 daemon 全环境。
 - Agent 资源可见性在 Mission admission 与每次 action freeze 时重验；在途 action 使用 frozen revision，不能因模板被换掉而漂移。
@@ -1105,7 +1190,7 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-37** 问题类型为员工 revision 内的稳定闭集；script/只读 Agent 生产者对 exact head/evidence digest 产出同一
   `ProblemSetEnvelope`。未知 type、遗漏 required subject、重复 problemRef、陈旧 head 或不完整输出均不形成事实。
 - **AC-38** 每个可修复问题类型都有分类包定义的显式有序处理规则，handler 可为 Agent 或 program；两者都不 commit/push，
-  真实 workspace delta 由平台验证并发布。多问题工作集顺序可回放，无规则不猜；重试只取 Case pin 的全局执行策略，耗尽后
+  真实 workspace delta 由平台验证并发布。多问题工作集顺序可回放，无规则不猜；重试只取 Case pin 的限额快照，耗尽后
   按 exact baseline 重建，只有分类包定义了 fallback registration 才切换实现。
 - **AC-39** `invoke-employee` 幂等建立独立 child Mission，父子分别 pin 仓库/员工/策略并只通过 typed envelope/artifact
   ref 交换结果；重复 reconcile 不重复建 child，静态/动态环和深度/child budget 耗尽得到具名阻断。join 的 all/any/quorum、
@@ -1126,8 +1211,8 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   均由分类包定义。任何工具只有通过该合同 fixture 才能发布，员工实例只能选择当前节点的兼容已发布注册。
 - **AC-45** 事件目录至少支持业务显示名、说明和 locale fallback；业务画布、任务和活动记录不得把 `work.accept` 等 machine ID
   当作主文案。Event 只解释“为何唤醒”，工作项只解释“要做什么”，两者不得用同义标签重复占据节点信息层级。
-- **AC-46** 重试、same/fresh-scene、退避、总预算和 handoff 只在“设置 → 执行策略”定义；分类、工作项、工具和员工页面无覆盖项。
-  新 Case pin 已发布策略 revision，在途 Case 只有显式升级才变化。
+- **AC-46** 数字员工不新增执行策略页；same/fresh-scene 次数只读取“设置 → 限额”的既有字段，分类、工作项、工具和员工页面无覆盖项。
+  新 Case pin 当时限额物化的内部 revision，在途 Case 不随设置保存变化。
 - **AC-47** 研发、设计、测试三个 fixture 分类由同一通用 manifest/画布/工具箱组件渲染；前端不得按 `development` 写类型分支。
   Agent/Workflow 仍在原 owner 创建；ProgramTool 直接在分类工作项工具箱定义但复用既有 Script executor；三者都保存合同校验 receipt。
 - **AC-48** 岗位模板在分类“员工”页内创建和发布，只保存名称/说明与工作项默认工具，不形成新导航层、流程图或规则层。Java、C++、
@@ -1152,6 +1237,38 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-56** Agent 的平台执行契约选择必须位于“输入/输出”页并与端口列表同屏。选择或切换契约时平台在同一状态变更中
   规范化唯一 `agent-result`；取消最后一个契约时同步移除端口及其 kind/wrapper/branch sidecar。该端口显示“契约托管”，没有
   独立编辑/删除动作；所有服务端创建、更新、bundle 与 intent 保存入口复用同一规整命令，不能绕过 UI 保存矛盾状态。
+- **AC-57** Webhook 与轮询均通过 Publisher adapter 向 Event Center 发布同一 Event Envelope；Webhook endpoint 只保留验签、
+  归一化和 ingress audit 的来源职责，不能再直接旁路启动任务或另写一套 wake/notification 真相。
+- **AC-58** Event Center Subscription 至少支持 `exact` 与 `filtered` 两种确定性模式。“实时订阅”同一列表显示数字员工
+  Attention 与现有 Webhook 响应规则，显示来源、事件、匹配范围、消费者和状态；Webhook 规则的启停/编辑立即改变该订阅。
+- **AC-59** 所有匹配均生成统一 durable EventDelivery，再由注册 subscriber adapter 消费。automation adapter 必须复用既有
+  owner、ACL、per-stream 串行、熔断、supersede 和 MR terminal fence；数字员工 adapter 按 deliveryId 幂等接收入 Case inbox。
+- **AC-60** Event Type、Source、EventRecord 与 EventDelivery 均无业务优先级。数字员工队列优先级只来自 Case pinned type
+  package 的 ReactionRule；Webhook/Workflow 等其他消费者不得反向污染事件目录的中立合同。
+- **AC-61** EventRecord 不可变且无全局 consumed 状态。一次发布向每个匹配 Subscription 生成独立 Delivery，并由
+  `(eventId, subscriptionId)` 唯一；接受、lease 过期、重试和死信只修改该 deliveryId。至少以两个 exact 与两个 filtered
+  subscriber 覆盖“一方确认/失败不影响另一方”和重复发布不增加重复 Delivery。
+- **AC-62** Event Type 可声明 exact `TriggerParameterContract`。Publisher 多给、少给、跨 namespace 或未声明却给参数均拒绝；
+  Task row 冻结通用 TriggerContext 及 definition revision。模板 parser/render/preflight 只依赖 `trigger.<namespace>.<field>` 与合同，
+  不在任务系统按 Webhook event matrix 分支；编辑器从 Event Center catalog 动态生成参数。
+- **AC-63** Event Center 顶层 IA 固定为“事件总览 / 事件来源 / 实时订阅 / 投递记录”。来源页同列展示 Webhook endpoint 与主动
+  Observer；订阅页同列展示 exact Attention 与 filtered response；投递页以同一 Event ID 下的独立 Delivery 状态解释多播。
+  旧 `/webhooks` 只把 endpoint/rule/audit 深链分别重定向到这三个公共页面。
+- **AC-64** automation Delivery 通过统一 WorkStart subscriber adapter 启动工作。target 必须是 `orchestration | digital-employee`
+  封闭联合，均以 event delivery 作为幂等与审计来源；数字员工新建 Case 与已有 Case Attention 唤醒是两个显式动作，禁止按
+  event name 猜测。任一 target 失败只结算自己的 Delivery。
+- **AC-65** Task 与 EmployeeCase 的公开 lifecycle 事件由各 owner 事务 outbox 发布到 Event Center，支持人工注册订阅、员工间
+  协作和父 Case 等待子 Case；不得直接调用另一运行时的内存回调，也不得新增第二套发布/通知/ACK 真相。
+- **AC-66** Event Type 只表达已提交的稳定事实；Webhook/轮询是 observation mechanism，WorkStart 是 command。相同业务事实的
+  push/poll 观察必须归一到同一公开 Event Type；历史 Webhook matrix 只作为 compatibility fact 供旧 selector 使用，数字员工
+  周期复核等 wake signal 只作为 internal fact 使用，二者均不进入公开目录。
+- **AC-67** “实时订阅 → 响应规则”必须从 Event Center catalog 动态列出全部 `public + TriggerParameterContract` 事件，并支持
+  Workflow/Agent/Workgroup/DigitalEmployee 四类 WorkStart target；目录可见且具备任务合同的事件不得出现“能看不能选”。
+- **AC-68** 数字员工首次启动直接执行类型包声明的 `workStartWorkItemRef`，不创建伪造的 initial event/attention/delivery；后续只对
+  已提交 Context 自动产生的 Attention 和真实外部/内部 Event 进行 React。
+- **AC-69** `code-host.activity@1` 必须为所有已支持代码平台 occurrence 发布一对事件：旧 `code-host.event.*` 仅供存量 selector，
+  来源无关的 `code-host.branch.* / merge-request.* / pipeline.* / issue.*` 作为 public business fact。后者声明 `trigger.code_host.*`
+  合同并全部进入标准响应规则；公开目录不得出现“MR 状态观察”或“工作入口”。
 
 ## 15. 本轮已批准的设计决策
 
@@ -1190,11 +1307,31 @@ RFC-294 同步和实现门批准后另行开始。
   executor；三者都要合同校验 receipt。其他数字员工通过协作通道调用，不作为普通工具。
 - **D22**：用户只配置分类、岗位模板、名称/启停、负责范围和工具绑定；事件、Context、流程、effect、失败路由由分类包程序化定义。
 - **D23**：事件目录必须国际化并提供业务说明；Event 表示唤醒原因，工作项表示职责动作，业务界面隐藏 machine ID。
-- **D24**：所有重试、fresh-scene、退避与预算统一进入全局执行策略；节点、工具、分类和员工不得覆盖。
+- **D24**：数字员工不新增执行策略配置；same/fresh-scene 次数复用“设置 → 限额”，Case admission 只冻结内部快照；节点、工具、分类和员工不得覆盖。
 - **D25**：适用范围由分类 WorkScopeContract 定义，公共 OS 不硬编码仓库；新产品 canonical route 使用
   `/digital-employees`，`/code` 仅为研发旧入口兼容跳转。
 - **D26**：分类工具箱、岗位模板、员工定义和任务运行复用同一职责图与 workItem identity，分别只改变右侧面板操作语义。
 - **D27**：首个研发分类只有“交付一个 MR / 持续看护 MR”两个职责背景；内部工作项和 Context→Attention 循环由类型包固定，
   Java/C++ 只改变工具绑定。
+- **D28**：Event Center 是平台唯一 durable 事件发布、订阅、投递与通知机制。Webhook 与轮询只是 Publisher adapter；
+  Webhook endpoint/原始 body/fires 作为来源与消费者审计保留，不再构成第二条事件总线。
+- **D29**：Subscription 是 `exact | filtered` 的封闭联合。数字员工 Attention 使用 exact subject 并激活 Observer；Webhook
+  响应规则使用确定性 selector 与 automation subscriber。两者统一进入“实时订阅”和 EventDelivery，不允许 UI 聚合而运行时仍双发。
+- **D30**：事件中心业务中立，priority/preemption 归 subscriber owner；代码员工把它放在 ReactionRule，事件来源和事件类型不配置。
+- **D31**：事件消费语义是 immutable EventRecord + per-Subscription EventDelivery 多播；ACK/重试/死信均以 deliveryId 为界，
+  不提供会让第一个消费者删除事件的 API。
+- **D32**：触发参数由 Event Type 注册 `TriggerParameterContract`，任务执行核心只支持通用
+  `trigger.<namespace>.<field>`；新代码平台事实使用 `trigger.code_host.*`，`trigger.webhook.*` 只保留为存量规则兼容合同。
+- **D33**：事件驱动的工作启动目标是 `orchestration | digital-employee` 对等联合；前者创建 Task，后者创建 EmployeeCase，
+  两者共享 owner/ACL、TriggerContext、delivery 幂等与投递结算合同。
+- **D34**：Task/Employee lifecycle、员工间通道及外部来源统一进入 Event Center；owner outbox 发布 committed fact，禁止
+  Webhook、自定义轮询、任务广播和员工回调分别形成 durable 事件真相。
+- **D35**：Webhook 与轮询是同一 Event Source 的 observation adapter，不是 Event Type 前缀；同一业务事实只有一个公开类型。
+  旧 Webhook occurrence matrix 以 `compatibility` visibility 继续服务存量规则；员工 observer tick 以 `internal` visibility 服务
+  exact Attention。二者都不进入公共目录和标准响应规则，公开代码平台事实使用 `code-host.*` 业务名称。
+- **D36**：WorkStart 是命令而非事件。员工 Case 的首步由 `workStartWorkItemRef` 直接确定，禁止 initial-event → subscription →
+  delivery → 再启动自己的自循环建模。
+- **D37**：公开目录与响应规则选择集合遵循同一判据：`catalogVisibility=public && triggerParameters!=null`。新增 Task/Employee/
+  自定义事件只要声明合同即自动可选，不允许前端维护事件 ID 白名单。
 
 实现按 [plan.md](./plan.md) 的后续 PR 批次验收，并完成 RFC-294 bounded-context 同步后，才可将本 RFC 再次置为 Done。

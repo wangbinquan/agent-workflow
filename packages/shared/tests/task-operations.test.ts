@@ -80,8 +80,8 @@ describe('RFC-244 task list view single source', () => {
 
 describe('RFC-301 task launch-origin contract', () => {
   test('persisted and query literals are closed, ordered, and include webhook/api', () => {
-    expect(TASK_LAUNCH_ORIGINS).toEqual(['manual', 'scheduled', 'webhook', 'api'])
-    expect(TASK_LIST_ORIGINS).toEqual(['all', 'manual', 'scheduled', 'webhook', 'api'])
+    expect(TASK_LAUNCH_ORIGINS).toEqual(['manual', 'scheduled', 'event', 'webhook', 'api'])
+    expect(TASK_LIST_ORIGINS).toEqual(['all', 'manual', 'scheduled', 'event', 'webhook', 'api'])
     for (const origin of TASK_LAUNCH_ORIGINS) {
       expect(TaskLaunchOriginSchema.parse(origin)).toBe(origin)
       expect(TaskListOriginSchema.parse(origin)).toBe(origin)

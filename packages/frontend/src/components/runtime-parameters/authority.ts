@@ -86,6 +86,61 @@ export const RUNTIME_PARAMETER_AUTHORITY_ADAPTERS = {
     surface: 'webhook-launch',
     modes: CARET,
   },
+  'webhook:digital-employee:employee-body': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'webhook:digital-employee:employee-external-id': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'webhook:digital-employee:employee-target': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:work-start:name': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:workflow:input': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:agent:description': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:agent:input': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:workgroup:goal': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:digital-employee:body': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:digital-employee:external-id': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
+  'event:digital-employee:target': {
+    audience: 'webhook-launch',
+    surface: 'webhook-launch',
+    modes: CARET,
+  },
 } satisfies Record<RuntimeTemplateAuthorityKey, RuntimeParameterAuthorityAdapter>
 
 export function runtimeParameterTargetForAuthority(

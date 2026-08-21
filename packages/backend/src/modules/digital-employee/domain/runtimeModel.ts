@@ -123,10 +123,6 @@ export const employeeCaseLaunchSchema = z
     workSubject: z
       .object({ typeId: z.string().min(1).max(200), subjectRef: z.string().min(1).max(1_000) })
       .strict(),
-    initialEventTypeRef: exactResourceRefSchema,
-    initialEventSourceRef: exactResourceRefSchema,
-    initialEventDedupeKey: z.string().min(1).max(500),
-    initialEventSummary: z.string().min(1).max(2_000),
   })
   .strict()
 

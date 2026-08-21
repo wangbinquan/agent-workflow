@@ -290,6 +290,7 @@ const eventSourceRegistrationSchema = z
   .object({
     sourceId: machineIdSchema,
     version: z.number().int().positive(),
+    ownerTypeId: machineIdSchema.optional(),
     displayName: localizedTextSchema,
     description: localizedTextSchema,
     observationMode: z.enum(['passive', 'active', 'hybrid']),
@@ -312,9 +313,37 @@ const eventTypeRegistrationSchema = z
     displayName: localizedTextSchema,
     description: localizedTextSchema,
     deliveryClass: machineIdSchema,
-    priority: z.number().int().min(0).max(100_000),
-    preemptsContinuation: z.boolean(),
+    /** Deprecated Event Center priority; reactionRules own scheduling. */
+    priority: z.number().int().min(0).max(100_000).optional(),
     sourceRef: exactResourceRefSchema,
+    catalogVisibility: z.enum(['public', 'internal', 'compatibility']).optional(),
+    triggerParameters: z
+      .object({
+        namespace: z
+          .string()
+          .min(1)
+          .max(64)
+          .regex(/^[a-z][a-z0-9_-]*$/),
+        fields: z
+          .array(
+            z
+              .object({
+                fieldId: z
+                  .string()
+                  .min(1)
+                  .max(128)
+                  .regex(/^[a-z][a-z0-9_-]*$/),
+                displayName: localizedTextSchema,
+                description: localizedTextSchema,
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(256),
+      })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict()
 
@@ -340,6 +369,8 @@ const reactionRuleSchema = z
   .object({
     ruleId: machineIdSchema,
     eventTypeId: machineIdSchema,
+    priority: z.number().int().min(0).max(100_000),
+    preemptsContinuation: z.boolean(),
     requiredContextTypes: z.array(machineIdSchema).min(1).max(20),
     workItemRef: machineIdSchema,
     slotRef: machineIdSchema,
@@ -366,10 +397,12 @@ export const employeeTypePackageDescriptorSchema = z
     workScopeAuthoring: workScopeAuthoringManifestSchema,
     workIntakeAuthoring: workIntakeAuthoringManifestSchema,
     authoringManifest: employeeAuthoringManifestSchema,
+    /** WorkStart is a command and selects this first work item directly. */
+    workStartWorkItemRef: machineIdSchema,
     workContracts: z.array(workContractSchema).min(1).max(200),
     contextTypes: z.array(contextTypeRegistrationSchema).min(1).max(100),
-    eventSources: z.array(eventSourceRegistrationSchema).min(1).max(100),
-    eventTypes: z.array(eventTypeRegistrationSchema).min(1).max(200),
+    eventSources: z.array(eventSourceRegistrationSchema).max(100),
+    eventTypes: z.array(eventTypeRegistrationSchema).max(200),
     attentionRules: z.array(attentionRuleSchema).max(200),
     reactionRules: z.array(reactionRuleSchema).max(300),
     invocationContracts: z.array(invocationContractSchema).max(100),
@@ -555,8 +588,10 @@ export type DigitalEmployeeDefinitionContent = z.infer<
 export const globalExecutionPolicySchema = z
   .object({
     schemaVersion: z.literal(1),
-    sameSceneAttempts: z.number().int().min(0).max(20),
-    freshSceneAttempts: z.number().int().min(0).max(20),
+    // Derived from Settings -> Limits. The bounds intentionally match the
+    // shared settings bounds instead of defining another employee-local range.
+    sameSceneAttempts: z.number().int().min(0).max(50),
+    freshSceneAttempts: z.number().int().min(0).max(10),
     initialBackoffMs: z
       .number()
       .int()
@@ -606,8 +641,8 @@ export type GlobalExecutionPolicy = z.infer<typeof globalExecutionPolicySchema>
 
 export const DEFAULT_GLOBAL_EXECUTION_POLICY: GlobalExecutionPolicy = {
   schemaVersion: 1,
-  sameSceneAttempts: 2,
-  freshSceneAttempts: 2,
+  sameSceneAttempts: 3,
+  freshSceneAttempts: 1,
   initialBackoffMs: 2_000,
   maxBackoffMs: 120_000,
   roundBudgetMs: 2 * 60 * 60 * 1000,
@@ -702,6 +737,14 @@ export function validateTypePackage(
   const workItems = new Map(
     descriptor.authoringManifest.workItems.map((item) => [item.workItemRef, item] as const),
   )
+
+  if (!workItems.has(descriptor.workStartWorkItemRef)) {
+    violations.push({
+      code: 'unknown-work-item',
+      at: 'workStartWorkItemRef',
+      detail: descriptor.workStartWorkItemRef,
+    })
+  }
 
   for (const item of descriptor.authoringManifest.workItems) {
     if (!regionIds.has(item.regionId)) {

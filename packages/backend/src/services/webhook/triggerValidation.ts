@@ -6,11 +6,17 @@
 // assertScheduledTargetUsable（ACL/builtin/upload/launch-shape 全复用，等价于
 // 验证「一个典型事件到来时这个触发器能启动」）——fire 期跑的是同一个 gate，
 // 保存期彩排让配置错误在保存时暴露而不是 fire 后逐次失败。
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
+import { z } from 'zod'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { workflows } from '@/db/schema'
+import {
+  employeeDefinitionRevisions,
+  employeeDefinitions,
+  employeeTypePackages,
+  workflows,
+} from '@/db/schema'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
 import { getWorkflowAclRow } from '@/services/workflow'
@@ -47,6 +53,16 @@ export type TriggerValidationIssue = {
 }
 
 type DefInput = WorkflowDefinition['inputs'][number]
+
+/** Persisted definitions are an untrusted boundary: malformed JSON becomes a typed validation result. */
+function parsePersistedJson(value: string | undefined): unknown {
+  if (value === undefined) return null
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return null
+  }
+}
 
 /** workflow 面：输入映射与 workflow 定义的 kind-aware 对账。 */
 export function validateWorkflowInputMappings(
@@ -158,7 +174,7 @@ export async function assertTriggerSaveable(
         .limit(1)
     )[0]
     if (wf !== undefined) {
-      const def = WorkflowDefinitionSchema.safeParse(JSON.parse(wf.definition))
+      const def = WorkflowDefinitionSchema.safeParse(parsePersistedJson(wf.definition))
       if (def.success) {
         workflowDefinition = migrateWorkflowDefinitionToLatest(def.data)
         workflowInputs = workflowDefinition.inputs
@@ -170,6 +186,104 @@ export async function assertTriggerSaveable(
       } else {
         workflowInputs = []
       }
+    }
+  }
+  if (candidate.launchKind === 'digital-employee') {
+    const employee = (
+      await db
+        .select()
+        .from(employeeDefinitions)
+        .where(eq(employeeDefinitions.id, candidate.launchRefId))
+        .limit(1)
+    )[0]
+    if (
+      employee === undefined ||
+      employee.archivedAt !== null ||
+      employee.publishedRevision === null ||
+      !(await canViewResource(db, actor, 'digital_employee', employee))
+    ) {
+      throw new NotFoundError('employee-definition-not-found', 'digital employee not found')
+    }
+    const revision = (
+      await db
+        .select({ contentJson: employeeDefinitionRevisions.contentJson })
+        .from(employeeDefinitionRevisions)
+        .where(
+          and(
+            eq(employeeDefinitionRevisions.employeeId, employee.id),
+            eq(employeeDefinitionRevisions.revision, employee.publishedRevision),
+          ),
+        )
+        .limit(1)
+    )[0]
+    const content = z
+      .object({ enabled: z.boolean() })
+      .passthrough()
+      .safeParse(parsePersistedJson(revision?.contentJson))
+    if (!content.success || !content.data.enabled) {
+      throw new ValidationError(
+        'employee-definition-unavailable',
+        'the published digital employee is disabled or unavailable',
+      )
+    }
+    const typePackage = (
+      await db
+        .select({ descriptorJson: employeeTypePackages.descriptorJson })
+        .from(employeeTypePackages)
+        .where(
+          and(
+            eq(employeeTypePackages.typeId, employee.typeId),
+            eq(employeeTypePackages.revision, employee.typeRevision),
+            eq(employeeTypePackages.state, 'published'),
+          ),
+        )
+        .limit(1)
+    )[0]
+    const intakeContract = z
+      .object({
+        workIntakeAuthoring: z
+          .object({
+            acceptedKinds: z.array(z.enum(['body', 'files', 'body-and-files', 'external-id'])),
+            targetFields: z.array(
+              z.object({ fieldRef: z.string().min(1), required: z.boolean() }).passthrough(),
+            ),
+          })
+          .passthrough(),
+      })
+      .passthrough()
+      .safeParse(parsePersistedJson(typePackage?.descriptorJson))
+    if (!intakeContract.success) {
+      throw new ValidationError(
+        'employee-intake-contract-unavailable',
+        'the digital employee intake contract is unavailable',
+      )
+    }
+    const employeePayload = payload as {
+      intakeKind: 'body' | 'external-id'
+      target: Record<string, string>
+    }
+    if (
+      !intakeContract.data.workIntakeAuthoring.acceptedKinds.includes(employeePayload.intakeKind)
+    ) {
+      throw new ValidationError(
+        'employee-intake-kind-incompatible',
+        `digital employee does not accept ${employeePayload.intakeKind} intake`,
+      )
+    }
+    const targetFields = intakeContract.data.workIntakeAuthoring.targetFields
+    const allowed = new Set(targetFields.map((field) => field.fieldRef))
+    const unknown = Object.keys(employeePayload.target).filter((key) => !allowed.has(key))
+    const missing = targetFields
+      .filter(
+        (field) => field.required && (employeePayload.target[field.fieldRef] ?? '').trim() === '',
+      )
+      .map((field) => field.fieldRef)
+    if (unknown.length > 0 || missing.length > 0) {
+      throw new ValidationError(
+        'employee-intake-target-incompatible',
+        'digital employee target mapping does not satisfy its intake contract',
+        { unknown, missing },
+      )
     }
   }
   const issues = staticTriggerIssues(
@@ -212,6 +326,7 @@ export async function assertTriggerSaveable(
       ? { kind: 'scratch' }
       : { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
   )
+  if (rendered.kind === 'digital-employee') return
   await assertScheduledTargetUsable(
     db,
     actor,

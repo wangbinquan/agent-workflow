@@ -5,6 +5,7 @@
 import {
   AGENT_LAUNCH_INPUT_MAX_LEN,
   CODE_HOST_EVENT_TYPES,
+  availableVarsFor,
   webhookTemplateAuthorityKey,
   type Agent,
   type CodeHostEventType,
@@ -14,6 +15,7 @@ import {
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   useCallback,
   useEffect,
@@ -46,7 +48,10 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { OwnerLabel } from '@/components/OwnerLabel'
 import { QueryState } from '@/components/QueryState'
 import { RuntimeParameterPicker } from '@/components/RuntimeParameterPicker'
-import { buildRuntimeParameterCatalog } from '@/components/runtime-parameters/catalog'
+import {
+  buildRuntimeParameterCatalog,
+  type RuntimeTriggerParameterContract,
+} from '@/components/runtime-parameters/catalog'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
@@ -54,6 +59,12 @@ import { Stepper } from '@/components/Stepper'
 import { TableViewport } from '@/components/TableViewport'
 import { currentActorAtRequest, useActor, type MeResponse } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
+import {
+  localized,
+  typeRefKey,
+  type DigitalEmployeeDefinition,
+  type EmployeeTypePackage,
+} from '@/components/digital-employees/types'
 import {
   agentTargetPayloadHasContent,
   repairWebhookAgentPayload,
@@ -133,6 +144,10 @@ interface Draft {
   agentInputsPresent: boolean
   agentPayloadMode: 'opaque' | 'zero' | 'ported'
   goal: string
+  employeeIntakeKind: 'body' | 'external-id'
+  employeeTarget: Record<string, string>
+  employeeBody: string
+  employeeExternalId: string
   workingBranch: string
   /**
    * 行里 launch payload 的原样副本。UI 只拥有它真正渲染的那几个键（见
@@ -177,6 +192,10 @@ const EMPTY_DRAFT: Draft = {
   agentInputsPresent: false,
   agentPayloadMode: 'opaque',
   goal: '',
+  employeeIntakeKind: 'body',
+  employeeTarget: {},
+  employeeBody: '',
+  employeeExternalId: '',
   workingBranch: '',
   payloadBase: {},
   maxConsecutiveFires: 3,
@@ -255,6 +274,10 @@ function draftFromRow(row: WebhookTrigger): Draft {
     inputs?: Record<string, WebhookInputMapping> | Record<string, string>
     description?: string
     goal?: string
+    intakeKind?: 'body' | 'external-id'
+    target?: Record<string, unknown>
+    body?: string
+    externalId?: string
     scratch?: true
   }
   const payloadBase = { ...((row.launchPayload ?? {}) as Record<string, unknown>) }
@@ -303,6 +326,24 @@ function draftFromRow(row: WebhookTrigger): Draft {
     agentInputsPresent,
     agentPayloadMode: 'opaque',
     goal: row.launchKind === 'workgroup' ? (payload.goal ?? '') : '',
+    employeeIntakeKind: payload.intakeKind === 'external-id' ? 'external-id' : 'body',
+    employeeTarget:
+      row.launchKind === 'digital-employee' &&
+      payload.target !== null &&
+      typeof payload.target === 'object' &&
+      !Array.isArray(payload.target)
+        ? Object.fromEntries(
+            Object.entries(payload.target).filter(
+              (entry): entry is [string, string] => typeof entry[1] === 'string',
+            ),
+          )
+        : {},
+    employeeBody:
+      row.launchKind === 'digital-employee' && typeof payload.body === 'string' ? payload.body : '',
+    employeeExternalId:
+      row.launchKind === 'digital-employee' && typeof payload.externalId === 'string'
+        ? payload.externalId
+        : '',
     workingBranch:
       typeof (row.launchPayload as Record<string, unknown> | null)?.workingBranch === 'string'
         ? ((row.launchPayload as Record<string, unknown>).workingBranch as string)
@@ -323,6 +364,19 @@ const SCRATCH_FORBIDDEN_KEYS = ['workingBranch', 'autoCommitPush'] as const
  * 后端整体覆盖掉——RFC-268 实现门 P1（2026-08-09）实证，归属 RFC-257。
  */
 function payloadOf(draft: Draft): unknown {
+  if (draft.launchKind === 'digital-employee') {
+    return draft.employeeIntakeKind === 'body'
+      ? {
+          intakeKind: 'body',
+          target: draft.employeeTarget,
+          body: draft.employeeBody,
+        }
+      : {
+          intakeKind: 'external-id',
+          target: draft.employeeTarget,
+          externalId: draft.employeeExternalId,
+        }
+  }
   const payload: Record<string, unknown> = { ...draft.payloadBase }
   if (draft.launchKind === 'workflow') {
     payload.inputs = draft.inputMappings
@@ -339,7 +393,7 @@ function payloadOf(draft: Draft): unknown {
       if (draft.agentInputsPresent) payload.inputs = draft.agentInputs
       else delete payload.inputs
     }
-  } else {
+  } else if (draft.launchKind === 'workgroup') {
     payload.goal = draft.goal
   }
   if (draft.space === 'scratch') {
@@ -374,7 +428,10 @@ function bodyOf(draft: Draft): Record<string, unknown> {
     launchRefId: draft.launchRefId,
     launchPayload: payloadOf(draft),
     maxConsecutiveFires: draft.maxConsecutiveFires,
-    autoRegisterRepos: draft.space === 'scratch' ? false : draft.autoRegisterRepos,
+    autoRegisterRepos:
+      draft.launchKind === 'digital-employee' || draft.space === 'scratch'
+        ? false
+        : draft.autoRegisterRepos,
   }
 }
 
@@ -384,6 +441,7 @@ type WorkflowDetail = {
 }
 type AgentRow = Pick<Agent, 'id' | 'name'>
 type WorkgroupRow = { id: string; name: string }
+type DigitalEmployeeList = { items: DigitalEmployeeDefinition[] }
 
 /** RFC-283：admin 全局管理，manager 只管理自己的规则，其余规则只读。 */
 export function TriggersPanel() {
@@ -431,6 +489,11 @@ export function TriggersPanel() {
   const workgroupOptions = useQuery({
     queryKey: ['workgroups', 'list'],
     queryFn: ({ signal }) => api.get<WorkgroupRow[]>('/api/workgroups', undefined, signal),
+    retry: false,
+  })
+  const employeeOptions = useQuery<DigitalEmployeeList>({
+    queryKey: ['digital-employees', 'webhook-target-list'],
+    queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
     retry: false,
   })
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['webhook-triggers'] })
@@ -550,8 +613,11 @@ export function TriggersPanel() {
     for (const row of workflowOptions.data ?? []) names.set(`workflow:${row.id}`, row.name)
     for (const row of agentOptions.data ?? []) names.set(`agent:${row.id}`, row.name)
     for (const row of workgroupOptions.data ?? []) names.set(`workgroup:${row.id}`, row.name)
+    for (const row of employeeOptions.data?.items ?? []) {
+      names.set(`digital-employee:${row.id}`, row.published?.displayName ?? row.name)
+    }
     return names
-  }, [agentOptions.data, workflowOptions.data, workgroupOptions.data])
+  }, [agentOptions.data, employeeOptions.data, workflowOptions.data, workgroupOptions.data])
 
   const newAction = (
     <button
@@ -830,7 +896,8 @@ function TriggerDialog(props: {
   onClose: () => void
   onSave: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const language = i18n.resolvedLanguage ?? i18n.language
   const onChange = props.onChange
   const liveRegion = useManagedLiveRegion()
   const historyRef = useRef<WebhookDraftHistory<Draft> | null>(null)
@@ -958,6 +1025,65 @@ function TriggerDialog(props: {
     queryFn: ({ signal }) => api.get<WorkgroupRow[]>('/api/workgroups', undefined, signal),
     enabled: draft.launchKind === 'workgroup',
   })
+  const digitalEmployees = useQuery<DigitalEmployeeList>({
+    queryKey: ['digital-employees', 'webhook-target-list'],
+    queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
+    enabled: draft.launchKind === 'digital-employee',
+  })
+  const availableDigitalEmployees = useMemo(
+    () =>
+      (digitalEmployees.data?.items ?? []).filter(
+        (employee) => employee.publishedRevision !== null && employee.published?.enabled === true,
+      ),
+    [digitalEmployees.data],
+  )
+  const selectedDigitalEmployee =
+    availableDigitalEmployees.find((employee) => employee.id === draft.launchRefId) ?? null
+  const selectedEmployeeTypeRef =
+    selectedDigitalEmployee === null ? null : typeRefKey(selectedDigitalEmployee.typeRef)
+  const employeeType = useQuery<EmployeeTypePackage>({
+    queryKey: ['digital-employee-type', selectedEmployeeTypeRef, 'webhook-target'],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/digital-employee-types/${encodeURIComponent(selectedEmployeeTypeRef ?? '')}`,
+        undefined,
+        signal,
+      ),
+    enabled: draft.launchKind === 'digital-employee' && selectedEmployeeTypeRef !== null,
+  })
+  const employeeIntake = employeeType.data?.workIntakeAuthoring
+  const supportedEmployeeIntakeKinds = useMemo(
+    () =>
+      (employeeIntake?.acceptedKinds ?? []).filter(
+        (kind): kind is 'body' | 'external-id' => kind === 'body' || kind === 'external-id',
+      ),
+    [employeeIntake],
+  )
+  useEffect(() => {
+    if (draft.launchKind !== 'digital-employee' || employeeIntake === undefined) return
+    const employeeIntakeKind = supportedEmployeeIntakeKinds.includes(draft.employeeIntakeKind)
+      ? draft.employeeIntakeKind
+      : (supportedEmployeeIntakeKinds[0] ?? 'body')
+    const employeeTarget = Object.fromEntries(
+      employeeIntake.targetFields.map((field) => [
+        field.fieldRef,
+        draft.employeeTarget[field.fieldRef] ?? '',
+      ]),
+    )
+    if (
+      employeeIntakeKind !== draft.employeeIntakeKind ||
+      JSON.stringify(employeeTarget) !== JSON.stringify(draft.employeeTarget)
+    ) {
+      setDerived({ employeeIntakeKind, employeeTarget })
+    }
+  }, [
+    draft.employeeIntakeKind,
+    draft.employeeTarget,
+    draft.launchKind,
+    employeeIntake,
+    setDerived,
+    supportedEmployeeIntakeKinds,
+  ])
   const workflowDetail = useQuery({
     queryKey: ['workflows', 'detail', draft.launchRefId],
     queryFn: ({ signal }) =>
@@ -1024,21 +1150,41 @@ function TriggerDialog(props: {
   const agentDetailError = agentDetail.error
   const agentDetailFetching = agentDetail.isFetching
   const refetchAgentDetail = agentDetail.refetch
+  const triggerContracts = useMemo<RuntimeTriggerParameterContract[]>(() => {
+    if (draft.eventTypes.length === 0) return []
+    return [
+      {
+        namespace: 'webhook',
+        definitionRef: { id: 'code-host.webhook.subscription', revision: 1 },
+        sourceLabel: t('runtimeParameters.source.webhook'),
+        groupLabel: t('runtimeParameters.group.webhookContext'),
+        fields: [...availableVarsFor(draft.eventTypes)].map((fieldId) => ({
+          fieldId,
+          label: t(`runtimeParameters.webhookLabels.${fieldId}`),
+          description: t(`webhookTriggers.fields.vars.${fieldId}`),
+          aliases: [fieldId],
+        })),
+      },
+    ]
+  }, [draft.eventTypes, t])
   const webhookCatalog = useMemo(
     () =>
       buildRuntimeParameterCatalog({
         audience: 'webhook-launch',
         surface: 'webhook-launch',
-        eventTypes: draft.eventTypes,
+        triggerContracts,
         t,
       }),
-    [draft.eventTypes, t],
+    [t, triggerContracts],
   )
   const webhookCatalogEmptyMessage =
     draft.eventTypes.length === 0 ? t('runtimeParameters.selectEventsFirst') : undefined
 
   const goalRef = useRef<HTMLTextAreaElement | null>(null)
   const workingBranchRef = useRef<HTMLInputElement | null>(null)
+  const employeeBodyRef = useRef<HTMLTextAreaElement | null>(null)
+  const employeeExternalIdRef = useRef<HTMLInputElement | null>(null)
+  const employeeTargetRefs = useRef(new Map<string, HTMLInputElement>())
   const mappingInputRefs = useRef(new Map<string, HTMLInputElement>())
   const agentInputRefs = useRef(new Map<string, HTMLTextAreaElement>())
   const agentDescriptionRef = useRef<HTMLTextAreaElement | null>(null)
@@ -1134,7 +1280,14 @@ function TriggerDialog(props: {
       ? (workflows.data ?? [])
       : draft.launchKind === 'agent'
         ? (agents.data ?? [])
-        : (workgroups.data ?? [])
+        : draft.launchKind === 'workgroup'
+          ? (workgroups.data ?? [])
+          : draft.launchKind === 'digital-employee'
+            ? availableDigitalEmployees.map((employee) => ({
+                id: employee.id,
+                name: employee.published?.displayName ?? employee.name,
+              }))
+            : []
   const targetLabel = buildResourceOptionLabeler(targetRows)
   const targetOptions: Array<{ value: string; label: string }> = targetRows.map((row) => ({
     value: row.id,
@@ -1142,7 +1295,11 @@ function TriggerDialog(props: {
   }))
   const applyTargetChange = (launchRefId: string) => {
     if (draft.launchKind !== 'agent') {
-      set({ launchRefId, inputMappings: {} })
+      set({
+        launchRefId,
+        inputMappings: {},
+        ...(draft.launchKind === 'digital-employee' ? { employeeTarget: {} } : {}),
+      })
       return
     }
     if (draft.launchRefId !== '') agentDraftsRef.current.set(draft.launchRefId, agentDraft)
@@ -1192,11 +1349,22 @@ function TriggerDialog(props: {
       (resolvedAgentShape !== null
         ? agentShapeIssue === null && !agentDefinitionBusy
         : agentResolutionError != null && opaqueAgentPayloadUnchanged && !agentDefinitionBusy))
+  const employeeTargetValid =
+    draft.launchKind !== 'digital-employee' ||
+    (selectedDigitalEmployee !== null &&
+      employeeIntake !== undefined &&
+      supportedEmployeeIntakeKinds.includes(draft.employeeIntakeKind) &&
+      employeeIntake.targetFields.every(
+        (field) => !field.required || (draft.employeeTarget[field.fieldRef] ?? '').trim() !== '',
+      ) &&
+      (draft.employeeIntakeKind !== 'body' || draft.employeeBody.trim() !== '') &&
+      (draft.employeeIntakeKind !== 'external-id' || draft.employeeExternalId.trim() !== ''))
   const targetValid =
     draft.launchRefId !== '' &&
     requiredWorkflowInputsMapped &&
     (draft.launchKind !== 'workgroup' || draft.goal.trim() !== '') &&
-    agentTargetValid
+    agentTargetValid &&
+    employeeTargetValid
   const protectionValid =
     Number.isInteger(draft.maxConsecutiveFires) &&
     draft.maxConsecutiveFires >= 1 &&
@@ -1234,7 +1402,13 @@ function TriggerDialog(props: {
         : t('webhookTriggers.scopeExact', { n: draft.scopePaths.length })
   const selectedTarget = targetOptions.find((option) => option.value === draft.launchRefId)?.label
   const targetQuery =
-    draft.launchKind === 'workflow' ? workflows : draft.launchKind === 'agent' ? agents : workgroups
+    draft.launchKind === 'workflow'
+      ? workflows
+      : draft.launchKind === 'agent'
+        ? agents
+        : draft.launchKind === 'workgroup'
+          ? workgroups
+          : digitalEmployees
 
   return (
     <>
@@ -1516,6 +1690,11 @@ function TriggerDialog(props: {
                             agentDescriptionPresent: false,
                             agentInputsPresent: false,
                             agentPayloadMode: 'opaque',
+                            goal: '',
+                            employeeIntakeKind: 'body',
+                            employeeTarget: {},
+                            employeeBody: '',
+                            employeeExternalId: '',
                           })
                         : undefined
                     }
@@ -1538,6 +1717,11 @@ function TriggerDialog(props: {
                         label: t('webhookTriggers.kinds.workgroup'),
                         description: t('webhookTriggers.kindDescriptions.workgroup'),
                       },
+                      {
+                        value: 'digital-employee',
+                        label: t('webhookTriggers.kinds.digital-employee'),
+                        description: t('webhookTriggers.kindDescriptions.digital-employee'),
+                      },
                     ]}
                   />
                 </Field>
@@ -1553,62 +1737,260 @@ function TriggerDialog(props: {
                     data-testid="wt-target"
                   />
                 </Field>
-                <Field label={t('webhookTriggers.fields.executionSpace')} group required>
-                  <ChoiceCards<ExecutionSpace>
-                    value={draft.space}
-                    onChange={(space) =>
-                      set(space === 'scratch' ? { space, autoRegisterRepos: false } : { space })
-                    }
-                    disabled={props.saving}
-                    ariaLabel={t('webhookTriggers.fields.executionSpace')}
-                    testidPrefix="wt-space"
-                    options={[
-                      {
-                        value: 'event-repo',
-                        label: t('webhookTriggers.spaces.eventRepo'),
-                        description: t('webhookTriggers.spaceDescriptions.eventRepo'),
-                      },
-                      {
-                        value: 'scratch',
-                        label: t('webhookTriggers.spaces.scratch'),
-                        description: t('webhookTriggers.spaceDescriptions.scratch'),
-                      },
-                    ]}
-                  />
-                </Field>
-                {draft.space === 'event-repo' && (
-                  <Field
-                    label={t('launch.workingBranch.label')}
-                    hint={t('webhookTriggers.fields.workingBranchTemplateHint')}
-                    action={
-                      <RuntimeParameterPicker
-                        authority={webhookTemplateAuthorityKey(draft.launchKind, 'working-branch')}
-                        entries={webhookCatalog}
-                        emptyMessage={webhookCatalogEmptyMessage}
+                {draft.launchKind !== 'digital-employee' && (
+                  <>
+                    <Field label={t('webhookTriggers.fields.executionSpace')} group required>
+                      <ChoiceCards<ExecutionSpace>
+                        value={draft.space}
+                        onChange={(space) =>
+                          set(space === 'scratch' ? { space, autoRegisterRepos: false } : { space })
+                        }
                         disabled={props.saving}
-                        testId="wt-working-branch-parameter"
-                        target={{
-                          id: 'webhook:workingBranch',
-                          label: t('launch.workingBranch.label'),
-                          mode: 'insert-at-caret',
-                          value: draft.workingBranch,
-                          revision: `${draftRevisionRef.current}:workingBranch`,
-                          element: () => workingBranchRef.current,
-                          commit: (workingBranch) => set({ workingBranch }),
-                        }}
+                        ariaLabel={t('webhookTriggers.fields.executionSpace')}
+                        testidPrefix="wt-space"
+                        options={[
+                          {
+                            value: 'event-repo',
+                            label: t('webhookTriggers.spaces.eventRepo'),
+                            description: t('webhookTriggers.spaceDescriptions.eventRepo'),
+                          },
+                          {
+                            value: 'scratch',
+                            label: t('webhookTriggers.spaces.scratch'),
+                            description: t('webhookTriggers.spaceDescriptions.scratch'),
+                          },
+                        ]}
                       />
-                    }
-                    group
-                  >
-                    <TextInput
-                      value={draft.workingBranch}
-                      onChange={(workingBranch) => set({ workingBranch })}
-                      placeholder={t('launch.workingBranch.placeholder')}
-                      inputRef={workingBranchRef}
-                      disabled={props.saving}
-                      data-testid="wt-working-branch"
-                    />
-                  </Field>
+                    </Field>
+                    {draft.space === 'event-repo' && (
+                      <Field
+                        label={t('launch.workingBranch.label')}
+                        hint={t('webhookTriggers.fields.workingBranchTemplateHint')}
+                        action={
+                          <RuntimeParameterPicker
+                            authority={webhookTemplateAuthorityKey(
+                              draft.launchKind,
+                              'working-branch',
+                            )}
+                            entries={webhookCatalog}
+                            emptyMessage={webhookCatalogEmptyMessage}
+                            disabled={props.saving}
+                            testId="wt-working-branch-parameter"
+                            target={{
+                              id: 'webhook:workingBranch',
+                              label: t('launch.workingBranch.label'),
+                              mode: 'insert-at-caret',
+                              value: draft.workingBranch,
+                              revision: `${draftRevisionRef.current}:workingBranch`,
+                              element: () => workingBranchRef.current,
+                              commit: (workingBranch) => set({ workingBranch }),
+                            }}
+                          />
+                        }
+                        group
+                      >
+                        <TextInput
+                          value={draft.workingBranch}
+                          onChange={(workingBranch) => set({ workingBranch })}
+                          placeholder={t('launch.workingBranch.placeholder')}
+                          inputRef={workingBranchRef}
+                          disabled={props.saving}
+                          data-testid="wt-working-branch"
+                        />
+                      </Field>
+                    )}
+                  </>
+                )}
+
+                {draft.launchKind === 'digital-employee' && draft.launchRefId !== '' && (
+                  <div className="form-grid" data-testid="wt-digital-employee-intake">
+                    {employeeType.isLoading ? (
+                      <LoadingState size="compact" />
+                    ) : employeeType.error != null ? (
+                      <ErrorBanner error={employeeType.error} />
+                    ) : employeeIntake === undefined ? null : (
+                      <>
+                        {supportedEmployeeIntakeKinds.length === 0 ? (
+                          <NoticeBanner
+                            tone="error"
+                            size="compact"
+                            title={t('webhookTriggers.fields.employeeUnsupportedTitle')}
+                          >
+                            {t('webhookTriggers.fields.employeeUnsupportedBody')}
+                          </NoticeBanner>
+                        ) : (
+                          <Field
+                            label={localized(employeeIntake.label, language)}
+                            hint={localized(employeeIntake.description, language)}
+                            group
+                            required
+                          >
+                            <ChoiceCards<'body' | 'external-id'>
+                              value={draft.employeeIntakeKind}
+                              onChange={(employeeIntakeKind) => set({ employeeIntakeKind })}
+                              disabled={props.saving}
+                              ariaLabel={localized(employeeIntake.label, language)}
+                              testidPrefix="wt-employee-intake"
+                              options={supportedEmployeeIntakeKinds.map((kind) => ({
+                                value: kind,
+                                label:
+                                  kind === 'body'
+                                    ? localized(employeeIntake.body.label, language)
+                                    : localized(employeeIntake.externalId.label, language),
+                                description:
+                                  kind === 'body'
+                                    ? localized(employeeIntake.body.description, language)
+                                    : localized(employeeIntake.externalId.description, language),
+                              }))}
+                            />
+                          </Field>
+                        )}
+
+                        {employeeIntake.targetFields.map((field) => {
+                          const value = draft.employeeTarget[field.fieldRef] ?? ''
+                          return (
+                            <Field
+                              key={field.fieldRef}
+                              label={localized(field.label, language)}
+                              hint={localized(field.description, language)}
+                              required={field.required}
+                              action={
+                                <RuntimeParameterPicker
+                                  authority="webhook:digital-employee:employee-target"
+                                  entries={webhookCatalog}
+                                  emptyMessage={webhookCatalogEmptyMessage}
+                                  disabled={props.saving}
+                                  testId={`wt-employee-target-${field.fieldRef}-parameter`}
+                                  target={{
+                                    id: `webhook:digital-employee:${draft.launchRefId}:target:${field.fieldRef}`,
+                                    label: localized(field.label, language),
+                                    mode: 'insert-at-caret',
+                                    value,
+                                    revision: `${draftRevisionRef.current}:employee-target:${field.fieldRef}`,
+                                    element: () =>
+                                      employeeTargetRefs.current.get(field.fieldRef) ?? null,
+                                    commit: (next) =>
+                                      set({
+                                        employeeTarget: {
+                                          ...draft.employeeTarget,
+                                          [field.fieldRef]: next,
+                                        },
+                                      }),
+                                  }}
+                                />
+                              }
+                              group
+                            >
+                              <TextInput
+                                value={value}
+                                onChange={(next) =>
+                                  set({
+                                    employeeTarget: {
+                                      ...draft.employeeTarget,
+                                      [field.fieldRef]: next,
+                                    },
+                                  })
+                                }
+                                placeholder={
+                                  field.placeholder === null
+                                    ? undefined
+                                    : localized(field.placeholder, language)
+                                }
+                                inputRef={(element) => {
+                                  if (element === null)
+                                    employeeTargetRefs.current.delete(field.fieldRef)
+                                  else employeeTargetRefs.current.set(field.fieldRef, element)
+                                }}
+                                disabled={props.saving}
+                                data-testid={`wt-employee-target-${field.fieldRef}`}
+                              />
+                            </Field>
+                          )
+                        })}
+
+                        {draft.employeeIntakeKind === 'body' &&
+                          supportedEmployeeIntakeKinds.includes('body') && (
+                            <Field
+                              label={localized(employeeIntake.body.label, language)}
+                              hint={localized(employeeIntake.body.description, language)}
+                              required
+                              action={
+                                <RuntimeParameterPicker
+                                  authority="webhook:digital-employee:employee-body"
+                                  entries={webhookCatalog}
+                                  emptyMessage={webhookCatalogEmptyMessage}
+                                  disabled={props.saving}
+                                  testId="wt-employee-body-parameter"
+                                  target={{
+                                    id: `webhook:digital-employee:${draft.launchRefId}:body`,
+                                    label: localized(employeeIntake.body.label, language),
+                                    mode: 'insert-at-caret',
+                                    value: draft.employeeBody,
+                                    revision: `${draftRevisionRef.current}:employee-body`,
+                                    element: () => employeeBodyRef.current,
+                                    commit: (employeeBody) => set({ employeeBody }),
+                                  }}
+                                />
+                              }
+                              group
+                            >
+                              <TextArea
+                                value={draft.employeeBody}
+                                onChange={(employeeBody) => set({ employeeBody })}
+                                placeholder={localized(employeeIntake.body.placeholder, language)}
+                                rows={6}
+                                monospace
+                                maxLength={employeeIntake.body.maxBytes}
+                                textareaRef={employeeBodyRef}
+                                disabled={props.saving}
+                                data-testid="wt-employee-body"
+                              />
+                            </Field>
+                          )}
+
+                        {draft.employeeIntakeKind === 'external-id' &&
+                          supportedEmployeeIntakeKinds.includes('external-id') && (
+                            <Field
+                              label={localized(employeeIntake.externalId.label, language)}
+                              hint={localized(employeeIntake.externalId.description, language)}
+                              required
+                              action={
+                                <RuntimeParameterPicker
+                                  authority="webhook:digital-employee:employee-external-id"
+                                  entries={webhookCatalog}
+                                  emptyMessage={webhookCatalogEmptyMessage}
+                                  disabled={props.saving}
+                                  testId="wt-employee-external-id-parameter"
+                                  target={{
+                                    id: `webhook:digital-employee:${draft.launchRefId}:external-id`,
+                                    label: localized(employeeIntake.externalId.label, language),
+                                    mode: 'insert-at-caret',
+                                    value: draft.employeeExternalId,
+                                    revision: `${draftRevisionRef.current}:employee-external-id`,
+                                    element: () => employeeExternalIdRef.current,
+                                    commit: (employeeExternalId) => set({ employeeExternalId }),
+                                  }}
+                                />
+                              }
+                              group
+                            >
+                              <TextInput
+                                value={draft.employeeExternalId}
+                                onChange={(employeeExternalId) => set({ employeeExternalId })}
+                                placeholder={localized(
+                                  employeeIntake.externalId.placeholder,
+                                  language,
+                                )}
+                                maxLength={500}
+                                inputRef={employeeExternalIdRef}
+                                disabled={props.saving}
+                                data-testid="wt-employee-external-id"
+                              />
+                            </Field>
+                          )}
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {draft.launchKind === 'workflow' && draft.launchRefId !== '' && (
@@ -2070,16 +2452,18 @@ function TriggerDialog(props: {
                       {selectedTarget ?? draft.launchRefId}
                     </dd>
                   </div>
-                  <div className="wizard-summary__row">
-                    <dt>{t('webhookTriggers.review.space')}</dt>
-                    <dd>
-                      {t(
-                        draft.space === 'scratch'
-                          ? 'webhookTriggers.spaces.scratch'
-                          : 'webhookTriggers.spaces.eventRepo',
-                      )}
-                    </dd>
-                  </div>
+                  {draft.launchKind !== 'digital-employee' && (
+                    <div className="wizard-summary__row">
+                      <dt>{t('webhookTriggers.review.space')}</dt>
+                      <dd>
+                        {t(
+                          draft.space === 'scratch'
+                            ? 'webhookTriggers.spaces.scratch'
+                            : 'webhookTriggers.spaces.eventRepo',
+                        )}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
                 <div className="form-grid--cols-2 webhook-protection-grid">
                   <Field
@@ -2095,7 +2479,7 @@ function TriggerDialog(props: {
                       data-testid="wt-max-fires"
                     />
                   </Field>
-                  {draft.space === 'event-repo' && (
+                  {draft.launchKind !== 'digital-employee' && draft.space === 'event-repo' && (
                     <Field label={t('webhookTriggers.fields.autoRegister')} group>
                       <Switch
                         checked={draft.autoRegisterRepos}
@@ -2107,7 +2491,7 @@ function TriggerDialog(props: {
                     </Field>
                   )}
                 </div>
-                {draft.space === 'scratch' && (
+                {draft.launchKind !== 'digital-employee' && draft.space === 'scratch' && (
                   <NoticeBanner tone="info" size="compact" testid="wt-scratch-notice">
                     {t('webhookTriggers.fields.scratchNotice')}
                   </NoticeBanner>
@@ -2153,6 +2537,7 @@ type FireRow = {
   outcome: string
   supersededTaskId: string | null
   taskId: string | null
+  employeeCaseId: string | null
   error: string | null
   firedAt: number
 }
@@ -2217,6 +2602,7 @@ function FiresDialog(props: { trigger: WebhookTrigger; canReset: boolean; onClos
                 <tr>
                   <th>{t('webhookTriggers.firesColumns.stream')}</th>
                   <th>{t('webhookTriggers.firesColumns.outcome')}</th>
+                  <th>{t('webhookTriggers.firesColumns.result')}</th>
                   <th>{t('webhookTriggers.firesColumns.time')}</th>
                   <th aria-label={t('common.ariaActions')} />
                 </tr>
@@ -2232,6 +2618,23 @@ function FiresDialog(props: { trigger: WebhookTrigger; canReset: boolean; onClos
                         {t(`webhookTriggers.outcomes.${f.outcome}`, { defaultValue: f.outcome })}
                       </StatusChip>
                       {f.error !== null && <div className="muted">{f.error}</div>}
+                    </td>
+                    <td>
+                      {f.employeeCaseId !== null ? (
+                        <Link
+                          to="/tasks/employee-cases/$caseId"
+                          params={{ caseId: f.employeeCaseId }}
+                          className="link"
+                        >
+                          {t('webhookTriggers.firesColumns.employeeCase')}
+                        </Link>
+                      ) : f.taskId !== null ? (
+                        <Link to="/tasks/$id" params={{ id: f.taskId }} className="link">
+                          {t('webhookTriggers.firesColumns.task')}
+                        </Link>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td className="muted">{new Date(f.firedAt).toLocaleString()}</td>
                     <td className="data-table__actions">

@@ -142,5 +142,7 @@ export interface DigitalEmployeeAuthoringStore {
 
   getCurrentExecutionPolicy(): ExecutionPolicyRevisionRecord | null
   getExecutionPolicyRevision(revision: number): ExecutionPolicyRevisionRecord | null
-  publishExecutionPolicy(input: ExecutionPolicyRevisionRecord): void
+  ensureExecutionPolicy(
+    input: Omit<ExecutionPolicyRevisionRecord, 'revision'>,
+  ): ExecutionPolicyRevisionRecord
 }

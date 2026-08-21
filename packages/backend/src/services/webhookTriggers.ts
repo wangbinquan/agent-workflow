@@ -60,10 +60,12 @@ function requireWrite(actor: Actor, row: Row): void {
   }
 }
 
-function requireLaunchPermission(actor: Actor): void {
-  if (!actor.permissions.has('tasks:execute')) {
-    throw new ForbiddenError('forbidden', 'missing permission: tasks:execute', {
-      requiredPermission: 'tasks:execute',
+function requireLaunchPermission(actor: Actor, launchKind: Row['launchKind']): void {
+  const permission =
+    launchKind === 'digital-employee' ? 'development-missions:launch' : 'tasks:execute'
+  if (!actor.permissions.has(permission)) {
+    throw new ForbiddenError('forbidden', `missing permission: ${permission}`, {
+      requiredPermission: permission,
     })
   }
 }
@@ -183,7 +185,6 @@ export async function createWebhookTrigger(
   rawBody: unknown,
 ): Promise<WebhookTrigger> {
   // 对齐 scheduled create：建触发器 = 预授权未来 launch，同 launch 权门。
-  requireLaunchPermission(actor)
   const parsed = CreateWebhookTriggerSchema.safeParse(rawBody)
   if (!parsed.success) {
     const policyConflict = parsed.error.issues.some(
@@ -198,6 +199,7 @@ export async function createWebhookTrigger(
     )
   }
   const body = parsed.data
+  requireLaunchPermission(actor, body.launchKind)
   // RFC-310 PR-10 T104：code-round writer 已删除——launchKind 值保留在 shared
   // enum 只为解析历史行；新建一律拒（fire 只会落 skipped-trigger-invalid）。
   if (body.launchKind === 'code-round') {

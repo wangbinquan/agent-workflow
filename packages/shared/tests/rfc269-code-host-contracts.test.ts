@@ -320,7 +320,7 @@ describe('RFC-269 模板渲染', () => {
   test('提取变量区分两个命名空间', () => {
     expect(extractCodeHostVars('{{a}} {{trigger.webhook.mr_iid}} {{a}}')).toEqual([
       { kind: 'port', name: 'a' },
-      { kind: 'trigger', name: 'mr_iid' },
+      { kind: 'trigger', source: 'webhook', name: 'mr_iid' },
     ])
   })
 

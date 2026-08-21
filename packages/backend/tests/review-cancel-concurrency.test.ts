@@ -20,11 +20,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import {
-  registerTerminalTaskHook,
-  setTaskStatus,
-  trySetTaskStatus,
-} from '../src/services/lifecycle'
+import { registerTerminalTaskHook, trySetTaskStatus } from '../src/services/lifecycle'
 import {
   addReviewComment,
   deleteReviewComment,
@@ -313,25 +309,24 @@ function observeDbSelect(db: DbClient, onSelect: () => void): DbClient {
 /** Make the first canceled task UPDATE lose to running→awaiting_human. */
 function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): DbClient {
   let lost = false
-  const wrapBuilder = (builder: object, cancelUpdate: boolean): object => {
+  const wrapBuilder = (
+    tx: Parameters<Parameters<DbClient['transaction']>[0]>[0],
+    builder: object,
+    taskUpdate: boolean,
+    cancelUpdate: boolean,
+  ): object => {
     const proxy: object = new Proxy(builder, {
       get(target, property) {
-        if (property === 'then' && cancelUpdate && !lost) {
-          return (
-            onFulfilled?: ((value: unknown) => unknown) | null,
-            onRejected?: ((reason: unknown) => unknown) | null,
-          ) => {
+        if (property === 'all' && taskUpdate && cancelUpdate && !lost) {
+          return (...args: unknown[]) => {
             lost = true
             onLost()
-            return setTaskStatus({
-              db,
-              taskId,
-              to: 'awaiting_human',
-              allowedFrom: ['running'],
-              reason: 'test-cancel-cas-loss',
-            })
-              .then(() => Promise.resolve(target as unknown as PromiseLike<unknown>))
-              .then(onFulfilled, onRejected)
+            // The lifecycle writer is now transactional. Move the row through
+            // the raw tx immediately before its CAS so the target UPDATE loses
+            // while its companion outbox write remains absent.
+            tx.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId)).run()
+            const method = Reflect.get(target, property, target) as (...inner: unknown[]) => unknown
+            return Reflect.apply(method, target, args)
           }
         }
         const value = Reflect.get(target, property, target)
@@ -344,7 +339,7 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
             args[0] !== null &&
             (args[0] as { status?: unknown }).status === 'canceled'
           return typeof next === 'object' && next !== null
-            ? wrapBuilder(next, cancelUpdate || armsCancel)
+            ? wrapBuilder(tx, next, taskUpdate, cancelUpdate || armsCancel)
             : next
         }
       },
@@ -355,9 +350,31 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
   return new Proxy(db, {
     get(target, property) {
       const value = Reflect.get(target, property, target)
-      if (property !== 'update' || typeof value !== 'function') return value
-      return (...args: unknown[]) =>
-        wrapBuilder(Reflect.apply(value, target, args) as object, false)
+      if (property !== 'transaction' || typeof value !== 'function') return value
+      return (...args: unknown[]) => {
+        const callback = args[0] as (
+          tx: Parameters<Parameters<DbClient['transaction']>[0]>[0],
+        ) => unknown
+        return Reflect.apply(value, target, [
+          (tx: Parameters<Parameters<DbClient['transaction']>[0]>[0]) => {
+            const wrappedTx = new Proxy(tx, {
+              get(txTarget, txProperty) {
+                const txValue = Reflect.get(txTarget, txProperty, txTarget)
+                if (txProperty !== 'update' || typeof txValue !== 'function') return txValue
+                return (...updateArgs: unknown[]) =>
+                  wrapBuilder(
+                    tx,
+                    Reflect.apply(txValue, txTarget, updateArgs) as object,
+                    updateArgs[0] === tasks,
+                    false,
+                  )
+              },
+            })
+            return callback(wrappedTx)
+          },
+          ...args.slice(1),
+        ])
+      }
     },
   }) as DbClient
 }
@@ -365,50 +382,19 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
 /** Keep one task moving between cancelable states before every task-cancel CAS. */
 function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): DbClient {
   let nextStatus: 'awaiting_human' | 'awaiting_review' = 'awaiting_review'
-  const wrapBuilder = (builder: object, taskUpdate: boolean, cancelUpdate: boolean): object => {
-    const proxy: object = new Proxy(builder, {
-      get(target, property) {
-        if (property === 'then' && taskUpdate && cancelUpdate) {
-          return (
-            onFulfilled?: ((value: unknown) => unknown) | null,
-            onRejected?: ((reason: unknown) => unknown) | null,
-          ) => {
-            onAttempt()
-            const status = nextStatus
-            nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-            return db
-              .update(tasks)
-              .set({ status })
-              .where(eq(tasks.id, taskId))
-              .then(() => Promise.resolve(target as unknown as PromiseLike<unknown>))
-              .then(onFulfilled, onRejected)
-          }
-        }
-        const value = Reflect.get(target, property, target)
-        if (typeof value !== 'function') return value
-        return (...args: unknown[]) => {
-          const next = Reflect.apply(value, target, args) as unknown
-          const armsCancel =
-            property === 'set' &&
-            typeof args[0] === 'object' &&
-            args[0] !== null &&
-            (args[0] as { status?: unknown }).status === 'canceled'
-          return typeof next === 'object' && next !== null
-            ? wrapBuilder(next, taskUpdate, cancelUpdate || armsCancel)
-            : next
-        }
-      },
-    })
-    return proxy
-  }
-
   return new Proxy(db, {
     get(target, property) {
       const value = Reflect.get(target, property, target)
-      if (property !== 'update' || typeof value !== 'function') return value
+      if (property !== 'transaction' || typeof value !== 'function') return value
       return (...args: unknown[]) => {
-        const builder = Reflect.apply(value, target, args) as object
-        return wrapBuilder(builder, args[0] === tasks, false)
+        // Every lifecycle CAS opens a transaction. Churn the target immediately
+        // before each boundary so a child cancellation can never win its
+        // read→CAS window, while the transaction itself remains production-real.
+        onAttempt()
+        const status = nextStatus
+        nextStatus = status === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
+        db.update(tasks).set({ status }).where(eq(tasks.id, taskId)).run()
+        return Reflect.apply(value, target, args)
       }
     },
   }) as DbClient

@@ -22,6 +22,9 @@ import {
 } from '@/db/schema'
 import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
 import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
+import { codeHostEventObservations } from '@/modules/integration/public/events'
+import { markDelivery } from '@/services/webhook/deliveryStore'
+import { supportsEventCenterCodeHostDelivery } from '@/services/webhook/dispatcherTypes'
 import { canViewTask } from '@/services/taskCollab'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
@@ -250,10 +253,13 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Replay a delivery (new row, dedupe bypassed; rejected not replayable)',
     },
     async (c) => {
-      const dispatcher = deps.webhookDispatcher
-      const secretBox = deps.secretBox
-      if (!dispatcher || !secretBox) {
-        throw new ConflictError('webhook-ingress-unavailable', 'webhook dispatch is not wired')
+      const eventCenter = deps.digitalEmployeeEventCenter
+      if (
+        eventCenter === undefined ||
+        deps.webhookDispatcher === undefined ||
+        !supportsEventCenterCodeHostDelivery(deps.webhookDispatcher)
+      ) {
+        throw new ConflictError('webhook-ingress-unavailable', 'event publishing is not wired')
       }
       const row = (
         await deps.db
@@ -356,7 +362,27 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       }
       const deliveryId = insert.deliveryId
       deps.webhookTerminalControl?.wake(insert.effectId)
-      void dispatcher.dispatch({ deliveryId, endpoint, event }).catch(() => {})
+      const occurredAt = Date.now()
+      const receipts = codeHostEventObservations({
+        endpointId: endpoint.id,
+        deliveryId,
+        event,
+        occurredAt,
+      }).map((observation) => eventCenter.commands.observe(observation))
+      const published = {
+        deliveryCount: receipts.reduce((total, receipt) => total + receipt.deliveryCount, 0),
+        deliveryIds: receipts.flatMap((receipt) => receipt.deliveryIds),
+      }
+      if (published.deliveryCount > 0) {
+        await markDelivery(deps.db, deliveryId, 'matched')
+      } else if (insert.effectId !== null) {
+        await markDelivery(deps.db, deliveryId, 'matched', 'terminal-control-accepted')
+      } else {
+        await markDelivery(deps.db, deliveryId, 'ignored', 'no-trigger-matched')
+      }
+      for (const eventDeliveryId of published.deliveryIds) {
+        void eventCenter.worker.runOneNotification(eventDeliveryId).catch(() => {})
+      }
       return c.json({ deliveryId, replayedFrom: row.id, status: 'received' })
     },
   )

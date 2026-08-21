@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import {
+  availableVarsFor,
+  WEBHOOK_TEMPLATE_VARS,
+  type CodeHostEventType,
+} from '@agent-workflow/shared'
+import {
   DEFAULT_RUNTIME_PARAMETER_PROVIDERS,
   buildRuntimeParameterCatalog,
   runtimeParameterMatches,
@@ -9,12 +14,29 @@ import {
 
 const t: RuntimeParameterCatalogContext['t'] = (key) => key
 
+function webhookContract(eventTypes?: readonly CodeHostEventType[]) {
+  const fields =
+    eventTypes === undefined ? WEBHOOK_TEMPLATE_VARS : [...availableVarsFor(eventTypes)]
+  return {
+    namespace: 'webhook',
+    definitionRef: { id: 'code-host.webhook.test', revision: 1 },
+    sourceLabel: 'runtimeParameters.source.webhook',
+    groupLabel: 'runtimeParameters.group.webhookContext',
+    fields: fields.map((fieldId) => ({
+      fieldId,
+      label: `runtimeParameters.webhookLabels.${fieldId}`,
+      description: `webhookTriggers.fields.vars.${fieldId}`,
+    })),
+  }
+}
+
 function context(
   over: Partial<RuntimeParameterCatalogContext> = {},
 ): RuntimeParameterCatalogContext {
   return {
     audience: 'workflow-inspector',
     surface: 'agent-prompt',
+    triggerContracts: [webhookContract()],
     t,
     ...over,
   }
@@ -56,13 +78,21 @@ describe('RFC-295 runtime parameter catalog', () => {
 
   test('webhook eventTypes intersection filters out unavailable leaves', () => {
     const entries = buildRuntimeParameterCatalog(
-      context({ surface: 'webhook-launch', audience: 'webhook-launch', eventTypes: ['push'] }),
+      context({
+        surface: 'webhook-launch',
+        audience: 'webhook-launch',
+        triggerContracts: [webhookContract(['push'])],
+      }),
     )
     expect(entries.some((entry) => entry.token === '{{trigger.webhook.commit_sha}}')).toBe(true)
     expect(entries.some((entry) => entry.token === '{{trigger.webhook.comment_text}}')).toBe(false)
     expect(
       buildRuntimeParameterCatalog(
-        context({ surface: 'webhook-launch', audience: 'webhook-launch', eventTypes: [] }),
+        context({
+          surface: 'webhook-launch',
+          audience: 'webhook-launch',
+          triggerContracts: [],
+        }),
       ),
     ).toEqual([])
   })

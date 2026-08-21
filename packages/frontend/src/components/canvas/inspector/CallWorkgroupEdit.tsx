@@ -48,7 +48,13 @@ function readLimits(rec: Record<string, unknown>): CallLimits {
   return out
 }
 
-export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
+export function CallWorkgroupEdit({
+  node,
+  definition,
+  triggerContracts,
+  onPatch,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   // Shared ['workgroups'] cache key — same rows the /workgroups list page
   // (useResourceList) and the launch wizard (tasks.new) already fetch.
@@ -78,6 +84,7 @@ export function CallWorkgroupEdit({ node, definition, onPatch, onHistoryBoundary
     {
       audience: 'workflow-inspector',
       surface: 'call-workgroup-goal',
+      triggerContracts,
       t,
     },
     {

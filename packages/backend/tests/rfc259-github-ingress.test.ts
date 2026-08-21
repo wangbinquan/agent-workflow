@@ -15,7 +15,7 @@ import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
-import { webhookDeliveries, webhookEndpoints } from '../src/db/schema'
+import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -54,7 +54,8 @@ async function harness(opts?: { dispatcher?: WebhookDispatcher; configPath?: str
   const db = createInMemoryDb(MIGRATIONS)
   const calls: string[] = []
   const dispatcher: WebhookDispatcher = opts?.dispatcher ?? {
-    dispatch: async (input) => {
+    dispatch: async () => {},
+    dispatchSubscription: async (input) => {
       calls.push(input.deliveryId)
     },
   }
@@ -65,6 +66,19 @@ async function harness(opts?: { dispatcher?: WebhookDispatcher; configPath?: str
     urlToken: 'aw_whk_gh1',
     secretEnc: box.seal(SECRET),
     enabled: true,
+  })
+  await db.insert(webhookTriggers).values({
+    id: 'trigger-github-fixture',
+    name: 'GitHub 入口回归规则',
+    endpointId: 'ep-gh',
+    ownerUserId: 'fixture-owner',
+    repoScope: JSON.stringify({ kind: 'all' }),
+    eventTypes: JSON.stringify(['push', 'pipeline_failed']),
+    ignoreUsernames: '[]',
+    launchKind: 'workflow',
+    launchRefId: 'fixture-workflow',
+    launchPayload: JSON.stringify({ inputs: {}, scratch: true }),
+    templateSyntaxVersion: 2,
   })
   const admin = await createUser(db, {
     username: 'root',
@@ -190,7 +204,7 @@ describe('RFC-259 · GitHub 入站状态码语义', () => {
     const good = await post(app, URL_GH, body, ghHeaders(body, 'push', 'guid-R'))
     expect(good.status).toBe(200)
     expect(((await good.json()) as { status: string }).status).toBe('received')
-    expect((await rows(db)).map((r) => r.status).sort()).toEqual(['received', 'rejected'])
+    expect((await rows(db)).map((r) => r.status).sort()).toEqual(['matched', 'rejected'])
   })
 
   test('X-GitHub-Delivery 缺失 → 无去重逐条处理（F-18 降级平移）', async () => {

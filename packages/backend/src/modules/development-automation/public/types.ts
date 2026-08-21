@@ -7,3 +7,9 @@ export {
   encodeDevelopmentApprovalSubject,
   type DevelopmentApprovalSubject,
 } from '../domain/approvalSubject'
+
+/** Public business fact emitted beside the employee-private approval wake-up. */
+export const DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF = {
+  id: 'approval.status.changed',
+  revision: 1,
+} as const

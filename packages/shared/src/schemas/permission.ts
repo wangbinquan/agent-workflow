@@ -98,6 +98,8 @@ export const PERMISSIONS = [
   'action-templates:read',
   'verification-profiles:read',
   'digital-employees:read',
+  // RFC-310 — global Event Center, shared by employees, workflows, webhooks and integrations.
+  'event-sources:read',
   'automation-policies:read',
   'adapter-definitions:read',
   'repos:read',
@@ -131,6 +133,7 @@ export const PERMISSIONS = [
   'action-templates:create',
   'verification-profiles:create',
   'digital-employees:create',
+  'event-sources:create',
   'automation-policies:create',
   'adapter-definitions:create',
   'scheduled-tasks:create',
@@ -152,6 +155,7 @@ export const PERMISSIONS = [
   'action-templates:update',
   'verification-profiles:update',
   'digital-employees:update',
+  'event-sources:update',
   'automation-policies:update',
   'adapter-definitions:update',
   // RFC-310 — assignments are repository configuration (repos:update tier).
@@ -191,6 +195,7 @@ export const PERMISSIONS = [
   'action-templates:archive',
   'verification-profiles:archive',
   'digital-employees:archive',
+  'event-sources:archive',
   'automation-policies:archive',
   'adapter-definitions:archive',
 
@@ -432,6 +437,19 @@ const permissionCatalog = {
   'digital-employees:archive': catalogEntry('digital-employees:archive', {
     group: 'resources',
     constraints: resourceAcl,
+  }),
+  'event-sources:read': catalogEntry('event-sources:read', { group: 'platform' }),
+  'event-sources:create': catalogEntry('event-sources:create', {
+    group: 'platform',
+    risk: 'elevated',
+  }),
+  'event-sources:update': catalogEntry('event-sources:update', {
+    group: 'platform',
+    risk: 'elevated',
+  }),
+  'event-sources:archive': catalogEntry('event-sources:archive', {
+    group: 'platform',
+    risk: 'elevated',
   }),
   'automation-policies:read': catalogEntry('automation-policies:read', {
     group: 'resources',
@@ -916,6 +934,7 @@ const USER_RESOURCE_READS: ReadonlyArray<Permission> = [
   'action-templates:read',
   'verification-profiles:read',
   'digital-employees:read',
+  'event-sources:read',
   'automation-policies:read',
   'adapter-definitions:read',
   'repository-employee-assignments:read',
@@ -965,6 +984,9 @@ const USER_RESOURCE_WRITES: ReadonlyArray<Permission> = [
   'digital-employees:create',
   'digital-employees:update',
   'digital-employees:archive',
+  'event-sources:create',
+  'event-sources:update',
+  'event-sources:archive',
   'automation-policies:create',
   'automation-policies:update',
   'automation-policies:archive',

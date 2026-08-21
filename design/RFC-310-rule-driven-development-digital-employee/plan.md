@@ -17,7 +17,7 @@
 > **2026-08-21 数字员工 OS 实现（待 hosted 验证）**：proposal/design §0A 的 Context、
 > Attention、Event Center、Observer、Employee Event Queue、Reaction、Employee Channel 与现有 Envelope/Script/
 > code-host/Token 底座复用设计，并确定“数字员工 → 数字员工分类 → 工作项 → 工具”、工作项 WorkContract、分类工具箱、
-> 全局执行策略和通用确定性职责图均已实现；PR-14..PR-18 的功能与 system-mock E2E 已收口。完整 `gate:local`
+> 共享限额快照和通用确定性职责图均已实现；PR-14..PR-18 的功能与 system-mock E2E 已收口。完整 `gate:local`
 > 于 2026-08-21 全绿（后端四个随机化分片；frontend 6660；shared 2219；system-mock 35），当前仅剩 exact-SHA hosted CI
 > 的发布验证。
 >
@@ -642,7 +642,7 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | AC-43 四层工具箱与节点归属                              | T144,T144a,T161-T163                                         |
 | AC-44 WorkContract pin/fixture/semantic validator       | T144,T144a,T151,T165-T166                                    |
 | AC-45 Event i18n 与职责文案分层                         | T147,T156                                                    |
-| AC-46 全局执行策略唯一 owner                            | T144b,T164                                                   |
+| AC-46 复用“设置 → 限额”且无第二策略入口                 | T144b,T164                                                   |
 | AC-47 通用类型包/画布/工具实现                          | T159,T161-T163                                               |
 | AC-48 岗位模板最小定义                                  | T144,T163                                                    |
 | AC-49 revision/retire/upgrade                           | T144a,T151,T163                                              |
@@ -1134,12 +1134,12 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 
 | 编号  | 任务                                                                                                                                                               | 依赖                | 状态 |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- | ---- |
-| T141  | 在 proposal/design/plan 落 OS、四层配置层级、WorkContract、分类工具箱、全局执行策略、确定性职责图与执行底座复用的规范修订                                          | 用户本轮确认        | ✅   |
+| T141  | 在 proposal/design/plan 落 OS、四层配置层级、WorkContract、分类工具箱、共享限额快照、确定性职责图与执行底座复用的规范修订                                          | 用户本轮确认        | ✅   |
 | T142  | 钉住 live baseline，盘点 Mission/wake/resumeAt/poll/child/link/join/mr-care/TaskEngine/source-control/code-host/Token 全调用面                                     | 设计批准            | ✅   |
 | T143  | 更新 RFC-294 owner 清单与 dependency manifests：新增 `digital-employee`、`event-center`，禁止 bootstrap/类型分支与跨 context internal import                       | T142                | ✅   |
 | T144  | Employee Type Package SDK：strict codecs/compiler、WorkItem/WorkContract、AuthoringManifest、JobTemplate、员工 definition 与程序化发布 API                         | T143                | ✅   |
 | T144a | 分类工具注册：`type + work item + contract` 闭合 API、Agent/Workflow required ports、ProgramTool 规范/Script 接线、fixture receipt、岗位默认与员工 override        | T144                | ✅   |
-| T144b | 全局执行策略 revision：same/fresh-scene、backoff、round/case budget、deadline/handoff，Case admission pin 与显式 upgrade                                           | T143,T144           | ✅   |
+| T144b | 从“设置 → 限额”物化不可变执行快照：same/fresh-scene 复用已有额度，固定 backoff/deadline/handoff 属平台合同，Case admission pin 且无独立设置入口                    | T143,T144           | ✅   |
 | T145  | EmployeeCase、ContextRecord/Link、artifact refs、ExternalContextBinding、OCC/lease/outbox/backup-restore                                                           | T144                | ✅   |
 | T146  | Context Assembler/materializer：外部 ID/上传/证据只传 refs，MR/commit Context Envelope 的 adoption/recovery 对拍                                                   | T145                | ✅   |
 | T147  | Event Type/Source catalog、i18n 显示名/说明、Subscription、EventRecord/Delivery strict contracts 与 Webhook/internal-event ingestion                               | T143,T145           | ✅   |
@@ -1158,7 +1158,7 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 | T161  | 数字员工通用 IA：`/digital-employees` 分类目录与每类“员工/工具箱/适用范围”页签，复用 operations 外观，旧 `/code`/executors/assignments 跳转迁移                    | T144,T156           | ✅   |
 | T162  | 单一固定职责图四模式：toolbox/job-template/employee/runtime 共用 workItem identity 与布局；生命周期背景、全量节点、合同 receipt；无 edge drag/阶段下拉/全局 picker | T144a,T159,T161     | ✅   |
 | T163  | 岗位模板与最小员工编辑器：模板只存默认工具；员工只存分类/模板/名称启停/范围/工具覆盖；缺工具深链并恢复草稿；无 Event/Context/effect/retry                          | T144a,T161,T162     | ✅   |
-| T164  | “设置 → 执行策略”与显式 active Case upgrade；节点/工具/分类/员工 DTO 负扫描 retry 字段为零                                                                         | T144b,T156,T161     | ✅   |
+| T164  | 删除独立数字员工策略页/API，复用“设置 → 限额”；节点/工具/分类/员工 DTO 负扫描 retry 字段为零，在途 Case 保持 admission 快照                                        | T144b,T156,T161     | ✅   |
 | T160  | 真实 E2E：分类工具注册→员工发布→任务；主动轮询0/1订阅、Webhook+poll去重、MR自动关注、红灯修复、跨仓返回、审批、committer merge、重启/乱序/重复矩阵                 | T148-T159,T161-T164 | ✅   |
 
 ### 功能自审记录
@@ -1184,7 +1184,7 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 - 工具箱退化为无分类/工作项/WorkContract 的全局执行者列表，或员工 picker 直接读取底层资源库；
 - 增加工具仍要求选择阶段/工作项，或职责图允许拖拽连线、改变类型包拓扑；
 - Event machine ID 作为业务主文案，或 Event 与工作项用同义标题重复表达；
-- retry/fresh-scene/backoff/budget 出现在分类、工作项、工具或员工 DTO/UI 中，而不是唯一全局执行策略；
+- retry/fresh-scene/backoff/budget 出现在分类、工作项、工具或员工 DTO/UI 中，或另造数字员工策略入口而不复用“设置 → 限额”；
 - 通用 employee/assignment/invocation DTO 硬编码 repository，或新分类仍必须经过 `/code` canonical route。
 
 ## 13f. PR-19：平台执行契约与职责泳道
@@ -1195,29 +1195,62 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 业务 `WorkContract` 与平台 `ExecutionContract` 分层：前者由员工类型包定义业务完成标准，后者统一 executor transport、
 兼容校验、fixture、exact output 和运行结算。画布拓扑仍由类型包固定，但新增业务可读的职责泳道而非自由编辑器。
 
-| 编号 | 任务                                                                                                                                                                                                | 依赖           | 状态 |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---- |
-| T165 | 新增 `execution-contract` bounded context：strict guide/transport/ref、Agent/Workflow/Program compatibility、真实 Script fixture、exact output validator 与窄 participant                           | T143,T151      | ✅   |
-| T166 | 接 authoring/runtime/UI：外部 ID 直接 `contractInput`、大输入 env/file、Agent 显式声明和 `agent-result`、Program 起始代码、Plan 冻结前输入与编辑/发布/结算输出同一 exact validator                    | T165           | ✅   |
-| T167 | AuthoringManifest 增 `spine/branch` 职责泳道与完整性校验；通用画布实现主干居中、职责横排、分发干线、自循环和外侧回路；研发 MR 看护拆成事件主干与五条职责支线；以 `development@2` 追加发布；同步页面留白和任务按钮 | T144,T159,T162 | ✅   |
-| T168 | 多轮功能自审、聚焦/系统链路/视觉/完整门禁、RFC-294 owner 账与 exact-SHA hosted CI/visual 终态验证                                                                                                   | T165-T167      | 🚧   |
+| 编号 | 任务                                                                                                                                                                                                                         | 依赖           | 状态 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---- |
+| T165 | 新增 `execution-contract` bounded context：strict guide/transport/ref、Agent/Workflow/Program compatibility、真实 Script fixture、exact output validator 与窄 participant                                                    | T143,T151      | ✅   |
+| T166 | 接 authoring/runtime/UI：外部 ID 直接 `contractInput`、大输入 env/file、Agent 显式声明和 `agent-result`、Program 起始代码、Plan 冻结前输入与编辑/发布/结算输出同一 exact validator                                           | T165           | ✅   |
+| T167 | AuthoringManifest 增 `spine/branch` 职责泳道与完整性校验；通用画布实现主干居中、职责横排、分发干线、自循环和外侧回路；研发 MR 看护拆成事件主干与五条职责支线；以 `development@2` 追加发布；同步页面留白和任务按钮            | T144,T159,T162 | ✅   |
+| T168 | 多轮功能自审、聚焦/系统链路/视觉/完整门禁、RFC-294 owner 账与 exact-SHA hosted CI/visual 终态验证                                                                                                                            | T165-T167      | 🚧   |
 | T169 | Agent 执行契约选择移入输入/输出页；`agent-result` 显示为不可单改的契约托管端口；选择/切换/取消时原子增删端口与 sidecar；create/update/bundle/intent 共用服务端规整命令；公共 guide 改为窄运行投影 + 已校验序列化 exact guide | T165,T166      | ✅   |
+| T170 | Event Center 从数字员工页迁为“运行与仓库”的全局入口；新增独立 `event-sources:*` 权限，数字员工只保留 Attention/订阅投影与跳转                                                                                                | T147,T161      | ✅   |
+| T171 | 自定义轮询来源 authoring：同 ID 草稿修订、Script/事件合同/周期/批量/入库规则、真实 fixture、immutable publish/retire 与 exact catalog 注册                                                                                   | T147,T148,T165 | ✅   |
+| T172 | 自定义 Observer adapter：固定 input file/stdout envelope、event key 闭集映射、平台 dedupe/入库、按订阅启停、cursor/lease/restart；API/UI/E2E 覆盖完整用户链路                                                                | T170,T171      | ✅   |
+| T173 | Event Center 中立化：从 Event Type/Delivery 移除 priority，ReactionRule 持有代码员工队列 priority/preemption；历史存储列迁移清理与乱序回归                                                                                   | T147,T150      | ✅   |
+| T174 | 统一 Publisher/Subscription 合同：Webhook 注册 push source/type，Subscription 封闭联合 exact/filtered，selector directory 与 bounded routing facts，不允许 ingress 直接旁路启动                                              | T147,T170      | ✅   |
+| T175 | 统一 durable Delivery/notification：automation subscriber adapter 复用既有 webhook owner/ACL/串行/熔断/supersede/terminal fence；delivery lease/retry/dead-letter、重启恢复与单 writer 切换                                  | T174           | ✅   |
+| T176 | 重做全局事件中心 IA：事件来源统一展示 Webhook/轮询；“实时订阅”统一展示 Attention 与 Webhook 响应规则；投递/观察健康同域可见，旧 `/webhooks` 仅兼容跳转                                                                       | T170,T174-T175 | ✅   |
+| T177 | 多消费者传输不变量：immutable EventRecord、`(eventId, subscriptionId)` 唯一 Delivery、独立 ACK/lease/retry/dead-letter 与审计保留；exact/filtered 多播和一方失败隔离回归                                                     | T174,T175      | ✅   |
+| T178 | source-neutral WorkStart：automation target 封闭联合 orchestration/digital-employee，统一 event origin、TriggerContext、delivery 幂等与结果投影；数字员工 intake 从已发布类型合同 authoring                                  | T175           | ✅   |
+| T179 | Task owner lifecycle outbox：初始与每次 status CAS 同事务写 stable observation，公共 worker 按“设置 → 限额”重试并发布到 Event Center；多订阅者回归                                                                           | T175,T178      | ✅   |
+| T180 | EmployeeCase owner lifecycle outbox 与 event-start provenance：Case 状态事务发布、同 delivery 重入采用已有 Case、员工/父任务可订阅公开 Case 状态；禁止内存回调                                                               | T175,T178      | ✅   |
+| T181 | Webhook 响应规则编辑器增加数字员工目标：只列 published/enabled 员工，读取类型 WorkIntakeContract 渲染 target/body/external-id，触发记录深链到 Case；文件上传保持显式人工入口                                                 | T176,T178      | ✅   |
+| T182 | 收敛 Event/Command 边界：移除 initial work event/attention/outbox，类型包声明 `workStartWorkItemRef`；首次 Case 直接进入确定工作项，后续只响应真实 committed fact                                                            | T178,T180      | ✅   |
+| T183 | 统一代码平台来源：`code-host.activity@1` 同时承载 push/poll；旧 Webhook occurrence matrix 标记 compatibility，员工复核信号标记 internal，公开目录只展示权威业务事件，exact revision 冲突 fail closed                         | T174,T182      | ✅   |
+| T184 | 来源无关响应规则：目录动态选择全部带 TriggerParameterContract 的公开事件，支持四类 WorkStart target、subject all/exact/prefix、独立多播投递与运行结果                                                                        | T176,T178,T183 | ✅   |
+| T185 | 万级运维读面：EventRecord/Subscription/Delivery 服务端分页与索引；来源审计扩为全局事件记录，Webhook 原始入站单列兼容视图；订阅数按 exact+filtered 实值聚合                                                                   | T170,T176      | ✅   |
+| T186 | 代码平台事件可达性：每个已支持 Webhook occurrence 同时发布 public `code-host.*` business fact 与 compatibility fact；public 合同统一注入 `trigger.code_host.*`，目录与响应规则选择集合完全一致                               | T183,T184      | ✅   |
+| T187 | 存量事件升级闭环：旧入口/MR/协同/审批类型降为 internal；活跃 MR Attention/Subscription/ObserverActivation 迁到统一来源；协同与审批双发 public fact；目录过滤空内部来源并锁定 immutable revision 启动兼容                     | T173,T183,T186 | ✅   |
+| T188 | 退役早期持久化的第二套 `code-host.webhook` 公开目录：历史 revision 保留为 compatibility，升级后公开目录与新增订阅只呈现统一 `code-host.activity`；迁移与真实新库页面锁定                                                     | T183,T187      | ✅   |
+| T189 | 自定义事件参数合同交互：每事件显式配置 namespace，区分机器参数键与界面显示名称，实时展示完整路径；参数行使用非持久化稳定编辑 ID，逐字输入不重建/丢焦点                                                                       | T171,T184      | ✅   |
 
-T168 本地部分于 2026-08-21 完成：完整 `gate:local` 9m29s 全绿；真实用户旅程、数字员工视觉基线与
-system-mock 全链均独立复跑通过。保持 🚧 只表示尚未取得推送后 exact-SHA hosted CI/visual 终态。
+T168 本地部分于 2026-08-21 完成：最终完整 `gate:local` 8m31s 全绿（backend 11,622 pass / 36 skip / 0 fail，
+frontend 6,669/6,669，shared 2,219/2,219，system-mocks 35/35）；真实用户旅程、数字员工视觉基线、system-mock
+全链与 Event Center dbVersion=199 实页均独立复跑通过。实页锁定公开目录 15 个事实/唯一代码平台来源，以及参数键逐字
+输入焦点和 `trigger.issue.issue_id` 实时路径。保持 🚧 只表示尚未取得推送后 exact-SHA hosted CI/visual 终态。
 
 ### 功能自审记录
 
-| 轮次                         | 自审问题                                                                         | 发现                                                                                  | 处置/锁定                                                                                                  |
-| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 第一轮：输入可消费性         | 只给问题 ID 时，Agent/Script 是否能直接得到字段；大输入是否仍依赖 prompt         | 旧 WorkContract 只有 schema 名，没有 transport 和字段来源；脚本作者不知道 env/stdout  | 平台 guide 给字段来源、transport、示例；外部 ID 直投影；Script 同时支持 inline/file 并提供三种语言起始代码 |
-| 第二轮：发布前确定性         | 能否在选择工具时知道 Agent/Workflow/Program 真能消费/产出，而不是运行时才猜      | 前端可能按 Agent 名称硬编码；Program 只保存文本；输出可能夹 Markdown/多字段           | 平台批量候选 receipt；Agent 声明 exact contract；Workflow structural closure；Program 真 runner fixture    |
-| 第三轮：运行结算复用         | 编辑期通过的合同是否与真实 Reaction 输入、prompt、Script port 和最终结算完全同源 | Script 旧 host 固定 `prompt` input；只做业务 semantic validation 会漏 extra/cross-run | host input port 显式化；平台先对拍 exact fields/round/nonce，再调用类型 semantic validator                 |
-| 第四轮：职责关系可读性       | MR 看护的检视、流水线、冲突、审批和合入判断是并行反应还是一条顺序链              | 节点按全局 order 平铺，人的职责、事件入口和回路无法辨认                               | manifest 声明主干/职责支线；支线内横排、支线间分隔，回边走右侧虚线 gutter；纯布局回归锁几何关系            |
-| 第五轮：横向扩展与界面一致性 | 新设计/测试员工是否仍能复用；全景、窄屏、operations 留白和任务动作是否一致       | 不能把 `care-*` 写进通用画布，也不能为窄屏折叠掉全景                                  | 通用组件只读 manifest；窄屏横向滚动；所有数字员工页面统一 body padding；任务入口改“新建编排任务”并复用间距 |
-| 第六轮：拓扑与视觉证据       | 图上的每条边是否真有运行规则；18 节点是否真的都进入视觉证据                      | 三条旧后继是伪关系；多类流水线错误缺自循环；1280×800 组件截图裁掉最下方合入判断泳道     | manifest 对齐 settlement；剩余失败类型回到修绿；虚假直达边删除；组件证据临时增高并锁定回环/协同/就绪关键边 |
-| 第七轮：平台入口唯一性       | 新员工类型或测试装配能否遗漏平台契约后继续发布/运行                              | authoring/runtime participant 仍为 optional，并保留旧 resource/fixture 校验 fallback    | 三处 composition 改为 required；删除旧旁路与重复 inspector/Program fixture；架构棘轮锁定不存在 optional 路径 |
-| 第八轮：Agent 端口生命周期   | 契约和端口是否能分别编辑，或通过 API/bundle 保存“有契约无端口/删契约留端口”       | 契约原在能力页且只 append `agent-result`；取消、切换和端口单删均不联动；完整 guide 还形成 42 叶公共 DTO | 选择器移入输入/输出；托管端口无独立动作；保存入口统一规整；公共面收窄为 runtime view + strict `guideJson`       |
+| 轮次                         | 自审问题                                                                         | 发现                                                                                                    | 处置/锁定                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 第一轮：输入可消费性         | 只给问题 ID 时，Agent/Script 是否能直接得到字段；大输入是否仍依赖 prompt         | 旧 WorkContract 只有 schema 名，没有 transport 和字段来源；脚本作者不知道 env/stdout                    | 平台 guide 给字段来源、transport、示例；外部 ID 直投影；Script 同时支持 inline/file 并提供三种语言起始代码    |
+| 第二轮：发布前确定性         | 能否在选择工具时知道 Agent/Workflow/Program 真能消费/产出，而不是运行时才猜      | 前端可能按 Agent 名称硬编码；Program 只保存文本；输出可能夹 Markdown/多字段                             | 平台批量候选 receipt；Agent 声明 exact contract；Workflow structural closure；Program 真 runner fixture       |
+| 第三轮：运行结算复用         | 编辑期通过的合同是否与真实 Reaction 输入、prompt、Script port 和最终结算完全同源 | Script 旧 host 固定 `prompt` input；只做业务 semantic validation 会漏 extra/cross-run                   | host input port 显式化；平台先对拍 exact fields/round/nonce，再调用类型 semantic validator                    |
+| 第四轮：职责关系可读性       | MR 看护的检视、流水线、冲突、审批和合入判断是并行反应还是一条顺序链              | 节点按全局 order 平铺，人的职责、事件入口和回路无法辨认                                                 | manifest 声明主干/职责支线；支线内横排、支线间分隔，回边走右侧虚线 gutter；纯布局回归锁几何关系               |
+| 第五轮：横向扩展与界面一致性 | 新设计/测试员工是否仍能复用；全景、窄屏、operations 留白和任务动作是否一致       | 不能把 `care-*` 写进通用画布，也不能为窄屏折叠掉全景                                                    | 通用组件只读 manifest；窄屏横向滚动；所有数字员工页面统一 body padding；任务入口改“新建编排任务”并复用间距    |
+| 第六轮：拓扑与视觉证据       | 图上的每条边是否真有运行规则；18 节点是否真的都进入视觉证据                      | 三条旧后继是伪关系；多类流水线错误缺自循环；1280×800 组件截图裁掉最下方合入判断泳道                     | manifest 对齐 settlement；剩余失败类型回到修绿；虚假直达边删除；组件证据临时增高并锁定回环/协同/就绪关键边    |
+| 第七轮：平台入口唯一性       | 新员工类型或测试装配能否遗漏平台契约后继续发布/运行                              | authoring/runtime participant 仍为 optional，并保留旧 resource/fixture 校验 fallback                    | 三处 composition 改为 required；删除旧旁路与重复 inspector/Program fixture；架构棘轮锁定不存在 optional 路径  |
+| 第八轮：Agent 端口生命周期   | 契约和端口是否能分别编辑，或通过 API/bundle 保存“有契约无端口/删契约留端口”      | 契约原在能力页且只 append `agent-result`；取消、切换和端口单删均不联动；完整 guide 还形成 42 叶公共 DTO | 选择器移入输入/输出；托管端口无独立动作；保存入口统一规整；公共面收窄为 runtime view + strict `guideJson`     |
+| 第九轮：多消费者隔离         | 一个 Webhook 命中多条规则时，一方失败是否会结算或污染其他消费者                  | 旧 dispatcher 让每个规则共写同一 WebhookDelivery 状态，首个失败可覆盖共享审计                           | 共享行只记录 ingress/routing；每个订阅独立 Delivery/lease/retry/dead-letter；双规则一成一败全 HTTP E2E 锁定   |
+| 第十轮：模块边界最小能力     | Event Center 是否能拿到 Webhook DB、全量 dispatcher 或业务启动内部               | provider adapter 曾跨层拿 DB/服务，EventCenter dispatcher 类型还附带 endpoint-wide dispatch             | 拆 integration domain/public/port/infrastructure；适配器仅依赖 required SPI；exact manifest 与源码棘轮锁定    |
+| 第十一轮：Webhook 失败窗口   | 原始行落库后 Event publish 失败或响应丢失，Resend 是否漏触发或重复启动           | `received` 行会占住 UUID；Event dedupe 又使用易变化的原始行 ID                                          | publish 失败置 failed 释放 UUID；identity 改 provider UUID；duplicate re-observe 并唤醒 pending Delivery      |
+| 第十二轮：坏持久化定义       | 员工 revision/type package JSON 损坏时，规则编辑能否得到稳定错误而非 500         | `safeParse(JSON.parse(...))` 仍会先抛原生 SyntaxError                                                   | 持久化 JSON 先防御解析；分别稳定返回 employee definition/intake contract 422；独立回归锁定                    |
+| 第十三轮：事实与入口边界     | “工作入口”和“MR 观察”是否被误建成事件，Webhook/poll 是否各造一套公开类型         | 首次 Case 曾伪造 work event；代码平台目录同时暴露 ingress occurrence 与权威 MR fact                     | WorkStart 改直接命令；同一 hybrid source；compatibility fact 不进公共目录；首步/目录回归锁定                  |
+| 第十四轮：目录与选择闭环     | 目录中 Task/Employee/自定义事件能否直接配置响应，而非只能选静态 Webhook 枚举     | 旧 TriggersPanel 硬编码 `CODE_HOST_EVENT_TYPES`，非 Webhook 事件只能看不能选                            | 新标准响应规则直接消费 catalog；仅按公开性和参数合同筛选；四类 target 和参数注入同屏                          |
+| 第十五轮：大表与来源审计     | 几万条订阅/事件/入站是否仍整表物化或纵向堆叠；来源订阅数是否真实                 | 审计读面与创作入口混排，Webhook/raw 与标准 Event 混作“来源审计”                                         | 三个审计面独立分页；来源数 exact+filtered 聚合；标准 Event 与 Webhook ingress 分视图                          |
+| 第十六轮：事件语义可达性     | “关注 MR”与“工作入口”是否仍伪装成事件；公开代码平台事实是否全部能选              | 周期门禁复核曾以“流水线状态更新”公开；旧 Webhook matrix 隐藏后缺少可配置的代码平台业务事实              | 周期复核改 internal；WorkStart 仍为直接命令；11 类 `code-host.*` public fact 与响应规则同源，raw 仅兼容       |
+| 第十七轮：存量升级连续性     | 已登记 revision 和运行中 Attention 能否在重构后继续启动；内部来源是否留下空目录  | 直接改 `development.*@1` 会触发 immutable conflict；旧 MR activation 若只改类型包会停止轮询             | 旧 revision 只改 visibility；MR 订阅/attention/activation 数据迁移；审批/协同双发公开事实；真实启动与迁移测试 |
+| 第十八轮：持久化目录唯一性   | 新代码只注册统一来源时，升级库是否仍因旧 catalog 行出现两套 Webhook 目录         | 生产形状库仍有 `code-host.webhook@1` 及 11 个 public type，与 `code-host.activity@1` 并列               | 0199 保留不可变行并降为 compatibility；滚动升级、新库目录 15 个公开事实和唯一代码平台来源实页验证             |
+| 第十九轮：参数合同可编辑性   | 自定义来源作者能否理解并稳定输入完整 Trigger 路径                                | namespace 被隐藏并写死 `custom_event`；参数行用 fieldId 作 React key，逐字输入即重建并跳回名称框        | namespace 同屏可配；机器键/显示名释义分开；稳定 editorKey 不入合同；实页填入后焦点仍在参数键且路径实时更新    |
 
 ### 批次停止条件
 
@@ -1225,6 +1258,9 @@ system-mock 全链均独立复跑通过。保持 🚧 只表示尚未取得推�
 - digital-employee 类型包各自复制 Agent prompt、Script env/stdout parser 或 output exact validator；
 - Agent 候选只按名称/tag 前端猜兼容，或 Program 未运行真实 fixture 就可发布；
 - Agent 契约与 `agent-result` 可分别保存、托管端口仍可单独编辑/删除，或完整 guide 重新扩成超预算公共 DTO；
+- Event Center import Webhook/Task/Employee 内部实现，或 provider adapter 取得 DB、integration infrastructure、endpoint-wide dispatcher；
+- Webhook ingress/replay 直接调用 dispatcher 启动工作，绕过 immutable Event 与 per-Subscription Delivery；
+- EventRecord 增加全局 consumed 位，或任一消费者修改共享 Webhook audit/其他 Subscription 的 ACK、重试、死信状态；
 - 职责泳道/连线可由业务用户拖拽修改，或阶段重新成为工作项归属下拉框；
 - MR 看护的五类职责再次按全局 order 混成单行，回路与前向关系无法区分；
 - 窄屏通过折叠/重排节点破坏“全量展开”，而不是保留固定布局并允许滚动。

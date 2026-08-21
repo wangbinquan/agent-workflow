@@ -49,7 +49,7 @@ export type TaskListScope = z.infer<typeof TaskListScopeSchema>
  * codec for the backend query contract and frontend filter; task-execution
  * owns the derivation/invariants that decide which literal is persisted.
  */
-export const TASK_LAUNCH_ORIGINS = ['manual', 'scheduled', 'webhook', 'api'] as const
+export const TASK_LAUNCH_ORIGINS = ['manual', 'scheduled', 'event', 'webhook', 'api'] as const
 export const TaskLaunchOriginSchema = z.enum(TASK_LAUNCH_ORIGINS)
 export type TaskLaunchOrigin = z.infer<typeof TaskLaunchOriginSchema>
 

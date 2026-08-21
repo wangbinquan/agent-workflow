@@ -87,7 +87,7 @@ async function harness() {
     secretBox: box,
     getDefaultRuntime: async () => null,
     launch: async (actor, rendered, invoker) => {
-      if (invoker.type !== 'webhook') throw new Error('bad invoker')
+      if (invoker.type !== 'event') throw new Error('bad invoker')
       const taskId = ulid()
       await db.insert(tasks).values({
         id: taskId,
@@ -99,11 +99,12 @@ async function harness() {
         baseBranch: 'main',
         branch: `aw/${taskId}`,
         status: 'running',
+        launchOrigin: 'event',
         ownerUserId: actor.user.id,
         inputs: '{}',
         startedAt: Date.now(),
-        webhookTriggerId: invoker.webhookTriggerId,
-        webhookFireId: invoker.webhookFireId,
+        eventSubscriptionId: invoker.eventSubscriptionId,
+        eventDeliveryId: invoker.eventDeliveryId,
         triggerContextJson: JSON.stringify(invoker.triggerContext),
       })
       return taskId
@@ -177,7 +178,10 @@ describe('RFC-259 · GitHub HTTP 入站 → 真分发器 → 任务行（全链�
         .where(eq(webhookTriggerFires.deliveryId, deliveryId))
       return rows[0] ?? null
     })
-    expect(fire.outcome).toBe('launched')
+    expect({ outcome: fire.outcome, error: fire.error }).toEqual({
+      outcome: 'launched',
+      error: null,
+    })
     expect(fire.streamKey).toBe('acme/api|mr:42') // PR number 维度（fork 空数组时才落 branch）
     const delivery = (
       await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
@@ -191,8 +195,9 @@ describe('RFC-259 · GitHub HTTP 入站 → 真分发器 → 任务行（全链�
         .where(eq(tasks.id, fire.taskId ?? ''))
         .limit(1)
     )[0]
-    expect(task?.webhookTriggerId).toBe('tr-gh')
-    expect(task?.webhookFireId).toBe(fire.id)
+    expect(task?.launchOrigin).toBe('event')
+    expect(task?.eventSubscriptionId).toBeTruthy()
+    expect(task?.eventDeliveryId).toBe(fire.id)
     expect(task?.ownerUserId).toBe(h.ownerId)
     expect(task?.name).toBe('[修到绿] acme/api!42')
 

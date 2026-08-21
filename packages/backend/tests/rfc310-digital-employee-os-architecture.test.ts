@@ -70,7 +70,7 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
     }
   })
 
-  test('every external dependency equals the reviewed exact composition/public manifest', () => {
+  test('every external dependency equals the reviewed public/composition/provider-adapter manifest', () => {
     const files = walk(BACKEND_SRC)
     for (const [context, entry] of Object.entries(manifest.contexts)) {
       const moduleRoot = portable(join(BACKEND_SRC, 'modules', context))
@@ -87,8 +87,14 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       }
       expect(actual.sort()).toEqual([...entry.externalImports].sort())
       expect(
-        actual.every((edge) =>
-          / -> (?:composition|public\/(?:commands|queries|participants|events|types))$/.test(edge),
+        actual.every(
+          (edge) =>
+            / -> (?:composition|public\/(?:commands|queries|participants|events|types))$/.test(
+              edge,
+            ) ||
+            /^modules\/[^/]+\/application\/adapters\/[^ ]+-adapter\.ts -> composition\/required-ports$/.test(
+              edge,
+            ),
         ),
       ).toBe(true)
     }
@@ -140,5 +146,56 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
         join(BACKEND_SRC, 'modules', 'digital-employee', 'composition', 'defaultRequiredPorts.ts'),
       ),
     ).toBe(false)
+  })
+
+  test('Event Center provider adapters cannot acquire integration storage or dispatcher internals', () => {
+    const adapter = readFileSync(
+      join(
+        BACKEND_SRC,
+        'modules',
+        'integration',
+        'application',
+        'adapters',
+        'event-center-adapter.ts',
+      ),
+      'utf8',
+    )
+    expect(adapter).toContain('@/modules/event-center/composition/required-ports')
+    for (const forbidden of [
+      "from '@/db",
+      "from '@/services",
+      "from 'drizzle-orm'",
+      '/infrastructure/',
+    ]) {
+      expect(adapter).not.toContain(forbidden)
+    }
+  })
+
+  test('Webhook ingress is publisher-only and Event Center receives no endpoint-wide dispatcher', () => {
+    const ingress = readFileSync(join(BACKEND_SRC, 'routes', 'webhooks.ts'), 'utf8')
+    const replay = readFileSync(join(BACKEND_SRC, 'routes', 'webhookDeliveries.ts'), 'utf8')
+    const integrationComposition = readFileSync(
+      join(BACKEND_SRC, 'modules', 'integration', 'composition.ts'),
+      'utf8',
+    )
+    const dispatcherTypes = readFileSync(
+      join(BACKEND_SRC, 'services', 'webhook', 'dispatcherTypes.ts'),
+      'utf8',
+    )
+
+    for (const route of [ingress, replay]) {
+      expect(route).toContain('commands.observe(')
+      expect(route).not.toMatch(/webhookDispatcher\s*\.\s*dispatch\s*\(/)
+    }
+    expect(integrationComposition).toContain('dispatcher: EventCenterCodeHostDeliveryDispatcher')
+    expect(dispatcherTypes).toContain(
+      'export interface EventCenterCodeHostDeliveryDispatcher {\n  dispatchSubscription',
+    )
+    expect(dispatcherTypes).toContain(
+      'export interface EventCenterAutomationWorkStarter {\n  dispatchEventTarget',
+    )
+    expect(dispatcherTypes).not.toMatch(
+      /interface EventCenter\w+ \{[^}]*dispatchSubscription[^}]*dispatchEventTarget/,
+    )
   })
 })

@@ -1,7 +1,7 @@
 // RFC-292 — the single scanner/parser for workflow and webhook template refs.
 
 import type { WebhookTemplateVar } from './schemas/webhook'
-import { isWebhookTriggerField } from './triggerContext'
+import { isWebhookTriggerField, TRIGGER_FIELD_RE, TRIGGER_NAMESPACE_RE } from './triggerContext'
 
 export type TemplateRefIssue =
   | 'empty-ref'
@@ -9,9 +9,8 @@ export type TemplateRefIssue =
   | 'control-character'
   | 'malformed-local-ref'
   | 'legacy-trigger-ref'
-  | 'unknown-trigger-source'
-  | 'unknown-trigger-field'
   | 'malformed-trigger-path'
+  | 'unknown-trigger-field'
   | 'unclosed-trigger-ref'
   | 'invalid-escape'
 
@@ -31,8 +30,8 @@ export type ValidTemplateRef =
     }
   | {
       readonly kind: 'trigger'
-      readonly source: 'webhook'
-      readonly field: WebhookTemplateVar
+      readonly source: string
+      readonly field: string
       readonly raw: string
       readonly span: TemplateSpan
     }
@@ -82,6 +81,17 @@ export function webhookTriggerToken(
   return `{{${webhookTriggerRef(field)}}}`
 }
 
+export function triggerRef(source: string, field: string): string {
+  if (!TRIGGER_NAMESPACE_RE.test(source) || !TRIGGER_FIELD_RE.test(field)) {
+    throw new Error('invalid trigger parameter reference')
+  }
+  return `trigger.${source}.${field}`
+}
+
+export function triggerToken(source: string, field: string): string {
+  return `{{${triggerRef(source, field)}}}`
+}
+
 function invalid(raw: string, reason: TemplateRefIssue, span: TemplateSpan): InvalidTemplateRef {
   return { kind: 'invalid', raw, reason, span }
 }
@@ -105,10 +115,18 @@ function classifyRef(raw: string, span: TemplateSpan): TemplateRef {
     if (parts.length < 3 || parts.length > 3) {
       return invalid(raw, 'malformed-trigger-path', span)
     }
-    if (parts[1] !== 'webhook') return invalid(raw, 'unknown-trigger-source', span)
+    const source = parts[1]!
     const field = parts[2]!
-    if (!isWebhookTriggerField(field)) return invalid(raw, 'unknown-trigger-field', span)
-    return { kind: 'trigger', source: 'webhook', field, raw, span }
+    if (!TRIGGER_NAMESPACE_RE.test(source) || !TRIGGER_FIELD_RE.test(field)) {
+      return invalid(raw, 'malformed-trigger-path', span)
+    }
+    // Built-in trigger namespaces own a closed contract. Extension namespaces
+    // stay syntactically open and are validated against their registered event
+    // contract at admission time.
+    if (source === 'webhook' && !isWebhookTriggerField(field)) {
+      return invalid(raw, 'unknown-trigger-field', span)
+    }
+    return { kind: 'trigger', source, field, raw, span }
   }
 
   if (parts.length <= 2 && parts.every((part) => LOCAL_SEGMENT_RE.test(part))) {

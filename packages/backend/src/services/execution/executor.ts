@@ -58,6 +58,16 @@ function depsForInvoker(
       launchProvenance: { kind: 'webhook' },
     }
   }
+  if (invoker.type === 'event') {
+    return {
+      ...deps,
+      eventSubscriptionId: invoker.eventSubscriptionId,
+      eventDeliveryId: invoker.eventDeliveryId,
+      triggerContext: invoker.triggerContext,
+      sourceTerminationSnapshot: invoker.sourceTerminationSnapshot,
+      launchProvenance: { kind: 'event' },
+    }
+  }
   if (invoker.type === 'node') {
     // PR-3: the scheduler's call-node launcher supplies the full child deps
     // (callLaunch + synthesized inherited space). The facade only asserts the

@@ -100,10 +100,6 @@ export interface EmployeeCaseLaunchInput {
   readonly primaryContextJson: string
   readonly artifactRefs: readonly string[]
   readonly workSubject: EventSubjectInput
-  readonly initialEventTypeRef: ExactResourceRef
-  readonly initialEventSourceRef: ExactResourceRef
-  readonly initialEventDedupeKey: string
-  readonly initialEventSummary: string
 }
 
 export interface EmployeeCaseProjectionDocument {

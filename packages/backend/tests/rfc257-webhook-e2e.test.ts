@@ -1,7 +1,5 @@
-// RFC-257 T14 — 全链路端到端：mock GitLab 的 HTTP POST 打进真 app（真三段式
-// 路由 + 真 createWebhookDispatcher），只在 launch 处注入 fake（落真 tasks 行）。
-// T5 测试用 fake dispatcher、T6 直调 dispatch —— 本文件补的正是两者之间的
-// 「HTTP 入站 → 真 dispatcher」接线（AC-5/AC-18 的组合面 + tasks 归属列）。
+// RFC-257/RFC-310 全链路端到端：HTTP POST → EventRecord → per-rule Delivery
+// → source-neutral WorkStart → 真 dispatcher，只在最终 launch 处注入 fake。
 import { describe, expect, test } from 'bun:test'
 import { createHmac } from 'node:crypto'
 import { resolve } from 'node:path'
@@ -13,6 +11,8 @@ import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import {
+  eventDeliveries,
+  eventRecords,
   tasks,
   webhookDeliveries,
   webhookEndpoints,
@@ -82,6 +82,7 @@ async function harness() {
     launchPayload: JSON.stringify({ inputs: {} }),
   })
   const canceled: string[] = []
+  const failLaunchNames = new Set<string>()
   const terminalControl = composeMrTerminalControl(db)
   await terminalControl.reconcileOnBoot()
   // 真 dispatcher；只在 launch/cancel 处注入（fake launch 落真 tasks 行，
@@ -93,11 +94,14 @@ async function harness() {
     getDefaultRuntime: async () => null,
     terminalControl,
     launch: async (actor, rendered, invoker) => {
-      if (invoker.type !== 'webhook') throw new Error('bad invoker')
+      if (invoker.type !== 'event') throw new Error('expected Event Center invoker')
+      const renderedName = (renderedLaunchPayload(rendered) as never as { name: string }).name
+      if (failLaunchNames.has(renderedName))
+        throw new Error(`fixture launch failed: ${renderedName}`)
       const taskId = ulid()
       await db.insert(tasks).values({
         id: taskId,
-        name: (renderedLaunchPayload(rendered) as never as { name: string }).name,
+        name: renderedName,
         workflowId,
         workflowSnapshot: '{}',
         repoPath: '/repo',
@@ -108,8 +112,8 @@ async function harness() {
         ownerUserId: actor.user.id,
         inputs: '{}',
         startedAt: Date.now(),
-        webhookTriggerId: invoker.webhookTriggerId,
-        webhookFireId: invoker.webhookFireId,
+        eventSubscriptionId: invoker.eventSubscriptionId,
+        eventDeliveryId: invoker.eventDeliveryId,
         triggerContextJson: JSON.stringify(invoker.triggerContext),
         ...(invoker.sourceTerminationSnapshot === undefined
           ? {}
@@ -137,7 +141,7 @@ async function harness() {
     webhookDispatcher: dispatcher,
     webhookTerminalControl: terminalControl,
   })
-  return { db, app, canceled, ownerId: owner.id, terminalControl }
+  return { db, app, canceled, ownerId: owner.id, terminalControl, failLaunchNames, workflowId }
 }
 
 function pipelineFailedBody(uuid: string): { body: string; headers: Record<string, string> } {
@@ -233,6 +237,70 @@ function githubPullRequestBody(
 }
 
 describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路）', () => {
+  test('同一 Webhook 命中两条规则：每条订阅独立投递，一条启动失败不吞掉另一条', async () => {
+    const h = await harness()
+    await h.db.insert(webhookTriggers).values({
+      id: 'tr-2',
+      name: '第二处理人',
+      endpointId: 'ep-1',
+      ownerUserId: h.ownerId,
+      repoScope: JSON.stringify({ kind: 'prefix', prefix: 'platform/' }),
+      eventTypes: JSON.stringify(['pipeline_failed']),
+      ignoreUsernames: JSON.stringify(['aw-bot']),
+      launchKind: 'workflow',
+      launchRefId: h.workflowId,
+      launchPayload: JSON.stringify({ inputs: {} }),
+    })
+    h.failLaunchNames.add('[修到绿] platform/api!42')
+
+    const incoming = pipelineFailedBody('uuid-multicast')
+    const response = await h.app.request('/webhooks/gitlab/aw_whk_e2e', {
+      method: 'POST',
+      headers: incoming.headers,
+      body: incoming.body,
+    })
+    expect(response.status).toBe(200)
+    const { deliveryId } = (await response.json()) as { deliveryId: string }
+
+    const fires = await waitFor(async () => {
+      const rows = await h.db
+        .select()
+        .from(webhookTriggerFires)
+        .where(eq(webhookTriggerFires.deliveryId, deliveryId))
+      return rows.length === 2 ? rows : null
+    })
+    expect(fires.map((fire) => fire.outcome).sort()).toEqual(['launch-failed', 'launched'])
+    expect(await h.db.select().from(tasks)).toHaveLength(1)
+
+    const event = (
+      await h.db
+        .select()
+        .from(eventRecords)
+        .where(eq(eventRecords.payloadArtifactRef, `webhook-delivery:${deliveryId}`))
+        .limit(1)
+    )[0]
+    if (event === undefined) throw new Error('expected immutable EventRecord')
+    const deliveries = await waitFor(async () => {
+      const rows = await h.db
+        .select()
+        .from(eventDeliveries)
+        .where(eq(eventDeliveries.eventId, event.id))
+      return rows.length === 2 && rows.every((row) => row.state === 'accepted') ? rows : null
+    })
+    expect(new Set(deliveries.map((delivery) => delivery.subscriptionId)).size).toBe(2)
+    expect(new Set(deliveries.map((delivery) => delivery.id)).size).toBe(2)
+    expect(
+      (
+        await h.db
+          .select()
+          .from(webhookDeliveries)
+          .where(eq(webhookDeliveries.id, deliveryId))
+          .limit(1)
+      )[0]?.status,
+    ).toBe('matched')
+    await h.terminalControl.stop()
+  })
+
   test('pipeline_failed 事件落任务；第二发 supersede 第一发；归属列成链', async () => {
     const h = await harness()
     const first = pipelineFailedBody('uuid-e2e-1')
@@ -265,8 +333,9 @@ describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路�
         .where(eq(tasks.id, fire.taskId ?? ''))
         .limit(1)
     )[0]
-    expect(task?.webhookTriggerId).toBe('tr-1')
-    expect(task?.webhookFireId).toBe(fire.id)
+    expect(task?.webhookTriggerId).toBeNull()
+    expect(task?.eventSubscriptionId).not.toBeNull()
+    expect(task?.eventDeliveryId).toBe(fire.id)
     expect(task?.ownerUserId).toBe(h.ownerId)
     expect(task?.name).toBe('[修到绿] platform/api!42')
 

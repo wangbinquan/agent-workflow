@@ -1,19 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
 import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/application/osWorker'
+import { runEventCenterCycle } from '@/modules/event-center/application/eventCenterWorker'
 
 describe('RFC-310 durable Digital Employee OS worker', () => {
-  test('drives observer, delivery, reaction, outbox and settlement in deterministic order', async () => {
+  test('drives delivery, reaction, outbox and settlement in deterministic order', async () => {
     const calls: string[] = []
     let cycle = 0
     const result = await runDigitalEmployeeOsCycle(
       {
-        eventCenter: {
-          async runOneDueObserver() {
-            calls.push(`observer:${cycle}`)
-            return cycle === 0 ? 'completed' : 'idle'
-          },
-        },
         runtime: {
           publishOneChannelResult() {
             return 'idle'
@@ -42,12 +37,10 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
     )
 
     expect(calls).toEqual([
-      'observer:0',
       'delivery:0',
       'plan:0',
       'outbox:0',
       'inspect:0',
-      'observer:1',
       'delivery:1',
       'plan:1',
       'outbox:1',
@@ -55,7 +48,6 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
     ])
     expect(result).toEqual({
       steps: 1,
-      observerRuns: 1,
       deliveries: 1,
       plannedRounds: 1,
       outboxSettlements: 1,
@@ -68,7 +60,6 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
   test('is bounded even when every durable owner continuously reports progress', async () => {
     const result = await runDigitalEmployeeOsCycle(
       {
-        eventCenter: { runOneDueObserver: async () => 'completed' },
         runtime: {
           publishOneChannelResult: () => 'idle',
           pumpOneDelivery: () => true,
@@ -81,5 +72,34 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
     )
     expect(result.steps).toBe(3)
     expect(result.plannedRounds).toBe(3)
+  })
+
+  test('keeps the global event worker independent from employee business processing', async () => {
+    const calls: string[] = []
+    let cycle = 0
+    const result = await runEventCenterCycle(
+      {
+        async runOneDueObserver() {
+          calls.push(`observer:${cycle}`)
+          return cycle === 0 ? 'completed' : 'idle'
+        },
+        async runOneNotification() {
+          calls.push(`notification:${cycle}`)
+          const outcome = cycle === 0 ? 'completed' : 'idle'
+          cycle += 1
+          return outcome
+        },
+      },
+      8,
+    )
+
+    expect(calls).toEqual(['observer:0', 'notification:0', 'observer:1', 'notification:1'])
+    expect(result).toEqual({
+      steps: 1,
+      publicationRuns: 0,
+      observerRuns: 1,
+      notificationDeliveries: 1,
+      madeProgress: true,
+    })
   })
 })

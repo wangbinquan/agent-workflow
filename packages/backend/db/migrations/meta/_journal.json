@@ -1345,6 +1345,55 @@
       "when": 1788537612051,
       "tag": "0192_rfc310_digital_employee_os_authoring",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "6",
+      "when": 1788537612052,
+      "tag": "0193_rfc310_custom_event_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "6",
+      "when": 1788537612053,
+      "tag": "0194_rfc310_unified_event_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "6",
+      "when": 1788537612054,
+      "tag": "0195_rfc310_work_start_lifecycle_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "6",
+      "when": 1788537612055,
+      "tag": "0196_rfc310_task_event_delivery_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "6",
+      "when": 1788537612056,
+      "tag": "0197_rfc310_event_response_rules_and_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "6",
+      "when": 1788537612057,
+      "tag": "0198_rfc310_event_catalog_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "6",
+      "when": 1788537612058,
+      "tag": "0199_rfc310_legacy_webhook_catalog_retire",
+      "breakpoints": true
     }
   ]
 }

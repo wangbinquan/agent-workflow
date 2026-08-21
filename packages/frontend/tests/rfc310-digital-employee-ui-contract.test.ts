@@ -239,16 +239,17 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain("search={{ view: 'jobs' }}")
   })
 
-  test('Event Center and global retry settings are visible without leaking runtime vocabulary', () => {
-    const home = read('routes/digital-employees.tsx')
+  test('Event Center is global and retry settings have one Limits authority', () => {
+    const events = read('routes/events.tsx')
     const settings = read('routes/settings.tsx')
 
-    expect(home).toContain("label: zh ? '事件中心' : 'Event Center'")
-    expect(home).toContain('Subscriptions drive observers automatically')
-    expect(settings).toContain("| 'digitalEmployee'")
-    expect(settings).toContain('sameSceneAttempts')
-    expect(settings).toContain('freshSceneAttempts')
-    expect(settings).toContain('等待外部协作或审批最长时间')
+    expect(events).toContain("title={zh ? '事件中心' : 'Event Center'}")
+    expect(events).toContain("{zh ? 'Webhook 推送来源' : 'Webhook push sources'}")
+    expect(settings).not.toContain("| 'digitalEmployee'")
+    expect(settings).not.toContain('DigitalEmployeePolicyTab')
+    expect(settings).toContain('defaultNodeRetries')
+    expect(settings).toContain('sessionRestartBudget')
+    expect(settings).toContain('limitsSharedRetryTitle')
   })
 
   test('task actions and every digital employee surface use the shared page spacing', () => {

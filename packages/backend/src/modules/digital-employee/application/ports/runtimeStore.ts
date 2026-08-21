@@ -27,7 +27,7 @@ export interface EmployeeOutboxRecord {
   readonly kind:
     | 'event-subscribe'
     | 'event-unsubscribe'
-    | 'event-observe'
+    | 'event-publish'
     | 'execution-launch'
     | 'platform-work-item-execute'
     | 'invocation-create'
@@ -114,9 +114,10 @@ export interface RuntimeCaseStorePort {
     readonly primaryContext: EmployeeContextRecord
     readonly contextDigest: string
     readonly externalSubject: { readonly typeId: string; readonly subjectRef: string }
-    readonly initialAttention: AttentionBindingRecord
-    readonly subscribeOutbox: EmployeeOutboxRecord
-    readonly observeOutbox: EmployeeOutboxRecord
+    readonly eventOrigin: {
+      readonly eventSubscriptionId: string
+      readonly eventDeliveryId: string
+    } | null
     readonly uploadClaims: readonly {
       readonly uploadRef: string
       readonly actorUserId: string | null
@@ -125,6 +126,7 @@ export interface RuntimeCaseStorePort {
     }[]
   }): void
   getCase(id: string): EmployeeCaseRecord | null
+  findCaseByEventDelivery(eventDeliveryId: string): EmployeeCaseRecord | null
   listCases(employeeId?: string, state?: string): EmployeeCaseRecord[]
   listCasesPage(input: {
     readonly employeeId?: string
@@ -194,7 +196,13 @@ export interface RuntimeCaseStorePort {
   }): void
   activateAttention(bindingId: string, subscriptionId: string, now: number): void
   cancelAttention(bindingId: string, now: number): void
-  acceptDelivery(caseId: string, id: string, delivery: EventDeliveryEnvelope, now: number): boolean
+  acceptDelivery(
+    caseId: string,
+    id: string,
+    delivery: EventDeliveryEnvelope,
+    priority: number,
+    now: number,
+  ): boolean
   markInbox(inboxId: string, state: 'coalesced' | 'obsolete', now: number): void
   createRound(input: {
     readonly expectedCaseRevision: number

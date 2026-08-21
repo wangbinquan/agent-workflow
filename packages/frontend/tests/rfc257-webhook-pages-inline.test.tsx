@@ -135,7 +135,7 @@ describe('RFC-257 · /webhooks page (write-capable actor)', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Webhook Automation' })).toBeTruthy()
     })
-    expect(screen.getByTestId('webhooks-tab-endpoints')).toBeTruthy()
+    expect(await screen.findByTestId('webhooks-tab-endpoints')).toBeTruthy()
     expect(screen.getByTestId('webhooks-tab-triggers')).toBeTruthy()
     expect(screen.getByTestId('webhooks-tab-deliveries')).toBeTruthy()
     await waitFor(() => expect(screen.getByTestId('webhook-endpoints')).toBeTruthy())

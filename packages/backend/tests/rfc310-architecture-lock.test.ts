@@ -45,7 +45,11 @@ const PUBLIC_ALLOWED = new Set([
 ])
 
 /** 消费者账本：import 这两个入口的仓内生产文件（相对 backend/src）。 */
-const COMPOSITION_CONSUMERS: string[] = ['cli/start.ts', 'routes/developmentMissions.ts']
+const COMPOSITION_CONSUMERS: string[] = [
+  'cli/start.ts',
+  'routes/developmentMissions.ts',
+  'server.ts',
+]
 const REQUIRED_PORTS_CONSUMERS: string[] = []
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -74,7 +78,9 @@ interface Edge {
   typeOnly: boolean
 }
 
-const FROM_RE = /(?:^|\n)\s*(import|export)\s+(type\s+)?[^'"\n]*?from\s*['"]([^'"]+)['"]/g
+// Imports are routinely formatted across multiple lines. Keeping this to one
+// physical line silently dropped cli/start.ts from the exact consumer ledger.
+const FROM_RE = /(?:^|\n)\s*(import|export)\s+(type\s+)?[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g
 const BARE_IMPORT_RE = /(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g
 const DYNAMIC_RE = /\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)/g
 

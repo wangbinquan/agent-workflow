@@ -24,7 +24,7 @@ describe('RFC-301 trusted direct initiator', () => {
 })
 
 describe('RFC-301 closed provenance derivation', () => {
-  test('all root variants reduce to the four persisted literals', () => {
+  test('all root variants reduce to the persisted literals', () => {
     const cases: Array<[TaskLaunchProvenance, (typeof TASK_LAUNCH_ORIGINS)[number]]> = [
       [{ kind: 'direct-json', initiator: 'manual' }, 'manual'],
       [{ kind: 'direct-json', initiator: 'api' }, 'api'],
@@ -33,6 +33,7 @@ describe('RFC-301 closed provenance derivation', () => {
       [{ kind: 'fusion', initiator: 'manual' }, 'manual'],
       [{ kind: 'fusion', initiator: 'api' }, 'api'],
       [{ kind: 'schedule' }, 'scheduled'],
+      [{ kind: 'event' }, 'event'],
       [{ kind: 'webhook' }, 'webhook'],
     ]
     expect(cases.map(([source]) => deriveTaskLaunchOrigin(source))).toEqual(

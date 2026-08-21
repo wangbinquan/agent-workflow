@@ -1,6 +1,6 @@
 // RFC-292 — parent-side call-workgroup goal rendering shared by runtime and UI.
 
-import type { TriggerContext } from './triggerContext'
+import { triggerContextValue, type TriggerContext } from './triggerContext'
 import { renderTemplateRefs, type TemplateRefIssue } from './templateRef'
 
 export type CallWorkgroupGoalRenderResult =
@@ -25,7 +25,7 @@ export function renderCallWorkgroupGoalTemplate(args: {
         missingContext = true
         return ''
       }
-      return args.triggerContext.trigger.webhook[ref.field] ?? ''
+      return triggerContextValue(args.triggerContext, ref.source, ref.field)
     }
     if (Object.hasOwn(args.builtins, ref.name)) return args.builtins[ref.name] ?? ''
     return args.inputs[ref.name] ?? ''

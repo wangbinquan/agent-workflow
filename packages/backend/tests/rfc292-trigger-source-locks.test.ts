@@ -69,7 +69,7 @@ describe('RFC-292 trigger namespace source locks', () => {
     expect(intent).toContain('$schema_version:${WORKFLOW_SCHEMA_VERSION}')
     expect(intent).toContain('Trigger values are execution context, NOT workflow inputs')
     expect(orchestrator).toContain('$schema_version: WORKFLOW_SCHEMA_VERSION')
-    expect(orchestrator).toContain('availableFields.map(webhookTriggerToken)')
+    expect(orchestrator).toContain('triggerToken(opts.triggerContext!.namespace, field)')
   })
 
   test('task wire exposes only the RFC-298 derived link, never frozen trigger JSON', () => {

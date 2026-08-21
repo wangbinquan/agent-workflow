@@ -12,8 +12,7 @@
 // RFC-253 D5「不把上游输出拼进脚本正文」是同一条道理，只是这里的载体从代码
 // 换成了 HTTP 请求。
 
-import type { WebhookTemplateVar } from '../schemas/webhook'
-import type { TriggerContext } from '../triggerContext'
+import { triggerContextValue, type TriggerContext } from '../triggerContext'
 import {
   extractTemplateRefs,
   parseTemplate,
@@ -23,7 +22,7 @@ import {
 
 export type CodeHostVarRef =
   | { readonly kind: 'port'; readonly name: string }
-  | { readonly kind: 'trigger'; readonly name: WebhookTemplateVar }
+  | { readonly kind: 'trigger'; readonly source: string; readonly name: string }
   | { readonly kind: 'invalid'; readonly raw: string; readonly reason: TemplateRefIssue }
 
 export interface CodeHostTemplateContext {
@@ -45,7 +44,7 @@ export function extractCodeHostVars(text: string): CodeHostVarRef[] {
     ref.kind === 'local'
       ? { kind: 'port', name: ref.name }
       : ref.kind === 'trigger'
-        ? { kind: 'trigger', name: ref.field }
+        ? { kind: 'trigger', source: ref.source, name: ref.field }
         : { kind: 'invalid', raw: ref.raw, reason: ref.reason },
   )
 }
@@ -95,7 +94,7 @@ export function renderCodeHostTemplate(
   const rendered = renderTemplateRefs(text, (templateRef) => {
     const ref: Exclude<CodeHostVarRef, { kind: 'invalid' }> =
       templateRef.kind === 'trigger'
-        ? { kind: 'trigger', name: templateRef.field }
+        ? { kind: 'trigger', source: templateRef.source, name: templateRef.field }
         : { kind: 'port', name: templateRef.name }
     let resolved: string
     if (ref.kind === 'trigger') {
@@ -103,7 +102,7 @@ export function renderCodeHostTemplate(
         triggerMissing = true
         resolved = ''
       } else {
-        resolved = ctx.triggerContext.trigger.webhook[ref.name] ?? ''
+        resolved = triggerContextValue(ctx.triggerContext, ref.source, ref.name)
       }
     } else {
       resolved = ctx.ports[ref.name] ?? ''

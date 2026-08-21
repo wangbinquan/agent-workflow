@@ -6,6 +6,7 @@
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { InspectorChangeMeta } from './historyMeta'
 import type { WorkflowTransition } from '@/lib/workflow-transition'
+import type { RuntimeTriggerParameterContract } from '@/components/runtime-parameters/catalog'
 
 export interface EditProps {
   node: WorkflowNode
@@ -18,6 +19,8 @@ export interface EditProps {
    * may omit it and simply see the full visible list.
    */
   workflowId?: string
+  /** Live Event Center contracts; omitted by isolated tests without platform context. */
+  triggerContracts?: readonly RuntimeTriggerParameterContract[]
   onPatch: (next: WorkflowNode, meta: InspectorChangeMeta) => void
   /**
    * Apply a multi-field workflow definition change. Used by branches that

@@ -7,6 +7,7 @@ import { DigitalEmployeeAuthoringService } from './application/authoringService'
 import { DigitalEmployeeRuntimeService } from './application/runtimeService'
 import type {
   EmployeeInputArtifactPort,
+  EmployeeRetryLimitsPort,
   ProgramArtifactPort,
   PlatformWorkItemExecutionPort,
   ReactionExecutionPort,
@@ -24,6 +25,7 @@ import { analyzeDigitalEmployeeMigration } from './composition/writerCutover'
 import { z } from 'zod'
 import { contractValidationCheckSchema, employeeTypePackageDescriptorSchema } from './domain/model'
 import type {
+  CreateToolRegistrationBody,
   DigitalEmployeeDefinitionContent,
   DigitalEmployeeDefinitionDraft,
   EmployeeAuthoringManifest,
@@ -70,6 +72,10 @@ export interface ToolRegistrationView {
   readonly updatedAt: number
 }
 
+export interface ToolAuthoringView extends ToolRegistrationView {
+  readonly body: CreateToolRegistrationBody
+}
+
 export interface JobTemplateView {
   readonly id: string
   readonly typeRef: EmployeeTypeRef
@@ -105,6 +111,9 @@ export interface DigitalEmployeeCommands {
     readonly body: unknown
     readonly actorUserId: string | null
   }): Promise<ToolRegistrationView>
+  updateTool(
+    input: Parameters<DigitalEmployeeAuthoringService['updateTool']>[0],
+  ): Promise<ToolRegistrationView>
   validateTool(
     input: Parameters<DigitalEmployeeAuthoringService['validateTool']>[0],
   ): Promise<ToolRegistrationView>
@@ -132,9 +141,6 @@ export interface DigitalEmployeeCommands {
   publishEmployee(
     input: Parameters<DigitalEmployeeAuthoringService['publishEmployeeDefinition']>[0],
   ): ExactResourceRef
-  publishExecutionPolicy(
-    input: Parameters<DigitalEmployeeAuthoringService['publishExecutionPolicy']>[0],
-  ): ExecutionPolicyView
 }
 
 export interface DigitalEmployeeQueries {
@@ -142,6 +148,9 @@ export interface DigitalEmployeeQueries {
   getType(ref: EmployeeTypeRef): EmployeeTypePackageDescriptor
   getAuthoringManifest(ref: EmployeeTypeRef): EmployeeAuthoringManifest
   listTools(ref: EmployeeTypeRef, workItemRef: string): ToolRegistrationView[]
+  getToolAuthoring(
+    input: Parameters<DigitalEmployeeAuthoringService['getToolAuthoring']>[0],
+  ): Promise<ToolAuthoringView>
   listJobTemplates(ref: EmployeeTypeRef): JobTemplateView[]
   listEmployees(ref?: EmployeeTypeRef): EmployeeDefinitionView[]
   getEmployee(id: string): EmployeeDefinitionView
@@ -169,6 +178,10 @@ export interface DigitalEmployeeModule {
         readonly employeeId: string
         readonly intake: unknown
         readonly actorUserId: string | null
+        readonly eventOrigin?: {
+          readonly eventSubscriptionId: string
+          readonly eventDeliveryId: string
+        }
       }): EmployeeCaseProjectionDocument
       previewPolicyUpgrade(caseId: string, targetPolicyRevision: number): string
       applyPolicyUpgrade(previewToken: string): EmployeeCaseProjectionDocument
@@ -202,6 +215,8 @@ export interface ComposeDigitalEmployeeOptions {
   readonly programArtifacts?: ProgramArtifactPort
   readonly inputArtifacts?: EmployeeInputArtifactPort
   readonly executionContracts: ExecutionContractParticipant
+  /** Read-only projection of Settings -> Limits; never employee-local config. */
+  readonly retryLimits?: EmployeeRetryLimitsPort
   readonly runtime?: {
     readonly eventCenter: EventCenterParticipant
     readonly execution: ReactionExecutionPort
@@ -318,7 +333,10 @@ export function composeDigitalEmployee(
   }
 
   const policyView = (): ExecutionPolicyView => {
-    const policy = service.getExecutionPolicy()
+    const policy =
+      options.retryLimits === undefined
+        ? service.getExecutionPolicy()
+        : service.ensureExecutionPolicyFromLimits(options.retryLimits.current())
     return {
       revision: policy.revision,
       content: policy.content,
@@ -351,6 +369,10 @@ export function composeDigitalEmployee(
           },
           runtimeCodecs: options.runtime.codecs,
           executionContracts: options.executionContracts,
+          resolveExecutionPolicy: () =>
+            options.retryLimits === undefined
+              ? service.getExecutionPolicy()
+              : service.ensureExecutionPolicyFromLimits(options.retryLimits.current()),
           inputUploads: inputUploadStore,
           inputArtifacts,
           ...(options.now === undefined ? {} : { now: options.now }),
@@ -392,6 +414,10 @@ export function composeDigitalEmployee(
       getType: (ref) => service.getType(ref),
       getAuthoringManifest: (ref) => service.getAuthoringManifest(ref),
       listTools: (ref, workItemRef) => service.listTools(ref, workItemRef).map(toolView),
+      getToolAuthoring: async (input) => {
+        const authoring = await service.getToolAuthoring(input)
+        return { ...toolView(authoring.record), body: authoring.body }
+      },
       listJobTemplates: (ref) => service.listJobTemplates(ref).map(jobView),
       listEmployees: (ref) => service.listEmployeeDefinitions(ref).map(employeeView),
       getEmployee: (id) => employeeView(service.getEmployeeDefinition(id)),
@@ -408,6 +434,7 @@ export function composeDigitalEmployee(
             ownerUserId: input.actorUserId,
           }),
         ),
+      updateTool: async (input) => toolView(await service.updateTool(input)),
       validateTool: async (input) => toolView(await service.validateTool(input)),
       publishTool: async (input) => (await service.publishTool(input)).ref,
       retireTool: (input) => service.retireTool(input),
@@ -431,10 +458,6 @@ export function composeDigitalEmployee(
         ),
       updateEmployee: (input) => employeeView(service.updateEmployeeDefinition(input)),
       publishEmployee: (input) => service.publishEmployeeDefinition(input),
-      publishExecutionPolicy: (input) => {
-        service.publishExecutionPolicy(input)
-        return policyView()
-      },
     },
     runtime:
       runtimeService === null

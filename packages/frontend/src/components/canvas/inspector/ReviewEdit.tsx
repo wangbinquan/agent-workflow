@@ -78,6 +78,7 @@ export function ReviewEdit({
   node,
   agents,
   definition,
+  triggerContracts,
   onPatch,
   onTransition,
   onHistoryBoundary,
@@ -268,6 +269,7 @@ export function ReviewEdit({
     {
       audience: 'workflow-inspector',
       surface: 'review-comment',
+      triggerContracts,
       t,
     },
     {

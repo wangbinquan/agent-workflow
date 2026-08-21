@@ -669,11 +669,34 @@ export function createSqliteDigitalEmployeeAuthoringStore(
           }
     },
 
-    publishExecutionPolicy(input) {
-      db.transaction((tx) => {
+    ensureExecutionPolicy(input) {
+      return db.transaction((tx) => {
+        const current = tx
+          .select({ revision: employeeOsSettings.executionPolicyRevision })
+          .from(employeeOsSettings)
+          .where(eq(employeeOsSettings.singletonKey, 'global'))
+          .get()
+        if (current !== undefined) {
+          const row = tx
+            .select()
+            .from(employeeExecutionPolicyRevisions)
+            .where(eq(employeeExecutionPolicyRevisions.revision, current.revision))
+            .get()
+          if (row !== undefined && row.contentDigest === input.contentDigest) {
+            return {
+              revision: row.revision,
+              content: globalExecutionPolicySchema.parse(parseJson(row.contentJson)),
+              contentDigest: row.contentDigest,
+              publishedAt: row.publishedAt,
+              publishedBy: row.publishedBy,
+            }
+          }
+        }
+
+        const revision = (current?.revision ?? 0) + 1
         tx.insert(employeeExecutionPolicyRevisions)
           .values({
-            revision: input.revision,
+            revision,
             contentJson: JSON.stringify(input.content),
             contentDigest: input.contentDigest,
             publishedAt: input.publishedAt,
@@ -683,17 +706,18 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         tx.insert(employeeOsSettings)
           .values({
             singletonKey: 'global',
-            executionPolicyRevision: input.revision,
+            executionPolicyRevision: revision,
             updatedAt: input.publishedAt,
           })
           .onConflictDoUpdate({
             target: employeeOsSettings.singletonKey,
             set: {
-              executionPolicyRevision: input.revision,
+              executionPolicyRevision: revision,
               updatedAt: input.publishedAt,
             },
           })
           .run()
+        return { revision, ...input }
       })
     },
   }

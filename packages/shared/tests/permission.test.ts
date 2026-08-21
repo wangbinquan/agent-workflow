@@ -77,7 +77,8 @@ describe('PERMISSIONS catalog', () => {
     // RFC-312 +1（`users:presence` —— 看到他人在线状态；系统域点，PAT 永不持有，
     // 且**不进 user/manager/guest 静态 preset**：它走"新建默认授予的显式 grant"，
     // 放进 preset 会让它永远无法按账号收回）⇒ **109**。
-    expect(PERMISSIONS.length).toBe(109)
+    // RFC-310 Event Center 增加全局事件来源 read/create/update/archive（+4）⇒ **113**。
+    expect(PERMISSIONS.length).toBe(113)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -178,6 +179,10 @@ describe('PERMISSIONS catalog', () => {
       'digital-employees:create',
       'digital-employees:update',
       'digital-employees:archive',
+      'event-sources:read',
+      'event-sources:create',
+      'event-sources:update',
+      'event-sources:archive',
       'automation-policies:read',
       'automation-policies:create',
       'automation-policies:update',
@@ -203,7 +208,7 @@ describe('PERMISSIONS catalog', () => {
     // 三个模板写点仍在基线里，但含义变了——它们不再蕴含脚本编写权（字段级门）。
     // RFC-310 +21（五资源×4 全入 user 基线 + assignments:read；assignments:update
     // 归 manager 档，对齐 repos:update）⇒ 75。
-    expect(ROLE_PERMISSIONS.user.length).toBe(82) // RFC-310 PR-2 +5、PR-7b +3（Mission 面全员）
+    expect(ROLE_PERMISSIONS.user.length).toBe(86) // RFC-310 PR-2 +5、PR-7b +3；Event Center +4
   })
 
   test('guest preset is exactly public-only reads for the six ACL resource domains', () => {

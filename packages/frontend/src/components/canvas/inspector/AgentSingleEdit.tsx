@@ -35,6 +35,7 @@ export function AgentSingleEdit({
   node,
   agents,
   definition,
+  triggerContracts,
   onPatch,
   onHistoryBoundary,
 }: EditProps) {
@@ -64,6 +65,7 @@ export function AgentSingleEdit({
     {
       audience: 'workflow-inspector',
       surface: 'agent-prompt',
+      triggerContracts,
       t,
     },
     {

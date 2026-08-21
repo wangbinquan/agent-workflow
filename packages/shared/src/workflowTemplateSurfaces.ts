@@ -2,7 +2,11 @@
 
 import type { WorkflowDefinition, WorkflowNode } from './schemas/workflow'
 import type { CodeHostEventType, WebhookTemplateVar } from './schemas/webhook'
-import type { ParsedTriggerContext, TriggerContext } from './triggerContext'
+import {
+  triggerContextContract,
+  type ParsedTriggerContext,
+  type TriggerContext,
+} from './triggerContext'
 import { WEBHOOK_EVENT_VAR_MATRIX } from './schemas/webhook'
 import { extractTemplateRefs } from './templateRef'
 import { projectCodeHostTemplates } from './codeHost/templateProjection'
@@ -246,7 +250,8 @@ export function mapWorkflowTemplateSurfaces(
 }
 
 export interface TriggerDependency {
-  readonly field: WebhookTemplateVar
+  readonly source: string
+  readonly field: string
   readonly nodeId: string
   readonly pointer: string
 }
@@ -260,10 +265,15 @@ export function collectTriggerDependencies(
     for (const item of collectActiveWorkflowTemplateSurfaces(definition)) {
       for (const ref of extractTemplateRefs(item.text)) {
         if (ref.kind !== 'trigger') continue
-        const key = `${item.nodeId}\u0000${item.pointer}\u0000${ref.field}`
+        const key = `${item.nodeId}\u0000${item.pointer}\u0000${ref.source}\u0000${ref.field}`
         if (seen.has(key)) continue
         seen.add(key)
-        out.push({ field: ref.field, nodeId: item.nodeId, pointer: item.pointer })
+        out.push({
+          source: ref.source,
+          field: ref.field,
+          nodeId: item.nodeId,
+          pointer: item.pointer,
+        })
       }
     }
   }
@@ -274,6 +284,13 @@ export type TriggerDependencySource =
   | ParsedTriggerContext
   | { readonly kind: 'context'; readonly value: TriggerContext }
   | { readonly kind: 'event-types'; readonly eventTypes: readonly CodeHostEventType[] }
+  | {
+      readonly kind: 'contracts'
+      readonly contracts: readonly {
+        readonly namespace: string
+        readonly availableFields: readonly string[]
+      }[]
+    }
 
 export type TriggerDependencyIssue =
   | { readonly code: 'trigger-context-invalid' }
@@ -300,8 +317,25 @@ export function evaluateTriggerDependencies(
     }
     for (const dependency of dependencies) {
       if (
+        dependency.source !== 'webhook' ||
         source.eventTypes.some(
-          (eventType) => !WEBHOOK_EVENT_VAR_MATRIX[eventType].includes(dependency.field),
+          (eventType) =>
+            !WEBHOOK_EVENT_VAR_MATRIX[eventType].includes(dependency.field as WebhookTemplateVar),
+        )
+      ) {
+        return [{ code: 'trigger-field-unavailable', dependency }]
+      }
+    }
+    return []
+  }
+
+  if (source.kind === 'contracts') {
+    for (const dependency of dependencies) {
+      if (
+        !source.contracts.some(
+          (contract) =>
+            contract.namespace === dependency.source &&
+            contract.availableFields.includes(dependency.field),
         )
       ) {
         return [{ code: 'trigger-field-unavailable', dependency }]
@@ -311,11 +345,14 @@ export function evaluateTriggerDependencies(
   }
 
   const context = source.value
-  const eventType = context.trigger.webhook.event_type
-  const available = WEBHOOK_EVENT_VAR_MATRIX[eventType]
+  const contract = triggerContextContract(context)
+  if (contract === null) return [{ code: 'trigger-context-invalid' }]
   for (const dependency of dependencies) {
-    if (!available.includes(dependency.field)) {
-      return [{ code: 'trigger-field-unavailable', dependency, eventType }]
+    if (
+      dependency.source !== contract.namespace ||
+      !contract.availableFields.includes(dependency.field)
+    ) {
+      return [{ code: 'trigger-field-unavailable', dependency }]
     }
   }
   return []

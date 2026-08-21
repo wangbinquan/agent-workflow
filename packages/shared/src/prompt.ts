@@ -22,7 +22,7 @@ import {
   sanitizeInlineField,
 } from './promptFencing'
 import { renderTemplateRefs, type InvalidTemplateRef } from './templateRef'
-import type { TriggerContext } from './triggerContext'
+import { triggerContextValue, type TriggerContext } from './triggerContext'
 import { AGENT_PROMPT_BUILTIN_NAMES } from './runtimeBuiltins'
 
 /**
@@ -529,8 +529,8 @@ export function renderUserPrompt(input: RenderPromptInput): string {
           throw new TriggerContextMissingError()
         }
         return fence(
-          `trigger-webhook-${ref.field}`,
-          input.triggerContext.trigger.webhook[ref.field],
+          `trigger-${ref.source}-${ref.field}`,
+          triggerContextValue(input.triggerContext, ref.source, ref.field),
         )
       }
       if (ref.name === '__review_comments__') {
@@ -553,8 +553,8 @@ export function renderUserPrompt(input: RenderPromptInput): string {
           throw new TriggerContextMissingError()
         }
         return fence(
-          `trigger-webhook-${ref.field}`,
-          input.triggerContext.trigger.webhook[ref.field],
+          `trigger-${ref.source}-${ref.field}`,
+          triggerContextValue(input.triggerContext, ref.source, ref.field),
         )
       }
       const name = ref.name

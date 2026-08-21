@@ -15,8 +15,10 @@ import {
 } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import type { DbTxSync } from '@/db/txSync'
 import {
   employeeAttentionBindings,
+  employeeCaseEventOrigins,
   employeeCaseInbox,
   employeeCases,
   employeeChannelResults,
@@ -45,9 +47,40 @@ import type {
   EmployeeContextRecord,
   ReactionRoundRecord,
 } from '../domain/runtimeModel'
+import { employeeCaseLifecycleObservation } from '../public/events'
 
 function changes(result: unknown): number {
   return (result as { changes?: number }).changes ?? 0
+}
+
+function enqueueCaseLifecycleEventTx(
+  tx: DbTxSync,
+  input: {
+    readonly caseId: string
+    readonly employeeId: string
+    readonly revision: number
+    readonly previousState: EmployeeCaseRecord['state'] | null
+    readonly state: EmployeeCaseRecord['state']
+    readonly terminalKind: string | null
+    readonly occurredAt: number
+  },
+): void {
+  const observation = employeeCaseLifecycleObservation(input)
+  tx.insert(employeeOsOutbox)
+    .values({
+      id: `case-lifecycle:${input.caseId}:${input.revision}`,
+      caseId: input.caseId,
+      kind: 'event-publish',
+      payloadJson: JSON.stringify(observation),
+      dedupeKey: observation.dedupeKey,
+      state: 'pending',
+      attemptCount: 0,
+      nextAttemptAt: input.occurredAt,
+      createdAt: input.occurredAt,
+      updatedAt: input.occurredAt,
+    })
+    .onConflictDoNothing({ target: employeeOsOutbox.dedupeKey })
+    .run()
 }
 
 function caseRecord(row: typeof employeeCases.$inferSelect): EmployeeCaseRecord {
@@ -280,6 +313,25 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             terminalAt: input.caseRecord.terminalAt,
           })
           .run()
+        if (input.eventOrigin !== null) {
+          tx.insert(employeeCaseEventOrigins)
+            .values({
+              caseId: input.caseRecord.id,
+              eventSubscriptionId: input.eventOrigin.eventSubscriptionId,
+              eventDeliveryId: input.eventOrigin.eventDeliveryId,
+              createdAt: input.caseRecord.createdAt,
+            })
+            .run()
+        }
+        enqueueCaseLifecycleEventTx(tx, {
+          caseId: input.caseRecord.id,
+          employeeId: input.caseRecord.employeeRef.id,
+          revision: input.caseRecord.revision,
+          previousState: null,
+          state: input.caseRecord.state,
+          terminalKind: input.caseRecord.terminalKind,
+          occurredAt: input.caseRecord.createdAt,
+        })
         tx.insert(employeeContextRecords)
           .values({
             id: input.primaryContext.id,
@@ -314,44 +366,22 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             updatedAt: input.caseRecord.createdAt,
           })
           .run()
-        tx.insert(employeeAttentionBindings)
-          .values({
-            id: input.initialAttention.id,
-            caseId: input.initialAttention.caseId,
-            contextId: input.initialAttention.contextId,
-            contextRevision: input.initialAttention.contextRevision,
-            eventTypeId: input.initialAttention.eventTypeRef.id,
-            eventTypeRevision: input.initialAttention.eventTypeRef.revision,
-            subjectType: input.initialAttention.subject.typeId,
-            subjectRef: input.initialAttention.subject.subjectRef,
-            desiredIdentityKey: input.initialAttention.desiredIdentityKey,
-            state: 'desired',
-            createdAt: input.initialAttention.createdAt,
-            updatedAt: input.initialAttention.updatedAt,
-          })
-          .run()
-        for (const outbox of [input.subscribeOutbox, input.observeOutbox]) {
-          tx.insert(employeeOsOutbox)
-            .values({
-              id: outbox.id,
-              caseId: outbox.caseId,
-              kind: outbox.kind,
-              payloadJson: outbox.payloadJson,
-              dedupeKey: outbox.dedupeKey,
-              state: 'pending',
-              attemptCount: 0,
-              nextAttemptAt: input.caseRecord.createdAt,
-              createdAt: input.caseRecord.createdAt,
-              updatedAt: input.caseRecord.createdAt,
-            })
-            .run()
-        }
       })
     },
 
     getCase(id) {
       const row = db.select().from(employeeCases).where(eq(employeeCases.id, id)).get()
       return row === undefined ? null : caseRecord(row)
+    },
+
+    findCaseByEventDelivery(eventDeliveryId) {
+      const row = db
+        .select({ case: employeeCases })
+        .from(employeeCaseEventOrigins)
+        .innerJoin(employeeCases, eq(employeeCases.id, employeeCaseEventOrigins.caseId))
+        .where(eq(employeeCaseEventOrigins.eventDeliveryId, eventDeliveryId))
+        .get()
+      return row === undefined ? null : caseRecord(row.case)
     },
 
     listCases(employeeId, state) {
@@ -876,7 +906,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         .run()
     },
 
-    acceptDelivery(caseId, id, delivery, now) {
+    acceptDelivery(caseId, id, delivery, priority, now) {
       return db.transaction((tx) => {
         const existing = tx
           .select({ id: employeeCaseInbox.id })
@@ -916,7 +946,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             subjectType: delivery.subject.typeId,
             subjectRef: delivery.subject.subjectRef,
             deliveryClass: delivery.deliveryClass,
-            priority: delivery.priority,
+            priority,
             occurredAt: delivery.occurredAt,
             summary: delivery.summary,
             payloadArtifactRef: delivery.payloadArtifactRef,
@@ -1336,6 +1366,9 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         }
         const nextState =
           input.nextCaseState ?? (input.state === 'failed' ? 'blocked' : current.state)
+        const nextRevision = current.revision + 1
+        const nextTerminalKind =
+          nextState === 'terminal' ? (input.terminalKind ?? 'completed') : null
         tx.update(employeeCases)
           .set({
             activeRoundId: null,
@@ -1345,7 +1378,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
                   (nextState === 'blocked' ? current.currentWorkItemRef : null))
                 : current.currentWorkItemRef,
             state: nextState,
-            terminalKind: nextState === 'terminal' ? (input.terminalKind ?? 'completed') : null,
+            terminalKind: nextTerminalKind,
             blockReason:
               nextState === 'blocked'
                 ? (input.blockReason ?? current.blockReason ?? 'reaction failed')
@@ -1355,11 +1388,22 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
               nextState === 'terminal' && current.state !== 'terminal'
                 ? current.writerGeneration + 1
                 : current.writerGeneration,
-            revision: current.revision + 1,
+            revision: nextRevision,
             updatedAt: input.now,
           })
           .where(and(eq(employeeCases.id, current.id), eq(employeeCases.activeRoundId, round.id)))
           .run()
+        if (nextState !== current.state) {
+          enqueueCaseLifecycleEventTx(tx, {
+            caseId: current.id,
+            employeeId: current.employeeId,
+            revision: nextRevision,
+            previousState: current.state,
+            state: nextState,
+            terminalKind: nextTerminalKind,
+            occurredAt: input.now,
+          })
+        }
       })
     },
 
@@ -1379,6 +1423,15 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
           })
           .where(eq(employeeCases.id, caseId))
           .run()
+        enqueueCaseLifecycleEventTx(tx, {
+          caseId,
+          employeeId: current.employeeId,
+          revision: current.revision + 1,
+          previousState: current.state,
+          state: 'blocked',
+          terminalKind: null,
+          occurredAt: now,
+        })
       })
     },
 
@@ -1416,6 +1469,15 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             ),
           )
           .run()
+        enqueueCaseLifecycleEventTx(tx, {
+          caseId,
+          employeeId: current.employeeId,
+          revision: current.revision + 1,
+          previousState: current.state,
+          state: 'active',
+          terminalKind: null,
+          occurredAt: now,
+        })
         const updated = tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)).get()
         if (updated === undefined) throw new Error('case vanished after resume transition')
         return caseRecord(updated)
@@ -1441,6 +1503,15 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             })
             .where(eq(employeeCases.id, caseId))
             .run()
+          enqueueCaseLifecycleEventTx(tx, {
+            caseId,
+            employeeId: current.employeeId,
+            revision: current.revision + 1,
+            previousState: current.state,
+            state: 'terminal',
+            terminalKind,
+            occurredAt: now,
+          })
           const outbound = tx
             .select({ id: employeeInvocations.id })
             .from(employeeInvocations)

@@ -46,7 +46,6 @@
 > 265 已在表内注明「该编号不再排期、不复用」、296 只是一份 2026-08-13 被撤出工作树的原型
 > （教训留在 `docs/dev-gotchas.md:1092`），三件套从未存在。
 
-
 > ✅ **已完成 RFC（Done，2026-08-20）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
 > —— 把「只有最后登录时间」补成「此刻在不在线」。判据是**活的 session WS 连接 + 60s 宽限期**（二态），
 > 走**独立 `/ws/presence` 通道**（整连接级权限门 + `rerunUpgradeGate`，无 frameGate）——权限被收回时既有复核
@@ -188,6 +187,16 @@
 > **1/1**、数字员工视觉基线 **3/3**、外部 ID→MR→跨仓员工→审批→大证据→合入 system-mock **1/1（29 断言）**。
 > 当前仅剩精确提交推送后的 hosted CI/visual 终态验证。
 >
+> **事件语义与创作面收口（2026-08-21）**：Webhook/轮询只作为观察方式，公开目录只收“已经发生”的稳定业务事实；
+> WorkStart 是直接命令，“关注 MR”与周期复核是员工内部状态/信号。代码平台统一为 `code-host.activity@1`，11 类公开
+> `code-host.*` 事实可直接建立来源无关响应规则；0199 把早期持久化的 `code-host.webhook@1` 第二套目录保留为
+> compatibility 历史但从新创作面隐藏。自定义来源现于每个事件类型显式配置参数 namespace，机器键与界面显示名分离，
+> 完整路径实时显示为 `trigger.<namespace>.<field>`；参数行用非持久化稳定编辑 ID，逐字输入不再重建并丢焦点。
+> **最终本地证据**：沙箱外 `bun run gate:local` **8m31s 全绿**——backend **11,622 pass / 36 skip /
+> 0 fail**、frontend **6,669/6,669**、shared **2,219/2,219**、system-mocks **35/35**，typecheck/lint/
+> format/depcheck 全绿；隔离真实页面 dbVersion=199、公开事件 15 个、仅一棵“代码平台”目录，输入 `issue_id` 后焦点
+> 仍在参数键且实时渲染 `trigger.issue.issue_id`。仍待提交推送后的 exact-SHA hosted CI/visual 终态。
+>
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
 > **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；
@@ -195,23 +204,23 @@
 >
 > **本轮落地（按时间序，均已推 main 且门禁全绿）**
 >
-> | commit | 内容 |
-> | --- | --- |
-> | `c2ee672a` | verification 结果升 catalog fact（三个 leaf + 新 group `verification`），`verification.repair` 终于排得上 |
-> | `c44f1dab` | 子进程非零退出把 stderr 尾巴带进 `errorMessage`（裸退出码不可归因） |
-> | `0267dc86` | 三处 e2e 退出码断言改**前缀锁**（`c44f1dab` 改了形状 ⇒ 精确等值全红，主干曾连红四轮） |
-> | `ebafbf50` | 诊断字符串沿途**两道互不知情的截断**（逐行裁头 `clampTailLine`；`MAX_STEP_FAILURE_DETAIL_CHARS` 500→2000） |
+> | commit     | 内容                                                                                                                   |
+> | ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+> | `c2ee672a` | verification 结果升 catalog fact（三个 leaf + 新 group `verification`），`verification.repair` 终于排得上              |
+> | `c44f1dab` | 子进程非零退出把 stderr 尾巴带进 `errorMessage`（裸退出码不可归因）                                                    |
+> | `0267dc86` | 三处 e2e 退出码断言改**前缀锁**（`c44f1dab` 改了形状 ⇒ 精确等值全红，主干曾连红四轮）                                  |
+> | `ebafbf50` | 诊断字符串沿途**两道互不知情的截断**（逐行裁头 `clampTailLine`；`MAX_STEP_FAILURE_DETAIL_CHARS` 500→2000）             |
 > | `a4b7ac3e` | **T71**：retention sweeper + hourly + 四条边界锁；GB 级 soak + nightly；顺带修 sink 的迟到 stream error 判红整个 shard |
-> | `a6ca84ed` | **T121**：`/code` 八页视觉场景（36→44）+ darwin 基线；照出并修掉「英文界面创建出中文步骤名」 |
-> | `52d9a7ca` | T121：收割 8 张 hosted ubuntu 基线（逐张人审，45 passed / 8 failed 正好是新场景） |
-> | `a329393a` | windows 真因：`mkdir '.'` 的 EEXIST（POSIX no-op / Windows 抛）+ `parentDirToCreate` 单点 + 纯判据回归锁 |
-> | `402387fe` | 旅程超时时带出 `decision-trace`（mission JSON 只说明「停了」） |
-> | `892c1bf3` | E2E-B 在 win32 **带判据重新停跑**（夹具是 POSIX-only：`#!/bin/sh` + `100755` 断言） |
+> | `a6ca84ed` | **T121**：`/code` 八页视觉场景（36→44）+ darwin 基线；照出并修掉「英文界面创建出中文步骤名」                           |
+> | `52d9a7ca` | T121：收割 8 张 hosted ubuntu 基线（逐张人审，45 passed / 8 failed 正好是新场景）                                      |
+> | `a329393a` | windows 真因：`mkdir '.'` 的 EEXIST（POSIX no-op / Windows 抛）+ `parentDirToCreate` 单点 + 纯判据回归锁               |
+> | `402387fe` | 旅程超时时带出 `decision-trace`（mission JSON 只说明「停了」）                                                         |
+> | `892c1bf3` | E2E-B 在 win32 **带判据重新停跑**（夹具是 POSIX-only：`#!/bin/sh` + `100755` 断言）                                    |
 >
 > **仍未做（真活，不是账）**
 >
 > 1. **T111 的两半**：hosted CI exact SHA 已做到（`892c1bf3` 31/31）；**发布 / 升级 / rollback runbook**
->    与**运维 dashboards / alerts** 从未产出。`design.md:2919` 只有一段 *cutover* runbook（迁移步骤，
+>    与**运维 dashboards / alerts** 从未产出。`design.md:2919` 只有一段 _cutover_ runbook（迁移步骤，
 >    不是发布回滚的运维文档）。⚠️ dashboards/alerts 依赖使用方实际的监控栈，**先问用户**再动手，
 >    否则只会造出一份没人会用的文档。
 > 2. **T93 的像素快照余量**：T121 覆盖的是 `/code` 八个业务页；PR-8 那批**运维视角**页面的
@@ -478,61 +487,61 @@
 >   e2e↔注册表守卫的两个空洞绿（不递归 / 不失败关闭，反事实实测：平铺版对子目录里的坏 spec
 >   7 pass 0 fail 直接放行）。
 >   **前台实走验收（2026-08-19，用户要求"自己从前台走一遍关键流程"）**：起独立 home 的 daemon
->   + 内嵌前端逐页操作，走通 adapter 建/发布、员工建/空草稿发布具名 422、policy 发布、仓库导入、
->   mission 发起（如实 blocked）、模板与员工授权发布、指派绑定、mission 重试推进到 `working`。
->   一趟又逮到三个"点开就见、门禁全拦不住"的缺陷：⑤`/code/assignments`「新建指派」整页白屏
->   （四条 useQuery 把 `{items}` 声明成裸数组 ⇒ 该页从未能用，而它正是 mission 解析员工的必经配置）；
->   ⑥员工详情存草稿后白屏（versioned ref `{id,revision}` 被当字符串塞进 JSX，React #31）；
->   ⑦同因导致「默认策略」静默显示成「—」（不报错，只是说谎）。三处的共同结构是**测试 fixture
->   照着前端的错误假设造数据、与实现互相印证**，故全绿。处置：修复三处 + fixture 改由后端 domain
->   schema 裁定（`safeParse` 对拍）+ 新增列表端点形状守卫（判据表逐条 curl 真实 daemon 实测，
->   并常驻一条判据函数自检）+ 两处列表把仓库 ULID 显示为地址。
->   **system mock E2E 自证复跑账（2026-08-19）**：T109 两旅程 2/2、四个 suite 型 E2E 9/9、
->   provider-mock 型（requirement / pipeline 真 adapter 子进程）19/19、**RFC-310 全量 69 文件
->   417 用例 2350 断言全绿（46s）**；账落 plan.md §「system mock E2E 自证的复跑账」。同时把
->   AC 证据索引**可执行化**（新增 `rfc310-ac-evidence-index` 守卫：点名的测试文件必须存在、
->   AC-1..35 逐条有证据、失败关闭；变异实测改名/家族消失/漏登三形态全检出）——此前索引无人守，
->   PR-10 删 88 个测试文件时它失效也不会有信号。
->   **PR-11/12/13（2026-08-19 按用户补充重新打开，已落 main `a762a707`）**：
->   ①**业务说明书**——`EmployeePlaybookContentV1` strict codec + canonical compiler，业务只写「哪一步
->   在什么条件下由谁做、成功/失败去哪」，内部 ActionTemplate / VerificationProfile / policy 闭包由平台
->   编译；聚合面 `GET/PUT/validate /digital-employees/:id/playbook` 一次命令冻结完整 closure；action
->   implementation 扩 script executor（仍走 TaskEngine→Wrapper→NodeExecutor→Kernel、共用 envelope 与
->   workspace validator）；`ProblemSetEnvelopeV1` 只读 producer 只产本步问题、不选下一步。
->   ②**跨仓 child Mission 与外部审批 saga**（migration 0187 四张表 + 幂等唯一索引 + OCC）：幂等
->   create/adopt/observe、ancestry/depth/child/wall-time 预算与按 employee identity 的动态环阻断
->   （`A@1 → B@1 → A@2` 同样拦）；Agent/script 只 prepare 审批材料（无凭据、不能直接 submit），平台经
->   integration `approval-gateway` adapter 幂等 submit / lookup-by-idempotency-key / observe，pending→
->   deferred wake、重启保 deadline/ordinal、all/any/quorum join 与 cancel/handoff/terminal fence。
->   ③**服务端 Journey**（`JourneyProjectionV1` 纯 projector）：读面带 journey、mutation 带 nextLocation，
->   共用 `JourneyNextAction` 让每页只有一个主动作；migration 0186 给任务加平台输入挂载名册
->   （不进公共 Task DTO / StartTask wire body）。
->   **提交前跑全套 `gate:local` 抓出 11 项**——上一轮只跑了 typecheck / lint / 定向用例，其中 **9 项
->   只有全量门禁看得见**：装配层业务分支（child drive 与 ReconcileDeps 互引用的延迟绑定守卫上提到
->   application，RFC-294 §2 架构锁）、路由直接读库（mission 详情的 MR 投影迁进 `missionReadModels`，
->   depcheck `no-routes-to-db`）、e2e spec 自起子进程（改走 `e2e/command.ts` 有界 runGit），六处登记面
->   （API 契约表 4 端点 / env-flags 7 个 `AW_APPROVAL_*`+`AW_PORT_PROMPT` / RFC-301 startTask 白名单 /
->   RFC-254 posix 允许表 / 迁移总数 185→187 / decision kinds 快照 +3），以及两条行为对账：①「缺 launcher
->   是 typed block」用例在 launcher 判定按 executor 分流后先撞 `action-baseline-not-wired`，已改为接好其余
->   端口只摘 launcher；②system mock 自本批起如实暴露 provider merge status，mr-facts 期望
->   `unknown → mergeable`，approvals 仍不暴露、`approvalHold` 保持 null。
->   **定式**：「typecheck + lint + 定向用例全绿」不构成可提交的证据（已进 `docs/dev-gotchas.md` 同族条目
->   的适用范围）。T121 / T131 / T132 / T140 维持 🚧——需要监听本机端口的 system mock / Playwright 旅程在
->   当前受限执行环境起不了 listener，由 hosted exact-SHA CI 收口，不提前登记完成。
->   本次提交**不含**并行 RFC-312 presence 的任何改动（identity-access / ws / shared 权限点 / 前端
->   `PresenceDot` 等仍在对方工作树）；i18n 与 styles.css 两个混改文件只提本 RFC 的部分。
->   **推完之后的两条实测更正（同日收口，见 `docs/dev-gotchas.md` 两条新条目）**：
->   ①`gate:local` **从不跑 system mock 用例**（CI 的 lint job 跑），于是本批一条红的
->   `rfc310-approval` 用例（`observationIndex` 是观察次数计数器、不是 statuses 下标）在本地全绿地
->   推了上去、CI 红一格——已修用例并把 `test:system-mocks` 补进 quality 车道（含车道断言）。
->   ②计划里「本机受限执行环境起不了 listener」**不成立**：同一棵树上 system mock 与编译后 daemon +
->   Playwright 都跑得起来。真跑 T140 旅程一次，立刻照出三个**前端根本不存在**的 testid（这条 spec
->   写完从未被执行过），修正锚点后又照出一个真实生产缺陷——新建 Mission 向导的 `disposedRef` 只在
->   cleanup 置 true、挂载时不复位，`<StrictMode>` 的 setup→cleanup→setup 之后上传永远被判成
->   「页面已关闭」并删文件（回归锁用 StrictMode 渲染 + 变异实证；「卸载后重挂载」写法是空洞绿）。
->   旅程当前止步于 development stub 未覆盖 `implement-gate-change`（T131/T132 范围），故该 spec
->   进仓但**默认关**（`AW_RFC310_JOURNEY_E2E=1` 手动开，skip 已登记进 `test-suite-policy` 的
->   `ALLOWED_SKIP_COUNTS`），解除条件写在 spec 顶部与 RFC plan.md。
+>   - 内嵌前端逐页操作，走通 adapter 建/发布、员工建/空草稿发布具名 422、policy 发布、仓库导入、
+>     mission 发起（如实 blocked）、模板与员工授权发布、指派绑定、mission 重试推进到 `working`。
+>     一趟又逮到三个"点开就见、门禁全拦不住"的缺陷：⑤`/code/assignments`「新建指派」整页白屏
+>     （四条 useQuery 把 `{items}` 声明成裸数组 ⇒ 该页从未能用，而它正是 mission 解析员工的必经配置）；
+>     ⑥员工详情存草稿后白屏（versioned ref `{id,revision}` 被当字符串塞进 JSX，React #31）；
+>     ⑦同因导致「默认策略」静默显示成「—」（不报错，只是说谎）。三处的共同结构是**测试 fixture
+>     照着前端的错误假设造数据、与实现互相印证**，故全绿。处置：修复三处 + fixture 改由后端 domain
+>     schema 裁定（`safeParse` 对拍）+ 新增列表端点形状守卫（判据表逐条 curl 真实 daemon 实测，
+>     并常驻一条判据函数自检）+ 两处列表把仓库 ULID 显示为地址。
+>     **system mock E2E 自证复跑账（2026-08-19）**：T109 两旅程 2/2、四个 suite 型 E2E 9/9、
+>     provider-mock 型（requirement / pipeline 真 adapter 子进程）19/19、**RFC-310 全量 69 文件
+>     417 用例 2350 断言全绿（46s）**；账落 plan.md §「system mock E2E 自证的复跑账」。同时把
+>     AC 证据索引**可执行化**（新增 `rfc310-ac-evidence-index` 守卫：点名的测试文件必须存在、
+>     AC-1..35 逐条有证据、失败关闭；变异实测改名/家族消失/漏登三形态全检出）——此前索引无人守，
+>     PR-10 删 88 个测试文件时它失效也不会有信号。
+>     **PR-11/12/13（2026-08-19 按用户补充重新打开，已落 main `a762a707`）**：
+>     ①**业务说明书**——`EmployeePlaybookContentV1` strict codec + canonical compiler，业务只写「哪一步
+>     在什么条件下由谁做、成功/失败去哪」，内部 ActionTemplate / VerificationProfile / policy 闭包由平台
+>     编译；聚合面 `GET/PUT/validate /digital-employees/:id/playbook` 一次命令冻结完整 closure；action
+>     implementation 扩 script executor（仍走 TaskEngine→Wrapper→NodeExecutor→Kernel、共用 envelope 与
+>     workspace validator）；`ProblemSetEnvelopeV1` 只读 producer 只产本步问题、不选下一步。
+>     ②**跨仓 child Mission 与外部审批 saga**（migration 0187 四张表 + 幂等唯一索引 + OCC）：幂等
+>     create/adopt/observe、ancestry/depth/child/wall-time 预算与按 employee identity 的动态环阻断
+>     （`A@1 → B@1 → A@2` 同样拦）；Agent/script 只 prepare 审批材料（无凭据、不能直接 submit），平台经
+>     integration `approval-gateway` adapter 幂等 submit / lookup-by-idempotency-key / observe，pending→
+>     deferred wake、重启保 deadline/ordinal、all/any/quorum join 与 cancel/handoff/terminal fence。
+>     ③**服务端 Journey**（`JourneyProjectionV1` 纯 projector）：读面带 journey、mutation 带 nextLocation，
+>     共用 `JourneyNextAction` 让每页只有一个主动作；migration 0186 给任务加平台输入挂载名册
+>     （不进公共 Task DTO / StartTask wire body）。
+>     **提交前跑全套 `gate:local` 抓出 11 项**——上一轮只跑了 typecheck / lint / 定向用例，其中 **9 项
+>     只有全量门禁看得见**：装配层业务分支（child drive 与 ReconcileDeps 互引用的延迟绑定守卫上提到
+>     application，RFC-294 §2 架构锁）、路由直接读库（mission 详情的 MR 投影迁进 `missionReadModels`，
+>     depcheck `no-routes-to-db`）、e2e spec 自起子进程（改走 `e2e/command.ts` 有界 runGit），六处登记面
+>     （API 契约表 4 端点 / env-flags 7 个 `AW_APPROVAL_*`+`AW_PORT_PROMPT` / RFC-301 startTask 白名单 /
+>     RFC-254 posix 允许表 / 迁移总数 185→187 / decision kinds 快照 +3），以及两条行为对账：①「缺 launcher
+>     是 typed block」用例在 launcher 判定按 executor 分流后先撞 `action-baseline-not-wired`，已改为接好其余
+>     端口只摘 launcher；②system mock 自本批起如实暴露 provider merge status，mr-facts 期望
+>     `unknown → mergeable`，approvals 仍不暴露、`approvalHold` 保持 null。
+>     **定式**：「typecheck + lint + 定向用例全绿」不构成可提交的证据（已进 `docs/dev-gotchas.md` 同族条目
+>     的适用范围）。T121 / T131 / T132 / T140 维持 🚧——需要监听本机端口的 system mock / Playwright 旅程在
+>     当前受限执行环境起不了 listener，由 hosted exact-SHA CI 收口，不提前登记完成。
+>     本次提交**不含**并行 RFC-312 presence 的任何改动（identity-access / ws / shared 权限点 / 前端
+>     `PresenceDot` 等仍在对方工作树）；i18n 与 styles.css 两个混改文件只提本 RFC 的部分。
+>     **推完之后的两条实测更正（同日收口，见 `docs/dev-gotchas.md` 两条新条目）**：
+>     ①`gate:local` **从不跑 system mock 用例**（CI 的 lint job 跑），于是本批一条红的
+>     `rfc310-approval` 用例（`observationIndex` 是观察次数计数器、不是 statuses 下标）在本地全绿地
+>     推了上去、CI 红一格——已修用例并把 `test:system-mocks` 补进 quality 车道（含车道断言）。
+>     ②计划里「本机受限执行环境起不了 listener」**不成立**：同一棵树上 system mock 与编译后 daemon +
+>     Playwright 都跑得起来。真跑 T140 旅程一次，立刻照出三个**前端根本不存在**的 testid（这条 spec
+>     写完从未被执行过），修正锚点后又照出一个真实生产缺陷——新建 Mission 向导的 `disposedRef` 只在
+>     cleanup 置 true、挂载时不复位，`<StrictMode>` 的 setup→cleanup→setup 之后上传永远被判成
+>     「页面已关闭」并删文件（回归锁用 StrictMode 渲染 + 变异实证；「卸载后重挂载」写法是空洞绿）。
+>     旅程当前止步于 development stub 未覆盖 `implement-gate-change`（T131/T132 范围），故该 spec
+>     进仓但**默认关**（`AW_RFC310_JOURNEY_E2E=1` 手动开，skip 已登记进 `test-suite-policy` 的
+>     `ALLOWED_SKIP_COUNTS`），解除条件写在 spec 顶部与 RFC plan.md。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：

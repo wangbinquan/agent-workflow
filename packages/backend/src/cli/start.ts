@@ -9,7 +9,10 @@ import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
-import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
+import {
+  composeDevelopmentAutomation,
+  createDevelopmentMissionCodeHostEventContinuation,
+} from '@/modules/development-automation/composition'
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
@@ -101,7 +104,7 @@ import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'no
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
 import {
   activateDigitalEmployeeOsWriter,
   composeDigitalEmployee,
@@ -125,7 +128,16 @@ import {
   composeDevelopmentCodeHostEventObserver,
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
+import {
+  createCodeHostWebhookDeliveryConsumer,
+  createCodeHostWebhookRoutingDirectory,
+} from '@/modules/integration/composition'
+import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
+import { createSqliteTaskLifecycleEventPublisher } from '@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher'
+import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
+import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 
 export interface StartOptions {
   port?: number
@@ -731,19 +743,27 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/
   // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
   // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
+  const digitalEmployeeWorkStart = createDeferredDigitalEmployeeWorkStart()
   const webhookDispatcher = createWebhookDispatcher({
     db,
     configPath: Paths.config,
     secretBox,
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
     terminalControl: webhookTerminalControl,
+    digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
   })
   const developmentApprovalGateway = composeApprovalGatewayRunner(db)
+  const missionEventContinuation = createDevelopmentMissionCodeHostEventContinuation(db)
   const employeeWriterState = activateDigitalEmployeeOsWriter(db)
   log.info('digital employee writer activated', { ...employeeWriterState })
   const employeeHttpEventCenter = composeEventCenter({
     db,
-    typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    typePackageDescriptorJsons: [
+      developmentEmployeeTypePackage.descriptorJson,
+      codeHostEventCatalogJson,
+      taskLifecycleEventCatalogJson,
+      digitalEmployeeLifecycleEventCatalogJson,
+    ],
     observer: composeDevelopmentEmployeeEventObserver({
       codeHost: composeDevelopmentCodeHostEventObserver({
         binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
@@ -752,6 +772,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         gateway: developmentApprovalGateway,
       }),
     }),
+    routingSubscriptions: createCodeHostWebhookRoutingDirectory(db, missionEventContinuation),
+    automationWorkStart: {
+      launch: (input) => webhookDispatcher.dispatchEventTarget(input),
+    },
+    deliveryConsumers: [
+      createCodeHostWebhookDeliveryConsumer(db, webhookDispatcher, missionEventContinuation),
+    ],
+    deliveryRetryLimits: {
+      current() {
+        const current = loadConfig(Paths.config)
+        return {
+          defaultNodeRetries: current.defaultNodeRetries,
+          sessionRestartBudget: current.sessionRestartBudget,
+        }
+      },
+    },
   })
 
   // 7. HTTP server.
@@ -769,6 +805,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     webhookDispatcher,
     webhookTerminalControl,
     digitalEmployeeEventCenter: employeeHttpEventCenter,
+    digitalEmployeeWorkStart,
   })
 
   const bindHost = opts.host ?? config.bindHost
@@ -1137,18 +1174,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     sourceControl: bindEmployeeCaseWorkspaceParticipant(),
     conflictMerge: bindConflictMergeParticipant(),
   })
-  const employeeEventCenter = composeEventCenter({
-    db,
-    typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
-    observer: composeDevelopmentEmployeeEventObserver({
-      codeHost: composeDevelopmentCodeHostEventObserver({
-        binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
-      }),
-      approval: composeDevelopmentApprovalEventObserver({
-        gateway: developmentApprovalGateway,
-      }),
-    }),
-  })
+  const employeeEventCenter = employeeHttpEventCenter
   const employeeDelivery = buildDevelopmentDeliveryDeps(db, secretBox)
   const employeeExecutionContracts = composeExecutionContract({
     db,
@@ -1161,6 +1187,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     typePackages: [developmentEmployeeTypePackage],
     executionContracts: employeeExecutionContracts,
+    retryLimits: {
+      current() {
+        const config = loadConfig(Paths.config)
+        return {
+          defaultNodeRetries: config.defaultNodeRetries,
+          sessionRestartBudget: config.sessionRestartBudget,
+        }
+      },
+    },
     inputArtifacts: employeeInputArtifacts,
     connectionCatalog: composeDevelopmentToolConnectionCatalog(db),
     runtime: {
@@ -1194,7 +1229,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
   const employeeOsWorker = startDigitalEmployeeOsWorker({
     dependencies: {
-      eventCenter: employeeEventCenter.worker,
       runtime: employeeOs.runtime.worker,
     },
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
@@ -1206,6 +1240,33 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     onCycle: (result) => {
       if (result.steps >= 32) {
         log.warn('digital employee OS cycle reached its bounded step budget', { ...result })
+      }
+    },
+  })
+  const eventCenterWorker = startEventCenterWorker({
+    dependencies: {
+      ...employeeEventCenter.worker,
+      runOnePublication: createSqliteTaskLifecycleEventPublisher({
+        db,
+        events: employeeEventCenter.commands,
+        retryLimits() {
+          const config = loadConfig(Paths.config)
+          return {
+            defaultNodeRetries: config.defaultNodeRetries,
+            sessionRestartBudget: config.sessionRestartBudget,
+          }
+        },
+      }).runOne,
+    },
+    intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
+    onError: (err) => {
+      log.warn('event center cycle failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    },
+    onCycle: (result) => {
+      if (result.steps >= 32) {
+        log.warn('event center cycle reached its bounded step budget', { ...result })
       }
     },
   })
@@ -1425,6 +1486,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     orphanReconcileTicker.stop()
     scheduledTaskTicker.stop()
     employeeOsWorker.stop()
+    eventCenterWorker.stop()
     clearInterval(developmentWakeTimer)
     clearInterval(developmentUploadGcTimer)
     clearInterval(developmentRetentionTimer)

@@ -126,6 +126,7 @@ import {
   transitionTaskStatusByEvent,
   trySetTaskStatus,
   setNodeRunStatusTx,
+  enqueueTaskLifecycleEventTx,
 } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
@@ -580,6 +581,9 @@ export interface StartTaskDeps {
    */
   webhookTriggerId?: string
   webhookFireId?: string
+  /** Source-neutral Event Center attribution for event-started tasks. */
+  eventSubscriptionId?: string
+  eventDeliveryId?: string
   /**
    * RFC-292 — complete nested launch-source context shared by every authored
    * trigger-aware sink. It is internal execution input and MUST be serialized
@@ -2224,7 +2228,9 @@ function rootLaunchOriginFromDeps(deps: StartTaskDeps): TaskLaunchOrigin | null 
     if (
       deps.scheduledTaskId !== undefined ||
       deps.webhookTriggerId !== undefined ||
-      deps.webhookFireId !== undefined
+      deps.webhookFireId !== undefined ||
+      deps.eventSubscriptionId !== undefined ||
+      deps.eventDeliveryId !== undefined
     ) {
       throw new ValidationError(
         'task-launch-child-metadata-invalid',
@@ -2244,6 +2250,8 @@ function rootLaunchOriginFromDeps(deps: StartTaskDeps): TaskLaunchOrigin | null 
     scheduledTaskId: deps.scheduledTaskId,
     webhookTriggerId: deps.webhookTriggerId,
     webhookFireId: deps.webhookFireId,
+    eventSubscriptionId: deps.eventSubscriptionId,
+    eventDeliveryId: deps.eventDeliveryId,
     hasTriggerContext: deps.triggerContext !== undefined,
     // RFC-304: a capability round's anchor is its round row, not a trigger fire.
     hasCodeRound: deps.codeRoundLaunch !== undefined,
@@ -2939,6 +2947,8 @@ async function startTaskImpl(
           // RFC-257: webhook-trigger attribution, same atomic-stamp discipline.
           webhookTriggerId: deps.webhookTriggerId ?? null,
           webhookFireId: deps.webhookFireId ?? null,
+          eventSubscriptionId: deps.eventSubscriptionId ?? null,
+          eventDeliveryId: deps.eventDeliveryId ?? null,
           // RFC-269: publish trigger inputs in this same task-row INSERT. The
           // scheduler starts only after this transaction commits and reads the
           // task row once, so a later UPDATE is observably too late.
@@ -2997,6 +3007,14 @@ async function startTaskImpl(
                   .get()?.rootTaskId ?? deps.callLaunch.parentTaskId),
         })
         .run()
+
+      enqueueTaskLifecycleEventTx(tx, {
+        taskId,
+        revision: 1,
+        previousStatus: null,
+        status: earlyError === null ? 'pending' : 'failed',
+        occurredAt: now,
+      })
 
       // RFC-311 — /api/tasks/page 的 keyset 排序键维护：新任务把自己的
       // started_at 沿父链向上推进（分支最新活动时间是聚合值,列表只按 root

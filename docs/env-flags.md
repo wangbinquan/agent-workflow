@@ -26,6 +26,8 @@
 | `AW_ADAPTER_SINK` / `AW_EXTERNAL_ID`    | `backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts`              | RFC-310 requirement adapter 子进程契约：one-shot staged sink 目录 + 外部需求 ID（env 从空对象构造，只含 PATH/HOME/TMPDIR + 本族）                           |
 | `AW_ADAPTER_QUESTIONS`                  | 同上（questions.writeback 操作时）                                                        | 问题集 JSON 随 env 传给 adapter（小 payload；大字节仍走 sink 文件）                                                                                         |
 | `AW_REQUIREMENT_MOCK_URL`               | `backend/src/modules/integration/composition/requirementSource.ts`（透传）；mock CLI 读取 | system-mocks E2E 座席：平台进程 env 存在该名时透传给 adapter 子进程，供 requirement-adapter-cli 找到 mock 上游；真实 adapter 走 connectionRef，不依赖此透传 |
+| `AW_EVENT_INPUT_FILE`                   | `backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts`           | 自定义事件观察程序的只读 input envelope 文件；大结果不经 env 传递                                                                                          |
+| `AW_EVENT_OBSERVER_PROTOCOL`            | 同上                                                                                      | 自定义事件观察程序必须遵守的版本化 stdout envelope 协议标识                                                                                                |
 
 ### script 节点上下文族（`backend/src/services/scriptRun.ts` 组装）
 

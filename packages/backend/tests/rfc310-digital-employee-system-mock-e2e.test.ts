@@ -39,6 +39,7 @@ import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infra
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
+import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { composeEventCenter } from '@/modules/event-center/composition'
 import {
   bindCandidateDeliveryParticipant,
@@ -238,7 +239,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     const eventCenter = composeEventCenter({
       db,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      typePackageDescriptorJsons: [
+        developmentEmployeeTypePackage.descriptorJson,
+        digitalEmployeeLifecycleEventCatalogJson,
+      ],
     })
     const adapterStore = createSqliteDevelopmentAdapterStore(db)
     const adapterIdentity = createDevelopmentAdapter(
@@ -911,8 +915,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       ],
     })
     eventCenter.commands.observe({
-      sourceRef: { id: 'development.code-host-state', revision: 1 },
-      eventTypeRef: { id: 'development.pipeline-updated', revision: 1 },
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
       occurredAt: Date.now(),
       dedupeKey: `pipeline:${parentMrHead}:external-dependency`,
@@ -963,8 +967,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       ],
     })
     eventCenter.commands.observe({
-      sourceRef: { id: 'development.code-host-state', revision: 1 },
-      eventTypeRef: { id: 'development.pipeline-updated', revision: 1 },
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: {
         typeId: 'merge-request',
         subjectRef: 'repo-system-mock-dependency!84',
@@ -986,8 +990,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
 
     mrStates.set('repo-system-mock-dependency', 'merged')
     eventCenter.commands.observe({
-      sourceRef: { id: 'development.code-host-state', revision: 1 },
-      eventTypeRef: { id: 'development.lifecycle-updated', revision: 1 },
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: {
         typeId: 'merge-request',
         subjectRef: 'repo-system-mock-dependency!84',
@@ -1091,8 +1095,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
 
     mrStates.set('repo-system-mock', 'merged')
     eventCenter.commands.observe({
-      sourceRef: { id: 'development.code-host-state', revision: 1 },
-      eventTypeRef: { id: 'development.lifecycle-updated', revision: 1 },
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
       occurredAt: Date.now() + 4,
       dedupeKey: `lifecycle:${parentMrHead}:merged`,

@@ -31,6 +31,7 @@ import { computePorts } from './WorkflowCanvas'
 import { nodeTitle } from './nodeTitle'
 import { PromptPreview } from './PromptPreview'
 import { useWorkflowRefResolver } from './useWorkflowRefResolver'
+import { useEventTriggerContracts } from './useEventTriggerContracts'
 import { AgentSingleEdit } from './inspector/AgentSingleEdit'
 import { CallWorkflowEdit } from './inspector/CallWorkflowEdit'
 import { CallWorkgroupEdit } from './inspector/CallWorkgroupEdit'
@@ -120,7 +121,7 @@ export function NodeInspector({
   onConnect,
   chrome = 'rail',
 }: NodeInspectorProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [tab, setTab] = useState<Tab>('edit')
   const [transitionNotice, setTransitionNotice] = useState<string | null>(null)
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents), [agents])
@@ -129,6 +130,7 @@ export function NodeInspector({
   // summary counts its child-mirrored ports (provider-tolerant hook — several
   // inspector suites render without a QueryClientProvider).
   const { workflowByRef } = useWorkflowRefResolver()
+  const triggerContracts = useEventTriggerContracts(i18n.resolvedLanguage ?? i18n.language)
 
   // Reset to edit tab whenever the selection changes.
   useEffect(() => {
@@ -318,6 +320,7 @@ export function NodeInspector({
                   agents={agents}
                   definition={definition}
                   workflowId={workflowId}
+                  triggerContracts={triggerContracts}
                   onPatch={patch}
                   onCommitDef={commitDefinition}
                   onTransition={commitTransition}

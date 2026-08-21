@@ -9,6 +9,18 @@ export interface ToolConnectionProjection {
 }
 
 /**
+ * Digital employees consume the platform-wide retry limits. This port is
+ * intentionally read-only: authoring an employee must never create a second
+ * retry-policy namespace beside Settings -> Limits.
+ */
+export interface EmployeeRetryLimitsPort {
+  current(): {
+    readonly defaultNodeRetries: number
+    readonly sessionRestartBudget: number
+  }
+}
+
+/**
  * Resolves one exact, platform-owned connection revision. The consumer owns
  * this narrow contract; provider credentials and executable details never
  * cross into Digital Employee authoring or Agent input.
@@ -27,6 +39,15 @@ export interface ProgramArtifactPort {
     readonly executableDigest: string
     readonly parameterValuesRef: string | null
   }>
+  read(input: {
+    readonly runtimeKind: 'bash' | 'node' | 'python'
+    readonly executableArtifactRef: string
+    readonly executableDigest: string
+    readonly parameterValuesRef: string | null
+  }): {
+    readonly source: string
+    readonly parameterValues: Readonly<Record<string, string | number | boolean>> | null
+  } | null
 }
 
 /**

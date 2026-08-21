@@ -357,7 +357,40 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
     const childTask = (
       await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
     )[0]!
-    expect(JSON.parse(childTask.triggerContextJson!)).toEqual(context)
+    expect(JSON.parse(childTask.triggerContextJson!)).toEqual({
+      ...context,
+      contract: {
+        namespace: 'webhook',
+        definitionRef: { id: 'code-host.webhook.note', revision: 1 },
+        availableFields: [
+          'event_type',
+          'provider',
+          'repo_path',
+          'repo_http_url',
+          'repo_ssh_url',
+          'branch',
+          'default_branch',
+          'api_base_url',
+          'project_id',
+          'project_web_url',
+          'repo_owner',
+          'repo_name',
+          'author_id',
+          'event_json',
+          'target_branch',
+          'mr_iid',
+          'mr_id',
+          'mr_title',
+          'mr_url',
+          'comment_text',
+          'comment_author',
+          'comment_id',
+          'comment_thread_id',
+          'comment_url',
+          'comment_position_json',
+        ],
+      },
+    })
     const childRun = (
       await h.db
         .select()

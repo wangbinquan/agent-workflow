@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { webhookDeliveries, webhookEndpoints } from '../src/db/schema'
+import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 import type { EventCenterModule } from '../src/modules/event-center/composition'
 import { createWebhookRateLimiters } from '../src/services/webhook/rateLimiter'
@@ -26,7 +26,8 @@ function fakeDispatcher(): { dispatcher: WebhookDispatcher; calls: DispatchCall[
   return {
     calls,
     dispatcher: {
-      dispatch: async (input) => {
+      dispatch: async () => {},
+      dispatchSubscription: async (input) => {
         calls.push({ deliveryId: input.deliveryId })
       },
     },
@@ -57,6 +58,19 @@ async function harness(opts?: {
     urlToken: 'aw_whk_tok1',
     secretEnc: box.seal(SECRET),
     enabled: opts?.enabled ?? true,
+  })
+  await db.insert(webhookTriggers).values({
+    id: 'trigger-ingress-fixture',
+    name: '入口回归规则',
+    endpointId: 'ep-1',
+    ownerUserId: 'fixture-owner',
+    repoScope: JSON.stringify({ kind: 'all' }),
+    eventTypes: JSON.stringify(['push', 'pipeline_failed']),
+    ignoreUsernames: '[]',
+    launchKind: 'workflow',
+    launchRefId: 'fixture-workflow',
+    launchPayload: JSON.stringify({ inputs: {}, scratch: true }),
+    templateSyntaxVersion: 2,
   })
   const app = createApp({
     token: 'a'.repeat(64),
@@ -178,9 +192,17 @@ describe('RFC-257 T5 · 三段式与去重', () => {
         },
       },
       participant: {},
-      commands: {},
+      commands: {
+        observe() {
+          return { eventId: 'event-stub', duplicate: false, deliveryCount: 0, deliveryIds: [] }
+        },
+      },
       queries: {},
-      worker: {},
+      worker: {
+        async runOneNotification() {
+          return 'idle' as const
+        },
+      },
     } as unknown as EventCenterModule
     const { app } = await harness({ digitalEmployeeEventCenter })
 
@@ -205,17 +227,17 @@ describe('RFC-257 T5 · 三段式与去重', () => {
       },
     )
     expect(pipeline.status).toBe(200)
-    expect(nudges).toEqual([{ id: 'development.code-host-state', revision: 1 }])
+    expect(nudges).toEqual([{ id: 'code-host.activity', revision: 1 }])
   })
 
-  test('接收成功：200 + received 行 + dispatcher 收到分发（AC-5 前半）', async () => {
+  test('接收成功：200 + matched 路由审计 + 独立事件投递（AC-5 前半）', async () => {
     const { app, db, calls } = await harness()
     const res = await post(app, URL_OK, pushBody(), H_OK)
     expect(res.status).toBe(200)
     const body = (await res.json()) as { deliveryId: string; status: string }
     expect(body.status).toBe('received')
     const rows = await deliveryRows(db)
-    expect(rows[0]?.status).toBe('received')
+    expect(rows[0]?.status).toBe('matched')
     expect(rows[0]?.eventType).toBe('push')
     expect(rows[0]?.repoPath).toBe('platform/api')
     expect(rows[0]?.streamHint).toBe('platform/api|branch:feature/x')
@@ -230,7 +252,8 @@ describe('RFC-257 T5 · 三段式与去重', () => {
     let started = false
     const { app } = await harness({
       dispatcher: {
-        dispatch: async () => {
+        dispatch: async () => {},
+        dispatchSubscription: async () => {
           started = true
           await gate
         },
@@ -258,6 +281,59 @@ describe('RFC-257 T5 · 三段式与去重', () => {
     expect((await deliveryRows(db)).length).toBe(1)
   })
 
+  test('业务事实发布失败释放 UUID 重投，已发布的兼容事实保持幂等', async () => {
+    const observations: Array<{ dedupeKey: string }> = []
+    const digitalEmployeeEventCenter = {
+      observerControl: {
+        nudgeSource() {
+          return false
+        },
+      },
+      participant: {},
+      commands: {
+        observe(input: { dedupeKey: string }) {
+          observations.push(input)
+          // The compatibility occurrence is already durable when publication
+          // of the public business fact fails.
+          if (observations.length === 2) throw new Error('fixture event publication failed')
+          return {
+            eventId: 'event-after-retry',
+            duplicate: false,
+            deliveryCount: 0,
+            deliveryIds: [],
+          }
+        },
+      },
+      queries: {},
+      worker: {
+        async runOneNotification() {
+          return 'idle' as const
+        },
+      },
+    } as unknown as EventCenterModule
+    const { app, db } = await harness({ digitalEmployeeEventCenter })
+
+    const first = await post(app, URL_OK, pushBody(), H_OK)
+    expect(first.status).toBe(500)
+    expect(await deliveryRows(db)).toMatchObject([
+      { status: 'failed', statusReason: 'internal-error' },
+    ])
+
+    const second = await post(app, URL_OK, pushBody(), H_OK)
+    expect(second.status).toBe(200)
+    expect((await second.json()) as { status: string }).toMatchObject({ status: 'received' })
+    const rows = await deliveryRows(db)
+    expect(rows).toHaveLength(2)
+    expect(new Set(rows.map((row) => row.id)).size).toBe(2)
+    expect(rows.map((row) => row.status).sort()).toEqual(['failed', 'ignored'])
+    expect(observations).toHaveLength(4)
+    expect(observations[0]!.dedupeKey).toBe(observations[2]!.dedupeKey)
+    expect(observations[1]!.dedupeKey).toBe(observations[3]!.dedupeKey)
+    expect(observations[0]!.dedupeKey).toContain('uuid-1')
+    expect(observations[1]!.dedupeKey).toContain('code-host-fact')
+    expect(observations[1]!.dedupeKey).toContain('uuid-1')
+  })
+
   test('rejected 后同 UUID 重投能落地（AC-3 · 去重索引排除 rejected）', async () => {
     const { app, db } = await harness()
     const bad = await post(app, URL_OK, pushBody(), {
@@ -272,7 +348,7 @@ describe('RFC-257 T5 · 三段式与去重', () => {
     expect(good.status).toBe(200)
     expect(((await good.json()) as { status: string }).status).toBe('received')
     const rows = await deliveryRows(db)
-    expect(rows.map((r) => r.status).sort()).toEqual(['received', 'rejected'])
+    expect(rows.map((r) => r.status).sort()).toEqual(['matched', 'rejected'])
   })
 
   test('UUID 缺失 → 无去重，逐条处理（F-18 降级模式）', async () => {
@@ -315,6 +391,28 @@ describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
         db,
         secretBox: box,
         webhookDispatcher: fake.dispatcher,
+        digitalEmployeeEventCenter: {
+          commands: {
+            observe() {
+              return {
+                eventId: 'limiter-event',
+                duplicate: false,
+                deliveryCount: 0,
+                deliveryIds: [],
+              }
+            },
+          },
+          worker: {
+            async runOneNotification() {
+              return 'idle' as const
+            },
+          },
+          observerControl: {
+            nudgeSource() {
+              return false
+            },
+          },
+        } as unknown as EventCenterModule,
       } as Parameters<typeof mountWebhookIngressRoutes>[1],
       { limiters },
     )
@@ -339,11 +437,12 @@ describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
 describe('RFC-257 T5 · daemon 重启恢复（D23）', () => {
   test('遗留 received/processing → failed(interrupted)；终态不动', async () => {
     const { db, app } = await harness()
-    await post(app, URL_OK, pushBody(), H_OK) // received（fake dispatcher 不推进状态）
+    const accepted = await post(app, URL_OK, pushBody(), H_OK)
+    const acceptedId = ((await accepted.json()) as { deliveryId: string }).deliveryId
     await db
       .update(webhookDeliveries)
       .set({ status: 'processing' })
-      .where(eq(webhookDeliveries.status, 'received'))
+      .where(eq(webhookDeliveries.id, acceptedId))
     await post(app, URL_OK, pushBody(), {
       'x-gitlab-token': 'wrong',
       'x-gitlab-event-uuid': 'uuid-X',

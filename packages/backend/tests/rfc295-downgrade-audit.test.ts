@@ -73,7 +73,7 @@ describe('RFC-295 legacy projection downgrade audit', () => {
     })
   })
 
-  test('forward-created inactive invalid, local and trigger refs block downgrade', () => {
+  test('forward-created local and generic trigger refs block downgrade without a frozen context', () => {
     const result = auditRfc295Downgrade({
       workflows: [
         {
@@ -96,8 +96,8 @@ describe('RFC-295 legacy projection downgrade audit', () => {
 
     expect(result.ok).toBe(false)
     expect(result.issues.map((entry) => entry.code).sort()).toEqual([
-      'legacy-invalid-template-ref',
       'legacy-local-ref-missing',
+      'legacy-trigger-context-missing',
       'legacy-trigger-context-missing',
     ])
     expect(result.issues.every((entry) => entry.revision === 8)).toBe(true)

@@ -1,16 +1,18 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Agent, WorkflowListItem } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
 import type {
   DigitalEmployeeDefinition,
   EmployeeWorkContract,
   EmployeeTypePackage,
   JobTemplate,
+  ToolAuthoringView,
   ToolRegistration,
   WorkItem,
 } from '@/components/digital-employees/types'
@@ -34,6 +36,7 @@ import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TabBar, tabDomIds } from '@/components/TabBar'
+import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 type WorkspaceView = 'employees' | 'jobs' | 'toolbox' | 'scope'
@@ -240,6 +243,29 @@ function WorkItemContractCard(props: {
   )
 }
 
+function toolStatus(
+  tool: ToolRegistration,
+  zh: boolean,
+): { kind: 'success' | 'danger' | 'neutral'; label: string } {
+  if (tool.validationReceipt.status === 'invalid') {
+    return {
+      kind: 'danger',
+      label:
+        tool.publishedRevision === null
+          ? zh
+            ? '验证失败'
+            : 'Invalid'
+          : zh
+            ? `待修正 · v${tool.publishedRevision} 仍可用`
+            : `Needs correction · v${tool.publishedRevision} remains available`,
+    }
+  }
+  if (tool.state === 'published') {
+    return { kind: 'success', label: zh ? '可用' : 'Available' }
+  }
+  return { kind: 'neutral', label: zh ? '草稿' : 'Draft' }
+}
+
 function ToolboxPanel(props: {
   typeRef: string
   typeName: string
@@ -248,8 +274,23 @@ function ToolboxPanel(props: {
   tools: ToolRegistration[]
   language: string
 }): ReactElement {
+  const qc = useQueryClient()
+  const canUpdate = usePermission('digital-employees:update')
+  const canArchive = usePermission('digital-employees:archive')
   const [open, setOpen] = useState(false)
+  const [editingTool, setEditingTool] = useState<ToolRegistration | null>(null)
   const zh = props.language.startsWith('zh')
+  const retire = useMutation({
+    mutationFn: (toolId: string) =>
+      api.post(
+        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/work-items/${encodeURIComponent(props.item?.workItemRef ?? '')}/tools/${encodeURIComponent(toolId)}/retire`,
+      ),
+    onSuccess: async () => {
+      await qc.invalidateQueries({
+        queryKey: ['digital-employee-tools', props.typeRef, props.item?.workItemRef],
+      })
+    },
+  })
   if (props.item === null) return <div />
   const business = props.item.nodeKind === 'business-tool'
   return (
@@ -264,8 +305,15 @@ function ToolboxPanel(props: {
           <h2>{localized(props.item.label, props.language)}</h2>
           <p>{localized(props.item.description, props.language)}</p>
         </div>
-        {business ? (
-          <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
+        {business && canUpdate ? (
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => {
+              setEditingTool(null)
+              setOpen(true)
+            }}
+          >
             {zh ? '增加工具' : 'Add tool'}
           </button>
         ) : (
@@ -282,44 +330,60 @@ function ToolboxPanel(props: {
                 : 'No tools yet. Add one, then select it in a job template.'}
             </p>
           ) : (
-            props.tools.map((tool) => (
-              <article key={tool.id} className="node-tool-row">
-                <div>
-                  <strong>{tool.content.displayName}</strong>
-                  <span>{tool.content.description}</span>
-                  <small>
-                    {tool.content.implementation.kind === 'agent'
-                      ? 'Agent'
-                      : tool.content.implementation.kind === 'workflow'
-                        ? 'Workflow'
-                        : 'Program'}
-                    {' · '}
-                    {tool.content.roleRef}
-                  </small>
-                </div>
-                <StatusChip
-                  kind={
-                    tool.state === 'published'
-                      ? 'success'
-                      : tool.validationReceipt.status === 'invalid'
-                        ? 'danger'
-                        : 'neutral'
-                  }
-                >
-                  {tool.state === 'published'
-                    ? zh
-                      ? '可用'
-                      : 'Available'
-                    : tool.validationReceipt.status === 'invalid'
-                      ? zh
-                        ? '验证失败'
-                        : 'Invalid'
-                      : zh
-                        ? '草稿'
-                        : 'Draft'}
-                </StatusChip>
-              </article>
-            ))
+            props.tools.map((tool) => {
+              const status = toolStatus(tool, zh)
+              return (
+                <article key={tool.id} className="node-tool-row">
+                  <div>
+                    <strong>{tool.content.displayName}</strong>
+                    <span>{tool.content.description}</span>
+                    <small>
+                      {tool.content.implementation.kind === 'agent'
+                        ? 'Agent'
+                        : tool.content.implementation.kind === 'workflow'
+                          ? 'Workflow'
+                          : 'Program'}
+                      {' · '}
+                      {tool.content.roleRef}
+                    </small>
+                  </div>
+                  <div className="employee-summary-card__actions">
+                    <StatusChip kind={status.kind}>{status.label}</StatusChip>
+                    {canUpdate ? (
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        onClick={() => {
+                          setEditingTool(tool)
+                          setOpen(true)
+                        }}
+                      >
+                        {zh ? '编辑' : 'Edit'}
+                      </button>
+                    ) : null}
+                    {canArchive ? (
+                      <ConfirmButton
+                        label={
+                          tool.publishedRevision === null
+                            ? zh
+                              ? '删除草稿'
+                              : 'Delete draft'
+                            : zh
+                              ? '停用'
+                              : 'Retire'
+                        }
+                        confirmLabel={zh ? '确认' : 'Confirm'}
+                        confirmationKey={tool.id}
+                        onConfirm={() => retire.mutateAsync(tool.id)}
+                        variant="danger"
+                        size="sm"
+                        disabled={retire.isPending}
+                      />
+                    ) : null}
+                  </div>
+                </article>
+              )
+            })
           )}
         </div>
       ) : (
@@ -349,12 +413,17 @@ function ToolboxPanel(props: {
           </Link>
         </NoticeBanner>
       ) : null}
+      {retire.isError ? <ErrorBanner error={retire.error} onRetry={() => retire.reset()} /> : null}
       <AddToolDialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false)
+          setEditingTool(null)
+        }}
         typeRef={props.typeRef}
         item={props.item}
         contract={props.contract}
+        tool={editingTool}
         language={props.language}
       />
     </section>
@@ -393,6 +462,7 @@ function AddToolDialog(props: {
   typeRef: string
   item: WorkItem
   contract: EmployeeWorkContract | null
+  tool: ToolRegistration | null
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
@@ -406,6 +476,9 @@ function AddToolDialog(props: {
   const [runtimeKind, setRuntimeKind] = useState<'bash' | 'node' | 'python'>('bash')
   const [connectionId, setConnectionId] = useState('')
   const [roleRef, setRoleRef] = useState(props.item.toolRoleGroups[0]?.roleRef ?? '')
+  const workingToolId = useRef<string | null>(null)
+  const editorSessionKey = useRef<string | null>(null)
+  const hydratedToolId = useRef<string | null>(null)
   const [validationChecks, setValidationChecks] = useState<
     Array<{ code: string; ok: boolean; detail: string }>
   >([])
@@ -431,13 +504,84 @@ function AddToolDialog(props: {
       ),
     staleTime: 60_000,
   })
+  const authoring = useQuery<ToolAuthoringView>({
+    queryKey: [
+      'digital-employee-tool-authoring',
+      props.typeRef,
+      props.item.workItemRef,
+      props.tool?.id,
+    ],
+    enabled: props.open && props.tool !== null,
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/work-items/${encodeURIComponent(props.item.workItemRef)}/tools/${encodeURIComponent(props.tool?.id ?? '')}`,
+        undefined,
+        signal,
+      ),
+  })
+  useEffect(() => {
+    if (!props.open) {
+      editorSessionKey.current = null
+      hydratedToolId.current = null
+      workingToolId.current = null
+      return
+    }
+    const sessionKey = props.tool?.id ?? 'new'
+    if (editorSessionKey.current === sessionKey) return
+    editorSessionKey.current = sessionKey
+    hydratedToolId.current = null
+    workingToolId.current = props.tool?.id ?? null
+    setKind(allowedKinds[0] ?? 'agent')
+    setName('')
+    setDescription('')
+    setResource('')
+    setSource('')
+    setParameterValuesJson('{}')
+    setRuntimeKind('bash')
+    setConnectionId('')
+    setRoleRef(props.item.toolRoleGroups[0]?.roleRef ?? '')
+    setValidationChecks([])
+  }, [allowedKinds, props.item.toolRoleGroups, props.open, props.tool?.id])
+  useEffect(() => {
+    if (
+      !props.open ||
+      props.tool === null ||
+      authoring.data?.id !== props.tool.id ||
+      hydratedToolId.current === props.tool.id
+    ) {
+      return
+    }
+    hydratedToolId.current = props.tool.id
+    const body = authoring.data.body
+    setKind(body.implementation.kind)
+    setName(body.displayName)
+    setDescription(body.description)
+    setRoleRef(body.roleRef)
+    setConnectionId(body.connectionRef?.id ?? '')
+    setValidationChecks(authoring.data.validationReceipt.checks)
+    if (body.implementation.kind === 'agent') {
+      setResource(body.implementation.agentRef.id)
+      setSource('')
+      setParameterValuesJson('{}')
+      return
+    }
+    if (body.implementation.kind === 'workflow') {
+      setResource(body.implementation.workflowRef.id)
+      setSource('')
+      setParameterValuesJson('{}')
+      return
+    }
+    setResource('')
+    setRuntimeKind(body.implementation.runtimeKind)
+    setSource(body.implementation.source)
+    setParameterValuesJson(JSON.stringify(body.implementation.parameterValues ?? {}, null, 2))
+  }, [authoring.data, props.open, props.tool])
   useEffect(() => {
     if (!props.open) return
     if (!allowedKinds.includes(kind)) setKind(allowedKinds[0] ?? 'agent')
     if (!props.item.toolRoleGroups.some((role) => role.roleRef === roleRef)) {
       setRoleRef(props.item.toolRoleGroups[0]?.roleRef ?? '')
     }
-    setValidationChecks([])
   }, [allowedKinds, kind, props.item.toolRoleGroups, props.open, roleRef])
   useEffect(() => {
     if (props.open && kind === 'program' && source.trim() === '') {
@@ -511,7 +655,7 @@ function AddToolDialog(props: {
     enabled: props.open && props.contract?.requiredConnectionPurpose != null,
     queryFn: ({ signal }) => api.get('/api/integrations/development-adapters', undefined, signal),
   })
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: async () => {
       const implementation =
         kind === 'agent'
@@ -541,28 +685,30 @@ function AddToolDialog(props: {
                   revision: 1,
                 },
               }
-      const draft = await api.post<ToolRegistration>(
-        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/work-items/${encodeURIComponent(props.item.workItemRef)}/tools`,
-        {
-          displayName: name,
-          description,
-          roleRef,
-          implementation,
-          connectionRef:
-            props.contract?.requiredConnectionPurpose == null
-              ? null
-              : {
-                  id: connectionId,
-                  revision:
-                    connections.data?.items.find((candidate) => candidate.id === connectionId)
-                      ?.publishedRevision ?? 0,
-                },
-        },
-      )
+      const body = {
+        displayName: name,
+        description,
+        roleRef,
+        implementation,
+        connectionRef:
+          props.contract?.requiredConnectionPurpose == null
+            ? null
+            : {
+                id: connectionId,
+                revision:
+                  connections.data?.items.find((candidate) => candidate.id === connectionId)
+                    ?.publishedRevision ?? 0,
+              },
+      }
+      const basePath = `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/work-items/${encodeURIComponent(props.item.workItemRef)}/tools`
+      const existingId = props.tool?.id ?? workingToolId.current
+      const draft =
+        existingId === null
+          ? await api.post<ToolRegistration>(basePath, body)
+          : await api.put<ToolRegistration>(`${basePath}/${encodeURIComponent(existingId)}`, body)
+      workingToolId.current = draft.id
       if (draft.validationReceipt.status !== 'valid') return draft
-      await api.post(
-        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/work-items/${encodeURIComponent(props.item.workItemRef)}/tools/${encodeURIComponent(draft.id)}/publish`,
-      )
+      await api.post(`${basePath}/${encodeURIComponent(draft.id)}/publish`)
       return draft
     },
     onMutate: () => setValidationChecks([]),
@@ -580,6 +726,7 @@ function AddToolDialog(props: {
       setSource('')
       setParameterValuesJson('{}')
       setConnectionId('')
+      workingToolId.current = null
       props.onClose()
     },
   })
@@ -607,12 +754,16 @@ function AddToolDialog(props: {
     <Dialog
       open={props.open}
       onClose={props.onClose}
-      title={`${zh ? '给工作项增加工具：' : 'Add tool to '}${localized(props.item.label, props.language)}`}
+      title={
+        props.tool === null
+          ? `${zh ? '给工作项增加工具：' : 'Add tool to '}${localized(props.item.label, props.language)}`
+          : `${zh ? '编辑工具：' : 'Edit tool: '}${props.tool.content.displayName}`
+      }
       size="lg"
-      dismissDisabled={create.isPending}
+      dismissDisabled={save.isPending}
       footer={
         <>
-          <button type="button" className="btn" onClick={props.onClose} disabled={create.isPending}>
+          <button type="button" className="btn" onClick={props.onClose} disabled={save.isPending}>
             {zh ? '取消' : 'Cancel'}
           </button>
           <button
@@ -620,20 +771,25 @@ function AddToolDialog(props: {
             form="employee-add-tool-form"
             className="btn btn--primary"
             disabled={
-              create.isPending ||
+              save.isPending ||
               contractGuide.data === undefined ||
+              (props.tool !== null && authoring.data === undefined) ||
               name.trim() === '' ||
               !resourceValid ||
               !connectionValid
             }
           >
-            {create.isPending
+            {save.isPending
               ? zh
                 ? '正在验证…'
                 : 'Validating…'
-              : zh
-                ? '检查契约并加入工具箱'
-                : 'Check contract and add'}
+              : props.tool === null
+                ? zh
+                  ? '检查契约并加入工具箱'
+                  : 'Check contract and add'
+                : zh
+                  ? '检查契约并发布新版本'
+                  : 'Check contract and publish new version'}
           </button>
         </>
       }
@@ -643,9 +799,14 @@ function AddToolDialog(props: {
         className="employee-dialog-form"
         onSubmit={(event) => {
           event.preventDefault()
-          create.mutate()
+          save.mutate()
         }}
       >
+        {props.tool !== null && authoring.isPending ? (
+          <LoadingState label={zh ? '正在加载工具草稿…' : 'Loading tool draft…'} />
+        ) : props.tool !== null && authoring.isError ? (
+          <ErrorBanner error={authoring.error} onRetry={() => void authoring.refetch()} />
+        ) : null}
         <WorkItemContractCard
           item={props.item}
           contract={props.contract}
@@ -908,7 +1069,7 @@ function AddToolDialog(props: {
             </ul>
           </NoticeBanner>
         ) : null}
-        {create.isError ? <ErrorBanner error={create.error} /> : null}
+        {save.isError ? <ErrorBanner error={save.error} onRetry={() => save.reset()} /> : null}
       </form>
     </Dialog>
   )

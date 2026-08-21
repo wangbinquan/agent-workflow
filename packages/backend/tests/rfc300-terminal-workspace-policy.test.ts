@@ -71,10 +71,13 @@ function dbWithCompetingWriter(real: DbClient, sabotage: () => void): DbClient {
   return new Proxy(real, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver) as unknown
-      if (prop === 'update' && typeof value === 'function') {
+      if (prop === 'transaction' && typeof value === 'function') {
         return (...args: unknown[]) => {
           if (!fired) {
             fired = true
+            // setTaskStatus now owns a transaction that includes its Event
+            // Center outbox write. Race immediately before that transaction so
+            // the status CAS still proves the prune claim cannot tear.
             sabotage()
           }
           return (value as (...inner: unknown[]) => unknown).apply(target, args)
@@ -103,6 +106,17 @@ describe('RFC-300 exact cleanup candidate predicate', () => {
       })
     }
   }
+
+  test('accepts generic Event Center attribution without legacy Webhook ids', () => {
+    expect(
+      shouldRequestWebhookWorkspacePrune(true, {
+        ...base,
+        to: 'done',
+        webhookTriggerId: null,
+        eventSubscriptionId: 'event-subscription-1',
+      }),
+    ).toBe(true)
+  })
 
   test('rejects failed/interrupted and every active status', () => {
     for (const to of [

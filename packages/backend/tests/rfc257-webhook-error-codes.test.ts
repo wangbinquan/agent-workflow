@@ -28,7 +28,10 @@ async function harness(opts?: { omitDispatcher?: boolean }) {
     password: 'longEnoughPassword',
   })
   const { token } = await createSession({ db, userId: admin.id })
-  const dispatcher: WebhookDispatcher = { dispatch: async () => {} }
+  const dispatcher: WebhookDispatcher = {
+    dispatch: async () => {},
+    dispatchSubscription: async () => {},
+  }
   const workflowId = ulid()
   await db.insert(workflows).values({
     id: workflowId,
