@@ -62,8 +62,8 @@ test('a first-time user configures a work-item tool directly on the fixed respon
   await expect(dialog).toBeVisible()
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill('First implementation tool')
   await dialog.getByRole('combobox').click()
-  await page.getByRole('option', { name: 'Built in · Code writing', exact: true }).click()
-  await dialog.getByRole('button', { name: 'Validate and add', exact: true }).click()
+  await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
+  await dialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
 
   await expect(dialog).toHaveCount(0)
   await expect(toolbox.getByText('First implementation tool', { exact: true })).toBeVisible()
