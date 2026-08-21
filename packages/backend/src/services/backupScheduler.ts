@@ -242,24 +242,48 @@ export function runWalCheckpointTick(db: DbClient): 'checkpointed' | 'skipped-sn
 
 export interface WalCheckpointOptions {
   db: DbClient
-  intervalMs: number
+  /**
+   * RFC-311 余项（2026-08-21）：**每拍热读**，与 events 归档器 / webhook GC /
+   * worktree GC 同款约定。此前这里收的是 `intervalMs: number`，而 `cli/start.ts`
+   * 传的是 boot 配置快照——把 `walCheckpointIntervalMs` 从 0 改成 600000 之后不
+   * 重启 daemon 永远不生效，而且 0 的那次启动直接 `return` 空 handle，进程里连
+   * timer 都不存在，没有任何东西会去重读配置（用户实测：改完文件、-wal 照涨）。
+   * 返回 0 = 关（但监督拍还在，改回非 0 立刻恢复）。
+   */
+  getIntervalMs: () => number
+  /**
+   * 监督拍：多久**看一眼配置**（默认 60s）。它与「多久 checkpoint 一次」是两件
+   * 事——配置值会被向上取整到监督拍的粒度，所以小于 tickMs 的配置值没有意义。
+   */
+  tickMs?: number
+  /** 注入时钟（测试用）。 */
+  now?: () => number
 }
 
 /** Periodically checkpoint(TRUNCATE) the WAL to bound -wal growth. 0 = off. */
 export function startWalCheckpointLoop(opts: WalCheckpointOptions): BackupSchedulerHandle {
-  if (!opts.intervalMs || opts.intervalMs <= 0) return { stop: () => {} }
-  let running = false
+  const tickMs = opts.tickMs ?? 60_000
+  const now = opts.now ?? Date.now
+  let lastCheckpointAt = now()
+  // 整拍是同步的（checkpointWal 走 exec），所以不需要重入守卫。
   const handle = setInterval(() => {
-    if (running) return
-    running = true
+    // try 把 `getIntervalMs()` 也罩进来:热读意味着每拍都要碰一次 config 文件,
+    // 而定时器回调里抛出的同步异常没人接得住(会变成 uncaughtException 打死
+    // daemon)——一个坏掉的 config.json 不该因为 checkpoint 循环而升级成宕机。
     try {
-      runWalCheckpointTick(opts.db)
+      const intervalMs = opts.getIntervalMs()
+      if (intervalMs <= 0) return
+      if (now() - lastCheckpointAt < intervalMs) return
+      // 快照期间的跳拍**不推进**水位:下一个监督拍(而不是下一个整间隔)就重试,
+      // 备份一结束 -wal 立刻被收掉。失败则推进——`wal_checkpoint(TRUNCATE)` 撞上
+      // 活跃 reader 会阻塞满 busy_timeout(5s)并冻结全站(实现门 P0-2),每 60s
+      // 重试一次等于把那 5 秒冻结变成常态,宁可等满一个间隔。
+      if (runWalCheckpointTick(opts.db) === 'checkpointed') lastCheckpointAt = now()
     } catch (err) {
       log.warn('wal checkpoint failed', { error: (err as Error).message })
-    } finally {
-      running = false
+      lastCheckpointAt = now()
     }
-  }, opts.intervalMs)
+  }, tickMs)
   ;(handle as { unref?: () => void }).unref?.()
   return { stop: () => clearInterval(handle) }
 }

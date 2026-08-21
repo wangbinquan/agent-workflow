@@ -38,3 +38,15 @@ export const DAEMON_CADENCE = {
   /** RFC-310 Digital Employee OS durable Event → Reaction driver. */
   digitalEmployeeOs: 1_000,
 } as const satisfies Record<string, number>
+
+/**
+ * RFC-311 余项 —— 体积封顶类维护循环（事件归档器 / 终态任务 sweeper）**boot 首拍**
+ * 的统一延迟。它不是周期，所以不进上表。
+ *
+ * 为什么需要首拍：只有 `setInterval(1h)` 的循环，在平均重启间隔短于一个周期的部署
+ * 上一次都不会执行——生产实测（2026-08-21）跑着含字节水位的 v0.18.11，事件表照样
+ * 长到 78.6 万行 / 1.72GB。为什么要延迟：一轮归档在 2.6GB 库上实测 4-6s，没必要撞
+ * 在迁移 / 备份 / 恢复 / boot 巡检的开机风暴上（同款形状见
+ * `lifecycleInvariants.ts` 的 `bootDelayMs`，那边是纯扫描所以只等 5s）。
+ */
+export const MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS = 30_000

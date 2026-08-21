@@ -53,6 +53,7 @@ import {
   workgroupMessages,
   workgroupTaskState,
 } from '@/db/schema'
+import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS } from '@/services/daemonCadence'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
@@ -558,11 +559,19 @@ export async function runManualTaskArchive(
   )
 }
 
-/** hourly ticker(config 每拍热读,与归档器/保留 sweeper 同款约定)。 */
+/**
+ * hourly ticker(config 每拍热读,与归档器/保留 sweeper 同款约定)。
+ *
+ * RFC-311 余项（2026-08-21）：与事件归档器同一个洞——只有 `setInterval(1h)` 的
+ * 循环，在平均重启间隔短于一个周期的部署上一次都不会执行，于是"终态任务超期出库"
+ * 这条体积封顶的执行者形同虚设。首拍延迟见
+ * `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`。
+ */
 export function startTaskArchiveSweeper(
   db: DbClient,
   loadConfig: () => TaskArchiveConfig,
   intervalMs: number = 3_600_000,
+  bootDelayMs: number = MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
 ): { stop: () => void } {
   let running = false
   const tick = (): void => {
@@ -574,9 +583,16 @@ export function startTaskArchiveSweeper(
         running = false
       })
   }
+  const bootTimer = setTimeout(tick, bootDelayMs)
+  ;(bootTimer as { unref?: () => void }).unref?.()
   const handle = setInterval(tick, intervalMs)
   ;(handle as { unref?: () => void }).unref?.()
-  return { stop: () => clearInterval(handle) }
+  return {
+    stop: () => {
+      clearTimeout(bootTimer)
+      clearInterval(handle)
+    },
+  }
 }
 
 /** 供 CLI / admin API 使用:按条件预览可归档的树,不动任何数据。 */

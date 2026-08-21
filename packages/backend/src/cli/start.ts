@@ -894,7 +894,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // every burst until the next passive checkpoint; 0 still disables.
   const walCheckpointTicker = startWalCheckpointLoop({
     db,
-    intervalMs: config.walCheckpointIntervalMs,
+    // RFC-311 余项：每拍热读，跟邻居一致——调这个值不再需要重启 daemon。
+    getIntervalMs: () => loadConfig(Paths.config).walCheckpointIntervalMs,
   })
   // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
   // nobody launches a task against them. Reads its own enable flag each tick.

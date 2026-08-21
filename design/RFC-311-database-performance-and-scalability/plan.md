@@ -258,3 +258,30 @@ SCAN(是 keyset 首页应有形态,第一版误报过);注入 `sqlite_stat1` 伪
 同步连接阻塞时长无判据(只有墙钟能测,进门禁必 flaky)。
 **归属划分记账**:development 的 `retention_state` sweeper 与 code rollup 表虽在 T18 里被点到,
 但归 RFC-310 / code-capability 域,不由本 RFC 收口(此条自旧版§未完成项第 4 条移入,避免随重复段删除而丢失)。
+
+### 收口后余项：维护循环的「第一拍」与配置热读（2026-08-21 生产对账修复）
+
+生产（v0.18.11，**已含**字节水位 `765910a3`）实测 `node_run_events` 仍是 78.6 万行 / 1.72GB。
+把开发库按同形放大到 78.6 万行 / 2.6GB 逐语句复测后，两件事分开了：
+
+- **水位与归档器本身没问题**：一拍削 20 万行（预算上限）、4 拍收敛到 20 万行 / 389MiB，
+  一拍 1151 条语句里只有 2 条 >50ms（53 / 55ms）。收敛值高于 256MiB 目标是因为字节水位按
+  **最近 1000 行**采样估算行宽（该库尾部均值 1264B、全表均值 1993B），偏 1~2 倍属预期。
+- **装配层有洞**：`startEventsArchiver` / `startTaskArchiveSweeper` 只挂 `setInterval(1h)`、
+  没有 boot 首拍 ⇒ 重启比周期更勤的部署一次都不会执行；`startWalCheckpointLoop` 读 boot
+  配置快照且 `intervalMs<=0` 时连 timer 都不建 ⇒ 把 `walCheckpointIntervalMs` 由 0 改成
+  600000 后不重启永不生效。
+
+修复：两个 sweeper 加 boot 首拍（`MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS = 30s`，`stop()`
+连未触发的首拍一起撤）；checkpoint 循环改为每拍热读 `getIntervalMs()`（快照期间跳拍**不**推进
+水位、失败才推进，避免 5s busy_timeout 冻结变成每拍常态）。判据 `tests/rfc311-maintenance-boot-tick.test.ts`
+（红→绿：修复前 3 条「该发生」全部超时）。通用教训落 `docs/dev-gotchas.md` §dev-env / daemon。
+
+同批实测但**未修**、留作后续（形状仍在，只是被水位掩住；建议单独立 RFC）：
+`autoKill.ts` 的 `LEFT JOIN node_run_events + max(ts) + GROUP BY` 在 20 个 running run 上实测
+**194.9ms 单条**（归档收敛后 34.6ms）——`stuckTaskDetector.ts:184-196` 早已换成反向 seek，
+这里漏了；`sessionView.ts:138-144` 的 `ORDER BY ts` 造成 TEMP B-TREE，10.8 万事件的 run 上
+实测 **461.5ms + 122.0ms**（收敛后 <50ms），改按 `id` 排即纯反向 seek，但 subagent 回灌下
+ts 与 id 不严格同序，属语义取舍；事件写入无批量合并（`runner.ts:1536/1550/1610` 每行 stdout
+一条 autocommit INSERT）是语句数与 -wal 增长的根，对应 proposal §3 非目标里那条「写入即落盘
+JSONL、DB 只留活跃尾部」的二期。

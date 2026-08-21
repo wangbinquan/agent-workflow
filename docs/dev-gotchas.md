@@ -1134,6 +1134,12 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
   没有该缺陷**，怀疑时自己写探针量几何量，别只信守卫。
 - **视觉基线的 darwin 侧对「palette 滚动容器底部的新条目」不稳定**：RFC-243 给 node picker 新增 CALLS 分区后，本地 `bun run test:visual` 对 `workflow-editor-1536-three-rail-light` / `1179-palette-light` 时绿时红，diff 图显示**只有 CALLS 两条目**有文字位移重影（约 3.3k~3.8k 像素、ratio 0.01），页面其余部分逐像素一致——底部条目受滚动位置/字体加载时序影响。**ubuntu（CI 权威门）稳定绿**，故未改 spec；再有人在 palette 末尾加分区且撞到同一抖动，正解是截图前显式把 palette 容器 `scrollTop=0` 或对该区域加 mask，而不是抬阈值。
 
+- **只挂 `setInterval` 的后台清理循环 = 在「重启比周期还频繁」的部署上一次都不会执行**（2026-08-21 生产实测，RFC-311 余项）：某生产跑 v0.18.11（**已含**事件归档的字节水位 `765910a3`），`node_run_events` 仍长到 78.6 万行 / 1.72GB。水位算法本身没问题——把开发库按同形放大到 78.6 万行 / 2.6GB 实测，归档器一拍削 20 万行、4 拍收敛到 20 万行 / 389MiB，单拍 1151 条语句里只有 2 条 >50ms。**问题全在装配**：`startEventsArchiver` / `startTaskArchiveSweeper` 都只挂了 `setInterval(1h)`、没有 boot 首拍，而那台 daemon 发版/重启比一小时更勤，于是两个「给库体积封顶」的执行者形同虚设，表只涨不缩。三条定式：
+  ① 凡是**给某个无界资源封顶**的周期任务，boot 也要跑一拍（延迟 30s 让迁移/备份/恢复/巡检的开机风暴先过去，见 `services/daemonCadence.ts` 的 `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`；纯扫描类如 lifecycle 巡检 5s 即可），并且 `stop()` 要连未触发的首拍一起撤——否则 DB 关掉之后定时器还会去碰它。
+  ② 周期循环的配置一律**每拍热读**（`() => loadConfig(Paths.config)`），别读 boot 快照。`startWalCheckpointLoop` 曾经是快照，且 `intervalMs<=0` 时直接返回空 handle、**进程里连 timer 都不存在**：把 `walCheckpointIntervalMs` 从 0 改成 600000 之后不重启 daemon 永远不生效，而现象只是「-wal 照涨」，没有任何日志指向真凶。
+  ③ 这类洞**单元测试天然抓不到**——既有用例都直接调 `archiveEvents()` / `runTaskArchiveSweep()`，跳过了装配层。判据必须写在 ticker 上（「boot 后 N ms 内跑了第一拍」「stop() 撤得掉未触发的首拍」「0→N 不重启即生效」），见 `tests/rfc311-maintenance-boot-tick.test.ts`。
+  排查同类现象（「某个清理器为什么没生效」）的第一顺位不是算法，是**这个循环有没有机会跑过**：查 daemon 连续在线时长（`grep 'lock acquired' logs/daemon.log`）与该循环自己的 INFO 行是否出现过。
+
 ## 跨任务并发（RFC-243 起）
 
 - **跨任务锁序约定：持有任务 A `writeSem` 的临界区不得等待任务 B 的任何锁或终态。** RFC-243 的调用节点是唯一跨任务组合点，靠「writeSem 只在派生/合并两个短窗口持有、等待子任务阶段零锁」满足（`services/callNode` 语义内联在 scheduler 的 `runCallWorkflowNode`）；新增任何跨任务等待路径都要先对这条约定过一遍。

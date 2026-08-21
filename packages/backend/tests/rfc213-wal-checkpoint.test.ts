@@ -50,8 +50,15 @@ describe('RFC-213 checkpointWal', () => {
     ;(db as unknown as { $client: Database }).$client.close()
   })
 
-  test('startWalCheckpointLoop with intervalMs=0 is a no-op', () => {
-    const handle = startWalCheckpointLoop({ db: {} as never, intervalMs: 0 })
+  // RFC-311 余项：间隔改成每拍热读（`getIntervalMs`）后，0 仍然是「不 checkpoint」，
+  // 只是监督拍还在跑——这样把配置改回非 0 不需要重启 daemon。热切换本身由
+  // `rfc311-maintenance-boot-tick.test.ts` 锁定。
+  test('startWalCheckpointLoop with getIntervalMs()=0 never touches the db', () => {
+    const handle = startWalCheckpointLoop({
+      db: {} as never,
+      getIntervalMs: () => 0,
+      tickMs: 5,
+    })
     expect(() => handle.stop()).not.toThrow()
   })
 })

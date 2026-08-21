@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns } from '@/db/schema'
+import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS } from '@/services/daemonCadence'
 import { readMaintenanceNumber, writeMaintenanceValue } from '@/services/maintenanceState'
 import { createLogger } from '@/util/log'
 
@@ -426,15 +427,22 @@ function jsonlPath(logsDir: string, taskId: string, nodeRunId: string): string {
 /**
  * Start the hourly archive ticker. `loadConfig` is called each tick so
  * config changes apply without restart, matching worktree-GC's pattern.
+ *
+ * RFC-311 余项（2026-08-21 生产对账）：**boot 后必须先跑一拍**。此前这里只有
+ * `setInterval(1h)`，于是平均重启间隔短于一个周期的部署（发版 / 崩溃 / watchdog）
+ * 一次都不会归档——生产实测跑着含字节水位的 v0.18.11，事件表照样长到 78.6 万行
+ * / 1.72GB。首拍延迟 30s 是为了让开机风暴（迁移、备份、恢复、boot 巡检）先过去：
+ * 一轮归档在 2.6GB 库上实测 4-6s，撞在启动上没有必要。
  */
 export function startEventsArchiver(
   db: DbClient,
   loadConfig: () => Pick<Config, 'eventsArchiveThresholds'>,
   logsDir: string,
   intervalMs: number = HOUR_MS,
+  bootDelayMs: number = MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
 ): { stop: () => void } {
   let running = false
-  const handle = setInterval(() => {
+  const tick = (): void => {
     if (running) return
     running = true
     archiveEvents(db, loadConfig(), logsDir)
@@ -446,6 +454,14 @@ export function startEventsArchiver(
       .finally(() => {
         running = false
       })
-  }, intervalMs)
-  return { stop: () => clearInterval(handle) }
+  }
+  const bootTimer = setTimeout(tick, bootDelayMs)
+  ;(bootTimer as { unref?: () => void }).unref?.()
+  const handle = setInterval(tick, intervalMs)
+  return {
+    stop: () => {
+      clearTimeout(bootTimer)
+      clearInterval(handle)
+    },
+  }
 }
