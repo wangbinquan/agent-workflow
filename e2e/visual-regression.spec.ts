@@ -1420,7 +1420,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const picker = page.locator('[data-runtime-parameter-popover]')
     await picker.getByRole('combobox').fill('comment_text')
     await expect(
-      picker.getByText('{{trigger.webhook.comment_text}}', { exact: true }),
+      picker.getByText('{{trigger.code_host.comment_text}}', { exact: true }).first(),
     ).toBeVisible()
     await expect(page).toHaveScreenshot('workflow-runtime-parameter-picker-1280-light.png', {
       ...SNAPSHOT_OPTS,
