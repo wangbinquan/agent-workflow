@@ -53,6 +53,9 @@ export interface AgentProcessRequest {
   capture?: {
     onStdoutLine?: (line: string) => void | Promise<void>
     onStderrLine?: (line: string) => void | Promise<void>
+    /** RFC-314 D3——一个 chunk 的行投递完之后各调一次（合并逐行写入用）。 */
+    onStdoutChunkEnd?: () => void | Promise<void>
+    onStderrChunkEnd?: () => void | Promise<void>
     /** 行被截断投递时通知（capture-faithful 调用方标记取证不完整）。 */
     onLineTruncated?: () => void | Promise<void>
     /** true → 结果含 byte-exact rolling-tail stdout（蒸馏器 envelope 解析）。 */
@@ -151,6 +154,12 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
       : {}),
     ...(req.capture?.onStdoutLine !== undefined ? { onStdoutLine: req.capture.onStdoutLine } : {}),
     ...(req.capture?.onStderrLine !== undefined ? { onStderrLine: req.capture.onStderrLine } : {}),
+    ...(req.capture?.onStdoutChunkEnd !== undefined
+      ? { onStdoutChunkEnd: req.capture.onStdoutChunkEnd }
+      : {}),
+    ...(req.capture?.onStderrChunkEnd !== undefined
+      ? { onStderrChunkEnd: req.capture.onStderrChunkEnd }
+      : {}),
     ...(req.capture?.onLineTruncated !== undefined
       ? { onLineTruncated: req.capture.onLineTruncated }
       : {}),

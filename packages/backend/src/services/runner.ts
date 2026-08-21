@@ -1299,6 +1299,52 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // from the scheduler handles the trailing-edge flush.
     const PARENT_BROADCAST_THROTTLE_MS = 500
     let lastParentBroadcastTs = 0
+    // RFC-314 D3 —— 事件按 chunk 合并落库。
+    //
+    // 此前每一行 stdout/stderr 都是一条 autocommit INSERT + 一次重试包装；20 个 agent
+    // 并发猛吐时语句数与 -wal 帧数按**行数**线性增长。缓冲的冲刷点是 pump 的 chunk 边界
+    // （`managedProcess.pump` 的 `onChunkEnd`）：它在同一个 await 内写完才让出事件循环，
+    // pump 的下一次 read 之前一定已落库，所以读点（countAgentTextEvents / 会话租约 retag /
+    // WS 回放 / 详情页）**不需要任何 flush 屏障**，也不引入额外的崩溃丢失窗口。
+    /** 单条多行 INSERT 的行数上限：6 列 × 100 行 = 600 个绑定参数，低于仓内 900 护栏线
+     *  （SQLite 硬上限 32766；归档器曾因无界 IN 撞上它而每小时失败）。 */
+    type NodeRunEventInsert = typeof nodeRunEvents.$inferInsert
+    const EVENT_INSERT_MAX_ROWS = 100
+    const makeEventBuffer = (
+      operation: string,
+    ): { push: (row: NodeRunEventInsert) => void; flush: () => Promise<void> } => {
+      const rows: NodeRunEventInsert[] = []
+      return {
+        push: (row) => {
+          rows.push(row)
+        },
+        flush: async () => {
+          if (rows.length === 0) return
+          // splice 之前没有 await：两条流各有自己的缓冲，且这一步对并发的另一条泵是原子的。
+          const batch = rows.splice(0, rows.length)
+          for (let i = 0; i < batch.length; i += EVENT_INSERT_MAX_ROWS) {
+            const slice = batch.slice(i, i + EVENT_INSERT_MAX_ROWS)
+            await persistRunnerWrite(operation, () => opts.db.insert(nodeRunEvents).values(slice))
+          }
+        },
+      }
+    }
+    const stdoutEvents = makeEventBuffer('node-run-event/stdout')
+    const stderrEvents = makeEventBuffer('node-run-event/stderr')
+    /** 抛错前把已缓冲的取证事件写下去——它们恰恰在失败时最重要。冲刷本身再失败也不能
+     *  盖住原始错误（那才是这次运行失败的原因）。 */
+    const flushEventsBeforeThrow = async (): Promise<void> => {
+      try {
+        await stdoutEvents.flush()
+        await stderrEvents.flush()
+      } catch (flushError) {
+        log.warn('node-run-event-flush-failed', {
+          nodeRunId: opts.nodeRunId,
+          err: flushError instanceof Error ? flushError.message : String(flushError),
+        })
+      }
+    }
+
     const broadcastParentRunning = (): void => {
       const now = Date.now()
       if (now - lastParentBroadcastTs < PARENT_BROADCAST_THROTTLE_MS) return
@@ -1389,6 +1435,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
 
     const onStdoutLine = async (line: string): Promise<void> => {
+      // RFC-314 D3：任一行的解析/租约写入抛错时，先把本 chunk 已缓冲的取证事件落库
+      // 再抛——它们恰恰在失败时最重要（去掉这层，「第 k 行抛错时前 k-1 行已落库」
+      // 那条用例立刻转红）。
+      try {
+        await onStdoutLineInner(line)
+      } catch (error) {
+        await flushEventsBeforeThrow()
+        throw error
+      }
+    }
+    const onStdoutLineInner = async (line: string): Promise<void> => {
       // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
       // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
       // routes them through the raw-text fallback exactly as the old inline
@@ -1441,6 +1498,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               }
               const heldLease = runtimeLeaseToken
               const nextSessionId = ev.sessionId
+              // RFC-314 D3 —— **顺序屏障**：`rotateRuntimeSessionLease` 会把该 run 已落库
+              // 的旧 epoch 事件回标到新 sessionId（`runtimeSessionLease.ts` 的两条 UPDATE）。
+              // 本 chunk 里还躺在缓冲区的行如果晚于它落库，就会带着旧 sessionId 落在一个
+              // 孤儿桶里——正是那条回标要消灭的形态。所以先冲刷再轮换。
+              await stdoutEvents.flush()
               runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/rotate', () =>
                 rotateRuntimeSessionLease(opts.db, heldLease, nextSessionId),
               )
@@ -1532,28 +1594,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // stdout 行都解析不出它，而 `node_run_events.kind` 的 enum 里也没有它。
         // 读进局部常量是必要的：`kind` 是可变属性，窄化跨不进下面的延迟回调。
         const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
-        await persistRunnerWrite('node-run-event/stdout', () =>
-          opts.db.insert(nodeRunEvents).values({
-            nodeRunId: opts.nodeRunId,
-            ts,
-            kind: persistedKind,
-            payload: ev.rawLine,
-            sessionId: evtSessionId,
-            parentSessionId: null,
-          }),
-        )
+        stdoutEvents.push({
+          nodeRunId: opts.nodeRunId,
+          ts,
+          kind: persistedKind,
+          payload: ev.rawLine,
+          sessionId: evtSessionId,
+          parentSessionId: null,
+        })
         broadcastParentRunning()
       } else {
         // Non-JSON stdout lines shouldn't happen with --format json, but record
         // them as kind=text for debugging.
-        await persistRunnerWrite('node-run-event/stdout', () =>
-          opts.db.insert(nodeRunEvents).values({
-            nodeRunId: opts.nodeRunId,
-            ts: Date.now(),
-            kind: 'text',
-            payload: line,
-          }),
-        )
+        stdoutEvents.push({
+          nodeRunId: opts.nodeRunId,
+          ts: Date.now(),
+          kind: 'text',
+          payload: line,
+        })
         appendAgentText(line)
         broadcastParentRunning()
       }
@@ -1606,14 +1664,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
     const persistStderrLine = async (line: string): Promise<void> => {
       stderrTailBuf = appendBoundedTail(stderrTailBuf, clampTailLine(line), MAX_STDERR_TAIL_CHARS)
-      await persistRunnerWrite('node-run-event/stderr', () =>
-        opts.db.insert(nodeRunEvents).values({
-          nodeRunId: opts.nodeRunId,
-          ts: Date.now(),
-          kind: 'stderr',
-          payload: line,
-        }),
-      )
+      stderrEvents.push({
+        nodeRunId: opts.nodeRunId,
+        ts: Date.now(),
+        kind: 'stderr',
+        payload: line,
+      })
       // RFC-031: detect opencode's plugin-load error log lines and surface a
       // synthetic `text` event tagged `[rfc031/plugin-load-failed]`. opencode
       // only logs + publishes these (does NOT kill the parent process — see
@@ -1682,6 +1738,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         onStdoutLine: async (line: string) => {
           await onStdoutLine(line)
         },
+        // RFC-314 D3：一个 chunk 的行投递完 ⇒ 合并成一条多行 INSERT 落库。
+        onStdoutChunkEnd: () => stdoutEvents.flush(),
+        onStderrChunkEnd: () => stderrEvents.flush(),
         // impl-gate P2-B: the OLD runner applied settlePump to BOTH streams —
         // a stderr-persist failure was also a stream failure. persistStderrLine
         // can throw (the synthetic plugin-load-failed row insert); the executor
@@ -1690,6 +1749,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       },
       log,
     })
+    // RFC-314 D3：取消 / kill 时 pump 走的是 `cancel()` 而不是 EOF，最后一批缓冲拿不到
+    // chunk-end。这里兜底冲刷，且必须在任何读事件的下游逻辑（信封解析 / 计数 / 广播）
+    // 之前。
+    await stdoutEvents.flush()
+    await stderrEvents.flush()
     let gitMutationViolation: string | undefined
     if (gitControlBefore !== undefined && runResult.outcome !== 'unreaped') {
       const gitControlAfter = await captureGitControlSnapshot(opts.worktreePath)

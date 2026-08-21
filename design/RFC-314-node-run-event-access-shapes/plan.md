@@ -44,3 +44,28 @@
 **"清理器根本没机会跑"**；本 RFC 解决的是**"跑起来之后仍然存在、只是被水位掩住的形状"**。
 两者正交：前者让 per-run 行数有上界，后者让单条语句的成本不再与 per-run 行数挂钩。
 只做前者的话，任何一个 agent 在两次归档之间攒够事件，三条症状就会回来。
+
+## 5. 实施记录（与设计稿的偏差，如实登记）
+
+1. **新增一处 design 未写的顺序屏障（D3）**：`rotateRuntimeSessionLease` 会把该 run **已落库**的
+   旧 epoch 事件回标到新 sessionId（`runtimeSessionLease.ts` 的两条 UPDATE）。缓冲行若晚于它落库，
+   就会带着旧 sessionId 落进一个孤儿桶——正是那条回标要消灭的形态。因此在轮换调用**之前**加了
+   一次 `stdoutEvents.flush()`。这是实现期才暴露的真约束，代码注释与源代码层断言都已钉住。
+2. **`broadcastParentRunning` 保持逐行调用**（design §5.3 原写「改为每次冲刷后调用一次」）：它本
+   来就是节流的 `node.status` 提示、不含 DB 写，逐行调用等于**零行为变化**；改成按批反而是一次
+   没有收益的行为改动。
+3. **「抛错前冲刷」在进程内测不出行为差别**：变异检验实测——单去掉 runner 的 catch-flush，用例
+   仍绿，因为进程返回后的兜底冲刷同样会把那批事件写下去（pump 抛错 → managedProcess 记
+   `pumpError` 并杀子进程 → `runAgentProcess` 正常返回 → 兜底冲刷）。catch-flush 的真实价值是把
+   落库提前到 kill/reap 那几秒之前（daemon 若在那期间崩掉就只剩它兜底），而这在进程内无法观察。
+   故保留实现，并按仓规配一条**源代码层断言**当地板（三个冲刷点各一条），变异结论写进测试注释，
+   不谎称它是红→绿对。
+4. **AC-8 的落法调整**：三条读路径**未**并入 `rfc311-perf-guards` 的共享注册表。原因是该注册表的
+   `seed()` 不建 `node_runs` / `node_run_events`，为两条新路径扩 seed 会改动既有条目的判据面——
+   尤其 `runLifecycleInvariants` 那条「每行语句数 ≤3.1」的棘轮对每任务多出的 node_runs 极敏感，
+   在共享测试上冒这个险与收益不对等。等价的五条不变量已在 `rfc314-autokill-stall-window.test.ts`
+   与 `rfc314-session-view-window.test.ts` 里逐条实现（语句数不随数据量增长、EXPLAIN 无 SCAN /
+   无 TEMP B-TREE、绑定参数上界、窗口成员精确值）。**留债**：等有人给共享注册表补上 node_runs /
+   events 维度的 seed 时，把这两条并进去。
+5. **提交拆分**：plan §2 建议批 A / B / C 各自过门禁再推。实际按三个提交落地、**门禁跑在三批合并
+   后的最终树上一次**（三批互不依赖，各自的用例已分别跑绿；单 RFC 单 PR 也是仓规默认）。

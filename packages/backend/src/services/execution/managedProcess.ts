@@ -66,6 +66,12 @@ export interface ManagedProcessRequest {
   onStdoutLine?: (line: string) => Promise<void> | void
   onStderrLine?: (line: string) => Promise<void> | void
   /**
+   * RFC-314 D3 —— 一个 chunk 的行投递完之后各调一次（见 `pump()` 的同名参数）。
+   * 调用方用它把逐行写入合并成一条语句；不传即行为逐字不变。
+   */
+  onStdoutChunkEnd?: () => Promise<void> | void
+  onStderrChunkEnd?: () => Promise<void> | void
+  /**
    * RFC-280 T4 — notified when a line exceeded the cap and was TRUNCATED
    * before delivery. Lets a capture-faithful caller (systemAgentRun's event
    * sink) mark its capture incomplete instead of silently storing a clipped
@@ -147,6 +153,14 @@ export function pump(
   onLine: ((line: string) => Promise<void> | void) | undefined,
   onRaw: ((chunk: string) => void) | undefined,
   onLineTruncated?: () => Promise<void> | void,
+  /**
+   * RFC-314 D3 —— 一个 chunk 的所有完整行都投递完之后调用一次（EOF 收尾行之后再调
+   * 一次）。调用方用它把逐行累积的写入合并成一条语句：**chunk 边界是唯一一个既天然
+   * 存在、又不引入新的持久化延迟的边界**——它在同一个 `await` 内跑完才让出事件循环，
+   * pump 的下一次 `reader.read()` 之前一定已经落库，因此读点不需要任何 flush 屏障。
+   * 不传即行为逐字不变（本仓另外四个调用方都不传）。
+   */
+  onChunkEnd?: () => Promise<void> | void,
 ): Pump {
   const reader = stream.getReader()
   let canceled = false
@@ -182,6 +196,8 @@ export function pump(
           }
           if (line.length > 0) await onLine(line)
         }
+        // RFC-314 D3：本 chunk 的完整行已全部投递。
+        await onChunkEnd?.()
       }
       if (onLine !== undefined && buffer.length > 0 && !canceled && !dropping) {
         if (buffer.length > MANAGED_PROCESS_MAX_LINE_CHARS) await onLineTruncated?.()
@@ -190,6 +206,8 @@ export function pump(
             ? buffer.slice(0, MANAGED_PROCESS_MAX_LINE_CHARS) + LINE_TRUNCATED_MARKER
             : buffer,
         )
+        // RFC-314 D3：EOF 收尾行也要冲刷，否则最后一行会留在缓冲里。
+        await onChunkEnd?.()
       }
     } finally {
       reader.releaseLock()
@@ -343,6 +361,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         }
       : undefined,
     req.onLineTruncated,
+    req.onStdoutChunkEnd,
   )
   const stderrPump = pump(
     child.stderr as ReadableStream<Uint8Array>,
@@ -353,6 +372,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       if (next.truncated) truncated.stderr = true
     },
     req.onLineTruncated,
+    req.onStderrChunkEnd,
   )
 
   let outcome: ManagedProcessOutcome = 'exited'
