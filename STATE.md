@@ -197,7 +197,7 @@
 > format/depcheck 全绿；隔离真实页面 dbVersion=199、公开事件 15 个、仅一棵“代码平台”目录，输入 `issue_id` 后焦点
 > 仍在参数键且实时渲染 `trigger.issue.issue_id`。仍待提交推送后的 exact-SHA hosted CI/visual 终态。
 >
-> **PR-20 可选职责与开发员工闭环（2026-08-21，本地完成，待 hosted）**：`development@3` 保留主线必需能力，检视、
+> **PR-20 可选职责与开发员工闭环（2026-08-22，已完成）**：`development@3` 保留主线必需能力，检视、
 > 流水线、冲突、员工协同和外部审批均改为可选泳道；未配置不阻断发布/执行且不订阅，员工 revision 冻结
 > `enabledWorkItemRefs`。流水线问题类型由岗位级有序列表定义（唯一末尾 fallback + exact 工具/协同目标），不再是平台枚举。
 > 评论/冲突 Event 只作 wake hint，Reaction 先执行平台 `observe-mr` 刷新权威事实，再按能力开关进入业务节点；检视输入包含
@@ -207,7 +207,8 @@
 > **1/1、45 断言**，覆盖四仓父子员工、审批、大日志、真实 Git/MR、多轮检视 ACK→修复→回帖、自回复重放和 committer 合入；
 > 浏览器功能 **4/4**、数字员工目标视觉 **3/3**。当前工作树最终 `bun run gate:local` **8m30s 全绿**：backend
 > **11,624 pass / 36 skip / 0 fail**、frontend **6,674/6,674**、shared **2,219/2,219**、system-mocks **35/35**，
-> typecheck/lint/format/depcheck 全绿。下一步只剩精确提交/推送与 exact-SHA hosted CI/visual 终态。
+> typecheck/lint/format/depcheck 全绿。功能/视觉冻结提交为 `96df8c49c84d532e630f0b8346cbde4787e811cd`；exact-SHA
+> CI `32502058325` **31/31 jobs success**，visual `32502058323` **55/55 tests success**，无失败或取消。
 >
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >

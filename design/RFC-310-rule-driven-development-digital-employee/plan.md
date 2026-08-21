@@ -14,18 +14,18 @@
 > nightly（T71）、`/code` 逐页像素基线（T121）、verification 结果升 catalog fact 已于 2026-08-20 补齐。
 > 2026-08-20 补齐：out-of-order webhook 矩阵（T82）、conflict repair 的 Agent 执行面（T78）。
 >
-> **2026-08-21 数字员工 OS 实现（待 hosted 验证）**：proposal/design §0A 的 Context、
+> **2026-08-21 数字员工 OS 实现（已通过 hosted 验证）**：proposal/design §0A 的 Context、
 > Attention、Event Center、Observer、Employee Event Queue、Reaction、Employee Channel 与现有 Envelope/Script/
 > code-host/Token 底座复用设计，并确定“数字员工 → 数字员工分类 → 工作项 → 工具”、工作项 WorkContract、分类工具箱、
 > 共享限额快照和通用确定性职责图均已实现；PR-14..PR-18 的功能与 system-mock E2E 已收口。完整 `gate:local`
-> 于 2026-08-21 全绿（后端四个随机化分片；frontend 6660；shared 2219；system-mock 35），当前仅剩 exact-SHA hosted CI
-> 的发布验证。
+> 于 2026-08-21 全绿（后端四个随机化分片；frontend 6660；shared 2219；system-mock 35）；最终发布证据见本节 PR-20
+> 的 exact-SHA hosted 终态。
 >
-> **2026-08-21 PR-19/20（待 hosted 验证）**：平台执行契约、职责泳道、可选能力、岗位级动态处理路由、检视整树闭环与
+> **2026-08-21 PR-19/20（已通过 hosted 验证）**：平台执行契约、职责泳道、可选能力、岗位级动态处理路由、检视整树闭环与
 > 事件权威刷新均已进入生产实现。增强后的新 OS system-mock 全旅程已通过 45 个断言；公共能力聚焦矩阵和旧 Mission
 > code-host system-mock 也已独立复跑。当前工作树完整 `gate:local` 8m30s 全绿（backend 11,624 pass / 36 skip / 0 fail；
-> frontend 6,674；shared 2,219；system-mocks 35），浏览器功能 4/4、目标视觉 3/3；仅剩提交后的 exact-SHA hosted 终态，
-> 不沿用更早 SHA 的绿灯。
+> frontend 6,674；shared 2,219；system-mocks 35），浏览器功能 4/4、目标视觉 3/3；功能/视觉冻结提交 `96df8c49` 的 hosted CI
+> 31/31 与 visual 55/55 均为 success，不沿用更早 SHA 的绿灯。
 > 最终冻结研发类型为 `development@3`，升级库保留 `@1/@2` 并只追加 `@3`，避免 descriptor drift 阻断启动。
 > Agent 端口联动已追加进入本批：契约选择移入“输入/输出”，`agent-result` 由 UI 与所有保存入口共同按契约生命周期托管。
 
@@ -1279,7 +1279,7 @@ Agent/Script、审批和事件生命周期，而不是用 application 内存 fak
 | T193 | 检视线程全树采集、revision、自有标记、修前 ACK、Agent 每线程 resolution envelope、平台 push 后结果回帖和 replay/self-loop 抑制；内置检视修复 Agent                 | T192      | ✅   |
 | T194 | 外部审批保持通用 prepare/submit/observe adapter 边界；审批泳道可选；平台调度配置不注入 Agent/Script 业务 `contractInput`                                           | T165,T190 | ✅   |
 | T195 | 新 OS stateful system mock 扩成四仓：父子员工、审批/大日志、真实 Git/MR、同一检视 thread 多轮评论、ACK→Agent 修复→push→回帖、自回复重放、committer 合入；45 个断言 | T191-T194 | ✅   |
-| T196 | 建 design §15.8 公共能力矩阵并逐组复跑；浏览器锁 20 节点、可选职责、动态关系、无横向溢出；人工检查并刷新三幅目标视觉基线；完整 gate 与 exact-SHA hosted CI         | T190-T195 | 🚧   |
+| T196 | 建 design §15.8 公共能力矩阵并逐组复跑；浏览器锁 20 节点、可选职责、动态关系、无横向溢出；人工检查并刷新三幅目标视觉基线；完整 gate 与 exact-SHA hosted CI         | T190-T195 | ✅   |
 
 ### 当前可复跑证据
 
@@ -1297,7 +1297,10 @@ Agent/Script、审批和事件生命周期，而不是用 application 内存 fak
 **11,624 pass / 36 skip / 0 fail**，frontend **6,674/6,674**，shared **2,219/2,219**，system-mocks
 **35/35**，typecheck/lint/format/depcheck 全绿；第一轮唯一 lint warning 已删除后从头重跑，不能用第一轮局部结果代替本次终态。
 
-T196 只有在当前工作树形成提交后的完整 `gate:local`、推送后 exact-SHA hosted CI 和 visual 终态均完成后才能置 ✅。
+最终 hosted 终态（2026-08-22）：功能/视觉冻结提交为 `96df8c49c84d532e630f0b8346cbde4787e811cd`；
+[CI 32502058325](https://github.com/wangbinquan/agent-workflow/actions/runs/32502058325) **31/31 jobs success**，
+[visual 32502058323](https://github.com/wangbinquan/agent-workflow/actions/runs/32502058323) **55/55 tests success**，无失败或取消。
+T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条件均已满足。
 
 ### 功能自审记录
 
