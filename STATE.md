@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（Draft 待批，2026-08-21）：[RFC-314 node_run_events 三处读写形状修复](design/RFC-314-node-run-event-access-shapes/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-21 实现落主干）：[RFC-314 node_run_events 三处读写形状修复](design/RFC-314-node-run-event-access-shapes/proposal.md)**
 > —— 起于生产对账：部署 **v0.18.11**（已含 RFC-311 字节水位）的 `node_run_events` 仍是 **78.6 万行 / 1.72GB**。
 > 定位分两半：**装配洞已修**（`b2321179`：归档器与终态 sweeper 只有 `setInterval(1h)`、没有 boot 首拍，重启比
 > 周期更勤的部署一次都不会执行；checkpoint 循环读 boot 配置快照，改 `walCheckpointIntervalMs` 不重启永不生效）；
@@ -11,7 +11,15 @@
 > 的 `ORDER BY ts` 造成 TEMP B-TREE（**461.5ms + 122.0ms**）、事件写入每行一条 autocommit INSERT。
 > 三条真慢语句**全部走索引、没有一条 SCAN**，所以**不加任何索引**（实测加三个索引会让 5000 条 INSERT 的
 > WAL 页写 ×12.8）。用户已就三处取舍逐条拍板（窗口 max(ts) / 窗口按 id 取 / 只在单次 chunk 内合并），
-> 三件套已落档，**待批准后进入实现**。
+> 三批已落主干：`88bcf439`（autoKill 有界窗口）/ `55d1607d`（会话树窗口按 id 取 + 逐 run 查）/
+> `3c922316`（事件落库按 chunk 合并）。修复后复测：autoKill **194.9ms → 最慢 0.4ms**、会话树
+> **461.5+122.0ms → 最慢 48.8ms**（0 条超阈）、30 行事件的 INSERT 从 30 条降到个位数。
+> **接手须知**：三条欠账如实记在 RFC `plan.md §5`——catch-flush 做不成红→绿对（配了源代码层断言）、
+> AC-6 未做前后 p50/WAL 对照、三条读路径未并入 `rfc311-perf-guards` 共享注册表（扩它的 seed 会动到
+> invariants 的 3.1 比率棘轮，等价判据已在 rfc314 两个测试文件里）。另：本轮两次门禁红**都不是代码
+> 问题**——一次是基线被吃（fseventsd 107%）导致分片被饿死，一次是另一个 session 并发跑 Playwright
+> 往共享工作树写 `test-results/` 触发泄漏探测器；正解是**把门禁跑在从 git 对象物化的分离 worktree
+> 里**（只含被追踪内容，天然免疫），这条已在 `docs/dev-gotchas.md` 有记载。
 
 > ✅ **已完成 RFC（Done，2026-08-20 复验收口）：[RFC-286 前端数据层收敛与死 class 修复](design/RFC-286-frontend-data-layer-and-dead-classes/proposal.md)**
 > —— **零生产改动的记账收口**。代码 2026-08-13 当天即已全部落主干（F1-F4 五批 + T5 双路实现门

@@ -28,15 +28,15 @@
 
 ## 3. 验收清单
 
-- [ ] AC-1 `findStalledRunningChildren`（20 running run，10.8 万事件/run）单条语句 < 50ms，语句数 O(并发度)
-- [ ] AC-2 `getSessionTree`（10.8 万事件的 run）每条语句 < 50ms，EXPLAIN 无 TEMP B-TREE
-- [ ] AC-3 会话树 oracle 在常规数据上逐行等价（含定根与归档合并）
-- [ ] AC-4 单 chunk N 行 ⇒ 落库语句数 `ceil(N/100)`，单条绑定参数 ≤900
-- [ ] AC-5 第 k 行抛错时前 k-1 行已落库（变异检验：去掉冲刷必须转红）
-- [ ] AC-6 写入路径 p50 与 WAL 页写不劣化于落地前（同形库对照）
-- [ ] AC-7 `node_run_events` 索引数量**不变**（零新增）
-- [ ] AC-8 三条读路径在 `rfc311-perf-guards` 注册表内跑绿
-- [ ] AC-9 全部既有测试绿；`gate:local` 全绿；CI 按 exact SHA 绿
+- [x] AC-1 —— 实测 21 条语句、最慢 0.4ms（design §2.2b）
+- [x] AC-2 —— 实测 5 条语句、最慢 48.8ms、0 条超阈；EXPLAIN 无 TEMP B-TREE（design §2.2b + 用例）
+- [x] AC-3 —— 窗口成员用精确行集合断言；根不退化由 rfc311-session-view-bounded 继续看守
+- [x] AC-4 —— 30 行事件的 INSERT 语句数降到个位数，单条绑定参数 ≤900（用例断言）
+- [~] AC-5 —— 结果被锁住（那批取证事件不丢），但**做不成红→绿对**：兜底冲刷同样覆盖，见 §5.3；配源代码层断言当地板
+- [~] AC-6 —— 由「语句数严格下降」推出（合并只会减少语句与 WAL 帧），**未**单独做前后 p50/WAL 对照实测
+- [x] AC-7 —— node_run_events 索引数量不变（零新增）
+- [~] AC-8 —— 改由 rfc314 自己的两组结构判据满足，未并入共享注册表（理由与留债见 §5.4）
+- [x] AC-9 —— 分离 worktree 里 `gate:local` 全绿（backend 4 分片 + 前端 6664）；CI 按 exact SHA `3c922316` 绿（CI + integration-opencode）
 
 ## 4. 与前一笔修复的边界
 
