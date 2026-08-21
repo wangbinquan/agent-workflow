@@ -2,6 +2,17 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft 待批，2026-08-21）：[RFC-314 node_run_events 三处读写形状修复](design/RFC-314-node-run-event-access-shapes/proposal.md)**
+> —— 起于生产对账：部署 **v0.18.11**（已含 RFC-311 字节水位）的 `node_run_events` 仍是 **78.6 万行 / 1.72GB**。
+> 定位分两半：**装配洞已修**（`b2321179`：归档器与终态 sweeper 只有 `setInterval(1h)`、没有 boot 首拍，重启比
+> 周期更勤的部署一次都不会执行；checkpoint 循环读 boot 配置快照，改 `walCheckpointIntervalMs` 不重启永不生效）；
+> **本 RFC 是另一半**——把库按同形放大到 78.6 万行 / 2.6GB 实测出的三条形状问题，与表总量无关、与**单个 run 的
+> 事件条数**成正比，被归档水位掩着但没消失：`autoKill` 的 `max(ts)` join（**194.9ms** 单条）、`sessionView`
+> 的 `ORDER BY ts` 造成 TEMP B-TREE（**461.5ms + 122.0ms**）、事件写入每行一条 autocommit INSERT。
+> 三条真慢语句**全部走索引、没有一条 SCAN**，所以**不加任何索引**（实测加三个索引会让 5000 条 INSERT 的
+> WAL 页写 ×12.8）。用户已就三处取舍逐条拍板（窗口 max(ts) / 窗口按 id 取 / 只在单次 chunk 内合并），
+> 三件套已落档，**待批准后进入实现**。
+
 > ✅ **已完成 RFC（Done，2026-08-20 复验收口）：[RFC-286 前端数据层收敛与死 class 修复](design/RFC-286-frontend-data-layer-and-dead-classes/proposal.md)**
 > —— **零生产改动的记账收口**。代码 2026-08-13 当天即已全部落主干（F1-F4 五批 + T5 双路实现门
 > findings 全处置，末笔 `afa0d4f3`），但索引状态行自留的「待门禁/CI 复验后置 Done」始终无人回填，
