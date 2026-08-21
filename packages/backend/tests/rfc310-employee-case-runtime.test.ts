@@ -203,6 +203,137 @@ describe('RFC-310 stateful employee Case runtime', () => {
         codecs: [developmentEmployeeRuntimeCodec],
         platformWorkItems: {
           async execute(plan) {
+            const inputEnvelope = JSON.parse(plan.inputEnvelopeJson) as { contextsJson: string }
+            const contexts = JSON.parse(inputEnvelope.contextsJson) as Array<{
+              id: string
+              revision: number
+              typeId: string
+              stateJson: string
+              artifactRefs: string[]
+            }>
+            if (plan.workItemRef === 'classify-feedback') {
+              const mergeRequestContext = contexts.find(
+                (context) => context.typeId === 'development.merge-request',
+              )!
+              const mergeRequest = JSON.parse(mergeRequestContext.stateJson) as {
+                mergeRequestRef: string
+                headSha: string
+                reviewThreads: Array<{
+                  threadRef: string
+                  revision: string
+                  authorClass: 'human' | 'bot' | 'self'
+                  resolved: boolean
+                  body: string
+                  path: string | null
+                  messages?: Array<{
+                    messageRef: string
+                    parentMessageRef: string | null
+                    authorClass: 'human' | 'bot' | 'self'
+                    body: string
+                    path: string | null
+                    createdAt: string | null
+                  }>
+                }>
+              }
+              const thread = mergeRequest.reviewThreads[0]!
+              return JSON.stringify({
+                schemaVersion: 1,
+                roundRef: plan.roundRef,
+                executionNonce: plan.executionNonce,
+                status: 'ok',
+                summary: '平台已汇总完整检视意见树',
+                contextPatches: [
+                  {
+                    contextId: null,
+                    contextTypeId: 'development.problem-set',
+                    schemaVersion: 1,
+                    expectedRevision: null,
+                    lifecycleState: 'active',
+                    stateJson: JSON.stringify({
+                      status: 'active',
+                      source: 'review',
+                      headSha: mergeRequest.headSha,
+                      remainingTypes: ['review'],
+                      problems: [
+                        {
+                          problemId: thread.threadRef,
+                          type: 'review',
+                          summary: thread.body,
+                          evidenceArtifactRefs: [],
+                          reviewThread: { ...thread, messages: thread.messages ?? [] },
+                        },
+                      ],
+                    }),
+                    artifactRefs: [],
+                  },
+                  {
+                    contextId: null,
+                    contextTypeId: 'development.review-resolution',
+                    schemaVersion: 1,
+                    expectedRevision: null,
+                    lifecycleState: 'active',
+                    stateJson: JSON.stringify({
+                      status: 'collected',
+                      mergeRequestRef: mergeRequest.mergeRequestRef,
+                      sourceHeadSha: mergeRequest.headSha,
+                      publishedHeadSha: null,
+                      commitSha: null,
+                      threads: [
+                        {
+                          threadRef: thread.threadRef,
+                          revision: thread.revision,
+                          acknowledgement: null,
+                          disposition: null,
+                          replyBody: null,
+                          finalReply: null,
+                        },
+                      ],
+                    }),
+                    artifactRefs: [],
+                  },
+                ],
+                effectSuggestions: [],
+                artifactRefs: [],
+              })
+            }
+            if (plan.workItemRef === 'acknowledge-feedback') {
+              const resolutionContext = contexts.find(
+                (context) => context.typeId === 'development.review-resolution',
+              )!
+              const resolution = JSON.parse(resolutionContext.stateJson) as {
+                threads: Array<{ threadRef: string; revision: string }>
+              }
+              return JSON.stringify({
+                schemaVersion: 1,
+                roundRef: plan.roundRef,
+                executionNonce: plan.executionNonce,
+                status: 'ok',
+                summary: '平台已逐线程回复收到',
+                contextPatches: [
+                  {
+                    contextId: resolutionContext.id,
+                    contextTypeId: 'development.review-resolution',
+                    schemaVersion: 1,
+                    expectedRevision: resolutionContext.revision,
+                    lifecycleState: 'active',
+                    stateJson: JSON.stringify({
+                      ...JSON.parse(resolutionContext.stateJson),
+                      status: 'acknowledged',
+                      threads: resolution.threads.map((thread) => ({
+                        ...thread,
+                        acknowledgement: {
+                          marker: `agent-workflow:review:${thread.threadRef}:ack`,
+                          noteRef: `note:${thread.threadRef}:ack`,
+                        },
+                      })),
+                    }),
+                    artifactRefs: resolutionContext.artifactRefs,
+                  },
+                ],
+                effectSuggestions: [],
+                artifactRefs: [],
+              })
+            }
             if (plan.workItemRef !== 'publish-mr') {
               return JSON.stringify({
                 schemaVersion: 1,
@@ -267,56 +398,28 @@ describe('RFC-310 stateful employee Case runtime', () => {
               workItemRef: string
             }
             const outputForRound =
-              plan.workItemRef === 'classify-feedback'
+              plan.workItemRef === 'collect-pipeline'
                 ? {
                     ...executionOutput,
                     contextPatches: [
                       {
                         contextId: null,
-                        contextTypeId: 'development.problem-set',
+                        contextTypeId: 'development.pipeline',
                         schemaVersion: 1,
                         expectedRevision: null,
                         lifecycleState: 'active',
                         stateJson: JSON.stringify({
-                          status: 'active',
-                          source: 'review',
+                          status: 'failed',
+                          mergeRequestRef: 'repo-1!42',
                           headSha: 'a'.repeat(40),
-                          remainingTypes: ['review'],
-                          problems: [
-                            {
-                              problemId: 'review-1',
-                              type: 'review',
-                              summary: 'review feedback',
-                              evidenceArtifactRefs: [],
-                            },
-                          ],
+                          evidenceArtifactRef: '.agent-workflow/pipeline/case-1/result.json',
+                          failureTypes: ['unknown'],
                         }),
                         artifactRefs: [],
                       },
                     ],
                   }
-                : plan.workItemRef === 'collect-pipeline'
-                  ? {
-                      ...executionOutput,
-                      contextPatches: [
-                        {
-                          contextId: null,
-                          contextTypeId: 'development.pipeline',
-                          schemaVersion: 1,
-                          expectedRevision: null,
-                          lifecycleState: 'active',
-                          stateJson: JSON.stringify({
-                            status: 'failed',
-                            mergeRequestRef: 'repo-1!42',
-                            headSha: 'a'.repeat(40),
-                            evidenceArtifactRef: '.agent-workflow/pipeline/case-1/result.json',
-                            failureTypes: ['unknown'],
-                          }),
-                          artifactRefs: [],
-                        },
-                      ],
-                    }
-                  : executionOutput
+                : executionOutput
             return {
               kind: 'completed',
               executionRef,
@@ -334,7 +437,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const bindings: Array<{
@@ -388,6 +491,35 @@ describe('RFC-310 stateful employee Case runtime', () => {
         }
       }
     }
+    const pipelineRepairTool = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      actorUserId: 'author',
+      body: {
+        displayName: '通用流水线修复工具',
+        description: '处理岗位中配置的流水线错误类型',
+        roleRef: 'repairer',
+        implementation: {
+          kind: 'agent',
+          agentRef: { id: 'agent-repair-pipeline', revision: 1 },
+        },
+        connectionRef: null,
+      },
+    })
+    const pipelineRepairRef = await module.commands.publishTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      toolId: pipelineRepairTool.id,
+      actorUserId: 'author',
+    })
+    const repairFallbackRoute = {
+      routeRef: 'unknown',
+      displayName: '未分类流水线错误',
+      description: '没有命中更高优先级类型时使用通用修复 Agent',
+      destinationWorkItemRef: 'repair-pipeline',
+      registrationRef: pipelineRepairRef,
+      fallback: true,
+    }
     const baseJob = module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
@@ -395,6 +527,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         name: '协同目标岗位',
         description: '固定节点默认工具',
         defaultToolBindings: bindings,
+        orderedDispatchConfigurations: [
+          { classifierWorkItemRef: 'classify-pipeline', routes: [repairFallbackRoute] },
+        ],
       },
     })
     const baseJobRef = module.commands.publishJobTemplate({
@@ -454,6 +589,22 @@ describe('RFC-310 stateful employee Case runtime', () => {
             invocationContractId: 'development.cross-repository-work',
             joinMode: 'any',
             quorum: null,
+          },
+        ],
+        orderedDispatchConfigurations: [
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routes: [
+              {
+                routeRef: 'external-dependency',
+                displayName: '跨仓依赖',
+                description: '需要另一个数字员工先完成工作',
+                destinationWorkItemRef: 'delegate',
+                registrationRef: null,
+                fallback: false,
+              },
+              repairFallbackRoute,
+            ],
           },
         ],
       },
@@ -691,7 +842,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     )
     expect(projection.case).toMatchObject({
       state: 'active',
-      currentWorkItemRef: 'prepare-approval',
+      currentWorkItemRef: 'collect-pipeline',
     })
     const parentInboxCountAfterAnyJoin = projection.inbox.length
     runtime.commands.terminate(detachedChildCaseId, 'completed-late')
@@ -820,18 +971,31 @@ describe('RFC-310 stateful employee Case runtime', () => {
       ),
     ).toHaveLength(1)
 
-    // The higher-priority review event preempts the deterministic pipeline recheck;
-    // the lower-priority pipeline event stays queued for the next round.
+    // The higher-priority review event preempts the deterministic pipeline recheck.
+    // A provider event is only a hint, so the platform refreshes authoritative
+    // MR facts before entering the optional review lane. The lower-priority
+    // pipeline event stays queued for the next round.
     expect(runtime.worker.planOneReaction()).not.toBeNull()
     projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
     expect(projection.activeRound).toMatchObject({
-      workItemRef: 'classify-feedback',
+      workItemRef: 'observe-mr',
       ruleId: 'handle-review',
     })
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-      // Attention cleanup can precede the reaction launch outbox.
+      // Attention cleanup can precede the authoritative MR refresh.
     }
-    expect(await runtime.worker.inspectOneExecution()).toBe('completed')
+    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    expect(projection.case.currentWorkItemRef).toBe('classify-feedback')
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // The platform classifier freezes the complete review thread tree.
+    }
+    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    expect(projection.case.currentWorkItemRef).toBe('acknowledge-feedback')
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Platform acknowledgement settles without launching an Agent execution.
+    }
     projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
     expect(projection.case.currentWorkItemRef).toBe('repair-feedback')
 

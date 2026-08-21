@@ -22,6 +22,7 @@ import {
   findWorkItem,
   globalExecutionPolicySchema,
   mergeExactToolBindings,
+  orderedDispatchConfigurationSchema,
   packageDigest,
   toolRegistrationContentSchema,
   validateTypePackage,
@@ -35,6 +36,7 @@ import {
   type EmployeeTypeRef,
   type EmployeeTypeRuntimePackage,
   type ExactResourceRef,
+  type OrderedDispatchConfiguration,
   type ToolImplementation,
   type ToolRegistrationContent,
   type ToolValidationReceipt,
@@ -54,6 +56,7 @@ export const createJobTemplateBodySchema = z
     description: z.string().max(2_000),
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100).default([]),
+    orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
   })
   .strict()
 
@@ -594,6 +597,140 @@ export class DigitalEmployeeAuthoringService {
     return tool
   }
 
+  #validateOrderedDispatchConfigurations(
+    typeRef: EmployeeTypeRef,
+    configurations: readonly OrderedDispatchConfiguration[],
+    enabledWorkItemRefs?: readonly string[],
+  ): ToolRevisionRecord[] {
+    const runtime = this.#runtime(typeRef)
+    const expectedClassifiers = runtime.descriptor.authoringManifest.workItems.filter(
+      (item) => item.orderedDispatchAuthoring !== null,
+    )
+    const byClassifier = new Map<string, OrderedDispatchConfiguration>()
+    for (const configuration of configurations) {
+      if (byClassifier.has(configuration.classifierWorkItemRef)) {
+        throw new ValidationError(
+          'employee-ordered-dispatch-duplicate',
+          `ordered dispatch is defined more than once for ${configuration.classifierWorkItemRef}`,
+        )
+      }
+      const classifier = findWorkItem(runtime.descriptor, configuration.classifierWorkItemRef)
+      if (classifier?.orderedDispatchAuthoring === null || classifier === null) {
+        throw new ValidationError(
+          'employee-ordered-dispatch-invalid',
+          `work item does not declare ordered dispatch authoring: ${configuration.classifierWorkItemRef}`,
+        )
+      }
+      const allowedDestinations = new Set(
+        classifier.orderedDispatchAuthoring.destinationWorkItemRefs,
+      )
+      for (const route of configuration.routes) {
+        if (!allowedDestinations.has(route.destinationWorkItemRef)) {
+          throw new ValidationError(
+            'employee-ordered-dispatch-destination-invalid',
+            `${route.routeRef} cannot dispatch ${configuration.classifierWorkItemRef} to ${route.destinationWorkItemRef}`,
+          )
+        }
+      }
+      byClassifier.set(configuration.classifierWorkItemRef, configuration)
+    }
+    if (enabledWorkItemRefs !== undefined) {
+      const enabled = new Set(enabledWorkItemRefs)
+      for (const classifier of expectedClassifiers) {
+        if (!enabled.has(classifier.workItemRef)) continue
+        if (byClassifier.has(classifier.workItemRef)) continue
+        throw new ValidationError(
+          'employee-ordered-dispatch-missing',
+          `ordered dispatch must be configured for ${classifier.workItemRef}`,
+        )
+      }
+    }
+
+    const tools: ToolRevisionRecord[] = []
+    for (const configuration of configurations) {
+      for (const route of configuration.routes) {
+        const destination = findWorkItem(runtime.descriptor, route.destinationWorkItemRef)
+        if (destination === null) {
+          throw new ValidationError(
+            'employee-ordered-dispatch-destination-invalid',
+            `unknown dispatch destination: ${route.destinationWorkItemRef}`,
+          )
+        }
+        if (destination.nodeKind === 'collaboration') {
+          if (route.registrationRef !== null) {
+            throw new ValidationError(
+              'employee-ordered-dispatch-tool-invalid',
+              `${route.routeRef} dispatches to collaboration and cannot bind a tool`,
+            )
+          }
+          continue
+        }
+        if (destination.nodeKind !== 'business-tool' || route.registrationRef === null) {
+          throw new ValidationError(
+            'employee-ordered-dispatch-tool-missing',
+            `${route.routeRef} must bind a published tool for ${route.destinationWorkItemRef}`,
+          )
+        }
+        const tool = this.#store.getToolRevision(route.registrationRef)
+        if (tool === null || tool.state !== 'published') {
+          throw new ValidationError(
+            'employee-ordered-dispatch-tool-invalid',
+            `tool revision is not published: ${route.registrationRef.id}@${route.registrationRef.revision}`,
+          )
+        }
+        const validRoles = new Set(destination.toolRoleGroups.map((role) => role.roleRef))
+        if (
+          !sameType(tool.content.typeRef, typeRef) ||
+          tool.content.workItemRef !== destination.workItemRef ||
+          !validRoles.has(tool.content.roleRef)
+        ) {
+          throw new ValidationError(
+            'employee-ordered-dispatch-tool-invalid',
+            `tool revision does not belong to ${route.destinationWorkItemRef}`,
+          )
+        }
+        tools.push(tool)
+      }
+    }
+    return tools
+  }
+
+  #enabledWorkItemRefs(input: {
+    typeRef: EmployeeTypeRef
+    toolBindings: readonly WorkItemToolBinding[]
+    collaborationBindings: readonly EmployeeCollaborationBinding[]
+    orderedDispatchConfigurations: readonly OrderedDispatchConfiguration[]
+  }): string[] {
+    const manifest = this.#runtime(input.typeRef).descriptor.authoringManifest
+    const laneOptional = new Map(
+      manifest.lifecycleRegions.flatMap((region) =>
+        region.responsibilityLanes.map((lane) => [lane.laneId, lane.optional] as const),
+      ),
+    )
+    const activeOptionalLanes = new Set<string>()
+    const activate = (workItemRef: string) => {
+      const item = manifest.workItems.find((candidate) => candidate.workItemRef === workItemRef)
+      if (item?.responsibilityLaneId !== null && item?.responsibilityLaneId !== undefined) {
+        activeOptionalLanes.add(item.responsibilityLaneId)
+      }
+    }
+    for (const binding of input.toolBindings) activate(binding.workItemRef)
+    for (const binding of input.collaborationBindings) activate(binding.workItemRef)
+    for (const configuration of input.orderedDispatchConfigurations) {
+      activate(configuration.classifierWorkItemRef)
+      for (const route of configuration.routes) activate(route.destinationWorkItemRef)
+    }
+    return manifest.workItems
+      .filter((item) => {
+        if (item.responsibilityLaneId === null) return true
+        return (
+          laneOptional.get(item.responsibilityLaneId) !== true ||
+          activeOptionalLanes.has(item.responsibilityLaneId)
+        )
+      })
+      .map((item) => item.workItemRef)
+  }
+
   #validateCollaborationBinding(
     typeRef: EmployeeTypeRef,
     binding: EmployeeCollaborationBinding,
@@ -638,6 +775,7 @@ export class DigitalEmployeeAuthoringService {
     for (const binding of body.defaultCollaborationBindings) {
       this.#validateCollaborationBinding(input.typeRef, binding)
     }
+    this.#validateOrderedDispatchConfigurations(input.typeRef, body.orderedDispatchConfigurations)
     validateCollaborationGroups(body.defaultCollaborationBindings)
     const draft = employeeJobTemplateContentSchema.parse({
       schemaVersion: 1,
@@ -645,6 +783,7 @@ export class DigitalEmployeeAuthoringService {
       description: body.description,
       defaultToolBindings: body.defaultToolBindings,
       defaultCollaborationBindings: body.defaultCollaborationBindings,
+      orderedDispatchConfigurations: body.orderedDispatchConfigurations,
     })
     const now = this.#now()
     const record: JobTemplateRecord = {
@@ -677,6 +816,10 @@ export class DigitalEmployeeAuthoringService {
     for (const binding of body.defaultCollaborationBindings) {
       this.#validateCollaborationBinding(existing.typeRef, binding)
     }
+    this.#validateOrderedDispatchConfigurations(
+      existing.typeRef,
+      body.orderedDispatchConfigurations,
+    )
     validateCollaborationGroups(body.defaultCollaborationBindings)
     const draft: EmployeeJobTemplateContent = {
       schemaVersion: 1,
@@ -684,6 +827,7 @@ export class DigitalEmployeeAuthoringService {
       description: body.description,
       defaultToolBindings: body.defaultToolBindings,
       defaultCollaborationBindings: body.defaultCollaborationBindings,
+      orderedDispatchConfigurations: body.orderedDispatchConfigurations,
     }
     this.#store.updateJobTemplate(existing.id, body.name, draft, this.#now())
     const updated = this.#store.getJobTemplate(existing.id)
@@ -705,10 +849,17 @@ export class DigitalEmployeeAuthoringService {
       )
     }
     const runtime = this.#runtime(template.typeRef)
+    const enabledWorkItemRefs = this.#enabledWorkItemRefs({
+      typeRef: template.typeRef,
+      toolBindings: template.draft.defaultToolBindings,
+      collaborationBindings: template.draft.defaultCollaborationBindings,
+      orderedDispatchConfigurations: template.draft.orderedDispatchConfigurations,
+    })
     const merged = mergeExactToolBindings({
       manifest: runtime.descriptor.authoringManifest,
       defaults: template.draft.defaultToolBindings,
       overrides: [],
+      enabledWorkItemRefs,
     })
     if (merged.violations.length > 0) {
       throw new ValidationError(
@@ -723,6 +874,11 @@ export class DigitalEmployeeAuthoringService {
     for (const binding of template.draft.defaultCollaborationBindings) {
       this.#validateCollaborationBinding(template.typeRef, binding)
     }
+    this.#validateOrderedDispatchConfigurations(
+      template.typeRef,
+      template.draft.orderedDispatchConfigurations,
+      enabledWorkItemRefs,
+    )
     validateCollaborationGroups(template.draft.defaultCollaborationBindings)
     const ref = { id: template.id, revision: nextRevision(template.publishedRevision) }
     this.#store.publishJobTemplate({
@@ -833,10 +989,21 @@ export class DigitalEmployeeAuthoringService {
         'the pinned job template is unavailable or belongs to another type',
       )
     }
+    const collaborationBindings = mergeCollaborationBindings({
+      defaults: template.content.defaultCollaborationBindings,
+      overrides: employee.draft.collaborationOverrides,
+    })
+    const enabledWorkItemRefs = this.#enabledWorkItemRefs({
+      typeRef: employee.typeRef,
+      toolBindings: [...template.content.defaultToolBindings, ...employee.draft.toolOverrides],
+      collaborationBindings,
+      orderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
+    })
     const merged = mergeExactToolBindings({
       manifest: runtime.descriptor.authoringManifest,
       defaults: template.content.defaultToolBindings,
       overrides: employee.draft.toolOverrides,
+      enabledWorkItemRefs,
     })
     if (merged.violations.length > 0) {
       throw new ValidationError(
@@ -850,14 +1017,31 @@ export class DigitalEmployeeAuthoringService {
       const revision = this.#validateBinding(employee.typeRef, binding)
       toolDigests.push(revision.contentDigest)
     }
-    const collaborationBindings = mergeCollaborationBindings({
-      defaults: template.content.defaultCollaborationBindings,
-      overrides: employee.draft.collaborationOverrides,
-    })
     validateCollaborationGroups(collaborationBindings)
     const collaborationTargetDigests = collaborationBindings.map((binding) =>
       this.#validateCollaborationBinding(employee.typeRef, binding),
     )
+    const dispatchTools = this.#validateOrderedDispatchConfigurations(
+      employee.typeRef,
+      template.content.orderedDispatchConfigurations,
+      enabledWorkItemRefs,
+    )
+    for (const configuration of template.content.orderedDispatchConfigurations) {
+      for (const route of configuration.routes) {
+        const destination = findWorkItem(runtime.descriptor, route.destinationWorkItemRef)
+        if (
+          destination?.nodeKind === 'collaboration' &&
+          !collaborationBindings.some(
+            (binding) => binding.workItemRef === route.destinationWorkItemRef,
+          )
+        ) {
+          throw new ValidationError(
+            'employee-ordered-dispatch-collaboration-missing',
+            `${route.routeRef} requires a collaboration target for ${route.destinationWorkItemRef}`,
+          )
+        }
+      }
+    }
 
     const encodedScope = runtime.parseWorkScope(employee.draft.workScope)
     const scopeRef = { id: this.#id(), revision: 1 }
@@ -870,6 +1054,8 @@ export class DigitalEmployeeAuthoringService {
       toolDigests,
       collaborationBindings,
       collaborationTargetDigests,
+      orderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
+      dispatchToolDigests: dispatchTools.map((tool) => tool.contentDigest),
     }
     const content = digitalEmployeeDefinitionContentSchema.parse({
       schemaVersion: 1,
@@ -881,6 +1067,8 @@ export class DigitalEmployeeAuthoringService {
       workScopeSummary: runtime.summarizeWorkScope(encodedScope, 'zh-CN'),
       exactToolBindings: merged.bindings,
       exactCollaborationBindings: collaborationBindings,
+      exactOrderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
+      enabledWorkItemRefs,
       compiledClosureDigest: contentDigest(closure),
     })
     const now = this.#now()

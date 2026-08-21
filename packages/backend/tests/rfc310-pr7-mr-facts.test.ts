@@ -2,11 +2,11 @@
 //
 // 锁：①同 snapshot 三读 fence——两次 mr.get 之间 head 变化即 `mr-facts-head-race`
 // 整组丢弃（不缝合跨 head 的两半事实）；②threads 采集与 authorClass 三分类
-// （human / bot 后缀 / self-marker），revision 随 note 追加而变；③读不到的面
+// （human / bot 后缀 / self-marker），业务 revision 只随外部 note 追加而变；③读不到的面
 // 不伪造——mock 自 PR-12 起如实暴露 provider 的 merge status（种子分支无冲突 ⇒
 // mergeableState='mergeable'），但**不**暴露 approvals，于是 approvalHold 仍是
-// null 而不是被折算成"没有阻塞"；④reply 只回复不 resolve，正文自动附隐形 self-marker，
-// 再采集时该 thread 归 'self'（防 feedback 自循环）；⑤源码级负面锁：facts/
+// null 而不是被折算成"没有阻塞"；④reply 只回复不 resolve，正文自动附隐形 self-marker；
+// 再采集时外部 thread 作者/revision 不变，但新增消息归 self（防 feedback 自循环）；⑤源码级负面锁：facts/
 // reply 文件不可出现 resolve/approve/merge 的 action 或 API path（平台永不
 // merge/approve/resolve 的 §10 纪律，对拍 T84 负扫描）。
 
@@ -139,17 +139,20 @@ for (const provider of ['gitlab', 'github'] as const) {
       })
       expect(replied.ok).toBe(true)
 
-      // 再采集：同 thread 的 revision 前进（note 数 +1）、authorClass 变 self；
-      // 外部 resolved 状态没有被平台改动。
+      // 再采集：平台回复作为 self 消息保留在完整树中，但不能覆盖最近一条
+      // 外部意见的作者、正文或业务 revision；外部 resolved 状态也不改动。
       const second = await collectMergeRequestFacts(deps, mrRef, { selfMarker: 'm-777' })
       expect(second.ok).toBe(true)
       if (!second.ok) return
       const repliedThread = second.snapshot.threads.find(
         (t) => t.threadRef === humanThread.threadRef,
       )!
-      expect(repliedThread.authorClass).toBe('self')
-      expect(repliedThread.revision).toMatch(/^2:/)
-      expect(repliedThread.lastBody).toContain(selfMarkerToken('m-777'))
+      expect(repliedThread.authorClass).toBe('human')
+      expect(repliedThread.revision).toBe(humanThread.revision)
+      expect(repliedThread.lastBody).toBe(humanThread.lastBody)
+      expect(repliedThread.messages).toHaveLength(2)
+      expect(repliedThread.messages[1]).toMatchObject({ authorClass: 'self' })
+      expect(repliedThread.messages[1]!.body).toContain(selfMarkerToken('m-777'))
       expect(repliedThread.resolved).toBe(false)
       // 没配 selfMarker 的采集方看到同一条是 human（marker 判定是采集方合同）。
       const noMarker = await collectMergeRequestFacts(deps, mrRef)

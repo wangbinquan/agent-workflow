@@ -15,11 +15,11 @@
 > Event Center、Context/Reaction/Channel 与通用 UI 已落生产代码；RFC-294 owner/exact dependency 专项账本已同步，
 > 完整 `gate:local` 已于 2026-08-21 全绿，当前仅剩 exact-SHA hosted CI 的发布验证。
 >
-> **2026-08-21 PR-19（待 hosted 验证）**：新增平台 `execution-contract` context，统一 Agent/Workflow/Program 的
+> **2026-08-21 PR-19/20（待 hosted 验证）**：新增平台 `execution-contract` context，统一 Agent/Workflow/Program 的
 > 输入输出指南、兼容校验、fixture 与运行结算；AuthoringManifest 新增通用职责泳道，固定职责图按主干、支线和外侧回路呈现。
-> Manifest 与真实后继关系作为冻结类型合同发布在 `development@2`；升级只追加新 revision，不原地改写 `development@1`
-> descriptor/digest，也不需要 schema migration。Agent 契约选择与端口编辑同页；契约托管的 `agent-result` 随声明原子增删，
-> UI 与所有保存入口均禁止单独改写。
+> Manifest 与真实后继关系先发布 `development@2`，随后把可选泳道、岗位级动态处理路由、检视整树闭环和事件权威刷新
+> 追加冻结在 `development@3`；升级只追加新 revision，不原地改写 `development@1/@2` descriptor/digest，也不需要
+> schema migration。Agent 契约选择与端口编辑同页；契约托管的 `agent-result` 随声明原子增删，UI 与所有保存入口均禁止单独改写。
 
 ## 0A. 数字员工操作系统目标架构
 
@@ -102,6 +102,8 @@ interface EmployeeJobTemplateRevision {
   readonly typePackageRef: VersionedResourceRef
   readonly displayNameKey: string
   readonly defaultToolBindings: readonly WorkItemToolBinding[]
+  readonly defaultCollaborationBindings: readonly EmployeeCollaborationBinding[]
+  readonly orderedDispatchConfigurations: readonly OrderedDispatchConfiguration[]
 }
 
 interface EmployeeWorkScopeRevision {
@@ -120,6 +122,9 @@ interface DigitalEmployeeDefinitionRevision {
   readonly enabled: boolean
   readonly workScopeRef: VersionedResourceRef
   readonly exactToolBindings: readonly WorkItemToolBinding[]
+  readonly exactCollaborationBindings: readonly EmployeeCollaborationBinding[]
+  readonly exactOrderedDispatchConfigurations: readonly OrderedDispatchConfiguration[]
+  readonly enabledWorkItemRefs: readonly WorkItemRef[]
   readonly compiledClosureDigest: string
 }
 
@@ -134,8 +139,10 @@ interface EmployeeCase {
 }
 ```
 
-类型包由代码发布并提供闭集 schema/编译器；岗位模板只预选该分类工作项已注册的工具；员工 definition 由业务用户通过
-UI/API 配置并冻结 exact tool registrations。EmployeeCase 是运行实例，并 pin 从“设置 → 限额”物化的内部执行快照 revision。
+类型包由代码发布并提供闭集 schema/编译器；岗位模板只预选该分类工作项已注册的工具、员工协同目标和有序分派表；员工 definition
+由业务用户通过 UI/API 配置并冻结 exact registrations、协同绑定、分派表以及实际启用的工作项闭包。可选泳道未配置时不阻断模板/
+员工发布，不建立 Attention，也不进入 Reaction；一旦配置了其中任一步，就必须闭合该泳道内部所有必需合同。EmployeeCase 是运行实例，
+并 pin 从“设置 → 限额”物化的内部执行快照 revision。
 definition 或 Limits 更新只影响新 Case；若技术运维显式把在途 Case 升到另一已物化 revision，必须 preview/apply 并重新计算
 Context、Attention、pending Delivery、execution 与 invocation 失效面。
 
@@ -494,6 +501,7 @@ interface ReactionRuleDefinition {
   readonly eventTypeRef: EventTypeRef
   readonly requiredContextTypes: readonly string[]
   readonly predicates: readonly TypedFactPredicate[]
+  readonly capabilityWorkItemRef?: WorkItemRef
   readonly workItemRef: WorkItemRef
   readonly workContractRef: WorkContractRef
   readonly toolBindingSlotRef: ToolBindingSlotRef
@@ -529,6 +537,9 @@ delivery 通过 transition fence 在下一次外部写前优先结算，而不�
 
 Event 是“为什么醒来”，不是当前事实。Reaction planner 必须先按 type package collector 取得同一 logical snapshot，再用
 typed rules 判断 Event 是否仍适用；过时 delivery 标 obsolete，不把 stale webhook payload 当事实。
+`capabilityWorkItemRef` 表示“哪项可选职责允许订阅/响应”，`workItemRef` 表示本轮实际先执行哪一步。两者通常相同；当评论、冲突等
+Event 只是一条 wake hint 时，规则由可选职责控制是否启用，但必须先进入平台 `observe-mr` 刷新权威 MR Context，再由 settlement
+根据最新事实确定是否进入检视/冲突修复。这样既不会因为平台刷新节点始终存在而误启用可选泳道，也不会拿旧 Case 快照直接修复。
 
 ### 0A.8 EmployeeInvocation、Channel 与 Join
 
@@ -674,6 +685,7 @@ interface EmployeeAuthoringManifestV1 {
       readonly descriptionKey: string
       readonly order: number
       readonly kind: 'spine' | 'branch'
+      readonly optional: boolean
     }[]
   }[]
   readonly workItems: readonly {
@@ -687,6 +699,12 @@ interface EmployeeAuthoringManifestV1 {
     readonly materialSummaryKey: string
     readonly completionStandardKey: string
     readonly nodeKind: 'business-tool' | 'system' | 'collaboration'
+    readonly collaborationContractId: string | null
+    readonly orderedDispatchAuthoring: {
+      readonly labelKey: string
+      readonly descriptionKey: string
+      readonly destinationWorkItemRefs: readonly WorkItemRef[]
+    } | null
     readonly toolRoleGroups: readonly ToolRoleGroupV1[]
     readonly nextWorkItemRefs: readonly WorkItemRef[]
   }[]
@@ -695,17 +713,18 @@ interface EmployeeAuthoringManifestV1 {
 
 画布拓扑从 manifest + employee definition 纯投影：生命周期 region 固定、工作项位置固定、全量展开，不提供 edge drag、
 stage selector 或任意 topology mutation。阶段只作为背景 region；每个 region 可声明一条 `spine` 主干与多条 `branch` 职责泳道，
-泳道 identity/order 在类型包发布时冻结。有泳道的 region 中，每个工作项必须且只能引用该 region 的一个 lane；重复 lane、缺失归属、
-跨 region 引用或未知 `nextWorkItemRefs` 均阻断发布。工作项是唯一可点击配置节点。业务工具节点只允许从当前分类、
+泳道 identity/order/optional 在类型包发布时冻结。有泳道的 region 中，每个工作项必须且只能引用该 region 的一个 lane；重复 lane、
+缺失归属、跨 region 引用或未知 `nextWorkItemRefs` 均阻断类型包发布。非可选主线始终要求闭合；可选泳道没有任何绑定时只是“该员工
+不具备该职责”，不阻断岗位模板或员工发布。工作项是唯一可点击配置节点。业务工具节点只允许从当前分类、
 当前工作项、exact WorkContract 下的已发布工具注册中选择；系统节点只读，协作节点进入 EmployeeInvocation 配置。Event、closed
 predicate、Context mapping、Effect 与 failure/retry policy 都由类型包编译，不出现在员工实例编辑器。前端通用组件不得按
 `development` 类型分支，类型差异只能来自 manifest 和注册的业务文案/codec。
 
 布局算法同样属于通用 manifest 投影，不属于研发页面特例：`spine` 节点在内容区居中；每条 `branch` 独占一行或多行，节点按
-`order` 从左到右展开；`nextWorkItemRefs` 的同泳道前向边直接连接，事件主干到多条支线先汇入一条共享分发干线再短接各支线，其他
-跨泳道或跨 region 的前向边走右侧过渡通道；指向更早工作项或更早 region 的边统一进入右侧 gutter 并以虚线表示回路，同节点回路从卡片上方
-回入，表达“按固定优先级继续处理下一类型”。画布给定显式 width/height/viewBox，桌面默认全量展开，窄屏只由外壳横向滚动，
-不得为了适配宽度把支线重新平铺成一个无法辨认前后关系的序列。
+`order` 从左到右展开。每条 `nextWorkItemRefs` 都单独生成紧凑正交线，从卡片右侧统一出、从目标左侧统一入；不显示悬浮端口圆圈，
+不使用会绕场一周的共享分发干线。指向更早工作项或同节点的边使用虚线回路，但只走相邻外侧通道。选中节点时同时高亮直接关联节点
+与边，其余元素降为次要层级。画布给定显式 width/height/viewBox，桌面在可用宽度内缩放展示完整全景，窄屏保持固定最小宽度并由
+外壳横向滚动；不得为了适配宽度把支线重新平铺成一个无法辨认前后关系的序列。
 
 运行投影至少提供：
 
@@ -3699,9 +3718,10 @@ retry 或内部 revision。
 - “增加工具”可选择已有 Agent/Workflow，或直接定义当前节点的 ProgramTool；按工作项允许的角色分组，外部连接仅在工具需要时出现。
 - 表单不允许再次选择阶段或工作项；不能在这里新建/改写底层 Agent 或 Workflow，ProgramTool 则只在这里定义并要求程序写权。
 - 保存后先显示合同校验结果；通过后才能发布。系统节点只展示平台行为和 receipt，无“增加工具”。
-- “处理流水线”一个工作项内可分“问题识别工具 / 问题修复工具”；问题类型路由由分类包固定，不把流程重新拆成自由连线图。
-- 泳道标签回答“这是人的哪类职责”，节点回答“这一步做什么”；MR 事件入口是分发主干，不把检视、流水线、冲突、审批和合入判断
-  误画成必须依次执行的一条长链。回入口/重新发布/重采边固定走外侧虚线，选择节点时仅高亮相关边。
+- “归类流水线问题”节点显式编辑岗位级有序分派表：每行定义业务失败类型、显示名、目标处理工作项和 exact 工具或协同员工；列表顺序
+  就是优先级，必须且只能有一个末尾兜底项。类型包只声明允许到达哪些处理节点，不写死编译/单测/静态检查等业务枚举。
+- 泳道标签回答“这是人的哪类职责”，节点回答“这一步做什么”；MR 事件入口是权威事实刷新点，不把检视、流水线、冲突、审批和合入判断
+  误画成必须依次执行的一条长链。回入口/重新发布/重采边固定使用短虚线回路；选择节点时同时高亮直接关联的边和节点。
 
 员工创建/详情复用同一职责图，但配置更少：选分类和岗位模板后，只填写名称、启停、负责范围，并为有覆盖需要的工作项选择一个
 已发布工具。节点右侧显示“当前工具 / 模板默认 / 可选兼容工具”和只读输入输出合同。缺少工具时动作跳到
@@ -4068,6 +4088,28 @@ SHA 终态验证；取消或被 successor 覆盖的 run 不能当 pass。
    structural closure、Program 真实 Script fixture、extra/missing/cross-round 输出均有正反向回归；编辑发布与运行调用同一 validator。
 9. Responsibility lane component/E2E：type package 缺 lane/未知 lane 拒绝；事件入口节点居中，同一支线节点 x 单调、不同支线 y 分离，
    回边拥有独立 loop 样式；研发/设计/测试复用同一布局函数，窄屏滚动后仍可看到全景。
+
+### 15.8 公共平台能力覆盖矩阵（normative release gate）
+
+“完备用例防护”不等于把所有分支塞进一个巨型 E2E。每项公共机制至少同时具备**合同/反向测试**与**跨模块集成/恢复测试**；凡跨越
+进程、Git、代码平台、自建系统或审批边界的能力，再增加 stateful system mock；页面交互和几何关系再增加浏览器/像素证据。任一层缺失，
+只能声称局部实现完成，不能把 RFC-310 标为 Done。
+
+| 公共能力边界                                                          | 合同与反向防护                                                             | 跨模块、恢复与并发防护                                                                                      | 外部/浏览器证据                                                                                                 |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| RFC-294 owner、exact public/required ports、唯一执行链                | `rfc310-digital-employee-os-architecture`、`rfc310-architecture-lock`      | composition 启动与 descriptor drift fail-closed                                                             | system mock 只能通过公开 participant 装配，不取得 owner 内部对象                                                |
+| 平台 ExecutionContract 与 Agent/Workflow/Program envelope             | `execution-contract-platform`、Agent 托管端口生命周期测试                  | authoring、ReactionPlan 与 settlement 共用 exact validator；调度元数据不得混入业务 `contractInput`          | Program 真 Script fixture；浏览器工具选择只列 compatible executor                                               |
+| Context/Case/Attention/队列/限额重试/Reaction                         | `rfc310-digital-employee-authoring`、`rfc310-employee-case-runtime`        | `rfc310-digital-employee-os-worker` 锁 lease、重启、优先级、coalesce 和 terminal fence                      | 新 OS system mock 从 WorkStart 跑到外部 MR terminal                                                             |
+| 全局 Event Center：目录、来源、订阅、多播、Delivery、Webhook/轮询统一 | `rfc310-event-center`、0193–0199 migration tests                           | task/case lifecycle outbox、晚订阅、A-B-A、启停 Observer、单消费者失败隔离、重复 observation                | 自定义来源运行真实脚本；旧 Webhook HTTP E2E 保持触发任务与多消费者语义                                          |
+| Employee Channel/Join 与跨仓协同                                      | invocation/ancestry/join/cancel 合同反向测试                               | Case runtime 锁 child reuse、all/any/quorum、deadline 与恢复                                                | stateful system mock 运行父仓→子仓员工→返回父 Case，两个真实 Git remote 隔离                                    |
+| workspace、上传、candidate、平台 commit/CAS push/MR                   | `rfc310-pr3-*`、`rfc310-pr4-*`、`rfc310-pr5-*`                             | `rfc310-employee-workspace-delivery` 与 `rfc310-pr7b-conflict-repair-journey` 锁 remote advance、冲突和重放 | 旧 T109 与新 OS system mock 均使用真 bare remote + HTTP code-host mock，不以内存 fake 代替                      |
+| 类型包、可选泳道、岗位模板与动态问题路由                              | `rfc310-digital-employee-authoring`、`digital-employee-type-package-drift` | 未配置可选泳道可发布且不订阅；部分配置 fail closed；有序类型表唯一末尾兜底并冻结 exact destination          | 浏览器零配置旅程证明不用先补齐所有可选职责；开发全旅程使用 `development@3`                                      |
+| MR 权威刷新、检视整树、ACK/修复/回帖与自回复抑制                      | `rfc310-pr7-mr-facts`、case runtime settlement tests                       | Event 只作 wake hint，`capabilityWorkItemRef` 控制职责启用，先 `observe-mr` 再按新 revision 分派            | stateful code-host mock 注入同线程多轮回复，验证先 ACK、Agent 收到完整树、push 后按 envelope 回帖、重放不自循环 |
+| 流水线大证据与外部审批 adapter                                        | `rfc310-pr6-*`、system-mocks provider/approval tests                       | 大结果落 `.agent-workflow/pipeline`、审批 submit/adopt/observe、cursor 与 outage 恢复                       | runnable pipeline/approval provider；父子员工 + 审批 + 门禁重跑 system mock 旅程                                |
+| 通用职责图与最小配置 UI                                               | frontend RFC-310 contract、capsule nowrap、execution guide tests           | 同一 manifest 驱动 toolbox/job/employee/runtime，20 节点关系与可选状态一致                                  | Playwright 零配置/完整任务旅程；数字员工目录、全景图、工具弹窗三幅目标视觉基线                                  |
+
+新员工分类接入时必须在此矩阵新增“类型包专属能力”行；不能把公共 OS 已有绿灯复制成该分类业务语义已经被验证。system mock 的作用是
+证明平台外边界和真实状态迁移，不替代纯函数/合同反向用例；反过来，in-test object fake 也不能替代跨进程 system mock。
 
 ## 16. 被否决的方案
 

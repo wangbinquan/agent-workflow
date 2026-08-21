@@ -15,7 +15,11 @@ import {
 import type { ApprovalGatewayPort } from '../application/ports/reconcilerPorts'
 import { encodeDevelopmentApprovalSubject } from '../domain/approvalSubject'
 import { canonicalDigest } from '../domain/canonicalJson'
-import { approvalContextSchema } from './employeeTypePackage'
+import {
+  approvalContextSchema,
+  problemSetContextSchema,
+  reviewResolutionContextSchema,
+} from './employeeTypePackage'
 import { sha256Hex } from '@/util/hash'
 import { stableIdentityComponent } from '@/util/gitRef'
 import { createGitBaselineReader } from '../infrastructure/gitBaselineReader'
@@ -152,6 +156,21 @@ const reviewThreadStateSchema = z
     resolved: z.boolean(),
     body: z.string().max(32_000),
     path: z.string().min(1).max(1_000).nullable(),
+    messages: z
+      .array(
+        z
+          .object({
+            messageRef: z.string().min(1).max(500),
+            parentMessageRef: z.string().min(1).max(500).nullable(),
+            authorClass: z.enum(['human', 'bot', 'self']),
+            body: z.string().max(32_000),
+            path: z.string().min(1).max(1_000).nullable(),
+            createdAt: z.string().nullable(),
+          })
+          .strict(),
+      )
+      .max(500)
+      .default([]),
   })
   .strict()
 
@@ -264,6 +283,26 @@ function platformOutput(
   })
 }
 
+function reviewReplyMarker(input: {
+  readonly caseId: string
+  readonly phase: 'received' | 'resolved'
+  readonly threadRef: string
+  readonly revision: string
+  readonly commitSha?: string
+}): string {
+  return `${input.caseId}:review-${input.phase}:${sha256Hex(
+    JSON.stringify({
+      threadRef: input.threadRef,
+      revision: input.revision,
+      commitSha: input.commitSha ?? null,
+    }),
+  ).slice(0, 24)}`
+}
+
+function reviewMarkerToken(marker: string): string {
+  return `<!-- aw-self:${marker} -->`
+}
+
 export function composeDevelopmentEmployeePlatformWorkItems(input: {
   readonly db: DbClient
   readonly appHome: string
@@ -275,6 +314,18 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
     } | null
   }
   readonly mrEffects: {
+    reply(
+      repositoryId: string,
+      request: {
+        readonly mrRef: string
+        readonly threadRef: string
+        readonly body: string
+        readonly selfMarker: string
+      },
+    ): Promise<
+      | { readonly ok: true; readonly noteRef: string }
+      | { readonly ok: false; readonly code: string; readonly detail: string }
+    >
     ensure(
       repositoryId: string,
       request: {
@@ -338,6 +389,14 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               readonly resolved: boolean
               readonly body: string
               readonly path: string | null
+              readonly messages: readonly {
+                readonly messageRef: string
+                readonly parentMessageRef: string | null
+                readonly authorClass: 'human' | 'bot' | 'self'
+                readonly body: string
+                readonly path: string | null
+                readonly createdAt: string | null
+              }[]
             }[]
           }
         }
@@ -507,6 +566,292 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
     async execute(plan) {
       const output = (value: Parameters<typeof platformOutput>[1]) => platformOutput(plan, value)
       const contexts = contextsOf(plan)
+      if (plan.workItemRef === 'classify-feedback') {
+        const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
+        if (currentMr === undefined) {
+          return output({ status: 'blocked', summary: '缺少当前 MR 上下文，无法汇总检视意见' })
+        }
+        const mergeRequest = mergeRequestStateSchema.parse(
+          JSON.parse(currentMr.stateJson) as unknown,
+        )
+        const currentProblemSet = contexts.find(
+          (context) => context.typeId === 'development.problem-set',
+        )
+        const currentResolution = contexts.find(
+          (context) => context.typeId === 'development.review-resolution',
+        )
+        const priorResolution =
+          currentResolution === undefined
+            ? null
+            : reviewResolutionContextSchema.parse(
+                JSON.parse(currentResolution.stateJson) as unknown,
+              )
+        const knownThreadRevisions = new Set(
+          priorResolution?.threads.map((thread) => `${thread.threadRef}\u0000${thread.revision}`) ??
+            [],
+        )
+        const actionable = mergeRequest.reviewThreads.filter(
+          (thread) =>
+            !thread.resolved &&
+            thread.authorClass !== 'self' &&
+            !knownThreadRevisions.has(`${thread.threadRef}\u0000${thread.revision}`),
+        )
+        if (actionable.length === 0) {
+          return output({
+            status: 'needs-input',
+            summary: '没有新的外部检视线程需要处理；平台自身回复不会重新触发修复',
+          })
+        }
+        const normalizedThreads = actionable.map((thread) => ({
+          ...thread,
+          messages:
+            thread.messages.length > 0
+              ? thread.messages
+              : [
+                  {
+                    messageRef: thread.revision,
+                    parentMessageRef: null,
+                    authorClass: thread.authorClass,
+                    body: thread.body,
+                    path: thread.path,
+                    createdAt: null,
+                  },
+                ],
+        }))
+        const problemSet = problemSetContextSchema.parse({
+          status: 'active',
+          source: 'review',
+          headSha: mergeRequest.headSha,
+          remainingTypes: ['review'],
+          problems: normalizedThreads.map((thread) => ({
+            problemId: thread.threadRef,
+            type: 'review',
+            summary: `${thread.path ?? 'MR'} · ${thread.body || thread.threadRef}`.slice(0, 2_000),
+            evidenceArtifactRefs: [],
+            reviewThread: thread,
+          })),
+        })
+        const resolution = reviewResolutionContextSchema.parse({
+          status: 'collected',
+          mergeRequestRef: mergeRequest.mergeRequestRef,
+          sourceHeadSha: mergeRequest.headSha,
+          publishedHeadSha: null,
+          commitSha: null,
+          threads: [
+            ...(priorResolution?.threads ?? []),
+            ...normalizedThreads.map((thread) => ({
+              threadRef: thread.threadRef,
+              revision: thread.revision,
+              acknowledgement: null,
+              disposition: null,
+              replyBody: null,
+              finalReply: null,
+            })),
+          ],
+        })
+        return output({
+          summary: `已汇总 ${actionable.length} 棵待处理检视线程树`,
+          contextPatches: [
+            contextPatch({
+              current: currentProblemSet,
+              contextTypeId: 'development.problem-set',
+              state: problemSet,
+            }),
+            contextPatch({
+              current: currentResolution,
+              contextTypeId: 'development.review-resolution',
+              state: resolution,
+            }),
+          ],
+        })
+      }
+
+      if (plan.workItemRef === 'acknowledge-feedback') {
+        const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
+        const currentResolution = contexts.find(
+          (context) => context.typeId === 'development.review-resolution',
+        )
+        if (currentMr === undefined || currentResolution === undefined) {
+          return output({ status: 'blocked', summary: '缺少待确认的检视线程上下文' })
+        }
+        if (input.mrFacts === undefined) {
+          return output({ status: 'blocked', summary: 'MR 检视事实采集程序尚未接入平台' })
+        }
+        const mergeRequest = mergeRequestStateSchema.parse(
+          JSON.parse(currentMr.stateJson) as unknown,
+        )
+        if (mergeRequest.repositoryRef === null || mergeRequest.providerMrRef === null) {
+          return output({ status: 'blocked', summary: 'MR 上下文缺少仓库或代码平台标识' })
+        }
+        const resolution = reviewResolutionContextSchema.parse(
+          JSON.parse(currentResolution.stateJson) as unknown,
+        )
+        const live = await input.mrFacts.collect(
+          mergeRequest.repositoryRef,
+          mergeRequest.providerMrRef,
+          plan.caseRef.id,
+        )
+        if (!live.ok) {
+          return output({
+            status: 'blocked',
+            summary: `确认检视意见前刷新线程失败：${live.code} · ${live.detail}`,
+          })
+        }
+        const nextThreads = []
+        for (const thread of resolution.threads) {
+          if (thread.acknowledgement !== null || thread.finalReply !== null) {
+            nextThreads.push(thread)
+            continue
+          }
+          const marker = reviewReplyMarker({
+            caseId: plan.caseRef.id,
+            phase: 'received',
+            threadRef: thread.threadRef,
+            revision: thread.revision,
+          })
+          const existing = live.snapshot.reviewThreads
+            .find((candidate) => candidate.threadRef === thread.threadRef)
+            ?.messages.find((message) => message.body.includes(reviewMarkerToken(marker)))
+          if (existing !== undefined) {
+            nextThreads.push({
+              ...thread,
+              acknowledgement: { marker, noteRef: existing.messageRef },
+            })
+            continue
+          }
+          const replied = await input.mrEffects.reply(mergeRequest.repositoryRef, {
+            mrRef: mergeRequest.providerMrRef,
+            threadRef: thread.threadRef,
+            body: '已收到该检视意见，正在处理。',
+            selfMarker: marker,
+          })
+          if (!replied.ok) {
+            return output({
+              status: 'blocked',
+              summary: `回复检视意见失败：${replied.code} · ${replied.detail}`,
+            })
+          }
+          nextThreads.push({
+            ...thread,
+            acknowledgement: { marker, noteRef: replied.noteRef },
+          })
+        }
+        return output({
+          summary: `已逐线程确认 ${nextThreads.filter((thread) => thread.finalReply === null).length} 条检视意见`,
+          contextPatches: [
+            contextPatch({
+              current: currentResolution,
+              contextTypeId: 'development.review-resolution',
+              state: reviewResolutionContextSchema.parse({
+                ...resolution,
+                status: 'acknowledged',
+                threads: nextThreads,
+              }),
+            }),
+          ],
+          effectSuggestions: ['code-host.merge-request.reply'],
+        })
+      }
+
+      if (plan.workItemRef === 'reply-feedback') {
+        const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
+        const currentResolution = contexts.find(
+          (context) => context.typeId === 'development.review-resolution',
+        )
+        if (currentMr === undefined || currentResolution === undefined) {
+          return output({ status: 'blocked', summary: '缺少已发布提交或检视处理说明' })
+        }
+        if (input.mrFacts === undefined) {
+          return output({ status: 'blocked', summary: 'MR 检视事实采集程序尚未接入平台' })
+        }
+        const mergeRequest = mergeRequestStateSchema.parse(
+          JSON.parse(currentMr.stateJson) as unknown,
+        )
+        const resolution = reviewResolutionContextSchema.parse(
+          JSON.parse(currentResolution.stateJson) as unknown,
+        )
+        if (
+          resolution.status !== 'prepared' ||
+          mergeRequest.repositoryRef === null ||
+          mergeRequest.providerMrRef === null
+        ) {
+          return output({ status: 'blocked', summary: '检视处理说明尚未准备好或 MR 标识不完整' })
+        }
+        const live = await input.mrFacts.collect(
+          mergeRequest.repositoryRef,
+          mergeRequest.providerMrRef,
+          plan.caseRef.id,
+        )
+        if (!live.ok) {
+          return output({
+            status: 'blocked',
+            summary: `回复修复结果前刷新线程失败：${live.code} · ${live.detail}`,
+          })
+        }
+        const nextThreads = []
+        for (const thread of resolution.threads) {
+          if (thread.finalReply !== null) {
+            nextThreads.push(thread)
+            continue
+          }
+          if (thread.disposition === null || thread.replyBody === null) {
+            return output({ status: 'blocked', summary: `线程 ${thread.threadRef} 缺少处理说明` })
+          }
+          const marker = reviewReplyMarker({
+            caseId: plan.caseRef.id,
+            phase: 'resolved',
+            threadRef: thread.threadRef,
+            revision: thread.revision,
+            commitSha: mergeRequest.headSha,
+          })
+          const existing = live.snapshot.reviewThreads
+            .find((candidate) => candidate.threadRef === thread.threadRef)
+            ?.messages.find((message) => message.body.includes(reviewMarkerToken(marker)))
+          if (existing !== undefined) {
+            nextThreads.push({
+              ...thread,
+              finalReply: { marker, noteRef: existing.messageRef },
+            })
+            continue
+          }
+          const body =
+            thread.disposition === 'addressed'
+              ? `已在提交 ${mergeRequest.headSha.slice(0, 12)} 中处理。\n\n${thread.replyBody}`
+              : `该意见需要人工决策，数字员工已暂停自动处理。\n\n${thread.replyBody}`
+          const replied = await input.mrEffects.reply(mergeRequest.repositoryRef, {
+            mrRef: mergeRequest.providerMrRef,
+            threadRef: thread.threadRef,
+            body,
+            selfMarker: marker,
+          })
+          if (!replied.ok) {
+            return output({
+              status: 'blocked',
+              summary: `回复检视修复结果失败：${replied.code} · ${replied.detail}`,
+            })
+          }
+          nextThreads.push({ ...thread, finalReply: { marker, noteRef: replied.noteRef } })
+        }
+        return output({
+          summary: `已把 ${nextThreads.length} 条检视处理说明回复到原线程`,
+          contextPatches: [
+            contextPatch({
+              current: currentResolution,
+              contextTypeId: 'development.review-resolution',
+              lifecycleState: 'terminal',
+              state: reviewResolutionContextSchema.parse({
+                ...resolution,
+                status: 'replied',
+                publishedHeadSha: mergeRequest.headSha,
+                commitSha: mergeRequest.headSha,
+                threads: nextThreads,
+              }),
+            }),
+          ],
+          effectSuggestions: ['code-host.merge-request.reply'],
+        })
+      }
+
       if (plan.workItemRef === 'submit-approval') {
         const current = contexts.find((context) => context.typeId === 'development.approval')
         if (current === undefined) {
@@ -1307,6 +1652,18 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
                 .parse(JSON.parse(pipelineContext.stateJson) as unknown)
         const sameHeadFacts = state.factsHeadSha === state.headSha
         const sameHeadPipeline = pipeline?.headSha === state.headSha
+        const approvalContext = contexts.find(
+          (context) => context.typeId === 'development.approval',
+        )
+        const approval =
+          approvalContext === undefined
+            ? null
+            : approvalContextSchema.parse(JSON.parse(approvalContext.stateJson) as unknown)
+        const approvalReady =
+          state.approvalHold !== true ||
+          (approval?.status === 'approved' &&
+            approval.mergeRequestRef === state.mergeRequestRef &&
+            approval.headSha === state.headSha)
         const readyToMerge =
           state.status === 'active' &&
           !state.draft &&
@@ -1314,7 +1671,8 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           state.unresolvedReviewCount === 0 &&
           sameHeadFacts &&
           sameHeadPipeline &&
-          pipeline?.status === 'passed'
+          pipeline?.status === 'passed' &&
+          approvalReady
         const next = mergeRequestStateSchema.parse({ ...state, readyToMerge })
         const reasons = [
           ...(state.draft ? ['MR 仍是草稿'] : []),
@@ -1326,12 +1684,11 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           ...(!sameHeadPipeline || pipeline?.status !== 'passed'
             ? ['当前 head 的流水线门禁未通过']
             : []),
+          ...(!approvalReady ? ['当前 MR head 的外部审批尚未通过'] : []),
         ]
         return output({
           summary: readyToMerge
-            ? state.approvalHold === true
-              ? '代码与机器门禁已就绪，等待 committer 审核合入'
-              : 'MR 已随时可合入，等待 committer'
+            ? 'MR 已随时可合入，等待 committer'
             : `MR 尚未就绪：${reasons.join('；')}`,
           contextPatches: [
             contextPatch({

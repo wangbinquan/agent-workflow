@@ -591,7 +591,7 @@ export function EventResponseRulesPanel(props: {
       onClick={() => setDraft(emptyDraft(refKey(eligibleEvents[0]!.eventTypeRef)))}
       data-testid="event-response-rule-new"
     >
-      {zh ? '新增响应规则' : 'New response rule'}
+      {zh ? '新建响应规则' : 'New response rule'}
     </button>
   ) : undefined
 
@@ -630,7 +630,6 @@ export function EventResponseRulesPanel(props: {
               ? '选择一个业务事件，再选择要启动的编排、Agent、工作组或数字员工。'
               : 'Choose a business event and the workflow, agent, workgroup, or employee it should start.'
           }
-          action={newAction}
         />
       ) : (
         <div className="webhook-card-grid" data-testid="event-response-rule-list">
@@ -726,7 +725,7 @@ export function EventResponseRulesPanel(props: {
           title={
             draft.id === null
               ? zh
-                ? '新增响应规则'
+                ? '新建响应规则'
                 : 'New response rule'
               : zh
                 ? '编辑响应规则'

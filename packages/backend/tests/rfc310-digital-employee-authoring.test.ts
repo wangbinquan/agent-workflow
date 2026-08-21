@@ -11,6 +11,7 @@ import {
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
+import { isEmployeeReactionEventEnabled } from '@/modules/digital-employee/application/runtimeService'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { inspectExecutionContractWorkflowDefinition } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
@@ -132,7 +133,8 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       'care-review',
       'care-pipeline',
       'care-conflict',
-      'care-coordination',
+      'care-collaboration',
+      'care-approval',
       'care-readiness',
     ])
     const workItems = new Map(
@@ -141,14 +143,38 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     expect(workItems.get('analyze-implement')?.nextWorkItemRefs).toEqual(['prepare-change'])
     expect(workItems.get('repair-pipeline')?.nextWorkItemRefs).toEqual([
       'repair-pipeline',
+      'delegate',
       'prepare-change',
     ])
     expect(workItems.get('observe-mr')?.nextWorkItemRefs).toEqual([
       'classify-feedback',
       'collect-pipeline',
       'repair-conflict',
+      'prepare-approval',
       'evaluate-ready',
     ])
+    expect(workItems.get('classify-feedback')).toMatchObject({
+      nodeKind: 'system',
+      toolRoleGroups: [],
+      nextWorkItemRefs: ['acknowledge-feedback'],
+    })
+    expect(workItems.get('delegate')).toMatchObject({
+      responsibilityLaneId: 'care-collaboration',
+      nextWorkItemRefs: ['collect-pipeline'],
+    })
+    expect(workItems.get('prepare-approval')?.responsibilityLaneId).toBe('care-approval')
+    expect(descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-review')).toMatchObject({
+      capabilityWorkItemRef: 'classify-feedback',
+      workItemRef: 'observe-mr',
+      slotRef: 'system',
+    })
+    expect(
+      descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-conflict'),
+    ).toMatchObject({
+      capabilityWorkItemRef: 'repair-conflict',
+      workItemRef: 'observe-mr',
+      slotRef: 'system',
+    })
     expect(validateTypePackage(descriptor)).toEqual([])
 
     const invalid = structuredClone(descriptor)
@@ -157,6 +183,13 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       code: 'unknown-responsibility-lane',
       at: `workItems.${invalid.authoringManifest.workItems[0]!.workItemRef}.responsibilityLaneId`,
       detail: 'missing-lane',
+    })
+    const invalidCapability = structuredClone(descriptor)
+    invalidCapability.reactionRules[0]!.capabilityWorkItemRef = 'missing-capability'
+    expect(validateTypePackage(invalidCapability)).toContainEqual({
+      code: 'unknown-capability-work-item',
+      at: `reactionRules.${invalidCapability.reactionRules[0]!.ruleId}.capabilityWorkItemRef`,
+      detail: 'missing-capability',
     })
   })
 
@@ -221,16 +254,20 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     await ensureDigitalEmployeeAgentTemplates(db)
 
     const templates = await listDigitalEmployeeAgentTemplates(db)
-    expect(templates).toHaveLength(3)
+    expect(templates).toHaveLength(7)
     expect(templates.map((template) => template.frontmatterExtra.digitalEmployeeTemplate)).toEqual([
       'code-writing',
       'problem-diagnosis',
       'pipeline-repair',
+      'review-repair',
+      'conflict-repair',
+      'business-implementation',
+      'issue-repair',
     ])
     expect(
       templates.every((template) => template.builtin && template.visibility === 'public'),
     ).toBe(true)
-    expect(await listAgents(db)).toHaveLength(3)
+    expect(await listAgents(db)).toHaveLength(7)
   })
 
   test('design and test packages use the same type -> work item -> tool -> employee core', async () => {
@@ -333,7 +370,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   test('a job template cannot publish before every required graph node has a tool', () => {
     const module = fixtureModule()
     const draft = module.commands.createJobTemplate({
-      typeRef: { typeId: 'development', revision: 2 },
+      typeRef: { typeId: 'development', revision: 3 },
       actorUserId: 'author-1',
       body: {
         name: '不完整岗位',
@@ -347,13 +384,184 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     ).toThrow('job template does not cover every required work-item tool slot')
   })
 
+  test('unconfigured optional lanes stay disabled without blocking employee publication', async () => {
+    const module = fixtureModule()
+    const typeRef = { typeId: 'development', revision: 3 }
+    const typePackage = module.queries.getType(typeRef)
+    const optionalLanes = new Set(
+      typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
+        region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
+      ),
+    )
+    const coreItems = typePackage.authoringManifest.workItems.filter(
+      (item) => item.responsibilityLaneId === null || !optionalLanes.has(item.responsibilityLaneId),
+    )
+    const bindings = [] as Array<{
+      workItemRef: string
+      slotRef: string
+      registrationRef: { id: string; revision: number }
+    }>
+    for (const item of coreItems) {
+      for (const role of item.toolRoleGroups) {
+        for (const slot of role.bindingSlots.filter((candidate) => candidate.required)) {
+          const tool = await module.commands.createTool({
+            typeRef,
+            workItemRef: item.workItemRef,
+            actorUserId: 'author-optional',
+            body: {
+              displayName: `${item.label['zh-CN']}工具`,
+              description: '仅配置交付主线',
+              roleRef: role.roleRef,
+              implementation: {
+                kind: 'agent',
+                agentRef: { id: `agent-${item.workItemRef}`, revision: 1 },
+              },
+              connectionRef: null,
+            },
+          })
+          bindings.push({
+            workItemRef: item.workItemRef,
+            slotRef: slot.slotRef,
+            registrationRef: await module.commands.publishTool({
+              typeRef,
+              workItemRef: item.workItemRef,
+              toolId: tool.id,
+              actorUserId: 'author-optional',
+            }),
+          })
+        }
+      }
+    }
+    const job = module.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'author-optional',
+      body: {
+        name: '只负责交付 MR 的岗位',
+        description: '不启用检视、流水线、冲突、协同或外部审批泳道',
+        defaultToolBindings: bindings,
+      },
+    })
+    const jobRef = module.commands.publishJobTemplate({
+      id: job.id,
+      actorUserId: 'author-optional',
+    })
+    const employee = module.commands.createEmployee({
+      typeRef,
+      actorUserId: 'author-optional',
+      body: {
+        name: '只交付 MR 的数字员工',
+        jobTemplateRef: jobRef,
+        enabled: true,
+        workScope: { kind: 'repository', repositoryId: 'repo-core-only' },
+      },
+    })
+    module.commands.publishEmployee({ id: employee.id, actorUserId: 'author-optional' })
+    const enabled = module.queries.getEmployee(employee.id).published?.enabledWorkItemRefs ?? []
+    expect(enabled).toEqual(coreItems.map((item) => item.workItemRef))
+    expect(enabled).not.toContain('classify-feedback')
+    expect(enabled).not.toContain('collect-pipeline')
+    expect(enabled).not.toContain('repair-conflict')
+    expect(enabled).not.toContain('delegate')
+    expect(enabled).not.toContain('prepare-approval')
+    expect(
+      isEmployeeReactionEventEnabled({
+        descriptor: typePackage,
+        enabledWorkItemRefs: enabled,
+        eventTypeId: 'development.review-updated',
+      }),
+    ).toBe(false)
+    expect(
+      isEmployeeReactionEventEnabled({
+        descriptor: typePackage,
+        enabledWorkItemRefs: enabled,
+        eventTypeId: 'development.lifecycle-updated',
+      }),
+    ).toBe(true)
+
+    const collectPipeline = typePackage.authoringManifest.workItems.find(
+      (item) => item.workItemRef === 'collect-pipeline',
+    )!
+    const collectSlot = collectPipeline.toolRoleGroups[0]!.bindingSlots[0]!
+    const partialTool = await module.commands.createTool({
+      typeRef,
+      workItemRef: collectPipeline.workItemRef,
+      actorUserId: 'author-optional',
+      body: {
+        displayName: '取得流水线证据',
+        description: '只开始配置了流水线泳道，但尚未定义错误类型',
+        roleRef: collectPipeline.toolRoleGroups[0]!.roleRef,
+        implementation: {
+          kind: 'workflow',
+          workflowRef: { id: 'workflow-collect-pipeline', revision: 1 },
+        },
+        connectionRef: null,
+      },
+    })
+    const classifyPipeline = typePackage.authoringManifest.workItems.find(
+      (item) => item.workItemRef === 'classify-pipeline',
+    )!
+    const classifySlot = classifyPipeline.toolRoleGroups[0]!.bindingSlots[0]!
+    const classifierTool = await module.commands.createTool({
+      typeRef,
+      workItemRef: classifyPipeline.workItemRef,
+      actorUserId: 'author-optional',
+      body: {
+        displayName: '归类流水线失败',
+        description: '按岗位定义的错误类型闭集进行归类',
+        roleRef: classifyPipeline.toolRoleGroups[0]!.roleRef,
+        implementation: {
+          kind: 'agent',
+          agentRef: { id: 'agent-classify-pipeline', revision: 1 },
+        },
+        connectionRef: null,
+      },
+    })
+    const partialJob = module.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'author-optional',
+      body: {
+        name: '未配完的流水线岗位',
+        description: '开始配置后才要求本泳道内部闭合',
+        defaultToolBindings: [
+          ...bindings,
+          {
+            workItemRef: collectPipeline.workItemRef,
+            slotRef: collectSlot.slotRef,
+            registrationRef: await module.commands.publishTool({
+              typeRef,
+              workItemRef: collectPipeline.workItemRef,
+              toolId: partialTool.id,
+              actorUserId: 'author-optional',
+            }),
+          },
+          {
+            workItemRef: classifyPipeline.workItemRef,
+            slotRef: classifySlot.slotRef,
+            registrationRef: await module.commands.publishTool({
+              typeRef,
+              workItemRef: classifyPipeline.workItemRef,
+              toolId: classifierTool.id,
+              actorUserId: 'author-optional',
+            }),
+          },
+        ],
+      },
+    })
+    expect(() =>
+      module.commands.publishJobTemplate({
+        id: partialJob.id,
+        actorUserId: 'author-optional',
+      }),
+    ).toThrow('ordered dispatch must be configured for classify-pipeline')
+  })
+
   test('type -> work item -> tool registration closes an exact employee definition', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     const manifest = module.queries.getAuthoringManifest(typeRef)
     const typePackage = module.queries.getType(typeRef)
     expect(manifest.lifecycleRegions.map((region) => region.regionId)).toEqual(['delivery', 'care'])
-    expect(manifest.workItems).toHaveLength(18)
+    expect(manifest.workItems).toHaveLength(20)
     expect(
       manifest.workItems.find((item) => item.workItemRef === 'repair-conflict')?.nextWorkItemRefs,
     ).toEqual(['publish-conflict'])
@@ -433,6 +641,42 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         }
       }
     }
+    const pipelineRepairTool = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      actorUserId: 'author-1',
+      body: {
+        displayName: '通用流水线修复工具',
+        description: '岗位可把任意错误类型绑定到这个 Agent',
+        roleRef: 'repairer',
+        implementation: {
+          kind: 'agent',
+          agentRef: { id: 'agent-pipeline-generic', revision: 1 },
+        },
+        connectionRef: null,
+      },
+    })
+    const pipelineRepairRef = await module.commands.publishTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      toolId: pipelineRepairTool.id,
+      actorUserId: 'author-1',
+    })
+    const orderedDispatchConfigurations = [
+      {
+        classifierWorkItemRef: 'classify-pipeline',
+        routes: [
+          {
+            routeRef: 'other-pipeline-failure',
+            displayName: '其他流水线错误',
+            description: '用户配置的兜底错误类型',
+            destinationWorkItemRef: 'repair-pipeline',
+            registrationRef: pipelineRepairRef,
+            fallback: true,
+          },
+        ],
+      },
+    ]
 
     const template = module.commands.createJobTemplate({
       typeRef,
@@ -441,6 +685,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         name: '标准开发岗位',
         description: '节点默认工具，不包含事件、重试或执行规则。',
         defaultToolBindings: bindings,
+        orderedDispatchConfigurations,
       },
     })
     const templateRef = module.commands.publishJobTemplate({
@@ -473,6 +718,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ),
       ),
     )
+    expect(published.published?.exactOrderedDispatchConfigurations).toEqual(
+      orderedDispatchConfigurations,
+    )
     expect(JSON.stringify(published)).not.toContain('sameSceneAttempts')
     expect(JSON.stringify(published)).not.toContain('retry')
 
@@ -483,6 +731,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         name: 'C++ 开发岗位',
         description: '同一分类可定义另一套节点工具组合。',
         defaultToolBindings: bindings,
+        orderedDispatchConfigurations,
       },
     })
     const cppTemplateRef = module.commands.publishJobTemplate({
@@ -510,7 +759,36 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     )
   })
 
-  test('pipeline problem types select specialist slots in fixed priority with unknown fallback', () => {
+  test('pipeline problem types follow the employee-configured priority and handler list', () => {
+    const orderedDispatchConfigurations = [
+      {
+        classifierWorkItemRef: 'classify-pipeline',
+        routes: [
+          {
+            routeRef: 'compile',
+            displayName: '编译错误',
+            description: '先处理编译失败',
+            destinationWorkItemRef: 'repair-pipeline',
+            registrationRef: { id: 'compile-agent', revision: 1 },
+            fallback: false,
+          },
+          {
+            routeRef: 'environment',
+            displayName: '其他环境错误',
+            description: '岗位自定义兜底类型',
+            destinationWorkItemRef: 'repair-pipeline',
+            registrationRef: { id: 'generic-agent', revision: 1 },
+            fallback: true,
+          },
+        ],
+      },
+    ]
+    const failureTypeDefinitions = orderedDispatchConfigurations[0]!.routes.map((route, index) => ({
+      typeId: route.routeRef,
+      priority: index + 1,
+      fallback: route.fallback,
+      handlingWorkItemRef: route.destinationWorkItemRef,
+    }))
     const context = {
       id: 'problem-context',
       revision: 1,
@@ -527,6 +805,12 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
             summary: 'compile failed',
             evidenceArtifactRefs: ['.agent-workflow/pipeline/case-1/logs/compile.log'],
           },
+          {
+            problemId: 'environment-1',
+            type: 'environment',
+            summary: 'environment failed',
+            evidenceArtifactRefs: [],
+          },
         ],
       }),
       artifactRefs: [],
@@ -537,8 +821,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           JSON.stringify({
             schemaVersion: 1,
             workItemRef: 'repair-pipeline',
-            defaultSlotRef: 'unknown',
+            defaultSlotRef: 'system',
             contextsJson: JSON.stringify([context]),
+            orderedDispatchConfigurationsJson: JSON.stringify(orderedDispatchConfigurations),
           }),
         ),
       ),
@@ -549,12 +834,13 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           JSON.stringify({
             schemaVersion: 1,
             workItemRef: 'repair-pipeline',
-            defaultSlotRef: 'unknown',
+            defaultSlotRef: 'system',
             contextsJson: '[]',
+            orderedDispatchConfigurationsJson: JSON.stringify(orderedDispatchConfigurations),
           }),
         ),
       ),
-    ).toEqual({ slotRef: 'unknown' })
+    ).toEqual({ slotRef: 'system' })
 
     const firstRepair = JSON.parse(
       developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
@@ -573,7 +859,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
             artifactRefs: [],
           }),
           contextsJson: JSON.stringify([context]),
-          allowedNextWorkItemRefs: ['repair-pipeline', 'prepare-change'],
+          inputEnvelopeJson: JSON.stringify({
+            contextsJson: JSON.stringify([context]),
+            contractInput: { failureTypeDefinitions },
+          }),
+          allowedNextWorkItemRefs: ['repair-pipeline', 'delegate', 'prepare-change'],
         }),
       ),
     )
@@ -625,6 +915,19 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
             artifactRefs: [],
           }),
           contextsJson: JSON.stringify([pipelineProblem]),
+          inputEnvelopeJson: JSON.stringify({
+            contextsJson: JSON.stringify([pipelineProblem]),
+            contractInput: {
+              failureTypeDefinitions: [
+                {
+                  typeId: 'external-dependency',
+                  priority: 1,
+                  fallback: true,
+                  handlingWorkItemRef: 'delegate',
+                },
+              ],
+            },
+          }),
           allowedNextWorkItemRefs: ['repair-pipeline', 'delegate'],
         }),
       ),
@@ -648,6 +951,24 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
             type: 'review',
             summary: 'review finding',
             evidenceArtifactRefs: [],
+            reviewThread: {
+              threadRef: 'review-1',
+              revision: '1:1',
+              authorClass: 'human',
+              resolved: false,
+              body: 'review finding',
+              path: null,
+              messages: [
+                {
+                  messageRef: '1',
+                  parentMessageRef: null,
+                  authorClass: 'human',
+                  body: 'review finding',
+                  path: null,
+                  createdAt: null,
+                },
+              ],
+            },
           },
         ],
       }),
@@ -723,6 +1044,171 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       ),
     )
     expect(observed).toMatchObject({ caseState: 'active', nextWorkItemRef: 'evaluate-ready' })
+
+    const reviewMrContext = {
+      ...mrContext,
+      stateJson: JSON.stringify({
+        ...JSON.parse(mrContext.stateJson),
+        unresolvedReviewCount: 1,
+        reviewThreads: [
+          {
+            threadRef: 'thread-review-refresh',
+            revision: '2:42',
+            authorClass: 'human',
+            resolved: false,
+            body: 'please repair the refreshed review thread',
+            path: 'src/main.ts',
+            messages: [
+              {
+                messageRef: '41',
+                parentMessageRef: null,
+                authorClass: 'human',
+                body: 'root review comment',
+                path: 'src/main.ts',
+                createdAt: null,
+              },
+              {
+                messageRef: '42',
+                parentMessageRef: '41',
+                authorClass: 'human',
+                body: 'please repair the refreshed review thread',
+                path: 'src/main.ts',
+                createdAt: null,
+              },
+            ],
+          },
+        ],
+      }),
+    }
+    expect(
+      JSON.parse(
+        developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
+          JSON.stringify({
+            schemaVersion: 1,
+            workItemRef: 'observe-mr',
+            toolSlotRef: 'system',
+            outputJson: JSON.stringify({
+              schemaVersion: 1,
+              roundRef: 'round-observe-review',
+              executionNonce: '1'.repeat(64),
+              status: 'ok',
+              summary: 'authoritative review facts refreshed',
+              contextPatches: [],
+              effectSuggestions: [],
+              artifactRefs: [],
+            }),
+            contextsJson: JSON.stringify([reviewMrContext]),
+            inputEnvelopeJson: JSON.stringify({
+              contextsJson: JSON.stringify([reviewMrContext]),
+              contractInput: {},
+              eventJson: JSON.stringify({
+                eventTypeRef: { id: 'development.review-updated', revision: 2 },
+              }),
+            }),
+            enabledWorkItemRefsJson: JSON.stringify(['observe-mr', 'classify-feedback']),
+            allowedNextWorkItemRefs: ['classify-feedback', 'repair-conflict', 'evaluate-ready'],
+          }),
+        ),
+      ),
+    ).toMatchObject({ caseState: 'active', nextWorkItemRef: 'classify-feedback' })
+
+    const conflictMrContext = {
+      ...mrContext,
+      stateJson: JSON.stringify({
+        ...JSON.parse(mrContext.stateJson),
+        mergeableState: 'conflict',
+        targetSha: 'e'.repeat(40),
+      }),
+    }
+    expect(
+      JSON.parse(
+        developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
+          JSON.stringify({
+            schemaVersion: 1,
+            workItemRef: 'observe-mr',
+            toolSlotRef: 'system',
+            outputJson: JSON.stringify({
+              schemaVersion: 1,
+              roundRef: 'round-observe-conflict',
+              executionNonce: '2'.repeat(64),
+              status: 'ok',
+              summary: 'authoritative conflict facts refreshed',
+              contextPatches: [],
+              effectSuggestions: [],
+              artifactRefs: [],
+            }),
+            contextsJson: JSON.stringify([conflictMrContext]),
+            inputEnvelopeJson: JSON.stringify({
+              contextsJson: JSON.stringify([conflictMrContext]),
+              contractInput: {},
+              eventJson: JSON.stringify({
+                eventTypeRef: { id: 'development.conflict-updated', revision: 2 },
+              }),
+            }),
+            enabledWorkItemRefsJson: JSON.stringify(['observe-mr', 'repair-conflict']),
+            allowedNextWorkItemRefs: ['classify-feedback', 'repair-conflict', 'evaluate-ready'],
+          }),
+        ),
+      ),
+    ).toMatchObject({ caseState: 'active', nextWorkItemRef: 'repair-conflict' })
+
+    const approvalPendingMr = {
+      ...mrContext,
+      stateJson: JSON.stringify({
+        ...JSON.parse(mrContext.stateJson),
+        approvalHold: true,
+      }),
+    }
+    const pendingApproval = {
+      id: 'approval-pending',
+      revision: 1,
+      typeId: 'development.approval',
+      stateJson: JSON.stringify({
+        status: 'pending',
+        mergeRequestRef: 'repo!42',
+        headSha: 'c'.repeat(40),
+        approvalType: 'gate-change',
+        adapterRef: { id: 'approval-adapter', revision: 1 },
+        validatedDraftRef: 'draft-1',
+        subjectRef: 'approval-subject',
+        deadlineAt: '2026-09-01T00:00:00.000Z',
+        idempotencyKey: 'd'.repeat(64),
+        correlationRef: 'approval-correlation',
+        externalRequestRef: 'APP-1',
+        submittedRevision: 'submit-1',
+        observedRevision: 'observe-1',
+        evidenceRef: null,
+      }),
+      artifactRefs: [],
+    }
+    expect(
+      JSON.parse(
+        developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
+          JSON.stringify({
+            schemaVersion: 1,
+            workItemRef: 'observe-mr',
+            toolSlotRef: 'system',
+            outputJson: JSON.stringify({
+              schemaVersion: 1,
+              roundRef: 'round-observe-pending-approval',
+              executionNonce: 'f'.repeat(64),
+              status: 'ok',
+              summary: 'MR facts refreshed while approval is pending',
+              contextPatches: [],
+              effectSuggestions: [],
+              artifactRefs: [],
+            }),
+            contextsJson: JSON.stringify([approvalPendingMr, pendingApproval]),
+            enabledWorkItemRefsJson: JSON.stringify([
+              'observe-mr',
+              'prepare-approval',
+              'evaluate-ready',
+            ]),
+            allowedNextWorkItemRefs: ['prepare-approval', 'evaluate-ready'],
+          }),
+        ),
+      ),
+    ).toMatchObject({ caseState: 'active', nextWorkItemRef: 'evaluate-ready' })
 
     const notReady = JSON.parse(
       developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
@@ -877,6 +1363,16 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
             resolved: false,
             body: 'please repair the null branch',
             path: 'src/main.ts',
+            messages: [
+              {
+                messageRef: '1',
+                parentMessageRef: null,
+                authorClass: 'human',
+                body: 'please repair the null branch',
+                path: 'src/main.ts',
+                createdAt: null,
+              },
+            ],
           },
           {
             threadRef: 'thread-bot',
@@ -905,8 +1401,21 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       }),
     }
-    const validate = (problemIds: readonly string[]) =>
-      developmentEmployeeRuntimeCodec.validateReactionOutputJson(
+    const validate = (problemIds: readonly string[]) => {
+      const reviewThreads = (
+        JSON.parse(mergeRequest.stateJson) as {
+          reviewThreads: Array<{
+            threadRef: string
+            revision: string
+            authorClass: 'human' | 'bot' | 'self'
+            resolved: boolean
+            body: string
+            path: string | null
+            messages?: unknown[]
+          }>
+        }
+      ).reviewThreads
+      return developmentEmployeeRuntimeCodec.validateReactionOutputJson(
         JSON.stringify({
           schemaVersion: 1,
           workItemRef: 'classify-feedback',
@@ -937,6 +1446,34 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
                     type: 'review',
                     summary: `review problem ${problemId}`,
                     evidenceArtifactRefs: [],
+                    reviewThread:
+                      reviewThreads.find((thread) => thread.threadRef === problemId) ??
+                      reviewThreads[0],
+                  })),
+                }),
+                artifactRefs: [],
+              },
+              {
+                contextId: null,
+                contextTypeId: 'development.review-resolution',
+                schemaVersion: 1,
+                expectedRevision: null,
+                lifecycleState: 'active',
+                stateJson: JSON.stringify({
+                  status: 'collected',
+                  mergeRequestRef: 'repo!42',
+                  sourceHeadSha: 'a'.repeat(40),
+                  publishedHeadSha: null,
+                  commitSha: null,
+                  threads: problemIds.map((threadRef) => ({
+                    threadRef,
+                    revision:
+                      reviewThreads.find((thread) => thread.threadRef === threadRef)?.revision ??
+                      'unexpected',
+                    acknowledgement: null,
+                    disposition: null,
+                    replyBody: null,
+                    finalReply: null,
                   })),
                 }),
                 artifactRefs: [],
@@ -947,6 +1484,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           }),
         }),
       )
+    }
 
     expect(() => validate(['thread-human'])).toThrow(
       'must cover each unresolved non-self review thread exactly once',
@@ -969,7 +1507,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   test('system nodes reject tools and employee retries are derived from global Limits', async () => {
     let limits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
     const module = fixtureModule({ current: () => limits })
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     await expect(
       module.commands.createTool({
         typeRef,
@@ -999,7 +1537,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('a work-item connection must resolve to the exact required provider purpose', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     const create = (connectionRef: { id: string; revision: number } | null) =>
       module.commands.createTool({
         typeRef,
@@ -1052,7 +1590,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   // registration identity and successful republishes advance only its revision.
   test('tool corrections reuse one registration id and publish immutable revisions', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     const body = {
       displayName: '审批工具',
       description: '先以缺失连接制造可纠正的失败草稿。',
@@ -1118,7 +1656,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('Program tool editor round-trips source and parameters from immutable artifacts', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     const created = await module.commands.createTool({
       typeRef,
       workItemRef: 'prepare-materials',

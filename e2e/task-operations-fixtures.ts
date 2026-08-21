@@ -277,7 +277,7 @@ export async function routeTaskOperationsFixture(
     originByTaskId.set(row.id, row.scheduledTaskId === null ? 'manual' : 'scheduled')
   }
   for (const id of ['dense-alert', 'branch-many', ...manyChildren.map((row) => row.id)]) {
-    originByTaskId.set(id, 'webhook')
+    originByTaskId.set(id, 'event')
   }
   for (const id of ['tree-root', 'tree-middle', 'deep-target', 'agent-subject']) {
     originByTaskId.set(id, 'api')

@@ -264,7 +264,7 @@ test('debounced deep search restores its visible ancestry and advanced status fi
   await expect(page.getByTestId('task-row-dense-failed')).toHaveCount(0)
 })
 
-test('Webhook and API origin filters keep complete trees and reset cursor identity', async ({
+test('Event Center and API origin filters keep complete trees and reset cursor identity', async ({
   page,
 }) => {
   const controller = await openOperations(page)
@@ -278,30 +278,31 @@ test('Webhook and API origin filters keep complete trees and reset cursor identi
     'All origins',
     'Manual',
     'Scheduled',
+    'Event Center',
     'Webhook',
     'API',
   ])
-  await originGroup.getByRole('radio', { name: 'Webhook', exact: true }).click()
+  await originGroup.getByRole('radio', { name: 'Event Center', exact: true }).click()
   await dialog.getByRole('button', { name: 'Apply filters' }).click()
 
-  await expect(page).toHaveURL(/[?&]origin=webhook(?:&|$)/)
+  await expect(page).toHaveURL(/[?&]origin=event(?:&|$)/)
   await expect(page.getByTestId('task-row-dense-alert')).toBeVisible()
   await expect(page.getByTestId('task-row-branch-many')).toBeVisible()
   await expect(page.getByTestId('task-row-dense-scheduled')).toHaveCount(0)
-  const webhookRootRequest = controller.requests.at(-1)!
-  expect(webhookRootRequest).toContain('origin=webhook')
-  expect(webhookRootRequest).not.toContain('cursor=')
+  const eventRootRequest = controller.requests.at(-1)!
+  expect(eventRootRequest).toContain('origin=event')
+  expect(eventRootRequest).not.toContain('cursor=')
 
   await page.getByTestId('task-expand-branch-many').click()
   await expect(page.getByTestId('task-row-branch-child-01')).toBeVisible()
   expect(controller.requests.at(-1)).toContain('parent_id=branch-many')
-  expect(controller.requests.at(-1)).toContain('origin=webhook')
+  expect(controller.requests.at(-1)).toContain('origin=event')
 
   await page.getByTestId('tasks-filter-button').click()
   dialog = page.getByTestId('tasks-filter-dialog').getByRole('dialog')
-  const selectedWebhook = dialog.getByRole('radio', { name: 'Webhook', exact: true })
-  await selectedWebhook.focus()
-  await selectedWebhook.press('End')
+  const selectedEvent = dialog.getByRole('radio', { name: 'Event Center', exact: true })
+  await selectedEvent.focus()
+  await selectedEvent.press('End')
   await expect(dialog.getByRole('radio', { name: 'API', exact: true })).toHaveAttribute(
     'aria-checked',
     'true',
@@ -597,8 +598,8 @@ test('real session, PAT, schedule, and webhook launches filter exactly and sched
   const apiPage = await pageFor('api')
   expect(apiPage.items.map((item) => item.id)).toContain(api.id)
   expect(apiPage.items.map((item) => item.id)).not.toContain(manual.id)
-  const webhookPage = await pageFor('webhook')
-  expect(webhookPage.items.map((item) => item.id)).toContain(webhookTaskId)
+  const eventPage = await pageFor('event')
+  expect(eventPage.items.map((item) => item.id)).toContain(webhookTaskId)
 
   const scheduledRootPage = await pageFor('scheduled')
   expect(scheduledRootPage.items.map((item) => item.id)).toContain(scheduled.taskId)
@@ -630,7 +631,7 @@ test('real session, PAT, schedule, and webhook launches filter exactly and sched
   const scheduledGrandchildren = scheduledGrandchildState.page
   expect(scheduledGrandchildren.items).toHaveLength(1)
 
-  for (const page of [manualPage, apiPage, webhookPage, scheduledRootPage, scheduledChildren]) {
+  for (const page of [manualPage, apiPage, eventPage, scheduledRootPage, scheduledChildren]) {
     for (const item of page.items) expect(Object.hasOwn(item, 'launchOrigin')).toBe(false)
   }
 })

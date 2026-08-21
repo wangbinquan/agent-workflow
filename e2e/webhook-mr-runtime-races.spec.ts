@@ -446,16 +446,30 @@ async function launchFromWebhook(
   const trace = await waitForTrace(launched.id)
   const expectedEvent = action === 'update' ? 'mr_updated' : 'mr_opened'
   expectWebhookPrompt(trace, expectedEvent, fixture.mrIid)
-  expect(
-    querySqlite<{ origin: string | null; triggerId: string | null; fireId: string | null }>(
-      join(daemon!.home, 'db.sqlite'),
-      `SELECT launch_origin AS origin,
-              webhook_trigger_id AS triggerId,
-              webhook_fire_id AS fireId
-         FROM tasks WHERE id = ?`,
-      [launched.id],
-    ),
-  ).toEqual([{ origin: 'webhook', triggerId: fixture.triggerId, fireId: fire.id }])
+  const provenance = querySqlite<{
+    origin: string | null
+    legacyTriggerId: string | null
+    legacyFireId: string | null
+    eventSubscriptionId: string | null
+    eventDeliveryId: string | null
+  }>(
+    join(daemon!.home, 'db.sqlite'),
+    `SELECT launch_origin AS origin,
+            webhook_trigger_id AS legacyTriggerId,
+            webhook_fire_id AS legacyFireId,
+            event_subscription_id AS eventSubscriptionId,
+            event_delivery_id AS eventDeliveryId
+       FROM tasks WHERE id = ?`,
+    [launched.id],
+  )
+  expect(provenance).toHaveLength(1)
+  expect(provenance[0]).toMatchObject({
+    origin: 'event',
+    legacyTriggerId: null,
+    legacyFireId: null,
+    eventDeliveryId: fire.id,
+  })
+  expect(provenance[0]?.eventSubscriptionId).toContain(`route:${fixture.triggerId}:`)
   return { delivery: receipt, fire, task: launched }
 }
 
@@ -677,8 +691,8 @@ test('verified malformed JSON is a parse-failed audit row and creates zero fire/
     ).flat()
     expect(afterFires.filter((row) => !beforeFireIds.has(row.id))).toEqual([])
     const tasksPage = await jsonOrThrow<{ items: TaskRow[] }>(
-      await apiFetch('/api/tasks/page?scope=mine&origin=webhook&limit=50'),
-      'list webhook tasks after malformed ingress',
+      await apiFetch('/api/tasks/page?scope=mine&limit=50'),
+      'list tasks after malformed ingress',
     )
     expect(tasksPage.items).toEqual([])
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -932,16 +946,30 @@ test('different-UUID launch-eligible facts serialize, supersede to one live runt
   for (const row of converged) {
     const launch = fireByTaskId.get(row.id)!
     expect(row.webhookSourceLink).toEqual({ kind: 'merge_request', url: mrUrl(fixture) })
-    expect(
-      querySqlite<{ origin: string | null; triggerId: string | null; fireId: string | null }>(
-        join(daemon!.home, 'db.sqlite'),
-        `SELECT launch_origin AS origin,
-                webhook_trigger_id AS triggerId,
-                webhook_fire_id AS fireId
-           FROM tasks WHERE id = ?`,
-        [row.id],
-      ),
-    ).toEqual([{ origin: 'webhook', triggerId: fixture.triggerId, fireId: launch.fire.id }])
+    const provenance = querySqlite<{
+      origin: string | null
+      legacyTriggerId: string | null
+      legacyFireId: string | null
+      eventSubscriptionId: string | null
+      eventDeliveryId: string | null
+    }>(
+      join(daemon!.home, 'db.sqlite'),
+      `SELECT launch_origin AS origin,
+              webhook_trigger_id AS legacyTriggerId,
+              webhook_fire_id AS legacyFireId,
+              event_subscription_id AS eventSubscriptionId,
+              event_delivery_id AS eventDeliveryId
+         FROM tasks WHERE id = ?`,
+      [row.id],
+    )
+    expect(provenance).toHaveLength(1)
+    expect(provenance[0]).toMatchObject({
+      origin: 'event',
+      legacyTriggerId: null,
+      legacyFireId: null,
+      eventDeliveryId: launch.fire.id,
+    })
+    expect(provenance[0]?.eventSubscriptionId).toContain(`route:${fixture.triggerId}:`)
   }
 
   const liveTrace = await waitForTrace(live.id)

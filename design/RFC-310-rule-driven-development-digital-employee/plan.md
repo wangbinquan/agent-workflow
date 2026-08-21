@@ -21,11 +21,12 @@
 > 于 2026-08-21 全绿（后端四个随机化分片；frontend 6660；shared 2219；system-mock 35），当前仅剩 exact-SHA hosted CI
 > 的发布验证。
 >
-> **2026-08-21 PR-19（待 hosted 验证）**：平台执行契约与职责泳道已完成生产实现和聚焦回归；真实页面旅程 1/1、
-> 数字员工视觉基线 3/3、外部 ID 到合入的 system-mock 1/1（29 个断言）均通过。隔离提交树完整
-> `gate:local` 9m29s 全绿：backend 11,559 pass / 36 skip / 0 fail、frontend 6,664、shared 2,219、
-> system-mock 35；当前只剩 exact-SHA hosted/visual 终态验证。
-> 本批将冻结研发类型提升为 `development@2`，升级库保留 `@1` 并追加 `@2`，避免 descriptor drift 阻断启动。
+> **2026-08-21 PR-19/20（待 hosted 验证）**：平台执行契约、职责泳道、可选能力、岗位级动态处理路由、检视整树闭环与
+> 事件权威刷新均已进入生产实现。增强后的新 OS system-mock 全旅程已通过 45 个断言；公共能力聚焦矩阵和旧 Mission
+> code-host system-mock 也已独立复跑。当前工作树完整 `gate:local` 8m30s 全绿（backend 11,624 pass / 36 skip / 0 fail；
+> frontend 6,674；shared 2,219；system-mocks 35），浏览器功能 4/4、目标视觉 3/3；仅剩提交后的 exact-SHA hosted 终态，
+> 不沿用更早 SHA 的绿灯。
+> 最终冻结研发类型为 `development@3`，升级库保留 `@1/@2` 并只追加 `@3`，避免 descriptor drift 阻断启动。
 > Agent 端口联动已追加进入本批：契约选择移入“输入/输出”，`agent-result` 由 UI 与所有保存入口共同按契约生命周期托管。
 
 ## 0. 交付原则
@@ -66,6 +67,7 @@
 | PR-17   | Employee Channel            | 跨仓员工调用、typed return、milestone、all/any/quorum、deadline/cancel/recovery 成为 OS 公共能力                                              | PR-14-PR-16 |
 | PR-18   | 类型包迁移与通用配置界面    | 现有 Mission/MR care 迁入研发类型包并切单 writer；分类/工作项工具箱/最小员工配置/设置页与完整旅程验收                                         | PR-14-PR-17 |
 | PR-19   | 平台执行契约与职责泳道      | Agent/Workflow/Program 的确定性输入输出由平台统一校验；职责图按主干、并行职责和回路显示，不再顺序平铺                                         | PR-18       |
+| PR-20   | 可选职责与开发员工闭环      | 可选泳道不阻断、动态失败类型分派、MR 权威刷新、检视整树协议、通用审批边界和分层 system-mock/浏览器覆盖                                        | PR-19       |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -653,6 +655,21 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | AC-54 通用职责泳道与回路布局                            | T167-T168                                                    |
 | AC-55 按钮命名/间距与数字员工页面留白                   | T167-T168                                                    |
 | AC-56 Agent 契约与托管端口原子生命周期                  | T169                                                         |
+| AC-57 Webhook/轮询统一 Event Publisher                  | T170-T176,T183,T186-T188                                     |
+| AC-58/59 Subscription 与 durable Delivery 统一          | T174-T177                                                    |
+| AC-60/61 中立优先级与多消费者隔离                       | T173,T175,T177                                               |
+| AC-62 Trigger 参数合同                                  | T174,T178,T184,T189                                          |
+| AC-63 Event Center 统一 IA                              | T170,T176,T185                                               |
+| AC-64/65 WorkStart 与 Task/Case lifecycle outbox        | T178-T182                                                    |
+| AC-66/67/68/69 Event/Command 边界与公开目录可达性       | T182-T188                                                    |
+| AC-70 可选职责与冻结启用闭包                            | T190                                                         |
+| AC-71 岗位级动态问题类型分派                            | T191                                                         |
+| AC-72 Event wake 后权威事实刷新                         | T192                                                         |
+| AC-73 检视整树 ACK/修复/回帖与自回复抑制                | T193                                                         |
+| AC-74 通用外部审批 adapter 边界                         | T194                                                         |
+| AC-75 业务 contractInput 与平台调度元数据隔离           | T190-T192,T194                                               |
+| AC-76 公共能力覆盖矩阵与 stateful system mock           | T195-T196                                                    |
+| AC-77 20 节点全景、连线、标签与视觉防护                 | T190,T196                                                    |
 
 ## 13a. T112 交付出账（2026-08-18）
 
@@ -695,6 +712,24 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
   `gate:local` 全绿 + hosted CI exact SHA。
 - **AC-27/28/29/30/32**（polyglot 两阶段、no-change、review、readiness、tracking-only）：
   `rfc310-pr5-analyze` / `rfc310-pr5-no-change` / `rfc310-pr5-review` / `rfc310-pr7b-handover`。
+- **AC-36/37/38**（业务职责、问题生产/处理与确定性 handler）：`rfc310-pr11-employee-playbook` +
+  `rfc310-playbook-coordinator`。
+- **AC-39/40/41/42**（跨员工、审批、同页下一步与完整旅程）：`rfc310-employee-case-runtime` +
+  `rfc310-digital-employee-system-mock-e2e` + `rfc310-pr13-journey`。
+- **AC-43/44/45/46/47/48/49/50/51/52**（四层工具箱、WorkContract、i18n、限额、通用类型包、岗位/员工与研发职责）：
+  `rfc310-digital-employee-authoring` + `rfc310-digital-employee-os-architecture` +
+  `rfc310-digital-employee-ui-contract`。
+- **AC-53/54/55/56**（平台 ExecutionContract、职责图、页面一致性与托管端口）：
+  `execution-contract-platform` + `execution-contract-guide-panel` + `rfc310-digital-employee-ui-contract`。
+- **AC-57/58/59/60/61/62/63/64/65/66/67/68/69**（统一 Event Center、Webhook/轮询、订阅多播、Trigger 参数、
+  WorkStart/lifecycle outbox 与目录可达性）：`rfc310-event-center` + `rfc310-task-lifecycle-events` +
+  `rfc310-event-center-ui-contract`。
+- **AC-70/71/72**（可选职责、动态失败类型路由、Event 后权威刷新）：`rfc310-digital-employee-authoring` +
+  `digital-employee-type-package-drift` + `rfc310-employee-case-runtime`。
+- **AC-73/74/75/76**（检视整树协议、通用审批边界、contractInput 隔离与 stateful system mock）：
+  `rfc310-pr7-mr-facts` + `rfc310-digital-employee-system-mock-e2e` + `execution-contract-platform`。
+- **AC-77**（20 节点全景、关联高亮、标签与视觉防护）：`rfc310-digital-employee-ui-contract`；浏览器旅程与
+  `visual-regression.spec.ts` 由 T196 作为独立 E2E/像素门运行。
 
 ### system mock E2E 自证的复跑账（2026-08-19 逐条实跑）
 
@@ -1199,7 +1234,7 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---- |
 | T165 | 新增 `execution-contract` bounded context：strict guide/transport/ref、Agent/Workflow/Program compatibility、真实 Script fixture、exact output validator 与窄 participant                                                    | T143,T151      | ✅   |
 | T166 | 接 authoring/runtime/UI：外部 ID 直接 `contractInput`、大输入 env/file、Agent 显式声明和 `agent-result`、Program 起始代码、Plan 冻结前输入与编辑/发布/结算输出同一 exact validator                                           | T165           | ✅   |
-| T167 | AuthoringManifest 增 `spine/branch` 职责泳道与完整性校验；通用画布实现主干居中、职责横排、分发干线、自循环和外侧回路；研发 MR 看护拆成事件主干与五条职责支线；以 `development@2` 追加发布；同步页面留白和任务按钮            | T144,T159,T162 | ✅   |
+| T167 | AuthoringManifest 增 `spine/branch` 职责泳道与完整性校验；通用画布实现主干居中、职责横排、自循环和外侧回路；研发 MR 看护拆成事件主干与五条职责支线；先以 `development@2` 追加发布；同步页面留白和任务按钮                    | T144,T159,T162 | ✅   |
 | T168 | 多轮功能自审、聚焦/系统链路/视觉/完整门禁、RFC-294 owner 账与 exact-SHA hosted CI/visual 终态验证                                                                                                                            | T165-T167      | 🚧   |
 | T169 | Agent 执行契约选择移入输入/输出页；`agent-result` 显示为不可单改的契约托管端口；选择/切换/取消时原子增删端口与 sidecar；create/update/bundle/intent 共用服务端规整命令；公共 guide 改为窄运行投影 + 已校验序列化 exact guide | T165,T166      | ✅   |
 | T170 | Event Center 从数字员工页迁为“运行与仓库”的全局入口；新增独立 `event-sources:*` 权限，数字员工只保留 Attention/订阅投影与跳转                                                                                                | T147,T161      | ✅   |
@@ -1223,10 +1258,46 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 | T188 | 退役早期持久化的第二套 `code-host.webhook` 公开目录：历史 revision 保留为 compatibility，升级后公开目录与新增订阅只呈现统一 `code-host.activity`；迁移与真实新库页面锁定                                                     | T183,T187      | ✅   |
 | T189 | 自定义事件参数合同交互：每事件显式配置 namespace，区分机器参数键与界面显示名称，实时展示完整路径；参数行使用非持久化稳定编辑 ID，逐字输入不重建/丢焦点                                                                       | T171,T184      | ✅   |
 
-T168 本地部分于 2026-08-21 完成：最终完整 `gate:local` 8m31s 全绿（backend 11,622 pass / 36 skip / 0 fail，
+T168 的 PR-19 基线于 2026-08-21 完成：当时完整 `gate:local` 8m31s 全绿（backend 11,622 pass / 36 skip / 0 fail，
 frontend 6,669/6,669，shared 2,219/2,219，system-mocks 35/35）；真实用户旅程、数字员工视觉基线、system-mock
 全链与 Event Center dbVersion=199 实页均独立复跑通过。实页锁定公开目录 15 个事实/唯一代码平台来源，以及参数键逐字
-输入焦点和 `trigger.issue.issue_id` 实时路径。保持 🚧 只表示尚未取得推送后 exact-SHA hosted CI/visual 终态。
+输入焦点和 `trigger.issue.issue_id` 实时路径。PR-20 修改后的 gate/visual/hosted 结果必须重新取当前提交证据，不能继承这组早期数字。
+
+## 13g. PR-20：可选职责、动态分派与 system-mock 覆盖收口
+
+### 目标与任务
+
+本批把研发数字员工从“图上看起来完整”收紧为“用户只配置实际职责、事件先刷新真实现场、每条外部闭环可执行复验”。公共 OS 与
+开发类型包分开验收：前者证明可被后续设计/测试员工复用，后者必须在 RFC-304 的 stateful system mock 底座上证明真实 Git、代码平台、
+Agent/Script、审批和事件生命周期，而不是用 application 内存 fake 自证。
+
+| 编号 | 任务                                                                                                                                                               | 依赖      | 状态 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---- |
+| T190 | Manifest lane 增 `optional`；员工编译冻结 `enabledWorkItemRefs`，无配置不阻断/不订阅，部分配置按泳道合同 fail closed；职责图显示可选状态并移除端口圆圈/共享干线    | T167      | ✅   |
+| T191 | `orderedDispatchAuthoring` 与岗位级配置：任意失败类型、列表优先级、唯一末尾 fallback、每类 exact 工具或协同目标；运行时逐类确定性分派                              | T190      | ✅   |
+| T192 | ReactionRule 增 `capabilityWorkItemRef`；检视/冲突事件由可选职责控制启用，但实际先执行平台 `observe-mr`，按权威新 Context 再进入处理节点                           | T173,T190 | ✅   |
+| T193 | 检视线程全树采集、revision、自有标记、修前 ACK、Agent 每线程 resolution envelope、平台 push 后结果回帖和 replay/self-loop 抑制；内置检视修复 Agent                 | T192      | ✅   |
+| T194 | 外部审批保持通用 prepare/submit/observe adapter 边界；审批泳道可选；平台调度配置不注入 Agent/Script 业务 `contractInput`                                           | T165,T190 | ✅   |
+| T195 | 新 OS stateful system mock 扩成四仓：父子员工、审批/大日志、真实 Git/MR、同一检视 thread 多轮评论、ACK→Agent 修复→push→回帖、自回复重放、committer 合入；45 个断言 | T191-T194 | ✅   |
+| T196 | 建 design §15.8 公共能力矩阵并逐组复跑；浏览器锁 20 节点、可选职责、动态关系、无横向溢出；人工检查并刷新三幅目标视觉基线；完整 gate 与 exact-SHA hosted CI         | T190-T195 | 🚧   |
+
+### 当前可复跑证据
+
+- 公共平台合同/运行：`execution-contract-platform`、`rfc310-digital-employee-os-architecture`、
+  `rfc310-digital-employee-authoring`、`rfc310-employee-case-runtime`、`rfc310-digital-employee-os-worker`。
+- Event Center：`rfc310-event-center` 覆盖目录、source、订阅启停、Observer、Webhook nudge、晚订阅、A-B-A、批量、去重、
+  exact/filtered 多播及失败隔离；task lifecycle 和 0193–0199 migration tests 单列保持旧 Webhook 功能。
+- 外部状态：`rfc310-employee-workspace-delivery`、`rfc310-pr7b-conflict-repair-journey`、旧
+  `rfc310-t109-full-journey-e2e` 与新 `rfc310-digital-employee-system-mock-e2e` 均使用真实 Git/HTTP 边界。
+- 检视协议：`rfc310-pr7-mr-facts` 锁完整 thread/self marker 事实；新 system mock 以 45 个断言锁先 ACK、完整树输入、commit 后回帖、
+  自回复不重触发与最终外部 merge。
+- 浏览器：零配置 3 条 + 完整员工旅程 1 条；目录/全景/工具弹窗 3 条 macOS 目标视觉基线无更新参数复跑通过。
+
+当前工作树最终本地门禁（2026-08-21）：`bun run gate:local` 8m30s 全绿，backend 四个随机分片合计
+**11,624 pass / 36 skip / 0 fail**，frontend **6,674/6,674**，shared **2,219/2,219**，system-mocks
+**35/35**，typecheck/lint/format/depcheck 全绿；第一轮唯一 lint warning 已删除后从头重跑，不能用第一轮局部结果代替本次终态。
+
+T196 只有在当前工作树形成提交后的完整 `gate:local`、推送后 exact-SHA hosted CI 和 visual 终态均完成后才能置 ✅。
 
 ### 功能自审记录
 
@@ -1235,9 +1306,9 @@ frontend 6,669/6,669，shared 2,219/2,219，system-mocks 35/35）；真实用户
 | 第一轮：输入可消费性         | 只给问题 ID 时，Agent/Script 是否能直接得到字段；大输入是否仍依赖 prompt         | 旧 WorkContract 只有 schema 名，没有 transport 和字段来源；脚本作者不知道 env/stdout                    | 平台 guide 给字段来源、transport、示例；外部 ID 直投影；Script 同时支持 inline/file 并提供三种语言起始代码    |
 | 第二轮：发布前确定性         | 能否在选择工具时知道 Agent/Workflow/Program 真能消费/产出，而不是运行时才猜      | 前端可能按 Agent 名称硬编码；Program 只保存文本；输出可能夹 Markdown/多字段                             | 平台批量候选 receipt；Agent 声明 exact contract；Workflow structural closure；Program 真 runner fixture       |
 | 第三轮：运行结算复用         | 编辑期通过的合同是否与真实 Reaction 输入、prompt、Script port 和最终结算完全同源 | Script 旧 host 固定 `prompt` input；只做业务 semantic validation 会漏 extra/cross-run                   | host input port 显式化；平台先对拍 exact fields/round/nonce，再调用类型 semantic validator                    |
-| 第四轮：职责关系可读性       | MR 看护的检视、流水线、冲突、审批和合入判断是并行反应还是一条顺序链              | 节点按全局 order 平铺，人的职责、事件入口和回路无法辨认                                                 | manifest 声明主干/职责支线；支线内横排、支线间分隔，回边走右侧虚线 gutter；纯布局回归锁几何关系               |
+| 第四轮：职责关系可读性       | MR 看护的检视、流水线、冲突、审批和合入判断是并行反应还是一条顺序链              | 节点按全局 order 平铺，人的职责、事件入口和回路无法辨认                                                 | manifest 声明主干/职责支线；支线内横排、支线间分隔，回边使用短虚线外侧通道；纯布局回归锁几何关系              |
 | 第五轮：横向扩展与界面一致性 | 新设计/测试员工是否仍能复用；全景、窄屏、operations 留白和任务动作是否一致       | 不能把 `care-*` 写进通用画布，也不能为窄屏折叠掉全景                                                    | 通用组件只读 manifest；窄屏横向滚动；所有数字员工页面统一 body padding；任务入口改“新建编排任务”并复用间距    |
-| 第六轮：拓扑与视觉证据       | 图上的每条边是否真有运行规则；18 节点是否真的都进入视觉证据                      | 三条旧后继是伪关系；多类流水线错误缺自循环；1280×800 组件截图裁掉最下方合入判断泳道                     | manifest 对齐 settlement；剩余失败类型回到修绿；虚假直达边删除；组件证据临时增高并锁定回环/协同/就绪关键边    |
+| 第六轮：拓扑与视觉证据       | 图上的每条边是否真有运行规则；20 节点是否真的都进入视觉证据                      | 三条旧后继是伪关系；多类流水线错误缺自循环；1280×800 组件截图裁掉最下方合入判断泳道                     | manifest 对齐 settlement；剩余失败类型回到修绿；虚假直达边删除；组件证据临时增高并锁定回环/协同/就绪关键边    |
 | 第七轮：平台入口唯一性       | 新员工类型或测试装配能否遗漏平台契约后继续发布/运行                              | authoring/runtime participant 仍为 optional，并保留旧 resource/fixture 校验 fallback                    | 三处 composition 改为 required；删除旧旁路与重复 inspector/Program fixture；架构棘轮锁定不存在 optional 路径  |
 | 第八轮：Agent 端口生命周期   | 契约和端口是否能分别编辑，或通过 API/bundle 保存“有契约无端口/删契约留端口”      | 契约原在能力页且只 append `agent-result`；取消、切换和端口单删均不联动；完整 guide 还形成 42 叶公共 DTO | 选择器移入输入/输出；托管端口无独立动作；保存入口统一规整；公共面收窄为 runtime view + strict `guideJson`     |
 | 第九轮：多消费者隔离         | 一个 Webhook 命中多条规则时，一方失败是否会结算或污染其他消费者                  | 旧 dispatcher 让每个规则共写同一 WebhookDelivery 状态，首个失败可覆盖共享审计                           | 共享行只记录 ingress/routing；每个订阅独立 Delivery/lease/retry/dead-letter；双规则一成一败全 HTTP E2E 锁定   |
@@ -1251,6 +1322,11 @@ frontend 6,669/6,669，shared 2,219/2,219，system-mocks 35/35）；真实用户
 | 第十七轮：存量升级连续性     | 已登记 revision 和运行中 Attention 能否在重构后继续启动；内部来源是否留下空目录  | 直接改 `development.*@1` 会触发 immutable conflict；旧 MR activation 若只改类型包会停止轮询             | 旧 revision 只改 visibility；MR 订阅/attention/activation 数据迁移；审批/协同双发公开事实；真实启动与迁移测试 |
 | 第十八轮：持久化目录唯一性   | 新代码只注册统一来源时，升级库是否仍因旧 catalog 行出现两套 Webhook 目录         | 生产形状库仍有 `code-host.webhook@1` 及 11 个 public type，与 `code-host.activity@1` 并列               | 0199 保留不可变行并降为 compatibility；滚动升级、新库目录 15 个公开事实和唯一代码平台来源实页验证             |
 | 第十九轮：参数合同可编辑性   | 自定义来源作者能否理解并稳定输入完整 Trigger 路径                                | namespace 被隐藏并写死 `custom_event`；参数行用 fieldId 作 React key，逐字输入即重建并跳回名称框        | namespace 同屏可配；机器键/显示名释义分开；稳定 editorKey 不入合同；实页填入后焦点仍在参数键且路径实时更新    |
+| 第二十轮：职责最小闭包       | 不需要检视/流水线/冲突/协同/审批的员工能否直接保存执行                           | 旧必需 slot 把所有泳道都当成发布前提；配置一个工具还可能隐式开启其他能力                                | lane 显式 optional；无绑定不阻断且不订阅；部分泳道闭包 fail closed；员工 revision 冻结 enabled work items     |
+| 第二十一轮：动态错误处理     | 用户能否定义任意流水线错误类型并给每类注册不同工具/员工                          | 分类包固定类型会把业务枚举写死；一个 repair slot 不能解释一对多运行分派                                 | 岗位级有序路由表、唯一末尾 fallback、exact destination；类型列表顺序即规则优先级，Agent 不参与选择            |
+| 第二十二轮：Event 与事实     | 评论/冲突 Webhook 到来时是否可能拿旧 Case Context 直接修复                       | Event Center 只发 wake hint，旧 reaction 直接落分类/修复节点，缺一次权威 MR refresh                     | capability gate 与实际刷新 work item 分离；先 observe-mr，再按新 revision 进入职责；无变化即正常收敛          |
+| 第二十三轮：检视协议闭环     | 多轮 thread、ACK、修复说明和自身回复是否完整且不会死循环                         | 只取末条评论会丢上下文；平台回复可能被重新当成人类意见；Agent 没有逐 thread 处理说明合同                | 完整树 + stable revision；修前 ACK/修后回帖；self marker；envelope resolutions；stateful mock replay 零新增   |
+| 第二十四轮：公共能力证据     | 公共 OS 与开发类型包是否只是单元测试绿，外部状态迁移有没有真正跑通               | 分散测试无法直接回答能力层级；in-test fake 不能证明 Git/code-host/Script/approval 边界                  | design §15.8 分层矩阵；公共合同+恢复；跨边界 stateful system mock；浏览器功能+像素；当前 SHA 完整 gate/hosted |
 
 ### 批次停止条件
 
@@ -1263,6 +1339,9 @@ frontend 6,669/6,669，shared 2,219/2,219，system-mocks 35/35）；真实用户
 - EventRecord 增加全局 consumed 位，或任一消费者修改共享 Webhook audit/其他 Subscription 的 ACK、重试、死信状态；
 - 职责泳道/连线可由业务用户拖拽修改，或阶段重新成为工作项归属下拉框；
 - MR 看护的五类职责再次按全局 order 混成单行，回路与前向关系无法区分；
+- 任一可选泳道未配置时阻断员工发布/执行，或仍建立对应 Attention/Reaction；
+- 流水线失败类型重新写死在平台 enum，缺唯一末尾 fallback，或由 Agent 选择下一类型/工具；
+- 评论/冲突 Event 绕过 `observe-mr` 权威刷新直接进入修复，或平台自身 ACK/结果回帖再次触发检视修复；
 - 窄屏通过折叠/重排节点破坏“全量展开”，而不是保留固定布局并允许滚动。
 
 ## 14. 风险与停止条件

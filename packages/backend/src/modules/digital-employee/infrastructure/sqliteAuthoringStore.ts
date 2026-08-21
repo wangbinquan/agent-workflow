@@ -18,8 +18,8 @@ import {
   digitalEmployeeDefinitionContentSchema,
   digitalEmployeeDefinitionDraftSchema,
   employeeJobTemplateContentSchema,
-  employeeTypePackageDescriptorSchema,
   globalExecutionPolicySchema,
+  parsePersistedEmployeeTypePackageDescriptor,
   toolRegistrationContentSchema,
   toolValidationReceiptSchema,
   type EmployeeTypeRef,
@@ -81,7 +81,7 @@ function typeWhere(ref: EmployeeTypeRef) {
 
 function toTypePackage(row: typeof employeeTypePackages.$inferSelect): TypePackageRecord {
   return {
-    descriptor: employeeTypePackageDescriptorSchema.parse(parseJson(row.descriptorJson)),
+    descriptor: parsePersistedEmployeeTypePackageDescriptor(parseJson(row.descriptorJson)),
     descriptorDigest: row.descriptorDigest,
     state: row.state,
     registeredAt: row.registeredAt,

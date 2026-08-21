@@ -51,6 +51,7 @@ describe('platform execution contracts', () => {
     expect(material.input.fields.map((field) => field.path)).toContain(
       'contractInput.workRequest.externalId',
     )
+    expect(material.input.primaryFieldPaths).toEqual(['contractInput.workRequest.externalId'])
     expect(
       material.input.topLevelFields.every((field) =>
         material.input.fields.some((guideField) => guideField.path === field),
@@ -78,6 +79,10 @@ describe('platform execution contracts', () => {
     const duplicateExecutor = structuredClone(guide('development.prepare-materials'))
     duplicateExecutor.allowedExecutorKinds.push('agent')
     expect(executionContractGuideSchema.safeParse(duplicateExecutor).success).toBe(false)
+
+    const unknownPrimaryField = structuredClone(guide('development.prepare-materials'))
+    unknownPrimaryField.input.primaryFieldPaths = ['contractInput.unknown']
+    expect(executionContractGuideSchema.safeParse(unknownPrimaryField).success).toBe(false)
   })
 
   test('the type package projects an intake ID into a directly consumable contractInput', () => {

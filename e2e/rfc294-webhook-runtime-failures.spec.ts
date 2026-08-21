@@ -101,8 +101,10 @@ interface Fixture {
 
 interface DurableTaskProvenance {
   origin: string | null
-  triggerId: string | null
-  fireId: string | null
+  legacyTriggerId: string | null
+  legacyFireId: string | null
+  eventSubscriptionId: string | null
+  eventDeliveryId: string | null
   triggerContextJson: string | null
 }
 
@@ -344,18 +346,22 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       const provenance = querySqlite<DurableTaskProvenance>(
         join(daemon.home, 'db.sqlite'),
         `SELECT launch_origin AS origin,
-                webhook_trigger_id AS triggerId,
-                webhook_fire_id AS fireId,
+                webhook_trigger_id AS legacyTriggerId,
+                webhook_fire_id AS legacyFireId,
+                event_subscription_id AS eventSubscriptionId,
+                event_delivery_id AS eventDeliveryId,
                 trigger_context_json AS triggerContextJson
            FROM tasks WHERE id = ?`,
         [terminalTask.id],
       )
       expect(provenance).toHaveLength(1)
       expect(provenance[0]).toMatchObject({
-        origin: 'webhook',
-        triggerId: fixture.triggerId,
-        fireId: fire.id,
+        origin: 'event',
+        legacyTriggerId: null,
+        legacyFireId: null,
+        eventDeliveryId: fire.id,
       })
+      expect(provenance[0]?.eventSubscriptionId).toContain(`route:${fixture.triggerId}:`)
       expect(provenance[0]?.triggerContextJson).not.toBeNull()
       expect(JSON.parse(provenance[0]!.triggerContextJson!)).toMatchObject({
         trigger: {

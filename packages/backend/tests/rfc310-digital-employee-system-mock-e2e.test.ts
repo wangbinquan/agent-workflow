@@ -11,6 +11,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -18,7 +19,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { startSystemMockSuite, type StartedSystemMockSuite } from '@agent-workflow/system-mocks'
+import {
+  SYSTEM_MOCK_CODE_HOST_TOKEN,
+  startSystemMockSuite,
+  type StartedSystemMockSuite,
+} from '@agent-workflow/system-mocks'
 
 import { createInMemoryDb } from '@/db/client'
 import { cachedRepos, employeeOsOutbox } from '@/db/schema'
@@ -35,6 +40,8 @@ import {
   publishDevelopmentAdapter,
 } from '@/modules/integration/application/developmentAdapterCommands'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
+import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
@@ -70,6 +77,14 @@ function git(cwd: string, ...args: string[]): string {
     throw new Error(`git ${args.join(' ')} failed: ${process.stderr.toString()}`)
   }
   return process.stdout.toString().trim()
+}
+
+// The mock's internal Git transport maps to a real bare repository under the
+// system temp root. Using that path keeps Git real while the MR API remains a
+// real HTTP system mock (the same arrangement as RFC-310's full journey test).
+function mockRepoDiskPath(repoHttpUrl: string): string {
+  const pathname = decodeURIComponent(new URL(repoHttpUrl).pathname)
+  return join(realpathSync(tmpdir()), pathname.replace(/^\/git\//, ''))
 }
 
 function naturalEnv(extra: Readonly<Record<string, string>>): Record<string, string> {
@@ -143,6 +158,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     const remoteRepo = join(root, 'remote.git')
     const dependencyBaselineRepo = join(root, 'dependency-baseline')
     const dependencyRemoteRepo = join(root, 'dependency-remote.git')
+    const deliveryOnlyBaselineRepo = join(root, 'delivery-only-baseline')
+    const deliveryOnlyRemoteRepo = join(root, 'delivery-only-remote.git')
+    const reviewBaselineRepo = join(root, 'review-baseline')
+    const reviewProjectPath = 'rfc310/digital-employee-os-review'
     mkdirSync(baselineRepo, { recursive: true })
     git(baselineRepo, 'init', '-q', '-b', 'main')
     writeFileSync(join(baselineRepo, 'README.md'), '# system-mock baseline\n')
@@ -177,6 +196,33 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     )
     mkdirSync(dependencyRemoteRepo, { recursive: true })
     git(dependencyRemoteRepo, 'init', '-q', '--bare')
+    mkdirSync(deliveryOnlyBaselineRepo, { recursive: true })
+    git(deliveryOnlyBaselineRepo, 'init', '-q', '-b', 'main')
+    writeFileSync(join(deliveryOnlyBaselineRepo, 'README.md'), '# delivery-only baseline\n')
+    git(deliveryOnlyBaselineRepo, 'add', '-A')
+    git(
+      deliveryOnlyBaselineRepo,
+      '-c',
+      'user.email=system-mock@example.com',
+      '-c',
+      'user.name=system-mock',
+      'commit',
+      '-q',
+      '-m',
+      'delivery-only baseline',
+    )
+    mkdirSync(deliveryOnlyRemoteRepo, { recursive: true })
+    git(deliveryOnlyRemoteRepo, 'init', '-q', '--bare')
+    const reviewProject = await suite.client.seedCodeHost({
+      provider: 'gitlab',
+      projectPath: reviewProjectPath,
+      title: 'Digital Employee OS review protocol',
+      defaultBranch: 'main',
+      baseFiles: { README: '# review system-mock baseline\n' },
+    })
+    const reviewRemoteRepo = mockRepoDiskPath(reviewProject.gitTransportUrl)
+    git(root, 'clone', '-q', reviewRemoteRepo, reviewBaselineRepo)
+    git(reviewBaselineRepo, 'checkout', '-q', 'main')
     // Deliberately leave the target branch without a remote ref. Ordinary MR
     // readiness consumes the exact target SHA from code-host facts; fetching a
     // target branch is reserved for constructing a real conflict-repair scene.
@@ -199,6 +245,30 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         urlEnc: null,
         urlRedacted: dependencyRemoteRepo,
         localPath: dependencyBaselineRepo,
+        defaultBranch: 'main',
+        lastFetchedAt: 1,
+        createdAt: 1,
+      })
+      .run()
+    db.insert(cachedRepos)
+      .values({
+        id: 'repo-system-mock-delivery-only',
+        urlHash: 'rfc310-system-mock-delivery-only',
+        urlEnc: null,
+        urlRedacted: deliveryOnlyRemoteRepo,
+        localPath: deliveryOnlyBaselineRepo,
+        defaultBranch: 'main',
+        lastFetchedAt: 1,
+        createdAt: 1,
+      })
+      .run()
+    db.insert(cachedRepos)
+      .values({
+        id: 'repo-system-mock-review',
+        urlHash: 'rfc310-system-mock-review',
+        urlEnc: null,
+        urlRedacted: reviewProject.repoHttpUrl,
+        localPath: reviewBaselineRepo,
         defaultBranch: 'main',
         lastFetchedAt: 1,
         createdAt: 1,
@@ -286,6 +356,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       string,
       { readonly plan: ReactionExecutionPlan; readonly outputJson: string }
     >()
+    const reviewRepairInputs: Array<{
+      readonly threadRef: string
+      readonly bodies: readonly string[]
+    }> = []
     let executionOrdinal = 0
     const execution = {
       async launch(plan: ReactionExecutionPlan, attempt: { ordinal: number; mode: string }) {
@@ -451,14 +525,82 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             ],
             artifactRefs: [pipelineState.evidenceArtifactRef],
           })
-        } else if (plan.workItemRef === 'prepare-approval') {
-          const delegation = contexts.find(
-            (context) => context.typeId === 'development.delegation',
+        } else if (plan.workItemRef === 'repair-feedback') {
+          const problemSet = contexts.find(
+            (context) => context.typeId === 'development.problem-set',
           )!
-          expect(JSON.parse(delegation.stateJson)).toMatchObject({ status: 'satisfied' })
+          const resolution = contexts.find(
+            (context) => context.typeId === 'development.review-resolution',
+          )!
+          const problemState = JSON.parse(problemSet.stateJson) as {
+            problems: Array<{
+              problemId: string
+              reviewThread: {
+                threadRef: string
+                messages: Array<{ body: string }>
+              }
+            }>
+          }
+          const resolutionState = JSON.parse(resolution.stateJson) as {
+            status: string
+            mergeRequestRef: string
+            sourceHeadSha: string
+            publishedHeadSha: string | null
+            commitSha: string | null
+            threads: Array<{
+              threadRef: string
+              revision: string
+              acknowledgement: { marker: string; noteRef: string } | null
+              disposition: 'addressed' | 'needs-human' | null
+              replyBody: string | null
+              finalReply: { marker: string; noteRef: string } | null
+            }>
+          }
+          for (const problem of problemState.problems) {
+            reviewRepairInputs.push({
+              threadRef: problem.reviewThread.threadRef,
+              bodies: problem.reviewThread.messages.map((message) => message.body),
+            })
+          }
+          const sourceFile = join(scene.workspacePath, 'src', 'Main.java')
+          expect(readFileSync(sourceFile, 'utf8')).toContain('return "hello"')
+          writeFileSync(
+            sourceFile,
+            'public final class Main { public static String greeting() { return "hello reviewed"; } }\n',
+          )
+          outputJson = output(plan, {
+            summary: '完整读取检视线程树并修复代码',
+            contextPatches: [
+              {
+                contextId: resolution.id,
+                contextTypeId: resolution.typeId,
+                schemaVersion: 1,
+                expectedRevision: resolution.revision,
+                lifecycleState: 'active',
+                stateJson: JSON.stringify({
+                  ...resolutionState,
+                  status: 'prepared',
+                  threads: resolutionState.threads.map((thread) => ({
+                    ...thread,
+                    disposition: 'addressed',
+                    replyBody: '已按完整讨论上下文调整 greeting 的实现。',
+                  })),
+                }),
+                artifactRefs: [],
+              },
+            ],
+          })
+        } else if (plan.workItemRef === 'prepare-approval') {
+          const mergeRequest = contexts.find(
+            (context) => context.typeId === 'development.merge-request',
+          )!
+          const mergeRequestState = JSON.parse(mergeRequest.stateJson) as {
+            mergeRequestRef: string
+            headSha: string
+          }
           expect(plan.connectionRef).toEqual(approvalAdapterRef)
           outputJson = output(plan, {
-            summary: '根据协同仓库结果生成确定性审批草稿',
+            summary: '根据当前 MR head 生成确定性审批草稿',
             contextPatches: [
               {
                 contextId: null,
@@ -470,7 +612,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
                   status: 'draft',
                   approvalType: 'gate-change',
                   adapterRef: approvalAdapterRef,
-                  validatedDraftRef: `approval-draft:${plan.caseRef.id}:${delegation.revision}`,
+                  validatedDraftRef: `approval-draft:${plan.caseRef.id}:${mergeRequestState.headSha}`,
+                  mergeRequestRef: mergeRequestState.mergeRequestRef,
+                  headSha: mergeRequestState.headSha,
                   subjectRef: null,
                   deadlineAt: null,
                   idempotencyKey: null,
@@ -518,13 +662,45 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         'repo-system-mock-dependency',
         { baselineRepo: dependencyBaselineRepo, remoteRepo: dependencyRemoteRepo, mrRef: '84' },
       ],
+      [
+        'repo-system-mock-delivery-only',
+        {
+          baselineRepo: deliveryOnlyBaselineRepo,
+          remoteRepo: deliveryOnlyRemoteRepo,
+          mrRef: '126',
+        },
+      ],
+      [
+        'repo-system-mock-review',
+        { baselineRepo: reviewBaselineRepo, remoteRepo: reviewRemoteRepo, mrRef: 'provider' },
+      ],
     ])
     const mrStates = new Map<string, 'opened' | 'merged'>([
       ['repo-system-mock', 'opened'],
       ['repo-system-mock-dependency', 'opened'],
+      ['repo-system-mock-delivery-only', 'opened'],
     ])
     const mrHeads = new Map<string, string>()
+    const mrRefs = new Map<string, string>()
     const mrDescriptions = new Map<string, string>()
+    const reviewHostBinding = {
+      provider: 'gitlab' as const,
+      project: encodeURIComponent(reviewProjectPath),
+      call: {
+        connection: {
+          provider: 'gitlab' as const,
+          baseUrl: suite.endpoints.gitlabApiBaseUrl,
+          repositoryUrlPrefixes: [],
+          token: SYSTEM_MOCK_CODE_HOST_TOKEN,
+          rejectUnauthorized: true,
+        },
+        ctx: { ports: {} },
+      },
+    }
+    const reviewMrEffects = composeDevelopmentMrEffects({
+      binding: (repositoryId) =>
+        repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
+    })
     const platform = composeDevelopmentEmployeePlatformWorkItems({
       db,
       appHome,
@@ -544,7 +720,24 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       },
       mrEffects: {
+        async reply(repositoryId, request) {
+          if (repositoryId === 'repo-system-mock-review') {
+            return await reviewMrEffects.reply(repositoryId, request)
+          }
+          return {
+            ok: true as const,
+            noteRef: `note:${request.threadRef}:${request.selfMarker}`,
+          }
+        },
         async ensure(repositoryId, request) {
+          if (repositoryId === 'repo-system-mock-review') {
+            const ensured = await reviewMrEffects.ensure(repositoryId, request)
+            if (ensured.ok) {
+              if (ensured.mr.sourceSha !== null) mrHeads.set(repositoryId, ensured.mr.sourceSha)
+              mrRefs.set(repositoryId, ensured.mr.mrRef)
+            }
+            return ensured
+          }
           const fixture = repositoryFixtures.get(repositoryId)!
           mrDescriptions.set(repositoryId, request.description ?? '')
           const head = git(fixture.remoteRepo, 'rev-parse', `refs/heads/${request.sourceBranch}`)
@@ -560,7 +753,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             },
           }
         },
-        async observe(repositoryId) {
+        async observe(repositoryId, mrRef) {
+          if (repositoryId === 'repo-system-mock-review') {
+            return await reviewMrEffects.observe(repositoryId, mrRef)
+          }
           const fixture = repositoryFixtures.get(repositoryId)!
           return {
             ok: true as const,
@@ -574,7 +770,38 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       },
       mrFacts: {
-        async collect(repositoryId) {
+        async collect(repositoryId, mrRef, selfMarker) {
+          if (repositoryId === 'repo-system-mock-review') {
+            const collected = await collectMergeRequestFacts(reviewHostBinding, mrRef, {
+              selfMarker,
+            })
+            if (!collected.ok) return collected
+            return {
+              ok: true as const,
+              snapshot: {
+                state: collected.snapshot.state,
+                headSha: collected.snapshot.headSha,
+                targetSha: collected.snapshot.targetSha,
+                targetBranch: collected.snapshot.targetBranch,
+                draft: collected.snapshot.draft,
+                mergeableState: collected.snapshot.mergeableState,
+                approvalHold: collected.snapshot.approvalHold,
+                mergedCommitSha: collected.snapshot.mergedCommitSha,
+                unresolvedReviewCount: collected.snapshot.threads.filter(
+                  (thread) => !thread.resolved && thread.authorClass !== 'self',
+                ).length,
+                reviewThreads: collected.snapshot.threads.map((thread) => ({
+                  threadRef: thread.threadRef,
+                  revision: thread.revision,
+                  authorClass: thread.authorClass,
+                  resolved: thread.resolved,
+                  body: thread.lastBody,
+                  path: thread.path,
+                  messages: thread.messages,
+                })),
+              },
+            }
+          }
           const fixture = repositoryFixtures.get(repositoryId)!
           const state = mrStates.get(repositoryId)!
           const head = mrHeads.get(repositoryId)!
@@ -587,7 +814,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
               targetBranch: 'main',
               draft: false,
               mergeableState: 'mergeable' as const,
-              approvalHold: true,
+              approvalHold: repositoryId === 'repo-system-mock',
               mergedCommitSha: state === 'merged' ? head : null,
               unresolvedReviewCount: 0,
               reviewThreads: [],
@@ -651,7 +878,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         platformWorkItems: platform,
       },
     })
-    const typeRef = { typeId: 'development', revision: 2 }
+    const typeRef = { typeId: 'development', revision: 3 }
     const typePackage = employeeOs.queries.getType(typeRef)
     const bindings: Array<{
       workItemRef: string
@@ -709,6 +936,27 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         }
       }
     }
+    const pipelineRepairTool = await employeeOs.commands.createTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      actorUserId: 'system-mock-author',
+      body: {
+        displayName: 'system-mock 通用流水线修复 Agent',
+        description: '处理岗位配置路由到流水线修复职责的错误类型',
+        roleRef: 'repairer',
+        implementation: {
+          kind: 'agent',
+          agentRef: { id: 'system-mock-agent-repair-pipeline', revision: 1 },
+        },
+        connectionRef: null,
+      },
+    })
+    const pipelineRepairRef = await employeeOs.commands.publishTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      toolId: pipelineRepairTool.id,
+      actorUserId: 'system-mock-author',
+    })
     const dependencyJob = employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
@@ -716,6 +964,21 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         name: '依赖仓库 Java 岗位',
         description: '在另一个仓库完成配套变更',
         defaultToolBindings: bindings,
+        orderedDispatchConfigurations: [
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routes: [
+              {
+                routeRef: 'other-pipeline-failure',
+                displayName: '其他流水线错误',
+                description: '依赖仓库的通用修复兜底',
+                destinationWorkItemRef: 'repair-pipeline',
+                registrationRef: pipelineRepairRef,
+                fallback: true,
+              },
+            ],
+          },
+        ],
       },
     })
     const dependencyJobRef = employeeOs.commands.publishJobTemplate({
@@ -754,6 +1017,29 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             quorum: null,
           },
         ],
+        orderedDispatchConfigurations: [
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routes: [
+              {
+                routeRef: 'external-dependency',
+                displayName: '外部仓库依赖',
+                description: '调起另一个数字员工处理依赖仓库',
+                destinationWorkItemRef: 'delegate',
+                registrationRef: null,
+                fallback: false,
+              },
+              {
+                routeRef: 'other-pipeline-failure',
+                displayName: '其他流水线错误',
+                description: '交给通用流水线修复 Agent',
+                destinationWorkItemRef: 'repair-pipeline',
+                registrationRef: pipelineRepairRef,
+                fallback: true,
+              },
+            ],
+          },
+        ],
       },
     })
     const jobRef = employeeOs.commands.publishJobTemplate({
@@ -775,6 +1061,20 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       id: employee.id,
       actorUserId: 'system-mock-author',
     })
+    const optionalLaneIds = new Set(
+      typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
+        region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
+      ),
+    )
+    const coreWorkItemRefs = typePackage.authoringManifest.workItems
+      .filter(
+        (item) =>
+          item.responsibilityLaneId === null || !optionalLaneIds.has(item.responsibilityLaneId),
+      )
+      .map((item) => item.workItemRef)
+    const coreBindings = bindings.filter((binding) =>
+      coreWorkItemRefs.includes(binding.workItemRef),
+    )
     const runtime = employeeOs.runtime!
     const launched = runtime.commands.launchWork({
       employeeId: employeeRef.id,
@@ -825,6 +1125,15 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         currentWorkItemRef: string | null
         activeRoundId: string | null
       }>
+      const caseDiagnostics = cases.map((candidate) => {
+        const candidateProjection = JSON.parse(
+          runtime.queries.getCase(candidate.id).projectionJson,
+        ) as { rounds?: unknown[] }
+        return {
+          ...candidate,
+          recentRounds: candidateProjection.rounds?.slice(0, 3) ?? [],
+        }
+      })
       const pendingOutbox = db
         .select()
         .from(employeeOsOutbox)
@@ -841,7 +1150,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           lastError: row.lastError,
         }))
       throw new Error(
-        `Digital Employee OS journey exceeded deterministic step budget: ${JSON.stringify({ cases, pendingOutbox })}`,
+        `Digital Employee OS journey exceeded deterministic step budget: ${JSON.stringify({ cases: caseDiagnostics, pendingOutbox })}`,
       )
     }
 
@@ -1001,6 +1310,23 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       summary: 'dependency MR merged by its committer',
       payloadArtifactRef: null,
     })
+    const largeLogBytes = 2 * 1024 * 1024 + 17
+    await suite.client.seedDevelopmentPipeline({
+      headSha: parentMrHead,
+      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'pass',
+          runRef: 'run-compile-42',
+          attempt: 2,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [{ logId: 'compile-output', bytes: largeLogBytes }],
+        },
+      ],
+    })
     await driveUntilIdle()
     dependencyProjection = JSON.parse(
       runtime.queries.getCase(dependencyCaseId).projectionJson,
@@ -1031,23 +1357,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     await suite.client.seedDevelopmentApproval({
       idempotencyKey: String(pendingApproval.state.idempotencyKey),
       statuses: ['approved'],
-    })
-    const largeLogBytes = 2 * 1024 * 1024 + 17
-    await suite.client.seedDevelopmentPipeline({
-      headSha: parentMrHead,
-      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
-      gates: [
-        {
-          gateKey: 'compile',
-          required: true,
-          status: 'pass',
-          runRef: 'run-compile-42',
-          attempt: 2,
-          retryability: 'safe',
-          failureCategories: [],
-          logs: [{ logId: 'compile-output', bytes: largeLogBytes }],
-        },
-      ],
     })
     eventCenter.commands.observe({
       sourceRef: { id: 'development.approval-state', revision: 1 },
@@ -1109,5 +1418,270 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     expect(
       projection.contexts.find((context) => context.typeId === 'development.merge-request')?.state,
     ).toMatchObject({ status: 'merged' })
+
+    // A second employee intentionally has none of the review, pipeline,
+    // conflict, collaboration, or approval lanes configured. It must still
+    // publish, create an MR, subscribe only to capabilities it owns, and track
+    // the MR lifecycle until a committer merges it.
+    const deliveryOnlyJob = employeeOs.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'system-mock-author',
+      body: {
+        name: '只交付 MR 的 system-mock 岗位',
+        description: '不配置任何可选看护与修绿泳道',
+        defaultToolBindings: coreBindings,
+      },
+    })
+    const deliveryOnlyJobRef = employeeOs.commands.publishJobTemplate({
+      id: deliveryOnlyJob.id,
+      actorUserId: 'system-mock-author',
+    })
+    const deliveryOnlyEmployee = employeeOs.commands.createEmployee({
+      typeRef,
+      actorUserId: 'system-mock-author',
+      body: {
+        name: '只交付 MR 的数字员工',
+        jobTemplateRef: deliveryOnlyJobRef,
+        enabled: true,
+        workScope: { kind: 'repository', repositoryId: 'repo-system-mock-delivery-only' },
+        toolOverrides: [],
+      },
+    })
+    const deliveryOnlyEmployeeRef = employeeOs.commands.publishEmployee({
+      id: deliveryOnlyEmployee.id,
+      actorUserId: 'system-mock-author',
+    })
+    expect(
+      employeeOs.queries.getEmployee(deliveryOnlyEmployee.id).published?.enabledWorkItemRefs,
+    ).toEqual(coreWorkItemRefs)
+
+    const deliveryOnlyLaunch = runtime.commands.launchWork({
+      employeeId: deliveryOnlyEmployeeRef.id,
+      actorUserId: 'requester',
+      intake: {
+        kind: 'external-id',
+        target: { repositoryId: 'repo-system-mock-delivery-only' },
+        body: null,
+        externalId: 'REQ-OS-42',
+        uploads: [],
+        idempotencyKey: 'REQ-OS-42:delivery-only',
+      },
+    })
+    await driveUntilIdle()
+    const deliveryOnlyProjection = JSON.parse(
+      runtime.queries.getCase(deliveryOnlyLaunch.caseRef.id).projectionJson,
+    ) as {
+      case: { state: string; currentWorkItemRef: string | null }
+      contexts: Array<{ typeId: string; state: Record<string, unknown> }>
+      attention: Array<{ eventTypeRef: { id: string } }>
+    }
+    const deliveryOnlyMrHead = mrHeads.get('repo-system-mock-delivery-only')!
+    expect(deliveryOnlyProjection.case).toMatchObject({
+      state: 'waiting',
+      currentWorkItemRef: null,
+    })
+    expect(
+      deliveryOnlyProjection.contexts.find(
+        (context) => context.typeId === 'development.merge-request',
+      )?.state,
+    ).toMatchObject({
+      status: 'active',
+      headSha: deliveryOnlyMrHead,
+      readyToMerge: false,
+    })
+    expect(deliveryOnlyProjection.attention.map((attention) => attention.eventTypeRef.id)).toEqual([
+      'development.lifecycle-updated',
+    ])
+    expect(git(deliveryOnlyRemoteRepo, 'show', `${deliveryOnlyMrHead}:src/Main.java`)).toContain(
+      'return "hello"',
+    )
+
+    mrStates.set('repo-system-mock-delivery-only', 'merged')
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
+      subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock-delivery-only!126' },
+      occurredAt: Date.now() + 5,
+      dedupeKey: `lifecycle:${deliveryOnlyMrHead}:merged`,
+      summary: 'delivery-only MR merged by committer',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    expect(
+      JSON.parse(runtime.queries.getCase(deliveryOnlyLaunch.caseRef.id).projectionJson).case,
+    ).toMatchObject({ state: 'terminal', terminalKind: 'merged' })
+
+    // The review lane uses the real stateful GitLab system mock. A review event
+    // is only a wake-up hint: the employee first refreshes authoritative MR
+    // facts, freezes the root plus every reply, acknowledges the thread, lets
+    // the Agent repair it, publishes a new commit, and replies with that commit.
+    // The platform's own two replies must not create another repair round.
+    const reviewJob = employeeOs.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'system-mock-author',
+      body: {
+        name: '检视闭环 system-mock 岗位',
+        description: '只启用交付与检视意见修复泳道',
+        defaultToolBindings: bindings.filter(
+          (binding) =>
+            coreWorkItemRefs.includes(binding.workItemRef) ||
+            binding.workItemRef === 'repair-feedback',
+        ),
+      },
+    })
+    const reviewJobRef = employeeOs.commands.publishJobTemplate({
+      id: reviewJob.id,
+      actorUserId: 'system-mock-author',
+    })
+    const reviewEmployee = employeeOs.commands.createEmployee({
+      typeRef,
+      actorUserId: 'system-mock-author',
+      body: {
+        name: '检视闭环数字员工',
+        jobTemplateRef: reviewJobRef,
+        enabled: true,
+        workScope: { kind: 'repository', repositoryId: 'repo-system-mock-review' },
+        toolOverrides: [],
+      },
+    })
+    const reviewEmployeeRef = employeeOs.commands.publishEmployee({
+      id: reviewEmployee.id,
+      actorUserId: 'system-mock-author',
+    })
+    const reviewLaunch = runtime.commands.launchWork({
+      employeeId: reviewEmployeeRef.id,
+      actorUserId: 'requester',
+      intake: {
+        kind: 'external-id',
+        target: { repositoryId: 'repo-system-mock-review' },
+        body: null,
+        externalId: 'REQ-OS-42',
+        uploads: [],
+        idempotencyKey: 'REQ-OS-42:review-protocol',
+      },
+    })
+    await driveUntilIdle()
+    const reviewCaseId = reviewLaunch.caseRef.id
+    const reviewMrRef = mrRefs.get('repo-system-mock-review')!
+    const reviewMrNumber = Number(reviewMrRef)
+    const reviewHeadBeforeRepair = mrHeads.get('repo-system-mock-review')!
+    const rootReview = await suite.client.mutateCodeHost({
+      kind: 'add-review-comment',
+      provider: 'gitlab',
+      projectPath: reviewProjectPath,
+      number: reviewMrNumber,
+      threadId: 'review-thread-1',
+      body: '根意见：请让 greeting 明确体现已经完成检视修复。',
+      actor: { username: 'human-reviewer' },
+    })
+    const rootMessage = rootReview.mergeRequests
+      .find((candidate) => candidate.number === reviewMrNumber)!
+      .reviewComments.find((comment) => comment.body.startsWith('根意见：'))!
+    const secondReview = await suite.client.mutateCodeHost({
+      kind: 'add-review-comment',
+      provider: 'gitlab',
+      projectPath: reviewProjectPath,
+      number: reviewMrNumber,
+      threadId: 'review-thread-1',
+      inReplyToId: rootMessage.id,
+      body: '第一轮回复：不要只改说明，代码返回值也要变化。',
+      actor: { username: 'human-reviewer' },
+    })
+    const secondMessage = secondReview.mergeRequests
+      .find((candidate) => candidate.number === reviewMrNumber)!
+      .reviewComments.find((comment) => comment.body.startsWith('第一轮回复：'))!
+    await suite.client.mutateCodeHost({
+      kind: 'add-review-comment',
+      provider: 'gitlab',
+      projectPath: reviewProjectPath,
+      number: reviewMrNumber,
+      threadId: 'review-thread-1',
+      inReplyToId: secondMessage.id,
+      body: '第二轮回复：修复后请说明对应提交。',
+      actor: { username: 'maintainer-reviewer' },
+    })
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.review-updated', revision: 2 },
+      subject: { typeId: 'merge-request', subjectRef: `repo-system-mock-review!${reviewMrRef}` },
+      occurredAt: Date.now() + 6,
+      dedupeKey: `review:${reviewMrRef}:three-message-tree`,
+      summary: 'review thread received two rounds of human replies',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    expect(reviewRepairInputs).toEqual([
+      {
+        threadRef: 'review-thread-1',
+        bodies: [
+          '根意见：请让 greeting 明确体现已经完成检视修复。',
+          '第一轮回复：不要只改说明，代码返回值也要变化。',
+          '第二轮回复：修复后请说明对应提交。',
+        ],
+      },
+    ])
+    const reviewHeadAfterRepair = mrHeads.get('repo-system-mock-review')!
+    expect(reviewHeadAfterRepair).not.toBe(reviewHeadBeforeRepair)
+    expect(git(reviewRemoteRepo, 'show', `${reviewHeadAfterRepair}:src/Main.java`)).toContain(
+      'hello reviewed',
+    )
+    let reviewSnapshot = await suite.client.snapshot()
+    let reviewComments = reviewSnapshot.codeHosts
+      .find((host) => host.projectPath === reviewProjectPath)!
+      .mergeRequests.find((candidate) => candidate.number === reviewMrNumber)!.reviewComments
+    expect(reviewComments).toHaveLength(5)
+    expect(
+      reviewComments.some(
+        (comment) =>
+          comment.body.includes('已收到该检视意见，正在处理。') &&
+          comment.body.includes(`aw-self:${reviewCaseId}:review-received:`),
+      ),
+    ).toBe(true)
+    expect(
+      reviewComments.some(
+        (comment) =>
+          comment.body.includes(reviewHeadAfterRepair.slice(0, 12)) &&
+          comment.body.includes('已按完整讨论上下文调整 greeting 的实现。') &&
+          comment.body.includes(`aw-self:${reviewCaseId}:review-resolved:`),
+      ),
+    ).toBe(true)
+    const replyCountBeforeReplay = reviewComments.length
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.review-updated', revision: 2 },
+      subject: { typeId: 'merge-request', subjectRef: `repo-system-mock-review!${reviewMrRef}` },
+      occurredAt: Date.now() + 7,
+      dedupeKey: `review:${reviewMrRef}:self-replies-only`,
+      summary: 'only platform replies changed the provider thread',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    reviewSnapshot = await suite.client.snapshot()
+    reviewComments = reviewSnapshot.codeHosts
+      .find((host) => host.projectPath === reviewProjectPath)!
+      .mergeRequests.find((candidate) => candidate.number === reviewMrNumber)!.reviewComments
+    expect(reviewComments).toHaveLength(replyCountBeforeReplay)
+
+    await suite.client.mutateCodeHost({
+      kind: 'set-mr-state',
+      provider: 'gitlab',
+      projectPath: reviewProjectPath,
+      number: reviewMrNumber,
+      state: 'merged',
+    })
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
+      subject: { typeId: 'merge-request', subjectRef: `repo-system-mock-review!${reviewMrRef}` },
+      occurredAt: Date.now() + 8,
+      dedupeKey: `lifecycle:${reviewHeadAfterRepair}:merged`,
+      summary: 'review employee MR merged by committer',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    expect(JSON.parse(runtime.queries.getCase(reviewCaseId).projectionJson).case).toMatchObject({
+      state: 'terminal',
+      terminalKind: 'merged',
+    })
   })
 })

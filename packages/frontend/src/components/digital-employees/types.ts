@@ -33,6 +33,11 @@ export interface WorkItem {
   completionStandard: LocalizedText
   nodeKind: 'business-tool' | 'system' | 'collaboration'
   collaborationContractId: string | null
+  orderedDispatchAuthoring: {
+    label: LocalizedText
+    description: LocalizedText
+    destinationWorkItemRefs: string[]
+  } | null
   toolRoleGroups: Array<{
     roleRef: string
     label: LocalizedText
@@ -122,6 +127,7 @@ export interface EmployeeTypePackage {
         description: LocalizedText
         order: number
         kind: 'spine' | 'branch'
+        optional: boolean
       }>
     }>
     workItems: WorkItem[]
@@ -223,6 +229,17 @@ export interface JobTemplate {
       joinMode: 'all' | 'any' | 'quorum'
       quorum: number | null
     }>
+    orderedDispatchConfigurations: Array<{
+      classifierWorkItemRef: string
+      routes: Array<{
+        routeRef: string
+        displayName: string
+        description: string
+        destinationWorkItemRef: string
+        registrationRef: ExactRef | null
+        fallback: boolean
+      }>
+    }>
   }
   publishedRevision: number | null
 }
@@ -268,6 +285,8 @@ export interface DigitalEmployeeDefinition {
       joinMode: 'all' | 'any' | 'quorum'
       quorum: number | null
     }>
+    exactOrderedDispatchConfigurations: JobTemplate['draft']['orderedDispatchConfigurations']
+    enabledWorkItemRefs: string[]
   }
 }
 

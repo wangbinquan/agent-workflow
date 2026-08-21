@@ -131,6 +131,23 @@ function typeKey(typeId: string, revision: number): string {
   return `${typeId}@${revision}`
 }
 
+export function isEmployeeReactionEventEnabled(input: {
+  readonly descriptor: EmployeeTypePackageDescriptor
+  readonly enabledWorkItemRefs: readonly string[]
+  readonly eventTypeId: string
+}): boolean {
+  const enabledWorkItemRefs = new Set(
+    input.enabledWorkItemRefs.length === 0
+      ? input.descriptor.authoringManifest.workItems.map((candidate) => candidate.workItemRef)
+      : input.enabledWorkItemRefs,
+  )
+  return input.descriptor.reactionRules.some(
+    (rule) =>
+      rule.eventTypeId === input.eventTypeId &&
+      enabledWorkItemRefs.has(rule.capabilityWorkItemRef ?? rule.workItemRef),
+  )
+}
+
 export class DigitalEmployeeRuntimeService {
   readonly #store: RuntimeCaseStorePort
   readonly #authoringStore: DigitalEmployeeAuthoringStore
@@ -607,6 +624,14 @@ export class DigitalEmployeeRuntimeService {
   #settleCompletedRound(round: ReactionRoundRecord, validatedOutputJson: string): void {
     const caseRecord = this.getCase(round.caseId)
     const descriptor = this.#descriptor(caseRecord)
+    const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+    if (employee === null) throw new Error('pinned employee definition disappeared')
+    const eventCapabilityEnabled = (eventTypeId: string): boolean =>
+      isEmployeeReactionEventEnabled({
+        descriptor,
+        enabledWorkItemRefs: employee.content.enabledWorkItemRefs,
+        eventTypeId,
+      })
     const item = findWorkItem(descriptor, round.workItemRef)
     if (item === null) throw new Error(`reaction work item disappeared: ${round.workItemRef}`)
     const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
@@ -620,6 +645,8 @@ export class DigitalEmployeeRuntimeService {
             toolSlotRef: plan.toolSlotRef,
             outputJson: validatedOutputJson,
             contextsJson: JSON.stringify(beforeContexts),
+            inputEnvelopeJson: plan.inputEnvelopeJson,
+            enabledWorkItemRefsJson: JSON.stringify(employee.content.enabledWorkItemRefs),
             allowedNextWorkItemRefs: item.nextWorkItemRefs,
           }),
         ),
@@ -734,6 +761,7 @@ export class DigitalEmployeeRuntimeService {
             ),
           ) as unknown,
         )
+        .filter((subject) => eventCapabilityEnabled(subject.eventTypeRef.id))
       const externalSubjects = [
         ...new Map(
           subjects.map((subject) => [
@@ -787,6 +815,7 @@ export class DigitalEmployeeRuntimeService {
             ),
           ) as unknown,
         )
+        .filter((subject) => eventCapabilityEnabled(subject.eventTypeRef.id))
       for (const subject of desired) {
         const eventType = descriptor.eventTypes.find(
           (candidate) =>
@@ -1591,6 +1620,24 @@ export class DigitalEmployeeRuntimeService {
         if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
         continue
       }
+      const enabledWorkItemRefs =
+        employee.content.enabledWorkItemRefs.length === 0
+          ? descriptor.authoringManifest.workItems.map((candidate) => candidate.workItemRef)
+          : employee.content.enabledWorkItemRefs
+      const capabilityWorkItemRef = rule?.capabilityWorkItemRef ?? item.workItemRef
+      if (
+        !enabledWorkItemRefs.includes(item.workItemRef) ||
+        !enabledWorkItemRefs.includes(capabilityWorkItemRef)
+      ) {
+        if (inbox !== undefined) {
+          this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+          continue
+        }
+        throw new ValidationError(
+          'employee-continuation-capability-disabled',
+          `continuation points to disabled optional capability: ${item.workItemRef}`,
+        )
+      }
       const defaultSlotRef =
         rule?.slotRef ??
         item.toolRoleGroups.flatMap((group) => group.bindingSlots).find((slot) => slot.required)
@@ -1608,11 +1655,24 @@ export class DigitalEmployeeRuntimeService {
                 workItemRef: item.workItemRef,
                 defaultSlotRef,
                 contextsJson: JSON.stringify(contexts),
+                orderedDispatchConfigurationsJson: JSON.stringify(
+                  employee.content.exactOrderedDispatchConfigurations,
+                ),
               }),
             ),
           ) as unknown,
         ).slotRef
-      if (item.nodeKind === 'business-tool' && findToolSlot(item, selectedSlotRef) === null) {
+      const selectedDispatchRoute = employee.content.exactOrderedDispatchConfigurations
+        .flatMap((configuration) => configuration.routes)
+        .find(
+          (route) =>
+            route.routeRef === selectedSlotRef && route.destinationWorkItemRef === item.workItemRef,
+        )
+      if (
+        item.nodeKind === 'business-tool' &&
+        findToolSlot(item, selectedSlotRef) === null &&
+        selectedDispatchRoute === undefined
+      ) {
         throw new ValidationError(
           'employee-tool-slot-selection-invalid',
           `type package selected unknown slot ${item.workItemRef}/${selectedSlotRef}`,
@@ -1622,27 +1682,18 @@ export class DigitalEmployeeRuntimeService {
         (candidate) =>
           candidate.workItemRef === item.workItemRef && candidate.slotRef === selectedSlotRef,
       )
-      // Optional specialist slots deterministically fall back to the required
-      // default (for development this is `unknown`) when no specialist was
-      // configured. This preserves total routing without letting the model pick.
-      const binding =
-        selectedBinding ??
-        (selectedSlotRef === defaultSlotRef
-          ? undefined
-          : employee.content.exactToolBindings.find(
-              (candidate) =>
-                candidate.workItemRef === item.workItemRef && candidate.slotRef === defaultSlotRef,
-            ))
-      // Freeze the logical business slot, not the fallback registration slot:
-      // an `unknown` fallback may execute a `compile` assignment, but settlement
-      // must still retire `compile` from the deterministic problem queue.
+      const binding = selectedBinding
       const frozenSlotRef = selectedSlotRef
+      const selectedRegistrationRef =
+        selectedDispatchRoute?.registrationRef ?? binding?.registrationRef ?? null
       const tool =
-        binding === undefined ? null : this.#authoringStore.getToolRevision(binding.registrationRef)
-      if (item.nodeKind === 'business-tool' && (binding === undefined || tool === null)) {
+        selectedRegistrationRef === null
+          ? null
+          : this.#authoringStore.getToolRevision(selectedRegistrationRef)
+      if (item.nodeKind === 'business-tool' && tool === null) {
         throw new ValidationError(
           'employee-tool-binding-unavailable',
-          `no exact published tool for ${item.workItemRef}/${selectedSlotRef} (fallback ${defaultSlotRef})`,
+          `no exact published tool for ${item.workItemRef}/${selectedSlotRef}`,
         )
       }
       const collaborationBindings =
@@ -1672,6 +1723,7 @@ export class DigitalEmployeeRuntimeService {
         toolSlotRef: frozenSlotRef,
         workContractRef: item.workContractRef,
         toolRegistrationRef: tool?.ref ?? null,
+        orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
         executionPolicyRevision: caseRecord.executionPolicyRevision,
       })
       const assembledInputEnvelopeJson = this.#codec(
@@ -1695,6 +1747,9 @@ export class DigitalEmployeeRuntimeService {
           ),
           contextsJson: JSON.stringify(
             contexts.filter((context) => requiredContextTypes.includes(context.typeId)),
+          ),
+          orderedDispatchConfigurationsJson: JSON.stringify(
+            employee.content.exactOrderedDispatchConfigurations,
           ),
         }),
       )

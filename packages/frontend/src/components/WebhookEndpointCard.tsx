@@ -231,7 +231,7 @@ export function WebhookEndpointCard({
   const createAction = (
     <button
       type="button"
-      className="btn btn--sm btn--primary"
+      className="btn btn--primary event-source-create-action"
       onClick={(event) => openCreate(event.currentTarget)}
       data-testid="webhook-endpoint-add"
     >

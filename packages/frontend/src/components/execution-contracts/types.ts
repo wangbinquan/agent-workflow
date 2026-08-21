@@ -24,6 +24,7 @@ export interface ExecutionContractGuide {
     displayName: ContractLocalizedText
     description: ContractLocalizedText
     topLevelFields: string[]
+    primaryFieldPaths: string[]
     fields: ExecutionContractField[]
     exampleJson: string
   }
@@ -32,6 +33,7 @@ export interface ExecutionContractGuide {
     displayName: ContractLocalizedText
     description: ContractLocalizedText
     topLevelFields: string[]
+    primaryFieldPaths: string[]
     fields: ExecutionContractField[]
     exampleJson: string
   }

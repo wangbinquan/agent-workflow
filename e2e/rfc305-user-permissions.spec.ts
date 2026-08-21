@@ -177,7 +177,9 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // PR-10 −1 (code-rounds:launch retired with the legacy writer) ⇒ 108.
   // RFC-312 +1 (`users:presence`) ⇒ 109. 它**不进任何静态 preset**（RFC-305 没有 deny 集，
   // 进了就永远无法按账号收回），只作为可授予项出现在目录里 —— 所以行数 +1、生效数不变。
-  await expect(dialog.locator('.user-permission-row')).toHaveCount(109)
+  // RFC-310 Event Center +4（event-sources read/create/update/archive）⇒ 113；四点都在
+  // user baseline，因此只增加目录行，不增加可单独勾选数。
+  await expect(dialog.locator('.user-permission-row')).toHaveCount(113)
   // PR-9 +1 grantable (development-missions:cutover is admin-tier, so it is a
   // preset difference); PR-10 −1 row but +0 grantable (code-rounds:launch was
   // in the user baseline) ⇒ 26.
@@ -514,7 +516,7 @@ test('guest browser exposes public resources without mutation or task affordance
     '/outcomes',
     '/scheduled',
     '/repos',
-    '/webhooks',
+    '/events',
     '/memory',
   ])
 

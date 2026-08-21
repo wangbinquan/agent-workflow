@@ -19,6 +19,7 @@ interface ResponsibilityLaneLayout {
   label: EmployeeTypePackage['authoringManifest']['lifecycleRegions'][number]['responsibilityLanes'][number]['label']
   description: EmployeeTypePackage['authoringManifest']['lifecycleRegions'][number]['responsibilityLanes'][number]['description']
   kind: 'spine' | 'branch'
+  optional: boolean
   y: number
   height: number
 }
@@ -50,7 +51,8 @@ const LANE_LABEL_WIDTH = 132
 const LANE_PADDING_Y = 10
 const FALLBACK_COLUMNS = 4
 const MAX_LANE_COLUMNS = 5
-const LOOP_GUTTER = 50
+const EDGE_GUTTER = 26
+const NODE_FRAME_GUTTER = 4
 
 function rowStartX(contentX: number, contentWidth: number, count: number): number {
   const rowWidth = count * NODE_WIDTH + Math.max(0, count - 1) * COLUMN_GAP
@@ -85,7 +87,7 @@ export function buildResponsibilityGraphLayout(
   const columns = Math.max(1, Math.min(MAX_LANE_COLUMNS, largestLane))
   const contentX = PADDING_X + LANE_LABEL_WIDTH
   const contentWidth = columns * NODE_WIDTH + Math.max(0, columns - 1) * COLUMN_GAP
-  const width = contentX + contentWidth + LOOP_GUTTER + PADDING_X
+  const width = contentX + contentWidth + EDGE_GUTTER + PADDING_X
   const nodes: ResponsibilityNodeLayout[] = []
   const bands: ResponsibilityBandLayout[] = []
   let graphY = 0
@@ -109,6 +111,7 @@ export function buildResponsibilityGraphLayout(
           label: lane.label,
           description: lane.description,
           kind: lane.kind,
+          optional: lane.optional,
           y: cursorY,
           height: laneHeight,
         })
@@ -173,59 +176,45 @@ function stableEdgeLane(sourceRef: string, targetRef: string): number {
   return value
 }
 
-function edgePath(
+export function buildResponsibilityEdgePath(
   source: ResponsibilityNodeLayout,
   target: ResponsibilityNodeLayout,
-  sourceBand: ResponsibilityBandLayout,
-  targetBand: ResponsibilityBandLayout,
   width: number,
   loop: boolean,
 ): string {
   const sourceRight = source.x + NODE_WIDTH
-  const sourceCenterX = source.x + NODE_WIDTH / 2
   const sourceCenterY = source.y + NODE_HEIGHT / 2
-  const targetRight = target.x + NODE_WIDTH
   const targetCenterY = target.y + NODE_HEIGHT / 2
   const edgeLane = stableEdgeLane(source.item.workItemRef, target.item.workItemRef)
+  const targetEntryX = target.x - 9 - edgeLane * 1.5
+  const exitX = Math.min(width - PADDING_X - 6, sourceRight + 9 + edgeLane * 1.5)
 
   if (loop) {
-    const loopX = width - PADDING_X - 6 - edgeLane * 4
-    if (source.item.workItemRef === target.item.workItemRef) {
-      return `M ${sourceRight} ${sourceCenterY} H ${loopX} V ${source.y - 6} H ${sourceCenterX} V ${source.y}`
-    }
-    return `M ${sourceRight} ${sourceCenterY} H ${loopX} V ${targetCenterY} H ${targetRight}`
-  }
-
-  if (source.regionIndex === target.regionIndex && source.row === target.row) {
-    return `M ${sourceRight} ${sourceCenterY} H ${target.x}`
-  }
-
-  const sourceBottom = source.y + NODE_HEIGHT
-  const sourceAboveTarget = source.y < target.y
-  if (source.regionIndex !== target.regionIndex || source.laneId !== target.laneId) {
-    const transitionX = width - PADDING_X - 10 - edgeLane * 3
-    const laneY =
-      source.regionIndex === target.regionIndex
-        ? sourceBottom + 4 + (edgeLane - 3) * 0.6
-        : sourceBand.y +
-          sourceBand.height +
-          (targetBand.y - sourceBand.y - sourceBand.height) / 2 +
-          (edgeLane - 3) * 2
+    const loopY = source.y + NODE_HEIGHT + 6 + edgeLane * 1.4
     return [
-      `M ${sourceCenterX} ${sourceBottom}`,
-      `V ${laneY}`,
-      `H ${transitionX}`,
+      `M ${sourceRight} ${sourceCenterY}`,
+      `H ${exitX}`,
+      `V ${loopY}`,
+      `H ${targetEntryX}`,
       `V ${targetCenterY}`,
-      `H ${targetRight}`,
+      `H ${target.x}`,
     ].join(' ')
   }
 
-  const sourceY = sourceAboveTarget ? sourceBottom : source.y
-  const laneY = sourceY + (targetCenterY - sourceY) / 2 + (edgeLane - 3) * 2
+  if (
+    source.regionIndex === target.regionIndex &&
+    source.row === target.row &&
+    target.x >= sourceRight
+  ) {
+    return `M ${sourceRight} ${sourceCenterY} H ${target.x}`
+  }
+
+  const laneY = source.y + NODE_HEIGHT + 5 + edgeLane * 1.2
   return [
-    `M ${sourceCenterX} ${sourceY}`,
+    `M ${sourceRight} ${sourceCenterY}`,
+    `H ${exitX}`,
     `V ${laneY}`,
-    `H ${target.x - 12}`,
+    `H ${targetEntryX}`,
     `V ${targetCenterY}`,
     `H ${target.x}`,
   ].join(' ')
@@ -254,24 +243,19 @@ export function ResponsibilityGraph(props: {
       return [{ source, target, loop }]
     }),
   )
-  const dispatchGroups = new Map<string, typeof edges>()
-  for (const edge of edges) {
-    if (
-      edge.loop ||
-      edge.source.regionIndex !== edge.target.regionIndex ||
-      edge.source.laneKind !== 'spine' ||
-      edge.target.laneKind !== 'branch'
-    ) {
-      continue
-    }
-    const existing = dispatchGroups.get(edge.source.item.workItemRef) ?? []
-    existing.push(edge)
-    dispatchGroups.set(edge.source.item.workItemRef, existing)
-  }
-  const dispatchEdgeKeys = new Set(
-    [...dispatchGroups.values()].flatMap((group) =>
-      group.map(({ source, target }) => `${source.item.workItemRef}:${target.item.workItemRef}`),
-    ),
+  const selectedEdges =
+    props.selectedWorkItemRef === null
+      ? []
+      : edges.filter(
+          ({ source, target }) =>
+            source.item.workItemRef === props.selectedWorkItemRef ||
+            target.item.workItemRef === props.selectedWorkItemRef,
+        )
+  const relatedWorkItemRefs = new Set(
+    selectedEdges.flatMap(({ source, target }) => [
+      source.item.workItemRef,
+      target.item.workItemRef,
+    ]),
   )
 
   return (
@@ -353,7 +337,12 @@ export function ResponsibilityGraph(props: {
                     height={lane.height}
                   >
                     <div className="employee-graph-lane-label" data-lane-kind={lane.kind}>
-                      <strong>{localized(lane.label, props.language)}</strong>
+                      <div>
+                        <strong>{localized(lane.label, props.language)}</strong>
+                        {lane.optional ? (
+                          <em>{props.language.startsWith('zh') ? '可选能力' : 'Optional'}</em>
+                        ) : null}
+                      </div>
                       <span>{localized(lane.description, props.language)}</span>
                     </div>
                   </foreignObject>
@@ -364,104 +353,51 @@ export function ResponsibilityGraph(props: {
         })}
 
         <g className="employee-graph__edges" aria-hidden="true">
-          {edges.flatMap(({ source, target, loop }) => {
+          {edges.map(({ source, target, loop }) => {
             const edgeKey = `${source.item.workItemRef}:${target.item.workItemRef}`
-            if (dispatchEdgeKeys.has(edgeKey)) return []
             const active =
               props.selectedWorkItemRef === source.item.workItemRef ||
               props.selectedWorkItemRef === target.item.workItemRef
-            return [
+            return (
               <path
                 key={edgeKey}
                 data-from={source.item.workItemRef}
                 data-to={target.item.workItemRef}
                 className={`${active ? 'employee-graph__edge--active' : ''}${
-                  loop ? ' employee-graph__edge--loop' : ''
-                }`}
-                d={edgePath(
-                  source,
-                  target,
-                  layout.bands[source.regionIndex]!,
-                  layout.bands[target.regionIndex]!,
-                  layout.width,
-                  loop,
-                )}
+                  props.selectedWorkItemRef !== null && !active
+                    ? ' employee-graph__edge--dimmed'
+                    : ''
+                }${loop ? ' employee-graph__edge--loop' : ''}`}
+                d={buildResponsibilityEdgePath(source, target, layout.width, loop)}
                 markerEnd={active ? 'url(#employee-arrow-active)' : 'url(#employee-arrow)'}
                 vectorEffect="non-scaling-stroke"
-              />,
-            ]
-          })}
-          {[...dispatchGroups.entries()].flatMap(([sourceRef, group], groupIndex) => {
-            const source = group[0]?.source
-            if (source === undefined) return []
-            const branchTopYs = group.map(({ target }) => target.y - 6)
-            const busStartY = Math.min(...branchTopYs)
-            const busEndY = Math.max(...branchTopYs)
-            const busX = PADDING_X + LANE_LABEL_WIDTH - 12 - groupIndex * 5
-            const sourceCenterX = source.x + NODE_WIDTH / 2
-            const sourceBottom = source.y + NODE_HEIGHT
-            const sourceSelected = props.selectedWorkItemRef === source.item.workItemRef
-            const selectedBranch = group.find(
-              ({ target }) => props.selectedWorkItemRef === target.item.workItemRef,
+              />
             )
-            return [
-              <path
-                key={`${sourceRef}:dispatch-trunk`}
-                className={`employee-graph__dispatch-trunk${
-                  sourceSelected ? ' employee-graph__edge--active' : ''
-                }`}
-                d={`M ${sourceCenterX} ${sourceBottom} V ${busStartY} H ${busX} V ${busEndY}`}
-                vectorEffect="non-scaling-stroke"
-              />,
-              selectedBranch === undefined || sourceSelected ? null : (
-                <path
-                  key={`${sourceRef}:dispatch-selection`}
-                  className="employee-graph__dispatch-trunk employee-graph__edge--active"
-                  d={`M ${sourceCenterX} ${sourceBottom} V ${busStartY} H ${busX} V ${
-                    selectedBranch.target.y - 6
-                  }`}
-                  vectorEffect="non-scaling-stroke"
-                />
-              ),
-              ...group.map(({ target }) => {
-                const active =
-                  props.selectedWorkItemRef === source.item.workItemRef ||
-                  props.selectedWorkItemRef === target.item.workItemRef
-                const branchY = target.y - 6
-                return (
-                  <path
-                    key={`${sourceRef}:${target.item.workItemRef}`}
-                    data-from={sourceRef}
-                    data-to={target.item.workItemRef}
-                    className={`employee-graph__dispatch-branch${
-                      active ? ' employee-graph__edge--active' : ''
-                    }`}
-                    d={`M ${busX} ${branchY} H ${target.x - 10} V ${
-                      target.y + NODE_HEIGHT / 2
-                    } H ${target.x}`}
-                    markerEnd={active ? 'url(#employee-arrow-active)' : 'url(#employee-arrow)'}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )
-              }),
-            ]
           })}
         </g>
 
         {layout.nodes.map(({ item, x, y }) => {
           const selected = props.selectedWorkItemRef === item.workItemRef
+          const related = !selected && relatedWorkItemRefs.has(item.workItemRef)
+          const dimmed = props.selectedWorkItemRef !== null && !selected && !related
           const count = props.toolCounts?.[item.workItemRef] ?? 0
+          const slotCount = item.toolRoleGroups.reduce(
+            (total, role) => total + role.bindingSlots.length,
+            0,
+          )
           return (
             <foreignObject
               key={item.workItemRef}
-              x={x}
-              y={y}
-              width={NODE_WIDTH}
-              height={NODE_HEIGHT}
+              x={x - NODE_FRAME_GUTTER}
+              y={y - NODE_FRAME_GUTTER}
+              width={NODE_WIDTH + NODE_FRAME_GUTTER * 2}
+              height={NODE_HEIGHT + NODE_FRAME_GUTTER * 2}
             >
               <button
                 type="button"
-                className={`employee-graph-node${selected ? ' employee-graph-node--selected' : ''}`}
+                className={`employee-graph-node${selected ? ' employee-graph-node--selected' : ''}${
+                  related ? ' employee-graph-node--related' : ''
+                }${dimmed ? ' employee-graph-node--dimmed' : ''}`}
                 data-node-kind={item.nodeKind}
                 data-testid={`employee-work-item-${item.workItemRef}`}
                 aria-pressed={selected}
@@ -470,21 +406,27 @@ export function ResponsibilityGraph(props: {
                 <span className="employee-graph-node__kind" aria-hidden="true">
                   {item.nodeKind === 'business-tool'
                     ? props.language.startsWith('zh')
-                      ? '工具'
-                      : 'Tool'
+                      ? '可配工具'
+                      : 'Custom tool'
                     : item.nodeKind === 'system'
                       ? props.language.startsWith('zh')
-                        ? '平台'
-                        : 'Platform'
+                        ? '平台内置'
+                        : 'Built in'
                       : props.language.startsWith('zh')
-                        ? '协同'
-                        : 'Delegate'}
+                        ? '员工协同'
+                        : 'Employee'}
                 </span>
                 <strong>{localized(item.label, props.language)}</strong>
                 <span>{localized(item.description, props.language)}</span>
                 {props.mode === 'toolbox' && item.nodeKind === 'business-tool' ? (
                   <small>
-                    {props.language.startsWith('zh') ? `${count} 个工具` : `${count} tools`}
+                    {props.language.startsWith('zh')
+                      ? slotCount > 1
+                        ? `${slotCount} 类工具槽位 · ${count} 个已注册工具`
+                        : `${count} 个已注册工具`
+                      : slotCount > 1
+                        ? `${slotCount} tool slots · ${count} registered`
+                        : `${count} registered tools`}
                   </small>
                 ) : null}
               </button>

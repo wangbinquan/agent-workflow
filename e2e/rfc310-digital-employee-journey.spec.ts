@@ -25,10 +25,15 @@ interface EmployeeTypePackage {
   authoringManifest: {
     lifecycleRegions: Array<{
       regionId: string
-      responsibilityLanes: Array<{ laneId: string; kind: 'spine' | 'branch' }>
+      responsibilityLanes: Array<{
+        laneId: string
+        kind: 'spine' | 'branch'
+        optional: boolean
+      }>
     }>
     workItems: Array<{
       workItemRef: string
+      responsibilityLaneId: string | null
       workContractRef: { contractId: string; version: number }
       toolRoleGroups: Array<{
         roleRef: string
@@ -63,7 +68,7 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@2'
+const TYPE_REF = 'development@3'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
@@ -169,6 +174,11 @@ async function seedPublishedEmployee(): Promise<void> {
   const agents = await requestJson<AgentChoice[]>('/api/agents/builtins/digital-employee-templates')
   if (agents.length === 0) throw new Error('built-in Digital Employee Agent templates are missing')
   const approvalAdapterRef = await createPublishedApprovalAdapter()
+  const optionalLaneIds = new Set(
+    typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
+      region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
+    ),
+  )
   const bindings: Array<{
     workItemRef: string
     slotRef: string
@@ -176,6 +186,9 @@ async function seedPublishedEmployee(): Promise<void> {
   }> = []
 
   for (const item of typePackage.authoringManifest.workItems) {
+    if (item.responsibilityLaneId !== null && optionalLaneIds.has(item.responsibilityLaneId)) {
+      continue
+    }
     const contract = typePackage.workContracts.find(
       (candidate) =>
         candidate.contractId === item.workContractRef.contractId &&
@@ -329,10 +342,12 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
   const responsibilityGraph = page.getByTestId('digital-employee-responsibility-graph')
   await expect(responsibilityGraph).toBeVisible()
-  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
+  await expect(page.getByText(employeeName, { exact: true })).toBeVisible()
   await expect(responsibilityGraph.locator('.employee-graph__lane-bg--spine')).toHaveCount(2)
-  await expect(responsibilityGraph.locator('.employee-graph__lane-bg--branch')).toHaveCount(5)
-  await expect(responsibilityGraph.locator('.employee-graph__dispatch-trunk')).toHaveCount(1)
+  await expect(responsibilityGraph.locator('.employee-graph__lane-bg--branch')).toHaveCount(6)
+  await expect(responsibilityGraph.locator('.employee-graph__dispatch-trunk')).toHaveCount(0)
+  await expect(responsibilityGraph.locator('.employee-graph-node__port')).toHaveCount(0)
   await expect(
     responsibilityGraph.locator('path[data-from="observe-mr"][data-to="collect-pipeline"]'),
   ).toHaveCount(1)
@@ -345,16 +360,33 @@ test('body and repository-bound files enter a stateful employee case and the uni
     responsibilityGraph.locator('path[data-from="classify-pipeline"][data-to="delegate"]'),
   ).toHaveCount(1)
   await expect(
+    responsibilityGraph.locator('path[data-from="delegate"][data-to="collect-pipeline"]'),
+  ).toHaveCount(1)
+  await expect(
+    responsibilityGraph.locator('path[data-from="delegate"][data-to="prepare-approval"]'),
+  ).toHaveCount(0)
+  await expect(
     responsibilityGraph.locator('path[data-from="evaluate-ready"][data-to="wait-merge"]'),
   ).toHaveCount(1)
   await expect(
     responsibilityGraph.locator('path[data-from="observe-mr"][data-to="wait-merge"]'),
   ).toHaveCount(0)
+  await page.getByTestId('employee-work-item-classify-pipeline').click()
+  await expect(page.getByTestId('employee-work-item-classify-pipeline')).toHaveClass(
+    /employee-graph-node--selected/,
+  )
+  await expect(page.getByTestId('employee-work-item-repair-pipeline')).toHaveClass(
+    /employee-graph-node--related/,
+  )
+  await expect(
+    responsibilityGraph.locator(
+      'path.employee-graph__edge--active[data-from="classify-pipeline"][data-to="repair-pipeline"]',
+    ),
+  ).toHaveCount(1)
   const horizontalOverflow = await responsibilityGraph.evaluate(
     (element) => element.scrollWidth - element.clientWidth,
   )
   expect(horizontalOverflow).toBeLessThanOrEqual(1)
-  await expect(page.getByText(employeeName, { exact: true })).toBeVisible()
 
   await page.goto(`${daemon.baseUrl}/tasks/employee-cases/new`)
   await expect(
@@ -396,7 +428,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const caseId = page.url().split('/').at(-1)!
   await expect(page.getByRole('heading', { name: employeeName, exact: true })).toBeVisible()
   await expect(page.getByTestId('digital-employee-responsibility-graph')).toBeVisible()
-  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
   await expect(page.getByText('Work context', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Current responsibility and full lifecycle', { exact: true }),

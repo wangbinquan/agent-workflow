@@ -16,12 +16,13 @@
 > 2026-08-21 以四个随机化后端分片、frontend 6660、shared 2219、system-mock 35 全绿；当前仅剩 exact-SHA hosted CI
 > 的发布验证，最终证据写入 plan/STATE。
 >
-> **2026-08-21 PR-19（待 hosted 验证）**：把 Agent/Workflow/ProgramTool 的输入输出约束提升为平台级
+> **2026-08-21 PR-19/20（待 hosted 验证）**：把 Agent/Workflow/ProgramTool 的输入输出约束提升为平台级
 > `execution-contract`，并把固定职责图升级为 manifest 驱动的“生命周期背景 + 职责泳道 + 确定性边/回路”。研发
 > “MR 看护与修绿”不再把所有节点顺序平铺，而是由 MR 事件入口分发到检视、流水线、冲突、跨仓/审批和合入判断五条职责支线。
 > Agent 编辑器中的契约选择与端口归入同一“输入/输出”页；`agent-result` 是契约托管端口，随契约原子增删，不能单独编辑或删除。
-> 由于本批修改了已冻结的 AuthoringManifest/后继关系，内置研发类型发布为 `development@2`，不覆写或删除已登记的
-> `development@1`；已有数据库启动时新增 revision，因此不触发 descriptor drift，空库与升级库走同一 bootstrap 路径。
+> 后续按功能自审补齐可选泳道、岗位级流水线失败类型/处理者、检视整树与双回帖、权威事实刷新和更紧凑的确定性连线，
+> 因此内置研发类型最终追加发布为 `development@3`，不覆写或删除已登记的 `development@1/@2`；已有数据库只追加新
+> revision，空库与升级库走同一 bootstrap 路径。公共能力与研发能力的分层覆盖矩阵见 design §15.8、plan §13g。
 >
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
@@ -1269,6 +1270,27 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-69** `code-host.activity@1` 必须为所有已支持代码平台 occurrence 发布一对事件：旧 `code-host.event.*` 仅供存量 selector，
   来源无关的 `code-host.branch.* / merge-request.* / pipeline.* / issue.*` 作为 public business fact。后者声明 `trigger.code_host.*`
   合同并全部进入标准响应规则；公开目录不得出现“MR 状态观察”或“工作入口”。
+- **AC-70** 类型包可以把职责泳道声明为可选。岗位模板/员工没有配置该泳道时仍可校验、发布和执行，并且不建立该职责的 Attention；
+  一旦配置其中任一步，必须闭合泳道内部必需工具/协同/有序路由。发布后的员工冻结 `enabledWorkItemRefs`，运行时不得因后来新增工具
+  静默获得新职责。
+- **AC-71** 流水线失败类型属于岗位配置，不是平台枚举。分类节点提供有序分派编辑器，每个类型必须有业务名称、目标处理工作项以及
+  exact 工具或协同员工；列表顺序是唯一优先级，末项必须且只能是一个 fallback。运行时按问题集合和冻结列表逐类调度，不让 Agent
+  选择下一类型或执行者。
+- **AC-72** Event 只是一条 wake hint。检视、冲突、流水线等代码平台事件必须先刷新权威 MR Context，再根据最新事实进入业务职责；
+  ReactionRule 分开冻结“允许响应的可选职责”和“实际先执行的平台刷新工作项”，既不能用旧 Case 快照修复，也不能因刷新节点常驻而
+  误启用未配置泳道。
+- **AC-73** 检视修复输入必须包含每个未处理非自身 thread 的完整评论树和稳定 revision。平台在进入修复前逐 thread 回“已收到”，
+  Agent 输出 envelope 必须逐 thread 给出处理说明；平台完成 commit/push 后再回帖说明和 commit。两类平台回复都带自有标记且不会成为
+  新问题，重复事件/replay 不重复 ACK、修复或回帖。
+- **AC-74** 外部审批不是平台内置业务。平台只内置 prepare/submit/observe 的通用合同、幂等台账和等待机制；具体审批系统语义、凭据、
+  submit/adopt/observe 程序都来自已注册 adapter。没有配置审批泳道的员工不受影响。
+- **AC-75** 平台调度字段（事件、Case、round、nonce、允许后继、启用工作项和分派表控制信息）只能存在于运行 envelope 元数据或平台
+  projection；Agent/Script 的 `contractInput` 只包含当前 WorkContract 声明的业务输入。编辑期示例、兼容校验与运行期使用同一投影。
+- **AC-76** 公共 OS 能力按 design §15.8 建立分层覆盖矩阵：每项至少有合同/反向与集成/恢复用例；跨 Git、代码平台、自建系统、审批
+  或进程边界的能力还必须有 runnable stateful system mock。开发数字员工 system mock 至少覆盖父子员工、外部审批、大证据、真实 Git/MR、
+  多轮检视 ACK→修复→回帖、自回复抑制与 committer 外部合入。
+- **AC-77** 职责图桌面全量展示 20 个工作项，窄屏仅整体滚动；连线统一右出左入、无悬浮端口圆圈、无绕场共享干线，选择节点同时
+  高亮直接关联节点和边。平台/自定义工具/员工三类标签和可选泳道必须可辨，并由功能 E2E 与目标视觉基线共同防护。
 
 ## 15. 本轮已批准的设计决策
 

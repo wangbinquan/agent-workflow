@@ -26,6 +26,11 @@ import { DeliveriesPanel } from '@/components/webhooks/DeliveriesPanel'
 import { TriggersPanel } from '@/components/webhooks/TriggersPanel'
 import { EventResponseRulesPanel } from '@/components/events/EventResponseRulesPanel'
 import { useActor, usePermission } from '@/hooks/useActor'
+import {
+  customEventObserverStarter,
+  syncManagedObserverSource,
+  type CustomObserverLanguage,
+} from '@/lib/events/customEventObserverTemplate'
 import { Route as RootRoute } from './__root'
 
 export type EventCenterTab = 'overview' | 'sources' | 'subscriptions' | 'deliveries'
@@ -217,7 +222,12 @@ interface CustomSourceDraft {
   pollIntervalMs: number
   batchSize: number
   ingestionMode: 'state-change' | 'occurrence'
-  program: { language: 'bash' | 'node' | 'python'; source: string; timeoutMs: number }
+  program: {
+    language: CustomObserverLanguage
+    source: string
+    templateManaged?: boolean
+    timeoutMs: number
+  }
   eventTypes: CustomEventTypePayload[]
   fixture: {
     subjects: Array<{ typeId: string; subjectRef: string }>
@@ -234,27 +244,6 @@ interface CustomSourceAuthoring {
 
 function sameRef(left: ExactRef, right: ExactRef): boolean {
   return left.id === right.id && left.revision === right.revision
-}
-
-function nodeStarter(): string {
-  return `import { readFileSync } from 'node:fs'
-
-const input = JSON.parse(readFileSync(process.env.AW_EVENT_INPUT_FILE, 'utf8'))
-const observations = input.subjects.map((subject) => ({
-  eventKey: 'status.changed',
-  subjectRef: subject.subjectRef,
-  occurredAt: new Date().toISOString(),
-  sourceEventKey: subject.subjectRef,
-  sourceEventRevision: 'replace-with-stable-source-revision',
-  summary: \`\${subject.subjectRef} changed\`,
-  triggerParameters: { item_id: subject.subjectRef },
-}))
-
-console.log(JSON.stringify({
-  protocol: 'aw-event-observer@1',
-  cursor: input.cursor,
-  observations,
-}))`
 }
 
 function initialEvent(eventKey = 'status.changed'): CustomEventTypeDraft {
@@ -297,18 +286,22 @@ function nextEventKey(events: readonly CustomEventTypeDraft[]): string {
   return `event.${ordinal}`
 }
 
-function initialDraft(): {
+interface CustomSourceEditorForm {
   displayName: LocalizedText
   description: LocalizedText
   pollIntervalSeconds: number
   batchSize: number
   ingestionMode: 'state-change' | 'occurrence'
-  language: 'bash' | 'node' | 'python'
+  language: CustomObserverLanguage
   source: string
+  sourceTemplateManaged: boolean
   timeoutSeconds: number
   cursorJson: string
   eventTypes: CustomEventTypeDraft[]
-} {
+}
+
+function initialDraft(): CustomSourceEditorForm {
+  const eventTypes = [initialEvent()]
   return {
     displayName: { 'zh-CN': '', 'en-US': '' },
     description: { 'zh-CN': '', 'en-US': '' },
@@ -316,10 +309,27 @@ function initialDraft(): {
     batchSize: 50,
     ingestionMode: 'state-change',
     language: 'node',
-    source: nodeStarter(),
+    source: customEventObserverStarter('node', eventTypes),
+    sourceTemplateManaged: true,
     timeoutSeconds: 30,
     cursorJson: '',
-    eventTypes: [initialEvent()],
+    eventTypes,
+  }
+}
+
+function withSynchronizedEventTypes(
+  current: CustomSourceEditorForm,
+  eventTypes: CustomEventTypeDraft[],
+): CustomSourceEditorForm {
+  return {
+    ...current,
+    eventTypes,
+    source: syncManagedObserverSource({
+      language: current.language,
+      source: current.source,
+      templateManaged: current.sourceTemplateManaged,
+      events: eventTypes,
+    }),
   }
 }
 
@@ -749,11 +759,11 @@ function EventsPage(): ReactElement {
                   {canCreate ? (
                     <button
                       type="button"
-                      className="btn btn--primary"
+                      className="btn btn--primary event-source-create-action"
                       onClick={() => setEditor('new')}
                       data-testid="event-source-new"
                     >
-                      {zh ? '新增事件来源' : 'New event source'}
+                      {zh ? '新建自定义事件' : 'New custom event'}
                     </button>
                   ) : null}
                 </header>
@@ -863,21 +873,17 @@ function EventsPage(): ReactElement {
                     />
                   </section>
 
-                  <section className="employee-node-panel event-response-compatibility">
+                  <section className="employee-node-panel event-response-webhook">
                     <header>
                       <div>
                         <span className="employee-node-panel__eyebrow">
-                          {zh ? '兼容配置' : 'Compatibility'}
+                          {zh ? 'Webhook 订阅' : 'Webhook subscriptions'}
                         </span>
-                        <h2>
-                          {zh
-                            ? '现有代码平台 Webhook 规则'
-                            : 'Existing code-platform Webhook rules'}
-                        </h2>
+                        <h2>{zh ? 'Webhook 触发订阅' : 'Webhook trigger subscriptions'}</h2>
                         <p>
                           {zh
-                            ? '保留仓库、分支和评论命令等代码平台专用条件。新规则优先使用上方标准事件响应。'
-                            : 'Keeps code-platform-specific repository, branch, and comment-command filters. Prefer standard event responses for new rules.'}
+                            ? '配置仓库、分支和评论命令等 Webhook 专用条件；命中后同样通过事件中心启动编排或数字员工。'
+                            : 'Configure Webhook-specific repository, branch, and comment-command conditions. Matches start workflows or digital employees through Event Center.'}
                         </p>
                       </div>
                     </header>
@@ -1013,9 +1019,9 @@ function EventsPage(): ReactElement {
                   ariaLabel={zh ? '投递页面视图' : 'Delivery page view'}
                   testidPrefix="event-delivery-view"
                   options={[
-                    { value: 'consumer', label: zh ? '订阅投递' : 'Subscription deliveries' },
+                    { value: 'consumer', label: zh ? '投递记录' : 'Delivery records' },
                     { value: 'source', label: zh ? '事件记录' : 'Source events' },
-                    { value: 'webhook', label: zh ? 'Webhook 入站' : 'Webhook ingress' },
+                    { value: 'webhook', label: zh ? 'Webhook事件' : 'Webhook events' },
                   ]}
                 />
               </div>
@@ -1025,12 +1031,12 @@ function EventsPage(): ReactElement {
                   <header>
                     <div>
                       <span className="employee-node-panel__eyebrow">
-                        {zh ? '订阅投递' : 'Subscription deliveries'}
+                        {zh ? '投递记录' : 'Delivery records'}
                       </span>
                       <h2>{zh ? '每个消费者的处理状态' : 'Processing state per consumer'}</h2>
                     </div>
                   </header>
-                  <FilterBar ariaLabel={zh ? '订阅投递筛选' : 'Subscription delivery filters'}>
+                  <FilterBar ariaLabel={zh ? '投递记录筛选' : 'Delivery record filters'}>
                     <Segmented<DeliveryStateFilter>
                       value={deliveryState}
                       onChange={(value) => {
@@ -1204,7 +1210,7 @@ function EventsPage(): ReactElement {
                   <header>
                     <div>
                       <span className="employee-node-panel__eyebrow">
-                        {zh ? 'Webhook 入站审计' : 'Webhook ingress audit'}
+                        {zh ? 'Webhook事件' : 'Webhook events'}
                       </span>
                       <h2>
                         {zh
@@ -1252,6 +1258,7 @@ function EventSourceEditor(props: {
   const [action, setAction] = useState<'save' | 'validate' | 'publish' | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [validation, setValidation] = useState<string | null>(null)
+  const [validationSetupOpen, setValidationSetupOpen] = useState(false)
   const authoring = useQuery<CustomSourceAuthoring>({
     queryKey: ['event-center', 'custom-source', props.sourceId],
     queryFn: ({ signal }) =>
@@ -1271,6 +1278,7 @@ function EventSourceEditor(props: {
       ingestionMode: draft.ingestionMode,
       language: draft.program.language,
       source: draft.program.source,
+      sourceTemplateManaged: draft.program.templateManaged === true,
       timeoutSeconds: draft.program.timeoutMs / 1_000,
       cursorJson: draft.fixture.cursorJson ?? '',
       eventTypes: draft.eventTypes.map((event) => ({
@@ -1296,8 +1304,8 @@ function EventSourceEditor(props: {
   const body = useMemo<CustomSourceDraft>(() => {
     const subjects = new Map<string, string>()
     for (const event of form.eventTypes) {
-      if (!subjects.has(event.subjectTypeId)) {
-        subjects.set(event.subjectTypeId, event.fixtureSubjectRef)
+      if (!subjects.has(event.subjectTypeId) && event.fixtureSubjectRef.trim() !== '') {
+        subjects.set(event.subjectTypeId, event.fixtureSubjectRef.trim())
       }
     }
     return {
@@ -1310,6 +1318,7 @@ function EventSourceEditor(props: {
       program: {
         language: form.language,
         source: form.source,
+        templateManaged: form.sourceTemplateManaged,
         timeoutMs: Math.round(form.timeoutSeconds * 1_000),
       },
       eventTypes: form.eventTypes.map(
@@ -1333,7 +1342,7 @@ function EventSourceEditor(props: {
     }
   }, [form])
 
-  const valid =
+  const draftValid =
     form.displayName['zh-CN'].trim() !== '' &&
     form.displayName['en-US'].trim() !== '' &&
     form.description['zh-CN'].trim() !== '' &&
@@ -1353,7 +1362,6 @@ function EventSourceEditor(props: {
         event.displayName['en-US'].trim() !== '' &&
         event.description['zh-CN'].trim() !== '' &&
         event.description['en-US'].trim() !== '' &&
-        event.fixtureSubjectRef.trim() !== '' &&
         (event.triggerParameters === null ||
           (event.triggerParameters.namespace.trim() !== '' &&
             event.triggerParameters.fields.length > 0 &&
@@ -1367,6 +1375,8 @@ function EventSourceEditor(props: {
             ))),
     )
 
+  const fixtureValid = form.eventTypes.every((event) => event.fixtureSubjectRef.trim() !== '')
+
   async function saveDraft(): Promise<string> {
     const id = workingId
     const saved =
@@ -1379,6 +1389,18 @@ function EventSourceEditor(props: {
   }
 
   async function run(next: 'save' | 'validate' | 'publish'): Promise<void> {
+    if (next !== 'save' && !fixtureValid) {
+      setValidationSetupOpen(true)
+      setValidation(null)
+      setError(
+        new Error(
+          zh
+            ? '运行验证或发布前，请在“发布前验证”中填写一个真实测试对象。保存草稿不需要填写。'
+            : 'Before validation or publish, add one real test object under “Pre-publish validation”. Saving a draft does not require it.',
+        ),
+      )
+      return
+    }
     setAction(next)
     setError(null)
     setValidation(null)
@@ -1408,12 +1430,14 @@ function EventSourceEditor(props: {
   }
 
   function updateEvent(index: number, patch: Partial<CustomEventTypeDraft>): void {
-    setForm((current) => ({
-      ...current,
-      eventTypes: current.eventTypes.map((event, eventIndex) =>
-        eventIndex === index ? { ...event, ...patch } : event,
+    setForm((current) =>
+      withSynchronizedEventTypes(
+        current,
+        current.eventTypes.map((event, eventIndex) =>
+          eventIndex === index ? { ...event, ...patch } : event,
+        ),
       ),
-    }))
+    )
   }
 
   function updateTriggerField(
@@ -1421,21 +1445,23 @@ function EventSourceEditor(props: {
     fieldIndex: number,
     patch: Partial<NonNullable<CustomEventTypeDraft['triggerParameters']>['fields'][number]>,
   ): void {
-    setForm((current) => ({
-      ...current,
-      eventTypes: current.eventTypes.map((event, index) => {
-        if (index !== eventIndex || event.triggerParameters === null) return event
-        return {
-          ...event,
-          triggerParameters: {
-            ...event.triggerParameters,
-            fields: event.triggerParameters.fields.map((field, index) =>
-              index === fieldIndex ? { ...field, ...patch } : field,
-            ),
-          },
-        }
-      }),
-    }))
+    setForm((current) =>
+      withSynchronizedEventTypes(
+        current,
+        current.eventTypes.map((event, index) => {
+          if (index !== eventIndex || event.triggerParameters === null) return event
+          return {
+            ...event,
+            triggerParameters: {
+              ...event.triggerParameters,
+              fields: event.triggerParameters.fields.map((field, index) =>
+                index === fieldIndex ? { ...field, ...patch } : field,
+              ),
+            },
+          }
+        }),
+      ),
+    )
   }
 
   return (
@@ -1445,8 +1471,8 @@ function EventSourceEditor(props: {
       title={
         props.sourceId === null
           ? zh
-            ? '新增事件来源'
-            : 'New event source'
+            ? '新建自定义事件'
+            : 'New custom event'
           : zh
             ? '编辑事件来源'
             : 'Edit event source'
@@ -1462,7 +1488,7 @@ function EventSourceEditor(props: {
           <button
             type="button"
             className="btn"
-            disabled={!valid || action !== null || authoringLoading}
+            disabled={!draftValid || action !== null || authoringLoading}
             onClick={() => void run('save')}
           >
             {action === 'save' ? (zh ? '保存中…' : 'Saving…') : zh ? '保存草稿' : 'Save draft'}
@@ -1470,7 +1496,7 @@ function EventSourceEditor(props: {
           <button
             type="button"
             className="btn"
-            disabled={!valid || action !== null || authoringLoading}
+            disabled={!draftValid || action !== null || authoringLoading}
             onClick={() => void run('validate')}
             data-testid="event-source-validate"
           >
@@ -1485,7 +1511,7 @@ function EventSourceEditor(props: {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!valid || action !== null || authoringLoading}
+            disabled={!draftValid || action !== null || authoringLoading}
             onClick={() => void run('publish')}
             data-testid="event-source-publish"
           >
@@ -1614,13 +1640,12 @@ function EventSourceEditor(props: {
               type="button"
               className="btn btn--sm"
               onClick={() =>
-                setForm((current) => ({
-                  ...current,
-                  eventTypes: [
+                setForm((current) =>
+                  withSynchronizedEventTypes(current, [
                     ...current.eventTypes,
                     initialEvent(nextEventKey(current.eventTypes)),
-                  ],
-                }))
+                  ]),
+                )
               }
             >
               {zh ? '增加事件种类' : 'Add event type'}
@@ -1636,12 +1661,12 @@ function EventSourceEditor(props: {
                       type="button"
                       className="btn btn--sm"
                       onClick={() =>
-                        setForm((current) => ({
-                          ...current,
-                          eventTypes: current.eventTypes.filter(
-                            (_, itemIndex) => itemIndex !== index,
+                        setForm((current) =>
+                          withSynchronizedEventTypes(
+                            current,
+                            current.eventTypes.filter((_, itemIndex) => itemIndex !== index),
                           ),
-                        }))
+                        )
                       }
                     >
                       {zh ? '移除' : 'Remove'}
@@ -1729,7 +1754,7 @@ function EventSourceEditor(props: {
                         onClick={() =>
                           updateEvent(index, {
                             triggerParameters: {
-                              namespace: triggerNamespaceFromEventKey(event.eventKey),
+                              namespace: '',
                               fields: [initialTriggerField()],
                             },
                           })
@@ -1753,7 +1778,11 @@ function EventSourceEditor(props: {
                         <Field label={zh ? '参数命名空间' : 'Parameter namespace'} required>
                           <TextInput
                             value={event.triggerParameters.namespace}
-                            placeholder={zh ? '例如：issue' : 'For example: issue'}
+                            placeholder={
+                              zh
+                                ? `例如：${triggerNamespaceFromEventKey(event.eventKey)}`
+                                : `For example: ${triggerNamespaceFromEventKey(event.eventKey)}`
+                            }
                             onChange={(value) =>
                               updateEvent(index, {
                                 triggerParameters: {
@@ -1799,7 +1828,7 @@ function EventSourceEditor(props: {
                               ) : null}
                             </div>
                             <code className="event-source-editor__parameter-path">
-                              {`trigger.${event.triggerParameters!.namespace}.${field.fieldId || (zh ? '<参数键>' : '<parameter-key>')}`}
+                              {`trigger.${event.triggerParameters!.namespace || (zh ? '<命名空间>' : '<namespace>')}.${field.fieldId || (zh ? '<参数键>' : '<parameter-key>')}`}
                             </code>
                             <div className="event-source-editor__grid">
                               <Field label={zh ? '参数键' : 'Parameter key'} required>
@@ -1902,33 +1931,21 @@ function EventSourceEditor(props: {
             </code>
           </NoticeBanner>
           <div className="event-source-editor__grid">
-            <Field
-              label={zh ? '验证对象 ID' : 'Fixture object ID'}
-              hint={
-                zh
-                  ? '填写一个在来源系统中真实存在的对象；发布前平台会用它运行一次脚本。'
-                  : 'Enter a real object from the source system. The platform runs the program against it before publish.'
-              }
-              required
-            >
-              <TextInput
-                value={form.eventTypes[0]?.fixtureSubjectRef ?? ''}
-                placeholder={zh ? '例如：ISSUE-1234' : 'For example: ISSUE-1234'}
-                onChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    eventTypes: current.eventTypes.map((event) => ({
-                      ...event,
-                      fixtureSubjectRef: value,
-                    })),
-                  }))
-                }
-              />
-            </Field>
             <Field label={zh ? '脚本语言' : 'Program language'} group required>
               <Select
                 value={form.language}
-                onChange={(value) => setForm((current) => ({ ...current, language: value }))}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    language: value,
+                    source: syncManagedObserverSource({
+                      language: value,
+                      source: current.source,
+                      templateManaged: current.sourceTemplateManaged,
+                      events: current.eventTypes,
+                    }),
+                  }))
+                }
                 options={[
                   { value: 'node', label: 'Node.js' },
                   { value: 'python', label: 'Python' },
@@ -1960,25 +1977,78 @@ function EventSourceEditor(props: {
               rows={18}
               monospace
               value={form.source}
-              onChange={(value) => setForm((current) => ({ ...current, source: value }))}
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  source: value,
+                  sourceTemplateManaged: false,
+                }))
+              }
               data-testid="event-source-program"
             />
           </Field>
-          <Field
-            label={zh ? '样例 Cursor（可选 JSON）' : 'Fixture cursor (optional JSON)'}
-            hint={
-              zh
-                ? '验证成功后的生产游标由平台持久化。'
-                : 'The platform persists production cursors after successful runs.'
-            }
+          <details
+            className="event-source-editor__technical-details"
+            open={validationSetupOpen}
+            onToggle={(event) => setValidationSetupOpen(event.currentTarget.open)}
           >
-            <TextArea
-              rows={3}
-              monospace
-              value={form.cursorJson}
-              onChange={(value) => setForm((current) => ({ ...current, cursorJson: value }))}
-            />
-          </Field>
+            <summary>
+              {zh ? '发布前验证（按需填写）' : 'Pre-publish validation (on demand)'}
+            </summary>
+            <p>
+              {zh
+                ? '测试对象只用于在验证或发布时真实运行一次脚本，不属于事件参数，也不会注入任务；保存草稿无需填写。'
+                : 'The test object only runs the program during validation or publish. It is not an event parameter and is never injected into tasks. Drafts can be saved without it.'}
+            </p>
+            <div className="event-source-editor__grid">
+              {[...new Set(form.eventTypes.map((event) => event.subjectTypeId))].map(
+                (subjectTypeId) => (
+                  <Field
+                    key={subjectTypeId}
+                    label={zh ? `测试对象（${subjectTypeId}）` : `Test object (${subjectTypeId})`}
+                    hint={
+                      zh
+                        ? '填写来源系统中真实存在、可由脚本读取的对象 ID。'
+                        : 'Enter a real object ID that the program can read from the source system.'
+                    }
+                  >
+                    <TextInput
+                      value={
+                        form.eventTypes.find((event) => event.subjectTypeId === subjectTypeId)
+                          ?.fixtureSubjectRef ?? ''
+                      }
+                      placeholder={zh ? '例如：ISSUE-1234' : 'For example: ISSUE-1234'}
+                      onChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          eventTypes: current.eventTypes.map((event) =>
+                            event.subjectTypeId === subjectTypeId
+                              ? { ...event, fixtureSubjectRef: value }
+                              : event,
+                          ),
+                        }))
+                      }
+                    />
+                  </Field>
+                ),
+              )}
+              <Field
+                label={zh ? '起始游标（可选 JSON）' : 'Initial cursor (optional JSON)'}
+                hint={
+                  zh
+                    ? '只影响本次验证；生产游标由平台独立持久化。'
+                    : 'Only affects this validation run. Production cursors are persisted separately.'
+                }
+              >
+                <TextArea
+                  rows={3}
+                  monospace
+                  value={form.cursorJson}
+                  onChange={(value) => setForm((current) => ({ ...current, cursorJson: value }))}
+                />
+              </Field>
+            </div>
+          </details>
         </section>
       </div>
     </Dialog>

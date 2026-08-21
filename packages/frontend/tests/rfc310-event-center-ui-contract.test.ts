@@ -14,6 +14,12 @@ const responseRules = readFileSync(
   resolve(FRONTEND, 'components', 'events', 'EventResponseRulesPanel.tsx'),
   'utf8',
 )
+const endpointCard = readFileSync(
+  resolve(FRONTEND, 'components', 'WebhookEndpointCard.tsx'),
+  'utf8',
+)
+const zh = readFileSync(resolve(FRONTEND, 'i18n', 'zh-CN.ts'), 'utf8')
+const styles = readFileSync(resolve(FRONTEND, 'styles.css'), 'utf8')
 
 describe('RFC-310 global Event Center UI contract', () => {
   test('is a global operations route instead of a digital-employee tab', () => {
@@ -35,7 +41,19 @@ describe('RFC-310 global Event Center UI contract', () => {
     expect(events).toContain("zh ? '参数命名空间' : 'Parameter namespace'")
     expect(events).toContain('key={field.editorKey}')
     expect(events).toContain('triggerNamespaceFromEventKey(event.eventKey)')
+    expect(events).toContain("namespace: ''")
     expect(events).not.toContain("namespace: 'custom_event'")
+    expect(events).toContain("zh ? '发布前验证（按需填写）'")
+    expect(events).toContain('保存草稿无需填写')
+    expect(events).not.toContain("label={zh ? '验证对象 ID'")
+    expect(events).toContain('sourceTemplateManaged')
+    expect(events).toContain('syncManagedObserverSource')
+    expect(events).toContain("zh ? '新建自定义事件' : 'New custom event'")
+    expect(events).toContain('btn btn--primary event-source-create-action')
+    expect(endpointCard).toContain('btn btn--primary event-source-create-action')
+    expect(zh).toContain("add: '新建Webhook端点'")
+    expect(styles).toContain('.event-source-create-action')
+    expect(styles).toContain('inline-size: 176px')
   })
 
   test('owns Webhook as a push-source family and retires the standalone navigation page', () => {
@@ -80,6 +98,10 @@ describe('RFC-310 global Event Center UI contract', () => {
     expect(responseRules).toContain('selectedEvent.subjectTypeId')
     expect(responseRules).toContain('event:workflow:input')
     expect(responseRules).toContain('event:digital-employee:target')
-    expect(events).toContain('现有代码平台 Webhook 规则')
+    expect(events).toContain('Webhook 触发订阅')
+    expect(events).not.toContain("zh ? '兼容配置' : 'Compatibility'")
+    expect(responseRules).not.toContain('action={newAction}')
+    expect(events).toContain("label: zh ? '投递记录' : 'Delivery records'")
+    expect(events).toContain("label: zh ? 'Webhook事件' : 'Webhook events'")
   })
 })

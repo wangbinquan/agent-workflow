@@ -171,6 +171,15 @@ export function createCustomEventObserverProgram(input: {
     },
 
     async validate(request) {
+      const fixtureTypes = new Set(request.draft.fixture.subjects.map((subject) => subject.typeId))
+      if (request.draft.fixture.subjects.length === 0) {
+        throw new Error('validation needs at least one real test object')
+      }
+      for (const event of request.draft.eventTypes) {
+        if (!fixtureTypes.has(event.subjectTypeId)) {
+          throw new Error(`validation needs a test object for subject type: ${event.subjectTypeId}`)
+        }
+      }
       const result = await execute({
         sourceRef: request.sourceRef,
         draft: request.draft,

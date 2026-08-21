@@ -366,6 +366,9 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       },
       repoRemote: { resolve: () => ({ remoteUrl: remoteRepo, defaultBranch: 'main' }) },
       mrEffects: {
+        async reply() {
+          return { ok: true as const, noteRef: 'note-1' }
+        },
         async ensure() {
           ensureCalls += 1
           return {

@@ -84,7 +84,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 2 } as const
+const typeRef = { typeId: 'development', revision: 3 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 
 const scopeSchema = z.discriminatedUnion('kind', [
@@ -218,13 +218,13 @@ const contracts: WorkContract[] = [
     'development.classify-feedback',
     'development.review-evidence.v1',
     'development.problem-set.v1',
-    '未处理的 MR 检视意见和当前代码上下文',
-    'Unhandled merge-request review feedback and current code context',
-    '只产出类型化问题集合，不选择下一动作',
-    'Produces only a typed problem set and does not select the next action',
-    ['agent', 'workflow', 'program'],
+    '当前 MR 的全部未处理、非自身检视意见',
+    'Every unresolved non-self review thread on the current merge request',
+    '平台逐条归一化为可追溯问题集合，不遗漏、不合并，也不选择下一动作',
+    'The platform normalizes every thread into a traceable problem set without omission, merging, or action selection',
     [],
-    READ_ONLY,
+    [],
+    NO_WORKSPACE,
   ),
   contract(
     'development.repair-feedback',
@@ -256,8 +256,8 @@ const contracts: WorkContract[] = [
     'development.problem-set.v1',
     '结构化门禁结果和大日志 artifact 引用',
     'Structured gate results and large-log artifact references',
-    '产出闭集流水线问题类型，未知项明确进入兜底类型',
-    'Produces closed pipeline problem types with explicit unknown fallback',
+    '只产出闭集失败类型集合；平台随后按固定优先级逐类调度，未知项进入兜底类型',
+    'Produces only a closed failure-type set; the platform then dispatches each type by fixed priority with an explicit unknown fallback',
     ['agent', 'workflow', 'program'],
     [],
     READ_ONLY,
@@ -336,12 +336,12 @@ const contracts: WorkContract[] = [
   ),
   contract(
     'development.prepare-approval',
-    'development.delegated-result.v1',
+    'development.merge-request-context.v1',
     'development.approval-draft.v1',
-    '协同结果、审批类型和审批系统连接',
-    'Collaboration result, approval type, and approval-system connection',
-    '形成严格审批草稿引用；Agent 不持有凭据且不能直接提交',
-    'Produces a strict approval draft reference without credentials or direct submission',
+    '当前 MR 门禁事实、审批类型和审批系统连接',
+    'Current merge-request gate facts, approval type, and approval-system connection',
+    '形成绑定当前 MR head 的严格审批草稿引用；Agent 不持有凭据且不能直接提交',
+    'Produces a strict approval draft bound to the current MR head without credentials or direct submission',
     ['agent', 'workflow', 'program'],
     [],
     READ_ONLY,
@@ -369,6 +369,30 @@ const contracts: WorkContract[] = [
     'A short call returns pending, approved, rejected, expired, or unavailable',
     [],
     ['external-approval.observe'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.acknowledge-feedback',
+    'development.review-resolution.v1',
+    'development.review-resolution.v1',
+    '待处理检视线程和当前 MR',
+    'Actionable review threads and the current merge request',
+    '平台已逐线程回复收到并保存幂等笔迹',
+    'The platform has acknowledged every thread and recorded idempotent markers',
+    [],
+    ['code-host.merge-request.reply'],
+    NO_WORKSPACE,
+  ),
+  contract(
+    'development.reply-feedback',
+    'development.review-resolution.v1',
+    'development.review-resolution.v1',
+    '已发布提交和 Agent 逐线程处理说明',
+    'The published commit and the Agent treatment for every thread',
+    '平台已把每条处理说明回复到原线程并保存回执',
+    'The platform has replied to every original thread and recorded receipts',
+    [],
+    ['code-host.merge-request.reply'],
     NO_WORKSPACE,
   ),
 ]
@@ -611,9 +635,14 @@ const outputFields: ExecutionContractField[] = [
 
 const inputDetailsByContract: Record<
   string,
-  { readonly fields: readonly ExecutionContractField[]; readonly contractInput: unknown }
+  {
+    readonly primaryFieldPaths: readonly string[]
+    readonly fields: readonly ExecutionContractField[]
+    readonly contractInput: unknown
+  }
 > = {
   'development.prepare-materials': {
+    primaryFieldPaths: ['contractInput.workRequest.externalId'],
     fields: [
       contractField(
         'contractInput.workRequest.kind',
@@ -672,6 +701,7 @@ const inputDetailsByContract: Record<
     },
   },
   'development.collect-pipeline': {
+    primaryFieldPaths: ['contractInput.mergeRequest.mergeRequestRef'],
     fields: [
       contractField(
         'contractInput.mergeRequest.mergeRequestRef',
@@ -775,6 +805,7 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
         displayName: text('确定性输入 envelope', 'Deterministic input envelope'),
         description: workContract.materialSummary,
         topLevelFields: Object.keys(inputExample),
+        primaryFieldPaths: [...(details?.primaryFieldPaths ?? ['contractInput'])],
         fields: [...commonInputFields, ...(details?.fields ?? [])],
         exampleJson: JSON.stringify(inputExample, null, 2),
       },
@@ -783,6 +814,7 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
         displayName: text('确定性输出 envelope', 'Deterministic output envelope'),
         description: workContract.completionStandard,
         topLevelFields: [...outputTopLevelFields],
+        primaryFieldPaths: ['summary'],
         fields: outputFields,
         exampleJson: JSON.stringify(
           {
@@ -835,14 +867,14 @@ const legacyBuiltinAgentContractRefs: Readonly<
 > = {
   'code-writing': [
     { contractId: 'development.analyze-implement', version: 1 },
-    { contractId: 'development.repair-feedback', version: 1 },
     { contractId: 'development.repair-conflict', version: 1 },
   ],
-  'problem-diagnosis': [
-    { contractId: 'development.classify-feedback', version: 1 },
-    { contractId: 'development.classify-pipeline', version: 1 },
-  ],
+  'problem-diagnosis': [{ contractId: 'development.classify-pipeline', version: 1 }],
   'pipeline-repair': [{ contractId: 'development.repair-pipeline', version: 1 }],
+  'review-repair': [{ contractId: 'development.repair-feedback', version: 1 }],
+  'conflict-repair': [{ contractId: 'development.repair-conflict', version: 1 }],
+  'business-implementation': [{ contractId: 'development.analyze-implement', version: 1 }],
+  'issue-repair': [{ contractId: 'development.analyze-implement', version: 1 }],
 }
 
 /**
@@ -880,27 +912,40 @@ const primaryRole = (
   },
 ]
 
-const pipelineRepairSlots = [
-  ['compile', '编译错误', 'Compile failures'],
-  ['unit-test', '单元测试错误', 'Unit-test failures'],
-  ['integration-test', '集成测试错误', 'Integration-test failures'],
-  ['static-analysis', '静态检查错误', 'Static-analysis failures'],
-  ['environment', '环境与依赖错误', 'Environment and dependency failures'],
-  ['unknown', '未知错误兜底', 'Unknown failure fallback'],
-] as const
+const pipelineFailureTypeSchema = z
+  .string()
+  .min(1)
+  .max(160)
+  .regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/)
+  .refine((value) => value !== 'review', 'review is reserved for review feedback')
 
-const pipelineFailureTypeSchema = z.enum([
-  'compile',
-  'unit-test',
-  'integration-test',
-  'static-analysis',
-  'environment',
-  'external-dependency',
-  'unknown',
-])
-
-const pipelineRepairPriority = pipelineRepairSlots.map(([slotRef]) => slotRef)
-const pipelineFailurePriority = [...pipelineRepairPriority, 'external-dependency'] as const
+const orderedDispatchConfigurationRuntimeSchema = z
+  .array(
+    z
+      .object({
+        classifierWorkItemRef: z.string().min(1).max(160),
+        routes: z
+          .array(
+            z
+              .object({
+                routeRef: pipelineFailureTypeSchema,
+                displayName: z.string().min(1).max(200),
+                description: z.string().max(2_000),
+                destinationWorkItemRef: z.string().min(1).max(160),
+                registrationRef: z
+                  .object({ id: z.string().min(1), revision: z.number().int().positive() })
+                  .strict()
+                  .nullable(),
+                fallback: z.boolean(),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(100),
+      })
+      .strict(),
+  )
+  .max(100)
 
 const runtimePackage = {
   descriptor: {
@@ -1058,16 +1103,18 @@ const runtimePackage = {
               description: text('识别意见并完成修复', 'Classify and repair review feedback'),
               order: 10,
               kind: 'branch',
+              optional: true,
             },
             {
               laneId: 'care-pipeline',
               label: text('流水线门禁', 'Pipeline gates'),
               description: text(
-                '取得门禁、分类失败并按类型修绿',
-                'Collect, classify, and repair gates',
+                '取得证据、归类失败，再按固定优先级逐类修绿',
+                'Collect evidence, classify failures, then repair each type by fixed priority',
               ),
               order: 20,
               kind: 'branch',
+              optional: true,
             },
             {
               laneId: 'care-conflict',
@@ -1078,13 +1125,29 @@ const runtimePackage = {
               ),
               order: 30,
               kind: 'branch',
+              optional: true,
             },
             {
-              laneId: 'care-coordination',
-              label: text('跨仓与审批门禁', 'Cross-repo and approval'),
-              description: text('调起其他员工并等待外部审批', 'Delegate work and await approval'),
+              laneId: 'care-collaboration',
+              label: text('员工协同', 'Employee collaboration'),
+              description: text(
+                '调起其他数字员工并等待其工作结果',
+                'Invoke another digital employee and wait for its result',
+              ),
               order: 40,
               kind: 'branch',
+              optional: true,
+            },
+            {
+              laneId: 'care-approval',
+              label: text('外部审批门禁', 'External approval gate'),
+              description: text(
+                '独立准备、提交并等待外部系统审批',
+                'Independently prepare, submit, and await external approval',
+              ),
+              order: 50,
+              kind: 'branch',
+              optional: true,
             },
             {
               laneId: 'care-readiness',
@@ -1093,7 +1156,7 @@ const runtimePackage = {
                 '持续判断随时可合入并等待 committer',
                 'Stay merge-ready and await a committer',
               ),
-              order: 50,
+              order: 60,
               kind: 'branch',
             },
           ],
@@ -1149,10 +1212,10 @@ const runtimePackage = {
           regionId: 'delivery',
           responsibilityLaneId: 'delivery-main',
           order: 30,
-          label: text('形成修改候选', 'Prepare change candidate'),
+          label: text('校验并冻结代码修改', 'Validate and freeze code changes'),
           description: text(
-            '平台校验 envelope 和工作区差异',
-            'The platform validates the envelope and workspace delta',
+            '只校验 envelope 与工作区差异并冻结待提交快照，不 commit、不 push',
+            'Validate the envelope and workspace delta, then freeze a pending snapshot without commit or push',
           ),
           workContractRef: { contractId: 'development.prepare-change', version: 1 },
           materialSummary: contracts[2]!.materialSummary,
@@ -1176,7 +1239,7 @@ const runtimePackage = {
           completionStandard: contracts[3]!.completionStandard,
           nodeKind: 'system',
           toolRoleGroups: [],
-          nextWorkItemRefs: ['observe-mr'],
+          nextWorkItemRefs: ['observe-mr', 'reply-feedback'],
         },
         {
           workItemRef: 'observe-mr',
@@ -1197,6 +1260,7 @@ const runtimePackage = {
             'classify-feedback',
             'collect-pipeline',
             'repair-conflict',
+            'prepare-approval',
             'evaluate-ready',
           ],
         },
@@ -1205,21 +1269,33 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-review',
           order: 60,
-          label: text('识别检视问题', 'Classify review feedback'),
+          label: text('汇总待处理检视意见', 'Collect actionable review feedback'),
           description: text(
-            '把检视意见转换为闭集问题类型',
-            'Convert review feedback into closed problem types',
+            '平台收集当前 MR 全部未处理、非自身意见并逐条形成问题集合',
+            'The platform collects every unresolved non-self thread and creates one problem per thread',
           ),
           workContractRef: { contractId: 'development.classify-feedback', version: 1 },
           materialSummary: contracts[5]!.materialSummary,
           completionStandard: contracts[5]!.completionStandard,
-          nodeKind: 'business-tool',
-          toolRoleGroups: primaryRole(
-            '问题识别者',
-            'Problem recognizer',
-            '只生产问题集合',
-            'Produces only a problem set',
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['acknowledge-feedback'],
+        },
+        {
+          workItemRef: 'acknowledge-feedback',
+          regionId: 'care',
+          responsibilityLaneId: 'care-review',
+          order: 65,
+          label: text('回复已收到', 'Acknowledge review feedback'),
+          description: text(
+            '平台逐线程回复固定收到消息，并以自身标记防止重复触发',
+            'The platform acknowledges every thread and marks its own replies to prevent retriggering',
           ),
+          workContractRef: { contractId: 'development.acknowledge-feedback', version: 1 },
+          materialSummary: contracts[18]!.materialSummary,
+          completionStandard: contracts[18]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
           nextWorkItemRefs: ['repair-feedback'],
         },
         {
@@ -1243,6 +1319,23 @@ const runtimePackage = {
             'Repair review problems',
           ),
           nextWorkItemRefs: ['prepare-change'],
+        },
+        {
+          workItemRef: 'reply-feedback',
+          regionId: 'care',
+          responsibilityLaneId: 'care-review',
+          order: 75,
+          label: text('回复修复结果', 'Reply with repair result'),
+          description: text(
+            '提交更新 MR 后，平台把 Agent 的逐线程处理说明回复到原意见',
+            'After updating the MR, the platform replies to each thread with the Agent treatment',
+          ),
+          workContractRef: { contractId: 'development.reply-feedback', version: 1 },
+          materialSummary: contracts[19]!.materialSummary,
+          completionStandard: contracts[19]!.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
+          nextWorkItemRefs: ['observe-mr'],
         },
         {
           workItemRef: 'collect-pipeline',
@@ -1271,15 +1364,23 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-pipeline',
           order: 90,
-          label: text('识别流水线问题', 'Classify pipeline failures'),
+          label: text('归类流水线失败', 'Classify pipeline failures'),
           description: text(
-            '从结构化结果和日志引用生产问题集合',
-            'Produce a problem set from structured results and log references',
+            '按岗位中配置的错误类型列表归类；列表顺序就是确定性处理优先级',
+            'Classify against the job-configured failure list; list order is deterministic priority',
           ),
           workContractRef: { contractId: 'development.classify-pipeline', version: 1 },
           materialSummary: contracts[8]!.materialSummary,
           completionStandard: contracts[8]!.completionStandard,
           nodeKind: 'business-tool',
+          orderedDispatchAuthoring: {
+            label: text('流水线错误类型与处理方式', 'Pipeline failure types and handlers'),
+            description: text(
+              '逐项定义错误类型、优先级，以及交给修复工具还是协同员工处理',
+              'Define each failure type, its priority, and whether a repair tool or another employee handles it',
+            ),
+            destinationWorkItemRefs: ['repair-pipeline', 'delegate'],
+          },
           toolRoleGroups: primaryRole(
             '问题识别者',
             'Problem recognizer',
@@ -1295,8 +1396,8 @@ const runtimePackage = {
           order: 100,
           label: text('修复流水线问题', 'Repair pipeline failures'),
           description: text(
-            '不同错误类型使用对应的 Agent、Workflow 或程序',
-            'Use the bound Agent, Workflow, or program for each failure type',
+            '每种失败类型绑定独立工具；平台按优先级逐类动态调度',
+            'Bind a tool per failure type; the platform dispatches them dynamically by priority',
           ),
           workContractRef: { contractId: 'development.repair-pipeline', version: 1 },
           materialSummary: contracts[9]!.materialSummary,
@@ -1307,21 +1408,14 @@ const runtimePackage = {
               roleRef: 'repairer',
               label: text('问题修复', 'Problem repair'),
               description: text(
-                '每种流水线错误类型绑定一个修复工具',
-                'Bind one repair tool for each pipeline failure type',
+                '在归类节点把每种错误类型绑定到这里的一个工具',
+                'Bind every configured failure type to one tool from this node',
               ),
               order: 0,
-              bindingSlots: pipelineRepairSlots.map(([slotRef, zh, en]) => ({
-                slotRef,
-                label: text(zh, en),
-                description: text(`处理${zh}`, `Handles ${en.toLowerCase()}`),
-                required: slotRef === 'unknown',
-                cardinality:
-                  slotRef === 'unknown' ? ('exactly-one' as const) : ('zero-or-one' as const),
-              })),
+              bindingSlots: [],
             },
           ],
-          nextWorkItemRefs: ['repair-pipeline', 'prepare-change'],
+          nextWorkItemRefs: ['repair-pipeline', 'delegate', 'prepare-change'],
         },
         {
           workItemRef: 'repair-conflict',
@@ -1350,10 +1444,10 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-conflict',
           order: 115,
-          label: text('发布冲突修复', 'Publish conflict repair'),
+          label: text('提交冲突修复', 'Commit conflict repair'),
           description: text(
-            '平台生成 merge commit、CAS 推送并刷新 MR head',
-            'The platform creates the merge commit, CAS-pushes it, and refreshes the MR head',
+            '平台生成 merge commit、CAS 推送到远端并刷新 MR head',
+            'The platform creates a merge commit, CAS-pushes it to the remote, and refreshes the MR head',
           ),
           workContractRef: { contractId: 'development.publish-conflict', version: 1 },
           materialSummary: contracts[14]!.materialSummary,
@@ -1365,7 +1459,7 @@ const runtimePackage = {
         {
           workItemRef: 'delegate',
           regionId: 'care',
-          responsibilityLaneId: 'care-coordination',
+          responsibilityLaneId: 'care-collaboration',
           order: 120,
           label: text('协同其他数字员工', 'Collaborate with another employee'),
           description: text(
@@ -1378,17 +1472,17 @@ const runtimePackage = {
           nodeKind: 'collaboration',
           collaborationContractId: 'development.cross-repository-work',
           toolRoleGroups: [],
-          nextWorkItemRefs: ['prepare-approval'],
+          nextWorkItemRefs: ['collect-pipeline'],
         },
         {
           workItemRef: 'prepare-approval',
           regionId: 'care',
-          responsibilityLaneId: 'care-coordination',
+          responsibilityLaneId: 'care-approval',
           order: 122,
           label: text('准备外部审批', 'Prepare external approval'),
           description: text(
-            '根据协同结果形成审批材料；执行工具不持有审批系统凭据',
-            'Prepare approval material from collaboration results without approval credentials',
+            '根据当前 MR 门禁形成审批材料；执行工具不持有审批系统凭据',
+            'Prepare approval material from current MR gates without approval credentials',
           ),
           workContractRef: { contractId: 'development.prepare-approval', version: 1 },
           materialSummary: contracts[15]!.materialSummary,
@@ -1405,7 +1499,7 @@ const runtimePackage = {
         {
           workItemRef: 'submit-approval',
           regionId: 'care',
-          responsibilityLaneId: 'care-coordination',
+          responsibilityLaneId: 'care-approval',
           order: 124,
           label: text('提交外部审批', 'Submit external approval'),
           description: text(
@@ -1422,7 +1516,7 @@ const runtimePackage = {
         {
           workItemRef: 'observe-approval',
           regionId: 'care',
-          responsibilityLaneId: 'care-coordination',
+          responsibilityLaneId: 'care-approval',
           order: 126,
           label: text('等待外部审批', 'Wait for external approval'),
           description: text(
@@ -1434,7 +1528,7 @@ const runtimePackage = {
           completionStandard: contracts[17]!.completionStandard,
           nodeKind: 'system',
           toolRoleGroups: [],
-          nextWorkItemRefs: ['collect-pipeline'],
+          nextWorkItemRefs: ['observe-mr'],
         },
         {
           workItemRef: 'evaluate-ready',
@@ -1792,8 +1886,9 @@ const runtimePackage = {
         priority: 900,
         preemptsContinuation: true,
         requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
-        workItemRef: 'classify-feedback',
-        slotRef: 'default',
+        capabilityWorkItemRef: 'classify-feedback',
+        workItemRef: 'observe-mr',
+        slotRef: 'system',
         allowedEffectKinds: [],
       },
       {
@@ -1812,8 +1907,9 @@ const runtimePackage = {
         priority: 800,
         preemptsContinuation: true,
         requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
-        workItemRef: 'repair-conflict',
-        slotRef: 'default',
+        capabilityWorkItemRef: 'repair-conflict',
+        workItemRef: 'observe-mr',
+        slotRef: 'system',
         allowedEffectKinds: [],
       },
       {
@@ -2003,10 +2099,25 @@ const reviewThreadContextSchema = z
     resolved: z.boolean(),
     body: z.string().max(32_000),
     path: z.string().min(1).max(1_000).nullable(),
+    messages: z
+      .array(
+        z
+          .object({
+            messageRef: z.string().min(1).max(500),
+            parentMessageRef: z.string().min(1).max(500).nullable(),
+            authorClass: z.enum(['human', 'bot', 'self']),
+            body: z.string().max(32_000),
+            path: z.string().min(1).max(1_000).nullable(),
+            createdAt: z.string().nullable(),
+          })
+          .strict(),
+      )
+      .max(500)
+      .default([]),
   })
   .strict()
 
-const mergeRequestContextSchema = z
+export const mergeRequestContextSchema = z
   .object({
     status: z.enum(['active', 'merged', 'closed']),
     mergeRequestRef: z.string().min(1).max(1_000),
@@ -2074,7 +2185,7 @@ const pipelineContextSchema = z
 
 const problemTypeSchema = z.union([z.literal('review'), pipelineFailureTypeSchema])
 
-const problemSetContextSchema = z
+export const problemSetContextSchema = z
   .object({
     status: z.enum(['active', 'resolved']),
     source: z.enum(['review', 'pipeline']),
@@ -2091,6 +2202,7 @@ const problemSetContextSchema = z
             type: problemTypeSchema,
             summary: z.string().min(1).max(2_000),
             evidenceArtifactRefs: z.array(z.string().min(1).max(1_000)).max(100),
+            reviewThread: reviewThreadContextSchema.nullable().default(null),
           })
           .strict(),
       )
@@ -2098,11 +2210,12 @@ const problemSetContextSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    const allowed =
-      value.source === 'review' ? new Set(['review']) : new Set(pipelineFailurePriority)
     const seen = new Set<string>()
     for (const type of value.remainingTypes) {
-      if (!allowed.has(type)) {
+      if (
+        (value.source === 'review' && type !== 'review') ||
+        (value.source === 'pipeline' && type === 'review')
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: `${type} is invalid for ${value.source}`,
@@ -2123,6 +2236,105 @@ const problemSetContextSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'active problem set has no remaining type',
+      })
+    }
+    for (const problem of value.problems) {
+      if (value.source === 'review' && problem.reviewThread === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `review problem ${problem.problemId} has no complete thread snapshot`,
+        })
+      }
+      if (value.source === 'pipeline' && problem.reviewThread !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `pipeline problem ${problem.problemId} cannot carry a review thread`,
+        })
+      }
+    }
+  })
+
+const reviewReplyReceiptSchema = z
+  .object({
+    marker: z.string().min(1).max(1_000),
+    noteRef: z.string().min(1).max(500),
+  })
+  .strict()
+
+export const reviewResolutionContextSchema = z
+  .object({
+    status: z.enum(['collected', 'acknowledged', 'prepared', 'replied']),
+    mergeRequestRef: z.string().min(1).max(1_000),
+    sourceHeadSha: z.string().regex(/^[a-f0-9]{40}$/),
+    publishedHeadSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable(),
+    commitSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable(),
+    threads: z
+      .array(
+        z
+          .object({
+            threadRef: z.string().min(1).max(500),
+            revision: z.string().min(1).max(500),
+            acknowledgement: reviewReplyReceiptSchema.nullable(),
+            disposition: z.enum(['addressed', 'needs-human']).nullable(),
+            replyBody: z.string().min(1).max(8_000).nullable(),
+            finalReply: reviewReplyReceiptSchema.nullable(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const refs = new Set<string>()
+    for (const [index, thread] of value.threads.entries()) {
+      const key = `${thread.threadRef}\u0000${thread.revision}`
+      if (refs.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['threads', index],
+          message: 'duplicate review thread revision',
+        })
+      }
+      refs.add(key)
+      if (value.status !== 'collected' && thread.acknowledgement === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['threads', index, 'acknowledgement'],
+          message: 'acknowledgement is required after collection',
+        })
+      }
+      if (
+        (value.status === 'prepared' || value.status === 'replied') &&
+        (thread.disposition === null || thread.replyBody === null)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['threads', index],
+          message: 'prepared review repair requires a disposition and reply body',
+        })
+      }
+      if (value.status === 'replied' && thread.finalReply === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['threads', index, 'finalReply'],
+          message: 'final reply receipt is required after publishing',
+        })
+      }
+    }
+    if (
+      value.status === 'replied' &&
+      (value.publishedHeadSha === null || value.commitSha === null)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'replied review resolution must identify the published commit',
       })
     }
   })
@@ -2154,6 +2366,12 @@ const delegationContextSchema = z
 export const approvalContextSchema = z
   .object({
     status: z.enum(['draft', 'pending', 'approved', 'rejected', 'expired', 'unavailable']),
+    mergeRequestRef: z.string().min(1).max(1_000).nullable().default(null),
+    headSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable()
+      .default(null),
     approvalType: z.string().min(1).max(120),
     adapterRef: z
       .object({ id: z.string().min(1).max(500), revision: z.number().int().positive() })
@@ -2195,6 +2413,7 @@ const contextSchemas: Record<string, z.ZodTypeAny> = {
   'development.merge-request': mergeRequestContextSchema,
   'development.pipeline': pipelineContextSchema,
   'development.problem-set': problemSetContextSchema,
+  'development.review-resolution': reviewResolutionContextSchema,
   'development.delegation': delegationContextSchema,
   'development.approval': approvalContextSchema,
 }
@@ -2229,7 +2448,12 @@ const reactionOutputSchema = z
   })
   .strict()
 
-const reactionInputEnvelopeSchema = z.object({ contextsJson: z.string().min(2) }).passthrough()
+const reactionInputEnvelopeSchema = z
+  .object({
+    contextsJson: z.string().min(2),
+    contractInput: z.unknown().default({}),
+  })
+  .passthrough()
 
 const reactionContextRecordSchema = z
   .object({ typeId: z.string().min(1), stateJson: z.string().min(2) })
@@ -2618,6 +2842,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         workItemRef: z.string().min(1),
         defaultSlotRef: z.string().min(1),
         contextsJson: z.string().min(2),
+        orderedDispatchConfigurationsJson: z.string().min(2).default('[]'),
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
@@ -2636,7 +2861,15 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const problemSet = problemSetContextSchema.parse(
       JSON.parse(problemContext.stateJson) as unknown,
     )
-    const selected = pipelineRepairPriority.find((type) => problemSet.remainingTypes.includes(type))
+    const configurations = orderedDispatchConfigurationRuntimeSchema.parse(
+      JSON.parse(request.orderedDispatchConfigurationsJson) as unknown,
+    )
+    const configuredRoutes = configurations
+      .find((configuration) => configuration.classifierWorkItemRef === 'classify-pipeline')
+      ?.routes.filter((route) => route.destinationWorkItemRef === request.workItemRef)
+    const selected = configuredRoutes?.find((route) =>
+      problemSet.remainingTypes.includes(route.routeRef),
+    )?.routeRef
     return JSON.stringify({ slotRef: selected ?? request.defaultSlotRef })
   },
   assembleReactionInputJson(requestJson) {
@@ -2656,6 +2889,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         outputSchemaId: z.string().min(1),
         eventJson: z.string().min(2),
         contextsJson: z.string().min(2),
+        orderedDispatchConfigurationsJson: z.string().min(2).default('[]'),
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
@@ -2666,7 +2900,9 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const mergeRequest = contexts.find((context) => context.typeId === 'development.merge-request')
     const pipeline = contexts.find((context) => context.typeId === 'development.pipeline')
     const problemSet = contexts.find((context) => context.typeId === 'development.problem-set')
-    const delegation = contexts.find((context) => context.typeId === 'development.delegation')
+    const reviewResolution = contexts.find(
+      (context) => context.typeId === 'development.review-resolution',
+    )
     const stateOf = (context: (typeof contexts)[number] | undefined): unknown =>
       context === undefined ? null : (JSON.parse(context.stateJson) as unknown)
     const issueState =
@@ -2687,7 +2923,22 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       artifactRefs: Array.isArray(context.artifactRefs) ? context.artifactRefs : [],
     }))
     const event = JSON.parse(request.eventJson) as unknown
-    const contractInput =
+    const orderedDispatchConfigurations = orderedDispatchConfigurationRuntimeSchema.parse(
+      JSON.parse(request.orderedDispatchConfigurationsJson) as unknown,
+    )
+    const pipelineDispatch = orderedDispatchConfigurations.find(
+      (configuration) => configuration.classifierWorkItemRef === 'classify-pipeline',
+    )
+    const failureTypeDefinitions =
+      pipelineDispatch?.routes.map((route, index) => ({
+        typeId: route.routeRef,
+        name: route.displayName,
+        description: route.description,
+        priority: index + 1,
+        fallback: route.fallback,
+        handlingWorkItemRef: route.destinationWorkItemRef,
+      })) ?? []
+    const projectedContractInput =
       request.workItemRef === 'prepare-materials'
         ? {
             workRequest: issueState?.request ?? null,
@@ -2698,7 +2949,11 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           : request.workItemRef === 'classify-feedback'
             ? { reviewEvidence: stateOf(mergeRequest) }
             : request.workItemRef === 'repair-feedback'
-              ? { problemSet: stateOf(problemSet), mergeRequest: stateOf(mergeRequest) }
+              ? {
+                  problemSet: stateOf(problemSet),
+                  mergeRequest: stateOf(mergeRequest),
+                  reviewResolution: stateOf(reviewResolution),
+                }
               : request.workItemRef === 'collect-pipeline'
                 ? {
                     mergeRequest: stateOf(mergeRequest),
@@ -2706,17 +2961,18 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
                     pipelineDirectory: `${PLATFORM_WORKSPACE_DIR}/pipeline`,
                   }
                 : request.workItemRef === 'classify-pipeline'
-                  ? { pipelineEvidence: stateOf(pipeline) }
+                  ? { pipelineEvidence: stateOf(pipeline), failureTypeDefinitions }
                   : request.workItemRef === 'repair-pipeline'
                     ? {
                         problemSet: stateOf(problemSet),
                         pipelineEvidence: stateOf(pipeline),
+                        assignedFailureType: request.toolSlotRef,
                       }
                     : request.workItemRef === 'repair-conflict'
                       ? { mergeRequest: stateOf(mergeRequest), event }
                       : request.workItemRef === 'prepare-approval'
                         ? {
-                            delegatedResult: stateOf(delegation),
+                            mergeRequest: stateOf(mergeRequest),
                             connectionRef: request.connectionRef,
                           }
                         : { event, contexts: genericContexts }
@@ -2729,8 +2985,17 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
               .repositoryRef,
           }
     return JSON.stringify({
-      ...request,
-      contractInput,
+      schemaVersion: request.schemaVersion,
+      roundRef: request.roundRef,
+      executionNonce: request.executionNonce,
+      workItemRef: request.workItemRef,
+      toolSlotRef: request.toolSlotRef,
+      connectionRef: request.connectionRef,
+      inputSchemaId: request.inputSchemaId,
+      outputSchemaId: request.outputSchemaId,
+      eventJson: request.eventJson,
+      contextsJson: request.contextsJson,
+      contractInput: projectedContractInput,
       artifactRefs: [
         ...new Set(
           contexts.flatMap((context) =>
@@ -2742,18 +3007,20 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       ],
       workInstructions:
         request.workItemRef === 'prepare-approval'
-          ? 'Produce one development.approval context patch with status=draft. adapterRef must exactly equal connectionRef, approvalType must be gate-change, validatedDraftRef must identify the strict approval draft envelope, and all submission/observation fields must be null. Do not submit the approval and do not access credentials.'
+          ? 'Produce one development.approval context patch with status=draft. mergeRequestRef and headSha must exactly equal the frozen current MR, adapterRef must exactly equal connectionRef, approvalType must be gate-change, validatedDraftRef must identify the strict approval draft envelope, and all submission/observation fields must be null. Do not submit the approval and do not access credentials.'
           : request.workItemRef === 'collect-pipeline'
             ? 'Write complete gate evidence and large logs under the supplied .agent-workflow/pipeline Case directory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes.'
             : request.workItemRef === 'classify-pipeline'
-              ? 'Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes drawn only from compile, unit-test, integration-test, static-analysis, environment, external-dependency, unknown. external-dependency means a separately configured digital employee must act first.'
+              ? `Classify the pipeline evidence using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier configured type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
               : request.workItemRef === 'repair-pipeline'
                 ? `Repair every problem assigned to deterministic slot ${request.toolSlotRef}; do not choose another tool or slot. The platform will mark that slot complete after an ok result.`
                 : request.workItemRef === 'classify-feedback'
                   ? 'Read development.merge-request.reviewThreads. Upsert development.problem-set with source=review, remainingTypes=["review"], and exactly one typed problem for every unresolved non-self review thread. Each problemId must equal that review threadRef; do not add, omit, or merge threads.'
-                  : request.workItemRef === 'prepare-materials'
-                    ? 'For an external ID, programmatically download all source files into the supplied .agent-workflow/inputs/requirements Case directory. Do not write Git metadata.'
-                    : 'Follow the frozen work contract and return only its deterministic result.',
+                  : request.workItemRef === 'repair-feedback'
+                    ? 'Read the complete root comment and all replies from every problem.reviewThread. Repair every assigned thread. Upsert development.review-resolution with status=prepared and exactly one row per input (threadRef, revision), preserving its acknowledgement receipt and adding disposition plus a concrete replyBody that explains how that thread was handled. Do not post comments, commit, push, or resolve threads.'
+                    : request.workItemRef === 'prepare-materials'
+                      ? 'For an external ID, programmatically download all source files into the supplied .agent-workflow/inputs/requirements Case directory. Do not write Git metadata.'
+                      : 'Follow the frozen work contract and return only its deterministic result.',
       executionEnvironmentJson: JSON.stringify(executionEnvironment),
     })
   },
@@ -2792,12 +3059,14 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       const requiredContextType =
         request.workItemRef === 'prepare-approval'
           ? 'development.approval'
-          : request.workItemRef === 'collect-pipeline'
-            ? 'development.pipeline'
-            : request.workItemRef === 'classify-pipeline' ||
-                request.workItemRef === 'classify-feedback'
-              ? 'development.problem-set'
-              : null
+          : request.workItemRef === 'repair-feedback'
+            ? 'development.review-resolution'
+            : request.workItemRef === 'collect-pipeline'
+              ? 'development.pipeline'
+              : request.workItemRef === 'classify-pipeline' ||
+                  request.workItemRef === 'classify-feedback'
+                ? 'development.problem-set'
+                : null
       if (
         requiredContextType !== null &&
         !output.contextPatches.some((patch) => patch.contextTypeId === requiredContextType)
@@ -2819,15 +3088,19 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       }
       if (request.workItemRef === 'prepare-approval') {
         const approval = patchState('development.approval', approvalContextSchema)
+        const mergeRequest = inputState('development.merge-request', mergeRequestContextSchema)
         if (
           approval === null ||
+          mergeRequest === null ||
           approval.status !== 'draft' ||
+          approval.mergeRequestRef !== mergeRequest.mergeRequestRef ||
+          approval.headSha !== mergeRequest.headSha ||
           request.connectionRef === null ||
           approval.adapterRef.id !== request.connectionRef.id ||
           approval.adapterRef.revision !== request.connectionRef.revision
         ) {
           throw new Error(
-            'prepare-approval must produce a draft bound to the frozen approval connection',
+            'prepare-approval must produce a draft bound to the frozen MR head and approval connection',
           )
         }
       }
@@ -2851,6 +3124,47 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           throw new Error('pipeline status and failureTypes disagree')
         }
       }
+      if (request.workItemRef === 'repair-feedback') {
+        const problemSet = inputState('development.problem-set', problemSetContextSchema)
+        const current = inputState('development.review-resolution', reviewResolutionContextSchema)
+        const proposed = patchState('development.review-resolution', reviewResolutionContextSchema)
+        if (
+          problemSet === null ||
+          problemSet.source !== 'review' ||
+          current === null ||
+          current.status !== 'acknowledged' ||
+          proposed === null ||
+          proposed.status !== 'prepared'
+        ) {
+          throw new Error(
+            'repair-feedback requires an acknowledged review set and a prepared resolution',
+          )
+        }
+        const expected = current.threads.map(
+          (thread) => `${thread.threadRef}\u0000${thread.revision}`,
+        )
+        const actual = proposed.threads.map(
+          (thread) => `${thread.threadRef}\u0000${thread.revision}`,
+        )
+        if (
+          expected.length !== actual.length ||
+          expected.some((key, index) => actual[index] !== key) ||
+          proposed.mergeRequestRef !== current.mergeRequestRef ||
+          proposed.sourceHeadSha !== current.sourceHeadSha ||
+          proposed.publishedHeadSha !== null ||
+          proposed.commitSha !== null ||
+          proposed.threads.some(
+            (thread, index) =>
+              JSON.stringify(thread.acknowledgement) !==
+                JSON.stringify(current.threads[index]!.acknowledgement) ||
+              thread.finalReply !== null,
+          )
+        ) {
+          throw new Error(
+            'repair-feedback must answer every acknowledged thread exactly once without changing platform receipts',
+          )
+        }
+      }
       if (
         request.workItemRef === 'classify-pipeline' ||
         request.workItemRef === 'classify-feedback'
@@ -2870,6 +3184,34 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         if (expectedHead === undefined || problemSet.headSha !== expectedHead) {
           throw new Error(`${request.workItemRef} problem set is stale for the current head`)
         }
+        if (request.workItemRef === 'classify-pipeline') {
+          const configured = z
+            .object({
+              failureTypeDefinitions: z
+                .array(
+                  z
+                    .object({
+                      typeId: pipelineFailureTypeSchema,
+                      priority: z.number().int().positive(),
+                      fallback: z.boolean(),
+                      handlingWorkItemRef: z.string().min(1),
+                    })
+                    .passthrough(),
+                )
+                .min(1),
+            })
+            .passthrough()
+            .parse(inputEnvelope.contractInput).failureTypeDefinitions
+          const allowedTypes = new Set(configured.map((definition) => definition.typeId))
+          if (
+            problemSet.remainingTypes.some((type) => !allowedTypes.has(type)) ||
+            problemSet.problems.some((problem) => !allowedTypes.has(problem.type))
+          ) {
+            throw new Error(
+              'classify-pipeline may only emit failure types configured in this employee job',
+            )
+          }
+        }
         const remaining = new Set(problemSet.remainingTypes)
         if (
           problemSet.problems.length === 0 ||
@@ -2881,11 +3223,37 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           throw new Error('problem set types and problem records do not form a closed set')
         }
         if (request.workItemRef === 'classify-feedback') {
+          const resolution = patchState(
+            'development.review-resolution',
+            reviewResolutionContextSchema,
+          )
           if (mergeRequest === null) {
             throw new Error('classify-feedback requires the current MR context')
           }
+          if (
+            resolution === null ||
+            resolution.status !== 'collected' ||
+            resolution.mergeRequestRef !== mergeRequest.mergeRequestRef ||
+            resolution.sourceHeadSha !== mergeRequest.headSha
+          ) {
+            throw new Error('classify-feedback must create the matching review-resolution context')
+          }
+          const priorResolution = inputState(
+            'development.review-resolution',
+            reviewResolutionContextSchema,
+          )
+          const knownThreadRevisions = new Set(
+            priorResolution?.threads.map(
+              (thread) => `${thread.threadRef}\u0000${thread.revision}`,
+            ) ?? [],
+          )
           const expectedThreadRefs = (mergeRequest.reviewThreads ?? [])
-            .filter((thread) => !thread.resolved && thread.authorClass !== 'self')
+            .filter(
+              (thread) =>
+                !thread.resolved &&
+                thread.authorClass !== 'self' &&
+                !knownThreadRevisions.has(`${thread.threadRef}\u0000${thread.revision}`),
+            )
             .map((thread) => thread.threadRef)
             .sort()
           const producedThreadRefs = problemSet.problems.map((problem) => problem.problemId).sort()
@@ -2910,6 +3278,8 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         toolSlotRef: z.string().min(1),
         outputJson: z.string().min(2),
         contextsJson: z.string().min(2),
+        inputEnvelopeJson: z.string().min(2).optional(),
+        enabledWorkItemRefsJson: z.string().min(2).default('[]'),
         allowedNextWorkItemRefs: z.array(z.string().min(1)).max(20),
       })
       .strict()
@@ -2928,6 +3298,52 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           .passthrough(),
       )
       .parse(JSON.parse(request.contextsJson) as unknown)
+    const inputEnvelope = reactionInputEnvelopeSchema.parse(
+      request.inputEnvelopeJson === undefined
+        ? { contextsJson: request.contextsJson, contractInput: {} }
+        : (JSON.parse(request.inputEnvelopeJson) as unknown),
+    )
+    const serializedEvent = (inputEnvelope as { readonly eventJson?: unknown }).eventJson
+    const triggeringEventTypeId = z
+      .object({
+        eventTypeRef: z.object({ id: z.string().min(1) }).passthrough(),
+      })
+      .passthrough()
+      .safeParse(typeof serializedEvent === 'string' ? JSON.parse(serializedEvent) : null).data
+      ?.eventTypeRef.id
+    const executionConfiguration = z
+      .object({
+        failureTypeDefinitions: z
+          .array(
+            z
+              .object({
+                typeId: pipelineFailureTypeSchema,
+                priority: z.number().int().positive(),
+                handlingWorkItemRef: z.string().min(1),
+              })
+              .passthrough(),
+          )
+          .default([]),
+      })
+      .passthrough()
+      .parse(inputEnvelope.contractInput)
+    const failureTypeDefinitions = executionConfiguration.failureTypeDefinitions
+    const enabledWorkItemRefs = new Set(
+      z
+        .array(z.string().min(1).max(160))
+        .parse(JSON.parse(request.enabledWorkItemRefsJson) as unknown),
+    )
+    const capabilityEnabled = (workItemRef: string): boolean =>
+      enabledWorkItemRefs.size === 0 || enabledWorkItemRefs.has(workItemRef)
+    const nextConfiguredPipelineWorkItem = (remainingTypes: readonly string[]): string => {
+      const selected = failureTypeDefinitions.find((definition) =>
+        remainingTypes.includes(definition.typeId),
+      )
+      if (selected === undefined) {
+        throw new Error('pipeline problem set has no configured deterministic destination')
+      }
+      return selected.handlingWorkItemRef
+    }
     const settlementPatches = [...output.contextPatches]
     const proposedState = (typeId: string): unknown => {
       const patch = [...output.contextPatches]
@@ -2967,9 +3383,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       if (problemSet.status !== 'active') {
         throw new Error('failed pipeline classification must produce an active problem set')
       }
-      nextWorkItemRef = problemSet.remainingTypes.includes('external-dependency')
-        ? 'delegate'
-        : 'repair-pipeline'
+      nextWorkItemRef = nextConfiguredPipelineWorkItem(problemSet.remainingTypes)
     } else if (request.workItemRef === 'repair-feedback') {
       const current = contexts.find((context) => context.typeId === 'development.problem-set')
       if (current === undefined) throw new Error('review repair has no problem-set context')
@@ -2997,6 +3411,11 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       if (existingPatch === -1) settlementPatches.push(replacement)
       else settlementPatches[existingPatch] = replacement
       nextWorkItemRef = 'prepare-change'
+    } else if (request.workItemRef === 'publish-mr') {
+      const reviewResolution = reviewResolutionContextSchema
+        .nullable()
+        .parse(proposedState('development.review-resolution'))
+      nextWorkItemRef = reviewResolution?.status === 'prepared' ? 'reply-feedback' : 'observe-mr'
     } else if (request.workItemRef === 'repair-pipeline') {
       const current = contexts.find((context) => context.typeId === 'development.problem-set')
       if (current === undefined) throw new Error('pipeline repair has no problem-set context')
@@ -3023,7 +3442,10 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       )
       if (existingPatch === -1) settlementPatches.push(replacement)
       else settlementPatches[existingPatch] = replacement
-      nextWorkItemRef = remainingTypes.length === 0 ? 'prepare-change' : 'repair-pipeline'
+      nextWorkItemRef =
+        remainingTypes.length === 0
+          ? 'prepare-change'
+          : nextConfiguredPipelineWorkItem(remainingTypes)
     } else if (request.workItemRef === 'evaluate-ready') {
       const mergeRequest = mergeRequestContextSchema
         .nullable()
@@ -3039,7 +3461,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         .nullable()
         .parse(proposedState('development.delegation'))
       if (delegation?.status === 'satisfied') {
-        nextWorkItemRef = 'prepare-approval'
+        nextWorkItemRef = 'collect-pipeline'
       } else if (delegation?.status === 'failed') {
         caseState = 'blocked'
         nextWorkItemRef = null
@@ -3056,8 +3478,55 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         terminalKind = mergeRequest.status
         nextWorkItemRef = null
       } else if (request.workItemRef === 'observe-mr') {
-        caseState = 'active'
-        nextWorkItemRef = 'evaluate-ready'
+        if (mergeRequest === null) {
+          caseState = 'blocked'
+          nextWorkItemRef = null
+        } else {
+          caseState = 'active'
+          const priorReviewResolution = reviewResolutionContextSchema
+            .nullable()
+            .parse(proposedState('development.review-resolution'))
+          const knownReviewThreadRevisions = new Set(
+            priorReviewResolution?.threads.map(
+              (thread) => `${thread.threadRef}\u0000${thread.revision}`,
+            ) ?? [],
+          )
+          const hasNewReviewFeedback = mergeRequest.reviewThreads.some(
+            (thread) =>
+              !thread.resolved &&
+              thread.authorClass !== 'self' &&
+              !knownReviewThreadRevisions.has(`${thread.threadRef}\u0000${thread.revision}`),
+          )
+          const approval = approvalContextSchema
+            .nullable()
+            .parse(proposedState('development.approval'))
+          const approvalRequired = mergeRequest.approvalHold === true
+          const currentHeadApproval =
+            approval?.mergeRequestRef === mergeRequest.mergeRequestRef &&
+            approval.headSha === mergeRequest.headSha
+          const currentHeadApproved = currentHeadApproval && approval.status === 'approved'
+          if (
+            triggeringEventTypeId === 'development.review-updated' &&
+            capabilityEnabled('classify-feedback') &&
+            hasNewReviewFeedback
+          ) {
+            nextWorkItemRef = 'classify-feedback'
+          } else if (
+            triggeringEventTypeId === 'development.conflict-updated' &&
+            capabilityEnabled('repair-conflict') &&
+            mergeRequest.mergeableState === 'conflict'
+          ) {
+            nextWorkItemRef = 'repair-conflict'
+          } else {
+            nextWorkItemRef =
+              approvalRequired &&
+              !currentHeadApproved &&
+              !currentHeadApproval &&
+              capabilityEnabled('prepare-approval')
+                ? 'prepare-approval'
+                : 'evaluate-ready'
+          }
+        }
       } else {
         caseState = 'waiting'
         nextWorkItemRef = null

@@ -17,14 +17,29 @@
 import { executeCodeHostCall } from '@/services/codeHost/call'
 import { callDeps, normalizedState, parseJson, type MrEnsureConnectionDeps } from './mrEnsure'
 
+export interface MrThreadMessageFact {
+  readonly messageRef: string
+  readonly parentMessageRef: string | null
+  readonly authorClass: 'human' | 'bot' | 'self'
+  readonly body: string
+  readonly path: string | null
+  readonly createdAt: string | null
+}
+
 export interface MrThreadFact {
   readonly threadRef: string
-  /** 该 thread 的内容版本（`<note 数>:<最新 note id>`——新增/追加即变）。 */
+  /**
+   * 只计算非平台回复的内容版本。平台自己的“收到”与处理结果不会改变该版本，
+   * 因而不会把同一线程重新送进修复循环；外部追加回复一定产生新版本。
+   */
   readonly revision: string
+  /** 最近一条非平台消息的作者分类；平台回复不覆盖待处理作者。 */
   readonly authorClass: 'human' | 'bot' | 'self'
   readonly resolved: boolean
   readonly lastBody: string
   readonly path: string | null
+  /** 根评论与全部多轮回复，按 provider 返回顺序冻结。 */
+  readonly messages: readonly MrThreadMessageFact[]
 }
 
 export interface MrFactsSnapshot {
@@ -82,6 +97,7 @@ interface GitlabNote {
   readonly author?: RawUser
   readonly resolved?: boolean
   readonly position?: { readonly new_path?: string } | null
+  readonly created_at?: string
 }
 
 interface GitlabDiscussion {
@@ -109,6 +125,7 @@ interface GithubReviewComment {
   readonly user?: RawUser
   readonly in_reply_to_id?: number
   readonly path?: string
+  readonly created_at?: string
 }
 
 function classifyAuthor(
@@ -116,10 +133,26 @@ function classifyAuthor(
   body: string,
   selfMarker: string | null,
 ): MrThreadFact['authorClass'] {
-  if (selfMarker !== null && body.includes(selfMarkerToken(selfMarker))) return 'self'
+  if (selfMarker !== null) {
+    const markerPrefix = `<!-- aw-self:${selfMarker}`
+    if (body.includes(`${markerPrefix} -->`) || body.includes(`${markerPrefix}:`)) return 'self'
+  }
   const name = user?.username ?? user?.login ?? ''
   if (name.endsWith('[bot]') || name.endsWith('-bot')) return 'bot'
   return 'human'
+}
+
+function summarizeThreadMessages(
+  messages: readonly MrThreadMessageFact[],
+): Pick<MrThreadFact, 'revision' | 'authorClass' | 'lastBody' | 'path'> {
+  const external = messages.filter((message) => message.authorClass !== 'self')
+  const last = external.at(-1)
+  return {
+    revision: last === undefined ? '0:self' : `${external.length}:${last.messageRef}`,
+    authorClass: last?.authorClass ?? 'self',
+    lastBody: last?.body ?? '',
+    path: last?.path ?? null,
+  }
 }
 
 function mergeableOf(input: {
@@ -219,14 +252,21 @@ async function collectThreads(
       .filter((d) => (d.notes?.length ?? 0) > 0)
       .map((d) => {
         const notes = d.notes!
-        const last = notes[notes.length - 1]!
+        const rootRef = String(notes[0]!.id)
+        const messages = notes.map((note, index) => ({
+          messageRef: String(note.id),
+          parentMessageRef: index === 0 ? null : rootRef,
+          authorClass: classifyAuthor(note.author, note.body ?? '', selfMarker),
+          body: note.body ?? '',
+          path: note.position?.new_path ?? null,
+          createdAt: note.created_at ?? null,
+        }))
+        const summary = summarizeThreadMessages(messages)
         return {
           threadRef: d.id,
-          revision: `${notes.length}:${last.id}`,
-          authorClass: classifyAuthor(last.author, last.body ?? '', selfMarker),
+          ...summary,
           resolved: notes.every((n) => n.resolved === true),
-          lastBody: last.body ?? '',
-          path: last.position?.new_path ?? null,
+          messages,
         }
       })
     return { ok: true, threads }
@@ -250,16 +290,22 @@ async function collectThreads(
     else bucket.push(comment)
   }
   const threads = [...byThread.entries()].map(([threadRef, notes]) => {
-    const last = notes[notes.length - 1]!
+    const messages = notes.map((note) => ({
+      messageRef: String(note.id),
+      parentMessageRef: note.in_reply_to_id === undefined ? null : String(note.in_reply_to_id),
+      authorClass: classifyAuthor(note.user, note.body ?? '', selfMarker),
+      body: note.body ?? '',
+      path: note.path ?? null,
+      createdAt: note.created_at ?? null,
+    }))
+    const summary = summarizeThreadMessages(messages)
     return {
       threadRef,
-      revision: `${notes.length}:${last.id}`,
-      authorClass: classifyAuthor(last.user, last.body ?? '', selfMarker),
+      ...summary,
       // REST 不暴露 review thread resolution（GraphQL only）；恒 false，
       // 外部 resolve 状态由 policy 侧按「未解决」保守处理。
       resolved: false,
-      lastBody: last.body ?? '',
-      path: last.path ?? null,
+      messages,
     }
   })
   return { ok: true, threads }

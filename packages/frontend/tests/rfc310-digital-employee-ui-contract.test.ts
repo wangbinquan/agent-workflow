@@ -8,7 +8,10 @@ import {
   withAgentExecutionContractKeys,
   withAgentExecutionContractsAndPorts,
 } from '../src/components/AgentForm'
-import { buildResponsibilityGraphLayout } from '../src/components/digital-employees/ResponsibilityGraph'
+import {
+  buildResponsibilityEdgePath,
+  buildResponsibilityGraphLayout,
+} from '../src/components/digital-employees/ResponsibilityGraph'
 import type { EmployeeTypePackage } from '../src/components/digital-employees/types'
 import { executionContractProgramStarter } from '../src/components/execution-contracts/ExecutionContractGuidePanel'
 
@@ -34,11 +37,26 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).not.toContain('stageId')
     expect(graph).toContain('item.nextWorkItemRefs')
     expect(graph).toContain('employee-graph__edge--loop')
-    expect(graph).toContain('employee-graph__dispatch-trunk')
-    expect(graph).toContain('employee-graph__dispatch-branch')
+    expect(graph).not.toContain('employee-graph__dispatch-trunk')
+    expect(graph).not.toContain('employee-graph__dispatch-branch')
     expect(graph).toContain('employee-graph-lane-label')
+    expect(graph).toContain("'可选能力'")
     expect(graph).toContain('data-from={source.item.workItemRef}')
+    expect(graph).toContain("'可配工具'")
+    expect(graph).toContain("'平台内置'")
+    expect(graph).toContain('employee-graph-node--related')
+    expect(graph).toContain('employee-graph-node--dimmed')
+    expect(typePage).toContain('employee-runtime-dispatch')
+    expect(typePage).toContain('增加错误类型')
+    expect(typePage).toContain('未配置：这名数字员工不会启用该泳道，也不会订阅对应事件。')
+    expect(typePage).toContain('可选能力 · 配置后启用')
+    expect(typePage).toContain('启用本泳道后必填')
+    expect(typePage).toContain('不启用这项能力')
+    expect(typePage).toContain('不启用员工协同')
     expect(graph).not.toContain('onConnect')
+
+    const styles = read('styles.css')
+    expect(styles).not.toMatch(/\.employee-graph-node::(?:before|after)/)
   })
 
   test('responsibility graph separates the event hub and parallel reaction duties', () => {
@@ -78,6 +96,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
                 description: text('事件分发'),
                 order: 0,
                 kind: 'spine',
+                optional: false,
               },
               {
                 laneId: 'review',
@@ -85,6 +104,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
                 description: text('检视闭环'),
                 order: 10,
                 kind: 'branch',
+                optional: true,
               },
               {
                 laneId: 'pipeline',
@@ -92,6 +112,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
                 description: text('流水线闭环'),
                 order: 20,
                 kind: 'branch',
+                optional: true,
               },
             ],
           },
@@ -122,6 +143,21 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(reviewClassify.y).toBe(reviewRepair.y)
     expect(reviewClassify.x).toBeLessThan(reviewRepair.x)
     expect(pipelineCollect.y).toBeGreaterThan(reviewClassify.y)
+
+    const forward = buildResponsibilityEdgePath(reviewClassify, reviewRepair, layout.width, false)
+    expect(forward).toBe(`M ${reviewClassify.x + 160} ${reviewClassify.y + 40} H ${reviewRepair.x}`)
+    const crossLane = buildResponsibilityEdgePath(observe, reviewClassify, layout.width, false)
+    expect(crossLane).toMatch(
+      new RegExp(
+        `^M ${observe.x + 160} ${observe.y + 40} H [0-9.]+ V [0-9.]+ H [0-9.]+ V ${reviewClassify.y + 40} H ${reviewClassify.x}$`,
+      ),
+    )
+    const loop = buildResponsibilityEdgePath(reviewRepair, observe, layout.width, true)
+    expect(loop).toMatch(
+      new RegExp(
+        `^M ${reviewRepair.x + 160} ${reviewRepair.y + 40} H [0-9.]+ V [0-9.]+ H [0-9.]+ V ${observe.y + 40} H ${observe.x}$`,
+      ),
+    )
   })
 
   test('platform execution contracts guide and gate Agent or Script configuration', () => {

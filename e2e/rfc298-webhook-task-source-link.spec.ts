@@ -268,7 +268,9 @@ test.beforeAll(async () => {
       trigger: {
         webhook: {
           ...sourceCase.fields,
-          comment_text: `raw fixture ${sourceCase.key} must never reach the browser`,
+          ...(sourceCase.fields.event_type === 'note'
+            ? { comment_text: `raw fixture ${sourceCase.key} must never reach the browser` }
+            : {}),
           event_json: JSON.stringify({ privateFixture: sourceCase.key }),
         },
       },

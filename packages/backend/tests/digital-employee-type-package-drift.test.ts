@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
+import { employeeTypePackages } from '@/db/schema'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { DigitalEmployeeAuthoringService } from '@/modules/digital-employee/application/authoringService'
 import type {
@@ -44,6 +45,31 @@ function newStore() {
   return createSqliteDigitalEmployeeAuthoringStore(createInMemoryDb(MIGRATIONS))
 }
 
+function legacyDescriptor(): Record<string, unknown> {
+  const legacy = structuredClone(descriptor) as unknown as Record<string, unknown>
+  delete legacy.workStartWorkItemRef
+  const scheduling = new Map(
+    (legacy.reactionRules as Record<string, unknown>[]).map((rule) => [
+      rule.eventTypeId as string,
+      {
+        priority: rule.priority,
+        preemptsContinuation: rule.preemptsContinuation,
+      },
+    ]),
+  )
+  legacy.eventTypes = (legacy.eventTypes as Record<string, unknown>[]).map((event) => ({
+    ...event,
+    ...(scheduling.get(event.eventTypeId as string) ?? {
+      priority: 0,
+      preemptsContinuation: false,
+    }),
+  }))
+  legacy.reactionRules = (legacy.reactionRules as Record<string, unknown>[]).map(
+    ({ priority: _priority, preemptsContinuation: _preemptsContinuation, ...rule }) => rule,
+  )
+  return legacy
+}
+
 function record(descriptorDigest: string): TypePackageRecord {
   return { descriptor, descriptorDigest, state: 'published', registeredAt: 1_000 }
 }
@@ -67,7 +93,7 @@ describe('employee type package digest guard', () => {
     expect(store.getTypePackage(descriptor.typeRef)?.descriptorDigest).toBe(currentDigest)
   })
 
-  test('a frozen development@1 registration upgrades by appending development@2', () => {
+  test('a frozen development@1 registration upgrades by appending development@3', () => {
     const store = newStore()
     const previous = structuredClone(descriptor)
     previous.typeRef.revision = 1
@@ -81,9 +107,42 @@ describe('employee type package digest guard', () => {
     store.ensureTypePackage(record(currentDigest))
 
     expect(store.listTypePackages().map((entry) => entry.descriptor.typeRef)).toEqual([
-      { typeId: 'development', revision: 2 },
+      { typeId: 'development', revision: 3 },
       { typeId: 'development', revision: 1 },
     ])
+  })
+
+  test('an immutable revision-1 descriptor is projected without rewriting its frozen row', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const store = createSqliteDigitalEmployeeAuthoringStore(db)
+    const legacy = legacyDescriptor()
+    const frozenJson = JSON.stringify(legacy)
+    const frozenDigest = 'b'.repeat(64)
+    db.insert(employeeTypePackages)
+      .values({
+        typeId: 'development',
+        revision: 1,
+        descriptorJson: frozenJson,
+        descriptorDigest: frozenDigest,
+        state: 'published',
+        registeredAt: 900,
+      })
+      .run()
+
+    const projected = store.getTypePackage({ typeId: 'development', revision: 1 })
+
+    expect(projected?.descriptor.workStartWorkItemRef).toBe('prepare-materials')
+    expect(projected?.descriptor.reactionRules[0]).toMatchObject({
+      priority: descriptor.reactionRules[0]?.priority,
+      preemptsContinuation: descriptor.reactionRules[0]?.preemptsContinuation,
+    })
+    expect(projected?.descriptor.eventTypes[0]).not.toHaveProperty('preemptsContinuation')
+    expect(projected?.descriptorDigest).toBe(frozenDigest)
+    const frozenRow = db
+      .select({ descriptorJson: employeeTypePackages.descriptorJson })
+      .from(employeeTypePackages)
+      .get()
+    expect(frozenRow?.descriptorJson).toBe(frozenJson)
   })
 
   test('an edited descriptor on a registered revision names both digests and both exits', () => {

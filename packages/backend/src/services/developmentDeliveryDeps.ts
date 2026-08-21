@@ -64,6 +64,14 @@ export function buildDevelopmentDeliveryDeps(
               readonly resolved: boolean
               readonly body: string
               readonly path: string | null
+              readonly messages: readonly {
+                readonly messageRef: string
+                readonly parentMessageRef: string | null
+                readonly authorClass: 'human' | 'bot' | 'self'
+                readonly body: string
+                readonly path: string | null
+                readonly createdAt: string | null
+              }[]
             }[]
           }
         }
@@ -124,6 +132,7 @@ export function buildDevelopmentDeliveryDeps(
             resolved: thread.resolved,
             body: thread.lastBody,
             path: thread.path,
+            messages: thread.messages,
           })),
         },
       }

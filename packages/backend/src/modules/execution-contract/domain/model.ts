@@ -26,6 +26,8 @@ export interface ExecutionContractSchemaGuide {
   displayName: LocalizedContractText
   description: LocalizedContractText
   topLevelFields: string[]
+  /** Small, author-selected business surface shown before the full envelope. */
+  primaryFieldPaths: string[]
   fields: ExecutionContractField[]
   exampleJson: string
 }
@@ -183,6 +185,7 @@ export const executionContractSchemaGuideSchema = z
     displayName: localizedContractTextSchema,
     description: localizedContractTextSchema,
     topLevelFields: z.array(machineIdSchema).min(1).max(100),
+    primaryFieldPaths: z.array(z.string().min(1).max(300)).max(20).default([]),
     fields: z.array(executionContractFieldSchema).min(1).max(200),
     exampleJson: z
       .string()
@@ -215,6 +218,22 @@ export const executionContractSchemaGuideSchema = z
     }
     if (new Set(value.fields.map((field) => field.path)).size !== value.fields.length) {
       ctx.addIssue({ code: 'custom', path: ['fields'], message: 'field paths must be unique' })
+    }
+    if (new Set(value.primaryFieldPaths).size !== value.primaryFieldPaths.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['primaryFieldPaths'],
+        message: 'primary field paths must be unique',
+      })
+    }
+    for (const primaryPath of value.primaryFieldPaths) {
+      if (!value.fields.some((field) => field.path === primaryPath)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['primaryFieldPaths'],
+          message: `primary field ${primaryPath} must have a field guide`,
+        })
+      }
     }
     for (const topLevelField of value.topLevelFields) {
       if (!value.fields.some((field) => field.path === topLevelField)) {

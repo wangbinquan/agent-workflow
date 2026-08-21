@@ -8952,7 +8952,7 @@ export const zhCN: Resources = {
     webhookEndpoints: {
       eyebrow: '接收事件',
       title: '接收端点',
-      add: '新建端点',
+      add: '新建Webhook端点',
       hint: '为 GitLab / GitHub 创建一个稳定的事件入口。创建后，把 URL 和 Secret 一起粘贴到代码平台的 Webhook 配置。',
       empty: '还没有接收端点',
       emptyDescription: '先创建端点，拿到只显示一次的 Secret，再回到代码平台完成连接。',

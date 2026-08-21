@@ -498,6 +498,7 @@ describe('RFC-310 shared Event Center', () => {
           resolved: false,
           lastBody: 'please fix this',
           path: 'src/main.ts',
+          messages: [],
         },
         {
           threadRef: 'thread-self',
@@ -506,6 +507,7 @@ describe('RFC-310 shared Event Center', () => {
           resolved: false,
           lastBody: 'platform reply',
           path: null,
+          messages: [],
         },
       ],
     } satisfies MrFactsSnapshot
@@ -571,6 +573,7 @@ describe('RFC-310 shared Event Center', () => {
           resolved: false,
           lastBody: 'please fix this',
           path: 'src/main.ts',
+          messages: [],
         },
       ],
     } satisfies MrFactsSnapshot
@@ -1085,6 +1088,7 @@ describe('RFC-310 shared Event Center', () => {
       ingestionMode: 'state-change' as const,
       program: {
         language: 'node' as const,
+        templateManaged: true,
         timeoutMs: 10_000,
         source: `import { readFileSync } from 'node:fs'
 const input = JSON.parse(readFileSync(process.env.AW_EVENT_INPUT_FILE, 'utf8'))
@@ -1119,10 +1123,20 @@ console.log(JSON.stringify({
         cursorJson: null,
       },
     }
-    const created = eventCenter.customSources.commands.create(draft, 'author-1') as {
+    const created = eventCenter.customSources.commands.create(
+      { ...draft, fixture: { ...draft.fixture, subjects: [] } },
+      'author-1',
+    ) as {
       id: string
     }
     expect(created.id).toBe('global-event-1')
+    expect(eventCenter.customSources.queries.get(created.id).draft.program.templateManaged).toBe(
+      true,
+    )
+    await expect(eventCenter.customSources.commands.validate(created.id)).rejects.toThrow(
+      'validation needs at least one real test object',
+    )
+    eventCenter.customSources.commands.update(created.id, draft)
     await expect(eventCenter.customSources.commands.validate(created.id)).resolves.toMatchObject({
       observationCount: 1,
     })

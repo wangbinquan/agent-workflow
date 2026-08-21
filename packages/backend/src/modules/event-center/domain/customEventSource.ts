@@ -60,6 +60,8 @@ export const customEventSourceDraftSchema = z
       .object({
         language: z.enum(['bash', 'node', 'python']),
         source: z.string().min(1).max(1_000_000),
+        /** True only while the UI-generated starter has never been edited. */
+        templateManaged: z.boolean().optional(),
         timeoutMs: z
           .number()
           .int()
@@ -95,7 +97,6 @@ export const customEventSourceDraftSchema = z
               })
               .strict(),
           )
-          .min(1)
           .max(100),
         cursorJson: z
           .string()
@@ -114,15 +115,7 @@ export const customEventSourceDraftSchema = z
   })
   .strict()
   .superRefine((draft, ctx) => {
-    const fixtureTypes = new Set(draft.fixture.subjects.map((subject) => subject.typeId))
     for (const [index, event] of draft.eventTypes.entries()) {
-      if (!fixtureTypes.has(event.subjectTypeId)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['eventTypes', index, 'subjectTypeId'],
-          message: 'every event type needs a matching fixture subject',
-        })
-      }
       const triggerFields = event.triggerParameters?.fields.map((field) => field.fieldId) ?? []
       if (new Set(triggerFields).size !== triggerFields.length) {
         ctx.addIssue({

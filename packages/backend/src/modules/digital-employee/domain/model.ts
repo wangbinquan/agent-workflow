@@ -70,6 +70,55 @@ export const workItemToolBindingSchema = z
 
 export type WorkItemToolBinding = z.infer<typeof workItemToolBindingSchema>
 
+export const orderedDispatchRouteSchema = z
+  .object({
+    routeRef: machineIdSchema,
+    displayName: z.string().min(1).max(200),
+    description: z.string().max(2_000),
+    destinationWorkItemRef: machineIdSchema,
+    registrationRef: exactResourceRefSchema.nullable(),
+    fallback: z.boolean(),
+  })
+  .strict()
+
+export const orderedDispatchConfigurationSchema = z
+  .object({
+    classifierWorkItemRef: machineIdSchema,
+    routes: z.array(orderedDispatchRouteSchema).min(1).max(100),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const routeRefs = new Set<string>()
+    let fallbackCount = 0
+    for (const [index, route] of value.routes.entries()) {
+      if (routeRefs.has(route.routeRef)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['routes', index, 'routeRef'],
+          message: `duplicate routeRef: ${route.routeRef}`,
+        })
+      }
+      routeRefs.add(route.routeRef)
+      if (route.fallback) fallbackCount += 1
+    }
+    if (fallbackCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['routes'],
+        message: 'ordered dispatch requires exactly one fallback route',
+      })
+    }
+    if (!value.routes.at(-1)?.fallback) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['routes'],
+        message: 'the fallback route must be last',
+      })
+    }
+  })
+
+export type OrderedDispatchConfiguration = z.infer<typeof orderedDispatchConfigurationSchema>
+
 export const employeeCollaborationBindingSchema = z
   .object({
     workItemRef: machineIdSchema,
@@ -115,7 +164,7 @@ const toolRoleGroupSchema = z
     label: localizedTextSchema,
     description: localizedTextSchema,
     order: z.number().int().nonnegative(),
-    bindingSlots: z.array(toolBindingSlotSchema).min(1).max(100),
+    bindingSlots: z.array(toolBindingSlotSchema).max(100).default([]),
   })
   .strict()
 
@@ -126,6 +175,7 @@ const responsibilityLaneSchema = z
     description: localizedTextSchema,
     order: z.number().int().nonnegative(),
     kind: z.enum(['spine', 'branch']),
+    optional: z.boolean().default(false),
   })
   .strict()
 
@@ -152,6 +202,15 @@ const workItemDefinitionSchema = z
     completionStandard: localizedTextSchema,
     nodeKind: z.enum(['business-tool', 'system', 'collaboration']),
     collaborationContractId: machineIdSchema.nullable().default(null),
+    orderedDispatchAuthoring: z
+      .object({
+        label: localizedTextSchema,
+        description: localizedTextSchema,
+        destinationWorkItemRefs: z.array(machineIdSchema).min(1).max(20),
+      })
+      .strict()
+      .nullable()
+      .default(null),
     toolRoleGroups: z.array(toolRoleGroupSchema).max(100),
     nextWorkItemRefs: z.array(machineIdSchema).max(20),
   })
@@ -372,6 +431,13 @@ const reactionRuleSchema = z
     priority: z.number().int().min(0).max(100_000),
     preemptsContinuation: z.boolean(),
     requiredContextTypes: z.array(machineIdSchema).min(1).max(20),
+    /**
+     * The employee capability whose publication enables this event reaction.
+     * It can differ from workItemRef when an external event must first enter a
+     * platform-owned refresh node before the optional business lane runs.
+     * Older frozen descriptors omit it and retain workItemRef semantics.
+     */
+    capabilityWorkItemRef: machineIdSchema.optional(),
     workItemRef: machineIdSchema,
     slotRef: machineIdSchema,
     allowedEffectKinds: z.array(machineIdSchema).max(100),
@@ -410,6 +476,113 @@ export const employeeTypePackageDescriptorSchema = z
   .strict()
 
 export type EmployeeTypePackageDescriptor = z.infer<typeof employeeTypePackageDescriptorSchema>
+
+function jsonObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+/**
+ * Projects the immutable RFC-310 revision-1 descriptor into the current
+ * in-memory contract. Revision 1 stored scheduling on event types and selected
+ * its initial work through the single graph root; revision 2 moved scheduling
+ * to reaction rules and made WorkStart explicit.
+ *
+ * This is intentionally a read projection. Rewriting descriptor_json would
+ * invalidate the digest that freezes an already-published type revision.
+ */
+function projectLegacyPersistedTypePackage(value: unknown): unknown {
+  const descriptor = jsonObject(value)
+  if (descriptor === null || descriptor.workStartWorkItemRef !== undefined) return value
+
+  const eventTypes = Array.isArray(descriptor.eventTypes) ? descriptor.eventTypes : null
+  const reactionRules = Array.isArray(descriptor.reactionRules) ? descriptor.reactionRules : null
+  const authoringManifest = jsonObject(descriptor.authoringManifest)
+  const workItems = Array.isArray(authoringManifest?.workItems) ? authoringManifest.workItems : null
+  if (eventTypes === null || reactionRules === null || workItems === null) return value
+
+  const schedulingByEvent = new Map<
+    string,
+    { readonly priority: number; readonly preemptsContinuation: boolean }
+  >()
+  for (const candidate of eventTypes) {
+    const event = jsonObject(candidate)
+    if (
+      event === null ||
+      typeof event.eventTypeId !== 'string' ||
+      typeof event.priority !== 'number' ||
+      typeof event.preemptsContinuation !== 'boolean'
+    ) {
+      return value
+    }
+    schedulingByEvent.set(event.eventTypeId, {
+      priority: event.priority,
+      preemptsContinuation: event.preemptsContinuation,
+    })
+  }
+
+  if (
+    reactionRules.some((candidate) => {
+      const rule = jsonObject(candidate)
+      return rule === null || rule.priority !== undefined || rule.preemptsContinuation !== undefined
+    })
+  ) {
+    return value
+  }
+
+  const workItemRecords: Array<{
+    readonly workItemRef: string
+    readonly nextWorkItemRefs: unknown[]
+  }> = []
+  for (const candidate of workItems) {
+    const item = jsonObject(candidate)
+    if (
+      item === null ||
+      typeof item.workItemRef !== 'string' ||
+      !Array.isArray(item.nextWorkItemRefs)
+    ) {
+      return value
+    }
+    workItemRecords.push({
+      workItemRef: item.workItemRef,
+      nextWorkItemRefs: item.nextWorkItemRefs,
+    })
+  }
+  const referencedWorkItems = new Set(
+    workItemRecords.flatMap((item) =>
+      item.nextWorkItemRefs.filter((ref): ref is string => typeof ref === 'string'),
+    ),
+  )
+  const rootWorkItems = workItemRecords
+    .map((item) => item.workItemRef)
+    .filter((workItemRef) => !referencedWorkItems.has(workItemRef))
+  if (rootWorkItems.length !== 1) return value
+
+  const projectedEventTypes = eventTypes.map((candidate) => {
+    const { preemptsContinuation: _legacyPreemption, ...event } = jsonObject(candidate)!
+    return event
+  })
+  const projectedReactionRules = reactionRules.map((candidate) => {
+    const rule = jsonObject(candidate)!
+    const scheduling =
+      typeof rule.eventTypeId === 'string' ? schedulingByEvent.get(rule.eventTypeId) : undefined
+    return scheduling === undefined ? rule : { ...rule, ...scheduling }
+  })
+
+  return {
+    ...descriptor,
+    workStartWorkItemRef: rootWorkItems[0],
+    eventTypes: projectedEventTypes,
+    reactionRules: projectedReactionRules,
+  }
+}
+
+export function parsePersistedEmployeeTypePackageDescriptor(
+  value: unknown,
+): EmployeeTypePackageDescriptor {
+  return employeeTypePackageDescriptorSchema.parse(projectLegacyPersistedTypePackage(value))
+}
 
 export interface EmployeeTypeRuntimePackage {
   readonly descriptor: EmployeeTypePackageDescriptor
@@ -546,6 +719,7 @@ export const employeeJobTemplateContentSchema = z
     description: z.string().max(2_000),
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),
+    orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
   })
   .strict()
 
@@ -577,6 +751,11 @@ export const digitalEmployeeDefinitionContentSchema = z
     workScopeSummary: z.string().min(1).max(500),
     exactToolBindings: z.array(workItemToolBindingSchema).max(300),
     exactCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),
+    exactOrderedDispatchConfigurations: z
+      .array(orderedDispatchConfigurationSchema)
+      .max(100)
+      .default([]),
+    enabledWorkItemRefs: z.array(machineIdSchema).max(200).default([]),
     compiledClosureDigest: digestSchema,
   })
   .strict()
@@ -842,6 +1021,33 @@ export function validateTypePackage(
         })
       }
     }
+    if (item.orderedDispatchAuthoring !== null) {
+      addDuplicates(
+        `workItems.${item.workItemRef}.orderedDispatchAuthoring.destinationWorkItemRefs`,
+        item.orderedDispatchAuthoring.destinationWorkItemRefs,
+      )
+      for (const destination of item.orderedDispatchAuthoring.destinationWorkItemRefs) {
+        if (!item.nextWorkItemRefs.includes(destination)) {
+          violations.push({
+            code: 'ordered-dispatch-destination-not-next',
+            at: `workItems.${item.workItemRef}.orderedDispatchAuthoring.destinationWorkItemRefs`,
+            detail: destination,
+          })
+        }
+        const destinationItem = workItems.get(destination)
+        if (
+          destinationItem !== undefined &&
+          destinationItem.nodeKind !== 'business-tool' &&
+          destinationItem.nodeKind !== 'collaboration'
+        ) {
+          violations.push({
+            code: 'ordered-dispatch-destination-invalid',
+            at: `workItems.${item.workItemRef}.orderedDispatchAuthoring.destinationWorkItemRefs`,
+            detail: destination,
+          })
+        }
+      }
+    }
   }
 
   for (const rule of descriptor.attentionRules) {
@@ -885,6 +1091,8 @@ export function validateTypePackage(
 
   for (const rule of descriptor.reactionRules) {
     const item = workItems.get(rule.workItemRef)
+    const capabilityItem =
+      rule.capabilityWorkItemRef === undefined ? item : workItems.get(rule.capabilityWorkItemRef)
     if (!events.has(rule.eventTypeId)) {
       violations.push({
         code: 'unknown-event-type',
@@ -908,6 +1116,13 @@ export function validateTypePackage(
         detail: rule.workItemRef,
       })
       continue
+    }
+    if (capabilityItem === undefined) {
+      violations.push({
+        code: 'unknown-capability-work-item',
+        at: `reactionRules.${rule.ruleId}.capabilityWorkItemRef`,
+        detail: rule.capabilityWorkItemRef!,
+      })
     }
     const slotIds = new Set(
       item.toolRoleGroups.flatMap((role) => role.bindingSlots.map((slot) => slot.slotRef)),
@@ -997,6 +1212,7 @@ export function mergeExactToolBindings(input: {
   readonly manifest: EmployeeAuthoringManifest
   readonly defaults: readonly WorkItemToolBinding[]
   readonly overrides: readonly WorkItemToolBinding[]
+  readonly enabledWorkItemRefs?: readonly string[]
 }): { bindings: WorkItemToolBinding[]; violations: TypePackageViolation[] } {
   const violations: TypePackageViolation[] = []
   const allowed = new Map<string, { workItemRef: string; slotRef: string; required: boolean }>()
@@ -1040,8 +1256,10 @@ export function mergeExactToolBindings(input: {
   apply(input.defaults, 'jobTemplate.defaultToolBindings')
   apply(input.overrides, 'employee.toolOverrides')
 
+  const enabled =
+    input.enabledWorkItemRefs === undefined ? null : new Set(input.enabledWorkItemRefs)
   for (const [key, slot] of allowed) {
-    if (slot.required && !merged.has(key)) {
+    if (slot.required && (enabled === null || enabled.has(slot.workItemRef)) && !merged.has(key)) {
       violations.push({
         code: 'required-tool-binding-missing',
         at: `workItems.${slot.workItemRef}`,

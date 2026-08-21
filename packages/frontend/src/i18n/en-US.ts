@@ -2564,7 +2564,7 @@ export const enUS: Resources = {
     webhookEndpoints: {
       eyebrow: 'Receive events',
       title: 'Ingress endpoints',
-      add: 'New endpoint',
+      add: 'New Webhook endpoint',
       hint: 'Create a stable event entrance for GitLab or GitHub, then paste its URL and secret into the code-host webhook.',
       empty: 'No ingress endpoints yet',
       emptyDescription:

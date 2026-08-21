@@ -1,6 +1,6 @@
 // RFC-310 —— AC 证据索引的**可执行性**守卫。
 //
-// `design/RFC-310-.../plan.md §13a` 把 35 条验收标准逐条映射到具体测试文件
+// `design/RFC-310-.../plan.md §13a` 把 77 条验收标准逐条映射到具体测试文件
 // （"AC-14/25/35 → rfc310-pr5-* + rfc310-t109-full-journey-e2e"）。那份索引是
 // 本 RFC「功能自证」的落脚点：它声称每条 AC 都有可复跑的证据。
 //
@@ -10,7 +10,7 @@
 //
 // 这条测试把索引变成可执行的：
 //   ①索引里点名的每个测试文件**必须真实存在**（glob 形态至少命中一个）；
-//   ②AC-1..AC-35 必须**逐条出现**，不许有洞；
+//   ②AC-1..AC-77 必须**逐条出现**，不许有洞；
 //   ③失败关闭——扫不到东西时红，而不是"没找到违规"式的空洞绿。
 //
 // 它不检查那些文件是否绿：那是 `gate:local` / CI 的职责，重复断言只会两处都
@@ -102,10 +102,10 @@ describe('RFC-310 AC evidence index stays executable', () => {
     expect(missing).toEqual([])
   })
 
-  test('AC-1..AC-35 are each cited somewhere in the index', () => {
+  test('AC-1..AC-77 are each cited somewhere in the index', () => {
     const cited = citedAcNumbers(section)
     const gaps: number[] = []
-    for (let ac = 1; ac <= 35; ac++) {
+    for (let ac = 1; ac <= 77; ac++) {
       if (!cited.has(ac)) gaps.push(ac)
     }
     expect(gaps).toEqual([])

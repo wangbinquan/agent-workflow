@@ -129,16 +129,15 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   // UserMenu and ShellNavigation subscribe to the same actor query through
   // separate observers. The menu can commit one render before the admin-only
   // navigation rows, so waiting on it alone still leaves screenshots racing
-  // the late /webhooks row. Lock the visible navigation tree as well.
+  // the late Event Center row. Lock the visible navigation tree as well.
   await expect(
-    page.locator('[data-testid^="shell-navigation-"]:visible a[href="/webhooks"]'),
+    page.locator('[data-testid^="shell-navigation-"]:visible a[href="/events"]'),
   ).toBeVisible()
   // …and the LAST row of the LAST nav group, which is what actually settles the
-  // sidebar's height. `/webhooks` alone stopped being sufficient the moment
-  // RFC-304 added `/code` after it: the screenshot could land with `/code`
-  // still unrendered, so the same commit produced a passing run at 08:56 and a
-  // failing one at 09:19 (visual-regression-nightly, 2026-08-16) — one nav row
-  // of vertical shift in every scene that shows the sidebar.
+  // sidebar's height. `/events` alone is insufficient because later groups can
+  // still be rendering; the last-row anchor below is the authoritative settle
+  // point. Earlier intermediate-row anchors produced a passing run followed by
+  // a one-nav-row vertical shift in the next run, even at the same source SHA.
   //
   // ⚠️ This anchor must track the last `NAV_GROUPS` row. Pinning anything else
   // silently reopens the race, and the failure shows up as an unrelated-looking
@@ -1073,18 +1072,18 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%402?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%403?view=toolbox&workItem=analyze-implement`,
     )
     const graph = page.getByTestId('digital-employee-responsibility-graph')
     await expect(graph).toBeVisible()
-    await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+    await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
     await waitForStableAuthenticatedShell(page)
     // The app shell scrolls its main pane internally. Playwright fills the
     // clipped tail of an element screenshot with the page background instead
     // of scrolling that ancestor, so the canonical 1280x800 viewport silently
-    // omitted the final merge-readiness lane despite all 18 nodes existing.
+    // omitted the final merge-readiness lane despite all 20 nodes existing.
     // Give this component-only evidence enough height to prove the fully
     // expanded panorama; the functional journey still locks the normal desktop
     // viewport, same-page selection, and absence of horizontal overflow.
@@ -1103,7 +1102,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%402?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%403?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
