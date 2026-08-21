@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
+  developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import {
@@ -18,6 +19,7 @@ import {
   MAX_EMPLOYEE_INVOCATION_DEPTH,
 } from '@/modules/digital-employee/domain/runtimeModel'
 import { composeEventCenter } from '@/modules/event-center/composition'
+import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -142,32 +144,40 @@ describe('RFC-310 stateful employee Case runtime', () => {
       now: () => now,
       id: nextId,
     })
+    const executionContracts = new ExecutionContractService({
+      registrations: developmentExecutionContractRegistrations,
+      resources: {
+        async inspect({ implementation }) {
+          return {
+            kind: implementation.kind,
+            name:
+              implementation.kind === 'agent'
+                ? implementation.agentRef.id
+                : implementation.workflowRef.id,
+            available: true,
+            detail: 'runtime test exact executor',
+            declaredContractRefs:
+              implementation.kind === 'agent'
+                ? developmentExecutionContractRegistrations.map(
+                    (registration) => registration.contractRef,
+                  )
+                : null,
+          }
+        },
+      },
+      programFixtures: {
+        async validate() {
+          return [{ code: 'runtime-test-fixture', ok: true, detail: 'exact test fixture' }]
+        },
+      },
+    })
     const module = composeDigitalEmployee({
       db,
       appHome,
       typePackages: [developmentEmployeeTypePackage],
+      executionContracts,
       now: () => now,
       id: nextId,
-      resourceCatalog: {
-        async resolveAgent(ref) {
-          return {
-            kind: 'agent',
-            ref,
-            name: ref.id,
-            available: true,
-            closureSummary: 'strict employee envelope',
-          }
-        },
-        async resolveWorkflow(ref) {
-          return {
-            kind: 'workflow',
-            ref,
-            name: ref.id,
-            available: true,
-            closureSummary: 'closed workflow graph',
-          }
-        },
-      },
       connectionCatalog: {
         async resolve(ref) {
           return {
@@ -176,11 +186,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
             available: true,
             closureSummary: 'exact approval-gateway fixture',
           }
-        },
-      },
-      fixtureRunner: {
-        async validate() {
-          return [{ code: 'fixture', ok: true, detail: 'valid' }]
         },
       },
       runtime: {
@@ -319,7 +324,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 1 }
+    const typeRef = { typeId: 'development', revision: 2 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const bindings: Array<{

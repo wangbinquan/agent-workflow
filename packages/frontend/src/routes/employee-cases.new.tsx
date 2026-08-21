@@ -228,246 +228,251 @@ function NewEmployeeCasePage(): ReactElement {
           </p>
         </PageHeader>
 
-        {availableEmployees.length === 0 ? (
-          <NoticeBanner
-            tone="warning"
-            title={zh ? '还没有可用的数字员工' : 'No employee is available'}
-          >
-            {zh
-              ? '请先在“数字员工”中创建并启用一个员工。'
-              : 'Create, publish and enable an employee from Digital Employees first.'}
-          </NoticeBanner>
-        ) : null}
+        <div className="digital-employee-surface__body">
+          {availableEmployees.length === 0 ? (
+            <NoticeBanner
+              tone="warning"
+              title={zh ? '还没有可用的数字员工' : 'No employee is available'}
+            >
+              {zh
+                ? '请先在“数字员工”中创建并启用一个员工。'
+                : 'Create, publish and enable an employee from Digital Employees first.'}
+            </NoticeBanner>
+          ) : null}
 
-        <div className="employee-case-create-grid">
-          <FormSection title={zh ? '1. 谁来负责' : '1. Who owns this work'}>
-            <Field label={zh ? '数字员工' : 'Digital employee'} required>
-              <Select
-                value={employeeId}
-                onChange={(value) => {
-                  setEmployeeId(value)
-                  setTarget({})
-                }}
-                searchable
-                options={availableEmployees.map((candidate) => ({
-                  value: candidate.id,
-                  label: candidate.published?.displayName ?? candidate.name,
-                  description: candidate.published?.workScopeSummary,
-                }))}
-                placeholder={zh ? '选择数字员工' : 'Choose an employee'}
-                disabled={launch.isPending}
-              />
-            </Field>
-            {employee !== null && descriptor !== undefined ? (
-              <NoticeBanner
-                tone="info"
-                title={localized(descriptor.displayName, language)}
-                size="compact"
-              >
-                {employee.published?.workScopeSummary ??
-                  localized(descriptor.description, language)}
-              </NoticeBanner>
-            ) : typeQuery.isPending && employee !== null ? (
-              <LoadingState />
-            ) : typeQuery.isError ? (
-              <ErrorBanner error={typeQuery.error} />
-            ) : null}
-          </FormSection>
+          <div className="employee-case-create-grid">
+            <FormSection title={zh ? '1. 谁来负责' : '1. Who owns this work'}>
+              <Field label={zh ? '数字员工' : 'Digital employee'} required>
+                <Select
+                  value={employeeId}
+                  onChange={(value) => {
+                    setEmployeeId(value)
+                    setTarget({})
+                  }}
+                  searchable
+                  options={availableEmployees.map((candidate) => ({
+                    value: candidate.id,
+                    label: candidate.published?.displayName ?? candidate.name,
+                    description: candidate.published?.workScopeSummary,
+                  }))}
+                  placeholder={zh ? '选择数字员工' : 'Choose an employee'}
+                  disabled={launch.isPending}
+                />
+              </Field>
+              {employee !== null && descriptor !== undefined ? (
+                <NoticeBanner
+                  tone="info"
+                  title={localized(descriptor.displayName, language)}
+                  size="compact"
+                >
+                  {employee.published?.workScopeSummary ??
+                    localized(descriptor.description, language)}
+                </NoticeBanner>
+              ) : typeQuery.isPending && employee !== null ? (
+                <LoadingState />
+              ) : typeQuery.isError ? (
+                <ErrorBanner error={typeQuery.error} />
+              ) : null}
+            </FormSection>
 
-          <FormSection title={zh ? '2. 给它什么工作' : '2. What work should it do'}>
-            {descriptor !== undefined ? (
-              <>
-                {descriptor.workIntakeAuthoring.targetFields.map((field) => (
-                  <Field
-                    key={field.fieldRef}
-                    label={localized(field.label, language)}
-                    hint={localized(field.description, language)}
-                    required={field.required}
-                  >
-                    {field.inputKind === 'repository-picker' ? (
-                      <Select
-                        value={target[field.fieldRef] ?? ''}
-                        onChange={(value) =>
-                          setTarget((current) => ({ ...current, [field.fieldRef]: value }))
-                        }
-                        searchable
-                        options={(repositories.data?.items ?? []).map((repository) => ({
-                          value: repository.id,
-                          label: repository.urlRedacted,
-                        }))}
-                        placeholder={
-                          field.placeholder === null
-                            ? zh
-                              ? '选择仓库'
-                              : 'Choose repository'
-                            : localized(field.placeholder, language)
-                        }
-                        disabled={launch.isPending}
-                      />
-                    ) : field.inputKind === 'repository-group-picker' ? (
-                      <Select
-                        value={target[field.fieldRef] ?? ''}
-                        onChange={(value) =>
-                          setTarget((current) => ({ ...current, [field.fieldRef]: value }))
-                        }
-                        searchable
-                        options={(groups.data?.items ?? []).map((group) => ({
-                          value: group.id,
-                          label: group.name,
-                        }))}
-                        placeholder={zh ? '选择仓库组' : 'Choose repository group'}
-                        disabled={launch.isPending}
-                      />
-                    ) : (
-                      <TextInput
-                        value={target[field.fieldRef] ?? ''}
-                        onChange={(value) =>
-                          setTarget((current) => ({ ...current, [field.fieldRef]: value }))
-                        }
-                        placeholder={
-                          field.placeholder === null
-                            ? undefined
-                            : localized(field.placeholder, language)
-                        }
-                        disabled={launch.isPending}
-                      />
-                    )}
-                  </Field>
-                ))}
-
-                <Field label={zh ? '工作材料形式' : 'Work material'} group required>
-                  <Segmented
-                    value={kind}
-                    onChange={setKind}
-                    ariaLabel={zh ? '工作材料形式' : 'Work material kind'}
-                    options={acceptedKinds.map((value) => ({
-                      value,
-                      label: kindLabel(value),
-                    }))}
-                    disabled={launch.isPending}
-                  />
-                </Field>
-
-                {needsBody ? (
-                  <Field
-                    label={localized(descriptor.workIntakeAuthoring.body.label, language)}
-                    hint={localized(descriptor.workIntakeAuthoring.body.description, language)}
-                    required
-                  >
-                    <TextArea
-                      value={body}
-                      onChange={setBody}
-                      placeholder={localized(
-                        descriptor.workIntakeAuthoring.body.placeholder,
-                        language,
-                      )}
-                      disabled={launch.isPending}
-                    />
-                  </Field>
-                ) : null}
-
-                {kind === 'external-id' ? (
-                  <Field
-                    label={localized(descriptor.workIntakeAuthoring.externalId.label, language)}
-                    hint={localized(
-                      descriptor.workIntakeAuthoring.externalId.description,
-                      language,
-                    )}
-                    required
-                  >
-                    <TextInput
-                      value={externalId}
-                      onChange={setExternalId}
-                      placeholder={localized(
-                        descriptor.workIntakeAuthoring.externalId.placeholder,
-                        language,
-                      )}
-                      disabled={launch.isPending}
-                    />
-                  </Field>
-                ) : null}
-
-                {needsFiles ? (
-                  <Field
-                    label={localized(descriptor.workIntakeAuthoring.files.label, language)}
-                    hint={localized(descriptor.workIntakeAuthoring.files.description, language)}
-                    required
-                  >
-                    <FilesDropzone
-                      files={files.map((draft) => draft.file)}
-                      onFilesChange={(next) => {
-                        const previous = new Map(files.map((draft) => [draft.file, draft]))
-                        setFiles(
-                          next.map(
-                            (file) =>
-                              previous.get(file) ?? {
-                                file,
-                                targetPath: file.name,
-                                key: crypto.randomUUID(),
-                              },
-                          ),
-                        )
-                      }}
-                      maxCount={descriptor.workIntakeAuthoring.files.maxFiles}
-                      title={zh ? '拖入或选择文件' : 'Drop or choose files'}
-                      description={
-                        zh
-                          ? '每个文件都要指定提交到仓库中的路径。'
-                          : 'Each file needs an exact path in the target repository.'
-                      }
-                      chooseLabel={zh ? '选择文件' : 'Choose files'}
-                      removeLabel={zh ? '移除' : 'Remove'}
-                      disabled={launch.isPending}
-                    />
-                    <div className="employee-case-upload-list">
-                      {files.map((draft, index) => (
-                        <Card
-                          key={draft.key}
-                          title={draft.file.name}
-                          actions={
-                            <span className="muted">{formatShortBytes(draft.file.size)}</span>
+            <FormSection title={zh ? '2. 给它什么工作' : '2. What work should it do'}>
+              {descriptor !== undefined ? (
+                <>
+                  {descriptor.workIntakeAuthoring.targetFields.map((field) => (
+                    <Field
+                      key={field.fieldRef}
+                      label={localized(field.label, language)}
+                      hint={localized(field.description, language)}
+                      required={field.required}
+                    >
+                      {field.inputKind === 'repository-picker' ? (
+                        <Select
+                          value={target[field.fieldRef] ?? ''}
+                          onChange={(value) =>
+                            setTarget((current) => ({ ...current, [field.fieldRef]: value }))
                           }
-                        >
-                          <Field label={zh ? '提交到仓库路径' : 'Repository target path'} required>
-                            <TextInput
-                              value={draft.targetPath}
-                              onChange={(value) =>
-                                setFiles((current) =>
-                                  current.map((item, itemIndex) =>
-                                    itemIndex === index ? { ...item, targetPath: value } : item,
-                                  ),
-                                )
-                              }
-                              placeholder="src/example.txt"
-                              disabled={launch.isPending}
-                            />
-                          </Field>
-                        </Card>
-                      ))}
-                    </div>
-                  </Field>
-                ) : null}
-              </>
-            ) : null}
-          </FormSection>
-        </div>
+                          searchable
+                          options={(repositories.data?.items ?? []).map((repository) => ({
+                            value: repository.id,
+                            label: repository.urlRedacted,
+                          }))}
+                          placeholder={
+                            field.placeholder === null
+                              ? zh
+                                ? '选择仓库'
+                                : 'Choose repository'
+                              : localized(field.placeholder, language)
+                          }
+                          disabled={launch.isPending}
+                        />
+                      ) : field.inputKind === 'repository-group-picker' ? (
+                        <Select
+                          value={target[field.fieldRef] ?? ''}
+                          onChange={(value) =>
+                            setTarget((current) => ({ ...current, [field.fieldRef]: value }))
+                          }
+                          searchable
+                          options={(groups.data?.items ?? []).map((group) => ({
+                            value: group.id,
+                            label: group.name,
+                          }))}
+                          placeholder={zh ? '选择仓库组' : 'Choose repository group'}
+                          disabled={launch.isPending}
+                        />
+                      ) : (
+                        <TextInput
+                          value={target[field.fieldRef] ?? ''}
+                          onChange={(value) =>
+                            setTarget((current) => ({ ...current, [field.fieldRef]: value }))
+                          }
+                          placeholder={
+                            field.placeholder === null
+                              ? undefined
+                              : localized(field.placeholder, language)
+                          }
+                          disabled={launch.isPending}
+                        />
+                      )}
+                    </Field>
+                  ))}
 
-        {launch.isError ? <ErrorBanner error={launch.error} /> : null}
-        <div className="employee-case-create-actions">
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!ready || launch.isPending}
-            onClick={() => launch.mutate()}
-          >
-            {launch.isPending
-              ? zh
-                ? '正在交给数字员工…'
-                : 'Assigning…'
-              : zh
-                ? '交给数字员工'
-                : 'Assign work'}
-          </button>
+                  <Field label={zh ? '工作材料形式' : 'Work material'} group required>
+                    <Segmented
+                      value={kind}
+                      onChange={setKind}
+                      ariaLabel={zh ? '工作材料形式' : 'Work material kind'}
+                      options={acceptedKinds.map((value) => ({
+                        value,
+                        label: kindLabel(value),
+                      }))}
+                      disabled={launch.isPending}
+                    />
+                  </Field>
+
+                  {needsBody ? (
+                    <Field
+                      label={localized(descriptor.workIntakeAuthoring.body.label, language)}
+                      hint={localized(descriptor.workIntakeAuthoring.body.description, language)}
+                      required
+                    >
+                      <TextArea
+                        value={body}
+                        onChange={setBody}
+                        placeholder={localized(
+                          descriptor.workIntakeAuthoring.body.placeholder,
+                          language,
+                        )}
+                        disabled={launch.isPending}
+                      />
+                    </Field>
+                  ) : null}
+
+                  {kind === 'external-id' ? (
+                    <Field
+                      label={localized(descriptor.workIntakeAuthoring.externalId.label, language)}
+                      hint={localized(
+                        descriptor.workIntakeAuthoring.externalId.description,
+                        language,
+                      )}
+                      required
+                    >
+                      <TextInput
+                        value={externalId}
+                        onChange={setExternalId}
+                        placeholder={localized(
+                          descriptor.workIntakeAuthoring.externalId.placeholder,
+                          language,
+                        )}
+                        disabled={launch.isPending}
+                      />
+                    </Field>
+                  ) : null}
+
+                  {needsFiles ? (
+                    <Field
+                      label={localized(descriptor.workIntakeAuthoring.files.label, language)}
+                      hint={localized(descriptor.workIntakeAuthoring.files.description, language)}
+                      required
+                    >
+                      <FilesDropzone
+                        files={files.map((draft) => draft.file)}
+                        onFilesChange={(next) => {
+                          const previous = new Map(files.map((draft) => [draft.file, draft]))
+                          setFiles(
+                            next.map(
+                              (file) =>
+                                previous.get(file) ?? {
+                                  file,
+                                  targetPath: file.name,
+                                  key: crypto.randomUUID(),
+                                },
+                            ),
+                          )
+                        }}
+                        maxCount={descriptor.workIntakeAuthoring.files.maxFiles}
+                        title={zh ? '拖入或选择文件' : 'Drop or choose files'}
+                        description={
+                          zh
+                            ? '每个文件都要指定提交到仓库中的路径。'
+                            : 'Each file needs an exact path in the target repository.'
+                        }
+                        chooseLabel={zh ? '选择文件' : 'Choose files'}
+                        removeLabel={zh ? '移除' : 'Remove'}
+                        disabled={launch.isPending}
+                      />
+                      <div className="employee-case-upload-list">
+                        {files.map((draft, index) => (
+                          <Card
+                            key={draft.key}
+                            title={draft.file.name}
+                            actions={
+                              <span className="muted">{formatShortBytes(draft.file.size)}</span>
+                            }
+                          >
+                            <Field
+                              label={zh ? '提交到仓库路径' : 'Repository target path'}
+                              required
+                            >
+                              <TextInput
+                                value={draft.targetPath}
+                                onChange={(value) =>
+                                  setFiles((current) =>
+                                    current.map((item, itemIndex) =>
+                                      itemIndex === index ? { ...item, targetPath: value } : item,
+                                    ),
+                                  )
+                                }
+                                placeholder="src/example.txt"
+                                disabled={launch.isPending}
+                              />
+                            </Field>
+                          </Card>
+                        ))}
+                      </div>
+                    </Field>
+                  ) : null}
+                </>
+              ) : null}
+            </FormSection>
+          </div>
+
+          {launch.isError ? <ErrorBanner error={launch.error} /> : null}
+          <div className="employee-case-create-actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!ready || launch.isPending}
+              onClick={() => launch.mutate()}
+            >
+              {launch.isPending
+                ? zh
+                  ? '正在交给数字员工…'
+                  : 'Assigning…'
+                : zh
+                  ? '交给数字员工'
+                  : 'Assign work'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

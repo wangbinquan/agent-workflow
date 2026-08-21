@@ -23,6 +23,10 @@ interface ExactRef {
 
 interface EmployeeTypePackage {
   authoringManifest: {
+    lifecycleRegions: Array<{
+      regionId: string
+      responsibilityLanes: Array<{ laneId: string; kind: 'spine' | 'branch' }>
+    }>
     workItems: Array<{
       workItemRef: string
       workContractRef: { contractId: string; version: number }
@@ -43,7 +47,10 @@ interface EmployeeTypePackage {
 interface AgentChoice {
   id: string
   updatedAt: number
-  frontmatterExtra: { digitalEmployeeTemplate?: string }
+  frontmatterExtra: {
+    digitalEmployeeTemplate?: string
+    executionContracts?: Array<{ contractId: string; version: number }>
+  }
 }
 
 interface ToolDraft {
@@ -56,9 +63,21 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@1'
-const PROGRAM_FIXTURE =
-  'printf \'<workflow-output nonce="%s"><port name="result">{"schemaVersion":1,"ok":true}</port></workflow-output>\\n\' "$AW_ENVELOPE_NONCE"'
+const TYPE_REF = 'development@2'
+const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
+const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
+  readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
+const input = JSON.parse(inputJson)
+process.stdout.write(JSON.stringify({
+  schemaVersion: 1,
+  roundRef: input.roundRef,
+  executionNonce: input.executionNonce,
+  status: 'blocked',
+  summary: 'browser contract fixture',
+  contextPatches: [],
+  effectSuggestions: [],
+  artifactRefs: [],
+}))`
 
 let daemon: DaemonHandle
 let mocks: SystemMockClient
@@ -148,11 +167,7 @@ async function seedPublishedEmployee(): Promise<void> {
     `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}`,
   )
   const agents = await requestJson<AgentChoice[]>('/api/agents/builtins/digital-employee-templates')
-  const agent =
-    agents.find(
-      (candidate) => candidate.frontmatterExtra.digitalEmployeeTemplate === 'code-writing',
-    ) ?? agents[0]
-  if (agent === undefined) throw new Error('built-in Digital Employee Agent templates are missing')
+  if (agents.length === 0) throw new Error('built-in Digital Employee Agent templates are missing')
   const approvalAdapterRef = await createPublishedApprovalAdapter()
   const bindings: Array<{
     workItemRef: string
@@ -170,20 +185,27 @@ async function seedPublishedEmployee(): Promise<void> {
     for (const role of item.toolRoleGroups) {
       for (const slot of role.bindingSlots) {
         if (!slot.required) continue
-        const implementation = contract.allowedToolKinds.includes('agent')
-          ? {
-              kind: 'agent' as const,
-              agentRef: { id: agent.id, revision: agent.updatedAt },
-            }
-          : contract.allowedToolKinds.includes('program')
+        const agent = agents.find((candidate) =>
+          candidate.frontmatterExtra.executionContracts?.some(
+            (declared) =>
+              declared.contractId === contract.contractId && declared.version === contract.version,
+          ),
+        )
+        const implementation =
+          contract.allowedToolKinds.includes('agent') && agent !== undefined
             ? {
-                kind: 'program' as const,
-                runtimeKind: 'bash' as const,
-                source: PROGRAM_FIXTURE,
-                parameterValues: {},
-                runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+                kind: 'agent' as const,
+                agentRef: { id: agent.id, revision: agent.updatedAt },
               }
-            : null
+            : contract.allowedToolKinds.includes('program')
+              ? {
+                  kind: 'program' as const,
+                  runtimeKind: 'node' as const,
+                  source: PROGRAM_FIXTURE,
+                  parameterValues: {},
+                  runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+                }
+              : null
         if (implementation === null) {
           throw new Error(`${item.workItemRef}/${slot.slotRef} has no browser fixture executor`)
         }
@@ -305,8 +327,33 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await primeAuth(page)
 
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
-  await expect(page.getByTestId('digital-employee-responsibility-graph')).toBeVisible()
+  const responsibilityGraph = page.getByTestId('digital-employee-responsibility-graph')
+  await expect(responsibilityGraph).toBeVisible()
   await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(18)
+  await expect(responsibilityGraph.locator('.employee-graph__lane-bg--spine')).toHaveCount(2)
+  await expect(responsibilityGraph.locator('.employee-graph__lane-bg--branch')).toHaveCount(5)
+  await expect(responsibilityGraph.locator('.employee-graph__dispatch-trunk')).toHaveCount(1)
+  await expect(
+    responsibilityGraph.locator('path[data-from="observe-mr"][data-to="collect-pipeline"]'),
+  ).toHaveCount(1)
+  await expect(
+    responsibilityGraph.locator(
+      'path.employee-graph__edge--loop[data-from="repair-pipeline"][data-to="repair-pipeline"]',
+    ),
+  ).toHaveCount(1)
+  await expect(
+    responsibilityGraph.locator('path[data-from="classify-pipeline"][data-to="delegate"]'),
+  ).toHaveCount(1)
+  await expect(
+    responsibilityGraph.locator('path[data-from="evaluate-ready"][data-to="wait-merge"]'),
+  ).toHaveCount(1)
+  await expect(
+    responsibilityGraph.locator('path[data-from="observe-mr"][data-to="wait-merge"]'),
+  ).toHaveCount(0)
+  const horizontalOverflow = await responsibilityGraph.evaluate(
+    (element) => element.scrollWidth - element.clientWidth,
+  )
+  expect(horizontalOverflow).toBeLessThanOrEqual(1)
   await expect(page.getByText(employeeName, { exact: true })).toBeVisible()
 
   await page.goto(`${daemon.baseUrl}/tasks/employee-cases/new`)

@@ -467,7 +467,7 @@ function TasksPage() {
     caseItems.length === 0 &&
     !initialEmpty
   const newTaskAction = (
-    <div className="page-header__actions">
+    <>
       <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
         {t('tasks.newButton')}
       </Link>
@@ -478,7 +478,7 @@ function TasksPage() {
       >
         {t('tasks.operations.newDigitalEmployee')}
       </Link>
-    </div>
+    </>
   )
   const previousResult = useRef<{ fingerprint: string; count: number } | null>(null)
   useEffect(() => {

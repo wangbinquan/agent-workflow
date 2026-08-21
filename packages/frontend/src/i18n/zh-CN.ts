@@ -5023,6 +5023,8 @@ export interface Resources {
         wrapperSameName: string
         wrapperDuplicate: string
         branch: string
+        managed: string
+        managedHint: string
         normalOutput: string
         inactiveWrapperMap: string
       }
@@ -5120,6 +5122,8 @@ export interface Resources {
     }
     groupCapabilities: string
     groupCapabilitiesHint: string
+    fieldExecutionContracts: string
+    fieldExecutionContractsHint: string
     groupDependencies: string
     groupDependenciesHint: string
     fieldSkills: string
@@ -11121,7 +11125,7 @@ export const zhCN: Resources = {
   },
   tasks: {
     title: '任务',
-    newButton: '新建任务',
+    newButton: '新建编排任务',
     filterAll: '全部',
     emptyList: '还没有任务',
     emptyDescription: '启动工作流、工作组或单个代理，并在这里持续跟踪每次执行。',
@@ -12511,6 +12515,8 @@ export const zhCN: Resources = {
         wrapperSameName: '聚合后保持名称 {{name}}',
         wrapperDuplicate: '聚合名称重复',
         branch: '分支端口',
+        managed: '契约托管',
+        managedHint: '由平台执行契约维护；请通过上方契约选择器变更。',
         normalOutput: '运行信封必须按此名称产出。',
         inactiveWrapperMap: '保留的聚合映射 {{name}} → {{wrapper}} 在普通代理角色下不生效。',
       },
@@ -12604,6 +12610,9 @@ export const zhCN: Resources = {
     },
     groupCapabilities: '可用能力',
     groupCapabilitiesHint: '运行时可调用的技能、工具和扩展',
+    fieldExecutionContracts: '平台执行契约',
+    fieldExecutionContractsHint:
+      '选择这个 Agent 能消费的确定性输入。平台会在本页自动增删并锁定 agent-result 输出端口；切换或取消契约时端口同步变化。',
     groupDependencies: '协作代理',
     groupDependenciesHint: '这个代理可以向其委派工作',
     fieldSkills: '技能',

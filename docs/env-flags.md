@@ -36,7 +36,11 @@
 `AW_PORT_MY_PORT`（同上，保留名）、`AW_PORT_DIFF`（`backend/src/services/scriptPorts.ts`，
 diff 端口的免拷贝特例）、`AW_PORT_PROMPT`（RFC-310 PR-11 数字员工 program 步骤：合成的
 script host 快照只有 `prompt` 一个输入端口，程序从这里拿平台提示词——见
-`backend/src/modules/task-execution/domain/digitalEmployeeHost.ts`）。语义契约见 script 节点相关 RFC / 源码；此处只登记名字防漂移。
+`backend/src/modules/task-execution/domain/digitalEmployeeHost.ts`）、`AW_PORT_CONTRACT_INPUT` /
+`AW_PORT_FILE_CONTRACT_INPUT`（RFC-310 PR-19 平台执行合同：小输入直接注入，超过 script
+端口阈值后只保留落盘文件路径；定义点
+`backend/src/modules/execution-contract/domain/model.ts`）。语义契约见 script 节点相关 RFC / 源码；
+此处只登记名字防漂移。
 
 ### development pipeline adapter 上下文族（`backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts` 组装，RFC-310 PR-6）
 

@@ -1,9 +1,9 @@
-// RFC-310 T143: executable owner/dependency manifest for the two OS contexts.
+// RFC-310 T143/T165: executable owner/dependency manifest for the OS contexts.
 // RFC-294's global seven-manifest W0-R remains a separate migration wave; this
 // vertical-slice manifest prevents the new contexts from adding that debt now.
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -24,7 +24,9 @@ interface ContextManifest {
 
 interface OsArchitectureManifest {
   readonly schemaVersion: 1
-  readonly contexts: Readonly<Record<'digital-employee' | 'event-center', ContextManifest>>
+  readonly contexts: Readonly<
+    Record<'digital-employee' | 'event-center' | 'execution-contract', ContextManifest>
+  >
   readonly genericTypeLiteralBan: string
 }
 
@@ -96,6 +98,7 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
     const genericRoots = [
       join(BACKEND_SRC, 'modules', 'digital-employee'),
       join(BACKEND_SRC, 'modules', 'event-center'),
+      join(BACKEND_SRC, 'modules', 'execution-contract'),
       join(REPO_ROOT, 'packages', 'frontend', 'src', 'components', 'digital-employees'),
     ]
     const genericRoutes = [
@@ -111,5 +114,31 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
         .filter((file) => literal.test(readFileSync(file, 'utf8')))
         .map((file) => portable(relative(REPO_ROOT, file))),
     ).toEqual([])
+  })
+
+  test('every Digital Employee composition requires the platform execution-contract participant', () => {
+    const composition = readFileSync(
+      join(BACKEND_SRC, 'modules', 'digital-employee', 'composition.ts'),
+      'utf8',
+    )
+    const authoring = readFileSync(
+      join(BACKEND_SRC, 'modules', 'digital-employee', 'application', 'authoringService.ts'),
+      'utf8',
+    )
+    const runtime = readFileSync(
+      join(BACKEND_SRC, 'modules', 'digital-employee', 'application', 'runtimeService.ts'),
+      'utf8',
+    )
+    expect(composition).toContain('readonly executionContracts: ExecutionContractParticipant')
+    expect(authoring).toContain('readonly executionContracts: ExecutionContractParticipant')
+    expect(runtime).toContain('readonly executionContracts: ExecutionContractParticipant')
+    expect(composition).not.toContain('executionContracts?:')
+    expect(authoring).not.toContain('executionContracts?:')
+    expect(runtime).not.toContain('executionContracts?:')
+    expect(
+      existsSync(
+        join(BACKEND_SRC, 'modules', 'digital-employee', 'composition', 'defaultRequiredPorts.ts'),
+      ),
+    ).toBe(false)
   })
 })

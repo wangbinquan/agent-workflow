@@ -16,6 +16,13 @@
 > 2026-08-21 以四个随机化后端分片、frontend 6660、shared 2219、system-mock 35 全绿；当前仅剩 exact-SHA hosted CI
 > 的发布验证，最终证据写入 plan/STATE。
 >
+> **2026-08-21 PR-19（待 hosted 验证）**：把 Agent/Workflow/ProgramTool 的输入输出约束提升为平台级
+> `execution-contract`，并把固定职责图升级为 manifest 驱动的“生命周期背景 + 职责泳道 + 确定性边/回路”。研发
+> “MR 看护与修绿”不再把所有节点顺序平铺，而是由 MR 事件入口分发到检视、流水线、冲突、跨仓/审批和合入判断五条职责支线。
+> Agent 编辑器中的契约选择与端口归入同一“输入/输出”页；`agent-result` 是契约托管端口，随契约原子增删，不能单独编辑或删除。
+> 由于本批修改了已冻结的 AuthoringManifest/后继关系，内置研发类型发布为 `development@2`，不覆写或删除已登记的
+> `development@1`；已有数据库启动时新增 revision，因此不触发 descriptor drift，空库与升级库走同一 bootstrap 路径。
+>
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
 > [RFC-308](../RFC-308-unified-task-git-commit-exclusions/proposal.md)、
@@ -61,6 +68,7 @@ DigitalEmployeeType = ContextTypes
                     + WorkScopeContract
                     + WorkItems
                     + WorkContracts
+                    + ExecutionContractRegistrations
                     + AttentionRules
                     + ReactionRules
                     + InvocationContracts
@@ -220,6 +228,7 @@ validator、重试、回退和 Effect closure，不承诺模型每次生成字�
 | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | Employee Type SDK、员工定义/revision、EmployeeCase、Context Graph、Attention/Reaction、EmployeeChannel/Join | 新通用 `digital-employee` bounded context          |
 | Event Type/Source、Subscription、ObserverActivation、Event Record 与 delivery contract                      | 新通用 `event-center` bounded context              |
+| 执行器中立的输入输出指南、Agent/Workflow/Program 兼容校验、fixture 与 exact 输出回执                        | 新通用 `execution-contract` bounded context        |
 | Agent、Workflow 与其已发布资源 revision                                                                     | `resource-catalog` 各 typed aggregate              |
 | 分类工作项工具注册；ProgramTool 的版本化程序规范                                                            | `digital-employee`；程序仍交给既有 Script executor |
 | Workflow/Agent/Script 的实际运行                                                                            | `task-execution`                                   |
@@ -228,7 +237,7 @@ validator、重试、回退和 Effect closure，不承诺模型每次生成字�
 | transaction/outbox/lease/timer/process/durable queue kernel                                                 | 技术 `platform`                                    |
 | 首个代码员工的 Context/Event/职责/规则/调用合同与默认编排                                                   | `development-automation` 员工类型包                |
 
-`event-center` 与 `digital-employee` 是对 RFC-294 bounded-context 清单的目标扩展；实施前必须同步 RFC-294 架构总纲与
+`event-center`、`digital-employee` 与 `execution-contract` 是对 RFC-294 bounded-context 清单的目标扩展；实施前必须同步 RFC-294 架构总纲与
 依赖棘轮，不能在 `development-automation` 内先做一套临时公共实现。
 
 每个数字员工分类拥有自己的**分类工具箱**。已发布 Agent、Workflow 以 opaque revision ref 注册为某分类某份 WorkContract 的
@@ -268,6 +277,18 @@ defineEmployeeType({
 实现多份合同，一个工作项也可以有多个兼容工具，但员工节点只能从合同兼容集合中选择。工具不拥有阶段、事件、队列或
 下一步；同一个工具若跨员工类型复用，仍要分别对每份工作合同证明兼容。
 
+`WorkContract` 仍表达“这项职责要完成什么”；平台级 `ExecutionContract` 统一表达“执行器怎样取得输入、必须怎样交回输出”。
+每个工作项 pin exact `ExecutionContractRef`，类型包只注册业务 schema、字段说明、示例和 semantic validator，不自行实现
+Agent/Script 注入与解析。平台统一提供：
+
+- 直接字段注入，例如外部问题 ID 必须出现在 `contractInput.workRequest.externalId`，不能只藏在 prompt 描述里；
+- Agent 通过固定 `agent-result` 输出口交一个无 Markdown/无前后文字的 exact JSON object，并显式声明支持的合同 revision；
+- ProgramTool 从 `AW_PORT_CONTRACT_INPUT` 取得小输入，大输入由平台 spill 后从 `AW_PORT_FILE_CONTRACT_INPUT` 读取，stdout
+  只能输出同一 exact JSON object；编辑器显示起始代码和字段说明；
+- Workflow 由平台检查必需输入、结果口、可达节点和 Effect closure；
+- 工具保存/发布前运行兼容检查与 fixture；每轮结算前再次对拍 contract revision、`roundRef`、`executionNonce`、字段闭集和
+  semantic validator。失败返回具名现场给全局执行策略重试，不让各员工类型复制解析器。
+
 业务用户创建员工时只配置：员工分类、岗位模板、名称/启停、适用范围，以及没有被模板填满的工作项工具绑定。普通工作项只需
 选择一个工具；问题处理工作项按分类包声明的“识别工具 / 修复工具”槽位选择工具，`问题类型 → 槽位` 路由仍由分类包固定；
 协作工作项只选择允许的另一名员工或审批目标，输入输出和完成标准只读。
@@ -280,10 +301,12 @@ Event Center、Context 存储、队列、Token、Git 或执行器实现。
 
 ### 0A.9 确定性画布与运行态界面
 
-员工类型包声明固定生命周期区域、Context/Event 内部合同、职责工作项与允许的输出关系；业务用户在一个全量展开的画布
+员工类型包声明固定生命周期区域、Context/Event 内部合同、职责泳道、职责工作项与允许的输出关系；业务用户在一个全量展开的画布
 上只补齐工具，不编辑运行时拓扑：
 
 - 生命周期区域固定作为视觉背景，默认一次看见完整员工职责全景；
+- 每个区域可声明一条 `spine` 主干和若干 `branch` 职责泳道；主干节点居中，支线内节点按业务顺序横向展开，支线之间纵向分隔；
+- `nextWorkItemRefs` 画出确定性前向边；返回事件入口、重新发布或重新采集等回边统一走外侧虚线回路，不能与支线内部顺序混在一起；
 - 不提供连线拖拽、阶段下拉框或任意新增边；Context 产出与 Attention 关系由类型包合同投影；
 - 平台自动节点灰显“无需配置”；可配置节点只显示工作名称、业务说明、已选工具与是否完整；
 - 右侧面板普通节点只有“使用的工具”；“平台自动提供的材料”和“完成标准”由 WorkContract 投影为只读业务文案；
@@ -338,27 +361,30 @@ Event Center 提供事件目录、Event Source、当前订阅和 Observer health
 
 ### 0A.11 首个研发数字员工分类的确定性职责图
 
-研发分类严格只有两项人的职责，职责区域作为固定背景；区域内再放可配置工作项和只读系统节点：
+研发分类严格只有两项人的职责，职责区域作为固定背景；区域内再按人的工作分成确定性主干与职责支线：
 
 ```text
 职责一：交付一个 MR
-  收到新工作(Event)
-    → [准备工作材料] → [分析并实现] → [验证改动] → [平台提交并创建 MR]
-                                                        │
-                                                        └─ 产出 MergeRequestContext
-                                                           自动建立 MR 关注
+  交付主干： [准备工作材料] → [分析并实现] → [形成修改候选] → [平台提交并创建 MR]
+                                                               │
+                                                               └─ 产出 MergeRequestContext
+                                                                  自动建立 MR 关注
 
 职责二：持续看护 MR
-  [等待 MR 变化·系统] → Event Queue 按规则选下一项
-    ├→ [处理检视意见] ─┐
-    ├→ [处理流水线]   ─┼→ [平台验证并发布修复] → [等待 MR 变化·系统]
-    ├→ [处理合并冲突] ─┤
-    └→ [跨员工协作/审批]┘
-  merged / closed(Event) → [结束关注·系统]
+  MR 事件入口：             [关注 MR 状态]
+                              ├─ 检视意见：      [识别检视问题] → [修复检视问题] ─────────┐
+                              ├─ 流水线门禁：    [取得门禁] → [识别失败] → [按类型修绿] ↺ 下一失败类型 ─┤
+                              │                                      └─ 外部依赖 → 跨仓/审批支线
+                              ├─ 代码冲突：      [修复冲突] → [平台发布冲突修复] ───────┤
+                              │  跨仓/审批：     [协同员工] → [准备审批] → [提交] → [等待] ┤
+                              └─ 合入判断：      [判断随时可合入] → [等待 committer 合入]  │
+                                                                                         └─ 回到事件入口
 ```
 
-连线和循环由研发 Type Package 固定。`MergeRequestContext` 一产生就通过 AttentionRule 扩张关注范围，不需要用户再配置
+五条支线是并列职责，不是一个必须依次跑完的阶段序列；Event Queue 每轮只选择一条当前匹配的支线。连线和循环由研发 Type
+Package 固定。`MergeRequestContext` 一产生就通过 AttentionRule 扩张关注范围，不需要用户再配置
 “创建 MR 后去监控 MR”。一轮只处理队列中的一个已选工作集；新评论与红流水线并存时，低优先级项留在下一轮。
+流水线同轮只执行规则选中的一个失败类型；仍有剩余类型时回到同一修绿工作项并重新按固定优先级选槽位，全部清零后才进入修改候选。
 
 首版工作项合同如下；业务界面显示中文名称和摘要，括号内 ID 只供技术合同：
 
@@ -1114,6 +1140,18 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   仅右侧面板分别执行“注册工具 / 选默认 / 覆盖默认 / 查看运行”。深链和刷新保持同一选中工作项。
 - **AC-52** 研发分类 manifest 只呈现“交付一个 MR / 持续看护 MR”两个职责背景及 §0A.11 的工作项。创建 MR 的系统节点产出
   `MergeRequestContext` 后自动建立关注；评论/流水线/冲突修复发布后回到等待节点；merged/closed 取消订阅并终结。
+- **AC-53** 执行合同由平台 `execution-contract` 唯一实现。类型包只能注册 exact schema guide/validator；Agent 必须声明
+  contract revision 并有 `agent-result`，Workflow 必须闭合必需输入/结果口/可达节点，Program 必须通过真实 Script fixture。
+  编辑、发布、ReactionPlan 冻结前输入和每轮结算输出都复用同一校验；外部 ID 直接注入，大输入可 spill 到文件，输入输出均具备
+  exact fields/types/round/nonce。
+  数字员工 authoring/runtime/execution composition 必须注入该 participant，禁止 optional 或旧 resource/fixture fallback。
+- **AC-54** AuthoringManifest 可声明通用 `spine | branch` 职责泳道；有泳道的区域中每个工作项都必须归属唯一已声明泳道。
+  四种图模式使用同一布局：主干居中、各职责横向展开、职责间纵向分隔、前向边与外侧回路可辨；无开发类型分支、无拖线和阶段选择。
+- **AC-55** `/tasks` 的新建入口明确命名为“新建编排任务”并与相邻动作保持标准间距；所有数字员工页面使用 operations
+  内容留白。窄屏只允许职责图整体横向滚动，不折叠或重排掉全景关系。
+- **AC-56** Agent 的平台执行契约选择必须位于“输入/输出”页并与端口列表同屏。选择或切换契约时平台在同一状态变更中
+  规范化唯一 `agent-result`；取消最后一个契约时同步移除端口及其 kind/wrapper/branch sidecar。该端口显示“契约托管”，没有
+  独立编辑/删除动作；所有服务端创建、更新、bundle 与 intent 保存入口复用同一规整命令，不能绕过 UI 保存矛盾状态。
 
 ## 15. 本轮已批准的设计决策
 

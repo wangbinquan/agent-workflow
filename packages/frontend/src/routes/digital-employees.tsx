@@ -64,70 +64,72 @@ function DigitalEmployeesPage(): ReactElement {
           </p>
         </PageHeader>
 
-        <TabBar
-          active={view}
-          onSelect={(next) =>
-            void navigate({ search: next === 'events' ? { view: 'events' } : {}, replace: true })
-          }
-          ariaLabel={zh ? '数字员工平台' : 'Digital employee platform'}
-          idPrefix="digital-employees-sections"
-          variant="segment"
-          tabs={[
-            { key: 'types', label: zh ? '员工分类' : 'Employee types' },
-            { key: 'events', label: zh ? '事件中心' : 'Event Center' },
-          ]}
-        />
+        <div className="digital-employee-surface__body">
+          <TabBar
+            active={view}
+            onSelect={(next) =>
+              void navigate({ search: next === 'events' ? { view: 'events' } : {}, replace: true })
+            }
+            ariaLabel={zh ? '数字员工平台' : 'Digital employee platform'}
+            idPrefix="digital-employees-sections"
+            variant="segment"
+            tabs={[
+              { key: 'types', label: zh ? '员工分类' : 'Employee types' },
+              { key: 'events', label: zh ? '事件中心' : 'Event Center' },
+            ]}
+          />
 
-        <div role="tabpanel" id={panelIds.panelId} aria-labelledby={panelIds.tabId} tabIndex={0}>
-          {view === 'events' ? (
-            <EventCenterPanel language={language} />
-          ) : (
-            <>
-              {query.isPending ? <LoadingState /> : null}
-              {query.isError ? <ErrorBanner error={query.error} /> : null}
-              {query.data?.items.length === 0 ? (
-                <EmptyState
-                  title={zh ? '还没有员工分类' : 'No employee types'}
-                  description={
-                    zh
-                      ? '员工分类由程序化类型包注册。'
-                      : 'Employee types are registered by programmable type packages.'
-                  }
-                />
-              ) : null}
-              <div className="employee-type-grid" data-testid="digital-employee-type-list">
-                {query.data?.items.map((type) => (
-                  <Link
-                    key={typeRefKey(type.typeRef)}
-                    to="/digital-employees/$typeRef"
-                    params={{ typeRef: typeRefKey(type.typeRef) }}
-                    search={{ view: 'employees' }}
-                    className="employee-type-card"
-                    data-testid={`digital-employee-type-${type.typeRef.typeId}`}
-                  >
-                    <span className="employee-type-card__eyebrow">
-                      {zh ? '数字员工分类' : 'Employee type'}
-                    </span>
-                    <strong>{localized(type.displayName, language)}</strong>
-                    <p>{localized(type.description, language)}</p>
-                    <dl>
-                      <div>
-                        <dt>{zh ? '职责' : 'Work items'}</dt>
-                        <dd>{type.authoringManifest.workItems.length}</dd>
-                      </div>
-                      <div>
-                        <dt>{zh ? '生命周期' : 'Lifecycle regions'}</dt>
-                        <dd>{type.authoringManifest.lifecycleRegions.length}</dd>
-                      </div>
-                    </dl>
-                    <span className="employee-type-card__open">
-                      {zh ? '进入配置' : 'Configure'} →
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </>
-          )}
+          <div role="tabpanel" id={panelIds.panelId} aria-labelledby={panelIds.tabId} tabIndex={0}>
+            {view === 'events' ? (
+              <EventCenterPanel language={language} />
+            ) : (
+              <>
+                {query.isPending ? <LoadingState /> : null}
+                {query.isError ? <ErrorBanner error={query.error} /> : null}
+                {query.data?.items.length === 0 ? (
+                  <EmptyState
+                    title={zh ? '还没有员工分类' : 'No employee types'}
+                    description={
+                      zh
+                        ? '员工分类由程序化类型包注册。'
+                        : 'Employee types are registered by programmable type packages.'
+                    }
+                  />
+                ) : null}
+                <div className="employee-type-grid" data-testid="digital-employee-type-list">
+                  {query.data?.items.map((type) => (
+                    <Link
+                      key={typeRefKey(type.typeRef)}
+                      to="/digital-employees/$typeRef"
+                      params={{ typeRef: typeRefKey(type.typeRef) }}
+                      search={{ view: 'employees' }}
+                      className="employee-type-card"
+                      data-testid={`digital-employee-type-${type.typeRef.typeId}`}
+                    >
+                      <span className="employee-type-card__eyebrow">
+                        {zh ? '数字员工分类' : 'Employee type'}
+                      </span>
+                      <strong>{localized(type.displayName, language)}</strong>
+                      <p>{localized(type.description, language)}</p>
+                      <dl>
+                        <div>
+                          <dt>{zh ? '职责' : 'Work items'}</dt>
+                          <dd>{type.authoringManifest.workItems.length}</dd>
+                        </div>
+                        <div>
+                          <dt>{zh ? '生命周期' : 'Lifecycle regions'}</dt>
+                          <dd>{type.authoringManifest.lifecycleRegions.length}</dd>
+                        </div>
+                      </dl>
+                      <span className="employee-type-card__open">
+                        {zh ? '进入配置' : 'Configure'} →
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,21 +1,16 @@
 import { join } from 'node:path'
 
 import type { DbClient } from '@/db/client'
+import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import { DigitalEmployeeAuthoringService } from './application/authoringService'
 import { DigitalEmployeeRuntimeService } from './application/runtimeService'
-import {
-  createToolResourceCatalogAdapter,
-  createWorkContractFixtureAdapter,
-} from './composition/defaultRequiredPorts'
 import type {
   EmployeeInputArtifactPort,
   ProgramArtifactPort,
   PlatformWorkItemExecutionPort,
   ReactionExecutionPort,
   ToolConnectionCatalogPort,
-  ToolResourceCatalogPort,
-  WorkContractFixturePort,
 } from './composition/required-ports'
 import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
 import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
@@ -203,11 +198,10 @@ export interface ComposeDigitalEmployeeOptions {
   readonly db: DbClient
   readonly appHome: string
   readonly typePackages: readonly EmployeeTypePackageRegistration[]
-  readonly resourceCatalog?: ToolResourceCatalogPort
   readonly connectionCatalog?: ToolConnectionCatalogPort
   readonly programArtifacts?: ProgramArtifactPort
   readonly inputArtifacts?: EmployeeInputArtifactPort
-  readonly fixtureRunner?: WorkContractFixturePort
+  readonly executionContracts: ExecutionContractParticipant
   readonly runtime?: {
     readonly eventCenter: EventCenterParticipant
     readonly execution: ReactionExecutionPort
@@ -290,15 +284,13 @@ export function composeDigitalEmployee(
   const service = new DigitalEmployeeAuthoringService({
     store,
     typePackages: runtimePackages,
-    resourceCatalog: options.resourceCatalog ?? createToolResourceCatalogAdapter(options.db),
     connectionCatalog: options.connectionCatalog ?? {
       async resolve() {
         return null
       },
     },
     programArtifacts: options.programArtifacts ?? createProgramArtifactStore(options.appHome),
-    fixtureRunner:
-      options.fixtureRunner ?? createWorkContractFixtureAdapter({ appHome: options.appHome }),
+    executionContracts: options.executionContracts,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.id === undefined ? {} : { id: options.id }),
   })
@@ -358,6 +350,7 @@ export function composeDigitalEmployee(
             },
           },
           runtimeCodecs: options.runtime.codecs,
+          executionContracts: options.executionContracts,
           inputUploads: inputUploadStore,
           inputArtifacts,
           ...(options.now === undefined ? {} : { now: options.now }),

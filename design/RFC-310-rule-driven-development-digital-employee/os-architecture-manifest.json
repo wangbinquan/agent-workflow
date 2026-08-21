@@ -38,6 +38,22 @@
         "routes/eventCenter.ts -> composition",
         "server.ts -> composition"
       ]
+    },
+    "execution-contract": {
+      "owner": "executor-neutral deterministic input and output guides, compatibility validation, fixture probes and exact output receipts",
+      "topLevelEntries": ["application", "composition.ts", "domain", "infrastructure", "public"],
+      "publicEntries": ["commands.ts", "types.ts"],
+      "externalImports": [
+        "cli/start.ts -> composition",
+        "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
+        "modules/digital-employee/application/authoringService.ts -> public/types",
+        "modules/digital-employee/application/runtimeService.ts -> public/types",
+        "modules/digital-employee/composition.ts -> public/types",
+        "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
+        "routes/executionContracts.ts -> public/types",
+        "server.ts -> composition",
+        "services/agent.ts -> public/commands"
+      ]
     }
   },
   "genericTypeLiteralBan": "development"

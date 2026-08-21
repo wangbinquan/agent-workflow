@@ -24,6 +24,7 @@ export interface ToolSlot {
 export interface WorkItem {
   workItemRef: string
   regionId: string
+  responsibilityLaneId: string | null
   order: number
   label: LocalizedText
   description: LocalizedText
@@ -40,6 +41,17 @@ export interface WorkItem {
     bindingSlots: ToolSlot[]
   }>
   nextWorkItemRefs: string[]
+}
+
+export interface EmployeeWorkContract {
+  contractId: string
+  version: number
+  inputSchemaId: string
+  outputSchemaId: string
+  allowedToolKinds: Array<'agent' | 'workflow' | 'program'>
+  allowedEffectKinds: string[]
+  requiredConnectionPurpose: string | null
+  semanticValidatorId: string
 }
 
 export interface EmployeeTypePackage {
@@ -104,19 +116,17 @@ export interface EmployeeTypePackage {
       label: LocalizedText
       description: LocalizedText
       order: number
+      responsibilityLanes: Array<{
+        laneId: string
+        label: LocalizedText
+        description: LocalizedText
+        order: number
+        kind: 'spine' | 'branch'
+      }>
     }>
     workItems: WorkItem[]
   }
-  workContracts: Array<{
-    contractId: string
-    version: number
-    inputSchemaId: string
-    outputSchemaId: string
-    allowedToolKinds: Array<'agent' | 'workflow' | 'program'>
-    allowedEffectKinds: string[]
-    requiredConnectionPurpose: string | null
-    semanticValidatorId: string
-  }>
+  workContracts: EmployeeWorkContract[]
   contextTypes: Array<{
     typeId: string
     schemaVersion: number

@@ -114,6 +114,22 @@
 }
 
 /* RFC-310 Digital Employee OS — one fixed responsibility map in every mode. */
+.digital-employee-surface__body {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 0 22px 22px;
+}
+
+.digital-employee-surface__body > .tabs-viewport {
+  min-width: 0;
+  margin: 0;
+}
+
+.digital-employee-surface__body > [role='tabpanel'] {
+  min-width: 0;
+}
+
 .employee-type-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -193,14 +209,10 @@
   font-weight: 650;
 }
 
-.digital-employee-type-page .tabs-viewport {
-  margin: 4px 0 18px;
-}
-
 .employee-map-section {
   display: grid;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 0;
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -234,7 +246,7 @@
 
 .employee-graph-shell {
   width: 100%;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 14px;
   background:
@@ -250,8 +262,8 @@
 .employee-graph {
   display: block;
   width: 100%;
-  min-height: 480px;
-  max-height: 72vh;
+  min-width: 900px;
+  height: auto;
 }
 
 .employee-graph__region-bg {
@@ -282,17 +294,64 @@
   font-size: 11px;
 }
 
+.employee-graph__lane-bg {
+  fill: color-mix(in srgb, var(--panel) 66%, transparent);
+  stroke: color-mix(in srgb, var(--border) 72%, transparent);
+  stroke-width: 1;
+}
+
+.employee-graph__lane-bg--spine {
+  fill: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  stroke: color-mix(in srgb, var(--accent) 26%, var(--border));
+}
+
+.employee-graph-lane-label {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  padding: 10px 12px 10px 2px;
+  color: var(--text);
+}
+
+.employee-graph-lane-label strong {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.employee-graph-lane-label span {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.employee-graph-lane-label[data-lane-kind='spine'] strong {
+  color: var(--accent);
+}
+
 .employee-graph__edges path {
   fill: none;
-  opacity: 0.46;
+  opacity: 0.62;
   stroke: color-mix(in srgb, var(--muted) 56%, transparent);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.25;
+  stroke-width: 1.4;
 }
 
 .employee-graph__edges .employee-graph__edge--loop {
+  opacity: 0.72;
   stroke-dasharray: 5 4;
+}
+
+.employee-graph__edges .employee-graph__dispatch-trunk {
+  opacity: 0.46;
+  stroke-width: 1.2;
+}
+
+.employee-graph__edges .employee-graph__dispatch-branch {
+  opacity: 0.72;
 }
 
 .employee-graph__edges .employee-graph__edge--active {
@@ -313,10 +372,10 @@
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto 1fr auto;
-  gap: 3px 8px;
+  gap: 3px 6px;
   width: 100%;
   height: 100%;
-  padding: 10px 12px;
+  padding: 9px 10px;
   overflow: hidden;
   text-align: left;
   color: var(--text);
@@ -339,7 +398,7 @@
 
 .employee-graph-node > strong {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -408,6 +467,150 @@
 .work-item-contract-card p {
   margin: 5px 0 0;
   line-height: 1.45;
+}
+
+.work-item-contract-card code {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--border) 44%, transparent);
+}
+
+.execution-contract-guide {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+
+.execution-contract-guide > header,
+.execution-contract-guide__schema-flow,
+.execution-contract-field > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.execution-contract-guide > header {
+  justify-content: space-between;
+}
+
+.execution-contract-guide > header > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.execution-contract-guide > header span,
+.execution-contract-transport span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.execution-contract-guide__schema-flow {
+  min-width: 0;
+  color: var(--muted);
+}
+
+.execution-contract-guide__schema-flow code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.execution-contract-transport {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.execution-contract-transport > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.execution-contract-transport code,
+.execution-contract-field code {
+  overflow-wrap: anywhere;
+}
+
+.execution-contract-transport p,
+.execution-contract-field p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.execution-contract-guide details {
+  border-top: 1px solid var(--border);
+}
+
+.execution-contract-guide summary {
+  padding: 10px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.execution-contract-guide pre {
+  max-height: 260px;
+  margin: 10px 0 0;
+  padding: 12px;
+  overflow: auto;
+  font-size: 11px;
+  white-space: pre;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.execution-contract-fields {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.execution-contract-field {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(130px, 0.55fr) minmax(220px, 1.4fr);
+  align-items: start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.execution-contract-field strong {
+  font-size: 12px;
+}
+
+.execution-contract-field small {
+  grid-column: 3;
+  color: var(--warn-fg);
+  font-size: 11px;
+}
+
+.execution-contract-field__type,
+.execution-contract-field__required {
+  padding: 2px 5px;
+  font-size: 10px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.execution-contract-field__required {
+  color: var(--accent);
 }
 
 .node-tool-list,
@@ -511,7 +714,6 @@
 .employee-case-create-actions {
   display: flex;
   justify-content: flex-end;
-  padding-block: var(--space-4);
 }
 
 .employee-case-upload-list,
@@ -666,11 +868,9 @@
     align-self: flex-start;
   }
 
-  .employee-graph {
-    min-height: 320px;
-  }
-
   .work-item-contract-card,
+  .execution-contract-transport,
+  .execution-contract-field,
   .employee-dialog-form__row,
   .employee-case-create-grid,
   .employee-case-detail-grid,
@@ -678,6 +878,22 @@
   .employee-kind-choices,
   .job-binding-list > label {
     grid-template-columns: 1fr;
+  }
+
+  .execution-contract-guide > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .execution-contract-field small {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .digital-employee-surface__body {
+    gap: 14px;
+    padding: 0 16px 16px;
   }
 }
 
@@ -5653,6 +5869,13 @@ details.form-section[open] > summary {
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.agent-port-card__managed-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
 }
 
 .agent-port-dialog__fields {

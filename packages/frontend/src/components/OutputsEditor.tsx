@@ -23,6 +23,8 @@ interface OutputsEditorProps {
   outputWrapperPortNames?: Record<string, string>
   /** RFC-306 — which outputs may be closed at run time. */
   branchPorts?: string[]
+  /** Ports materialized and owned by a platform contract. */
+  managedPortNames?: readonly string[]
   aggregator?: boolean
   /** A route-level compact summary is already the page's live alert. */
   hasExternalPortAlert?: boolean
@@ -43,6 +45,7 @@ export function OutputsEditor({
   outputKinds,
   outputWrapperPortNames,
   branchPorts,
+  managedPortNames = [],
   aggregator = false,
   hasExternalPortAlert,
   onChange,
@@ -54,6 +57,7 @@ export function OutputsEditor({
   const editRefs = useRef(new Map<number, HTMLButtonElement>())
   const pendingFocusRef = useRef<PendingFocus>(null)
   const state = { outputs, outputKinds, outputWrapperPortNames, branchPorts }
+  const managedPorts = new Set(managedPortNames)
 
   useEffect(() => {
     const pending = pendingFocusRef.current
@@ -77,11 +81,13 @@ export function OutputsEditor({
   }
 
   function open(mode: AgentPortDialogMode, trigger: HTMLElement | null) {
+    if (mode.kind === 'edit' && managedPorts.has(outputs[mode.index] ?? '')) return
     dialogTriggerRef.current = trigger
     setDialogMode(mode)
   }
 
   function remove(index: number) {
+    if (managedPorts.has(outputs[index] ?? '')) return
     const next = removeOutputPort(state, index)
     pendingFocusRef.current =
       next.outputs.length === 0 ? 'add' : Math.min(index, Math.max(0, next.outputs.length - 1))
@@ -136,6 +142,7 @@ export function OutputsEditor({
               }
               legacy={!AGENT_PORT_NAME_RE.test(name)}
               duplicate={(counts.get(name) ?? 0) > 1}
+              managed={managedPorts.has(name)}
               editButtonRef={(node) => {
                 if (node === null) editRefs.current.delete(index)
                 else editRefs.current.set(index, node)

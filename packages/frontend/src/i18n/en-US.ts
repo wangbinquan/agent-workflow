@@ -4928,7 +4928,7 @@ export const enUS: Resources = {
   },
   tasks: {
     title: 'Tasks',
-    newButton: 'New task',
+    newButton: 'New orchestration task',
     filterAll: 'All',
     emptyList: 'No tasks yet',
     emptyDescription:
@@ -6418,6 +6418,8 @@ export const enUS: Resources = {
         wrapperSameName: 'Promoted with the same name, {{name}}',
         wrapperDuplicate: 'duplicate promoted name',
         branch: 'branch port',
+        managed: 'contract managed',
+        managedHint: 'Managed by the platform execution contract; change it with the picker above.',
         normalOutput: 'The runtime envelope must emit this exact name.',
         inactiveWrapperMap:
           'Reserved promotion {{name}} → {{wrapper}} is inactive for a normal agent.',
@@ -6520,6 +6522,9 @@ export const enUS: Resources = {
     },
     groupCapabilities: 'Available capabilities',
     groupCapabilitiesHint: 'Skills, tools, and extensions available at runtime',
+    fieldExecutionContracts: 'Platform execution contracts',
+    fieldExecutionContractsHint:
+      'Choose the deterministic inputs this Agent can consume. The platform adds, removes, and locks the agent-result output here as contracts change.',
     groupDependencies: 'Collaborating agents',
     groupDependenciesHint: 'Agents this agent can delegate work to',
     fieldSkills: 'Skills',

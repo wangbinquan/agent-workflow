@@ -2,6 +2,7 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
+import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type {
   EmployeeTypeCollaborationCodec,
@@ -120,6 +121,7 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly inputUploads: EmployeeInputUploadStore
   readonly inputArtifacts: EmployeeInputArtifactPort
   readonly runtimeCodecs: readonly EmployeeTypeRuntimeCodec[]
+  readonly executionContracts: ExecutionContractParticipant
   readonly now?: () => number
   readonly id?: () => string
   readonly workerId?: string
@@ -145,6 +147,7 @@ export class DigitalEmployeeRuntimeService {
   readonly #platformWorkItems: PlatformWorkItemExecutionPort
   readonly #inputUploads: EmployeeInputUploadStore
   readonly #inputArtifacts: EmployeeInputArtifactPort
+  readonly #executionContracts: ExecutionContractParticipant
   readonly #codecs = new Map<string, EmployeeTypeRuntimeCodec>()
   readonly #now: () => number
   readonly #id: () => string
@@ -159,6 +162,7 @@ export class DigitalEmployeeRuntimeService {
     this.#platformWorkItems = deps.platformWorkItems
     this.#inputUploads = deps.inputUploads
     this.#inputArtifacts = deps.inputArtifacts
+    this.#executionContracts = deps.executionContracts
     this.#now = deps.now ?? Date.now
     this.#id = deps.id ?? ulid
     this.#workerId = deps.workerId ?? `digital-employee-${ulid()}`
@@ -934,6 +938,13 @@ export class DigitalEmployeeRuntimeService {
 
   #validateRoundOutput(round: ReactionRoundRecord, outputJson: string): string {
     const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
+    const platformValidatedOutput = this.#executionContracts.validateEnvelope({
+      direction: 'output',
+      contractRef: plan.workContractRef,
+      roundRef: round.id,
+      executionNonce: plan.executionNonce,
+      envelopeJson: outputJson,
+    })
     const identity = z
       .object({
         schemaVersion: z.literal(1),
@@ -941,7 +952,7 @@ export class DigitalEmployeeRuntimeService {
         executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
       })
       .passthrough()
-      .parse(JSON.parse(outputJson) as unknown)
+      .parse(JSON.parse(platformValidatedOutput) as unknown)
     if (identity.roundRef !== round.id || identity.executionNonce !== plan.executionNonce) {
       throw new ValidationError(
         'employee-output-envelope-identity-mismatch',
@@ -955,7 +966,7 @@ export class DigitalEmployeeRuntimeService {
         toolSlotRef: plan.toolSlotRef,
         connectionRef: plan.connectionRef,
         inputEnvelopeJson: plan.inputEnvelopeJson,
-        outputJson,
+        outputJson: platformValidatedOutput,
       }),
     )
   }
@@ -1703,7 +1714,9 @@ export class DigitalEmployeeRuntimeService {
         toolRegistrationRef: tool?.ref ?? null,
         executionPolicyRevision: caseRecord.executionPolicyRevision,
       })
-      const inputEnvelopeJson = this.#codec(caseRecord.typeRef.typeId).assembleReactionInputJson(
+      const assembledInputEnvelopeJson = this.#codec(
+        caseRecord.typeRef.typeId,
+      ).assembleReactionInputJson(
         JSON.stringify({
           schemaVersion: 1,
           roundRef: roundId,
@@ -1725,6 +1738,13 @@ export class DigitalEmployeeRuntimeService {
           ),
         }),
       )
+      const inputEnvelopeJson = this.#executionContracts.validateEnvelope({
+        direction: 'input',
+        contractRef: item.workContractRef,
+        roundRef: roundId,
+        executionNonce,
+        envelopeJson: assembledInputEnvelopeJson,
+      })
       let implementationRef: ExactResourceRef | null = null
       let implementationKind: ReactionExecutionPlan['implementationKind'] =
         item.nodeKind === 'system'

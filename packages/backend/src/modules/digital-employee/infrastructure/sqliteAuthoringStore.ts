@@ -46,6 +46,32 @@ function uniqueError(error: unknown, code: string, message: string): never {
   throw error
 }
 
+function shortDigest(digest: string): string {
+  return digest.length > 12 ? `${digest.slice(0, 12)}…` : digest
+}
+
+/**
+ * A registered type revision is immutable, so a descriptor edit without a
+ * revision bump aborts daemon boot. The daemon prints only `err.message`
+ * (`main.ts` top-level handler), so the remediation has to live in the message
+ * itself — see `tests/digital-employee-type-package-drift.test.ts`.
+ */
+function typePackageDriftMessage(
+  typeId: string,
+  revision: number,
+  registeredDigest: string,
+  currentDigest: string,
+): string {
+  return [
+    `employee type package ${typeId}@${revision} changed without a revision bump ` +
+      `(registered digest ${shortDigest(registeredDigest)}, current build ${shortDigest(currentDigest)}).`,
+    'a registered type revision is immutable — publish the edited descriptor by bumping typeRef.revision,',
+    'or, when the registered row is a stale local registration with no dependents, drop it and restart:',
+    `  DELETE FROM employee_type_packages WHERE type_id = '${typeId}' AND revision = ${revision};`,
+    '  (the daemon DB path is logged at boot as `db ready path=…`)',
+  ].join('\n')
+}
+
 function typeWhere(ref: EmployeeTypeRef) {
   return and(
     eq(employeeTypePackages.typeId, ref.typeId),
@@ -170,9 +196,21 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .get()
       if (existing !== undefined) {
         if (existing.descriptorDigest !== input.descriptorDigest) {
+          const { typeId, revision } = input.descriptor.typeRef
           throw new ConflictError(
             'employee-type-revision-drift',
-            `${input.descriptor.typeRef.typeId}@${input.descriptor.typeRef.revision} changed without a revision bump`,
+            typePackageDriftMessage(
+              typeId,
+              revision,
+              existing.descriptorDigest,
+              input.descriptorDigest,
+            ),
+            {
+              typeId,
+              revision,
+              registeredDigest: existing.descriptorDigest,
+              currentDigest: input.descriptorDigest,
+            },
           )
         }
         return

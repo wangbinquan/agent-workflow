@@ -1,18 +1,5 @@
-import type { ContractValidationCheck, ExactResourceRef, ToolImplementation } from '../domain/model'
+import type { ExactResourceRef } from '../domain/model'
 import type { ReactionExecutionPlan } from '../domain/runtimeModel'
-
-export interface ToolResourceProjection {
-  readonly kind: 'agent' | 'workflow'
-  readonly ref: ExactResourceRef
-  readonly name: string
-  readonly available: boolean
-  readonly closureSummary: string
-}
-
-export interface ToolResourceCatalogPort {
-  resolveAgent(ref: ExactResourceRef): Promise<ToolResourceProjection | null>
-  resolveWorkflow(ref: ExactResourceRef): Promise<ToolResourceProjection | null>
-}
 
 export interface ToolConnectionProjection {
   readonly ref: ExactResourceRef
@@ -54,18 +41,6 @@ export interface EmployeeInputArtifactPort {
   }>
   hasBlob(blobRef: string): boolean
   copyBlobTo(blobRef: string, absoluteTargetPath: string): void
-}
-
-/**
- * The fixture runner is an execution participant, not an alternate runtime.
- * Production adapts it to the existing Agent/Workflow/Script execution path.
- */
-export interface WorkContractFixturePort {
-  validate(input: {
-    readonly inputSchemaId: string
-    readonly outputSchemaId: string
-    readonly implementation: ToolImplementation
-  }): Promise<readonly ContractValidationCheck[]>
 }
 
 export type ReactionExecutionSnapshot =

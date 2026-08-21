@@ -8,9 +8,16 @@ import { createInMemoryDb } from '@/db/client'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
+  developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
-import { inspectDigitalEmployeeWorkflowDefinition } from '@/modules/digital-employee/composition/defaultRequiredPorts'
+import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
+import { inspectExecutionContractWorkflowDefinition } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
+import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
+import {
+  employeeTypePackageDescriptorSchema,
+  validateTypePackage,
+} from '@/modules/digital-employee/domain/model'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { buildDigitalEmployeeFixedPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createApp } from '@/server'
@@ -27,10 +34,59 @@ import {
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
+const developmentContractRefs = developmentExecutionContractRegistrations.map(
+  (registration) => registration.contractRef,
+)
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
+
+function developmentExecutionContracts(): ExecutionContractParticipant {
+  return new ExecutionContractService({
+    registrations: developmentExecutionContractRegistrations,
+    resources: {
+      async inspect({ implementation }) {
+        return {
+          kind: implementation.kind,
+          name:
+            implementation.kind === 'agent'
+              ? implementation.agentRef.id
+              : implementation.workflowRef.id,
+          available: true,
+          detail: 'test exact executor',
+          declaredContractRefs: implementation.kind === 'agent' ? developmentContractRefs : null,
+        }
+      },
+    },
+    programFixtures: {
+      async validate() {
+        return [{ code: 'test-program-fixture', ok: true, detail: 'exact test fixture' }]
+      },
+    },
+  })
+}
+
+const genericExecutionContracts: ExecutionContractParticipant = {
+  list: () => [],
+  get: () => {
+    throw new Error('generic authoring test does not execute a reaction')
+  },
+  async validateExecutor({ contractRef }) {
+    return {
+      schemaVersion: 1,
+      contractRef,
+      status: 'valid',
+      checks: [{ code: 'generic-platform-contract', ok: true, detail: 'test contract' }],
+    }
+  },
+  async validateAgentCandidates() {
+    return []
+  },
+  validateEnvelope() {
+    throw new Error('generic authoring test does not settle a reaction')
+  },
+}
 
 function fixtureModule() {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc310-os-authoring-'))
@@ -40,28 +96,9 @@ function fixtureModule() {
     db: createInMemoryDb(MIGRATIONS),
     appHome,
     typePackages: [developmentEmployeeTypePackage],
+    executionContracts: developmentExecutionContracts(),
     id: () => `resource-${++ordinal}`,
     now: () => 1_000 + ordinal,
-    resourceCatalog: {
-      async resolveAgent(ref) {
-        return {
-          kind: 'agent',
-          ref,
-          name: `Agent ${ref.id}`,
-          available: true,
-          closureSummary: 'strict digital-employee envelope',
-        }
-      },
-      async resolveWorkflow(ref) {
-        return {
-          kind: 'workflow',
-          ref,
-          name: `Workflow ${ref.id}`,
-          available: true,
-          closureSummary: 'closed workflow effect graph',
-        }
-      },
-    },
     connectionCatalog: {
       async resolve(ref) {
         if (ref.id === 'missing-adapter') return null
@@ -75,21 +112,51 @@ function fixtureModule() {
         }
       },
     },
-    fixtureRunner: {
-      async validate(request) {
-        return [
-          {
-            code: 'fixture-envelope',
-            ok: true,
-            detail: `${request.inputSchemaId} -> ${request.outputSchemaId}`,
-          },
-        ]
-      },
-    },
   })
 }
 
 describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
+  test('type packages declare complete responsibility lanes for deterministic graph layout', () => {
+    const descriptor = employeeTypePackageDescriptorSchema.parse(
+      JSON.parse(developmentEmployeeTypePackage.descriptorJson),
+    )
+    const care = descriptor.authoringManifest.lifecycleRegions.find(
+      (region) => region.regionId === 'care',
+    )!
+
+    expect(care.responsibilityLanes.map((lane) => lane.laneId)).toEqual([
+      'care-attention',
+      'care-review',
+      'care-pipeline',
+      'care-conflict',
+      'care-coordination',
+      'care-readiness',
+    ])
+    const workItems = new Map(
+      descriptor.authoringManifest.workItems.map((item) => [item.workItemRef, item] as const),
+    )
+    expect(workItems.get('analyze-implement')?.nextWorkItemRefs).toEqual(['prepare-change'])
+    expect(workItems.get('repair-pipeline')?.nextWorkItemRefs).toEqual([
+      'repair-pipeline',
+      'prepare-change',
+    ])
+    expect(workItems.get('observe-mr')?.nextWorkItemRefs).toEqual([
+      'classify-feedback',
+      'collect-pipeline',
+      'repair-conflict',
+      'evaluate-ready',
+    ])
+    expect(validateTypePackage(descriptor)).toEqual([])
+
+    const invalid = structuredClone(descriptor)
+    invalid.authoringManifest.workItems[0]!.responsibilityLaneId = 'missing-lane'
+    expect(validateTypePackage(invalid)).toContainEqual({
+      code: 'unknown-responsibility-lane',
+      at: `workItems.${invalid.authoringManifest.workItems[0]!.workItemRef}.responsibilityLaneId`,
+      detail: 'missing-lane',
+    })
+  })
+
   test('HTTP names malformed type refs and empty or declared-oversized uploads', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-authoring-route-errors-'))
@@ -116,6 +183,12 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     })
     expect(malformedType.status).toBe(422)
     expect(await malformedType.json()).toMatchObject({ code: 'employee-type-ref-invalid' })
+
+    const malformedContract = await app.request('/api/execution-contracts/not-a-ref', {
+      headers: authorization,
+    })
+    expect(malformedContract.status).toBe(422)
+    expect(await malformedContract.json()).toMatchObject({ code: 'execution-contract-ref-invalid' })
 
     const emptyUpload = await app.request('/api/digital-employee-input-uploads', {
       method: 'POST',
@@ -165,26 +238,8 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       db: createInMemoryDb(MIGRATIONS),
       appHome,
       typePackages: [designEmployeeTypePackage, testEmployeeTypePackage],
+      executionContracts: genericExecutionContracts,
       id: () => `generic-${++ordinal}`,
-      resourceCatalog: {
-        async resolveAgent(ref) {
-          return {
-            kind: 'agent',
-            ref,
-            name: ref.id,
-            available: true,
-            closureSummary: 'generic exact Agent',
-          }
-        },
-        async resolveWorkflow() {
-          return null
-        },
-      },
-      fixtureRunner: {
-        async validate() {
-          return [{ code: 'generic-envelope', ok: true, detail: 'strict envelope' }]
-        },
-      },
     })
 
     expect(module.queries.listTypes().map((item) => item.typeRef.typeId)).toEqual([
@@ -275,7 +330,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   test('a job template cannot publish before every required graph node has a tool', () => {
     const module = fixtureModule()
     const draft = module.commands.createJobTemplate({
-      typeRef: { typeId: 'development', revision: 1 },
+      typeRef: { typeId: 'development', revision: 2 },
       actorUserId: 'author-1',
       body: {
         name: '不完整岗位',
@@ -291,7 +346,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('type -> work item -> tool registration closes an exact employee definition', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 1 }
+    const typeRef = { typeId: 'development', revision: 2 }
     const manifest = module.queries.getAuthoringManifest(typeRef)
     const typePackage = module.queries.getType(typeRef)
     expect(manifest.lifecycleRegions.map((region) => region.regionId)).toEqual(['delivery', 'care'])
@@ -497,6 +552,36 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ),
       ),
     ).toEqual({ slotRef: 'unknown' })
+
+    const firstRepair = JSON.parse(
+      developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          workItemRef: 'repair-pipeline',
+          toolSlotRef: 'compile',
+          outputJson: JSON.stringify({
+            schemaVersion: 1,
+            roundRef: 'round-repair-compile',
+            executionNonce: 'c'.repeat(64),
+            status: 'ok',
+            summary: 'compile failure repaired',
+            contextPatches: [],
+            effectSuggestions: [],
+            artifactRefs: [],
+          }),
+          contextsJson: JSON.stringify([context]),
+          allowedNextWorkItemRefs: ['repair-pipeline', 'prepare-change'],
+        }),
+      ),
+    )
+    expect(firstRepair).toMatchObject({ caseState: 'active', nextWorkItemRef: 'repair-pipeline' })
+    expect(
+      JSON.parse(
+        firstRepair.contextPatches.find(
+          (patch: { contextTypeId: string }) => patch.contextTypeId === 'development.problem-set',
+        ).stateJson,
+      ),
+    ).toMatchObject({ status: 'active', remainingTypes: ['environment'] })
   })
 
   test('typed pipeline dependency and review repair resolve to fixed continuations', () => {
@@ -880,7 +965,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('system nodes reject tools and execution retry policy has one global owner', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 1 }
+    const typeRef = { typeId: 'development', revision: 2 }
     await expect(
       module.commands.createTool({
         typeRef,
@@ -924,7 +1009,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('a work-item connection must resolve to the exact required provider purpose', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 1 }
+    const typeRef = { typeId: 'development', revision: 2 }
     const create = (connectionRef: { id: string; revision: number } | null) =>
       module.commands.createTool({
         typeRef,
@@ -971,7 +1056,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   })
 
   test('Workflow and Agent execution boundaries reject hidden platform effects', () => {
-    const safe = inspectDigitalEmployeeWorkflowDefinition({
+    const safe = inspectExecutionContractWorkflowDefinition({
       $schema_version: 5,
       inputs: [{ kind: 'text', key: 'prompt', label: 'Prompt', required: true }],
       nodes: [
@@ -987,7 +1072,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     })
     expect(safe.ok).toBe(true)
     expect(
-      inspectDigitalEmployeeWorkflowDefinition({
+      inspectExecutionContractWorkflowDefinition({
         $schema_version: 5,
         inputs: [
           { kind: 'text', key: 'prompt', label: 'Prompt' },
@@ -1007,7 +1092,6 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
     const prompt = buildDigitalEmployeeFixedPrompt(
       {
-        outputSchemaId: 'development.output.v1',
         roundRef: 'round-1',
         executionNonce: 'a'.repeat(64),
         toolSlotRef: 'compile',
@@ -1015,12 +1099,16 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         inputEnvelopeJson: '{"frozen":true}',
       },
       { previousError: 'wrong nonce' },
+      developmentExecutionContracts().get({
+        contractId: 'development.analyze-implement',
+        version: 1,
+      }),
     )
     expect(prompt).toContain('Do not run git, commit, push, merge, approve')
     expect(prompt).toContain('or choose the next action')
     expect(prompt).toContain(`executionNonce=${JSON.stringify('a'.repeat(64))}`)
     expect(prompt).toContain('tool slot "compile"')
-    expect(prompt).toContain('previous exact-envelope attempt was rejected: wrong nonce')
+    expect(prompt).toContain('previous output was rejected: wrong nonce')
     expect(prompt.endsWith('{"frozen":true}')).toBe(true)
 
     const executionSource = readFileSync(

@@ -8,6 +8,7 @@ import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import type {
   DigitalEmployeeDefinition,
+  EmployeeWorkContract,
   EmployeeTypePackage,
   JobTemplate,
   ToolRegistration,
@@ -16,6 +17,15 @@ import type {
 import { localized } from '@/components/digital-employees/types'
 import { ResponsibilityGraph } from '@/components/digital-employees/ResponsibilityGraph'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import {
+  ExecutionContractGuidePanel,
+  executionContractProgramStarter,
+} from '@/components/execution-contracts/ExecutionContractGuidePanel'
+import {
+  contractRefKey,
+  type ExecutionContractAgentCandidateReceipt,
+  type ExecutionContractGuide,
+} from '@/components/execution-contracts/types'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -103,6 +113,12 @@ function DigitalEmployeeTypePage(): ReactElement {
   if (typeQuery.isPending) return <LoadingState />
   if (typeQuery.isError) return <ErrorBanner error={typeQuery.error} />
   const type = typeQuery.data
+  const selectedContract =
+    type.workContracts.find(
+      (contract) =>
+        contract.contractId === selectedItem?.workContractRef.contractId &&
+        contract.version === selectedItem.workContractRef.version,
+    ) ?? null
   const graphMode =
     search.view === 'jobs' ? 'job-template' : search.view === 'toolbox' ? 'toolbox' : 'employee'
 
@@ -121,105 +137,104 @@ function DigitalEmployeeTypePage(): ReactElement {
           <p className="operations-surface__subtitle">{localized(type.description, language)}</p>
         </PageHeader>
 
-        <TabBar
-          active={search.view}
-          onSelect={(view) => void navigate({ search: { ...search, view }, replace: true })}
-          ariaLabel={zh ? '数字员工分类配置' : 'Employee type configuration'}
-          idPrefix="digital-employee-type-sections"
-          variant="segment"
-          tabs={[
-            { key: 'employees', label: zh ? '员工' : 'Employees' },
-            { key: 'jobs', label: zh ? '岗位模板' : 'Job templates' },
-            { key: 'toolbox', label: zh ? '工具箱' : 'Toolbox' },
-            { key: 'scope', label: zh ? '适用范围' : 'Scope' },
-          ]}
-        />
-
-        <section
-          className="employee-map-section"
-          aria-label={zh ? '职责全景' : 'Responsibility map'}
-        >
-          <div className="employee-map-section__heading">
-            <div>
-              <h2>{zh ? '确定性职责全景' : 'Deterministic responsibility map'}</h2>
-              <p>
-                {zh
-                  ? '生命周期是固定背景；节点和连线由分类程序定义。点击工作项，在同页完成配置。'
-                  : 'Lifecycle regions are fixed backgrounds. The type package owns nodes and edges; select a work item to configure it here.'}
-              </p>
-            </div>
-            <span className="employee-map-section__legend">
-              {zh ? '全量展开 · 不可拖线' : 'Fully expanded · no edge editing'}
-            </span>
-          </div>
-          <ResponsibilityGraph
-            type={type}
-            language={language}
-            selectedWorkItemRef={selectedRef}
-            onSelect={(workItem) =>
-              void navigate({
-                search: { ...search, view: 'toolbox', workItem },
-                replace: true,
-              })
-            }
-            toolCounts={toolCounts}
-            mode={graphMode}
+        <div className="digital-employee-surface__body">
+          <TabBar
+            active={search.view}
+            onSelect={(view) => void navigate({ search: { ...search, view }, replace: true })}
+            ariaLabel={zh ? '数字员工分类配置' : 'Employee type configuration'}
+            idPrefix="digital-employee-type-sections"
+            variant="segment"
+            tabs={[
+              { key: 'employees', label: zh ? '员工' : 'Employees' },
+              { key: 'jobs', label: zh ? '岗位模板' : 'Job templates' },
+              { key: 'toolbox', label: zh ? '工具箱' : 'Toolbox' },
+              { key: 'scope', label: zh ? '适用范围' : 'Scope' },
+            ]}
           />
-        </section>
 
-        <div role="tabpanel" id={panelIds.panelId} aria-labelledby={panelIds.tabId} tabIndex={0}>
-          {search.view === 'toolbox' ? (
-            <ToolboxPanel
-              typeRef={typeRef}
-              typeName={localized(type.displayName, language)}
-              item={selectedItem}
-              allowedToolKinds={
-                type.workContracts.find(
-                  (contract) =>
-                    contract.contractId === selectedItem?.workContractRef.contractId &&
-                    contract.version === selectedItem.workContractRef.version,
-                )?.allowedToolKinds ?? []
-              }
-              requiredConnectionPurpose={
-                type.workContracts.find(
-                  (contract) =>
-                    contract.contractId === selectedItem?.workContractRef.contractId &&
-                    contract.version === selectedItem.workContractRef.version,
-                )?.requiredConnectionPurpose ?? null
-              }
-              tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
-              language={language}
-            />
-          ) : search.view === 'jobs' ? (
-            <JobTemplatesPanel
-              typeRef={typeRef}
+          <section
+            className="employee-map-section"
+            aria-label={zh ? '职责全景' : 'Responsibility map'}
+          >
+            <div className="employee-map-section__heading">
+              <div>
+                <h2>{zh ? '确定性职责全景' : 'Deterministic responsibility map'}</h2>
+                <p>
+                  {zh
+                    ? '生命周期是固定背景；节点和连线由分类程序定义。点击工作项，在同页完成配置。'
+                    : 'Lifecycle regions are fixed backgrounds. The type package owns nodes and edges; select a work item to configure it here.'}
+                </p>
+              </div>
+              <span className="employee-map-section__legend">
+                {zh ? '全量展开 · 不可拖线' : 'Fully expanded · no edge editing'}
+              </span>
+            </div>
+            <ResponsibilityGraph
               type={type}
-              toolsByWorkItem={toolsByWorkItem}
-              selectedItem={selectedItem}
               language={language}
+              selectedWorkItemRef={selectedRef}
+              onSelect={(workItem) =>
+                void navigate({
+                  search: { ...search, view: 'toolbox', workItem },
+                  replace: true,
+                })
+              }
+              toolCounts={toolCounts}
+              mode={graphMode}
             />
-          ) : search.view === 'scope' ? (
-            <ScopePanel typeRef={typeRef} language={language} />
-          ) : (
-            <EmployeesPanel typeRef={typeRef} type={type} language={language} />
-          )}
+          </section>
+
+          <div role="tabpanel" id={panelIds.panelId} aria-labelledby={panelIds.tabId} tabIndex={0}>
+            {search.view === 'toolbox' ? (
+              <ToolboxPanel
+                typeRef={typeRef}
+                typeName={localized(type.displayName, language)}
+                item={selectedItem}
+                contract={selectedContract}
+                tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
+                language={language}
+              />
+            ) : search.view === 'jobs' ? (
+              <JobTemplatesPanel
+                typeRef={typeRef}
+                type={type}
+                toolsByWorkItem={toolsByWorkItem}
+                selectedItem={selectedItem}
+                language={language}
+              />
+            ) : search.view === 'scope' ? (
+              <ScopePanel typeRef={typeRef} language={language} />
+            ) : (
+              <EmployeesPanel typeRef={typeRef} type={type} language={language} />
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function WorkItemContractCard(props: { item: WorkItem; language: string }): ReactElement {
+function WorkItemContractCard(props: {
+  item: WorkItem
+  contract?: EmployeeWorkContract | null
+  language: string
+}): ReactElement {
   const zh = props.language.startsWith('zh')
   return (
     <div className="work-item-contract-card">
       <div>
         <span>{zh ? '输入材料' : 'Input material'}</span>
         <p>{localized(props.item.materialSummary, props.language)}</p>
+        {props.contract === null || props.contract === undefined ? null : (
+          <code>{props.contract.inputSchemaId}</code>
+        )}
       </div>
       <div>
         <span>{zh ? '确定性产出与完成标准' : 'Deterministic output and completion'}</span>
         <p>{localized(props.item.completionStandard, props.language)}</p>
+        {props.contract === null || props.contract === undefined ? null : (
+          <code>{props.contract.outputSchemaId}</code>
+        )}
       </div>
     </div>
   )
@@ -229,8 +244,7 @@ function ToolboxPanel(props: {
   typeRef: string
   typeName: string
   item: WorkItem | null
-  allowedToolKinds: Array<'agent' | 'workflow' | 'program'>
-  requiredConnectionPurpose: string | null
+  contract: EmployeeWorkContract | null
   tools: ToolRegistration[]
   language: string
 }): ReactElement {
@@ -258,7 +272,7 @@ function ToolboxPanel(props: {
           <StatusChip kind="neutral">{zh ? '平台内建步骤' : 'Platform-owned step'}</StatusChip>
         )}
       </header>
-      <WorkItemContractCard item={props.item} language={props.language} />
+      <WorkItemContractCard item={props.item} contract={props.contract} language={props.language} />
       {business ? (
         <div className="node-tool-list">
           {props.tools.length === 0 ? (
@@ -340,8 +354,7 @@ function ToolboxPanel(props: {
         onClose={() => setOpen(false)}
         typeRef={props.typeRef}
         item={props.item}
-        allowedToolKinds={props.allowedToolKinds}
-        requiredConnectionPurpose={props.requiredConnectionPurpose}
+        contract={props.contract}
         language={props.language}
       />
     </section>
@@ -379,8 +392,7 @@ function AddToolDialog(props: {
   onClose: () => void
   typeRef: string
   item: WorkItem
-  allowedToolKinds: Array<'agent' | 'workflow' | 'program'>
-  requiredConnectionPurpose: string | null
+  contract: EmployeeWorkContract | null
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
@@ -398,9 +410,27 @@ function AddToolDialog(props: {
     Array<{ code: string; ok: boolean; detail: string }>
   >([])
   const allowedKinds = useMemo<ReadonlyArray<'agent' | 'workflow' | 'program'>>(
-    () => props.allowedToolKinds,
-    [props.allowedToolKinds],
+    () => props.contract?.allowedToolKinds ?? [],
+    [props.contract],
   )
+  const contractKey =
+    props.contract === null
+      ? null
+      : contractRefKey({
+          contractId: props.contract.contractId,
+          version: props.contract.version,
+        })
+  const contractGuide = useQuery<ExecutionContractGuide>({
+    queryKey: ['execution-contract', contractKey],
+    enabled: props.open && contractKey !== null,
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/execution-contracts/${encodeURIComponent(contractKey ?? '')}`,
+        undefined,
+        signal,
+      ),
+    staleTime: 60_000,
+  })
   useEffect(() => {
     if (!props.open) return
     if (!allowedKinds.includes(kind)) setKind(allowedKinds[0] ?? 'agent')
@@ -409,6 +439,11 @@ function AddToolDialog(props: {
     }
     setValidationChecks([])
   }, [allowedKinds, kind, props.item.toolRoleGroups, props.open, roleRef])
+  useEffect(() => {
+    if (props.open && kind === 'program' && source.trim() === '') {
+      setSource(executionContractProgramStarter(runtimeKind))
+    }
+  }, [kind, props.open, runtimeKind, source])
   const parsedParameters = useMemo(() => {
     try {
       const parsed = JSON.parse(parameterValuesJson) as unknown
@@ -440,14 +475,40 @@ function AddToolDialog(props: {
       return [...builtin, ...ordinary]
     },
   })
+  const agentRefs = useMemo(
+    () =>
+      (agents.data ?? []).map((agent) => ({
+        id: agent.id,
+        revision: agent.updatedAt,
+      })),
+    [agents.data],
+  )
+  const agentCompatibility = useQuery<{ items: ExecutionContractAgentCandidateReceipt[] }>({
+    queryKey: ['execution-contract-agent-candidates', contractKey, agentRefs],
+    enabled: props.open && kind === 'agent' && contractKey !== null && agents.data !== undefined,
+    queryFn: ({ signal }) =>
+      api.post(
+        `/api/execution-contracts/${encodeURIComponent(contractKey ?? '')}/agent-candidates`,
+        { agentRefs },
+        signal,
+      ),
+    staleTime: 60_000,
+  })
+  const agentReceipt = (agent: AgentChoice): ExecutionContractAgentCandidateReceipt | undefined =>
+    agentCompatibility.data?.items.find(
+      (candidate) =>
+        candidate.agentRef.id === agent.id && candidate.agentRef.revision === agent.updatedAt,
+    )
+  const agentSupportsContract = (agent: AgentChoice): boolean =>
+    agentReceipt(agent)?.validationReceipt.status === 'valid'
   const workflows = useQuery<WorkflowListItem[]>({
     queryKey: ['digital-employee-workflow-choices'],
     enabled: props.open && kind === 'workflow',
     queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
   })
   const connections = useQuery<{ items: DevelopmentAdapterChoice[] }>({
-    queryKey: ['digital-employee-tool-connections', props.requiredConnectionPurpose],
-    enabled: props.open && props.requiredConnectionPurpose !== null,
+    queryKey: ['digital-employee-tool-connections', props.contract?.requiredConnectionPurpose],
+    enabled: props.open && props.contract?.requiredConnectionPurpose != null,
     queryFn: ({ signal }) => api.get('/api/integrations/development-adapters', undefined, signal),
   })
   const create = useMutation({
@@ -488,7 +549,7 @@ function AddToolDialog(props: {
           roleRef,
           implementation,
           connectionRef:
-            props.requiredConnectionPurpose === null
+            props.contract?.requiredConnectionPurpose == null
               ? null
               : {
                   id: connectionId,
@@ -524,14 +585,20 @@ function AddToolDialog(props: {
   })
   const resourceValid =
     allowedKinds.includes(kind) && kind === 'program'
-      ? source.trim() !== '' && parsedParameters !== null
-      : allowedKinds.includes(kind) && resource !== ''
+      ? source.trim() !== '' &&
+        !source.includes('TODO_IMPLEMENT_CONTRACT') &&
+        parsedParameters !== null
+      : allowedKinds.includes(kind) &&
+        resource !== '' &&
+        (kind !== 'agent' ||
+          (agents.data?.some((agent) => agent.id === resource && agentSupportsContract(agent)) ??
+            false))
   const connectionValid =
-    props.requiredConnectionPurpose === null ||
+    props.contract?.requiredConnectionPurpose == null ||
     (connections.data?.items.some(
       (candidate) =>
         candidate.id === connectionId &&
-        candidate.purpose === props.requiredConnectionPurpose &&
+        candidate.purpose === props.contract?.requiredConnectionPurpose &&
         candidate.publishedRevision !== null,
     ) ??
       false)
@@ -552,15 +619,21 @@ function AddToolDialog(props: {
             type="submit"
             form="employee-add-tool-form"
             className="btn btn--primary"
-            disabled={create.isPending || name.trim() === '' || !resourceValid || !connectionValid}
+            disabled={
+              create.isPending ||
+              contractGuide.data === undefined ||
+              name.trim() === '' ||
+              !resourceValid ||
+              !connectionValid
+            }
           >
             {create.isPending
               ? zh
                 ? '正在验证…'
                 : 'Validating…'
               : zh
-                ? '验证并加入工具箱'
-                : 'Validate and add'}
+                ? '检查契约并加入工具箱'
+                : 'Check contract and add'}
           </button>
         </>
       }
@@ -573,7 +646,32 @@ function AddToolDialog(props: {
           create.mutate()
         }}
       >
-        <WorkItemContractCard item={props.item} language={props.language} />
+        <WorkItemContractCard
+          item={props.item}
+          contract={props.contract}
+          language={props.language}
+        />
+        {contractGuide.isPending ? (
+          <LoadingState label={zh ? '正在加载平台执行契约…' : 'Loading platform contract…'} />
+        ) : contractGuide.isError ? (
+          <ErrorBanner error={contractGuide.error} onRetry={() => void contractGuide.refetch()} />
+        ) : contractGuide.data === undefined ? (
+          <NoticeBanner
+            tone="warning"
+            title={zh ? '这个工作项缺少执行契约' : 'This work item has no execution contract'}
+            size="compact"
+          >
+            {zh
+              ? '分类程序必须先注册确定性输入和输出，才能增加执行工具。'
+              : 'The employee type must register deterministic input and output before adding an executor.'}
+          </NoticeBanner>
+        ) : (
+          <ExecutionContractGuidePanel
+            guide={contractGuide.data}
+            language={props.language}
+            kind={kind}
+          />
+        )}
         <Field label={zh ? '工具名称' : 'Tool name'} required>
           <TextInput value={name} onChange={setName} autoFocus />
         </Field>
@@ -586,6 +684,9 @@ function AddToolDialog(props: {
             onChange={(next) => {
               setKind(next)
               setResource('')
+              if (next === 'program' && source.trim() === '') {
+                setSource(executionContractProgramStarter(runtimeKind))
+              }
             }}
             ariaLabel={zh ? '执行方式' : 'Executor kind'}
             options={[
@@ -601,7 +702,7 @@ function AddToolDialog(props: {
             ]}
           />
         </Field>
-        {props.requiredConnectionPurpose !== null ? (
+        {props.contract?.requiredConnectionPurpose != null ? (
           <Field
             label={zh ? '使用哪个已注册系统' : 'Registered system connection'}
             hint={
@@ -619,7 +720,7 @@ function AddToolDialog(props: {
               options={(connections.data?.items ?? [])
                 .filter(
                   (candidate) =>
-                    candidate.purpose === props.requiredConnectionPurpose &&
+                    candidate.purpose === props.contract?.requiredConnectionPurpose &&
                     candidate.publishedRevision !== null,
                 )
                 .map((candidate) => ({ value: candidate.id, label: candidate.name }))}
@@ -657,8 +758,46 @@ function AddToolDialog(props: {
               options={(agents.data ?? []).map((agent) => ({
                 value: agent.id,
                 label: agentChoiceLabel(agent, props.language),
+                disabled: !agentSupportsContract(agent),
+                description: agentSupportsContract(agent)
+                  ? zh
+                    ? '契约声明与 agent-result 输出端口均匹配'
+                    : 'Contract declaration and agent-result output both match'
+                  : (agentReceipt(agent)?.validationReceipt.checks.find((check) => !check.ok)
+                      ?.detail ?? (zh ? '平台正在检查契约' : 'Platform contract check pending')),
+                badge: agentSupportsContract(agent)
+                  ? zh
+                    ? '可用'
+                    : 'Compatible'
+                  : zh
+                    ? '不匹配'
+                    : 'Mismatch',
+                badgeTone: agentSupportsContract(agent)
+                  ? ('neutral' as const)
+                  : ('danger' as const),
               }))}
             />
+            {agents.data !== undefined && agentCompatibility.isPending ? (
+              <LoadingState
+                size="compact"
+                label={zh ? '平台正在逐个检查 Agent 契约…' : 'Checking Agent contracts…'}
+              />
+            ) : agentCompatibility.isError ? (
+              <ErrorBanner
+                error={agentCompatibility.error}
+                onRetry={() => void agentCompatibility.refetch()}
+              />
+            ) : (agents.data ?? []).some((agent) => agentSupportsContract(agent)) ? null : (
+              <NoticeBanner
+                tone="info"
+                title={zh ? '没有匹配这个契约的 Agent' : 'No Agent matches this contract'}
+                size="compact"
+              >
+                {zh
+                  ? '请先在 Agent 库的“输入/输出 → 平台执行契约”中声明该契约；agent-result 端口由契约自动维护，不能单独编辑或删除。'
+                  : 'Declare this contract under Agent library → Inputs & outputs → Platform execution contracts. The contract owns the agent-result port, so it cannot be edited or deleted separately.'}
+              </NoticeBanner>
+            )}
           </Field>
         ) : kind === 'workflow' ? (
           <Field label={zh ? '从工作流库选择' : 'Choose from workflow library'} required>
@@ -686,7 +825,12 @@ function AddToolDialog(props: {
             <Field label={zh ? '程序语言' : 'Language'} required>
               <Select
                 value={runtimeKind}
-                onChange={setRuntimeKind}
+                onChange={(next) => {
+                  setRuntimeKind(next)
+                  if (source.trim() === '' || source.includes('TODO_IMPLEMENT_CONTRACT')) {
+                    setSource(executionContractProgramStarter(next))
+                  }
+                }}
                 options={[
                   { value: 'bash', label: 'Bash' },
                   { value: 'node', label: 'Node.js' },
@@ -698,8 +842,8 @@ function AddToolDialog(props: {
               label={zh ? '程序内容' : 'Program source'}
               hint={
                 zh
-                  ? '平台会冻结程序版本，并仍通过统一的 Script 执行与 envelope 校验。'
-                  : 'The platform freezes this version and uses the shared Script runner and envelope validation.'
+                  ? '完整 envelope 固定从 AW_PORT_CONTRACT_INPUT 读取；大输入改从 AW_PORT_FILE_CONTRACT_INPUT 文件读取。stdout 只能写一个 JSON 对象。'
+                  : 'Read the complete envelope from AW_PORT_CONTRACT_INPUT, or AW_PORT_FILE_CONTRACT_INPUT for large input. stdout must contain only one JSON object.'
               }
               required
             >
@@ -710,6 +854,17 @@ function AddToolDialog(props: {
                 monospace
               />
             </Field>
+            {source.includes('TODO_IMPLEMENT_CONTRACT') ? (
+              <NoticeBanner
+                tone="warning"
+                title={zh ? '请完成程序逻辑' : 'Implement the program logic'}
+                size="compact"
+              >
+                {zh
+                  ? '示例已经演示输入注入和确定性输出，但 TODO 分支会阻止发布。替换该分支并保留 fixture 分支后，平台会实际运行一次契约样例。'
+                  : 'The starter demonstrates injection and exact output, but its TODO branch blocks publishing. Replace it and keep the fixture branch; the platform will execute one contract fixture.'}
+              </NoticeBanner>
+            ) : null}
             <Field
               label={zh ? '程序参数（JSON）' : 'Program parameters (JSON)'}
               hint={

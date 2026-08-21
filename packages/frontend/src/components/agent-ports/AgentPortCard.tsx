@@ -32,6 +32,8 @@ export interface AgentPortCardProps {
   branch?: boolean
   legacy?: boolean
   duplicate?: boolean
+  /** Platform-owned ports follow their contract and cannot be edited alone. */
+  managed?: boolean
   editButtonRef?: Ref<HTMLButtonElement>
   onEdit: () => void
   onDelete: () => unknown | Promise<unknown>
@@ -60,6 +62,7 @@ export function AgentPortCard({
   wrapperDuplicate = false,
   legacy = false,
   duplicate = false,
+  managed = false,
   branch,
   editButtonRef,
   onEdit,
@@ -111,6 +114,11 @@ export function AgentPortCard({
                 {t('agentForm.ports.card.branch', { defaultValue: 'Branch port' })}
               </StatusChip>
             )}
+            {managed && (
+              <StatusChip kind="info" size="sm">
+                {t('agentForm.ports.card.managed')}
+              </StatusChip>
+            )}
             {legacy && (
               <StatusChip kind="warn" size="sm">
                 {t('agentForm.ports.card.legacy', { defaultValue: 'Legacy name' })}
@@ -132,35 +140,41 @@ export function AgentPortCard({
         </div>
       }
       footer={
-        <>
-          <button
-            ref={editButtonRef}
-            type="button"
-            className="btn btn--sm"
-            onClick={onEdit}
-            aria-label={editLabel}
-          >
-            {t('common.edit')}
-          </button>
-          <ConfirmButton
-            label={t('common.delete')}
-            confirmLabel={t('common.confirmDelete')}
-            ariaLabel={deleteLabel}
-            confirmAriaLabel={confirmDeleteLabel}
-            confirmationKey={JSON.stringify([
-              direction,
-              index,
-              name,
-              kind,
-              required,
-              description ?? null,
-              wrapperPortName ?? null,
-            ])}
-            onConfirm={onDelete}
-            size="sm"
-            variant="danger"
-          />
-        </>
+        managed ? (
+          <span className="agent-port-card__managed-note">
+            {t('agentForm.ports.card.managedHint')}
+          </span>
+        ) : (
+          <>
+            <button
+              ref={editButtonRef}
+              type="button"
+              className="btn btn--sm"
+              onClick={onEdit}
+              aria-label={editLabel}
+            >
+              {t('common.edit')}
+            </button>
+            <ConfirmButton
+              label={t('common.delete')}
+              confirmLabel={t('common.confirmDelete')}
+              ariaLabel={deleteLabel}
+              confirmAriaLabel={confirmDeleteLabel}
+              confirmationKey={JSON.stringify([
+                direction,
+                index,
+                name,
+                kind,
+                required,
+                description ?? null,
+                wrapperPortName ?? null,
+              ])}
+              onConfirm={onDelete}
+              size="sm"
+              variant="danger"
+            />
+          </>
+        )
       }
     >
       {direction === 'input' ? (

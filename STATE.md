@@ -173,6 +173,13 @@
 > **本地证据**：2026-08-21 `bun run gate:local` 9m28s 全绿——四个后端随机化分片全部通过，frontend 6660、shared 2219、
 > system-mock 35，typecheck/lint/format/depcheck 全绿。下一步仅为精确提交、推送与 exact-SHA hosted CI 终态验证。
 >
+> **PR-19 本地证据（2026-08-21）**：平台 ExecutionContract、Agent 契约托管端口和确定性职责泳道已实现；契约选择位于
+> Agent“输入/输出”，`agent-result` 不可独立编辑/删除，并由 UI 与 create/update/bundle/intent 保存入口在契约选择、
+> 切换、取消时原子联动。隔离提交树 `bun run gate:local` **9m29s 全绿**：backend **11,559 pass / 36 skip /
+> 0 fail**、frontend **6,664/6,664**、shared **2,219/2,219**、system-mocks **35/35**；另有真实页面旅程
+> **1/1**、数字员工视觉基线 **3/3**、外部 ID→MR→跨仓员工→审批→大证据→合入 system-mock **1/1（29 断言）**。
+> 当前仅剩精确提交推送后的 hosted CI/visual 终态验证。
+>
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
 > **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；

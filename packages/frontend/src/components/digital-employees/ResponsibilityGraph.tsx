@@ -3,68 +3,229 @@ import type { ReactElement } from 'react'
 import type { EmployeeTypePackage, WorkItem } from './types'
 import { localized } from './types'
 
-interface NodeLayout {
+export interface ResponsibilityNodeLayout {
   item: WorkItem
   regionIndex: number
+  laneId: string | null
+  laneKind: 'spine' | 'branch' | null
   row: number
   column: number
   x: number
   y: number
 }
 
-interface BandLayout {
+interface ResponsibilityLaneLayout {
   id: string
+  label: EmployeeTypePackage['authoringManifest']['lifecycleRegions'][number]['responsibilityLanes'][number]['label']
+  description: EmployeeTypePackage['authoringManifest']['lifecycleRegions'][number]['responsibilityLanes'][number]['description']
+  kind: 'spine' | 'branch'
   y: number
   height: number
 }
 
-const NODE_WIDTH = 226
-const NODE_HEIGHT = 86
-const COLUMN_GAP = 44
-const ROW_GAP = 34
-const BAND_GAP = 28
-const PADDING_X = 42
-const BAND_HEADER = 62
-const COLUMNS = 4
+export interface ResponsibilityBandLayout {
+  id: string
+  y: number
+  height: number
+  lanes: ResponsibilityLaneLayout[]
+}
+
+export interface ResponsibilityGraphLayout {
+  width: number
+  height: number
+  nodes: ResponsibilityNodeLayout[]
+  bands: ResponsibilityBandLayout[]
+}
+
+const NODE_WIDTH = 160
+const NODE_HEIGHT = 80
+const COLUMN_GAP = 14
+const ROW_GAP = 18
+const LANE_GAP = 10
+const BAND_GAP = 22
+const PADDING_X = 18
+const BAND_HEADER = 58
+const BAND_BOTTOM = 14
+const LANE_LABEL_WIDTH = 132
+const LANE_PADDING_Y = 10
+const FALLBACK_COLUMNS = 4
+const MAX_LANE_COLUMNS = 5
+const LOOP_GUTTER = 50
+
+function rowStartX(contentX: number, contentWidth: number, count: number): number {
+  const rowWidth = count * NODE_WIDTH + Math.max(0, count - 1) * COLUMN_GAP
+  return contentX + Math.max(0, (contentWidth - rowWidth) / 2)
+}
+
+export function buildResponsibilityGraphLayout(
+  type: EmployeeTypePackage,
+): ResponsibilityGraphLayout {
+  const regions = [...type.authoringManifest.lifecycleRegions].sort(
+    (left, right) => left.order - right.order,
+  )
+  const itemsByRegion = new Map(
+    regions.map((region) => [
+      region.regionId,
+      type.authoringManifest.workItems
+        .filter((item) => item.regionId === region.regionId)
+        .sort((left, right) => left.order - right.order),
+    ]),
+  )
+  const largestLane = Math.max(
+    1,
+    ...regions.flatMap((region) => {
+      const items = itemsByRegion.get(region.regionId) ?? []
+      return region.responsibilityLanes.length === 0
+        ? [Math.min(FALLBACK_COLUMNS, items.length)]
+        : region.responsibilityLanes.map(
+            (lane) => items.filter((item) => item.responsibilityLaneId === lane.laneId).length,
+          )
+    }),
+  )
+  const columns = Math.max(1, Math.min(MAX_LANE_COLUMNS, largestLane))
+  const contentX = PADDING_X + LANE_LABEL_WIDTH
+  const contentWidth = columns * NODE_WIDTH + Math.max(0, columns - 1) * COLUMN_GAP
+  const width = contentX + contentWidth + LOOP_GUTTER + PADDING_X
+  const nodes: ResponsibilityNodeLayout[] = []
+  const bands: ResponsibilityBandLayout[] = []
+  let graphY = 0
+  let logicalRow = 0
+
+  for (const [regionIndex, region] of regions.entries()) {
+    const items = itemsByRegion.get(region.regionId) ?? []
+    const lanes: ResponsibilityLaneLayout[] = []
+    let cursorY = graphY + BAND_HEADER
+
+    if (region.responsibilityLanes.length > 0) {
+      for (const lane of [...region.responsibilityLanes].sort(
+        (left, right) => left.order - right.order,
+      )) {
+        const laneItems = items.filter((item) => item.responsibilityLaneId === lane.laneId)
+        const rowCount = Math.max(1, Math.ceil(laneItems.length / columns))
+        const laneHeight =
+          LANE_PADDING_Y * 2 + rowCount * NODE_HEIGHT + Math.max(0, rowCount - 1) * ROW_GAP
+        lanes.push({
+          id: lane.laneId,
+          label: lane.label,
+          description: lane.description,
+          kind: lane.kind,
+          y: cursorY,
+          height: laneHeight,
+        })
+        for (let row = 0; row < rowCount; row += 1) {
+          const rowItems = laneItems.slice(row * columns, (row + 1) * columns)
+          const startX =
+            lane.kind === 'spine' ? rowStartX(contentX, contentWidth, rowItems.length) : contentX
+          rowItems.forEach((item, column) => {
+            nodes.push({
+              item,
+              regionIndex,
+              laneId: lane.laneId,
+              laneKind: lane.kind,
+              row: logicalRow + row,
+              column,
+              x: startX + column * (NODE_WIDTH + COLUMN_GAP),
+              y: cursorY + LANE_PADDING_Y + row * (NODE_HEIGHT + ROW_GAP),
+            })
+          })
+        }
+        logicalRow += rowCount
+        cursorY += laneHeight + LANE_GAP
+      }
+    } else {
+      const rowCount = Math.max(1, Math.ceil(items.length / columns))
+      items.forEach((item, index) => {
+        const row = Math.floor(index / columns)
+        const rowItems = items.slice(row * columns, (row + 1) * columns)
+        const column = index % columns
+        nodes.push({
+          item,
+          regionIndex,
+          laneId: null,
+          laneKind: null,
+          row: logicalRow + row,
+          column,
+          x:
+            rowStartX(contentX, contentWidth, rowItems.length) + column * (NODE_WIDTH + COLUMN_GAP),
+          y: cursorY + row * (NODE_HEIGHT + ROW_GAP),
+        })
+      })
+      cursorY += rowCount * NODE_HEIGHT + Math.max(0, rowCount - 1) * ROW_GAP
+      logicalRow += rowCount
+    }
+
+    const height = cursorY - graphY - (lanes.length > 0 ? LANE_GAP : 0) + BAND_BOTTOM
+    bands.push({ id: region.regionId, y: graphY, height, lanes })
+    graphY += height + BAND_GAP
+  }
+
+  return {
+    width,
+    height: Math.max(320, graphY - BAND_GAP),
+    nodes,
+    bands,
+  }
+}
+
+function stableEdgeLane(sourceRef: string, targetRef: string): number {
+  let value = 0
+  for (const char of `${sourceRef}:${targetRef}`) value = (value * 31 + char.charCodeAt(0)) % 7
+  return value
+}
 
 function edgePath(
-  source: NodeLayout,
-  target: NodeLayout,
-  sourceBand: BandLayout,
-  targetBand: BandLayout,
-  laneIndex: number,
+  source: ResponsibilityNodeLayout,
+  target: ResponsibilityNodeLayout,
+  sourceBand: ResponsibilityBandLayout,
+  targetBand: ResponsibilityBandLayout,
+  width: number,
+  loop: boolean,
 ): string {
   const sourceRight = source.x + NODE_WIDTH
+  const sourceCenterX = source.x + NODE_WIDTH / 2
   const sourceCenterY = source.y + NODE_HEIGHT / 2
+  const targetRight = target.x + NODE_WIDTH
   const targetCenterY = target.y + NODE_HEIGHT / 2
+  const edgeLane = stableEdgeLane(source.item.workItemRef, target.item.workItemRef)
 
-  if (
-    source.regionIndex === target.regionIndex &&
-    source.row === target.row &&
-    target.column === source.column + 1
-  ) {
+  if (loop) {
+    const loopX = width - PADDING_X - 6 - edgeLane * 4
+    if (source.item.workItemRef === target.item.workItemRef) {
+      return `M ${sourceRight} ${sourceCenterY} H ${loopX} V ${source.y - 6} H ${sourceCenterX} V ${source.y}`
+    }
+    return `M ${sourceRight} ${sourceCenterY} H ${loopX} V ${targetCenterY} H ${targetRight}`
+  }
+
+  if (source.regionIndex === target.regionIndex && source.row === target.row) {
     return `M ${sourceRight} ${sourceCenterY} H ${target.x}`
   }
 
-  const laneOffset = (laneIndex % 4) * 4
-  let laneY: number
-  if (source.regionIndex !== target.regionIndex) {
-    const upper = sourceBand.y < targetBand.y ? sourceBand : targetBand
-    const lower = sourceBand.y < targetBand.y ? targetBand : sourceBand
-    laneY = upper.y + upper.height + (lower.y - upper.y - upper.height) / 2 + laneOffset - 6
-  } else if (target.row > 0) {
-    laneY = target.y - ROW_GAP / 2 + laneOffset - 6
-  } else {
-    laneY = target.y + NODE_HEIGHT + ROW_GAP / 2 + laneOffset - 6
+  const sourceBottom = source.y + NODE_HEIGHT
+  const sourceAboveTarget = source.y < target.y
+  if (source.regionIndex !== target.regionIndex || source.laneId !== target.laneId) {
+    const transitionX = width - PADDING_X - 10 - edgeLane * 3
+    const laneY =
+      source.regionIndex === target.regionIndex
+        ? sourceBottom + 4 + (edgeLane - 3) * 0.6
+        : sourceBand.y +
+          sourceBand.height +
+          (targetBand.y - sourceBand.y - sourceBand.height) / 2 +
+          (edgeLane - 3) * 2
+    return [
+      `M ${sourceCenterX} ${sourceBottom}`,
+      `V ${laneY}`,
+      `H ${transitionX}`,
+      `V ${targetCenterY}`,
+      `H ${targetRight}`,
+    ].join(' ')
   }
 
-  const sourceLaneX = sourceRight + 10 + (laneIndex % 3) * 4
-  const targetLaneX = target.x - 10 - (laneIndex % 3) * 4
+  const sourceY = sourceAboveTarget ? sourceBottom : source.y
+  const laneY = sourceY + (targetCenterY - sourceY) / 2 + (edgeLane - 3) * 2
   return [
-    `M ${sourceRight} ${sourceCenterY}`,
-    `H ${sourceLaneX}`,
+    `M ${sourceCenterX} ${sourceY}`,
     `V ${laneY}`,
-    `H ${targetLaneX}`,
+    `H ${target.x - 12}`,
     `V ${targetCenterY}`,
     `H ${target.x}`,
   ].join(' ')
@@ -81,33 +242,37 @@ export function ResponsibilityGraph(props: {
   const regions = [...props.type.authoringManifest.lifecycleRegions].sort(
     (left, right) => left.order - right.order,
   )
-  const layouts: NodeLayout[] = []
-  const bands: BandLayout[] = []
-  let y = 0
-  for (const [regionIndex, region] of regions.entries()) {
-    const items = props.type.authoringManifest.workItems
-      .filter((item) => item.regionId === region.regionId)
-      .sort((left, right) => left.order - right.order)
-    const rows = Math.max(1, Math.ceil(items.length / COLUMNS))
-    const height = BAND_HEADER + rows * NODE_HEIGHT + Math.max(0, rows - 1) * ROW_GAP + 32
-    bands.push({ id: region.regionId, y, height })
-    items.forEach((item, index) => {
-      const row = Math.floor(index / COLUMNS)
-      const column = index % COLUMNS
-      layouts.push({
-        item,
-        regionIndex,
-        row,
-        column,
-        x: PADDING_X + column * (NODE_WIDTH + COLUMN_GAP),
-        y: y + BAND_HEADER + row * (NODE_HEIGHT + ROW_GAP),
-      })
-    })
-    y += height + BAND_GAP
+  const layout = buildResponsibilityGraphLayout(props.type)
+  const byRef = new Map(layout.nodes.map((node) => [node.item.workItemRef, node] as const))
+  const edges = layout.nodes.flatMap((source) =>
+    source.item.nextWorkItemRefs.flatMap((targetRef) => {
+      const target = byRef.get(targetRef)
+      if (target === undefined) return []
+      const loop =
+        target.regionIndex < source.regionIndex ||
+        (target.regionIndex === source.regionIndex && target.item.order <= source.item.order)
+      return [{ source, target, loop }]
+    }),
+  )
+  const dispatchGroups = new Map<string, typeof edges>()
+  for (const edge of edges) {
+    if (
+      edge.loop ||
+      edge.source.regionIndex !== edge.target.regionIndex ||
+      edge.source.laneKind !== 'spine' ||
+      edge.target.laneKind !== 'branch'
+    ) {
+      continue
+    }
+    const existing = dispatchGroups.get(edge.source.item.workItemRef) ?? []
+    existing.push(edge)
+    dispatchGroups.set(edge.source.item.workItemRef, existing)
   }
-  const width = PADDING_X * 2 + COLUMNS * NODE_WIDTH + (COLUMNS - 1) * COLUMN_GAP
-  const height = Math.max(320, y - BAND_GAP)
-  const byRef = new Map(layouts.map((layout) => [layout.item.workItemRef, layout] as const))
+  const dispatchEdgeKeys = new Set(
+    [...dispatchGroups.values()].flatMap((group) =>
+      group.map(({ source, target }) => `${source.item.workItemRef}:${target.item.workItemRef}`),
+    ),
+  )
 
   return (
     <div
@@ -117,7 +282,9 @@ export function ResponsibilityGraph(props: {
     >
       <svg
         className="employee-graph"
-        viewBox={`0 0 ${width} ${height}`}
+        width={layout.width}
+        height={layout.height}
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
         role="img"
         aria-label={
           props.language.startsWith('zh')
@@ -125,60 +292,6 @@ export function ResponsibilityGraph(props: {
             : 'Deterministic digital employee responsibility map'
         }
       >
-        {bands.map((band, index) => {
-          const region = regions.find((candidate) => candidate.regionId === band.id)!
-          return (
-            <g key={band.id} className="employee-graph__region">
-              <rect
-                x="1"
-                y={band.y + 1}
-                width={width - 2}
-                height={band.height - 2}
-                rx="18"
-                className={`employee-graph__region-bg employee-graph__region-bg--${index % 3}`}
-              />
-              <text x={PADDING_X} y={band.y + 28} className="employee-graph__region-title">
-                {localized(region.label, props.language)}
-              </text>
-              <text x={PADDING_X} y={band.y + 48} className="employee-graph__region-description">
-                {localized(region.description, props.language)}
-              </text>
-            </g>
-          )
-        })}
-
-        <g className="employee-graph__edges" aria-hidden="true">
-          {layouts.flatMap((source) =>
-            source.item.nextWorkItemRefs.flatMap((targetRef, targetIndex) => {
-              const target = byRef.get(targetRef)
-              if (target === undefined) return []
-              const active =
-                props.selectedWorkItemRef === source.item.workItemRef ||
-                props.selectedWorkItemRef === target.item.workItemRef
-              const loop =
-                target.regionIndex < source.regionIndex ||
-                (target.regionIndex === source.regionIndex &&
-                  target.item.order <= source.item.order)
-              return [
-                <path
-                  key={`${source.item.workItemRef}:${targetRef}`}
-                  className={`${active ? 'employee-graph__edge--active' : ''}${
-                    loop ? ' employee-graph__edge--loop' : ''
-                  }`}
-                  d={edgePath(
-                    source,
-                    target,
-                    bands[source.regionIndex]!,
-                    bands[target.regionIndex]!,
-                    targetIndex,
-                  )}
-                  markerEnd={active ? 'url(#employee-arrow-active)' : 'url(#employee-arrow)'}
-                  vectorEffect="non-scaling-stroke"
-                />,
-              ]
-            }),
-          )}
-        </g>
         <defs>
           <marker
             id="employee-arrow"
@@ -205,14 +318,144 @@ export function ResponsibilityGraph(props: {
           </marker>
         </defs>
 
-        {layouts.map(({ item, x, y: nodeY }) => {
+        {layout.bands.map((band, index) => {
+          const region = regions.find((candidate) => candidate.regionId === band.id)!
+          return (
+            <g key={band.id} className="employee-graph__region">
+              <rect
+                x="1"
+                y={band.y + 1}
+                width={layout.width - 2}
+                height={band.height - 2}
+                rx="18"
+                className={`employee-graph__region-bg employee-graph__region-bg--${index % 3}`}
+              />
+              <text x={PADDING_X} y={band.y + 28} className="employee-graph__region-title">
+                {localized(region.label, props.language)}
+              </text>
+              <text x={PADDING_X} y={band.y + 48} className="employee-graph__region-description">
+                {localized(region.description, props.language)}
+              </text>
+              {band.lanes.map((lane) => (
+                <g key={lane.id} className="employee-graph__lane">
+                  <rect
+                    x={PADDING_X / 2}
+                    y={lane.y}
+                    width={layout.width - PADDING_X}
+                    height={lane.height}
+                    rx="12"
+                    className={`employee-graph__lane-bg employee-graph__lane-bg--${lane.kind}`}
+                  />
+                  <foreignObject
+                    x={PADDING_X}
+                    y={lane.y}
+                    width={LANE_LABEL_WIDTH - 18}
+                    height={lane.height}
+                  >
+                    <div className="employee-graph-lane-label" data-lane-kind={lane.kind}>
+                      <strong>{localized(lane.label, props.language)}</strong>
+                      <span>{localized(lane.description, props.language)}</span>
+                    </div>
+                  </foreignObject>
+                </g>
+              ))}
+            </g>
+          )
+        })}
+
+        <g className="employee-graph__edges" aria-hidden="true">
+          {edges.flatMap(({ source, target, loop }) => {
+            const edgeKey = `${source.item.workItemRef}:${target.item.workItemRef}`
+            if (dispatchEdgeKeys.has(edgeKey)) return []
+            const active =
+              props.selectedWorkItemRef === source.item.workItemRef ||
+              props.selectedWorkItemRef === target.item.workItemRef
+            return [
+              <path
+                key={edgeKey}
+                data-from={source.item.workItemRef}
+                data-to={target.item.workItemRef}
+                className={`${active ? 'employee-graph__edge--active' : ''}${
+                  loop ? ' employee-graph__edge--loop' : ''
+                }`}
+                d={edgePath(
+                  source,
+                  target,
+                  layout.bands[source.regionIndex]!,
+                  layout.bands[target.regionIndex]!,
+                  layout.width,
+                  loop,
+                )}
+                markerEnd={active ? 'url(#employee-arrow-active)' : 'url(#employee-arrow)'}
+                vectorEffect="non-scaling-stroke"
+              />,
+            ]
+          })}
+          {[...dispatchGroups.entries()].flatMap(([sourceRef, group], groupIndex) => {
+            const source = group[0]?.source
+            if (source === undefined) return []
+            const branchTopYs = group.map(({ target }) => target.y - 6)
+            const busStartY = Math.min(...branchTopYs)
+            const busEndY = Math.max(...branchTopYs)
+            const busX = PADDING_X + LANE_LABEL_WIDTH - 12 - groupIndex * 5
+            const sourceCenterX = source.x + NODE_WIDTH / 2
+            const sourceBottom = source.y + NODE_HEIGHT
+            const sourceSelected = props.selectedWorkItemRef === source.item.workItemRef
+            const selectedBranch = group.find(
+              ({ target }) => props.selectedWorkItemRef === target.item.workItemRef,
+            )
+            return [
+              <path
+                key={`${sourceRef}:dispatch-trunk`}
+                className={`employee-graph__dispatch-trunk${
+                  sourceSelected ? ' employee-graph__edge--active' : ''
+                }`}
+                d={`M ${sourceCenterX} ${sourceBottom} V ${busStartY} H ${busX} V ${busEndY}`}
+                vectorEffect="non-scaling-stroke"
+              />,
+              selectedBranch === undefined || sourceSelected ? null : (
+                <path
+                  key={`${sourceRef}:dispatch-selection`}
+                  className="employee-graph__dispatch-trunk employee-graph__edge--active"
+                  d={`M ${sourceCenterX} ${sourceBottom} V ${busStartY} H ${busX} V ${
+                    selectedBranch.target.y - 6
+                  }`}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ),
+              ...group.map(({ target }) => {
+                const active =
+                  props.selectedWorkItemRef === source.item.workItemRef ||
+                  props.selectedWorkItemRef === target.item.workItemRef
+                const branchY = target.y - 6
+                return (
+                  <path
+                    key={`${sourceRef}:${target.item.workItemRef}`}
+                    data-from={sourceRef}
+                    data-to={target.item.workItemRef}
+                    className={`employee-graph__dispatch-branch${
+                      active ? ' employee-graph__edge--active' : ''
+                    }`}
+                    d={`M ${busX} ${branchY} H ${target.x - 10} V ${
+                      target.y + NODE_HEIGHT / 2
+                    } H ${target.x}`}
+                    markerEnd={active ? 'url(#employee-arrow-active)' : 'url(#employee-arrow)'}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )
+              }),
+            ]
+          })}
+        </g>
+
+        {layout.nodes.map(({ item, x, y }) => {
           const selected = props.selectedWorkItemRef === item.workItemRef
           const count = props.toolCounts?.[item.workItemRef] ?? 0
           return (
             <foreignObject
               key={item.workItemRef}
               x={x}
-              y={nodeY}
+              y={y}
               width={NODE_WIDTH}
               height={NODE_HEIGHT}
             >

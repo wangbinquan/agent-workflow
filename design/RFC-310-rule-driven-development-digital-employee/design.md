@@ -14,6 +14,12 @@
 > 保留文本理解为新 OS 目标仍选择有序步骤作为主抽象。数字员工分类、工作项合同、分类节点工具箱、最小业务配置、
 > Event Center、Context/Reaction/Channel 与通用 UI 已落生产代码；RFC-294 owner/exact dependency 专项账本已同步，
 > 完整 `gate:local` 已于 2026-08-21 全绿，当前仅剩 exact-SHA hosted CI 的发布验证。
+>
+> **2026-08-21 PR-19（待 hosted 验证）**：新增平台 `execution-contract` context，统一 Agent/Workflow/Program 的
+> 输入输出指南、兼容校验、fixture 与运行结算；AuthoringManifest 新增通用职责泳道，固定职责图按主干、支线和外侧回路呈现。
+> Manifest 与真实后继关系作为冻结类型合同发布在 `development@2`；升级只追加新 revision，不原地改写 `development@1`
+> descriptor/digest，也不需要 schema migration。Agent 契约选择与端口编辑同页；契约托管的 `agent-result` 随声明原子增删，
+> UI 与所有保存入口均禁止单独改写。
 
 ## 0A. 数字员工操作系统目标架构
 
@@ -37,6 +43,10 @@ external webhook / scheduled observation / internal domain event
                  → invocation/channel/join
                            │
                            ▼
+                   execution-contract
+       schema guide → executor compatibility → exact receipt
+                           │
+                           ▼
                      task-execution
        TaskEngine → WrapperRuntime → NodeExecutor → Kernel
                 │             │              │
@@ -52,6 +62,7 @@ external webhook / scheduled observation / internal domain event
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `digital-employee`       | employee type/job template/definition revision、WorkItem tool registration/ProgramTool spec、EmployeeCase、ContextRecord/Link、AttentionRule、CaseInboxItem、ReactionRule/Round、EmployeeInvocation/Channel/Join | `public/{commands,queries,participants,events,types}`    |
 | `event-center`           | EventType/Source catalog、Subscription、ObserverActivation、EventRecord、transport Delivery 与 observation cursor/lease                                                                                          | `public/{commands,queries,participants,events,types}`    |
+| `execution-contract`     | executor-neutral schema guide、输入 transport、exact 输出规则、Agent/Workflow/Program 兼容校验与 fixture receipt                                                                                                 | `public/types.ts` participant；机制不认识员工类型        |
 | `development-automation` | 代码员工类型包、代码领域 context/event schema、两类职责、问题分类/处理与默认 attention/reaction/invocation contract                                                                                              | `digital-employee` 的 type-package registration contract |
 | `task-execution`         | 已有 Task/NodeRun、Workflow/Agent/Script 执行与恢复                                                                                                                                                              | exact execution participant；OS 不直接 spawn             |
 | `resource-catalog`       | Agent/Workflow 等已发布资源的 ACL/ref/revision                                                                                                                                                                   | exact resource refs/queries                              |
@@ -59,8 +70,8 @@ external webhook / scheduled observation / internal domain event
 | `source-control`         | workspace、candidate、diff、commit、CAS push                                                                                                                                                                     | 既有 path-free participants                              |
 | `platform`               | tx/outbox/clock/job/process/lease/durable-queue kernel                                                                                                                                                           | 中性机制；不拥有员工/Event业务规则                       |
 
-`digital-employee` 和 `event-center` 不得读取 `development-automation` 内部表或 import 代码员工 domain。类型包只能通过
-注册合同提供 schema、pure rule/compiler 与 tool requirements；bootstrap 只装配，不按员工类型写 `if`。
+`digital-employee`、`event-center` 和 `execution-contract` 不得读取 `development-automation` 内部表或 import 代码员工 domain。
+类型包只能通过注册合同提供 schema、pure rule/compiler、execution guide 与 tool requirements；bootstrap 只装配，不按员工类型写 `if`。
 
 产品“工具箱”是按“数字员工分类 + 工作项 + 工作合同”建立的注册与聚合 read model：Agent/Workflow 工具引用
 resource-catalog 资源；ProgramTool 的版本化程序规范属于该工作项注册并复用现有 Script executor；外部 Adapter/Connection
@@ -526,10 +537,18 @@ interface EmployeeAuthoringManifestV1 {
     readonly labelKey: string
     readonly descriptionKey: string
     readonly order: number
+    readonly responsibilityLanes: readonly {
+      readonly laneId: string
+      readonly labelKey: string
+      readonly descriptionKey: string
+      readonly order: number
+      readonly kind: 'spine' | 'branch'
+    }[]
   }[]
   readonly workItems: readonly {
     readonly workItemRef: WorkItemRef
     readonly regionId: string
+    readonly responsibilityLaneId: string | null
     readonly order: number
     readonly labelKey: string
     readonly descriptionKey: string
@@ -538,15 +557,24 @@ interface EmployeeAuthoringManifestV1 {
     readonly completionStandardKey: string
     readonly nodeKind: 'business-tool' | 'system' | 'collaboration'
     readonly toolRoleGroups: readonly ToolRoleGroupV1[]
+    readonly nextWorkItemRefs: readonly WorkItemRef[]
   }[]
 }
 ```
 
 画布拓扑从 manifest + employee definition 纯投影：生命周期 region 固定、工作项位置固定、全量展开，不提供 edge drag、
-stage selector 或任意 topology mutation。阶段只作为背景 region；工作项是唯一可点击配置节点。业务工具节点只允许从当前分类、
+stage selector 或任意 topology mutation。阶段只作为背景 region；每个 region 可声明一条 `spine` 主干与多条 `branch` 职责泳道，
+泳道 identity/order 在类型包发布时冻结。有泳道的 region 中，每个工作项必须且只能引用该 region 的一个 lane；重复 lane、缺失归属、
+跨 region 引用或未知 `nextWorkItemRefs` 均阻断发布。工作项是唯一可点击配置节点。业务工具节点只允许从当前分类、
 当前工作项、exact WorkContract 下的已发布工具注册中选择；系统节点只读，协作节点进入 EmployeeInvocation 配置。Event、closed
 predicate、Context mapping、Effect 与 failure/retry policy 都由类型包编译，不出现在员工实例编辑器。前端通用组件不得按
 `development` 类型分支，类型差异只能来自 manifest 和注册的业务文案/codec。
+
+布局算法同样属于通用 manifest 投影，不属于研发页面特例：`spine` 节点在内容区居中；每条 `branch` 独占一行或多行，节点按
+`order` 从左到右展开；`nextWorkItemRefs` 的同泳道前向边直接连接，事件主干到多条支线先汇入一条共享分发干线再短接各支线，其他
+跨泳道或跨 region 的前向边走右侧过渡通道；指向更早工作项或更早 region 的边统一进入右侧 gutter 并以虚线表示回路，同节点回路从卡片上方
+回入，表达“按固定优先级继续处理下一类型”。画布给定显式 width/height/viewBox，桌面默认全量展开，窄屏只由外壳横向滚动，
+不得为了适配宽度把支线重新平铺成一个无法辨认前后关系的序列。
 
 运行投影至少提供：
 
@@ -670,6 +698,76 @@ registration validation receipt，再发布对应岗位模板/员工 revision。
 员工发布和新 Case admission；已经 active 的 Case 保留 frozen registration，在底层 exact resource 仍可解析且 authority 有效时继续，
 不可用则进入具名 dependency block，禁止自动换同名工具。Agent/Workflow archive、ACL/Connection 变化在 readiness/admission 与每轮
 freeze 重验；任何替换都经 employee/Case upgrade preview/apply，不做名字匹配 fallback。
+
+### 0A.14 平台执行契约
+
+`WorkContract` 属于员工类型的业务职责合同；`ExecutionContract` 是所有上层能力复用的执行器中立机制。后者由独立
+`execution-contract` bounded context 唯一实现，`digital-employee` 只 pin/调用 exact contract participant，
+`development-automation` 只注册研发 schema guide，不复制输入注入、输出解析或 executor 探测代码。
+`DigitalEmployeeAuthoringService`、`DigitalEmployeeRuntimeService` 与 TaskExecution reaction host 的 production composition
+都必须注入该 participant；不存在 optional participant、按类型回退或旧 resource/fixture 校验旁路。测试替身也只能实现同一
+participant，而不能触发另一套生产算法。
+
+```ts
+interface ExecutionContractGuideV1 {
+  readonly schemaVersion: 1
+  readonly contractRef: { readonly contractId: string; readonly version: number }
+  readonly displayName: LocalizedText
+  readonly description: LocalizedText
+  readonly input: ExecutionContractSchemaGuide
+  readonly output: ExecutionContractSchemaGuide
+  readonly allowedExecutorKinds: readonly ('agent' | 'workflow' | 'program')[]
+  readonly transports: {
+    readonly agent: ExecutionTransportGuide | null
+    readonly workflow: ExecutionTransportGuide | null
+    readonly program: ExecutionTransportGuide | null
+  }
+}
+
+interface ExecutionContractValidationReceiptV1 {
+  readonly schemaVersion: 1
+  readonly contractRef: ExecutionContractRef
+  readonly status: 'valid' | 'invalid'
+  readonly checks: readonly {
+    readonly code: string
+    readonly ok: boolean
+    readonly detail: string
+  }[]
+}
+```
+
+完整 `ExecutionContractGuideV1` 是 `execution-contract` 内部注册/校验模型，不作为跨 context mega DTO 展开。类型包注册
+`{contractRef, guideJson}`，平台先 strict parse 并对拍 ref；公共 participant 的 list/get 只返回小型
+`ExecutionContractRuntimeView`（显示摘要、schema id、允许执行器、输出字段闭集及只读 `guideJson`）。列表 API 返回摘要，exact
+guide API 直接返回平台已校验的序列化指南；运行消费者只取得构造 prompt 所需的最小投影。这样既保持字段指南完整，又满足
+RFC-294 的公共合同叶字段上限，调用方不能把内部 guide 当业务写模型传播。
+
+`ExecutionContractSchemaGuide` 固定 schema id、业务化字段说明、字段来源、required/condition、top-level field 闭集和 JSON 示例。
+它是可读指南和机械校验合同，不是开放 JSON Schema 编辑器；业务用户不能在工具表单改写。平台 API 提供 list/exact guide，Agent
+候选查询对当前可见 exact revision 批量返回 validation receipt，前端据此禁用不兼容项而不是硬编码研发 Agent 名称。
+
+三种 executor 的发布门固定为：
+
+1. **Agent**：exact revision 必须存在、可用、声明实现 exact `ExecutionContractRef`，并有固定 `agent-result` 输出口。契约选择器
+   与输入/输出端口同页；只要存在声明，保存层就把该端口规范化为唯一、无 kind/wrapper/branch sidecar 的契约托管端口，UI 不提供
+   编辑/删除动作。取消最后一个声明时同一写入删除该端口及 sidecar；create/update/bundle/intent 都进入同一规整命令。兼容期内置
+   Agent 的隐式声明只能由对应类型包提供 migration callback，通用模块不得出现 `development` literal；新建 Agent 直接保存显式声明。
+2. **Workflow**：必须有平台规定的文本输入、无额外 required input、只包含合同允许的节点种类，并能闭合输出 `agent-result`；代码平台
+   Effect 等越出合同 closure 的节点在发布前拒绝。
+3. **Program**：平台以真实 Script runner、runtime profile、exact executable digest 和参数 artifact 运行合同示例；只有 stdout
+   产生合法 exact output 才得到 valid receipt。编辑器提供 Bash/Node/Python 起始代码，但保留 `TODO_IMPLEMENT_CONTRACT` 时禁止加入工具箱。
+
+运行输入统一为完整 envelope，其中 `roundRef`、`executionNonce`、`workItemRef`、`toolSlotRef`、schema ids、Context/Event/artifact refs
+和业务 `contractInput` 都是一级确定字段。外部需求/问题 ID 直接投影到 `contractInput.workRequest.externalId`；流水线合同直接给 MR
+head/connection 和 `.agent-workflow/pipeline/<bundleId>` artifact ref。Agent prompt 由平台构造并在末尾放完整 JSON；Program 的小输入
+注入 `AW_PORT_CONTRACT_INPUT`，超过 Script port 阈值时由既有 runner spill 后只注入 `AW_PORT_FILE_CONTRACT_INPUT`。
+
+类型包组装输入后、冻结 ReactionPlan 前，平台先校验 input top-level 闭集、每个 top-level 字段都有可读字段指南、required/path/valueType
+以及 `schemaVersion/roundRef/executionNonce`；失败时该轮不得进入执行器。输出只能是一个无 Markdown、无前后正文的 JSON object，
+top-level keys 必须与 guide 完全相等，字段类型必须匹配，并逐轮对拍 `schemaVersion=1`、
+`roundRef`、`executionNonce`、closed status 与非空 summary。平台 exact 校验通过后，再由员工类型包 semantic validator 检查
+`contextPatches/effectSuggestions/artifactRefs` 的业务语义；两层均通过才可形成事实或 Effect intent。编辑发布 fixture 和运行结算调用
+同一 participant 的 `validateEnvelope(input | output)`，错误原文进入同现场重试提示；重试次数仍只来自 Case pin 的全局执行策略。
 
 ## 0. 设计裁决与事实基线
 
@@ -3444,9 +3542,16 @@ retry 或内部 revision。
 
 ```text
 数字员工 / 研发数字员工 / 工具箱
-┌ 接收工作 ─────────┬ 完成交付 ─────────┬ 持续关注 ─────────┐
-│ [准备工作材料]    │ [需求开发] [提交MR] │ [处理检视] [处理流水线] │
-└───────────────────┴────────────────────┴────────────────────────┘
+┌ 需求开发与问题定位 ───────────────────────────────────────────┐
+│ 交付主线       [准备材料] → [分析实现] → [修改候选] → [提交 MR] │
+├ MR 看护与修绿 ────────────────────────────────────────────────┤
+│ MR 事件入口                         [关注 MR 状态]              │
+│ 检视意见       [识别检视] → [修复检视] ────────────────┐       │
+│ 流水线门禁     [取得门禁] → [识别失败] → [修绿] ↺ 下一类型 ┤       │
+│ 代码冲突       [修复冲突] → [发布冲突修复] ───────────┤→ 回入口│
+│ 跨仓与审批     [协同] → [准备] → [提交] → [等待] ─────┤       │（由流水线外部依赖进入）
+│ 合入判断       [判断就绪] → [等待 committer] ─────────┘       │
+└───────────────────────────────────────────────────────────────┘
                          点击工作项
                               ↓
 右侧：该工作项的输入｜输出｜完成标准｜工具列表｜[增加工具]
@@ -3469,6 +3574,8 @@ retry 或内部 revision。
 - 表单不允许再次选择阶段或工作项；不能在这里新建/改写底层 Agent 或 Workflow，ProgramTool 则只在这里定义并要求程序写权。
 - 保存后先显示合同校验结果；通过后才能发布。系统节点只展示平台行为和 receipt，无“增加工具”。
 - “处理流水线”一个工作项内可分“问题识别工具 / 问题修复工具”；问题类型路由由分类包固定，不把流程重新拆成自由连线图。
+- 泳道标签回答“这是人的哪类职责”，节点回答“这一步做什么”；MR 事件入口是分发主干，不把检视、流水线、冲突、审批和合入判断
+  误画成必须依次执行的一条长链。回入口/重新发布/重采边固定走外侧虚线，选择节点时仅高亮相关边。
 
 员工创建/详情复用同一职责图，但配置更少：选分类和岗位模板后，只填写名称、启停、负责范围，并为有覆盖需要的工作项选择一个
 已发布工具。节点右侧显示“当前工具 / 模板默认 / 可选兼容工具”和只读输入输出合同。缺少工具时动作跳到
@@ -3830,6 +3937,10 @@ SHA 终态验证；取消或被 successor 覆盖的 run 不能当 pass。
    → 选岗位模板/范围 → 发布。全程无阶段下拉、edge drag、Event/Context/effect/retry 和裸 ID；节点/列表/返回草稿深链可刷新恢复。
 7. i18n tests：Event Catalog 的支持 locale 均能解析显示名/说明，fallback 稳定；业务活动只显示事件业务文案，技术权限展开后才见
    machine ID；事件“为何唤醒”与工作项“做什么”的文案字段分别渲染。
+8. ExecutionContract tests：外部 ID 直接字段、小输入 env/大输入 file transport、Agent exact declaration/result port、Workflow
+   structural closure、Program 真实 Script fixture、extra/missing/cross-round 输出均有正反向回归；编辑发布与运行调用同一 validator。
+9. Responsibility lane component/E2E：type package 缺 lane/未知 lane 拒绝；事件入口节点居中，同一支线节点 x 单调、不同支线 y 分离，
+   回边拥有独立 loop 样式；研发/设计/测试复用同一布局函数，窄屏滚动后仍可看到全景。
 
 ## 16. 被否决的方案
 

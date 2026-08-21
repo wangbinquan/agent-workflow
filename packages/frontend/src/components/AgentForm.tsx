@@ -23,6 +23,7 @@ import { DependencyTreePreview } from './agents/DependencyTreePreview'
 import { mergeAgentDeps } from '@/lib/agent-dep-detect'
 import { Field, Switch, TextInput } from './Form'
 import { ErrorBanner } from './ErrorBanner'
+import { ExecutionContractPicker } from './execution-contracts/ExecutionContractPicker'
 import { FeedbackStack } from './FeedbackStack'
 import { LoadingState } from './LoadingState'
 import { NoticeBanner } from './NoticeBanner'
@@ -176,6 +177,78 @@ export function resourceRefCount(v: CreateAgent): number {
   )
 }
 
+export function agentExecutionContractKeys(frontmatter: Record<string, unknown>): string[] {
+  const declarations = frontmatter.executionContracts
+  if (!Array.isArray(declarations)) return []
+  const keys: string[] = []
+  for (const declaration of declarations) {
+    if (declaration === null || typeof declaration !== 'object' || Array.isArray(declaration)) {
+      continue
+    }
+    const contractId = (declaration as Record<string, unknown>).contractId
+    const version = (declaration as Record<string, unknown>).version
+    if (
+      typeof contractId === 'string' &&
+      contractId !== '' &&
+      typeof version === 'number' &&
+      Number.isInteger(version) &&
+      version > 0
+    ) {
+      keys.push(`${contractId}@${version}`)
+    }
+  }
+  return [...new Set(keys)]
+}
+
+export function withAgentExecutionContractKeys(
+  frontmatter: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> {
+  const next = { ...frontmatter }
+  const declarations = keys.flatMap((key) => {
+    const at = key.lastIndexOf('@')
+    const version = Number(key.slice(at + 1))
+    return at <= 0 || !Number.isInteger(version) || version <= 0
+      ? []
+      : [{ contractId: key.slice(0, at), version }]
+  })
+  if (declarations.length === 0) delete next.executionContracts
+  else next.executionContracts = declarations
+  return next
+}
+
+export const AGENT_EXECUTION_CONTRACT_RESULT_PORT = 'agent-result'
+
+/**
+ * Contract declarations and their reserved Agent output are one logical value.
+ * The picker is the only authoring control: selecting/switching a contract
+ * canonicalizes the port, while removing the final contract removes the port
+ * and every editable sidecar that could otherwise outlive it.
+ */
+export function withAgentExecutionContractsAndPorts(
+  value: CreateAgent,
+  keys: readonly string[],
+): CreateAgent {
+  const frontmatterExtra = withAgentExecutionContractKeys(value.frontmatterExtra ?? {}, keys)
+  const active = agentExecutionContractKeys(frontmatterExtra).length > 0
+  const ordinaryOutputs = value.outputs.filter(
+    (port) => port !== AGENT_EXECUTION_CONTRACT_RESULT_PORT,
+  )
+  const outputKinds = value.outputKinds === undefined ? undefined : { ...value.outputKinds }
+  const outputWrapperPortNames =
+    value.outputWrapperPortNames === undefined ? undefined : { ...value.outputWrapperPortNames }
+  delete outputKinds?.[AGENT_EXECUTION_CONTRACT_RESULT_PORT]
+  delete outputWrapperPortNames?.[AGENT_EXECUTION_CONTRACT_RESULT_PORT]
+  return {
+    ...value,
+    frontmatterExtra,
+    outputs: active ? [...ordinaryOutputs, AGENT_EXECUTION_CONTRACT_RESULT_PORT] : ordinaryOutputs,
+    outputKinds,
+    outputWrapperPortNames,
+    branchPorts: value.branchPorts?.filter((port) => port !== AGENT_EXECUTION_CONTRACT_RESULT_PORT),
+  }
+}
+
 export type AgentTab = 'basics' | 'prompt' | 'ports' | 'resources' | 'advanced'
 
 export function AgentForm({
@@ -233,7 +306,16 @@ export function AgentForm({
     const nextJsonDraft = { ...jsonDraft, [key]: next }
     if (controlledJsonDraft === undefined) setUncontrolledJsonDraft(nextJsonDraft)
     onJsonDraftChange?.(nextJsonDraft)
-    if (next.parsed !== undefined) patch(key, next.parsed)
+    if (next.parsed !== undefined) {
+      if (key === 'frontmatterExtra') {
+        const nextValue = { ...value, frontmatterExtra: next.parsed }
+        onChange(
+          withAgentExecutionContractsAndPorts(nextValue, agentExecutionContractKeys(next.parsed)),
+        )
+      } else {
+        patch(key, next.parsed)
+      }
+    }
   }
 
   // RFC-112: registered runtimes drive the picker options + each runtime's
@@ -292,6 +374,7 @@ export function AgentForm({
 
   const portCount = portBadgeCount(value)
   const refCount = resourceRefCount(value)
+  const executionContractKeys = agentExecutionContractKeys(value.frontmatterExtra ?? {})
   const resourceIssueCount = resourceStatus?.issues.length ?? 0
   const selectedResourceOptions = (
     kind: AgentResourceRefKind,
@@ -424,6 +507,26 @@ export function AgentForm({
 
   const ports = (
     <div className="agent-ports">
+      <Field
+        group
+        label={t('agentForm.fieldExecutionContracts')}
+        hint={t('agentForm.fieldExecutionContractsHint')}
+      >
+        <ExecutionContractPicker
+          value={executionContractKeys}
+          enabled={tab === 'ports'}
+          onChange={(keys) => {
+            const nextValue = withAgentExecutionContractsAndPorts(value, keys)
+            const nextJsonDraft = {
+              ...jsonDraft,
+              frontmatterExtra: jsonFieldChangeFromValue(nextValue.frontmatterExtra ?? {}),
+            }
+            if (controlledJsonDraft === undefined) setUncontrolledJsonDraft(nextJsonDraft)
+            onJsonDraftChange?.(nextJsonDraft)
+            onChange(nextValue)
+          }}
+        />
+      </Field>
       {portValidation.issues.length > 0 && (
         <AgentPortValidationSummary
           issues={portValidation.issues}
@@ -442,11 +545,21 @@ export function AgentForm({
           outputKinds={value.outputKinds}
           outputWrapperPortNames={value.outputWrapperPortNames}
           branchPorts={value.branchPorts}
+          managedPortNames={
+            executionContractKeys.length > 0 ? [AGENT_EXECUTION_CONTRACT_RESULT_PORT] : undefined
+          }
           aggregator={value.role === 'aggregator'}
           hasExternalPortAlert={hasExternalPortAlert}
-          onChange={(outputs, outputKinds, outputWrapperPortNames, branchPorts) =>
-            onChange({ ...value, outputs, outputKinds, outputWrapperPortNames, branchPorts })
-          }
+          onChange={(outputs, outputKinds, outputWrapperPortNames, branchPorts) => {
+            const nextValue = {
+              ...value,
+              outputs,
+              outputKinds,
+              outputWrapperPortNames,
+              branchPorts,
+            }
+            onChange(withAgentExecutionContractsAndPorts(nextValue, executionContractKeys))
+          }}
         />
       </div>
     </div>

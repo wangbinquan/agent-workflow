@@ -2,12 +2,8 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import type {
-  ProgramArtifactPort,
-  ToolConnectionCatalogPort,
-  ToolResourceCatalogPort,
-  WorkContractFixturePort,
-} from '../composition/required-ports'
+import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
+import type { ProgramArtifactPort, ToolConnectionCatalogPort } from '../composition/required-ports'
 import {
   DEFAULT_GLOBAL_EXECUTION_POLICY,
   buildToolValidationReceipt,
@@ -80,10 +76,10 @@ export const updateEmployeeDefinitionBodySchema = createEmployeeDefinitionBodySc
 export interface DigitalEmployeeAuthoringServiceDependencies {
   readonly store: DigitalEmployeeAuthoringStore
   readonly typePackages: readonly EmployeeTypeRuntimePackage[]
-  readonly resourceCatalog: ToolResourceCatalogPort
   readonly connectionCatalog: ToolConnectionCatalogPort
   readonly programArtifacts: ProgramArtifactPort
-  readonly fixtureRunner: WorkContractFixturePort
+  /** Platform-owned IO contract authority; there is no per-type fallback path. */
+  readonly executionContracts: ExecutionContractParticipant
   readonly now?: () => number
   readonly id?: () => string
 }
@@ -200,19 +196,17 @@ function validateCollaborationGroups(bindings: readonly EmployeeCollaborationBin
 export class DigitalEmployeeAuthoringService {
   readonly #store: DigitalEmployeeAuthoringStore
   readonly #types = new Map<string, EmployeeTypeRuntimePackage>()
-  readonly #resourceCatalog: ToolResourceCatalogPort
   readonly #connectionCatalog: ToolConnectionCatalogPort
   readonly #programArtifacts: ProgramArtifactPort
-  readonly #fixtureRunner: WorkContractFixturePort
+  readonly #executionContracts: ExecutionContractParticipant
   readonly #now: () => number
   readonly #id: () => string
 
   constructor(deps: DigitalEmployeeAuthoringServiceDependencies) {
     this.#store = deps.store
-    this.#resourceCatalog = deps.resourceCatalog
     this.#connectionCatalog = deps.connectionCatalog
     this.#programArtifacts = deps.programArtifacts
-    this.#fixtureRunner = deps.fixtureRunner
+    this.#executionContracts = deps.executionContracts
     this.#now = deps.now ?? Date.now
     this.#id = deps.id ?? ulid
 
@@ -358,49 +352,11 @@ export class DigitalEmployeeAuthoringService {
       )
     }
 
-    if (content.implementation.kind === 'agent') {
-      const projection = await this.#resourceCatalog.resolveAgent(content.implementation.agentRef)
-      checks.push(
-        projection === null
-          ? validationFailure(
-              'agent-exact-revision-resolves',
-              `${content.implementation.agentRef.id}@${content.implementation.agentRef.revision} not found`,
-            )
-          : {
-              code: 'agent-exact-revision-resolves',
-              ok: projection.available,
-              detail: projection.available
-                ? projection.closureSummary
-                : `${projection.name} unavailable`,
-            },
-      )
-    } else if (content.implementation.kind === 'workflow') {
-      const projection = await this.#resourceCatalog.resolveWorkflow(
-        content.implementation.workflowRef,
-      )
-      checks.push(
-        projection === null
-          ? validationFailure(
-              'workflow-exact-revision-resolves',
-              `${content.implementation.workflowRef.id}@${content.implementation.workflowRef.revision} not found`,
-            )
-          : {
-              code: 'workflow-exact-revision-resolves',
-              ok: projection.available,
-              detail: projection.available
-                ? projection.closureSummary
-                : `${projection.name} unavailable`,
-            },
-      )
-    }
-
-    checks.push(
-      ...(await this.#fixtureRunner.validate({
-        inputSchemaId: contract.inputSchemaId,
-        outputSchemaId: contract.outputSchemaId,
-        implementation: content.implementation,
-      })),
-    )
+    const receipt = await this.#executionContracts.validateExecutor({
+      contractRef: { contractId: contract.contractId, version: contract.version },
+      implementation: content.implementation,
+    })
+    checks.push(...receipt.checks)
     return buildToolValidationReceipt({
       contract,
       implementation: content.implementation,

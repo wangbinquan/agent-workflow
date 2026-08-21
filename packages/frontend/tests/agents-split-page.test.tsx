@@ -158,6 +158,7 @@ function installFetch(
         })
       if (method === 'GET' && path.endsWith('/api/config'))
         return json({ defaultRuntime: 'opencode' })
+      if (method === 'GET' && path.endsWith('/api/execution-contracts')) return json({ items: [] })
       if (method === 'POST' && path.endsWith('/api/users/lookup'))
         return json(
           opts.ownerName === undefined

@@ -176,6 +176,7 @@ export function composeScriptActionExecution(deps: {
             actionRunId: input.actionRunId,
             snapshotJson: JSON.stringify(
               synthesizeDigitalEmployeeScriptHostSnapshot({
+                inputPort: DIGITAL_EMPLOYEE_PROMPT_KEY,
                 language: script.data.language,
                 script: script.data.script,
                 dependencies: script.data.dependencies ?? [],

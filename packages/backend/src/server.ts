@@ -60,6 +60,7 @@ import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
 import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
 import { mountEventCenterRoutes } from '@/routes/eventCenter'
+import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
 import { mountCodeRoutes } from '@/routes/code'
 import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
@@ -81,9 +82,12 @@ import {
   readDigitalEmployeeWriterState,
 } from '@/modules/digital-employee/composition'
 import {
+  developmentExecutionContractRegistrations,
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
+  developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
+import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -382,6 +386,12 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     sourceControl: bindEmployeeCaseWorkspaceParticipant(),
     conflictMerge: bindConflictMergeParticipant(),
   })
+  const executionContracts = composeExecutionContract({
+    db: deps.db,
+    appHome,
+    registrations: developmentExecutionContractRegistrations,
+    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+  })
   const eventCenter =
     deps.digitalEmployeeEventCenter ??
     composeEventCenter({
@@ -399,6 +409,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     db: deps.db,
     appHome,
     typePackages: [developmentEmployeeTypePackage],
+    executionContracts,
     inputArtifacts,
     connectionCatalog: composeDevelopmentToolConnectionCatalog(deps.db),
     runtime: {
@@ -410,6 +421,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
           appHome,
           startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
           workspace: developmentWorkspace,
+          executionContracts,
         }),
       ),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
@@ -462,6 +474,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountCodeRoutes(app, deps) // RFC-304 T31b
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
   mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
+  mountExecutionContractRoutes(app, executionContracts) // platform deterministic IO contracts
   mountDigitalEmployeeRoutes(app, digitalEmployee) // RFC-310 Digital Employee OS
   mountDevelopmentConfigRoutes(app, deps) // RFC-310 PR-1B
   mountDevelopmentMissionRoutes(app, deps, {

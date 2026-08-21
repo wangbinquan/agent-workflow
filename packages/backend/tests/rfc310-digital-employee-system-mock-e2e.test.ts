@@ -27,7 +27,9 @@ import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-autom
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
+  developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
+import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -592,32 +594,39 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
 
     let idOrdinal = 0
+    const executionContracts = new ExecutionContractService({
+      registrations: developmentExecutionContractRegistrations,
+      resources: {
+        async inspect({ implementation }) {
+          const ref =
+            implementation.kind === 'agent' ? implementation.agentRef : implementation.workflowRef
+          return {
+            kind: implementation.kind,
+            name: ref.id,
+            available: true,
+            detail: 'system-mock exact resource',
+            declaredContractRefs:
+              implementation.kind === 'agent'
+                ? developmentExecutionContractRegistrations.map(
+                    (registration) => registration.contractRef,
+                  )
+                : null,
+          }
+        },
+      },
+      programFixtures: {
+        async validate() {
+          return [{ code: 'system-mock-program-fixture', ok: true, detail: 'covered by journey' }]
+        },
+      },
+    })
     const employeeOs = composeDigitalEmployee({
       db,
       appHome,
       typePackages: [developmentEmployeeTypePackage],
+      executionContracts,
       inputArtifacts,
       id: () => `os-${String(++idOrdinal).padStart(5, '0')}`,
-      resourceCatalog: {
-        async resolveAgent(ref) {
-          return {
-            kind: 'agent' as const,
-            ref,
-            name: ref.id,
-            available: true,
-            closureSummary: 'system-mock exact Agent',
-          }
-        },
-        async resolveWorkflow(ref) {
-          return {
-            kind: 'workflow' as const,
-            ref,
-            name: ref.id,
-            available: true,
-            closureSummary: 'system-mock exact Workflow',
-          }
-        },
-      },
       connectionCatalog: {
         async resolve(ref) {
           if (ref.id !== approvalAdapterRef.id || ref.revision !== approvalAdapterRef.revision) {
@@ -631,11 +640,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           }
         },
       },
-      fixtureRunner: {
-        async validate() {
-          return [{ code: 'system-mock-fixture', ok: true, detail: 'covered by journey' }]
-        },
-      },
       runtime: {
         eventCenter: eventCenter.participant,
         codecs: [developmentEmployeeRuntimeCodec],
@@ -643,7 +647,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         platformWorkItems: platform,
       },
     })
-    const typeRef = { typeId: 'development', revision: 1 }
+    const typeRef = { typeId: 'development', revision: 2 }
     const typePackage = employeeOs.queries.getType(typeRef)
     const bindings: Array<{
       workItemRef: string

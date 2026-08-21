@@ -23,6 +23,7 @@ interface InitialState {
   kinds?: AgentOutputKindsMap
   wrappers?: WrapperMap
   branchPorts?: string[]
+  managedPortNames?: string[]
   aggregator?: boolean
 }
 
@@ -38,6 +39,7 @@ function mountStateful(initial: InitialState, spy: OnChange = vi.fn<OnChange>())
         outputKinds={kinds}
         outputWrapperPortNames={wrappers}
         branchPorts={branchPorts}
+        managedPortNames={initial.managedPortNames}
         aggregator={initial.aggregator}
         onChange={(nextOutputs, nextKinds, nextWrappers, nextBranchPorts) => {
           spy(nextOutputs, nextKinds, nextWrappers, nextBranchPorts)
@@ -122,6 +124,20 @@ describe('OutputsEditor explicit card and Dialog flow', () => {
         '[data-testid="agent-port-card-output-1"] .agent-port-card__kind-code',
       )?.textContent,
     ).toBe('path<md>')
+  })
+
+  test('contract-managed output cannot be edited or deleted independently', () => {
+    mountStateful({
+      outputs: ['ordinary', 'agent-result'],
+      managedPortNames: ['agent-result'],
+    })
+
+    expect(screen.getByText(/contract managed/i)).toBeTruthy()
+    expect(screen.getByText(/change it with the picker above/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Edit output port agent-result/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Delete output port agent-result/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Edit output port ordinary/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Delete output port ordinary/i })).toBeTruthy()
   })
 
   test('aggregator rename and delete update both sidecar maps atomically', async () => {

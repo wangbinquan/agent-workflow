@@ -134,6 +134,7 @@ surface 与 consumer 已切完”是三种不同状态；当前没有一个 RFC-
 | `task-execution`             | Task/NodeRun 生命周期、调度、恢复、运行态 ownership、wrapper/fanout、执行身份与 provenance                   |
 | `digital-employee`           | 员工类型/岗位/员工定义、EmployeeCase、Context/Attention/Reaction、员工调用通道与确定性职责执行               |
 | `event-center`               | Event/Source catalog、Subscription、ObserverActivation、observation cursor、EventRecord 与 Delivery          |
+| `execution-contract`         | 执行器中立的输入输出指南、Agent/Workflow/Program 兼容校验、fixture、exact 输出规则与验证回执                 |
 | `development-automation`     | DevelopmentMission/ActionRun/AgentAttempt、确定性策略与配置资源、evidence/effect intent、MR 生命周期编排     |
 | `resource-catalog`           | agent/skill/MCP/plugin/workflow/workgroup 六个聚合子模块；共享 ACL/ref/revision/catalog kernel               |
 | `collaboration`              | review/clarify/question 等 human gate、授权、park/release/rerun 命令                                         |
@@ -159,9 +160,14 @@ RFC-304 的 `code-capability` 不再是目标态 active writer context：RFC-310
 
 RFC-310 的 2026-08-21 架构修订进一步把**通用、有状态的数字员工机制**从代码领域中拆出：
 `digital-employee` 只拥有 Context + Event 驱动的员工职责运行模型，`event-center` 只拥有按订阅激活的事件观察与投递；
-`development-automation` 收缩为首个代码员工类型包，负责研发 Context/Event schema、职责规则和默认工具需求。三者不得以
-共享表、内部 import 或 bootstrap `if type === development` 重新耦合。该 vertical slice 的临时 exact owner/import 账本在
+`execution-contract` 只拥有 executor-neutral 的 schema guide、transport、兼容探测、fixture 与 exact output validator；
+`development-automation` 收缩为首个代码员工类型包，负责研发 Context/Event/schema guide、职责规则和默认工具需求。四者不得以
+共享表、内部 import 或 bootstrap `if type === development` 重新耦合。数字员工 authoring/runtime/reaction host 必须消费同一
+`ExecutionContractParticipant`，不得把它做成 optional 后退回类型内资源探测或 fixture。该 vertical slice 的临时 exact owner/import 账本在
 RFC-310 `os-architecture-manifest.json`；它不替代本 RFC W0-R 尚待建立的全仓七份 canonical manifest。
+完整 schema guide 留在 `execution-contract` 内部：类型包以 exact ref + strict `guideJson` 注册，public list/get 只暴露低于 DTO
+预算的 runtime view 与只读序列化文档，禁止把字段指南展开成跨域 mega DTO。Agent 声明与固定 `agent-result` 的增删由该 context 的
+规整命令拥有，所有 Agent 保存入口复用，不能让 UI、bundle 或 intent 各自复制生命周期规则。
 
 ### G3：执行链形成四级内核
 

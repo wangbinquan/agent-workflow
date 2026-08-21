@@ -8,6 +8,12 @@ import { isTerminalTaskStatus, type StartTask } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { tasks, workflows } from '@/db/schema'
 import type { DigitalEmployeeExecutionParticipant } from '../public/participants'
+import {
+  EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
+  buildExecutionContractAgentPrompt,
+  type ExecutionContractParticipant,
+  type ExecutionContractRuntimeView,
+} from '@/modules/execution-contract/public/types'
 import { getAgentById } from '@/services/agent'
 import { getExecutionOutcome } from '@/services/execution/executor'
 import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
@@ -61,7 +67,11 @@ const planSchema = z
     implementationKind: z.enum(['agent', 'workflow', 'program']),
     implementationJson: z.string().min(2),
     inputEnvelopeJson: z.string().min(2),
+    inputSchemaId: z.string().min(1),
     outputSchemaId: z.string().min(1),
+    workContractRef: z
+      .object({ contractId: z.string().min(1), version: z.number().int().positive() })
+      .strict(),
     semanticValidatorId: z.string().min(1),
     roundBudgetMs: z.number().int().positive(),
   })
@@ -102,36 +112,24 @@ function containedArtifact(appHome: string, artifactRef: string): string | null 
 export function buildDigitalEmployeeFixedPrompt(
   plan: Pick<
     z.infer<typeof planSchema>,
-    | 'outputSchemaId'
-    | 'roundRef'
-    | 'executionNonce'
-    | 'toolSlotRef'
-    | 'semanticValidatorId'
-    | 'inputEnvelopeJson'
+    'roundRef' | 'executionNonce' | 'toolSlotRef' | 'semanticValidatorId' | 'inputEnvelopeJson'
   >,
   attempt: Pick<z.infer<typeof attemptSchema>, 'previousError'>,
+  guide: ExecutionContractRuntimeView,
 ): string {
-  return [
-    'You are executing one frozen Digital Employee work item.',
-    'Do not run git, commit, push, merge, approve, call a code host, or choose the next action.',
-    'Only modify business files required by the supplied work contract.',
-    `Return only the exact JSON envelope for output schema ${plan.outputSchemaId}.`,
-    `Copy schemaVersion=1, roundRef=${JSON.stringify(plan.roundRef)}, and executionNonce=${JSON.stringify(plan.executionNonce)} exactly.`,
-    `The platform selected tool slot ${JSON.stringify(plan.toolSlotRef)}; do not select or invoke another slot.`,
-    'The envelope must contain exactly these top-level fields: schemaVersion, roundRef, executionNonce, status, summary, contextPatches, effectSuggestions, artifactRefs.',
-    'status is one of ok, needs-input, blocked. contextPatches is an array of {contextId,contextTypeId,schemaVersion,expectedRevision,lifecycleState,stateJson,artifactRefs}.',
-    'Never wrap the JSON in Markdown and never add prose before or after it.',
-    `Semantic validator: ${plan.semanticValidatorId}.`,
-    ...(attempt.previousError === null
-      ? []
-      : [
-          '',
-          `The previous exact-envelope attempt was rejected: ${attempt.previousError}`,
-          'Correct the reported contract violation and return a new complete envelope.',
-        ]),
-    '',
-    plan.inputEnvelopeJson,
-  ].join('\n')
+  return buildExecutionContractAgentPrompt({
+    guide,
+    roundRef: plan.roundRef,
+    executionNonce: plan.executionNonce,
+    toolSlotRef: plan.toolSlotRef,
+    semanticValidatorId: plan.semanticValidatorId,
+    inputEnvelopeJson: plan.inputEnvelopeJson,
+    policyLines: [
+      'Do not run git, commit, push, merge, approve, call a code host, or choose the next action.',
+      'Only modify business files allowed by the supplied workspace contract.',
+    ],
+    previousError: attempt.previousError,
+  })
 }
 
 export function composeDigitalEmployeeExecution(deps: {
@@ -139,6 +137,7 @@ export function composeDigitalEmployeeExecution(deps: {
   readonly appHome: string
   readonly startDeps: StartTaskDeps
   readonly workspace?: DigitalEmployeeWorkspacePort
+  readonly executionContracts: ExecutionContractParticipant
 }): DigitalEmployeeExecutionParticipant {
   return {
     async launch(planJson, attemptJson) {
@@ -185,11 +184,15 @@ export function composeDigitalEmployeeExecution(deps: {
                 cleanup: { kind: 'borrowed' as const },
               },
             }
-      const prompt = buildDigitalEmployeeFixedPrompt(plan, attempt)
+      const guide = deps.executionContracts.get(plan.workContractRef)
+      const prompt = buildDigitalEmployeeFixedPrompt(plan, attempt, guide)
       const startInput: StartTask = {
         workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
         name: `employee:${plan.roundRef}`.slice(0, 255),
-        inputs: { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
+        inputs:
+          implementation.kind === 'program'
+            ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: plan.inputEnvelopeJson }
+            : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
         maxDurationMs: plan.roundBudgetMs,
         ...sourceFields,
       }
@@ -229,6 +232,7 @@ export function composeDigitalEmployeeExecution(deps: {
         }
         snapshotJson = JSON.stringify(
           synthesizeDigitalEmployeeScriptHostSnapshot({
+            inputPort: EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
             language: implementation.runtimeKind,
             script: source,
             dependencies: [],

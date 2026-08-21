@@ -20,6 +20,13 @@
 > 全局执行策略和通用确定性职责图均已实现；PR-14..PR-18 的功能与 system-mock E2E 已收口。完整 `gate:local`
 > 于 2026-08-21 全绿（后端四个随机化分片；frontend 6660；shared 2219；system-mock 35），当前仅剩 exact-SHA hosted CI
 > 的发布验证。
+>
+> **2026-08-21 PR-19（待 hosted 验证）**：平台执行契约与职责泳道已完成生产实现和聚焦回归；真实页面旅程 1/1、
+> 数字员工视觉基线 3/3、外部 ID 到合入的 system-mock 1/1（29 个断言）均通过。隔离提交树完整
+> `gate:local` 9m29s 全绿：backend 11,559 pass / 36 skip / 0 fail、frontend 6,664、shared 2,219、
+> system-mock 35；当前只剩 exact-SHA hosted/visual 终态验证。
+> 本批将冻结研发类型提升为 `development@2`，升级库保留 `@1` 并追加 `@2`，避免 descriptor drift 阻断启动。
+> Agent 端口联动已追加进入本批：契约选择移入“输入/输出”，`agent-result` 由 UI 与所有保存入口共同按契约生命周期托管。
 
 ## 0. 交付原则
 
@@ -58,6 +65,7 @@
 | PR-16   | Reaction 与执行底座接线     | ReactionPlan 只复用已有 Workflow/Agent/Script、source-control 与平台注册 code-host/Token 能力                                                 | PR-14,PR-15 |
 | PR-17   | Employee Channel            | 跨仓员工调用、typed return、milestone、all/any/quorum、deadline/cancel/recovery 成为 OS 公共能力                                              | PR-14-PR-16 |
 | PR-18   | 类型包迁移与通用配置界面    | 现有 Mission/MR care 迁入研发类型包并切单 writer；分类/工作项工具箱/最小员工配置/设置页与完整旅程验收                                         | PR-14-PR-17 |
+| PR-19   | 平台执行契约与职责泳道      | Agent/Workflow/Program 的确定性输入输出由平台统一校验；职责图按主干、并行职责和回路显示，不再顺序平铺                                         | PR-18       |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -629,6 +637,22 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | AC-38 Agent/script handler 与确定性处理规则             | T115-T117                                                    |
 | AC-39 child Mission/跨仓/幂等/join                      | T122-T124,T128-T129,T131-T132                                |
 | AC-40 审批 prepare/submit/observe/durable wait          | T125-T132                                                    |
+| AC-41 同页下一步与无指导 Journey                        | T133-T140,T156                                               |
+| AC-42 浏览器零配置与跨仓审批旅程                        | T140,T160                                                    |
+| AC-43 四层工具箱与节点归属                              | T144,T144a,T161-T163                                         |
+| AC-44 WorkContract pin/fixture/semantic validator       | T144,T144a,T151,T165-T166                                    |
+| AC-45 Event i18n 与职责文案分层                         | T147,T156                                                    |
+| AC-46 全局执行策略唯一 owner                            | T144b,T164                                                   |
+| AC-47 通用类型包/画布/工具实现                          | T159,T161-T163                                               |
+| AC-48 岗位模板最小定义                                  | T144,T163                                                    |
+| AC-49 revision/retire/upgrade                           | T144a,T151,T163                                              |
+| AC-50 type-neutral scope 与 canonical route             | T144,T159,T161                                               |
+| AC-51 四模式同 manifest/identity/layout                 | T156,T162-T163                                               |
+| AC-52 研发两职责、自动关注与回路                        | T146,T149-T153,T159-T160,T167                                |
+| AC-53 平台 ExecutionContract                            | T165-T166,T168                                               |
+| AC-54 通用职责泳道与回路布局                            | T167-T168                                                    |
+| AC-55 按钮命名/间距与数字员工页面留白                   | T167-T168                                                    |
+| AC-56 Agent 契约与托管端口原子生命周期                  | T169                                                         |
 
 ## 13a. T112 交付出账（2026-08-18）
 
@@ -1139,13 +1163,13 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 
 ### 功能自审记录
 
-| 轮次                          | 自审问题                                                                 | 发现                                                                                                          | 处置与回归证据                                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 第一轮：真实集成闭环          | 从外部问题 ID 到父/子真实 MR、门禁、审批、committer 合入是否只靠生产接线 | 审批 intent canonical digest 不一致；Case ID 污染 Git ref/path；同 MR 的后续门禁采集重复创建 Pipeline Context | 统一 canonical digest；引入稳定 identity/ref 编码；重复采集更新现有 Context；全旅程 system-mock E2E 走真 bare remote、真 adapter CLI 与大日志               |
-| 第二轮：跨阶段 Context 可移植 | 创建 MR 后，数字员工能否仅凭 MR/commit 恢复问题来源并自动关注下一阶段    | commit/MR 没有最小 recoverable Context Envelope，阶段间仍依赖本地 Case 记忆                                   | commit message 与 MR description 同写 Case/Context/schema/work-item envelope；external subject binding 可反查 Case；delivery policy 与 system-mock E2E 锁定 |
-| 第三轮：业务运行可读性        | 用户能否在同页看懂“现在发生了什么、关注什么、下一步是什么”               | 运行页误用员工配置模式，waiting 状态和 machine ID/state 直接暴露                                              | 改用 runtime graph；本地化事件/状态/下一步；业务页隐藏 raw Case/Event/round/channel ID；UI contract 锁定无阶段下拉、无连线拖拽、同节点工具入口              |
-| 第四轮：RFC-294 边界          | 新 OS 是否又长出跨域内部 import、万能 Event port 或 bootstrap 类型分支   | integration observer 穿透 development internal；Event participant 膨胀到 6 方法                               | approval subject 改走 exact public contract；观察控制与 Case 订阅/投递拆口；`os-architecture-manifest.json` 与 RFC-294 preflight 双棘轮全绿                 |
-| 第五轮：配置闭包与规模        | 四层 authoring 是否能在真实路由、升级与大量存量任务下保持确定且有界       | 37 个新端点漏 API 契约；迁移报告三次无界读取；schema migration 写入业务资源会污染纯升级；递归 JSON 类型压垮路由推导 | 全量补 registry；报告改成精确计数+最多 100 条明细和批量聚合；内置 Agent 改由 boot 幂等播种；序列化投影先校验再原样响应；57 条聚焦回归与完整本地门禁全绿       |
+| 轮次                          | 自审问题                                                                 | 发现                                                                                                                | 处置与回归证据                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 第一轮：真实集成闭环          | 从外部问题 ID 到父/子真实 MR、门禁、审批、committer 合入是否只靠生产接线 | 审批 intent canonical digest 不一致；Case ID 污染 Git ref/path；同 MR 的后续门禁采集重复创建 Pipeline Context       | 统一 canonical digest；引入稳定 identity/ref 编码；重复采集更新现有 Context；全旅程 system-mock E2E 走真 bare remote、真 adapter CLI 与大日志               |
+| 第二轮：跨阶段 Context 可移植 | 创建 MR 后，数字员工能否仅凭 MR/commit 恢复问题来源并自动关注下一阶段    | commit/MR 没有最小 recoverable Context Envelope，阶段间仍依赖本地 Case 记忆                                         | commit message 与 MR description 同写 Case/Context/schema/work-item envelope；external subject binding 可反查 Case；delivery policy 与 system-mock E2E 锁定 |
+| 第三轮：业务运行可读性        | 用户能否在同页看懂“现在发生了什么、关注什么、下一步是什么”               | 运行页误用员工配置模式，waiting 状态和 machine ID/state 直接暴露                                                    | 改用 runtime graph；本地化事件/状态/下一步；业务页隐藏 raw Case/Event/round/channel ID；UI contract 锁定无阶段下拉、无连线拖拽、同节点工具入口              |
+| 第四轮：RFC-294 边界          | 新 OS 是否又长出跨域内部 import、万能 Event port 或 bootstrap 类型分支   | integration observer 穿透 development internal；Event participant 膨胀到 6 方法                                     | approval subject 改走 exact public contract；观察控制与 Case 订阅/投递拆口；`os-architecture-manifest.json` 与 RFC-294 preflight 双棘轮全绿                 |
+| 第五轮：配置闭包与规模        | 四层 authoring 是否能在真实路由、升级与大量存量任务下保持确定且有界      | 37 个新端点漏 API 契约；迁移报告三次无界读取；schema migration 写入业务资源会污染纯升级；递归 JSON 类型压垮路由推导 | 全量补 registry；报告改成精确计数+最多 100 条明细和批量聚合；内置 Agent 改由 boot 幂等播种；序列化投影先校验再原样响应；57 条聚焦回归与完整本地门禁全绿     |
 
 ### 批次停止条件
 
@@ -1162,6 +1186,48 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 - Event machine ID 作为业务主文案，或 Event 与工作项用同义标题重复表达；
 - retry/fresh-scene/backoff/budget 出现在分类、工作项、工具或员工 DTO/UI 中，而不是唯一全局执行策略；
 - 通用 employee/assignment/invocation DTO 硬编码 repository，或新分类仍必须经过 `/code` canonical route。
+
+## 13f. PR-19：平台执行契约与职责泳道
+
+### 目标与任务
+
+本批把“每个实现自己约定如何喂输入/收输出”收回平台机制层，并修正职责全景把 MR 看护节点误画成顺序清单的问题。
+业务 `WorkContract` 与平台 `ExecutionContract` 分层：前者由员工类型包定义业务完成标准，后者统一 executor transport、
+兼容校验、fixture、exact output 和运行结算。画布拓扑仍由类型包固定，但新增业务可读的职责泳道而非自由编辑器。
+
+| 编号 | 任务                                                                                                                                                                                                | 依赖           | 状态 |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---- |
+| T165 | 新增 `execution-contract` bounded context：strict guide/transport/ref、Agent/Workflow/Program compatibility、真实 Script fixture、exact output validator 与窄 participant                           | T143,T151      | ✅   |
+| T166 | 接 authoring/runtime/UI：外部 ID 直接 `contractInput`、大输入 env/file、Agent 显式声明和 `agent-result`、Program 起始代码、Plan 冻结前输入与编辑/发布/结算输出同一 exact validator                    | T165           | ✅   |
+| T167 | AuthoringManifest 增 `spine/branch` 职责泳道与完整性校验；通用画布实现主干居中、职责横排、分发干线、自循环和外侧回路；研发 MR 看护拆成事件主干与五条职责支线；以 `development@2` 追加发布；同步页面留白和任务按钮 | T144,T159,T162 | ✅   |
+| T168 | 多轮功能自审、聚焦/系统链路/视觉/完整门禁、RFC-294 owner 账与 exact-SHA hosted CI/visual 终态验证                                                                                                   | T165-T167      | 🚧   |
+| T169 | Agent 执行契约选择移入输入/输出页；`agent-result` 显示为不可单改的契约托管端口；选择/切换/取消时原子增删端口与 sidecar；create/update/bundle/intent 共用服务端规整命令；公共 guide 改为窄运行投影 + 已校验序列化 exact guide | T165,T166      | ✅   |
+
+T168 本地部分于 2026-08-21 完成：完整 `gate:local` 9m29s 全绿；真实用户旅程、数字员工视觉基线与
+system-mock 全链均独立复跑通过。保持 🚧 只表示尚未取得推送后 exact-SHA hosted CI/visual 终态。
+
+### 功能自审记录
+
+| 轮次                         | 自审问题                                                                         | 发现                                                                                  | 处置/锁定                                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 第一轮：输入可消费性         | 只给问题 ID 时，Agent/Script 是否能直接得到字段；大输入是否仍依赖 prompt         | 旧 WorkContract 只有 schema 名，没有 transport 和字段来源；脚本作者不知道 env/stdout  | 平台 guide 给字段来源、transport、示例；外部 ID 直投影；Script 同时支持 inline/file 并提供三种语言起始代码 |
+| 第二轮：发布前确定性         | 能否在选择工具时知道 Agent/Workflow/Program 真能消费/产出，而不是运行时才猜      | 前端可能按 Agent 名称硬编码；Program 只保存文本；输出可能夹 Markdown/多字段           | 平台批量候选 receipt；Agent 声明 exact contract；Workflow structural closure；Program 真 runner fixture    |
+| 第三轮：运行结算复用         | 编辑期通过的合同是否与真实 Reaction 输入、prompt、Script port 和最终结算完全同源 | Script 旧 host 固定 `prompt` input；只做业务 semantic validation 会漏 extra/cross-run | host input port 显式化；平台先对拍 exact fields/round/nonce，再调用类型 semantic validator                 |
+| 第四轮：职责关系可读性       | MR 看护的检视、流水线、冲突、审批和合入判断是并行反应还是一条顺序链              | 节点按全局 order 平铺，人的职责、事件入口和回路无法辨认                               | manifest 声明主干/职责支线；支线内横排、支线间分隔，回边走右侧虚线 gutter；纯布局回归锁几何关系            |
+| 第五轮：横向扩展与界面一致性 | 新设计/测试员工是否仍能复用；全景、窄屏、operations 留白和任务动作是否一致       | 不能把 `care-*` 写进通用画布，也不能为窄屏折叠掉全景                                  | 通用组件只读 manifest；窄屏横向滚动；所有数字员工页面统一 body padding；任务入口改“新建编排任务”并复用间距 |
+| 第六轮：拓扑与视觉证据       | 图上的每条边是否真有运行规则；18 节点是否真的都进入视觉证据                      | 三条旧后继是伪关系；多类流水线错误缺自循环；1280×800 组件截图裁掉最下方合入判断泳道     | manifest 对齐 settlement；剩余失败类型回到修绿；虚假直达边删除；组件证据临时增高并锁定回环/协同/就绪关键边 |
+| 第七轮：平台入口唯一性       | 新员工类型或测试装配能否遗漏平台契约后继续发布/运行                              | authoring/runtime participant 仍为 optional，并保留旧 resource/fixture 校验 fallback    | 三处 composition 改为 required；删除旧旁路与重复 inspector/Program fixture；架构棘轮锁定不存在 optional 路径 |
+| 第八轮：Agent 端口生命周期   | 契约和端口是否能分别编辑，或通过 API/bundle 保存“有契约无端口/删契约留端口”       | 契约原在能力页且只 append `agent-result`；取消、切换和端口单删均不联动；完整 guide 还形成 42 叶公共 DTO | 选择器移入输入/输出；托管端口无独立动作；保存入口统一规整；公共面收窄为 runtime view + strict `guideJson`       |
+
+### 批次停止条件
+
+- `execution-contract` 出现 `development` literal、业务 WorkItem 路由或员工重试策略；
+- digital-employee 类型包各自复制 Agent prompt、Script env/stdout parser 或 output exact validator；
+- Agent 候选只按名称/tag 前端猜兼容，或 Program 未运行真实 fixture 就可发布；
+- Agent 契约与 `agent-result` 可分别保存、托管端口仍可单独编辑/删除，或完整 guide 重新扩成超预算公共 DTO；
+- 职责泳道/连线可由业务用户拖拽修改，或阶段重新成为工作项归属下拉框；
+- MR 看护的五类职责再次按全局 order 混成单行，回路与前向关系无法区分；
+- 窄屏通过折叠/重排节点破坏“全量展开”，而不是保留固定布局并允许滚动。
 
 ## 14. 风险与停止条件
 

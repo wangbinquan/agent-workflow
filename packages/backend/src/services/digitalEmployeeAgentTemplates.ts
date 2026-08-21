@@ -30,7 +30,15 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       dependsOn: [],
       mcp: [],
       plugins: [],
-      frontmatterExtra: { digitalEmployeeTemplate: 'code-writing', schemaVersion: 1 },
+      frontmatterExtra: {
+        digitalEmployeeTemplate: 'code-writing',
+        schemaVersion: 1,
+        executionContracts: [
+          { contractId: 'development.analyze-implement', version: 1 },
+          { contractId: 'development.repair-feedback', version: 1 },
+          { contractId: 'development.repair-conflict', version: 1 },
+        ],
+      },
       bodyMd:
         '你是数字员工操作系统内置的代码编写者。只处理输入 envelope 中已授权的业务文件和目标；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。先理解需求与现有代码，再完成最小且完整的实现和必要验证。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
     },
@@ -48,7 +56,14 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       dependsOn: [],
       mcp: [],
       plugins: [],
-      frontmatterExtra: { digitalEmployeeTemplate: 'problem-diagnosis', schemaVersion: 1 },
+      frontmatterExtra: {
+        digitalEmployeeTemplate: 'problem-diagnosis',
+        schemaVersion: 1,
+        executionContracts: [
+          { contractId: 'development.classify-feedback', version: 1 },
+          { contractId: 'development.classify-pipeline', version: 1 },
+        ],
+      },
       bodyMd:
         '你是数字员工操作系统内置的问题定位者。只依据输入 envelope、仓库现场和 artifact 引用收集证据，区分事实、推断与未知项；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。定位最小根因并给出合同要求的结构化产出。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
     },
@@ -66,7 +81,11 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       dependsOn: [],
       mcp: [],
       plugins: [],
-      frontmatterExtra: { digitalEmployeeTemplate: 'pipeline-repair', schemaVersion: 1 },
+      frontmatterExtra: {
+        digitalEmployeeTemplate: 'pipeline-repair',
+        schemaVersion: 1,
+        executionContracts: [{ contractId: 'development.repair-pipeline', version: 1 }],
+      },
       bodyMd:
         '你是数字员工操作系统内置的流水线修复者。读取输入 envelope 指向的 .agent-workflow/pipeline 证据包与日志，不要把大日志复述进输出。只修复指定失败类型和授权业务文件；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。完成最小验证后，只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
     },

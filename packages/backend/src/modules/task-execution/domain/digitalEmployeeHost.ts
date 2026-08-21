@@ -11,7 +11,6 @@
 // 顶注记录过同一形状的教训）。
 
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
-
 export const DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID = '00000000000000DIGEMPHOST0'
 export const DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME = '__digital_employee_host__'
 
@@ -116,6 +115,7 @@ export function synthesizeDigitalEmployeeHostSnapshot(input: DigitalEmployeeHost
 }
 
 export interface DigitalEmployeeScriptHostSnapshotInput {
+  readonly inputPort: string
   readonly language: 'python' | 'bash' | 'node'
   readonly script: string
   readonly dependencies: readonly string[]
@@ -126,7 +126,7 @@ export interface DigitalEmployeeScriptHostSnapshotInput {
 /**
  * Script implementations travel through the same TaskEngine host as Agent
  * implementations. The authored program is frozen into the task snapshot,
- * receives the platform prompt through AW_PORT_PROMPT, and must emit the exact
+ * receives raw JSON through AW_PORT_CONTRACT_INPUT, and must emit the exact
  * `agent-result` output envelope. No direct Bun.spawn shortcut exists here.
  */
 export function synthesizeDigitalEmployeeScriptHostSnapshot(
@@ -137,14 +137,18 @@ export function synthesizeDigitalEmployeeScriptHostSnapshot(
     inputs: [
       {
         kind: 'text',
-        key: DIGITAL_EMPLOYEE_PROMPT_KEY,
-        label: 'Digital employee prompt',
+        key: input.inputPort,
+        label: 'Execution contract input JSON',
         required: true,
         multiline: true,
       },
     ],
     nodes: [
-      { id: DIGITAL_EMPLOYEE_INPUT_NODE_ID, kind: 'input', inputKey: DIGITAL_EMPLOYEE_PROMPT_KEY },
+      {
+        id: DIGITAL_EMPLOYEE_INPUT_NODE_ID,
+        kind: 'input',
+        inputKey: input.inputPort,
+      },
       {
         id: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
         kind: 'script',
@@ -171,8 +175,14 @@ export function synthesizeDigitalEmployeeScriptHostSnapshot(
     edges: [
       {
         id: 'e_de_script_prompt',
-        source: { nodeId: DIGITAL_EMPLOYEE_INPUT_NODE_ID, portName: DIGITAL_EMPLOYEE_PROMPT_KEY },
-        target: { nodeId: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID, portName: DIGITAL_EMPLOYEE_PROMPT_KEY },
+        source: {
+          nodeId: DIGITAL_EMPLOYEE_INPUT_NODE_ID,
+          portName: input.inputPort,
+        },
+        target: {
+          nodeId: DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
+          portName: input.inputPort,
+        },
       },
       {
         id: 'e_de_script_result',

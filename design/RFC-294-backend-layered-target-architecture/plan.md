@@ -652,11 +652,17 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
       目前只作为 pending source delta：先经 containing repair SHA 通过 clean gates，再保持 wire/selector oracle；分页还须补
       `(created_at,id)` 复合索引与绑定参数 EXPLAIN、大 tie-group 负测、前端分页消费，之后才能宣称最坏 O(页)。route 最终只调
       public query，不再 deep import application/infrastructure 或自行 compose module。
-- [ ] **E9 digital-employee / event-center**：以 RFC-310 OS 已落的 Case/Context/Attention/Reaction/Channel 与
-      catalog/subscription/observer/delivery 作为行为 oracle；保留 `os-architecture-manifest.json` 对两个 context 的唯一 owner、
+- [ ] **E9 digital-employee / event-center / execution-contract**：以 RFC-310 OS 已落的 Case/Context/Attention/Reaction/Channel、
+      catalog/subscription/observer/delivery，以及 executor-neutral guide/compatibility/fixture/exact-output receipt 作为行为 oracle；
+      保留 `os-architecture-manifest.json` 对三个 context 的唯一 owner、
       root/public entrypoint 和全量 external import exact 对拍，任何模块内穿透、bootstrap 类型分支或 >5 方法 public port 都阻断；
       route 从 composition view 迁到 public command/query，Event observer 进入 W9 managed job registry，类型包只经注册合同接入，
-      不把研发 Context/Event schema 或仓库范围复制进通用 OS。
+      不把研发 Context/Event/schema guide 或仓库范围复制进通用 OS。`execution-contract` 的 Agent/Workflow 检视和真实 Script fixture
+      改由 consumer-owned required ports + resource-catalog/task-execution exact provider adapter 提供；删掉对 legacy
+      `services/agent|workflow|scriptRun` 的兼容 infrastructure seam，但保持同一 validation receipt/wire oracle。当前 vertical slice
+      已先删除 digital-employee 内部旧 resource/fixture duplicate 与 optional participant 路径，authoring/runtime/reaction host 均强制
+      注入同一 `ExecutionContractParticipant`；完整 guide 已收为 ref+strict guideJson 注册与窄 RuntimeView，Agent 契约托管端口由平台
+      规整命令覆盖全部保存入口。这不等于 E9 provider adapter cutover 已完成。
 
 **W4 全局退出门**（所有 C/E、对应 B adapter 与 D root contraction 汇合后）：route→DB `15→0`；AppDeps imports `52→0`；
 services→routes `1→0`；MCP/server SCC 消失；

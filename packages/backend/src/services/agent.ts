@@ -51,6 +51,10 @@ import { assertRefsUsableInTx } from './resourceRefs'
 import { assertAgentResourceIntegrity } from './agentResourceIntegrity'
 import { PLUGIN_DISABLED_ERROR_CODE } from './execution/resourcePolicy'
 import { monotonicNow } from '@/util/time'
+import {
+  reconcileCreatedAgentExecutionContractPorts,
+  reconcileUpdatedAgentExecutionContractPorts,
+} from '@/modules/execution-contract/public/commands'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -127,6 +131,7 @@ export async function prepareAgentCreate(
     pendingBundleIds?: ReadonlySet<string>
   },
 ): Promise<PreparedAgentCreate> {
+  input = reconcileCreatedAgentExecutionContractPorts(input)
   const ownerUserId = opts?.ownerUserId ?? null
   assertInitialResourceOwner(opts?.actor, ownerUserId)
   const initialAcl =
@@ -358,6 +363,7 @@ export async function prepareAgentUpdate(
   if (existing === null) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
+  patch = reconcileUpdatedAgentExecutionContractPorts(existing, patch)
 
   // RFC-223 (PR-1, Codex impl-gate P1-2): resolve patched id-or-name refs →
   // canonical ids AND enforce ACL in ONE pass, then store the SAME resolved

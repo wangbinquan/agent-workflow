@@ -119,12 +119,23 @@ const toolRoleGroupSchema = z
   })
   .strict()
 
+const responsibilityLaneSchema = z
+  .object({
+    laneId: machineIdSchema,
+    label: localizedTextSchema,
+    description: localizedTextSchema,
+    order: z.number().int().nonnegative(),
+    kind: z.enum(['spine', 'branch']),
+  })
+  .strict()
+
 const lifecycleRegionSchema = z
   .object({
     regionId: machineIdSchema,
     label: localizedTextSchema,
     description: localizedTextSchema,
     order: z.number().int().nonnegative(),
+    responsibilityLanes: z.array(responsibilityLaneSchema).max(30).default([]),
   })
   .strict()
 
@@ -132,6 +143,7 @@ const workItemDefinitionSchema = z
   .object({
     workItemRef: machineIdSchema,
     regionId: machineIdSchema,
+    responsibilityLaneId: machineIdSchema.nullable().default(null),
     order: z.number().int().nonnegative(),
     label: localizedTextSchema,
     description: localizedTextSchema,
@@ -638,6 +650,12 @@ export function validateTypePackage(
     'authoringManifest.lifecycleRegions',
     descriptor.authoringManifest.lifecycleRegions.map((region) => region.regionId),
   )
+  for (const region of descriptor.authoringManifest.lifecycleRegions) {
+    addDuplicates(
+      `authoringManifest.lifecycleRegions.${region.regionId}.responsibilityLanes`,
+      region.responsibilityLanes.map((lane) => lane.laneId),
+    )
+  }
   addDuplicates(
     'authoringManifest.workItems',
     descriptor.authoringManifest.workItems.map((item) => item.workItemRef),
@@ -670,6 +688,11 @@ export function validateTypePackage(
   const regionIds = new Set(
     descriptor.authoringManifest.lifecycleRegions.map((region) => region.regionId),
   )
+  const regions = new Map(
+    descriptor.authoringManifest.lifecycleRegions.map(
+      (region) => [region.regionId, region] as const,
+    ),
+  )
   const contracts = new Set(descriptor.workContracts.map((contract) => refKey(contract)))
   const contexts = new Set(descriptor.contextTypes.map((context) => context.typeId))
   const events = new Set(descriptor.eventTypes.map((event) => event.eventTypeId))
@@ -685,6 +708,28 @@ export function validateTypePackage(
       violations.push({
         code: 'unknown-lifecycle-region',
         at: `workItems.${item.workItemRef}.regionId`,
+        detail: item.regionId,
+      })
+    }
+    const region = regions.get(item.regionId)
+    if (
+      item.responsibilityLaneId !== null &&
+      !region?.responsibilityLanes.some((lane) => lane.laneId === item.responsibilityLaneId)
+    ) {
+      violations.push({
+        code: 'unknown-responsibility-lane',
+        at: `workItems.${item.workItemRef}.responsibilityLaneId`,
+        detail: item.responsibilityLaneId,
+      })
+    }
+    if (
+      region !== undefined &&
+      region.responsibilityLanes.length > 0 &&
+      item.responsibilityLaneId === null
+    ) {
+      violations.push({
+        code: 'missing-responsibility-lane',
+        at: `workItems.${item.workItemRef}.responsibilityLaneId`,
         detail: item.regionId,
       })
     }

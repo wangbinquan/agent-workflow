@@ -1073,7 +1073,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%401?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%402?view=toolbox&workItem=analyze-implement`,
     )
     const graph = page.getByTestId('digital-employee-responsibility-graph')
     await expect(graph).toBeVisible()
@@ -1081,10 +1081,14 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
     await waitForStableAuthenticatedShell(page)
-    // The app shell scrolls its main pane internally. Component shots lock the
-    // fully expanded 18-node map and the selected node panel without clipping
-    // either at the viewport boundary; the functional journey locks that they
-    // are on the same page and that clicking the node selects this panel.
+    // The app shell scrolls its main pane internally. Playwright fills the
+    // clipped tail of an element screenshot with the page background instead
+    // of scrolling that ancestor, so the canonical 1280x800 viewport silently
+    // omitted the final merge-readiness lane despite all 18 nodes existing.
+    // Give this component-only evidence enough height to prove the fully
+    // expanded panorama; the functional journey still locks the normal desktop
+    // viewport, same-page selection, and absence of horizontal overflow.
+    await page.setViewportSize({ width: 1280, height: 1200 })
     await expect(graph).toHaveScreenshot(
       'digital-employee-responsibility-map.png',
       COMPONENT_SNAPSHOT_OPTS,
@@ -1099,7 +1103,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%401?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%402?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
@@ -1107,7 +1111,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
     await dialog.getByRole('textbox', { name: /Tool name/ }).fill('Implement Java changes')
     await dialog.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'Built in · Code writing', exact: true }).click()
+    await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('digital-employee-tool-dialog.png', SNAPSHOT_OPTS)
   })

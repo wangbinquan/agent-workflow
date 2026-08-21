@@ -378,370 +378,372 @@ function EmployeeCaseDetailPage(): ReactElement {
           </p>
         </PageHeader>
 
-        <NoticeBanner
-          tone={next.tone}
-          title={next.title}
-          action={
-            data.case.state === 'blocked' && canResume ? (
-              <button
-                type="button"
-                className="btn btn--sm btn--primary"
-                disabled={resume.isPending}
-                onClick={() => resume.mutate()}
-              >
-                {resume.isPending
-                  ? zh
-                    ? '正在恢复…'
-                    : 'Resuming…'
-                  : zh
-                    ? '已处理，继续工作'
-                    : 'Resolved, continue work'}
-              </button>
-            ) : undefined
-          }
-        >
-          {next.body}
-        </NoticeBanner>
-        {resume.isError ? <ErrorBanner error={resume.error} /> : null}
-
-        {descriptor.isPending ? <LoadingState /> : null}
-        {descriptor.isError ? <ErrorBanner error={descriptor.error} /> : null}
-        {descriptor.data !== undefined ? (
-          <section
-            className="employee-map-section"
-            aria-label={zh ? '职责进度' : 'Responsibility progress'}
+        <div className="digital-employee-surface__body">
+          <NoticeBanner
+            tone={next.tone}
+            title={next.title}
+            action={
+              data.case.state === 'blocked' && canResume ? (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  disabled={resume.isPending}
+                  onClick={() => resume.mutate()}
+                >
+                  {resume.isPending
+                    ? zh
+                      ? '正在恢复…'
+                      : 'Resuming…'
+                    : zh
+                      ? '已处理，继续工作'
+                      : 'Resolved, continue work'}
+                </button>
+              ) : undefined
+            }
           >
-            <div className="employee-map-section__heading">
-              <div>
-                <h2>
-                  {zh ? '当前职责与完整生命周期' : 'Current responsibility and full lifecycle'}
-                </h2>
-                <p>
-                  {zh
-                    ? '高亮节点是当前或手动选中的工作项；流程结构在运行中不会改变。'
-                    : 'The highlighted node is current or selected; the graph never changes at runtime.'}
-                </p>
-              </div>
-              <span className="employee-map-section__legend">
-                {data.case.currentWorkItemRef === null
-                  ? zh
-                    ? '等待下一步'
-                    : 'Waiting for next step'
-                  : zh
-                    ? '当前工作项已高亮'
-                    : 'Current work item highlighted'}
-              </span>
-            </div>
-            <ResponsibilityGraph
-              type={descriptor.data}
-              language={language}
-              selectedWorkItemRef={selectedWorkItemRef}
-              onSelect={setSelectedWorkItemRef}
-              mode="runtime"
-            />
-            {selectedItem !== undefined ? (
-              <div className="work-item-contract-card employee-case-selected-contract">
-                <div>
-                  <span>{zh ? '这个工作项收到什么' : 'What this work item receives'}</span>
-                  <p>{localized(selectedItem.materialSummary, language)}</p>
-                </div>
-                <div>
-                  <span>{zh ? '怎样才算完成' : 'Definition of done'}</span>
-                  <p>{localized(selectedItem.completionStandard, language)}</p>
-                </div>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
+            {next.body}
+          </NoticeBanner>
+          {resume.isError ? <ErrorBanner error={resume.error} /> : null}
 
-        <div className="employee-case-detail-grid">
-          <section className="employee-node-panel">
-            <header>
-              <div>
-                <span className="employee-node-panel__eyebrow">
-                  {zh ? '工作上下文' : 'Work context'}
+          {descriptor.isPending ? <LoadingState /> : null}
+          {descriptor.isError ? <ErrorBanner error={descriptor.error} /> : null}
+          {descriptor.data !== undefined ? (
+            <section
+              className="employee-map-section"
+              aria-label={zh ? '职责进度' : 'Responsibility progress'}
+            >
+              <div className="employee-map-section__heading">
+                <div>
+                  <h2>
+                    {zh ? '当前职责与完整生命周期' : 'Current responsibility and full lifecycle'}
+                  </h2>
+                  <p>
+                    {zh
+                      ? '高亮节点是当前或手动选中的工作项；流程结构在运行中不会改变。'
+                      : 'The highlighted node is current or selected; the graph never changes at runtime.'}
+                  </p>
+                </div>
+                <span className="employee-map-section__legend">
+                  {data.case.currentWorkItemRef === null
+                    ? zh
+                      ? '等待下一步'
+                      : 'Waiting for next step'
+                    : zh
+                      ? '当前工作项已高亮'
+                      : 'Current work item highlighted'}
                 </span>
-                <h2>{zh ? '这个员工目前知道什么' : 'What this employee currently knows'}</h2>
-                <p>
-                  {zh
-                    ? '上下文由每轮确定性产出更新。'
-                    : 'Each deterministic output updates these contexts.'}
-                </p>
               </div>
-            </header>
-            <div className="employee-card-list">
-              {data.contexts.map((context) => {
-                const registration = descriptor.data?.contextTypes.find(
-                  (candidate) => candidate.typeId === context.typeId,
-                )
-                const facts = contextFacts(registration, context.state, language)
-                return (
-                  <Card
-                    key={context.id}
-                    title={
-                      registration === undefined
-                        ? zh
-                          ? '工作记录'
-                          : 'Work record'
-                        : localized(registration.displayName, language)
-                    }
-                    actions={
-                      <StatusChip
-                        kind={context.lifecycleState === 'active' ? 'success' : 'neutral'}
-                      >
-                        {context.lifecycleState === 'active'
+              <ResponsibilityGraph
+                type={descriptor.data}
+                language={language}
+                selectedWorkItemRef={selectedWorkItemRef}
+                onSelect={setSelectedWorkItemRef}
+                mode="runtime"
+              />
+              {selectedItem !== undefined ? (
+                <div className="work-item-contract-card employee-case-selected-contract">
+                  <div>
+                    <span>{zh ? '这个工作项收到什么' : 'What this work item receives'}</span>
+                    <p>{localized(selectedItem.materialSummary, language)}</p>
+                  </div>
+                  <div>
+                    <span>{zh ? '怎样才算完成' : 'Definition of done'}</span>
+                    <p>{localized(selectedItem.completionStandard, language)}</p>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          <div className="employee-case-detail-grid">
+            <section className="employee-node-panel">
+              <header>
+                <div>
+                  <span className="employee-node-panel__eyebrow">
+                    {zh ? '工作上下文' : 'Work context'}
+                  </span>
+                  <h2>{zh ? '这个员工目前知道什么' : 'What this employee currently knows'}</h2>
+                  <p>
+                    {zh
+                      ? '上下文由每轮确定性产出更新。'
+                      : 'Each deterministic output updates these contexts.'}
+                  </p>
+                </div>
+              </header>
+              <div className="employee-card-list">
+                {data.contexts.map((context) => {
+                  const registration = descriptor.data?.contextTypes.find(
+                    (candidate) => candidate.typeId === context.typeId,
+                  )
+                  const facts = contextFacts(registration, context.state, language)
+                  return (
+                    <Card
+                      key={context.id}
+                      title={
+                        registration === undefined
                           ? zh
-                            ? '使用中'
-                            : 'Active'
-                          : context.lifecycleState === 'waiting'
+                            ? '工作记录'
+                            : 'Work record'
+                          : localized(registration.displayName, language)
+                      }
+                      actions={
+                        <StatusChip
+                          kind={context.lifecycleState === 'active' ? 'success' : 'neutral'}
+                        >
+                          {context.lifecycleState === 'active'
                             ? zh
-                              ? '等待中'
-                              : 'Waiting'
-                            : zh
-                              ? '已结束'
-                              : 'Terminal'}
-                      </StatusChip>
-                    }
-                  >
-                    {registration === undefined ? null : (
-                      <p className="employee-case-context-description">
-                        {localized(registration.description, language)}
-                      </p>
-                    )}
-                    {facts.length > 0 ? (
-                      <dl className="employee-case-context-facts">
-                        {facts.map((fact) => (
-                          <div key={fact.label}>
-                            <dt>{fact.label}</dt>
-                            <dd>{fact.value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : null}
-                    {context.artifactRefs.length > 0 ? (
-                      <div className="employee-case-artifacts">
-                        <strong>{zh ? '工作材料' : 'Work artifacts'}</strong>
-                        {context.artifactRefs.map((artifact) => (
-                          <code key={artifact}>{artifact}</code>
-                        ))}
+                              ? '使用中'
+                              : 'Active'
+                            : context.lifecycleState === 'waiting'
+                              ? zh
+                                ? '等待中'
+                                : 'Waiting'
+                              : zh
+                                ? '已结束'
+                                : 'Terminal'}
+                        </StatusChip>
+                      }
+                    >
+                      {registration === undefined ? null : (
+                        <p className="employee-case-context-description">
+                          {localized(registration.description, language)}
+                        </p>
+                      )}
+                      {facts.length > 0 ? (
+                        <dl className="employee-case-context-facts">
+                          {facts.map((fact) => (
+                            <div key={fact.label}>
+                              <dt>{fact.label}</dt>
+                              <dd>{fact.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
+                      {context.artifactRefs.length > 0 ? (
+                        <div className="employee-case-artifacts">
+                          <strong>{zh ? '工作材料' : 'Work artifacts'}</strong>
+                          {context.artifactRefs.map((artifact) => (
+                            <code key={artifact}>{artifact}</code>
+                          ))}
+                        </div>
+                      ) : null}
+                      <details className="employee-case-technical-details">
+                        <summary>
+                          {zh ? '查看完整技术记录' : 'View complete technical record'}
+                        </summary>
+                        <pre className="employee-case-json">
+                          {JSON.stringify(context.state, null, 2)}
+                        </pre>
+                      </details>
+                    </Card>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="employee-node-panel">
+              <header>
+                <div>
+                  <span className="employee-node-panel__eyebrow">
+                    {zh ? '关注范围' : 'Attention'}
+                  </span>
+                  <h2>{zh ? '它正在等待哪些结果' : 'What it is watching for'}</h2>
+                  <p>
+                    {zh
+                      ? '有订阅时观察器运行；无人订阅时自动停止。'
+                      : 'Observers run only while a subscription exists.'}
+                  </p>
+                </div>
+              </header>
+              <div className="node-tool-list">
+                {data.attention.length === 0 ? (
+                  <p className="node-tool-list__empty">
+                    {zh ? '当前没有关注对象。' : 'No watched subjects.'}
+                  </p>
+                ) : (
+                  data.attention.map((binding) => (
+                    <article key={binding.id} className="node-tool-row">
+                      <div>
+                        <strong>
+                          {binding.displayName === null
+                            ? zh
+                              ? '工作结果有更新'
+                              : 'Work result updated'
+                            : localized(binding.displayName, language)}
+                        </strong>
+                        <span>{binding.subject.subjectRef}</span>
+                        {binding.description === null ? null : (
+                          <small>{localized(binding.description, language)}</small>
+                        )}
                       </div>
-                    ) : null}
-                    <details className="employee-case-technical-details">
-                      <summary>
-                        {zh ? '查看完整技术记录' : 'View complete technical record'}
-                      </summary>
-                      <pre className="employee-case-json">
-                        {JSON.stringify(context.state, null, 2)}
-                      </pre>
-                    </details>
-                  </Card>
-                )
-              })}
-            </div>
-          </section>
+                      <StatusChip kind={binding.state === 'active' ? 'success' : 'neutral'}>
+                        {binding.state === 'active'
+                          ? zh
+                            ? '关注中'
+                            : 'Watching'
+                          : businessStateLabel(binding.state, zh)}
+                      </StatusChip>
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
 
           <section className="employee-node-panel">
             <header>
               <div>
                 <span className="employee-node-panel__eyebrow">
-                  {zh ? '关注范围' : 'Attention'}
+                  {zh ? '事件队列' : 'Event queue'}
                 </span>
-                <h2>{zh ? '它正在等待哪些结果' : 'What it is watching for'}</h2>
+                <h2>{zh ? '下一轮会先处理什么' : 'What the next reaction will process'}</h2>
                 <p>
                   {zh
-                    ? '有订阅时观察器运行；无人订阅时自动停止。'
-                    : 'Observers run only while a subscription exists.'}
+                    ? '待处理事件按优先级排列；同一时刻只运行一轮。'
+                    : 'Pending events are ordered by priority; only one reaction runs at a time.'}
                 </p>
               </div>
             </header>
             <div className="node-tool-list">
-              {data.attention.length === 0 ? (
+              {orderedInbox.length === 0 ? (
                 <p className="node-tool-list__empty">
-                  {zh ? '当前没有关注对象。' : 'No watched subjects.'}
+                  {zh ? '事件队列为空。' : 'The event queue is empty.'}
                 </p>
               ) : (
-                data.attention.map((binding) => (
-                  <article key={binding.id} className="node-tool-row">
+                orderedInbox.map((event) => (
+                  <article key={event.id} className="node-tool-row">
                     <div>
                       <strong>
-                        {binding.displayName === null
+                        {event.displayName === null
                           ? zh
-                            ? '工作结果有更新'
-                            : 'Work result updated'
-                          : localized(binding.displayName, language)}
+                            ? '工作事件'
+                            : 'Work event'
+                          : localized(event.displayName, language)}
                       </strong>
-                      <span>{binding.subject.subjectRef}</span>
-                      {binding.description === null ? null : (
-                        <small>{localized(binding.description, language)}</small>
-                      )}
+                      <span>{event.summary}</span>
+                      <small>
+                        {new Date(event.occurredAt).toLocaleString()} · {zh ? '优先级' : 'Priority'}{' '}
+                        {event.priority}
+                      </small>
                     </div>
-                    <StatusChip kind={binding.state === 'active' ? 'success' : 'neutral'}>
-                      {binding.state === 'active'
-                        ? zh
-                          ? '关注中'
-                          : 'Watching'
-                        : businessStateLabel(binding.state, zh)}
+                    <StatusChip kind={event.state === 'pending' ? 'info' : 'neutral'}>
+                      {businessStateLabel(event.state, zh)}
                     </StatusChip>
                   </article>
                 ))
               )}
             </div>
           </section>
-        </div>
 
-        <section className="employee-node-panel">
-          <header>
-            <div>
-              <span className="employee-node-panel__eyebrow">
-                {zh ? '事件队列' : 'Event queue'}
-              </span>
-              <h2>{zh ? '下一轮会先处理什么' : 'What the next reaction will process'}</h2>
-              <p>
-                {zh
-                  ? '待处理事件按优先级排列；同一时刻只运行一轮。'
-                  : 'Pending events are ordered by priority; only one reaction runs at a time.'}
-              </p>
-            </div>
-          </header>
-          <div className="node-tool-list">
-            {orderedInbox.length === 0 ? (
-              <p className="node-tool-list__empty">
-                {zh ? '事件队列为空。' : 'The event queue is empty.'}
-              </p>
-            ) : (
-              orderedInbox.map((event) => (
-                <article key={event.id} className="node-tool-row">
-                  <div>
-                    <strong>
-                      {event.displayName === null
-                        ? zh
-                          ? '工作事件'
-                          : 'Work event'
-                        : localized(event.displayName, language)}
-                    </strong>
-                    <span>{event.summary}</span>
-                    <small>
-                      {new Date(event.occurredAt).toLocaleString()} · {zh ? '优先级' : 'Priority'}{' '}
-                      {event.priority}
-                    </small>
-                  </div>
-                  <StatusChip kind={event.state === 'pending' ? 'info' : 'neutral'}>
-                    {businessStateLabel(event.state, zh)}
-                  </StatusChip>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-
-        <div className="employee-case-detail-grid">
-          <section className="employee-node-panel">
-            <header>
-              <div>
-                <span className="employee-node-panel__eyebrow">
-                  {zh ? '执行记录' : 'Reactions'}
-                </span>
-                <h2>{zh ? '每一轮做了什么' : 'What each reaction did'}</h2>
-              </div>
-            </header>
-            <div className="node-tool-list">
-              {[...data.rounds].reverse().map((round) => {
-                const item = descriptor.data?.authoringManifest.workItems.find(
-                  (candidate) => candidate.workItemRef === round.workItemRef,
-                )
-                return (
-                  <article key={round.id} className="node-tool-row">
-                    <div>
-                      <strong>
-                        {item === undefined
-                          ? zh
-                            ? '员工工作项'
-                            : 'Employee work item'
-                          : localized(item.label, language)}
-                      </strong>
-                      <span>
-                        {zh
-                          ? `第 ${round.attemptOrdinal + 1} 次尝试`
-                          : `Attempt ${round.attemptOrdinal + 1}`}
-                      </span>
-                    </div>
-                    {round.executionRef === null ? (
-                      <StatusChip kind={round.state === 'failed' ? 'danger' : 'neutral'}>
-                        {businessStateLabel(round.state, zh)}
-                      </StatusChip>
-                    ) : (
-                      <Link
-                        to="/tasks/$id"
-                        params={{ id: round.executionRef }}
-                        className="btn btn--sm"
-                      >
-                        {zh ? '查看执行' : 'View execution'}
-                      </Link>
-                    )}
-                  </article>
-                )
-              })}
-            </div>
-          </section>
-
-          <section className="employee-node-panel">
-            <header>
-              <div>
-                <span className="employee-node-panel__eyebrow">
-                  {zh ? '员工协作' : 'Employee collaboration'}
-                </span>
-                <h2>{zh ? '委托出去的工作' : 'Delegated work'}</h2>
-              </div>
-            </header>
-            <div className="node-tool-list">
-              {data.channels.length === 0 ? (
-                <p className="node-tool-list__empty">
-                  {zh ? '当前没有委托其他数字员工。' : 'No delegated employee work.'}
-                </p>
-              ) : (
-                data.channels.map((channel) => (
-                  <article key={channel.id} className="node-tool-row">
-                    <div>
-                      <strong>
-                        {employeeDirectory.data?.items.find(
-                          (candidate) => candidate.id === channel.targetEmployeeRef.id,
-                        )?.name ?? (zh ? '协作数字员工' : 'Collaborating employee')}
-                      </strong>
-                      <span>
-                        {channel.state === 'satisfied'
-                          ? zh
-                            ? '协作工作已返回'
-                            : 'Delegated work returned'
-                          : channel.state === 'failed'
+          <div className="employee-case-detail-grid">
+            <section className="employee-node-panel">
+              <header>
+                <div>
+                  <span className="employee-node-panel__eyebrow">
+                    {zh ? '执行记录' : 'Reactions'}
+                  </span>
+                  <h2>{zh ? '每一轮做了什么' : 'What each reaction did'}</h2>
+                </div>
+              </header>
+              <div className="node-tool-list">
+                {[...data.rounds].reverse().map((round) => {
+                  const item = descriptor.data?.authoringManifest.workItems.find(
+                    (candidate) => candidate.workItemRef === round.workItemRef,
+                  )
+                  return (
+                    <article key={round.id} className="node-tool-row">
+                      <div>
+                        <strong>
+                          {item === undefined
                             ? zh
-                              ? '协作工作失败'
-                              : 'Delegated work failed'
-                            : zh
-                              ? '正在等待协作结果'
-                              : 'Waiting for delegated result'}
-                      </span>
-                      <small>
-                        {zh
-                          ? `${channel.results.length} 个返回事件`
-                          : `${channel.results.length} result events`}
-                      </small>
-                    </div>
-                    {channel.childCaseId === null ? (
-                      <StatusChip kind="info">{businessStateLabel(channel.state, zh)}</StatusChip>
-                    ) : (
-                      <Link
-                        to="/tasks/employee-cases/$caseId"
-                        params={{ caseId: channel.childCaseId }}
-                        className="btn btn--sm"
-                      >
-                        {zh ? '查看被委托任务' : 'View delegated task'}
-                      </Link>
-                    )}
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
+                              ? '员工工作项'
+                              : 'Employee work item'
+                            : localized(item.label, language)}
+                        </strong>
+                        <span>
+                          {zh
+                            ? `第 ${round.attemptOrdinal + 1} 次尝试`
+                            : `Attempt ${round.attemptOrdinal + 1}`}
+                        </span>
+                      </div>
+                      {round.executionRef === null ? (
+                        <StatusChip kind={round.state === 'failed' ? 'danger' : 'neutral'}>
+                          {businessStateLabel(round.state, zh)}
+                        </StatusChip>
+                      ) : (
+                        <Link
+                          to="/tasks/$id"
+                          params={{ id: round.executionRef }}
+                          className="btn btn--sm"
+                        >
+                          {zh ? '查看执行' : 'View execution'}
+                        </Link>
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="employee-node-panel">
+              <header>
+                <div>
+                  <span className="employee-node-panel__eyebrow">
+                    {zh ? '员工协作' : 'Employee collaboration'}
+                  </span>
+                  <h2>{zh ? '委托出去的工作' : 'Delegated work'}</h2>
+                </div>
+              </header>
+              <div className="node-tool-list">
+                {data.channels.length === 0 ? (
+                  <p className="node-tool-list__empty">
+                    {zh ? '当前没有委托其他数字员工。' : 'No delegated employee work.'}
+                  </p>
+                ) : (
+                  data.channels.map((channel) => (
+                    <article key={channel.id} className="node-tool-row">
+                      <div>
+                        <strong>
+                          {employeeDirectory.data?.items.find(
+                            (candidate) => candidate.id === channel.targetEmployeeRef.id,
+                          )?.name ?? (zh ? '协作数字员工' : 'Collaborating employee')}
+                        </strong>
+                        <span>
+                          {channel.state === 'satisfied'
+                            ? zh
+                              ? '协作工作已返回'
+                              : 'Delegated work returned'
+                            : channel.state === 'failed'
+                              ? zh
+                                ? '协作工作失败'
+                                : 'Delegated work failed'
+                              : zh
+                                ? '正在等待协作结果'
+                                : 'Waiting for delegated result'}
+                        </span>
+                        <small>
+                          {zh
+                            ? `${channel.results.length} 个返回事件`
+                            : `${channel.results.length} result events`}
+                        </small>
+                      </div>
+                      {channel.childCaseId === null ? (
+                        <StatusChip kind="info">{businessStateLabel(channel.state, zh)}</StatusChip>
+                      ) : (
+                        <Link
+                          to="/tasks/employee-cases/$caseId"
+                          params={{ caseId: channel.childCaseId }}
+                          className="btn btn--sm"
+                        >
+                          {zh ? '查看被委托任务' : 'View delegated task'}
+                        </Link>
+                      )}
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>

@@ -112,9 +112,12 @@ import {
 } from '@/modules/digital-employee/composition'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
+  developmentExecutionContractRegistrations,
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
+  developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
+import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import {
@@ -1147,10 +1150,17 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }),
   })
   const employeeDelivery = buildDevelopmentDeliveryDeps(db, secretBox)
+  const employeeExecutionContracts = composeExecutionContract({
+    db,
+    appHome: Paths.root,
+    registrations: developmentExecutionContractRegistrations,
+    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+  })
   const employeeOs = composeDigitalEmployee({
     db,
     appHome: Paths.root,
     typePackages: [developmentEmployeeTypePackage],
+    executionContracts: employeeExecutionContracts,
     inputArtifacts: employeeInputArtifacts,
     connectionCatalog: composeDevelopmentToolConnectionCatalog(db),
     runtime: {
@@ -1162,6 +1172,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           appHome: Paths.root,
           startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
           workspace: employeeWorkspace,
+          executionContracts: employeeExecutionContracts,
         }),
       ),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
