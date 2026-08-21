@@ -1092,10 +1092,13 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       'digital-employee-responsibility-map.png',
       COMPONENT_SNAPSHOT_OPTS,
     )
-    await expect(toolbox).toHaveScreenshot(
-      'digital-employee-node-toolbox.png',
-      COMPONENT_SNAPSHOT_OPTS,
-    )
+    await expect(toolbox).toHaveScreenshot('digital-employee-node-toolbox.png', {
+      ...COMPONENT_SNAPSHOT_OPTS,
+      // Hosted Ubuntu alternates between two byte-stable font rasters for
+      // the two long contract summaries: 2,043 of 319,200 pixels (0.640%).
+      // Keep this component-only allowance barely above that known jitter.
+      maxDiffPixelRatio: 0.007,
+    })
   })
 
   test('/digital-employees add work-item tool dialog (light)', async ({ page }) => {
