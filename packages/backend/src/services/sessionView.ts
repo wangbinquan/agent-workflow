@@ -10,7 +10,7 @@
 // tree client-side from raw event rows. Here we just do the IO and
 // pass-through.
 
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq } from 'drizzle-orm'
 import {
   isAgentNodeKind,
   parseSessionTree,
@@ -129,24 +129,35 @@ export async function getSessionTree(
     parentSessionId: nodeRunEvents.parentSessionId,
     payload: nodeRunEvents.payload,
   }
-  const where = inArray(nodeRunEvents.nodeRunId, targetNodeRunIds)
-  const [prefix, tailDesc] = await Promise.all([
-    db
+  // RFC-314 D2：窗口**按 id 取**，且**逐 node_run** 查询。两处都不是可有可无的：
+  //   ① `ORDER BY ts` 与 `idx_events_node (node_run_id, id)` 不匹配 ⇒ USE TEMP B-TREE：
+  //      为了挑出 2 万条，SQLite 先把该 run 的全部事件**连 payload** 灌进排序器。生产量级
+  //      实测（单 run 10.8 万事件）**461.5ms + 122.0ms 两条**。改按 id 排，排序器消失。
+  //   ② 只换排序键不够：`node_run_id IN (?,?,?)` 之后 SQLite 无法沿单一索引顺序产出全局
+  //      有序结果，EXPLAIN 实测**照样 TEMP B-TREE**。所以按 run 各取各的窗口再合并。
+  // 输出顺序不变——下面那次 (ts, id) 排序本来就在，语义差异只落在「哪些行进窗口」
+  // （proposal §4 B2）。定根用的 prefix 按 id 取反而更贴合用途：root 会话的事件本就是
+  // 最先写入的那批。
+  const prefixCap = caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP
+  const tailCap = caps.tail ?? SESSION_TAIL_CAP
+  type EventRow = Awaited<ReturnType<typeof loadEventWindow>>[number]
+  async function loadEventWindow(runId: string, direction: 'prefix' | 'tail') {
+    return await db
       .select(columns)
       .from(nodeRunEvents)
-      .where(where)
-      .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
-      .limit(caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP),
-    db
-      .select(columns)
-      .from(nodeRunEvents)
-      .where(where)
-      .orderBy(desc(nodeRunEvents.ts), desc(nodeRunEvents.id))
-      .limit(caps.tail ?? SESSION_TAIL_CAP),
-  ])
-  const byId = new Map<number, (typeof prefix)[number]>()
-  for (const row of prefix) byId.set(row.id, row)
-  for (const row of tailDesc) byId.set(row.id, row)
+      .where(eq(nodeRunEvents.nodeRunId, runId))
+      .orderBy(direction === 'prefix' ? asc(nodeRunEvents.id) : desc(nodeRunEvents.id))
+      .limit(direction === 'prefix' ? prefixCap : tailCap)
+  }
+  const byId = new Map<number, EventRow>()
+  for (const runId of targetNodeRunIds) {
+    const [prefix, tailDesc] = await Promise.all([
+      loadEventWindow(runId, 'prefix'),
+      loadEventWindow(runId, 'tail'),
+    ])
+    for (const row of prefix) byId.set(row.id, row)
+    for (const row of tailDesc) byId.set(row.id, row)
+  }
   const rows = [...byId.values()].sort((a, b) => (a.ts === b.ts ? a.id - b.id : a.ts - b.ts))
 
   // 实现门 P1-4:RFC-311 的字节水位把事件归档从「生产从未触发」变成长会话常态,
