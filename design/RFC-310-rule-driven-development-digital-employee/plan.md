@@ -1514,7 +1514,7 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | T223 | 修复工具新 revision 必须显式声明 `acceptedDispatchRoutes`；表单从分类工具清单结构化多选；内置通用修复 Agent 冻结 `*`                | T222      | ✅   |
 | T224 | 岗位选择分类工具即派生同数量/同顺序 `P1..Pn` 并自动连线；岗位只配置处理方式；后端逐项校验清单与 exact 分类工具 revision 一致        | T222,T223 | ✅   |
 | T225 | 稳定容器 pointer capture 驱动精确槽位预览、源泳道跟手与可中断 FLIP，松手才提交；扇出卡以单一不透明 paint stack 逐层遮盖 | T224      | ✅   |
-| T226 | 合同/authoring/runtime/system-mock、前端/E2E/视觉回归；真实浏览器检查；完整 gate；主分支精确提交推送与 exact-SHA CI/visual 终态     | T222-T225 | 🚧   |
+| T226 | 合同/authoring/runtime/system-mock、前端/E2E/视觉回归；真实浏览器检查；完整 gate；主分支精确提交推送与 exact-SHA CI/visual 终态     | T222-T225 | ✅   |
 
 ### 批次停止条件
 

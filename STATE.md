@@ -243,15 +243,16 @@
 > 远端 `2cf02e2f5399d62ee53001eb6515b7429dad9ab4` 上，CI `32547935559` **31/31 jobs success**，visual
 > `32547935610` **56/56 tests success**，无失败或取消。
 >
-> **PR-25 工具归属的问题分派与交互修复（2026-08-22，实施中）**：分类工具注册新增有序问题清单，岗位选择工具即自动派生并连接
+> **PR-25 工具归属的问题分派与交互修复（2026-08-23，已完成）**：分类工具注册新增有序问题清单，岗位选择工具即自动派生并连接
 > `P1..Pn`，岗位只配置处理方式；修复工具表单改为结构化多选能力，后端同时校验分类工具清单 exact 一致和修复工具 route 兼容性。
 > 岗位优先级改由稳定泳道容器持有 pointer capture，按冻结槽位边界实时预览；源泳道逐帧跟随指针，其他泳道以可中断 FLIP 让位，松手提交
 > exact 预览顺序。工具箱/岗位共用扇出卡改为同一不透明 paint stack，主卡覆盖中层、中层覆盖后层，只露同色右/底窄边且不会与邻卡交错。
 > 当前定向证据：frontend RFC-310 UI contract **9/9**、backend authoring **20/20**、Case runtime **3/3**、stateful system-mock 完整链
 > **1/1（57 断言）**、前后端 typecheck 全绿；真实浏览器连续快速验证 **P4→P1、P1→P3、P3→P1** 均准确落位。合并远端并保留并发
 > RFC-315 后的最终树 `bun run gate:local` **9m59s 全绿**：backend **11,648 pass / 36 skip / 0 fail**、frontend **6,686/6,686**、
-> shared **2,222/2,222**、system-mocks **62/62**，typecheck/lint/format/depcheck 全绿。仍待精确提交推送及 exact-SHA hosted CI/visual，
-> 未提前标记完成。
+> shared **2,222/2,222**、system-mocks **62/62**，typecheck/lint/format/depcheck 全绿。实现提交 `6ab45898` 经共享主干合并、Linux
+> 视觉基线 `de2b8a4c` 与 Select 焦点交接修复 `b48939f7` 收口；远端 exact SHA `b48939f7c48874ad92f15eb558babe0c41a5ccdc`
+> 上，CI `32588052788` **31/31 jobs success**，visual `32588052795` **56/56 tests success**，无失败或取消。
 >
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
