@@ -251,6 +251,16 @@ export function Select<V extends string>(props: Props<V>) {
   )
 
   function onTriggerKey(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key === 'Escape' && open) {
+      // Opening moves focus into the portaled listbox on the next task. If the
+      // user presses Escape during that hand-off, the trigger still owns the
+      // event; consume it here so it cannot dismiss a surrounding Dialog.
+      e.stopPropagation()
+      e.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
+      return
+    }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       openIntentRef.current =

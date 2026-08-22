@@ -72,6 +72,24 @@ describe('Select searchable (RFC-165 UI 精修)', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  test('Escape during the trigger-to-listbox focus hand-off closes only Select', () => {
+    const parentKeyDown = vi.fn()
+    render(
+      <div onKeyDown={parentKeyDown}>
+        <Select<string> value="" options={[]} onChange={() => {}} data-testid="sel" />
+      </div>,
+    )
+    const trigger = screen.getByTestId('sel')
+    fireEvent.click(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+
+    fireEvent.keyDown(trigger, { key: 'Escape' })
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(parentKeyDown).not.toHaveBeenCalled()
+  })
+
   test('S4 arrows from the search input move ONE row; Enter fires once (Codex P1)', () => {
     const onChange = vi.fn()
     const { getByTestId } = render(

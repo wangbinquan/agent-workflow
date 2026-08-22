@@ -388,9 +388,24 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const reviewRepairCard = responsibilityMap.locator('[data-work-item-ref="repair-feedback"]')
   const pipelineFanOutCard = responsibilityMap.locator('[data-work-item-ref="repair-pipeline"]')
   await expect(reviewRepairCard).not.toHaveClass(/employee-toolbox-card--fan-out/)
-  await expect(reviewRepairCard.locator('.employee-toolbox-card__stack-layer')).toHaveCount(0)
   await expect(pipelineFanOutCard).toHaveClass(/employee-toolbox-card--fan-out/)
-  await expect(pipelineFanOutCard.locator('.employee-toolbox-card__stack-layer')).toHaveCount(2)
+  const pipelineStackVisual = await pipelineFanOutCard.evaluate((card) => {
+    const style = getComputedStyle(card)
+    return {
+      backgroundColor: style.backgroundColor,
+      borderColor: style.borderColor,
+      boxShadow: style.boxShadow,
+      legacyLayerCount: card.querySelectorAll('.employee-toolbox-card__stack-layer').length,
+    }
+  })
+  expect(pipelineStackVisual.legacyLayerCount).toBe(0)
+  expect(pipelineStackVisual.boxShadow).toContain(pipelineStackVisual.backgroundColor)
+  expect(pipelineStackVisual.boxShadow).toContain(pipelineStackVisual.borderColor)
+  expect(pipelineStackVisual.boxShadow).toContain('4px 4px')
+  expect(pipelineStackVisual.boxShadow).toContain('8px 8px')
+  expect(pipelineStackVisual.boxShadow.indexOf('4px 4px')).toBeLessThan(
+    pipelineStackVisual.boxShadow.indexOf('8px 8px'),
+  )
   const careSpine = responsibilityMap.locator('[data-lane-id="care-attention"]')
   await expect(careSpine.locator('[data-work-item-ref="evaluate-ready"]')).toBeVisible()
   await expect(careSpine.locator('[data-work-item-ref="wait-merge"]')).toBeVisible()
