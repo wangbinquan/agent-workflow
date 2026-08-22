@@ -1,6 +1,6 @@
 # RFC-315 技术设计：统一事件自动化规则权限合同
 
-- 状态：In Progress
+- 状态：Done
 - 对应：[`proposal.md`](./proposal.md)
 
 ## 1. 落位摘要

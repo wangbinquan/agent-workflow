@@ -1,6 +1,6 @@
 # RFC-315 实施计划：统一事件自动化规则权限合同
 
-- 状态：In Progress（实现与全量本地门禁完成，等待提交及远端精确 SHA CI）
+- 状态：Done（实现 `7a15e0a4` + 目录闭环 `bf5827ce`；exact-SHA CI/visual 全绿）
 - 对应：[`proposal.md`](./proposal.md) / [`design.md`](./design.md)
 
 ## 1. 任务
@@ -16,7 +16,7 @@
 | T7   | shared/migration/HTTP/frontend 定向矩阵                             | Done                                  |
 | T8   | RFC-294 边界与旧名/`event-sources` 退役棘轮                         | Done（现有架构门 + source inventory） |
 | T9   | RFC、STATE、索引与发布/回滚说明                                     | Done                                  |
-| T10  | 全量本地 gate、精确路径提交、远端 exact-SHA CI/visual 归因          | In Progress                           |
+| T10  | 全量本地 gate、精确路径提交、远端 exact-SHA CI/visual 归因          | Done                                  |
 
 ## 2. 验证清单
 
@@ -58,10 +58,17 @@
 
 - [x] targeted format/lint/typecheck/test 全绿
 - [x] `bun run gate:local` 全绿（非网络沙箱；后端四分片、frontend、shared、system-mocks 均零失败）
-- [ ] 精确路径 staged diff / commit trailer 验证
-- [ ] 推送 `origin/main`，证明远端包含目标 SHA
-- [ ] exact-SHA hosted CI 与 visual 终态归因
-- [ ] RFC/STATE/索引置 Done
+- [x] 精确路径 staged diff / commit trailer 验证
+- [x] 推送 `origin/main`，证明远端包含目标 SHA
+- [x] exact-SHA hosted CI 与 visual 终态归因
+- [x] RFC/STATE/索引置 Done
+
+### 发布证据
+
+- 本地完整 `bun run gate:local`：后端四分片共 11,636 pass / 36 skip / 0 fail；frontend 6,678/6,678；shared 2,220/2,220；system-mocks 62/62；typecheck/lint/format/depcheck 全绿。
+- 实现提交 `7a15e0a49289ad587739f8fa1a116c178544eb78` 推至 `main`。首个 CI `32579277912` 在跨平台 `rfc305-user-permissions` 抓到新 `event-center` 未接入前端 `GROUP_ORDER`，实际目录少五行；未把该运行计作成功。
+- 修复提交 `bf5827ceb479ac67ec0028627c2a7cb7821d1fa4` 补分组与组件/E2E 棘轮；本地精确浏览器文件 3/3 全绿。
+- 修复 SHA 的 CI `32579840718`：completed/success，31 个 job 无非成功项；visual `32579840744`：completed/success，Ubuntu 56/56 场景通过、无快照更新。
 
 ## 3. 提交与共享 main 约束
 

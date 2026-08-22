@@ -12,14 +12,14 @@
 > 用法见 README「从源码构建」；踩坑（mock 换密钥不换 kid + daemon 长寿 JWKS 缓存、常驻 dev 子进程的
 > 孤儿/SIGHUP/keep-alive 三件套）已进 `docs/dev-gotchas.md`。
 
-> 🚧 **进行中 RFC（In Progress，2026-08-22）：[RFC-315 统一事件自动化规则权限合同](design/RFC-315-unified-event-automation-rule-permissions/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-22）：[RFC-315 统一事件自动化规则权限合同](design/RFC-315-unified-event-automation-rule-permissions/proposal.md)**
 > —— 用户已批准按 Webhook 预期统一权限并提交上库。实现以 `event-automation-rules:{read,create,update,delete,override-owner}`
 > 取代 Webhook 私有权限名，同时把来源无关规则从 `event-sources:update` 中拆出：默认 user 只读，manager 仅管理本人，
 > admin/显式 override 可跨 owner；创建仍需 `tasks:execute`，数字员工目标创建/更新仍需
 > `development-missions:launch`。迁移 `0202` 保留旧 grant provenance、映射并去重各状态 PAT scope，
 > 不映射 `event-sources:*`、不重写 audit。Webhook PAT 保持；来源无关规则全路由拒绝 PAT。前端两面板共享
 > permission × owner 投影，产品文案改为“事件自动化规则”；现有 response-rules API/表/内部类型只作兼容保留。
-> **当前代码、定向验证和完整 `bun run gate:local` 已全绿；待精确提交推送和 hosted exact-SHA CI/visual 终态后置 Done。**
+> 实现提交 `7a15e0a4` 后，首个 hosted CI 在 RFC-305 跨平台 E2E 抓到新 `event-center` 组未接入用户权限目录顺序表，五个新点被 UI 静默过滤；追加 `bf5827ce` 补组与组件/E2E 棘轮。后继精确 SHA 的 CI `32579840718` **31/31 jobs 全绿**，visual `32579840744` **Ubuntu 56/56 全绿且零快照更新**；远端 `main` 已包含两笔提交。
 
 > ✅ **已完成 RFC（Done，2026-08-21 实现落主干）：[RFC-314 node_run_events 三处读写形状修复](design/RFC-314-node-run-event-access-shapes/proposal.md)**
 > —— 起于生产对账：部署 **v0.18.11**（已含 RFC-311 字节水位）的 `node_run_events` 仍是 **78.6 万行 / 1.72GB**。
