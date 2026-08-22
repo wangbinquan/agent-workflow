@@ -31,6 +31,11 @@
 > 最终完成仍以 plan §13k 的完整门禁、
 > 浏览器实走、远端 exact-SHA CI 为准，不能因前端卡片已经出现就提前标记完成。
 >
+> **2026-08-22 PR-25（实施中）**：按用户对真实界面的复核，流水线问题清单从岗位级全局配置迁入“归类流水线失败”工具的
+> immutable revision；岗位选择分类工具时立即按该工具清单自动扇出并连接 `P1..Pn`，只为每个派生节点选择处理方式。
+> “修复流水线”工具显式多选其可解决的问题，平台内置通用修复 Agent 固定声明 `*`。同批补齐岗位优先级拖动的稳定 pointer capture、
+> 释放前精确槽位预览与可中断 FLIP 动画，并让工具箱/岗位图中的三层扇出卡继承主卡同一背景、边框和稳定层次。终态证据见 plan §13l。
+>
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
 > [RFC-308](../RFC-308-unified-task-git-commit-exclusions/proposal.md)、
@@ -788,19 +793,22 @@ interface ProblemSetEnvelopeV1 {
 }
 ```
 
-- **问题类型**由数字员工分类包定义，至少含稳定 `typeId`、业务名称、适用证据域、是否可修复和 unknown 回退；例如
-  `compile`、`unit-test`、`static-analysis`、`review-change-requested`、`merge-conflict`。
+- **问题类型**由问题识别/分类工具的 immutable registration revision 定义，至少含稳定 `typeId`、业务名称、识别说明和唯一末尾
+  unknown 回退；例如 `compile`、`unit-test`、`static-analysis`、`review-change-requested`、`merge-conflict`。分类包只声明
+  ordered-dispatch 合同和允许到达的处理工作项，不持有业务问题枚举。
 - **问题生产者**可以是 script 或只读 Agent。它只读 exact head 对应的 evidence bundle，只能产出配置允许的 typeId；
   平台校验 evidence digest、subject 闭集、覆盖性、唯一 problemRef 和 envelope 后才形成 fact。
-- **问题处理规则**按稳定顺序把 `typeId + repository/module/gate facts` 映射到一个修复生产者。修复生产者也可以是
-  Agent 或 script；两者都不能 commit/push，业务改动由平台从真实 workspace 推导并统一验证、提交和推送。
+- **问题处理规则**沿分类工具清单的稳定顺序，把每个 `typeId` 映射到岗位冻结的处理工作项和 exact registration/协同员工。
+  修复工具必须显式声明接受的 classifier/typeId 闭集，可多选，`*` 表示解决该分类器全部问题；平台内置通用修复 Agent 固定使用
+  `*`。修复生产者可以是 Agent 或 script；两者都不能 commit/push，业务改动由平台从真实 workspace 推导并统一验证、提交和推送。
 - 多问题由程序按 `(type priority, subjectRef, problemRef)` 生成工作集；规则明确逐类还是成批处理，Agent 不挑问题。
 - producer/handler 输出错误时按 Case pin 的限额快照同现场重试；耗尽后从 exact baseline 重建现场。只有分类包的确定性规则显式配置了
   下一 producer/handler 才能换实现，否则阻断并交人。
 - 每轮固定为“采集证据 → 产出问题 → 规则选处理者 → 修复 → 程序化验证 → 重采”；unknown 不得当作已修复或通过。
 
-流水线处理仍是一个工作项。该节点的工具列表可按“问题识别工具”和“问题修复工具”分组；分类包定义稳定的
-`problem type → recognition registration → repair registration` 路由，业务用户只选择已验证注册，不手写 predicate 或下一动作。
+流水线处理仍是一个工作项。分类工具 revision 定义稳定有序的问题清单，修复工具 revision 定义自己可解决的问题集合；岗位选择分类
+工具后由平台复制同一清单并自动生成/连接派生节点，用户只为节点选择已验证的修复 registration 或协同员工，不在岗位层重写问题名、顺序
+或识别说明，也不手写 predicate。
 
 ### 6.5 调用其他数字员工与外部审批
 
@@ -1200,11 +1208,12 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-36** 数字员工主界面只出现分类、岗位模板、名称、负责范围和每个工作项选择的工具；创建与详情不出现员工启停、发布状态、事件选择、
   Context 映射、effect、重试/回退、阶段下拉、连线编辑、`ActionTemplate`、`VerificationProfile`、`adapter/profile`、裸资源
   ID 或 JSON。管理员可在折叠的技术详情中查看编译 receipt；页面骨架和交互复用仓库/Webhook 的 operations 视觉体系。
-- **AC-37** 问题类型为员工 revision 内的稳定闭集；script/只读 Agent 生产者对 exact head/evidence digest 产出同一
-  `ProblemSetEnvelope`。未知 type、遗漏 required subject、重复 problemRef、陈旧 head 或不完整输出均不形成事实。
-- **AC-38** 每个可修复问题类型都有分类包定义的显式有序处理规则，handler 可为 Agent 或 program；两者都不 commit/push，
-  真实 workspace delta 由平台验证并发布。多问题工作集顺序可回放，无规则不猜；重试只取 Case pin 的限额快照，耗尽后
-  按 exact baseline 重建，只有分类包定义了 fallback registration 才切换实现。
+- **AC-37** 问题类型为所选分类工具 revision 内的稳定有序闭集；script/只读 Agent 生产者对 exact head/evidence digest 产出同一
+  `ProblemSetEnvelope`。岗位和员工只能冻结该闭集，不能改名、增删或重排。未知 type、遗漏 required subject、重复 problemRef、
+  陈旧 head 或不完整输出均不形成事实。
+- **AC-38** 每个可修复问题类型都有岗位冻结的显式处理目标；repair registration 必须声明自己接受的 classifier/typeId，可一次声明
+  多个类型，`*` 代表全部。handler 可为 Agent 或 program；两者都不 commit/push，真实 workspace delta 由平台验证并发布。多问题
+  工作集顺序可回放，无兼容工具不猜；重试只取 Case pin 的限额快照，耗尽后按 exact baseline 重建。
 - **AC-39** `invoke-employee` 幂等建立独立 child Mission，父子分别 pin 仓库/员工/策略并只通过 typed envelope/artifact
   ref 交换结果；重复 reconcile 不重复建 child，静态/动态环和深度/child budget 耗尽得到具名阻断。join 的 all/any/quorum、
   deadline、部分成功和取消/handoff 行为全部由规则定义。
@@ -1218,8 +1227,8 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   child 仓 MR ready → 审批 pending/approved → 父门禁重跑 → 父 MR ready → 外部 merged。每一停点断言当前位置、下一步、
   负责人和可执行动作，刷新/daemon 重启后投影不丢失。
 - **AC-43** 产品层级固定为“数字员工 → 数字员工分类 → 工作项 → 工具”。工具箱复用分类的全量职责流程图；点击工作项后列表
-  只返回该节点工具，“增加工具”自动携带分类、工作项和合同，不出现阶段选择。系统节点没有增加工具入口；普通/识别/修复等
-  role 与各问题类型 slot 由分类 manifest 定义，岗位模板/员工只为 slot 选择兼容工具。
+  只返回该节点工具，“增加工具”自动携带分类、工作项和合同，不出现阶段选择。系统节点没有增加工具入口；分类工具定义自己的有序
+  问题清单，修复工具多选自己能解决的问题，岗位模板/员工只选择分类工具及其派生节点的兼容处理者。
 - **AC-44** 每个工作项 pin 不可变 `WorkContractRevision`，其输入 schema、输出 schema、完成标准、允许工具种类和语义验证器
   均由分类包定义。任何工具只有通过该合同 fixture 才能发布，员工实例只能选择当前节点的兼容已发布注册。
 - **AC-45** 事件目录至少支持业务显示名、说明和 locale fallback；业务画布、任务和活动记录不得把 `work.accept` 等 machine ID
@@ -1289,9 +1298,9 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-70** 类型包可以把职责泳道声明为可选。岗位模板/员工没有配置该泳道时仍可校验、发布和执行，并且不建立该职责的 Attention；
   一旦配置其中任一步，必须闭合泳道内部必需工具/协同/有序路由。发布后的员工冻结 `enabledWorkItemRefs`，运行时不得因后来新增工具
   静默获得新职责。
-- **AC-71** 流水线失败类型属于岗位配置，不是平台枚举。分类节点提供有序分派编辑器，每个类型必须有业务名称、目标处理工作项以及
-  exact 工具或协同员工；列表顺序是唯一优先级，末项必须且只能是一个 fallback。运行时按问题集合和冻结列表逐类调度，不让 Agent
-  选择下一类型或执行者。
+- **AC-71** 流水线失败类型属于分类工具 revision，不是平台枚举或岗位全局配置。分类工具编辑器维护有序问题清单，每项必须有稳定机器键、
+  业务名称和识别说明，末项必须且只能是 fallback。岗位选择该工具后立即派生同数量、同顺序、不可改写的 `P1..Pn` 节点，并只为每个
+  节点选择允许的处理工作项及 exact 工具/协同员工。运行时按问题集合和冻结清单逐类调度，不让 Agent 选择下一类型或执行者。
 - **AC-72** Event 只是一条 wake hint。检视、冲突、流水线等代码平台事件必须先刷新权威 MR Context，再根据最新事实进入业务职责；
   ReactionRule 分开冻结“允许响应的可选职责”和“实际先执行的平台刷新工作项”，既不能用旧 Case 快照修复，也不能因刷新节点常驻而
   误启用未配置泳道。
@@ -1337,7 +1346,7 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-86** 新建岗位模板先用只含名称、说明的基本信息弹窗建立当前编辑草稿，随后进入分类页内职责编辑状态；详情页不再常驻重复的名称/
   说明输入框。确认基本信息必须先把不完整模板持久化为 `publishedRevision=null` 的草稿，再进入职责图；取消、刷新或尚无必选工具不能丢失
   该草稿，完整性只在发布时阻断。已有模板点击修改时直接进入职责编辑，并可按需从次要“基本信息”动作重新打开同一弹窗。职责全景保持一屏完整展示，点击
-  卡片才打开该职责的默认工具、错误类型或协同员工配置弹窗；已配置为绿色，未纳入岗位能力为黄色。可选泳道不配置也可保存；提交时仅对
+  卡片才打开该职责的默认工具、工具派生问题节点处理者或协同员工配置弹窗；已配置为绿色，未纳入岗位能力为黄色。可选泳道不配置也可保存；提交时仅对
   真正缺失的必选职责闪烁并直接打开第一项职责弹窗。
 - **AC-87** 员工负责范围用一个仓库空间下拉表达：可直接选择单仓、仓库组或“任务启动时指定仓库”，不再先选范围类型，也不出现“全局默认”。
   启动任务时，固定单仓不显示仓库选择并继承已发布 scope；仓库组只列组内仓库；任务时指定则列可用仓库。后端仍拒绝固定单仓的冲突目标，
@@ -1352,17 +1361,20 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   泳道名称、主/职责类型和可选性固定在左侧，完整说明通过该行的可访问名称与详情保留；职责节点在右侧按执行顺序从左到右展开。多分支阶段
   由阶段背景表达共同生命周期，不画贯穿多行的共享分流轴；只绘制每条泳道入口和泳道内的短方向箭头，不恢复跨全图绕行连线。业务名称
   必须完整自然换行，1280×900 仍能看到全景。
-- **AC-91** 岗位模板的有序分类配置产出 N 个失败类型时，职责图必须紧随分类节点派生 N 张等宽修复卡片并展示 `P1..Pn`；每张卡片是
-  独立必填绑定，只能选择其目标工作项下声明接受该 classifier/route 的已发布工具或协同员工。候选过滤只是引导，后端发布仍需 exact
-  compatibility 校验；缺少任何派生节点绑定都不得发布。
+- **AC-91** 岗位选择含 N 个问题定义的分类工具时，职责图必须在选择动作完成、鼠标仍停留于职责弹窗期间就紧随分类节点派生并连接 N 张
+  等宽修复卡片，展示 `P1..Pn`；无需保存或另点“增加错误类型”。每张卡片是独立必填绑定，只能选择其目标工作项下声明接受该
+  classifier/route 的已发布工具或协同员工。候选过滤只是引导，后端发布仍需校验分类工具清单逐项一致和 exact compatibility；缺少任何
+  派生节点绑定都不得发布。
 - **AC-92** 数字员工任务详情复用 authoring 的同一职责图和冻结有序分类配置，按 work item/route 显示未开始、运行中、等待、失败和完成。
   同页必须有 Case 全生命周期阶段时间线；点击任一阶段可查看 exact session、冻结 Context 引用、Agent envelope 或 Program 输入输出和错误现场，
   不得只展示当前节点或从易变日志反推历史。
 - **AC-93** `inputMultiplicity=collection` 只约束一个工作项可一次消费同类集合，不代表运行分支，也不产生叠卡。“修复检视问题”即使输入完整
-  thread tree 集合，仍显示为一个职责节点。只有 `orderedDispatchAuthoring` 的分类节点会让目标修复职责显示三层扇出提示；岗位配置完成后，
-  该提示由真实 `P1..Pn` 错误类型节点替换。视觉层从 manifest 的有序分派关系推导，不能硬编码开发类型或工作项 ID。
+  thread tree 集合，仍显示为一个职责节点。只有 `orderedDispatchAuthoring` 的分类节点会让目标修复职责显示三层扇出提示；三层必须按固定
+  偏移依次后退，并继承主卡的同一背景色和边框色，不能形成三张异色卡。岗位配置完成后，该提示由真实 `P1..Pn` 问题节点替换。视觉层从
+  manifest 的有序分派关系推导，不能硬编码开发类型或工作项 ID。
 - **AC-94** MR 看护区的非可选“判断可合入/等待 committer”职责并入 MR 事件主泳道，不再单列“合入判断”泳道；检视、流水线、冲突、员工协同、
-  外部审批是可选反应泳道。岗位模板可拖动这些反应泳道排序，保存并冻结 `reactionLaneOrder`；运行任务图必须显示同一 `P1..Pn` 顺序。
+  外部审批是可选反应泳道。岗位模板可拖动这些反应泳道排序；拖动经过目标泳道时、鼠标释放前就必须渲染临时目标顺序、目标高亮和实时
+  位移动画，drop 才保存并冻结 `reactionLaneOrder`，取消则恢复原顺序。运行任务图必须显示同一 `P1..Pn` 顺序。
 - **AC-95** `/tasks/new` 的四种创建能力来自共享注册表；注册项必须声明 runtime owner、inventory、权限、四步合同和参数合同。选择数字员工只替换
   同一路由、同一页面骨架中的四步内容，不跳到另一创建页面；切回 Agent/Workflow/工作组同理。AppShell 按注册能力做 any-of 权限准入。
 - **AC-96** DigitalEmployeeDefinition 不持有 enabled/business status，创建与保存不出现发布态文案；新 API 传入 `enabled` 必须被拒绝，存量 JSON
@@ -1458,15 +1470,20 @@ RFC-294 同步和实现门批准后另行开始。
   一个成员仓库。旧 `global` 仅由 type-id runtime codec 解码，不能由 revision 5 authoring 创建。
 - **D46**：启动 UI 只信 published revision。公共 EmployeeDefinition view 附带解析后的 `publishedWorkScope`，避免 draft 已改但未发布时把任务
   发往错误仓库；runtime 仍以 workScopeRef 的 frozen revision 为最终事实。
-- **D47**：有序分类不是一个藏在弹窗里的配置表。每个 route 都在 authoring/runtime 同一职责图中派生一张带优先级的独立修复卡片；修复工具
-  冻结其接受的 classifier/route 能力，前端过滤与后端发布校验共同保证一类问题只能绑定到兼容执行者。
+- **D47**：有序问题清单归分类工具 revision，不归岗位全局配置。岗位选择分类工具即按清单自动派生和连接 route 卡片；每个 route 都在
+  authoring/runtime 同一职责图中成为一张带优先级的独立修复卡片。修复工具冻结其接受的 classifier/route 能力（可多选或 `*`），前端过滤、
+  清单一致性门禁与后端发布校验共同保证一类问题只能绑定到兼容执行者。
 - **D48**：任务详情复用相同职责图并增加 Case 全阶段时间线。历史阶段以冻结 Round/plan/input/output 为事实，点击后展示 exact session 与
   Agent/Program 输入输出；不能只显示当前节点，也不能用当前 Context 或编译日志反推历史。
 - **D49**：岗位基本信息确认就是草稿创建命令，不是前端临时状态。发布门禁与创建分离，用户可在必选职责未闭合时退出并继续编辑。
 - **D50**：集合输入只影响 WorkContract，不影响职责图层数；三层扇出卡由类型包 `orderedDispatchAuthoring.destinationWorkItemRefs` 驱动，
-  配置后由真实 route 节点替换。视觉层不识别 `development`、`repair-feedback` 或 `repair-pipeline` 特例。
+  配置后由真实 route 节点替换。叠层以同一个不透明 paint stack 继承主卡背景/边框并保持同向等距偏移：主卡完整覆盖中层、中层完整覆盖
+  后层，只露右侧和底部窄边，不能用独立负 z-index 子卡造成轮廓透出或与邻卡交错。工具箱与岗位图共用同一组件；视觉层不识别
+  `development`、`repair-feedback` 或 `repair-pipeline` 特例。
 - **D51**：岗位模板冻结 `reactionLaneOrder`，员工 revision 冻结 `exactReactionLaneOrder`。主泳道和 terminal fence 有固定高优先级；可选反应泳道
-  按岗位顺序处理，泳道内保留 type rule 优先级。Event Center 仍不保存任何业务 priority。
+  按岗位顺序处理，泳道内保留 type rule 优先级。排序手柄开始 pointer drag 后，由不会随预览重排的泳道容器持有 pointer capture；目标按拖动
+  开始时冻结的槽位边界精确计算，源泳道逐帧跟随指针，其他泳道以可中断的短 FLIP 动画让位。`pointerup` 才持久化当前临时顺序，取消则恢复；
+  Event Center 仍不保存任何业务 priority。
 - **D52**：任务来源是共享注册合同，不是前端卡片、列表分区或筛选枚举的常量。每类只声明稳定 source ID、owner 目录、inventory、permission、
   四步合同、parameter contract、详情路由和读取权限；统一创建、列表与筛选均由同一注册表投影。runtime owner 只在来源提交命令或只读适配器
   内处理自己的事实，公共层不识别具体来源。前端公共 Host 直接消费声明式合同，并独占来源卡片、资源选择器、执行空间和生命周期外壳。

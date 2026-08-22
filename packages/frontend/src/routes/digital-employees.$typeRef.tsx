@@ -38,6 +38,7 @@ import {
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { GROUP_OPTION_PREFIX } from '@/components/launch/RepoSourceRow'
+import { MultiSelect } from '@/components/MultiSelect'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
@@ -197,6 +198,7 @@ function DigitalEmployeeTypePage(): ReactElement {
                     item={selectedItem}
                     contract={selectedContract}
                     tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
+                    toolsByWorkItem={toolsByWorkItem}
                     dispatchSources={
                       selectedItem === null
                         ? []
@@ -294,11 +296,42 @@ function toolStatus(
   return { kind: 'neutral', label: zh ? '草稿' : 'Draft' }
 }
 
+function dispatchProblemOptions(
+  sourceItem: WorkItem,
+  toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>,
+) {
+  const options = new Map<string, { value: string; label: string; description?: string }>()
+  for (const tool of toolsByWorkItem[sourceItem.workItemRef] ?? []) {
+    if (tool.state !== 'published') continue
+    for (const definition of tool.content.dispatchRouteDefinitions ?? []) {
+      if (options.has(definition.routeRef)) continue
+      options.set(definition.routeRef, {
+        value: definition.routeRef,
+        label: `${definition.displayName} · ${definition.routeRef}`,
+        ...(definition.description === '' ? {} : { description: definition.description }),
+      })
+    }
+  }
+  return [...options.values()]
+}
+
+function dispatchProblemLabel(
+  sourceItem: WorkItem,
+  routeRef: string,
+  toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>,
+): string {
+  return (
+    dispatchProblemOptions(sourceItem, toolsByWorkItem).find((option) => option.value === routeRef)
+      ?.label ?? routeRef
+  )
+}
+
 function ToolboxPanel(props: {
   typeRef: string
   item: WorkItem | null
   contract: EmployeeWorkContract | null
   tools: ToolRegistration[]
+  toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
   dispatchSources: WorkItem[]
   language: string
 }): ReactElement {
@@ -391,17 +424,13 @@ function ToolboxPanel(props: {
         <section className="employee-dispatch-card" data-testid="employee-runtime-dispatch">
           <header>
             <div>
-              <span>{zh ? '运行时动态调度' : 'Runtime dispatch'}</span>
-              <strong>{localized(orderedDispatch.label, props.language)}</strong>
+              <span>{zh ? '问题清单归工具所有' : 'Problem list belongs to the tool'}</span>
+              <strong>
+                {zh
+                  ? '选择分类工具后自动生成修复节点'
+                  : 'Selecting a classifier tool creates repair nodes'}
+              </strong>
             </div>
-            <Link
-              to="/digital-employees/$typeRef"
-              params={{ typeRef: props.typeRef }}
-              search={{ view: 'jobs', workItem: props.item.workItemRef }}
-              className="btn btn--sm"
-            >
-              {zh ? '配置错误类型列表' : 'Configure failure types'}
-            </Link>
           </header>
           <div
             className="employee-dispatch-flow"
@@ -417,8 +446,8 @@ function ToolboxPanel(props: {
           </div>
           <p>
             {zh
-              ? `${localized(orderedDispatch.description, props.language)}。类型不是平台枚举；未配置这条泳道时，该数字员工不会订阅或处理流水线失败事件。`
-              : `${localized(orderedDispatch.description, props.language)}. Types are not a platform enum; without this lane configuration the employee does not subscribe to pipeline-failure events.`}
+              ? `${localized(orderedDispatch.description, props.language)}。每个分类工具版本在下方维护自己的有序问题清单；岗位模板只为派生节点选择兼容处理工具。`
+              : `${localized(orderedDispatch.description, props.language)}. Each classifier tool revision owns its ordered problem list below; a job template only selects compatible handlers for the derived nodes.`}
           </p>
         </section>
       ) : null}
@@ -463,6 +492,25 @@ function ToolboxPanel(props: {
                       {' · '}
                       {tool.content.roleRef}
                     </small>
+                    {tool.content.dispatchRouteDefinitions === undefined ? null : (
+                      <div className="node-tool-row__problem-list">
+                        <small>{zh ? '本工具的问题清单' : 'Problem list in this tool'}</small>
+                        <ol>
+                          {tool.content.dispatchRouteDefinitions.map((definition, index) => (
+                            <li key={definition.routeRef}>
+                              <b>P{index + 1}</b>
+                              <span>{definition.displayName}</span>
+                              <code>{definition.routeRef}</code>
+                              {definition.fallback ? (
+                                <StatusChip kind="warn" size="sm">
+                                  {zh ? '兜底' : 'Fallback'}
+                                </StatusChip>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                     {props.dispatchSources.map((sourceItem) => {
                       const routeRefs = tool.content.acceptedDispatchRoutes?.find(
                         (accepted) => accepted.classifierWorkItemRef === sourceItem.workItemRef,
@@ -471,15 +519,19 @@ function ToolboxPanel(props: {
                         <small key={`${tool.id}/${sourceItem.workItemRef}`}>
                           {sourceItem.workItemRef === 'classify-pipeline'
                             ? zh
-                              ? '可处理错误类型'
-                              : 'Failure types'
+                              ? '该工具解决的问题'
+                              : 'Problems solved'
                             : localized(sourceItem.label, props.language)}
                           {'：'}
                           {routeRefs.includes('*')
                             ? zh
-                              ? '全部类型'
-                              : 'All types'
-                            : routeRefs.join(', ')}
+                              ? '全部问题'
+                              : 'All problems'
+                            : routeRefs
+                                .map((routeRef) =>
+                                  dispatchProblemLabel(sourceItem, routeRef, props.toolsByWorkItem),
+                                )
+                                .join(', ')}
                         </small>
                       )
                     })}
@@ -552,42 +604,36 @@ function ToolboxPanel(props: {
           title={
             props.item.workItemRef === 'repair-pipeline'
               ? zh
-                ? '修复工具已可关联错误类型'
-                : 'Repair tools can now be assigned to failure types'
+                ? '修复范围已由工具声明'
+                : 'Repair coverage is declared by each tool'
               : zh
                 ? '这个工作项已有可用工具'
                 : 'This work item has an available tool'
           }
         >
-          <span>
-            {props.item.workItemRef === 'repair-pipeline'
-              ? zh
-                ? '工具只定义修复能力；“错误类型 → 修复工具”的关系在岗位模板的“归类流水线失败”职责中配置，同一工具可以被多个类型复用。'
-                : 'A tool defines repair capability only. Configure each “failure type → repair tool” mapping under “Classify pipeline failures” in a job template; one tool may serve multiple types.'
-              : zh
-                ? '下一步可继续配置其他节点，或把这些工具组合成岗位模板。'
-                : 'Next, configure another node or combine these tools into a job template.'}
-          </span>{' '}
-          <Link
-            to="/digital-employees/$typeRef"
-            params={{ typeRef: props.typeRef }}
-            search={{
-              view: 'jobs',
-              workItem:
-                props.item.workItemRef === 'repair-pipeline'
-                  ? 'classify-pipeline'
-                  : props.item.workItemRef,
-            }}
-            className="btn btn--sm"
-          >
-            {props.item.workItemRef === 'repair-pipeline'
-              ? zh
-                ? '关联流水线错误类型'
-                : 'Assign failure types'
-              : zh
-                ? '配置岗位模板'
-                : 'Configure job template'}
-          </Link>
+          {props.item.workItemRef === 'repair-pipeline' ? (
+            <span>
+              {zh
+                ? '岗位模板选择分类工具后会自动生成同数量的问题节点；点击节点时，平台只显示声明解决该问题的修复工具。'
+                : 'Selecting a classifier tool in a job automatically creates the same number of problem nodes. Each node only offers repair tools that declare support for that problem.'}
+            </span>
+          ) : (
+            <>
+              <span>
+                {zh
+                  ? '下一步可继续配置其他节点，或把这些工具组合成岗位模板。'
+                  : 'Next, configure another node or combine these tools into a job template.'}
+              </span>{' '}
+              <Link
+                to="/digital-employees/$typeRef"
+                params={{ typeRef: props.typeRef }}
+                search={{ view: 'jobs', workItem: props.item.workItemRef }}
+                className="btn btn--sm"
+              >
+                {zh ? '配置岗位模板' : 'Configure job template'}
+              </Link>
+            </>
+          )}
         </NoticeBanner>
       ) : null}
       {retire.isError ? <ErrorBanner error={retire.error} onRetry={() => retire.reset()} /> : null}
@@ -602,6 +648,7 @@ function ToolboxPanel(props: {
         contract={props.contract}
         tool={editingTool}
         dispatchSources={props.dispatchSources}
+        toolsByWorkItem={props.toolsByWorkItem}
         language={props.language}
       />
     </section>
@@ -639,6 +686,13 @@ interface DevelopmentAdapterChoice {
   publishedRevision: number | null
 }
 
+interface DispatchRouteDefinitionDraft {
+  localRef: string
+  routeRef: string
+  displayName: string
+  description: string
+}
+
 function AddToolDialog(props: {
   open: boolean
   onClose: () => void
@@ -647,6 +701,7 @@ function AddToolDialog(props: {
   contract: EmployeeWorkContract | null
   tool: ToolRegistration | null
   dispatchSources: WorkItem[]
+  toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
@@ -659,7 +714,11 @@ function AddToolDialog(props: {
   const [parameterValuesJson, setParameterValuesJson] = useState('{}')
   const [runtimeKind, setRuntimeKind] = useState<'bash' | 'node' | 'python'>('bash')
   const [connectionId, setConnectionId] = useState('')
-  const [dispatchRouteRefsText, setDispatchRouteRefsText] = useState<Record<string, string>>({})
+  const [acceptedDispatchRoutes, setAcceptedDispatchRoutes] = useState<Record<string, string[]>>({})
+  const [dispatchRouteDefinitions, setDispatchRouteDefinitions] = useState<
+    DispatchRouteDefinitionDraft[]
+  >([])
+  const dispatchDefinitionOrdinal = useRef(0)
   const [roleRef, setRoleRef] = useState(props.item.toolRoleGroups[0]?.roleRef ?? '')
   const workingToolId = useRef<string | null>(null)
   const editorSessionKey = useRef<string | null>(null)
@@ -724,12 +783,32 @@ function AddToolDialog(props: {
     setParameterValuesJson('{}')
     setRuntimeKind('bash')
     setConnectionId('')
-    setDispatchRouteRefsText(
-      Object.fromEntries(props.dispatchSources.map((source) => [source.workItemRef, '*'])),
+    setAcceptedDispatchRoutes(
+      Object.fromEntries(props.dispatchSources.map((source) => [source.workItemRef, []])),
+    )
+    dispatchDefinitionOrdinal.current = 0
+    setDispatchRouteDefinitions(
+      props.item.orderedDispatchAuthoring === null
+        ? []
+        : [
+            {
+              localRef: `problem-${++dispatchDefinitionOrdinal.current}`,
+              routeRef: '',
+              displayName: '',
+              description: '',
+            },
+          ],
     )
     setRoleRef(props.item.toolRoleGroups[0]?.roleRef ?? '')
     setValidationChecks([])
-  }, [allowedKinds, props.dispatchSources, props.item.toolRoleGroups, props.open, props.tool?.id])
+  }, [
+    allowedKinds,
+    props.dispatchSources,
+    props.item.orderedDispatchAuthoring,
+    props.item.toolRoleGroups,
+    props.open,
+    props.tool?.id,
+  ])
   useEffect(() => {
     if (
       !props.open ||
@@ -746,17 +825,35 @@ function AddToolDialog(props: {
     setDescription(body.description)
     setRoleRef(body.roleRef)
     setConnectionId(body.connectionRef?.id ?? '')
-    setDispatchRouteRefsText(
+    setAcceptedDispatchRoutes(
       Object.fromEntries(
         props.dispatchSources.map((source) => [
           source.workItemRef,
-          (
-            body.acceptedDispatchRoutes?.find(
-              (accepted) => accepted.classifierWorkItemRef === source.workItemRef,
-            )?.routeRefs ?? ['*']
-          ).join(', '),
+          body.acceptedDispatchRoutes?.find(
+            (accepted) => accepted.classifierWorkItemRef === source.workItemRef,
+          )?.routeRefs ?? ['*'],
         ]),
       ),
+    )
+    dispatchDefinitionOrdinal.current = 0
+    const loadedDispatchRouteDefinitions =
+      props.item.orderedDispatchAuthoring === null
+        ? []
+        : (body.dispatchRouteDefinitions ?? [
+            {
+              routeRef: '',
+              displayName: '',
+              description: '',
+              fallback: true,
+            },
+          ])
+    setDispatchRouteDefinitions(
+      loadedDispatchRouteDefinitions.map((definition) => ({
+        localRef: `problem-${++dispatchDefinitionOrdinal.current}`,
+        routeRef: definition.routeRef,
+        displayName: definition.displayName,
+        description: definition.description,
+      })),
     )
     setValidationChecks(authoring.data.validationReceipt.checks)
     if (body.implementation.kind === 'agent') {
@@ -775,7 +872,13 @@ function AddToolDialog(props: {
     setRuntimeKind(body.implementation.runtimeKind)
     setSource(body.implementation.source)
     setParameterValuesJson(JSON.stringify(body.implementation.parameterValues ?? {}, null, 2))
-  }, [authoring.data, props.dispatchSources, props.open, props.tool])
+  }, [
+    authoring.data,
+    props.dispatchSources,
+    props.item.orderedDispatchAuthoring,
+    props.open,
+    props.tool,
+  ])
   useEffect(() => {
     if (!props.open) return
     if (!allowedKinds.includes(kind)) setKind(allowedKinds[0] ?? 'agent')
@@ -806,10 +909,7 @@ function AddToolDialog(props: {
   }, [parameterValuesJson])
   const parsedDispatchRoutes = useMemo(() => {
     const parsed = props.dispatchSources.map((sourceItem) => {
-      const routeRefs = (dispatchRouteRefsText[sourceItem.workItemRef] ?? '')
-        .split(/[\s,，]+/)
-        .map((value) => value.trim())
-        .filter((value) => value !== '')
+      const routeRefs = acceptedDispatchRoutes[sourceItem.workItemRef] ?? []
       const valid =
         routeRefs.length > 0 &&
         new Set(routeRefs).size === routeRefs.length &&
@@ -825,7 +925,26 @@ function AddToolDialog(props: {
           (value): value is { classifierWorkItemRef: string; routeRefs: string[] } =>
             value !== null,
         )
-  }, [dispatchRouteRefsText, props.dispatchSources])
+  }, [acceptedDispatchRoutes, props.dispatchSources])
+  const parsedDispatchRouteDefinitions = useMemo(() => {
+    if (props.item.orderedDispatchAuthoring === null) return undefined
+    const routeRefs = dispatchRouteDefinitions.map((definition) => definition.routeRef.trim())
+    const valid =
+      dispatchRouteDefinitions.length > 0 &&
+      new Set(routeRefs).size === routeRefs.length &&
+      dispatchRouteDefinitions.every(
+        (definition) =>
+          /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(definition.routeRef.trim()) &&
+          definition.displayName.trim() !== '',
+      )
+    if (!valid) return null
+    return dispatchRouteDefinitions.map((definition, index) => ({
+      routeRef: definition.routeRef.trim(),
+      displayName: definition.displayName.trim(),
+      description: definition.description.trim(),
+      fallback: index === dispatchRouteDefinitions.length - 1,
+    }))
+  }, [dispatchRouteDefinitions, props.item.orderedDispatchAuthoring])
   const agents = useQuery<AgentChoice[]>({
     queryKey: ['digital-employee-agent-choices'],
     enabled: props.open && kind === 'agent',
@@ -912,6 +1031,9 @@ function AddToolDialog(props: {
         description,
         roleRef,
         implementation,
+        ...(parsedDispatchRouteDefinitions === undefined || parsedDispatchRouteDefinitions === null
+          ? {}
+          : { dispatchRouteDefinitions: parsedDispatchRouteDefinitions }),
         ...(parsedDispatchRoutes === null || parsedDispatchRoutes.length === 0
           ? {}
           : { acceptedDispatchRoutes: parsedDispatchRoutes }),
@@ -951,11 +1073,10 @@ function AddToolDialog(props: {
       setSource('')
       setParameterValuesJson('{}')
       setConnectionId('')
-      setDispatchRouteRefsText(
-        Object.fromEntries(
-          props.dispatchSources.map((sourceItem) => [sourceItem.workItemRef, '*']),
-        ),
+      setAcceptedDispatchRoutes(
+        Object.fromEntries(props.dispatchSources.map((sourceItem) => [sourceItem.workItemRef, []])),
       )
+      setDispatchRouteDefinitions([])
       workingToolId.current = null
       props.onClose()
     },
@@ -979,6 +1100,38 @@ function AddToolDialog(props: {
         candidate.publishedRevision !== null,
     ) ??
       false)
+  const addDispatchRouteDefinition = () => {
+    setDispatchRouteDefinitions((current) => [
+      ...current,
+      {
+        localRef: `problem-${++dispatchDefinitionOrdinal.current}`,
+        routeRef: '',
+        displayName: '',
+        description: '',
+      },
+    ])
+  }
+  const updateDispatchRouteDefinition = (
+    localRef: string,
+    patch: Partial<DispatchRouteDefinitionDraft>,
+  ) => {
+    setDispatchRouteDefinitions((current) =>
+      current.map((definition) =>
+        definition.localRef === localRef ? { ...definition, ...patch } : definition,
+      ),
+    )
+  }
+  const moveDispatchRouteDefinition = (index: number, delta: -1 | 1) => {
+    setDispatchRouteDefinitions((current) => {
+      const target = index + delta
+      if (target < 0 || target >= current.length) return current
+      const next = [...current]
+      const [definition] = next.splice(index, 1)
+      if (definition === undefined) return current
+      next.splice(target, 0, definition)
+      return next
+    })
+  }
 
   return (
     <Dialog
@@ -1009,7 +1162,8 @@ function AddToolDialog(props: {
               name.trim() === '' ||
               !resourceValid ||
               !connectionValid ||
-              parsedDispatchRoutes === null
+              parsedDispatchRoutes === null ||
+              parsedDispatchRouteDefinitions === null
             }
           >
             {save.isPending
@@ -1072,46 +1226,183 @@ function AddToolDialog(props: {
         <Field label={zh ? '说明' : 'Description'}>
           <TextArea value={description} onChange={setDescription} />
         </Field>
-        {props.dispatchSources.map((sourceItem) => (
-          <Field
-            key={`dispatch-routes/${sourceItem.workItemRef}`}
-            label={
-              sourceItem.workItemRef === 'classify-pipeline'
-                ? zh
-                  ? '可处理的流水线错误类型'
-                  : 'Supported pipeline failure types'
-                : zh
-                  ? `可处理的“${localized(sourceItem.label, props.language)}”输出类型`
-                  : `Accepted output types from “${localized(sourceItem.label, props.language)}”`
-            }
-            hint={
-              zh
-                ? '填写岗位模板中使用的类型标识，多个用逗号分隔，例如 compile-error, test-failure；填写 * 表示通用工具，可处理全部类型。'
-                : 'Enter the type keys used by job templates, separated by commas, for example compile-error, test-failure. Use * for a general tool that accepts every type.'
-            }
-            required
+        {props.item.orderedDispatchAuthoring === null ? null : (
+          <section
+            className="tool-dispatch-definition-editor"
+            data-testid="tool-dispatch-route-definitions"
           >
-            <TextInput
-              value={dispatchRouteRefsText[sourceItem.workItemRef] ?? ''}
-              onChange={(value) =>
-                setDispatchRouteRefsText((current) => ({
-                  ...current,
-                  [sourceItem.workItemRef]: value,
-                }))
+            <header>
+              <div>
+                <strong>
+                  {zh ? '本工具归类的问题清单' : 'Problem list classified by this tool'}
+                </strong>
+                <p>
+                  {zh
+                    ? '清单随工具版本发布；岗位选择这个工具后，会按同一顺序自动生成 P1…Pn 修复节点并连接。最后一项固定为兜底。'
+                    : 'The list is versioned with this tool. Selecting it in a job automatically creates and connects P1…Pn repair nodes in this order; the final item is the fallback.'}
+                </p>
+              </div>
+              <button type="button" className="btn btn--sm" onClick={addDispatchRouteDefinition}>
+                {zh ? '增加问题类型' : 'Add problem type'}
+              </button>
+            </header>
+            <div className="tool-dispatch-definition-list">
+              {dispatchRouteDefinitions.map((definition, index) => (
+                <article key={definition.localRef} className="tool-dispatch-definition">
+                  <header>
+                    <b>P{index + 1}</b>
+                    {index === dispatchRouteDefinitions.length - 1 ? (
+                      <StatusChip kind="warn" size="sm">
+                        {zh ? '兜底问题' : 'Fallback'}
+                      </StatusChip>
+                    ) : null}
+                    <div className="tool-dispatch-definition__actions">
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        aria-label={
+                          zh ? `提高问题 P${index + 1} 的优先级` : `Move problem P${index + 1} up`
+                        }
+                        disabled={index === 0}
+                        onClick={() => moveDispatchRouteDefinition(index, -1)}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        aria-label={
+                          zh ? `降低问题 P${index + 1} 的优先级` : `Move problem P${index + 1} down`
+                        }
+                        disabled={index === dispatchRouteDefinitions.length - 1}
+                        onClick={() => moveDispatchRouteDefinition(index, 1)}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--danger"
+                        disabled={dispatchRouteDefinitions.length === 1}
+                        onClick={() =>
+                          setDispatchRouteDefinitions((current) =>
+                            current.filter(
+                              (candidate) => candidate.localRef !== definition.localRef,
+                            ),
+                          )
+                        }
+                      >
+                        {zh ? '删除' : 'Remove'}
+                      </button>
+                    </div>
+                  </header>
+                  <div className="tool-dispatch-definition__fields">
+                    <Field label={`${zh ? '问题标识' : 'Problem key'} P${index + 1}`} required>
+                      <TextInput
+                        value={definition.routeRef}
+                        onChange={(routeRef) =>
+                          updateDispatchRouteDefinition(definition.localRef, { routeRef })
+                        }
+                      />
+                    </Field>
+                    <Field label={`${zh ? '问题名称' : 'Problem name'} P${index + 1}`} required>
+                      <TextInput
+                        value={definition.displayName}
+                        onChange={(displayName) =>
+                          updateDispatchRouteDefinition(definition.localRef, { displayName })
+                        }
+                      />
+                    </Field>
+                    <Field label={`${zh ? '识别说明' : 'Matching description'} P${index + 1}`}>
+                      <TextArea
+                        value={definition.description}
+                        onChange={(description) =>
+                          updateDispatchRouteDefinition(definition.localRef, { description })
+                        }
+                      />
+                    </Field>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {parsedDispatchRouteDefinitions === null ? (
+              <NoticeBanner
+                tone="warning"
+                title={zh ? '问题清单尚未完成' : 'Problem list is incomplete'}
+                size="compact"
+              >
+                {zh
+                  ? '至少保留一个问题；问题标识必须唯一且使用小写机器键，每项都要填写名称。'
+                  : 'Keep at least one problem. Keys must be unique lowercase machine keys, and every problem needs a name.'}
+              </NoticeBanner>
+            ) : null}
+          </section>
+        )}
+        {props.dispatchSources.map((sourceItem) => {
+          const routeRefs = acceptedDispatchRoutes[sourceItem.workItemRef] ?? []
+          const acceptsAll = routeRefs.includes('*')
+          return (
+            <Field
+              key={`dispatch-routes/${sourceItem.workItemRef}`}
+              label={zh ? '该工具解决哪些问题' : 'Problems solved by this tool'}
+              hint={
+                zh
+                  ? `问题选项来自“${localized(sourceItem.label, props.language)}”节点中已发布分类工具的问题清单；可以多选。`
+                  : `Options come from problem lists in published classifier tools under “${localized(sourceItem.label, props.language)}”; select one or more.`
               }
-              placeholder="compile-error, test-failure"
-            />
-          </Field>
-        ))}
+              required
+            >
+              <Segmented
+                value={acceptsAll ? 'all' : 'selected'}
+                onChange={(mode) =>
+                  setAcceptedDispatchRoutes((current) => ({
+                    ...current,
+                    [sourceItem.workItemRef]: mode === 'all' ? ['*'] : [],
+                  }))
+                }
+                ariaLabel={zh ? '问题覆盖范围' : 'Problem coverage'}
+                options={[
+                  { value: 'selected' as const, label: zh ? '选择问题' : 'Specific problems' },
+                  { value: 'all' as const, label: zh ? '全部问题' : 'All problems' },
+                ]}
+              />
+              {acceptsAll ? (
+                <NoticeBanner
+                  tone="info"
+                  title={zh ? '解决全部问题' : 'Solves all problems'}
+                  size="compact"
+                >
+                  {zh
+                    ? '该能力以 * 冻结；内置通用流水线修复 Agent 使用这一模式。'
+                    : 'This capability is frozen as *. The built-in general pipeline repair Agent uses this mode.'}
+                </NoticeBanner>
+              ) : (
+                <MultiSelect
+                  value={routeRefs}
+                  onChange={(next) =>
+                    setAcceptedDispatchRoutes((current) => ({
+                      ...current,
+                      [sourceItem.workItemRef]: next,
+                    }))
+                  }
+                  options={dispatchProblemOptions(sourceItem, props.toolsByWorkItem)}
+                  ariaLabel={zh ? '该工具解决哪些问题' : 'Problems solved by this tool'}
+                  placeholder={zh ? '选择一个或多个问题' : 'Select one or more problems'}
+                  emptyLabel={zh ? '还没有已发布的问题清单' : 'No published problem list yet'}
+                  openOnFocus={false}
+                />
+              )}
+            </Field>
+          )
+        })}
         {props.dispatchSources.length > 0 && parsedDispatchRoutes === null ? (
           <NoticeBanner
             tone="warning"
-            title={zh ? '错误类型标识格式不正确' : 'Invalid failure type keys'}
+            title={zh ? '请选择工具能解决的问题' : 'Select problems this tool can solve'}
             size="compact"
           >
             {zh
-              ? '类型标识必须唯一，并使用小写字母、数字、点、下划线或短横线；* 不能和具体类型同时填写。'
-              : 'Keys must be unique and use lowercase letters, digits, dots, underscores, or hyphens. * cannot be combined with exact keys.'}
+              ? '至少选择一个具体问题，或选择“全部问题”。'
+              : 'Select at least one specific problem, or choose “All problems”.'}
           </NoticeBanner>
         ) : null}
         <Field label={zh ? '执行方式' : 'Executor kind'} group>
@@ -1372,6 +1663,89 @@ function toolAcceptsDispatchRoute(
     accepted?.routeRefs.includes('*') === true ||
     (routeRef !== '' && accepted?.routeRefs.includes(routeRef) === true)
   )
+}
+
+function preferredDispatchTool(
+  tools: readonly ToolRegistration[],
+  classifierWorkItemRef: string,
+  routeRef: string,
+): ToolRegistration | undefined {
+  const score = (tool: ToolRegistration): number => {
+    const accepted = tool.content.acceptedDispatchRoutes?.find(
+      (candidate) => candidate.classifierWorkItemRef === classifierWorkItemRef,
+    )
+    const wildcard =
+      tool.content.acceptedDispatchRoutes === undefined ||
+      accepted?.routeRefs.includes('*') === true
+    if (tool.origin === 'platform' && wildcard) return 0
+    if (wildcard) return 1
+    if (tool.origin === 'platform') return 2
+    return 3
+  }
+  return tools
+    .filter(
+      (tool) =>
+        tool.state === 'published' &&
+        tool.publishedRevision !== null &&
+        tool.selection === 'selectable' &&
+        toolAcceptsDispatchRoute(tool, classifierWorkItemRef, routeRef),
+    )
+    .sort((left, right) => score(left) - score(right))[0]
+}
+
+function deriveDispatchRouteDrafts(input: {
+  classifier: WorkItem
+  definitions: NonNullable<ToolRegistration['content']['dispatchRouteDefinitions']>
+  existing: readonly OrderedDispatchRouteDraft[]
+  workItems: readonly WorkItem[]
+  toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
+}): OrderedDispatchRouteDraft[] {
+  const destinations = input.classifier.orderedDispatchAuthoring?.destinationWorkItemRefs ?? []
+  const defaultDestination =
+    destinations.find(
+      (workItemRef) =>
+        input.workItems.find((item) => item.workItemRef === workItemRef)?.nodeKind ===
+        'business-tool',
+    ) ??
+    destinations[0] ??
+    ''
+  const existingByRoute = new Map(input.existing.map((route) => [route.routeRef, route]))
+  return input.definitions.map((definition, index) => {
+    const current = existingByRoute.get(definition.routeRef)
+    const destinationWorkItemRef =
+      current !== undefined && destinations.includes(current.destinationWorkItemRef)
+        ? current.destinationWorkItemRef
+        : defaultDestination
+    const destination = input.workItems.find((item) => item.workItemRef === destinationWorkItemRef)
+    const compatibleCurrentTool = (input.toolsByWorkItem[destinationWorkItemRef] ?? []).find(
+      (tool) =>
+        tool.id === current?.toolId &&
+        tool.state === 'published' &&
+        tool.selection === 'selectable' &&
+        toolAcceptsDispatchRoute(tool, input.classifier.workItemRef, definition.routeRef),
+    )
+    const toolId =
+      destination?.nodeKind === 'business-tool'
+        ? ((
+            compatibleCurrentTool ??
+            preferredDispatchTool(
+              input.toolsByWorkItem[destinationWorkItemRef] ?? [],
+              input.classifier.workItemRef,
+              definition.routeRef,
+            )
+          )?.id ?? '')
+        : ''
+    return {
+      localRef:
+        current?.localRef ??
+        `${input.classifier.workItemRef}/${definition.routeRef}/${String(index + 1)}`,
+      routeRef: definition.routeRef,
+      displayName: definition.displayName,
+      description: definition.description,
+      destinationWorkItemRef,
+      toolId,
+    }
+  })
 }
 
 function defaultReactionLaneOrder(type: EmployeeTypePackage): string[] {
@@ -1645,14 +2019,13 @@ function JobTemplatesPanel(props: {
     setValidationAttempt(0)
     setName(job.name)
     setDescription(job.draft.description)
-    setBindings(
-      Object.fromEntries(
-        job.draft.defaultToolBindings.map((binding) => [
-          `${binding.workItemRef}/${binding.slotRef}`,
-          binding.registrationRef.id,
-        ]),
-      ),
+    const loadedBindings = Object.fromEntries(
+      job.draft.defaultToolBindings.map((binding) => [
+        `${binding.workItemRef}/${binding.slotRef}`,
+        binding.registrationRef.id,
+      ]),
     )
+    setBindings(loadedBindings)
     setCollaborationBindings(
       Object.fromEntries(
         job.draft.defaultCollaborationBindings.map((binding) => [
@@ -1661,21 +2034,36 @@ function JobTemplatesPanel(props: {
         ]),
       ),
     )
-    setOrderedDispatchRoutes(
-      Object.fromEntries(
-        job.draft.orderedDispatchConfigurations.map((configuration) => [
-          configuration.classifierWorkItemRef,
-          configuration.routes.map((route) => ({
-            localRef: `${configuration.classifierWorkItemRef}-${++dispatchOrdinal.current}`,
-            routeRef: route.routeRef,
-            displayName: route.displayName,
-            description: route.description,
-            destinationWorkItemRef: route.destinationWorkItemRef,
-            toolId: route.registrationRef?.id ?? '',
-          })),
-        ]),
-      ),
+    const loadedDispatchRoutes: Record<string, OrderedDispatchRouteDraft[]> = Object.fromEntries(
+      job.draft.orderedDispatchConfigurations.map((configuration) => [
+        configuration.classifierWorkItemRef,
+        configuration.routes.map((route) => ({
+          localRef: `${configuration.classifierWorkItemRef}-${++dispatchOrdinal.current}`,
+          routeRef: route.routeRef,
+          displayName: route.displayName,
+          description: route.description,
+          destinationWorkItemRef: route.destinationWorkItemRef,
+          toolId: route.registrationRef?.id ?? '',
+        })),
+      ]),
     )
+    for (const classifier of dispatchItems) {
+      const slot = classifier.toolRoleGroups.flatMap((role) => role.bindingSlots)[0]
+      const toolId =
+        slot === undefined ? '' : loadedBindings[`${classifier.workItemRef}/${slot.slotRef}`]
+      const tool = (props.toolsByWorkItem[classifier.workItemRef] ?? []).find(
+        (candidate) => candidate.id === toolId,
+      )
+      if (tool?.content.dispatchRouteDefinitions === undefined) continue
+      loadedDispatchRoutes[classifier.workItemRef] = deriveDispatchRouteDrafts({
+        classifier,
+        definitions: tool.content.dispatchRouteDefinitions,
+        existing: loadedDispatchRoutes[classifier.workItemRef] ?? [],
+        workItems: props.type.authoringManifest.workItems,
+        toolsByWorkItem: props.toolsByWorkItem,
+      })
+    }
+    setOrderedDispatchRoutes(loadedDispatchRoutes)
     setReactionLaneOrder(
       job.draft.reactionLaneOrder.length > 0
         ? job.draft.reactionLaneOrder
@@ -1966,20 +2354,27 @@ function JobTemplatesPanel(props: {
   const legacyTemplates = (upgradeCandidates.data?.jobTemplates ?? []).filter(
     (job) => !currentTemplateNames.has(job.name),
   )
-  const addDispatchRoute = (classifier: WorkItem) => {
-    const destinationWorkItemRef =
-      classifier.orderedDispatchAuthoring?.destinationWorkItemRefs[0] ?? ''
-    const route: OrderedDispatchRouteDraft = {
-      localRef: `${classifier.workItemRef}-${++dispatchOrdinal.current}`,
-      routeRef: '',
-      displayName: '',
-      description: '',
-      destinationWorkItemRef,
-      toolId: '',
+  const updateToolBinding = (item: WorkItem, slotRef: string, toolId: string) => {
+    setBindings((current) => ({ ...current, [`${item.workItemRef}/${slotRef}`]: toolId }))
+    if (item.orderedDispatchAuthoring === null) return
+    if (toolId === '') {
+      setOrderedDispatchRoutes((current) => ({ ...current, [item.workItemRef]: [] }))
+      return
     }
+    const tool = (props.toolsByWorkItem[item.workItemRef] ?? []).find(
+      (candidate) => candidate.id === toolId,
+    )
+    const definitions = tool?.content.dispatchRouteDefinitions
+    if (definitions === undefined) return
     setOrderedDispatchRoutes((current) => ({
       ...current,
-      [classifier.workItemRef]: [...(current[classifier.workItemRef] ?? []), route],
+      [item.workItemRef]: deriveDispatchRouteDrafts({
+        classifier: item,
+        definitions,
+        existing: current[item.workItemRef] ?? [],
+        workItems: props.type.authoringManifest.workItems,
+        toolsByWorkItem: props.toolsByWorkItem,
+      }),
     }))
   }
   const updateDispatchRoute = (
@@ -1993,29 +2388,6 @@ function JobTemplatesPanel(props: {
         route.localRef === localRef ? { ...route, ...patch } : route,
       ),
     }))
-  }
-  const moveDispatchRoute = (classifierRef: string, index: number, delta: -1 | 1) => {
-    setOrderedDispatchRoutes((current) => {
-      const routes = [...(current[classifierRef] ?? [])]
-      const target = index + delta
-      if (target < 0 || target >= routes.length) return current
-      const [route] = routes.splice(index, 1)
-      if (route === undefined) return current
-      routes.splice(target, 0, route)
-      return { ...current, [classifierRef]: routes }
-    })
-  }
-  const removeDispatchRoute = (classifierRef: string, localRef: string) => {
-    setOrderedDispatchRoutes((current) => ({
-      ...current,
-      [classifierRef]: (current[classifierRef] ?? []).filter(
-        (route) => route.localRef !== localRef,
-      ),
-    }))
-    if (editorDispatchRouteKey === localRef) {
-      setEditorDispatchRouteKey(null)
-      setDutyOpen(false)
-    }
   }
   const submitJob = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -2329,6 +2701,54 @@ function JobTemplatesPanel(props: {
                         : 'Required'}
                   </StatusChip>
                 </header>
+                <Field
+                  label={zh ? '处理方式' : 'Handler'}
+                  hint={
+                    zh
+                      ? '每个问题节点可以分别选择自动修复工具或数字员工协同；切换后会自动清除不兼容的旧工具。'
+                      : 'Each problem node can independently use an automated repair tool or employee collaboration. Switching clears an incompatible tool selection.'
+                  }
+                  required
+                >
+                  <Select
+                    value={selectedDispatchRoute.route.destinationWorkItemRef}
+                    onChange={(value) =>
+                      updateDispatchRoute(
+                        selectedDispatchRoute.classifier.workItemRef,
+                        selectedDispatchRoute.route.localRef,
+                        {
+                          destinationWorkItemRef: value,
+                          toolId: '',
+                        },
+                      )
+                    }
+                    options={
+                      selectedDispatchRoute.classifier.orderedDispatchAuthoring?.destinationWorkItemRefs.flatMap(
+                        (workItemRef) => {
+                          const item = props.type.authoringManifest.workItems.find(
+                            (candidate) => candidate.workItemRef === workItemRef,
+                          )
+                          return item === undefined
+                            ? []
+                            : [
+                                {
+                                  value: workItemRef,
+                                  label: localized(item.label, props.language),
+                                  description:
+                                    item.nodeKind === 'collaboration'
+                                      ? zh
+                                        ? '数字员工协同'
+                                        : 'Employee collaboration'
+                                      : zh
+                                        ? '自动修复工具'
+                                        : 'Automated repair tool',
+                                },
+                              ]
+                        },
+                      ) ?? []
+                    }
+                  />
+                </Field>
                 {selectedDispatchDestination.nodeKind === 'business-tool' ? (
                   <Field
                     label={zh ? '处理这个错误类型的工具' : 'Tool for this failure type'}
@@ -2421,8 +2841,8 @@ function JobTemplatesPanel(props: {
                     }
                   >
                     {zh
-                      ? `新增工具时，把 ${selectedDispatchRoute.route.routeRef || '对应类型标识'} 填入“可处理的流水线错误类型”。`
-                      : `When adding the tool, include ${selectedDispatchRoute.route.routeRef || 'the type key'} under supported pipeline failure types.`}
+                      ? `新增工具时，在“该工具解决哪些问题”里选择 ${selectedDispatchRoute.route.displayName || selectedDispatchRoute.route.routeRef || '对应问题'}；也可以声明解决全部问题。`
+                      : `When adding the tool, select ${selectedDispatchRoute.route.displayName || selectedDispatchRoute.route.routeRef || 'the problem'} under “Problems solved by this tool”, or declare that it solves every problem.`}
                   </NoticeBanner>
                 ) : null}
               </section>
@@ -2451,6 +2871,16 @@ function JobTemplatesPanel(props: {
                     .map((classifier) => {
                       const authoring = classifier.orderedDispatchAuthoring!
                       const routes = orderedDispatchRoutes[classifier.workItemRef] ?? []
+                      const classifierSlot = classifier.toolRoleGroups.flatMap(
+                        (role) => role.bindingSlots,
+                      )[0]
+                      const classifierToolId =
+                        classifierSlot === undefined
+                          ? ''
+                          : (bindings[`${classifier.workItemRef}/${classifierSlot.slotRef}`] ?? '')
+                      const classifierTool = (
+                        props.toolsByWorkItem[classifier.workItemRef] ?? []
+                      ).find((tool) => tool.id === classifierToolId)
                       return (
                         <section
                           key={`dispatch/${classifier.workItemRef}`}
@@ -2460,21 +2890,27 @@ function JobTemplatesPanel(props: {
                           <header>
                             <div>
                               <strong>{localized(authoring.label, props.language)}</strong>
-                              <span>{localized(authoring.description, props.language)}</span>
+                              <span>
+                                {zh
+                                  ? '问题清单归分类工具所有；岗位只为自动生成的节点选择处理方式。'
+                                  : 'The classifier tool owns the problem list; the job only chooses a handler for each generated node.'}
+                              </span>
                             </div>
-                            <button
-                              type="button"
-                              className="btn btn--sm"
-                              onClick={() => addDispatchRoute(classifier)}
-                            >
-                              {zh ? '增加错误类型' : 'Add failure type'}
-                            </button>
+                            <StatusChip kind={routes.length > 0 ? 'success' : 'warn'}>
+                              {routes.length > 0
+                                ? zh
+                                  ? `${routes.length} 个节点已自动连接`
+                                  : `${routes.length} nodes auto-connected`
+                                : zh
+                                  ? '等待选择分类工具'
+                                  : 'Choose a classifier tool'}
+                            </StatusChip>
                           </header>
                           {routes.length === 0 ? (
                             <p className="job-dispatch-editor__empty">
                               {zh
-                                ? '未配置：这名数字员工不会启用该泳道，也不会订阅对应事件。'
-                                : 'Not configured: this lane stays disabled and its events are not subscribed.'}
+                                ? '请在下方选择带问题清单的分类工具；选择后，系统会立即按工具定义的顺序扇出 P1…Pn 节点并连接好线路。'
+                                : 'Choose a classifier tool with a problem list below. The system immediately fans out and connects P1…Pn nodes in the tool-defined order.'}
                             </p>
                           ) : (
                             <div className="job-dispatch-routes">
@@ -2482,17 +2918,26 @@ function JobTemplatesPanel(props: {
                                 const destination = props.type.authoringManifest.workItems.find(
                                   (item) => item.workItemRef === route.destinationWorkItemRef,
                                 )
+                                const tool = (
+                                  props.toolsByWorkItem[route.destinationWorkItemRef] ?? []
+                                ).find((candidate) => candidate.id === route.toolId)
+                                const employeeName = employees.data?.items.find(
+                                  (employee) =>
+                                    employee.id ===
+                                    collaborationBindings[route.destinationWorkItemRef],
+                                )?.name
+                                const configured = dispatchRouteComplete(classifier, route)
                                 return (
                                   <article key={route.localRef} className="job-dispatch-route">
                                     <header>
-                                      <b>{index + 1}</b>
+                                      <b>P{index + 1}</b>
                                       <strong>
                                         {route.displayName.trim() ||
-                                          (zh ? '未命名错误类型' : 'Unnamed failure type')}
+                                          (zh ? '未命名问题' : 'Unnamed problem')}
                                       </strong>
                                       {index === routes.length - 1 ? (
                                         <StatusChip kind="warn">
-                                          {zh ? '兜底类型' : 'Fallback'}
+                                          {zh ? '兜底问题' : 'Fallback'}
                                         </StatusChip>
                                       ) : null}
                                       <div className="job-dispatch-route__actions">
@@ -2506,158 +2951,25 @@ function JobTemplatesPanel(props: {
                                         >
                                           {zh ? '配置处理节点' : 'Configure handler node'}
                                         </button>
-                                        <button
-                                          type="button"
-                                          className="btn btn--sm"
-                                          aria-label={zh ? '提高优先级' : 'Move up'}
-                                          disabled={index === 0}
-                                          onClick={() =>
-                                            moveDispatchRoute(classifier.workItemRef, index, -1)
-                                          }
-                                        >
-                                          ↑
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="btn btn--sm"
-                                          aria-label={zh ? '降低优先级' : 'Move down'}
-                                          disabled={index === routes.length - 1}
-                                          onClick={() =>
-                                            moveDispatchRoute(classifier.workItemRef, index, 1)
-                                          }
-                                        >
-                                          ↓
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="btn btn--sm btn--danger"
-                                          onClick={() =>
-                                            removeDispatchRoute(
-                                              classifier.workItemRef,
-                                              route.localRef,
-                                            )
-                                          }
-                                        >
-                                          {zh ? '删除' : 'Remove'}
-                                        </button>
                                       </div>
                                     </header>
-                                    <div className="job-dispatch-route__fields">
-                                      <Field
-                                        label={zh ? '类型标识' : 'Type key'}
-                                        hint={
-                                          zh
-                                            ? '写入确定性 envelope，例如 compile-error'
-                                            : 'Written into the deterministic envelope, e.g. compile-error'
-                                        }
-                                        required
-                                      >
-                                        <TextInput
-                                          value={route.routeRef}
-                                          onChange={(value) =>
-                                            updateDispatchRoute(
-                                              classifier.workItemRef,
-                                              route.localRef,
-                                              {
-                                                routeRef: value,
-                                                toolId: '',
-                                              },
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field
-                                        label={zh ? '错误类型名称' : 'Failure type name'}
-                                        required
-                                      >
-                                        <TextInput
-                                          value={route.displayName}
-                                          onChange={(value) =>
-                                            updateDispatchRoute(
-                                              classifier.workItemRef,
-                                              route.localRef,
-                                              {
-                                                displayName: value,
-                                              },
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field label={zh ? '处理方式' : 'Handler'} required>
-                                        <Select
-                                          value={route.destinationWorkItemRef}
-                                          onChange={(value) =>
-                                            updateDispatchRoute(
-                                              classifier.workItemRef,
-                                              route.localRef,
-                                              {
-                                                destinationWorkItemRef: value,
-                                                toolId: '',
-                                              },
-                                            )
-                                          }
-                                          options={authoring.destinationWorkItemRefs.flatMap(
-                                            (workItemRef) => {
-                                              const item =
-                                                props.type.authoringManifest.workItems.find(
-                                                  (candidate) =>
-                                                    candidate.workItemRef === workItemRef,
-                                                )
-                                              return item === undefined
-                                                ? []
-                                                : [
-                                                    {
-                                                      value: workItemRef,
-                                                      label: localized(item.label, props.language),
-                                                    },
-                                                  ]
-                                            },
-                                          )}
-                                        />
-                                      </Field>
-                                      {destination?.nodeKind === 'business-tool' ? (
-                                        <NoticeBanner
-                                          tone={route.toolId === '' ? 'warning' : 'success'}
-                                          title={
-                                            route.toolId === ''
-                                              ? zh
-                                                ? '处理节点尚未配置'
-                                                : 'Handler node is not configured'
-                                              : zh
-                                                ? '处理节点已配置'
-                                                : 'Handler node configured'
-                                          }
-                                        >
-                                          {zh
-                                            ? '保存类型后，职责图会按优先级展开一个独立修复节点；点击该节点，只会显示支持此类型的工具。'
-                                            : 'The responsibility map expands one repair node at this priority. Select that node to see only tools supporting this type.'}
-                                        </NoticeBanner>
-                                      ) : (
-                                        <NoticeBanner
-                                          tone="info"
-                                          title={
-                                            zh ? '由员工协同配置处理' : 'Handled by collaboration'
-                                          }
-                                        >
-                                          {zh
-                                            ? '在下方“协同其他数字员工”选择目标员工；运行时会调起并等待其结果。'
-                                            : 'Choose the target under “Collaborate with another employee” below; runtime invokes it and waits for its result.'}
-                                        </NoticeBanner>
-                                      )}
-                                      <Field label={zh ? '识别说明' : 'Matching description'}>
-                                        <TextArea
-                                          value={route.description}
-                                          onChange={(value) =>
-                                            updateDispatchRoute(
-                                              classifier.workItemRef,
-                                              route.localRef,
-                                              {
-                                                description: value,
-                                              },
-                                            )
-                                          }
-                                        />
-                                      </Field>
+                                    <div className="job-dispatch-route__summary">
+                                      <code>{route.routeRef}</code>
+                                      <p>
+                                        {route.description.trim() ||
+                                          (zh
+                                            ? `由“${classifierTool?.content.displayName ?? '所选分类工具'}”定义的问题。`
+                                            : `Problem defined by “${classifierTool?.content.displayName ?? 'the selected classifier tool'}”.`)}
+                                      </p>
+                                      <StatusChip kind={configured ? 'success' : 'warn'}>
+                                        {configured
+                                          ? zh
+                                            ? `已连接：${tool?.content.displayName ?? employeeName ?? localized(destination?.label ?? { 'en-US': 'Handler', 'zh-CN': '处理节点' }, props.language)}`
+                                            : `Connected: ${tool?.content.displayName ?? employeeName ?? localized(destination?.label ?? { 'en-US': 'Handler', 'zh-CN': '处理节点' }, props.language)}`
+                                          : zh
+                                            ? '待选择兼容的处理节点'
+                                            : 'Choose a compatible handler'}
+                                      </StatusChip>
                                     </div>
                                   </article>
                                 )
@@ -2720,9 +3032,7 @@ function JobTemplatesPanel(props: {
                             >
                               <Select
                                 value={bindings[key] ?? ''}
-                                onChange={(value) =>
-                                  setBindings((current) => ({ ...current, [key]: value }))
-                                }
+                                onChange={(value) => updateToolBinding(item, slot.slotRef, value)}
                                 placeholder={
                                   candidates.length === 0
                                     ? zh

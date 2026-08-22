@@ -98,8 +98,40 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'problem-diagnosis',
-        schemaVersion: 2,
+        schemaVersion: 3,
         executionContracts: [{ contractId: 'development.classify-pipeline', version: 1 }],
+        dispatchRouteDefinitions: [
+          {
+            routeRef: 'compile-error',
+            displayName: '编译与构建错误',
+            description: '编译、类型检查、链接或构建步骤失败',
+            fallback: false,
+          },
+          {
+            routeRef: 'test-failure',
+            displayName: '测试失败',
+            description: '单元、集成、端到端或其他自动化测试失败',
+            fallback: false,
+          },
+          {
+            routeRef: 'quality-gate-failure',
+            displayName: '质量门禁失败',
+            description: '格式、Lint、静态扫描或质量阈值未通过',
+            fallback: false,
+          },
+          {
+            routeRef: 'dependency-or-environment',
+            displayName: '依赖或环境错误',
+            description: '依赖解析、工具链、权限、网络或运行环境异常',
+            fallback: false,
+          },
+          {
+            routeRef: 'other-pipeline-failure',
+            displayName: '其他流水线错误',
+            description: '未命中前序问题类型的确定性兜底',
+            fallback: true,
+          },
+        ],
       },
       bodyMd:
         '你是数字员工操作系统内置的问题定位者。只依据输入 envelope、仓库现场和 artifact 引用收集证据，区分事实、推断与未知项；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。定位最小根因并给出合同要求的结构化产出。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',

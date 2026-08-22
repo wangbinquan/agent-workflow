@@ -445,6 +445,20 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const typeRef = { typeId: 'development', revision: 5 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
+    const pipelineProblemDefinitions = [
+      {
+        routeRef: 'external-dependency',
+        displayName: '跨仓依赖',
+        description: '需要另一个数字员工先完成工作',
+        fallback: false,
+      },
+      {
+        routeRef: 'unknown',
+        displayName: '未分类流水线错误',
+        description: '没有命中更高优先级类型时使用通用修复 Agent',
+        fallback: true,
+      },
+    ]
     const bindings: Array<{
       workItemRef: string
       slotRef: string
@@ -481,6 +495,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
                 contract.requiredConnectionPurpose === null
                   ? null
                   : { id: 'approval-adapter', revision: 1 },
+              ...(item.workItemRef === 'classify-pipeline'
+                ? { dispatchRouteDefinitions: pipelineProblemDefinitions }
+                : {}),
+              ...(item.workItemRef === 'repair-pipeline'
+                ? {
+                    acceptedDispatchRoutes: [
+                      { classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] },
+                    ],
+                  }
+                : {}),
             },
           })
           bindings.push({
@@ -509,6 +533,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
           agentRef: { id: 'agent-repair-pipeline', revision: 1 },
         },
         connectionRef: null,
+        acceptedDispatchRoutes: [{ classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] }],
       },
     })
     const pipelineRepairRef = await module.commands.publishTool({
@@ -533,7 +558,20 @@ describe('RFC-310 stateful employee Case runtime', () => {
         description: '固定节点默认工具',
         defaultToolBindings: bindings,
         orderedDispatchConfigurations: [
-          { classifierWorkItemRef: 'classify-pipeline', routes: [repairFallbackRoute] },
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routes: [
+              {
+                routeRef: 'external-dependency',
+                displayName: '跨仓依赖',
+                description: '需要另一个数字员工先完成工作',
+                destinationWorkItemRef: 'repair-pipeline',
+                registrationRef: pipelineRepairRef,
+                fallback: false,
+              },
+              repairFallbackRoute,
+            ],
+          },
         ],
       },
     })

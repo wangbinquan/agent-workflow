@@ -5,6 +5,17 @@
 // surface cannot become a second, structurally open copy of every type-package
 // schema. HTTP inbound adapters still expose the decoded business projection.
 
+import { dispatchRouteDefinitionsSchema } from '../domain/model'
+
+export function normalizeDispatchRouteDefinitionsJson(inputJson: string): string | null {
+  try {
+    const parsed = dispatchRouteDefinitionsSchema.safeParse(JSON.parse(inputJson) as unknown)
+    return parsed.success ? JSON.stringify(parsed.data) : null
+  } catch {
+    return null
+  }
+}
+
 export interface EmployeeTypeRef {
   readonly typeId: string
   readonly revision: number

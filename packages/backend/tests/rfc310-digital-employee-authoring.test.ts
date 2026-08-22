@@ -23,6 +23,7 @@ import {
 } from '@/modules/digital-employee/domain/model'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { buildDigitalEmployeeFixedPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { createApp } from '@/server'
 import {
   ensureDigitalEmployeeAgentTemplates,
@@ -331,6 +332,178 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       templates.every((template) => template.builtin && template.visibility === 'public'),
     ).toBe(true)
     expect(await listAgents(db)).toHaveLength(8)
+
+    // User regression 2026-08-22: the classifier's problem list must be part
+    // of the exact tool revision, while the built-in repair Agent explicitly
+    // declares that it can solve every problem emitted by that classifier.
+    const catalog = composeDigitalEmployeeBuiltinToolCatalog({
+      db,
+      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    })
+    const classifierTools = JSON.parse(
+      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 5 }), 'classify-pipeline'),
+    ) as Array<{
+      content: {
+        dispatchRouteDefinitions?: Array<{ routeRef: string; fallback: boolean }>
+      }
+    }>
+    expect(classifierTools).toHaveLength(1)
+    expect(classifierTools[0]?.content.dispatchRouteDefinitions).toEqual([
+      expect.objectContaining({ routeRef: 'compile-error', fallback: false }),
+      expect.objectContaining({ routeRef: 'test-failure', fallback: false }),
+      expect.objectContaining({ routeRef: 'quality-gate-failure', fallback: false }),
+      expect.objectContaining({ routeRef: 'dependency-or-environment', fallback: false }),
+      expect.objectContaining({ routeRef: 'other-pipeline-failure', fallback: true }),
+    ])
+    const repairTools = JSON.parse(
+      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 5 }), 'repair-pipeline'),
+    ) as Array<{
+      content: {
+        acceptedDispatchRoutes?: Array<{
+          classifierWorkItemRef: string
+          routeRefs: string[]
+        }>
+      }
+    }>
+    expect(repairTools).toHaveLength(1)
+    expect(repairTools[0]?.content.acceptedDispatchRoutes).toEqual([
+      { classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] },
+    ])
+  })
+
+  test('classifier tools own problem definitions and repair tools declare exact capabilities', async () => {
+    const module = fixtureModule()
+    const typeRef = { typeId: 'development', revision: 5 }
+    const classifierBody = {
+      displayName: '两类流水线问题识别工具',
+      description: '工具版本拥有有序问题清单',
+      roleRef: 'primary',
+      implementation: {
+        kind: 'agent' as const,
+        agentRef: { id: 'agent-classifier', revision: 1 },
+      },
+      connectionRef: null,
+      dispatchRouteDefinitions: [
+        {
+          routeRef: 'compile-error',
+          displayName: '编译错误',
+          description: '编译或类型检查失败',
+          fallback: false,
+        },
+        {
+          routeRef: 'other-pipeline-failure',
+          displayName: '其他流水线错误',
+          description: '没有命中前序问题时的兜底',
+          fallback: true,
+        },
+      ],
+    }
+
+    await expect(
+      module.commands.createTool({
+        typeRef,
+        workItemRef: 'classify-pipeline',
+        actorUserId: 'author',
+        body: { ...classifierBody, dispatchRouteDefinitions: undefined },
+      }),
+    ).rejects.toThrow('classifier tools must define their ordered dispatch routes')
+
+    const classifier = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'classify-pipeline',
+      actorUserId: 'author',
+      body: classifierBody,
+    })
+    const classifierRef = await module.commands.publishTool({
+      typeRef,
+      workItemRef: 'classify-pipeline',
+      toolId: classifier.id,
+      actorUserId: 'author',
+    })
+
+    const repairBody = {
+      displayName: '编译与其他问题修复工具',
+      description: '显式声明可解决多个问题',
+      roleRef: 'repairer',
+      implementation: {
+        kind: 'agent' as const,
+        agentRef: { id: 'agent-repair', revision: 1 },
+      },
+      connectionRef: null,
+    }
+    await expect(
+      module.commands.createTool({
+        typeRef,
+        workItemRef: 'repair-pipeline',
+        actorUserId: 'author',
+        body: repairBody,
+      }),
+    ).rejects.toThrow('dispatch destination tools must declare accepted routes')
+    const repair = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      actorUserId: 'author',
+      body: {
+        ...repairBody,
+        acceptedDispatchRoutes: [
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routeRefs: ['compile-error', 'other-pipeline-failure'],
+          },
+        ],
+      },
+    })
+    expect(repair.content.acceptedDispatchRoutes?.[0]?.routeRefs).toEqual([
+      'compile-error',
+      'other-pipeline-failure',
+    ])
+    const repairRef = await module.commands.publishTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      toolId: repair.id,
+      actorUserId: 'author',
+    })
+
+    expect(() =>
+      module.commands.createJobTemplate({
+        typeRef,
+        actorUserId: 'author',
+        body: {
+          name: '被篡改的问题清单',
+          description: '岗位不能修改分类工具的问题名称或顺序',
+          defaultToolBindings: [
+            {
+              workItemRef: 'classify-pipeline',
+              slotRef: 'default',
+              registrationRef: classifierRef,
+            },
+          ],
+          orderedDispatchConfigurations: [
+            {
+              classifierWorkItemRef: 'classify-pipeline',
+              routes: [
+                {
+                  routeRef: 'compile-error',
+                  displayName: '岗位擅自改名',
+                  description: '编译或类型检查失败',
+                  destinationWorkItemRef: 'repair-pipeline',
+                  registrationRef: repairRef,
+                  fallback: false,
+                },
+                {
+                  routeRef: 'other-pipeline-failure',
+                  displayName: '其他流水线错误',
+                  description: '没有命中前序问题时的兜底',
+                  destinationWorkItemRef: 'repair-pipeline',
+                  registrationRef: repairRef,
+                  fallback: true,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toThrow('must match the classifier tool revision')
   })
 
   test('design and test packages use the same type -> work item -> tool -> employee core', async () => {
@@ -777,6 +950,14 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           agentRef: { id: 'agent-classify-pipeline', revision: 1 },
         },
         connectionRef: null,
+        dispatchRouteDefinitions: [
+          {
+            routeRef: 'other-pipeline-failure',
+            displayName: '其他流水线错误',
+            description: '未命中前序问题类型的兜底',
+            fallback: true,
+          },
+        ],
       },
     })
     const partialJob = module.commands.createJobTemplate({
@@ -884,6 +1065,25 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
                 contract.requiredConnectionPurpose === null
                   ? null
                   : { id: 'approval-adapter', revision: 1 },
+              ...(item.workItemRef === 'classify-pipeline'
+                ? {
+                    dispatchRouteDefinitions: [
+                      {
+                        routeRef: 'other-pipeline-failure',
+                        displayName: '其他流水线错误',
+                        description: '用户配置的兜底错误类型',
+                        fallback: true,
+                      },
+                    ],
+                  }
+                : {}),
+              ...(item.workItemRef === 'repair-pipeline'
+                ? {
+                    acceptedDispatchRoutes: [
+                      { classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] },
+                    ],
+                  }
+                : {}),
             },
           })
           expect(

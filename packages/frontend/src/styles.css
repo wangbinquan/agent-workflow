@@ -345,6 +345,7 @@
 }
 
 .employee-toolbox-lane {
+  position: relative;
   display: grid;
   grid-template-columns: var(--employee-lane-label-width) 20px minmax(0, 1fr);
   align-items: stretch;
@@ -420,6 +421,8 @@
   padding: 0;
   color: var(--muted);
   cursor: grab;
+  touch-action: none;
+  user-select: none;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -438,7 +441,27 @@
 }
 
 .employee-toolbox-lane--dragging {
-  opacity: 0.58;
+  z-index: 2;
+  opacity: 0.98;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--text) 12%, transparent);
+  will-change: transform;
+}
+
+.employee-toolbox-lane--dragging::after {
+  position: absolute;
+  inset: -2px;
+  z-index: 3;
+  pointer-events: none;
+  border: 2px dashed color-mix(in srgb, var(--accent) 46%, var(--border));
+  border-radius: 11px;
+  content: '';
+  transform: translateY(calc(0px - var(--employee-lane-drag-offset, 0px)));
+}
+
+.employee-toolbox-lane--drop-target {
+  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
 }
 
 .employee-toolbox-lane__axis {
@@ -480,6 +503,11 @@
 }
 
 .employee-toolbox-card {
+  --employee-card-background: var(--panel);
+  --employee-card-border: var(--border);
+  --employee-card-state-shadow: 0 0 0 0 transparent;
+  --employee-card-stack-shadows: 0 0 0 0 transparent;
+
   position: relative;
   z-index: 1;
   display: grid;
@@ -493,9 +521,10 @@
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid var(--employee-card-border);
   border-radius: 10px;
-  background: var(--panel);
+  background: var(--employee-card-background);
+  box-shadow: var(--employee-card-state-shadow), var(--employee-card-stack-shadows);
   transition:
     border-color 130ms ease,
     background 130ms ease,
@@ -503,33 +532,17 @@
 }
 
 .employee-toolbox-lane__cards:has(.employee-toolbox-card--fan-out) {
-  padding-right: 8px;
-  padding-bottom: 7px;
+  padding-right: 10px;
+  padding-bottom: 9px;
 }
 
 .employee-toolbox-card--fan-out {
-  isolation: isolate;
-}
-
-.employee-toolbox-card__stack-layer {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--panel) 94%, var(--accent));
-}
-
-.employee-toolbox-card__stack-layer--middle {
-  opacity: 0.88;
-  transform: translate(3px, 3px);
-}
-
-.employee-toolbox-card__stack-layer--back {
-  z-index: -2;
-  opacity: 0.68;
-  transform: translate(6px, 6px);
+  /* One paint stack cannot interleave with neighbouring cards. The first
+     opaque pair is the middle card and fully covers the second pair; the real
+     card surface then covers both, leaving only the right/bottom reveals. */
+  --employee-card-stack-shadows:
+    4px 4px 0 0 var(--employee-card-background), 4px 4px 0 1px var(--employee-card-border),
+    8px 8px 0 0 var(--employee-card-background), 8px 8px 0 1px var(--employee-card-border);
 }
 
 .employee-toolbox-card + .employee-toolbox-card::before {
@@ -562,8 +575,8 @@
 }
 
 .employee-toolbox-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
-  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+  --employee-card-border: color-mix(in srgb, var(--accent) 64%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
 .employee-toolbox-card__kind {
@@ -623,37 +636,37 @@
 }
 
 .employee-toolbox-card--configured {
-  border-color: color-mix(in srgb, var(--success) 54%, var(--border));
-  background: color-mix(in srgb, var(--success) 7%, var(--panel));
+  --employee-card-border: color-mix(in srgb, var(--success) 54%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--success) 7%, var(--panel));
 }
 
 .employee-toolbox-card--completed {
-  border-color: color-mix(in srgb, var(--success) 62%, var(--border));
-  background: color-mix(in srgb, var(--success) 9%, var(--panel));
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--success) 78%, var(--border));
+  --employee-card-border: color-mix(in srgb, var(--success) 62%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--success) 9%, var(--panel));
+  --employee-card-state-shadow: inset 3px 0 0 color-mix(in srgb, var(--success) 78%, var(--border));
 }
 
 .employee-toolbox-card--running {
-  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
-  box-shadow: inset 3px 0 0 var(--accent-fill);
+  --employee-card-border: color-mix(in srgb, var(--accent) 72%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  --employee-card-state-shadow: inset 3px 0 0 var(--accent-fill);
 }
 
 .employee-toolbox-card--failed {
-  border-color: color-mix(in srgb, var(--danger) 68%, var(--border));
-  background: color-mix(in srgb, var(--danger) 9%, var(--panel));
-  box-shadow: inset 3px 0 0 var(--danger);
+  --employee-card-border: color-mix(in srgb, var(--danger) 68%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--danger) 9%, var(--panel));
+  --employee-card-state-shadow: inset 3px 0 0 var(--danger);
 }
 
 .employee-toolbox-card--waiting,
 .employee-toolbox-card--neutral {
-  border-color: color-mix(in srgb, var(--border) 86%, transparent);
-  background: color-mix(in srgb, var(--bg) 52%, var(--panel));
+  --employee-card-border: color-mix(in srgb, var(--border) 86%, transparent);
+  --employee-card-background: color-mix(in srgb, var(--bg) 52%, var(--panel));
 }
 
 .employee-toolbox-card--missing {
-  border-color: color-mix(in srgb, var(--warn) 58%, var(--border));
-  background: color-mix(in srgb, var(--warn) 9%, var(--panel));
+  --employee-card-border: color-mix(in srgb, var(--warn) 58%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--warn) 9%, var(--panel));
 }
 
 .employee-toolbox-card--attention {
@@ -663,28 +676,32 @@
 @keyframes employee-required-duty-pulse {
   0%,
   100% {
-    box-shadow: inset 3px 0 0 var(--accent);
+    box-shadow:
+      inset 3px 0 0 var(--accent),
+      var(--employee-card-stack-shadows);
   }
 
   50% {
     border-color: var(--warn);
     box-shadow:
       inset 3px 0 0 var(--warn),
-      0 0 0 4px color-mix(in srgb, var(--warn) 20%, transparent);
+      0 0 0 4px color-mix(in srgb, var(--warn) 20%, transparent),
+      var(--employee-card-stack-shadows);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .employee-toolbox-card--attention {
+    --employee-card-state-shadow: inset 4px 0 0 var(--warn);
+
     animation: none;
-    box-shadow: inset 4px 0 0 var(--warn);
   }
 }
 
 .employee-toolbox-card--active {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
-  box-shadow: inset 3px 0 0 var(--accent);
+  --employee-card-border: var(--accent);
+  --employee-card-background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  --employee-card-state-shadow: inset 3px 0 0 var(--accent);
 }
 
 @media (max-width: 760px) {
@@ -1026,6 +1043,52 @@
   color: var(--muted);
 }
 
+.node-tool-row__problem-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 5px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.node-tool-row__problem-list ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.node-tool-row__problem-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.node-tool-row__problem-list li > b {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.node-tool-row__problem-list li > span {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.node-tool-row__problem-list code,
+.job-dispatch-route__summary code {
+  padding: 2px 5px;
+  color: var(--muted);
+  font-size: 10px;
+  border-radius: 5px;
+  background: var(--bg);
+}
+
 .node-tool-list__empty {
   margin: 0;
   padding: 20px;
@@ -1201,6 +1264,81 @@
 .employee-add-tool-dialog .execution-contract-guide pre {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.tool-dispatch-definition-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.tool-dispatch-definition-editor > header,
+.tool-dispatch-definition > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tool-dispatch-definition-editor > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tool-dispatch-definition-editor > header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tool-dispatch-definition-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tool-dispatch-definition {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.tool-dispatch-definition > header > b {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  color: var(--accent);
+  font-size: 10px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.tool-dispatch-definition__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.tool-dispatch-definition__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  min-width: 0;
+}
+
+.tool-dispatch-definition__fields > :last-child {
+  grid-column: 1 / -1;
 }
 
 .employee-dialog-form > label,
@@ -2016,6 +2154,23 @@
   gap: 5px;
 }
 
+.job-dispatch-route__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.job-dispatch-route__summary p {
+  flex: 1 1 260px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .job-dispatch-route__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2053,12 +2208,18 @@
 }
 
 @media (max-width: 760px) {
-  .job-dispatch-route__fields {
+  .job-dispatch-route__fields,
+  .tool-dispatch-definition__fields {
     grid-template-columns: 1fr;
   }
 
+  .tool-dispatch-definition__fields > :last-child {
+    grid-column: auto;
+  }
+
   .job-dispatch-route > header,
-  .job-binding-group > header {
+  .job-binding-group > header,
+  .tool-dispatch-definition-editor > header {
     align-items: stretch;
     flex-direction: column;
   }

@@ -387,25 +387,84 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   page,
 }) => {
   await primeAuth(page)
+  const classifierToolName = `Two-type classifier ${Date.now()}`
   const toolName = `Compile-only pipeline repair ${Date.now()}`
+
+  // User regression 2026-08-22: the problem list belongs to the classifier
+  // tool revision. Creating that tool must be the only place that authors the
+  // ordered list; selecting it in a job materializes the same N fan-out nodes.
+  await page.goto(
+    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=classify-pipeline`,
+  )
+  let toolbox = page.getByTestId('employee-node-toolbox')
+  await expect(toolbox.getByRole('link', { name: 'Configure failure types' })).toHaveCount(0)
+  await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
+  let toolDialog = page.getByRole('dialog', { name: 'Add tool to Classify pipeline failures' })
+  await toolDialog.getByLabel('Tool name').fill(classifierToolName)
+  await toolDialog.getByLabel('Problem key P1').fill('compile-error')
+  await toolDialog.getByLabel('Problem name P1').fill('Compile error')
+  await toolDialog.getByLabel('Matching description P1').fill('Compilation or type checking fails')
+  await toolDialog.getByRole('button', { name: 'Add problem type', exact: true }).click()
+  await toolDialog.getByLabel('Problem key P2').fill('test-failure')
+  await toolDialog.getByLabel('Problem name P2').fill('Test failure')
+  await toolDialog.getByLabel('Matching description P2').fill('One or more tests fail')
+  await toolDialog
+    .locator('label.form-field')
+    .filter({ hasText: 'Choose from Agent library' })
+    .getByRole('combobox')
+    .click()
+  await page.getByRole('option', { name: /^Built in · Problem diagnosis Compatible/ }).click()
+  await toolDialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
+  await expect(toolDialog).toHaveCount(0)
+
   await page.goto(
     `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=repair-pipeline`,
   )
 
-  const toolbox = page.getByTestId('employee-node-toolbox')
+  toolbox = page.getByTestId('employee-node-toolbox')
+  const stackedRepairCard = page
+    .getByTestId('employee-toolbox-responsibility-map')
+    .locator('[data-work-item-ref="repair-pipeline"]')
+  const stackVisual = await stackedRepairCard.evaluate((card) => {
+    const style = getComputedStyle(card)
+    return {
+      backgroundColor: style.backgroundColor,
+      borderColor: style.borderColor,
+      boxShadow: style.boxShadow,
+      legacyLayerCount: card.querySelectorAll('.employee-toolbox-card__stack-layer').length,
+    }
+  })
+  expect(stackVisual.legacyLayerCount).toBe(0)
+  expect(stackVisual.boxShadow).toContain(stackVisual.backgroundColor)
+  expect(stackVisual.boxShadow).toContain(stackVisual.borderColor)
+  expect(stackVisual.boxShadow).toContain('4px 4px')
+  expect(stackVisual.boxShadow).toContain('8px 8px')
+  expect(stackVisual.boxShadow.indexOf('4px 4px')).toBeLessThan(
+    stackVisual.boxShadow.indexOf('8px 8px'),
+  )
+
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
-  const toolDialog = page.getByRole('dialog', { name: 'Add tool to Repair pipeline failures' })
+  toolDialog = page.getByRole('dialog', { name: 'Add tool to Repair pipeline failures' })
   await toolDialog.getByLabel('Tool name').fill(toolName)
-  await toolDialog.getByLabel('Supported pipeline failure types').fill('compile-error')
-  await toolDialog.getByRole('combobox').click()
+  await toolDialog.getByRole('combobox', { name: 'Problems solved by this tool' }).click()
+  await page.getByRole('option', { name: /compile-error/ }).click()
+  await page.keyboard.press('Escape')
+  await toolDialog
+    .locator('label.form-field')
+    .filter({ hasText: 'Choose from Agent library' })
+    .getByRole('combobox')
+    .click()
   await page.getByRole('option', { name: /^Built in · General pipeline repair Compatible/ }).click()
   await toolDialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
   await expect(toolDialog).toHaveCount(0)
 
   const toolRow = toolbox.locator('.node-tool-row').filter({ hasText: toolName })
-  await expect(toolRow).toContainText('Failure types：compile-error')
-  await toolbox.getByRole('link', { name: 'Assign failure types', exact: true }).click()
-  await page.waitForURL(/view=jobs&workItem=classify-pipeline/)
+  await expect(toolRow).toContainText('compile-error')
+  await expect(toolbox.getByRole('link', { name: 'Assign failure types' })).toHaveCount(0)
+
+  await page.goto(
+    `${daemon.baseUrl}/digital-employees/development%405?view=jobs&workItem=classify-pipeline`,
+  )
   await expect(
     page.getByRole('heading', { name: 'Configure “Classify pipeline failures”' }),
   ).toBeVisible()
@@ -428,15 +487,18 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(jobMap.locator('[data-work-item-ref="repair-pipeline"]')).toHaveClass(
     /employee-toolbox-card--fan-out/,
   )
-  const dispatchEditor = classifierDialog.getByTestId('job-dispatch-classify-pipeline')
-  await dispatchEditor.getByRole('button', { name: 'Add failure type', exact: true }).click()
-  await dispatchEditor.getByRole('button', { name: 'Add failure type', exact: true }).click()
-  const routeEditors = dispatchEditor.locator('.job-dispatch-route')
-  await expect(routeEditors).toHaveCount(2)
-  await routeEditors.nth(0).getByLabel('Type key').fill('compile-error')
-  await routeEditors.nth(0).getByLabel('Failure type name').fill('Compile error')
-  await routeEditors.nth(1).getByLabel('Type key').fill('test-failure')
-  await routeEditors.nth(1).getByLabel('Failure type name').fill('Test failure')
+  await classifierDialog
+    .locator('label.form-field')
+    .filter({ hasText: 'Default tool' })
+    .getByRole('combobox')
+    .click()
+  await page.getByRole('option', { name: classifierToolName, exact: true }).click()
+
+  const derivedProblemList = classifierDialog.getByTestId('job-dispatch-classify-pipeline')
+  await expect(derivedProblemList.locator('.job-dispatch-route')).toHaveCount(2)
+  await expect(derivedProblemList).toContainText('Compile error')
+  await expect(derivedProblemList).toContainText('Test failure')
+  await expect(derivedProblemList.getByRole('button', { name: 'Add failure type' })).toHaveCount(0)
   await classifierDialog.getByRole('button', { name: 'Done', exact: true }).click()
 
   const dispatchNodes = jobMap.locator('[data-dispatch-route-key]')
@@ -455,29 +517,103 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   const pipelineLane = jobMap.locator('[data-lane-id="care-pipeline"]')
   await expect(reviewLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
   await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P4')
-  await pipelineLane
-    .getByRole('button', { name: /Drag “Pipeline gates” to change event priority/ })
-    .dragTo(reviewLane)
+
+  const dragHandle = pipelineLane.getByRole('button', {
+    name: /Drag “Pipeline gates” to change event priority/,
+  })
+  const dragHandleBox = await dragHandle.boundingBox()
+  const firstSlotBox = await reviewLane.boundingBox()
+  expect(dragHandleBox).not.toBeNull()
+  expect(firstSlotBox).not.toBeNull()
+  const pointerX = (dragHandleBox?.x ?? 0) + (dragHandleBox?.width ?? 0) / 2
+  const pointerStartY = (dragHandleBox?.y ?? 0) + (dragHandleBox?.height ?? 0) / 2
+  const pointerFirstSlotY = (firstSlotBox?.y ?? 0) + (firstSlotBox?.height ?? 0) / 2
+  await page.mouse.move(pointerX, pointerStartY)
+  await page.mouse.down()
+  await page.mouse.move(pointerX, pointerFirstSlotY, { steps: 2 })
+  await expect
+    .poll(() =>
+      jobMap
+        .locator('.employee-toolbox-lane')
+        .evaluateAll((lanes) => lanes.some((lane) => lane.getAnimations().length > 0)),
+    )
+    .toBe(true)
+  await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--dragging/)
+  await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--drop-target/)
+  // The source follows the captured pointer and occupies exact slot zero before release.
+  const movedHandleBox = await dragHandle.boundingBox()
+  expect(movedHandleBox).not.toBeNull()
+  expect(
+    Math.abs((movedHandleBox?.y ?? 0) + (movedHandleBox?.height ?? 0) / 2 - pointerFirstSlotY),
+  ).toBeLessThanOrEqual(1)
   await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
   await expect(reviewLane.locator('.employee-toolbox-lane__priority')).toHaveText('P2')
+  await page.mouse.up()
+  await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
+
+  // A single captured move followed immediately by release must still commit
+  // the exact final slot. This locks the old intermittent stale-state race.
+  const sortableLanes = jobMap
+    .locator('.employee-toolbox-lane')
+    .filter({ has: page.locator('.employee-toolbox-lane__priority') })
+  let currentHandleBox = await dragHandle.boundingBox()
+  let thirdSlotBox = await sortableLanes.nth(2).boundingBox()
+  expect(currentHandleBox).not.toBeNull()
+  expect(thirdSlotBox).not.toBeNull()
+  await page.mouse.move(
+    (currentHandleBox?.x ?? 0) + (currentHandleBox?.width ?? 0) / 2,
+    (currentHandleBox?.y ?? 0) + (currentHandleBox?.height ?? 0) / 2,
+  )
+  await page.mouse.down()
+  await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--dragging/)
+  await page.mouse.move(
+    (currentHandleBox?.x ?? 0) + (currentHandleBox?.width ?? 0) / 2,
+    (thirdSlotBox?.y ?? 0) + (thirdSlotBox?.height ?? 0) / 2,
+    { steps: 1 },
+  )
+  await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P3')
+  await page.mouse.up()
+  await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P3')
+
+  currentHandleBox = await dragHandle.boundingBox()
+  const exactFirstSlotBox = await sortableLanes.nth(0).boundingBox()
+  expect(currentHandleBox).not.toBeNull()
+  expect(exactFirstSlotBox).not.toBeNull()
+  await page.mouse.move(
+    (currentHandleBox?.x ?? 0) + (currentHandleBox?.width ?? 0) / 2,
+    (currentHandleBox?.y ?? 0) + (currentHandleBox?.height ?? 0) / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move(
+    (currentHandleBox?.x ?? 0) + (currentHandleBox?.width ?? 0) / 2,
+    (exactFirstSlotBox?.y ?? 0) + (exactFirstSlotBox?.height ?? 0) / 2,
+    { steps: 1 },
+  )
+  await page.mouse.up()
+  await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
 
   await dispatchNodes.filter({ hasText: 'Compile error' }).click()
   let repairDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(repairDialog).toContainText('Repair priority P1')
-  await repairDialog.getByRole('combobox').click()
+  await repairDialog
+    .locator('label.form-field')
+    .filter({ hasText: 'Tool for this failure type' })
+    .getByRole('combobox')
+    .click()
   await expect(page.getByRole('option', { name: new RegExp(toolName) })).toBeVisible()
   await page.getByRole('option', { name: new RegExp(toolName) }).click()
   await repairDialog.getByRole('button', { name: 'Done', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Save and publish', exact: true }).click()
+  await dispatchNodes.filter({ hasText: 'Test failure' }).click()
   repairDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(repairDialog).toContainText('Repair priority P2')
-  await expect(repairDialog).toContainText('Required')
-  await repairDialog.getByRole('combobox').click()
+  await repairDialog
+    .locator('label.form-field')
+    .filter({ hasText: 'Tool for this failure type' })
+    .getByRole('combobox')
+    .click()
   await expect(page.getByRole('option', { name: new RegExp(toolName) })).toHaveCount(0)
-  const compatibleOptions = page.getByRole('option')
-  await expect(compatibleOptions).not.toHaveCount(0)
-  await compatibleOptions.first().click()
+  await page.keyboard.press('Escape')
   await repairDialog.getByRole('button', { name: 'Done', exact: true }).click()
 
   await expect(dispatchNodes.nth(0)).toHaveClass(/employee-toolbox-card--configured/)

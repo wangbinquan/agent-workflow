@@ -728,9 +728,12 @@ predicate、Context mapping、Effect 与 failure/retry policy 都由类型包编
 不得按剩余宽度拉伸卡片。超过单行上限时按相同宽度换行，窄屏使用 `auto-fit/minmax` 保持全量可见且不产生横向滚动；不得为了适配宽度
 把不同职责泳道合并成无法辨认关系的单行。
 
-`inputMultiplicity='collection'` 表示一次职责消费同类工作集合。它仍是一个可配置、可选择、可结算的工作项，但共享职责图用一个主卡片加
-两个后置轮廓组成三层叠卡，直观提示会处理多个成员；状态、点击区和工具绑定仍作用于整组，不能伪造三个独立运行节点。缺省或 `single`
-保持普通单卡。研发类型的“修复检视问题”消费完整 review thread problem set，因此声明为 `collection`；authoring 与 runtime 自动获得同一呈现。
+`inputMultiplicity='collection'` 只表示一次职责消费同类工作集合；它仍是一个普通的可配置、可选择、可结算工作项，不产生视觉分支。
+共享职责图只对 `orderedDispatchAuthoring.destinationWorkItemRefs` 指向的静态目标显示一个主卡片加两个后置轮廓的三层扇出提示，表示该目标
+会被分类工具的问题清单替换成多个真实 route。两层使用主卡当前状态的同一 background/border，在主卡同一个 box-shadow paint stack 内
+按 `4px/8px` 同向等距绘制；CSS 的同元素绘制顺序保证主卡完整覆盖中层、中层完整覆盖后层，只露右侧和底部窄边，不创建可与相邻节点
+交错的负 z-index 子层。工具箱与岗位图不得各造一套颜色；状态、点击区和工具绑定仍作用于主卡。岗位选择分类工具后，这一静态叠卡立即由真实
+`P1..Pn` 派生卡片替换。研发类型“修复检视问题”的 collection 输入因此保持普通单卡，“修复流水线”才显示三层扇出提示。
 
 运行投影至少提供：
 
@@ -790,6 +793,19 @@ interface TypeToolRegistrationV1 {
         readonly runtimeProfileRef: VersionedResourceRef
       }
   readonly connectionRef: VersionedResourceRef | null
+  // 仅 ordered-dispatch 分类工具拥有；唯一 fallback 必须位于末项。
+  // optional 只用于读取迁移前已冻结的 immutable revision。
+  readonly dispatchRouteDefinitions?: readonly {
+    readonly routeRef: string
+    readonly displayName: string
+    readonly description: string
+    readonly fallback: boolean
+  }[]
+  // 仅分类器允许到达的处理工作项工具拥有；新 revision 必填。
+  readonly acceptedDispatchRoutes?: readonly {
+    readonly classifierWorkItemRef: WorkItemRef
+    readonly routeRefs: readonly string[] // 多选稳定键；['*'] = 全部问题
+  }[]
   readonly validationReceiptRef: ArtifactRef
   readonly state: 'draft' | 'published' | 'retired'
 }
@@ -837,9 +853,11 @@ contract 一律拒绝，避免前端隐藏字段漂移。工作项为 `system` �
 `published` 且合同相容的 registration；岗位模板和员工覆盖都引用 registration revision，不直接引用底层 executor。
 
 `roleRef` 与 `slotRef` 均是类型包闭集：工具注册必须选择当前工作项存在的 role；岗位模板/员工绑定必须选择该 role 下存在的 slot。
-普通工作项通常只有一个 `primary/default` slot；研发“处理流水线”可在“问题识别”role 下声明识别 slot，并在“问题修复”role 下按
-compile/unit-test/static-analysis 等问题类型声明多个业务化 slot。ReactionRule 直接引用 slot，用户只为槽位选工具，不编写
-`problem type → tool` predicate。required slot 缺失、同 slot 多绑定或 registration role 不符均在 publish 拒绝。
+普通工作项通常只有一个 `primary/default` slot。ordered-dispatch 分类工具 revision 以 `dispatchRouteDefinitions` 定义自己的有序问题
+清单；分类包只声明可达处理工作项。修复 registration 以 `acceptedDispatchRoutes` 多选自己能解决的问题，平台内置通用修复 Agent 使用
+`['*']`。岗位选择分类工具后复制同一问题清单并为每项选择 exact 处理 registration/协同员工，不编写 `problem type → tool` predicate，
+也不能修改问题键、名称、说明、顺序或 fallback。required slot 缺失、同 slot 多绑定、registration role 不符、清单与分类工具 revision
+不一致或处理工具未接受对应 route，均在 publish 拒绝。
 
 重试次数不新增数字员工设置入口。Case admission 从现有 Limits 读取 `defaultNodeRetries` 与 `sessionRestartBudget`，按内容 digest
 幂等取得内部 `ExecutionPolicyRevision` 并 pin；Reaction、tool registration、job template 和 employee definition 都没有 retry
@@ -3729,13 +3747,15 @@ Case runtime 用同一 manifest 和员工冻结配置投影全景，显示未开
 - “增加工具”可选择已有 Agent/Workflow，或直接定义当前节点的 ProgramTool；按工作项允许的角色分组，外部连接仅在工具需要时出现。
 - 表单不允许再次选择阶段或工作项；不能在这里新建/改写底层 Agent 或 Workflow，ProgramTool 则只在这里定义并要求程序写权。
 - 保存后先显示合同校验结果；通过后才能发布。系统节点只展示平台行为和 receipt，无“增加工具”。
-- “归类流水线问题”节点显式编辑岗位级有序分派表：每行定义业务失败类型、显示名和目标处理工作项；列表顺序就是优先级，必须且只能有
-  一个末尾兜底项。保存分类后，全景在分类节点之后按顺序派生 `P1..Pn` 修复卡片，并隐藏被这些派生卡片替代的静态目标卡片；每张派生卡片
-  单独选择 exact 工具或协同员工，任何一张缺失都阻断已启用泳道发布。类型包只声明允许到达哪些处理节点，不写死编译/单测/静态检查等
-  业务枚举。
+- “归类流水线问题”工具编辑器显式维护本工具 revision 的有序问题清单：每行定义稳定机器键、业务名称和识别说明；列表顺序就是优先级，
+  必须且只能有一个末尾兜底项。岗位职责弹窗不再出现可增删/改名的全局错误类型表；选择某个已发布分类工具后，前端在同一次状态更新中
+  读取其 `dispatchRouteDefinitions`，立即按顺序派生并连接 `P1..Pn` 修复卡片，并隐藏被派生卡片替代的静态目标卡片。每张派生卡片只单独
+  选择允许的处理工作项及 exact 工具或协同员工，任何一张缺失都阻断已启用泳道发布。后端保存/发布逐项比较 route key/name/description/
+  fallback 与所绑定分类工具 revision，拒绝绕过 UI 改写。类型包只声明允许到达哪些处理节点，不写死编译/单测/静态检查等业务枚举。
 - 修复工具冻结 `acceptedDispatchRoutes[] = { classifierWorkItemRef, routeRefs }` 能力声明；`routeRefs=['*']` 表示接受该分类器全部类型，
-  否则只能接受列出的稳定类型键。编辑器按当前派生卡片过滤候选，发布服务再次用 exact classifier/route 校验，防止绕过前端绑定不兼容工具。
-  旧 revision 未携带该字段时仅为兼容按全部类型解释，新发布 revision 必须显式形成声明。
+  否则只能接受多选的稳定类型键；工具表单的问题选项来自已发布分类工具的问题清单。内置通用流水线修复 Agent 固定为 `*`。编辑器按当前
+  派生卡片过滤候选，发布服务再次用 exact classifier/route 校验，防止绕过前端绑定不兼容工具。旧 revision 未携带该字段时仅为兼容按全部
+  类型解释，新发布 revision 必须显式形成声明。
 - 泳道标签回答“这是人的哪类职责”，节点回答“这一步做什么”；MR 事件入口是权威事实刷新点，不把检视、流水线、冲突、审批和合入判断
   误排成必须依次执行的一条长链。前后继以卡片内“下一步”说明表达，选择节点只高亮自身并打开对应详情。
 
@@ -4327,14 +4347,20 @@ source-control owner 在 commit message 末尾追加 Case/Context 机器标记�
    职责编辑状态。草稿不要求必选职责闭合，取消、刷新或暂时缺少工具后仍出现在列表并可继续编辑；只有发布命令执行完整门禁。已有模板点击
    “修改”直接进入职责编辑；
 2. 职责编辑页顶部只显示模板摘要和操作，不再常驻名称/说明输入框；次要“基本信息”动作可重新打开同一 Dialog；
-3. 详情编辑器复用相同紧凑卡片图，点击卡片才打开该职责的工具槽、动态错误类型或协同员工 Dialog，关闭后回到完整全景。
+3. 详情编辑器复用相同紧凑卡片图，点击卡片才打开该职责的工具槽、分类工具派生问题节点处理者或协同员工 Dialog，关闭后回到完整全景；
+4. 反应泳道排序使用 Pointer Events：手柄 `pointerdown` 时取消上一轮未结束动画、冻结最终布局的槽位边界，再由不随预览重排的泳道容器持有
+   pointer capture。每次 `pointermove` 直接按源泳道中心跨过的固定边界计算 exact target index，同步重排临时 DOM、目标高亮和 `P1..Pn`；源泳道
+   用 transform 逐帧贴住指针，其他泳道以 120ms、可中断且从当前视觉位置续接的 FLIP 动画让位。只有容器收到 `pointerup` 才把当前预览写入岗位
+   草稿，`pointercancel/lostpointercapture` 恢复持久顺序；即使手柄因临时重排换位，也不能丢失结算事件。`prefers-reduced-motion` 下保留源泳道
+   跟随、临时目标状态和实时顺序，只省略其他泳道的过渡动画。
 
 职责状态规则保持不变：
 
-- 平台固定节点天然为绿色；已有有效工具、完整有序路由或协同绑定的职责为绿色；
+- 平台固定节点天然为绿色；已有有效分类工具、由其清单派生且处理者完整的有序路由或协同绑定职责为绿色；
 - 未配置或未启用的职责为黄色；黄色可选泳道不会阻断发布；
 - 发布时重新按 manifest 计算 `requiredMissingWorkItemRefs`；有缺失才让对应卡片闪烁并直接打开第一项职责 Dialog；
-- Dialog 内只渲染当前职责的 tool slot、动态错误类型或协同员工配置，避免一次铺开全部参数。
+- Dialog 内只渲染当前职责的 tool slot、工具派生问题节点处理者或协同员工配置；问题清单只在分类工具编辑器出现，避免岗位级全局配置与
+  一次铺开全部参数。
 
 ### 21.6.1 运行态职责图与阶段时间线
 

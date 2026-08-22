@@ -45,8 +45,11 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('data-dispatch-route-key={node.key}')
     expect(graph).toContain('employee-toolbox-card--active')
     expect(typePage).toContain('employee-runtime-dispatch')
-    expect(typePage).toContain('增加错误类型')
-    expect(typePage).toContain('未配置：这名数字员工不会启用该泳道，也不会订阅对应事件。')
+    expect(typePage).not.toContain('配置错误类型列表')
+    expect(typePage).not.toContain('增加错误类型')
+    expect(typePage).not.toContain('dispatchRouteRefsText')
+    expect(typePage).toContain('dispatchRouteDefinitions')
+    expect(typePage).toContain('<MultiSelect')
     expect(typePage).toContain('可选能力 · 配置后启用')
     expect(typePage).toContain('启用本泳道后必填')
     expect(typePage).toContain('不启用这项能力')
@@ -75,6 +78,50 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).not.toContain(
       '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
     )
+  })
+
+  // User regression 2026-08-22: failure types were edited globally from the
+  // job, while repair tools accepted free-text ids and classifier selection did
+  // not materialize its fan-out nodes.
+  test('classifier tools own problem types and jobs only bind compatible handlers', () => {
+    const typePage = read('routes/digital-employees.$typeRef.tsx')
+    const types = read('components/digital-employees/types.ts')
+
+    expect(types).toContain('dispatchRouteDefinitions?: Array<{')
+    expect(typePage).toContain("zh ? '问题清单归工具所有' : 'Problem list belongs to the tool'")
+    expect(typePage).toContain("zh ? '该工具解决哪些问题' : 'Problems solved by this tool'")
+    expect(typePage).toContain('deriveDispatchRouteDrafts(')
+    expect(typePage).toContain('preferredDispatchTool(')
+    expect(typePage).toContain('setOrderedDispatchRoutes((current) =>')
+    expect(typePage).toContain('data-testid="tool-dispatch-route-definitions"')
+    expect(typePage).not.toContain('填写岗位模板中使用的类型标识')
+    expect(typePage).not.toContain('关联流水线错误类型')
+  })
+
+  // User regressions 2026-08-22/23: native drag was throttled, lagged behind
+  // the pointer, and moving a later lane to the first slot could land at P2.
+  test('lane dragging renders a temporary target order and animates each move', () => {
+    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const styles = read('styles.css')
+
+    expect(graph).toContain('dragPreviewOrder')
+    expect(graph).toContain('effectiveLanePriorityOrder')
+    expect(graph).toContain('previewPriorityIndex')
+    expect(graph).toContain('slotBoundaries')
+    expect(graph).toContain('onPointerMove')
+    expect(graph).toContain('updatePointerDrag(session.sourceLaneId, event.clientY)')
+    expect(graph).toContain('onPointerUp')
+    expect(graph).toContain('mapElement.current?.setPointerCapture')
+    expect(graph).toContain('for (const animation of element?.getAnimations() ?? [])')
+    expect(graph).toContain('animation.cancel()')
+    expect(graph).not.toContain('onDragEnter')
+    expect(graph).not.toContain('draggable')
+    expect(graph).toContain('animateLaneReorder')
+    expect(graph).toContain("' employee-toolbox-lane--drop-target'")
+    expect(styles).toContain('.employee-toolbox-lane--drop-target')
+    expect(styles).toContain('.employee-toolbox-lane--dragging')
+    expect(styles).toContain('touch-action: none')
+    expect(styles).toContain('calc(0px - var(--employee-lane-drag-offset, 0px))')
   })
 
   test('platform execution contracts guide and gate Agent or Script configuration', () => {
@@ -245,12 +292,19 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).toContain('.employee-toolbox-card--configured')
     expect(styles).toContain('.employee-toolbox-card--missing')
     expect(styles).toContain('.employee-toolbox-card--fan-out')
-    expect(styles).toContain('.employee-toolbox-card__stack-layer--middle')
-    expect(styles).toContain('.employee-toolbox-card__stack-layer--back')
+    const stackRule = styles.match(/\.employee-toolbox-card--fan-out \{[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(stackRule).toContain('--employee-card-stack-shadows:')
+    expect(stackRule).toContain('4px 4px 0 0 var(--employee-card-background)')
+    expect(stackRule).toContain('8px 8px 0 0 var(--employee-card-background)')
+    expect(stackRule).toContain('4px 4px 0 1px var(--employee-card-border)')
+    expect(stackRule).toContain('8px 8px 0 1px var(--employee-card-border)')
+    expect(stackRule).not.toContain('z-index:')
+    expect(stackRule).not.toContain('opacity:')
     expect(map).toContain('const fanOutDestinationRefs = new Set(')
     expect(map).toContain('source.orderedDispatchAuthoring?.destinationWorkItemRefs')
     expect(map).not.toContain("item.inputMultiplicity === 'collection'")
     expect(map).toContain('employee-toolbox-card--fan-out')
+    expect(map).not.toContain('employee-toolbox-card__stack-layer')
     expect(map).not.toContain('repair-feedback')
     expect(map).toContain('employee-toolbox-region--${lanes.length > 1')
     expect(map).toContain('employee-toolbox-lane__axis')

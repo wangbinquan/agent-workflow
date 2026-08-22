@@ -904,6 +904,20 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     const typeRef = { typeId: 'development', revision: 5 }
     const typePackage = employeeOs.queries.getType(typeRef)
+    const pipelineProblemDefinitions = [
+      {
+        routeRef: 'external-dependency',
+        displayName: '外部仓库依赖',
+        description: '调起另一个数字员工处理依赖仓库',
+        fallback: false,
+      },
+      {
+        routeRef: 'other-pipeline-failure',
+        displayName: '其他流水线错误',
+        description: '交给通用流水线修复 Agent',
+        fallback: true,
+      },
+    ]
     const bindings: Array<{
       workItemRef: string
       slotRef: string
@@ -945,6 +959,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
               implementation,
               connectionRef:
                 contract.requiredConnectionPurpose === null ? null : approvalAdapterRef,
+              ...(item.workItemRef === 'classify-pipeline'
+                ? { dispatchRouteDefinitions: pipelineProblemDefinitions }
+                : {}),
+              ...(item.workItemRef === 'repair-pipeline'
+                ? {
+                    acceptedDispatchRoutes: [
+                      { classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] },
+                    ],
+                  }
+                : {}),
             },
           })
           bindings.push({
@@ -973,6 +997,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           agentRef: { id: 'system-mock-agent-repair-pipeline', revision: 1 },
         },
         connectionRef: null,
+        acceptedDispatchRoutes: [{ classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] }],
       },
     })
     const pipelineRepairRef = await employeeOs.commands.publishTool({
@@ -993,9 +1018,17 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             classifierWorkItemRef: 'classify-pipeline',
             routes: [
               {
+                routeRef: 'external-dependency',
+                displayName: '外部仓库依赖',
+                description: '调起另一个数字员工处理依赖仓库',
+                destinationWorkItemRef: 'repair-pipeline',
+                registrationRef: pipelineRepairRef,
+                fallback: false,
+              },
+              {
                 routeRef: 'other-pipeline-failure',
                 displayName: '其他流水线错误',
-                description: '依赖仓库的通用修复兜底',
+                description: '交给通用流水线修复 Agent',
                 destinationWorkItemRef: 'repair-pipeline',
                 registrationRef: pipelineRepairRef,
                 fallback: true,

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactElement } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 
 import { StatusChip } from '@/components/StatusChip'
 
@@ -49,6 +49,60 @@ export function ResponsibilitySwimlaneMap(props: {
 }): ReactElement {
   const zh = props.language.startsWith('zh')
   const [draggedLaneId, setDraggedLaneId] = useState<string | null>(null)
+  const [dragTargetLaneId, setDragTargetLaneId] = useState<string | null>(null)
+  const [dragPreviewOrder, setDragPreviewOrder] = useState<string[] | null>(null)
+  const [dragTranslateY, setDragTranslateY] = useState(0)
+  const mapElement = useRef<HTMLElement | null>(null)
+  const laneElements = useRef(new Map<string, HTMLElement>())
+  const previousLaneTops = useRef(new Map<string, number>())
+  const dragPreviewOrderRef = useRef<string[] | null>(null)
+  const dragTranslateYRef = useRef(0)
+  const pointerDrag = useRef<{
+    pointerId: number
+    sourceLaneId: string
+    grabOffsetY: number
+    laneHeight: number
+    moved: boolean
+    slotTops: number[]
+    slotBoundaries: number[]
+  } | null>(null)
+  const effectiveLanePriorityOrder = dragPreviewOrder ?? props.lanePriorityOrder ?? []
+  const lanePrioritySignature = effectiveLanePriorityOrder.join('\u0000')
+  useLayoutEffect(() => {
+    const animateLaneReorder = () => {
+      const nextTops = new Map<string, number>()
+      for (const [laneId, element] of laneElements.current) {
+        const runningAnimations = element.getAnimations()
+        const visualTop = element.getBoundingClientRect().top
+        for (const animation of runningAnimations) animation.cancel()
+        const nextTop =
+          laneId === draggedLaneId
+            ? element.getBoundingClientRect().top - dragTranslateYRef.current
+            : element.getBoundingClientRect().top
+        nextTops.set(laneId, nextTop)
+        const previousTop = previousLaneTops.current.get(laneId)
+        const animationStartTop = runningAnimations.length > 0 ? visualTop : previousTop
+        const delta = animationStartTop === undefined ? 0 : animationStartTop - nextTop
+        const reducedMotion =
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        if (
+          draggedLaneId !== null &&
+          laneId !== draggedLaneId &&
+          Math.abs(delta) > 0.5 &&
+          !reducedMotion &&
+          typeof element.animate === 'function'
+        ) {
+          element.animate(
+            [{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }],
+            { duration: 120, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+          )
+        }
+      }
+      previousLaneTops.current = nextTops
+    }
+    animateLaneReorder()
+  }, [draggedLaneId, lanePrioritySignature])
   const workItemsByRef = new Map(
     props.type.authoringManifest.workItems.map((item) => [item.workItemRef, item]),
   )
@@ -68,15 +122,38 @@ export function ResponsibilitySwimlaneMap(props: {
   const regions = [...props.type.authoringManifest.lifecycleRegions].sort(
     (left, right) => left.order - right.order,
   )
-  const movePriorityLane = (sourceLaneId: string, targetLaneId: string) => {
-    if (sourceLaneId === targetLaneId || props.onLanePriorityOrderChange === undefined) return
-    const order = [...(props.lanePriorityOrder ?? [])]
-    const sourceIndex = order.indexOf(sourceLaneId)
-    const targetIndex = order.indexOf(targetLaneId)
-    if (sourceIndex < 0 || targetIndex < 0) return
-    order.splice(sourceIndex, 1)
-    order.splice(targetIndex, 0, sourceLaneId)
-    props.onLanePriorityOrderChange(order)
+  const previewPriorityIndex = (sourceLaneId: string, targetIndex: number) => {
+    const currentOrder = dragPreviewOrderRef.current ?? props.lanePriorityOrder ?? []
+    const nextOrder = currentOrder.filter((laneId) => laneId !== sourceLaneId)
+    nextOrder.splice(Math.max(0, Math.min(targetIndex, nextOrder.length)), 0, sourceLaneId)
+    if (nextOrder.every((laneId, index) => laneId === currentOrder[index])) return
+    dragPreviewOrderRef.current = nextOrder
+    setDragTargetLaneId(sourceLaneId)
+    setDragPreviewOrder(nextOrder)
+  }
+  const updatePointerDrag = (sourceLaneId: string, clientY: number) => {
+    const session = pointerDrag.current
+    if (session === null || session.sourceLaneId !== sourceLaneId) return
+    session.moved = true
+    const draggedCenterY = clientY - session.grabOffsetY + session.laneHeight / 2
+    let targetIndex = session.slotBoundaries.findIndex((boundary) => draggedCenterY < boundary)
+    if (targetIndex < 0) targetIndex = session.slotTops.length - 1
+    const nextTranslateY =
+      clientY - session.grabOffsetY - (session.slotTops[targetIndex] ?? session.slotTops[0] ?? 0)
+    dragTranslateYRef.current = nextTranslateY
+    setDragTranslateY(nextTranslateY)
+    previewPriorityIndex(sourceLaneId, targetIndex)
+  }
+  const finishPriorityDrag = (commit: boolean) => {
+    const finalOrder = dragPreviewOrderRef.current
+    if (commit && finalOrder !== null) props.onLanePriorityOrderChange?.([...finalOrder])
+    pointerDrag.current = null
+    dragPreviewOrderRef.current = null
+    setDraggedLaneId(null)
+    setDragTargetLaneId(null)
+    setDragPreviewOrder(null)
+    dragTranslateYRef.current = 0
+    setDragTranslateY(0)
   }
   const shiftPriorityLane = (laneId: string, delta: -1 | 1) => {
     const order = [...(props.lanePriorityOrder ?? [])]
@@ -95,9 +172,34 @@ export function ResponsibilitySwimlaneMap(props: {
 
   return (
     <section
+      ref={mapElement}
       className={`employee-toolbox-map${props.compactChrome === true ? ' employee-toolbox-map--compact' : ''}`}
       aria-label={zh ? '确定性职责全景' : 'Deterministic responsibility map'}
       data-testid="employee-toolbox-responsibility-map"
+      onPointerMove={(event) => {
+        const session = pointerDrag.current
+        if (session === null || session.pointerId !== event.pointerId) return
+        event.preventDefault()
+        updatePointerDrag(session.sourceLaneId, event.clientY)
+      }}
+      onPointerUp={(event) => {
+        const session = pointerDrag.current
+        if (session === null || session.pointerId !== event.pointerId) return
+        event.preventDefault()
+        if (!session.moved) updatePointerDrag(session.sourceLaneId, event.clientY)
+        finishPriorityDrag(true)
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId)
+        }
+      }}
+      onPointerCancel={(event) => {
+        if (pointerDrag.current?.pointerId !== event.pointerId) return
+        finishPriorityDrag(false)
+      }}
+      onLostPointerCapture={(event) => {
+        if (pointerDrag.current?.pointerId !== event.pointerId) return
+        finishPriorityDrag(false)
+      }}
     >
       {props.compactChrome === true ? null : (
         <header className="employee-toolbox-map__header">
@@ -134,8 +236,8 @@ export function ResponsibilitySwimlaneMap(props: {
             .filter((lane) => !absorbedLaneIds.has(lane.laneId))
             .sort((left, right) => {
               if (left.kind !== right.kind) return left.kind === 'spine' ? -1 : 1
-              const leftPriority = props.lanePriorityOrder?.indexOf(left.laneId) ?? -1
-              const rightPriority = props.lanePriorityOrder?.indexOf(right.laneId) ?? -1
+              const leftPriority = effectiveLanePriorityOrder.indexOf(left.laneId)
+              const rightPriority = effectiveLanePriorityOrder.indexOf(right.laneId)
               if (leftPriority >= 0 && rightPriority >= 0) return leftPriority - rightPriority
               if (leftPriority >= 0) return -1
               if (rightPriority >= 0) return 1
@@ -189,27 +291,34 @@ export function ResponsibilitySwimlaneMap(props: {
                     ]
                   })
                   const laneColumns = Math.min(entries.length, 4)
-                  const lanePriority = props.lanePriorityOrder?.indexOf(lane.laneId) ?? -1
+                  const lanePriority = effectiveLanePriorityOrder.indexOf(lane.laneId)
                   const laneSortable =
                     lanePriority >= 0 && props.onLanePriorityOrderChange !== undefined
                   return (
                     <section
                       key={lane.laneId}
+                      ref={(element) => {
+                        if (element === null) laneElements.current.delete(lane.laneId)
+                        else laneElements.current.set(lane.laneId, element)
+                      }}
                       className={`employee-toolbox-lane employee-toolbox-lane--${lane.kind}${
                         draggedLaneId === lane.laneId ? ' employee-toolbox-lane--dragging' : ''
+                      }${
+                        dragTargetLaneId === lane.laneId
+                          ? ' employee-toolbox-lane--drop-target'
+                          : ''
                       }`}
+                      style={
+                        draggedLaneId === lane.laneId
+                          ? ({
+                              '--employee-lane-drag-offset': `${dragTranslateY}px`,
+                              transform: `translate3d(0, ${dragTranslateY}px, 0)`,
+                            } as CSSProperties)
+                          : undefined
+                      }
                       data-lane-id={lane.laneId}
                       aria-label={`${localized(lane.label, props.language)}：${localized(lane.description, props.language)}`}
                       title={localized(lane.description, props.language)}
-                      onDragOver={(event) => {
-                        if (laneSortable && draggedLaneId !== null) event.preventDefault()
-                      }}
-                      onDrop={(event) => {
-                        if (!laneSortable || draggedLaneId === null) return
-                        event.preventDefault()
-                        movePriorityLane(draggedLaneId, lane.laneId)
-                        setDraggedLaneId(null)
-                      }}
                     >
                       <header>
                         <div>
@@ -243,7 +352,6 @@ export function ResponsibilitySwimlaneMap(props: {
                           <button
                             type="button"
                             className="employee-toolbox-lane__drag-handle"
-                            draggable
                             aria-label={
                               zh
                                 ? `拖动“${localized(lane.label, props.language)}”调整事件优先级`
@@ -255,12 +363,48 @@ export function ResponsibilitySwimlaneMap(props: {
                                 : 'Drag to reorder; arrow keys also work'
                             }
                             onClick={(event) => event.preventDefault()}
-                            onDragStart={(event) => {
+                            onPointerDown={(event) => {
+                              if (event.button !== 0) return
+                              event.preventDefault()
+                              const order = [...(props.lanePriorityOrder ?? [])]
+                              for (const laneId of order) {
+                                const element = laneElements.current.get(laneId)
+                                for (const animation of element?.getAnimations() ?? []) {
+                                  animation.cancel()
+                                }
+                              }
+                              const source = laneElements.current.get(lane.laneId)
+                              const slotRects = order
+                                .flatMap((laneId) => {
+                                  const element = laneElements.current.get(laneId)
+                                  return element === undefined
+                                    ? []
+                                    : [element.getBoundingClientRect()]
+                                })
+                                .sort((left, right) => left.top - right.top)
+                              if (source === undefined || slotRects.length !== order.length) return
+                              const sourceRect = source.getBoundingClientRect()
+                              const slotCenters = slotRects.map(
+                                (rect) => rect.top + rect.height / 2,
+                              )
+                              pointerDrag.current = {
+                                pointerId: event.pointerId,
+                                sourceLaneId: lane.laneId,
+                                grabOffsetY: event.clientY - sourceRect.top,
+                                laneHeight: sourceRect.height,
+                                moved: false,
+                                slotTops: slotRects.map((rect) => rect.top),
+                                slotBoundaries: slotCenters
+                                  .slice(0, -1)
+                                  .map((center, index) => (center + slotCenters[index + 1]!) / 2),
+                              }
+                              dragPreviewOrderRef.current = order
                               setDraggedLaneId(lane.laneId)
-                              event.dataTransfer.effectAllowed = 'move'
-                              event.dataTransfer.setData('text/plain', lane.laneId)
+                              setDragTargetLaneId(null)
+                              setDragPreviewOrder(order)
+                              setDragTranslateY(0)
+                              mapElement.current?.setPointerCapture(event.pointerId)
                             }}
-                            onDragEnd={() => setDraggedLaneId(null)}
                             onKeyDown={(event) => {
                               if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
                               event.preventDefault()
@@ -389,18 +533,6 @@ export function ResponsibilitySwimlaneMap(props: {
                               title={localized(item.description, props.language)}
                               onClick={() => props.onSelect(item.workItemRef)}
                             >
-                              {fanOut ? (
-                                <>
-                                  <span
-                                    className="employee-toolbox-card__stack-layer employee-toolbox-card__stack-layer--back"
-                                    aria-hidden="true"
-                                  />
-                                  <span
-                                    className="employee-toolbox-card__stack-layer employee-toolbox-card__stack-layer--middle"
-                                    aria-hidden="true"
-                                  />
-                                </>
-                              ) : null}
                               <span className="employee-toolbox-card__kind">{kind.label}</span>
                               <strong>{localized(item.label, props.language)}</strong>
                               <small title={detail}>{compactDetail}</small>

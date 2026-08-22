@@ -361,6 +361,24 @@ export class DigitalEmployeeAuthoringService {
     const dispatchSources = runtime.descriptor.authoringManifest.workItems.filter((source) =>
       source.orderedDispatchAuthoring?.destinationWorkItemRefs.includes(item.workItemRef),
     )
+    if (item.orderedDispatchAuthoring !== null && body.dispatchRouteDefinitions === undefined) {
+      throw new ValidationError(
+        'employee-tool-dispatch-routes-required',
+        'classifier tools must define their ordered dispatch routes',
+      )
+    }
+    if (item.orderedDispatchAuthoring === null && body.dispatchRouteDefinitions !== undefined) {
+      throw new ValidationError(
+        'employee-tool-dispatch-routes-unexpected',
+        `${item.workItemRef} is not an ordered dispatch classifier`,
+      )
+    }
+    if (dispatchSources.length > 0 && body.acceptedDispatchRoutes === undefined) {
+      throw new ValidationError(
+        'employee-tool-dispatch-capability-required',
+        'dispatch destination tools must declare accepted routes',
+      )
+    }
     for (const accepted of body.acceptedDispatchRoutes ?? []) {
       if (
         !dispatchSources.some((source) => source.workItemRef === accepted.classifierWorkItemRef)
@@ -371,14 +389,6 @@ export class DigitalEmployeeAuthoringService {
         )
       }
     }
-    const acceptedDispatchRoutes =
-      body.acceptedDispatchRoutes ??
-      (dispatchSources.length === 0
-        ? undefined
-        : dispatchSources.map((source) => ({
-            classifierWorkItemRef: source.workItemRef,
-            routeRefs: ['*'] as const,
-          })))
     const implementation = await this.#materializeImplementation(body.implementation)
     const content = toolRegistrationContentSchema.parse({
       schemaVersion: 1,
@@ -390,7 +400,12 @@ export class DigitalEmployeeAuthoringService {
       description: body.description,
       implementation,
       connectionRef: body.connectionRef ?? null,
-      ...(acceptedDispatchRoutes === undefined ? {} : { acceptedDispatchRoutes }),
+      ...(body.dispatchRouteDefinitions === undefined
+        ? {}
+        : { dispatchRouteDefinitions: body.dispatchRouteDefinitions }),
+      ...(body.acceptedDispatchRoutes === undefined
+        ? {}
+        : { acceptedDispatchRoutes: body.acceptedDispatchRoutes }),
     })
     return {
       content,
@@ -541,6 +556,9 @@ export class DigitalEmployeeAuthoringService {
         roleRef: record.content.roleRef,
         implementation,
         connectionRef: record.content.connectionRef,
+        ...(record.content.dispatchRouteDefinitions === undefined
+          ? {}
+          : { dispatchRouteDefinitions: record.content.dispatchRouteDefinitions }),
         ...(record.content.acceptedDispatchRoutes === undefined
           ? {}
           : { acceptedDispatchRoutes: record.content.acceptedDispatchRoutes }),
@@ -646,6 +664,7 @@ export class DigitalEmployeeAuthoringService {
   #validateOrderedDispatchConfigurations(
     typeRef: EmployeeTypeRef,
     configurations: readonly OrderedDispatchConfiguration[],
+    toolBindings: readonly WorkItemToolBinding[],
     enabledWorkItemRefs?: readonly string[],
   ): ToolRevisionRecord[] {
     const runtime = this.#runtime(typeRef)
@@ -753,6 +772,36 @@ export class DigitalEmployeeAuthoringService {
         tools.push(tool)
       }
     }
+    for (const configuration of configurations) {
+      const classifierBinding = toolBindings.find(
+        (binding) => binding.workItemRef === configuration.classifierWorkItemRef,
+      )
+      if (classifierBinding === undefined) continue
+      const classifierTool = this.#toolRevision(classifierBinding.registrationRef)
+      const definitions = classifierTool?.content.dispatchRouteDefinitions
+      // Immutable revisions created before tool-owned problem definitions keep
+      // their existing job-owned list. Every newly authored classifier is
+      // required to carry definitions by #prepareToolDraft above.
+      if (definitions === undefined) continue
+      const matches =
+        definitions.length === configuration.routes.length &&
+        definitions.every((definition, index) => {
+          const route = configuration.routes[index]
+          return (
+            route !== undefined &&
+            route.routeRef === definition.routeRef &&
+            route.displayName === definition.displayName &&
+            route.description === definition.description &&
+            route.fallback === definition.fallback
+          )
+        })
+      if (!matches) {
+        throw new ValidationError(
+          'employee-ordered-dispatch-definition-mismatch',
+          `${configuration.classifierWorkItemRef} routes must match the classifier tool revision`,
+        )
+      }
+    }
     return tools
   }
 
@@ -857,7 +906,11 @@ export class DigitalEmployeeAuthoringService {
     for (const binding of body.defaultCollaborationBindings) {
       this.#validateCollaborationBinding(input.typeRef, binding)
     }
-    this.#validateOrderedDispatchConfigurations(input.typeRef, body.orderedDispatchConfigurations)
+    this.#validateOrderedDispatchConfigurations(
+      input.typeRef,
+      body.orderedDispatchConfigurations,
+      body.defaultToolBindings,
+    )
     validateCollaborationGroups(body.defaultCollaborationBindings)
     const draft = employeeJobTemplateContentSchema.parse({
       schemaVersion: 1,
@@ -902,6 +955,7 @@ export class DigitalEmployeeAuthoringService {
     this.#validateOrderedDispatchConfigurations(
       existing.typeRef,
       body.orderedDispatchConfigurations,
+      body.defaultToolBindings,
     )
     validateCollaborationGroups(body.defaultCollaborationBindings)
     const draft: EmployeeJobTemplateContent = {
@@ -961,6 +1015,7 @@ export class DigitalEmployeeAuthoringService {
     this.#validateOrderedDispatchConfigurations(
       template.typeRef,
       template.draft.orderedDispatchConfigurations,
+      template.draft.defaultToolBindings,
       enabledWorkItemRefs,
     )
     validateCollaborationGroups(template.draft.defaultCollaborationBindings)
@@ -1198,6 +1253,7 @@ export class DigitalEmployeeAuthoringService {
     const dispatchTools = this.#validateOrderedDispatchConfigurations(
       employee.typeRef,
       template.content.orderedDispatchConfigurations,
+      merged.bindings,
       enabledWorkItemRefs,
     )
     for (const configuration of template.content.orderedDispatchConfigurations) {

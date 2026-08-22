@@ -866,8 +866,8 @@ const inputDetailsByContract: Record<
         'contractInput.failureTypeDefinitions',
         '失败类型定义',
         'Failure type definitions',
-        '岗位模板冻结的有序闭集；列表顺序就是识别优先级',
-        'The ordered closed set frozen by the job template; list order is matching priority',
+        '所选分类工具版本冻结的有序闭集；列表顺序就是识别优先级',
+        'The ordered closed set frozen by the selected classifier tool revision; list order is matching priority',
         'work-input',
         'array',
       ),
@@ -1852,18 +1852,18 @@ const runtimePackage = {
           order: 90,
           label: text('归类流水线失败', 'Classify pipeline failures'),
           description: text(
-            '按岗位中配置的错误类型列表归类；列表顺序就是确定性处理优先级',
-            'Classify against the job-configured failure list; list order is deterministic priority',
+            '按所选分类工具版本内的问题清单归类；清单顺序就是确定性处理优先级',
+            'Classify against the selected tool revision problem list; list order is deterministic priority',
           ),
           workContractRef: { contractId: 'development.classify-pipeline', version: 1 },
           materialSummary: contracts[8]!.materialSummary,
           completionStandard: contracts[8]!.completionStandard,
           nodeKind: 'business-tool',
           orderedDispatchAuthoring: {
-            label: text('流水线错误类型与处理方式', 'Pipeline failure types and handlers'),
+            label: text('流水线问题与处理方式', 'Pipeline problems and handlers'),
             description: text(
-              '逐项定义错误类型、优先级，以及交给修复工具还是协同员工处理',
-              'Define each failure type, its priority, and whether a repair tool or another employee handles it',
+              '问题清单由分类工具定义；岗位只为派生问题选择兼容修复工具或协同员工',
+              'The classifier tool defines the problem list; the job only selects a compatible repair tool or employee for each derived problem',
             ),
             destinationWorkItemRefs: ['repair-pipeline', 'delegate'],
           },
@@ -1882,8 +1882,8 @@ const runtimePackage = {
           order: 100,
           label: text('修复流水线问题', 'Repair pipeline failures'),
           description: text(
-            '每种失败类型绑定独立工具；平台按优先级逐类动态调度',
-            'Bind a tool per failure type; the platform dispatches them dynamically by priority',
+            '工具声明能解决的问题；岗位按分类工具清单逐类选择兼容处理者',
+            'Tools declare the problems they solve; jobs select a compatible handler for each classifier-tool problem',
           ),
           workContractRef: { contractId: 'development.repair-pipeline', version: 1 },
           materialSummary: contracts[9]!.materialSummary,
@@ -1894,8 +1894,8 @@ const runtimePackage = {
               roleRef: 'repairer',
               label: text('问题修复', 'Problem repair'),
               description: text(
-                '在归类节点把每种错误类型绑定到这里的一个工具',
-                'Bind every configured failure type to one tool from this node',
+                '本工具显式声明可解决一个、多个或全部分类问题',
+                'This tool explicitly declares that it solves one, multiple, or all classified problems',
               ),
               order: 0,
               bindingSlots: [],
@@ -3611,7 +3611,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           : request.workItemRef === 'collect-pipeline'
             ? 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes. Do not choose another download path.'
             : request.workItemRef === 'classify-pipeline'
-              ? `Read pipeline evidence only from platformPaths.pipelineDirectory and classify it using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier configured type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
+              ? `Read pipeline evidence only from platformPaths.pipelineDirectory and classify it using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier classifier-tool type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
               : request.workItemRef === 'repair-pipeline'
                 ? `Read the exact evidence and large logs from platformPaths.pipelineDirectory. Repair every problem assigned to deterministic slot ${request.toolSlotRef}; do not choose another tool, slot, or evidence path. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit the issue Context. The platform will mark that slot complete after an ok result.`
                 : request.workItemRef === 'classify-feedback'

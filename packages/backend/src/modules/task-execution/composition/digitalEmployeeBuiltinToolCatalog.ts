@@ -2,7 +2,10 @@ import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
-import type { DigitalEmployeePlatformToolCatalogParticipant } from '@/modules/digital-employee/public/types'
+import {
+  normalizeDispatchRouteDefinitionsJson,
+  type DigitalEmployeePlatformToolCatalogParticipant,
+} from '@/modules/digital-employee/public/types'
 import { sha256Hex } from '@/util/hash'
 import { getAgentByIdSync } from '@/services/agent'
 import {
@@ -49,7 +52,6 @@ const typeRefSchema = z
   .object({ typeId: z.string(), revision: z.number().int().positive() })
   .strict()
 const exactRefSchema = z.object({ id: z.string(), revision: z.number().int().positive() }).strict()
-
 function digest(value: unknown): string {
   return sha256Hex(canonicalJson(value))
 }
@@ -59,6 +61,20 @@ function declaredContracts(value: unknown): readonly { contractId: string; versi
     .array(z.object({ contractId: z.string(), version: z.number().int().positive() }).strict())
     .catch([])
     .parse(value)
+}
+
+function declaredDispatchRoutes(value: unknown) {
+  const inputJson = JSON.stringify(value)
+  if (inputJson === undefined) return undefined
+  const normalizedJson = normalizeDispatchRouteDefinitionsJson(inputJson)
+  return normalizedJson === null
+    ? undefined
+    : (JSON.parse(normalizedJson) as Array<{
+        routeRef: string
+        displayName: string
+        description: string
+        fallback: boolean
+      }>)
 }
 
 export function composeDigitalEmployeeBuiltinToolCatalog(input: {
@@ -89,6 +105,12 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
           if (agent === null || agent.builtin !== true || agent.visibility !== 'public') return []
           const template = agent.frontmatterExtra.digitalEmployeeTemplate
           if (typeof template !== 'string') return []
+          const dispatchRouteDefinitions = declaredDispatchRoutes(
+            agent.frontmatterExtra.dispatchRouteDefinitions,
+          )
+          if (item.orderedDispatchAuthoring != null && dispatchRouteDefinitions === undefined) {
+            return []
+          }
           const presentation = digitalEmployeeAgentToolPresentation(template)
           if (presentation === null) return []
           const selection = presentation.selection
@@ -140,6 +162,9 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
             description: agent.description,
             implementation,
             connectionRef: null,
+            ...(item.orderedDispatchAuthoring == null
+              ? {}
+              : { dispatchRouteDefinitions: dispatchRouteDefinitions! }),
             ...(dispatchSources.length === 0
               ? {}
               : {

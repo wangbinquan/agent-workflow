@@ -199,6 +199,12 @@ export interface ToolRegistration {
     roleRef: string
     displayName: string
     description: string
+    dispatchRouteDefinitions?: Array<{
+      routeRef: string
+      displayName: string
+      description: string
+      fallback: boolean
+    }>
     acceptedDispatchRoutes?: Array<{
       classifierWorkItemRef: string
       routeRefs: string[]
@@ -245,6 +251,12 @@ export interface ToolAuthoringView extends ToolRegistration {
     roleRef: string
     implementation: ToolAuthoringImplementation
     connectionRef?: ExactRef | null
+    dispatchRouteDefinitions?: Array<{
+      routeRef: string
+      displayName: string
+      description: string
+      fallback: boolean
+    }>
     acceptedDispatchRoutes?: Array<{
       classifierWorkItemRef: string
       routeRefs: string[]

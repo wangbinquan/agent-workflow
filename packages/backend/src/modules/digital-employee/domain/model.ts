@@ -70,6 +70,49 @@ export const workItemToolBindingSchema = z
 
 export type WorkItemToolBinding = z.infer<typeof workItemToolBindingSchema>
 
+export const dispatchRouteDefinitionSchema = z
+  .object({
+    routeRef: machineIdSchema,
+    displayName: z.string().min(1).max(200),
+    description: z.string().max(2_000),
+    fallback: z.boolean(),
+  })
+  .strict()
+
+export const dispatchRouteDefinitionsSchema = z
+  .array(dispatchRouteDefinitionSchema)
+  .min(1)
+  .max(100)
+  .superRefine((value, ctx) => {
+    const routeRefs = new Set<string>()
+    let fallbackCount = 0
+    for (const [index, route] of value.entries()) {
+      if (routeRefs.has(route.routeRef)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, 'routeRef'],
+          message: `duplicate routeRef: ${route.routeRef}`,
+        })
+      }
+      routeRefs.add(route.routeRef)
+      if (route.fallback) fallbackCount += 1
+    }
+    if (fallbackCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'dispatch route definitions require exactly one fallback route',
+      })
+    }
+    if (!value.at(-1)?.fallback) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'the fallback route definition must be last',
+      })
+    }
+  })
+
+export type DispatchRouteDefinition = z.infer<typeof dispatchRouteDefinitionSchema>
+
 export const orderedDispatchRouteSchema = z
   .object({
     routeRef: machineIdSchema,
@@ -752,6 +795,7 @@ export const createToolRegistrationBodySchema = z
     roleRef: machineIdSchema,
     implementation: toolAuthoringImplementationSchema,
     connectionRef: exactResourceRefSchema.nullable().optional(),
+    dispatchRouteDefinitions: dispatchRouteDefinitionsSchema.optional(),
     acceptedDispatchRoutes: acceptedDispatchRoutesSchema.optional(),
   })
   .strict()
@@ -769,6 +813,9 @@ export const toolRegistrationContentSchema = z
     description: z.string().max(2_000),
     implementation: toolImplementationSchema,
     connectionRef: exactResourceRefSchema.nullable(),
+    // Optional only for immutable classifier revisions published before the
+    // problem taxonomy moved from job authoring into the classifier tool.
+    dispatchRouteDefinitions: dispatchRouteDefinitionsSchema.optional(),
     // Optional keeps already-frozen revision digests stable. Legacy revisions
     // without the field are interpreted as all-routes by the authoring gate.
     acceptedDispatchRoutes: acceptedDispatchRoutesSchema.optional(),
