@@ -142,6 +142,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 旧穷举管线在已物化的 `base b` 上求值、新快路径直接打 `tasks t`,两条路径
     // 必须共用同一份过滤定义——写死 `b.` 前缀就做不到。棘轮跟着挪到新形态:
     // 它锁的仍是同一件事「launch_origin 的过滤发生在查询层」。
+    expect(operations).toContain("${col('launch_origin')} IN ('event', 'webhook')")
     expect(operations).toContain("${col('launch_origin')} = ${filters.origin}")
     expect(sharedTaskSchema).not.toMatch(/\blaunchOrigin\b|\blaunch_origin\b/)
 

@@ -11,11 +11,13 @@ const DETAIL_SRC = path.join(HERE, '../src/routes/tasks.detail.tsx')
 const SUBJECT_SRC = path.join(HERE, '../src/components/TaskSubjectLink.tsx')
 
 describe('tasks operations list shows its compact subject', () => {
-  test('the visual grid uses business columns while task metadata delegates subject rendering', async () => {
+  test('the visual grid uses business columns and the normalized catalog subject', async () => {
     const src = await fs.readFile(LIST_SRC, 'utf8')
     expect(src).toContain("t('tasks.operations.columns.task')")
     expect(src).toContain("t('tasks.operations.columns.execution')")
-    expect(src).toContain('<TaskSubjectLink task={item} taskId={item.id} badge />')
+    expect(src).toContain('const subject = localized(item.subject.label, language)')
+    expect(src).toContain('t(taskSourceRegistration(item.sourceId).labelKey)')
+    expect(src).not.toContain('<TaskSubjectLink task={item}')
   })
 })
 

@@ -141,46 +141,6 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       app,
       {
         method: 'GET',
-        path: '/api/employee-cases',
-        permissions: ['digital-employees:read'],
-        tokenAccess: 'allow',
-        summary: 'List Digital Employee OS cases',
-      },
-      (c) => {
-        const view = z
-          .enum(['all', 'active', 'attention', 'finished'])
-          .catch('all')
-          .parse(c.req.query('view'))
-        const rawStates = c.req.query('states')
-        const states =
-          rawStates === undefined || rawStates === ''
-            ? undefined
-            : z
-                .array(z.enum(['active', 'waiting', 'blocked', 'terminal']))
-                .parse(rawStates.split(','))
-        return jsonDocumentResponse(
-          runtime.queries.listCasePage({
-            ...(c.req.query('employeeId') === undefined
-              ? {}
-              : { employeeId: c.req.query('employeeId')! }),
-            ...(states === undefined ? {} : { states }),
-            view,
-            ...(c.req.query('q') === undefined ? {} : { q: c.req.query('q')! }),
-            ...(c.req.query('cursor') === undefined ? {} : { cursor: c.req.query('cursor')! }),
-            ...(c.req.query('limit') === undefined
-              ? {}
-              : {
-                  limit: z.coerce.number().int().min(1).max(100).parse(c.req.query('limit')),
-                }),
-          }),
-        )
-      },
-    )
-
-    registerRoute(
-      app,
-      {
-        method: 'GET',
         path: '/api/employee-cases/:id',
         permissions: ['digital-employees:read'],
         tokenAccess: 'allow',
@@ -481,6 +441,24 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
   registerRoute(
     app,
     {
+      method: 'GET',
+      path: '/api/digital-employee-types/:typeRef/upgrade-candidates',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'List older job templates and employees that require an explicit type upgrade',
+    },
+    (c) => {
+      const typeRef = parseEmployeeTypeRef(c.req.param('typeRef'))
+      return c.json({
+        jobTemplates: module.queries.listJobTemplateUpgradeCandidates(typeRef),
+        employees: module.queries.listEmployeeUpgradeCandidates(typeRef),
+      })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
       method: 'POST',
       path: '/api/digital-employee-types/:typeRef/job-templates',
       permissions: ['digital-employees:create'],
@@ -556,7 +534,7 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       path: '/api/digital-employee-types/:typeRef/employees',
       permissions: ['digital-employees:create'],
       tokenAccess: 'allow',
-      summary: 'Create a minimal digital employee definition',
+      summary: 'Create a digital employee with its first executable revision',
     },
     async (c) =>
       c.json(
@@ -572,11 +550,31 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
   registerRoute(
     app,
     {
+      method: 'POST',
+      path: '/api/digital-employee-types/:typeRef/employees/:id/upgrade',
+      permissions: ['digital-employees:update'],
+      tokenAccess: 'allow',
+      summary: 'Explicitly upgrade one employee to a newer type revision',
+    },
+    async (c) =>
+      c.json({
+        ref: module.commands.upgradeEmployee({
+          id: c.req.param('id'),
+          targetTypeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
+          body: await safeJsonOrEmpty(c.req.raw),
+          actorUserId: actorId(c),
+        }),
+      }),
+  )
+
+  registerRoute(
+    app,
+    {
       method: 'GET',
       path: '/api/digital-employees',
       permissions: ['digital-employees:read'],
       tokenAccess: 'allow',
-      summary: 'List published and draft digital employees across programmable types',
+      summary: 'List digital employees across programmable types',
     },
     (c) => c.json({ items: module.queries.listEmployees() }),
   )
@@ -603,10 +601,22 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
     app,
     {
       method: 'GET',
+      path: '/api/digital-employees/launchable',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'List digital employees pinned to the current installed type revision',
+    },
+    (c) => c.json({ items: module.queries.listLaunchableEmployees() }),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
       path: '/api/digital-employees/:id',
       permissions: ['digital-employees:read'],
       tokenAccess: 'allow',
-      summary: 'Read a digital employee definition and its published head',
+      summary: 'Read a digital employee definition and its current revision',
     },
     (c) => c.json(module.queries.getEmployee(c.req.param('id'))),
   )
@@ -618,32 +628,15 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       path: '/api/digital-employees/:id',
       permissions: ['digital-employees:update'],
       tokenAccess: 'allow',
-      summary: 'Update a digital employee draft',
+      summary: 'Save a digital employee and atomically create its next executable revision',
     },
     async (c) =>
       c.json(
         module.commands.updateEmployee({
           id: c.req.param('id'),
           body: await safeJsonOrEmpty(c.req.raw),
-        }),
-      ),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/digital-employees/:id/publish',
-      permissions: ['digital-employees:update'],
-      tokenAccess: 'allow',
-      summary: 'Publish an employee with exact node tool bindings',
-    },
-    (c) =>
-      c.json({
-        ref: module.commands.publishEmployee({
-          id: c.req.param('id'),
           actorUserId: actorId(c),
         }),
-      }),
+      ),
   )
 }

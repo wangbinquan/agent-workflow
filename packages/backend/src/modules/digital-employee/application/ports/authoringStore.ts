@@ -80,8 +80,13 @@ export interface EmployeeDefinitionRecord {
   readonly id: string
   readonly name: string
   readonly typeRef: EmployeeTypeRef
-  readonly draft: DigitalEmployeeDefinitionDraft
-  readonly publishedRevision: number | null
+  readonly configuration: DigitalEmployeeDefinitionDraft
+  /**
+   * Exact immutable revision used by every new Case. Null is read compatibility
+   * for incomplete definitions created before save became atomic; current
+   * authoring commands never create or return that state.
+   */
+  readonly currentRevision: number | null
   readonly ownerUserId: string | null
   readonly visibility: 'private' | 'public'
   readonly createdAt: number
@@ -93,8 +98,8 @@ export interface EmployeeDefinitionRevisionRecord {
   readonly ref: ExactResourceRef
   readonly content: DigitalEmployeeDefinitionContent
   readonly contentDigest: string
-  readonly publishedAt: number
-  readonly publishedBy: string | null
+  readonly createdAt: number
+  readonly createdBy: string | null
 }
 
 export interface WorkScopeRevisionRecord {
@@ -137,21 +142,28 @@ export interface DigitalEmployeeAuthoringStore {
   updateJobTemplate(id: string, name: string, draft: EmployeeJobTemplateContent, now: number): void
   getJobTemplate(id: string): JobTemplateRecord | null
   listJobTemplates(typeRef: EmployeeTypeRef): JobTemplateRecord[]
+  listJobTemplatesByTypeId(typeId: string): JobTemplateRecord[]
   publishJobTemplate(input: JobTemplateRevisionRecord): void
   getJobTemplateRevision(ref: ExactResourceRef): JobTemplateRevisionRecord | null
 
-  createEmployeeDefinition(input: EmployeeDefinitionRecord): void
-  updateEmployeeDefinition(
-    id: string,
-    name: string,
-    draft: DigitalEmployeeDefinitionDraft,
-    now: number,
-  ): void
   getEmployeeDefinition(id: string): EmployeeDefinitionRecord | null
   listEmployeeDefinitions(typeRef?: EmployeeTypeRef): EmployeeDefinitionRecord[]
-  publishEmployeeDefinition(input: {
+  saveEmployeeDefinition(input: {
     revision: EmployeeDefinitionRevisionRecord
     workScope: WorkScopeRevisionRecord
+    definitionMutation:
+      | {
+          readonly kind: 'create'
+          readonly record: EmployeeDefinitionRecord
+        }
+      | {
+          readonly kind: 'update'
+          readonly expectedTypeRef: EmployeeTypeRef
+          readonly targetTypeRef: EmployeeTypeRef
+          readonly name: string
+          readonly configuration: DigitalEmployeeDefinitionDraft
+          readonly updatedAt: number
+        }
   }): void
   getEmployeeDefinitionRevision(ref: ExactResourceRef): EmployeeDefinitionRevisionRecord | null
   getWorkScopeRevision(ref: ExactResourceRef): WorkScopeRevisionRecord | null

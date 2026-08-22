@@ -1,4 +1,4 @@
-// RFC-311 §6.6 —— 「备份进行中，`/api/tasks/page` 仍然快」。
+// RFC-311 §6.6 —— 「备份进行中，task-operations catalog 仍然快」。
 //
 // 这条验收此前**结构成立但零测试**（bench-results §G4 如实记账过），而它恰恰是本
 // RFC 自己一度重新引入的形态：C5 把 WAL checkpoint 循环改成默认开，

@@ -233,7 +233,7 @@ describe('digital employee capability builder', () => {
     expect(screen.getByTestId('digital-employee-build-assignments')).toBeTruthy()
     expect(screen.queryByTestId('digital-employee-build-outcomes')).toBeNull()
     expect(screen.getByTestId('digital-employee-open-tasks').getAttribute('href')).toBe(
-      '/tasks?category=digital-employee',
+      '/tasks?type=digital-employee',
     )
     expect(screen.queryByTestId('mission-operations-board')).toBeNull()
     expect(calls).not.toContain('/api/code/work-items')

@@ -1080,8 +1080,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('task-creation-unified-cards.png', SNAPSHOT_OPTS)
 
     await page.getByTestId('wizard-kind-digital-employee').click()
-    await page.waitForURL(/\/tasks\/employee-cases\/new$/)
-    await expect(page.getByTestId('employee-case-task-wizard-stepper')).toBeVisible()
+    await expect(page).toHaveURL(/\/tasks\/new$/)
+    await expect(page.getByTestId('task-wizard-stepper')).toBeVisible()
     await expect(page.getByTestId('stepper-step-mode')).toHaveAttribute('aria-current', 'step')
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('digital-employee-task-wizard-mode.png', SNAPSHOT_OPTS)
@@ -1223,23 +1223,22 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
               id: 'visual-java-employee',
               name: 'Java delivery employee',
               typeRef: { typeId: 'development', revision: 5 },
-              draft: {
+              configuration: {
                 displayName: 'Java delivery employee',
-                enabled: true,
                 jobTemplateRef: { id: 'visual-java-job', revision: 3 },
                 workScope: { kind: 'repository', repositoryId: 'visual-repo' },
                 toolOverrides: [],
                 collaborationOverrides: [],
               },
-              publishedRevision: 4,
-              publishedWorkScope: { kind: 'repository', repositoryId: 'visual-repo' },
-              published: {
+              revision: 4,
+              workScope: { kind: 'repository', repositoryId: 'visual-repo' },
+              definition: {
                 displayName: 'Java delivery employee',
-                enabled: true,
                 workScopeSummary: 'Repository · team/orders-service',
                 exactToolBindings: [],
                 exactCollaborationBindings: [],
                 exactOrderedDispatchConfigurations: [],
+                exactReactionLaneOrder: [],
                 enabledWorkItemRefs: [],
               },
             },
@@ -1247,26 +1246,25 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
               id: 'visual-cpp-employee',
               name: 'C++ pipeline repair employee',
               typeRef: { typeId: 'development', revision: 5 },
-              draft: {
+              configuration: {
                 displayName: 'C++ pipeline repair employee',
-                enabled: false,
                 jobTemplateRef: { id: 'visual-cpp-job', revision: 2 },
                 workScope: { kind: 'repository-group', repositoryGroupId: 'firmware' },
                 toolOverrides: [],
                 collaborationOverrides: [],
               },
-              publishedRevision: 2,
-              publishedWorkScope: {
+              revision: 2,
+              workScope: {
                 kind: 'repository-group',
                 repositoryGroupId: 'firmware',
               },
-              published: {
+              definition: {
                 displayName: 'C++ pipeline repair employee',
-                enabled: false,
                 workScopeSummary: 'Repository group · Firmware repositories',
                 exactToolBindings: [],
                 exactCollaborationBindings: [],
                 exactOrderedDispatchConfigurations: [],
+                exactReactionLaneOrder: [],
                 enabledWorkItemRefs: [],
               },
             },

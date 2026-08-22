@@ -477,7 +477,7 @@ test('guest browser exposes public resources without mutation or task affordance
       runtimeRegistryRequests.push(browserRequest.url())
     }
     if (
-      pathname === '/api/tasks/page' ||
+      pathname === '/api/task-catalog' ||
       pathname === '/api/cached-repos' ||
       pathname === '/api/memories' ||
       pathname === '/api/fusions/pending-count'

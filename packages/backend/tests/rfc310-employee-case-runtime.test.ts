@@ -547,30 +547,25 @@ describe('RFC-310 stateful employee Case runtime', () => {
       body: {
         name: '协同开发员工',
         jobTemplateRef: baseJobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-1' },
         toolOverrides: [],
       },
     })
-    const childEmployeeRef = module.commands.publishEmployee({
-      id: childEmployee.id,
-      actorUserId: 'author',
-    })
+    const childEmployeeRef = { id: childEmployee.id, revision: childEmployee.revision }
     const secondChildEmployee = module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
         name: '协同开发员工二号',
         jobTemplateRef: baseJobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-1' },
         toolOverrides: [],
       },
     })
-    const secondChildEmployeeRef = module.commands.publishEmployee({
+    const secondChildEmployeeRef = {
       id: secondChildEmployee.id,
-      actorUserId: 'author',
-    })
+      revision: secondChildEmployee.revision,
+    }
     const job = module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
@@ -621,15 +616,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       body: {
         name: '开发一号',
         jobTemplateRef: jobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-1' },
         toolOverrides: [],
       },
     })
-    const employeeRef = module.commands.publishEmployee({
-      id: employee.id,
-      actorUserId: 'author',
-    })
+    const employeeRef = { id: employee.id, revision: employee.revision }
 
     const launched = runtime.commands.launch({
       employeeRef,
@@ -1116,5 +1107,34 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const firstEventLaunch = runtime.commands.launchWork(eventWork)
     const repeatedEventLaunch = runtime.commands.launchWork(eventWork)
     expect(repeatedEventLaunch.caseRef.id).toBe(firstEventLaunch.caseRef.id)
+    expect(JSON.parse(firstEventLaunch.projectionJson).case).toMatchObject({
+      ownerUserId: null,
+      launchOrigin: 'event',
+    })
+
+    const manualLaunch = runtime.commands.launchWork({
+      employeeId: employee.id,
+      intake: {
+        kind: 'body',
+        target: { repositoryId: 'repo-1' },
+        body: '由当前用户手工启动数字员工任务',
+        externalId: null,
+        uploads: [],
+        idempotencyKey: 'manual-work:catalog-user',
+      },
+      actorUserId: 'catalog-user',
+    })
+    expect(JSON.parse(manualLaunch.projectionJson).case).toMatchObject({
+      ownerUserId: 'catalog-user',
+      launchOrigin: 'manual',
+    })
+    const mine = JSON.parse(
+      runtime.queries.listCasePage({ ownerUserId: 'catalog-user', launchOrigin: 'manual' }),
+    ) as { items: Array<{ id: string }> }
+    expect(mine.items.map((item) => item.id)).toEqual([manualLaunch.caseRef.id])
+    const events = JSON.parse(runtime.queries.listCasePage({ launchOrigin: 'event' })) as {
+      items: Array<{ id: string }>
+    }
+    expect(events.items.map((item) => item.id)).toContain(firstEventLaunch.caseRef.id)
   })
 })

@@ -172,8 +172,16 @@ export interface EmployeeTypePackage {
     displayName: LocalizedText
     description: LocalizedText
     deliveryClass: string
+    priority?: number
+    preemptsContinuation?: boolean
+  }>
+  reactionRules: Array<{
+    ruleId: string
+    eventTypeId: string
     priority: number
     preemptsContinuation: boolean
+    capabilityWorkItemRef?: string
+    workItemRef: string
   }>
   invocationContracts: Array<{
     contractId: string
@@ -246,6 +254,7 @@ export interface ToolAuthoringView extends ToolRegistration {
 
 export interface JobTemplate {
   id: string
+  typeRef: EmployeeTypeRef
   name: string
   draft: {
     description: string
@@ -273,6 +282,7 @@ export interface JobTemplate {
         fallback: boolean
       }>
     }>
+    reactionLaneOrder: string[]
   }
   publishedRevision: number | null
 }
@@ -281,9 +291,8 @@ export interface DigitalEmployeeDefinition {
   id: string
   name: string
   typeRef: EmployeeTypeRef
-  draft: {
+  configuration: {
     displayName: string
-    enabled: boolean
     jobTemplateRef: ExactRef
     workScope: unknown
     toolOverrides: Array<{
@@ -300,11 +309,10 @@ export interface DigitalEmployeeDefinition {
       quorum: number | null
     }>
   }
-  publishedRevision: number | null
-  publishedWorkScope: unknown | null
-  published: null | {
+  revision: number
+  workScope: unknown
+  definition: {
     displayName: string
-    enabled: boolean
     workScopeSummary: string
     exactToolBindings: Array<{
       workItemRef: string
@@ -320,6 +328,7 @@ export interface DigitalEmployeeDefinition {
       quorum: number | null
     }>
     exactOrderedDispatchConfigurations: JobTemplate['draft']['orderedDispatchConfigurations']
+    exactReactionLaneOrder: string[]
     enabledWorkItemRefs: string[]
   }
 }

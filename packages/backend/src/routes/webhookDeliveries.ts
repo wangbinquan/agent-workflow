@@ -42,7 +42,7 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-261：页码分页（用户拍板，非 load-more）。响应从裸数组改封套
-      // {items,total,page,pageCount}（tasks /api/tasks/page 先例）；receivedAt
+      // {items,total,page,pageCount}；receivedAt
       // 游标参数 `before` 删除（仓内零消费）。
       // 钳制必须 isFinite+trunc 守门（评审门 P1-①）：RFC-257 原式 `Math.min(200,
       // Number(...)||50)` 会把 `-1` 交给 drizzle（负 LIMIT 被吞 → 全表 dump），
@@ -119,7 +119,7 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
   )
 
   // RFC-261：仓库过滤下拉的选项源（保留窗内出现过的仓库）。必须挂在 `/:id`
-  // 之前，防止字面量 `repos` 被吃进 `:id`（routes/tasks.ts `/api/tasks/page` 同款）。
+  // 之前，防止字面量 `repos` 被吃进 `:id`。
   registerRoute(
     app,
     {

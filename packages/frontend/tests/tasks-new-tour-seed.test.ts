@@ -46,6 +46,8 @@ describe('RFC-211 task wizard tour seeding is wired into the source', () => {
     expect(src).toContain("fromTour ? t('tour.firstTask.seedTaskName') : ''")
     expect(src).toContain("fromTour ? t('tour.firstTask.seedTaskPrompt') : ''")
     // Start on Confirm so the launch button (data-tour="task-submit") is present.
-    expect(src).toContain('fromTour ? STEP_CONFIRM :')
+    expect(src).toContain(
+      "if (search.tour === 'first-task' && !editing && !relaunching) return STEP_CONFIRM",
+    )
   })
 })

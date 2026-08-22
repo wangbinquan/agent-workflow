@@ -41,6 +41,8 @@ describe('ChoiceCards (RFC-165 UI 精修)', () => {
     expect(getByText('Alpha')).toBeTruthy()
     expect(getByText('first choice')).toBeTruthy()
     expect(getByTestId('icon-a')).toBeTruthy()
+    expect(getByTestId('cc-a').classList.contains('choice-card--without-icon')).toBe(false)
+    expect(getByTestId('cc-b').classList.contains('choice-card--without-icon')).toBe(true)
   })
 
   test('C3 group disabled + per-option disabled', () => {

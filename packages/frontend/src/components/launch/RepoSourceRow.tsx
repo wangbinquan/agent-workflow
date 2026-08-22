@@ -44,6 +44,15 @@ export interface RepoSourceRowProps {
   selectedGroupId?: string
   /** Fail-closed switch for the repos:read-protected catalogs. */
   catalogEnabled?: boolean
+  /** Caller-owned, already-authorized repository inventory. */
+  catalogItems?: ReadonlyArray<{ id: string; label: string }>
+  /** Select an existing repository only; no URL or ref editor. */
+  catalogOnly?: boolean
+  /** Read-only projection used for a pre-bound repository. */
+  disabled?: boolean
+  fieldLabel?: string
+  fieldHint?: string
+  fieldPlaceholder?: string
 }
 
 /** 下拉里区分「组条目」与「仓库条目」的值前缀（仓库值是裸 ULID）。 */
@@ -61,6 +70,12 @@ export function RepoSourceRow({
   previewDirName,
   index,
   catalogEnabled = true,
+  catalogItems,
+  catalogOnly = false,
+  disabled = false,
+  fieldLabel,
+  fieldHint,
+  fieldPlaceholder,
 }: RepoSourceRowProps) {
   const { t } = useTranslation()
   // RFC-248: 仓库组与仓库同列在这一个下拉里——用户视角「就是从仓库列表里选
@@ -74,12 +89,16 @@ export function RepoSourceRow({
   const cached = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
-    enabled: catalogEnabled,
+    enabled: catalogEnabled && catalogItems === undefined,
   })
   // `enabled:false` prevents new I/O but React Query may still expose a cache
   // populated by an earlier, more privileged authority snapshot. Shape the
   // read projection as well as the request.
-  const cachedItems = catalogEnabled ? (cached.data?.items ?? []) : []
+  const cachedItems = catalogEnabled
+    ? (catalogItems ??
+      cached.data?.items.map((item) => ({ id: item.id, label: item.urlRedacted })) ??
+      [])
+    : []
   const groupItems = catalogEnabled ? (groups.data?.items ?? []) : []
 
   const idxSuffix = typeof index === 'number' ? `-${index}` : ''
@@ -91,20 +110,21 @@ export function RepoSourceRow({
     !groupSelected &&
     (source.cachedRepoId === undefined || source.cachedRepoId === '') &&
     (manualUrl || source.repoUrl.trim() !== '')
-  const showUrlInput = onSelectGroup === undefined || manualUrlActive
+  const showUrlInput = !catalogOnly && (onSelectGroup === undefined || manualUrlActive)
   const repositorySelected =
     !groupSelected &&
     (onSelectGroup === undefined ||
       (source.cachedRepoId !== undefined && source.cachedRepoId !== '') ||
       (manualUrlActive && source.repoUrl.trim() !== ''))
-  const showSourcePicker =
-    onSelectGroup !== undefined
+  const showSourcePicker = catalogOnly
+    ? catalogEnabled && (catalogItems !== undefined || cached.data !== undefined)
+    : onSelectGroup !== undefined
       ? catalogEnabled && (cached.data !== undefined || groups.data !== undefined)
       : cachedItems.length > 0
 
   return (
     <div className="repo-source-row" data-testid={`repo-source-row${idxSuffix}`}>
-      {showRemove === true && (
+      {showRemove === true && !disabled && (
         <div className="repo-source-row__header">
           <button
             type="button"
@@ -129,15 +149,17 @@ export function RepoSourceRow({
 
       <Field
         label={
-          onSelectGroup === undefined
+          fieldLabel ??
+          (onSelectGroup === undefined && !catalogOnly
             ? t('launch.repoSource.urlField')
-            : t('launch.repoSource.spaceField')
+            : t('launch.repoSource.spaceField'))
         }
         required
         hint={
-          onSelectGroup === undefined
+          fieldHint ??
+          (onSelectGroup === undefined && !catalogOnly
             ? t('launch.repoSource.urlHint')
-            : t('launch.repoSource.spaceHint')
+            : t('launch.repoSource.spaceHint'))
         }
       >
         {showSourcePicker && (
@@ -149,9 +171,10 @@ export function RepoSourceRow({
                 : t('launch.repoSource.spacePlaceholder')
             }
             placeholder={
-              onSelectGroup === undefined
+              fieldPlaceholder ??
+              (onSelectGroup === undefined && !catalogOnly
                 ? t('launch.repoSource.recentUrlsPlaceholder')
-                : t('launch.repoSource.spacePlaceholder')
+                : t('launch.repoSource.spacePlaceholder'))
             }
             value={
               groupSelected
@@ -160,6 +183,7 @@ export function RepoSourceRow({
                   ? MANUAL_URL_OPTION
                   : (source.cachedRepoId ?? '')
             }
+            disabled={disabled}
             onChange={(id) => {
               if (id.startsWith(GROUP_OPTION_PREFIX)) {
                 setManualUrl(false)
@@ -187,7 +211,7 @@ export function RepoSourceRow({
                 const hit = cachedItems.find((it) => it.id === id)
                 onChange({
                   kind: 'url',
-                  repoUrl: hit?.urlRedacted ?? '',
+                  repoUrl: hit?.label ?? '',
                   cachedRepoId: id,
                   ref: source.ref,
                 })
@@ -197,13 +221,14 @@ export function RepoSourceRow({
               {
                 value: '',
                 label:
-                  onSelectGroup === undefined
+                  fieldPlaceholder ??
+                  (onSelectGroup === undefined && !catalogOnly
                     ? t('launch.repoSource.recentUrlsPlaceholder')
-                    : t('launch.repoSource.spacePlaceholder'),
+                    : t('launch.repoSource.spacePlaceholder')),
               },
               ...cachedItems.map((it) => ({
                 value: it.id,
-                label: it.urlRedacted,
+                label: it.label,
               })),
               ...(onSelectGroup !== undefined
                 ? groupItems.map((g) => ({
@@ -214,7 +239,7 @@ export function RepoSourceRow({
                     }),
                   }))
                 : []),
-              ...(onSelectGroup !== undefined
+              ...(onSelectGroup !== undefined && !catalogOnly
                 ? [
                     {
                       value: MANUAL_URL_OPTION,
@@ -232,6 +257,7 @@ export function RepoSourceRow({
               onChange={(v) => onChange({ kind: 'url', repoUrl: v, ref: source.ref })}
               placeholder={t('launch.repoSource.urlPlaceholder')}
               data-testid={`repo-source-url${idxSuffix}`}
+              disabled={disabled}
             />
             {validateRepoUrl(source.repoUrl) === 'invalid' && (
               <div className="form-input__error" data-testid={`repo-source-url-error${idxSuffix}`}>
@@ -241,7 +267,7 @@ export function RepoSourceRow({
           </>
         )}
       </Field>
-      {repositorySelected && (
+      {repositorySelected && !catalogOnly && (
         <>
           <Field label={t('launch.repoSource.refField')} hint={t('launch.repoSource.refHint')}>
             <TextInput
@@ -249,6 +275,7 @@ export function RepoSourceRow({
               onChange={(v) => onChange({ ...source, ref: v })}
               placeholder={t('launch.repoSource.refPlaceholder')}
               data-testid={`repo-source-ref${idxSuffix}`}
+              disabled={disabled}
             />
           </Field>
           {/* RFC-068: FF sync is always automatic for remote workspaces — make that visible. */}

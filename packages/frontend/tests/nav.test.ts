@@ -10,7 +10,13 @@
 
 import { describe, expect, test } from 'vitest'
 import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
-import { NAV_GROUPS, navPermissionForPath, resolveActiveNav } from '@/lib/nav'
+import {
+  NAV_GROUPS,
+  navIconForPath,
+  navPermissionForPath,
+  navPermissionsForPath,
+  resolveActiveNav,
+} from '@/lib/nav'
 
 describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags', () => {
   test('guest keeps the complete navigation catalog while permissions shape page content', () => {
@@ -31,8 +37,8 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       '/digital-employees',
       '/tasks',
       '/scheduled',
-      '/repos',
       '/events',
+      '/repos',
       '/memory',
     ])
   })
@@ -42,6 +48,10 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(navPermissionForPath('/tasks/task_1')).toBe('tasks:read')
     expect(navPermissionForPath('/tasks/new')).toBe('tasks:execute')
     expect(navPermissionForPath('/tasks/new/confirm')).toBe('tasks:execute')
+    expect(navPermissionsForPath('/tasks/new')).toEqual([
+      'tasks:execute',
+      'development-missions:launch',
+    ])
     expect(navPermissionForPath('/repos')).toBe('repos:read')
     expect(navPermissionForPath('/agents/agent_1')).toBe('agents:read')
     expect(navPermissionForPath('/digital-employees')).toBe('digital-employees:read')
@@ -62,16 +72,17 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       ['/plugins', 'plugin'],
       ['/workflows', 'workflow'],
       ['/workgroups', 'workgroup'],
-      // RFC-234 — intent builder rides the workflow icon (it authors
-      // workflows/workgroups; no dedicated glyph yet).
-      ['/intent', 'workflow'],
-      ['/digital-employees', 'agent'],
+      ['/intent', 'intent'],
+      ['/digital-employees', 'digital-employee'],
       ['/tasks', 'task'],
       ['/scheduled', 'schedule'],
-      ['/repos', 'repo'],
       ['/events', 'webhook'],
+      ['/repos', 'repo'],
       ['/memory', 'memory'],
     ])
+    expect(navIconForPath('/digital-employees')).toBe('digital-employee')
+    expect(navIconForPath('/agents')).toBe('agent')
+    expect(navIconForPath('/intent')).toBe('intent')
   })
 
   test('root path activates the home link, nothing else', () => {

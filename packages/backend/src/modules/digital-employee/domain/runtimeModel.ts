@@ -1,4 +1,8 @@
-import { canonicalJson, PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
+import {
+  canonicalJson,
+  PLATFORM_WORKSPACE_DIR,
+  type TaskLaunchOrigin,
+} from '@agent-workflow/shared'
 import { z } from 'zod'
 
 import { sha256Hex } from '@/util/hash'
@@ -154,6 +158,8 @@ export interface EmployeeCaseRecord {
   readonly typeRef: { readonly typeId: string; readonly revision: number }
   readonly primaryContextId: string
   readonly executionPolicyRevision: number
+  readonly ownerUserId: string | null
+  readonly launchOrigin: TaskLaunchOrigin
   readonly state: 'active' | 'waiting' | 'blocked' | 'terminal'
   readonly terminalKind: string | null
   readonly blockReason: string | null

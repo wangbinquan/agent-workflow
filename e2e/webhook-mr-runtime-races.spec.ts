@@ -691,7 +691,7 @@ test('verified malformed JSON is a parse-failed audit row and creates zero fire/
     ).flat()
     expect(afterFires.filter((row) => !beforeFireIds.has(row.id))).toEqual([])
     const tasksPage = await jsonOrThrow<{ items: TaskRow[] }>(
-      await apiFetch('/api/tasks/page?scope=mine&limit=50'),
+      await apiFetch('/api/task-catalog?scope=mine&limit=50'),
       'list tasks after malformed ingress',
     )
     expect(tasksPage.items).toEqual([])

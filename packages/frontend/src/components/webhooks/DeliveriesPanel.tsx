@@ -71,7 +71,7 @@ type DeliveryDetail = DeliveryRow & {
   terminalControl: TerminalControlAudit | null
 }
 
-/** RFC-261 列表封套（tasks /api/tasks/page 同款形态）。 */
+/** RFC-261 Webhook 投递列表封套。 */
 type DeliveryPage = {
   items: DeliveryRow[]
   total: number

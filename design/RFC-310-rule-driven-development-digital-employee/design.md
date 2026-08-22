@@ -4393,7 +4393,7 @@ interface EmployeeTerminalOutcomeCounts {
 越界，一旦超过即失败关闭并让卡片显示“成效暂不可用”，不得截断后冒充完整统计。legacy 查询同时进入 RFC-311 实际 SQL 语句数、结果行数、
 索引计划和重列投影防护。
 
-卡片只展示四个数字与“查看任务”，历史、状态、日志和 receipt 都继续使用 `/tasks?category=digital-employee` 及任务详情。侧栏删除成效项；
+卡片只展示四个数字与“查看任务”，历史、状态、日志和 receipt 都继续使用 `/tasks?type=digital-employee` 及任务详情。侧栏删除成效项；
 `/outcomes`、`/code/outcomes` 只作到 `/digital-employees` 的兼容重定向，不再注册页面组件或独立视觉基线。Mission journey 的终态出口也改到
 数字员工目录/统一任务历史，不再制造一个已经退役的产品目的地。
 
@@ -4401,6 +4401,86 @@ interface EmployeeTerminalOutcomeCounts {
 
 任务列表不再并列两个主按钮，只保留“新建任务”。`/tasks/new` 的“执行方式”卡片增加“数字员工”，与 Workflow、Agent、工作组同级；选择后
 继续使用同一套四步 Stepper：①选择数字员工；②确认执行空间（固定仓锁定、仓库组内选仓、任务时指定）；③填写 ID/正文/多文件、目标路径与
-方案评审策略；④只读确认并提交。数字员工总览和分类页右上角仍显示语义明确的“创建数字员工任务”，但链接统一到
+方案评审策略；④只读确认并提交。数字员工目录不再放第二套页头启动按钮；具体数字员工卡片上的“创建任务”统一链接到
 `/tasks/new?kind=digital-employee` 并预选数字员工。数字员工的最终提交仍调用 Case command，不强迫两种 runtime 共用 payload；编辑定时任务、
-重新执行既有编排或创建定时任务时不显示该卡片，避免把不支持的 lifecycle 混入原协议。
+重新执行既有编排或创建定时任务时不显示该卡片，避免把不支持的 lifecycle 混入原协议。旧 `/tasks/employee-cases/new` 页面、路由注册及其
+专用布局样式全部删除。数字员工和编排来源都由公共 task-creation Host 直接消费来源合同；来源代码只保留自己的受控状态和最终命令。
+
+所有对象选择器遵循同一空值规则：只有 deep link 明确携带 resource ID 才可预选，否则必须显示“请选择”，不得因为异步 inventory 返回就
+自动选择第一项。选择数字员工后不再追加重复的负责范围提醒。若 published employee revision 已绑定单仓库，第二步把该仓库注入对应
+repository port，并以已填写、不可修改的字段展示；它不依赖仓库展示名查询成功，也不要求用户再次选择，Next admission 直接消费冻结的
+repository ID。未绑定单仓库时才显示可编辑的仓库/仓库组选择器。
+
+### 21.9 统一任务来源注册、查询与筛选
+
+任务公共层只定义 `TaskSourceRegistration`，每个来源注册以下事实：
+
+```ts
+interface TaskSourceRegistration {
+  id: TaskSourceId
+  order: number
+  catalogPath: string
+  labelKey: string
+  descriptionKey: string
+  creation: {
+    inventoryPath: string
+    resourceSearchKey: string
+    requiredPermission: Permission
+    steps: readonly ['mode', 'space', 'content', 'confirm']
+    parameterContract: TaskCreationParameterContract
+    supportsSchedule: boolean
+    supportsRelaunch: boolean
+  }
+  list: {
+    requiredPermission: Permission
+    detailPath: string
+  }
+}
+```
+
+共享注册表是创建卡片、`type` 筛选、来源发现、详情路由和覆盖性校验的唯一来源。不存在第二层身份、映射表、挂载点或链式分派。
+前端公共创建入口读取 `creation.parameterContract`，由唯一 `TaskCreationFlow` 持有 `step/maxVisited` 状态机，由唯一
+`TaskCreationContractFrame → TaskCreationWizardHost` 挂载点独占页面宽度、四卡目录、四步 Stepper、导航和
+loading/blocked 外壳；`TaskCreationResourcePicker` 独占对象字段的标签、说明、空值、loading/error/empty/retry；
+`TaskCreationRepositorySpace` 直接复用编排任务的 `RepoSourceList`，处理固定仓锁定、仓库组收敛和任务启动时选仓。来源代码只管理自己
+的受控值、校验和最终 command，不能再创建 page、Shell、Stepper、Picker、执行空间或另一个 Host。
+
+任务列表只消费一个规范化合同：
+
+```ts
+interface TaskCatalogPage {
+  schemaVersion: 1
+  sourceIds: TaskSourceId[]
+  items: TaskCatalogListItem[] // 每项直接携带 sourceId
+  nextCursor: string | null
+  facets: { all: number; active: number; attention: number; finished: number }
+}
+```
+
+后端 consumer-owned `task-catalog` 以 `sourceId` 直接登记每个 owner 的只读来源适配器：
+
+```text
+GET /api/task-catalog/sources
+  → 从 TaskSourceRegistration 投影当前 actor 可见来源
+
+GET /api/task-catalog?type=<source>&...
+  → 校验 source/permission
+  → 按 sourceId 调用唯一来源适配器
+  → 在 owner 边界 exact 校验私有读取形状并规范化
+  → 返回 TaskCatalogPage@1
+```
+
+`task-catalog` application 只依赖自有 required port，不 import task-execution 或 digital-employee 内部实现；适配器只在 bootstrap composition
+装配。注册表中的每个公开来源必须恰好登记一次，重复、遗漏、未知来源或返回错误 `sourceId` 都 fail closed。旧 `/api/tasks/page` 与
+`/api/employee-cases` 列表入口退役；详情、创建、恢复和 mutation 仍由原 bounded context 拥有，统一读面不成为跨域 writer。
+
+前端只有一次 catalog 请求、一个列表模型、一个分页游标和一套行组件。公共筛选键固定为 `view/q/statuses/type/scope/origin`；
+`category` 与 `subject` 不再作为产品筛选，其中旧 task-execution 的 subject 只在来源适配器内部兼容翻译。每个来源适配器必须真实执行这些
+语义或明确拒绝，不能静默忽略。DigitalEmployee Case 增加 `owner_user_id` 与 `launch_origin`，手工启动写 `manual`、事件中心启动写 `event`、
+员工协作写 `api`；普通用户的 `all` 收敛为 `mine`，当前无 Case 协作者模型时 `shared` 返回空集。历史 Case 无法可靠反推 owner，迁移保持
+`NULL` 并标记 `api`，不得冒充当前用户任务。
+
+架构回归必须锁住：共享前后端 application 和公共创建组件不含具体来源 ID 的业务分支；来源注册只含上述声明字段；task-creation 生产目录
+只能有一个四步状态机和一个 Host 挂载点，且不能出现来源专属的 Creation Flow/Page；公共任务页不包含来源私有
+列表、挂载点或链；每个来源恰有一个只读适配器且只能返回自己的 `sourceId`；私有读取形状解析失败不能进入公共 DTO；旧列表端点保持不可用。
+用例同时锁定桌面四卡同排、切换来源宽度不变、不重复弹恢复设置、对象选择默认空值、固定仓库只读注入且可直接进入下一步。

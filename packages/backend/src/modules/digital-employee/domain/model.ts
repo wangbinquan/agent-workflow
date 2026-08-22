@@ -805,6 +805,13 @@ export const employeeJobTemplateContentSchema = z
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),
     orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
+    /**
+     * Highest-priority reaction lane first. The value is frozen with the job
+     * template instead of living on Event Center sources or employee-local AI
+     * prompts. Empty only exists for revisions published before lane ordering
+     * became authorable; runtime then keeps the type-package priorities.
+     */
+    reactionLaneOrder: z.array(machineIdSchema).max(30).default([]),
   })
   .strict()
 
@@ -816,12 +823,11 @@ export const digitalEmployeeDefinitionDraftSchema = z
     typeRef: employeeTypeRefSchema,
     jobTemplateRef: exactResourceRefSchema,
     displayName: z.string().min(1).max(200),
-    enabled: z.boolean(),
     workScope: z.unknown(),
     toolOverrides: z.array(workItemToolBindingSchema).max(300),
     collaborationOverrides: z.array(employeeCollaborationBindingSchema).max(100),
   })
-  .strict()
+  .strip()
 
 export type DigitalEmployeeDefinitionDraft = z.infer<typeof digitalEmployeeDefinitionDraftSchema>
 
@@ -831,7 +837,6 @@ export const digitalEmployeeDefinitionContentSchema = z
     typeRef: employeeTypeRefSchema,
     jobTemplateRef: exactResourceRefSchema,
     displayName: z.string().min(1).max(200),
-    enabled: z.boolean(),
     workScopeRef: exactResourceRefSchema,
     workScopeSummary: z.string().min(1).max(500),
     exactToolBindings: z.array(workItemToolBindingSchema).max(300),
@@ -840,10 +845,11 @@ export const digitalEmployeeDefinitionContentSchema = z
       .array(orderedDispatchConfigurationSchema)
       .max(100)
       .default([]),
+    exactReactionLaneOrder: z.array(machineIdSchema).max(30).default([]),
     enabledWorkItemRefs: z.array(machineIdSchema).max(200).default([]),
     compiledClosureDigest: digestSchema,
   })
-  .strict()
+  .strip()
 
 export type DigitalEmployeeDefinitionContent = z.infer<
   typeof digitalEmployeeDefinitionContentSchema
@@ -1306,6 +1312,69 @@ export function findWorkItem(
   return (
     descriptor.authoringManifest.workItems.find((item) => item.workItemRef === workItemRef) ?? null
   )
+}
+
+export function reactionLaneIdForRule(
+  descriptor: EmployeeTypePackageDescriptor,
+  rule: EmployeeTypePackageDescriptor['reactionRules'][number],
+): string | null {
+  return (
+    findWorkItem(descriptor, rule.capabilityWorkItemRef ?? rule.workItemRef)
+      ?.responsibilityLaneId ?? null
+  )
+}
+
+/**
+ * Returns only lanes that can compete for an event round. Spine lanes are
+ * platform guards and stay fixed ahead of authorable business-duty lanes.
+ */
+export function reactionLaneIds(descriptor: EmployeeTypePackageDescriptor): string[] {
+  const priorities = new Map<string, number>()
+  for (const rule of descriptor.reactionRules) {
+    const laneId = reactionLaneIdForRule(descriptor, rule)
+    if (laneId !== null)
+      priorities.set(laneId, Math.max(priorities.get(laneId) ?? 0, rule.priority))
+  }
+  const declared = descriptor.authoringManifest.lifecycleRegions
+    .slice()
+    .sort((left, right) => left.order - right.order)
+    .flatMap((region) =>
+      region.responsibilityLanes
+        .slice()
+        .sort((left, right) => left.order - right.order)
+        .filter((lane) => lane.kind === 'branch' && priorities.has(lane.laneId))
+        .map((lane, laneIndex) => ({
+          laneId: lane.laneId,
+          declaredOrder: region.order * 100 + laneIndex,
+        })),
+    )
+  return declared
+    .sort(
+      (left, right) =>
+        (priorities.get(right.laneId) ?? 0) - (priorities.get(left.laneId) ?? 0) ||
+        left.declaredOrder - right.declaredOrder,
+    )
+    .map((lane) => lane.laneId)
+}
+
+export function effectiveReactionPriority(input: {
+  descriptor: EmployeeTypePackageDescriptor
+  reactionLaneOrder: readonly string[]
+  rule: EmployeeTypePackageDescriptor['reactionRules'][number]
+}): number {
+  if (input.reactionLaneOrder.length === 0) return input.rule.priority
+  const laneId = reactionLaneIdForRule(input.descriptor, input.rule)
+  if (laneId === null) return input.rule.priority
+  const lane = input.descriptor.authoringManifest.lifecycleRegions
+    .flatMap((region) => region.responsibilityLanes)
+    .find((candidate) => candidate.laneId === laneId)
+  // Platform spine reactions (especially merged/closed observations) are a
+  // fixed transition fence and can never be dragged below a business duty.
+  if (lane?.kind === 'spine') return 90_000 + Math.min(input.rule.priority, 9_999)
+  const laneIndex = input.reactionLaneOrder.indexOf(laneId)
+  if (laneIndex < 0) return input.rule.priority
+  // Leave room for deterministic intra-lane ordering from the type package.
+  return 80_000 - laneIndex * 1_000 + Math.min(input.rule.priority, 999)
 }
 
 export function findWorkContract(

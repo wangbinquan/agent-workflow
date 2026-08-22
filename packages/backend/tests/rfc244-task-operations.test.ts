@@ -1,4 +1,4 @@
-import { TaskOperationsRootPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
+import { TaskCatalogPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
@@ -299,6 +299,10 @@ describe('RFC-244 task operations query', () => {
         startedAt: 500,
         launchOrigin: 'webhook',
       }),
+      task('workflow-event', 'alice', 'done', {
+        startedAt: 550,
+        launchOrigin: 'event',
+      }),
       task('workflow-api', 'alice', 'done', {
         startedAt: 600,
         launchOrigin: 'api',
@@ -308,6 +312,7 @@ describe('RFC-244 task operations query', () => {
     const workflow = await listTaskOperationsPage(db, actor('alice'), { subject: 'workflow' })
     expect(workflow.items.map((row) => row.id)).toEqual([
       'workflow-api',
+      'workflow-event',
       'workflow-webhook',
       'workflow-scheduled',
       'workflow-manual',
@@ -333,6 +338,8 @@ describe('RFC-244 task operations query', () => {
     ])
     const webhook = await listTaskOperationsPage(db, actor('alice'), { origin: 'webhook' })
     expect(webhook.items.map((row) => row.id)).toEqual(['workflow-webhook'])
+    const event = await listTaskOperationsPage(db, actor('alice'), { origin: 'event' })
+    expect(event.items.map((row) => row.id)).toEqual(['workflow-event', 'workflow-webhook'])
     const api = await listTaskOperationsPage(db, actor('alice'), { origin: 'api' })
     expect(api.items.map((row) => row.id)).toEqual(['workflow-api'])
     expect(JSON.stringify(api)).not.toContain('launchOrigin')
@@ -352,7 +359,7 @@ describe('RFC-244 task operations query', () => {
     expect(page.facets).toEqual({ all: 2, active: 0, attention: 0, finished: 2 })
   })
 
-  test('static /api/tasks/page route returns the strict page wire without changing legacy /api/tasks', async () => {
+  test('registered task source returns its normalized page through the unified catalog', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const owner = await createUser(db, {
       username: 'route-owner',
@@ -379,16 +386,20 @@ describe('RFC-244 task operations query', () => {
     const token = (await createSession({ db, userId: owner.id })).token
     const headers = { Authorization: `Bearer ${token}` }
 
-    const pageResponse = await app.request('/api/tasks/page?limit=1', { headers })
+    const pageResponse = await app.request('/api/task-catalog?limit=1', { headers })
     expect(pageResponse.status).toBe(200)
-    const page = TaskOperationsRootPageSchema.parse(await pageResponse.json())
+    const page = TaskCatalogPageSchema.parse(await pageResponse.json())
+    expect(page.sourceIds).toContain('workflow')
     expect(page.items.map((item) => item.id)).toEqual(['route-task'])
 
-    const badResponse = await app.request('/api/tasks/page?limit=101', { headers })
+    const badResponse = await app.request('/api/task-catalog?limit=101', { headers })
     expect(badResponse.status).toBe(422)
     expect((await badResponse.json()) as { code: string }).toMatchObject({
       code: 'task-page-filter-invalid',
     })
+
+    const retiredResponse = await app.request('/api/tasks/page?limit=1', { headers })
+    expect(retiredResponse.status).toBe(404)
 
     const legacyResponse = await app.request('/api/tasks', { headers })
     expect(legacyResponse.status).toBe(200)

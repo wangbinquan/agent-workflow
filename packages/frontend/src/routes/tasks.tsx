@@ -1,23 +1,25 @@
 // RFC-244 — high-density task operations list.
 
 import {
-  TASK_LIST_ORIGINS,
+  TASK_LIST_VISIBLE_ORIGINS,
   TASK_LIST_SCOPES,
-  TASK_LIST_SUBJECTS,
   TASK_LIST_VIEWS,
+  TASK_SOURCE_REGISTRATIONS,
   TASK_STATUS,
   canonicalTaskStatuses,
+  isTaskSourceId,
   parseTaskStatusList,
+  taskSourceRegistration,
   type TaskListOrigin,
   type TaskListScope,
-  type TaskListSubject,
   type TaskListView,
+  type TaskCatalogListItem,
+  type TaskCatalogPage,
   type TaskOperationsFilters,
   type TaskOperationsListItem,
-  type TaskOperationsPage,
+  type TaskSourceId,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   useCallback,
@@ -26,13 +28,11 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ReactElement,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/Dialog'
-import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
@@ -53,68 +53,30 @@ import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
-import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { TASK_ICON } from '@/components/icons/resourceIcons'
-import { localized, type LocalizedText } from '@/components/digital-employees/types'
-import { useActor, usePermission } from '@/hooks/useActor'
+import { localized } from '@/components/digital-employees/types'
+import { useActor, useCurrentPermissions, usePermission } from '@/hooks/useActor'
 import { useNowTick } from '@/hooks/useNowTick'
 import { useTaskOperationsPage } from '@/hooks/useTaskOperationsPage'
 import { useTaskOperationsSync } from '@/hooks/useTaskOperationsSync'
 import { shouldRowNavigate } from '@/lib/row-nav'
 import { taskOperationsDuration } from '@/lib/task-operations-duration'
 import { describeTaskFailure } from '@/lib/task-failure'
-import { taskRepoDisplayName } from '@/lib/task-repo-name'
 import { Route as RootRoute } from './__root'
 
-interface EmployeeCaseSummary {
-  id: string
-  revision: number
-  state: 'active' | 'waiting' | 'blocked' | 'terminal'
-  terminalKind: string | null
-  blockReason: string | null
-  employeeName: string
-  typeName: LocalizedText
-  subjectRef: string
-  targetRef: string | null
-  currentWorkItemRef: string | null
-  currentWorkItemName: LocalizedText | null
-  activeRound: null | {
-    id: string
-    state: string
-    workItemRef: string
-    attemptOrdinal: number
-  }
-  pendingEventCount: number
-  openChannelCount: number
-  createdAt: number
-  updatedAt: number
-}
-
-function caseStatesFromTaskStatuses(
-  statuses: readonly TaskStatus[],
-): EmployeeCaseSummary['state'][] | undefined {
-  if (statuses.length === 0) return undefined
-  const states = new Set<EmployeeCaseSummary['state']>()
-  for (const status of statuses) {
-    if (status === 'pending' || status === 'running') states.add('active')
-    else if (status === 'awaiting_human' || status === 'awaiting_review') states.add('waiting')
-    else if (status === 'failed' || status === 'interrupted') states.add('blocked')
-    else states.add('terminal')
-  }
-  return [...states]
-}
-
-type TaskCategory = 'all' | 'orchestration' | 'digital-employee'
-const TASK_CATEGORIES = ['all', 'orchestration', 'digital-employee'] as const
+type TaskType = 'all' | TaskSourceId
+const TASK_TYPES = [
+  'all',
+  ...TASK_SOURCE_REGISTRATIONS.map((source) => source.id),
+] as const satisfies readonly TaskType[]
 
 interface TasksSearch {
   view?: Exclude<TaskListView, 'all'>
   q?: string
   statuses?: string
-  subject?: Exclude<TaskListSubject, 'all'>
+  type?: TaskSourceId
   scope?: TaskListScope
   origin?: Exclude<TaskListOrigin, 'all'>
-  category?: Exclude<TaskCategory, 'all'>
 }
 
 function canonicalSearch(raw: Record<string, unknown>): TasksSearch {
@@ -140,13 +102,7 @@ function canonicalSearch(raw: Record<string, unknown>): TasksSearch {
     const statuses = parseTaskStatusList(rawStatuses)
     if (statuses !== null) out.statuses = statuses.join(',')
   }
-  if (
-    typeof raw.subject === 'string' &&
-    raw.subject !== 'all' &&
-    (TASK_LIST_SUBJECTS as readonly string[]).includes(raw.subject)
-  ) {
-    out.subject = raw.subject as Exclude<TaskListSubject, 'all'>
-  }
+  if (isTaskSourceId(raw.type)) out.type = raw.type
   if (
     typeof raw.scope === 'string' &&
     (TASK_LIST_SCOPES as readonly string[]).includes(raw.scope)
@@ -156,16 +112,9 @@ function canonicalSearch(raw: Record<string, unknown>): TasksSearch {
   if (
     typeof raw.origin === 'string' &&
     raw.origin !== 'all' &&
-    (TASK_LIST_ORIGINS as readonly string[]).includes(raw.origin)
+    (TASK_LIST_VISIBLE_ORIGINS as readonly string[]).includes(raw.origin)
   ) {
     out.origin = raw.origin as Exclude<TaskListOrigin, 'all'>
-  }
-  if (
-    typeof raw.category === 'string' &&
-    raw.category !== 'all' &&
-    (TASK_CATEGORIES as readonly string[]).includes(raw.category)
-  ) {
-    out.category = raw.category as Exclude<TaskCategory, 'all'>
   }
   return out
 }
@@ -175,10 +124,9 @@ function taskSearchParams(search: TasksSearch): URLSearchParams {
   if (search.view !== undefined) params.set('view', search.view)
   if (search.q !== undefined) params.set('q', search.q)
   if (search.statuses !== undefined) params.set('statuses', search.statuses)
-  if (search.subject !== undefined) params.set('subject', search.subject)
+  if (search.type !== undefined) params.set('type', search.type)
   if (search.scope !== undefined) params.set('scope', search.scope)
   if (search.origin !== undefined) params.set('origin', search.origin)
-  if (search.category !== undefined) params.set('category', search.category)
   return params
 }
 
@@ -189,16 +137,7 @@ function taskSearchParamsFromHref(href: string): URLSearchParams {
 function taskSearchFromHref(href: string): TasksSearch {
   const params = taskSearchParamsFromHref(href)
   const raw: Record<string, unknown> = {}
-  for (const key of [
-    'view',
-    'q',
-    'statuses',
-    'status',
-    'subject',
-    'scope',
-    'origin',
-    'category',
-  ] as const) {
+  for (const key of ['view', 'q', 'statuses', 'status', 'type', 'scope', 'origin'] as const) {
     const values = params.getAll(key)
     if (values.length > 0) raw[key] = values.at(-1)
   }
@@ -222,29 +161,34 @@ function TasksPageRoute() {
 
 interface FilterDraft {
   statuses: TaskStatus[]
-  subject: TaskListSubject
+  type: TaskType
   scope: TaskListScope
   origin: TaskListOrigin
-  category: TaskCategory
 }
 
-function dedupeItems(pages: TaskOperationsPage[] | undefined): TaskOperationsListItem[] {
-  const items: TaskOperationsListItem[] = []
+function dedupeItems(pages: TaskCatalogPage[] | undefined): TaskCatalogListItem[] {
+  const items: TaskCatalogListItem[] = []
   const seen = new Set<string>()
   for (const page of pages ?? []) {
     for (const item of page.items) {
-      if (seen.has(item.id)) continue
-      seen.add(item.id)
+      const key = taskCatalogItemKey(item)
+      if (seen.has(key)) continue
+      seen.add(key)
       items.push(item)
     }
   }
   return items
 }
 
+function taskCatalogItemKey(item: Pick<TaskCatalogListItem, 'sourceId' | 'id'>): string {
+  return `${item.sourceId}:${item.id}`
+}
+
+const EMPTY_FACETS = { all: 0, active: 0, attention: 0, finished: 0 } as const
+
 function TasksPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const liveRegion = useManagedLiveRegion()
   // Canonicalize only the last committed /tasks URL. During navigation,
   // state.location becomes the pending destination while this component is
   // still mounted; reading it here would treat another route's search keys
@@ -261,14 +205,17 @@ function TasksPage() {
     [routeSearch],
   )
   const actor = useActor()
+  const permissions = useCurrentPermissions()
   const canReadAll = usePermission('tasks:read:all')
-  const canReadDigitalEmployees = usePermission('digital-employees:read')
   const actorReady =
-    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
+    actor.status === 'success' &&
+    actor.fetchStatus === 'idle' &&
+    actor.data !== undefined &&
+    actor.data !== null
   const defaultScope: TaskListScope = canReadAll ? 'all' : 'mine'
   const effectiveScope: TaskListScope =
     search.scope === 'all' && !canReadAll ? 'mine' : (search.scope ?? defaultScope)
-  const category: TaskCategory = search.category ?? 'all'
+  const selectedSource = search.type === undefined ? null : taskSourceRegistration(search.type)
 
   useEffect(() => {
     if (!actorReady || actor.data === null) return
@@ -298,91 +245,13 @@ function TasksPage() {
       view: search.view ?? 'all',
       ...(search.q === undefined ? {} : { q: search.q }),
       statuses,
-      subject: search.subject ?? 'all',
       scope: effectiveScope,
       origin: search.origin ?? 'all',
+      subject: 'all',
     }),
-    [effectiveScope, search.origin, search.q, search.subject, search.view, statuses],
+    [effectiveScope, search.origin, search.q, search.view, statuses],
   )
-  const filterFingerprint = JSON.stringify({ filters, category })
-  const taskQueryEnabled = actorReady && actor.data !== null && category !== 'digital-employee'
-  const query = useTaskOperationsPage(filters, undefined, taskQueryEnabled)
-  const sync = useTaskOperationsSync()
-  const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
-  const caseQuery = useInfiniteQuery({
-    queryKey: ['employee-cases', 'task-operations', filters.view, filters.statuses, filters.q],
-    initialPageParam: null as string | null,
-    enabled:
-      actorReady && actor.data !== null && canReadDigitalEmployees && category !== 'orchestration',
-    refetchInterval: 10_000,
-    queryFn: ({ pageParam, signal }) =>
-      api.get<{
-        items: EmployeeCaseSummary[]
-        nextCursor: string | null
-        facets: { all: number; active: number; attention: number; finished: number }
-      }>(
-        '/api/employee-cases',
-        {
-          limit: 50,
-          view: filters.view,
-          states: caseStatesFromTaskStatuses(filters.statuses)?.join(','),
-          q: filters.q,
-          cursor: pageParam ?? undefined,
-        },
-        signal,
-      ),
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-  })
-  const caseItems = useMemo(
-    () => (caseQuery.data?.pages ?? []).flatMap((page) => page.items),
-    [caseQuery.data?.pages],
-  )
-  const rootPage = query.data?.pages.find((page) => page.kind === 'root')
-  const taskFacets =
-    rootPage?.kind === 'root' ? rootPage.facets : { all: 0, active: 0, attention: 0, finished: 0 }
-  // facets 由服务端给（算在全集上，不随 view/statuses/q 变），与旧的
-  // `digitalEmployeeFacets(全量)` 语义逐字一致。
-  const caseFacets = caseQuery.data?.pages[0]?.facets ?? {
-    all: 0,
-    active: 0,
-    attention: 0,
-    finished: 0,
-  }
-  const facets =
-    category === 'digital-employee'
-      ? caseFacets
-      : category === 'orchestration'
-        ? taskFacets
-        : {
-            all: taskFacets.all + caseFacets.all,
-            active: taskFacets.active + caseFacets.active,
-            attention: taskFacets.attention + caseFacets.attention,
-            finished: taskFacets.finished + caseFacets.finished,
-          }
-
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
-  useEffect(() => {
-    setExpanded(new Set())
-    setCollapsed(new Set())
-  }, [filterFingerprint])
-  const toggleBranch = useCallback((id: string, currentlyOpen: boolean) => {
-    if (currentlyOpen) {
-      setExpanded((previous) => {
-        const next = new Set(previous)
-        next.delete(id)
-        return next
-      })
-      setCollapsed((previous) => new Set(previous).add(id))
-    } else {
-      setCollapsed((previous) => {
-        const next = new Set(previous)
-        next.delete(id)
-        return next
-      })
-      setExpanded((previous) => new Set(previous).add(id))
-    }
-  }, [])
+  const filterFingerprint = JSON.stringify({ filters, source: selectedSource?.id ?? 'all' })
 
   const [searchDraft, setSearchDraft] = useState(search.q ?? '')
   useEffect(() => setSearchDraft(search.q ?? ''), [search.q])
@@ -404,27 +273,24 @@ function TasksPage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [draft, setDraft] = useState<FilterDraft>({
     statuses,
-    subject: filters.subject,
+    type: selectedSource?.id ?? 'all',
     scope: filters.scope,
     origin: filters.origin,
-    category,
   })
   const openFilters = () => {
     setDraft({
-      statuses: filters.statuses,
-      subject: filters.subject,
+      statuses: [...filters.statuses],
+      type: selectedSource?.id ?? 'all',
       scope: filters.scope,
       origin: filters.origin,
-      category,
     })
     setFiltersOpen(true)
   }
   const filterDimensionCount =
     Number(filters.statuses.length > 0) +
-    Number(filters.subject !== 'all') +
+    Number(selectedSource !== null) +
     Number(filters.scope !== defaultScope) +
-    Number(filters.origin !== 'all') +
-    Number(category !== 'all')
+    Number(filters.origin !== 'all')
   const hasAnyFilter = filters.view !== 'all' || filters.q !== undefined || filterDimensionCount > 0
 
   const clearFilters = () => {
@@ -438,34 +304,153 @@ function TasksPage() {
       search: {
         ...search,
         statuses: canonicalStatuses.length === 0 ? undefined : canonicalStatuses.join(','),
-        subject: draft.subject === 'all' ? undefined : draft.subject,
+        type: draft.type === 'all' ? undefined : draft.type,
         scope: draft.scope === defaultScope ? undefined : draft.scope,
         origin: draft.origin === 'all' ? undefined : draft.origin,
-        category: draft.category === 'all' ? undefined : draft.category,
       },
     })
     setFiltersOpen(false)
   }
 
-  const isLoading =
-    actor.isLoading ||
-    (category !== 'digital-employee' && query.isLoading) ||
-    (category !== 'orchestration' && canReadDigitalEmployees && caseQuery.isLoading)
+  const sourceReadable =
+    selectedSource === null
+      ? TASK_SOURCE_REGISTRATIONS.some((source) => permissions.has(source.list.requiredPermission))
+      : permissions.has(selectedSource.list.requiredPermission)
+  const query = useTaskOperationsPage(
+    filters,
+    undefined,
+    actorReady && sourceReadable,
+    selectedSource?.id,
+  )
+  const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
+  const facets = query.data?.pages[0]?.facets ?? EMPTY_FACETS
+  const sync = useTaskOperationsSync()
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  useEffect(() => {
+    setExpanded(new Set())
+    setCollapsed(new Set())
+  }, [filterFingerprint])
+  const toggleBranch = useCallback((id: string, currentlyOpen: boolean) => {
+    if (currentlyOpen) {
+      setExpanded((previous) => {
+        const next = new Set(previous)
+        next.delete(id)
+        return next
+      })
+      setCollapsed((previous) => new Set(previous).add(id))
+      return
+    }
+    setCollapsed((previous) => {
+      const next = new Set(previous)
+      next.delete(id)
+      return next
+    })
+    setExpanded((previous) => new Set(previous).add(id))
+  }, [])
+
+  return (
+    <>
+      <RegisteredTasksSurface
+        items={items}
+        facets={facets}
+        actorLoading={actor.isLoading}
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        feedback={
+          sync.dirty ? (
+            <NoticeBanner
+              tone="info"
+              size="compact"
+              testid="tasks-dirty-banner"
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void sync.refresh()}>
+                  {t('tasks.operations.refresh')}
+                </button>
+              }
+            >
+              {t('tasks.operations.updated')}
+            </NoticeBanner>
+          ) : null
+        }
+        filters={filters}
+        sourceId={selectedSource?.id}
+        search={search}
+        searchDraft={searchDraft}
+        setSearchDraft={setSearchDraft}
+        filterDimensionCount={filterDimensionCount}
+        hasAnyFilter={hasAnyFilter}
+        filterFingerprint={filterFingerprint}
+        openFilters={openFilters}
+        clearFilters={clearFilters}
+        searchRef={searchRef}
+        filterButtonRef={filterButtonRef}
+        expanded={expanded}
+        collapsed={collapsed}
+        onToggle={toggleBranch}
+        onLoadMore={() => void query.fetchNextPage()}
+        hasNextPage={query.hasNextPage}
+        loadingMore={query.isFetchingNextPage}
+      />
+      <TaskListFilterDialog
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        triggerRef={filterButtonRef}
+        draft={draft}
+        onChange={setDraft}
+        canReadAll={canReadAll}
+        onApply={applyFilters}
+        onClear={() =>
+          setDraft({
+            statuses: [],
+            type: 'all',
+            scope: defaultScope,
+            origin: 'all',
+          })
+        }
+      />
+    </>
+  )
+}
+
+function RegisteredTasksSurface(props: {
+  items: readonly TaskCatalogListItem[]
+  facets: TaskCatalogPage['facets']
+  actorLoading: boolean
+  isLoading: boolean
+  error: unknown
+  onRetry: () => void
+  feedback: ReactNode
+  filters: TaskOperationsFilters
+  sourceId?: TaskSourceId
+  search: TasksSearch
+  searchDraft: string
+  setSearchDraft: (value: string) => void
+  filterDimensionCount: number
+  hasAnyFilter: boolean
+  filterFingerprint: string
+  openFilters: () => void
+  clearFilters: () => void
+  searchRef: React.RefObject<HTMLInputElement | null>
+  filterButtonRef: React.RefObject<HTMLButtonElement | null>
+  expanded: ReadonlySet<string>
+  collapsed: ReadonlySet<string>
+  onToggle: (id: string, currentlyOpen: boolean) => void
+  onLoadMore: () => void
+  hasNextPage: boolean
+  loadingMore: boolean
+}) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const liveRegion = useManagedLiveRegion()
+  const facets = props.facets
+  const itemCount = props.items.length
+  const isLoading = props.actorLoading || props.isLoading
+  const hasError = props.error != null
   const initialEmpty =
-    !isLoading &&
-    query.error == null &&
-    caseQuery.error == null &&
-    items.length === 0 &&
-    caseItems.length === 0 &&
-    facets.all === 0 &&
-    !hasAnyFilter
-  const noMatches =
-    !isLoading &&
-    query.error == null &&
-    caseQuery.error == null &&
-    items.length === 0 &&
-    caseItems.length === 0 &&
-    !initialEmpty
+    !isLoading && !hasError && itemCount === 0 && facets.all === 0 && !props.hasAnyFilter
+  const noMatches = !isLoading && !hasError && itemCount === 0 && !initialEmpty
   const newTaskAction = (
     <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
       {t('tasks.newButton')}
@@ -473,44 +458,19 @@ function TasksPage() {
   )
   const previousResult = useRef<{ fingerprint: string; count: number } | null>(null)
   useEffect(() => {
-    if (isLoading || query.error != null || liveRegion === null) return
+    if (isLoading || hasError || liveRegion === null) return
     const previous = previousResult.current
-    if (previous === null || previous.fingerprint !== filterFingerprint) {
-      liveRegion.announce(
-        t('tasks.operations.resultCount', { count: items.length + caseItems.length }),
-      )
-    } else if (items.length + caseItems.length > previous.count) {
-      liveRegion.announce(
-        t('tasks.operations.addedCount', {
-          count: items.length + caseItems.length - previous.count,
-        }),
-      )
+    if (previous === null || previous.fingerprint !== props.filterFingerprint) {
+      liveRegion.announce(t('tasks.operations.resultCount', { count: itemCount }))
+    } else if (itemCount > previous.count) {
+      liveRegion.announce(t('tasks.operations.addedCount', { count: itemCount - previous.count }))
     }
-    previousResult.current = {
-      fingerprint: filterFingerprint,
-      count: items.length + caseItems.length,
-    }
-  }, [caseItems.length, filterFingerprint, isLoading, items.length, liveRegion, query.error, t])
+    previousResult.current = { fingerprint: props.filterFingerprint, count: itemCount }
+  }, [hasError, isLoading, itemCount, liveRegion, props.filterFingerprint, t])
 
   return (
     <div className="page page--operations page--task-operations">
-      <FeedbackStack variant="section">
-        {sync.dirty && (
-          <NoticeBanner
-            tone="info"
-            size="compact"
-            testid="tasks-dirty-banner"
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void sync.refresh()}>
-                {t('tasks.operations.refresh')}
-              </button>
-            }
-          >
-            {t('tasks.operations.updated')}
-          </NoticeBanner>
-        )}
-      </FeedbackStack>
-
+      <FeedbackStack variant="section">{props.feedback}</FeedbackStack>
       <div className="operations-surface">
         <PageHeader
           title={t('tasks.title')}
@@ -519,14 +479,13 @@ function TasksPage() {
         >
           <p className="operations-surface__subtitle">{t('tasks.operations.subtitle')}</p>
         </PageHeader>
-
         {!initialEmpty && (
           <OperationsToolbar<TaskListView>
-            view={filters.view}
+            view={props.filters.view}
             onViewChange={(view) =>
               void navigate({
                 to: '/tasks',
-                search: { ...search, view: view === 'all' ? undefined : view },
+                search: { ...props.search, view: view === 'all' ? undefined : view },
               })
             }
             views={TASK_LIST_VIEWS.map((view) => ({
@@ -535,31 +494,25 @@ function TasksPage() {
               count: facets[view],
             }))}
             viewAria={t('tasks.operations.viewAria')}
-            searchValue={searchDraft}
-            onSearchChange={setSearchDraft}
+            searchValue={props.searchDraft}
+            onSearchChange={props.setSearchDraft}
             searchPlaceholder={t('tasks.operations.searchPlaceholder')}
             searchLabel={t('tasks.operations.searchLabel')}
             filterLabel={t('tasks.operations.filters')}
-            activeFilterCount={filterDimensionCount}
+            activeFilterCount={props.filterDimensionCount}
             activeFiltersLabel={(count) => t('tasks.operations.activeFilters', { count })}
-            onOpenFilters={openFilters}
-            showClear={hasAnyFilter}
+            onOpenFilters={props.openFilters}
+            showClear={props.hasAnyFilter}
             clearLabel={t('common.clearFilters')}
-            onClear={clearFilters}
+            onClear={props.clearFilters}
             testidPrefix="tasks"
             busy={isLoading}
-            searchRef={searchRef}
-            filterButtonRef={filterButtonRef}
+            searchRef={props.searchRef}
+            filterButtonRef={props.filterButtonRef}
           />
         )}
-
         <FeedbackStack variant="section">
-          {query.error != null && (
-            <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-          )}
-          {caseQuery.error != null && category !== 'orchestration' && (
-            <ErrorBanner error={caseQuery.error} onRetry={() => void caseQuery.refetch()} />
-          )}
+          {hasError ? <ErrorBanner error={props.error} onRetry={props.onRetry} /> : null}
         </FeedbackStack>
         {isLoading && <LoadingState data-testid="tasks-loading" />}
         {initialEmpty && (
@@ -576,56 +529,28 @@ function TasksPage() {
             size="compact"
             title={t('common.noMatches')}
             action={
-              <button type="button" className="btn btn--sm" onClick={clearFilters}>
+              <button type="button" className="btn btn--sm" onClick={props.clearFilters}>
                 {t('common.clearFilters')}
               </button>
             }
             data-testid="tasks-no-matches"
           />
         )}
-
-        {caseItems.length > 0 && category !== 'orchestration' && (
-          <DigitalEmployeeTaskList
-            items={caseItems}
-            hasNextPage={caseQuery.hasNextPage}
-            loadingMore={caseQuery.isFetchingNextPage}
-            onLoadMore={() => void caseQuery.fetchNextPage()}
-          />
-        )}
-
-        {items.length > 0 && category !== 'digital-employee' && (
+        {props.items.length > 0 ? (
           <TaskOperationsList
-            items={items}
-            filters={filters}
-            scrollResetKey={filterFingerprint}
-            expanded={expanded}
-            collapsed={collapsed}
-            onToggle={toggleBranch}
-            onLoadMore={() => void query.fetchNextPage()}
-            hasNextPage={query.hasNextPage}
-            loadingMore={query.isFetchingNextPage}
+            items={[...props.items]}
+            filters={props.filters}
+            sourceId={props.sourceId}
+            scrollResetKey={props.filterFingerprint}
+            expanded={props.expanded}
+            collapsed={props.collapsed}
+            onToggle={props.onToggle}
+            onLoadMore={props.onLoadMore}
+            hasNextPage={props.hasNextPage}
+            loadingMore={props.loadingMore}
           />
-        )}
+        ) : null}
       </div>
-
-      <TaskListFilterDialog
-        open={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        triggerRef={filterButtonRef}
-        draft={draft}
-        onChange={setDraft}
-        canReadAll={canReadAll}
-        onApply={applyFilters}
-        onClear={() =>
-          setDraft({
-            statuses: [],
-            subject: 'all',
-            scope: defaultScope,
-            origin: 'all',
-            category: 'all',
-          })
-        }
-      />
     </div>
   )
 }
@@ -670,13 +595,16 @@ function TaskListFilterDialog(props: {
     >
       <div className="form-grid task-list-filter-dialog">
         <Field label={t('tasks.operations.categoryLabel')} group>
-          <Segmented<TaskCategory>
-            value={props.draft.category}
-            onChange={(category) => props.onChange({ ...props.draft, category })}
+          <Segmented<TaskType>
+            value={props.draft.type}
+            onChange={(taskType) => props.onChange({ ...props.draft, type: taskType })}
             ariaLabel={t('tasks.operations.categoryLabel')}
-            options={TASK_CATEGORIES.map((category) => ({
-              value: category,
-              label: t(`tasks.operations.category.${category}`),
+            options={TASK_TYPES.map((taskType) => ({
+              value: taskType,
+              label:
+                taskType === 'all'
+                  ? t('tasks.operations.category.all')
+                  : t(taskSourceRegistration(taskType).labelKey),
             }))}
           />
         </Field>
@@ -694,17 +622,6 @@ function TaskListFilterDialog(props: {
             data-testid="tasks-status-filter"
           />
         </Field>
-        <Field label={t('tasks.colSubject')} group>
-          <Segmented<TaskListSubject>
-            value={props.draft.subject}
-            onChange={(subject) => props.onChange({ ...props.draft, subject })}
-            ariaLabel={t('tasks.colSubject')}
-            options={TASK_LIST_SUBJECTS.map((subject) => ({
-              value: subject,
-              label: t(`tasks.subjectFilter.${subject}`),
-            }))}
-          />
-        </Field>
         <Field label={t('tasks.operations.scopeLabel')} group>
           <Segmented<TaskListScope>
             value={props.draft.scope}
@@ -718,7 +635,7 @@ function TaskListFilterDialog(props: {
             value={props.draft.origin}
             onChange={(origin) => props.onChange({ ...props.draft, origin })}
             ariaLabel={t('tasks.operations.originLabel')}
-            options={TASK_LIST_ORIGINS.map((origin) => ({
+            options={TASK_LIST_VISIBLE_ORIGINS.map((origin) => ({
               value: origin,
               label: t(`tasks.operations.origin.${origin}`),
             }))}
@@ -729,139 +646,10 @@ function TaskListFilterDialog(props: {
   )
 }
 
-function DigitalEmployeeTaskList(props: {
-  items: EmployeeCaseSummary[]
-  hasNextPage: boolean
-  loadingMore: boolean
-  onLoadMore: () => void
-}): ReactElement {
-  const { t, i18n } = useTranslation()
-  const language = i18n.resolvedLanguage ?? i18n.language
-  const zh = language.startsWith('zh')
-  const navigate = useNavigate()
-  const status = (item: EmployeeCaseSummary) => {
-    if (item.state === 'terminal') {
-      return {
-        kind: 'success' as const,
-        label: item.terminalKind ?? (zh ? '已结束' : 'Finished'),
-      }
-    }
-    if (item.state === 'blocked') {
-      return { kind: 'danger' as const, label: zh ? '需要处理' : 'Needs attention' }
-    }
-    if (item.state === 'waiting') {
-      return { kind: 'warn' as const, label: zh ? '等待事件' : 'Waiting for event' }
-    }
-    return { kind: 'info' as const, label: zh ? '工作中' : 'Working' }
-  }
-  return (
-    <section
-      className="task-operations task-operations--digital-employee"
-      aria-label={t('tasks.operations.digitalEmployeeSection')}
-      data-testid="digital-employee-task-list"
-    >
-      <div className="task-operations__section-title">
-        <strong>{t('tasks.operations.digitalEmployeeSection')}</strong>
-        <span>{t('tasks.operations.digitalEmployeeSectionHint')}</span>
-      </div>
-      <div className="task-operations__head" aria-hidden="true">
-        <span>{t('tasks.operations.columns.task')}</span>
-        <span>{t('tasks.operations.columns.execution')}</span>
-        <span>{t('tasks.operations.columns.time')}</span>
-        <span>{t('acl.owner')}</span>
-        <span />
-      </div>
-      <div className="task-operations__list" role="list">
-        {props.items.map((employeeCase) => {
-          const caseStatus = status(employeeCase)
-          return (
-            <div
-              key={employeeCase.id}
-              role="listitem"
-              className="task-operations__row"
-              data-testid={`digital-employee-task-${employeeCase.id}`}
-              onClick={(event) => {
-                if (shouldRowNavigate(event)) {
-                  void navigate({
-                    to: '/tasks/employee-cases/$caseId',
-                    params: { caseId: employeeCase.id },
-                  })
-                }
-              }}
-            >
-              <div className="task-operations__cell task-operations__task">
-                <span className="task-operations__expand-spacer" aria-hidden="true" />
-                <div className="task-operations__task-copy">
-                  <div className="task-operations__name-line">
-                    <Link
-                      to="/tasks/employee-cases/$caseId"
-                      params={{ caseId: employeeCase.id }}
-                      className="data-table__link task-operations__name"
-                    >
-                      {employeeCase.subjectRef}
-                    </Link>
-                    <StatusChip kind="info" size="sm">
-                      {t('tasks.operations.category.digital-employee')}
-                    </StatusChip>
-                  </div>
-                  <div className="task-operations__meta">
-                    <span>{localized(employeeCase.typeName, language)}</span>
-                    <span aria-hidden="true">·</span>
-                    <code>{employeeCase.targetRef ?? employeeCase.id.slice(-8)}</code>
-                  </div>
-                </div>
-              </div>
-              <div className="task-operations__cell task-operations__execution">
-                <StatusChip kind={caseStatus.kind} size="sm">
-                  {caseStatus.label}
-                </StatusChip>
-                <small>
-                  {employeeCase.currentWorkItemName === null
-                    ? employeeCase.blockReason
-                    : localized(employeeCase.currentWorkItemName, language)}
-                </small>
-              </div>
-              <div className="task-operations__cell task-operations__time">
-                <RelativeTime ts={employeeCase.updatedAt} />
-              </div>
-              <div className="task-operations__cell task-operations__owner">
-                {employeeCase.employeeName}
-              </div>
-              <div className="task-operations__cell task-operations__chevron" aria-hidden="true">
-                <OperationsChevronIcon />
-              </div>
-            </div>
-          )
-        })}
-        {props.hasNextPage && (
-          <div className="task-operations__more" role="listitem">
-            {/* 与 /tasks 根列表同款：可及名固定、永不 disabled，加载态由 aria-busy +
-                sr-only 旁白承载（见 RFC-311 关于点击目标不能从指针底下消失的注记）。 */}
-            <button
-              type="button"
-              className="btn btn--sm"
-              aria-busy={props.loadingMore || undefined}
-              onClick={() => {
-                if (!props.loadingMore) props.onLoadMore()
-              }}
-            >
-              {t('tasks.operations.loadMore')}
-            </button>
-            {props.loadingMore ? (
-              <span role="status" className="sr-only">
-                {t('tasks.operations.loadingMore')}
-              </span>
-            ) : null}
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
 function TaskOperationsList(props: {
-  items: TaskOperationsListItem[]
+  items: TaskCatalogListItem[]
   filters: TaskOperationsFilters
+  sourceId?: TaskSourceId
   /** Changes only when the result set's filter identity changes. */
   scrollResetKey: string
   expanded: ReadonlySet<string>
@@ -898,9 +686,9 @@ function TaskOperationsList(props: {
         <span>{t('acl.owner')}</span>
         <span />
       </div>
-      <VirtualList<TaskOperationsListItem>
+      <VirtualList<TaskCatalogListItem>
         items={props.items}
-        itemKey={(item) => item.id}
+        itemKey={taskCatalogItemKey}
         estimateSize={73}
         scrollResetKey={props.scrollResetKey}
         containerProps={{
@@ -914,6 +702,7 @@ function TaskOperationsList(props: {
             item={item}
             depth={0}
             filters={props.filters}
+            sourceId={props.sourceId}
             expanded={props.expanded}
             collapsed={props.collapsed}
             onToggle={props.onToggle}
@@ -952,9 +741,10 @@ function TaskOperationsList(props: {
 }
 
 interface TaskBranchProps {
-  item: TaskOperationsListItem
+  item: TaskCatalogListItem
   depth: number
   filters: TaskOperationsFilters
+  sourceId?: TaskSourceId
   expanded: ReadonlySet<string>
   collapsed: ReadonlySet<string>
   onToggle: (id: string, currentlyOpen: boolean) => void
@@ -967,10 +757,11 @@ interface TaskBranchProps {
 
 function TaskBranch(props: TaskBranchProps) {
   const { item } = props
-  const hasChildren = item.listContext.qualifyingChildCount > 0
-  const autoExpanded = item.listContext.matchKind === 'context' && !props.collapsed.has(item.id)
-  const isExpanded = hasChildren && (props.expanded.has(item.id) || autoExpanded)
-  const branchId = `task-children-${encodeURIComponent(item.id).replaceAll('%', '_')}`
+  const itemKey = taskCatalogItemKey(item)
+  const hasChildren = item.hierarchy.qualifyingChildCount > 0
+  const autoExpanded = item.hierarchy.matchKind === 'context' && !props.collapsed.has(itemKey)
+  const isExpanded = hasChildren && (props.expanded.has(itemKey) || autoExpanded)
+  const branchId = `task-children-${encodeURIComponent(itemKey).replaceAll('%', '_')}`
   // RFC-311: list/listitem roles are explicit — the root level lives inside
   // the VirtualList's positioning wrapper (a role-neutral div between the
   // role="list" scroller and these rows), where literal <ol>/<li> nesting
@@ -993,14 +784,14 @@ function TaskBranch(props: TaskBranchProps) {
         depth={props.depth}
         branchId={hasChildren ? branchId : undefined}
         expanded={isExpanded}
-        onToggle={() => props.onToggle(item.id, isExpanded)}
+        onToggle={() => props.onToggle(itemKey, isExpanded)}
       />
       {hasChildren && (
         <div
           role="list"
           id={branchId}
           className="task-operations__children"
-          aria-label={`${item.name}`}
+          aria-label={item.title}
           hidden={!isExpanded}
         >
           {isExpanded && (
@@ -1008,6 +799,7 @@ function TaskBranch(props: TaskBranchProps) {
               parent={item}
               depth={props.depth + 1}
               filters={props.filters}
+              sourceId={props.sourceId}
               expanded={props.expanded}
               collapsed={props.collapsed}
               onToggle={props.onToggle}
@@ -1019,10 +811,10 @@ function TaskBranch(props: TaskBranchProps) {
   )
 }
 
-function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOperationsListItem }) {
+function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskCatalogListItem }) {
   const { t } = useTranslation()
   const liveRegion = useManagedLiveRegion()
-  const query = useTaskOperationsPage(props.filters, props.parent.id)
+  const query = useTaskOperationsPage(props.filters, props.parent.id, true, props.sourceId)
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
   const childFingerprint = `${props.parent.id}:${JSON.stringify(props.filters)}`
   const previousPage = useRef<{ fingerprint: string; pages: number; count: number } | null>(null)
@@ -1084,7 +876,7 @@ function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOpera
         </div>
       )}
       {items.map((item) => (
-        <TaskBranch key={item.id} item={item} {...props} />
+        <TaskBranch key={taskCatalogItemKey(item)} item={item} {...props} />
       ))}
       {query.hasNextPage && (
         <div role="listitem" className="task-operations__more task-operations__more--child">
@@ -1111,17 +903,19 @@ function TaskChildren(props: Omit<TaskBranchProps, 'item'> & { parent: TaskOpera
 }
 
 function TaskOperationsRow(props: {
-  item: TaskOperationsListItem
+  item: TaskCatalogListItem
   depth: number
   branchId?: string
   expanded: boolean
   onToggle: () => void
 }) {
   const { item } = props
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const now = useNowTick()
-  const repo = taskRepoDisplayName(item)
+  const language = i18n.resolvedLanguage ?? i18n.language
+  const href = taskDetailHref(item)
+  const subject = localized(item.subject.label, language)
   const duration = taskOperationsDuration(item, now)
   const durationText =
     duration.kind === 'dash'
@@ -1129,7 +923,7 @@ function TaskOperationsRow(props: {
       : t(`tasks.operations.duration.${duration.kind}`, {
           dur: t(`common.dur.${duration.dur.key}`, duration.dur.opts),
         })
-  const detail = executionDetail(item, t)
+  const detail = executionDetail(item, t, language)
 
   return (
     <div
@@ -1137,7 +931,7 @@ function TaskOperationsRow(props: {
       data-testid={`task-row-${item.id}`}
       onClick={(event) => {
         if (shouldRowNavigate(event)) {
-          void navigate({ to: '/tasks/$id', params: { id: item.id } })
+          void navigate({ to: href })
         }
       }}
     >
@@ -1151,7 +945,7 @@ function TaskOperationsRow(props: {
               expanded={props.expanded}
               controls={props.branchId}
               label={t(props.expanded ? 'tasks.collapseChildren' : 'tasks.expandChildrenCount', {
-                count: item.listContext.qualifyingChildCount,
+                count: item.hierarchy.qualifyingChildCount,
               })}
               testid={`task-expand-${item.id}`}
               onToggle={props.onToggle}
@@ -1159,20 +953,15 @@ function TaskOperationsRow(props: {
           )}
           <div className="task-operations__task-copy">
             <div className="task-operations__name-line">
-              <Link
-                to="/tasks/$id"
-                params={{ id: item.id }}
-                className="data-table__link task-operations__name"
-                title={item.name}
-              >
-                {item.name}
-              </Link>
+              <a href={href} className="data-table__link task-operations__name" title={item.title}>
+                {item.title}
+              </a>
               {item.childCount > 0 && (
                 <span className="task-operations__child-count">
                   {t('tasks.operations.childCount', { count: item.childCount })}
                 </span>
               )}
-              {item.listContext.parentAvailability === 'unavailable' && (
+              {item.hierarchy.parentAvailability === 'unavailable' && (
                 <span
                   className="chip chip--tight"
                   data-testid={`task-parent-unavailable-${item.id}`}
@@ -1182,19 +971,26 @@ function TaskOperationsRow(props: {
               )}
             </div>
             <div className="task-operations__meta">
-              <TaskSubjectLink task={item} taskId={item.id} badge />
-              <span className="task-operations__repo-separator" aria-hidden="true">
-                ·
-              </span>
-              <code className="task-operations__repo" title={repo.title}>
-                {repo.name}
-              </code>
-              {item.repoCount > 1 && (
+              <StatusChip kind="info" size="sm">
+                {t(taskSourceRegistration(item.sourceId).labelKey)}
+              </StatusChip>
+              <span>{subject}</span>
+              {item.targetLabel !== null ? (
+                <>
+                  <span className="task-operations__repo-separator" aria-hidden="true">
+                    ·
+                  </span>
+                  <code className="task-operations__repo" title={item.targetLabel}>
+                    {item.targetLabel}
+                  </code>
+                </>
+              ) : null}
+              {item.repositoryCount > 1 && (
                 <span
                   className="chip chip--tight task-operations__repo-count"
                   data-testid={`task-repos-${item.id}`}
                 >
-                  {t('tasks.repoCountChip', { n: item.repoCount })}
+                  {t('tasks.repoCountChip', { n: item.repositoryCount })}
                 </span>
               )}
               {item.scheduledTaskId != null && (
@@ -1239,7 +1035,11 @@ function TaskOperationsRow(props: {
 
       <div className="task-operations__cell task-operations__owner">
         <span className="sr-only">{t('acl.owner')}：</span>
-        <OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />
+        {item.ownerLabel === null ? (
+          <OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />
+        ) : (
+          <span>{item.ownerLabel}</span>
+        )}
       </div>
 
       <div className="task-operations__nav" aria-hidden="true">
@@ -1249,10 +1049,19 @@ function TaskOperationsRow(props: {
   )
 }
 
+function taskDetailHref(item: TaskCatalogListItem): string {
+  return taskSourceRegistration(item.sourceId).list.detailPath.replace(
+    /\$[A-Za-z][A-Za-z0-9]*/,
+    encodeURIComponent(item.id),
+  )
+}
+
 function executionDetail(
-  item: TaskOperationsListItem,
+  item: TaskCatalogListItem,
   t: (key: string, options?: Record<string, unknown>) => string,
+  language: string,
 ): { text: string; title?: string } {
+  if (item.statusDetail !== null) return { text: localized(item.statusDetail, language) }
   if ((item.openAlertCount ?? 0) > 0) {
     return { text: t('tasks.operations.openAlertDetail', { count: item.openAlertCount }) }
   }
@@ -1263,10 +1072,10 @@ function executionDetail(
     })
     return { text: failure.title, title: item.errorSummary ?? failure.title }
   }
-  if (item.listContext.matchKind === 'context') {
+  if (item.hierarchy.matchKind === 'context') {
     return {
       text: t('tasks.operations.contextMatches', {
-        count: item.listContext.matchingDescendantCount,
+        count: item.hierarchy.matchingDescendantCount,
       }),
     }
   }

@@ -133,6 +133,52 @@ function subjectMatches(row: ReturnType<typeof item>, subject: string): boolean 
   return true
 }
 
+function catalogItem(row: ReturnType<typeof item>) {
+  const sourceId =
+    row.workgroupId !== null ? 'workgroup' : row.sourceAgentName !== null ? 'agent' : 'workflow'
+  const subject =
+    sourceId === 'workgroup'
+      ? (row.workgroupName ?? row.workgroupId ?? '—')
+      : sourceId === 'agent'
+        ? (row.sourceAgentName ?? row.sourceAgentId ?? '—')
+        : (row.workflowName ?? row.workflowId)
+  return {
+    id: row.id,
+    sourceId,
+    title: row.name,
+    subject: {
+      resourceId:
+        sourceId === 'workgroup'
+          ? row.workgroupId
+          : sourceId === 'agent'
+            ? row.sourceAgentId
+            : row.workflowId,
+      label: { 'zh-CN': subject, 'en-US': subject },
+    },
+    targetLabel: row.repoPath.split('/').filter(Boolean).at(-1) ?? null,
+    status: row.status,
+    statusDetail: null,
+    startedAt: row.startedAt,
+    updatedAt: row.finishedAt ?? row.executionClock.runningSince ?? row.startedAt,
+    finishedAt: row.finishedAt,
+    executionClock: row.executionClock,
+    ownerUserId: row.ownerUserId,
+    owner: row.owner,
+    ownerLabel: null,
+    errorSummary: row.errorSummary,
+    failureCode: null,
+    childCount: row.childCount,
+    repositoryCount: row.repoCount,
+    scheduledTaskId: row.scheduledTaskId,
+    openAlertCount: row.openAlertCount,
+    hierarchy: {
+      parentItemId: row.parentTaskId,
+      invocationDepth: row.invocationDepth,
+      ...row.listContext,
+    },
+  }
+}
+
 /**
  * Deterministic RFC-244 browser fixture. It represents 30+ root tasks, every
  * lifecycle status, alerts, scheduled launches, unavailable parents, long
@@ -293,7 +339,19 @@ export async function routeTaskOperationsFixture(
       .length,
   }
 
-  await page.route(/\/api\/tasks\/page(?:\?.*)?$/, async (route) => {
+  const catalogPage = (pageDocument: {
+    items: Array<ReturnType<typeof item>>
+    nextCursor: string | null
+    facets?: typeof facets
+  }) => ({
+    schemaVersion: 1,
+    sourceIds: ['agent', 'workflow', 'workgroup'],
+    items: pageDocument.items.map(catalogItem),
+    nextCursor: pageDocument.nextCursor,
+    facets: pageDocument.facets ?? { all: 0, active: 0, attention: 0, finished: 0 },
+  })
+
+  await page.route(/\/api\/task-catalog(?:\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') return route.continue()
     const requestUrl = new URL(route.request().url())
     controller.requests.push(`${requestUrl.pathname}${requestUrl.search}`)
@@ -328,7 +386,7 @@ export async function routeTaskOperationsFixture(
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ kind: 'children', parentId, items, nextCursor }),
+        body: JSON.stringify(catalogPage({ items, nextCursor })),
       })
       return
     }
@@ -346,7 +404,7 @@ export async function routeTaskOperationsFixture(
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ kind: 'root', items: [contextRoot], nextCursor: null, facets }),
+        body: JSON.stringify(catalogPage({ items: [contextRoot], nextCursor: null, facets })),
       })
       return
     }
@@ -354,7 +412,7 @@ export async function routeTaskOperationsFixture(
     let rows = cursor === 'root-page-2' ? secondRootPage : firstRootPage
     const view = requestUrl.searchParams.get('view') ?? 'all'
     const statuses = requestUrl.searchParams.get('statuses')?.split(',') ?? []
-    const subject = requestUrl.searchParams.get('subject') ?? 'all'
+    const subject = requestUrl.searchParams.get('type') ?? 'all'
     const origin = requestUrl.searchParams.get('origin') ?? 'all'
     rows = rows.filter(
       (row) =>
@@ -378,7 +436,7 @@ export async function routeTaskOperationsFixture(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ kind: 'root', items: rows, nextCursor, facets }),
+      body: JSON.stringify(catalogPage({ items: rows, nextCursor, facets })),
     })
   })
 

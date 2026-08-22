@@ -54,18 +54,15 @@ function installFetch(): string[] {
         headers: { 'content-type': 'application/json' },
       })
     if (url.pathname === '/api/auth/me') return json(actorPayload)
-    if (url.pathname === '/api/employee-cases')
+    if (url.pathname === '/api/task-catalog')
       return json({
+        schemaVersion: 1,
+        sourceIds: ['digital-employee'],
         items: [],
         nextCursor: null,
         facets: { all: 0, active: 0, attention: 0, finished: 0 },
       })
-    return json({
-      kind: 'root',
-      items: [],
-      nextCursor: null,
-      facets: { all: 0, active: 0, attention: 0, finished: 0 },
-    })
+    return json({})
   })
   return urls
 }
@@ -105,17 +102,21 @@ async function renderTasks(search: string): Promise<void> {
 describe('RFC-311 — /tasks 的数字员工列表走服务端过滤，不再取全量', () => {
   test('mission 请求带 limit/view，且过滤变化会重新发请求', async () => {
     const urls = installFetch()
-    await renderTasks('?category=digital-employee&view=attention')
+    await renderTasks('?type=digital-employee&view=attention')
 
     await waitFor(() => {
-      expect(urls.some((u) => u.startsWith('/api/employee-cases'))).toBe(true)
+      expect(
+        urls.some((u) => u.startsWith('/api/task-catalog?') && u.includes('type=digital-employee')),
+      ).toBe(true)
     })
-    const missionUrls = urls.filter((u) => u.startsWith('/api/employee-cases'))
+    const missionUrls = urls.filter(
+      (u) => u.startsWith('/api/task-catalog?') && u.includes('type=digital-employee'),
+    )
 
     // ③ 裸全量形态必须绝迹——它是这次改动之前的样子。
     expect(
-      missionUrls.filter((u) => u === '/api/employee-cases'),
-      '出现了不带任何参数的 /api/employee-cases ⇒ 又在取全量了',
+      missionUrls.filter((u) => u === '/api/task-catalog'),
+      '出现了不带提供者和分页参数的 /api/task-catalog ⇒ 又在取全量了',
     ).toEqual([])
 
     // ① 服务端过滤 + 分页的证据
@@ -128,9 +129,9 @@ describe('RFC-311 — /tasks 的数字员工列表走服务端过滤，不再取
 
   test('不同 view 打到不同的服务端请求（而不是同一份全量在前端筛）', async () => {
     const urls = installFetch()
-    await renderTasks('?category=digital-employee&view=finished')
+    await renderTasks('?type=digital-employee&view=finished')
     await waitFor(() => {
-      expect(urls.some((u) => u.includes('/api/employee-cases'))).toBe(true)
+      expect(urls.some((u) => u.includes('type=digital-employee'))).toBe(true)
     })
     expect(urls.some((u) => u.includes('view=finished'))).toBe(true)
     expect(urls.some((u) => u.includes('view=attention'))).toBe(false)

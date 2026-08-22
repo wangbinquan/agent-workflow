@@ -24,6 +24,7 @@ import {
   mergeExactToolBindings,
   orderedDispatchConfigurationSchema,
   packageDigest,
+  reactionLaneIds,
   toolRegistrationContentSchema,
   validateTypePackage,
   workItemToolBindingSchema,
@@ -46,9 +47,11 @@ import type {
   DigitalEmployeeAuthoringStore,
   DigitalEmployeePlatformToolCatalog,
   EmployeeDefinitionRecord,
+  EmployeeDefinitionRevisionRecord,
   JobTemplateRecord,
   ToolDraftRecord,
   ToolRevisionRecord,
+  WorkScopeRevisionRecord,
 } from './ports/authoringStore'
 import { EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG } from './ports/authoringStore'
 
@@ -59,6 +62,7 @@ export const createJobTemplateBodySchema = z
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100).default([]),
     orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
+    reactionLaneOrder: z.array(z.string().min(1).max(160)).max(30).default([]),
   })
   .strict()
 
@@ -68,7 +72,6 @@ export const createEmployeeDefinitionBodySchema = z
   .object({
     name: z.string().min(1).max(200),
     jobTemplateRef: exactResourceRefSchema,
-    enabled: z.boolean().default(true),
     workScope: z.unknown(),
     toolOverrides: z.array(workItemToolBindingSchema).max(300).default([]),
     collaborationOverrides: z.array(employeeCollaborationBindingSchema).max(100).default([]),
@@ -789,6 +792,27 @@ export class DigitalEmployeeAuthoringService {
       .map((item) => item.workItemRef)
   }
 
+  #normalizeReactionLaneOrder(
+    typeRef: EmployeeTypeRef,
+    authoredOrder: readonly string[],
+  ): string[] {
+    const expected = reactionLaneIds(this.#runtime(typeRef).descriptor)
+    if (authoredOrder.length === 0) return expected
+    const actual = new Set(authoredOrder)
+    if (
+      actual.size !== authoredOrder.length ||
+      actual.size !== expected.length ||
+      expected.some((laneId) => !actual.has(laneId))
+    ) {
+      throw new ValidationError(
+        'employee-reaction-lane-order-invalid',
+        'reaction lane order must contain every event-driven business lane exactly once',
+        { expected, actual: authoredOrder },
+      )
+    }
+    return [...authoredOrder]
+  }
+
   #validateCollaborationBinding(
     typeRef: EmployeeTypeRef,
     binding: EmployeeCollaborationBinding,
@@ -813,7 +837,7 @@ export class DigitalEmployeeAuthoringService {
       )
     }
     const target = this.#store.getEmployeeDefinitionRevision(binding.targetEmployeeRef)
-    if (target === null || !target.content.enabled) {
+    if (target === null) {
       throw new ValidationError(
         'employee-collaboration-target-unavailable',
         `target employee is unavailable: ${binding.targetEmployeeRef.id}@${binding.targetEmployeeRef.revision}`,
@@ -842,6 +866,7 @@ export class DigitalEmployeeAuthoringService {
       defaultToolBindings: body.defaultToolBindings,
       defaultCollaborationBindings: body.defaultCollaborationBindings,
       orderedDispatchConfigurations: body.orderedDispatchConfigurations,
+      reactionLaneOrder: this.#normalizeReactionLaneOrder(input.typeRef, body.reactionLaneOrder),
     })
     const now = this.#now()
     const record: JobTemplateRecord = {
@@ -886,6 +911,7 @@ export class DigitalEmployeeAuthoringService {
       defaultToolBindings: body.defaultToolBindings,
       defaultCollaborationBindings: body.defaultCollaborationBindings,
       orderedDispatchConfigurations: body.orderedDispatchConfigurations,
+      reactionLaneOrder: this.#normalizeReactionLaneOrder(existing.typeRef, body.reactionLaneOrder),
     }
     this.#store.updateJobTemplate(existing.id, body.name, draft, this.#now())
     const updated = this.#store.getJobTemplate(existing.id)
@@ -938,11 +964,18 @@ export class DigitalEmployeeAuthoringService {
       enabledWorkItemRefs,
     )
     validateCollaborationGroups(template.draft.defaultCollaborationBindings)
+    const publishedContent = employeeJobTemplateContentSchema.parse({
+      ...template.draft,
+      reactionLaneOrder: this.#normalizeReactionLaneOrder(
+        template.typeRef,
+        template.draft.reactionLaneOrder,
+      ),
+    })
     const ref = { id: template.id, revision: nextRevision(template.publishedRevision) }
     this.#store.publishJobTemplate({
       ref,
-      content: template.draft,
-      contentDigest: contentDigest(template.draft),
+      content: publishedContent,
+      contentDigest: contentDigest(publishedContent),
       publishedAt: this.#now(),
       publishedBy: input.actorUserId,
     })
@@ -965,12 +998,11 @@ export class DigitalEmployeeAuthoringService {
     }
     runtime.parseWorkScope(body.workScope)
     validateCollaborationGroups(body.collaborationOverrides)
-    const draft = digitalEmployeeDefinitionDraftSchema.parse({
+    const configuration = digitalEmployeeDefinitionDraftSchema.parse({
       schemaVersion: 1,
       typeRef: input.typeRef,
       jobTemplateRef: body.jobTemplateRef,
       displayName: body.name,
-      enabled: body.enabled,
       workScope: body.workScope,
       toolOverrides: body.toolOverrides,
       collaborationOverrides: body.collaborationOverrides,
@@ -980,19 +1012,31 @@ export class DigitalEmployeeAuthoringService {
       id: this.#id(),
       name: body.name,
       typeRef: input.typeRef,
-      draft,
-      publishedRevision: null,
+      configuration,
+      currentRevision: null,
       ownerUserId: input.ownerUserId,
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
     }
-    this.#store.createEmployeeDefinition(record)
-    return record
+    const compiled = this.#compileEmployeeDefinition(record, input.ownerUserId)
+    this.#store.saveEmployeeDefinition({
+      ...compiled,
+      definitionMutation: { kind: 'create', record },
+    })
+    const saved = this.#store.getEmployeeDefinition(record.id)
+    if (saved === null || saved.currentRevision === null) {
+      throw new Error('employee vanished after atomic create')
+    }
+    return saved
   }
 
-  updateEmployeeDefinition(input: { id: string; body: unknown }): EmployeeDefinitionRecord {
+  updateEmployeeDefinition(input: {
+    id: string
+    body: unknown
+    actorUserId: string | null
+  }): EmployeeDefinitionRecord {
     const existing = this.#store.getEmployeeDefinition(input.id)
     if (existing === null || existing.archivedAt !== null) {
       throw new NotFoundError('employee-definition-not-found', `employee not found: ${input.id}`)
@@ -1008,39 +1052,108 @@ export class DigitalEmployeeAuthoringService {
     }
     runtime.parseWorkScope(body.workScope)
     validateCollaborationGroups(body.collaborationOverrides)
-    const draft: DigitalEmployeeDefinitionDraft = {
+    const configuration: DigitalEmployeeDefinitionDraft = {
       schemaVersion: 1,
       typeRef: existing.typeRef,
       jobTemplateRef: body.jobTemplateRef,
       displayName: body.name,
-      enabled: body.enabled,
       workScope: body.workScope,
       toolOverrides: body.toolOverrides,
       collaborationOverrides: body.collaborationOverrides,
     }
-    this.#store.updateEmployeeDefinition(existing.id, body.name, draft, this.#now())
+    const candidate: EmployeeDefinitionRecord = {
+      ...existing,
+      name: body.name,
+      configuration,
+      updatedAt: this.#now(),
+    }
+    const compiled = this.#compileEmployeeDefinition(candidate, input.actorUserId)
+    this.#store.saveEmployeeDefinition({
+      ...compiled,
+      definitionMutation: {
+        kind: 'update',
+        expectedTypeRef: existing.typeRef,
+        targetTypeRef: existing.typeRef,
+        name: candidate.name,
+        configuration,
+        updatedAt: compiled.revision.createdAt,
+      },
+    })
     const updated = this.#store.getEmployeeDefinition(existing.id)
-    if (updated === null) throw new Error('employee vanished after update')
+    if (updated === null || updated.currentRevision === null) {
+      throw new Error('employee vanished after atomic update')
+    }
     return updated
   }
 
   listEmployeeDefinitions(typeRef?: EmployeeTypeRef): EmployeeDefinitionRecord[] {
     if (typeRef !== undefined) this.#runtime(typeRef)
-    return this.#store.listEmployeeDefinitions(typeRef)
+    return this.#store
+      .listEmployeeDefinitions(typeRef)
+      .filter((employee) => employee.currentRevision !== null)
+  }
+
+  listLaunchableEmployeeDefinitions(): EmployeeDefinitionRecord[] {
+    const currentTypeRevisions = new Map(
+      this.listTypes().map((descriptor) => [
+        descriptor.typeRef.typeId,
+        descriptor.typeRef.revision,
+      ]),
+    )
+    return this.#store.listEmployeeDefinitions().filter((employee) => {
+      if (
+        employee.currentRevision === null ||
+        currentTypeRevisions.get(employee.typeRef.typeId) !== employee.typeRef.revision
+      ) {
+        return false
+      }
+      return (
+        this.#store.getEmployeeDefinitionRevision({
+          id: employee.id,
+          revision: employee.currentRevision,
+        }) !== null
+      )
+    })
+  }
+
+  listJobTemplateUpgradeCandidates(targetTypeRef: EmployeeTypeRef): JobTemplateRecord[] {
+    this.#runtime(targetTypeRef)
+    return this.#store
+      .listJobTemplatesByTypeId(targetTypeRef.typeId)
+      .filter((template) => template.typeRef.revision < targetTypeRef.revision)
+  }
+
+  listEmployeeDefinitionUpgradeCandidates(
+    targetTypeRef: EmployeeTypeRef,
+  ): EmployeeDefinitionRecord[] {
+    this.#runtime(targetTypeRef)
+    return this.#store
+      .listEmployeeDefinitions()
+      .filter(
+        (employee) =>
+          employee.currentRevision !== null &&
+          employee.typeRef.typeId === targetTypeRef.typeId &&
+          employee.typeRef.revision < targetTypeRef.revision,
+      )
   }
 
   getEmployeeDefinition(id: string): EmployeeDefinitionRecord {
     const record = this.#store.getEmployeeDefinition(id)
-    if (record === null || record.archivedAt !== null) {
+    if (record === null || record.archivedAt !== null || record.currentRevision === null) {
       throw new NotFoundError('employee-definition-not-found', `employee not found: ${id}`)
     }
     return record
   }
 
-  publishEmployeeDefinition(input: { id: string; actorUserId: string | null }): ExactResourceRef {
-    const employee = this.getEmployeeDefinition(input.id)
+  #compileEmployeeDefinition(
+    employee: EmployeeDefinitionRecord,
+    actorUserId: string | null,
+  ): {
+    readonly revision: EmployeeDefinitionRevisionRecord
+    readonly workScope: WorkScopeRevisionRecord
+  } {
     const runtime = this.#runtime(employee.typeRef)
-    const template = this.#store.getJobTemplateRevision(employee.draft.jobTemplateRef)
+    const template = this.#store.getJobTemplateRevision(employee.configuration.jobTemplateRef)
     if (template === null || !sameType(template.content.typeRef, employee.typeRef)) {
       throw new ValidationError(
         'employee-job-template-invalid',
@@ -1049,18 +1162,21 @@ export class DigitalEmployeeAuthoringService {
     }
     const collaborationBindings = mergeCollaborationBindings({
       defaults: template.content.defaultCollaborationBindings,
-      overrides: employee.draft.collaborationOverrides,
+      overrides: employee.configuration.collaborationOverrides,
     })
     const enabledWorkItemRefs = this.#enabledWorkItemRefs({
       typeRef: employee.typeRef,
-      toolBindings: [...template.content.defaultToolBindings, ...employee.draft.toolOverrides],
+      toolBindings: [
+        ...template.content.defaultToolBindings,
+        ...employee.configuration.toolOverrides,
+      ],
       collaborationBindings,
       orderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
     })
     const merged = mergeExactToolBindings({
       manifest: runtime.descriptor.authoringManifest,
       defaults: template.content.defaultToolBindings,
-      overrides: employee.draft.toolOverrides,
+      overrides: employee.configuration.toolOverrides,
       enabledWorkItemRefs,
     })
     if (merged.violations.length > 0) {
@@ -1101,36 +1217,37 @@ export class DigitalEmployeeAuthoringService {
       }
     }
 
-    const encodedScope = runtime.parseWorkScope(employee.draft.workScope)
+    const encodedScope = runtime.parseWorkScope(employee.configuration.workScope)
     const scopeRef = { id: this.#id(), revision: 1 }
-    const revisionRef = { id: employee.id, revision: nextRevision(employee.publishedRevision) }
+    const revisionRef = { id: employee.id, revision: nextRevision(employee.currentRevision) }
     const closure = {
       typeRef: employee.typeRef,
-      jobTemplateRef: employee.draft.jobTemplateRef,
+      jobTemplateRef: employee.configuration.jobTemplateRef,
       workScopeRef: scopeRef,
       bindings: merged.bindings,
       toolDigests,
       collaborationBindings,
       collaborationTargetDigests,
       orderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
+      reactionLaneOrder: template.content.reactionLaneOrder,
       dispatchToolDigests: dispatchTools.map((tool) => tool.contentDigest),
     }
     const content = digitalEmployeeDefinitionContentSchema.parse({
       schemaVersion: 1,
       typeRef: employee.typeRef,
-      jobTemplateRef: employee.draft.jobTemplateRef,
-      displayName: employee.draft.displayName,
-      enabled: employee.draft.enabled,
+      jobTemplateRef: employee.configuration.jobTemplateRef,
+      displayName: employee.configuration.displayName,
       workScopeRef: scopeRef,
       workScopeSummary: runtime.summarizeWorkScope(encodedScope, 'zh-CN'),
       exactToolBindings: merged.bindings,
       exactCollaborationBindings: collaborationBindings,
       exactOrderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
+      exactReactionLaneOrder: template.content.reactionLaneOrder,
       enabledWorkItemRefs,
       compiledClosureDigest: contentDigest(closure),
     })
     const now = this.#now()
-    this.#store.publishEmployeeDefinition({
+    return {
       workScope: {
         ref: scopeRef,
         typeRef: employee.typeRef,
@@ -1138,17 +1255,78 @@ export class DigitalEmployeeAuthoringService {
         displaySummary: content.workScopeSummary,
         contentDigest: contentDigest(encodedScope),
         createdAt: now,
-        createdBy: input.actorUserId,
+        createdBy: actorUserId,
       },
       revision: {
         ref: revisionRef,
         content,
         contentDigest: contentDigest(content),
-        publishedAt: now,
-        publishedBy: input.actorUserId,
+        createdAt: now,
+        createdBy: actorUserId,
+      },
+    }
+  }
+
+  upgradeEmployeeDefinition(input: {
+    id: string
+    targetTypeRef: EmployeeTypeRef
+    body: unknown
+    actorUserId: string | null
+  }): ExactResourceRef {
+    const existing = this.#store.getEmployeeDefinition(input.id)
+    if (existing === null || existing.archivedAt !== null) {
+      throw new NotFoundError('employee-definition-not-found', `employee not found: ${input.id}`)
+    }
+    if (
+      existing.typeRef.typeId !== input.targetTypeRef.typeId ||
+      existing.typeRef.revision >= input.targetTypeRef.revision
+    ) {
+      throw new ValidationError(
+        'employee-type-upgrade-invalid',
+        'employee upgrade must target a newer revision of the same employee type',
+        { currentTypeRef: existing.typeRef, targetTypeRef: input.targetTypeRef },
+      )
+    }
+    const runtime = this.#runtime(input.targetTypeRef)
+    const body = updateEmployeeDefinitionBodySchema.parse(input.body)
+    const template = this.#store.getJobTemplateRevision(body.jobTemplateRef)
+    if (template === null || !sameType(template.content.typeRef, input.targetTypeRef)) {
+      throw new ValidationError(
+        'employee-job-template-invalid',
+        'job template revision does not belong to the target employee type',
+      )
+    }
+    runtime.parseWorkScope(body.workScope)
+    validateCollaborationGroups(body.collaborationOverrides)
+    const configuration = digitalEmployeeDefinitionDraftSchema.parse({
+      schemaVersion: 1,
+      typeRef: input.targetTypeRef,
+      jobTemplateRef: body.jobTemplateRef,
+      displayName: body.name,
+      workScope: body.workScope,
+      toolOverrides: body.toolOverrides,
+      collaborationOverrides: body.collaborationOverrides,
+    })
+    const candidate: EmployeeDefinitionRecord = {
+      ...existing,
+      name: body.name,
+      typeRef: input.targetTypeRef,
+      configuration,
+      updatedAt: this.#now(),
+    }
+    const compiled = this.#compileEmployeeDefinition(candidate, input.actorUserId)
+    this.#store.saveEmployeeDefinition({
+      ...compiled,
+      definitionMutation: {
+        kind: 'update',
+        expectedTypeRef: existing.typeRef,
+        targetTypeRef: input.targetTypeRef,
+        name: candidate.name,
+        configuration,
+        updatedAt: compiled.revision.createdAt,
       },
     })
-    return revisionRef
+    return compiled.revision.ref
   }
 
   getExecutionPolicy() {

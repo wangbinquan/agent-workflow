@@ -1157,7 +1157,7 @@ export const tasks = sqliteTable(
     /**
      * RFC-311：本行为根的子树内 max(started_at) 的物化缓存（纯派生值，迁移
      * 0180 回填、子任务创建/启动时沿父链向上推进、invariants 校验自愈）。
-     * 任务列表（/api/tasks/page）以 root 行的该值做 keyset 排序取页，取代
+     * task-operations catalog provider 以 root 行的该值做 keyset 排序取页，取代
      * 旧实现「全量物化 + 递归聚合后才 LIMIT」的 O(全表) 形状。
      */
     branchStartedAt: integer('branch_started_at').notNull().default(0),
@@ -4964,8 +4964,11 @@ export const employeeDefinitions = sqliteTable(
     name: text('name').notNull(),
     typeId: text('type_id').notNull(),
     typeRevision: integer('type_revision').notNull(),
-    draftJson: text('draft_json').notNull(),
-    publishedRevision: integer('published_revision'),
+    // Physical column names stay compatible with existing databases. Product
+    // semantics are a single saved configuration + current immutable revision;
+    // there is no draft/published employee state.
+    configurationJson: text('draft_json').notNull(),
+    currentRevision: integer('published_revision'),
     ownerUserId: text('owner_user_id'),
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
@@ -4993,8 +4996,8 @@ export const employeeDefinitionRevisions = sqliteTable(
     revision: integer('revision').notNull(),
     contentJson: text('content_json').notNull(),
     contentDigest: text('content_digest').notNull(),
-    publishedAt: integer('published_at').notNull(),
-    publishedBy: text('published_by'),
+    createdAt: integer('published_at').notNull(),
+    createdBy: text('published_by'),
   },
   (t) => ({ pk: primaryKey({ columns: [t.employeeId, t.revision] }) }),
 )
@@ -5398,6 +5401,9 @@ export const employeeCases = sqliteTable(
     typeRevision: integer('type_revision').notNull(),
     primaryContextId: text('primary_context_id').notNull(),
     executionPolicyRevision: integer('execution_policy_revision').notNull(),
+    /** Unified task-catalog ownership and launch provenance. */
+    ownerUserId: text('owner_user_id'),
+    launchOrigin: text('launch_origin', { enum: TASK_LAUNCH_ORIGINS }).notNull().default('api'),
     state: text('state', { enum: ['active', 'waiting', 'blocked', 'terminal'] })
       .notNull()
       .default('active'),
@@ -5422,6 +5428,12 @@ export const employeeCases = sqliteTable(
       t.state,
       t.employeeId,
       t.terminalKind,
+    ),
+    ownerOriginUpdatedIdx: index('idx_employee_cases_owner_origin_updated').on(
+      t.ownerUserId,
+      t.launchOrigin,
+      t.updatedAt,
+      t.id,
     ),
   }),
 )

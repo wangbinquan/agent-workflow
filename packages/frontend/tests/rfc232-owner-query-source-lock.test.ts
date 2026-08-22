@@ -16,11 +16,16 @@ describe('RFC-232 — task-list owner query isolation', () => {
       read('src/routes/scheduled.$id.tsx'),
     ]
 
-    expect(taskList).toContain('useTaskOperationsPage(filters')
+    expect(taskList).toContain('const query = useTaskOperationsPage(')
+    expect(taskList).toContain('selectedSource?.id')
     expect(taskList).toContain(
       '<OwnerLabel ownerUserId={item.ownerUserId} owner={item.owner} wrap />',
     )
-    expect(read('src/hooks/useTaskOperationsPage.ts')).toContain("'/api/tasks/page'")
+    const catalogHook = read('src/hooks/useTaskOperationsPage.ts')
+    expect(catalogHook).toContain("'/api/task-catalog'")
+    expect(catalogHook).toContain('TaskCatalogPageSchema.parse(payload)')
+    expect(catalogHook).toContain('type: sourceId')
+    expect(catalogHook).not.toContain('provider')
     for (const source of unchangedConsumers) {
       expect(source).not.toContain('include_owner')
       expect(source).not.toContain('TaskListItem')

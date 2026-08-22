@@ -87,6 +87,8 @@ export * from './workflow-yaml' // RFC-199
 export * from './workflow-node-references' // RFC-199 T7.1
 export * from './task-questions' // RFC-120
 export * from './taskOperations' // RFC-244
+export * from './taskCreation' // RFC-310 — unified task creation capability registry
+export * from './taskCatalog' // RFC-310 — task-source discovery and unified catalog page
 // RFC-060 PR-E: removed `./sharding` (was RFC-055 agent-multi sharding strategy
 // helpers — agent-multi NodeKind has been removed in favor of wrapper-fanout).
 export * from './kindParser'

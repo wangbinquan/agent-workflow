@@ -149,8 +149,8 @@ function toEmployee(row: typeof employeeDefinitions.$inferSelect): EmployeeDefin
     id: row.id,
     name: row.name,
     typeRef: { typeId: row.typeId, revision: row.typeRevision },
-    draft: digitalEmployeeDefinitionDraftSchema.parse(parseJson(row.draftJson)),
-    publishedRevision: row.publishedRevision,
+    configuration: digitalEmployeeDefinitionDraftSchema.parse(parseJson(row.configurationJson)),
+    currentRevision: row.currentRevision,
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
     createdAt: row.createdAt,
@@ -166,8 +166,8 @@ function toEmployeeRevision(
     ref: { id: row.employeeId, revision: row.revision },
     content: digitalEmployeeDefinitionContentSchema.parse(parseJson(row.contentJson)),
     contentDigest: row.contentDigest,
-    publishedAt: row.publishedAt,
-    publishedBy: row.publishedBy,
+    createdAt: row.createdAt,
+    createdBy: row.createdBy,
   }
 }
 
@@ -442,6 +442,21 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .sort((a, b) => a.name.localeCompare(b.name))
     },
 
+    listJobTemplatesByTypeId(typeId) {
+      return db
+        .select()
+        .from(employeeJobTemplates)
+        .where(
+          and(eq(employeeJobTemplates.typeId, typeId), isNull(employeeJobTemplates.archivedAt)),
+        )
+        .all()
+        .map(toJobTemplate)
+        .sort((a, b) => {
+          const revision = b.typeRef.revision - a.typeRef.revision
+          return revision === 0 ? a.name.localeCompare(b.name) : revision
+        })
+    },
+
     publishJobTemplate(input) {
       db.transaction((tx) => {
         tx.insert(employeeJobTemplateRevisions)
@@ -484,44 +499,6 @@ export function createSqliteDigitalEmployeeAuthoringStore(
       return row === undefined ? null : toJobTemplateRevision(row)
     },
 
-    createEmployeeDefinition(input) {
-      try {
-        db.insert(employeeDefinitions)
-          .values({
-            id: input.id,
-            name: input.name,
-            typeId: input.typeRef.typeId,
-            typeRevision: input.typeRef.revision,
-            draftJson: JSON.stringify(input.draft),
-            publishedRevision: input.publishedRevision,
-            ownerUserId: input.ownerUserId,
-            visibility: input.visibility,
-            createdAt: input.createdAt,
-            updatedAt: input.updatedAt,
-            archivedAt: input.archivedAt,
-          })
-          .run()
-      } catch (error) {
-        uniqueError(error, 'employee-definition-name-conflict', 'employee name already exists')
-      }
-    },
-
-    updateEmployeeDefinition(id, name, draft, now) {
-      try {
-        const result = db
-          .update(employeeDefinitions)
-          .set({ name, draftJson: JSON.stringify(draft), updatedAt: now })
-          .where(and(eq(employeeDefinitions.id, id), isNull(employeeDefinitions.archivedAt)))
-          .run()
-        if ((result as unknown as { changes?: number }).changes !== 1) {
-          throw new NotFoundError('employee-definition-not-found', `employee not found: ${id}`)
-        }
-      } catch (error) {
-        if (error instanceof NotFoundError) throw error
-        uniqueError(error, 'employee-definition-name-conflict', 'employee name already exists')
-      }
-    },
-
     getEmployeeDefinition(id) {
       const row = db.select().from(employeeDefinitions).where(eq(employeeDefinitions.id, id)).get()
       return row === undefined ? null : toEmployee(row)
@@ -545,51 +522,83 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .sort((a, b) => a.name.localeCompare(b.name))
     },
 
-    publishEmployeeDefinition(input) {
-      db.transaction((tx) => {
-        tx.insert(employeeWorkScopeRevisions)
-          .values({
-            scopeId: input.workScope.ref.id,
-            revision: input.workScope.ref.revision,
-            typeId: input.workScope.typeRef.typeId,
-            typeRevision: input.workScope.typeRef.revision,
-            encodedScopeJson: JSON.stringify(input.workScope.encodedScope),
-            displaySummary: input.workScope.displaySummary,
-            contentDigest: input.workScope.contentDigest,
-            createdAt: input.workScope.createdAt,
-            createdBy: input.workScope.createdBy,
-          })
-          .run()
-        tx.insert(employeeDefinitionRevisions)
-          .values({
-            employeeId: input.revision.ref.id,
-            revision: input.revision.ref.revision,
-            contentJson: JSON.stringify(input.revision.content),
-            contentDigest: input.revision.contentDigest,
-            publishedAt: input.revision.publishedAt,
-            publishedBy: input.revision.publishedBy,
-          })
-          .run()
-        const result = tx
-          .update(employeeDefinitions)
-          .set({
-            publishedRevision: input.revision.ref.revision,
-            updatedAt: input.revision.publishedAt,
-          })
-          .where(
-            and(
-              eq(employeeDefinitions.id, input.revision.ref.id),
-              isNull(employeeDefinitions.archivedAt),
-            ),
-          )
-          .run()
-        if ((result as unknown as { changes?: number }).changes !== 1) {
-          throw new NotFoundError(
-            'employee-definition-not-found',
-            `employee not found: ${input.revision.ref.id}`,
-          )
-        }
-      })
+    saveEmployeeDefinition(input) {
+      try {
+        db.transaction((tx) => {
+          if (input.definitionMutation.kind === 'create') {
+            const record = input.definitionMutation.record
+            tx.insert(employeeDefinitions)
+              .values({
+                id: record.id,
+                name: record.name,
+                typeId: record.typeRef.typeId,
+                typeRevision: record.typeRef.revision,
+                configurationJson: JSON.stringify(record.configuration),
+                currentRevision: input.revision.ref.revision,
+                ownerUserId: record.ownerUserId,
+                visibility: record.visibility,
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+                archivedAt: record.archivedAt,
+              })
+              .run()
+          }
+          tx.insert(employeeWorkScopeRevisions)
+            .values({
+              scopeId: input.workScope.ref.id,
+              revision: input.workScope.ref.revision,
+              typeId: input.workScope.typeRef.typeId,
+              typeRevision: input.workScope.typeRef.revision,
+              encodedScopeJson: JSON.stringify(input.workScope.encodedScope),
+              displaySummary: input.workScope.displaySummary,
+              contentDigest: input.workScope.contentDigest,
+              createdAt: input.workScope.createdAt,
+              createdBy: input.workScope.createdBy,
+            })
+            .run()
+          tx.insert(employeeDefinitionRevisions)
+            .values({
+              employeeId: input.revision.ref.id,
+              revision: input.revision.ref.revision,
+              contentJson: JSON.stringify(input.revision.content),
+              contentDigest: input.revision.contentDigest,
+              createdAt: input.revision.createdAt,
+              createdBy: input.revision.createdBy,
+            })
+            .run()
+          if (input.definitionMutation.kind === 'update') {
+            const update = input.definitionMutation
+            const result = tx
+              .update(employeeDefinitions)
+              .set({
+                name: update.name,
+                typeId: update.targetTypeRef.typeId,
+                typeRevision: update.targetTypeRef.revision,
+                configurationJson: JSON.stringify(update.configuration),
+                currentRevision: input.revision.ref.revision,
+                updatedAt: update.updatedAt,
+              })
+              .where(
+                and(
+                  eq(employeeDefinitions.id, input.revision.ref.id),
+                  eq(employeeDefinitions.typeId, update.expectedTypeRef.typeId),
+                  eq(employeeDefinitions.typeRevision, update.expectedTypeRef.revision),
+                  isNull(employeeDefinitions.archivedAt),
+                ),
+              )
+              .run()
+            if ((result as unknown as { changes?: number }).changes !== 1) {
+              throw new NotFoundError(
+                'employee-definition-not-found',
+                `employee not found or changed while saving: ${input.revision.ref.id}`,
+              )
+            }
+          }
+        })
+      } catch (error) {
+        if (error instanceof NotFoundError) throw error
+        uniqueError(error, 'employee-definition-name-conflict', 'employee name already exists')
+      }
     },
 
     getEmployeeDefinitionRevision(ref) {

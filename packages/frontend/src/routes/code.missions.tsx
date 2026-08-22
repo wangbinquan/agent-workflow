@@ -15,7 +15,7 @@ export const Route = createRoute({
 })
 
 export function redirectMissionListToTasks(): never {
-  throw redirect({ to: '/tasks', search: { category: 'digital-employee' } })
+  throw redirect({ to: '/tasks', search: { type: 'digital-employee' } })
 }
 
 export interface MissionSummary {

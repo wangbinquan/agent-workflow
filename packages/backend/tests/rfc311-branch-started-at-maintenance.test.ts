@@ -1,6 +1,6 @@
 // RFC-311 实现门 P1-6 / P2-3 —— `tasks.branch_started_at` 的维护面。
 //
-// 该列是 /api/tasks/page 默认视图(快路径)的排序键,语义是「子树 max(started_at)」。
+// 该列是 task-operations catalog provider 默认视图(快路径)的排序键,语义是「子树 max(started_at)」。
 // 变异检验发现两件事:
 //   ① 把 task.ts 的父链传播整段短路后,47 个既有用例仍全绿——真启动路径造出来的
 //      父子任务从没有人断言过父行被抬升(rfc311 的两个文件都是跑 migration 回填

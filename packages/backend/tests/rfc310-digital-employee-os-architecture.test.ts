@@ -111,7 +111,15 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       join(REPO_ROOT, 'packages', 'frontend', 'src', 'routes', 'digital-employees.tsx'),
       join(REPO_ROOT, 'packages', 'frontend', 'src', 'routes', 'digital-employees.$typeRef.tsx'),
       join(REPO_ROOT, 'packages', 'frontend', 'src', 'routes', 'employee-cases.$caseId.tsx'),
-      join(REPO_ROOT, 'packages', 'frontend', 'src', 'routes', 'employee-cases.new.tsx'),
+      join(
+        REPO_ROOT,
+        'packages',
+        'frontend',
+        'src',
+        'components',
+        'task-creation',
+        'TaskCreationSubjectDescriptorContract.tsx',
+      ),
     ]
     const files = [...genericRoots.flatMap((root) => walk(root)), ...genericRoutes]
     const literal = new RegExp(`['"]${manifest.genericTypeLiteralBan}['"]`)

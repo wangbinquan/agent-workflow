@@ -304,7 +304,7 @@ describe('/code/missions list', () => {
     const router = await renderMissions('/code/missions')
     await screen.findByTestId('unified-task-list')
     expect(router.state.location.pathname).toBe('/tasks')
-    expect(router.state.location.search).toEqual({ category: 'digital-employee' })
+    expect(router.state.location.search).toEqual({ type: 'digital-employee' })
   })
 
   test('guided launch preflights and submits a direct-body mission with a pinned employee revision', async () => {

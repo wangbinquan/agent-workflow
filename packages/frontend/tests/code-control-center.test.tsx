@@ -122,7 +122,7 @@ test('/code is a self-guided digital employee capability builder', async () => {
     '/code/assignments',
   )
   expect(screen.getByTestId('digital-employee-open-tasks').getAttribute('href')).toBe(
-    '/tasks?category=digital-employee',
+    '/tasks?type=digital-employee',
   )
   expect(screen.queryByTestId('mission-operations-board')).toBeNull()
 })

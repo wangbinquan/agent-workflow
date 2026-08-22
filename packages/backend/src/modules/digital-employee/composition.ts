@@ -56,6 +56,7 @@ import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/typ
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
+export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
 export { startDigitalEmployeeOsWorker } from './application/osWorker'
 export {
   activateDigitalEmployeeOsWriter,
@@ -101,11 +102,11 @@ export interface EmployeeDefinitionView {
   readonly id: string
   readonly name: string
   readonly typeRef: EmployeeTypeRef
-  readonly draft: DigitalEmployeeDefinitionDraft
-  readonly publishedRevision: number | null
-  readonly published: DigitalEmployeeDefinitionContent | null
-  /** Exact decoded scope frozen into the published employee revision. */
-  readonly publishedWorkScope: unknown | null
+  readonly configuration: DigitalEmployeeDefinitionDraft
+  readonly revision: number
+  readonly definition: DigitalEmployeeDefinitionContent
+  /** Exact decoded scope frozen into the current employee revision. */
+  readonly workScope: unknown
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -150,9 +151,13 @@ export interface DigitalEmployeeCommands {
     readonly body: unknown
     readonly actorUserId: string | null
   }): EmployeeDefinitionView
-  updateEmployee(input: { readonly id: string; readonly body: unknown }): EmployeeDefinitionView
-  publishEmployee(
-    input: Parameters<DigitalEmployeeAuthoringService['publishEmployeeDefinition']>[0],
+  updateEmployee(input: {
+    readonly id: string
+    readonly body: unknown
+    readonly actorUserId: string | null
+  }): EmployeeDefinitionView
+  upgradeEmployee(
+    input: Parameters<DigitalEmployeeAuthoringService['upgradeEmployeeDefinition']>[0],
   ): ExactResourceRef
 }
 
@@ -165,7 +170,10 @@ export interface DigitalEmployeeQueries {
     input: Parameters<DigitalEmployeeAuthoringService['getToolAuthoring']>[0],
   ): Promise<ToolAuthoringView>
   listJobTemplates(ref: EmployeeTypeRef): JobTemplateView[]
+  listJobTemplateUpgradeCandidates(ref: EmployeeTypeRef): JobTemplateView[]
   listEmployees(ref?: EmployeeTypeRef): EmployeeDefinitionView[]
+  listLaunchableEmployees(): EmployeeDefinitionView[]
+  listEmployeeUpgradeCandidates(ref: EmployeeTypeRef): EmployeeDefinitionView[]
   getEmployee(id: string): EmployeeDefinitionView
   getExecutionPolicy(): ExecutionPolicyView
   getMigrationStatus(): ReturnType<typeof analyzeDigitalEmployeeMigration>
@@ -388,25 +396,24 @@ export function composeDigitalEmployee(
   const employeeView = (
     record: ReturnType<DigitalEmployeeAuthoringService['getEmployeeDefinition']>,
   ): EmployeeDefinitionView => {
-    const published =
-      record.publishedRevision === null
-        ? null
-        : (store.getEmployeeDefinitionRevision({
-            id: record.id,
-            revision: record.publishedRevision,
-          })?.content ?? null)
-    const publishedWorkScope =
-      published === null
-        ? null
-        : (store.getWorkScopeRevision(published.workScopeRef)?.encodedScope ?? null)
+    if (record.currentRevision === null) {
+      throw new Error(`employee has no current revision: ${record.id}`)
+    }
+    const revision = store.getEmployeeDefinitionRevision({
+      id: record.id,
+      revision: record.currentRevision,
+    })
+    if (revision === null) throw new Error(`employee revision is missing: ${record.id}`)
+    const workScope = store.getWorkScopeRevision(revision.content.workScopeRef)
+    if (workScope === null) throw new Error(`employee work scope is missing: ${record.id}`)
     return {
       id: record.id,
       name: record.name,
       typeRef: record.typeRef,
-      draft: record.draft,
-      publishedRevision: record.publishedRevision,
-      published,
-      publishedWorkScope,
+      configuration: record.configuration,
+      revision: record.currentRevision,
+      definition: revision.content,
+      workScope: workScope.encodedScope,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     }
@@ -448,6 +455,7 @@ export function composeDigitalEmployee(
             },
           },
           runtimeCodecs: options.runtime.codecs,
+          currentTypeRefs: runtimePackages.map((runtime) => runtime.descriptor.typeRef),
           executionContracts: options.executionContracts,
           platformTools,
           resolveExecutionPolicy: () =>
@@ -500,7 +508,12 @@ export function composeDigitalEmployee(
         return { ...toolView(authoring.record), body: authoring.body }
       },
       listJobTemplates: (ref) => service.listJobTemplates(ref).map(jobView),
+      listJobTemplateUpgradeCandidates: (ref) =>
+        service.listJobTemplateUpgradeCandidates(ref).map(jobView),
       listEmployees: (ref) => service.listEmployeeDefinitions(ref).map(employeeView),
+      listLaunchableEmployees: () => service.listLaunchableEmployeeDefinitions().map(employeeView),
+      listEmployeeUpgradeCandidates: (ref) =>
+        service.listEmployeeDefinitionUpgradeCandidates(ref).map(employeeView),
       getEmployee: (id) => employeeView(service.getEmployeeDefinition(id)),
       getExecutionPolicy: policyView,
       getMigrationStatus: () => analyzeDigitalEmployeeMigration(options.db),
@@ -538,7 +551,7 @@ export function composeDigitalEmployee(
           }),
         ),
       updateEmployee: (input) => employeeView(service.updateEmployeeDefinition(input)),
-      publishEmployee: (input) => service.publishEmployeeDefinition(input),
+      upgradeEmployee: (input) => service.upgradeEmployeeDefinition(input),
     },
     runtime:
       runtimeService === null

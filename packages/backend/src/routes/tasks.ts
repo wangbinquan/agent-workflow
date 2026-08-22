@@ -93,7 +93,6 @@ import { getWorkflow } from '@/services/workflow'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { listTaskOperationsPage } from '@/services/taskOperations'
 import { safeJsonOrEmpty } from '@/util/http'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
@@ -203,35 +202,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       }
       return c.json(
         includeOwner ? await listTaskItems(deps.db, filters) : await listTasks(deps.db, filters),
-      )
-    },
-  )
-
-  // RFC-244 — static route must stay above the /api/tasks/:id visibility
-  // middleware so the literal "page" is never interpreted as a task id.
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/tasks/page',
-      permissions: ['tasks:read'],
-      tokenAccess: 'allow',
-      summary: 'List tasks (paged)',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await listTaskOperationsPage(deps.db, actor, {
-          view: c.req.query('view'),
-          q: c.req.query('q'),
-          statuses: c.req.query('statuses'),
-          subject: c.req.query('subject'),
-          scope: c.req.query('scope'),
-          origin: c.req.query('origin'),
-          parent_id: c.req.query('parent_id'),
-          cursor: c.req.query('cursor'),
-          limit: c.req.query('limit'),
-        }),
       )
     },
   )

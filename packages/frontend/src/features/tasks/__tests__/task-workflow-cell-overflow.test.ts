@@ -62,10 +62,10 @@ describe('tasks list workflow-column workgroup badge one-line guard', () => {
     expect(subjectLink).toContain('task-workflow-cell__badge')
   })
 
-  it('routes/tasks.tsx delegates the subject cell to <TaskSubjectLink>', () => {
-    // The inline cell is gone — the list <td> renders the shared component,
-    // so the wrapper classes above must live in TaskSubjectLink, not here.
-    expect(tasksRoute).toContain('<TaskSubjectLink')
+  it('routes/tasks.tsx renders the normalized catalog subject without legacy host identity', () => {
+    expect(tasksRoute).toContain('const subject = localized(item.subject.label, language)')
+    expect(tasksRoute).toContain('t(taskSourceRegistration(item.sourceId).labelKey)')
+    expect(tasksRoute).not.toContain('<TaskSubjectLink task={item}')
     expect(tasksRoute).not.toContain('task-workflow-cell__badge')
   })
 })

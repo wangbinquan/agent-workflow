@@ -3016,7 +3016,7 @@ async function startTaskImpl(
         occurredAt: now,
       })
 
-      // RFC-311 — /api/tasks/page 的 keyset 排序键维护：新任务把自己的
+      // RFC-311 — task-operations catalog provider 的 keyset 排序键维护：新任务把自己的
       // started_at 沿父链向上推进（分支最新活动时间是聚合值,列表只按 root
       // 行取页）。链长受调度树深度约束（MAX_TREE_DEPTH=64 同款上限）;这是
       // 唯一铸行点,invariants 的自愈规则兜住历史漂移。

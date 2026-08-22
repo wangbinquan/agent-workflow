@@ -276,7 +276,13 @@ function nonViewCondition(
     conditions.push(sql`(${col('workgroup_id')} IS NULL OR ${col('workgroup_id')} = '')`)
     conditions.push(sql`(${col('source_agent_name')} IS NULL OR ${col('source_agent_name')} = '')`)
   }
-  if (filters.origin !== 'all') conditions.push(sql`${col('launch_origin')} = ${filters.origin}`)
+  if (filters.origin === 'event') {
+    // RFC-310 unified Webhook delivery under Event Center. Historical rows
+    // keep their immutable `webhook` fact but belong to the one event filter.
+    conditions.push(sql`${col('launch_origin')} IN ('event', 'webhook')`)
+  } else if (filters.origin !== 'all') {
+    conditions.push(sql`${col('launch_origin')} = ${filters.origin}`)
+  }
 
   if (filters.q !== undefined) {
     const pattern = `%${escapeLike(filters.q.toLocaleLowerCase('en-US'))}%`

@@ -351,7 +351,7 @@ export function EventResponseRulesPanel(props: {
   })
   const employees = useQuery<DigitalEmployeeList>({
     queryKey: ['digital-employees', 'event-response-target-list'],
-    queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
+    queryFn: ({ signal }) => api.get('/api/digital-employees/launchable', undefined, signal),
     retry: false,
   })
 
@@ -373,13 +373,7 @@ export function EventResponseRulesPanel(props: {
     enabled: draft?.targetKind === 'agent' && draft.targetRefId !== '',
     retry: false,
   })
-  const availableEmployees = useMemo(
-    () =>
-      (employees.data?.items ?? []).filter(
-        (employee) => employee.publishedRevision !== null && employee.published?.enabled === true,
-      ),
-    [employees.data],
-  )
+  const availableEmployees = useMemo(() => employees.data?.items ?? [], [employees.data])
   const selectedEmployee =
     draft?.targetKind === 'digital-employee'
       ? (availableEmployees.find((employee) => employee.id === draft.targetRefId) ?? null)
@@ -527,7 +521,7 @@ export function EventResponseRulesPanel(props: {
           ? (workgroups.data ?? []).map((row) => ({ value: row.id, label: row.name }))
           : availableEmployees.map((employee) => ({
               value: employee.id,
-              label: employee.published?.displayName ?? employee.name,
+              label: employee.definition.displayName,
             }))
   const resourceName = (target: EventResponseTarget): string => {
     if (target.kind === 'workflow') {
@@ -540,7 +534,7 @@ export function EventResponseRulesPanel(props: {
       return workgroups.data?.find((row) => row.id === target.refId)?.name ?? target.refId
     }
     const employee = availableEmployees.find((row) => row.id === target.refId)
-    return employee?.published?.displayName ?? employee?.name ?? target.refId
+    return employee?.definition.displayName ?? employee?.name ?? target.refId
   }
   const eventName = (ref: ExactRef): string => {
     const event = props.catalog.eventTypes.find(

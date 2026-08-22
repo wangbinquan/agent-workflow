@@ -55,8 +55,8 @@ describe('Webhook Digital Employee trigger validation', () => {
       name: 'fixture employee',
       typeId: 'fixture',
       typeRevision: 1,
-      draftJson: '{}',
-      publishedRevision: 1,
+      configurationJson: '{}',
+      currentRevision: 1,
       ownerUserId: owner.id,
       visibility: 'private',
       createdAt: now,
@@ -67,8 +67,8 @@ describe('Webhook Digital Employee trigger validation', () => {
       revision: 1,
       contentJson: '{not-json',
       contentDigest: 'broken-definition',
-      publishedAt: now,
-      publishedBy: owner.id,
+      createdAt: now,
+      createdBy: owner.id,
     })
     const candidate = {
       launchKind: 'digital-employee' as const,
@@ -85,7 +85,7 @@ describe('Webhook Digital Employee trigger validation', () => {
 
     await db
       .update(employeeDefinitionRevisions)
-      .set({ contentJson: JSON.stringify({ enabled: true }) })
+      .set({ contentJson: JSON.stringify({ schemaVersion: 1 }) })
       .where(eq(employeeDefinitionRevisions.employeeId, employeeId))
     await db
       .update(employeeTypePackages)

@@ -493,7 +493,7 @@ export function TriggersPanel() {
   })
   const employeeOptions = useQuery<DigitalEmployeeList>({
     queryKey: ['digital-employees', 'webhook-target-list'],
-    queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
+    queryFn: ({ signal }) => api.get('/api/digital-employees/launchable', undefined, signal),
     retry: false,
   })
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['webhook-triggers'] })
@@ -614,7 +614,7 @@ export function TriggersPanel() {
     for (const row of agentOptions.data ?? []) names.set(`agent:${row.id}`, row.name)
     for (const row of workgroupOptions.data ?? []) names.set(`workgroup:${row.id}`, row.name)
     for (const row of employeeOptions.data?.items ?? []) {
-      names.set(`digital-employee:${row.id}`, row.published?.displayName ?? row.name)
+      names.set(`digital-employee:${row.id}`, row.definition.displayName)
     }
     return names
   }, [agentOptions.data, employeeOptions.data, workflowOptions.data, workgroupOptions.data])
@@ -1027,14 +1027,11 @@ function TriggerDialog(props: {
   })
   const digitalEmployees = useQuery<DigitalEmployeeList>({
     queryKey: ['digital-employees', 'webhook-target-list'],
-    queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
+    queryFn: ({ signal }) => api.get('/api/digital-employees/launchable', undefined, signal),
     enabled: draft.launchKind === 'digital-employee',
   })
   const availableDigitalEmployees = useMemo(
-    () =>
-      (digitalEmployees.data?.items ?? []).filter(
-        (employee) => employee.publishedRevision !== null && employee.published?.enabled === true,
-      ),
+    () => digitalEmployees.data?.items ?? [],
     [digitalEmployees.data],
   )
   const selectedDigitalEmployee =
@@ -1285,7 +1282,7 @@ function TriggerDialog(props: {
           : draft.launchKind === 'digital-employee'
             ? availableDigitalEmployees.map((employee) => ({
                 id: employee.id,
-                name: employee.published?.displayName ?? employee.name,
+                name: employee.definition.displayName,
               }))
             : []
   const targetLabel = buildResourceOptionLabeler(targetRows)

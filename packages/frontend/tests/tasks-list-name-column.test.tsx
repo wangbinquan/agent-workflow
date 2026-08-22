@@ -17,12 +17,13 @@ describe('routes/tasks.tsx — dense task identity column', () => {
   })
 
   test('task name is the linked primary label', () => {
-    expect(SRC).toMatch(/task-operations__name[\s\S]*?\{item\.name\}/)
+    expect(SRC).toMatch(/task-operations__name[\s\S]*?\{item\.title\}/)
   })
 
   test('metadata keeps subject, repository, and a compact recoverable id', () => {
-    expect(SRC).toContain('<TaskSubjectLink task={item} taskId={item.id} badge />')
-    expect(SRC).toContain('taskRepoDisplayName(item)')
+    expect(SRC).toContain('const subject = localized(item.subject.label, language)')
+    expect(SRC).toContain('t(taskSourceRegistration(item.sourceId).labelKey)')
+    expect(SRC).toContain('item.targetLabel')
     expect(SRC).toMatch(
       /className="task-operations__id" title=\{item\.id\}[\s\S]*?item\.id\.slice\(-8\)/,
     )

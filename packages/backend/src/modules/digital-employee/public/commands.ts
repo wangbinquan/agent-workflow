@@ -39,7 +39,7 @@ export type DigitalEmployeeAuthoringCommand =
       readonly commandJson: string
     }
   | {
-      readonly kind: 'job-template.publish' | 'employee.publish'
+      readonly kind: 'job-template.publish'
       readonly resourceRef: ExactResourceRef
       readonly actorUserId: string | null
     }
@@ -53,6 +53,7 @@ export type DigitalEmployeeAuthoringCommand =
       readonly kind: 'employee.update'
       readonly resourceRef: ExactResourceRef
       readonly commandJson: string
+      readonly actorUserId: string | null
     }
   | {
       readonly kind: 'execution-policy.publish'

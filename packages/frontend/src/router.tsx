@@ -39,7 +39,6 @@ import { Route as skillDetailRoute } from '@/routes/skills.detail'
 import { Route as skillNewRoute } from '@/routes/skills.new'
 import { Route as tasksRoute } from '@/routes/tasks'
 import { TaskWizardRoute as taskWizardRoute } from '@/routes/tasks.new'
-import { Route as employeeCaseNewRoute } from '@/routes/employee-cases.new'
 import { Route as employeeCaseDetailRoute } from '@/routes/employee-cases.$caseId'
 import { Route as intentSessionsRoute } from '@/routes/intent'
 import { Route as intentSessionDetailRoute } from '@/routes/intent.detail'
@@ -129,8 +128,7 @@ const routeTree = rootRoute.addChildren([
   workgroupLaunchRedirect,
   workgroupDetailRoute,
   workgroupsRoute,
-  // RFC-310: digital employee case literals precede the generic task detail.
-  employeeCaseNewRoute,
+  // RFC-310: the unified /tasks/new route owns every task creation source.
   employeeCaseDetailRoute,
   // RFC-105: '/tasks/$id/preview' (longer literal) before '/tasks/$id'.
   taskPreviewRoute,

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactElement } from 'react'
+import { useState, type CSSProperties, type ReactElement } from 'react'
 
 import { StatusChip } from '@/components/StatusChip'
 
@@ -43,14 +43,49 @@ export function ResponsibilitySwimlaneMap(props: {
   dispatchNodes?: readonly ResponsibilityDispatchNode[]
   selectedDispatchNodeKey?: string | null
   onSelectDispatchNode?: (node: ResponsibilityDispatchNode) => void
+  /** Highest-priority event-driven duty lane first. Spine lanes stay fixed. */
+  lanePriorityOrder?: readonly string[]
+  onLanePriorityOrderChange?: (order: string[]) => void
 }): ReactElement {
   const zh = props.language.startsWith('zh')
+  const [draggedLaneId, setDraggedLaneId] = useState<string | null>(null)
   const workItemsByRef = new Map(
     props.type.authoringManifest.workItems.map((item) => [item.workItemRef, item]),
+  )
+  const reactionLaneIds = new Set(
+    props.type.reactionRules.flatMap((rule) => {
+      const item = workItemsByRef.get(rule.capabilityWorkItemRef ?? rule.workItemRef)
+      return item?.responsibilityLaneId == null ? [] : [item.responsibilityLaneId]
+    }),
+  )
+  const fanOutDestinationRefs = new Set(
+    props.type.authoringManifest.workItems.flatMap((source) =>
+      (source.orderedDispatchAuthoring?.destinationWorkItemRefs ?? []).filter(
+        (destinationRef) => workItemsByRef.get(destinationRef)?.nodeKind === 'business-tool',
+      ),
+    ),
   )
   const regions = [...props.type.authoringManifest.lifecycleRegions].sort(
     (left, right) => left.order - right.order,
   )
+  const movePriorityLane = (sourceLaneId: string, targetLaneId: string) => {
+    if (sourceLaneId === targetLaneId || props.onLanePriorityOrderChange === undefined) return
+    const order = [...(props.lanePriorityOrder ?? [])]
+    const sourceIndex = order.indexOf(sourceLaneId)
+    const targetIndex = order.indexOf(targetLaneId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+    order.splice(sourceIndex, 1)
+    order.splice(targetIndex, 0, sourceLaneId)
+    props.onLanePriorityOrderChange(order)
+  }
+  const shiftPriorityLane = (laneId: string, delta: -1 | 1) => {
+    const order = [...(props.lanePriorityOrder ?? [])]
+    const sourceIndex = order.indexOf(laneId)
+    const targetIndex = sourceIndex + delta
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= order.length) return
+    ;[order[sourceIndex], order[targetIndex]] = [order[targetIndex]!, order[sourceIndex]!]
+    props.onLanePriorityOrderChange?.(order)
+  }
   const nodeKind = (item: WorkItem): { label: string; className: string } =>
     item.nodeKind === 'business-tool'
       ? { label: zh ? '工具' : 'Tool', className: 'tool' }
@@ -84,9 +119,28 @@ export function ResponsibilitySwimlaneMap(props: {
 
       <div className="employee-toolbox-map__regions">
         {regions.map((region, regionIndex) => {
-          const lanes = [...region.responsibilityLanes].sort(
+          const declaredLanes = [...region.responsibilityLanes].sort(
             (left, right) => left.order - right.order,
           )
+          const absorbedLaneIds = new Set(
+            declaredLanes
+              .filter(
+                (lane) =>
+                  lane.kind === 'branch' && !lane.optional && !reactionLaneIds.has(lane.laneId),
+              )
+              .map((lane) => lane.laneId),
+          )
+          const lanes = declaredLanes
+            .filter((lane) => !absorbedLaneIds.has(lane.laneId))
+            .sort((left, right) => {
+              if (left.kind !== right.kind) return left.kind === 'spine' ? -1 : 1
+              const leftPriority = props.lanePriorityOrder?.indexOf(left.laneId) ?? -1
+              const rightPriority = props.lanePriorityOrder?.indexOf(right.laneId) ?? -1
+              if (leftPriority >= 0 && rightPriority >= 0) return leftPriority - rightPriority
+              if (leftPriority >= 0) return -1
+              if (rightPriority >= 0) return 1
+              return left.order - right.order
+            })
           return (
             <section
               key={region.regionId}
@@ -103,11 +157,16 @@ export function ResponsibilitySwimlaneMap(props: {
               </header>
               <div className="employee-toolbox-region__lanes">
                 {lanes.map((lane) => {
+                  const includedLaneIds =
+                    lane.kind === 'spine'
+                      ? new Set([lane.laneId, ...absorbedLaneIds])
+                      : new Set([lane.laneId])
                   const items = props.type.authoringManifest.workItems
                     .filter(
                       (item) =>
                         item.regionId === region.regionId &&
-                        item.responsibilityLaneId === lane.laneId,
+                        item.responsibilityLaneId !== null &&
+                        includedLaneIds.has(item.responsibilityLaneId),
                     )
                     .sort((left, right) => left.order - right.order)
                   if (items.length === 0) return null
@@ -130,12 +189,27 @@ export function ResponsibilitySwimlaneMap(props: {
                     ]
                   })
                   const laneColumns = Math.min(entries.length, 4)
+                  const lanePriority = props.lanePriorityOrder?.indexOf(lane.laneId) ?? -1
+                  const laneSortable =
+                    lanePriority >= 0 && props.onLanePriorityOrderChange !== undefined
                   return (
                     <section
                       key={lane.laneId}
-                      className={`employee-toolbox-lane employee-toolbox-lane--${lane.kind}`}
+                      className={`employee-toolbox-lane employee-toolbox-lane--${lane.kind}${
+                        draggedLaneId === lane.laneId ? ' employee-toolbox-lane--dragging' : ''
+                      }`}
+                      data-lane-id={lane.laneId}
                       aria-label={`${localized(lane.label, props.language)}：${localized(lane.description, props.language)}`}
                       title={localized(lane.description, props.language)}
+                      onDragOver={(event) => {
+                        if (laneSortable && draggedLaneId !== null) event.preventDefault()
+                      }}
+                      onDrop={(event) => {
+                        if (!laneSortable || draggedLaneId === null) return
+                        event.preventDefault()
+                        movePriorityLane(draggedLaneId, lane.laneId)
+                        setDraggedLaneId(null)
+                      }}
                     >
                       <header>
                         <div>
@@ -154,9 +228,48 @@ export function ResponsibilitySwimlaneMap(props: {
                                 {zh ? '可选能力' : 'Optional'}
                               </StatusChip>
                             ) : null}
+                            {lanePriority >= 0 ? (
+                              <span
+                                className="employee-toolbox-lane__priority"
+                                title={zh ? '事件处理优先级' : 'Event handling priority'}
+                              >
+                                P{lanePriority + 1}
+                              </span>
+                            ) : null}
                           </div>
                           <strong>{localized(lane.label, props.language)}</strong>
                         </div>
+                        {laneSortable ? (
+                          <button
+                            type="button"
+                            className="employee-toolbox-lane__drag-handle"
+                            draggable
+                            aria-label={
+                              zh
+                                ? `拖动“${localized(lane.label, props.language)}”调整事件优先级`
+                                : `Drag “${localized(lane.label, props.language)}” to change event priority`
+                            }
+                            title={
+                              zh
+                                ? '拖动排序；也可用上下方向键'
+                                : 'Drag to reorder; arrow keys also work'
+                            }
+                            onClick={(event) => event.preventDefault()}
+                            onDragStart={(event) => {
+                              setDraggedLaneId(lane.laneId)
+                              event.dataTransfer.effectAllowed = 'move'
+                              event.dataTransfer.setData('text/plain', lane.laneId)
+                            }}
+                            onDragEnd={() => setDraggedLaneId(null)}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+                              event.preventDefault()
+                              shiftPriorityLane(lane.laneId, event.key === 'ArrowUp' ? -1 : 1)
+                            }}
+                          >
+                            <span aria-hidden="true">⠿</span>
+                          </button>
+                        ) : null}
                       </header>
                       <span className="employee-toolbox-lane__axis" aria-hidden="true">
                         <span />
@@ -205,7 +318,7 @@ export function ResponsibilitySwimlaneMap(props: {
                           }
                           const item = entry.item
                           const kind = nodeKind(item)
-                          const fanOut = item.inputMultiplicity === 'collection'
+                          const fanOut = fanOutDestinationRefs.has(item.workItemRef)
                           const state = props.cardState?.(item)
                           const availableTools = (
                             props.toolsByWorkItem?.[item.workItemRef] ?? []
