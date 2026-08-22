@@ -44,11 +44,13 @@ import {
 } from '../domain/model'
 import type {
   DigitalEmployeeAuthoringStore,
+  DigitalEmployeePlatformToolCatalog,
   EmployeeDefinitionRecord,
   JobTemplateRecord,
   ToolDraftRecord,
   ToolRevisionRecord,
 } from './ports/authoringStore'
+import { EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG } from './ports/authoringStore'
 
 export const createJobTemplateBodySchema = z
   .object({
@@ -82,6 +84,7 @@ export interface DigitalEmployeeAuthoringServiceDependencies {
   readonly programArtifacts: ProgramArtifactPort
   /** Platform-owned IO contract authority; there is no per-type fallback path. */
   readonly executionContracts: ExecutionContractParticipant
+  readonly platformTools?: DigitalEmployeePlatformToolCatalog
   readonly now?: () => number
   readonly id?: () => string
 }
@@ -201,6 +204,7 @@ export class DigitalEmployeeAuthoringService {
   readonly #connectionCatalog: ToolConnectionCatalogPort
   readonly #programArtifacts: ProgramArtifactPort
   readonly #executionContracts: ExecutionContractParticipant
+  readonly #platformTools: DigitalEmployeePlatformToolCatalog
   readonly #now: () => number
   readonly #id: () => string
 
@@ -209,6 +213,7 @@ export class DigitalEmployeeAuthoringService {
     this.#connectionCatalog = deps.connectionCatalog
     this.#programArtifacts = deps.programArtifacts
     this.#executionContracts = deps.executionContracts
+    this.#platformTools = deps.platformTools ?? EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG
     this.#now = deps.now ?? Date.now
     this.#id = deps.id ?? ulid
 
@@ -297,6 +302,12 @@ export class DigitalEmployeeAuthoringService {
     readonly workItemRef: string
     readonly toolId: string
   }): ToolDraftRecord {
+    if (this.#platformTools.isPlatformTool(input.toolId)) {
+      throw new ConflictError(
+        'employee-platform-tool-readonly',
+        `platform tool is immutable: ${input.toolId}`,
+      )
+    }
     const tool = this.#store.getTool(input.toolId)
     if (
       tool === null ||
@@ -462,7 +473,14 @@ export class DigitalEmployeeAuthoringService {
     if (item === null) {
       throw new NotFoundError('employee-work-item-not-found', `work item not found: ${workItemRef}`)
     }
-    return this.#store.listTools(typeRef, workItemRef)
+    return [
+      ...this.#platformTools.list(typeRef, workItemRef),
+      ...this.#store.listTools(typeRef, workItemRef),
+    ]
+  }
+
+  #toolRevision(ref: ExactResourceRef): ToolRevisionRecord | null {
+    return this.#platformTools.getRevision(ref) ?? this.#store.getToolRevision(ref)
   }
 
   async getToolAuthoring(input: {
@@ -577,7 +595,7 @@ export class DigitalEmployeeAuthoringService {
         `unknown slot: ${binding.workItemRef}/${binding.slotRef}`,
       )
     }
-    const tool = this.#store.getToolRevision(binding.registrationRef)
+    const tool = this.#toolRevision(binding.registrationRef)
     if (tool === null || tool.state !== 'published') {
       throw new ValidationError(
         'employee-tool-binding-invalid',
@@ -671,7 +689,7 @@ export class DigitalEmployeeAuthoringService {
             `${route.routeRef} must bind a published tool for ${route.destinationWorkItemRef}`,
           )
         }
-        const tool = this.#store.getToolRevision(route.registrationRef)
+        const tool = this.#toolRevision(route.registrationRef)
         if (tool === null || tool.state !== 'published') {
           throw new ValidationError(
             'employee-ordered-dispatch-tool-invalid',

@@ -1,4 +1,4 @@
-# visual-regression — 60 pixel baselines
+# visual-regression — 62 pixel baselines
 
 Specs: `e2e/visual-regression.spec.ts` and `e2e/rfc250-visual-states.spec.ts`. Baselines live in each
 spec's `*-snapshots/` directory. Coverage belongs to RFC-054/198/199/219/246/249/250/299/310.
@@ -19,20 +19,21 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 
 ## Scenes covered
 
-| Viewport         | Scenes                                                                                                                                                                                                                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1536×900 desktop | workflow editor with palette and inspector rails                                                                                                                                                                                                                                                                    |
-| 1440×900 desktop | RFC-249 repository-group editor with 20 flat repos and a selected three-level node                                                                                                                                                                                                                                  |
-| 1280×800 desktop | auth, agents, workflows, repos, memory, settings Runtime, settings System Agents, onboarding, seeded homepage, tasks, three inbox states, editor light/dark, open runtime-parameter picker, dynamic preview, current RFC-310 `/digital-employees` catalog/map/tool dialog, and retained `/code` compatibility pages |
-| 1179×800 compact | workflow editor palette and inspector side modals, plus the RFC-219 50-Agent Human category in dark mode                                                                                                                                                                                                            |
-| 736×900 compact  | RFC-249 repository-group inline node settings                                                                                                                                                                                                                                                                       |
-| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings Network, settings OIDC card dialog, task detail, editor modes, open Webhook runtime-parameter picker, RFC-249 batch mode                                                                                                                   |
+| Viewport         | Scenes                                                                                                                                                                                                                                                                                                                                              |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1536×900 desktop | workflow editor with palette and inspector rails                                                                                                                                                                                                                                                                                                    |
+| 1440×900 desktop | RFC-249 repository-group editor with 20 flat repos and a selected three-level node                                                                                                                                                                                                                                                                  |
+| 1280×800 desktop | auth, agents, workflows, repos, memory, settings Runtime, settings System Agents, onboarding, seeded homepage, tasks, three inbox states, editor light/dark, open runtime-parameter picker, dynamic preview, current RFC-310 unified task-creation cards and `/digital-employees` catalog/map/tool dialog, and retained `/code` compatibility pages |
+| 1179×800 compact | workflow editor palette and inspector side modals, plus the RFC-219 50-Agent Human category in dark mode                                                                                                                                                                                                                                            |
+| 736×900 compact  | RFC-249 repository-group inline node settings                                                                                                                                                                                                                                                                                                       |
+| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings Network, settings OIDC card dialog, task detail, editor modes, open Webhook runtime-parameter picker, RFC-249 batch mode                                                                                                                                                   |
 
-The canonical suite has 46 scenes: 44 own a full-page baseline, while the genuine-empty workflow
-scene and the Digital Employee responsibility/toolbox scene use focused component locks. Seven
+The canonical suite has 47 scenes and 46 full-page baselines: the unified creation scene records both
+the four task-type cards and the Digital Employee first step. The genuine-empty workflow scene and
+the Digital Employee responsibility/toolbox scene use focused component locks. Seven
 focused locator baselines lock mobile navigation open, a real overflowing TableViewport edge, the
 workflow empty state, a Dialog footer, the deterministic dynamic-workflow preview canvas, the full
-18-node responsibility map, and the selected work-item toolbox so the full-page 0.2% threshold
+20-node responsibility card map, and the selected work-item toolbox so the full-page 0.2% threshold
 cannot hide a small but important local regression.
 
 RFC-250 adds nine populated high-risk baselines: PAT permission matrix and masked reveal; Task
@@ -50,9 +51,11 @@ RFC-295 refreshes the five selected-Agent editor baselines after removing the al
 Webhook token wall. It also adds a desktop open-picker scene and a 390px Webhook Agent open-picker
 scene so the classified label/token/explanation rows, portal placement, and mobile clamp are locked.
 
-RFC-310 now has ten digital-employee scenes. Three current `/digital-employees` scenes lock the
-employee-type catalog, the complete fixed responsibility map plus selected node toolbox, and the
-same-context Add Tool dialog. Seven retained read/compatibility scenes cover the legacy employee
+RFC-310 now has eleven digital-employee scenes. The unified `/tasks/new` scene locks Agent, Workflow,
+Workgroup, and Digital Employee into one task-creation card group, then locks the selected Digital
+Employee in the same four-step shell. Three current `/digital-employees`
+scenes lock the employee-type catalog, the complete fixed responsibility card map plus selected node
+toolbox, and the same-context Add Tool dialog. Seven retained read/compatibility scenes cover the legacy employee
 list populated and empty, executor library, policy list, assignment list, run outcomes, and employee
 detail. Six retained list/history scenes take their data from `e2e/code-surface-fixtures.ts` (route
 interception with fixed JSON) because the real rows carry ULIDs and relative timestamps that no pixel

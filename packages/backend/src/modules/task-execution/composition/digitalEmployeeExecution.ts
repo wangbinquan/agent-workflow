@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { ulid } from 'ulid'
@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 import { isTerminalTaskStatus, type StartTask } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { tasks, workflows } from '@/db/schema'
+import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
 import type { DigitalEmployeeExecutionParticipant } from '../public/participants'
 import {
   EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
@@ -15,14 +15,18 @@ import {
   type ExecutionContractRuntimeView,
 } from '@/modules/execution-contract/public/types'
 import { getAgentById } from '@/services/agent'
+import { DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID } from '@/services/digitalEmployeeAgentTemplates'
 import { getExecutionOutcome } from '@/services/execution/executor'
 import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
 import { sha256Hex } from '@/util/hash'
 import {
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+  DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
   DIGITAL_EMPLOYEE_PROMPT_KEY,
+  DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
   synthesizeDigitalEmployeeHostSnapshot,
+  synthesizeReviewedDigitalEmployeeHostSnapshot,
   synthesizeDigitalEmployeeScriptHostSnapshot,
 } from '../domain/digitalEmployeeHost'
 import { ensureDigitalEmployeeHostWorkflow } from './agentActionExecution'
@@ -83,7 +87,22 @@ const environmentSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('repository-group'), repoGroupId: z.string().min(1) }).strict(),
 ])
 
-const inputEnvelopeSchema = z.object({ executionEnvironmentJson: z.string().min(2) }).passthrough()
+const humanReviewSchema = z
+  .object({
+    kind: z.literal('implementation-plan'),
+    artifactPort: z.string().min(1),
+    documentPath: z.string().min(1),
+    title: z.string().min(1),
+    description: z.string().min(1),
+  })
+  .strict()
+
+const inputEnvelopeSchema = z
+  .object({
+    executionEnvironmentJson: z.string().min(2),
+    humanReview: humanReviewSchema.nullable().default(null),
+  })
+  .passthrough()
 
 const attemptSchema = z
   .object({
@@ -130,6 +149,29 @@ export function buildDigitalEmployeeFixedPrompt(
     ],
     previousError: attempt.previousError,
   })
+}
+
+export function buildDigitalEmployeePlanPrompt(
+  plan: Pick<z.infer<typeof planSchema>, 'roundRef' | 'executionNonce' | 'inputEnvelopeJson'>,
+  attempt: Pick<z.infer<typeof attemptSchema>, 'previousError'>,
+  documentPath: string,
+): string {
+  return [
+    'You are preparing a read-only implementation plan for human review.',
+    'Read every requirement body, uploaded repositoryPath, external material directory, and relevant repository file listed by the frozen input envelope.',
+    `Write the complete Markdown plan only to this exact platform path: ${documentPath}`,
+    'Do not modify any other file or run git, commit, push, merge, approve, or call a code host.',
+    `Publish exactly ${documentPath} through the analysis-plan output port; no other output path is accepted.`,
+    'The plan must cover requirement understanding, affected code, implementation steps, tests, risks, assumptions, and unresolved questions.',
+    `ROUND_REF: ${plan.roundRef}`,
+    `EXECUTION_NONCE: ${plan.executionNonce}`,
+    `EXPECTED_ANALYSIS_PLAN_PATH_JSON\n${JSON.stringify(documentPath)}`,
+    attempt.previousError === null ? '' : `PREVIOUS_ERROR:\n${attempt.previousError}`,
+    'INPUT_ENVELOPE_JSON',
+    plan.inputEnvelopeJson,
+  ]
+    .filter((line) => line.length > 0)
+    .join('\n\n')
 }
 
 export function composeDigitalEmployeeExecution(deps: {
@@ -186,13 +228,25 @@ export function composeDigitalEmployeeExecution(deps: {
             }
       const guide = deps.executionContracts.get(plan.workContractRef)
       const prompt = buildDigitalEmployeeFixedPrompt(plan, attempt, guide)
+      const reviewedExecution = envelope.humanReview
+      if (reviewedExecution && implementation.kind !== 'agent') {
+        throw new Error('implementation plan review requires an Agent implementation')
+      }
+      const planPrompt = reviewedExecution
+        ? buildDigitalEmployeePlanPrompt(plan, attempt, reviewedExecution.documentPath)
+        : null
       const startInput: StartTask = {
         workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
         name: `employee:${plan.roundRef}`.slice(0, 255),
         inputs:
           implementation.kind === 'program'
             ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: plan.inputEnvelopeJson }
-            : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
+            : reviewedExecution
+              ? {
+                  [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt,
+                  [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: planPrompt!,
+                }
+              : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
         maxDurationMs: plan.roundBudgetMs,
         ...sourceFields,
       }
@@ -207,9 +261,36 @@ export function composeDigitalEmployeeExecution(deps: {
         if (!agent.outputs.includes(DIGITAL_EMPLOYEE_RESULT_PORT)) {
           throw new Error(`agent must expose ${DIGITAL_EMPLOYEE_RESULT_PORT}`)
         }
-        snapshotJson = JSON.stringify(
-          synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
-        )
+        if (reviewedExecution === null) {
+          snapshotJson = JSON.stringify(
+            synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
+          )
+        } else {
+          const planAgent = await getAgentById(deps.db, DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID)
+          if (
+            planAgent === null ||
+            planAgent.builtin !== true ||
+            planAgent.visibility !== 'public'
+          ) {
+            throw new Error('platform implementation plan Agent is unavailable')
+          }
+          if (!planAgent.outputs.includes(reviewedExecution.artifactPort)) {
+            throw new Error(
+              `implementation plan Agent must expose ${reviewedExecution.artifactPort}`,
+            )
+          }
+          snapshotJson = JSON.stringify(
+            synthesizeReviewedDigitalEmployeeHostSnapshot({
+              planAgentId: planAgent.id,
+              planAgentName: planAgent.name,
+              implementationAgentId: agent.id,
+              implementationAgentName: agent.name,
+              artifactPort: reviewedExecution.artifactPort,
+              reviewTitle: reviewedExecution.title,
+              reviewDescription: reviewedExecution.description,
+            }),
+          )
+        }
       } else if (implementation.kind === 'program') {
         const artifactPath = containedArtifact(deps.appHome, implementation.executableArtifactRef)
         if (artifactPath === null || !existsSync(artifactPath)) {
@@ -297,7 +378,11 @@ export function composeDigitalEmployeeExecution(deps: {
 
     async inspect(executionRef) {
       const task = deps.db
-        .select({ status: tasks.status, roundRef: tasks.digitalEmployeeRoundId })
+        .select({
+          status: tasks.status,
+          roundRef: tasks.digitalEmployeeRoundId,
+          inputs: tasks.inputs,
+        })
         .from(tasks)
         .where(eq(tasks.id, executionRef))
         .get()
@@ -307,6 +392,40 @@ export function composeDigitalEmployeeExecution(deps: {
       if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
       const outcome = await getExecutionOutcome(deps.db, executionRef)
       const output = outcome.outputs[DIGITAL_EMPLOYEE_RESULT_PORT]?.content ?? null
+      const parsedInputs = z
+        .record(z.string(), z.unknown())
+        .parse(JSON.parse(task.inputs) as unknown)
+      const planPrompt = parsedInputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
+      if (typeof planPrompt === 'string') {
+        const expectedMatch = /EXPECTED_ANALYSIS_PLAN_PATH_JSON\n("[^"\\]*(?:\\.[^"\\]*)*")/.exec(
+          planPrompt,
+        )
+        const expectedPath =
+          expectedMatch?.[1] === undefined
+            ? null
+            : z.string().parse(JSON.parse(expectedMatch[1]) as unknown)
+        const planOutput = deps.db
+          .select({ content: nodeRunOutputs.content })
+          .from(nodeRunOutputs)
+          .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
+          .where(
+            and(
+              eq(nodeRuns.taskId, executionRef),
+              eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID),
+              eq(nodeRuns.status, 'done'),
+              eq(nodeRunOutputs.portName, 'analysis-plan'),
+            ),
+          )
+          .orderBy(desc(nodeRuns.id))
+          .get()
+        if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
+          return resultFailure(
+            executionRef,
+            'implementation-plan-path-mismatch',
+            `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
+          )
+        }
+      }
       if (deps.workspace !== undefined && task.roundRef !== null) {
         const validation = await deps.workspace.validate({
           roundRef: task.roundRef,

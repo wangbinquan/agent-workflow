@@ -4,6 +4,7 @@ function FieldList(props: {
   fields: ExecutionContractField[]
   language: string
   primary?: boolean
+  testid?: string
 }): React.ReactElement {
   const zh = props.language.startsWith('zh')
   return (
@@ -13,7 +14,7 @@ function FieldList(props: {
           ? 'execution-contract-fields execution-contract-fields--primary'
           : 'execution-contract-fields'
       }
-      data-testid={props.primary === true ? 'execution-contract-primary-fields' : undefined}
+      data-testid={props.testid}
     >
       {props.fields.map((field) => (
         <div
@@ -128,6 +129,11 @@ export function ExecutionContractGuidePanel(props: {
     return field === undefined ? [] : [field]
   })
   const primaryPaths = new Set(primaryFields.map((field) => field.path))
+  const primaryOutputFields = props.guide.output.primaryFieldPaths.flatMap((path) => {
+    const field = props.guide.output.fields.find((candidate) => candidate.path === path)
+    return field === undefined ? [] : [field]
+  })
+  const primaryOutputPaths = new Set(primaryOutputFields.map((field) => field.path))
   const advancedInputFields = props.guide.input.fields.filter(
     (field) => !primaryPaths.has(field.path),
   )
@@ -147,7 +153,33 @@ export function ExecutionContractGuidePanel(props: {
           ? '参数值来自每次任务，不在工具定义中固定填写。请确认所选 Agent、Workflow 或脚本能消费下面的路径。'
           : 'Values come from each task and are not fixed in the tool definition. Confirm that the selected Agent, Workflow, or script consumes the path below.'}
       </p>
-      <FieldList fields={primaryFields} language={props.language} primary />
+      <FieldList
+        fields={primaryFields}
+        language={props.language}
+        primary
+        testid="execution-contract-primary-input-fields"
+      />
+
+      <header className="execution-contract-guide__primary-heading execution-contract-guide__primary-heading--output">
+        <div>
+          <span>{zh ? '这个工具完成后必须交回' : 'This tool must return'}</span>
+          <strong>{zh ? '关键业务产出' : 'Key business outputs'}</strong>
+        </div>
+        <span className="execution-contract-guide__injected">
+          {zh ? '平台校验并执行写回' : 'Validated and applied by platform'}
+        </span>
+      </header>
+      <p className="execution-contract-guide__primary-copy">
+        {zh
+          ? '这些内容必须出现在输出 envelope 的明确路径中。Agent 或脚本只产出内容；评论回复、提交、推送和 MR 更新由平台执行。'
+          : 'These values must appear at the exact output-envelope paths. The Agent or script produces content; the platform posts replies, commits, pushes, and updates the merge request.'}
+      </p>
+      <FieldList
+        fields={primaryOutputFields}
+        language={props.language}
+        primary
+        testid="execution-contract-primary-output-fields"
+      />
 
       <details className="execution-contract-guide__advanced">
         <summary>
@@ -194,7 +226,12 @@ export function ExecutionContractGuidePanel(props: {
           </details>
           <details>
             <summary>{zh ? '输出字段' : 'Output fields'}</summary>
-            <FieldList fields={props.guide.output.fields} language={props.language} />
+            <FieldList
+              fields={props.guide.output.fields.filter(
+                (field) => !primaryOutputPaths.has(field.path),
+              )}
+              language={props.language}
+            />
           </details>
           <details>
             <summary>{zh ? '查看输入 JSON 示例' : 'View input JSON example'}</summary>

@@ -20,6 +20,9 @@ export const DIGITAL_EMPLOYEE_AGENT_NODE_ID = '__de_agent__'
 export const DIGITAL_EMPLOYEE_SCRIPT_NODE_ID = '__de_script__'
 export const DIGITAL_EMPLOYEE_OUTPUT_NODE_ID = '__de_output__'
 export const DIGITAL_EMPLOYEE_PROMPT_KEY = 'prompt'
+export const DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY = 'plan-prompt'
+export const DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID = '__de_plan_agent__'
+export const DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID = '__de_plan_review__'
 
 /**
  * Agent 唯一结果端口。与 development-automation/domain/agentEnvelope 的
@@ -101,6 +104,136 @@ export function synthesizeDigitalEmployeeHostSnapshot(input: DigitalEmployeeHost
       },
       {
         id: 'e_de_result',
+        source: {
+          nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_RESULT_PORT,
+        },
+        target: {
+          nodeId: DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_RESULT_PORT,
+        },
+      },
+    ],
+  }
+}
+
+export interface ReviewedDigitalEmployeeHostSnapshotInput {
+  readonly planAgentId: string
+  readonly planAgentName: string
+  readonly implementationAgentId: string
+  readonly implementationAgentName: string
+  readonly artifactPort: string
+  readonly reviewTitle: string
+  readonly reviewDescription: string
+}
+
+/**
+ * Fixed analyze -> human review -> implement host. The implementation node has
+ * two prerequisites, so TaskEngine cannot dispatch it before approved_doc is
+ * committed by the existing review lifecycle.
+ */
+export function synthesizeReviewedDigitalEmployeeHostSnapshot(
+  input: ReviewedDigitalEmployeeHostSnapshotInput,
+): { $schema_version: number; inputs: unknown[]; nodes: unknown[]; edges: unknown[] } {
+  return {
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
+    inputs: [
+      {
+        kind: 'text',
+        key: DIGITAL_EMPLOYEE_PROMPT_KEY,
+        label: 'Digital employee execution prompt',
+        required: true,
+        multiline: true,
+      },
+      {
+        kind: 'text',
+        key: DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
+        label: 'Digital employee plan prompt',
+        required: true,
+        multiline: true,
+      },
+    ],
+    nodes: [
+      {
+        id: DIGITAL_EMPLOYEE_INPUT_NODE_ID,
+        kind: 'input',
+        inputKey: DIGITAL_EMPLOYEE_PROMPT_KEY,
+      },
+      {
+        id: '__de_plan_input__',
+        kind: 'input',
+        inputKey: DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
+      },
+      {
+        id: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
+        kind: 'agent-single',
+        agentId: input.planAgentId,
+        agentName: input.planAgentName,
+        promptTemplate: `{{${DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY}}}`,
+      },
+      {
+        id: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
+        kind: 'review',
+        title: input.reviewTitle,
+        description: input.reviewDescription,
+        inputSource: {
+          nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
+          portName: input.artifactPort,
+        },
+        rerunnableOnReject: [DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID],
+        rerunnableOnIterate: [DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID],
+        commentInjectTemplate: '\n\nHUMAN_REVIEW_COMMENTS\n{{__review_comments__}}',
+      },
+      {
+        id: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
+        kind: 'agent-single',
+        agentId: input.implementationAgentId,
+        agentName: input.implementationAgentName,
+        promptTemplate: `{{${DIGITAL_EMPLOYEE_PROMPT_KEY}}}\n\nAPPROVED_IMPLEMENTATION_PLAN\n{{implementation-plan}}`,
+      },
+      {
+        id: DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
+        kind: 'output',
+        ports: [
+          {
+            name: DIGITAL_EMPLOYEE_RESULT_PORT,
+            bind: {
+              nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
+              portName: DIGITAL_EMPLOYEE_RESULT_PORT,
+            },
+          },
+        ],
+      },
+    ],
+    edges: [
+      {
+        id: 'e_de_plan_prompt',
+        source: { nodeId: '__de_plan_input__', portName: DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY },
+        target: {
+          nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
+        },
+      },
+      {
+        id: 'e_de_plan_review',
+        source: { nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID, portName: input.artifactPort },
+        target: { nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID, portName: '__review_input__' },
+      },
+      {
+        id: 'e_de_implementation_prompt',
+        source: {
+          nodeId: DIGITAL_EMPLOYEE_INPUT_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_PROMPT_KEY,
+        },
+        target: { nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID, portName: DIGITAL_EMPLOYEE_PROMPT_KEY },
+      },
+      {
+        id: 'e_de_approved_plan',
+        source: { nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID, portName: 'approved_doc' },
+        target: { nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID, portName: 'implementation-plan' },
+      },
+      {
+        id: 'e_de_reviewed_result',
         source: {
           nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
           portName: DIGITAL_EMPLOYEE_RESULT_PORT,

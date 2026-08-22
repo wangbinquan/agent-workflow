@@ -254,7 +254,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     await ensureDigitalEmployeeAgentTemplates(db)
 
     const templates = await listDigitalEmployeeAgentTemplates(db)
-    expect(templates).toHaveLength(7)
+    expect(templates).toHaveLength(8)
     expect(templates.map((template) => template.frontmatterExtra.digitalEmployeeTemplate)).toEqual([
       'code-writing',
       'problem-diagnosis',
@@ -263,11 +263,12 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       'conflict-repair',
       'business-implementation',
       'issue-repair',
+      'implementation-planning',
     ])
     expect(
       templates.every((template) => template.builtin && template.visibility === 'public'),
     ).toBe(true)
-    expect(await listAgents(db)).toHaveLength(7)
+    expect(await listAgents(db)).toHaveLength(8)
   })
 
   test('design and test packages use the same type -> work item -> tool -> employee core', async () => {
@@ -367,10 +368,61 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     ).toBe(false)
   })
 
+  test('repository admission is inherited from a fixed employee scope or required at task launch', () => {
+    const request = (workScope: unknown, target: Record<string, string>) => ({
+      schemaVersion: 1,
+      caseRef: 'case-scope-admission',
+      employeeRef: { id: 'employee-scope-admission', revision: 1 },
+      workScopeJson: JSON.stringify(workScope),
+      receivedAt: 1,
+      intake: {
+        kind: 'body',
+        target,
+        body: 'Implement the requested behavior',
+        externalId: null,
+        idempotencyKey: 'scope-admission',
+        executionOptions: {},
+        uploads: [],
+      },
+    })
+    const repositoryRef = (payload: ReturnType<typeof request>): string => {
+      const launch = JSON.parse(
+        developmentEmployeeRuntimeCodec.buildInitialCaseJson(JSON.stringify(payload)),
+      ) as { primaryContextJson: string }
+      return (JSON.parse(launch.primaryContextJson) as { repositoryRef: string }).repositoryRef
+    }
+
+    expect(repositoryRef(request({ kind: 'repository', repositoryId: 'repo-fixed' }, {}))).toBe(
+      'repo-fixed',
+    )
+    expect(() =>
+      repositoryRef(
+        request({ kind: 'repository', repositoryId: 'repo-fixed' }, { repositoryId: 'repo-other' }),
+      ),
+    ).toThrow('outside the employee responsibility scope')
+    expect(repositoryRef(request({ kind: 'task' }, { repositoryId: 'repo-launch' }))).toBe(
+      'repo-launch',
+    )
+    expect(() => repositoryRef(request({ kind: 'task' }, {}))).toThrow(
+      'requires a target repository',
+    )
+    expect(
+      repositoryRef(
+        request(
+          { kind: 'repository-group', repositoryGroupId: 'group-1' },
+          { repositoryId: 'repo-from-group' },
+        ),
+      ),
+    ).toBe('repo-from-group')
+    expect(repositoryRef(request({ kind: 'global' }, { repositoryId: 'repo-legacy' }))).toBe(
+      'repo-legacy',
+    )
+  })
+
   test('a job template cannot publish before every required graph node has a tool', () => {
     const module = fixtureModule()
     const draft = module.commands.createJobTemplate({
-      typeRef: { typeId: 'development', revision: 3 },
+      typeRef: { typeId: 'development', revision: 5 },
       actorUserId: 'author-1',
       body: {
         name: '不完整岗位',
@@ -386,7 +438,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('unconfigured optional lanes stay disabled without blocking employee publication', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const typePackage = module.queries.getType(typeRef)
     const optionalLanes = new Set(
       typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
@@ -557,7 +609,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('type -> work item -> tool registration closes an exact employee definition', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const manifest = module.queries.getAuthoringManifest(typeRef)
     const typePackage = module.queries.getType(typeRef)
     expect(manifest.lifecycleRegions.map((region) => region.regionId)).toEqual(['delivery', 'care'])
@@ -711,6 +763,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     const published = module.queries.getEmployee(employee.id)
     expect(employeeRef).toEqual({ id: employee.id, revision: 1 })
     expect(published.published?.workScopeSummary).toBe('仓库：repo-1')
+    expect(published.publishedWorkScope).toEqual({ kind: 'repository', repositoryId: 'repo-1' })
     expect(published.published?.exactToolBindings).toEqual(
       [...bindings].sort((left, right) =>
         `${left.workItemRef}/${left.slotRef}`.localeCompare(
@@ -1507,7 +1560,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   test('system nodes reject tools and employee retries are derived from global Limits', async () => {
     let limits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
     const module = fixtureModule({ current: () => limits })
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     await expect(
       module.commands.createTool({
         typeRef,
@@ -1537,7 +1590,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('a work-item connection must resolve to the exact required provider purpose', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const create = (connectionRef: { id: string; revision: number } | null) =>
       module.commands.createTool({
         typeRef,
@@ -1590,7 +1643,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   // registration identity and successful republishes advance only its revision.
   test('tool corrections reuse one registration id and publish immutable revisions', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const body = {
       displayName: '审批工具',
       description: '先以缺失连接制造可纠正的失败草稿。',
@@ -1656,7 +1709,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('Program tool editor round-trips source and parameters from immutable artifacts', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const created = await module.commands.createTool({
       typeRef,
       workItemRef: 'prepare-materials',

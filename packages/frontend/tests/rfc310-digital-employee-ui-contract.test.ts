@@ -24,6 +24,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     const graph = read('components/digital-employees/ResponsibilityGraph.tsx')
 
     expect(typePage).toContain("label: zh ? '工具箱' : 'Toolbox'")
+    expect(typePage).toContain('<div className="employee-toolbox-workspace">')
+    expect(typePage).toContain('<ToolboxResponsibilityMap')
+    expect(typePage).not.toContain('<ResponsibilityGraph')
     expect(typePage).toContain('<ToolboxPanel')
     expect(typePage).toContain('item={selectedItem}')
     expect(typePage).toContain('typeName={localized(type.displayName, language)}')
@@ -33,7 +36,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).not.toContain("? ['agent', 'workflow', 'program']")
     expect(typePage).toContain('parameterValues: parsedParameters')
     expect(typePage).toContain("search={{ view: 'toolbox', workItem:")
-    expect(typePage).toContain("search: { ...search, view: 'toolbox', workItem }")
+    expect(typePage).toContain("search: { view: 'toolbox', workItem }")
     expect(typePage).not.toContain('stageId')
     expect(graph).toContain('item.nextWorkItemRefs')
     expect(graph).toContain('employee-graph__edge--loop')
@@ -242,11 +245,25 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
   test('work intake and runtime are first-class routes in the unified task surface', () => {
     const create = read('routes/employee-cases.new.tsx')
     const detail = read('routes/employee-cases.$caseId.tsx')
+    const wizard = read('routes/tasks.new.tsx')
 
     expect(create).toContain("path: '/tasks/employee-cases/new'")
     expect(create).toContain("'body-and-files'")
     expect(create).toContain("'external-id'")
     expect(create).toContain('targetPath')
+    expect(create).toContain('fixedRepositoryId')
+    expect(create).toContain('目标仓库已由数字员工绑定')
+    expect(create).toContain('groupLayout.data?.repos')
+    expect(create).toContain('effectiveTarget')
+    expect(create).toContain('<Stepper')
+    expect(create).toContain("{ key: 'mode', title: t('taskWizard.stepMode') }")
+    expect(create).toContain("{ key: 'space', title: t('taskWizard.stepSpace') }")
+    expect(create).toContain("{ key: 'content', title: t('taskWizard.stepContent') }")
+    expect(create).toContain("{ key: 'confirm', title: t('taskWizard.stepConfirm') }")
+    expect(create).toContain('data-testid="employee-case-wizard-summary"')
+    expect(create).toContain('data-testid="employee-case-launch"')
+    expect(wizard).toContain("value: 'digital-employee'")
+    expect(wizard).toContain("to: '/tasks/employee-cases/new'")
     expect(detail).toContain("path: '/tasks/employee-cases/$caseId'")
     expect(detail).toContain('<ResponsibilityGraph')
     expect(detail).toContain('mode="runtime"')
@@ -267,12 +284,20 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
 
   test('employee setup keeps the next action on the same page and supports later edits', () => {
     const typePage = read('routes/digital-employees.$typeRef.tsx')
+    const styles = read('styles.css')
 
     expect(typePage).toContain('下一步：给必需工作项增加工具')
     expect(typePage).toContain('下一步：先准备岗位模板')
     expect(typePage).toContain('onClick={() => openEditor(employee)}')
     expect(typePage).toContain('保存并发布新版本')
     expect(typePage).toContain("search={{ view: 'jobs' }}")
+    expect(typePage).toContain('job-template-detail-editor')
+    expect(styles).toContain('.employee-toolbox-card--configured')
+    expect(styles).toContain('.employee-toolbox-card--missing')
+    expect(typePage).toContain('requiredMissingWorkItemRefs')
+    expect(typePage).toContain("value: 'task'")
+    expect(typePage).toContain('GROUP_OPTION_PREFIX')
+    expect(typePage).toContain('任务启动时指定仓库')
   })
 
   test('Event Center is global and retry settings have one Limits authority', () => {
@@ -290,6 +315,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
 
   test('task actions and every digital employee surface use the shared page spacing', () => {
     const tasks = read('routes/tasks.tsx')
+    const wizard = read('routes/tasks.new.tsx')
+    const digitalEmployees = read('routes/digital-employees.tsx')
+    const typePage = read('routes/digital-employees.$typeRef.tsx')
     const styles = read('styles.css')
     const zh = read('i18n/zh-CN.ts')
     const routes = [
@@ -300,7 +328,11 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     ]
 
     expect(tasks).not.toContain('className="page-header__actions"')
-    expect(zh).toContain("newButton: '新建编排任务'")
+    expect(tasks).not.toContain('tasks-new-digital-employee')
+    expect(zh).toContain("newButton: '新建任务'")
+    expect(wizard).toContain("value: 'digital-employee'")
+    expect(digitalEmployees).toContain("search={{ kind: 'digital-employee' }}")
+    expect(typePage).toContain("search={{ kind: 'digital-employee' }}")
     for (const route of routes) expect(read(route)).toContain('digital-employee-surface__body')
     expect(styles).toMatch(/\.digital-employee-surface__body\s*{[^}]*padding: 0 22px 22px/s)
     expect(styles).toMatch(

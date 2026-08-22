@@ -16,6 +16,7 @@
         "cli/start.ts -> composition",
         "cli/start.ts -> public/events",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
+        "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
         "server.ts -> public/events"

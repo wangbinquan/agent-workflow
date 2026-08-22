@@ -215,7 +215,7 @@ const OVERLAY_CALLSITES = {
   // RFC-310 PR-8 T87 — policy 创建对话框。
   'routes/code.policies.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 Digital Employee OS: add tool, job template and employee.
-  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 3 },
+  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 2 },
   // RFC-310 Event Center: custom polling-source authoring stays in one shared
   // Dialog while source/catalog/delivery browsing remains inline.
   'routes/events.tsx': { family: 'resource-management', count: 1 },

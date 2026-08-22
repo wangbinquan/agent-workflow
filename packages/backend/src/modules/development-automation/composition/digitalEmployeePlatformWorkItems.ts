@@ -57,6 +57,7 @@ const issueSchema = z
           z
             .object({
               artifactRef: z.string().regex(/^employee-input:[a-f0-9]{64}$/),
+              placement: z.enum(['repository', 'temporary']).default('repository'),
               targetPath: z.string().min(1),
               originalName: z.string().min(1),
             })
@@ -64,6 +65,15 @@ const issueSchema = z
         ),
       })
       .passthrough(),
+    deliveryContent: z
+      .object({
+        commitMessage: z.string().trim().min(1).max(5_000),
+        mergeRequestTitle: z.string().trim().min(1).max(240),
+        mergeRequestDescription: z.string().trim().min(1).max(32_000),
+      })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .passthrough()
 
@@ -95,10 +105,11 @@ async function resolveEmployeeUploadPlan(input: {
   | { readonly ok: true; readonly plan: EmployeeUploadPlan | null }
   | { readonly ok: false; readonly code: string; readonly detail: string }
 > {
-  if (input.uploads.length === 0) return { ok: true, plan: null }
+  const repositoryUploads = input.uploads.filter((upload) => upload.placement === 'repository')
+  if (repositoryUploads.length === 0) return { ok: true, plan: null }
   const baseline = createGitBaselineReader(input.baselineRepoPath, input.baselineSha)
   const entries: EmployeeUploadPlan['entries'][number][] = []
-  for (const upload of input.uploads) {
+  for (const upload of repositoryUploads) {
     const uploadSha256 = upload.artifactRef.slice('employee-input:'.length)
     const stat = await baseline.stat(upload.targetPath)
     if (stat === 'directory' || stat === 'unsupported') {
@@ -566,6 +577,21 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
     async execute(plan) {
       const output = (value: Parameters<typeof platformOutput>[1]) => platformOutput(plan, value)
       const contexts = contextsOf(plan)
+      if (plan.workItemRef === 'prepare-materials') {
+        const issue = issueOf(contexts)
+        if (issue.state.request.kind === 'external-id') {
+          return output({
+            status: 'blocked',
+            summary: '外部需求或问题 ID 必须由已配置的材料取得工具处理',
+          })
+        }
+        return output({
+          summary:
+            issue.state.request.uploads.length > 0
+              ? `平台已接收正文并冻结 ${issue.state.request.uploads.length} 个上传文件落点`
+              : '平台已接收并冻结需求或问题正文',
+        })
+      }
       if (plan.workItemRef === 'classify-feedback') {
         const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
         if (currentMr === undefined) {
@@ -1077,25 +1103,13 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       if (plan.workItemRef === 'prepare-change') {
         const issue = issueOf(contexts)
         const { row, repository } = currentWorkspace(plan.caseRef.id)
-        const previousRound = input.db
-          .select({ outputJson: employeeReactionRounds.outputJson })
-          .from(employeeReactionRounds)
-          .where(
-            and(
-              eq(employeeReactionRounds.caseId, plan.caseRef.id),
-              eq(employeeReactionRounds.state, 'completed'),
-            ),
-          )
-          .orderBy(desc(employeeReactionRounds.createdAt))
-          .get()
-        let summarySource = 'Digital employee prepared a repository change'
-        if (previousRound?.outputJson !== null && previousRound?.outputJson !== undefined) {
-          const parsed = z
-            .object({ summary: z.string().min(1) })
-            .passthrough()
-            .safeParse(JSON.parse(previousRound.outputJson) as unknown)
-          if (parsed.success) summarySource = parsed.data.summary
+        if (issue.state.deliveryContent === null) {
+          return output({
+            status: 'blocked',
+            summary: 'Agent 未输出提交信息与 MR 标题/正文，不能形成修改候选',
+          })
         }
+        const summarySource = issue.state.deliveryContent.commitMessage
         const resolvedUploadPlan = await resolveEmployeeUploadPlan({
           uploads: issue.state.request.uploads,
           baselineRepoPath: repository.localPath,
@@ -1174,6 +1188,13 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
 
       if (plan.workItemRef === 'publish-mr') {
         const issue = issueOf(contexts)
+        if (issue.state.deliveryContent === null) {
+          return output({
+            status: 'blocked',
+            summary: 'Agent 交付内容缺失，不能提交代码或创建 MR',
+          })
+        }
+        const deliveryContent = issue.state.deliveryContent
         const { row, repository } = currentWorkspace(plan.caseRef.id)
         const candidateContext = contexts.find(
           (context) => context.typeId === 'development.change-candidate',
@@ -1264,16 +1285,14 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             summary: `平台推送失败：${pushed.code} · ${pushed.detail}`,
           })
         }
-        const titleSource =
-          issue.state.request.body?.split('\n')[0]?.trim() ||
-          issue.state.request.externalId ||
-          issue.state.subjectRef
         const ensured = await input.mrEffects.ensure(issue.state.repositoryRef, {
           missionId: plan.caseRef.id,
           sourceBranch: row.sourceBranch,
           targetBranch: row.targetBranch,
-          title: titleSource.slice(0, 240),
+          title: deliveryContent.mergeRequestTitle,
           description: [
+            deliveryContent.mergeRequestDescription,
+            '',
             `Agent-Workflow-Case: ${plan.caseRef.id}`,
             `Agent-Workflow-Context: ${issue.context.id}`,
             'Agent-Workflow-Schema: issue-handling.v1',

@@ -211,6 +211,16 @@ const workItemDefinitionSchema = z
       .strict()
       .nullable()
       .default(null),
+    humanReview: z
+      .object({
+        optionRef: machineIdSchema,
+        artifactPort: machineIdSchema,
+        label: localizedTextSchema,
+        description: localizedTextSchema,
+      })
+      .strict()
+      .nullable()
+      .default(null),
     toolRoleGroups: z.array(toolRoleGroupSchema).max(100),
     nextWorkItemRefs: z.array(machineIdSchema).max(20),
   })
@@ -314,6 +324,34 @@ const workIntakeAuthoringManifestSchema = z
       .array(z.enum(['body', 'files', 'body-and-files', 'external-id']))
       .min(1)
       .max(4),
+    kindRequirements: z
+      .array(
+        z
+          .object({
+            kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
+            workItemRef: machineIdSchema,
+            slotRef: machineIdSchema,
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
+    executionOptions: z
+      .array(
+        z
+          .object({
+            optionRef: machineIdSchema,
+            label: localizedTextSchema,
+            description: localizedTextSchema,
+            defaultValue: z.boolean(),
+            requiredWorkItemRef: machineIdSchema.nullable().default(null),
+            requiredSlotRef: machineIdSchema.nullable().default(null),
+            requiredExecutorKind: z.enum(['agent', 'workflow', 'program']).nullable().default(null),
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
     body: z
       .object({
         label: localizedTextSchema,
@@ -333,6 +371,11 @@ const workIntakeAuthoringManifestSchema = z
         maxFiles: z.number().int().positive().max(500),
         maxFileBytes: z.number().int().positive(),
         targetPathRequired: z.literal(true),
+        placementModes: z
+          .array(z.enum(['repository', 'temporary']))
+          .min(1)
+          .max(2)
+          .default(['repository']),
       })
       .strict(),
     externalId: z
@@ -898,6 +941,14 @@ export function validateTypePackage(
     'reactionRules',
     descriptor.reactionRules.map((rule) => rule.ruleId),
   )
+  addDuplicates(
+    'workIntakeAuthoring.kindRequirements',
+    descriptor.workIntakeAuthoring.kindRequirements.map((requirement) => requirement.kind),
+  )
+  addDuplicates(
+    'workIntakeAuthoring.executionOptions',
+    descriptor.workIntakeAuthoring.executionOptions.map((option) => option.optionRef),
+  )
 
   const regionIds = new Set(
     descriptor.authoringManifest.lifecycleRegions.map((region) => region.regionId),
@@ -923,6 +974,50 @@ export function validateTypePackage(
       at: 'workStartWorkItemRef',
       detail: descriptor.workStartWorkItemRef,
     })
+  }
+
+  for (const requirement of descriptor.workIntakeAuthoring.kindRequirements) {
+    const item = workItems.get(requirement.workItemRef)
+    const slot = item?.toolRoleGroups
+      .flatMap((role) => role.bindingSlots)
+      .find((candidate) => candidate.slotRef === requirement.slotRef)
+    if (item?.nodeKind !== 'business-tool' || slot === undefined) {
+      violations.push({
+        code: 'intake-kind-requirement-invalid',
+        at: `workIntakeAuthoring.kindRequirements.${requirement.kind}`,
+        detail: `${requirement.workItemRef}/${requirement.slotRef}`,
+      })
+    }
+  }
+  for (const option of descriptor.workIntakeAuthoring.executionOptions) {
+    if (option.requiredWorkItemRef !== null && !workItems.has(option.requiredWorkItemRef)) {
+      violations.push({
+        code: 'intake-execution-option-work-item-invalid',
+        at: `workIntakeAuthoring.executionOptions.${option.optionRef}`,
+        detail: option.requiredWorkItemRef,
+      })
+    }
+    if ((option.requiredWorkItemRef === null) !== (option.requiredSlotRef === null)) {
+      violations.push({
+        code: 'intake-execution-option-slot-invalid',
+        at: `workIntakeAuthoring.executionOptions.${option.optionRef}`,
+        detail: `${option.requiredWorkItemRef ?? 'null'}/${option.requiredSlotRef ?? 'null'}`,
+      })
+    } else if (option.requiredWorkItemRef !== null && option.requiredSlotRef !== null) {
+      const item = workItems.get(option.requiredWorkItemRef)
+      if (
+        item === undefined ||
+        !item.toolRoleGroups.some((role) =>
+          role.bindingSlots.some((slot) => slot.slotRef === option.requiredSlotRef),
+        )
+      ) {
+        violations.push({
+          code: 'intake-execution-option-slot-invalid',
+          at: `workIntakeAuthoring.executionOptions.${option.optionRef}`,
+          detail: `${option.requiredWorkItemRef}/${option.requiredSlotRef}`,
+        })
+      }
+    }
   }
 
   for (const item of descriptor.authoringManifest.workItems) {
@@ -968,6 +1063,18 @@ export function validateTypePackage(
       role.bindingSlots.map((slot) => slot.slotRef),
     )
     addDuplicates(`workItems.${item.workItemRef}.bindingSlots`, slots)
+    if (
+      item.humanReview !== null &&
+      !descriptor.workIntakeAuthoring.executionOptions.some(
+        (option) => option.optionRef === item.humanReview?.optionRef,
+      )
+    ) {
+      violations.push({
+        code: 'work-item-human-review-option-invalid',
+        at: `workItems.${item.workItemRef}.humanReview.optionRef`,
+        detail: item.humanReview.optionRef,
+      })
+    }
     if (item.nodeKind === 'business-tool' && item.toolRoleGroups.length === 0) {
       violations.push({
         code: 'business-work-item-without-tool-slot',

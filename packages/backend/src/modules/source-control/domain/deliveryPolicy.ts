@@ -118,17 +118,34 @@ export function resolveSourceBranch(input: ResolveSourceBranchInput): SourceBran
   }
 }
 
-/** §9.2：commit message 由平台模板生成——Agent 只供 summary 素材。 */
+/** §9.2：业务提交文案由执行器产出，平台只规范标题并追加机器追踪标记。 */
 export function candidateCommitMessage(input: {
   readonly missionId: string
   readonly summarySource: string
   readonly contextEnvelope?: DeliveryContextEnvelope
 }): string {
-  const firstLine = input.summarySource.split('\n')[0]!.trim().slice(0, 72)
+  const [rawFirstLine = '', ...rawBodyLines] = input.summarySource
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+  const firstLine = rawFirstLine.trim().slice(0, 72)
   const subject = firstLine.length === 0 ? 'apply mission change candidate' : firstLine
+  const businessBody = rawBodyLines
+    .filter((line) => {
+      const value = line.trim()
+      return !(
+        /\[aw-mission:/i.test(value) ||
+        /^(?:Mission|Agent-Workflow-Case|Agent-Workflow-Context|Agent-Workflow-Schema|Work-Item):/i.test(
+          value,
+        )
+      )
+    })
+    .join('\n')
+    .trim()
+    .slice(0, 5_000)
+  const body = businessBody.length === 0 ? '' : `\n${businessBody}\n`
   const context =
     input.contextEnvelope === undefined
       ? ''
       : `\n${renderDeliveryContextEnvelope(input.contextEnvelope)}\n`
-  return `aw: ${subject}\n\nMission: ${input.missionId}\n${missionMachineMarker(input.missionId)}${context}\n`
+  return `aw: ${subject}\n${body}\nMission: ${input.missionId}\n${missionMachineMarker(input.missionId)}${context}\n`
 }

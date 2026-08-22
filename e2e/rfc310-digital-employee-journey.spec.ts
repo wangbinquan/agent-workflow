@@ -68,7 +68,7 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@3'
+const TYPE_REF = 'development@5'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
@@ -340,63 +340,65 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await primeAuth(page)
 
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
-  const responsibilityGraph = page.getByTestId('digital-employee-responsibility-graph')
-  await expect(responsibilityGraph).toBeVisible()
-  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
   await expect(page.getByText(employeeName, { exact: true })).toBeVisible()
-  await expect(responsibilityGraph.locator('.employee-graph__lane-bg--spine')).toHaveCount(2)
-  await expect(responsibilityGraph.locator('.employee-graph__lane-bg--branch')).toHaveCount(6)
-  await expect(responsibilityGraph.locator('.employee-graph__dispatch-trunk')).toHaveCount(0)
-  await expect(responsibilityGraph.locator('.employee-graph-node__port')).toHaveCount(0)
-  await expect(
-    responsibilityGraph.locator('path[data-from="observe-mr"][data-to="collect-pipeline"]'),
-  ).toHaveCount(1)
-  await expect(
-    responsibilityGraph.locator(
-      'path.employee-graph__edge--loop[data-from="repair-pipeline"][data-to="repair-pipeline"]',
-    ),
-  ).toHaveCount(1)
-  await expect(
-    responsibilityGraph.locator('path[data-from="classify-pipeline"][data-to="delegate"]'),
-  ).toHaveCount(1)
-  await expect(
-    responsibilityGraph.locator('path[data-from="delegate"][data-to="collect-pipeline"]'),
-  ).toHaveCount(1)
-  await expect(
-    responsibilityGraph.locator('path[data-from="delegate"][data-to="prepare-approval"]'),
-  ).toHaveCount(0)
-  await expect(
-    responsibilityGraph.locator('path[data-from="evaluate-ready"][data-to="wait-merge"]'),
-  ).toHaveCount(1)
-  await expect(
-    responsibilityGraph.locator('path[data-from="observe-mr"][data-to="wait-merge"]'),
-  ).toHaveCount(0)
-  await page.getByTestId('employee-work-item-classify-pipeline').click()
-  await expect(page.getByTestId('employee-work-item-classify-pipeline')).toHaveClass(
-    /employee-graph-node--selected/,
-  )
-  await expect(page.getByTestId('employee-work-item-repair-pipeline')).toHaveClass(
-    /employee-graph-node--related/,
-  )
-  await expect(
-    responsibilityGraph.locator(
-      'path.employee-graph__edge--active[data-from="classify-pipeline"][data-to="repair-pipeline"]',
-    ),
-  ).toHaveCount(1)
-  const horizontalOverflow = await responsibilityGraph.evaluate(
+  await expect(page.getByTestId('employee-toolbox-responsibility-map')).toHaveCount(0)
+  await expect(page.getByTestId('digital-employee-type-new-task')).toBeVisible()
+  await page.getByRole('tab', { name: 'Toolbox' }).click()
+  const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
+  await expect(responsibilityMap).toBeVisible()
+  await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
+  const classifierCard = responsibilityMap.locator('[data-work-item-ref="classify-pipeline"]')
+  await classifierCard.click()
+  await expect(classifierCard).toHaveClass(/employee-toolbox-card--active/)
+  await expect(page.getByText('Input material', { exact: true })).toBeVisible()
+  const horizontalOverflow = await responsibilityMap.evaluate(
     (element) => element.scrollWidth - element.clientWidth,
   )
   expect(horizontalOverflow).toBeLessThanOrEqual(1)
 
-  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/new`)
-  await expect(
-    page.getByRole('heading', { name: 'Assign work to a digital employee' }),
-  ).toBeVisible()
+  await page.getByRole('button', { name: 'Add tool', exact: true }).click()
+  const toolDialog = page.getByTestId('employee-add-tool-dialog')
+  await expect(toolDialog).toBeVisible()
+  await page.setViewportSize({ width: 760, height: 900 })
+  expect(
+    await toolDialog
+      .locator('.dialog__body')
+      .evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1)
+  expect(
+    await page.locator('html').evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1)
+  await toolDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.setViewportSize({ width: 1280, height: 800 })
+
+  await page.getByRole('tab', { name: 'Job templates' }).click()
+  await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
+  await expect(page.locator('.job-template-detail-editor')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.locator('.employee-toolbox-card--configured').first()).toBeVisible()
+  await expect(page.locator('.employee-toolbox-card--missing').first()).toBeVisible()
+
+  await page.goto(`${daemon.baseUrl}/tasks/new`)
+  await expect(page.getByTestId('wizard-kind-digital-employee')).toBeVisible()
+  await page.getByTestId('wizard-kind-digital-employee').click()
+  await page.waitForURL(/\/tasks\/employee-cases\/new$/)
+  await expect(page.getByRole('heading', { name: 'New task' })).toBeVisible()
+  await expect(page.getByTestId('employee-case-task-wizard-stepper')).toBeVisible()
+  await expect(page.getByTestId('stepper-step-mode')).toHaveAttribute('aria-current', 'step')
   await expect(page.getByRole('combobox').first()).toHaveAccessibleName(employeeName)
-  const repositoryPicker = page.getByRole('combobox').nth(1)
-  await expect(repositoryPicker).toBeVisible()
-  await repositoryPicker.click()
-  await page.getByRole('option', { name: new RegExp(PROJECT_PATH) }).click()
+  await page.setViewportSize({ width: 760, height: 900 })
+  expect(
+    await page.locator('html').evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1)
+  await page.setViewportSize({ width: 1280, height: 800 })
+
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('stepper-step-space')).toHaveAttribute('aria-current', 'step')
+  await expect(page.getByTestId('employee-case-repository')).toHaveCount(0)
+  await expect(page.getByText('Repository fixed by the employee', { exact: true })).toBeVisible()
+
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('stepper-step-content')).toHaveAttribute('aria-current', 'step')
   await page.getByRole('radio', { name: 'Request and files', exact: true }).click()
   await page
     .getByLabel('Requirement or problem body')
@@ -406,16 +408,21 @@ test('body and repository-bound files enter a stateful employee case and the uni
     mimeType: 'text/markdown',
     buffer: Buffer.from('# Acceptance\nThe change is ready for committer review.\n'),
   })
-  await page
-    .getByRole('textbox', { name: 'Repository target path *', exact: true })
-    .fill('docs/acceptance.md')
+  await page.getByLabel('Repository target path', { exact: true }).fill('docs/acceptance.md')
 
   const launchRequest = page.waitForRequest(
     (request) =>
       request.method() === 'POST' &&
       /\/api\/digital-employees\/[^/]+\/cases$/.test(new URL(request.url()).pathname),
   )
-  await page.getByRole('button', { name: 'Assign work', exact: true }).click()
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('stepper-step-confirm')).toHaveAttribute('aria-current', 'step')
+  await expect(page.getByTestId('employee-case-summary-employee')).toContainText(employeeName)
+  await expect(page.getByTestId('employee-case-summary-space')).toContainText(PROJECT_PATH)
+  await expect(page.getByTestId('employee-case-summary-content')).toContainText(
+    'docs/acceptance.md',
+  )
+  await page.getByTestId('employee-case-launch').click()
   const submitted = await launchRequest
   expect(submitted.postDataJSON()).toMatchObject({
     kind: 'body-and-files',

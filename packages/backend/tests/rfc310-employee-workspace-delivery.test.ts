@@ -316,12 +316,26 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         settledAt: 20,
       })
       .run()
+    const deliveryIssueContext = {
+      ...issueContext,
+      revision: 2,
+      stateJson: JSON.stringify({
+        ...issueState,
+        deliveryContent: {
+          commitMessage:
+            'implement deterministic delivery\n\nApply the requested repository files and feature change.',
+          mergeRequestTitle: 'Implement deterministic delivery',
+          mergeRequestDescription:
+            '## Summary\n\nApply the requested repository files and feature change.',
+        },
+      }),
+    }
 
     const preparePlan = plan({
       roundRef: 'round-prepare',
       caseRef: 'case-1',
       workItemRef: 'prepare-change',
-      contexts: [issueContext],
+      contexts: [deliveryIssueContext],
       allowedEffectKinds: ['source-control.candidate'],
     })
     db.insert(employeeReactionRounds)
@@ -576,7 +590,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       roundRef: 'round-publish',
       caseRef: 'case-1',
       workItemRef: 'publish-mr',
-      contexts: [issueContext, candidateContext],
+      contexts: [deliveryIssueContext, candidateContext],
       allowedEffectKinds: [
         'source-control.commit',
         'source-control.push',
@@ -679,7 +693,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       roundRef: 'round-repair-conflict',
       caseRef: 'case-1',
       workItemRef: 'repair-conflict',
-      contexts: [issueContext, conflictMrContext],
+      contexts: [deliveryIssueContext, conflictMrContext],
       workspacePolicy: writePolicy,
     })
     db.insert(employeeReactionRounds)

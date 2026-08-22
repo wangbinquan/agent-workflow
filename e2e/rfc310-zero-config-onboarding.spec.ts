@@ -1,9 +1,9 @@
 // RFC-310 current first-use browser contract.
 //
 // A new administrator starts from the Digital Employees catalog, sees the
-// whole deterministic responsibility map, selects the work item in context,
+// whole deterministic responsibility card map, selects the work item in context,
 // and adds a tool on the same page. The test deliberately has no legacy
-// `/code` journey or stage selector: the fixed graph is the navigation model.
+// `/code` journey, stage selector, or editable line: the fixed cards are the navigation model.
 
 import { expect, test, type Page } from '@playwright/test'
 
@@ -33,7 +33,7 @@ test.afterAll(async () => {
   await daemon?.stop()
 })
 
-test('a first-time user configures a work-item tool directly on the fixed responsibility map', async ({
+test('a first-time user configures a work-item tool directly on the fixed responsibility cards', async ({
   page,
 }) => {
   await primeAuth(page)
@@ -41,12 +41,15 @@ test('a first-time user configures a work-item tool directly on the fixed respon
 
   await expect(page.getByTestId('digital-employee-type-list')).toBeVisible()
   await page.getByTestId('digital-employee-type-development').click()
-  await expect(page.getByTestId('digital-employee-responsibility-graph')).toBeVisible()
-  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
+  await expect(page.getByTestId('employee-toolbox-responsibility-map')).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Toolbox' }).click()
+  const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
+  await expect(responsibilityMap).toBeVisible()
+  await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
   await expect(page.getByText('Delivery and diagnosis', { exact: true })).toBeVisible()
   await expect(page.getByText('MR care and repair', { exact: true })).toBeVisible()
 
-  await page.getByTestId('employee-work-item-analyze-implement').click()
+  await responsibilityMap.locator('[data-work-item-ref="analyze-implement"]').click()
   await page.waitForURL(/view=toolbox&workItem=analyze-implement/)
   const toolbox = page.getByTestId('employee-node-toolbox')
   await expect(toolbox).toBeVisible()
@@ -66,8 +69,11 @@ test('a first-time user configures a work-item tool directly on the fixed respon
   await dialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
 
   await expect(dialog).toHaveCount(0)
-  await expect(toolbox.getByText('First implementation tool', { exact: true })).toBeVisible()
-  await expect(toolbox.getByText('Available', { exact: true })).toBeVisible()
+  const createdTool = toolbox
+    .locator('.node-tool-row')
+    .filter({ hasText: 'First implementation tool' })
+  await expect(createdTool).toHaveCount(1)
+  await expect(createdTool.getByText('Available', { exact: true })).toBeVisible()
 })
 
 test('a failed contract check is corrected on the same tool registration id', async ({ page }) => {
@@ -89,7 +95,7 @@ test('a failed contract check is corrected on the same tool registration id', as
   })
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%403?view=toolbox&workItem=analyze-implement`,
+    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
@@ -101,7 +107,7 @@ test('a failed contract check is corrected on the same tool registration id', as
 
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('This tool is not publishable yet')).toBeVisible()
-  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%403/work-items/analyze-implement/tools`
+  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%405/work-items/analyze-implement/tools`
   const failedResponse = await page.request.get(listUrl, {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
@@ -133,7 +139,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
 }) => {
   await primeAuth(page)
   const name = `Editable invalid tool ${Date.now()}`
-  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%403/work-items/analyze-implement/tools`
+  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%405/work-items/analyze-implement/tools`
   const seededResponse = await page.request.post(listUrl, {
     headers: { Authorization: `Bearer ${daemon.token}` },
     data: {
@@ -155,7 +161,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
   expect(seeded.validationReceipt.status).toBe('invalid')
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%403?view=toolbox&workItem=analyze-implement`,
+    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   const row = toolbox.locator('.node-tool-row').filter({ hasText: name })

@@ -46,8 +46,13 @@ function DigitalEmployeesPage(): ReactElement {
           className="operations-surface__header"
           title={zh ? '数字员工' : 'Digital employees'}
           actions={
-            <Link to="/tasks/employee-cases/new" className="btn btn--primary">
-              {zh ? '交给数字员工' : 'Assign work'}
+            <Link
+              to="/tasks/new"
+              search={{ kind: 'digital-employee' }}
+              className="btn btn--primary"
+              data-testid="digital-employees-new-task"
+            >
+              {zh ? '创建数字员工任务' : 'Create digital employee task'}
             </Link>
           }
         >

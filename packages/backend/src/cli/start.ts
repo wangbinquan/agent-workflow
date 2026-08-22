@@ -134,6 +134,7 @@ import {
 } from '@/modules/integration/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { createSqliteTaskLifecycleEventPublisher } from '@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
@@ -1186,6 +1187,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     appHome: Paths.root,
     typePackages: [developmentEmployeeTypePackage],
+    platformTools: composeDigitalEmployeeBuiltinToolCatalog({
+      db,
+      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    }),
     executionContracts: employeeExecutionContracts,
     retryLimits: {
       current() {

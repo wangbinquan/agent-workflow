@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
 import { agents as agentRows } from '@/db/schema'
 import {
@@ -27,7 +28,11 @@ import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
-import { synthesizeDigitalEmployeeScriptHostSnapshot } from '@/modules/task-execution/domain/digitalEmployeeHost'
+import {
+  synthesizeDigitalEmployeeScriptHostSnapshot,
+  synthesizeReviewedDigitalEmployeeHostSnapshot,
+} from '@/modules/task-execution/domain/digitalEmployeeHost'
+import { buildDigitalEmployeePlanPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createAgent, updateAgent } from '@/services/agent'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -51,7 +56,10 @@ describe('platform execution contracts', () => {
     expect(material.input.fields.map((field) => field.path)).toContain(
       'contractInput.workRequest.externalId',
     )
-    expect(material.input.primaryFieldPaths).toEqual(['contractInput.workRequest.externalId'])
+    expect(material.input.primaryFieldPaths).toEqual([
+      'contractInput.workRequest.externalId',
+      'contractInput.materialTargetDirectory',
+    ])
     expect(
       material.input.topLevelFields.every((field) =>
         material.input.fields.some((guideField) => guideField.path === field),
@@ -90,6 +98,7 @@ describe('platform execution contracts', () => {
       developmentEmployeeRuntimeCodec.assembleReactionInputJson(
         JSON.stringify({
           schemaVersion: 1,
+          caseRef: 'case-1',
           roundRef: 'round-1',
           executionNonce: '1'.repeat(64),
           workItemRef: 'prepare-materials',
@@ -112,6 +121,7 @@ describe('platform execution contracts', () => {
                   body: null,
                   externalId: 'ISSUE-1234',
                   uploads: [],
+                  executionOptions: {},
                 },
                 materialArtifactRefs: [],
               }),
@@ -127,8 +137,142 @@ describe('platform execution contracts', () => {
         body: null,
         externalId: 'ISSUE-1234',
         uploads: [],
+        executionOptions: {},
       },
       repositoryRef: 'repo',
+      materialTargetDirectory: '.agent-workflow/inputs/requirements/case-1/external',
+    })
+  })
+
+  test('plan review receives one platform path and a fixed analyze-review-implement host', () => {
+    const requirementDirectory = '.agent-workflow/inputs/requirements/case-plan'
+    const envelope = JSON.parse(
+      developmentEmployeeRuntimeCodec.assembleReactionInputJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          caseRef: 'case-plan',
+          roundRef: 'round-plan',
+          executionNonce: '3'.repeat(64),
+          workItemRef: 'analyze-implement',
+          toolSlotRef: 'default',
+          connectionRef: null,
+          inputSchemaId: 'development.requirement-context.v1',
+          outputSchemaId: 'development.change-proposal.v1',
+          eventJson: JSON.stringify({ kind: 'work-item-continuation' }),
+          contextsJson: JSON.stringify([
+            {
+              typeId: 'development.issue-handling',
+              schemaVersion: 1,
+              revision: 1,
+              stateJson: JSON.stringify({
+                status: 'active',
+                subjectRef: 'case:case-plan',
+                repositoryRef: 'repo',
+                request: {
+                  kind: 'body',
+                  body: 'Implement the accepted plan.',
+                  externalId: null,
+                  executionOptions: { 'review-implementation-plan': true },
+                  uploads: [
+                    {
+                      artifactRef: 'employee-input:blob-1',
+                      placement: 'temporary',
+                      targetPath: `${requirementDirectory}/uploads/001-doc`,
+                      originalName: 'design.md',
+                    },
+                  ],
+                },
+                materialArtifactRefs: ['employee-input:blob-1'],
+              }),
+              artifactRefs: ['employee-input:blob-1'],
+            },
+          ]),
+        }),
+      ),
+    ) as {
+      humanReview: {
+        kind: string
+        artifactPort: string
+        documentPath: string
+        title: string
+        description: string
+      }
+      platformPaths: {
+        requirementDirectory: string
+        implementationPlanPath: string
+      }
+      materialInstructions: {
+        uploads: Array<{
+          originalName: string
+          placement: string
+          workspacePath: string
+          commitWithMergeRequest: boolean
+          artifactRef: string
+        }>
+      }
+    }
+    const implementationPlanPath = `${requirementDirectory}/review/implementation-plan.md`
+    expect(envelope.humanReview).toEqual({
+      kind: 'implementation-plan',
+      artifactPort: 'analysis-plan',
+      documentPath: implementationPlanPath,
+      title: '实现方案评审',
+      description: '请评审数字员工基于冻结工作材料和仓库现场形成的实现方案。',
+    })
+    expect(envelope.platformPaths).toMatchObject({
+      requirementDirectory,
+      implementationPlanPath,
+    })
+    expect(envelope.materialInstructions.uploads).toEqual([
+      {
+        originalName: 'design.md',
+        placement: 'temporary',
+        workspacePath: `${requirementDirectory}/uploads/001-doc`,
+        commitWithMergeRequest: false,
+        artifactRef: 'employee-input:blob-1',
+      },
+    ])
+
+    const prompt = buildDigitalEmployeePlanPrompt(
+      {
+        roundRef: 'round-plan',
+        executionNonce: '3'.repeat(64),
+        inputEnvelopeJson: JSON.stringify(envelope),
+      },
+      { previousError: null },
+      implementationPlanPath,
+    )
+    expect(prompt).toContain(
+      `Write the complete Markdown plan only to this exact platform path: ${implementationPlanPath}`,
+    )
+    expect(prompt).toContain(
+      `EXPECTED_ANALYSIS_PLAN_PATH_JSON\n${JSON.stringify(implementationPlanPath)}`,
+    )
+    expect(prompt).toContain('Do not modify any other file or run git, commit, push')
+
+    const host = WorkflowDefinitionSchema.parse(
+      synthesizeReviewedDigitalEmployeeHostSnapshot({
+        planAgentId: 'builtin-plan-agent',
+        planAgentName: 'Implementation planning',
+        implementationAgentId: 'employee-implementation-agent',
+        implementationAgentName: 'Implementation',
+        artifactPort: 'analysis-plan',
+        reviewTitle: '实现方案评审',
+        reviewDescription: '批准后才开始修改代码。',
+      }),
+    )
+    expect(host.nodes.map((node) => node.kind)).toEqual([
+      'input',
+      'input',
+      'agent-single',
+      'review',
+      'agent-single',
+      'output',
+    ])
+    expect(host.edges).toContainEqual({
+      id: 'e_de_approved_plan',
+      source: { nodeId: '__de_plan_review__', portName: 'approved_doc' },
+      target: { nodeId: '__de_agent__', portName: 'implementation-plan' },
     })
   })
 
@@ -162,6 +306,11 @@ describe('platform execution contracts', () => {
       executionNonce: '2'.repeat(64),
       status: 'ok',
       summary: 'done',
+      deliveryContent: {
+        commitMessage: 'implement accepted requirement',
+        mergeRequestTitle: 'Implement accepted requirement',
+        mergeRequestDescription: 'Implemented the accepted requirement.',
+      },
       contextPatches: [],
       effectSuggestions: [],
       artifactRefs: [],

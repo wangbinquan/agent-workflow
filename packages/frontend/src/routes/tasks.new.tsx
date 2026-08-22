@@ -101,7 +101,7 @@ import { workgroupLaunchErrorMessage } from '@/lib/workgroup-launch'
 import { classifyWriteOutcome } from '@/lib/write-outcome'
 import { Route as RootRoute } from './__root'
 
-interface TaskWizardSearch {
+interface OrchestrationTaskWizardSearch {
   kind?: WizardKind
   /** Deep-link object refs — canonical ids for all three resource kinds. */
   workflow?: string
@@ -126,13 +126,22 @@ interface TaskWizardSearch {
   tour?: 'first-task'
 }
 
+interface TaskWizardSearch extends Omit<OrchestrationTaskWizardSearch, 'kind'> {
+  kind?: WizardKind | 'digital-employee'
+}
+
 export const TaskWizardRoute = createRoute({
   getParentRoute: () => RootRoute,
   path: '/tasks/new',
-  component: TaskWizardPage,
+  component: TaskCreationEntryPage,
   validateSearch: (raw: Record<string, unknown>): TaskWizardSearch => {
     const out: TaskWizardSearch = {}
-    if (raw.kind === 'workflow' || raw.kind === 'agent' || raw.kind === 'workgroup')
+    if (
+      raw.kind === 'workflow' ||
+      raw.kind === 'agent' ||
+      raw.kind === 'workgroup' ||
+      raw.kind === 'digital-employee'
+    )
       out.kind = raw.kind
     for (const k of [
       'workflow',
@@ -178,6 +187,29 @@ export const TaskWizardRoute = createRoute({
   },
 })
 
+function TaskCreationEntryPage() {
+  const search = TaskWizardRoute.useSearch()
+  if (search.kind === 'digital-employee') return <DigitalEmployeeTaskEntry />
+  return <TaskWizardPage />
+}
+
+function DigitalEmployeeTaskEntry() {
+  const navigate = useNavigate()
+  const { i18n } = useTranslation()
+  useEffect(() => {
+    void navigate({ to: '/tasks/employee-cases/new', replace: true })
+  }, [navigate])
+  return (
+    <LoadingState
+      label={
+        (i18n.resolvedLanguage ?? i18n.language).startsWith('zh')
+          ? '正在打开数字员工任务…'
+          : 'Opening digital employee task…'
+      }
+    />
+  )
+}
+
 const STEP_MODE = 0
 const STEP_SPACE = 1
 const STEP_CONTENT = 2
@@ -187,7 +219,7 @@ type TaskWizardSubmissionOperation = NonNullable<TaskWizardDraftV1['reconciliati
 
 function TaskWizardPage() {
   const { t } = useTranslation()
-  const search = TaskWizardRoute.useSearch()
+  const search = TaskWizardRoute.useSearch() as OrchestrationTaskWizardSearch
   const navigate = useNavigate()
   const qc = useQueryClient()
   const actor = useActor()
@@ -2087,9 +2119,13 @@ function TaskWizardPage() {
           {step === STEP_MODE && (
             <div className="form-grid">
               <Field label={t('taskWizard.kindLabel')} group>
-                <ChoiceCards<WizardKind>
+                <ChoiceCards<WizardKind | 'digital-employee'>
                   value={kind}
                   onChange={(next) => {
+                    if (next === 'digital-employee') {
+                      void navigate({ to: '/tasks/new', search: { kind: next } })
+                      return
+                    }
                     if (next === kind) return
                     setKind(next)
                     // Changing the kind resets the object (and the object-scoped
@@ -2130,6 +2166,16 @@ function TaskWizardPage() {
                       description: t('taskWizard.kindHintWorkgroup'),
                       icon: <WorkgroupIcon />,
                     },
+                    ...(!isEdit && !isRelaunch && search.schedule !== true
+                      ? [
+                          {
+                            value: 'digital-employee' as const,
+                            label: t('taskWizard.kindDigitalEmployee'),
+                            description: t('taskWizard.kindHintDigitalEmployee'),
+                            icon: <DigitalEmployeeIcon />,
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </Field>
@@ -2794,6 +2840,25 @@ function WorkgroupIcon() {
       <path d="M3.5 19c.8-2.9 3-4.5 5.5-4.5s4.7 1.6 5.5 4.5" />
       <circle cx="17" cy="9" r="2.2" />
       <path d="M15.5 14.7c2 .3 3.9 1.7 4.6 4.3" />
+    </svg>
+  )
+}
+
+function DigitalEmployeeIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="8" r="3" />
+      <path d="M6.5 19c.7-3.3 2.7-5 5.5-5s4.8 1.7 5.5 5" />
+      <path d="M18.5 5.5l.7 1.2 1.3.3-.9 1 .1 1.4-1.2-.6-1.2.6.1-1.4-.9-1 1.3-.3.7-1.2Z" />
     </svg>
   )
 }

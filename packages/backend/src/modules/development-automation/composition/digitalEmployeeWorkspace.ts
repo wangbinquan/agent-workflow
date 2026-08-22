@@ -59,6 +59,7 @@ const issueContextSchema = z
           z
             .object({
               artifactRef: z.string().regex(/^employee-input:/),
+              placement: z.enum(['repository', 'temporary']).default('repository'),
               targetPath: z.string().min(1),
               originalName: z.string().min(1),
             })
@@ -148,11 +149,43 @@ function rootsOf(workspacePath: string): Record<string, string> {
   }
 }
 
-function skipPrefixes(policy: z.infer<typeof workspacePolicySchema>) {
+function skipPrefixes(
+  policy: z.infer<typeof workspacePolicySchema>,
+  caseId: string,
+  workItemRef: string,
+  planReviewEnabled: boolean,
+) {
+  const platformCaseKey = stableIdentityComponent(caseId)
   return {
     'git-meta': PLATFORM_OWNED_GIT_METADATA_PREFIXES,
-    evidence: policy.platformWritePrefixes,
+    evidence: policy.platformWritePrefixes.flatMap((prefix) => {
+      if (prefix === 'inputs/requirements' && workItemRef === 'analyze-implement') {
+        return planReviewEnabled
+          ? [`${prefix}/${platformCaseKey}/review/implementation-plan.md`]
+          : []
+      }
+      return [
+        prefix === 'inputs/requirements' && workItemRef === 'prepare-materials'
+          ? `${prefix}/${platformCaseKey}/external`
+          : `${prefix}/${platformCaseKey}`,
+      ]
+    }),
   } as const
+}
+
+function hasImplementationPlanReview(plan: z.infer<typeof planSchema>): boolean {
+  return (
+    z
+      .object({
+        humanReview: z
+          .object({ kind: z.literal('implementation-plan') })
+          .passthrough()
+          .nullable(),
+      })
+      .passthrough()
+      .catch({ humanReview: null })
+      .parse(JSON.parse(plan.inputEnvelopeJson) as unknown).humanReview !== null
+  )
 }
 
 function contextsOf(plan: z.infer<typeof planSchema>) {
@@ -307,6 +340,9 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           platformCaseKey,
         )
         mkdirSync(requirementsRoot, { recursive: true })
+        mkdirSync(join(requirementsRoot, 'uploads'), { recursive: true })
+        mkdirSync(join(requirementsRoot, 'external'), { recursive: true })
+        mkdirSync(join(requirementsRoot, 'review'), { recursive: true })
         mkdirSync(pipelineRoot, { recursive: true })
         writeFileSync(
           join(requirementsRoot, 'request.json'),
@@ -406,6 +442,9 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             platformCaseKey,
           )
           mkdirSync(requirementsRoot, { recursive: true })
+          mkdirSync(join(requirementsRoot, 'uploads'), { recursive: true })
+          mkdirSync(join(requirementsRoot, 'external'), { recursive: true })
+          mkdirSync(join(requirementsRoot, 'review'), { recursive: true })
           mkdirSync(pipelineRoot, { recursive: true })
           const checkpoint = sourceControl.checkpoint({
             workspacePath: prepared.workspacePath,
@@ -414,7 +453,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           pre = {
             protected: serializeProtected(
               snapshotProtectedRoots(rootsOf(prepared.workspacePath), {
-                skipPrefixesByRoot: skipPrefixes(plan.workspacePolicy),
+                skipPrefixesByRoot: skipPrefixes(
+                  plan.workspacePolicy,
+                  plan.caseRef.id,
+                  plan.workItemRef,
+                  hasImplementationPlanReview(plan),
+                ),
               }),
             ),
             business: [...businessTreeSnapshot(prepared.workspacePath).entries()],
@@ -508,7 +552,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           checkpointRoot: checkpointRoot(plan.caseRef.id, plan.roundRef),
         })
         const protectedSnapshot = snapshotProtectedRoots(rootsOf(workspacePath(plan.caseRef.id)), {
-          skipPrefixesByRoot: skipPrefixes(plan.workspacePolicy),
+          skipPrefixesByRoot: skipPrefixes(
+            plan.workspacePolicy,
+            plan.caseRef.id,
+            plan.workItemRef,
+            hasImplementationPlanReview(plan),
+          ),
         })
         const preState: SerializedPreState = {
           protected: serializeProtected(protectedSnapshot),
@@ -608,7 +657,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         workspacePath: activeWorkspacePath,
         preProtected: reviveProtected(pre.protected),
         protectedRoots: rootsOf(activeWorkspacePath),
-        protectedSkipPrefixesByRoot: skipPrefixes(plan.workspacePolicy),
+        protectedSkipPrefixesByRoot: skipPrefixes(
+          plan.workspacePolicy,
+          plan.caseRef.id,
+          plan.workItemRef,
+          hasImplementationPlanReview(plan),
+        ),
         preBusinessTree: beforeBusiness,
         outcome,
         workspaceMode:
@@ -617,7 +671,9 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         preservePaths: [],
         editablePaths:
           pre.conflict === undefined
-            ? issue.request.uploads.map((upload) => upload.targetPath)
+            ? issue.request.uploads.flatMap((upload) =>
+                upload.placement === 'repository' ? [upload.targetPath] : [],
+              )
             : [],
         budget: { maxChangedFiles: 2_000, maxTotalBytes: 128 * 1024 * 1024 },
       })

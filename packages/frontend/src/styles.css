@@ -113,7 +113,7 @@
   --focus-ring-gutter: 4px;
 }
 
-/* RFC-310 Digital Employee OS — one fixed responsibility map in every mode. */
+/* RFC-310 Digital Employee OS — type-level authoring keeps one roomy surface. */
 .digital-employee-surface__body {
   display: grid;
   gap: 18px;
@@ -242,6 +242,248 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
+}
+
+.employee-toolbox-workspace {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding-bottom: 24px;
+}
+
+.employee-toolbox-map {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.employee-toolbox-map__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.employee-toolbox-map__header h2 {
+  margin: 0 0 5px;
+  font-size: 18px;
+}
+
+.employee-toolbox-map__header p,
+.employee-toolbox-region > header p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.employee-toolbox-map__header > span {
+  flex: none;
+  padding: 5px 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.employee-toolbox-map__regions,
+.employee-toolbox-region,
+.employee-toolbox-region__lanes {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.employee-toolbox-region {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg) 76%, var(--panel));
+}
+
+.employee-toolbox-region > header strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 14px;
+}
+
+.employee-toolbox-lane {
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.employee-toolbox-lane > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.employee-toolbox-lane > header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.employee-toolbox-lane > header strong {
+  font-size: 12px;
+}
+
+.employee-toolbox-lane > header span:not(.status-chip) {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.employee-toolbox-lane__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.employee-toolbox-card {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 5px;
+  min-width: 0;
+  min-height: 126px;
+  padding: 11px 12px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  transition:
+    border-color 130ms ease,
+    background 130ms ease,
+    box-shadow 130ms ease;
+}
+
+.employee-toolbox-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+
+.employee-toolbox-card__kind {
+  width: max-content;
+  max-width: 100%;
+  padding: 2px 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.employee-toolbox-card--tool .employee-toolbox-card__kind {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.employee-toolbox-card--platform .employee-toolbox-card__kind {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 8%, transparent);
+}
+
+.employee-toolbox-card--collaboration .employee-toolbox-card__kind {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.employee-toolbox-card strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.employee-toolbox-card small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.employee-toolbox-card__next {
+  align-self: end;
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.employee-toolbox-card--configured {
+  border-color: color-mix(in srgb, var(--success) 54%, var(--border));
+  background: color-mix(in srgb, var(--success) 7%, var(--panel));
+}
+
+.employee-toolbox-card--missing {
+  border-color: color-mix(in srgb, var(--warn) 58%, var(--border));
+  background: color-mix(in srgb, var(--warn) 9%, var(--panel));
+}
+
+.employee-toolbox-card--attention {
+  animation: employee-required-duty-pulse 760ms ease-in-out 3;
+}
+
+@keyframes employee-required-duty-pulse {
+  0%,
+  100% {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  50% {
+    border-color: var(--warn);
+    box-shadow:
+      inset 3px 0 0 var(--warn),
+      0 0 0 4px color-mix(in srgb, var(--warn) 20%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-toolbox-card--attention {
+    animation: none;
+    box-shadow: inset 4px 0 0 var(--warn);
+  }
+}
+
+.employee-toolbox-card--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+@media (max-width: 760px) {
+  .employee-toolbox-map {
+    padding: 14px;
+  }
+
+  .employee-toolbox-map__header,
+  .employee-toolbox-lane {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-toolbox-map__header {
+    display: grid;
+  }
+
+  .employee-toolbox-map__header > span {
+    justify-self: start;
+  }
 }
 
 .employee-graph-shell {
@@ -538,6 +780,16 @@
   background: color-mix(in srgb, var(--border) 44%, transparent);
 }
 
+.work-item-contract-card > .work-item-contract-card__review {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.work-item-contract-card__review code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .execution-contract-guide {
   display: grid;
   gap: 12px;
@@ -599,6 +851,12 @@
   border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.execution-contract-guide__primary-heading--output {
+  margin-top: 4px;
+  padding-top: 13px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
 .execution-contract-transport {
@@ -761,6 +1019,13 @@
   gap: 3px;
 }
 
+.node-tool-row__title {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px !important;
+}
+
 .node-tool-row span,
 .node-tool-row small {
   color: var(--muted);
@@ -884,6 +1149,20 @@
   gap: 15px;
 }
 
+.employee-add-tool-dialog .dialog__body {
+  overflow-x: hidden;
+}
+
+.employee-add-tool-dialog :where(.employee-dialog-form, .execution-contract-guide, pre) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.employee-add-tool-dialog .execution-contract-guide pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .employee-dialog-form > label,
 .employee-dialog-form__row > label,
 .job-binding-list > label,
@@ -933,6 +1212,21 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
   align-items: start;
+}
+
+/* Digital employee launch reuses the canonical four-step task shell. Each
+   step owns the full wizard column; the two-column layout remains detail-only. */
+.employee-case-create-page .digital-employee-surface__body {
+  padding: 0;
+}
+
+.employee-case-create-page .employee-case-create-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.employee-case-create-page .stepper__body {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .employee-case-create-actions {
@@ -1334,6 +1628,69 @@
   overflow: auto;
 }
 
+.job-template-detail-editor {
+  gap: 20px;
+  overflow: hidden;
+}
+
+.employee-job-editor__form {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.employee-job-editor__form > * {
+  min-width: 0;
+}
+
+.employee-job-editor__identity {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(300px, 1.3fr);
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg) 76%, var(--panel));
+}
+
+.employee-job-duty-editor {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.employee-job-duty-editor > header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.employee-job-duty-editor > header span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.employee-job-duty-editor > header strong {
+  font-size: 16px;
+}
+
+.employee-job-duty-editor > header p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.employee-job-duty-editor .job-binding-list {
+  max-height: none;
+  min-width: 0;
+  overflow: visible;
+}
+
 .job-binding-list > label {
   grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr);
   align-items: center;
@@ -1474,6 +1831,10 @@
   }
 
   .job-dispatch-route__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-job-editor__identity {
     grid-template-columns: 1fr;
   }
 

@@ -71,6 +71,15 @@ export async function getAgentById(db: DbClient, id: string): Promise<Agent | nu
 }
 
 /**
+ * Read-only bootstrap/catalog projection for synchronous compositions. Runtime
+ * execution continues to use the async resolver above; both share rowToAgent.
+ */
+export function getAgentByIdSync(db: DbClient, id: string): Agent | null {
+  const row = db.select().from(agents).where(eq(agents.id, id)).get()
+  return row === undefined ? null : rowToAgent(row)
+}
+
+/**
  * RFC-223 (T15) — a Drizzle `WHERE` that resolves a frozen workflow-snapshot
  * agent-single node by canonical id only. `agentName` is display-only; a
  * name-only/corrupt snapshot returns `null` and callers fail closed. The R4-1

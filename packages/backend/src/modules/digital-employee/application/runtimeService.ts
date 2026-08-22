@@ -1,11 +1,12 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import { retryAttemptCap } from '@agent-workflow/shared'
+import { PLATFORM_WORKSPACE_DIR, retryAttemptCap } from '@agent-workflow/shared'
 
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { EventObservationInput } from '@/modules/event-center/public/types'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { stableIdentityComponent } from '@/util/gitRef'
 import type {
   EmployeeTypeCollaborationCodec,
   EmployeeTypeContextCodec,
@@ -16,7 +17,11 @@ import { employeeInvocationResultObservation } from '../public/events'
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
   EmployeeTypeCollaborationCodec
-import type { DigitalEmployeeAuthoringStore } from './ports/authoringStore'
+import type {
+  DigitalEmployeeAuthoringStore,
+  DigitalEmployeePlatformToolCatalog,
+} from './ports/authoringStore'
+import { EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG } from './ports/authoringStore'
 import type { ExecutionPolicyRevisionRecord } from './ports/authoringStore'
 import type {
   AttentionBindingRecord,
@@ -113,6 +118,7 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly inputArtifacts: EmployeeInputArtifactPort
   readonly runtimeCodecs: readonly EmployeeTypeRuntimeCodec[]
   readonly executionContracts: ExecutionContractParticipant
+  readonly platformTools?: DigitalEmployeePlatformToolCatalog
   readonly resolveExecutionPolicy?: () => ExecutionPolicyRevisionRecord
   readonly now?: () => number
   readonly id?: () => string
@@ -157,6 +163,7 @@ export class DigitalEmployeeRuntimeService {
   readonly #inputUploads: EmployeeInputUploadStore
   readonly #inputArtifacts: EmployeeInputArtifactPort
   readonly #executionContracts: ExecutionContractParticipant
+  readonly #platformTools: DigitalEmployeePlatformToolCatalog
   readonly #resolveExecutionPolicy: () => ExecutionPolicyRevisionRecord
   readonly #codecs = new Map<string, EmployeeTypeRuntimeCodec>()
   readonly #now: () => number
@@ -173,6 +180,7 @@ export class DigitalEmployeeRuntimeService {
     this.#inputUploads = deps.inputUploads
     this.#inputArtifacts = deps.inputArtifacts
     this.#executionContracts = deps.executionContracts
+    this.#platformTools = deps.platformTools ?? EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG
     this.#resolveExecutionPolicy =
       deps.resolveExecutionPolicy ??
       (() => {
@@ -214,6 +222,10 @@ export class DigitalEmployeeRuntimeService {
     return record.descriptor
   }
 
+  #toolRevision(ref: ExactResourceRef) {
+    return this.#platformTools.getRevision(ref) ?? this.#authoringStore.getToolRevision(ref)
+  }
+
   launchWork(input: {
     readonly employeeId: string
     readonly intake: unknown
@@ -249,7 +261,65 @@ export class DigitalEmployeeRuntimeService {
         'the employee work scope revision is unavailable',
       )
     }
-    const intake = employeeWorkIntakeSchema.parse(input.intake)
+    const admittedType = this.#authoringStore.getTypePackage(revision.content.typeRef)
+    if (admittedType === null || admittedType.state !== 'published') {
+      throw new ValidationError(
+        'employee-type-unavailable',
+        'the employee type package is unavailable at work admission',
+      )
+    }
+    const parsedIntake = employeeWorkIntakeSchema.parse(input.intake)
+    const optionDefinitions = admittedType.descriptor.workIntakeAuthoring.executionOptions
+    const allowedOptionRefs = new Set(optionDefinitions.map((option) => option.optionRef))
+    const unknownOption = Object.keys(parsedIntake.executionOptions).find(
+      (optionRef) => !allowedOptionRefs.has(optionRef),
+    )
+    if (unknownOption !== undefined) {
+      throw new ValidationError(
+        'employee-intake-option-unknown',
+        `unknown employee intake option: ${unknownOption}`,
+      )
+    }
+    const executionOptions = Object.fromEntries(
+      optionDefinitions.map((option) => [
+        option.optionRef,
+        parsedIntake.executionOptions[option.optionRef] ?? option.defaultValue,
+      ]),
+    )
+    const intake = employeeWorkIntakeSchema.parse({ ...parsedIntake, executionOptions })
+    const exactBinding = (workItemRef: string, slotRef: string) =>
+      revision.content.exactToolBindings.find(
+        (binding) => binding.workItemRef === workItemRef && binding.slotRef === slotRef,
+      )
+    const intakeRequirement = admittedType.descriptor.workIntakeAuthoring.kindRequirements.find(
+      (requirement) => requirement.kind === intake.kind,
+    )
+    if (intakeRequirement !== undefined) {
+      const binding = exactBinding(intakeRequirement.workItemRef, intakeRequirement.slotRef)
+      const tool = binding === undefined ? null : this.#toolRevision(binding.registrationRef)
+      if (tool === null || tool.state !== 'published') {
+        throw new ValidationError(
+          'employee-intake-kind-unsupported',
+          `this employee cannot accept ${intake.kind} until ${intakeRequirement.workItemRef}/${intakeRequirement.slotRef} has a published tool`,
+        )
+      }
+    }
+    for (const option of optionDefinitions) {
+      if (!executionOptions[option.optionRef] || option.requiredWorkItemRef === null) continue
+      const binding = exactBinding(option.requiredWorkItemRef, option.requiredSlotRef!)
+      const tool = binding === undefined ? null : this.#toolRevision(binding.registrationRef)
+      if (
+        tool === null ||
+        tool.state !== 'published' ||
+        (option.requiredExecutorKind !== null &&
+          tool.content.implementation.kind !== option.requiredExecutorKind)
+      ) {
+        throw new ValidationError(
+          'employee-intake-option-incompatible',
+          `${option.optionRef} requires a published ${option.requiredExecutorKind ?? 'compatible'} tool at ${option.requiredWorkItemRef}/${option.requiredSlotRef}`,
+        )
+      }
+    }
     const caseId = this.#id()
     const now = this.#now()
     const uploads = this.#inputUploads.resolveForCase({
@@ -258,6 +328,7 @@ export class DigitalEmployeeRuntimeService {
       caseId,
       now,
     })
+    const platformCaseKey = stableIdentityComponent(caseId)
     const resolvedUploads = intake.uploads.map((upload, index) => {
       const row = uploads[index]!
       if (!this.#inputArtifacts.hasBlob(row.blobRef)) {
@@ -272,7 +343,11 @@ export class DigitalEmployeeRuntimeService {
         sha256: row.sha256,
         bytes: row.bytes,
         originalName: row.originalName,
-        targetPath: upload.targetPath,
+        placement: upload.placement,
+        targetPath:
+          upload.placement === 'repository'
+            ? upload.targetPath!
+            : `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}/uploads/${String(index + 1).padStart(3, '0')}-${stableIdentityComponent(row.id)}`,
       }
     })
     const launch = employeeCaseLaunchSchema.parse(
@@ -1668,8 +1743,10 @@ export class DigitalEmployeeRuntimeService {
           (route) =>
             route.routeRef === selectedSlotRef && route.destinationWorkItemRef === item.workItemRef,
         )
+      const platformSelected = item.nodeKind === 'business-tool' && selectedSlotRef === 'platform'
       if (
         item.nodeKind === 'business-tool' &&
+        !platformSelected &&
         findToolSlot(item, selectedSlotRef) === null &&
         selectedDispatchRoute === undefined
       ) {
@@ -1687,10 +1764,8 @@ export class DigitalEmployeeRuntimeService {
       const selectedRegistrationRef =
         selectedDispatchRoute?.registrationRef ?? binding?.registrationRef ?? null
       const tool =
-        selectedRegistrationRef === null
-          ? null
-          : this.#authoringStore.getToolRevision(selectedRegistrationRef)
-      if (item.nodeKind === 'business-tool' && tool === null) {
+        selectedRegistrationRef === null ? null : this.#toolRevision(selectedRegistrationRef)
+      if (item.nodeKind === 'business-tool' && !platformSelected && tool === null) {
         throw new ValidationError(
           'employee-tool-binding-unavailable',
           `no exact published tool for ${item.workItemRef}/${selectedSlotRef}`,
@@ -1731,6 +1806,7 @@ export class DigitalEmployeeRuntimeService {
       ).assembleReactionInputJson(
         JSON.stringify({
           schemaVersion: 1,
+          caseRef: caseRecord.id,
           roundRef: roundId,
           executionNonce,
           workItemRef: item.workItemRef,
@@ -1762,7 +1838,7 @@ export class DigitalEmployeeRuntimeService {
       })
       let implementationRef: ExactResourceRef | null = null
       let implementationKind: ReactionExecutionPlan['implementationKind'] =
-        item.nodeKind === 'system'
+        item.nodeKind === 'system' || platformSelected
           ? 'system'
           : item.nodeKind === 'collaboration'
             ? 'collaboration'
@@ -1836,13 +1912,13 @@ export class DigitalEmployeeRuntimeService {
         id: this.#id(),
         caseId: caseRecord.id,
         kind:
-          item.nodeKind === 'business-tool'
+          item.nodeKind === 'business-tool' && !platformSelected
             ? 'execution-launch'
-            : item.nodeKind === 'system'
+            : item.nodeKind === 'system' || platformSelected
               ? 'platform-work-item-execute'
               : 'invocation-create',
         payloadJson: JSON.stringify(
-          item.nodeKind === 'business-tool'
+          item.nodeKind === 'business-tool' && !platformSelected
             ? {
                 roundId,
                 plan,
@@ -1851,9 +1927,9 @@ export class DigitalEmployeeRuntimeService {
             : { roundId, plan },
         ),
         dedupeKey:
-          item.nodeKind === 'business-tool'
+          item.nodeKind === 'business-tool' && !platformSelected
             ? `execution-launch:${roundId}:0`
-            : item.nodeKind === 'system'
+            : item.nodeKind === 'system' || platformSelected
               ? `platform-work-item-execute:${roundId}`
               : `invocation-create:${roundId}`,
         attemptCount: 0,

@@ -17,7 +17,6 @@ import type {
   WorkItem,
 } from '@/components/digital-employees/types'
 import { localized } from '@/components/digital-employees/types'
-import { ResponsibilityGraph } from '@/components/digital-employees/ResponsibilityGraph'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   ExecutionContractGuidePanel,
@@ -30,6 +29,7 @@ import {
 } from '@/components/execution-contracts/types'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { GROUP_OPTION_PREFIX } from '@/components/launch/RepoSourceRow'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
@@ -39,7 +39,7 @@ import { TabBar, tabDomIds } from '@/components/TabBar'
 import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
-type WorkspaceView = 'employees' | 'jobs' | 'toolbox' | 'scope'
+type WorkspaceView = 'employees' | 'jobs' | 'toolbox'
 
 interface WorkspaceSearch extends Record<string, unknown> {
   view: WorkspaceView
@@ -47,8 +47,7 @@ interface WorkspaceSearch extends Record<string, unknown> {
 }
 
 function validateSearch(raw: Record<string, unknown>): WorkspaceSearch {
-  const view =
-    raw.view === 'jobs' || raw.view === 'toolbox' || raw.view === 'scope' ? raw.view : 'employees'
+  const view = raw.view === 'jobs' || raw.view === 'toolbox' ? raw.view : 'employees'
   return {
     view,
     ...(typeof raw.workItem === 'string' && raw.workItem !== '' ? { workItem: raw.workItem } : {}),
@@ -100,16 +99,6 @@ function DigitalEmployeeTypePage(): ReactElement {
     })
     return out
   }, [toolQueries, workItems])
-  const toolCounts = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(toolsByWorkItem).map(([workItemRef, tools]) => [
-          workItemRef,
-          tools.filter((tool) => tool.state === 'published').length,
-        ]),
-      ),
-    [toolsByWorkItem],
-  )
   const selectedItem = workItems.find((item) => item.workItemRef === selectedRef) ?? null
   const panelIds = tabDomIds('digital-employee-type-sections', search.view)
 
@@ -122,9 +111,6 @@ function DigitalEmployeeTypePage(): ReactElement {
         contract.contractId === selectedItem?.workContractRef.contractId &&
         contract.version === selectedItem.workContractRef.version,
     ) ?? null
-  const graphMode =
-    search.view === 'jobs' ? 'job-template' : search.view === 'toolbox' ? 'toolbox' : 'employee'
-
   return (
     <div className="page page--operations digital-employee-type-page">
       <div className="operations-surface">
@@ -132,9 +118,19 @@ function DigitalEmployeeTypePage(): ReactElement {
           className="operations-surface__header"
           title={localized(type.displayName, language)}
           actions={
-            <Link to="/tasks" search={{ category: 'digital-employee' }} className="btn btn--sm">
-              {zh ? '查看运行任务' : 'View running tasks'}
-            </Link>
+            <>
+              <Link
+                to="/tasks/new"
+                search={{ kind: 'digital-employee' }}
+                className="btn btn--primary"
+                data-testid="digital-employee-type-new-task"
+              >
+                {zh ? '创建数字员工任务' : 'Create digital employee task'}
+              </Link>
+              <Link to="/tasks" search={{ category: 'digital-employee' }} className="btn">
+                {zh ? '查看运行任务' : 'View running tasks'}
+              </Link>
+            </>
           }
         >
           <p className="operations-surface__subtitle">{localized(type.description, language)}</p>
@@ -151,62 +147,40 @@ function DigitalEmployeeTypePage(): ReactElement {
               { key: 'employees', label: zh ? '员工' : 'Employees' },
               { key: 'jobs', label: zh ? '岗位模板' : 'Job templates' },
               { key: 'toolbox', label: zh ? '工具箱' : 'Toolbox' },
-              { key: 'scope', label: zh ? '适用范围' : 'Scope' },
             ]}
           />
 
-          <section
-            className="employee-map-section"
-            aria-label={zh ? '职责全景' : 'Responsibility map'}
-          >
-            <div className="employee-map-section__heading">
-              <div>
-                <h2>{zh ? '确定性职责全景' : 'Deterministic responsibility map'}</h2>
-                <p>
-                  {zh
-                    ? '生命周期是固定背景；节点和连线由分类程序定义。点击工作项，在同页完成配置。'
-                    : 'Lifecycle regions are fixed backgrounds. The type package owns nodes and edges; select a work item to configure it here.'}
-                </p>
-              </div>
-              <span className="employee-map-section__legend">
-                {zh ? '全量展开 · 不可拖线' : 'Fully expanded · no edge editing'}
-              </span>
-            </div>
-            <ResponsibilityGraph
-              type={type}
-              language={language}
-              selectedWorkItemRef={selectedRef}
-              onSelect={(workItem) =>
-                void navigate({
-                  search: { ...search, view: 'toolbox', workItem },
-                  replace: true,
-                })
-              }
-              toolCounts={toolCounts}
-              mode={graphMode}
-            />
-          </section>
-
           <div role="tabpanel" id={panelIds.panelId} aria-labelledby={panelIds.tabId} tabIndex={0}>
             {search.view === 'toolbox' ? (
-              <ToolboxPanel
-                typeRef={typeRef}
-                typeName={localized(type.displayName, language)}
-                item={selectedItem}
-                contract={selectedContract}
-                tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
-                language={language}
-              />
+              <div className="employee-toolbox-workspace">
+                <ToolboxResponsibilityMap
+                  type={type}
+                  selectedWorkItemRef={selectedRef}
+                  toolsByWorkItem={toolsByWorkItem}
+                  language={language}
+                  onSelect={(workItem) =>
+                    void navigate({
+                      search: { view: 'toolbox', workItem },
+                      replace: true,
+                    })
+                  }
+                />
+                <ToolboxPanel
+                  typeRef={typeRef}
+                  typeName={localized(type.displayName, language)}
+                  item={selectedItem}
+                  contract={selectedContract}
+                  tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
+                  language={language}
+                />
+              </div>
             ) : search.view === 'jobs' ? (
               <JobTemplatesPanel
                 typeRef={typeRef}
                 type={type}
                 toolsByWorkItem={toolsByWorkItem}
-                selectedItem={selectedItem}
                 language={language}
               />
-            ) : search.view === 'scope' ? (
-              <ScopePanel typeRef={typeRef} language={language} />
             ) : (
               <EmployeesPanel typeRef={typeRef} type={type} language={language} />
             )}
@@ -214,6 +188,164 @@ function DigitalEmployeeTypePage(): ReactElement {
         </div>
       </div>
     </div>
+  )
+}
+
+function ToolboxResponsibilityMap(props: {
+  type: EmployeeTypePackage
+  selectedWorkItemRef: string | null
+  toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
+  language: string
+  onSelect: (workItemRef: string) => void
+  title?: string
+  description?: string
+  legend?: string
+  cardIdPrefix?: string
+  attentionPulse?: number
+  cardState?: (item: WorkItem) => {
+    state: 'configured' | 'missing' | 'neutral'
+    detail: string
+    attention?: boolean
+  }
+}): ReactElement {
+  const zh = props.language.startsWith('zh')
+  const workItemsByRef = new Map(
+    props.type.authoringManifest.workItems.map((item) => [item.workItemRef, item]),
+  )
+  const regions = [...props.type.authoringManifest.lifecycleRegions].sort(
+    (left, right) => left.order - right.order,
+  )
+  const nodeKind = (item: WorkItem): { label: string; className: string } =>
+    item.nodeKind === 'business-tool'
+      ? { label: zh ? '工具' : 'Tool', className: 'tool' }
+      : item.nodeKind === 'system'
+        ? { label: zh ? '平台' : 'Platform', className: 'platform' }
+        : { label: zh ? '协同' : 'Collaboration', className: 'collaboration' }
+
+  return (
+    <section
+      className="employee-toolbox-map"
+      aria-label={zh ? '确定性职责全景' : 'Deterministic responsibility map'}
+      data-testid="employee-toolbox-responsibility-map"
+    >
+      <header className="employee-toolbox-map__header">
+        <div>
+          <h2>{props.title ?? (zh ? '确定性职责全景' : 'Deterministic responsibility map')}</h2>
+          <p>
+            {props.description ??
+              (zh
+                ? '生命周期固定、职责全量展开。选择一张小卡片，就在下方查看输入输出并配置该职责的工具。'
+                : 'Lifecycle regions are fixed and every duty is expanded. Select a card to inspect its I/O and configure its tools below.')}
+          </p>
+        </div>
+        <span>{props.legend ?? (zh ? '固定流程 · 无需拖线' : 'Fixed flow · no edge editing')}</span>
+      </header>
+
+      <div className="employee-toolbox-map__regions">
+        {regions.map((region) => {
+          const lanes = [...region.responsibilityLanes].sort(
+            (left, right) => left.order - right.order,
+          )
+          return (
+            <section key={region.regionId} className="employee-toolbox-region">
+              <header>
+                <div>
+                  <strong>{localized(region.label, props.language)}</strong>
+                  <p>{localized(region.description, props.language)}</p>
+                </div>
+              </header>
+              <div className="employee-toolbox-region__lanes">
+                {lanes.map((lane) => {
+                  const items = props.type.authoringManifest.workItems
+                    .filter(
+                      (item) =>
+                        item.regionId === region.regionId &&
+                        item.responsibilityLaneId === lane.laneId,
+                    )
+                    .sort((left, right) => left.order - right.order)
+                  if (items.length === 0) return null
+                  return (
+                    <section key={lane.laneId} className="employee-toolbox-lane">
+                      <header>
+                        <div>
+                          <strong>{localized(lane.label, props.language)}</strong>
+                          <span>{localized(lane.description, props.language)}</span>
+                        </div>
+                        {lane.optional ? (
+                          <StatusChip kind="neutral" size="sm">
+                            {zh ? '可选能力' : 'Optional'}
+                          </StatusChip>
+                        ) : null}
+                      </header>
+                      <div className="employee-toolbox-lane__cards">
+                        {items.map((item) => {
+                          const kind = nodeKind(item)
+                          const state = props.cardState?.(item)
+                          const availableTools = (
+                            props.toolsByWorkItem[item.workItemRef] ?? []
+                          ).filter((tool) => tool.state === 'published').length
+                          const nextLabels = item.nextWorkItemRefs
+                            .map((ref) => workItemsByRef.get(ref))
+                            .filter((next): next is WorkItem => next !== undefined)
+                            .map((next) => localized(next.label, props.language))
+                          return (
+                            <button
+                              key={`${item.workItemRef}:${state?.attention === true ? (props.attentionPulse ?? 0) : 0}`}
+                              id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
+                              data-work-item-ref={item.workItemRef}
+                              type="button"
+                              className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
+                                state === undefined ? '' : ` employee-toolbox-card--${state.state}`
+                              }${
+                                state?.attention === true ? ' employee-toolbox-card--attention' : ''
+                              }${
+                                item.workItemRef === props.selectedWorkItemRef
+                                  ? ' employee-toolbox-card--active'
+                                  : ''
+                              }`}
+                              aria-pressed={item.workItemRef === props.selectedWorkItemRef}
+                              onClick={() => props.onSelect(item.workItemRef)}
+                            >
+                              <span className="employee-toolbox-card__kind">{kind.label}</span>
+                              <strong>{localized(item.label, props.language)}</strong>
+                              <small>
+                                {state?.detail ??
+                                  (item.nodeKind === 'business-tool'
+                                    ? availableTools > 0
+                                      ? zh
+                                        ? `${availableTools} 个可用工具`
+                                        : `${availableTools} available tool${availableTools === 1 ? '' : 's'}`
+                                      : zh
+                                        ? '尚未配置工具'
+                                        : 'No tool configured'
+                                    : item.nodeKind === 'system'
+                                      ? zh
+                                        ? '平台按固定规则执行'
+                                        : 'Platform fixed rule'
+                                      : zh
+                                        ? '调起并等待其他员工'
+                                        : 'Invoke and await employees')}
+                              </small>
+                              <span className="employee-toolbox-card__next">
+                                {nextLabels.length === 0
+                                  ? zh
+                                    ? '完成后等待事件或结束'
+                                    : 'Then wait for an event or finish'
+                                  : `${zh ? '下一步' : 'Next'}：${nextLabels.join(' / ')}`}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )
+                })}
+              </div>
+            </section>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -239,6 +371,23 @@ function WorkItemContractCard(props: {
           <code>{props.contract.outputSchemaId}</code>
         )}
       </div>
+      {props.item.humanReview === null ? null : (
+        <div className="work-item-contract-card__review">
+          <span>{zh ? '可选方案评审子阶段' : 'Optional plan-review substage'}</span>
+          <p>
+            {zh
+              ? '输入：平台注入方案文档精确落点。输出：内置方案 Agent 必须写入 Markdown，并从指定端口返回同一路径；随后由平台审核节点受理。'
+              : 'Input: the platform injects the exact plan-document path. Output: the built-in planner writes Markdown there and returns the same path from the declared port; the platform review node then owns approval.'}
+          </p>
+          <code>
+            platformPaths.implementationPlanPath → {props.item.humanReview.artifactPort} ·
+            path&lt;md&gt;
+          </code>
+          <code>
+            .agent-workflow/inputs/requirements/&lt;case&gt;/review/implementation-plan.md
+          </code>
+        </div>
+      )}
     </div>
   )
 }
@@ -280,6 +429,24 @@ function ToolboxPanel(props: {
   const [open, setOpen] = useState(false)
   const [editingTool, setEditingTool] = useState<ToolRegistration | null>(null)
   const zh = props.language.startsWith('zh')
+  const contractKey =
+    props.contract === null
+      ? null
+      : contractRefKey({
+          contractId: props.contract.contractId,
+          version: props.contract.version,
+        })
+  const contractGuide = useQuery<ExecutionContractGuide>({
+    queryKey: ['execution-contract', contractKey, 'toolbox-card'],
+    enabled: contractKey !== null,
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/execution-contracts/${encodeURIComponent(contractKey ?? '')}`,
+        undefined,
+        signal,
+      ),
+    staleTime: 60_000,
+  })
   const retire = useMutation({
     mutationFn: (toolId: string) =>
       api.post(
@@ -333,6 +500,20 @@ function ToolboxPanel(props: {
         )}
       </header>
       <WorkItemContractCard item={props.item} contract={props.contract} language={props.language} />
+      {contractGuide.isPending ? (
+        <LoadingState
+          size="compact"
+          label={zh ? '正在加载输入输出契约…' : 'Loading I/O contract…'}
+        />
+      ) : contractGuide.isError ? (
+        <ErrorBanner error={contractGuide.error} onRetry={() => void contractGuide.refetch()} />
+      ) : contractGuide.data === undefined ? null : (
+        <ExecutionContractGuidePanel
+          guide={contractGuide.data}
+          language={props.language}
+          kind={props.contract?.allowedToolKinds[0] ?? 'agent'}
+        />
+      )}
       {business && orderedDispatch !== null ? (
         <section className="employee-dispatch-card" data-testid="employee-runtime-dispatch">
           <header>
@@ -382,7 +563,23 @@ function ToolboxPanel(props: {
               return (
                 <article key={tool.id} className="node-tool-row">
                   <div>
-                    <strong>{tool.content.displayName}</strong>
+                    <div className="node-tool-row__title">
+                      <strong>{tool.content.displayName}</strong>
+                      {tool.origin === 'platform' ? (
+                        <StatusChip kind="neutral" size="sm">
+                          {zh ? '平台内置' : 'Built in'}
+                        </StatusChip>
+                      ) : (
+                        <StatusChip kind="neutral" size="sm">
+                          {zh ? '自定义工具' : 'Custom'}
+                        </StatusChip>
+                      )}
+                      {tool.selection === 'automatic' ? (
+                        <StatusChip kind="success" size="sm">
+                          {zh ? '平台自动使用' : 'Used automatically'}
+                        </StatusChip>
+                      ) : null}
+                    </div>
                     <span>{tool.content.description}</span>
                     <small>
                       {tool.content.implementation.kind === 'agent'
@@ -396,7 +593,7 @@ function ToolboxPanel(props: {
                   </div>
                   <div className="employee-summary-card__actions">
                     <StatusChip kind={status.kind}>{status.label}</StatusChip>
-                    {canUpdate ? (
+                    {canUpdate && tool.editable ? (
                       <button
                         type="button"
                         className="btn btn--sm"
@@ -408,7 +605,7 @@ function ToolboxPanel(props: {
                         {zh ? '编辑' : 'Edit'}
                       </button>
                     ) : null}
-                    {canArchive ? (
+                    {canArchive && tool.editable ? (
                       <ConfirmButton
                         label={
                           tool.publishedRevision === null
@@ -455,7 +652,8 @@ function ToolboxPanel(props: {
               : 'The platform executes this node by fixed rules; no Agent or script can be attached.'}
         </NoticeBanner>
       )}
-      {business && props.tools.some((tool) => tool.state === 'published') ? (
+      {business &&
+      props.tools.some((tool) => tool.state === 'published' && tool.selection === 'selectable') ? (
         <NoticeBanner
           tone="success"
           title={zh ? '这个工作项已有可用工具' : 'This work item has an available tool'}
@@ -508,6 +706,7 @@ function agentChoiceLabel(agent: AgentChoice, language: string): string {
     'conflict-repair': ['内置 · 代码冲突修复', 'Built in · Merge conflict repair'],
     'business-implementation': ['内置 · 业务需求实现', 'Built in · Business implementation'],
     'issue-repair': ['内置 · 代码问题修复', 'Built in · Issue repair'],
+    'implementation-planning': ['内置 · 实现方案分析', 'Built in · Implementation planning'],
   }
   const label = typeof template === 'string' ? labels[template] : undefined
   return label === undefined
@@ -826,6 +1025,8 @@ function AddToolDialog(props: {
           : `${zh ? '编辑工具：' : 'Edit tool: '}${props.tool.content.displayName}`
       }
       size="lg"
+      panelClassName="employee-add-tool-dialog"
+      data-testid="employee-add-tool-dialog"
       dismissDisabled={save.isPending}
       footer={
         <>
@@ -1154,14 +1355,18 @@ function JobTemplatesPanel(props: {
   typeRef: string
   type: EmployeeTypePackage
   toolsByWorkItem: Record<string, ToolRegistration[]>
-  selectedItem: WorkItem | null
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
+  const [editingJob, setEditingJob] = useState<JobTemplate | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [editorWorkItemRef, setEditorWorkItemRef] = useState(
+    props.type.authoringManifest.workItems[0]?.workItemRef ?? '',
+  )
+  const [validationAttempt, setValidationAttempt] = useState(0)
   const dispatchOrdinal = useRef(0)
   const configurableGroups = props.type.authoringManifest.workItems
     .map((item) => ({
@@ -1194,96 +1399,167 @@ function JobTemplatesPanel(props: {
     enabled: open,
     queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
   })
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: async () => {
-      const draft = await api.post<JobTemplate>(
-        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/job-templates`,
-        {
-          name,
-          description,
-          defaultToolBindings: configurableSlots.flatMap(({ item, slot }) => {
-            const toolId = bindings[`${item.workItemRef}/${slot.slotRef}`]
-            if (toolId === undefined || toolId === '') return []
-            const tool = props.toolsByWorkItem[item.workItemRef]?.find(
-              (candidate) => candidate.id === toolId,
+      const body = {
+        name,
+        description,
+        defaultToolBindings: configurableSlots.flatMap(({ item, slot }) => {
+          const toolId = bindings[`${item.workItemRef}/${slot.slotRef}`]
+          if (toolId === undefined || toolId === '') return []
+          const tool = props.toolsByWorkItem[item.workItemRef]?.find(
+            (candidate) => candidate.id === toolId && candidate.selection === 'selectable',
+          )
+          if (tool?.publishedRevision == null) return []
+          return [
+            {
+              workItemRef: item.workItemRef,
+              slotRef: slot.slotRef,
+              registrationRef: { id: tool.id, revision: tool.publishedRevision },
+            },
+          ]
+        }),
+        defaultCollaborationBindings: props.type.authoringManifest.workItems
+          .filter(
+            (item) =>
+              item.nodeKind === 'collaboration' &&
+              item.collaborationContractId !== null &&
+              collaborationBindings[item.workItemRef],
+          )
+          .flatMap((item) => {
+            const employee = employees.data?.items.find(
+              (candidate) => candidate.id === collaborationBindings[item.workItemRef],
             )
-            if (tool?.publishedRevision == null) return []
+            if (employee?.publishedRevision == null || item.collaborationContractId === null) {
+              return []
+            }
             return [
               {
                 workItemRef: item.workItemRef,
-                slotRef: slot.slotRef,
-                registrationRef: { id: tool.id, revision: tool.publishedRevision },
-              },
-            ]
-          }),
-          defaultCollaborationBindings: props.type.authoringManifest.workItems
-            .filter(
-              (item) =>
-                item.nodeKind === 'collaboration' &&
-                item.collaborationContractId !== null &&
-                collaborationBindings[item.workItemRef],
-            )
-            .flatMap((item) => {
-              const employee = employees.data?.items.find(
-                (candidate) => candidate.id === collaborationBindings[item.workItemRef],
-              )
-              if (employee?.publishedRevision == null || item.collaborationContractId === null) {
-                return []
-              }
-              return [
-                {
-                  workItemRef: item.workItemRef,
-                  targetEmployeeRef: {
-                    id: employee.id,
-                    revision: employee.publishedRevision,
-                  },
-                  invocationContractId: item.collaborationContractId,
+                targetEmployeeRef: {
+                  id: employee.id,
+                  revision: employee.publishedRevision,
                 },
-              ]
-            }),
-          orderedDispatchConfigurations: dispatchItems.flatMap((classifier) => {
-            const routes = orderedDispatchRoutes[classifier.workItemRef] ?? []
-            if (routes.length === 0) return []
-            return [
-              {
-                classifierWorkItemRef: classifier.workItemRef,
-                routes: routes.map((route, index) => {
-                  const destination = props.type.authoringManifest.workItems.find(
-                    (item) => item.workItemRef === route.destinationWorkItemRef,
-                  )
-                  const tool = (props.toolsByWorkItem[route.destinationWorkItemRef] ?? []).find(
-                    (candidate) => candidate.id === route.toolId,
-                  )
-                  return {
-                    routeRef: route.routeRef.trim(),
-                    displayName: route.displayName.trim(),
-                    description: route.description.trim(),
-                    destinationWorkItemRef: route.destinationWorkItemRef,
-                    registrationRef:
-                      destination?.nodeKind === 'business-tool' && tool?.publishedRevision != null
-                        ? { id: tool.id, revision: tool.publishedRevision }
-                        : null,
-                    fallback: index === routes.length - 1,
-                  }
-                }),
+                invocationContractId: item.collaborationContractId,
               },
             ]
           }),
-        },
-      )
+        orderedDispatchConfigurations: dispatchItems.flatMap((classifier) => {
+          const routes = orderedDispatchRoutes[classifier.workItemRef] ?? []
+          if (routes.length === 0) return []
+          return [
+            {
+              classifierWorkItemRef: classifier.workItemRef,
+              routes: routes.map((route, index) => {
+                const destination = props.type.authoringManifest.workItems.find(
+                  (item) => item.workItemRef === route.destinationWorkItemRef,
+                )
+                const tool = (props.toolsByWorkItem[route.destinationWorkItemRef] ?? []).find(
+                  (candidate) =>
+                    candidate.id === route.toolId && candidate.selection === 'selectable',
+                )
+                return {
+                  routeRef: route.routeRef.trim(),
+                  displayName: route.displayName.trim(),
+                  description: route.description.trim(),
+                  destinationWorkItemRef: route.destinationWorkItemRef,
+                  registrationRef:
+                    destination?.nodeKind === 'business-tool' && tool?.publishedRevision != null
+                      ? { id: tool.id, revision: tool.publishedRevision }
+                      : null,
+                  fallback: index === routes.length - 1,
+                }
+              }),
+            },
+          ]
+        }),
+      }
+      const draft =
+        editingJob === null
+          ? await api.post<JobTemplate>(
+              `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/job-templates`,
+              body,
+            )
+          : await api.put<JobTemplate>(
+              `/api/digital-employee-job-templates/${encodeURIComponent(editingJob.id)}`,
+              body,
+            )
       await api.post(`/api/digital-employee-job-templates/${encodeURIComponent(draft.id)}/publish`)
       return draft
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['digital-employee-job-templates', props.typeRef] })
       setOpen(false)
+      setEditingJob(null)
       setName('')
       setDescription('')
       setBindings({})
       setCollaborationBindings({})
       setOrderedDispatchRoutes({})
+      setValidationAttempt(0)
     },
   })
+  const resetDraft = () => {
+    setName('')
+    setDescription('')
+    setBindings({})
+    setCollaborationBindings({})
+    setOrderedDispatchRoutes({})
+    dispatchOrdinal.current = 0
+  }
+  const openNew = () => {
+    resetDraft()
+    setEditingJob(null)
+    setEditorWorkItemRef(props.type.authoringManifest.workItems[0]?.workItemRef ?? '')
+    setValidationAttempt(0)
+    setOpen(true)
+  }
+  const openExisting = (job: JobTemplate) => {
+    dispatchOrdinal.current = 0
+    setEditingJob(job)
+    setEditorWorkItemRef(props.type.authoringManifest.workItems[0]?.workItemRef ?? '')
+    setValidationAttempt(0)
+    setName(job.name)
+    setDescription(job.draft.description)
+    setBindings(
+      Object.fromEntries(
+        job.draft.defaultToolBindings.map((binding) => [
+          `${binding.workItemRef}/${binding.slotRef}`,
+          binding.registrationRef.id,
+        ]),
+      ),
+    )
+    setCollaborationBindings(
+      Object.fromEntries(
+        job.draft.defaultCollaborationBindings.map((binding) => [
+          binding.workItemRef,
+          binding.targetEmployeeRef.id,
+        ]),
+      ),
+    )
+    setOrderedDispatchRoutes(
+      Object.fromEntries(
+        job.draft.orderedDispatchConfigurations.map((configuration) => [
+          configuration.classifierWorkItemRef,
+          configuration.routes.map((route) => ({
+            localRef: `${configuration.classifierWorkItemRef}-${++dispatchOrdinal.current}`,
+            routeRef: route.routeRef,
+            displayName: route.displayName,
+            description: route.description,
+            destinationWorkItemRef: route.destinationWorkItemRef,
+            toolId: route.registrationRef?.id ?? '',
+          })),
+        ]),
+      ),
+    )
+    setOpen(true)
+  }
+  const closeEditor = () => {
+    setOpen(false)
+    setEditingJob(null)
+    setValidationAttempt(0)
+    resetDraft()
+  }
   const laneOptional = new Map(
     props.type.authoringManifest.lifecycleRegions.flatMap((region) =>
       region.responsibilityLanes.map((lane) => [lane.laneId, lane.optional] as const),
@@ -1312,8 +1588,7 @@ function JobTemplatesPanel(props: {
     item.responsibilityLaneId === null ||
     laneOptional.get(item.responsibilityLaneId) !== true ||
     activeOptionalLanes.has(item.responsibilityLaneId)
-  const dispatchComplete = dispatchItems.every((classifier) => {
-    if (!itemEnabled(classifier)) return true
+  const dispatchItemComplete = (classifier: WorkItem): boolean => {
     const routes = orderedDispatchRoutes[classifier.workItemRef] ?? []
     if (routes.length === 0) return false
     return routes.every((route) => {
@@ -1329,7 +1604,10 @@ function JobTemplatesPanel(props: {
           : destination.nodeKind === 'business-tool' && route.toolId !== '')
       )
     })
-  })
+  }
+  const dispatchComplete = dispatchItems.every(
+    (classifier) => !itemEnabled(classifier) || dispatchItemComplete(classifier),
+  )
   const complete =
     configurableSlots.every(
       ({ item, slot }) =>
@@ -1337,12 +1615,83 @@ function JobTemplatesPanel(props: {
         !slot.required ||
         Boolean(bindings[`${item.workItemRef}/${slot.slotRef}`]),
     ) && dispatchComplete
+  const requiredMissingWorkItemRefs = new Set<string>([
+    ...configurableSlots.flatMap(({ item, slot }) =>
+      slot.required && itemEnabled(item) && !bindings[`${item.workItemRef}/${slot.slotRef}`]
+        ? [item.workItemRef]
+        : [],
+    ),
+    ...dispatchItems.flatMap((item) =>
+      itemEnabled(item) && !dispatchItemComplete(item) ? [item.workItemRef] : [],
+    ),
+  ])
+  const selectedEditorItem =
+    props.type.authoringManifest.workItems.find((item) => item.workItemRef === editorWorkItemRef) ??
+    props.type.authoringManifest.workItems[0] ??
+    null
+  const jobCardState = (
+    item: WorkItem,
+  ): { state: 'configured' | 'missing' | 'neutral'; detail: string; attention?: boolean } => {
+    const optionalLane =
+      item.responsibilityLaneId !== null && laneOptional.get(item.responsibilityLaneId) === true
+    let configured = item.nodeKind === 'system'
+    if (item.nodeKind === 'collaboration') {
+      configured = Boolean(collaborationBindings[item.workItemRef])
+    } else if (item.orderedDispatchAuthoring !== null) {
+      configured = dispatchItemComplete(item)
+    } else if (item.nodeKind === 'business-tool') {
+      const slots = configurableSlots.filter(
+        (candidate) => candidate.item.workItemRef === item.workItemRef,
+      )
+      const requiredSlots = slots.filter((candidate) => candidate.slot.required)
+      configured =
+        slots.length === 0 ||
+        (requiredSlots.length > 0
+          ? requiredSlots.every((candidate) =>
+              Boolean(bindings[`${item.workItemRef}/${candidate.slot.slotRef}`]),
+            )
+          : slots.some((candidate) =>
+              Boolean(bindings[`${item.workItemRef}/${candidate.slot.slotRef}`]),
+            ))
+    }
+    const requiredMissing = requiredMissingWorkItemRefs.has(item.workItemRef)
+    return configured
+      ? {
+          state: 'configured',
+          detail:
+            item.nodeKind === 'system'
+              ? zh
+                ? '平台固定规则'
+                : 'Platform fixed rule'
+              : zh
+                ? '已配置'
+                : 'Configured',
+        }
+      : {
+          state: 'missing',
+          detail: requiredMissing
+            ? zh
+              ? '必选职责尚未配置'
+              : 'Required duty is not configured'
+            : optionalLane
+              ? zh
+                ? '未启用这项可选能力'
+                : 'Optional capability is disabled'
+              : zh
+                ? '尚未配置'
+                : 'Not configured',
+          ...(requiredMissing && validationAttempt > 0 ? { attention: true } : {}),
+        }
+  }
   const firstMissingToolItem = configurableSlots.find(
     ({ item, role, slot }) =>
       slot.required &&
       itemEnabled(item) &&
       !(props.toolsByWorkItem[item.workItemRef] ?? []).some(
-        (tool) => tool.state === 'published' && tool.content.roleRef === role.roleRef,
+        (tool) =>
+          tool.state === 'published' &&
+          tool.selection === 'selectable' &&
+          tool.content.roleRef === role.roleRef,
       ),
   )?.item
   const addDispatchRoute = (classifier: WorkItem) => {
@@ -1392,28 +1741,82 @@ function JobTemplatesPanel(props: {
       ),
     }))
   }
+  const submitJob = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!complete) {
+      const firstMissing = [...requiredMissingWorkItemRefs][0]
+      setValidationAttempt((current) => current + 1)
+      if (firstMissing !== undefined) {
+        setEditorWorkItemRef(firstMissing)
+        window.setTimeout(() => {
+          document
+            .getElementById(`job-duty-${firstMissing}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 0)
+      }
+      return
+    }
+    save.mutate()
+  }
   return (
-    <section className="employee-node-panel">
+    <section className={`employee-node-panel${open ? ' job-template-detail-editor' : ''}`}>
       <header>
         <div>
           <span className="employee-node-panel__eyebrow">{zh ? '岗位模板' : 'Job templates'}</span>
           <h2>
-            {zh ? '给每个职责节点设定默认工具' : 'Choose a default tool for every responsibility'}
+            {open
+              ? editingJob === null
+                ? zh
+                  ? '新建岗位模板'
+                  : 'New job template'
+                : zh
+                  ? `修改岗位模板：${editingJob.name}`
+                  : `Edit job template: ${editingJob.name}`
+              : zh
+                ? '给每个职责节点设定默认工具'
+                : 'Choose a default tool for every responsibility'}
           </h2>
           <p>
-            {zh
-              ? '员工创建时只需选岗位模板；仍可在员工上覆盖个别节点。'
-              : 'An employee chooses one job template and can override individual nodes later.'}
+            {open
+              ? zh
+                ? '点击职责卡片配置当前节点；绿色表示已配置，黄色表示尚未配置或未启用。'
+                : 'Select a duty card to configure it. Green means configured; yellow means missing or disabled.'
+              : zh
+                ? '员工创建时只需选岗位模板；仍可在员工上覆盖个别节点。'
+                : 'An employee chooses one job template and can override individual nodes later.'}
           </p>
         </div>
-        <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
-          {zh ? '新建岗位模板' : 'New job template'}
-        </button>
+        {open ? (
+          <div className="employee-summary-card__actions">
+            <button type="button" className="btn" onClick={closeEditor} disabled={save.isPending}>
+              {zh ? '取消编辑' : 'Cancel editing'}
+            </button>
+            <button
+              type="submit"
+              form="employee-job-form"
+              className="btn btn--primary"
+              disabled={name.trim() === '' || save.isPending}
+            >
+              {save.isPending
+                ? zh
+                  ? '正在校验并发布…'
+                  : 'Validating and publishing…'
+                : editingJob === null
+                  ? zh
+                    ? '保存并发布'
+                    : 'Save and publish'
+                  : zh
+                    ? '保存并发布新版本'
+                    : 'Save and publish new revision'}
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn--primary" onClick={openNew}>
+            {zh ? '新建岗位模板' : 'New job template'}
+          </button>
+        )}
       </header>
-      {props.selectedItem ? (
-        <WorkItemContractCard item={props.selectedItem} language={props.language} />
-      ) : null}
-      {firstMissingToolItem !== undefined ? (
+      {!open && firstMissingToolItem !== undefined ? (
         <NoticeBanner
           tone="info"
           title={zh ? '下一步：给必需工作项增加工具' : 'Next: add a required tool'}
@@ -1433,375 +1836,451 @@ function JobTemplatesPanel(props: {
           </Link>
         </NoticeBanner>
       ) : null}
-      {query.isPending ? <LoadingState /> : null}
-      {query.isError ? <ErrorBanner error={query.error} /> : null}
-      <div className="employee-card-list">
-        {query.data?.items.map((job) => (
-          <article key={job.id} className="employee-summary-card">
-            <div>
-              <strong>{job.name}</strong>
-              <p>{job.draft.description}</p>
-            </div>
-            <StatusChip kind={job.publishedRevision === null ? 'neutral' : 'success'}>
-              {job.publishedRevision === null ? (zh ? '草稿' : 'Draft') : zh ? '可用' : 'Published'}
-            </StatusChip>
-          </article>
-        ))}
-      </div>
-      <Dialog
-        open={open}
-        onClose={() => setOpen(false)}
-        title={zh ? '新建岗位模板' : 'New job template'}
-        size="lg"
-        dismissDisabled={create.isPending}
-        footer={
-          <>
-            <button type="button" className="btn" onClick={() => setOpen(false)}>
-              {zh ? '取消' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              form="employee-job-form"
-              className="btn btn--primary"
-              disabled={!complete || name.trim() === '' || create.isPending}
+      {!open && query.isPending ? <LoadingState /> : null}
+      {!open && query.isError ? <ErrorBanner error={query.error} /> : null}
+      {!open ? (
+        <div className="employee-card-list">
+          {query.data?.items.map((job) => (
+            <article key={job.id} className="employee-summary-card">
+              <div>
+                <strong>{job.name}</strong>
+                <p>{job.draft.description}</p>
+              </div>
+              <div className="employee-summary-card__actions">
+                <StatusChip kind={job.publishedRevision === null ? 'neutral' : 'success'}>
+                  {job.publishedRevision === null
+                    ? zh
+                      ? '草稿'
+                      : 'Draft'
+                    : zh
+                      ? `可用 · v${job.publishedRevision}`
+                      : `Published · v${job.publishedRevision}`}
+                </StatusChip>
+                <button type="button" className="btn btn--sm" onClick={() => openExisting(job)}>
+                  {zh ? '修改' : 'Edit'}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      {open ? (
+        <form id="employee-job-form" className="employee-job-editor__form" onSubmit={submitJob}>
+          <section className="employee-job-editor__identity">
+            <Field label={zh ? '岗位名称' : 'Template name'} required>
+              <TextInput value={name} onChange={setName} autoFocus />
+            </Field>
+            <Field label={zh ? '说明' : 'Description'}>
+              <TextArea value={description} onChange={setDescription} />
+            </Field>
+          </section>
+          <ToolboxResponsibilityMap
+            type={props.type}
+            selectedWorkItemRef={selectedEditorItem?.workItemRef ?? null}
+            toolsByWorkItem={props.toolsByWorkItem}
+            language={props.language}
+            onSelect={setEditorWorkItemRef}
+            title={zh ? '配置岗位职责' : 'Configure job duties'}
+            description={
+              zh
+                ? '这是与工具箱一致的固定职责图。点击卡片后，只编辑该职责；可选泳道不配置也可以发布。'
+                : 'This is the same fixed duty map as the toolbox. Select one card to edit that duty; optional lanes may remain disabled.'
+            }
+            legend={zh ? '绿色已配置 · 黄色未配置' : 'Green configured · yellow missing'}
+            cardIdPrefix="job-duty"
+            attentionPulse={validationAttempt}
+            cardState={jobCardState}
+          />
+          {validationAttempt > 0 && !complete ? (
+            <NoticeBanner
+              tone="warning"
+              title={zh ? '还有必选职责没有配置' : 'Required duties are still missing'}
             >
-              {zh ? '保存并发布' : 'Save and publish'}
-            </button>
-          </>
-        }
-      >
-        <form
-          id="employee-job-form"
-          className="employee-dialog-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            create.mutate()
-          }}
-        >
-          <Field label={zh ? '岗位名称' : 'Template name'} required>
-            <TextInput value={name} onChange={setName} autoFocus />
-          </Field>
-          <Field label={zh ? '说明' : 'Description'}>
-            <TextArea value={description} onChange={setDescription} />
-          </Field>
-          <div className="job-binding-list">
-            {dispatchItems.map((classifier) => {
-              const authoring = classifier.orderedDispatchAuthoring!
-              const routes = orderedDispatchRoutes[classifier.workItemRef] ?? []
-              return (
-                <section
-                  key={`dispatch/${classifier.workItemRef}`}
-                  className="job-binding-group job-dispatch-editor"
-                  data-testid={`job-dispatch-${classifier.workItemRef}`}
-                >
-                  <header>
-                    <div>
-                      <strong>{localized(authoring.label, props.language)}</strong>
-                      <span>{localized(authoring.description, props.language)}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => addDispatchRoute(classifier)}
-                    >
-                      {zh ? '增加错误类型' : 'Add failure type'}
-                    </button>
-                  </header>
-                  {routes.length === 0 ? (
-                    <p className="job-dispatch-editor__empty">
-                      {zh
-                        ? '未配置：这名数字员工不会启用该泳道，也不会订阅对应事件。'
-                        : 'Not configured: this lane stays disabled and its events are not subscribed.'}
-                    </p>
-                  ) : (
-                    <div className="job-dispatch-routes">
-                      {routes.map((route, index) => {
-                        const destination = props.type.authoringManifest.workItems.find(
-                          (item) => item.workItemRef === route.destinationWorkItemRef,
-                        )
-                        const candidates = (
-                          props.toolsByWorkItem[route.destinationWorkItemRef] ?? []
-                        ).filter((tool) => tool.state === 'published')
-                        return (
-                          <article key={route.localRef} className="job-dispatch-route">
-                            <header>
-                              <b>{index + 1}</b>
-                              <strong>
-                                {route.displayName.trim() ||
-                                  (zh ? '未命名错误类型' : 'Unnamed failure type')}
-                              </strong>
-                              {index === routes.length - 1 ? (
-                                <StatusChip kind="warn">{zh ? '兜底类型' : 'Fallback'}</StatusChip>
-                              ) : null}
-                              <div className="job-dispatch-route__actions">
-                                <button
-                                  type="button"
-                                  className="btn btn--sm"
-                                  aria-label={zh ? '提高优先级' : 'Move up'}
-                                  disabled={index === 0}
-                                  onClick={() =>
-                                    moveDispatchRoute(classifier.workItemRef, index, -1)
-                                  }
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn--sm"
-                                  aria-label={zh ? '降低优先级' : 'Move down'}
-                                  disabled={index === routes.length - 1}
-                                  onClick={() =>
-                                    moveDispatchRoute(classifier.workItemRef, index, 1)
-                                  }
-                                >
-                                  ↓
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn--sm btn--danger"
-                                  onClick={() =>
-                                    removeDispatchRoute(classifier.workItemRef, route.localRef)
-                                  }
-                                >
-                                  {zh ? '删除' : 'Remove'}
-                                </button>
-                              </div>
-                            </header>
-                            <div className="job-dispatch-route__fields">
-                              <Field
-                                label={zh ? '类型标识' : 'Type key'}
-                                hint={
-                                  zh
-                                    ? '写入确定性 envelope，例如 compile-error'
-                                    : 'Written into the deterministic envelope, e.g. compile-error'
-                                }
-                                required
-                              >
-                                <TextInput
-                                  value={route.routeRef}
-                                  onChange={(value) =>
-                                    updateDispatchRoute(classifier.workItemRef, route.localRef, {
-                                      routeRef: value,
-                                    })
-                                  }
-                                />
-                              </Field>
-                              <Field label={zh ? '错误类型名称' : 'Failure type name'} required>
-                                <TextInput
-                                  value={route.displayName}
-                                  onChange={(value) =>
-                                    updateDispatchRoute(classifier.workItemRef, route.localRef, {
-                                      displayName: value,
-                                    })
-                                  }
-                                />
-                              </Field>
-                              <Field label={zh ? '处理方式' : 'Handler'} required>
-                                <Select
-                                  value={route.destinationWorkItemRef}
-                                  onChange={(value) =>
-                                    updateDispatchRoute(classifier.workItemRef, route.localRef, {
-                                      destinationWorkItemRef: value,
-                                      toolId: '',
-                                    })
-                                  }
-                                  options={authoring.destinationWorkItemRefs.flatMap(
-                                    (workItemRef) => {
-                                      const item = props.type.authoringManifest.workItems.find(
-                                        (candidate) => candidate.workItemRef === workItemRef,
-                                      )
-                                      return item === undefined
-                                        ? []
-                                        : [
-                                            {
-                                              value: workItemRef,
-                                              label: localized(item.label, props.language),
-                                            },
-                                          ]
-                                    },
-                                  )}
-                                />
-                              </Field>
-                              {destination?.nodeKind === 'business-tool' ? (
-                                <Field label={zh ? '执行工具' : 'Executor'} required>
-                                  <Select
-                                    value={route.toolId}
-                                    onChange={(value) =>
-                                      updateDispatchRoute(classifier.workItemRef, route.localRef, {
-                                        toolId: value,
-                                      })
-                                    }
-                                    placeholder={
-                                      candidates.length === 0
-                                        ? zh
-                                          ? '先到对应节点增加并发布工具'
-                                          : 'Publish a tool on the target node first'
-                                        : zh
-                                          ? '选择 Agent、Workflow 或脚本'
-                                          : 'Choose an Agent, Workflow, or program'
-                                    }
-                                    options={candidates.map((tool) => ({
-                                      value: tool.id,
-                                      label: tool.content.displayName,
-                                    }))}
-                                  />
-                                </Field>
-                              ) : (
-                                <NoticeBanner
-                                  tone="info"
-                                  title={zh ? '由员工协同配置处理' : 'Handled by collaboration'}
-                                >
-                                  {zh
-                                    ? '在下方“协同其他数字员工”选择目标员工；运行时会调起并等待其结果。'
-                                    : 'Choose the target under “Collaborate with another employee” below; runtime invokes it and waits for its result.'}
-                                </NoticeBanner>
-                              )}
-                              <Field label={zh ? '识别说明' : 'Matching description'}>
-                                <TextArea
-                                  value={route.description}
-                                  onChange={(value) =>
-                                    updateDispatchRoute(classifier.workItemRef, route.localRef, {
-                                      description: value,
-                                    })
-                                  }
-                                />
-                              </Field>
-                            </div>
-                          </article>
-                        )
-                      })}
-                    </div>
-                  )}
-                </section>
-              )
-            })}
-            {configurableGroups.map(({ item, slots }) => (
-              <section key={item.workItemRef} className="job-binding-group">
-                <header>
-                  <strong>{localized(item.label, props.language)}</strong>
-                  {item.responsibilityLaneId !== null &&
-                  laneOptional.get(item.responsibilityLaneId) === true ? (
-                    <StatusChip kind="neutral">
-                      {zh ? '可选能力 · 配置后启用' : 'Optional · enabled when configured'}
-                    </StatusChip>
-                  ) : slots.length > 1 ? (
-                    <span>
-                      {zh
-                        ? `${slots.length} 类工具槽位 · 按显示顺序动态调度`
-                        : `${slots.length} tool slots · dispatched in display order`}
-                    </span>
-                  ) : null}
-                </header>
-                {slots.map(({ role, slot }) => {
-                  const key = `${item.workItemRef}/${slot.slotRef}`
-                  const optionalLane =
-                    item.responsibilityLaneId !== null &&
-                    laneOptional.get(item.responsibilityLaneId) === true
-                  const candidates = (props.toolsByWorkItem[item.workItemRef] ?? []).filter(
-                    (tool) => tool.state === 'published' && tool.content.roleRef === role.roleRef,
-                  )
+              {zh
+                ? '已高亮对应黄色卡片，并定位到第一项；补齐后再次保存发布。'
+                : 'The missing yellow cards are highlighted and the first one is selected. Configure them, then publish again.'}
+            </NoticeBanner>
+          ) : null}
+          <section className="employee-job-duty-editor">
+            <header>
+              <div>
+                <span>{zh ? '当前职责' : 'Selected duty'}</span>
+                <strong>
+                  {selectedEditorItem === null
+                    ? zh
+                      ? '未选择'
+                      : 'None selected'
+                    : localized(selectedEditorItem.label, props.language)}
+                </strong>
+                {selectedEditorItem === null ? null : (
+                  <p>{localized(selectedEditorItem.description, props.language)}</p>
+                )}
+              </div>
+            </header>
+            {selectedEditorItem?.nodeKind === 'system' ? (
+              <NoticeBanner tone="info" title={zh ? '平台固定职责' : 'Platform-fixed duty'}>
+                {zh
+                  ? '这个节点由平台按固定规则执行，不需要岗位再选择工具。'
+                  : 'The platform executes this node by fixed rules; the job does not select a tool.'}
+              </NoticeBanner>
+            ) : null}
+            <div className="job-binding-list">
+              {dispatchItems
+                .filter((classifier) => classifier.workItemRef === selectedEditorItem?.workItemRef)
+                .map((classifier) => {
+                  const authoring = classifier.orderedDispatchAuthoring!
+                  const routes = orderedDispatchRoutes[classifier.workItemRef] ?? []
                   return (
-                    <Field
-                      key={key}
-                      label={localized(slot.label, props.language)}
-                      hint={
-                        slot.required
-                          ? localized(slot.description, props.language) +
-                            (item.responsibilityLaneId !== null &&
-                            laneOptional.get(item.responsibilityLaneId) === true
-                              ? zh
-                                ? ' · 启用本泳道后必填'
-                                : ' · Required after enabling this lane'
-                              : '')
-                          : `${localized(slot.description, props.language)} · ${zh ? '可选，未绑定时使用未知错误兜底' : 'Optional; falls back to unknown'}`
-                      }
-                      required={
-                        slot.required &&
-                        (item.responsibilityLaneId === null ||
-                          laneOptional.get(item.responsibilityLaneId) !== true)
-                      }
+                    <section
+                      key={`dispatch/${classifier.workItemRef}`}
+                      className="job-binding-group job-dispatch-editor"
+                      data-testid={`job-dispatch-${classifier.workItemRef}`}
                     >
-                      <Select
-                        value={bindings[key] ?? ''}
-                        onChange={(value) =>
-                          setBindings((current) => ({ ...current, [key]: value }))
-                        }
-                        placeholder={
-                          candidates.length === 0
-                            ? zh
-                              ? '请先在该节点增加工具'
-                              : 'Add a tool to this node first'
-                            : zh
-                              ? '选择默认工具'
-                              : 'Choose default tool'
-                        }
-                        options={[
-                          ...(!slot.required || optionalLane
-                            ? [
-                                {
-                                  value: '',
-                                  label: optionalLane
-                                    ? zh
-                                      ? '不启用这项能力'
-                                      : 'Disable this capability'
-                                    : zh
-                                      ? '不配置（使用未知错误兜底）'
-                                      : 'Not configured (use unknown fallback)',
-                                },
-                              ]
-                            : []),
-                          ...candidates.map((tool) => ({
-                            value: tool.id,
-                            label: tool.content.displayName,
-                          })),
-                        ]}
-                      />
-                    </Field>
+                      <header>
+                        <div>
+                          <strong>{localized(authoring.label, props.language)}</strong>
+                          <span>{localized(authoring.description, props.language)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => addDispatchRoute(classifier)}
+                        >
+                          {zh ? '增加错误类型' : 'Add failure type'}
+                        </button>
+                      </header>
+                      {routes.length === 0 ? (
+                        <p className="job-dispatch-editor__empty">
+                          {zh
+                            ? '未配置：这名数字员工不会启用该泳道，也不会订阅对应事件。'
+                            : 'Not configured: this lane stays disabled and its events are not subscribed.'}
+                        </p>
+                      ) : (
+                        <div className="job-dispatch-routes">
+                          {routes.map((route, index) => {
+                            const destination = props.type.authoringManifest.workItems.find(
+                              (item) => item.workItemRef === route.destinationWorkItemRef,
+                            )
+                            const candidates = (
+                              props.toolsByWorkItem[route.destinationWorkItemRef] ?? []
+                            ).filter(
+                              (tool) =>
+                                tool.state === 'published' && tool.selection === 'selectable',
+                            )
+                            return (
+                              <article key={route.localRef} className="job-dispatch-route">
+                                <header>
+                                  <b>{index + 1}</b>
+                                  <strong>
+                                    {route.displayName.trim() ||
+                                      (zh ? '未命名错误类型' : 'Unnamed failure type')}
+                                  </strong>
+                                  {index === routes.length - 1 ? (
+                                    <StatusChip kind="warn">
+                                      {zh ? '兜底类型' : 'Fallback'}
+                                    </StatusChip>
+                                  ) : null}
+                                  <div className="job-dispatch-route__actions">
+                                    <button
+                                      type="button"
+                                      className="btn btn--sm"
+                                      aria-label={zh ? '提高优先级' : 'Move up'}
+                                      disabled={index === 0}
+                                      onClick={() =>
+                                        moveDispatchRoute(classifier.workItemRef, index, -1)
+                                      }
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn--sm"
+                                      aria-label={zh ? '降低优先级' : 'Move down'}
+                                      disabled={index === routes.length - 1}
+                                      onClick={() =>
+                                        moveDispatchRoute(classifier.workItemRef, index, 1)
+                                      }
+                                    >
+                                      ↓
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn--sm btn--danger"
+                                      onClick={() =>
+                                        removeDispatchRoute(classifier.workItemRef, route.localRef)
+                                      }
+                                    >
+                                      {zh ? '删除' : 'Remove'}
+                                    </button>
+                                  </div>
+                                </header>
+                                <div className="job-dispatch-route__fields">
+                                  <Field
+                                    label={zh ? '类型标识' : 'Type key'}
+                                    hint={
+                                      zh
+                                        ? '写入确定性 envelope，例如 compile-error'
+                                        : 'Written into the deterministic envelope, e.g. compile-error'
+                                    }
+                                    required
+                                  >
+                                    <TextInput
+                                      value={route.routeRef}
+                                      onChange={(value) =>
+                                        updateDispatchRoute(
+                                          classifier.workItemRef,
+                                          route.localRef,
+                                          {
+                                            routeRef: value,
+                                          },
+                                        )
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label={zh ? '错误类型名称' : 'Failure type name'} required>
+                                    <TextInput
+                                      value={route.displayName}
+                                      onChange={(value) =>
+                                        updateDispatchRoute(
+                                          classifier.workItemRef,
+                                          route.localRef,
+                                          {
+                                            displayName: value,
+                                          },
+                                        )
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label={zh ? '处理方式' : 'Handler'} required>
+                                    <Select
+                                      value={route.destinationWorkItemRef}
+                                      onChange={(value) =>
+                                        updateDispatchRoute(
+                                          classifier.workItemRef,
+                                          route.localRef,
+                                          {
+                                            destinationWorkItemRef: value,
+                                            toolId: '',
+                                          },
+                                        )
+                                      }
+                                      options={authoring.destinationWorkItemRefs.flatMap(
+                                        (workItemRef) => {
+                                          const item = props.type.authoringManifest.workItems.find(
+                                            (candidate) => candidate.workItemRef === workItemRef,
+                                          )
+                                          return item === undefined
+                                            ? []
+                                            : [
+                                                {
+                                                  value: workItemRef,
+                                                  label: localized(item.label, props.language),
+                                                },
+                                              ]
+                                        },
+                                      )}
+                                    />
+                                  </Field>
+                                  {destination?.nodeKind === 'business-tool' ? (
+                                    <Field label={zh ? '执行工具' : 'Executor'} required>
+                                      <Select
+                                        value={route.toolId}
+                                        onChange={(value) =>
+                                          updateDispatchRoute(
+                                            classifier.workItemRef,
+                                            route.localRef,
+                                            {
+                                              toolId: value,
+                                            },
+                                          )
+                                        }
+                                        placeholder={
+                                          candidates.length === 0
+                                            ? zh
+                                              ? '先到对应节点增加并发布工具'
+                                              : 'Publish a tool on the target node first'
+                                            : zh
+                                              ? '选择 Agent、Workflow 或脚本'
+                                              : 'Choose an Agent, Workflow, or program'
+                                        }
+                                        options={candidates.map((tool) => ({
+                                          value: tool.id,
+                                          label: tool.content.displayName,
+                                        }))}
+                                      />
+                                    </Field>
+                                  ) : (
+                                    <NoticeBanner
+                                      tone="info"
+                                      title={zh ? '由员工协同配置处理' : 'Handled by collaboration'}
+                                    >
+                                      {zh
+                                        ? '在下方“协同其他数字员工”选择目标员工；运行时会调起并等待其结果。'
+                                        : 'Choose the target under “Collaborate with another employee” below; runtime invokes it and waits for its result.'}
+                                    </NoticeBanner>
+                                  )}
+                                  <Field label={zh ? '识别说明' : 'Matching description'}>
+                                    <TextArea
+                                      value={route.description}
+                                      onChange={(value) =>
+                                        updateDispatchRoute(
+                                          classifier.workItemRef,
+                                          route.localRef,
+                                          {
+                                            description: value,
+                                          },
+                                        )
+                                      }
+                                    />
+                                  </Field>
+                                </div>
+                              </article>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </section>
                   )
                 })}
-              </section>
-            ))}
-            {props.type.authoringManifest.workItems
-              .filter((item) => item.nodeKind === 'collaboration')
-              .map((item) => (
-                <Field
-                  key={`collaboration/${item.workItemRef}`}
-                  label={localized(item.label, props.language)}
-                  hint={
-                    zh
-                      ? '可选：需要跨仓协作时，调起哪一名数字员工'
-                      : 'Optional: employee invoked for cross-scope collaboration'
-                  }
-                >
-                  <Select
-                    value={collaborationBindings[item.workItemRef] ?? ''}
-                    onChange={(value) =>
-                      setCollaborationBindings((current) => ({
-                        ...current,
-                        [item.workItemRef]: value,
-                      }))
+              {configurableGroups
+                .filter(({ item }) => item.workItemRef === selectedEditorItem?.workItemRef)
+                .map(({ item, slots }) => (
+                  <section key={item.workItemRef} className="job-binding-group">
+                    <header>
+                      <strong>{localized(item.label, props.language)}</strong>
+                      {item.responsibilityLaneId !== null &&
+                      laneOptional.get(item.responsibilityLaneId) === true ? (
+                        <StatusChip kind="neutral">
+                          {zh ? '可选能力 · 配置后启用' : 'Optional · enabled when configured'}
+                        </StatusChip>
+                      ) : slots.length > 1 ? (
+                        <span>
+                          {zh
+                            ? `${slots.length} 类工具槽位 · 按显示顺序动态调度`
+                            : `${slots.length} tool slots · dispatched in display order`}
+                        </span>
+                      ) : null}
+                    </header>
+                    {slots.map(({ role, slot }) => {
+                      const key = `${item.workItemRef}/${slot.slotRef}`
+                      const optionalLane =
+                        item.responsibilityLaneId !== null &&
+                        laneOptional.get(item.responsibilityLaneId) === true
+                      const candidates = (props.toolsByWorkItem[item.workItemRef] ?? []).filter(
+                        (tool) =>
+                          tool.state === 'published' &&
+                          tool.selection === 'selectable' &&
+                          tool.content.roleRef === role.roleRef,
+                      )
+                      return (
+                        <Field
+                          key={key}
+                          label={localized(slot.label, props.language)}
+                          hint={
+                            slot.required
+                              ? localized(slot.description, props.language) +
+                                (item.responsibilityLaneId !== null &&
+                                laneOptional.get(item.responsibilityLaneId) === true
+                                  ? zh
+                                    ? ' · 启用本泳道后必填'
+                                    : ' · Required after enabling this lane'
+                                  : '')
+                              : `${localized(slot.description, props.language)} · ${zh ? '可选，未绑定时使用未知错误兜底' : 'Optional; falls back to unknown'}`
+                          }
+                          required={
+                            slot.required &&
+                            (item.responsibilityLaneId === null ||
+                              laneOptional.get(item.responsibilityLaneId) !== true)
+                          }
+                        >
+                          <Select
+                            value={bindings[key] ?? ''}
+                            onChange={(value) =>
+                              setBindings((current) => ({ ...current, [key]: value }))
+                            }
+                            placeholder={
+                              candidates.length === 0
+                                ? zh
+                                  ? '请先在该节点增加工具'
+                                  : 'Add a tool to this node first'
+                                : zh
+                                  ? '选择默认工具'
+                                  : 'Choose default tool'
+                            }
+                            options={[
+                              ...(!slot.required || optionalLane
+                                ? [
+                                    {
+                                      value: '',
+                                      label: optionalLane
+                                        ? zh
+                                          ? '不启用这项能力'
+                                          : 'Disable this capability'
+                                        : zh
+                                          ? '不配置（使用未知错误兜底）'
+                                          : 'Not configured (use unknown fallback)',
+                                    },
+                                  ]
+                                : []),
+                              ...candidates.map((tool) => ({
+                                value: tool.id,
+                                label: tool.content.displayName,
+                              })),
+                            ]}
+                          />
+                        </Field>
+                      )
+                    })}
+                  </section>
+                ))}
+              {props.type.authoringManifest.workItems
+                .filter(
+                  (item) =>
+                    item.nodeKind === 'collaboration' &&
+                    item.workItemRef === selectedEditorItem?.workItemRef,
+                )
+                .map((item) => (
+                  <Field
+                    key={`collaboration/${item.workItemRef}`}
+                    label={localized(item.label, props.language)}
+                    hint={
+                      zh
+                        ? '可选：需要跨仓协作时，调起哪一名数字员工'
+                        : 'Optional: employee invoked for cross-scope collaboration'
                     }
-                    searchable
-                    placeholder={zh ? '不启用协同，或选择数字员工' : 'Disabled, or choose employee'}
-                    options={[
-                      {
-                        value: '',
-                        label: zh ? '不启用员工协同' : 'Disable employee collaboration',
-                      },
-                      ...(employees.data?.items ?? [])
-                        .filter((employee) => employee.publishedRevision !== null)
-                        .map((employee) => ({
-                          value: employee.id,
-                          label: `${employee.name} · ${employee.published?.workScopeSummary ?? ''}`,
-                        })),
-                    ]}
-                  />
-                </Field>
-              ))}
-          </div>
-          {create.isError ? <ErrorBanner error={create.error} /> : null}
+                  >
+                    <Select
+                      value={collaborationBindings[item.workItemRef] ?? ''}
+                      onChange={(value) =>
+                        setCollaborationBindings((current) => ({
+                          ...current,
+                          [item.workItemRef]: value,
+                        }))
+                      }
+                      searchable
+                      placeholder={
+                        zh ? '不启用协同，或选择数字员工' : 'Disabled, or choose employee'
+                      }
+                      options={[
+                        {
+                          value: '',
+                          label: zh ? '不启用员工协同' : 'Disable employee collaboration',
+                        },
+                        ...(employees.data?.items ?? [])
+                          .filter((employee) => employee.publishedRevision !== null)
+                          .map((employee) => ({
+                            value: employee.id,
+                            label: `${employee.name} · ${employee.published?.workScopeSummary ?? ''}`,
+                          })),
+                      ]}
+                    />
+                  </Field>
+                ))}
+            </div>
+          </section>
+          {save.isError ? <ErrorBanner error={save.error} /> : null}
         </form>
-      </Dialog>
+      ) : null}
     </section>
   )
 }
@@ -1819,7 +2298,10 @@ function EmployeesPanel(props: {
   const [jobId, setJobId] = useState('')
   const [enabled, setEnabled] = useState<'enabled' | 'disabled'>('enabled')
   const firstVariant = props.type.workScopeAuthoring.variants[0]
-  const [scopeKind, setScopeKind] = useState(firstVariant?.kind ?? '')
+  const taskLaunchVariant = props.type.workScopeAuthoring.variants.find(
+    (variant) => variant.kind === 'task',
+  )
+  const [scopeKind, setScopeKind] = useState(taskLaunchVariant?.kind ?? firstVariant?.kind ?? '')
   const [scopeValues, setScopeValues] = useState<Record<string, string>>({})
   const employees = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', props.typeRef],
@@ -1846,7 +2328,9 @@ function EmployeesPanel(props: {
     enabled: open,
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
   })
-  const repositoryGroups = useQuery<{ items: Array<{ id: string; name: string }> }>({
+  const repositoryGroups = useQuery<{
+    items: Array<{ id: string; name: string; flatRepoCount?: number }>
+  }>({
     queryKey: ['repo-groups', 'employee-scope'],
     enabled: open,
     queryFn: ({ signal }) => api.get('/api/repo-groups', undefined, signal),
@@ -1860,7 +2344,7 @@ function EmployeesPanel(props: {
     setName('')
     setJobId('')
     setEnabled('enabled')
-    setScopeKind(firstVariant?.kind ?? '')
+    setScopeKind(taskLaunchVariant?.kind ?? firstVariant?.kind ?? '')
     setScopeValues({})
   }
   const openEditor = (employee: DigitalEmployeeDefinition | null) => {
@@ -1872,7 +2356,11 @@ function EmployeesPanel(props: {
       employee?.draft.workScope !== null && typeof employee?.draft.workScope === 'object'
         ? (employee.draft.workScope as Record<string, unknown>)
         : {}
-    setScopeKind(typeof scope.kind === 'string' ? scope.kind : (firstVariant?.kind ?? ''))
+    setScopeKind(
+      typeof scope.kind === 'string'
+        ? scope.kind
+        : (taskLaunchVariant?.kind ?? firstVariant?.kind ?? ''),
+    )
     setScopeValues(
       Object.fromEntries(
         Object.entries(scope).flatMap(([key, value]) =>
@@ -1928,6 +2416,26 @@ function EmployeesPanel(props: {
     selectedVariant.fields.every(
       (field) => !field.required || (scopeValues[field.fieldRef] ?? '').trim() !== '',
     )
+  const scopeSelection =
+    scopeKind === 'repository'
+      ? (scopeValues.repositoryId ?? '')
+      : scopeKind === 'repository-group'
+        ? `${GROUP_OPTION_PREFIX}${scopeValues.repositoryGroupId ?? ''}`
+        : 'task'
+  const changeScopeSelection = (value: string) => {
+    if (value === 'task') {
+      setScopeKind('task')
+      setScopeValues({})
+      return
+    }
+    if (value.startsWith(GROUP_OPTION_PREFIX)) {
+      setScopeKind('repository-group')
+      setScopeValues({ repositoryGroupId: value.slice(GROUP_OPTION_PREFIX.length) })
+      return
+    }
+    setScopeKind('repository')
+    setScopeValues({ repositoryId: value })
+  }
 
   return (
     <section className="employee-node-panel" data-testid="digital-employee-definitions">
@@ -2076,134 +2584,38 @@ function EmployeesPanel(props: {
           <Field
             label={localized(props.type.workScopeAuthoring.label, props.language)}
             hint={localized(props.type.workScopeAuthoring.description, props.language)}
-            group
+            required
           >
-            <Segmented
-              value={scopeKind}
-              onChange={(next) => {
-                setScopeKind(next)
-                setScopeValues({})
-              }}
+            <Select
+              data-testid="employee-scope-picker"
+              value={scopeSelection}
+              onChange={changeScopeSelection}
               ariaLabel={localized(props.type.workScopeAuthoring.label, props.language)}
-              options={props.type.workScopeAuthoring.variants.map((variant) => ({
-                value: variant.kind,
-                label: localized(variant.label, props.language),
-              }))}
+              searchable
+              options={[
+                {
+                  value: 'task',
+                  label: zh ? '任务启动时指定仓库' : 'Choose repository when starting a task',
+                },
+                ...(repositories.data?.items ?? []).map((repository) => ({
+                  value: repository.id,
+                  label: repository.urlRedacted ?? repository.id,
+                })),
+                ...(repositoryGroups.data?.items ?? []).map((group) => ({
+                  value: `${GROUP_OPTION_PREFIX}${group.id}`,
+                  label:
+                    group.flatRepoCount === undefined
+                      ? `${group.name}${zh ? '（仓库组）' : ' (group)'}`
+                      : zh
+                        ? `${group.name}（组 · ${group.flatRepoCount} 仓）`
+                        : `${group.name} (group · ${group.flatRepoCount} repos)`,
+                })),
+              ]}
             />
           </Field>
-          {selectedVariant?.fields.map((field) => (
-            <Field
-              key={field.fieldRef}
-              label={localized(field.label, props.language)}
-              hint={localized(field.description, props.language)}
-              required={field.required}
-            >
-              {field.inputKind === 'repository-picker' ? (
-                <Select
-                  value={scopeValues[field.fieldRef] ?? ''}
-                  onChange={(value) =>
-                    setScopeValues((current) => ({
-                      ...current,
-                      [field.fieldRef]: value,
-                    }))
-                  }
-                  placeholder={
-                    field.placeholder === null
-                      ? zh
-                        ? '请选择'
-                        : 'Choose'
-                      : localized(field.placeholder, props.language)
-                  }
-                  searchable
-                  options={(repositories.data?.items ?? []).map((repository) => ({
-                    value: repository.id,
-                    label: repository.urlRedacted ?? repository.id,
-                  }))}
-                />
-              ) : field.inputKind === 'repository-group-picker' ? (
-                <Select
-                  value={scopeValues[field.fieldRef] ?? ''}
-                  onChange={(value) =>
-                    setScopeValues((current) => ({
-                      ...current,
-                      [field.fieldRef]: value,
-                    }))
-                  }
-                  placeholder={
-                    field.placeholder === null
-                      ? zh
-                        ? '请选择'
-                        : 'Choose'
-                      : localized(field.placeholder, props.language)
-                  }
-                  searchable
-                  options={(repositoryGroups.data?.items ?? []).map((group) => ({
-                    value: group.id,
-                    label: group.name,
-                  }))}
-                />
-              ) : (
-                <TextInput
-                  value={scopeValues[field.fieldRef] ?? ''}
-                  placeholder={
-                    field.placeholder === null
-                      ? undefined
-                      : localized(field.placeholder, props.language)
-                  }
-                  onChange={(value) =>
-                    setScopeValues((current) => ({
-                      ...current,
-                      [field.fieldRef]: value,
-                    }))
-                  }
-                />
-              )}
-            </Field>
-          ))}
           {save.isError ? <ErrorBanner error={save.error} /> : null}
         </form>
       </Dialog>
-    </section>
-  )
-}
-
-function ScopePanel(props: { typeRef: string; language: string }): ReactElement {
-  const zh = props.language.startsWith('zh')
-  const query = useQuery<{ items: DigitalEmployeeDefinition[] }>({
-    queryKey: ['digital-employees', props.typeRef],
-    queryFn: ({ signal }) =>
-      api.get(
-        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/employees`,
-        undefined,
-        signal,
-      ),
-  })
-  return (
-    <section className="employee-node-panel">
-      <header>
-        <div>
-          <span className="employee-node-panel__eyebrow">{zh ? '适用范围' : 'Scope'}</span>
-          <h2>{zh ? '按员工查看当前负责范围' : 'Employee responsibility scopes'}</h2>
-          <p>
-            {zh
-              ? '范围属于员工定义，不在工作项或工具上重复配置。'
-              : 'Scope belongs to the employee definition and is not repeated on work items or tools.'}
-          </p>
-        </div>
-      </header>
-      {query.isPending ? <LoadingState /> : null}
-      {query.isError ? <ErrorBanner error={query.error} /> : null}
-      <div className="employee-card-list">
-        {query.data?.items.map((employee) => (
-          <article key={employee.id} className="employee-summary-card">
-            <strong>{employee.name}</strong>
-            <p>
-              {employee.published?.workScopeSummary ??
-                (zh ? '草稿尚未发布' : 'Draft not published')}
-            </p>
-          </article>
-        ))}
-      </div>
     </section>
   )
 }

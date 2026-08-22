@@ -18,7 +18,7 @@
 > **2026-08-21 PR-19/20（待 hosted 验证）**：新增平台 `execution-contract` context，统一 Agent/Workflow/Program 的
 > 输入输出指南、兼容校验、fixture 与运行结算；AuthoringManifest 新增通用职责泳道，固定职责图按主干、支线和外侧回路呈现。
 > Manifest 与真实后继关系先发布 `development@2`，随后把可选泳道、岗位级动态处理路由、检视整树闭环和事件权威刷新
-> 追加冻结在 `development@3`；升级只追加新 revision，不原地改写 `development@1/@2` descriptor/digest，也不需要
+> 追加冻结在 `development@5`；升级只追加新 revision，不原地改写 `development@1/@2/@3/@4` descriptor/digest，也不需要
 > schema migration。Agent 契约选择与端口编辑同页；契约托管的 `agent-result` 随声明原子增删，UI 与所有保存入口均禁止单独改写。
 
 ## 0A. 数字员工操作系统目标架构
@@ -720,11 +720,10 @@ stage selector 或任意 topology mutation。阶段只作为背景 region；每�
 predicate、Context mapping、Effect 与 failure/retry policy 都由类型包编译，不出现在员工实例编辑器。前端通用组件不得按
 `development` 类型分支，类型差异只能来自 manifest 和注册的业务文案/codec。
 
-布局算法同样属于通用 manifest 投影，不属于研发页面特例：`spine` 节点在内容区居中；每条 `branch` 独占一行或多行，节点按
-`order` 从左到右展开。每条 `nextWorkItemRefs` 都单独生成紧凑正交线，从卡片右侧统一出、从目标左侧统一入；不显示悬浮端口圆圈，
-不使用会绕场一周的共享分发干线。指向更早工作项或同节点的边使用虚线回路，但只走相邻外侧通道。选中节点时同时高亮直接关联节点
-与边，其余元素降为次要层级。画布给定显式 width/height/viewBox，桌面在可用宽度内缩放展示完整全景，窄屏保持固定最小宽度并由
-外壳横向滚动；不得为了适配宽度把支线重新平铺成一个无法辨认前后关系的序列。
+布局算法同样属于通用 manifest 投影，不属于研发页面特例：先按 region，再按 `spine | branch` lane，最后按 `order` 排列工作项小卡片。
+卡片内直接显示 node kind、配置事实和 `nextWorkItemRefs` 的业务名称；不生成 SVG edge、共享分发干线、回路、悬浮端口或拖拽 handle。
+选择卡片只高亮当前职责并更新下方 inspector。网格列使用可收缩 `auto-fit/minmax`，桌面与窄屏都保持全量可见且不产生横向滚动；
+不得为了适配宽度把不同职责泳道合并成无法辨认关系的单行。
 
 运行投影至少提供：
 
@@ -1895,6 +1894,9 @@ interface MissionAdmissionAssignment {
   readonly defaultRequirementSourceKey: string | null
 }
 ```
+
+该结构是 RFC-310 操作系统改造前的 legacy Mission 兼容合同，只用于解码和迁移既有冻结任务。新数字员工的负责范围与选择顺序以
+§21.7 为准：只允许单仓、仓库组或任务启动时指定仓库，不再创建新的 `global-default` assignment。
 
 scope 优先级是 exact repository > repository-group > global default；每一级最多一份。assignment 是可选上下文，
 不是显式选择的前置条件：请求已给 authorized employee revision 时，即使没有 assignment 也能继续；没有显式员工时，
@@ -3661,9 +3663,9 @@ development-child-missions:launch/read
 顶层信息架构按“定义与运行分开”固定为：
 
 1. **数字员工**（位于“编排”和“运行与仓库”之间）只放能力构建。进入 `/digital-employees` 先看到数字员工分类；每个分类使用同一三个页签：
-   - **员工** `/digital-employees/:typeId/employees`：创建和管理该分类的具体数字员工；同页次级“岗位模板”管理默认工具组合；
-   - **工具箱** `/digital-employees/:typeId/toolbox`：按该分类职责图的工作项管理工具；
-   - **适用范围** `/digital-employees/:typeId/assignments`：按该分类的 WorkScopeContract 绑定已发布员工；研发分类投影为仓库/仓库组。
+   - **员工**：创建和管理该分类的具体数字员工；范围是员工表单的一部分；
+   - **岗位模板**：管理岗位默认工具组合，创建/修改进入同页详情编辑；
+   - **工具箱**：按该分类职责小卡片管理工具，也是唯一常驻职责全景。
 2. **运行与仓库**收纳所有执行事实：
    - **任务** `/tasks`：数字员工 Mission 与普通编排任务统一管理，提供“数字员工”分类筛选；旧
      `/code/missions` 只做兼容跳转。数字员工任务可写正文、上传带仓库目标路径的文件或提交外部 ID，并跟踪到 MR terminal；
@@ -3672,23 +3674,23 @@ development-child-missions:launch/read
 
 分类不是研发专用 hard-code。`/digital-employees` 从 Type Catalog 投影研发、设计、测试等分类卡片；进入分类后，页签、画布、
 工作项、WorkScope 表单和文案全由 `EmployeeAuthoringManifestV1`/WorkScopeContract 驱动。旧 `/code` 兼容跳转到研发分类员工页，
-旧 `/code/executors` 跳到研发分类工具箱，旧 `/code/assignments` 跳到研发分类适用范围，不再渲染全局执行者列表。
+旧 `/code/executors` 跳到研发分类工具箱；旧 `/code/assignments` 跳到研发分类员工页，不再渲染全局执行者或独立适用范围页。
 
 任何数字员工、任务或成效页都不放“← 返回”这类机械导航按钮。用户通过稳定的左侧分类定位，并通过同页
 `JourneyNextAction` 继续当前 User Case；不得用返回列表代替“下一步”。
 
 #### 12.4.0 确定性职责图与分类工具箱
 
-职责图始终全量展开。生命周期区域是固定、低对比度的视觉背景，工作项节点按 manifest 固定在区域中；不提供连线拖拽、节点新增、
-阶段下拉、折叠分支或自由布局。节点卡只显示业务名称、材料摘要、产出/完成标准和工具状态，不显示 Event ID、Context、Effect、
-retry 或内部 revision。
+工具箱职责小卡片始终全量展开。生命周期区域是固定、低对比度的视觉背景，工作项按 manifest 固定归属区域/泳道；不提供连线、端口、
+节点新增、阶段下拉、折叠分支或自由布局。节点卡只显示业务名称、节点类型、配置状态和下一步，不显示 Event ID、Context、Effect、retry
+或内部 revision；材料摘要、产出/完成标准与工具列表在选择后的下方详情显示。
 
 分类“工具箱”页是四层层级的实际落点：
 
 ```text
 数字员工 / 研发数字员工 / 工具箱
 ┌ 需求开发与问题定位 ───────────────────────────────────────────┐
-│ 交付主线       [准备材料] → [分析实现] → [修改候选] → [提交 MR] │
+│ 交付主线       [准备材料] [分析实现] [修改候选] [提交 MR]         │
 ├ MR 看护与修绿 ────────────────────────────────────────────────┤
 │ MR 事件入口                         [关注 MR 状态]              │
 │ 检视意见       [识别检视] → [修复检视] ────────────────┐       │
@@ -3702,17 +3704,15 @@ retry 或内部 revision。
 右侧：该工作项的输入｜输出｜完成标准｜工具列表｜[增加工具]
 ```
 
-同一 `EmployeeAuthoringManifestV1` 画布有四个严格模式，不能复制成四套各自维护的图：
+同一 `EmployeeAuthoringManifestV1` 有两个 authoring 呈现，不能复制成各自维护的图：
 
-| 模式           | URL/页面              | 节点右侧唯一可写内容            | 只读内容                                        |
-| -------------- | --------------------- | ------------------------------- | ----------------------------------------------- |
-| `toolbox`      | 分类“工具箱”          | 注册/验证/发布当前工作项工具    | WorkContract、角色/槽位、已有工具状态           |
-| `job-template` | 分类“员工 → 岗位模板” | 为 slot 选择默认 registration   | 职责、合同、可选工具兼容范围                    |
-| `employee`     | 员工创建/详情         | 必要时覆盖模板默认 registration | 模板默认、职责、合同、发布诊断                  |
-| `runtime`      | `/tasks/:caseRef`     | 无；动作来自 JourneyNextAction  | 当前/待办/完成节点、实际工具、事件原因、receipt |
+| 模式           | URL/页面                   | 卡片选择后的唯一可写内容      | 只读内容                              |
+| -------------- | -------------------------- | ----------------------------- | ------------------------------------- |
+| `toolbox`      | 分类“工具箱”               | 注册/验证/发布当前工作项工具  | WorkContract、角色/槽位、已有工具状态 |
+| `job-template` | 分类“岗位模板”详情编辑状态 | 为 slot 选择默认 registration | 职责、合同、可选工具兼容范围          |
 
-四种模式共享 workItem key、几何布局、业务文案和选中态 URL codec；只替换 inspector codec。刷新、深链或从缺失工具返回草稿时，
-必须回到同一 workItem。前端不得为岗位模板/员工/任务复制或重新排序节点。
+两种模式共享 workItem key、区域/泳道/卡片布局和业务文案，只替换 inspector。员工列表不重复全景；runtime 只按 Case 投影当前工作、等待条件、
+事件队列和 receipt。刷新、深链或从缺失工具返回草稿时必须回到同一 workItem。
 
 - 点击节点即确定 `type + work item + contract`；工具列表查询不得省略这三个条件。
 - “增加工具”可选择已有 Agent/Workflow，或直接定义当前节点的 ProgramTool；按工作项允许的角色分组，外部连接仅在工具需要时出现。
@@ -3721,7 +3721,7 @@ retry 或内部 revision。
 - “归类流水线问题”节点显式编辑岗位级有序分派表：每行定义业务失败类型、显示名、目标处理工作项和 exact 工具或协同员工；列表顺序
   就是优先级，必须且只能有一个末尾兜底项。类型包只声明允许到达哪些处理节点，不写死编译/单测/静态检查等业务枚举。
 - 泳道标签回答“这是人的哪类职责”，节点回答“这一步做什么”；MR 事件入口是权威事实刷新点，不把检视、流水线、冲突、审批和合入判断
-  误画成必须依次执行的一条长链。回入口/重新发布/重采边固定使用短虚线回路；选择节点时同时高亮直接关联的边和节点。
+  误排成必须依次执行的一条长链。前后继以卡片内“下一步”说明表达，选择节点只高亮自身并打开对应详情。
 
 员工创建/详情复用同一职责图，但配置更少：选分类和岗位模板后，只填写名称、启停、负责范围，并为有覆盖需要的工作项选择一个
 已发布工具。节点右侧显示“当前工具 / 模板默认 / 可选兼容工具”和只读输入输出合同。缺少工具时动作跳到
@@ -4086,8 +4086,8 @@ SHA 终态验证；取消或被 successor 覆盖的 run 不能当 pass。
    machine ID；事件“为何唤醒”与工作项“做什么”的文案字段分别渲染。
 8. ExecutionContract tests：外部 ID 直接字段、小输入 env/大输入 file transport、Agent exact declaration/result port、Workflow
    structural closure、Program 真实 Script fixture、extra/missing/cross-round 输出均有正反向回归；编辑发布与运行调用同一 validator。
-9. Responsibility lane component/E2E：type package 缺 lane/未知 lane 拒绝；事件入口节点居中，同一支线节点 x 单调、不同支线 y 分离，
-   回边拥有独立 loop 样式；研发/设计/测试复用同一布局函数，窄屏滚动后仍可看到全景。
+9. Responsibility lane component/E2E：type package 缺 lane/未知 lane 拒绝；region/lane/order 决定卡片分组，平台/工具/协同与绿/黄状态可辨；
+   研发/设计/测试复用同一布局函数，桌面与窄屏无横向溢出且全量卡片可见。
 
 ### 15.8 公共平台能力覆盖矩阵（normative release gate）
 
@@ -4103,10 +4103,10 @@ SHA 终态验证；取消或被 successor 覆盖的 run 不能当 pass。
 | 全局 Event Center：目录、来源、订阅、多播、Delivery、Webhook/轮询统一 | `rfc310-event-center`、0193–0199 migration tests                           | task/case lifecycle outbox、晚订阅、A-B-A、启停 Observer、单消费者失败隔离、重复 observation                | 自定义来源运行真实脚本；旧 Webhook HTTP E2E 保持触发任务与多消费者语义                                          |
 | Employee Channel/Join 与跨仓协同                                      | invocation/ancestry/join/cancel 合同反向测试                               | Case runtime 锁 child reuse、all/any/quorum、deadline 与恢复                                                | stateful system mock 运行父仓→子仓员工→返回父 Case，两个真实 Git remote 隔离                                    |
 | workspace、上传、candidate、平台 commit/CAS push/MR                   | `rfc310-pr3-*`、`rfc310-pr4-*`、`rfc310-pr5-*`                             | `rfc310-employee-workspace-delivery` 与 `rfc310-pr7b-conflict-repair-journey` 锁 remote advance、冲突和重放 | 旧 T109 与新 OS system mock 均使用真 bare remote + HTTP code-host mock，不以内存 fake 代替                      |
-| 类型包、可选泳道、岗位模板与动态问题路由                              | `rfc310-digital-employee-authoring`、`digital-employee-type-package-drift` | 未配置可选泳道可发布且不订阅；部分配置 fail closed；有序类型表唯一末尾兜底并冻结 exact destination          | 浏览器零配置旅程证明不用先补齐所有可选职责；开发全旅程使用 `development@3`                                      |
+| 类型包、可选泳道、岗位模板与动态问题路由                              | `rfc310-digital-employee-authoring`、`digital-employee-type-package-drift` | 未配置可选泳道可发布且不订阅；部分配置 fail closed；有序类型表唯一末尾兜底并冻结 exact destination          | 浏览器零配置旅程证明不用先补齐所有可选职责；开发全旅程使用 `development@5`                                      |
 | MR 权威刷新、检视整树、ACK/修复/回帖与自回复抑制                      | `rfc310-pr7-mr-facts`、case runtime settlement tests                       | Event 只作 wake hint，`capabilityWorkItemRef` 控制职责启用，先 `observe-mr` 再按新 revision 分派            | stateful code-host mock 注入同线程多轮回复，验证先 ACK、Agent 收到完整树、push 后按 envelope 回帖、重放不自循环 |
 | 流水线大证据与外部审批 adapter                                        | `rfc310-pr6-*`、system-mocks provider/approval tests                       | 大结果落 `.agent-workflow/pipeline`、审批 submit/adopt/observe、cursor 与 outage 恢复                       | runnable pipeline/approval provider；父子员工 + 审批 + 门禁重跑 system mock 旅程                                |
-| 通用职责图与最小配置 UI                                               | frontend RFC-310 contract、capsule nowrap、execution guide tests           | 同一 manifest 驱动 toolbox/job/employee/runtime，20 节点关系与可选状态一致                                  | Playwright 零配置/完整任务旅程；数字员工目录、全景图、工具弹窗三幅目标视觉基线                                  |
+| 通用职责卡片与最小配置 UI                                             | frontend RFC-310 contract、capsule nowrap、execution guide tests           | 同一 manifest 驱动 toolbox/job detail，20 节点分组、绿黄状态与可选状态一致；员工/runtime 不重复全景         | Playwright 零配置/完整任务旅程；数字员工目录、工具箱卡片、岗位详情与工具弹窗桌面/窄屏证据                       |
 
 新员工分类接入时必须在此矩阵新增“类型包专属能力”行；不能把公共 OS 已有绿灯复制成该分类业务语义已经被验证。system mock 的作用是
 证明平台外边界和真实状态迁移，不替代纯函数/合同反向用例；反过来，in-test object fake 也不能替代跨进程 system mock。
@@ -4187,3 +4187,138 @@ closed effect union、source-control 独占 Git、快照对拍、回退台账、
 三轮后，业务配置闭包为：分类包程序化定义职责、合同、事件和规则；分类工具箱为每个工作项准备合格工具；岗位模板预选默认
 工具；具体员工只选择模板、名称/启停、适用范围和必要覆盖；运行 Case pin 员工/type/tool/limits-snapshot revision。任一层缺失都在
 validate/publish/admission 给出工作项级诊断，不推迟到 Agent 运行时猜测。
+
+## 21. 内置工具、材料分派与可选方案评审（2026-08-22）
+
+### 21.1 平台工具目录
+
+Digital Employee OS 增加 consumer-owned `PlatformToolCatalog` required port。它把平台已经注册的 exact Agent revision 投影成
+`ToolRegistrationView`，但不把这些工具写入用户的 `employee_tool_registrations` 草稿表。目录项固定携带：
+
+- `origin=platform`、`editable=false`；
+- `selection=selectable | automatic`；
+- exact WorkContract、work item、role、Agent ref、合同校验回执和稳定虚拟 tool id；
+- 运行、岗位模板发布和员工发布均通过同一 catalog 解析 exact revision，不允许 UI-only 伪工具。
+
+`selectable` 项可以作为岗位绑定；`automatic` 项只解释平台在该工作项会自动使用什么，不进入选择器。GET authoring 以及
+update/validate/publish/retire 对平台项统一返回 `employee-platform-tool-readonly`。用户工具仍由 SQLite authoring store 拥有，两个目录
+只在 query/resolution 边界合并，不能互相覆盖 stable id。
+
+### 21.2 输入种类驱动的材料分派
+
+`WorkIntakeAuthoringManifest` 增加通用 `kindRequirements[]`：每项把一种 intake kind 绑定到必需的 work item/slot。开发类型只声明
+`external-id -> prepare-materials/default`。正文、文件、正文+文件没有该要求，因此员工即使没有外部取件工具也能发布和执行；受理页
+根据已发布员工的 exact bindings 只展示它实际支持的输入种类，admission 使用相同 manifest 在建 Case 与 claim upload 前复核。
+
+`prepare-materials` 的工具槽改为 `zero-or-one`。类型 codec 只根据冻结 `IssueHandlingContext.request.kind` 返回：
+
+- `body | files | body-and-files -> platform`：运行平台材料接收器，确认正文/上传清单已冻结后直接结算；
+- `external-id -> default`：必须解析 exact 工具，输入核心字段就是 `contractInput.workRequest.externalId`，由 Agent/Script 下载多文件到
+  平台注入的 `.agent-workflow/inputs/requirements/<case>/external/` 并更新 Context。
+
+`platform` 是 OS 保留执行选择，不是可编辑 slot。Reaction planner 对它生成 `implementationKind=system` 和
+`platform-work-item-execute` outbox；其他未知 slot 继续 fail closed。这样不存在“空跑一个 Agent 再跳过”的伪步骤，也没有 Agent
+自行判断材料是否足够的分支。
+
+上传文件逐项冻结 placement。`repository` 文件复制到用户指定的仓库相对路径并进入 ChangeCandidate/commit/push；`temporary` 文件由
+平台分配 `.agent-workflow/inputs/requirements/<case>/uploads/<ordinal>-<upload-id>`，工作区可读但由 exclude manager 保证不进入 Git。
+平台同时生成 request manifest；`assembleReactionInput` 为所有分析/实现动作投影 `materialInstructions`，固定列出正文是否存在、外部 ID、
+每个上传的 `originalName -> placement -> targetPath` 以及平台材料目录。执行 prompt 明确要求先读取这些路径再分析或实现；artifact ref
+继续只作大材料引用，不能替代可读路径。
+
+### 21.3 可选方案评审
+
+`WorkIntakeAuthoringManifest.executionOptions[]` 首版提供通用 boolean option。开发类型注册 `review-implementation-plan`，默认 false，
+受理页以“直接实现 / 先评审方案”显示并把选择写入 immutable IssueHandlingContext。类型包在 `analyze-implement` 的输入 envelope 中只在
+该值为 true 时生成 `humanReview` directive：评审标题、说明、方案端口和内置方案 Agent exact ref；false 时为 null。该字段是平台
+执行元数据，不进入 `contractInput`，Agent 不能修改。
+
+TaskExecution 收到 directive 且当前工具为 Agent 时，合成以下固定 host snapshot：
+
+```text
+platform plan prompt -> builtin plan Agent.analysis-plan -> review.approved_doc
+original execution prompt -----------------------------------------------> implementation Agent.agent-result
+review.approved_doc ------------------------------------------------------> implementation Agent.implementation-plan
+```
+
+方案 Agent 只能写平台分配的
+`.agent-workflow/inputs/requirements/<case>/review/implementation-plan.md`，并必须从 `analysis-plan` 端口返回同一路径；除此以外业务文件
+保持只读。review 复用已有评论、iterate、reject、approve、freshness 和恢复语义。reject/iterate 只重跑方案 Agent并注入评审意见，批准前
+实现 Agent不可调度；approve 后 `approved_doc` 与原执行 prompt 一起进入已绑定实现 Agent。非 Agent 工具开启该 option 在 admission 阶段
+返回具名不兼容错误，不静默退化为无评审。Digital Employee worker 把
+`awaiting_review` 当作 pending，Task 详情继续使用现有 review 操作面，不建设第二套人工审批 UI。
+
+### 21.4 工具弹窗布局合同
+
+`employee-add-tool-dialog` 的 panel/body/form/contract guide 全链路 `min-width:0; max-width:100%`。契约字段网格只使用可收缩列，代码示例
+在自身容器内换行或纵向滚动；窄屏统一单列。body 保留纵向滚动和焦点环内边距，但 `overflow-x:hidden`，任何子项都不能靠固定最小宽度
+产生横向 scrollbar。浏览器在桌面和窄屏分别打开真实工具弹窗，断言 panel、body、form 及 guide 的 `scrollWidth <= clientWidth`。
+
+### 21.5 平台路径与显式输出边界
+
+Case 创建后一次计算 `platformCaseKey`，此后所有工具只能读取 envelope 注入的精确目录：
+
+| 用途             | 平台目录                                                                   | Git 语义                        |
+| ---------------- | -------------------------------------------------------------------------- | ------------------------------- |
+| 外部 ID 多文件   | `.agent-workflow/inputs/requirements/<case>/external/`                     | 平台临时材料，不提交            |
+| 临时上传         | `.agent-workflow/inputs/requirements/<case>/uploads/<ordinal>-<upload-id>` | 平台临时材料，不提交            |
+| 人工评审方案     | `.agent-workflow/inputs/requirements/<case>/review/implementation-plan.md` | 平台评审材料，不提交            |
+| 流水线门禁与日志 | `.agent-workflow/pipeline/<case>/`                                         | 平台证据，不提交                |
+| 仓库上传         | 用户在受理页选择的规范化仓库相对路径                                       | 纳入 ChangeCandidate 与最终提交 |
+
+WorkContract guide 的 primary fields 同时显示业务输入与上述平台路径，不允许工具从 `cwd`、文件名或提示词惯例猜目录。workspace snapshot 与
+delivery policy 对平台路径分别做可写前缀和 Git exclusion；回退现场时按相同 Case 路径恢复，不重新分配。
+
+会修改业务文件的 Agent 只输出内容，不输出平台副作用：
+
+```ts
+interface DeliveryContent {
+  readonly commitMessage: string
+  readonly mergeRequestTitle: string
+  readonly mergeRequestDescription: string
+}
+
+interface ReviewReply {
+  readonly threadRef: string
+  readonly resolution: string
+}
+```
+
+`status=ok` 时 `deliveryContent` 是 envelope 顶层必填字段；检视修复还必须对冻结 problem set 中每个 thread 恰好给出一个有序
+`reviewReplies`。类型 codec 只验证业务语义并把它们合成平台拥有的 Context patch；Agent 直接提交 issue/review Context patch 一律拒绝。
+source-control owner 在 commit message 末尾追加 Case/Context 机器标记，保留 Agent 给出的多行正文；MR 与评论 owner 只消费校验后的字段。
+
+### 21.6 职责小卡片与岗位详情编辑
+
+分类页只保留“员工 / 岗位模板 / 工具箱”三个页签。确定性职责全景常驻位置只有工具箱；它按生命周期区域和泳道渲染全量小卡片，卡片内
+显示“平台 / 工具 / 协同”、业务名称、配置事实和下一步，不绘制连线与端口。卡片区与下方工具详情以 20px 间距分开，任何卡片选择都只更新
+同页详情，不跨页跳转。
+
+岗位模板列表点击“新建/修改”后在原页面进入 detail editor，不打开 Dialog。详情编辑器复用相同小卡片图：
+
+- 平台固定节点天然为绿色；已有有效工具、完整有序路由或协同绑定的职责为绿色；
+- 未配置或未启用的职责为黄色；黄色可选泳道不会阻断发布；
+- 发布时重新按 manifest 计算 `requiredMissingWorkItemRefs`；有缺失才让对应卡片闪烁、选择第一项并滚动定位；
+- 点击一张卡片只渲染该职责的 tool slot、动态错误类型或协同员工配置，避免一次铺开全部参数。
+
+### 21.7 负责范围与任务启动
+
+员工编辑只显示一个 combined repository-space picker，候选依次包含“任务启动时指定仓库”、已有仓库和带仓数标记的仓库组。picker value
+内部解码为分类 WorkScopeContract 的 `task | repository | repository-group` union；UI 不再先选类型，也不提供 revision 5 的 `global`。
+
+启动页读取 Employee API 投影的 `publishedWorkScope`，不能读取 draft：
+
+- `repository`：目标仓库由已发布员工固定，表单隐藏仓库选择；提交时平台可补入同一 ID，codec 对冲突 ID fail closed；
+- `repository-group`：读取该组当前 layout，只把成员仓库列为本次具体目标；
+- `task`：显示平台可用仓库列表并要求选择；
+- 旧 revision 3 的 `global`：runtime codec 兼容为任务时选择，但 revision 5 authoring schema 不接受。
+
+runtime 最终仍读取 published employee revision 的 `workScopeRef`；`publishedWorkScope` 只是同一事实的 UI 投影，不能取代 admission。
+
+### 21.8 统一新建任务入口
+
+任务列表不再并列两个主按钮，只保留“新建任务”。`/tasks/new` 的“执行方式”卡片增加“数字员工”，与 Workflow、Agent、工作组同级；选择后
+继续使用同一套四步 Stepper：①选择数字员工；②确认执行空间（固定仓锁定、仓库组内选仓、任务时指定）；③填写 ID/正文/多文件、目标路径与
+方案评审策略；④只读确认并提交。数字员工总览和分类页右上角仍显示语义明确的“创建数字员工任务”，但链接统一到
+`/tasks/new?kind=digital-employee` 并预选数字员工。数字员工的最终提交仍调用 Case command，不强迫两种 runtime 共用 payload；编辑定时任务、
+重新执行既有编排或创建定时任务时不显示该卡片，避免把不支持的 lifecycle 混入原协议。

@@ -2,7 +2,7 @@
 //
 // 锁：分支名由平台模板生成（Agent 不供名）；碰撞闭集——同 marker 同绑定幂等
 // adopt / 同 marker 异绑定 blocked / 普通同名 deterministic suffix / 后缀耗尽
-// blocked；marker 反解 round-trip；commit message 模板只吃 summary 素材首行。
+// blocked；marker 反解 round-trip；commit message 保留业务正文，但平台追踪字段只由平台生成。
 
 import { describe, expect, test } from 'bun:test'
 
@@ -104,10 +104,20 @@ describe('rfc310 pr5 — delivery policy', () => {
     expect(exhausted.kind).toBe('blocked')
   })
 
-  test('commit message is platform-templated: first line of the summary source only, marker appended', () => {
+  test('commit message keeps business prose while platform-reserved metadata stays authoritative', () => {
     const message = candidateCommitMessage({
       missionId: MISSION,
-      summarySource: 'implement the widget\nignore this second line entirely',
+      summarySource: [
+        'implement the widget',
+        '',
+        'explain the second-line implementation detail',
+        'Mission: forged-mission',
+        '[aw-mission:forged-mission]',
+        'Agent-Workflow-Case: forged-case',
+        'Agent-Workflow-Context: forged-context',
+        'Agent-Workflow-Schema: forged-schema',
+        'Work-Item: forged-work-item',
+      ].join('\n'),
       contextEnvelope: {
         employeeCaseRef: 'case-42',
         issueContextRef: 'context-7',
@@ -116,8 +126,13 @@ describe('rfc310 pr5 — delivery policy', () => {
       },
     })
     expect(message.startsWith('aw: implement the widget\n')).toBe(true)
+    expect(message).toContain('explain the second-line implementation detail')
     expect(message).toContain(missionMachineMarker(MISSION))
-    expect(message).not.toContain('second line')
+    expect(message).not.toContain('forged-mission')
+    expect(message).not.toContain('forged-case')
+    expect(message).not.toContain('forged-context')
+    expect(message).not.toContain('forged-schema')
+    expect(message).not.toContain('forged-work-item')
     expect(message).toContain('Agent-Workflow-Case: case-42')
     expect(message).toContain('Agent-Workflow-Context: context-7')
     expect(message).toContain('Agent-Workflow-Schema: issue-handling.v1')

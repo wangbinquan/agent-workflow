@@ -95,6 +95,7 @@ import {
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
@@ -474,6 +475,10 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     db: deps.db,
     appHome,
     typePackages: [developmentEmployeeTypePackage],
+    platformTools: composeDigitalEmployeeBuiltinToolCatalog({
+      db: deps.db,
+      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    }),
     executionContracts,
     retryLimits: {
       current() {

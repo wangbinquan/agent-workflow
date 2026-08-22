@@ -38,6 +38,12 @@ export interface WorkItem {
     description: LocalizedText
     destinationWorkItemRefs: string[]
   } | null
+  humanReview: {
+    optionRef: string
+    artifactPort: string
+    label: LocalizedText
+    description: LocalizedText
+  } | null
   toolRoleGroups: Array<{
     roleRef: string
     label: LocalizedText
@@ -95,6 +101,20 @@ export interface EmployeeTypePackage {
       placeholder: LocalizedText | null
     }>
     acceptedKinds: Array<'body' | 'files' | 'body-and-files' | 'external-id'>
+    kindRequirements: Array<{
+      kind: 'body' | 'files' | 'body-and-files' | 'external-id'
+      workItemRef: string
+      slotRef: string
+    }>
+    executionOptions: Array<{
+      optionRef: string
+      label: LocalizedText
+      description: LocalizedText
+      defaultValue: boolean
+      requiredWorkItemRef: string | null
+      requiredSlotRef: string | null
+      requiredExecutorKind: 'agent' | 'workflow' | 'program' | null
+    }>
     body: {
       label: LocalizedText
       description: LocalizedText
@@ -107,6 +127,7 @@ export interface EmployeeTypePackage {
       maxFiles: number
       maxFileBytes: number
       targetPathRequired: true
+      placementModes: Array<'repository' | 'temporary'>
     }
     externalId: {
       label: LocalizedText
@@ -187,6 +208,9 @@ export interface ToolRegistration {
   }
   publishedRevision: number | null
   state: 'draft' | 'published' | 'retired'
+  origin: 'custom' | 'platform'
+  editable: boolean
+  selection: 'selectable' | 'automatic'
   updatedAt: number
 }
 
@@ -268,6 +292,7 @@ export interface DigitalEmployeeDefinition {
     }>
   }
   publishedRevision: number | null
+  publishedWorkScope: unknown | null
   published: null | {
     displayName: string
     enabled: boolean

@@ -19,6 +19,7 @@ import {
   type ExecutionContractField,
   type ExecutionContractRegistration,
 } from '@/modules/execution-contract/public/types'
+import { stableIdentityComponent } from '@/util/gitRef'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
@@ -84,7 +85,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 3 } as const
+const typeRef = { typeId: 'development', revision: 5 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 
 const scopeSchema = z.discriminatedUnion('kind', [
@@ -92,6 +93,14 @@ const scopeSchema = z.discriminatedUnion('kind', [
   z
     .object({ kind: z.literal('repository-group'), repositoryGroupId: z.string().min(1).max(200) })
     .strict(),
+  z.object({ kind: z.literal('task') }).strict(),
+])
+
+// Revision 5 retires “global default” from authoring in favor of an explicit
+// task-time repository choice. Runtime codecs are keyed by type id, however,
+// so they must continue decoding frozen revision-3 employee scopes.
+const runtimeScopeSchema = z.discriminatedUnion('kind', [
+  ...scopeSchema.options,
   z.object({ kind: z.literal('global') }).strict(),
 ])
 
@@ -127,6 +136,12 @@ const WRITE_REQUIRED = {
   businessChangeOnOk: 'required',
   writablePrefixes: [],
   platformWritePrefixes: [],
+} as const satisfies WorkContract['workspacePolicy']
+const WRITE_IMPLEMENTATION = {
+  mode: 'write',
+  businessChangeOnOk: 'required',
+  writablePrefixes: [],
+  platformWritePrefixes: ['inputs/requirements'],
 } as const satisfies WorkContract['workspacePolicy']
 const WRITE_MATERIALS = {
   mode: 'write',
@@ -176,7 +191,7 @@ const contracts: WorkContract[] = [
     'Produces an envelope-valid change proposal and verification notes without Git or code-host effects',
     ['agent', 'workflow'],
     [],
-    WRITE_REQUIRED,
+    WRITE_IMPLEMENTATION,
   ),
   contract(
     'development.prepare-change',
@@ -519,6 +534,34 @@ const commonInputFields: ExecutionContractField[] = [
     false,
   ),
   contractField(
+    'materialInstructions',
+    '工作材料清单',
+    'Work material manifest',
+    '平台列出正文、外部 ID、每个上传文件的落点和材料目录；执行器必须逐项读取',
+    'Lists the body, external ID, every uploaded file placement, and material directory; the executor must read every item',
+    'platform',
+    'object',
+  ),
+  contractField(
+    'platformPaths',
+    '平台工作目录',
+    'Platform workspace paths',
+    '当前 Case 的需求材料、外部下载和流水线证据精确目录；工具不得自行选择路径',
+    'Exact requirement, external-download, and pipeline-evidence directories for this case; tools cannot choose paths',
+    'platform',
+    'object',
+  ),
+  contractField(
+    'humanReview',
+    '人工评审指令',
+    'Human review directive',
+    '需要先评审方案时由平台注入，否则为 null',
+    'Injected when a plan must be reviewed first; otherwise null',
+    'platform',
+    'object',
+    false,
+  ),
+  contractField(
     'eventJson',
     '触发事件',
     'Triggering event',
@@ -642,7 +685,10 @@ const inputDetailsByContract: Record<
   }
 > = {
   'development.prepare-materials': {
-    primaryFieldPaths: ['contractInput.workRequest.externalId'],
+    primaryFieldPaths: [
+      'contractInput.workRequest.externalId',
+      'contractInput.materialTargetDirectory',
+    ],
     fields: [
       contractField(
         'contractInput.workRequest.kind',
@@ -679,11 +725,20 @@ const inputDetailsByContract: Record<
         'contractInput.workRequest.uploads',
         '上传文件',
         'Uploaded files',
-        '每项含 artifactRef、targetPath、originalName',
-        'Each item contains artifactRef, targetPath, and originalName',
+        '每项含平台分配的 placement、artifactRef、targetPath、originalName',
+        'Each item contains platform-assigned placement, artifactRef, targetPath, and originalName',
         'artifact',
         'array',
         false,
+      ),
+      contractField(
+        'contractInput.materialTargetDirectory',
+        '外部材料目标目录',
+        'External material target directory',
+        '平台为当前任务分配的唯一临时目录；外部 ID 工具只能写入这里',
+        'The only temporary directory allocated by the platform for this case; an external-ID tool writes only here',
+        'platform',
+        'string',
       ),
       contractField(
         'contractInput.repositoryRef',
@@ -698,10 +753,58 @@ const inputDetailsByContract: Record<
     contractInput: {
       workRequest: { kind: 'external-id', externalId: 'ISSUE-1234', body: null, uploads: [] },
       repositoryRef: 'repository-id',
+      materialTargetDirectory: '.agent-workflow/inputs/requirements/case-id/external',
+    },
+  },
+  'development.analyze-implement': {
+    primaryFieldPaths: [
+      'contractInput.requirementContext.request',
+      'platformPaths.requirementDirectory',
+      'platformPaths.implementationPlanPath',
+    ],
+    fields: [
+      contractField(
+        'contractInput.requirementContext.request',
+        '需求与问题材料',
+        'Requirement and problem materials',
+        '正文、外部 ID 以及每个上传文档的平台落点',
+        'Body, external ID, and the platform placement of every uploaded document',
+        'context',
+        'object',
+      ),
+      contractField(
+        'platformPaths.requirementDirectory',
+        '材料读取目录',
+        'Material directory',
+        '必须逐项读取该 Case 目录内的平台材料',
+        'Every platform material in this case directory must be read',
+        'platform',
+        'string',
+      ),
+      contractField(
+        'platformPaths.implementationPlanPath',
+        '方案文档路径',
+        'Implementation plan path',
+        '启用人工评审时，方案分析 Agent 必须在此路径写入 Markdown，并从 analysis-plan 输出同一路径',
+        'When review is enabled, the planning Agent writes Markdown here and emits the same path from analysis-plan',
+        'platform',
+        'string',
+        false,
+        '.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md',
+        text('仅启用实现方案评审时使用', 'Used only when implementation-plan review is enabled'),
+      ),
+    ],
+    contractInput: {
+      requirementContext: {
+        request: { kind: 'body', body: 'Implement the accepted requirement', uploads: [] },
+      },
     },
   },
   'development.collect-pipeline': {
-    primaryFieldPaths: ['contractInput.mergeRequest.mergeRequestRef'],
+    primaryFieldPaths: [
+      'contractInput.mergeRequest.mergeRequestRef',
+      'contractInput.pipelineDirectory',
+    ],
     fields: [
       contractField(
         'contractInput.mergeRequest.mergeRequestRef',
@@ -737,7 +840,7 @@ const inputDetailsByContract: Record<
         'Pipeline material directory',
         '大日志必须下载到该目录并只在输出中返回引用',
         'Large logs must be downloaded here and returned only by reference',
-        'artifact',
+        'platform',
         'string',
       ),
     ],
@@ -746,6 +849,318 @@ const inputDetailsByContract: Record<
       connectionRef: { id: 'pipeline-adapter', revision: 1 },
       pipelineDirectory: '.agent-workflow/pipeline/<case-id>',
     },
+  },
+  'development.classify-pipeline': {
+    primaryFieldPaths: ['contractInput.pipelineDirectory', 'contractInput.failureTypeDefinitions'],
+    fields: [
+      contractField(
+        'contractInput.pipelineDirectory',
+        '流水线材料目录',
+        'Pipeline material directory',
+        '只从平台分配的当前 Case 目录读取结构化门禁结果和大日志',
+        'Read structured gate results and large logs only from this platform-allocated case directory',
+        'platform',
+        'string',
+      ),
+      contractField(
+        'contractInput.failureTypeDefinitions',
+        '失败类型定义',
+        'Failure type definitions',
+        '岗位模板冻结的有序闭集；列表顺序就是识别优先级',
+        'The ordered closed set frozen by the job template; list order is matching priority',
+        'work-input',
+        'array',
+      ),
+    ],
+    contractInput: {
+      pipelineDirectory: '.agent-workflow/pipeline/case-id',
+      failureTypeDefinitions: [],
+    },
+  },
+  'development.repair-pipeline': {
+    primaryFieldPaths: ['contractInput.assignedFailureType', 'contractInput.pipelineDirectory'],
+    fields: [
+      contractField(
+        'contractInput.assignedFailureType',
+        '本轮失败类型',
+        'Assigned failure type',
+        '平台规则已选择的唯一失败类型，工具不得改选',
+        'The one failure type selected by platform rules; the tool cannot choose another',
+        'work-input',
+        'string',
+      ),
+      contractField(
+        'contractInput.pipelineDirectory',
+        '流水线材料目录',
+        'Pipeline material directory',
+        '当前失败类型对应证据和大日志的精确平台目录',
+        'The exact platform directory containing evidence and large logs for this failure',
+        'platform',
+        'string',
+      ),
+    ],
+    contractInput: {
+      assignedFailureType: 'compile-error',
+      pipelineDirectory: '.agent-workflow/pipeline/case-id',
+    },
+  },
+  'development.repair-feedback': {
+    primaryFieldPaths: [
+      'contractInput.problemSet',
+      'contractInput.requirementContext',
+      'platformPaths.requirementDirectory',
+    ],
+    fields: [
+      contractField(
+        'contractInput.problemSet',
+        '完整检视线程树',
+        'Complete review thread trees',
+        '每项包含根评论、全部多轮回复、作者分类、文件路径与冻结 revision；必须整棵处理',
+        'Each item contains the root comment, every reply, author class, file path, and frozen revision; the entire tree must be handled',
+        'context',
+        'object',
+      ),
+      contractField(
+        'contractInput.requirementContext',
+        '需求与交付 Context',
+        'Requirement and delivery Context',
+        '输出交付文案时必须基于并完整保留的当前需求 Context',
+        'The current requirement Context that must be preserved when returning delivery content',
+        'context',
+        'object',
+      ),
+      contractField(
+        'platformPaths.requirementDirectory',
+        '原始工作材料目录',
+        'Original work-material directory',
+        '需要回看需求或上传文档时使用的精确平台路径',
+        'The exact platform path used when the original request or uploads must be revisited',
+        'platform',
+        'string',
+      ),
+    ],
+    contractInput: {
+      problemSet: { source: 'review', problems: [{ reviewThread: { messages: [] } }] },
+      mergeRequest: { mergeRequestRef: 'project!123', headSha: '0'.repeat(40) },
+      reviewResolution: { status: 'acknowledged', threads: [] },
+      requirementContext: {
+        request: { kind: 'body', body: 'Implement the accepted requirement', uploads: [] },
+      },
+    },
+  },
+  'development.repair-conflict': {
+    primaryFieldPaths: [
+      'contractInput.mergeRequest',
+      'contractInput.event',
+      'contractInput.requirementContext',
+    ],
+    fields: [
+      contractField(
+        'contractInput.mergeRequest',
+        '当前 MR 与固定 head',
+        'Current merge request and pinned head',
+        '平台准备冲突现场所依据的 MR 身份与提交',
+        'The merge-request identity and commit used by the platform to prepare the conflict scene',
+        'context',
+        'object',
+      ),
+      contractField(
+        'contractInput.event',
+        '冲突现场事件',
+        'Conflict-scene event',
+        '包含平台已验证的冲突文件和父提交引用；工具不得改选',
+        'Contains platform-validated conflict files and parent refs; the tool cannot choose another scene',
+        'event',
+        'object',
+      ),
+      contractField(
+        'contractInput.requirementContext',
+        '需求与交付 Context',
+        'Requirement and delivery Context',
+        '生成提交与 MR 文案时必须保留的当前需求 Context',
+        'The current requirement Context preserved while generating commit and MR content',
+        'context',
+        'object',
+      ),
+    ],
+    contractInput: {
+      mergeRequest: { mergeRequestRef: 'project!123', headSha: '0'.repeat(40) },
+      event: { conflictFiles: ['src/example.ts'], parentShas: ['0'.repeat(40), '1'.repeat(40)] },
+      requirementContext: {
+        request: { kind: 'body', body: 'Implement the accepted requirement', uploads: [] },
+      },
+    },
+  },
+  'development.prepare-approval': {
+    primaryFieldPaths: ['contractInput.mergeRequest', 'contractInput.connectionRef'],
+    fields: [
+      contractField(
+        'contractInput.mergeRequest',
+        '待审批 MR',
+        'Merge request requiring approval',
+        '审批草稿必须绑定的当前 MR head 与门禁事实',
+        'Current merge-request head and gate facts to which the approval draft must bind',
+        'context',
+        'object',
+      ),
+      contractField(
+        'contractInput.connectionRef',
+        '审批系统连接',
+        'Approval-system connection',
+        '平台冻结的适配程序版本；凭据不进入 Agent 或脚本',
+        'Frozen adapter revision; credentials never enter the Agent or script',
+        'platform',
+        'object',
+      ),
+    ],
+    contractInput: {
+      mergeRequest: { mergeRequestRef: 'project!123', headSha: '0'.repeat(40) },
+      connectionRef: { id: 'approval-adapter', revision: 1 },
+    },
+  },
+}
+
+const successfulDeliveryCondition = text(
+  'status=ok 时必填；needs-input 或 blocked 时可以为 null',
+  'Required when status=ok; may be null for needs-input or blocked',
+)
+
+const deliveryOutputFields: readonly ExecutionContractField[] = [
+  contractField(
+    'deliveryContent',
+    '交付写回内容',
+    'Delivery writeback content',
+    'Agent 只产出内容；平台校验后执行提交、推送和 MR 写回',
+    'The Agent only produces content; the platform validates it and performs commit, push, and merge-request writeback',
+    'work-input',
+    'object',
+    false,
+    null,
+    successfulDeliveryCondition,
+  ),
+  contractField(
+    'deliveryContent.commitMessage',
+    '提交信息',
+    'Commit message',
+    'Agent 必须给出提交标题和可选正文；平台只追加 Case 与 Context 机器标记并执行 commit',
+    'The Agent supplies the commit subject and optional body; the platform only appends Case and Context markers and performs the commit',
+    'context',
+    'string',
+    false,
+    null,
+    successfulDeliveryCondition,
+  ),
+  contractField(
+    'deliveryContent.mergeRequestTitle',
+    'MR 标题',
+    'Merge request title',
+    'Agent 必须给出最终 MR 标题；平台校验后原样用于创建或更新 MR',
+    'The Agent supplies the final merge-request title; the platform validates it and uses it to create or update the MR',
+    'context',
+    'string',
+    false,
+    null,
+    successfulDeliveryCondition,
+  ),
+  contractField(
+    'deliveryContent.mergeRequestDescription',
+    'MR 正文',
+    'Merge request description',
+    'Agent 必须给出面向评审者的 MR 正文；平台只在末尾追加可追踪机器标记',
+    'The Agent supplies the reviewer-facing description; the platform only appends traceability markers',
+    'context',
+    'string',
+    false,
+    null,
+    successfulDeliveryCondition,
+  ),
+]
+
+const deliveryPrimaryFieldPaths = deliveryOutputFields
+  .filter((field) => field.path !== 'deliveryContent')
+  .map((field) => field.path)
+
+const deliveryContentExample = {
+  commitMessage: 'implement accepted requirement\n\nAdd the requested behavior and tests.',
+  mergeRequestTitle: 'Implement accepted requirement',
+  mergeRequestDescription: '## What changed\n\nImplemented the requested behavior and tests.',
+}
+
+const outputDetailsByContract: Record<
+  string,
+  {
+    readonly primaryFieldPaths: readonly string[]
+    readonly fields: readonly ExecutionContractField[]
+    readonly topLevelFields?: readonly string[]
+    readonly exampleFields?: Readonly<Record<string, unknown>>
+  }
+> = {
+  'development.prepare-materials': {
+    primaryFieldPaths: ['artifactRefs', 'contextPatches'],
+    fields: [],
+  },
+  'development.analyze-implement': {
+    primaryFieldPaths: deliveryPrimaryFieldPaths,
+    fields: deliveryOutputFields,
+    topLevelFields: ['deliveryContent'],
+    exampleFields: { deliveryContent: deliveryContentExample },
+  },
+  'development.repair-pipeline': {
+    primaryFieldPaths: deliveryPrimaryFieldPaths,
+    fields: deliveryOutputFields,
+    topLevelFields: ['deliveryContent'],
+    exampleFields: { deliveryContent: deliveryContentExample },
+  },
+  'development.repair-conflict': {
+    primaryFieldPaths: deliveryPrimaryFieldPaths,
+    fields: deliveryOutputFields,
+    topLevelFields: ['deliveryContent'],
+    exampleFields: { deliveryContent: deliveryContentExample },
+  },
+  'development.repair-feedback': {
+    primaryFieldPaths: [...deliveryPrimaryFieldPaths, 'reviewReplies'],
+    fields: [
+      ...deliveryOutputFields,
+      contractField(
+        'reviewReplies',
+        '逐条检视回复',
+        'Reply for every review thread',
+        '每棵输入线程必须输出一条具体处理说明；平台在提交发布后把它回复到原线程',
+        'Every input thread must receive a concrete treatment message; the platform posts it to the original thread after publishing the commit',
+        'context',
+        'array',
+        false,
+        null,
+        text(
+          'status=ok 时必须与输入线程逐条对应；其他状态可以为空数组',
+          'For status=ok, must correspond one-for-one with input threads; otherwise it may be empty',
+        ),
+      ),
+    ],
+    topLevelFields: ['deliveryContent', 'reviewReplies'],
+    exampleFields: {
+      deliveryContent: deliveryContentExample,
+      reviewReplies: [
+        {
+          threadRef: 'thread-1',
+          revision: 'revision-1',
+          disposition: 'addressed',
+          replyBody: '已按意见修正边界条件，并补充对应回归测试。',
+        },
+      ],
+    },
+  },
+  'development.collect-pipeline': {
+    primaryFieldPaths: ['artifactRefs', 'contextPatches'],
+    fields: [],
+  },
+  'development.classify-pipeline': {
+    primaryFieldPaths: ['contextPatches'],
+    fields: [],
+  },
+  'development.prepare-approval': {
+    primaryFieldPaths: ['artifactRefs', 'contextPatches'],
+    fields: [],
   },
 }
 
@@ -768,6 +1183,7 @@ const outputTopLevelFields = [
 export const developmentExecutionContractRegistrations: readonly ExecutionContractRegistration[] =
   contracts.map((workContract) => {
     const details = inputDetailsByContract[workContract.contractId]
+    const outputDetails = outputDetailsByContract[workContract.contractId]
     const workItemRef = workContract.contractId.slice('development.'.length)
     const inputExample = {
       schemaVersion: 1,
@@ -780,6 +1196,21 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
       outputSchemaId: workContract.outputSchemaId,
       contractInput: details?.contractInput ?? genericContractInput,
       artifactRefs: [],
+      materialInstructions: {
+        bodyProvided: false,
+        externalId: null,
+        uploads: [],
+        requirementDirectory: '.agent-workflow/inputs/requirements/case-id',
+        externalMaterialDirectory: '.agent-workflow/inputs/requirements/case-id/external',
+      },
+      platformPaths: {
+        requirementDirectory: '.agent-workflow/inputs/requirements/case-id',
+        externalMaterialDirectory: '.agent-workflow/inputs/requirements/case-id/external',
+        pipelineDirectory: '.agent-workflow/pipeline/case-id',
+        implementationPlanPath:
+          '.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md',
+      },
+      humanReview: null,
       eventJson: '{}',
       contextsJson: '[]',
       workInstructions: 'Follow the frozen contract.',
@@ -813,9 +1244,9 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
         schemaId: workContract.outputSchemaId,
         displayName: text('确定性输出 envelope', 'Deterministic output envelope'),
         description: workContract.completionStandard,
-        topLevelFields: [...outputTopLevelFields],
-        primaryFieldPaths: ['summary'],
-        fields: outputFields,
+        topLevelFields: [...outputTopLevelFields, ...(outputDetails?.topLevelFields ?? [])],
+        primaryFieldPaths: [...(outputDetails?.primaryFieldPaths ?? ['summary'])],
+        fields: [...outputFields, ...(outputDetails?.fields ?? [])],
         exampleJson: JSON.stringify(
           {
             schemaVersion: 1,
@@ -826,6 +1257,7 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
             contextPatches: [],
             effectSuggestions: [],
             artifactRefs: [],
+            ...(outputDetails?.exampleFields ?? {}),
           },
           null,
           2,
@@ -907,6 +1339,32 @@ const primaryRole = (
         description: text('此工作项的确定性执行工具', 'Deterministic executor for this work item'),
         required: true,
         cardinality: 'exactly-one' as const,
+      },
+    ],
+  },
+]
+
+const optionalPrimaryRole = (
+  labelZh: string,
+  labelEn: string,
+  descriptionZh: string,
+  descriptionEn: string,
+) => [
+  {
+    roleRef: 'primary',
+    label: text(labelZh, labelEn),
+    description: text(descriptionZh, descriptionEn),
+    order: 0,
+    bindingSlots: [
+      {
+        slotRef: 'default',
+        label: text('外部 ID 取得工具', 'External ID acquisition tool'),
+        description: text(
+          '仅当任务输入外部需求或问题 ID 时使用',
+          'Used only when a task starts from an external requirement or issue ID',
+        ),
+        required: false,
+        cardinality: 'zero-or-one' as const,
       },
     ],
   },
@@ -996,11 +1454,11 @@ const runtimePackage = {
           ],
         },
         {
-          kind: 'global',
-          label: text('全局默认', 'Global default'),
+          kind: 'task',
+          label: text('任务启动时指定仓库', 'Choose repository when starting a task'),
           description: text(
-            '作为没有更具体匹配时的默认员工',
-            'Acts as the default when no narrower scope matches',
+            '员工不固定仓库，每次交给它工作时再选择目标仓库',
+            'The employee is not bound to a repository; choose one for each new task',
           ),
           fields: [],
         },
@@ -1027,6 +1485,23 @@ const runtimePackage = {
         },
       ],
       acceptedKinds: ['body', 'files', 'body-and-files', 'external-id'],
+      kindRequirements: [
+        { kind: 'external-id', workItemRef: 'prepare-materials', slotRef: 'default' },
+      ],
+      executionOptions: [
+        {
+          optionRef: 'review-implementation-plan',
+          label: text('实现前评审方案', 'Review implementation plan'),
+          description: text(
+            '先输出实现方案，等待人工评论、驳回/迭代或批准，再开始修改代码',
+            'Produce a plan and wait for human comments, iteration, or approval before changing code',
+          ),
+          defaultValue: false,
+          requiredWorkItemRef: 'analyze-implement',
+          requiredSlotRef: 'default',
+          requiredExecutorKind: 'agent',
+        },
+      ],
       body: {
         label: text('需求或问题正文', 'Requirement or problem body'),
         description: text(
@@ -1037,14 +1512,15 @@ const runtimePackage = {
         maxBytes: 2 * 1024 * 1024,
       },
       files: {
-        label: text('随代码提交的文件', 'Files committed with the change'),
+        label: text('需求或问题文档', 'Requirement or problem documents'),
         description: text(
-          '每个文件都必须指定仓库相对目标路径。',
-          'Every file must have an explicit repository-relative target path.',
+          '每个文件可选择随 MR 入库，或放入平台临时材料目录仅供分析与实现读取。',
+          'Each file can be committed with the MR or placed in the platform temporary material directory for analysis and implementation only.',
         ),
         maxFiles: 200,
         maxFileBytes: 32 * 1024 * 1024,
         targetPathRequired: true,
+        placementModes: ['repository', 'temporary'],
       },
       externalId: {
         label: text('外部需求或问题 ID', 'External requirement or issue ID'),
@@ -1177,7 +1653,7 @@ const runtimePackage = {
           materialSummary: contracts[0]!.materialSummary,
           completionStandard: contracts[0]!.completionStandard,
           nodeKind: 'business-tool',
-          toolRoleGroups: primaryRole(
+          toolRoleGroups: optionalPrimaryRole(
             '材料取得',
             'Material acquisition',
             '取得并规范化工作材料',
@@ -1199,6 +1675,15 @@ const runtimePackage = {
           materialSummary: contracts[1]!.materialSummary,
           completionStandard: contracts[1]!.completionStandard,
           nodeKind: 'business-tool',
+          humanReview: {
+            optionRef: 'review-implementation-plan',
+            artifactPort: 'analysis-plan',
+            label: text('可选人工方案评审', 'Optional human plan review'),
+            description: text(
+              '任务受理时可选择先评审实现方案，批准后才执行实现工具',
+              'The task may require plan approval before its implementation tool runs',
+            ),
+          },
           toolRoleGroups: primaryRole(
             '实现者',
             'Implementer',
@@ -1959,8 +2444,8 @@ const runtimePackage = {
 
   summarizeWorkScope(scope: unknown, locale: 'zh-CN' | 'en-US'): string {
     const parsed = scopeSchema.parse(scope)
-    if (parsed.kind === 'global')
-      return locale === 'zh-CN' ? '全局默认范围' : 'Global default scope'
+    if (parsed.kind === 'task')
+      return locale === 'zh-CN' ? '任务启动时指定仓库' : 'Repository chosen at task launch'
     if (parsed.kind === 'repository') {
       return locale === 'zh-CN'
         ? `仓库：${parsed.repositoryId}`
@@ -2030,6 +2515,7 @@ export const developmentEmployeeTypePackage: EmployeeTypePackageRegistration = {
 const uploadSeedSchema = z
   .object({
     artifactRef: z.string().min(1).max(1_000),
+    placement: z.enum(['repository', 'temporary']).default('repository'),
     targetPath: z
       .string()
       .min(1)
@@ -2042,16 +2528,40 @@ const uploadSeedSchema = z
           value
             .split('/')
             .every((segment) => segment !== '' && segment !== '.' && segment !== '..'),
-      )
-      .refine((value) => {
-        const root = value.split('/')[0]?.toLowerCase()
-        return root !== '.git' && root !== PLATFORM_WORKSPACE_DIR
-      }),
+      ),
     originalName: z.string().min(1).max(500),
   })
   .strict()
+  .superRefine((value, ctx) => {
+    const root = value.targetPath.split('/')[0]?.toLowerCase()
+    if (value.placement === 'repository' && (root === '.git' || root === PLATFORM_WORKSPACE_DIR)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['targetPath'],
+        message: 'repository upload path overlaps a platform-owned path',
+      })
+    }
+    if (
+      value.placement === 'temporary' &&
+      !value.targetPath.startsWith(`${PLATFORM_WORKSPACE_DIR}/inputs/requirements/`)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['targetPath'],
+        message: 'temporary upload path must be allocated under the platform requirement root',
+      })
+    }
+  })
 
-const issueHandlingContextSchema = z
+const deliveryContentSchema = z
+  .object({
+    commitMessage: z.string().trim().min(1).max(5_000),
+    mergeRequestTitle: z.string().trim().min(1).max(240),
+    mergeRequestDescription: z.string().trim().min(1).max(32_000),
+  })
+  .strict()
+
+export const issueHandlingContextSchema = z
   .object({
     status: z.enum(['active', 'waiting', 'terminal']),
     subjectRef: z.string().min(1).max(1_000),
@@ -2066,9 +2576,11 @@ const issueHandlingContextSchema = z
           .nullable(),
         externalId: z.string().min(1).max(500).nullable(),
         uploads: z.array(uploadSeedSchema).max(200),
+        executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
       })
       .strict(),
     materialArtifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+    deliveryContent: deliveryContentSchema.nullable().default(null),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -2425,6 +2937,20 @@ const reactionOutputSchema = z
     executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
     status: z.enum(['ok', 'needs-input', 'blocked']),
     summary: z.string().min(1).max(5_000),
+    deliveryContent: deliveryContentSchema.nullable().optional(),
+    reviewReplies: z
+      .array(
+        z
+          .object({
+            threadRef: z.string().min(1).max(500),
+            revision: z.string().min(1).max(500),
+            disposition: z.enum(['addressed', 'needs-human']),
+            replyBody: z.string().trim().min(1).max(8_000),
+          })
+          .strict(),
+      )
+      .max(100)
+      .optional(),
     contextPatches: z
       .array(
         z
@@ -2475,6 +3001,7 @@ const initialCaseRequestSchema = z
         body: z.string().min(1).nullable(),
         externalId: z.string().min(1).nullable(),
         idempotencyKey: z.string().min(1).max(500),
+        executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
         uploads: z.array(
           z
             .object({
@@ -2483,6 +3010,7 @@ const initialCaseRequestSchema = z
               sha256: z.string().regex(/^[a-f0-9]{64}$/),
               bytes: z.number().int().positive(),
               originalName: z.string().min(1),
+              placement: z.enum(['repository', 'temporary']).default('repository'),
               targetPath: z.string().min(1),
             })
             .strict(),
@@ -2585,12 +3113,18 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
   typeId: 'development',
   buildInitialCaseJson(requestJson) {
     const request = initialCaseRequestSchema.parse(JSON.parse(requestJson) as unknown)
-    const scope = scopeSchema.parse(JSON.parse(request.workScopeJson) as unknown)
-    const repositoryRef = request.intake.target.repositoryId
+    const scope = runtimeScopeSchema.parse(JSON.parse(request.workScopeJson) as unknown)
+    const requestedRepositoryRef = request.intake.target.repositoryId
+    const repositoryRef = scope.kind === 'repository' ? scope.repositoryId : requestedRepositoryRef
     if (repositoryRef === undefined || repositoryRef.length === 0) {
       throw new Error('development work intake requires a target repository')
     }
-    if (scope.kind === 'repository' && scope.repositoryId !== repositoryRef) {
+    if (
+      scope.kind === 'repository' &&
+      requestedRepositoryRef !== undefined &&
+      requestedRepositoryRef !== '' &&
+      requestedRepositoryRef !== scope.repositoryId
+    ) {
       throw new Error('target repository is outside the employee responsibility scope')
     }
     const artifactRefs = request.intake.uploads.map((upload) => `employee-input:${upload.blobRef}`)
@@ -2606,8 +3140,10 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         kind: request.intake.kind,
         body: request.intake.body,
         externalId: request.intake.externalId,
+        executionOptions: request.intake.executionOptions,
         uploads: request.intake.uploads.map((upload) => ({
           artifactRef: `employee-input:${upload.blobRef}`,
+          placement: upload.placement,
           targetPath: upload.targetPath,
           originalName: upload.originalName,
         })),
@@ -2626,7 +3162,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
   },
   buildInvokedCaseJson(requestJson) {
     const request = invokedCaseRequestSchema.parse(JSON.parse(requestJson) as unknown)
-    const scope = scopeSchema.parse(JSON.parse(request.targetWorkScopeJson) as unknown)
+    const scope = runtimeScopeSchema.parse(JSON.parse(request.targetWorkScopeJson) as unknown)
     const parentEnvelope = z
       .object({ contextsJson: z.string().min(2) })
       .passthrough()
@@ -2846,6 +3382,19 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
+    if (request.workItemRef === 'prepare-materials') {
+      const contexts = z
+        .array(z.object({ typeId: z.string(), stateJson: z.string() }).passthrough())
+        .parse(JSON.parse(request.contextsJson) as unknown)
+      const issue = contexts.find((context) => context.typeId === 'development.issue-handling')
+      const kind =
+        issue === undefined
+          ? null
+          : issueHandlingContextSchema.parse(JSON.parse(issue.stateJson) as unknown).request.kind
+      return JSON.stringify({
+        slotRef: kind === 'external-id' ? request.defaultSlotRef : 'platform',
+      })
+    }
     if (request.workItemRef !== 'repair-pipeline') {
       return JSON.stringify({ slotRef: request.defaultSlotRef })
     }
@@ -2876,6 +3425,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const request = z
       .object({
         schemaVersion: z.literal(1),
+        caseRef: z.string().min(1),
         roundRef: z.string().min(1),
         executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
         workItemRef: z.string().min(1),
@@ -2938,11 +3488,17 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         fallback: route.fallback,
         handlingWorkItemRef: route.destinationWorkItemRef,
       })) ?? []
+    const platformCaseKey = stableIdentityComponent(request.caseRef)
+    const requirementDirectory = `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}`
+    const materialTargetDirectory = `${requirementDirectory}/external`
+    const pipelineDirectory = `${PLATFORM_WORKSPACE_DIR}/pipeline/${platformCaseKey}`
+    const implementationPlanPath = `${requirementDirectory}/review/implementation-plan.md`
     const projectedContractInput =
       request.workItemRef === 'prepare-materials'
         ? {
             workRequest: issueState?.request ?? null,
             repositoryRef: issueState?.repositoryRef ?? null,
+            materialTargetDirectory,
           }
         : request.workItemRef === 'analyze-implement'
           ? { requirementContext: issueState }
@@ -2953,23 +3509,33 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
                   problemSet: stateOf(problemSet),
                   mergeRequest: stateOf(mergeRequest),
                   reviewResolution: stateOf(reviewResolution),
+                  requirementContext: issueState,
                 }
               : request.workItemRef === 'collect-pipeline'
                 ? {
                     mergeRequest: stateOf(mergeRequest),
                     connectionRef: request.connectionRef,
-                    pipelineDirectory: `${PLATFORM_WORKSPACE_DIR}/pipeline`,
+                    pipelineDirectory,
                   }
                 : request.workItemRef === 'classify-pipeline'
-                  ? { pipelineEvidence: stateOf(pipeline), failureTypeDefinitions }
+                  ? {
+                      pipelineEvidence: stateOf(pipeline),
+                      failureTypeDefinitions,
+                      pipelineDirectory,
+                    }
                   : request.workItemRef === 'repair-pipeline'
                     ? {
                         problemSet: stateOf(problemSet),
                         pipelineEvidence: stateOf(pipeline),
                         assignedFailureType: request.toolSlotRef,
+                        pipelineDirectory,
                       }
                     : request.workItemRef === 'repair-conflict'
-                      ? { mergeRequest: stateOf(mergeRequest), event }
+                      ? {
+                          mergeRequest: stateOf(mergeRequest),
+                          event,
+                          requirementContext: issueState,
+                        }
                       : request.workItemRef === 'prepare-approval'
                         ? {
                             mergeRequest: stateOf(mergeRequest),
@@ -2984,6 +3550,31 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             cachedRepoId: issueHandlingContextSchema.parse(JSON.parse(issue.stateJson) as unknown)
               .repositoryRef,
           }
+    const materialInstructions = {
+      bodyProvided: issueState?.request.body !== null && issueState?.request.body !== undefined,
+      externalId: issueState?.request.externalId ?? null,
+      uploads:
+        issueState?.request.uploads.map((upload) => ({
+          originalName: upload.originalName,
+          placement: upload.placement,
+          workspacePath: upload.targetPath,
+          commitWithMergeRequest: upload.placement === 'repository',
+          artifactRef: upload.artifactRef,
+        })) ?? [],
+      requirementDirectory,
+      externalMaterialDirectory: materialTargetDirectory,
+    }
+    const humanReview =
+      request.workItemRef === 'analyze-implement' &&
+      issueState?.request.executionOptions['review-implementation-plan'] === true
+        ? {
+            kind: 'implementation-plan',
+            artifactPort: 'analysis-plan',
+            documentPath: implementationPlanPath,
+            title: '实现方案评审',
+            description: '请评审数字员工基于冻结工作材料和仓库现场形成的实现方案。',
+          }
+        : null
     return JSON.stringify({
       schemaVersion: request.schemaVersion,
       roundRef: request.roundRef,
@@ -3005,22 +3596,34 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           ),
         ),
       ],
+      materialInstructions,
+      humanReview,
+      platformPaths: {
+        requirementDirectory,
+        externalMaterialDirectory: materialTargetDirectory,
+        pipelineDirectory,
+        implementationPlanPath,
+      },
       workInstructions:
         request.workItemRef === 'prepare-approval'
           ? 'Produce one development.approval context patch with status=draft. mergeRequestRef and headSha must exactly equal the frozen current MR, adapterRef must exactly equal connectionRef, approvalType must be gate-change, validatedDraftRef must identify the strict approval draft envelope, and all submission/observation fields must be null. Do not submit the approval and do not access credentials.'
           : request.workItemRef === 'collect-pipeline'
-            ? 'Write complete gate evidence and large logs under the supplied .agent-workflow/pipeline Case directory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes.'
+            ? 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes. Do not choose another download path.'
             : request.workItemRef === 'classify-pipeline'
-              ? `Classify the pipeline evidence using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier configured type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
+              ? `Read pipeline evidence only from platformPaths.pipelineDirectory and classify it using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier configured type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
               : request.workItemRef === 'repair-pipeline'
-                ? `Repair every problem assigned to deterministic slot ${request.toolSlotRef}; do not choose another tool or slot. The platform will mark that slot complete after an ok result.`
+                ? `Read the exact evidence and large logs from platformPaths.pipelineDirectory. Repair every problem assigned to deterministic slot ${request.toolSlotRef}; do not choose another tool, slot, or evidence path. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit the issue Context. The platform will mark that slot complete after an ok result.`
                 : request.workItemRef === 'classify-feedback'
                   ? 'Read development.merge-request.reviewThreads. Upsert development.problem-set with source=review, remainingTypes=["review"], and exactly one typed problem for every unresolved non-self review thread. Each problemId must equal that review threadRef; do not add, omit, or merge threads.'
                   : request.workItemRef === 'repair-feedback'
-                    ? 'Read the complete root comment and all replies from every problem.reviewThread. Repair every assigned thread. Upsert development.review-resolution with status=prepared and exactly one row per input (threadRef, revision), preserving its acknowledgement receipt and adding disposition plus a concrete replyBody that explains how that thread was handled. Do not post comments, commit, push, or resolve threads.'
-                    : request.workItemRef === 'prepare-materials'
-                      ? 'For an external ID, programmatically download all source files into the supplied .agent-workflow/inputs/requirements Case directory. Do not write Git metadata.'
-                      : 'Follow the frozen work contract and return only its deterministic result.',
+                    ? 'Read the complete root comment and all replies from every problem.reviewThread. Repair every assigned thread. Return top-level reviewReplies in the exact input order, with one (threadRef, revision, disposition, replyBody) for every thread, plus top-level deliveryContent. Do not edit platform Contexts or receipts, and do not post comments, commit, push, or resolve threads; the platform performs those actions after validation.'
+                    : request.workItemRef === 'analyze-implement'
+                      ? 'Before analysis or implementation, read every body, external ID, uploaded workspacePath, and requirementDirectory entry in materialInstructions. Respect commitWithMergeRequest: temporary documents are read-only materials and must never be copied into a commit. When humanReview is present, implementation starts only after the platform review has approved the generated plan; consume that approved plan together with this frozen envelope. Do not omit an uploaded document. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit the issue Context or perform Git/MR operations.'
+                      : request.workItemRef === 'repair-conflict'
+                        ? 'Repair only the platform-frozen conflict scene and authorized files. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit platform Contexts and do not perform commit, push, merge, or MR updates.'
+                        : request.workItemRef === 'prepare-materials'
+                          ? 'For an external ID, download every source file only into contractInput.materialTargetDirectory, which the platform has already allocated and created. Do not choose another path, do not write Git metadata, and do not copy these temporary materials into business paths.'
+                          : 'Follow the frozen work contract and return only its deterministic result.',
       executionEnvironmentJson: JSON.stringify(executionEnvironment),
     })
   },
@@ -3040,7 +3643,11 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
-    const output = reactionOutputSchema.parse(JSON.parse(request.outputJson) as unknown)
+    const parsedOutput = reactionOutputSchema.parse(JSON.parse(request.outputJson) as unknown)
+    const output = {
+      ...parsedOutput,
+      contextPatches: [...parsedOutput.contextPatches],
+    }
     const inputEnvelope = reactionInputEnvelopeSchema.parse(
       JSON.parse(request.inputEnvelopeJson) as unknown,
     )
@@ -3051,11 +3658,120 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       const context = inputContexts.find((candidate) => candidate.typeId === typeId)
       return context === undefined ? null : schema.parse(JSON.parse(context.stateJson) as unknown)
     }
+    const platformContext = (typeId: string) => {
+      const context = inputContexts.find((candidate) => candidate.typeId === typeId)
+      if (context === undefined) return null
+      const record = z
+        .object({
+          id: z.string().min(1),
+          typeId: z.literal(typeId),
+          schemaVersion: z.number().int().positive(),
+          revision: z.number().int().positive(),
+          lifecycleState: z.enum(['active', 'waiting', 'terminal']),
+          artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+        })
+        .passthrough()
+        .safeParse(context)
+      if (!record.success) {
+        throw new Error(`${typeId} is missing platform context identity metadata`)
+      }
+      return record.data
+    }
+    const appendPlatformContextPatch = (
+      context: NonNullable<ReturnType<typeof platformContext>>,
+      state: unknown,
+    ): void => {
+      output.contextPatches.push({
+        contextId: context.id,
+        contextTypeId: context.typeId,
+        schemaVersion: context.schemaVersion,
+        expectedRevision: context.revision,
+        lifecycleState: context.lifecycleState,
+        stateJson: JSON.stringify(state),
+        artifactRefs: context.artifactRefs,
+      })
+    }
     const patchState = <T>(typeId: string, schema: z.ZodType<T>): T | null => {
       const patch = output.contextPatches.find((candidate) => candidate.contextTypeId === typeId)
       return patch === undefined ? null : schema.parse(JSON.parse(patch.stateJson) as unknown)
     }
     if (output.status === 'ok') {
+      const deliveryWorkItems = new Set([
+        'analyze-implement',
+        'repair-feedback',
+        'repair-pipeline',
+        'repair-conflict',
+      ])
+      if (deliveryWorkItems.has(request.workItemRef)) {
+        if (
+          parsedOutput.contextPatches.some(
+            (patch) => patch.contextTypeId === 'development.issue-handling',
+          )
+        ) {
+          throw new Error(
+            `${request.workItemRef} must return top-level deliveryContent and cannot edit the platform-owned issue Context`,
+          )
+        }
+        if (output.deliveryContent === undefined || output.deliveryContent === null) {
+          throw new Error(
+            `${request.workItemRef} must output commitMessage, mergeRequestTitle, and mergeRequestDescription`,
+          )
+        }
+        const issueContext = platformContext('development.issue-handling')
+        const issue = inputState('development.issue-handling', issueHandlingContextSchema)
+        if (issueContext === null || issue === null) {
+          throw new Error(`${request.workItemRef} requires the platform-owned issue Context`)
+        }
+        appendPlatformContextPatch(
+          issueContext,
+          issueHandlingContextSchema.parse({ ...issue, deliveryContent: output.deliveryContent }),
+        )
+      }
+      if (request.workItemRef === 'repair-feedback') {
+        if (
+          parsedOutput.contextPatches.some(
+            (patch) => patch.contextTypeId === 'development.review-resolution',
+          )
+        ) {
+          throw new Error(
+            'repair-feedback must return top-level reviewReplies and cannot edit platform review receipts',
+          )
+        }
+        const resolutionContext = platformContext('development.review-resolution')
+        const current = inputState('development.review-resolution', reviewResolutionContextSchema)
+        const replies = output.reviewReplies
+        if (
+          resolutionContext === null ||
+          current === null ||
+          current.status !== 'acknowledged' ||
+          replies === undefined ||
+          replies.length !== current.threads.length ||
+          current.threads.some(
+            (thread, index) =>
+              replies[index]?.threadRef !== thread.threadRef ||
+              replies[index]?.revision !== thread.revision,
+          )
+        ) {
+          throw new Error(
+            'repair-feedback must return one ordered review reply for every acknowledged thread revision',
+          )
+        }
+        appendPlatformContextPatch(
+          resolutionContext,
+          reviewResolutionContextSchema.parse({
+            ...current,
+            status: 'prepared',
+            publishedHeadSha: null,
+            commitSha: null,
+            threads: current.threads.map((thread, index) => ({
+              ...thread,
+              disposition: replies[index]!.disposition,
+              replyBody: replies[index]!.replyBody,
+              finalReply: null,
+            })),
+          }),
+        )
+      }
       const requiredContextType =
         request.workItemRef === 'prepare-approval'
           ? 'development.approval'
@@ -3077,13 +3793,21 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       }
       if (request.workItemRef === 'prepare-materials') {
         const issue = inputState('development.issue-handling', issueHandlingContextSchema)
-        if (
-          issue?.request.kind === 'external-id' &&
-          patchState('development.issue-handling', issueHandlingContextSchema) === null
-        ) {
+        const patchedIssue = patchState('development.issue-handling', issueHandlingContextSchema)
+        if (issue?.request.kind === 'external-id' && patchedIssue === null) {
           throw new Error(
             'prepare-materials must update the issue context for an external work item',
           )
+        }
+        if (
+          issue?.request.kind === 'external-id' &&
+          patchedIssue !== null &&
+          (patchedIssue.repositoryRef !== issue.repositoryRef ||
+            patchedIssue.request.kind !== issue.request.kind ||
+            patchedIssue.request.externalId !== issue.request.externalId ||
+            JSON.stringify(patchedIssue.request.uploads) !== JSON.stringify(issue.request.uploads))
+        ) {
+          throw new Error('prepare-materials cannot change platform-owned intake paths or identity')
         }
       }
       if (request.workItemRef === 'prepare-approval') {
@@ -3268,7 +3992,10 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         }
       }
     }
-    return JSON.stringify(output)
+    if (output.contextPatches.length > 50) {
+      throw new Error('platform context synthesis exceeds the reaction patch limit')
+    }
+    return JSON.stringify(reactionOutputSchema.parse(output))
   },
   resolveReactionSettlementJson(requestJson) {
     const request = z

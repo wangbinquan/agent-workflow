@@ -3,7 +3,7 @@ import type { Agent, CreateAgent } from '@agent-workflow/shared'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DbClient } from '@/db/client'
 import { ConflictError } from '@/util/errors'
-import { createAgent, getAgentById } from './agent'
+import { createAgent, getAgentById, updateAgent } from './agent'
 
 export const DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
   '00000000000000DECODEWRITER',
@@ -13,12 +13,50 @@ export const DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
   '00000000000000DECONFLICTFIX',
   '00000000000000DEFEATUREDEV',
   '00000000000000DEISSUEFIX',
+  '00000000000000DEPLANANALYZE',
 ] as const
+
+export const DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[7]
+
+const DIGITAL_EMPLOYEE_AGENT_TOOL_PRESENTATION: Readonly<
+  Record<
+    string,
+    { readonly zh: string; readonly en: string; readonly selection: 'selectable' | 'automatic' }
+  >
+> = {
+  'code-writing': { zh: '代码编写', en: 'Code writing', selection: 'selectable' },
+  'problem-diagnosis': { zh: '问题定位', en: 'Problem diagnosis', selection: 'selectable' },
+  'pipeline-repair': {
+    zh: '通用流水线修复',
+    en: 'General pipeline repair',
+    selection: 'selectable',
+  },
+  'review-repair': { zh: '检视意见修复', en: 'Review feedback repair', selection: 'selectable' },
+  'conflict-repair': { zh: '代码冲突修复', en: 'Merge conflict repair', selection: 'selectable' },
+  'business-implementation': {
+    zh: '业务需求实现',
+    en: 'Business implementation',
+    selection: 'selectable',
+  },
+  'issue-repair': { zh: '代码问题修复', en: 'Issue repair', selection: 'selectable' },
+  'implementation-planning': {
+    zh: '实现方案分析',
+    en: 'Implementation planning',
+    selection: 'automatic',
+  },
+}
+
+export function digitalEmployeeAgentToolPresentation(template: string) {
+  return DIGITAL_EMPLOYEE_AGENT_TOOL_PRESENTATION[template] ?? null
+}
 
 interface DigitalEmployeeAgentTemplate {
   readonly id: (typeof DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS)[number]
   readonly definition: CreateAgent
 }
+
+const DELIVERY_CONTENT_INSTRUCTION =
+  '只要本轮修改了代码，输出 envelope 就必须在顶层 deliveryContent 中给出完整 commitMessage、mergeRequestTitle、mergeRequestDescription。不得编辑平台 Context；平台会校验并保存业务内容，再负责 commit、push 和创建或更新 MR。不得把交付文案只写在 summary。'
 
 const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] = [
   {
@@ -36,14 +74,13 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'code-writing',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [
           { contractId: 'development.analyze-implement', version: 1 },
           { contractId: 'development.repair-conflict', version: 1 },
         ],
       },
-      bodyMd:
-        '你是数字员工操作系统内置的代码编写者。只处理输入 envelope 中已授权的业务文件和目标；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。先理解需求与现有代码，再完成最小且完整的实现和必要验证。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
+      bodyMd: `你是数字员工操作系统内置的代码编写者。只处理输入 envelope 中已授权的业务文件和目标；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。先理解需求与现有代码，再完成最小且完整的实现和必要验证。${DELIVERY_CONTENT_INSTRUCTION} 最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。`,
     },
   },
   {
@@ -61,7 +98,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'problem-diagnosis',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [{ contractId: 'development.classify-pipeline', version: 1 }],
       },
       bodyMd:
@@ -83,11 +120,10 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'pipeline-repair',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [{ contractId: 'development.repair-pipeline', version: 1 }],
       },
-      bodyMd:
-        '你是数字员工操作系统内置的流水线修复者。读取输入 envelope 指向的 .agent-workflow/pipeline 证据包与日志，不要把大日志复述进输出。只修复指定失败类型和授权业务文件；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。完成最小验证后，只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
+      bodyMd: `你是数字员工操作系统内置的流水线修复者。读取输入 envelope 的 platformPaths.pipelineDirectory 指向的精确证据目录，不要把大日志复述进输出。只修复指定失败类型和授权业务文件；不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。完成最小验证后，${DELIVERY_CONTENT_INSTRUCTION} 最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。`,
     },
   },
   {
@@ -105,11 +141,10 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'review-repair',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [{ contractId: 'development.repair-feedback', version: 1 }],
       },
-      bodyMd:
-        '你是数字员工操作系统内置的检视意见修复者。输入中的每个 reviewThread 都包含根评论和全部多轮回复，必须结合整棵线程理解审阅者意图并修复授权业务文件。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得直接回复或 resolve 评论。输出 envelope 必须更新 development.review-resolution：为每个输入的 threadRef 与 revision 恰好返回一条 disposition 和具体 replyBody，说明如何修复或为什么需要人工决策，同时保留平台已有 acknowledgement 回执。最终只向 agent-result 输出 JSON envelope，不得夹带 Markdown、解释文字或额外端口。',
+      bodyMd: `你是数字员工操作系统内置的检视意见修复者。输入中的每个 reviewThread 都包含根评论和全部多轮回复，必须结合整棵线程理解审阅者意图并修复授权业务文件。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得直接回复或 resolve 评论。输出 envelope 必须在顶层 reviewReplies 按输入顺序为每个 threadRef 与 revision 恰好返回一条 disposition 和具体 replyBody，说明如何修复或为什么需要人工决策；不得编辑平台保存的 acknowledgement 回执。平台会在发布提交后把 replyBody 写回原线程。${DELIVERY_CONTENT_INSTRUCTION} 最终只向 agent-result 输出 JSON envelope，不得夹带 Markdown、解释文字或额外端口。`,
     },
   },
   {
@@ -127,11 +162,10 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'conflict-repair',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [{ contractId: 'development.repair-conflict', version: 1 }],
       },
-      bodyMd:
-        '你是数字员工操作系统内置的代码冲突修复者。只在平台冻结的冲突现场中理解双方变更意图，修改合同授权的冲突文件，并完成最小验证。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得改变固定父提交或自行选择下一步。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
+      bodyMd: `你是数字员工操作系统内置的代码冲突修复者。只在平台冻结的冲突现场中理解双方变更意图，修改合同授权的冲突文件，并完成最小验证。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得改变固定父提交或自行选择下一步。${DELIVERY_CONTENT_INSTRUCTION} 最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。`,
     },
   },
   {
@@ -149,11 +183,10 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'business-implementation',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [{ contractId: 'development.analyze-implement', version: 1 }],
       },
-      bodyMd:
-        '你是数字员工操作系统内置的业务需求实现者。依据冻结需求、验收目标和仓库事实理解既有领域边界，完成最小且完整的业务代码、必要测试与说明。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
+      bodyMd: `你是数字员工操作系统内置的业务需求实现者。依据冻结需求、验收目标和仓库事实理解既有领域边界，完成最小且完整的业务代码、必要测试与说明。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。${DELIVERY_CONTENT_INSTRUCTION} 最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。`,
     },
   },
   {
@@ -171,11 +204,32 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'issue-repair',
-        schemaVersion: 1,
+        schemaVersion: 2,
         executionContracts: [{ contractId: 'development.analyze-implement', version: 1 }],
       },
+      bodyMd: `你是数字员工操作系统内置的代码问题修复者。先用冻结问题材料、复现证据和仓库事实定位可验证根因，再实施最小修复并补充针对性回归验证；不要借机重构无关代码。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。${DELIVERY_CONTENT_INSTRUCTION} 最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。`,
+    },
+  },
+  {
+    id: DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID,
+    definition: {
+      name: 'digital-employee-implementation-planner',
+      description: '只读分析需求、材料与仓库，形成供人工评审的实现方案，不修改任何文件。',
+      outputs: ['analysis-plan'],
+      outputKinds: { 'analysis-plan': 'path<md>' },
+      inputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {
+        digitalEmployeeTemplate: 'implementation-planning',
+        schemaVersion: 2,
+      },
       bodyMd:
-        '你是数字员工操作系统内置的代码问题修复者。先用冻结问题材料、复现证据和仓库事实定位可验证根因，再实施最小修复并补充针对性回归验证；不要借机重构无关代码。不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得自行选择下一步。最终只向 agent-result 输出工作合同要求的 JSON envelope；不得夹带 Markdown、解释文字或额外端口。',
+        '你是数字员工操作系统内置的实现方案分析者。先逐项阅读平台列出的需求正文、上传文件、外部材料目录和仓库现状，区分确定事实、假设与待确认项。只允许在平台注入的 platformPaths.implementationPlanPath 写入包含目标理解、影响范围、实现步骤、测试计划、风险与待确认问题的 Markdown 方案，并向 analysis-plan 端口只输出该相对路径。不得修改其他文件，不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得输出 agent-result。收到评审意见后必须逐条回应并覆写同一方案文件形成完整替代方案。',
     },
   },
 ]
@@ -199,6 +253,13 @@ export async function ensureDigitalEmployeeAgentTemplates(db: DbClient): Promise
           'builtin-agent-id-collision',
           `stable digital employee Agent id '${template.id}' is occupied`,
         )
+      }
+      if (
+        existing.frontmatterExtra.schemaVersion !==
+        template.definition.frontmatterExtra.schemaVersion
+      ) {
+        const { name: _stableName, ...contentPatch } = template.definition
+        await updateAgent(db, template.id, contentPatch, null)
       }
       continue
     }

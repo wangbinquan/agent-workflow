@@ -47,11 +47,29 @@ export const employeeWorkIntakeSchema = z
         z
           .object({
             uploadRef: z.string().min(1).max(200),
-            targetPath: repositoryTargetPathSchema,
+            placement: z.enum(['repository', 'temporary']).default('repository'),
+            targetPath: repositoryTargetPathSchema.nullable().default(null),
           })
-          .strict(),
+          .strict()
+          .superRefine((upload, ctx) => {
+            if (upload.placement === 'repository' && upload.targetPath === null) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['targetPath'],
+                message: 'repository placement requires a target path',
+              })
+            }
+            if (upload.placement === 'temporary' && upload.targetPath !== null) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['targetPath'],
+                message: 'temporary placement path is allocated by the platform',
+              })
+            }
+          }),
       )
       .max(500),
+    executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
     idempotencyKey: z.string().min(1).max(500),
   })
   .strict()
@@ -88,7 +106,9 @@ export const employeeWorkIntakeSchema = z
         message: 'externalId is not allowed for this input kind',
       })
     }
-    const targetPaths = value.uploads.map((upload) => upload.targetPath)
+    const targetPaths = value.uploads.flatMap((upload) =>
+      upload.placement === 'repository' && upload.targetPath !== null ? [upload.targetPath] : [],
+    )
     if (new Set(targetPaths).size !== targetPaths.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'upload target paths must be unique' })
     }

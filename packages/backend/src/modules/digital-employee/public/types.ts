@@ -47,6 +47,16 @@ export interface EmployeeTypePackageRegistration {
   validateContractFixtureJson(requestJson: string): string
 }
 
+/**
+ * Provider-owned catalog of immutable platform tools. Canonical JSON keeps the
+ * Digital Employee OS from importing Agent/Workflow storage internals.
+ */
+export interface DigitalEmployeePlatformToolCatalogParticipant {
+  listJson(typeRefJson: string, workItemRef: string): string
+  getRevisionJson(refJson: string): string | null
+  isPlatformTool(toolId: string): boolean
+}
+
 /** Case/context half of a runtime-only pure type-package codec. */
 export interface EmployeeTypeContextCodec {
   readonly typeId: string

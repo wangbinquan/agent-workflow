@@ -3818,7 +3818,6 @@ export interface Resources {
       }
       categoryLabel: string
       category: { all: string; orchestration: string; 'digital-employee': string }
-      newDigitalEmployee: string
       digitalEmployeeSection: string
       digitalEmployeeSectionHint: string
       digitalEmployeeTask: string
@@ -4545,9 +4544,11 @@ export interface Resources {
     kindWorkflow: string
     kindAgent: string
     kindWorkgroup: string
+    kindDigitalEmployee: string
     kindHintWorkflow: string
     kindHintAgent: string
     kindHintWorkgroup: string
+    kindHintDigitalEmployee: string
     objectWorkflow: string
     objectAgent: string
     objectWorkgroup: string
@@ -11170,7 +11171,7 @@ export const zhCN: Resources = {
   },
   tasks: {
     title: '任务',
-    newButton: '新建编排任务',
+    newButton: '新建任务',
     filterAll: '全部',
     emptyList: '还没有任务',
     emptyDescription: '启动工作流、工作组或单个代理，并在这里持续跟踪每次执行。',
@@ -11241,9 +11242,8 @@ export const zhCN: Resources = {
       category: {
         all: '全部任务',
         orchestration: '编排任务',
-        'digital-employee': '数字员工',
+        'digital-employee': '数字员工任务',
       },
-      newDigitalEmployee: '交给数字员工',
       digitalEmployeeSection: '数字员工任务',
       digitalEmployeeSectionHint: '需求、自动开发、MR 看护与合入生命周期',
       digitalEmployeeTask: '数字员工任务',
@@ -12049,9 +12049,11 @@ export const zhCN: Resources = {
     kindWorkflow: '工作流',
     kindAgent: 'Agent',
     kindWorkgroup: '工作组',
+    kindDigitalEmployee: '数字员工',
     kindHintWorkflow: '按工作流定义的输入启动一次编排任务。',
     kindHintAgent: '把任务描述直接交给一个 Agent 执行，支持反问。',
     kindHintWorkgroup: '把使命交给一个工作组协同完成。',
+    kindHintDigitalEmployee: '交给有状态的数字员工，并持续跟踪后续事件直到工作结束。',
     objectWorkflow: '选择工作流',
     objectAgent: '选择 Agent',
     objectWorkgroup: '选择工作组',

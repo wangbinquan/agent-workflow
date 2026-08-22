@@ -24,6 +24,12 @@ import { createSqliteRuntimeStore } from './infrastructure/sqliteRuntimeStore'
 import { analyzeDigitalEmployeeMigration } from './composition/writerCutover'
 import { z } from 'zod'
 import { contractValidationCheckSchema, employeeTypePackageDescriptorSchema } from './domain/model'
+import {
+  employeeTypeRefSchema,
+  exactResourceRefSchema,
+  toolRegistrationContentSchema,
+  toolValidationReceiptSchema,
+} from './domain/model'
 import type {
   CreateToolRegistrationBody,
   DigitalEmployeeDefinitionContent,
@@ -46,6 +52,8 @@ import type {
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
 } from './public/types'
+import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/types'
+import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { startDigitalEmployeeOsWorker } from './application/osWorker'
@@ -68,6 +76,9 @@ export interface ToolRegistrationView {
   readonly validationReceipt: ToolValidationReceipt
   readonly publishedRevision: number | null
   readonly state: 'draft' | 'published' | 'retired'
+  readonly origin: 'custom' | 'platform'
+  readonly editable: boolean
+  readonly selection: 'selectable' | 'automatic'
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -93,6 +104,8 @@ export interface EmployeeDefinitionView {
   readonly draft: DigitalEmployeeDefinitionDraft
   readonly publishedRevision: number | null
   readonly published: DigitalEmployeeDefinitionContent | null
+  /** Exact decoded scope frozen into the published employee revision. */
+  readonly publishedWorkScope: unknown | null
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -215,6 +228,7 @@ export interface ComposeDigitalEmployeeOptions {
   readonly programArtifacts?: ProgramArtifactPort
   readonly inputArtifacts?: EmployeeInputArtifactPort
   readonly executionContracts: ExecutionContractParticipant
+  readonly platformTools?: DigitalEmployeePlatformToolCatalogParticipant
   /** Read-only projection of Settings -> Limits; never employee-local config. */
   readonly retryLimits?: EmployeeRetryLimitsPort
   readonly runtime?: {
@@ -268,8 +282,66 @@ function toolView(
         : record.publishedRevision === null
           ? 'draft'
           : 'published',
+    origin: record.origin ?? 'custom',
+    editable: record.origin !== 'platform',
+    selection: record.selection ?? 'selectable',
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  }
+}
+
+const platformToolDraftSchema = z
+  .object({
+    id: z.string().min(1).max(500),
+    typeRef: employeeTypeRefSchema,
+    workItemRef: z.string().min(1).max(160),
+    content: toolRegistrationContentSchema,
+    validationReceipt: toolValidationReceiptSchema,
+    publishedRevision: z.number().int().positive().nullable(),
+    ownerUserId: z.string().nullable(),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+    retiredAt: z.number().int().nonnegative().nullable(),
+    origin: z.literal('platform'),
+    selection: z.enum(['selectable', 'automatic']),
+  })
+  .strict()
+
+const platformToolRevisionSchema = z
+  .object({
+    ref: exactResourceRefSchema,
+    content: toolRegistrationContentSchema,
+    contentDigest: z.string().regex(/^[a-f0-9]{64}$/),
+    validationReceipt: toolValidationReceiptSchema,
+    state: z.enum(['published', 'retired']),
+    publishedAt: z.number().int().nonnegative(),
+    publishedBy: z.string().nullable(),
+  })
+  .strict()
+
+function platformToolCatalogOf(
+  participant: DigitalEmployeePlatformToolCatalogParticipant | undefined,
+): DigitalEmployeePlatformToolCatalog {
+  if (participant === undefined) {
+    return {
+      list: () => [],
+      getRevision: () => null,
+      isPlatformTool: () => false,
+    }
+  }
+  return {
+    list(typeRef, workItemRef) {
+      return z
+        .array(platformToolDraftSchema)
+        .parse(JSON.parse(participant.listJson(JSON.stringify(typeRef), workItemRef)) as unknown)
+    },
+    getRevision(ref) {
+      const encoded = participant.getRevisionJson(JSON.stringify(ref))
+      return encoded === null
+        ? null
+        : platformToolRevisionSchema.parse(JSON.parse(encoded) as unknown)
+    },
+    isPlatformTool: (toolId) => participant.isPlatformTool(toolId),
   }
 }
 
@@ -296,6 +368,7 @@ export function composeDigitalEmployee(
     options.inputArtifacts ??
     createEmployeeInputArtifactStore(join(options.appHome, 'artifacts', 'employee-inputs'))
   const runtimePackages = options.typePackages.map(runtimePackageOf)
+  const platformTools = platformToolCatalogOf(options.platformTools)
   const service = new DigitalEmployeeAuthoringService({
     store,
     typePackages: runtimePackages,
@@ -306,6 +379,7 @@ export function composeDigitalEmployee(
     },
     programArtifacts: options.programArtifacts ?? createProgramArtifactStore(options.appHome),
     executionContracts: options.executionContracts,
+    platformTools,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.id === undefined ? {} : { id: options.id }),
   })
@@ -320,6 +394,10 @@ export function composeDigitalEmployee(
             id: record.id,
             revision: record.publishedRevision,
           })?.content ?? null)
+    const publishedWorkScope =
+      published === null
+        ? null
+        : (store.getWorkScopeRevision(published.workScopeRef)?.encodedScope ?? null)
     return {
       id: record.id,
       name: record.name,
@@ -327,6 +405,7 @@ export function composeDigitalEmployee(
       draft: record.draft,
       publishedRevision: record.publishedRevision,
       published,
+      publishedWorkScope,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     }
@@ -369,6 +448,7 @@ export function composeDigitalEmployee(
           },
           runtimeCodecs: options.runtime.codecs,
           executionContracts: options.executionContracts,
+          platformTools,
           resolveExecutionPolicy: () =>
             options.retryLimits === undefined
               ? service.getExecutionPolicy()

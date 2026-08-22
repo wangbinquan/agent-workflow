@@ -28,6 +28,10 @@ export interface ToolDraftRecord {
   readonly createdAt: number
   readonly updatedAt: number
   readonly retiredAt: number | null
+  /** Platform catalog entries are immutable projections, never user drafts. */
+  readonly origin?: 'custom' | 'platform'
+  /** Automatic entries explain platform behavior but cannot be bound by a job. */
+  readonly selection?: 'selectable' | 'automatic'
 }
 
 export interface ToolRevisionRecord {
@@ -38,6 +42,18 @@ export interface ToolRevisionRecord {
   readonly state: 'published' | 'retired'
   readonly publishedAt: number
   readonly publishedBy: string | null
+}
+
+export interface DigitalEmployeePlatformToolCatalog {
+  list(typeRef: EmployeeTypeRef, workItemRef: string): readonly ToolDraftRecord[]
+  getRevision(ref: ExactResourceRef): ToolRevisionRecord | null
+  isPlatformTool(toolId: string): boolean
+}
+
+export const EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG: DigitalEmployeePlatformToolCatalog = {
+  list: () => [],
+  getRevision: () => null,
+  isPlatformTool: () => false,
 }
 
 export interface JobTemplateRecord {

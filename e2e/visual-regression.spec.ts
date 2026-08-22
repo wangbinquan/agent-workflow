@@ -43,7 +43,7 @@ import { routeTaskOperationsFixture } from './task-operations-fixtures'
 import { routeCodeSurfaceFixtures } from './code-surface-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 46
+const EXPECTED_VISUAL_SCENE_COUNT = 47
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -1055,7 +1055,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
   })
 
-  // RFC-310 —— 当前数字员工入口的逐页视觉回归。分类、固定职责全景、节点工具箱和
+  // RFC-310 —— 当前数字员工入口的逐页视觉回归。分类、固定职责卡片、节点工具箱和
   // 增加工具弹窗必须同屏保持上下文；旧 `/code/config/*` 深链继续作为兼容读面覆盖，
   // 但 `/code` 首页已经由单写切换重定向到这里，不再记录已废弃的 journey 像素。
   test('/digital-employees type catalog (light)', async ({ page }) => {
@@ -1068,27 +1068,41 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('digital-employees.png', SNAPSHOT_OPTS)
   })
 
+  test('/tasks/new unified task creation cards (light)', async ({ page }) => {
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/tasks/new`)
+    await expect(page.getByTestId('wizard-kind-agent')).toBeVisible()
+    await expect(page.getByTestId('wizard-kind-workflow')).toBeVisible()
+    await expect(page.getByTestId('wizard-kind-workgroup')).toBeVisible()
+    await expect(page.getByTestId('wizard-kind-digital-employee')).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('task-creation-unified-cards.png', SNAPSHOT_OPTS)
+
+    await page.getByTestId('wizard-kind-digital-employee').click()
+    await page.waitForURL(/\/tasks\/employee-cases\/new$/)
+    await expect(page.getByTestId('employee-case-task-wizard-stepper')).toBeVisible()
+    await expect(page.getByTestId('stepper-step-mode')).toHaveAttribute('aria-current', 'step')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('digital-employee-task-wizard-mode.png', SNAPSHOT_OPTS)
+  })
+
   test('/digital-employees fixed responsibility toolbox (light)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
+    // Fit the fully expanded fixed map inside the app shell's scroll viewport.
+    // Element screenshots cannot recover pixels clipped by that ancestor.
+    await page.setViewportSize({ width: 1280, height: 2400 })
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%403?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
     )
-    const graph = page.getByTestId('digital-employee-responsibility-graph')
-    await expect(graph).toBeVisible()
-    await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
+    const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
+    await expect(responsibilityMap).toBeVisible()
+    await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
     await waitForStableAuthenticatedShell(page)
-    // The app shell scrolls its main pane internally. Playwright fills the
-    // clipped tail of an element screenshot with the page background instead
-    // of scrolling that ancestor, so the canonical 1280x800 viewport silently
-    // omitted the final merge-readiness lane despite all 20 nodes existing.
-    // Give this component-only evidence enough height to prove the fully
-    // expanded panorama; the functional journey still locks the normal desktop
-    // viewport, same-page selection, and absence of horizontal overflow.
-    await page.setViewportSize({ width: 1280, height: 1200 })
-    await expect(graph).toHaveScreenshot(
+    await expect(responsibilityMap).toHaveScreenshot(
       'digital-employee-responsibility-map.png',
       COMPONENT_SNAPSHOT_OPTS,
     )
@@ -1105,7 +1119,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%403?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()

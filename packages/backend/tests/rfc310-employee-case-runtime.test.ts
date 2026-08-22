@@ -134,9 +134,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
     let ordinal = 0
     let retryLimits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
     let corruptOutputsRemaining = 3
-    let executionOutput = {
+    let executionOutput: Record<string, unknown> = {
       status: 'ok',
-      summary: '工作材料已取得并规范化',
+      summary: '需求已实现并形成交付文案',
+      deliveryContent: {
+        commitMessage: 'implement deterministic employee runtime',
+        mergeRequestTitle: 'Implement deterministic employee runtime',
+        mergeRequestDescription: 'Implements the requested deterministic employee runtime.',
+      },
       contextPatches: [],
       effectSuggestions: [],
       artifactRefs: [],
@@ -437,7 +442,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const bindings: Array<{
@@ -707,12 +712,25 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(projection.inbox).toEqual([])
 
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
+    expect(launchedPlans).toHaveLength(0)
+    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    expect(projection.rounds[0]).toMatchObject({ state: 'completed' })
+    expect(projection.case).toMatchObject({
+      state: 'active',
+      currentWorkItemRef: 'analyze-implement',
+    })
+
+    const analyzeRound = runtime.worker.planOneReaction()
+    expect(analyzeRound).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Lifecycle publication can precede the Agent launch outbox.
+    }
     expect(launchedPlans).toHaveLength(1)
     expect(launchedPlans[0]).toMatchObject({
-      roundRef: roundId,
+      roundRef: analyzeRound,
       implementationKind: 'agent',
-      inputSchemaId: 'development.work-request.v1',
-      outputSchemaId: 'development.requirement-context.v1',
+      inputSchemaId: 'development.requirement-context.v1',
+      outputSchemaId: 'development.change-proposal.v1',
       allowedEffectKinds: [],
     })
     const retryDelays = [2_000, 4_000, 8_000]
@@ -731,24 +749,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(await runtime.worker.inspectOneExecution()).toBe('completed')
     projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
     expect(projection.activeRound).toBeUndefined()
-    expect(projection.rounds[0]).toMatchObject({ state: 'completed' })
     expect(projection.inbox).toEqual([])
     expect(projection.case).toMatchObject({
       state: 'active',
-      currentWorkItemRef: 'analyze-implement',
+      currentWorkItemRef: 'prepare-change',
     })
     expect(projection.attention).toEqual([])
-
-    const analyzeRound = runtime.worker.planOneReaction()
-    expect(analyzeRound).not.toBeNull()
-    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-      // Attention cleanup can precede the reaction launch outbox.
-    }
-    expect(await runtime.worker.inspectOneExecution()).toBe('completed')
-    expect(
-      JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson).case
-        .currentWorkItemRef,
-    ).toBe('prepare-change')
 
     expect(runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
@@ -1062,7 +1068,17 @@ describe('RFC-310 stateful employee Case runtime', () => {
     }
     expect(runtime.worker.pumpOneDelivery()).toBe(false)
     expect(runtime.worker.planOneReaction()).not.toBeNull()
-    expect(await runtime.worker.runOneOutbox()).toBe('completed')
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Body input bypasses external-material acquisition and advances to implementation.
+    }
+    expect(
+      JSON.parse(runtime.queries.getCase(terminalOnFailure.caseRef.id).projectionJson).case
+        .currentWorkItemRef,
+    ).toBe('analyze-implement')
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Launch the implementation Agent after the platform-only intake step.
+    }
     expect(await runtime.worker.inspectOneExecution()).toBe('failed')
     expect(
       JSON.parse(runtime.queries.getCase(terminalOnFailure.caseRef.id).projectionJson).case,

@@ -210,6 +210,17 @@
 > typecheck/lint/format/depcheck 全绿。功能/视觉冻结提交为 `96df8c49c84d532e630f0b8346cbde4787e811cd`；exact-SHA
 > CI `32502058325` **31/31 jobs success**，visual `32502058323` **55/55 tests success**，无失败或取消。
 >
+> **PR-21/22 内置工具、最小化配置与统一任务创建（2026-08-22，本地完成，待 hosted 终态）**：研发类型升级为
+> `development@5`，`@1..@4` 保持不可变；内置分析/实现/流水线/冲突修复 Agent 在分类工具箱可见、可选但不可编辑。
+> 平台统一材料、方案、流水线目录以及 `deliveryContent`/`reviewReplies` 输出合同，正文、外部 ID、多文件仓库落点或临时落点
+> 分流确定；方案评审复用 TaskEngine review，批准前不进入实现。固定全景只留在工具箱并改为 20 张职责小卡片，岗位模板在
+> 同页点卡配置，员工范围统一为单仓/仓库组/任务时指定。任务列表只保留一个“新建任务”入口，数字员工成为第四张执行方式卡；
+> 选择后继续走**执行方式 → 执行空间 → 任务内容 → 确认**四步 Stepper，最终确认时才调用 Case command，而不是落入一页式表单。
+> **本地证据**：最终 `bun run gate:local` **9m34s 全绿**——backend **11,626 pass / 36 skip / 0 fail**、frontend
+> **6,674/6,674**、shared **2,219/2,219**、system-mocks **35/35**，typecheck/lint/format/depcheck 全绿；四步真实页面
+> 旅程 **1/1**、零配置旅程 **3/3**、目标视觉 **4/4**、外部 ID→MR→跨仓员工→审批→大证据→合入 system-mock
+> **1/1（52 断言）**。远端 exact-SHA CI/visual 仍须由本轮提交取得，不能沿用 PR-20 的绿灯。
+>
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
 > **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；

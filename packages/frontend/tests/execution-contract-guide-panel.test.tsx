@@ -80,10 +80,13 @@ describe('<ExecutionContractGuidePanel />', () => {
       <ExecutionContractGuidePanel guide={guide} language="zh-CN" kind="agent" />,
     )
 
-    const primary = getByTestId('execution-contract-primary-fields')
+    const primary = getByTestId('execution-contract-primary-input-fields')
     expect(primary.textContent).toContain('需求 / 问题 ID')
     expect(primary.textContent).toContain('contractInput.workRequest.externalId')
     expect(primary.textContent).not.toContain('执行轮次')
+    expect(getByTestId('execution-contract-primary-output-fields').textContent).toContain(
+      '结果摘要',
+    )
     expect(container.textContent).toContain('参数值来自每次任务，不在工具定义中固定填写')
 
     const advanced = container.querySelector(

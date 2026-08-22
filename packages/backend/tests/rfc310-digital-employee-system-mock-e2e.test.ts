@@ -126,6 +126,17 @@ function output(
     readonly summary: string
     readonly contextPatches?: readonly object[]
     readonly artifactRefs?: readonly string[]
+    readonly deliveryContent?: {
+      readonly commitMessage: string
+      readonly mergeRequestTitle: string
+      readonly mergeRequestDescription: string
+    }
+    readonly reviewReplies?: readonly {
+      readonly threadRef: string
+      readonly revision: string
+      readonly disposition: 'addressed' | 'needs-human'
+      readonly replyBody: string
+    }[]
   },
 ): string {
   return JSON.stringify({
@@ -134,6 +145,8 @@ function output(
     executionNonce: plan.executionNonce,
     status: 'ok',
     summary: body.summary,
+    ...(body.deliveryContent === undefined ? {} : { deliveryContent: body.deliveryContent }),
+    ...(body.reviewReplies === undefined ? {} : { reviewReplies: [...body.reviewReplies] }),
     contextPatches: [...(body.contextPatches ?? [])],
     effectSuggestions: [],
     artifactRefs: [...(body.artifactRefs ?? [])],
@@ -369,12 +382,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         })
         if (scene.kind !== 'repository')
           throw new Error(`${plan.workItemRef} needs repository scene`)
-        const requirementsMount = scene.platformInputPaths.find((path) =>
-          path.startsWith('.agent-workflow/inputs/requirements/'),
-        )!
-        const pipelineMount = scene.platformInputPaths.find((path) =>
-          path.startsWith('.agent-workflow/pipeline/'),
-        )!
+        const inputEnvelope = JSON.parse(plan.inputEnvelopeJson) as {
+          contractInput: Record<string, unknown>
+          platformPaths: {
+            requirementDirectory: string
+            externalMaterialDirectory: string
+            pipelineDirectory: string
+          }
+        }
+        const externalMaterialDirectory = inputEnvelope.platformPaths.externalMaterialDirectory
+        const pipelineMount = inputEnvelope.platformPaths.pipelineDirectory
         const contexts = contextsOf(plan)
         let outputJson: string
         if (plan.workItemRef === 'prepare-materials') {
@@ -383,7 +400,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             request: { externalId: string | null }
             materialArtifactRefs: string[]
           }
-          const sink = join(scene.workspacePath, requirementsMount)
+          expect(inputEnvelope.contractInput.materialTargetDirectory).toBe(
+            externalMaterialDirectory,
+          )
+          const sink = join(scene.workspacePath, externalMaterialDirectory)
           const adapterEnvelope = JSON.parse(
             await runAdapter({
               file: join(SYSTEM_MOCKS, 'requirement-adapter-cli.ts'),
@@ -396,7 +416,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             }),
           ) as { files: Array<{ relativePath: string }> }
           const materialRefs = adapterEnvelope.files.map(
-            (file) => `${requirementsMount}/${file.relativePath}`,
+            (file) => `${externalMaterialDirectory}/${file.relativePath}`,
           )
           outputJson = output(plan, {
             summary: `取得 ${materialRefs.length} 个需求文件`,
@@ -429,7 +449,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             join(scene.workspacePath, 'src', 'Main.java'),
             'public final class Main { public static String greeting() { return "hello"; } }\n',
           )
-          outputJson = output(plan, { summary: '实现 Java greeting 并完成本地检查' })
+          outputJson = output(plan, {
+            summary: '实现 Java greeting 并完成本地检查',
+            deliveryContent: {
+              commitMessage:
+                'implement Java greeting\n\nGenerate the requested source and preserve uploaded materials.',
+              mergeRequestTitle: 'Implement Java greeting',
+              mergeRequestDescription:
+                '## Summary\n\nImplements the requested Java greeting and its verification.',
+            },
+          })
         } else if (plan.workItemRef === 'collect-pipeline') {
           const mr = contexts.find((context) => context.typeId === 'development.merge-request')!
           const currentPipeline = contexts.find(
@@ -440,6 +469,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             headSha: string
           }
           const sink = join(scene.workspacePath, pipelineMount)
+          expect(inputEnvelope.contractInput.pipelineDirectory).toBe(pipelineMount)
           const adapterEnvelope = JSON.parse(
             await runAdapter({
               file: join(SYSTEM_MOCKS, 'pipeline-adapter-cli.ts'),
@@ -570,25 +600,19 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           )
           outputJson = output(plan, {
             summary: '完整读取检视线程树并修复代码',
-            contextPatches: [
-              {
-                contextId: resolution.id,
-                contextTypeId: resolution.typeId,
-                schemaVersion: 1,
-                expectedRevision: resolution.revision,
-                lifecycleState: 'active',
-                stateJson: JSON.stringify({
-                  ...resolutionState,
-                  status: 'prepared',
-                  threads: resolutionState.threads.map((thread) => ({
-                    ...thread,
-                    disposition: 'addressed',
-                    replyBody: '已按完整讨论上下文调整 greeting 的实现。',
-                  })),
-                }),
-                artifactRefs: [],
-              },
-            ],
+            deliveryContent: {
+              commitMessage:
+                'address review feedback\n\nApply the requested greeting adjustment and verification.',
+              mergeRequestTitle: 'Implement Java greeting',
+              mergeRequestDescription:
+                '## Summary\n\nImplements the greeting and addresses all current review feedback.',
+            },
+            reviewReplies: resolutionState.threads.map((thread) => ({
+              threadRef: thread.threadRef,
+              revision: thread.revision,
+              disposition: 'addressed',
+              replyBody: '已按完整讨论上下文调整 greeting 的实现。',
+            })),
           })
         } else if (plan.workItemRef === 'prepare-approval') {
           const mergeRequest = contexts.find(
@@ -878,7 +902,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         platformWorkItems: platform,
       },
     })
-    const typeRef = { typeId: 'development', revision: 3 }
+    const typeRef = { typeId: 'development', revision: 5 }
     const typePackage = employeeOs.queries.getType(typeRef)
     const bindings: Array<{
       workItemRef: string
@@ -888,7 +912,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     for (const item of typePackage.authoringManifest.workItems) {
       for (const role of item.toolRoleGroups) {
         for (const slot of role.bindingSlots) {
-          if (!slot.required) continue
+          if (!slot.required && item.workItemRef !== 'prepare-materials') continue
           const contract = typePackage.workContracts.find(
             (candidate) => candidate.contractId === item.workContractRef.contractId,
           )!
@@ -1186,6 +1210,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           'inputs',
           'requirements',
           caseId,
+          'external',
           'files',
           'design.md',
         ),

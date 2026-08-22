@@ -93,7 +93,7 @@ describe('employee type package digest guard', () => {
     expect(store.getTypePackage(descriptor.typeRef)?.descriptorDigest).toBe(currentDigest)
   })
 
-  test('a frozen development@1 registration upgrades by appending development@3', () => {
+  test('a frozen development@1 registration upgrades by appending development@5', () => {
     const store = newStore()
     const previous = structuredClone(descriptor)
     previous.typeRef.revision = 1
@@ -107,7 +107,7 @@ describe('employee type package digest guard', () => {
     store.ensureTypePackage(record(currentDigest))
 
     expect(store.listTypePackages().map((entry) => entry.descriptor.typeRef)).toEqual([
-      { typeId: 'development', revision: 3 },
+      { typeId: 'development', revision: 5 },
       { typeId: 'development', revision: 1 },
     ])
   })

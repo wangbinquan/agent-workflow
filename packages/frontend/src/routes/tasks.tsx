@@ -467,18 +467,9 @@ function TasksPage() {
     caseItems.length === 0 &&
     !initialEmpty
   const newTaskAction = (
-    <>
-      <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
-        {t('tasks.newButton')}
-      </Link>
-      <Link
-        to="/tasks/employee-cases/new"
-        className="btn btn--primary"
-        data-testid="tasks-new-digital-employee"
-      >
-        {t('tasks.operations.newDigitalEmployee')}
-      </Link>
-    </>
+    <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
+      {t('tasks.newButton')}
+    </Link>
   )
   const previousResult = useRef<{ fingerprint: string; count: number } | null>(null)
   useEffect(() => {

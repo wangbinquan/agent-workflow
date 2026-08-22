@@ -4947,7 +4947,7 @@ export const enUS: Resources = {
   },
   tasks: {
     title: 'Tasks',
-    newButton: 'New orchestration task',
+    newButton: 'New task',
     filterAll: 'All',
     emptyList: 'No tasks yet',
     emptyDescription:
@@ -5019,9 +5019,8 @@ export const enUS: Resources = {
       category: {
         all: 'All tasks',
         orchestration: 'Orchestration',
-        'digital-employee': 'Digital employee',
+        'digital-employee': 'Digital employee task',
       },
-      newDigitalEmployee: 'Give work to an employee',
       digitalEmployeeSection: 'Digital employee tasks',
       digitalEmployeeSectionHint:
         'Requirement, automated development, MR care, and merge lifecycle',
@@ -5880,9 +5879,12 @@ export const enUS: Resources = {
     kindWorkflow: 'Workflow',
     kindAgent: 'Agent',
     kindWorkgroup: 'Workgroup',
+    kindDigitalEmployee: 'Digital employee',
     kindHintWorkflow: 'Launch an orchestrated run driven by the workflow\u2019s declared inputs.',
     kindHintAgent: 'Hand a task description straight to one agent; it may ask follow-up questions.',
     kindHintWorkgroup: 'Give a mission to a workgroup to complete collaboratively.',
+    kindHintDigitalEmployee:
+      'Assign work to a stateful digital employee that keeps reacting to follow-up events.',
     objectWorkflow: 'Workflow',
     objectAgent: 'Agent',
     objectWorkgroup: 'Workgroup',
