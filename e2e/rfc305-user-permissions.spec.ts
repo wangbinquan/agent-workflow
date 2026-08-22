@@ -179,6 +179,8 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // 进了就永远无法按账号收回），只作为可授予项出现在目录里 —— 所以行数 +1、生效数不变。
   // RFC-310 Event Center +4（event-sources read/create/update/archive）⇒ 113；四点都在
   // user baseline，因此只增加目录行，不增加可单独勾选数。
+  // RFC-315 以 5 个 event-automation-rules 点一对一替换 Webhook 规则旧点，行数不变；
+  // 这条同时锁住新 event-center 分组已经接入前端 GROUP_ORDER，避免整组被静默过滤。
   await expect(dialog.locator('.user-permission-row')).toHaveCount(113)
   // PR-9 +1 grantable (development-missions:cutover is admin-tier, so it is a
   // preset difference); PR-10 −1 row but +0 grantable (code-rounds:launch was
@@ -229,10 +231,30 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   const targetContext = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   await primeAuth(targetContext, userToken)
   const targetPage = await targetContext.newPage()
+  const regularUserConfigWrites: string[] = []
+  targetPage.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname === '/api/config' && request.method() === 'PUT') {
+      regularUserConfigWrites.push(request.postData() ?? '')
+    }
+  })
   const workflowHello = waitForWorkflowHello(targetPage)
   await targetPage.goto(`${daemon.baseUrl}/workflows/${workflowId}`)
   await expect(targetPage.getByRole('heading', { name: 'rfc305-live-script' })).toBeVisible()
   await workflowHello
+
+  // RFC-036 regression lock: locale is personal browser state. A regular user
+  // can hot-switch and persist it locally without receiving settings:write or
+  // probing the admin-only config write endpoint.
+  await targetPage.getByRole('radio', { name: '中' }).click()
+  await expect(targetPage.getByRole('radio', { name: '中' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  await expect
+    .poll(() => targetPage.evaluate(() => window.localStorage.getItem('aw-language')))
+    .toBe('zh-CN')
+  expect(regularUserConfigWrites).toEqual([])
 
   await setTheme('dark')
   await page.reload()
@@ -514,8 +536,8 @@ test('guest browser exposes public resources without mutation or task affordance
     '/digital-employees',
     '/tasks',
     '/scheduled',
-    '/repos',
     '/events',
+    '/repos',
     '/memory',
   ])
 

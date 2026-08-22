@@ -235,9 +235,9 @@ describe('RFC-260/RFC-305 · 无管理权限的只读视图（AC-5）', () => {
     actorUserId = 'manager-1'
     actorPermissions = [
       'users:search',
-      'webhook-triggers:create',
-      'webhook-triggers:update',
-      'webhook-triggers:delete',
+      'event-automation-rules:create',
+      'event-automation-rules:update',
+      'event-automation-rules:delete',
     ]
     triggerRows = [
       { ...TRIGGER_ROW, id: 'tr-mine', name: 'Mine', ownerUserId: 'manager-1' },

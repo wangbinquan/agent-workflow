@@ -264,4 +264,13 @@ describe('RFC-310 unified task catalog', () => {
       expect(sourceCode).not.toContain(concrete)
     }
   })
+
+  test('the route rejects an unknown source with the stable task-source-invalid code', () => {
+    const routeSource = readFileSync(
+      resolve(import.meta.dir, '../src/routes/taskCatalog.ts'),
+      'utf8',
+    )
+    expect(routeSource).toContain('!isTaskSourceId(rawSource)')
+    expect(routeSource).toContain("new ValidationError('task-source-invalid'")
+  })
 })

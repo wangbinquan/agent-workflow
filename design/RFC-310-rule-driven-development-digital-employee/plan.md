@@ -1467,18 +1467,21 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 共享一套来源注册，前后端公共层都只消费按 `sourceId` 定位的来源合同。各 bounded context 继续拥有自己的创建命令、详情和 mutation；
 任务抽象中不再存在第二层分派身份、挂载点或链。
 
-| 编号 | 任务                                                                                                                                | 依赖      | 状态 |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
-| T216 | shared `TaskSourceRegistration` 同源声明创建、列表、筛选和详情；唯一 source/filter、四步合同及权限回归                              | T206      | ✅   |
-| T217 | backend consumer-owned `task-catalog`、sourceId 直连 required port、bootstrap-only adapter 装配；旧两套列表端点退役                 | T216      | ✅   |
-| T218 | DigitalEmployee Case 持久化 owner/launchOrigin 并迁移；mine/all/shared、Event Center origin、status/view/query 在来源适配器真实执行 | T217      | ✅   |
-| T219 | 前端公共 Host、公共受控资源/仓库选择器、单一 catalog/list/type 筛选；移除来源私有页面与 category/subject 分支                       | T216,T217 | ✅   |
-| T220 | shared/backend/frontend 架构反向、API contract、迁移、system-mock E2E、任务创建/列表浏览器和视觉覆盖                                | T217-T219 | ✅   |
-| T221 | 三轮功能自审、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA hosted CI/visual 终态核对                       | T220      | 🚧   |
+| 编号 | 任务                                                                                                                                 | 依赖      | 状态 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---- |
+| T216 | shared `TaskSourceRegistration` 同源声明创建、列表、筛选和详情；唯一 source/filter、四步合同及权限回归                               | T206      | ✅   |
+| T217 | backend consumer-owned `task-catalog`、sourceId 直连 required port、bootstrap-only adapter 装配；旧两套列表端点退役                    | T216      | ✅   |
+| T218 | DigitalEmployee Case 持久化 owner/launchOrigin 并迁移；mine/all/shared、Event Center origin、status/view/query 在来源适配器真实执行    | T217      | ✅   |
+| T219 | 前端公共 Host、公共受控资源/仓库选择器、单一 catalog/list/type 筛选；移除来源私有页面与 category/subject 分支                         | T216,T217 | ✅   |
+| T220 | shared/backend/frontend 架构反向、API contract、迁移、system-mock E2E、任务创建/列表浏览器和视觉覆盖                                 | T217-T219 | ✅   |
+| T221 | 三轮功能自审、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA hosted CI/visual 终态核对                        | T220      | ✅   |
 
-**T220/T221 本地证据（2026-08-22）**：真实浏览器任务创建/列表回归 **19/19**；完整 `bun run gate:local` **9m22s 全绿**——
-shared **2,221/2,221**、system-mocks **62/62**、frontend **6,677/6,677**，backend 四分片均 **0 fail**，
-typecheck/lint/format/depcheck 全绿。T221 仍等待 exact-path 提交推送、远端 ancestry 与 exact-SHA hosted CI/visual 终态，未提前完成。
+**T220/T221 完成证据（2026-08-22/23）**：真实浏览器任务创建/列表回归 **19/19**；完整 `bun run gate:local`
+**10m22s 全绿**——shared **2,222/2,222**、system-mocks **62/62**、frontend **6,681/6,681**，backend 四分片均
+**0 fail**，typecheck/lint/format/depcheck 全绿。发布后针对 Windows 路径与导航顺序的合同修正分别通过架构单测
+**6/6** 与真实浏览器 **1/1**。运行时代码与测试收口 SHA `a7e47241e6367f7c927bb15842424a54515c7bc7` 已精确推送到
+`origin/main`，远端指针相等且 ancestry 校验通过；exact-SHA hosted CI `32583948518` **success**，visual
+`32583948552` **success（56/56）**。
 
 ### 批次停止条件
 

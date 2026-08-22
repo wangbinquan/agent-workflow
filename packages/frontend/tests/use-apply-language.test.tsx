@@ -7,6 +7,7 @@
 //   4. config.language is an unsupported string → no setLanguage call.
 //   5. <html lang> mirrors the resolved target.
 //   6. Stable target across re-renders does not retrigger setLanguage.
+//   7. A regular user never reads daemon config or consumes a cached admin value.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -14,7 +15,16 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { useApplyLanguage, isSupportedLanguage } from '../src/hooks/useLanguage'
 import i18n, { setLanguage } from '../src/i18n'
+import { getConfigQueryKey } from '../src/lib/config-resource'
 import { clearToken, setBaseUrl, setToken } from '../src/stores/auth'
+
+const permissionHarness = vi.hoisted(() => ({
+  permissions: new Set<string>(['settings:read', 'settings:write']),
+}))
+
+vi.mock('@/hooks/useActor', () => ({
+  usePermission: (permission: string) => permissionHarness.permissions.has(permission),
+}))
 
 function HookHost() {
   useApplyLanguage()
@@ -44,6 +54,7 @@ function mockConfigOnce(language: unknown) {
 }
 
 beforeEach(() => {
+  permissionHarness.permissions = new Set(['settings:read', 'settings:write'])
   setBaseUrl('http://daemon.test')
   // Reset i18next to a known start so cross-test ordering doesn't bleed.
   void i18n.changeLanguage('zh-CN')
@@ -126,6 +137,21 @@ describe('useApplyLanguage', () => {
     rerender(<HookHost />)
     rerender(<HookHost />)
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  test('regular user keeps local language without config fetch or cached-admin override', async () => {
+    permissionHarness.permissions = new Set()
+    setToken('user-token')
+    void i18n.changeLanguage('en-US')
+    const calls = mockConfigOnce('zh-CN')
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    qc.setQueryData(getConfigQueryKey(), { ...DEFAULT_CONFIG, language: 'zh-CN' })
+
+    render(<HookHost />, { wrapper: wrap(qc) })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(calls).toHaveLength(0)
+    expect(i18n.language).toBe('en-US')
   })
 
   test('setLanguage helper writes the value into i18n (sanity)', async () => {

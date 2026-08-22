@@ -163,7 +163,7 @@ describe('PERMISSIONS catalog', () => {
       'intent:write',
       // RFC-260/RFC-305 — webhook 读面全员开放；端点管理和 URL 明文由
       // `webhook-endpoints:manage` + session 响应分层控制。
-      'webhook-triggers:read',
+      'event-automation-rules:read',
       'webhook-endpoints:read',
       // RFC-310 —— 数字员工配置五资源全员可建（对齐六类 ACL 资源先例，
       // 行级 ACL 管边界）；assignments 只读入基线，update 归 manager 档。
@@ -269,18 +269,18 @@ describe('PERMISSIONS catalog', () => {
       // GitLab/GitHub 的写权限，平台侧 ACL 约束不了它能碰到的仓库）。
       'code-host-calls:author',
       // RFC-257（UI 修订收紧）→ RFC-260（读面重新放开）：写动词与端点 manage
-      // 默认只在 admin 预设；两个 read 点（webhook-triggers:read /
+      // 默认只在 admin 预设；两个 read 点（event-automation-rules:read /
       // webhook-endpoints:read）自 RFC-260 起进 user 基线，已从本负向清单移除。
       'webhook-endpoints:manage',
-      'webhook-triggers:create',
-      'webhook-triggers:update',
-      'webhook-triggers:delete',
+      'event-automation-rules:create',
+      'event-automation-rules:update',
+      'event-automation-rules:delete',
       // RFC-305：原先位于角色判断中的五个能力现在全部是显式权限点。
       'resource-acl:bypass',
       'memory-distill-jobs:manage',
       'intent:audit',
       'mcp-runtime-tests:audit',
-      'webhook-triggers:override-owner',
+      'event-automation-rules:override-owner',
       // RFC-310 —— assignments:update 归 manager 档（同 repos:update）。
       'repository-employee-assignments:update',
     ]
@@ -528,9 +528,9 @@ describe('RFC-222 manager role', () => {
       // RFC-309 — 模板写点不再下放到 manager：它已是 user 基线上的普通点。
       // 以 daemon 身份跑的那部分仍由 scripts:author 把守（上一条）。
       // RFC-283 — 方法粗门对 manager 开放，路由内仍只允许自己的规则。
-      'webhook-triggers:create',
-      'webhook-triggers:update',
-      'webhook-triggers:delete',
+      'event-automation-rules:create',
+      'event-automation-rules:update',
+      'event-automation-rules:delete',
       // RFC-305 — the manager preset retains its historical ACL and distill
       // reach through explicit permissions.
       'resource-acl:bypass',
@@ -554,9 +554,9 @@ describe('RFC-222 manager role', () => {
       'tasks:read:all',
       'memory:create',
       'memory:delete',
-      'webhook-triggers:create',
-      'webhook-triggers:update',
-      'webhook-triggers:delete',
+      'event-automation-rules:create',
+      'event-automation-rules:update',
+      'event-automation-rules:delete',
     ] as const) {
       expect(presetHasPermission('manager', p)).toBe(true)
     }

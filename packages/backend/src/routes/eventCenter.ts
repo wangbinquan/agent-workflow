@@ -213,8 +213,8 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     {
       method: 'GET',
       path: '/api/event-center/response-rules',
-      permissions: ['event-sources:read'],
-      tokenAccess: 'allow',
+      permissions: ['event-automation-rules:read'],
+      tokenAccess: 'never',
       summary: 'List source-neutral event response rules',
     },
     (c) => c.json({ items: module.responseRules.queries.list() }),
@@ -224,41 +224,58 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     {
       method: 'POST',
       path: '/api/event-center/response-rules',
-      permissions: ['event-sources:update'],
+      permissions: ['event-automation-rules:create', 'tasks:execute'],
       tokenAccess: 'never',
       summary: 'Create a source-neutral event response rule',
     },
-    async (c) =>
-      c.json(
-        module.responseRules.commands.create(await safeJsonOrEmpty(c.req.raw), actorOf(c).user.id),
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(
+        module.responseRules.commands.create(await safeJsonOrEmpty(c.req.raw), {
+          userId: actor.user.id,
+          canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
+          canLaunchDigitalEmployee: actor.permissions.has('development-missions:launch'),
+        }),
         201,
-      ),
+      )
+    },
   )
   registerRoute(
     app,
     {
       method: 'PUT',
       path: '/api/event-center/response-rules/:id',
-      permissions: ['event-sources:update'],
+      permissions: ['event-automation-rules:update'],
       tokenAccess: 'never',
       summary: 'Update a source-neutral event response rule',
     },
-    async (c) =>
-      c.json(
-        module.responseRules.commands.update(c.req.param('id'), await safeJsonOrEmpty(c.req.raw)),
-      ),
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(
+        module.responseRules.commands.update(c.req.param('id'), await safeJsonOrEmpty(c.req.raw), {
+          userId: actor.user.id,
+          canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
+          canLaunchDigitalEmployee: actor.permissions.has('development-missions:launch'),
+        }),
+      )
+    },
   )
   registerRoute(
     app,
     {
       method: 'DELETE',
       path: '/api/event-center/response-rules/:id',
-      permissions: ['event-sources:update'],
+      permissions: ['event-automation-rules:delete'],
       tokenAccess: 'never',
       summary: 'Delete a source-neutral event response rule',
     },
     (c) => {
-      module.responseRules.commands.remove(c.req.param('id'))
+      const actor = actorOf(c)
+      module.responseRules.commands.remove(c.req.param('id'), {
+        userId: actor.user.id,
+        canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
+        canLaunchDigitalEmployee: actor.permissions.has('development-missions:launch'),
+      })
       return c.json({ ok: true })
     },
   )

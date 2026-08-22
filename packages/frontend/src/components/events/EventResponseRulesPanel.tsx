@@ -1,6 +1,6 @@
 import { type Agent } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -17,9 +17,15 @@ import {
 } from '@/components/digital-employees/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import {
+  canCreateEventAutomationRule,
+  canWriteEventAutomationRule,
+  type EventAutomationRuleWritePermission,
+} from '@/components/events/eventAutomationRulePermissions'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { OwnerLabel } from '@/components/OwnerLabel'
 import { RuntimeParameterPicker } from '@/components/RuntimeParameterPicker'
 import {
   buildRuntimeParameterCatalog,
@@ -28,6 +34,8 @@ import {
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
+import { currentActorAtRequest, useActor } from '@/hooks/useActor'
+import { useUserLookup } from '@/hooks/useUserLookup'
 import type { RuntimeTemplateAuthorityKey } from '@agent-workflow/shared'
 
 type ExactRef = { id: string; revision: number }
@@ -105,6 +113,7 @@ interface EventResponseRule {
 
 interface RuleDraft {
   id: string | null
+  ownerUserId: string | null
   name: string
   enabled: boolean
   eventKey: string
@@ -119,6 +128,11 @@ interface RuleDraft {
   intakeKind: 'body' | 'external-id'
   employeeTarget: Record<string, string>
   valueTemplate: string
+}
+
+interface RuleRequest<T> {
+  readonly session: number
+  readonly input: T
 }
 
 type WorkflowRow = { id: string; name: string }
@@ -138,6 +152,7 @@ function refKey(ref: ExactRef): string {
 function emptyDraft(eventKey: string): RuleDraft {
   return {
     id: null,
+    ownerUserId: null,
     name: '',
     enabled: true,
     eventKey,
@@ -145,7 +160,7 @@ function emptyDraft(eventKey: string): RuleDraft {
     subjectPattern: '',
     targetKind: 'workflow',
     targetRefId: '',
-    nameTemplate: '事件响应任务',
+    nameTemplate: '事件自动化任务',
     inputs: {},
     descriptionTemplate: '',
     goalTemplate: '',
@@ -158,6 +173,7 @@ function emptyDraft(eventKey: string): RuleDraft {
 function draftOf(rule: EventResponseRule): RuleDraft {
   const base = {
     id: rule.id,
+    ownerUserId: rule.ownerUserId,
     name: rule.name,
     enabled: rule.enabled,
     eventKey: refKey(rule.eventTypeRef),
@@ -165,7 +181,7 @@ function draftOf(rule: EventResponseRule): RuleDraft {
     subjectPattern: rule.subjectPattern ?? '',
     targetKind: rule.target.kind,
     targetRefId: rule.target.refId,
-    nameTemplate: '事件响应任务',
+    nameTemplate: '事件自动化任务',
     inputs: {},
     descriptionTemplate: '',
     goalTemplate: '',
@@ -303,11 +319,16 @@ function TemplateControl(props: {
 export function EventResponseRulesPanel(props: {
   readonly catalog: ResponseRuleEventCatalog
   readonly language: string
-  readonly canManage: boolean
 }): ReactElement {
   const { t } = useTranslation()
   const zh = props.language.startsWith('zh')
   const qc = useQueryClient()
+  const actorQuery = useActor()
+  const actor =
+    actorQuery.status === 'success' && actorQuery.fetchStatus === 'idle'
+      ? (actorQuery.data ?? undefined)
+      : undefined
+  const canCreate = canCreateEventAutomationRule(actor)
   const eligibleEvents = useMemo(() => {
     const sourceOrder = new Map(
       props.catalog.sources.map((source, index) => [refKey(source.sourceRef), index] as const),
@@ -328,6 +349,17 @@ export function EventResponseRulesPanel(props: {
   }, [props.catalog.eventTypes, props.catalog.sources, props.language])
   const [draft, setDraft] = useState<RuleDraft | null>(null)
   const [error, setError] = useState<unknown>(null)
+  const [writeSession, setWriteSession] = useState(0)
+  const writeSessionRef = useRef(0)
+  const authoritySignature = [
+    actor?.user.id ?? '',
+    actor?.permissions.includes('event-automation-rules:create') === true ? 'c' : '-',
+    actor?.permissions.includes('event-automation-rules:update') === true ? 'u' : '-',
+    actor?.permissions.includes('event-automation-rules:delete') === true ? 'd' : '-',
+    actor?.permissions.includes('event-automation-rules:override-owner') === true ? 'o' : '-',
+  ].join(':')
+  const previousAuthoritySignatureRef = useRef(authoritySignature)
+  const resetMutationsRef = useRef<() => void>(() => {})
 
   const rules = useQuery<{ items: EventResponseRule[] }>({
     queryKey: ['event-center', 'response-rules'],
@@ -472,8 +504,30 @@ export function EventResponseRulesPanel(props: {
       qc.invalidateQueries({ queryKey: ['event-center', 'catalog'] }),
     ])
   }
+  const requestIsCurrent = (
+    session: number,
+    permission: EventAutomationRuleWritePermission,
+    ownerUserId?: string,
+  ): boolean => {
+    if (session !== writeSessionRef.current) return false
+    const requestActor = currentActorAtRequest(qc)
+    if (permission === 'event-automation-rules:create') {
+      return canCreateEventAutomationRule(requestActor)
+    }
+    return (
+      ownerUserId !== undefined &&
+      canWriteEventAutomationRule(requestActor, ownerUserId, permission)
+    )
+  }
   const save = useMutation({
-    mutationFn: (value: RuleDraft) => {
+    mutationFn: ({ input: value, session }: RuleRequest<RuleDraft>) => {
+      const permission =
+        value.id === null
+          ? ('event-automation-rules:create' as const)
+          : ('event-automation-rules:update' as const)
+      if (!requestIsCurrent(session, permission, value.ownerUserId ?? undefined)) {
+        throw new Error('Event automation rule write access ended')
+      }
       const event = eligibleEvents.find(
         (candidate) => refKey(candidate.eventTypeRef) === value.eventKey,
       )
@@ -486,28 +540,117 @@ export function EventResponseRulesPanel(props: {
             body,
           )
     },
-    onSuccess: async () => {
+    onSuccess: async (_saved, request) => {
+      const permission =
+        request.input.id === null
+          ? ('event-automation-rules:create' as const)
+          : ('event-automation-rules:update' as const)
+      if (!requestIsCurrent(request.session, permission, request.input.ownerUserId ?? undefined)) {
+        return
+      }
       setDraft(null)
       setError(null)
       await invalidate()
     },
-    onError: setError,
+    onError: (nextError, request) => {
+      const permission =
+        request.input.id === null
+          ? ('event-automation-rules:create' as const)
+          : ('event-automation-rules:update' as const)
+      if (requestIsCurrent(request.session, permission, request.input.ownerUserId ?? undefined)) {
+        setError(nextError)
+      }
+    },
   })
   const toggle = useMutation({
-    mutationFn: (rule: EventResponseRule) =>
-      api.put<EventResponseRule>(
+    mutationFn: ({ input: rule, session }: RuleRequest<EventResponseRule>) => {
+      if (!requestIsCurrent(session, 'event-automation-rules:update', rule.ownerUserId)) {
+        throw new Error('Event automation rule write access ended')
+      }
+      return api.put<EventResponseRule>(
         `/api/event-center/response-rules/${encodeURIComponent(rule.id)}`,
         { ...bodyOf(draftOf(rule), rule.eventTypeRef), enabled: !rule.enabled },
-      ),
-    onSuccess: invalidate,
-    onError: setError,
+      )
+    },
+    onSuccess: async (_saved, request) => {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:update',
+          request.input.ownerUserId,
+        )
+      ) {
+        await invalidate()
+      }
+    },
+    onError: (nextError, request) => {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:update',
+          request.input.ownerUserId,
+        )
+      ) {
+        setError(nextError)
+      }
+    },
   })
   const remove = useMutation({
-    mutationFn: (id: string) =>
-      api.delete(`/api/event-center/response-rules/${encodeURIComponent(id)}`),
-    onSuccess: invalidate,
-    onError: setError,
+    mutationFn: ({ input, session }: RuleRequest<{ id: string; ownerUserId: string }>) => {
+      if (!requestIsCurrent(session, 'event-automation-rules:delete', input.ownerUserId)) {
+        throw new Error('Event automation rule write access ended')
+      }
+      return api.delete(`/api/event-center/response-rules/${encodeURIComponent(input.id)}`)
+    },
+    onSuccess: async (_deleted, request) => {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:delete',
+          request.input.ownerUserId,
+        )
+      ) {
+        setError(null)
+        await invalidate()
+      }
+    },
+    onError: (nextError, request) => {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:delete',
+          request.input.ownerUserId,
+        )
+      ) {
+        setError(nextError)
+      }
+    },
   })
+  resetMutationsRef.current = () => {
+    save.reset()
+    toggle.reset()
+    remove.reset()
+  }
+
+  useLayoutEffect(() => {
+    if (previousAuthoritySignatureRef.current === authoritySignature) return
+    previousAuthoritySignatureRef.current = authoritySignature
+    writeSessionRef.current += 1
+    setWriteSession(writeSessionRef.current)
+    setError(null)
+    resetMutationsRef.current()
+    setDraft((current) => {
+      if (current === null) return null
+      if (current.id === null) return canCreate ? current : null
+      return current.ownerUserId !== null &&
+        canWriteEventAutomationRule(actor, current.ownerUserId, 'event-automation-rules:update')
+        ? current
+        : null
+    })
+  }, [actor, authoritySignature, canCreate])
+
+  const rows = rules.data?.items ?? []
+  const owners = useUserLookup(rows.map((rule) => rule.ownerUserId))
 
   if (rules.isPending) return <LoadingState data-testid="event-response-rules-loading" />
   if (rules.isError) return <ErrorBanner error={rules.error} />
@@ -577,15 +720,18 @@ export function EventResponseRulesPanel(props: {
     )
   })()
 
-  const newAction = props.canManage ? (
+  const newAction = canCreate ? (
     <button
       type="button"
       className="btn btn--primary"
       disabled={eligibleEvents.length === 0}
-      onClick={() => setDraft(emptyDraft(refKey(eligibleEvents[0]!.eventTypeRef)))}
+      onClick={() => {
+        if (!requestIsCurrent(writeSession, 'event-automation-rules:create')) return
+        setDraft(emptyDraft(refKey(eligibleEvents[0]!.eventTypeRef)))
+      }}
       data-testid="event-response-rule-new"
     >
-      {zh ? '新建响应规则' : 'New response rule'}
+      {zh ? '新建自动化规则' : 'New automation rule'}
     </button>
   ) : undefined
 
@@ -593,9 +739,7 @@ export function EventResponseRulesPanel(props: {
     <div className="event-response-rules" data-testid="event-response-rules">
       <div className="webhook-panel__intro">
         <div>
-          <span className="webhook-panel__eyebrow">
-            {zh ? '标准事件响应' : 'Standard event response'}
-          </span>
+          <span className="webhook-panel__eyebrow">{zh ? '事件自动化' : 'Event automation'}</span>
           <h3>{zh ? '事件发生后启动哪项工作' : 'Start work when an event occurs'}</h3>
           <p>
             {zh
@@ -603,7 +747,7 @@ export function EventResponseRulesPanel(props: {
               : 'Events come from the unified catalog. Only events with a declared task-input contract are selectable, regardless of observation mechanism.'}
           </p>
         </div>
-        {(rules.data.items.length > 0 || eligibleEvents.length > 0) && newAction}
+        {(rows.length > 0 || eligibleEvents.length > 0) && newAction}
       </div>
 
       {error !== null ? <ErrorBanner error={error} /> : null}
@@ -616,9 +760,9 @@ export function EventResponseRulesPanel(props: {
             ? '事件发布者需要先声明任务输入参数；仅用于唤醒已有关注的事件不会出现在这里。'
             : 'Publishers must declare task inputs. Events that only wake existing attention are intentionally omitted.'}
         </NoticeBanner>
-      ) : rules.data.items.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
-          title={zh ? '还没有事件响应规则' : 'No event response rules'}
+          title={zh ? '还没有事件自动化规则' : 'No event automation rules'}
           description={
             zh
               ? '选择一个业务事件，再选择要启动的编排、Agent、工作组或数字员工。'
@@ -627,88 +771,138 @@ export function EventResponseRulesPanel(props: {
         />
       ) : (
         <div className="webhook-card-grid" data-testid="event-response-rule-list">
-          {rules.data.items.map((rule) => (
-            <Card
-              key={rule.id}
-              title={rule.name}
-              actions={
-                <div className="webhook-trigger-card__status">
-                  {rule.lastStatus !== null ? (
-                    <StatusChip
-                      kind={rule.lastStatus === 'failed' ? 'danger' : 'success'}
-                      size="sm"
-                    >
-                      {rule.lastStatus === 'failed'
-                        ? zh
-                          ? '上次启动失败'
-                          : 'Last launch failed'
-                        : zh
-                          ? '上次已启动'
-                          : 'Last launched'}
-                    </StatusChip>
-                  ) : null}
-                </div>
-              }
-              footer={
-                <div className="webhook-card__footer">
-                  {props.canManage ? (
-                    <Switch
-                      checked={rule.enabled}
-                      onChange={() => toggle.mutate(rule)}
-                      disabled={toggle.isPending}
-                      label={zh ? '启用规则' : 'Enable rule'}
-                    />
-                  ) : (
-                    <StatusChip kind={rule.enabled ? 'success' : 'neutral'} size="sm">
-                      {rule.enabled ? (zh ? '已启用' : 'Enabled') : zh ? '已停用' : 'Disabled'}
-                    </StatusChip>
-                  )}
-                  {props.canManage ? (
-                    <div className="page__actions">
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        onClick={() => setDraft(draftOf(rule))}
-                        data-testid={`event-response-rule-edit-${rule.id}`}
-                      >
-                        {zh ? '编辑' : 'Edit'}
-                      </button>
-                      <ConfirmButton
+          {rows.map((rule) => {
+            const canUpdate = canWriteEventAutomationRule(
+              actor,
+              rule.ownerUserId,
+              'event-automation-rules:update',
+            )
+            const canDelete = canWriteEventAutomationRule(
+              actor,
+              rule.ownerUserId,
+              'event-automation-rules:delete',
+            )
+            const isOwn = actor?.user.id === rule.ownerUserId
+            return (
+              <Card
+                key={rule.id}
+                title={rule.name}
+                actions={
+                  <div className="webhook-trigger-card__status">
+                    {rule.lastStatus !== null ? (
+                      <StatusChip
+                        kind={rule.lastStatus === 'failed' ? 'danger' : 'success'}
                         size="sm"
-                        variant="danger"
-                        label={zh ? '删除' : 'Delete'}
-                        confirmLabel={zh ? '确认删除' : 'Confirm delete'}
-                        confirmationKey={rule.id}
-                        onConfirm={() => remove.mutateAsync(rule.id)}
+                      >
+                        {rule.lastStatus === 'failed'
+                          ? zh
+                            ? '上次启动失败'
+                            : 'Last launch failed'
+                          : zh
+                            ? '上次已启动'
+                            : 'Last launched'}
+                      </StatusChip>
+                    ) : null}
+                  </div>
+                }
+                footer={
+                  <div className="webhook-card__footer">
+                    {canUpdate ? (
+                      <Switch
+                        checked={rule.enabled}
+                        onChange={() => toggle.mutate({ session: writeSession, input: rule })}
+                        disabled={toggle.isPending}
+                        label={zh ? '启用规则' : 'Enable rule'}
                       />
-                    </div>
-                  ) : null}
+                    ) : (
+                      <StatusChip kind={rule.enabled ? 'success' : 'neutral'} size="sm">
+                        {rule.enabled ? (zh ? '已启用' : 'Enabled') : zh ? '已停用' : 'Disabled'}
+                      </StatusChip>
+                    )}
+                    {canUpdate || canDelete ? (
+                      <div className="page__actions">
+                        {canUpdate ? (
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            onClick={() => {
+                              if (
+                                !requestIsCurrent(
+                                  writeSession,
+                                  'event-automation-rules:update',
+                                  rule.ownerUserId,
+                                )
+                              ) {
+                                return
+                              }
+                              setDraft(draftOf(rule))
+                            }}
+                            data-testid={`event-response-rule-edit-${rule.id}`}
+                          >
+                            {zh ? '编辑' : 'Edit'}
+                          </button>
+                        ) : null}
+                        {canDelete ? (
+                          <ConfirmButton
+                            size="sm"
+                            variant="danger"
+                            label={zh ? '删除' : 'Delete'}
+                            confirmLabel={zh ? '确认删除' : 'Confirm delete'}
+                            confirmationKey={rule.id}
+                            onConfirm={() =>
+                              remove.mutateAsync({
+                                session: writeSession,
+                                input: { id: rule.id, ownerUserId: rule.ownerUserId },
+                              })
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                }
+              >
+                <dl className="webhook-facts">
+                  <div data-testid={`event-response-rule-owner-${rule.id}`}>
+                    <dt>{zh ? '所有者' : 'Owner'}</dt>
+                    <dd>
+                      <OwnerLabel
+                        ownerUserId={rule.ownerUserId}
+                        owner={owners.get(rule.ownerUserId) ?? null}
+                        wrap
+                      />
+                      {isOwn ? (
+                        <StatusChip kind="info" size="sm">
+                          {zh ? '我的规则' : 'My rule'}
+                        </StatusChip>
+                      ) : null}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="webhook-card__body">
+                  <p>
+                    <strong>{zh ? '事件' : 'Event'}</strong>
+                    <span>{eventName(rule.eventTypeRef)}</span>
+                  </p>
+                  <p>
+                    <strong>{zh ? '启动' : 'Starts'}</strong>
+                    <span>{resourceName(rule.target)}</span>
+                  </p>
+                  <p>
+                    <strong>{zh ? '对象范围' : 'Subject scope'}</strong>
+                    <span>
+                      {rule.subjectMatch === 'all'
+                        ? zh
+                          ? '全部对象'
+                          : 'All subjects'
+                        : `${rule.subjectMatch === 'exact' ? (zh ? '精确' : 'Exact') : zh ? '前缀' : 'Prefix'} · ${rule.subjectPattern ?? ''}`}
+                    </span>
+                  </p>
+                  {rule.lastError !== null ? <small>{rule.lastError}</small> : null}
                 </div>
-              }
-            >
-              <div className="webhook-card__body">
-                <p>
-                  <strong>{zh ? '事件' : 'Event'}</strong>
-                  <span>{eventName(rule.eventTypeRef)}</span>
-                </p>
-                <p>
-                  <strong>{zh ? '启动' : 'Starts'}</strong>
-                  <span>{resourceName(rule.target)}</span>
-                </p>
-                <p>
-                  <strong>{zh ? '对象范围' : 'Subject scope'}</strong>
-                  <span>
-                    {rule.subjectMatch === 'all'
-                      ? zh
-                        ? '全部对象'
-                        : 'All subjects'
-                      : `${rule.subjectMatch === 'exact' ? (zh ? '精确' : 'Exact') : zh ? '前缀' : 'Prefix'} · ${rule.subjectPattern ?? ''}`}
-                  </span>
-                </p>
-                {rule.lastError !== null ? <small>{rule.lastError}</small> : null}
-              </div>
-            </Card>
-          ))}
+              </Card>
+            )
+          })}
         </div>
       )}
 
@@ -719,11 +913,11 @@ export function EventResponseRulesPanel(props: {
           title={
             draft.id === null
               ? zh
-                ? '新建响应规则'
-                : 'New response rule'
+                ? '新建自动化规则'
+                : 'New automation rule'
               : zh
-                ? '编辑响应规则'
-                : 'Edit response rule'
+                ? '编辑自动化规则'
+                : 'Edit automation rule'
           }
           size="lg"
           dismissDisabled={save.isPending}
@@ -741,7 +935,7 @@ export function EventResponseRulesPanel(props: {
                 type="button"
                 className="btn btn--primary"
                 disabled={!valid || save.isPending}
-                onClick={() => save.mutate(draft)}
+                onClick={() => save.mutate({ session: writeSession, input: draft })}
                 data-testid="event-response-rule-save"
               >
                 {save.isPending ? (zh ? '保存中…' : 'Saving…') : zh ? '保存规则' : 'Save rule'}

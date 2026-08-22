@@ -8,7 +8,7 @@
 // 身份执行，grants 写权 = 改绑目标后借 owner 身份的提权通道）。RFC-260 D1/D5：
 // **读面全量开放**（列表/详情/fires 对任何过了 read 方法门的 viewer 可见，原
 // 「不可见 = 404」读语义退役）；RFC-283/RFC-305 写面行级门为 owner ∨
-// `webhook-triggers:override-owner`（404 同形）。保存期校验三层
+// `event-automation-rules:override-owner`（404 同形）。保存期校验三层
 // （services/webhook/triggerValidation.ts 注释）；创建/更新时以**保存者身份**跑
 // 「彩排渲染 + assertScheduledTargetUsable」——launch 目标对保存者不可见即拒绝
 // （对齐 services/resourceRefs.ts 的新增引用校验惯例）。
@@ -49,12 +49,15 @@ export type WebhookTriggerFireRow = typeof webhookTriggerFires.$inferSelect
 /**
  * RFC-260 D1/D5：读路径不再做行级过滤（触发器全量只读，用户拍板——规则本身
  * 不敏感，全量可见最利排障）；RFC-283/RFC-305 写路径的行级门为 owner ∨
- * `webhook-triggers:override-owner`。方法权限与跨 owner 权限相互独立。原「非 owner
+ * `event-automation-rules:override-owner`。方法权限与跨 owner 权限相互独立。原「非 owner
  * 404 同形」读语义随 D1 显式退役。
  */
 function requireWrite(actor: Actor, row: Row): void {
   if (
-    !(row.ownerUserId === actor.user.id || actor.permissions.has('webhook-triggers:override-owner'))
+    !(
+      row.ownerUserId === actor.user.id ||
+      actor.permissions.has('event-automation-rules:override-owner')
+    )
   ) {
     throw new NotFoundError('webhook-trigger-not-found', `trigger '${row.id}' not found`)
   }

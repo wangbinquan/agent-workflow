@@ -557,7 +557,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
     .locator('.employee-toolbox-lane')
     .filter({ has: page.locator('.employee-toolbox-lane__priority') })
   let currentHandleBox = await dragHandle.boundingBox()
-  let thirdSlotBox = await sortableLanes.nth(2).boundingBox()
+  const thirdSlotBox = await sortableLanes.nth(2).boundingBox()
   expect(currentHandleBox).not.toBeNull()
   expect(thirdSlotBox).not.toBeNull()
   await page.mouse.move(

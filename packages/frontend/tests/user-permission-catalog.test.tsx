@@ -21,7 +21,17 @@ function Harness() {
 
 describe('RFC-305 UserPermissionCatalog', () => {
   test('renders catalog-derived rows and makes only additional points interactive', () => {
-    render(<Harness />)
+    const { container } = render(<Harness />)
+    expect(container.querySelectorAll('.user-permission-row')).toHaveLength(113)
+    const automationRead = screen.getByTestId(
+      'user-permission-event-automation-rules:read',
+    ) as HTMLInputElement
+    expect(automationRead.checked).toBe(true)
+    expect(automationRead.disabled).toBe(true)
+    expect(screen.getByTestId('user-permission-event-automation-rules:create')).toBeTruthy()
+    expect(screen.getByTestId('user-permission-event-automation-rules:update')).toBeTruthy()
+    expect(screen.getByTestId('user-permission-event-automation-rules:delete')).toBeTruthy()
+    expect(screen.getByTestId('user-permission-event-automation-rules:override-owner')).toBeTruthy()
     const baseline = screen.getByTestId('user-permission-agents:read') as HTMLInputElement
     expect(baseline.checked).toBe(true)
     expect(baseline.disabled).toBe(true)
@@ -35,8 +45,8 @@ describe('RFC-305 UserPermissionCatalog', () => {
     expect(scripts.checked).toBe(false)
     fireEvent.click(scripts)
     expect(scripts.checked).toBe(true)
-    // Event Center contributes one read plus three authoring points to the
-    // user preset; the explicitly ticked `scripts:author` remains additive.
+    // The unified rule family replaces the old Webhook family one-for-one, so
+    // the user baseline count is stable; `scripts:author` remains additive.
     expect(screen.getByText(/87 effective/i)).toBeTruthy()
   })
 

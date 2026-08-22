@@ -4,6 +4,7 @@ import {
   createEventResponseDeliveryConsumer,
   createEventResponseRoutingDirectory,
   EventResponseRuleService,
+  type ResponseRuleWritePrincipal,
 } from './application/eventResponseRules'
 import type {
   EventAutomationWorkStartPort,
@@ -51,9 +52,16 @@ export interface EventCenterModule {
   }
   readonly responseRules: {
     readonly commands: {
-      create(input: unknown, ownerUserId: string): ReturnType<EventResponseRuleService['create']>
-      update(id: string, input: unknown): ReturnType<EventResponseRuleService['update']>
-      remove(id: string): void
+      create(
+        input: unknown,
+        principal: ResponseRuleWritePrincipal,
+      ): ReturnType<EventResponseRuleService['create']>
+      update(
+        id: string,
+        input: unknown,
+        principal: ResponseRuleWritePrincipal,
+      ): ReturnType<EventResponseRuleService['update']>
+      remove(id: string, principal: ResponseRuleWritePrincipal): void
     }
     readonly queries: {
       list(): ReturnType<EventResponseRuleService['list']>
@@ -263,9 +271,9 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
     },
     responseRules: {
       commands: {
-        create: (input, ownerUserId) => responseRules.create(input, ownerUserId),
-        update: (id, input) => responseRules.update(id, input),
-        remove: (id) => responseRules.remove(id),
+        create: (input, principal) => responseRules.create(input, principal),
+        update: (id, input, principal) => responseRules.update(id, input, principal),
+        remove: (id, principal) => responseRules.remove(id, principal),
       },
       queries: {
         list: () => responseRules.list(),

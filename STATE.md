@@ -12,6 +12,15 @@
 > 用法见 README「从源码构建」；踩坑（mock 换密钥不换 kid + daemon 长寿 JWKS 缓存、常驻 dev 子进程的
 > 孤儿/SIGHUP/keep-alive 三件套）已进 `docs/dev-gotchas.md`。
 
+> ✅ **已完成 RFC（Done，2026-08-22）：[RFC-315 统一事件自动化规则权限合同](design/RFC-315-unified-event-automation-rule-permissions/proposal.md)**
+> —— 用户已批准按 Webhook 预期统一权限并提交上库。实现以 `event-automation-rules:{read,create,update,delete,override-owner}`
+> 取代 Webhook 私有权限名，同时把来源无关规则从 `event-sources:update` 中拆出：默认 user 只读，manager 仅管理本人，
+> admin/显式 override 可跨 owner；创建仍需 `tasks:execute`，数字员工目标创建/更新仍需
+> `development-missions:launch`。迁移 `0202` 保留旧 grant provenance、映射并去重各状态 PAT scope，
+> 不映射 `event-sources:*`、不重写 audit。Webhook PAT 保持；来源无关规则全路由拒绝 PAT。前端两面板共享
+> permission × owner 投影，产品文案改为“事件自动化规则”；现有 response-rules API/表/内部类型只作兼容保留。
+> 实现提交 `7a15e0a4` 后，首个 hosted CI 在 RFC-305 跨平台 E2E 抓到新 `event-center` 组未接入用户权限目录顺序表，五个新点被 UI 静默过滤；追加 `bf5827ce` 补组与组件/E2E 棘轮。后继精确 SHA 的 CI `32579840718` **31/31 jobs 全绿**，visual `32579840744` **Ubuntu 56/56 全绿且零快照更新**；远端 `main` 已包含两笔提交。
+
 > ✅ **已完成 RFC（Done，2026-08-21 实现落主干）：[RFC-314 node_run_events 三处读写形状修复](design/RFC-314-node-run-event-access-shapes/proposal.md)**
 > —— 起于生产对账：部署 **v0.18.11**（已含 RFC-311 字节水位）的 `node_run_events` 仍是 **78.6 万行 / 1.72GB**。
 > 定位分两半：**装配洞已修**（`b2321179`：归档器与终态 sweeper 只有 `setInterval(1h)`、没有 boot 首拍，重启比
@@ -239,8 +248,10 @@
 > 岗位优先级改由稳定泳道容器持有 pointer capture，按冻结槽位边界实时预览；源泳道逐帧跟随指针，其他泳道以可中断 FLIP 让位，松手提交
 > exact 预览顺序。工具箱/岗位共用扇出卡改为同一不透明 paint stack，主卡覆盖中层、中层覆盖后层，只露同色右/底窄边且不会与邻卡交错。
 > 当前定向证据：frontend RFC-310 UI contract **9/9**、backend authoring **20/20**、Case runtime **3/3**、stateful system-mock 完整链
-> **1/1（57 断言）**、前后端 typecheck 全绿；真实浏览器连续快速验证 **P4→P1、P1→P3、P3→P1** 均准确落位。仍待完整 gate、提交推送及
-> exact-SHA hosted CI/visual，未提前标记完成。
+> **1/1（57 断言）**、前后端 typecheck 全绿；真实浏览器连续快速验证 **P4→P1、P1→P3、P3→P1** 均准确落位。合并远端并保留并发
+> RFC-315 后的最终树 `bun run gate:local` **9m59s 全绿**：backend **11,648 pass / 36 skip / 0 fail**、frontend **6,686/6,686**、
+> shared **2,222/2,222**、system-mocks **62/62**，typecheck/lint/format/depcheck 全绿。仍待精确提交推送及 exact-SHA hosted CI/visual，
+> 未提前标记完成。
 >
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >

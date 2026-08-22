@@ -11,7 +11,7 @@
 //   「不可见 workflow 的存在性 + 必填输入名 + 输入 kind」oracle，正是仓内其它
 //   地方（如 routes/workflows.ts 的 DELETE 门顺序）精心保序防的 D1 泄漏。
 //
-// 当前**不可利用**，本测试锁的是顺序不变量本身：`webhook-triggers:create` /
+// 当前**不可利用**，本测试锁的是顺序不变量本身：`event-automation-rules:create` /
 //   `:update` 今天只在 admin 的权限集里（shared/schemas/permission.ts —— 既不在
 //   USER_BASELINE 也不在 MANAGER_EXTRA），而 admin 恒 `hasResourceAclBypass`
 //   ⇒ `canViewResource` 对任何 workflow 都返回 true，能走到这条路径的人本就全可见。

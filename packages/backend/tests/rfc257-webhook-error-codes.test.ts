@@ -180,7 +180,7 @@ describe('RFC-257 · 触发器面错误码', () => {
     ).toBe('webhook-stream-invalid')
   })
 
-  test('webhook-triggers:override-owner grant/revoke controls cross-owner mutation', async () => {
+  test('event-automation-rules:override-owner grant/revoke controls cross-owner mutation', async () => {
     const h = await harness()
     await h.db
       .update(workflows)
@@ -204,7 +204,7 @@ describe('RFC-257 · 触发器面错误码', () => {
       displayName: 'Trigger editor',
       role: 'user',
       password: 'longEnoughPassword',
-      additionalPermissions: ['webhook-triggers:update'],
+      additionalPermissions: ['event-automation-rules:update'],
     })
     const editorToken = (await createSession({ db: h.db, userId: editor.id })).token
     const edit = (name: string) =>
@@ -229,7 +229,10 @@ describe('RFC-257 · 触发器面错误码', () => {
       targetUserId: editor.id,
       access: {
         role: 'user',
-        additionalPermissions: ['webhook-triggers:update', 'webhook-triggers:override-owner'],
+        additionalPermissions: [
+          'event-automation-rules:update',
+          'event-automation-rules:override-owner',
+        ],
         expectedRevision: 0,
       },
     })
@@ -239,7 +242,7 @@ describe('RFC-257 · 触发器面错误码', () => {
       targetUserId: editor.id,
       access: {
         role: 'user',
-        additionalPermissions: ['webhook-triggers:update'],
+        additionalPermissions: ['event-automation-rules:update'],
         expectedRevision: 1,
       },
     })

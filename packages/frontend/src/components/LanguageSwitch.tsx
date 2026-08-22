@@ -1,18 +1,19 @@
 // RFC-025: Sidebar-footer language switcher.
 //
 // Two-option segmented control. Clicking an option:
-//   1. Optimistically flips i18next via setLanguage (instant UI response).
-//   2. Queues the minimal PUT /api/config { language } patch to persist.
-//   3. On error, rolls i18next back to the previous value + shows a muted
-//      red error line below the segmented control.
+//   1. Always flips i18next + its localStorage cache (instant, per-browser).
+//   2. Only actors with settings:write queue the minimal daemon config patch.
+//   3. A definitive daemon-write error rolls an authorized writer back and
+//      shows a muted red error line below the segmented control.
 //
-// Backend config is the authority — useApplyLanguage will reconcile if the
-// backend ever disagrees with the optimistic flip.
+// For actors who can read and write daemon settings, backend config remains
+// authoritative. Everyone else owns a browser-local language preference.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Config } from '@agent-workflow/shared'
+import { usePermission } from '@/hooks/useActor'
 import { describeApiError, setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
 import {
@@ -38,16 +39,27 @@ export function LanguageSwitch({ className }: Props) {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const token = useAuthToken()
+  // RFC-036: language choice is personal UI state, not daemon administration.
+  // A regular user must neither probe nor write /api/config; the i18next
+  // localStorage cache remains their authority. Privileged actors retain the
+  // historical daemon-wide sync behavior.
+  const canReadConfig = usePermission('settings:read')
+  const canWriteConfig = usePermission('settings:write')
+  const canSyncConfig = canReadConfig && canWriteConfig
   const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
     queryKey: configQueryKey,
     queryFn: ({ signal }) => queryConfig(signal),
-    enabled: token !== null,
+    enabled: token !== null && canSyncConfig,
     staleTime: 60_000,
   })
 
-  const current: SupportedLanguage = isSupportedLanguage(config.data?.language)
-    ? (config.data!.language as SupportedLanguage)
+  // Config cache identity follows the daemon and intentionally survives an
+  // account rotation. Never let an admin-populated cache override a regular
+  // user's browser-local choice after logout/login.
+  const daemonLanguage = canSyncConfig ? config.data?.language : undefined
+  const current: SupportedLanguage = isSupportedLanguage(daemonLanguage)
+    ? (daemonLanguage as SupportedLanguage)
     : isSupportedLanguage(i18n.language)
       ? (i18n.language as SupportedLanguage)
       : 'zh-CN'
@@ -107,6 +119,10 @@ export function LanguageSwitch({ className }: Props) {
               disabled={mutation.isPending}
               onClick={() => {
                 if (lang === current) return
+                if (!canWriteConfig) {
+                  setLanguage(lang)
+                  return
+                }
                 mutation.mutate(lang)
               }}
             >

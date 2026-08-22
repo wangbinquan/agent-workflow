@@ -38,6 +38,11 @@ import { ConfirmButton } from '@/components/ConfirmButton'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
+import {
+  canCreateEventAutomationRule,
+  canWriteEventAutomationRule,
+  type EventAutomationRuleWritePermission,
+} from '@/components/events/eventAutomationRulePermissions'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { Checkbox, Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
@@ -57,7 +62,7 @@ import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { Stepper } from '@/components/Stepper'
 import { TableViewport } from '@/components/TableViewport'
-import { currentActorAtRequest, useActor, type MeResponse } from '@/hooks/useActor'
+import { currentActorAtRequest, useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import {
   localized,
@@ -87,26 +92,6 @@ type ExecutionSpace = 'event-repo' | 'scratch'
 interface TriggerRequest<T> {
   session: number
   input: T
-}
-
-type TriggerWritePermission =
-  | 'webhook-triggers:create'
-  | 'webhook-triggers:update'
-  | 'webhook-triggers:delete'
-
-function canCreateTrigger(actor: MeResponse | null | undefined): boolean {
-  return actor?.permissions.includes('webhook-triggers:create') === true
-}
-
-function canWriteTrigger(
-  actor: MeResponse | null | undefined,
-  ownerUserId: string,
-  permission: Exclude<TriggerWritePermission, 'webhook-triggers:create'>,
-): boolean {
-  return (
-    actor?.permissions.includes(permission) === true &&
-    (actor.user.id === ownerUserId || actor.permissions.includes('webhook-triggers:override-owner'))
-  )
 }
 
 function isScratchPayload(payload: unknown): payload is { scratch: true } {
@@ -452,7 +437,7 @@ export function TriggersPanel() {
     actorQuery.status === 'success' && actorQuery.fetchStatus === 'idle'
       ? actorQuery.data
       : undefined
-  const canCreate = canCreateTrigger(actor)
+  const canCreate = canCreateEventAutomationRule(actor)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [firesFor, setFiresFor] = useState<WebhookTrigger | null>(null)
@@ -499,18 +484,24 @@ export function TriggersPanel() {
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['webhook-triggers'] })
   const requestIsCurrent = (
     session: number,
-    permission: TriggerWritePermission,
+    permission: EventAutomationRuleWritePermission,
     ownerUserId?: string,
   ): boolean => {
     if (session !== writeSessionRef.current) return false
     const requestActor = currentActorAtRequest(qc)
-    if (permission === 'webhook-triggers:create') return canCreateTrigger(requestActor)
-    return ownerUserId !== undefined && canWriteTrigger(requestActor, ownerUserId, permission)
+    if (permission === 'event-automation-rules:create') {
+      return canCreateEventAutomationRule(requestActor)
+    }
+    return (
+      ownerUserId !== undefined &&
+      canWriteEventAutomationRule(requestActor, ownerUserId, permission)
+    )
   }
 
   const save = useMutation({
     mutationFn: ({ input: d, session }: TriggerRequest<Draft>) => {
-      const permission = d.id === null ? 'webhook-triggers:create' : 'webhook-triggers:update'
+      const permission =
+        d.id === null ? 'event-automation-rules:create' : 'event-automation-rules:update'
       if (!requestIsCurrent(session, permission, d.ownerUserId ?? undefined)) {
         throw new Error('Webhook trigger write access ended')
       }
@@ -525,7 +516,9 @@ export function TriggersPanel() {
     },
     onSuccess: (_saved, request) => {
       const permission =
-        request.input.id === null ? 'webhook-triggers:create' : 'webhook-triggers:update'
+        request.input.id === null
+          ? 'event-automation-rules:create'
+          : 'event-automation-rules:update'
       if (!requestIsCurrent(request.session, permission, request.input.ownerUserId ?? undefined)) {
         return
       }
@@ -535,7 +528,9 @@ export function TriggersPanel() {
     },
     onError: (nextError, request) => {
       const permission =
-        request.input.id === null ? 'webhook-triggers:create' : 'webhook-triggers:update'
+        request.input.id === null
+          ? 'event-automation-rules:create'
+          : 'event-automation-rules:update'
       if (requestIsCurrent(request.session, permission, request.input.ownerUserId ?? undefined)) {
         setError(nextError)
       }
@@ -546,7 +541,7 @@ export function TriggersPanel() {
       input,
       session,
     }: TriggerRequest<{ id: string; ownerUserId: string; enabled: boolean }>) => {
-      if (!requestIsCurrent(session, 'webhook-triggers:update', input.ownerUserId)) {
+      if (!requestIsCurrent(session, 'event-automation-rules:update', input.ownerUserId)) {
         throw new Error('Webhook trigger write access ended')
       }
       return api.put<WebhookTrigger>(`/api/webhook-triggers/${encodeURIComponent(input.id)}`, {
@@ -554,26 +549,42 @@ export function TriggersPanel() {
       })
     },
     onSuccess: (_saved, request) => {
-      if (requestIsCurrent(request.session, 'webhook-triggers:update', request.input.ownerUserId)) {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:update',
+          request.input.ownerUserId,
+        )
+      ) {
         invalidate()
       }
     },
     onError: (nextError, request) => {
-      if (requestIsCurrent(request.session, 'webhook-triggers:update', request.input.ownerUserId)) {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:update',
+          request.input.ownerUserId,
+        )
+      ) {
         setError(nextError)
       }
     },
   })
   const remove = useMutation({
     mutationFn: ({ input, session }: TriggerRequest<{ id: string; ownerUserId: string }>) => {
-      if (!requestIsCurrent(session, 'webhook-triggers:delete', input.ownerUserId)) {
+      if (!requestIsCurrent(session, 'event-automation-rules:delete', input.ownerUserId)) {
         throw new Error('Webhook trigger write access ended')
       }
       return api.delete(`/api/webhook-triggers/${encodeURIComponent(input.id)}`)
     },
     onSuccess: (_deleted, request) => {
       if (
-        !requestIsCurrent(request.session, 'webhook-triggers:delete', request.input.ownerUserId)
+        !requestIsCurrent(
+          request.session,
+          'event-automation-rules:delete',
+          request.input.ownerUserId,
+        )
       ) {
         return
       }
@@ -581,7 +592,13 @@ export function TriggersPanel() {
       invalidate()
     },
     onError: (nextError, request) => {
-      if (requestIsCurrent(request.session, 'webhook-triggers:delete', request.input.ownerUserId)) {
+      if (
+        requestIsCurrent(
+          request.session,
+          'event-automation-rules:delete',
+          request.input.ownerUserId,
+        )
+      ) {
         setError(nextError)
       }
     },
@@ -624,7 +641,7 @@ export function TriggersPanel() {
       type="button"
       className="btn btn--primary"
       onClick={() => {
-        if (!requestIsCurrent(writeSession, 'webhook-triggers:create')) return
+        if (!requestIsCurrent(writeSession, 'event-automation-rules:create')) return
         setError(null)
         save.reset()
         setDraft({ ...EMPTY_DRAFT, endpointId: endpoints.data?.[0]?.id ?? '' })
@@ -679,8 +696,16 @@ export function TriggersPanel() {
               targetNames.get(`${row.launchKind}:${row.launchRefId}`) ?? row.launchRefId
             const scratch = isScratchPayload(row.launchPayload)
             const isOwn = actor?.user.id === row.ownerUserId
-            const canUpdate = canWriteTrigger(actor, row.ownerUserId, 'webhook-triggers:update')
-            const canDelete = canWriteTrigger(actor, row.ownerUserId, 'webhook-triggers:delete')
+            const canUpdate = canWriteEventAutomationRule(
+              actor,
+              row.ownerUserId,
+              'event-automation-rules:update',
+            )
+            const canDelete = canWriteEventAutomationRule(
+              actor,
+              row.ownerUserId,
+              'event-automation-rules:delete',
+            )
             return (
               <Card
                 key={row.id}
@@ -746,7 +771,7 @@ export function TriggersPanel() {
                                 if (
                                   !requestIsCurrent(
                                     writeSession,
-                                    'webhook-triggers:update',
+                                    'event-automation-rules:update',
                                     row.ownerUserId,
                                   )
                                 ) {
@@ -862,7 +887,11 @@ export function TriggersPanel() {
         (draft.id === null
           ? canCreate
           : draft.ownerUserId !== null &&
-            canWriteTrigger(actor, draft.ownerUserId, 'webhook-triggers:update')) && (
+            canWriteEventAutomationRule(
+              actor,
+              draft.ownerUserId,
+              'event-automation-rules:update',
+            )) && (
           <TriggerDialog
             draft={draft}
             endpoints={endpoints.data ?? []}
@@ -879,7 +908,11 @@ export function TriggersPanel() {
       {firesFor !== null && (
         <FiresDialog
           trigger={firesFor}
-          canReset={canWriteTrigger(actor, firesFor.ownerUserId, 'webhook-triggers:update')}
+          canReset={canWriteEventAutomationRule(
+            actor,
+            firesFor.ownerUserId,
+            'event-automation-rules:update',
+          )}
           onClose={() => setFiresFor(null)}
         />
       )}
@@ -2555,7 +2588,11 @@ function FiresDialog(props: { trigger: WebhookTrigger; canReset: boolean; onClos
   })
   const requestIsCurrent = (session: number): boolean =>
     session === writeSessionRef.current &&
-    canWriteTrigger(currentActorAtRequest(qc), props.trigger.ownerUserId, 'webhook-triggers:update')
+    canWriteEventAutomationRule(
+      currentActorAtRequest(qc),
+      props.trigger.ownerUserId,
+      'event-automation-rules:update',
+    )
   const reset = useMutation({
     mutationFn: ({ input: streamKey, session }: TriggerRequest<string>) => {
       if (!requestIsCurrent(session)) throw new Error('Webhook trigger write access ended')
