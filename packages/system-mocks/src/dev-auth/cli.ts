@@ -9,7 +9,13 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { runProcess } from '../core/process'
-import { DEV_AUTH_DEFAULT_APP_ORIGIN, DEV_AUTH_DEFAULT_PORT, startDevAuthServer } from './server'
+import { pidIsAlive, startOrphanWatchdog } from './lifecycle'
+import {
+  DEV_AUTH_DEFAULT_APP_ORIGIN,
+  DEV_AUTH_DEFAULT_PORT,
+  DevAuthPortInUseError,
+  startDevAuthServer,
+} from './server'
 import type { CliResult } from './seed'
 
 if (process.env.AW_DEV_AUTH === '0') {
@@ -46,20 +52,45 @@ const service = await startDevAuthServer({
   appOrigin,
   runCli,
   log,
+}).catch((error: unknown) => {
+  // A port clash is an operator situation, not a crash: print the remedy, not a
+  // stack trace over a `bun dev` that is otherwise starting fine.
+  if (error instanceof DevAuthPortInUseError) {
+    process.stderr.write(`${error.message}\n`)
+    process.exit(1)
+  }
+  throw error
 })
 
 log(`role login page: ${service.url}`)
 log(`mock identity provider: ${service.issuerUrl}`)
 log(`seeding database: ${home}`)
 
+const stopWatchdog = startOrphanWatchdog({
+  parentPid: process.ppid,
+  currentParentPid: () => process.ppid,
+  isAlive: pidIsAlive,
+  onOrphaned: (reason) => {
+    log(`${reason}; shutting down so the login port is not left held`)
+    void stop(0)
+  },
+})
+
 let stopping = false
-async function stop(): Promise<void> {
+async function stop(code = 0): Promise<void> {
   if (stopping) return
   stopping = true
-  await service.close()
-  process.exit(0)
+  stopWatchdog()
+  // Shutdown must be bounded. Anything that can keep `close()` pending (a socket
+  // that refuses to die, an in-flight seed request) would otherwise leave the
+  // port held by a process the developer already told to quit.
+  await Promise.race([service.close(), new Promise<void>((resolve) => setTimeout(resolve, 2000))])
+  process.exit(code)
 }
 
 process.once('SIGINT', () => void stop())
 process.once('SIGTERM', () => void stop())
+// Closing the terminal window delivers SIGHUP rather than SIGINT; without this
+// the service survives exactly the case people assume kills everything.
+process.once('SIGHUP', () => void stop())
 await new Promise<void>(() => {})

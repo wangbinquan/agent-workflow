@@ -15,7 +15,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -30,7 +32,12 @@ import {
   startRoleAuthorization,
   type CliResult,
 } from '../src/dev-auth/seed'
-import { safeRedirect, startDevAuthServer } from '../src/dev-auth/server'
+import { DevAuthPortInUseError, safeRedirect, startDevAuthServer } from '../src/dev-auth/server'
+import { pidIsAlive, startOrphanWatchdog } from '../src/dev-auth/lifecycle'
+
+function repoRoot(): string {
+  return resolve(import.meta.dir, '..', '..', '..')
+}
 
 const cleanups: Array<() => Promise<void>> = []
 
@@ -133,6 +140,32 @@ describe('one-click page', () => {
     expect(html).not.toContain('href="/login/admin"')
     expect(html.match(/class="card__cta card__cta--disabled"/g)).toHaveLength(4)
     expect(html).toContain('http-equiv="refresh"')
+  })
+
+  test('gives every role its own accent and names the role on its button', () => {
+    // The anti-misclick property: four identical buttons a few pixels apart is
+    // how you audit the wrong role. Colour + label are what tell them apart.
+    const html = renderDevAuthPage(
+      baseState({
+        status: 'ok',
+        result: {
+          providerSlug: DEV_PROVIDER_SLUG,
+          providerId: 'p1',
+          adminUsername: 'dev_seed_admin',
+          seededAt: 1,
+          roles: DEV_ROLES.map((role) => ({
+            key: role.key,
+            username: role.username,
+            userId: `id-${role.key}`,
+            displayName: role.displayName,
+          })),
+        },
+      }),
+    )
+    const accents = [...html.matchAll(/--role:(#[0-9a-f]{6})/g)].map((match) => match[1])
+    expect(accents).toHaveLength(DEV_ROLES.length)
+    expect(new Set(accents).size).toBe(DEV_ROLES.length)
+    for (const role of DEV_ROLES) expect(html).toContain(`>\u4ee5 ${role.key} \u767b\u5f55</a>`)
   })
 
   test('escapes the seed failure instead of pasting daemon output into the DOM', () => {
@@ -282,6 +315,151 @@ describe('dev auth service', () => {
   })
 })
 
+describe('process lifecycle', () => {
+  // Measured on bun 1.3.13 before this existed: a terminal Ctrl-C (group SIGINT)
+  // did take the service down with `bun dev`, but `kill -9` on the filter runner
+  // left this process reparented to pid 1 and still holding the login port, so
+  // the next `bun dev` met EADDRINUSE from a process nobody remembered starting.
+  function watchdogHarness(overrides: {
+    parentPid?: number
+    currentParentPid?: () => number
+    isAlive?: (pid: number) => boolean
+  }) {
+    const fired: string[] = []
+    let tick: (() => void) | null = null
+    const stop = startOrphanWatchdog({
+      parentPid: overrides.parentPid ?? 4242,
+      currentParentPid: overrides.currentParentPid ?? (() => 4242),
+      isAlive: overrides.isAlive ?? (() => true),
+      onOrphaned: (reason) => fired.push(reason),
+      setTimer: (callback) => {
+        tick = callback
+        return 'timer'
+      },
+      clearTimer: () => {
+        tick = null
+      },
+    })
+    return { fired, run: () => tick?.(), stop }
+  }
+
+  test('stays quiet while the parent is alive and unchanged', () => {
+    const harness = watchdogHarness({})
+    harness.run()
+    harness.run()
+    expect(harness.fired).toEqual([])
+  })
+
+  test('fires once when the process is reparented', () => {
+    const harness = watchdogHarness({ currentParentPid: () => 1 })
+    harness.run()
+    harness.run()
+    expect(harness.fired).toHaveLength(1)
+    expect(harness.fired[0]).toContain('reparented to 1')
+  })
+
+  test('fires when the original parent is simply gone', () => {
+    const harness = watchdogHarness({ isAlive: () => false })
+    harness.run()
+    expect(harness.fired[0]).toContain('no longer exists')
+  })
+
+  test('never watches a process that was already detached', () => {
+    const harness = watchdogHarness({ parentPid: 1, currentParentPid: () => 1 })
+    harness.run()
+    // nohup / launchd runs have no parent to outlive; firing here would kill
+    // every deliberately detached instance.
+    expect(harness.fired).toEqual([])
+  })
+
+  test('signal-0 probe answers for a live pid and a certainly-dead one', () => {
+    expect(pidIsAlive(process.pid)).toBe(true)
+    expect(pidIsAlive(2_147_483_600)).toBe(false)
+  })
+
+  test('shutdown does not wait for an idle keep-alive socket', async () => {
+    const home = await temporaryHome()
+    const service = await startService({ home })
+    const port = Number(new URL(service.url).port)
+    const socket = connect({ host: '127.0.0.1', port })
+    await new Promise<void>((resolvePromise, reject) => {
+      socket.once('connect', () => resolvePromise())
+      socket.once('error', reject)
+    })
+    const startedAt = Date.now()
+    await service.close()
+    socket.destroy()
+    // `server.close()` on its own parks until the peer times out — that delay is
+    // the port staying held after the developer already quit.
+    expect(Date.now() - startedAt).toBeLessThan(1500)
+  })
+
+  test('a held port produces the remedy, not a bare EADDRINUSE', async () => {
+    const home = await temporaryHome()
+    const first = await startService({ home })
+    const port = Number(new URL(first.url).port)
+    const conflict = await startDevAuthServer({
+      home,
+      runCli: noopCli,
+      port,
+      autoSeed: false,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    )
+    expect(conflict).toBeInstanceOf(DevAuthPortInUseError)
+    expect((conflict as Error).message).toContain(`port ${port} is already in use`)
+    expect((conflict as Error).message).toContain('pkill -f dev-auth/cli.ts')
+  })
+
+  test('an orphaned service exits instead of holding the port forever', async () => {
+    const home = await temporaryHome()
+    // `sh` stands in for the `bun run --filter` parent: it starts the service in
+    // the background and waits, so killing IT leaves a real reparented orphan —
+    // the case a group signal never reaches.
+    const cli = join(repoRoot(), 'packages', 'system-mocks', 'src', 'dev-auth', 'cli.ts')
+    const parent = spawn('sh', ['-c', `bun run ${cli} & echo "CHILD:$!"; wait`], {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, AGENT_WORKFLOW_HOME: home, AW_DEV_AUTH_PORT: '0' },
+    })
+    let output = ''
+    const servicePid = await new Promise<number>((resolvePromise, reject) => {
+      const timer = setTimeout(() => reject(new Error(`dev-auth never started: ${output}`)), 40_000)
+      parent.stdout.on('data', (chunk: Buffer) => {
+        output += chunk.toString('utf8')
+        const pid = /CHILD:(\d+)/.exec(output)?.[1]
+        if (pid !== undefined && output.includes('role login page')) {
+          clearTimeout(timer)
+          resolvePromise(Number(pid))
+        }
+      })
+      parent.once('error', reject)
+    })
+    cleanups.push(async () => {
+      for (const pid of [servicePid, parent.pid ?? 0]) {
+        try {
+          if (pid > 0) process.kill(pid, 'SIGKILL')
+        } catch {
+          /* already gone — the point of the test */
+        }
+      }
+    })
+
+    expect(pidIsAlive(servicePid)).toBe(true)
+    process.kill(parent.pid ?? 0, 'SIGKILL')
+
+    const deadline = Date.now() + 20_000
+    let alive = true
+    while (Date.now() < deadline) {
+      await new Promise<void>((done) => setTimeout(done, 500))
+      alive = pidIsAlive(servicePid)
+      if (!alive) break
+    }
+    expect(alive).toBe(false)
+  }, 90_000)
+})
+
 describe('seed administrator recovery', () => {
   test('rotates the password through the CLI when the account already exists, then clears the forced change', async () => {
     const home = await temporaryHome()
@@ -360,10 +538,9 @@ describe('seed administrator recovery', () => {
 
 describe('production isolation', () => {
   test('no product source mentions the dev login provider or its accounts', () => {
-    const repoRoot = resolve(import.meta.dir, '..', '..', '..')
     const markers = [DEV_PROVIDER_SLUG, 'dev_seed_admin', 'dev-auth']
     for (const packageName of ['backend', 'frontend', 'shared']) {
-      for (const path of sourceFiles(join(repoRoot, 'packages', packageName, 'src'))) {
+      for (const path of sourceFiles(join(repoRoot(), 'packages', packageName, 'src'))) {
         const source = readFileSync(path, 'utf8')
         for (const marker of markers) {
           expect(`${path}:${source.includes(marker) ? marker : ''}`).toBe(`${path}:`)
@@ -373,12 +550,11 @@ describe('production isolation', () => {
   })
 
   test('`bun dev` starts the service through the mock package, not a product script', () => {
-    const repoRoot = resolve(import.meta.dir, '..', '..', '..')
     const mocks = JSON.parse(
-      readFileSync(join(repoRoot, 'packages', 'system-mocks', 'package.json'), 'utf8'),
+      readFileSync(join(repoRoot(), 'packages', 'system-mocks', 'package.json'), 'utf8'),
     ) as { scripts?: Record<string, string> }
     expect(mocks.scripts?.dev).toBe('bun run src/dev-auth/cli.ts')
-    const root = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
+    const root = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as {
       scripts?: Record<string, string>
     }
     expect(root.scripts?.dev).toBe("bun run --filter '*' dev")

@@ -1619,3 +1619,24 @@ verified`——而同一份代码首次运行完全正常。
 - **通用判据**：**换密钥必须换 `kid`**。任何自建/mock 的签名端（IdP、JWT 签发、webhook 签名）
   一旦「密钥随进程重生成、标识符却写死」，对端只要缓存了密钥集就会进入这种「重启才好」的
   伪灵异状态。看到「首次通、重启必挂、重启对端又好了」，先查两边的 key id 与缓存生命周期。
+
+## 给 `bun dev` 加常驻子进程：Ctrl-C 会带走它，父进程被强杀不会（2026-08-22 实测）
+
+`bun run --filter '*' dev` 把各包的 dev 进程放在**同一个前台进程组**里，所以终端 Ctrl-C
+（组 SIGINT）能到达每一个——实测 dev-auth 子进程随组退出、端口立刻释放。但这只覆盖了信号
+**传得到**的那一半：
+
+- `kill -9` 掉 `bun run --filter '*' dev` 父进程（或父进程自己崩了）→ 子进程**存活并被
+  reparent 到 pid 1，端口继续占着**（实测：`54796 1 bun run src/dev-auth/cli.ts` + LISTEN），
+  下次 `bun dev` 撞 EADDRINUSE，而占用者是十分钟前自己启动、早已忘掉的进程。
+- 关终端窗口发的是 **SIGHUP** 不是 SIGINT，只注册 SIGINT/SIGTERM 的进程正好漏掉这一种。
+- `server.close()` **不等于**端口马上释放：浏览器留着的 idle keep-alive 连接会把它吊住到超时。
+  必须自己记下活动 socket 并在关闭时 `destroy()`，再加一个「到点硬退」的兜底。
+
+定式（`packages/system-mocks/src/dev-auth/lifecycle.ts` 是现成实现）：常驻 dev 子进程一律
+①注册 SIGINT/SIGTERM/**SIGHUP**；②起一个孤儿看门狗——启动时记下 `process.ppid`，之后轮询
+「ppid 变了」**或**「原 ppid 用 signal-0 探不到了」，任一成立就自杀（bun 1.3.13 实测两个信号
+都可用；启动时 ppid 已经是 1 的 nohup/launchd 场景要跳过，否则会误杀故意 detach 的实例）；
+③关闭时销毁存量 socket + 限时硬退；④端口被占时打印**人话补救命令**而不是 EADDRINUSE 栈。
+回归锁见 `packages/system-mocks/tests/dev-auth.test.ts` 的 `process lifecycle` 一组（含一条
+真起进程、杀父、断言孤儿自退的用例，把看门狗关掉立刻红）。

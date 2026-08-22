@@ -10,6 +10,7 @@
 
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { Socket } from 'node:net'
 
 import { readRequestBody, writeJson, writeText } from '../core/http'
 import { OidcMock } from '../oidc/server'
@@ -194,9 +195,22 @@ export async function startDevAuthServer(
     response.end()
   }
 
+  // Every live socket is tracked so shutdown can destroy them. `server.close()`
+  // alone waits for the browser's idle keep-alive connection to time out, which
+  // turns Ctrl-C into "the port is still held for another minute" — the exact
+  // orphan symptom this service must not produce.
+  const sockets = new Set<Socket>()
+  server.on('connection', (socket: Socket) => {
+    sockets.add(socket)
+    socket.once('close', () => sockets.delete(socket))
+  })
+
+  const port = options.port ?? DEV_AUTH_DEFAULT_PORT
   await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(options.port ?? DEV_AUTH_DEFAULT_PORT, host, () => resolve())
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      reject(error.code === 'EADDRINUSE' ? new DevAuthPortInUseError(port) : error)
+    })
+    server.listen(port, host, () => resolve())
   })
   const address = server.address()
   if (address === null || typeof address === 'string') {
@@ -212,7 +226,10 @@ export async function startDevAuthServer(
     state,
     seed,
     close: async () => {
-      await new Promise<void>((resolve) => server.close(() => resolve()))
+      const closed = new Promise<void>((resolve) => server.close(() => resolve()))
+      for (const socket of sockets) socket.destroy()
+      sockets.clear()
+      await closed
     },
   }
 }
@@ -221,4 +238,25 @@ export async function startDevAuthServer(
 export function safeRedirect(value: string | null): string {
   if (value === null) return '/agents'
   return /^\/(?![/\\])/.test(value) ? value : '/agents'
+}
+
+/**
+ * A held port is nearly always the previous run of this very service, orphaned
+ * by a parent that died without passing the signal on. Say that, and say the one
+ * command that fixes it — a raw EADDRINUSE stack sends people hunting through
+ * `lsof` for a process they started themselves ten minutes ago.
+ */
+export class DevAuthPortInUseError extends Error {
+  readonly port: number
+
+  constructor(port: number) {
+    super(
+      `dev-auth: port ${port} is already in use.\n` +
+        '  Most likely an earlier dev-auth process outlived its parent. Clear it with:\n' +
+        '    pkill -f dev-auth/cli.ts\n' +
+        `  or run this one elsewhere with AW_DEV_AUTH_PORT=<port>.`,
+    )
+    this.name = 'DevAuthPortInUseError'
+    this.port = port
+  }
 }
