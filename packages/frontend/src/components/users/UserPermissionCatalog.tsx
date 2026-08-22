@@ -15,6 +15,7 @@ const GROUP_ORDER: ReadonlyArray<PermissionGroup> = [
   'resources',
   'tasks',
   'memory-intent',
+  'event-center',
   'webhooks',
   'repositories',
   'privileged-authoring',
