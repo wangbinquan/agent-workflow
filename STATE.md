@@ -2,6 +2,16 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🛠 **开发工装（非 RFC，2026-08-22）：`bun dev` 现在会多起一个开发登录服务**
+> —— `packages/system-mocks/src/dev-auth/`（test-only 包，产品代码零改动，`AW_DEV_AUTH=0` 可关）。
+> 它起一个 mock OIDC IdP，并往 **`bun dev` 正在服务的那个库**里幂等种入 `admin/manager/user/guest`
+> 四个角色账号（`dev-admin` 等）+ 一个供种子器自用的密码管理员 `dev_seed_admin`（密码在
+> `<home>/.dev-auth.json`，600）+ 一个 `dev-roles` 身份提供方。**所以你会在 /users 与登录页看到
+> 这些 `[dev]` 条目，它们不是脏数据**；不想要就删掉它们，或用 `AGENT_WORKFLOW_HOME=~/.agent-workflow-dev bun dev`
+> 换个库。两个入口：http://127.0.0.1:7460 点角色直登，或从产品登录页点 `[dev]` 走标准 OIDC。
+> 用法见 README「从源码构建」；踩坑（mock 换密钥不换 kid + daemon 长寿 JWKS 缓存、常驻 dev 子进程的
+> 孤儿/SIGHUP/keep-alive 三件套）已进 `docs/dev-gotchas.md`。
+
 > ✅ **已完成 RFC（Done，2026-08-21 实现落主干）：[RFC-314 node_run_events 三处读写形状修复](design/RFC-314-node-run-event-access-shapes/proposal.md)**
 > —— 起于生产对账：部署 **v0.18.11**（已含 RFC-311 字节水位）的 `node_run_events` 仍是 **78.6 万行 / 1.72GB**。
 > 定位分两半：**装配洞已修**（`b2321179`：归档器与终态 sweeper 只有 `setInterval(1h)`、没有 boot 首拍，重启比
