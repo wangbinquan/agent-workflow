@@ -329,6 +329,82 @@ describe('dev auth service', () => {
   })
 })
 
+describe('identity chooser (login started from the product login page)', () => {
+  // Reported from a live session: the developer clicked the `[dev]` identity
+  // provider on the product login page, landed on the shared mock's bare
+  // chooser, and reasonably read it as "the buttons are still the old ones".
+  // That page is part of this flow, so it gets the same treatment.
+  async function authorizeUrl(service: { issuerUrl: string }): Promise<URL> {
+    const url = new URL(`${service.issuerUrl}/authorize`)
+    url.searchParams.set('response_type', 'code')
+    url.searchParams.set('client_id', MOCK_OIDC_CLIENT_ID)
+    url.searchParams.set('redirect_uri', 'http://localhost:5174/api/auth/oidc/dev-roles/callback')
+    url.searchParams.set('scope', 'openid profile email')
+    url.searchParams.set('state', 'state-9')
+    url.searchParams.set('code_challenge', 'challenge-9')
+    url.searchParams.set('code_challenge_method', 'S256')
+    url.searchParams.set('nonce', 'nonce-9')
+    return url
+  }
+
+  test('renders one styled card per dev role and replays the request verbatim', async () => {
+    const home = await temporaryHome()
+    const service = await startService({ home })
+    const response = await fetch((await authorizeUrl(service)).toString())
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const html = await response.text()
+
+    for (const role of DEV_ROLES) {
+      expect(html).toContain(`data-testid="oidc-user-${role.sub}"`)
+      expect(html).toContain(`value="${role.sub}"`)
+    }
+    const accents = [...html.matchAll(/--role:(#[0-9a-f]{6})/g)].map((match) => match[1])
+    expect(new Set(accents).size).toBe(DEV_ROLES.length)
+    // Every parameter of the authorization request must survive into the POST,
+    // or the daemon's PKCE/state check rejects the callback it started.
+    for (const key of ['state', 'code_challenge', 'nonce', 'redirect_uri', 'client_id']) {
+      expect(html).toContain(`name="${key}"`)
+    }
+    expect(html).toContain('name="state" value="state-9"')
+    expect(html).toContain(`action="${service.issuerUrl}/authorize"`)
+  })
+
+  test('submitting a card yields a redeemable code, exactly like the bare mock did', async () => {
+    const home = await temporaryHome()
+    const service = await startService({ home })
+    const url = await authorizeUrl(service)
+    const form = new URLSearchParams(url.searchParams)
+    form.set('mock_sub', DEV_ROLES[0]!.sub)
+    const posted = await fetch(`${service.issuerUrl}/authorize`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form,
+      redirect: 'manual',
+    })
+    expect(posted.status).toBe(302)
+    const location = new URL(posted.headers.get('location') ?? '')
+    expect(location.searchParams.get('state')).toBe('state-9')
+    expect(location.searchParams.get('code')).toBeTruthy()
+  })
+
+  test("a malformed authorization request still gets the mock's own answer", async () => {
+    const home = await temporaryHome()
+    const service = await startService({ home })
+    const url = await authorizeUrl(service)
+    url.searchParams.delete('state')
+    const response = await fetch(url.toString())
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe('missing state')
+
+    const wrongClient = await authorizeUrl(service)
+    wrongClient.searchParams.set('client_id', 'not-our-client')
+    const rejected = await fetch(wrongClient.toString())
+    expect(rejected.status).toBe(400)
+    expect(await rejected.text()).toBe('unknown client_id')
+  })
+})
+
 describe('process lifecycle', () => {
   // Measured on bun 1.3.13 before this existed: a terminal Ctrl-C (group SIGINT)
   // did take the service down with `bun dev`, but `kill -9` on the filter runner

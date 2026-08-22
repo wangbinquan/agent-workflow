@@ -88,17 +88,7 @@ function roleCard(state: DevAuthPageState, index: number): string {
   </article>`
 }
 
-export function renderDevAuthPage(state: DevAuthPageState): string {
-  const refresh = state.seed.status === 'pending' ? '<meta http-equiv="refresh" content="2">' : ''
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Workflow · 开发角色一键登录</title>
-${refresh}
-<style>
-:root { color-scheme: light dark; --bg:#f5f6f8; --fg:#12141a; --muted:#5d6470; --card:#ffffff;
+const PAGE_CSS = `:root { color-scheme: light dark; --bg:#f5f6f8; --fg:#12141a; --muted:#5d6470; --card:#ffffff;
   --line:#e2e6ea; --accent:#2f6feb; --shadow:0 1px 2px rgba(16,20,28,.05), 0 12px 28px -20px rgba(16,20,28,.45); }
 @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --fg:#e8eaee; --muted:#98a1ae; --card:#181b21;
   --line:#282d36; --accent:#5b8cf5; --shadow:0 1px 2px rgba(0,0,0,.45), 0 14px 30px -22px rgba(0,0,0,.9); } }
@@ -142,12 +132,33 @@ h1 { font-size: 24px; letter-spacing:-0.2px; margin: 0 0 6px; }
 .facts { margin-top:36px; border-top:1px solid var(--line); padding-top:20px; font-size:13px; color:var(--muted); }
 .facts dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0 0 12px; }
 .facts dd { margin:0; }
-code { font-family: ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,monospace; font-size:12px; }
+code { font-family: ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,monospace; font-size:12px; }`
+
+function htmlShell(input: { title: string; head?: string; body: string }): string {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(input.title)}</title>
+${input.head ?? ''}
+<style>
+${PAGE_CSS}
 </style>
 </head>
 <body>
 <main>
-  <h1>开发角色一键登录</h1>
+${input.body}
+</main>
+</body>
+</html>`
+}
+
+export function renderDevAuthPage(state: DevAuthPageState): string {
+  return htmlShell({
+    title: 'Agent Workflow · 开发角色一键登录',
+    head: state.seed.status === 'pending' ? '<meta http-equiv="refresh" content="2">' : '',
+    body: `  <h1>开发角色一键登录</h1>
   <p class="sub">点一个角色即可以该身份进入 <code>${escapeHtml(state.appOrigin)}</code>。
   同一浏览器 profile 只保留最后一次登录的会话；想同时对比两个角色请用无痕窗口。</p>
   ${statusBanner(state)}
@@ -165,8 +176,67 @@ code { font-family: ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,monospace
     <code>login/start → mock IdP → callback → #aw_session</code>。产品代码零改动，
     关掉本进程后系统仍按原样运行（登录页会多出一个禁用不掉的 <code>[dev]</code> 身份提供方，
     可在 设置 → 身份提供方 里删除）。</p>
-  </section>
-</main>
-</body>
-</html>`
+  </section>`,
+  })
+}
+
+export interface ChooserIdentity {
+  readonly sub: string
+  readonly name: string
+  readonly email: string
+  /** Platform role when the subject is one of the seeded dev roles. */
+  readonly roleKey?: string
+  readonly summary?: string
+}
+
+export interface IdentityChooserInput {
+  /** Where the form posts — the mock IdP's own authorize endpoint. */
+  readonly action: string
+  /** The authorization request, replayed verbatim as hidden fields. */
+  readonly params: ReadonlyArray<readonly [string, string]>
+  readonly identities: ReadonlyArray<ChooserIdentity>
+  /** Origin the login will land on, for the copy. */
+  readonly appOrigin: string
+}
+
+/**
+ * The account chooser the browser sees when a login starts from the PRODUCT
+ * login page (its `[dev]` identity-provider button) rather than from this
+ * service's own page. It is the same decision — which of the four dev roles —
+ * so it gets the same cards, the same colours and the same hit targets.
+ *
+ * Rendered here rather than by the shared OidcMock on purpose: that mock is
+ * e2e fixture code whose bare markup several specs assert against, and a dev
+ * convenience has no business reshaping it.
+ */
+export function renderIdentityChooserPage(input: IdentityChooserInput): string {
+  const hidden = input.params
+    .map(
+      ([name, value]) =>
+        `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`,
+    )
+    .join('')
+  const cards = input.identities
+    .map((identity) => {
+      const accent = ROLE_ACCENT[identity.roleKey ?? ''] ?? '#5c6b7a'
+      const label = identity.roleKey ?? identity.sub
+      return `<form class="card" style="--role:${escapeHtml(accent)}" method="post" action="${escapeHtml(input.action)}">
+      ${hidden}<input type="hidden" name="mock_sub" value="${escapeHtml(identity.sub)}">
+      <span class="card__badge">${escapeHtml(label)}</span>
+      <h2>${escapeHtml(identity.name)}</h2>
+      <p class="card__summary">${escapeHtml(identity.summary ?? identity.email)}</p>
+      <dl class="card__meta"><dt>邮箱</dt><dd><code>${escapeHtml(identity.email)}</code></dd></dl>
+      <button class="card__cta" type="submit" data-testid="oidc-user-${escapeHtml(identity.sub)}">以 ${escapeHtml(label)} 继续</button>
+    </form>`
+    })
+    .join('\n')
+  return htmlShell({
+    title: 'Agent Workflow · 选择开发身份',
+    body: `  <h1>选择开发身份</h1>
+  <p class="sub">这是开发用的 mock 身份提供方。选中的身份会带你回到
+  <code>${escapeHtml(input.appOrigin)}</code> 并以对应角色登录。</p>
+  <section class="grid">
+${cards}
+  </section>`,
+  })
 }

@@ -13,10 +13,16 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Socket } from 'node:net'
 
 import { readRequestBody, writeJson, writeText } from '../core/http'
-import { OidcMock } from '../oidc/server'
+import { MOCK_OIDC_CLIENT_ID, OidcMock } from '../oidc/server'
 import { readDaemonInfo, waitForDaemon } from './daemon'
-import { renderDevAuthPage, type DevAuthPageState, type DevAuthSeedState } from './page'
-import { devRoleMockUsers, findDevRole } from './roles'
+import {
+  renderDevAuthPage,
+  renderIdentityChooserPage,
+  type ChooserIdentity,
+  type DevAuthPageState,
+  type DevAuthSeedState,
+} from './page'
+import { DEV_ROLES, devRoleMockUsers, findDevRole } from './roles'
 import { seedDevAuth, startRoleAuthorization, type CliRunner } from './seed'
 
 export const DEV_AUTH_DEFAULT_PORT = 7460
@@ -118,6 +124,24 @@ export async function startDevAuthServer(
     await seedInFlight
   }
 
+  function renderChooser(url: URL): string {
+    const identities: ChooserIdentity[] = oidc.snapshot().users.map((user) => {
+      const role = DEV_ROLES.find((candidate) => candidate.sub === user.sub)
+      return {
+        sub: user.sub,
+        name: role?.title ?? user.name,
+        email: user.email,
+        ...(role === undefined ? {} : { roleKey: role.key, summary: role.summary }),
+      }
+    })
+    return renderIdentityChooserPage({
+      action: `${issuer()}/authorize`,
+      params: [...url.searchParams.entries()],
+      identities,
+      appOrigin,
+    })
+  }
+
   const server: Server = createServer((request, response) => {
     void handle(request, response).catch((error: unknown) => {
       if (!response.headersSent) {
@@ -136,6 +160,22 @@ export async function startDevAuthServer(
     const url = new URL(request.url ?? '/', baseUrl === '' ? `http://${host}` : baseUrl)
     const body = await readRequestBody(request)
     if (url.pathname === routePrefix || url.pathname.startsWith(`${routePrefix}/`)) {
+      // A login started from the PRODUCT login page reaches the IdP's account
+      // chooser in the browser — the same "which of the four roles" decision the
+      // page at `/` answers, so it gets the same cards instead of the mock's
+      // bare fixture markup. Only the GET is taken over: the POST, the token
+      // exchange and every error path stay the shared mock's, and so does any
+      // request that fails its parameter checks (fall through, same 400s).
+      if (
+        request.method === 'GET' &&
+        url.pathname === `${routePrefix}/authorize` &&
+        authorizeRequestIsWellFormed(url)
+      ) {
+        writeText(response, 200, renderChooser(url), 'text/html; charset=utf-8', {
+          'cache-control': 'no-store',
+        })
+        return
+      }
       const handled = await oidc.handle({ request, response, url, body, routePrefix })
       if (!handled) writeText(response, 404, 'not found')
       return
@@ -270,4 +310,20 @@ export class DevAuthPortInUseError extends Error {
     this.name = 'DevAuthPortInUseError'
     this.port = port
   }
+}
+
+/**
+ * Mirrors the shared mock's own preconditions (system-mocks/src/oidc/server.ts
+ * `#authorizePage`). A request that fails any of them is handed straight back to
+ * the mock so its error text — the thing tests and muscle memory rely on —
+ * remains the single answer.
+ */
+export function authorizeRequestIsWellFormed(url: URL): boolean {
+  for (const key of ['client_id', 'redirect_uri', 'response_type', 'state']) {
+    if (!url.searchParams.has(key)) return false
+  }
+  return (
+    url.searchParams.get('client_id') === MOCK_OIDC_CLIENT_ID &&
+    url.searchParams.get('response_type') === 'code'
+  )
 }
