@@ -20,6 +20,7 @@
     "./development/approval-adapter-cli": "./src/development/approval-adapter-cli.ts"
   },
   "scripts": {
+    "dev": "bun run src/dev-auth/cli.ts",
     "start": "bun run src/cli.ts",
     "lint": "eslint src tests --max-warnings=0 --cache --cache-strategy content --cache-location ../../node_modules/.cache/eslint/system-mocks",
     "lint:fix": "eslint src tests --fix",

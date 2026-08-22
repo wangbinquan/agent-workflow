@@ -1597,3 +1597,25 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
 - **排查提示（这条最省时间）**：被抢的那一半才报 `EADDRINUSE`；**先绑成功、而对面连到了别人**
   这一半只会看到「语义离谱的响应码」。所以一旦看到**桩不可能返回的状态码**，先怀疑端口串了，
   别去追业务逻辑。
+
+## mock IdP 重启后所有 OIDC 登录失败：`kid` 不变 + 长寿 JWKS 缓存（2026-08-22 实测）
+
+`bun dev` 的开发登录服务（`packages/system-mocks/src/dev-auth`）第一次跑通后，**重启这个
+进程**再点登录，daemon 一律回 `Login failed / The id_token signature or claims could not be
+verified`——而同一份代码首次运行完全正常。
+
+- **根因是两边各自合理的缓存对撞**：`OidcMock.create()` **每次启动新生成一对 RSA 密钥**，
+  但公钥的 `kid` 是硬编码的 `system-mock-key-1`（`packages/system-mocks/src/oidc/server.ts`）；
+  daemon 侧 `getJwksInstance(jwksUri)`（`packages/backend/src/auth/oidc/endpoints.ts`）
+  **按 `jwks_uri` 缓存一个 jose `RemoteJWKSet`，生命周期与进程同长**。jose 只在
+  「找不到匹配的 kid」时才回源刷新——现在 kid **找得到**，只是密钥换了，于是它拿旧公钥去验新
+  签名，永远失败，且 `PATCH /api/oidc/providers/:id`（重存同一 issuer）**清不掉**这个缓存，
+  只有重启 daemon 才行。
+- **修法（现行）**：让每个 dev-auth 进程用**自己的 issuer 路径**（`/oidc/<8位随机>`），
+  于是 `jwks_uri` 与 discovery 缓存键都是新的，daemon 下一次登录自然取到新公钥；provider 行在
+  种子阶段被重新指向新 issuer，**已种好的身份挂在 provider 行上、不受影响**。
+  回归锁：`packages/system-mocks/tests/dev-auth.test.ts` 的「every process gets its own issuer
+  path」（把前缀改回固定 `/oidc` 立刻红）。
+- **通用判据**：**换密钥必须换 `kid`**。任何自建/mock 的签名端（IdP、JWT 签发、webhook 签名）
+  一旦「密钥随进程重生成、标识符却写死」，对端只要缓存了密钥集就会进入这种「重启才好」的
+  伪灵异状态。看到「首次通、重启必挂、重启对端又好了」，先查两边的 key id 与缓存生命周期。

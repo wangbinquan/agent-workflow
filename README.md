@@ -289,6 +289,13 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+`bun run dev` also starts a development-only identity provider on
+<http://127.0.0.1:7460> and seeds one account per platform role
+(`admin` / `manager` / `user` / `guest`) into the database it is serving, so role
+behaviour can be checked by clicking a single button. It lives entirely in the
+test-mock package (`packages/system-mocks/src/dev-auth`), touches no product
+code, and is skipped with `AW_DEV_AUTH=0`.
+
 Before contributing:
 
 ```bash

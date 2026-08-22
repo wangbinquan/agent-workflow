@@ -250,6 +250,11 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+`bun run dev` 会同时起一个**仅开发用**的身份提供方（<http://127.0.0.1:7460>），
+并把 `admin` / `manager` / `user` / `guest` 四个角色各一个账号种进它正在服务的数据库，
+点一下即可以对应角色登录，用来验证角色能力。它完全落在测试 mock 包里
+（`packages/system-mocks/src/dev-auth`），不改任何产品代码，`AW_DEV_AUTH=0` 可关闭。
+
 贡献前运行：
 
 ```bash
