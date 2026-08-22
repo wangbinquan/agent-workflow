@@ -29,7 +29,7 @@
 > 最终冻结研发类型为 `development@5`，升级库保留 `@1/@2/@3/@4` 并只追加 `@5`，避免 descriptor drift 阻断启动。
 > Agent 端口联动已追加进入本批：契约选择移入“输入/输出”，`agent-result` 由 UI 与所有保存入口共同按契约生命周期托管。
 >
-> **2026-08-22 PR-21/22（本地完成，待 hosted 终态）**：继续收口平台内置工具、材料/评审精确路径、Agent 显式交付输出、职责小卡片、
+> **2026-08-22 PR-21/22（已完成）**：继续收口平台内置工具、材料/评审精确路径、Agent 显式交付输出、职责小卡片、
 > 岗位页面内编辑、已发布负责范围继承与统一新建任务入口。旧 `global` 仅保留 runtime 解码兼容，不回到新建界面；最终证据必须来自本轮新提交。
 
 ## 0. 交付原则
@@ -1366,7 +1366,7 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | T199 | 增内置方案分析 Agent、`humanReview` directive 和 analyze→review→implement 固定 host；复用评论、驳回/迭代、批准与 durable waiting                 | T197,T198 | ✅   |
 | T200 | 生成上传材料明确 prompt 清单，锁多文件目标路径、平台 request manifest、分析/实现读取指令与最终 ChangeCandidate/MR 提交                           | T198,T199 | ✅   |
 | T201 | 工具弹窗消除横向 overflow；前端合同、后端反向、TaskEngine review、System Mock、桌面/窄屏浏览器和视觉基线形成覆盖矩阵                             | T197-T200 | ✅   |
-| T202 | 三轮功能自审、`bun run gate:local`、exact-path commit/push、精确 SHA hosted CI/visual 终态核对                                                   | T197-T201 | 🚧   |
+| T202 | 三轮功能自审、`bun run gate:local`、exact-path commit/push、精确 SHA hosted CI/visual 终态核对                                                   | T197-T201 | ✅   |
 
 ### 批次停止条件
 
@@ -1390,9 +1390,9 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | T204 | 全景仅在工具箱常驻；以区域/泳道小卡片替换连线画布；岗位新建/修改改为页内详情，绿/黄状态及必选缺失闪烁定位                                   | T197      | ✅   |
 | T205 | 员工范围合成单个仓库/仓库组/任务时指定 picker；API 投影 `publishedWorkScope`；固定仓隐藏选择、组内过滤、task scope 要求选择及旧 global 兼容 | T204      | ✅   |
 | T206 | `/tasks/new` 增数字员工创建卡片；任务列表只留“新建任务”；数字员工总览/分类页经统一入口预选，并复用执行者/空间/内容/确认四步 Stepper         | T204,T205 | ✅   |
-| T207 | codec/authoring/runtime/workspace/system-mock、前端功能、桌面/窄屏浏览器与 overflow 回归；三轮功能自审、完整 gate、提交推送和 exact-SHA CI  | T203-T206 | 🚧   |
+| T207 | codec/authoring/runtime/workspace/system-mock、前端功能、桌面/窄屏浏览器与 overflow 回归；三轮功能自审、完整 gate、提交推送和 exact-SHA CI  | T203-T206 | ✅   |
 
-### 本批功能自审记录（2026-08-22，hosted 终态待补）
+### 本批功能自审记录（2026-08-22，已完成）
 
 | 轮次               | 自审问题                                                                                  | 发现                                                                                                                          | 处置与证据                                                                                                                                                                   |
 | ------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1403,8 +1403,10 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 
 本地终态证据：`bun run gate:local` **9m34s 全绿**——backend **11,626 pass / 36 skip / 0 fail**、frontend
 **6,674/6,674**、shared **2,219/2,219**、system-mocks **35/35**，typecheck/lint/format/depcheck 全绿；四步创建真实页面
-旅程 **1/1**、零配置旅程 **3/3**、目标视觉 **4/4**，system-mock 完整链 **1/1（52 断言）**。T202/T207 保持进行中，
-直到本批 exact-path commit/push 与精确 SHA hosted CI/visual 全部终态通过。
+旅程 **1/1**、零配置旅程 **3/3**、目标视觉 **4/4**，system-mock 完整链 **1/1（52 断言）**。实现提交 `017ae96b`
+与逐图核验的 Linux 基线提交 `7265c3c4`、`2cf02e2f` 已推送；包含全部实现的精确 SHA
+`2cf02e2f5399d62ee53001eb6515b7429dad9ab4` 上，CI `32547935559` **31/31 jobs success**，visual
+`32547935610` **56/56 tests success**，T202/T207 终态完成。
 
 ### 批次停止条件
 
