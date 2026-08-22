@@ -832,7 +832,7 @@ function EventsPage(): ReactElement {
                   <strong>{zh ? '订阅管理' : 'Subscription management'}</strong>
                   <span>
                     {zh
-                      ? '配置响应规则与查看运行订阅分开呈现，万级清单不会把编辑入口推到页面底部。'
+                      ? '配置自动化规则与查看运行订阅分开呈现，万级清单不会把编辑入口推到页面底部。'
                       : 'Rule authoring and runtime audit are separate views, so large lists never bury authoring.'}
                   </span>
                 </div>
@@ -842,7 +842,7 @@ function EventsPage(): ReactElement {
                   ariaLabel={zh ? '订阅页面视图' : 'Subscription page view'}
                   testidPrefix="event-subscription-view"
                   options={[
-                    { value: 'rules', label: zh ? '响应规则' : 'Response rules' },
+                    { value: 'rules', label: zh ? '自动化规则' : 'Automation rules' },
                     { value: 'audit', label: zh ? '订阅审计' : 'Subscription audit' },
                   ]}
                 />
@@ -854,7 +854,7 @@ function EventsPage(): ReactElement {
                     <header>
                       <div>
                         <span className="employee-node-panel__eyebrow">
-                          {zh ? '响应规则' : 'Response rules'}
+                          {zh ? '自动化规则' : 'Automation rules'}
                         </span>
                         <h2>
                           {zh ? '事件发生后启动哪项工作' : 'Choose work to start for an event'}
@@ -866,11 +866,7 @@ function EventsPage(): ReactElement {
                         </p>
                       </div>
                     </header>
-                    <EventResponseRulesPanel
-                      catalog={catalog.data}
-                      language={language}
-                      canManage={canUpdateSource}
-                    />
+                    <EventResponseRulesPanel catalog={catalog.data} language={language} />
                   </section>
 
                   <section className="employee-node-panel event-response-webhook">

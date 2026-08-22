@@ -21,6 +21,11 @@ import {
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const OWNER_PRINCIPAL = {
+  userId: 'owner-1',
+  canOverrideOwner: false,
+  canLaunchDigitalEmployee: true,
+} as const
 
 describe('RFC-310 shared Event Center', () => {
   test('publishes one business catalog, hides Webhook compatibility facts, and lets every contracted event start work', async () => {
@@ -142,7 +147,7 @@ describe('RFC-310 shared Event Center', () => {
             inputs: { mr: '{{trigger.code_host.mr_iid}}' },
           },
         },
-        'owner-1',
+        OWNER_PRINCIPAL,
       )
     }
 
@@ -251,7 +256,7 @@ describe('RFC-310 shared Event Center', () => {
             inputs: {},
           },
         },
-        'owner-1',
+        OWNER_PRINCIPAL,
       ),
     ).toThrow('non-public event facts cannot be selected')
   })
@@ -289,7 +294,7 @@ describe('RFC-310 shared Event Center', () => {
           inputs: {},
         },
       },
-      'owner-1',
+      OWNER_PRINCIPAL,
     )
     const receipt = eventCenter.participant.observe(
       codeHostBusinessEventObservation({
@@ -312,19 +317,23 @@ describe('RFC-310 shared Event Center', () => {
         },
       }),
     )
-    eventCenter.responseRules.commands.update(original.id, {
-      name: '流水线修复（新定义）',
-      enabled: true,
-      eventTypeRef: { id: 'code-host.pipeline.failed', revision: 1 },
-      subjectMatch: 'all',
-      subjectPattern: null,
-      target: {
-        kind: 'workflow',
-        refId: 'workflow-after-edit',
-        nameTemplate: 'repair edited',
-        inputs: {},
+    eventCenter.responseRules.commands.update(
+      original.id,
+      {
+        name: '流水线修复（新定义）',
+        enabled: true,
+        eventTypeRef: { id: 'code-host.pipeline.failed', revision: 1 },
+        subjectMatch: 'all',
+        subjectPattern: null,
+        target: {
+          kind: 'workflow',
+          refId: 'workflow-after-edit',
+          nameTemplate: 'repair edited',
+          inputs: {},
+        },
       },
-    })
+      OWNER_PRINCIPAL,
+    )
 
     expect(await eventCenter.worker.runOneNotification()).toBe('completed')
     expect(launches).toEqual([])

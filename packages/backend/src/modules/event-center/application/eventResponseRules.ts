@@ -1,6 +1,6 @@
 import { ulid } from 'ulid'
 
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type {
   EventAutomationWorkStartPort,
@@ -54,6 +54,13 @@ function definitionOf(rule: EventResponseRuleRecord) {
   }
 }
 
+/** Trusted projection built by an authenticated inbound adapter. */
+export interface ResponseRuleWritePrincipal {
+  readonly userId: string
+  readonly canOverrideOwner: boolean
+  readonly canLaunchDigitalEmployee: boolean
+}
+
 export class EventResponseRuleService {
   readonly #rules: EventResponseRuleStorePort
   readonly #events: EventStorePort
@@ -87,12 +94,13 @@ export class EventResponseRuleService {
     return rule
   }
 
-  create(input: unknown, ownerUserId: string): EventResponseRuleRecord {
+  create(input: unknown, principal: ResponseRuleWritePrincipal): EventResponseRuleRecord {
     const draft = this.#validatedDraft(input)
+    this.#requireTargetLaunchPermission(draft, principal)
     const eventType = this.#events.getEventType(draft.eventTypeRef)!
     return this.#rules.create({
       id: this.#id(),
-      ownerUserId,
+      ownerUserId: principal.userId,
       sourceRef: eventType.sourceRef,
       subjectTypeId: eventType.subjectTypeId,
       draft,
@@ -100,9 +108,14 @@ export class EventResponseRuleService {
     })
   }
 
-  update(id: string, input: unknown): EventResponseRuleRecord {
-    this.get(id)
+  update(
+    id: string,
+    input: unknown,
+    principal: ResponseRuleWritePrincipal,
+  ): EventResponseRuleRecord {
+    this.#requireOwnedRule(id, principal)
     const draft = this.#validatedDraft(input)
+    this.#requireTargetLaunchPermission(draft, principal)
     const eventType = this.#events.getEventType(draft.eventTypeRef)!
     const updated = this.#rules.update({
       id,
@@ -120,7 +133,8 @@ export class EventResponseRuleService {
     return updated
   }
 
-  remove(id: string): void {
+  remove(id: string, principal: ResponseRuleWritePrincipal): void {
+    this.#requireOwnedRule(id, principal)
     if (!this.#rules.remove(id)) {
       throw new NotFoundError(
         'event-response-rule-not-found',
@@ -129,8 +143,38 @@ export class EventResponseRuleService {
     }
   }
 
+  #requireOwnedRule(id: string, principal: ResponseRuleWritePrincipal): EventResponseRuleRecord {
+    const rule = this.#rules.get(id)
+    if (rule === null || (rule.ownerUserId !== principal.userId && !principal.canOverrideOwner)) {
+      throw new NotFoundError(
+        'event-response-rule-not-found',
+        `event response rule not found: ${id}`,
+      )
+    }
+    return rule
+  }
+
+  #requireTargetLaunchPermission(
+    draft: EventResponseRuleDraft,
+    principal: ResponseRuleWritePrincipal,
+  ): void {
+    if (draft.target.kind === 'digital-employee' && !principal.canLaunchDigitalEmployee) {
+      throw new ForbiddenError('forbidden', 'missing permission: development-missions:launch', {
+        requiredPermission: 'development-missions:launch',
+      })
+    }
+  }
+
   #validatedDraft(input: unknown): EventResponseRuleDraft {
-    const draft = eventResponseRuleDraftSchema.parse(input)
+    const parsed = eventResponseRuleDraftSchema.safeParse(input)
+    if (!parsed.success) {
+      throw new ValidationError(
+        'event-response-rule-invalid',
+        'event response rule is invalid',
+        parsed.error.flatten(),
+      )
+    }
+    const draft = parsed.data
     const eventType = this.#events.getEventType(draft.eventTypeRef)
     if (eventType === null) {
       throw new NotFoundError(

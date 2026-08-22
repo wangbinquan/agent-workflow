@@ -39,12 +39,12 @@ describe('RFC-305 exhaustive permission catalog', () => {
       // merged point is in the user baseline, and what a user still cannot do
       // without a grant is author SCRIPTS (`scripts:author`), which is a field
       // inside a template rather than a template verb.
-      'webhook-triggers:create',
+      'event-automation-rules:create',
       'repos:create',
       'repository-employee-assignments:update', // RFC-310（manager 档差集）
-      'webhook-triggers:update',
+      'event-automation-rules:update',
       'repos:update',
-      'webhook-triggers:delete',
+      'event-automation-rules:delete',
       'repos:delete',
       'tasks:delete',
       'repos:execute',
@@ -66,7 +66,7 @@ describe('RFC-305 exhaustive permission catalog', () => {
       'memory-distill-jobs:manage',
       'intent:audit',
       'mcp-runtime-tests:audit',
-      'webhook-triggers:override-owner',
+      'event-automation-rules:override-owner',
     ])
     expect(grantableAdditionalPermissions('admin')).toEqual([])
     // 78 points − 7 guest baseline = 71.
@@ -83,12 +83,43 @@ describe('RFC-305 exhaustive permission catalog', () => {
       'memory-distill-jobs:manage',
       'intent:audit',
       'mcp-runtime-tests:audit',
-      'webhook-triggers:override-owner',
+      'event-automation-rules:override-owner',
     ] as const) {
       expect(PERMISSIONS).toContain(permission)
       expect(PERMISSION_CATALOG[permission].delegation).toBe('account-additive')
       expect(PERMISSION_CATALOG[permission].token).toBe('never')
     }
+  })
+
+  test('RFC-315 exposes one source-neutral event-automation family', () => {
+    const verbs = ['read', 'create', 'update', 'delete', 'override-owner'] as const
+    for (const verb of verbs) {
+      const permission = `event-automation-rules:${verb}` as Permission
+      expect(PERMISSIONS).toContain(permission)
+      expect(PERMISSION_CATALOG[permission].group).toBe('event-center')
+    }
+    for (const permission of [
+      'event-automation-rules:create',
+      'event-automation-rules:update',
+      'event-automation-rules:delete',
+    ] as const) {
+      expect(PERMISSION_CATALOG[permission].constraints).toContain('owner-or-override')
+    }
+    expect(PERMISSION_CATALOG['event-automation-rules:override-owner'].token).toBe('never')
+
+    expect(PERMISSIONS.some((permission) => permission.startsWith('webhook-triggers:'))).toBe(false)
+    expect(ROLE_PERMISSIONS.user).toContain('event-automation-rules:read')
+    expect(ROLE_PERMISSIONS.user).not.toContain('event-automation-rules:create')
+    expect(ROLE_PERMISSIONS.manager).toEqual(
+      expect.arrayContaining([
+        'event-automation-rules:read',
+        'event-automation-rules:create',
+        'event-automation-rules:update',
+        'event-automation-rules:delete',
+      ]),
+    )
+    expect(ROLE_PERMISSIONS.manager).not.toContain('event-automation-rules:override-owner')
+    expect(ROLE_PERMISSIONS.guest).not.toContain('event-automation-rules:read')
   })
 })
 
@@ -220,7 +251,7 @@ describe('RFC-305 PAT account cap', () => {
       'memory-distill-jobs:manage',
       'intent:audit',
       'mcp-runtime-tests:audit',
-      'webhook-triggers:override-owner',
+      'event-automation-rules:override-owner',
     ] as const
     const effective = resolveEffectiveAccountPermissions({
       role: 'user',

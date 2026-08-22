@@ -27,9 +27,9 @@ function jsonResponse(body: unknown): Response {
 
 const WEBHOOK_WRITE_PERMISSIONS = [
   'webhook-endpoints:manage',
-  'webhook-triggers:create',
-  'webhook-triggers:update',
-  'webhook-triggers:delete',
+  'event-automation-rules:create',
+  'event-automation-rules:update',
+  'event-automation-rules:delete',
 ] as const
 let permissions: string[] = [...WEBHOOK_WRITE_PERMISSIONS]
 let triggers: unknown[] = []

@@ -124,7 +124,7 @@ beforeEach(async () => {
       return jsonResponse({
         user: { id: 'u1', username: 'root', displayName: 'root', role: 'user', status: 'active' },
         source: 'session',
-        permissions: ['webhook-triggers:update'],
+        permissions: ['event-automation-rules:update'],
         linkedIdentities: [],
         pats: [],
       })

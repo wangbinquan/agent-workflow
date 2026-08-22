@@ -480,10 +480,13 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 以及公开目录与兼容入站事件的持久化隔离；0199 把早期构建残留的
     // `code-host.webhook` 第二套公开目录降为只读兼容历史；0200 为数字员工卡片
     // 的 Case 与旧 Mission 终态分组投影增加 covering indexes。
+    // RFC-315 bump 到 201 with 0202_rfc315_event_automation_permissions：统一
+    // Webhook / Event Center 自动化规则权限，并迁移 account grant 与 PAT scope。
+    // 0201 已由共享工作树中的 RFC-310 并发改动预留，故本提交不复用该文件名。
     // 外部 reopen 已关闭的 MR 时终态不逆转，另建带链接的新 Mission generation——
     // 这一列就是那条链接。不复用 development_mission_links：它的 parent_step_run_id
     // NOT NULL，而 reopen 不由任何 playbook step 触发）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(200)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(201)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

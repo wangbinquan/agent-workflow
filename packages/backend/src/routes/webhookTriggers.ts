@@ -2,7 +2,7 @@
 // db/schema 访问下沉 services/webhookTriggers.ts（权限语义/owner 制/保存期校验
 // 的领域注释也在那里）；本文件只剩 registerRoute 元数据 + actor/param/query/body
 // 抽取。方法级权限门在 registerRoute，行级
-// owner∨`webhook-triggers:override-owner` 门在服务层。
+// owner∨`event-automation-rules:override-owner` 门在服务层。
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
@@ -27,7 +27,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-triggers',
-      permissions: ['webhook-triggers:read'],
+      permissions: ['event-automation-rules:read'],
       tokenAccess: 'allow',
       summary: 'List webhook triggers visible to the caller',
     },
@@ -39,7 +39,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'POST',
       path: '/api/webhook-triggers',
-      permissions: ['webhook-triggers:create', 'tasks:execute'],
+      permissions: ['event-automation-rules:create', 'tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Create a webhook trigger (arms event-driven launches)',
     },
@@ -55,7 +55,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-triggers/:id',
-      permissions: ['webhook-triggers:read'],
+      permissions: ['event-automation-rules:read'],
       tokenAccess: 'allow',
       summary: 'Get one webhook trigger',
     },
@@ -67,7 +67,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'PUT',
       path: '/api/webhook-triggers/:id',
-      permissions: ['webhook-triggers:update'],
+      permissions: ['event-automation-rules:update'],
       tokenAccess: 'allow',
       summary: 'Update a webhook trigger (kind/endpoint immutable)',
     },
@@ -87,7 +87,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'DELETE',
       path: '/api/webhook-triggers/:id',
-      permissions: ['webhook-triggers:delete'],
+      permissions: ['event-automation-rules:delete'],
       tokenAccess: 'allow',
       summary: 'Delete a webhook trigger (fires/streams cascade)',
     },
@@ -102,7 +102,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'GET',
       path: '/api/webhook-triggers/:id/fires',
-      permissions: ['webhook-triggers:read'],
+      permissions: ['event-automation-rules:read'],
       tokenAccess: 'allow',
       summary: 'Fire history of one trigger (owner-facing troubleshooting)',
     },
@@ -117,7 +117,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     {
       method: 'POST',
       path: '/api/webhook-triggers/:id/streams/reset',
-      permissions: ['webhook-triggers:update'],
+      permissions: ['event-automation-rules:update'],
       tokenAccess: 'allow',
       summary: 'Reset the circuit counter of one stream (D22 manual reset)',
     },

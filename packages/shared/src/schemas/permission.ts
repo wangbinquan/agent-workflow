@@ -85,12 +85,12 @@ export const PERMISSIONS = [
   // department layer, which is the split's entire purpose.
   'capability-templates:read',
   'scheduled-tasks:read',
-  // RFC-260/RFC-283/RFC-305 — webhook 读面在 user 预设；写与跨 owner
-  // 能力由具体权限组合决定。两个 read 点都在 USER_BASELINE
-  // （触发器全量只读 + 端点/投递元数据只读——hook URL 明文另由响应分层保护：
+  // RFC-260/RFC-283/RFC-305/RFC-315 — 事件自动化规则读面在 user 预设；
+  // 写与跨 owner 能力由具体权限组合决定。两个 read 点都在 USER_BASELINE
+  // （规则全量只读 + 端点/投递元数据只读——hook URL 明文另由响应分层保护：
   // 只有持有 webhook-endpoints:manage 的 session 请求拿明文，一切 PAT 拿掩码
   // hint，见 routes/webhookEndpoints.ts toWire）。owner 行级门另行约束。
-  'webhook-triggers:read',
+  'event-automation-rules:read',
   // RFC-260 — 端点与投递审计共用的读点（投递是端点级审计，RFC-257 F-13；
   // replay/写面仍走 system 域的 webhook-endpoints:manage）。
   'webhook-endpoints:read',
@@ -137,7 +137,7 @@ export const PERMISSIONS = [
   'automation-policies:create',
   'adapter-definitions:create',
   'scheduled-tasks:create',
-  'webhook-triggers:create',
+  'event-automation-rules:create',
   'repos:create',
   'memory:create',
   // NOTE: no `tasks:create` — launching a task is an EXECUTE verb (RFC-247 D11).
@@ -162,7 +162,7 @@ export const PERMISSIONS = [
   'repository-employee-assignments:read',
   'repository-employee-assignments:update',
   'scheduled-tasks:update',
-  'webhook-triggers:update',
+  'event-automation-rules:update',
   'memory:update',
   'tasks:update',
   // RFC-248: `repos:update` 由 `PUT /api/repo-groups/:id` 引入——在此之前 repos
@@ -183,7 +183,7 @@ export const PERMISSIONS = [
   'workgroups:delete',
   'capability-templates:delete',
   'scheduled-tasks:delete',
-  'webhook-triggers:delete',
+  'event-automation-rules:delete',
   'repos:delete',
   'memory:delete',
   'tasks:delete',
@@ -293,7 +293,7 @@ export const PERMISSIONS = [
   'memory-distill-jobs:manage',
   'intent:audit',
   'mcp-runtime-tests:audit',
-  'webhook-triggers:override-owner',
+  'event-automation-rules:override-owner',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -318,6 +318,7 @@ export type PermissionGroup =
   | 'resources'
   | 'tasks'
   | 'memory-intent'
+  | 'event-center'
   | 'webhooks'
   | 'repositories'
   | 'privileged-authoring'
@@ -490,7 +491,9 @@ const permissionCatalog = {
     group: 'repositories',
   }),
   'scheduled-tasks:read': catalogEntry('scheduled-tasks:read', { group: 'tasks' }),
-  'webhook-triggers:read': catalogEntry('webhook-triggers:read', { group: 'webhooks' }),
+  'event-automation-rules:read': catalogEntry('event-automation-rules:read', {
+    group: 'event-center',
+  }),
   'webhook-endpoints:read': catalogEntry('webhook-endpoints:read', { group: 'webhooks' }),
   'repos:read': catalogEntry('repos:read', { group: 'repositories' }),
   'memory:read': catalogEntry('memory:read', { group: 'memory-intent', constraints: resourceAcl }),
@@ -532,8 +535,8 @@ const permissionCatalog = {
     constraints: resourceAcl,
   }),
   'scheduled-tasks:create': catalogEntry('scheduled-tasks:create', { group: 'tasks' }),
-  'webhook-triggers:create': catalogEntry('webhook-triggers:create', {
-    group: 'webhooks',
+  'event-automation-rules:create': catalogEntry('event-automation-rules:create', {
+    group: 'event-center',
     risk: 'elevated',
     constraints: ownerOrOverride,
   }),
@@ -563,8 +566,8 @@ const permissionCatalog = {
     constraints: resourceAcl,
   }),
   'scheduled-tasks:update': catalogEntry('scheduled-tasks:update', { group: 'tasks' }),
-  'webhook-triggers:update': catalogEntry('webhook-triggers:update', {
-    group: 'webhooks',
+  'event-automation-rules:update': catalogEntry('event-automation-rules:update', {
+    group: 'event-center',
     risk: 'elevated',
     constraints: ownerOrOverride,
   }),
@@ -613,8 +616,8 @@ const permissionCatalog = {
     group: 'tasks',
     risk: 'elevated',
   }),
-  'webhook-triggers:delete': catalogEntry('webhook-triggers:delete', {
-    group: 'webhooks',
+  'event-automation-rules:delete': catalogEntry('event-automation-rules:delete', {
+    group: 'event-center',
     risk: 'critical',
     constraints: ownerOrOverride,
   }),
@@ -779,8 +782,8 @@ const permissionCatalog = {
     risk: 'critical',
     token: 'never',
   }),
-  'webhook-triggers:override-owner': catalogEntry('webhook-triggers:override-owner', {
-    group: 'webhooks',
+  'event-automation-rules:override-owner': catalogEntry('event-automation-rules:override-owner', {
+    group: 'event-center',
     risk: 'critical',
     token: 'never',
   }),
@@ -844,7 +847,7 @@ export const SYSTEM_DOMAIN_POINTS: ReadonlyArray<Permission> = [
   'memory-distill-jobs:manage',
   'intent:audit',
   'mcp-runtime-tests:audit',
-  'webhook-triggers:override-owner',
+  'event-automation-rules:override-owner',
 ]
 
 /**
@@ -1052,9 +1055,9 @@ const USER_BASELINE: ReadonlyArray<Permission> = [
   // RFC-234 (D22): intent building is open to all users.
   'intent:read',
   'intent:write',
-  // RFC-260/RFC-283/RFC-305 — webhook 读面全员开放；触发规则写面在 manager
-  // 预设中默认开启，端点管理是可单独授予的显式能力。
-  'webhook-triggers:read',
+  // RFC-260/RFC-283/RFC-305/RFC-315 — 事件自动化规则读面全员开放；写面在
+  // manager 预设中默认开启，端点管理是可单独授予的显式能力。
+  'event-automation-rules:read',
   'webhook-endpoints:read',
 ]
 
@@ -1072,11 +1075,11 @@ const MANAGER_EXTRA: ReadonlyArray<Permission> = [
   // RFC-269/RFC-305 — same shape as script authoring: preset default plus
   // explicit account grant; never available to PATs.
   'code-host-calls:author',
-  // RFC-283 — manager 可创建触发规则，并仅修改/删除自己名下的规则。
-  // 这三个点只是方法粗门，owner 边界由 webhookTriggers 路由逐行判定。
-  'webhook-triggers:create',
-  'webhook-triggers:update',
-  'webhook-triggers:delete',
+  // RFC-283/RFC-315 — manager 可创建事件自动化规则，并仅修改/删除自己名下的规则。
+  // 这三个点只是方法粗门，owner 边界由各自 application/service 逐行判定。
+  'event-automation-rules:create',
+  'event-automation-rules:update',
+  'event-automation-rules:delete',
   'repos:create',
   'repos:update', // RFC-248 D5/G4 —— 仓库组走 repos:* 这一档
   'repository-employee-assignments:update', // RFC-310 —— 与 repos:update 同档

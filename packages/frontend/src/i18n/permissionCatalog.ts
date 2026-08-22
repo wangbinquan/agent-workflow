@@ -23,7 +23,7 @@ const EN_RESOURCES = {
   workflows: 'Workflows',
   workgroups: 'Workgroups',
   'scheduled-tasks': 'Scheduled tasks',
-  'webhook-triggers': 'Webhook triggers',
+  'event-automation-rules': 'Event automation rules',
   'webhook-endpoints': 'Webhook endpoints',
   repos: 'Repositories',
   memory: 'Memory',
@@ -63,7 +63,7 @@ const ZH_RESOURCES = {
   workflows: '工作流',
   workgroups: '工作组',
   'scheduled-tasks': '定时任务',
-  'webhook-triggers': 'Webhook 触发规则',
+  'event-automation-rules': '事件自动化规则',
   'webhook-endpoints': 'Webhook 端点',
   repos: '仓库',
   memory: '记忆',
@@ -204,9 +204,9 @@ const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTransl
       label: 'Audit MCP runtime tests',
       description: 'View MCP runtime test sessions owned by other users.',
     },
-    'webhook-triggers:override-owner': {
-      label: 'Override webhook trigger owners',
-      description: 'Modify or delete webhook trigger rules owned by another user.',
+    'event-automation-rules:override-owner': {
+      label: 'Override event automation rule owners',
+      description: 'Modify or delete event automation rules owned by another user.',
     },
   },
   'zh-CN': {
@@ -259,9 +259,9 @@ const SPECIAL: Record<Locale, Partial<Record<Permission, PermissionCatalogTransl
       label: '审计 MCP 运行测试',
       description: '查看其他用户拥有的 MCP 运行测试会话。',
     },
-    'webhook-triggers:override-owner': {
-      label: '覆盖 Webhook 触发规则 owner',
-      description: '修改或删除其他用户拥有的 Webhook 触发规则。',
+    'event-automation-rules:override-owner': {
+      label: '覆盖事件自动化规则 owner',
+      description: '修改或删除其他用户拥有的事件自动化规则。',
     },
   },
 }
@@ -285,6 +285,7 @@ const PERMISSION_UI_COPY = {
       resources: 'Resources',
       tasks: 'Tasks',
       'memory-intent': 'Memory and Intent',
+      'event-center': 'Event Center',
       webhooks: 'Webhooks',
       repositories: 'Repositories',
       'privileged-authoring': 'Privileged authoring',
@@ -327,6 +328,7 @@ const PERMISSION_UI_COPY = {
       resources: '资源',
       tasks: '任务',
       'memory-intent': '记忆与 Intent',
+      'event-center': '事件中心',
       webhooks: 'Webhook',
       repositories: '仓库',
       'privileged-authoring': '高风险编写能力',

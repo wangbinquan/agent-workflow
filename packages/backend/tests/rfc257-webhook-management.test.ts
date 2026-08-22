@@ -215,7 +215,7 @@ describe('RFC-257 T8 · 触发器管理（owner 制）', () => {
     expect(bobList.status).toBe(200)
     expect(((await bobList.json()) as unknown[]).length).toBe(1)
     expect((await call(h.app, h.bob, 'GET', `/api/webhook-triggers/${tid}`)).status).toBe(200)
-    // 写入口仍 admin-only（webhook-triggers:create 不在 user 基线）
+    // 写入口仍 admin-only（event-automation-rules:create 不在 user 基线）
     expect(
       (await call(h.app, h.bob, 'POST', '/api/webhook-triggers', triggerBody('ep-x', 'wf-x')))
         .status,
