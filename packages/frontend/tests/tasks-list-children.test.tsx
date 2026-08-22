@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { catalogPageFromOperations } from './task-catalog-fixtures'
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -83,7 +84,7 @@ const actorPayload = {
     status: 'active',
   },
   source: 'session',
-  permissions: ['tasks:read:all'],
+  permissions: ['tasks:read', 'tasks:read:all'],
   linkedIdentities: [],
   pats: [],
 }
@@ -113,12 +114,14 @@ function installFetch(
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
     const url = new URL(req.toString())
     urls.push(url.toString())
-    const payload =
-      url.pathname === '/api/auth/me'
-        ? actorPayload
-        : url.searchParams.has('parent_id')
-          ? resolveChildren(url)
-          : root
+    if (url.pathname === '/api/auth/me') {
+      return new Response(JSON.stringify(actorPayload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    const page = url.searchParams.has('parent_id') ? resolveChildren(url) : root
+    const payload = catalogPageFromOperations(page)
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { 'content-type': 'application/json' },

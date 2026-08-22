@@ -544,16 +544,6 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'specialized',
     owners: [rendered('tasks-new-wizard.test.tsx')],
   },
-  '@/routes/employee-cases.new#Route': {
-    surface: '/tasks/employee-cases/new',
-    classification: 'standard',
-    owners: [source('rfc310-digital-employee-ui-contract.test.ts')],
-    header: {
-      mode: 'direct',
-      sourceFile: 'routes/employee-cases.new.tsx',
-      primitive: 'PageHeader',
-    },
-  },
   '@/routes/employee-cases.$caseId#Route': {
     surface: '/tasks/employee-cases/$caseId',
     classification: 'standard',

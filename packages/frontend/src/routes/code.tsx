@@ -89,7 +89,7 @@ function CodePage(): ReactElement {
           </div>
           <Link
             to="/tasks"
-            search={{ category: 'digital-employee' }}
+            search={{ type: 'digital-employee' }}
             className="btn btn--sm"
             data-testid="digital-employee-open-tasks"
           >

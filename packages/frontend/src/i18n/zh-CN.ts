@@ -3783,11 +3783,7 @@ export interface Resources {
         api: string
       }
       categoryLabel: string
-      category: { all: string; orchestration: string; 'digital-employee': string }
-      digitalEmployeeSection: string
-      digitalEmployeeSectionHint: string
-      digitalEmployeeTask: string
-      digitalEmployeeOwner: string
+      category: { all: string }
       applyFilters: string
       resultCount: string
       addedCount: string
@@ -4582,8 +4578,15 @@ export interface Resources {
     draftRecoveryTitle: string
     draftRecoveryBody: string
     draftRecoveryUnknownBody: string
+    draftRecoveryObject: string
+    draftRecoveryTaskName: string
+    draftRecoverySavedAt: string
+    draftRecoveryNotSelected: string
+    draftRecoveryNotNamed: string
     draftRestore: string
     draftDiscard: string
+    draftRestoreUnknown: string
+    draftDiscardUnknown: string
     outcomeUnknownTitle: string
     outcomeUnknownBody: string
     outcomeUnknownInspect: string
@@ -11171,16 +11174,10 @@ export const zhCN: Resources = {
         webhook: 'Webhook 触发',
         api: 'API 启动',
       },
-      categoryLabel: '任务分类',
+      categoryLabel: '任务类型',
       category: {
         all: '全部任务',
-        orchestration: '编排任务',
-        'digital-employee': '数字员工任务',
       },
-      digitalEmployeeSection: '数字员工任务',
-      digitalEmployeeSectionHint: '需求、自动开发、MR 看护与合入生命周期',
-      digitalEmployeeTask: '数字员工任务',
-      digitalEmployeeOwner: '数字员工',
       applyFilters: '应用筛选',
       resultCount: '共显示 {{count}} 个任务分支',
       addedCount: '已追加 {{count}} 个任务分支',
@@ -12056,12 +12053,20 @@ export const zhCN: Resources = {
     draftReentryTitle: '部分内容需要重新输入',
     draftReentryBody:
       '为保护凭据与本地文件，这些内容不会恢复（仓库：{{repo}}，输入：{{inputs}}，上传：{{uploads}}）。',
-    draftRecoveryTitle: '恢复任务设置？',
-    draftRecoveryBody: '这个精确任务流程存在一份更新的同标签页草稿。',
+    draftRecoveryTitle: '继续填写上次的任务？',
+    draftRecoveryBody:
+      '你上次在这个页面填写了任务信息，但还没有创建任务。选择“继续填写”会恢复下面的内容；选择“重新填写”会清空草稿并从头创建。',
     draftRecoveryUnknownBody:
-      '上一次请求没有可信的结果。请恢复冻结草稿，先检查服务端列表，再执行其他操作。',
-    draftRestore: '恢复草稿',
-    draftDiscard: '放弃草稿',
+      '上次提交后没有收到明确结果，任务可能已经创建。请先恢复现场并检查任务列表，避免重复创建；只有确认不需要核对时才删除记录。',
+    draftRecoveryObject: '执行对象',
+    draftRecoveryTaskName: '任务内容',
+    draftRecoverySavedAt: '保存时间',
+    draftRecoveryNotSelected: '尚未选择',
+    draftRecoveryNotNamed: '尚未填写',
+    draftRestore: '继续填写',
+    draftDiscard: '重新填写',
+    draftRestoreUnknown: '恢复并核对结果',
+    draftDiscardUnknown: '确认无需核对，删除记录',
     outcomeUnknownTitle: '任务请求结果不确定',
     outcomeUnknownBody:
       '「{{name}}」的请求于 {{time}} 发出，但响应无法证明是否已提交。已冻结本次提交草稿；请检查列表并处理可能的重复项，再结束核对。',

@@ -32,12 +32,16 @@ import type {
   WorkflowListItem,
 } from '@agent-workflow/shared'
 import {
+  TASK_SOURCE_REGISTRATIONS,
   deriveAgentLaunchForm,
   isLooseValidBranchName,
   taskExecutionKind,
+  isTaskSourceId,
+  taskSourceRegistration,
   workgroupLaunchReadiness,
   type RepoGroup,
   type RepoGroupLayoutResponse,
+  type TaskCreationKind,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -46,11 +50,11 @@ import { FeedbackStack } from '@/components/FeedbackStack'
 import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
-import { PageHeader } from '@/components/PageHeader'
 import { ScheduleDialog, type ScheduleCreateRequest } from '@/components/ScheduleDialog'
 import { ChoiceCards } from '@/components/ChoiceCards'
-import { Select } from '@/components/Select'
-import { Stepper } from '@/components/Stepper'
+import { TaskCreationContractFrame } from '@/components/task-creation/TaskCreationContractFrame'
+import { TaskCreationSubjectDescriptorContract } from '@/components/task-creation/TaskCreationSubjectDescriptorContract'
+import { TaskCreationResourcePicker } from '@/components/task-creation/TaskCreationResourcePicker'
 import { UserPicker } from '@/components/UserPicker'
 import { DynamicInput } from '@/components/launch/DynamicInput'
 import { RepoSourceList } from '@/components/launch/RepoSourceList'
@@ -127,7 +131,8 @@ interface OrchestrationTaskWizardSearch {
 }
 
 interface TaskWizardSearch extends Omit<OrchestrationTaskWizardSearch, 'kind'> {
-  kind?: WizardKind | 'digital-employee'
+  kind?: TaskCreationKind
+  employeeId?: string
 }
 
 export const TaskWizardRoute = createRoute({
@@ -136,17 +141,12 @@ export const TaskWizardRoute = createRoute({
   component: TaskCreationEntryPage,
   validateSearch: (raw: Record<string, unknown>): TaskWizardSearch => {
     const out: TaskWizardSearch = {}
-    if (
-      raw.kind === 'workflow' ||
-      raw.kind === 'agent' ||
-      raw.kind === 'workgroup' ||
-      raw.kind === 'digital-employee'
-    )
-      out.kind = raw.kind
+    if (isTaskSourceId(raw.kind)) out.kind = raw.kind
     for (const k of [
       'workflow',
       'agentId',
       'workgroupId',
+      'employeeId',
       'editScheduled',
       'relaunchFrom',
     ] as const) {
@@ -189,37 +189,146 @@ export const TaskWizardRoute = createRoute({
 
 function TaskCreationEntryPage() {
   const search = TaskWizardRoute.useSearch()
-  if (search.kind === 'digital-employee') return <DigitalEmployeeTaskEntry />
-  return <TaskWizardPage />
-}
-
-function DigitalEmployeeTaskEntry() {
-  const navigate = useNavigate()
-  const { i18n } = useTranslation()
+  const initialSourceIdRef = useRef<TaskCreationKind>(
+    search.kind ?? TASK_SOURCE_REGISTRATIONS[0].id,
+  )
+  const [sourceId, setSourceId] = useState<TaskCreationKind>(initialSourceIdRef.current)
+  const [sourceChanged, setSourceChanged] = useState(false)
   useEffect(() => {
-    void navigate({ to: '/tasks/employee-cases/new', replace: true })
-  }, [navigate])
+    if (search.kind !== undefined) setSourceId(search.kind)
+  }, [search.kind])
+  const onSourceChange = (next: TaskCreationKind) => {
+    if (next !== sourceId) setSourceChanged(true)
+    setSourceId(next)
+  }
   return (
-    <LoadingState
-      label={
-        (i18n.resolvedLanguage ?? i18n.language).startsWith('zh')
-          ? '正在打开数字员工任务…'
-          : 'Opening digital employee task…'
-      }
+    <TaskCreationFlow
+      sourceId={sourceId}
+      initialSourceId={initialSourceIdRef.current}
+      initialResourceId={search.employeeId}
+      allowDraftRecovery={!sourceChanged}
+      onSourceChange={onSourceChange}
     />
   )
+}
+
+interface TaskCreationFlowProps {
+  readonly sourceId: TaskCreationKind
+  readonly initialSourceId: TaskCreationKind
+  readonly initialResourceId?: string
+  readonly allowDraftRecovery: boolean
+  readonly onSourceChange: (sourceId: TaskCreationKind) => void
+}
+
+/**
+ * The single task-creation flow. The source registration selects a declarative
+ * contract interpreter; task identities never select a page or visual shell.
+ */
+function TaskCreationFlow(context: TaskCreationFlowProps) {
+  const search = TaskWizardRoute.useSearch()
+  const source = taskSourceRegistration(context.sourceId)
+  const initialStep = taskCreationInitialStep(source, search)
+  const [step, setStep] = useState(initialStep)
+  const [maxVisited, setMaxVisited] = useState(initialStep)
+  const previousSourceRef = useRef(context.sourceId)
+  useEffect(() => {
+    if (previousSourceRef.current === context.sourceId) return
+    previousSourceRef.current = context.sourceId
+    const nextStep = taskCreationInitialStep(source, search)
+    setStep(nextStep)
+    setMaxVisited(nextStep)
+  }, [context.sourceId, search, source])
+  const onSourceChange = (next: TaskCreationKind) => {
+    setStep(STEP_MODE)
+    setMaxVisited(STEP_MODE)
+    context.onSourceChange(next)
+  }
+  if (source.creation.parameterContract.kind === 'subject-descriptor') {
+    return (
+      <TaskCreationSubjectDescriptorContract
+        key={source.creation.parameterContract.schemaId}
+        source={source}
+        initialResourceId={context.initialResourceId}
+        onSourceChange={onSourceChange}
+        step={step}
+        maxVisited={maxVisited}
+        setStep={setStep}
+        setMaxVisited={setMaxVisited}
+      />
+    )
+  }
+  return (
+    <TaskCreationSharedSchemaContract
+      key={source.creation.parameterContract.kind}
+      sourceId={context.sourceId}
+      initialSourceId={context.initialSourceId}
+      allowDraftRecovery={context.allowDraftRecovery}
+      onSourceChange={onSourceChange}
+      step={step}
+      maxVisited={maxVisited}
+      setStep={setStep}
+      setMaxVisited={setMaxVisited}
+    />
+  )
+}
+
+function taskCreationInitialStep(
+  source: ReturnType<typeof taskSourceRegistration>,
+  search: TaskWizardSearch,
+): number {
+  const editing = search.editScheduled !== undefined
+  const relaunching = search.relaunchFrom !== undefined && !editing
+  if (search.tour === 'first-task' && !editing && !relaunching) return STEP_CONFIRM
+  const resource = search[source.creation.resourceSearchKey]
+  return search.kind === source.id && typeof resource === 'string' && resource !== '' && !editing
+    ? STEP_SPACE
+    : STEP_MODE
 }
 
 const STEP_MODE = 0
 const STEP_SPACE = 1
 const STEP_CONTENT = 2
 const STEP_CONFIRM = 3
+const ORCHESTRATION_TASK_CREATION_KINDS = new Set<TaskCreationKind>(
+  TASK_SOURCE_REGISTRATIONS.filter(
+    (source) => source.creation.parameterContract.kind === 'shared-schema',
+  ).map((source) => source.id),
+)
+
+function orchestrationWizardKind(sourceId: TaskCreationKind): WizardKind {
+  if (!ORCHESTRATION_TASK_CREATION_KINDS.has(sourceId)) {
+    throw new Error(`task source does not belong to orchestration: ${sourceId}`)
+  }
+  return sourceId as WizardKind
+}
 
 type TaskWizardSubmissionOperation = NonNullable<TaskWizardDraftV1['reconciliation']>['operation']
 
-function TaskWizardPage() {
-  const { t } = useTranslation()
+interface TaskCreationSharedSchemaContractProps {
+  readonly sourceId: TaskCreationKind
+  readonly initialSourceId: TaskCreationKind
+  readonly allowDraftRecovery: boolean
+  readonly onSourceChange: (sourceId: TaskCreationKind) => void
+  readonly step: number
+  readonly maxVisited: number
+  readonly setStep: (step: number) => void
+  readonly setMaxVisited: (update: number | ((current: number) => number)) => void
+}
+
+function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContractProps) {
+  const props = {
+    initialKind: orchestrationWizardKind(context.sourceId),
+    draftPreferredKind: orchestrationWizardKind(context.initialSourceId),
+    availableSourceIds: ORCHESTRATION_TASK_CREATION_KINDS,
+    allowDraftRecovery: context.allowDraftRecovery,
+    onSourceChange: context.onSourceChange,
+  }
+  const { t, i18n } = useTranslation()
   const search = TaskWizardRoute.useSearch() as OrchestrationTaskWizardSearch
+  const routeKind =
+    search.kind === 'workflow' || search.kind === 'agent' || search.kind === 'workgroup'
+      ? search.kind
+      : undefined
   const navigate = useNavigate()
   const qc = useQueryClient()
   const actor = useActor()
@@ -247,23 +356,23 @@ function TaskWizardPage() {
 
   // --- Step 1 state: execution kind + object -------------------------------
   const deepObject =
-    search.kind === 'workflow'
+    routeKind === 'workflow'
       ? search.workflow
-      : search.kind === 'agent'
+      : routeKind === 'agent'
         ? search.agentId
-        : search.kind === 'workgroup'
+        : routeKind === 'workgroup'
           ? search.workgroupId
           : undefined
-  const [kind, setKind] = useState<WizardKind>(search.kind ?? 'agent')
+  const [kind, setKind] = useState<WizardKind>(props.initialKind)
   const [workflowId, setWorkflowId] = useState(
-    search.kind === 'workflow' ? (search.workflow ?? '') : '',
+    routeKind === 'workflow' ? (search.workflow ?? '') : '',
   )
-  const [agentId, setAgentId] = useState(search.kind === 'agent' ? (search.agentId ?? '') : '')
+  const [agentId, setAgentId] = useState(routeKind === 'agent' ? (search.agentId ?? '') : '')
   const [workgroupId, setWorkgroupId] = useState(
-    search.kind === 'workgroup' ? (search.workgroupId ?? '') : '',
+    routeKind === 'workgroup' ? (search.workgroupId ?? '') : '',
   )
   const [selectedWorkgroupVersion, setSelectedWorkgroupVersion] = useState<number | undefined>(
-    search.kind === 'workgroup' ? search.workgroupVersion : undefined,
+    routeKind === 'workgroup' ? search.workgroupVersion : undefined,
   )
   // RFC-175 + RFC-199: every immediate WORKFLOW launch captures the exact
   // `workflows.version` its inputs were normalized against. Editor deep links
@@ -305,7 +414,7 @@ function TaskWizardPage() {
   const newDraftSourceId = taskWizardNewDraftSourceId({
     scheduled: search.schedule === true,
     entry:
-      search.kind === 'workflow' && search.workflow !== undefined
+      routeKind === 'workflow' && search.workflow !== undefined
         ? {
             kind: 'workflow',
             resourceId: search.workflow,
@@ -313,9 +422,9 @@ function TaskWizardPage() {
               ? { workflowVersion: search.workflowVersion }
               : {}),
           }
-        : search.kind === 'agent' && search.agentId !== undefined
+        : routeKind === 'agent' && search.agentId !== undefined
           ? { kind: 'agent', resourceId: search.agentId }
-          : search.kind === 'workgroup' &&
+          : routeKind === 'workgroup' &&
               taskExecutionKind({ workgroupId: search.workgroupId }) === 'workgroup'
             ? {
                 kind: 'workgroup',
@@ -324,7 +433,7 @@ function TaskWizardPage() {
                   ? { workgroupVersion: search.workgroupVersion }
                   : {}),
               }
-            : { kind: 'picker', preferredKind: search.kind ?? 'agent' },
+            : { kind: 'picker', preferredKind: props.draftPreferredKind },
   })
   const draftSourceId = isEdit
     ? (search.editScheduled ?? null)
@@ -366,13 +475,10 @@ function TaskWizardPage() {
   const [maxTotalTokens, setMaxTotalTokens] = useState<number | undefined>(undefined)
 
   // --- Wizard chrome: current step + reachable frontier ---------------------
-  const deepLinked = search.kind !== undefined && deepObject !== undefined && !isEdit
+  const deepLinked = routeKind !== undefined && deepObject !== undefined && !isEdit
   // From the tour, everything is prefilled — open straight on Confirm so the
   // spotlight lands on a real, enabled launch button (all steps reachable).
-  const [step, setStep] = useState(fromTour ? STEP_CONFIRM : deepLinked ? STEP_SPACE : STEP_MODE)
-  const [maxVisited, setMaxVisited] = useState(
-    fromTour ? STEP_CONFIRM : deepLinked ? STEP_SPACE : STEP_MODE,
-  )
+  const { step, maxVisited, setStep, setMaxVisited } = context
   const [saveScheduledOpen, setSaveScheduledOpen] = useState(false)
   const [draftCandidate, setDraftCandidate] = useState<TaskWizardDraftV1 | null>(null)
   const [draftReady, setDraftReady] = useState(false)
@@ -404,15 +510,18 @@ function TaskWizardPage() {
   // --- Object lists (Step 1) -------------------------------------------------
   const workflowsQ = useQuery<WorkflowListItem[]>({
     queryKey: ['workflows'],
-    queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
+    queryFn: ({ signal }) =>
+      api.get(taskSourceRegistration('workflow').creation.inventoryPath, undefined, signal),
   })
   const agentsQ = useQuery<Agent[]>({
     queryKey: ['agents'],
-    queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
+    queryFn: ({ signal }) =>
+      api.get(taskSourceRegistration('agent').creation.inventoryPath, undefined, signal),
   })
   const workgroupsQ = useQuery<Workgroup[]>({
     queryKey: ['workgroups'],
-    queryFn: ({ signal }) => api.get('/api/workgroups', undefined, signal),
+    queryFn: ({ signal }) =>
+      api.get(taskSourceRegistration('workgroup').creation.inventoryPath, undefined, signal),
   })
 
   // RFC-175: the source task + its members, for relaunch pre-fill.
@@ -461,7 +570,7 @@ function TaskWizardPage() {
       ? normalizedWorkflowRevision.version
       : kind === 'workflow' && restoredWorkflowRevision?.workflowId === workflowId
         ? restoredWorkflowRevision.version
-        : search.kind === 'workflow' && search.workflow === workflowId
+        : routeKind === 'workflow' && search.workflow === workflowId
           ? search.workflowVersion
           : undefined
   // Derive the live mismatch in render as well as persisting it in state. A
@@ -553,7 +662,7 @@ function TaskWizardPage() {
     // to what they want to change (or to Confirm to just re-save).
     setStep(STEP_SPACE)
     setMaxVisited(STEP_CONFIRM)
-  }, [isEdit, scheduleQ.data])
+  }, [isEdit, scheduleQ.data, setMaxVisited, setStep])
 
   // Collaborator ids → UserPublic chips (second async hop, RFC-159 pattern).
   const collabLookup = useUserLookup(seedCollabIds.current)
@@ -887,61 +996,31 @@ function TaskWizardPage() {
   const activeInventoryLoading = activeInventoryQ.data === undefined && activeInventoryQ.isLoading
   const activeInventoryError =
     activeInventoryQ.error !== null && activeInventoryQ.error !== undefined
-  const activeInventoryEmpty =
-    kind === 'workflow'
-      ? workflowOptions.length === 0
-      : kind === 'agent'
-        ? agentOptions.length === 0
-        : workgroupOptions.length === 0
+  const objectOptions =
+    kind === 'workflow' ? workflowOptions : kind === 'agent' ? agentOptions : workgroupOptions
   const objectFieldLabel =
     kind === 'workflow'
       ? t('taskWizard.objectWorkflow')
       : kind === 'agent'
         ? t('taskWizard.objectAgent')
         : t('taskWizard.objectWorkgroup')
-  const objectPicker =
-    kind === 'workflow' ? (
-      <Select
-        value={workflowId}
-        onChange={(nextWorkflowId) => {
-          setWorkflowId(nextWorkflowId)
-          setNormalizedWorkflowRevision(null)
-          setRestoredWorkflowRevision(null)
-          setWorkflowVersionMismatch(null)
-        }}
-        options={workflowOptions}
-        searchable
-        ariaLabel={objectFieldLabel}
-        placeholder={t('taskWizard.objectPlaceholder')}
-        data-testid="wizard-object-workflow"
-      />
-    ) : kind === 'agent' ? (
-      <Select
-        value={agentId}
-        onChange={setAgentId}
-        options={agentOptions}
-        searchable
-        ariaLabel={objectFieldLabel}
-        placeholder={t('taskWizard.objectPlaceholder')}
-        data-testid="wizard-object-agent"
-      />
-    ) : (
-      <Select
-        value={workgroupId}
-        onChange={(nextWorkgroupId) => {
-          setWorkgroupId(nextWorkgroupId)
-          const selected = (workgroupsQ.data ?? []).find((group) => group.id === nextWorkgroupId)
-          setSelectedWorkgroupVersion(selected?.version)
-        }}
-        options={workgroupOptions}
-        searchable
-        ariaLabel={objectFieldLabel}
-        placeholder={t('taskWizard.objectPlaceholder')}
-        data-testid="wizard-object-workgroup"
-      />
-    )
-
   const selectedObject = kind === 'workflow' ? workflowId : kind === 'agent' ? agentId : workgroupId
+  const changeSelectedObject = (nextObjectId: string) => {
+    if (kind === 'workflow') {
+      setWorkflowId(nextObjectId)
+      setNormalizedWorkflowRevision(null)
+      setRestoredWorkflowRevision(null)
+      setWorkflowVersionMismatch(null)
+      return
+    }
+    if (kind === 'agent') {
+      setAgentId(nextObjectId)
+      return
+    }
+    setWorkgroupId(nextObjectId)
+    const selected = (workgroupsQ.data ?? []).find((group) => group.id === nextObjectId)
+    setSelectedWorkgroupVersion(selected?.version)
+  }
   const selectedObjectLabel =
     kind === 'workflow'
       ? (workflowOptions.find((o) => o.value === workflowId)?.label ??
@@ -1266,6 +1345,17 @@ function TaskWizardPage() {
     baselineFingerprintRef.current = taskWizardBaselineFingerprint(serializedDraftValues)
     setDraftReady(false)
 
+    // A recovery decision belongs to entering the creation page, not to
+    // switching its execution-kind card. A session that entered through the
+    // digital-employee arm starts clean and must not surface an unrelated
+    // orchestration draft when the user compares another card.
+    if (!props.allowDraftRecovery) {
+      setDraftCandidate(null)
+      setDraftReadError(null)
+      setDraftReady(true)
+      return
+    }
+
     const storage = getSessionStorage()
     if (storage === null) {
       setDraftReadError(new Error(t('taskWizard.draftStorageUnavailable')))
@@ -1310,6 +1400,7 @@ function TaskWizardPage() {
     draftSourceId,
     draftReadAttempt,
     materialSignature,
+    props.allowDraftRecovery,
     serializedDraftValues,
     t,
   ])
@@ -1382,6 +1473,26 @@ function TaskWizardPage() {
   const onNavigate = (i: number) => {
     setStep(i)
     setMaxVisited((mv) => Math.max(mv, i))
+  }
+
+  const selectCreationKind = (next: TaskCreationKind): void => {
+    if (!props.availableSourceIds.has(next)) {
+      props.onSourceChange(next)
+      return
+    }
+    if (next !== kind) {
+      setKind(orchestrationWizardKind(next))
+      // Changing the orchestration kind resets its object identity. Content
+      // remains in this mounted wizard and is only sent for the active kind.
+      setWorkflowId('')
+      setAgentId('')
+      setWorkgroupId('')
+      setCollaborators([])
+      setSelectedWorkgroupVersion(undefined)
+      setNormalizedWorkflowRevision(null)
+      setWorkflowVersionMismatch(null)
+    }
+    props.onSourceChange(next)
   }
 
   // --- Submission -------------------------------------------------------------
@@ -1775,20 +1886,23 @@ function TaskWizardPage() {
 
   if (missingCapabilityPermission !== null) {
     return (
-      <div className="page">
-        <PageHeader title={pageTitle} />
-        <ErrorBanner
-          error={
-            new ApiError(
-              403,
-              'permission-required',
-              `missing permission: ${missingCapabilityPermission}`,
-              { requiredPermission: missingCapabilityPermission },
-            )
-          }
-          testid="wizard-capability-error"
-        />
-      </div>
+      <TaskCreationContractFrame
+        title={pageTitle}
+        sourceId={kind}
+        blockingContent={
+          <ErrorBanner
+            error={
+              new ApiError(
+                403,
+                'permission-required',
+                `missing permission: ${missingCapabilityPermission}`,
+                { requiredPermission: missingCapabilityPermission },
+              )
+            }
+            testid="wizard-capability-error"
+          />
+        }
+      />
     )
   }
 
@@ -1797,17 +1911,21 @@ function TaskWizardPage() {
   // replace (or re-seed) the user's draft.
   if (isEdit && !seededRef.current && !scheduleQ.isError)
     return (
-      <div className="page">
-        <PageHeader title={pageTitle} />
-        <LoadingState />
-      </div>
+      <TaskCreationContractFrame
+        title={pageTitle}
+        sourceId={kind}
+        blockingContent={<LoadingState />}
+      />
     )
   if (isEdit && !seededRef.current && scheduleQ.isError) {
     return (
-      <div className="page">
-        <PageHeader title={pageTitle} />
-        <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
-      </div>
+      <TaskCreationContractFrame
+        title={pageTitle}
+        sourceId={kind}
+        blockingContent={
+          <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
+        }
+      />
     )
   }
 
@@ -1829,379 +1947,338 @@ function TaskWizardPage() {
     </button>
   )
 
+  const draftRecoveryKindLabel =
+    draftCandidate?.values.kind === 'workflow'
+      ? t('taskWizard.kindWorkflow')
+      : draftCandidate?.values.kind === 'workgroup'
+        ? t('taskWizard.kindWorkgroup')
+        : t('taskWizard.kindAgent')
+  const draftRecoveryObject =
+    draftCandidate?.values.kind === 'workflow'
+      ? draftCandidate.values.workflowId
+      : draftCandidate?.values.kind === 'workgroup'
+        ? draftCandidate.values.workgroupId
+        : (draftCandidate?.values.agentId ?? '')
+  const draftRecoveryTaskName =
+    draftCandidate?.values.taskName.trim() ||
+    draftCandidate?.values.goal.trim() ||
+    draftCandidate?.values.description.trim().slice(0, 160) ||
+    ''
+  const draftRecoverySavedAt =
+    draftCandidate === null
+      ? ''
+      : new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(new Date(draftCandidate.savedAt))
+
   return (
-    <div className="page task-wizard" data-testid="task-wizard">
-      <PageHeader title={pageTitle} />
+    <TaskCreationContractFrame
+      title={pageTitle}
+      sourceId={kind}
+      feedback={
+        <FeedbackStack variant="section">
+          {draftWarning !== null && (
+            <NoticeBanner tone="warning" size="compact" data-testid="wizard-draft-warning">
+              {t(draftWarning)}
+            </NoticeBanner>
+          )}
 
-      <FeedbackStack variant="section">
-        {draftWarning !== null && (
-          <NoticeBanner tone="warning" size="compact" data-testid="wizard-draft-warning">
-            {t(draftWarning)}
-          </NoticeBanner>
-        )}
-
-        {persistenceError !== null && materialDirty && (
-          <ErrorBanner
-            error={persistenceError}
-            message={t('taskWizard.draftWriteFailed')}
-            testid="wizard-draft-write-error"
-          />
-        )}
-
-        {draftReadError !== null && (
-          <ErrorBanner
-            error={draftReadError}
-            message={t('taskWizard.draftReadFailed')}
-            onRetry={() => {
-              initializedDraftKeyRef.current = null
-              setDraftReadError(null)
-              setDraftReadAttempt((attempt) => attempt + 1)
-            }}
-            retryLabel={t('taskWizard.draftReadRetry')}
-            testid="wizard-draft-read-error"
-          />
-        )}
-
-        {(repoUrlReentryRequired ||
-          inputReentryKeys.length > 0 ||
-          uploadReselectKeys.length > 0) && (
-          <NoticeBanner
-            tone="warning"
-            size="compact"
-            title={t('taskWizard.draftReentryTitle')}
-            data-testid="wizard-draft-reentry"
-          >
-            {t('taskWizard.draftReentryBody', {
-              inputs: inputReentryKeys.length,
-              uploads: uploadReselectKeys.length,
-              repo: repoUrlReentryRequired ? 1 : 0,
-            })}
-          </NoticeBanner>
-        )}
-
-        {outcomeUnknown !== null && (
-          <NoticeBanner
-            tone="warning"
-            title={t('taskWizard.outcomeUnknownTitle')}
-            action={
-              <div className="form-actions">
-                <a
-                  className="btn btn--sm"
-                  href={outcomeUnknown.operation === 'create-task' ? '/tasks' : '/scheduled'}
-                  target="_blank"
-                  rel="noreferrer"
-                  data-testid="wizard-reconcile-inventory"
-                >
-                  {t('taskWizard.outcomeUnknownInspect')}
-                </a>
-                <button
-                  type="button"
-                  className="btn btn--sm btn--danger"
-                  onClick={() => {
-                    activeReconciliationRef.current = null
-                    setOutcomeUnknown(null)
-                    start.reset()
-                    saveConfig.reset()
-                    createSchedule.reset()
-                    writeActiveDraft(null)
-                  }}
-                  data-testid="wizard-reconcile-finish"
-                >
-                  {t('taskWizard.outcomeUnknownFinish')}
-                </button>
-              </div>
-            }
-            data-testid="wizard-outcome-unknown"
-          >
-            {t('taskWizard.outcomeUnknownBody', {
-              name: outcomeUnknown.taskName || t('taskWizard.unnamedTask'),
-              time: new Date(outcomeUnknown.startedAt).toLocaleString(),
-            })}
-          </NoticeBanner>
-        )}
-
-        {isEdit && scheduleQ.isError && (
-          <div data-testid="wizard-schedule-stale-error">
-            <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
-          </div>
-        )}
-
-        {seedFailed && (
-          <NoticeBanner tone="warning" size="compact" className="info-box--muted">
-            <span data-testid="wizard-seed-degraded">{t('taskWizard.degradedBanner')}</span>
-          </NoticeBanner>
-        )}
-
-        {relaunchError && (
-          <div data-testid="wizard-relaunch-error">
+          {persistenceError !== null && materialDirty && (
             <ErrorBanner
-              error={relaunchErrorQ?.error}
-              onRetry={() => void relaunchErrorQ?.refetch()}
+              error={persistenceError}
+              message={t('taskWizard.draftWriteFailed')}
+              testid="wizard-draft-write-error"
             />
-          </div>
-        )}
+          )}
 
-        {kind === 'workflow' && activeWorkflowVersionMismatch !== null && (
-          <div data-testid="wizard-workflow-version-mismatch">
+          {draftReadError !== null && (
+            <ErrorBanner
+              error={draftReadError}
+              message={t('taskWizard.draftReadFailed')}
+              onRetry={() => {
+                initializedDraftKeyRef.current = null
+                setDraftReadError(null)
+                setDraftReadAttempt((attempt) => attempt + 1)
+              }}
+              retryLabel={t('taskWizard.draftReadRetry')}
+              testid="wizard-draft-read-error"
+            />
+          )}
+
+          {(repoUrlReentryRequired ||
+            inputReentryKeys.length > 0 ||
+            uploadReselectKeys.length > 0) && (
             <NoticeBanner
               tone="warning"
-              title={t('taskWizard.workflowVersionMismatchTitle')}
-              action={
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => void recoverWorkflowVersion()}
-                  data-testid="wizard-workflow-version-recover"
-                >
-                  {t(
-                    search.workflowVersion !== undefined
-                      ? 'taskWizard.workflowVersionReturnToEditor'
-                      : 'taskWizard.workflowVersionUseLatest',
-                  )}
-                </button>
-              }
+              size="compact"
+              title={t('taskWizard.draftReentryTitle')}
+              data-testid="wizard-draft-reentry"
             >
-              {t('taskWizard.workflowVersionMismatchBody', {
-                expected: activeWorkflowVersionMismatch.expected,
-                current: activeWorkflowVersionMismatch.current,
+              {t('taskWizard.draftReentryBody', {
+                inputs: inputReentryKeys.length,
+                uploads: uploadReselectKeys.length,
+                repo: repoUrlReentryRequired ? 1 : 0,
               })}
             </NoticeBanner>
-          </div>
-        )}
+          )}
 
-        {startWorkflowVersionMismatch && (
-          <div data-testid="wizard-workflow-submit-version-error">
-            <ErrorBanner
-              error={start.error}
-              message={t('taskWizard.workflowLaunchVersionMismatchBody')}
+          {outcomeUnknown !== null && (
+            <NoticeBanner
+              tone="warning"
+              title={t('taskWizard.outcomeUnknownTitle')}
               action={
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => void recoverWorkflowVersion()}
-                  data-testid="wizard-workflow-submit-version-recover"
-                >
-                  {t(
-                    search.workflowVersion !== undefined
-                      ? 'taskWizard.workflowVersionReturnToEditor'
-                      : 'taskWizard.workflowVersionUseLatest',
-                  )}
-                </button>
+                <div className="form-actions">
+                  <a
+                    className="btn btn--sm"
+                    href={outcomeUnknown.operation === 'create-task' ? '/tasks' : '/scheduled'}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-testid="wizard-reconcile-inventory"
+                  >
+                    {t('taskWizard.outcomeUnknownInspect')}
+                  </a>
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--danger"
+                    onClick={() => {
+                      activeReconciliationRef.current = null
+                      setOutcomeUnknown(null)
+                      start.reset()
+                      saveConfig.reset()
+                      createSchedule.reset()
+                      writeActiveDraft(null)
+                    }}
+                    data-testid="wizard-reconcile-finish"
+                  >
+                    {t('taskWizard.outcomeUnknownFinish')}
+                  </button>
+                </div>
               }
-            />
-          </div>
-        )}
+              data-testid="wizard-outcome-unknown"
+            >
+              {t('taskWizard.outcomeUnknownBody', {
+                name: outcomeUnknown.taskName || t('taskWizard.unnamedTask'),
+                time: new Date(outcomeUnknown.startedAt).toLocaleString(),
+              })}
+            </NoticeBanner>
+          )}
 
-        {kind === 'workflow' &&
-          ((search.schedule === true && canCreateScheduledTasks) || isEdit) && (
-            <div data-testid="wizard-scheduled-workflow-policy">
+          {isEdit && scheduleQ.isError && (
+            <div data-testid="wizard-schedule-stale-error">
+              <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
+            </div>
+          )}
+
+          {seedFailed && (
+            <NoticeBanner tone="warning" size="compact" className="info-box--muted">
+              <span data-testid="wizard-seed-degraded">{t('taskWizard.degradedBanner')}</span>
+            </NoticeBanner>
+          )}
+
+          {relaunchError && (
+            <div data-testid="wizard-relaunch-error">
+              <ErrorBanner
+                error={relaunchErrorQ?.error}
+                onRetry={() => void relaunchErrorQ?.refetch()}
+              />
+            </div>
+          )}
+
+          {kind === 'workflow' && activeWorkflowVersionMismatch !== null && (
+            <div data-testid="wizard-workflow-version-mismatch">
               <NoticeBanner
-                tone="info"
-                size="compact"
-                title={t('taskWizard.scheduledWorkflowLatestTitle')}
+                tone="warning"
+                title={t('taskWizard.workflowVersionMismatchTitle')}
+                action={
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => void recoverWorkflowVersion()}
+                    data-testid="wizard-workflow-version-recover"
+                  >
+                    {t(
+                      search.workflowVersion !== undefined
+                        ? 'taskWizard.workflowVersionReturnToEditor'
+                        : 'taskWizard.workflowVersionUseLatest',
+                    )}
+                  </button>
+                }
               >
-                {t('taskWizard.scheduledWorkflowLatestBody')}
+                {t('taskWizard.workflowVersionMismatchBody', {
+                  expected: activeWorkflowVersionMismatch.expected,
+                  current: activeWorkflowVersionMismatch.current,
+                })}
               </NoticeBanner>
             </div>
           )}
 
-        {/* RFC-203 PR-2 实现门 P1：workflow/agent 启动失败改走富横幅——launch 的
+          {startWorkflowVersionMismatch && (
+            <div data-testid="wizard-workflow-submit-version-error">
+              <ErrorBanner
+                error={start.error}
+                message={t('taskWizard.workflowLaunchVersionMismatchBody')}
+                action={
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => void recoverWorkflowVersion()}
+                    data-testid="wizard-workflow-submit-version-recover"
+                  >
+                    {t(
+                      search.workflowVersion !== undefined
+                        ? 'taskWizard.workflowVersionReturnToEditor'
+                        : 'taskWizard.workflowVersionUseLatest',
+                    )}
+                  </button>
+                }
+              />
+            </div>
+          )}
+
+          {kind === 'workflow' &&
+            ((search.schedule === true && canCreateScheduledTasks) || isEdit) && (
+              <div data-testid="wizard-scheduled-workflow-policy">
+                <NoticeBanner
+                  tone="info"
+                  size="compact"
+                  title={t('taskWizard.scheduledWorkflowLatestTitle')}
+                >
+                  {t('taskWizard.scheduledWorkflowLatestBody')}
+                </NoticeBanner>
+              </div>
+            )}
+
+          {/* RFC-203 PR-2 实现门 P1：workflow/agent 启动失败改走富横幅——launch 的
             workflow-invalid 带 details.issues（节点/边定位），字符串壳会把它们
             全部丢掉，只剩一句「工作流内容不合法」。放在版本冲突横幅的同一正文
             区（同类失败的既有先例）；workgroup 分支保留 footer 的专用友好文案
             （workgroupLaunchErrorMessage）。 */}
-        {outcomeUnknown === null &&
-          kind !== 'workgroup' &&
-          ((start.error !== null && start.error !== undefined && !startWorkflowVersionMismatch) ||
-            (saveConfig.error !== null && saveConfig.error !== undefined)) && (
-            <div data-testid="wizard-submit-error">
-              <ErrorBanner
-                error={workflowTaskCreationDisplayError(start.error ?? saveConfig.error)}
-              />
-            </div>
-          )}
-      </FeedbackStack>
-
-      <fieldset
-        className="task-wizard__material"
-        disabled={materialLocked}
-        aria-busy={submitPending || undefined}
-      >
-        <Stepper
-          steps={steps}
-          current={step}
-          maxReachable={maxVisited}
-          onNavigate={onNavigate}
-          nextEnabled={nextEnabled}
-          rootTestid="task-wizard-stepper"
-          finalActions={
+          {outcomeUnknown === null &&
+            kind !== 'workgroup' &&
+            ((start.error !== null && start.error !== undefined && !startWorkflowVersionMismatch) ||
+              (saveConfig.error !== null && saveConfig.error !== undefined)) && (
+              <div data-testid="wizard-submit-error">
+                <ErrorBanner
+                  error={workflowTaskCreationDisplayError(start.error ?? saveConfig.error)}
+                />
+              </div>
+            )}
+        </FeedbackStack>
+      }
+      onSourceChange={selectCreationKind}
+      availableSourceIds={
+        !isEdit && !isRelaunch && search.schedule !== true ? undefined : props.availableSourceIds
+      }
+      sourceSelectionDisabled={isEdit}
+      sourceSelectionHint={
+        isEdit ? <div className="muted">{t('taskWizard.kindLocked')}</div> : undefined
+      }
+      materialDisabled={materialLocked}
+      busy={submitPending}
+      steps={steps}
+      currentStep={step}
+      maxReachable={maxVisited}
+      onNavigate={onNavigate}
+      nextEnabled={nextEnabled}
+      navigationDisabled={submitPending}
+      finalActions={
+        <>
+          {isEdit ? (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={runSaveConfig}
+              disabled={!canSubmit}
+              data-testid="wizard-save-config"
+            >
+              {saveConfig.isPending ? t('scheduled.saving') : t('taskWizard.saveConfig')}
+            </button>
+          ) : search.schedule === true && canCreateScheduledTasks ? (
             <>
-              {isEdit ? (
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => setSaveScheduledOpen(true)}
+                disabled={!canSubmit || scheduleUnsupported}
+                title={scheduleUnsupported ? t('scheduled.uploadUnsupported') : undefined}
+                data-testid="wizard-save-scheduled"
+              >
+                {t('taskWizard.saveScheduled')}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={runStart}
+                disabled={!canSubmit}
+                data-testid="wizard-launch"
+                data-tour="task-submit"
+              >
+                {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={runStart}
+                disabled={!canSubmit}
+                data-testid="wizard-launch"
+                data-tour="task-submit"
+              >
+                {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
+              </button>
+              {canCreateScheduledTasks && (
                 <button
                   type="button"
-                  className="btn btn--primary"
-                  onClick={runSaveConfig}
-                  disabled={!canSubmit}
-                  data-testid="wizard-save-config"
+                  className="btn"
+                  onClick={() => setSaveScheduledOpen(true)}
+                  disabled={!canSubmit || scheduleUnsupported}
+                  title={scheduleUnsupported ? t('scheduled.uploadUnsupported') : undefined}
+                  data-testid="wizard-save-scheduled"
                 >
-                  {saveConfig.isPending ? t('scheduled.saving') : t('taskWizard.saveConfig')}
+                  {t('taskWizard.saveScheduled')}
                 </button>
-              ) : search.schedule === true && canCreateScheduledTasks ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={() => setSaveScheduledOpen(true)}
-                    disabled={!canSubmit || scheduleUnsupported}
-                    title={scheduleUnsupported ? t('scheduled.uploadUnsupported') : undefined}
-                    data-testid="wizard-save-scheduled"
-                  >
-                    {t('taskWizard.saveScheduled')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={runStart}
-                    disabled={!canSubmit}
-                    data-testid="wizard-launch"
-                    data-tour="task-submit"
-                  >
-                    {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={runStart}
-                    disabled={!canSubmit}
-                    data-testid="wizard-launch"
-                    data-tour="task-submit"
-                  >
-                    {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
-                  </button>
-                  {canCreateScheduledTasks && (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setSaveScheduledOpen(true)}
-                      disabled={!canSubmit || scheduleUnsupported}
-                      title={scheduleUnsupported ? t('scheduled.uploadUnsupported') : undefined}
-                      data-testid="wizard-save-scheduled"
-                    >
-                      {t('taskWizard.saveScheduled')}
-                    </button>
-                  )}
-                </>
               )}
-              {start.isPending && space.kind === 'remote' && (
-                <span className="muted" data-testid="wizard-cloning-hint">
-                  {t('launch.repoSource.cloningHint')}
-                </span>
-              )}
-              {isEdit && collabLookup.isError && (
-                <span className="form-actions__error" data-testid="wizard-collab-load-error">
-                  {t('scheduled.collabLoadError')}
-                </span>
-              )}
-              {outcomeUnknown === null &&
-                kind === 'workgroup' &&
-                ((start.error !== null && start.error !== undefined) ||
-                  (saveConfig.error !== null && saveConfig.error !== undefined)) && (
-                  <span className="form-actions__error" data-testid="wizard-submit-error">
-                    {workgroupLaunchErrorMessage(start.error ?? saveConfig.error, t)}
-                  </span>
-                )}
             </>
-          }
-        >
+          )}
+          {start.isPending && space.kind === 'remote' && (
+            <span className="muted" data-testid="wizard-cloning-hint">
+              {t('launch.repoSource.cloningHint')}
+            </span>
+          )}
+          {isEdit && collabLookup.isError && (
+            <span className="form-actions__error" data-testid="wizard-collab-load-error">
+              {t('scheduled.collabLoadError')}
+            </span>
+          )}
+          {outcomeUnknown === null &&
+            kind === 'workgroup' &&
+            ((start.error !== null && start.error !== undefined) ||
+              (saveConfig.error !== null && saveConfig.error !== undefined)) && (
+              <span className="form-actions__error" data-testid="wizard-submit-error">
+                {workgroupLaunchErrorMessage(start.error ?? saveConfig.error, t)}
+              </span>
+            )}
+        </>
+      }
+      stepContent={
+        <>
           {step === STEP_MODE && (
             <div className="form-grid">
-              <Field label={t('taskWizard.kindLabel')} group>
-                <ChoiceCards<WizardKind | 'digital-employee'>
-                  value={kind}
-                  onChange={(next) => {
-                    if (next === 'digital-employee') {
-                      void navigate({ to: '/tasks/new', search: { kind: next } })
-                      return
-                    }
-                    if (next === kind) return
-                    setKind(next)
-                    // Changing the kind resets the object (and the object-scoped
-                    // content the user may have typed stays — it only goes on the
-                    // wire for the active kind).
-                    setWorkflowId('')
-                    setAgentId('')
-                    setWorkgroupId('')
-                    // RFC-175 (§4.5, R2-F2): clear seeded collaborators + captured
-                    // subject ids on a kind switch — else a relaunch-seeded agent/
-                    // workflow collaborator set would ride into a workgroup launch
-                    // (which must NOT pre-fill collaborators), and a stale captured
-                    // id would target the wrong subject.
-                    setCollaborators([])
-                    setSelectedWorkgroupVersion(undefined)
-                    setNormalizedWorkflowRevision(null)
-                    setWorkflowVersionMismatch(null)
-                  }}
-                  disabled={isEdit}
-                  ariaLabel={t('taskWizard.kindLabel')}
-                  testidPrefix="wizard-kind"
-                  options={[
-                    {
-                      value: 'agent',
-                      label: t('taskWizard.kindAgent'),
-                      description: t('taskWizard.kindHintAgent'),
-                      icon: <AgentIcon />,
-                    },
-                    {
-                      value: 'workflow',
-                      label: t('taskWizard.kindWorkflow'),
-                      description: t('taskWizard.kindHintWorkflow'),
-                      icon: <WorkflowIcon />,
-                    },
-                    {
-                      value: 'workgroup',
-                      label: t('taskWizard.kindWorkgroup'),
-                      description: t('taskWizard.kindHintWorkgroup'),
-                      icon: <WorkgroupIcon />,
-                    },
-                    ...(!isEdit && !isRelaunch && search.schedule !== true
-                      ? [
-                          {
-                            value: 'digital-employee' as const,
-                            label: t('taskWizard.kindDigitalEmployee'),
-                            description: t('taskWizard.kindHintDigitalEmployee'),
-                            icon: <DigitalEmployeeIcon />,
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              </Field>
-              {isEdit && <div className="muted">{t('taskWizard.kindLocked')}</div>}
-
-              <Field label={objectFieldLabel} required group>
-                {activeInventoryLoading ? (
-                  <LoadingState size="compact" data-testid="wizard-object-loading" />
-                ) : activeInventoryError ? (
-                  <>
-                    <div data-testid="wizard-object-load-error">
-                      <ErrorBanner
-                        error={activeInventoryQ.error}
-                        onRetry={() => void activeInventoryQ.refetch()}
-                      />
-                    </div>
-                    {!activeInventoryEmpty && objectPicker}
-                  </>
-                ) : activeInventoryEmpty ? (
-                  <div className="muted" data-testid="wizard-object-empty">
-                    {t('taskWizard.objectEmpty')}
-                  </div>
-                ) : (
-                  objectPicker
-                )}
-              </Field>
+              <TaskCreationResourcePicker
+                label={objectFieldLabel}
+                value={selectedObject}
+                onChange={changeSelectedObject}
+                options={objectOptions}
+                loading={activeInventoryLoading}
+                error={activeInventoryError ? activeInventoryQ.error : null}
+                onRetry={() => void activeInventoryQ.refetch()}
+                placeholder={t('taskWizard.objectPlaceholder')}
+                emptyText={t('taskWizard.objectEmpty')}
+                testId={`wizard-object-${kind}`}
+              />
             </div>
           )}
 
@@ -2687,9 +2764,9 @@ function TaskWizardPage() {
               )}
             </dl>
           )}
-        </Stepper>
-      </fieldset>
-
+        </>
+      }
+    >
       {!isEdit && canCreateScheduledTasks && (
         <ScheduleDialog
           open={saveScheduledOpen}
@@ -2720,11 +2797,15 @@ function TaskWizardPage() {
           <>
             <button
               type="button"
-              className="btn btn--danger"
+              className="btn"
               onClick={discardRecoveryDraft}
               data-testid="wizard-draft-discard"
             >
-              {t('taskWizard.draftDiscard')}
+              {t(
+                draftCandidate?.reconciliation === undefined
+                  ? 'taskWizard.draftDiscard'
+                  : 'taskWizard.draftDiscardUnknown',
+              )}
             </button>
             <button
               ref={restoreButtonRef}
@@ -2733,7 +2814,11 @@ function TaskWizardPage() {
               onClick={restoreDraft}
               data-testid="wizard-draft-restore"
             >
-              {t('taskWizard.draftRestore')}
+              {t(
+                draftCandidate?.reconciliation === undefined
+                  ? 'taskWizard.draftRestore'
+                  : 'taskWizard.draftRestoreUnknown',
+              )}
             </button>
           </>
         }
@@ -2745,6 +2830,26 @@ function TaskWizardPage() {
               : 'taskWizard.draftRecoveryUnknownBody',
           )}
         </p>
+        {draftCandidate !== null ? (
+          <dl className="wizard-summary wizard-draft-recovery__summary">
+            <div className="wizard-summary__row">
+              <dt>{t('taskWizard.kindLabel')}</dt>
+              <dd>{draftRecoveryKindLabel}</dd>
+            </div>
+            <div className="wizard-summary__row">
+              <dt>{t('taskWizard.draftRecoveryObject')}</dt>
+              <dd>{draftRecoveryObject.trim() || t('taskWizard.draftRecoveryNotSelected')}</dd>
+            </div>
+            <div className="wizard-summary__row">
+              <dt>{t('taskWizard.draftRecoveryTaskName')}</dt>
+              <dd>{draftRecoveryTaskName || t('taskWizard.draftRecoveryNotNamed')}</dd>
+            </div>
+            <div className="wizard-summary__row">
+              <dt>{t('taskWizard.draftRecoverySavedAt')}</dt>
+              <dd>{draftRecoverySavedAt}</dd>
+            </div>
+          </dl>
+        ) : null}
         {draftCandidate !== null &&
           draftCandidate.baselineFingerprint !== baselineFingerprintRef.current && (
             <NoticeBanner tone="warning" size="compact">
@@ -2781,85 +2886,7 @@ function TaskWizardPage() {
           forceLeaveWarning: 'taskWizard.unsavedForceLeaveWarning',
         }}
       />
-    </div>
-  )
-}
-
-function AgentIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="5" y="8" width="14" height="10" rx="2" />
-      <path d="M12 8V5" />
-      <circle cx="12" cy="4" r="1" />
-      <path d="M9.5 12.5v1M14.5 12.5v1" />
-    </svg>
-  )
-}
-
-function WorkflowIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="6" height="6" rx="1.5" />
-      <rect x="15" y="14" width="6" height="6" rx="1.5" />
-      <path d="M9 7h5a2 2 0 0 1 2 2v5" />
-    </svg>
-  )
-}
-
-function WorkgroupIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3.5 19c.8-2.9 3-4.5 5.5-4.5s4.7 1.6 5.5 4.5" />
-      <circle cx="17" cy="9" r="2.2" />
-      <path d="M15.5 14.7c2 .3 3.9 1.7 4.6 4.3" />
-    </svg>
-  )
-}
-
-function DigitalEmployeeIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="8" r="3" />
-      <path d="M6.5 19c.7-3.3 2.7-5 5.5-5s4.8 1.7 5.5 5" />
-      <path d="M18.5 5.5l.7 1.2 1.3.3-.9 1 .1 1.4-1.2-.6-1.2.6.1-1.4-.9-1 1.3-.3.7-1.2Z" />
-    </svg>
+    </TaskCreationContractFrame>
   )
 }
 

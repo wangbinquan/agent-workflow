@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { catalogPageFromOperations } from './task-catalog-fixtures'
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -82,7 +83,7 @@ const actorPayload = {
     status: 'active',
   },
   source: 'session',
-  permissions: ['tasks:read:all'],
+  permissions: ['tasks:read', 'tasks:read:all'],
   linkedIdentities: [],
   pats: [],
 }
@@ -110,7 +111,8 @@ function installFetch(resolvePage: (url: URL) => TaskOperationsRootPage) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
     const url = new URL(req.toString())
     urls.push(url.toString())
-    const payload = url.pathname === '/api/auth/me' ? actorPayload : resolvePage(url)
+    const payload =
+      url.pathname === '/api/auth/me' ? actorPayload : catalogPageFromOperations(resolvePage(url))
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -180,7 +182,7 @@ describe('/tasks — dense operations list (RFC-244)', () => {
     await renderPage()
 
     const row = await screen.findByTestId('task-row-t_failed task')
-    expect(urls.some((url) => url.includes('/api/tasks/page') && url.includes('limit=50'))).toBe(
+    expect(urls.some((url) => url.includes('/api/task-catalog') && url.includes('limit=50'))).toBe(
       true,
     )
     expect(row.closest('[role="list"].task-operations__list')).not.toBeNull()
@@ -253,7 +255,7 @@ describe('/tasks — dense operations list (RFC-244)', () => {
       within(originGroup)
         .getAllByRole('radio')
         .map((radio) => radio.textContent),
-    ).toEqual(['All origins', 'Manual', 'Scheduled', 'Event Center', 'Webhook', 'API'])
+    ).toEqual(['All origins', 'Manual', 'Scheduled', 'Event Center', 'API'])
 
     const statusInput = within(dialog).getByRole('combobox', { name: /exact status/i })
     fireEvent.focus(statusInput)
@@ -267,7 +269,7 @@ describe('/tasks — dense operations list (RFC-244)', () => {
     await waitFor(() =>
       expect(router.state.location.search).toMatchObject({
         statuses: 'pending',
-        subject: 'workgroup',
+        type: 'workgroup',
         origin: 'api',
       }),
     )

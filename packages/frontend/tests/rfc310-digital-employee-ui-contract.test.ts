@@ -63,7 +63,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
 
     expect(graph).toContain('region.responsibilityLanes')
     expect(graph).toContain('.sort(')
-    expect(graph).toContain('item.responsibilityLaneId === lane.laneId')
+    expect(graph).toContain('includedLaneIds.has(item.responsibilityLaneId)')
     expect(graph).toContain('laneDispatchNodes')
     expect(graph).toContain('replacedDestinationRefs')
     expect(graph).toContain('P{node.priority}')
@@ -157,27 +157,46 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
   })
 
   test('work intake and runtime are first-class routes in the unified task surface', () => {
-    const create = read('routes/employee-cases.new.tsx')
+    const create = read('components/task-creation/TaskCreationSubjectDescriptorContract.tsx')
+    const repositorySpace = read('components/task-creation/TaskCreationRepositorySpace.tsx')
     const detail = read('routes/employee-cases.$caseId.tsx')
     const wizard = read('routes/tasks.new.tsx')
+    const router = read('router.tsx')
+    const shell = read('components/task-creation/TaskCreationWizardShell.tsx')
+    const host = read('components/task-creation/TaskCreationWizardHost.tsx')
 
-    expect(create).toContain("path: '/tasks/employee-cases/new'")
+    expect(create).not.toContain("path: '/tasks/employee-cases/new'")
+    expect(router).not.toContain('employee-cases.new')
+    expect(router).not.toContain('/tasks/employee-cases/new')
     expect(create).toContain("'body-and-files'")
     expect(create).toContain("'external-id'")
     expect(create).toContain('targetPath')
     expect(create).toContain('fixedRepositoryId')
-    expect(create).toContain('目标仓库已由数字员工绑定')
+    expect(create).not.toContain('目标仓库已由数字员工绑定')
+    expect(create).toContain('fixedRepositoryId ?? target[field.fieldRef]')
+    expect(create).toContain('<TaskCreationContractFields')
+    expect(create).toContain('<TaskCreationRepositorySpace')
+    expect(repositorySpace).toContain('<RepoSourceList')
+    expect(create).toContain('disabled')
     expect(create).toContain('groupLayout.data?.repos')
     expect(create).toContain('effectiveTarget')
-    expect(create).toContain('<Stepper')
+    expect(create).not.toContain('<Stepper')
     expect(create).toContain("{ key: 'mode', title: t('taskWizard.stepMode') }")
     expect(create).toContain("{ key: 'space', title: t('taskWizard.stepSpace') }")
     expect(create).toContain("{ key: 'content', title: t('taskWizard.stepContent') }")
     expect(create).toContain("{ key: 'confirm', title: t('taskWizard.stepConfirm') }")
-    expect(create).toContain('data-testid="employee-case-wizard-summary"')
-    expect(create).toContain('data-testid="employee-case-launch"')
-    expect(wizard).toContain("value: 'digital-employee'")
-    expect(wizard).toContain("to: '/tasks/employee-cases/new'")
+    expect(create).toContain('data-testid="wizard-summary"')
+    expect(create).toContain('data-testid="wizard-launch"')
+    expect(create).toContain('<TaskCreationContractFrame')
+    expect(create).not.toContain('<TaskCreationKindPicker')
+    expect(create).not.toContain('<TaskCreationWizardShell')
+    expect(shell).toContain('data-testid="task-wizard"')
+    expect(host).toContain('<Stepper')
+    expect(host).toContain('<TaskCreationKindPicker')
+    expect(host).toContain('<TaskCreationWizardShell')
+    expect(wizard).not.toContain("to: '/tasks/employee-cases/new'")
+    expect(wizard).not.toContain('<TaskCreationKindPicker')
+    expect(wizard).not.toContain("navigate({ to: '/tasks/new', search: { kind: next } })")
     expect(detail).toContain("path: '/tasks/employee-cases/$caseId'")
     expect(detail).toContain('<ResponsibilitySwimlaneMap')
     expect(detail).toContain('dispatchNodes={runtimeDispatchNodes}')
@@ -209,7 +228,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain('下一步：给必需工作项增加工具')
     expect(typePage).toContain('下一步：先准备岗位模板')
     expect(typePage).toContain('onClick={() => openEditor(employee)}')
-    expect(typePage).toContain('保存并发布新版本')
+    expect(typePage).toContain("? '保存'")
+    expect(typePage).not.toContain("label={zh ? '工作状态'")
+    expect(typePage).not.toContain("? '工作中'")
     expect(typePage).toContain("search={{ view: 'jobs' }}")
     expect(typePage).toContain('job-template-detail-editor')
     expect(typePage).toContain('data-testid="employee-job-identity-dialog"')
@@ -226,7 +247,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).toContain('.employee-toolbox-card--fan-out')
     expect(styles).toContain('.employee-toolbox-card__stack-layer--middle')
     expect(styles).toContain('.employee-toolbox-card__stack-layer--back')
-    expect(map).toContain("item.inputMultiplicity === 'collection'")
+    expect(map).toContain('const fanOutDestinationRefs = new Set(')
+    expect(map).toContain('source.orderedDispatchAuthoring?.destinationWorkItemRefs')
+    expect(map).not.toContain("item.inputMultiplicity === 'collection'")
     expect(map).toContain('employee-toolbox-card--fan-out')
     expect(map).not.toContain('repair-feedback')
     expect(map).toContain('employee-toolbox-region--${lanes.length > 1')
@@ -234,7 +257,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(map).toContain("? '主泳道'")
     expect(map).toContain("? '职责泳道'")
     expect(styles).toContain(
-      'grid-template-columns: var(--employee-lane-label-width) 16px minmax(0, 1fr)',
+      'grid-template-columns: var(--employee-lane-label-width) 20px minmax(0, 1fr)',
     )
     expect(styles).not.toContain(
       '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
@@ -261,7 +284,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain("queryKey: ['digital-employee-outcomes', 'legacy']")
     expect(typePage).toContain('data-testid={`digital-employee-outcomes-${employee.id}`}')
     expect(typePage).toContain("zh ? '已合入' : 'Merged'")
-    expect(typePage).toContain("search={{ category: 'digital-employee' }}")
+    expect(typePage).toContain('data-testid={`digital-employee-create-task-${employee.id}`}')
+    expect(typePage).not.toContain("search={{ category: 'digital-employee' }}")
   })
 
   test('Event Center is global and retry settings have one Limits authority', () => {
@@ -280,6 +304,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
   test('task actions and every digital employee surface use the shared page spacing', () => {
     const tasks = read('routes/tasks.tsx')
     const wizard = read('routes/tasks.new.tsx')
+    const host = read('components/task-creation/TaskCreationWizardHost.tsx')
+    const create = read('components/task-creation/TaskCreationSubjectDescriptorContract.tsx')
     const digitalEmployees = read('routes/digital-employees.tsx')
     const typePage = read('routes/digital-employees.$typeRef.tsx')
     const styles = read('styles.css')
@@ -287,16 +313,17 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     const routes = [
       'routes/digital-employees.tsx',
       'routes/digital-employees.$typeRef.tsx',
-      'routes/employee-cases.new.tsx',
       'routes/employee-cases.$caseId.tsx',
     ]
 
     expect(tasks).not.toContain('className="page-header__actions"')
     expect(tasks).not.toContain('tasks-new-digital-employee')
     expect(zh).toContain("newButton: '新建任务'")
-    expect(wizard).toContain("value: 'digital-employee'")
-    expect(digitalEmployees).toContain("search={{ kind: 'digital-employee' }}")
-    expect(typePage).toContain("search={{ kind: 'digital-employee' }}")
+    expect(wizard).not.toContain('<TaskCreationKindPicker')
+    expect(host).toContain('<TaskCreationKindPicker')
+    expect(digitalEmployees).not.toContain('digital-employees-new-task')
+    expect(typePage).toContain("search={{ kind: 'digital-employee', employeeId: employee.id }}")
+    expect(create).not.toContain('digital-employee-surface__body')
     for (const route of routes) expect(read(route)).toContain('digital-employee-surface__body')
     expect(styles).toMatch(/\.digital-employee-surface__body\s*{[^}]*padding: 0 22px 22px/s)
     expect(styles).toMatch(

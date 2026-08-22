@@ -1,4 +1,4 @@
-// RFC-311 PR-4 — /api/tasks/page default-view fast path oracle.
+// RFC-311 PR-4 — task-operations catalog default-view fast path oracle.
 //
 // The default (filter-free) view used to pay O(all tasks) per page: full
 // MATERIALIZED base + per-row correlated subqueries + two whole-forest

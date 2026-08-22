@@ -273,14 +273,13 @@ async function seedPublishedEmployee(): Promise<void> {
   )
 
   employeeName = `Browser development employee ${RUN_TAG}`
-  const employee = await requestJson<{ id: string }>(
+  const employee = await requestJson<{ id: string; revision: number }>(
     `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}/employees`,
     {
       method: 'POST',
       body: {
         name: employeeName,
         jobTemplateRef: jobRef.ref,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId },
         toolOverrides: [],
         collaborationOverrides: [],
@@ -288,10 +287,7 @@ async function seedPublishedEmployee(): Promise<void> {
     },
   )
   employeeId = employee.id
-  await requestJson(`/api/digital-employees/${encodeURIComponent(employee.id)}/publish`, {
-    method: 'POST',
-    body: {},
-  })
+  expect(employee.revision).toBe(1)
 }
 
 async function primeAuth(page: Page): Promise<void> {
@@ -348,12 +344,13 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(outcomeSummary).toContainText('Merged0')
   await expect(outcomeSummary).toContainText('No change0')
   await expect(page.getByTestId('employee-toolbox-responsibility-map')).toHaveCount(0)
-  await expect(page.getByTestId('digital-employee-type-new-task')).toBeVisible()
+  await expect(page.getByTestId('digital-employee-type-new-task')).toHaveCount(0)
+  await expect(page.getByTestId(`digital-employee-create-task-${employeeId}`)).toBeVisible()
   await page.getByRole('tab', { name: 'Toolbox' }).click()
   const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(responsibilityMap).toBeVisible()
   await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
-  await expect(responsibilityMap.locator('.employee-toolbox-lane')).toHaveCount(8)
+  await expect(responsibilityMap.locator('.employee-toolbox-lane')).toHaveCount(7)
   await expect(responsibilityMap.getByText('Main lane', { exact: true }).first()).toBeVisible()
   await expect(responsibilityMap.getByText('Duty lane', { exact: true }).first()).toBeVisible()
   const mapWidth = await responsibilityMap.evaluate(
@@ -369,7 +366,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   ).toBe(true)
   await expect(
     responsibilityMap.locator('.employee-toolbox-region--branching .employee-toolbox-lane__axis'),
-  ).toHaveCount(7)
+  ).toHaveCount(6)
   expect(
     await responsibilityMap
       .locator('.employee-toolbox-card strong')
@@ -388,9 +385,16 @@ test('body and repository-bound files enter a stateful employee case and the uni
     Math.max(...responsibilityCardWidths) - Math.min(...responsibilityCardWidths),
   ).toBeLessThanOrEqual(0.5)
   const classifierCard = responsibilityMap.locator('[data-work-item-ref="classify-pipeline"]')
-  const reviewFanOutCard = responsibilityMap.locator('[data-work-item-ref="repair-feedback"]')
-  await expect(reviewFanOutCard).toHaveClass(/employee-toolbox-card--fan-out/)
-  await expect(reviewFanOutCard.locator('.employee-toolbox-card__stack-layer')).toHaveCount(2)
+  const reviewRepairCard = responsibilityMap.locator('[data-work-item-ref="repair-feedback"]')
+  const pipelineFanOutCard = responsibilityMap.locator('[data-work-item-ref="repair-pipeline"]')
+  await expect(reviewRepairCard).not.toHaveClass(/employee-toolbox-card--fan-out/)
+  await expect(reviewRepairCard.locator('.employee-toolbox-card__stack-layer')).toHaveCount(0)
+  await expect(pipelineFanOutCard).toHaveClass(/employee-toolbox-card--fan-out/)
+  await expect(pipelineFanOutCard.locator('.employee-toolbox-card__stack-layer')).toHaveCount(2)
+  const careSpine = responsibilityMap.locator('[data-lane-id="care-attention"]')
+  await expect(careSpine.locator('[data-work-item-ref="evaluate-ready"]')).toBeVisible()
+  await expect(careSpine.locator('[data-work-item-ref="wait-merge"]')).toBeVisible()
+  await expect(responsibilityMap.locator('[data-lane-id="care-readiness"]')).toHaveCount(0)
   await classifierCard.click()
   await expect(classifierCard).toHaveClass(/employee-toolbox-card--active/)
   const dutyDialog = page.getByTestId('employee-toolbox-duty-dialog')
@@ -473,12 +477,56 @@ test('body and repository-bound files enter a stateful employee case and the uni
 
   await page.goto(`${daemon.baseUrl}/tasks/new`)
   await expect(page.getByTestId('wizard-kind-digital-employee')).toBeVisible()
+  const orchestrationWizardWidth = await page
+    .getByTestId('task-wizard')
+    .evaluate((element) => element.getBoundingClientRect().width)
+  const creationCardBoxes = await Promise.all(
+    ['agent', 'workflow', 'workgroup', 'digital-employee'].map((kind) =>
+      page.getByTestId(`wizard-kind-${kind}`).boundingBox(),
+    ),
+  )
+  expect(creationCardBoxes.every((box) => box !== null)).toBe(true)
+  const creationCardRows = creationCardBoxes.map((box) => box?.y ?? 0)
+  expect(Math.max(...creationCardRows) - Math.min(...creationCardRows)).toBeLessThanOrEqual(1)
+  for (const [kind, destination] of [
+    ['agent', '/agents'],
+    ['workflow', '/workflows'],
+    ['workgroup', '/workgroups'],
+    ['digital-employee', '/digital-employees'],
+  ] as const) {
+    const cardIcon = page.getByTestId(`wizard-kind-${kind}`).locator('[data-icon]')
+    const navigationIcon = page.locator(`a[href="${destination}"] [data-icon]`).first()
+    const navigationIconName = await navigationIcon.getAttribute('data-icon')
+    expect(navigationIconName).not.toBeNull()
+    await expect(cardIcon).toHaveAttribute('data-icon', navigationIconName!)
+  }
+  const creationCard = page.getByTestId('wizard-kind-digital-employee')
+  const iconBox = await creationCard.locator('.choice-card__icon').boundingBox()
+  const descriptionBox = await creationCard.locator('.choice-card__desc').boundingBox()
+  expect(iconBox).not.toBeNull()
+  expect(descriptionBox).not.toBeNull()
+  expect(Math.abs((iconBox?.x ?? 0) - (descriptionBox?.x ?? 0))).toBeLessThanOrEqual(0.5)
   await page.getByTestId('wizard-kind-digital-employee').click()
-  await page.waitForURL(/\/tasks\/employee-cases\/new$/)
+  await expect(page).toHaveURL(/\/tasks\/new$/)
   await expect(page.getByRole('heading', { name: 'New task' })).toBeVisible()
-  await expect(page.getByTestId('employee-case-task-wizard-stepper')).toBeVisible()
+  await expect(page.getByTestId('task-wizard-stepper')).toBeVisible()
+  const employeeWizardWidth = await page
+    .getByTestId('task-wizard')
+    .evaluate((element) => element.getBoundingClientRect().width)
+  expect(Math.abs(employeeWizardWidth - orchestrationWizardWidth)).toBeLessThanOrEqual(1)
   await expect(page.getByTestId('stepper-step-mode')).toHaveAttribute('aria-current', 'step')
-  await expect(page.getByRole('combobox').first()).toHaveAccessibleName(employeeName)
+  await expect(page.getByTestId('wizard-draft-recovery')).toHaveCount(0)
+  await page.getByTestId('wizard-kind-workflow').click()
+  await expect(page).toHaveURL(/\/tasks\/new$/)
+  await expect(page.getByTestId('wizard-draft-recovery')).toHaveCount(0)
+  await page.getByTestId('wizard-kind-digital-employee').click()
+  await expect(page.getByTestId('wizard-draft-recovery')).toHaveCount(0)
+  const employeePicker = page.getByRole('combobox', { name: 'Digital employee' })
+  await expect(employeePicker).toContainText('Select…')
+  await expect(employeePicker).not.toContainText(employeeName)
+  await employeePicker.click()
+  await page.getByRole('option', { name: new RegExp(employeeName) }).click()
+  await expect(page.getByText('Repository selected when the task starts')).toHaveCount(0)
   await page.setViewportSize({ width: 760, height: 900 })
   expect(
     await page.locator('html').evaluate((element) => element.scrollWidth - element.clientWidth),
@@ -487,8 +535,9 @@ test('body and repository-bound files enter a stateful employee case and the uni
 
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-space')).toHaveAttribute('aria-current', 'step')
-  await expect(page.getByTestId('employee-case-repository')).toHaveCount(0)
-  await expect(page.getByText('Repository fixed by the employee', { exact: true })).toBeVisible()
+  const fixedRepository = page.getByTestId('repo-source-recent-urls-0')
+  await expect(fixedRepository).toBeDisabled()
+  await expect(fixedRepository).toContainText(PROJECT_PATH)
 
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-content')).toHaveAttribute('aria-current', 'step')
@@ -515,7 +564,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(page.getByTestId('employee-case-summary-content')).toContainText(
     'docs/acceptance.md',
   )
-  await page.getByTestId('employee-case-launch').click()
+  await page.getByTestId('wizard-launch').click()
   const submitted = await launchRequest
   expect(submitted.postDataJSON()).toMatchObject({
     kind: 'body-and-files',
@@ -545,7 +594,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
     timeline.getByText('Deterministic output / program output', { exact: true }),
   ).toBeVisible()
 
-  await page.goto(`${daemon.baseUrl}/tasks?category=digital-employee`)
-  await expect(page.getByTestId('digital-employee-task-list')).toBeVisible()
-  await expect(page.getByTestId(`digital-employee-task-${caseId}`)).toBeVisible()
+  await page.goto(`${daemon.baseUrl}/tasks?type=digital-employee`)
+  await expect(page.getByTestId('task-operations-list')).toBeVisible()
+  await expect(page.getByTestId(`task-row-${caseId}`)).toBeVisible()
 })

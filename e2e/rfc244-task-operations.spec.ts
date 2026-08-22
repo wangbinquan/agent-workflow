@@ -106,6 +106,9 @@ test('task rows own vertical scrolling without moving the page title or filters'
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await openOperations(page)
+  const rootItems = page.locator('.task-operations__item[data-depth="0"]')
+  await page.getByRole('button', { name: 'Load more tasks' }).click()
+  await expect(rootItems.first()).toHaveAttribute('aria-setsize', '34')
 
   const before = await page.evaluate(() => {
     const content = document.querySelector<HTMLElement>('[data-testid="app-shell-main"]')
@@ -279,7 +282,6 @@ test('Event Center and API origin filters keep complete trees and reset cursor i
     'Manual',
     'Scheduled',
     'Event Center',
-    'Webhook',
     'API',
   ])
   await originGroup.getByRole('radio', { name: 'Event Center', exact: true }).click()
@@ -587,7 +589,7 @@ test('real session, PAT, schedule, and webhook launches filter exactly and sched
 
   const pageFor = (origin: string, parentId?: string) =>
     requestJson<OperationsPage>(
-      `/api/tasks/page?scope=mine&limit=50&origin=${origin}${
+      `/api/task-catalog?scope=mine&limit=50&origin=${origin}${
         parentId === undefined ? '' : `&parent_id=${encodeURIComponent(parentId)}`
       }`,
     )

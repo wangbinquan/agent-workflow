@@ -6,7 +6,9 @@
 // `/code` journey, stage selector, or editable line: the fixed cards are the navigation model.
 
 import { expect, test, type Page } from '@playwright/test'
+import { join } from 'node:path'
 
+import { runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 test.describe.configure({ mode: 'serial' })
@@ -83,6 +85,145 @@ test('a first-time user publishes a job template with the built-in implementatio
     .locator('.employee-summary-card')
     .filter({ hasText: 'First development role' })
   await expect(created).toContainText('Published · v1')
+
+  await page.getByRole('tab', { name: 'Employees' }).click()
+  await page.getByRole('button', { name: 'Create employee', exact: true }).click()
+  const employeeDialog = page.getByRole('dialog', { name: 'Create digital employee' })
+  await employeeDialog.getByLabel('Employee name').fill('First development employee')
+  await employeeDialog.getByRole('combobox', { name: 'Job template' }).click()
+  await page.getByRole('option', { name: 'First development role', exact: true }).click()
+  const employeeDraftResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/digital-employee-types\/[^/]+\/employees$/.test(new URL(response.url()).pathname),
+  )
+  await employeeDialog.getByRole('button', { name: 'Create', exact: true }).click()
+  const employeeResponse = await employeeDraftResponse
+  expect(employeeResponse.status()).toBe(201)
+  expect((await employeeResponse.json()).revision).toBe(1)
+  const employeeCard = page
+    .locator('.employee-summary-card--employee')
+    .filter({ hasText: 'First development employee' })
+  await expect(employeeCard).toContainText('First development role')
+  await expect(employeeCard).not.toContainText('Enabled')
+  await expect(employeeCard).not.toContainText('Disabled')
+})
+
+test('older hidden definitions surface as explicit upgrades and keep the employee identity', async ({
+  page,
+}) => {
+  const oldJobDraft = JSON.stringify({
+    schemaVersion: 1,
+    typeRef: { typeId: 'development', revision: 4 },
+    description: 'Older template that must be rebound',
+    defaultToolBindings: [],
+    defaultCollaborationBindings: [],
+    orderedDispatchConfigurations: [],
+  }).replaceAll("'", "''")
+  const oldEmployeeDraft = JSON.stringify({
+    schemaVersion: 1,
+    typeRef: { typeId: 'development', revision: 4 },
+    jobTemplateRef: { id: 'legacy-browser-job', revision: 1 },
+    displayName: 'Legacy browser employee',
+    // A pre-removal raw row proves the read boundary strips the retired field
+    // without restoring it to the current product model.
+    enabled: false,
+    workScope: { kind: 'task' },
+    toolOverrides: [],
+    collaborationOverrides: [],
+  }).replaceAll("'", "''")
+  const oldEmployeePublished = JSON.stringify({
+    schemaVersion: 1,
+    typeRef: { typeId: 'development', revision: 4 },
+    jobTemplateRef: { id: 'legacy-browser-job', revision: 1 },
+    displayName: 'Legacy browser employee',
+    enabled: false,
+    workScopeRef: { id: 'legacy-browser-scope', revision: 1 },
+    workScopeSummary: 'Repository selected when the task starts',
+    exactToolBindings: [],
+    exactCollaborationBindings: [],
+    exactOrderedDispatchConfigurations: [],
+    exactReactionLaneOrder: [],
+    enabledWorkItemRefs: [],
+    compiledClosureDigest: '0'.repeat(64),
+  }).replaceAll("'", "''")
+  runSqlite(
+    join(daemon.home, 'db.sqlite'),
+    `INSERT INTO employee_job_templates
+       (id, type_id, type_revision, name, draft_json, published_revision,
+        owner_user_id, created_at, updated_at, archived_at)
+     VALUES
+       ('legacy-browser-job', 'development', 4, 'Legacy browser role',
+        '${oldJobDraft}', NULL, NULL, 100, 100, NULL);
+     INSERT INTO employee_definitions
+       (id, name, type_id, type_revision, draft_json, published_revision,
+        owner_user_id, visibility, acl_revision, created_at, updated_at, archived_at)
+     VALUES
+       ('legacy-browser-employee', 'Legacy browser employee', 'development', 4,
+        '${oldEmployeeDraft}', 1, NULL, 'private', 0, 100, 100, NULL);
+     INSERT INTO employee_work_scope_revisions
+       (scope_id, revision, type_id, type_revision, encoded_scope_json,
+        display_summary, content_digest, created_at, created_by)
+     VALUES
+       ('legacy-browser-scope', 1, 'development', 4, '{"kind":"task"}',
+        'Repository selected when the task starts', '${'1'.repeat(64)}', 100, NULL);
+     INSERT INTO employee_definition_revisions
+       (employee_id, revision, content_json, content_digest, published_at, published_by)
+     VALUES
+       ('legacy-browser-employee', 1, '${oldEmployeePublished}', '${'2'.repeat(64)}', 100, NULL);`,
+  )
+
+  await primeAuth(page)
+  const staleTypeRequests: string[] = []
+  page.on('request', (request) => {
+    if (decodeURIComponent(request.url()).includes('/digital-employee-types/development@4')) {
+      staleTypeRequests.push(request.url())
+    }
+  })
+  await page.goto(`${daemon.baseUrl}/tasks/new?kind=digital-employee`)
+  await expect(page).toHaveURL(/\/tasks\/new\?kind=digital-employee$/)
+  await expect(page.getByTestId('task-wizard-stepper')).toBeVisible()
+  const employeePicker = page.getByRole('combobox', { name: 'Digital employee' })
+  await expect(employeePicker).toContainText('Select…')
+  await employeePicker.click()
+  await expect(page.getByRole('option', { name: /First development employee/ })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Legacy browser employee' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  expect(staleTypeRequests).toEqual([])
+
+  await page.goto(`${daemon.baseUrl}/digital-employees/development%405?view=jobs`)
+  const legacyJobs = page.getByTestId('legacy-job-template-upgrades')
+  await expect(legacyJobs).toContainText('Legacy browser role')
+  await legacyJobs.getByRole('button', { name: 'Upgrade to current version' }).click()
+  const jobEditor = page.getByTestId('employee-job-template-editor')
+  await expect(jobEditor).toBeVisible()
+  await expect(jobEditor).toContainText('Upgrading an older job template')
+  await page.getByRole('button', { name: 'Cancel editing', exact: true }).click()
+  await expect(legacyJobs).toHaveCount(0)
+
+  await page.getByRole('tab', { name: 'Employees' }).click()
+  const legacyEmployees = page.getByTestId('legacy-digital-employee-upgrades')
+  await expect(legacyEmployees).toContainText('Legacy browser employee')
+  await legacyEmployees.getByRole('button', { name: 'Upgrade to current version' }).click()
+  const upgradeDialog = page.getByRole('dialog', { name: 'Upgrade digital employee' })
+  await upgradeDialog.getByRole('combobox', { name: 'Job template' }).click()
+  await page.getByRole('option', { name: 'First development role', exact: true }).click()
+  const upgradeResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/digital-employee-types\/[^/]+\/employees\/legacy-browser-employee\/upgrade$/.test(
+        new URL(response.url()).pathname,
+      ),
+  )
+  await upgradeDialog.getByRole('button', { name: 'Upgrade', exact: true }).click()
+  expect((await upgradeResponse).status()).toBe(200)
+  await expect(legacyEmployees).toHaveCount(0)
+  const upgradedEmployee = page
+    .locator('.employee-summary-card--employee')
+    .filter({ hasText: 'Legacy browser employee' })
+  await expect(upgradedEmployee).toContainText('First development role')
+  await expect(upgradedEmployee).not.toContainText('Enabled')
+  await expect(upgradedEmployee).not.toContainText('Disabled')
 })
 
 test('a first-time user configures a work-item tool directly on the fixed responsibility cards', async ({
@@ -280,6 +421,13 @@ test('pipeline failure types expand into equal-width required nodes and only sho
 
   const classifierDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(classifierDialog).toBeVisible()
+  const jobMap = page.getByTestId('employee-toolbox-responsibility-map')
+  await expect(jobMap.locator('[data-work-item-ref="repair-feedback"]')).not.toHaveClass(
+    /employee-toolbox-card--fan-out/,
+  )
+  await expect(jobMap.locator('[data-work-item-ref="repair-pipeline"]')).toHaveClass(
+    /employee-toolbox-card--fan-out/,
+  )
   const dispatchEditor = classifierDialog.getByTestId('job-dispatch-classify-pipeline')
   await dispatchEditor.getByRole('button', { name: 'Add failure type', exact: true }).click()
   await dispatchEditor.getByRole('button', { name: 'Add failure type', exact: true }).click()
@@ -291,9 +439,9 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await routeEditors.nth(1).getByLabel('Failure type name').fill('Test failure')
   await classifierDialog.getByRole('button', { name: 'Done', exact: true }).click()
 
-  const jobMap = page.getByTestId('employee-toolbox-responsibility-map')
   const dispatchNodes = jobMap.locator('[data-dispatch-route-key]')
   await expect(dispatchNodes).toHaveCount(2)
+  await expect(jobMap.locator('[data-work-item-ref="repair-pipeline"]')).toHaveCount(0)
   await expect(dispatchNodes.nth(0)).toContainText('P1 · Tool')
   await expect(dispatchNodes.nth(0)).toContainText('Compile error')
   await expect(dispatchNodes.nth(1)).toContainText('P2 · Tool')
@@ -302,6 +450,16 @@ test('pipeline failure types expand into equal-width required nodes and only sho
     .locator('.employee-toolbox-card')
     .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(0.5)
+
+  const reviewLane = jobMap.locator('[data-lane-id="care-review"]')
+  const pipelineLane = jobMap.locator('[data-lane-id="care-pipeline"]')
+  await expect(reviewLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
+  await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P4')
+  await pipelineLane
+    .getByRole('button', { name: /Drag “Pipeline gates” to change event priority/ })
+    .dragTo(reviewLane)
+  await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
+  await expect(reviewLane.locator('.employee-toolbox-lane__priority')).toHaveText('P2')
 
   await dispatchNodes.filter({ hasText: 'Compile error' }).click()
   let repairDialog = page.getByTestId('employee-job-duty-dialog')

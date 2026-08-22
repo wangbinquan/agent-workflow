@@ -1,4 +1,5 @@
 import type { EventDeliveryEnvelope } from '@/modules/event-center/public/types'
+import type { TaskLaunchOrigin } from '@agent-workflow/shared'
 import type {
   CaseInboxRecord,
   EmployeeCaseRecord,
@@ -136,6 +137,8 @@ export interface RuntimeCaseStorePort {
   }[]
   listCasesPage(input: {
     readonly employeeId?: string
+    readonly ownerUserId?: string
+    readonly launchOrigin?: TaskLaunchOrigin
     readonly states?: readonly EmployeeCaseRecord['state'][]
     readonly view: 'all' | 'active' | 'attention' | 'finished'
     readonly q?: string

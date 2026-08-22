@@ -24,7 +24,7 @@ import { UserMenu } from '@/components/UserMenu'
 import { useActor, useCurrentPermissions, usePermission } from '@/hooks/useActor'
 import { useAuthoritySync } from '@/hooks/useAuthoritySync'
 import { usePresenceSubscription } from '@/hooks/usePresence'
-import { navPermissionForPath, resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
+import { navPermissionsForPath, resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
 import { setInboxOpen, toggleInboxOpen, useInboxOpen } from '@/stores/inbox'
 import { CompactTopBar } from './CompactTopBar'
 import { InboxDrawer } from './InboxDrawer'
@@ -70,12 +70,13 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)
   const permissions = useCurrentPermissions()
-  const destinationPermission = navPermissionForPath(pathname)
+  const destinationPermissions = navPermissionsForPath(pathname)
   // RFC-305 guest follow-up: navigation remains a complete discovery surface,
   // but a destination without its catalog read capability must not mount route
   // children (and therefore must not start queries that can only return 403).
   const destinationGranted =
-    destinationPermission === null || permissions.has(destinationPermission)
+    destinationPermissions.length === 0 ||
+    destinationPermissions.some((permission) => permissions.has(permission))
   const canReadMemory = permissions.has('memory:read')
   const canReadTasks = usePermission('tasks:read')
   const inboxOpen = useInboxOpen()
@@ -96,9 +97,9 @@ export function AppShell({ pathname, children }: AppShellProps) {
   // authority page cannot keep polling. RoutePortalScope separately removes
   // body-level portals, which sit outside Activity's host tree. A fresh
   // explicit denial still unmounts the subtree entirely.
-  const destinationKey = `${pathname}\u0000${destinationPermission ?? 'public'}`
+  const destinationKey = `${pathname}\u0000${destinationPermissions.join(',') || 'public'}`
   const destinationAuthorityUnsettled =
-    destinationPermission !== null &&
+    destinationPermissions.length > 0 &&
     (actor.status === 'pending' ||
       actor.status === 'error' ||
       actor.fetchStatus === 'fetching' ||

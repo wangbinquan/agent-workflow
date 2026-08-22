@@ -87,7 +87,9 @@ export function ChoiceCards<V extends string>(props: ChoiceCardsProps<V>) {
             aria-checked={active}
             tabIndex={opt.value === tabStopValue ? 0 : -1}
             data-choice-value={opt.value}
-            className={'choice-card' + (active ? ' choice-card--active' : '')}
+            className={`choice-card${active ? ' choice-card--active' : ''}${
+              opt.icon === undefined ? ' choice-card--without-icon' : ''
+            }`}
             disabled={props.disabled === true || opt.disabled === true}
             title={opt.title}
             data-testid={

@@ -57,6 +57,7 @@ import { mountReviewRoutes } from '@/routes/reviews'
 import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
+import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
@@ -82,6 +83,7 @@ import { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import {
   composeDigitalEmployee,
+  composeDigitalEmployeeTaskCatalogSource,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readDigitalEmployeeWriterState,
@@ -95,6 +97,7 @@ import {
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -126,6 +129,7 @@ import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
+import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 
 /**
  * Narrow in-process dependency seams for route tests that exercise diagnostics
@@ -530,6 +534,15 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
       },
     })
   }
+  if (digitalEmployee.runtime === null) {
+    throw new Error('task catalog requires the digital employee runtime')
+  }
+  const taskCatalog = composeTaskCatalog({
+    sources: [
+      ...composeTaskExecutionCatalogSources(deps.db),
+      composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
+    ],
+  })
 
   mountConfigRoutes(app, deps)
   mountDaemonRoutes(app, deps)
@@ -558,6 +571,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   }
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
   mountTaskRoutes(app, deps)
+  mountTaskCatalogRoutes(app, taskCatalog)
   mountTaskArchiveRoutes(app, deps) // RFC-311 T19
   mountMaintenanceDiskRoutes(app, deps) // RFC-311 T20
   mountScheduledTaskRoutes(app, deps) // RFC-159

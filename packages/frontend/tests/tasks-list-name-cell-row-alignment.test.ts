@@ -12,7 +12,7 @@ describe('routes/tasks.tsx — operations-grid row alignment', () => {
     // RFC-311：顶层列表进 VirtualList 窗口化,容器/行从 <ol>/<li> 改为
     // role="list"/"listitem" 的 div(sizer div 不能作 <ol> 子元素)——
     // 层级仍由 list 语义持有,依旧不是表格布局。
-    expect(SRC).toContain('<VirtualList<TaskOperationsListItem>')
+    expect(SRC).toContain('<VirtualList<TaskCatalogListItem>')
     expect(SRC).toContain("className: 'task-operations__list'")
     expect(SRC).toContain("role: 'list'")
     expect(SRC).toContain("'task-operations__item'")

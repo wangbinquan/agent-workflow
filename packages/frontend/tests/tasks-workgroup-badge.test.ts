@@ -23,9 +23,11 @@ import { zhCN } from '../src/i18n/zh-CN'
 
 const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.tsx'), 'utf-8')
 
-describe('routes/tasks.tsx — task metadata delegates to TaskSubjectLink (no host-workflow leak)', () => {
-  test('the compact task metadata renders <TaskSubjectLink> with the item + badge', () => {
-    expect(SRC).toContain('<TaskSubjectLink task={item} taskId={item.id} badge />')
+describe('routes/tasks.tsx — task metadata consumes normalized source identity', () => {
+  test('the compact metadata renders the registered source and localized subject', () => {
+    expect(SRC).toContain('t(taskSourceRegistration(item.sourceId).labelKey)')
+    expect(SRC).toContain('const subject = localized(item.subject.label, language)')
+    expect(SRC).not.toContain('<TaskSubjectLink task={item}')
   })
 
   test('the list no longer inlines a subject link (moved into the shared component)', () => {
@@ -36,15 +38,14 @@ describe('routes/tasks.tsx — task metadata delegates to TaskSubjectLink (no ho
     expect(SRC).not.toContain('to="/workgroups/$name"')
   })
 
-  test('both bundles label ALL THREE subject badges (workgroup / agent / workflow)', () => {
-    expect(zhCN.tasks.workgroupBadge).toBe('工作组')
-    expect(enUS.tasks.workgroupBadge.length).toBeGreaterThan(0)
-    expect(zhCN.tasks.agentBadge).toBe('代理')
-    expect(enUS.tasks.agentBadge.length).toBeGreaterThan(0)
-    // 2026-07-14: the workflow kind was the one left unlabeled — the column read
-    // asymmetrically (group/agent chipped, workflow bare). Table-level assert so
-    // a new kind can't be added without a label.
-    expect(zhCN.tasks.workflowBadge).toBe('工作流')
-    expect(enUS.tasks.workflowBadge.length).toBeGreaterThan(0)
+  test('both bundles label every registered task source', () => {
+    expect(zhCN.taskWizard.kindWorkgroup).toBe('工作组')
+    expect(enUS.taskWizard.kindWorkgroup.length).toBeGreaterThan(0)
+    expect(zhCN.taskWizard.kindAgent.length).toBeGreaterThan(0)
+    expect(enUS.taskWizard.kindAgent.length).toBeGreaterThan(0)
+    expect(zhCN.taskWizard.kindWorkflow).toBe('工作流')
+    expect(enUS.taskWizard.kindWorkflow.length).toBeGreaterThan(0)
+    expect(zhCN.taskWizard.kindDigitalEmployee).toBe('数字员工')
+    expect(enUS.taskWizard.kindDigitalEmployee.length).toBeGreaterThan(0)
   })
 })

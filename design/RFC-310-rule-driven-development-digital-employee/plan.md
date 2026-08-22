@@ -31,6 +31,10 @@
 >
 > **2026-08-22 PR-21/22（已完成）**：继续收口平台内置工具、材料/评审精确路径、Agent 显式交付输出、职责小卡片、
 > 岗位页面内编辑、已发布负责范围继承与统一新建任务入口。旧 `global` 仅保留 runtime 解码兼容，不回到新建界面；最终证据必须来自本轮新提交。
+>
+> **2026-08-22 PR-24（实施中）**：复核发现 PR-22 只统一了创建入口视觉，没有统一后台任务来源注册、列表与筛选。当前按 §13k
+> 重新打开：完成前端/后端 `TaskSourceRegistration + task-catalog source adapter`、退役旧列表入口，并补齐 DigitalEmployee Case 的 owner/origin
+> 筛选事实；完整 gate、浏览器实走、推送和 exact-SHA hosted 证据未完成前不得标记本批完成。
 
 ## 0. 交付原则
 
@@ -73,6 +77,7 @@
 | PR-20   | 可选职责与开发员工闭环      | 可选泳道不阻断、动态失败类型分派、MR 权威刷新、检视整树协议、通用审批边界和分层 system-mock/浏览器覆盖                                        | PR-19       |
 | PR-21   | 内置工具、材料与方案评审    | 内置 Agent 工具可见不可改；正文/文件/ID 分派、仓库/临时落点、方案评审和显式 Agent 交付内容均由平台合同锁定                                    | PR-20       |
 | PR-22   | 最小化配置与统一任务入口    | 工具箱小卡片、岗位页内编辑、单一仓库范围选择、固定仓库继承和统一“新建任务”卡片入口可无指导使用                                                | PR-21       |
+| PR-24   | 统一任务来源与任务目录      | 创建、列表、筛选由单一来源合同注册；公共层零具体来源分支；后台统一 task-catalog，数字员工 Case 正确执行 owner/origin 筛选                     | PR-22       |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -90,7 +95,7 @@ evidence。未通过不进入 PR-1。
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---- |
 | T0   | 重新取 exact baseline，生成 code-capability 调用面、stage/hook/script、code-host action、runtime env/Git mount、旧 writer、cross-context import inventory | manifest 有 owner/remove wave，和源码计数对拍                               | ✅   |
 | T1   | 建 `development-automation` 七层骨架、exact `public/*`/`composition/required-ports` 空白入口和 dependency ledger                                          | 未授权 symbol 为 0；bootstrap only composition scan                         | ✅   |
-| T2   | 建 consumer-owned required-port contract fixture：integration/task provider adapters 只做 DTO translation                                                 | 禁止 provider import Mission domain/application；禁止 bootstrap 业务分支    | ✅   |
+| T2   | 建 consumer-owned required-port contract fixture：integration/task-execution adapters 只做 DTO translation                                                | 禁止 adapter import Mission domain/application；禁止 bootstrap 业务分支     | ✅   |
 | T3   | 定义 strict opaque refs、Fact/Policy/Decision/Agent/Bundle codecs 与 unknown-key mutation harness                                                         | every codec round-trip；新增 unknown field 全红                             | ✅   |
 | T4   | 为 OpenCode、Claude Code 实作**测试专用**检测/回退 probe：真实子进程写 Git/evidence/受保护路径后快照对拍检出并回退                                        | 业务路径正向写成功；违规写全部检出且分类正确；workspace byte-identical 重建 | ✅   |
 | T5   | Git metadata/protected roots/evidence 的前后快照与对拍机制：`status/diff/log` 只读语义可用，写入必被检出                                                  | file API/绝对路径 Git binary/`GIT_DIR` 等同形改动零漏报                     | ✅   |
@@ -1451,6 +1456,44 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 - 必选缺失只闪烁但不打开具体职责，或者可选黄色职责重新阻断发布；
 - Dialog 出现横向滚动、嵌套焦点争抢、ESC 一次关闭两层，或关闭职责弹窗后丢失当前页签。
 - 员工卡片成效按员工逐个请求、只统计新/旧一套账本、使用已加载明细行计数，或 `/outcomes` 仍作为页面/侧栏入口存在。
+
+## 13k. PR-24：统一任务来源、列表与筛选
+
+### 目标与任务
+
+本批纠正“统一创建已完成”的错误标记。统一不是让数字员工卡片跳到另一页，也不是公共组件里继续写来源分支；任务创建、列表和筛选必须
+共享一套来源注册，前后端公共层都只消费按 `sourceId` 定位的来源合同。各 bounded context 继续拥有自己的创建命令、详情和 mutation；
+任务抽象中不再存在第二层分派身份、挂载点或链。
+
+| 编号 | 任务                                                                                                                                 | 依赖      | 状态 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---- |
+| T216 | shared `TaskSourceRegistration` 同源声明创建、列表、筛选和详情；唯一 source/filter、四步合同及权限回归                               | T206      | ✅   |
+| T217 | backend consumer-owned `task-catalog`、sourceId 直连 required port、bootstrap-only adapter 装配；旧两套列表端点退役                    | T216      | ✅   |
+| T218 | DigitalEmployee Case 持久化 owner/launchOrigin 并迁移；mine/all/shared、Event Center origin、status/view/query 在来源适配器真实执行    | T217      | ✅   |
+| T219 | 前端公共 Host、公共受控资源/仓库选择器、单一 catalog/list/type 筛选；移除来源私有页面与 category/subject 分支                         | T216,T217 | ✅   |
+| T220 | shared/backend/frontend 架构反向、API contract、迁移、system-mock E2E、任务创建/列表浏览器和视觉覆盖                                 | T217-T219 | ✅   |
+| T221 | 三轮功能自审、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA hosted CI/visual 终态核对                        | T220      | 🚧   |
+
+**T220/T221 本地证据（2026-08-22）**：真实浏览器任务创建/列表回归 **19/19**；完整 `bun run gate:local` **9m22s 全绿**——
+shared **2,221/2,221**、system-mocks **62/62**、frontend **6,677/6,677**，backend 四分片均 **0 fail**，
+typecheck/lint/format/depcheck 全绿。T221 仍等待 exact-path 提交推送、远端 ancestry 与 exact-SHA hosted CI/visual 终态，未提前完成。
+
+### 批次停止条件
+
+- 公共创建页、任务页或 task-catalog application 按具体来源 ID 写 `if/switch`；
+- 新来源必须同时修改创建卡片常量、筛选枚举和后端路由，而不是追加一条注册及对应来源适配器；
+- 统一只发生在前端，后台仍由 `/api/tasks/page` 与 `/api/employee-cases` 两套列表协议分别承载；
+- DigitalEmployee 来源适配器静默忽略 scope/origin，或普通用户“我的任务”看到他人 Case；
+- owner 私有 page 未按来源 schema 校验，错误 payload 被类型断言直接送进公共页面；
+- `category` 与 `subject` 继续并列为两个产品筛选，或 Webhook 仍作为事件中心之外的启动来源；
+- 选择数字员工改变创建页宽度、换行规则或跳转专用页，切换卡片仍反复弹出恢复设置；
+- 来源自己渲染 page/Shell/Stepper/Picker/Host，或公共创建组件出现具体 source 字面量业务分支；
+- task-creation 生产代码出现第二套 `step/maxVisited` 状态机、第二个 Host 挂载点，或把来源专属创建控制器改名后继续保留；
+- `/tasks/employee-cases/new`、`employee-cases.new.tsx` 或数字员工创建专用布局样式继续作为第二创建面存在；
+- 来源自行渲染执行空间的 Field/Select，而不是把契约字段投给公共字段渲染器；
+- inventory 返回后自动选中首个对象，数字员工与其他来源不再统一显示“请选择”；
+- 固定仓库只显示说明横幅、要求再次选择，或仓库展示名读取失败反向阻断已冻结 repository ID；
+- system-mock、浏览器实走、完整 gate、远端 exact-SHA CI 任一未形成终态证据却把 T220/T221 标为完成。
 
 ## 14. 风险与停止条件
 

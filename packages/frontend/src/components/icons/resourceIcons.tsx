@@ -11,9 +11,11 @@ import type { ReactNode } from 'react'
 export type ResourceIconKey =
   | 'home'
   | 'agent'
+  | 'digital-employee'
   | 'skill'
   | 'mcp'
   | 'plugin'
+  | 'intent'
   | 'workflow'
   | 'workgroup'
   | 'task'
@@ -98,6 +100,25 @@ export const AGENT_ICON: ReactNode = (
     <circle cx="8" cy="2" r="0.7" />
     <path d="M6.2 8.4h.01M9.8 8.4h.01" />
     <path d="M6.6 10.8h2.8" />
+  </IconSvg>
+)
+
+/** Digital employee — a person silhouette with a deterministic automation mark. */
+export const DIGITAL_EMPLOYEE_ICON: ReactNode = (
+  <IconSvg name="digital-employee">
+    <circle cx="6.6" cy="5.1" r="2.2" />
+    <path d="M2.7 13c.5-2.6 1.8-4 3.9-4s3.4 1.4 3.9 4" />
+    <path d="m12.4 3.1.55 1.05 1.15.2-.82.85.17 1.16-1.05-.52-1.04.52.17-1.16-.83-.85 1.16-.2z" />
+    <path d="M11.8 9.2h2M12.8 8.2v2" />
+  </IconSvg>
+)
+
+/** Intent builder — a thought bubble turning an idea into a concrete draft. */
+export const INTENT_ICON: ReactNode = (
+  <IconSvg name="intent">
+    <path d="M2.3 3.1h8.8v6.6H6.2l-2.6 2v-2H2.3z" />
+    <path d="m12.6 2.2.45.9.95.16-.68.7.14.95-.86-.42-.85.42.14-.95-.69-.7.96-.16z" />
+    <path d="M6.7 5.2h.01M4.6 5.2h.01M8.8 5.2h.01" />
   </IconSvg>
 )
 
@@ -211,9 +232,11 @@ export const HOME_ICON: ReactNode = (
 const RESOURCE_ICONS: Record<ResourceIconKey, ReactNode> = {
   home: HOME_ICON,
   agent: AGENT_ICON,
+  'digital-employee': DIGITAL_EMPLOYEE_ICON,
   skill: SKILL_ICON,
   mcp: MCP_ICON,
   plugin: PLUGIN_ICON,
+  intent: INTENT_ICON,
   workflow: WORKFLOW_ICON,
   workgroup: WORKGROUP_ICON,
   task: TASK_ICON,

@@ -45,6 +45,21 @@ export interface RepoSourceListProps {
   selectedGroupDetails?: ReactNode
   /** Whether protected cached-repo / repo-group catalogs may be queried. */
   catalogEnabled?: boolean
+  /**
+   * A caller-owned repository inventory. Supplying this keeps the shared
+   * execution-space control while letting a task contract narrow the choices
+   * (for example to one employee's repository group). The row performs no
+   * cached-repository query when this value is present.
+   */
+  catalogItems?: ReadonlyArray<{ id: string; label: string }>
+  /** Catalog-only mode removes free-form URL and ref editing. */
+  catalogOnly?: boolean
+  /** Locks the shared selector for a source whose repository is pre-bound. */
+  disabled?: boolean
+  /** Optional contract copy; orchestration keeps the launch defaults. */
+  fieldLabel?: string
+  fieldHint?: string
+  fieldPlaceholder?: string
 }
 
 export function RepoSourceList({
@@ -56,6 +71,12 @@ export function RepoSourceList({
   selectedGroupId,
   selectedGroupDetails,
   catalogEnabled = true,
+  catalogItems,
+  catalogOnly = false,
+  disabled = false,
+  fieldLabel,
+  fieldHint,
+  fieldPlaceholder,
 }: RepoSourceListProps) {
   const { t } = useTranslation()
   const max = maxCount ?? MULTI_REPO_MAX
@@ -85,6 +106,12 @@ export function RepoSourceList({
           onRemove={() => removeAt(i)}
           previewDirName={isMulti ? (previewNames[i] ?? null) : null}
           catalogEnabled={catalogEnabled}
+          catalogItems={catalogItems}
+          catalogOnly={catalogOnly}
+          disabled={disabled}
+          fieldLabel={fieldLabel}
+          fieldHint={fieldHint}
+          fieldPlaceholder={fieldPlaceholder}
           {...(catalogEnabled && onSelectGroup !== undefined && i === 0 ? { onSelectGroup } : {})}
           {...(catalogEnabled && selectedGroupId !== undefined && i === 0
             ? { selectedGroupId, details: selectedGroupDetails }
@@ -94,7 +121,7 @@ export function RepoSourceList({
       {/* RFC-248: 只在还允许多行时渲染「+ 添加仓库」。组模式（onSelectGroup
           已给）下多仓只能由仓库组表达——留着加行按钮会让用户拼出一个
           builder 只取首行的空间，那是静默降级。 */}
-      {max > 1 && (
+      {max > 1 && !disabled && (
         <div className="repo-source-list__actions">
           <button
             type="button"

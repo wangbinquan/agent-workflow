@@ -57,6 +57,9 @@ export const TASK_LIST_ORIGINS = ['all', ...TASK_LAUNCH_ORIGINS] as const
 export const TaskListOriginSchema = z.enum(TASK_LIST_ORIGINS)
 export type TaskListOrigin = z.infer<typeof TaskListOriginSchema>
 
+/** Webhook is now an Event Center source, not a parallel launch-origin choice. */
+export const TASK_LIST_VISIBLE_ORIGINS = ['all', 'manual', 'scheduled', 'event', 'api'] as const
+
 export const TaskListMatchKindSchema = z.enum(['self', 'context'])
 export type TaskListMatchKind = z.infer<typeof TaskListMatchKindSchema>
 

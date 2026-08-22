@@ -1015,15 +1015,14 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       body: {
         name: '依赖仓库数字员工',
         jobTemplateRef: dependencyJobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-system-mock-dependency' },
         toolOverrides: [],
       },
     })
-    const dependencyEmployeeRef = employeeOs.commands.publishEmployee({
+    const dependencyEmployeeRef = {
       id: dependencyEmployee.id,
-      actorUserId: 'system-mock-author',
-    })
+      revision: dependencyEmployee.revision,
+    }
     const job = employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
@@ -1076,15 +1075,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       body: {
         name: 'Java system-mock 数字员工',
         jobTemplateRef: jobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-system-mock' },
         toolOverrides: [],
       },
     })
-    const employeeRef = employeeOs.commands.publishEmployee({
-      id: employee.id,
-      actorUserId: 'system-mock-author',
-    })
+    const employeeRef = { id: employee.id, revision: employee.revision }
     const optionalLaneIds = new Set(
       typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
         region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
@@ -1497,17 +1492,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       body: {
         name: '只交付 MR 的数字员工',
         jobTemplateRef: deliveryOnlyJobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-system-mock-delivery-only' },
         toolOverrides: [],
       },
     })
-    const deliveryOnlyEmployeeRef = employeeOs.commands.publishEmployee({
+    const deliveryOnlyEmployeeRef = {
       id: deliveryOnlyEmployee.id,
-      actorUserId: 'system-mock-author',
-    })
+      revision: deliveryOnlyEmployee.revision,
+    }
     expect(
-      employeeOs.queries.getEmployee(deliveryOnlyEmployee.id).published?.enabledWorkItemRefs,
+      employeeOs.queries.getEmployee(deliveryOnlyEmployee.id).definition.enabledWorkItemRefs,
     ).toEqual(coreWorkItemRefs)
 
     const deliveryOnlyLaunch = runtime.commands.launchWork({
@@ -1594,15 +1588,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       body: {
         name: '检视闭环数字员工',
         jobTemplateRef: reviewJobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-system-mock-review' },
         toolOverrides: [],
       },
     })
-    const reviewEmployeeRef = employeeOs.commands.publishEmployee({
-      id: reviewEmployee.id,
-      actorUserId: 'system-mock-author',
-    })
+    const reviewEmployeeRef = { id: reviewEmployee.id, revision: reviewEmployee.revision }
     const reviewLaunch = runtime.commands.launchWork({
       employeeId: reviewEmployeeRef.id,
       actorUserId: 'requester',

@@ -115,6 +115,85 @@ const WORKGROUPS = [
   },
 ]
 
+const DIGITAL_EMPLOYEE = {
+  id: 'employee-fixed-repository',
+  name: 'Fixed repository employee',
+  typeRef: { typeId: 'development', revision: 5 },
+  configuration: {
+    displayName: 'Fixed repository employee',
+    jobTemplateRef: { id: 'development-job', revision: 1 },
+    workScope: { kind: 'repository', repositoryId: 'repo-fixed' },
+    toolOverrides: [],
+    collaborationOverrides: [],
+  },
+  revision: 1,
+  workScope: { kind: 'repository', repositoryId: 'repo-fixed' },
+  definition: {
+    displayName: 'Fixed repository employee',
+    workScopeSummary: 'Repository selected when the employee was created',
+    exactToolBindings: [],
+    exactCollaborationBindings: [],
+    exactOrderedDispatchConfigurations: [],
+    exactReactionLaneOrder: [],
+    enabledWorkItemRefs: [],
+  },
+}
+
+const TASK_SCOPED_DIGITAL_EMPLOYEE = {
+  ...DIGITAL_EMPLOYEE,
+  id: 'employee-task-scoped',
+  name: 'Task-scoped employee',
+  configuration: {
+    ...DIGITAL_EMPLOYEE.configuration,
+    displayName: 'Task-scoped employee',
+    workScope: { kind: 'task' },
+  },
+  workScope: { kind: 'task' },
+  definition: {
+    ...DIGITAL_EMPLOYEE.definition,
+    displayName: 'Task-scoped employee',
+    workScopeSummary: 'Choose a repository when starting each task',
+  },
+}
+
+const DIGITAL_EMPLOYEE_TYPE = {
+  displayName: { 'zh-CN': '开发数字员工', 'en-US': 'Development employee' },
+  workIntakeAuthoring: {
+    acceptedKinds: ['body'],
+    kindRequirements: [],
+    executionOptions: [],
+    targetFields: [
+      {
+        fieldRef: 'repositoryId',
+        label: { 'zh-CN': '目标仓库', 'en-US': 'Target repository' },
+        description: { 'zh-CN': '代码仓库', 'en-US': 'Code repository' },
+        inputKind: 'repository-picker',
+        required: true,
+        placeholder: null,
+      },
+    ],
+    body: {
+      label: { 'zh-CN': '需求正文', 'en-US': 'Request body' },
+      description: { 'zh-CN': '需求正文', 'en-US': 'Request body' },
+      placeholder: { 'zh-CN': '输入需求', 'en-US': 'Describe the request' },
+      maxBytes: 100_000,
+    },
+    files: {
+      label: { 'zh-CN': '文件', 'en-US': 'Files' },
+      description: { 'zh-CN': '文件', 'en-US': 'Files' },
+      maxFiles: 10,
+      maxFileBytes: 10_000_000,
+      targetPathRequired: true,
+      placementModes: ['repository', 'temporary'],
+    },
+    externalId: {
+      label: { 'zh-CN': '需求 ID', 'en-US': 'Requirement ID' },
+      description: { 'zh-CN': '需求 ID', 'en-US': 'Requirement ID' },
+      placeholder: { 'zh-CN': '输入 ID', 'en-US': 'Enter ID' },
+    },
+  },
+}
+
 const SCHEDULE_AGENT = {
   id: 'sched-a',
   name: 'nightly audit',
@@ -215,6 +294,7 @@ beforeEach(() => {
   permissionHarness.permissions = new Set([
     'tasks:read',
     'tasks:execute',
+    'development-missions:launch',
     'repos:read',
     'scheduled-tasks:read',
     'scheduled-tasks:create',
@@ -257,6 +337,10 @@ function installFetch(): FetchCall[] {
       if (url.includes('/api/tasks/relaunch-task/members')) return json(RELAUNCH_MEMBERS)
       if (url.includes('/api/tasks/relaunch-task')) return json(RELAUNCH_TASK)
       if (url.includes('/api/users/lookup')) return json([])
+      if (url.includes('/api/digital-employees/launchable'))
+        return json({ items: [DIGITAL_EMPLOYEE, TASK_SCOPED_DIGITAL_EMPLOYEE] })
+      if (decodeURIComponent(url).includes('/api/digital-employee-types/development@5'))
+        return json(DIGITAL_EMPLOYEE_TYPE)
       if (url.includes('/api/cached-repos')) return json({ items: [] })
       if (url.includes('/api/workflows/wf-1')) return json(WF_DETAIL)
       if (url.includes('/api/workflows')) return json(WORKFLOWS)
@@ -409,6 +493,65 @@ async function chooseManualRepoUrl() {
 }
 
 describe('RFC-165 T12 — /tasks/new wizard', () => {
+  test('switching execution cards stays in one creation session and never reopens draft recovery', async () => {
+    installFetch()
+    await renderWizard('/tasks/new')
+
+    fireEvent.click(screen.getByTestId('wizard-kind-workflow'))
+    await waitFor(() => expect(window.sessionStorage.length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByTestId('wizard-kind-digital-employee'))
+    expect(screen.queryByTestId('wizard-draft-recovery')).toBeNull()
+    fireEvent.click(await screen.findByTestId('wizard-kind-workflow'))
+
+    expect(screen.queryByTestId('wizard-draft-recovery')).toBeNull()
+    expect(screen.getByTestId('task-wizard')).toBeTruthy()
+  })
+
+  test('digital employee selection starts empty and a fixed repository is injected read-only', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?kind=digital-employee')
+
+    const employeePicker = await screen.findByRole('combobox', { name: 'Digital employee' })
+    expect(employeePicker.textContent).toContain('Select…')
+    expect(employeePicker.textContent).not.toContain(DIGITAL_EMPLOYEE.name)
+    expect(screen.queryByText(DIGITAL_EMPLOYEE.definition.workScopeSummary)).toBeNull()
+    expect(calls.some((call) => call.url.includes('/api/digital-employee-types/'))).toBe(false)
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.click(employeePicker)
+    const listbox = await screen.findByRole('listbox')
+    fireEvent.mouseDown(within(listbox).getByRole('option', { name: /Fixed repository employee/ }))
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+
+    next()
+    const repository = await screen.findByTestId('repo-source-recent-urls-0')
+    expect((repository as HTMLButtonElement).disabled).toBe(true)
+    expect(repository.textContent).toContain('repo-fixed')
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('a task-scoped employee loads repository choices without waiting for a disabled group query', async () => {
+    installFetch()
+    await renderWizard('/tasks/new?kind=digital-employee')
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Digital employee' }))
+    fireEvent.mouseDown(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: /Task-scoped employee/,
+      }),
+    )
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+
+    next()
+    const repository = await screen.findByTestId('repo-source-recent-urls-0')
+    expect((repository as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
   test('tasks:execute alone keeps launch usable without probing or exposing extra capabilities', async () => {
     permissionHarness.permissions = new Set(['tasks:execute'])
     const calls = installFetch()
@@ -1559,7 +1702,19 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     cleanup()
     await renderWizard(AGENT_NEW_URL)
 
-    expect(await screen.findByTestId('wizard-draft-recovery')).toBeTruthy()
+    const recoveryDialog = await screen.findByTestId('wizard-draft-recovery')
+    expect(recoveryDialog).toBeTruthy()
+    expect(
+      within(recoveryDialog).getByText('Continue filling out your previous task?'),
+    ).toBeTruthy()
+    expect(
+      within(recoveryDialog).getByText(/You entered task details here but did not create the task/),
+    ).toBeTruthy()
+    expect(within(recoveryDialog).getByText('Recovered audit')).toBeTruthy()
+    expect(
+      within(recoveryDialog).getByRole('button', { name: 'Continue filling out' }),
+    ).toBeTruthy()
+    expect(within(recoveryDialog).getByRole('button', { name: 'Start over' })).toBeTruthy()
     expect(materialFieldset().disabled).toBe(true)
     fireEvent.click(screen.getByTestId('wizard-draft-restore'))
 

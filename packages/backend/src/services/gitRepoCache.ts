@@ -1323,7 +1323,7 @@ export async function listCachedReposPage(
     const c = decodeRepoCursor(options.cursor)
     // 行值比较,不写展开的 `a < ? OR (a = ? AND id < ?)`:后者在**绑定参数**下
     // 让 SQLite 选 MULTI-INDEX OR 并回落 `USE TEMP B-TREE FOR ORDER BY`(在
-    // /api/tasks/page 上实测把翻页从 30ms 拖到 197ms)。500 仓的尺度照不出来,
+    // task-operations catalog provider 上实测把翻页从 30ms 拖到 197ms)。500 仓的尺度照不出来,
     // 但十万仓目标下是同一个坑——实现门 P2-4。
     conds.push(
       sql`(${cachedRepos.lastFetchedAt}, ${cachedRepos.id}) < (${c.lastFetchedAt}, ${c.id})`,

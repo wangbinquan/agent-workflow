@@ -34,6 +34,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { catalogPageFromOperations } from './task-catalog-fixtures'
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -80,7 +81,7 @@ function item(name: string): TaskOperationsListItem {
 const actorPayload = {
   user: { id: 'admin', username: 'admin', displayName: 'Admin', role: 'admin', status: 'active' },
   source: 'session',
-  permissions: ['tasks:read:all'],
+  permissions: ['tasks:read', 'tasks:read:all'],
   linkedIdentities: [],
   pats: [],
 }
@@ -115,10 +116,10 @@ function installFetch(first: TaskOperationsRootPage, second: TaskOperationsRootP
         headers: { 'content-type': 'application/json' },
       })
     if (url.pathname === '/api/auth/me') return json(actorPayload)
-    if (!url.searchParams.has('cursor')) return json(first)
+    if (!url.searchParams.has('cursor')) return json(catalogPageFromOperations(first))
     cursorRequests.count += 1
     await new Promise<void>((resolve) => pending.push(resolve))
-    return json(second)
+    return json(catalogPageFromOperations(second))
   })
   return {
     cursorRequests,

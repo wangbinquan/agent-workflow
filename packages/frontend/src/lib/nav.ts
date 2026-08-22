@@ -7,7 +7,7 @@
 // tests can exhaustively cover route → group mapping without spinning up a
 // router.
 
-import type { Permission } from '@agent-workflow/shared'
+import { TASK_SOURCE_REGISTRATIONS, type Permission } from '@agent-workflow/shared'
 import type { ResourceIconKey } from '@/components/icons/resourceIcons'
 
 export type GroupKey = 'agents' | 'workflows' | 'digitalEmployees' | 'tasks' | 'memory'
@@ -65,7 +65,7 @@ export const NAV_GROUPS: NavGroupEntry[] = [
       },
       // RFC-234: the intent builder authors workflows/workgroups (and their
       // agents/skills), so it lives beside them.
-      { to: '/intent', i18nKey: 'nav.intent', icon: 'workflow', permission: 'intent:read' },
+      { to: '/intent', i18nKey: 'nav.intent', icon: 'intent', permission: 'intent:read' },
     ],
   },
   {
@@ -75,7 +75,7 @@ export const NAV_GROUPS: NavGroupEntry[] = [
       {
         to: '/digital-employees',
         i18nKey: 'nav.digitalEmployees',
-        icon: 'agent',
+        icon: 'digital-employee',
         permission: 'digital-employees:read',
       },
     ],
@@ -91,13 +91,13 @@ export const NAV_GROUPS: NavGroupEntry[] = [
         icon: 'schedule',
         permission: 'scheduled-tasks:read',
       },
-      { to: '/repos', i18nKey: 'nav.repos', icon: 'repo', permission: 'repos:read' },
       {
         to: '/events',
         i18nKey: 'nav.events',
         icon: 'webhook',
         permission: 'event-sources:read',
       },
+      { to: '/repos', i18nKey: 'nav.repos', icon: 'repo', permission: 'repos:read' },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so
@@ -118,8 +118,29 @@ export const NAV_GROUPS: NavGroupEntry[] = [
  */
 export const NAV_CONTENT_PERMISSION_OVERRIDES: ReadonlyArray<{
   path: string
-  permission: Permission
-}> = [{ path: '/tasks/new', permission: 'tasks:execute' }]
+  permissions: readonly Permission[]
+}> = [
+  {
+    path: '/tasks/new',
+    permissions: [
+      ...new Set(TASK_SOURCE_REGISTRATIONS.map((source) => source.creation.requiredPermission)),
+    ],
+  },
+]
+
+/** A destination with multiple registered launch kinds admits any one capability. */
+export function navPermissionsForPath(pathname: string): readonly Permission[] {
+  for (const override of NAV_CONTENT_PERMISSION_OVERRIDES) {
+    if (pathname === override.path || pathname.startsWith(override.path + '/')) {
+      return override.permissions
+    }
+  }
+  const matches = NAV_GROUPS.flatMap((group) => group.subnav).filter(
+    (item) => pathname === item.to || pathname.startsWith(item.to + '/'),
+  )
+  const permission = matches.sort((a, b) => b.to.length - a.to.length)[0]?.permission
+  return permission === undefined ? [] : [permission]
+}
 
 /**
  * Resolve the read capability that owns a visible navigation destination.
@@ -127,15 +148,16 @@ export const NAV_CONTENT_PERMISSION_OVERRIDES: ReadonlyArray<{
  * drifting away from the menu it protects.
  */
 export function navPermissionForPath(pathname: string): Permission | null {
-  for (const override of NAV_CONTENT_PERMISSION_OVERRIDES) {
-    if (pathname === override.path || pathname.startsWith(override.path + '/')) {
-      return override.permission
-    }
-  }
-  const matches = NAV_GROUPS.flatMap((group) => group.subnav).filter(
-    (item) => pathname === item.to || pathname.startsWith(item.to + '/'),
+  return navPermissionsForPath(pathname)[0] ?? null
+}
+
+/** Resolve the exact glyph used by a visible sidebar destination. */
+export function navIconForPath(pathname: string): ResourceIconKey {
+  const item = NAV_GROUPS.flatMap((group) => group.subnav).find(
+    (candidate) => candidate.to === pathname,
   )
-  return matches.sort((a, b) => b.to.length - a.to.length)[0]?.permission ?? null
+  if (item === undefined) throw new Error(`navigation icon not registered: ${pathname}`)
+  return item.icon
 }
 
 export interface ActiveNav {

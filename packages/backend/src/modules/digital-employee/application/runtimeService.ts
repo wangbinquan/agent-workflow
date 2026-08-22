@@ -1,6 +1,10 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import { PLATFORM_WORKSPACE_DIR, retryAttemptCap } from '@agent-workflow/shared'
+import {
+  PLATFORM_WORKSPACE_DIR,
+  retryAttemptCap,
+  type TaskLaunchOrigin,
+} from '@agent-workflow/shared'
 
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { EventObservationInput } from '@/modules/event-center/public/types'
@@ -36,10 +40,12 @@ import type {
 import type { EmployeeInputUploadStore } from '../infrastructure/inputUploadStore'
 import {
   employeeCollaborationBindingSchema,
+  effectiveReactionPriority,
   findWorkContract,
   findWorkItem,
   findToolSlot,
   type EmployeeTypePackageDescriptor,
+  type EmployeeTypeRef,
   type ExactResourceRef,
 } from '../domain/model'
 import {
@@ -117,6 +123,8 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly inputUploads: EmployeeInputUploadStore
   readonly inputArtifacts: EmployeeInputArtifactPort
   readonly runtimeCodecs: readonly EmployeeTypeRuntimeCodec[]
+  /** Latest installed revision for each programmable employee type. */
+  readonly currentTypeRefs: readonly EmployeeTypeRef[]
   readonly executionContracts: ExecutionContractParticipant
   readonly platformTools?: DigitalEmployeePlatformToolCatalog
   readonly resolveExecutionPolicy?: () => ExecutionPolicyRevisionRecord
@@ -166,6 +174,7 @@ export class DigitalEmployeeRuntimeService {
   readonly #platformTools: DigitalEmployeePlatformToolCatalog
   readonly #resolveExecutionPolicy: () => ExecutionPolicyRevisionRecord
   readonly #codecs = new Map<string, EmployeeTypeRuntimeCodec>()
+  readonly #currentTypeRevisions = new Map<string, number>()
   readonly #now: () => number
   readonly #id: () => string
   readonly #workerId: string
@@ -198,6 +207,20 @@ export class DigitalEmployeeRuntimeService {
       }
       this.#codecs.set(codec.typeId, codec)
     }
+    for (const ref of deps.currentTypeRefs) {
+      const current = this.#currentTypeRevisions.get(ref.typeId) ?? 0
+      if (ref.revision > current) this.#currentTypeRevisions.set(ref.typeId, ref.revision)
+    }
+  }
+
+  #assertCurrentLaunchType(ref: EmployeeTypeRef): void {
+    const currentRevision = this.#currentTypeRevisions.get(ref.typeId)
+    if (currentRevision === ref.revision) return
+    throw new ValidationError(
+      'employee-upgrade-required',
+      `digital employee ${typeKey(ref.typeId, ref.revision)} cannot start new work; upgrade it to ${typeKey(ref.typeId, currentRevision ?? 0)}`,
+      { employeeTypeRef: ref, currentTypeRevision: currentRevision ?? null },
+    )
   }
 
   #codec(typeId: string): EmployeeTypeRuntimeCodec {
@@ -240,20 +263,21 @@ export class DigitalEmployeeRuntimeService {
       if (existing !== null) return existing
     }
     const employee = this.#authoringStore.getEmployeeDefinition(input.employeeId)
-    if (employee === null || employee.archivedAt !== null || employee.publishedRevision === null) {
+    if (employee === null || employee.archivedAt !== null || employee.currentRevision === null) {
       throw new NotFoundError(
         'employee-definition-not-found',
-        `published employee not found: ${input.employeeId}`,
+        `digital employee not found: ${input.employeeId}`,
       )
     }
-    const employeeRef = { id: employee.id, revision: employee.publishedRevision }
+    const employeeRef = { id: employee.id, revision: employee.currentRevision }
     const revision = this.#authoringStore.getEmployeeDefinitionRevision(employeeRef)
-    if (revision === null || !revision.content.enabled) {
+    if (revision === null) {
       throw new ValidationError(
         'employee-definition-unavailable',
-        'the exact employee revision is missing or disabled',
+        'the exact employee revision is missing',
       )
     }
+    this.#assertCurrentLaunchType(revision.content.typeRef)
     const scope = this.#authoringStore.getWorkScopeRevision(revision.content.workScopeRef)
     if (scope === null) {
       throw new ValidationError(
@@ -373,6 +397,8 @@ export class DigitalEmployeeRuntimeService {
     return this.launchCase(launch, {
       caseId,
       now,
+      ownerUserId: input.actorUserId,
+      launchOrigin: input.eventOrigin === undefined ? 'manual' : 'event',
       eventOrigin: input.eventOrigin ?? null,
       uploadClaims: uploads.map((upload) => ({
         uploadRef: upload.id,
@@ -388,6 +414,8 @@ export class DigitalEmployeeRuntimeService {
     admission?: {
       readonly caseId: string
       readonly now: number
+      readonly ownerUserId: string | null
+      readonly launchOrigin: TaskLaunchOrigin
       readonly eventOrigin: {
         readonly eventSubscriptionId: string
         readonly eventDeliveryId: string
@@ -402,12 +430,13 @@ export class DigitalEmployeeRuntimeService {
   ): EmployeeCaseRecord {
     const launch = employeeCaseLaunchSchema.parse(input)
     const employee = this.#authoringStore.getEmployeeDefinitionRevision(launch.employeeRef)
-    if (employee === null || !employee.content.enabled) {
+    if (employee === null) {
       throw new ValidationError(
         'employee-definition-unavailable',
-        'the exact employee revision is missing or disabled',
+        'the exact employee revision is missing',
       )
     }
+    this.#assertCurrentLaunchType(employee.content.typeRef)
     const typePackage = this.#authoringStore.getTypePackage(employee.content.typeRef)
     if (typePackage === null || typePackage.state !== 'published') {
       throw new ValidationError(
@@ -464,6 +493,8 @@ export class DigitalEmployeeRuntimeService {
       typeRef: employee.content.typeRef,
       primaryContextId: contextId,
       executionPolicyRevision: policy.revision,
+      ownerUserId: admission?.ownerUserId ?? null,
+      launchOrigin: admission?.launchOrigin ?? 'api',
       state: 'active',
       terminalKind: null,
       blockReason: null,
@@ -522,6 +553,8 @@ export class DigitalEmployeeRuntimeService {
 
   listCasePage(input: {
     readonly employeeId?: string
+    readonly ownerUserId?: string
+    readonly launchOrigin?: TaskLaunchOrigin
     readonly states?: readonly EmployeeCaseRecord['state'][]
     readonly view?: 'all' | 'active' | 'attention' | 'finished'
     readonly q?: string
@@ -542,6 +575,8 @@ export class DigitalEmployeeRuntimeService {
     }
     const page = this.#store.listCasesPage({
       ...(input.employeeId === undefined ? {} : { employeeId: input.employeeId }),
+      ...(input.ownerUserId === undefined ? {} : { ownerUserId: input.ownerUserId }),
+      ...(input.launchOrigin === undefined ? {} : { launchOrigin: input.launchOrigin }),
       ...(input.states === undefined ? {} : { states: input.states }),
       view: input.view ?? 'all',
       ...(input.q === undefined || input.q.trim() === ''
@@ -1251,7 +1286,7 @@ export class DigitalEmployeeRuntimeService {
     }> = []
     for (const binding of bindings) {
       const target = this.#authoringStore.getEmployeeDefinitionRevision(binding.targetEmployeeRef)
-      if (target === null || !target.content.enabled) {
+      if (target === null) {
         throw new ValidationError(
           'employee-collaboration-target-unavailable',
           `the frozen target employee is unavailable: ${binding.memberRef}`,
@@ -1336,7 +1371,14 @@ export class DigitalEmployeeRuntimeService {
             'target type codec changed the frozen target employee revision',
           )
         }
-        this.launchCase(launch, { caseId: childCaseId, now, eventOrigin: null, uploadClaims: [] })
+        this.launchCase(launch, {
+          caseId: childCaseId,
+          now,
+          ownerUserId: parentCase.ownerUserId,
+          launchOrigin: 'api',
+          eventOrigin: null,
+          uploadClaims: [],
+        })
       }
       this.#store.acceptInvocation({
         invocationId,
@@ -1613,6 +1655,7 @@ export class DigitalEmployeeRuntimeService {
       )
       if (deliveries.length === 0) continue
       const descriptor = this.#descriptor(caseRecord)
+      const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
       for (const delivery of deliveries) {
         const rule = descriptor.reactionRules.find(
           (candidate) => candidate.eventTypeId === delivery.eventTypeRef.id,
@@ -1621,7 +1664,13 @@ export class DigitalEmployeeRuntimeService {
           caseRecord.id,
           this.#id(),
           delivery,
-          rule?.priority ?? 0,
+          rule === undefined || employee === null
+            ? (rule?.priority ?? 0)
+            : effectiveReactionPriority({
+                descriptor,
+                reactionLaneOrder: employee.content.exactReactionLaneOrder,
+                rule,
+              }),
           this.#now(),
         )
         this.#eventCenter.acceptDelivery(delivery.deliveryId)
@@ -1695,7 +1744,7 @@ export class DigitalEmployeeRuntimeService {
       const contract = findWorkContract(descriptor, item.workContractRef)
       if (contract === null) throw new Error(`work item contract missing: ${item.workItemRef}`)
       const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
-      if (employee === null || !employee.content.enabled) {
+      if (employee === null) {
         if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
         continue
       }

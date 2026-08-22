@@ -199,7 +199,7 @@ export async function assertTriggerSaveable(
     if (
       employee === undefined ||
       employee.archivedAt !== null ||
-      employee.publishedRevision === null ||
+      employee.currentRevision === null ||
       !(await canViewResource(db, actor, 'digital_employee', employee))
     ) {
       throw new NotFoundError('employee-definition-not-found', 'digital employee not found')
@@ -211,19 +211,16 @@ export async function assertTriggerSaveable(
         .where(
           and(
             eq(employeeDefinitionRevisions.employeeId, employee.id),
-            eq(employeeDefinitionRevisions.revision, employee.publishedRevision),
+            eq(employeeDefinitionRevisions.revision, employee.currentRevision),
           ),
         )
         .limit(1)
     )[0]
-    const content = z
-      .object({ enabled: z.boolean() })
-      .passthrough()
-      .safeParse(parsePersistedJson(revision?.contentJson))
-    if (!content.success || !content.data.enabled) {
+    const content = parsePersistedJson(revision?.contentJson)
+    if (content === null || typeof content !== 'object' || Array.isArray(content)) {
       throw new ValidationError(
         'employee-definition-unavailable',
-        'the published digital employee is disabled or unavailable',
+        'the current digital employee revision is unavailable',
       )
     }
     const typePackage = (

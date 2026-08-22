@@ -112,7 +112,6 @@ const ALLOW_EMPTY = new Map<string, number>([
   ['components/tasks/TaskMembersPanel.tsx', 1],
   ['components/tasks/TaskDiagnosePanel.tsx', 1],
   ['components/tasks/RepairChoiceDialog.tsx', 1],
-  ['routes/tasks.new.tsx', 1],
   // P3 (Codex re-review): combined-className escapees the exact-`"muted"` regex missed.
   ['components/agents/DependencyTreePreview.tsx', 3],
   // RFC-297: 四张手写表合并为一张按 declaration 选列的通用表，空态出现次数随之

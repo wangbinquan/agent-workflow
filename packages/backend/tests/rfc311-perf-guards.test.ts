@@ -217,11 +217,11 @@ function heavyColumns(): string[] {
  */
 const GUARDED: GuardedPath[] = [
   {
-    name: '/api/tasks/page — 默认视图首页',
+    name: 'task-operations catalog — 默认视图首页',
     run: (db) => listTaskOperationsPage(db, actorOf('admin'), {}),
   },
   {
-    name: '/api/tasks/page — 过滤视图（G1 快路径）',
+    name: 'task-operations catalog — 过滤视图（G1 快路径）',
     run: (db) => listTaskOperationsPage(db, actorOf('admin'), { statuses: 'running' }),
   },
   {

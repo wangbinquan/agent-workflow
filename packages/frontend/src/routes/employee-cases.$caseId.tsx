@@ -341,7 +341,7 @@ function EmployeeCaseDetailPage(): ReactElement {
   const employeeDirectory = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', 'case-collaboration-directory'],
     enabled: (projection.data?.channels.length ?? 0) > 0,
-    queryFn: ({ signal }) => api.get('/api/digital-employees', undefined, signal),
+    queryFn: ({ signal }) => api.get('/api/digital-employees/launchable', undefined, signal),
   })
   const resume = useMutation({
     mutationFn: (): Promise<EmployeeCaseProjection> =>
@@ -389,7 +389,7 @@ function EmployeeCaseDetailPage(): ReactElement {
   )
   const latestRoundByWorkItem = new Map<string, ReactionRound>()
   for (const round of chronologicalRounds) latestRoundByWorkItem.set(round.workItemRef, round)
-  const enabledWorkItemRefs = new Set(employee.data?.published?.enabledWorkItemRefs ?? [])
+  const enabledWorkItemRefs = new Set(employee.data?.definition.enabledWorkItemRefs ?? [])
   const runtimeCardState = (
     item: EmployeeTypePackage['authoringManifest']['workItems'][number],
   ) => {
@@ -427,7 +427,7 @@ function EmployeeCaseDetailPage(): ReactElement {
       )
     })
   const runtimeDispatchNodes: ResponsibilityDispatchNode[] =
-    employee.data?.published?.exactOrderedDispatchConfigurations.flatMap((configuration) =>
+    employee.data?.definition.exactOrderedDispatchConfigurations.flatMap((configuration) =>
       configuration.routes.map((route, index) => {
         const latest = routeRound(route.destinationWorkItemRef, route.routeRef)
         const visualState = roundVisualState(latest?.state)
@@ -463,7 +463,7 @@ function EmployeeCaseDetailPage(): ReactElement {
         <PageHeader
           className="operations-surface__header"
           title={
-            employee.data?.published?.displayName ??
+            employee.data?.definition.displayName ??
             employee.data?.name ??
             (zh ? '数字员工任务' : 'Digital employee task')
           }

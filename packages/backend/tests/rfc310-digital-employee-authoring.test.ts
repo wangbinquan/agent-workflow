@@ -16,7 +16,9 @@ import { ExecutionContractService } from '@/modules/execution-contract/applicati
 import { inspectExecutionContractWorkflowDefinition } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import {
+  effectiveReactionPriority,
   employeeTypePackageDescriptorSchema,
+  reactionLaneIds,
   validateTypePackage,
 } from '@/modules/digital-employee/domain/model'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
@@ -177,6 +179,51 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       workItemRef: 'observe-mr',
       slotRef: 'system',
     })
+    expect(reactionLaneIds(descriptor)).toEqual([
+      'care-review',
+      'care-approval',
+      'care-conflict',
+      'care-pipeline',
+      'care-collaboration',
+    ])
+    const reviewRule = descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-review')!
+    const pipelineRule = descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-pipeline')!
+    const lifecycleRule = descriptor.reactionRules.find(
+      (rule) => rule.ruleId === 'handle-lifecycle',
+    )!
+    const pipelineFirst = [
+      'care-pipeline',
+      'care-review',
+      'care-conflict',
+      'care-collaboration',
+      'care-approval',
+    ]
+    expect(
+      effectiveReactionPriority({
+        descriptor,
+        reactionLaneOrder: pipelineFirst,
+        rule: pipelineRule,
+      }),
+    ).toBeGreaterThan(
+      effectiveReactionPriority({
+        descriptor,
+        reactionLaneOrder: pipelineFirst,
+        rule: reviewRule,
+      }),
+    )
+    expect(
+      effectiveReactionPriority({
+        descriptor,
+        reactionLaneOrder: pipelineFirst,
+        rule: lifecycleRule,
+      }),
+    ).toBeGreaterThan(
+      effectiveReactionPriority({
+        descriptor,
+        reactionLaneOrder: pipelineFirst,
+        rule: pipelineRule,
+      }),
+    )
     expect(
       descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-conflict'),
     ).toMatchObject({
@@ -253,6 +300,12 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     })
     expect(oversizedUpload.status).toBe(422)
     expect(await oversizedUpload.json()).toMatchObject({ code: 'employee-upload-too-large' })
+
+    const removedPublishEndpoint = await app.request(
+      '/api/digital-employees/no-longer-two-phase/publish',
+      { method: 'POST', headers: authorization },
+    )
+    expect(removedPublishEndpoint.status).toBe(404)
   })
 
   test('pure migrations stay resource-empty and daemon seeding installs Agent templates once', async () => {
@@ -335,13 +388,13 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       body: {
         name: '产品设计数字员工',
         jobTemplateRef: jobRef,
-        enabled: true,
         workScope: { kind: 'global' },
       },
     })
-    expect(
-      module.commands.publishEmployee({ id: employee.id, actorUserId: 'generic-author' }),
-    ).toEqual({ id: employee.id, revision: 1 })
+    expect({ id: employee.id, revision: employee.revision }).toEqual({
+      id: employee.id,
+      revision: 1,
+    })
 
     for (const source of [
       'modules/digital-employee/application/authoringService.ts',
@@ -440,12 +493,163 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       },
     })
 
+    expect(draft.draft.reactionLaneOrder).toEqual([
+      'care-review',
+      'care-approval',
+      'care-conflict',
+      'care-pipeline',
+      'care-collaboration',
+    ])
+
     expect(() =>
       module.commands.publishJobTemplate({ id: draft.id, actorUserId: 'author-1' }),
     ).toThrow('job template does not cover every required work-item tool slot')
+
+    expect(() =>
+      module.commands.createJobTemplate({
+        typeRef: { typeId: 'development', revision: 5 },
+        actorUserId: 'author-1',
+        body: {
+          name: '错误的泳道优先级',
+          description: '缺失泳道不得静默回退。',
+          defaultToolBindings: [],
+          reactionLaneOrder: ['care-review'],
+        },
+      }),
+    ).toThrow('reaction lane order must contain every event-driven business lane exactly once')
   })
 
-  test('unconfigured optional lanes stay disabled without blocking employee publication', async () => {
+  test('older templates are discoverable and one stable employee upgrades atomically to the current type', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-explicit-upgrade-'))
+    roots.push(appHome)
+    const baseDescriptor = JSON.parse(designEmployeeTypePackage.descriptorJson) as {
+      typeRef: { typeId: string; revision: number }
+    }
+    const oldPackage = {
+      ...designEmployeeTypePackage,
+      descriptorJson: JSON.stringify({
+        ...baseDescriptor,
+        typeRef: { ...baseDescriptor.typeRef, revision: 1 },
+      }),
+    }
+    const currentPackage = {
+      ...designEmployeeTypePackage,
+      descriptorJson: JSON.stringify({
+        ...baseDescriptor,
+        typeRef: { ...baseDescriptor.typeRef, revision: 2 },
+      }),
+    }
+    let ordinal = 0
+    const module = composeDigitalEmployee({
+      db: createInMemoryDb(MIGRATIONS),
+      appHome,
+      typePackages: [oldPackage, currentPackage],
+      executionContracts: genericExecutionContracts,
+      id: () => `upgrade-${++ordinal}`,
+      now: () => 20_000 + ordinal,
+    })
+    const publishJob = async (revision: number, suffix: string) => {
+      const typeRef = { typeId: 'design', revision }
+      const tool = await module.commands.createTool({
+        typeRef,
+        workItemRef: 'design-work',
+        actorUserId: 'upgrade-author',
+        body: {
+          displayName: `设计工具${suffix}`,
+          description: '精确版本工具',
+          roleRef: 'primary',
+          implementation: {
+            kind: 'agent',
+            agentRef: { id: `design-agent-${suffix}`, revision: 1 },
+          },
+          connectionRef: null,
+        },
+      })
+      const toolRef = await module.commands.publishTool({
+        typeRef,
+        workItemRef: 'design-work',
+        toolId: tool.id,
+        actorUserId: 'upgrade-author',
+      })
+      const job = module.commands.createJobTemplate({
+        typeRef,
+        actorUserId: 'upgrade-author',
+        body: {
+          name: '产品设计岗位',
+          description: `设计类型 ${revision}`,
+          defaultToolBindings: [
+            {
+              workItemRef: 'design-work',
+              slotRef: 'primary',
+              registrationRef: toolRef,
+            },
+          ],
+        },
+      })
+      return {
+        job,
+        ref: module.commands.publishJobTemplate({
+          id: job.id,
+          actorUserId: 'upgrade-author',
+        }),
+      }
+    }
+    const oldJob = await publishJob(1, 'v1')
+    const oldEmployee = module.commands.createEmployee({
+      typeRef: { typeId: 'design', revision: 1 },
+      actorUserId: 'upgrade-author',
+      body: {
+        name: '稳定设计员工',
+        jobTemplateRef: oldJob.ref,
+        workScope: { kind: 'global' },
+      },
+    })
+    expect(oldEmployee.revision).toBe(1)
+    const currentJob = await publishJob(2, 'v2')
+
+    expect(
+      module.queries
+        .listJobTemplateUpgradeCandidates({ typeId: 'design', revision: 2 })
+        .map((job) => job.id),
+    ).toEqual([oldJob.job.id])
+    expect(
+      module.queries
+        .listEmployeeUpgradeCandidates({ typeId: 'design', revision: 2 })
+        .map((employee) => employee.id),
+    ).toEqual([oldEmployee.id])
+    expect(module.queries.listLaunchableEmployees()).toEqual([])
+
+    expect(
+      module.commands.upgradeEmployee({
+        id: oldEmployee.id,
+        targetTypeRef: { typeId: 'design', revision: 2 },
+        actorUserId: 'upgrade-author',
+        body: {
+          name: '稳定设计员工',
+          jobTemplateRef: currentJob.ref,
+          workScope: { kind: 'global' },
+          toolOverrides: [],
+          collaborationOverrides: [],
+        },
+      }),
+    ).toEqual({ id: oldEmployee.id, revision: 2 })
+    expect(module.queries.getEmployee(oldEmployee.id)).toMatchObject({
+      id: oldEmployee.id,
+      name: '稳定设计员工',
+      typeRef: { typeId: 'design', revision: 2 },
+      revision: 2,
+      configuration: { jobTemplateRef: currentJob.ref },
+      definition: { jobTemplateRef: currentJob.ref },
+    })
+    expect(module.queries.listEmployeeUpgradeCandidates({ typeId: 'design', revision: 2 })).toEqual(
+      [],
+    )
+    expect(module.queries.listLaunchableEmployees().map((employee) => employee.id)).toEqual([
+      oldEmployee.id,
+    ])
+  })
+
+  test('unconfigured optional lanes stay disabled without blocking employee save', async () => {
     const module = fixtureModule()
     const typeRef = { typeId: 'development', revision: 5 }
     const typePackage = module.queries.getType(typeRef)
@@ -512,12 +716,10 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       body: {
         name: '只交付 MR 的数字员工',
         jobTemplateRef: jobRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-core-only' },
       },
     })
-    module.commands.publishEmployee({ id: employee.id, actorUserId: 'author-optional' })
-    const enabled = module.queries.getEmployee(employee.id).published?.enabledWorkItemRefs ?? []
+    const enabled = module.queries.getEmployee(employee.id).definition.enabledWorkItemRefs
     expect(enabled).toEqual(coreItems.map((item) => item.workItemRef))
     expect(enabled).not.toContain('classify-feedback')
     expect(enabled).not.toContain('collect-pipeline')
@@ -805,38 +1007,68 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       id: template.id,
       actorUserId: 'author-1',
     })
+    expect(() =>
+      module.commands.createEmployee({
+        typeRef,
+        actorUserId: 'author-1',
+        body: {
+          name: '带废弃启动开关的员工',
+          jobTemplateRef: templateRef,
+          enabled: true,
+          workScope: { kind: 'repository', repositoryId: 'repo-1' },
+        },
+      }),
+    ).toThrow()
     const employee = module.commands.createEmployee({
       typeRef,
       actorUserId: 'author-1',
       body: {
         name: 'Java 开发数字员工',
         jobTemplateRef: templateRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-1' },
         toolOverrides: [],
       },
     })
-    const employeeRef = module.commands.publishEmployee({
-      id: employee.id,
-      actorUserId: 'author-1',
-    })
+    const employeeRef = { id: employee.id, revision: employee.revision }
 
-    const published = module.queries.getEmployee(employee.id)
+    const current = module.queries.getEmployee(employee.id)
     expect(employeeRef).toEqual({ id: employee.id, revision: 1 })
-    expect(published.published?.workScopeSummary).toBe('仓库：repo-1')
-    expect(published.publishedWorkScope).toEqual({ kind: 'repository', repositoryId: 'repo-1' })
-    expect(published.published?.exactToolBindings).toEqual(
+    expect(current.definition.workScopeSummary).toBe('仓库：repo-1')
+    expect(current.workScope).toEqual({ kind: 'repository', repositoryId: 'repo-1' })
+    expect(current.definition.exactToolBindings).toEqual(
       [...bindings].sort((left, right) =>
         `${left.workItemRef}/${left.slotRef}`.localeCompare(
           `${right.workItemRef}/${right.slotRef}`,
         ),
       ),
     )
-    expect(published.published?.exactOrderedDispatchConfigurations).toEqual(
+    expect(current.definition.exactOrderedDispatchConfigurations).toEqual(
       orderedDispatchConfigurations,
     )
-    expect(JSON.stringify(published)).not.toContain('sameSceneAttempts')
-    expect(JSON.stringify(published)).not.toContain('retry')
+    expect(current.configuration).not.toHaveProperty('enabled')
+    expect(current.definition).not.toHaveProperty('enabled')
+    expect(current).not.toHaveProperty('publishedRevision')
+    expect(current).not.toHaveProperty('published')
+    expect(JSON.stringify(current)).not.toContain('sameSceneAttempts')
+    expect(JSON.stringify(current)).not.toContain('retry')
+
+    const savedAgain = module.commands.updateEmployee({
+      id: employee.id,
+      actorUserId: 'author-1',
+      body: {
+        name: 'Java 开发数字员工（更新）',
+        jobTemplateRef: templateRef,
+        workScope: { kind: 'repository', repositoryId: 'repo-1' },
+        toolOverrides: [],
+        collaborationOverrides: [],
+      },
+    })
+    expect(savedAgain).toMatchObject({
+      id: employee.id,
+      name: 'Java 开发数字员工（更新）',
+      revision: 2,
+    })
+    expect(module.queries.getEmployee(employee.id).revision).toBe(2)
 
     const cppTemplate = module.commands.createJobTemplate({
       typeRef,
@@ -858,17 +1090,15 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       body: {
         name: 'C++ 开发数字员工',
         jobTemplateRef: cppTemplateRef,
-        enabled: true,
         workScope: { kind: 'repository', repositoryId: 'repo-2' },
         toolOverrides: [],
       },
     })
-    module.commands.publishEmployee({ id: cppEmployee.id, actorUserId: 'author-1' })
     expect(module.queries.listJobTemplates(typeRef).map((job) => job.name)).toEqual([
       'C++ 开发岗位',
       '标准开发岗位',
     ])
-    expect(module.queries.getEmployee(cppEmployee.id).published?.jobTemplateRef).toEqual(
+    expect(module.queries.getEmployee(cppEmployee.id).definition.jobTemplateRef).toEqual(
       cppTemplateRef,
     )
   })

@@ -116,7 +116,7 @@
 /* RFC-310 Digital Employee OS — type-level authoring keeps one roomy surface. */
 .digital-employee-surface__body {
   display: grid;
-  gap: 18px;
+  gap: 13px;
   min-width: 0;
   padding: 0 22px 22px;
 }
@@ -346,7 +346,7 @@
 
 .employee-toolbox-lane {
   display: grid;
-  grid-template-columns: var(--employee-lane-label-width) 16px minmax(0, 1fr);
+  grid-template-columns: var(--employee-lane-label-width) 20px minmax(0, 1fr);
   align-items: stretch;
   min-width: 0;
   min-height: 52px;
@@ -364,7 +364,10 @@
 
 .employee-toolbox-lane > header {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-content: center;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
   padding: 4px 7px;
   border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
@@ -380,6 +383,7 @@
 
 .employee-toolbox-lane__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
   min-width: 0;
@@ -400,6 +404,43 @@
   line-height: 1.2;
 }
 
+.employee-toolbox-lane__priority {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.employee-toolbox-lane__drag-handle {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  cursor: grab;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.employee-toolbox-lane__drag-handle:hover,
+.employee-toolbox-lane__drag-handle:focus-visible {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  outline: none;
+}
+
+.employee-toolbox-lane__drag-handle:active {
+  cursor: grabbing;
+}
+
+.employee-toolbox-lane--dragging {
+  opacity: 0.58;
+}
+
 .employee-toolbox-lane__axis {
   position: relative;
   display: grid;
@@ -409,7 +450,7 @@
 .employee-toolbox-lane__axis::after {
   position: absolute;
   top: calc(50% - 1px);
-  right: 0;
+  right: 6px;
   left: 2px;
   height: 1px;
   background: color-mix(in srgb, var(--accent) 34%, var(--border));
@@ -420,7 +461,7 @@
   z-index: 1;
   width: 6px;
   height: 6px;
-  margin-right: 1px;
+  margin-right: 7px;
   border-top: 1.5px solid color-mix(in srgb, var(--accent) 58%, var(--border));
   border-right: 1.5px solid color-mix(in srgb, var(--accent) 58%, var(--border));
   background: transparent;
@@ -440,6 +481,7 @@
 
 .employee-toolbox-card {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto auto;
@@ -461,7 +503,8 @@
 }
 
 .employee-toolbox-lane__cards:has(.employee-toolbox-card--fan-out) {
-  padding-top: 7px;
+  padding-right: 8px;
+  padding-bottom: 7px;
 }
 
 .employee-toolbox-card--fan-out {
@@ -480,21 +523,21 @@
 
 .employee-toolbox-card__stack-layer--middle {
   opacity: 0.88;
-  transform: translate(3px, -3px);
+  transform: translate(3px, 3px);
 }
 
 .employee-toolbox-card__stack-layer--back {
   z-index: -2;
   opacity: 0.68;
-  transform: translate(6px, -6px);
+  transform: translate(6px, 6px);
 }
 
 .employee-toolbox-card + .employee-toolbox-card::before {
   position: absolute;
   top: calc(50% - 1px);
-  left: -14px;
-  width: 13px;
-  height: 2px;
+  left: -13px;
+  width: 8px;
+  height: 1px;
   background: color-mix(in srgb, var(--muted) 38%, transparent);
   pointer-events: none;
   content: '';
@@ -503,7 +546,7 @@
 .employee-toolbox-card + .employee-toolbox-card::after {
   position: absolute;
   top: calc(50% - 4px);
-  left: -6px;
+  left: -10px;
   width: 6px;
   height: 6px;
   border-top: 1.5px solid color-mix(in srgb, var(--muted) 58%, transparent);
@@ -1203,32 +1246,11 @@
   gap: 12px;
 }
 
-.employee-case-create-grid,
 .employee-case-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
   align-items: start;
-}
-
-/* Digital employee launch reuses the canonical four-step task shell. Each
-   step owns the full wizard column; the two-column layout remains detail-only. */
-.employee-case-create-page .digital-employee-surface__body {
-  padding: 0;
-}
-
-.employee-case-create-page .employee-case-create-grid {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.employee-case-create-page .stepper__body {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.employee-case-create-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .employee-case-upload-list,
@@ -2080,7 +2102,6 @@
   .execution-contract-transport,
   .execution-contract-field,
   .employee-dialog-form__row,
-  .employee-case-create-grid,
   .employee-case-detail-grid,
   .employee-execution-timeline-layout,
   .employee-execution-io-grid,
@@ -20800,6 +20821,14 @@ button.status-chip {
   gap: 0.15rem;
 }
 
+.wizard-draft-recovery__summary {
+  margin-block: 0.85rem;
+}
+
+.wizard-draft-recovery__summary .wizard-summary__row {
+  grid-template-columns: minmax(5rem, 0.7fr) minmax(0, 1.3fr);
+}
+
 /* =============================================================================
    RFC-165 UI 精修 — ChoiceCards (.choice-cards namespace)
    ============================================================================= */
@@ -20810,10 +20839,18 @@ button.status-chip {
   gap: 0.75rem;
 }
 
+/* Every registered task source occupies one equal desktop column. Source
+   providers cannot override this grid or negotiate a private page width. */
+.task-creation-kind-picker {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .choice-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
   align-items: flex-start;
-  gap: 0.65rem;
+  gap: 0.2rem 0.65rem;
   text-align: left;
   padding: 0.85rem 1rem;
   border: 1px solid var(--border-strong);
@@ -20849,6 +20886,8 @@ button.status-chip {
 
 .choice-card__icon {
   display: inline-flex;
+  grid-row: 1;
+  grid-column: 1;
   color: var(--muted);
   margin-top: 0.1rem;
   flex-shrink: 0;
@@ -20859,13 +20898,13 @@ button.status-chip {
 }
 
 .choice-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
+  display: contents;
 }
 
 .choice-card__label {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
   font-weight: 600;
   font-size: 0.92rem;
 }
@@ -20875,9 +20914,28 @@ button.status-chip {
 }
 
 .choice-card__desc {
+  grid-row: 2;
+  grid-column: 1 / -1;
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.35;
+}
+
+.choice-card--without-icon .choice-card__label,
+.choice-card--without-icon .choice-card__desc {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .task-creation-kind-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .task-creation-kind-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* RFC-165 UI 精修 — Select searchable mode */
@@ -20910,15 +20968,20 @@ button.status-chip {
   font-size: 0.85rem;
 }
 
-/* RFC-165 UI 精修 — wizard page: centered narrow container (fixes the
-   full-bleed stretched controls the user flagged as "prototype-ish") */
+/* One width contract for every task source renderer. */
 .task-wizard {
-  max-width: 47.5rem;
+  max-width: 68rem;
   margin-inline: auto;
 }
 
 .task-wizard .stepper__body {
   min-height: 14rem;
+}
+
+.task-creation-step {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
 }
 
 .task-wizard__material {

@@ -41,9 +41,9 @@ describe('tasks operations list — long content containment', () => {
 
   test('the task link exposes the full name through its title', () => {
     const link = SRC.match(
-      /<Link[\s\S]*?className="data-table__link task-operations__name"[\s\S]*?>[\s\S]*?\{item\.name\}[\s\S]*?<\/Link>/,
+      /<a[\s\S]*?className="data-table__link task-operations__name"[\s\S]*?>[\s\S]*?\{item\.title\}[\s\S]*?<\/a>/,
     )
     expect(link).not.toBeNull()
-    expect(link?.[0]).toMatch(/title=\{item\.name\}/)
+    expect(link?.[0]).toMatch(/title=\{item\.title\}/)
   })
 })

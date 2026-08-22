@@ -18,11 +18,18 @@
 >
 > **2026-08-21 PR-19/20（待 hosted 验证）**：把 Agent/Workflow/ProgramTool 的输入输出约束提升为平台级
 > `execution-contract`，并把固定职责图升级为 manifest 驱动的“生命周期背景 + 职责泳道 + 确定性边/回路”。研发
-> “MR 看护与修绿”不再把所有节点顺序平铺，而是由 MR 事件入口分发到检视、流水线、冲突、跨仓/审批和合入判断五条职责支线。
+> “MR 看护与修绿”不再把所有节点顺序平铺，而是由固定最高优先级的 MR 主泳道分发到检视、流水线、冲突、跨仓/审批等事件职责泳道；
+> 合入判断归入 MR 主泳道，不再伪装成另一种可抢占事件。
 > Agent 编辑器中的契约选择与端口归入同一“输入/输出”页；`agent-result` 是契约托管端口，随契约原子增删，不能单独编辑或删除。
 > 后续按功能自审补齐可选泳道、岗位级流水线失败类型/处理者、检视整树与双回帖、权威事实刷新和更紧凑的职责卡片，
 > 因此内置研发类型最终追加发布为 `development@5`，不覆写或删除已登记的 `development@1/@2/@3/@4`；已有数据库只追加新
 > revision，空库与升级库走同一 bootstrap 路径。公共能力与研发能力的分层覆盖矩阵见 design §15.8、plan §13g。
+>
+> **2026-08-22 PR-24（实施中）**：此前“统一新建任务”只合并了入口外观，未形成完整任务来源抽象。本轮把任务创建、
+> 列表、筛选和详情路由统一到 `TaskSourceRegistration`；后端增加 consumer-owned `task-catalog` 查询边界，由各来源
+> 通过自己的 `sourceId` 直接接入，公共层不再判断 Agent、Workflow、Workgroup 或 DigitalEmployee，也不存在中间分派身份。
+> 最终完成仍以 plan §13k 的完整门禁、
+> 浏览器实走、远端 exact-SHA CI 为准，不能因前端卡片已经出现就提前标记完成。
 >
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
@@ -165,7 +172,8 @@ selector，Workflow/Agent/Workgroup 是 subscriber target。数字员工 Attenti
 既有 Webhook 专用条件作为明确标注的兼容配置保留，不再限制其他公开事件的选择。
 
 Event Center 的 Event/Delivery 不携带业务优先级，也不决定“评论还是流水线先处理”。每个订阅者在自己的已发布规则中解释
-同一批 Delivery：数字员工从 pinned `ReactionRule.priority` 计算 Case 队列顺序；其他 subscriber 可以有各自确定性调度规则。
+同一批 Delivery：数字员工先按岗位模板冻结的 `reactionLaneOrder` 选择职责泳道，再以 pinned `ReactionRule.priority` 处理同泳道规则；
+其他 subscriber 可以有各自确定性调度规则。
 因此事件来源创作、事件类型和 Event Center 订阅表单均不出现优先级字段。
 
 Event Center 决定事件应投递给谁；员工的版本化规则决定同一案件中先处理哪个。相同外部 revision 被 Webhook 与轮询
@@ -252,13 +260,15 @@ ContextSnapshotRefs + ContextRevisions + Event + EmployeeRevision + RuleRevision
 ```
 
 运行中的输入不被新 Event 修改。新 Event 进入下一轮 pending 队列；规则可按 subject/type/revision 去重、合并或标记
-obsolete。每次 claim 下一轮时按 type package 优先级重新排序；新到的高优先级事件排到下一轮首位，但不抢占已经运行的普通
+obsolete。每次 claim 下一轮时按“主泳道固定最高 → 岗位 `reactionLaneOrder` → 泳道内 type package 规则”重新排序；新到的高优先级事件
+排到下一轮首位，但不抢占已经运行的普通
 Round。队列每次 committed 变更都更新任务页实时投影，因此评论与红门禁同时到达时，用户能看见“当前处理 + 后续待办”。
 每轮真正执行前重新收集外部事实；Event 是唤醒原因，不冒充当前事实。MR merged/closed 等终态在新外部
 Effect 前形成 transition fence，普通低优先级事件不得覆盖终态。
 
 ReactionRule 用 typed Event、Context facts 和闭集 predicate 选择唯一工作合同及其 exact Tool Binding 与允许 Effect。
-ReactionRule、队列优先级与业务失败分支由员工类型包程序化定义；业务用户不在员工页面配置事件、规则顺序或重试。
+ReactionRule、主泳道 guard、泳道内规则顺序与业务失败分支由员工类型包程序化定义；岗位模板只允许把类型包声明的全部事件职责泳道
+作为一个闭合集合拖拽排序。该顺序随岗位发布并冻结到员工 revision；员工实例不能另行覆盖，事件、规则内容和重试也不开放配置。
 执行失败后的同现场与全新现场次数只读取“设置 → 限额”的既有字段；Case admission 把当时值物化为内部
 `ExecutionPolicyRevision` 并精确 pin。固定 backoff 与停止条件属于平台运行合同，不形成第二份配置。无匹配、多匹配、
 事实不完整均显式阻断，不让 AI 自主选择下一步。
@@ -374,7 +384,8 @@ Agent/Script 注入与解析。平台统一提供：
 - 工具保存/发布前运行兼容检查与 fixture；每轮结算前再次对拍 contract revision、`roundRef`、`executionNonce`、字段闭集和
   semantic validator。失败返回具名现场并按 Case pin 的限额快照重试，不让各员工类型复制解析器。
 
-业务用户创建员工时只配置：员工分类、岗位模板、名称/启停、适用范围，以及没有被模板填满的工作项工具绑定。普通工作项只需
+业务用户创建员工时只配置：员工分类、岗位模板、名称、适用范围，以及没有被模板填满的工作项工具绑定。员工本身没有“工作中/停用”或
+“已发布/未发布”的业务开关；是否自动接活由 Event Center 响应规则决定，单次执行状态只出现在统一任务中。普通工作项只需
 选择一个工具；问题处理工作项按分类包声明的“识别工具 / 修复工具”槽位选择工具，`问题类型 → 槽位` 路由仍由分类包固定；
 协作工作项只选择允许的另一名员工或审批目标，输入输出和完成标准只读。
 事件、Context mapping、规则顺序、重试/回退、Effect、stage 和连线均不进入员工表单。运行时只执行编译冻结后的 revision。
@@ -457,17 +468,17 @@ Agent/Workflow/ProgramTool 的合同错误、same-scene 尝试与 fresh-scene �
                                                                   自动建立 MR 关注
 
 职责二：持续看护 MR
-  MR 事件入口：             [关注 MR 状态]
+  MR 主泳道（固定最高）：    [关注 MR 状态] → [判断随时可合入] → [等待 committer 合入]
                               ├─ 检视意见：      [识别检视问题] → [修复检视问题] ─────────┐
                               ├─ 流水线门禁：    [取得门禁] → [识别失败] → [按类型修绿] ↺ 下一失败类型 ─┤
-                              │                                      └─ 外部依赖 → 跨仓/审批支线
+                              │                                      └─ 外部依赖 → 跨仓/审批泳道
                               ├─ 代码冲突：      [修复冲突] → [平台发布冲突修复] ───────┤
-                              │  跨仓/审批：     [协同员工] → [准备审批] → [提交] → [等待] ┤
-                              └─ 合入判断：      [判断随时可合入] → [等待 committer 合入]  │
-                                                                                         └─ 回到事件入口
+                              └─ 跨仓/审批：     [协同员工] → [准备审批] → [提交] → [等待] ┤
+                                                                                         └─ 回到 MR 主泳道
 ```
 
-五条支线是并列职责，不是一个必须依次跑完的阶段序列；Event Queue 每轮只选择一条当前匹配的支线。前后继和循环由研发 Type
+MR 主泳道持有终态 fence 和合入判断；四类事件职责泳道彼此并列，不是一个必须依次跑完的阶段序列。岗位模板可拖拽四条事件泳道决定
+同一 Case 下一轮先处理哪类事件，主泳道不可拖动且永远最高。Event Queue 每轮只选择一条当前匹配的泳道；前后继、循环和泳道内规则由研发 Type
 Package 固定。`MergeRequestContext` 一产生就通过 AttentionRule 扩张关注范围，不需要用户再配置
 “创建 MR 后去监控 MR”。一轮只处理队列中的一个已选工作集；新评论与红流水线并存时，低优先级项留在下一轮。
 流水线同轮只执行规则选中的一个失败类型；仍有剩余类型时回到同一修绿工作项并重新按固定优先级选槽位，全部清零后才进入修改候选。
@@ -703,8 +714,9 @@ Mission 只允许一个可写 ActionRun。只读分析可以在不可变 snapsho
 “阶段”只是在职责流程图上帮助用户理解生命周期的视觉背景，例如“接收工作”“完成交付”“持续关注”，不是第五层配置对象，
 也不得出现在“增加工具”表单的下拉框中。用户点击哪个工作项，平台就已经知道工具属于哪个分类、哪个工作项以及哪一版输入输出合同。
 
-业务用户只回答四个问题：**创建哪类员工、它叫什么并负责哪里、每个工作项使用哪个工具、是否启用**。事件订阅、Context
-映射、流程连线、effect、重试与回退不是员工实例配置项。`ActionTemplate`、`VerificationProfile`、`adapter`、`profile`、资源
+业务用户只回答四个必需问题：**创建哪类员工、它叫什么并负责哪里、每个工作项使用哪个工具、是否启用**；岗位模板另提供一个可选的
+“事件职责优先级”拖拽顺序，默认值即可直接使用。事件订阅、Context 映射、流程连线、规则内容、effect、重试与回退不是员工实例配置项。
+`ActionTemplate`、`VerificationProfile`、`adapter`、`profile`、资源
 ID/revision 也不得成为业务界面的概念。
 
 ### 6.1 三层业务定义
@@ -712,8 +724,8 @@ ID/revision 也不得成为业务界面的概念。
 四层信息架构背后只有三类可发布业务定义：
 
 1. `EmployeeTypeRevision`（数字员工分类）由程序化 Type Package 定义职责、固定工作项、工作合同、事件反应规则与业务文案。
-2. `EmployeeJobTemplateRevision`（岗位模板）为某个分类预选一组默认工具，例如“Java 服务研发”“C++ CMake 研发”；它只是一键起步方案，
-   不复制底层 Agent、Workflow 或 Program。
+2. `EmployeeJobTemplateRevision`（岗位模板）为某个分类预选一组默认工具，并冻结事件职责泳道优先级，例如“Java 服务研发”“C++ CMake 研发”；
+   它只是一键起步方案，不复制底层 Agent、Workflow 或 Program。
 3. `DigitalEmployeeDefinitionRevision`（具体员工）只保存名称、启用状态、分类与岗位模板 revision、负责范围，以及用户对默认工具的显式替换。
 
 岗位模板不是第五层导航或另一套流程。在分类的“员工”页内以次级“岗位模板”列表管理；创建模板仍复用同一固定职责图，只填写
@@ -1089,7 +1101,7 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - 从直接正文、上传文件、正文加文件或外部 ID 到一个持续维护的 MR，形成单一 Mission 生命周期。
 - 决策可配置、可预演、可解释、可回放；同 facts + 同 policy revision 得到同 decision。
 - 支持研发、设计、测试等可横向扩展的数字员工分类；Java/C++/polyglot 作为研发分类的岗位模板和工作项工具路由。
-- 业务用户只配置分类、岗位模板、名称/启停、负责范围和各工作项工具；职责、事件反应、输入输出合同与技术资源由分类包和发布编译器管理。
+- 业务用户只配置分类、岗位模板、名称、负责范围和各工作项工具；职责、事件反应、输入输出合同与技术资源由分类包和编译器管理。
 - MR 问题生产与修复均支持 Agent 或程序实现，并共享 exact input/output envelope、工作区验证和现场回退合同。
 - 自建需求系统、流水线系统通过 typed program adapter 接入。
 - 大材料落本地 evidence bundle，Agent 按需读，平台持久化 ref/digest 而非大正文。
@@ -1185,7 +1197,7 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   会被拒绝，`agent-editable` 仍要求目标路径存在；相同 digest 不制造空 commit。首次 publish receipt 明确标记 seed 已被
   commit 吸收，后续 MR care 不重复应用计划；Git mode/ignore/filter 不得让 entry 漏失或不可还原，push 成功但回执丢失
   可从 remote tree 补账而不重复提交。
-- **AC-36** 数字员工主界面只出现分类、岗位模板、名称/启停、负责范围和每个工作项选择的工具；创建与详情不出现事件选择、
+- **AC-36** 数字员工主界面只出现分类、岗位模板、名称、负责范围和每个工作项选择的工具；创建与详情不出现员工启停、发布状态、事件选择、
   Context 映射、effect、重试/回退、阶段下拉、连线编辑、`ActionTemplate`、`VerificationProfile`、`adapter/profile`、裸资源
   ID 或 JSON。管理员可在折叠的技术详情中查看编译 receipt；页面骨架和交互复用仓库/Webhook 的 operations 视觉体系。
 - **AC-37** 问题类型为员工 revision 内的稳定闭集；script/只读 Agent 生产者对 exact head/evidence digest 产出同一
@@ -1233,7 +1245,8 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   exact fields/types/round/nonce。
   数字员工 authoring/runtime/execution composition 必须注入该 participant，禁止 optional 或旧 resource/fixture fallback。
 - **AC-54** AuthoringManifest 可声明通用 `spine | branch` 职责泳道；有泳道的区域中每个工作项都必须归属唯一已声明泳道。
-  authoring 视图按“生命周期区域 → 泳道 → 工作项小卡片”全量展开，前后继写在卡片内，不提供连线、端口、拖拽或阶段选择；无开发类型分支。
+  authoring 视图按“生命周期区域 → 泳道 → 工作项小卡片”全量展开，前后继写在卡片内，不提供连线、端口、节点拖拽或阶段选择；岗位模板中
+  只允许拖动反应泳道标题调整确定性事件处理顺序，无开发类型分支。
 - **AC-55** `/tasks` 只提供一个“新建任务”入口；现有创建向导首屏把 Workflow、Agent、工作组与数字员工显示为同级创建卡片。
   数字员工页的“创建数字员工任务”按钮也进入该统一入口并预选数字员工卡片；选择后继续复用执行方式、执行空间、任务内容、确认四步
   Stepper，不得降级成一页式专用表单。所有数字员工页面使用 operations 内容留白。
@@ -1246,8 +1259,9 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   Attention 与现有 Webhook 响应规则，显示来源、事件、匹配范围、消费者和状态；Webhook 规则的启停/编辑立即改变该订阅。
 - **AC-59** 所有匹配均生成统一 durable EventDelivery，再由注册 subscriber adapter 消费。automation adapter 必须复用既有
   owner、ACL、per-stream 串行、熔断、supersede 和 MR terminal fence；数字员工 adapter 按 deliveryId 幂等接收入 Case inbox。
-- **AC-60** Event Type、Source、EventRecord 与 EventDelivery 均无业务优先级。数字员工队列优先级只来自 Case pinned type
-  package 的 ReactionRule；Webhook/Workflow 等其他消费者不得反向污染事件目录的中立合同。
+- **AC-60** Event Type、Source、EventRecord 与 EventDelivery 均无业务优先级。数字员工队列优先级只来自 Case pinned 岗位模板的
+  `reactionLaneOrder` 与 type package 的 ReactionRule；主泳道/终态 fence 优先于可排序职责泳道，泳道内再使用规则优先级和稳定
+  `occurredAt/eventId` 次序。Webhook/Workflow 等其他消费者不得反向污染事件目录的中立合同。
 - **AC-61** EventRecord 不可变且无全局 consumed 状态。一次发布向每个匹配 Subscription 生成独立 Delivery，并由
   `(eventId, subscriptionId)` 唯一；接受、lease 过期、重试和死信只修改该 deliveryId。至少以两个 exact 与两个 filtered
   subscriber 覆盖“一方确认/失败不影响另一方”和重复发布不增加重复 Delivery。
@@ -1291,7 +1305,8 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-76** 公共 OS 能力按 design §15.8 建立分层覆盖矩阵：每项至少有合同/反向与集成/恢复用例；跨 Git、代码平台、自建系统、审批
   或进程边界的能力还必须有 runnable stateful system mock。开发数字员工 system mock 至少覆盖父子员工、外部审批、大证据、真实 Git/MR、
   多轮检视 ACK→修复→回帖、自回复抑制与 committer 外部合入。
-- **AC-77** 工具箱的小卡片职责图桌面和窄屏都全量展示 20 个工作项，不出现跨泳道线、端口圆圈或画布拖拽。桌面 1280×900 视口在页面
+- **AC-77** 工具箱的小卡片职责图桌面和窄屏都全量展示 20 个工作项，不出现跨泳道线、端口圆圈或节点/连线画布拖拽；岗位模板的泳道标题
+  排序手柄是唯一拖拽入口。桌面 1280×900 视口在页面
   顶部必须一次看全职责图，不靠把视口拉高或纵向滚动；平台、可定制工具、员工协同三类标签和可选泳道必须可辨。卡片只常驻显示类型、
   业务名称和配置事实，说明、下一步、输入输出及工具配置在点击后的职责弹窗中展示。业务名称必须完整换行显示，禁止省略号、裁切或通过
   继续缩小文字来换取一屏；同一图中所有职责卡固定等宽、左对齐，不能按每条泳道剩余空间拉伸。由几何断言、逐卡文字裁切断言、功能 E2E
@@ -1322,7 +1337,7 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-86** 新建岗位模板先用只含名称、说明的基本信息弹窗建立当前编辑草稿，随后进入分类页内职责编辑状态；详情页不再常驻重复的名称/
   说明输入框。确认基本信息必须先把不完整模板持久化为 `publishedRevision=null` 的草稿，再进入职责图；取消、刷新或尚无必选工具不能丢失
   该草稿，完整性只在发布时阻断。已有模板点击修改时直接进入职责编辑，并可按需从次要“基本信息”动作重新打开同一弹窗。职责全景保持一屏完整展示，点击
-  卡片才打开该职责的默认工具、错误类型或协同员工配置弹窗；已配置为绿色，未配置或未启用为黄色。可选泳道不配置也可发布；提交时仅对
+  卡片才打开该职责的默认工具、错误类型或协同员工配置弹窗；已配置为绿色，未纳入岗位能力为黄色。可选泳道不配置也可保存；提交时仅对
   真正缺失的必选职责闪烁并直接打开第一项职责弹窗。
 - **AC-87** 员工负责范围用一个仓库空间下拉表达：可直接选择单仓、仓库组或“任务启动时指定仓库”，不再先选范围类型，也不出现“全局默认”。
   启动任务时，固定单仓不显示仓库选择并继承已发布 scope；仓库组只列组内仓库；任务时指定则列可用仓库。后端仍拒绝固定单仓的冲突目标，
@@ -1343,9 +1358,17 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-92** 数字员工任务详情复用 authoring 的同一职责图和冻结有序分类配置，按 work item/route 显示未开始、运行中、等待、失败和完成。
   同页必须有 Case 全生命周期阶段时间线；点击任一阶段可查看 exact session、冻结 Context 引用、Agent envelope 或 Program 输入输出和错误现场，
   不得只展示当前节点或从易变日志反推历史。
-- **AC-93** 类型包可用 `inputMultiplicity=collection` 声明一个职责消费同类工作集合；共享职责图必须把它显示为一个主卡片加两层后置轮廓的
-  三层叠卡，authoring/runtime 状态与点击仍归同一工作项。开发类型的“修复检视问题”必须使用该声明表达一个 problem set 中的多棵 thread tree，
-  不得由页面按 work item ID 硬编码，也不得误画成三个独立执行节点。
+- **AC-93** `inputMultiplicity=collection` 只约束一个工作项可一次消费同类集合，不代表运行分支，也不产生叠卡。“修复检视问题”即使输入完整
+  thread tree 集合，仍显示为一个职责节点。只有 `orderedDispatchAuthoring` 的分类节点会让目标修复职责显示三层扇出提示；岗位配置完成后，
+  该提示由真实 `P1..Pn` 错误类型节点替换。视觉层从 manifest 的有序分派关系推导，不能硬编码开发类型或工作项 ID。
+- **AC-94** MR 看护区的非可选“判断可合入/等待 committer”职责并入 MR 事件主泳道，不再单列“合入判断”泳道；检视、流水线、冲突、员工协同、
+  外部审批是可选反应泳道。岗位模板可拖动这些反应泳道排序，保存并冻结 `reactionLaneOrder`；运行任务图必须显示同一 `P1..Pn` 顺序。
+- **AC-95** `/tasks/new` 的四种创建能力来自共享注册表；注册项必须声明 runtime owner、inventory、权限、四步合同和参数合同。选择数字员工只替换
+  同一路由、同一页面骨架中的四步内容，不跳到另一创建页面；切回 Agent/Workflow/工作组同理。AppShell 按注册能力做 any-of 权限准入。
+- **AC-96** DigitalEmployeeDefinition 不持有 enabled/business status，创建与保存不出现发布态文案；新 API 传入 `enabled` 必须被拒绝，存量 JSON
+  中同名未知字段只作读取兼容并在新 revision 中消失。自动接活开关属于 Event Center 响应规则，运行状态属于 Task/EmployeeCase。
+- **AC-97** 类型升级不得让 `development@4` 等旧模板或员工静默进入当前运行目录，也不能显示“版本不认识”的死路。当前类型页显式列出升级候选；
+  用户选择当前岗位/工具后生成当前 revision，新任务 inventory 只返回当前、可启动定义，runtime 对陈旧 definition fail closed 并给出升级动作。
 
 ## 15. 本轮已批准的设计决策
 
@@ -1382,7 +1405,7 @@ RFC-294 同步和实现门批准后另行开始。
 - **D20**：每个分类拥有自己的工具箱。工具箱按工作项节点展示，增加工具自动绑定分类/工作项/合同；不再提供全局执行者库或阶段下拉。
 - **D21**：Agent、Workflow 在各自原始 owner 中定义，工具箱只注册引用；ProgramTool 在分类工作项工具箱定义但复用既有 Script
   executor；三者都要合同校验 receipt。其他数字员工通过协作通道调用，不作为普通工具。
-- **D22**：用户只配置分类、岗位模板、名称/启停、负责范围和工具绑定；事件、Context、流程、effect、失败路由由分类包程序化定义。
+- **D22**：用户只配置分类、岗位模板、名称、负责范围和工具绑定；员工没有启停/发布业务状态，事件、Context、流程、effect、失败路由由分类包程序化定义。
 - **D23**：事件目录必须国际化并提供业务说明；Event 表示唤醒原因，工作项表示职责动作，业务界面隐藏 machine ID。
 - **D24**：数字员工不新增执行策略配置；same/fresh-scene 次数复用“设置 → 限额”，Case admission 只冻结内部快照；节点、工具、分类和员工不得覆盖。
 - **D25**：适用范围由分类 WorkScopeContract 定义，公共 OS 不硬编码仓库；新产品 canonical route 使用
@@ -1422,13 +1445,17 @@ RFC-294 同步和实现门批准后另行开始。
 - **D42**：确定性职责全景的 authoring 表达采用固定阶段背景上的横向泳道板，而不是 SVG 自由连线画布或卡片分组矩阵。泳道左侧固定职责名称，
   右侧节点从左到右排列；每条泳道只用入口短箭头、行内短箭头和明确标签表达，不画贯穿多泳道的竖线。所有节点卡片固定等宽、左对齐，
   不按剩余空间拉伸。工具箱常驻显示；岗位模板只在职责编辑态复用；员工列表和其他页签不重复占据页面。节点卡片只写类型、业务名称和
-  配置状态，跨泳道下一步、合同与可写配置统一进入职责弹窗。
+  配置状态，跨泳道下一步、合同与可写配置统一进入职责弹窗。节点与连线不可拖；只有岗位模板的反应泳道标题可排序。
 - **D43**：岗位模板创建只用一次轻量基本信息弹窗，随后是页面内职责全景；已有模板直接进入职责编辑，名称/说明不作为常驻表单占据页面。
-  黄色只是“未配置/未启用”的事实，不等于阻断；只有分类 manifest 认定为必选且当前启用的职责缺失时，发布动作才高亮并打开对应职责弹窗。
+  黄色只是“未纳入岗位或尚未配置”的事实，不等于阻断；只有分类 manifest 认定为必选职责缺失时，保存动作才高亮并打开对应职责弹窗。
 - **D44**：新任务入口统一为现有 `/tasks/new` 的执行方式卡片选择。数字员工拥有独立 Case/runtime owner 和最终提交协议，但创作体验必须
-  复用同一四步 Stepper；它不再在任务列表拥有第二个并列主按钮，数字员工页入口通过统一卡片预选进入四步创建。
+  复用同一四步 Stepper；选择执行方式只在同一路由和页面骨架内切换注册内容，不导航到专用创建页。它不再在任务列表拥有第二个并列主按钮，
+  数字员工卡片入口通过统一卡片预选进入四步创建。卡片标题/描述从同一来源注册表投影，对象字段统一由公共资源选择器渲染标签、说明、
+  loading/error/empty/retry 和空值占位；执行空间的契约字段由公共字段渲染器投影，来源不能持有另一套表单布局。除显式 deep link 外，任何异步
+  inventory 都不得自动选中第一项。旧 `/tasks/employee-cases/new` 页面和路由直接删除，不保留第二创建面。
 - **D45**：负责范围 authoring 以单个 combined repository-space picker 保存 typed union。`task` 取代新 revision 的 `global`；固定仓库
-  由启动页继承，仓库组在启动时收敛到一个成员仓库。旧 `global` 仅由 type-id runtime codec 解码，不能由 revision 5 authoring 创建。
+  由启动页继承并作为已填写、不可修改的 repository port 展示，不能再用说明横幅代替字段，也不能要求用户重复选择；仓库组在启动时收敛到
+  一个成员仓库。旧 `global` 仅由 type-id runtime codec 解码，不能由 revision 5 authoring 创建。
 - **D46**：启动 UI 只信 published revision。公共 EmployeeDefinition view 附带解析后的 `publishedWorkScope`，避免 draft 已改但未发布时把任务
   发往错误仓库；runtime 仍以 workScopeRef 的 frozen revision 为最终事实。
 - **D47**：有序分类不是一个藏在弹窗里的配置表。每个 route 都在 authoring/runtime 同一职责图中派生一张带优先级的独立修复卡片；修复工具
@@ -1436,6 +1463,20 @@ RFC-294 同步和实现门批准后另行开始。
 - **D48**：任务详情复用相同职责图并增加 Case 全阶段时间线。历史阶段以冻结 Round/plan/input/output 为事实，点击后展示 exact session 与
   Agent/Program 输入输出；不能只显示当前节点，也不能用当前 Context 或编译日志反推历史。
 - **D49**：岗位基本信息确认就是草稿创建命令，不是前端临时状态。发布门禁与创建分离，用户可在必选职责未闭合时退出并继续编辑。
-- **D50**：集合输入职责通过类型包 `inputMultiplicity` 驱动三层叠卡；视觉层不识别 `development` 或 `repair-feedback` 特例。
+- **D50**：集合输入只影响 WorkContract，不影响职责图层数；三层扇出卡由类型包 `orderedDispatchAuthoring.destinationWorkItemRefs` 驱动，
+  配置后由真实 route 节点替换。视觉层不识别 `development`、`repair-feedback` 或 `repair-pipeline` 特例。
+- **D51**：岗位模板冻结 `reactionLaneOrder`，员工 revision 冻结 `exactReactionLaneOrder`。主泳道和 terminal fence 有固定高优先级；可选反应泳道
+  按岗位顺序处理，泳道内保留 type rule 优先级。Event Center 仍不保存任何业务 priority。
+- **D52**：任务来源是共享注册合同，不是前端卡片、列表分区或筛选枚举的常量。每类只声明稳定 source ID、owner 目录、inventory、permission、
+  四步合同、parameter contract、详情路由和读取权限；统一创建、列表与筛选均由同一注册表投影。runtime owner 只在来源提交命令或只读适配器
+  内处理自己的事实，公共层不识别具体来源。前端公共 Host 直接消费声明式合同，并独占来源卡片、资源选择器、执行空间和生命周期外壳。
+- **D53**：数字员工定义没有启停、工作中、已发布或未发布产品状态；事件响应规则决定是否自动拉起，任务状态解释是否正在执行。员工保存仍可在
+  内部形成 immutable revision，但界面不把实现版本机制伪装成业务开关。
+- **D54**：统一任务读面由 consumer-owned `task-catalog` 按 `sourceId` 组合各 bounded context 的只读来源适配器。公共 application 层只按注册表检查
+  source/permission，要求每个公开来源恰好一个适配器，并统一返回 `TaskCatalogPage@1`；owner 私有读取形状在适配器边界 exact 校验后立即规范化。
+  创建 command、详情与 mutation 仍归原 owner，禁止 task-catalog 变成跨域 writer 或直接 import 其他模块内部实现。
+- **D55**：统一筛选只保留一项 `type=<TaskSourceId>`，不再并列“任务分类/主题”。所有来源适配器必须真实执行公共 view、status、scope、origin、
+  query 语义或明确拒绝，不能静默忽略。DigitalEmployee Case 因此持久化 owner 与 canonical launch origin；无 `tasks:read:all` 时 `all`
+  收敛为 `mine`，Webhook 来源按 Event Center 语义归一为 `event`。
 
 实现按 [plan.md](./plan.md) 的后续 PR 批次验收，并完成 RFC-294 bounded-context 同步后，才可将本 RFC 再次置为 Done。

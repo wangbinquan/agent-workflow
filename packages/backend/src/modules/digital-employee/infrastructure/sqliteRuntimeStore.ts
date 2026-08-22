@@ -90,6 +90,8 @@ function caseRecord(row: typeof employeeCases.$inferSelect): EmployeeCaseRecord 
     typeRef: { typeId: row.typeId, revision: row.typeRevision },
     primaryContextId: row.primaryContextId,
     executionPolicyRevision: row.executionPolicyRevision,
+    ownerUserId: row.ownerUserId,
+    launchOrigin: row.launchOrigin,
     state: row.state,
     terminalKind: row.terminalKind,
     blockReason: row.blockReason,
@@ -302,6 +304,8 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             typeRevision: input.caseRecord.typeRef.revision,
             primaryContextId: input.caseRecord.primaryContextId,
             executionPolicyRevision: input.caseRecord.executionPolicyRevision,
+            ownerUserId: input.caseRecord.ownerUserId,
+            launchOrigin: input.caseRecord.launchOrigin,
             state: input.caseRecord.state,
             terminalKind: input.caseRecord.terminalKind,
             blockReason: input.caseRecord.blockReason,
@@ -429,6 +433,12 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
       if (input.employeeId !== undefined) {
         conditions.push(eq(employeeCases.employeeId, input.employeeId))
       }
+      if (input.ownerUserId !== undefined) {
+        conditions.push(eq(employeeCases.ownerUserId, input.ownerUserId))
+      }
+      if (input.launchOrigin !== undefined) {
+        conditions.push(eq(employeeCases.launchOrigin, input.launchOrigin))
+      }
       if (input.states !== undefined && input.states.length > 0) {
         conditions.push(inArray(employeeCases.state, [...input.states]))
       }
@@ -472,8 +482,17 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         .orderBy(desc(employeeCases.updatedAt), desc(employeeCases.id))
         .limit(input.limit + 1)
         .all()
-      const facetBase =
-        input.employeeId === undefined ? undefined : eq(employeeCases.employeeId, input.employeeId)
+      const facetConditions: SQL[] = []
+      if (input.employeeId !== undefined) {
+        facetConditions.push(eq(employeeCases.employeeId, input.employeeId))
+      }
+      if (input.ownerUserId !== undefined) {
+        facetConditions.push(eq(employeeCases.ownerUserId, input.ownerUserId))
+      }
+      if (input.launchOrigin !== undefined) {
+        facetConditions.push(eq(employeeCases.launchOrigin, input.launchOrigin))
+      }
+      const facetBase = facetConditions.length === 0 ? undefined : and(...facetConditions)
       const countWhere = (stateWhere?: SQL) =>
         Number(
           db

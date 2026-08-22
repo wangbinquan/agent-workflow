@@ -328,6 +328,20 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.queryByTestId('memory-badge')).toBeNull()
   })
 
+  test('a registered digital-employee launch permission opens the same task launcher', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    harness.permissions = ['development-missions:launch']
+    render(
+      <AppShell pathname="/tasks/new">
+        <h1 data-testid="digital-employee-launcher-content">Start digital employee task</h1>
+      </AppShell>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Tasks', exact: true })).toBeTruthy()
+    expect(screen.getByTestId('digital-employee-launcher-content')).toBeTruthy()
+    expect(screen.queryByTestId('memory-badge')).toBeNull()
+  })
+
   test('authority refresh pauses effects and portals while preserving the exact routed draft', () => {
     vi.stubGlobal('matchMedia', undefined)
     let activeRouteEffects = 0
