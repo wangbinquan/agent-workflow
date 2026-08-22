@@ -536,8 +536,8 @@ test('guest browser exposes public resources without mutation or task affordance
     '/digital-employees',
     '/tasks',
     '/scheduled',
-    '/repos',
     '/events',
+    '/repos',
     '/memory',
   ])
 

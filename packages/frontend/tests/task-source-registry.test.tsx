@@ -1,7 +1,7 @@
 import { TASK_SOURCE_REGISTRATIONS } from '@agent-workflow/shared'
 import { cleanup, render, screen } from '@testing-library/react'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { describe, expect, test, vi } from 'vitest'
 
 import { TaskCreationResourcePicker } from '@/components/task-creation/TaskCreationResourcePicker'
@@ -184,20 +184,18 @@ describe('unified task-source frontend registry', () => {
     ]
     const sources = productionFiles.map((file) => ({ file, code: readFileSync(file, 'utf8') }))
     const hostMounts = sources.filter(({ code }) => code.includes('<TaskCreationWizardHost'))
-    expect(hostMounts.map(({ file }) => file.split('/').at(-1))).toEqual([
-      'TaskCreationContractFrame.tsx',
-    ])
+    expect(hostMounts.map(({ file }) => basename(file))).toEqual(['TaskCreationContractFrame.tsx'])
 
     const stepOwners = sources.filter(({ code }) => code.includes('const [step, setStep]'))
     const frontierOwners = sources.filter(({ code }) =>
       code.includes('const [maxVisited, setMaxVisited]'),
     )
-    expect(stepOwners.map(({ file }) => file.split('/').at(-1))).toEqual(['tasks.new.tsx'])
-    expect(frontierOwners.map(({ file }) => file.split('/').at(-1))).toEqual(['tasks.new.tsx'])
+    expect(stepOwners.map(({ file }) => basename(file))).toEqual(['tasks.new.tsx'])
+    expect(frontierOwners.map(({ file }) => basename(file))).toEqual(['tasks.new.tsx'])
 
     const sourceSpecificController =
       /(agent|workflow|workgroup|digitalemployee|employee).*taskcreation(flow|provider)/i
-    expect(productionFiles.map((file) => file.split('/').at(-1))).not.toEqual(
+    expect(productionFiles.map((file) => basename(file))).not.toEqual(
       expect.arrayContaining([expect.stringMatching(sourceSpecificController)]),
     )
   })
