@@ -8,11 +8,6 @@ import {
   withAgentExecutionContractKeys,
   withAgentExecutionContractsAndPorts,
 } from '../src/components/AgentForm'
-import {
-  buildResponsibilityEdgePath,
-  buildResponsibilityGraphLayout,
-} from '../src/components/digital-employees/ResponsibilityGraph'
-import type { EmployeeTypePackage } from '../src/components/digital-employees/types'
 import { executionContractProgramStarter } from '../src/components/execution-contracts/ExecutionContractGuidePanel'
 
 const read = (file: string): string =>
@@ -21,16 +16,19 @@ const read = (file: string): string =>
 describe('RFC-310 Digital Employee OS information architecture', () => {
   test('tool configuration is anchored to a selected work item on the fixed graph', () => {
     const typePage = read('routes/digital-employees.$typeRef.tsx')
-    const graph = read('components/digital-employees/ResponsibilityGraph.tsx')
+    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
 
     expect(typePage).toContain("label: zh ? '工具箱' : 'Toolbox'")
     expect(typePage).toContain('<div className="employee-toolbox-workspace">')
-    expect(typePage).toContain('<ToolboxResponsibilityMap')
+    expect(typePage).toContain('<ResponsibilitySwimlaneMap')
     expect(typePage).not.toContain('<ResponsibilityGraph')
     expect(typePage).toContain('<ToolboxPanel')
     expect(typePage).toContain('item={selectedItem}')
-    expect(typePage).toContain('typeName={localized(type.displayName, language)}')
-    expect(typePage).toContain('数字员工 / ${props.typeName} / ${localized(props.item.label')
+    expect(typePage).toContain('data-testid="employee-toolbox-duty-dialog"')
+    expect(typePage).toContain('open={selectedItem !== null}')
+    expect(typePage).toContain("search: { view: 'toolbox' }")
+    expect(typePage).toContain('`Configure duty: ${localized(selectedItem.label, language)}`')
+    expect(typePage).not.toContain('数字员工 / ${props.typeName} / ${localized(props.item.label')
     expect(typePage).toContain("zh ? '增加工具' : 'Add tool'")
     expect(typePage).toContain('props.contract?.allowedToolKinds ?? []')
     expect(typePage).not.toContain("? ['agent', 'workflow', 'program']")
@@ -39,16 +37,13 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain("search: { view: 'toolbox', workItem }")
     expect(typePage).not.toContain('stageId')
     expect(graph).toContain('item.nextWorkItemRefs')
-    expect(graph).toContain('employee-graph__edge--loop')
-    expect(graph).not.toContain('employee-graph__dispatch-trunk')
-    expect(graph).not.toContain('employee-graph__dispatch-branch')
-    expect(graph).toContain('employee-graph-lane-label')
+    expect(graph).toContain('employee-toolbox-region__lanes')
+    expect(graph).toContain('employee-toolbox-lane')
     expect(graph).toContain("'可选能力'")
-    expect(graph).toContain('data-from={source.item.workItemRef}')
-    expect(graph).toContain("'可配工具'")
-    expect(graph).toContain("'平台内置'")
-    expect(graph).toContain('employee-graph-node--related')
-    expect(graph).toContain('employee-graph-node--dimmed')
+    expect(graph).toContain("? '工具'")
+    expect(graph).toContain("? '平台'")
+    expect(graph).toContain('data-dispatch-route-key={node.key}')
+    expect(graph).toContain('employee-toolbox-card--active')
     expect(typePage).toContain('employee-runtime-dispatch')
     expect(typePage).toContain('增加错误类型')
     expect(typePage).toContain('未配置：这名数字员工不会启用该泳道，也不会订阅对应事件。')
@@ -59,107 +54,26 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).not.toContain('onConnect')
 
     const styles = read('styles.css')
-    expect(styles).not.toMatch(/\.employee-graph-node::(?:before|after)/)
+    expect(styles).not.toContain('.employee-graph')
   })
 
-  test('responsibility graph separates the event hub and parallel reaction duties', () => {
-    const text = (value: string) => ({ 'zh-CN': value, 'en-US': value })
-    const item = (
-      workItemRef: string,
-      responsibilityLaneId: string,
-      order: number,
-      nextWorkItemRefs: string[],
-    ) => ({
-      workItemRef,
-      regionId: 'care',
-      responsibilityLaneId,
-      order,
-      label: text(workItemRef),
-      description: text(workItemRef),
-      workContractRef: { contractId: workItemRef, version: 1 },
-      materialSummary: text(workItemRef),
-      completionStandard: text(workItemRef),
-      nodeKind: 'system' as const,
-      collaborationContractId: null,
-      toolRoleGroups: [],
-      nextWorkItemRefs,
-    })
-    const type = {
-      authoringManifest: {
-        lifecycleRegions: [
-          {
-            regionId: 'care',
-            label: text('MR 看护与修绿'),
-            description: text('按事件响应'),
-            order: 0,
-            responsibilityLanes: [
-              {
-                laneId: 'attention',
-                label: text('MR 事件入口'),
-                description: text('事件分发'),
-                order: 0,
-                kind: 'spine',
-                optional: false,
-              },
-              {
-                laneId: 'review',
-                label: text('检视意见'),
-                description: text('检视闭环'),
-                order: 10,
-                kind: 'branch',
-                optional: true,
-              },
-              {
-                laneId: 'pipeline',
-                label: text('流水线门禁'),
-                description: text('流水线闭环'),
-                order: 20,
-                kind: 'branch',
-                optional: true,
-              },
-            ],
-          },
-        ],
-        workItems: [
-          item('observe', 'attention', 10, ['review-classify', 'pipeline-collect']),
-          item('review-classify', 'review', 20, ['review-repair']),
-          item('review-repair', 'review', 30, ['observe']),
-          item('pipeline-collect', 'pipeline', 40, ['pipeline-classify']),
-          item('pipeline-classify', 'pipeline', 50, ['observe']),
-        ],
-      },
-    } as unknown as EmployeeTypePackage
+  test('the shared swimlane map keeps parallel duties separate and expands typed repairs', () => {
+    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const styles = read('styles.css')
 
-    const layout = buildResponsibilityGraphLayout(type)
-    const byRef = new Map(layout.nodes.map((node) => [node.item.workItemRef, node]))
-    const observe = byRef.get('observe')!
-    const reviewClassify = byRef.get('review-classify')!
-    const reviewRepair = byRef.get('review-repair')!
-    const pipelineCollect = byRef.get('pipeline-collect')!
-
-    expect(layout.bands[0]!.lanes.map((lane) => lane.id)).toEqual([
-      'attention',
-      'review',
-      'pipeline',
-    ])
-    expect(observe.x).toBeGreaterThan(reviewClassify.x)
-    expect(reviewClassify.y).toBe(reviewRepair.y)
-    expect(reviewClassify.x).toBeLessThan(reviewRepair.x)
-    expect(pipelineCollect.y).toBeGreaterThan(reviewClassify.y)
-
-    const forward = buildResponsibilityEdgePath(reviewClassify, reviewRepair, layout.width, false)
-    expect(forward).toBe(`M ${reviewClassify.x + 160} ${reviewClassify.y + 40} H ${reviewRepair.x}`)
-    const crossLane = buildResponsibilityEdgePath(observe, reviewClassify, layout.width, false)
-    expect(crossLane).toMatch(
-      new RegExp(
-        `^M ${observe.x + 160} ${observe.y + 40} H [0-9.]+ V [0-9.]+ H [0-9.]+ V ${reviewClassify.y + 40} H ${reviewClassify.x}$`,
-      ),
+    expect(graph).toContain('region.responsibilityLanes')
+    expect(graph).toContain('.sort(')
+    expect(graph).toContain('item.responsibilityLaneId === lane.laneId')
+    expect(graph).toContain('laneDispatchNodes')
+    expect(graph).toContain('replacedDestinationRefs')
+    expect(graph).toContain('P{node.priority}')
+    expect(graph).toContain('props.cardState?.(item)')
+    expect(styles).toContain(
+      'grid-template-columns: repeat(var(--employee-lane-columns, 1), minmax(0, 168px))',
     )
-    const loop = buildResponsibilityEdgePath(reviewRepair, observe, layout.width, true)
-    expect(loop).toMatch(
-      new RegExp(
-        `^M ${reviewRepair.x + 160} ${reviewRepair.y + 40} H [0-9.]+ V [0-9.]+ H [0-9.]+ V ${observe.y + 40} H ${observe.x}$`,
-      ),
+    expect(styles).toContain('justify-content: start')
+    expect(styles).not.toContain(
+      '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
     )
   })
 
@@ -265,8 +179,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(wizard).toContain("value: 'digital-employee'")
     expect(wizard).toContain("to: '/tasks/employee-cases/new'")
     expect(detail).toContain("path: '/tasks/employee-cases/$caseId'")
-    expect(detail).toContain('<ResponsibilityGraph')
-    expect(detail).toContain('mode="runtime"')
+    expect(detail).toContain('<ResponsibilitySwimlaneMap')
+    expect(detail).toContain('dispatchNodes={runtimeDispatchNodes}')
+    expect(detail).toContain('cardState={runtimeCardState}')
     expect(detail).toContain("zh ? '事件队列' : 'Event queue'")
     expect(detail).toContain("zh ? '员工协作' : 'Employee collaboration'")
     expect(detail).toContain('/api/employee-cases/${encodeURIComponent(caseId)}/resume')
@@ -280,10 +195,15 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(detail).toContain('下一步：等待关注对象发生变化')
     expect(detail).toContain('businessStateLabel(binding.state, zh)')
     expect(detail).toContain("? '工作事件'")
+    expect(detail).toContain("zh ? '员工工作时间线' : 'Employee work timeline'")
+    expect(detail).toContain('data-testid="employee-work-timeline"')
+    expect(detail).toContain('inputContextRefsJson')
+    expect(detail).toContain('outputJson')
   })
 
   test('employee setup keeps the next action on the same page and supports later edits', () => {
     const typePage = read('routes/digital-employees.$typeRef.tsx')
+    const map = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
     const styles = read('styles.css')
 
     expect(typePage).toContain('下一步：给必需工作项增加工具')
@@ -292,12 +212,56 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain('保存并发布新版本')
     expect(typePage).toContain("search={{ view: 'jobs' }}")
     expect(typePage).toContain('job-template-detail-editor')
+    expect(typePage).toContain('data-testid="employee-job-identity-dialog"')
+    expect(typePage).toContain('data-testid="employee-job-duty-dialog"')
+    expect(typePage).toContain("'创建并配置职责'")
+    expect(typePage).toContain('const createDraft = useMutation')
+    expect(typePage).toContain('defaultToolBindings: []')
+    expect(typePage).toContain('setEditingJob(draft)')
+    expect(typePage).toContain("{zh ? '基本信息' : 'Basic information'}")
+    expect(typePage).not.toContain('employee-job-editor__identity')
+    expect(styles).not.toContain('.employee-job-editor__identity')
     expect(styles).toContain('.employee-toolbox-card--configured')
     expect(styles).toContain('.employee-toolbox-card--missing')
+    expect(styles).toContain('.employee-toolbox-card--fan-out')
+    expect(styles).toContain('.employee-toolbox-card__stack-layer--middle')
+    expect(styles).toContain('.employee-toolbox-card__stack-layer--back')
+    expect(map).toContain("item.inputMultiplicity === 'collection'")
+    expect(map).toContain('employee-toolbox-card--fan-out')
+    expect(map).not.toContain('repair-feedback')
+    expect(map).toContain('employee-toolbox-region--${lanes.length > 1')
+    expect(map).toContain('employee-toolbox-lane__axis')
+    expect(map).toContain("? '主泳道'")
+    expect(map).toContain("? '职责泳道'")
+    expect(styles).toContain(
+      'grid-template-columns: var(--employee-lane-label-width) 16px minmax(0, 1fr)',
+    )
+    expect(styles).not.toContain(
+      '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
+    )
+    expect(styles).toContain('.employee-toolbox-card + .employee-toolbox-card::before')
+    expect(styles).not.toContain('minmax(min(100%, 210px), 1fr)')
+    expect(styles).toContain('minmax(0, 168px)')
+    const dutyNameRule = styles.match(/\.employee-toolbox-card strong \{[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(dutyNameRule).toContain('white-space: normal')
+    expect(dutyNameRule).toContain('overflow: visible')
+    expect(dutyNameRule).not.toContain('text-overflow: ellipsis')
+    expect(styles).toContain(
+      '.job-template-detail-editor > header > .employee-summary-card__actions',
+    )
+    expect(styles).toContain('.employee-duty-dialog .execution-contract-guide > *')
+    expect(styles).toContain(
+      'grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.2fr)',
+    )
     expect(typePage).toContain('requiredMissingWorkItemRefs')
     expect(typePage).toContain("value: 'task'")
     expect(typePage).toContain('GROUP_OPTION_PREFIX')
     expect(typePage).toContain('任务启动时指定仓库')
+    expect(typePage).toContain("queryKey: ['digital-employee-outcomes', 'runtime']")
+    expect(typePage).toContain("queryKey: ['digital-employee-outcomes', 'legacy']")
+    expect(typePage).toContain('data-testid={`digital-employee-outcomes-${employee.id}`}')
+    expect(typePage).toContain("zh ? '已合入' : 'Merged'")
+    expect(typePage).toContain("search={{ category: 'digital-employee' }}")
   })
 
   test('Event Center is global and retry settings have one Limits authority', () => {

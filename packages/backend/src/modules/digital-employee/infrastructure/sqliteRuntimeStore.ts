@@ -249,6 +249,7 @@ function channelResultRecord(
 }
 
 export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
+  const maxEmployeeOutcomeGroups = 50_000
   return {
     createCase(input) {
       db.transaction((tx) => {
@@ -398,6 +399,29 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         .orderBy(desc(employeeCases.updatedAt), desc(employeeCases.id))
         .all()
         .map(caseRecord)
+    },
+
+    listTerminalOutcomeGroups() {
+      const rows = db
+        .select({
+          employeeId: employeeCases.employeeId,
+          terminalKind: employeeCases.terminalKind,
+          count: sql<number>`count(*)`,
+        })
+        .from(employeeCases)
+        .where(eq(employeeCases.state, 'terminal'))
+        .groupBy(employeeCases.employeeId, employeeCases.terminalKind)
+        .orderBy(asc(employeeCases.employeeId), asc(employeeCases.terminalKind))
+        .limit(maxEmployeeOutcomeGroups + 1)
+        .all()
+      if (rows.length > maxEmployeeOutcomeGroups) {
+        throw new Error('employee-outcome-group-limit-exceeded')
+      }
+      return rows.map((row) => ({
+        employeeId: row.employeeId,
+        terminalKind: row.terminalKind ?? 'completed',
+        count: Number(row.count),
+      }))
     },
 
     listCasesPage(input) {

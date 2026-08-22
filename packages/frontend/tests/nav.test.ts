@@ -30,7 +30,6 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       '/intent',
       '/digital-employees',
       '/tasks',
-      '/outcomes',
       '/scheduled',
       '/repos',
       '/events',
@@ -49,7 +48,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(navPermissionForPath('/digital-employees/development%40v1')).toBe(
       'digital-employees:read',
     )
-    expect(navPermissionForPath('/outcomes')).toBe('development-missions:read')
+    expect(navPermissionForPath('/outcomes')).toBeNull()
     expect(navPermissionForPath('/events')).toBe('event-sources:read')
     expect(navPermissionForPath('/')).toBeNull()
     expect(navPermissionForPath('/account')).toBeNull()
@@ -68,7 +67,6 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       ['/intent', 'workflow'],
       ['/digital-employees', 'agent'],
       ['/tasks', 'task'],
-      ['/outcomes', 'task'],
       ['/scheduled', 'schedule'],
       ['/repos', 'repo'],
       ['/events', 'webhook'],
@@ -186,7 +184,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     })
   })
 
-  test('digital employee construction stays separate from runtime and outcomes', () => {
+  test('digital employee cards own outcomes while retired URLs have no navigation item', () => {
     expect(resolveActiveNav('/digital-employees')).toEqual({
       onHome: false,
       onSettings: false,
@@ -202,8 +200,8 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(resolveActiveNav('/outcomes')).toEqual({
       onHome: false,
       onSettings: false,
-      activeGroup: 'tasks',
-      activeItemTo: '/outcomes',
+      activeGroup: null,
+      activeItemTo: null,
     })
   })
 

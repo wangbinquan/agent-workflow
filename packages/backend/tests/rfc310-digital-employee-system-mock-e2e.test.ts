@@ -1191,6 +1191,21 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         state: string
         targetEmployeeRef: { id: string; revision: number }
       }>
+      rounds: Array<{
+        id: string
+        workItemRef: string
+        state: string
+        executionRef: string | null
+        toolRef: { id: string; revision: number } | null
+        workContractRef: { contractId: string; version: number }
+        inputContextRefsJson: string
+        planJson: string
+        outputJson: string | null
+        attemptOrdinal: number
+        createdAt: number
+        updatedAt: number
+        settledAt: number | null
+      }>
     }
     const parentMrHead = mrHeads.get('repo-system-mock')!
     const mr = projection.contexts.find(
@@ -1260,6 +1275,21 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     await driveUntilIdle()
     projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
     expect(projection.case).toMatchObject({ state: 'waiting', currentWorkItemRef: null })
+    const delegatedRound = [...projection.rounds]
+      .reverse()
+      .find((round) => round.workItemRef === 'delegate')
+    expect(delegatedRound).toBeDefined()
+    expect(JSON.parse(delegatedRound!.planJson)).toMatchObject({
+      toolSlotRef: 'collaboration',
+      implementationKind: 'collaboration',
+    })
+    expect(Array.isArray(JSON.parse(delegatedRound!.inputContextRefsJson))).toBe(true)
+    expect(delegatedRound).toMatchObject({
+      state: 'completed',
+      attemptOrdinal: 0,
+      workContractRef: { version: 1 },
+    })
+    expect(typeof delegatedRound!.settledAt).toBe('number')
     expect(projection.channels).toEqual([
       expect.objectContaining({
         state: 'open',

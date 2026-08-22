@@ -623,13 +623,8 @@ export const ROUTE_UX_INVENTORY = {
   },
   '@/routes/code.outcomes#Route': {
     surface: '/outcomes',
-    classification: 'standard',
-    owners: [rendered('code-page-inline.test.tsx')],
-    header: {
-      mode: 'direct',
-      sourceFile: 'routes/code.outcomes.tsx',
-      primitive: 'PageHeader',
-    },
+    classification: 'redirect',
+    owners: [source('code-page-inline.test.tsx')],
   },
   '@/routes/code.outcomes#LegacyRoute': {
     surface: '/code/outcomes',

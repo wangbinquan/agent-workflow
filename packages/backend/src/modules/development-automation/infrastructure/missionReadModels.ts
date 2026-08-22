@@ -4,7 +4,7 @@
 // 详情附 source/upload/decision 摘要，trace 回 canonical guard/rule trace。
 // 不返回 host path/nonce/secret/raw 正文（§12.4）。
 
-import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 
 import {
   DIGITAL_EMPLOYEE_MISSION_STATUSES,
@@ -82,6 +82,57 @@ export function listMissionSummaries(db: DbClient): MissionSummaryView[] {
     .orderBy(desc(developmentMissions.createdAt))
     .all()
     .map(summaryOf)
+}
+
+const TERMINAL_MISSION_STATUSES = [
+  'merged',
+  'completed-no-change',
+  'closed-unmerged',
+  'canceled',
+  'failed',
+] as const
+const MAX_EMPLOYEE_OUTCOME_GROUPS = 50_000
+
+/**
+ * Legacy-drain outcome projection for employee cards. This bounded context
+ * emits raw status groups; the UI owns the stable cross-generation buckets.
+ */
+export function listMissionTerminalOutcomeGroups(db: DbClient): readonly {
+  readonly employeeId: string
+  readonly terminalKind: string
+  readonly count: number
+}[] {
+  const rows = db
+    .select({
+      employeeId: developmentMissions.employeeId,
+      terminalKind: developmentMissions.status,
+      count: sql<number>`count(*)`,
+    })
+    .from(developmentMissions)
+    .where(
+      and(
+        sql`${developmentMissions.employeeId} is not null`,
+        inArray(developmentMissions.status, [...TERMINAL_MISSION_STATUSES]),
+      ),
+    )
+    .groupBy(developmentMissions.status, developmentMissions.employeeId)
+    .orderBy(asc(developmentMissions.status), asc(developmentMissions.employeeId))
+    .limit(MAX_EMPLOYEE_OUTCOME_GROUPS + 1)
+    .all()
+  if (rows.length > MAX_EMPLOYEE_OUTCOME_GROUPS) {
+    throw new Error('employee-outcome-group-limit-exceeded')
+  }
+  return rows.flatMap((row) =>
+    row.employeeId === null
+      ? []
+      : [
+          {
+            employeeId: row.employeeId,
+            terminalKind: row.terminalKind,
+            count: Number(row.count),
+          },
+        ],
+  )
 }
 
 /** 分页游标:与 /repos、/tasks 同款——**行值比较**的 keyset,不是 offset。 */

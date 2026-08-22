@@ -77,7 +77,7 @@ describe('RFC-310 PR-13 server-owned journey projection', () => {
     ).toMatchObject({ key: 'reviewAndMerge', owner: 'committer' })
     expect(
       projectMissionJourney({ ...base, status: 'merged', hasQuestions: false }).next,
-    ).toMatchObject({ key: 'viewOutcome', kind: 'complete' })
+    ).toMatchObject({ key: 'viewOutcome', kind: 'complete', href: '/digital-employees' })
   })
 
   test('projects child and approval waits without occupying an Agent action', () => {

@@ -56,7 +56,7 @@ Workgroup, and Digital Employee into one task-creation card group, then locks th
 Employee in the same four-step shell. Three current `/digital-employees`
 scenes lock the employee-type catalog, the complete fixed responsibility card map plus selected node
 toolbox, and the same-context Add Tool dialog. Seven retained read/compatibility scenes cover the legacy employee
-list populated and empty, executor library, policy list, assignment list, run outcomes, and employee
+list populated and empty, executor library, policy list, assignment list, employee-card outcomes, and employee
 detail. Six retained list/history scenes take their data from `e2e/code-surface-fixtures.ts` (route
 interception with fixed JSON) because the real rows carry ULIDs and relative timestamps that no pixel
 baseline can survive. The employee detail scene deliberately does NOT: its projection is a

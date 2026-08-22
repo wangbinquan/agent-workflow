@@ -313,7 +313,7 @@ export function projectMissionJourney(input: MissionJourneyInput): JourneyProjec
       kind: 'complete',
       detailKey: 'terminalCompleteDetail',
       owner: 'platform',
-      href: '/outcomes',
+      href: '/digital-employees',
       command: null,
       available: true,
       unavailableReason: null,

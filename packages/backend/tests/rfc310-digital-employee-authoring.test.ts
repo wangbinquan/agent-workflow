@@ -158,6 +158,15 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       toolRoleGroups: [],
       nextWorkItemRefs: ['acknowledge-feedback'],
     })
+    expect(workItems.get('repair-feedback')).toMatchObject({
+      nodeKind: 'business-tool',
+      inputMultiplicity: 'collection',
+    })
+    expect(
+      [...workItems.values()]
+        .filter((item) => item.inputMultiplicity === 'collection')
+        .map((item) => item.workItemRef),
+    ).toEqual(['repair-feedback'])
     expect(workItems.get('delegate')).toMatchObject({
       responsibilityLaneId: 'care-collaboration',
       nextWorkItemRefs: ['collect-pipeline'],
@@ -706,6 +715,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           agentRef: { id: 'agent-pipeline-generic', revision: 1 },
         },
         connectionRef: null,
+        acceptedDispatchRoutes: [{ classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] }],
       },
     })
     const pipelineRepairRef = await module.commands.publishTool({
@@ -729,6 +739,57 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       },
     ]
+
+    const compileOnlyTool = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      actorUserId: 'author-1',
+      body: {
+        displayName: '只修复编译错误',
+        description: '只能消费 compile 类型的问题集合',
+        roleRef: 'repairer',
+        implementation: {
+          kind: 'agent',
+          agentRef: { id: 'agent-pipeline-compile', revision: 1 },
+        },
+        connectionRef: null,
+        acceptedDispatchRoutes: [
+          { classifierWorkItemRef: 'classify-pipeline', routeRefs: ['compile'] },
+        ],
+      },
+    })
+    const compileOnlyRef = await module.commands.publishTool({
+      typeRef,
+      workItemRef: 'repair-pipeline',
+      toolId: compileOnlyTool.id,
+      actorUserId: 'author-1',
+    })
+    expect(() =>
+      module.commands.createJobTemplate({
+        typeRef,
+        actorUserId: 'author-1',
+        body: {
+          name: '错误绑定示例',
+          description: 'environment 类型不能选择只支持 compile 的工具。',
+          defaultToolBindings: bindings,
+          orderedDispatchConfigurations: [
+            {
+              classifierWorkItemRef: 'classify-pipeline',
+              routes: [
+                {
+                  routeRef: 'environment',
+                  displayName: '环境错误',
+                  description: '用于验证后端确定性能力过滤',
+                  destinationWorkItemRef: 'repair-pipeline',
+                  registrationRef: compileOnlyRef,
+                  fallback: true,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toThrow('does not accept classify-pipeline/environment')
 
     const template = module.commands.createJobTemplate({
       typeRef,

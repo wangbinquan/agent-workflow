@@ -43,6 +43,7 @@ import {
   listMissionEffects,
   listMissionSummaries,
   listMissionSummariesPage,
+  listMissionTerminalOutcomeGroups,
   type MissionPageCursor,
 } from '@/modules/development-automation/infrastructure/missionReadModels'
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
@@ -426,8 +427,21 @@ export function mountDevelopmentMissionRoutes(
       return c.json({
         items: page.items,
         nextCursor: page.nextCursor === null ? null : encodeMissionCursor(page.nextCursor),
+        counts: page.counts,
       })
     },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/code/missions/outcome-summaries',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'List terminal legacy Mission outcome groups for every digital employee',
+    },
+    (c) => c.json({ items: listMissionTerminalOutcomeGroups(deps.db) }),
   )
 
   registerRoute(

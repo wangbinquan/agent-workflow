@@ -57,7 +57,10 @@ import {
   users,
   workflows,
 } from '../src/db/schema'
-import { listMissionSummariesPage } from '../src/modules/development-automation/infrastructure/missionReadModels'
+import {
+  listMissionSummariesPage,
+  listMissionTerminalOutcomeGroups,
+} from '../src/modules/development-automation/infrastructure/missionReadModels'
 import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
@@ -67,6 +70,13 @@ import { recordStatements, type RecordedStatement } from './helpers/statementRec
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const T0 = 1_700_000_000_000
+const LEGACY_TERMINAL_STATUSES = [
+  'merged',
+  'completed-no-change',
+  'closed-unmerged',
+  'canceled',
+  'failed',
+] as const
 
 /**
  * 会无界增长的表。列表页碰它们必须走索引；扫这些表 = 生产上随数据量线性变慢。
@@ -153,12 +163,14 @@ async function seed(db: DbClient, n: number): Promise<void> {
     await db.insert(developmentMissions).values({
       id: `m${String(i).padStart(4, '0')}`,
       revision: 1,
-      status: 'working',
+      status: LEGACY_TERMINAL_STATUSES[i % LEGACY_TERMINAL_STATUSES.length]!,
       automationMode: 'auto',
       transitionFence: 'none',
       repositoryId: `repo${String(i).padStart(4, '0')}`,
       sourceKind: 'direct-input',
       deliveryKind: 'merge-request',
+      employeeId: `employee-${i % 10}`,
+      terminalAt: T0 + i * 1_000,
       createdAt: T0 + i * 1_000,
       updatedAt: T0 + i * 1_000,
     })
@@ -219,6 +231,10 @@ const GUARDED: GuardedPath[] = [
   {
     name: '/api/code/missions — keyset 首页',
     run: async (db) => listMissionSummariesPage(db, { limit: 20 }),
+  },
+  {
+    name: '/api/code/missions/outcome-summaries — 员工终态分组',
+    run: async (db) => listMissionTerminalOutcomeGroups(db),
   },
   {
     name: '/api/overview — 计数面板',

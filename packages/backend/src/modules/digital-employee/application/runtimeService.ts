@@ -516,6 +516,10 @@ export class DigitalEmployeeRuntimeService {
     return this.#store.listCases(employeeId, state)
   }
 
+  listTerminalOutcomeGroups() {
+    return this.#store.listTerminalOutcomeGroups()
+  }
+
   listCasePage(input: {
     readonly employeeId?: string
     readonly states?: readonly EmployeeCaseRecord['state'][]
@@ -1715,6 +1719,7 @@ export class DigitalEmployeeRuntimeService {
       }
       const defaultSlotRef =
         rule?.slotRef ??
+        (item.nodeKind === 'collaboration' ? 'collaboration' : undefined) ??
         item.toolRoleGroups.flatMap((group) => group.bindingSlots).find((slot) => slot.required)
           ?.slotRef ??
         item.toolRoleGroups.flatMap((group) => group.bindingSlots)[0]?.slotRef ??

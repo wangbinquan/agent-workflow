@@ -204,6 +204,7 @@ export interface DigitalEmployeeModule {
     readonly queries: {
       getCase(caseId: string): EmployeeCaseProjectionDocument
       listCases(employeeId?: string, state?: string): string
+      listTerminalOutcomeGroups(): string
       listCasePage(input: Parameters<DigitalEmployeeRuntimeService['listCasePage']>[0]): string
       findByExternalSubject(
         subjectType: string,
@@ -571,6 +572,8 @@ export function composeDigitalEmployee(
               getCase: runtimeDocument,
               listCases: (employeeId, state) =>
                 JSON.stringify(runtimeService.listCases(employeeId, state)),
+              listTerminalOutcomeGroups: () =>
+                JSON.stringify(runtimeService.listTerminalOutcomeGroups()),
               listCasePage: (input) => JSON.stringify(runtimeService.listCasePage(input)),
               findByExternalSubject: (subjectType, subjectRef) => {
                 const record = runtimeService.findCaseByExternalSubject(subjectType, subjectRef)

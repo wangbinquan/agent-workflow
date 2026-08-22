@@ -1090,29 +1090,50 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
   test('/digital-employees fixed responsibility toolbox (light)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
-    // Fit the fully expanded fixed map inside the app shell's scroll viewport.
-    // Element screenshots cannot recover pixels clipped by that ancestor.
-    await page.setViewportSize({ width: 1280, height: 2400 })
-    await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
-    )
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%405?view=toolbox`)
     const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
     await expect(responsibilityMap).toBeVisible()
     await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
-    const toolbox = page.getByTestId('employee-node-toolbox')
-    await expect(toolbox).toBeVisible()
+    const mapBox = await responsibilityMap.boundingBox()
+    expect(mapBox).not.toBeNull()
+    expect((mapBox?.y ?? 0) + (mapBox?.height ?? 0)).toBeLessThanOrEqual(900)
+    expect(
+      await responsibilityMap
+        .locator('.employee-toolbox-card strong')
+        .evaluateAll((labels) =>
+          labels.flatMap((label) =>
+            label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1
+              ? [label.textContent]
+              : [],
+          ),
+        ),
+    ).toEqual([])
+    const cardWidths = await responsibilityMap
+      .locator('.employee-toolbox-card')
+      .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
+    expect(Math.max(...cardWidths) - Math.min(...cardWidths)).toBeLessThanOrEqual(0.5)
     await waitForStableAuthenticatedShell(page)
     await expect(responsibilityMap).toHaveScreenshot(
       'digital-employee-responsibility-map.png',
       COMPONENT_SNAPSHOT_OPTS,
     )
-    await expect(toolbox).toHaveScreenshot('digital-employee-node-toolbox.png', {
-      ...COMPONENT_SNAPSHOT_OPTS,
-      // Hosted Ubuntu alternates between two byte-stable font rasters for
-      // the two long contract summaries: 2,043 of 319,200 pixels (0.640%).
-      // Keep this component-only allowance barely above that known jitter.
-      maxDiffPixelRatio: 0.007,
-    })
+
+    await responsibilityMap.locator('[data-work-item-ref="analyze-implement"]').click()
+    const dutyDialog = page.getByTestId('employee-toolbox-duty-dialog')
+    await expect(dutyDialog).toBeVisible()
+    const toolbox = page.getByTestId('employee-node-toolbox')
+    await expect(toolbox).toBeVisible()
+    await expect(dutyDialog.locator('.dialog__panel')).toHaveScreenshot(
+      'digital-employee-node-toolbox.png',
+      {
+        ...COMPONENT_SNAPSHOT_OPTS,
+        // Hosted Ubuntu alternates between two byte-stable font rasters for
+        // the two long contract summaries: 2,043 of 319,200 pixels (0.640%).
+        // Keep this component-only allowance barely above that known jitter.
+        maxDiffPixelRatio: 0.007,
+      },
+    )
   })
 
   test('/digital-employees add work-item tool dialog (light)', async ({ page }) => {
@@ -1192,22 +1213,133 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('code-assignments.png', SNAPSHOT_OPTS)
   })
 
-  test('/outcomes run outcomes (populated, light)', async ({ page }) => {
+  test('/digital-employees employee cards with run outcomes (light)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
-    await routeCodeSurfaceFixtures(page)
-    await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/outcomes`)
-    await expect(page.getByTestId('code-outcome-history')).toBeVisible()
-    // RFC-311 的两个新形状都必须真的在图里：服务端 counts（22 ≠ 已加载的 6 行）
-    // 与 keyset 翻页的「加载更多」。
-    await expect(page.getByRole('button', { name: 'Load more' })).toBeVisible()
-    await expect(page.getByTestId('capability-outcomes')).toBeVisible()
-    await waitForStableAuthenticatedShell(page)
-    await expect(page).toHaveScreenshot('code-outcomes.png', {
-      ...SNAPSHOT_OPTS,
-      // 同 policies：完成时间走 `toLocaleString()`，随机器时区变化。
-      mask: [page.locator('[data-testid="code-outcome-history"] tbody td:nth-child(5)')],
+    await page.route('**/api/digital-employee-types/*/employees', async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 'visual-java-employee',
+              name: 'Java delivery employee',
+              typeRef: { typeId: 'development', revision: 5 },
+              draft: {
+                displayName: 'Java delivery employee',
+                enabled: true,
+                jobTemplateRef: { id: 'visual-java-job', revision: 3 },
+                workScope: { kind: 'repository', repositoryId: 'visual-repo' },
+                toolOverrides: [],
+                collaborationOverrides: [],
+              },
+              publishedRevision: 4,
+              publishedWorkScope: { kind: 'repository', repositoryId: 'visual-repo' },
+              published: {
+                displayName: 'Java delivery employee',
+                enabled: true,
+                workScopeSummary: 'Repository · team/orders-service',
+                exactToolBindings: [],
+                exactCollaborationBindings: [],
+                exactOrderedDispatchConfigurations: [],
+                enabledWorkItemRefs: [],
+              },
+            },
+            {
+              id: 'visual-cpp-employee',
+              name: 'C++ pipeline repair employee',
+              typeRef: { typeId: 'development', revision: 5 },
+              draft: {
+                displayName: 'C++ pipeline repair employee',
+                enabled: false,
+                jobTemplateRef: { id: 'visual-cpp-job', revision: 2 },
+                workScope: { kind: 'repository-group', repositoryGroupId: 'firmware' },
+                toolOverrides: [],
+                collaborationOverrides: [],
+              },
+              publishedRevision: 2,
+              publishedWorkScope: {
+                kind: 'repository-group',
+                repositoryGroupId: 'firmware',
+              },
+              published: {
+                displayName: 'C++ pipeline repair employee',
+                enabled: false,
+                workScopeSummary: 'Repository group · Firmware repositories',
+                exactToolBindings: [],
+                exactCollaborationBindings: [],
+                exactOrderedDispatchConfigurations: [],
+                enabledWorkItemRefs: [],
+              },
+            },
+          ],
+        },
+      })
     })
+    await page.route('**/api/digital-employee-types/*/job-templates', async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 'visual-java-job',
+              name: 'Java service delivery',
+              draft: {
+                description: '',
+                defaultToolBindings: [],
+                defaultCollaborationBindings: [],
+                orderedDispatchConfigurations: [],
+              },
+              publishedRevision: 3,
+            },
+            {
+              id: 'visual-cpp-job',
+              name: 'C++ repair specialist',
+              draft: {
+                description: '',
+                defaultToolBindings: [],
+                defaultCollaborationBindings: [],
+                orderedDispatchConfigurations: [],
+              },
+              publishedRevision: 2,
+            },
+          ],
+        },
+      })
+    })
+    await page.route('**/api/digital-employees/outcome-summaries', async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            { employeeId: 'visual-java-employee', terminalKind: 'merged', count: 18 },
+            { employeeId: 'visual-java-employee', terminalKind: 'closed', count: 1 },
+            { employeeId: 'visual-cpp-employee', terminalKind: 'execution-failed', count: 2 },
+          ],
+        },
+      })
+    })
+    await page.route('**/api/code/missions/outcome-summaries', async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              employeeId: 'visual-java-employee',
+              terminalKind: 'completed-no-change',
+              count: 3,
+            },
+            { employeeId: 'visual-cpp-employee', terminalKind: 'merged', count: 7 },
+            { employeeId: 'visual-cpp-employee', terminalKind: 'canceled', count: 1 },
+          ],
+        },
+      })
+    })
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%405?view=employees`)
+    await expect(page.getByTestId('digital-employee-outcomes-visual-java-employee')).toContainText(
+      '18',
+    )
+    await expect(page.getByTestId('digital-employee-outcomes-visual-cpp-employee')).toContainText(
+      '7',
+    )
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('digital-employee-cards.png', SNAPSHOT_OPTS)
   })
 
   // 员工详情页**不走 route 夹具**：它的 playbook 投影（步骤、执行器、违规项、

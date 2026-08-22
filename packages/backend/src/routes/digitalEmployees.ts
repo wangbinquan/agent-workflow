@@ -585,6 +585,24 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
     app,
     {
       method: 'GET',
+      path: '/api/digital-employees/outcome-summaries',
+      permissions: ['digital-employees:read'],
+      tokenAccess: 'allow',
+      summary: 'List terminal EmployeeCase outcome groups for every digital employee',
+    },
+    (c) =>
+      c.json({
+        items:
+          module.runtime === null
+            ? []
+            : (JSON.parse(module.runtime.queries.listTerminalOutcomeGroups()) as unknown[]),
+      }),
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
       path: '/api/digital-employees/:id',
       permissions: ['digital-employees:read'],
       tokenAccess: 'allow',

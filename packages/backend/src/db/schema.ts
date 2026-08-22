@@ -5418,6 +5418,11 @@ export const employeeCases = sqliteTable(
       t.state,
       t.updatedAt,
     ),
+    stateEmployeeTerminalIdx: index('idx_employee_cases_state_employee_terminal').on(
+      t.state,
+      t.employeeId,
+      t.terminalKind,
+    ),
   }),
 )
 
@@ -5966,6 +5971,7 @@ export const developmentMissions = sqliteTable(
       .on(t.launchIdempotencyKey)
       .where(sql`${t.launchIdempotencyKey} IS NOT NULL`),
     statusIdx: index('idx_development_missions_status').on(t.status),
+    statusEmployeeIdx: index('idx_development_missions_status_employee').on(t.status, t.employeeId),
     repoIdx: index('idx_development_missions_repo').on(t.repositoryId),
     createdIdx: index('idx_development_missions_created').on(t.createdAt), // RFC-311：列表排序
     // RFC-311：keyset 排序键是 (created_at DESC, id DESC)；单列索引让同一时间戳内

@@ -355,6 +355,27 @@ export class DigitalEmployeeAuthoringService {
     }
     const contract = findWorkContract(runtime.descriptor, item.workContractRef)
     if (contract === null) throw new Error(`type package lost contract for ${item.workItemRef}`)
+    const dispatchSources = runtime.descriptor.authoringManifest.workItems.filter((source) =>
+      source.orderedDispatchAuthoring?.destinationWorkItemRefs.includes(item.workItemRef),
+    )
+    for (const accepted of body.acceptedDispatchRoutes ?? []) {
+      if (
+        !dispatchSources.some((source) => source.workItemRef === accepted.classifierWorkItemRef)
+      ) {
+        throw new ValidationError(
+          'employee-tool-dispatch-classifier-invalid',
+          `${accepted.classifierWorkItemRef} does not dispatch to ${item.workItemRef}`,
+        )
+      }
+    }
+    const acceptedDispatchRoutes =
+      body.acceptedDispatchRoutes ??
+      (dispatchSources.length === 0
+        ? undefined
+        : dispatchSources.map((source) => ({
+            classifierWorkItemRef: source.workItemRef,
+            routeRefs: ['*'] as const,
+          })))
     const implementation = await this.#materializeImplementation(body.implementation)
     const content = toolRegistrationContentSchema.parse({
       schemaVersion: 1,
@@ -366,6 +387,7 @@ export class DigitalEmployeeAuthoringService {
       description: body.description,
       implementation,
       connectionRef: body.connectionRef ?? null,
+      ...(acceptedDispatchRoutes === undefined ? {} : { acceptedDispatchRoutes }),
     })
     return {
       content,
@@ -516,6 +538,9 @@ export class DigitalEmployeeAuthoringService {
         roleRef: record.content.roleRef,
         implementation,
         connectionRef: record.content.connectionRef,
+        ...(record.content.acceptedDispatchRoutes === undefined
+          ? {}
+          : { acceptedDispatchRoutes: record.content.acceptedDispatchRoutes }),
       }),
     }
   }
@@ -705,6 +730,21 @@ export class DigitalEmployeeAuthoringService {
           throw new ValidationError(
             'employee-ordered-dispatch-tool-invalid',
             `tool revision does not belong to ${route.destinationWorkItemRef}`,
+          )
+        }
+        const accepted = tool.content.acceptedDispatchRoutes?.find(
+          (candidate) => candidate.classifierWorkItemRef === configuration.classifierWorkItemRef,
+        )
+        const acceptsRoute =
+          // Revisions frozen before route capability declarations remain
+          // compatible with every route, preserving their existing behavior.
+          tool.content.acceptedDispatchRoutes === undefined ||
+          accepted?.routeRefs.includes('*') === true ||
+          accepted?.routeRefs.includes(route.routeRef) === true
+        if (!acceptsRoute) {
+          throw new ValidationError(
+            'employee-ordered-dispatch-tool-incompatible',
+            `${tool.content.displayName} does not accept ${configuration.classifierWorkItemRef}/${route.routeRef}`,
           )
         }
         tools.push(tool)

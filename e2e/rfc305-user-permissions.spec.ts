@@ -508,12 +508,11 @@ test('guest browser exposes public resources without mutation or task affordance
     '/workgroups',
     '/intent',
     // RFC-310：数字员工是一个顶层分组，分类、工作项与工具都在同一个固定职责图入口
-    // 下完成；实际执行仍归统一任务列表，`/outcomes` 归运行组。这条清单是**完整产品地图**的
+    // 下完成；实际执行仍归统一任务列表，运行成效归每名员工卡片。这条清单是**完整产品地图**的
     // 快照——guest 照样看得见全部条目，只是无权目标页为空且不发请求（RFC-305 的
     // stable-nav 契约），所以导航改版必然要同步改它。
     '/digital-employees',
     '/tasks',
-    '/outcomes',
     '/scheduled',
     '/repos',
     '/events',

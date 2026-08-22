@@ -201,6 +201,7 @@ const workItemDefinitionSchema = z
     materialSummary: localizedTextSchema,
     completionStandard: localizedTextSchema,
     nodeKind: z.enum(['business-tool', 'system', 'collaboration']),
+    inputMultiplicity: z.enum(['single', 'collection']).optional(),
     collaborationContractId: machineIdSchema.nullable().default(null),
     orderedDispatchAuthoring: z
       .object({
@@ -707,6 +708,43 @@ export const toolAuthoringImplementationSchema = z.discriminatedUnion('kind', [
 
 export type ToolAuthoringImplementation = z.infer<typeof toolAuthoringImplementationSchema>
 
+const dispatchRouteRefsSchema = z
+  .array(z.union([machineIdSchema, z.literal('*')]))
+  .min(1)
+  .max(100)
+  .superRefine((values, ctx) => {
+    if (new Set(values).size !== values.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'dispatch route refs must be unique' })
+    }
+    if (values.includes('*') && values.length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'the all-routes marker cannot be combined with exact route refs',
+      })
+    }
+  })
+
+const acceptedDispatchRoutesSchema = z
+  .array(
+    z
+      .object({
+        classifierWorkItemRef: machineIdSchema,
+        routeRefs: dispatchRouteRefsSchema,
+      })
+      .strict(),
+  )
+  .min(1)
+  .max(20)
+  .superRefine((values, ctx) => {
+    const classifierRefs = values.map((value) => value.classifierWorkItemRef)
+    if (new Set(classifierRefs).size !== classifierRefs.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'dispatch classifiers must be unique',
+      })
+    }
+  })
+
 export const createToolRegistrationBodySchema = z
   .object({
     displayName: z.string().min(1).max(200),
@@ -714,6 +752,7 @@ export const createToolRegistrationBodySchema = z
     roleRef: machineIdSchema,
     implementation: toolAuthoringImplementationSchema,
     connectionRef: exactResourceRefSchema.nullable().optional(),
+    acceptedDispatchRoutes: acceptedDispatchRoutesSchema.optional(),
   })
   .strict()
 
@@ -730,6 +769,9 @@ export const toolRegistrationContentSchema = z
     description: z.string().max(2_000),
     implementation: toolImplementationSchema,
     connectionRef: exactResourceRefSchema.nullable(),
+    // Optional keeps already-frozen revision digests stable. Legacy revisions
+    // without the field are interpreted as all-routes by the authoring gate.
+    acceptedDispatchRoutes: acceptedDispatchRoutesSchema.optional(),
   })
   .strict()
 

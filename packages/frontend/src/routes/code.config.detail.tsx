@@ -10,7 +10,7 @@
 // projection 永远只显示 key 名，不显示任何值。
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, Link } from '@tanstack/react-router'
+import { createRoute } from '@tanstack/react-router'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -38,7 +38,6 @@ import {
   type PublishedResourceOption,
 } from '@/components/code/employeePlaybook'
 import { CONFIG_KIND_SPECS, isConfigKind, type ConfigKind } from './code.config'
-import { missionStatusKind, missionStatusLabel, type MissionSummary } from './code.missions'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -250,8 +249,6 @@ function ConfigDetailPage(): ReactElement {
             violations={row.violations ?? []}
           />
 
-          {kind === 'employees' ? <EmployeeOutcomeSummary employeeId={row.id} /> : null}
-
           {kind !== 'employees' || canAuthorScripts ? (
             <FormSection
               title={
@@ -304,89 +301,6 @@ function ConfigDetailPage(): ReactElement {
         </div>
       </div>
     </div>
-  )
-}
-
-const TERMINAL_MISSION_STATUSES = [
-  'merged',
-  'completed-no-change',
-  'closed-unmerged',
-  'canceled',
-  'failed',
-] as const
-
-function EmployeeOutcomeSummary({ employeeId }: { employeeId: string }): ReactElement {
-  const { t } = useTranslation()
-  // RFC-311：只要四个数字，就**一行都不搬**。此前这里 `api.get('/api/code/missions')`
-  // 取回整张表再 `filter().length`——mission 表长起来后，光是为了渲染一张摘要卡片就
-  // 要把全部 mission 送到浏览器。服务端按 employeeId 收敛后回 `counts`（按原始
-  // mission 状态分组，行数被枚举封顶），四个数字全部由它派生。
-  const missions = useQuery<{ counts: Record<string, number> }>({
-    queryKey: ['code-missions', 'employee-outcome', employeeId],
-    queryFn: ({ signal }) => api.get('/api/code/missions', { employeeId, limit: 1 }, signal),
-  })
-  // 历史只展示最近 5 条终态——独立的一次**有界**请求，而不是把全量取回来再 slice(0,5)。
-  const recent = useQuery<{ items: MissionSummary[] }>({
-    queryKey: ['code-missions', 'employee-outcome-recent', employeeId],
-    queryFn: ({ signal }) =>
-      api.get(
-        '/api/code/missions',
-        { employeeId, missionStatuses: TERMINAL_MISSION_STATUSES.join(','), limit: 5 },
-        signal,
-      ),
-  })
-  if (missions.isPending) return <LoadingState />
-  if (missions.isError) return <ErrorBanner error={missions.error} />
-
-  const counts = missions.data?.counts ?? {}
-  const sum = (keys: readonly string[]): number =>
-    keys.reduce((total, key) => total + (counts[key] ?? 0), 0)
-  const mineCount = Object.values(counts).reduce((a, b) => a + b, 0)
-  const terminalCount = sum(TERMINAL_MISSION_STATUSES)
-  const active = mineCount - terminalCount
-  const ready = sum(['ready-to-merge', 'waiting-committer'])
-  const delivered = sum(['merged', 'completed-no-change'])
-
-  return (
-    <Card
-      title={t('code.outcomes.employeeSummaryTitle')}
-      actions={
-        <Link to="/outcomes" search={{ employee: employeeId }} className="btn btn--xs">
-          {t('code.outcomes.employeeSummaryOpen')}
-        </Link>
-      }
-      data-testid="employee-outcome-summary"
-    >
-      <p>{t('code.outcomes.employeeSummaryHint')}</p>
-      <div className="employee-outcome-summary__counts">
-        <span>
-          <strong>{active}</strong>
-          {t('code.outcomes.employeeActive')}
-        </span>
-        <span>
-          <strong>{ready}</strong>
-          {t('code.outcomes.employeeReady')}
-        </span>
-        <span>
-          <strong>{delivered}</strong>
-          {t('code.outcomes.employeeDelivered')}
-        </span>
-      </div>
-      {(recent.data?.items?.length ?? 0) > 0 ? (
-        <ul className="employee-outcome-summary__history">
-          {(recent.data?.items ?? []).map((mission) => (
-            <li key={mission.id}>
-              <Link to="/code/missions/$missionId" params={{ missionId: mission.id }}>
-                {mission.id.slice(-8)}
-              </Link>
-              <StatusChip kind={missionStatusKind(mission.status)} size="sm">
-                {missionStatusLabel(t, mission.status)}
-              </StatusChip>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </Card>
   )
 }
 

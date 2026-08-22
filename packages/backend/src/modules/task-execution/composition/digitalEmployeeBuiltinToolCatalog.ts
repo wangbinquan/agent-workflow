@@ -31,6 +31,11 @@ const descriptorSchema = z
                 .passthrough()
                 .nullable()
                 .optional(),
+              orderedDispatchAuthoring: z
+                .object({ destinationWorkItemRefs: z.array(z.string()) })
+                .passthrough()
+                .nullable()
+                .optional(),
               toolRoleGroups: z.array(z.object({ roleRef: z.string() }).passthrough()),
             })
             .passthrough(),
@@ -70,6 +75,9 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
       descriptor.authoringManifest.workItems.flatMap((item) => {
         if (item.nodeKind !== 'business-tool') return []
         const roleRef = item.toolRoleGroups[0]?.roleRef
+        const dispatchSources = descriptor.authoringManifest.workItems.filter((source) =>
+          source.orderedDispatchAuthoring?.destinationWorkItemRefs.includes(item.workItemRef),
+        )
         const contract = descriptor.workContracts.find(
           (candidate) =>
             candidate.contractId === item.workContractRef.contractId &&
@@ -132,6 +140,14 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
             description: agent.description,
             implementation,
             connectionRef: null,
+            ...(dispatchSources.length === 0
+              ? {}
+              : {
+                  acceptedDispatchRoutes: dispatchSources.map((source) => ({
+                    classifierWorkItemRef: source.workItemRef,
+                    routeRefs: ['*'],
+                  })),
+                }),
           }
           const id = `${prefix}${descriptor.typeRef.typeId}:${descriptor.typeRef.revision}:${item.workItemRef}:${agent.id}`
           return [

@@ -128,6 +128,12 @@ export interface RuntimeCaseStorePort {
   getCase(id: string): EmployeeCaseRecord | null
   findCaseByEventDelivery(eventDeliveryId: string): EmployeeCaseRecord | null
   listCases(employeeId?: string, state?: string): EmployeeCaseRecord[]
+  /** Terminal facts grouped once for every employee, without loading Case rows. */
+  listTerminalOutcomeGroups(): readonly {
+    readonly employeeId: string
+    readonly terminalKind: string
+    readonly count: number
+  }[]
   listCasesPage(input: {
     readonly employeeId?: string
     readonly states?: readonly EmployeeCaseRecord['state'][]

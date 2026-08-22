@@ -1,7 +1,7 @@
 // RFC-310 capability-builder and runtime-outcome placement regressions.
 //
-// `/code` contains definitions only. Live work belongs to `/tasks`, while
-// historical results live in the Operations & repositories `/outcomes` route.
+// `/code` contains definitions only. Live work belongs to `/tasks`; runtime
+// outcome totals are projected on the canonical digital-employee cards.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -222,29 +222,6 @@ async function renderCode(initial = '/code') {
   )
 }
 
-async function renderOutcomes(initial = '/outcomes') {
-  const page = await import('../src/routes/code.outcomes')
-  const root = createRootRoute()
-  const outcomes = createRoute({
-    getParentRoute: () => root,
-    path: '/outcomes',
-    validateSearch: page.validateOutcomesSearch,
-    component: page.Route.options.component,
-  })
-  const router = createRouter({
-    routeTree: root.addChildren([outcomes]),
-    history: createMemoryHistory({ initialEntries: [initial] }),
-  })
-  render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <RouterProvider router={router as any} />
-    </QueryClientProvider>,
-  )
-}
-
 describe('digital employee capability builder', () => {
   test('contains only construction destinations and sends execution to unified tasks', async () => {
     const calls = installFetch()
@@ -276,38 +253,12 @@ describe('digital employee capability builder', () => {
   })
 })
 
-describe('digital employee outcomes', () => {
-  test('owns terminal mission history and keeps the four non-invented adoption outcomes', async () => {
-    installFetch()
-    await renderOutcomes()
-
-    expect(await screen.findByTestId('run-outcomes-page')).toBeTruthy()
-    const history = await screen.findByTestId('code-outcome-history')
-    expect(history.textContent).toContain('Merged')
-    expect(history.textContent).toContain('No change confirmed')
-    expect(history.textContent).toContain('Failed')
-    expect(history.textContent).not.toContain('Merge-ready')
-
-    const adoption = await screen.findByTestId('code-metrics-adoption-mr-review')
-    expect([...adoption.querySelectorAll('td')].map((cell) => cell.textContent)).toEqual([
-      'mr-review',
-      '10',
-      '4',
-      '3',
-      '2',
-      '1',
-    ])
-    expect(screen.getByText(/last 30 days/i)).toBeTruthy()
-  })
-
-  test('filters the same result projection when opened from one employee', async () => {
-    installFetch()
-    await renderOutcomes('/outcomes?employee=employee-2')
-
-    expect(await screen.findByText('C++ employee outcomes')).toBeTruthy()
-    const history = screen.getByTestId('code-outcome-history')
-    expect(history.textContent).toContain('Failed')
-    expect(history.textContent).not.toContain('Merged')
-    expect(screen.queryByTestId('capability-outcomes')).toBeNull()
-  })
+test('retired outcome routes remain compatibility redirects without a page surface', () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, '../src/routes/code.outcomes.tsx'),
+    'utf8',
+  )
+  expect(source).toContain("throw redirect({ to: '/digital-employees' })")
+  expect(source).not.toContain('run-outcomes-page')
+  expect(source).not.toContain('OutcomeSummary')
 })

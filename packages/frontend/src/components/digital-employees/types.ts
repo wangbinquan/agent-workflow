@@ -32,6 +32,7 @@ export interface WorkItem {
   materialSummary: LocalizedText
   completionStandard: LocalizedText
   nodeKind: 'business-tool' | 'system' | 'collaboration'
+  inputMultiplicity?: 'single' | 'collection'
   collaborationContractId: string | null
   orderedDispatchAuthoring: {
     label: LocalizedText
@@ -190,6 +191,10 @@ export interface ToolRegistration {
     roleRef: string
     displayName: string
     description: string
+    acceptedDispatchRoutes?: Array<{
+      classifierWorkItemRef: string
+      routeRefs: string[]
+    }>
     implementation:
       | { kind: 'agent'; agentRef: ExactRef }
       | { kind: 'workflow'; workflowRef: ExactRef }
@@ -232,6 +237,10 @@ export interface ToolAuthoringView extends ToolRegistration {
     roleRef: string
     implementation: ToolAuthoringImplementation
     connectionRef?: ExactRef | null
+    acceptedDispatchRoutes?: Array<{
+      classifierWorkItemRef: string
+      routeRefs: string[]
+    }>
   }
 }
 

@@ -1797,6 +1797,7 @@ const runtimePackage = {
           materialSummary: contracts[6]!.materialSummary,
           completionStandard: contracts[6]!.completionStandard,
           nodeKind: 'business-tool',
+          inputMultiplicity: 'collection',
           toolRoleGroups: primaryRole(
             '问题修复者',
             'Problem repairer',

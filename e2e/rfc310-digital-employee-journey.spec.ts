@@ -87,6 +87,7 @@ process.stdout.write(JSON.stringify({
 let daemon: DaemonHandle
 let mocks: SystemMockClient
 let repositoryId = ''
+let employeeId = ''
 let employeeName = ''
 
 function requiredEnv(name: string): string {
@@ -286,6 +287,7 @@ async function seedPublishedEmployee(): Promise<void> {
       },
     },
   )
+  employeeId = employee.id
   await requestJson(`/api/digital-employees/${encodeURIComponent(employee.id)}/publish`, {
     method: 'POST',
     body: {},
@@ -341,22 +343,70 @@ test('body and repository-bound files enter a stateful employee case and the uni
 
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
   await expect(page.getByText(employeeName, { exact: true })).toBeVisible()
+  const outcomeSummary = page.getByTestId(`digital-employee-outcomes-${employeeId}`)
+  await expect(outcomeSummary).toBeVisible()
+  await expect(outcomeSummary).toContainText('Merged0')
+  await expect(outcomeSummary).toContainText('No change0')
   await expect(page.getByTestId('employee-toolbox-responsibility-map')).toHaveCount(0)
   await expect(page.getByTestId('digital-employee-type-new-task')).toBeVisible()
   await page.getByRole('tab', { name: 'Toolbox' }).click()
   const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(responsibilityMap).toBeVisible()
   await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
+  await expect(responsibilityMap.locator('.employee-toolbox-lane')).toHaveCount(8)
+  await expect(responsibilityMap.getByText('Main lane', { exact: true }).first()).toBeVisible()
+  await expect(responsibilityMap.getByText('Duty lane', { exact: true }).first()).toBeVisible()
+  const mapWidth = await responsibilityMap.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  )
+  expect(
+    await responsibilityMap
+      .locator('.employee-toolbox-lane')
+      .evaluateAll(
+        (lanes, width) => lanes.every((lane) => lane.getBoundingClientRect().width >= width * 0.94),
+        mapWidth,
+      ),
+  ).toBe(true)
+  await expect(
+    responsibilityMap.locator('.employee-toolbox-region--branching .employee-toolbox-lane__axis'),
+  ).toHaveCount(7)
+  expect(
+    await responsibilityMap
+      .locator('.employee-toolbox-card strong')
+      .evaluateAll((labels) =>
+        labels.flatMap((label) =>
+          label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1
+            ? [label.textContent]
+            : [],
+        ),
+      ),
+  ).toEqual([])
+  const responsibilityCardWidths = await responsibilityMap
+    .locator('.employee-toolbox-card')
+    .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
+  expect(
+    Math.max(...responsibilityCardWidths) - Math.min(...responsibilityCardWidths),
+  ).toBeLessThanOrEqual(0.5)
   const classifierCard = responsibilityMap.locator('[data-work-item-ref="classify-pipeline"]')
+  const reviewFanOutCard = responsibilityMap.locator('[data-work-item-ref="repair-feedback"]')
+  await expect(reviewFanOutCard).toHaveClass(/employee-toolbox-card--fan-out/)
+  await expect(reviewFanOutCard.locator('.employee-toolbox-card__stack-layer')).toHaveCount(2)
   await classifierCard.click()
   await expect(classifierCard).toHaveClass(/employee-toolbox-card--active/)
-  await expect(page.getByText('Input material', { exact: true })).toBeVisible()
+  const dutyDialog = page.getByTestId('employee-toolbox-duty-dialog')
+  await expect(dutyDialog).toBeVisible()
+  await expect(dutyDialog.getByText('Input material', { exact: true })).toBeVisible()
+  expect(
+    await dutyDialog
+      .locator('.dialog__body')
+      .evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1)
   const horizontalOverflow = await responsibilityMap.evaluate(
     (element) => element.scrollWidth - element.clientWidth,
   )
   expect(horizontalOverflow).toBeLessThanOrEqual(1)
 
-  await page.getByRole('button', { name: 'Add tool', exact: true }).click()
+  await dutyDialog.getByRole('button', { name: 'Add tool', exact: true }).click()
   const toolDialog = page.getByTestId('employee-add-tool-dialog')
   await expect(toolDialog).toBeVisible()
   await page.setViewportSize({ width: 760, height: 900 })
@@ -369,14 +419,57 @@ test('body and repository-bound files enter a stateful employee case and the uni
     await page.locator('html').evaluate((element) => element.scrollWidth - element.clientWidth),
   ).toBeLessThanOrEqual(1)
   await toolDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await dutyDialog.locator('.dialog__close').click()
+  await expect(dutyDialog).toHaveCount(0)
 
   await page.getByRole('tab', { name: 'Job templates' }).click()
-  await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
+  await page.getByRole('button', { name: 'New job template', exact: true }).click()
+  const identityDialog = page.getByTestId('employee-job-identity-dialog')
+  await expect(identityDialog).toBeVisible()
+  await identityDialog.getByLabel('Template name').fill('Browser-created template')
+  await identityDialog.getByLabel('Description').fill('Configured from the compact duty map')
+  await identityDialog
+    .getByRole('button', { name: 'Create and configure duties', exact: true })
+    .click()
+  const templateEditor = page.getByTestId('employee-job-template-editor')
+  await expect(templateEditor).toBeVisible()
+  await expect(page.getByLabel('Template name')).toHaveCount(0)
+  await expect(page.getByLabel('Description')).toHaveCount(0)
+  await templateEditor.locator('[data-work-item-ref="analyze-implement"]').click()
+  const newTemplateDutyDialog = page.getByTestId('employee-job-duty-dialog')
+  await expect(newTemplateDutyDialog).toBeVisible()
+  await newTemplateDutyDialog.getByRole('combobox').click()
+  await page.getByRole('option').first().click()
+  await newTemplateDutyDialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.getByRole('button', { name: 'Save and publish', exact: true }).click()
+  await expect(templateEditor).toHaveCount(0)
+  const createdTemplate = page
+    .locator('.employee-summary-card')
+    .filter({ hasText: 'Browser-created template' })
+  await expect(createdTemplate).toContainText('Published · v1')
+  await createdTemplate.getByRole('button', { name: 'Edit', exact: true }).click()
   await expect(page.locator('.job-template-detail-editor')).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('.employee-toolbox-card--configured').first()).toBeVisible()
   await expect(page.locator('.employee-toolbox-card--missing').first()).toBeVisible()
+  const jobMap = page.getByTestId('employee-toolbox-responsibility-map')
+  const jobMapBox = await jobMap.boundingBox()
+  expect(jobMapBox).not.toBeNull()
+  expect((jobMapBox?.y ?? 0) + (jobMapBox?.height ?? 0)).toBeLessThanOrEqual(900)
+  await jobMap.locator('[data-work-item-ref="analyze-implement"]').click()
+  const jobDutyDialog = page.getByTestId('employee-job-duty-dialog')
+  await expect(jobDutyDialog).toBeVisible()
+  await expect(jobDutyDialog.getByText('Selected duty', { exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 760, height: 900 })
+  expect(
+    await jobDutyDialog
+      .locator('.dialog__body')
+      .evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await jobDutyDialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await expect(jobDutyDialog).toHaveCount(0)
 
   await page.goto(`${daemon.baseUrl}/tasks/new`)
   await expect(page.getByTestId('wizard-kind-digital-employee')).toBeVisible()
@@ -434,11 +527,22 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
   const caseId = page.url().split('/').at(-1)!
   await expect(page.getByRole('heading', { name: employeeName, exact: true })).toBeVisible()
-  await expect(page.getByTestId('digital-employee-responsibility-graph')).toBeVisible()
-  await expect(page.locator('[data-testid^="employee-work-item-"]')).toHaveCount(20)
+  const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
+  await expect(runtimeMap).toBeVisible()
+  await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(20)
   await expect(page.getByText('Work context', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Current responsibility and full lifecycle', { exact: true }),
+  ).toBeVisible()
+  const timeline = page.getByTestId('employee-work-timeline')
+  await expect(timeline).toBeVisible()
+  await expect(timeline.locator('.employee-execution-timeline__step').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  await timeline.locator('.employee-execution-timeline__step').first().click()
+  await expect(timeline.getByText('Frozen input / program input', { exact: true })).toBeVisible()
+  await expect(
+    timeline.getByText('Deterministic output / program output', { exact: true }),
   ).toBeVisible()
 
   await page.goto(`${daemon.baseUrl}/tasks?category=digital-employee`)

@@ -216,6 +216,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   // RFC-310 PR-2 — Mission 生命周期（handoff/attach/resume/upgrade 随后续批次）。
   { method: 'POST', path: '/api/code/missions' },
   { method: 'GET', path: '/api/code/missions' },
+  { method: 'GET', path: '/api/code/missions/outcome-summaries' },
   // RFC-310 的 mission 预览端点。本行由 RFC-311 顺手补:两个 session 同时改
   // routes/developmentMissions.ts（我加分页、他们加这条），提交时必然一起带上，
   // 缺这一行会让 `api-contract-coverage` 恒红。
@@ -329,6 +330,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/digital-employee-types/:typeRef/employees' },
   { method: 'POST', path: '/api/digital-employee-types/:typeRef/employees' },
   { method: 'GET', path: '/api/digital-employees' },
+  { method: 'GET', path: '/api/digital-employees/outcome-summaries' },
   { method: 'GET', path: '/api/digital-employees/:id' },
   { method: 'PUT', path: '/api/digital-employees/:id' },
   { method: 'POST', path: '/api/digital-employees/:id/publish' },

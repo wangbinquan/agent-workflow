@@ -699,6 +699,7 @@ interface EmployeeAuthoringManifestV1 {
     readonly materialSummaryKey: string
     readonly completionStandardKey: string
     readonly nodeKind: 'business-tool' | 'system' | 'collaboration'
+    readonly inputMultiplicity?: 'single' | 'collection'
     readonly collaborationContractId: string | null
     readonly orderedDispatchAuthoring: {
       readonly labelKey: string
@@ -721,9 +722,15 @@ predicate、Context mapping、Effect 与 failure/retry policy 都由类型包编
 `development` 类型分支，类型差异只能来自 manifest 和注册的业务文案/codec。
 
 布局算法同样属于通用 manifest 投影，不属于研发页面特例：先按 region，再按 `spine | branch` lane，最后按 `order` 排列工作项小卡片。
-卡片内直接显示 node kind、配置事实和 `nextWorkItemRefs` 的业务名称；不生成 SVG edge、共享分发干线、回路、悬浮端口或拖拽 handle。
-选择卡片只高亮当前职责并更新下方 inspector。网格列使用可收缩 `auto-fit/minmax`，桌面与窄屏都保持全量可见且不产生横向滚动；
-不得为了适配宽度把不同职责泳道合并成无法辨认关系的单行。
+卡片内直接显示 node kind、配置事实和 `nextWorkItemRefs` 的业务名称；不生成 SVG edge、共享分发干线、跨泳道竖线、回路、悬浮端口或
+拖拽 handle。每条泳道只在标签与首节点之间画一段短入口箭头，节点之间只画同一行内的短方向箭头；生命周期 region 本身就是共同上下文，
+不再用一根贯穿阶段的线重复表达关联。选择卡片只高亮当前职责并打开职责 Dialog。桌面列宽使用固定相等的卡片宽度并左对齐，剩余空间留白；
+不得按剩余宽度拉伸卡片。超过单行上限时按相同宽度换行，窄屏使用 `auto-fit/minmax` 保持全量可见且不产生横向滚动；不得为了适配宽度
+把不同职责泳道合并成无法辨认关系的单行。
+
+`inputMultiplicity='collection'` 表示一次职责消费同类工作集合。它仍是一个可配置、可选择、可结算的工作项，但共享职责图用一个主卡片加
+两个后置轮廓组成三层叠卡，直观提示会处理多个成员；状态、点击区和工具绑定仍作用于整组，不能伪造三个独立运行节点。缺省或 `single`
+保持普通单卡。研发类型的“修复检视问题”消费完整 review thread problem set，因此声明为 `collection`；authoring 与 runtime 自动获得同一呈现。
 
 运行投影至少提供：
 
@@ -3666,11 +3673,14 @@ development-child-missions:launch/read
    - **员工**：创建和管理该分类的具体数字员工；范围是员工表单的一部分；
    - **岗位模板**：管理岗位默认工具组合，创建/修改进入同页详情编辑；
    - **工具箱**：按该分类职责小卡片管理工具，也是唯一常驻职责全景。
-2. **运行与仓库**收纳所有执行事实：
+2. **运行与仓库**收纳任务和仓库运行事实：
    - **任务** `/tasks`：数字员工 Mission 与普通编排任务统一管理，提供“数字员工”分类筛选；旧
      `/code/missions` 只做兼容跳转。数字员工任务可写正文、上传带仓库目标路径的文件或提交外部 ID，并跟踪到 MR terminal；
-   - **成效** `/outcomes`：按员工和时间展示已交付/准备合入/阻断/平均恢复轮次，全部来自平台 receipt；
    - 定时任务、仓库和 Webhook 保持本组既有位置。
+
+运行成效不是另一套运行对象：分类“员工”页的每张数字员工卡片直接显示该员工的终态成效计数，并以“查看任务”进入统一任务列表。
+新 EmployeeCase 与切换前仍在留存的 DevelopmentMission 分别由各自 bounded context 提供有界分组统计，展示层只按固定成效桶相加，
+不得逐员工拉全量明细或把旧表耦合进数字员工模块。`/outcomes` 与 `/code/outcomes` 仅保留到 `/digital-employees` 的兼容跳转，侧栏不再出现成效入口。
 
 分类不是研发专用 hard-code。`/digital-employees` 从 Type Catalog 投影研发、设计、测试等分类卡片；进入分类后，页签、画布、
 工作项、WorkScope 表单和文案全由 `EmployeeAuthoringManifestV1`/WorkScopeContract 驱动。旧 `/code` 兼容跳转到研发分类员工页，
@@ -3711,15 +3721,21 @@ development-child-missions:launch/read
 | `toolbox`      | 分类“工具箱”               | 注册/验证/发布当前工作项工具  | WorkContract、角色/槽位、已有工具状态 |
 | `job-template` | 分类“岗位模板”详情编辑状态 | 为 slot 选择默认 registration | 职责、合同、可选工具兼容范围          |
 
-两种模式共享 workItem key、区域/泳道/卡片布局和业务文案，只替换 inspector。员工列表不重复全景；runtime 只按 Case 投影当前工作、等待条件、
-事件队列和 receipt。刷新、深链或从缺失工具返回草稿时必须回到同一 workItem。
+两种 authoring 模式与 runtime 共享 workItem key、区域/泳道/卡片布局和业务文案，只替换卡片状态与选择后的详情。员工列表不重复全景；
+Case runtime 用同一 manifest 和员工冻结配置投影全景，显示未开始、运行中、等待、失败、完成状态。刷新、深链或从缺失工具返回草稿时必须
+回到同一 workItem。
 
 - 点击节点即确定 `type + work item + contract`；工具列表查询不得省略这三个条件。
 - “增加工具”可选择已有 Agent/Workflow，或直接定义当前节点的 ProgramTool；按工作项允许的角色分组，外部连接仅在工具需要时出现。
 - 表单不允许再次选择阶段或工作项；不能在这里新建/改写底层 Agent 或 Workflow，ProgramTool 则只在这里定义并要求程序写权。
 - 保存后先显示合同校验结果；通过后才能发布。系统节点只展示平台行为和 receipt，无“增加工具”。
-- “归类流水线问题”节点显式编辑岗位级有序分派表：每行定义业务失败类型、显示名、目标处理工作项和 exact 工具或协同员工；列表顺序
-  就是优先级，必须且只能有一个末尾兜底项。类型包只声明允许到达哪些处理节点，不写死编译/单测/静态检查等业务枚举。
+- “归类流水线问题”节点显式编辑岗位级有序分派表：每行定义业务失败类型、显示名和目标处理工作项；列表顺序就是优先级，必须且只能有
+  一个末尾兜底项。保存分类后，全景在分类节点之后按顺序派生 `P1..Pn` 修复卡片，并隐藏被这些派生卡片替代的静态目标卡片；每张派生卡片
+  单独选择 exact 工具或协同员工，任何一张缺失都阻断已启用泳道发布。类型包只声明允许到达哪些处理节点，不写死编译/单测/静态检查等
+  业务枚举。
+- 修复工具冻结 `acceptedDispatchRoutes[] = { classifierWorkItemRef, routeRefs }` 能力声明；`routeRefs=['*']` 表示接受该分类器全部类型，
+  否则只能接受列出的稳定类型键。编辑器按当前派生卡片过滤候选，发布服务再次用 exact classifier/route 校验，防止绕过前端绑定不兼容工具。
+  旧 revision 未携带该字段时仅为兼容按全部类型解释，新发布 revision 必须显式形成声明。
 - 泳道标签回答“这是人的哪类职责”，节点回答“这一步做什么”；MR 事件入口是权威事实刷新点，不把检视、流水线、冲突、审批和合入判断
   误排成必须依次执行的一条长链。前后继以卡片内“下一步”说明表达，选择节点只高亮自身并打开对应详情。
 
@@ -3731,8 +3747,9 @@ development-child-missions:launch/read
 事件或规则。已发布模板 revision 不原地修改；新模板 revision 不静默改写已有员工，员工显式采用新版时预览默认工具变化并保留/重算
 自己的 override。
 
-可以放一张小型运行摘要并链接到 `/outcomes?employee=...`，但完整成效统计只属于“运行与仓库”。业务选择器显示“Java 开发
-Agent”“C++ 编译修复程序”等业务名称，不显示 `ActionTemplate`、`VerificationProfile`、`adapter/profile`、资源 ID/revision
+员工卡片固定放置小型运行成效摘要，显示“已合入 / 无需修改 / 其他结束 / 执行失败”四个由平台 receipt 推导的终态桶；历史明细仍从
+“查看任务”进入统一任务列表，不另建成效详情页。业务选择器显示“Java 开发 Agent”“C++ 编译修复程序”等业务名称，不显示
+`ActionTemplate`、`VerificationProfile`、`adapter/profile`、资源 ID/revision
 或 JSON。其他员工和审批作为协作节点/通道呈现，不混进普通工具列表。高级管理员可以展开“技术实现”查看解析后的依赖和编译
 receipt，但它不是业务配置的必经路径。
 
@@ -4290,16 +4307,51 @@ source-control owner 在 commit message 末尾追加 Case/Context 机器标记�
 
 ### 21.6 职责小卡片与岗位详情编辑
 
-分类页只保留“员工 / 岗位模板 / 工具箱”三个页签。确定性职责全景常驻位置只有工具箱；它按生命周期区域和泳道渲染全量小卡片，卡片内
-显示“平台 / 工具 / 协同”、业务名称、配置事实和下一步，不绘制连线与端口。卡片区与下方工具详情以 20px 间距分开，任何卡片选择都只更新
-同页详情，不跨页跳转。
+分类页只保留“员工 / 岗位模板 / 工具箱”三个页签。确定性职责全景常驻位置只有工具箱；它按生命周期阶段渲染真正的横向泳道板，不能把
+每条泳道降成一个宽度不一的卡片分组。每条泳道占据完整一行：左侧固定显示“主泳道 / 职责泳道”、业务名称和可选性，完整说明进入该行的
+`aria-label`/title 与职责详情；右侧职责节点按执行顺序从左到右排列。阶段背景表达主事件入口与各职责泳道共享同一生命周期语境，每条泳道
+只保留标签到首节点、节点到节点的短箭头；不绘制贯穿多行的共享分流轴、跨全图绕行连线、可拖拽端口或自由边。所有卡片固定等宽并左对齐，
+不能为了占满一行按节点数量把卡片拉成不同宽度。
 
-岗位模板列表点击“新建/修改”后在原页面进入 detail editor，不打开 Dialog。详情编辑器复用相同小卡片图：
+桌面 1280×900 视口在页面顶部必须完整看见全景，不能再依赖 2400px 测试视口或纵向滚动。卡片把“平台 / 工具 / 协同”和短配置事实放在
+首行，业务名称占完整第二行并允许自然换行。名称不得使用 `text-overflow: ellipsis`、line clamp 或隐藏 overflow；一屏目标通过减少重复页头、
+说明、间距和合理分栏实现，不能继续压缩文字。完整说明、跨泳道确定性下一步、输入输出与完成标准移入详情。窄屏把每条泳道的左侧标签移到
+节点上方并自然换行，不产生横向滚动。
+
+工具箱选择卡片后以共享 `Dialog` 打开职责详情和工具列表，URL 仍 pin `workItem`，因此刷新和深链恢复同一弹窗；关闭弹窗只移除
+`workItem`，不切换页签。增加/修改工具继续复用 `AddToolDialog`，作为职责详情之上的受支持嵌套弹窗，焦点与 ESC 由公共 Dialog stack 管理。
+
+岗位模板列表的交互分为两个层次：
+
+1. “新建岗位模板”先打开只含名称、说明的基本信息 Dialog；确认时立即 POST 一个 `publishedRevision=null` 的持久化草稿，成功后才进入页面内
+   职责编辑状态。草稿不要求必选职责闭合，取消、刷新或暂时缺少工具后仍出现在列表并可继续编辑；只有发布命令执行完整门禁。已有模板点击
+   “修改”直接进入职责编辑；
+2. 职责编辑页顶部只显示模板摘要和操作，不再常驻名称/说明输入框；次要“基本信息”动作可重新打开同一 Dialog；
+3. 详情编辑器复用相同紧凑卡片图，点击卡片才打开该职责的工具槽、动态错误类型或协同员工 Dialog，关闭后回到完整全景。
+
+职责状态规则保持不变：
 
 - 平台固定节点天然为绿色；已有有效工具、完整有序路由或协同绑定的职责为绿色；
 - 未配置或未启用的职责为黄色；黄色可选泳道不会阻断发布；
-- 发布时重新按 manifest 计算 `requiredMissingWorkItemRefs`；有缺失才让对应卡片闪烁、选择第一项并滚动定位；
-- 点击一张卡片只渲染该职责的 tool slot、动态错误类型或协同员工配置，避免一次铺开全部参数。
+- 发布时重新按 manifest 计算 `requiredMissingWorkItemRefs`；有缺失才让对应卡片闪烁并直接打开第一项职责 Dialog；
+- Dialog 内只渲染当前职责的 tool slot、动态错误类型或协同员工配置，避免一次铺开全部参数。
+
+### 21.6.1 运行态职责图与阶段时间线
+
+数字员工任务详情不能另造一张运行图。它以 Case pinned type revision、employee revision 和
+`exactOrderedDispatchConfigurations` 调用同一职责图组件；分类配置中的每个 route 仍派生一张等宽 `P1..Pn` 卡片。普通节点按最新
+ReactionRound 的 `workItemRef` 投影状态，派生节点再以冻结 `plan.toolSlotRef === routeRef` 精确归属，不能把同一处理工作项的多种失败类型
+合并成一个模糊状态。点击卡片只选择该职责或该 route 对应的最近一轮，不改变调度。
+
+职责图下方提供 Case 级完整阶段时间线，按所有 ReactionRound 的时间顺序展示，而不是只展示当前一轮。点击任意阶段必须同时显示：
+
+- work item/route、状态、attempt、开始与结算时间；
+- exact execution session 入口和执行者引用；
+- 冻结 `inputContextRefsJson` 与 `planJson`，即 Agent envelope 输入或 Program 输入；
+- `outputJson` 或错误现场，即校验后的 Agent envelope 输出或 Program 输出。
+
+这些字段来自 runtime owner 的只读投影，不从日志文本反推，也不重新读取已变化的当前 Context。大证据仍只显示平台规划路径并由使用者按需
+进入 session/目录查看，任务详情不把整份编译日志灌进页面。
 
 ### 21.7 负责范围与任务启动
 
@@ -4314,6 +4366,36 @@ source-control owner 在 commit message 末尾追加 Case/Context 机器标记�
 - 旧 revision 3 的 `global`：runtime codec 兼容为任务时选择，但 revision 5 authoring schema 不接受。
 
 runtime 最终仍读取 published employee revision 的 `workScopeRef`；`publishedWorkScope` 只是同一事实的 UI 投影，不能取代 admission。
+
+### 21.7.1 数字员工卡片运行成效
+
+独立 `/outcomes` 页面退役，成效成为员工定义卡片上的只读运行投影。它不进入 employee revision，也不改变 authoring 聚合：
+
+```ts
+interface EmployeeTerminalOutcomeCounts {
+  readonly employeeId: string
+  readonly merged: number
+  readonly noChange: number
+  readonly otherFinished: number
+  readonly failed: number
+}
+```
+
+投影同时覆盖单写切换前后的两本账：
+
+1. `digital-employee` 的 runtime store 对 `employee_cases(employee_id, state, terminal_kind)` 做一次有界分组，只统计 `state=terminal`；
+2. `development-automation` 的 read model 对 `development_missions(employee_id, status)` 做一次有界分组，只统计终态 Mission；
+3. 两个 owner 各自通过只读 HTTP projection 返回原始终态分组，前端纯函数按 employee ID 合并为上述四桶。`merged` 单列，
+   `completed-no-change/no-change-confirmed` 归 `noChange`，显式 failure 归 `failed`，其余终态归 `otherFinished`；未知终态不会被丢弃；
+4. 统计请求数量恒为两次，与员工数无关；任一旧账本不可用时卡片显示成效暂不可用，不能把另一半的数字伪装成完整总数。
+
+两个查询分别使用 `(state, employee_id, terminal_kind)` 与 `(status, employee_id)` 覆盖索引，并最多读取 50,000 个分组；查询额外取一行检测
+越界，一旦超过即失败关闭并让卡片显示“成效暂不可用”，不得截断后冒充完整统计。legacy 查询同时进入 RFC-311 实际 SQL 语句数、结果行数、
+索引计划和重列投影防护。
+
+卡片只展示四个数字与“查看任务”，历史、状态、日志和 receipt 都继续使用 `/tasks?category=digital-employee` 及任务详情。侧栏删除成效项；
+`/outcomes`、`/code/outcomes` 只作到 `/digital-employees` 的兼容重定向，不再注册页面组件或独立视觉基线。Mission journey 的终态出口也改到
+数字员工目录/统一任务历史，不再制造一个已经退役的产品目的地。
 
 ### 21.8 统一新建任务入口
 

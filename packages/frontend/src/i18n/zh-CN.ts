@@ -378,7 +378,6 @@ export interface Resources {
     digitalEmployees: string
     executors: string
     employeeAssignments: string
-    employeeOutcomes: string
     settings: string
     brand: string
     openMenu: string
@@ -1407,39 +1406,6 @@ export interface Resources {
           empty: string
         }
       >
-    }
-    outcomes: {
-      title: string
-      employeeTitle: string
-      subtitle: string
-      backToCode: string
-      backToTasks: string
-      showAll: string
-      historyTitle: string
-      historyHint: string
-      emptyTitle: string
-      emptyBody: string
-      colMission: string
-      colResult: string
-      colEmployee: string
-      colRepository: string
-      colCompleted: string
-      employeeFallback: string
-      summaryAria: string
-      summary: Record<
-        'merged' | 'noChange' | 'closed' | 'failed',
-        {
-          title: string
-          body: string
-        }
-      >
-      capabilityTitle: string
-      employeeSummaryTitle: string
-      employeeSummaryOpen: string
-      employeeSummaryHint: string
-      employeeActive: string
-      employeeReady: string
-      employeeDelivered: string
     }
     tab: { matrix: string; activity: string; metrics: string; templates: string }
     config: {
@@ -6957,7 +6923,6 @@ export const zhCN: Resources = {
     digitalEmployees: '数字员工',
     executors: '执行者库',
     employeeAssignments: '适用仓库',
-    employeeOutcomes: '运行成效',
     settings: '设置',
     brand: 'Agent Workflow',
     openMenu: '打开导航菜单',
@@ -8131,38 +8096,6 @@ export const zhCN: Resources = {
           empty: '当前没有 MR 需要自动看护。',
         },
       },
-    },
-    outcomes: {
-      title: '运行成效',
-      employeeTitle: '{{employee}} 的成效',
-      subtitle: '用历史任务结果和能力信号调整数字员工与执行策略。',
-      backToCode: '← 数字员工',
-      backToTasks: '← 数字员工任务',
-      showAll: '查看全部员工',
-      historyTitle: '任务结果历史',
-      historyHint: '终态结果留在这里；运行中的工作统一在任务列表中管理。',
-      emptyTitle: '还没有已完成任务',
-      emptyBody: '任务进入生命周期终态后，结果会出现在这里。',
-      colMission: '任务',
-      colResult: '结果',
-      colEmployee: '数字员工',
-      colRepository: '仓库',
-      colCompleted: '完成时间',
-      employeeFallback: '按仓库指派的数字员工',
-      summaryAria: '任务成效摘要',
-      summary: {
-        merged: { title: '已合入', body: 'committer 审核并合入了准备好的 MR。' },
-        noChange: { title: '无需变更', body: '需求已满足，并经规则要求的确认收束。' },
-        closed: { title: '未合入关闭', body: '任务取消或 MR 未合入即关闭。' },
-        failed: { title: '失败', body: '进入终态失败，需要调整能力或流程。' },
-      },
-      capabilityTitle: '能力成效信号',
-      employeeSummaryTitle: '该员工的任务成效',
-      employeeSummaryOpen: '查看成效',
-      employeeSummaryHint: '该已发布员工产生的实时负载与终态结果。',
-      employeeActive: ' 条进行中',
-      employeeReady: ' 条可合入',
-      employeeDelivered: ' 条已交付',
     },
     tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
     config: {

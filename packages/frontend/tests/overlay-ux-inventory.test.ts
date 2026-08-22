@@ -201,7 +201,7 @@ const OVERLAY_CALLSITES = {
   // capability on but never point it at a configuration.
   // T63 added the bulk-change dialog: preview → apply → undo, all in one
   // RFC-310 PR-10 T104/T105 —— matrix/bulk 与模板创建 Dialog 随 legacy 写面
-  // 删除；/code 数字员工构建页与 /outcomes 运行成效页均为零 overlay。
+  // 删除；/code 数字员工构建页为零 overlay，运行成效已归并到员工卡片。
   // RFC-310 — mission creation moved from a cramped dialog to a full-page
   // Stepper; the list now has no overlay.
   // RFC-310 PR-11 — each employee step can create its executor inline without
@@ -214,8 +214,10 @@ const OVERLAY_CALLSITES = {
   'routes/code.assignments.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 PR-8 T87 — policy 创建对话框。
   'routes/code.policies.tsx': { family: 'resource-management', count: 1 },
-  // RFC-310 Digital Employee OS: add tool, job template and employee.
-  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 2 },
+  // RFC-310 Digital Employee OS: responsibility details and job-template
+  // identity/duty authoring use shared dialogs; add-tool and employee editing
+  // remain their existing resource-management overlays.
+  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 5 },
   // RFC-310 Event Center: custom polling-source authoring stays in one shared
   // Dialog while source/catalog/delivery browsing remains inline.
   'routes/events.tsx': { family: 'resource-management', count: 1 },

@@ -11,7 +11,10 @@ import type {
   LocalizedText,
 } from '@/components/digital-employees/types'
 import { localized, typeRefKey } from '@/components/digital-employees/types'
-import { ResponsibilityGraph } from '@/components/digital-employees/ResponsibilityGraph'
+import {
+  ResponsibilitySwimlaneMap,
+  type ResponsibilityDispatchNode,
+} from '@/components/digital-employees/ResponsibilitySwimlaneMap'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { usePermission } from '@/hooks/useActor'
 import { LoadingState } from '@/components/LoadingState'
@@ -84,9 +87,15 @@ interface ReactionRound {
   workItemRef: string
   state: string
   executionRef: string | null
+  toolRef: { id: string; revision: number } | null
+  workContractRef: { contractId: string; version: number }
+  inputContextRefsJson: string
+  planJson: string
+  outputJson: string | null
   attemptOrdinal: number
   createdAt: number
   updatedAt: number
+  settledAt: number | null
 }
 
 export const Route = createRoute({
@@ -203,6 +212,25 @@ function businessStateLabel(state: string, zh: boolean): string {
   return label === undefined ? (zh ? '状态已更新' : 'Status updated') : label[zh ? 0 : 1]
 }
 
+function parseJsonValue(value: string | null): unknown {
+  if (value === null) return null
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
+function roundVisualState(
+  state: string | undefined,
+): 'running' | 'failed' | 'completed' | 'waiting' | 'neutral' {
+  if (state === 'planned' || state === 'running' || state === 'settling') return 'running'
+  if (state === 'failed') return 'failed'
+  if (state === 'completed') return 'completed'
+  if (state === 'obsolete') return 'neutral'
+  return 'waiting'
+}
+
 function contextFacts(
   registration: EmployeeTypePackage['contextTypes'][number] | undefined,
   state: unknown,
@@ -284,6 +312,8 @@ function EmployeeCaseDetailPage(): ReactElement {
   const queryClient = useQueryClient()
   const canResume = usePermission('development-missions:retry')
   const [selectedWorkItemRef, setSelectedWorkItemRef] = useState<string | null>(null)
+  const [selectedDispatchNodeKey, setSelectedDispatchNodeKey] = useState<string | null>(null)
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
   const projection = useQuery<EmployeeCaseProjection>({
     queryKey: ['employee-case', caseId],
     queryFn: ({ signal }) =>
@@ -329,6 +359,13 @@ function EmployeeCaseDetailPage(): ReactElement {
     }
   }, [projection.data?.case.currentWorkItemRef, selectedWorkItemRef])
 
+  useEffect(() => {
+    const rounds = projection.data?.rounds ?? []
+    if (selectedRoundId === null && rounds.length > 0) {
+      setSelectedRoundId(rounds.at(-1)?.id ?? null)
+    }
+  }, [projection.data?.rounds, selectedRoundId])
+
   const orderedInbox = useMemo(
     () =>
       [...(projection.data?.inbox ?? [])].sort((left, right) => {
@@ -347,6 +384,78 @@ function EmployeeCaseDetailPage(): ReactElement {
   const selectedItem = descriptor.data?.authoringManifest.workItems.find(
     (item) => item.workItemRef === selectedWorkItemRef,
   )
+  const chronologicalRounds = [...data.rounds].sort(
+    (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+  )
+  const latestRoundByWorkItem = new Map<string, ReactionRound>()
+  for (const round of chronologicalRounds) latestRoundByWorkItem.set(round.workItemRef, round)
+  const enabledWorkItemRefs = new Set(employee.data?.published?.enabledWorkItemRefs ?? [])
+  const runtimeCardState = (
+    item: EmployeeTypePackage['authoringManifest']['workItems'][number],
+  ) => {
+    const round = latestRoundByWorkItem.get(item.workItemRef)
+    const state = roundVisualState(round?.state)
+    const enabled = enabledWorkItemRefs.size === 0 || enabledWorkItemRefs.has(item.workItemRef)
+    const detail =
+      round === undefined
+        ? enabled
+          ? zh
+            ? '尚未进入'
+            : 'Not reached yet'
+          : zh
+            ? '岗位未启用'
+            : 'Disabled by job template'
+        : businessStateLabel(round.state, zh)
+    return {
+      state: enabled ? state : ('neutral' as const),
+      detail,
+      compactDetail: detail,
+    }
+  }
+  const routeRound = (
+    destinationWorkItemRef: string,
+    routeRef: string,
+  ): ReactionRound | undefined =>
+    [...chronologicalRounds].reverse().find((round) => {
+      if (round.workItemRef !== destinationWorkItemRef) return false
+      const plan = parseJsonValue(round.planJson)
+      return (
+        plan !== null &&
+        typeof plan === 'object' &&
+        !Array.isArray(plan) &&
+        (plan as Record<string, unknown>).toolSlotRef === routeRef
+      )
+    })
+  const runtimeDispatchNodes: ResponsibilityDispatchNode[] =
+    employee.data?.published?.exactOrderedDispatchConfigurations.flatMap((configuration) =>
+      configuration.routes.map((route, index) => {
+        const latest = routeRound(route.destinationWorkItemRef, route.routeRef)
+        const visualState = roundVisualState(latest?.state)
+        return {
+          key: `${configuration.classifierWorkItemRef}/${route.routeRef}`,
+          classifierWorkItemRef: configuration.classifierWorkItemRef,
+          destinationWorkItemRef: route.destinationWorkItemRef,
+          routeRef: route.routeRef,
+          displayName: route.displayName,
+          priority: index + 1,
+          configured: route.registrationRef !== null,
+          state: visualState,
+          detail:
+            latest === undefined
+              ? zh
+                ? '等待归类产出'
+                : 'Waiting for classifier output'
+              : businessStateLabel(latest.state, zh),
+        }
+      }),
+    ) ?? []
+  const selectedRound = chronologicalRounds.find((round) => round.id === selectedRoundId) ?? null
+  const selectedRoundItem = descriptor.data?.authoringManifest.workItems.find(
+    (item) => item.workItemRef === selectedRound?.workItemRef,
+  )
+  const selectedRoundPlan = selectedRound === null ? null : parseJsonValue(selectedRound.planJson)
+  const selectedRoundOutput =
+    selectedRound === null ? null : parseJsonValue(selectedRound.outputJson)
 
   return (
     <div className="page page--operations employee-case-detail-page">
@@ -419,8 +528,8 @@ function EmployeeCaseDetailPage(): ReactElement {
                   </h2>
                   <p>
                     {zh
-                      ? '高亮节点是当前或手动选中的工作项；流程结构在运行中不会改变。'
-                      : 'The highlighted node is current or selected; the graph never changes at runtime.'}
+                      ? '岗位中的确定性结构原样投影到运行态；流水线错误类型按优先级展开，卡片显示每个节点的实际状态。'
+                      : 'The deterministic job structure is projected into runtime. Pipeline failure types expand by priority and every card shows its actual state.'}
                   </p>
                 </div>
                 <span className="employee-map-section__legend">
@@ -433,12 +542,34 @@ function EmployeeCaseDetailPage(): ReactElement {
                       : 'Current work item highlighted'}
                 </span>
               </div>
-              <ResponsibilityGraph
+              <ResponsibilitySwimlaneMap
                 type={descriptor.data}
                 language={language}
                 selectedWorkItemRef={selectedWorkItemRef}
-                onSelect={setSelectedWorkItemRef}
-                mode="runtime"
+                onSelect={(workItemRef) => {
+                  setSelectedDispatchNodeKey(null)
+                  setSelectedWorkItemRef(workItemRef)
+                }}
+                dispatchNodes={runtimeDispatchNodes}
+                selectedDispatchNodeKey={selectedDispatchNodeKey}
+                onSelectDispatchNode={(node) => {
+                  setSelectedDispatchNodeKey(node.key)
+                  setSelectedWorkItemRef(node.destinationWorkItemRef)
+                  const latest = routeRound(node.destinationWorkItemRef, node.routeRef)
+                  if (latest !== undefined) setSelectedRoundId(latest.id)
+                }}
+                cardState={runtimeCardState}
+                title={
+                  zh ? '运行中的确定性职责全景' : 'Deterministic responsibility map in runtime'
+                }
+                description={
+                  zh
+                    ? '同一张岗位职责图展示等待、执行中、成功和失败；点击节点查看它的契约，点击时间线查看每次真实执行。'
+                    : 'The same job map shows waiting, running, successful, and failed duties. Select a node for its contract and a timeline entry for the actual execution.'
+                }
+                legend={
+                  zh ? '蓝色执行中 · 绿色完成 · 红色失败' : 'Blue running · green done · red failed'
+                }
               />
               {selectedItem !== undefined ? (
                 <div className="work-item-contract-card employee-case-selected-contract">
@@ -635,53 +766,157 @@ function EmployeeCaseDetailPage(): ReactElement {
             </div>
           </section>
 
-          <div className="employee-case-detail-grid">
-            <section className="employee-node-panel">
+          <>
+            <section
+              className="employee-node-panel employee-execution-history"
+              data-testid="employee-work-timeline"
+            >
               <header>
                 <div>
                   <span className="employee-node-panel__eyebrow">
-                    {zh ? '执行记录' : 'Reactions'}
+                    {zh ? '员工工作时间线' : 'Employee work timeline'}
                   </span>
-                  <h2>{zh ? '每一轮做了什么' : 'What each reaction did'}</h2>
+                  <h2>
+                    {zh
+                      ? '从受理到每一轮 React 的完整阶段'
+                      : 'Every stage from intake through each reaction'}
+                  </h2>
+                  <p>
+                    {zh
+                      ? '按实际发生顺序保留 Agent、Workflow、脚本和平台节点。点击阶段查看冻结输入、确定性输出及执行 session。'
+                      : 'Agent, workflow, program, and platform nodes are kept in actual order. Select a stage for its frozen input, deterministic output, and execution session.'}
+                  </p>
                 </div>
               </header>
-              <div className="node-tool-list">
-                {[...data.rounds].reverse().map((round) => {
-                  const item = descriptor.data?.authoringManifest.workItems.find(
-                    (candidate) => candidate.workItemRef === round.workItemRef,
-                  )
-                  return (
-                    <article key={round.id} className="node-tool-row">
-                      <div>
-                        <strong>
-                          {item === undefined
-                            ? zh
-                              ? '员工工作项'
-                              : 'Employee work item'
-                            : localized(item.label, language)}
-                        </strong>
-                        <span>
-                          {zh
-                            ? `第 ${round.attemptOrdinal + 1} 次尝试`
-                            : `Attempt ${round.attemptOrdinal + 1}`}
-                        </span>
+              <div className="employee-execution-timeline-layout">
+                <ol className="employee-execution-timeline">
+                  {chronologicalRounds.length === 0 ? (
+                    <li className="employee-execution-timeline__empty">
+                      {zh ? '尚未产生执行阶段。' : 'No execution stage yet.'}
+                    </li>
+                  ) : (
+                    chronologicalRounds.map((round, index) => {
+                      const item = descriptor.data?.authoringManifest.workItems.find(
+                        (candidate) => candidate.workItemRef === round.workItemRef,
+                      )
+                      const active = round.id === selectedRoundId
+                      return (
+                        <li key={round.id}>
+                          <button
+                            type="button"
+                            className={`employee-execution-timeline__step${active ? ' employee-execution-timeline__step--active' : ''}`}
+                            aria-pressed={active}
+                            onClick={() => {
+                              setSelectedRoundId(round.id)
+                              setSelectedDispatchNodeKey(null)
+                              setSelectedWorkItemRef(round.workItemRef)
+                            }}
+                          >
+                            <b>{index + 1}</b>
+                            <span>
+                              <strong>
+                                {item === undefined
+                                  ? zh
+                                    ? '员工工作项'
+                                    : 'Employee work item'
+                                  : localized(item.label, language)}
+                              </strong>
+                              <small>
+                                {new Date(round.createdAt).toLocaleString(language)} ·{' '}
+                                {zh
+                                  ? `第 ${round.attemptOrdinal + 1} 次尝试`
+                                  : `Attempt ${round.attemptOrdinal + 1}`}
+                              </small>
+                            </span>
+                            <StatusChip
+                              kind={
+                                round.state === 'failed'
+                                  ? 'danger'
+                                  : round.state === 'completed'
+                                    ? 'success'
+                                    : roundVisualState(round.state) === 'running'
+                                      ? 'info'
+                                      : 'neutral'
+                              }
+                            >
+                              {businessStateLabel(round.state, zh)}
+                            </StatusChip>
+                          </button>
+                        </li>
+                      )
+                    })
+                  )}
+                </ol>
+                <div className="employee-execution-stage-detail">
+                  {selectedRound === null ? (
+                    <p className="node-tool-list__empty">
+                      {zh
+                        ? '选择一个阶段查看执行现场。'
+                        : 'Select a stage to inspect its execution.'}
+                    </p>
+                  ) : (
+                    <>
+                      <header>
+                        <div>
+                          <span>{zh ? '当前选择的阶段' : 'Selected stage'}</span>
+                          <h3>
+                            {selectedRoundItem === undefined
+                              ? selectedRound.workItemRef
+                              : localized(selectedRoundItem.label, language)}
+                          </h3>
+                          <p>
+                            {selectedRound.workContractRef.contractId}@
+                            {selectedRound.workContractRef.version} ·{' '}
+                            {selectedRound.toolRef === null
+                              ? zh
+                                ? '平台节点'
+                                : 'Platform node'
+                              : `${selectedRound.toolRef.id}@${selectedRound.toolRef.revision}`}
+                          </p>
+                        </div>
+                        {selectedRound.executionRef === null ? null : (
+                          <Link
+                            to="/tasks/$id"
+                            params={{ id: selectedRound.executionRef }}
+                            className="btn btn--sm btn--primary"
+                          >
+                            {zh ? '查看执行 Session' : 'View execution session'}
+                          </Link>
+                        )}
+                      </header>
+                      <div className="employee-execution-io-grid">
+                        <section>
+                          <span>{zh ? '冻结输入 / 脚本输入' : 'Frozen input / program input'}</span>
+                          <pre>{JSON.stringify(selectedRoundPlan, null, 2)}</pre>
+                        </section>
+                        <section>
+                          <span>
+                            {zh ? '确定性输出 / 脚本输出' : 'Deterministic output / program output'}
+                          </span>
+                          <pre>
+                            {selectedRoundOutput === null
+                              ? zh
+                                ? '当前阶段尚未产生输出。'
+                                : 'This stage has not produced output yet.'
+                              : JSON.stringify(selectedRoundOutput, null, 2)}
+                          </pre>
+                        </section>
                       </div>
-                      {round.executionRef === null ? (
-                        <StatusChip kind={round.state === 'failed' ? 'danger' : 'neutral'}>
-                          {businessStateLabel(round.state, zh)}
-                        </StatusChip>
-                      ) : (
-                        <Link
-                          to="/tasks/$id"
-                          params={{ id: round.executionRef }}
-                          className="btn btn--sm"
-                        >
-                          {zh ? '查看执行' : 'View execution'}
-                        </Link>
-                      )}
-                    </article>
-                  )
-                })}
+                      <details className="employee-case-technical-details">
+                        <summary>
+                          {zh ? '查看输入 Context 精确版本' : 'View exact input context revisions'}
+                        </summary>
+                        <pre className="employee-case-json">
+                          {JSON.stringify(
+                            parseJsonValue(selectedRound.inputContextRefsJson),
+                            null,
+                            2,
+                          )}
+                        </pre>
+                      </details>
+                    </>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -743,7 +978,7 @@ function EmployeeCaseDetailPage(): ReactElement {
                 )}
               </div>
             </section>
-          </div>
+          </>
         </div>
       </div>
     </div>
