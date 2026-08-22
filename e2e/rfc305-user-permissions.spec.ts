@@ -231,10 +231,30 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   const targetContext = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   await primeAuth(targetContext, userToken)
   const targetPage = await targetContext.newPage()
+  const regularUserConfigWrites: string[] = []
+  targetPage.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname === '/api/config' && request.method() === 'PUT') {
+      regularUserConfigWrites.push(request.postData() ?? '')
+    }
+  })
   const workflowHello = waitForWorkflowHello(targetPage)
   await targetPage.goto(`${daemon.baseUrl}/workflows/${workflowId}`)
   await expect(targetPage.getByRole('heading', { name: 'rfc305-live-script' })).toBeVisible()
   await workflowHello
+
+  // RFC-036 regression lock: locale is personal browser state. A regular user
+  // can hot-switch and persist it locally without receiving settings:write or
+  // probing the admin-only config write endpoint.
+  await targetPage.getByRole('radio', { name: '中' }).click()
+  await expect(targetPage.getByRole('radio', { name: '中' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  await expect
+    .poll(() => targetPage.evaluate(() => window.localStorage.getItem('aw-language')))
+    .toBe('zh-CN')
+  expect(regularUserConfigWrites).toEqual([])
 
   await setTheme('dark')
   await page.reload()
