@@ -8,6 +8,7 @@
 //   5. PUT failure rolls back to the previous language + renders an error line.
 //   6. Click on the already-active option does NOT fire a PUT.
 //   7. While mutation.isPending both buttons are disabled.
+//   8. A regular user changes the browser-local language without config I/O.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -17,6 +18,14 @@ import { LanguageSwitch } from '../src/components/LanguageSwitch'
 import i18n from '../src/i18n'
 import { getConfigQueryKey } from '../src/lib/config-resource'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
+
+const permissionHarness = vi.hoisted(() => ({
+  permissions: new Set<string>(['settings:read', 'settings:write']),
+}))
+
+vi.mock('@/hooks/useActor', () => ({
+  usePermission: (permission: string) => permissionHarness.permissions.has(permission),
+}))
 
 function wrap(qc: QueryClient) {
   return function Wrapped({ children }: { children: React.ReactNode }) {
@@ -66,6 +75,7 @@ function mockFetch(opts: MockOptions): { calls: Array<{ method: string; body: un
 }
 
 beforeEach(() => {
+  permissionHarness.permissions = new Set(['settings:read', 'settings:write'])
   setBaseUrl(`http://language-switch-${crypto.randomUUID()}.test`)
   setToken('tok')
   void i18n.changeLanguage('zh-CN')
@@ -197,5 +207,43 @@ describe('LanguageSwitch', () => {
     await waitFor(() => {
       expect((en as HTMLButtonElement).disabled).toBe(false)
     })
+  })
+
+  test('regular user switches locally without reading or writing daemon config', async () => {
+    permissionHarness.permissions = new Set()
+    const calls = mockFetch({ getLanguage: 'zh-CN' }).calls
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // Simulate a daemon-scoped cache left by a preceding admin session. The
+    // current regular user must still follow their own browser-local language.
+    qc.setQueryData(getConfigQueryKey(), { ...DEFAULT_CONFIG, language: 'zh-CN' })
+    render(<LanguageSwitch />, { wrapper: wrap(qc) })
+
+    const en = await screen.findByRole('radio', { name: 'EN' })
+    expect(en.getAttribute('aria-checked')).toBe('false')
+    act(() => {
+      fireEvent.click(en)
+    })
+
+    await waitFor(() => {
+      expect(i18n.language).toBe('en-US')
+      expect(window.localStorage.getItem('aw-language')).toBe('en-US')
+      expect(en.getAttribute('aria-checked')).toBe('true')
+    })
+    expect(calls).toHaveLength(0)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  test('settings read without write does not override the personal language', async () => {
+    permissionHarness.permissions = new Set(['settings:read'])
+    const calls = mockFetch({ getLanguage: 'zh-CN' }).calls
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    qc.setQueryData(getConfigQueryKey(), { ...DEFAULT_CONFIG, language: 'zh-CN' })
+    void i18n.changeLanguage('en-US')
+
+    render(<LanguageSwitch />, { wrapper: wrap(qc) })
+    const en = await screen.findByRole('radio', { name: 'EN' })
+
+    expect(en.getAttribute('aria-checked')).toBe('true')
+    expect(calls).toHaveLength(0)
   })
 })
