@@ -101,6 +101,7 @@ describe('dev role fixtures', () => {
 
 describe('one-click page', () => {
   const baseState = (seed: DevAuthPageState['seed']): DevAuthPageState => ({
+    startedAt: 1_760_000_000_000,
     home: '/tmp/home',
     appOrigin: 'http://localhost:5174',
     daemonBaseUrl: 'http://127.0.0.1:7456',
@@ -218,6 +219,19 @@ describe('dev auth service', () => {
 
     expect((await fetch(`${service.url}/login/admin`, { redirect: 'manual' })).status).toBe(503)
     expect((await fetch(`${service.url}/login/root`, { redirect: 'manual' })).status).toBe(404)
+  })
+
+  test('never lets a browser keep the page or the status document', async () => {
+    // Reported from a live session: the service was already serving the new
+    // layout while the developer's tab still showed the old one. Every byte here
+    // is per-process state, so a cached copy is a render from a process that no
+    // longer exists.
+    const home = await temporaryHome()
+    const service = await startService({ home })
+    for (const path of ['/', '/status.json']) {
+      const response = await fetch(`${service.url}${path}`)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+    }
   })
 
   test('every process gets its own issuer path, so a restart re-keys the daemon JWKS cache', async () => {

@@ -34,6 +34,8 @@ export interface DevAuthServerOptions {
   /** Off in tests that drive seeding themselves. */
   readonly autoSeed?: boolean
   readonly daemonWaitMs?: number
+  /** Injected for tests so the rendered start time is deterministic. */
+  readonly now?: () => number
 }
 
 export interface StartedDevAuthServer {
@@ -71,8 +73,10 @@ export async function startDevAuthServer(
 
   const daemonBaseUrl = (): string | null => readDaemonInfo(options.home)?.baseUrl ?? null
 
+  const startedAt = options.now?.() ?? Date.now()
   const state = (): DevAuthPageState => ({
     home: options.home,
+    startedAt,
     appOrigin,
     daemonBaseUrl: daemonBaseUrl(),
     issuerUrl: issuer(),
@@ -137,11 +141,18 @@ export async function startDevAuthServer(
       return
     }
     if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-      writeText(response, 200, renderDevAuthPage(state()), 'text/html; charset=utf-8')
+      // no-store, because every byte of this page is state: the seeding banner
+      // flips, the accounts appear, the issuer path changes with each process.
+      // Served without cache headers it is exactly the kind of page a browser
+      // feels free to keep — and then the developer is looking at a render from
+      // a process that no longer exists, wondering why their change is missing.
+      writeText(response, 200, renderDevAuthPage(state()), 'text/html; charset=utf-8', {
+        'cache-control': 'no-store',
+      })
       return
     }
     if (request.method === 'GET' && url.pathname === '/status.json') {
-      writeJson(response, 200, state())
+      writeJson(response, 200, state(), { 'cache-control': 'no-store' })
       return
     }
     if (request.method === 'POST' && url.pathname === '/reseed') {

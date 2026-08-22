@@ -11,6 +11,8 @@ export type DevAuthSeedState =
   | { readonly status: 'error'; readonly message: string }
 
 export interface DevAuthPageState {
+  /** When THIS process started — the answer to "am I looking at a stale page?". */
+  readonly startedAt: number
   readonly home: string
   readonly appOrigin: string
   readonly daemonBaseUrl: string | null
@@ -157,6 +159,7 @@ code { font-family: ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,monospace
       <dt>数据目录</dt><dd><code>${escapeHtml(state.home)}</code></dd>
       <dt>daemon</dt><dd><code>${escapeHtml(state.daemonBaseUrl ?? '等待中…')}</code></dd>
       <dt>mock IdP</dt><dd><code>${escapeHtml(state.issuerUrl)}/.well-known/openid-configuration</code></dd>
+      <dt>本页进程</dt><dd>启动于 <code>${escapeHtml(new Date(state.startedAt).toLocaleString('zh-CN'))}</code></dd>
     </dl>
     <p>四个账号由本进程用真实授权码流程种入上面这个数据库，登录链路与生产完全一致：
     <code>login/start → mock IdP → callback → #aw_session</code>。产品代码零改动，
