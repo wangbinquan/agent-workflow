@@ -236,8 +236,13 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     expect(task.spaceKind).toBe('scratch')
     expect(taskExecutionKind(task)).toBe('agent')
     expect(task.inputs[AGENT_HOST_INPUT_KEY]).toBe('fix the flaky test')
-    const snapshot = task.workflowSnapshot as { nodes: Array<{ id: string; agentName?: string }> }
+    const snapshot = task.workflowSnapshot as {
+      nodes: Array<{ id: string; agentName?: string; position?: { x: number; y: number } }>
+    }
     expect(snapshot.nodes.some((n) => n.id === AGENT_HOST_AGENT_NODE_ID)).toBe(true)
+    // Platform-owned host snapshots freeze the shared canonical layout at the
+    // task boundary; legacy rows use the same policy in the read projection.
+    expect(snapshot.nodes.every((node) => node.position !== undefined)).toBe(true)
     // FK anchor row exists and is builtin (lazily seeded).
     const anchor = (
       await db.select().from(workflows).where(eq(workflows.id, AGENT_HOST_WORKFLOW_ID))

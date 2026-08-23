@@ -27,6 +27,7 @@ import {
   serializeWorkflowEditableSnapshotV1,
   normalizeResourceDisplayName,
   migrateWorkflowDefinitionToLatest,
+  planCanonicalWorkflowLayout,
   PRIVILEGED_LENS_TRANSPARENT,
   rehydratePrivilegedNodes,
   RESOURCE_DISPLAY_NAME_MSG,
@@ -173,13 +174,15 @@ export async function createWorkflow(
   // Normalize incoming v1 → v2 (RFC-005) so new rows always land at the
   // latest schema version. Older clients can still post v1 — they get upgraded.
   const normalized = migrateDefinitionToLatest(input.definition)
-  assertCanonicalWorkflowAgentIds(normalized)
-  const newAgentIds = [...extractWorkflowAgentRefs(normalized)]
+  const definitionForInsert =
+    opts?.builtin === true ? planCanonicalWorkflowLayout(normalized).next : normalized
+  assertCanonicalWorkflowAgentIds(definitionForInsert)
+  const newAgentIds = [...extractWorkflowAgentRefs(definitionForInsert)]
   // RFC-243 (§5.3): call-workflow references are NAME selectors, checked with
   // the same D15 semantics as agent refs (existence tolerated until launch,
   // visibility enforced on save) in the dangle-tolerant name domain.
-  const newWorkflowNames = extractWorkflowWorkflowRefs(normalized)
-  const newWorkgroupNames = extractWorkflowWorkgroupRefs(normalized)
+  const newWorkflowNames = extractWorkflowWorkflowRefs(definitionForInsert)
+  const newWorkgroupNames = extractWorkflowWorkgroupRefs(definitionForInsert)
   const actor = opts?.actor ?? null
   const resolvedNewAgents = await resolveRefsUsableById(db, actor, 'agent', newAgentIds)
   const resolvedNewWorkflows = await resolveRefsUsableByName(
@@ -218,7 +221,7 @@ export async function createWorkflow(
       id,
       name: input.name,
       description: input.description,
-      definition: normalized,
+      definition: definitionForInsert,
       ownerUserId,
       builtin: opts?.builtin === true,
       ...(opts?.visibility === undefined ? {} : { visibility: opts.visibility }),

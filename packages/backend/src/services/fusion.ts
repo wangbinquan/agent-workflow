@@ -38,7 +38,9 @@ import {
   PLATFORM_FUSION_DIR,
   PLATFORM_FUSION_MANIFEST,
   PLATFORM_WORKSPACE_DIR,
+  planCanonicalWorkflowLayout,
   TERMINAL_TASK_STATUSES,
+  WorkflowDefinitionSchema,
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -322,7 +324,20 @@ function repairFusionWorkflowAgentId(definition: string): {
       'the built-in fusion workflow has no merger agent node',
     )
   }
-  return { definition: changed ? JSON.stringify(parsed) : definition, changed }
+  const shape = WorkflowDefinitionSchema.safeParse(record)
+  if (!shape.success) {
+    throw new ConflictError(
+      'builtin-workflow-definition-invalid',
+      'the built-in fusion workflow definition does not match the workflow schema',
+    )
+  }
+  // Use the validated raw record rather than `shape.data`: workflow nodes are
+  // passthrough and the built-in repair contract also preserves historical
+  // top-level extensions (for example migration/customization markers).
+  const laidOut = planCanonicalWorkflowLayout(record as unknown as WorkflowDefinition).next
+  const nextDefinition = JSON.stringify(laidOut)
+  if (nextDefinition !== definition) changed = true
+  return { definition: changed ? nextDefinition : definition, changed }
 }
 
 export async function seedFusionResources(db: DbClient): Promise<void> {

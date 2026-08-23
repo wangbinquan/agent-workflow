@@ -31,6 +31,13 @@ const VERTICAL_GAP = 52
 /** Bump only when new layout results intentionally change. */
 export const WORKFLOW_LAYOUT_ALGORITHM_VERSION = 1
 
+/**
+ * Stable platform-owned origin for definitions whose geometry is generated
+ * rather than authored. Intent-created and built-in workflows use the same
+ * anchor so server-side layout cannot drift by entry point.
+ */
+export const WORKFLOW_LAYOUT_CANONICAL_ORIGIN = Object.freeze({ x: 80, y: 80 })
+
 export interface WorkflowLayoutSemanticContext {
   agentsByName: PortAgentLookup
 }
@@ -536,4 +543,27 @@ export function planWorkflowLayout(
   const nodes = definition.nodes.map((node) => states.get(node.id)?.node ?? node)
   const changed = nodes.some((node, index) => node !== definition.nodes[index])
   return { next: changed ? { ...definition, nodes } : definition, warnings }
+}
+
+/** Deterministic whole-definition layout used at platform-owned write/read boundaries. */
+export function planCanonicalWorkflowLayout(definition: WorkflowDefinition): WorkflowLayoutPlan {
+  const planned = planWorkflowLayout(definition, {
+    selection: { mode: 'all' },
+    rootAnchor: WORKFLOW_LAYOUT_CANONICAL_ORIGIN,
+  })
+  // A node already sitting on the historical fallback coordinate needs no
+  // translation, so the low-level planner may legitimately leave `position`
+  // omitted. Platform-generated documents must nevertheless freeze explicit
+  // geometry: otherwise a future fallback-grid change would silently move an
+  // old built-in while claiming its layout had already been normalized.
+  const nodes = planned.next.nodes.map((node, index) =>
+    node.position === undefined
+      ? { ...node, position: effectiveWorkflowNodePosition(node, index) }
+      : node,
+  )
+  const materialized = nodes.some((node, index) => node !== planned.next.nodes[index])
+  return {
+    next: materialized ? { ...planned.next, nodes } : planned.next,
+    warnings: planned.warnings,
+  }
 }
