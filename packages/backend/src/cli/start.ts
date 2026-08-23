@@ -80,7 +80,7 @@ import {
   registerTerminalWorkspacePruneEffect,
   registerTerminalWorkspacePrunePolicy,
 } from '@/services/lifecycle'
-import { shouldRequestWebhookWorkspacePrune } from '@/services/webhook/terminalWorkspaceCleanup'
+import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
@@ -468,10 +468,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-300 composition: integration owns the direct-Webhook attribution
   // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
   // physical deletion. Read config at each transition so the setting is hot.
-  registerTerminalWorkspacePrunePolicy((row, to) =>
-    shouldRequestWebhookWorkspacePrune(loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup, {
-      ...row,
-      to,
+  registerTerminalWorkspacePrunePolicy(
+    createWebhookTerminalWorkspacePrunePolicy({
+      db,
+      enabled: () => loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup,
     }),
   )
   registerTerminalWorkspacePruneEffect((effectDb, taskId) => {

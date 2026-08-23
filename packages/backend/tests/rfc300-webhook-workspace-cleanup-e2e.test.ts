@@ -40,7 +40,7 @@ import {
 import { getTask, isTaskActive } from '../src/services/task'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { shouldRequestWebhookWorkspacePrune } from '../src/services/webhook/terminalWorkspaceCleanup'
+import { createWebhookTerminalWorkspacePrunePolicy } from '../src/services/webhook/terminalWorkspaceCleanup'
 import { createWorkflow } from '../src/services/workflow'
 import { sha1Hex } from '../src/util/hash'
 
@@ -247,8 +247,8 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
       .limit(1)
   )[0]!
 
-  registerTerminalWorkspacePrunePolicy((row, to) =>
-    shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+  registerTerminalWorkspacePrunePolicy(
+    createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
   registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
     if (isTaskActive(taskId)) return
@@ -484,8 +484,8 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     cancelOnMrTerminal: true,
   })
 
-  registerTerminalWorkspacePrunePolicy((row, to) =>
-    shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+  registerTerminalWorkspacePrunePolicy(
+    createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
   registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
     if (isTaskActive(taskId)) return

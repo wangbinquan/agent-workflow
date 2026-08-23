@@ -112,6 +112,18 @@
       "lines": 553
     },
     {
+      "id": "rfc317-lifecycle-origin-neutrality",
+      "file": "packages/backend/tests/architecture/rfc317-lifecycle-origin-neutrality.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 235
+    },
+    {
       "id": "rfc317-module-boundary",
       "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
       "runner": "bun",

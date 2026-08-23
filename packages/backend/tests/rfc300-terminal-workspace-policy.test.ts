@@ -15,7 +15,10 @@ import {
   registerTerminalWorkspacePrunePolicy,
   setTaskStatus,
 } from '../src/services/lifecycle'
-import { shouldRequestWebhookWorkspacePrune } from '../src/services/webhook/terminalWorkspaceCleanup'
+import {
+  createWebhookTerminalWorkspacePrunePolicy,
+  shouldRequestWebhookWorkspacePrune,
+} from '../src/services/webhook/terminalWorkspaceCleanup'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -173,8 +176,8 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
   test('winning done CAS writes the claim with the same clock and wakes the effect', async () => {
     const taskId = await seedTask()
     const effects: Array<{ taskId: string; to: string }> = []
-    registerTerminalWorkspacePrunePolicy((row, to) =>
-      shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+    registerTerminalWorkspacePrunePolicy(
+      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     registerTerminalWorkspacePruneEffect((_db, id, to) => effects.push({ taskId: id, to }))
 
@@ -197,8 +200,8 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
 
   test('the setting is sampled at terminal transition, not when the task started', async () => {
     let enabled = false
-    registerTerminalWorkspacePrunePolicy((row, to) =>
-      shouldRequestWebhookWorkspacePrune(enabled, { ...row, to }),
+    registerTerminalWorkspacePrunePolicy(
+      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => enabled }),
     )
 
     const startedWhileOff = await seedTask()
@@ -235,8 +238,8 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
   test('losing terminal CAS writes neither claim nor effect', async () => {
     const taskId = await seedTask()
     let effectCount = 0
-    registerTerminalWorkspacePrunePolicy((row, to) =>
-      shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+    registerTerminalWorkspacePrunePolicy(
+      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     registerTerminalWorkspacePruneEffect(() => {
       effectCount += 1
@@ -266,8 +269,8 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
   test('racing done/canceled transitions leave exactly one terminal winner with its claim', async () => {
     const taskId = await seedTask()
     const effects: Array<{ taskId: string; to: string }> = []
-    registerTerminalWorkspacePrunePolicy((row, to) =>
-      shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+    registerTerminalWorkspacePrunePolicy(
+      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     registerTerminalWorkspacePruneEffect((_db, id, to) => effects.push({ taskId: id, to }))
 
@@ -298,8 +301,8 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
   })
 
   test('failed/interrupted and a context-only inherited child never gain a claim', async () => {
-    registerTerminalWorkspacePrunePolicy((row, to) =>
-      shouldRequestWebhookWorkspacePrune(true, { ...row, to }),
+    registerTerminalWorkspacePrunePolicy(
+      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     let effectCount = 0
     registerTerminalWorkspacePruneEffect(() => {
@@ -342,8 +345,8 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
 
   test('disabled or throwing provider never blocks the terminal transition', async () => {
     const disabledId = await seedTask()
-    registerTerminalWorkspacePrunePolicy((row, to) =>
-      shouldRequestWebhookWorkspacePrune(false, { ...row, to }),
+    registerTerminalWorkspacePrunePolicy(
+      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => false }),
     )
     await setTaskStatus({
       db,

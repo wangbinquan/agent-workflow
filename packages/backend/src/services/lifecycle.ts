@@ -389,21 +389,41 @@ export class ConcurrentTaskTransition extends ConflictError {
   }
 }
 
+/**
+ * 工作区回收原因的取值域，**从 schema 派生**而不是手抄。
+ *
+ * 手抄一份联合类型等于把同一个词汇表写两遍：schema 加一个取值时，这里不会红，
+ * 而是安静地把新原因判成不合法。派生则让「取值域」只有一个事实源。
+ */
+export type WorkspacePruneCause = NonNullable<(typeof tasks.$inferSelect)['workspacePruneCause']>
+
+/**
+ * RFC-317 LC-04 —— 回收判定连**原因**一起由注入方给出。
+ *
+ * 原本 port 返回裸 `boolean`，于是「要不要回收」被外置了、而「这次回收叫什么名字」
+ * 仍留在 kernel 里硬编码（`workspacePruneCause: 'webhook-terminal' as const`）。
+ * 那是**半次反转**：策略搬出去了，词汇表没搬——第二个来源要表达自己的原因，唯一的
+ * 办法就是回来改这个通用写点。闭合联合把「不回收就没有原因」也变成编译期事实。
+ */
+export type TerminalWorkspacePruneDecision =
+  | { readonly prune: false }
+  | { readonly prune: true; readonly cause: WorkspacePruneCause }
+
 /** RFC-300: daemon-composed policy deciding whether this exact terminal CAS
  * must also durably claim the task's owned workspace. Lifecycle receives only
- * the minimum persisted attribution/ownership facts and never imports config
- * or Webhook services. */
+ * neutral ownership/tombstone facts plus the task id; any origin-specific
+ * attribution column is read by the policy itself, so this generic writer names
+ * zero integrations. It never imports config or integration services. */
 export type TerminalWorkspacePrunePolicy = (
   row: {
-    webhookTriggerId: string | null
-    eventSubscriptionId: string | null
+    taskId: string
     spaceKind: (typeof tasks.$inferSelect)['spaceKind']
     workspacePruningAt: number | null
     workspacePruneCause: (typeof tasks.$inferSelect)['workspacePruneCause']
     workspacePrunedAt: number | null
   },
   to: TaskStatus,
-) => boolean
+) => TerminalWorkspacePruneDecision
 
 /** RFC-300: post-commit wake-up for an already-durable claim. It is a separate
  * multicast concern from RFC-202's human-gate sweep; failures never undo the
@@ -460,8 +480,6 @@ export async function setTaskStatus(args: {
     .select({
       status: tasks.status,
       worktreePath: tasks.worktreePath,
-      webhookTriggerId: tasks.webhookTriggerId,
-      eventSubscriptionId: tasks.eventSubscriptionId,
       spaceKind: tasks.spaceKind,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePruneCause: tasks.workspacePruneCause,
@@ -546,13 +564,12 @@ export async function setTaskStatus(args: {
   // `runningMs` delta are computed against the same instant (and are injectable
   // for deterministic tests).
   const now = args.now ?? Date.now()
-  let requestWorkspacePrune = false
+  let workspacePruneDecision: TerminalWorkspacePruneDecision = { prune: false }
   if (terminalWorkspacePrunePolicy !== null && (args.to === 'done' || args.to === 'canceled')) {
     try {
-      requestWorkspacePrune = terminalWorkspacePrunePolicy(
+      workspacePruneDecision = terminalWorkspacePrunePolicy(
         {
-          webhookTriggerId: row.webhookTriggerId,
-          eventSubscriptionId: row.eventSubscriptionId,
+          taskId: args.taskId,
           spaceKind: row.spaceKind,
           workspacePruningAt: row.workspacePruningAt,
           workspacePruneCause: row.workspacePruneCause,
@@ -588,8 +605,8 @@ export async function setTaskStatus(args: {
               }
             : {}),
         ...(args.extra ?? {}),
-        ...(requestWorkspacePrune
-          ? { workspacePruningAt: now, workspacePruneCause: 'webhook-terminal' as const }
+        ...(workspacePruneDecision.prune
+          ? { workspacePruningAt: now, workspacePruneCause: workspacePruneDecision.cause }
           : {}),
         lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
       })
@@ -598,7 +615,7 @@ export async function setTaskStatus(args: {
           eq(tasks.id, args.taskId),
           eq(tasks.status, from),
           ...(isRevival ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)] : []),
-          ...(requestWorkspacePrune
+          ...(workspacePruneDecision.prune
             ? [
                 isNull(tasks.workspacePruningAt),
                 isNull(tasks.workspacePruneCause),
@@ -638,7 +655,7 @@ export async function setTaskStatus(args: {
         `terminal task hook failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
       )
     }
-    if (requestWorkspacePrune) {
+    if (workspacePruneDecision.prune) {
       try {
         terminalWorkspacePruneEffect?.(args.db, args.taskId, args.to)
       } catch (err) {
