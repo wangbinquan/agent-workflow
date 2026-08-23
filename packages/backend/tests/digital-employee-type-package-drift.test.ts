@@ -113,6 +113,41 @@ describe('employee type package digest guard', () => {
     ])
   })
 
+  test('a historical task can still read its exact frozen responsibility map', () => {
+    // Regression: EmployeeCase pins an exact type revision, but getType used
+    // only the currently executable in-memory package registry. After a type
+    // upgrade, /tasks/employee-cases/:id therefore rendered the timeline while
+    // dropping the shared responsibility map with "employee type not found".
+    const store = newStore()
+    const historical = structuredClone(descriptor)
+    historical.typeRef.revision = descriptor.typeRef.revision - 1
+    historical.displayName = {
+      ...historical.displayName,
+      'en-US': 'Frozen historical development employee',
+    }
+    store.ensureTypePackage({
+      descriptor: historical,
+      descriptorDigest: packageDigest(historical),
+      state: 'published',
+      registeredAt: 900,
+    })
+
+    const service = new DigitalEmployeeAuthoringService({
+      store,
+      typePackages: [runtimePackage()],
+      connectionCatalog: stubConnectionCatalog,
+      programArtifacts: stubProgramArtifacts,
+      executionContracts: unreachableExecutionContracts,
+      now: () => 2_000,
+    })
+
+    expect(service.getType(historical.typeRef)).toEqual(historical)
+    expect(service.getAuthoringManifest(historical.typeRef)).toEqual(
+      historical.authoringManifest,
+    )
+    expect(service.getType(descriptor.typeRef)).toEqual(descriptor)
+  })
+
   test('an immutable revision-1 descriptor is projected without rewriting its frozen row', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const store = createSqliteDigitalEmployeeAuthoringStore(db)

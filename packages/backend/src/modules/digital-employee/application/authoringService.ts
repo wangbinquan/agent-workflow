@@ -261,6 +261,14 @@ export class DigitalEmployeeAuthoringService {
     return runtime
   }
 
+  #descriptor(ref: EmployeeTypeRef): EmployeeTypePackageDescriptor {
+    const record = this.#store.getTypePackage(ref)
+    if (record === null) {
+      throw new NotFoundError('employee-type-not-found', `employee type not found: ${typeKey(ref)}`)
+    }
+    return record.descriptor
+  }
+
   listTypes(): EmployeeTypePackageDescriptor[] {
     const latest = new Map<string, EmployeeTypePackageDescriptor>()
     for (const record of this.#store.listTypePackages()) {
@@ -274,11 +282,11 @@ export class DigitalEmployeeAuthoringService {
   }
 
   getType(ref: EmployeeTypeRef): EmployeeTypePackageDescriptor {
-    return this.#runtime(ref).descriptor
+    return this.#descriptor(ref)
   }
 
   getAuthoringManifest(ref: EmployeeTypeRef) {
-    return this.#runtime(ref).descriptor.authoringManifest
+    return this.#descriptor(ref).authoringManifest
   }
 
   async #materializeImplementation(
