@@ -577,37 +577,86 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                     current.push(ingress)
                     ingressesByTarget.set(ingress.nextWorkItemRef, current)
                   }
-                  const primaryEntryFor = (item: WorkItem): ResponsibilityMapEntry => {
-                    if (item.humanReview !== null) {
-                      const gate: ResponsibilityReviewGate = {
-                        parentWorkItemRef: item.workItemRef,
-                        optionRef: item.humanReview.optionRef,
-                        label: item.humanReview.label,
-                        description: item.humanReview.description,
-                      }
-                      const reviewActive = capabilityReviewState(gate)?.active
-                      if (reviewActive !== false) {
-                        return {
-                          kind: 'review-branch',
-                          item,
-                          gate,
-                          mode: reviewActive === true ? 'active' : 'conditional',
-                        }
-                      }
+                  const reviewProjectionByWorkItem = new Map<
+                    string,
+                    { gate: ResponsibilityReviewGate; mode: 'conditional' | 'active' }
+                  >()
+                  for (const item of items) {
+                    if (
+                      item.humanReview === null ||
+                      replacedDestinationRefs.has(item.workItemRef)
+                    ) {
+                      continue
                     }
-                    const itemIngresses = ingressesByTarget.get(item.workItemRef) ?? []
+                    const gate: ResponsibilityReviewGate = {
+                      parentWorkItemRef: item.workItemRef,
+                      optionRef: item.humanReview.optionRef,
+                      label: item.humanReview.label,
+                      description: item.humanReview.description,
+                    }
+                    const reviewActive = capabilityReviewState(gate)?.active
+                    if (reviewActive === false) continue
+                    reviewProjectionByWorkItem.set(item.workItemRef, {
+                      gate,
+                      mode: reviewActive === true ? 'active' : 'conditional',
+                    })
+                  }
+                  // Assign every ingress card to exactly one branch. Earlier source items own
+                  // bypass routes to their single successor; the successor only owns a route
+                  // when no active predecessor branch already presents it.
+                  const claimedIngressRefs = new Set<string>()
+                  const ingressProjectionByWorkItem = new Map<
+                    string,
+                    {
+                      ingresses: ResponsibilityProjectedIngress[]
+                      bypassIngresses: ResponsibilityProjectedIngress[]
+                    }
+                  >()
+                  for (const item of items) {
+                    if (
+                      replacedDestinationRefs.has(item.workItemRef) ||
+                      reviewProjectionByWorkItem.has(item.workItemRef)
+                    ) {
+                      continue
+                    }
+                    const itemIngresses = (ingressesByTarget.get(item.workItemRef) ?? []).filter(
+                      (ingress) => !claimedIngressRefs.has(ingress.ingressRef),
+                    )
+                    if (itemIngresses.length === 0) continue
+                    for (const ingress of itemIngresses) claimedIngressRefs.add(ingress.ingressRef)
                     const bypassIngresses =
                       item.nextWorkItemRefs.length === 1
                         ? (ingressesByTarget.get(item.nextWorkItemRefs[0]!) ?? []).filter(
-                            (ingress) => ingress.routeKind === 'bypass',
+                            (ingress) =>
+                              ingress.routeKind === 'bypass' &&
+                              !claimedIngressRefs.has(ingress.ingressRef),
                           )
                         : []
-                    return itemIngresses.length > 0
+                    for (const ingress of bypassIngresses) {
+                      claimedIngressRefs.add(ingress.ingressRef)
+                    }
+                    ingressProjectionByWorkItem.set(item.workItemRef, {
+                      ingresses: itemIngresses,
+                      bypassIngresses,
+                    })
+                  }
+                  const primaryEntryFor = (item: WorkItem): ResponsibilityMapEntry => {
+                    const reviewProjection = reviewProjectionByWorkItem.get(item.workItemRef)
+                    if (reviewProjection !== undefined) {
+                      return {
+                        kind: 'review-branch',
+                        item,
+                        gate: reviewProjection.gate,
+                        mode: reviewProjection.mode,
+                      }
+                    }
+                    const ingressProjection = ingressProjectionByWorkItem.get(item.workItemRef)
+                    return ingressProjection !== undefined
                       ? {
                           kind: 'ingress-branch',
                           item,
-                          ingresses: itemIngresses,
-                          bypassIngresses,
+                          ingresses: ingressProjection.ingresses,
+                          bypassIngresses: ingressProjection.bypassIngresses,
                         }
                       : { kind: 'item', item }
                   }
@@ -690,18 +739,9 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                       )
                     }
                   })
-                  const groupedIngressRefs = new Set(
-                    primaryEntries.flatMap((entry) =>
-                      entry.kind === 'ingress-branch'
-                        ? [...entry.ingresses, ...entry.bypassIngresses].map(
-                            (ingress) => ingress.ingressRef,
-                          )
-                        : [],
-                    ),
-                  )
                   const auxiliaryDrafts = [
                     ...ingresses
-                      .filter((ingress) => !groupedIngressRefs.has(ingress.ingressRef))
+                      .filter((ingress) => !claimedIngressRefs.has(ingress.ingressRef))
                       .map((ingress) => ({
                         order: ingress.order,
                         identity: `ingress:${ingress.ingressRef}`,

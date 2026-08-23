@@ -130,6 +130,30 @@ function fixtureType(): EmployeeTypePackage {
 }
 
 describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
+  test('runtime review collapse still renders every projected ingress exactly once', () => {
+    const { container } = render(
+      <ResponsibilitySwimlaneMap
+        type={fixtureType()}
+        selectedWorkItemRef={null}
+        language="en-US"
+        onSelect={vi.fn()}
+        reviewGateState={() => ({
+          active: false,
+          state: 'neutral',
+          detail: 'Not selected',
+        })}
+      />,
+    )
+
+    expect(container.querySelectorAll('[data-work-ingress-ref]')).toHaveLength(3)
+    for (const ingressRef of ['ui-input:direct', 'ui-input:external-id', 'issue']) {
+      expect(container.querySelectorAll(`[data-work-ingress-ref="${ingressRef}"]`)).toHaveLength(1)
+    }
+    expect(container.querySelectorAll('[data-work-item-ref="prepare"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-work-item-ref="analyze"]')).toHaveLength(1)
+    expect(container.querySelector('[data-review-option-ref="review-plan"]')).toBeNull()
+  })
+
   test('renders generic ingress and human-review projections outside executable work items', () => {
     const onSelect = vi.fn()
     const onConfigureIngress = vi.fn()
