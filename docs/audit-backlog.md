@@ -2170,3 +2170,35 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
   隐式但不改契约；③明确声明验证程序是 POSIX-only 能力，在文档与 UI 上说清楚。
   **这是产品能力取舍，需要用户裁决**，故未自行选路。相关的 E2E-B 已带着这条判据在 win32 上停跑
   （解除条件写在 `e2e/rfc310-digital-employee-journey.spec.ts` 顶部）；同 shard 的 E2E-A 在 windows 上是绿的。
+
+## 存量 type package descriptor 与新必填字段的断层（2026-08-23 实测，RFC-310 相关）
+
+> **发现者不是该 RFC 的作者**——这两条是排查「`bun dev` 起不来」时顺带量到的，写在这里
+> 供 RFC-310 的 frozen-type-package 修复参考（对方已有 repro：commit `218ae46f0`
+> *"test(dev): reproduce unparseable frozen type package"*）。**未改动任何相关生产代码。**
+
+- **症状**：daemon 启动即退出（exit 1），zod 报
+  `authoringManifest.workItems[1].humanReview.planningRoleRef / planningSlotRef: Required`。
+  三条 ready 行一条都出不来。
+- **坏数据位置**：`~/.agent-workflow/db.sqlite` 的 `employee_type_packages.descriptor_json`。
+  本机 7 个修订里 **rev 4–7 缺这两个字段**；rev 1–3 不受影响（它们根本没有 `humanReview`）。
+  即：`humanReview` 先落地，`planningRoleRef` / `planningSlotRef` 是后来才加的必填字段，
+  中间那批已冻结的 descriptor 卡在断层里。
+- **代码侧是对的**：内置包 `modules/development-automation/composition/employeeTypePackage.ts`
+  对同一个 `analyze-implement` / `review-implementation-plan` 工作项声明的正是
+  `planningRoleRef: 'planning'` / `planningSlotRef: 'plan'`——所以**全新 DB 不会复现**，
+  只有带着存量行的开发机会撞。
+- **本机已做的临时处置**（仅数据，未动代码）：备份 `db.sqlite` 后按内置包的取值回填那 4 行，
+  daemon 恢复正常。这只是单机解封，**不是修复**——真正的修法是类型包升级 / 迁移路径要能
+  处理「字段变必填之前写入的 descriptor」。
+
+### 由此暴露的一个结构性测试盲区（不限于 RFC-310）
+
+**CI 永远用全新临时 DB，结构上碰不到存量旧行**，所以「CI 全绿 + `bun dev` 起不来」是可
+复现的常态，而不是偶发。同批实测：`973793228` 的 CI 里 3552 个后端用例只红 1 个，且红的
+不是这条——启动路径对**旧形状持久化数据**的容忍度，当前没有任何用例在守。
+
+- **建议的守卫形态**：一条「拿旧形状 descriptor（缺后加的必填字段）启动」的用例，
+  或更通用的「schema 新增必填字段时，必须同批给出存量行的迁移 / 兼容路径」检查。
+- 这与 `docs/dev-gotchas.md` 反复讲的是同一族：**空的 / 全新的语料让守卫零预言力**——
+  那边是「扫描扫到 0 个文件」，这边是「测试库里没有一行旧数据」。
