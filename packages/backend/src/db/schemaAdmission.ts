@@ -48,7 +48,18 @@ const MAX_EXPECTED_PHYSICAL_SCHEMA_CACHE_ENTRIES = 8
 // applied before shared-main migration files reached their canonical form.
 // The expected tag and timestamp are still checked at the same chain index;
 // all other history edits continue to fail admission.
-const LEGACY_MIGRATION_HASHES: Readonly<Record<string, readonly string[]>> = {
+/**
+ * RFC-317 T46（CC-03）—— 导出，并让唯一的消费者与唯一的守卫共用它。
+ *
+ * 这张表此前在 `tests/rfc278-legacy-schema-reconciliation.test.ts` 里被**手抄了一份**
+ * （8 条哈希逐字重写）。手抄的账本必然与生产走散，且走散时**不会红**：生产这边加一条
+ * 别名，测试那边照旧只认它自己那 8 条，于是新加的别名从来没有被任何断言看过。
+ *
+ * 每条别名的存活性有一条**可复核**的判据（见守卫）：别名哈希必须与该 tag 当前规范
+ * 文件的哈希**不同**。相同就说明规范文件已经回到了当年被应用的字节，这条别名是死的，
+ * 应当删除——比一句散文 `why` 强，因为它会自己过期。
+ */
+export const LEGACY_MIGRATION_HASHES: Readonly<Record<string, readonly string[]>> = {
   '0052_rfc108_recovery_events': [
     '3b5f02214e1c06a1b05ab2eaef4d1209815d60198850eba9ad4a899fa14c96f0',
   ],
