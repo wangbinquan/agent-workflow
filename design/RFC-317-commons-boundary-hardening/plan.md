@@ -167,6 +167,7 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 | T68 | `design/plan.md` RFC 索引登记 RFC-317（状态四选一打头）；`STATE.md` 顶部「进行中 RFC」→ 完工后移入已完成表                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | T69 | `docs/dev-gotchas.md` 沉淀通用教训：①「守卫只覆盖自己诞生的那一块」的系统性自检定式（写完任一守卫先问「起点面全吗？终点面全吗？subject 是硬编码还是派生？」）；②`<=` 型棘轮会留下可复用的松弛槽位，快照降下去不销账等于白送分支额度；③ 单跳 schema 反射守卫看不见多跳级联；④ 默认参数会让安全语义变成 opt-in，且对导入图 / AST cast 禁令 / 源码文本三类扫描**全部隐形**；⑤ **`git ls-files` 型守卫看不见未跟踪的新文件**——`docs/dev-gotchas.md:12` 已记这条事故，但没写**本地的快解**：`git add` 进索引后 `git ls-files` 就能看见它，不必先提交再验（RFC-317 B1-c 实撞：新错误码守卫因看不见新测试文件而误报）；⑥ **AST 定位路由 handler 必须按 method + path**，只按 path 会永远取到最后注册的那条（同一 path 常有 GET/POST 或 GET/PUT 两条），断言看的是另一个 handler 却恒定「工作正常」；⑦ **正则剥注释会吃掉真代码**——非贪婪块注释正则从字符串里的 `/*` 一路吃到下一个 `*/`，吞掉几百行；判「某个名字有没有被调用」应当用 AST，对注释与字符串天然免疫；⑧ **正向锁也会被注释满足**：`text.includes('someGuardFn')` 会被文档注释里的提及满足，比它的镜像版（注释踩负向锁）更隐蔽，因为它不会让人怀疑；⑨ **design 文档里裸写正则会被 lychee 当成 markdown 链接**——`['"](?:a | b)['"]`这种片段形如`[...](...)`，CI 的 `Markdown link check (design/)`会去请求`(?:a | b)` 并红，本 RFC 落档时实撞（`findings.md` 三处），定式是**正则一律包进反引号** |
 | T70 | 若有机制被 R1–R12 完全覆盖，按 `docs/dev-gotchas.md` 三种处置逐条判并记录                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| T71 | **B11 收口时补录**：`POST /api/runtimes/probe` 与 `POST /api/runtimes` 预检 smoke 的 `extraArgs` / `isSandbox` 能力门（能力影响 **C3** 已获批准，但任务表里从来没有对应任务；见下方实施记录）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | RT-01                                                                               |
 
 ## 3. 冲突矩阵（多人并发树）
 
@@ -186,19 +187,19 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 ## 4. 验收清单
 
 - [x] AC-1 `architecture/commons-manifest.json` 落地且与源码双向闭合（B0；82 个内核 / 31 个 core，闭合断言在 `rfc317-architecture-ledgers.test.ts`）
-- [ ] AC-2 R1/R2 落地，94 + 22 条边精确入账
-- [ ] AC-3 R3 覆盖全部 11 个 context，两处具名偏离（`intent` 无 public / `integration/public/mrTerminalControl.ts` 非 exact）入账
-- [ ] AC-4 R4 在清单文件集上生效，`toBe` 精确断言
-- [ ] AC-5 R5–R9 落地，各带正反 fixture
-- [ ] AC-6 R10 覆盖仓内每一个 allowlist，基线只降
-- [ ] AC-7 R11 manifest 落地并自变异转红
-- [ ] AC-8 R12 语料扩面，扩面后新增违规逐条修或入账（预算未调高）
-- [ ] AC-9 52 条 P1/P2 逐条修复 + 红→绿 + 变异复跑确认转红
+- [x] AC-2 R1/R2 落地，94 + 22 条边精确入账（B3-a；`rfc317-module-boundary.test.ts` 的 T22/T23「与债务账本**逐条相等**」，不是上限）
+- [x] AC-3 R3 覆盖全部 11 个 context，两处具名偏离入账（B3-a；同文件 T24「R3：模块目录形状」）
+- [x] AC-4 R4 在清单文件集上生效，`toBe` 精确断言（B4-a；`rfc317-foreign-vocabulary-budget.test.ts` + `rfc317-identity-dispatch.test.ts`，各带自变异边界）
+- [x] AC-5 R5–R9 落地，各带正反 fixture（R5 `rfc317-table-ownership.test.ts` T41；R7 T34 spawn 治理形态；R8 `cascadeClosure.ts` 传递闭包；R9 T60–T64 全前端棘轮 + `rfc317-dead-class-invariants.test.ts`）
+- [x] AC-6 R10 覆盖仓内每一个 allowlist，基线只降（B2-c；`rfc317-ledger-highwater.test.ts` 34 条，一次性 `allowGrowth` 已完整跑过「声明→用掉→下一笔判过期」的生命周期）
+- [x] AC-7 R11 manifest 落地并自变异转红（B2-a/b；`rfc317-architecture-ledgers.test.ts` 两向钉死 + `rfc317-guard-corpus-floor.test.ts` + `rfc317-guard-negative-fixture.test.ts`；guard 分母现 **143**）
+- [x] AC-8 R12 语料扩面，扩面后新增违规逐条修或入账（B3-b；T25「public 入口的开放 Record 面精确入账」+ 解析扩面正反 fixture）
+- [x] AC-9 52 条 P1/P2 逐条修复 + 红→绿 + 变异复跑确认转红（B11 收口时按 gid 对账发现 **RT-01 从未被任何任务映射**，补为 T71 修掉；`EK-03` 由 R1/R3 承担、`DE-09` 由规则关闭，两者在 `design.md` 有明确处置，非点修）
 - [x] AC-10 79 条 P3 逐条入账（B0 入账 + B11 T67 复核：17 条已在本 RFC 内解决，加 `resolvedIn` 并由断言钉死任务号真实存在）
-- [ ] AC-11 能力影响 C1–C9 各有禁用/拒绝分支覆盖
+- [x] AC-11 能力影响 C1–C9 各有禁用/拒绝分支覆盖（C3 此前**只有能力影响条目、没有任务**，B11 补 T71 后其两条拒绝分支各有用例，且各自断言「零 spawn」）
 - [ ] AC-12 `bun run gate:local` 全绿 + 按 exact SHA 的 hosted CI 全绿（含 Playwright / visual）
 - [x] AC-13 19 条 stale 断言逐条改对（B11 T66；并立成 `rfc317-stale-assertion-invariants.test.ts` 的 6 条派生式不变量，规则③另捞出 4 处同类）
-- [ ] AC-14 索引 / STATE / dev-gotchas 同步
+- [x] AC-14 索引 / STATE / dev-gotchas 同步（T68 用构造 blob 在共享工作树上只提交自己那几行；T69 追加 13 节）
 
 ## 5. 本轮不做（登记）
 
@@ -459,3 +460,28 @@ T17 的「基线只降不升」初版一律拿 `git show HEAD~1:` 比。**CI 里
 **R9.3 判的是「这个 class 在 CSS 里有没有定义」，RFC-286 F1 判的是「这个定义在这个语境里生效吗」**。`.script-env-table__row .form-error` 是一条**嵌套**定义——token 在 CSS 里确实存在，所以 R9.3 认为它已定义；但它只在 ScriptEdit 的 DOM 语境下生效，别处用就还是无样式裸文本。两条规则一强一弱不成立，是**正交**。
 
 顺带一条一般性教训（已进 `docs/dev-gotchas.md`）：判「新规则是否覆盖旧规则」不能比较判据的措辞，要比较**同一变异下的红绿**——措辞上「全域 ⊇ 三个文件」看起来天经地义，实测却是两条正交的判据。
+
+#### T71（补录）—— C3 有能力影响条目，却从来没有任务（B11 逐条对账才发现）
+
+收口时按 gid 把 `findings.md` 的 52 条 P1/P2 与任务表对了一遍，发现 **`RT-01` 不被任何任务行引用**。回看 `proposal.md §能力影响清单`，它就是 **C3**——用户在开工时已逐项确认过的九条之一：
+
+> **C3** | `POST /api/runtimes/probe` 的 `extraArgs` / `isSandbox` | **无能力门**：请求可对任意 runtime 带上这两个字段并真实拉起子进程
+
+也就是说：**它在批准清单里，却没落进任务分解**。AC-9 与 AC-11 都会因此在「看起来都做完了」的状态下静默不成立。这正是本 RFC 一直在讲的形态，只是这次账本是它自己的 `plan.md`。
+
+**修法**（按 finding 的拟建守卫）：
+
+- `runtimeRegistry.ts` 新增导出 `assertRuntimeSpawnCapabilities(protocol, {extraArgs, isSandbox})`（内部复用既有的 `validateExtraArgs` + 此前**未导出**的 `validateIsSandbox`）；
+- `routes/runtimes.ts` 的**三处** `smokeRuntime(` 站点各自在 spawn **之前**过门。第三处（`/api/runtimes/:name/probe`）入参来自已持久化的行、不是 RT-01 点名的请求体通道，仍然过门是有意的：driver 的能力声明可能在该行写下之后**被收回**，那时按旧行去 spawn 就成了绕过；三站点判据一致也让源码棘轮不必区分「哪些站点算数」；
+- 用例四条 + 源码棘轮一条 + matcher 自证两条。行为用例的要点不是状态码而是**零 spawn**——`422` 分不出「拒绝了」与「跑完才拒绝」，而 C3 的危害恰恰在于后者（预检 smoke 跑在 `createRuntime` 之前，"保存时会校验"救不了它）。
+
+**变异实证**
+
+| 变异                                  | 结果                                                 |
+| ------------------------------------- | ---------------------------------------------------- |
+| 撤掉 `/probe` 的门                    | **3 fail**（2 条行为 + 棘轮）                        |
+| 撤掉预检 smoke 的门                   | **2 fail**（1 条行为 + 棘轮）                        |
+| 撤掉具名 probe 的门                   | **1 fail**（只有棘轮——该站点无行为用例，与设计一致） |
+| 合成样本：无门的 spawn / 有门的 spawn | matcher 自证正反各一，判据既咬得动也不误伤           |
+
+**一般性教训**（已进 `docs/dev-gotchas.md`）：**能力影响清单与任务分解是两份账本，它们之间没有任何机器判据。** 逐项确认过的能力收缩会在写 `plan.md` 时漏掉一条而不留痕迹——两份都在仓里、都被 review 过、都看不出少了什么。收口前拿 gid / 编号做一次两向对账，成本是几分钟。

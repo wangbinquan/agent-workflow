@@ -711,6 +711,37 @@ function profilePatch(
   return out
 }
 
+/**
+ * RFC-317 T71（findings RT-01）—— 起子进程**之前**必须过的能力门。
+ *
+ * `acceptsExtraArgs` / `acceptsSandboxCompatibilityMarker` 是 driver 的能力声明，
+ * 而在此之前它们只在**注册写路径**（createRuntime / updateRuntime）上被查过。
+ * `POST /api/runtimes/probe` 与 `POST /api/runtimes` 的预检 smoke 都把**请求体里的**
+ * `extraArgs` / `isSandbox` 直接交给 `smokeRuntime` 拉起真子进程，两条都绕过了这道门。
+ *
+ * 「只在两个入口之一被强制的能力声明不是能力，是约定」——而
+ * `validateExtraArgs` 的错误文案（:218）正是拿它当能力说的：「只有声明了
+ * acceptsExtraArgs 的 driver 才会消费它」。这句话对 probe 路径不成立。
+ *
+ * 今天这条缺口是**惰性**的：opencode 的 spawn 既不读 extraArgs 也不写 IS_SANDBOX
+ * （`services/runtime/opencode/spawn.ts`），只有 claudeCode 会（`claudeCode/spawn.ts`）。
+ * 但一个未来的 driver 只要开始读这两个字段，任何 `settings:write` 调用方就立刻拿到
+ * 一条**未经校验的 argv / env 通道**——所以这里不等到那一天再补。
+ *
+ * 注册路径不改用本函数：它们各自还要做与写入相关的其它校验，且顺序有意义。
+ * 本函数只承担「spawn 前的能力门」这一件事。
+ */
+export function assertRuntimeSpawnCapabilities(
+  protocol: RuntimeProtocol,
+  input: {
+    readonly extraArgs?: readonly string[] | null | undefined
+    readonly isSandbox?: boolean | undefined
+  },
+): void {
+  validateExtraArgs(protocol, input.extraArgs)
+  validateIsSandbox(protocol, input.isSandbox)
+}
+
 function validateIsSandbox(protocol: RuntimeProtocol, value: boolean | undefined): boolean {
   if (value === true && getRuntimeDriver(protocol).acceptsSandboxCompatibilityMarker !== true) {
     throw new ValidationError(

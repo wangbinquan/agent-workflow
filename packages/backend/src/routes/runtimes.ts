@@ -16,6 +16,7 @@ import {
   createRuntime,
   deleteRuntime,
   getRuntime,
+  assertRuntimeSpawnCapabilities,
   listRuntimes,
   parseRuntimeExtraArgs,
   RUNTIME_PROTOCOLS,
@@ -238,6 +239,14 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const body = parseBody(ProbeBody, await c.req.json().catch(() => ({})))
+      // RFC-317 T71（findings RT-01）—— 能力门必须在**任何 spawn 之前**。
+      // ProbeBody 只做形状校验（:43 的注释自己写着「registry 的 validateExtraArgs
+      // 才是权威」），而这条路径此前从不调它：请求体里的 extraArgs / isSandbox
+      // 直接进 smokeRuntime 拉起真子进程。
+      assertRuntimeSpawnCapabilities(body.protocol, {
+        extraArgs: body.extraArgs,
+        isSandbox: body.isSandbox,
+      })
       const cfg = loadConfig(deps.configPath)
       const result = await smokeRuntime({
         protocol: body.protocol,
@@ -271,6 +280,13 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       let smoke: SmokeResult | undefined
       const wantProbe = body.probe ?? body.binaryPath !== undefined
       if (wantProbe && body.binaryPath !== undefined) {
+        // RFC-317 T71（findings RT-01）—— 预检 smoke 跑在 createRuntime **之前**，
+        // 所以「createRuntime 会校验」救不了它：一组不被接受的参数会先被**执行**，
+        // 之后才因保存失败而报错。能力门前置到 spawn 之前。
+        assertRuntimeSpawnCapabilities(body.protocol, {
+          extraArgs: body.extraArgs,
+          isSandbox: body.isSandbox,
+        })
         const cfg = loadConfig(deps.configPath)
         smoke = await smokeRuntime({
           protocol: body.protocol,
@@ -424,6 +440,14 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       const binaryPath = resolveRuntimeBinary(row, cfg)
       const probeTarget = runtimeProbeTargetOf(row, binaryPath)
       const rowExtraArgs = parseRuntimeExtraArgs(row.extraArgsJson)
+      // RFC-317 T71 —— 这一处的入参来自**已持久化的行**（写入时过过校验），
+      // 因此不是 RT-01 点名的请求体通道；仍然过一次门是有意的：driver 的能力声明
+      // 可能在这一行写下之后**被收回**，那时按旧行去 spawn 就成了绕过。
+      // 三个 spawn 站点判据一致，也让下面那条源码棘轮不必区分「哪些站点算数」。
+      assertRuntimeSpawnCapabilities(row.protocol, {
+        extraArgs: rowExtraArgs,
+        isSandbox: row.isSandbox,
+      })
       const smoke = await smokeRuntime({
         protocol: row.protocol,
         binaryPath,
