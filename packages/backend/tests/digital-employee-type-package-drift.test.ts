@@ -72,6 +72,21 @@ function legacyDescriptor(): Record<string, unknown> {
   return legacy
 }
 
+function descriptorBeforePlanningBindingFields(): Record<string, unknown> {
+  const frozen = structuredClone(descriptor) as unknown as Record<string, unknown>
+  const authoringManifest = frozen.authoringManifest as Record<string, unknown>
+  const workItems = authoringManifest.workItems as Record<string, unknown>[]
+  const analyzeImplement = workItems.find(
+    (workItem) => workItem.workItemRef === 'analyze-implement',
+  )
+  if (analyzeImplement === undefined) throw new Error('missing analyze-implement fixture')
+  const humanReview = analyzeImplement.humanReview as Record<string, unknown> | null
+  if (humanReview === null) throw new Error('missing analyze-implement humanReview fixture')
+  delete humanReview.planningRoleRef
+  delete humanReview.planningSlotRef
+  return frozen
+}
+
 function record(descriptorDigest: string): TypePackageRecord {
   return { descriptor, descriptorDigest, state: 'published', registeredAt: 1_000 }
 }
@@ -269,6 +284,60 @@ describe('employee type package digest guard', () => {
     expect(persistedStore.getTypePackage(descriptor.typeRef)).toMatchObject({
       descriptor: frozenDescriptor,
       descriptorDigest: frozenDigest,
+      registeredAt: 1_000,
+    })
+  })
+
+  test('the Bun-dev overlay boots over a same-revision row that predates newly required descriptor fields', () => {
+    // Regression: a live Bun watch generation can freeze an intermediate
+    // descriptor before a later edit adds required schema fields. The next
+    // generation must select the current in-memory draft before attempting to
+    // parse that immutable row with the newer schema; otherwise `bun dev`
+    // aborts before the digest overlay can run.
+    const db = createInMemoryDb(MIGRATIONS)
+    const persistedStore = createSqliteDigitalEmployeeAuthoringStore(db)
+    const frozenJson = JSON.stringify(descriptorBeforePlanningBindingFields())
+    const frozenDigest = 'c'.repeat(64)
+    db.insert(employeeTypePackages)
+      .values({
+        typeId: descriptor.typeRef.typeId,
+        revision: descriptor.typeRef.revision,
+        descriptorJson: frozenJson,
+        descriptorDigest: frozenDigest,
+        state: 'published',
+        registeredAt: 1_000,
+      })
+      .run()
+    const overlayStore = withTypePackageDraftOverlay(persistedStore)
+
+    const service = new DigitalEmployeeAuthoringService({
+      store: overlayStore,
+      typePackages: [runtimePackage()],
+      connectionCatalog: stubConnectionCatalog,
+      programArtifacts: stubProgramArtifacts,
+      executionContracts: unreachableExecutionContracts,
+      now: () => 2_000,
+    })
+
+    expect(service.getType(descriptor.typeRef)).toEqual(descriptor)
+    expect(service.listTypes()).toEqual([descriptor])
+    expect(overlayStore.getTypePackage(descriptor.typeRef)).toMatchObject({
+      descriptor,
+      descriptorDigest: currentDigest,
+    })
+    const frozenRow = db
+      .select({
+        descriptorJson: employeeTypePackages.descriptorJson,
+        descriptorDigest: employeeTypePackages.descriptorDigest,
+        state: employeeTypePackages.state,
+        registeredAt: employeeTypePackages.registeredAt,
+      })
+      .from(employeeTypePackages)
+      .get()
+    expect(frozenRow).toEqual({
+      descriptorJson: frozenJson,
+      descriptorDigest: frozenDigest,
+      state: 'published',
       registeredAt: 1_000,
     })
   })
