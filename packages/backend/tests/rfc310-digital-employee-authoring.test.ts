@@ -242,6 +242,15 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       workItemRef: 'observe-mr',
       slotRef: 'system',
     })
+    expect(descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-pipeline')).toMatchObject({
+      requiredContextTypes: [
+        'development.issue-handling',
+        'development.merge-request',
+        'development.pipeline',
+      ],
+      workItemRef: 'collect-pipeline',
+      slotRef: 'default',
+    })
     expect(reactionLaneIds(descriptor)).toEqual([
       'care-review',
       'care-approval',
@@ -2290,6 +2299,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         toolSlotRef: 'compile',
         semanticValidatorId: 'development.validator',
         inputEnvelopeJson: '{"frozen":true}',
+        allowedEffectKinds: [],
       },
       { previousError: 'wrong nonce' },
       developmentExecutionContracts().get({
