@@ -271,8 +271,8 @@ const contracts: WorkContract[] = [
     'development.problem-set.v1',
     '结构化门禁结果和大日志 artifact 引用',
     'Structured gate results and large-log artifact references',
-    '只产出闭集失败类型集合；平台随后按固定优先级逐类调度，未知项进入兜底类型',
-    'Produces only a closed failure-type set; the platform then dispatches each type by fixed priority with an explicit unknown fallback',
+    '产出命中本工具闭集的问题记录与待处理种类；平台随后按固定优先级逐类调度，未知项进入兜底类型',
+    "Produces problem records and remaining categories from this tool's closed set; the platform then dispatches each category by fixed priority with an explicit unknown fallback",
     ['agent', 'workflow', 'program'],
     [],
     READ_ONLY,
@@ -281,10 +281,10 @@ const contracts: WorkContract[] = [
     'development.repair-pipeline',
     'development.problem-set.v1',
     'development.change-proposal.v1',
-    '按错误类型分组的问题、日志引用和当前代码',
-    'Problems grouped by failure type, log references, and current code',
-    '对应槽位工具修复问题并输出修改 envelope',
-    'The bound slot tool repairs the problem and emits a change envelope',
+    '平台分配的唯一问题种类、该类问题记录、流水线证据和当前代码',
+    'The one assigned problem category, its problem records, pipeline evidence, and current code',
+    '对应槽位工具修复该种类的全部问题并输出修改 envelope',
+    'The bound slot tool repairs every problem in that category and emits a change envelope',
     ['agent', 'workflow', 'program'],
     [],
     WRITE_REQUIRED,
@@ -676,6 +676,49 @@ const outputFields: ExecutionContractField[] = [
   ),
 ]
 
+const pipelineEvidenceExample = {
+  status: 'failed',
+  mergeRequestRef: 'project!123',
+  headSha: '0'.repeat(40),
+  evidenceArtifactRef: '.agent-workflow/pipeline/case-id/result.json',
+  failureTypes: ['compile-error'],
+}
+
+const pipelineFailureTypeDefinitionsExample = [
+  {
+    typeId: 'compile-error',
+    name: 'Compile error',
+    description: 'Compilation or type checking fails',
+    priority: 1,
+    fallback: false,
+    handlingWorkItemRef: 'repair-pipeline',
+  },
+  {
+    typeId: 'unknown-pipeline-failure',
+    name: 'Unknown pipeline failure',
+    description: 'No earlier category matches',
+    priority: 2,
+    fallback: true,
+    handlingWorkItemRef: 'repair-pipeline',
+  },
+]
+
+const pipelineProblemSetExample = {
+  status: 'active',
+  source: 'pipeline',
+  headSha: '0'.repeat(40),
+  remainingTypes: ['compile-error'],
+  problems: [
+    {
+      problemId: 'pipeline:compile-error:1',
+      type: 'compile-error',
+      summary: 'Type checking failed in the frontend package',
+      evidenceArtifactRefs: ['.agent-workflow/pipeline/case-id/logs/typecheck.log'],
+      reviewThread: null,
+    },
+  ],
+}
+
 const inputDetailsByContract: Record<
   string,
   {
@@ -851,8 +894,17 @@ const inputDetailsByContract: Record<
     },
   },
   'development.classify-pipeline': {
-    primaryFieldPaths: ['contractInput.pipelineDirectory', 'contractInput.failureTypeDefinitions'],
+    primaryFieldPaths: ['contractInput.pipelineEvidence', 'contractInput.pipelineDirectory'],
     fields: [
+      contractField(
+        'contractInput.pipelineEvidence',
+        '流水线失败证据',
+        'Pipeline failure evidence',
+        '当前 MR head 的结构化门禁状态、失败信号和证据 artifact 引用；这是问题归类的业务输入',
+        'Structured gate status, failure signals, and evidence artifact references for the current MR head; this is the business input to classification',
+        'context',
+        'object',
+      ),
       contractField(
         'contractInput.pipelineDirectory',
         '流水线材料目录',
@@ -866,28 +918,52 @@ const inputDetailsByContract: Record<
         'contractInput.failureTypeDefinitions',
         '失败类型定义',
         'Failure type definitions',
-        '所选分类工具版本冻结的有序闭集；列表顺序就是识别优先级',
-        'The ordered closed set frozen by the selected classifier tool revision; list order is matching priority',
-        'work-input',
+        '平台从本工具版本的“问题种类”配置冻结注入，只约束允许产出的种类、优先级和兜底项；它不是上游任务材料',
+        "Injected from this tool revision's problem-category configuration; it constrains allowed outputs, priority, and fallback and is not upstream task material",
+        'platform',
         'array',
       ),
     ],
     contractInput: {
+      pipelineEvidence: pipelineEvidenceExample,
       pipelineDirectory: '.agent-workflow/pipeline/case-id',
-      failureTypeDefinitions: [],
+      failureTypeDefinitions: pipelineFailureTypeDefinitionsExample,
     },
   },
   'development.repair-pipeline': {
-    primaryFieldPaths: ['contractInput.assignedFailureType', 'contractInput.pipelineDirectory'],
+    primaryFieldPaths: [
+      'contractInput.problemSet',
+      'contractInput.assignedFailureType',
+      'contractInput.pipelineEvidence',
+      'contractInput.pipelineDirectory',
+    ],
     fields: [
+      contractField(
+        'contractInput.problemSet',
+        '已归类的流水线问题',
+        'Classified pipeline problems',
+        '分类工具产出的完整问题集合；本工具只处理 problems 中 type 等于 assignedFailureType 的全部记录',
+        'The complete problem set emitted by the classifier; this tool handles every problem whose type equals assignedFailureType',
+        'context',
+        'object',
+      ),
       contractField(
         'contractInput.assignedFailureType',
         '本轮失败类型',
         'Assigned failure type',
         '平台规则已选择的唯一失败类型，工具不得改选',
         'The one failure type selected by platform rules; the tool cannot choose another',
-        'work-input',
+        'platform',
         'string',
+      ),
+      contractField(
+        'contractInput.pipelineEvidence',
+        '流水线失败证据',
+        'Pipeline failure evidence',
+        '与问题集合绑定到同一 MR head 的结构化门禁状态和证据引用',
+        'Structured gate state and evidence references bound to the same MR head as the problem set',
+        'context',
+        'object',
       ),
       contractField(
         'contractInput.pipelineDirectory',
@@ -900,7 +976,9 @@ const inputDetailsByContract: Record<
       ),
     ],
     contractInput: {
+      problemSet: pipelineProblemSetExample,
       assignedFailureType: 'compile-error',
+      pipelineEvidence: pipelineEvidenceExample,
       pipelineDirectory: '.agent-workflow/pipeline/case-id',
     },
   },
@@ -1086,6 +1164,18 @@ const deliveryContentExample = {
   mergeRequestDescription: '## What changed\n\nImplemented the requested behavior and tests.',
 }
 
+function mergeContractFields(
+  common: readonly ExecutionContractField[],
+  specialized: readonly ExecutionContractField[],
+): ExecutionContractField[] {
+  const specializedByPath = new Map(specialized.map((field) => [field.path, field]))
+  const commonPaths = new Set(common.map((field) => field.path))
+  return [
+    ...common.map((field) => specializedByPath.get(field.path) ?? field),
+    ...specialized.filter((field) => !commonPaths.has(field.path)),
+  ]
+}
+
 const outputDetailsByContract: Record<
   string,
   {
@@ -1156,7 +1246,32 @@ const outputDetailsByContract: Record<
   },
   'development.classify-pipeline': {
     primaryFieldPaths: ['contextPatches'],
-    fields: [],
+    fields: [
+      contractField(
+        'contextPatches',
+        '问题种类与问题记录',
+        'Problem categories and records',
+        '必须恰好写回一个 development.problem-set：problems[].type 和去重后的 remainingTypes 只能取本工具配置的问题种类，且每个待处理种类至少有一条问题记录；平台据此启动下一修复工具',
+        'Must return exactly one development.problem-set: problems[].type and deduplicated remainingTypes may only use categories configured by this tool, with at least one problem record per remaining category; the platform uses it to start the next repair tool',
+        'context',
+        'array',
+      ),
+    ],
+    exampleFields: {
+      contextPatches: [
+        {
+          contextId: null,
+          contextTypeId: 'development.problem-set',
+          schemaVersion: 1,
+          expectedRevision: null,
+          lifecycleState: 'active',
+          stateJson: JSON.stringify(pipelineProblemSetExample),
+          artifactRefs: pipelineProblemSetExample.problems.flatMap(
+            (problem) => problem.evidenceArtifactRefs,
+          ),
+        },
+      ],
+    },
   },
   'development.prepare-approval': {
     primaryFieldPaths: ['artifactRefs', 'contextPatches'],
@@ -1246,7 +1361,7 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
         description: workContract.completionStandard,
         topLevelFields: [...outputTopLevelFields, ...(outputDetails?.topLevelFields ?? [])],
         primaryFieldPaths: [...(outputDetails?.primaryFieldPaths ?? ['summary'])],
-        fields: [...outputFields, ...(outputDetails?.fields ?? [])],
+        fields: mergeContractFields(outputFields, outputDetails?.fields ?? []),
         exampleJson: JSON.stringify(
           {
             schemaVersion: 1,

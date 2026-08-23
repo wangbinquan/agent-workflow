@@ -79,6 +79,69 @@ describe('platform execution contracts', () => {
     ])
   })
 
+  // User regression 2026-08-23: the tool-definition guide had reversed the
+  // classifier's configuration and runtime handoff, hiding the problem set.
+  test('pipeline tool guides expose the classified problem-set handoff instead of treating tool configuration as task input', () => {
+    const classifier = guide('development.classify-pipeline')
+    expect(classifier.input.primaryFieldPaths).toEqual([
+      'contractInput.pipelineEvidence',
+      'contractInput.pipelineDirectory',
+    ])
+    expect(
+      classifier.input.fields.find(
+        (field) => field.path === 'contractInput.failureTypeDefinitions',
+      ),
+    ).toMatchObject({ source: 'platform' })
+    expect(classifier.output.primaryFieldPaths).toEqual(['contextPatches'])
+    expect(classifier.output.fields.find((field) => field.path === 'contextPatches')).toMatchObject(
+      {
+        label: {
+          'zh-CN': '问题种类与问题记录',
+          'en-US': 'Problem categories and records',
+        },
+      },
+    )
+
+    const classifierInput = JSON.parse(classifier.input.exampleJson) as {
+      contractInput: Record<string, unknown>
+    }
+    expect(classifierInput.contractInput).toMatchObject({
+      pipelineEvidence: expect.objectContaining({ status: 'failed' }),
+      failureTypeDefinitions: expect.arrayContaining([
+        expect.objectContaining({ typeId: 'compile-error' }),
+      ]),
+    })
+    const classifierOutput = JSON.parse(classifier.output.exampleJson) as {
+      contextPatches: Array<{ contextTypeId: string; stateJson: string }>
+    }
+    expect(classifierOutput.contextPatches).toHaveLength(1)
+    expect(classifierOutput.contextPatches[0]?.contextTypeId).toBe('development.problem-set')
+    expect(JSON.parse(classifierOutput.contextPatches[0]!.stateJson)).toMatchObject({
+      source: 'pipeline',
+      remainingTypes: ['compile-error'],
+      problems: [expect.objectContaining({ type: 'compile-error' })],
+    })
+
+    const repair = guide('development.repair-pipeline')
+    expect(repair.input.primaryFieldPaths).toEqual([
+      'contractInput.problemSet',
+      'contractInput.assignedFailureType',
+      'contractInput.pipelineEvidence',
+      'contractInput.pipelineDirectory',
+    ])
+    const repairInput = JSON.parse(repair.input.exampleJson) as {
+      contractInput: Record<string, unknown>
+    }
+    expect(repairInput.contractInput).toMatchObject({
+      problemSet: expect.objectContaining({ remainingTypes: ['compile-error'] }),
+      assignedFailureType: 'compile-error',
+      pipelineEvidence: expect.objectContaining({ status: 'failed' }),
+    })
+    expect(
+      repair.input.fields.find((field) => field.path === 'contractInput.assignedFailureType'),
+    ).toMatchObject({ source: 'platform' })
+  })
+
   test('contract registration rejects guides whose examples or executor kinds contradict the guide', () => {
     const mismatchedExample = structuredClone(guide('development.prepare-materials'))
     mismatchedExample.input.exampleJson = JSON.stringify({ unexpected: true })

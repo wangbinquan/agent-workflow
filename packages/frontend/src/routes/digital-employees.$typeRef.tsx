@@ -1234,12 +1234,12 @@ function AddToolDialog(props: {
             <header>
               <div>
                 <strong>
-                  {zh ? '本工具归类的问题清单' : 'Problem list classified by this tool'}
+                  {zh ? '本工具产出的问题种类' : 'Problem categories emitted by this tool'}
                 </strong>
                 <p>
                   {zh
-                    ? '清单随工具版本发布；岗位选择这个工具后，会按同一顺序自动生成 P1…Pn 修复节点并连接。最后一项固定为兜底。'
-                    : 'The list is versioned with this tool. Selecting it in a job automatically creates and connects P1…Pn repair nodes in this order; the final item is the fallback.'}
+                    ? '这是分类输出的闭集，不是全局配置或上游输入。每次运行会产出命中的问题记录和待处理种类；清单随工具版本发布，岗位选择后按同一顺序自动生成并连接 P1…Pn 修复节点，最后一项固定为兜底。'
+                    : 'This is the closed set for classifier output, not global configuration or upstream input. Each run emits matched problem records and remaining categories. The list is versioned with this tool; selecting it in a job automatically creates and connects P1…Pn repair nodes in this order, with the final item as fallback.'}
                 </p>
               </div>
               <button type="button" className="btn btn--sm" onClick={addDispatchRouteDefinition}>

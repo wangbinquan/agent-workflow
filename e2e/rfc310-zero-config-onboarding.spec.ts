@@ -390,9 +390,9 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   const classifierToolName = `Two-type classifier ${Date.now()}`
   const toolName = `Compile-only pipeline repair ${Date.now()}`
 
-  // User regression 2026-08-22: the problem list belongs to the classifier
-  // tool revision. Creating that tool must be the only place that authors the
-  // ordered list; selecting it in a job materializes the same N fan-out nodes.
+  // User regressions 2026-08-22..23: the problem list belongs to the classifier
+  // tool revision and defines its output vocabulary, while pipeline evidence is
+  // the runtime input. Selecting the tool materializes the same N fan-out nodes.
   await page.goto(
     `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=classify-pipeline`,
   )
@@ -400,6 +400,14 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(toolbox.getByRole('link', { name: 'Configure failure types' })).toHaveCount(0)
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
   let toolDialog = page.getByRole('dialog', { name: 'Add tool to Classify pipeline failures' })
+  const classifierPrimaryInput = toolDialog.getByTestId('execution-contract-primary-input-fields')
+  await expect(classifierPrimaryInput).toContainText('Pipeline failure evidence')
+  await expect(classifierPrimaryInput).toContainText('Pipeline material directory')
+  await expect(classifierPrimaryInput).not.toContainText('Failure type definitions')
+  const classifierPrimaryOutput = toolDialog.getByTestId('execution-contract-primary-output-fields')
+  await expect(classifierPrimaryOutput).toContainText('Problem categories and records')
+  await expect(classifierPrimaryOutput).toContainText('contextPatches')
+  await expect(toolDialog).toContainText('Problem categories emitted by this tool')
   await toolDialog.getByLabel('Tool name').fill(classifierToolName)
   await toolDialog.getByLabel('Problem key P1').fill('compile-error')
   await toolDialog.getByLabel('Problem name P1').fill('Compile error')
@@ -445,6 +453,14 @@ test('pipeline failure types expand into equal-width required nodes and only sho
 
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
   toolDialog = page.getByRole('dialog', { name: 'Add tool to Repair pipeline failures' })
+  const repairPrimaryInput = toolDialog.getByTestId('execution-contract-primary-input-fields')
+  await expect(repairPrimaryInput).toContainText('Classified pipeline problems')
+  await expect(repairPrimaryInput).toContainText('Assigned failure type')
+  await expect(repairPrimaryInput).toContainText('Pipeline failure evidence')
+  await expect(repairPrimaryInput).toContainText('Pipeline material directory')
+  await expect(toolDialog.getByTestId('execution-contract-primary-output-fields')).toContainText(
+    'Commit message',
+  )
   await toolDialog.getByLabel('Tool name').fill(toolName)
   await toolDialog.getByRole('combobox', { name: 'Problems solved by this tool' }).click()
   await page.getByRole('option', { name: /compile-error/ }).click()
