@@ -89,8 +89,16 @@ export function sealOpenHumanGatesForTask(
       }
       // Park-carrier run for this round (self: the clarify intermediary;
       // cross: the questioner's run). Same-tx guarded write — the shared
-      // transition table's `mark-canceled` edge covers awaiting_human, and
-      // async lifecycle helpers cannot join a sync transaction.
+      // transition table's `mark-canceled` edge covers awaiting_human.
+      //
+      // RFC-317 T66 —— 这里原本写的理由是「async lifecycle helpers cannot join a
+      // sync transaction」。那句话在写下时（30b296055，2026-07-16）是真的，
+      // 三天后就不再是：`setNodeRunStatusTx`（services/lifecycle.ts）正是
+      // 同步事务版的内核入口，cafc80ee4（2026-07-19）落地，今天已被
+      // services/task.ts 与 services/workgroup/taskActions.ts 使用。
+      // 真实现状是**这两处还没迁**，不是迁不了——债记在
+      // architecture/commons-debt.json 的 LC-12。留着一个已经失效的技术理由
+      // 比留着债更坏：它让下一个 reviewer 问「能不能走内核」时得到「不能」。
       // rfc053-allow-direct-status-write -- RFC-202 T2 atomic terminal sweep
       const parked = tx
         .update(nodeRuns)

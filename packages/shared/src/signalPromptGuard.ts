@@ -8,9 +8,13 @@
 //
 // This helper performs a syntax-only scan: it extracts `{{identifier}}`
 // references from the template and reports any that resolve to a
-// port whose ParsedKind is `{ kind: 'base', name: 'signal' }`. PR-B
-// ships the helper only; PR-D wires it into runner.ts's pre-spawn
-// validation pass alongside renderUserPrompt.
+// port whose ParsedKind is `{ kind: 'base', name: 'signal' }`.
+//
+// 现状（RFC-317 T66 按源码订正）：**已接入 runtime**——
+// `services/runner.ts:44` 导入 `assertNoPromptSignalRefs`，在 prompt render
+// 之前跑。原注释写的是「PR-B ships the helper only; PR-D wires it into
+// runner.ts's pre-spawn validation pass」，那句话把一个**已经在生产路径上**的
+// 校验描述成了尚未接线的裸 helper。
 
 import { tryParseKind, type ParsedKind } from './kindParser'
 import { tryHandlerForParsedKind } from './outputKinds'

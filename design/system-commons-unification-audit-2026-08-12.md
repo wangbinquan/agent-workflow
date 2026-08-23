@@ -9,11 +9,62 @@
 > 处置：本报告 §6 的包①随本报告同批落地；其余按 RFC-284…289 执行（§6）。
 > **决策台账 §5 是后续全部 RFC 的输入契约**——接手 RFC-284…289 的 session 必读。
 
+> ---
+>
+> ⚠️ **2026-08-24 勘误（RFC-317 T66）——本报告是 2026-08-12 的快照，下列结论今天已不成立。**
+> 本节不改写原文（它是那一刻的记录），只逐条标注**哪一句不能再当现状引用**。
+> RFC-294 §2 直接把本报告列为输入，因此一句过期的「已归一」会被下一个 RFC 当作前提继承——
+> 这正是本 RFC（commons boundary hardening）要治的那类债：**账本比代码老，而读者信账本**。
+>
+> 1. **§0 总判定 / §1「runtime 抽象」行 / §2「runtime」条：「runtime 字面量执行分支 driver
+>    目录外真零」「driver.kind 目录外零引用」「runtime 分支清零…全部兑现」——不成立**
+>    （findings EK-09 / RT-15）。目录外至少三处仍在按 runtime 字面量分支：
+>    `cli/start.ts`（`config.defaultRuntime === 'claude-code'`，且它拿 runtime **名字**
+>    去比 **kind** 字面量）、`routes/runtime.ts` 的别名三元、`routes/config.ts` 的双字面量
+>    `changedBinaryProtocols`。仓内自己的棘轮 `rfc143-runtime-driver-capability.test.ts`
+>    就把 `start.ts` 写进了 allowlist——**豁免名单与「真零」这句话直接互斥**。
+>    「清零」之所以能被复核成立，是因为它只覆盖了 rfc143 正则**看得见的那几种比较形态**。
+>    反方向也有：§3 的 N2（selfCheck 缺蕴含守卫）标着 OPEN，实际已被 RFC-284 关闭
+>    （`runtime/selfCheck.ts` + `rfc282-a3-driver-selfcheck.test.ts`）。
+>
+> 2. **§1「任务生命周期」行：「三条状态机全收敛 lifecycle.ts CAS+转移表 + 源文本棘轮」——
+>    只有一条真的三层齐全**（findings LC-13）。`merge_state` 是；`tasks.status` 有源文本
+>    棘轮但写入方从不查转移表；`node_runs.status` 两样都没有——s14 只管 `tasks`，
+>    node_run 那道是 marker opt-out 式 grep，且有存量旁路。同一行的开放项里写了
+>    「若干注释与现实相反」，等于半承认，但读者记住的是标题那句「全收敛」。
+>
+> 3. **§1「前端」行 / §2「前端」条 / §3 N16：「六大高危面实测 100% 归一零逃逸」
+>    「Segmented 37/TabBar 17 手拼零」「死 class ×8」——全部已被后续提交推翻**
+>    （findings FE-11）。`canvas/inspector/JoinModeField.tsx` 在审计基线**五天后**
+>    （1a7da7c04，2026-08-17）落了一个手拼 segmented；死 class 家族到 RFC-317 普查时
+>    已是**五族**而非三个具名（`page__subtitle` / `form-section__hint` / `inspector-hint` /
+>    `inspector__readonly` / `dep-tree__*`），最大的一族随 `components/code/*` 在
+>    a762a7075（2026-08-19）进来。两者都已在 RFC-317 B10（T61/T63）修掉，
+>    但**当时没有任何守卫会因此变红**——判据是逐文件白名单，新文件天然在名单外。
+>
+> 4. **§2「边界」条的防护制度清单：「dep-cruiser 四规则、depcheck 三棘轮、类型穷尽
+>    Record×3」——三个数字都偏小**（findings G-12）。今天 `.dependency-cruiser.cjs`
+>    声明 **9 条** forbidden 规则、`scripts/depcheck.ts` 的 `KNOWN_VIOLATIONS` 展开后有
+>    **37** 条（no-circular 17 / no-routes-to-db 15 / no-transport-to-db 2 /
+>    no-util-to-upper 2 / no-services-to-routes 1）、生产代码里 `satisfies Record<`
+>    有 **47** 处。这些数字**同样会过期**——本条真正要留下的不是数字而是重数的办法：
+>    `grep -n "      name: '" .dependency-cruiser.cjs` /
+>    `grep -rn "satisfies Record<" packages/*/src | wc -l` /
+>    `bun run depcheck`（它自己会打印「已接受 N / N 条存量违规」）。
+>    **清单类断言写数字必须同时写出处**，否则它就只是一个没人会去核的数。
+>
+>    写这条勘误时当场又踩了一次同样的坑，值得记下来：我用
+>    `grep -c "rule: '"` 数出 22 条并差点写进去，而真值是 37——`KNOWN_VIOLATIONS`
+>    里有两处 `...(ARRAY).map(…)` 展开，**数语法元素只会数到模板本身**，展开的条数
+>    在源码里根本不作为字面量出现。这正是 `architecture/ledger-baselines.json` 的
+>    `depcheck-known-violations` 条目在 `why` 里专门写明「静态清点已按源数组长度展开」
+>    的原因。**账本类的数，只信会执行那份数据的程序打印出来的值。**
+
 ## 0. 总判定
 
 | 问题               | 答案                                                                                                                                                                                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 全局归一了吗       | **判定层/状态机层/spawn 层：是**——RFC-280「唯一 spawn 点」、RFC-282「ACL 单源 / buildSpawn 单面 / runtime 分支清零」经独立复核全部兑现。**装配层/CRUD 形态层/微 helper 层：残留成片**（六类资源 CRUD 六份手写、scheduler 六条同构装配线、safeJson×20 等复制）。 |
+| 全局归一了吗       | **判定层/状态机层/spawn 层：是**——RFC-280「唯一 spawn 点」、RFC-282「ACL 单源 / buildSpawn 单面 / runtime 分支清零」经独立复核全部兑现（⚠️ **「runtime 分支清零」已勘误，见页首勘误 1**）。**装配层/CRUD 形态层/微 helper 层：残留成片**（六类资源 CRUD 六份手写、scheduler 六条同构装配线、safeJson×20 等复制）。 |
 | 目录模块划分明确吗 | 可运维但非「明确」：services/ 下 172 平铺文件 vs 15 子目录是**历史沉积而非成文约定**（clarify/ 目录 1 个文件、5 个 clarify\*.ts 平铺在外反向 import 它；四个「ref」概念各立门户）。                                                                             |
 | 模块边界清晰吗     | **防护成体系、账本诚实**：Tarjan SCC 实测 5 个值级循环全部与 `scripts/depcheck.ts` KNOWN_VIOLATIONS 吻合、零账外环。但 routes→db 直查（18/44 路由文件）与 util→services 两个方向完全无防护规则。                                                                |
 | 没有特殊处理吗     | 纪律明显强于常态：全仓零裸 TODO/HACK 标记、零测试环境行为分叉（45 处 seam 全契约化）、fail-open 全显式带 RFC 锚、scheduler.ts 内 `process.env` 零命中。存在的特化基本是有 RFC/测试锁定的合理特化；真正的债是**重复实现**而非暗门。                              |
@@ -24,21 +75,21 @@
 | ------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 调度器       | 高     | frontier 单引擎（旧 `computeReadyNodes` 降级 test oracle，freshness.ts:114-119）；node-kind 编译期穷尽单表（shared/node-kind-behavior.ts:100-203）+ 链尾 `unhandled-node-kind` 响亮失败（scheduler.ts:5126-5131）；workgroup/动态工作流是注册表路由（scheduler.ts:738-743）的显式第二模型非漂移 | scheduler.ts 9791 行内六条同构 spawn 装配线（→RFC-287）；fanout 内层旁路小引擎（已登记 WP-6b→RFC-289）                                                               |
 | 执行器       | 高     | agent 类 `Bun.spawn` 全仓仅 managedProcess.ts:250 一处；7 消费方全经 `runAgentProcess`；治理语义（TERM→KILL/reap/drain/上限）单源                                                                                                                                                               | 工具类 spawn（npm 安装/探针）各自手抄弱杀链（已登记族，backlog「其他 backlog」节）；`drainTimedOut` 无人消费（新）；缺全仓 spawn 棘轮锁                              |
-| runtime 抽象 | 高     | runtime 字面量执行分支 driver 目录外真零；`?? opencodeDriver` 改显式 throw + fence 测试（rfc282-c0c2）；唯一 `buildSpawn` 五链全走；ESLint 密封栅栏有真配置变异测试；driver 零反向依赖                                                                                                          | selfCheck 不验「声明 inventory-file ⇒ 实现 readInventory」蕴含（新增 kind 最大漏点）；declared 与注入 business 面两次计算（已登记 deferred，RFC-282 plan §实施记录） |
+| runtime 抽象 | 高     | ⚠️ **见页首勘误 1**——runtime 字面量执行分支 driver 目录外真零；`?? opencodeDriver` 改显式 throw + fence 测试（rfc282-c0c2）；唯一 `buildSpawn` 五链全走；ESLint 密封栅栏有真配置变异测试；driver 零反向依赖                                                                                                          | selfCheck 不验「声明 inventory-file ⇒ 实现 readInventory」蕴含（新增 kind 最大漏点）；declared 与注入 business 面两次计算（已登记 deferred，RFC-282 plan §实施记录） |
 | 资源管理     | 中高   | ACL 判据/grant SQL/name→id 入口/RFC-271 codec 四域单源兑现；路由 ACL 面六类完全同构；创建默认三元组单点                                                                                                                                                                                         | 「六类对称」只在 ACL/引用层成立：修订 fence 六种拼法、反查引用四份复制、删除任务引用强度三档；`resourcePolicy.ts` 'agent' 条目基于不存在的列（P1 事实错误）          |
 | 权限         | 高     | resourceAcl.ts 单源真实成立；RouteMeta 声明式 gate + 双向启动自检（routes/registry.ts:356-378）；非 HTTP 入口（MCP/webhook/scheduled/CLI/bundle）全构造同构 Actor 无第二实现；未发现新 fail-open                                                                                                | 任务域 403/404 双轨（语义分叉）；快照式可见性三份同构手写；两个已登记旧洞（review 冒名 / ws-repo-imports）                                                           |
-| 任务生命周期 | 高     | 三条状态机全收敛 lifecycle.ts CAS+转移表 + 源文本棘轮（s14 钉恰好 1 处直写）；11 启动入口全过 `startExecution` 门面 + 源文本锁；修复七模块职责正交                                                                                                                                              | call 子任务 `as unknown as` 伪造 Actor；retry_index 取号 4 处手写；若干注释与现实相反                                                                                |
-| 前端         | 高     | 六大高危面（modal/tabs/segmented/骨架/WS/chip）实测 100% 归一零逃逸；HTTP/WS/错误/状态骨架单点且有 RFC 锚                                                                                                                                                                                       | 死 class ×8（报错无错误视觉，真实 bug）；原语建成迁移未收尾（Checkbox 8 处、Card ~151 条 bespoke）；queryKey 双轨                                                    |
+| 任务生命周期 | 高     | ⚠️ **见页首勘误 2**——三条状态机全收敛 lifecycle.ts CAS+转移表 + 源文本棘轮（s14 钉恰好 1 处直写）；11 启动入口全过 `startExecution` 门面 + 源文本锁；修复七模块职责正交                                                                                                                                              | call 子任务 `as unknown as` 伪造 Actor；retry_index 取号 4 处手写；若干注释与现实相反                                                                                |
+| 前端         | 高     | ⚠️ **见页首勘误 3**——六大高危面（modal/tabs/segmented/骨架/WS/chip）实测 100% 归一零逃逸；HTTP/WS/错误/状态骨架单点且有 RFC 锚                                                                                                                                                                                       | 死 class ×8（报错无错误视觉，真实 bug）；原语建成迁移未收尾（Checkbox 8 处、Card ~151 条 bespoke）；queryKey 双轨                                                    |
 
 ## 2. 核实为已归一的面（正面清单选摘，均经独立子代理带锚复核）
 
 - **调度**：状态机单源 shared/lifecycle.ts（node_run status + merge_state 两台机）；node_runs 插入单厂 nodeRunMint.ts + grep 守卫；边分类注册表 shared/systemChannelPorts.ts（RFC-147）；wrapper 三类共用 resume/terminal/progress 辅助、loop/git 内层递归复用同一 runScope；exit_condition 单模块；fanout fail-all-after-join 有测试锁；并发池注册表 resize-on-read；回滚单权威 nodeRollback.ts；注入解析单点 resolveInjection 6+6 调用点配对。
 - **执行**：pump 单实现；outcome 六态映射单源 agentProcess.ts mapOutcome；startupVerification 三层由 `capabilities.startupObservation` 能力枚举驱动、读端单点；testOnly seam 全显式；平台分支收敛 util/platformExec.ts（负扫描锁）。
-- **runtime**：`opencodeCmd` 收敛 binaryOverride + mint 冻结（nodeRunMint.ts:493-546）；boundary 各归各 driver；新 kind 编译期表态多层（Record 穷尽 + declarationFaces 派生 + boot 拒启）；会话 lease runtime 无关（(protocol,sessionId) CAS）；降级路径全带结构化 warn 码；driver.kind 目录外零引用。
+- **runtime**：`opencodeCmd` 收敛 binaryOverride + mint 冻结（nodeRunMint.ts:493-546）；boundary 各归各 driver；新 kind 编译期表态多层（Record 穷尽 + declarationFaces 派生 + boot 拒启）；会话 lease runtime 无关（(protocol,sessionId) CAS）；降级路径全带结构化 warn 码；driver.kind 目录外零引用（⚠️ **见页首勘误 1**）。
 - **权限**：六类资源路由同形（filterVisibleRows / canView→404 / requireResourceOwner 六文件无例外）；PAT 公式单点 + 矩阵越权 422；launch 闭包名解析按 actor 可见性过滤（closure.ts:242-256）；prompt 隔离双层锁在位、新组装点复核无泄漏；凭据链 fail-closed（disabled 过滤、WS 撤权即时重扫）。
 - **任务**：resume/retry 单核 resumeKick（7 调用面无旁路）；worktree 生命周期单点（两阶段墓碑 claim↔revive CAS 对偶）；修复七模块正交（lifecycleRepair.ts=引擎 + lifecycleRepair/=per-rule 插件包，非同名冲突）。
-- **边界**：shared 零反向；db 零反向；services→routes 仅 1 条已记账；runtime/ 零上层依赖；5 值环全部在 depcheck 账本（零账外）；防护制度清单——ESLint 跨包+密封栅栏（真配置变异测试）、dep-cruiser 四规则、depcheck 三棘轮、A2 单实现锁+禁止词族、写纪律 grep 锁群、启动自检×2、类型穷尽 Record×3。
-- **前端**：Dialog 64 文件（window.confirm 零）；原生 select 零；Segmented 37/TabBar 17 手拼零；ErrorBanner 105/EmptyState 67/LoadingState 70；WS 一份实现（useWebSocket.ts:152 唯一 new WebSocket）+ 表驱动 invalidation + 10 领域薄封装；HTTP 单点 api/client.ts（RFC-208 双超时预算）；stores 刻意薄（155 行零状态库）；lib 主体纯函数。
+- **边界**：shared 零反向；db 零反向；services→routes 仅 1 条已记账；runtime/ 零上层依赖；5 值环全部在 depcheck 账本（零账外）；防护制度清单（⚠️ **数字见页首勘误 4**）——ESLint 跨包+密封栅栏（真配置变异测试）、dep-cruiser 四规则、depcheck 三棘轮、A2 单实现锁+禁止词族、写纪律 grep 锁群、启动自检×2、类型穷尽 Record×3。
+- **前端**（⚠️ **见页首勘误 3**）：Dialog 64 文件（window.confirm 零）；原生 select 零；Segmented 37/TabBar 17 手拼零；ErrorBanner 105/EmptyState 67/LoadingState 70；WS 一份实现（useWebSocket.ts:152 唯一 new WebSocket）+ 表驱动 invalidation + 10 领域薄封装；HTTP 单点 api/client.ts（RFC-208 双超时预算）；stores 刻意薄（155 行零状态库）；lib 主体纯函数。
 
 ## 3. 新发现问题与处置去向
 
@@ -52,7 +103,7 @@ P2（结构性，纯实现）：
 
 | #   | 发现                                                                                                      | 锚点                                                                                                             | 去向                                                   |
 | --- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| N2  | selfCheck 缺「声明 inventory-file ⇒ 实现 readInventory / init-event ⇒ parseStartupInventory」蕴含守卫     | runtime/selfCheck.ts:48-52；消费双源 runner.ts:1793,1828-1838                                                    | RFC-284                                                |
+| N2  | ⚠️ **已由 RFC-284 关闭，见页首勘误 1**——selfCheck 缺「声明 inventory-file ⇒ 实现 readInventory / init-event ⇒ parseStartupInventory」蕴含守卫     | runtime/selfCheck.ts:48-52；消费双源 runner.ts:1793,1828-1838                                                    | RFC-284                                                |
 | N3  | session-not-found stderr 方言四条正则全 opencode 措辞却在公共层对所有 runtime 调用；claude 告警静默缺失   | sessionModeFallback.ts:97-102；scheduler.ts:6041                                                                 | RFC-284（D10 下沉 driver）                             |
 | N4  | mcpRuntimeTest 手写二元 cast 绕开 shared 完备性设计；新增第三 kind 编译过运行时 TypeError                 | mcpRuntimeTest.ts:2547 vs shared/runtimeConfigDir.ts:23-26                                                       | RFC-284                                                |
 | N5  | runner 丢弃 `drainTimedOut`（尾流丢失取证降级零消费；envelope 静默取旧值无线索）                          | runner.ts:1256-1258（对照 systemAgentRun.ts:593-598 有消费）                                                     | RFC-284（D9 进观测面）                                 |
@@ -66,7 +117,7 @@ P2（结构性，纯实现）：
 | N13 | 内容修订 fence 六类六种拼法、stale 错误码 4+ 种                                                           | agent/workflow/workgroups/mcp/plugin/skillToken 各文件（详见审计原文）                                           | RFC-285（D6 错误码归一）+ RFC-284（选型表文档）        |
 | N14 | 删除任务引用强度三档无横向文档；三份 scheduled 引用扫描纯复制                                             | workflow.ts:682-695；agent.ts:661-689,804-818；workgroups.ts:528-592,894-931                                     | RFC-285（D5 统一中档）+ RFC-284（扫描单点）            |
 | N15 | call 子任务 `as unknown as` 伪造空权限 Actor；owner 失活后仍可拉起新子任务（与 scheduled/webhook 不对称） | scheduler.ts:3867-3870                                                                                           | RFC-285（D7）                                          |
-| N16 | 前端死 class ×8：error-text（6 处）/checkbox-row/form-error——报错无错误视觉的真实 bug                     | routes/tasks.new.tsx:2235 等；intent.detail.tsx:1263；review/MultiDocReviewView.tsx:662                          | RFC-286                                                |
+| N16 | ⚠️ **见页首勘误 3（实为五族，已由 RFC-317 B10 修掉）**——前端死 class ×8：error-text（6 处）/checkbox-row/form-error——报错无错误视觉的真实 bug                     | routes/tasks.new.tsx:2235 等；intent.detail.tsx:1263；review/MultiDocReviewView.tsx:662                          | RFC-286                                                |
 | N17 | bare fetch ×3 + 自写第二 error decoder（client.ts:146-149 明文禁止形态；apiGetBlob 闲置）                 | lib/worktree-download.ts:26,60；WorktreeFilesPanel.tsx:284；ImportZipPanel.tsx:963-982                           | RFC-286                                                |
 | N18 | resourcePackages wire 类型前端手写副本（shared 零对应；全仓其余 334 处走 shared）                         | frontend/api/resourcePackages.ts:13-60+                                                                          | RFC-286                                                |
 | N19 | queryKey 双轨、同 key 双定义；WS invalidation 靠字符串相等纪律                                            | lib/mcp-probe-query.ts:22 vs routes/mcps.detail.tsx:55 等                                                        | RFC-286（D16 只收 WS 关联族）                          |

@@ -308,10 +308,19 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
  * 「token 能不能开它」表态，那是一次编译期决定，而不是一个静默的默认拒绝加一句过期注释。
  *
  * 四个排除项各自的理由：
- *   · `repo-import`     — its spec states it has "no gate of any kind"
- *     (RFC-152 D4 leftover); anyone who guesses a batchId sees another user's
- *     import. That is an existing defect, but leaving it open to tokens would
- *     downgrade it from "needs an interactive login" to "one leaked token".
+ *   · `repo-import`     — owner-gated since RFC-285 B6②: `ws/registry.ts`
+ *     installs an `upgradeGate` requiring `owner === actor.user.id ||
+ *     hasResourceAclBypass(actor)`, refusing with an existence-preserving
+ *     `batch-not-found`（`rfc152-ws-channel-registry.test.ts` 钉死该 gate 存在）。
+ *     它不对 token 开放的理由与那道门无关：导入批次属于**发起导入的那个人**，
+ *     token 是机器身份，没有「我的导入」这个概念。
+ *
+ *     RFC-317 T66 —— 这一条原本写的是「its spec states it has 'no gate of any
+ *     kind' (RFC-152 D4 leftover); anyone who guesses a batchId sees another
+ *     user's import. That is an existing defect」。那个缺陷**已经关掉**，而同一个
+ *     文件在 174 行处就写着它已关闭——**同一份文件里两句话互相矛盾，一句说有门、
+ *     一句说没门**。安全面的过期注释是最坏的一种：它要么让人以为存在一个不存在的
+ *     漏洞而去重复修，要么在真出问题时被当成「已知缺陷」而不再追。
  *   · `intent-sessions` — RFC-247 D7 puts `intent:*` permanently out of a
  *     token's reach, and every `/api/intent-sessions/*` route 403s for tokens.
  *     Allowing the socket would be a back door to exactly that data.

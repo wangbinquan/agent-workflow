@@ -18,8 +18,10 @@
 // `list-item-validate-failed` subReason whose `detail` lines list each
 // failing line index + the inner subReason.
 //
-// PR-A scope: registered into PARAMETRIC_HANDLERS as the new ListHandler;
-// not yet called by runtime. PR-D wires it into envelope + scheduler.
+// 现状（RFC-317 T66 按源码订正）：**已接入 runtime**——
+// `services/envelope.ts:652` 对每个声明端口调 `getHandlerForParsedKind`，
+// 因而本 handler 在正常执行路径上。原注释写的是「not yet called by runtime.
+// PR-D wires it into envelope + scheduler」，早已不成立。
 
 import type { ParsedKind } from '../kindParser'
 import { stringifyKind } from '../kindParser'

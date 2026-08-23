@@ -1,9 +1,24 @@
-// RFC-284 T22（2026-08-12 审计 N26）——daemon 后台节奏唯一注册表。
+// RFC-284 T22（2026-08-12 审计 N26）——daemon 后台节奏注册表。
 //
 // 此前「某状态最坏多久被扫到」要翻 9 个文件（各扫描器 opts 默认值 + start.ts
 // 两处连常量名都没有的裸 1h）。本表只收**周期/节奏**（多久跑一次）；阈值类
 // （stuck 30min、pending 5min 等「多久算异常」）语义不同，留在各 owner 模块
 // 并在此以注释索引。数值全部与收口前逐字相等——本表是可读性收口，不是调参。
+//
+// ⚠️ **不是全仓唯一**（RFC-317 T66 按源码订正；原文写的是「唯一注册表」）。
+// 本表被 10 个文件消费，而 `packages/backend/src` 下有 35 处 `setInterval(`；
+// 至少这几处仍各自带默认周期，没有进表：
+//   · services/backupScheduler.ts:194 —— `setInterval(…, 3_600_000)` 裸字面量，
+//     正是本表被创造出来消灭的那种形状；
+//   · services/taskArchive.ts / maintenanceRetention.ts / eventsArchive.ts ——
+//     `intervalMs: number = 3_600_000` 形式的参数默认值；
+//   · services/pluginGenerationGc.ts / memoryDistillScheduler.ts ——
+//     模块私有 DEFAULT_INTERVAL_MS / `?? 1000`。
+// 并且**没有任何守卫**要求新的周期性循环进表：漏掉一个不会红。
+// 「唯一注册表」这句话的危害不在于数错，而在于它让读者停止去别处找——
+// 想知道「这个状态最坏多久被扫到」的人读完这句会以为翻完本表就够了。
+// 收敛这些外挂周期（或加一条「新 setInterval 必须引用本表」的棘轮）是待办，
+// 记在 architecture/commons-debt.json 的 TP-12。
 
 export const MINUTE_MS = 60_000
 export const HOUR_MS = 60 * 60 * 1000

@@ -1,8 +1,14 @@
 // RFC-099 — resource-level ownership ACL core.
 //
-// Six resource types (agent / skill / mcp / plugin / workflow / workgroup) carry
+// Every type in `ACL_RESOURCE_TYPES` (shared/schemas/resourceAcl.ts) carries
 // owner_user_id + visibility ('private'|'public') columns plus per-user rows
-// in resource_grants. This module is the single authority for "can this actor
+// in resource_grants; `ACL_TABLES` below is the table side of the same list.
+// RFC-317 T66 — this header used to name six types by hand and the list has
+// grown twice since (RFC-304/309 capability templates, RFC-310's five config
+// resources + employee_definition). A hand-copied roster is exactly the kind
+// of claim that rots silently, so the roster now lives in one place and this
+// header points at it instead of restating it.
+// This module is the single authority for "can this actor
 // see / modify this resource":
 //
 //   - `resource-acl:bypass` bypasses row ACLs. RFC-305 deliberately keys this
@@ -21,7 +27,13 @@
 // role recorded on review comments / decisions / clarify submissions. Member
 // task membership wins over global ACL-bypass authority.
 //
-// ── RFC-284 T12（§2.6）——六类资源的 OCC fence 选型对照（现状登记，非规范）──
+// ── RFC-284 T12（§2.6）——OCC fence 选型对照（现状登记，非规范）──
+//
+// 下表只覆盖 RFC-284 当时存在的六类；此后新增的类（capability_template /
+// action_template / verification_profile / digital_employee / automation_policy /
+// development_adapter / employee_definition）**尚未逐条登记 fence 选型**，
+// 这是已知缺口（RFC-317 T66 如实记录，不在本 RFC 补齐）。原表头写作
+// 「六类资源的…对照」，读起来像是全集，实际只是 RFC-284 那一刻的切片。
 //
 // | 资源      | 机制                                        | 为什么是这个                          | 拒因子码现状 |
 // | agent     | 行级 CAS：expectedUpdatedAt+expectedAclRevision | 无 version 列；ACL 与内容双轴各自演进   | resource-operation-stale；名字域 agent-name-in-use |
@@ -389,7 +401,9 @@ export function discloseScheduleRefs(
  * Post-filter a full list query down to what the actor may see. One grants
  * query per call; actors with `resource-acl:bypass` short-circuit without touching resource_grants.
  * (List endpoints in this codebase load full tables — system scale is small,
- * so a JS post-filter keeps the five routes uniform; see design §3.)
+ * so a JS post-filter keeps every list route uniform; see design §3. The
+ * original wording said "the five routes" — RFC-317 T66: there are far more
+ * callers than five today, and the sentence never needed a count at all.)
  */
 export async function filterVisibleRows<T extends AclRow>(
   db: DbClient,

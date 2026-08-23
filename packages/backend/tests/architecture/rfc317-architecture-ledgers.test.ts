@@ -53,6 +53,8 @@ interface RegisteredFinding {
   readonly title: string
   readonly why: string
   readonly removeWhen: string
+  /** RFC-317 T67 —— 在本 RFC 内被修掉的条目在此点名任务号（见下方断言）。 */
+  readonly resolvedIn?: string
 }
 
 interface GuardEntry {
@@ -169,6 +171,38 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
       .filter((finding) => finding.why.trim() === '' || finding.removeWhen.trim() === '')
       .map((finding) => finding.findingId)
     expect(bad).toEqual([])
+  })
+
+  /**
+   * RFC-317 T67 —— 账本自己不能变成过期断言。
+   *
+   * 79 条 P3 入账时统一写着「本 RFC 只登记不修」。到收口时其中 17 条**已经在本
+   * RFC 内被修掉**（T43 删死表、T61/T63 前端、T66 逐条改对过期断言…），账本却
+   * 还在说它们没修——这正是本 RFC 要治的那一类：**账本比代码老，而读者信账本**。
+   * 已解决的条目加 `resolvedIn` 并改写 `why`；这条断言钉死 `resolvedIn` 必须
+   * 点名一个**真实存在于本 RFC plan.md 里的任务号**，而不是一句好听的话。
+   */
+  test('已解决的 P3 必须点名本 RFC plan.md 里真实存在的任务号', () => {
+    const plan = readFileSync(
+      resolve(REPO_ROOT, 'design/RFC-317-commons-boundary-hardening/plan.md'),
+      'utf8',
+    )
+    const known = new Set([...plan.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`))
+    expect(known.size, 'plan.md 里一个任务号都没解析出来，本断言的派生端断了').toBeGreaterThan(20)
+
+    const bad: string[] = []
+    for (const finding of debt.registeredFindings) {
+      const resolvedIn = finding.resolvedIn
+      if (resolvedIn === undefined) continue
+      const tasks = [...resolvedIn.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`)
+      if (tasks.length === 0 || tasks.some((task) => !known.has(task))) {
+        bad.push(`${finding.findingId}: resolvedIn='${resolvedIn}'`)
+      }
+      if (!/RFC-317/.test(resolvedIn)) bad.push(`${finding.findingId}: resolvedIn 未点名 RFC`)
+    }
+    expect(bad, 'resolvedIn 必须写成「RFC-317 T<n>」且 T<n> 在本 RFC 的 plan.md 里真实存在').toEqual(
+      [],
+    )
   })
 })
 

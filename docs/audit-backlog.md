@@ -677,14 +677,18 @@ the option AND advances`（:908）在 **windows-latest shard 3/3** 撞 **20s 用
   - `services/structuralDiff/deep/runner.ts:36-54` —— SCIP indexer 真执行：自建
     `SpawnFn` + `setTimeout` + `proc.kill()`，**非 detached、只杀直接子进程**，而
     indexer 是长跑的重型构建工具，孙进程必漏。与 managedProcess 语义差距最大的一处。
-  - `services/pluginInstaller.ts:791-797` —— npm 安装：`node:child_process.spawn` +
-    手写 chunk 累积 + `setTimeout` → `child.kill('SIGKILL')`，非 detached、无 group kill。
-  - `services/scriptRun.ts:270-287` —— 解释器 `--version` 探针：自建 deadline +
-    `proc.kill(9)`，非 detached；注释自述它跑在 scheduler 并发许可之前。
-  - **三份几乎逐字相同的 `--version` 探针骨架**：`util/opencode.ts:77`、
-    `services/runtime/claudeCode/probe.ts:53`、`util/opencode-models.ts:137`
-    （detached + timer + group SIGKILL + 解耦 exit/drain，注释互相写着 "same shape as"）。
-    这正是 RFC-280 在 agent 侧消灭的那类手抄骨架，只是不在它的射程内。
+  - ✅ ~~`services/pluginInstaller.ts:791-797` —— npm 安装：`node:child_process.spawn` +
+    手写 chunk 累积 + `setTimeout` → `child.kill('SIGKILL')`，非 detached、无 group kill。~~
+    **已收编**（RFC-284 T16）：`pluginInstaller.ts:780` 的 `runCommand` 现在直接调
+    `runManagedProcess`，全仓已无手写 `node:child_process.spawn` 的 npm 安装路径。
+  - ✅ ~~`services/scriptRun.ts:270-287` —— 解释器 `--version` 探针：自建 deadline +
+    `proc.kill(9)`，非 detached。~~ **已收编**：`scriptRun.ts:276` 改调
+    `spawnVersionProbe`（`util/process.ts:435`）。
+  - ✅ ~~**三份几乎逐字相同的 `--version` 探针骨架**：`util/opencode.ts:77`、
+    `services/runtime/claudeCode/probe.ts:53`、`util/opencode-models.ts:137`。~~
+    **已合并**（RFC-284 T8）为单一 `util/process.ts:435 spawnVersionProbe`，
+    三处调用点分别在 `services/runtime/opencode/util.ts:70`、
+    `services/runtime/claudeCode/probe.ts:58`、`services/scriptRun.ts:276`。
   - **git 两处**：`util/git.ts:180-186` 与 `services/gitRepoCache.ts:126-133` 两份独立的
     timer→`process.kill(-pid,'SIGKILL')`，`gitRepoCache.ts:95-96` 的注释自己声明「这两处
     不得漂移」—— 靠注释维持而非靠代码。
@@ -693,6 +697,21 @@ the option AND advances`（:908）在 **windows-latest shard 3/3** 撞 **20s 用
     域不同）。建议的切法：先只把 `mcpProbe` 与 SCIP indexer 这两条**会产生孙进程**的收编
     到 `runManagedProcess`，三份 `--version` 探针合并为一个共享 helper，git 两处维持现状
     但把「不得漂移」从注释升级为源码锁。
+
+  > ⚠️ **2026-08-24 对账（RFC-317 T66 / findings EK-09）**：本族此前**两个方向都过期**。
+  > 上面三条打 ✅ 的是「已修但仍列为待办」——一份待办清单里挂着已经完成的条目，会让
+  > 下一个人重复做一遍、或者反过来认为整族都还没动。反方向是**新长出来的没进清单**：
+  > `modules/development-automation/infrastructure/verificationRunner.ts:143` 与
+  > `modules/integration/infrastructure/developmentAdapterRunner.ts:360` 都是审计之后
+  > 才出现的工具类 spawn。**这两条今天已经不弱了**（各自 `detached: true` +
+  > `killProcessTree` TERM→宽限→KILL，见 verificationRunner.ts:157-165 /
+  > developmentAdapterRunner.ts:370-387），所以不必补进待办——但它们说明一件事：
+  > **这份清单没有任何机制会在新 spawn 点出现时提醒你**，它只在有人手工普查时才更新。
+  > 尚未收编、仍值得处理的是原文列的头两条（`mcpProbe` 与 SCIP indexer 的孙进程回收）
+  > 加上 `modules/development-automation/infrastructure/gitBaselineReader.ts:95`
+  > （二进制字节直连，已在 rfc284 spawn allowlist 内）。
+  > 结构性的解法是原文最后一句提到的「源码锁」——把 spawn 点清单变成棘轮，
+  > 而不是靠下一次审计再来对一次账。
 - ❗ **`docs/audit-backlog.md` 上文关于 `--ignore-scripts` 的记载与源码不符**（2026-08-03 实测）：
   `services/pluginInstaller.ts:222` 的实际 argv 是
   `npm install --prefix <dir> --no-audit --no-fund --silent <spec>`，**全仓 grep `ignore-scripts` 零命中**，

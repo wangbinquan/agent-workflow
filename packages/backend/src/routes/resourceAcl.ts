@@ -26,10 +26,18 @@ import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
 /**
- * RFC-310 的五类数字员工配置资源已进 AclResourceType，但它们的 ACL 端点与
- * permission 点必须同批落（registry.ts 的 RFC-247 反向自检：无 route 的点
- * 会让 daemon 拒启）。挂载配置的键域显式排除它们——等对应 routes 批次落地
- * 时从这里移除排除项，编译器会顺带要求补 ACL_PERMISSION_PREFIX 映射。
+ * 挂载配置的键域 = 全部 `AclResourceType`，**没有排除项**。
+ *
+ * RFC-317 T66 —— 这段注释此前写着「RFC-310 的五类数字员工配置资源已进
+ * AclResourceType…挂载配置的键域显式排除它们——等对应 routes 批次落地时从这里
+ * 移除排除项」，而紧接着的一行就是 `= AclResourceType`：排除项**早已不存在**，
+ * 那五类的 ACL 端点也早已挂上（`routes/developmentConfig.ts` 的
+ * `mountAclEndpoints`）。这是最坏的一种过期断言——它读起来像一件**待办**，
+ * 会让下一个人去找一个不存在的排除清单，或者以为那五类还没有 ACL 端点而重复实现。
+ *
+ * 保留这个别名而不是直接用 `AclResourceType`：`ACL_PERMISSION_PREFIX` 用它做
+ * `Record` 键域，新增一类 ACL 资源时编译器会在那里报错，逼出「这一类的权限点
+ * 前缀是什么」这个决策（RFC-317 B1-c 的 `employee_definition` 就是被它逼出来的）。
  */
 export type MountedAclResourceType = AclResourceType
 
@@ -64,17 +72,23 @@ export interface AclEndpointConfig {
 
 export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConfig): void {
   const path = `${cfg.base}/:${cfg.param}/acl`
-  // RFC-247 T1/T3 — these twelve routes (six resources x GET/PUT) are generated
-  // from a template, so there is no literal path for a caller to declare. The
-  // mount registers its OWN metadata instead: leaving it to the six callers
-  // would mean six chances to write a different contract for the same endpoint,
-  // and the startup coverage self-check could not tell a missing declaration
-  // from a templated one.
+  // RFC-247 T1/T3 — the GET/PUT pair here is generated from a template, so
+  // there is no literal path for a caller to declare. The mount registers its
+  // OWN metadata instead: leaving it to each caller would mean one chance per
+  // caller to write a different contract for the same endpoint, and the
+  // startup coverage self-check could not tell a missing declaration from a
+  // templated one.
+  // (RFC-317 T66 — this comment used to say "these twelve routes (six
+  // resources x GET/PUT)" and "the six callers". Both counts were frozen at
+  // RFC-247 time; the mount has more callers than that today and the sentence
+  // never depended on the number. Counting call sites in prose is a ledger
+  // nobody updates — the derived truth is `ACL_RESOURCE_TYPES` plus whichever
+  // route files call this function.)
   // Exhaustive singular→plural map rather than a cast off `cfg.base`: adding a
-  // seventh ACL resource type becomes a COMPILE error here instead of silently
+  // new ACL resource type becomes a COMPILE error here instead of silently
   // producing a permission point that no route backs (which the RFC-247 startup
   // reverse check would then reject at boot, much further from the cause).
-  // Value type is the SIX ACL prefixes only — deliberately not MatrixResource,
+  // Value type is the ACL prefixes only — deliberately not MatrixResource,
   // which also contains repos / tasks / memory / scheduled-tasks. Widening it
   // would let `${resource}:update` name `repos:update`, a point RFC-247 never
   // created because the repos domain has no PUT/PATCH route. TypeScript catches

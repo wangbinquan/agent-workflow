@@ -14,10 +14,10 @@
 // Prompt template `{{<signal_port>}}` references are forbidden — but that
 // check lives in the prompt template validator (PR-B T3), not here.
 //
-// PR-A scope: handler registered into PARAMETRIC_HANDLERS; AgentOutputKind
-// schema does NOT yet whitelist 'signal' as a base name (PR-B adds it).
-// In PR-A the only way to reach this handler is via direct test or via
-// the wrapper-fanout `__done__` auto-mint path (also PR-D).
+// 现状（RFC-317 T66 按源码订正）：`'signal'` **已经**在
+// `kindParser.ts` 的 `REGISTERED_BASE_KINDS` 里（:178），因此它是一个正常可声明
+// 的 base kind，不再是「只能靠单测或 __done__ 自动铸造才碰得到」。原注释里
+// 「PR-B adds it」的那一步已经发生。
 
 import type { ParsedKind } from '../kindParser'
 import type { ParametricOutputKindHandler } from './registry'

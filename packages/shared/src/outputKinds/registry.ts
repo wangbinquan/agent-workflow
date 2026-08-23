@@ -3,15 +3,14 @@
 // 把 RFC-049 的 `OutputKindHandler<K extends AgentOutputKind>`（按字面值 kind
 // 绑定的 handler）泛化为按 `ParsedKind` 谓词分派的 handler。
 //
-// PR-A 阶段：这是一个 **sibling 注册表**——`PARAMETRIC_HANDLERS` 与现有
-// `HANDLERS` Record 并存，不接现有 runtime；getHandlerForParsedKind 仅供
-// 新 wrapper-fanout 相关代码（待 PR-C / PR-D）调用。现有 envelope.ts /
-// review.ts 仍走 `getOutputKindHandler(kind: AgentOutputKind)`。
+// RFC-317 T66 —— 这里原本压着两段**已经过期的施工期说明**：一段说本注册表
+// 「不接现有 runtime」、getHandlerForParsedKind 仅供待建代码调用，一段是
+// 「PR-D 将切换 runtime 调用方」的计划。两段都已发生（见下面这段现状），
+// 但它们排在最前面，读者第一眼读到的是「这是个还没接上的骨架」。已删。
+// 唯一仍未兑现的是「删除 markdownFile.ts」——该文件今天仍在
+// `outputKinds/markdownFile.ts`，作为 follow-up 如实记在下面。
 //
-// PR-D：切换 runtime 调用方为 parseKind + getHandlerForParsedKind；同步
-// 删除 markdownFile.ts、把现有 HANDLERS Record 替换为本注册表。
-//
-// RFC-080（PR-A）现状更新：agent-output 的运行时调用方——shared/prompt.ts
+// RFC-080 现状：agent-output 的运行时调用方——shared/prompt.ts
 // `buildProtocolBlock`、backend `envelope.ts resolvePortContentDetailed`、
 // `runner.ts` repair——**已切到本注册表**（经 `groupPortsByParsedKind` /
 // `getHandlerForParsedKind` / `composePerParsedKindRepairBlocks`）。

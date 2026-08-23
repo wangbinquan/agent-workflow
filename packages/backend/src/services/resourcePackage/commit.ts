@@ -618,10 +618,17 @@ function makePackageProvider(
     // 自己 seed 的那一个。只认 `builtin = true` 的行——同名的普通资源不算数，
     // 否则「忽略 built-in」会退化成「绑到某个碰巧同名的用户资源」。
     resolveBuiltin: async (type, name) => {
-      // 第二道防线（refs.ts 已按槽类型校验过声明类型）：**只有 agents / workflows
-      // 两张表有 `builtin` 列**。对其余四类拼 `eq(table.builtin, true)` 会让 drizzle
-      // 生成非法 SQL ⇒ 500 而不是 4xx。这里直接判「没有 built-in」，交给调用点
-      // fail closed。
+      // 第二道防线（refs.ts 已按槽类型校验过声明类型）：`builtin` 列只在
+      // agents / workflows / capability_templates 三张表上，对没有该列的类型拼
+      // `eq(table.builtin, true)` 会让 drizzle 生成非法 SQL ⇒ 500 而不是 4xx。
+      // 这里直接判「没有 built-in」，交给调用点 fail closed。
+      //
+      // RFC-317 T66 —— capability_template **有列但没有任何写 true 的路径**
+      // （全仓零 `builtin: true` 写点），因此今天这条早退不会漏掉任何真实的
+      // built-in。等哪天真的 seed 了 built-in 能力模板，这里必须一起放行，
+      // 否则包里的 `builtin:capability_template/...` 引用会 fail closed 到
+      // 「本实例没有同名 built-in」——这正是原注释「只有两张表有列」所掩盖的
+      // 那一步。
       if (type !== 'agent' && type !== 'workflow') return null
       const table = ACL_TABLES[type]
       const row = db

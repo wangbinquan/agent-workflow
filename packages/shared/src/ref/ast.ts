@@ -131,8 +131,11 @@ export const ResourceRefAstSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('project-skill'), name: z.string().min(1).max(128) }),
   z.object({
     k: z.literal('builtin'),
-    // 只有 agents / workflows 两张表有 builtin 列；把六类 ACL type 全放进来会
-    // 制造一种任何 resolver 都不可能兑现的非法状态。
+    // 键域刻意只有这两类：`builtin` 列虽然在三张表上（agents / workflows /
+    // capability_templates），但**只有这两张有把它写成 true 的路径**，
+    // 所以第三类进来会制造一种任何 resolver 都不可能兑现的非法状态。
+    // 把全部 ACL type 放进来更是如此。（RFC-317 T66 订正：原注释说「只有两张表
+    // 有 builtin 列」——列的分布与 seed 的分布是两件事，判据是后者。）
     type: z.enum(['agent', 'workflow']),
     name: z.string().min(1).max(256),
   }),

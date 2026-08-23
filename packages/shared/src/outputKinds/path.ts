@@ -18,9 +18,12 @@
 // the markdownFile.ts contract exactly so PR-D can swap the legacy module
 // out without touching call sites.
 //
-// PR-A scope: registered into PARAMETRIC_HANDLERS as sibling to markdownFile;
-// not yet called by runtime. PR-D removes markdownFile.ts and routes
-// envelope.ts / review.ts through this handler.
+// 现状（RFC-317 T66 按源码订正）：**已接入 runtime**——本 handler 注册在
+// `registry.ts:149` 的 PARAMETRIC_HANDLERS 里，`services/envelope.ts:652`
+// 对每个声明端口调 `getHandlerForParsedKind` 派发到它。原注释写的是
+// 「not yet called by runtime」。
+// 仍未兑现的只有 markdownFile.ts 的删除——该文件今天还在
+// `outputKinds/markdownFile.ts`，与 registry.ts 头部记的是同一条 follow-up。
 
 import { isReviewableBodyKind, type ParsedKind } from '../kindParser'
 import type { ParametricOutputKindHandler } from './registry'

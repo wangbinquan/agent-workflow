@@ -1,8 +1,10 @@
 // RFC-099 — resource-level ownership ACL schemas.
 //
-// Six resource types (agent / skill / mcp / plugin / workflow / workgroup)
-// carry a single
-// owner + a per-user grant list + a 'public' switch. Granted users can view
+// Every type in `ACL_RESOURCE_TYPES` below carries a single
+// owner + a per-user grant list + a 'public' switch.
+// (RFC-317 T66 — this line used to name six types by hand while the list had
+// already grown to thirteen. The roster is one `as const` array a few lines
+// down; a header that restates it can only ever be a second copy that rots.) Granted users can view
 // and use; owner and `resource-acl:bypass` holders can modify / delete /
 // transfer / manage grants. Non-granted actors without bypass must not observe the resource at all
 // (lists filter, detail 404s).

@@ -26,7 +26,17 @@
 //      都会立刻红）。外部 npm 包解析不了不算（子路径 exports / bun 内建）。
 //   ② 没有 KNOWN_VIOLATIONS 之外的违规。
 //   ③ KNOWN_VIOLATIONS 里没有**过期**条目 —— 某条不再触发说明环已被拆掉，
-//      必须同步删除。这让允许列表只能缩、不能涨。
+//      必须同步删除。
+//
+// RFC-317 T66 —— ③ 原本还跟着一句「这让允许列表只能缩、不能涨」，那是**只做了
+// 一半的判据**：stale 检测只管「缩」的方向（不再触发的条目必须删），对「涨」
+// 完全无话可说——在同一个 PR 里新加一处违规、同时在这里加一行豁免，本脚本全绿。
+// 「不能涨」这一半今天由**另一处**兑现：`architecture/ledger-baselines.json` 给
+// KNOWN_VIOLATIONS 钉了条目数，`rfc317-ledger-highwater.test.ts` 要求它与源码逐字
+// 相等且相对上一个 commit 只降不升（要升必须显式写 `allowGrowth` 并点名 RFC，
+// 且在下一笔不涨的提交上被判过期、强制清理）。
+// 留下原来那句的坏处不是措辞不准，而是**它让人以为这里已经防住了**，于是没人
+// 会去建真正防住它的那道门——这个洞就是这么活了很久的。
 //
 // 每条 known 违规都要写明 why + removeWhen（测试强制非空），removeWhen 指向
 // `design/task-execution-architecture-audit-2026-08-03.md` 的工作包编号。

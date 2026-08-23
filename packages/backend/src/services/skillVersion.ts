@@ -76,7 +76,8 @@ export { skillVersionRelPath } from '@/services/skillIdentityPaths'
  * the ids of memories that must be UN-fused because the restored content (=
  * version N) predates their absorption. Invariant: fused ⟺ knowledge is in the
  * current version, so memories fused at a version > N no longer apply.
- * Pure; used by restore (RFC-101 PR-B wires the actual status flip).
+ * Pure；状态翻转由 restore 路径实际执行（RFC-101 已 Done；RFC-317 T66 把原来的
+ * 「PR-B wires the actual status flip」改成陈述——那是施工期的将来时）。
  */
 export function memoriesToUnfuseOnRestore(
   fused: ReadonlyArray<{ id: string; fusedIntoSkillVersion: number | null }>,

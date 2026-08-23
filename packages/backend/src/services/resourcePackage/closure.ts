@@ -52,13 +52,18 @@ export interface ClosureResource {
    * 复制一份的结果是对端多出一个 owner 错、`builtin=false` 的同名副本，而真正的
    * built-in 仍在那儿。所以它进包只为了**让引用能被解释**，不产 create op。
    *
-   * 可选：缺省 = 不是 built-in。只有 `agents` / `workflows` 两张表有这一列，
-   * 其余四类永远走缺省。
+   * 可选：缺省 = 不是 built-in。带这一列的是 `agents` / `workflows` /
+   * `capability_templates` 三张表，但只有前两张有把它写成 true 的路径，
+   * 其余类型永远走缺省。（RFC-317 T66 订正：原文写「只有两张表有这一列」，
+   * RFC-304/309 给 capability_templates 加列之后就不成立了。）
    */
   builtin?: boolean
 }
 
-/** 只有 agents / workflows 两张表有 `builtin` 列；其余四类恒为 false。 */
+/**
+ * `builtin` 列在 agents / workflows / capability_templates 三张表上；只有前两张
+ * 有写 true 的路径，因此其余类型的行恒为 false。（RFC-317 T66 订正。）
+ */
 export const isBuiltinRow = (row: Record<string, unknown>): boolean => row.builtin === true
 
 export interface ClosureCallRef {

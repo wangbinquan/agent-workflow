@@ -21,11 +21,18 @@
 //     ignores it (fusionWorkflowId selects builtin=true), so the name
 //     collision RFC-101 worried about is no longer ambiguous.
 //
-// Only agents + workflows carry the column today (the sole seeded types). The
-// skill / mcp / plugin rows have no `builtin` field, so isBuiltinRow is false for them and the
-// generic guards are no-ops; adding a built-in of those types later MUST add
-// the column to that table AND guard that type's write paths (e.g. for skills:
-// ZIP/source-conflict import, reconcile, commitSkillVersion fusion approval).
+// Three tables carry the `builtin` column — agents, workflows and
+// capability_templates (db/schema.ts) — but only agents and workflows have any
+// writer that sets it to true, so they remain the only SEEDED built-in types.
+// (RFC-317 T66: this paragraph used to say "only agents + workflows carry the
+// column", which stopped being true when RFC-304/309 added it to
+// capability_templates. The column and the seeding are two different facts and
+// the old sentence collapsed them — hence the correction naming both.)
+// Types without the column have no `builtin` field, so isBuiltinRow is false
+// for them and the generic guards are no-ops; adding a built-in of those types
+// later MUST add the column to that table AND guard that type's write paths
+// (e.g. for skills: ZIP/source-conflict import, reconcile, commitSkillVersion
+// fusion approval).
 
 import { QUARANTINED_FUSION_SKILL_ID, type AclResourceType } from '@agent-workflow/shared'
 import { ForbiddenError } from '@/util/errors'

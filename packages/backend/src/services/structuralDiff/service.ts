@@ -5,8 +5,12 @@
 // results (status 'partial' when some repos are unusable).
 //
 // Scopes: 'task' (base_commit → worktree), 'node' (a write node's pre_snapshot
-// → the next write node's pre_snapshot / worktree, single-repo). 'wrapper' is
-// not yet wired and returns a typed 'structural-scope-unsupported'.
+// → the next write node's pre_snapshot / worktree, single-repo)、以及
+// 'wrapper'（`getWrapperStructuralDiff`，需要 `nodeRunId` query 参数）。
+// RFC-317 T66 订正：原注释写着「'wrapper' is not yet wired and returns a typed
+// 'structural-scope-unsupported'」——该分支早已接上（见下方 scope === 'wrapper'），
+// 而 RFC-083 已 Done。这条尤其误导：它写在**文件头的 scope 说明**里，
+// 是任何人想知道「支持哪几种 scope」时第一眼看的地方。
 
 import { existsSync } from 'node:fs'
 import { asc, eq } from 'drizzle-orm'

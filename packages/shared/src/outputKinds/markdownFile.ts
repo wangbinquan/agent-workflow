@@ -2,14 +2,18 @@
 // `<port>` content is a worktree-relative path; the framework reads that file
 // off disk before downstream nodes see the body.
 //
-// PR-A scope: 3 of 5 subReasons (empty-path / escapes-worktree / missing-file)
-// + buildPromptGuidance moved out of shared/prompt.ts.
+// 现状（RFC-317 T66 订正——原文是两段施工期分期说明：先「3 of 5 subReasons」
+// 再「(this file): subReasons set expanded to 5」。RFC-049 早已 Done，分期说明
+// 在完工后只会让读者去猜「现在到底是 3 个还是 5 个」，现改为直述现状）：
 //
-// PR-B scope (this file): subReasons set expanded to 5 (adds wrong-extension
-// + empty-file). validate now runs the stricter post-read checks so the
-// markdown_file contract is "the file MUST exist AND be .md/.markdown AND have
-// non-empty trimmed content"; the buildRepairBlock SUB_REASON_DESCRIPTIONS map
-// was already PR-A-ready for these.
+// subReasons 共 5 个：empty-path / escapes-worktree / missing-file /
+// wrong-extension / empty-file。validate 跑完整的读后严格检查，因此
+// markdown_file 的契约是「该文件必须存在、必须是 .md/.markdown、且 trim 后
+// 非空」；buildRepairBlock 的 SUB_REASON_DESCRIPTIONS 覆盖全部 5 个。
+//
+// ⚠️ 本文件是**待删的旧实现**：parametric 注册表里的 `outputKinds/path.ts`
+// 已经承担运行时派发，删除 markdownFile.ts 是 registry.ts 头部记的同一条
+// follow-up。
 
 import type { OutputKindHandler } from './types'
 

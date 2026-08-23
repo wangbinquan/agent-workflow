@@ -13,9 +13,13 @@
 //       opened), writes a lifecycle_repair_audit row, runs `apply`,
 //       re-scans invariants for the task, returns the resolved/new alerts.
 //
-// PR-A scope: S3 / T1 / R1 / U1 (4 rules, 11 options). PR-B fills the
-// remaining 8 rules. The `satisfies` clause on REPAIR_OPTIONS allows empty
-// arrays in PR-A; PR-B narrows it to require ≥ 1 option per rule.
+// 现状（RFC-317 T66 按源码订正）：**14 条规则全部有选项**，且
+// `REPAIR_OPTIONS` 的 `satisfies` 已经收紧成
+// `Record<LifecycleAlertRule, readonly [RepairOptionDef, ...RepairOptionDef[]]>`
+// ——空数组是**编译错误**，不是被容忍的中间态。
+// 原注释写的是「PR-A scope: 4 rules, 11 options. PR-B fills the remaining 8
+// rules… allows empty arrays in PR-A」，那是 RFC-057 施工期的状态，
+// 该 RFC 早已 Done。留着它会让人以为这张表还是半成品。
 //
 // State machine: ALL node_run.status writes go through `transitionNodeRunStatus`
 // or `setNodeRunStatus` (RFC-053 PR-B). Grep guard in
@@ -94,7 +98,8 @@ export const REPAIR_OPTIONS = {
 
 // Runtime guard: every implemented option id must appear in the shared
 // REPAIR_OPTION_IDS taxonomy. Catches drift if a rule's option list is
-// edited in isolation. Empty rules in PR-A are tolerated.
+// edited in isolation.（RFC-317 T66：原句末尾「Empty rules in PR-A are
+// tolerated」已删——类型层面现在就不允许空数组。）
 for (const rule of Object.keys(REPAIR_OPTIONS) as LifecycleAlertRule[]) {
   const expected = new Set(REPAIR_OPTION_IDS[rule] as readonly string[])
   for (const def of REPAIR_OPTIONS[rule]) {

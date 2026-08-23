@@ -345,9 +345,13 @@ export async function dismissOpenClarifyParksForAutonomous(
       result.dismissedSessions++
       // Park-carrier clarify run → canceled in the SAME transaction (the
       // asking host run already closed as done/failed — RFC-181 design §2.1a).
-      // rfc053-allow-direct-status-write -- RFC-181 A2 atomic dismissal (guarded
-      // awaiting_human-only UPDATE inside dbTxSync; async lifecycle helpers
-      // cannot join a sync transaction).
+      // rfc053-allow-direct-status-write -- RFC-181 A2 atomic dismissal
+      // (guarded awaiting_human-only UPDATE inside dbTxSync).
+      //
+      // RFC-317 T66 —— 原括注还带一句「async lifecycle helpers cannot join a
+      // sync transaction」，已删：同步事务版内核入口 `setNodeRunStatusTx`
+      // 自 2026-07-19 起就存在（services/lifecycle.ts），这一处属于**尚未迁移**
+      // 而非无法迁移，债记在 architecture/commons-debt.json 的 LC-12。
       const parked = tx
         .update(nodeRuns)
         .set({

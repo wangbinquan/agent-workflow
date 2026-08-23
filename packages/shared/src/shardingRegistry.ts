@@ -20,9 +20,12 @@
 // catch-all `path<*>` registration is consulted as a fallback when a
 // specific ext is not registered.
 //
-// PR-A scope: registry + resolveKeyOf. Not yet wired into scheduler
-// (PR-D); fanout sharding consumer reaches in via resolveKeyOf when
-// computing per-item shardKey at mint time.
+// 现状（RFC-317 T66 按源码订正）：**已接入 runtime**——
+// `services/scheduler.ts:62` 导入 `resolveKeyOf`，:7819 在 mint 分片时按 item
+// 取 shardKey。原注释停在「PR-A scope … Not yet wired into scheduler (PR-D)」，
+// 那是一份**施工期路线图**被留在了完工的代码里：读者据此会以为这个注册表还是
+// 死的，从而在别处另起一套 shardKey 计算。分阶段注释的失效期就是它描述的那个
+// PR 合并的那一刻——写的时候就该写成「PR-D 之后请删掉本段」。
 
 import type { ParsedKind } from './kindParser'
 import { stringifyKind } from './kindParser'
