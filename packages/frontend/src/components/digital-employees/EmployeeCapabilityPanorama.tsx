@@ -2,6 +2,15 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactElemen
 
 import { StatusChip } from '@/components/StatusChip'
 
+import {
+  ResponsibilityFlowCard,
+  ResponsibilityIngressBranch,
+  ResponsibilityIngressCard,
+  ResponsibilityLaneAxis,
+  ResponsibilityReviewBranch,
+  type ResponsibilityCardPresentation,
+  type ResponsibilityProjectedIngress,
+} from './ResponsibilityFlowDisplay'
 import type { EmployeeTypePackage, ToolRegistration, WorkIngress, WorkItem } from './types'
 import { localized } from './types'
 
@@ -20,7 +29,12 @@ export interface ResponsibilityDispatchNode {
 
 type ResponsibilityMapEntry =
   | { kind: 'item'; item: WorkItem }
-  | { kind: 'ingress-branch'; item: WorkItem; ingresses: WorkIngress[] }
+  | {
+      kind: 'ingress-branch'
+      item: WorkItem
+      ingresses: ResponsibilityProjectedIngress[]
+      bypassIngresses: ResponsibilityProjectedIngress[]
+    }
   | {
       kind: 'review-branch'
       item: WorkItem
@@ -28,7 +42,7 @@ type ResponsibilityMapEntry =
       mode: 'conditional' | 'active'
     }
   | { kind: 'dispatch'; node: ResponsibilityDispatchNode }
-  | { kind: 'ingress'; ingress: WorkIngress }
+  | { kind: 'ingress'; ingress: ResponsibilityProjectedIngress }
 
 type ResponsibilityMapLayoutEntry = {
   entry: ResponsibilityMapEntry
@@ -90,6 +104,89 @@ export interface EmployeeCapabilityPanoramaProps {
   /** Highest-priority event-driven duty lane first. Spine lanes stay fixed. */
   lanePriorityOrder?: readonly string[]
   onLanePriorityOrderChange?: (order: string[]) => void
+}
+
+function projectWorkIngresses(
+  type: EmployeeTypePackage,
+  workItemsByRef: ReadonlyMap<string, WorkItem>,
+): ResponsibilityProjectedIngress[] {
+  const intake = type.workIntakeAuthoring as EmployeeTypePackage['workIntakeAuthoring'] | undefined
+  return type.authoringManifest.workIngresses.flatMap((ingress) => {
+    const sourceIngress = ingress
+    const fallback: ResponsibilityProjectedIngress = {
+      ...ingress,
+      sourceIngress,
+      routeKind: 'standard',
+    }
+    const startItem = workItemsByRef.get(ingress.nextWorkItemRef)
+    const directTargetRef =
+      startItem?.nextWorkItemRefs.length === 1 ? startItem.nextWorkItemRefs[0] : undefined
+    const directTarget =
+      directTargetRef === undefined ? undefined : workItemsByRef.get(directTargetRef)
+    if (
+      ingress.configurationSurface === 'event-response-rules' &&
+      ingress.sourceClass === 'issue' &&
+      directTargetRef !== undefined &&
+      directTarget !== undefined
+    ) {
+      return [
+        {
+          ...ingress,
+          nextWorkItemRef: directTargetRef,
+          sourceIngress,
+          routeKind: 'bypass',
+        },
+      ]
+    }
+    if (ingress.configurationSurface !== 'task-creation' || intake === undefined) {
+      return [fallback]
+    }
+
+    const externalIdRequirement = intake.kindRequirements.find(
+      (requirement) =>
+        requirement.kind === 'external-id' && requirement.workItemRef === ingress.nextWorkItemRef,
+    )
+    const directlyAcceptedKinds = intake.acceptedKinds.filter(
+      (kind) =>
+        kind !== 'external-id' &&
+        !intake.kindRequirements.some((requirement) => requirement.kind === kind),
+    )
+    if (
+      externalIdRequirement === undefined ||
+      directlyAcceptedKinds.length === 0 ||
+      directTargetRef === undefined ||
+      directTarget === undefined
+    ) {
+      return [fallback]
+    }
+
+    return [
+      {
+        ...ingress,
+        ingressRef: `${ingress.ingressRef}:direct`,
+        order: ingress.order,
+        label: { 'zh-CN': '输入描述/文档', 'en-US': 'Description / document' },
+        valueLabel: { 'zh-CN': '界面', 'en-US': 'UI' },
+        description: {
+          'zh-CN': `从统一新建任务界面输入需求描述或上传文档，直接进入${localized(directTarget.label, 'zh-CN')}`,
+          'en-US': `Enter a description or upload documents in unified task creation and continue directly to ${localized(directTarget.label, 'en-US')}`,
+        },
+        nextWorkItemRef: directTargetRef,
+        sourceIngress,
+        routeKind: 'bypass',
+      },
+      {
+        ...ingress,
+        ingressRef: `${ingress.ingressRef}:external-id`,
+        order: ingress.order + 1,
+        label: { 'zh-CN': '输入 ID', 'en-US': 'Input ID' },
+        valueLabel: { 'zh-CN': '界面', 'en-US': 'UI' },
+        description: intake.externalId.description,
+        sourceIngress,
+        routeKind: 'standard',
+      },
+    ]
+  })
 }
 
 export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProps): ReactElement {
@@ -159,7 +256,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
     (item) => capabilityToolState(item)?.active !== false,
   )
   const workItemsByRef = new Map(activeWorkItems.map((item) => [item.workItemRef, item]))
-  const activeIngresses = props.type.authoringManifest.workIngresses.filter((ingress) =>
+  const activeIngresses = projectWorkIngresses(props.type, workItemsByRef).filter((ingress) =>
     workItemsByRef.has(ingress.nextWorkItemRef),
   )
   const reactionLaneIds = new Set(
@@ -282,7 +379,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
       : item.nodeKind === 'system'
         ? { label: zh ? '平台' : 'Platform', className: 'platform' }
         : { label: zh ? '协同' : 'Collaboration', className: 'collaboration' }
-  const workItemPresentation = (item: WorkItem) => {
+  const workItemPresentation = (item: WorkItem): ResponsibilityCardPresentation => {
     const kind = nodeKind(item)
     const fanOut = fanOutDestinationRefs.has(item.workItemRef)
     const state = capabilityToolState(item)
@@ -436,7 +533,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
             >
               <header>
                 <span className="employee-toolbox-region__phase">
-                  {zh ? `阶段 ${regionIndex + 1}` : `Phase ${regionIndex + 1}`}
+                  {zh ? `职责 ${regionIndex + 1}` : `Responsibility ${regionIndex + 1}`}
                 </span>
                 <div>
                   <strong>{localized(region.label, props.language)}</strong>
@@ -474,7 +571,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                       .filter((node) => itemRefs.has(node.destinationWorkItemRef))
                       .map((node) => node.destinationWorkItemRef),
                   )
-                  const ingressesByTarget = new Map<string, WorkIngress[]>()
+                  const ingressesByTarget = new Map<string, ResponsibilityProjectedIngress[]>()
                   for (const ingress of ingresses) {
                     const current = ingressesByTarget.get(ingress.nextWorkItemRef) ?? []
                     current.push(ingress)
@@ -499,8 +596,19 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                       }
                     }
                     const itemIngresses = ingressesByTarget.get(item.workItemRef) ?? []
+                    const bypassIngresses =
+                      item.nextWorkItemRefs.length === 1
+                        ? (ingressesByTarget.get(item.nextWorkItemRefs[0]!) ?? []).filter(
+                            (ingress) => ingress.routeKind === 'bypass',
+                          )
+                        : []
                     return itemIngresses.length > 0
-                      ? { kind: 'ingress-branch', item, ingresses: itemIngresses }
+                      ? {
+                          kind: 'ingress-branch',
+                          item,
+                          ingresses: itemIngresses,
+                          bypassIngresses,
+                        }
                       : { kind: 'item', item }
                   }
                   const primaryEntryBuckets: Array<{
@@ -540,7 +648,9 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                     ...primaryEntries.map(entryColumnSpan),
                   )
                   const hasParallelIngressBranch = primaryEntries.some(
-                    (entry) => entry.kind === 'ingress-branch' && entry.ingresses.length > 1,
+                    (entry) =>
+                      entry.kind === 'ingress-branch' &&
+                      entry.ingresses.length + entry.bypassIngresses.length > 1,
                   )
                   let nextPrimaryColumn = 1
                   let nextPrimaryRow = 1
@@ -583,7 +693,9 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                   const groupedIngressRefs = new Set(
                     primaryEntries.flatMap((entry) =>
                       entry.kind === 'ingress-branch'
-                        ? entry.ingresses.map((ingress) => ingress.ingressRef)
+                        ? [...entry.ingresses, ...entry.bypassIngresses].map(
+                            (ingress) => ingress.ingressRef,
+                          )
                         : [],
                     ),
                   )
@@ -622,60 +734,11 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                   const lanePriority = effectiveLanePriorityOrder.indexOf(lane.laneId)
                   const laneSortable =
                     lanePriority >= 0 && props.onLanePriorityOrderChange !== undefined
-                  const renderIngressCard = (
-                    ingress: WorkIngress,
-                    options: {
-                      auxiliary?: ResponsibilityMapLayoutEntry['auxiliary']
-                      sourceNode?: boolean
-                    } = {},
-                  ) => {
+                  const nextLabelForIngress = (ingress: ResponsibilityProjectedIngress) => {
                     const nextItem = workItemsByRef.get(ingress.nextWorkItemRef)
-                    const next =
-                      nextItem === undefined
-                        ? ingress.nextWorkItemRef
-                        : localized(nextItem.label, props.language)
-                    const action =
-                      ingress.configurationSurface === 'task-creation'
-                        ? zh
-                          ? '去新建任务'
-                          : 'Create task'
-                        : zh
-                          ? '去 Webhook 配置'
-                          : 'Configure Webhook'
-                    return (
-                      <button
-                        key={`ingress:${ingress.ingressRef}`}
-                        id={`${props.cardIdPrefix ?? 'toolbox-duty'}-ingress-${ingress.ingressRef}`}
-                        data-work-ingress-ref={ingress.ingressRef}
-                        data-capability-tool-ref={`ingress:${ingress.ingressRef}`}
-                        data-next-work-item-ref={ingress.nextWorkItemRef}
-                        type="button"
-                        className={`employee-toolbox-card employee-toolbox-card--ingress ${
-                          options.sourceNode === true
-                            ? 'employee-toolbox-card--source-node'
-                            : 'employee-toolbox-card--auxiliary'
-                        }`}
-                        style={
-                          options.sourceNode === true
-                            ? undefined
-                            : ({
-                                '--employee-aux-column': options.auxiliary?.column ?? 1,
-                                '--employee-aux-row': options.auxiliary?.row ?? 1,
-                              } as CSSProperties)
-                        }
-                        aria-label={`${localized(ingress.label, props.language)} · ${localized(ingress.valueLabel, props.language)} · ${action} · ${zh ? '下一步' : 'Next'}：${next}`}
-                        title={localized(ingress.description, props.language)}
-                        onClick={() => props.onConfigureIngress?.(ingress)}
-                      >
-                        <span className="employee-toolbox-card__kind">
-                          {localized(ingress.valueLabel, props.language)}
-                        </span>
-                        <strong>{localized(ingress.label, props.language)}</strong>
-                        {options.sourceNode === true ? null : (
-                          <small title={action}>{`→ ${next}`}</small>
-                        )}
-                      </button>
-                    )
+                    return nextItem === undefined
+                      ? ingress.nextWorkItemRef
+                      : localized(nextItem.label, props.language)
                   }
                   return (
                     <section
@@ -799,9 +862,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                           </button>
                         ) : null}
                       </header>
-                      <span className="employee-toolbox-lane__axis" aria-hidden="true">
-                        <span />
-                      </span>
+                      <ResponsibilityLaneAxis />
                       <div
                         className="employee-toolbox-lane__cards"
                         style={
@@ -812,71 +873,47 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                       >
                         {entries.map(({ entry, auxiliary }, itemIndex) => {
                           if (entry.kind === 'ingress') {
-                            return renderIngressCard(entry.ingress, { auxiliary })
+                            return (
+                              <ResponsibilityIngressCard
+                                key={`ingress:${entry.ingress.ingressRef}`}
+                                ingress={entry.ingress}
+                                language={props.language}
+                                cardIdPrefix={props.cardIdPrefix ?? 'toolbox-duty'}
+                                auxiliary={auxiliary}
+                                nextLabel={nextLabelForIngress(entry.ingress)}
+                                onConfigure={props.onConfigureIngress}
+                              />
+                            )
                           }
                           if (entry.kind === 'ingress-branch') {
                             const item = entry.item
-                            const { kind, fanOut, state, detail, compactDetail, next } =
-                              workItemPresentation(item)
                             const selected =
                               item.workItemRef === props.selectedWorkItemRef &&
                               props.selectedReviewOptionRef == null
+                            const sourceIngresses = [
+                              ...entry.ingresses,
+                              ...entry.bypassIngresses,
+                            ].sort(
+                              (left, right) =>
+                                left.order - right.order ||
+                                left.ingressRef.localeCompare(right.ingressRef),
+                            )
+                            const rowStart = primaryRowStartIndices.has(itemIndex)
                             return (
-                              <div
+                              <ResponsibilityIngressBranch
                                 key={`ingress-branch:${item.workItemRef}`}
-                                className={`employee-toolbox-ingress-branch${
-                                  primaryRowStartIndices.has(itemIndex)
-                                    ? ' employee-toolbox-ingress-branch--row-start'
-                                    : ''
-                                }`}
-                                style={
-                                  {
-                                    '--employee-ingress-half-span': `${Math.max(0, entry.ingresses.length - 1) * 30}px`,
-                                  } as CSSProperties
-                                }
-                                data-ingress-branch-work-item-ref={item.workItemRef}
-                                aria-label={
-                                  zh
-                                    ? `工作来源汇聚到${localized(item.label, props.language)}`
-                                    : `Work sources converge on ${localized(item.label, props.language)}`
-                                }
-                              >
-                                <div className="employee-toolbox-ingress-branch__sources">
-                                  {entry.ingresses.map((ingress) =>
-                                    renderIngressCard(ingress, { sourceNode: true }),
-                                  )}
-                                </div>
-                                <span
-                                  className="employee-toolbox-ingress-branch__merge"
-                                  aria-hidden="true"
-                                >
-                                  <span />
-                                </span>
-                                <button
-                                  id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
-                                  data-work-item-ref={item.workItemRef}
-                                  data-capability-tool-ref={`work-item:${item.workItemRef}`}
-                                  type="button"
-                                  className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
-                                    state === undefined
-                                      ? ''
-                                      : ` employee-toolbox-card--${state.state}`
-                                  }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
-                                    state?.attention === true
-                                      ? ' employee-toolbox-card--attention'
-                                      : ''
-                                  }${selected ? ' employee-toolbox-card--active' : ''}`}
-                                  aria-pressed={selected}
-                                  aria-label={`${localized(item.label, props.language)} · ${kind.label} · ${detail} · ${next}`}
-                                  title={localized(item.description, props.language)}
-                                  onClick={() => props.onSelect(item.workItemRef)}
-                                >
-                                  <span className="employee-toolbox-card__kind">{kind.label}</span>
-                                  <strong>{localized(item.label, props.language)}</strong>
-                                  <small title={detail}>{compactDetail}</small>
-                                  <span className="sr-only">{next}</span>
-                                </button>
-                              </div>
+                                item={item}
+                                ingresses={sourceIngresses}
+                                presentation={workItemPresentation(item)}
+                                language={props.language}
+                                cardIdPrefix={props.cardIdPrefix ?? 'toolbox-duty'}
+                                selected={selected}
+                                incoming={itemIndex > 0 && !rowStart}
+                                rowStart={rowStart}
+                                onSelect={() => props.onSelect(item.workItemRef)}
+                                onConfigureIngress={props.onConfigureIngress}
+                                nextLabelFor={nextLabelForIngress}
+                              />
                             )
                           }
                           if (entry.kind === 'review-branch') {
@@ -916,127 +953,41 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                               props.language,
                             )
                             const selectItem = () => props.onSelect(item.workItemRef)
+                            const rowStart = primaryRowStartIndices.has(itemIndex)
                             return (
-                              <div
+                              <ResponsibilityReviewBranch
                                 key={`review-branch:${item.workItemRef}`}
-                                className={`employee-toolbox-review-branch${
-                                  entry.mode === 'conditional'
-                                    ? ' employee-toolbox-review-branch--conditional'
-                                    : ''
-                                }${
-                                  primaryRowStartIndices.has(itemIndex)
-                                    ? ' employee-toolbox-review-branch--row-start'
-                                    : ''
-                                }`}
-                                data-review-branch-work-item-ref={item.workItemRef}
-                                aria-label={
-                                  entry.mode === 'active'
-                                    ? zh
-                                      ? `${localized(item.label, props.language)}的已启用审核路径`
-                                      : `Active review path for ${localized(item.label, props.language)}`
-                                    : zh
-                                      ? `${localized(item.label, props.language)}的审核分支`
-                                      : `Review branches for ${localized(item.label, props.language)}`
-                                }
-                              >
-                                {entry.mode === 'conditional' ? (
-                                  <span
-                                    className="employee-toolbox-review-branch__bypass"
-                                    data-review-bypass
-                                  >
-                                    <span className="employee-toolbox-review-branch__bypass-label">
-                                      {zh ? '无需人工审核' : 'No human review'}
-                                    </span>
-                                    <span
-                                      className="employee-toolbox-review-branch__bypass-end"
-                                      aria-hidden="true"
-                                    />
-                                  </span>
-                                ) : null}
-                                <div className="employee-toolbox-review-branch__prefix">
-                                  <span className="employee-toolbox-review-branch__label">
-                                    {zh ? '需人工审核' : 'Human review required'}
-                                  </span>
-                                  <div className="employee-toolbox-review-branch__reviewed-flow">
-                                    <button
-                                      type="button"
-                                      className={`employee-toolbox-card employee-toolbox-card--${kind.className} employee-toolbox-card--review-stage${
-                                        beforeReviewState === undefined
-                                          ? ''
-                                          : ` employee-toolbox-card--${beforeReviewState}`
-                                      }`}
-                                      data-review-stage="analysis"
-                                      data-capability-tool-ref={`review:${gate.optionRef}:analysis`}
-                                      aria-label={`${beforeReviewLabel} · ${localized(item.description, props.language)}`}
-                                      title={localized(item.description, props.language)}
-                                      onClick={selectItem}
-                                    >
-                                      <span className="employee-toolbox-card__kind">
-                                        {kind.label}
-                                      </span>
-                                      <strong>{beforeReviewLabel}</strong>
-                                    </button>
-                                    <button
-                                      id={`${props.cardIdPrefix ?? 'toolbox-duty'}-review-${gate.optionRef}`}
-                                      data-review-option-ref={gate.optionRef}
-                                      data-capability-tool-ref={`review:${gate.optionRef}`}
-                                      type="button"
-                                      className={`employee-toolbox-card employee-toolbox-card--human-gate employee-toolbox-card--review-stage${
-                                        gateState === undefined
-                                          ? ''
-                                          : ` employee-toolbox-card--${gateState.state}`
-                                      }${
-                                        gateState?.attention === true
-                                          ? ' employee-toolbox-card--attention'
-                                          : ''
-                                      }${gateSelected ? ' employee-toolbox-card--active' : ''}`}
-                                      aria-pressed={gateSelected}
-                                      aria-label={`${localized(gate.label, props.language)} · ${zh ? '人工门禁' : 'Human gate'} · ${gateDetail}`}
-                                      title={`${localized(gate.description, props.language)} · ${gateDetail}`}
-                                      onClick={() => {
-                                        if (props.onSelectReviewGate === undefined) {
-                                          props.onSelect(gate.parentWorkItemRef)
-                                        } else {
-                                          props.onSelectReviewGate(gate)
-                                        }
-                                      }}
-                                    >
-                                      <span className="employee-toolbox-card__kind">
-                                        {zh ? '审核' : 'Review'}
-                                      </span>
-                                      <strong>{localized(gate.label, props.language)}</strong>
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="employee-toolbox-review-branch__merge-target">
-                                  <button
-                                    id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
-                                    data-work-item-ref={item.workItemRef}
-                                    data-capability-tool-ref={`work-item:${item.workItemRef}`}
-                                    type="button"
-                                    className={`employee-toolbox-card employee-toolbox-review-branch__merged-item employee-toolbox-card--${kind.className}${
-                                      afterApprovalState === undefined
-                                        ? ''
-                                        : ` employee-toolbox-card--${afterApprovalState}`
-                                    }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
-                                      state?.attention === true
-                                        ? ' employee-toolbox-card--attention'
-                                        : ''
-                                    }${itemSelected ? ' employee-toolbox-card--active' : ''}`}
-                                    aria-pressed={itemSelected}
-                                    aria-label={`${localized(item.label, props.language)} · ${kind.label} · ${detail} · ${next}`}
-                                    title={localized(item.description, props.language)}
-                                    onClick={selectItem}
-                                  >
-                                    <span className="employee-toolbox-card__kind">
-                                      {kind.label}
-                                    </span>
-                                    <strong>{localized(item.label, props.language)}</strong>
-                                    <small title={detail}>{compactDetail}</small>
-                                  </button>
-                                </div>
-                                <span className="sr-only">{next}</span>
-                              </div>
+                                item={item}
+                                gate={gate}
+                                mode={entry.mode}
+                                presentation={{
+                                  kind,
+                                  fanOut,
+                                  state,
+                                  detail,
+                                  compactDetail,
+                                  next,
+                                }}
+                                language={props.language}
+                                cardIdPrefix={props.cardIdPrefix ?? 'toolbox-duty'}
+                                beforeReviewLabel={beforeReviewLabel}
+                                gateDetail={gateDetail}
+                                gateState={gateState}
+                                beforeReviewState={beforeReviewState}
+                                afterApprovalState={afterApprovalState}
+                                gateSelected={gateSelected}
+                                itemSelected={itemSelected}
+                                incoming={itemIndex > 0 && !rowStart}
+                                rowStart={rowStart}
+                                onSelectItem={selectItem}
+                                onSelectGate={() => {
+                                  if (props.onSelectReviewGate === undefined) {
+                                    props.onSelect(gate.parentWorkItemRef)
+                                  } else {
+                                    props.onSelectReviewGate(gate)
+                                  }
+                                }}
+                              />
                             )
                           }
                           if (entry.kind === 'dispatch') {
@@ -1051,67 +1002,64 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                               node.displayName.trim() ||
                               node.routeRef.trim() ||
                               (zh ? '未命名错误类型' : 'Unnamed failure type')
+                            const rowStart = primaryRowStartIndices.has(itemIndex)
                             return (
-                              <button
+                              <ResponsibilityFlowCard
                                 key={`${node.key}:${node.attention === true ? (props.attentionPulse ?? 0) : 0}`}
                                 id={`${props.cardIdPrefix ?? 'toolbox-duty'}-dispatch-${node.key}`}
                                 data-dispatch-route-key={node.key}
                                 data-capability-tool-ref={`dispatch:${node.key}`}
                                 type="button"
-                                className={`employee-toolbox-card employee-toolbox-card--${kind.className} employee-toolbox-card--${node.state ?? (node.configured ? 'configured' : 'missing')}${
+                                className={`employee-toolbox-card--${kind.className} employee-toolbox-card--${node.state ?? (node.configured ? 'configured' : 'missing')}${
                                   node.attention === true ? ' employee-toolbox-card--attention' : ''
                                 }${selected ? ' employee-toolbox-card--active' : ''}${
-                                  primaryRowStartIndices.has(itemIndex)
-                                    ? ' employee-toolbox-card--row-start'
-                                    : ''
+                                  rowStart ? ' employee-toolbox-card--row-start' : ''
                                 }`}
                                 aria-pressed={selected}
                                 aria-label={`${zh ? '优先级' : 'Priority'} ${node.priority} · ${displayName} · ${node.detail}`}
                                 onClick={() => props.onSelectDispatchNode?.(node)}
-                              >
-                                <span className="employee-toolbox-card__kind">
-                                  P{node.priority} · {kind.label}
-                                </span>
-                                <strong>{displayName}</strong>
-                                <small title={node.detail}>{node.detail}</small>
-                              </button>
+                                incoming={itemIndex > 0 && !rowStart}
+                                kindLabel={`P${node.priority} · ${kind.label}`}
+                                label={displayName}
+                                detailText={node.detail}
+                                detailTitle={node.detail}
+                              />
                             )
                           }
                           const item = entry.item
                           const { kind, fanOut, state, detail, compactDetail, next } =
                             workItemPresentation(item)
+                          const selected =
+                            item.workItemRef === props.selectedWorkItemRef &&
+                            props.selectedReviewOptionRef == null
+                          const rowStart = primaryRowStartIndices.has(itemIndex)
                           return (
-                            <button
+                            <ResponsibilityFlowCard
                               key={`${item.workItemRef}:${state?.attention === true ? (props.attentionPulse ?? 0) : 0}`}
                               id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
                               data-work-item-ref={item.workItemRef}
                               data-capability-tool-ref={`work-item:${item.workItemRef}`}
                               type="button"
-                              className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
+                              className={`employee-toolbox-card--${kind.className}${
                                 state === undefined ? '' : ` employee-toolbox-card--${state.state}`
                               }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
                                 state?.attention === true ? ' employee-toolbox-card--attention' : ''
-                              }${
-                                item.workItemRef === props.selectedWorkItemRef &&
-                                props.selectedReviewOptionRef == null
-                                  ? ' employee-toolbox-card--active'
-                                  : ''
-                              }${primaryRowStartIndices.has(itemIndex) ? ' employee-toolbox-card--row-start' : ''}`}
-                              aria-pressed={
-                                item.workItemRef === props.selectedWorkItemRef &&
-                                props.selectedReviewOptionRef == null
-                              }
+                              }${selected ? ' employee-toolbox-card--active' : ''}${
+                                rowStart ? ' employee-toolbox-card--row-start' : ''
+                              }`}
+                              aria-pressed={selected}
                               aria-label={`${localized(item.label, props.language)} · ${kind.label}${
                                 fanOut ? (zh ? ' · 多项扇出' : ' · Fan-out collection') : ''
                               } · ${detail} · ${next}`}
                               title={localized(item.description, props.language)}
                               onClick={() => props.onSelect(item.workItemRef)}
-                            >
-                              <span className="employee-toolbox-card__kind">{kind.label}</span>
-                              <strong>{localized(item.label, props.language)}</strong>
-                              <small title={detail}>{compactDetail}</small>
-                              <span className="sr-only">{next}</span>
-                            </button>
+                              incoming={itemIndex > 0 && !rowStart}
+                              kindLabel={kind.label}
+                              label={localized(item.label, props.language)}
+                              detailText={compactDetail}
+                              detailTitle={detail}
+                              nextText={next}
+                            />
                           )
                         })}
                       </div>

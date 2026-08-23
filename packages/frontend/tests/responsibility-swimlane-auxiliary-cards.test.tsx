@@ -1,3 +1,8 @@
+// User regression 2026-08-23: the responsibility panorama collapsed direct
+// description/document intake and external-ID intake into one source card,
+// then routed both through material preparation. Keep all three public inputs
+// and their distinct graph edges visible.
+
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 
@@ -17,6 +22,13 @@ const text = (value: string) => ({ 'zh-CN': value, 'en-US': value })
 
 function fixtureType(): EmployeeTypePackage {
   return {
+    workIntakeAuthoring: {
+      acceptedKinds: ['body', 'files', 'body-and-files', 'external-id'],
+      kindRequirements: [{ kind: 'external-id', workItemRef: 'prepare', slotRef: 'default' }],
+      externalId: {
+        description: text('从界面输入外部 ID'),
+      },
+    },
     authoringManifest: {
       schemaVersion: 1,
       lifecycleRegions: [
@@ -139,9 +151,10 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
     )
 
     expect(container.querySelectorAll('[data-work-item-ref]')).toHaveLength(2)
-    expect(container.querySelectorAll('[data-work-ingress-ref]')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-work-ingress-ref]')).toHaveLength(3)
     expect(container.querySelectorAll('[data-review-option-ref]')).toHaveLength(1)
-    expect(container.textContent).toContain('界面输入')
+    expect(container.textContent).toContain('输入描述/文档')
+    expect(container.textContent).toContain('输入 ID')
     expect(container.textContent).toContain('ISSUE')
     expect(container.textContent).toContain('分析与实现')
     expect(container.textContent).toContain('无需人工审核')
@@ -173,21 +186,59 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
       ),
     ).toBeNull()
     expect(container.querySelector('[data-review-bypass]')).not.toBeNull()
-    expect(container.querySelector('.employee-toolbox-review-branch__bypass-end')).not.toBeNull()
+    expect(container.querySelector('[data-review-bypass-join]')).not.toBeNull()
     expect(container.querySelector('.employee-toolbox-review-branch__direct-label')).toBeNull()
     expect(container.querySelectorAll('[data-work-item-ref="analyze"]')).toHaveLength(1)
     expect(
       Array.from(container.querySelectorAll('[data-work-ingress-ref]'), (card) =>
         card.getAttribute('data-next-work-item-ref'),
       ),
-    ).toEqual(['prepare', 'prepare'])
+    ).toEqual(['analyze', 'prepare', 'analyze'])
     expect(container.querySelector('[data-ingress-branch-work-item-ref="prepare"]')).not.toBeNull()
-    expect(container.querySelector('[data-work-ingress-ref="ui-input"] small')).toBeNull()
+    expect(container.querySelector('[data-work-ingress-ref="ui-input:direct"] small')).toBeNull()
+    expect(
+      container.querySelector('[data-work-ingress-ref="ui-input:external-id"] small'),
+    ).toBeNull()
     expect(container.querySelector('[data-work-ingress-ref="issue"] small')).toBeNull()
     expect(container.querySelector('.employee-toolbox-ingress-branch__merge')).not.toBeNull()
-    expect(container.querySelector('.employee-toolbox-ingress-branch__merge > span')).not.toBeNull()
+    expect(
+      container.querySelector(
+        '[data-responsibility-flow-connector="ingress-target"]' +
+          '[data-ingress-route-arrow-to="prepare"]',
+      ),
+    ).not.toBeNull()
+    const ingressRoutes = Array.from(
+      container.querySelectorAll('[data-ingress-route-from]'),
+      (route) => [
+        route.getAttribute('data-ingress-route-from'),
+        route.getAttribute('data-ingress-route-to'),
+      ],
+    )
+    expect(ingressRoutes).toHaveLength(3)
+    expect(ingressRoutes).toEqual(
+      expect.arrayContaining([
+        ['ui-input:direct', 'analyze'],
+        ['ui-input:external-id', 'prepare'],
+        ['issue', 'analyze'],
+      ]),
+    )
+    expect(
+      Array.from(container.querySelectorAll('[data-ingress-route-arrow-to]'), (arrow) =>
+        arrow.getAttribute('data-ingress-route-arrow-to'),
+      ),
+    ).toEqual(['prepare'])
+    expect(container.querySelectorAll('[data-flow-arrow]').length).toBeGreaterThan(0)
+    expect(
+      Array.from(container.querySelectorAll('[data-flow-arrow]')).every(
+        (arrow) => arrow.getAttribute('class') === 'employee-responsibility-flow-connector__arrow',
+      ),
+    ).toBe(true)
 
-    fireEvent.click(container.querySelector('[data-work-ingress-ref="ui-input"]')!)
+    fireEvent.click(container.querySelector('[data-work-ingress-ref="ui-input:direct"]')!)
+    expect(onConfigureIngress).toHaveBeenCalledWith(
+      expect.objectContaining({ ingressRef: 'ui-input', nextWorkItemRef: 'prepare' }),
+    )
+    fireEvent.click(container.querySelector('[data-work-ingress-ref="ui-input:external-id"]')!)
     expect(onConfigureIngress).toHaveBeenCalledWith(
       expect.objectContaining({ ingressRef: 'ui-input', nextWorkItemRef: 'prepare' }),
     )

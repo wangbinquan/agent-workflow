@@ -253,11 +253,14 @@
 .employee-toolbox-map {
   --employee-tool-card-width: 100px;
   --employee-tool-card-height: 56px;
-  --employee-flow-gap: 10px;
-  --employee-flow-shaft-length: 6px;
-  --employee-flow-arrow-size: 3px;
-  --employee-flow-arrow-stroke: 1.25px;
-  --employee-flow-branch-trunk-inset: 2px;
+  --employee-flow-gap: 15px;
+  --employee-flow-arrow-width: 4px;
+  --employee-flow-arrow-height: 6px;
+  --employee-flow-card-clearance: 2px;
+  --employee-flow-stroke-width: 2px;
+  --employee-flow-color: color-mix(in srgb, var(--muted) 58%, var(--panel));
+  --employee-review-bypass-entry: 7px;
+  --employee-review-bypass-exit: 8px;
 
   container-type: inline-size;
   display: grid;
@@ -316,7 +319,7 @@
 }
 
 .employee-toolbox-map--compact {
-  padding: 6px;
+  padding: 2px;
 }
 
 .employee-toolbox-region {
@@ -351,7 +354,7 @@
 }
 
 .employee-toolbox-region__lanes {
-  --employee-lane-label-width: 120px;
+  --employee-lane-label-width: 100px;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -481,31 +484,46 @@
 
 .employee-toolbox-lane__axis {
   position: relative;
-  display: grid;
-  place-items: center end;
 }
 
-.employee-toolbox-lane__axis::after {
+.employee-responsibility-flow-connector {
   position: absolute;
-  top: calc(50% - 1px);
-  right: 4px;
-  width: var(--employee-flow-shaft-length);
-  height: 1px;
-  background: color-mix(in srgb, var(--accent) 34%, var(--border));
-  content: '';
+  top: 50%;
+  right: calc(100% + var(--employee-flow-target-border-width, 0px));
+  z-index: 2;
+  display: block;
+  width: var(--employee-flow-gap);
+  height: var(--employee-flow-arrow-height);
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
-.employee-toolbox-lane__axis > span {
-  z-index: 1;
-  width: var(--employee-flow-arrow-size);
-  height: var(--employee-flow-arrow-size);
-  margin-right: 3px;
-  border-top: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--accent) 58%, var(--border));
-  border-right: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--accent) 58%, var(--border));
-  background: transparent;
-  transform: rotate(45deg);
+.employee-responsibility-flow-connector--axis {
+  right: 0;
+}
+
+.employee-responsibility-flow-connector--ingress-target {
+  right: auto;
+  left: var(--employee-tool-card-width);
+}
+
+.employee-responsibility-flow-connector__line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% - var(--employee-flow-arrow-width) - var(--employee-flow-card-clearance));
+  height: 100%;
+  overflow: visible;
+}
+
+.employee-responsibility-flow-connector__arrow {
+  position: absolute;
+  top: 0;
+  right: var(--employee-flow-card-clearance);
+  display: block;
+  width: var(--employee-flow-arrow-width);
+  height: var(--employee-flow-arrow-height);
+  overflow: visible;
 }
 
 .employee-toolbox-lane__cards {
@@ -517,14 +535,13 @@
   gap: var(--employee-flow-gap);
   min-width: 0;
   /* Do not reserve a partial column on the right: at the job-template width,
-     six spare pixels make the seventh Phase 1 card wrap while leaving almost
+     six spare pixels make the seventh Responsibility 1 card wrap while leaving almost
      a full card of empty space. Fan-out lanes add their own shadow clearance. */
   padding: 1px 0;
 }
 
-/* Phase 1 combines two source cards with two implementation paths. Keep the
- * composite branches as tall as the grid row and center every ordinary step
- * on that row, so every 50% connector lands on one shared horizontal spine. */
+/* Responsibility 1 combines three source cards with two implementation paths.
+ * Its composite stays vertically centred on the same shared flow geometry. */
 .employee-toolbox-lane--parallel-ingress .employee-toolbox-lane__cards {
   align-items: center;
 }
@@ -538,6 +555,7 @@
   --employee-card-border: var(--border);
   --employee-card-state-shadow: 0 0 0 0 transparent;
   --employee-card-stack-shadows: 0 0 0 0 transparent;
+  --employee-flow-target-border-width: 1px;
 
   position: relative;
   z-index: 1;
@@ -577,67 +595,6 @@
   --employee-card-stack-shadows:
     4px 4px 0 0 var(--employee-card-background), 4px 4px 0 1px var(--employee-card-border),
     8px 8px 0 0 var(--employee-card-background), 8px 8px 0 1px var(--employee-card-border);
-}
-
-.employee-toolbox-lane__cards
-  > :is(
-    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-    .employee-toolbox-ingress-branch,
-    .employee-toolbox-review-branch
-  )
-  + :is(
-    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-    .employee-toolbox-ingress-branch,
-    .employee-toolbox-review-branch
-  )::before,
-.employee-toolbox-review-branch__reviewed-flow
-  > .employee-toolbox-card
-  + .employee-toolbox-card::before {
-  position: absolute;
-  top: calc(50% - 1px);
-  left: calc(0px - var(--employee-flow-gap));
-  width: var(--employee-flow-shaft-length);
-  height: 1px;
-  background: color-mix(in srgb, var(--muted) 38%, transparent);
-  pointer-events: none;
-  content: '';
-}
-
-.employee-toolbox-lane__cards
-  > :is(
-    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-    .employee-toolbox-ingress-branch,
-    .employee-toolbox-review-branch
-  )
-  + :is(
-    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-    .employee-toolbox-ingress-branch,
-    .employee-toolbox-review-branch
-  )::after,
-.employee-toolbox-review-branch__reviewed-flow
-  > .employee-toolbox-card
-  + .employee-toolbox-card::after {
-  position: absolute;
-  top: calc(50% - 2px);
-  left: calc(0px - var(--employee-flow-gap) + var(--employee-flow-shaft-length) - 2px);
-  width: var(--employee-flow-arrow-size);
-  height: var(--employee-flow-arrow-size);
-  border-top: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 58%, transparent);
-  border-right: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 58%, transparent);
-  pointer-events: none;
-  content: '';
-  transform: rotate(45deg);
-}
-
-.employee-toolbox-card--row-start::before,
-.employee-toolbox-card--row-start::after,
-.employee-toolbox-ingress-branch--row-start::before,
-.employee-toolbox-ingress-branch--row-start::after,
-.employee-toolbox-review-branch--row-start::before,
-.employee-toolbox-review-branch--row-start::after {
-  display: none;
 }
 
 .employee-toolbox-card:hover {
@@ -723,61 +680,36 @@
 }
 
 .employee-toolbox-ingress-branch__merge {
-  position: relative;
   display: block;
-  align-self: stretch;
   min-width: 0;
 }
 
-.employee-toolbox-ingress-branch__merge::before {
+.employee-toolbox-ingress-branch__routing {
   position: absolute;
-  top: 50%;
-  right: var(--employee-flow-branch-trunk-inset);
-  left: var(--employee-flow-branch-trunk-inset);
-  height: 1px;
-  background: color-mix(in srgb, var(--muted) 42%, transparent);
-  content: '';
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
 
-.employee-toolbox-ingress-branch__merge::after {
-  position: absolute;
-  top: calc(50% - 2px);
-  right: 3px;
-  width: var(--employee-flow-arrow-size);
-  height: var(--employee-flow-arrow-size);
-  border-top: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 62%, transparent);
-  border-right: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 62%, transparent);
-  content: '';
-  transform: rotate(45deg);
+.employee-toolbox-ingress-branch__sources,
+.employee-toolbox-ingress-branch > .employee-toolbox-card {
+  position: relative;
+  z-index: 3;
 }
 
-.employee-toolbox-ingress-branch__merge > span {
-  position: absolute;
-  top: calc(50% - var(--employee-ingress-half-span, 30px));
-  bottom: calc(50% - var(--employee-ingress-half-span, 30px));
-  left: var(--employee-flow-branch-trunk-inset);
-  width: 1px;
-  background: color-mix(in srgb, var(--muted) 42%, transparent);
+.employee-responsibility-flow-path {
+  fill: none;
+  stroke: var(--employee-flow-color);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: var(--employee-flow-stroke-width);
 }
 
-.employee-toolbox-ingress-branch__merge > span::before,
-.employee-toolbox-ingress-branch__merge > span::after {
-  position: absolute;
-  left: calc(0px - var(--employee-flow-branch-trunk-inset));
-  width: var(--employee-flow-branch-trunk-inset);
-  height: 1px;
-  background: color-mix(in srgb, var(--muted) 42%, transparent);
-  content: '';
-}
-
-.employee-toolbox-ingress-branch__merge > span::before {
-  top: 0;
-}
-
-.employee-toolbox-ingress-branch__merge > span::after {
-  bottom: 0;
+.employee-responsibility-flow-arrow {
+  fill: var(--employee-flow-color);
 }
 
 .employee-toolbox-ingress-branch .employee-toolbox-card {
@@ -843,25 +775,21 @@
 .employee-toolbox-review-branch__bypass {
   position: absolute;
   top: 4px;
-  left: calc(0px - var(--employee-flow-gap));
-  z-index: 3;
+  right: calc(var(--employee-tool-card-width) + var(--employee-review-bypass-exit));
+  left: calc(0px - var(--employee-review-bypass-entry, var(--employee-flow-gap)));
+  z-index: 4;
   display: block;
-  width: calc(
-    var(--employee-tool-card-width) + var(--employee-tool-card-width) + var(--employee-flow-gap) +
-      var(--employee-flow-gap) + var(--employee-flow-gap)
-  );
   height: calc(50% - 4px);
   color: var(--muted);
   pointer-events: none;
 }
 
-.employee-toolbox-review-branch__bypass::before {
+.employee-toolbox-review-branch__bypass-route {
   position: absolute;
-  inset: 0 8px 0 0;
-  border-top: 1px solid color-mix(in srgb, var(--muted) 42%, transparent);
-  border-right: 1px solid color-mix(in srgb, var(--muted) 42%, transparent);
-  border-left: 1px solid color-mix(in srgb, var(--muted) 42%, transparent);
-  content: '';
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 .employee-toolbox-review-branch__bypass-label {
@@ -878,36 +806,12 @@
   transform: translate(-50%, -50%);
 }
 
-.employee-toolbox-review-branch__bypass-end {
+.employee-toolbox-review-branch__bypass-join {
   position: absolute;
   right: 0;
-  bottom: -1px;
-  width: 8px;
-  height: 3px;
-}
-
-.employee-toolbox-review-branch__bypass-end::before {
-  position: absolute;
-  top: 1px;
-  left: 0;
-  width: var(--employee-flow-shaft-length);
-  height: 1px;
-  background: color-mix(in srgb, var(--muted) 38%, transparent);
-  content: '';
-}
-
-.employee-toolbox-review-branch__bypass-end::after {
-  position: absolute;
-  top: 0;
-  left: calc(var(--employee-flow-shaft-length) - 2px);
-  width: var(--employee-flow-arrow-size);
-  height: var(--employee-flow-arrow-size);
-  border-top: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 58%, transparent);
-  border-right: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 58%, transparent);
-  content: '';
-  transform: rotate(45deg);
+  bottom: 0;
+  width: 0;
+  height: 0;
 }
 
 .employee-toolbox-review-branch__prefix {
@@ -967,30 +871,6 @@
 
 .employee-toolbox-review-branch__merged-item {
   align-self: center;
-}
-
-.employee-toolbox-review-branch__merged-item::before {
-  position: absolute;
-  top: calc(50% - 1px);
-  left: calc(0px - var(--employee-flow-gap));
-  width: var(--employee-flow-shaft-length);
-  height: 1px;
-  content: '';
-  background: color-mix(in srgb, var(--muted) 38%, transparent);
-}
-
-.employee-toolbox-review-branch__merged-item::after {
-  position: absolute;
-  top: calc(50% - 2px);
-  left: calc(0px - var(--employee-flow-gap) + var(--employee-flow-shaft-length) - 2px);
-  width: var(--employee-flow-arrow-size);
-  height: var(--employee-flow-arrow-size);
-  content: '';
-  border-top: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 58%, transparent);
-  border-right: var(--employee-flow-arrow-stroke) solid
-    color-mix(in srgb, var(--muted) 58%, transparent);
-  transform: rotate(45deg);
 }
 
 .employee-toolbox-review-branch .employee-toolbox-card {
@@ -1212,28 +1092,7 @@
     grid-template-columns: repeat(auto-fit, var(--employee-tool-card-width));
   }
 
-  .employee-toolbox-lane__cards
-    > :is(
-      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-      .employee-toolbox-ingress-branch,
-      .employee-toolbox-review-branch
-    )
-    + :is(
-      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-      .employee-toolbox-ingress-branch,
-      .employee-toolbox-review-branch
-    )::before,
-  .employee-toolbox-lane__cards
-    > :is(
-      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-      .employee-toolbox-ingress-branch,
-      .employee-toolbox-review-branch
-    )
-    + :is(
-      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
-      .employee-toolbox-ingress-branch,
-      .employee-toolbox-review-branch
-    )::after {
+  .employee-responsibility-flow-connector--sequence {
     display: none;
   }
 

@@ -394,7 +394,8 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.setViewportSize({ width: 1280, height: 800 })
   await expect.poll(() => capabilityLaneRowCount(responsibilityMap, 'delivery-main')).toBe(1)
   await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
-  const uiInputCard = responsibilityMap.locator('[data-work-ingress-ref="ui-input"]')
+  const directInputCard = responsibilityMap.locator('[data-work-ingress-ref="ui-input:direct"]')
+  const idInputCard = responsibilityMap.locator('[data-work-ingress-ref="ui-input:external-id"]')
   const issueIngressCard = responsibilityMap.locator('[data-work-ingress-ref="issue"]')
   const reviewBranch = responsibilityMap.locator(
     '[data-review-branch-work-item-ref="analyze-implement"]',
@@ -402,19 +403,23 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const repairPlanReviewCard = responsibilityMap.locator(
     '[data-review-option-ref="review-implementation-plan"]',
   )
-  await expect(uiInputCard).toHaveCount(1)
-  await expect(uiInputCard).toContainText('UI input')
+  await expect(directInputCard).toHaveCount(1)
+  await expect(directInputCard).toContainText('Description / document')
+  await expect(idInputCard).toHaveCount(1)
+  await expect(idInputCard).toContainText('Input ID')
   await expect(issueIngressCard).toHaveCount(1)
   await expect(issueIngressCard).toContainText('ISSUE')
   expect(
-    await uiInputCard.locator('strong').evaluate((label) => ({
+    await directInputCard.locator('strong').evaluate((label) => ({
       fontSize: getComputedStyle(label).fontSize,
       textAlign: getComputedStyle(label).textAlign,
     })),
   ).toEqual({ fontSize: '12px', textAlign: 'left' })
-  await expect(uiInputCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
-  await expect(issueIngressCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
-  await expect(uiInputCard.locator('small')).toHaveCount(0)
+  await expect(directInputCard).toHaveAttribute('data-next-work-item-ref', 'analyze-implement')
+  await expect(idInputCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
+  await expect(issueIngressCard).toHaveAttribute('data-next-work-item-ref', 'analyze-implement')
+  await expect(directInputCard.locator('small')).toHaveCount(0)
+  await expect(idInputCard.locator('small')).toHaveCount(0)
   await expect(issueIngressCard.locator('small')).toHaveCount(0)
   const ingressBranch = responsibilityMap.locator(
     '[data-ingress-branch-work-item-ref="prepare-materials"]',
@@ -422,21 +427,29 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(ingressBranch).toContainText('Prepare work materials')
   const parallelIngressBoxes = await Promise.all(
     [
-      uiInputCard,
+      directInputCard,
+      idInputCard,
       issueIngressCard,
       ingressBranch.locator('[data-work-item-ref="prepare-materials"]'),
     ].map(async (node) => await node.boundingBox()),
   )
   expect(parallelIngressBoxes.every((box) => box !== null)).toBe(true)
-  const uiInputBox = parallelIngressBoxes[0]!
-  const issueInputBox = parallelIngressBoxes[1]!
-  const prepareMaterialsBox = parallelIngressBoxes[2]!
-  expect(Math.abs(uiInputBox.x - issueInputBox.x)).toBeLessThanOrEqual(1)
-  expect(uiInputBox.y).toBeLessThan(issueInputBox.y)
-  expect(uiInputBox.x).toBeLessThan(prepareMaterialsBox.x)
+  const directInputBox = parallelIngressBoxes[0]!
+  const idInputBox = parallelIngressBoxes[1]!
+  const issueInputBox = parallelIngressBoxes[2]!
+  const prepareMaterialsBox = parallelIngressBoxes[3]!
+  expect(Math.abs(directInputBox.x - idInputBox.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(idInputBox.x - issueInputBox.x)).toBeLessThanOrEqual(1)
+  expect(directInputBox.y).toBeLessThan(idInputBox.y)
+  expect(idInputBox.y).toBeLessThan(issueInputBox.y)
+  expect(directInputBox.x).toBeLessThan(prepareMaterialsBox.x)
+  expect(idInputBox.x).toBeLessThan(prepareMaterialsBox.x)
   expect(issueInputBox.x).toBeLessThan(prepareMaterialsBox.x)
   const prepareMaterialsCenterY = prepareMaterialsBox.y + prepareMaterialsBox.height / 2
-  expect(uiInputBox.y + uiInputBox.height / 2).toBeLessThan(prepareMaterialsCenterY)
+  expect(directInputBox.y + directInputBox.height / 2).toBeLessThan(prepareMaterialsCenterY)
+  expect(
+    Math.abs(idInputBox.y + idInputBox.height / 2 - prepareMaterialsCenterY),
+  ).toBeLessThanOrEqual(1)
   expect(issueInputBox.y + issueInputBox.height / 2).toBeGreaterThan(prepareMaterialsCenterY)
   await expect(reviewBranch).toContainText('No human review')
   await expect(reviewBranch).toContainText('Analyze and implement')
@@ -449,22 +462,50 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(repairPlanReviewCard).toHaveCount(1)
   await expect(repairPlanReviewCard.locator('strong')).toHaveText('Human plan review')
   const reviewBypass = reviewBranch.locator('[data-review-bypass]')
+  const reviewBypassJoin = reviewBranch.locator('[data-review-bypass-join]')
   const reviewPrefix = reviewBranch.locator('.employee-toolbox-review-branch__prefix')
   const analyzeImplementCard = reviewBranch.locator('[data-work-item-ref="analyze-implement"]')
+  const analyzeImplementArrow = analyzeImplementCard.locator('[data-flow-arrow]')
   await expect(reviewBypass).toHaveCount(1)
-  const [reviewBypassBox, reviewPrefixBox, analyzeImplementBox] = await Promise.all([
+  const [
+    reviewBypassBox,
+    reviewBypassJoinBox,
+    reviewPrefixBox,
+    analyzeImplementBox,
+    analyzeImplementArrowBox,
+    reviewCardBox,
+  ] = await Promise.all([
     reviewBypass.boundingBox(),
+    reviewBypassJoin.boundingBox(),
     reviewPrefix.boundingBox(),
     analyzeImplementCard.boundingBox(),
+    analyzeImplementArrow.boundingBox(),
+    repairPlanReviewCard.boundingBox(),
   ])
   expect(reviewBypassBox).not.toBeNull()
+  expect(reviewBypassJoinBox).not.toBeNull()
   expect(reviewPrefixBox).not.toBeNull()
   expect(analyzeImplementBox).not.toBeNull()
+  expect(analyzeImplementArrowBox).not.toBeNull()
+  expect(reviewCardBox).not.toBeNull()
+  expect(reviewBypassBox!.x - (prepareMaterialsBox.x + prepareMaterialsBox.width)).toBeGreaterThan(
+    0,
+  )
   expect(
-    Math.abs(reviewBypassBox!.x - (prepareMaterialsBox.x + prepareMaterialsBox.width)),
+    Math.abs(
+      reviewBypassBox!.x +
+        reviewBypassBox!.width -
+        (reviewCardBox!.x + reviewCardBox!.width + analyzeImplementBox!.x) / 2,
+    ),
   ).toBeLessThanOrEqual(1)
   expect(
-    Math.abs(reviewBypassBox!.x + reviewBypassBox!.width - analyzeImplementBox!.x),
+    analyzeImplementBox!.x - (analyzeImplementArrowBox!.x + analyzeImplementArrowBox!.width),
+  ).toBe(2)
+  expect(
+    Math.abs(
+      reviewBypassJoinBox!.x -
+        (reviewCardBox!.x + reviewCardBox!.width + analyzeImplementBox!.x) / 2,
+    ),
   ).toBeLessThanOrEqual(1)
   expect(reviewBypassBox!.y).toBeLessThan(reviewPrefixBox!.y - 5)
   expect(
@@ -488,7 +529,8 @@ test('body and repository-bound files enter a stateful employee case and the uni
         cards.map((card) => card.querySelector('strong')?.textContent?.trim()),
       ),
   ).toEqual(['Implementation planning', 'Human plan review'])
-  await expect(uiInputCard).not.toHaveAttribute('data-work-item-ref')
+  await expect(directInputCard).not.toHaveAttribute('data-work-item-ref')
+  await expect(idInputCard).not.toHaveAttribute('data-work-item-ref')
   await expect(issueIngressCard).not.toHaveAttribute('data-work-item-ref')
   await expect(repairPlanReviewCard).not.toHaveAttribute('data-work-item-ref')
 
@@ -506,7 +548,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   expect(mainFlowCenters.every(Number.isFinite)).toBe(true)
   expect(Math.max(...mainFlowCenters) - Math.min(...mainFlowCenters)).toBeLessThanOrEqual(1)
 
-  await uiInputCard.click()
+  await directInputCard.click()
   await page.waitForURL(/\/tasks\/new\?kind=digital-employee$/)
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=toolbox`)
   await expect(responsibilityMap).toBeVisible()
@@ -806,7 +848,8 @@ test('body and repository-bound files enter a stateful employee case and the uni
   expect(renderedRuntimeWorkItemRefs).toEqual(
     [...runtimeCase.capabilityActivation.activeWorkItemRefs].sort(),
   )
-  await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input"]')).toHaveCount(1)
+  await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input:direct"]')).toHaveCount(1)
+  await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input:external-id"]')).toHaveCount(1)
   await expect(runtimeMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
   const overlappingCapabilityTools = await runtimeMap
     .locator('.employee-toolbox-card')

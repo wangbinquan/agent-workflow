@@ -96,6 +96,48 @@ function fixtureType(): EmployeeTypePackage {
   } as unknown as EmployeeTypePackage
 }
 
+function responsibilityNumberingFixture(): EmployeeTypePackage {
+  const type = fixtureType()
+  const firstItem = type.authoringManifest.workItems[0]!
+  return {
+    ...type,
+    authoringManifest: {
+      ...type.authoringManifest,
+      lifecycleRegions: [
+        ...type.authoringManifest.lifecycleRegions,
+        {
+          regionId: 'release',
+          label: text('发布'),
+          description: text('发布职责'),
+          order: 1,
+          responsibilityLanes: [
+            {
+              laneId: 'release-main',
+              label: text('发布泳道'),
+              description: text('发布能力'),
+              order: 0,
+              kind: 'spine',
+              optional: false,
+            },
+          ],
+        },
+      ],
+      workItems: [
+        ...type.authoringManifest.workItems,
+        {
+          ...firstItem,
+          workItemRef: 'release',
+          regionId: 'release',
+          responsibilityLaneId: 'release-main',
+          label: text('release'),
+          description: text('release description'),
+          workContractRef: { contractId: 'contract.release', version: 1 },
+        },
+      ],
+    },
+  }
+}
+
 const neutral = (active?: boolean): EmployeeCapabilityToolState => ({
   active,
   state: 'neutral',
@@ -103,6 +145,32 @@ const neutral = (active?: boolean): EmployeeCapabilityToolState => ({
 })
 
 describe('public employee capability panorama active projection', () => {
+  test('presents numbered lifecycle regions as responsibilities in both languages', () => {
+    const renderPanorama = (language: string) => (
+      <EmployeeCapabilityPanorama
+        type={responsibilityNumberingFixture()}
+        selectedWorkItemRef={null}
+        language={language}
+        onSelect={vi.fn()}
+      />
+    )
+    const { container, rerender } = render(renderPanorama('zh-CN'))
+    const regionNumbers = () =>
+      Array.from(
+        container.querySelectorAll('.employee-toolbox-region__phase'),
+        (label) => label.textContent,
+      )
+
+    expect(regionNumbers()).toEqual(['职责 1', '职责 2'])
+    expect(container.textContent).not.toContain('阶段 1')
+    expect(container.textContent).not.toContain('阶段 2')
+
+    rerender(renderPanorama('en-US'))
+    expect(regionNumbers()).toEqual(['Responsibility 1', 'Responsibility 2'])
+    expect(container.textContent).not.toContain('Phase 1')
+    expect(container.textContent).not.toContain('Phase 2')
+  })
+
   test('keeps the phase, capability lane and tool layers while cropping inactive tools', () => {
     const { container } = render(
       <EmployeeCapabilityPanorama

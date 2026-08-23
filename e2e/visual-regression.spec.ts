@@ -1095,7 +1095,12 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
     await expect(responsibilityMap).toBeVisible()
     await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
-    await expect(responsibilityMap.locator('[data-work-ingress-ref="ui-input"]')).toHaveCount(1)
+    await expect(
+      responsibilityMap.locator('[data-work-ingress-ref="ui-input:direct"]'),
+    ).toHaveCount(1)
+    await expect(
+      responsibilityMap.locator('[data-work-ingress-ref="ui-input:external-id"]'),
+    ).toHaveCount(1)
     await expect(responsibilityMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
     await expect(
       responsibilityMap.locator('[data-review-option-ref="review-implementation-plan"]'),
@@ -1146,7 +1151,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     expect(Math.round(capabilityToolSizes[0]!.width)).toBe(100)
     expect(Math.round(capabilityToolSizes[0]!.height)).toBe(56)
     const sourceTypography = await responsibilityMap
-      .locator('[data-work-ingress-ref="ui-input"] strong')
+      .locator('[data-work-ingress-ref="ui-input:direct"] strong')
       .evaluate((label) => ({
         fontSize: getComputedStyle(label).fontSize,
         textAlign: getComputedStyle(label).textAlign,
@@ -1189,68 +1194,133 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       }
       const prepare = box('[data-work-item-ref="prepare-materials"]')
       const bypass = box('[data-review-bypass]')
+      const bypassJoin = box('[data-review-bypass-join]')
+      const mergedArrow = box('.employee-toolbox-review-branch__merged-item [data-flow-arrow]')
+      const directIngressRoute = box('[data-ingress-route-from="ui-input:direct"]')
       const prefix = box('.employee-toolbox-review-branch__prefix')
+      const reviewGate = box('[data-review-option-ref]')
       const merged = box('[data-work-item-ref="analyze-implement"]')
       return {
-        startDelta: Math.abs(bypass.left - prepare.right),
-        endDelta: Math.abs(bypass.right - merged.left),
+        startGap: bypass.left - prepare.right,
+        routeClearance: bypass.left - directIngressRoute.right,
+        joinDelta: Math.abs(bypass.right - bypassJoin.left),
         horizontalAbovePrefix: bypass.top < prefix.top - 5,
         startCenterDelta: Math.abs(bypass.bottom - (prepare.top + prepare.height / 2)),
         endCenterDelta: Math.abs(bypass.bottom - (merged.top + merged.height / 2)),
+        endArrowClearance: merged.left - mergedArrow.right,
+        endArrowCenterDelta: Math.abs(
+          mergedArrow.top + mergedArrow.height / 2 - (merged.top + merged.height / 2),
+        ),
+        endDropMidpointDelta: Math.abs(bypassJoin.left - (reviewGate.right + merged.left) / 2),
       }
     })
-    expect(reviewBypassGeometry).toEqual({
-      startDelta: 0,
-      endDelta: 0,
+    expect(reviewBypassGeometry.startGap).toBeGreaterThanOrEqual(7.5)
+    expect(reviewBypassGeometry.routeClearance).toBeGreaterThanOrEqual(5)
+    expect(reviewBypassGeometry.endDropMidpointDelta).toBeLessThanOrEqual(0.5)
+    expect(reviewBypassGeometry).toMatchObject({
+      joinDelta: 0,
       horizontalAbovePrefix: true,
       startCenterDelta: 0,
       endCenterDelta: 0,
+      endArrowClearance: 2,
+      endArrowCenterDelta: 0,
     })
-    const connectorGeometry = await responsibilityMap.evaluate((map) => {
-      const readConnector = (selector: string) => {
-        const element = map.querySelector<HTMLElement>(selector)
-        if (element === null) throw new Error(`Missing connector target: ${selector}`)
-        const shaft = getComputedStyle(element, '::before')
-        const arrow = getComputedStyle(element, '::after')
+    const flowRendering = await responsibilityMap.evaluate((map) => {
+      const readConnector = (connector: HTMLElement) => {
+        const line = connector.querySelector<SVGSVGElement>(
+          '.employee-responsibility-flow-connector__line',
+        )
+        const linePath = line?.querySelector<SVGPathElement>('.employee-responsibility-flow-path')
+        const arrow = connector.querySelector<SVGSVGElement>(
+          '.employee-responsibility-flow-connector__arrow',
+        )
+        const arrowShape = arrow?.querySelector<SVGPolygonElement>(
+          '.employee-responsibility-flow-arrow',
+        )
+        if (line === null || linePath === null || arrow === null || arrowShape === null) {
+          throw new Error('Incomplete shared connector')
+        }
+        const lineStyle = getComputedStyle(line)
+        const linePathStyle = getComputedStyle(linePath)
+        const arrowStyle = getComputedStyle(arrow)
+        const arrowShapeStyle = getComputedStyle(arrowShape)
+        const lineBox = line.getBoundingClientRect()
+        const arrowBox = arrow.getBoundingClientRect()
+        const kind = connector.dataset.responsibilityFlowConnector
+        const target =
+          kind === 'axis'
+            ? connector
+                .closest('.employee-toolbox-lane')
+                ?.querySelector('.employee-toolbox-lane__cards')
+            : kind === 'ingress-target'
+              ? connector
+                  .closest('.employee-toolbox-ingress-branch')
+                  ?.querySelector(':scope > .employee-toolbox-card')
+              : connector.parentElement
+        if (target === null || target === undefined) throw new Error('Missing connector target')
+        const targetBox = target.getBoundingClientRect()
         return {
-          shaftWidth: shaft.width,
-          arrowWidth: arrow.width,
-          arrowHeight: arrow.height,
-          arrowTopStroke: arrow.borderTopWidth,
-          arrowRightStroke: arrow.borderRightWidth,
+          kind,
+          lineWidth: lineStyle.width,
+          lineStrokeWidth: linePathStyle.strokeWidth,
+          lineColor: linePathStyle.stroke,
+          arrowWidth: arrowStyle.width,
+          arrowHeight: arrowStyle.height,
+          arrowColor: arrowShapeStyle.fill,
+          arrowPoints: arrowShape.getAttribute('points'),
+          centerDelta: Math.abs(
+            lineBox.top + lineBox.height / 2 - (arrowBox.top + arrowBox.height / 2),
+          ),
+          targetClearance: targetBox.left - arrowBox.right,
         }
       }
-      const axis = map.querySelector<HTMLElement>('.employee-toolbox-lane__axis')
-      const axisArrow = axis?.querySelector<HTMLElement>(':scope > span')
-      if (axis === null || axis === undefined || axisArrow === null || axisArrow === undefined) {
-        throw new Error('Missing lane-axis connector')
+      const connectors = Array.from(
+        map.querySelectorAll<HTMLElement>('[data-responsibility-flow-connector]'),
+      )
+      const paths = Array.from(
+        map.querySelectorAll<SVGPathElement>('.employee-responsibility-flow-path'),
+      )
+      const ingressTarget = map.querySelector<HTMLElement>(
+        '[data-ingress-route-arrow-to="prepare-materials"]',
+      )
+      if (connectors.length === 0 || paths.length === 0 || ingressTarget === null) {
+        throw new Error('Missing flow rendering target')
       }
-      const axisShaftStyle = getComputedStyle(axis, '::after')
-      const axisArrowStyle = getComputedStyle(axisArrow)
-      return [
-        {
-          shaftWidth: axisShaftStyle.width,
-          arrowWidth: axisArrowStyle.width,
-          arrowHeight: axisArrowStyle.height,
-          arrowTopStroke: axisArrowStyle.borderTopWidth,
-          arrowRightStroke: axisArrowStyle.borderRightWidth,
-        },
-        readConnector('[data-work-item-ref="prepare-change"]'),
-        readConnector('[data-review-option-ref]'),
-        readConnector('.employee-toolbox-review-branch__merged-item'),
-        readConnector('.employee-toolbox-review-branch__bypass-end'),
-        readConnector('.employee-toolbox-ingress-branch__merge'),
-      ]
+      return {
+        connectors: connectors.map(readConnector),
+        arrowCount: map.querySelectorAll('[data-flow-arrow]').length,
+        pathColors: paths.map((path) => getComputedStyle(path).stroke),
+        pathStrokeWidths: paths.map((path) => getComputedStyle(path).strokeWidth),
+        ingressTargetKind: ingressTarget.dataset.responsibilityFlowConnector,
+      }
     })
-    expect(connectorGeometry).toEqual(
-      Array(6).fill({
-        shaftWidth: '6px',
-        arrowWidth: '3px',
-        arrowHeight: '3px',
-        arrowTopStroke: '1px',
-        arrowRightStroke: '1px',
-      }),
+    const connectorGeometry = flowRendering.connectors
+    expect(connectorGeometry.length).toBeGreaterThan(5)
+    expect(flowRendering.arrowCount).toBe(connectorGeometry.length)
+    expect(new Set(connectorGeometry.map(({ lineWidth }) => lineWidth))).toEqual(new Set(['9px']))
+    expect(new Set(connectorGeometry.map(({ lineStrokeWidth }) => lineStrokeWidth))).toEqual(
+      new Set(['2px']),
     )
+    expect(new Set(connectorGeometry.map(({ arrowWidth }) => arrowWidth))).toEqual(new Set(['4px']))
+    expect(new Set(connectorGeometry.map(({ arrowHeight }) => arrowHeight))).toEqual(
+      new Set(['6px']),
+    )
+    expect(
+      connectorGeometry.every(
+        ({ arrowPoints, centerDelta }) => arrowPoints === '0,0 4,3 0,6' && centerDelta <= 0.5,
+      ),
+    ).toBe(true)
+    expect(new Set(connectorGeometry.map(({ targetClearance }) => targetClearance))).toEqual(
+      new Set([2]),
+    )
+    expect(new Set(flowRendering.pathStrokeWidths)).toEqual(new Set(['2px']))
+    expect(
+      new Set([
+        ...connectorGeometry.flatMap(({ lineColor, arrowColor }) => [lineColor, arrowColor]),
+        ...flowRendering.pathColors,
+      ]).size,
+    ).toBe(1)
+    expect(flowRendering.ingressTargetKind).toBe('ingress-target')
     expect(
       await responsibilityMap
         .locator('.employee-toolbox-lane__cards')
@@ -1260,12 +1330,19 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
         'center',
       ),
     )
-    const phaseOneFlowGeometry = await responsibilityMap
+    const sharedFlowGaps = await responsibilityMap
+      .locator('.employee-toolbox-lane__cards')
+      .evaluateAll((lanes) => lanes.map((lane) => getComputedStyle(lane).columnGap))
+    expect(sharedFlowGaps.length).toBeGreaterThanOrEqual(2)
+    expect(new Set(sharedFlowGaps)).toEqual(new Set(['15px']))
+    const responsibilityOneFlowGeometry = await responsibilityMap
       .locator('.employee-toolbox-lane--parallel-ingress')
       .evaluate((lane) => {
         const centerY = (selector: string) => {
           const element = lane.querySelector<HTMLElement>(selector)
-          if (element === null) throw new Error(`Missing Phase 1 flow node: ${selector}`)
+          if (element === null) {
+            throw new Error(`Missing Responsibility 1 flow node: ${selector}`)
+          }
           const box = element.getBoundingClientRect()
           return box.top + box.height / 2
         }
@@ -1276,7 +1353,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             return box.top + box.height / 2
           },
         )
+        const cards = lane.querySelector<HTMLElement>('.employee-toolbox-lane__cards')
+        if (cards === null) throw new Error('Missing Responsibility 1 card flow')
         return {
+          flowGap: getComputedStyle(cards).columnGap,
           trunkCenters: [
             centerY('.employee-toolbox-lane__axis'),
             centerY('[data-ingress-branch-work-item-ref="prepare-materials"]'),
@@ -1288,17 +1368,39 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             centerY('[data-work-item-ref="publish-mr"]'),
           ],
           sourceCenters,
+          ingressRoutes: Array.from(
+            lane.querySelectorAll<SVGPathElement>('[data-ingress-route-from]'),
+            (route) => [
+              route.getAttribute('data-ingress-route-from'),
+              route.getAttribute('data-ingress-route-to'),
+            ],
+          ),
+          ingressRouteArrows: Array.from(
+            lane.querySelectorAll<HTMLElement>('[data-ingress-route-arrow-to]'),
+            (arrow) => arrow.getAttribute('data-ingress-route-arrow-to'),
+          ),
         }
       })
     expect(
-      Math.max(...phaseOneFlowGeometry.trunkCenters) -
-        Math.min(...phaseOneFlowGeometry.trunkCenters),
+      Math.max(...responsibilityOneFlowGeometry.trunkCenters) -
+        Math.min(...responsibilityOneFlowGeometry.trunkCenters),
     ).toBeLessThanOrEqual(0.5)
-    expect(phaseOneFlowGeometry.sourceCenters).toHaveLength(2)
+    expect(responsibilityOneFlowGeometry.flowGap).toBe('15px')
+    expect(responsibilityOneFlowGeometry.sourceCenters).toHaveLength(3)
+    expect(responsibilityOneFlowGeometry.ingressRoutes).toHaveLength(3)
+    expect(responsibilityOneFlowGeometry.ingressRoutes).toEqual(
+      expect.arrayContaining([
+        ['ui-input:direct', 'analyze-implement'],
+        ['ui-input:external-id', 'prepare-materials'],
+        ['issue', 'analyze-implement'],
+      ]),
+    )
+    expect(responsibilityOneFlowGeometry.ingressRouteArrows).toEqual(['prepare-materials'])
     expect(
       Math.abs(
-        (phaseOneFlowGeometry.sourceCenters[0]! + phaseOneFlowGeometry.sourceCenters[1]!) / 2 -
-          phaseOneFlowGeometry.trunkCenters[0]!,
+        responsibilityOneFlowGeometry.sourceCenters.reduce((total, center) => total + center, 0) /
+          responsibilityOneFlowGeometry.sourceCenters.length -
+          responsibilityOneFlowGeometry.trunkCenters[0]!,
       ),
     ).toBeLessThanOrEqual(0.5)
     await waitForStableAuthenticatedShell(page)
