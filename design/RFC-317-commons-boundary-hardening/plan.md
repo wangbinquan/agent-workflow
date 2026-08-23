@@ -246,3 +246,25 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 3. **正则剥注释会吃掉真代码**：第二版改成「先正则剥注释再匹配调用形态」，非贪婪块注释正则从字符串里的 `/*` 一路吃到下一个 `*/`，把 `tasks.ts` 中间几百行连同真正的 `canViewResource(` 调用一起吞掉，导致 allowlist stale 误报。终版改用 **TS AST 判「被调用过的名字」**，对注释与字符串天然免疫。
 
 **B0 的 CI 结论**：run `32619463902` = **30/31 job 绿**，唯一红格就是上面这条既有 flake，已在本批修复。
+
+### B1-b（2026-08-23）—— ACL 列入网守卫与端点入网预言（零生产改动）
+
+**落地任务**：T9 / T9b。**T8 因发现新事实被拆出，见下。**
+
+- **T9**：`tests/architecture/rfc317-acl-column-enrolment-guard.test.ts`。schema 反射两向锁：①声明了 `owner_user_id` + `visibility` 的表必须是 `AclResourceType`；②每个 ACL 类型对应的表必须真有那两列。实测分母：**13 张表带 ACL 列，12 张已入网**，唯一未入网的是 `employee_definitions`，作为**带具名清偿波次**的豁免入账（`removeWhen: RFC-317 T8`），并额外钉死「待入网集合恰好是这一张」——再多一张就红。
+- **T9b**：`rfc099-acl-endpoints-matrix.test.ts` 的入网守卫由**源码正则**换成**运行时预言**。旧版扫 `type: '<literal>'`，而 `developmentConfig.ts` 用工厂 `type: cfg.aclType`（变量）挂载 ⇒ 正则**永远匹配不到**；它恰好命中 7 类，而 CASES 恰好也是那 7 行，于是断言两边相等、全绿，**RFC-310 五类配置资源的跨用户 ACL 端点行为零覆盖**。新版起真 app、从 `allRouteMeta()` 观察实际注册的 `/acl` 端点（与挂载写法无关），再与 `ACL_RESOURCE_TYPES` 和 CASES 三方对齐；同批补上五类的 CASES 行，该文件用例数 **33 → 51**，全绿——说明这五类的 `/acl` **行为本来就是对的，洞在覆盖**。
+
+**变异实证**：删掉 `PENDING_ENROLMENT` 里的 `employee_definitions` ⇒ T9 规则①红；删掉一行 CASES ⇒ T9b 的「CASES 覆盖全部 AclResourceType」红。两者均还原逐字一致后复绿。
+
+### T8 的阻塞点（**需用户裁决**，2026-08-23 读源码后发现）
+
+D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被理解为「让三列不再惰性」。实际落地时发现它还牵一个**权限模型**决策：
+
+- 今天 `/api/digital-employee-types/:typeRef/employees` 这组员工定义路由用的是 **`digital-employees:read/create/update`**；
+- 而 `digital-employees` 这个权限前缀**已经**属于 RFC-310 的另一样东西——`digital_employee` **配置资源**（`digital_employees` 表，`/api/code/digital-employees`，已是 ACL 类型之一）；
+- `mountAclEndpoints` 的权限点由 `${resource}:update` 推导，因此给 `employee_definition` 挂 `/acl` 必须二选一：
+  - **(i) 复用 `digital-employees:*`** —— 零新权限点、零 preset 变更、零 grant/PAT 迁移，但两样不同的东西共用一个点名，语义混淆（且与 `findings.md TP-05` 记的「权限点名归属」是同一类问题）；
+  - **(ii) 新增 `employee-definitions:*` 点族** —— 语义干净，但要动权限目录、角色 preset、用户权限目录顺序表（RFC-305 有硬性顺序门）、存量用户 grant 与 PAT scope 迁移。形态等同 RFC-315，属**独立的产品/权限变更**，不该塞进一个治理批。
+
+在拿到裁决前，`employee_definitions` 由 T9 的豁免账本锁住（不会再多一张同形表），越权面维持现状并如实记录。
+

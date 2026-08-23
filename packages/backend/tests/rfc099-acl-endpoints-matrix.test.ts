@@ -32,27 +32,32 @@
 // See design/test-guard-audit-2026-07-21 Top-5 (B5-ACL-cluster) / 逃逸机制③.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
+  actionTemplates,
   agents,
+  automationPolicies,
   capabilityTemplates,
+  developmentAdapterDefinitions,
+  digitalEmployees,
   mcps,
   plugins,
   skills,
+  verificationProfiles,
   workflows,
   workgroups,
 } from '../src/db/schema'
+import { ACL_RESOURCE_TYPES } from '@agent-workflow/shared'
+import { allRouteMeta } from '../src/routes/registry'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
 
 interface Harness {
   db: DbClient
@@ -290,21 +295,173 @@ const CASES: ResourceCase[] = [
       return row
     },
   },
+  // RFC-317 T9b —— RFC-310 的五类配置资源。它们从落地起就挂着 /acl 端点，却因为
+  // 上面那条入网守卫是**字符串字面量正则**（要求 `type: '<literal>'`）而结构上不
+  // 可见：developmentConfig.ts 用工厂 `type: cfg.aclType` 挂载，正则永远匹配不到，
+  // 于是这五类的跨用户 ACL 端点行为**零覆盖**，而守卫全绿（findings.md ACL-03）。
+  // 五张表共用 developmentResourceIdentityColumns，种子形状一致。
+  {
+    type: 'action_template',
+    base: '/api/code/action-templates',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(actionTemplates).values({
+        ...row,
+        capabilityId: 'acl-matrix-capability',
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    type: 'verification_profile',
+    base: '/api/code/verification-profiles',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(verificationProfiles).values({
+        ...row,
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    type: 'digital_employee',
+    base: '/api/code/digital-employees',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(digitalEmployees).values({
+        ...row,
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    type: 'automation_policy',
+    base: '/api/code/automation-policies',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(automationPolicies).values({
+        ...row,
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    type: 'development_adapter',
+    base: '/api/integrations/development-adapters',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(developmentAdapterDefinitions).values({
+        ...row,
+        purpose: 'requirement-source',
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
 ]
 
-describe('RFC-099 ACL endpoint matrix — enrolment', () => {
-  test('every mountAclEndpoints call site is covered by a row in CASES', () => {
-    // Without this, a seventh ACL'd resource type would ship with the same
-    // silence that left five of the current six untested across users.
-    const mounted: string[] = []
-    for (const file of readdirSync(ROUTES_DIR).filter((f) => f.endsWith('.ts'))) {
-      const src = readFileSync(join(ROUTES_DIR, file), 'utf8')
-      const re =
-        /mountAclEndpoints\s*\(\s*app\s*,\s*deps\s*,\s*\{[\s\S]{0,400}?type:\s*['"]([^'"]+)['"]/g
-      let m: RegExpExecArray | null
-      while ((m = re.exec(src)) !== null) mounted.push(m[1]!)
+// RFC-317 T9b —— 入网守卫从**源码正则**换成**运行时预言**。
+//
+// 旧版扫 `routes/*.ts` 找 `mountAclEndpoints(app, deps, { … type: '<literal>' … })`。
+// 它有一个结构性盲区：`routes/developmentConfig.ts` 用工厂挂载
+// （`type: cfg.aclType`，一个**变量**），正则永远匹配不到。实测旧正则恰好命中 7 类，
+// 而当时 CASES 也恰好是那 7 行 ⇒ 断言两边相等、全绿，而 RFC-310 的五类配置资源
+// **跨用户 ACL 端点行为零覆盖**（findings.md ACL-03）。这条守卫的文件头写着
+// 「so adding mountAclEndpoints somewhere new fails here until it is enrolled」——
+// 它相信自己在做一件它结构上做不到的事。
+//
+// 新版起真 app，从**框架实际注册的路由表**（`allRouteMeta()`）观察 `/acl` 端点，
+// 与挂载写法无关；再与 `ACL_RESOURCE_TYPES` 和 CASES 三方对齐。
+describe('RFC-099 / RFC-317 T9b ACL endpoint matrix — enrolment（运行时预言）', () => {
+  test('每个 AclResourceType 都有一对真正注册上的 /acl 端点', async () => {
+    const h = await buildHarness()
+    void h
+    const aclPaths = allRouteMeta()
+      .filter((meta) => meta.path.endsWith('/acl'))
+      .map((meta) => `${meta.method} ${meta.path}`)
+    // 语料非空：读到 0 条说明 app 没起来或路由表口径变了，此刻零预言力。
+    expect(
+      aclPaths.length,
+      'allRouteMeta 里读到 0 个 /acl 端点——本用例此刻零预言力',
+    ).toBeGreaterThan(0)
+
+    const basesWithAcl = new Set(
+      allRouteMeta()
+        .filter((meta) => meta.path.endsWith('/acl'))
+        .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
+    )
+    expect(
+      basesWithAcl.size,
+      `注册上的 /acl 基路径数应等于 ACL 资源类型数；实际基路径=${[...basesWithAcl].sort().join(', ')}`,
+    ).toBe(ACL_RESOURCE_TYPES.length)
+
+    // GET 与 PUT 成对，缺一不可。
+    const pairs = new Map<string, Set<string>>()
+    for (const meta of allRouteMeta()) {
+      if (!meta.path.endsWith('/acl')) continue
+      const base = meta.path.replace(/\/:[^/]+\/acl$/, '')
+      if (!pairs.has(base)) pairs.set(base, new Set())
+      pairs.get(base)!.add(meta.method.toUpperCase())
     }
-    expect(mounted.sort()).toEqual(CASES.map((c) => c.type).sort())
+    const incomplete = [...pairs.entries()]
+      .filter(([, methods]) => !(methods.has('GET') && methods.has('PUT')))
+      .map(([base, methods]) => `${base} → ${[...methods].sort().join(',')}`)
+    expect(incomplete, '每个 ACL 资源都要有 GET+PUT 一对 /acl 端点').toEqual([])
+  })
+
+  test('CASES 覆盖全部 AclResourceType（新增一类而不写行 ⇒ 红）', () => {
+    expect([...CASES.map((c) => c.type)].sort()).toEqual([...ACL_RESOURCE_TYPES].sort())
+  })
+
+  test('CASES 的 base 与真实注册的 /acl 基路径逐条对上', async () => {
+    const h = await buildHarness()
+    void h
+    const registered = new Set(
+      allRouteMeta()
+        .filter((meta) => meta.path.endsWith('/acl'))
+        .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
+    )
+    const missing = CASES.map((c) => c.base).filter((base) => !registered.has(base))
+    expect(missing, 'CASES 写的 base 在真实路由表里找不到对应的 /acl 端点').toEqual([])
   })
 })
 

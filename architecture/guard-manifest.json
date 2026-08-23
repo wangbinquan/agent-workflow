@@ -28,16 +28,28 @@
       "lines": 129
     },
     {
+      "id": "rfc317-acl-column-enrolment-guard",
+      "file": "packages/backend/tests/architecture/rfc317-acl-column-enrolment-guard.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "classified": false,
+      "r11FixturesExported": false,
+      "inFileNegativeFixture": false,
+      "prosePromisesMutation": false,
+      "minCorpusFiles": null,
+      "lines": 129
+    },
+    {
       "id": "rfc317-acl-write-gate-guard",
       "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
       "runner": "bun",
-      "mechanism": "source-text",
+      "mechanism": "ast",
       "classified": false,
       "r11FixturesExported": false,
       "inFileNegativeFixture": false,
       "prosePromisesMutation": true,
       "minCorpusFiles": null,
-      "lines": 131
+      "lines": 163
     },
     {
       "id": "rfc317-architecture-ledgers",
