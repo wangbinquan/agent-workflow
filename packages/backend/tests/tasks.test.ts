@@ -395,7 +395,12 @@ describe('task HTTP routes', () => {
             provider: 'gitlab',
             comment_url: commentUrl,
             comment_text: 'never expose this text',
-            event_json: '{"private":true}',
+            // 哨兵串必须**不可能**出现在其它字段里。原来用的是 `private`，而
+            // detail 里带着 `repoPath`——macOS 上 `/tmp` 是 `/private/tmp` 的软链，
+            // 任何把 TMPDIR 落在真实路径下的跑法（分片跑测很常见）都会让下面那条
+            // `not.toContain('private')` 命中**路径**而不是泄漏，报一个与本用例
+            // 毫无关系的红。换成带前缀的唯一标记，断言意图逐字不变。
+            event_json: '{"aw-trigger-context-must-not-leak":true}',
           },
         },
       }),
@@ -408,7 +413,7 @@ describe('task HTTP routes', () => {
     expect(detail).not.toHaveProperty('triggerContextJson')
     expect(detail).not.toHaveProperty('triggerContext')
     expect(JSON.stringify(detail)).not.toContain('never expose this text')
-    expect(JSON.stringify(detail)).not.toContain('private')
+    expect(JSON.stringify(detail)).not.toContain('aw-trigger-context-must-not-leak')
 
     const list = (await (await req(h.app, '/api/tasks')).json()) as Array<Record<string, unknown>>
     expect(list.find((row) => row.id === taskId)).not.toHaveProperty('webhookSourceLink')
