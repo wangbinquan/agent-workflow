@@ -841,7 +841,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 250
+      "lines": 365
     },
     {
       "id": "rfc311-perf-guards",

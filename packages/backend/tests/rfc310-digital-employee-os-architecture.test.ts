@@ -6,6 +6,9 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
+import { mintedVocabulary, sourceUnit } from './architecture/census'
+
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = join(REPO_ROOT, 'packages', 'backend', 'src')
 const MANIFEST_PATH = join(
@@ -27,7 +30,51 @@ interface OsArchitectureManifest {
   readonly contexts: Readonly<
     Record<'digital-employee' | 'event-center' | 'execution-contract', ContextManifest>
   >
-  readonly genericTypeLiteralBan: string
+  readonly genericVocabularyBan: {
+    readonly note: string
+    readonly extraLiterals: readonly { readonly literal: string; readonly why: string }[]
+    readonly allowlist: readonly {
+      readonly file: string
+      readonly literals: readonly string[]
+      readonly why: string
+      readonly removeWhen: string
+    }[]
+  }
+}
+
+/**
+ * 通用 OS / 画布不得出现的业务身份词汇。
+ *
+ * 主体从**内置类型包的描述符**派生——它是「开发员工这一类型有哪些身份」的单一事实源，
+ * 类型包演进时禁用集自动跟上；手抄一份等于把同一批词写两遍，而写两遍的那一份必然过期
+ * （这正是 DE-07 的形态：一个 2026 年初写下的单词，一直被当成整条不耦合规则的执法者）。
+ *
+ * `extraLiterals` 是少量**手写且逐条有据**的补充：开发域的终态词（'merged' 等）不在描述符
+ * 里，却是最典型的越界形态。刻意不把 'failed' / 'canceled' 这类通用生命周期词放进来——
+ * 那会让违规集被假阳性淹没，最后所有人都去加豁免。
+ */
+function derivedGenericVocabularyBan(): readonly string[] {
+  const descriptor = JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
+    readonly typeRef: { readonly typeId: string }
+    readonly workContracts?: readonly Record<string, unknown>[]
+    readonly contextTypes?: readonly { readonly typeId?: string }[]
+    readonly eventTypes?: readonly { readonly ref?: { readonly id?: string } }[]
+  }
+  const vocabulary = new Set<string>([descriptor.typeRef.typeId])
+  for (const contract of descriptor.workContracts ?? []) {
+    for (const key of ['contractId', 'inputSchemaId', 'outputSchemaId']) {
+      const value = contract[key]
+      if (typeof value === 'string') vocabulary.add(value)
+    }
+  }
+  for (const context of descriptor.contextTypes ?? []) {
+    if (typeof context.typeId === 'string') vocabulary.add(context.typeId)
+  }
+  for (const event of descriptor.eventTypes ?? []) {
+    if (typeof event.ref?.id === 'string') vocabulary.add(event.ref.id)
+  }
+  for (const extra of manifest.genericVocabularyBan.extraLiterals) vocabulary.add(extra.literal)
+  return [...vocabulary].sort()
 }
 
 const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as OsArchitectureManifest
@@ -122,11 +169,79 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       ),
     ]
     const files = [...genericRoots.flatMap((root) => walk(root)), ...genericRoutes]
-    const literal = new RegExp(`['"]${manifest.genericTypeLiteralBan}['"]`)
+
+    // RFC-317 T32（DE-07）—— 禁用集由内置类型包描述符**派生**，不是一个手抄的单词。
+    //
+    // 旧写法是 `new RegExp(\`['"]\${manifest.genericTypeLiteralBan}['"]\`)` 打在原始文本上，
+    // genericTypeLiteralBan = 'development'。它读起来像「通用 OS 与画布永不按开发员工
+    // 类型分支」，实际只挡住**一个词的一种拼法**：模板字符串、导入常量、
+    // `startsWith('develop')`、标识符形式全都绕得过。更糟的是它扫描的文件里当时就已经
+    // 躺着业务身份（`terminalKind === 'merged'`、'MR 已合入' 文案），却照样全绿——
+    // 下游（含 RFC-294 提案）把这条当成「不再耦合」的执法依据，而它没有那个力量。
+    const banned = derivedGenericVocabularyBan()
+    expect(banned.length, '禁用集派生为空 ⇒ 下面那条必然绿，零预言力').toBeGreaterThanOrEqual(20)
+    const allowlist = new Map(
+      manifest.genericVocabularyBan.allowlist.map((entry) => [entry.file, entry] as const),
+    )
+    const offenders: string[] = []
+    for (const file of files) {
+      const rel = portable(relative(REPO_ROOT, file))
+      const hits = mintedVocabulary(sourceUnit(rel, readFileSync(file, 'utf8')), banned)
+      if (hits.length === 0) continue
+      const allowed = allowlist.get(rel)
+      const literals = [...new Set(hits.map((hit) => hit.slice(hit.indexOf("'") + 1, -1)))].sort()
+      if (allowed === undefined) {
+        offenders.push(`${rel} → ${literals.join(', ')}（不在 allowlist）`)
+        continue
+      }
+      const unlisted = literals.filter((literal) => !allowed.literals.includes(literal))
+      if (unlisted.length > 0) offenders.push(`${rel} → ${unlisted.join(', ')}（allowlist 未覆盖）`)
+    }
     expect(
-      files
-        .filter((file) => literal.test(readFileSync(file, 'utf8')))
-        .map((file) => portable(relative(REPO_ROOT, file))),
+      offenders,
+      '通用 OS / 画布里出现了开发员工类型的业务身份。要么把它移回类型包，要么在' +
+        'os-architecture-manifest.json 的 genericVocabularyBan.allowlist 里逐条登记并写清' +
+        'why / removeWhen——登记是**显式欠账**，不是豁免',
+    ).toEqual([])
+  })
+
+  test('RFC-317 T32 —— allowlist 无过期条目（文件没了 / 已清干净 ⇒ 删掉这一行）', () => {
+    const banned = derivedGenericVocabularyBan()
+    const stale: string[] = []
+    for (const entry of manifest.genericVocabularyBan.allowlist) {
+      const absolute = join(REPO_ROOT, entry.file)
+      if (!existsSync(absolute)) {
+        stale.push(`${entry.file}（文件已不存在）`)
+        continue
+      }
+      const hits = new Set(
+        mintedVocabulary(sourceUnit(entry.file, readFileSync(absolute, 'utf8')), banned).map(
+          (hit) => hit.slice(hit.indexOf("'") + 1, -1),
+        ),
+      )
+      const gone = entry.literals.filter((literal) => !hits.has(literal))
+      if (gone.length > 0) stale.push(`${entry.file} → ${gone.join(', ')}（已清干净，登记应删）`)
+    }
+    expect(stale, 'allowlist 只能缩、不能涨；过期条目必须删').toEqual([])
+  })
+
+  test('RFC-317 T32 —— 每条 allowlist / 手写禁用词都写清了理由与清偿波次', () => {
+    const badAllow = manifest.genericVocabularyBan.allowlist
+      .filter(
+        (entry) =>
+          entry.why.trim().length < 20 ||
+          entry.removeWhen.trim().length < 5 ||
+          !/RFC-\d{3}|T\d{1,3}/.test(entry.removeWhen),
+      )
+      .map((entry) => entry.file)
+    expect(badAllow, 'removeWhen 必须点名具体 RFC / 任务').toEqual([])
+    const badExtra = manifest.genericVocabularyBan.extraLiterals
+      .filter((entry) => entry.why.trim().length < 20)
+      .map((entry) => entry.literal)
+    expect(
+      badExtra,
+      '手写的禁用词必须写清「为什么它是开发域专有、而不是通用生命周期词」——' +
+        '把 failed / canceled 这类通用词放进来会淹没在假阳性里',
     ).toEqual([])
   })
 

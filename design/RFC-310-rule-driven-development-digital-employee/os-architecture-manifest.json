@@ -72,5 +72,35 @@
       ]
     }
   },
-  "genericTypeLiteralBan": "development"
+  "genericVocabularyBan": {
+    "note": "RFC-317 T32（DE-07）—— 原本这里是一个单词 `development` + 一条打在原始文本上的正则。它读起来像「通用 OS 与画布永不按开发员工类型分支」，实际只挡住一个词的一种拼法：模板字符串、导入常量、startsWith('develop')、标识符形式全都绕得过，而它扫描的三个文件里当时已经躺着业务身份（terminalKind === 'merged' 之类）。现在禁用集由内置类型包描述符**派生**（typeId / 各 workContract 的 contractId 与 in/out schemaId / contextTypes / eventTypes），加少量手写的 development 专有词；判据走 AST 字面量，注释与散文不再算数。",
+    "extraLiterals": [
+      {
+        "literal": "merged",
+        "why": "MR 合入是源码托管域的业务终态，不是通用 OS 的生命周期词（通用侧只有 done/failed/canceled）。"
+      },
+      {
+        "literal": "completed-no-change",
+        "why": "「无变更完成」是开发任务特有的终态，通用 Case 只知道「终结」。"
+      },
+      {
+        "literal": "no-change-confirmed",
+        "why": "同上，是它的 terminalKind 形态。"
+      }
+    ],
+    "allowlist": [
+      {
+        "file": "packages/frontend/src/components/digital-employees/outcomes.ts",
+        "literals": ["merged", "completed-no-change", "no-change-confirmed"],
+        "why": "通用画布把 terminalKind 归入展示分桶时，直接认了开发域的三个终态。正解是让分桶来自类型包（terminalKind 闭合联合 + 穷尽分类表），属 RFC-317 T44 的范围。",
+        "removeWhen": "RFC-317 T44"
+      },
+      {
+        "file": "packages/frontend/src/routes/employee-cases.$caseId.tsx",
+        "literals": ["merged"],
+        "why": "Case 详情页按 terminalKind === 'merged' 决定是否渲染「MR 已合入」文案。同上，随 T44 一并收口。",
+        "removeWhen": "RFC-317 T44"
+      }
+    ]
+  }
 }
