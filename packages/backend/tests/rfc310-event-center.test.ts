@@ -24,7 +24,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_PRINCIPAL = {
   userId: 'owner-1',
   canOverrideOwner: false,
-  canLaunchDigitalEmployee: true,
+  hasPermission: () => true,
 } as const
 
 describe('RFC-310 shared Event Center', () => {

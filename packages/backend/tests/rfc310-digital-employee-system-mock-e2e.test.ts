@@ -1216,7 +1216,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       {
         userId: webhookOwner.id,
         canOverrideOwner: false,
-        canLaunchDigitalEmployee: true,
+        hasPermission: () => true,
       },
     )
     const issueBody = JSON.stringify({

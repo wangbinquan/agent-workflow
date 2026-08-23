@@ -234,7 +234,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
         module.responseRules.commands.create(await safeJsonOrEmpty(c.req.raw), {
           userId: actor.user.id,
           canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
-          canLaunchDigitalEmployee: actor.permissions.has('development-missions:launch'),
+          hasPermission: (permission) => actor.permissions.has(permission),
         }),
         201,
       )
@@ -255,7 +255,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
         module.responseRules.commands.update(c.req.param('id'), await safeJsonOrEmpty(c.req.raw), {
           userId: actor.user.id,
           canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
-          canLaunchDigitalEmployee: actor.permissions.has('development-missions:launch'),
+          hasPermission: (permission) => actor.permissions.has(permission),
         }),
       )
     },
@@ -274,7 +274,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       module.responseRules.commands.remove(c.req.param('id'), {
         userId: actor.user.id,
         canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
-        canLaunchDigitalEmployee: actor.permissions.has('development-missions:launch'),
+        hasPermission: (permission) => actor.permissions.has(permission),
       })
       return c.json({ ok: true })
     },

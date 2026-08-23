@@ -1,5 +1,7 @@
 import { ulid } from 'ulid'
 
+import type { Permission } from '@agent-workflow/shared'
+
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type {
@@ -13,6 +15,7 @@ import {
   eventResponseRuleDraftSchema,
   type EventResponseRuleDraft,
   type EventResponseRuleRecord,
+  type EventResponseTarget,
 } from '../domain/responseRule'
 import type { EventStorePort } from './ports/eventStore'
 import type { EventResponseRuleStorePort } from './ports/responseRuleStore'
@@ -54,27 +57,47 @@ function definitionOf(rule: EventResponseRuleRecord) {
   }
 }
 
+/**
+ * RFC-317 T30（DE-04）—— 每类响应目标要求的启动权限点；`null` = 该类无额外要求。
+ *
+ * 写成 `Record<EventResponseTarget['kind'], …>` 而不是「一个可选映射」：新增一类
+ * 目标时**两个装配根都编译不过**，逼作者当场决定这类要不要权限门，而不是默认落进
+ * 「不需要」。值类型是 shared 的 `Permission` 联合，所以权限点本身也是编译期校验的。
+ */
+export type TargetLaunchPermissions = Readonly<
+  Record<EventResponseTarget['kind'], Permission | null>
+>
+
 /** Trusted projection built by an authenticated inbound adapter. */
 export interface ResponseRuleWritePrincipal {
   readonly userId: string
   readonly canOverrideOwner: boolean
-  readonly canLaunchDigitalEmployee: boolean
+  /**
+   * 该主体是否持有某个权限点。**具体点名哪一个由注入的表决定**——原先这里是
+   * `canLaunchDigitalEmployee: boolean`，等于 event-center 在自己的契约里写死了
+   * 「数字员工」这一类目标、以及另一个 context 的权限点字符串
+   * `'development-missions:launch'`；第二类目标需要权限门时只能回来改这个接口。
+   */
+  readonly hasPermission: (permission: Permission) => boolean
 }
 
 export class EventResponseRuleService {
   readonly #rules: EventResponseRuleStorePort
   readonly #events: EventStorePort
+  readonly #targetLaunchPermissions: TargetLaunchPermissions
   readonly #now: () => number
   readonly #id: () => string
 
   constructor(input: {
     readonly rules: EventResponseRuleStorePort
     readonly events: EventStorePort
+    readonly targetLaunchPermissions: TargetLaunchPermissions
     readonly now?: () => number
     readonly id?: () => string
   }) {
     this.#rules = input.rules
     this.#events = input.events
+    this.#targetLaunchPermissions = input.targetLaunchPermissions
     this.#now = input.now ?? Date.now
     this.#id = input.id ?? ulid
   }
@@ -158,11 +181,11 @@ export class EventResponseRuleService {
     draft: EventResponseRuleDraft,
     principal: ResponseRuleWritePrincipal,
   ): void {
-    if (draft.target.kind === 'digital-employee' && !principal.canLaunchDigitalEmployee) {
-      throw new ForbiddenError('forbidden', 'missing permission: development-missions:launch', {
-        requiredPermission: 'development-missions:launch',
-      })
-    }
+    const required = this.#targetLaunchPermissions[draft.target.kind]
+    if (required === null || principal.hasPermission(required)) return
+    throw new ForbiddenError('forbidden', `missing permission: ${required}`, {
+      requiredPermission: required,
+    })
   }
 
   #validatedDraft(input: unknown): EventResponseRuleDraft {

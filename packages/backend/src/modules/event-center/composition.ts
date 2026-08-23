@@ -4,6 +4,7 @@ import {
   createEventResponseDeliveryConsumer,
   createEventResponseRoutingDirectory,
   EventResponseRuleService,
+  type TargetLaunchPermissions,
   type ResponseRuleWritePrincipal,
 } from './application/eventResponseRules'
 import type {
@@ -76,9 +77,34 @@ export interface EventCenterModule {
   }
 }
 
+/**
+ * RFC-317 T30（DE-04）—— 每类响应目标的启动权限门，**装配层的数据**。
+ *
+ * 原先这张对应关系散在 `EventResponseRuleService` 的判据里：
+ * `if (draft.target.kind === 'digital-employee' && !principal.canLaunchDigitalEmployee)`
+ * 外加写死的 `'development-missions:launch'`。也就是说 event-center 的**应用层**
+ * 认识了「数字员工」这一类目标，还认识了 development-automation 的权限词汇——第二类
+ * 目标要加权限门，只能回来改那段判据和 `ResponseRuleWritePrincipal` 接口。
+ *
+ * 现在判据只问「这一类要哪个权限点」，对应关系作为数据落在装配层：跨 context 的词汇
+ * 本来就该在装配处相遇，而不是渗进领域判据。类型是**穷尽** `Record`，所以
+ * `eventResponseTargetSchema` 加一类目标时这里编译不过，逼作者当场决定它的权限门。
+ */
+export const DEFAULT_TARGET_LAUNCH_PERMISSIONS: TargetLaunchPermissions = {
+  workflow: null,
+  agent: null,
+  workgroup: null,
+  'digital-employee': 'development-missions:launch',
+}
+
 export interface ComposeEventCenterOptions {
   readonly db: DbClient
   readonly typePackageDescriptorJsons: readonly string[]
+  /**
+   * RFC-317 T30（DE-04）—— 每类响应目标的启动权限门。省略时用
+   * `DEFAULT_TARGET_LAUNCH_PERMISSIONS`；给了就整表覆盖。
+   */
+  readonly targetLaunchPermissions?: TargetLaunchPermissions
   readonly observer?: EventObserverProgramPort
   readonly routingSubscriptions?: EventRoutingSubscriptionDirectoryPort
   readonly deliveryConsumers?: readonly EventDeliveryConsumerPort[]
@@ -98,6 +124,7 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
   const responseRules = new EventResponseRuleService({
     rules: responseRuleStore,
     events: eventStore,
+    targetLaunchPermissions: options.targetLaunchPermissions ?? DEFAULT_TARGET_LAUNCH_PERMISSIONS,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.id === undefined ? {} : { id: options.id }),
   })

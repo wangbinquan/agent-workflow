@@ -76,6 +76,18 @@
       "lines": 273
     },
     {
+      "id": "rfc317-foreign-vocabulary-budget",
+      "file": "packages/backend/tests/architecture/rfc317-foreign-vocabulary-budget.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 5,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 116
+    },
+    {
       "id": "rfc317-guard-corpus-floor",
       "file": "packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts",
       "runner": "bun",
