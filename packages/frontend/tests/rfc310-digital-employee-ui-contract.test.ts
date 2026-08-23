@@ -35,11 +35,18 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
 
   test('tool configuration is anchored to a selected work item on the fixed graph', () => {
     const typePage = read('routes/digital-employees.$typeRef.tsx')
-    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const taskDetail = read('routes/employee-cases.$caseId.tsx')
+    const graph = read('components/digital-employees/EmployeeCapabilityPanorama.tsx')
+    const compatibility = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
 
     expect(typePage).toContain("label: zh ? '工具箱' : 'Toolbox'")
     expect(typePage).toContain('<div className="employee-toolbox-workspace">')
     expect(typePage).toContain('<EmployeeCapabilityPanorama')
+    expect(typePage.match(/<EmployeeCapabilityPanorama/g)).toHaveLength(2)
+    expect(taskDetail.match(/<EmployeeCapabilityPanorama/g)).toHaveLength(1)
+    expect(typePage).toContain("from '@/components/digital-employees/EmployeeCapabilityPanorama'")
+    expect(taskDetail).toContain("from '@/components/digital-employees/EmployeeCapabilityPanorama'")
+    expect(compatibility).toContain('EmployeeCapabilityPanorama as ResponsibilitySwimlaneMap')
     expect(typePage).not.toContain('<ResponsibilityGraph')
     expect(typePage).toContain('<ToolboxPanel')
     expect(typePage).toContain('item={selectedItem}')
@@ -81,7 +88,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
   })
 
   test('the shared swimlane map keeps parallel duties separate and expands typed repairs', () => {
-    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const graph = read('components/digital-employees/EmployeeCapabilityPanorama.tsx')
     const styles = read('styles.css')
 
     expect(graph).toContain('region.responsibilityLanes')
@@ -91,7 +98,11 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('replacedDestinationRefs')
     expect(graph).toContain('P{node.priority}')
     expect(graph).toContain('props.cardState?.(item)')
-    expect(styles).toContain('--employee-lane-template')
+    expect(styles).toContain('--employee-tool-card-width: 100px')
+    expect(styles).toContain('--employee-tool-card-width: 136px')
+    expect(styles).toContain('@container (min-width: 1200px)')
+    expect(styles).toContain('--employee-tool-card-height: 56px')
+    expect(styles).toContain('--employee-lane-label-width: 120px')
     expect(styles).toContain('justify-content: start')
     expect(styles).not.toContain(
       '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
@@ -99,7 +110,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
   })
 
   test('ingress and human-review cards are generic read-only projections', () => {
-    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const graph = read('components/digital-employees/EmployeeCapabilityPanorama.tsx')
     const types = read('components/digital-employees/types.ts')
     const typePage = read('routes/digital-employees.$typeRef.tsx')
     const runtime = read('routes/employee-cases.$caseId.tsx')
@@ -116,7 +127,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('data-work-ingress-ref={ingress.ingressRef}')
     expect(graph).toContain('data-next-work-item-ref={ingress.nextWorkItemRef}')
     expect(graph).toContain('data-review-stage="analysis"')
-    expect(graph).toContain('data-review-stage="implementation"')
+    expect(graph).not.toContain('data-review-stage="implementation"')
+    expect(graph).toContain('employee-toolbox-review-branch__merged-item')
+    expect(graph).toContain('data-review-path="bypass"')
     expect(graph).toContain('data-review-option-ref={gate.optionRef}')
     expect(graph).toContain('item.humanReview !== null')
     expect(graph).toContain("mode: 'conditional' | 'active'")
@@ -142,10 +155,30 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).toContain('.employee-toolbox-card--ingress')
     expect(styles).toContain('.employee-toolbox-ingress-branch__sources')
     expect(styles).toContain('.employee-toolbox-ingress-branch__merge')
-    expect(styles).toContain('.employee-toolbox-lane--parallel-ingress')
+    expect(styles).toMatch(
+      /\.employee-toolbox-card--source-node \.employee-toolbox-card__kind\s*\{[^}]*font-size:\s*9px/,
+    )
+    expect(styles).toMatch(
+      /\.employee-toolbox-ingress-branch \.employee-toolbox-card--source-node strong\s*\{[^}]*font-size:\s*12px/,
+    )
+    expect(styles).not.toContain('.employee-toolbox-lane--parallel-ingress {')
     expect(styles).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(styles).toMatch(/\.employee-toolbox-lane__cards\s*\{[^}]*align-items:\s*center/)
+    expect(styles).toMatch(
+      /\.employee-toolbox-review-branch\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--panel\)/,
+    )
+    expect(graph).toContain('new ResizeObserver(measureLaneColumns)')
+    expect(graph).toContain('laneColumnCapacityById[lane.laneId] ?? totalColumnSpan')
+    expect(graph).not.toContain('Math.min(totalColumnSpan, 5)')
+    expect(styles).toContain('--employee-flow-gap: 10px')
+    expect(styles).toContain('left: calc(0px - var(--employee-flow-gap))')
+    expect(styles).toMatch(
+      /\.employee-toolbox-review-branch__reviewed-flow[\s\S]*?\+ \.employee-toolbox-card::after\s*\{[\s\S]*?left:\s*-6px/,
+    )
     expect(graph).toContain('options.sourceNode === true ? null')
-    expect(graph).toContain("'--employee-lane-template': laneTemplateColumns")
+    expect(graph).toContain("entry.kind === 'ingress-branch'")
+    expect(styles).toContain('grid-column: span 2')
+    expect(styles).toContain('grid-column: span 3')
     expect(styles).toContain('.employee-toolbox-card--human-gate')
   })
 
@@ -170,7 +203,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
   // User regressions 2026-08-22/23: native drag was throttled, lagged behind
   // the pointer, and moving a later lane to the first slot could land at P2.
   test('lane dragging renders a temporary target order and animates each move', () => {
-    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const graph = read('components/digital-employees/EmployeeCapabilityPanorama.tsx')
     const styles = read('styles.css')
 
     expect(graph).toContain('dragPreviewOrder')
@@ -348,7 +381,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
 
   test('employee setup keeps the next action on the same page and supports later edits', () => {
     const typePage = read('routes/digital-employees.$typeRef.tsx')
-    const map = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const map = read('components/digital-employees/EmployeeCapabilityPanorama.tsx')
     const styles = read('styles.css')
 
     expect(typePage).toContain('下一步：给必需工作项增加工具')
@@ -398,10 +431,11 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).toContain('.employee-toolbox-review-branch__reviewed-flow')
     expect(styles).toContain('+ .employee-toolbox-card::before')
     expect(styles).not.toContain('minmax(min(100%, 210px), 1fr)')
-    expect(styles).toContain('minmax(0, 168px)')
+    expect(styles).toContain('var(--employee-tool-card-width)')
     const dutyNameRule = styles.match(/\.employee-toolbox-card strong \{[\s\S]*?\n\}/)?.[0] ?? ''
     expect(dutyNameRule).toContain('white-space: normal')
-    expect(dutyNameRule).toContain('overflow: visible')
+    expect(dutyNameRule).toContain('overflow: hidden')
+    expect(dutyNameRule).toContain('-webkit-line-clamp: 2')
     expect(dutyNameRule).not.toContain('text-overflow: ellipsis')
     expect(styles).toContain(
       '.job-template-detail-editor > header > .employee-summary-card__actions',

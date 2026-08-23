@@ -88,7 +88,7 @@ function fixtureType(): EmployeeTypePackage {
           regionId: 'delivery',
           responsibilityLaneId: 'main',
           order: 20,
-          label: text('分析并实现'),
+          label: text('分析与实现'),
           description: text('分析问题并实现修改'),
           workContractRef: { contractId: 'support.analyze', version: 1 },
           materialSummary: text('工单'),
@@ -99,11 +99,13 @@ function fixtureType(): EmployeeTypePackage {
           humanReview: {
             optionRef: 'review-plan',
             artifactPort: 'plan',
-            label: text('人工审核修复计划'),
+            planningRoleRef: 'planning',
+            planningSlotRef: 'plan',
+            label: text('人工审核方案'),
             description: text('批准后才实现'),
             reviewedPath: {
-              beforeReviewLabel: text('分析'),
-              afterApprovalLabel: text('实现'),
+              beforeReviewLabel: text('方案分析'),
+              afterApprovalLabel: text('分析与实现'),
             },
           },
           toolRoleGroups: [],
@@ -141,10 +143,10 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
     expect(container.querySelectorAll('[data-review-option-ref]')).toHaveLength(1)
     expect(container.textContent).toContain('界面输入')
     expect(container.textContent).toContain('ISSUE')
-    expect(container.textContent).toContain('分析并实现')
+    expect(container.textContent).toContain('分析与实现')
     expect(container.textContent).toContain('不启用审核')
     expect(container.textContent).toContain('启用审核')
-    expect(container.textContent).toContain('人工审核修复计划')
+    expect(container.textContent).toContain('人工审核方案')
     expect(
       Array.from(
         container.querySelectorAll(
@@ -152,7 +154,20 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
         ),
         (label) => label.textContent,
       ),
-    ).toEqual(['分析', '人工审核修复计划', '实现'])
+    ).toEqual(['方案分析', '人工审核方案'])
+    expect(
+      Array.from(
+        container.querySelectorAll(
+          '.employee-toolbox-review-branch__reviewed-flow .employee-toolbox-card__kind',
+        ),
+        (label) => label.textContent,
+      ),
+    ).toEqual(['工具', '审核'])
+    expect(container.querySelector('[data-review-stage="implementation"]')).toBeNull()
+    expect(container.querySelectorAll('.employee-toolbox-review-branch__merged-item')).toHaveLength(
+      1,
+    )
+    expect(container.querySelectorAll('[data-work-item-ref="analyze"]')).toHaveLength(1)
     expect(
       Array.from(container.querySelectorAll('[data-work-ingress-ref]'), (card) =>
         card.getAttribute('data-next-work-item-ref'),

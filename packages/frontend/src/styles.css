@@ -251,14 +251,24 @@
 }
 
 .employee-toolbox-map {
+  --employee-tool-card-width: 100px;
+  --employee-tool-card-height: 56px;
+
+  container-type: inline-size;
   display: grid;
   gap: 6px;
   min-width: 0;
-  padding: 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel);
   box-shadow: var(--shadow-sm);
+}
+
+@container (min-width: 1200px) {
+  .employee-toolbox-map__regions {
+    --employee-tool-card-width: 136px;
+  }
 }
 
 .employee-toolbox-map__header {
@@ -336,7 +346,7 @@
 }
 
 .employee-toolbox-region__lanes {
-  --employee-lane-label-width: 154px;
+  --employee-lane-label-width: 120px;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -361,10 +371,6 @@
 .employee-toolbox-lane--spine {
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
-}
-
-.employee-toolbox-lane--parallel-ingress {
-  --employee-lane-label-width: 100px;
 }
 
 .employee-toolbox-lane > header {
@@ -496,34 +502,30 @@
 }
 
 .employee-toolbox-lane__cards {
-  --employee-flow-gap: 13px;
+  --employee-flow-gap: 10px;
 
   display: grid;
-  grid-template-columns: var(
-    --employee-lane-template,
-    repeat(var(--employee-lane-columns, 1), minmax(0, 168px))
-  );
-  grid-auto-rows: minmax(48px, auto);
-  align-items: start;
+  grid-template-columns: repeat(var(--employee-lane-columns, 1), var(--employee-tool-card-width));
+  grid-auto-rows: minmax(var(--employee-tool-card-height), auto);
+  align-items: center;
   justify-content: start;
   gap: var(--employee-flow-gap);
   min-width: 0;
-  padding: 1px 6px 1px 0;
+  /* Do not reserve a partial column on the right: at the job-template width,
+     six spare pixels make the seventh Phase 1 card wrap while leaving almost
+     a full card of empty space. Fan-out lanes add their own shadow clearance. */
+  padding: 1px 0;
 }
 
 /* Phase 1 combines two source cards with two implementation paths. Keep the
  * composite branches as tall as the grid row and center every ordinary step
  * on that row, so every 50% connector lands on one shared horizontal spine. */
 .employee-toolbox-lane--parallel-ingress .employee-toolbox-lane__cards {
-  --employee-flow-gap: 8px;
-
-  align-items: stretch;
+  align-items: center;
 }
 
-.employee-toolbox-lane--parallel-ingress
-  .employee-toolbox-lane__cards
-  > .employee-toolbox-card:not(.employee-toolbox-card--auxiliary) {
-  align-self: center;
+.employee-toolbox-lane--parallel-ingress .employee-toolbox-ingress-branch__sources {
+  align-content: center;
 }
 
 .employee-toolbox-card {
@@ -535,12 +537,15 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   align-content: start;
   gap: 3px 6px;
+  box-sizing: border-box;
+  width: var(--employee-tool-card-width);
   min-width: 0;
-  min-height: 48px;
+  height: var(--employee-tool-card-height);
+  min-height: var(--employee-tool-card-height);
   padding: 3px 6px;
   color: var(--text);
   text-align: left;
@@ -586,7 +591,7 @@
   position: absolute;
   top: calc(50% - 1px);
   left: calc(0px - var(--employee-flow-gap));
-  width: calc(var(--employee-flow-gap) - 5px);
+  width: calc(var(--employee-flow-gap) - 4px);
   height: 1px;
   background: color-mix(in srgb, var(--muted) 38%, transparent);
   pointer-events: none;
@@ -609,7 +614,7 @@
   + .employee-toolbox-card::after {
   position: absolute;
   top: calc(50% - 4px);
-  left: calc(3px - var(--employee-flow-gap));
+  left: calc(0px - var(--employee-flow-gap));
   width: 6px;
   height: 6px;
   border-top: 1.5px solid color-mix(in srgb, var(--muted) 58%, transparent);
@@ -617,6 +622,22 @@
   pointer-events: none;
   content: '';
   transform: rotate(45deg);
+}
+
+.employee-toolbox-review-branch__reviewed-flow
+  > .employee-toolbox-card
+  + .employee-toolbox-card::before {
+  left: -5px;
+  width: 3px;
+}
+
+.employee-toolbox-review-branch__reviewed-flow
+  > .employee-toolbox-card
+  + .employee-toolbox-card::after {
+  top: calc(50% - 3px);
+  left: -6px;
+  width: 4px;
+  height: 4px;
 }
 
 .employee-toolbox-card--row-start::before,
@@ -639,10 +660,12 @@
   align-self: start;
   width: max-content;
   max-width: 100%;
+  overflow: hidden;
   padding: 1px 5px;
   color: var(--muted);
   font-size: 9px;
   font-weight: 700;
+  text-overflow: ellipsis;
   white-space: nowrap;
   border: 1px solid currentColor;
   border-radius: 999px;
@@ -689,9 +712,12 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) 16px minmax(0, 1fr);
+  grid-column: span 2;
+  grid-template-columns:
+    var(--employee-tool-card-width) 10px
+    var(--employee-tool-card-width);
   align-items: center;
-  width: 100%;
+  width: calc(var(--employee-tool-card-width) + var(--employee-tool-card-width) + 10px);
   min-width: 0;
 }
 
@@ -734,8 +760,8 @@
 
 .employee-toolbox-ingress-branch__merge > span {
   position: absolute;
-  top: calc(50% - 24px);
-  bottom: calc(50% - 24px);
+  top: calc(50% - var(--employee-ingress-half-span, 30px));
+  bottom: calc(50% - var(--employee-ingress-half-span, 30px));
   left: 4px;
   width: 1px;
   background: color-mix(in srgb, var(--muted) 42%, transparent);
@@ -760,51 +786,62 @@
 }
 
 .employee-toolbox-ingress-branch .employee-toolbox-card {
-  width: 100%;
+  width: var(--employee-tool-card-width);
 }
 
 .employee-toolbox-card.employee-toolbox-card--source-node {
   grid-template: auto auto / minmax(0, 1fr);
-  place-items: center;
-  min-height: 44px;
-  padding: 3px;
-  text-align: center;
+  place-items: start;
+  height: var(--employee-tool-card-height);
+  min-height: var(--employee-tool-card-height);
+  padding: 3px 6px;
+  text-align: left;
 }
 
 .employee-toolbox-card--source-node .employee-toolbox-card__kind,
 .employee-toolbox-card--source-node strong {
   grid-column: 1;
-  justify-self: center;
+  justify-self: start;
 }
 
 .employee-toolbox-card--source-node .employee-toolbox-card__kind {
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .employee-toolbox-ingress-branch .employee-toolbox-card--source-node strong {
-  font-size: 10px;
-  text-align: center;
+  font-size: 12px;
+  text-align: left;
   overflow-wrap: normal;
   word-break: normal;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .employee-toolbox-review-branch {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 4px;
-  width: 100%;
+  grid-column: span 3;
+  grid-template-columns:
+    calc(var(--employee-tool-card-width) + var(--employee-tool-card-width) + 5px)
+    var(--employee-tool-card-width);
+  grid-template-rows: repeat(2, auto);
+  align-items: center;
+  gap: 4px 5px;
+  width: calc(
+    var(--employee-tool-card-width) + var(--employee-tool-card-width) +
+      var(--employee-tool-card-width) + 20px
+  );
   min-width: 0;
   box-sizing: border-box;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--warn) 34%, var(--border));
+  border: 1px solid var(--border);
   border-radius: 11px;
-  background: color-mix(in srgb, var(--warn) 3%, var(--panel));
+  background: var(--panel);
 }
 
 .employee-toolbox-review-branch__path {
   display: grid;
+  grid-column: 1;
   gap: 3px;
   min-width: 0;
 }
@@ -822,35 +859,81 @@
 }
 
 .employee-toolbox-review-branch__reviewed-flow {
-  --employee-flow-gap: 8px;
+  --employee-flow-gap: 5px;
 
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, var(--employee-tool-card-width));
   align-items: stretch;
   gap: var(--employee-flow-gap);
   min-width: 0;
 }
 
-.employee-toolbox-review-branch .employee-toolbox-card {
+.employee-toolbox-review-branch__bypass {
+  position: relative;
+  display: block;
   width: 100%;
+  height: var(--employee-tool-card-height);
+}
+
+.employee-toolbox-review-branch__bypass::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  content: '';
+  background: color-mix(in srgb, var(--muted) 38%, transparent);
+}
+
+.employee-toolbox-review-branch__merged-item {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+}
+
+.employee-toolbox-review-branch__merged-item::before {
+  position: absolute;
+  top: calc(50% - 1px);
+  left: -5px;
+  width: 3px;
+  height: 1px;
+  content: '';
+  background: color-mix(in srgb, var(--muted) 38%, transparent);
+}
+
+.employee-toolbox-review-branch__merged-item::after {
+  position: absolute;
+  top: calc(50% - 3px);
+  left: -6px;
+  width: 4px;
+  height: 4px;
+  content: '';
+  border-top: 1.5px solid color-mix(in srgb, var(--muted) 58%, transparent);
+  border-right: 1.5px solid color-mix(in srgb, var(--muted) 58%, transparent);
+  transform: rotate(45deg);
+}
+
+.employee-toolbox-review-branch .employee-toolbox-card {
+  width: var(--employee-tool-card-width);
 }
 
 .employee-toolbox-card--review-stage {
   display: grid;
-  grid-template: auto / minmax(0, 1fr);
-  place-items: center;
-  min-height: 44px;
-  padding: 3px;
-  text-align: center;
+  grid-template: auto auto / minmax(0, 1fr);
+  place-items: start;
+  height: var(--employee-tool-card-height);
+  min-height: var(--employee-tool-card-height);
+  padding: 3px 6px;
+  text-align: left;
 }
 
 .employee-toolbox-review-branch .employee-toolbox-card--review-stage strong {
-  grid-row: 1;
+  grid-row: 2;
   grid-column: 1;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.15;
-  overflow-wrap: normal;
-  word-break: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .employee-toolbox-card--human-gate.employee-toolbox-card--review-stage {
@@ -867,12 +950,15 @@
   grid-column: 1 / -1;
   grid-row: 2;
   min-width: 0;
-  overflow: visible;
+  display: -webkit-box;
+  overflow: hidden;
   font-size: 12px;
   line-height: 1.3;
   overflow-wrap: anywhere;
   text-overflow: clip;
   white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .employee-toolbox-card small {
@@ -1037,13 +1123,13 @@
 
   .employee-toolbox-lane__cards {
     grid-column: 1;
-    grid-template-columns: repeat(auto-fit, minmax(0, 168px));
+    grid-template-columns: repeat(auto-fit, var(--employee-tool-card-width));
     justify-content: start;
     padding: 6px;
   }
 
   .employee-toolbox-lane__cards:has(> .employee-toolbox-ingress-branch) {
-    grid-template-columns: repeat(auto-fit, minmax(0, 224px));
+    grid-template-columns: repeat(auto-fit, var(--employee-tool-card-width));
   }
 
   .employee-toolbox-lane__cards

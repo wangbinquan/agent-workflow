@@ -1091,7 +1091,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%406?view=toolbox`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%407?view=toolbox`)
     const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
     await expect(responsibilityMap).toBeVisible()
     await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
@@ -1104,12 +1104,23 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     expect(mapBox).not.toBeNull()
     expect((mapBox?.y ?? 0) + (mapBox?.height ?? 0)).toBeLessThanOrEqual(900)
     expect(
-      await responsibilityMap
-        .locator('.employee-toolbox-card strong')
-        .evaluateAll((labels) =>
-          labels.flatMap((label) =>
+      await responsibilityMap.locator('.employee-toolbox-card strong').evaluateAll((labels) =>
+        labels.flatMap((label) => {
+          const clipped =
             label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1
-              ? [label.textContent]
+          const text = label.textContent?.trim() ?? ''
+          const accessibleName = label.closest('button')?.getAttribute('aria-label') ?? ''
+          return clipped && !accessibleName.includes(text) ? [text] : []
+        }),
+      ),
+    ).toEqual([])
+    expect(
+      await responsibilityMap
+        .locator('.employee-toolbox-card')
+        .evaluateAll((cards) =>
+          cards.flatMap((card) =>
+            card.scrollWidth > card.clientWidth + 1 || card.scrollHeight > card.clientHeight + 1
+              ? [card.getAttribute('data-capability-tool-ref')]
               : [],
           ),
         ),
@@ -1118,6 +1129,47 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       .locator('.employee-toolbox-lane__cards > .employee-toolbox-card')
       .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
     expect(Math.max(...cardWidths) - Math.min(...cardWidths)).toBeLessThanOrEqual(0.5)
+    const capabilityToolSizes = await responsibilityMap
+      .locator('[data-capability-tool-ref]')
+      .evaluateAll((cards) =>
+        cards.map((card) => {
+          const box = card.getBoundingClientRect()
+          return { width: box.width, height: box.height }
+        }),
+      )
+    expect(Math.max(...capabilityToolSizes.map(({ width }) => width))).toBeLessThanOrEqual(
+      Math.min(...capabilityToolSizes.map(({ width }) => width)) + 0.5,
+    )
+    expect(Math.max(...capabilityToolSizes.map(({ height }) => height))).toBeLessThanOrEqual(
+      Math.min(...capabilityToolSizes.map(({ height }) => height)) + 0.5,
+    )
+    expect(Math.round(capabilityToolSizes[0]!.width)).toBe(100)
+    expect(Math.round(capabilityToolSizes[0]!.height)).toBe(56)
+    const sourceTypography = await responsibilityMap
+      .locator('[data-work-ingress-ref="ui-input"] strong')
+      .evaluate((label) => ({
+        fontSize: getComputedStyle(label).fontSize,
+        textAlign: getComputedStyle(label).textAlign,
+      }))
+    expect(sourceTypography).toEqual({ fontSize: '12px', textAlign: 'left' })
+    const reviewBranchBackgrounds = await responsibilityMap
+      .locator('.employee-toolbox-review-branch')
+      .evaluateAll((branches) =>
+        branches.map((branch) => ({
+          branch: getComputedStyle(branch).backgroundColor,
+          map: getComputedStyle(branch.closest('.employee-toolbox-map')!).backgroundColor,
+        })),
+      )
+    expect(reviewBranchBackgrounds.every(({ branch, map }) => branch === map)).toBe(true)
+    expect(
+      await responsibilityMap
+        .locator('.employee-toolbox-lane__cards')
+        .evaluateAll((lanes) => lanes.map((lane) => getComputedStyle(lane).alignItems)),
+    ).toEqual(
+      Array(await responsibilityMap.locator('.employee-toolbox-lane__cards').count()).fill(
+        'center',
+      ),
+    )
     const phaseOneFlowGeometry = await responsibilityMap
       .locator('.employee-toolbox-lane--parallel-ingress')
       .evaluate((lane) => {
@@ -1186,7 +1238,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%406?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%407?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()

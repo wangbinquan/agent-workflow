@@ -21,7 +21,7 @@ import { localized } from '@/components/digital-employees/types'
 import {
   EmployeeCapabilityPanorama,
   type ResponsibilityDispatchNode,
-} from '@/components/digital-employees/ResponsibilitySwimlaneMap'
+} from '@/components/digital-employees/EmployeeCapabilityPanorama'
 import {
   employeeTerminalOutcomeCounts,
   type EmployeeTerminalOutcomeGroup,
@@ -2634,7 +2634,7 @@ function JobTemplatesPanel(props: {
             lanePriorityOrder={reactionLaneOrder}
             onLanePriorityOrderChange={setReactionLaneOrder}
             attentionPulse={validationAttempt}
-            toolState={jobCardState}
+            cardState={jobCardState}
             compactChrome
           />
           {validationAttempt > 0 && !complete ? (

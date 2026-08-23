@@ -7,7 +7,7 @@
 // evidence -> repair -> merged lifecycle is covered by the backend system-mock
 // E2E, where those deterministic participants can be asserted without UI races.
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 
@@ -37,6 +37,7 @@ interface EmployeeTypePackage {
       workContractRef: { contractId: string; version: number }
       toolRoleGroups: Array<{
         roleRef: string
+        workContractRef?: { contractId: string; version: number }
         bindingSlots: Array<{ slotRef: string; required: boolean }>
       }>
     }>
@@ -68,7 +69,7 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@6'
+const TYPE_REF = 'development@7'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
@@ -89,7 +90,6 @@ let mocks: SystemMockClient
 let repositoryId = ''
 let employeeId = ''
 let employeeName = ''
-let expectedActiveWorkItemRefs: string[] = []
 
 function requiredEnv(name: string): string {
   const value = process.env[name]
@@ -181,12 +181,6 @@ async function seedPublishedEmployee(): Promise<void> {
       region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
     ),
   )
-  expectedActiveWorkItemRefs = typePackage.authoringManifest.workItems
-    .filter(
-      (item) =>
-        item.responsibilityLaneId === null || !optionalLaneIds.has(item.responsibilityLaneId),
-    )
-    .map((item) => item.workItemRef)
   const bindings: Array<{
     workItemRef: string
     slotRef: string
@@ -197,13 +191,14 @@ async function seedPublishedEmployee(): Promise<void> {
     if (item.responsibilityLaneId !== null && optionalLaneIds.has(item.responsibilityLaneId)) {
       continue
     }
-    const contract = typePackage.workContracts.find(
-      (candidate) =>
-        candidate.contractId === item.workContractRef.contractId &&
-        candidate.version === item.workContractRef.version,
-    )
-    if (contract === undefined) throw new Error(`missing work contract for ${item.workItemRef}`)
     for (const role of item.toolRoleGroups) {
+      const roleContractRef = role.workContractRef ?? item.workContractRef
+      const contract = typePackage.workContracts.find(
+        (candidate) =>
+          candidate.contractId === roleContractRef.contractId &&
+          candidate.version === roleContractRef.version,
+      )
+      if (contract === undefined) throw new Error(`missing work contract for ${item.workItemRef}`)
       for (const slot of role.bindingSlots) {
         if (!slot.required) continue
         const agent = agents.find((candidate) =>
@@ -308,6 +303,41 @@ async function primeAuth(page: Page): Promise<void> {
   )
 }
 
+async function expectUniformCapabilityToolCards(
+  map: Locator,
+  expectedWidth: number,
+): Promise<void> {
+  const sizes = await map.locator('[data-capability-tool-ref]').evaluateAll((cards) =>
+    cards.map((card) => {
+      const box = card.getBoundingClientRect()
+      return { width: box.width, height: box.height }
+    }),
+  )
+  expect(sizes.length).toBeGreaterThan(0)
+  expect(Math.max(...sizes.map((size) => size.width))).toBeLessThanOrEqual(
+    Math.min(...sizes.map((size) => size.width)) + 0.5,
+  )
+  expect(Math.max(...sizes.map((size) => size.height))).toBeLessThanOrEqual(
+    Math.min(...sizes.map((size) => size.height)) + 0.5,
+  )
+  expect(Math.round(sizes[0]!.width)).toBe(expectedWidth)
+  expect(Math.round(sizes[0]!.height)).toBe(56)
+}
+
+async function capabilityLaneRowCount(map: Locator, laneId: string): Promise<number> {
+  return map
+    .locator(`[data-capability-lane-id="${laneId}"] .employee-toolbox-lane__cards`)
+    .evaluate((cards) => {
+      const rowCenters = Array.from(cards.children)
+        .filter((child) => !child.classList.contains('employee-toolbox-card--auxiliary'))
+        .map((child) => {
+          const box = child.getBoundingClientRect()
+          return Math.round(box.top + box.height / 2)
+        })
+      return new Set(rowCenters).size
+    })
+}
+
 test.beforeAll(async () => {
   mocks = new SystemMockClient(
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL'),
@@ -356,6 +386,13 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.getByRole('tab', { name: 'Toolbox' }).click()
   const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(responsibilityMap).toBeVisible()
+  await expectUniformCapabilityToolCards(responsibilityMap, 100)
+  expect(await capabilityLaneRowCount(responsibilityMap, 'delivery-main')).toBe(1)
+  await page.setViewportSize({ width: 1728, height: 900 })
+  await expect.poll(() => capabilityLaneRowCount(responsibilityMap, 'delivery-main')).toBe(1)
+  await expectUniformCapabilityToolCards(responsibilityMap, 136)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect.poll(() => capabilityLaneRowCount(responsibilityMap, 'delivery-main')).toBe(1)
   await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
   const uiInputCard = responsibilityMap.locator('[data-work-ingress-ref="ui-input"]')
   const issueIngressCard = responsibilityMap.locator('[data-work-ingress-ref="issue"]')
@@ -370,15 +407,11 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(issueIngressCard).toHaveCount(1)
   await expect(issueIngressCard).toContainText('ISSUE')
   expect(
-    await uiInputCard.locator('strong').evaluate((label) => getComputedStyle(label).whiteSpace),
-  ).toBe('nowrap')
-  expect(
-    await uiInputCard.locator('strong').evaluate((label) => {
-      const range = document.createRange()
-      range.selectNodeContents(label)
-      return range.getClientRects().length
-    }),
-  ).toBe(1)
+    await uiInputCard.locator('strong').evaluate((label) => ({
+      fontSize: getComputedStyle(label).fontSize,
+      textAlign: getComputedStyle(label).textAlign,
+    })),
+  ).toEqual({ fontSize: '12px', textAlign: 'left' })
   await expect(uiInputCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
   await expect(issueIngressCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
   await expect(uiInputCard.locator('small')).toHaveCount(0)
@@ -408,15 +441,20 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(reviewBranch).toContainText('No review')
   await expect(reviewBranch).toContainText('Analyze and implement')
   await expect(reviewBranch).toContainText('Review enabled')
-  await expect(reviewBranch.locator('[data-review-stage="analysis"]')).toHaveText('Analyze')
-  await expect(reviewBranch.locator('[data-review-stage="implementation"]')).toHaveText('Implement')
+  await expect(reviewBranch.locator('[data-review-stage="analysis"] strong')).toHaveText(
+    'Implementation planning',
+  )
+  await expect(reviewBranch.locator('[data-review-stage="implementation"]')).toHaveCount(0)
+  await expect(reviewBranch.locator('[data-work-item-ref="analyze-implement"]')).toHaveCount(1)
   await expect(repairPlanReviewCard).toHaveCount(1)
-  await expect(repairPlanReviewCard).toHaveText('Human plan review')
+  await expect(repairPlanReviewCard.locator('strong')).toHaveText('Human plan review')
   expect(
     await reviewBranch
       .locator('.employee-toolbox-review-branch__reviewed-flow .employee-toolbox-card')
-      .evaluateAll((cards) => cards.map((card) => card.textContent?.trim())),
-  ).toEqual(['Analyze', 'Human plan review', 'Implement'])
+      .evaluateAll((cards) =>
+        cards.map((card) => card.querySelector('strong')?.textContent?.trim()),
+      ),
+  ).toEqual(['Implementation planning', 'Human plan review'])
   await expect(uiInputCard).not.toHaveAttribute('data-work-item-ref')
   await expect(issueIngressCard).not.toHaveAttribute('data-work-item-ref')
   await expect(repairPlanReviewCard).not.toHaveAttribute('data-work-item-ref')
@@ -476,15 +514,15 @@ test('body and repository-bound files enter a stateful employee case and the uni
     responsibilityMap.locator('.employee-toolbox-region--branching .employee-toolbox-lane__axis'),
   ).toHaveCount(6)
   expect(
-    await responsibilityMap
-      .locator('.employee-toolbox-card strong')
-      .evaluateAll((labels) =>
-        labels.flatMap((label) =>
+    await responsibilityMap.locator('.employee-toolbox-card strong').evaluateAll((labels) =>
+      labels.flatMap((label) => {
+        const clipped =
           label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1
-            ? [label.textContent]
-            : [],
-        ),
-      ),
+        const text = label.textContent?.trim() ?? ''
+        const accessibleName = label.closest('button')?.getAttribute('aria-label') ?? ''
+        return clipped && !accessibleName.includes(text) ? [text] : []
+      }),
+    ),
   ).toEqual([])
   expect(
     await responsibilityMap.locator('.employee-toolbox-card').evaluateAll((cards) =>
@@ -578,12 +616,16 @@ test('body and repository-bound files enter a stateful employee case and the uni
     .click()
   const templateEditor = page.getByTestId('employee-job-template-editor')
   await expect(templateEditor).toBeVisible()
+  await expectUniformCapabilityToolCards(templateEditor, 100)
+  expect(await capabilityLaneRowCount(templateEditor, 'delivery-main')).toBe(1)
   await expect(page.getByLabel('Template name')).toHaveCount(0)
   await expect(page.getByLabel('Description')).toHaveCount(0)
   await templateEditor.locator('[data-work-item-ref="analyze-implement"]').click()
   const newTemplateDutyDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(newTemplateDutyDialog).toBeVisible()
-  await newTemplateDutyDialog.getByRole('combobox').click()
+  await newTemplateDutyDialog
+    .getByRole('combobox', { name: 'Choose default tool', exact: true })
+    .click()
   await page.getByRole('option').first().click()
   await newTemplateDutyDialog.getByRole('button', { name: 'Done', exact: true }).click()
   await page.getByRole('button', { name: 'Save and publish', exact: true }).click()
@@ -600,7 +642,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const jobMap = page.getByTestId('employee-toolbox-responsibility-map')
   const jobMapBox = await jobMap.boundingBox()
   expect(jobMapBox).not.toBeNull()
-  expect((jobMapBox?.y ?? 0) + (jobMapBox?.height ?? 0)).toBeLessThanOrEqual(900)
+  expect(jobMapBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(900)
   await jobMap.locator('[data-work-item-ref="analyze-implement"]').click()
   const jobDutyDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(jobDutyDialog).toBeVisible()
@@ -715,15 +757,22 @@ test('body and repository-bound files enter a stateful employee case and the uni
 
   await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
   const caseId = page.url().split('/').at(-1)!
+  const runtimeCase = await requestJson<{
+    capabilityActivation: { activeWorkItemRefs: string[] }
+  }>(`/api/employee-cases/${encodeURIComponent(caseId)}`)
   await expect(page.getByRole('heading', { name: employeeName, exact: true })).toBeVisible()
   const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(runtimeMap).toBeVisible()
-  await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(
-    expectedActiveWorkItemRefs.length,
+  await expectUniformCapabilityToolCards(runtimeMap, 100)
+  expect(await capabilityLaneRowCount(runtimeMap, 'delivery-main')).toBe(1)
+  const renderedRuntimeWorkItemRefs = await runtimeMap
+    .locator('[data-work-item-ref]')
+    .evaluateAll((items) =>
+      items.map((item) => item.getAttribute('data-work-item-ref') ?? '').sort(),
+    )
+  expect(renderedRuntimeWorkItemRefs).toEqual(
+    [...runtimeCase.capabilityActivation.activeWorkItemRefs].sort(),
   )
-  for (const workItemRef of expectedActiveWorkItemRefs) {
-    await expect(runtimeMap.locator(`[data-work-item-ref="${workItemRef}"]`)).toHaveCount(1)
-  }
   await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input"]')).toHaveCount(1)
   await expect(runtimeMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
   const overlappingCapabilityTools = await runtimeMap

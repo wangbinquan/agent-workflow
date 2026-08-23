@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 import {
   EmployeeCapabilityPanorama,
   type EmployeeCapabilityToolState,
-} from '../src/components/digital-employees/ResponsibilitySwimlaneMap'
+} from '../src/components/digital-employees/EmployeeCapabilityPanorama'
 import type { EmployeeTypePackage } from '../src/components/digital-employees/types'
 
 beforeAll(() => {
@@ -80,6 +80,8 @@ function fixtureType(): EmployeeTypePackage {
         item('implement', 'main', 1, {
           optionRef: 'review-plan',
           artifactPort: 'plan',
+          planningRoleRef: 'planning',
+          planningSlotRef: 'plan',
           label: text('人工审核方案'),
           description: text('审核后实现'),
           reviewedPath: {
@@ -163,10 +165,12 @@ describe('public employee capability panorama active projection', () => {
     const analysis = container.querySelector(
       '[data-capability-tool-ref="review:review-plan:analysis"]',
     )
-    const implementation = container.querySelector(
-      '[data-capability-tool-ref="review:review-plan:implementation"]',
-    )
+    const mergedItem = container.querySelector('[data-capability-tool-ref="work-item:implement"]')
     expect(analysis?.classList.contains('employee-toolbox-card--completed')).toBe(true)
-    expect(implementation?.classList.contains('employee-toolbox-card--running')).toBe(true)
+    expect(container.querySelector('[data-review-stage="implementation"]')).toBeNull()
+    expect(container.querySelectorAll('.employee-toolbox-review-branch__merged-item')).toHaveLength(
+      1,
+    )
+    expect(mergedItem?.classList.contains('employee-toolbox-card--running')).toBe(true)
   })
 })

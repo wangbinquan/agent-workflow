@@ -15,7 +15,7 @@ import {
   EmployeeCapabilityPanorama,
   type ResponsibilityDispatchNode,
   type ResponsibilityReviewGate,
-} from '@/components/digital-employees/ResponsibilitySwimlaneMap'
+} from '@/components/digital-employees/EmployeeCapabilityPanorama'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { usePermission } from '@/hooks/useActor'
 import { LoadingState } from '@/components/LoadingState'
