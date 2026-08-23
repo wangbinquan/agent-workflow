@@ -363,3 +363,23 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 **顺带修掉的清单盲区**：`rfc317-ledger-highwater.test.ts` 放在 `tests/architecture/` 下，但文件名不含 `guard|lock|ratchet|architecture` 任一关键词，于是**没进 `guard-manifest.json`**——一条崭新的守卫从第一天起就能被静默删除，而两向钉死那条断言照绿（磁盘侧与清单侧同时看不见它）。改 `guardTestFiles`：`tests/architecture/` 下的每个测试都算守卫，**目录本身就是声明**。
 
 **留给 B3 的缺口**：`GUARD_FILE_NAME_PATTERN` 仍以文件名关键词圈定 `tests/` 顶层的守卫。实测 `rfc143-runtime-driver-capability.test.ts` 是扫语料 + 断言不存在的守卫，却因名字不含关键词而不在清单里、也不受 T13/T14 约束。放宽这个 pattern 会大量改变清单规模，需要单独测量后再动。
+
+### B3-a（2026-08-23）—— T22/T23/T24/T26：模块边界三条规则落地
+
+**R1（inbound，94 条）/ R2（outbound，22 条）**：与 `commons-debt.json` **逐条 `toEqual`**。用相等而非 `<=`，理由同 T18：`<=` 会把收敛出来的差额变成下一个人的免费槽位。R2 另加一条层别断言——B0 采数时 22 条全在 `application`，一旦出现 `domain` / `engine` 反向依赖 legacy，那比 application 严重得多，必须单独审而不是混进同一个数字里。
+
+**R3（模块形状，12 个模块）**：subject 由 `readdirSync(MODULES_ROOT)` 派生且**目录缺失必须抛错**（返回空 = 规则静默失效，本 RFC 通篇在防的形态）。量出两个非常规形状，均入账而非放过：`intent`（只有一个 domain 文件、无 public 合同）、`integration`（非 exact public 入口 `mrTerminalControl.ts`，与 rfc294 的 `PUBLIC_SURFACE_PILOT_DEBT` 同源）。
+
+**`work-start` 的处理**：`modules/work-start/` 是**零追踪文件的空目录残留**（git 追踪不了空目录，CI 的干净 checkout 根本没有它）。若直接进 subject，本地与 CI 的模块集合会不一致——规则本身变成环境依赖。处置：按 `git ls-files` 判定追踪面，零文件目录排除并打印警告，同时加一条**反向断言**「零文件目录必然零追踪文件」防止这个口径本身坏掉。
+
+**变异实证（3 条，均双向）**：
+1. 账本删一条 R1 ⇒ 红（模拟「新增越界边没入账」）；
+2. 账本加一条不存在的边 ⇒ 红（模拟「债还掉了没销账」）；
+3. 删掉 `importEdges` 的动态 `import()` 一支 ⇒ **只红 T26 那条 fixture，R1 主断言仍绿**——因为当前生产代码没有一条动态 import 越界边。**这正是 fixture 不可替代的实证**：真实语料证明不了「判据能处理一种当前没人用的写法」，而那恰恰是最容易被"整理"掉的一支。
+
+#### 本批的两次「被自己的机制抓住」
+
+1. **新守卫没登记进清单 ⇒ 五条断言同时红**。B2 建的两向钉死（清单↔磁盘、语料下限、负 fixture）在我自己身上生效了。重算清单后 124 个守卫、36 个受管、零缺口。
+2. **`bun test` 21 条全绿，门禁 `tsc` 红**。`edgeKey` 的参数写成 `Pick<BoundaryEdge, …>`，吃不下从 JSON 读出来的账本条目（`edgeKind` 那边是 `string`）；另有两处 `Record<string, number>` 索引在 `noUncheckedIndexedAccess` 下是 `number | undefined`。**运行时不做类型检查，这类错只有 `tsc` 抓得到**——教训写进了 `edgeKey` 的注释。
+
+**门禁归属**：首轮全量门禁 13 条后端失败 + 1 条前端失败。逐条核实**无一属于本批**——本批只动 2 个文件（清单 JSON + 新守卫）。后端 13 条是负载（抽 `rfc258-file-symbols` 隔离跑 12 pass / 0 fail；无争用重跑 **11932 pass / 0 fail**），且负载有我一份责任：杀掉上一轮门禁后立刻重跑。前端 1 条是 `responsibility-swimlane-auxiliary-cards.test.tsx`，该文件**正被并发 session 编辑**（有未提交改动），组件本身与远端一致。
