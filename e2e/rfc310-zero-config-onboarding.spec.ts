@@ -8,8 +8,23 @@
 import { expect, test, type Page } from '@playwright/test'
 import { join } from 'node:path'
 
+import { developmentEmployeeTypePackage } from '../packages/backend/src/modules/development-automation/composition/employeeTypePackage'
 import { runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
+
+/**
+ * 内置 development 类型包的**当前**引用，从 descriptor 派生。
+ *
+ * 本文件原先有 8 处硬编码 `development%406`。内置包升到 7 之后，8 处一起红在
+ * 「找不到类型」——与被测行为毫无关系的失败，而且每次升版都要再改一遍 8 个地方。
+ * 手抄的常量必然过期；这里改为从生产 descriptor 取，升版后自动跟随。
+ */
+const DEVELOPMENT_TYPE_REF = (
+  JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
+    readonly typeRef: { readonly typeId: string; readonly revision: number }
+  }
+).typeRef
+const DEVELOPMENT_TYPE_PATH = `${DEVELOPMENT_TYPE_REF.typeId}%40${DEVELOPMENT_TYPE_REF.revision}`
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
@@ -39,7 +54,7 @@ test('a first-time user publishes a job template with the built-in implementatio
   page,
 }) => {
   await primeAuth(page)
-  await page.goto(`${daemon.baseUrl}/digital-employees/development%406`)
+  await page.goto(`${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}`)
   await page.getByRole('tab', { name: 'Job templates' }).click()
   await page.getByRole('button', { name: 'New job template', exact: true }).click()
 
@@ -178,7 +193,7 @@ test('an older definition never becomes a user migration task or manual API', as
       staleTypeRequests.push(request.url())
     }
   })
-  await page.goto(`${daemon.baseUrl}/digital-employees/development%406?view=jobs`)
+  await page.goto(`${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}?view=jobs`)
   await expect(page.getByTestId('legacy-job-template-upgrades')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Upgrade to current version' })).toHaveCount(0)
 
@@ -250,7 +265,7 @@ test('a failed contract check is corrected on the same tool registration id', as
   })
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=analyze-implement`,
+    `${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}?view=toolbox&workItem=analyze-implement`,
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
@@ -262,7 +277,7 @@ test('a failed contract check is corrected on the same tool registration id', as
 
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('This tool is not publishable yet')).toBeVisible()
-  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%406/work-items/analyze-implement/tools`
+  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/${DEVELOPMENT_TYPE_PATH}/work-items/analyze-implement/tools`
   const failedResponse = await page.request.get(listUrl, {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
@@ -294,7 +309,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
 }) => {
   await primeAuth(page)
   const name = `Editable invalid tool ${Date.now()}`
-  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%406/work-items/analyze-implement/tools`
+  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/${DEVELOPMENT_TYPE_PATH}/work-items/analyze-implement/tools`
   const seededResponse = await page.request.post(listUrl, {
     headers: { Authorization: `Bearer ${daemon.token}` },
     data: {
@@ -316,7 +331,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
   expect(seeded.validationReceipt.status).toBe('invalid')
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=analyze-implement`,
+    `${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}?view=toolbox&workItem=analyze-implement`,
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   const row = toolbox.locator('.node-tool-row').filter({ hasText: name })
@@ -356,7 +371,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   // tool revision and defines its output vocabulary, while pipeline evidence is
   // the runtime input. Selecting the tool materializes the same N fan-out nodes.
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=classify-pipeline`,
+    `${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}?view=toolbox&workItem=classify-pipeline`,
   )
   let toolbox = page.getByTestId('employee-node-toolbox')
   await expect(toolbox.getByRole('link', { name: 'Configure failure types' })).toHaveCount(0)
@@ -388,7 +403,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(toolDialog).toHaveCount(0)
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=repair-pipeline`,
+    `${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}?view=toolbox&workItem=repair-pipeline`,
   )
 
   toolbox = page.getByTestId('employee-node-toolbox')
@@ -441,7 +456,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(toolbox.getByRole('link', { name: 'Assign failure types' })).toHaveCount(0)
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%406?view=jobs&workItem=classify-pipeline`,
+    `${daemon.baseUrl}/digital-employees/${DEVELOPMENT_TYPE_PATH}?view=jobs&workItem=classify-pipeline`,
   )
   await expect(
     page.getByRole('heading', { name: 'Configure “Classify pipeline failures”' }),

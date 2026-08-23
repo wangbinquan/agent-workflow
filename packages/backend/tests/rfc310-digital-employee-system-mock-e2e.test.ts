@@ -955,7 +955,15 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         platformWorkItems: platform,
       },
     })
-    const typeRef = { typeId: 'development', revision: 6 }
+    // 从内置包的 descriptor **派生**，不手抄修订号。
+    // 这条测试本来写死 `revision: 6`，内置包升到 7 之后它就红在
+    // `employee type not found: development@6`——一个与被测行为毫无关系的失败，
+    // 而且每次内置包升版都要再修一次。手抄的常量必然过期（RFC-317 一路在讲的同一件事）。
+    const typeRef = (
+      JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
+        readonly typeRef: { readonly typeId: string; readonly revision: number }
+      }
+    ).typeRef
     const typePackage = employeeOs.queries.getType(typeRef)
     const pipelineProblemDefinitions = [
       {
