@@ -1640,3 +1640,26 @@ verified`——而同一份代码首次运行完全正常。
 ③关闭时销毁存量 socket + 限时硬退；④端口被占时打印**人话补救命令**而不是 EADDRINUSE 栈。
 回归锁见 `packages/system-mocks/tests/dev-auth.test.ts` 的 `process lifecycle` 一组（含一条
 真起进程、杀父、断言孤儿自退的用例，把看门狗关掉立刻红）。
+
+## `bun dev` 的三个端口互不相关：一个撞了另外两个照起，于是残留叠层、报错越滚越多（2026-08-23 实撞）
+
+`bun run --filter '*' dev` 并发起三个包，各占一个端口：backend 7456、frontend(vite) 5174、
+dev-auth 7460。**`--filter` 不做联动**——某个包因 EADDRINUSE `Exited with code 1` 时，另外两个
+照常起来并留在前台。于是失败一次的结果不是「没起来」，而是**起来了一半**，下一次再跑就叠上
+一层，报错条数每轮增加。
+
+本次实测的形态：用户 14:26 那次 backend 死了（撞更早一个 daemon）、vite+dev-auth 活着；我
+14:32 再跑，backend 抢到 7456 起来了、vite+dev-auth 撞上前一次的残留双双退出。**两次的存活
+集合正好互补**，页面居然还能用，掩盖了「有两棵半死进程树」这个事实——从终端里看只是「一堆
+报错」，看不出报错分别属于哪一次。
+
+- **判据**：报错读不出所属，直接按端口反查属主，不要按日志顺序猜：
+  `lsof -nP -sTCP:LISTEN -iTCP:5174 -iTCP:7456 -iTCP:7460`，再 `ps -o ppid= -p <pid>` 把 pid
+  归到各自的 `bun dev` 树。`ppid=1` 即孤儿残留（成因见上一条）。
+- **清理**：先杀整棵树再重起，别只杀占端口那一个——同树的兄弟还活着，下一轮继续叠。
+  按 pid 精确杀；**禁止 `pkill -f bun`**：树上常并行跑着别的 session 的 `test-backend-sharded.ts`
+  分片、`mock-gitlab.ts`、opencode serve 等，会被一起误杀（本仓多人并发，见 §git / 多人协作）。
+  实在要按模式杀就限定到具体入口：`dev-auth/cli.ts` / `bin/vite` / `--watch src/main.ts`。
+- **验收**：三个端口全空再起，起后确认三条 ready 行都在（backend `listening url=`、vite
+  `Local:`、dev-auth `ready — open …`）。**只看到「ready」不够**，缺哪条就是那个包又没起。
+  backend 的 `/api/health` 返 **401 是正常的**（需 token），别当成故障继续排查。
