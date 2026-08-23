@@ -1,19 +1,23 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
-- 目标架构状态：Draft（2026-08-19 刷新；仍待用户批准 D1～D9）
-- 迁移事实：Out-of-order in progress（RFC-287、RFC-297～311 已按各自范围形成多条 production vertical slice；
-  RFC-288/289 已关闭且未实现；这些落点均不等于 RFC-294 任一完整 wave 已获批或完成）
+- 目标架构状态：Draft（2026-08-24 刷新；仍待用户批准 D1～D9）
+- 迁移事实：Out-of-order in progress（RFC-287、RFC-297～315 及 RFC-310 后续 PR 已按各自范围形成多条 production vertical slice；
+  RFC-317 已落 B0～B5 与 B6 的 T42～T46，沉积 W0-R 公共内核治理子集并修复多条 P1/P2；RFC-288/289 已关闭且未实现；
+  这些落点均不等于 RFC-294 任一完整 wave 已获批或完成）
 - 性质：目标架构总纲 + 迁移治理合同；本次刷新只改设计文档，不修改生产代码
-- 当前 committed tip：`HEAD=origin/main=9ec2a4694e3c0d6d15bcc11792ee99ae7c07b614`；但该 tip 的 clean backend
-  typecheck 仍因 `DevelopmentAutomationModule.drive` 缺口失败，因此标为 **NOT-CLEAN / inadmissible**，不得计作 landed
-  architecture 或行为 oracle。最后可准入、可复跑的量化基线仍为 `dfda2d027016b026be9ca632d3b97333aa1c602b`，已包含
-  RFC-304～311 的生产改造（含 RFC-311 G4、T20、T21）。`7c542729/9ec2a469` 的 mission keyset/limit 分页与 admission
-  preview 仅记 pending source delta；共享工作树中的 RFC-312 与后续 UI/runtime 改动也不计入 landed architecture。量化与
-  下一步顺序以 `plan.md` §1/§3.2 为准；每个实施 wave 开工时仍须重钉新的干净、已发布 exact SHA
+- 当前最新已发布且 architecture-admissible 的 source tip：`origin/main=7c61a07468c60ae5c5eacfc89ba7b0c99858ef42`。它包含 TaskCatalog
+  `public|internal` membership、migration `0203`，RFC-317 B0～B5/B6 部分，以及 RFC-310 数字员工职责、类型包与
+  Task↔EmployeeCase 联结的后续批次，以及 RFC-317 T42/T43 的 registry reverse-completeness 守卫。该 exact SHA 的 CI
+  `32657178722` 为 31/31 全绿；本区间没有 frontend production/visual delta，因而没有独立 visual run。§2 的结构数字按
+  `7c61a074` committed objects/RFC-317 machine ledgers 重采，不能用旧 `56755bc0` 或 `fdcb72e58` 数字冒充当前实测。
+  此前 `9ec2a469` 的 composition 缺口、mission
+  分页 pending delta 与“RFC-312 未提交”判断已经失效。当前基线包含 RFC-304～315、RFC-310 后续已发布批次、统一任务创建/
+  `task-catalog` 与数字员工工具 I/O 合同。量化与下一步顺序以 `plan.md` §1/§3.2 为准；每个实施 wave 开工时仍须重钉新的
+  干净、已发布 exact SHA，不能把本次快照当成新增债务额度
 - 直接输入：
   - `design/system-commons-unification-audit-2026-08-12.md`
   - `design/task-execution-architecture-audit-2026-08-03.md`
-  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-311
+  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-315、RFC-317 B0～B5/B6 部分
 
 ## 1. 摘要裁决
 
@@ -73,24 +77,40 @@ RFC-280/282/284/285/292 已经完成了多块重要归一：agent spawn、资源
 ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等都已经有单一事实源。当前问题不再是
 “完全没有抽象”，而是抽象停在了机制层，尚未形成稳定的后台层次架构。
 
-截至最后可准入、可复跑的 `dfda2d02` 量化基线（当前 committed tip `9ec2a469` 另按 NOT-CLEAN 偏差记账）：
+截至 latest published、exact-SHA CI 全绿的 `7c61a074` 的 production landed shape：
 
-| 指标                              |                   当前值 | 说明                                                                       |
-| --------------------------------- | -----------------------: | -------------------------------------------------------------------------- |
-| backend TypeScript 源文件         |                      676 | `packages/backend/src/**/*.ts`                                             |
-| `services/` 内实现文件            |                      362 | 其中根目录平铺 192 个                                                      |
-| `modules/**` production TS        |   182 / 7 个现存 context | `development-automation` 90 个；其余见 `plan.md` §1                        |
-| `scheduler.ts`                    |                10,513 行 | 仍同时承载图引擎、wrapper、fanout、装配、状态与广播                        |
-| `task.ts`                         |                 6,692 行 | 仍同时承载入口、物化、控制面、读模型、恢复和 active registry               |
-| route→DB 值级文件                 |                       15 | transport 仍可绕过 application/use-case 层                                 |
-| route/MCP `AppDeps` consumer 文件 |                       52 | transport 仍反向依赖 composition root                                      |
-| 值级 SCC                          | backend 5 个 / 全仓 7 个 | 依赖图形状未因目录增长而完成收口                                           |
-| `KNOWN_VIOLATIONS`                |                       35 | task 6、git 5、其余环 6、services→routes 1、route→DB 15、util→upper 2      |
-| production `setInterval(`         |          28 处 / 23 文件 | 另有 34 个 token 命中；W0-R 必须按 job/worker/execution-local 重建正式分母 |
+| 指标                              |                                                    当前值 | 说明                                                                                                     |
+| --------------------------------- | --------------------------------------------------------: | -------------------------------------------------------------------------------------------------------- |
+| backend TypeScript 源文件         |                                                       779 | `packages/backend/src/**/*.ts`                                                                           |
+| `services/` 内实现文件            |                                                       364 | 其中根目录平铺 194 个                                                                                    |
+| `modules/**` production TS/TSX    |                                   277 / 11 个非空物理模块 | `development-automation` 107、`digital-employee` 22；完整分布见 `plan.md` §1                             |
+| `scheduler.ts`                    |                                                 10,653 行 | 仍同时承载图引擎、wrapper、fanout、装配、状态与广播                                                      |
+| `task.ts`                         |                                                  6,890 行 | 仍同时承载入口、物化、控制面、读模型、恢复和 active registry                                             |
+| route→DB 值级文件                 |                                                        15 | transport 仍可绕过 application/use-case 层                                                               |
+| route/MCP `AppDeps` consumer 文件 |                                                        53 | `digitalEmployees.ts` 新增一条；transport 仍反向依赖 composition root                                    |
+| 值级 SCC                          |                                  backend 5 个 / 全仓 7 个 | 依赖图形状未因目录增长而完成收口                                                                         |
+| `KNOWN_VIOLATIONS`                |                                                        35 | task 6、git 5、其余环 6、services→routes 1、route→DB 15、util→upper 2                                    |
+| production `setInterval(`         |                                           32 处 / 25 文件 | TypeScript AST 调用口径；字符串 grep 为 35/26；W0-R 仍须重建正式分母                                     |
+| RFC-317 boundary/guard census     | inbound 94 / 28 files；outbound 22 / 13 files；guards 130 | R1/R2 exact equality、R3、R12、classification/fixture 已落；仍不等于七份 canonical manifest 或 W0-R exit |
+| TaskCatalog membership            |                                     `public` / `internal` | migration `0203`；TaskExecution 单写/继承，Catalog provider 只投影 `public`                              |
 
-RFC-305/306/308/310/311 已经证明目标方向可落地：identity authority、branch activation、source-control participant、
-development mission 以及 archive/retention 都已有真实纵切。但“聚合与行为已落”“模块内分层已落”“跨 context exact
+RFC-305/306/308/310～315 已经证明目标方向可落地：identity authority/presence、branch activation、source-control
+participant、数字员工 OS、统一任务目录、retry policy、事件读写形状、事件自动化授权以及 archive/retention 都已有真实纵切。
+但“聚合与行为已落”“模块内分层已落”“跨 context exact
 surface 与 consumer 已切完”是三种不同状态；当前没有一个 RFC-294 wave 满足完整退出门。
+RFC-317 已把 W0-R 的公共内核子集从 census 推进为真实机器门：82 个 kernel（31 core）、94 条 inbound 与 22 条 outbound
+边逐 entry 对拍，R3 模块形状、R12 type 语料扩面、账本高水位、guard classification 与 negative fixture 已落；guard 分母现为
+130。`commons-{manifest,debt}.json` 与 `ledger-baselines.json` 的 pins 分别钉在 published ancestors `b04cf0eb0`、
+`13a9cc035`；旧 `efc1bdb01` 非祖先 provenance 阻断已经修复。**但**新增第 130 条
+`rfc317-registry-reverse-completeness` 后，`guard-manifest.json.recordedAtSha=0d4010e53` 已不能重放当前语料：它必须统一改钉一个
+确实包含 130 条 guard 的 published full SHA/content digest，并由 replay/tamper gate 对拍后，才能重新称 guard provenance 闭合。
+B1 的 owner/archive/ACL13 止血、B4/B5 与 B6 T42～T46 已成为必须保真的 behavior oracle；B6 仅余 T41。仍未完成的是 RFC-294
+的七份全局 canonical manifest、它们之间的 owner/symbol/edge foreign key、全模块
+required-port liveness、ambient/background/public-surface 总分母与最终 consumer cutover；所以 W0-R 仍是 partial，而非 exit。
+
+`ba54ba3d` 只让 `/api/task-catalog`/`/tasks` 目录排除 internal execution；legacy `GET /api/tasks` 与首页运行概览仍走未过滤兼容
+列表。它也没有删除 server→Catalog adapter 或 adapter→legacy `services/taskOperations` 的 R1/R2 债。因此这是正确性行为 oracle，
+不是 W4-E10 public/inbound cutover credit，更不是“全产品任务列表已隐藏 internal”。
 
 典型结构性裂缝已经产生正确性问题，而不仅是“代码不好看”：
 
@@ -128,31 +148,34 @@ surface 与 consumer 已切完”是三种不同状态；当前没有一个 RFC-
 
 最终后台至少形成以下 bounded contexts：
 
-| 模块                         | 唯一拥有的能力                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `identity-access`            | user/OIDC/session/token、role/permission、opaque request/transaction authority 与认证审计                    |
-| `task-execution`             | Task/NodeRun 生命周期、调度、恢复、运行态 ownership、wrapper/fanout、执行身份与 provenance                   |
-| `digital-employee`           | 员工类型/岗位/员工定义、EmployeeCase、Context/Attention/Reaction、员工调用通道与确定性职责执行               |
-| `event-center`               | Event/Source catalog、Subscription、ObserverActivation、observation cursor、EventRecord 与 Delivery          |
-| `execution-contract`         | 执行器中立的输入输出指南、Agent/Workflow/Program 兼容校验、fixture、exact 输出规则与验证回执                 |
-| `development-automation`     | DevelopmentMission/ActionRun/AgentAttempt、确定性策略与配置资源、evidence/effect intent、MR 生命周期编排     |
-| `resource-catalog`           | agent/skill/MCP/plugin/workflow/workgroup 六个聚合子模块；共享 ACL/ref/revision/catalog kernel               |
-| `collaboration`              | review/clarify/question 等 human gate、授权、park/release/rerun 命令                                         |
-| `knowledge-evolution`        | memory→skill fusion aggregate、融合决策/provenance，以及 skill restore 时 fused-membership 不变量            |
-| `integration`                | webhook、schedule、code-host ingress/egress 及其触发合同                                                     |
-| `intent`                     | Intent 会话、working set、turn/draft/checkpoint；资源提交只通过共享 atomic apply port                        |
-| `memory`                     | memory 生命周期、scope policy、注入快照与 distill；fusion 生命周期不再埋在 memory CRUD 中                    |
-| `source-control`             | repo/repo-group/cache/worktree/submodule/credential 与 Git 操作语义                                          |
-| `runtime-management`         | runtime inventory/profile/status/probe/diagnostic；执行只消费冻结 RuntimeDriver port                         |
-| `workspace-insight`          | structural diff、code intelligence、change narrative 与只读内容分析                                          |
-| `system-operations`          | admin backup/restore/recovery/diagnostic orchestration；不拥有 readiness、task limits 或 workspace GC policy |
-| `platform`（非业务 context） | persistence/tx、runtime/process mechanism、event outbox、config、background、errors/observability            |
+| 模块                         | 唯一拥有的能力                                                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity-access`            | user/OIDC/session/token、role/permission、opaque request/transaction authority 与认证审计                                                          |
+| `task-execution`             | Task/NodeRun 生命周期、调度、恢复、运行态 ownership、wrapper/fanout、执行身份/provenance 与 task catalog membership 分类                           |
+| `task-catalog`               | 多任务来源的只读 source registry、actor-filtered 合并列表/cursor/facets；只消费来源 owner 的 catalog-visible 投影，不拥有 Task/EmployeeCase 写模型 |
+| `digital-employee`           | 员工类型/岗位/员工定义、EmployeeCase、Context/Attention/Reaction、员工调用通道与确定性职责执行                                                     |
+| `event-center`               | Event/Source catalog、Subscription、ObserverActivation、observation cursor、EventRecord/Delivery 与 source-neutral `EventResponseRule`             |
+| `execution-contract`         | 执行器中立的输入输出指南、Agent/Workflow/Program 兼容校验、fixture、exact 输出规则与验证回执                                                       |
+| `development-automation`     | DevelopmentMission/ActionRun/AgentAttempt、确定性策略与配置资源、evidence/effect intent、MR 生命周期编排                                           |
+| `resource-catalog`           | agent/skill/MCP/plugin/workflow/workgroup 六个聚合子模块；共享 ACL/ref/revision/catalog kernel                                                     |
+| `collaboration`              | review/clarify/question 等 human gate、授权、park/release/rerun 命令                                                                               |
+| `knowledge-evolution`        | memory→skill fusion aggregate、融合决策/provenance，以及 skill restore 时 fused-membership 不变量                                                  |
+| `integration`                | webhook endpoint/secret、`WebhookTrigger`、schedule、code-host ingress/egress 及其触发合同                                                         |
+| `intent`                     | Intent 会话、working set、turn/draft/checkpoint；资源提交只通过共享 atomic apply port                                                              |
+| `memory`                     | memory 生命周期、scope policy、注入快照与 distill；fusion 生命周期不再埋在 memory CRUD 中                                                          |
+| `source-control`             | repo/repo-group/cache/worktree/submodule/credential 与 Git 操作语义                                                                                |
+| `runtime-management`         | runtime inventory/profile/status/probe/diagnostic；执行只消费冻结 RuntimeDriver port                                                               |
+| `workspace-insight`          | structural diff、code intelligence、change narrative 与只读内容分析                                                                                |
+| `system-operations`          | admin backup/restore/recovery/diagnostic orchestration；不拥有 readiness、task limits 或 workspace GC policy                                       |
+| `platform`（非业务 context） | persistence/tx、runtime/process mechanism、event outbox、config、background、errors/observability                                                  |
 
 跨域共享只能是稳定值对象、port 或领域事件；不能以“复用方便”为由共享 Drizzle table、route context、
 内部 service 或可变 singleton。
 
-`resource-catalog` 内共享的是 ACL/ref/revision/catalog 小内核，不是一个 `switch(resourceType)` 万能 CRUD；
-六类资源各自保留独立 aggregate、command 和不变量。
+`resource-catalog` 内共享的是 ACL/ref/revision/catalog 小内核，不是一个 `switch(resourceType)` 万能 CRUD。原始
+agent/skill/MCP/plugin/workflow/workgroup 六个 aggregate 仍各自保留 command 与不变量；当前 ACL catalog 已扩为 13 类，新增
+`capability_template`、`employee_definition` 与五类数字员工/研发配置资源仍由各自业务 owner 写，不能因为复用 ACL 行就转归
+resource-catalog。
 
 RFC-304 的 `code-capability` 不再是目标态 active writer context：RFC-310 已把五条能力的写模型切到
 `development-automation`。当前残留 19 个 production 文件只作为历史查询/兼容资源岛；其中 capability template 同步仍是
@@ -169,6 +192,12 @@ RFC-310 `os-architecture-manifest.json`；它不替代本 RFC W0-R 尚待建立�
 预算的 runtime view 与只读序列化文档，禁止把字段指南展开成跨域 mega DTO。Agent 声明与固定 `agent-result` 的增删由该 context 的
 规整命令拥有，所有 Agent 保存入口复用，不能让 UI、bundle 或 intent 各自复制生命周期规则。
 
+RFC-310 后续统一任务创建又形成了独立 `task-catalog` 读模型。它只拥有来源注册、闭合 query/cursor 与合并后的
+actor-filtered projection；`task-execution` 与 `digital-employee` 分别实现 consumer-owned source adapter，业务启动仍调用各自
+source-specific command。统一 UI/共享 source metadata 不授权后端创造一个 `StartAnything` command，也不允许 catalog 读取
+Task/EmployeeCase 内部表。当前实现仍把完整 `Actor`、string filter 与 composition 直接暴露给 route，这些是 W4 的待收编
+facade，不是目标接口。
+
 ### G3：执行链形成四级内核
 
 `task-execution` 内部固定为四层：
@@ -180,6 +209,10 @@ RFC-310 `os-architecture-manifest.json`；它不替代本 RFC W0-R 尚待建立�
 
 RFC-287 的 `runAssembly(spec)` 是第 4 层的必要第一刀，但不等于整套目标架构；它不能继续吸收 task
 控制面、fanout 身份、human gate 或领域状态判断。
+
+RFC-313 的 `retryAttemptCap` 纯乘积/ceiling 算术已有 task-execution 与 digital-employee 两个生产 consumer，因此归
+`platform/contracts` 的中性 value/policy contract；TaskExecution 只拥有 envelope followup/session-restart policy/state，
+DigitalEmployee 只拥有 reaction/outbox retry policy/state。ExecutionKernel 不因复用这段算术而取得另一域的 retry policy。
 
 ### G4：写命令和提交后副作用归一
 

@@ -1,9 +1,10 @@
 # RFC-294 技术设计：后台最终层次架构
 
 > 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
-> 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～311 已在其后
+> 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～315、
+> RFC-310 后续已发布批次已在其后
 > 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
-> 2026-08-19 刷新为准。本文件中的终局接口是 target contract，不得反推为当前实现已经具备。
+> 2026-08-24 刷新为准。本文件中的终局接口是 target contract，不得反推为当前实现已经具备。
 
 ## 1. 设计原则
 
@@ -68,6 +69,7 @@ packages/backend/src/
 │   │   ├── composition/required-ports.ts
 │   │   └── composition.ts
 │   ├── identity-access/
+│   ├── task-catalog/
 │   ├── digital-employee/
 │   ├── event-center/
 │   ├── execution-contract/
@@ -93,6 +95,7 @@ packages/backend/src/
 │   ├── workspace-insight/
 │   └── system-operations/
 ├── platform/
+│   ├── contracts/
 │   ├── persistence/sqlite/
 │   ├── runtime/
 │   ├── process/
@@ -125,33 +128,72 @@ RFC-309 `capability_templates` 的 upstream merge；临时 owner 明确为 `code
 command/query/writer 收成 exact compatibility surface，并在 migration analyzer 与 legacy template consumer=0 后迁入
 `development-automation` 的 ActionTemplate 或退役。除此之外不得恢复 code-round admission/writer。
 
-Committed `dfda2d02` 的 landed overlay（不是目标目录完成度）如下：
+Latest published source `7c61a074` 已包含 TaskCatalog membership、RFC-317 B0～B5/B6 部分，以及数字员工后续
+authoring/runtime/case-task 联结。它的 exact-SHA CI `32657178722` 为 31/31 全绿；本区间没有 frontend production/visual
+delta，因而没有独立 visual run。因此下表按 `7c61a074` committed objects 描述 landed、architecture-admissible source shape。
+空的 `modules/work-start/` 不计生产 owner：
 
-| current module           | production TS | architecture interpretation                                                                             |
-| ------------------------ | ------------: | ------------------------------------------------------------------------------------------------------- |
-| `development-automation` |            90 | active writer；aggregate/single-writer/internal layering landed，public/required/inbound cutover 未完成 |
-| `identity-access`        |            23 | authority vertical slice landed；full Actor 与多处 concrete composition facade 未退役                   |
-| `code-capability`        |            19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner          |
-| `integration`            |            19 | webhook + requirement/pipeline/MR adapter pilots；仍有两条 task internal debt                           |
-| `task-execution`         |            17 | supervisor/branch/agent-host/workspace pilots；四级 engine 与六条 task SCC 未收口                       |
-| `source-control`         |            13 | exclude/candidate/commit/publish/conflict pilots；WorkspaceRef/repo/cache/worktree owner 未收口         |
-| `intent`                 |             1 | pure domain seed                                                                                        |
+| current module           | production TS/TSX | architecture interpretation                                                                                          |
+| ------------------------ | ----------------: | -------------------------------------------------------------------------------------------------------------------- |
+| `development-automation` |               107 | active writer/type package；aggregate 与功能闭环已落，public/required/inbound/bootstrap cutover 未完成               |
+| `identity-access`        |                29 | role/grant/authority + presence vertical slices landed；full Actor 与 concrete composition facade 未退役             |
+| `integration`            |                30 | webhook/code-host + requirement/pipeline/MR + Event Center adapter；仍有 legacy/inbound 装配债                       |
+| `task-execution`         |                24 | supervisor/branch/agent-host/workspace/catalog-source + membership pilots；四级 engine 与六条 task SCC 未收口        |
+| `digital-employee`       |                22 | EmployeeCase/Context/Reaction/authoring/runtime vertical slice landed；外部 provider/bootstrap 收口未完成            |
+| `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer landed；canonical outbox/background/root 收口未完成    |
+| `code-capability`        |                19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner                       |
+| `source-control`         |                14 | exclude/candidate/commit/publish/conflict pilots；WorkspaceRef/repo/cache/worktree owner 未收口                      |
+| `execution-contract`     |                 7 | executor-neutral guide/fixture/exact-output contract landed；legacy resource/script provider adapter 未退役          |
+| `task-catalog`           |                 4 | 多来源目录读模型 landed；当前仍传 full Actor/string filter 且 route 直取 composition，未达最终 public query contract |
+| `intent`                 |                 1 | pure domain seed                                                                                                     |
 
-2026-08-21 RFC-310 新增的 `digital-employee`、`event-center` 与 `execution-contract` 是上述历史量化基线之后的独立
-vertical slice：前者拥有 EmployeeCase/Context/Attention/Reaction/Channel，中者拥有 catalog/subscription/observer/event/delivery，
+RFC-310 新增的 `digital-employee`、`event-center` 与 `execution-contract` 已形成独立 vertical slice：前者拥有
+EmployeeCase/Context/Attention/Reaction/Channel，中者拥有 catalog/subscription/observer/event/delivery 与来源中性的事件自动化规则，
 后者拥有 executor-neutral schema guide/transport/compatibility/fixture/exact-output receipt；`development-automation` 只通过类型包
-注册提供代码员工规则和业务合同指南。新三域的 root/public/external-import exact 清单由
+注册代码员工规则和业务合同指南。三域的 root/public/external-import exact 清单由
 `design/RFC-310-rule-driven-development-digital-employee/os-architecture-manifest.json` 与
 `rfc310-digital-employee-os-architecture.test.ts` 双向锁定，跨 context internal import 与宽 public port 继续由本 RFC
-preflight gate 阻断。该专项账本证明“新增纵切没有继续扩大 RFC-294 债”，不把 W0-R 七份全仓 canonical manifest 伪报为完成。
+preflight gate 阻断。统一任务创建另落 `task-catalog`：它只合并 task-execution/digital-employee 的 actor-filtered source page，
+业务启动仍由来源 owner 的 command 完成。该专项账本证明“新增纵切有自己的局部门”，不把 W0-R 七份全仓 canonical manifest
+伪报为完成。
+
+RFC-317 已把仓根治理从 B0 census 推进为可执行子集：`commons-manifest.json` 登记 82 个公共 kernel（31 core），
+`commons-debt.json` 逐条锁住 legacy inbound→module internal 94 条边/28 文件与 module application→legacy 22 条边/13 文件；
+R1/R2 exact equality、R3 模块形状、R12 type 语料扩面、账本高水位、guard classification 与 negative fixture 均已落，当前
+`guard-manifest.json` 分母为 130。`commons-{manifest,debt}.json` 与 `ledger-baselines.json` 的 pins 已分别改为 published
+ancestors `b04cf0eb0`、`13a9cc035`，旧 `efc1bdb01` 非祖先 provenance debt 已解除；但新增
+`rfc317-registry-reverse-completeness` 后，guard 的 `recordedAtSha=0d4010e53` 不包含第 130 条语料，当前只能作为已验证 ceiling，
+不能作为可从 pin 重放的闭合证据。它必须在 containing published SHA/content digest 上重新生成并经 replay/tamper gate 对拍。
+B1 的 owner/archive/ACL13 止血、B4/B5 与 B6 T42～T46 同时成为后续必须保持的行为 oracle；B6 仅余 T41。
+
+这些资产仍只是未来 `module-symbol-owners/cross-context-imports+facades` 的 subset/projection 与补充性 guard registry，不是七份
+canonical manifest 的平行真值。全局 owner/symbol/edge foreign key、mutation/tx/background/public-surface inventory、全模块
+required-port liveness、ambient wiring 与最终 consumer cutover 尚未完成；W0-R 必须把 subset 生成/投影进唯一 canonical 真值，
+不能复制一套新 owner/debt。
+
+RFC-317 已落的 P1/P2 修复是目标架构的行为 oracle，但不是边界 cutover credit：
+
+- 五类 development configuration resource 的 command/admission 仍归 `development-automation`；owner/current-authority 判定应由
+  identity/resource authority 的 purpose-specific participant 提供。当前 route 直接调 `requireResourceOwner`、持有 full `Actor/AppDeps` 只是
+  W4-E0/E8 必须保真后删除的 legacy seam。
+- task archive 中“传递 FK closure 必须导出 `review_comments`”是 TaskExecution 业务选择；platform/storage 只提供导出与 artifact
+  机制。当前 flat `services/taskArchive.ts` 是 W4-E1/W9 artifact-lifecycle 迁移时的接受 oracle，不能下沉为读全库的 platform god service。
+- T42/T43 把 registry guard 从“表是否被引用”扩到“每个 key/dimension 是否有 direct/via consumer”，并删除零消费者的
+  `NodeKindBehavior.isProcess` 与 ref-resolution domain/export 假合同。目标共享面据此只保留真实调用的
+  `retryCascade/isAgent/settlesWithoutRow` 与调用级 `purpose/onMissing/failureOwner`；`code-round` 只是 decode/history compatibility row，
+  不能再进入 active executor 或 W2 admission。这个收缩是 W0-R registry oracle，不是新 bounded context 或 owner transfer。
 
 因此验收必须分别回答：领域事实/单写是否落地、模块内 layer 是否落地、最终 public interface 与所有 consumer 是否切完。
 只有第三项 consumer=0/ledger 全绿后，才可以把对应 RFC-294 vertical slice 记为完成。
 
-发布 tip `9ec2a469` 另有 mission keyset/limit 与 admission preview 源码增量，但 clean backend typecheck 仍因
-`DevelopmentAutomationModule.drive` composition 半边缺失而失败，故不并入上表。该增量只有在首个 containing repair SHA
-通过 clean typecheck、binary build 与定向测试后才可进入 landed overlay；其中 mission paging 还必须补
-`(created_at,id)` 复合索引、绑定参数 EXPLAIN 与大 tie-group 负测，才能宣称最坏 O(page)。
+此前 `9ec2a469` 的 composition 半边已修，mission `(created_at,id)` 复合索引、统一分页消费与 admission preview 已进入当前
+干净基线；旧 NOT-CLEAN/pending-delta 判断作废。它们只证明 DA query 行为和统一 UI 已落，不证明 route 已切到 DA public query，
+也不证明 bootstrap-only composition 或全局 W4 退出门。
+
+RFC-310 后续 migration `0205`/`0206` 又落了两条跨域事实：`tasks.digital_employee_case_id` 是 TaskExecution-owned Task row 上的
+EmployeeCase provenance ref，`employee_cases.name` 仍由 DigitalEmployee 单写。Task detail 只可用前者定位、再通过 DE actor-filtered
+query 投影最小 Case link；不能把 Case 名称/状态复制进 Task row，也不能让 DE 直接更新 Task。Expand-only 列与存量 NULL 可在
+W4-E1/E9、W7 切 reader 时保留，回滚不得删已写引用。
 
 运行时调用与源码 import 必须分开看：
 
@@ -179,10 +221,12 @@ infrastructure；bootstrap 也不能 deep import module infrastructure。
   归 `platform/persistence`。
 - `resource-catalog/core` 只共享 ACL/ref/revision/catalog 合同；六类资源仍是独立 aggregate 子模块，禁止用
   `switch(resourceType)` 堆成一个 CRUD god module。
-- 当前 shared ACL catalog 已覆盖 12 类 resource kind：原六类加 capability template、development-automation 的四类
-  config resource 与 integration adapter。这里的 catalog 只提供统一 ref/revision/visibility 机制；新增六类 aggregate 的
-  writer 分别留在 compatibility island、development-automation、integration，不能因共用 ACL 就转交 resource-catalog。
-- `dfda2d02` 的 shared permission catalog 已有 108 个闭合 permission；这是 identity-access role/grant 单写的输入分母，
+- 当前 shared ACL catalog 已覆盖 13 类 resource kind：原六类加 capability template、development-automation 的四类
+  config resource、integration adapter 与 DE-owned `employee_definition`。这里的 catalog 只提供统一 ref/revision/visibility 机制；
+  新增七类 aggregate 的 writer 分别留在 compatibility island、development-automation、integration、digital-employee，不能因共用
+  ACL 就转交 resource-catalog。
+- 当前 shared permission catalog 已有 113 个闭合 permission（admin/user/manager/guest = 113/86/99/7）；这是
+  identity-access role/grant 单写的输入分母，
   不是给各 bounded context 自建 permission switch 的授权。每次 W4-E0 切换都从 catalog/operation descriptor 派生并重采数量。
 - `platform/` 只放领域中性的机制，禁止出现“某资源是 manager 才能改”之类业务判断。
 - outbound port 的**领域实现**放对应 module 的 `infrastructure/`；跨域复用的 DB connection、runtime、process、
@@ -238,6 +282,7 @@ flowchart LR
   TE --> RC["resource-catalog"]
   TE --> SC["source-control"]
   TE --> RM["runtime-management"]
+  TC["task-catalog"] --> IA
   COL["collaboration"] --> TE
   MEM["memory"] --> RC
   MEM --> SC
@@ -259,15 +304,49 @@ flowchart LR
   DA --> XC["execution-contract"]
   DE --> EC["event-center"]
   DE --> XC
+  TE --> EC
+  EC --> IA
   TE --> XC
-  TE --> DA
+  INTEG --> EC
   INTEG --> DA
+  TE -. "implements AgentActionExecutionPort" .-> DA
+  TE -. "implements ReactionExecutionPortV1" .-> DE
+  INTEG -. "implements development effect SPI" .-> DA
+  TE -. "implements TaskCatalogSource" .-> TC
+  DE -. "implements TaskCatalogSource" .-> TC
+  TE -. "implements TaskAutomationWorkStartPort" .-> EC
+  DE -. "implements EmployeeAutomationWorkStartPort" .-> EC
+  IA -. "implements EventAutomationDelegatedContextFactory" .-> EC
+  INTEG -. "implements event source/routing SPI" .-> EC
+  RC -. "implements contract resource projection SPI" .-> XC
+  TE -. "implements contract fixture SPI" .-> XC
 ```
 
-箭头统一表示“左侧源码只可依赖右侧受控 `public/*` entrypoint”。其中 `TE → DA` 表示 task provider adapter 实现
-DA consumer-owned `AgentActionExecutionPort`；`INTEG → DA` 同时覆盖 integration provider adapter 实现 DA required SPI 与
-integration ingress 消费 DA offered public commands。DA 不反向 import task/integration public type 来实现这两条 effect seam。
+实线箭头表示“左侧消费右侧受控 offered `public/*` entrypoint”；虚线箭头仅表示 provider adapter 实现右侧
+consumer-owned required SPI，不是 application 同步反向依赖。`INTEG → DA` 的实线只覆盖 integration ingress 消费 DA offered
+public commands；同一对 context 的 development effect 实现单独以虚线登记。DA 不反向 import task/integration public type来实现
+这些 effect seam，TaskCatalog 也不反向 import source provider。
 `platform` 不在业务 DAG 中：各模块只依赖自己拥有的 platform-facing port，bootstrap 再注入 platform 实现。
+
+`TE → TC` 与 `DE → TC` 是 composition implementation edge：task-execution 与 digital-employee 的 provider adapter
+分别实现 task-catalog consumer-owned `TaskCatalogSource`。运行时 catalog 扇出到注入的 source；源码上 catalog 不反向
+import 两个 provider，也不读取 Task/EmployeeCase table。四个公开 `TaskSourceId`（agent/workflow/workgroup/digital-employee）
+各有且只有一个 adapter；TaskSourceId 是目录来源，不是 ExecutionKind。
+
+DigitalEmployee 启动/恢复 Reaction 时只消费本域拥有的 `ReactionExecutionPortV1`；TaskExecution 的 exact provider adapter 实现该
+required SPI，输入/回执都使用 DE-owned closed DTO，bootstrap 注入。当前 DE adapter 直接 import
+`task-execution/public/participants.DigitalEmployeeExecutionParticipant`，同时 TE public/required/implementation 又 import
+DE-owned `WorkspaceFailureClass`，是已落的双向 contract/type debt，不是目标 DAG：W4-E9 必须先以
+`ReactionExecutionPortV1` 收口，再删除两侧反向 public import；禁止用 shared 复制 DTO 或把 bootstrap callback 当第三份合同。
+
+Event Center 的 observation/catalog 是 offered capability，因此 task-execution、digital-employee、integration 到 EC 的实线
+分别登记它们的真实 consumer/type edge；自动化启动和 code-host source/routing 则是相反方向的 required-SPI implementation edge。
+`EC → IA` 实线只消费 delegated authority resolver/types；`IA ⇢ EC` 虚线只表示 IA exact provider adapter 实现 EC-owned
+`EventAutomationDelegatedContextFactory` required SPI，不是 identity-access application 反向消费 Event Center。该 adapter 是唯一
+能把 current delegated authority、origin 与 closed port id 绑定成 event-only context 的实现者，bootstrap 只负责注入。
+目标合同把宽 `EventAutomationWorkStartPort` 拆成 task 与 employee 两个 target-specific port，Event Center 只按已冻结
+`EventResponseTarget` 判别调用哪一个；provider 收不到另一种 target，也不返回 task/case 二选一 receipt。Integration 只实现自己
+拥有的 code-host source/routing/delivery adapter，不取得来源中性 rule 或 Task/EmployeeCase mutation 权限。
 
 `XC` 不拥有执行器或员工业务：`DE → XC` 只消费 guide/validation participant，`TE → XC` 只消费 prompt/port/exact-output
 机制，`DA → XC` 只注册业务 schema guide。Agent/Workflow projection 与真实 Script fixture 在终局通过 XC consumer-owned
@@ -363,6 +442,12 @@ interface ConsumerRef {
 type AuthorityRequirement =
   | { kind: 'none' }
   | { kind: 'request-authority'; mode: 'direct' | 'delegated'; subjectBinding: 'context' }
+  | {
+      kind: 'event-delegated-authority'
+      subjectBinding: 'context'
+      originBinding: 'context'
+      portId: EventAutomationPortId
+    }
   | { kind: 'current-authority-in-tx'; scopeBinding: string }
   | {
       kind: 'ownership-epoch'
@@ -452,31 +537,32 @@ Prepared payload 在 enqueue/act 前还要重算 canonical hash，不能只相�
 
 下表是目标**上限**而非要求一次实现的占位 API。只有对应 vertical slice 有真实 consumer 时才落 symbol。
 
-| 模块                     | `public/commands`                                                                                                                      | `public/queries`                                                                                               | offered participants / composition-only required ports                                                                                                                                                                                                                                                                                                                                                                                  | 最小 event/types                                                                                                              | 明确不跨界                                                                                                                                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| identity-access          | inbound auth/session/token 管理各自 typed command；不提供万能 `mutateUser`                                                             | `GetCurrentIdentity`、authority-filtered `ListUserSummaries`                                                   | `DirectOperationContextFactory` / `DelegatedOperationContextFactory`、`DelegatedAuthorityResolver`、`CurrentAuthorityInTx`；system-effect factory 归各 platform worker family                                                                                                                                                                                                                                                           | aggregate-bound `AuthorityRevisionChanged {}`；opaque `RequestAuthority`、`AuthorizationSubjectRef`                           | token hash/secret、session row、full Actor/permission snapshot、任意 SystemActor constructor                                                                                                    |
-| task-execution           | `Launch/Resume/RetryTask/RetryNode/Cancel/SyncWorkflow`                                                                                | `GetTaskView/ListTaskSummaries/GetExecutionView`；task-owned `ListTaskWorkspaceFiles/ReadTaskWorkspaceContent` | offered source-specific `RepositoryStepTaskLaunchIntentParticipantInTx` / `PreMaterializedTaskLaunchIntentParticipantInTx`、`TaskDecisionParticipantInTx`；required `WorkspacePreparationExecutionPort`、`HumanGatePreparationPort` / `HumanGateOpenParticipantInTx`、`TaskMemoryInjectionPort`、`CodeHostExecutionPort`、`ExecutionWorkspacePort/RepositoryExecutionPort/TaskWorkspaceReadPort`；ownership/ledger ports 仅 composition | `TaskTerminalCommitted` / `TaskInvalidated` / `NodeInvalidated`；`TaskRef/NodeRunRef/TaskMutationReceipt`                     | scheduler state、frontier、OwnershipToken、AbortController、node row、worktree path                                                                                                             |
-| digital-employee         | type/tool/job/employee publish；Case launch/resume/terminate 与显式 policy upgrade                                                     | 分类/职责图/节点工具箱/员工/Case Context·Attention·Queue·Round·Channel 投影                                    | required `ExecutionContractParticipant`、Event Center、Reaction execution 与 platform work-item participants；只提交 frozen ReactionPlan；不得 optional 回退到资源/fixture 探测                                                                                                                                                                                                                                                         | `EmployeeTypeRef/EmployeeCaseRef/ContextRef` 与 projection invalidation；正文/日志只用 artifact ref                           | 代码员工 schema、Git/code-host credential、Task/NodeRun row、任意工具 picker、retry 字段、按 type 分支                                                                                          |
-| event-center             | idempotent `ObserveEvent`                                                                                                              | localized catalog、subscriptions、observer health                                                              | 分拆的 subscription、delivery、observer-control participants；required observer program port                                                                                                                                                                                                                                                                                                                                            | `EventExactRef/EventSubjectRef/EventObservationReceipt/EventDeliveryEnvelope` 与 projection invalidation                      | EmployeeCase/Reaction、代码员工事件判断、provider credential、大日志、常驻无订阅轮询                                                                                                            |
-| execution-contract       | Agent 契约托管端口 create/update 规整命令；无业务 mutation command                                                                      | list/get 只返窄 `RuntimeView`；完整 exact guide 为平台校验后的序列化只读文档                                   | offered `ExecutionContractParticipant`：get/list/validateExecutor/validateAgentCandidates/validateEnvelope(input/output)；required exact resource projection 与 Program fixture ports                                                                                                                                                                                                                                                    | `ExecutionContractRef/RuntimeView/ValidationReceipt`、固定 Agent/Script port 名与 exact-envelope validator；注册只传 ref+guideJson | EmployeeCase/WorkItem 路由、开发 schema literal、retry policy、完整 guide mega DTO、Agent/Workflow 写模型、Script runtime、Git/Token/Effect 实现                                                   |
-| development-automation   | `Launch/Retry/Cancel/Resume/HandoffMission`、`SubmitMissionAnswers/ConfirmNoChange/AttachMergeRequest` 与四类 config 的 typed commands | actor-filtered `PreviewMissionAdmission` 与 mission/activity/config/readiness/evidence projections             | required `AgentActionExecutionPort` / `RequirementAcquisitionPort` / `RequirementInteractionPort` / `MergeRequestFactsPort` / `PipelineEvidencePort` / `RepositoryDeliveryPort` 等 use-case-specific SPI；provider adapter 只实现自己的一小面                                                                                                                                                                                           | `DevelopmentMissionRef/ActionRunRef/AgentAttemptRef`；`MissionInvalidated` 与 effect receipt/invalidate，正文/日志不进 event  | Task/NodeRun row、Git/code-host credential、absolute path/URL、raw prompt/log、provider SDK、legacy code-round writer、22-option service locator                                                |
-| resource-catalog/core    | 无 universal CRUD；各 aggregate 自己 typed command                                                                                     | 横向 `ResourceCatalogQuery` 只返 summary；完整查询归六子模块                                                   | purpose-specific `TaskExecutionResourceSnapshotInTx` / `IntentApplyResourceParticipantInTx` / `IntegrationTriggerResourceSnapshotInTx`、actor-filtered `ResourceBlockerQuery` / `SkillProvenanceVisibilityQuery`                                                                                                                                                                                                                        | internal receipt events / public invalidate；`ResourceRef/VersionedResourceRef/ResourceSummary`                               | `ACL_TABLES`、owner/grant row、generic repository、六类 detail union                                                                                                                            |
-| resource 子模块          | 每类明确 `Create/Update/Rename/Delete/UpdateAcl` 的实际集合                                                                            | 每类 typed list/detail/filter                                                                                  | 仅真实跨域需要的 participant，如 `SkillVersionParticipantInTx`                                                                                                                                                                                                                                                                                                                                                                          | kind-specific DTO/event payload                                                                                               | 其他资源的不变量、`switch(resourceType)` CRUD                                                                                                                                                   |
-| resource-catalog/package | typed package inspect/admit/apply command；不是六类 universal CRUD                                                                     | package preview/receipt                                                                                        | `ResourcePackageApplyProvider` 消费六子模块 typed package mutation participants                                                                                                                                                                                                                                                                                                                                                         | package ref/version/opaque receipt                                                                                            | resource row、generic repository、AtomicApply journal/claim                                                                                                                                     |
-| collaboration            | `SubmitClarifyAnswers/SubmitReviewDecision/SubmitQuestionAnswers`                                                                      | `GetGateView/ListPendingGateSummaries`                                                                         | implements task required preparation/open ports；consumes task-offered `TaskDecisionParticipantInTx`；module transaction port internal                                                                                                                                                                                                                                                                                                  | `GateDecisionCommitted` / `GateInvalidated`；公开 view 不含 continuation                                                      | document row、ContinuationIntent、resume failure、worker id、terminal closer command                                                                                                            |
-| knowledge-evolution      | `StartFusion/ApproveFusion/RejectFusion/RetryFusion/RestoreSkillVersion`                                                               | `GetFusionView/ListFusionSummaries/GetSkillProvenance`                                                         | consumes task launch + skill/memory tx participants；对外仅 versioned recovery/provenance query                                                                                                                                                                                                                                                                                                                                         | internal apply/provenance receipt / `FusionInvalidated`；`FusionRef/FusionProvenanceRef`                                      | memory/skill row、task internal、raw artifact/journal、module transaction scope                                                                                                                 |
-| memory                   | `Create/PatchContent/Move/Promote/Archive/Unarchive/Delete/RetryFailedDistill/CancelPendingDistill`                                    | typed visible list/detail + distill list/job/session view（注入正文不是 public query）                         | implements task required `TaskMemoryInjectionPort`；offered、KE-only `MemoryMembershipParticipantInTx` / `MemoryProvenanceVisibilityQuery`；consumes RC/SC scope visibility filters + task/collaboration distillation snapshots + memory-required distiller execution                                                                                                                                                                   | internal membership receipt / `MemoryInvalidated` / `DistillJobInvalidated`；exact v1 injection snapshot 只给 task port       | prompt consumer list、author/ACL row、fusion engine、raw distill queue/runtime handle                                                                                                           |
-| intent                   | `StartSession/SubmitTurn/UpdateWorkingSet/ApplyDraft/ArchiveSession`                                                                   | `GetJourney/GetSessionView`                                                                                    | 通常不向外导 port；内部消费 catalog/apply contract                                                                                                                                                                                                                                                                                                                                                                                      | aggregate-bound closed state fact / `IntentSessionInvalidated {}`；`IntentSessionRef`                                         | changeset journal/artifact、resource repository、agent runner handle                                                                                                                            |
-| integration              | endpoint/rule/schedule 的 typed commands 与 trigger admission                                                                          | delivery/rule typed queries                                                                                    | consumes task launch-intent participant；implements task required `CodeHostExecutionPort`                                                                                                                                                                                                                                                                                                                                               | internal `DeliveryCommitted` / `DeliveryInvalidated`；RFC-292 task launch projection                                          | webhook secret、raw credential、Task deps、server/Hono handler、generic operation catalog                                                                                                       |
-| source-control           | repo/group/repository-credential 的真实 typed commands                                                                                 | repo-owned UI summary/tree/file；task workspace query 不在此授权                                               | offered `PublicRepositorySourceSealPort` / `RepositoryLaunchSnapshotInTx` / `RepositoryPreparationParticipant` / `WorkspaceMaterializationParticipant` / `RepositoryActionParticipant` / bounded `WorkspaceContentParticipant` / memory-only `RepositoryScopeAuthorizationInTx`；task infrastructure adapter 实现 task required ports                                                                                                   | opaque `RepositoryRef/RepositoryCredentialRef/SealedPublicRepositorySourceRef/WorkspaceRef/SnapshotRef`；revision-only events | one-shot seal sink 之外的 raw URL、任何 credential-bearing URL、task membership、absolute path、credential/token、code-host API connection、git client、mutable worktree object、OwnershipToken |
-| runtime-management       | runtime profile/admin commands                                                                                                         | inventory/status/probe/diagnostic typed views                                                                  | offered `RuntimeSelectionParticipantInTx`；process/runtime mechanism 属 platform contract                                                                                                                                                                                                                                                                                                                                               | internal capability fact / public invalidate；opaque frozen runtime ref                                                       | provider secret、process handle、ambient/full config、vendor SDK object                                                                                                                         |
-| workspace-insight        | idempotent `StartChangeNarrative/CancelInsightJob`；纯结构查询不伪装 mutation                                                          | `GetInsightStatus/GetInsightArtifact/GetStructuralDiff/GetSymbols`                                             | consumes task/source-control/runtime purpose-specific immutable snapshot participants；durable job claim internal                                                                                                                                                                                                                                                                                                                       | `InsightArtifactReady` / `InsightInvalidated`；bounded result 或 `InsightArtifactRef`                                         | repo path、DB client、live worktree mutation、unbounded file bodies、process/model handle                                                                                                       |
-| system-operations        | admin `RequestBackup/StageRestore/ActivateRestore` 仅做 orchestration；limits/GC job 仍归 task/source-control owner                    | `GetRecoveryStatus/GetRecoveryOperationDiagnostics`，只看 platform coordinator 自己的 operation                | consumes platform backup/restore coordinator；不取得 contributor registry                                                                                                                                                                                                                                                                                                                                                               | safe phase/status invalidate；`BackupRef/RestoreRef/DaemonGeneration`                                                         | public liveness、跨业务统计、任何业务事实表、通用跨库 repository、task limit/GC policy、把 health/GC 收成 misc domain                                                                           |
-| platform/contracts       | 无业务 command                                                                                                                         | 无业务 query                                                                                                   | `Transaction/Clock/Id/Event/Audit/Config/Job/AtomicApply` 中性机制                                                                                                                                                                                                                                                                                                                                                                      | 只含中性 envelope/opaque refs                                                                                                 | Actor/resource/task policy、业务 DTO、任何 module implementation                                                                                                                                |
+| 模块                     | `public/commands`                                                                                                                      | `public/queries`                                                                                               | offered participants / composition-only required ports                                                                                                                                                                                                                                                                                                                                                                                  | 最小 event/types                                                                                                                   | 明确不跨界                                                                                                                                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| identity-access          | inbound auth/session/token 管理与 WS `TrackPresenceConnection` 各自 typed command；不提供万能 `mutateUser`                             | `GetCurrentIdentity`、authority-filtered `ListUserSummaries/GetUserPresence`                                   | `DirectOperationContextFactory` / `DelegatedOperationContextFactory`、`DelegatedAuthorityResolver`、`CurrentAuthorityInTx`；exact adapter 实现 EC-owned `EventAutomationDelegatedContextFactory` required SPI；system-effect factory 归各 platform worker family                                                                                                                                                                        | aggregate-bound `AuthorityRevisionChanged {}`；opaque `RequestAuthority`、`AuthorizationSubjectRef`、二态 `UserOnlineState`        | token hash/secret、session row、full Actor/permission snapshot、连接数/设备/时长、presence 进 prompt、任意 SystemActor constructor                                                              |
+| task-execution           | `Launch/Resume/RetryTask/RetryNode/Cancel/SyncWorkflow`                                                                                | `GetTaskView/ListTaskSummaries/GetExecutionView`；task-owned `ListTaskWorkspaceFiles/ReadTaskWorkspaceContent` | offered source-specific `RepositoryStepTaskLaunchIntentParticipantInTx` / `PreMaterializedTaskLaunchIntentParticipantInTx`、`TaskDecisionParticipantInTx`；required `WorkspacePreparationExecutionPort`、`HumanGatePreparationPort` / `HumanGateOpenParticipantInTx`、`TaskMemoryInjectionPort`、`CodeHostExecutionPort`、`ExecutionWorkspacePort/RepositoryExecutionPort/TaskWorkspaceReadPort`；ownership/ledger ports 仅 composition | `TaskTerminalCommitted` / `TaskInvalidated` / `NodeInvalidated`；`TaskRef/NodeRunRef/TaskMutationReceipt`                          | scheduler state、frontier、OwnershipToken、AbortController、node row、worktree path                                                                                                             |
+| task-catalog             | 无 mutation/create；任务启动始终调用来源 owner 的 typed command                                                                        | `ListTaskSources/ListTaskCatalogPage`，typed source/filter/page/cursor                                         | required `TaskCatalogSource` 由 task-execution/digital-employee exact adapter 实现；每个 sourceId 唯一且启动期闭合                                                                                                                                                                                                                                                                                                                      | `TaskSourceId/TaskCatalogItem/TaskCatalogPage`；只读 projection 不发业务 event                                                     | full Actor、JSON string response、raw string filter、Task/EmployeeCase row、来源详情/mutation、万能 StartAnything                                                                               |
+| digital-employee         | type/tool/job/employee publish；Case launch/resume/terminate 与显式 policy upgrade                                                     | 分类/职责图/节点工具箱/员工/Case Context·Attention·Queue·Round·Channel 投影                                    | consumes execution-contract offered `ExecutionContractParticipant` 与 Event Center split participants；本域 required `ReactionExecutionPortV1` 及 tool/program/work-item 等 exact SPI，TE adapter 只实现前者；只提交 factory-built frozen request，不得 optional 回退到资源/fixture 探测                                                                                                                                                | `EmployeeTypeRef/EmployeeCaseRef/ContextRef` 与 projection invalidation；正文/日志只用 artifact ref                                | 代码员工 schema、Git/code-host credential、Task/NodeRun row、任意工具 picker、retry 字段、按 type 分支                                                                                          |
+| event-center             | idempotent `ObserveEvent`；来源中性 automation rule 的 typed create/update/delete                                                      | localized catalog/subscriptions/rules/observer health                                                          | 分拆的 subscription、delivery、observer-control participants；required observer/source adapters、target-specific `TaskAutomationWorkStartPort` / `EmployeeAutomationWorkStartPort`、EC-owned `EventAutomationDelegatedContextFactory` 与 consumer-specific `EventDeliveryRetryConfigProjection`                                                                                                                                         | `EventExactRef/EventSubjectRef/EventObservationReceipt/EventDeliveryEnvelope` 与 projection invalidation                           | Webhook endpoint/secret/trigger row、EmployeeCase/Reaction、代码员工事件判断、provider credential、大日志、跨 target 启动 union、Task/DE retry state、常驻无订阅轮询                            |
+| execution-contract       | Agent 契约托管端口 create/update 规整命令；无业务 mutation command                                                                     | list/get 只返窄 `RuntimeView`；完整 exact guide 为平台校验后的序列化只读文档                                   | offered `ExecutionContractParticipant`：get/list/validateExecutor/validateAgentCandidates/validateEnvelope(input/output)；required exact resource projection 与 Program fixture ports                                                                                                                                                                                                                                                   | `ExecutionContractRef/RuntimeView/ValidationReceipt`、固定 Agent/Script port 名与 exact-envelope validator；注册只传 ref+guideJson | EmployeeCase/WorkItem 路由、开发 schema literal、retry policy、完整 guide mega DTO、Agent/Workflow 写模型、Script runtime、Git/Token/Effect 实现                                                |
+| development-automation   | `Launch/Retry/Cancel/Resume/HandoffMission`、`SubmitMissionAnswers/ConfirmNoChange/AttachMergeRequest` 与四类 config 的 typed commands | actor-filtered `PreviewMissionAdmission` 与 mission/activity/config/readiness/evidence projections             | required `AgentActionExecutionPort` / `RequirementAcquisitionPort` / `RequirementInteractionPort` / `MergeRequestFactsPort` / `PipelineEvidencePort` / `RepositoryDeliveryPort` 等 use-case-specific SPI；provider adapter 只实现自己的一小面                                                                                                                                                                                           | `DevelopmentMissionRef/ActionRunRef/AgentAttemptRef`；`MissionInvalidated` 与 effect receipt/invalidate，正文/日志不进 event       | Task/NodeRun row、Git/code-host credential、absolute path/URL、raw prompt/log、provider SDK、legacy code-round writer、26-option service locator                                                |
+| resource-catalog/core    | 无 universal CRUD；各 aggregate 自己 typed command                                                                                     | 横向 `ResourceCatalogQuery` 只返 summary；完整查询归六子模块                                                   | purpose-specific `TaskExecutionResourceSnapshotInTx` / `IntentApplyResourceParticipantInTx` / `IntegrationTriggerResourceSnapshotInTx`、actor-filtered `ResourceBlockerQuery` / `SkillProvenanceVisibilityQuery`                                                                                                                                                                                                                        | internal receipt events / public invalidate；`ResourceRef/VersionedResourceRef/ResourceSummary`                                    | `ACL_TABLES`、owner/grant row、generic repository、六类 detail union                                                                                                                            |
+| resource 子模块          | 每类明确 `Create/Update/Rename/Delete/UpdateAcl` 的实际集合                                                                            | 每类 typed list/detail/filter                                                                                  | 仅真实跨域需要的 participant，如 `SkillVersionParticipantInTx`                                                                                                                                                                                                                                                                                                                                                                          | kind-specific DTO/event payload                                                                                                    | 其他资源的不变量、`switch(resourceType)` CRUD                                                                                                                                                   |
+| resource-catalog/package | typed package inspect/admit/apply command；不是六类 universal CRUD                                                                     | package preview/receipt                                                                                        | `ResourcePackageApplyProvider` 消费六子模块 typed package mutation participants                                                                                                                                                                                                                                                                                                                                                         | package ref/version/opaque receipt                                                                                                 | resource row、generic repository、AtomicApply journal/claim                                                                                                                                     |
+| collaboration            | `SubmitClarifyAnswers/SubmitReviewDecision/SubmitQuestionAnswers`                                                                      | `GetGateView/ListPendingGateSummaries`                                                                         | implements task required preparation/open ports；consumes task-offered `TaskDecisionParticipantInTx`；module transaction port internal                                                                                                                                                                                                                                                                                                  | `GateDecisionCommitted` / `GateInvalidated`；公开 view 不含 continuation                                                           | document row、ContinuationIntent、resume failure、worker id、terminal closer command                                                                                                            |
+| knowledge-evolution      | `StartFusion/ApproveFusion/RejectFusion/RetryFusion/RestoreSkillVersion`                                                               | `GetFusionView/ListFusionSummaries/GetSkillProvenance`                                                         | consumes task launch + skill/memory tx participants；对外仅 versioned recovery/provenance query                                                                                                                                                                                                                                                                                                                                         | internal apply/provenance receipt / `FusionInvalidated`；`FusionRef/FusionProvenanceRef`                                           | memory/skill row、task internal、raw artifact/journal、module transaction scope                                                                                                                 |
+| memory                   | `Create/PatchContent/Move/Promote/Archive/Unarchive/Delete/RetryFailedDistill/CancelPendingDistill`                                    | typed visible list/detail + distill list/job/session view（注入正文不是 public query）                         | implements task required `TaskMemoryInjectionPort`；offered、KE-only `MemoryMembershipParticipantInTx` / `MemoryProvenanceVisibilityQuery`；consumes RC/SC scope visibility filters + task/collaboration distillation snapshots + memory-required distiller execution                                                                                                                                                                   | internal membership receipt / `MemoryInvalidated` / `DistillJobInvalidated`；exact v1 injection snapshot 只给 task port            | prompt consumer list、author/ACL row、fusion engine、raw distill queue/runtime handle                                                                                                           |
+| intent                   | `StartSession/SubmitTurn/UpdateWorkingSet/ApplyDraft/ArchiveSession`                                                                   | `GetJourney/GetSessionView`                                                                                    | 通常不向外导 port；内部消费 catalog/apply contract                                                                                                                                                                                                                                                                                                                                                                                      | aggregate-bound closed state fact / `IntentSessionInvalidated {}`；`IntentSessionRef`                                              | changeset journal/artifact、resource repository、agent runner handle                                                                                                                            |
+| integration              | webhook endpoint/trigger rule/schedule 的 typed commands 与 trigger admission                                                          | delivery/webhook-rule typed queries                                                                            | consumes task launch-intent participant；implements task required `CodeHostExecutionPort` 与 Event Center provider/observer adapters                                                                                                                                                                                                                                                                                                    | internal `DeliveryCommitted` / `DeliveryInvalidated`；RFC-292 task launch projection                                               | 来源中性 EventResponseRule、webhook secret、raw credential、Task deps、server/Hono handler、generic operation catalog                                                                           |
+| source-control           | repo/group/repository-credential 的真实 typed commands                                                                                 | repo-owned UI summary/tree/file；task workspace query 不在此授权                                               | offered `PublicRepositorySourceSealPort` / `RepositoryLaunchSnapshotInTx` / `RepositoryPreparationParticipant` / `WorkspaceMaterializationParticipant` / `RepositoryActionParticipant` / bounded `WorkspaceContentParticipant` / memory-only `RepositoryScopeAuthorizationInTx`；task infrastructure adapter 实现 task required ports                                                                                                   | opaque `RepositoryRef/RepositoryCredentialRef/SealedPublicRepositorySourceRef/WorkspaceRef/SnapshotRef`；revision-only events      | one-shot seal sink 之外的 raw URL、任何 credential-bearing URL、task membership、absolute path、credential/token、code-host API connection、git client、mutable worktree object、OwnershipToken |
+| runtime-management       | runtime profile/admin commands                                                                                                         | inventory/status/probe/diagnostic typed views                                                                  | offered `RuntimeSelectionParticipantInTx`；process/runtime mechanism 属 platform contract                                                                                                                                                                                                                                                                                                                                               | internal capability fact / public invalidate；opaque frozen runtime ref                                                            | provider secret、process handle、ambient/full config、vendor SDK object                                                                                                                         |
+| workspace-insight        | idempotent `StartChangeNarrative/CancelInsightJob`；纯结构查询不伪装 mutation                                                          | `GetInsightStatus/GetInsightArtifact/GetStructuralDiff/GetSymbols`                                             | consumes task/source-control/runtime purpose-specific immutable snapshot participants；durable job claim internal                                                                                                                                                                                                                                                                                                                       | `InsightArtifactReady` / `InsightInvalidated`；bounded result 或 `InsightArtifactRef`                                              | repo path、DB client、live worktree mutation、unbounded file bodies、process/model handle                                                                                                       |
+| system-operations        | admin `RequestBackup/StageRestore/ActivateRestore` 仅做 orchestration；limits/GC job 仍归 task/source-control owner                    | `GetRecoveryStatus/GetRecoveryOperationDiagnostics`，只看 platform coordinator 自己的 operation                | consumes platform backup/restore coordinator；不取得 contributor registry                                                                                                                                                                                                                                                                                                                                                               | safe phase/status invalidate；`BackupRef/RestoreRef/DaemonGeneration`                                                              | public liveness、跨业务统计、任何业务事实表、通用跨库 repository、task limit/GC policy、把 health/GC 收成 misc domain                                                                           |
+| platform/contracts       | 无业务 command                                                                                                                         | 无业务 query                                                                                                   | `Transaction/Clock/Id/Event/Audit/Config/Job/AtomicApply` 中性机制                                                                                                                                                                                                                                                                                                                                                                      | 只含中性 envelope/opaque refs                                                                                                      | Actor/resource/task policy、业务 DTO、任何 module implementation                                                                                                                                |
 
 `development-automation` 的 committed aggregate、单写与模块内层次是 RFC-310 的受保护行为基线，但上表描述的是**尚未完成的最终
-边界**。当前 `public/{commands,queries,participants,events}` 为空、`public/types` 只导出空集，声明的
-`composition/required-ports.ts` 没有 production consumer；真实运行依赖仍集中在带 22 个 optional port 的
+边界**。当前 `public/{commands,queries,participants,events}` 为空，`public/types` 只导出 external-approval subject 与
+status-changed event ref；声明的 `composition/required-ports.ts` 没有 production consumer；真实运行依赖仍集中在带 26 个 optional port 的
 `application/ports/ReconcilerPorts`，并跨 seam 传 path/URL/prompt/callback。W4-E8/W5 必须先让上表合同成为唯一生产事实，
 再删除 dead/duplicate contract；不得把空 public 文件或专项 architecture lock 当作 cutover evidence。
 
@@ -490,6 +576,585 @@ bootstrap/platform。
 
 以下接口锁住最容易再次长成 mega-context 的跨域接缝。省略的内部字段不得由实现“顺便”加进 public DTO。
 
+Event Center 的自动化启动先拆成两条互不重叠的 required SPI。Rule owner、delivery/subscription id、rule revision 与
+target digest 只封进 Event Center 铸造的 durable `EventAutomationOriginRef`；provider 不接这些可错绑字段，也不接
+`targetKind` 或 task/case 二选一 union：
+
+```ts
+declare const eventAutomationOriginBrand: unique symbol
+declare const boundedAutomationNameBrand: unique symbol
+declare const boundedAutomationTextBrand: unique symbol
+declare const boundedAutomationInputKeyBrand: unique symbol
+declare const boundedAutomationInputListBrand: unique symbol
+declare const automationMachineFieldIdBrand: unique symbol
+declare const boundedEmployeeTargetValueBrand: unique symbol
+declare const boundedAutomationBodyBrand: unique symbol
+declare const boundedAutomationExternalIdBrand: unique symbol
+declare const boundedEmployeeTargetListBrand: unique symbol
+
+type EventAutomationOriginRef = string & {
+  readonly [eventAutomationOriginBrand]: 'event-delivery+subscription+rule-revision+target-digest-v1'
+}
+type EventAutomationPortId = 'task-automation-work-start.v1' | 'employee-automation-work-start.v1'
+declare const eventAutomationDelegatedContextBrand: unique symbol
+interface EventAutomationDelegatedContext<
+  TPort extends EventAutomationPortId,
+> extends IdempotentCommandContext {
+  readonly [eventAutomationDelegatedContextBrand]: TPort
+  readonly portId: TPort
+  readonly origin: EventAutomationOriginRef
+}
+type BoundedAutomationName = string & {
+  readonly [boundedAutomationNameBrand]: 'trimmed-1..255-code-points'
+}
+type BoundedAutomationText = string & {
+  readonly [boundedAutomationTextBrand]: 'max-64-kib-utf8'
+}
+type BoundedAutomationInputKey = string & {
+  readonly [boundedAutomationInputKeyBrand]: 'trimmed-1..160-code-points'
+}
+type AutomationMachineFieldId = string & {
+  readonly [automationMachineFieldIdBrand]: 'machine-id-1..160'
+}
+type BoundedEmployeeTargetValue = string & {
+  readonly [boundedEmployeeTargetValueBrand]: '1..1000-code-points'
+}
+type BoundedAutomationBody = string & {
+  readonly [boundedAutomationBodyBrand]: '1..2-mib-utf8'
+}
+type BoundedAutomationExternalId = string & {
+  readonly [boundedAutomationExternalIdBrand]: 'trimmed-1..500-code-points'
+}
+interface EventAutomationInputEntryV1 {
+  readonly key: BoundedAutomationInputKey
+  readonly value: BoundedAutomationText
+}
+type EventAutomationInputListV1 = readonly EventAutomationInputEntryV1[] & {
+  readonly [boundedAutomationInputListBrand]: 'unique-key-sorted-max-256'
+}
+
+type TaskAutomationTargetV1 =
+  | {
+      readonly kind: 'workflow'
+      readonly workflow: ResourceRef<'workflow'>
+      readonly name: BoundedAutomationName
+      readonly inputs: EventAutomationInputListV1
+    }
+  | {
+      readonly kind: 'agent'
+      readonly agent: ResourceRef<'agent'>
+      readonly name: BoundedAutomationName
+      readonly description: BoundedAutomationText | null
+      readonly inputs: EventAutomationInputListV1
+    }
+  | {
+      readonly kind: 'workgroup'
+      readonly workgroup: ResourceRef<'workgroup'>
+      readonly name: BoundedAutomationName
+      readonly goal: BoundedAutomationText
+    }
+
+interface TaskAutomationWorkStartV1 {
+  readonly version: 1
+  readonly target: TaskAutomationTargetV1
+  readonly trigger: TriggerContext // RFC-292 canonical exact codec; confidential
+}
+interface TaskAutomationWorkStartReceipt {
+  readonly task: TaskRef
+}
+interface TaskAutomationWorkStartPort {
+  start(
+    ctx: EventAutomationDelegatedContext<'task-automation-work-start.v1'>,
+    input: TaskAutomationWorkStartV1,
+  ): Promise<TaskAutomationWorkStartReceipt>
+}
+
+interface EmployeeAutomationTargetFieldV1 {
+  readonly fieldId: AutomationMachineFieldId
+  readonly value: BoundedEmployeeTargetValue
+}
+type EmployeeAutomationTargetFieldListV1 = readonly EmployeeAutomationTargetFieldV1[] & {
+  readonly [boundedEmployeeTargetListBrand]: 'unique-field-sorted-max-256'
+}
+type EmployeeAutomationIntakeV1 =
+  | { readonly kind: 'body'; readonly value: BoundedAutomationBody }
+  | { readonly kind: 'external-id'; readonly value: BoundedAutomationExternalId }
+
+interface EmployeeAutomationWorkStartV1 {
+  readonly version: 1
+  readonly employee: ExactResourceRef
+  readonly target: EmployeeAutomationTargetFieldListV1
+  readonly intake: EmployeeAutomationIntakeV1
+}
+interface EmployeeAutomationWorkStartReceipt {
+  readonly employeeCase: EmployeeCaseRef
+}
+interface EmployeeAutomationWorkStartPort {
+  start(
+    ctx: EventAutomationDelegatedContext<'employee-automation-work-start.v1'>,
+    input: EmployeeAutomationWorkStartV1,
+  ): Promise<EmployeeAutomationWorkStartReceipt>
+}
+```
+
+两个 `start` 都只接受 event-automation 专用 delegated factory 从 rule owner **当前** authority、durable origin 与闭合 port id
+构造的 branded context；通用 direct/delegated `IdempotentCommandContext` 在类型上都不能代入。Event Center 不传
+`ownerUserId`/permission snapshot，provider 在自己的事务里重验 target 可见、可用与
+launch 权限。幂等 key 由 `EventAutomationOriginRef + target port id` 确定性派生，provider 以 origin 唯一键返回同一 receipt，不能由
+Event Center 另传随机 key。Event Center 在外调前同事务写 target-specific work intent 并 claim epoch；provider 成功后只允许同一
+claim epoch 结算 delivery，crash-after-start 重放得到同一 Task/EmployeeCase，旧 worker 即使拿到 receipt 也不能结算新 claim。
+
+Task 输入只允许已经按 Event Center rule exact codec 物化的 name/description/goal/inputs 与 canonical `TriggerContext`；Employee
+输入只允许 employee ref、最多 256 个唯一 target field 和闭合 intake。`BoundedAutomationBody` 沿用既有 2 MiB 上限，
+`BoundedAutomationExternalId` 使用 employee owner 的 exact external-id codec；切 V2 前必须为超过新 collection budget 的存量 rule
+提供显式兼容/修复报告，不能静默截断。字段分级固定为：origin/ref/revision 为 internal，task inputs/trigger 与 employee target/intake
+为 confidential，receipt 为 internal；raw event payload、rule/delivery/subscription id、template body、Actor、credential、absolute path、
+另一 target 的 ref/receipt 均不得进入 port。两方法分别登记 recursive field consumer、transitive budget、delegated authority 与
+data-class ledger；wrong-target、direct-context substitution、owner 重绑、context origin/key/port mismatch、stale claim、unknown field 与
+超预算变异必须打红。
+
+Task catalog 的接口先锁目录语义，避免“统一入口”重新长成万能 task service：
+
+```ts
+type TaskSourceId = 'agent' | 'workflow' | 'workgroup' | 'digital-employee'
+type ActiveExecutionKind = 'workflow' | 'agent' | 'workgroup'
+type PersistedExecutionKind = ActiveExecutionKind | 'code-round' // decode/history only; new admission rejects it
+
+declare const pageSizeBrand: unique symbol
+declare const searchTextBrand: unique symbol
+declare const catalogCursorBrand: unique symbol
+declare const sourceCursorBrand: unique symbol
+declare const taskCatalogSourceIdListBrand: unique symbol
+declare const taskCatalogSourceItemsBrand: unique symbol
+declare const taskCatalogAggregateItemsBrand: unique symbol
+type BoundedPageSize = number & { readonly [pageSizeBrand]: 'integer-1..100' }
+type BoundedSearchText = string & { readonly [searchTextBrand]: 'trimmed-max-100-code-points' }
+type TaskCatalogCursor = string & {
+  readonly [catalogCursorBrand]: 'hmac-authenticated-task-catalog-cursor-v2'
+}
+type TaskCatalogSourceCursor = string & { readonly [sourceCursorBrand]: 'source-owned-cursor-v1' }
+
+type TaskCatalogSourceIdListV2 = readonly TaskSourceId[] & {
+  readonly [taskCatalogSourceIdListBrand]: 'unique-sorted-max-4'
+}
+type NonEmptyTaskCatalogSourceIdListV2 = readonly [TaskSourceId, ...TaskSourceId[]] &
+  TaskCatalogSourceIdListV2
+
+interface TaskCatalogItemRef<TId extends TaskSourceId = TaskSourceId> {
+  readonly sourceId: TId
+  readonly id: string
+}
+
+type TaskCatalogView = 'all' | 'active' | 'attention' | 'finished'
+type TaskCatalogScope = 'mine' | 'shared' | 'all'
+type TaskCatalogOrigin = 'all' | 'manual' | 'scheduled' | 'event' | 'webhook' | 'api'
+type TaskCatalogStatusSelection =
+  | { readonly kind: 'all' }
+  | { readonly kind: 'only'; readonly statuses: readonly [TaskStatus, ...TaskStatus[]] }
+
+interface TaskCatalogFiltersV2 {
+  readonly view: TaskCatalogView
+  readonly search:
+    | { readonly kind: 'none' }
+    | { readonly kind: 'text'; readonly text: BoundedSearchText }
+  readonly statuses: TaskCatalogStatusSelection
+  readonly scope: TaskCatalogScope
+  readonly origin: TaskCatalogOrigin
+}
+
+type TaskCatalogSourceSelection =
+  | { readonly kind: 'all' }
+  | { readonly kind: 'only'; readonly sourceIds: NonEmptyTaskCatalogSourceIdListV2 }
+
+type TaskCatalogPageRequest =
+  | { readonly kind: 'first'; readonly perSourceLimit: BoundedPageSize }
+  | {
+      readonly kind: 'after'
+      readonly cursor: TaskCatalogCursor
+      readonly perSourceLimit: BoundedPageSize
+    }
+
+type TaskCatalogHierarchyRequest =
+  | { readonly kind: 'root' }
+  | { readonly kind: 'children'; readonly parent: TaskCatalogItemRef }
+
+interface TaskCatalogQueryV2 {
+  readonly sources: TaskCatalogSourceSelection
+  readonly page: TaskCatalogPageRequest
+  readonly hierarchy: TaskCatalogHierarchyRequest
+  readonly filters: TaskCatalogFiltersV2
+}
+
+interface TaskCatalogLocalizedTextV2 {
+  readonly 'zh-CN': string
+  readonly 'en-US': string
+}
+
+type TaskCatalogOwnerV2 =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'label'; readonly label: string }
+  | {
+      readonly kind: 'user'
+      readonly userRef: UserRef
+      readonly username: string
+      readonly displayName: string
+    }
+
+interface TaskCatalogItemV2<TId extends TaskSourceId = TaskSourceId> {
+  readonly ref: TaskCatalogItemRef<TId>
+  readonly display: {
+    readonly title: string
+    readonly subject: {
+      readonly resourceRef: string | null
+      readonly label: TaskCatalogLocalizedTextV2
+    }
+    readonly targetLabel: string | null
+  }
+  readonly state: {
+    readonly status: TaskStatus
+    readonly detail: TaskCatalogLocalizedTextV2 | null
+    readonly failureCode: FailureCode | null
+    readonly safeErrorSummary: string | null
+  }
+  readonly clock: {
+    readonly startedAt: number
+    readonly updatedAt: number
+    readonly finishedAt: number | null
+    readonly runningMs: number
+    readonly runningSince: number | null
+  }
+  readonly owner: TaskCatalogOwnerV2
+  readonly counts: {
+    readonly children: number
+    readonly repositories: number
+    readonly openAlerts: number
+  }
+  readonly scheduledTask:
+    | { readonly kind: 'none' }
+    | { readonly kind: 'ref'; readonly task: TaskRef }
+  readonly hierarchy: {
+    readonly parent:
+      | { readonly kind: 'none' }
+      | { readonly kind: 'ref'; readonly item: TaskCatalogItemRef }
+    readonly invocationDepth: number
+    readonly matchKind: 'self' | 'context'
+    readonly parentAvailability: 'none' | 'visible' | 'unavailable'
+    readonly qualifyingChildCount: number
+    readonly matchingDescendantCount: number
+    readonly branchStartedAt: number
+  }
+}
+
+type TaskCatalogSourceItemListV2<TId extends TaskSourceId> = readonly TaskCatalogItemV2<TId>[] & {
+  readonly [taskCatalogSourceItemsBrand]: 'length-lte-requested-limit'
+}
+type TaskCatalogAggregateItemListV2 = readonly TaskCatalogItemV2[] & {
+  readonly [taskCatalogAggregateItemsBrand]: 'length-max-400'
+}
+
+interface TaskCatalogFacetsV2 {
+  readonly all: number
+  readonly active: number
+  readonly attention: number
+  readonly finished: number
+}
+
+interface TaskCatalogSourceAvailabilityV2 {
+  readonly canList: boolean
+  readonly canCreate: boolean
+}
+
+interface TaskCatalogSourceDescriptorV2<
+  TId extends TaskSourceId = TaskSourceId,
+> extends TaskCatalogSourceAvailabilityV2 {
+  readonly sourceId: TId
+  readonly order: number
+  readonly hierarchy: TaskCatalogHierarchyCapability
+  readonly catalogPath: string
+  readonly detailPath: string
+  readonly labelKey: string
+  readonly descriptionKey: string
+}
+
+interface TaskSourceListV2 {
+  readonly schemaVersion: 2
+  readonly sources: readonly TaskCatalogSourceDescriptorV2[]
+}
+
+interface TaskCatalogPageV2 {
+  readonly schemaVersion: 2
+  readonly sourceIds: TaskCatalogSourceIdListV2
+  readonly items: TaskCatalogAggregateItemListV2
+  readonly nextCursor: TaskCatalogCursor | null
+  readonly facets: TaskCatalogFacetsV2
+}
+
+type TaskCatalogSourcePageRequest =
+  | { readonly kind: 'first'; readonly limit: BoundedPageSize }
+  | {
+      readonly kind: 'after'
+      readonly cursor: TaskCatalogSourceCursor
+      readonly limit: BoundedPageSize
+    }
+
+type TaskCatalogHierarchyCapability =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'parents-from'; readonly sourceIds: NonEmptyTaskCatalogSourceIdListV2 }
+
+interface TaskCatalogSourceQueryV2 {
+  readonly filters: TaskCatalogFiltersV2
+  readonly hierarchy: TaskCatalogHierarchyRequest
+  readonly page: TaskCatalogSourcePageRequest
+}
+
+interface TaskCatalogSourcePageV2<TId extends TaskSourceId> {
+  readonly items: TaskCatalogSourceItemListV2<TId>
+  readonly nextCursor: TaskCatalogSourceCursor | null
+  readonly facets: TaskCatalogFacetsV2
+}
+
+interface TaskCatalogQueryService {
+  listSources(ctx: QueryContext): Promise<TaskSourceListV2>
+  list(ctx: QueryContext, input: TaskCatalogQueryV2): Promise<TaskCatalogPageV2>
+}
+
+// Consumer-owned required SPI. Provider adapters do current-authority filtering in their own owner context.
+interface TaskCatalogSource<TId extends TaskSourceId> {
+  readonly sourceId: TId
+  readonly hierarchy: TaskCatalogHierarchyCapability
+  availability(authority: RequestAuthority): Promise<TaskCatalogSourceAvailabilityV2>
+  list(
+    authority: RequestAuthority,
+    input: TaskCatalogSourceQueryV2,
+  ): Promise<TaskCatalogSourcePageV2<TId>>
+}
+```
+
+V2 只含 catalog UI 已登记 consumer 的 stable ref、display/status/clock/owner summary、hierarchy、facets 与 cursor；不含 source row、
+完整 Task/EmployeeCase view、JSON 字符串、permission name/set/snapshot 或启动参数。`availability` 由每个 source owner 按 current
+authority 返回两个布尔能力，Catalog 不复制权限 switch；`canCreate` 只控制目录 affordance，启动仍调用来源 command。现有 v1 wire
+中 `canList=false && canCreate=false` 的来源继续从 listSources 结果省略，且结果不回传 permission 名称；
+先按 recursive leaf ledger 对拍再经 versioned adapter 迁 V2，不借“最小化”静默删兼容字段。Catalog aggregate cursor 的 exact
+codec 内含 `schemaVersion/queryHash/subjectBinding/四来源 cursor map/keyId/mac`；它是 server-issued HMAC authenticated envelope，
+不是可改写的 base64 JSON；先验 codec/version/keyId/MAC，再对拍 subject/query，轮换期只接受 current + bounded previous key。
+签名 key 只能经 platform secret use-port 使用，永不进入 DTO/log。`only.sourceIds` 与结果 sourceIds 由 strict codec 铸为
+unique/sorted/max-4，重复、未知或超量在调用 provider 前拒绝。aggregate `perSourceLimit` 是每个被选来源的独立上限，
+source query 再映射成自己的 `limit`，因此一页最大 item 数为 `selectedSourceCount × perSourceLimit`（当前绝对上限 400）；Catalog
+对每个 provider receipt 重验 `items.length <= requested limit`，over-return 时 fail-closed 且不签发/推进 aggregate cursor；通过后返回
+所有已推进 source page 的 item，不再做会越过未返回项的二次全局截断。decode 后必须用 canonical V2 query hash 与
+`ctx.authority.subjectRef` 对拍，mismatch 在调用 source 前 fail-closed，cursor 本体不暴露给 provider。Hierarchy capability 是来源注册合同：task-execution 的 agent/workflow/workgroup
+adapter 都声明 `parents-from` 这三个 source，因而 workflow 父任务可以展开 agent/workgroup 异源 child；digital-employee 声明
+`none`，只接受 root。Catalog 只把 child query 发给显式接受该 parent source 的 adapter，provider act 前重复校验；不能把 parent
+强绑成 child adapter 自己的 sourceId。Availability receipt 不重复携带 sourceId，避免真 authority 配错来源。
+Catalog 启动时校验四个 source id 唯一且齐全；新增来源必须
+同时更新 closed union、provider adapter、wire codec、consumer/field ledger。`TaskSourceId` 只回答“目录由谁提供”，不得用来扩张
+`ExecutionKind`、`NodeKind` 或绕过来源 owner 的 typed launch command。
+
+TaskExecution 另独占 persisted `TaskCatalogVisibility = 'public' | 'internal'`：普通 root 默认 `public`，内部执行 adapter 只能
+显式铸 `internal`，call child 在同一 task INSERT 事务读取并继承 parent 值；migration `0203` 递归回填既有数字员工内部任务树。
+该字段是 catalog membership，不是权限 grant；internal 任务仍可在既有 task authority 下按 exact ref 查看。`TaskCatalogSource.list`
+不得接 caller-supplied visibility，provider adapter 必须恒定只投影 `public`，facets/hierarchy/cursor 也在同一 predicate 内计算，避免
+只隐藏 item 却从 count/parent/cursor 泄漏内部执行。当前 landed 行为只覆盖 `/api/task-catalog` 及其 `/tasks` 目录 consumer；legacy
+`GET /api/tasks` 与首页 Running/RecentlyDone 仍走未过滤 compatibility list。终局要么把目录型 consumer 全切 Catalog，要么把确需
+包含 internal 的运维视图明确归 task-execution actor-filtered admin query + 独立 DTO；绝不能据此声称“所有任务列表已隐藏 internal”。
+
+DigitalEmployee → TaskExecution 的 Reaction 执行也必须收成一个 consumer-owned、无 raw JSON/path 的精确 required SPI。目标合同是：
+
+```ts
+declare const reactionOperationBrand: unique symbol
+declare const reactionExecutionBrand: unique symbol
+declare const reactionRoundBrand: unique symbol
+declare const reactionPlanBrand: unique symbol
+declare const reactionAccessBrand: unique symbol
+declare const reactionHashBrand: unique symbol
+declare const reactionInputArtifactBrand: unique symbol
+declare const reactionWorkspaceBrand: unique symbol
+declare const reactionPolicyBrand: unique symbol
+declare const reactionOutputArtifactBrand: unique symbol
+declare const reactionDiagnosticsBrand: unique symbol
+declare const reactionStopReceiptBrand: unique symbol
+declare const reactionReviewArtifactBrand: unique symbol
+declare const reactionReviewApprovalBrand: unique symbol
+declare const reactionRetryFeedbackBrand: unique symbol
+declare const programArtifactBrand: unique symbol
+declare const platformWorkItemBrand: unique symbol
+declare const collaborationWorkItemBrand: unique symbol
+declare const reactionSafeCodeBrand: unique symbol
+declare const reactionClaimEpochBrand: unique symbol
+declare const authorityRevisionBrand: unique symbol
+
+interface EmployeeCaseRef {
+  readonly id: string
+  readonly revision: number // exact codec: positive integer
+}
+interface ExecutionContractRef {
+  readonly contractId: string
+  readonly version: number // exact codec: positive integer
+}
+type WorkspaceFailureClass = 'boundary' | 'semantic' | 'infrastructure'
+type ReactionSafeCode = string & {
+  readonly [reactionSafeCodeBrand]: 'allowlisted-reaction-safe-code-v1'
+}
+type ReactionClaimEpoch = number & {
+  readonly [reactionClaimEpochBrand]: 'positive-monotonic-reaction-claim-epoch'
+}
+type AuthorityRevision = number & {
+  readonly [authorityRevisionBrand]: 'positive-current-authority-revision'
+}
+
+type ReactionExecutionOperationRef = string & {
+  readonly [reactionOperationBrand]: 'digital-employee-reaction-operation-v1'
+}
+type ReactionExecutionRef = string & {
+  readonly [reactionExecutionBrand]: 'digital-employee-reaction-execution-v1'
+}
+type ReactionRoundRef = string & { readonly [reactionRoundBrand]: 'reaction-round-v1' }
+type ReactionRequestHash = string & {
+  readonly [reactionHashBrand]: 'sha256-canonical-reaction-request-v1'
+}
+type ReactionInputArtifactRef = string & {
+  readonly [reactionInputArtifactBrand]: 'validated-content-addressed-reaction-input-v1'
+}
+type FrozenReactionWorkspaceRef = string & {
+  readonly [reactionWorkspaceBrand]: 'authorized-frozen-reaction-workspace-v1'
+}
+type FrozenReactionExecutionPolicyRef = string & {
+  readonly [reactionPolicyBrand]: 'frozen-reaction-execution-policy-v1'
+}
+type ReactionOutputArtifactRef = string & {
+  readonly [reactionOutputArtifactBrand]: 'validated-content-addressed-reaction-output-v1'
+}
+type ReactionDiagnosticsRef = string & {
+  readonly [reactionDiagnosticsBrand]: 'actor-filtered-reaction-diagnostics-v1'
+}
+type ReactionExecutionStopReceipt = string & {
+  readonly [reactionStopReceiptBrand]: 'reaction-execution-stopped-v1'
+}
+type ReactionReviewArtifactRef = string & {
+  readonly [reactionReviewArtifactBrand]: 'actor-filtered-reaction-review-artifact-v1'
+}
+type ReactionReviewApprovalRef = string & {
+  readonly [reactionReviewApprovalBrand]: 'reaction-review-approval-v1'
+}
+type ReactionRetryFeedbackArtifactRef = string & {
+  readonly [reactionRetryFeedbackBrand]: 'sanitized-content-addressed-reaction-retry-feedback-v1'
+}
+type ProgramArtifactRef = string & { readonly [programArtifactBrand]: 'program-artifact-v1' }
+type PlatformWorkItemRef = string & { readonly [platformWorkItemBrand]: 'platform-work-item-v1' }
+type CollaborationWorkItemRef = string & {
+  readonly [collaborationWorkItemBrand]: 'collaboration-work-item-v1'
+}
+
+type ReactionImplementationV1 =
+  | { readonly kind: 'agent'; readonly agent: ResourceRef<'agent'> }
+  | { readonly kind: 'workflow'; readonly workflow: ResourceRef<'workflow'> }
+  | { readonly kind: 'program'; readonly program: ProgramArtifactRef }
+  | { readonly kind: 'system'; readonly workItem: PlatformWorkItemRef }
+  | { readonly kind: 'collaboration'; readonly workItem: CollaborationWorkItemRef }
+
+interface ReactionExecutionRequestV1 {
+  readonly version: 1
+  readonly operation: ReactionExecutionOperationRef
+  readonly employeeCase: EmployeeCaseRef
+  readonly reaction: ReactionRoundRef
+  readonly authority: {
+    readonly subject: AuthorizationSubjectRef
+    readonly revision: AuthorityRevision
+  }
+  readonly attempt: {
+    readonly ordinal: number // exact codec: nonnegative integer; initial=0; bounded by frozen policy
+    readonly mode: 'initial' | 'same-scene' | 'fresh-scene'
+    readonly retryFeedback:
+      | { readonly kind: 'none' }
+      | { readonly kind: 'artifact'; readonly ref: ReactionRetryFeedbackArtifactRef }
+  }
+  readonly implementation: ReactionImplementationV1
+  readonly executionContract: ExecutionContractRef
+  readonly input: ReactionInputArtifactRef
+  readonly workspace: FrozenReactionWorkspaceRef
+  readonly policy: FrozenReactionExecutionPolicyRef
+  readonly requestHash: ReactionRequestHash
+}
+
+type PreparedReactionExecutionV1 = DeepReadonlyJson<ReactionExecutionRequestV1> & {
+  readonly [reactionPlanBrand]: 'factory-built-deep-frozen-reaction-request-v1'
+}
+
+// Non-serializable live capability; factory binds the exact case/reaction/operation/execution,
+// current DE claim epoch and authority revision. Callers cannot replace any bound identifier.
+interface ReactionExecutionAccessV1 {
+  readonly [reactionAccessBrand]: 'current-reaction-execution-access-v1'
+  readonly operation: ReactionExecutionOperationRef
+  readonly execution: ReactionExecutionRef
+  readonly employeeCase: EmployeeCaseRef
+  readonly reaction: ReactionRoundRef
+  readonly authority: {
+    readonly subject: AuthorizationSubjectRef
+    readonly revision: AuthorityRevision
+  }
+  readonly claimEpoch: ReactionClaimEpoch
+}
+
+interface ReactionExecutionLaunchReceiptV1 {
+  readonly execution: ReactionExecutionRef
+}
+
+type ReactionExecutionSnapshotV1 =
+  | { readonly kind: 'pending' }
+  | { readonly kind: 'running' }
+  | { readonly kind: 'completed'; readonly output: ReactionOutputArtifactRef }
+  | {
+      readonly kind: 'failed'
+      readonly errorClass: WorkspaceFailureClass
+      readonly safeCode: ReactionSafeCode
+      readonly diagnostics: ReactionDiagnosticsRef
+    }
+  | { readonly kind: 'stopped'; readonly receipt: ReactionExecutionStopReceipt }
+
+type ReactionHumanReviewSnapshotV1 =
+  | { readonly kind: 'not-applicable' }
+  | { readonly kind: 'planning' }
+  | { readonly kind: 'waiting'; readonly artifact: ReactionReviewArtifactRef }
+  | { readonly kind: 'approved'; readonly approval: ReactionReviewApprovalRef }
+  | {
+      readonly kind: 'failed'
+      readonly safeCode: ReactionSafeCode
+      readonly diagnostics: ReactionDiagnosticsRef
+    }
+
+// Owned by digital-employee/composition/required-ports; one TE provider adapter implements all methods.
+interface ReactionExecutionPortV1 {
+  launch(input: PreparedReactionExecutionV1): Promise<ReactionExecutionLaunchReceiptV1>
+  inspect(access: ReactionExecutionAccessV1): Promise<ReactionExecutionSnapshotV1>
+  inspectHumanReview(access: ReactionExecutionAccessV1): Promise<ReactionHumanReviewSnapshotV1>
+  cancel(access: ReactionExecutionAccessV1): Promise<ReactionExecutionStopReceipt>
+}
+```
+
+`PreparedReactionExecutionV1` 只能由 DigitalEmployee 的 allowed factory 在当前 Case/Reaction claim 与 current delegated authority 下生成：exact codec 先冻结
+implementation、ExecutionContract、content-addressed input、authorized workspace 与 execution policy，再 canonical hash、deep-freeze；外部
+caller/route/bootstrap/TaskExecution 均不能 object-literal、spread-rewrap 或 cast 铸造。`operation` 对同一个逻辑 Reaction attempt 稳定，
+technical retry/takeover/replay 复用同一个 operation 并得到同一个 `ReactionExecutionRef`；只有用户或 policy 创建新的逻辑 attempt 才铸新
+operation。provider 在首次 effect 前按 `authority.subject + authority.revision` 重建 current authority，并在 record-before-act journal 上对拍
+operation + requestHash；同 operation 不同 hash、不同 case/reaction/subject 或过期 access capability 都 fail-closed。已成功启动后的纯
+receipt replay 不重新执行外部 effect；若 authority 已撤销且尚未 act，则拒绝并由 DE owner 结算该 attempt。
+
+行为兼容固定为 0-based：`initial` 必须 `ordinal=0 + retryFeedback:none`；`same-scene/fresh-scene` 必须携与该 attempt 绑定的
+sanitized/content-addressed retry-feedback artifact。artifact 保留现有 `previousError` 生成纠错提示所需的 safe 信息，但 raw error/detail
+不跨 required port；mode/ordinal/feedback mismatch、跨 attempt 复用或 artifact digest 不符在 provider effect 前拒绝。
+
+TaskExecution provider adapter 只把 closed implementation/ref/artifact 映射进自己的 execution command，并在服务端强制
+`TaskCatalogVisibility='internal'`、持久化 Case/Reaction provenance；DE 不能传 TaskRef、visibility、workspace path、tool credential 或
+provider config。输出正文、plan、review、error detail 与日志只落 content-addressed/actor-filtered artifact，由 DE query 再授权读取；port
+只返 tagged state、safe code 与 opaque ref。`inspectHumanReview` 永远存在，不适用时返回 `not-applicable`，禁止 optional method/fallback。
+
+启动 liveness gate 要求 `ReactionExecutionPortV1` 恰有一个 TE provider adapter、四个 method 全实现、optional method=0；唯一允许的源码
+implementation edge 是 TE provider adapter → DE-owned required SPI。切换时只切 bootstrap binding，不并存双 writer；旧
+`DigitalEmployeeExecutionParticipant` facade 保留到唯一 production consumer=0 后删除。回滚只回 binding，已创建的 execution/task row
+继续由新 owner forward-converge。wrong brand/hash/operation reuse、nested mutation、stale claim/access、非 internal stamp、raw JSON/path/
+Actor 泄漏、optional fallback、重复 launch 与 stop/complete 竞态均须有变异测试；同刀删除 DE→TE public participant import 和 TE→DE
+`WorkspaceFailureClass` public/required reverse import，consumer-method/recursive-field ledger 必须归零。
+
 ```ts
 // identity-access owns request/delegated authority; each platform worker family owns its effect capability factory.
 declare const idempotencyKeyBrand: unique symbol
@@ -501,15 +1166,25 @@ declare const currentAuthorityBrand: unique symbol
 declare const requestAuthorityBrand: unique symbol
 interface RequestAuthority {
   readonly [requestAuthorityBrand]: 'current-request-authority'
+  readonly subjectRef: AuthorizationSubjectRef // factory-bound; context has no replaceable actorRef
 }
 
 interface CurrentAuthorityInTx {
   readonly [currentAuthorityBrand]: 'current-authority-in-live-tx'
+  readonly subjectRef: AuthorizationSubjectRef // same live tx binding; never a permissions snapshot
 }
+
+type DelegatedAuthoritySource =
+  | 'schedule'
+  | 'webhook'
+  | 'call-workflow'
+  | 'call-workgroup'
+  | 'code-host'
+  | 'event'
 
 interface DelegatedAuthorityResolver {
   resolve(
-    source: 'schedule' | 'webhook' | 'call-workflow' | 'call-workgroup' | 'code-host',
+    source: DelegatedAuthoritySource,
     subject: AuthorizationSubjectRef,
   ): Promise<DelegatedAuthorityRef> // subject active/current effective permissions rebuilt here
 }
@@ -533,9 +1208,17 @@ interface DirectOperationContextFactory {
 interface DelegatedOperationContextFactory {
   fromDurableAttempt(
     authority: DelegatedAuthorityRef,
-    source: 'schedule' | 'webhook' | 'call-workflow' | 'call-workgroup' | 'code-host',
+    source: Exclude<DelegatedAuthoritySource, 'event'>,
     attempt: DurableSourceAttemptRef,
   ): IdempotentCommandContext
+}
+
+interface EventAutomationDelegatedContextFactory {
+  fromOrigin<TPort extends EventAutomationPortId>(
+    authority: DelegatedAuthorityRef,
+    origin: EventAutomationOriginRef,
+    portId: TPort,
+  ): EventAutomationDelegatedContext<TPort>
 }
 
 interface SystemEffectContextFactory<TId extends SystemEffectId> {
@@ -945,11 +1628,13 @@ Identity-access 只重建 subject/delegation authority，不检查 workflow/repo
 `DelegatedAuthorityRef` 不可由业务代码构造、不含 displayName、PAT id 或可持久化 permissions snapshot；展示身份另走
 actor-filtered identity query。
 Context factory 也不做一个 `{actor,transport,initiator,...}` generic constructor：HTTP/MCP/CLI adapter只注入 direct
-factory，integration只注入 delegated factory，bootstrap worker只注入 private system-effect factory。Method 固定允许的
+factory，integration只注入普通 durable-attempt delegated factory，Event Center delivery consumer 只注入
+`EventAutomationDelegatedContextFactory`，bootstrap worker只注入 private system-effect factory。Method 固定允许的
 initiator/source，now/operation/correlation ids 服务端生成；普通 adapter 无法把自己标成 recovery/background/system。
 需要幂等的 direct operation 只有一个 wire key 来源：binding 明确指定 header **或** body 字段，codec 校验长度、字符集后
-铸成可比较、可持久化但 no-log 的 branded string `ValidatedIdempotencyKey`，禁止两处择一或 route 手工 spread。Delegated key 由 durable source attempt ref 确定性
-派生，不能为每次 retry 随机生成。每个 event family/job 只注入自己 private-branded 的
+铸成可比较、可持久化但 no-log 的 branded string `ValidatedIdempotencyKey`，禁止两处择一或 route 手工 spread。普通 delegated key 由
+durable source attempt ref 确定性派生；event-automation key 只由专用 factory 的 origin + closed port id 派生，不能为每次 retry
+随机生成或由 caller 另传。每个 event family/job 只注入自己 private-branded 的
 `SystemEffectAuthority<EffectId>`；`SystemEffectId` 是 owner-qualified、exact-codec 校验的 branded string，账本只持其
 canonical string，authority/claim brand 本身不可序列化。Claim 绑定 consumerId/eventId/claim epoch/target revision，factory
 不接受调用者传入任意 effect string，也不存在可复用的万能 `SystemOperationAuthority`。
@@ -1441,7 +2126,8 @@ interface BootstrapAuthorityContext {
 - transport/initiator 是 inbound binding metadata，不进入所有 application context；只有某个 use case 确有生产 consumer
   时才以 source-specific tagged input 投影。领域代码不得按 `'http'|'mcp'|'background'` 字符串分支授权或恢复语义。
 - HTTP/MCP adapter 只能把已认证 principal 交给 direct factory；webhook/schedule/call 把 durable
-  `AuthorizationSubjectRef + sourceAttempt` 交给 delegated factory。Recovery/continuation/outbox worker 每个只注入自己
+  `AuthorizationSubjectRef + sourceAttempt` 交给普通 delegated factory；Event Center 自动化启动把当前 rule-owner
+  `DelegatedAuthorityRef + EventAutomationOriginRef + closed port id` 交给 event-only factory。Recovery/continuation/outbox worker 每个只注入自己
   family 的 private authority + durable claim，不存在 composition-wide 万能 `SystemOperationAuthority`，业务代码也不能
   公开 `new SystemActor(...)` 逃逸口。
 - `RequestAuthority` / `CurrentAuthorityInTx` 是不可解构、不可序列化的 live capability；调用方不能从中读取或替换 subject、
@@ -1449,14 +2135,15 @@ interface BootstrapAuthorityContext {
   独立 `AuthorizationSubjectRef` / delegated attempt receipt，并连同 operation/correlation/causation 与授权所需 resource refs
   持久化；不能把宽泛权限快照当新授权。不同异步面必须保持当前能力语义，不得泛化成“全部重建原用户”或“全部 SystemActor”：
 
-| 异步面                          | Actor/authority 合同                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------- |
-| schedule、webhook、call 新启动  | 保留各入口 delegated-owner contract：重读 owner active/current effective permissions 与目标可用性 |
-| code-host inbound/continuation  | 由 integration 明确绑定 triggering connection/owner；每次触发重验，不升级成通用 system            |
-| 人工 resume/retry/cancel        | 使用本次请求 current actor，并在 command 内按当前目标重授权                                       |
-| 已运行 task 的内部 continuation | task ownership epoch + 窄化 `SystemEffectCapability`；保留现有 Q6 resume 豁免                     |
-| outbox consumer                 | event family 的窄化 system-effect capability；业务效果仍重读目标/受众当前状态                     |
-| apply converger                 | journal claim epoch + engine capability；receipt 可见性仍按发起 `actorRef` 重授权                 |
+| 异步面                          | Actor/authority 合同                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| schedule、webhook、call 新启动  | 保留各入口 delegated-owner contract：重读 owner active/current effective permissions 与目标可用性      |
+| Event Center 自动化启动         | event-only delegated context 绑定 rule owner、origin、target port；provider 当前重授权并按 origin 幂等 |
+| code-host inbound/continuation  | 由 integration 明确绑定 triggering connection/owner；每次触发重验，不升级成通用 system                 |
+| 人工 resume/retry/cancel        | 使用本次请求 current actor，并在 command 内按当前目标重授权                                            |
+| 已运行 task 的内部 continuation | task ownership epoch + 窄化 `SystemEffectCapability`；保留现有 Q6 resume 豁免                          |
+| outbox consumer                 | event family 的窄化 system-effect capability；业务效果仍重读目标/受众当前状态                          |
+| apply converger                 | journal claim epoch + engine capability；receipt 可见性仍按发起 `actorRef` 重授权                      |
 
 任何改变 Q6、schedule/call 继承或 task owner disabled 后 resume 行为的方案都属于独立能力 RFC。事务内安全决策由
 policy port 按上述 authority 重读当前授权；旧 Actor snapshot 本身不授予新业务写权限。
@@ -2961,28 +3648,29 @@ aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实�
 
 ## 17. 架构不变量与终局指标
 
-| 不变量                                                                                                           |                                                                      当前基线 |                                     终局 |
-| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------: | ---------------------------------------: |
-| backend 值级 SCC                                                                                                 |                                                                             5 |                                        0 |
-| 全仓值级 SCC                                                                                                     |                                                                             7 |                                        0 |
-| `KNOWN_VIOLATIONS`                                                                                               |                                                                            35 |                                        0 |
-| route→DB 值级文件                                                                                                |                                                                            15 |                                        0 |
-| route/MCP 反向 import `server.AppDeps`                                                                           |                                                                            52 |                                        0 |
-| `modules/**` production TS / 已存在 context                                                                      |                                                                       182 / 7 |                    全量 owner/layer 100% |
-| production `setInterval(`                                                                                        |                                                                 28 / 23 files | 由 managed background manifest 解释 100% |
-| production ambient wiring seam                                                                                   |                                                              未建正式机器分母 |                                        0 |
-| 通用 AtomicApply lifecycle 实现                                                                                  |                                                                             2 |                                        1 |
-| resource visible loader/canonical catalog                                                                        |                                            6 route loaders + 2 Intent catalog |                             1 query port |
-| task ownership authority                                                                                         |                                             active Map + lease Map + CAS 约定 |               1 durable epoch/lease port |
-| route human-gate resume saga                                                                                     |                                                                             3 |                                        0 |
-| transaction 内外发事件                                                                                           |                                                                      存量存在 |                                        0 |
-| background work lifecycle（job/worker/local timer）声明覆盖                                                      |                                                                        非完整 |                                     100% |
-| business mutation trusted authority / internal family capability + fence/OCC（适用时）+ audit + classified event |                                                                        非完整 |                                     100% |
-| 跨 context / inbound non-exact import                                                                            | module 间已记账 2；legacy inbound ad-hoc expanded audit 63（正式分母待 W0-R） |                                        0 |
+| 不变量                                                                                                           |                                                                              当前基线 |                                     终局 |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------: | ---------------------------------------: |
+| backend 值级 SCC                                                                                                 |                                                                                     5 |                                        0 |
+| 全仓值级 SCC                                                                                                     |                                                                                     7 |                                        0 |
+| `KNOWN_VIOLATIONS`                                                                                               |                                                                                    35 |                                        0 |
+| route→DB 值级文件                                                                                                |                                                                                    15 |                                        0 |
+| route/MCP 反向 import `server.AppDeps`                                                                           |                                                                                    53 |                                        0 |
+| `modules/**` production TS / 已存在 context                                                                      |                                                                              277 / 11 |                    全量 owner/layer 100% |
+| production `setInterval(`（TypeScript AST call）                                                                 |                                                                         32 / 25 files | 由 managed background manifest 解释 100% |
+| production ambient wiring seam                                                                                   |                                                                      未建正式机器分母 |                                        0 |
+| 通用 AtomicApply lifecycle 实现                                                                                  |                                                                                     2 |                                        1 |
+| resource visible loader/canonical catalog                                                                        |                                                    6 route loaders + 2 Intent catalog |                             1 query port |
+| task ownership authority                                                                                         |                                                     active Map + lease Map + CAS 约定 |               1 durable epoch/lease port |
+| route human-gate resume saga                                                                                     |                                                                                     3 |                                        0 |
+| transaction 内外发事件                                                                                           |                                                                              存量存在 |                                        0 |
+| background work lifecycle（job/worker/local timer）声明覆盖                                                      |                                                                                非完整 |                                     100% |
+| business mutation trusted authority / internal family capability + fence/OCC（适用时）+ audit + classified event |                                                                                非完整 |                                     100% |
+| 跨 context / inbound non-exact import                                                                            | module 间已记账 2；RFC-317 census：inbound 94/28 files、outbound 22（全 application） |                                        0 |
 
 中间指标只能下降，不能通过新增 `KNOWN_VIOLATIONS`、pathNot 或 dynamic import 把违规藏起来。
 
-表中“存量存在/非完整/未设门”不能长期作为基线。W0 必须生成机器可复算 manifests：
+表中“存量存在/非完整/未设门”不能长期作为基线。RFC-317 B0 的三份公共内核 subset 账本是第一批真实沉积，但 W0-R 仍必须生成
+下列机器可复算 canonical manifests，并让 subset 通过稳定外键或生成投影引用它们：
 
 - `mutation-entrypoints.json`：所有生产 mutation 入口为分母，逐项标 request/effect authority、authorization、OCC/fence、tx、audit、event；
 - `tx-external-effects.json`：所有 transaction callback 为分母，列 publish/broadcast/send/FS/process 调用；
@@ -2993,60 +3681,68 @@ aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实�
 - `public-surfaces.json`：exact entrypoint/symbol/method/field/consumer/authority/transaction/data-class/API snapshot；
 - `module-symbol-owners.json`：每个 production file/symbol 的唯一 context+layer，以及 legacy facade 的 target/remove wave。
 
-W0 后上述指标使用确切 `N/M`，每波只能改善；终局按 manifest 证明 `0` 或 `100%`，不能以抽样和人工宣称验收。
+W0-R 后上述指标使用确切 `N/M`，每波只能改善；终局按 manifest 证明 `0` 或 `100%`，不能以抽样和人工宣称验收。
 
 ## 18. 现有能力到目标 owner 的映射
 
-| 现有能力/散点                                              | 目标唯一 owner                                                                              | 迁移波次                                                           | 终局消费方式                                                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `scheduler.ts` frontier / scope / drive                    | `task-execution/engine/task`                                                                | W2、W7                                                             | `TaskEnginePort`                                                                 |
-| RFC-306 branch activation / `skipped` / consumed trace     | `task-execution/domain` + application                                                       | domain slice Done；W2/W7 callpoint/provenance                      | pure activation policy + selected-generation provenance                          |
-| RFC-304/309 code-round writer 与 stage engine              | RFC-310 已退役；历史事实由 compatibility read island 保留                                   | writer retirement Done；retention/W9 contract                      | 新 admission 永久 fail-closed；只保留 versioned history reader                   |
-| RFC-309 `capability_templates` upstream merge              | 临时 `code-capability/template-compatibility`；目标为 DA ActionTemplate/退役                | W4-E8 exact surface + consumer-zero sunset                         | 唯一有账兼容 writer；禁止借此恢复 code-round 或 generic template CRUD            |
-| RFC-310 DevelopmentMission/ActionRun/AgentAttempt          | `development-automation`                                                                    | aggregate/internal layering Done；W4/W5/W9 cutover                 | exact command/query + purpose-specific required/offered ports                    |
-| RFC-310 EmployeeCase/Context/Attention/Reaction/Channel    | `digital-employee`                                                                          | OS vertical slice Done；W4 inbound/public 与 W9 worker 收编        | type-neutral command/query + exact Event/Task/platform participants              |
-| RFC-310 Event catalog/subscription/observer/delivery       | `event-center`                                                                              | OS vertical slice Done；W3 committed event/W4 inbound/W9 job 收编  | idempotent observation + split subscription/delivery/control participants        |
-| RFC-310 executor-neutral input/output contract             | `execution-contract`                                                                        | PR-19 vertical slice Done；W4-E9 required-port/provider cutover    | exact guide + compatibility/fixture/output participant；员工类型只注册 schema    |
-| RFC-310 代码员工职责图、WorkContract 与规则                | `development-automation` code employee type package                                         | type package Done；legacy Mission 冻结新 admission并 drain         | registration contract；通用 OS/UI 无 development 类型分支                        |
-| `7c542729/9ec2a469` mission preview/paging source delta    | `development-automation/application` + query projection                                     | NOT-CLEAN；N0 repair 后才可计 behavior；W4-E8 public-query cutover | preview 与 launch 共用 selector；paging 补复合索引/EXPLAIN 后才称最坏 O(page)    |
-| RFC-310 evidence、decision trace、effect intent、MR care   | `development-automation`                                                                    | behavior Done；W3/W4/W9 mechanism cutover                          | mission tx + typed effect receipt/reconcile                                      |
-| 五条 spawn/iso/merge 装配线                                | `task-execution/engine/kernel/assembly`                                                     | RFC-287 behavior Done；W2-A 归位                                   | `RunAssembly`                                                                    |
-| RFC-287 三项配额 settings surface                          | task-execution quota policy + settings adapter                                              | RFC-287 T10 behavior；W4-E4b/W9-A projection                       | typed command + consumer-specific hot config projection                          |
-| public repository source seal/launchability / `file://`    | source-control policy；task admission consumer                                              | RFC-287 T11 behavior；W4-E1/W5 interface                           | `PublicRepositorySourceSealPort` + `RepositoryLaunchSnapshotInTx`                |
-| repository baseline retry / hard-fail                      | source-control repository-preparation policy                                                | RFC-287 T12 behavior；W4-E1/W5 policy                              | exact retry classifier + hot config projection                                   |
-| task 落库后的 background repo prep + `__repo_prep__`       | task admission/normal execution owner + source-control adapter                              | RFC-287 T13 behavior；W2-B/W4-E1/W5 迁位                           | task/run claim + attempt operation journal → SC participant                      |
-| multipart pre-materialization/upload artifact              | task-execution direct-launch prestage                                                       | W4-E1                                                              | task-owned upload journal；现有 pre-materialized 语义                            |
-| loop/git/fanout                                            | `task-execution/engine/wrapper`                                                             | W2-D；W8 仅可选能力                                                | `WrapperRuntime`                                                                 |
-| agent/script/call/code-host kind 分发                      | `task-execution/engine/node`                                                                | W2-C                                                               | `NodeExecutorRegistry`                                                           |
-| `activeTasks` / `driverLease` / status claim               | `task-execution/application/ports` + infrastructure                                         | P0-D、W2                                                           | `TaskOwnershipPort` + `TaskRuntimeRegistry`                                      |
-| lifecycle writer + hook/watch/budget/WS                    | `task-execution/domain` + `platform/events`                                                 | W3                                                                 | transition + classified committed events                                         |
-| review/clarify/questions route saga                        | `collaboration/application`                                                                 | P0、W3                                                             | human-gate commands + continuation worker                                        |
-| `resourceAcl` / 六类 visible loaders / `ACL_TABLES`        | `resource-catalog`                                                                          | W4                                                                 | public query/command ports；tables 留 SQLite adapter                             |
-| capability/development/integration 的六类新增 ACL kind     | 各 aggregate owner；`resource-catalog/core` 仅共享 ACL/ref 机制                             | RFC-305/309/310 landed；W4 surface cutover                         | owner-specific command/query + common visibility participant                     |
-| HTTP/MCP route 复用、API docs registry                     | inbound adapters + application operation catalog                                            | W4                                                                 | transport mapping → same use case                                                |
-| BundleApply / Intent apply 两台通用恢复机                  | `platform/atomic-apply`                                                                     | P0、W6                                                             | one lifecycle engine + domain providers                                          |
-| memory CRUD/scope/inject/distill                           | `memory`                                                                                    | P0、W4                                                             | typed commands + task injection/distillation ports                               |
-| ResourcePackage/Bundle manifest、admission、receipt        | `resource-catalog/package`                                                                  | W4、W6                                                             | typed package participants + AtomicApply provider                                |
-| fusion aggregate/decision/apply/provenance                 | `knowledge-evolution`                                                                       | P0、W4、W6                                                         | fusion commands + use-case-specific tx + apply provider                          |
-| skill restore 与 memory fused membership                   | `knowledge-evolution`                                                                       | W4、W6                                                             | skill/memory tx participants + exact provenance                                  |
-| Intent session/draft/working set                           | `intent`                                                                                    | W4、W6                                                             | Intent commands；资源提交调 AtomicApply port                                     |
-| webhook/schedule/code-host                                 | `integration`                                                                               | W4                                                                 | trigger commands + Task application port                                         |
-| repo/cache/submodule/worktree/git                          | `source-control` + execution workspace port                                                 | W5                                                                 | source-control commands/queries + pure Git adapter                               |
-| RFC-308 exclude/candidate/commit/CAS publish/conflict      | `source-control` + task-execution participant                                               | vertical slice Done；W5 owner/path cutover                         | path-free offered participant + opaque WorkspaceRef                              |
-| user/OIDC/session/token/role/request authority             | `identity-access`                                                                           | RFC-305 core Done；W4、W9 facade cutover                           | opaque authority/context factory + public auth use cases                         |
-| runtime registry/status/probe/diagnostic                   | `runtime-management` + `platform/runtime`                                                   | W4、W9                                                             | admin use cases + frozen runtime/kernel port                                     |
-| structuralDiff/codeIntel/changeNarrative                   | `workspace-insight`                                                                         | W4、W5                                                             | pure query + durable insight job/artifact                                        |
-| MCP runtime test session/continuation                      | `resource-catalog/mcp/application/diagnostics`                                              | W4                                                                 | typed test commands/query + runtime/process ports                                |
-| admin backup/restore/recovery diagnostics                  | `system-operations` orchestration + `platform/persistence` mechanism                        | W4、W9-E                                                           | admin use case → generation coordinator                                          |
-| task limits / workspace GC / public readiness              | `task-execution` / `source-control` / bootstrap-platform                                    | W4、W9                                                             | owner jobs/participants + safe liveness projection                               |
-| runtime/injection/managed process                          | `platform/runtime` / `platform/process`                                                     | 已有资产；W2/W4/W9 接口化                                          | kernel ports                                                                     |
-| config/timers/global setters/shutdown                      | `platform/config` / `platform/background` / `bootstrap`                                     | W3、W6、W9                                                         | instance-based container + managed background registry                           |
-| RFC-311 index/query/archive/retention/maintenance          | 各事实 owner + platform persistence/background mechanism                                    | query/archive slices Done；W4/W9 lifecycle                         | typed projection/archive command + managed job/worker                            |
-| RFC-311 T21 NodeRun prompt 分档外置与永久双读              | `task-execution` immutable run-input projection + platform filesystem/persistence mechanism | behavior Done；W4 task query、W7 provenance、W9 artifact lifecycle | `promptText/promptPath` versioned dual codec + relative prompt artifact manifest |
-| HTTP-coupled errors、散点 log/audit                        | `platform/errors` / `platform/observability`                                                | W0、W4、W9                                                         | transport-neutral error + OperationContext/AuditPort                             |
-| `node_runs` nullable axes / ULID freshness / JSON consumed | `task-execution/domain/run-identity`                                                        | W7                                                                 | generationSeq + scope/container + consumption edges                              |
-| WS broadcaster/revalidation/global hook                    | inbound WS adapter + `platform/events`                                                      | W3、W9                                                             | live audience policy + sanitized event projection                                |
-| RFC-292 trigger namespace                                  | `integration` public contract，task snapshot consumer                                       | 保持现状                                                           | 作为纵切归一范例，不重写                                                         |
+| 现有能力/散点                                                 | 目标唯一 owner                                                                                    | 迁移波次                                                                                                 | 终局消费方式                                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `scheduler.ts` frontier / scope / drive                       | `task-execution/engine/task`                                                                      | W2、W7                                                                                                   | `TaskEnginePort`                                                                                 |
+| RFC-306 branch activation / `skipped` / consumed trace        | `task-execution/domain` + application                                                             | domain slice Done；W2/W7 callpoint/provenance                                                            | pure activation policy + selected-generation provenance                                          |
+| RFC-304/309 code-round writer 与 stage engine                 | RFC-310 已退役；历史事实由 compatibility read island 保留                                         | writer retirement Done；retention/W9 contract                                                            | 新 admission 永久 fail-closed；只保留 versioned history reader                                   |
+| RFC-309 `capability_templates` upstream merge                 | 临时 `code-capability/template-compatibility`；目标为 DA ActionTemplate/退役                      | W4-E8 exact surface + consumer-zero sunset                                                               | 唯一有账兼容 writer；禁止借此恢复 code-round 或 generic template CRUD                            |
+| RFC-310 DevelopmentMission/ActionRun/AgentAttempt             | `development-automation`                                                                          | aggregate/internal layering Done；W4/W5/W9 cutover                                                       | exact command/query + purpose-specific required/offered ports                                    |
+| RFC-310 EmployeeCase/Context/Attention/Reaction/Channel       | `digital-employee`                                                                                | OS vertical slice Done；W4 inbound/public 与 W9 worker 收编                                              | type-neutral command/query + exact Event/Task/platform participants                              |
+| RFC-310 Event catalog/subscription/observer/delivery          | `event-center`                                                                                    | OS vertical slice Done；W3 committed event/W4 inbound/W9 job 收编                                        | idempotent observation + split subscription/delivery/control participants                        |
+| RFC-310 executor-neutral input/output contract                | `execution-contract`                                                                              | PR-19 vertical slice Done；W4-E9 required-port/provider cutover                                          | exact guide + compatibility/fixture/output participant；员工类型只注册 schema                    |
+| RFC-310 代码员工职责图、WorkContract 与规则                   | `development-automation` code employee type package                                               | type package Done；legacy Mission 冻结新 admission并 drain                                               | registration contract；通用 OS/UI 无 development 类型分支                                        |
+| RFC-310 unified task creation / task source registry          | `task-catalog` 只读 federation + 各来源 command owner                                             | behavior Done；W4-E10 public/authority/adapter cutover                                                   | typed catalog query + one `TaskCatalogSource` adapter per source；无万能启动命令                 |
+| task catalog membership (`0203`)                              | `task-execution` 单写 `public` / `internal`；`task-catalog` 只消费 public projection              | behavior landed；W2 保 launch/继承，W4-E10 收 exact source seam                                          | visibility 不进 transport/filter；item/facets/hierarchy/cursor 共用 public predicate             |
+| Task↔EmployeeCase link / Case name (`0205/0206`)              | TE 单写 Task provenance ref；DE 单写 EmployeeCase/name                                            | behavior landed；W4-E1/E9 reader/authority，W7 identity mapping                                          | Task detail 只经 actor-filtered DE projection取最小 link；expand-only rollback保列               |
+| RFC-317 B1/B4/B5/B6 partial guards                            | 各业务 owner + RFC-317 machine governance                                                         | behavior/machine oracle landed；W0-R/W4/W9 边界迁移                                                      | owner/ACL/archive、identity/站点/tx/path/nonce/prompt/registry/terminal/schema ledger 均只减不增 |
+| mission preview/keyset paging                                 | `development-automation/application` + query projection                                           | behavior/index/UI consumer Done；W4-E8 public-query cutover                                              | preview 与 launch 共用 selector；route 不再 deep import infrastructure                           |
+| RFC-310 evidence、decision trace、effect intent、MR care      | `development-automation`                                                                          | behavior Done；W3/W4/W9 mechanism cutover                                                                | mission tx + typed effect receipt/reconcile                                                      |
+| 五条 spawn/iso/merge 装配线                                   | `task-execution/engine/kernel/assembly`                                                           | RFC-287 behavior Done；W2-A 归位                                                                         | `RunAssembly`                                                                                    |
+| RFC-287 三项配额 settings surface                             | task-execution quota policy + settings adapter                                                    | RFC-287 T10 behavior；W4-E4b/W9-A projection                                                             | typed command + consumer-specific hot config projection                                          |
+| public repository source seal/launchability / `file://`       | source-control policy；task admission consumer                                                    | RFC-287 T11 behavior；W4-E1/W5 interface                                                                 | `PublicRepositorySourceSealPort` + `RepositoryLaunchSnapshotInTx`                                |
+| repository baseline retry / hard-fail                         | source-control repository-preparation policy                                                      | RFC-287 T12 behavior；W4-E1/W5 policy                                                                    | exact retry classifier + hot config projection                                                   |
+| task 落库后的 background repo prep + `__repo_prep__`          | task admission/normal execution owner + source-control adapter                                    | RFC-287 T13 behavior；W2-B/W4-E1/W5 迁位                                                                 | task/run claim + attempt operation journal → SC participant                                      |
+| multipart pre-materialization/upload artifact                 | task-execution direct-launch prestage                                                             | W4-E1                                                                                                    | task-owned upload journal；现有 pre-materialized 语义                                            |
+| loop/git/fanout                                               | `task-execution/engine/wrapper`                                                                   | W2-D；W8 仅可选能力                                                                                      | `WrapperRuntime`                                                                                 |
+| agent/script/call/code-host kind 分发                         | `task-execution/engine/node`                                                                      | W2-C                                                                                                     | `NodeExecutorRegistry`                                                                           |
+| `activeTasks` / `driverLease` / status claim                  | `task-execution/application/ports` + infrastructure                                               | P0-D、W2                                                                                                 | `TaskOwnershipPort` + `TaskRuntimeRegistry`                                                      |
+| lifecycle writer + hook/watch/budget/WS                       | `task-execution/domain` + `platform/events`                                                       | W3                                                                                                       | transition + classified committed events                                                         |
+| review/clarify/questions route saga                           | `collaboration/application`                                                                       | P0、W3                                                                                                   | human-gate commands + continuation worker                                                        |
+| 13 类 ACL/ref catalog + 原六类 visible loaders / `ACL_TABLES` | `resource-catalog/core` 仅统一 ACL/ref/summary；各 aggregate writer 留原 owner                    | W4                                                                                                       | public summary + owner-specific typed query/command；tables 留各 SQLite adapter                  |
+| capability/development/integration/DE 的七类新增 ACL kind     | 各 aggregate owner；`resource-catalog/core` 仅共享 ACL/ref 机制                                   | RFC-305/309/310/317 landed；W4 surface cutover                                                           | owner-specific command/query + common visibility participant                                     |
+| HTTP/MCP route 复用、API docs registry                        | inbound adapters + application operation catalog                                                  | W4                                                                                                       | transport mapping → same use case                                                                |
+| BundleApply / Intent apply 两台通用恢复机                     | `platform/atomic-apply`                                                                           | P0、W6                                                                                                   | one lifecycle engine + domain providers                                                          |
+| memory CRUD/scope/inject/distill                              | `memory`                                                                                          | P0、W4                                                                                                   | typed commands + task injection/distillation ports                                               |
+| ResourcePackage/Bundle manifest、admission、receipt           | `resource-catalog/package`                                                                        | W4、W6                                                                                                   | typed package participants + AtomicApply provider                                                |
+| fusion aggregate/decision/apply/provenance                    | `knowledge-evolution`                                                                             | P0、W4、W6                                                                                               | fusion commands + use-case-specific tx + apply provider                                          |
+| skill restore 与 memory fused membership                      | `knowledge-evolution`                                                                             | W4、W6                                                                                                   | skill/memory tx participants + exact provenance                                                  |
+| Intent session/draft/working set                              | `intent`                                                                                          | W4、W6                                                                                                   | Intent commands；资源提交调 AtomicApply port                                                     |
+| webhook/schedule/code-host                                    | `integration`                                                                                     | W4                                                                                                       | trigger commands + Task application port                                                         |
+| repo/cache/submodule/worktree/git                             | `source-control` + execution workspace port                                                       | W5                                                                                                       | source-control commands/queries + pure Git adapter                                               |
+| RFC-308 exclude/candidate/commit/CAS publish/conflict         | `source-control` + task-execution participant                                                     | vertical slice Done；W5 owner/path cutover                                                               | path-free offered participant + opaque WorkspaceRef                                              |
+| user/OIDC/session/token/role/request authority                | `identity-access`                                                                                 | RFC-305 core Done；W4、W9 facade cutover                                                                 | opaque authority/context factory + public auth use cases                                         |
+| RFC-312 user presence / grace / batch projection              | `identity-access`                                                                                 | behavior Done；W4-E0 public/WS cutover、W9 timer lifecycle                                               | dedicated WS inbound → presence command/query；二态 view，不入 prompt/ACL kind                   |
+| RFC-313 envelope retry/session escalation                     | `platform/contracts` neutral cap arithmetic；task-execution 与 digital-employee 各自 policy/state | behavior Done；neutral contract 抽取后 W2-C 迁 TE、W9 注入 config projection                             | 两 consumer 共用钳制算术，不共享 followup/restart/reaction/outbox 状态；不增加 ExecutionKind     |
+| RFC-314 NodeRun event read/write access shapes                | task-execution event ledger/query + platform persistence mechanism                                | behavior Done；W2/W7/W9 owner/path cutover                                                               | bounded per-run reads + chunk append/flush oracle；不新增 context/schema owner                   |
+| RFC-315 source-neutral automation rules                       | EventResponseRule 归 `event-center`；WebhookTrigger 归 `integration`                              | authority behavior Done；E0 为前置，EventResponseRule 归 W4-E9，WebhookTrigger 归 W4-B integration slice | 共用 `event-automation-rules:*` vocabulary，不共享 aggregate/table/repository                    |
+| runtime registry/status/probe/diagnostic                      | `runtime-management` + `platform/runtime`                                                         | W4、W9                                                                                                   | admin use cases + frozen runtime/kernel port                                                     |
+| structuralDiff/codeIntel/changeNarrative                      | `workspace-insight`                                                                               | W4、W5                                                                                                   | pure query + durable insight job/artifact                                                        |
+| MCP runtime test session/continuation                         | `resource-catalog/mcp/application/diagnostics`                                                    | W4                                                                                                       | typed test commands/query + runtime/process ports                                                |
+| admin backup/restore/recovery diagnostics                     | `system-operations` orchestration + `platform/persistence` mechanism                              | W4、W9-E                                                                                                 | admin use case → generation coordinator                                                          |
+| task limits / workspace GC / public readiness                 | `task-execution` / `source-control` / bootstrap-platform                                          | W4、W9                                                                                                   | owner jobs/participants + safe liveness projection                                               |
+| runtime/injection/managed process                             | `platform/runtime` / `platform/process`                                                           | 已有资产；W2/W4/W9 接口化                                                                                | kernel ports                                                                                     |
+| config/timers/global setters/shutdown                         | `platform/config` / `platform/background` / `bootstrap`                                           | W3、W6、W9                                                                                               | instance-based container + managed background registry                                           |
+| RFC-311 index/query/archive/retention/maintenance             | 各事实 owner + platform persistence/background mechanism                                          | query/archive slices Done；W4/W9 lifecycle                                                               | typed projection/archive command + managed job/worker                                            |
+| RFC-311 T21 NodeRun prompt 分档外置与永久双读                 | `task-execution` immutable run-input projection + platform filesystem/persistence mechanism       | behavior Done；W4 task query、W7 provenance、W9 artifact lifecycle                                       | `promptText/promptPath` versioned dual codec + relative prompt artifact manifest                 |
+| HTTP-coupled errors、散点 log/audit                           | `platform/errors` / `platform/observability`                                                      | W0、W4、W9                                                                                               | transport-neutral error + OperationContext/AuditPort                                             |
+| `node_runs` nullable axes / ULID freshness / JSON consumed    | `task-execution/domain/run-identity`                                                              | W7                                                                                                       | generationSeq + scope/container + consumption edges                                              |
+| WS broadcaster/revalidation/global hook                       | inbound WS adapter + `platform/events`                                                            | W3、W9                                                                                                   | live audience policy + sanitized event projection                                                |
+| RFC-292 trigger namespace                                     | `integration` public contract，task snapshot consumer                                             | 保持现状                                                                                                 | 作为纵切归一范例，不重写                                                                         |
 
 该表是 owner 账本。新增能力如果无法落到某一行的 owner，必须先补设计；不得暂存到 `services/common.ts`。
 

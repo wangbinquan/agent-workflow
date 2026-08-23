@@ -81,12 +81,13 @@
 > AC-3 的 parse 对拍锚（`rfc271-resource-package-hardening` 内 `PackagePreviewSchema.parse` /
 > `PackageImportReceiptSchema.parse`）**12/12 绿**。RFC 目录 `plan.md` 的验收清单两项已勾选并附证据。
 >
-> **顺带做的全量状态对账**（回答「还有哪些 RFC 没进终态」）：`design/plan.md` RFC 索引现 **310 行**
-> （309 个数字编号 + `RFC-172b`），表行与 `design/RFC-*` 目录**一一对应**、既无游离行也无未登记目录；
-> 状态分布 **Done 304 · Superseded 2 · In Progress 1 · CLOSED 2 · Draft 1**。即 RFC-286 收口后，
-> **非终态只剩 [RFC-310](design/RFC-310-rule-driven-development-digital-employee/proposal.md)（In Progress）
-> 与 [RFC-294](design/RFC-294-backend-layered-target-architecture/proposal.md)（Draft，后台分层目标架构总纲，
-> D1–D9 待批、各波次退出门未满足）**。另有两条**登记口径**问题需要后来者知道：RFC-288 / RFC-289 的状态取值写作
+> **顺带做的全量状态对账（2026-08-23 再刷新）**（回答「还有哪些 RFC 没进终态」）：此前基于 `f57394d8` 的
+> **312 行 / Done 306** 快照已被后续 RFC-317 推进取代，不再作为当前分母。latest published
+> `origin/main=7c61a074` 已包含 RFC-317 B0～B5/B6 部分、TaskCatalog membership 与数字员工后续 schema/contract；当前明确非终态至少包括
+> [RFC-310](design/RFC-310-rule-driven-development-digital-employee/proposal.md)（In Progress）、
+> [RFC-317](design/RFC-317-commons-boundary-hardening/proposal.md)（In Progress）与
+> [RFC-294](design/RFC-294-backend-layered-target-architecture/proposal.md)（Draft，各波次退出门未满足）。任何新的总数/状态分布必须从新的 clean exact SHA 重采，不能沿用旧快照。
+> 另有两条**登记口径**问题需要后来者知道：RFC-288 / RFC-289 的状态取值写作
 > `CLOSED`，**不在** CLAUDE.md 规定的四选一（Draft / In Progress / Done / Superseded）内——二者已于
 > 2026-08-14 由用户裁决「未实现即关闭、零生产改动」，实质是终态，但任何按四态扫描「哪些 RFC 没收口」的检查
 > 都会把它俩持续伪报为未收口（正是当初立四选一硬约定要避免的情况），建议下次触及时改写为 **Superseded**
@@ -139,8 +140,9 @@
 > prompt + 按 reason 定制的简短告知），升级次数由新增 `sessionRestartBudget`（默认 1）约束。attempt 上限
 > `(1+defaultNodeRetries)×(1+sessionRestartBudget)`，默认 8；**设为 0 逐字回到落地前**，即关闭开关。
 > 判定是共享纯函数 `decideRetryShape`，scheduler 只留状态适配（`keepIf` 是升级原因的唯一写者）。
-> **实现期三条值得记的**：①`retryAttemptCap` 必须自钳到 `RETRY_ATTEMPT_CAP_CEILING=64`——两个设置项是**相乘**的，
-> 各自边界（50 / 10）单看都不离谱、乘起来 561 会撞装配骨架的 `ASSEMBLY_MAX_ATTEMPTS` spec-bug 保险丝，用那条
+> **实现期三条值得记的**：①`retryAttemptCap` 必须自钳到 `RETRY_ATTEMPT_CAP_CEILING=99`（保险丝 `100` 的前一格；实现门已纠正
+> 早期 `64` 方案，避免把历史可达的 `F=64,R=0` 从 65 次静默截短）——两个设置项是**相乘**的，各自边界（50 / 10）
+> 单看都不离谱、乘起来 561 会撞装配骨架的 `ASSEMBLY_MAX_ATTEMPTS` spec-bug 保险丝，用那条
 > 保险丝去接住一个**配置选择**会把运维引到错误方向；②上限是乘积、**与失败种类无关**，所以纯崩溃节点也 4→8
 > （已立测钉死，并在 design §2.1 写明否决动态式的理由：骨架调用序 `shouldRetry` 先于 `keepIf`，动态式只能靠预测
 > 放行，早期崩溃会从后续接续链额度里扣走一格）；③`ConfigSchema` 是全必填，新增 required-with-default 键靠
@@ -295,18 +297,23 @@
 > `32610899094` **56/56 tests success**，无快照漂移。CI `32610899098` 初次仅 macOS 后端 3/4 分片因既有测试 harness
 > 取得空 SHA、在测试正文前执行空 pathspec `git checkout` 而红；同一 exact SHA 重跑终态 **31/31 jobs success**。
 >
-> **PR-27 双来源入口与人工审核分支（2026-08-23，实施完成，发布验证中）**：职责全景把 `界面输入`、`ISSUE`
-> 画成同一来源列中上下并列、无前后顺序的两个入口节点；“准备工作材料”位于来源列右侧，两个入口分别以独立连线汇入该节点，
-> 卡片内部不重复显示方向箭头。关闭审核时走“分析并实现”，开启审核时走“分析 → 人工审核修复计划 → 实现”；两条路径汇合后，
-> “校验并冻结代码修改 → 提交 MR”保持在同一主行。当前已追加 `development@6`、通用 `workIngresses`/`reviewedPath` 合同、
-> authoring/岗位/runtime 共用投影，以及统一任务创建和 Webhook 自动化规则深链；入口与条件阶段均不进入 WorkItem/工具/Reaction/Round，
-> 20 个工作项不变。定向证据：backend authoring/runtime/host/digest **37/37**，签名 ISSUE→Event Center→MR→红灯修绿 system mock
-> **1/1**（65 assertions），frontend **11/11**，Chromium 主旅程 **1/1**、零配置 **6/6**、视觉 **1/1**，frontend/backend
-> typecheck 全绿；隔离发布树完整 `bun run gate:local` **11m07s 全绿**——backend **11,727 pass / 36 skip / 0 fail**、
-> frontend **6,692/6,692**、shared **2,222/2,222**、system-mocks **62/62**，typecheck/lint/format/depcheck
-> 全绿。当前仅剩 exact-path commit/push 与远端 exact-SHA CI/visual 终态验证。
+> **PR-27 双来源入口与人工审核分支（2026-08-23，实施完成，发布验证中）**：用户已确认职责全景的规范拓扑：`界面输入`、`ISSUE`
+> 是同一来源列中上下并列、无前后顺序的两个入口节点，“准备工作材料”位于来源列右侧，两个入口分别以独立连线汇入该节点；不得把两个来源
+> 沿主流程横排成伪串行关系，也不得把材料准备堆到来源列下方。其后关闭审核时走
+> “分析并实现”，开启审核时走“分析 → 人工审核修复计划 → 实现”。两条
+> 路径汇合后，“校验并冻结代码修改 → 提交 MR”保持在同一主行。当前已追加 `development@6`、通用 `workIngresses`/`reviewedPath` 合同、
+> authoring/岗位/runtime 共用投影，以及统一任务创建和 Webhook 自动化规则深链；入口与条件阶段均不进入 WorkItem/工具/Reaction/Round，20 个
+> 工作项不变。定向证据：backend authoring/runtime/host/digest **37/37**，签名 ISSUE→Event Center→MR→红灯修绿 system mock **1/1**（65
+> assertions），frontend **11/11**，Chromium 主旅程 **1/1**、零配置 **6/6**、视觉零差异 **1/1**，frontend/backend typecheck 全绿；隔离
+> 发布树完整 `bun run gate:local` **11m07s 全绿**——backend **11,727 pass / 36 skip / 0 fail**、frontend **6,692/6,692**、shared
+> **2,222/2,222**、system-mocks **62/62**，typecheck/lint/format/depcheck 全绿。当前仅剩 exact-path commit/push 与远端 exact-SHA
+> CI/visual 终态验证，因此 T231 与发布状态仍为待完成。
 >
-> ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
+> ### 📌 历史接手快照（2026-08-20 收工；勿作为当前开工入口）
+>
+> ⚠️ 本段从 `892c1bf3` 到当时的 T111/T112 余量仅保留为历史交接证据，已被上方 RFC-310 当前状态与本文件末尾
+> RFC-294 架构总纲刷新取代。新 session 必须先钉当前 clean `HEAD`、读取 RFC-310 三件套的最新任务状态，并以
+> RFC-294 的现行 owner/DAG/波次表判断架构余量；不得从本段旧 commit、旧 CI 或“仍未做”清单直接开工。
 >
 > **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；
 > `evidence-soak-nightly` 绿（2GiB soak 在 CI 实跑 108s，不是静默 skip——已核）。
@@ -366,7 +373,7 @@
 > `.agent-workflow/inputs/requirements/<bundleId>`；自建门禁把大日志
 > 流式落到 `.agent-workflow/pipeline/<bundleId>`，DB/prompt 只持 ref/digest。内部以 `development-automation`
 > 取代 `code-capability` 上层模型且完成单 writer cutover；RFC-294 exact public/consumer-owned required-port 仍是后续
-> W4-E8/W5 的架构收口项，当前 22-option `ReconcilerPorts`/legacy composition 不冒充已经完成。三轮功能自审补齐了
+> W4-E8/W5 的架构收口项，当前 26-option `ReconcilerPorts`/legacy composition 不冒充已经完成。三轮功能自审补齐了
 > requirement source 选择与问答闭集决策、new/adopt/attach MR、
 > polyglot 两段选择、`completed-no-change`、unknown/stale 规则停机、pipeline missing trigger、`tracking-only` 人工接管、
 > cancel/handoff transition fence 和 durable wait；用户补充后又纵向复核了上传目标 create/replace CAS、
@@ -845,7 +852,7 @@
 
 > 🔒 **已关闭（2026-08-14，用户决定；两者均未实现、零生产改动）：RFC-288 + RFC-289** —— **RFC-288**（[task↔scheduler 环拆解](design/RFC-288-task-scheduler-cycle-untangle/proposal.md)）连过三轮设计门（第二轮两半场 P0×8/P1×7/P2×1；第三轮三路错开视角 P0×5/P1×11/P2×5），findings 全部处置后范围收敛到「四件合同的 owner/consumer/import 拓扑 + 断环」——**而这正是当时 RFC-294（pin `be31dd62`）§16.2 已逐条规定、§5.3 已逐字定义接口、旧 DAG 曾排期（`W1 → gate → W2`）的内容**，收敛到正确形状后该文档不再承载 294 之外的设计信息。叠加当时的实现硬前置未到、而源码锚两天内烂了三轮（`da706b19`→`01d2160e`→`6e8c4f9f`，每轮全量重锚），继续维护行级 inventory 到开工必然重写，故关闭。**九条不随锚烂掉的结论已写进 proposal 顶部**（最要紧的四条：合同必须携带 `OwnershipToken`/epoch——taskId-only 的 `requestStop` 经实测会**误杀继任者**；`abortAll(reason)` 不可选，丢 reason 会把 daemon 停机从可恢复 `interrupted` 降级成 `canceled`〔此后 RFC-287 并发面审计在生产代码里抓到同形态真回归，任务永久楔死，可见非纸面推演〕；kick 是**四点**含 RFC-287 AC-11 的 `retryRepoPreparation`；解环最小充分集＝断 A1+B1+B2/B3/B4+E3，**C1/C2 转静态与 materialization 拆分都不必做**）。六条 depcheck 账目的 `removeWhen` 已按 RFC-247 关闭时的同一做法**转出至 RFC-294 §16.2 / W2**，当前 successor 是 W0-R + P0-D 后另立的新号 implementation RFC，不再执行旧 gate。**RFC-289**（[fanout 内链](design/RFC-289-fanout-inner-chain/proposal.md)）**产品目标不被否定**，被否定的是当前设计——RFC-294 §5.3 已裁决其「child 上游限定为当前 wrapperRunId」与既有跨 generation replay 保留原 parent 不能同时成立、且所依赖的 consumed gate 并不存在；只有该产品能力在 **W7 NodeRun identity** 之后重新获批，才按 §5.3 五条另立新号，否则保持挡板并跳过可选 W8。两份文档均**保留不删**，作为将来实现/重写的输入。**教训（已在 proposal 顶部与本条各记一份）**：①别用**仓库级指标**（「零值级 SCC」）当单个 RFC 的验收标准——它是范围吸引子，三轮里把三族环→git 5 节点含 `util/git` 分层倒置→MCP 三环逐次吸进来，而环只是症状、边界才是目标；②判据「**不跨 context**」（留在本 bounded context 内＝该刀可做，跨到别的 context＝属对应波次）能自动回答「要不要顺手做」，避免把波次归属反复变成选择题。
 
-> 🧭 **架构总纲刷新（Draft，2026-08-19）：[RFC-294 后台最终层次架构与能力归一](design/RFC-294-backend-layered-target-architecture/proposal.md)** —— observed committed tip 为 `HEAD=origin/main=9ec2a469`，但 clean backend typecheck 仍红，故最后可准入/量化基线保持 `dfda2d02`；共享树未提交的 RFC-312 / UI-runtime WIP 不计 landed。目标仍是 **bounded-context feature-first + 模块内分层** 与 bootstrap 唯一装配；跨 context 只开放 exact public/required contracts。RFC-305 已落 identity-access 单写/CAS/audit/opaque authority，RFC-306 已落 branch domain，RFC-308 已落 source-control vertical slice，RFC-310 已把 active execution writer 从 code-capability 切到新的 `development-automation`（90 files；legacy code-capability 19 files 为 history/template compatibility，其中仅 `capability_templates` upstream merge 是有账临时 writer），RFC-311 已落 PR-1～PR-7 + G4 + T20/T21 的 query/archive/retention/maintenance 与 NodeRun prompt 分档外置/永久双读；`7c542729/9ec2a469` 的 mission paging/preview 仅记 pending source delta。它们是能力/domain/internal-layering 的真实输入，不是整波退出：当前 `modules/**=182/7 contexts`、`KNOWN=35`、route→DB=15、AppDeps consumer files=52、`setInterval(`=28/23 files；七份 architecture manifest 仍为 0，P0-D durable ownership、W2 四合同/六环、W3 canonical outbox、W4 inbound/public cutover、W5 SCC/WorkspaceRef、W7 NodeRun v2/provenance、W9 managed background/artifact lifecycle 仍未完成。`code-round` 只作历史判别并 fail-closed，数字员工复用普通 agent host task，W2 不得重建其 executor。**下一步先修复 committed tip 并取得 clean containing SHA，再把已落 preflight pilot 扩成 W0-R canonical manifests/global layer+inbound gate，并与 P0-D 设计并行；W0-R 最小门后实施 P0-D，再进入新号 W2 RFC。RFC-294 D1～D9 与每个行为波次仍需独立批准。**
+> 🧭 **架构总纲刷新（Draft，2026-08-24）：[RFC-294 后台最终层次架构与能力归一](design/RFC-294-backend-layered-target-architecture/proposal.md)** —— 最新已发布、architecture-admissible source baseline 是 `origin/main=7c61a074`，exact-SHA CI `32657178722` 31/31 全绿；本区间无 frontend production/visual delta。当前结构量化为 backend 779 TS、services 364（根平铺 194）、`modules/**=277/11 contexts`、depgraph 1846、backend/repo SCC=5/7、`KNOWN=35`、route→DB=15、AppDeps=53、`setInterval` AST=32/25 files。TaskCatalog membership (`0203`) 仍由 TaskExecution 单写且只给新 Catalog 投影 public，legacy `/api/tasks` 仍可能显示 internal execution；`0205/0206` 新增 Task→EmployeeCase provenance ref 与 DE-owned Case name。RFC-317 已落 B0～B5+B6 T42～T46：R1/R2 exact 94/22、R3/R12、高水位与 130 guard classification/fixture 已落；commons/ledger pins 可重放，但 guard `recordedAtSha=0d4010e53` 不含第 130 条语料，须重钉后才可称 provenance 闭合。目标仍是 **bounded-context feature-first + 模块内分层**、bootstrap 唯一装配与 exact public/consumer-owned required contracts；TE↔DE 当前双向 contract/type import 要收成 DE-owned `ReactionExecutionPortV1` + TE provider adapter。RFC-317 子集不是 W0-R exit；仍需其 B6 T41/B7～B11、七份 canonical manifest、P0-D durable ownership、W2 四合同/六环、W3 outbox、W4 inbound/public cutover、W5 SCC/WorkspaceRef、W6 AtomicApply、W7 NodeRun v2/provenance、W9 managed background/artifact lifecycle。
 
 > ✅ **已完成 RFC（Done，2026-08-13）：[RFC-293 Intent 持续迭代工作台](design/RFC-293-intent-workbench-working-context/proposal.md)** —— 用户最终裁决只做纯功能与 UX：详情页全宽、左右 pane 独立滚动；工作上下文统一批量管理，空闲应用后自动生成、运行中排队自动续跑或停止后立即刷新；questions 与资源建议一次处理；提交前可反复完善，提交后以检查点继续；current draft 可废弃重跑且不回滚已提交资源。**Intent 继续复用现有普通 system-agent runtime/profile/配置与全部能力；没有增加 sealed/sandbox runtime、credential/auth adapter、containment、capture quarantine、历史清洗或任何 Intent-only 能力收缩。** 1800px/1080px/390×844 浏览器验收与 RFC-293 E2E 已通过，`bun run gate:local` 全绿；实现提交 `53c57080` 已推送且 exact-SHA CI `31641274578`、visual `31641274690`、Windows `31641274650`、integration `31641274736` 全部成功。
 
