@@ -611,7 +611,7 @@ function jsonObject(value: unknown): Record<string, unknown> | null {
  * This is intentionally a read projection. Rewriting descriptor_json would
  * invalidate the digest that freezes an already-published type revision.
  */
-function projectLegacyPersistedTypePackage(value: unknown): unknown {
+function projectRevisionOnePersistedTypePackage(value: unknown): unknown {
   const descriptor = jsonObject(value)
   if (descriptor === null || descriptor.workStartWorkItemRef !== undefined) return value
 
@@ -695,6 +695,85 @@ function projectLegacyPersistedTypePackage(value: unknown): unknown {
     eventTypes: projectedEventTypes,
     reactionRules: projectedReactionRules,
   }
+}
+
+/**
+ * Human-review planning bindings became explicit after persisted packages had
+ * already shipped with the review option and its required slot. Recover the
+ * role from that frozen option/slot relationship instead of baking a current
+ * built-in role name into the compatibility reader.
+ */
+function projectPersistedHumanReviewPlanningBindings(value: unknown): unknown {
+  const descriptor = jsonObject(value)
+  const authoringManifest = jsonObject(descriptor?.authoringManifest)
+  const workIntakeAuthoring = jsonObject(descriptor?.workIntakeAuthoring)
+  const workItems = Array.isArray(authoringManifest?.workItems) ? authoringManifest.workItems : null
+  const executionOptions = Array.isArray(workIntakeAuthoring?.executionOptions)
+    ? workIntakeAuthoring.executionOptions
+    : null
+  if (descriptor === null || workItems === null || executionOptions === null) return value
+
+  let changed = false
+  const projectedWorkItems = workItems.map((candidate) => {
+    const item = jsonObject(candidate)
+    const humanReview = jsonObject(item?.humanReview)
+    if (
+      item === null ||
+      humanReview === null ||
+      humanReview.planningRoleRef !== undefined ||
+      humanReview.planningSlotRef !== undefined ||
+      typeof item.workItemRef !== 'string' ||
+      typeof humanReview.optionRef !== 'string' ||
+      !Array.isArray(item.toolRoleGroups)
+    ) {
+      return candidate
+    }
+
+    const option = executionOptions
+      .map(jsonObject)
+      .find(
+        (entry): entry is Record<string, unknown> =>
+          entry !== null &&
+          entry.optionRef === humanReview.optionRef &&
+          entry.requiredWorkItemRef === item.workItemRef &&
+          typeof entry.requiredSlotRef === 'string',
+      )
+    if (option === undefined || typeof option.requiredSlotRef !== 'string') return candidate
+
+    const matchingRoleRefs = item.toolRoleGroups.flatMap((roleCandidate) => {
+      const role = jsonObject(roleCandidate)
+      if (role === null || typeof role.roleRef !== 'string' || !Array.isArray(role.bindingSlots)) {
+        return []
+      }
+      return role.bindingSlots.some(
+        (slotCandidate) => jsonObject(slotCandidate)?.slotRef === option.requiredSlotRef,
+      )
+        ? [role.roleRef]
+        : []
+    })
+    if (matchingRoleRefs.length !== 1) return candidate
+
+    changed = true
+    return {
+      ...item,
+      humanReview: {
+        ...humanReview,
+        planningRoleRef: matchingRoleRefs[0],
+        planningSlotRef: option.requiredSlotRef,
+      },
+    }
+  })
+
+  return changed
+    ? {
+        ...descriptor,
+        authoringManifest: { ...authoringManifest, workItems: projectedWorkItems },
+      }
+    : value
+}
+
+function projectLegacyPersistedTypePackage(value: unknown): unknown {
+  return projectPersistedHumanReviewPlanningBindings(projectRevisionOnePersistedTypePackage(value))
 }
 
 export function parsePersistedEmployeeTypePackageDescriptor(

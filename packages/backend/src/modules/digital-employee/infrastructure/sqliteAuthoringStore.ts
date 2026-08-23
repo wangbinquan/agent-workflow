@@ -34,6 +34,7 @@ import type {
   ToolDraftRecord,
   ToolRevisionRecord,
   TypePackageRecord,
+  TypePackageRegistrationRecord,
 } from '../application/ports/authoringStore'
 
 function parseJson(text: string): unknown {
@@ -77,6 +78,26 @@ function typeWhere(ref: EmployeeTypeRef) {
     eq(employeeTypePackages.typeId, ref.typeId),
     eq(employeeTypePackages.revision, ref.revision),
   )
+}
+
+function compareTypeRefs(left: EmployeeTypeRef, right: EmployeeTypeRef): number {
+  const byType = left.typeId.localeCompare(right.typeId)
+  return byType === 0 ? right.revision - left.revision : byType
+}
+
+function toTypePackageRegistration(row: {
+  readonly typeId: string
+  readonly revision: number
+  readonly descriptorDigest: string
+  readonly state: 'published' | 'retired'
+  readonly registeredAt: number
+}): TypePackageRegistrationRecord {
+  return {
+    typeRef: { typeId: row.typeId, revision: row.revision },
+    descriptorDigest: row.descriptorDigest,
+    state: row.state,
+    registeredAt: row.registeredAt,
+  }
 }
 
 function toTypePackage(row: typeof employeeTypePackages.$inferSelect): TypePackageRecord {
@@ -227,18 +248,28 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .run()
     },
 
+    listTypePackageRegistrations() {
+      return db
+        .select({
+          typeId: employeeTypePackages.typeId,
+          revision: employeeTypePackages.revision,
+          descriptorDigest: employeeTypePackages.descriptorDigest,
+          state: employeeTypePackages.state,
+          registeredAt: employeeTypePackages.registeredAt,
+        })
+        .from(employeeTypePackages)
+        .all()
+        .map(toTypePackageRegistration)
+        .sort((a, b) => compareTypeRefs(a.typeRef, b.typeRef))
+    },
+
     listTypePackages() {
       return db
         .select()
         .from(employeeTypePackages)
         .all()
         .map(toTypePackage)
-        .sort((a, b) => {
-          const byType = a.descriptor.typeRef.typeId.localeCompare(b.descriptor.typeRef.typeId)
-          return byType === 0
-            ? b.descriptor.typeRef.revision - a.descriptor.typeRef.revision
-            : byType
-        })
+        .sort((a, b) => compareTypeRefs(a.descriptor.typeRef, b.descriptor.typeRef))
     },
 
     getTypePackage(ref) {

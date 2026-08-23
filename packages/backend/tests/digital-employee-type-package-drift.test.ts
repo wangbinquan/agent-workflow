@@ -196,6 +196,61 @@ describe('employee type package digest guard', () => {
     expect(frozenRow?.descriptorJson).toBe(frozenJson)
   })
 
+  test('historical planning bindings are projected from their frozen option and slot without rewriting the row', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const store = createSqliteDigitalEmployeeAuthoringStore(db)
+    const historical = descriptorBeforePlanningBindingFields()
+    const historicalTypeRef = {
+      typeId: descriptor.typeRef.typeId,
+      revision: descriptor.typeRef.revision - 1,
+    }
+    historical.typeRef = historicalTypeRef
+    const frozenJson = JSON.stringify(historical)
+    const frozenDigest = 'd'.repeat(64)
+    db.insert(employeeTypePackages)
+      .values({
+        typeId: historicalTypeRef.typeId,
+        revision: historicalTypeRef.revision,
+        descriptorJson: frozenJson,
+        descriptorDigest: frozenDigest,
+        state: 'published',
+        registeredAt: 900,
+      })
+      .run()
+
+    const projected = store.getTypePackage(historicalTypeRef)
+    const analyzeImplement = projected?.descriptor.authoringManifest.workItems.find(
+      (item) => item.workItemRef === 'analyze-implement',
+    )
+
+    expect(analyzeImplement?.humanReview).toMatchObject({
+      planningRoleRef: 'planning',
+      planningSlotRef: 'plan',
+    })
+    expect(projected?.descriptorDigest).toBe(frozenDigest)
+    const frozenRow = db
+      .select({ descriptorJson: employeeTypePackages.descriptorJson })
+      .from(employeeTypePackages)
+      .get()
+    expect(frozenRow?.descriptorJson).toBe(frozenJson)
+
+    const service = new DigitalEmployeeAuthoringService({
+      store: withTypePackageDraftOverlay(store),
+      typePackages: [runtimePackage()],
+      connectionCatalog: stubConnectionCatalog,
+      programArtifacts: stubProgramArtifacts,
+      executionContracts: unreachableExecutionContracts,
+      now: () => 2_000,
+    })
+    expect(service.listTypes()).toEqual([descriptor])
+    expect(
+      service
+        .getType(historicalTypeRef)
+        .authoringManifest.workItems.find((item) => item.workItemRef === 'analyze-implement')
+        ?.humanReview,
+    ).toMatchObject({ planningRoleRef: 'planning', planningSlotRef: 'plan' })
+  })
+
   test('an edited descriptor on a registered revision names both digests and both exits', () => {
     const store = newStore()
     store.ensureTypePackage(record(STALE_DIGEST))
@@ -296,7 +351,12 @@ describe('employee type package digest guard', () => {
     // aborts before the digest overlay can run.
     const db = createInMemoryDb(MIGRATIONS)
     const persistedStore = createSqliteDigitalEmployeeAuthoringStore(db)
-    const frozenJson = JSON.stringify(descriptorBeforePlanningBindingFields())
+    const frozenDescriptor = descriptorBeforePlanningBindingFields()
+    // Keep this row unparseable even after the known historical planning-field
+    // projection, so the test locks the overlay's schema-independent lookup
+    // order rather than passing accidentally through that compatibility path.
+    frozenDescriptor.watchGenerationDraftMarker = true
+    const frozenJson = JSON.stringify(frozenDescriptor)
     const frozenDigest = 'c'.repeat(64)
     db.insert(employeeTypePackages)
       .values({
@@ -308,6 +368,8 @@ describe('employee type package digest guard', () => {
         registeredAt: 1_000,
       })
       .run()
+    expect(() => persistedStore.getTypePackage(descriptor.typeRef)).toThrow()
+    expect(persistedStore.listTypePackageRegistrations()).toHaveLength(1)
     const overlayStore = withTypePackageDraftOverlay(persistedStore)
 
     const service = new DigitalEmployeeAuthoringService({

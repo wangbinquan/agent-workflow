@@ -17,6 +17,20 @@ export interface TypePackageRecord {
   readonly registeredAt: number
 }
 
+/**
+ * Schema-independent projection of a frozen type package row.
+ *
+ * Draft-overlay startup must be able to identify a same-revision descriptor
+ * drift before parsing descriptor JSON with the current schema. The durable
+ * descriptor remains available through get/listTypePackages for normal reads.
+ */
+export interface TypePackageRegistrationRecord {
+  readonly typeRef: EmployeeTypeRef
+  readonly descriptorDigest: string
+  readonly state: 'published' | 'retired'
+  readonly registeredAt: number
+}
+
 export interface ToolDraftRecord {
   readonly id: string
   readonly typeRef: EmployeeTypeRef
@@ -128,6 +142,7 @@ export interface ExecutionPolicyRevisionRecord {
 
 export interface DigitalEmployeeAuthoringStore {
   ensureTypePackage(input: TypePackageRecord): void
+  listTypePackageRegistrations(): TypePackageRegistrationRecord[]
   listTypePackages(): TypePackageRecord[]
   getTypePackage(ref: EmployeeTypeRef): TypePackageRecord | null
 

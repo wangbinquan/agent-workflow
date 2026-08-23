@@ -22,8 +22,10 @@ export function withTypePackageDraftOverlay(
     ...store,
     ensureTypePackage(input) {
       const key = typeKey(input.descriptor.typeRef)
-      const persisted = store.getTypePackage(input.descriptor.typeRef)
-      if (persisted !== null && persisted.descriptorDigest !== input.descriptorDigest) {
+      const persisted = store
+        .listTypePackageRegistrations()
+        .find((record) => typeKey(record.typeRef) === key)
+      if (persisted !== undefined && persisted.descriptorDigest !== input.descriptorDigest) {
         overlays.set(key, input)
         return
       }
@@ -32,9 +34,17 @@ export function withTypePackageDraftOverlay(
       overlays.delete(key)
     },
     listTypePackages() {
-      return store
-        .listTypePackages()
-        .map((record) => overlays.get(typeKey(record.descriptor.typeRef)) ?? record)
+      return store.listTypePackageRegistrations().map((registration) => {
+        const key = typeKey(registration.typeRef)
+        const overlay = overlays.get(key)
+        if (overlay !== undefined) return overlay
+
+        const persisted = store.getTypePackage(registration.typeRef)
+        if (persisted === null) {
+          throw new Error(`employee type package disappeared while listing: ${key}`)
+        }
+        return persisted
+      })
     },
     getTypePackage(ref) {
       return overlays.get(typeKey(ref)) ?? store.getTypePackage(ref)
