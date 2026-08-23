@@ -237,3 +237,14 @@ describe('RFC-317 T14 —— matcher 自证：五种 import 语法都必须被�
     )
   })
 })
+
+// RFC-317 T13 —— 语料非空。
+//
+// 上面每条断言的绿都可能来自两处：真的没有违规，或者**扫描根失效、语料被筛成空**。
+// 两者在断言层面同形，后者是永久静默的假绿。这一条把「扫描器还活着」变成可断言事实；
+// 下限同时两向钉进 architecture/guard-manifest.json，静默调低会红。
+describe('RFC-317 T13 —— 语料非空', () => {
+  test('扫描确实覆盖到后端源码语料（扫空即假绿）', () => {
+    expect(walk(BACKEND_SRC).length).toBeGreaterThanOrEqual(600)
+  })
+})

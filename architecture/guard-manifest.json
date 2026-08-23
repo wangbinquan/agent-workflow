@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "note": "RFC-317 守卫清单。三向钉死：①两向枚举（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红）；②扫语料型守卫（corpusScanner）的语料下限 minCorpusFiles——扫描根失效时「零违规」与「合规」同形，语料下限是唯一能把二者分开的断言；③断言「不存在」的守卫（assertsAbsence）必须有负 fixture（negativeFixture）——语料还在但 matcher 不咬了，违规集合同样回到空。只断言存在的守卫自带证明，不在 ③ 的管辖内。全部判据走 census.ts 单一实现，与生成本账本的实现逐字相同。",
-  "recordedAtSha": "b04cf0eb0",
+  "recordedAtSha": "0d4010e53",
   "guards": [
     {
       "id": "agent-depends-on-cascade-guard",
@@ -73,7 +73,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 245
+      "lines": 310
     },
     {
       "id": "rfc317-guard-negative-fixture",
@@ -109,7 +109,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 535
+      "lines": 553
     },
     {
       "id": "rfc317-module-boundary",
@@ -213,7 +213,7 @@
       "runner": "bun",
       "mechanism": "source-text",
       "corpusScanner": true,
-      "minCorpusFiles": 1,
+      "minCorpusFiles": 4,
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
@@ -753,11 +753,11 @@
       "runner": "bun",
       "mechanism": "ast",
       "corpusScanner": true,
-      "minCorpusFiles": 7,
+      "minCorpusFiles": 600,
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 202
+      "lines": 213
     },
     {
       "id": "rfc303-architecture-lock",
@@ -801,11 +801,11 @@
       "runner": "bun",
       "mechanism": "source-text",
       "corpusScanner": true,
-      "minCorpusFiles": 21,
+      "minCorpusFiles": 600,
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 239
+      "lines": 250
     },
     {
       "id": "rfc311-perf-guards",
@@ -813,7 +813,7 @@
       "runner": "bun",
       "mechanism": "source-text",
       "corpusScanner": true,
-      "minCorpusFiles": 6,
+      "minCorpusFiles": 201,
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
@@ -993,11 +993,11 @@
       "runner": "bun",
       "mechanism": "source-text",
       "corpusScanner": true,
-      "minCorpusFiles": 1,
+      "minCorpusFiles": 150,
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 162
+      "lines": 175
     },
     {
       "id": "source-text-rfc066-pr-b-guards",
@@ -1504,5 +1504,5 @@
       "lines": 112
     }
   ],
-  "recordedAtShaNote": "采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
+  "recordedAtShaNote": "本轮采数在 0d4010e53 的工作树上跑，随后与「收紧 corpusFloor 判据」的那次提交一起落盘——故这里钉的是那次提交的**父提交**（守卫要求采数 SHA 在当前历史上可达，尚未存在的提交填不进来）。要复算请用含本文件的那次提交的树：判据（packages/backend/tests/architecture/census.ts）与语料必须同树，分开取会得到不同的数。上一版记的是 b04cf0eb0。"
 }

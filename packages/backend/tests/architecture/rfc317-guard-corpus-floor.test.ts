@@ -222,6 +222,52 @@ const FIXTURES: readonly Fixture[] = [
     scanner: true,
     floor: null,
   },
+  // 下面四条是**本判据实际犯过的错**，一错一条。前三条是「放得太宽」，最后一条是
+  // 修宽之后「收得太紧」——两个方向都要钉，否则下一版会在另一侧翻车。
+  {
+    name: '账本里某个字段的字符串长度**不是**语料下限（rfc310 实撞：账本据此记了个假的 21）',
+    source:
+      `import { readdirSync, readFileSync } from 'node:fs'\n` +
+      `const manifest = JSON.parse(readFileSync('/m.json', 'utf8'))\n` +
+      `for (const [k, entry] of Object.entries(manifest.contexts)) {\n` +
+      `  expect(entry.owner.length).toBeGreaterThan(20)\n` +
+      `  expect(readdirSync(k).sort()).toEqual([])\n` +
+      `}\n`,
+    scanner: true,
+    floor: null,
+  },
+  {
+    name: '单个文件文本里的正则匹配数**不是**语料下限（rfc301 实撞：账本据此记了个假的 7）',
+    source:
+      `import { readdirSync, readFileSync } from 'node:fs'\n` +
+      `readdirSync('/x')\n` +
+      `const src = readFileSync('/one.ts', 'utf8')\n` +
+      `expect((src.match(/\\bfoo\\b/g) ?? []).length).toBe(7)\n`,
+    scanner: true,
+    floor: null,
+  },
+  {
+    name: '手写常量表的长度**不是**语料下限（rfc311 实撞：账本据此记了个假的 6）',
+    source:
+      `import { readdirSync } from 'node:fs'\n` +
+      `const TABLES = ['a', 'b', 'c']\n` +
+      `readdirSync('/x')\n` +
+      `expect(TABLES.length).toBeGreaterThanOrEqual(3)\n`,
+    scanner: true,
+    floor: null,
+  },
+  {
+    name: '逐文件自增的计数器**是**语料下限（收紧第一版把 rfc311 真正的 201 判丢了）',
+    source:
+      `import { readdirSync } from 'node:fs'\n` +
+      `let scanned = 0\n` +
+      `for (const name of readdirSync('/x')) {\n` +
+      `  scanned += 1\n` +
+      `}\n` +
+      `expect(scanned).toBeGreaterThan(200)\n`,
+    scanner: true,
+    floor: 201,
+  },
 ]
 
 describe('RFC-317 T21 —— 判据自变异：把 fixture 喂回同一份判据', () => {
@@ -237,9 +283,28 @@ describe('RFC-317 T21 —— 判据自变异：把 fixture 喂回同一份判据
     })
   }
 
-  test('两个判据互相独立：不扫语料的文件即便写了下限也不进受管集合', () => {
+  // 这条原本断言的是「不扫语料的文件也能记出下限」，用来证明两个判据互相独立。
+  // 收紧判据后那句话**在构造上不再成立**：语料下限现在要求被度量的量能追溯到文件枚举，
+  // 而枚举正是 isCorpusScanner 的判据本身——于是 floor !== null ⇒ scanner === true。
+  // 直接删掉这条会丢掉它真正在守的东西（两个判据不是同一个判据的两个名字），所以改成
+  // 断言收紧后**仍然独立**的那个方向：枚举了语料、但一条规模断言都没写 ⇒ 扫描型成立、
+  // 下限为空。这正是 T13 要抓的那类守卫。
+  test('两个判据互相独立：枚举了语料但没写规模断言 ⇒ 扫描型成立、下限为空', () => {
+    const unit = sourceUnit(
+      'fixture.test.ts',
+      `import { readdirSync } from 'node:fs'\nconst f = readdirSync('/x')\nexpect(f.filter(bad)).toEqual([])\n`,
+    )
+    expect(isCorpusScanner(unit), '枚举 API 在场 ⇒ 扫描型').toBe(true)
+    expect(corpusFloor(unit), '没有任何规模断言 ⇒ 无下限，这条守卫会被 T13 点名').toBe(null)
+  })
+
+  test('反方向：一条枚举都没有 ⇒ 既不是扫描型，也不可能有语料下限', () => {
     const unit = sourceUnit('fixture.test.ts', `expect(rows.length).toBeGreaterThanOrEqual(4)\n`)
     expect(isCorpusScanner(unit)).toBe(false)
-    expect(corpusFloor(unit)).toBe(4)
+    expect(
+      corpusFloor(unit),
+      '`rows` 追溯不到任何文件枚举——它可能是手写数组、JSON 账本、单文件的匹配数。' +
+        '把这种数记成 minCorpusFiles，账本里就会躺着一个没有任何东西在校验的数字',
+    ).toBe(null)
   })
 })

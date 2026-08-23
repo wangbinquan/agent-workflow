@@ -476,8 +476,6 @@ const CORPUS_ENUMERATION_CALLEES = new Set([
   'moduleShapes',
 ])
 
-/** `expect(x.length)` 里能算作「语料规模」的接收者形态。 */
-const CORPUS_SIZE_RECEIVER = /\.(?:length|size)\b/
 
 function calleeName(node: ts.CallExpression): string | null {
   const target = node.expression
@@ -517,6 +515,7 @@ export function isCorpusScanner(unit: SourceUnit): boolean {
  * 「扫描器还活着」的证据强度，账本要钉死的也是它。
  */
 export function corpusFloor(unit: SourceUnit): number | null {
+  const topLevel = topLevelFacts(unit.source, CORPUS_ENUMERATION_CALLEES, 'references')
   let floor: number | null = null
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
@@ -529,8 +528,8 @@ export function corpusFloor(unit: SourceUnit): number | null {
         argument !== undefined &&
         ts.isNumericLiteral(argument)
       ) {
-        const receiver = node.expression.expression.getText(unit.source)
-        if (receiver.startsWith('expect(') && CORPUS_SIZE_RECEIVER.test(receiver)) {
+        const measured = measuredCorpusSize(node.expression.expression, topLevel)
+        if (measured) {
           const value = Number(argument.text) + (matcher === 'toBeGreaterThan' ? 1 : 0)
           if (value >= 1 && (floor === null || value > floor)) floor = value
         }
@@ -540,6 +539,238 @@ export function corpusFloor(unit: SourceUnit): number | null {
   }
   visit(unit.source)
   return floor
+}
+
+/**
+ * 这个 `expect(…)` 量的是**语料规模**吗？
+ *
+ * 判据分两半，缺一不可：
+ *   ① 被度量的表达式以 `.length` / `.size` 收尾——它在数东西；
+ *   ② 被数的那个东西**能追溯到文件枚举**（`readdirSync` / `globSync` /
+ *      `guardTestFiles` / `backendUnits` / `moduleShapes`，含经由自定义
+ *      `walk()` 之类的传递）。
+ *
+ * 第二半是被实测逼出来的。上一版只有第一半（一条 `/\.(?:length|size)\b/` 正则打在
+ * 接收者文本上），于是 `rfc310-digital-employee-os-architecture` 里的
+ * `expect(entry.owner.length).toBeGreaterThan(20)`——**一句「manifest 里的 owner
+ * 描述别写得太敷衍」的字符串长度断言**——被记成了「该守卫声明了 21 个文件的语料下限」，
+ * 而它其实一条语料下限都没有。账本里于是躺着一个**没有任何东西在校验的数字**，
+ * 却长得和真下限一模一样：这正是 T13 要防的假绿，只不过发生在守卫的守卫自己身上。
+ *
+ * 种子刻意用 `CORPUS_ENUMERATION_CALLEES` 而非 `CORPUS_PRODUCING_CALLEES`：后者含
+ * `readFileSync`，而 `JSON.parse(readFileSync(manifest))` 出来的是**一份账本**，不是
+ * 语料；用它当种子的话上面那条误判照样成立（`entry` 会经 `manifest` 被判成语料）。
+ * 「语料下限」量的是**扫了多少个文件**，所以只有枚举才是它的源头。
+ */
+function measuredCorpusSize(expectCall: ts.Node, topLevel: TopLevelFacts): boolean {
+  if (!ts.isCallExpression(expectCall)) return false
+  if (!ts.isIdentifier(expectCall.expression) || expectCall.expression.text !== 'expect') {
+    return false
+  }
+  const measured = expectCall.arguments[0]
+  if (measured === undefined) return false
+
+  // 「在数东西」：子树里出现 `.length` / `.size`。**不能**要求顶层节点就是属性访问——
+  // 仓里最常见的语料下限写法是把两个根加起来（`expect(walk(BACKEND).length +
+  // walk(SHARED).length)`，见 rfc070 / rfc222 / rfc305），顶层是个 `+`。
+  let counts = false
+  const findCount = (child: ts.Node): void => {
+    if (counts) return
+    if (
+      ts.isPropertyAccessExpression(child) &&
+      (child.name.text === 'length' || child.name.text === 'size')
+    ) {
+      counts = true
+      return
+    }
+    ts.forEachChild(child, findCount)
+  }
+  findCount(measured)
+  if (!counts && !isPlainCounterReference(measured)) return false
+
+  const scope = scopeFacts(expectCall, topLevel, CORPUS_ENUMERATION_CALLEES)
+  const accumulators = new Set([
+    ...enumerationAccumulators(expectCall, scope.corpus),
+    ...enumerationCounters(expectCall, scope.corpus),
+  ])
+  let derived = false
+  const visit = (child: ts.Node): void => {
+    if (derived) return
+    if (ts.isCallExpression(child)) {
+      const target = child.expression
+      const callee = ts.isIdentifier(target)
+        ? target.text
+        : ts.isPropertyAccessExpression(target)
+          ? target.name.text
+          : null
+      if (callee !== null && CORPUS_ENUMERATION_CALLEES.has(callee)) {
+        derived = true
+        return
+      }
+    }
+    if (ts.isIdentifier(child) && (scope.corpus.has(child.text) || accumulators.has(child.text))) {
+      derived = true
+      return
+    }
+    ts.forEachChild(child, visit)
+  }
+  visit(measured)
+  return derived
+}
+
+/** `expect(scanned)` 这种「光秃秃一个名字」——是否要走计数器那条判据。 */
+function isPlainCounterReference(measured: ts.Node): boolean {
+  return ts.isIdentifier(measured)
+}
+
+/**
+ * 「逐文件自增计数器」形态的语料规模。
+ *
+ * `rfc311-perf-guards` 不持有文件数组，它在 `walk()` 里 `scanned += 1`，然后
+ * `expect(scanned).toBeGreaterThan(200)`。这条下限是真的——扫描根一失效 `scanned`
+ * 就是 0、断言立刻红——只是它身上没有 `.length` 可抓。
+ *
+ * 判据：`let x = <数字字面量>`，且 `x` 在某个**枚举语料的函数体 / 循环体**内被自增。
+ * 「枚举语料」沿用同一份判据（子树里有枚举 callee 或语料名字），所以这里不会把一个
+ * 与语料无关的普通计数器算进来。
+ */
+function enumerationCounters(node: ts.Node, corpus: ReadonlySet<string>): ReadonlySet<string> {
+  const numeric = new Set<string>()
+  const roots: ts.Node[] = []
+  let current: ts.Node | undefined = node
+  while (current !== undefined) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      roots.push(current)
+      for (const statement of current.statements) {
+        if (!ts.isVariableStatement(statement)) continue
+        for (const declaration of statement.declarationList.declarations) {
+          if (
+            ts.isIdentifier(declaration.name) &&
+            declaration.initializer !== undefined &&
+            ts.isNumericLiteral(declaration.initializer)
+          ) {
+            numeric.add(declaration.name.text)
+          }
+        }
+      }
+    }
+    current = current.parent
+  }
+  if (numeric.size === 0) return numeric
+
+  const enumerating = (subtree: ts.Node): boolean => {
+    let hit = false
+    const visit = (child: ts.Node): void => {
+      if (hit) return
+      if (ts.isCallExpression(child)) {
+        const target = child.expression
+        const callee = ts.isIdentifier(target)
+          ? target.text
+          : ts.isPropertyAccessExpression(target)
+            ? target.name.text
+            : null
+        if (callee !== null && CORPUS_ENUMERATION_CALLEES.has(callee)) {
+          hit = true
+          return
+        }
+      }
+      if (ts.isIdentifier(child) && corpus.has(child.text)) {
+        hit = true
+        return
+      }
+      ts.forEachChild(child, visit)
+    }
+    visit(subtree)
+    return hit
+  }
+
+  const incremented = new Set<string>()
+  const scan = (child: ts.Node): void => {
+    const bumped =
+      ts.isPostfixUnaryExpression(child) || ts.isPrefixUnaryExpression(child)
+        ? child.operand
+        : ts.isBinaryExpression(child) &&
+            child.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken
+          ? child.left
+          : undefined
+    if (bumped !== undefined && ts.isIdentifier(bumped) && numeric.has(bumped.text)) {
+      let owner: ts.Node | undefined = child.parent
+      while (owner !== undefined) {
+        if (
+          ts.isFunctionDeclaration(owner) ||
+          ts.isFunctionExpression(owner) ||
+          ts.isArrowFunction(owner) ||
+          ts.isForOfStatement(owner) ||
+          ts.isForInStatement(owner) ||
+          ts.isForStatement(owner)
+        ) {
+          if (enumerating(owner)) {
+            incremented.add(bumped.text)
+            break
+          }
+        }
+        owner = owner.parent
+      }
+    }
+    ts.forEachChild(child, scan)
+  }
+  for (const root of roots) scan(root)
+  return incremented
+}
+
+/**
+ * 「出参累加器」形态的语料持有者。
+ *
+ * `rfc254-file-url-pathname-guard` 的写法是
+ * `const files: string[] = []` + `walk(BACKEND_SRC, files)` + `expect(files.length)…`：
+ * `files` 的**初始化式是空数组字面量**，赋值发生在 `walk` 内部，所以按初始化式传播的
+ * 那套（`scopeFacts`）看不见它——一条 500 的真下限会被判成没有下限。
+ *
+ * 判据刻意收窄到「初始化式恰好是 `[]`，且该名字被当作实参传给了一个枚举语料的函数」。
+ * 不放宽成「凡是传给枚举函数的实参都算」：那样 `walk(dir, out)` 里的 `dir`（一个路径
+ * 字符串）也会被算成语料，于是 `expect(dir.length)` 这种字符串长度断言又会被记成语料
+ * 下限——正是本判据要修的那类错，只是换了个入口。
+ */
+function enumerationAccumulators(node: ts.Node, corpus: ReadonlySet<string>): ReadonlySet<string> {
+  const empties = new Set<string>()
+  let current: ts.Node | undefined = node
+  const roots: ts.Node[] = []
+  while (current !== undefined) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      roots.push(current)
+      for (const statement of current.statements) {
+        if (!ts.isVariableStatement(statement)) continue
+        for (const declaration of statement.declarationList.declarations) {
+          if (
+            ts.isIdentifier(declaration.name) &&
+            declaration.initializer !== undefined &&
+            ts.isArrayLiteralExpression(declaration.initializer) &&
+            declaration.initializer.elements.length === 0
+          ) {
+            empties.add(declaration.name.text)
+          }
+        }
+      }
+    }
+    current = current.parent
+  }
+  if (empties.size === 0) return empties
+
+  const filled = new Set<string>()
+  const visit = (child: ts.Node): void => {
+    if (ts.isCallExpression(child)) {
+      const target = child.expression
+      const callee = ts.isIdentifier(target) ? target.text : null
+      if (callee !== null && (corpus.has(callee) || CORPUS_ENUMERATION_CALLEES.has(callee))) {
+        for (const argument of child.arguments) {
+          if (ts.isIdentifier(argument) && empties.has(argument.text)) filled.add(argument.text)
+        }
+      }
+    }
+    ts.forEachChild(child, visit)
+  }
+  for (const root of roots) visit(root)
+  return filled
 }
 
 // ---------------------------------------------------------------------------
@@ -626,7 +857,26 @@ interface TopLevelFacts {
   readonly carrier: ReadonlySet<string>
 }
 
-function topLevelFacts(source: ts.SourceFile): TopLevelFacts {
+/**
+ * 传播深度。两个用途要的深度**不同**，混用会互相拆台：
+ *
+ * - `'calls'`（负 fixture 用）——只跟随**被调用的名字**。要判的是「这条断言的
+ *   **输入**是不是伪造的」；一个 matcher 内部查了张从真实注册表派生的表，它**仍然
+ *   是 matcher**。把它算成「碰了语料」会把合格的 fixture 判成不合格（实测：
+ *   rfc317-identity-dispatch / rfc287-t9 / tasks-list-scroll-boundary 三条全被误杀，
+ *   它们喂的都是伪造源码字面量）。
+ * - `'references'`（语料下限用）——连普通标识符引用一起跟随。要判的是「这个量会不会
+ *   **随语料一起塌掉**」，那么 `function callsitesOf(v) { return allFiles.filter(…) }`
+ *   里对 `allFiles` 的**引用**（非调用）就必须算数，否则 btn-variants-callsite 那条
+ *   语料一空就必红的真下限会被判成没有下限。
+ */
+type CorpusReach = 'calls' | 'references'
+
+function topLevelFacts(
+  source: ts.SourceFile,
+  seeds: ReadonlySet<string>,
+  reach: CorpusReach,
+): TopLevelFacts {
   const declarations = new Map<string, ts.Node>()
   // 被 import 进来的名字同样是候选 matcher——而且是**最好的**那种：判据抽进非 test
   // 模块（如本文件）后，守卫与「守卫的守卫」才能各自 import 同一份实现。漏掉这一支
@@ -664,7 +914,7 @@ function topLevelFacts(source: ts.SourceFile): TopLevelFacts {
             ? target.name.text
             : null
         if (name !== null) {
-          if (CORPUS_PRODUCING_CALLEES.has(name)) {
+          if (seeds.has(name)) {
             hit = true
             return
           }
@@ -675,6 +925,17 @@ function topLevelFacts(source: ts.SourceFile): TopLevelFacts {
               hit = true
               return
             }
+          }
+        }
+      }
+      // 见 CorpusReach：只有 'references' 深度才跟随普通标识符引用。
+      if (reach === 'references' && ts.isIdentifier(child)) {
+        const referenced = declarations.get(child.text)
+        if (referenced !== undefined && !seen.has(child.text)) {
+          seen.add(child.text)
+          if (producesCorpus(referenced, seen)) {
+            hit = true
+            return
           }
         }
       }
@@ -693,7 +954,7 @@ function topLevelFacts(source: ts.SourceFile): TopLevelFacts {
   }
   for (const name of imported) {
     if (declarations.has(name)) continue
-    if (CORPUS_PRODUCING_CALLEES.has(name)) corpus.add(name)
+    if (seeds.has(name)) corpus.add(name)
     else matcher.add(name)
   }
   return { corpus, matcher, carrier }
@@ -720,7 +981,11 @@ interface ScopeFacts {
  *
  * 语料的传播要跑到不动点：`files → offenders → filtered` 这种链条上，只看一跳会漏。
  */
-function scopeFacts(node: ts.Node, topLevel: TopLevelFacts): ScopeFacts {
+function scopeFacts(
+  node: ts.Node,
+  topLevel: TopLevelFacts,
+  seeds: ReadonlySet<string>,
+): ScopeFacts {
   const initializers = new Map<string, ts.Node>()
   const forOfBindings = new Map<string, ts.Node>()
   let current: ts.Node | undefined = node
@@ -761,7 +1026,7 @@ function scopeFacts(node: ts.Node, topLevel: TopLevelFacts): ScopeFacts {
             : ts.isPropertyAccessExpression(target)
               ? target.name.text
               : null
-          if (callee !== null && CORPUS_PRODUCING_CALLEES.has(callee)) {
+          if (callee !== null && seeds.has(callee)) {
             derived = true
             return
           }
@@ -799,7 +1064,7 @@ function scopeFacts(node: ts.Node, topLevel: TopLevelFacts): ScopeFacts {
  */
 export function negativeFixtureAssertions(unit: SourceUnit): string[] {
   const source = unit.source
-  const topLevel = topLevelFacts(source)
+  const topLevel = topLevelFacts(source, CORPUS_PRODUCING_CALLEES, 'calls')
   const found: string[] = []
   const visit = (node: ts.Node): void => {
     if (
@@ -809,7 +1074,7 @@ export function negativeFixtureAssertions(unit: SourceUnit): string[] {
       node.arguments[0] !== undefined
     ) {
       const subject = node.arguments[0]
-      const scope = scopeFacts(node, topLevel)
+      const scope = scopeFacts(node, topLevel, CORPUS_PRODUCING_CALLEES)
       let fabricated = containsFabricatedSource(subject)
       let touchesCorpus = false
       const walk = (child: ts.Node): void => {
