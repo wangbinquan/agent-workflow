@@ -1245,7 +1245,15 @@ function ledgerElementCount(node: ts.Node): number | null {
   if (ts.isNewExpression(node)) {
     // new Set([...]) / new Map([...])
     const argument = node.arguments?.[0]
-    return argument === undefined ? null : ledgerElementCount(argument)
+    if (argument !== undefined) return ledgerElementCount(argument)
+    // RFC-317 T72 —— `new Set<string>()` 是**空账本**，条目数 0，不是「数不出来」。
+    // 之前一律返回 null，于是空账本无法进 ledger-baselines.json——而空恰恰是最该被
+    // 钉住的状态：钉成 0 之后，任何人往里加第一条豁免都会红。实测仓内两处
+    // （`rfc284-safejson-convergence` / `shared-no-any`）就卡在这上面。
+    // 只在**确实没有参数**时算 0；`new Set(someVariable)` 仍然是 null（数不出来），
+    // 两者的区别正是「我看得见它是空的」与「我看不见里面有什么」。
+    const noArguments = node.arguments === undefined || node.arguments.length === 0
+    return noArguments ? 0 : null
   }
   return null
 }

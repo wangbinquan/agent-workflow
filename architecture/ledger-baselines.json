@@ -86,6 +86,139 @@
       "symbol": "PENDING_ENROLMENT",
       "baseline": 0,
       "why": "带 ACL 列却未入网的表。B1-c 已全部入网，0 是目标态"
+    },
+    {
+      "id": "acl-read-only-visibility-allowlist",
+      "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
+      "symbol": "READ_ONLY_VISIBILITY_ALLOWLIST",
+      "baseline": 2,
+      "why": "routes/ 下只读消费 canViewResource、无 owner 写门的文件。每一条都是「这个路由确实只读」的断言，新增一条等于新增一处需要人复核的写门缺口（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "lifecycle-status-set-exemptions",
+      "file": "packages/backend/tests/architecture/rfc317-lifecycle-status-sets.test.ts",
+      "symbol": "EXEMPTIONS",
+      "baseline": 3,
+      "why": "仍手抄任务状态集合而未走 shared 派生的站点。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "table-ownership-debt",
+      "file": "packages/backend/tests/architecture/rfc317-table-ownership.test.ts",
+      "symbol": "OWNERSHIP_DEBT",
+      "baseline": 8,
+      "why": "一张表被两个 bounded context 直查的存量。R5 的目标终值是 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "node-run-direct-status-writes",
+      "file": "packages/backend/tests/lifecycle-grep-guard.test.ts",
+      "symbol": "DIRECT_STATUS_WRITE_ALLOWLIST",
+      "baseline": 3,
+      "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "merge-state-blind-writes",
+      "file": "packages/backend/tests/rfc144-merge-state-blind-write-inventory.test.ts",
+      "symbol": "MERGE_STATE_WRITE_ALLOWLIST",
+      "baseline": 1,
+      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "safejson-local-definitions",
+      "file": "packages/backend/tests/rfc284-safejson-convergence.test.ts",
+      "symbol": "LOCAL_DEF_ALLOWLIST",
+      "baseline": 0,
+      "why": "自写 safeJson 的文件。**当前为空**——钉成 0 之后加第一条就红，这正是空账本值得入账的理由（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "rfc310-top-level-allowed-dirs",
+      "file": "packages/backend/tests/rfc310-architecture-lock.test.ts",
+      "symbol": "TOP_LEVEL_ALLOWED_DIRS",
+      "baseline": 7,
+      "why": "数字员工 OS 允许的顶层目录。它是结构声明而非债务，但同样只应在有意的架构决策下变化——入账让「顺手加一个目录」必须显式改这里（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "rfc310-top-level-allowed-files",
+      "file": "packages/backend/tests/rfc310-architecture-lock.test.ts",
+      "symbol": "TOP_LEVEL_ALLOWED_FILES",
+      "baseline": 1,
+      "why": "同上，文件维度（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "routes-allowed-cast-targets",
+      "file": "packages/backend/tests/routes-no-cast.test.ts",
+      "symbol": "ALLOWED_CAST_TARGETS",
+      "baseline": 5,
+      "why": "routes/ 下允许的 cast 目标类型。放宽一类 cast 是能被绕过的类型面，必须显式（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "routes-cast-file-line-allowlist",
+      "file": "packages/backend/tests/routes-no-cast.test.ts",
+      "symbol": "FILE_LINE_ALLOWLIST",
+      "baseline": 2,
+      "why": "routes/ 下按 file:line 豁免的 cast 存量。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "tasks-status-blind-writes",
+      "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
+      "symbol": "STATUS_WRITE_ALLOWLIST",
+      "baseline": 1,
+      "why": "tasks.status 的直写站点（s14 钉恰好 1 处，C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "shared-schema-any-allowlist",
+      "file": "packages/backend/tests/shared-no-any.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 0,
+      "why": "shared API schema 里允许 z.any() 的文件。**当前为空**——钉成 0 让第一个逃生口必须显式声明（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "test-suite-allowed-skips",
+      "file": "packages/backend/tests/test-suite-policy.test.ts",
+      "symbol": "ALLOWED_SKIP_COUNTS",
+      "baseline": 29,
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "frontend-inline-loading-allowlist",
+      "file": "packages/frontend/tests/inline-loading-ban.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 4,
+      "why": "仍自写 inline loading 而未走 LoadingState 的站点（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "frontend-form-error-allowlist",
+      "file": "packages/frontend/tests/rfc286-f1-dead-class-extinction.test.ts",
+      "symbol": "FORM_ERROR_ALLOWLIST",
+      "baseline": 1,
+      "why": "form-error 这个 class 的嵌套定义真实生效的语境（ScriptEdit）。多一条就意味着又有一处依赖嵌套定义的巧合（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "ux-modal-chrome-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "MODAL_CHROME_ALLOWLIST",
+      "baseline": 1,
+      "why": "自造 modal chrome class 的站点（R9.1）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "ux-native-select-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "NATIVE_SELECT_ALLOWLIST",
+      "baseline": 0,
+      "why": "直接落原生 <select> 的站点。**当前为空**（T60 的承重自证当场清空了它），钉成 0 防回潮（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "ux-public-selector-feature-debt",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "PUBLIC_SELECTOR_FEATURE_DEBT",
+      "baseline": 4,
+      "why": "公共 class 被特性名限定的存量选择器（R9.4）。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "ux-segmented-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "SEGMENTED_ALLOWLIST",
+      "baseline": 1,
+      "why": "手拼 .segmented 家族的站点（R9.2）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     }
   ]
 }

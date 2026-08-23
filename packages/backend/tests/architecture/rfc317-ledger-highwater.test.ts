@@ -23,12 +23,14 @@
 // 实现；否则又是「账本一套判据、守卫另一套判据」。
 
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
 
-import { ledgerEntryCount } from './census'
+import ts from 'typescript'
+
+import { ledgerEntryCount, portable } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -187,6 +189,140 @@ function readPreviousBaselines(): PreviousBaselines {
 }
 
 const PREVIOUS = readPreviousBaselines()
+
+/**
+ * RFC-317 T72 —— R10 少了最外面那一圈：**新出现的账本必须进 `ledger-baselines.json`**。
+ *
+ * T16/T17 管的是「已登记的账本不许悄悄变大」。但**谁来保证一份新账本会被登记**？
+ * 此前没有任何东西——于是「加一份新的豁免表」这个动作完全不留痕迹，而它恰恰是
+ * 绕过整套高水位机制最省事的办法。收口时实测：仓内 27 处账本形状的豁免表，
+ * `ledger-baselines.json` 只覆盖 **8** 处，其中包括能力影响 C9 逐字点名的
+ * `DIRECT_STATUS_WRITE_ALLOWLIST`（node_run 盲写）与 `STATUS_WRITE_ALLOWLIST`
+ * （tasks.status 直写）。AC-6 写的是「R10 覆盖仓内每一个 allowlist」。
+ *
+ * 判据形状：扫 tests / scripts 下的**顶层集合常量**，名字命中账本词汇
+ * （ALLOWLIST / EXEMPT / KNOWN_VIOLATIONS / DEBT / _HASHES / ALLOWED_ / PENDING_），
+ * 初始化式是数组 / 对象 / new Set / new Map。每一处要么在基线文件里有条目，
+ * 要么进下面这张**具名豁免表**并写清为什么它不是账本。
+ */
+const NOT_A_LEDGER: Readonly<Record<string, string>> = {
+  // 这张表自己：它是「哪些集合不算账本」的声明，不是债务。
+  'packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts|NOT_A_LEDGER':
+    '本规则的豁免表本身；它的条目数由下面那条精确相等断言钉住',
+}
+
+describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () => {
+  test('tests / scripts 下的账本形状常量，要么入基线、要么在具名豁免表里', () => {
+    const roots = [
+      'packages/backend/tests',
+      'packages/frontend/tests',
+      'packages/shared/tests',
+      'scripts',
+    ]
+    const registered = new Set(BASELINES.ledgers.map((l) => `${l.file}|${l.symbol}`))
+    const corpus = roots.flatMap((root) => listSourceFiles(resolve(REPO_ROOT, root)))
+    // 语料下限（T13）：本条是扫语料型判据，扫描根一旦失效它会永久静默地绿。
+    // 实测 500+ 个文件；下限取一个明显更低、但足以证明枚举没断的数。
+    expect(corpus.length, 'tests / scripts 的文件枚举断了，下面的缺席断言全部失去意义').toBeGreaterThan(
+      300,
+    )
+    const found: string[] = []
+    const unregistered: string[] = []
+    {
+      for (const file of corpus) {
+        const rel = portable(relative(REPO_ROOT, file))
+        for (const symbol of ledgerShapedSymbols(readFileSync(file, 'utf8'))) {
+          const key = `${rel}|${symbol}`
+          found.push(key)
+          if (registered.has(key)) continue
+          if (Object.prototype.hasOwnProperty.call(NOT_A_LEDGER, key)) continue
+          unregistered.push(key)
+        }
+      }
+    }
+    expect(found.length, '一处账本形状常量都没扫到——判据的被测面没了').toBeGreaterThan(20)
+    expect(
+      unregistered,
+      '这些豁免表没有进 architecture/ledger-baselines.json。' +
+        '「加一份新账本」是绕过整套高水位机制最省事的办法，必须留痕：' +
+        '要么给它钉一个只降不升的条目数，要么在 NOT_A_LEDGER 里写清它为什么不是账本。',
+    ).toEqual([])
+  })
+
+  test('豁免表逐条相等（删一条消红也会红）', () => {
+    expect(Object.keys(NOT_A_LEDGER).sort()).toEqual([
+      'packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts|NOT_A_LEDGER',
+    ])
+  })
+
+  test('matcher 自证：账本形状的常量必须被认出来，非账本形状必须放过', () => {
+    const ledgerLike = [
+      "const SOMETHING_ALLOWLIST = new Set<string>(['a'])",
+      'const KNOWN_VIOLATIONS = [{ rule: 1 }]',
+      "const PENDING_ENROLMENT: readonly string[] = ['x']",
+    ].join('\n')
+    expect(ledgerShapedSymbols(ledgerLike).sort()).toEqual([
+      'KNOWN_VIOLATIONS',
+      'PENDING_ENROLMENT',
+      'SOMETHING_ALLOWLIST',
+    ])
+    const notLedgerLike = [
+      // 名字命中但不是集合
+      'const ALLOWLIST_PATH = resolve(dir, "x")',
+      // 集合但名字不是账本词汇
+      "const ROOTS = ['a', 'b']",
+      // 非顶层（函数体内的局部量不是账本）
+      'function f() { const LOCAL_ALLOWLIST = new Set<string>() ; return LOCAL_ALLOWLIST }',
+    ].join('\n')
+    expect(
+      ledgerShapedSymbols(notLedgerLike),
+      '判据把非账本也算进来了——那会逼着后来的人给普通常量改名',
+    ).toEqual([])
+  })
+})
+
+const LEDGER_NAME = /ALLOWLIST|ALLOWED_|EXEMPT|KNOWN_VIOLATIONS|_HASHES|DEBT|PENDING_/
+
+/** 顶层的、名字命中账本词汇的、集合形状的常量名。纯函数——扫描与自证共用。 */
+function ledgerShapedSymbols(text: string): string[] {
+  const source = ts.createSourceFile('ledger.ts', text, ts.ScriptTarget.Latest, true)
+  const out: string[] = []
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) continue
+      if (!LEDGER_NAME.test(declaration.name.text)) continue
+      const initializer = declaration.initializer
+      if (initializer === undefined) continue
+      if (!isCollectionInitializer(initializer)) continue
+      out.push(declaration.name.text)
+    }
+  }
+  return out
+}
+
+function isCollectionInitializer(node: ts.Expression): boolean {
+  if (ts.isArrayLiteralExpression(node) || ts.isObjectLiteralExpression(node)) return true
+  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+    return isCollectionInitializer(node.expression)
+  }
+  if (ts.isParenthesizedExpression(node)) return isCollectionInitializer(node.expression)
+  if (ts.isNewExpression(node)) return /\b(Set|Map)$/.test(node.expression.getText())
+  return false
+}
+
+function listSourceFiles(dir: string): string[] {
+  const out: string[] = []
+  const visit = (current: string): void => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name)
+      if (entry.isDirectory()) visit(path)
+      else if (/\.tsx?$/.test(entry.name)) out.push(path)
+    }
+  }
+  visit(dir)
+  return out
+}
 
 describe('RFC-317 T17 —— 基线相对上一个 commit 只降不升', () => {
   test('历史比对确实跑了；跑不了时必须是两个**已知**原因之一，并把原因打出来', () => {
