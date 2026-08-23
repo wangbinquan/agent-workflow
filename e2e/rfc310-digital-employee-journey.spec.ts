@@ -596,7 +596,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(20)
   await expect(page.getByText('Work context', { exact: true })).toBeVisible()
   await expect(
-    page.getByText('Current responsibility and full lifecycle', { exact: true }),
+    page.getByText('Complete digital employee capability map', { exact: true }),
   ).toBeVisible()
   const timeline = page.getByTestId('employee-work-timeline')
   await expect(timeline).toBeVisible()
