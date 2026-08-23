@@ -584,7 +584,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
   mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
   mountExecutionContractRoutes(app, executionContracts) // platform deterministic IO contracts
-  mountDigitalEmployeeRoutes(app, digitalEmployee) // RFC-310 Digital Employee OS
+  mountDigitalEmployeeRoutes(app, deps, digitalEmployee) // RFC-310 Digital Employee OS
   mountDevelopmentConfigRoutes(app, deps) // RFC-310 PR-1B
   mountDevelopmentMissionRoutes(app, deps, {
     legacyAdmissionsEnabled: () => readDigitalEmployeeWriterState(deps.db).legacyAdmissionsEnabled,

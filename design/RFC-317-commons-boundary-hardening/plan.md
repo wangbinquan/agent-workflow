@@ -165,7 +165,7 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 | T66 | 15 条 family + 4 条 critic 的 stale 断言逐条改对（含 `resourceAcl.ts` 的「六类资源」表述、`ref/resolution.ts:87` 的单一事实源声明、`depcheck.ts:28-30` 的「只能缩不能涨」、`system-commons-unification-audit-2026-08-12.md` 的三处过时计数与前端行） |
 | T67 | 79 条 P3 入账复核：`findings.md` 的 gid 与 `commons-debt.json` 条目一一对应 |
 | T68 | `design/plan.md` RFC 索引登记 RFC-317（状态四选一打头）；`STATE.md` 顶部「进行中 RFC」→ 完工后移入已完成表 |
-| T69 | `docs/dev-gotchas.md` 沉淀通用教训：①「守卫只覆盖自己诞生的那一块」的系统性自检定式（写完任一守卫先问「起点面全吗？终点面全吗？subject 是硬编码还是派生？」）；②`<=` 型棘轮会留下可复用的松弛槽位，快照降下去不销账等于白送分支额度；③ 单跳 schema 反射守卫看不见多跳级联；④ 默认参数会让安全语义变成 opt-in，且对导入图 / AST cast 禁令 / 源码文本三类扫描**全部隐形**；⑤ **design 文档里裸写正则会被 lychee 当成 markdown 链接**——`['"](?:a|b)['"]` 这种片段形如 `[...](...)`，CI 的 `Markdown link check (design/)` 会去请求 `(?:a|b)` 并红，本 RFC 落档时实撞（`findings.md` 三处），定式是**正则一律包进反引号** |
+| T69 | `docs/dev-gotchas.md` 沉淀通用教训：①「守卫只覆盖自己诞生的那一块」的系统性自检定式（写完任一守卫先问「起点面全吗？终点面全吗？subject 是硬编码还是派生？」）；②`<=` 型棘轮会留下可复用的松弛槽位，快照降下去不销账等于白送分支额度；③ 单跳 schema 反射守卫看不见多跳级联；④ 默认参数会让安全语义变成 opt-in，且对导入图 / AST cast 禁令 / 源码文本三类扫描**全部隐形**；⑤ **`git ls-files` 型守卫看不见未跟踪的新文件**——`docs/dev-gotchas.md:12` 已记这条事故，但没写**本地的快解**：`git add` 进索引后 `git ls-files` 就能看见它，不必先提交再验（RFC-317 B1-c 实撞：新错误码守卫因看不见新测试文件而误报）；⑥ **AST 定位路由 handler 必须按 method + path**，只按 path 会永远取到最后注册的那条（同一 path 常有 GET/POST 或 GET/PUT 两条），断言看的是另一个 handler 却恒定「工作正常」；⑦ **正则剥注释会吃掉真代码**——非贪婪块注释正则从字符串里的 `/*` 一路吃到下一个 `*/`，吞掉几百行；判「某个名字有没有被调用」应当用 AST，对注释与字符串天然免疫；⑧ **正向锁也会被注释满足**：`text.includes('someGuardFn')` 会被文档注释里的提及满足，比它的镜像版（注释踩负向锁）更隐蔽，因为它不会让人怀疑；⑨ **design 文档里裸写正则会被 lychee 当成 markdown 链接**——`['"](?:a|b)['"]` 这种片段形如 `[...](...)`，CI 的 `Markdown link check (design/)` 会去请求 `(?:a|b)` 并红，本 RFC 落档时实撞（`findings.md` 三处），定式是**正则一律包进反引号** |
 | T70 | 若有机制被 R1–R12 完全覆盖，按 `docs/dev-gotchas.md` 三种处置逐条判并记录 |
 
 ## 3. 冲突矩阵（多人并发树）
@@ -267,4 +267,20 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
   - **(ii) 新增 `employee-definitions:*` 点族** —— 语义干净，但要动权限目录、角色 preset、用户权限目录顺序表（RFC-305 有硬性顺序门）、存量用户 grant 与 PAT scope 迁移。形态等同 RFC-315，属**独立的产品/权限变更**，不该塞进一个治理批。
 
 在拿到裁决前，`employee_definitions` 由 T9 的豁免账本锁住（不会再多一张同形表），越权面维持现状并如实记录。
+
+### B1-c（2026-08-23）—— T8：`employee_definitions` 立为第 13 类 ACL 资源
+
+**用户裁决**：复用既有的 `digital-employees:*` 前缀，不新开点族，本批落地。
+
+- **内核入网**：`ACL_RESOURCE_TYPES` / `ACL_TABLES` / `resource_grants.resource_type` 枚举 / `ACL_PERMISSION_PREFIX` 四处。第四处是**编译期强制**的——`mountAclEndpoints` 的 `Record<MountedAclResourceType, …>` 让新增一类直接编译报错，正是它逼出了权限点归属这个决策。
+- **判据接线（全部留在 transport，ACL 不下沉进模块）**：三个列表面走 `filterVisibleRows`；详情走「不可见 ⇒ 404 与不存在同形」；`PUT /api/digital-employees/:id` 与 `POST …/employees/:id/upgrade` 走 `requireResourceOwner`；`/acl` 挂在 `/api/digital-employees/:id/acl`。
+- **新增窄查询 `getEmployeeDefinitionAcl`**（port + sqlite 实现 + composition 暴露）：只选三列、**不解析配置内容**。落地时实撞两次才定到这个形状——`service.getEmployeeDefinition` 对 `currentRevision === null` 的半成品行抛 not-found；`store.getEmployeeDefinition` 会 zod 解析 `configuration_json`，内容不合 schema 时抛 ⇒ 授权判据会 500。**授权判据必须对任何存在的行可答**，否则半成品行与内容漂移行会从「谁都改不动」退化成 500 甚至绕过判据。
+- **迁移 `0204`**：零 schema 改动。存量行不回填（用户裁决），唯一补丁是把 `owner_user_id IS NULL` 的历史孤儿行显式置 `public`——当前写路径产不出这种行，但列可空且唯一索引用了 `COALESCE`，若真有而保持 `private`，入网后它对所有人不可见、无人能修。沿用 RFC-231「框架 built-in 显式保持 public」的口径。
+- **覆盖**：新增 `rfc317-employee-definition-acl.test.ts`（8 条：404 同形含**响应体逐字相等**、public 行不被误伤、可见非 owner ⇒ 403 零写入、不可见 ⇒ 404 零写入、owner/admin 放行、三个列表面的 AST 接线断言）；`rfc099` 矩阵补第 13 行，用例数 51 → 61。
+- **T9 账本清空**：`PENDING_ENROLMENT` 归空，「待入网集合」断言由 `['employee_definitions']` 改为 `[]`——这是**目标态**，再新增一张未入网的表就红。
+
+**变异实证**：拆掉 `loadVisibleEmployee` / `requireOwnedEmployee` 两处调用 ⇒ 4 条红（3 条行为 + 1 条 AST 接线），还原逐字一致后 8/8 绿。
+
+**本批的一个自伤**：AST 定位 handler 时**只按 path 匹配**，而同一 path 上常有两条路由（GET 列表 / POST 创建、GET 详情 / PUT 更新），于是永远取到最后注册的那条——断言看的是创建/更新 handler，而不是它以为在看的列表/详情 handler。这类「锚错了但恒定错在同一处」的断言比漏测更坏，因为它看起来一直在工作。改成按 **method + path** 定位，教训已写进该文件头注释。
+
 

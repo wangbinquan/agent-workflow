@@ -226,6 +226,16 @@ describe('API contract registry coverage', () => {
         // daemon and the group layer carried none, so granting one had to not
         // grant the other. That is a field-level check inside one row now.
         '/api/capability-templates/:id',
+        // RFC-317 T8 —— 员工定义（第 13 类）。
+        //
+        // 注意这里**只有 8 个 base**，而 ACL 资源今天有 13 类：RFC-310 的五类配置
+        // 资源经 routes/developmentConfig.ts 的工厂挂载（`type: cfg.aclType`，一个
+        // 变量），`discoverRoutes()` 的字面量重建规则看不见它们——与 findings.md
+        // ACL-03 是同一处结构性盲区。本条清单因此**不是**「全部 ACL 端点」的分母；
+        // 真正的入网判据已由 RFC-317 T9b 换成运行时预言
+        // （rfc099-acl-endpoints-matrix.test.ts 起真 app 读 allRouteMeta()）。
+        // 补齐这里属 TP-01 的契约覆盖扫描器改造，另批处理。
+        '/api/digital-employees/:id',
       ]
         .flatMap((base) => [`GET ${base}/acl`, `PUT ${base}/acl`])
         .sort(),

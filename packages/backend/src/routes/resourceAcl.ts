@@ -113,6 +113,12 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     digital_employee: 'digital-employees',
     automation_policy: 'automation-policies',
     development_adapter: 'adapter-definitions',
+    // RFC-317 T8 —— 用户裁决：复用既有的 digital-employees:* 前缀，不新开点族。
+    // 于是这个前缀同时背两样东西：RFC-310 的 digital_employee **配置资源**
+    // （/api/code/digital-employees）与 OS 的员工定义（/api/digital-employees）。
+    // 语义上确实混淆，但新开点族要动权限目录 / 角色 preset / 目录顺序表 /
+    // 存量 grant 与 PAT scope 迁移，属独立的产品变更（findings.md TP-05 同类）。
+    employee_definition: 'digital-employees',
   }
   const resource = ACL_PERMISSION_PREFIX[cfg.type]
 

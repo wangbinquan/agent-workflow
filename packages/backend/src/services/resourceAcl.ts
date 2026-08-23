@@ -63,6 +63,7 @@ import {
   digitalEmployees,
   automationPolicies,
   developmentAdapterDefinitions,
+  employeeDefinitions,
 } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -139,6 +140,8 @@ export const ACL_TABLES = {
   digital_employee: digitalEmployees,
   automation_policy: automationPolicies,
   development_adapter: developmentAdapterDefinitions,
+  // RFC-317 T8 —— 员工定义（数字员工 OS 的 authoring 面）。
+  employee_definition: employeeDefinitions,
 } as const
 
 /** RFC-223: these five resource types have owner-scoped display-name uniqueness.

@@ -519,6 +519,8 @@ export const resourceGrants = sqliteTable(
         'digital_employee',
         'automation_policy',
         'development_adapter',
+        // RFC-317 T8 —— 数字员工 OS 的员工定义（第 13 类）。
+        'employee_definition',
       ],
     }).notNull(),
     resourceId: text('resource_id').notNull(),

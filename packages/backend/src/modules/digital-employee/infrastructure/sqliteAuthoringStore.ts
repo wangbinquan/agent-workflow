@@ -504,6 +504,20 @@ export function createSqliteDigitalEmployeeAuthoringStore(
       return row === undefined ? null : toEmployee(row)
     },
 
+    getEmployeeDefinitionAcl(id) {
+      const row = db
+        .select({
+          id: employeeDefinitions.id,
+          ownerUserId: employeeDefinitions.ownerUserId,
+          visibility: employeeDefinitions.visibility,
+          archivedAt: employeeDefinitions.archivedAt,
+        })
+        .from(employeeDefinitions)
+        .where(eq(employeeDefinitions.id, id))
+        .get()
+      return row === undefined ? null : row
+    },
+
     listEmployeeDefinitions(typeRef) {
       const where =
         typeRef === undefined

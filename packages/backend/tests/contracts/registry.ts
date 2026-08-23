@@ -886,6 +886,15 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PUT', path: '/api/workflows/:id/acl' },
   { method: 'GET', path: '/api/workgroups/:id/acl' },
   { method: 'PUT', path: '/api/workgroups/:id/acl' },
+  // RFC-317 T8 —— 员工定义（第 13 类 ACL 资源）。
+  //
+  // 注意本清单**只有**这 7 类，而 ACL 资源今天有 13 类：RFC-310 的五类配置资源经
+  // routes/developmentConfig.ts 的工厂挂载（`type: cfg.aclType`，一个变量），
+  // 上游扫描器的字面量正则看不见它们，于是它们从未被要求登记（findings.md ACL-03
+  // 的同一处结构性盲区；RFC-317 T9b 已把**入网**判据换成运行时预言，本清单的
+  // 补齐属 TP-01 的契约覆盖扫描器改造，另批处理）。
+  { method: 'GET', path: '/api/digital-employees/:id/acl' },
+  { method: 'PUT', path: '/api/digital-employees/:id/acl' },
 ]
 
 // ----------------------------------------------------------------------------

@@ -32,11 +32,9 @@ const ACL_COLUMNS = ['owner_user_id', 'visibility'] as const
  * 这不是「允许存在」，是「已知、已定去向、且不许再多一个」。
  */
 const PENDING_ENROLMENT: Readonly<Record<string, { why: string; removeWhen: string }>> = {
-  employee_definitions: {
-    why: '数字员工 OS 的员工定义。三列自建表起就在，但 employee_definition 从未进 ACL_RESOURCE_TYPES ⇒ 三列惰性、全员可见全部员工定义（findings.md ACL-02，P1）。',
-    removeWhen:
-      'RFC-317 T8 —— 用户已裁决 D2(a)：立为第 13 类 ACL 资源。落地前须先定权限点归属（今天它与 RFC-310 的 digital_employee 配置资源共用 digital-employees:* 前缀），那是产品决策。',
-  },
+  // 空表是**目标态**，不是「还没开始」：RFC-317 T8 已把最后一张（employee_definitions）
+  // 入网。往这里加一行，等于承认新增了一张「看着受控、实则惰性」的表——那必须是
+  // 有意识的决定，并带具名清偿波次。
 }
 
 interface TableFacts {
@@ -121,8 +119,9 @@ describe('RFC-317 T9 —— ACL 列与 ACL 类型必须一一对应', () => {
     const pending = TABLES.filter(
       (table) => hasAclColumns(table) && !ACL_TABLE_NAMES.has(table.name),
     ).map((table) => table.name)
-    expect(pending, '实测分母：13 张表带 ACL 列，12 张已入网，只剩 employee_definitions').toEqual([
-      'employee_definitions',
-    ])
+    expect(
+      pending,
+      'RFC-317 T8 之后，13 张带 ACL 列的表**全部**入网；新增一张未入网的就红',
+    ).toEqual([])
   })
 })

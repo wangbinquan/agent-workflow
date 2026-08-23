@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 203 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 204 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -488,7 +488,12 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 外部 reopen 已关闭的 MR 时终态不逆转，另建带链接的新 Mission generation——
     // 这一列就是那条链接。不复用 development_mission_links：它的 parent_step_run_id
     // NOT NULL，而 reopen 不由任何 playbook step 触发）。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(203)
+    // RFC-317 T8 bump 到 204 with 0204_rfc317_employee_definition_acl：
+    // employee_definitions 立为第 13 类 ACL 资源。零 schema 改动（三列自建表起就在，
+    // 只是从未入网 ACL_RESOURCE_TYPES ⇒ 完全惰性、全员可见全部员工定义）；迁移唯一
+    // 做的事是把 owner_user_id IS NULL 的历史孤儿行显式置 public，免得入网后出现
+    // 任何人都够不到的行。存量行不回填。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(204)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

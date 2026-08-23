@@ -40,6 +40,12 @@ export const ACL_RESOURCE_TYPES = [
   'digital_employee',
   'automation_policy',
   'development_adapter',
+  // RFC-317 T8 / findings.md ACL-02 —— 数字员工 OS 的员工定义。它自建表起就带着
+  // 完整的行级 ACL 列（owner_user_id / visibility / acl_revision + owner×name 唯一
+  // 索引），却一直不在这张表里 ⇒ 三列完全惰性、全员可见全部员工定义。用户裁决
+  // D2(a)：立为第 13 类，权限点复用既有的 digital-employees:* 前缀（见
+  // routes/resourceAcl.ts 的 ACL_PERMISSION_PREFIX）。
+  'employee_definition',
 ] as const
 
 /**

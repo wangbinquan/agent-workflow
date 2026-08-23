@@ -147,6 +147,19 @@ export interface DigitalEmployeeAuthoringStore {
   getJobTemplateRevision(ref: ExactResourceRef): JobTemplateRevisionRecord | null
 
   getEmployeeDefinition(id: string): EmployeeDefinitionRecord | null
+  /**
+   * RFC-317 T8 —— 只取行级 ACL 三元组，**不解析配置内容**。
+   *
+   * `getEmployeeDefinition` 会把 `configuration_json` zod 解析成完整草稿；对一行
+   * 尚未完成、或存储内容随 schema 漂移到解析不了的员工定义，它会抛。授权判据不能
+   * 依赖内容可解析——否则那样的行会从「谁都改不动」退化成 500，甚至绕过判据。
+   */
+  getEmployeeDefinitionAcl(id: string): {
+    readonly id: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly archivedAt: number | null
+  } | null
   listEmployeeDefinitions(typeRef?: EmployeeTypeRef): EmployeeDefinitionRecord[]
   saveEmployeeDefinition(input: {
     revision: EmployeeDefinitionRevisionRecord

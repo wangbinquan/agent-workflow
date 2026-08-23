@@ -7,6 +7,10 @@ import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
 import type { DigitalEmployeeModule } from '@/modules/digital-employee/composition'
 import { registerRoute } from '@/routes/registry'
+import { mountAclEndpoints } from '@/routes/resourceAcl'
+import type { AppDeps } from '@/server'
+import { filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import { jsonDocumentResponse } from '@/util/jsonDocument'
@@ -45,8 +49,50 @@ function actorForToolAuthoring(c: Parameters<typeof actorOf>[0], body: unknown) 
   return actor
 }
 
-export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeModule): void {
+export function mountDigitalEmployeeRoutes(
+  app: Hono,
+  deps: AppDeps,
+  module: DigitalEmployeeModule,
+): void {
   const maxUploadBytes = 32 * 1024 * 1024
+
+  // RFC-317 T8 / findings.md ACL-02 —— 员工定义是第 13 类 ACL 资源。
+  //
+  // 表自建起就带完整的行级 ACL 列，但 'employee_definition' 一直不在
+  // ACL_RESOURCE_TYPES 里 ⇒ 三列惰性、列表只按 archivedAt 过滤、**全员可见全部
+  // 员工定义**。判据与其余 12 类同形，全部留在 transport 层（下面这两个 helper），
+  // 模块内部不感知 ACL。
+  const visibleEmployees = async <
+    T extends { id: string; ownerUserId: string | null; visibility: 'private' | 'public' },
+  >(
+    c: Parameters<typeof actorOf>[0],
+    rows: readonly T[],
+  ): Promise<T[]> => filterVisibleRows(deps.db, actorOf(c), 'employee_definition', rows)
+
+  /** 详情/写路径共用：不可见 ⇒ 404 与不存在同形（RFC-248 H9 反枚举）。 */
+  const loadVisibleEmployee = async (
+    c: Parameters<typeof actorOf>[0],
+    id: string,
+  ): Promise<{ id: string; ownerUserId: string | null; visibility: 'private' | 'public' }> => {
+    const row = module.queries.getEmployeeAcl(id)
+    if (row === null) {
+      throw new NotFoundError('employee-definition-not-found', 'digital employee not found')
+    }
+    const [visible] = await filterVisibleRows(deps.db, actorOf(c), 'employee_definition', [row])
+    if (visible === undefined) {
+      throw new NotFoundError('employee-definition-not-found', 'digital employee not found')
+    }
+    return visible
+  }
+
+  /** 写路径：先 404 同形，再 owner-or-bypass ⇒ 403。 */
+  const requireOwnedEmployee = async (
+    c: Parameters<typeof actorOf>[0],
+    id: string,
+  ): Promise<void> => {
+    const row = await loadVisibleEmployee(c, id)
+    await requireResourceOwner(deps.db, actorOf(c), 'employee_definition', row)
+  }
 
   registerRoute(
     app,
@@ -521,9 +567,12 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       tokenAccess: 'allow',
       summary: 'List digital employees of one type',
     },
-    (c) =>
+    async (c) =>
       c.json({
-        items: module.queries.listEmployees(parseEmployeeTypeRef(c.req.param('typeRef'))),
+        items: await visibleEmployees(
+          c,
+          module.queries.listEmployees(parseEmployeeTypeRef(c.req.param('typeRef'))),
+        ),
       }),
   )
 
@@ -556,15 +605,18 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       tokenAccess: 'allow',
       summary: 'Explicitly upgrade one employee to a newer type revision',
     },
-    async (c) =>
-      c.json({
+    async (c) => {
+      const id = c.req.param('id')
+      await requireOwnedEmployee(c, id)
+      return c.json({
         ref: module.commands.upgradeEmployee({
-          id: c.req.param('id'),
+          id,
           targetTypeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
           body: await safeJsonOrEmpty(c.req.raw),
           actorUserId: actorId(c),
         }),
-      }),
+      })
+    },
   )
 
   registerRoute(
@@ -576,7 +628,7 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       tokenAccess: 'allow',
       summary: 'List digital employees across programmable types',
     },
-    (c) => c.json({ items: module.queries.listEmployees() }),
+    async (c) => c.json({ items: await visibleEmployees(c, module.queries.listEmployees()) }),
   )
 
   registerRoute(
@@ -606,7 +658,8 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       tokenAccess: 'allow',
       summary: 'List digital employees pinned to the current installed type revision',
     },
-    (c) => c.json({ items: module.queries.listLaunchableEmployees() }),
+    async (c) =>
+      c.json({ items: await visibleEmployees(c, module.queries.listLaunchableEmployees()) }),
   )
 
   registerRoute(
@@ -618,7 +671,11 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       tokenAccess: 'allow',
       summary: 'Read a digital employee definition and its current revision',
     },
-    (c) => c.json(module.queries.getEmployee(c.req.param('id'))),
+    async (c) => {
+      const id = c.req.param('id')
+      await loadVisibleEmployee(c, id)
+      return c.json(module.queries.getEmployee(id))
+    },
   )
 
   registerRoute(
@@ -630,13 +687,25 @@ export function mountDigitalEmployeeRoutes(app: Hono, module: DigitalEmployeeMod
       tokenAccess: 'allow',
       summary: 'Save a digital employee and atomically create its next executable revision',
     },
-    async (c) =>
-      c.json(
+    async (c) => {
+      const id = c.req.param('id')
+      await requireOwnedEmployee(c, id)
+      return c.json(
         module.commands.updateEmployee({
-          id: c.req.param('id'),
+          id,
           body: await safeJsonOrEmpty(c.req.raw),
           actorUserId: actorId(c),
         }),
-      ),
+      )
+    },
   )
+
+  // RFC-317 T8 —— 授权管理端点。base 是 `/api/digital-employees`，与 RFC-310 配置
+  // 资源的 `/api/code/digital-employees` 不同前缀，路径不冲突。
+  mountAclEndpoints(app, deps, {
+    type: 'employee_definition',
+    base: '/api/digital-employees',
+    param: 'id',
+    load: async (_db, key) => module.queries.getEmployeeAcl(key),
+  })
 }

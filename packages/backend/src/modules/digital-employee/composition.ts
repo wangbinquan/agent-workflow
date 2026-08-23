@@ -108,6 +108,14 @@ export interface EmployeeDefinitionView {
   readonly definition: DigitalEmployeeDefinitionContent
   /** Exact decoded scope frozen into the current employee revision. */
   readonly workScope: unknown
+  /**
+   * RFC-317 T8 —— 行级 ACL 事实。表自建起就有这两列，但它们此前不出现在视图里，
+   * 于是 transport 层根本没有可判可见性的输入（findings.md ACL-02）。
+   * 判据本身仍留在 transport（`filterVisibleRows` / `requireResourceOwner`），
+   * 与其余 12 类同形——ACL 不下沉进本模块。
+   */
+  readonly ownerUserId: string | null
+  readonly visibility: 'private' | 'public'
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -176,6 +184,19 @@ export interface DigitalEmployeeQueries {
   listLaunchableEmployees(): EmployeeDefinitionView[]
   listEmployeeUpgradeCandidates(ref: EmployeeTypeRef): EmployeeDefinitionView[]
   getEmployee(id: string): EmployeeDefinitionView
+  /**
+   * RFC-317 T8 —— 只读 ACL 三元组的**窄查询**。
+   *
+   * 为什么不复用 `getEmployee`：那个视图要物化 current revision 与 work scope，
+   * 对「还没有 current revision」的行会抛；而 ACL 判据必须对**任何存在的行**都能
+   * 作答（否则半成品行会变成「谁都改得动」）。也不让 transport 直接查
+   * `employee_definitions` 表——那是跨界读模块私表，正是 RFC-317 R5 要禁的形态。
+   */
+  getEmployeeAcl(id: string): {
+    readonly id: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+  } | null
   getExecutionPolicy(): ExecutionPolicyView
   getMigrationStatus(): ReturnType<typeof analyzeDigitalEmployeeMigration>
 }
@@ -421,6 +442,8 @@ export function composeDigitalEmployee(
       revision: record.currentRevision,
       definition: revision.content,
       workScope: workScope.encodedScope,
+      ownerUserId: record.ownerUserId,
+      visibility: record.visibility,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     }
@@ -522,6 +545,18 @@ export function composeDigitalEmployee(
       listEmployeeUpgradeCandidates: (ref) =>
         service.listEmployeeDefinitionUpgradeCandidates(ref).map(employeeView),
       getEmployee: (id) => employeeView(service.getEmployeeDefinition(id)),
+      getEmployeeAcl: (id) => {
+        // 走 store 的**窄查询**（只选三列，不解析配置内容）：
+        //   - service.getEmployeeDefinition 对 currentRevision === null 的半成品行抛
+        //     not-found；
+        //   - store.getEmployeeDefinition 会 zod 解析 configuration_json，内容不合
+        //     schema 时抛。
+        // 授权判据必须对**任何存在的行**可答，否则那些行会从「谁都改不动」退化成
+        // 500 甚至绕过判据。archived 仍按「已消失」处理，与详情面 404 同形。
+        const record = store.getEmployeeDefinitionAcl(id)
+        if (record === null || record.archivedAt !== null) return null
+        return { id: record.id, ownerUserId: record.ownerUserId, visibility: record.visibility }
+      },
       getExecutionPolicy: policyView,
       getMigrationStatus: () => analyzeDigitalEmployeeMigration(options.db),
     },

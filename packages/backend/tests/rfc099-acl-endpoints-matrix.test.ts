@@ -44,6 +44,7 @@ import {
   capabilityTemplates,
   developmentAdapterDefinitions,
   digitalEmployees,
+  employeeDefinitions,
   mcps,
   plugins,
   skills,
@@ -369,6 +370,29 @@ const CASES: ResourceCase[] = [
         ...row,
         draftJson: '{}',
         publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    // RFC-317 T8 —— 第 13 类：数字员工 OS 的员工定义。权限点复用 digital-employees:*
+    // （与 RFC-310 的 digital_employee 配置资源同前缀，用户裁决），base 不同故不冲突。
+    type: 'employee_definition',
+    base: '/api/digital-employees',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(employeeDefinitions).values({
+        ...row,
+        typeId: 'acl-matrix-type',
+        typeRevision: 1,
+        configurationJson: '{}',
+        currentRevision: null,
         ownerUserId,
         visibility: 'private',
         createdAt: now,
