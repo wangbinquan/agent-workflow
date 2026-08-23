@@ -118,7 +118,7 @@ const WORKGROUPS = [
 const DIGITAL_EMPLOYEE = {
   id: 'employee-fixed-repository',
   name: 'Fixed repository employee',
-  typeRef: { typeId: 'development', revision: 6 },
+  typeRef: { typeId: 'development', revision: 7 },
   configuration: {
     displayName: 'Fixed repository employee',
     jobTemplateRef: { id: 'development-job', revision: 1 },
@@ -339,7 +339,12 @@ function installFetch(): FetchCall[] {
       if (url.includes('/api/users/lookup')) return json([])
       if (url.includes('/api/digital-employees/launchable'))
         return json({ items: [DIGITAL_EMPLOYEE, TASK_SCOPED_DIGITAL_EMPLOYEE] })
-      if (decodeURIComponent(url).includes('/api/digital-employee-types/development@6'))
+      if (
+        url.includes('/api/digital-employees/employee-fixed-repository/cases') &&
+        method === 'POST'
+      )
+        return json({ case: { id: 'employee-case-created' } }, 201)
+      if (decodeURIComponent(url).includes('/api/digital-employee-types/development@7'))
         return json(DIGITAL_EMPLOYEE_TYPE)
       if (url.includes('/api/cached-repos')) return json({ items: [] })
       if (url.includes('/api/workflows/wf-1')) return json(WF_DETAIL)
@@ -398,6 +403,11 @@ async function renderWizard(
       return <div data-testid="task-page" />
     },
   })
+  const employeeCasePage = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/tasks/employee-cases/$caseId',
+    component: () => <div data-testid="employee-case-page" />,
+  })
   const scheduledDetail = createRoute({
     getParentRoute: () => rootRoute,
     path: '/scheduled/$id',
@@ -417,6 +427,7 @@ async function renderWizard(
     routeTree: rootRoute.addChildren([
       wizard,
       taskPage,
+      employeeCasePage,
       scheduledDetail,
       scheduledList,
       workflowEditor,
@@ -530,6 +541,48 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect((repository as HTMLButtonElement).disabled).toBe(true)
     expect(repository.textContent).toContain('repo-fixed')
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('digital employee creation requires and submits an operator-defined task name', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?kind=digital-employee')
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Digital employee' }))
+    fireEvent.mouseDown(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: /Fixed repository employee/,
+      }),
+    )
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    await screen.findByTestId('repo-source-recent-urls-0')
+    next()
+
+    const taskName = await screen.findByTestId('wizard-task-name')
+    expect((taskName as HTMLInputElement).value).toBe('')
+    fireEvent.change(screen.getByPlaceholderText('Describe the request'), {
+      target: { value: 'Repair the login failure and add a regression test.' },
+    })
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(taskName, { target: { value: '修复登录失败' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    expect(screen.getByTestId('employee-case-summary-name').textContent).toContain('修复登录失败')
+
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+    expect(await screen.findByTestId('employee-case-page')).toBeTruthy()
+    expect(
+      calls.find(
+        (call) =>
+          call.method === 'POST' &&
+          call.url.includes('/api/digital-employees/employee-fixed-repository/cases'),
+      )?.body,
+    ).toMatchObject({ name: '修复登录失败' })
   })
 
   test('a task-scoped employee loads repository choices without waiting for a disabled group query', async () => {

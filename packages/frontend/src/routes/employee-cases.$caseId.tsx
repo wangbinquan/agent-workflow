@@ -24,9 +24,10 @@ import { PageHeader } from '@/components/PageHeader'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { Route as RootRoute } from './__root'
 
-interface EmployeeCaseProjection {
+export interface EmployeeCaseProjection {
   case: {
     id: string
+    name: string
     employeeRef: { id: string; revision: number }
     typeRef: { typeId: string; revision: number }
     state: 'active' | 'waiting' | 'blocked' | 'terminal'
@@ -41,6 +42,7 @@ interface EmployeeCaseProjection {
   employeeType: { displayName: LocalizedText; description: LocalizedText }
   capabilityActivation: {
     displayName: string
+    jobTemplateRef: { id: string; revision: number }
     activeWorkItemRefs: string[]
     executionOptions: Record<string, boolean>
     exactOrderedDispatchConfigurations: DigitalEmployeeDefinition['definition']['exactOrderedDispatchConfigurations']
@@ -79,6 +81,7 @@ interface EmployeeCaseProjection {
     parentWorkItemRef: string
     optionRef: string
     state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
+    executionRef: string | null
   }>
   channels: Array<{
     id: string
@@ -88,10 +91,16 @@ interface EmployeeCaseProjection {
     invocationContractId: string
     results: Array<{ id: string; milestoneType: string; createdAt: number }>
   }>
-  nextAction: null | {
-    owner: 'current-user' | 'platform' | 'digital-employee'
-    action: 'resolve-blocker' | 'schedule-next-reaction' | 'continue-automatically'
-  }
+  nextAction:
+    | null
+    | { owner: 'current-user'; action: 'resolve-blocker' }
+    | {
+        owner: 'current-user'
+        action: 'complete-human-review'
+        executionRef: string
+      }
+    | { owner: 'platform'; action: 'schedule-next-reaction' }
+    | { owner: 'digital-employee'; action: 'continue-automatically' }
 }
 
 interface ReactionRound {
@@ -133,7 +142,7 @@ function caseStatus(
   return { label: zh ? '正在工作' : 'Working', kind: 'success' }
 }
 
-function nextActionCopy(
+export function nextActionCopy(
   projection: EmployeeCaseProjection,
   zh: boolean,
 ): { tone: 'info' | 'warning' | 'success'; title: string; body: string } {
@@ -160,6 +169,15 @@ function nextActionCopy(
       body:
         projection.case.blockReason ??
         (zh ? '查看最近一轮的错误现场。' : 'Inspect the latest failed round.'),
+    }
+  }
+  if (projection.nextAction?.action === 'complete-human-review') {
+    return {
+      tone: 'warning',
+      title: zh ? '下一步：完成人工评审' : 'Next: complete the human review',
+      body: zh
+        ? '打开待评审的执行 Session，提交评审决定后数字员工会自动继续。'
+        : 'Open the pending execution session and submit a review decision; the employee then continues automatically.',
     }
   }
   if (projection.nextAction?.owner === 'platform') {
@@ -241,6 +259,19 @@ function roundVisualState(
   if (state === 'completed') return 'completed'
   if (state === 'obsolete') return 'neutral'
   return 'waiting'
+}
+
+export function runningRoundTaskTarget(
+  round: { state: string; executionRef: string | null } | undefined,
+): { to: '/tasks/$id'; params: { id: string } } | null {
+  if (
+    round === undefined ||
+    round.executionRef === null ||
+    roundVisualState(round.state) !== 'running'
+  ) {
+    return null
+  }
+  return { to: '/tasks/$id', params: { id: round.executionRef } }
 }
 
 function contextFacts(
@@ -526,26 +557,27 @@ function EmployeeCaseDetailPage(): ReactElement {
       <div className="operations-surface">
         <PageHeader
           className="operations-surface__header"
-          title={
-            data.capabilityActivation.displayName || (zh ? '数字员工任务' : 'Digital employee task')
-          }
+          title={data.case.name}
           meta={<StatusChip kind={status.kind}>{status.label}</StatusChip>}
           actions={
             typeRef === null ? null : (
               <Link
                 to="/digital-employees/$typeRef"
                 params={{ typeRef }}
-                search={{ view: 'employees' }}
+                search={{
+                  view: 'jobs',
+                  jobTemplateId: data.capabilityActivation.jobTemplateRef.id,
+                }}
                 className="btn btn--sm"
               >
-                {zh ? '查看员工配置' : 'View employee configuration'}
+                {zh ? '查看岗位模板' : 'View job template'}
               </Link>
             )
           }
         >
           <p className="operations-surface__subtitle">
             {localized(data.employeeType.displayName, language)} ·{' '}
-            {zh ? '持续负责到外部合入或结束' : 'Responsible until external merge or finish'}
+            {data.capabilityActivation.displayName}
           </p>
         </PageHeader>
 
@@ -554,7 +586,15 @@ function EmployeeCaseDetailPage(): ReactElement {
             tone={next.tone}
             title={next.title}
             action={
-              data.case.state === 'blocked' && canResume ? (
+              data.nextAction?.action === 'complete-human-review' ? (
+                <Link
+                  to="/tasks/$id"
+                  params={{ id: data.nextAction.executionRef }}
+                  className="btn btn--sm btn--primary"
+                >
+                  {zh ? '继续人工评审' : 'Continue human review'}
+                </Link>
+              ) : data.case.state === 'blocked' && canResume ? (
                 <button
                   type="button"
                   className="btn btn--sm btn--primary"
@@ -608,6 +648,11 @@ function EmployeeCaseDetailPage(): ReactElement {
                 selectedWorkItemRef={selectedWorkItemRef}
                 selectedReviewOptionRef={selectedReviewOptionRef}
                 onSelect={(workItemRef) => {
+                  const target = runningRoundTaskTarget(latestRoundByWorkItem.get(workItemRef))
+                  if (target !== null) {
+                    void navigate(target)
+                    return
+                  }
                   setSelectedDispatchNodeKey(null)
                   setSelectedReviewOptionRef(null)
                   setSelectedWorkItemRef(workItemRef)
@@ -625,10 +670,15 @@ function EmployeeCaseDetailPage(): ReactElement {
                 dispatchNodes={runtimeDispatchNodes}
                 selectedDispatchNodeKey={selectedDispatchNodeKey}
                 onSelectDispatchNode={(node) => {
+                  const latest = routeRound(node.destinationWorkItemRef, node.routeRef)
+                  const target = runningRoundTaskTarget(latest)
+                  if (target !== null) {
+                    void navigate(target)
+                    return
+                  }
                   setSelectedReviewOptionRef(null)
                   setSelectedDispatchNodeKey(node.key)
                   setSelectedWorkItemRef(node.destinationWorkItemRef)
-                  const latest = routeRound(node.destinationWorkItemRef, node.routeRef)
                   if (latest !== undefined) setSelectedRoundId(latest.id)
                 }}
                 toolState={runtimeToolState}

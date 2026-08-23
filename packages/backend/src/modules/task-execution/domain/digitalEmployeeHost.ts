@@ -20,7 +20,12 @@ export const DIGITAL_EMPLOYEE_AGENT_NODE_ID = '__de_agent__'
 export const DIGITAL_EMPLOYEE_SCRIPT_NODE_ID = '__de_script__'
 export const DIGITAL_EMPLOYEE_OUTPUT_NODE_ID = '__de_output__'
 export const DIGITAL_EMPLOYEE_PROMPT_KEY = 'prompt'
-export const DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY = 'plan-prompt'
+// Prompt-template local references accept identifier-shaped names only. Keep
+// the frozen input/edge port and `{{...}}` token on the same valid identifier;
+// a hyphenated name is parsed as a malformed local reference before either
+// reviewed Agent can start.
+export const DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY = 'plan_prompt'
+export const DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY = 'implementation_plan'
 export const DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID = '__de_plan_agent__'
 export const DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID = '__de_plan_review__'
 
@@ -189,7 +194,7 @@ export function synthesizeReviewedDigitalEmployeeHostSnapshot(
         kind: 'agent-single',
         agentId: input.implementationAgentId,
         agentName: input.implementationAgentName,
-        promptTemplate: `{{${DIGITAL_EMPLOYEE_PROMPT_KEY}}}\n\nAPPROVED_IMPLEMENTATION_PLAN\n{{implementation-plan}}`,
+        promptTemplate: `{{${DIGITAL_EMPLOYEE_PROMPT_KEY}}}\n\nAPPROVED_IMPLEMENTATION_PLAN\n{{${DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY}}}`,
       },
       {
         id: DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
@@ -230,7 +235,10 @@ export function synthesizeReviewedDigitalEmployeeHostSnapshot(
       {
         id: 'e_de_approved_plan',
         source: { nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID, portName: 'approved_doc' },
-        target: { nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID, portName: 'implementation-plan' },
+        target: {
+          nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,
+        },
       },
       {
         id: 'e_de_reviewed_result',

@@ -46,6 +46,7 @@ import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
 import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
 import { TaskQuestionList, type TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { TaskMembersDialogButton } from '@/components/tasks/TaskMembersPanel'
+import { TaskDigitalEmployeeSourceLink } from '@/components/tasks/TaskDigitalEmployeeSourceLink'
 import { TaskWebhookSourceLink } from '@/components/tasks/TaskWebhookSourceLink'
 import { WorkgroupRoom } from '@/components/workgroup/room/WorkgroupRoom'
 import { DynamicWorkflowPanel } from '@/components/workgroup/DynamicWorkflowPanel'
@@ -581,6 +582,13 @@ function TaskDetailPage() {
                   {' '}
                   <span aria-hidden="true">·</span>{' '}
                   <TaskWebhookSourceLink source={tk.webhookSourceLink} />
+                </span>
+              )}
+              {tk.digitalEmployeeCaseId != null && (
+                <span className="task-detail__source" data-testid="task-digital-employee-source">
+                  {' '}
+                  <span aria-hidden="true">·</span>{' '}
+                  <TaskDigitalEmployeeSourceLink caseId={tk.digitalEmployeeCaseId} />
                 </span>
               )}
             </div>

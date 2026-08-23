@@ -594,6 +594,11 @@ export const TaskSchema = z.object({
    */
   codeRoundId: z.string().nullable().optional(),
   /**
+   * RFC-310: stable owning Case for a digital-employee OS execution. Optional
+   * keeps rolling compatibility; task summaries intentionally omit it.
+   */
+  digitalEmployeeCaseId: z.string().nullable().optional(),
+  /**
    * RFC-298: the single safe navigation target derived from frozen webhook
    * context for the detail response. Optional keeps rolling compatibility
    * with older daemons; list/summary schemas deliberately do not expose it.

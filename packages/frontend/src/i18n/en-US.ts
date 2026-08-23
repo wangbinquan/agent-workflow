@@ -5006,6 +5006,7 @@ export const enUS: Resources = {
       },
     },
     detailTitleIdLabel: 'Task ID',
+    digitalEmployeeSource: 'Back to digital employee task',
     webhookSource: {
       comment: 'Open original comment',
       mergeRequest: 'Open original merge request/PR',

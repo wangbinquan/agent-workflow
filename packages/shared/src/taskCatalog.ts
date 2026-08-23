@@ -114,6 +114,7 @@ export const DigitalEmployeeTaskPageSchema = z
           employeeName: z.string().min(1),
           typeRef: z.object({ typeId: z.string().min(1), revision: z.number().int().positive() }),
           typeName: TaskCatalogLocalizedTextSchema,
+          taskName: z.string().min(1),
           subjectRef: z.string().min(1),
           targetRef: z.string().nullable(),
           currentWorkItemRef: z.string().nullable(),

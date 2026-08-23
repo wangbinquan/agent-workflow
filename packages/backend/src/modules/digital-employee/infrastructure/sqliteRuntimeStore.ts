@@ -86,6 +86,7 @@ function enqueueCaseLifecycleEventTx(
 function caseRecord(row: typeof employeeCases.$inferSelect): EmployeeCaseRecord {
   return {
     id: row.id,
+    name: row.name,
     employeeRef: { id: row.employeeId, revision: row.employeeRevision },
     typeRef: { typeId: row.typeId, revision: row.typeRevision },
     primaryContextId: row.primaryContextId,
@@ -298,6 +299,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         tx.insert(employeeCases)
           .values({
             id: input.caseRecord.id,
+            name: input.caseRecord.name,
             employeeId: input.caseRecord.employeeRef.id,
             employeeRevision: input.caseRecord.employeeRef.revision,
             typeId: input.caseRecord.typeRef.typeId,
@@ -453,6 +455,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         const term = `%${input.q}%`
         conditions.push(
           or(
+            like(employeeCases.name, term),
             like(employeeCases.id, term),
             like(employeeCases.employeeId, term),
             like(employeeCases.blockReason, term),

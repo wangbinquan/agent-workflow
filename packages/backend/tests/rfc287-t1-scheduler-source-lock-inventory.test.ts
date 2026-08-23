@@ -135,6 +135,7 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'scheduler-clarify-baseline.test.ts',
   'scheduler-cross-clarify-dispatch.test.ts',
   'scheduler-cross-clarify-no-runaway.test.ts',
+  'scheduler-default-retries.test.ts',
   'scheduler-node-overrides.test.ts',
   'scheduler-shard-item-kind-stringify.test.ts',
   'scheduler-subagent-live-capture-passthrough.test.ts',

@@ -1387,6 +1387,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         parentWorkItemRef: string
         optionRef: string
         state: string
+        /** RFC-310：人工检视闸口回指的那次执行；未到达的闸口为 null。 */
+        executionRef: string | null
       }>
     }
     const chronologicalRounds = [...projection.rounds].sort(
@@ -1396,10 +1398,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       'prepare-materials',
       'analyze-implement',
     ])
+    // `executionRef` 是 RFC-310 新增的回指：闸口要能把人带到**具体哪一次执行**去完成
+    // 检视，否则前端只知道「有个闸口在等」却不知道等在哪。这里钉死具体的
+    // `system-mock-execution-2` 而不是「非空即可」——本用例整条链路都是确定性 system
+    // mock（上一条断言同样钉死了轮次的精确顺序），所以这个 id 是可预言的；它要是漂了，
+    // 说明 mock 的确定性真的坏了，那正是本用例该报的事。
     expect(projection.reviewGates).toContainEqual({
       parentWorkItemRef: 'analyze-implement',
       optionRef: 'review-implementation-plan',
       state: 'skipped',
+      executionRef: 'system-mock-execution-2',
     })
     const parentMrHead = mrHeads.get('repo-system-mock')!
     const mr = projection.contexts.find(
@@ -1707,6 +1715,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       employeeId: deliveryOnlyEmployeeRef.id,
       actorUserId: 'requester',
       intake: {
+        name: '交付 REQ-OS-42',
         kind: 'external-id',
         target: { repositoryId: 'repo-system-mock-delivery-only' },
         body: null,
@@ -1796,6 +1805,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       employeeId: reviewEmployeeRef.id,
       actorUserId: 'requester',
       intake: {
+        name: '检视并修复 REQ-OS-42',
         kind: 'external-id',
         target: { repositoryId: 'repo-system-mock-review' },
         body: null,

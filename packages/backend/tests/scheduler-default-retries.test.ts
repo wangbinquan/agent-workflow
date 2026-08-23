@@ -161,6 +161,20 @@ describe('RFC-042 default retries fallback = 3', () => {
   })
   afterEach(() => h.cleanup())
 
+  test('a pre-spawn exception catch terminalizes its node_run before retry dispatch', () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    const thrownResult = source.indexOf('const errorMessage = `node ${node.id} threw: ${msg}`')
+    expect(thrownResult).toBeGreaterThan(0)
+    const catchStart = source.lastIndexOf('} catch (err) {', thrownResult)
+    const catchBody = source.slice(catchStart, thrownResult + 1_600)
+    expect(catchBody).toContain("event: { kind: 'mark-failed'")
+    expect(catchBody).toContain('finishedAt: Date.now()')
+    expect(catchBody).toContain('broadcastNodeStatus')
+  })
+
   test(
     'omitted retries → 4 attempts (1 + 3 retries)',
     async () => {

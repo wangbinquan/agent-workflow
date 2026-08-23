@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import { renderUserPrompt, WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
 import { agents as agentRows, nodeRuns, tasks, workflows } from '@/db/schema'
 import {
@@ -29,13 +29,16 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import {
+  DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
   DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
   synthesizeDigitalEmployeeScriptHostSnapshot,
   synthesizeReviewedDigitalEmployeeHostSnapshot,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import {
+  buildDigitalEmployeeFixedPrompt,
   buildDigitalEmployeePlanPrompt,
+  composeDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createAgent, updateAgent } from '@/services/agent'
@@ -53,6 +56,29 @@ function guide(contractId: string) {
   )
   if (registration === undefined) throw new Error(`missing fixture ${contractId}`)
   return executionContractGuideSchema.parse(JSON.parse(registration.guideJson) as unknown)
+}
+
+/**
+ * 从工作流节点上取 `promptTemplate`。
+ *
+ * 这个字段**没有在 `WorkflowNodeSchema` 里声明**——它靠 `.passthrough()` 漏过去，
+ * 于是每个读点拿到的都是 `unknown`。全仓有 24 个生产文件在用它，却没有任何共享读取器：
+ * `scheduler.ts` 自己开了个私有的 `pickString(node, 'promptTemplate')`（:5741 / :8387），
+ * 其余各处各自应付。这里不复刻那份私有实现，只做本测试需要的显式收窄，并把这个缺口
+ * 记在 `docs/audit-backlog.md`——补 schema 声明会改变既有存量定义的校验行为，
+ * 属独立决策，不该顺手塞进一个测试修复里。
+ */
+function requirePromptTemplate(node: unknown, label: string): string {
+  // 参数取 unknown 而不是 `{ promptTemplate?: unknown }`：后者全是可选属性，会触发
+  // TS 的弱类型检查（"has no properties in common"）——而这恰恰说明该字段**不在类型里**。
+  const value =
+    typeof node === 'object' && node !== null
+      ? (node as { promptTemplate?: unknown }).promptTemplate
+      : undefined
+  if (typeof value !== 'string') {
+    throw new Error(`${label} node is missing a string promptTemplate (got ${typeof value})`)
+  }
+  return value
 }
 
 describe('platform execution contracts', () => {
@@ -103,6 +129,55 @@ describe('platform execution contracts', () => {
         outputJson: '.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md',
       }),
     ).toBe('.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md')
+  })
+
+  // Real GitLab Case regression (2026-08-23): an otherwise successful Agent
+  // returned `status: "succeeded"` because the frozen prompt named the field
+  // but not its closed vocabulary, so strict validation discarded the result.
+  test('Agent envelope prompts name the closed status vocabulary and successful value', () => {
+    const contractGuide = guide('development.analyze-implement')
+    const runtimeGuide = {
+      schemaVersion: contractGuide.schemaVersion,
+      outputMode: contractGuide.outputMode,
+      contractRef: contractGuide.contractRef,
+      displayName: contractGuide.displayName,
+      description: contractGuide.description,
+      inputSchemaId: contractGuide.input.schemaId,
+      outputSchemaId: contractGuide.output.schemaId,
+      outputTopLevelFields: contractGuide.output.topLevelFields,
+      allowedExecutorKinds: contractGuide.allowedExecutorKinds,
+      agentOutputPort: contractGuide.transports.agent?.outputPort ?? null,
+      agentOutputKind: contractGuide.transports.agent?.outputKind ?? null,
+      guideJson: JSON.stringify(contractGuide),
+    }
+    const prompt = buildDigitalEmployeeFixedPrompt(
+      {
+        roundRef: 'round-status-vocabulary',
+        executionNonce: 'a'.repeat(64),
+        toolSlotRef: 'default',
+        semanticValidatorId: 'development.analyze-implement.validator',
+        inputEnvelopeJson: '{}',
+      },
+      { previousError: null },
+      runtimeGuide,
+    )
+
+    expect(prompt).toContain(
+      'Set status to exactly "ok", "needs-input", or "blocked". For successful completion use "ok", never "succeeded" or another synonym.',
+    )
+    expect(() =>
+      validateExactContractOutput({
+        guide: contractGuide,
+        roundRef: 'round-status-vocabulary',
+        executionNonce: 'a'.repeat(64),
+        outputJson: JSON.stringify({
+          ...JSON.parse(contractGuide.output.exampleJson),
+          roundRef: 'round-status-vocabulary',
+          executionNonce: 'a'.repeat(64),
+          status: 'succeeded',
+        }),
+      }),
+    ).toThrow('output status must be ok, needs-input, or blocked')
   })
 
   // User regression 2026-08-23: the tool-definition guide had reversed the
@@ -390,8 +465,47 @@ describe('platform execution contracts', () => {
     expect(host.edges).toContainEqual({
       id: 'e_de_approved_plan',
       source: { nodeId: '__de_plan_review__', portName: 'approved_doc' },
-      target: { nodeId: '__de_agent__', portName: 'implementation-plan' },
+      target: {
+        nodeId: '__de_agent__',
+        portName: DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,
+      },
     })
+    const planningNode = host.nodes.find((node) => node.id === '__de_plan_agent__')
+    expect(planningNode?.kind).toBe('agent-single')
+    if (planningNode?.kind !== 'agent-single') throw new Error('missing planning Agent node')
+    const renderedPlanPrompt = renderUserPrompt({
+      promptTemplate: requirePromptTemplate(planningNode, 'planning'),
+      inputs: { [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: prompt },
+      meta: {
+        repoPath: '/repo',
+        baseBranch: 'main',
+        taskId: 'plan-task',
+        nodeId: planningNode.id,
+      },
+      agentOutputs: ['analysis-plan'],
+      agentOutputKinds: { 'analysis-plan': 'path<md>' },
+    })
+    expect(renderedPlanPrompt).toContain(prompt)
+
+    const implementationNode = host.nodes.find((node) => node.id === '__de_agent__')
+    expect(implementationNode?.kind).toBe('agent-single')
+    if (implementationNode?.kind !== 'agent-single') {
+      throw new Error('missing implementation Agent node')
+    }
+    const approvedPlan = '# Approved implementation plan\n\nUse the reviewed contract.'
+    const renderedImplementationPrompt = renderUserPrompt({
+      promptTemplate: requirePromptTemplate(implementationNode, 'implementation'),
+      inputs: { prompt, [DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY]: approvedPlan },
+      meta: {
+        repoPath: '/repo',
+        baseBranch: 'main',
+        taskId: 'implementation-task',
+        nodeId: implementationNode.id,
+      },
+      agentOutputs: ['agent-result'],
+      agentOutputKinds: { 'agent-result': 'string' },
+    })
+    expect(renderedImplementationPrompt).toContain(approvedPlan)
   })
 
   test('human-review projection reads the frozen host input and durable review receipt', async () => {
@@ -447,6 +561,44 @@ describe('platform execution contracts', () => {
       .where(eq(nodeRuns.id, 'review-projection-run'))
       .run()
     expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('failed')
+  })
+
+  test('a failed reviewed execution reports the task failure before derived plan validation', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = 'reviewed-execution-failed-before-output'
+    await db.insert(tasks).values({
+      id: taskId,
+      name: 'reviewed execution pre-spawn failure',
+      workflowId: 'digital-employee-host-reviewed',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/reviewed-execution-failure',
+      worktreePath: '/tmp/reviewed-execution-failure',
+      baseBranch: 'main',
+      branch: 'agent-workflow/reviewed-execution-failure',
+      status: 'failed',
+      inputs: JSON.stringify({
+        [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]:
+          'EXPECTED_ANALYSIS_PLAN_PATH_JSON\n".agent-workflow/reviews/plan.md"',
+      }),
+      startedAt: 1,
+      finishedAt: 2,
+      errorSummary: 'implementation Agent failed before spawn',
+      errorMessage: 'invalid prompt template ref: malformed-local-ref',
+      failedNodeId: '__de_agent__',
+    })
+    const execution = composeDigitalEmployeeExecution({
+      db,
+      appHome: '/tmp',
+      startDeps: null as never,
+      executionContracts: null as never,
+    })
+
+    expect(await execution.inspect(taskId)).toEqual({
+      kind: 'failed',
+      executionRef: taskId,
+      errorCode: 'execution-failed',
+      errorDetail: 'invalid prompt template ref: malformed-local-ref',
+    })
   })
 
   test('exact envelope validation rejects malformed input and missing, extra, or cross-round output', () => {

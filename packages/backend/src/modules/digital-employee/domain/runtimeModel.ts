@@ -38,6 +38,8 @@ const repositoryTargetPathSchema = z
 
 export const employeeWorkIntakeSchema = z
   .object({
+    /** Operator-owned logical task name; event admissions may derive one from event material. */
+    name: z.string().trim().min(1).max(255).optional(),
     kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
     target: z.record(z.string().min(1).max(160), z.string().min(1).max(1_000)),
     body: z
@@ -154,6 +156,7 @@ export type EmployeeCaseLaunch = z.infer<typeof employeeCaseLaunchSchema>
 
 export interface EmployeeCaseRecord {
   readonly id: string
+  readonly name: string
   readonly employeeRef: { readonly id: string; readonly revision: number }
   readonly typeRef: { readonly typeId: string; readonly revision: number }
   readonly primaryContextId: string

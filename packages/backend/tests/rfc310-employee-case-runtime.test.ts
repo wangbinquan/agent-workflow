@@ -715,6 +715,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(JSON.parse(launched.projectionJson)).toMatchObject({
       capabilityActivation: {
         displayName: '开发一号',
+        jobTemplateRef: jobRef,
         activeWorkItemRefs: expect.arrayContaining(['prepare-materials', 'analyze-implement']),
         executionOptions: { 'review-implementation-plan': false },
         exactOrderedDispatchConfigurations: [
@@ -1179,13 +1180,30 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const repeatedEventLaunch = runtime.commands.launchWork(eventWork)
     expect(repeatedEventLaunch.caseRef.id).toBe(firstEventLaunch.caseRef.id)
     expect(JSON.parse(firstEventLaunch.projectionJson).case).toMatchObject({
+      name: '由统一事件投递启动数字员工',
       ownerUserId: null,
       launchOrigin: 'event',
     })
 
+    expect(() =>
+      runtime.commands.launchWork({
+        employeeId: employee.id,
+        intake: {
+          kind: 'body',
+          target: { repositoryId: 'repo-1' },
+          body: '缺少任务名的手工请求',
+          externalId: null,
+          uploads: [],
+          idempotencyKey: 'manual-work:missing-name',
+        },
+        actorUserId: 'catalog-user',
+      }),
+    ).toThrow('manual digital employee work requires a task name')
+
     const manualLaunch = runtime.commands.launchWork({
       employeeId: employee.id,
       intake: {
+        name: '修复目录任务命名链',
         kind: 'body',
         target: { repositoryId: 'repo-1' },
         body: '由当前用户手工启动数字员工任务',
@@ -1196,13 +1214,15 @@ describe('RFC-310 stateful employee Case runtime', () => {
       actorUserId: 'catalog-user',
     })
     expect(JSON.parse(manualLaunch.projectionJson).case).toMatchObject({
+      name: '修复目录任务命名链',
       ownerUserId: 'catalog-user',
       launchOrigin: 'manual',
     })
     const mine = JSON.parse(
       runtime.queries.listCasePage({ ownerUserId: 'catalog-user', launchOrigin: 'manual' }),
-    ) as { items: Array<{ id: string }> }
+    ) as { items: Array<{ id: string; taskName: string }> }
     expect(mine.items.map((item) => item.id)).toEqual([manualLaunch.caseRef.id])
+    expect(mine.items[0]?.taskName).toBe('修复目录任务命名链')
     const events = JSON.parse(runtime.queries.listCasePage({ launchOrigin: 'event' })) as {
       items: Array<{ id: string }>
     }

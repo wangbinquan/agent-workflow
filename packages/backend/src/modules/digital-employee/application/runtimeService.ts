@@ -199,6 +199,61 @@ export function projectFrozenExecutionOptions(input: {
   )
 }
 
+export type EmployeeCaseNextAction =
+  | null
+  | { readonly owner: 'current-user'; readonly action: 'resolve-blocker' }
+  | {
+      readonly owner: 'current-user'
+      readonly action: 'complete-human-review'
+      readonly executionRef: string
+    }
+  | { readonly owner: 'platform'; readonly action: 'schedule-next-reaction' }
+  | { readonly owner: 'digital-employee'; readonly action: 'continue-automatically' }
+
+export function projectEmployeeCaseNextAction(input: {
+  readonly caseState: EmployeeCaseRecord['state']
+  readonly activeRoundExists: boolean
+  readonly hasPendingInbox: boolean
+  readonly reviewGates: readonly {
+    readonly state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
+    readonly executionRef: string | null
+  }[]
+}): EmployeeCaseNextAction {
+  if (input.caseState === 'terminal') return null
+  if (input.caseState === 'blocked') {
+    return { owner: 'current-user', action: 'resolve-blocker' }
+  }
+  const waitingReview = input.reviewGates.find(
+    (gate) => gate.state === 'waiting' && gate.executionRef !== null,
+  )
+  if (waitingReview?.executionRef !== null && waitingReview?.executionRef !== undefined) {
+    return {
+      owner: 'current-user',
+      action: 'complete-human-review',
+      executionRef: waitingReview.executionRef,
+    }
+  }
+  if (!input.activeRoundExists && input.hasPendingInbox) {
+    return { owner: 'platform', action: 'schedule-next-reaction' }
+  }
+  return { owner: 'digital-employee', action: 'continue-automatically' }
+}
+
+function boundedCaseTaskName(candidate: string, fallback: string): string {
+  const normalized = candidate.trim().slice(0, 255)
+  return normalized === '' ? fallback.slice(0, 255) : normalized
+}
+
+function taskNameFromEventIntake(input: {
+  readonly body: string | null
+  readonly externalId: string | null
+  readonly idempotencyKey: string
+}): string {
+  const material = (input.externalId ?? input.body ?? '').trim()
+  const firstLine = material.split(/\r?\n/, 1)[0] ?? ''
+  return boundedCaseTaskName(firstLine, input.idempotencyKey)
+}
+
 export class DigitalEmployeeRuntimeService {
   readonly #store: RuntimeCaseStorePort
   readonly #authoringStore: DigitalEmployeeAuthoringStore
@@ -348,6 +403,20 @@ export class DigitalEmployeeRuntimeService {
       ]),
     )
     const intake = employeeWorkIntakeSchema.parse({ ...parsedIntake, executionOptions })
+    const { name: providedTaskName, ...workIntake } = intake
+    if (input.eventOrigin === undefined && providedTaskName === undefined) {
+      throw new ValidationError(
+        'employee-task-name-required',
+        'manual digital employee work requires a task name',
+      )
+    }
+    const taskName =
+      providedTaskName ??
+      taskNameFromEventIntake({
+        body: intake.body,
+        externalId: intake.externalId,
+        idempotencyKey: intake.idempotencyKey,
+      })
     const exactBinding = (workItemRef: string, slotRef: string) =>
       revision.content.exactToolBindings.find(
         (binding) => binding.workItemRef === workItemRef && binding.slotRef === slotRef,
@@ -420,7 +489,7 @@ export class DigitalEmployeeRuntimeService {
             employeeRef,
             workScopeJson: JSON.stringify(scope.encodedScope),
             receivedAt: now,
-            intake: { ...intake, uploads: resolvedUploads },
+            intake: { ...workIntake, uploads: resolvedUploads },
           }),
         ),
       ) as unknown,
@@ -434,6 +503,7 @@ export class DigitalEmployeeRuntimeService {
     return this.launchCase(launch, {
       caseId,
       now,
+      taskName,
       ownerUserId: input.actorUserId,
       launchOrigin: input.eventOrigin === undefined ? 'manual' : 'event',
       eventOrigin: input.eventOrigin ?? null,
@@ -451,6 +521,7 @@ export class DigitalEmployeeRuntimeService {
     admission?: {
       readonly caseId: string
       readonly now: number
+      readonly taskName?: string
       readonly ownerUserId: string | null
       readonly launchOrigin: TaskLaunchOrigin
       readonly eventOrigin: {
@@ -526,6 +597,7 @@ export class DigitalEmployeeRuntimeService {
     const contextId = this.#id()
     const caseRecord: EmployeeCaseRecord = {
       id: caseId,
+      name: boundedCaseTaskName(admission?.taskName ?? launch.workSubject.subjectRef, caseId),
       employeeRef: launch.employeeRef,
       typeRef: employee.content.typeRef,
       primaryContextId: contextId,
@@ -659,6 +731,7 @@ export class DigitalEmployeeRuntimeService {
         employeeName: employee?.content.displayName ?? caseRecord.employeeRef.id,
         typeRef: caseRecord.typeRef,
         typeName: descriptor.displayName,
+        taskName: caseRecord.name,
         subjectRef,
         targetRef,
         currentWorkItemRef: caseRecord.currentWorkItemRef,
@@ -714,6 +787,7 @@ export class DigitalEmployeeRuntimeService {
         : employee.content.enabledWorkItemRefs
     const capabilityActivation = {
       displayName: employee.content.displayName,
+      jobTemplateRef: employee.content.jobTemplateRef,
       activeWorkItemRefs,
       executionOptions: projectFrozenExecutionOptions({
         definitions: descriptor.workIntakeAuthoring.executionOptions,
@@ -731,6 +805,7 @@ export class DigitalEmployeeRuntimeService {
       parentWorkItemRef: string
       optionRef: string
       state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
+      executionRef: string | null
     }>((item) => {
       if (item.humanReview === null) return []
       const round = [...rounds]
@@ -743,6 +818,7 @@ export class DigitalEmployeeRuntimeService {
             parentWorkItemRef: item.workItemRef,
             optionRef: item.humanReview.optionRef,
             state: 'not-reached' as const,
+            executionRef: null,
           },
         ]
       }
@@ -762,6 +838,7 @@ export class DigitalEmployeeRuntimeService {
             parentWorkItemRef: item.workItemRef,
             optionRef: item.humanReview.optionRef,
             state: 'skipped' as const,
+            executionRef: round.executionRef,
           },
         ]
       }
@@ -781,6 +858,7 @@ export class DigitalEmployeeRuntimeService {
           parentWorkItemRef: item.workItemRef,
           optionRef: item.humanReview.optionRef,
           state,
+          executionRef: round.executionRef,
         },
       ]
     })
@@ -838,14 +916,12 @@ export class DigitalEmployeeRuntimeService {
           })),
         }
       }),
-      nextAction:
-        caseRecord.state === 'terminal'
-          ? null
-          : caseRecord.state === 'blocked'
-            ? { owner: 'current-user', action: 'resolve-blocker' }
-            : activeRound === undefined && inbox.some((item) => item.state === 'pending')
-              ? { owner: 'platform', action: 'schedule-next-reaction' }
-              : { owner: 'digital-employee', action: 'continue-automatically' },
+      nextAction: projectEmployeeCaseNextAction({
+        caseState: caseRecord.state,
+        activeRoundExists: activeRound !== undefined,
+        hasPendingInbox: inbox.some((item) => item.state === 'pending'),
+        reviewGates,
+      }),
     }
   }
 
@@ -1488,6 +1564,10 @@ export class DigitalEmployeeRuntimeService {
         this.launchCase(launch, {
           caseId: childCaseId,
           now,
+          taskName: boundedCaseTaskName(
+            `${parentCase.name} · ${target.content.displayName}`,
+            childCaseId,
+          ),
           ownerUserId: parentCase.ownerUserId,
           launchOrigin: 'api',
           eventOrigin: null,

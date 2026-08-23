@@ -61,6 +61,7 @@ export function TaskCreationSubjectDescriptorContract(
   const navigate = useNavigate()
   const { step, maxVisited, setStep, setMaxVisited } = context
   const [employeeId, setEmployeeId] = useState(context.initialResourceId ?? '')
+  const [taskName, setTaskName] = useState('')
   const [kind, setKind] = useState<IntakeKind>('body')
   const [target, setTarget] = useState<Record<string, string>>({})
   const [body, setBody] = useState('')
@@ -347,7 +348,13 @@ export function TaskCreationSubjectDescriptorContract(
     (!needsBody || body.trim() !== '') &&
     (!needsFiles || filesValid) &&
     (kind !== 'external-id' || externalId.trim() !== '')
-  const ready = employee !== null && descriptor !== undefined && targetComplete && contentComplete
+  const taskNameComplete = taskName.trim().length > 0
+  const ready =
+    employee !== null &&
+    descriptor !== undefined &&
+    targetComplete &&
+    taskNameComplete &&
+    contentComplete
 
   const launch = useMutation({
     mutationFn: async () => {
@@ -376,6 +383,7 @@ export function TaskCreationSubjectDescriptorContract(
         return await api.post<LaunchProjection>(
           `/api/digital-employees/${encodeURIComponent(employee.id)}/cases`,
           {
+            name: taskName.trim(),
             kind,
             target: Object.fromEntries(
               Object.entries(effectiveTarget).map(([key, value]) => [key, value.trim()]),
@@ -442,7 +450,7 @@ export function TaskCreationSubjectDescriptorContract(
       : step === 1
         ? employeeReady && targetComplete
         : step === 2
-          ? employeeReady && targetComplete && contentComplete
+          ? employeeReady && targetComplete && taskNameComplete && contentComplete
           : ready
   const onNavigate = (next: number) => {
     if (next < 0 || next >= steps.length || launch.isPending) return
@@ -611,6 +619,21 @@ export function TaskCreationSubjectDescriptorContract(
             <div className="form-grid">
               {descriptor !== undefined ? (
                 <>
+                  <Field
+                    label={t('launch.fieldTaskName')}
+                    required
+                    hint={t('launch.fieldTaskNameHint')}
+                  >
+                    <TextInput
+                      value={taskName}
+                      onChange={setTaskName}
+                      required
+                      maxLength={255}
+                      data-testid="wizard-task-name"
+                      disabled={launch.isPending}
+                    />
+                  </Field>
+
                   <Field label={zh ? '工作材料形式' : 'Work material'} group required>
                     <Segmented
                       value={kind}
@@ -913,6 +936,13 @@ export function TaskCreationSubjectDescriptorContract(
                         .filter((value) => value !== '')
                         .join(' · ')}
                   {summaryEdit(1)}
+                </dd>
+              </div>
+              <div className="wizard-summary__row">
+                <dt>{t('launch.fieldTaskName')}</dt>
+                <dd data-testid="employee-case-summary-name">
+                  {taskName.trim() || '—'}
+                  {summaryEdit(2)}
                 </dd>
               </div>
               <div className="wizard-summary__row">

@@ -1095,6 +1095,8 @@ export const tasks = sqliteTable(
     codeRoundId: text('code_round_id'),
     /** RFC-310 OS: one task is one exact Employee Reaction attempt. */
     digitalEmployeeRoundId: text('digital_employee_round_id'),
+    /** RFC-310: stable owning OS Case; NULL for legacy Development Automation action runs. */
+    digitalEmployeeCaseId: text('digital_employee_case_id'),
     /**
      * RFC-175 (§2e): the launching agent's STABLE `agents.id` at launch time
      * (alongside the name soft-link). Lets "relaunch" faithfully verify the
@@ -5404,6 +5406,8 @@ export const employeeCases = sqliteTable(
   'employee_cases',
   {
     id: text('id').primaryKey(),
+    /** Operator-owned logical task name; never an employee or ReactionRound identifier. */
+    name: text('name').notNull().default(''),
     employeeId: text('employee_id').notNull(),
     employeeRevision: integer('employee_revision').notNull(),
     typeId: text('type_id').notNull(),

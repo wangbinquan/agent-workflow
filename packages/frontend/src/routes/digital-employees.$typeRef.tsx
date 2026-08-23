@@ -53,14 +53,17 @@ type WorkspaceView = 'employees' | 'jobs' | 'toolbox'
 
 interface WorkspaceSearch extends Record<string, unknown> {
   view: WorkspaceView
+  jobTemplateId?: string
   workItem?: string
   reviewOption?: string
 }
 
-function validateSearch(raw: Record<string, unknown>): WorkspaceSearch {
+export function validateDigitalEmployeeTypeSearch(raw: Record<string, unknown>): WorkspaceSearch {
   const view = raw.view === 'jobs' || raw.view === 'toolbox' ? raw.view : 'employees'
+  const jobTemplateId = typeof raw.jobTemplateId === 'string' ? raw.jobTemplateId.trim() : ''
   return {
     view,
+    ...(view === 'jobs' && jobTemplateId !== '' ? { jobTemplateId } : {}),
     ...(typeof raw.workItem === 'string' && raw.workItem !== '' ? { workItem: raw.workItem } : {}),
     ...(typeof raw.reviewOption === 'string' && raw.reviewOption !== ''
       ? { reviewOption: raw.reviewOption }
@@ -71,7 +74,7 @@ function validateSearch(raw: Record<string, unknown>): WorkspaceSearch {
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/digital-employees/$typeRef',
-  validateSearch,
+  validateSearch: validateDigitalEmployeeTypeSearch,
   component: DigitalEmployeeTypePage,
 })
 
@@ -243,6 +246,13 @@ function DigitalEmployeeTypePage(): ReactElement {
                 toolsByWorkItem={toolsByWorkItem}
                 language={language}
                 requestedWorkItemRef={selectedRef}
+                requestedJobTemplateId={search.jobTemplateId}
+                onRequestedJobTemplateClose={() =>
+                  void navigate({
+                    search: (previous) => ({ ...previous, jobTemplateId: undefined }),
+                    replace: true,
+                  })
+                }
                 onConfigureIngress={(ingress) =>
                   ingress.configurationSurface === 'task-creation'
                     ? void navigate({ to: '/tasks/new', search: { kind: 'digital-employee' } })
@@ -1860,6 +1870,8 @@ function JobTemplatesPanel(props: {
   toolsByWorkItem: Record<string, ToolRegistration[]>
   language: string
   requestedWorkItemRef: string | null
+  requestedJobTemplateId?: string
+  onRequestedJobTemplateClose: () => void
   onConfigureIngress: (ingress: WorkIngress) => void
 }): ReactElement {
   const zh = props.language.startsWith('zh')
@@ -2031,6 +2043,7 @@ function JobTemplatesPanel(props: {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['digital-employee-job-templates', props.typeRef] })
+      if (props.requestedJobTemplateId !== undefined) props.onRequestedJobTemplateClose()
       setOpen(false)
       setIdentityOpen(false)
       setDutyOpen(false)
@@ -2131,6 +2144,21 @@ function JobTemplatesPanel(props: {
     setDutyOpen(requestedWorkItem !== null)
     setOpen(true)
   }
+  const openedRequestedJobTemplateId = useRef<string | null>(null)
+  const openExistingRef = useRef(openExisting)
+  openExistingRef.current = openExisting
+  useEffect(() => {
+    const requestedId = props.requestedJobTemplateId
+    if (requestedId === undefined) {
+      openedRequestedJobTemplateId.current = null
+      return
+    }
+    if (openedRequestedJobTemplateId.current === requestedId) return
+    const requestedJobTemplate = query.data?.items.find((job) => job.id === requestedId)
+    if (requestedJobTemplate === undefined) return
+    openedRequestedJobTemplateId.current = requestedId
+    openExistingRef.current(requestedJobTemplate)
+  }, [props.requestedJobTemplateId, query.data?.items])
   const openIdentityEditor = () => {
     setIdentityName(name)
     setIdentityDescription(description)
@@ -2161,6 +2189,7 @@ function JobTemplatesPanel(props: {
     setDutyOpen(editorWorkItemRef !== '')
   }
   const closeEditor = () => {
+    if (props.requestedJobTemplateId !== undefined) props.onRequestedJobTemplateClose()
     setOpen(false)
     setIdentityOpen(false)
     setDutyOpen(false)
@@ -3239,7 +3268,8 @@ function EmployeesPanel(props: {
   const taskLaunchVariant = props.type.workScopeAuthoring.variants.find(
     (variant) => variant.kind === 'task',
   )
-  const [scopeKind, setScopeKind] = useState(taskLaunchVariant?.kind ?? firstVariant?.kind ?? '')
+  const defaultScopeKind = taskLaunchVariant?.kind ?? firstVariant?.kind ?? ''
+  const [scopeKind, setScopeKind] = useState(defaultScopeKind)
   const [scopeValues, setScopeValues] = useState<Record<string, string>>({})
   const employees = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', props.typeRef],
@@ -3289,7 +3319,7 @@ function EmployeesPanel(props: {
     setEditing(null)
     setName('')
     setJobId('')
-    setScopeKind(taskLaunchVariant?.kind ?? firstVariant?.kind ?? '')
+    setScopeKind(defaultScopeKind)
     setScopeValues({})
   }
   const openEditor = (employee: DigitalEmployeeDefinition | null) => {
@@ -3301,11 +3331,7 @@ function EmployeesPanel(props: {
       typeof employee?.configuration.workScope === 'object'
         ? (employee.configuration.workScope as Record<string, unknown>)
         : {}
-    setScopeKind(
-      typeof scope.kind === 'string'
-        ? scope.kind
-        : (taskLaunchVariant?.kind ?? firstVariant?.kind ?? ''),
-    )
+    setScopeKind(typeof scope.kind === 'string' ? scope.kind : defaultScopeKind)
     setScopeValues(
       Object.fromEntries(
         Object.entries(scope).flatMap(([key, value]) =>

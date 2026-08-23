@@ -63,6 +63,7 @@ const programParametersSchema = z.record(z.string(), z.union([z.string(), z.numb
 const planSchema = z
   .object({
     schemaVersion: z.literal(1),
+    caseRef: exactRefSchema,
     roundRef: z.string().min(1),
     executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
     toolSlotRef: z.string().min(1),
@@ -398,7 +399,10 @@ export function composeDigitalEmployeeExecution(deps: {
         const task = await startTask(workflowInput, {
           ...deps.startDeps,
           catalogVisibility: 'internal',
-          digitalEmployeeLaunch: { actionRunId: plan.roundRef },
+          digitalEmployeeLaunch: {
+            actionRunId: plan.roundRef,
+            caseId: plan.caseRef.id,
+          },
           ...sceneDeps,
           ...(deps.startDeps.launchProvenance === undefined &&
           deps.startDeps.callLaunch === undefined
@@ -417,7 +421,11 @@ export function composeDigitalEmployeeExecution(deps: {
       const task = await startTask(startInput, {
         ...deps.startDeps,
         catalogVisibility: 'internal',
-        digitalEmployeeLaunch: { actionRunId: plan.roundRef, snapshotJson },
+        digitalEmployeeLaunch: {
+          actionRunId: plan.roundRef,
+          caseId: plan.caseRef.id,
+          snapshotJson,
+        },
         ...sceneDeps,
         ...(deps.startDeps.launchProvenance === undefined && deps.startDeps.callLaunch === undefined
           ? {
@@ -447,6 +455,17 @@ export function composeDigitalEmployeeExecution(deps: {
       if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
       const outcome = await getExecutionOutcome(deps.db, executionRef)
       const output = outcome.outputs[DIGITAL_EMPLOYEE_RESULT_PORT]?.content ?? null
+      // Contract/output validation is meaningful only after a successful
+      // execution. Running it first masks the actual TaskEngine failure (for
+      // example a pre-spawn prompt error) as a missing or mismatched derived
+      // artifact, which sends both the Case and the user toward the wrong fix.
+      if (task.status !== 'done') {
+        return resultFailure(
+          executionRef,
+          `execution-${task.status}`,
+          outcome.error?.message ?? outcome.error?.summary ?? `task ended as ${task.status}`,
+        )
+      }
       const parsedInputs = z
         .record(z.string(), z.unknown())
         .parse(JSON.parse(task.inputs) as unknown)
@@ -490,13 +509,6 @@ export function composeDigitalEmployeeExecution(deps: {
         if (!validation.ok) {
           return resultFailure(executionRef, validation.errorCode, validation.errorDetail)
         }
-      }
-      if (task.status !== 'done') {
-        return resultFailure(
-          executionRef,
-          `execution-${task.status}`,
-          outcome.error?.message ?? outcome.error?.summary ?? `task ended as ${task.status}`,
-        )
       }
       if (output === null) {
         return resultFailure(

@@ -3804,6 +3804,7 @@ export interface Resources {
       duration: { queued: string; running: string; accumulated: string }
     }
     detailTitleIdLabel: string
+    digitalEmployeeSource: string
     webhookSource: {
       comment: string
       mergeRequest: string
@@ -11202,6 +11203,7 @@ export const zhCN: Resources = {
       },
     },
     detailTitleIdLabel: '任务 ID',
+    digitalEmployeeSource: '返回数字员工任务',
     webhookSource: {
       comment: '查看原始评论',
       mergeRequest: '查看原始 MR/PR',

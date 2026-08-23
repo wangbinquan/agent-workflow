@@ -6610,13 +6610,26 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      const errorMessage = `node ${node.id} threw: ${msg}`
+      // runNode normally owns pending→running→terminal. Exceptions thrown
+      // before it can enter that lifecycle (for example prompt-template
+      // rendering) used to leave the attempt row pending. Retry minting then
+      // abandoned each predecessor, while the final pending/isolating row was
+      // redispatched and crashed on begin-isolation from an abandoned state.
+      // Close the row before the retry policy observes the synthetic failure.
+      await transitionNodeRunStatus({
+        db,
+        nodeRunId,
+        event: { kind: 'mark-failed', reason: 'scheduler-node-threw' },
+        extra: { finishedAt: Date.now(), errorMessage, exitCode: null },
+      })
       lastResult = {
         status: 'failed',
         exitCode: null,
         outputs: {},
         tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
         prompt: '',
-        errorMessage: `node ${node.id} threw: ${msg}`,
+        errorMessage,
       }
       lastError = msg
     }

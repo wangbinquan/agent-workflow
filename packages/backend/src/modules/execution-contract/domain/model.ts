@@ -531,6 +531,7 @@ export function buildExecutionContractAgentPrompt(input: {
           `Return only one JSON object through ${input.guide.agentOutputPort ?? EXECUTION_CONTRACT_RESULT_PORT}.`,
           `Copy schemaVersion=1, roundRef=${JSON.stringify(input.roundRef)}, and executionNonce=${JSON.stringify(input.executionNonce)} exactly.`,
           `The output must contain exactly these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}.`,
+          'Set status to exactly "ok", "needs-input", or "blocked". For successful completion use "ok", never "succeeded" or another synonym.',
           'Never wrap the JSON in Markdown and never add text before or after it.',
         ]
   return [

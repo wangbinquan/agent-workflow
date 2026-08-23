@@ -32,6 +32,16 @@ function text(value: string) {
   return { 'zh-CN': label, 'en-US': label }
 }
 
+function employeeLabel(
+  typeName: { readonly 'zh-CN': string; readonly 'en-US': string },
+  employeeName: string,
+) {
+  return {
+    'zh-CN': `${typeName['zh-CN']} · ${employeeName}`,
+    'en-US': `${typeName['en-US']} · ${employeeName}`,
+  }
+}
+
 function taskStatus(item: { state: EmployeeCaseState; terminalKind: string | null }): TaskStatus {
   if (item.state === 'active') return 'running'
   if (item.state === 'waiting') return 'awaiting_human'
@@ -120,8 +130,11 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
           return {
             id: item.id,
             sourceId: 'digital-employee',
-            title: item.subjectRef,
-            subject: { resourceId: item.employeeRef.id, label: item.typeName },
+            title: item.taskName,
+            subject: {
+              resourceId: item.employeeRef.id,
+              label: employeeLabel(item.typeName, item.employeeName),
+            },
             targetLabel: item.targetRef,
             status,
             statusDetail: detail,

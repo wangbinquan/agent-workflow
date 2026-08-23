@@ -221,6 +221,7 @@ describe('RFC-310 unified task catalog', () => {
                 employeeName: 'Developer',
                 typeRef: { typeId: 'development', revision: 6 },
                 typeName: { 'zh-CN': '开发数字员工', 'en-US': 'Development employee' },
+                taskName: '修复登录失败',
                 subjectRef: 'issue-1',
                 targetRef: 'repository-1',
                 currentWorkItemRef: 'analyze',
@@ -248,7 +249,20 @@ describe('RFC-310 unified task catalog', () => {
       actor: actor(['tasks:read', 'digital-employees:read']),
     })
     expect(page.items).toEqual([
-      expect.objectContaining({ id: 'case-1', sourceId: 'digital-employee', status: 'running' }),
+      expect.objectContaining({
+        id: 'case-1',
+        sourceId: 'digital-employee',
+        title: '修复登录失败',
+        status: 'running',
+        // Operators need both the broad employee category and the exact employee identity.
+        subject: {
+          resourceId: 'employee-1',
+          label: {
+            'zh-CN': '开发数字员工 · Developer',
+            'en-US': 'Development employee · Developer',
+          },
+        },
+      }),
     ])
   })
 
