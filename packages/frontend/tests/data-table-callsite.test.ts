@@ -2,6 +2,9 @@
 // design.md §5 MUST render `.data-table` (instead of the legacy bespoke
 // classes). The visual is owned by the shared primitive now.
 
+// ⚠️ RFC-317 T64（findings G-06）—— 本文件只覆盖四个点名文件，不是全前端棘轮。
+// 新写一个 bespoke 表格在这里不会红；全前端的原生 `<table>` 判据在
+// `tests/ux-source-ratchets.test.ts`。本文件是迁移完成的证据 + 防回潮。
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

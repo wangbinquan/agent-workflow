@@ -53,6 +53,20 @@ export interface DialogProps {
   'data-testid'?: string
   /** Extra class names appended to the standard `.dialog__panel`. */
   panelClassName?: string
+  /**
+   * RFC-317 T62（R9.4）—— 覆盖层的**变体 class**，由调用方声明。
+   *
+   * 为什么需要它：改造前四个特性对话框的覆盖层布局是这样写的——
+   * `.dialog__overlay:has(> .workflow-editor-surface-dialog) { … }`。
+   * 也就是**公共 class 的选择器被特性名限定**：`dialog__overlay` 这个共享原语
+   * 必须逐一认识每一个用它的业务面板。加第五个特性面板就得再加一条 `:has()`，
+   * 而这条规则住在 styles.css 里，写新面板的人不会想到去改它。
+   *
+   * 现在方向反过来：特性用 `overlayClassName` **声明自己要哪种覆盖层布局**，
+   * 共享 class 一个特性名都不认识。可用的变体见 styles.css 的
+   * `.dialog__overlay--flush` / `--sheet-start` / `--sheet-end`。
+   */
+  overlayClassName?: string
 }
 
 const FOCUSABLE =
@@ -377,7 +391,12 @@ export function Dialog(props: DialogProps): ReactElement | null {
   const overlay = (
     <div
       ref={overlayRef}
-      className={`dialog__overlay dialog--${size}`}
+      className={
+        `dialog__overlay dialog--${size}` +
+        (props.overlayClassName !== undefined && props.overlayClassName !== ''
+          ? ` ${props.overlayClassName}`
+          : '')
+      }
       onMouseDown={(e) => {
         if (!closeOnOverlay || dismissDisabled) return
         if (e.target === overlayRef.current) props.onClose()

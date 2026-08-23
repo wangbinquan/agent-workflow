@@ -165,6 +165,7 @@ export function ValidationPanel(props: ValidationPanelProps) {
           onClose={close}
           title={t('editor.validationDetailsTitle')}
           size="md"
+          overlayClassName="dialog__overlay--flush"
           panelClassName="workflow-validation-dialog"
           triggerRef={triggerRef}
           initialFocusRef={headingRef}

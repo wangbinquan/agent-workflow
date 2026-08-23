@@ -39,6 +39,7 @@ export function MobileNavDialog({
       triggerRef={triggerRef}
       restoreFocusFallbackRef={restoreFocusFallbackRef}
       footer={footer}
+      overlayClassName="dialog__overlay--sheet-start"
       panelClassName="mobile-nav-dialog"
       data-testid="mobile-nav-dialog"
     >

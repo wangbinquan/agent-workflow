@@ -279,6 +279,7 @@ export function ScriptEdit({ node, definition, onPatch, onHistoryBoundary }: Edi
               title={fullscreenLabel}
               size="full"
               triggerRef={fullscreenTriggerRef}
+              overlayClassName="dialog__overlay--flush-narrow"
               panelClassName="script-code-editor-dialog"
               data-testid="script-body-fullscreen-dialog"
             >

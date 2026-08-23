@@ -1297,7 +1297,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 45
+      "lines": 48
     },
     {
       "id": "empty-loading-callsite",
@@ -1307,9 +1307,9 @@
       "corpusScanner": false,
       "minCorpusFiles": null,
       "assertsAbsence": false,
-      "negativeFixture": false,
+      "negativeFixture": true,
       "classified": true,
-      "lines": 66
+      "lines": 86
     },
     {
       "id": "mermaid-block-labels",
@@ -1468,6 +1468,18 @@
       "lines": 112
     },
     {
+      "id": "rfc317-dead-class-invariants",
+      "file": "packages/frontend/tests/rfc317-dead-class-invariants.test.ts",
+      "runner": "vitest",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 1001,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 310
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -1609,7 +1621,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 301
+      "lines": 516
     },
     {
       "id": "wrapper-fanout-boundary-input-tag",

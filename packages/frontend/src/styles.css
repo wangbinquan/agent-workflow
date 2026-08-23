@@ -5744,6 +5744,15 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* RFC-317 T61（findings FE-02）—— `.page__subtitle` 有 5 处调用却**零定义**，
+ * 渲染出来是无样式裸文本。视觉档位与同族的 `.page__meta` 一致（页眉下的次要说明）。 */
+.page__subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+
 .page__heading-content {
   min-width: 0;
 }
@@ -7453,6 +7462,15 @@ section.form-section > .form-section__title {
   gap: 16px;
 }
 
+/* RFC-317 T61（findings FE-02）—— `.form-section__hint` 有 9 处调用却**零定义**。
+ * 同族的 `.form-section__title` / `.form-section__body` 都在（就在上面两条），
+ * 所以这不是命名错觉，是真漏了一条。档位对齐 `.form-field__hint`。 */
+.form-section__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 details.form-section {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -8823,6 +8841,16 @@ details.form-section[open] > summary {
   background: var(--bg);
 }
 
+/* RFC-317 T61（findings FE-02）—— `.inspector-hint` 有 7 处调用却零定义
+ * （ScriptEdit 的重试警告、CodeHostCallEdit、settings/CodeHostsSection 等）。
+ * 注意它是**连字符**命名（不是 `.inspector__hint`），与其余 inspector 族的 BEM
+ * 写法不同——这正是它当初被漏掉的原因之一。档位对齐 `.form-field__hint`。 */
+.inspector-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .inspector__kind {
   font-size: 11px;
   color: var(--muted);
@@ -8866,6 +8894,26 @@ details.form-section[open] > summary {
   cursor: pointer;
 }
 
+/* RFC-317 T61（findings FE-02）—— `.inspector__readonly` 有 **12 处**调用却零定义，
+ * 是本次查出的最大一族（比 finding 逐条点名的任何一个都大）。它是 `<Field>` 里的
+ * 只读值展示块；两个修饰符各自表示这条只读值本身是错误 / 警告状态
+ * （ClarifyEdit / CrossClarifyEdit 用它显示接线问题），此前同样渲染成裸文本，
+ * 于是「这里有问题」这件事在视觉上完全传达不出来。 */
+.inspector__readonly {
+  color: var(--text);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.inspector__readonly--error {
+  color: var(--danger);
+}
+
+.inspector__readonly--warning {
+  color: var(--warn);
+}
+
 .inspector__body {
   flex: 1;
   overflow: auto;
@@ -8892,11 +8940,6 @@ details.form-section[open] > summary {
   width: 100%;
 }
 
-.dialog__overlay:has(> .workflow-editor-surface-dialog) {
-  align-items: stretch;
-  justify-content: flex-end;
-  padding: 0;
-}
 
 .dialog__panel.workflow-editor-surface-dialog {
   width: min(88vw, 420px);
@@ -10507,9 +10550,6 @@ details.form-section[open] > summary {
 /* The short-height validation surface is edge-to-edge. The shared dialog
  * overlay normally contributes a 24px inline gutter, which would otherwise
  * constrain a 100vw panel to viewport - 48px. */
-.dialog__overlay:has(> .workflow-validation-dialog) {
-  padding: 0;
-}
 
 .inspector__field-anchor:focus-visible,
 [data-inspector-port]:focus-visible {
@@ -15854,6 +15894,21 @@ mark.prior-comment-anchor[data-active='true'] {
   overflow-x: auto;
 }
 
+/* RFC-317 T61（findings FE-02）—— 这两条有 6 处调用却**零定义**，而同族有十一条
+ * `.dep-tree__*` 规则。`dep-tree__error` 更严重：它带着 `role="alert"`，
+ * 也就是一条错误提示被渲染成完全无样式的裸文本。 */
+.dep-tree__empty {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+
+.dep-tree__error {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--danger);
+}
+
 .dep-tree__row {
   display: flex;
   align-items: baseline;
@@ -17277,6 +17332,28 @@ mark.prior-comment-anchor[data-active='true'] {
 }
 
 /* ---- RFC-035 PR3 shared primitives (Dialog / EmptyState / LoadingState / DetailLayout) ---- */
+
+/* RFC-317 T62（R9.4）—— 覆盖层的**通用变体**。
+ *
+ * 改造前这四种布局是写成 `.dialog__overlay:has(> .<特性面板>)` 的，
+ * 也就是共享原语必须逐一认识每个用它的业务面板；加第五个面板要回来改 styles.css，
+ * 而写新面板的人不会想到。现在由调用方经 `overlayClassName` 声明要哪一种，
+ * 共享 class 一个特性名都不认识。 */
+.dialog__overlay--flush {
+  padding: 0;
+}
+
+.dialog__overlay--sheet-start {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.dialog__overlay--sheet-end {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+}
 
 .dialog__overlay {
   position: fixed;
@@ -23375,11 +23452,6 @@ button.status-chip {
   padding-inline: 5px;
 }
 
-.dialog__overlay:has(.mobile-nav-dialog) {
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: 0;
-}
 
 .dialog__panel.mobile-nav-dialog {
   position: fixed;
@@ -26748,7 +26820,10 @@ button.status-chip {
 }
 
 @media (max-width: 720px) {
-  .dialog__overlay:has(> .script-code-editor-dialog) {
+  /* RFC-317 T62（R9.4）—— 窄屏专用的 flush 变体。原规则是
+   * `.dialog__overlay:has(> .script-code-editor-dialog)`（公共 class 被特性名限定），
+   * 且**只在这个媒体查询内生效**——所以不能换成无条件的 `--flush`，那会改掉桌面行为。 */
+  .dialog__overlay--flush-narrow {
     padding: 0;
   }
 

@@ -15,6 +15,7 @@ import {
 } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
+import { Segmented } from '@/components/Segmented'
 import { atomicNodeInspectorChange, type InspectorChangeMeta } from './historyMeta'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 
@@ -56,26 +57,26 @@ export function JoinModeField({
   return (
     <InspectorFieldAnchor nodeId={node.id} field="join-mode">
       <Field label={t('inspector.fieldJoinMode')} hint={t('inspector.fieldJoinModeHint')}>
-        <div className="segmented" role="group" aria-label={t('inspector.fieldJoinMode')}>
-          <button
-            type="button"
-            className={current === 'any' ? 'is-active' : ''}
-            aria-pressed={current === 'any'}
-            onClick={() => set('any')}
-            data-testid="node-join-mode-any"
-          >
-            {t('inspector.joinModeAny')}
-          </button>
-          <button
-            type="button"
-            className={current === 'all' ? 'is-active' : ''}
-            aria-pressed={current === 'all'}
-            onClick={() => set('all')}
-            data-testid="node-join-mode-all"
-          >
-            {t('inspector.joinModeAll')}
-          </button>
-        </div>
+        {/* RFC-317 T63（findings FE-01）—— 改用公共 `<Segmented>`。
+            改造前这里手搓 `.segmented` 容器 + 两个 `<button className={... 'is-active'}>`：
+            · `.segmented .is-active` 在 styles.css 里**根本不存在**（公共原语用的是
+              `segmented__option` / `segmented__option--active`，36px 最小高度那条规则
+              也是键在 `segmented__option` 上）——于是这两个按钮在一个有样式的胶囊容器里
+              完全没有样式；
+            · `role="group"` + `aria-pressed` 不是分段控件的语义，公共原语给的是
+              `role="radiogroup"` / `role="radio"` / `aria-checked` + roving tabIndex
+              + 方向键 / Home / End 导航，这些全都丢了。
+            `testidPrefix` 正好产出原来的两个 testid，行为测试不用改。 */}
+        <Segmented<JoinMode>
+          value={current}
+          onChange={set}
+          ariaLabel={t('inspector.fieldJoinMode')}
+          testidPrefix="node-join-mode"
+          options={[
+            { value: 'any', label: t('inspector.joinModeAny') },
+            { value: 'all', label: t('inspector.joinModeAll') },
+          ]}
+        />
       </Field>
     </InspectorFieldAnchor>
   )

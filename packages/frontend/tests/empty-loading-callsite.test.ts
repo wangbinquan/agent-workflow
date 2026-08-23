@@ -2,8 +2,11 @@
 // rollout. Each retrofitted route MUST import + render the shared
 // primitives instead of the bare `<div className="muted">` pattern.
 
+// ⚠️ RFC-317 T64（findings G-06）—— 本文件只覆盖 `RETROFITTED_ROUTES` 里的路由，
+// 不是全前端棘轮：新写一个自造空状态在这里不会红。下面那条 coverage 自证至少防住
+// 「删条目消红」——名单只能增不能减，且每个条目必须指向真实文件。
 import { describe, expect, test } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -61,6 +64,23 @@ describe('RFC-035 EmptyState / LoadingState rollout', () => {
         /<div className="muted">\{t\('common\.loading'\)\}<\/div>/.test(body),
         `${rel} contains the old loading pattern`,
       ).toBe(false)
+    }
+  })
+})
+
+// RFC-317 T64（findings G-06）—— **名单只能增不能减**。
+//
+// 本文件的判据是「这些路由用了 EmptyState / LoadingState」。它对新路由完全失明，
+// 那部分覆盖由别处承担；这里至少堵住最容易的一条退路：**把条目从名单里删掉来消红**。
+describe('RFC-317 T64 —— 迁移名单的 coverage 自证', () => {
+  test('名单非空，且每个条目都指向真实文件（删条目消红会在这里红）', () => {
+    // 3 是**今天的真实条数**（RFC-169 / RFC-191 把另外六个资源页的空/载入态搬进了
+    // 共享的 ResourceSplitPage / ResourceGalleryPage，那部分由本文件下方各自的断言覆盖，
+    // 不再逐路由列在这里）。写死当前值而不是拍一个更大的数：目的是「不许减」，
+    // 不是「必须涨」。
+    expect(RETROFITTED_ROUTES.length).toBe(3)
+    for (const route of RETROFITTED_ROUTES) {
+      expect(existsSync(path.resolve(SRC, route)), `名单里的 ${route} 不存在`).toBe(true)
     }
   })
 })

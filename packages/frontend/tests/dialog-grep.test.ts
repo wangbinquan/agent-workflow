@@ -3,6 +3,11 @@
 // names MUST be absent from JSX className strings. (CSS class names
 // survive in styles.css as a fallback during the cleanup window.)
 
+// ⚠️ RFC-317 T64（findings G-06）—— **本文件只覆盖三个点名文件**，不是全前端棘轮。
+// 新写一个自造的 overlay 在这里一条都不会红。全前端的那道判据在
+// `tests/ux-source-ratchets.test.ts` 的「modal chrome 的 class 只归 Dialog」
+// （RFC-317 T60 新增）。本文件保留为**迁移完成的证据**：那三个文件确实改过来了，
+// 且没有回潮。下面那条 coverage 自证防的是「删条目消红」。
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

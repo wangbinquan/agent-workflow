@@ -1144,6 +1144,7 @@ export function WorkflowEditorLoaded({
             title={t('editor.nodePicker.title')}
             initialFocusRef={paletteSearchRef}
             restoreFocusFallbackRef={canvasFrameRef}
+            overlayClassName="dialog__overlay--sheet-end"
             panelClassName={`workflow-editor-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
             data-testid="workflow-editor-palette-surface"
           >
