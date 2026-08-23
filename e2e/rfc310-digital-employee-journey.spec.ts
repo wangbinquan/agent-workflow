@@ -694,7 +694,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expectUniformCapabilityToolCards(templateEditor, 100)
   expect(await capabilityLaneRowCount(templateEditor, 'delivery-main')).toBe(1)
   await expect(page.getByLabel('Template name')).toHaveCount(0)
-  await expect(page.getByLabel('Description')).toHaveCount(0)
+  await expect(page.getByLabel('Description', { exact: true })).toHaveCount(0)
   await templateEditor.locator('[data-work-item-ref="analyze-implement"]').click()
   const newTemplateDutyDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(newTemplateDutyDialog).toBeVisible()

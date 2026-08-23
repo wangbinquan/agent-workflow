@@ -89,7 +89,7 @@ test('a first-time user publishes a job template with the built-in implementatio
   await expect(editor).toBeVisible()
   await editor.locator('[data-work-item-ref="analyze-implement"]').click()
   const dutyDialog = page.getByTestId('employee-job-duty-dialog')
-  await dutyDialog.getByRole('combobox').click()
+  await dutyDialog.getByRole('combobox', { name: 'Choose default tool', exact: true }).click()
   await expect(page.getByRole('option')).not.toHaveCount(0)
   await page.getByRole('option').first().click()
   await dutyDialog.getByRole('button', { name: 'Done', exact: true }).click()
