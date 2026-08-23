@@ -473,6 +473,16 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // same class of race on the same locator.)
     const keyboardPalette = page.getByTestId('workflow-node-picker-dialog')
     await expect(keyboardPalette).toBeVisible()
+    // Third wait, and the one that actually removes the race instead of narrowing
+    // it: the Dialog's focus trap performs its initial focus asynchronously onto
+    // `initialFocusRef` — here the search box (WorkflowNodePicker.tsx:450). Our
+    // own focus() below fires exactly once, while the assertion after it *polls*;
+    // so if the trap's initial focus lands after ours, it takes focus back and
+    // nothing ever re-focuses the row — the 15s poll runs out and reports
+    // `Received: inactive` rather than flapping. Waiting for the trap to settle
+    // first makes the ordering deterministic under any CI load.
+    // (CI run 32670431312, shard 2/2, on top of the earlier 29757172909.)
+    await expect(keyboardPalette.getByTestId('workflow-node-picker-search')).toBeFocused()
     const keyboardItem = keyboardPalette.locator('.editor-sidebar__item').first()
     await keyboardItem.focus()
     await expect(keyboardItem).toBeFocused()
