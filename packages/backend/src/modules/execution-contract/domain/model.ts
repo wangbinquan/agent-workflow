@@ -518,9 +518,43 @@ export function buildExecutionContractAgentPrompt(input: {
   readonly toolSlotRef: string
   readonly semanticValidatorId: string
   readonly inputEnvelopeJson: string
+  /** Frozen effect closure selected for this exact reaction round. */
+  readonly allowedEffectKinds?: readonly string[]
   readonly policyLines: readonly string[]
   readonly previousError: string | null
 }): string {
+  const authoredGuide = executionContractGuideSchema.parse(
+    JSON.parse(input.guide.guideJson) as unknown,
+  )
+  const outputExample = (() => {
+    if (input.guide.outputMode !== 'envelope') return null
+    const decoded = JSON.parse(authoredGuide.output.exampleJson) as Record<string, unknown>
+    return JSON.stringify(
+      {
+        ...decoded,
+        schemaVersion: 1,
+        roundRef: input.roundRef,
+        executionNonce: input.executionNonce,
+      },
+      null,
+      2,
+    )
+  })()
+  const effectInstructions =
+    input.guide.outputMode !== 'envelope'
+      ? []
+      : [
+          'effectSuggestions must be an array of string effect IDs; never encode an effect as an object.',
+          ...(input.allowedEffectKinds === undefined
+            ? []
+            : input.allowedEffectKinds.length === 0
+              ? ['This frozen contract allows no effect IDs, so return effectSuggestions: [].']
+              : [
+                  `This frozen contract allows only these effect IDs: ${input.allowedEffectKinds
+                    .map((effect) => JSON.stringify(effect))
+                    .join(', ')}. Use only these exact strings, or [] when no effect is needed.`,
+                ]),
+        ]
   const outputInstructions =
     input.guide.outputMode === 'artifact-path'
       ? [
@@ -532,6 +566,10 @@ export function buildExecutionContractAgentPrompt(input: {
           `Copy schemaVersion=1, roundRef=${JSON.stringify(input.roundRef)}, and executionNonce=${JSON.stringify(input.executionNonce)} exactly.`,
           `The output must contain exactly these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}.`,
           'Set status to exactly "ok", "needs-input", or "blocked". For successful completion use "ok", never "succeeded" or another synonym.',
+          ...effectInstructions,
+          'Use the following authored example as the exact JSON value shape; replace only business content while preserving field types.',
+          'OUTPUT_SCHEMA_EXAMPLE_JSON',
+          outputExample!,
           'Never wrap the JSON in Markdown and never add text before or after it.',
         ]
   return [

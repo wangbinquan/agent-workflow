@@ -724,6 +724,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           return {
             kind: 'failed' as const,
             executionRef,
+            // RFC-317 T31（DE-03）—— 类别原样转发，system mock 不自己判：这条链上
+            // 「边界违规要换干净场景」正是被测的性质，mock 一旦自己编类别就测不到了。
+            errorClass: validation.errorClass,
             errorCode: validation.errorCode,
             errorDetail: validation.errorDetail,
           }

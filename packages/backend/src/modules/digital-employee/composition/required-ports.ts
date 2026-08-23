@@ -1,4 +1,5 @@
 import type { ExactResourceRef } from '../domain/model'
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import type { ReactionExecutionPlan } from '../domain/runtimeModel'
 
 export interface ToolConnectionProjection {
@@ -70,6 +71,8 @@ export type ReactionExecutionSnapshot =
   | {
       readonly kind: 'failed'
       readonly executionRef: string
+      /** RFC-317 T31（DE-03）—— 决定重试落在同场景还是新场景，见 WorkspaceFailureClass。 */
+      readonly errorClass: WorkspaceFailureClass
       readonly errorCode: string
       readonly errorDetail: string
     }

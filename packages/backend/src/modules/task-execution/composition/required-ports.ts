@@ -1,3 +1,4 @@
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 /**
  * Consumer-owned workspace contract for one Digital Employee Reaction.
  * The implementation may live in source-control or an employee type package;
@@ -19,6 +20,12 @@ export interface DigitalEmployeeWorkspacePort {
     readonly outputJson: string | null
   }): Promise<
     | { readonly ok: true }
-    | { readonly ok: false; readonly errorCode: string; readonly errorDetail: string }
+    | {
+        readonly ok: false
+        /** RFC-317 T31（DE-03）—— 由校验方直接给出，不再让消费方嗅 errorCode 前缀。 */
+        readonly errorClass: WorkspaceFailureClass
+        readonly errorCode: string
+        readonly errorDetail: string
+      }
   >
 }

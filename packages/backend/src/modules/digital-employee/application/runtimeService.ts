@@ -1,4 +1,6 @@
 import { ulid } from 'ulid'
+import { PLATFORM_WORK_ITEM_SLOT_REF } from '@/modules/digital-employee/public/types'
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { z } from 'zod'
 import {
   PLATFORM_WORKSPACE_DIR,
@@ -184,6 +186,23 @@ function findFrozenExecutionOptions(
     if (found !== null) return found
   }
   return null
+}
+
+/**
+ * 哪些失败类别要求换一个**干净场景**重试。
+ *
+ * 写成 `satisfies Record<WorkspaceFailureClass, boolean>` 而不是 `=== 'boundary'`：
+ * 新增一类失败时这里编译不过，逼作者当场决定它要不要换场景，而不是默认落进「不换」——
+ * 后者正是本条 finding 里那族没有 kind 段的 errorCode 长期被静默吞掉的形状。
+ */
+const ESCALATES_TO_FRESH_SCENE = {
+  boundary: true,
+  semantic: false,
+  infrastructure: false,
+} satisfies Record<WorkspaceFailureClass, boolean>
+
+export function boundaryEscalates(errorClass: WorkspaceFailureClass): boolean {
+  return ESCALATES_TO_FRESH_SCENE[errorClass]
 }
 
 export function projectFrozenExecutionOptions(input: {
@@ -1991,7 +2010,8 @@ export class DigitalEmployeeRuntimeService {
           (route) =>
             route.routeRef === selectedSlotRef && route.destinationWorkItemRef === item.workItemRef,
         )
-      const platformSelected = item.nodeKind === 'business-tool' && selectedSlotRef === 'platform'
+      const platformSelected =
+        item.nodeKind === 'business-tool' && selectedSlotRef === PLATFORM_WORK_ITEM_SLOT_REF
       if (
         item.nodeKind === 'business-tool' &&
         !platformSelected &&
@@ -2227,13 +2247,16 @@ export class DigitalEmployeeRuntimeService {
 
   #retryOrFailExecution(
     round: ReactionRoundRecord,
+    errorClass: WorkspaceFailureClass,
     errorCode: string,
     errorDetail: string,
   ): 'retried' | 'failed' {
     if (round.executionRef === null) throw new Error('running round has no execution ref')
     const policy = this.#authoringStore.getExecutionPolicyRevision(round.executionPolicyRevision)
     if (policy === null) throw new Error('pinned execution policy disappeared')
-    const boundaryFailure = errorCode.startsWith('workspace-boundary-')
+    // RFC-317 T31（DE-03）—— 原本是 `errorCode.startsWith('workspace-boundary-')`：
+    // 平台级的重试策略由某个业务模块**拼字符串的拼法**决定。现在读端口上的闭合字段。
+    const boundaryFailure = boundaryEscalates(errorClass)
     const attemptsPerScene = policy.content.sameSceneAttempts + 1
     const nextOrdinal = boundaryFailure
       ? Math.max(
@@ -2301,7 +2324,12 @@ export class DigitalEmployeeRuntimeService {
     const snapshot = await this.#execution.inspect(round.executionRef)
     if (snapshot.kind === 'pending') return 'pending'
     if (snapshot.kind === 'failed') {
-      return this.#retryOrFailExecution(round, snapshot.errorCode, snapshot.errorDetail)
+      return this.#retryOrFailExecution(
+        round,
+        snapshot.errorClass,
+        snapshot.errorCode,
+        snapshot.errorDetail,
+      )
     }
     try {
       const validated = this.#validateRoundOutput(round, snapshot.outputJson)
@@ -2310,6 +2338,8 @@ export class DigitalEmployeeRuntimeService {
     } catch (error) {
       return this.#retryOrFailExecution(
         round,
+        // agent 交回来的信封不合契约：与工作区边界无关，按同场景重试（行为同改造前）。
+        'semantic',
         'execution-envelope-invalid',
         error instanceof Error ? error.message : String(error),
       )

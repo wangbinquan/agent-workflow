@@ -139,3 +139,33 @@ export interface EmployeeCaseProjectionDocument {
   readonly projectionJson: string
   readonly projectionRevision: number
 }
+
+/**
+ * RFC-317 T31（DE-03）—— 一次执行失败的**类别**，决定 OS 的重试落在同场景还是新场景。
+ *
+ * 在此之前这个判据是一次**前缀嗅探**：`errorCode.startsWith('workspace-boundary-')`。
+ * 而那个前缀由 development-automation 用模板拼出来
+ * （`workspace-${verdict.kind}-${verdict.code}`），两端之间没有任何类型联系——把
+ * `kind: 'boundary'` 改名、或把模板顺序调一下，每一次边界违规都会**静默降级**成同场景
+ * 重试：OS 会在一个已经被证明污染的工作区里反复重跑 agent，而且看不出异常（重试照常
+ * 发生，只是场景错了）。同一处还有一族 `workspace-${conflictInspection.code}`（没有
+ * kind 段），因此从来就触发不了升级。
+ *
+ * 现在类别是端口上的**闭合字段**，OS 按联合分支，新增一类是编译错误。
+ */
+export const WORKSPACE_FAILURE_CLASSES = ['boundary', 'semantic', 'infrastructure'] as const
+
+export type WorkspaceFailureClass = (typeof WORKSPACE_FAILURE_CLASSES)[number]
+
+/**
+ * RFC-317 T31（DE-05）—— 「这一轮不绑具体工具，走平台工作项」的**保留 slotRef**。
+ *
+ * 这个值让一个工作项绕过 OS 的两条不变量（「选中的 slot 必须存在」「该 slot 必须有
+ * 一个精确发布的工具修订」）。它此前在两个模块里各是一枚裸字面量 `'platform'`，
+ * 两侧没有任何共享符号：任一侧改名都不会报错，只会**换一条代码路径**——OS 要么开始
+ * 索要一个并不存在的工具绑定，要么不再索要一个本该存在的绑定。
+ *
+ * 导出成常量后，改名是编译期事件；同时它现在有一个可被 grep / import 图看见的名字，
+ * 「谁在使用这条逃生门」不再需要靠搜字符串。
+ */
+export const PLATFORM_WORK_ITEM_SLOT_REF = 'platform'

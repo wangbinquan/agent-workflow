@@ -1,5 +1,6 @@
 // RFC-303 — the only cross-context task-control surface.
 // It deliberately accepts a source binding, never caller-selected task ids.
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import type { TaskStatus } from '@agent-workflow/shared'
 
 declare const sourceTerminationCapabilityBrand: unique symbol
@@ -91,6 +92,8 @@ export type DigitalEmployeeExecutionResult =
   | {
       readonly kind: 'failed'
       readonly executionRef: string
+      /** RFC-317 T31（DE-03）—— 决定 OS 的重试落在同场景还是新场景。 */
+      readonly errorClass: WorkspaceFailureClass
       readonly errorCode: string
       readonly errorDetail: string
     }

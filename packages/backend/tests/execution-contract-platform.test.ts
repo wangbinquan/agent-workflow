@@ -4,7 +4,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { renderUserPrompt, WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import {
+  DAEMON_RESTART_ERROR_SUMMARY,
+  renderUserPrompt,
+  WorkflowDefinitionSchema,
+} from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
 import { agents as agentRows, nodeRuns, tasks, workflows } from '@/db/schema'
 import {
@@ -157,6 +161,7 @@ describe('platform execution contracts', () => {
         toolSlotRef: 'default',
         semanticValidatorId: 'development.analyze-implement.validator',
         inputEnvelopeJson: '{}',
+        allowedEffectKinds: [],
       },
       { previousError: null },
       runtimeGuide,
@@ -165,6 +170,14 @@ describe('platform execution contracts', () => {
     expect(prompt).toContain(
       'Set status to exactly "ok", "needs-input", or "blocked". For successful completion use "ok", never "succeeded" or another synonym.',
     )
+    expect(prompt).toContain(
+      'effectSuggestions must be an array of string effect IDs; never encode an effect as an object.',
+    )
+    expect(prompt).toContain(
+      'This frozen contract allows no effect IDs, so return effectSuggestions: [].',
+    )
+    expect(prompt).toContain('OUTPUT_SCHEMA_EXAMPLE_JSON')
+    expect(prompt).toContain('"effectSuggestions": []')
     expect(() =>
       validateExactContractOutput({
         guide: contractGuide,
@@ -596,8 +609,56 @@ describe('platform execution contracts', () => {
     expect(await execution.inspect(taskId)).toEqual({
       kind: 'failed',
       executionRef: taskId,
+      errorClass: 'infrastructure',
       errorCode: 'execution-failed',
       errorDetail: 'invalid prompt template ref: malformed-local-ref',
+    })
+  })
+
+  // Real development Case regression (2026-08-23): Bun watch interrupted an
+  // implementation task, boot auto-resume immediately reclaimed the same task,
+  // but the employee adapter had already reported the transient interrupted row
+  // as a permanent round failure. The Case became blocked while its Task was
+  // visibly running again, and repeated reloads then burned work for no purpose.
+  test('daemon-restart interruptions remain pending while automatic recovery is available', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = 'employee-execution-recovering-after-daemon-restart'
+    await db.insert(tasks).values({
+      id: taskId,
+      name: 'recovering employee execution',
+      workflowId: 'digital-employee-host',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/recovering-employee-execution',
+      worktreePath: '/tmp/recovering-employee-execution',
+      baseBranch: 'main',
+      branch: 'agent-workflow/recovering-employee-execution',
+      status: 'interrupted',
+      inputs: '{}',
+      startedAt: 1,
+      finishedAt: 2,
+      errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
+      errorMessage: 'daemon restarted while this task was running; please resume',
+      autoRecoverySuspended: false,
+    })
+    const execution = composeDigitalEmployeeExecution({
+      db,
+      appHome: '/tmp',
+      startDeps: null as never,
+      executionContracts: null as never,
+    })
+
+    expect(await execution.inspect(taskId)).toEqual({
+      kind: 'pending',
+      executionRef: taskId,
+    })
+
+    db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId)).run()
+    expect(await execution.inspect(taskId)).toEqual({
+      kind: 'failed',
+      executionRef: taskId,
+      errorClass: 'infrastructure',
+      errorCode: 'execution-interrupted',
+      errorDetail: 'daemon restarted while this task was running; please resume',
     })
   })
 

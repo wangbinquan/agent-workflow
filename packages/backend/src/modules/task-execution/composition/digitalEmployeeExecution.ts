@@ -1,10 +1,15 @@
 import { and, desc, eq } from 'drizzle-orm'
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
-import { isTerminalTaskStatus, type StartTask } from '@agent-workflow/shared'
+import {
+  DAEMON_RESTART_ERROR_SUMMARY,
+  isTerminalTaskStatus,
+  type StartTask,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
 import type { DigitalEmployeeExecutionParticipant } from '../public/participants'
@@ -78,6 +83,7 @@ const planSchema = z
       .object({ contractId: z.string().min(1), version: z.number().int().positive() })
       .strict(),
     semanticValidatorId: z.string().min(1),
+    allowedEffectKinds: z.array(z.string().min(1).max(200)).max(100),
     roundBudgetMs: z.number().int().positive(),
   })
   .passthrough()
@@ -123,10 +129,18 @@ const attemptSchema = z
   })
   .strict()
 
-function resultFailure(executionRef: string, errorCode: string, errorDetail: string) {
+function resultFailure(
+  executionRef: string,
+  // RFC-317 T31（DE-03）—— 类别是必传的第二个参数而不是可选项：新增一条失败路径时，
+  // 作者必须当场说清它属于哪一类，而不是默认落进「不升级」。
+  errorClass: WorkspaceFailureClass,
+  errorCode: string,
+  errorDetail: string,
+) {
   return {
     kind: 'failed' as const,
     executionRef,
+    errorClass,
     errorCode,
     errorDetail: errorDetail.slice(0, 2_000),
   }
@@ -142,7 +156,12 @@ function containedArtifact(appHome: string, artifactRef: string): string | null 
 export function buildDigitalEmployeeFixedPrompt(
   plan: Pick<
     z.infer<typeof planSchema>,
-    'roundRef' | 'executionNonce' | 'toolSlotRef' | 'semanticValidatorId' | 'inputEnvelopeJson'
+    | 'roundRef'
+    | 'executionNonce'
+    | 'toolSlotRef'
+    | 'semanticValidatorId'
+    | 'inputEnvelopeJson'
+    | 'allowedEffectKinds'
   >,
   attempt: Pick<z.infer<typeof attemptSchema>, 'previousError'>,
   guide: ExecutionContractRuntimeView,
@@ -154,6 +173,7 @@ export function buildDigitalEmployeeFixedPrompt(
     toolSlotRef: plan.toolSlotRef,
     semanticValidatorId: plan.semanticValidatorId,
     inputEnvelopeJson: plan.inputEnvelopeJson,
+    allowedEffectKinds: plan.allowedEffectKinds,
     policyLines: [
       'Do not run git, commit, push, merge, approve, call a code host, or choose the next action.',
       'Only modify business files allowed by the supplied workspace contract.',
@@ -445,12 +465,32 @@ export function composeDigitalEmployeeExecution(deps: {
           status: tasks.status,
           roundRef: tasks.digitalEmployeeRoundId,
           inputs: tasks.inputs,
+          errorSummary: tasks.errorSummary,
+          autoRecoverySuspended: tasks.autoRecoverySuspended,
         })
         .from(tasks)
         .where(eq(tasks.id, executionRef))
         .get()
       if (task === undefined) {
-        return resultFailure(executionRef, 'execution-not-found', 'TaskEngine execution is missing')
+        return resultFailure(
+          executionRef,
+          'infrastructure',
+          'execution-not-found',
+          'TaskEngine execution is missing',
+        )
+      }
+      // A daemon restart is a recoverable TaskEngine transport interruption,
+      // not a business result. Boot auto-resume reclaims the same task after
+      // reaping it, so publishing a permanent employee failure in this brief
+      // interrupted window blocks the Case while that very task is running
+      // again. Keep the round pending until recovery either completes or the
+      // circuit breaker explicitly suspends further automatic attempts.
+      if (
+        task.status === 'interrupted' &&
+        task.errorSummary === DAEMON_RESTART_ERROR_SUMMARY &&
+        !task.autoRecoverySuspended
+      ) {
+        return { kind: 'pending', executionRef }
       }
       if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
       const outcome = await getExecutionOutcome(deps.db, executionRef)
@@ -462,6 +502,7 @@ export function composeDigitalEmployeeExecution(deps: {
       if (task.status !== 'done') {
         return resultFailure(
           executionRef,
+          'infrastructure',
           `execution-${task.status}`,
           outcome.error?.message ?? outcome.error?.summary ?? `task ended as ${task.status}`,
         )
@@ -495,6 +536,7 @@ export function composeDigitalEmployeeExecution(deps: {
         if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
           return resultFailure(
             executionRef,
+            'semantic',
             'implementation-plan-path-mismatch',
             `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
           )
@@ -507,12 +549,18 @@ export function composeDigitalEmployeeExecution(deps: {
           outputJson: output,
         })
         if (!validation.ok) {
-          return resultFailure(executionRef, validation.errorCode, validation.errorDetail)
+          return resultFailure(
+            executionRef,
+            validation.errorClass,
+            validation.errorCode,
+            validation.errorDetail,
+          )
         }
       }
       if (output === null) {
         return resultFailure(
           executionRef,
+          'semantic',
           'execution-output-missing',
           `task did not publish ${DIGITAL_EMPLOYEE_RESULT_PORT}`,
         )

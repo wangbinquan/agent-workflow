@@ -1,4 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm'
+import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
@@ -122,7 +123,12 @@ interface DevelopmentEmployeeWorkspaceParticipant {
     readonly outputJson: string | null
   }): Promise<
     | { readonly ok: true }
-    | { readonly ok: false; readonly errorCode: string; readonly errorDetail: string }
+    | {
+        readonly ok: false
+        readonly errorClass: WorkspaceFailureClass
+        readonly errorCode: string
+        readonly errorDetail: string
+      }
   >
 }
 
@@ -605,7 +611,14 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         .where(eq(employeeReactionRounds.id, request.roundRef))
         .get()
       if (round === undefined) {
-        return { ok: false, errorCode: 'workspace-round-missing', errorDetail: request.roundRef }
+        return {
+          ok: false,
+          // 轮次行不见了：这是平台侧的状态缺失，不是工作区被污染——换个干净场景重跑
+          // 也变不出这一行，所以按 infrastructure 处理（行为同改造前：不升级）。
+          errorClass: 'infrastructure',
+          errorCode: 'workspace-round-missing',
+          errorDetail: request.roundRef,
+        }
       }
       const plan = planSchema.parse(JSON.parse(round.planJson) as unknown)
       if (plan.workspacePolicy.mode === 'none') return { ok: true }
@@ -618,6 +631,8 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       if (state === undefined) {
         return {
           ok: false,
+          // 同上：平台侧的前置状态缺失，换场景也补不回来。
+          errorClass: 'infrastructure',
           errorCode: 'workspace-pre-state-missing',
           errorDetail: request.roundRef,
         }
@@ -706,6 +721,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       if (verdict.ok && conflictInspection !== null && !conflictInspection.ok) {
         return {
           ok: false,
+          // 冲突检查失败**不**升级到新场景——这与本次改造前的行为逐字一致（旧判据是
+          // 前缀嗅探，而这一族 errorCode 没有 `boundary` 段，从来就没触发过升级）。
+          // 它「该不该」升级是产品判断，不在本次「把隐式握手换成显式契约」的范围内；
+          // 改成显式字段之后，要改它只需改这一个词，且改动会被重试用例看见。
+          errorClass: 'semantic',
           errorCode: `workspace-${conflictInspection.code}`,
           errorDetail: conflictInspection.detail,
         }
@@ -740,6 +760,9 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       }
       return {
         ok: false,
+        // `verdict.kind` 是 'boundary' | 'semantic' 的闭合联合，直接成为类别——
+        // 这正是原先靠字符串前缀传递、因而可以被任意一侧改名悄悄切断的那条信息。
+        errorClass: verdict.kind,
         errorCode: `workspace-${verdict.kind}-${verdict.code}`,
         errorDetail: verdict.detail,
       }

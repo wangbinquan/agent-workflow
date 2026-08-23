@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
+import { PLATFORM_WORK_ITEM_SLOT_REF } from '@/modules/digital-employee/public/types'
 import type {
   EmployeeTypeCollaborationCodec,
   EmployeeTypePackageRegistration,
@@ -678,10 +679,12 @@ const outputFields: ExecutionContractField[] = [
     'effectSuggestions',
     '效果建议',
     'Effect suggestions',
-    '只提出合同允许的平台效果；执行器不直接执行',
-    'Only suggests contract-allowed platform effects; the executor never performs them',
+    '字符串效果 ID 数组，只能使用本轮冻结合同允许的 ID；合同未允许任何效果时必须为 []，执行器不直接执行',
+    "Array of string effect IDs from this round's frozen contract; must be [] when no effects are allowed, and the executor never performs them directly",
     'platform',
     'array',
+    true,
+    '[]',
   ),
   contractField(
     'artifactRefs',
@@ -3673,7 +3676,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           ? null
           : issueHandlingContextSchema.parse(JSON.parse(issue.stateJson) as unknown).request.kind
       return JSON.stringify({
-        slotRef: kind === 'external-id' ? request.defaultSlotRef : 'platform',
+        slotRef: kind === 'external-id' ? request.defaultSlotRef : PLATFORM_WORK_ITEM_SLOT_REF,
       })
     }
     if (request.workItemRef !== 'repair-pipeline') {
