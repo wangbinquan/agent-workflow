@@ -89,6 +89,7 @@ let mocks: SystemMockClient
 let repositoryId = ''
 let employeeId = ''
 let employeeName = ''
+let expectedActiveWorkItemRefs: string[] = []
 
 function requiredEnv(name: string): string {
   const value = process.env[name]
@@ -180,6 +181,12 @@ async function seedPublishedEmployee(): Promise<void> {
       region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
     ),
   )
+  expectedActiveWorkItemRefs = typePackage.authoringManifest.workItems
+    .filter(
+      (item) =>
+        item.responsibilityLaneId === null || !optionalLaneIds.has(item.responsibilityLaneId),
+    )
+    .map((item) => item.workItemRef)
   const bindings: Array<{
     workItemRef: string
     slotRef: string
@@ -414,16 +421,19 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(issueIngressCard).not.toHaveAttribute('data-work-item-ref')
   await expect(repairPlanReviewCard).not.toHaveAttribute('data-work-item-ref')
 
-  const mainFlowTops = await Promise.all(
+  const mainFlowCenters = await Promise.all(
     [
       ingressBranch,
       reviewBranch,
       responsibilityMap.locator('[data-work-item-ref="prepare-change"]'),
       responsibilityMap.locator('[data-work-item-ref="publish-mr"]'),
-    ].map(async (node) => (await node.boundingBox())?.y ?? Number.NaN),
+    ].map(async (node) => {
+      const box = await node.boundingBox()
+      return box === null ? Number.NaN : box.y + box.height / 2
+    }),
   )
-  expect(mainFlowTops.every(Number.isFinite)).toBe(true)
-  expect(Math.max(...mainFlowTops) - Math.min(...mainFlowTops)).toBeLessThanOrEqual(1)
+  expect(mainFlowCenters.every(Number.isFinite)).toBe(true)
+  expect(Math.max(...mainFlowCenters) - Math.min(...mainFlowCenters)).toBeLessThanOrEqual(1)
 
   await uiInputCard.click()
   await page.waitForURL(/\/tasks\/new\?kind=digital-employee$/)
@@ -708,7 +718,12 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(page.getByRole('heading', { name: employeeName, exact: true })).toBeVisible()
   const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(runtimeMap).toBeVisible()
-  await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(20)
+  await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(
+    expectedActiveWorkItemRefs.length,
+  )
+  for (const workItemRef of expectedActiveWorkItemRefs) {
+    await expect(runtimeMap.locator(`[data-work-item-ref="${workItemRef}"]`)).toHaveCount(1)
+  }
   await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input"]')).toHaveCount(1)
   await expect(runtimeMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
   const overlappingCapabilityTools = await runtimeMap

@@ -515,7 +515,7 @@
  * composite branches as tall as the grid row and center every ordinary step
  * on that row, so every 50% connector lands on one shared horizontal spine. */
 .employee-toolbox-lane--parallel-ingress .employee-toolbox-lane__cards {
-  --employee-flow-gap: 9px;
+  --employee-flow-gap: 8px;
 
   align-items: stretch;
 }
@@ -784,9 +784,9 @@
 .employee-toolbox-ingress-branch .employee-toolbox-card--source-node strong {
   font-size: 10px;
   text-align: center;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   word-break: normal;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .employee-toolbox-review-branch {
