@@ -261,7 +261,7 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(detail).toContain('下一步：等待关注对象发生变化')
     expect(detail).toContain('businessStateLabel(binding.state, zh)')
     expect(detail).toContain("? '工作事件'")
-    expect(detail).toContain("zh ? '员工工作时间线' : 'Employee work timeline'")
+    expect(detail).toContain("zh ? '任务流水 · 时间轴' : 'Task execution timeline'")
     expect(detail).toContain('data-testid="employee-work-timeline"')
     expect(detail).toContain('inputContextRefsJson')
     expect(detail).toContain('outputJson')

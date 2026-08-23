@@ -523,13 +523,11 @@ function EmployeeCaseDetailPage(): ReactElement {
             >
               <div className="employee-map-section__heading">
                 <div>
-                  <h2>
-                    {zh ? '当前职责与完整生命周期' : 'Current responsibility and full lifecycle'}
-                  </h2>
+                  <h2>{zh ? '数字员工完整能力图' : 'Complete digital employee capability map'}</h2>
                   <p>
                     {zh
-                      ? '岗位中的确定性结构原样投影到运行态；流水线错误类型按优先级展开，卡片显示每个节点的实际状态。'
-                      : 'The deterministic job structure is projected into runtime. Pipeline failure types expand by priority and every card shows its actual state.'}
+                      ? '完整保留岗位中的确定性结构和未启用能力；已经完成的节点显示为绿色，正在执行的节点持续闪烁。'
+                      : 'The full deterministic job structure, including disabled capabilities, remains visible. Completed nodes are green and the running node pulses.'}
                   </p>
                 </div>
                 <span className="employee-map-section__legend">
@@ -559,16 +557,16 @@ function EmployeeCaseDetailPage(): ReactElement {
                   if (latest !== undefined) setSelectedRoundId(latest.id)
                 }}
                 cardState={runtimeCardState}
-                title={
-                  zh ? '运行中的确定性职责全景' : 'Deterministic responsibility map in runtime'
-                }
+                title={zh ? '完整能力图与运行状态' : 'Complete capability map and runtime state'}
                 description={
                   zh
-                    ? '同一张岗位职责图展示等待、执行中、成功和失败；点击节点查看它的契约，点击时间线查看每次真实执行。'
-                    : 'The same job map shows waiting, running, successful, and failed duties. Select a node for its contract and a timeline entry for the actual execution.'
+                    ? '同一张岗位职责图展示未开始、等待、执行中、完成和失败；点击节点查看契约，点击任务流水查看每次真实执行。'
+                    : 'The same job map shows not started, waiting, running, completed, and failed duties. Select a node for its contract and a timeline entry for each actual execution.'
                 }
                 legend={
-                  zh ? '蓝色执行中 · 绿色完成 · 红色失败' : 'Blue running · green done · red failed'
+                  zh
+                    ? '蓝色闪烁执行中 · 绿色已完成 · 红色失败'
+                    : 'Pulsing blue running · green completed · red failed'
                 }
               />
               {selectedItem !== undefined ? (
@@ -774,13 +772,9 @@ function EmployeeCaseDetailPage(): ReactElement {
               <header>
                 <div>
                   <span className="employee-node-panel__eyebrow">
-                    {zh ? '员工工作时间线' : 'Employee work timeline'}
+                    {zh ? '任务流水 · 时间轴' : 'Task execution timeline'}
                   </span>
-                  <h2>
-                    {zh
-                      ? '从受理到每一轮 React 的完整阶段'
-                      : 'Every stage from intake through each reaction'}
-                  </h2>
+                  <h2>{zh ? '历史执行过的所有节点' : 'Every historically executed node'}</h2>
                   <p>
                     {zh
                       ? '按实际发生顺序保留 Agent、Workflow、脚本和平台节点。点击阶段查看冻结输入、确定性输出及执行 session。'

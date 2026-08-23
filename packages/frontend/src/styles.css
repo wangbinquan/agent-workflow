@@ -650,6 +650,28 @@
   --employee-card-border: color-mix(in srgb, var(--accent) 72%, var(--border));
   --employee-card-background: color-mix(in srgb, var(--accent) 10%, var(--panel));
   --employee-card-state-shadow: inset 3px 0 0 var(--accent-fill);
+
+  /* Match the task-detail workflow canvas: a running node keeps a stable blue
+     state ring and breathes at the same 1.4s cadence. Keep the card's fan-out
+     stack shadows in every frame so live status never flattens the graph. */
+  animation: employee-runtime-node-running-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes employee-runtime-node-running-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 3px 0 0 var(--accent-fill),
+      0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent),
+      var(--employee-card-stack-shadows);
+  }
+
+  50% {
+    box-shadow:
+      inset 3px 0 0 var(--accent-fill),
+      0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent),
+      var(--employee-card-stack-shadows);
+  }
 }
 
 .employee-toolbox-card--failed {
@@ -691,6 +713,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .employee-toolbox-card--running {
+    animation: none;
+    box-shadow:
+      inset 3px 0 0 var(--accent-fill),
+      0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent),
+      var(--employee-card-stack-shadows);
+  }
+
   .employee-toolbox-card--attention {
     --employee-card-state-shadow: inset 4px 0 0 var(--warn);
 
@@ -698,10 +728,29 @@
   }
 }
 
-.employee-toolbox-card--active {
+.employee-toolbox-card--active:not(
+  .employee-toolbox-card--running,
+  .employee-toolbox-card--completed,
+  .employee-toolbox-card--failed,
+  .employee-toolbox-card--waiting,
+  .employee-toolbox-card--neutral
+) {
   --employee-card-border: var(--accent);
   --employee-card-background: color-mix(in srgb, var(--accent) 9%, var(--panel));
   --employee-card-state-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Runtime selection must not replace green/red/live status with the generic
+   blue selected-card treatment. A separate outline preserves both signals. */
+.employee-toolbox-card--active:is(
+  .employee-toolbox-card--running,
+  .employee-toolbox-card--completed,
+  .employee-toolbox-card--failed,
+  .employee-toolbox-card--waiting,
+  .employee-toolbox-card--neutral
+) {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 1px;
 }
 
 @media (max-width: 760px) {
