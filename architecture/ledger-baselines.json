@@ -64,10 +64,7 @@
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
       "baseline": 2,
-      "why": "RFC-294 试点期允许的非 exact public 入口。目标架构下终值为 0",
-      "allowGrowth": {
-        "why": "RFC-317 T25：解析语料扩到 shared + platform、FORBIDDEN_TYPE_IMPORT 补 @/platform 之后，第一次看见 identity-access 的 public 合同 insertInitialUserAccessInTransaction 把 @/platform 的 TransactionScope 摆进签名——两个 legacy 消费者因此必须认识平台层持久化类型。这是**存量条件被首次照亮**，不是新增回归；修法要给 identity-access 定义模块自有的事务端口，属该 context 的架构决策，故本批只入账不代改。**预算未调高**（god-surface 的 24 片叶子等预算一字未动）。"
-      }
+      "why": "RFC-294 试点期允许的非 exact public 入口。目标架构下终值为 0 RFC-317 T25 涨到 2（identity-access 的 public 合同把 @/platform 的 TransactionScope 摆进签名），当时的一次性 allowGrowth 已按 T17 在下一笔提交中收回。"
     },
     {
       "id": "rfc317-no-corpus-floor",

@@ -406,3 +406,29 @@ T25 落地后跑两条变异——**两条都没被抓住**：①撤掉 `resolve
 **教训**：给扫描器扩面时，「扩面后仍然全绿」既可能是「真的没有新违规」，也可能是「扩的那部分根本没被任何断言用到」。两者同形。**扩面必须同批给出一条会因为扩面而变色的 fixture**，否则这次扩面从第一天起就可以被无痕撤回。
 
 **门禁归属**：backend 4 分片全过、frontend 过、typecheck / format / depcheck 过；lint 红一条——`BoundaryEdge` 在我把 `Pick<BoundaryEdge,…>` 换成结构化类型后成了死引用（`--max-warnings 0`，正是 CLAUDE.md 记的 RFC-140 教训）。已删。另有一条 typecheck 错在 `execution-contract-platform.test.ts`，该文件有并发 session 未提交的 17 行新增，不属本批。
+
+### B4-a（2026-08-23）—— T27（R4）：身份分派必须编译期穷尽
+
+**测量先于结论**。D4 原本裁的是「`core: true` 内核的业务身份字面量预算直接归零」。实测 31 个 core 内核里有 **18 处**身份字面量、涉及 6 个文件；逐条读过之后，「归零」这个口径需要修正——因为这 18 处分属**三种性质完全不同**的形态：
+
+| 站点 | 形态 | 判定 |
+| --- | --- | --- |
+| `executor.ts#startExecution` | 3 分支，兜底**静默当成 workflow** | 真隐患 → 本批修 |
+| `outcome.ts#projectExecutionOutcome` | 4 分支 + `const unhandled: never` | 前人已按 RFC-304 事故修好 ✅ |
+| `workflowScope.ts#promotedSourceForWrapper` | 3 分支，兜底 `return null`（**失败关闭**） | 入册留痕，不要求穷尽 |
+| `nodePorts.ts` / `wrapperFanout.ts` / `systemChannelPorts.ts` | `Record<NodeKind,…>` 穷尽表，或跨不同注册表的**合取守卫** | 不适用 |
+
+**判据落在「兜底」而不是「字面量」**。危险的从来不是代码里出现 `=== 'workgroup'`，而是**分派链的兜底会把新种类静默当成某个旧种类**。`outcome.ts` 里前人留的注释就是这个事故的一手记录：code-round 曾掉进 workgroup 分支，`workgroupModeOf(null)` 返回 null，结果是 `status: 'done'` + `outputs: {}` + 一条 `workgroup-config-unparsable` 警告——**一个看起来成功、实则空输出、还赖在它根本没有的配置头上的结果**；原话「the failure was in the arm NOBODY would think to check」。
+
+**生产改动（1 处）**：`executor.ts#startExecution` 的 `if` 链改为 `switch` + `const _exhaustive: never`（本仓既有写法，`shared/src/lifecycle.ts` 用了 5 处）。行为逐字不变。**变异实证**：给 `StartExecutionRequest` 加第四个变体 ⇒ 编译报错 `Type '{ kind: "probe-new-kind"; … }' is not assignable to type 'never'`；**改之前**同样的新增会被静默路由到 `startTask`（当成 workflow），编译与测试**零反应**。
+
+**判据三条边界，各配正反 fixture**（每条都对应判据实际犯过的错）：
+1. 字面量从注册表**派生**，不手抄——手抄的集合会随注册表增长而过期，而过期的表现是「扫不出违规」，与合规同形。另加一条自检：注册表派生不出值时**先红**（改名 ⇒ 三条断言同时红，实证过）。
+2. 按**判别表达式**分组，不是数字面量总数。初版数总数，把 `isAggregatorAgentNode`（`node.kind !== 'agent-single'` 加 `agent.role === 'aggregator'`，先判种类再判角色）误报成分派——那是**合取**，根本没有分支。
+3. 失败关闭的兜底入册即可。`return null` 与「被当成 workflow 启动」不是一个量级。
+
+#### 顺带修掉自己守卫的一个判据缺陷（用起来才暴露）
+
+T17 的「基线只降不升」初版一律拿 `git show HEAD~1:` 比。**CI 里工作树 == HEAD，比 HEAD~1 是对的；本地带着未提交改动时，它跳过了 HEAD**——上一笔已经提交过的涨账会被重复算成「本次增长」，一次性的 `allowGrowth` 也就永远判不了过期。改为按**评估对象**选基准：基线文件脏 ⇒ 比 `HEAD`，干净 ⇒ 比 `HEAD~1`。
+
+**一次性许可完成了一个完整生命周期**：B3-b 涨账时声明 `allowGrowth` ⇒ 通过；本批不涨账，许可按 T17 收回 ⇒ 通过；把许可加回来（未涨账）⇒ **判过期转红**。机制刚刚约束了它的作者本人。

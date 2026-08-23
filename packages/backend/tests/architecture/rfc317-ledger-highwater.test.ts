@@ -153,9 +153,27 @@ type PreviousBaselines =
   | { readonly kind: 'absent-in-parent' }
   | { readonly kind: 'unparsable' }
 
+/**
+ * 「上一版」是哪一版，取决于**本次评估的对象是谁**。
+ *
+ * - 基线文件有未提交改动 ⇒ 评估对象是**工作树**，上一版就是 `HEAD`。
+ * - 基线文件干净（CI 的情形：工作树逐字等于 HEAD）⇒ 评估对象是 `HEAD` 这一笔，
+ *   上一版是 `HEAD~1`。
+ *
+ * 初版一律比 `HEAD~1`，是用起来才暴露的缺陷：本地带着未提交改动时它**跳过了 HEAD**，
+ * 于是上一笔已经提交过的涨账会被重复算成「本次增长」，一次性的 allowGrowth 也就永远
+ * 判不了过期。两种情形共用一个引用，必然错一头。
+ */
+function baselineComparisonRef(): string | null {
+  const dirty = git('status', '--porcelain', '--', 'architecture/ledger-baselines.json')
+  if (dirty.ok && dirty.stdout.trim().length > 0) return 'HEAD'
+  return PARENT_AVAILABLE ? 'HEAD~1' : null
+}
+
 function readPreviousBaselines(): PreviousBaselines {
-  if (!PARENT_AVAILABLE) return { kind: 'no-parent' }
-  const shown = git('show', 'HEAD~1:architecture/ledger-baselines.json')
+  const ref = baselineComparisonRef()
+  if (ref === null) return { kind: 'no-parent' }
+  const shown = git('show', `${ref}:architecture/ledger-baselines.json`)
   if (!shown.ok) return { kind: 'absent-in-parent' }
   try {
     const parsed = JSON.parse(shown.stdout) as { ledgers?: readonly LedgerBaseline[] }

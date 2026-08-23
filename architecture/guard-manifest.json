@@ -88,6 +88,18 @@
       "lines": 308
     },
     {
+      "id": "rfc317-identity-dispatch",
+      "file": "packages/backend/tests/architecture/rfc317-identity-dispatch.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 397
+    },
+    {
       "id": "rfc317-ledger-highwater",
       "file": "packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts",
       "runner": "bun",

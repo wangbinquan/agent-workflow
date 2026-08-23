@@ -112,16 +112,27 @@ export async function startExecution(
     )
   }
   const effectiveDeps = depsForInvoker(actor, deps, req)
-  if (req.kind === 'agent') {
-    return await startAgentTask(db, actor, req.refId, req.payload, effectiveDeps, req.uploads)
+  // RFC-317 R4 —— 分派必须是**编译器能证明穷尽**的形式。
+  //
+  // 原本是 `if (agent) … if (workgroup) … return startTask(…)`：最后那个 return 是
+  // **兜底**，将来给 StartExecutionRequest 加第四个变体时，它会被静默当成 workflow 走
+  // startTask——一个新业务种类接错启动路径，而且没有任何测试会红。
+  // 换成 switch + `_exhaustive: never`（本仓既有写法，见 shared/src/lifecycle.ts）后，
+  // 漏掉一个变体是**编译错误**，而不是运行期的静默错路。行为与改前逐字一致。
+  switch (req.kind) {
+    case 'agent':
+      return await startAgentTask(db, actor, req.refId, req.payload, effectiveDeps, req.uploads)
+    case 'workgroup':
+      return await startWorkgroupTask(db, actor, req.refId, req.payload, effectiveDeps)
+    case 'workflow':
+      // `refId` 与 payload 自带的目标必须一致——不一致是调用点的编程错误，已在函数
+      // 开头（消费 actor/deps 之前）大声抛出，此处不再重复判断以保持错误优先级不变。
+      return await startTask(req.payload, effectiveDeps)
+    default: {
+      const _exhaustive: never = req
+      throw new Error(`unreachable execution kind: ${JSON.stringify(_exhaustive)}`)
+    }
   }
-  if (req.kind === 'workgroup') {
-    return await startWorkgroupTask(db, actor, req.refId, req.payload, effectiveDeps)
-  }
-  // workflow — `refId` and the payload's own target must agree; a mismatch is
-  // a programming error at the call site, surfaced loudly instead of silently
-  // trusting one side.
-  return await startTask(req.payload, effectiveDeps)
 }
 
 /** Unified cancel verb — delegates to cancelTask (PR-2 adds the child cascade there). */
