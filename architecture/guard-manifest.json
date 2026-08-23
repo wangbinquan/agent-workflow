@@ -673,7 +673,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 357
+      "lines": 385
     },
     {
       "id": "rfc284-git-twin-textlock",

@@ -20,6 +20,11 @@ import {
   type RuntimeDriver,
 } from '@/services/runtime'
 import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from '@/services/runtimeRegistry'
+
+/** 驱动实现目录（从 runtime 注册表派生，见 rfc282-single-implementation-lock 同名常量）。 */
+const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
+  (kind) => `services/runtime/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
+)
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
 import type { AgentSpawnContext } from '../src/services/runtime/types'
@@ -241,6 +246,8 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // systemAgentRun 已在 RFC-237 能力化消除；start.ts / routes/runtime.ts 入
     // 白名单）。新正则把三种逃逸拼写全部纳入。
     const offenders: string[] = []
+    /** RFC-317 T33 —— 正向控制：证明公共层**真的**进了扫描面（见下方断言）。 */
+    const scannedRuntimeCommons: string[] = []
     // RFC-317 T19 / findings RT-02 —— 原表三条，实测其中**两条已死**：
     // routes/runtimes.ts 与 services/runner.ts 早已不含任何 kind 判别，豁免却还挂着。
     // 死豁免不是「多余的一行」，是一张**空白许可证**：那两个文件里以后新长出来的
@@ -250,6 +257,13 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       // startup probability optimization, not spawn assembly; removing it
       // needs a driver boot-probe declaration, out of proportion (design §5).
       'cli/start.ts',
+      // RFC-317 T33（RT-03）—— `RuntimeBinaryConfig` 的 `opencodePath` /
+      // `claudeCodePath` 两个键**镜像的是用户可见的 config schema 字段名**，不是这里
+      // 自己发明的 kind 判别。把它收成 `Record<RuntimeKind, string | null>` 要连
+      // config schema 一起改（用户面 + 迁移），与本条「把整目录豁免收窄成驱动目录」
+      // 不成比例。收窄扫描面后它第一次可见，先如实入账。
+      // removeWhen: 配置项改为按 runtime kind 索引的那次 RFC。
+      'services/runtime/types.ts',
     ])
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
@@ -259,17 +273,30 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
         // so `.has()` missed every allowlisted file and flagged it as an offender).
         const rp = relative(SRC_ROOT, p).replace(/\\/g, '/')
         if (statSync(p).isDirectory()) {
-          if (rp === 'services/runtime') continue
+          // RFC-317 T33（RT-03）—— 只跳过**驱动实现**目录，不跳过整个 services/runtime。
+          //
+          // 原来是 `if (rp === 'services/runtime') continue`，整棵子树都不走。但那个目录
+          // 是混合区：两个驱动子目录，外加每个驱动都会调用的中立公共层。于是 runtime
+          // kind 判别破坏力最大的那一块——共享内核——恰恰没有任何守卫看过。
+          if (RUNTIME_DRIVER_DIRS.includes(`${rp}/`)) continue
           walk(p)
           continue
         }
         if (!name.endsWith('.ts')) continue
+        if (rp.startsWith('services/runtime/')) scannedRuntimeCommons.push(rp)
         if (kindDiscriminationAllowlist.has(rp)) continue
         const src = readFileSync(p, 'utf8')
         if (KIND_DISCRIMINATION.test(src)) offenders.push(rp)
       }
     }
     walk(SRC_ROOT)
+    // RFC-317 T33 —— 没有这一条，把豁免放宽回 `rp === 'services/runtime'` 之后一切照绿：
+    // 违规集为空与「整块没扫」在断言层面完全同形。实测过——收窄之前它就是这样绿着的。
+    expect(
+      scannedRuntimeCommons.length,
+      'services/runtime 下的**中立公共层**一个都没进扫描面。豁免只该覆盖驱动实现目录；' +
+        '整目录跳过会让两个驱动共用的那块内核成为唯一没有守卫看过的地方',
+    ).toBeGreaterThanOrEqual(5)
     expect(offenders).toEqual([])
   })
 
@@ -427,7 +454,7 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
   const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
   // 与上面扫描用的是同一个集合语义；这里重新声明是因为原表声明在 it() 体内。
   // 两处一旦不一致，下面第一条断言会红。
-  const ALLOWLIST = ['cli/start.ts'] as const
+  const ALLOWLIST = ['cli/start.ts', 'services/runtime/types.ts'] as const
 
   it('豁免表与扫描里用的那份一致（防两份各改各的）', () => {
     const source = readFileSync(

@@ -21,6 +21,8 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
+import { RUNTIME_KINDS } from '@/services/runtime'
+
 const SRC = resolve(import.meta.dir, '..', 'src')
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -157,19 +159,45 @@ describe('RFC-282 A2 — conversion definition points are unique', () => {
 // embed production line wholesale, so no entries are expected to appear.
 const RUNTIME_TOKEN_EXCEPTIONS: readonly string[] = []
 
+/**
+ * 允许出现 runtime 方言的**驱动实现**目录。
+ *
+ * 从驱动注册表派生而不是手抄：新增一个 runtime 驱动时，如果作者忘了在这里开口子，
+ * 守卫会立刻红——那是正确的提醒；反过来，如果这里手抄的目录名与实际驱动走散，
+ * 守卫会安静地把一个真实驱动当成公共层（或把公共层当成驱动），两种都不会报错。
+ */
+const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
+  (kind) => `services/runtime/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
+)
+
 const FORBIDDEN_TOKENS = ['OPENCODE_CONFIG_CONTENT', '--mcp-config', '.claude/'] as const
 
 describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
   test('forbidden tokens appear only under services/runtime/ (+ C3-pending exceptions)', () => {
     const offenders: string[] = []
+    /** RFC-317 T33 —— 正向控制：证明公共层**真的**进了扫描面（见下方断言）。 */
+    const scannedRuntimeCommons: string[] = []
     for (const f of FILES) {
-      if (f.rel.startsWith('services/runtime/')) continue
+      // RFC-317 T33（RT-03）—— 豁免只覆盖**驱动实现**，不覆盖它们共用的中立内核。
+      //
+      // 原判据是 `startsWith('services/runtime/')`：它把「在 services/runtime/ 下」
+      // 当成了「是一个驱动」的同义词。但那个目录是**混合区**——两个驱动子目录，外加
+      // 每个驱动都会调用的中立公共层（stageSkills / spawnCtx / head / selfCheck /
+      // types / injectionIdentity / index）。于是 runtime 方言破坏力最大的那一块
+      // ——两个驱动共同调用的共享内核——恰恰是唯一没有任何守卫看过的地方。
+      if (RUNTIME_DRIVER_DIRS.some((dir) => f.rel.startsWith(dir))) continue
+      if (f.rel.startsWith('services/runtime/')) scannedRuntimeCommons.push(f.rel)
       if (RUNTIME_TOKEN_EXCEPTIONS.includes(f.rel)) continue
       const code = stripComments(f.text)
       for (const token of FORBIDDEN_TOKENS) {
         if (code.includes(token)) offenders.push(`${f.rel} :: ${token}`)
       }
     }
+    // RFC-317 T33 —— 见 rfc143 同名断言：少了它，把豁免放宽回整目录后一切照绿。
+    expect(
+      scannedRuntimeCommons.length,
+      'services/runtime 下的中立公共层一个都没进扫描面——豁免又变回整目录了',
+    ).toBeGreaterThanOrEqual(5)
     expect(offenders).toEqual([])
   })
 
