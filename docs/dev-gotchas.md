@@ -1663,3 +1663,24 @@ dev-auth 7460。**`--filter` 不做联动**——某个包因 EADDRINUSE `Exited
 - **验收**：三个端口全空再起，起后确认三条 ready 行都在（backend `listening url=`、vite
   `Local:`、dev-auth `ready — open …`）。**只看到「ready」不够**，缺哪条就是那个包又没起。
   backend 的 `/api/health` 返 **401 是正常的**（需 token），别当成故障继续排查。
+
+## 守卫的自证：三条会让「护栏一直绿」的判据陷阱（RFC-317 B1-d / B2-a 实测，2026-08-23）
+
+- **`git cat-file -e <sha>` 证明不了「这个 SHA 在当前历史上」**。它只证明**对象还在本地仓库里**——rebase
+  前的那个 commit、被丢弃的 stash、别人 force-push 掉的分支尖端，对象统统还在。本仓 trunk-only + 频繁
+  `pull --rebase`，「记进文档 / 账本的 SHA 是 rebase 前的本地 SHA」是常态事故：本人写的守卫初版用
+  `cat-file -e` 判，变异回那个从未 push 过的 SHA **照绿**。判可达性必须
+  `git merge-base --is-ancestor <sha> HEAD`（或 `… origin/main`）。同一坑的另一面见 §git / 多人协作
+  「接到跨 session 关于远端状态的断言」。
+- **「守卫导出一个数、清单 import 它来断言」这个形状在本仓不可实施**。清单测试要读到那个导出就得
+  `import` 该 **test 文件**，而 import 一个 test 文件会把它的 `describe/test` **重复注册**一遍（前端
+  vitest 还会连带拖起 jsdom setup）。想做「守卫的守卫」只有两条路：①守卫在自己文件里断言，清单用
+  **AST** 读出那个断言并两向钉死（RFC-317 T13 采用——下限就写在用它的地方，被调低会红）；②把判据抽到
+  一个**非 test 模块**（如 `tests/architecture/census.ts`），守卫与清单各自 import 它。写 RFC 时别再把
+  ①②之外的形状写进设计。
+- **写进文档的纪律不落成机器账本就会退化**。「负扫描必须配反向自检 / 语料非空断言」这条早在本文件
+  §测试 / CI 记着（RFC-304 T11），但 2026-08-23 实测：**37 个枚举文件的守卫里只有 14 个真有语料下限**，
+  且缺的恰恰是最吃重的几条（`rfc294-architecture-preflight` / `rfc305-architecture-lock` /
+  `rfc284-spawn-site-ratchet` / `ux-source-ratchets`）。把 `rfc294` 的扫描根指到一个不存在的目录，它
+  6 条测试里 **5 条照绿**。现在由 `packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts`
+  强制：凡枚举文件的守卫必须断言语料下限，下限两向钉进 `architecture/guard-manifest.json`，**静默调低也红**。

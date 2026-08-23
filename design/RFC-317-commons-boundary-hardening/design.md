@@ -243,7 +243,11 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 三条断言：
 
 1. **两向钉死**：`guard-manifest.json` 里的每个 `file` 必须存在；`packages/{backend,frontend}/tests` 下每个文件名匹配 `/architecture|boundary|ratchet|lock|guard|invariants|preflight/` 的测试文件必须在 manifest 里。⇒ 删守卫、改守卫名都会红。
-2. **语料非空**：每个 `mechanism: 'source-text' | 'ast'` 的守卫必须导出其扫描到的文件数，manifest 断言 `>= minCorpusFiles`。⇒ 目录改名 / 正则失配导致的「扫了个寂寞」不再是绿。
+2. **语料非空**：每个**枚举文件**（`corpusScanner`）的守卫必须在自己文件里断言一条语料下限，manifest 两向钉死该下限（`minCorpusFiles`）。⇒ 目录改名 / 正则失配导致的「扫了个寂寞」不再是绿，且**静默调低下限**同样红。
+
+   > **落地偏离（B2-a，2026-08-23）**：原文写的是「守卫**导出**扫描到的文件数、manifest 断言」。实现时发现这条不可实施——manifest 要读到那个导出就得 `import` 该测试文件，而 import 一个 test 文件会把它的 `describe/test` **重复注册**一遍（前端 vitest 还会连带拖起 jsdom setup）。改为「守卫在文件内断言下限 + manifest 用 AST 两向钉死该下限」：目标失效形态（扫成空）覆盖相同，且下限就写在用它的地方、被调低会红，比导出一个数字更难悄悄失效。
+   >
+   > **subject 同时收窄**：从「所有 `source-text | ast` 守卫」（76 个）收窄到「真的枚举文件的守卫」（37 个）。读固定文件名的守卫不存在「静默扫成空」——文件没了 `readFileSync` 直接抛，是响亮的红，不需要这条规则。
 3. **变异必红**：每个守卫导出 `export const __mutationFixtures: ReadonlyArray<{ name, source, mustReport: boolean }>`，manifest 把每条喂给同一个导出的 matcher，断言 `mustReport` 的**确实报**、不报的**确实不报**。fixture 是**内存字符串**，绝不往工作树写故意的红（仓规）。
 
 **本条自身的变异实证**：把某条 `mustReport: true` 的 fixture 改成合法源码 ⇒ manifest 必须红。

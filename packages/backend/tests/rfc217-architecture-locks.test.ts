@@ -331,3 +331,23 @@ describe('rfc217 G9 — 房间 query 单 owner', () => {
     expect(offenders).toEqual(['packages/frontend/src/routes/tasks.detail.tsx'])
   })
 })
+
+// RFC-317 T13 —— 语料非空（守卫的守卫：architecture/rfc317-guard-corpus-floor.test.ts）。
+//
+// 本文件的扫描器都是各 test 内部的局部 walk，共享同一个前提：`ROOT` 指向仓库根、
+// 其下 `packages/backend/src` 是一棵有内容的 TS 树。这个前提一旦破（目录改名、
+// 相对层级算错），每个局部 walk 都会安静地扫出 0 个文件，而所有 `toEqual([])` 照绿。
+// 这里用同一形态的 walk 把该前提变成可断言事实。
+describe('RFC-317 T13 —— 语料非空', () => {
+  test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
+    const walkTs = (dir: string, out: string[] = []): string[] => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walkTs(rel, out)
+        else if (e.name.endsWith('.ts')) out.push(rel)
+      }
+      return out
+    }
+    expect(walkTs('packages/backend/src').length).toBeGreaterThanOrEqual(300)
+  })
+})

@@ -273,7 +273,7 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 **用户裁决**：复用既有的 `digital-employees:*` 前缀，不新开点族，本批落地。
 
 - **内核入网**：`ACL_RESOURCE_TYPES` / `ACL_TABLES` / `resource_grants.resource_type` 枚举 / `ACL_PERMISSION_PREFIX` 四处。第四处是**编译期强制**的——`mountAclEndpoints` 的 `Record<MountedAclResourceType, …>` 让新增一类直接编译报错，正是它逼出了权限点归属这个决策。
-- **判据接线（全部留在 transport，ACL 不下沉进模块）**：三个列表面走 `filterVisibleRows`；详情走「不可见 ⇒ 404 与不存在同形」；`PUT /api/digital-employees/:id` 与 `POST …/employees/:id/upgrade` 走 `requireResourceOwner`；`/acl` 挂在 `/api/digital-employees/:id/acl`。
+- **判据接线（全部留在 transport，ACL 不下沉进模块）**：三个列表面走 `filterVisibleRows`；详情走「不可见 ⇒ 404 与不存在同形」；`PUT /api/digital-employees/:id` 走 `requireResourceOwner`；`/acl` 挂在 `/api/digital-employees/:id/acl`。RFC-310 PR-28 已删除用户手工 `POST …/employees/:id/upgrade` 路由，类型兼容升级改由领域 bootstrap 自动完成。
 - **新增窄查询 `getEmployeeDefinitionAcl`**（port + sqlite 实现 + composition 暴露）：只选三列、**不解析配置内容**。落地时实撞两次才定到这个形状——`service.getEmployeeDefinition` 对 `currentRevision === null` 的半成品行抛 not-found；`store.getEmployeeDefinition` 会 zod 解析 `configuration_json`，内容不合 schema 时抛 ⇒ 授权判据会 500。**授权判据必须对任何存在的行可答**，否则半成品行与内容漂移行会从「谁都改不动」退化成 500 甚至绕过判据。
 - **迁移 `0204`**：零 schema 改动。存量行不回填（用户裁决），唯一补丁是把 `owner_user_id IS NULL` 的历史孤儿行显式置 `public`——当前写路径产不出这种行，但列可空且唯一索引用了 `COALESCE`，若真有而保持 `private`，入网后它对所有人不可见、无人能修。沿用 RFC-231「框架 built-in 显式保持 public」的口径。
 - **覆盖**：新增 `rfc317-employee-definition-acl.test.ts`（8 条：404 同形含**响应体逐字相等**、public 行不被误伤、可见非 owner ⇒ 403 零写入、不可见 ⇒ 404 零写入、owner/admin 放行、三个列表面的 AST 接线断言）；`rfc099` 矩阵补第 13 行，用例数 51 → 61。
@@ -284,3 +284,27 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 **本批的一个自伤**：AST 定位 handler 时**只按 path 匹配**，而同一 path 上常有两条路由（GET 列表 / POST 创建、GET 详情 / PUT 更新），于是永远取到最后注册的那条——断言看的是创建/更新 handler，而不是它以为在看的列表/详情 handler。这类「锚错了但恒定错在同一处」的断言比漏测更坏，因为它看起来一直在工作。改成按 **method + path** 定位，教训已写进该文件头注释。
 
 
+### B1-d（2026-08-23）—— 账本采数 SHA 订正 + 可复算守卫
+
+并发 session 在 `STATE.md` 里指出三份账本记的 `recordedAtSha: efc1bdb01` 走不到。查证属实：那是 rebase **前**的本地 commit，publish 出去的是 `b04cf0eb0`，`efc1bdb01` 从未进过 origin。已核对 `git diff efc1bdb01 b04cf0eb0 -- packages/{backend,shared}` 为空（采数内容逐字相同，只是 SHA 记错），三份账本改记 `b04cf0eb0` 并加 `recordedAtShaNote` 说明 rebase 由来。
+
+**新守卫**：`rfc317-architecture-ledgers.test.ts` 增「每个采数 SHA 都在当前历史上可达」。无 git 环境（shallow clone）显式 skip 并打印原因，不假绿。
+
+**本批的一个自伤**：守卫初版用 `git cat-file -e <sha>` 判存在——变异回 `efc1bdb01` 后**照绿**，因为 rebase 前的对象在本地仓库里仍然存在，只是不可达。可达性必须用 `git merge-base --is-ancestor <sha> HEAD` 判，「对象还在」与「历史上走得到」是两回事。改判据后同一变异 13 pass / 1 fail。教训已写进该 describe 的注释。
+
+### B2-a（2026-08-23）—— T13 / T21：扫语料型守卫必须自证「语料还在」
+
+**动机（findings G-07 / CC-07 实测）**：源码扫描型守卫的绿有两种来源——真没违规，或**扫描根失效 / walk 提前 return / 后缀过滤把语料筛成空**。二者在断言层面完全同形，后者是**永久静默**的假绿：它每次 CI 都绿，还在守卫清单里占着名额。实测把 `rfc294-architecture-preflight.test.ts` 的 `MODULES_ROOT` 指到一个不存在的目录，它 6 条测试里 **5 条照绿**。
+
+- **判据下沉进 `census.ts`**（与账本共用单一实现，不再长第二判据）：`isCorpusScanner`（AST 调用名，注释 / 字符串里提到 `readdirSync` 不算）+ `corpusFloor`（`toBeGreaterThan(n)` 记 `n+1`、`toBeGreaterThanOrEqual(n)` / `toBe(n)` 记 `n`，同文件取最大）。
+- **新守卫 `rfc317-guard-corpus-floor.test.ts`**：①凡枚举文件的守卫都必须断言 `>= 1` 的语料下限；②磁盘上「谁在扫语料」与账本 `corpusScanner` 逐条相等；③账本 `minCorpusFiles` 与文件里的下限逐条相等（**静默调低就红**）；④非扫描型守卫不得记 `minCorpusFiles`；⑤豁免账本 `NO_FLOOR_YET` 空表即目标态，且过期 / 无具名波次都红。
+- **T21 判据自变异**：11 条内存字符串 fixture 喂回同一份判据（真枚举 / 注释提及 / 字符串提及 / 各 matcher 形态 / `Set.size` / 非规模接收者 / `toEqual([])` 不算下限 / 两判据互相独立）。fixture 一律内存字符串，不依赖仓内某文件恰好保持某形状。
+- **回填 22 个守卫**：扫语料型守卫 37 个，原本只有 14 个带下限。其余 22 个（`rfc294` / `rfc305` / `rfc284` / `ux-source-ratchets` 等最吃重的 ratchet 全在内）各补一条语料下限；`rfc217` 的扫描器都是 test 内部局部 walk，改为在同形 walk 上断言 `ROOT` 这个共享前提。
+- **清单**：`guard-manifest.json` 全量重算，`classified` 全部转 true，新增 `corpusScanner` / `minCorpusFiles` 两列，守卫数 120 → 121。
+
+**变异实证（5 条，逐条 `diff -q` 还原）**：
+1. `rfc294` 扫描根指向空目录 ⇒ 新增的语料下限红（且暴露出它另外 5 条测试仍照绿——正是本批要消灭的形态）；
+2. 静默把 `rfc294` 下限 120 → 1、账本不动 ⇒ 两向钉死红；
+3. 整块删掉 `rfc305` 的语料下限 describe ⇒ 2 红（缺下限 + 账本漂移）；
+4. 削弱判据：删 `corpusFloor` 的 `toBeGreaterThanOrEqual` 分支 ⇒ 6 红（含 4 条 T21 fixture——**判据变弱会先咬到自己**）；
+5. 放宽判据：`isCorpusScanner` 退回文本判据 ⇒ T21 的「注释里提到 readdirSync 不算」红。

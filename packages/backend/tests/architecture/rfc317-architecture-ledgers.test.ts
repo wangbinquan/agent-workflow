@@ -14,6 +14,7 @@
 //      可复用的松弛槽位（findings.md G-04 实测今天就有 3 个免费槽位）。
 
 import { describe, expect, test } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -65,13 +66,22 @@ function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(resolve(REPO_ROOT, relativePath), 'utf8')) as T
 }
 
-const commons = readJson<{ kernels: CommonsKernel[] }>('architecture/commons-manifest.json')
+const commons = readJson<{ kernels: CommonsKernel[]; recordedAtSha?: string }>(
+  'architecture/commons-manifest.json',
+)
 const debt = readJson<{
-  baseline: { inboundEdges: number; outboundEdges: number; registeredFindings: number }
+  baseline: {
+    inboundEdges: number
+    outboundEdges: number
+    registeredFindings: number
+    recordedAtSha?: string
+  }
   entries: DebtEntry[]
   registeredFindings: RegisteredFinding[]
 }>('architecture/commons-debt.json')
-const guardManifest = readJson<{ guards: GuardEntry[] }>('architecture/guard-manifest.json')
+const guardManifest = readJson<{ guards: GuardEntry[]; recordedAtSha?: string }>(
+  'architecture/guard-manifest.json',
+)
 
 const FINDINGS_PATH = 'design/RFC-317-commons-boundary-hardening/findings.md'
 
@@ -159,6 +169,50 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
       .filter((finding) => finding.why.trim() === '' || finding.removeWhen.trim() === '')
       .map((finding) => finding.findingId)
     expect(bad).toEqual([])
+  })
+})
+
+/**
+ * 账本自称的采数 SHA 必须是**这条历史上真实存在**的提交。
+ *
+ * 起因（2026-08-23 实撞）：三份账本最初记的是 `efc1bdb01`——rebase **前**的本地
+ * 提交。它经 rebase 以 `b04cf0eb0` 发布到 origin，`efc1bdb01` 本身从未进远端，于是
+ * 账本指着一个**任何人都 checkout 不出来**的 SHA：想复算的人第一步就卡住，而所有
+ * 测试全绿。这正是本 RFC 要消灭的「陈述与历史不符」。
+ *
+ * 浅克隆里做不了对象判定，此时**显式报告跳过原因**而不是静默通过——「skip 即绿」
+ * 是守卫失效的另一种形态。
+ */
+describe('RFC-317 — 账本的采数 SHA 必须可复算', () => {
+  const git = (...args: string[]): { ok: boolean; out: string } => {
+    const result = spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' })
+    return { ok: result.status === 0, out: (result.stdout ?? '').trim() }
+  }
+  const shallow = git('rev-parse', '--is-shallow-repository').out === 'true'
+  const shas = [
+    commons.recordedAtSha,
+    guardManifest.recordedAtSha,
+    debt.baseline.recordedAtSha,
+  ].filter((sha): sha is string => typeof sha === 'string' && sha.length > 0)
+
+  test('三份账本都记了采数 SHA', () => {
+    expect(shas.length).toBe(3)
+  })
+
+  test('每个采数 SHA 都在当前历史上可达（不是「本地对象还在」而已）', () => {
+    if (shallow) {
+      expect(shallow, '浅克隆下判不了祖先关系——本条此刻已跳过，不是通过').toBe(true)
+      return
+    }
+    // 判**祖先**而不是 `cat-file -e`：rebase 前的本地提交在自己机器上仍是可达对象，
+    // `cat-file -e` 照样成功，于是「记了个远端没有的 SHA」这条恰好逃掉（写这条守卫
+    // 时用它做变异，0 红，当场打脸）。要证的是「别人 checkout 本仓到 HEAD 之后，
+    // 能不能走到那个提交」——那才是「可复算」的实际含义。
+    const unreachable = shas.filter((sha) => !git('merge-base', '--is-ancestor', sha, 'HEAD').ok)
+    expect(
+      unreachable,
+      '账本记了当前历史走不到的 SHA（典型成因：记了 rebase 前的本地提交），想复算的人第一步就卡住',
+    ).toEqual([])
   })
 })
 

@@ -251,3 +251,17 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     })
   })
 })
+
+// RFC-317 T13 —— 语料非空（守卫的守卫：architecture/rfc317-guard-corpus-floor.test.ts）。
+//
+// `srcInventory` 用 `readdirSync(SRC_ROOT, { recursive: true })` 扫全树后按 needle 计数；
+// `SRC_ROOT` 一旦失效，每个 needle 都会返回 `{}`，而「某调用点已消失」类断言恰恰以
+// 空结果为通过。这一条把「树还在」变成可断言事实。
+describe('RFC-317 T13 —— 语料非空', () => {
+  test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
+    const files = readdirSync(SRC_ROOT, { recursive: true, withFileTypes: true }).filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.ts'),
+    )
+    expect(files.length).toBeGreaterThanOrEqual(300)
+  })
+})

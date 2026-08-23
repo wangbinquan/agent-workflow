@@ -445,3 +445,93 @@ export function moduleShapes(repoRoot: string): ModuleShape[] {
       }
     })
 }
+
+// ---------------------------------------------------------------------------
+// 守卫自检采数（RFC-317 B2 / T13 / T21 · findings G-07 · CC-07）
+// ---------------------------------------------------------------------------
+//
+// 源码扫描型守卫有一个**静默**失效面：扫描根写错、walk 提前 return、后缀过滤把
+// 语料筛成空——此时「违规集合为空」与「合规」在断言层面**完全同形**，守卫绿得
+// 毫无信息量。G-07 已实测到 rfc294 / rfc305 / rfc284 / ux-source-ratchets 这四条
+// 最吃重的 ratchet 一条语料下限都没有。
+//
+// 这里只做**采数**：判定「谁在扫语料」以及「它自己声明的语料下限是多少」。
+// 断言留给 rfc317-guard-corpus-floor.test.ts，且两者共用这一份实现——否则又是
+// 「账本一套判据、守卫另一套判据」。
+
+/** 文件枚举 API：出现其一即认为该守卫在扫语料，而非读固定几个文件。 */
+const CORPUS_ENUMERATION_CALLEES = new Set([
+  'readdirSync',
+  'readdir',
+  'opendirSync',
+  'globSync',
+  'guardTestFiles',
+  'backendUnits',
+  'moduleShapes',
+])
+
+/** `expect(x.length)` 里能算作「语料规模」的接收者形态。 */
+const CORPUS_SIZE_RECEIVER = /\.(?:length|size)\b/
+
+function calleeName(node: ts.CallExpression): string | null {
+  const target = node.expression
+  if (ts.isIdentifier(target)) return target.text
+  if (ts.isPropertyAccessExpression(target)) return target.name.text
+  return null
+}
+
+/**
+ * 该守卫是否在枚举文件语料。
+ *
+ * 判据是 **AST 调用名**而非文本——注释里提到 `readdirSync`、字符串里出现
+ * `'globSync'` 都不算，避免 dev-gotchas 记过的「正向检查被注释满足」。
+ */
+export function isCorpusScanner(unit: SourceUnit): boolean {
+  let found = false
+  const visit = (node: ts.Node): void => {
+    if (found) return
+    if (ts.isCallExpression(node)) {
+      const name = calleeName(node)
+      if (name !== null && CORPUS_ENUMERATION_CALLEES.has(name)) {
+        found = true
+        return
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  return found
+}
+
+/**
+ * 守卫自己声明的语料下限：`expect(<…length>).toBeGreaterThan(n)` 记 `n + 1`、
+ * `.toBeGreaterThanOrEqual(n)` / `.toBe(n)` 记 `n`；同一文件多条取**最大**。
+ *
+ * 取最大而非最小：一个文件里可能既有「语料 ≥ 200」也有「某子集 ≥ 1」，前者才是
+ * 「扫描器还活着」的证据强度，账本要钉死的也是它。
+ */
+export function corpusFloor(unit: SourceUnit): number | null {
+  let floor: number | null = null
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const matcher = node.expression.name.text
+      const argument = node.arguments[0]
+      if (
+        (matcher === 'toBeGreaterThan' ||
+          matcher === 'toBeGreaterThanOrEqual' ||
+          matcher === 'toBe') &&
+        argument !== undefined &&
+        ts.isNumericLiteral(argument)
+      ) {
+        const receiver = node.expression.expression.getText(unit.source)
+        if (receiver.startsWith('expect(') && CORPUS_SIZE_RECEIVER.test(receiver)) {
+          const value = Number(argument.text) + (matcher === 'toBeGreaterThan' ? 1 : 0)
+          if (value >= 1 && (floor === null || value > floor)) floor = value
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  return floor
+}
