@@ -274,6 +274,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     logFile: Paths.daemonLog,
   })
   const log = createLogger('daemon')
+  const digitalEmployeeTypePackageDriftPolicy =
+    !IS_EMBEDDED &&
+    devLockHandoffMs() > 0 &&
+    process.env.AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY === '1'
+      ? 'draft-overlay'
+      : 'reject'
 
   // 2. Single-instance lock.
   let lock: Lock
@@ -807,6 +813,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     webhookTerminalControl,
     digitalEmployeeEventCenter: employeeHttpEventCenter,
     digitalEmployeeWorkStart,
+    digitalEmployeeTypePackageDriftPolicy,
   })
 
   const bindHost = opts.host ?? config.bindHost
@@ -1187,6 +1194,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     appHome: Paths.root,
     typePackages: [developmentEmployeeTypePackage],
+    typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
     platformTools: composeDigitalEmployeeBuiltinToolCatalog({
       db,
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],

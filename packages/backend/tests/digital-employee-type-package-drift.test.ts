@@ -31,6 +31,7 @@ import {
   type EmployeeTypeRuntimePackage,
 } from '@/modules/digital-employee/domain/model'
 import { createSqliteDigitalEmployeeAuthoringStore } from '@/modules/digital-employee/infrastructure/sqliteAuthoringStore'
+import { withTypePackageDraftOverlay } from '@/modules/digital-employee/application/typePackageDraftOverlay'
 import { DomainError } from '@/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -230,6 +231,59 @@ describe('employee type package digest guard', () => {
 
     expect(error.code).toBe('employee-type-revision-drift')
     expect(error.message).toContain('DELETE FROM employee_type_packages')
+  })
+
+  test('the Bun-dev overlay serves the current draft without rewriting the frozen row', () => {
+    const persistedStore = newStore()
+    const frozenDescriptor = employeeTypePackageDescriptorSchema.parse({
+      ...descriptor,
+      displayName: {
+        ...descriptor.displayName,
+        'en-US': 'Frozen development employee',
+      },
+    })
+    const frozenDigest = packageDigest(frozenDescriptor)
+    persistedStore.ensureTypePackage({
+      descriptor: frozenDescriptor,
+      descriptorDigest: frozenDigest,
+      state: 'published',
+      registeredAt: 1_000,
+    })
+    const overlayStore = withTypePackageDraftOverlay(persistedStore)
+
+    const service = new DigitalEmployeeAuthoringService({
+      store: overlayStore,
+      typePackages: [runtimePackage()],
+      connectionCatalog: stubConnectionCatalog,
+      programArtifacts: stubProgramArtifacts,
+      executionContracts: unreachableExecutionContracts,
+      now: () => 2_000,
+    })
+
+    expect(service.getType(descriptor.typeRef)).toEqual(descriptor)
+    expect(service.listTypes()).toEqual([descriptor])
+    expect(overlayStore.getTypePackage(descriptor.typeRef)).toMatchObject({
+      descriptor,
+      descriptorDigest: currentDigest,
+    })
+    expect(persistedStore.getTypePackage(descriptor.typeRef)).toMatchObject({
+      descriptor: frozenDescriptor,
+      descriptorDigest: frozenDigest,
+      registeredAt: 1_000,
+    })
+  })
+
+  test('only the explicit non-embedded Bun-dev command enables the overlay', () => {
+    const backendPackage = JSON.parse(
+      readFileSync(resolve(import.meta.dir, '..', 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> }
+    expect(backendPackage.scripts.dev).toContain('AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY=1')
+    expect(backendPackage.scripts.start).not.toContain('AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY')
+
+    const start = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+    expect(start).toMatch(
+      /!IS_EMBEDDED\s*&&\s*devLockHandoffMs\(\) > 0\s*&&\s*process\.env\.AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY === '1'/,
+    )
   })
 
   test('the daemon prints only err.message, so the remediation must live there', () => {

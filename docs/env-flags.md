@@ -8,13 +8,14 @@
 
 ## 运维 / 部署面（daemon 自身读取）
 
-| 变量                                  | 读取点                                            | 语义                                                                                |
-| ------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `AGENT_WORKFLOW_HOME`                 | `backend/src/util/paths.ts`                       | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                         |
-| `AGENT_WORKFLOW_VERSION`              | `backend/src/util/version.ts`                     | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                      |
-| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK` | `backend/src/cli/start.ts`                        | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                       |
-| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`  | `backend/src/cli/start.ts`                        | dev 模式下单实例 flock 交接的等待毫秒数                                             |
-| `AGENT_WORKFLOW_OPENCODE_BIN`         | `backend/src/services/runtime/opencode/driver.ts` | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道） |
+| 变量                                      | 读取点                                            | 语义                                                                                 |
+| ----------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                       | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
+| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                     | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
+| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/cli/start.ts`                        | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
+| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/cli/start.ts`                        | dev 模式下单实例 flock 交接的等待毫秒数                                              |
+| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/cli/start.ts`                        | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
+| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts` | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
 
@@ -26,8 +27,8 @@
 | `AW_ADAPTER_SINK` / `AW_EXTERNAL_ID`    | `backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts`              | RFC-310 requirement adapter 子进程契约：one-shot staged sink 目录 + 外部需求 ID（env 从空对象构造，只含 PATH/HOME/TMPDIR + 本族）                           |
 | `AW_ADAPTER_QUESTIONS`                  | 同上（questions.writeback 操作时）                                                        | 问题集 JSON 随 env 传给 adapter（小 payload；大字节仍走 sink 文件）                                                                                         |
 | `AW_REQUIREMENT_MOCK_URL`               | `backend/src/modules/integration/composition/requirementSource.ts`（透传）；mock CLI 读取 | system-mocks E2E 座席：平台进程 env 存在该名时透传给 adapter 子进程，供 requirement-adapter-cli 找到 mock 上游；真实 adapter 走 connectionRef，不依赖此透传 |
-| `AW_EVENT_INPUT_FILE`                   | `backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts`           | 自定义事件观察程序的只读 input envelope 文件；大结果不经 env 传递                                                                                          |
-| `AW_EVENT_OBSERVER_PROTOCOL`            | 同上                                                                                      | 自定义事件观察程序必须遵守的版本化 stdout envelope 协议标识                                                                                                |
+| `AW_EVENT_INPUT_FILE`                   | `backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts`           | 自定义事件观察程序的只读 input envelope 文件；大结果不经 env 传递                                                                                           |
+| `AW_EVENT_OBSERVER_PROTOCOL`            | 同上                                                                                      | 自定义事件观察程序必须遵守的版本化 stdout envelope 协议标识                                                                                                 |
 
 ### script 节点上下文族（`backend/src/services/scriptRun.ts` 组装）
 

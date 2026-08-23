@@ -199,6 +199,8 @@ export interface AppDeps {
    * Route tests may omit it and use the local DB-backed composition below.
    */
   digitalEmployeeEventCenter?: EventCenterModule
+  /** Bun-dev only: serve the current type-package draft without rewriting its frozen DB row. */
+  digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
   /** Bootstrap-local late binding that makes orchestration and Employee Case peer work targets. */
   digitalEmployeeWorkStart?: DeferredDigitalEmployeeWorkStart
   /**
@@ -479,6 +481,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     db: deps.db,
     appHome,
     typePackages: [developmentEmployeeTypePackage],
+    typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
     platformTools: composeDigitalEmployeeBuiltinToolCatalog({
       db: deps.db,
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],

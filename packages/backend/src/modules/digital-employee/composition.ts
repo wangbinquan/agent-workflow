@@ -20,6 +20,7 @@ import {
   type EmployeeInputUploadRecord,
 } from './infrastructure/inputUploadStore'
 import { createSqliteDigitalEmployeeAuthoringStore } from './infrastructure/sqliteAuthoringStore'
+import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
 import { createSqliteRuntimeStore } from './infrastructure/sqliteRuntimeStore'
 import { analyzeDigitalEmployeeMigration } from './composition/writerCutover'
 import { z } from 'zod'
@@ -233,6 +234,8 @@ export interface ComposeDigitalEmployeeOptions {
   readonly db: DbClient
   readonly appHome: string
   readonly typePackages: readonly EmployeeTypePackageRegistration[]
+  /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
+  readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
   readonly connectionCatalog?: ToolConnectionCatalogPort
   readonly programArtifacts?: ProgramArtifactPort
   readonly inputArtifacts?: EmployeeInputArtifactPort
@@ -371,7 +374,11 @@ function jobView(
 export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
-  const store = createSqliteDigitalEmployeeAuthoringStore(options.db)
+  const persistedStore = createSqliteDigitalEmployeeAuthoringStore(options.db)
+  const store =
+    options.typePackageDriftPolicy === 'draft-overlay'
+      ? withTypePackageDraftOverlay(persistedStore)
+      : persistedStore
   const inputUploadStore = createEmployeeInputUploadStore(options.db)
   const inputArtifacts =
     options.inputArtifacts ??

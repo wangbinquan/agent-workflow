@@ -12,6 +12,12 @@
 > 用法见 README「从源码构建」；踩坑（mock 换密钥不换 kid + daemon 长寿 JWKS 缓存、常驻 dev 子进程的
 > 孤儿/SIGHUP/keep-alive 三件套）已进 `docs/dev-gotchas.md`。
 
+> 🛠 **开发工装修复（2026-08-23）：`bun dev` 不再因同 revision 类型包漂移退出**
+> —— `development@N` 仍是正式运行时的 immutable exact revision；仅根 `bun dev` 在 non-embedded + dev lock
+> handoff 双门下启用进程内 draft overlay。同 revision 源码 descriptor 改变时，当前进程的
+> ensure/list/get 使用草稿，不 update/delete 已冻结 DB 行、不中止 backend boot；普通 `start` 和单二进制仍
+> fail closed 拒绝 exact-ref digest 漂移。回归同时锁定 dev 放行、持久行零改写与 production 拒绝。
+
 > ✅ **已完成 RFC（Done，2026-08-22）：[RFC-315 统一事件自动化规则权限合同](design/RFC-315-unified-event-automation-rule-permissions/proposal.md)**
 > —— 用户已批准按 Webhook 预期统一权限并提交上库。实现以 `event-automation-rules:{read,create,update,delete,override-owner}`
 > 取代 Webhook 私有权限名，同时把来源无关规则从 `event-sources:update` 中拆出：默认 user 只读，manager 仅管理本人，
