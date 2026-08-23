@@ -172,6 +172,18 @@
       "lines": 179
     },
     {
+      "id": "rfc317-registry-reverse-completeness",
+      "file": "packages/backend/tests/architecture/rfc317-registry-reverse-completeness.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 901,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 332
+    },
+    {
       "id": "e2e-sqlite-fixture-lock-contention",
       "file": "packages/backend/tests/e2e-sqlite-fixture-lock-contention.test.ts",
       "runner": "bun",

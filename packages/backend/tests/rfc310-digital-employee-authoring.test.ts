@@ -242,7 +242,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       workItemRef: 'observe-mr',
       slotRef: 'system',
     })
-    expect(descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-pipeline')).toMatchObject({
+    expect(
+      descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-pipeline'),
+    ).toMatchObject({
       requiredContextTypes: [
         'development.issue-handling',
         'development.merge-request',

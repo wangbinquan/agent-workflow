@@ -55,14 +55,6 @@ export type RetryCascadeBehavior = 'mint-placeholder' | 'skip'
 export interface NodeKindBehavior {
   retryCascade: RetryCascadeBehavior
   /**
-   * Process kinds spawn real work (an agent subprocess or a wrapper
-   * container run). Consumed via `isProcessNodeKind`
-   * (schemas/workflow.ts — RFC-146 made it table-backed; the historical
-   * or-chain twin is gone) and by extension everywhere that predicate is
-   * used (validator, canvas, retry cascade agreement tests).
-   */
-  isProcess: boolean
-  /**
    * Agent kinds own an opencode/claude SESSION: a prompt, an inventory
    * snapshot, a live-capturable transcript. Consumed by
    * `isAgentNodeKind` — the single predicate that replaced five copies
@@ -100,19 +92,16 @@ export interface NodeKindBehavior {
 export const NODE_KIND_BEHAVIORS = {
   'agent-single': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: true,
     settlesWithoutRow: false,
   },
   'wrapper-git': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
   'wrapper-loop': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
@@ -120,19 +109,16 @@ export const NODE_KIND_BEHAVIORS = {
   // node_run whose status is driven by inner subgraph shards + aggregator.
   'wrapper-fanout': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
   review: {
     retryCascade: 'skip',
-    isProcess: false,
     isAgent: false,
     settlesWithoutRow: false,
   },
   clarify: {
     retryCascade: 'skip',
-    isProcess: false,
     isAgent: false,
     settlesWithoutRow: true,
   },
@@ -142,19 +128,16 @@ export const NODE_KIND_BEHAVIORS = {
   // scheduler hook, not in this cross-cutting table.
   'clarify-cross-agent': {
     retryCascade: 'skip',
-    isProcess: false,
     isAgent: false,
     settlesWithoutRow: true,
   },
   input: {
     retryCascade: 'skip',
-    isProcess: false,
     isAgent: false,
     settlesWithoutRow: false,
   },
   output: {
     retryCascade: 'skip',
-    isProcess: false,
     isAgent: false,
     settlesWithoutRow: false,
   },
@@ -164,13 +147,11 @@ export const NODE_KIND_BEHAVIORS = {
   // and they always write a container-style node_run row.
   'call-workflow': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
   'call-workgroup': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
@@ -181,7 +162,6 @@ export const NODE_KIND_BEHAVIORS = {
   // it always writes its own node_run row.
   script: {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
@@ -196,26 +176,35 @@ export const NODE_KIND_BEHAVIORS = {
   // is about scheduling/lifecycle, which the two kinds genuinely share.
   'code-host-call': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
-  // RFC-304 — the single synthesized node of a code-capability round. It drives
-  // a whole stage sequence (program / script / ai / invoke steps) inside one
-  // node_run, so it is process-bearing and cascades on retry exactly like
-  // `script` and `code-host-call`.
+  // RFC-304 / **RFC-310 retired the execution chain** — read this row as a
+  // RETIRED kind, not a live one.
   //
-  // `isAgent: false` is load-bearing and NOT a statement about "does it use a
-  // model": individual `kind:'ai'` stages inside it DO spawn agent runs. What
-  // the flag means here is that the node itself owns no single session — there
-  // is no one prompt / inventory snapshot / transcript for the round as a whole
-  // (a round can hold several AI calls across several stages, plus retries and
-  // cross-session reruns). Keeping it false is what holds the round out of the
-  // agent-only paths: inventory capture, memory injection and clarify all key
-  // off `isAgentNodeKind`, and each of them assumes exactly one session per row.
+  // It used to be the single synthesized node of a code-capability round,
+  // driving a whole stage sequence (program / script / ai / invoke) inside one
+  // node_run. RFC-310 PR-10 T104 deleted that chain: `scheduler.ts` now answers
+  // any `code-round` node with a typed failure (`code-round-retired`) telling
+  // the operator to use development missions instead. The kind survives ONLY so
+  // that historical interrupted rounds resumed after a daemon restart fail
+  // legibly instead of crashing the scheduler, and so the frontend can still
+  // render / link those historical tasks.
+  //
+  // The values below are therefore the values a retired row needs, not a
+  // description of live behaviour: `mint-placeholder` keeps retry cascade
+  // shaped like the other row-owning kinds so a resumed historical task walks
+  // the ordinary failure path, and `isAgent: false` holds it out of the
+  // agent-only paths (inventory capture, memory injection, clarify all key off
+  // `isAgentNodeKind` and each assumes exactly one session per row).
+  //
+  // ⚠️ RFC-317 T43 —— 这段描述之前是**现在时**，写着「it drives a whole stage
+  // sequence … so it is process-bearing」，而那条链早已删除。没有任何守卫会因为
+  // 一个 kind 退役而重新审视它的行——`node-kind-behavior-table.test.ts` 当时只
+  // 逐值锁了 14 个 kind 里的 9 个，这一行不在其中。该测试现已改为遍历整个
+  // NODE_KIND，任何一行退役都必须在那里被重新确认一次。
   'code-round': {
     retryCascade: 'mint-placeholder',
-    isProcess: true,
     isAgent: false,
     settlesWithoutRow: false,
   },
@@ -228,22 +217,17 @@ export const NODE_KIND_BEHAVIORS = {
 /**
  * Convenience predicate equivalent to
  * `NODE_KIND_BEHAVIORS[kind].retryCascade === 'mint-placeholder'`.
- * Agrees with `isProcessNodeKind` by construction (both read this table
- * since RFC-146; the historical or-chain twin is gone).
+ *
+ * RFC-317 T43 — this is now the ONLY "does this kind bear a process" judgment.
+ * There used to be a second column (`isProcess`) plus an `isProcessNodeKind`
+ * predicate reading it. The two columns were hand-kept equal on every row (the
+ * table test asserted exactly that), and R6 measurement found the predicate had
+ * **zero production callers** — only tests, which asserted it against the very
+ * column it read. A second hand-synced column with no consumer is a drift
+ * hazard that buys nothing, so the column and its predicate were deleted.
  */
 export function nodeKindParticipatesInRetryCascade(kind: NodeKind): boolean {
   return NODE_KIND_BEHAVIORS[kind].retryCascade === 'mint-placeholder'
-}
-
-/**
- * RFC-052/RFC-146 — kinds that actually spawn a process / hold a per-attempt
- * node_run row the scheduler dispatches (agent + the three wrappers).
- * RFC-146 moved this here from schemas/workflow.ts and made it table-backed —
- * the historical or-chain (`kind === 'agent-single' || isWrapperKind(kind)`)
- * and this table agreed only by convention; now there is one source.
- */
-export function isProcessNodeKind(kind: NodeKind): boolean {
-  return NODE_KIND_BEHAVIORS[kind].isProcess
 }
 
 /**

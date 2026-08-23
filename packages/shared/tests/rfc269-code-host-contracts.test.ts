@@ -547,7 +547,6 @@ describe('RFC-269 节点 kind 接线', () => {
     const { NODE_KIND_BEHAVIORS } = await import('../src/node-kind-behavior')
     expect(NODE_KIND_BEHAVIORS['code-host-call']).toEqual({
       retryCascade: 'mint-placeholder',
-      isProcess: true,
       isAgent: false,
       settlesWithoutRow: false,
     })

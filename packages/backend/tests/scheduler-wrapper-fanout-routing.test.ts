@@ -155,11 +155,8 @@ describe('D.T8 — RFC-053 wrapper lifecycle compatibility', () => {
     expect(schedulerSrc).toMatch(/setNodeRunStatus\([\s\S]*?'wrapper-fanout-resume'/)
   })
 
-  test('wrapper-fanout joins isProcessNodeKind (shared lifecycle predicate)', () => {
-    // Cross-package sanity — the shared schema's isProcessNodeKind covers it.
-    // The actual predicate test lives in shared/tests/wrapper-fanout-schema.test.ts;
-    // re-verify the export name appears in the scheduler import surface so
-    // future renames don't silently break the contract.
-    expect(schedulerSrc).toMatch(/from '@agent-workflow\/shared'/)
-  })
+  // RFC-317 T43 —— 这里原有一条 `wrapper-fanout joins isProcessNodeKind` 的测试，
+  // 已删除。它的标题说自己在验证一个共享谓词，正文却只断言 scheduler.ts 里出现过
+  // 一行 `from '@agent-workflow/shared'`——那条断言对任何改动都恒为真，唯一的内容
+  // 是标题里那个名字。而该谓词本身（零生产调用者）也在 T43 一并删除了。
 })

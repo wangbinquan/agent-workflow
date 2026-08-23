@@ -205,6 +205,14 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 - **机制**：把 `rfc305-architecture-lock.test.ts:541-550` 已经验证可行的做法抽成共享 helper `assertEveryRegistryKeyHasAProductionConsumer(keys, root)`，逐注册表套用。
 - **为什么需要**：`satisfies Record<K,V>` 只保证「表对 union 完备」，**看不见没人读的行**。实测：`shared/ref/resolution.ts:87` 自称单一事实源，`REF_DOMAIN_POLICIES` 生产消费者为零；`NODE_KIND_BEHAVIORS.isProcess` 是零消费者的假维度；`code-round` 仍占一整行描述 RFC-310 已删除的执行链。
 - **关闭**：`G-09`、`CC-10`、`CC-09`、`NK-04`、`NK-11`。
+- **落地时的规则细化（T42 实测后补，非放宽）**：落地跑真实语料时发现原文表述的两处不够，都是实测逼出来的：
+  - **判据必须分两层，且顺序不能反**。只查「每个键有没有消费者」会被一类巧合骗过：一张**整体没人引用**的表，键名往往恰好以别的身份出现在别处（另一张表的键、一个局部变量名）。实测 `REF_DOMAIN_POLICIES` 在声明文件外零引用，键级判据却只报出 1 个死键——差一点整张死表就放行了。故先查**表级**（符号在声明文件外有无引用），再查**键级**。
+  - **消费有两种合法形态**：`direct`（声明文件外直接引用）与 `{ via: 访问器 }`（只经同文件的一个访问器出去）。后者在本仓有四个真实例子——`REPAIR_OPTIONS → listRepairOptionsForAlert → routes/tasks.ts`、`SYSTEM_CHANNEL_PORTS → PROMPT_INJECTED_PORT_NAMES → shared/prompt.ts`、`INVARIANT_RULES → runLifecycleInvariants`、`NODE_KIND_BEHAVIORS.isAgent → isAgentNodeKind`，把它们判死会逼着后来的人拆掉正当的封装。但 `via` **必须两半都验**：访问器真的读了这张表，**且**访问器自己在声明文件外有消费者。只验前半，一张死表配个恰好活着的同文件函数就能蒙混；只验后半，`isProcess` 那种「访问器自己也是死的」就漏了——那正是它当年混进准入标准的方式（它的注释写着 `Consumed via isProcessNodeKind`，而那个谓词零生产调用者，只有测试在拿它断言它自己读的那一列）。
+- **T43 各项的实际处置**（与 finding 的措辞有两处出入，记在此以便追溯）：
+  - `REF_DOMAIN_POLICIES` / `RefDomainPolicy` / `RefPolicy` / `EXPORT_CALL_POLICY` 及随之无人可用的 `'export'` purpose —— **删除**（任何形态零消费者）。这收缩了 RFC-271 `AC-B2e` 原文所称的「解析契约五属性」，存续语义为调用级三属性；`rfc271-ref-contract.test.ts` 的同义反复断言同批换成可证伪的「每条 policy 都必须有实参调用点」。
+  - `RefCallPolicy.failureOwner` —— **保留**。它同样从未被 deref，但 `resolveNodeAgentRef` 对整个 policy 参数是 `void call`：这套常量是**文档标记**而非行为表，整个对象作为标记被消费（源码层断言锁死哪个调用点配哪条 policy）。单删其中一个字段等于留着文档装置却挖掉文档，且 `purpose` / `onMissing` 同样不被 deref——只删一个是任意的。
+  - `NODE_KIND_BEHAVIORS.isProcess` —— **删除**该列连同 `isProcessNodeKind`。两列（`isProcess` 与 `retryCascade === 'mint-placeholder'`）在每一行上恒等且由测试手工对齐，谓词零生产调用者。
+  - `code-round` 死行 —— finding 要求的不是删行（该 kind 在前端与历史任务恢复路径上仍活），而是那一行的**现在时描述**在说一条 RFC-310 已删除的执行链。处置：改写为「退役行」的描述，并把 `node-kind-behavior-table.test.ts` 的逐值锁从 14 个 kind 里的 9 个**扩到全部 14 个**——原缺口正是「结构性断言只抓得住新增的 process kind，抓不住退役的」。
 
 ### R7 — 能力站点必须声明治理属性（不只是计数）
 

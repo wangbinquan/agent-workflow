@@ -123,7 +123,20 @@ function walkTsFiles(dir: string, out: string[]): string[] {
  * 本批新增的文件整批假绿（`docs/dev-gotchas.md` 记录的 RFC-311 T19 事故）。
  */
 export function backendUnits(repoRoot: string): SourceUnit[] {
-  const srcRoot = resolve(repoRoot, 'packages', 'backend', 'src')
+  return packageSrcUnits(repoRoot, 'backend')
+}
+
+/**
+ * 任一 workspace 包 `src/` 下的全部生产源文件。
+ *
+ * 跨包语料是**必需的**，不是锦上添花：`shared/` 里的注册表可能只被 `frontend/`
+ * 消费，只扫 backend 会把它误判成死表。同理只扫 shared 会漏掉 backend 侧的读点。
+ */
+export function packageSrcUnits(
+  repoRoot: string,
+  pkg: 'backend' | 'shared' | 'frontend',
+): SourceUnit[] {
+  const srcRoot = resolve(repoRoot, 'packages', pkg, 'src')
   return walkTsFiles(srcRoot, [])
     .sort()
     .map((path) => sourceUnit(portable(relative(repoRoot, path)), readFileSync(path, 'utf8')))
@@ -473,6 +486,7 @@ const CORPUS_ENUMERATION_CALLEES = new Set([
   'globSync',
   'guardTestFiles',
   'backendUnits',
+  'packageSrcUnits',
   'moduleShapes',
 ])
 
@@ -1284,4 +1298,145 @@ export function mintedVocabulary(unit: SourceUnit, vocabulary: readonly string[]
   }
   visit(unit.source)
   return hits
+}
+
+// ---------------------------------------------------------------------------
+// 注册表反向完备（RFC-317 T42 · findings G-09）
+// ---------------------------------------------------------------------------
+//
+// `satisfies Record<K, V>` 只挡住**一个方向**：它逼着表对 K 是全的。它挡不住反过来的
+// 那种失效——**一行是死的**，或者新加的那一支在消费侧从来没接上。这两种在本仓都真实
+// 发生过：RFC-247 找到四个没有任何路由使用的权限点，RFC-146 找到四个没有运行期消费者
+// 的「愿望清单维度」。两次都是手工发现的，只有第一次留下了永久机制。
+//
+// 这里把那个机制做成可复用的：给一组键与一片生产语料，报出**没有任何消费者**的键。
+
+/** 一个键在生产代码里被消费的两种形态。 */
+export type RegistryKeyConsumption = 'string-literal' | 'property-access'
+
+/**
+ * 报出没有生产消费者的注册表键。
+ *
+ * 两种形态都算消费：
+ *   · **字符串字面量**——`handlers['some-kind']`、把键当值传来传去（权限点、端口名）；
+ *   · **属性访问**——`CADENCE.tokenAuditGc`、解构 `const { tokenAuditGc } = CADENCE`。
+ * 只认前者会把所有「按属性名读」的注册表判成全死（本仓大多数注册表是这一类）；
+ * 只认后者则会漏掉按字符串索引的那一类。两者都要。
+ *
+ * `declaringFiles` 里的自引用不算消费——否则每张表都在自己的文件里"消费"了自己。
+ */
+export function registryKeysWithoutConsumer(input: {
+  readonly keys: readonly string[]
+  readonly units: readonly SourceUnit[]
+  readonly declaringFiles: readonly string[]
+}): string[] {
+  const declaring = new Set(input.declaringFiles)
+  const wanted = new Set(input.keys)
+  const consumed = new Set<string>()
+  for (const unit of input.units) {
+    if (declaring.has(unit.path)) continue
+    const visit = (node: ts.Node): void => {
+      if (
+        (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
+        wanted.has(node.text)
+      ) {
+        consumed.add(node.text)
+      }
+      if (ts.isPropertyAccessExpression(node) && wanted.has(node.name.text)) {
+        consumed.add(node.name.text)
+      }
+      if (ts.isBindingElement(node) && ts.isIdentifier(node.name) && wanted.has(node.name.text)) {
+        consumed.add(node.name.text)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+  }
+  return input.keys.filter((key) => !consumed.has(key)).sort()
+}
+
+/**
+ * 该注册表**符号本身**在声明文件之外有没有被引用。
+ *
+ * 这一层必须先于键级判据。键级判据证明的是「这个**名字**在生产代码里出现过」，
+ * 而不是「这张表的这一行被读过」——一张**整体没人引用**的表，它的键名往往恰好以别的
+ * 身份出现在别处（另一张表的键、一个局部变量名），于是键级判据会报「大部分键都有
+ * 消费者」，把「整张表是死的」这件事完全盖住。实测（T43 删除前）：`REF_DOMAIN_POLICIES`
+ * 在声明文件之外零引用，键级判据却只报出 1 个死键——差一点就把整张死表放行了。
+ */
+export function registrySymbolHasConsumer(input: {
+  readonly symbol: string
+  readonly units: readonly SourceUnit[]
+  readonly declaringFile: string
+}): boolean {
+  for (const unit of input.units) {
+    if (unit.path === input.declaringFile) continue
+    let found = false
+    const visit = (node: ts.Node): void => {
+      if (found) return
+      if (ts.isIdentifier(node) && node.text === input.symbol) {
+        found = true
+        return
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+    if (found) return true
+  }
+  return false
+}
+
+/**
+ * 声明文件里名为 `declarationName` 的**顶层声明**（函数或常量）内部有没有读到 `symbol`。
+ *
+ * 这是 `{ via: 访问器 }` 形态的第二半判据。只查「访问器有外部消费者」是不够的——
+ * 那样把一张死表和一个恰好活着的同文件函数配成对就能蒙混过关。必须同时证明
+ * **该访问器真的读了这张表**，两半合起来才construct出「表 → 访问器 → 外部」这条活链。
+ *
+ * 函数声明与 `const X = ...` 都算：本仓的同文件访问器两种形态都有
+ * （`listRepairOptionsForAlert` 是函数，`PROMPT_INJECTED_PORT_NAMES` 是常量）。
+ */
+export function declarationReadsSymbol(input: {
+  readonly unit: SourceUnit
+  readonly declarationName: string
+  readonly symbol: string
+}): boolean {
+  let found = false
+  const containsSymbol = (node: ts.Node): boolean => {
+    let hit = false
+    const scan = (n: ts.Node): void => {
+      if (hit) return
+      if (ts.isIdentifier(n) && n.text === input.symbol) {
+        hit = true
+        return
+      }
+      ts.forEachChild(n, scan)
+    }
+    ts.forEachChild(node, scan)
+    return hit
+  }
+  const visit = (node: ts.Node): void => {
+    if (found) return
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === input.declarationName &&
+      containsSymbol(node)
+    ) {
+      found = true
+      return
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === input.declarationName &&
+      node.initializer !== undefined &&
+      containsSymbol(node)
+    ) {
+      found = true
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(input.unit.source)
+  return found
 }

@@ -2,7 +2,7 @@
 //
 // Locks:
 //  1. NODE_KIND enum includes 'wrapper-fanout'.
-//  2. isProcessNodeKind('wrapper-fanout') === true.
+//  2. nodeKindParticipatesInRetryCascade('wrapper-fanout') === true.
 //  3. WrapperFanoutNodeSchema parses minimal shape + inputs[] / nodeIds[].
 //  4. WrapperFanoutPortSchema enforces non-empty name + non-empty kind.
 //  5. WorkflowEdgeSchema accepts optional boundary 'wrapper-input' /
@@ -18,9 +18,9 @@ import {
   WrapperFanoutNodeSchema,
   WrapperFanoutPortSchema,
 } from '../src/schemas/workflow'
-// RFC-146: isProcessNodeKind moved to the behavior table (barrel export
+// RFC-146: the predicate moved to the behavior table (barrel export
 // unchanged; this deep import follows the new home).
-import { isProcessNodeKind } from '../src/node-kind-behavior'
+import { nodeKindParticipatesInRetryCascade } from '../src/node-kind-behavior'
 
 describe('NODE_KIND enum', () => {
   test("includes 'wrapper-fanout'", () => {
@@ -49,22 +49,26 @@ describe('NODE_KIND enum', () => {
   })
 })
 
-describe('isProcessNodeKind', () => {
+// RFC-317 T43 —— 原 `isProcessNodeKind` 已删（零生产调用者，测试拿它去断言它自己
+// 读的那一列，纯同义反复）。「这个 kind 带不带进程」现在只有一条判据：
+// `nodeKindParticipatesInRetryCascade`，它读 `retryCascade`——而 `retryCascade`
+// 有真实生产消费者（services/task.ts retryNode）。下面按同样的意图改锚到活判据上。
+describe('nodeKindParticipatesInRetryCascade', () => {
   test("'wrapper-fanout' is a process kind", () => {
-    expect(isProcessNodeKind('wrapper-fanout')).toBe(true)
+    expect(nodeKindParticipatesInRetryCascade('wrapper-fanout')).toBe(true)
   })
 
   test('existing process kinds remain process kinds', () => {
     // 'agent-multi' dropped: RFC-060 PR-E removed it from NodeKind, so it's no
     // longer a (typed) process kind to assert here.
     for (const kind of ['agent-single', 'wrapper-git', 'wrapper-loop'] as const) {
-      expect(isProcessNodeKind(kind)).toBe(true)
+      expect(nodeKindParticipatesInRetryCascade(kind)).toBe(true)
     }
   })
 
   test('non-process kinds stay non-process', () => {
     for (const kind of ['input', 'output', 'review', 'clarify', 'clarify-cross-agent'] as const) {
-      expect(isProcessNodeKind(kind)).toBe(false)
+      expect(nodeKindParticipatesInRetryCascade(kind)).toBe(false)
     }
   })
 })

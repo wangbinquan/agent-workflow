@@ -16,20 +16,27 @@
 //
 // resolver 的行为契约在 `rfc271-runtime-ref.test.ts`；本文件锁的是「四处调用点
 // 各自映射到自己的归属」这件事——运行时巨型组件难直接覆盖，按仓规保留源码层断言。
+//
+// ⚠️ RFC-317 T43 改写了本文件的第一个 describe。原来那三条断言的是
+// `REF_DOMAIN_POLICIES` / `EXPORT_CALL_POLICY` 的字面量对着自己——
+// `expect(REF_DOMAIN_POLICIES.call.freeze).toBe('per-task')` 这种同义反复，
+// 把任何一条常量改掉，测试跟着改就照绿。R6 实测两张表**零消费者**（连一个把它
+// 当实参传出去的调用点都没有），已随 T43 删除；余下四条 policy 的真实契约是
+// 「每条都必须在生产源码里被当作实参传给某个 resolver 调用点」——那才是
+// 可证伪的性质：删掉任意一个调用点，下面这条就红。
 
 //
-// 覆盖验收条款：AC-B2c（统一引用模型）/ AC-B2e（解析契约五属性）/ AC-B2f（调度器不裸读）
+// 覆盖验收条款：AC-B2c（统一引用模型）/ AC-B2e（解析契约调用级三属性；域级两属性
+//   随 T43 删除，理由见 `shared/src/ref/resolution.ts` 顶注）/ AC-B2f（调度器不裸读）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import {
   DISPATCH_CALL_POLICY,
-  EXPORT_CALL_POLICY,
   FANOUT_HYDRATE_CALL_POLICY,
   PREVIEW_CALL_POLICY,
-  REF_DOMAIN_POLICIES,
   VALIDATE_CALL_POLICY,
   type RefCallPolicy,
 } from '@agent-workflow/shared'
@@ -45,59 +52,71 @@ const stripComments = (src: string): string =>
     .join('\n')
 const scheduler = readFileSync(SRC('services', 'scheduler.ts'), 'utf8')
 
-describe('五条解析属性 —— 域级 2 条 + 调用级 3 条，缺一不可', () => {
-  test('每个域都同时定死 freeze 与 aclAt（新增域忘了填会让这条红）', () => {
-    for (const [domain, policy] of Object.entries(REF_DOMAIN_POLICIES)) {
-      expect(['per-task', 'none'], `${domain}.freeze`).toContain(policy.freeze)
-      expect(['launch', 'save', 'none'], `${domain}.aclAt`).toContain(policy.aclAt)
-    }
-    // 五个域全在表里（`call` 是唯一冻结的那个）。注意「六个 wire codec」与
-    // 「五个域策略」不是同一件事：`bundle` 一个域有 identity / agent-skill /
-    // call 三种槽位编码，域级策略只有一条。
-    expect(Object.keys(REF_DOMAIN_POLICIES).sort()).toEqual([
-      'bundle',
-      'call',
-      'importSelector',
-      'intent',
-      'runtime',
-    ])
-    expect(REF_DOMAIN_POLICIES.call.freeze).toBe('per-task')
-    expect(REF_DOMAIN_POLICIES.runtime.freeze).toBe('none')
-  })
+/** 递归收集一棵源码树里的 `.ts`。 */
+function collectTs(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = resolve(dir, entry.name)
+    if (entry.isDirectory()) collectTs(full, out)
+    else if (entry.name.endsWith('.ts')) out.push(full)
+  }
+  return out
+}
 
-  test('每个已定案的调用实例都同时定死 purpose / onMissing / failureOwner', () => {
+/**
+ * 一条 policy 在生产源码里**被当作实参传出去**的次数。
+ *
+ * 只数 import 语句之外、注释之外的出现——import 进来却没用等于没消费，
+ * 而注释里提一嘴更不算（这个坑 RFC-217 的架构守卫踩过：裸文本扫描会撞上
+ * 描述自己的那行注释）。
+ */
+function markerCallSites(symbol: string): string[] {
+  const hits: string[] = []
+  for (const file of collectTs(SRC())) {
+    const code = stripComments(readFileSync(file, 'utf8'))
+    const used = code
+      .split('\n')
+      .some((line) => line.includes(symbol) && !/^\s*(import|export)\b/.test(line))
+    if (used) hits.push(file)
+  }
+  return hits
+}
+
+describe('调用级三属性 —— 每条 policy 都必须真的被某个调用点用上', () => {
+  test('四条 policy 各自至少有一个生产调用点（删掉调用点 ⇒ 这条红）', () => {
+    // `resolveNodeAgentRef` 拿到 policy 后 `void call`——它是**文档标记**，
+    // 真正的分支在调用点。标记的价值全在「被传出去」这一下：一条谁都不传的
+    // policy 就是纯装饰，正是 T43 删掉那两条的判据。
     const named: Array<[string, RefCallPolicy]> = [
-      ['export', EXPORT_CALL_POLICY],
-      ['dispatch', DISPATCH_CALL_POLICY],
-      ['fanout-hydrate', FANOUT_HYDRATE_CALL_POLICY],
-      ['validate', VALIDATE_CALL_POLICY],
-      ['preview', PREVIEW_CALL_POLICY],
+      ['DISPATCH_CALL_POLICY', DISPATCH_CALL_POLICY],
+      ['FANOUT_HYDRATE_CALL_POLICY', FANOUT_HYDRATE_CALL_POLICY],
+      ['VALIDATE_CALL_POLICY', VALIDATE_CALL_POLICY],
+      ['PREVIEW_CALL_POLICY', PREVIEW_CALL_POLICY],
     ]
-    for (const [label, p] of named) {
-      expect(['dispatch', 'validate', 'preview', 'export'], `${label}.purpose`).toContain(p.purpose)
-      expect(['fail', 'skip', 'dangle'], `${label}.onMissing`).toContain(p.onMissing)
-      expect(['node', 'wrapper', 'task', 'caller'], `${label}.failureOwner`).toContain(
-        p.failureOwner,
+    for (const [name, policy] of named) {
+      expect(
+        markerCallSites(name).length,
+        `${name} 没有任何生产调用点——它已经退化成纯装饰声明，要么接回调用点、要么删掉`,
+      ).toBeGreaterThan(0)
+      // 三属性齐备（缺字段是编译错误，这里锁的是取值落在既定词表内）。
+      expect(['dispatch', 'validate', 'preview'], `${name}.purpose`).toContain(policy.purpose)
+      expect(['fail', 'skip', 'dangle'], `${name}.onMissing`).toContain(policy.onMissing)
+      expect(['node', 'wrapper', 'task', 'caller'], `${name}.failureOwner`).toContain(
+        policy.failureOwner,
       )
     }
   })
 
-  test('域级与调用级**不重叠**：freeze/aclAt 不出现在调用策略里，反之亦然', () => {
-    // 两组属性混进同一个对象，就等于宣称「这个域永远只有一种调用方式」——
-    // dependsOn 的 fail / skip 之别正是反例。
-    const call = DISPATCH_CALL_POLICY as unknown as Record<string, unknown>
-    expect(call.freeze).toBeUndefined()
-    expect(call.aclAt).toBeUndefined()
-    const domain = REF_DOMAIN_POLICIES.call as unknown as Record<string, unknown>
-    expect(domain.onMissing).toBeUndefined()
-    expect(domain.failureOwner).toBeUndefined()
-  })
-
-  test('导出域是 dangle 不是 fail —— 与 AC-7b「零匹配与全不可见同形」绑死', () => {
-    expect(EXPORT_CALL_POLICY.onMissing).toBe('dangle')
-    expect(EXPORT_CALL_POLICY.failureOwner).toBe('caller')
-    // dispatch 与它相反：导出可以留悬空，派发不行。
+  test('派发与水合的归属**相反**，且这个差异写在两个不同调用点上', () => {
+    // 这两条不是「常量等于自己」——它锁的是 R7-P1-5 那条实测差异：同一种解析，
+    // 主派发失败要记到 node、fanout 水合失败要记到 wrapper。两者一旦被"统一"，
+    // 故障归属就整个塌掉，而运行期看不出来。
     expect(DISPATCH_CALL_POLICY.onMissing).toBe('fail')
+    expect(DISPATCH_CALL_POLICY.failureOwner).toBe('node')
+    expect(FANOUT_HYDRATE_CALL_POLICY.onMissing).toBe('skip')
+    expect(FANOUT_HYDRATE_CALL_POLICY.failureOwner).toBe('wrapper')
+    // 且两条确实分别落在 scheduler 的两个位点上（下面的 describe 逐条核对映射）。
+    expect(scheduler).toContain('DISPATCH_CALL_POLICY')
+    expect(scheduler).toContain('FANOUT_HYDRATE_CALL_POLICY')
   })
 })
 

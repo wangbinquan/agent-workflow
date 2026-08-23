@@ -112,7 +112,7 @@ describe('RFC-056 ClarifyCrossAgentNodeSchema parsing', () => {
 })
 
 describe("RFC-056 NODE_KIND_BEHAVIORS['clarify-cross-agent']", () => {
-  test('shares the non-process 5-dim row with RFC-023 clarify', () => {
+  test('shares the non-process row with RFC-023 clarify', () => {
     const ccBehavior = NODE_KIND_BEHAVIORS['clarify-cross-agent']
     const clarifyBehavior = NODE_KIND_BEHAVIORS.clarify
     expect(ccBehavior).toEqual(clarifyBehavior)
@@ -121,7 +121,6 @@ describe("RFC-056 NODE_KIND_BEHAVIORS['clarify-cross-agent']", () => {
   test('matches the documented behavior values exactly', () => {
     expect(NODE_KIND_BEHAVIORS['clarify-cross-agent']).toEqual({
       retryCascade: 'skip',
-      isProcess: false,
       isAgent: false,
       settlesWithoutRow: true,
     })

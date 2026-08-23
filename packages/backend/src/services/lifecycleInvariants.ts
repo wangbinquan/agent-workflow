@@ -84,9 +84,9 @@ const _LIFECYCLE_RULE_UNION_GUARD: [_AssertBackendSubsetOfShared, _AssertSharedS
 
 export type InvariantSeverity = 'warning' | 'error'
 
-/** Canonical list of the seven invariant rules — used as `ownedRules` so
+/** Canonical list of the invariant rules — used as `ownedRules` so
  *  the invariants reconcile only touches their own open rows. */
-export const INVARIANT_RULES: readonly InvariantRule[] = [
+export const INVARIANT_RULES = [
   'R1',
   'R2',
   'C1',
@@ -95,10 +95,36 @@ export const INVARIANT_RULES: readonly InvariantRule[] = [
   'T3',
   'U1',
   'CR-1',
-]
+] as const satisfies readonly InvariantRule[]
 
-/** Canonical list of the five stuck-task rules. */
-export const STUCK_RULES: readonly StuckRule[] = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+/** Canonical list of the stuck-task rules. */
+export const STUCK_RULES = [
+  'S1',
+  'S2',
+  'S3',
+  'S4',
+  'S5',
+  'S6',
+] as const satisfies readonly StuckRule[]
+
+// RFC-317 T43 —— 编译期守卫：**两张表都必须对各自的 union 穷尽**。
+//
+// 这两个常量此前标注的是 `readonly InvariantRule[]`。那个标注只保证「里面装的都是
+// 合法规则」，**完全不保证装全了**——往 union 里加一条规则、忘了往数组里加，
+// 一行都不会红。代价是静默的：这两个数组是作为 `ownedRules` 传给
+// `reconcileLifecycleAlerts` 的，而 `ownedRules` 正是「这次对账只碰自己的行」的
+// 那道闸。漏掉一条规则 = 该规则的 alert 行永远不被对账触碰：既不会被解决、也不会
+// 被升级，只会一直挂在 lifecycle_alerts 里，而且没有任何报错指向原因。
+//
+// `as const satisfies` 换掉宽标注后，下面两条把反方向也钉死：union 里有、数组里没有
+// 的成员会让 `Exclude<...>` 非空，于是 `extends never` 落到 `never`，赋值 `true`
+// 变成编译错误。（写法与本文件上方的 `_LIFECYCLE_RULE_UNION_GUARD` 一致。）
+type _AssertInvariantRulesExhaustive =
+  Exclude<InvariantRule, (typeof INVARIANT_RULES)[number]> extends never ? true : never
+type _AssertStuckRulesExhaustive =
+  Exclude<StuckRule, (typeof STUCK_RULES)[number]> extends never ? true : never
+const _RULE_LIST_EXHAUSTIVE_GUARD: [_AssertInvariantRulesExhaustive, _AssertStuckRulesExhaustive] =
+  [true, true]
 
 export interface LifecycleInvariantFinding {
   taskId: string
