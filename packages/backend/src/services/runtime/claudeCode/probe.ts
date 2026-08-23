@@ -7,7 +7,7 @@ import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '../types'
 // RFC-143 PR-5: shared best-effort semver extraction (display telemetry only).
 import { extractVersion } from '@/util/semver'
-import { spawnVersionProbe } from '@/util/process'
+import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/process'
 
 const log = createLogger('claude-code')
 
@@ -56,7 +56,9 @@ export async function probeClaudeCode(
     // finally 组 reap）收敛到 util/process.spawnVersionProbe，本函数只留
     // claude 侧策略（告警文案 + best-effort version telemetry）。
     const r = await spawnVersionProbe([...head, '--version'], {
-      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+      // RFC-317 T36（EK-02 / C4）—— 省略 timeoutMs 曾意味着「无进程组、无树杀、
+      // 无超时、stdout 无上限」。现在没有这个模式了：调用方不给就用具名默认。
+      timeoutMs: opts.timeoutMs ?? DEFAULT_VERSION_PROBE_TIMEOUT_MS,
     })
     if (r.timedOut) {
       warn('claude --version timed out', { binary, timeoutMs: opts.timeoutMs })

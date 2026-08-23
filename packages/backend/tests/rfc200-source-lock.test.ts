@@ -60,7 +60,10 @@ describe('RFC-200 source wiring locks', () => {
     expect(scheduler).toContain('loadRunEnvelopeNonce(db, nodeRunId)')
 
     const memory = read('packages/backend/src/services/memoryInject.ts')
-    expect(memory).toContain('fenceUntrusted(`memory:${m.id}`, m.bodyMd, envelopeNonce)')
+    // RFC-317 T39（CC-13）—— 围栏的 nonce 现在来自**必传的判别式**而不是默认参数：
+    // 空 nonce 曾经默默走「不加围栏」的分支，安全路径是你得记得去要的那一条。
+    expect(memory).toContain('fenceUntrusted(`memory:${m.id}`, m.bodyMd, fencing.nonce)')
+    expect(memory).toContain("fencing.kind === 'legacy-unfenced'")
 
     // RFC-217 T3 — nonce 线程收编进 executeTurn（唯一 load 点），prompt 组装
     // 迁至 memberTurns/strategies；本锁真正关心的「nonce 必须先取再渲染」不变。

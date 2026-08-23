@@ -11,16 +11,44 @@ import { adoptProcessTree, type ProcessTreeOwnership } from '@/util/windowsJobOb
 
 export type KillTreeSignal = 'SIGTERM' | 'SIGKILL'
 
-/** True iff `pid` is a live process this user can signal (or at least exists). */
-export function isProcessAlive(pid: number): boolean {
+export interface ProcessLivenessOptions {
+  /** POSIX process-state reader override for deterministic zombie tests. */
+  readProcessStat?: (pid: number) => string
+}
+
+function pidProcessStat(pid: number): string {
+  if (process.platform === 'win32') return ''
+  try {
+    const res = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'stat='])
+    return res.exitCode === 0 ? res.stdout.toString().trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * True iff `pid` is a live process this user can signal (or at least exists).
+ *
+ * POSIX `kill(pid, 0)` also succeeds for a zombie waiting to be reaped. A
+ * zombie cannot execute or write into a worktree, and SIGKILL cannot make it
+ * disappear; treating it as live makes TERM→KILL recovery falsely conclude
+ * that an agent survived and abort daemon boot. Use `ps stat` to distinguish
+ * that terminal kernel row while retaining the conservative `true` fallback
+ * when the state probe is unavailable.
+ */
+export function isProcessAlive(pid: number, opts: ProcessLivenessOptions = {}): boolean {
+  let exists = false
   try {
     process.kill(pid, 0)
-    return true
+    exists = true
   } catch (err) {
     const e = err as NodeJS.ErrnoException
     // EPERM means the process exists but we don't have permission to signal it.
-    return e.code === 'EPERM'
+    exists = e.code === 'EPERM'
   }
+  if (!exists || process.platform === 'win32') return exists
+  const stat = (opts.readProcessStat ?? pidProcessStat)(pid).trim()
+  return stat === '' || !stat.startsWith('Z')
 }
 
 /**
@@ -302,7 +330,18 @@ export function raceWithFallback<T>(p: Promise<T>, ms: number, fallback: T): Pro
 // 三胞胎的告警文案/registry 记录/semver 判定等策略全部留在各调用方。
 
 export interface VersionProbeOpts {
-  timeoutMs?: number
+  /**
+   * RFC-317 T36（EK-02 / 能力影响 C4）—— **必填**。
+   *
+   * 改造前它可省略，而省略时这个函数会同时失去四样东西：进程组（不 detached）、
+   * 树杀（没有 timer 就没有 killProcessTree）、超时本身、以及 stdout 的读取上限
+   * （`outPromise` 不再与超时赛跑）。也就是说「忘了写一个字段」= 一次可以永久挂起、
+   * 且挂起时连子孙进程都收不掉的 spawn——而 daemon 启动路径与 doctor 正是这么调的。
+   *
+   * 无 timeout 模式已**删除**（delete > deprecate）：没有默认值可继承，调用方要么给
+   * 自己的值，要么显式写 `DEFAULT_VERSION_PROBE_TIMEOUT_MS`。
+   */
+  timeoutMs: number
   env?: Record<string, string | undefined>
   cwd?: string
   /** 设置即切换 models 形态（见头注）。 */
@@ -310,6 +349,14 @@ export interface VersionProbeOpts {
   /** finally 组 reap 后有界等待组死的窗口（models 形态用；缺省 0 = 即杀即返）。 */
   awaitReapMs?: number
 }
+
+/**
+ * 没有自己的时长判断时该用的探测超时。
+ *
+ * 是一个**具名常量**而不是签名上的默认值：默认值会让「忘了写」与「决定用默认」在
+ * 代码里长得一模一样，而这两件事在一次可能永久挂起的 spawn 上不是一回事。
+ */
+export const DEFAULT_VERSION_PROBE_TIMEOUT_MS = 10_000
 
 export interface VersionProbeResult {
   timedOut: boolean
@@ -375,9 +422,8 @@ async function reapDetachedGroup(pid: number | undefined, awaitMs: number): Prom
 
 export async function spawnVersionProbe(
   argv: readonly string[],
-  opts: VersionProbeOpts = {},
+  opts: VersionProbeOpts,
 ): Promise<VersionProbeResult> {
-  const detached = opts.timeoutMs !== undefined
   const proc = Bun.spawn({
     ...platformSpawnOptionsForHost(),
     cmd: [...argv],
@@ -386,16 +432,14 @@ export async function spawnVersionProbe(
     stdout: 'pipe',
     stderr: 'pipe',
     ...(opts.maxBytes !== undefined ? { stdin: 'ignore' } : {}),
-    ...(detached ? { detached: true } : {}),
+    detached: true,
   })
   let timedOut = false
-  const timer = detached
-    ? setTimeout(() => {
-        timedOut = true
-        killProcessTree(proc.pid, 'SIGKILL')
-      }, opts.timeoutMs)
-    : undefined
-  ;(timer as { unref?: () => void } | undefined)?.unref?.()
+  const timer = setTimeout(() => {
+    timedOut = true
+    killProcessTree(proc.pid, 'SIGKILL')
+  }, opts.timeoutMs)
+  ;(timer as { unref?: () => void }).unref?.()
   try {
     if (opts.maxBytes !== undefined) {
       const [stdout, stderr, exitCode] = await Promise.all([
@@ -409,16 +453,14 @@ export async function spawnVersionProbe(
     const exitCode = await proc.exited
     let stdout = ''
     if (!timedOut && exitCode === 0) {
-      stdout = detached
-        ? await Promise.race([
-            outPromise,
-            new Promise<string>((res) => setTimeout(() => res(''), opts.timeoutMs)),
-          ])
-        : await outPromise
+      stdout = await Promise.race([
+        outPromise,
+        new Promise<string>((res) => setTimeout(() => res(''), opts.timeoutMs)),
+      ])
     }
     return { timedOut, exitCode, stdout, stderr: '' }
   } finally {
-    if (timer !== undefined) clearTimeout(timer)
-    if (detached) await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
+    clearTimeout(timer)
+    await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
   }
 }

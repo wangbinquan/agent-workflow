@@ -66,8 +66,8 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
     why: 'tar czf/xzf 单模块收敛点（文件头自述存在目的就是防散落的手搓 tar spawn）。',
   },
   'util/process.ts': {
-    count: 4,
-    why: '平台杀链自身的 ps/探测 spawnSync ×3 + RFC-284 T8 的 spawnVersionProbe 骨架（三胞胎探针唯一 spawn 点）。',
+    count: 5,
+    why: '平台杀链自身的 ps/探测 spawnSync ×3 + RFC-284 T8 的 spawnVersionProbe 骨架（三胞胎探针唯一 spawn 点）+ isProcessAlive 的 `ps -o stat=` 僵尸判定：POSIX `kill(pid,0)` 对等待回收的僵尸同样成功，把僵尸当活会让 TERM→KILL 恢复误判「agent 还活着」并中止 daemon 启动，故必须另读进程状态位。',
   },
   'util/win32Acl.ts': {
     count: 3,

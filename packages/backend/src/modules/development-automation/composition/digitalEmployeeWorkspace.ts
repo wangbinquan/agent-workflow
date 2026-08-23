@@ -1,5 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
+import { repoRelativePathSchema } from '../domain/requirementManifest'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
@@ -61,7 +62,13 @@ const issueContextSchema = z
             .object({
               artifactRef: z.string().regex(/^employee-input:/),
               placement: z.enum(['repository', 'temporary']).default('repository'),
-              targetPath: z.string().min(1),
+              // RFC-317 T38（CC-08）—— 与**产出这个值的那一侧**共用同一个 schema。
+              // 这里原本是 `z.string().min(1)`：同一条「上传目标必须是安全的仓库相对
+              // 路径」契约在仓里有三份独立声明，严格度递减，而**写侧这一份最松**——
+              // 产出侧拒掉的 `../`、反斜杠、盘符、空段，到了边界重解析时全部放行。
+              // 今天没有真实逃逸只是因为产出侧先拦住了；那是被拿掉的纵深防御，
+              // 而不是不需要的防御。
+              targetPath: repoRelativePathSchema,
               originalName: z.string().min(1),
             })
             .strict(),

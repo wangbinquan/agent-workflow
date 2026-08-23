@@ -259,12 +259,45 @@ function parseTagsField(raw: string | null | undefined): string[] {
  * byte-for-byte identical to legacy (pre-RFC-041) behavior. Order:
  *   agent (most-specific, listed first) → workflow → repo → global.
  */
+/**
+ * RFC-317 T39（CC-13）—— 记忆正文的围栏模式，**必传的闭合判别式**。
+ *
+ * 改造前这三个函数都是 `envelopeNonce = ''`：空 nonce 走「原样拼接、不加围栏」的分支
+ * （`fenceUntrusted` 遇到空 nonce 同样原样返回）。也就是说**安全路径是你得记得去要的
+ * 那一条**，而不加围栏是默认。今天唯一的生产调用点传了真 nonce、且被 RFC-200 的源码锁
+ * 钉着那一行；但默认值意味着**任何**新调用点、以及每一行 nonce 为 '' 的历史 node_run，
+ * 都会安静地落进不加围栏的分支——把「历史字节兼容」编码成默认值，而不是一个显式的、
+ * 有类型的 legacy 模式，这是把逃生门装在了安全边界上。
+ *
+ * 现在两种模式都要**说出来**：`{ kind: 'fenced', nonce }` 或
+ * `{ kind: 'legacy-unfenced' }`。后者的每一个使用点都在 import 图里可见、可 grep、可入账。
+ */
+export type MemoryEnvelopeFencing =
+  | { readonly kind: 'fenced'; readonly nonce: string }
+  | { readonly kind: 'legacy-unfenced' }
+
+/**
+ * 把一个**可能为空**的 nonce 转成显式模式。
+ *
+ * 空 nonce 只出现在两处历史入口：pre-RFC-200 的 `node_runs` 行没有 nonce，重建它们的
+ * persona 片段必须逐字复刻当年的拼法。这里把那个判断收成**一个具名转换器**——它可以
+ * 被 grep、被入账、被测试；而改造前它是散在三个公共函数签名上的默认参数值，每一个
+ * 新调用点都会静默继承「不加围栏」。
+ *
+ * 新代码不要用它：直接传 `{ kind: 'fenced', nonce }`。
+ */
+export function memoryFencingForNonce(nonce: string | null | undefined): MemoryEnvelopeFencing {
+  return nonce === null || nonce === undefined || nonce.length === 0
+    ? { kind: 'legacy-unfenced' }
+    : { kind: 'fenced', nonce }
+}
+
 export function formatMemoryBlock(
   set: InjectableMemorySet,
   budget: ScopeBudget = DEFAULT_BUDGET,
-  envelopeNonce = '',
+  fencing: MemoryEnvelopeFencing,
 ): string | null {
-  return formatMemoryBlockWithSnapshot(set, budget, envelopeNonce).block
+  return formatMemoryBlockWithSnapshot(set, budget, fencing).block
 }
 
 /**
@@ -278,7 +311,7 @@ export function formatMemoryBlock(
 export function formatMemoryBlockWithSnapshot(
   set: InjectableMemorySet,
   budget: ScopeBudget = DEFAULT_BUDGET,
-  envelopeNonce = '',
+  fencing: MemoryEnvelopeFencing,
 ): { block: string | null; snapshot: InjectedMemorySnapshot[] | null } {
   const agent = clipByBudget(set.byScope.agent, budget.agent)
   const workflow = clipByBudget(set.byScope.workflow, budget.workflow)
@@ -290,7 +323,7 @@ export function formatMemoryBlockWithSnapshot(
   if (all.length === 0) return { block: null, snapshot: null }
   const snapshot = all.map(toSnapshot)
   return {
-    block: formatMemoryBlockFromSnapshot(snapshot, envelopeNonce),
+    block: formatMemoryBlockFromSnapshot(snapshot, fencing),
     snapshot,
   }
 }
@@ -305,7 +338,7 @@ export function formatMemoryBlockWithSnapshot(
  */
 export function formatMemoryBlockFromSnapshot(
   snapshot: readonly InjectedMemorySnapshot[] | null,
-  envelopeNonce = '',
+  fencing: MemoryEnvelopeFencing,
 ): string | null {
   if (snapshot === null || snapshot.length === 0) return null
   const lines: string[] = [
@@ -316,12 +349,14 @@ export function formatMemoryBlockFromSnapshot(
     '--- BEGIN INJECTED MEMORY ---',
   ]
   for (const m of snapshot) {
-    if (envelopeNonce.length === 0) {
+    if (fencing.kind === 'legacy-unfenced') {
+      // 历史字节兼容：pre-RFC-200 的 node_run 行没有 nonce，重建它们的 persona 片段时
+      // 必须逐字复刻当年的拼法。这条分支现在只能被**显式点名**进入。
       lines.push(`- [${m.scopeType}] ${m.title} — ${m.bodyMd}`)
       continue
     }
     lines.push(`- [${m.scopeType}] ${sanitizeInlineField(m.title)}`)
-    lines.push(fenceUntrusted(`memory:${m.id}`, m.bodyMd, envelopeNonce))
+    lines.push(fenceUntrusted(`memory:${m.id}`, m.bodyMd, fencing.nonce))
   }
   lines.push('--- END INJECTED MEMORY ---')
   return lines.join('\n')
@@ -473,7 +508,11 @@ export async function injectMemoryForRun(deps: {
     repoIds,
     repoGroupId,
   })
-  return formatMemoryBlockWithSnapshot(set, deps.budget ?? DEFAULT_BUDGET, deps.envelopeNonce ?? '')
+  return formatMemoryBlockWithSnapshot(
+    set,
+    deps.budget ?? DEFAULT_BUDGET,
+    memoryFencingForNonce(deps.envelopeNonce),
+  )
 }
 
 /**

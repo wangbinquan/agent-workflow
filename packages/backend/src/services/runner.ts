@@ -110,6 +110,7 @@ import { NOOP_HANDLE } from './runtime'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
   formatMemoryBlockFromSnapshot,
+  memoryFencingForNonce,
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
   type ScopeBudget,
@@ -715,7 +716,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           reviewIteration: currentRunRow.reviewIteration,
           runId: opts.nodeRunId,
         })
-        injectedMemoryBlock = formatMemoryBlockFromSnapshot(injectedSnapshot, envelopeNonce)
+        // RFC-317 T39（CC-13）—— 这一支重建的是**历史 node_run** 的 persona 片段，
+        // pre-RFC-200 的行没有 nonce，必须逐字复刻当年的拼法；用具名转换器把
+        // 「空 nonce ⇒ 不加围栏」这个判断显式化，而不是靠公共函数的默认参数继承。
+        injectedMemoryBlock = formatMemoryBlockFromSnapshot(
+          injectedSnapshot,
+          memoryFencingForNonce(envelopeNonce),
+        )
       }
     } catch (err) {
       log.warn('memory-inject-followup-inherit-failed', {

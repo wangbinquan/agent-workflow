@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
+import { repoRelativePathSchema } from '../domain/requirementManifest'
 import {
   cachedRepos,
   employeeApprovalSagas,
@@ -58,7 +59,13 @@ const issueSchema = z
             .object({
               artifactRef: z.string().regex(/^employee-input:[a-f0-9]{64}$/),
               placement: z.enum(['repository', 'temporary']).default('repository'),
-              targetPath: z.string().min(1),
+              // RFC-317 T38（CC-08）—— 与**产出这个值的那一侧**共用同一个 schema。
+              // 这里原本是 `z.string().min(1)`：同一条「上传目标必须是安全的仓库相对
+              // 路径」契约在仓里有三份独立声明，严格度递减，而**写侧这一份最松**——
+              // 产出侧拒掉的 `../`、反斜杠、盘符、空段，到了边界重解析时全部放行。
+              // 今天没有真实逃逸只是因为产出侧先拦住了；那是被拿掉的纵深防御，
+              // 而不是不需要的防御。
+              targetPath: repoRelativePathSchema,
               originalName: z.string().min(1),
             })
             .strict(),
@@ -83,7 +90,9 @@ const employeeUploadPlanSchema = z
     entries: z.array(
       z
         .object({
-          targetPath: z.string().min(1),
+          // RFC-317 T38（CC-08）—— 上传计划里的目标路径同样走共享 schema：
+          // 它与上面那一处最终落在同一个 join() + copyBlobTo() 上。
+          targetPath: repoRelativePathSchema,
           contentPolicy: z.literal('agent-editable'),
           fileMode: z.enum(['regular', 'executable']),
           disposition: z.enum(['create', 'replace', 'already-present']),

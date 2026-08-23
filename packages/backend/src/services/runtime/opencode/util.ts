@@ -6,7 +6,7 @@
 import { createLogger } from '@/util/log'
 import { extractVersion } from '@/util/semver'
 import { recordOpencodeBinaryVersion } from './versionRegistry'
-import { spawnVersionProbe } from '@/util/process'
+import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '@/util/process'
 // RFC-282 C0 (设计门 P2-7) — the probe-options shape lives on the runtime
 // contract surface; this module re-exports it so existing `util/opencode`
 // import sites keep resolving until C3 relocates the whole module.
@@ -68,7 +68,9 @@ export async function probeOpencode(
     // exit 先行防孙进程持管道；finally 组 reap 防提前退出的 wrapper 漏杀）。
     // 本函数只留 opencode 侧策略：告警文案 + flag-spelling registry 记录。
     const r = await spawnVersionProbe([...head, '--version'], {
-      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+      // RFC-317 T36（EK-02 / C4）—— 省略 timeoutMs 曾意味着「无进程组、无树杀、
+      // 无超时、stdout 无上限」。现在没有这个模式了：调用方不给就用具名默认。
+      timeoutMs: opts.timeoutMs ?? DEFAULT_VERSION_PROBE_TIMEOUT_MS,
     })
     if (r.timedOut) {
       warn('opencode --version timed out', { binary, timeoutMs: opts.timeoutMs })

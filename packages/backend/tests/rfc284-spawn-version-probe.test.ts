@@ -8,7 +8,7 @@
 // design/RFC-284-commons-dedup-and-guardrails/design.md §1.5。
 
 import { describe, expect, test } from 'bun:test'
-import { spawnVersionProbe } from '../src/util/process'
+import { DEFAULT_VERSION_PROBE_TIMEOUT_MS, spawnVersionProbe } from '../src/util/process'
 
 const SH = '/bin/sh'
 
@@ -21,10 +21,20 @@ describe('RFC-284 T8 — 探针形态（缺省）', () => {
     expect(r.stderr).toBe('')
   })
 
-  test('正常：无 timeout 的历史 flat spawn 路径同样工作', async () => {
-    const r = await spawnVersionProbe(['/bin/echo', 'flat'])
+  // RFC-317 T36（EK-02 / 能力影响 C4）—— 「无 timeout 的历史 flat spawn 路径」**已删除**。
+  //
+  // 这条用例原本断言省略 `timeoutMs` 也能正常工作。那个模式同时放弃了四样东西：
+  // 进程组、树杀、超时、以及 stdout 的有界读——「忘了写一个字段」等于一次可以永久
+  // 挂起、且挂起时连子孙进程都收不掉的 spawn，而 daemon 启动路径与 doctor 正是这么调的。
+  // 参数改必填后这个模式在类型层面就不存在了；这里把用例改成锁住**替代契约**，
+  // 而不是删掉——删掉的话，「当年这里有过一个无 timeout 模式」这件事就没人知道了。
+  test('替代契约：不给自己的值时用具名默认常量，仍走进程组 + 有界读', async () => {
+    const r = await spawnVersionProbe(['/bin/echo', 'flat'], {
+      timeoutMs: DEFAULT_VERSION_PROBE_TIMEOUT_MS,
+    })
     expect(r.exitCode).toBe(0)
     expect(r.stdout).toContain('flat')
+    expect(r.timedOut).toBe(false)
   })
 
   test('非零退出：stdout 不读（历史语义——输出只在成功时消费）', async () => {
@@ -42,7 +52,11 @@ describe('RFC-284 T8 — 探针形态（缺省）', () => {
   })
 
   test('立死：binary 不存在 → spawn 抛错原样上抛（调用方各自处置）', async () => {
-    expect(spawnVersionProbe(['/definitely/absent/bin-rfc284'])).rejects.toThrow()
+    expect(
+      spawnVersionProbe(['/definitely/absent/bin-rfc284'], {
+        timeoutMs: DEFAULT_VERSION_PROBE_TIMEOUT_MS,
+      }),
+    ).rejects.toThrow()
   })
 
   test('孙进程持 stdout 写端不楔死探针（exit 先行 + 有界读）', async () => {

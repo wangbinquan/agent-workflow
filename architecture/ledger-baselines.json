@@ -43,10 +43,7 @@
       "file": "packages/backend/tests/rfc143-runtime-driver-capability.test.ts",
       "symbol": "ALLOWLIST",
       "baseline": 2,
-      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 清掉两条死条目后只剩 cli/start.ts；T33 把扫描面从「跳过整个 services/runtime」收窄成「只跳驱动实现目录」，公共层第一次进扫描，暴露出 services/runtime/types.ts 并如实入账。",
-      "allowGrowth": {
-        "why": "RFC-317 T33（RT-03）—— 这次涨不是「加了一条豁免绕开问题」，而是**扫描面扩大**：services/runtime 的中立公共层此前整块不被任何守卫看过，收窄豁免后 types.ts 的 opencodePath/claudeCodePath 第一次可见。它镜像的是用户可见的 config schema 字段名，收成 Record<RuntimeKind,…> 要连配置 schema 与迁移一起改，与本条不成比例，故先入账。"
-      }
+      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 清掉两条死条目后只剩 cli/start.ts；T33 把扫描面从「跳过整个 services/runtime」收窄成「只跳驱动实现目录」，公共层第一次进扫描，暴露出 services/runtime/types.ts 并如实入账。"
     },
     {
       "id": "legacy-migration-hashes",

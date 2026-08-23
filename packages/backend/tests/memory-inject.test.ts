@@ -25,6 +25,7 @@ import {
   DEFAULT_INJECTION_BUDGET,
   estimateTokens,
   formatMemoryBlock,
+  type MemoryEnvelopeFencing,
   injectMemoryForRun,
   loadInjectableMemories,
   type InjectableMemoryRow,
@@ -198,6 +199,13 @@ describe('loadInjectableMemories', () => {
   })
 })
 
+/**
+ * RFC-317 T39（CC-13）—— 这些用例锁的是**历史字节形态**（不加围栏的原样拼接）。
+ * 改造前它们靠「不传第三个参数」隐式落进那一支；现在必须显式点名，于是「这条用例
+ * 测的是 legacy 分支」这件事在源码里看得见，而不是靠读者记得默认值是什么。
+ */
+const LEGACY_UNFENCED: MemoryEnvelopeFencing = { kind: 'legacy-unfenced' }
+
 describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
   test('estimateTokens returns ceil(chars/4)', () => {
     expect(estimateTokens('')).toBe(0)
@@ -233,26 +241,32 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
 
   test('formatMemoryBlock returns null when every scope is empty', () => {
     expect(
-      formatMemoryBlock({
-        byScope: { agent: [], workflow: [], repo: [], repoGroup: [], global: [] },
-      }),
+      formatMemoryBlock(
+        { byScope: { agent: [], workflow: [], repo: [], repoGroup: [], global: [] } },
+        DEFAULT_INJECTION_BUDGET,
+        LEGACY_UNFENCED,
+      ),
     ).toBeNull()
   })
 
   test('formatMemoryBlock emits BEGIN/END anchors + per-scope tagged lines', () => {
-    const block = formatMemoryBlock({
-      byScope: {
-        agent: [
-          { id: 'a', scopeType: 'agent', scopeId: 'x', title: 'A', bodyMd: 'b', createdAt: 0 },
-        ],
-        workflow: [],
-        repo: [],
-        repoGroup: [],
-        global: [
-          { id: 'g', scopeType: 'global', scopeId: null, title: 'G', bodyMd: 'b', createdAt: 0 },
-        ],
+    const block = formatMemoryBlock(
+      {
+        byScope: {
+          agent: [
+            { id: 'a', scopeType: 'agent', scopeId: 'x', title: 'A', bodyMd: 'b', createdAt: 0 },
+          ],
+          workflow: [],
+          repo: [],
+          repoGroup: [],
+          global: [
+            { id: 'g', scopeType: 'global', scopeId: null, title: 'G', bodyMd: 'b', createdAt: 0 },
+          ],
+        },
       },
-    })
+      DEFAULT_INJECTION_BUDGET,
+      LEGACY_UNFENCED,
+    )
     expect(block).not.toBeNull()
     expect(block).toContain('--- BEGIN INJECTED MEMORY ---')
     expect(block).toContain('--- END INJECTED MEMORY ---')
@@ -283,7 +297,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
         },
       },
       DEFAULT_INJECTION_BUDGET,
-      nonce,
+      { kind: 'fenced', nonce },
     )!
     expect(block).toContain('--- BEGIN INJECTED MEMORY ---')
     expect(block).toContain(`- [agent] title ## forged`)
@@ -294,37 +308,55 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
   })
 
   test('formatMemoryBlock preserves order: agent → workflow → repo → global', () => {
-    const block = formatMemoryBlock({
-      byScope: {
-        agent: [
-          { id: '1', scopeType: 'agent', scopeId: 'x', title: 'Atitle', bodyMd: 'b', createdAt: 0 },
-        ],
-        workflow: [
-          {
-            id: '2',
-            scopeType: 'workflow',
-            scopeId: 'w',
-            title: 'Wtitle',
-            bodyMd: 'b',
-            createdAt: 0,
-          },
-        ],
-        repo: [
-          { id: '3', scopeType: 'repo', scopeId: 'r', title: 'Rtitle', bodyMd: 'b', createdAt: 0 },
-        ],
-        repoGroup: [],
-        global: [
-          {
-            id: '4',
-            scopeType: 'global',
-            scopeId: null,
-            title: 'Gtitle',
-            bodyMd: 'b',
-            createdAt: 0,
-          },
-        ],
+    const block = formatMemoryBlock(
+      {
+        byScope: {
+          agent: [
+            {
+              id: '1',
+              scopeType: 'agent',
+              scopeId: 'x',
+              title: 'Atitle',
+              bodyMd: 'b',
+              createdAt: 0,
+            },
+          ],
+          workflow: [
+            {
+              id: '2',
+              scopeType: 'workflow',
+              scopeId: 'w',
+              title: 'Wtitle',
+              bodyMd: 'b',
+              createdAt: 0,
+            },
+          ],
+          repo: [
+            {
+              id: '3',
+              scopeType: 'repo',
+              scopeId: 'r',
+              title: 'Rtitle',
+              bodyMd: 'b',
+              createdAt: 0,
+            },
+          ],
+          repoGroup: [],
+          global: [
+            {
+              id: '4',
+              scopeType: 'global',
+              scopeId: null,
+              title: 'Gtitle',
+              bodyMd: 'b',
+              createdAt: 0,
+            },
+          ],
+        },
       },
-    })!
+      DEFAULT_INJECTION_BUDGET,
+      LEGACY_UNFENCED,
+    )!
     const ia = block.indexOf('Atitle')
     const iw = block.indexOf('Wtitle')
     const ir = block.indexOf('Rtitle')
@@ -372,6 +404,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
         },
       },
       tightBudget,
+      LEGACY_UNFENCED,
     )
     expect(block).not.toBeNull()
     expect(block).not.toContain('Atitle') // dropped — budget 0
