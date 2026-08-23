@@ -514,6 +514,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   const dragHandle = pipelineLane.getByRole('button', {
     name: /Drag “Pipeline gates” to change event priority/,
   })
+  await dragHandle.scrollIntoViewIfNeeded()
   const dragHandleBox = await dragHandle.boundingBox()
   const firstSlotBox = await reviewLane.boundingBox()
   expect(dragHandleBox).not.toBeNull()
