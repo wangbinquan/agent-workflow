@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { TaskLaunchOrigin } from '@agent-workflow/shared'
+import type { TaskCatalogVisibility, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startTask, type MaterializedSpace } from '../src/services/task'
@@ -92,6 +92,7 @@ function seedRunningTask(
   h: Harness,
   launchOrigin: TaskLaunchOrigin,
   parentTaskId: string | null = null,
+  catalogVisibility: TaskCatalogVisibility = 'public',
 ): string {
   const id = ulid()
   h.db
@@ -109,6 +110,7 @@ function seedRunningTask(
       inputs: '{}',
       startedAt: Date.now(),
       launchOrigin,
+      catalogVisibility,
       parentTaskId,
       invocationDepth: parentTaskId === null ? 0 : 1,
     })
@@ -153,7 +155,7 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
 
   test('a workflow child and grandchild copy the exact root origin', async () => {
     h = buildHarness()
-    const rootId = seedRunningTask(h, 'webhook')
+    const rootId = seedRunningTask(h, 'webhook', null, 'internal')
     const rootRunId = seedCallRun(h, rootId)
     const childId = ulid()
     let grandchildId: string | undefined
@@ -164,6 +166,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
         db: h.db,
         materializedSpace: inheritedSpace(h, childId, false),
         callLaunch: callLaunch(rootId, rootRunId, 1),
+        // A call child may not escape its parent's catalog boundary.
+        catalogVisibility: 'public',
         triggerContext: { trigger: { webhook: { event_type: 'push' } } },
         awaitScheduler: true,
         workflowLaunchCommitHook: async (event) => {
@@ -197,6 +201,11 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
     expect(origins.get(rootId)).toBe('webhook')
     expect(origins.get(childId)).toBe('webhook')
     expect(origins.get(grandchildId!)).toBe('webhook')
+    const visibilities = h.db
+      .select({ id: tasks.id, catalogVisibility: tasks.catalogVisibility })
+      .from(tasks)
+      .all()
+    expect(new Set(visibilities.map((row) => row.catalogVisibility))).toEqual(new Set(['internal']))
   })
 
   test('concurrent siblings all copy one immutable parent value', async () => {

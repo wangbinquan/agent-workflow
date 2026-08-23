@@ -73,17 +73,24 @@ function source(db: DbClient, sourceId: (typeof EXECUTION_SOURCE_IDS)[number]): 
     sourceId,
     supportsHierarchy: true,
     async list(input) {
-      const page = await listTaskOperationsPage(db, input.actor, {
-        ...(input.view === undefined ? {} : { view: input.view }),
-        ...(input.q === undefined ? {} : { q: input.q }),
-        ...(input.statuses === undefined ? {} : { statuses: input.statuses }),
-        subject: sourceId,
-        ...(input.scope === undefined ? {} : { scope: input.scope }),
-        ...(input.origin === undefined ? {} : { origin: input.origin }),
-        ...(input.parentItemId === undefined ? {} : { parent_id: input.parentItemId }),
-        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
-        ...(input.limit === undefined ? {} : { limit: input.limit }),
-      })
+      const page = await listTaskOperationsPage(
+        db,
+        input.actor,
+        {
+          ...(input.view === undefined ? {} : { view: input.view }),
+          ...(input.q === undefined ? {} : { q: input.q }),
+          ...(input.statuses === undefined ? {} : { statuses: input.statuses }),
+          subject: sourceId,
+          ...(input.scope === undefined ? {} : { scope: input.scope }),
+          ...(input.origin === undefined ? {} : { origin: input.origin }),
+          ...(input.parentItemId === undefined ? {} : { parent_id: input.parentItemId }),
+          ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+          ...(input.limit === undefined ? {} : { limit: input.limit }),
+        },
+        {
+          catalogVisibility: 'public',
+        },
+      )
       return {
         items: page.items.map((item) => normalizeItem(sourceId, item)),
         nextCursor: page.nextCursor,

@@ -6,7 +6,7 @@
 // All `text` columns holding JSON are documented in comments; runtime parses with zod.
 
 import { sql } from 'drizzle-orm'
-import { TASK_LAUNCH_ORIGINS } from '@agent-workflow/shared'
+import { TASK_CATALOG_VISIBILITIES, TASK_LAUNCH_ORIGINS } from '@agent-workflow/shared'
 import {
   type AnySQLiteColumn,
   check,
@@ -1001,6 +1001,13 @@ export const tasks = sqliteTable(
      * launch provenance; every child copies its exact parent value.
      */
     launchOrigin: text('launch_origin', { enum: TASK_LAUNCH_ORIGINS }).notNull().default('manual'),
+    /**
+     * Public catalog membership is independent from execution ownership or
+     * subject. Internal rows remain durable and directly addressable.
+     */
+    catalogVisibility: text('catalog_visibility', { enum: TASK_CATALOG_VISIBILITIES })
+      .notNull()
+      .default('public'),
     // RFC-067: optional per-task Git commit identity. Both NULL → daemon
     // default (legacy behavior). Both set → runner injects GIT_AUTHOR_* /
     // GIT_COMMITTER_* env at spawn time AND startTask writes [user] into the

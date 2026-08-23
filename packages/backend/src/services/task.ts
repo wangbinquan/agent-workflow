@@ -15,6 +15,7 @@ import type {
   Task,
   TaskDiff,
   TaskListItem,
+  TaskCatalogVisibility,
   TaskLaunchOrigin,
   TaskNodeRuns,
   TaskRepo,
@@ -379,6 +380,11 @@ export interface StartTaskDeps {
    */
   secretBox?: SecretBox
   db: DbClient
+  /**
+   * Generic TaskEngine catalog visibility for a root execution. Call children
+   * ignore caller input and inherit the exact persisted parent value.
+   */
+  catalogVisibility?: TaskCatalogVisibility
   /** Test/recovery seam; production uses the structured process-tree reaper. */
   killStaleRunProcessTree?: typeof killStaleRunProcessTree
   /** Override app home (tests). Defaults to `Paths.root`. */
@@ -2815,12 +2821,14 @@ async function startTaskImpl(
       // the child row: child-first commits before cancel's child-set freeze;
       // cancel-first makes this launch fail with no post-terminal child.
       let launchOrigin = rootLaunchOrigin
+      let catalogVisibility: TaskCatalogVisibility = deps.catalogVisibility ?? 'public'
       let sourceTerminationSnapshot = deps.sourceTerminationSnapshot ?? null
       if (deps.callLaunch !== undefined) {
         const parent = tx
           .select({
             status: tasks.status,
             launchOrigin: tasks.launchOrigin,
+            catalogVisibility: tasks.catalogVisibility,
             sourceTerminationBinding: tasks.sourceTerminationBinding,
             sourceTerminationLaunchRev: tasks.sourceTerminationLaunchRev,
             sourceTerminationFence: tasks.sourceTerminationFence,
@@ -2846,6 +2854,7 @@ async function startTaskImpl(
           throw new ConflictError(sourceFenceError, sourceFenceError)
         }
         launchOrigin = parent.launchOrigin
+        catalogVisibility = parent.catalogVisibility
         sourceTerminationSnapshot =
           parent.sourceTerminationBinding === null || parent.sourceTerminationLaunchRev === null
             ? null
@@ -2940,6 +2949,7 @@ async function startTaskImpl(
           // RFC-301: immutable launch-tree source. Roots derive from trusted
           // provenance; children read the exact parent in this transaction.
           launchOrigin,
+          catalogVisibility,
           // RFC-159: the scheduled_tasks row that auto-launched this task (NULL =
           // manual). Stamped atomically with the row so the schedule's run history is
           // durable regardless of any later bookkeeping write.

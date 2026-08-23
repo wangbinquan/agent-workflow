@@ -218,6 +218,7 @@ export function composeAgentActionExecution(deps: {
       try {
         task = await startTask(startInput, {
           ...deps.startDeps,
+          catalogVisibility: 'internal',
           digitalEmployeeLaunch: {
             actionRunId: input.actionRunId,
             snapshotJson: JSON.stringify(

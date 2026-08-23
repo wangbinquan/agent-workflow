@@ -344,6 +344,7 @@ export function composeDigitalEmployeeExecution(deps: {
         }
         const task = await startTask(workflowInput, {
           ...deps.startDeps,
+          catalogVisibility: 'internal',
           digitalEmployeeLaunch: { actionRunId: plan.roundRef },
           ...sceneDeps,
           ...(deps.startDeps.launchProvenance === undefined &&
@@ -362,6 +363,7 @@ export function composeDigitalEmployeeExecution(deps: {
       await ensureDigitalEmployeeHostWorkflow(deps.db)
       const task = await startTask(startInput, {
         ...deps.startDeps,
+        catalogVisibility: 'internal',
         digitalEmployeeLaunch: { actionRunId: plan.roundRef, snapshotJson },
         ...sceneDeps,
         ...(deps.startDeps.launchProvenance === undefined && deps.startDeps.callLaunch === undefined

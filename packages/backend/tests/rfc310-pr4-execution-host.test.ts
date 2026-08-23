@@ -205,6 +205,7 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     // space_kind='internal'、终态后目录健在（borrowed）、未提交 overlay 未损。
     const row = h.db.select().from(tasks).where(eq(tasks.id, launched.executionRef)).get()!
     expect(row.workflowId).toBe(DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID)
+    expect(row.catalogVisibility).toBe('internal')
     expect(row.worktreePath).toBe(h.workspacePath)
     expect(row.spaceKind).toBe('internal')
     expect(JSON.parse(row.platformInputPathsJson!)).toEqual([

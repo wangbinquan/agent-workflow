@@ -9,6 +9,7 @@ import {
   TaskOperationsRootPageSchema,
   canonicalTaskStatuses,
   parseTaskStatusList,
+  type TaskCatalogVisibility,
   type TaskListOrigin,
   type TaskListScope,
   type TaskListSubject,
@@ -49,6 +50,12 @@ export interface TaskOperationsRawQuery {
   parent_id?: string
   cursor?: string
   limit?: string
+}
+
+/** Internal execution-query controls; wire filters remain unchanged. */
+export interface TaskOperationsPageOptions {
+  pipeline?: 'auto' | 'exhaustive'
+  catalogVisibility?: TaskCatalogVisibility
 }
 
 export interface ParsedTaskOperationsQuery {
@@ -172,7 +179,12 @@ function encodeCursor(cursor: TaskPageCursorV1): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
 }
 
-function fingerprint(actor: Actor, filters: TaskOperationsFilters, parentId?: string): string {
+function fingerprint(
+  actor: Actor,
+  filters: TaskOperationsFilters,
+  parentId?: string,
+  catalogVisibility?: TaskCatalogVisibility,
+): string {
   const canonical = JSON.stringify({
     actorUserId: actor.user.id,
     canReadAll: actor.permissions.has('tasks:read:all'),
@@ -183,6 +195,7 @@ function fingerprint(actor: Actor, filters: TaskOperationsFilters, parentId?: st
     subject: filters.subject,
     scope: filters.scope,
     origin: filters.origin,
+    catalogVisibility: catalogVisibility ?? null,
   })
   return sha256Hex(canonical)
 }
@@ -190,6 +203,7 @@ function fingerprint(actor: Actor, filters: TaskOperationsFilters, parentId?: st
 export function parseTaskOperationsQuery(
   actor: Actor,
   raw: TaskOperationsRawQuery,
+  options: Pick<TaskOperationsPageOptions, 'catalogVisibility'> = {},
 ): ParsedTaskOperationsQuery {
   const view = parseEnum<TaskListView>(raw.view, 'all', TaskListViewSchema, 'view')
   const subject = parseEnum<TaskListSubject>(raw.subject, 'all', TaskListSubjectSchema, 'subject')
@@ -224,7 +238,7 @@ export function parseTaskOperationsQuery(
     scope,
     origin,
   }
-  const filterFingerprint = fingerprint(actor, filters, parentId)
+  const filterFingerprint = fingerprint(actor, filters, parentId, options.catalogVisibility)
   const cursor = raw.cursor === undefined ? undefined : decodeCursor(raw.cursor)
   if (cursor !== undefined && cursor.filterFingerprint !== filterFingerprint) {
     cursorError('cursor does not match the current actor or filters')
@@ -246,6 +260,12 @@ function andConditions(conditions: SQL[]): SQL {
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
+
+function catalogVisibilityCondition(alias: string, catalogVisibility?: TaskCatalogVisibility): SQL {
+  if (catalogVisibility === undefined) return sql`1 = 1`
+  const col = (name: string): SQL => sql.raw(`${alias}.${name}`)
+  return sql`${col('catalog_visibility')} = ${catalogVisibility}`
 }
 
 function nonViewCondition(
@@ -460,13 +480,21 @@ function projectedRows(limit: number, cursor: TaskPageCursorV1 | undefined): SQL
   `
 }
 
-function rootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOperationsQuery): SQL {
+function rootQuery(
+  db: DbClient,
+  actor: Actor,
+  parsed: ParsedTaskOperationsQuery,
+  catalogVisibility?: TaskCatalogVisibility,
+): SQL {
   const auth = taskAuthorizationCondition(
     db,
     { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },
     actor,
   )
-  const authorizedIds = sql`SELECT t.id FROM tasks t WHERE ${auth}`
+  const authorizedIds = sql`
+    SELECT t.id FROM tasks t
+    WHERE ${auth} AND ${catalogVisibilityCondition('t', catalogVisibility)}
+  `
   const base = baseCtes(
     authorizedIds,
     nonViewCondition(db, actor, parsed.filters),
@@ -510,11 +538,24 @@ function rootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOperationsQuery
   `
 }
 
-async function assertVisibleParent(db: DbClient, actor: Actor, parentId: string): Promise<void> {
+async function assertVisibleParent(
+  db: DbClient,
+  actor: Actor,
+  parentId: string,
+  catalogVisibility?: TaskCatalogVisibility,
+): Promise<void> {
   const row = await db
     .select({ id: tasks.id })
     .from(tasks)
-    .where(and(eq(tasks.id, parentId), taskAuthorizationCondition(db, tasks, actor)))
+    .where(
+      and(
+        eq(tasks.id, parentId),
+        taskAuthorizationCondition(db, tasks, actor),
+        catalogVisibility === undefined
+          ? undefined
+          : eq(tasks.catalogVisibility, catalogVisibility),
+      ),
+    )
     .limit(1)
   if (row.length === 0) {
     throw new NotFoundError('task-not-found', `task '${parentId}' not found`)
@@ -525,6 +566,7 @@ function childQuery(
   db: DbClient,
   actor: Actor,
   parsed: ParsedTaskOperationsQuery & { parentId: string },
+  catalogVisibility?: TaskCatalogVisibility,
 ): SQL {
   const auth = taskAuthorizationCondition(
     db,
@@ -534,7 +576,9 @@ function childQuery(
   const authorizedIds = sql`
     SELECT t.id, ',' || t.id || ',' AS path, 1 AS depth
     FROM tasks t
-    WHERE t.parent_task_id = ${parsed.parentId} AND ${auth}
+    WHERE t.parent_task_id = ${parsed.parentId}
+      AND ${auth}
+      AND ${catalogVisibilityCondition('t', catalogVisibility)}
     UNION ALL
     SELECT t.id, subtree.path || t.id || ',', subtree.depth + 1
     FROM tasks t
@@ -542,6 +586,7 @@ function childQuery(
     WHERE subtree.depth < ${MAX_TREE_DEPTH}
       AND instr(subtree.path, ',' || t.id || ',') = 0
       AND ${auth}
+      AND ${catalogVisibilityCondition('t', catalogVisibility)}
   `
   const base = baseCtes(
     authorizedIds,
@@ -567,6 +612,7 @@ async function loadAuthorizedChildCounts(
   db: DbClient,
   actor: Actor,
   parentIds: readonly string[],
+  catalogVisibility?: TaskCatalogVisibility,
 ): Promise<Map<string, number>> {
   if (parentIds.length === 0) return new Map()
   const rows = await db
@@ -576,6 +622,9 @@ async function loadAuthorizedChildCounts(
       and(
         inArray(tasks.parentTaskId, [...parentIds]),
         taskAuthorizationCondition(db, defaultTaskAuthorizationRef(), actor),
+        catalogVisibility === undefined
+          ? undefined
+          : eq(tasks.catalogVisibility, catalogVisibility),
       ),
     )
   const counts = new Map<string, number>()
@@ -613,6 +662,7 @@ async function mapRows(
   actor: Actor,
   rawRows: OperationsSqlRow[],
   kind: 'root' | 'children',
+  catalogVisibility?: TaskCatalogVisibility,
 ): Promise<TaskOperationsListItem[]> {
   const rows = rawRows.flatMap((row): CompleteOperationsSqlRow[] => {
     if (row.id === null) return []
@@ -627,6 +677,7 @@ async function mapRows(
     db,
     actor,
     rows.map((row) => row.id),
+    catalogVisibility,
   )
   const failureCodes = await loadTaskFailureCodes(
     db,
@@ -908,7 +959,12 @@ export async function hasUnrootedTasks(db: DbClient): Promise<boolean> {
  * 受限 actor 仍走旧管线：他们的分支聚合按**可见性裁剪后**的树计算（不可见后代
  * 既不贡献 recency 也不计数），共享列答不了——与默认视图快路径同一条边界。
  */
-function fastFilteredRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOperationsQuery): SQL {
+function fastFilteredRootQuery(
+  db: DbClient,
+  actor: Actor,
+  parsed: ParsedTaskOperationsQuery,
+  catalogVisibility?: TaskCatalogVisibility,
+): SQL {
   const authOf = (alias: string): SQL =>
     taskAuthorizationCondition(
       db,
@@ -936,7 +992,9 @@ function fastFilteredRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOpe
         t.status,
         ${openAlertExists} AS has_open_alert
       FROM tasks t
-      WHERE ${authOf('t')} AND ${nonView}
+      WHERE ${authOf('t')}
+        AND ${catalogVisibilityCondition('t', catalogVisibility)}
+        AND ${nonView}
     ),
     matches AS MATERIALIZED (
       SELECT nvm.* FROM non_view_matches nvm
@@ -963,7 +1021,7 @@ function fastFilteredRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOpe
       SELECT t.id, t.parent_task_id
       FROM tasks t
       JOIN page_roots pr ON pr.rid = t.root_task_id
-      WHERE ${authOf('t')}
+      WHERE ${authOf('t')} AND ${catalogVisibilityCondition('t', catalogVisibility)}
     ),
     -- Q = 匹配行 ∪ 其祖先（自底向上闭包；UNION 去重顺带防成环）。
     qualified(id) AS (
@@ -1048,39 +1106,37 @@ function fastFilteredRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOpe
   `
 }
 
-/** 只有 oracle 测试会传 'exhaustive'：新快路径一旦上线，比对的「慢侧」如果不
- *  强制走旧管线，就会被同一条快路径服务，oracle 当场退化成快-vs-快、永远相等。
- *  生产路径永远是 'auto'。 */
-export interface TaskOperationsPageOptions {
-  pipeline?: 'auto' | 'exhaustive'
-}
-
 export async function listTaskOperationsPage(
   db: DbClient,
   actor: Actor,
   rawQuery: TaskOperationsRawQuery,
   options: TaskOperationsPageOptions = {},
 ): Promise<TaskOperationsPage> {
-  const parsed = parseTaskOperationsQuery(actor, rawQuery)
-  if (parsed.parentId !== undefined) await assertVisibleParent(db, actor, parsed.parentId)
+  const parsed = parseTaskOperationsQuery(actor, rawQuery, options)
+  if (parsed.parentId !== undefined) {
+    await assertVisibleParent(db, actor, parsed.parentId, options.catalogVisibility)
+  }
+
+  const defaultFastPath =
+    options.catalogVisibility === undefined && isDefaultView(actor, parsed.filters)
 
   const filteredFastPath =
     parsed.parentId === undefined &&
     options.pipeline !== 'exhaustive' &&
-    !isDefaultView(actor, parsed.filters) &&
+    !defaultFastPath &&
     canUseFilteredFastPath(actor) &&
     !(await hasUnrootedTasks(db))
 
   const rawRows = (await db.all(
     parsed.parentId === undefined
       ? options.pipeline === 'exhaustive'
-        ? rootQuery(db, actor, parsed)
-        : isDefaultView(actor, parsed.filters)
+        ? rootQuery(db, actor, parsed, options.catalogVisibility)
+        : defaultFastPath
           ? fastDefaultRootQuery(db, actor, parsed)
           : filteredFastPath
-            ? fastFilteredRootQuery(db, actor, parsed)
-            : rootQuery(db, actor, parsed)
-      : childQuery(db, actor, { ...parsed, parentId: parsed.parentId }),
+            ? fastFilteredRootQuery(db, actor, parsed, options.catalogVisibility)
+            : rootQuery(db, actor, parsed, options.catalogVisibility)
+      : childQuery(db, actor, { ...parsed, parentId: parsed.parentId }, options.catalogVisibility),
   )) as OperationsSqlRow[]
 
   const pageRows = rawRows.filter((row) => row.id !== null)
@@ -1091,6 +1147,7 @@ export async function listTaskOperationsPage(
     actor,
     visibleRows,
     parsed.parentId === undefined ? 'root' : 'children',
+    options.catalogVisibility,
   )
   let nextCursor: string | null = null
   if (hasNext) {

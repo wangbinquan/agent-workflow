@@ -53,6 +53,15 @@ export const TASK_LAUNCH_ORIGINS = ['manual', 'scheduled', 'event', 'webhook', '
 export const TaskLaunchOriginSchema = z.enum(TASK_LAUNCH_ORIGINS)
 export type TaskLaunchOrigin = z.infer<typeof TaskLaunchOriginSchema>
 
+/**
+ * Persisted visibility of a TaskEngine execution in public task catalogs.
+ * Internal executions remain addressable audit records, but catalog sources
+ * omit them from public pagination, hierarchy and facets.
+ */
+export const TASK_CATALOG_VISIBILITIES = ['public', 'internal'] as const
+export const TaskCatalogVisibilitySchema = z.enum(TASK_CATALOG_VISIBILITIES)
+export type TaskCatalogVisibility = z.infer<typeof TaskCatalogVisibilitySchema>
+
 export const TASK_LIST_ORIGINS = ['all', ...TASK_LAUNCH_ORIGINS] as const
 export const TaskListOriginSchema = z.enum(TASK_LIST_ORIGINS)
 export type TaskListOrigin = z.infer<typeof TaskListOriginSchema>
