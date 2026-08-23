@@ -65,6 +65,15 @@ export interface EmployeeTypePackageRegistration {
 export interface DigitalEmployeePlatformToolCatalogParticipant {
   listJson(typeRefJson: string, workItemRef: string): string
   getRevisionJson(refJson: string): string | null
+  /**
+   * Provider-owned Type Package upgrade mapping. The common employee OS never
+   * parses provider-private tool IDs or guesses by display name.
+   */
+  resolveCompatibleRevisionJson?(
+    sourceRefJson: string,
+    targetTypeRefJson: string,
+    workItemRef: string,
+  ): string | null
   isPlatformTool(toolId: string): boolean
 }
 

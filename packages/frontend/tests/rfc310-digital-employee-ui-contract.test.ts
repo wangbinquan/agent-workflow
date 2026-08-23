@@ -14,6 +14,25 @@ const read = (file: string): string =>
   readFileSync(resolve(import.meta.dirname, '..', 'src', file), 'utf8')
 
 describe('RFC-310 Digital Employee OS information architecture', () => {
+  test('type package upgrades never become a user migration action', () => {
+    const typePage = read('routes/digital-employees.$typeRef.tsx')
+
+    for (const retiredSurface of [
+      'digital-employee-upgrade-candidates',
+      '/upgrade-candidates',
+      '/employees/${encodeURIComponent(editing.id)}/upgrade',
+      'Upgrade to current version',
+      '升级到当前版本',
+      'Explicit upgrade',
+      '显式升级',
+      'legacy-job-template-upgrades',
+      'legacy-digital-employee-upgrades',
+      'upgradingJob',
+    ]) {
+      expect(typePage).not.toContain(retiredSurface)
+    }
+  })
+
   test('tool configuration is anchored to a selected work item on the fixed graph', () => {
     const typePage = read('routes/digital-employees.$typeRef.tsx')
     const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')

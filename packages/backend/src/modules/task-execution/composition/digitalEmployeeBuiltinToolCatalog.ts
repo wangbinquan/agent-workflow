@@ -85,6 +85,27 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
     descriptorSchema.parse(JSON.parse(value) as unknown),
   )
   const prefix = 'platform:employee-tool:'
+  const parseIdentity = (toolId: string) => {
+    if (!toolId.startsWith(prefix)) return null
+    const [typeId, revisionText, workItemRef, ...agentParts] = toolId
+      .slice(prefix.length)
+      .split(':')
+    const revision = Number(revisionText)
+    const agentId = agentParts.reduce(
+      (value, part) => (value === '' ? part : `${value}:${part}`),
+      '',
+    )
+    if (
+      typeId === undefined ||
+      workItemRef === undefined ||
+      agentId === '' ||
+      !Number.isInteger(revision) ||
+      revision <= 0
+    ) {
+      return null
+    }
+    return { typeId, revision, workItemRef, agentId }
+  }
 
   const records = () =>
     descriptors.flatMap((descriptor) =>
@@ -216,6 +237,39 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
           candidate.selection === 'selectable',
       )
       if (record === undefined) return null
+      return JSON.stringify({
+        ref,
+        content: record.content,
+        contentDigest: digest(record.content),
+        validationReceipt: record.validationReceipt,
+        state: 'published',
+        publishedAt: record.updatedAt,
+        publishedBy: record.ownerUserId,
+      })
+    },
+    resolveCompatibleRevisionJson(sourceRefJson, targetTypeRefJson, workItemRef) {
+      const sourceRef = exactRefSchema.parse(JSON.parse(sourceRefJson) as unknown)
+      const targetTypeRef = typeRefSchema.parse(JSON.parse(targetTypeRefJson) as unknown)
+      const identity = parseIdentity(sourceRef.id)
+      if (
+        identity === null ||
+        identity.typeId !== targetTypeRef.typeId ||
+        identity.revision >= targetTypeRef.revision ||
+        identity.workItemRef !== workItemRef
+      ) {
+        return null
+      }
+      const record = records().find(
+        (candidate) =>
+          candidate.typeRef.typeId === targetTypeRef.typeId &&
+          candidate.typeRef.revision === targetTypeRef.revision &&
+          candidate.workItemRef === workItemRef &&
+          candidate.selection === 'selectable' &&
+          candidate.content.implementation.kind === 'agent' &&
+          candidate.content.implementation.agentRef.id === identity.agentId,
+      )
+      if (record === undefined || record.publishedRevision === null) return null
+      const ref = { id: record.id, revision: record.publishedRevision }
       return JSON.stringify({
         ref,
         content: record.content,

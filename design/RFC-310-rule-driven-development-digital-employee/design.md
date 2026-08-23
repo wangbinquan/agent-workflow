@@ -25,6 +25,9 @@
 > 无前后顺序的来源节点，并让两者以独立连线向右汇入“准备工作材料”；现有 `humanReview` 则投影为“分析并实现”与
 > “分析 → 人工审核修复计划 → 实现”两条互斥路径。
 > 两条路径汇合后的“校验并冻结代码修改”保持在同一主行。目标是不改变 WorkStart、20 个可执行工作项或 MR 修绿执行链。详见 §22。
+>
+> **2026-08-23 PR-28（用户已确认）**：`digital-employee/application` 在类型注册后执行通用自动兼容升级，幂等迁移 exact 工具、
+> 岗位与员工发布闭包；transport 删除用户手工升级面。兼容判定、失败诊断与持久化都不进入 bootstrap 业务分支，详见 §23。
 
 ## 0A. 数字员工操作系统目标架构
 
@@ -868,11 +871,12 @@ contract 一律拒绝，避免前端隐藏字段漂移。工作项为 `system` �
 幂等取得内部 `ExecutionPolicyRevision` 并 pin；Reaction、tool registration、job template 和 employee definition 都没有 retry
 字段。固定 backoff/deadline 属于平台合同，不形成第二份可编辑策略；管理员修改 Limits 也不能静默改变正在看护 MR 的 Case。
 
-版本与退役规则固定如下：Type Package 或 WorkContract 升版不会继承旧 registration 的兼容性；新分类 revision 必须生成新的
-registration validation receipt，再发布对应岗位模板/员工 revision。`retired` registration 不出现在 picker，也阻断引用它的新
-员工发布和新 Case admission；已经 active 的 Case 保留 frozen registration，在底层 exact resource 仍可解析且 authority 有效时继续，
-不可用则进入具名 dependency block，禁止自动换同名工具。Agent/Workflow archive、ACL/Connection 变化在 readiness/admission 与每轮
-freeze 重验；任何替换都经 employee/Case upgrade preview/apply，不做名字匹配 fallback。
+版本与退役规则固定如下：Type Package 升版由 `digital-employee/application` 对旧发布闭包执行确定性兼容预检；只有 WorkContract exact
+不变、旧 receipt 有效且所有引用可在目标包闭合时，才自动生成目标 registration/job/employee revision。平台工具的 successor 必须由工具
+owner 按稳定实现身份显式解析，公共层不拆 ID、不按显示名匹配。`retired` registration 不迁移，也不进入新选择和新 Case admission；已经
+active 的 Case 保留 frozen registration，在底层 exact resource 仍可解析且 authority 有效时继续，不可用则进入具名 dependency block。
+Agent/Workflow archive、ACL/Connection 变化仍在 readiness/admission 与每轮 freeze 重验；不兼容闭包由后续平台版本提供程序化迁移规则，
+不暴露用户手工 preview/apply 或名字 fallback。
 
 ### 0A.14 平台执行契约
 
@@ -4667,3 +4671,54 @@ interface ReviewedPathDefinition {
 `prepare-materials`；材料准备被堆到来源列下方；入口绕过材料准备；人工审核排在“实现”
 之后而不是处于“分析”和“实现”之间；`prepare-change` 被辅助节点挤到第二行；页面显示“已启用”却未读取权威规则；无权限用户能编辑规则；review
 卡拥有工具槽或独立 runtime writer；旧 revision digest 漂移；只补截图而没有真实 Webhook 到修绿的纵向回归。
+
+## 23. 类型包自动兼容升级（2026-08-23）
+
+### 23.1 Owner、触发点与结果
+
+升级属于 `digital-employee` bounded context。`DigitalEmployeeAuthoringService` 在所有 code-owned Type Package 完成
+`ensureTypePackage` 后、当前 launch inventory 对外可见前，按 `(typeId, targetRevision)` 扫描旧发布闭包。bootstrap 只注入类型包、平台工具
+successor participant 与诊断 sink，不查询业务表、不写 `if typeId === development`。HTTP/MCP 不提供 upgrade command。
+
+每条成功迁移保持 employee stable id，追加 `DigitalEmployeeDefinitionRevision` 与新的 WorkScope revision；目标工具和岗位使用内容寻址的
+确定性迁移 identity，故 daemon 重启、崩溃后重放和多个旧 revision 收敛到同一等价内容时都只生成一份目标资源。旧 row/revision 不删除、不
+原地改写，active Case 继续解析原 exact refs；新 Case inventory 只读取目标 revision。
+
+### 23.2 兼容预言
+
+兼容预言只接受可程序证明的闭包：
+
+1. source/target `typeId` 相等且 target revision 更高；目标 runtime codec 能解析员工冻结 work scope；
+2. 每个旧 tool binding 的 WorkItem、slot、role 仍存在；自定义工具的 target WorkContract 与 source descriptor 中的 exact contract
+   canonical-equal，旧 revision 为 `published`、receipt 为 `valid`；
+3. 平台工具由 `DigitalEmployeePlatformToolCatalogParticipant.resolveCompatibleRevision` 返回目标类型下同 provider identity 的已验证 exact
+   revision；公共数字员工模块不得解析 provider 私有 ID；
+4. 重写后的岗位对 required/optional slot、ordered dispatch、reaction lane order、collaboration contract 重新执行当前发布校验；
+5. 重写后的员工对岗位 ref、override、协同绑定、scope codec 和完整 compiled closure 重新执行当前编译器。
+
+显示名称、说明、布局 order、`workIngresses`、`humanReview.reviewedPath` 等不进入运行闭包的增量不会单独阻断；但它们也不能被用作兼容证据。
+WorkContract、slot/role、dispatch route、invocation contract 或 scope codec 任一不闭合即返回 stable reason code，不做部分猜测。
+
+### 23.3 持久化与故障语义
+
+迁移顺序固定为 exact tool revision → job revision → employee revision，每一步使用现有 SQLite transaction 保证单资源原子可见。工具/岗位迁移 ID
+由 target type ref、owner 与规范化目标内容计算；已存在同 identity 且内容一致视为 replay，内容冲突 fail closed。员工更新使用
+`expectedTypeRef` CAS，竞争或重复启动只允许一个新 revision 成功。某一闭包不兼容时不改该 employee；已成功的独立闭包保持有效，下一次启动
+继续处理剩余项。
+
+岗位显示名不是兼容证据：若目标 revision 已存在同名且内容或 owner 不同的岗位，平台不得覆盖或要求用户改名，而是按
+`source typeRef + target content digest` 生成不超过 200 字符的确定性迁移名并继续。已有同名同内容发布岗位直接复用；中断后留下的相同内容寻址
+草稿继续发布。只有内容寻址 identity 自身发生不可能等价的冲突时才 fail closed。
+
+失败通过注入的运维诊断 sink 记录 `typeRef/resourceKind/resourceId/reasonCode/detail`，不作为用户待办，不出现在员工页面。不得保留
+`upgrade-candidates`、`employees/:id/upgrade` 或前端“升级到当前版本”路径。后续应用版本若改变不变量，必须先扩兼容预言或提供 code-owned、
+可回放的迁移 adapter，再发布新 Type Package revision。
+
+### 23.4 测试矩阵
+
+- 空库与无旧闭包：零写入；重复启动：工具/岗位/员工 revision 与行数不变；
+- presentation-only / ingress / reviewedPath 增量：自定义工具、平台工具、岗位、employee 自动迁移且 stable id/owner/visibility/scope 保持；
+- 多个旧 revision 的等价工具/岗位内容收敛为一份目标资源；不等价同名岗位不覆盖并自动使用确定性迁移名；
+- WorkContract、slot/role、dispatch、retired tool、scope codec、平台 successor 缺失分别产生 stable diagnosis，employee 保持旧 pin；
+- active Case 继续引用旧 definition revision；launch inventory 只出现已自动迁移的目标 revision；
+- HTTP/API contract 与前端源码/组件测试证明 upgrade-candidates、单员工 upgrade route、按钮和手工编辑状态全部退役。

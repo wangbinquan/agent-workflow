@@ -3,7 +3,10 @@ import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
-import { DigitalEmployeeAuthoringService } from './application/authoringService'
+import {
+  DigitalEmployeeAuthoringService,
+  type AutomaticTypeUpgradeIssue,
+} from './application/authoringService'
 import { DigitalEmployeeRuntimeService } from './application/runtimeService'
 import type {
   EmployeeInputArtifactPort,
@@ -165,9 +168,6 @@ export interface DigitalEmployeeCommands {
     readonly body: unknown
     readonly actorUserId: string | null
   }): EmployeeDefinitionView
-  upgradeEmployee(
-    input: Parameters<DigitalEmployeeAuthoringService['upgradeEmployeeDefinition']>[0],
-  ): ExactResourceRef
 }
 
 export interface DigitalEmployeeQueries {
@@ -179,10 +179,8 @@ export interface DigitalEmployeeQueries {
     input: Parameters<DigitalEmployeeAuthoringService['getToolAuthoring']>[0],
   ): Promise<ToolAuthoringView>
   listJobTemplates(ref: EmployeeTypeRef): JobTemplateView[]
-  listJobTemplateUpgradeCandidates(ref: EmployeeTypeRef): JobTemplateView[]
   listEmployees(ref?: EmployeeTypeRef): EmployeeDefinitionView[]
   listLaunchableEmployees(): EmployeeDefinitionView[]
-  listEmployeeUpgradeCandidates(ref: EmployeeTypeRef): EmployeeDefinitionView[]
   getEmployee(id: string): EmployeeDefinitionView
   /**
    * RFC-317 T8 —— 只读 ACL 三元组的**窄查询**。
@@ -262,6 +260,7 @@ export interface ComposeDigitalEmployeeOptions {
   readonly inputArtifacts?: EmployeeInputArtifactPort
   readonly executionContracts: ExecutionContractParticipant
   readonly platformTools?: DigitalEmployeePlatformToolCatalogParticipant
+  readonly onAutomaticUpgradeIssue?: (issue: AutomaticTypeUpgradeIssue) => void
   /** Read-only projection of Settings -> Limits; never employee-local config. */
   readonly retryLimits?: EmployeeRetryLimitsPort
   readonly runtime?: {
@@ -359,6 +358,7 @@ function platformToolCatalogOf(
     return {
       list: () => [],
       getRevision: () => null,
+      resolveCompatibleRevision: () => null,
       isPlatformTool: () => false,
     }
   }
@@ -371,6 +371,16 @@ function platformToolCatalogOf(
     getRevision(ref) {
       const encoded = participant.getRevisionJson(JSON.stringify(ref))
       return encoded === null
+        ? null
+        : platformToolRevisionSchema.parse(JSON.parse(encoded) as unknown)
+    },
+    resolveCompatibleRevision(input) {
+      const encoded = participant.resolveCompatibleRevisionJson?.(
+        JSON.stringify(input.sourceRef),
+        JSON.stringify(input.targetTypeRef),
+        input.workItemRef,
+      )
+      return encoded == null
         ? null
         : platformToolRevisionSchema.parse(JSON.parse(encoded) as unknown)
     },
@@ -417,6 +427,9 @@ export function composeDigitalEmployee(
     programArtifacts: options.programArtifacts ?? createProgramArtifactStore(options.appHome),
     executionContracts: options.executionContracts,
     platformTools,
+    ...(options.onAutomaticUpgradeIssue === undefined
+      ? {}
+      : { onAutomaticUpgradeIssue: options.onAutomaticUpgradeIssue }),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.id === undefined ? {} : { id: options.id }),
   })
@@ -538,12 +551,8 @@ export function composeDigitalEmployee(
         return { ...toolView(authoring.record), body: authoring.body }
       },
       listJobTemplates: (ref) => service.listJobTemplates(ref).map(jobView),
-      listJobTemplateUpgradeCandidates: (ref) =>
-        service.listJobTemplateUpgradeCandidates(ref).map(jobView),
       listEmployees: (ref) => service.listEmployeeDefinitions(ref).map(employeeView),
       listLaunchableEmployees: () => service.listLaunchableEmployeeDefinitions().map(employeeView),
-      listEmployeeUpgradeCandidates: (ref) =>
-        service.listEmployeeDefinitionUpgradeCandidates(ref).map(employeeView),
       getEmployee: (id) => employeeView(service.getEmployeeDefinition(id)),
       getEmployeeAcl: (id) => {
         // 走 store 的**窄查询**（只选三列，不解析配置内容）：
@@ -593,7 +602,6 @@ export function composeDigitalEmployee(
           }),
         ),
       updateEmployee: (input) => employeeView(service.updateEmployeeDefinition(input)),
-      upgradeEmployee: (input) => service.upgradeEmployeeDefinition(input),
     },
     runtime:
       runtimeService === null

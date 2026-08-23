@@ -451,9 +451,11 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         )
         .all()
         .map(toJobTemplate)
-        .sort((a, b) => {
-          const revision = b.typeRef.revision - a.typeRef.revision
-          return revision === 0 ? a.name.localeCompare(b.name) : revision
+        .sort((left, right) => {
+          const revision = right.typeRef.revision - left.typeRef.revision
+          return revision === 0
+            ? left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
+            : revision
         })
     },
 

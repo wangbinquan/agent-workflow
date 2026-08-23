@@ -88,8 +88,18 @@ export interface DigitalEmployeeAuthoringServiceDependencies {
   /** Platform-owned IO contract authority; there is no per-type fallback path. */
   readonly executionContracts: ExecutionContractParticipant
   readonly platformTools?: DigitalEmployeePlatformToolCatalog
+  readonly onAutomaticUpgradeIssue?: (issue: AutomaticTypeUpgradeIssue) => void
   readonly now?: () => number
   readonly id?: () => string
+}
+
+export interface AutomaticTypeUpgradeIssue {
+  readonly sourceTypeRef: EmployeeTypeRef
+  readonly targetTypeRef: EmployeeTypeRef
+  readonly resourceKind: 'job-template' | 'employee'
+  readonly resourceId: string
+  readonly reasonCode: string
+  readonly detail: string
 }
 
 function typeKey(ref: EmployeeTypeRef): string {
@@ -129,6 +139,29 @@ function validationFailure(code: string, detail: string): ContractValidationChec
 
 function nextRevision(current: number | null): number {
   return (current ?? 0) + 1
+}
+
+function automaticUpgradeResourceId(kind: 'tool' | 'job', identity: unknown): string {
+  return `auto-upgrade-${kind}-${contentDigest(identity).slice(0, 40)}`
+}
+
+function automaticUpgradeJobName(input: {
+  readonly sourceName: string
+  readonly sourceTypeRef: EmployeeTypeRef
+  readonly content: EmployeeJobTemplateContent
+}): string {
+  const suffix = ` · migrated ${typeKey(input.sourceTypeRef)}-${contentDigest(input.content).slice(0, 8)}`
+  return `${input.sourceName.slice(0, Math.max(1, 200 - suffix.length))}${suffix}`
+}
+
+class AutomaticTypeUpgradeError extends Error {
+  constructor(
+    readonly reasonCode: string,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'AutomaticTypeUpgradeError'
+  }
 }
 
 function mergeCollaborationBindings(input: {
@@ -208,6 +241,7 @@ export class DigitalEmployeeAuthoringService {
   readonly #programArtifacts: ProgramArtifactPort
   readonly #executionContracts: ExecutionContractParticipant
   readonly #platformTools: DigitalEmployeePlatformToolCatalog
+  readonly #onAutomaticUpgradeIssue: (issue: AutomaticTypeUpgradeIssue) => void
   readonly #now: () => number
   readonly #id: () => string
 
@@ -217,6 +251,7 @@ export class DigitalEmployeeAuthoringService {
     this.#programArtifacts = deps.programArtifacts
     this.#executionContracts = deps.executionContracts
     this.#platformTools = deps.platformTools ?? EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG
+    this.#onAutomaticUpgradeIssue = deps.onAutomaticUpgradeIssue ?? (() => {})
     this.#now = deps.now ?? Date.now
     this.#id = deps.id ?? ulid
 
@@ -243,6 +278,22 @@ export class DigitalEmployeeAuthoringService {
         state: 'published',
         registeredAt: this.#now(),
       })
+    }
+
+    const latestRuntimeByType = new Map<string, EmployeeTypeRuntimePackage>()
+    for (const runtime of deps.typePackages) {
+      const current = latestRuntimeByType.get(runtime.descriptor.typeRef.typeId)
+      if (
+        current === undefined ||
+        current.descriptor.typeRef.revision < runtime.descriptor.typeRef.revision
+      ) {
+        latestRuntimeByType.set(runtime.descriptor.typeRef.typeId, runtime)
+      }
+    }
+    for (const runtime of [...latestRuntimeByType.values()].sort((left, right) =>
+      left.descriptor.typeRef.typeId.localeCompare(right.descriptor.typeRef.typeId),
+    )) {
+      this.#automaticallyUpgradeCompatibleClosures(runtime.descriptor.typeRef)
     }
 
     this.#store.ensureExecutionPolicy({
@@ -287,6 +338,584 @@ export class DigitalEmployeeAuthoringService {
 
   getAuthoringManifest(ref: EmployeeTypeRef) {
     return this.#descriptor(ref).authoringManifest
+  }
+
+  #automaticallyUpgradeCompatibleClosures(targetTypeRef: EmployeeTypeRef): void {
+    const templates = this.#store
+      .listJobTemplatesByTypeId(targetTypeRef.typeId)
+      .filter(
+        (template) =>
+          template.publishedRevision !== null && template.typeRef.revision < targetTypeRef.revision,
+      )
+    for (const template of templates) {
+      const publishedRevision = template.publishedRevision
+      if (publishedRevision === null) continue
+      try {
+        this.#automaticallyUpgradeJobTemplate(
+          { id: template.id, revision: publishedRevision },
+          targetTypeRef,
+        )
+      } catch (error) {
+        this.#reportAutomaticUpgradeIssue(
+          {
+            sourceTypeRef: template.typeRef,
+            targetTypeRef,
+            resourceKind: 'job-template',
+            resourceId: template.id,
+          },
+          error,
+        )
+      }
+    }
+
+    const candidates = this.#store
+      .listEmployeeDefinitions()
+      .filter(
+        (employee) =>
+          employee.currentRevision !== null &&
+          employee.typeRef.typeId === targetTypeRef.typeId &&
+          employee.typeRef.revision < targetTypeRef.revision,
+      )
+      .sort(
+        (left, right) =>
+          right.typeRef.revision - left.typeRef.revision || left.id.localeCompare(right.id),
+      )
+
+    for (const employee of candidates) {
+      try {
+        this.#automaticallyUpgradeEmployee(employee, targetTypeRef)
+      } catch (error) {
+        this.#reportAutomaticUpgradeIssue(
+          {
+            sourceTypeRef: employee.typeRef,
+            targetTypeRef,
+            resourceKind: 'employee',
+            resourceId: employee.id,
+          },
+          error,
+        )
+      }
+    }
+  }
+
+  #reportAutomaticUpgradeIssue(
+    resource: Omit<AutomaticTypeUpgradeIssue, 'reasonCode' | 'detail'>,
+    error: unknown,
+  ): void {
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+    const issue: AutomaticTypeUpgradeIssue = {
+      ...resource,
+      reasonCode:
+        error instanceof AutomaticTypeUpgradeError
+          ? error.reasonCode
+          : typeof errorCode === 'string'
+            ? errorCode
+            : `${resource.resourceKind}-closure-incompatible`,
+      detail: error instanceof Error ? error.message : String(error),
+    }
+    try {
+      this.#onAutomaticUpgradeIssue(issue)
+    } catch {
+      // Diagnostics must never turn a compatible/incompatible decision into a
+      // second business outcome. The caller owns sink reliability.
+    }
+  }
+
+  #automaticallyUpgradeEmployee(
+    employee: EmployeeDefinitionRecord,
+    targetTypeRef: EmployeeTypeRef,
+  ): void {
+    const runtime = this.#runtime(targetTypeRef)
+    try {
+      runtime.parseWorkScope(employee.configuration.workScope)
+    } catch (error) {
+      throw new AutomaticTypeUpgradeError(
+        'work-scope-incompatible',
+        `target work-scope codec rejected ${employee.id}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+    const jobTemplateRef = this.#automaticallyUpgradeJobTemplate(
+      employee.configuration.jobTemplateRef,
+      targetTypeRef,
+    )
+    for (const binding of employee.configuration.collaborationOverrides) {
+      this.#assertAutomaticCollaborationCompatibility(employee.typeRef, targetTypeRef, binding)
+    }
+    const toolOverrides = employee.configuration.toolOverrides.map((binding) => ({
+      ...binding,
+      registrationRef: this.#automaticallyUpgradeToolRevision(
+        binding.registrationRef,
+        employee.typeRef,
+        targetTypeRef,
+        binding.workItemRef,
+      ),
+    }))
+    const configuration = digitalEmployeeDefinitionDraftSchema.parse({
+      ...employee.configuration,
+      typeRef: targetTypeRef,
+      jobTemplateRef,
+      toolOverrides,
+    })
+    const candidate: EmployeeDefinitionRecord = {
+      ...employee,
+      typeRef: targetTypeRef,
+      configuration,
+      updatedAt: this.#now(),
+    }
+    const compiled = this.#compileEmployeeDefinition(candidate, null)
+    this.#store.saveEmployeeDefinition({
+      ...compiled,
+      definitionMutation: {
+        kind: 'update',
+        expectedTypeRef: employee.typeRef,
+        targetTypeRef,
+        name: employee.name,
+        configuration,
+        updatedAt: compiled.revision.createdAt,
+      },
+    })
+  }
+
+  #automaticallyUpgradeToolRevision(
+    sourceRef: ExactResourceRef,
+    sourceTypeRef: EmployeeTypeRef,
+    targetTypeRef: EmployeeTypeRef,
+    workItemRef: string,
+  ): ExactResourceRef {
+    if (this.#platformTools.isPlatformTool(sourceRef.id)) {
+      this.#assertAutomaticPlatformToolContractCompatibility(
+        sourceTypeRef,
+        targetTypeRef,
+        workItemRef,
+      )
+      const successor = this.#platformTools.resolveCompatibleRevision({
+        sourceRef,
+        targetTypeRef,
+        workItemRef,
+      })
+      if (successor === null) {
+        throw new AutomaticTypeUpgradeError(
+          'platform-tool-successor-missing',
+          `platform tool has no compatible successor: ${sourceRef.id}@${sourceRef.revision}`,
+        )
+      }
+      this.#assertTargetToolRevision(successor, targetTypeRef, workItemRef)
+      return successor.ref
+    }
+
+    const source = this.#store.getToolRevision(sourceRef)
+    const sourceRecord = this.#store.getTool(sourceRef.id)
+    if (
+      source === null ||
+      sourceRecord === null ||
+      source.state !== 'published' ||
+      sourceRecord.retiredAt !== null ||
+      !sameType(source.content.typeRef, sourceTypeRef)
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-revision-unavailable',
+        `custom tool is not an active published revision: ${sourceRef.id}@${sourceRef.revision}`,
+      )
+    }
+    if (
+      source.content.typeRef.typeId !== targetTypeRef.typeId ||
+      source.content.typeRef.revision >= targetTypeRef.revision ||
+      source.content.workItemRef !== workItemRef
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-source-type-invalid',
+        `custom tool does not belong to an older ${targetTypeRef.typeId}/${workItemRef} closure`,
+      )
+    }
+    if (source.validationReceipt.status !== 'valid') {
+      throw new AutomaticTypeUpgradeError(
+        'tool-validation-invalid',
+        `custom tool validation receipt is not valid: ${sourceRef.id}@${sourceRef.revision}`,
+      )
+    }
+
+    const sourceDescriptor = this.#descriptor(source.content.typeRef)
+    const targetDescriptor = this.#descriptor(targetTypeRef)
+    const sourceContract = findWorkContract(sourceDescriptor, source.content.workContractRef)
+    const targetItem = findWorkItem(targetDescriptor, workItemRef)
+    const targetContract =
+      targetItem === null ? null : findWorkContract(targetDescriptor, targetItem.workContractRef)
+    if (
+      sourceContract === null ||
+      targetItem === null ||
+      targetItem.nodeKind !== 'business-tool' ||
+      targetContract === null ||
+      contentDigest(sourceContract) !== contentDigest(targetContract)
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'work-contract-changed',
+        `work contract changed for ${targetTypeRef.typeId}/${workItemRef}`,
+      )
+    }
+    if (findToolRole(targetItem, source.content.roleRef) === null) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-role-changed',
+        `tool role is not present in the target work item: ${source.content.roleRef}`,
+      )
+    }
+
+    const content = toolRegistrationContentSchema.parse({
+      ...source.content,
+      typeRef: targetTypeRef,
+      workContractRef: targetItem.workContractRef,
+    })
+    const id = automaticUpgradeResourceId('tool', {
+      targetTypeRef,
+      ownerUserId: sourceRecord.ownerUserId,
+      content,
+    })
+    let target = this.#store.getTool(id)
+    if (target === null) {
+      const now = this.#now()
+      this.#store.createTool({
+        id,
+        typeRef: targetTypeRef,
+        workItemRef,
+        content,
+        validationReceipt: source.validationReceipt,
+        publishedRevision: null,
+        ownerUserId: sourceRecord.ownerUserId,
+        createdAt: now,
+        updatedAt: now,
+        retiredAt: null,
+      })
+      target = this.#store.getTool(id)
+    }
+    if (
+      target === null ||
+      !sameType(target.typeRef, targetTypeRef) ||
+      target.workItemRef !== workItemRef ||
+      target.ownerUserId !== sourceRecord.ownerUserId ||
+      target.retiredAt !== null
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-migration-identity-conflict',
+        `automatic tool migration identity conflicts with an existing resource: ${id}`,
+      )
+    }
+    if (target.publishedRevision !== null) {
+      const published = this.#store.getToolRevision({
+        id: target.id,
+        revision: target.publishedRevision,
+      })
+      if (
+        published === null ||
+        published.state !== 'published' ||
+        contentDigest(published.content) !== contentDigest(content)
+      ) {
+        throw new AutomaticTypeUpgradeError(
+          'tool-migration-content-conflict',
+          `automatic tool migration content conflicts with ${id}@${target.publishedRevision}`,
+        )
+      }
+      return published.ref
+    }
+    if (
+      contentDigest(target.content) !== contentDigest(content) ||
+      target.validationReceipt.status !== 'valid'
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-migration-content-conflict',
+        `automatic tool migration draft conflicts with the expected content: ${id}`,
+      )
+    }
+    const revision: ToolRevisionRecord = {
+      ref: { id, revision: 1 },
+      content,
+      contentDigest: contentDigest(content),
+      validationReceipt: target.validationReceipt,
+      state: 'published',
+      publishedAt: this.#now(),
+      publishedBy: null,
+    }
+    this.#store.publishTool(revision)
+    return revision.ref
+  }
+
+  #assertTargetToolRevision(
+    revision: ToolRevisionRecord,
+    targetTypeRef: EmployeeTypeRef,
+    workItemRef: string,
+  ): void {
+    const item = findWorkItem(this.#runtime(targetTypeRef).descriptor, workItemRef)
+    if (
+      revision.state !== 'published' ||
+      revision.validationReceipt.status !== 'valid' ||
+      !sameType(revision.content.typeRef, targetTypeRef) ||
+      revision.content.workItemRef !== workItemRef ||
+      item === null ||
+      item.nodeKind !== 'business-tool' ||
+      item.workContractRef.contractId !== revision.content.workContractRef.contractId ||
+      item.workContractRef.version !== revision.content.workContractRef.version ||
+      findToolRole(item, revision.content.roleRef) === null
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'platform-tool-successor-invalid',
+        `platform tool successor does not close ${typeKey(targetTypeRef)}/${workItemRef}`,
+      )
+    }
+  }
+
+  #assertAutomaticPlatformToolContractCompatibility(
+    sourceTypeRef: EmployeeTypeRef,
+    targetTypeRef: EmployeeTypeRef,
+    workItemRef: string,
+  ): void {
+    const sourceDescriptor = this.#descriptor(sourceTypeRef)
+    const targetDescriptor = this.#descriptor(targetTypeRef)
+    const sourceItem = findWorkItem(sourceDescriptor, workItemRef)
+    const targetItem = findWorkItem(targetDescriptor, workItemRef)
+    const sourceContract =
+      sourceItem === null ? null : findWorkContract(sourceDescriptor, sourceItem.workContractRef)
+    const targetContract =
+      targetItem === null ? null : findWorkContract(targetDescriptor, targetItem.workContractRef)
+    if (
+      sourceItem === null ||
+      sourceItem.nodeKind !== 'business-tool' ||
+      targetItem === null ||
+      targetItem.nodeKind !== 'business-tool' ||
+      sourceContract === null ||
+      targetContract === null ||
+      contentDigest(sourceContract) !== contentDigest(targetContract)
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'work-contract-changed',
+        `work contract changed for ${targetTypeRef.typeId}/${workItemRef}`,
+      )
+    }
+  }
+
+  #automaticallyUpgradeJobTemplate(
+    sourceRef: ExactResourceRef,
+    targetTypeRef: EmployeeTypeRef,
+  ): ExactResourceRef {
+    const source = this.#store.getJobTemplateRevision(sourceRef)
+    const sourceRecord = this.#store.getJobTemplate(sourceRef.id)
+    if (
+      source === null ||
+      sourceRecord === null ||
+      sourceRecord.archivedAt !== null ||
+      source.content.typeRef.typeId !== targetTypeRef.typeId ||
+      source.content.typeRef.revision >= targetTypeRef.revision
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'job-template-revision-unavailable',
+        `job template is not an active older revision: ${sourceRef.id}@${sourceRef.revision}`,
+      )
+    }
+    for (const binding of source.content.defaultCollaborationBindings) {
+      this.#assertAutomaticCollaborationCompatibility(
+        source.content.typeRef,
+        targetTypeRef,
+        binding,
+      )
+    }
+    const defaultToolBindings = source.content.defaultToolBindings.map((binding) => ({
+      ...binding,
+      registrationRef: this.#automaticallyUpgradeToolRevision(
+        binding.registrationRef,
+        source.content.typeRef,
+        targetTypeRef,
+        binding.workItemRef,
+      ),
+    }))
+    const orderedDispatchConfigurations = source.content.orderedDispatchConfigurations.map(
+      (configuration) => ({
+        ...configuration,
+        routes: configuration.routes.map((route) => ({
+          ...route,
+          registrationRef:
+            route.registrationRef === null
+              ? null
+              : this.#automaticallyUpgradeToolRevision(
+                  route.registrationRef,
+                  source.content.typeRef,
+                  targetTypeRef,
+                  route.destinationWorkItemRef,
+                ),
+        })),
+      }),
+    )
+    const content = employeeJobTemplateContentSchema.parse({
+      ...source.content,
+      typeRef: targetTypeRef,
+      defaultToolBindings,
+      orderedDispatchConfigurations,
+      reactionLaneOrder: this.#normalizeReactionLaneOrder(
+        targetTypeRef,
+        source.content.reactionLaneOrder,
+      ),
+    })
+    this.#assertJobTemplateContentPublishable(content)
+
+    const targetJobs = this.#store.listJobTemplates(targetTypeRef)
+    const preferredId = automaticUpgradeResourceId('job', {
+      targetTypeRef,
+      ownerUserId: sourceRecord.ownerUserId,
+      name: sourceRecord.name,
+      content,
+    })
+    const preferred = targetJobs.find((candidate) => candidate.name === sourceRecord.name)
+    let preferredMatches = preferred === undefined
+    if (
+      preferred?.ownerUserId === sourceRecord.ownerUserId &&
+      preferred.publishedRevision !== null
+    ) {
+      const published = this.#store.getJobTemplateRevision({
+        id: preferred.id,
+        revision: preferred.publishedRevision,
+      })
+      preferredMatches =
+        published !== null && contentDigest(published.content) === contentDigest(content)
+    } else if (preferred?.ownerUserId === sourceRecord.ownerUserId) {
+      preferredMatches =
+        preferred.id === preferredId && contentDigest(preferred.draft) === contentDigest(content)
+    }
+    const targetName = preferredMatches
+      ? sourceRecord.name
+      : automaticUpgradeJobName({
+          sourceName: sourceRecord.name,
+          sourceTypeRef: source.content.typeRef,
+          content,
+        })
+    const id = automaticUpgradeResourceId('job', {
+      targetTypeRef,
+      ownerUserId: sourceRecord.ownerUserId,
+      name: targetName,
+      content,
+    })
+    const exactTarget = this.#store.getJobTemplate(id)
+    const sameNameTarget = targetJobs.find((candidate) => candidate.name === targetName)
+    let target = exactTarget ?? sameNameTarget ?? null
+    if (target === null) {
+      const now = this.#now()
+      this.#store.createJobTemplate({
+        id,
+        typeRef: targetTypeRef,
+        name: targetName,
+        draft: content,
+        publishedRevision: null,
+        ownerUserId: sourceRecord.ownerUserId,
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+      })
+      target = this.#store.getJobTemplate(id)
+    }
+    if (
+      target === null ||
+      !sameType(target.typeRef, targetTypeRef) ||
+      target.name !== targetName ||
+      target.ownerUserId !== sourceRecord.ownerUserId ||
+      target.archivedAt !== null
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'job-template-migration-identity-conflict',
+        `automatic job migration identity conflicts with an existing resource: ${targetName}`,
+      )
+    }
+    if (target.publishedRevision !== null) {
+      const published = this.#store.getJobTemplateRevision({
+        id: target.id,
+        revision: target.publishedRevision,
+      })
+      if (published === null || contentDigest(published.content) !== contentDigest(content)) {
+        throw new AutomaticTypeUpgradeError(
+          'job-template-migration-content-conflict',
+          `automatic job migration content conflicts with ${target.id}@${target.publishedRevision}`,
+        )
+      }
+      return published.ref
+    }
+    if (target.id !== id || contentDigest(target.draft) !== contentDigest(content)) {
+      throw new AutomaticTypeUpgradeError(
+        'job-template-migration-content-conflict',
+        `automatic job migration draft conflicts with the expected content: ${targetName}`,
+      )
+    }
+    const ref = { id, revision: 1 }
+    this.#store.publishJobTemplate({
+      ref,
+      content,
+      contentDigest: contentDigest(content),
+      publishedAt: this.#now(),
+      publishedBy: null,
+    })
+    return ref
+  }
+
+  #assertAutomaticCollaborationCompatibility(
+    sourceTypeRef: EmployeeTypeRef,
+    targetTypeRef: EmployeeTypeRef,
+    binding: EmployeeCollaborationBinding,
+  ): void {
+    const sourceDescriptor = this.#descriptor(sourceTypeRef)
+    const targetDescriptor = this.#descriptor(targetTypeRef)
+    const sourceItem = findWorkItem(sourceDescriptor, binding.workItemRef)
+    const targetItem = findWorkItem(targetDescriptor, binding.workItemRef)
+    const sourceContract = sourceDescriptor.invocationContracts.find(
+      (contract) => contract.contractId === binding.invocationContractId,
+    )
+    const targetContract = targetDescriptor.invocationContracts.find(
+      (contract) => contract.contractId === binding.invocationContractId,
+    )
+    if (
+      sourceItem === null ||
+      sourceItem.nodeKind !== 'collaboration' ||
+      sourceItem.collaborationContractId !== binding.invocationContractId ||
+      targetItem === null ||
+      targetItem.nodeKind !== 'collaboration' ||
+      targetItem.collaborationContractId !== binding.invocationContractId ||
+      sourceContract === undefined ||
+      targetContract === undefined ||
+      contentDigest(sourceContract) !== contentDigest(targetContract)
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'invocation-contract-changed',
+        `invocation contract changed for ${targetTypeRef.typeId}/${binding.workItemRef}`,
+      )
+    }
+  }
+
+  #assertJobTemplateContentPublishable(content: EmployeeJobTemplateContent): void {
+    for (const binding of content.defaultToolBindings) {
+      this.#validateBinding(content.typeRef, binding)
+    }
+    for (const binding of content.defaultCollaborationBindings) {
+      this.#validateCollaborationBinding(content.typeRef, binding)
+    }
+    validateCollaborationGroups(content.defaultCollaborationBindings)
+    const enabledWorkItemRefs = this.#enabledWorkItemRefs({
+      typeRef: content.typeRef,
+      toolBindings: content.defaultToolBindings,
+      collaborationBindings: content.defaultCollaborationBindings,
+      orderedDispatchConfigurations: content.orderedDispatchConfigurations,
+    })
+    const merged = mergeExactToolBindings({
+      manifest: this.#runtime(content.typeRef).descriptor.authoringManifest,
+      defaults: content.defaultToolBindings,
+      overrides: [],
+      enabledWorkItemRefs,
+    })
+    if (merged.violations.length > 0) {
+      throw new ValidationError(
+        'employee-job-template-bindings-incomplete',
+        'automatically migrated job template does not cover every required work-item tool slot',
+        { violations: merged.violations },
+      )
+    }
+    this.#validateOrderedDispatchConfigurations(
+      content.typeRef,
+      content.orderedDispatchConfigurations,
+      content.defaultToolBindings,
+      enabledWorkItemRefs,
+    )
   }
 
   async #materializeImplementation(
@@ -1179,27 +1808,6 @@ export class DigitalEmployeeAuthoringService {
     })
   }
 
-  listJobTemplateUpgradeCandidates(targetTypeRef: EmployeeTypeRef): JobTemplateRecord[] {
-    this.#runtime(targetTypeRef)
-    return this.#store
-      .listJobTemplatesByTypeId(targetTypeRef.typeId)
-      .filter((template) => template.typeRef.revision < targetTypeRef.revision)
-  }
-
-  listEmployeeDefinitionUpgradeCandidates(
-    targetTypeRef: EmployeeTypeRef,
-  ): EmployeeDefinitionRecord[] {
-    this.#runtime(targetTypeRef)
-    return this.#store
-      .listEmployeeDefinitions()
-      .filter(
-        (employee) =>
-          employee.currentRevision !== null &&
-          employee.typeRef.typeId === targetTypeRef.typeId &&
-          employee.typeRef.revision < targetTypeRef.revision,
-      )
-  }
-
   getEmployeeDefinition(id: string): EmployeeDefinitionRecord {
     const record = this.#store.getEmployeeDefinition(id)
     if (record === null || record.archivedAt !== null || record.currentRevision === null) {
@@ -1329,68 +1937,6 @@ export class DigitalEmployeeAuthoringService {
         createdBy: actorUserId,
       },
     }
-  }
-
-  upgradeEmployeeDefinition(input: {
-    id: string
-    targetTypeRef: EmployeeTypeRef
-    body: unknown
-    actorUserId: string | null
-  }): ExactResourceRef {
-    const existing = this.#store.getEmployeeDefinition(input.id)
-    if (existing === null || existing.archivedAt !== null) {
-      throw new NotFoundError('employee-definition-not-found', `employee not found: ${input.id}`)
-    }
-    if (
-      existing.typeRef.typeId !== input.targetTypeRef.typeId ||
-      existing.typeRef.revision >= input.targetTypeRef.revision
-    ) {
-      throw new ValidationError(
-        'employee-type-upgrade-invalid',
-        'employee upgrade must target a newer revision of the same employee type',
-        { currentTypeRef: existing.typeRef, targetTypeRef: input.targetTypeRef },
-      )
-    }
-    const runtime = this.#runtime(input.targetTypeRef)
-    const body = updateEmployeeDefinitionBodySchema.parse(input.body)
-    const template = this.#store.getJobTemplateRevision(body.jobTemplateRef)
-    if (template === null || !sameType(template.content.typeRef, input.targetTypeRef)) {
-      throw new ValidationError(
-        'employee-job-template-invalid',
-        'job template revision does not belong to the target employee type',
-      )
-    }
-    runtime.parseWorkScope(body.workScope)
-    validateCollaborationGroups(body.collaborationOverrides)
-    const configuration = digitalEmployeeDefinitionDraftSchema.parse({
-      schemaVersion: 1,
-      typeRef: input.targetTypeRef,
-      jobTemplateRef: body.jobTemplateRef,
-      displayName: body.name,
-      workScope: body.workScope,
-      toolOverrides: body.toolOverrides,
-      collaborationOverrides: body.collaborationOverrides,
-    })
-    const candidate: EmployeeDefinitionRecord = {
-      ...existing,
-      name: body.name,
-      typeRef: input.targetTypeRef,
-      configuration,
-      updatedAt: this.#now(),
-    }
-    const compiled = this.#compileEmployeeDefinition(candidate, input.actorUserId)
-    this.#store.saveEmployeeDefinition({
-      ...compiled,
-      definitionMutation: {
-        kind: 'update',
-        expectedTypeRef: existing.typeRef,
-        targetTypeRef: input.targetTypeRef,
-        name: candidate.name,
-        configuration,
-        updatedAt: compiled.revision.createdAt,
-      },
-    })
-    return compiled.revision.ref
   }
 
   getExecutionPolicy() {

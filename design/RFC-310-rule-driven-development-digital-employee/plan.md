@@ -40,6 +40,9 @@
 > “准备工作材料”位于来源列右侧，两者分别以连线汇入该节点；
 > 其后按是否启用审核分别显示“分析并实现”或“分析 → 人工审核修复计划 → 实现”。两条路径汇合后，“校验并冻结代码修改”和“提交 MR”
 > 继续位于同一主行。入口与条件阶段都不是新 WorkItem；20 个可执行工作项、WorkStart=`prepare-materials` 和 MR 修绿回路保持不变。
+>
+> **2026-08-23 PR-28（用户已确认）**：类型包升版只允许平台自动兼容升级；用户侧不保留岗位/员工升级候选、按钮或 API。
+> 不兼容项保持旧 pin 并输出运维诊断，后续版本以确定性 migration adapter 处理，不能要求用户重绑。
 
 ## 0. 交付原则
 
@@ -85,6 +88,7 @@
 | PR-24   | 统一任务来源与任务目录       | 创建、列表、筛选由单一来源合同注册；公共层零具体来源分支；后台统一 task-catalog，数字员工 Case 正确执行 owner/origin 筛选                     | PR-22       |
 | PR-25   | 工具归属的问题分派与拖动体验 | 问题清单归分类工具；修复工具多选能力；岗位选择后自动扇出连线；优先级释放前实时重排；三层卡同色且层次稳定                                      | PR-23       |
 | PR-27   | 双来源入口与人工审核分支     | 界面输入/ISSUE 都归一到材料准备；关闭审核走分析并实现，开启审核走分析→人工审核→实现；真实 ISSUE→MR→修绿链可复跑                               | PR-25,PR-26 |
+| PR-28   | 类型包自动兼容升级           | 自动迁移兼容工具/岗位/员工闭包，稳定员工身份与在途 pin；退役全部用户手工升级面，失败只进入运维诊断                                            | PR-27       |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -1566,6 +1570,39 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 - review 卡只是静态说明，运行任务等待人工时没有 waiting 状态，或未开启的任务被误报为待审核；
 - 仅补 UI/截图，没有 signed ISSUE Webhook 到 MR 修绿的生产链 E2E；
 - 实现拓扑偏离用户确认的双入口、双分支结构。
+
+## 13n. PR-28：类型包自动兼容升级
+
+### 目标与任务
+
+本批纠正“注册新 Type Package revision 后，旧员工全部退出 launch inventory 且只能由用户逐条重绑”的产品死路。兼容判定、依赖迁移与
+employee revision 追加必须在 `digital-employee` application 内自动完成；transport 只展示当前结果，不再提供升级操作。
+
+| 编号 | 任务                                                                                                                        | 依赖      | 状态 |
+| ---- | --------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
+| T232 | 冻结通用兼容预言、stable diagnosis 与内容寻址迁移 identity；平台工具 participant 提供 provider-owned successor 解析         | T231      | 🚧   |
+| T233 | 红测覆盖 custom/platform tool → job → employee 自动迁移、stable id/ACL/scope、多个旧 revision 收敛、幂等重启与在途 Case pin | T232      | ⏳   |
+| T234 | 在 authoring application/store 实现单资源事务化自动迁移与诊断 sink；不兼容闭包保持旧 pin，不进入当前 inventory              | T233      | ⏳   |
+| T235 | 删除 `upgrade-candidates`、单员工 upgrade command/route 与前端候选查询、按钮、编辑状态；补 API/源码/UI 不复辟棘轮           | T234      | ⏳   |
+| T236 | 原数据库副本实迁、定向/完整 gate、真实页面检查、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态           | T233-T235 | ⏳   |
+
+### 验收口径
+
+- proposal AC-48/49/97：兼容工具、岗位与员工在启动时自动进入目标 revision；员工 stable id、owner/visibility/ACL、scope 与历史 revision 保持；
+- 同一目标内容只生成一份迁移资源，重复启动不增行/增 revision；目标闭包继续通过当前 publish/compiler，不以版本号 update 冒充升级；
+- WorkContract/slot/dispatch/scope/平台 successor 任一不兼容时输出 stable 运维诊断，旧闭包零改写且用户界面没有手工待办；
+- 目标 revision 已有同名但 owner 或内容不同的岗位时不覆盖、不阻断用户，自动使用由 source typeRef 与目标内容摘要生成的确定性迁移名；
+- active Case 的 definition ref 不变，新 Case inventory 只返回成功自动升级的当前员工；
+- 通用 application 不含 `development` 分支，公共前端组件不含类型特判，bootstrap 不查询业务表或编排迁移步骤。
+
+### 批次停止条件
+
+- 直接 UPDATE 旧 descriptor/revision、覆盖旧工具/岗位内容，或让在途 Case 跟随 current row 漂移；
+- 用名称、显示文案、ID 字符串拆解或 AI 判断兼容；平台工具 successor 不是由 provider participant 显式给出；
+- 只迁 employee 行版本号，没有生成并验证目标工具/岗位/definition exact closure；
+- 重启产生重复工具/岗位/revision，两个旧 revision 的等价内容不能收敛，或冲突覆盖用户已有目标资源；
+- 页面、REST、MCP 仍出现升级候选、“升级到当前版本”或单员工手工升级命令；
+- 直接在用户原库试错而未先用副本验证，或完整 gate/远端终态未核验即宣称完成。
 
 ## 14. 风险与停止条件
 

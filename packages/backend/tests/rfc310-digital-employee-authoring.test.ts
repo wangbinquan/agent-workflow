@@ -402,6 +402,17 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       { method: 'POST', headers: authorization },
     )
     expect(removedPublishEndpoint.status).toBe(404)
+
+    const removedUpgradeCandidates = await app.request(
+      '/api/digital-employee-types/development@6/upgrade-candidates',
+      { headers: authorization },
+    )
+    expect(removedUpgradeCandidates.status).toBe(404)
+    const removedEmployeeUpgrade = await app.request(
+      '/api/digital-employee-types/development@6/employees/legacy/upgrade',
+      { method: 'POST', headers: authorization, body: '{}' },
+    )
+    expect(removedEmployeeUpgrade.status).toBe(404)
   })
 
   test('pure migrations stay resource-empty and daemon seeding installs Agent templates once', async () => {
@@ -785,136 +796,6 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         },
       }),
     ).toThrow('reaction lane order must contain every event-driven business lane exactly once')
-  })
-
-  test('older templates are discoverable and one stable employee upgrades atomically to the current type', async () => {
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-explicit-upgrade-'))
-    roots.push(appHome)
-    const baseDescriptor = JSON.parse(designEmployeeTypePackage.descriptorJson) as {
-      typeRef: { typeId: string; revision: number }
-    }
-    const oldPackage = {
-      ...designEmployeeTypePackage,
-      descriptorJson: JSON.stringify({
-        ...baseDescriptor,
-        typeRef: { ...baseDescriptor.typeRef, revision: 1 },
-      }),
-    }
-    const currentPackage = {
-      ...designEmployeeTypePackage,
-      descriptorJson: JSON.stringify({
-        ...baseDescriptor,
-        typeRef: { ...baseDescriptor.typeRef, revision: 2 },
-      }),
-    }
-    let ordinal = 0
-    const module = composeDigitalEmployee({
-      db: createInMemoryDb(MIGRATIONS),
-      appHome,
-      typePackages: [oldPackage, currentPackage],
-      executionContracts: genericExecutionContracts,
-      id: () => `upgrade-${++ordinal}`,
-      now: () => 20_000 + ordinal,
-    })
-    const publishJob = async (revision: number, suffix: string) => {
-      const typeRef = { typeId: 'design', revision }
-      const tool = await module.commands.createTool({
-        typeRef,
-        workItemRef: 'design-work',
-        actorUserId: 'upgrade-author',
-        body: {
-          displayName: `设计工具${suffix}`,
-          description: '精确版本工具',
-          roleRef: 'primary',
-          implementation: {
-            kind: 'agent',
-            agentRef: { id: `design-agent-${suffix}`, revision: 1 },
-          },
-          connectionRef: null,
-        },
-      })
-      const toolRef = await module.commands.publishTool({
-        typeRef,
-        workItemRef: 'design-work',
-        toolId: tool.id,
-        actorUserId: 'upgrade-author',
-      })
-      const job = module.commands.createJobTemplate({
-        typeRef,
-        actorUserId: 'upgrade-author',
-        body: {
-          name: '产品设计岗位',
-          description: `设计类型 ${revision}`,
-          defaultToolBindings: [
-            {
-              workItemRef: 'design-work',
-              slotRef: 'primary',
-              registrationRef: toolRef,
-            },
-          ],
-        },
-      })
-      return {
-        job,
-        ref: module.commands.publishJobTemplate({
-          id: job.id,
-          actorUserId: 'upgrade-author',
-        }),
-      }
-    }
-    const oldJob = await publishJob(1, 'v1')
-    const oldEmployee = module.commands.createEmployee({
-      typeRef: { typeId: 'design', revision: 1 },
-      actorUserId: 'upgrade-author',
-      body: {
-        name: '稳定设计员工',
-        jobTemplateRef: oldJob.ref,
-        workScope: { kind: 'global' },
-      },
-    })
-    expect(oldEmployee.revision).toBe(1)
-    const currentJob = await publishJob(2, 'v2')
-
-    expect(
-      module.queries
-        .listJobTemplateUpgradeCandidates({ typeId: 'design', revision: 2 })
-        .map((job) => job.id),
-    ).toEqual([oldJob.job.id])
-    expect(
-      module.queries
-        .listEmployeeUpgradeCandidates({ typeId: 'design', revision: 2 })
-        .map((employee) => employee.id),
-    ).toEqual([oldEmployee.id])
-    expect(module.queries.listLaunchableEmployees()).toEqual([])
-
-    expect(
-      module.commands.upgradeEmployee({
-        id: oldEmployee.id,
-        targetTypeRef: { typeId: 'design', revision: 2 },
-        actorUserId: 'upgrade-author',
-        body: {
-          name: '稳定设计员工',
-          jobTemplateRef: currentJob.ref,
-          workScope: { kind: 'global' },
-          toolOverrides: [],
-          collaborationOverrides: [],
-        },
-      }),
-    ).toEqual({ id: oldEmployee.id, revision: 2 })
-    expect(module.queries.getEmployee(oldEmployee.id)).toMatchObject({
-      id: oldEmployee.id,
-      name: '稳定设计员工',
-      typeRef: { typeId: 'design', revision: 2 },
-      revision: 2,
-      configuration: { jobTemplateRef: currentJob.ref },
-      definition: { jobTemplateRef: currentJob.ref },
-    })
-    expect(module.queries.listEmployeeUpgradeCandidates({ typeId: 'design', revision: 2 })).toEqual(
-      [],
-    )
-    expect(module.queries.listLaunchableEmployees().map((employee) => employee.id)).toEqual([
-      oldEmployee.id,
-    ])
   })
 
   test('unconfigured optional lanes stay disabled without blocking employee save', async () => {

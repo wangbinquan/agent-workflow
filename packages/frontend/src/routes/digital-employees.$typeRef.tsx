@@ -57,11 +57,6 @@ interface WorkspaceSearch extends Record<string, unknown> {
   reviewOption?: string
 }
 
-interface DigitalEmployeeUpgradeCandidates {
-  jobTemplates: JobTemplate[]
-  employees: DigitalEmployeeDefinition[]
-}
-
 function validateSearch(raw: Record<string, unknown>): WorkspaceSearch {
   const view = raw.view === 'jobs' || raw.view === 'toolbox' ? raw.view : 'employees'
   return {
@@ -1870,7 +1865,6 @@ function JobTemplatesPanel(props: {
   const [identityOpen, setIdentityOpen] = useState(false)
   const [dutyOpen, setDutyOpen] = useState(false)
   const [editingJob, setEditingJob] = useState<JobTemplate | null>(null)
-  const [upgradingJob, setUpgradingJob] = useState<JobTemplate | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [identityName, setIdentityName] = useState('')
@@ -1909,15 +1903,6 @@ function JobTemplatesPanel(props: {
         signal,
       ),
   })
-  const upgradeCandidates = useQuery<DigitalEmployeeUpgradeCandidates>({
-    queryKey: ['digital-employee-upgrade-candidates', props.typeRef],
-    queryFn: ({ signal }) =>
-      api.get(
-        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/upgrade-candidates`,
-        undefined,
-        signal,
-      ),
-  })
   const employees = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', 'all'],
     enabled: open,
@@ -1939,9 +1924,6 @@ function JobTemplatesPanel(props: {
     onSuccess: async (draft) => {
       await qc.invalidateQueries({
         queryKey: ['digital-employee-job-templates', props.typeRef],
-      })
-      await qc.invalidateQueries({
-        queryKey: ['digital-employee-upgrade-candidates', props.typeRef],
       })
       setEditingJob(draft)
       setName(draft.name)
@@ -2046,7 +2028,6 @@ function JobTemplatesPanel(props: {
       setIdentityOpen(false)
       setDutyOpen(false)
       setEditingJob(null)
-      setUpgradingJob(null)
       setEditorDispatchRouteKey(null)
       setName('')
       setDescription('')
@@ -2070,7 +2051,6 @@ function JobTemplatesPanel(props: {
     save.reset()
     resetDraft()
     setEditingJob(null)
-    setUpgradingJob(null)
     setEditorWorkItemRef(requestedWorkItem?.workItemRef ?? '')
     setEditorDispatchRouteKey(null)
     setValidationAttempt(0)
@@ -2085,7 +2065,6 @@ function JobTemplatesPanel(props: {
     save.reset()
     dispatchOrdinal.current = 0
     setEditingJob(job)
-    setUpgradingJob(null)
     setEditorWorkItemRef(requestedWorkItem?.workItemRef ?? '')
     setEditorDispatchRouteKey(null)
     setValidationAttempt(0)
@@ -2179,25 +2158,11 @@ function JobTemplatesPanel(props: {
     setIdentityOpen(false)
     setDutyOpen(false)
     setEditingJob(null)
-    setUpgradingJob(null)
     setEditorDispatchRouteKey(null)
     setValidationAttempt(0)
     createDraft.reset()
     save.reset()
     resetDraft()
-  }
-  const upgradeJob = (job: JobTemplate) => {
-    createDraft.reset()
-    save.reset()
-    resetDraft()
-    setEditingJob(null)
-    setUpgradingJob(job)
-    setEditorWorkItemRef('')
-    setEditorDispatchRouteKey(null)
-    setValidationAttempt(0)
-    setIdentityOpen(false)
-    setDutyOpen(false)
-    createDraft.mutate({ name: job.name, description: job.draft.description })
   }
   const laneOptional = new Map(
     props.type.authoringManifest.lifecycleRegions.flatMap((region) =>
@@ -2432,10 +2397,6 @@ function JobTemplatesPanel(props: {
           tool.content.roleRef === role.roleRef,
       ),
   )?.item
-  const currentTemplateNames = new Set(query.data?.items.map((job) => job.name) ?? [])
-  const legacyTemplates = (upgradeCandidates.data?.jobTemplates ?? []).filter(
-    (job) => !currentTemplateNames.has(job.name),
-  )
   const updateToolBinding = (item: WorkItem, slotRef: string, toolId: string) => {
     setBindings((current) => ({ ...current, [`${item.workItemRef}/${slotRef}`]: toolId }))
     if (item.orderedDispatchAuthoring === null) return
@@ -2593,43 +2554,6 @@ function JobTemplatesPanel(props: {
           </Link>
         </NoticeBanner>
       ) : null}
-      {!open && legacyTemplates.length > 0 ? (
-        <NoticeBanner
-          tone="warning"
-          title={zh ? '发现旧版本岗位模板' : 'Older job templates need an upgrade'}
-        >
-          {zh
-            ? '类型版本升级后不会静默继承旧工具。选择一个模板，平台会保留名称和说明，并打开当前版本职责图供你重新绑定。'
-            : 'Type upgrades never inherit old tools silently. Upgrade a template to keep its identity and rebind it on the current responsibility map.'}
-        </NoticeBanner>
-      ) : null}
-      {!open && legacyTemplates.length > 0 ? (
-        <div className="employee-card-list" data-testid="legacy-job-template-upgrades">
-          {legacyTemplates.map((job) => (
-            <article key={job.id} className="employee-summary-card">
-              <div>
-                <strong>{job.name}</strong>
-                <p>
-                  {zh
-                    ? `旧版本：${job.typeRef.typeId}@${job.typeRef.revision}`
-                    : `Older revision: ${job.typeRef.typeId}@${job.typeRef.revision}`}
-                </p>
-              </div>
-              <div className="employee-summary-card__actions">
-                <StatusChip kind="warn">{zh ? '需要升级' : 'Upgrade required'}</StatusChip>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => upgradeJob(job)}
-                  disabled={createDraft.isPending}
-                >
-                  {zh ? '升级到当前版本' : 'Upgrade to current version'}
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : null}
       {!identityOpen && createDraft.isError ? <ErrorBanner error={createDraft.error} /> : null}
       {!open && query.isPending ? <LoadingState /> : null}
       {!open && query.isError ? <ErrorBanner error={query.error} /> : null}
@@ -2672,16 +2596,6 @@ function JobTemplatesPanel(props: {
           data-testid="employee-job-template-editor"
           onSubmit={submitJob}
         >
-          {upgradingJob !== null ? (
-            <NoticeBanner
-              tone="info"
-              title={zh ? '正在升级旧岗位模板' : 'Upgrading an older job template'}
-            >
-              {zh
-                ? '名称和说明已保留；旧版本工具、协同目标和错误分类不会自动继承，请按当前契约重新配置后发布。'
-                : 'Name and description were kept. Reconfigure tools, collaborators, and failure routes against the current contracts before publishing.'}
-            </NoticeBanner>
-          ) : null}
           <EmployeeCapabilityPanorama
             type={props.type}
             selectedWorkItemRef={selectedEditorItem?.workItemRef ?? null}
@@ -3338,15 +3252,6 @@ function EmployeesPanel(props: {
         signal,
       ),
   })
-  const upgradeCandidates = useQuery<DigitalEmployeeUpgradeCandidates>({
-    queryKey: ['digital-employee-upgrade-candidates', props.typeRef],
-    queryFn: ({ signal }) =>
-      api.get(
-        `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/upgrade-candidates`,
-        undefined,
-        signal,
-      ),
-  })
   const runtimeOutcomes = useQuery<{ items: EmployeeTerminalOutcomeGroup[] }>({
     queryKey: ['digital-employee-outcomes', 'runtime'],
     queryFn: ({ signal }) => api.get('/api/digital-employees/outcome-summaries', undefined, signal),
@@ -3381,13 +3286,9 @@ function EmployeesPanel(props: {
     setScopeValues({})
   }
   const openEditor = (employee: DigitalEmployeeDefinition | null) => {
-    const currentType =
-      employee === null ||
-      (employee.typeRef.typeId === props.type.typeRef.typeId &&
-        employee.typeRef.revision === props.type.typeRef.revision)
     setEditing(employee)
     setName(employee?.configuration.displayName ?? employee?.name ?? '')
-    setJobId(currentType ? (employee?.configuration.jobTemplateRef.id ?? '') : '')
+    setJobId(employee?.configuration.jobTemplateRef.id ?? '')
     const scope =
       employee?.configuration.workScope !== null &&
       typeof employee?.configuration.workScope === 'object'
@@ -3407,10 +3308,6 @@ function EmployeesPanel(props: {
     )
     setOpen(true)
   }
-  const upgrading =
-    editing !== null &&
-    (editing.typeRef.typeId !== props.type.typeRef.typeId ||
-      editing.typeRef.revision !== props.type.typeRef.revision)
   const save = useMutation({
     mutationFn: async () => {
       const job = jobs.data?.items.find((candidate) => candidate.id === jobId)
@@ -3427,17 +3324,8 @@ function EmployeesPanel(props: {
         name,
         jobTemplateRef: { id: job.id, revision: job.publishedRevision },
         workScope,
-        toolOverrides: upgrading ? [] : (editing?.configuration.toolOverrides ?? []),
-        collaborationOverrides: upgrading
-          ? []
-          : (editing?.configuration.collaborationOverrides ?? []),
-      }
-      if (upgrading && editing !== null) {
-        await api.post(
-          `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/employees/${encodeURIComponent(editing.id)}/upgrade`,
-          body,
-        )
-        return editing
+        toolOverrides: editing?.configuration.toolOverrides ?? [],
+        collaborationOverrides: editing?.configuration.collaborationOverrides ?? [],
       }
       return editing === null
         ? api.post<DigitalEmployeeDefinition>(
@@ -3452,17 +3340,10 @@ function EmployeesPanel(props: {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['digital-employees', props.typeRef] })
       await qc.invalidateQueries({ queryKey: ['digital-employees', 'all'] })
-      await qc.invalidateQueries({
-        queryKey: ['digital-employee-upgrade-candidates', props.typeRef],
-      })
       closeEditor()
     },
   })
   const publishedJobs = (jobs.data?.items ?? []).filter((job) => job.publishedRevision !== null)
-  const currentEmployeeIds = new Set(employees.data?.items.map((employee) => employee.id) ?? [])
-  const legacyEmployees = (upgradeCandidates.data?.employees ?? []).filter(
-    (employee) => !currentEmployeeIds.has(employee.id),
-  )
   const valid =
     name.trim() !== '' &&
     jobId !== '' &&
@@ -3533,46 +3414,6 @@ function EmployeesPanel(props: {
             {zh ? '配置岗位模板' : 'Configure job templates'}
           </Link>
         </NoticeBanner>
-      ) : null}
-      {legacyEmployees.length > 0 ? (
-        <NoticeBanner
-          tone="warning"
-          title={zh ? '发现旧版本数字员工' : 'Older digital employees need an upgrade'}
-        >
-          {zh
-            ? '请选择当前岗位模板并重新确认负责范围；升级会沿用员工身份，但不会静默继承旧版本工具绑定。'
-            : 'Choose a current job template and confirm the scope. The employee identity is retained without silently inheriting old bindings.'}
-        </NoticeBanner>
-      ) : null}
-      {legacyEmployees.length > 0 ? (
-        <div className="employee-card-list" data-testid="legacy-digital-employee-upgrades">
-          {legacyEmployees.map((employee) => (
-            <article
-              key={employee.id}
-              className="employee-summary-card employee-summary-card--employee"
-            >
-              <div>
-                <strong>{employee.name}</strong>
-                <p>
-                  {zh
-                    ? `旧版本：${employee.typeRef.typeId}@${employee.typeRef.revision}`
-                    : `Older revision: ${employee.typeRef.typeId}@${employee.typeRef.revision}`}
-                </p>
-              </div>
-              <div className="employee-summary-card__actions">
-                <StatusChip kind="warn">{zh ? '需要升级' : 'Upgrade required'}</StatusChip>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => openEditor(employee)}
-                  disabled={publishedJobs.length === 0}
-                >
-                  {zh ? '升级到当前版本' : 'Upgrade to current version'}
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
       ) : null}
       {employees.isPending ? <LoadingState /> : null}
       {employees.isError ? <ErrorBanner error={employees.error} /> : null}
@@ -3647,13 +3488,9 @@ function EmployeesPanel(props: {
             ? zh
               ? '创建数字员工'
               : 'Create digital employee'
-            : upgrading
-              ? zh
-                ? '升级数字员工'
-                : 'Upgrade digital employee'
-              : zh
-                ? '编辑数字员工'
-                : 'Edit digital employee'
+            : zh
+              ? '编辑数字员工'
+              : 'Edit digital employee'
         }
         dismissDisabled={save.isPending}
         footer={
@@ -3667,17 +3504,7 @@ function EmployeesPanel(props: {
               className="btn btn--primary"
               disabled={!valid || save.isPending}
             >
-              {editing === null
-                ? zh
-                  ? '创建'
-                  : 'Create'
-                : upgrading
-                  ? zh
-                    ? '升级'
-                    : 'Upgrade'
-                  : zh
-                    ? '保存'
-                    : 'Save'}
+              {editing === null ? (zh ? '创建' : 'Create') : zh ? '保存' : 'Save'}
             </button>
           </>
         }
@@ -3690,13 +3517,6 @@ function EmployeesPanel(props: {
             save.mutate()
           }}
         >
-          {upgrading ? (
-            <NoticeBanner tone="info" title={zh ? '显式升级' : 'Explicit upgrade'}>
-              {zh
-                ? '平台会保留这名员工的稳定 ID 和历史版本；本次必须重新选择当前岗位模板，升级完成后新任务才使用当前类型。'
-                : 'The stable employee ID and history are retained. Select a current job template; new work uses the current type after the upgrade.'}
-            </NoticeBanner>
-          ) : null}
           <Field label={zh ? '员工名称' : 'Employee name'} required>
             <TextInput value={name} onChange={setName} autoFocus />
           </Field>

@@ -134,8 +134,6 @@ async function snapshot(db: DbClient, id: string): Promise<unknown> {
 }
 
 const DETAIL = (id: string): string => `/api/digital-employees/${id}`
-const UPGRADE = (id: string): string =>
-  `/api/digital-employee-types/rfc317-type@1/employees/${id}/upgrade`
 
 describe('RFC-317 T8 —— 员工定义的可见性', () => {
   test('陌生人读别人的 private 员工定义 ⇒ 404，与不存在同形', async () => {
@@ -177,7 +175,6 @@ describe('RFC-317 T8 —— 员工定义的写门', () => {
       path: DETAIL(id),
       init: { method: 'PUT', body: JSON.stringify({ name: 'intruded' }) },
     },
-    { label: 'POST …/upgrade', path: UPGRADE(id), init: { method: 'POST', body: '{}' } },
   ]
 
   test('可见但非 owner（public 行）⇒ 403 且零写入', async () => {
@@ -310,15 +307,12 @@ describe('RFC-317 T8 —— 三个列表面都接了可见性过滤（AST 断言
     ).toEqual([])
   })
 
-  test('详情走可见性门，两个写入口走 owner 门', () => {
+  test('详情走可见性门，保留的写入口走 owner 门', () => {
     const detail = handlerFor('GET', '/api/digital-employees/:id')
     expect(detail, '找不到详情 handler').not.toBeNull()
     expect(calledNames(detail!).has('loadVisibleEmployee')).toBe(true)
 
-    for (const [method, path] of [
-      ['PUT', '/api/digital-employees/:id'],
-      ['POST', '/api/digital-employee-types/:typeRef/employees/:id/upgrade'],
-    ] as const) {
+    for (const [method, path] of [['PUT', '/api/digital-employees/:id']] as const) {
       const handler = handlerFor(method, path)
       expect(handler, `找不到写入口 ${method} ${path}`).not.toBeNull()
       expect(

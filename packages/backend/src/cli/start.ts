@@ -1199,6 +1199,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       db,
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
     }),
+    onAutomaticUpgradeIssue: (issue) => {
+      log.warn('automatic digital employee type upgrade could not prove compatibility', {
+        ...issue,
+      })
+    },
     executionContracts: employeeExecutionContracts,
     retryLimits: {
       current() {

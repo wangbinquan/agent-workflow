@@ -487,24 +487,6 @@ export function mountDigitalEmployeeRoutes(
   registerRoute(
     app,
     {
-      method: 'GET',
-      path: '/api/digital-employee-types/:typeRef/upgrade-candidates',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'List older job templates and employees that require an explicit type upgrade',
-    },
-    (c) => {
-      const typeRef = parseEmployeeTypeRef(c.req.param('typeRef'))
-      return c.json({
-        jobTemplates: module.queries.listJobTemplateUpgradeCandidates(typeRef),
-        employees: module.queries.listEmployeeUpgradeCandidates(typeRef),
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
       method: 'POST',
       path: '/api/digital-employee-types/:typeRef/job-templates',
       permissions: ['digital-employees:create'],
@@ -594,29 +576,6 @@ export function mountDigitalEmployeeRoutes(
         }),
         201,
       ),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/digital-employee-types/:typeRef/employees/:id/upgrade',
-      permissions: ['digital-employees:update'],
-      tokenAccess: 'allow',
-      summary: 'Explicitly upgrade one employee to a newer type revision',
-    },
-    async (c) => {
-      const id = c.req.param('id')
-      await requireOwnedEmployee(c, id)
-      return c.json({
-        ref: module.commands.upgradeEmployee({
-          id,
-          targetTypeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
-          body: await safeJsonOrEmpty(c.req.raw),
-          actorUserId: actorId(c),
-        }),
-      })
-    },
   )
 
   registerRoute(

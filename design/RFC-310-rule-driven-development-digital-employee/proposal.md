@@ -43,6 +43,11 @@
 > 这些入口和条件阶段都不增加工具槽、不改变 20 个可执行工作项，也不恢复伪造的 WorkStart Event。规范性增量见 §0A.12、design §22、
 > plan §13m。
 >
+> **2026-08-23 PR-28（用户已确认）**：类型包升版后，平台必须自动升级所有可证明兼容的岗位与数字员工，用户侧不再出现
+> “升级到当前版本”、升级候选或手工迁移 API。兼容性由数字员工领域按 exact 发布闭包程序化判定，不按名称猜、不让 AI 判断；
+> 不兼容闭包保持旧 pin 并产生开发/运维诊断，后续平台版本必须提供确定性迁移规则，不能把处理责任转交给用户。规范性增量见
+> §0A.13、design §23、plan §13n。
+>
 > 架构总纲：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)。
 > 可复用底座：[RFC-304](../RFC-304-code-capability-platform/proposal.md)、
 > [RFC-308](../RFC-308-unified-task-git-commit-exclusions/proposal.md)、
@@ -538,6 +543,21 @@ WorkStart subscriber。
 
 因此研发类型仍有 **20 个可执行工作项**；完整全景额外呈现 2 张来源卡及 `humanReview` 条件路径。旧类型 revision 默认没有来源卡，仍按原
 manifest 稳定渲染；新能力只追加发布新的研发类型 revision，不原地改写 `development@1..@5`。
+
+### 0A.13 类型包升版自动兼容升级（PR-28）
+
+发布新 Type Package revision 后，平台在该类型进入当前运行目录前自动扫描旧版已发布岗位与数字员工。升级不是把数据库里的版本号直接改掉，
+也不是复制名称后让用户重新选工具，而是对每条 immutable 发布闭包做确定性预检：同一 `typeId`、目标 revision 更高；旧岗位使用的
+WorkItem、slot、role、WorkContract 与协作合同在目标包中仍成立；自定义工具的 exact WorkContract 未改变且旧 validation receipt 有效；
+平台工具由其 owner 提供同一实现身份在目标类型下的已验证 successor；冻结 work scope 能被目标 codec 解码；重写后的岗位与员工能通过当前
+发布编译器的全部完整性校验。任一条件无法证明即判为不兼容，禁止按名称、显示文案或 AI 推断“看起来差不多”。
+
+预检通过后，平台幂等生成目标类型下的新工具/岗位 revision，并为原数字员工追加新的 definition revision；员工稳定 `id`、名称、owner、
+visibility/ACL、负责范围与历史 revision 均保留。新 Case 只看新 revision；已经 active 的 Case 继续使用创建时冻结的旧闭包，不在运行中被换版。
+重复启动或升级中断后重放不得产生重复工具、岗位或员工 revision。
+
+用户创作面不提供升级候选、升级按钮或单员工升级命令。无法自动证明兼容时，旧定义保持不可变且不进入当前 launch inventory；平台只输出
+machine-readable 开发/运维诊断，由后续应用版本补充确定性迁移规则。用户不需要也不能通过重新绑定工具来完成版本升级。
 
 ## 0. 摘要裁决
 
@@ -1271,9 +1291,10 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
 - **AC-47** 研发、设计、测试三个 fixture 分类由同一通用 manifest/画布/工具箱组件渲染；前端不得按 `development` 写类型分支。
   Agent/Workflow 仍在原 owner 创建；ProgramTool 直接在分类工作项工具箱定义但复用既有 Script executor；三者都保存合同校验 receipt。
 - **AC-48** 岗位模板在分类“员工”页内创建和发布，只保存名称/说明与工作项默认工具，不形成新导航层、流程图或规则层。Java、C++、
-  polyglot 模板可被多个员工采用；模板升级不静默改变已发布员工，员工显式升级时显示默认工具差异和覆盖项。
-- **AC-49** 分类或 WorkContract 升版不自动把旧工具判为兼容；新 revision 必须重新注册/验证工具并升级岗位模板和员工。retired 工具
-  不进入新选择和新 Case admission；active Case 保持原 pin，资源仍可执行时完成当前生命周期，硬失效时具名阻断而不偷偷换工具。
+  polyglot 模板可被多个员工采用；类型包升版时，兼容岗位与采用它的员工由平台自动追加目标 revision，不向用户提供手工升级入口。
+- **AC-49** 分类或 WorkContract 升版只能由 exact 闭包兼容预检判定旧工具能否迁移：自定义工具要求 WorkContract 不变且旧 receipt 有效，
+  平台工具要求 owner 提供目标类型下同实现身份的已验证 successor。retired、合同漂移或闭包不完整均不得迁移；active Case 保持原 pin，
+  新 Case 只使用自动升级后的当前闭包。不兼容由平台版本提供确定性迁移规则，不允许用户手工重绑或 AI 猜测。
 - **AC-50** 通用 employee/type/assignment/invocation DTO 不含 repository 专用字段；适用范围由分类 WorkScopeContract 铸造。
   canonical 页面路由为 `/digital-employees`，旧 `/code` 只兼容跳到研发分类；设计/测试分类不经过代码专用页面。
 - **AC-51** 分类工具箱与岗位模板编辑器复用同一 manifest 小卡片图及 workItem identity；员工列表和普通页签不重复展示全景。
@@ -1412,8 +1433,9 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   同一路由、同一页面骨架中的四步内容，不跳到另一创建页面；切回 Agent/Workflow/工作组同理。AppShell 按注册能力做 any-of 权限准入。
 - **AC-96** DigitalEmployeeDefinition 不持有 enabled/business status，创建与保存不出现发布态文案；新 API 传入 `enabled` 必须被拒绝，存量 JSON
   中同名未知字段只作读取兼容并在新 revision 中消失。自动接活开关属于 Event Center 响应规则，运行状态属于 Task/EmployeeCase。
-- **AC-97** 类型升级不得让 `development@4` 等旧模板或员工静默进入当前运行目录，也不能显示“版本不认识”的死路。当前类型页显式列出升级候选；
-  用户选择当前岗位/工具后生成当前 revision，新任务 inventory 只返回当前、可启动定义，runtime 对陈旧 definition fail closed 并给出升级动作。
+- **AC-97** 类型升级在 bootstrap 内对旧模板和员工做幂等兼容预检；通过者自动生成目标工具/岗位/员工 revision 并进入当前 launch inventory，
+  员工 `id`、owner/ACL、负责范围和历史保持不变。失败者保持旧 pin、退出当前 inventory 并输出 machine-readable 运维诊断；当前类型页、REST/MCP
+  均不得暴露升级候选、升级按钮或单员工手工升级命令。重复启动不产生重复 revision，在途 Case 不被换版。
 - **AC-98** 研发职责全景在“需求开发与问题定位”主泳道最左侧的同一来源列上下并列显示两张只读入口卡：`界面输入` 与 `ISSUE`；两者是
   无前后顺序的并行来源。“准备工作材料”位于来源列右侧、中心落在两个来源节点之间；两个入口都以各自可见的连线指向
   `prepare-materials`；前者通过既有权限进入 `/tasks/new?kind=digital-employee`，后者进入 `/events?tab=subscriptions` 配置 ISSUE 事件到

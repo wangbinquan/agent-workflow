@@ -47,12 +47,18 @@ export interface ToolRevisionRecord {
 export interface DigitalEmployeePlatformToolCatalog {
   list(typeRef: EmployeeTypeRef, workItemRef: string): readonly ToolDraftRecord[]
   getRevision(ref: ExactResourceRef): ToolRevisionRecord | null
+  resolveCompatibleRevision(input: {
+    readonly sourceRef: ExactResourceRef
+    readonly targetTypeRef: EmployeeTypeRef
+    readonly workItemRef: string
+  }): ToolRevisionRecord | null
   isPlatformTool(toolId: string): boolean
 }
 
 export const EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG: DigitalEmployeePlatformToolCatalog = {
   list: () => [],
   getRevision: () => null,
+  resolveCompatibleRevision: () => null,
   isPlatformTool: () => false,
 }
 

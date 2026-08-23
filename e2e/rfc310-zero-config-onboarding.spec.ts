@@ -109,9 +109,7 @@ test('a first-time user publishes a job template with the built-in implementatio
   await expect(employeeCard).not.toContainText('Disabled')
 })
 
-test('older hidden definitions surface as explicit upgrades and keep the employee identity', async ({
-  page,
-}) => {
+test('an older definition never becomes a user migration task or manual API', async ({ page }) => {
   const oldJobDraft = JSON.stringify({
     schemaVersion: 1,
     typeRef: { typeId: 'development', revision: 4 },
@@ -180,50 +178,14 @@ test('older hidden definitions surface as explicit upgrades and keep the employe
       staleTypeRequests.push(request.url())
     }
   })
-  await page.goto(`${daemon.baseUrl}/tasks/new?kind=digital-employee`)
-  await expect(page).toHaveURL(/\/tasks\/new\?kind=digital-employee$/)
-  await expect(page.getByTestId('task-wizard-stepper')).toBeVisible()
-  const employeePicker = page.getByRole('combobox', { name: 'Digital employee' })
-  await expect(employeePicker).toContainText('Select…')
-  await employeePicker.click()
-  await expect(page.getByRole('option', { name: /First development employee/ })).toBeVisible()
-  await expect(page.getByRole('option', { name: 'Legacy browser employee' })).toHaveCount(0)
-  await page.keyboard.press('Escape')
-  expect(staleTypeRequests).toEqual([])
-
   await page.goto(`${daemon.baseUrl}/digital-employees/development%406?view=jobs`)
-  const legacyJobs = page.getByTestId('legacy-job-template-upgrades')
-  await expect(legacyJobs).toContainText('Legacy browser role')
-  await legacyJobs.getByRole('button', { name: 'Upgrade to current version' }).click()
-  const jobEditor = page.getByTestId('employee-job-template-editor')
-  await expect(jobEditor).toBeVisible()
-  await expect(jobEditor).toContainText('Upgrading an older job template')
-  await page.getByRole('button', { name: 'Cancel editing', exact: true }).click()
-  await expect(legacyJobs).toHaveCount(0)
+  await expect(page.getByTestId('legacy-job-template-upgrades')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Upgrade to current version' })).toHaveCount(0)
 
   await page.getByRole('tab', { name: 'Employees' }).click()
-  const legacyEmployees = page.getByTestId('legacy-digital-employee-upgrades')
-  await expect(legacyEmployees).toContainText('Legacy browser employee')
-  await legacyEmployees.getByRole('button', { name: 'Upgrade to current version' }).click()
-  const upgradeDialog = page.getByRole('dialog', { name: 'Upgrade digital employee' })
-  await upgradeDialog.getByRole('combobox', { name: 'Job template' }).click()
-  await page.getByRole('option', { name: 'First development role', exact: true }).click()
-  const upgradeResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      /\/api\/digital-employee-types\/[^/]+\/employees\/legacy-browser-employee\/upgrade$/.test(
-        new URL(response.url()).pathname,
-      ),
-  )
-  await upgradeDialog.getByRole('button', { name: 'Upgrade', exact: true }).click()
-  expect((await upgradeResponse).status()).toBe(200)
-  await expect(legacyEmployees).toHaveCount(0)
-  const upgradedEmployee = page
-    .locator('.employee-summary-card--employee')
-    .filter({ hasText: 'Legacy browser employee' })
-  await expect(upgradedEmployee).toContainText('First development role')
-  await expect(upgradedEmployee).not.toContainText('Enabled')
-  await expect(upgradedEmployee).not.toContainText('Disabled')
+  await expect(page.getByTestId('legacy-digital-employee-upgrades')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Upgrade to current version' })).toHaveCount(0)
+  expect(staleTypeRequests).toEqual([])
 })
 
 test('a first-time user configures a work-item tool directly on the fixed responsibility cards', async ({
