@@ -14,6 +14,8 @@ import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
 import type { DigitalEmployeeExecutionParticipant } from '../public/participants'
 import {
+  executionContractAgentImplementationSchema,
+  executionContractImplementationSchema,
   EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
   buildExecutionContractAgentPrompt,
   type ExecutionContractParticipant,
@@ -41,27 +43,14 @@ const exactRefSchema = z
   .object({ id: z.string().min(1), revision: z.number().int().positive() })
   .strict()
 
-const agentImplementationSchema = z
-  .object({ kind: z.literal('agent'), agentRef: exactRefSchema })
-  .strict()
-const workflowImplementationSchema = z
-  .object({ kind: z.literal('workflow'), workflowRef: exactRefSchema })
-  .strict()
-const programImplementationSchema = z
-  .object({
-    kind: z.literal('program'),
-    runtimeKind: z.enum(['bash', 'node', 'python']),
-    executableArtifactRef: z.string().min(1),
-    executableDigest: z.string().regex(/^[a-f0-9]{64}$/),
-    parameterValuesRef: z.string().min(1).nullable(),
-    runtimeProfileRef: exactRefSchema,
-  })
-  .strict()
-const implementationSchema = z.discriminatedUnion('kind', [
-  agentImplementationSchema,
-  workflowImplementationSchema,
-  programImplementationSchema,
-])
+// RFC-317 T45（DE-08）—— implementation 联合直接用 execution-contract 的**导出 schema**。
+//
+// 这里原本逐字段手抄了一份：`exactRefSchema` / agent / workflow / program 四段，连
+// `/^[a-f0-9]{64}$/` 的 digest 正则和 `z.enum(['bash','node','python'])` 都一模一样。
+// 而本文件**早就**在 import `@/modules/execution-contract/public/types`（拿的是
+// EXECUTION_CONTRACT_SCRIPT_INPUT_PORT 与 prompt 构造器），单一事实源只差一个标识符。
+// 手抄的那份必然过期：内核加一种 implementation kind、或收紧某个字段，这里不会红——
+// 它会安静地按旧形状解析，把新形态判成非法。
 
 const programParametersSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
 
@@ -108,7 +97,7 @@ const humanReviewSchema = z
         workContractRef: z
           .object({ contractId: z.literal('development.analyze-plan'), version: z.literal(1) })
           .strict(),
-        implementation: agentImplementationSchema,
+        implementation: executionContractAgentImplementationSchema,
       })
       .strict(),
   })
@@ -260,7 +249,7 @@ export function composeDigitalEmployeeExecution(deps: {
     async launch(planJson, attemptJson) {
       const plan = planSchema.parse(JSON.parse(planJson) as unknown)
       const attempt = attemptSchema.parse(JSON.parse(attemptJson) as unknown)
-      const implementation = implementationSchema.parse(
+      const implementation = executionContractImplementationSchema.parse(
         JSON.parse(plan.implementationJson) as unknown,
       )
       if (implementation.kind !== plan.implementationKind) {

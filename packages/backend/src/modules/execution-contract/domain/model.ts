@@ -362,8 +362,20 @@ const exactResourceRefSchema = z
   .object({ id: z.string().min(1), revision: z.number().int().positive() })
   .strict()
 
+/**
+ * RFC-317 T45（DE-08）—— agent 变体单独具名。
+ *
+ * 消费侧（task-execution 的规划工具）需要「这一处的 implementation 必须是 agent 形态」。
+ * 变体内联在联合里时，那边只能**再手抄一份**——而手抄的那份必然过期：内核收紧
+ * `agentRef` 或改名，消费侧不会红，它会安静地按旧形状解析。提取成具名 schema 后，
+ * 联合与消费侧共用同一个对象。
+ */
+export const executionContractAgentImplementationSchema = z
+  .object({ kind: z.literal('agent'), agentRef: exactResourceRefSchema })
+  .strict()
+
 export const executionContractImplementationSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('agent'), agentRef: exactResourceRefSchema }).strict(),
+  executionContractAgentImplementationSchema,
   z.object({ kind: z.literal('workflow'), workflowRef: exactResourceRefSchema }).strict(),
   z
     .object({

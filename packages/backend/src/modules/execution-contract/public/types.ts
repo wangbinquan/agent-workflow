@@ -15,6 +15,7 @@ export {
   EXECUTION_CONTRACT_SCRIPT_INPUT_FILE_ENV,
   EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
   buildExecutionContractAgentPrompt,
+  executionContractAgentImplementationSchema,
   executionContractImplementationSchema,
   executionContractRefKey,
   executionContractRefSchema,
