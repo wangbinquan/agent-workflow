@@ -438,9 +438,9 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const prepareMaterialsCenterY = prepareMaterialsBox.y + prepareMaterialsBox.height / 2
   expect(uiInputBox.y + uiInputBox.height / 2).toBeLessThan(prepareMaterialsCenterY)
   expect(issueInputBox.y + issueInputBox.height / 2).toBeGreaterThan(prepareMaterialsCenterY)
-  await expect(reviewBranch).toContainText('No review: start here')
+  await expect(reviewBranch).toContainText('No human review')
   await expect(reviewBranch).toContainText('Analyze and implement')
-  await expect(reviewBranch).toContainText('Optional review prefix')
+  await expect(reviewBranch).toContainText('Human review required')
   await expect(reviewBranch.locator('[data-review-stage="analysis"] strong')).toHaveText(
     'Implementation planning',
   )
@@ -448,6 +448,39 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(reviewBranch.locator('[data-work-item-ref="analyze-implement"]')).toHaveCount(1)
   await expect(repairPlanReviewCard).toHaveCount(1)
   await expect(repairPlanReviewCard.locator('strong')).toHaveText('Human plan review')
+  const reviewBypass = reviewBranch.locator('[data-review-bypass]')
+  const reviewPrefix = reviewBranch.locator('.employee-toolbox-review-branch__prefix')
+  const analyzeImplementCard = reviewBranch.locator('[data-work-item-ref="analyze-implement"]')
+  await expect(reviewBypass).toHaveCount(1)
+  const [reviewBypassBox, reviewPrefixBox, analyzeImplementBox] = await Promise.all([
+    reviewBypass.boundingBox(),
+    reviewPrefix.boundingBox(),
+    analyzeImplementCard.boundingBox(),
+  ])
+  expect(reviewBypassBox).not.toBeNull()
+  expect(reviewPrefixBox).not.toBeNull()
+  expect(analyzeImplementBox).not.toBeNull()
+  expect(
+    Math.abs(reviewBypassBox!.x - (prepareMaterialsBox.x + prepareMaterialsBox.width)),
+  ).toBeLessThanOrEqual(1)
+  expect(
+    Math.abs(reviewBypassBox!.x + reviewBypassBox!.width - analyzeImplementBox!.x),
+  ).toBeLessThanOrEqual(1)
+  expect(reviewBypassBox!.y).toBeLessThan(reviewPrefixBox!.y - 5)
+  expect(
+    Math.abs(
+      reviewBypassBox!.y +
+        reviewBypassBox!.height -
+        (analyzeImplementBox!.y + analyzeImplementBox!.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1)
+  expect(
+    Math.abs(
+      reviewBypassBox!.y +
+        reviewBypassBox!.height -
+        (prepareMaterialsBox.y + prepareMaterialsBox.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1)
   expect(
     await reviewBranch
       .locator('.employee-toolbox-review-branch__reviewed-flow .employee-toolbox-card')

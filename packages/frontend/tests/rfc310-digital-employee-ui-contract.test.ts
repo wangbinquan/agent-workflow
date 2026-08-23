@@ -131,8 +131,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('employee-toolbox-review-branch__merged-item')
     expect(graph).toContain('employee-toolbox-review-branch__prefix')
     expect(graph).toContain('employee-toolbox-review-branch__merge-target')
-    expect(graph).toContain('employee-toolbox-review-branch__direct-label')
-    expect(graph).not.toContain('data-review-path="bypass"')
+    expect(graph).toContain('data-review-bypass')
+    expect(graph).toContain('employee-toolbox-review-branch__bypass-end')
+    expect(graph).not.toContain('employee-toolbox-review-branch__direct-label')
     expect(graph).toContain('data-review-option-ref={gate.optionRef}')
     expect(graph).toContain('item.humanReview !== null')
     expect(graph).toContain("mode: 'conditional' | 'active'")
@@ -173,7 +174,9 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).toMatch(
       /\.employee-toolbox-review-branch__prefix::before\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--panel\)/,
     )
-    expect(styles).not.toContain('.employee-toolbox-review-branch__bypass')
+    expect(styles).toContain('.employee-toolbox-review-branch__bypass')
+    expect(styles).toContain('.employee-toolbox-review-branch__bypass-end')
+    expect(styles).not.toContain('.employee-toolbox-review-branch__direct-label')
     expect(graph).toContain('new ResizeObserver(measureLaneColumns)')
     expect(graph).toContain('laneColumnCapacityById[lane.laneId] ?? totalColumnSpan')
     expect(graph).not.toContain('Math.min(totalColumnSpan, 5)')

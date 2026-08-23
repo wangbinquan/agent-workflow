@@ -920,6 +920,10 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                               <div
                                 key={`review-branch:${item.workItemRef}`}
                                 className={`employee-toolbox-review-branch${
+                                  entry.mode === 'conditional'
+                                    ? ' employee-toolbox-review-branch--conditional'
+                                    : ''
+                                }${
                                   primaryRowStartIndices.has(itemIndex)
                                     ? ' employee-toolbox-review-branch--row-start'
                                     : ''
@@ -935,15 +939,23 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                       : `Review branches for ${localized(item.label, props.language)}`
                                 }
                               >
+                                {entry.mode === 'conditional' ? (
+                                  <span
+                                    className="employee-toolbox-review-branch__bypass"
+                                    data-review-bypass
+                                  >
+                                    <span className="employee-toolbox-review-branch__bypass-label">
+                                      {zh ? '无需人工审核' : 'No human review'}
+                                    </span>
+                                    <span
+                                      className="employee-toolbox-review-branch__bypass-end"
+                                      aria-hidden="true"
+                                    />
+                                  </span>
+                                ) : null}
                                 <div className="employee-toolbox-review-branch__prefix">
                                   <span className="employee-toolbox-review-branch__label">
-                                    {entry.mode === 'active'
-                                      ? zh
-                                        ? '已启用审核前缀'
-                                        : 'Review prefix enabled'
-                                      : zh
-                                        ? '可选审核前缀'
-                                        : 'Optional review prefix'}
+                                    {zh ? '需人工审核' : 'Human review required'}
                                   </span>
                                   <div className="employee-toolbox-review-branch__reviewed-flow">
                                     <button
@@ -997,11 +1009,6 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                   </div>
                                 </div>
                                 <div className="employee-toolbox-review-branch__merge-target">
-                                  {entry.mode === 'conditional' ? (
-                                    <span className="employee-toolbox-review-branch__direct-label">
-                                      {zh ? '不审核：从此开始' : 'No review: start here'}
-                                    </span>
-                                  ) : null}
                                   <button
                                     id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
                                     data-work-item-ref={item.workItemRef}

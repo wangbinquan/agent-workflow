@@ -1175,9 +1175,37 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
           outer === 'rgba(0, 0, 0, 0)' &&
           prefix === map &&
           !mergedInsidePrefix &&
-          bypassCount === 0,
+          bypassCount === 1,
       ),
     ).toBe(true)
+    await expect(
+      responsibilityMap.locator('.employee-toolbox-review-branch__direct-label'),
+    ).toHaveCount(0)
+    const reviewBypassGeometry = await responsibilityMap.evaluate((map) => {
+      const box = (selector: string) => {
+        const element = map.querySelector<HTMLElement>(selector)
+        if (element === null) throw new Error(`Missing review-bypass anchor: ${selector}`)
+        return element.getBoundingClientRect()
+      }
+      const prepare = box('[data-work-item-ref="prepare-materials"]')
+      const bypass = box('[data-review-bypass]')
+      const prefix = box('.employee-toolbox-review-branch__prefix')
+      const merged = box('[data-work-item-ref="analyze-implement"]')
+      return {
+        startDelta: Math.abs(bypass.left - prepare.right),
+        endDelta: Math.abs(bypass.right - merged.left),
+        horizontalAbovePrefix: bypass.top < prefix.top - 5,
+        startCenterDelta: Math.abs(bypass.bottom - (prepare.top + prepare.height / 2)),
+        endCenterDelta: Math.abs(bypass.bottom - (merged.top + merged.height / 2)),
+      }
+    })
+    expect(reviewBypassGeometry).toEqual({
+      startDelta: 0,
+      endDelta: 0,
+      horizontalAbovePrefix: true,
+      startCenterDelta: 0,
+      endCenterDelta: 0,
+    })
     const connectorGeometry = await responsibilityMap.evaluate((map) => {
       const readConnector = (selector: string) => {
         const element = map.querySelector<HTMLElement>(selector)
@@ -1210,11 +1238,12 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
         readConnector('[data-work-item-ref="prepare-change"]'),
         readConnector('[data-review-option-ref]'),
         readConnector('.employee-toolbox-review-branch__merged-item'),
+        readConnector('.employee-toolbox-review-branch__bypass-end'),
         readConnector('.employee-toolbox-ingress-branch__merge'),
       ]
     })
     expect(connectorGeometry).toEqual(
-      Array(5).fill({
+      Array(6).fill({
         shaftWidth: '6px',
         arrowWidth: '3px',
         arrowHeight: '3px',
