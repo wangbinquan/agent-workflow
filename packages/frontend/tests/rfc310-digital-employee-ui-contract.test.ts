@@ -71,13 +71,56 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('replacedDestinationRefs')
     expect(graph).toContain('P{node.priority}')
     expect(graph).toContain('props.cardState?.(item)')
-    expect(styles).toContain(
-      'grid-template-columns: repeat(var(--employee-lane-columns, 1), minmax(0, 168px))',
-    )
+    expect(styles).toContain('--employee-lane-template')
     expect(styles).toContain('justify-content: start')
     expect(styles).not.toContain(
       '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
     )
+  })
+
+  test('ingress and human-review cards are generic read-only projections', () => {
+    const graph = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+    const types = read('components/digital-employees/types.ts')
+    const typePage = read('routes/digital-employees.$typeRef.tsx')
+    const runtime = read('routes/employee-cases.$caseId.tsx')
+    const styles = read('styles.css')
+
+    expect(types).toContain('workIngresses: WorkIngress[]')
+    expect(types).toContain("configurationSurface: 'task-creation' | 'event-response-rules'")
+    expect(types).toContain('reviewedPath?: {')
+    expect(graph).toContain("kind: 'ingress'")
+    expect(graph).toContain("kind: 'ingress-branch'")
+    expect(graph).toContain("kind: 'review-branch'")
+    expect(graph).toContain('data-work-ingress-ref={ingress.ingressRef}')
+    expect(graph).toContain('data-next-work-item-ref={ingress.nextWorkItemRef}')
+    expect(graph).toContain('data-review-stage="analysis"')
+    expect(graph).toContain('data-review-stage="implementation"')
+    expect(graph).toContain('data-review-option-ref={gate.optionRef}')
+    expect(graph).toContain('item.humanReview === null')
+    expect(graph).not.toContain("typeId === 'development'")
+    expect(graph).not.toContain("ingressRef === 'issue'")
+    expect(graph).not.toContain("optionRef === 'review-implementation-plan'")
+    expect(typePage).toContain("navigate({ to: '/events', search: { tab: 'subscriptions' } })")
+    expect(typePage).toContain(
+      "navigate({ to: '/tasks/new', search: { kind: 'digital-employee' } })",
+    )
+    expect(typePage).toContain("ingress.configurationSurface === 'task-creation'")
+    expect(typePage).toContain('reviewOnly={selectedReview !== null}')
+    expect(typePage).toContain('data-testid="employee-review-gate-detail"')
+    expect(typePage).toContain('data-testid="employee-job-review-gate-detail"')
+    expect(typePage).toContain('不能在这里增加或选择工具')
+    expect(runtime).toContain('reviewGateState={runtimeReviewGateState}')
+    expect(runtime).toContain("ingress.configurationSurface === 'task-creation'")
+    expect(runtime).toContain("projection?.state === 'waiting'")
+    expect(runtime).toContain("projection?.state === 'skipped'")
+    expect(styles).toContain('.employee-toolbox-card--ingress')
+    expect(styles).toContain('.employee-toolbox-ingress-branch__sources')
+    expect(styles).toContain('.employee-toolbox-ingress-branch__merge')
+    expect(styles).toContain('.employee-toolbox-lane--parallel-ingress')
+    expect(styles).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(graph).toContain('options.sourceNode === true ? null')
+    expect(graph).toContain("'--employee-lane-template': laneTemplateColumns")
+    expect(styles).toContain('.employee-toolbox-card--human-gate')
   })
 
   // User regression 2026-08-22: failure types were edited globally from the
@@ -316,7 +359,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).not.toContain(
       '.employee-toolbox-region--branching .employee-toolbox-lane__axis::before',
     )
-    expect(styles).toContain('.employee-toolbox-card + .employee-toolbox-card::before')
+    expect(styles).toContain('.employee-toolbox-review-branch__reviewed-flow')
+    expect(styles).toContain('+ .employee-toolbox-card::before')
     expect(styles).not.toContain('minmax(min(100%, 210px), 1fr)')
     expect(styles).toContain('minmax(0, 168px)')
     const dutyNameRule = styles.match(/\.employee-toolbox-card strong \{[\s\S]*?\n\}/)?.[0] ?? ''

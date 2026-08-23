@@ -672,6 +672,63 @@ export class DigitalEmployeeRuntimeService {
     const activeRound = rounds.find((round) =>
       ['planned', 'running', 'settling'].includes(round.state),
     )
+    const reviewGates = descriptor.authoringManifest.workItems.flatMap<{
+      parentWorkItemRef: string
+      optionRef: string
+      state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
+    }>((item) => {
+      if (item.humanReview === null) return []
+      const round = [...rounds]
+        .filter((candidate) => candidate.workItemRef === item.workItemRef)
+        .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
+        .at(-1)
+      if (round === undefined) {
+        return [
+          {
+            parentWorkItemRef: item.workItemRef,
+            optionRef: item.humanReview.optionRef,
+            state: 'not-reached' as const,
+          },
+        ]
+      }
+      let enabled = false
+      try {
+        const rawPlan = JSON.parse(round.planJson) as { inputEnvelopeJson?: unknown }
+        if (typeof rawPlan.inputEnvelopeJson === 'string') {
+          const envelope = JSON.parse(rawPlan.inputEnvelopeJson) as { humanReview?: unknown }
+          enabled = envelope.humanReview !== null && envelope.humanReview !== undefined
+        }
+      } catch {
+        enabled = false
+      }
+      if (!enabled) {
+        return [
+          {
+            parentWorkItemRef: item.workItemRef,
+            optionRef: item.humanReview.optionRef,
+            state: 'skipped' as const,
+          },
+        ]
+      }
+      const taskState =
+        round.executionRef === null
+          ? null
+          : (this.#execution.inspectHumanReview?.(round.executionRef) ?? null)
+      const state =
+        taskState ??
+        (round.state === 'completed'
+          ? 'approved'
+          : round.state === 'failed' || round.state === 'obsolete'
+            ? 'failed'
+            : 'planning')
+      return [
+        {
+          parentWorkItemRef: item.workItemRef,
+          optionRef: item.humanReview.optionRef,
+          state,
+        },
+      ]
+    })
     return {
       case: caseRecord,
       employeeType: {
@@ -708,6 +765,7 @@ export class DigitalEmployeeRuntimeService {
       }),
       activeRound,
       rounds,
+      reviewGates,
       channels: this.#store.listChannels(caseId).map((channel) => {
         const invocation = this.#store
           .listInvocationsForRound(channel.correlationRef)

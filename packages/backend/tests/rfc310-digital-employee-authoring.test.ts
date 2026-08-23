@@ -131,6 +131,46 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       (region) => region.regionId === 'care',
     )!
 
+    expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 6 })
+    expect(descriptor.authoringManifest.workItems).toHaveLength(20)
+    expect(descriptor.authoringManifest.workIngresses).toEqual([
+      {
+        ingressRef: 'ui-input',
+        regionId: 'delivery',
+        responsibilityLaneId: 'delivery-main',
+        order: 0,
+        label: { 'zh-CN': '界面输入', 'en-US': 'UI input' },
+        valueLabel: { 'zh-CN': '任务', 'en-US': 'Task' },
+        description: {
+          'zh-CN': '从统一新建任务界面输入正文、文件或外部需求编号',
+          'en-US': 'Enter a body, files, or an external requirement ID in unified task creation',
+        },
+        sourceClass: 'manual',
+        eventTypeRefs: [],
+        configurationSurface: 'task-creation',
+        nextWorkItemRef: 'prepare-materials',
+      },
+      {
+        ingressRef: 'issue',
+        regionId: 'delivery',
+        responsibilityLaneId: 'delivery-main',
+        order: 10,
+        label: { 'zh-CN': 'ISSUE', 'en-US': 'ISSUE' },
+        valueLabel: { 'zh-CN': 'Webhook', 'en-US': 'Webhook' },
+        description: {
+          'zh-CN': '在 Webhook 自动化规则中把 ISSUE 事件交给这名数字员工',
+          'en-US': 'Route ISSUE events to this employee with a Webhook automation rule',
+        },
+        sourceClass: 'issue',
+        eventTypeRefs: [
+          { id: 'code-host.issue.labeled', revision: 1 },
+          { id: 'code-host.issue.comment-received', revision: 1 },
+        ],
+        configurationSurface: 'event-response-rules',
+        nextWorkItemRef: 'prepare-materials',
+      },
+    ])
+
     expect(care.responsibilityLanes.map((lane) => lane.laneId)).toEqual([
       'care-attention',
       'care-review',
@@ -144,6 +184,15 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       descriptor.authoringManifest.workItems.map((item) => [item.workItemRef, item] as const),
     )
     expect(workItems.get('analyze-implement')?.nextWorkItemRefs).toEqual(['prepare-change'])
+    expect(workItems.get('analyze-implement')?.humanReview).toMatchObject({
+      optionRef: 'review-implementation-plan',
+      artifactPort: 'analysis-plan',
+      label: { 'zh-CN': '人工审核修复计划', 'en-US': 'Human plan review' },
+      reviewedPath: {
+        beforeReviewLabel: { 'zh-CN': '分析', 'en-US': 'Analyze' },
+        afterApprovalLabel: { 'zh-CN': '实现', 'en-US': 'Implement' },
+      },
+    })
     expect(workItems.get('repair-pipeline')?.nextWorkItemRefs).toEqual([
       'repair-pipeline',
       'delegate',
@@ -240,6 +289,52 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       code: 'unknown-responsibility-lane',
       at: `workItems.${invalid.authoringManifest.workItems[0]!.workItemRef}.responsibilityLaneId`,
       detail: 'missing-lane',
+    })
+    const duplicateIngress = structuredClone(descriptor)
+    duplicateIngress.authoringManifest.workIngresses.push(
+      structuredClone(duplicateIngress.authoringManifest.workIngresses[1]!),
+    )
+    expect(validateTypePackage(duplicateIngress)).toContainEqual({
+      code: 'duplicate-identity',
+      at: 'authoringManifest.workIngresses',
+      detail: 'issue',
+    })
+    const invalidIngressLane = structuredClone(descriptor)
+    invalidIngressLane.authoringManifest.workIngresses[1]!.responsibilityLaneId = 'missing-lane'
+    expect(validateTypePackage(invalidIngressLane)).toContainEqual({
+      code: 'unknown-responsibility-lane',
+      at: 'workIngresses.issue.responsibilityLaneId',
+      detail: 'missing-lane',
+    })
+    const invalidIngressNext = structuredClone(descriptor)
+    invalidIngressNext.authoringManifest.workIngresses[1]!.nextWorkItemRef = 'analyze-implement'
+    expect(validateTypePackage(invalidIngressNext)).toContainEqual({
+      code: 'work-ingress-next-not-work-start',
+      at: 'workIngresses.issue.nextWorkItemRef',
+      detail: 'analyze-implement',
+    })
+    const missingIngressNext = structuredClone(descriptor)
+    missingIngressNext.authoringManifest.workIngresses[1]!.nextWorkItemRef = 'missing-work-item'
+    expect(validateTypePackage(missingIngressNext)).toContainEqual({
+      code: 'unknown-work-item',
+      at: 'workIngresses.issue.nextWorkItemRef',
+      detail: 'missing-work-item',
+    })
+    const missingEventType = structuredClone(descriptor)
+    missingEventType.authoringManifest.workIngresses[1]!.eventTypeRefs = []
+    expect(validateTypePackage(missingEventType)).toContainEqual({
+      code: 'work-ingress-event-type-required',
+      at: 'workIngresses.issue.eventTypeRefs',
+      detail: 'issue',
+    })
+    const eventOnUiInput = structuredClone(descriptor)
+    eventOnUiInput.authoringManifest.workIngresses[0]!.eventTypeRefs = [
+      { id: 'code-host.issue.labeled', revision: 1 },
+    ]
+    expect(validateTypePackage(eventOnUiInput)).toContainEqual({
+      code: 'work-ingress-event-type-not-applicable',
+      at: 'workIngresses.ui-input.eventTypeRefs',
+      detail: 'ui-input',
     })
     const invalidCapability = structuredClone(descriptor)
     invalidCapability.reactionRules[0]!.capabilityWorkItemRef = 'missing-capability'
@@ -341,7 +436,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
     })
     const classifierTools = JSON.parse(
-      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 5 }), 'classify-pipeline'),
+      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 6 }), 'classify-pipeline'),
     ) as Array<{
       content: {
         dispatchRouteDefinitions?: Array<{ routeRef: string; fallback: boolean }>
@@ -356,7 +451,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       expect.objectContaining({ routeRef: 'other-pipeline-failure', fallback: true }),
     ])
     const repairTools = JSON.parse(
-      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 5 }), 'repair-pipeline'),
+      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 6 }), 'repair-pipeline'),
     ) as Array<{
       content: {
         acceptedDispatchRoutes?: Array<{
@@ -373,7 +468,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('classifier tools own problem definitions and repair tools declare exact capabilities', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const classifierBody = {
       displayName: '两类流水线问题识别工具',
       description: '工具版本拥有有序问题清单',
@@ -657,7 +752,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   test('a job template cannot publish before every required graph node has a tool', () => {
     const module = fixtureModule()
     const draft = module.commands.createJobTemplate({
-      typeRef: { typeId: 'development', revision: 5 },
+      typeRef: { typeId: 'development', revision: 6 },
       actorUserId: 'author-1',
       body: {
         name: '不完整岗位',
@@ -680,7 +775,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
     expect(() =>
       module.commands.createJobTemplate({
-        typeRef: { typeId: 'development', revision: 5 },
+        typeRef: { typeId: 'development', revision: 6 },
         actorUserId: 'author-1',
         body: {
           name: '错误的泳道优先级',
@@ -824,7 +919,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('unconfigured optional lanes stay disabled without blocking employee save', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const typePackage = module.queries.getType(typeRef)
     const optionalLanes = new Set(
       typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
@@ -1001,7 +1096,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('type -> work item -> tool registration closes an exact employee definition', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const manifest = module.queries.getAuthoringManifest(typeRef)
     const typePackage = module.queries.getType(typeRef)
     expect(manifest.lifecycleRegions.map((region) => region.regionId)).toEqual(['delivery', 'care'])
@@ -2051,7 +2146,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   test('system nodes reject tools and employee retries are derived from global Limits', async () => {
     let limits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
     const module = fixtureModule({ current: () => limits })
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     await expect(
       module.commands.createTool({
         typeRef,
@@ -2081,7 +2176,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('a work-item connection must resolve to the exact required provider purpose', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const create = (connectionRef: { id: string; revision: number } | null) =>
       module.commands.createTool({
         typeRef,
@@ -2134,7 +2229,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
   // registration identity and successful republishes advance only its revision.
   test('tool corrections reuse one registration id and publish immutable revisions', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const body = {
       displayName: '审批工具',
       description: '先以缺失连接制造可纠正的失败草稿。',
@@ -2200,7 +2295,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
 
   test('Program tool editor round-trips source and parameters from immutable artifacts', async () => {
     const module = fixtureModule()
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const created = await module.commands.createTool({
       typeRef,
       workItemRef: 'prepare-materials',

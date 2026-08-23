@@ -85,7 +85,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 5 } as const
+const typeRef = { typeId: 'development', revision: 6 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 
 const scopeSchema = z.discriminatedUnion('kind', [
@@ -96,9 +96,9 @@ const scopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('task') }).strict(),
 ])
 
-// Revision 5 retires “global default” from authoring in favor of an explicit
+// Revision 5 retired “global default” from authoring in favor of an explicit
 // task-time repository choice. Runtime codecs are keyed by type id, however,
-// so they must continue decoding frozen revision-3 employee scopes.
+// so revision 6 must continue decoding frozen revision-3 employee scopes.
 const runtimeScopeSchema = z.discriminatedUnion('kind', [
   ...scopeSchema.options,
   z.object({ kind: z.literal('global') }).strict(),
@@ -1753,6 +1753,43 @@ const runtimePackage = {
           ],
         },
       ],
+      workIngresses: [
+        {
+          ingressRef: 'ui-input',
+          regionId: 'delivery',
+          responsibilityLaneId: 'delivery-main',
+          order: 0,
+          label: text('界面输入', 'UI input'),
+          valueLabel: text('任务', 'Task'),
+          description: text(
+            '从统一新建任务界面输入正文、文件或外部需求编号',
+            'Enter a body, files, or an external requirement ID in unified task creation',
+          ),
+          sourceClass: 'manual',
+          eventTypeRefs: [],
+          configurationSurface: 'task-creation',
+          nextWorkItemRef: 'prepare-materials',
+        },
+        {
+          ingressRef: 'issue',
+          regionId: 'delivery',
+          responsibilityLaneId: 'delivery-main',
+          order: 10,
+          label: text('ISSUE', 'ISSUE'),
+          valueLabel: text('Webhook', 'Webhook'),
+          description: text(
+            '在 Webhook 自动化规则中把 ISSUE 事件交给这名数字员工',
+            'Route ISSUE events to this employee with a Webhook automation rule',
+          ),
+          sourceClass: 'issue',
+          eventTypeRefs: [
+            { id: 'code-host.issue.labeled', revision: 1 },
+            { id: 'code-host.issue.comment-received', revision: 1 },
+          ],
+          configurationSurface: 'event-response-rules',
+          nextWorkItemRef: 'prepare-materials',
+        },
+      ],
       workItems: [
         {
           workItemRef: 'prepare-materials',
@@ -1793,11 +1830,15 @@ const runtimePackage = {
           humanReview: {
             optionRef: 'review-implementation-plan',
             artifactPort: 'analysis-plan',
-            label: text('可选人工方案评审', 'Optional human plan review'),
+            label: text('人工审核修复计划', 'Human plan review'),
             description: text(
               '任务受理时可选择先评审实现方案，批准后才执行实现工具',
               'The task may require plan approval before its implementation tool runs',
             ),
+            reviewedPath: {
+              beforeReviewLabel: text('分析', 'Analyze'),
+              afterApprovalLabel: text('实现', 'Implement'),
+            },
           },
           toolRoleGroups: primaryRole(
             '实现者',

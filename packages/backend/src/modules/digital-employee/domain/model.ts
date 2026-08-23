@@ -232,6 +232,22 @@ const lifecycleRegionSchema = z
   })
   .strict()
 
+const workIngressDefinitionSchema = z
+  .object({
+    ingressRef: machineIdSchema,
+    regionId: machineIdSchema,
+    responsibilityLaneId: machineIdSchema,
+    order: z.number().int().nonnegative(),
+    label: localizedTextSchema,
+    valueLabel: localizedTextSchema,
+    description: localizedTextSchema,
+    sourceClass: machineIdSchema,
+    eventTypeRefs: z.array(exactResourceRefSchema).max(20),
+    configurationSurface: z.enum(['task-creation', 'event-response-rules']),
+    nextWorkItemRef: machineIdSchema,
+  })
+  .strict()
+
 const workItemDefinitionSchema = z
   .object({
     workItemRef: machineIdSchema,
@@ -261,6 +277,14 @@ const workItemDefinitionSchema = z
         artifactPort: machineIdSchema,
         label: localizedTextSchema,
         description: localizedTextSchema,
+        reviewedPath: z
+          .object({
+            beforeReviewLabel: localizedTextSchema,
+            afterApprovalLabel: localizedTextSchema,
+          })
+          .strict()
+          .nullable()
+          .default(null),
       })
       .strict()
       .nullable()
@@ -274,11 +298,13 @@ export const employeeAuthoringManifestSchema = z
   .object({
     schemaVersion: z.literal(1),
     lifecycleRegions: z.array(lifecycleRegionSchema).min(1).max(50),
+    workIngresses: z.array(workIngressDefinitionSchema).max(100).default([]),
     workItems: z.array(workItemDefinitionSchema).min(1).max(200),
   })
   .strict()
 
 export type EmployeeAuthoringManifest = z.infer<typeof employeeAuthoringManifestSchema>
+export type WorkIngressDefinition = EmployeeAuthoringManifest['workIngresses'][number]
 export type WorkItemDefinition = EmployeeAuthoringManifest['workItems'][number]
 
 export const workContractSchema = z
@@ -1009,6 +1035,10 @@ export function validateTypePackage(
     )
   }
   addDuplicates(
+    'authoringManifest.workIngresses',
+    descriptor.authoringManifest.workIngresses.map((ingress) => ingress.ingressRef),
+  )
+  addDuplicates(
     'authoringManifest.workItems',
     descriptor.authoringManifest.workItems.map((item) => item.workItemRef),
   )
@@ -1069,6 +1099,61 @@ export function validateTypePackage(
       at: 'workStartWorkItemRef',
       detail: descriptor.workStartWorkItemRef,
     })
+  }
+
+  for (const ingress of descriptor.authoringManifest.workIngresses) {
+    if (!regionIds.has(ingress.regionId)) {
+      violations.push({
+        code: 'unknown-lifecycle-region',
+        at: `workIngresses.${ingress.ingressRef}.regionId`,
+        detail: ingress.regionId,
+      })
+    }
+    const region = regions.get(ingress.regionId)
+    if (
+      region !== undefined &&
+      !region.responsibilityLanes.some((lane) => lane.laneId === ingress.responsibilityLaneId)
+    ) {
+      violations.push({
+        code: 'unknown-responsibility-lane',
+        at: `workIngresses.${ingress.ingressRef}.responsibilityLaneId`,
+        detail: ingress.responsibilityLaneId,
+      })
+    }
+    if (!workItems.has(ingress.nextWorkItemRef)) {
+      violations.push({
+        code: 'unknown-work-item',
+        at: `workIngresses.${ingress.ingressRef}.nextWorkItemRef`,
+        detail: ingress.nextWorkItemRef,
+      })
+    } else if (ingress.nextWorkItemRef !== descriptor.workStartWorkItemRef) {
+      violations.push({
+        code: 'work-ingress-next-not-work-start',
+        at: `workIngresses.${ingress.ingressRef}.nextWorkItemRef`,
+        detail: ingress.nextWorkItemRef,
+      })
+    }
+    addDuplicates(
+      `workIngresses.${ingress.ingressRef}.eventTypeRefs`,
+      ingress.eventTypeRefs.map((eventTypeRef) => `${eventTypeRef.id}@${eventTypeRef.revision}`),
+    )
+    if (
+      ingress.configurationSurface === 'event-response-rules' &&
+      ingress.eventTypeRefs.length === 0
+    ) {
+      violations.push({
+        code: 'work-ingress-event-type-required',
+        at: `workIngresses.${ingress.ingressRef}.eventTypeRefs`,
+        detail: ingress.ingressRef,
+      })
+    }
+    if (ingress.configurationSurface === 'task-creation' && ingress.eventTypeRefs.length > 0) {
+      violations.push({
+        code: 'work-ingress-event-type-not-applicable',
+        at: `workIngresses.${ingress.ingressRef}.eventTypeRefs`,
+        detail: ingress.ingressRef,
+      })
+    }
   }
 
   for (const requirement of descriptor.workIntakeAuthoring.kindRequirements) {

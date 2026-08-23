@@ -22,6 +22,7 @@ import { sha256Hex } from '@/util/hash'
 import {
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
+  DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
@@ -172,6 +173,50 @@ export function buildDigitalEmployeePlanPrompt(
   ]
     .filter((line) => line.length > 0)
     .join('\n\n')
+}
+
+export function inspectDigitalEmployeeHumanReviewState(
+  db: DbClient,
+  executionRef: string,
+): 'planning' | 'waiting' | 'approved' | 'failed' | null {
+  const task = db
+    .select({ inputs: tasks.inputs })
+    .from(tasks)
+    .where(eq(tasks.id, executionRef))
+    .get()
+  if (task === undefined) return null
+  let parsedInputs: z.SafeParseReturnType<unknown, Record<string, unknown>>
+  try {
+    parsedInputs = z.record(z.string(), z.unknown()).safeParse(JSON.parse(task.inputs) as unknown)
+  } catch {
+    return null
+  }
+  if (
+    !parsedInputs.success ||
+    typeof parsedInputs.data[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY] !== 'string'
+  ) {
+    return null
+  }
+  const reviewRun = db
+    .select({ status: nodeRuns.status })
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, executionRef),
+        eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID),
+      ),
+    )
+    .orderBy(desc(nodeRuns.id))
+    .get()
+  if (reviewRun?.status === 'awaiting_review') return 'waiting'
+  if (reviewRun?.status === 'done') return 'approved'
+  if (
+    reviewRun !== undefined &&
+    ['failed', 'canceled', 'interrupted', 'skipped', 'exhausted'].includes(reviewRun.status)
+  ) {
+    return 'failed'
+  }
+  return 'planning'
 }
 
 export function composeDigitalEmployeeExecution(deps: {
@@ -453,6 +498,10 @@ export function composeDigitalEmployeeExecution(deps: {
         )
       }
       return { kind: 'completed', executionRef, outputJson: output }
+    },
+
+    inspectHumanReview(executionRef) {
+      return inspectDigitalEmployeeHumanReviewState(deps.db, executionRef)
     },
 
     async cancel(executionRef) {

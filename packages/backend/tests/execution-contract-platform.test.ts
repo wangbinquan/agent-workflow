@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 
 import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
-import { agents as agentRows } from '@/db/schema'
+import { agents as agentRows, nodeRuns, tasks, workflows } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
@@ -29,10 +29,15 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import {
+  DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
+  DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
   synthesizeDigitalEmployeeScriptHostSnapshot,
   synthesizeReviewedDigitalEmployeeHostSnapshot,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
-import { buildDigitalEmployeePlanPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import {
+  buildDigitalEmployeePlanPrompt,
+  inspectDigitalEmployeeHumanReviewState,
+} from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createAgent, updateAgent } from '@/services/agent'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -337,6 +342,61 @@ describe('platform execution contracts', () => {
       source: { nodeId: '__de_plan_review__', portName: 'approved_doc' },
       target: { nodeId: '__de_agent__', portName: 'implementation-plan' },
     })
+  })
+
+  test('human-review projection reads the frozen host input and durable review receipt', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await db.insert(workflows).values({
+      id: 'review-projection-workflow',
+      name: 'review projection workflow',
+      description: '',
+      version: 1,
+      schemaVersion: 2,
+      definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [], inputs: [] }),
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await db.insert(tasks).values({
+      id: 'review-projection-task',
+      name: 'review projection task',
+      workflowId: 'review-projection-workflow',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/review-projection',
+      worktreePath: '/tmp/review-projection',
+      baseBranch: 'main',
+      branch: 'agent-workflow/review-projection',
+      status: 'running',
+      inputs: '{}',
+      startedAt: 1,
+    })
+
+    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBeNull()
+    db.update(tasks)
+      .set({ inputs: JSON.stringify({ [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: 'frozen prompt' }) })
+      .where(eq(tasks.id, 'review-projection-task'))
+      .run()
+    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('planning')
+
+    await db.insert(nodeRuns).values({
+      id: 'review-projection-run',
+      taskId: 'review-projection-task',
+      nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_review',
+    })
+    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('waiting')
+    db.update(nodeRuns)
+      .set({ status: 'done' })
+      .where(eq(nodeRuns.id, 'review-projection-run'))
+      .run()
+    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('approved')
+    db.update(nodeRuns)
+      .set({ status: 'failed' })
+      .where(eq(nodeRuns.id, 'review-projection-run'))
+      .run()
+    expect(inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe('failed')
   })
 
   test('exact envelope validation rejects malformed input and missing, extra, or cross-round output', () => {

@@ -219,7 +219,7 @@ describe('RFC-310 unified task catalog', () => {
                 blockReason: null,
                 employeeRef: { id: 'employee-1', revision: 1 },
                 employeeName: 'Developer',
-                typeRef: { typeId: 'development', revision: 5 },
+                typeRef: { typeId: 'development', revision: 6 },
                 typeName: { 'zh-CN': '开发数字员工', 'en-US': 'Development employee' },
                 subjectRef: 'issue-1',
                 targetRef: 'repository-1',

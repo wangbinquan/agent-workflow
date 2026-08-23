@@ -35,6 +35,11 @@
 > **2026-08-22 PR-24（实施中）**：复核发现 PR-22 只统一了创建入口视觉，没有统一后台任务来源注册、列表与筛选。当前按 §13k
 > 重新打开：完成前端/后端 `TaskSourceRegistration + task-catalog source adapter`、退役旧列表入口，并补齐 DigitalEmployee Case 的 owner/origin
 > 筛选事实；完整 gate、浏览器实走、推送和 exact-SHA hosted 证据未完成前不得标记本批完成。
+>
+> **2026-08-23 PR-27（实施中，流程已确认）**：职责全景把“界面输入”和“ISSUE”显示为同一来源列内上下并列、无前后顺序的两个入口，
+> “准备工作材料”位于来源列右侧，两者分别以连线汇入该节点；
+> 其后按是否启用审核分别显示“分析并实现”或“分析 → 人工审核修复计划 → 实现”。两条路径汇合后，“校验并冻结代码修改”和“提交 MR”
+> 继续位于同一主行。入口与条件阶段都不是新 WorkItem；20 个可执行工作项、WorkStart=`prepare-materials` 和 MR 修绿回路保持不变。
 
 ## 0. 交付原则
 
@@ -79,6 +84,7 @@
 | PR-22   | 最小化配置与统一任务入口     | 工具箱小卡片、岗位页内编辑、单一仓库范围选择、固定仓库继承和统一“新建任务”卡片入口可无指导使用                                                | PR-21       |
 | PR-24   | 统一任务来源与任务目录       | 创建、列表、筛选由单一来源合同注册；公共层零具体来源分支；后台统一 task-catalog，数字员工 Case 正确执行 owner/origin 筛选                     | PR-22       |
 | PR-25   | 工具归属的问题分派与拖动体验 | 问题清单归分类工具；修复工具多选能力；岗位选择后自动扇出连线；优先级释放前实时重排；三层卡同色且层次稳定                                      | PR-23       |
+| PR-27   | 双来源入口与人工审核分支     | 界面输入/ISSUE 都归一到材料准备；关闭审核走分析并实现，开启审核走分析→人工审核→实现；真实 ISSUE→MR→修绿链可复跑                               | PR-25,PR-26 |
 
 PR 编号表示逻辑批次，不预设最终 GitHub/GitLab MR 数；若某批超出可审查范围，可以按同一验收边界拆成
 `A/B`，但不能把安全反向测试挪到以后。
@@ -1467,14 +1473,14 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 共享一套来源注册，前后端公共层都只消费按 `sourceId` 定位的来源合同。各 bounded context 继续拥有自己的创建命令、详情和 mutation；
 任务抽象中不再存在第二层分派身份、挂载点或链。
 
-| 编号 | 任务                                                                                                                                 | 依赖      | 状态 |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---- |
-| T216 | shared `TaskSourceRegistration` 同源声明创建、列表、筛选和详情；唯一 source/filter、四步合同及权限回归                               | T206      | ✅   |
-| T217 | backend consumer-owned `task-catalog`、sourceId 直连 required port、bootstrap-only adapter 装配；旧两套列表端点退役                    | T216      | ✅   |
-| T218 | DigitalEmployee Case 持久化 owner/launchOrigin 并迁移；mine/all/shared、Event Center origin、status/view/query 在来源适配器真实执行    | T217      | ✅   |
-| T219 | 前端公共 Host、公共受控资源/仓库选择器、单一 catalog/list/type 筛选；移除来源私有页面与 category/subject 分支                         | T216,T217 | ✅   |
-| T220 | shared/backend/frontend 架构反向、API contract、迁移、system-mock E2E、任务创建/列表浏览器和视觉覆盖                                 | T217-T219 | ✅   |
-| T221 | 三轮功能自审、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA hosted CI/visual 终态核对                        | T220      | ✅   |
+| 编号 | 任务                                                                                                                                | 依赖      | 状态 |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
+| T216 | shared `TaskSourceRegistration` 同源声明创建、列表、筛选和详情；唯一 source/filter、四步合同及权限回归                              | T206      | ✅   |
+| T217 | backend consumer-owned `task-catalog`、sourceId 直连 required port、bootstrap-only adapter 装配；旧两套列表端点退役                 | T216      | ✅   |
+| T218 | DigitalEmployee Case 持久化 owner/launchOrigin 并迁移；mine/all/shared、Event Center origin、status/view/query 在来源适配器真实执行 | T217      | ✅   |
+| T219 | 前端公共 Host、公共受控资源/仓库选择器、单一 catalog/list/type 筛选；移除来源私有页面与 category/subject 分支                       | T216,T217 | ✅   |
+| T220 | shared/backend/frontend 架构反向、API contract、迁移、system-mock E2E、任务创建/列表浏览器和视觉覆盖                                | T217-T219 | ✅   |
+| T221 | 三轮功能自审、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA hosted CI/visual 终态核对                       | T220      | ✅   |
 
 **T220/T221 完成证据（2026-08-22/23）**：真实浏览器任务创建/列表回归 **19/19**；完整 `bun run gate:local`
 **10m22s 全绿**——shared **2,222/2,222**、system-mocks **62/62**、frontend **6,681/6,681**，backend 四分片均
@@ -1513,7 +1519,7 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | T222 | `TypeToolRegistration` 增有序 `dispatchRouteDefinitions`；分类工具新 revision 必填、唯一末尾 fallback；内置问题定位工具发布五类清单 | T213      | ✅   |
 | T223 | 修复工具新 revision 必须显式声明 `acceptedDispatchRoutes`；表单从分类工具清单结构化多选；内置通用修复 Agent 冻结 `*`                | T222      | ✅   |
 | T224 | 岗位选择分类工具即派生同数量/同顺序 `P1..Pn` 并自动连线；岗位只配置处理方式；后端逐项校验清单与 exact 分类工具 revision 一致        | T222,T223 | ✅   |
-| T225 | 稳定容器 pointer capture 驱动精确槽位预览、源泳道跟手与可中断 FLIP，松手才提交；扇出卡以单一不透明 paint stack 逐层遮盖 | T224      | ✅   |
+| T225 | 稳定容器 pointer capture 驱动精确槽位预览、源泳道跟手与可中断 FLIP，松手才提交；扇出卡以单一不透明 paint stack 逐层遮盖             | T224      | ✅   |
 | T226 | 合同/authoring/runtime/system-mock、前端/E2E/视觉回归；真实浏览器检查；完整 gate；主分支精确提交推送与 exact-SHA CI/visual 终态     | T222-T225 | ✅   |
 
 ### 批次停止条件
@@ -1525,6 +1531,41 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 - 源泳道不跟随指针、跨槽位后目标顺序/`P` 标签没有在松手前变化、第三位拖不到第一位，或预览重排导致手柄丢失 pointer capture、松手不结算；
 - 工具箱与岗位图的三层扇出卡颜色/边框不一致，下层完整轮廓穿透上层，独立 z-index 让层次与邻卡来回交错，或 collection 职责被误画成扇出叠卡；
 - 定向测试、真实浏览器、完整 `gate:local`、远端 ancestry、exact-SHA CI/visual 任一没有终态证据却把 T226 标为完成。
+
+## 13m. PR-27：双来源入口与人工审核修复计划分支
+
+### 目标与任务
+
+本批不增加业务执行步骤，而是让职责全景如实呈现来源和条件路径：`界面输入` 与 `ISSUE` 是同一来源列中上下并列、无前后顺序的两个
+并行入口，“准备工作材料”位于来源列右侧，两个入口分别以连线汇入该节点；不允许把两个来源沿主流程横排成伪串行步骤，也不允许把材料准备
+堆到来源列下方；
+未选择“先评审方案”时走“分析并实现”，选择后走“分析 → 人工审核修复计划 → 实现”。两条路径必须在进入“校验并冻结代码修改”前汇合，
+不能把人工审核放到实现后面，也不能因增加展示节点把校验节点换到第二行。
+
+| 编号 | 任务                                                                                                                                                      | 依赖      | 状态 |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
+| T227 | 扩展通用 AuthoringManifest：`workIngresses` 默认空，支持 task-creation/event-response-rules，strict codec/交叉引用/WorkStart 一致性及旧 revision 反向测试 | T167,T196 | ✅   |
+| T228 | 追加 `development@6`，注册 ui-input 与 ISSUE 两个 ingress、既有公开 issue event refs、`humanReview.reviewedPath`；保持 20 WorkItem 与旧 digest 不变       | T227      | ✅   |
+| T229 | 共享职责图投影“并行双入口→材料准备”和审核开/关双分支；接入任务创建/Webhook 深链、父职责 Dialog、窄屏/汇聚布局及运行态状态                                 | T227,T228 | ✅   |
+| T230 | 补合同/authoring/runtime/frontend 回归及真实 signed ISSUE Webhook→Event Center→Case→MR→红灯修绿→ready system-mock；锁批准前后调度和拓扑顺序               | T228,T229 | ✅   |
+| T231 | 三轮功能自审、视觉核验、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态                                              | T227-T230 | ⏳   |
+
+### 验收口径
+
+- proposal AC-98：20 张 WorkItem 卡不变，另有 `界面输入`、`ISSUE` 两张处于同一来源列的上下并行入口卡；材料准备位于右侧并由两者分别汇入，配置动作分别复用统一任务创建与事件中心实时订阅；
+- proposal AC-99：每个带 `reviewedPath` 的 `humanReview` 通用投影审核开/关双分支；人工门禁无工具槽、无新 writer，跳过/等待/批准/失败来自冻结事实；
+- proposal AC-100：测试必须从签名 Webhook 和真实响应规则进入，不得直接 launch；红流水线由现有分类/修复回路恢复全绿并达到 ready-to-merge。
+
+### 批次停止条件
+
+- 为了显示 ISSUE 而恢复 `work-received` Event、增加 Issue 专用 Case/工作流、直接跳过 `prepare-materials`，或让页面维护第二份 Webhook 规则；
+- 缺少界面输入或 ISSUE 任一入口、两个来源沿主流程横排成伪串行关系、没有处于同一来源列、没有分别汇入右侧的 `prepare-materials`、材料准备被堆到来源列下方、人工审核出现在实现后、或
+  `prepare-change` 被挤到第二行；
+- ingress/review 展示节点被算入工作项完整性、工具绑定、enabled 集合、Reaction/Round，导致原 20 工作项合同漂移；
+- `ResponsibilitySwimlaneMap` 出现 `development`、`issue` 或 `review-implementation-plan` 的业务硬编码，而其他类型不能复用；
+- review 卡只是静态说明，运行任务等待人工时没有 waiting 状态，或未开启的任务被误报为待审核；
+- 仅补 UI/截图，没有 signed ISSUE Webhook 到 MR 修绿的生产链 E2E；
+- 实现拓扑偏离用户确认的双入口、双分支结构。
 
 ## 14. 风险与停止条件
 

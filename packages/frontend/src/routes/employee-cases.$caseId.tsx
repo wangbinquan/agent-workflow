@@ -14,6 +14,7 @@ import { localized, typeRefKey } from '@/components/digital-employees/types'
 import {
   ResponsibilitySwimlaneMap,
   type ResponsibilityDispatchNode,
+  type ResponsibilityReviewGate,
 } from '@/components/digital-employees/ResponsibilitySwimlaneMap'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { usePermission } from '@/hooks/useActor'
@@ -68,6 +69,11 @@ interface EmployeeCaseProjection {
   }>
   activeRound: ReactionRound | null
   rounds: ReactionRound[]
+  reviewGates?: Array<{
+    parentWorkItemRef: string
+    optionRef: string
+    state: 'not-reached' | 'skipped' | 'planning' | 'waiting' | 'approved' | 'failed'
+  }>
   channels: Array<{
     id: string
     state: string
@@ -306,12 +312,14 @@ function contextFacts(
 
 function EmployeeCaseDetailPage(): ReactElement {
   const { caseId } = Route.useParams()
+  const navigate = Route.useNavigate()
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
   const queryClient = useQueryClient()
   const canResume = usePermission('development-missions:retry')
   const [selectedWorkItemRef, setSelectedWorkItemRef] = useState<string | null>(null)
+  const [selectedReviewOptionRef, setSelectedReviewOptionRef] = useState<string | null>(null)
   const [selectedDispatchNodeKey, setSelectedDispatchNodeKey] = useState<string | null>(null)
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
   const projection = useQuery<EmployeeCaseProjection>({
@@ -410,6 +418,60 @@ function EmployeeCaseDetailPage(): ReactElement {
       state: enabled ? state : ('neutral' as const),
       detail,
       compactDetail: detail,
+    }
+  }
+  const runtimeReviewGateState = (gate: ResponsibilityReviewGate) => {
+    const projection = (data.reviewGates ?? []).find(
+      (candidate) =>
+        candidate.parentWorkItemRef === gate.parentWorkItemRef &&
+        candidate.optionRef === gate.optionRef,
+    )
+    if (projection?.state === 'waiting') {
+      return {
+        state: 'waiting' as const,
+        detail: zh ? '等待人工审核' : 'Awaiting human review',
+        compactDetail: zh ? '等待审核' : 'Awaiting review',
+      }
+    }
+    if (projection?.state === 'approved') {
+      return {
+        state: 'completed' as const,
+        detail: zh ? '已批准并继续实现' : 'Approved; implementation continued',
+        compactDetail: zh ? '已批准' : 'Approved',
+      }
+    }
+    if (projection?.state === 'failed') {
+      return {
+        state: 'failed' as const,
+        detail: zh ? '评审分支执行失败' : 'Review branch failed',
+        compactDetail: zh ? '失败' : 'Failed',
+      }
+    }
+    if (projection?.state === 'skipped') {
+      return {
+        state: 'neutral' as const,
+        detail: zh ? '本任务未启用，已跳过' : 'Not enabled for this task; skipped',
+        compactDetail: zh ? '已跳过' : 'Skipped',
+      }
+    }
+    return {
+      state: 'neutral' as const,
+      detail:
+        projection?.state === 'planning'
+          ? zh
+            ? '正在形成待审核计划'
+            : 'Preparing the plan for review'
+          : zh
+            ? '尚未到达'
+            : 'Not reached yet',
+      compactDetail:
+        projection?.state === 'planning'
+          ? zh
+            ? '形成计划中'
+            : 'Planning'
+          : zh
+            ? '尚未到达'
+            : 'Not reached',
     }
   }
   const routeRound = (
@@ -544,19 +606,33 @@ function EmployeeCaseDetailPage(): ReactElement {
                 type={descriptor.data}
                 language={language}
                 selectedWorkItemRef={selectedWorkItemRef}
+                selectedReviewOptionRef={selectedReviewOptionRef}
                 onSelect={(workItemRef) => {
                   setSelectedDispatchNodeKey(null)
+                  setSelectedReviewOptionRef(null)
                   setSelectedWorkItemRef(workItemRef)
                 }}
+                onSelectReviewGate={(gate) => {
+                  setSelectedDispatchNodeKey(null)
+                  setSelectedWorkItemRef(gate.parentWorkItemRef)
+                  setSelectedReviewOptionRef(gate.optionRef)
+                }}
+                onConfigureIngress={(ingress) =>
+                  ingress.configurationSurface === 'task-creation'
+                    ? void navigate({ to: '/tasks/new', search: { kind: 'digital-employee' } })
+                    : void navigate({ to: '/events', search: { tab: 'subscriptions' } })
+                }
                 dispatchNodes={runtimeDispatchNodes}
                 selectedDispatchNodeKey={selectedDispatchNodeKey}
                 onSelectDispatchNode={(node) => {
+                  setSelectedReviewOptionRef(null)
                   setSelectedDispatchNodeKey(node.key)
                   setSelectedWorkItemRef(node.destinationWorkItemRef)
                   const latest = routeRound(node.destinationWorkItemRef, node.routeRef)
                   if (latest !== undefined) setSelectedRoundId(latest.id)
                 }}
                 cardState={runtimeCardState}
+                reviewGateState={runtimeReviewGateState}
                 title={zh ? '完整能力图与运行状态' : 'Complete capability map and runtime state'}
                 description={
                   zh
@@ -579,6 +655,27 @@ function EmployeeCaseDetailPage(): ReactElement {
                     <span>{zh ? '怎样才算完成' : 'Definition of done'}</span>
                     <p>{localized(selectedItem.completionStandard, language)}</p>
                   </div>
+                  {selectedItem.humanReview?.optionRef === selectedReviewOptionRef ? (
+                    <div
+                      className="work-item-contract-card__review"
+                      data-testid="employee-case-review-gate-detail"
+                      tabIndex={-1}
+                    >
+                      <span>{localized(selectedItem.humanReview.label, language)}</span>
+                      <p>{localized(selectedItem.humanReview.description, language)}</p>
+                      <code>
+                        {selectedItem.humanReview.artifactPort} ·{' '}
+                        {
+                          runtimeReviewGateState({
+                            parentWorkItemRef: selectedItem.workItemRef,
+                            optionRef: selectedItem.humanReview.optionRef,
+                            label: selectedItem.humanReview.label,
+                            description: selectedItem.humanReview.description,
+                          }).detail
+                        }
+                      </code>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </section>

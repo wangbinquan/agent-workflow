@@ -363,6 +363,10 @@
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
+.employee-toolbox-lane--parallel-ingress {
+  --employee-lane-label-width: 100px;
+}
+
 .employee-toolbox-lane > header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -493,9 +497,12 @@
 
 .employee-toolbox-lane__cards {
   display: grid;
-  grid-template-columns: repeat(var(--employee-lane-columns, 1), minmax(0, 168px));
+  grid-template-columns: var(
+    --employee-lane-template,
+    repeat(var(--employee-lane-columns, 1), minmax(0, 168px))
+  );
   grid-auto-rows: minmax(48px, auto);
-  align-items: stretch;
+  align-items: start;
   justify-content: start;
   gap: 13px;
   min-width: 0;
@@ -545,7 +552,20 @@
     8px 8px 0 0 var(--employee-card-background), 8px 8px 0 1px var(--employee-card-border);
 }
 
-.employee-toolbox-card + .employee-toolbox-card::before {
+.employee-toolbox-lane__cards
+  > :is(
+    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+    .employee-toolbox-ingress-branch,
+    .employee-toolbox-review-branch
+  )
+  + :is(
+    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+    .employee-toolbox-ingress-branch,
+    .employee-toolbox-review-branch
+  )::before,
+.employee-toolbox-review-branch__reviewed-flow
+  > .employee-toolbox-card
+  + .employee-toolbox-card::before {
   position: absolute;
   top: calc(50% - 1px);
   left: -13px;
@@ -556,7 +576,20 @@
   content: '';
 }
 
-.employee-toolbox-card + .employee-toolbox-card::after {
+.employee-toolbox-lane__cards
+  > :is(
+    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+    .employee-toolbox-ingress-branch,
+    .employee-toolbox-review-branch
+  )
+  + :is(
+    .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+    .employee-toolbox-ingress-branch,
+    .employee-toolbox-review-branch
+  )::after,
+.employee-toolbox-review-branch__reviewed-flow
+  > .employee-toolbox-card
+  + .employee-toolbox-card::after {
   position: absolute;
   top: calc(50% - 4px);
   left: -10px;
@@ -570,7 +603,11 @@
 }
 
 .employee-toolbox-card--row-start::before,
-.employee-toolbox-card--row-start::after {
+.employee-toolbox-card--row-start::after,
+.employee-toolbox-ingress-branch--row-start::before,
+.employee-toolbox-ingress-branch--row-start::after,
+.employee-toolbox-review-branch--row-start::before,
+.employee-toolbox-review-branch--row-start::after {
   display: none;
 }
 
@@ -605,6 +642,203 @@
 }
 
 .employee-toolbox-card--collaboration .employee-toolbox-card__kind {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.employee-toolbox-card--ingress .employee-toolbox-card__kind {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.employee-toolbox-card--ingress {
+  grid-template-rows: auto auto auto;
+}
+
+.employee-toolbox-card.employee-toolbox-card--ingress small {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  justify-self: start;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.employee-toolbox-card--auxiliary {
+  grid-row: var(--employee-aux-row, auto);
+  grid-column: var(--employee-aux-column, auto);
+}
+
+.employee-toolbox-ingress-branch {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 108px) 16px minmax(0, 100px);
+  align-items: center;
+  width: 224px;
+  min-width: 0;
+}
+
+.employee-toolbox-ingress-branch__sources {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.employee-toolbox-ingress-branch__merge {
+  position: relative;
+  display: block;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.employee-toolbox-ingress-branch__merge::before {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  left: 4px;
+  height: 1px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  content: '';
+}
+
+.employee-toolbox-ingress-branch__merge::after {
+  position: absolute;
+  top: calc(50% - 3px);
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-top: 1.5px solid color-mix(in srgb, var(--muted) 62%, transparent);
+  border-right: 1.5px solid color-mix(in srgb, var(--muted) 62%, transparent);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.employee-toolbox-ingress-branch__merge > span {
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 4px;
+  width: 1px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.employee-toolbox-ingress-branch__merge > span::before,
+.employee-toolbox-ingress-branch__merge > span::after {
+  position: absolute;
+  left: -4px;
+  width: 4px;
+  height: 1px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  content: '';
+}
+
+.employee-toolbox-ingress-branch__merge > span::before {
+  top: 0;
+}
+
+.employee-toolbox-ingress-branch__merge > span::after {
+  bottom: 0;
+}
+
+.employee-toolbox-ingress-branch .employee-toolbox-card {
+  width: 100%;
+}
+
+.employee-toolbox-card.employee-toolbox-card--source-node {
+  grid-template: auto auto / minmax(0, 1fr);
+  place-items: center;
+  min-height: 44px;
+  padding: 3px;
+  text-align: center;
+}
+
+.employee-toolbox-card--source-node .employee-toolbox-card__kind,
+.employee-toolbox-card--source-node strong {
+  grid-column: 1;
+  justify-self: center;
+}
+
+.employee-toolbox-card--source-node .employee-toolbox-card__kind {
+  font-size: 8px;
+}
+
+.employee-toolbox-ingress-branch .employee-toolbox-card--source-node strong {
+  font-size: 10px;
+  text-align: center;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+}
+
+.employee-toolbox-review-branch {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  width: 168px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--warn) 34%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--warn) 3%, var(--panel));
+}
+
+.employee-toolbox-review-branch__path {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.employee-toolbox-review-branch__path + .employee-toolbox-review-branch__path {
+  padding-top: 3px;
+  border-top: 1px dashed color-mix(in srgb, var(--warn) 34%, var(--border));
+}
+
+.employee-toolbox-review-branch__label {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.employee-toolbox-review-branch__reviewed-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.2fr);
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.employee-toolbox-review-branch .employee-toolbox-card {
+  width: 100%;
+}
+
+.employee-toolbox-card--review-stage {
+  display: grid;
+  grid-template: auto / minmax(0, 1fr);
+  place-items: center;
+  min-height: 44px;
+  padding: 3px;
+  text-align: center;
+}
+
+.employee-toolbox-review-branch .employee-toolbox-card--review-stage strong {
+  grid-row: 1;
+  grid-column: 1;
+  font-size: 9px;
+  line-height: 1.15;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.employee-toolbox-card--human-gate.employee-toolbox-card--review-stage {
+  --employee-card-border: color-mix(in srgb, var(--warn) 58%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--warn) 8%, var(--panel));
+}
+
+.employee-toolbox-card--human-gate .employee-toolbox-card__kind {
   color: var(--warn);
   background: color-mix(in srgb, var(--warn) 8%, transparent);
 }
@@ -788,9 +1022,38 @@
     padding: 6px;
   }
 
-  .employee-toolbox-card + .employee-toolbox-card::before,
-  .employee-toolbox-card + .employee-toolbox-card::after {
+  .employee-toolbox-lane__cards:has(> .employee-toolbox-ingress-branch) {
+    grid-template-columns: repeat(auto-fit, minmax(0, 224px));
+  }
+
+  .employee-toolbox-lane__cards
+    > :is(
+      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+      .employee-toolbox-ingress-branch,
+      .employee-toolbox-review-branch
+    )
+    + :is(
+      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+      .employee-toolbox-ingress-branch,
+      .employee-toolbox-review-branch
+    )::before,
+  .employee-toolbox-lane__cards
+    > :is(
+      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+      .employee-toolbox-ingress-branch,
+      .employee-toolbox-review-branch
+    )
+    + :is(
+      .employee-toolbox-card:not(.employee-toolbox-card--auxiliary),
+      .employee-toolbox-ingress-branch,
+      .employee-toolbox-review-branch
+    )::after {
     display: none;
+  }
+
+  .employee-toolbox-card--auxiliary {
+    grid-row: auto;
+    grid-column: auto;
   }
 }
 

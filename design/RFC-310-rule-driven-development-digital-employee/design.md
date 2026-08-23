@@ -20,6 +20,11 @@
 > Manifest 与真实后继关系先发布 `development@2`，随后把可选泳道、岗位级动态处理路由、检视整树闭环和事件权威刷新
 > 追加冻结在 `development@5`；升级只追加新 revision，不原地改写 `development@1/@2/@3/@4` descriptor/digest，也不需要
 > schema migration。Agent 契约选择与端口编辑同页；契约托管的 `agent-result` 随声明原子增删，UI 与所有保存入口均禁止单独改写。
+>
+> **2026-08-23 PR-27（实施中，流程已确认）**：用通用只读 ingress projection 在同一来源列上下并列呈现 `界面输入`、`ISSUE` 两个
+> 无前后顺序的来源节点，并让两者以独立连线向右汇入“准备工作材料”；现有 `humanReview` 则投影为“分析并实现”与
+> “分析 → 人工审核修复计划 → 实现”两条互斥路径。
+> 两条路径汇合后的“校验并冻结代码修改”保持在同一主行。目标是不改变 WorkStart、20 个可执行工作项或 MR 修绿执行链。详见 §22。
 
 ## 0A. 数字员工操作系统目标架构
 
@@ -4510,3 +4515,151 @@ GET /api/task-catalog?type=<source>&...
 只能有一个四步状态机和一个 Host 挂载点，且不能出现来源专属的 Creation Flow/Page；公共任务页不包含来源私有
 列表、挂载点或链；每个来源恰有一个只读适配器且只能返回自己的 `sourceId`；私有读取形状解析失败不能进入公共 DTO；旧列表端点保持不可用。
 用例同时锁定桌面四卡同排、切换来源宽度不变、不重复弹恢复设置、对象选择默认空值、固定仓库只读注入且可直接进入下一步。
+
+## 22. 双来源入口与人工审核分支（2026-08-23）
+
+### 22.1 归一化执行语义
+
+PR-27 只补全职责全景的入口与条件门禁，不建立第二套执行模型。目标数据流固定为：
+
+```text
+UI input ────────────┐
+                     ├→ WorkStart command → prepare-materials
+signed ISSUE Webhook ┘
+  → review option off: analyze-and-implement Agent ─────────────────────────┐
+  → review option on: analysis/plan Agent → human review → implementation Agent ─┤
+                                                                                 ├→ prepare-change → publish-mr
+                                                                                   → observe-mr → classify/repair/re-publish
+                                                                                     → gates green → ready-to-merge
+```
+
+Webhook、Event Center、WorkStart 与 EmployeeCase 的 owner 保持不变。来源事实只解释为什么开始工作；一旦 WorkStart 成功，正文、文件、外部 ID
+和 ISSUE 都从同一 `workStartWorkItemRef` 进入。职责图必须把“界面输入”和“ISSUE”画在左侧同一来源列中，上下并列表示无前后顺序的
+并行入口，并把 `prepare-materials` 放在来源列右侧、垂直居于两个入口之间；每个入口都有独立汇聚连线。不得把两个入口沿主流程横排成
+伪串行步骤，也不得把材料准备放到来源列下方。`ISSUE` 卡也不得直接把 Case 跳到
+`analyze-implement`，因为那会绕过材料规范化并让页面拓扑与 runtime 不一致；用户看到的
+“进入分析并实现流程”是指规范化后汇入同一执行语义。
+
+### 22.2 通用双 ingress manifest
+
+`digital-employee` 在 `EmployeeAuthoringManifestV1` 增加向后兼容、默认空数组的通用声明：
+
+```ts
+interface WorkIngressDefinition {
+  readonly ingressRef: string
+  readonly regionId: string
+  readonly responsibilityLaneId: string
+  readonly order: number
+  readonly label: LocalizedText
+  readonly valueLabel: LocalizedText
+  readonly description: LocalizedText
+  readonly sourceClass: string
+  readonly eventTypeRefs: readonly { id: string; revision: number }[]
+  readonly configurationSurface: 'task-creation' | 'event-response-rules'
+  readonly nextWorkItemRef: string
+}
+
+interface EmployeeAuthoringManifestV1 {
+  readonly schemaVersion: 1
+  readonly lifecycleRegions: readonly LifecycleRegion[]
+  readonly workIngresses: readonly WorkIngressDefinition[] // default []
+  readonly workItems: readonly WorkItemDefinition[]
+}
+```
+
+公共校验要求 ingress/region/lane/ref 唯一，`nextWorkItemRef` 必须引用同 manifest 工作项；作为“新工作来源”的 ingress 还必须与类型 descriptor 的
+`workStartWorkItemRef` 相等。`event-response-rules` 必须声明至少一个 `eventTypeRef`，`task-creation` 则禁止携带事件引用；这些引用只是展示/深链过滤
+提示，不给予类型包发布 Event 的 authority，也不复制 Event Center catalog。`configurationSurface` 是稳定产品能力键，由前端公共路由注册分别
+解析为 `/tasks/new?kind=digital-employee` 与 `/events?tab=subscriptions`；domain manifest 不保存 URL、权限或页面组件。
+
+研发类型的新 revision 注册：
+
+```ts
+const workIngresses = [
+  {
+    ingressRef: 'ui-input',
+    regionId: 'delivery',
+    responsibilityLaneId: 'delivery-main',
+    order: 0,
+    label: text('界面输入', 'UI input'),
+    valueLabel: text('任务', 'Task'),
+    sourceClass: 'manual',
+    eventTypeRefs: [],
+    configurationSurface: 'task-creation',
+    nextWorkItemRef: 'prepare-materials',
+  },
+  {
+    ingressRef: 'issue',
+    regionId: 'delivery',
+    responsibilityLaneId: 'delivery-main',
+    order: 10,
+    label: text('ISSUE', 'ISSUE'),
+    valueLabel: text('Webhook', 'Webhook'),
+    sourceClass: 'issue',
+    eventTypeRefs: [
+      { id: 'code-host.issue.labeled', revision: 1 },
+      { id: 'code-host.issue.comment-received', revision: 1 },
+    ],
+    configurationSurface: 'event-response-rules',
+    nextWorkItemRef: 'prepare-materials',
+  },
+]
+```
+
+旧类型包通过 codec default 得到 `workIngresses=[]`；新研发类型只追加 `development@6`，不能更改 `@1..@5` 的 descriptor/digest。
+ingress 不进入岗位模板、员工 revision、工具查询、发布完整性、`enabledWorkItemRefs` 或 runtime plan，因此不产生假工具、假 Round 或迁移数据。
+
+### 22.3 `humanReview` 的双分支可视投影
+
+现有 `WorkItemDefinition.humanReview` 已包含 `optionRef/artifactPort/label/description`，TaskExecution 也已实现固定的
+plan → review → implement host；PR-27 只追加默认 `null` 的 `reviewedPath` 展示合同，不新增审批表、Review WorkItem 或第二个状态机：
+
+```ts
+interface ReviewedPathDefinition {
+  readonly beforeReviewLabel: LocalizedText
+  readonly afterApprovalLabel: LocalizedText
+}
+```
+
+共享 `ResponsibilitySwimlaneMap` 发现 `humanReview.reviewedPath` 后，把父工作项投影为一个通用 `review-branch` 组：上支保持父卡“分析并实现”；
+下支依次渲染 `beforeReviewLabel`、人工门禁卡、`afterApprovalLabel`，即“分析 → 人工审核修复计划 → 实现”。分支组只占一个主链位置，后继
+`prepare-change` 和 `publish-mr` 继续排在同一行，不能因为辅助展示节点增加顶层列数而换行。
+
+人工门禁业务文案为“人工审核修复计划”，状态始终不参与工具配置：
+
+- 工具箱/岗位模板：显示“可选，任务发起时决定”；点击打开父工作项 Dialog 并聚焦 `humanReview` 合同，不显示增加/选择工具；
+- Case runtime 未开启：`neutral/skipped`；已开启但尚未到达：`neutral`；等待评论或批准：`waiting`；已批准并继续：`completed`；
+- 状态只从冻结 Case 输入和 TaskEngine review receipt 投影，不从 mutable draft、日志字符串或浏览器状态推断。
+
+视觉连接必须表达它处在 `analyze-implement` 的内部条件路径，而不是该工作项完成后的新步骤。通用组件只识别 `humanReview.reviewedPath`
+字段，不识别研发类型或 option 字面量。20 张 `data-work-item-ref` 卡仍对应 20 个 WorkItem；两个来源与 review 分别使用
+`data-work-ingress-ref`、`data-review-option-ref`，避免测试把展示节点误算为可执行职责。
+
+### 22.4 Bounded-context 与权限边界
+
+- `development-automation` 只注册两类 ingress、ISSUE event refs、`workStartWorkItemRef` 与现有 `humanReview` 文案；不读取响应规则表或 review 表；
+- `digital-employee` 拥有通用 manifest codec、交叉引用校验、authoring/runtime projection；不发布代码平台事件；
+- `integration` 继续拥有 Webhook 验签与 `code-host.issue.*` 事实，`event-center` 继续拥有自动化规则、Subscription、Delivery 和 WorkStart adapter；
+- `task-execution` 继续拥有 review lifecycle、评论/驳回/迭代/批准和 durable waiting；职责图只是其只读投影；
+- “界面输入”复用统一任务创建路由，“ISSUE”复用 `/events?tab=subscriptions` 的现有 route gate 与规则权限；两者都不新增授权点，也不因无权限
+  而泄漏规则或员工 inventory。
+
+这组依赖没有改变 RFC-294 的 owner DAG：类型包只向公共 OS 注册 opaque refs，公共 OS 不反向 deep-import integration/event-center/task-execution
+内部实现；前端通过既有公开查询与路由能力组合，不跨域查表。
+
+### 22.5 测试与停止条件
+
+实现必须形成以下独立证据：
+
+1. codec/validator：旧 manifest 默认空 ingress；重复 ref、未知 lane/work item、非 WorkStart 后继全部 fail closed；fixture 类型证明 UI 无研发特例；
+2. authoring/runtime：20 个 WorkItem、工具完整性和 enabled 集合不变；两个入口节点与 review 分支不产生 registration、ReactionPlan 或 Round；
+3. frontend/E2E：工具箱、岗位模板、Case runtime 均把两个来源显示为同一来源列内的上下并行分支，并在右侧汇入材料准备，同时显示
+   关闭/开启审核的两条路径；几何断言锁定两个入口横坐标一致、材料准备位于其右侧且中心处于两入口之间，主链后继不换行；权限、深链、
+   Dialog、窄屏和 1280×900 无横向 overflow；
+4. system mock：签名 ISSUE Webhook → Event Center rule → EmployeeCase → MR → 红流水线 → 修绿 → ready-to-merge 全链；不得测试直调 WorkStart；
+5. review 分支：批准前实现 Agent 零调度，iterate 只重跑方案 Agent，批准后 exact approved document 进入实现 Agent。
+
+任一条件出现即停止发布：任一来源被加入 `workItems`；两个入口沿主流程横排成伪串行关系、未处于同一来源列或没有分别汇入右侧的
+`prepare-materials`；材料准备被堆到来源列下方；入口绕过材料准备；人工审核排在“实现”
+之后而不是处于“分析”和“实现”之间；`prepare-change` 被辅助节点挤到第二行；页面显示“已启用”却未读取权威规则；无权限用户能编辑规则；review
+卡拥有工具槽或独立 runtime writer；旧 revision digest 漂移；只补截图而没有真实 Webhook 到修绿的纵向回归。

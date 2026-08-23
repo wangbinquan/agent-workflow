@@ -265,6 +265,17 @@
 > `32610899094` **56/56 tests success**，无快照漂移。CI `32610899098` 初次仅 macOS 后端 3/4 分片因既有测试 harness
 > 取得空 SHA、在测试正文前执行空 pathspec `git checkout` 而红；同一 exact SHA 重跑终态 **31/31 jobs success**。
 >
+> **PR-27 双来源入口与人工审核分支（2026-08-23，实施完成，发布验证中）**：职责全景把 `界面输入`、`ISSUE`
+> 画成同一来源列中上下并列、无前后顺序的两个入口节点；“准备工作材料”位于来源列右侧，两个入口分别以独立连线汇入该节点，
+> 卡片内部不重复显示方向箭头。关闭审核时走“分析并实现”，开启审核时走“分析 → 人工审核修复计划 → 实现”；两条路径汇合后，
+> “校验并冻结代码修改 → 提交 MR”保持在同一主行。当前已追加 `development@6`、通用 `workIngresses`/`reviewedPath` 合同、
+> authoring/岗位/runtime 共用投影，以及统一任务创建和 Webhook 自动化规则深链；入口与条件阶段均不进入 WorkItem/工具/Reaction/Round，
+> 20 个工作项不变。定向证据：backend authoring/runtime/host/digest **37/37**，签名 ISSUE→Event Center→MR→红灯修绿 system mock
+> **1/1**（65 assertions），frontend **11/11**，Chromium 主旅程 **1/1**、零配置 **6/6**、视觉 **1/1**，frontend/backend
+> typecheck 全绿；隔离发布树完整 `bun run gate:local` **11m07s 全绿**——backend **11,727 pass / 36 skip / 0 fail**、
+> frontend **6,692/6,692**、shared **2,222/2,222**、system-mocks **62/62**，typecheck/lint/format/depcheck
+> 全绿。当前仅剩 exact-path commit/push 与远端 exact-SHA CI/visual 终态验证。
+>
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
 > **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；

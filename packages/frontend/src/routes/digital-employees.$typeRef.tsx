@@ -14,6 +14,7 @@ import type {
   JobTemplate,
   ToolAuthoringView,
   ToolRegistration,
+  WorkIngress,
   WorkItem,
 } from '@/components/digital-employees/types'
 import { localized } from '@/components/digital-employees/types'
@@ -53,6 +54,7 @@ type WorkspaceView = 'employees' | 'jobs' | 'toolbox'
 interface WorkspaceSearch extends Record<string, unknown> {
   view: WorkspaceView
   workItem?: string
+  reviewOption?: string
 }
 
 interface DigitalEmployeeUpgradeCandidates {
@@ -65,6 +67,9 @@ function validateSearch(raw: Record<string, unknown>): WorkspaceSearch {
   return {
     view,
     ...(typeof raw.workItem === 'string' && raw.workItem !== '' ? { workItem: raw.workItem } : {}),
+    ...(typeof raw.reviewOption === 'string' && raw.reviewOption !== ''
+      ? { reviewOption: raw.reviewOption }
+      : {}),
   }
 }
 
@@ -114,6 +119,10 @@ function DigitalEmployeeTypePage(): ReactElement {
     return out
   }, [toolQueries, workItems])
   const selectedItem = workItems.find((item) => item.workItemRef === selectedRef) ?? null
+  const selectedReview =
+    selectedItem !== null && selectedItem.humanReview?.optionRef === search.reviewOption
+      ? selectedItem.humanReview
+      : null
   const panelIds = tabDomIds('digital-employee-type-sections', search.view)
 
   if (typeQuery.isPending) return <LoadingState />
@@ -163,6 +172,7 @@ function DigitalEmployeeTypePage(): ReactElement {
                 <ResponsibilitySwimlaneMap
                   type={type}
                   selectedWorkItemRef={selectedRef}
+                  selectedReviewOptionRef={selectedReview?.optionRef ?? null}
                   toolsByWorkItem={toolsByWorkItem}
                   language={language}
                   onSelect={(workItem) =>
@@ -170,6 +180,21 @@ function DigitalEmployeeTypePage(): ReactElement {
                       search: { view: 'toolbox', workItem },
                       replace: true,
                     })
+                  }
+                  onSelectReviewGate={(gate) =>
+                    void navigate({
+                      search: {
+                        view: 'toolbox',
+                        workItem: gate.parentWorkItemRef,
+                        reviewOption: gate.optionRef,
+                      },
+                      replace: true,
+                    })
+                  }
+                  onConfigureIngress={(ingress) =>
+                    ingress.configurationSurface === 'task-creation'
+                      ? void navigate({ to: '/tasks/new', search: { kind: 'digital-employee' } })
+                      : void navigate({ to: '/events', search: { tab: 'subscriptions' } })
                   }
                 />
                 <Dialog
@@ -185,9 +210,11 @@ function DigitalEmployeeTypePage(): ReactElement {
                       ? zh
                         ? '配置职责'
                         : 'Configure duty'
-                      : zh
-                        ? `配置职责：${localized(selectedItem.label, language)}`
-                        : `Configure duty: ${localized(selectedItem.label, language)}`
+                      : selectedReview !== null
+                        ? localized(selectedReview.label, language)
+                        : zh
+                          ? `配置职责：${localized(selectedItem.label, language)}`
+                          : `Configure duty: ${localized(selectedItem.label, language)}`
                   }
                   size="lg"
                   panelClassName="employee-duty-dialog"
@@ -199,6 +226,7 @@ function DigitalEmployeeTypePage(): ReactElement {
                     contract={selectedContract}
                     tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
                     toolsByWorkItem={toolsByWorkItem}
+                    reviewOnly={selectedReview !== null}
                     dispatchSources={
                       selectedItem === null
                         ? []
@@ -219,6 +247,11 @@ function DigitalEmployeeTypePage(): ReactElement {
                 toolsByWorkItem={toolsByWorkItem}
                 language={language}
                 requestedWorkItemRef={selectedRef}
+                onConfigureIngress={(ingress) =>
+                  ingress.configurationSurface === 'task-creation'
+                    ? void navigate({ to: '/tasks/new', search: { kind: 'digital-employee' } })
+                    : void navigate({ to: '/events', search: { tab: 'subscriptions' } })
+                }
               />
             ) : (
               <EmployeesPanel typeRef={typeRef} type={type} language={language} />
@@ -234,8 +267,13 @@ function WorkItemContractCard(props: {
   item: WorkItem
   contract?: EmployeeWorkContract | null
   language: string
+  focusHumanReview?: boolean
 }): ReactElement {
   const zh = props.language.startsWith('zh')
+  const reviewElement = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (props.focusHumanReview === true) reviewElement.current?.focus()
+  }, [props.focusHumanReview])
   return (
     <div className="work-item-contract-card">
       <div>
@@ -253,7 +291,12 @@ function WorkItemContractCard(props: {
         )}
       </div>
       {props.item.humanReview === null ? null : (
-        <div className="work-item-contract-card__review">
+        <div
+          ref={reviewElement}
+          className="work-item-contract-card__review"
+          data-testid="employee-human-review-contract"
+          tabIndex={-1}
+        >
           <span>{zh ? '可选方案评审子阶段' : 'Optional plan-review substage'}</span>
           <p>
             {zh
@@ -334,6 +377,7 @@ function ToolboxPanel(props: {
   toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
   dispatchSources: WorkItem[]
   language: string
+  reviewOnly?: boolean
 }): ReactElement {
   const qc = useQueryClient()
   const canUpdate = usePermission('digital-employees:update')
@@ -376,6 +420,32 @@ function ToolboxPanel(props: {
   const adapterBackedSystem =
     props.item.nodeKind === 'system' &&
     (props.contract?.allowedEffectKinds ?? []).some((kind) => kind.startsWith('external-approval.'))
+  if (props.reviewOnly === true && props.item.humanReview !== null) {
+    return (
+      <section className="employee-node-panel" data-testid="employee-review-gate-detail">
+        <header>
+          <div>
+            <p>{localized(props.item.humanReview.description, props.language)}</p>
+          </div>
+          <StatusChip kind="neutral">{zh ? '只读人工门禁' : 'Read-only human gate'}</StatusChip>
+        </header>
+        <WorkItemContractCard
+          item={props.item}
+          contract={props.contract}
+          language={props.language}
+          focusHumanReview
+        />
+        <NoticeBanner
+          tone="info"
+          title={zh ? '任务发起时决定是否启用' : 'Enabled when work starts'}
+        >
+          {zh
+            ? '这张卡只说明“形成计划 → 人工审核 → 实现”的条件路径，不创建工具槽，也不能在这里增加或选择工具。'
+            : 'This card only explains the conditional plan → human review → implement path. It creates no tool slot and offers no tool editing.'}
+        </NoticeBanner>
+      </section>
+    )
+  }
   return (
     <section className="employee-node-panel" data-testid="employee-node-toolbox">
       <header>
@@ -1788,6 +1858,7 @@ function JobTemplatesPanel(props: {
   toolsByWorkItem: Record<string, ToolRegistration[]>
   language: string
   requestedWorkItemRef: string | null
+  onConfigureIngress: (ingress: WorkIngress) => void
 }): ReactElement {
   const zh = props.language.startsWith('zh')
   const qc = useQueryClient()
@@ -1805,6 +1876,7 @@ function JobTemplatesPanel(props: {
   const [identityName, setIdentityName] = useState('')
   const [identityDescription, setIdentityDescription] = useState('')
   const [editorWorkItemRef, setEditorWorkItemRef] = useState('')
+  const [editorReviewOptionRef, setEditorReviewOptionRef] = useState<string | null>(null)
   const [editorDispatchRouteKey, setEditorDispatchRouteKey] = useState<string | null>(null)
   const [validationAttempt, setValidationAttempt] = useState(0)
   const dispatchOrdinal = useRef(0)
@@ -2206,6 +2278,16 @@ function JobTemplatesPanel(props: {
   const selectedEditorItem =
     props.type.authoringManifest.workItems.find((item) => item.workItemRef === editorWorkItemRef) ??
     null
+  const selectedEditorReview =
+    selectedEditorItem?.humanReview?.optionRef === editorReviewOptionRef
+      ? selectedEditorItem.humanReview
+      : null
+  const selectedEditorContract =
+    props.type.workContracts.find(
+      (contract) =>
+        contract.contractId === selectedEditorItem?.workContractRef.contractId &&
+        contract.version === selectedEditorItem.workContractRef.version,
+    ) ?? null
   const dispatchRouteEntries = dispatchItems.flatMap((classifier) =>
     (orderedDispatchRoutes[classifier.workItemRef] ?? []).map((route, index) => ({
       classifier,
@@ -2603,17 +2685,27 @@ function JobTemplatesPanel(props: {
           <ResponsibilitySwimlaneMap
             type={props.type}
             selectedWorkItemRef={selectedEditorItem?.workItemRef ?? null}
+            selectedReviewOptionRef={selectedEditorReview?.optionRef ?? null}
             toolsByWorkItem={props.toolsByWorkItem}
             language={props.language}
             onSelect={(workItemRef) => {
               setEditorDispatchRouteKey(null)
+              setEditorReviewOptionRef(null)
               setEditorWorkItemRef(workItemRef)
               setDutyOpen(true)
             }}
+            onSelectReviewGate={(gate) => {
+              setEditorDispatchRouteKey(null)
+              setEditorWorkItemRef(gate.parentWorkItemRef)
+              setEditorReviewOptionRef(gate.optionRef)
+              setDutyOpen(true)
+            }}
+            onConfigureIngress={props.onConfigureIngress}
             dispatchNodes={dispatchNodes}
             selectedDispatchNodeKey={editorDispatchRouteKey}
             onSelectDispatchNode={(node) => {
               setEditorWorkItemRef('')
+              setEditorReviewOptionRef(null)
               setEditorDispatchRouteKey(node.key)
               setDutyOpen(true)
             }}
@@ -2636,32 +2728,64 @@ function JobTemplatesPanel(props: {
           ) : null}
           <Dialog
             open={dutyOpen && (selectedEditorItem !== null || selectedDispatchRoute !== null)}
-            onClose={() => setDutyOpen(false)}
+            onClose={() => {
+              setDutyOpen(false)
+              setEditorReviewOptionRef(null)
+            }}
             title={
-              selectedDispatchRoute !== null
-                ? `${zh ? '配置修复优先级' : 'Configure repair priority'} P${selectedDispatchRoute.priority}：${
-                    selectedDispatchRoute.route.displayName.trim() ||
-                    selectedDispatchRoute.route.routeRef ||
-                    (zh ? '未命名错误类型' : 'Unnamed failure type')
-                  }`
-                : selectedEditorItem === null
-                  ? zh
-                    ? '配置职责'
-                    : 'Configure duty'
-                  : zh
-                    ? `配置职责：${localized(selectedEditorItem.label, props.language)}`
-                    : `Configure duty: ${localized(selectedEditorItem.label, props.language)}`
+              selectedEditorReview !== null
+                ? localized(selectedEditorReview.label, props.language)
+                : selectedDispatchRoute !== null
+                  ? `${zh ? '配置修复优先级' : 'Configure repair priority'} P${selectedDispatchRoute.priority}：${
+                      selectedDispatchRoute.route.displayName.trim() ||
+                      selectedDispatchRoute.route.routeRef ||
+                      (zh ? '未命名错误类型' : 'Unnamed failure type')
+                    }`
+                  : selectedEditorItem === null
+                    ? zh
+                      ? '配置职责'
+                      : 'Configure duty'
+                    : zh
+                      ? `配置职责：${localized(selectedEditorItem.label, props.language)}`
+                      : `Configure duty: ${localized(selectedEditorItem.label, props.language)}`
             }
             size="lg"
             panelClassName="employee-job-duty-dialog"
             data-testid="employee-job-duty-dialog"
             footer={
-              <button type="button" className="btn btn--primary" onClick={() => setDutyOpen(false)}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  setDutyOpen(false)
+                  setEditorReviewOptionRef(null)
+                }}
+              >
                 {zh ? '完成' : 'Done'}
               </button>
             }
           >
-            {selectedDispatchRoute !== null && selectedDispatchDestination !== null ? (
+            {selectedEditorReview !== null && selectedEditorItem !== null ? (
+              <section
+                className="employee-job-duty-editor"
+                data-testid="employee-job-review-gate-detail"
+              >
+                <WorkItemContractCard
+                  item={selectedEditorItem}
+                  contract={selectedEditorContract}
+                  language={props.language}
+                  focusHumanReview
+                />
+                <NoticeBanner
+                  tone="info"
+                  title={zh ? '可选，任务发起时决定' : 'Optional; decided when work starts'}
+                >
+                  {zh
+                    ? '岗位模板只展示这条人工门禁合同；是否启用由每次任务的冻结输入决定，这里不增加或选择工具。'
+                    : 'The job only displays this human-gate contract. Each task’s frozen input decides whether it is enabled; no tool can be added or selected here.'}
+                </NoticeBanner>
+              </section>
+            ) : selectedDispatchRoute !== null && selectedDispatchDestination !== null ? (
               <section
                 className="employee-job-duty-editor employee-dispatch-node-editor"
                 data-testid="employee-dispatch-node-editor"

@@ -48,6 +48,7 @@ function newStore() {
 function legacyDescriptor(): Record<string, unknown> {
   const legacy = structuredClone(descriptor) as unknown as Record<string, unknown>
   delete legacy.workStartWorkItemRef
+  delete (legacy.authoringManifest as Record<string, unknown>).workIngresses
   const scheduling = new Map(
     (legacy.reactionRules as Record<string, unknown>[]).map((rule) => [
       rule.eventTypeId as string,
@@ -93,7 +94,7 @@ describe('employee type package digest guard', () => {
     expect(store.getTypePackage(descriptor.typeRef)?.descriptorDigest).toBe(currentDigest)
   })
 
-  test('a frozen development@1 registration upgrades by appending development@5', () => {
+  test('a frozen development@1 registration upgrades by appending development@6', () => {
     const store = newStore()
     const previous = structuredClone(descriptor)
     previous.typeRef.revision = 1
@@ -107,7 +108,7 @@ describe('employee type package digest guard', () => {
     store.ensureTypePackage(record(currentDigest))
 
     expect(store.listTypePackages().map((entry) => entry.descriptor.typeRef)).toEqual([
-      { typeId: 'development', revision: 5 },
+      { typeId: 'development', revision: 6 },
       { typeId: 'development', revision: 1 },
     ])
   })
@@ -132,6 +133,7 @@ describe('employee type package digest guard', () => {
     const projected = store.getTypePackage({ typeId: 'development', revision: 1 })
 
     expect(projected?.descriptor.workStartWorkItemRef).toBe('prepare-materials')
+    expect(projected?.descriptor.authoringManifest.workIngresses).toEqual([])
     expect(projected?.descriptor.reactionRules[0]).toMatchObject({
       priority: descriptor.reactionRules[0]?.priority,
       preemptsContinuation: descriptor.reactionRules[0]?.preemptsContinuation,

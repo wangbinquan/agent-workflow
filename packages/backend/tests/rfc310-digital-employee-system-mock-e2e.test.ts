@@ -18,6 +18,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { Hono } from 'hono'
 
 import {
   SYSTEM_MOCK_CODE_HOST_TOKEN,
@@ -26,7 +28,8 @@ import {
 } from '@agent-workflow/system-mocks'
 
 import { createInMemoryDb } from '@/db/client'
-import { cachedRepos, employeeOsOutbox } from '@/db/schema'
+import { cachedRepos, employeeOsOutbox, webhookDeliveries, webhookEndpoints } from '@/db/schema'
+import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
@@ -43,6 +46,8 @@ import { composeApprovalGatewayRunner } from '@/modules/integration/composition/
 import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
+import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
@@ -54,6 +59,10 @@ import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
+import { mountWebhookIngressRoutes } from '@/routes/webhooks'
+import type { AppDeps } from '@/server'
+import { createUser } from '@/services/users'
+import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 
 setDefaultTimeout(180_000)
 
@@ -164,7 +173,7 @@ function contextsOf(plan: ReactionExecutionPlan): Array<{
 }
 
 describe('RFC-310 Digital Employee OS system mock E2E', () => {
-  test('external ID -> MR -> cross-repository employee -> approval -> large evidence -> merged', async () => {
+  test('signed ISSUE -> Event Center -> MR -> red gates -> repair -> ready -> merged', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = join(root, 'home')
     const baselineRepo = join(root, 'baseline')
@@ -320,13 +329,57 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       sourceControl: bindEmployeeCaseWorkspaceParticipant(),
       conflictMerge: bindConflictMergeParticipant(),
     })
+    const webhookSecret = 'rfc310-issue-ingress-secret'
+    const webhookSecretBox = createSecretBoxFromKey(Buffer.alloc(32, 27))
+    const webhookOwner = await createUser(db, {
+      username: 'rfc310-issue-owner',
+      displayName: 'RFC-310 Issue Owner',
+      role: 'admin',
+      password: 'longEnoughPassword',
+    })
+    db.insert(webhookEndpoints)
+      .values({
+        id: 'rfc310-issue-endpoint',
+        name: 'RFC-310 ISSUE ingress',
+        provider: 'gitlab',
+        urlToken: 'rfc310_issue_ingress',
+        secretEnc: webhookSecretBox.seal(webhookSecret),
+        enabled: true,
+      })
+      .run()
+    let workStartDelegate: DigitalEmployeeWorkStartPort['launch'] | null = null
+    const digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort = {
+      launch(input) {
+        if (workStartDelegate === null) throw new Error('digital employee WorkStart is not bound')
+        return workStartDelegate(input)
+      },
+    }
+    const webhookDispatcher = createWebhookDispatcher({
+      db,
+      configPath: join(appHome, 'config.json'),
+      secretBox: webhookSecretBox,
+      getDefaultRuntime: async () => null,
+      digitalEmployeeWorkStart,
+    })
     const eventCenter = composeEventCenter({
       db,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
         digitalEmployeeLifecycleEventCatalogJson,
+        codeHostEventCatalogJson,
       ],
+      automationWorkStart: {
+        launch: (input) => webhookDispatcher.dispatchEventTarget(input),
+      },
     })
+    const webhookApp = new Hono()
+    mountWebhookIngressRoutes(webhookApp, {
+      db,
+      configPath: join(appHome, 'config.json'),
+      secretBox: webhookSecretBox,
+      webhookDispatcher,
+      digitalEmployeeEventCenter: eventCenter,
+    } as unknown as AppDeps)
     const adapterStore = createSqliteDevelopmentAdapterStore(db)
     const adapterIdentity = createDevelopmentAdapter(
       adapterStore,
@@ -902,7 +955,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         platformWorkItems: platform,
       },
     })
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const typePackage = employeeOs.queries.getType(typeRef)
     const pipelineProblemDefinitions = [
       {
@@ -1128,19 +1181,107 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       coreWorkItemRefs.includes(binding.workItemRef),
     )
     const runtime = employeeOs.runtime!
-    const launched = runtime.commands.launchWork({
-      employeeId: employeeRef.id,
-      actorUserId: 'requester',
-      intake: {
-        kind: 'external-id',
-        target: { repositoryId: 'repo-system-mock' },
-        body: null,
-        externalId: 'REQ-OS-42',
-        uploads: [],
-        idempotencyKey: 'REQ-OS-42:r7',
+    workStartDelegate = (input) => {
+      const launched = runtime.commands.launchWork({
+        employeeId: input.employeeId,
+        actorUserId: input.actorUserId,
+        intake: input.intake,
+        eventOrigin: input.origin,
+      })
+      return { caseId: launched.caseRef.id }
+    }
+    const issueRule = eventCenter.responseRules.commands.create(
+      {
+        name: 'ISSUE 交给研发数字员工',
+        enabled: true,
+        eventTypeRef: { id: 'code-host.issue.labeled', revision: 1 },
+        subjectMatch: 'all',
+        subjectPattern: null,
+        target: {
+          kind: 'digital-employee',
+          refId: employeeRef.id,
+          intakeKind: 'external-id',
+          target: {},
+          valueTemplate: '{{trigger.code_host.issue_iid}}',
+        },
+      },
+      {
+        userId: webhookOwner.id,
+        canOverrideOwner: false,
+        canLaunchDigitalEmployee: true,
+      },
+    )
+    const issueBody = JSON.stringify({
+      object_kind: 'issue',
+      project: {
+        id: 310,
+        path_with_namespace: 'rfc310/digital-employee-os',
+        git_http_url: 'https://gitlab.example/rfc310/digital-employee-os.git',
+        git_ssh_url: 'git@gitlab.example:rfc310/digital-employee-os.git',
+        web_url: 'https://gitlab.example/rfc310/digital-employee-os',
+        default_branch: 'main',
+      },
+      user: { username: 'issue-author' },
+      labels: [{ title: 'aw:implement' }],
+      object_attributes: {
+        iid: 'REQ-OS-42',
+        title: 'Generate src/Main.java and keep the MR green',
+        description: 'Use the attached requirement and repair every required gate.',
+        url: 'https://gitlab.example/rfc310/digital-employee-os/-/issues/42',
+        action: 'update',
+      },
+      changes: {
+        labels: { previous: [], current: [{ title: 'aw:implement' }] },
       },
     })
-    const caseId = launched.caseRef.id
+    const issueResponse = await webhookApp.request('/webhooks/gitlab/rfc310_issue_ingress', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-gitlab-event': 'Issue Hook',
+        'x-gitlab-event-uuid': 'rfc310-issue-labeled-delivery',
+        'x-gitlab-token': webhookSecret,
+      },
+      body: issueBody,
+    })
+    expect(issueResponse.status).toBe(200)
+    const issueReceipt = (await issueResponse.json()) as { deliveryId: string; status: string }
+    expect(issueReceipt.status).toBe('received')
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      await eventCenter.worker.runOneNotification()
+      const accepted = eventCenter.queries.operations
+        .deliveryStatuses()
+        .some(
+          (delivery) =>
+            delivery.subscriber.subscriberRef === `event-response-rule:${issueRule.id}` &&
+            delivery.state === 'accepted',
+        )
+      if ((JSON.parse(runtime.queries.listCases()) as unknown[]).length > 0 && accepted) break
+      await Bun.sleep(1)
+    }
+    const ingressCases = JSON.parse(runtime.queries.listCases()) as Array<{ id: string }>
+    expect(ingressCases).toHaveLength(1)
+    const caseId = ingressCases[0]!.id
+    expect(
+      eventCenter.queries.operations
+        .eventRecordPage({ page: 1, limit: 100, sourceId: 'code-host.activity' })
+        .items.filter((event) => event.eventTypeRef.id === 'code-host.issue.labeled')
+        .map((event) => event.eventTypeRef.id),
+    ).toEqual(['code-host.issue.labeled'])
+    expect(
+      eventCenter.queries.operations
+        .deliveryStatuses()
+        .find(
+          (delivery) => delivery.subscriber.subscriberRef === `event-response-rule:${issueRule.id}`,
+        ),
+    ).toMatchObject({ state: 'accepted' })
+    expect(
+      db
+        .select({ status: webhookDeliveries.status })
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.id, issueReceipt.deliveryId))
+        .get(),
+    ).toEqual({ status: 'matched' })
 
     const driveUntilIdle = async (budget = 300): Promise<void> => {
       for (let step = 0; step < budget; step += 1) {
@@ -1234,7 +1375,24 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         updatedAt: number
         settledAt: number | null
       }>
+      reviewGates: Array<{
+        parentWorkItemRef: string
+        optionRef: string
+        state: string
+      }>
     }
+    const chronologicalRounds = [...projection.rounds].sort(
+      (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+    )
+    expect(chronologicalRounds.slice(0, 2).map((round) => round.workItemRef)).toEqual([
+      'prepare-materials',
+      'analyze-implement',
+    ])
+    expect(projection.reviewGates).toContainEqual({
+      parentWorkItemRef: 'analyze-implement',
+      optionRef: 'review-implementation-plan',
+      state: 'skipped',
+    })
     const parentMrHead = mrHeads.get('repo-system-mock')!
     const mr = projection.contexts.find(
       (context) => context.typeId === 'development.merge-request',

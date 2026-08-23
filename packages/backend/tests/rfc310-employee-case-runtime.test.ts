@@ -442,7 +442,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 5 }
+    const typeRef = { typeId: 'development', revision: 6 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const pipelineProblemDefinitions = [

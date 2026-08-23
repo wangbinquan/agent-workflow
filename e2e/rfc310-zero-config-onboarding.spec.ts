@@ -39,7 +39,7 @@ test('a first-time user publishes a job template with the built-in implementatio
   page,
 }) => {
   await primeAuth(page)
-  await page.goto(`${daemon.baseUrl}/digital-employees/development%405`)
+  await page.goto(`${daemon.baseUrl}/digital-employees/development%406`)
   await page.getByRole('tab', { name: 'Job templates' }).click()
   await page.getByRole('button', { name: 'New job template', exact: true }).click()
 
@@ -191,7 +191,7 @@ test('older hidden definitions surface as explicit upgrades and keep the employe
   await page.keyboard.press('Escape')
   expect(staleTypeRequests).toEqual([])
 
-  await page.goto(`${daemon.baseUrl}/digital-employees/development%405?view=jobs`)
+  await page.goto(`${daemon.baseUrl}/digital-employees/development%406?view=jobs`)
   const legacyJobs = page.getByTestId('legacy-job-template-upgrades')
   await expect(legacyJobs).toContainText('Legacy browser role')
   await legacyJobs.getByRole('button', { name: 'Upgrade to current version' }).click()
@@ -288,7 +288,7 @@ test('a failed contract check is corrected on the same tool registration id', as
   })
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
+    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=analyze-implement`,
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
@@ -300,7 +300,7 @@ test('a failed contract check is corrected on the same tool registration id', as
 
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('This tool is not publishable yet')).toBeVisible()
-  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%405/work-items/analyze-implement/tools`
+  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%406/work-items/analyze-implement/tools`
   const failedResponse = await page.request.get(listUrl, {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
@@ -332,7 +332,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
 }) => {
   await primeAuth(page)
   const name = `Editable invalid tool ${Date.now()}`
-  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%405/work-items/analyze-implement/tools`
+  const listUrl = `${daemon.baseUrl}/api/digital-employee-types/development%406/work-items/analyze-implement/tools`
   const seededResponse = await page.request.post(listUrl, {
     headers: { Authorization: `Bearer ${daemon.token}` },
     data: {
@@ -354,7 +354,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
   expect(seeded.validationReceipt.status).toBe('invalid')
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=analyze-implement`,
+    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=analyze-implement`,
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   const row = toolbox.locator('.node-tool-row').filter({ hasText: name })
@@ -394,7 +394,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   // tool revision and defines its output vocabulary, while pipeline evidence is
   // the runtime input. Selecting the tool materializes the same N fan-out nodes.
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=classify-pipeline`,
+    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=classify-pipeline`,
   )
   let toolbox = page.getByTestId('employee-node-toolbox')
   await expect(toolbox.getByRole('link', { name: 'Configure failure types' })).toHaveCount(0)
@@ -426,7 +426,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(toolDialog).toHaveCount(0)
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%405?view=toolbox&workItem=repair-pipeline`,
+    `${daemon.baseUrl}/digital-employees/development%406?view=toolbox&workItem=repair-pipeline`,
   )
 
   toolbox = page.getByTestId('employee-node-toolbox')
@@ -479,7 +479,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(toolbox.getByRole('link', { name: 'Assign failure types' })).toHaveCount(0)
 
   await page.goto(
-    `${daemon.baseUrl}/digital-employees/development%405?view=jobs&workItem=classify-pipeline`,
+    `${daemon.baseUrl}/digital-employees/development%406?view=jobs&workItem=classify-pipeline`,
   )
   await expect(
     page.getByRole('heading', { name: 'Configure “Classify pipeline failures”' }),
@@ -525,7 +525,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(dispatchNodes.nth(1)).toContainText('P2 · Tool')
   await expect(dispatchNodes.nth(1)).toContainText('Test failure')
   const widths = await jobMap
-    .locator('.employee-toolbox-card')
+    .locator('.employee-toolbox-lane__cards > .employee-toolbox-card')
     .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(0.5)
 

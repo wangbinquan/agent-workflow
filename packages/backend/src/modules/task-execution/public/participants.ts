@@ -95,9 +95,12 @@ export type DigitalEmployeeExecutionResult =
       readonly errorDetail: string
     }
 
+export type DigitalEmployeeHumanReviewState = 'planning' | 'waiting' | 'approved' | 'failed'
+
 /** Exact TaskEngine lane used by the Digital Employee OS. */
 export interface DigitalEmployeeExecutionParticipant {
   launch(planJson: string, attemptJson: string): Promise<{ readonly executionRef: string }>
   inspect(executionRef: string): Promise<DigitalEmployeeExecutionResult>
+  inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | null
   cancel(executionRef: string): Promise<void>
 }

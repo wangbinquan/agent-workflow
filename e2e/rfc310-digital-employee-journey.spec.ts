@@ -68,7 +68,7 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@5'
+const TYPE_REF = 'development@6'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
@@ -350,6 +350,104 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(responsibilityMap).toBeVisible()
   await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
+  const uiInputCard = responsibilityMap.locator('[data-work-ingress-ref="ui-input"]')
+  const issueIngressCard = responsibilityMap.locator('[data-work-ingress-ref="issue"]')
+  const reviewBranch = responsibilityMap.locator(
+    '[data-review-branch-work-item-ref="analyze-implement"]',
+  )
+  const repairPlanReviewCard = responsibilityMap.locator(
+    '[data-review-option-ref="review-implementation-plan"]',
+  )
+  await expect(uiInputCard).toHaveCount(1)
+  await expect(uiInputCard).toContainText('UI input')
+  await expect(issueIngressCard).toHaveCount(1)
+  await expect(issueIngressCard).toContainText('ISSUE')
+  expect(
+    await uiInputCard.locator('strong').evaluate((label) => getComputedStyle(label).whiteSpace),
+  ).toBe('nowrap')
+  expect(
+    await uiInputCard.locator('strong').evaluate((label) => {
+      const range = document.createRange()
+      range.selectNodeContents(label)
+      return range.getClientRects().length
+    }),
+  ).toBe(1)
+  await expect(uiInputCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
+  await expect(issueIngressCard).toHaveAttribute('data-next-work-item-ref', 'prepare-materials')
+  await expect(uiInputCard.locator('small')).toHaveCount(0)
+  await expect(issueIngressCard.locator('small')).toHaveCount(0)
+  const ingressBranch = responsibilityMap.locator(
+    '[data-ingress-branch-work-item-ref="prepare-materials"]',
+  )
+  await expect(ingressBranch).toContainText('Prepare work materials')
+  const parallelIngressBoxes = await Promise.all(
+    [
+      uiInputCard,
+      issueIngressCard,
+      ingressBranch.locator('[data-work-item-ref="prepare-materials"]'),
+    ].map(async (node) => await node.boundingBox()),
+  )
+  expect(parallelIngressBoxes.every((box) => box !== null)).toBe(true)
+  const uiInputBox = parallelIngressBoxes[0]!
+  const issueInputBox = parallelIngressBoxes[1]!
+  const prepareMaterialsBox = parallelIngressBoxes[2]!
+  expect(Math.abs(uiInputBox.x - issueInputBox.x)).toBeLessThanOrEqual(1)
+  expect(uiInputBox.y).toBeLessThan(issueInputBox.y)
+  expect(uiInputBox.x).toBeLessThan(prepareMaterialsBox.x)
+  expect(issueInputBox.x).toBeLessThan(prepareMaterialsBox.x)
+  const prepareMaterialsCenterY = prepareMaterialsBox.y + prepareMaterialsBox.height / 2
+  expect(uiInputBox.y + uiInputBox.height / 2).toBeLessThan(prepareMaterialsCenterY)
+  expect(issueInputBox.y + issueInputBox.height / 2).toBeGreaterThan(prepareMaterialsCenterY)
+  await expect(reviewBranch).toContainText('No review')
+  await expect(reviewBranch).toContainText('Analyze and implement')
+  await expect(reviewBranch).toContainText('Review enabled')
+  await expect(reviewBranch.locator('[data-review-stage="analysis"]')).toHaveText('Analyze')
+  await expect(reviewBranch.locator('[data-review-stage="implementation"]')).toHaveText('Implement')
+  await expect(repairPlanReviewCard).toHaveCount(1)
+  await expect(repairPlanReviewCard).toHaveText('Human plan review')
+  expect(
+    await reviewBranch
+      .locator('.employee-toolbox-review-branch__reviewed-flow .employee-toolbox-card')
+      .evaluateAll((cards) => cards.map((card) => card.textContent?.trim())),
+  ).toEqual(['Analyze', 'Human plan review', 'Implement'])
+  await expect(uiInputCard).not.toHaveAttribute('data-work-item-ref')
+  await expect(issueIngressCard).not.toHaveAttribute('data-work-item-ref')
+  await expect(repairPlanReviewCard).not.toHaveAttribute('data-work-item-ref')
+
+  const mainFlowTops = await Promise.all(
+    [
+      ingressBranch,
+      reviewBranch,
+      responsibilityMap.locator('[data-work-item-ref="prepare-change"]'),
+      responsibilityMap.locator('[data-work-item-ref="publish-mr"]'),
+    ].map(async (node) => (await node.boundingBox())?.y ?? Number.NaN),
+  )
+  expect(mainFlowTops.every(Number.isFinite)).toBe(true)
+  expect(Math.max(...mainFlowTops) - Math.min(...mainFlowTops)).toBeLessThanOrEqual(1)
+
+  await uiInputCard.click()
+  await page.waitForURL(/\/tasks\/new\?kind=digital-employee$/)
+  await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=toolbox`)
+  await expect(responsibilityMap).toBeVisible()
+
+  await repairPlanReviewCard.click()
+  const reviewGateDialog = page.getByTestId('employee-toolbox-duty-dialog')
+  await expect(reviewGateDialog).toBeVisible()
+  await expect(repairPlanReviewCard).toHaveClass(/employee-toolbox-card--active/)
+  await expect(
+    responsibilityMap.locator('[data-work-item-ref="analyze-implement"]'),
+  ).not.toHaveClass(/employee-toolbox-card--active/)
+  await expect(reviewGateDialog.getByTestId('employee-review-gate-detail')).toBeVisible()
+  await expect(reviewGateDialog.getByRole('button', { name: 'Add tool', exact: true })).toHaveCount(
+    0,
+  )
+  await reviewGateDialog.locator('.dialog__close').click()
+  await expect(reviewGateDialog).toHaveCount(0)
+
+  await issueIngressCard.click()
+  await page.waitForURL(/\/events\?tab=subscriptions$/)
+  await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=toolbox`)
+  await expect(responsibilityMap).toBeVisible()
   await expect(responsibilityMap.locator('.employee-toolbox-lane')).toHaveCount(7)
   await expect(responsibilityMap.getByText('Main lane', { exact: true }).first()).toBeVisible()
   await expect(responsibilityMap.getByText('Duty lane', { exact: true }).first()).toBeVisible()
@@ -378,8 +476,25 @@ test('body and repository-bound files enter a stateful employee case and the uni
         ),
       ),
   ).toEqual([])
+  expect(
+    await responsibilityMap.locator('.employee-toolbox-card').evaluateAll((cards) =>
+      cards.flatMap((card) => {
+        const kind = card.querySelector('.employee-toolbox-card__kind')
+        const detail = card.querySelector('small')
+        if (kind === null || detail === null) return []
+        const kindBox = kind.getBoundingClientRect()
+        const detailBox = detail.getBoundingClientRect()
+        const overlaps =
+          kindBox.left < detailBox.right &&
+          kindBox.right > detailBox.left &&
+          kindBox.top < detailBox.bottom &&
+          kindBox.bottom > detailBox.top
+        return overlaps ? [card.getAttribute('aria-label')] : []
+      }),
+    ),
+  ).toEqual([])
   const responsibilityCardWidths = await responsibilityMap
-    .locator('.employee-toolbox-card')
+    .locator('.employee-toolbox-lane__cards > .employee-toolbox-card')
     .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
   expect(
     Math.max(...responsibilityCardWidths) - Math.min(...responsibilityCardWidths),
@@ -594,6 +709,15 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(runtimeMap).toBeVisible()
   await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(20)
+  await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input"]')).toHaveCount(1)
+  await expect(runtimeMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
+  const runtimeReviewGate = runtimeMap.locator(
+    '[data-review-option-ref="review-implementation-plan"]',
+  )
+  await expect(runtimeReviewGate).toHaveCount(1)
+  await runtimeReviewGate.click()
+  await expect(runtimeReviewGate).toHaveClass(/employee-toolbox-card--active/)
+  await expect(page.getByTestId('employee-case-review-gate-detail')).toBeVisible()
   await expect(page.getByText('Work context', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Complete digital employee capability map', { exact: true }),

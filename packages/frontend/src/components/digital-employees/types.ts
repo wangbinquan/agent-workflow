@@ -44,6 +44,10 @@ export interface WorkItem {
     artifactPort: string
     label: LocalizedText
     description: LocalizedText
+    reviewedPath?: {
+      beforeReviewLabel: LocalizedText
+      afterApprovalLabel: LocalizedText
+    } | null
   } | null
   toolRoleGroups: Array<{
     roleRef: string
@@ -53,6 +57,20 @@ export interface WorkItem {
     bindingSlots: ToolSlot[]
   }>
   nextWorkItemRefs: string[]
+}
+
+export interface WorkIngress {
+  ingressRef: string
+  regionId: string
+  responsibilityLaneId: string
+  order: number
+  label: LocalizedText
+  valueLabel: LocalizedText
+  description: LocalizedText
+  sourceClass: string
+  eventTypeRefs: ExactRef[]
+  configurationSurface: 'task-creation' | 'event-response-rules'
+  nextWorkItemRef: string
 }
 
 export interface EmployeeWorkContract {
@@ -152,6 +170,7 @@ export interface EmployeeTypePackage {
         optional: boolean
       }>
     }>
+    workIngresses: WorkIngress[]
     workItems: WorkItem[]
   }
   workContracts: EmployeeWorkContract[]

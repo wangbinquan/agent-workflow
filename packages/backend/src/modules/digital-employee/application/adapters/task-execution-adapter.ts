@@ -7,6 +7,12 @@ export function createReactionExecutionAdapter(
   return {
     launch: (plan, attempt) => participant.launch(JSON.stringify(plan), JSON.stringify(attempt)),
     inspect: (executionRef) => participant.inspect(executionRef),
+    ...(participant.inspectHumanReview === undefined
+      ? {}
+      : {
+          inspectHumanReview: (executionRef: string) =>
+            participant.inspectHumanReview!(executionRef),
+        }),
     cancel: (executionRef) => participant.cancel(executionRef),
   }
 }
