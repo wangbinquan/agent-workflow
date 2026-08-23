@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { ExecutionContractProgramFixturePort, ExecutionContractResourcePort } from './ports'
 import {
+  EXECUTION_CONTRACT_RESULT_PORT,
   executionContractGuideSchema,
   executionContractImplementationSchema,
   executionContractRefKey,
@@ -31,8 +32,10 @@ function sameRef(left: ExecutionContractRef, right: ExecutionContractRef): boole
 }
 
 function runtimeView(guide: ExecutionContractGuide): ExecutionContractRuntimeView {
+  const agentTransport = guide.transports.agent
   return {
     schemaVersion: 1,
+    outputMode: guide.outputMode,
     contractRef: guide.contractRef,
     displayName: guide.displayName,
     description: guide.description,
@@ -40,6 +43,11 @@ function runtimeView(guide: ExecutionContractGuide): ExecutionContractRuntimeVie
     outputSchemaId: guide.output.schemaId,
     outputTopLevelFields: guide.output.topLevelFields,
     allowedExecutorKinds: guide.allowedExecutorKinds,
+    agentOutputPort:
+      agentTransport === null
+        ? null
+        : (agentTransport.outputPort ?? EXECUTION_CONTRACT_RESULT_PORT),
+    agentOutputKind: agentTransport?.outputKind ?? null,
     guideJson: JSON.stringify(guide),
   }
 }
@@ -135,7 +143,12 @@ export class ExecutionContractService {
     if (implementation.kind === 'program') {
       checks.push(...(await this.#programFixtures.validate({ guide, implementation })))
     } else {
-      const projection = await this.#resources.inspect({ implementation })
+      const transport =
+        implementation.kind === 'agent' ? guide.transports.agent : guide.transports.workflow
+      const projection = await this.#resources.inspect({
+        implementation,
+        expectedOutputPort: transport?.outputPort ?? EXECUTION_CONTRACT_RESULT_PORT,
+      })
       checks.push(
         projection === null
           ? invalid(

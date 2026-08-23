@@ -8,6 +8,7 @@ const text = (value: string) => ({ 'zh-CN': value, 'en-US': value })
 
 const guide: ExecutionContractGuide = {
   schemaVersion: 1,
+  outputMode: 'envelope',
   contractRef: { contractId: 'development.prepare-materials', version: 1 },
   displayName: text('准备工作材料'),
   description: text('取得需求材料'),

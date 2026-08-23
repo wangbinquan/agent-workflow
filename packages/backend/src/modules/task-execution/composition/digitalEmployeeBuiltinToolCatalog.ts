@@ -30,7 +30,7 @@ const descriptorSchema = z
                 .object({ contractId: z.string(), version: z.number().int().positive() })
                 .strict(),
               humanReview: z
-                .object({ artifactPort: z.string() })
+                .object({ artifactPort: z.string(), planningRoleRef: z.string() })
                 .passthrough()
                 .nullable()
                 .optional(),
@@ -39,7 +39,17 @@ const descriptorSchema = z
                 .passthrough()
                 .nullable()
                 .optional(),
-              toolRoleGroups: z.array(z.object({ roleRef: z.string() }).passthrough()),
+              toolRoleGroups: z.array(
+                z
+                  .object({
+                    roleRef: z.string(),
+                    workContractRef: z
+                      .object({ contractId: z.string(), version: z.number().int().positive() })
+                      .strict()
+                      .optional(),
+                  })
+                  .passthrough(),
+              ),
             })
             .passthrough(),
         ),
@@ -58,7 +68,7 @@ function digest(value: unknown): string {
 
 function declaredContracts(value: unknown): readonly { contractId: string; version: number }[] {
   return z
-    .array(z.object({ contractId: z.string(), version: z.number().int().positive() }).strict())
+    .array(z.object({ contractId: z.string(), version: z.number().int().positive() }).passthrough())
     .catch([])
     .parse(value)
 }
@@ -111,107 +121,106 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
     descriptors.flatMap((descriptor) =>
       descriptor.authoringManifest.workItems.flatMap((item) => {
         if (item.nodeKind !== 'business-tool') return []
-        const roleRef = item.toolRoleGroups[0]?.roleRef
         const dispatchSources = descriptor.authoringManifest.workItems.filter((source) =>
           source.orderedDispatchAuthoring?.destinationWorkItemRefs.includes(item.workItemRef),
         )
-        const contract = descriptor.workContracts.find(
-          (candidate) =>
-            candidate.contractId === item.workContractRef.contractId &&
-            candidate.version === item.workContractRef.version,
-        )
-        if (roleRef === undefined || contract === undefined) return []
-        return DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.flatMap((agentId) => {
-          const agent = getAgentByIdSync(input.db, agentId)
-          if (agent === null || agent.builtin !== true || agent.visibility !== 'public') return []
-          const template = agent.frontmatterExtra.digitalEmployeeTemplate
-          if (typeof template !== 'string') return []
-          const dispatchRouteDefinitions = declaredDispatchRoutes(
-            agent.frontmatterExtra.dispatchRouteDefinitions,
-          )
-          if (item.orderedDispatchAuthoring != null && dispatchRouteDefinitions === undefined) {
-            return []
-          }
-          const presentation = digitalEmployeeAgentToolPresentation(template)
-          if (presentation === null) return []
-          const selection = presentation.selection
-          const declared = declaredContracts(agent.frontmatterExtra.executionContracts)
-          const compatible = declared.some(
+        return item.toolRoleGroups.flatMap((role) => {
+          const workContractRef = role.workContractRef ?? item.workContractRef
+          const contract = descriptor.workContracts.find(
             (candidate) =>
-              candidate.contractId === item.workContractRef.contractId &&
-              candidate.version === item.workContractRef.version,
+              candidate.contractId === workContractRef.contractId &&
+              candidate.version === workContractRef.version,
           )
-          const automatic =
-            selection === 'automatic' &&
-            item.humanReview?.artifactPort !== undefined &&
-            agent.outputs.includes(item.humanReview.artifactPort)
-          if (!compatible && !automatic) return []
-          if (selection === 'selectable' && !agent.outputs.includes('agent-result')) return []
-          const implementation = {
-            kind: 'agent' as const,
-            agentRef: { id: agent.id, revision: agent.updatedAt },
-          }
-          const checks = [
-            {
-              code: 'platform-agent-exact-revision',
-              ok: true,
-              detail: `${agent.id}@${agent.updatedAt}`,
-            },
-            {
-              code: automatic ? 'platform-agent-review-artifact' : 'platform-agent-contract',
-              ok: true,
-              detail: automatic
-                ? `${agent.name} publishes ${item.humanReview!.artifactPort}`
-                : `${agent.name} declares ${contract.contractId}@${contract.version}`,
-            },
-          ]
-          const receiptCore = {
-            schemaVersion: 1 as const,
-            status: 'valid' as const,
-            contractRef: item.workContractRef,
-            implementationDigest: digest(implementation),
-            checks,
-            checkedAt: agent.updatedAt,
-          }
-          const content = {
-            schemaVersion: 1 as const,
-            typeRef: descriptor.typeRef,
-            workItemRef: item.workItemRef,
-            workContractRef: item.workContractRef,
-            roleRef,
-            displayName: presentation.zh,
-            description: agent.description,
-            implementation,
-            connectionRef: null,
-            ...(item.orderedDispatchAuthoring == null
-              ? {}
-              : { dispatchRouteDefinitions: dispatchRouteDefinitions! }),
-            ...(dispatchSources.length === 0
-              ? {}
-              : {
-                  acceptedDispatchRoutes: dispatchSources.map((source) => ({
-                    classifierWorkItemRef: source.workItemRef,
-                    routeRefs: ['*'],
-                  })),
-                }),
-          }
-          const id = `${prefix}${descriptor.typeRef.typeId}:${descriptor.typeRef.revision}:${item.workItemRef}:${agent.id}`
-          return [
-            {
-              id,
+          if (contract === undefined) return []
+          const expectedOutputPort =
+            item.humanReview?.planningRoleRef === role.roleRef
+              ? item.humanReview.artifactPort
+              : 'agent-result'
+          return DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.flatMap((agentId) => {
+            const agent = getAgentByIdSync(input.db, agentId)
+            if (agent === null || agent.builtin !== true || agent.visibility !== 'public') return []
+            const template = agent.frontmatterExtra.digitalEmployeeTemplate
+            if (typeof template !== 'string') return []
+            const dispatchRouteDefinitions = declaredDispatchRoutes(
+              agent.frontmatterExtra.dispatchRouteDefinitions,
+            )
+            if (item.orderedDispatchAuthoring != null && dispatchRouteDefinitions === undefined) {
+              return []
+            }
+            const presentation = digitalEmployeeAgentToolPresentation(template)
+            if (presentation === null) return []
+            const selection = presentation.selection
+            const declared = declaredContracts(agent.frontmatterExtra.executionContracts)
+            const compatible = declared.some(
+              (candidate) =>
+                candidate.contractId === workContractRef.contractId &&
+                candidate.version === workContractRef.version,
+            )
+            if (!compatible || !agent.outputs.includes(expectedOutputPort)) return []
+            const implementation = {
+              kind: 'agent' as const,
+              agentRef: { id: agent.id, revision: agent.updatedAt },
+            }
+            const checks = [
+              {
+                code: 'platform-agent-exact-revision',
+                ok: true,
+                detail: `${agent.id}@${agent.updatedAt}`,
+              },
+              {
+                code: 'platform-agent-contract',
+                ok: true,
+                detail: `${agent.name} declares ${contract.contractId}@${contract.version} and publishes ${expectedOutputPort}`,
+              },
+            ]
+            const receiptCore = {
+              schemaVersion: 1 as const,
+              status: 'valid' as const,
+              contractRef: workContractRef,
+              implementationDigest: digest(implementation),
+              checks,
+              checkedAt: agent.updatedAt,
+            }
+            const content = {
+              schemaVersion: 1 as const,
               typeRef: descriptor.typeRef,
               workItemRef: item.workItemRef,
-              content,
-              validationReceipt: { ...receiptCore, receiptDigest: digest(receiptCore) },
-              publishedRevision: agent.updatedAt,
-              ownerUserId: agent.ownerUserId,
-              createdAt: agent.createdAt,
-              updatedAt: agent.updatedAt,
-              retiredAt: null,
-              origin: 'platform' as const,
-              selection,
-            },
-          ]
+              workContractRef,
+              roleRef: role.roleRef,
+              displayName: presentation.zh,
+              description: agent.description,
+              implementation,
+              connectionRef: null,
+              ...(item.orderedDispatchAuthoring == null
+                ? {}
+                : { dispatchRouteDefinitions: dispatchRouteDefinitions! }),
+              ...(dispatchSources.length === 0
+                ? {}
+                : {
+                    acceptedDispatchRoutes: dispatchSources.map((source) => ({
+                      classifierWorkItemRef: source.workItemRef,
+                      routeRefs: ['*'],
+                    })),
+                  }),
+            }
+            const id = `${prefix}${descriptor.typeRef.typeId}:${descriptor.typeRef.revision}:${item.workItemRef}:${agent.id}`
+            return [
+              {
+                id,
+                typeRef: descriptor.typeRef,
+                workItemRef: item.workItemRef,
+                content,
+                validationReceipt: { ...receiptCore, receiptDigest: digest(receiptCore) },
+                publishedRevision: agent.updatedAt,
+                ownerUserId: agent.ownerUserId,
+                createdAt: agent.createdAt,
+                updatedAt: agent.updatedAt,
+                retiredAt: null,
+                origin: 'platform' as const,
+                selection,
+              },
+            ]
+          })
         })
       }),
     )

@@ -42,6 +42,8 @@ export interface WorkItem {
   humanReview: {
     optionRef: string
     artifactPort: string
+    planningRoleRef: string
+    planningSlotRef: string
     label: LocalizedText
     description: LocalizedText
     reviewedPath?: {
@@ -54,6 +56,7 @@ export interface WorkItem {
     label: LocalizedText
     description: LocalizedText
     order: number
+    workContractRef?: { contractId: string; version: number }
     bindingSlots: ToolSlot[]
   }>
   nextWorkItemRefs: string[]

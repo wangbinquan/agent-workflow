@@ -17,11 +17,14 @@ import type {
 import {
   EXECUTION_CONTRACT_RESULT_PORT,
   EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
-  executionContractRefSchema,
   validateExactContractOutput,
 } from '../domain/model'
 
-const declarationsSchema = z.array(executionContractRefSchema).max(200)
+const declarationsSchema = z
+  .array(
+    z.object({ contractId: z.string().min(1), version: z.number().int().positive() }).passthrough(),
+  )
+  .max(200)
 const parameterValuesSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
 const CONTRACT_PROMPT_INPUT = 'prompt'
 const CONTRACT_WORKFLOW_NODE_KINDS = new Set([
@@ -33,7 +36,10 @@ const CONTRACT_WORKFLOW_NODE_KINDS = new Set([
   'wrapper-fanout',
 ])
 
-export function inspectExecutionContractWorkflowDefinition(definition: WorkflowDefinition): {
+export function inspectExecutionContractWorkflowDefinition(
+  definition: WorkflowDefinition,
+  expectedOutputPort = EXECUTION_CONTRACT_RESULT_PORT,
+): {
   readonly ok: boolean
   readonly detail: string
 } {
@@ -59,7 +65,7 @@ export function inspectExecutionContractWorkflowDefinition(definition: WorkflowD
   if (forbiddenKinds.length > 0)
     violations.push(`forbidden node kinds: ${forbiddenKinds.join(', ')}`)
   const hasResultOutput =
-    definition.outputs?.some((output) => output.name === EXECUTION_CONTRACT_RESULT_PORT) === true ||
+    definition.outputs?.some((output) => output.name === expectedOutputPort) === true ||
     definition.nodes.some((node) => {
       if (node.kind !== 'output') return false
       const ports = (node as { ports?: unknown }).ports
@@ -69,11 +75,11 @@ export function inspectExecutionContractWorkflowDefinition(definition: WorkflowD
           (port) =>
             port !== null &&
             typeof port === 'object' &&
-            (port as { name?: unknown }).name === EXECUTION_CONTRACT_RESULT_PORT,
+            (port as { name?: unknown }).name === expectedOutputPort,
         )
       )
     })
-  if (!hasResultOutput) violations.push(`missing output '${EXECUTION_CONTRACT_RESULT_PORT}'`)
+  if (!hasResultOutput) violations.push(`missing output '${expectedOutputPort}'`)
   return violations.length === 0
     ? { ok: true, detail: `closed contract workflow; ${definition.nodes.length} node(s)` }
     : { ok: false, detail: violations.join('; ') }
@@ -86,11 +92,11 @@ export function createExecutionContractResourceAdapter(
   }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],
 ): ExecutionContractResourcePort {
   return {
-    async inspect({ implementation }) {
+    async inspect({ implementation, expectedOutputPort }) {
       if (implementation.kind === 'agent') {
         const agent = await getAgentById(db, implementation.agentRef.id)
         if (agent === null || agent.updatedAt !== implementation.agentRef.revision) return null
-        const available = agent.outputs.includes(EXECUTION_CONTRACT_RESULT_PORT)
+        const available = agent.outputs.includes(expectedOutputPort)
         const declared = declarationsSchema.safeParse(agent.frontmatterExtra.executionContracts)
         const fallbackDeclarations = implicitAgentDeclarations({
           frontmatterExtra: agent.frontmatterExtra,
@@ -100,14 +106,17 @@ export function createExecutionContractResourceAdapter(
           name: agent.name,
           available,
           detail: available
-            ? `${agent.name}; exact ${EXECUTION_CONTRACT_RESULT_PORT} output port`
-            : `${agent.name}; missing required output ${EXECUTION_CONTRACT_RESULT_PORT}`,
+            ? `${agent.name}; exact ${expectedOutputPort} output port`
+            : `${agent.name}; missing required output ${expectedOutputPort}`,
           declaredContractRefs: declared.success ? declared.data : fallbackDeclarations,
         }
       }
       const workflow = await getWorkflow(db, implementation.workflowRef.id)
       if (workflow === null || workflow.version !== implementation.workflowRef.revision) return null
-      const closure = inspectExecutionContractWorkflowDefinition(workflow.definition)
+      const closure = inspectExecutionContractWorkflowDefinition(
+        workflow.definition,
+        expectedOutputPort,
+      )
       return {
         kind: 'workflow',
         name: workflow.name,

@@ -27,6 +27,7 @@ import {
   reactionLaneIds,
   toolRegistrationContentSchema,
   validateTypePackage,
+  workContractRefForToolRole,
   workItemToolBindingSchema,
   type ContractValidationCheck,
   type CreateToolRegistrationBody,
@@ -539,8 +540,12 @@ export class DigitalEmployeeAuthoringService {
     const targetDescriptor = this.#descriptor(targetTypeRef)
     const sourceContract = findWorkContract(sourceDescriptor, source.content.workContractRef)
     const targetItem = findWorkItem(targetDescriptor, workItemRef)
+    const targetRoleContractRef =
+      targetItem === null ? null : workContractRefForToolRole(targetItem, source.content.roleRef)
     const targetContract =
-      targetItem === null ? null : findWorkContract(targetDescriptor, targetItem.workContractRef)
+      targetRoleContractRef === null
+        ? null
+        : findWorkContract(targetDescriptor, targetRoleContractRef)
     if (
       sourceContract === null ||
       targetItem === null ||
@@ -563,7 +568,7 @@ export class DigitalEmployeeAuthoringService {
     const content = toolRegistrationContentSchema.parse({
       ...source.content,
       typeRef: targetTypeRef,
-      workContractRef: targetItem.workContractRef,
+      workContractRef: targetRoleContractRef,
     })
     const id = automaticUpgradeResourceId('tool', {
       targetTypeRef,
@@ -644,6 +649,8 @@ export class DigitalEmployeeAuthoringService {
     workItemRef: string,
   ): void {
     const item = findWorkItem(this.#runtime(targetTypeRef).descriptor, workItemRef)
+    const expectedContractRef =
+      item === null ? null : workContractRefForToolRole(item, revision.content.roleRef)
     if (
       revision.state !== 'published' ||
       revision.validationReceipt.status !== 'valid' ||
@@ -651,8 +658,9 @@ export class DigitalEmployeeAuthoringService {
       revision.content.workItemRef !== workItemRef ||
       item === null ||
       item.nodeKind !== 'business-tool' ||
-      item.workContractRef.contractId !== revision.content.workContractRef.contractId ||
-      item.workContractRef.version !== revision.content.workContractRef.version ||
+      expectedContractRef === null ||
+      expectedContractRef.contractId !== revision.content.workContractRef.contractId ||
+      expectedContractRef.version !== revision.content.workContractRef.version ||
       findToolRole(item, revision.content.roleRef) === null
     ) {
       throw new AutomaticTypeUpgradeError(
@@ -993,7 +1001,9 @@ export class DigitalEmployeeAuthoringService {
         `${body.roleRef} is not defined by ${input.workItemRef}`,
       )
     }
-    const contract = findWorkContract(runtime.descriptor, item.workContractRef)
+    const roleContractRef = workContractRefForToolRole(item, role.roleRef)
+    if (roleContractRef === null) throw new Error(`type package lost role for ${item.workItemRef}`)
+    const contract = findWorkContract(runtime.descriptor, roleContractRef)
     if (contract === null) throw new Error(`type package lost contract for ${item.workItemRef}`)
     const dispatchSources = runtime.descriptor.authoringManifest.workItems.filter((source) =>
       source.orderedDispatchAuthoring?.destinationWorkItemRefs.includes(item.workItemRef),
@@ -1031,7 +1041,7 @@ export class DigitalEmployeeAuthoringService {
       schemaVersion: 1,
       typeRef: input.typeRef,
       workItemRef: item.workItemRef,
-      workContractRef: item.workContractRef,
+      workContractRef: roleContractRef,
       roleRef: role.roleRef,
       displayName: body.displayName,
       description: body.description,
@@ -1285,10 +1295,14 @@ export class DigitalEmployeeAuthoringService {
         `tool revision is not published: ${binding.registrationRef.id}@${binding.registrationRef.revision}`,
       )
     }
+    const expectedContractRef = workContractRefForToolRole(item, slot.roleRef)
     if (
       !sameType(tool.content.typeRef, typeRef) ||
       tool.content.workItemRef !== binding.workItemRef ||
-      tool.content.roleRef !== slot.roleRef
+      tool.content.roleRef !== slot.roleRef ||
+      expectedContractRef === null ||
+      expectedContractRef.contractId !== tool.content.workContractRef.contractId ||
+      expectedContractRef.version !== tool.content.workContractRef.version
     ) {
       throw new ValidationError(
         'employee-tool-binding-invalid',

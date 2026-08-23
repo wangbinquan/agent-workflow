@@ -22,8 +22,8 @@
 > schema migration。Agent 契约选择与端口编辑同页；契约托管的 `agent-result` 随声明原子增删，UI 与所有保存入口均禁止单独改写。
 >
 > **2026-08-23 PR-27（实施中，流程已确认）**：用通用只读 ingress projection 在同一来源列上下并列呈现 `界面输入`、`ISSUE` 两个
-> 无前后顺序的来源节点，并让两者以独立连线向右汇入“准备工作材料”；现有 `humanReview` 则投影为“分析并实现”与
-> “分析 → 人工审核修复计划 → 实现”两条互斥路径。
+> 无前后顺序的来源节点，并让两者以独立连线向右汇入“准备工作材料”；现有 `humanReview` 则投影为可选前缀：
+> 未启用审核时直接进入唯一的“分析与实现”，启用时先走“方案分析 → 人工审核方案”，再汇入同一个“分析与实现”。
 > 两条路径汇合后的“校验并冻结代码修改”保持在同一主行。目标是不改变 WorkStart、20 个可执行工作项或 MR 修绿执行链。详见 §22。
 >
 > **2026-08-23 PR-28（用户已确认）**：`digital-employee/application` 在类型注册后执行通用自动兼容升级，幂等迁移 exact 工具、
@@ -4544,7 +4544,7 @@ Webhook、Event Center、WorkStart 与 EmployeeCase 的 owner 保持不变。来
 并行入口，并把 `prepare-materials` 放在来源列右侧、垂直居于两个入口之间；每个入口都有独立汇聚连线。不得把两个入口沿主流程横排成
 伪串行步骤，也不得把材料准备放到来源列下方。`ISSUE` 卡也不得直接把 Case 跳到
 `analyze-implement`，因为那会绕过材料规范化并让页面拓扑与 runtime 不一致；用户看到的
-“进入分析并实现流程”是指规范化后汇入同一执行语义。
+“进入分析与实现流程”是指规范化后汇入同一执行语义。
 
 ### 22.2 通用双 ingress manifest
 
@@ -4617,26 +4617,34 @@ ingress 不进入岗位模板、员工 revision、工具查询、发布完整性
 
 ### 22.3 `humanReview` 的双分支可视投影
 
-现有 `WorkItemDefinition.humanReview` 已包含 `optionRef/artifactPort/label/description`，TaskExecution 也已实现固定的
-plan → review → implement host；PR-27 只追加默认 `null` 的 `reviewedPath` 展示合同，不新增审批表、Review WorkItem 或第二个状态机：
+`WorkItemDefinition.humanReview` 在既有 `optionRef/artifactPort/label/description/reviewedPath` 基础上增加
+`planningRoleRef/planningSlotRef`，TaskExecution 继续复用固定的 plan → review → implement host，不新增审批表、Review WorkItem 或第二个状态机。
+`ToolRoleGroup.workContractRef` 允许组合工作项中的准备角色覆盖父工作合同；未声明时仍继承父合同：
 
 ```ts
 interface ReviewedPathDefinition {
   readonly beforeReviewLabel: LocalizedText
   readonly afterApprovalLabel: LocalizedText
 }
+
+interface HumanReviewPlanningBinding {
+  readonly planningRoleRef: string
+  readonly planningSlotRef: string
+}
 ```
 
-共享 `EmployeeCapabilityPanorama` 发现 `humanReview.reviewedPath` 后，把父工作项投影为一个通用 `review-branch` 组：上支保持父卡“分析并实现”；
-下支依次渲染 `beforeReviewLabel`、人工门禁卡、`afterApprovalLabel`，即“分析 → 人工审核修复计划 → 实现”。分支组只占一个主链位置，后继
+共享 `EmployeeCapabilityPanorama` 发现 `humanReview.reviewedPath` 后，把父工作项投影为一个通用 `review-branch` 组：上支直接旁路；
+下支依次渲染 `beforeReviewLabel` 和人工门禁卡，即“方案分析 → 人工审核方案”。两支随后必须汇入唯一的父卡“分析与实现”，不得再渲染
+第二张实现卡或把审核后的阶段伪装成另一个工作项。分支组只占一个主链位置，后继
 `prepare-change` 和 `publish-mr` 继续排在同一行，不能因为辅助展示节点增加顶层列数而换行。
 
-人工门禁业务文案为“人工审核修复计划”，状态始终不参与工具配置：
+人工门禁业务文案为“人工审核方案”，状态始终不参与工具配置；“方案分析”则是独立工具角色，使用自己的工作合同和 exact binding。
+内置 `implementation-planning` Agent 只是可替换默认工具；任何兼容 Agent 都只需从 `analysis-plan` 输出 Markdown 路径，不需要
+`agent-result` envelope：
 
-- 工具箱/岗位模板：显示“可选，任务发起时决定”；点击打开父工作项 Dialog 并聚焦 `humanReview` 合同，不显示增加/选择工具；
-- Case runtime 从冻结 `capabilityActivation.executionOptions[optionRef]` 取得 `active`：未开启时折叠为普通父工具，页面不出现任何人工审核文案；
-  已开启时只显示“分析 → 人工审核 → 实现”这一条实际路径，不再并列显示“未开启”路径；尚未到达为 `neutral`，等待评论或批准为
-  `waiting`，已批准并继续为 `completed`；
+- 人工门禁卡：显示“可选，任务发起时决定”；点击打开父工作项 Dialog 并聚焦 `humanReview` 合同，不显示增加/选择工具；
+- 方案分析卡与父职责工具箱：显示 `planning/plan` 角色，允许选择平台内置或自定义兼容 Agent；岗位模板冻结其 exact tool revision；
+- Case runtime 未开启：`neutral/skipped`；已开启但尚未到达：`neutral`；等待评论或批准：`waiting`；已批准并继续：`completed`；
 - 状态只从冻结 Case 输入和 TaskEngine review receipt 投影，不从 mutable draft、日志字符串或浏览器状态推断。
 
 视觉连接必须表达它处在 `analyze-implement` 的内部条件路径，而不是该工作项完成后的新步骤。通用组件只识别 `humanReview.reviewedPath`

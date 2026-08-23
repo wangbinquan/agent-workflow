@@ -200,17 +200,78 @@ export function agentExecutionContractKeys(frontmatter: Record<string, unknown>)
   return [...new Set(keys)]
 }
 
+export interface AgentExecutionContractTransport {
+  outputPort: string
+  outputKind: string | null
+}
+
+function agentExecutionContractTransports(
+  frontmatter: Record<string, unknown>,
+): ReadonlyMap<string, AgentExecutionContractTransport> {
+  const declarations = frontmatter.executionContracts
+  const transports = new Map<string, AgentExecutionContractTransport>()
+  if (!Array.isArray(declarations)) return transports
+  for (const declaration of declarations) {
+    if (declaration === null || typeof declaration !== 'object' || Array.isArray(declaration)) {
+      continue
+    }
+    const value = declaration as Record<string, unknown>
+    if (
+      typeof value.contractId !== 'string' ||
+      typeof value.version !== 'number' ||
+      !Number.isInteger(value.version) ||
+      value.version <= 0
+    ) {
+      continue
+    }
+    transports.set(`${value.contractId}@${value.version}`, {
+      outputPort:
+        typeof value.outputPort === 'string' && value.outputPort !== ''
+          ? value.outputPort
+          : AGENT_EXECUTION_CONTRACT_RESULT_PORT,
+      outputKind:
+        typeof value.outputKind === 'string' && value.outputKind !== '' ? value.outputKind : null,
+    })
+  }
+  return transports
+}
+
+export function agentExecutionContractManagedPorts(frontmatter: Record<string, unknown>): string[] {
+  return [
+    ...new Set(
+      [...agentExecutionContractTransports(frontmatter).values()].map((value) => value.outputPort),
+    ),
+  ]
+}
+
 export function withAgentExecutionContractKeys(
   frontmatter: Record<string, unknown>,
   keys: readonly string[],
+  transportsByKey: Readonly<Record<string, AgentExecutionContractTransport>> = {},
 ): Record<string, unknown> {
   const next = { ...frontmatter }
+  const existingTransports = agentExecutionContractTransports(frontmatter)
   const declarations = keys.flatMap((key) => {
     const at = key.lastIndexOf('@')
     const version = Number(key.slice(at + 1))
     return at <= 0 || !Number.isInteger(version) || version <= 0
       ? []
-      : [{ contractId: key.slice(0, at), version }]
+      : (() => {
+          const transport = transportsByKey[key] ?? existingTransports.get(key)
+          return [
+            {
+              contractId: key.slice(0, at),
+              version,
+              ...(transport === undefined ||
+              transport.outputPort === AGENT_EXECUTION_CONTRACT_RESULT_PORT
+                ? {}
+                : { outputPort: transport.outputPort }),
+              ...(transport?.outputKind === null || transport?.outputKind === undefined
+                ? {}
+                : { outputKind: transport.outputKind }),
+            },
+          ]
+        })()
   })
   if (declarations.length === 0) delete next.executionContracts
   else next.executionContracts = declarations
@@ -228,24 +289,42 @@ export const AGENT_EXECUTION_CONTRACT_RESULT_PORT = 'agent-result'
 export function withAgentExecutionContractsAndPorts(
   value: CreateAgent,
   keys: readonly string[],
+  transportsByKey: Readonly<Record<string, AgentExecutionContractTransport>> = {},
 ): CreateAgent {
-  const frontmatterExtra = withAgentExecutionContractKeys(value.frontmatterExtra ?? {}, keys)
-  const active = agentExecutionContractKeys(frontmatterExtra).length > 0
-  const ordinaryOutputs = value.outputs.filter(
-    (port) => port !== AGENT_EXECUTION_CONTRACT_RESULT_PORT,
+  const before = agentExecutionContractTransports(value.frontmatterExtra ?? {})
+  const frontmatterExtra = withAgentExecutionContractKeys(
+    value.frontmatterExtra ?? {},
+    keys,
+    transportsByKey,
   )
-  const outputKinds = value.outputKinds === undefined ? undefined : { ...value.outputKinds }
+  const after = agentExecutionContractTransports(frontmatterExtra)
+  const managedPorts = new Set(
+    [...before.values(), ...after.values()].map((transport) => transport.outputPort),
+  )
+  const ordinaryOutputs = value.outputs.filter((port) => !managedPorts.has(port))
+  const contractOutputs = [...new Set([...after.values()].map((value) => value.outputPort))]
+  const hadOutputKinds = value.outputKinds !== undefined
+  const outputKinds = { ...(value.outputKinds ?? {}) }
   const outputWrapperPortNames =
     value.outputWrapperPortNames === undefined ? undefined : { ...value.outputWrapperPortNames }
-  delete outputKinds?.[AGENT_EXECUTION_CONTRACT_RESULT_PORT]
-  delete outputWrapperPortNames?.[AGENT_EXECUTION_CONTRACT_RESULT_PORT]
+  for (const port of managedPorts) {
+    delete outputKinds[port]
+    delete outputWrapperPortNames?.[port]
+  }
+  for (const transport of after.values()) {
+    if (transport.outputKind !== null) outputKinds[transport.outputPort] = transport.outputKind
+  }
+  const normalizedOutputKinds =
+    hadOutputKinds || [...after.values()].some((transport) => transport.outputKind !== null)
+      ? outputKinds
+      : undefined
   return {
     ...value,
     frontmatterExtra,
-    outputs: active ? [...ordinaryOutputs, AGENT_EXECUTION_CONTRACT_RESULT_PORT] : ordinaryOutputs,
-    outputKinds,
+    outputs: [...ordinaryOutputs, ...contractOutputs],
+    outputKinds: normalizedOutputKinds,
     outputWrapperPortNames,
-    branchPorts: value.branchPorts?.filter((port) => port !== AGENT_EXECUTION_CONTRACT_RESULT_PORT),
+    branchPorts: value.branchPorts?.filter((port) => !managedPorts.has(port)),
   }
 }
 
@@ -515,8 +594,8 @@ export function AgentForm({
         <ExecutionContractPicker
           value={executionContractKeys}
           enabled={tab === 'ports'}
-          onChange={(keys) => {
-            const nextValue = withAgentExecutionContractsAndPorts(value, keys)
+          onChange={(keys, transportsByKey) => {
+            const nextValue = withAgentExecutionContractsAndPorts(value, keys, transportsByKey)
             const nextJsonDraft = {
               ...jsonDraft,
               frontmatterExtra: jsonFieldChangeFromValue(nextValue.frontmatterExtra ?? {}),
@@ -546,7 +625,9 @@ export function AgentForm({
           outputWrapperPortNames={value.outputWrapperPortNames}
           branchPorts={value.branchPorts}
           managedPortNames={
-            executionContractKeys.length > 0 ? [AGENT_EXECUTION_CONTRACT_RESULT_PORT] : undefined
+            executionContractKeys.length > 0
+              ? agentExecutionContractManagedPorts(value.frontmatterExtra ?? {})
+              : undefined
           }
           aggregator={value.role === 'aggregator'}
           hasExternalPortAlert={hasExternalPortAlert}

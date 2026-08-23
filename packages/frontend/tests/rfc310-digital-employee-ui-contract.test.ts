@@ -49,7 +49,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain('`Configure duty: ${localized(selectedItem.label, language)}`')
     expect(typePage).not.toContain('数字员工 / ${props.typeName} / ${localized(props.item.label')
     expect(typePage).toContain("zh ? '增加工具' : 'Add tool'")
-    expect(typePage).toContain('props.contract?.allowedToolKinds ?? []')
+    expect(typePage).toContain('selectedRole?.workContractRef ?? props.item.workContractRef')
+    expect(typePage).toContain('contract?.allowedToolKinds ?? []')
     expect(typePage).not.toContain("? ['agent', 'workflow', 'program']")
     expect(typePage).toContain('parameterValues: parsedParameters')
     expect(typePage).toContain("search={{ view: 'toolbox', workItem:")
@@ -107,6 +108,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(types).toContain('workIngresses: WorkIngress[]')
     expect(types).toContain("configurationSurface: 'task-creation' | 'event-response-rules'")
     expect(types).toContain('reviewedPath?: {')
+    expect(types).toContain('planningRoleRef: string')
+    expect(types).toContain('workContractRef?: { contractId: string; version: number }')
     expect(graph).toContain("kind: 'ingress'")
     expect(graph).toContain("kind: 'ingress-branch'")
     expect(graph).toContain("kind: 'review-branch'")
@@ -254,7 +257,17 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
       'development.analyze-implement@1',
     ])
 
-    const unlinked = withAgentExecutionContractsAndPorts(switched, [])
+    const planning = withAgentExecutionContractsAndPorts(switched, ['development.analyze-plan@1'], {
+      'development.analyze-plan@1': {
+        outputPort: 'analysis-plan',
+        outputKind: 'path<md>',
+      },
+    })
+    expect(planning.outputs).toEqual(['ordinary', 'analysis-plan'])
+    expect(planning.outputKinds).toEqual({ ordinary: 'markdown', 'analysis-plan': 'path<md>' })
+    expect(planning.outputs).not.toContain('agent-result')
+
+    const unlinked = withAgentExecutionContractsAndPorts(planning, [])
     expect(unlinked.outputs).toEqual(['ordinary'])
     expect(agentExecutionContractKeys(unlinked.frontmatterExtra)).toEqual([])
 

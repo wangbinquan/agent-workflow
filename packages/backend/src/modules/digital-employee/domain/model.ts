@@ -207,6 +207,10 @@ const toolRoleGroupSchema = z
     label: localizedTextSchema,
     description: localizedTextSchema,
     order: z.number().int().nonnegative(),
+    // A composite business work item may delegate a preparatory role to a
+    // narrower contract. Roles without an override inherit the work item
+    // contract, preserving every previously published descriptor.
+    workContractRef: workContractRefSchema.optional(),
     bindingSlots: z.array(toolBindingSlotSchema).max(100).default([]),
   })
   .strict()
@@ -275,6 +279,8 @@ const workItemDefinitionSchema = z
       .object({
         optionRef: machineIdSchema,
         artifactPort: machineIdSchema,
+        planningRoleRef: machineIdSchema,
+        planningSlotRef: machineIdSchema,
         label: localizedTextSchema,
         description: localizedTextSchema,
         reviewedPath: z
@@ -1239,6 +1245,16 @@ export function validateTypePackage(
     }
     const roleIds = item.toolRoleGroups.map((role) => role.roleRef)
     addDuplicates(`workItems.${item.workItemRef}.toolRoleGroups`, roleIds)
+    for (const role of item.toolRoleGroups) {
+      const roleContractRef = role.workContractRef ?? item.workContractRef
+      if (!contracts.has(refKey(roleContractRef))) {
+        violations.push({
+          code: 'unknown-work-contract',
+          at: `workItems.${item.workItemRef}.toolRoleGroups.${role.roleRef}.workContractRef`,
+          detail: refKey(roleContractRef),
+        })
+      }
+    }
     const slots = item.toolRoleGroups.flatMap((role) =>
       role.bindingSlots.map((slot) => slot.slotRef),
     )
@@ -1254,6 +1270,23 @@ export function validateTypePackage(
         at: `workItems.${item.workItemRef}.humanReview.optionRef`,
         detail: item.humanReview.optionRef,
       })
+    }
+    if (item.humanReview !== null) {
+      const planningRole = item.toolRoleGroups.find(
+        (role) => role.roleRef === item.humanReview?.planningRoleRef,
+      )
+      if (
+        planningRole === undefined ||
+        !planningRole.bindingSlots.some(
+          (slot) => slot.slotRef === item.humanReview?.planningSlotRef,
+        )
+      ) {
+        violations.push({
+          code: 'work-item-human-review-tool-slot-invalid',
+          at: `workItems.${item.workItemRef}.humanReview.planningSlotRef`,
+          detail: `${item.humanReview.planningRoleRef}/${item.humanReview.planningSlotRef}`,
+        })
+      }
     }
     if (item.nodeKind === 'business-tool' && item.toolRoleGroups.length === 0) {
       violations.push({
@@ -1525,6 +1558,14 @@ export function findToolRole(
   roleRef: string,
 ): WorkItemDefinition['toolRoleGroups'][number] | null {
   return item.toolRoleGroups.find((role) => role.roleRef === roleRef) ?? null
+}
+
+export function workContractRefForToolRole(
+  item: WorkItemDefinition,
+  roleRef: string,
+): WorkContractRef | null {
+  const role = findToolRole(item, roleRef)
+  return role === null ? null : (role.workContractRef ?? item.workContractRef)
 }
 
 export function findToolSlot(

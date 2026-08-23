@@ -2,50 +2,78 @@ import type { Agent, CreateAgent, UpdateAgent } from '@agent-workflow/shared'
 
 import { EXECUTION_CONTRACT_RESULT_PORT } from '../domain/model'
 
-function hasExecutionContractDeclarations(frontmatterExtra: Record<string, unknown>): boolean {
+interface ManagedContractPort {
+  readonly name: string
+  readonly kind: string | null
+}
+
+function executionContractPorts(
+  frontmatterExtra: Record<string, unknown>,
+): ManagedContractPort[] | null {
   const declarations = frontmatterExtra.executionContracts
-  return (
-    Array.isArray(declarations) &&
-    declarations.length > 0 &&
-    declarations.every(
-      (declaration) =>
-        declaration !== null &&
-        typeof declaration === 'object' &&
-        !Array.isArray(declaration) &&
-        typeof (declaration as Record<string, unknown>).contractId === 'string' &&
-        ((declaration as Record<string, unknown>).contractId as string).length > 0 &&
-        typeof (declaration as Record<string, unknown>).version === 'number' &&
-        Number.isInteger((declaration as Record<string, unknown>).version) &&
-        ((declaration as Record<string, unknown>).version as number) > 0,
-    )
-  )
+  if (!Array.isArray(declarations) || declarations.length === 0) return []
+  const ports = new Map<string, ManagedContractPort>()
+  for (const declaration of declarations) {
+    if (declaration === null || typeof declaration !== 'object' || Array.isArray(declaration)) {
+      return null
+    }
+    const value = declaration as Record<string, unknown>
+    if (
+      typeof value.contractId !== 'string' ||
+      value.contractId.length === 0 ||
+      typeof value.version !== 'number' ||
+      !Number.isInteger(value.version) ||
+      value.version <= 0 ||
+      (value.outputPort !== undefined &&
+        (typeof value.outputPort !== 'string' || value.outputPort.length === 0)) ||
+      (value.outputKind !== undefined &&
+        (typeof value.outputKind !== 'string' || value.outputKind.length === 0))
+    ) {
+      return null
+    }
+    const name = (value.outputPort as string | undefined) ?? EXECUTION_CONTRACT_RESULT_PORT
+    const kind = (value.outputKind as string | undefined) ?? null
+    const previous = ports.get(name)
+    ports.set(name, { name, kind: previous?.kind ?? kind })
+  }
+  return [...ports.values()]
 }
 
-function canonicalOutputs(outputs: readonly string[], active: boolean): string[] {
-  const ordinary = outputs.filter((port) => port !== EXECUTION_CONTRACT_RESULT_PORT)
-  return active ? [...ordinary, EXECUTION_CONTRACT_RESULT_PORT] : ordinary
+function canonicalOutputs(
+  outputs: readonly string[],
+  before: readonly ManagedContractPort[],
+  after: readonly ManagedContractPort[],
+): string[] {
+  const managed = new Set([...before, ...after].map((port) => port.name))
+  const ordinary = outputs.filter((port) => !managed.has(port))
+  return [...new Set([...ordinary, ...after.map((port) => port.name)])]
 }
 
-function withoutManagedMapEntry<T extends string>(
+function reconcileManagedMap<T extends string>(
   patched: Record<string, T> | undefined,
   existing: Record<string, T> | undefined,
+  before: readonly ManagedContractPort[],
+  after: readonly ManagedContractPort[],
+  managedValues?: ReadonlyMap<string, T>,
 ): Record<string, T> | undefined {
   const source = patched ?? existing
-  if (source === undefined) return undefined
-  if (patched === undefined && !(EXECUTION_CONTRACT_RESULT_PORT in source)) return undefined
-  const next = { ...source }
-  delete next[EXECUTION_CONTRACT_RESULT_PORT]
+  if (source === undefined && (managedValues?.size ?? 0) === 0) return undefined
+  const next = { ...(source ?? {}) }
+  for (const port of [...before, ...after]) delete next[port.name]
+  for (const [name, value] of managedValues ?? []) next[name] = value
   return next
 }
 
-function withoutManagedBranchPort(
+function withoutManagedBranchPorts(
   patched: string[] | undefined,
   existing: string[] | undefined,
+  before: readonly ManagedContractPort[],
+  after: readonly ManagedContractPort[],
 ): string[] | undefined {
   const source = patched ?? existing
   if (source === undefined) return undefined
-  if (patched === undefined && !source.includes(EXECUTION_CONTRACT_RESULT_PORT)) return undefined
-  return source.filter((port) => port !== EXECUTION_CONTRACT_RESULT_PORT)
+  const managed = new Set([...before, ...after].map((port) => port.name))
+  return source.filter((port) => !managed.has(port))
 }
 
 /**
@@ -54,13 +82,17 @@ function withoutManagedBranchPort(
  * editable output sidecars to it.
  */
 export function reconcileCreatedAgentExecutionContractPorts(input: CreateAgent): CreateAgent {
-  if (!hasExecutionContractDeclarations(input.frontmatterExtra)) return input
+  const after = executionContractPorts(input.frontmatterExtra)
+  if (after === null || after.length === 0) return input
+  const outputKinds = new Map(
+    after.flatMap((port) => (port.kind === null ? [] : [[port.name, port.kind] as const])),
+  )
   return {
     ...input,
-    outputs: canonicalOutputs(input.outputs, true),
-    outputKinds: withoutManagedMapEntry(input.outputKinds, undefined),
-    outputWrapperPortNames: withoutManagedMapEntry(input.outputWrapperPortNames, undefined),
-    branchPorts: withoutManagedBranchPort(input.branchPorts, undefined),
+    outputs: canonicalOutputs(input.outputs, [], after),
+    outputKinds: reconcileManagedMap(input.outputKinds, undefined, [], after, outputKinds),
+    outputWrapperPortNames: reconcileManagedMap(input.outputWrapperPortNames, undefined, [], after),
+    branchPorts: withoutManagedBranchPorts(input.branchPorts, undefined, [], after),
   }
 }
 
@@ -74,22 +106,36 @@ export function reconcileUpdatedAgentExecutionContractPorts(
   existing: Agent,
   patch: UpdateAgent,
 ): UpdateAgent {
-  const before = hasExecutionContractDeclarations(existing.frontmatterExtra)
-  const after = hasExecutionContractDeclarations(
-    patch.frontmatterExtra ?? existing.frontmatterExtra,
+  const before = executionContractPorts(existing.frontmatterExtra)
+  const after = executionContractPorts(patch.frontmatterExtra ?? existing.frontmatterExtra)
+  if (before === null || after === null || (before.length === 0 && after.length === 0)) return patch
+  const outputKindsByPort = new Map(
+    after.flatMap((port) => (port.kind === null ? [] : [[port.name, port.kind] as const])),
   )
-  if (!before && !after) return patch
 
   const next: UpdateAgent = {
     ...patch,
-    outputs: canonicalOutputs(patch.outputs ?? existing.outputs, after),
+    outputs: canonicalOutputs(patch.outputs ?? existing.outputs, before, after),
   }
-  const outputKinds = withoutManagedMapEntry(patch.outputKinds, existing.outputKinds)
-  const outputWrapperPortNames = withoutManagedMapEntry(
+  const outputKinds = reconcileManagedMap(
+    patch.outputKinds,
+    existing.outputKinds,
+    before,
+    after,
+    outputKindsByPort,
+  )
+  const outputWrapperPortNames = reconcileManagedMap(
     patch.outputWrapperPortNames,
     existing.outputWrapperPortNames,
+    before,
+    after,
   )
-  const branchPorts = withoutManagedBranchPort(patch.branchPorts, existing.branchPorts)
+  const branchPorts = withoutManagedBranchPorts(
+    patch.branchPorts,
+    existing.branchPorts,
+    before,
+    after,
+  )
   if (outputKinds !== undefined) next.outputKinds = outputKinds
   if (outputWrapperPortNames !== undefined) next.outputWrapperPortNames = outputWrapperPortNames
   if (branchPorts !== undefined) next.branchPorts = branchPorts

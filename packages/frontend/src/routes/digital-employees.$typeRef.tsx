@@ -219,6 +219,7 @@ function DigitalEmployeeTypePage(): ReactElement {
                     typeRef={typeRef}
                     item={selectedItem}
                     contract={selectedContract}
+                    contracts={type.workContracts}
                     tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
                     toolsByWorkItem={toolsByWorkItem}
                     reviewOnly={selectedReview !== null}
@@ -295,8 +296,8 @@ function WorkItemContractCard(props: {
           <span>{zh ? '可选方案评审子阶段' : 'Optional plan-review substage'}</span>
           <p>
             {zh
-              ? '输入：平台注入方案文档精确落点。输出：内置方案 Agent 必须写入 Markdown，并从指定端口返回同一路径；随后由平台审核节点受理。'
-              : 'Input: the platform injects the exact plan-document path. Output: the built-in planner writes Markdown there and returns the same path from the declared port; the platform review node then owns approval.'}
+              ? '输入：平台注入方案文档精确落点。输出：岗位配置的方案分析 Agent 必须写入 Markdown，并从指定端口返回同一路径；随后由平台审核节点受理。'
+              : 'Input: the platform injects the exact plan-document path. Output: the job-configured planning Agent writes Markdown there and returns the same path from the declared port; the platform review node then owns approval.'}
           </p>
           <code>
             platformPaths.implementationPlanPath → {props.item.humanReview.artifactPort} ·
@@ -368,6 +369,7 @@ function ToolboxPanel(props: {
   typeRef: string
   item: WorkItem | null
   contract: EmployeeWorkContract | null
+  contracts: EmployeeWorkContract[]
   tools: ToolRegistration[]
   toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
   dispatchSources: WorkItem[]
@@ -710,7 +712,7 @@ function ToolboxPanel(props: {
         }}
         typeRef={props.typeRef}
         item={props.item}
-        contract={props.contract}
+        contracts={props.contracts}
         tool={editingTool}
         dispatchSources={props.dispatchSources}
         toolsByWorkItem={props.toolsByWorkItem}
@@ -763,7 +765,7 @@ function AddToolDialog(props: {
   onClose: () => void
   typeRef: string
   item: WorkItem
-  contract: EmployeeWorkContract | null
+  contracts: EmployeeWorkContract[]
   tool: ToolRegistration | null
   dispatchSources: WorkItem[]
   toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
@@ -791,16 +793,24 @@ function AddToolDialog(props: {
   const [validationChecks, setValidationChecks] = useState<
     Array<{ code: string; ok: boolean; detail: string }>
   >([])
+  const selectedRole = props.item.toolRoleGroups.find((role) => role.roleRef === roleRef)
+  const selectedContractRef = selectedRole?.workContractRef ?? props.item.workContractRef
+  const contract =
+    props.contracts.find(
+      (candidate) =>
+        candidate.contractId === selectedContractRef.contractId &&
+        candidate.version === selectedContractRef.version,
+    ) ?? null
   const allowedKinds = useMemo<ReadonlyArray<'agent' | 'workflow' | 'program'>>(
-    () => props.contract?.allowedToolKinds ?? [],
-    [props.contract],
+    () => contract?.allowedToolKinds ?? [],
+    [contract],
   )
   const contractKey =
-    props.contract === null
+    contract === null
       ? null
       : contractRefKey({
-          contractId: props.contract.contractId,
-          version: props.contract.version,
+          contractId: contract.contractId,
+          version: contract.version,
         })
   const contractGuide = useQuery<ExecutionContractGuide>({
     queryKey: ['execution-contract', contractKey],
@@ -1051,14 +1061,15 @@ function AddToolDialog(props: {
     )
   const agentSupportsContract = (agent: AgentChoice): boolean =>
     agentReceipt(agent)?.validationReceipt.status === 'valid'
+  const expectedAgentOutputPort = contractGuide.data?.transports.agent?.outputPort ?? 'agent-result'
   const workflows = useQuery<WorkflowListItem[]>({
     queryKey: ['digital-employee-workflow-choices'],
     enabled: props.open && kind === 'workflow',
     queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
   })
   const connections = useQuery<{ items: DevelopmentAdapterChoice[] }>({
-    queryKey: ['digital-employee-tool-connections', props.contract?.requiredConnectionPurpose],
-    enabled: props.open && props.contract?.requiredConnectionPurpose != null,
+    queryKey: ['digital-employee-tool-connections', contract?.requiredConnectionPurpose],
+    enabled: props.open && contract?.requiredConnectionPurpose != null,
     queryFn: ({ signal }) => api.get('/api/integrations/development-adapters', undefined, signal),
   })
   const save = useMutation({
@@ -1103,7 +1114,7 @@ function AddToolDialog(props: {
           ? {}
           : { acceptedDispatchRoutes: parsedDispatchRoutes }),
         connectionRef:
-          props.contract?.requiredConnectionPurpose == null
+          contract?.requiredConnectionPurpose == null
             ? null
             : {
                 id: connectionId,
@@ -1157,11 +1168,11 @@ function AddToolDialog(props: {
           (agents.data?.some((agent) => agent.id === resource && agentSupportsContract(agent)) ??
             false))
   const connectionValid =
-    props.contract?.requiredConnectionPurpose == null ||
+    contract?.requiredConnectionPurpose == null ||
     (connections.data?.items.some(
       (candidate) =>
         candidate.id === connectionId &&
-        candidate.purpose === props.contract?.requiredConnectionPurpose &&
+        candidate.purpose === contract?.requiredConnectionPurpose &&
         candidate.publishedRevision !== null,
     ) ??
       false)
@@ -1259,11 +1270,7 @@ function AddToolDialog(props: {
         ) : props.tool !== null && authoring.isError ? (
           <ErrorBanner error={authoring.error} onRetry={() => void authoring.refetch()} />
         ) : null}
-        <WorkItemContractCard
-          item={props.item}
-          contract={props.contract}
-          language={props.language}
-        />
+        <WorkItemContractCard item={props.item} contract={contract} language={props.language} />
         {contractGuide.isPending ? (
           <LoadingState label={zh ? '正在加载平台执行契约…' : 'Loading platform contract…'} />
         ) : contractGuide.isError ? (
@@ -1494,7 +1501,7 @@ function AddToolDialog(props: {
             ]}
           />
         </Field>
-        {props.contract?.requiredConnectionPurpose != null ? (
+        {contract?.requiredConnectionPurpose != null ? (
           <Field
             label={zh ? '使用哪个已注册系统' : 'Registered system connection'}
             hint={
@@ -1512,7 +1519,7 @@ function AddToolDialog(props: {
               options={(connections.data?.items ?? [])
                 .filter(
                   (candidate) =>
-                    candidate.purpose === props.contract?.requiredConnectionPurpose &&
+                    candidate.purpose === contract?.requiredConnectionPurpose &&
                     candidate.publishedRevision !== null,
                 )
                 .map((candidate) => ({ value: candidate.id, label: candidate.name }))}
@@ -1553,8 +1560,8 @@ function AddToolDialog(props: {
                 disabled: !agentSupportsContract(agent),
                 description: agentSupportsContract(agent)
                   ? zh
-                    ? '契约声明与 agent-result 输出端口均匹配'
-                    : 'Contract declaration and agent-result output both match'
+                    ? `契约声明与 ${expectedAgentOutputPort} 输出端口均匹配`
+                    : `Contract declaration and ${expectedAgentOutputPort} output both match`
                   : (agentReceipt(agent)?.validationReceipt.checks.find((check) => !check.ok)
                       ?.detail ?? (zh ? '平台正在检查契约' : 'Platform contract check pending')),
                 badge: agentSupportsContract(agent)
@@ -1586,8 +1593,8 @@ function AddToolDialog(props: {
                 size="compact"
               >
                 {zh
-                  ? '请先在 Agent 库的“输入/输出 → 平台执行契约”中声明该契约；agent-result 端口由契约自动维护，不能单独编辑或删除。'
-                  : 'Declare this contract under Agent library → Inputs & outputs → Platform execution contracts. The contract owns the agent-result port, so it cannot be edited or deleted separately.'}
+                  ? `请先在 Agent 库的“输入/输出 → 平台执行契约”中声明该契约；${expectedAgentOutputPort} 端口由契约自动维护，不能单独编辑或删除。`
+                  : `Declare this contract under Agent library → Inputs & outputs → Platform execution contracts. The contract owns the ${expectedAgentOutputPort} port, so it cannot be edited or deleted separately.`}
               </NoticeBanner>
             )}
           </Field>

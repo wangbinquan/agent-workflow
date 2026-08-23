@@ -84,6 +84,27 @@ describe('platform execution contracts', () => {
     ])
   })
 
+  test('the planning contract owns analysis-plan without an agent-result envelope', () => {
+    const planning = guide('development.analyze-plan')
+    expect(planning.allowedExecutorKinds).toEqual(['agent'])
+    expect(planning.transports.agent).toMatchObject({
+      outputPort: 'analysis-plan',
+      outputKind: 'path<md>',
+    })
+    expect(planning.transports.agent?.outputInstruction['en-US']).toContain(
+      'do not emit an agent-result envelope',
+    )
+    expect(planning.output.topLevelFields).toEqual(['artifactPath'])
+    expect(
+      validateExactContractOutput({
+        guide: planning,
+        roundRef: 'not-embedded-for-artifacts',
+        executionNonce: '0'.repeat(64),
+        outputJson: '.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md',
+      }),
+    ).toBe('.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md')
+  })
+
   // User regression 2026-08-23: the tool-definition guide had reversed the
   // classifier's configuration and runtime handoff, hiding the problem set.
   test('pipeline tool guides expose the classified problem-set handoff instead of treating tool configuration as task input', () => {
@@ -255,6 +276,17 @@ describe('platform execution contracts', () => {
               artifactRefs: ['employee-input:blob-1'],
             },
           ]),
+          toolBindingsJson: JSON.stringify([
+            {
+              slotRef: 'plan',
+              registrationRef: { id: 'planning-tool', revision: 4 },
+              workContractRef: { contractId: 'development.analyze-plan', version: 1 },
+              implementation: {
+                kind: 'agent',
+                agentRef: { id: 'business-specific-planner', revision: 9 },
+              },
+            },
+          ]),
         }),
       ),
     ) as {
@@ -264,6 +296,15 @@ describe('platform execution contracts', () => {
         documentPath: string
         title: string
         description: string
+        planningTool: {
+          slotRef: string
+          registrationRef: { id: string; revision: number }
+          workContractRef: { contractId: string; version: number }
+          implementation: {
+            kind: 'agent'
+            agentRef: { id: string; revision: number }
+          }
+        }
       }
       platformPaths: {
         requirementDirectory: string
@@ -286,6 +327,15 @@ describe('platform execution contracts', () => {
       documentPath: implementationPlanPath,
       title: '实现方案评审',
       description: '请评审数字员工基于冻结工作材料和仓库现场形成的实现方案。',
+      planningTool: {
+        slotRef: 'plan',
+        registrationRef: { id: 'planning-tool', revision: 4 },
+        workContractRef: { contractId: 'development.analyze-plan', version: 1 },
+        implementation: {
+          kind: 'agent',
+          agentRef: { id: 'business-specific-planner', revision: 9 },
+        },
+      },
     })
     expect(envelope.platformPaths).toMatchObject({
       requirementDirectory,
@@ -491,6 +541,9 @@ describe('platform execution contracts', () => {
     const codeWriter = templates.find(
       (agent) => agent.frontmatterExtra.digitalEmployeeTemplate === 'code-writing',
     )!
+    const planner = templates.find(
+      (agent) => agent.frontmatterExtra.digitalEmployeeTemplate === 'implementation-planning',
+    )!
     db.update(agentRows)
       .set({
         frontmatterExtra: JSON.stringify({
@@ -545,6 +598,21 @@ describe('platform execution contracts', () => {
     expect(mismatched.checks).toContainEqual(
       expect.objectContaining({ code: 'agent-contract-declared', ok: false }),
     )
+    const compatiblePlanner = await service.validateExecutor({
+      contractRef: { contractId: 'development.analyze-plan', version: 1 },
+      implementation: {
+        kind: 'agent',
+        agentRef: { id: planner.id, revision: planner.updatedAt },
+      },
+    })
+    expect(compatiblePlanner.status).toBe('valid')
+    expect(compatiblePlanner.checks).toContainEqual(
+      expect.objectContaining({
+        code: 'agent-exact-revision-resolves',
+        ok: true,
+        detail: expect.stringContaining('exact analysis-plan output port'),
+      }),
+    )
   })
 
   test('Agent saves keep the contract-owned result port atomic with declaration lifecycle', async () => {
@@ -589,6 +657,43 @@ describe('platform execution contracts', () => {
     expect(removed.outputs).toEqual(['ordinary'])
     expect(removed.outputKinds).toEqual({ ordinary: 'markdown' })
     expect(removed.branchPorts).toBeUndefined()
+
+    const planner = await createAgent(db, {
+      name: 'contract-owned-plan-port',
+      description: '',
+      outputs: [],
+      inputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {
+        executionContracts: [
+          {
+            contractId: 'development.analyze-plan',
+            version: 1,
+            outputPort: 'analysis-plan',
+            outputKind: 'path<md>',
+          },
+        ],
+      },
+      bodyMd: '',
+    })
+    expect(planner.outputs).toEqual(['analysis-plan'])
+    expect(planner.outputKinds).toEqual({ 'analysis-plan': 'path<md>' })
+    const plannerProtected = await updateAgent(db, planner.id, {
+      outputs: [],
+      outputKinds: { 'analysis-plan': 'signal' },
+    })
+    expect(plannerProtected.outputs).toEqual(['analysis-plan'])
+    expect(plannerProtected.outputKinds).toEqual({ 'analysis-plan': 'path<md>' })
+    const plannerUnlinked = await updateAgent(db, planner.id, {
+      frontmatterExtra: {},
+      outputs: ['analysis-plan'],
+    })
+    expect(plannerUnlinked.outputs).toEqual([])
   })
 
   test('Program validation executes the authored script with the same env input and stdout contract', async () => {

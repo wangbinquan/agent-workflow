@@ -9,7 +9,10 @@ import { contractRefKey, contractText, type ExecutionContractSummary } from './t
 
 export function ExecutionContractPicker(props: {
   value: string[]
-  onChange: (next: string[]) => void
+  onChange: (
+    next: string[],
+    transportsByKey: Readonly<Record<string, { outputPort: string; outputKind: string | null }>>,
+  ) => void
   enabled?: boolean
 }): React.ReactElement {
   const { i18n } = useTranslation()
@@ -30,7 +33,27 @@ export function ExecutionContractPicker(props: {
   return (
     <MultiSelect
       value={props.value}
-      onChange={props.onChange}
+      onChange={(next) =>
+        props.onChange(
+          next,
+          Object.fromEntries(
+            contracts.flatMap((contract) => {
+              const key = contractRefKey(contract.contractRef)
+              return contract.agentOutputPort === null
+                ? []
+                : [
+                    [
+                      key,
+                      {
+                        outputPort: contract.agentOutputPort,
+                        outputKind: contract.agentOutputKind,
+                      },
+                    ] as const,
+                  ]
+            }),
+          ),
+        )
+      }
       ariaLabel={zh ? '平台执行契约' : 'Platform execution contracts'}
       placeholder={zh ? '选择这个 Agent 能执行的工作' : 'Choose work this Agent can execute'}
       emptyLabel={zh ? '没有可供 Agent 执行的契约' : 'No Agent-compatible contracts'}

@@ -42,7 +42,7 @@ const DIGITAL_EMPLOYEE_AGENT_TOOL_PRESENTATION: Readonly<
   'implementation-planning': {
     zh: '实现方案分析',
     en: 'Implementation planning',
-    selection: 'automatic',
+    selection: 'selectable',
   },
 }
 
@@ -258,7 +258,15 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
       plugins: [],
       frontmatterExtra: {
         digitalEmployeeTemplate: 'implementation-planning',
-        schemaVersion: 2,
+        schemaVersion: 3,
+        executionContracts: [
+          {
+            contractId: 'development.analyze-plan',
+            version: 1,
+            outputPort: 'analysis-plan',
+            outputKind: 'path<md>',
+          },
+        ],
       },
       bodyMd:
         '你是数字员工操作系统内置的实现方案分析者。先逐项阅读平台列出的需求正文、上传文件、外部材料目录和仓库现状，区分确定事实、假设与待确认项。只允许在平台注入的 platformPaths.implementationPlanPath 写入包含目标理解、影响范围、实现步骤、测试计划、风险与待确认问题的 Markdown 方案，并向 analysis-plan 端口只输出该相对路径。不得修改其他文件，不得执行 git、commit、push、merge、approve，不得调用代码托管平台，也不得输出 agent-result。收到评审意见后必须逐条回应并覆写同一方案文件形成完整替代方案。',

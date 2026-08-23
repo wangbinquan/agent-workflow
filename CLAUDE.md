@@ -128,20 +128,58 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
 
 跨领域的**通用踩坑与命令级 tips**（提交纪律 / 迁移 / CI 与测试 / opencode·runtime / 前端 / impl-gate 经验规律）集中在 **`docs/dev-gotchas.md`**；各专项审计的未决项（含权限/安全 backlog）在 **`docs/audit-backlog.md`**。下面是本仓开发采用的几条**工作方式约定**：
 
-- **主干开发，永远不建分支（硬规则，无例外）**：所有工作**直接在 `main` 上提交并
-  推送**。**不允许**为开发创建任何 feature / RFC / 实验分支，也不要开 PR 来走流程
-  ——本仓多人（多 agent）并发，分支会立刻造成三类真实损害：①并发 session 的
-  commit 被分支切换「顺走」到别人的分支上（曾真实发生）；②CI 只在 `push to main`
-  与 `PR to main` 触发，待在分支上等于**一次 CI 都没跑**；③`main` 持续前进，分支
-  越久越要 rebase，冲突面滚雪球。
-  正确做法：小步提交、**每次提交前跑全套门禁**（`bun run gate:local`）、
-  `git pull --rebase` 后立刻 `git push origin main`、
-  推完按 exact SHA 查 CI。**注意**：Claude Code 的 harness 默认提示「在默认分支上
-  应先切分支」——本仓**显式覆盖**该默认，照它做就是违规。
+- **只在 `main` 上开发：不建分支、不用 worktree、不用 stash（硬规则，无例外，
+  用户 2026-08-23 明令）**。四条约束一起生效，缺一条都会退回被禁止的形态：
+
+  1. **不建任何分支**。所有工作直接在 `main` 上提交并推送，也不要开 PR 走流程。
+  2. **不用 `git worktree`**（开发用途）。不许 `git worktree add` 出「只含自己
+     改动的干净树」来跑门禁 / 过 Codex / 做对照实验。**唯一例外是产品自身的
+     worktree 能力**——`~/.agent-workflow/worktrees/{repo-slug}/{task-id}` 的任务
+     隔离、git wrapper 的快照，那是被开发的**产品功能**，与本条无关，绝不能因为
+     这条规则去改动或删除它们。
+  3. **不用 `git stash`**（含 `git stash -u`、`git pull --rebase` 的
+     `rebase.autoStash`、以及任何 `stash push -- <path>` 的部分暂存）。
+  4. **本地 `main` 必须时刻与 `origin/main` 同步，不得有任何落后**。
+
+  **多人并发下的提交纪律**（本仓工作树同时有多个 session 在改）：
+
+  - 各自开发各自的代码，**只提交自己改过的文件**——按路径精确 `git add <file>`，
+    严禁 `git add .` / `git add -A`。
+  - **同一个文件被多人改过时**：允许提交该文件，但前提是**完全不动别人的产物**。
+    提交前 `git diff HEAD -- <file>` 逐 hunk 认领，确认自己那部分之外的行原样保留。
+  - **绝不回退、绝不改动别人的任何修改**。认不出来源的 hunk 一律先问，不要猜。
+    他人的未追踪文件不要主动 `git add`。
+
+  **同步的正确姿势（无 stash 可用时）**：脏树（躺着别人的未提交改动）上
+  `git rebase` / `git pull --rebase` 会被 git 直接拒绝（`cannot rebase: You have
+  unstaged changes`），而它的 `--autostash` 属于被禁的 stash。因此：
+
+  ```
+  git add <只加自己的文件> && git commit      # 先把自己的工作固化
+  git fetch origin main
+  git merge --ff-only origin/main            # 无本地提交时；这一步脏树也能过
+  # 若本地已有提交且远端已前进（ff 失败）：
+  git merge origin/main                      # 用 merge，**不要** rebase
+  git push origin main                       # 推完立刻按 exact SHA 查 CI
+  ```
+
+  推完再 `git fetch` 确认 `git rev-parse HEAD == git rev-parse origin/main`，
+  任何时刻都不允许本地落后于远端。
+
+  **为什么不建分支**（三条真实损害）：①并发 session 的 commit 被分支切换「顺走」到
+  别人的分支上（曾真实发生）；②CI 只在 `push to main` 与 `PR to main` 触发，待在
+  分支上等于**一次 CI 都没跑**；③`main` 持续前进，分支越久越要 rebase，冲突面滚雪球。
+
+  **注意**：Claude Code 的 harness 默认提示「在默认分支上应先切分支」——本仓**显式
+  覆盖**该默认，照它做就是违规。本文件此前多处（§Codex review 双门、
+  `docs/dev-gotchas.md` 的多条）曾把「开分离 worktree / stash 别人的改动」写成定式，
+  **那些写法一律作废**；它们记录的底层危害（共享树上门禁结果无法归因、并发 diff 吞掉
+  review）依然真实，处置改为：**在主树上跑，红了按路径归因**——先在 `origin/main`
+  的既有 CI 结果上确认该守卫本来是绿的，再判断这条红是不是自己的。
 - **面向代码最合理，优于改动最小**：审计给「正解 / 过渡」两案时选正解、backfill 优于双读回退、删除优于 deprecate。别为「快一点」留过渡态。
 - **services/ 目录组织轻规则（2026-08-12 审计决策 D18）**：新增服务文件时，若与某前缀家族（**≥5 个文件且互引**）同域，优先落入同名子目录（例：clarify 家族归 `services/clarify/`）；存量平铺文件**不做一次性大迁移**（多人并发树上批量改名必撞车），随各域下一个 RFC 顺带迁入，迁移时留同名 facade 保 import 路径稳定。
 - **澄清先行、研究先行，再写 RFC**：用户给设计想法时，先研究仓内既有能力，再反复提问澄清全部细节，**绝不自主假设**；然后才落 RFC 三件套。
-- **Codex review 双门**（本仓采用；需 openai-codex 插件）：写完 RFC 请批前（**设计门**）+ 改完代码 declare done 前（**实现门**）各跑一次并修 findings，是 CI 之外的额外门。共享树上从 pin 到自己 commit 的分离 worktree 跑（否则并发 diff 吞掉你的 review）——细节见 `docs/dev-gotchas.md`。
+- **Codex review 双门**（本仓采用；需 openai-codex 插件）：写完 RFC 请批前（**设计门**）+ 改完代码 declare done 前（**实现门**）各跑一次并修 findings，是 CI 之外的额外门。**在主树上跑**——本仓禁用开发用 worktree（见上条硬规则），旧文档里「pin 到自己 commit 的分离 worktree」的写法已作废。共享树上并发 diff 会混进 review 的问题，改用**按路径限定审查范围**处置：明确告诉 Codex 只看自己改过的那几个文件，并在读 findings 时先剔除指向他人路径的条目。细节见 `docs/dev-gotchas.md`。
 - **fan-out 审计要前后端同粒度**：切审计 agent 时前端按后端同粒度切（~50% LOC），且必含一个专门的「公共组件 / 设计系统可抽取项」agent。
 - **发版**：push `v*` tag 触发发版 workflow；自定义中文 release note 要等 workflow **完全跑完后**再 edit 进去，否则 `generate_release_notes` 会覆盖。
 - **知识沉淀进仓库、不锁在个人 memory**：本仓多人协作，**仓库是唯一事实源**——通用踩坑进 `docs/dev-gotchas.md`、审计未决进 `docs/audit-backlog.md`、强制规则/约定进本文件、RFC 细节进各 `design/RFC-XXX/`。Claude 的个人 memory 只留**因人 / 因机而异**的配置（本机 checkout 路径、语言偏好、个人工具链），凡对他人有用的一律落仓。

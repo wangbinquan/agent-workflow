@@ -85,7 +85,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 6 } as const
+const typeRef = { typeId: 'development', revision: 7 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 
 const scopeSchema = z.discriminatedUnion('kind', [
@@ -98,7 +98,7 @@ const scopeSchema = z.discriminatedUnion('kind', [
 
 // Revision 5 retired “global default” from authoring in favor of an explicit
 // task-time repository choice. Runtime codecs are keyed by type id, however,
-// so revision 6 must continue decoding frozen revision-3 employee scopes.
+// so revision 7 must continue decoding frozen revision-3 employee scopes.
 const runtimeScopeSchema = z.discriminatedUnion('kind', [
   ...scopeSchema.options,
   z.object({ kind: z.literal('global') }).strict(),
@@ -146,6 +146,12 @@ const WRITE_IMPLEMENTATION = {
 const WRITE_MATERIALS = {
   mode: 'write',
   businessChangeOnOk: 'optional',
+  writablePrefixes: [],
+  platformWritePrefixes: ['inputs/requirements'],
+} as const satisfies WorkContract['workspacePolicy']
+const WRITE_PLAN = {
+  mode: 'write',
+  businessChangeOnOk: 'forbidden',
   writablePrefixes: [],
   platformWritePrefixes: ['inputs/requirements'],
 } as const satisfies WorkContract['workspacePolicy']
@@ -409,6 +415,18 @@ const contracts: WorkContract[] = [
     [],
     ['code-host.merge-request.reply'],
     NO_WORKSPACE,
+  ),
+  contract(
+    'development.analyze-plan',
+    'development.requirement-context.v1',
+    'development.implementation-plan-path.v1',
+    '冻结的需求材料、仓库现场和方案文档精确路径',
+    'Frozen requirement materials, repository state, and exact plan document path',
+    '只写入指定 Markdown 方案，并从 analysis-plan 输出同一路径；不输出 agent-result envelope',
+    'Writes only the designated Markdown plan and emits the same path from analysis-plan; no agent-result envelope is produced',
+    ['agent'],
+    [],
+    WRITE_PLAN,
   ),
 ]
 
@@ -843,6 +861,47 @@ const inputDetailsByContract: Record<
       },
     },
   },
+  'development.analyze-plan': {
+    primaryFieldPaths: [
+      'contractInput.requirementContext.request',
+      'platformPaths.requirementDirectory',
+      'platformPaths.implementationPlanPath',
+    ],
+    fields: [
+      contractField(
+        'contractInput.requirementContext.request',
+        '需求与问题材料',
+        'Requirement and problem materials',
+        '正文、外部 ID 以及每个上传文档的平台落点',
+        'Body, external ID, and the platform placement of every uploaded document',
+        'context',
+        'object',
+      ),
+      contractField(
+        'platformPaths.requirementDirectory',
+        '材料读取目录',
+        'Material directory',
+        '必须逐项读取该 Case 目录内的平台材料',
+        'Every platform material in this case directory must be read',
+        'platform',
+        'string',
+      ),
+      contractField(
+        'platformPaths.implementationPlanPath',
+        '方案文档路径',
+        'Implementation plan path',
+        '只能在此路径写入完整 Markdown 方案，并从 analysis-plan 输出同一路径',
+        'Write the complete Markdown plan only here and emit the same path from analysis-plan',
+        'platform',
+        'string',
+      ),
+    ],
+    contractInput: {
+      requirementContext: {
+        request: { kind: 'body', body: 'Analyze the accepted requirement', uploads: [] },
+      },
+    },
+  },
   'development.collect-pipeline': {
     primaryFieldPaths: [
       'contractInput.mergeRequest.mergeRequestRef',
@@ -1183,6 +1242,7 @@ const outputDetailsByContract: Record<
     readonly fields: readonly ExecutionContractField[]
     readonly topLevelFields?: readonly string[]
     readonly exampleFields?: Readonly<Record<string, unknown>>
+    readonly replaceEnvelope?: boolean
   }
 > = {
   'development.prepare-materials': {
@@ -1194,6 +1254,25 @@ const outputDetailsByContract: Record<
     fields: deliveryOutputFields,
     topLevelFields: ['deliveryContent'],
     exampleFields: { deliveryContent: deliveryContentExample },
+  },
+  'development.analyze-plan': {
+    primaryFieldPaths: ['artifactPath'],
+    fields: [
+      contractField(
+        'artifactPath',
+        '方案文档路径',
+        'Plan document path',
+        '必须与平台注入的 implementationPlanPath 完全相同',
+        'Must exactly equal the platform-injected implementationPlanPath',
+        'artifact',
+        'string',
+      ),
+    ],
+    topLevelFields: ['artifactPath'],
+    exampleFields: {
+      artifactPath: '.agent-workflow/inputs/requirements/case-id/review/implementation-plan.md',
+    },
+    replaceEnvelope: true,
   },
   'development.repair-pipeline': {
     primaryFieldPaths: deliveryPrimaryFieldPaths,
@@ -1299,6 +1378,7 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
   contracts.map((workContract) => {
     const details = inputDetailsByContract[workContract.contractId]
     const outputDetails = outputDetailsByContract[workContract.contractId]
+    const artifactPathTransport = workContract.contractId === 'development.analyze-plan'
     const workItemRef = workContract.contractId.slice('development.'.length)
     const inputExample = {
       schemaVersion: 1,
@@ -1337,12 +1417,17 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
         'The platform injects the complete JSON envelope; the executor does not choose context sources.',
       ),
       outputInstruction: text(
-        '只接受一个严格 JSON 对象；缺字段、多字段或 schema 不符都会拒收。',
-        'Only one strict JSON object is accepted; missing, extra, or schema-mismatched fields are rejected.',
+        artifactPathTransport
+          ? '只从 analysis-plan 输出指定 Markdown 的精确相对路径；不输出 agent-result envelope。'
+          : '只接受一个严格 JSON 对象；缺字段、多字段或 schema 不符都会拒收。',
+        artifactPathTransport
+          ? 'Emit only the exact relative path of the designated Markdown through analysis-plan; do not emit an agent-result envelope.'
+          : 'Only one strict JSON object is accepted; missing, extra, or schema-mismatched fields are rejected.',
       ),
     }
     const guide = {
       schemaVersion: 1,
+      outputMode: artifactPathTransport ? ('artifact-path' as const) : ('envelope' as const),
       contractRef: { contractId: workContract.contractId, version: workContract.version },
       displayName: workContract.materialSummary,
       description: workContract.completionStandard,
@@ -1359,21 +1444,29 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
         schemaId: workContract.outputSchemaId,
         displayName: text('确定性输出 envelope', 'Deterministic output envelope'),
         description: workContract.completionStandard,
-        topLevelFields: [...outputTopLevelFields, ...(outputDetails?.topLevelFields ?? [])],
+        topLevelFields:
+          outputDetails?.replaceEnvelope === true
+            ? [...(outputDetails.topLevelFields ?? [])]
+            : [...outputTopLevelFields, ...(outputDetails?.topLevelFields ?? [])],
         primaryFieldPaths: [...(outputDetails?.primaryFieldPaths ?? ['summary'])],
-        fields: mergeContractFields(outputFields, outputDetails?.fields ?? []),
+        fields:
+          outputDetails?.replaceEnvelope === true
+            ? [...outputDetails.fields]
+            : mergeContractFields(outputFields, outputDetails?.fields ?? []),
         exampleJson: JSON.stringify(
-          {
-            schemaVersion: 1,
-            roundRef: '01JEXAMPLECONTRACTROUND',
-            executionNonce: '0'.repeat(64),
-            status: 'ok',
-            summary: 'Describe the completed result.',
-            contextPatches: [],
-            effectSuggestions: [],
-            artifactRefs: [],
-            ...(outputDetails?.exampleFields ?? {}),
-          },
+          outputDetails?.replaceEnvelope === true
+            ? (outputDetails.exampleFields ?? {})
+            : {
+                schemaVersion: 1,
+                roundRef: '01JEXAMPLECONTRACTROUND',
+                executionNonce: '0'.repeat(64),
+                status: 'ok',
+                summary: 'Describe the completed result.',
+                contextPatches: [],
+                effectSuggestions: [],
+                artifactRefs: [],
+                ...(outputDetails?.exampleFields ?? {}),
+              },
           null,
           2,
         ),
@@ -1384,7 +1477,9 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
           ? {
               ...commonTransport,
               inputLocation: 'Agent prompt · INPUT_ENVELOPE_JSON',
-              outputLocation: `Agent output port · ${EXECUTION_CONTRACT_RESULT_PORT}`,
+              outputLocation: `Agent output port · ${artifactPathTransport ? 'analysis-plan' : EXECUTION_CONTRACT_RESULT_PORT}`,
+              outputPort: artifactPathTransport ? 'analysis-plan' : EXECUTION_CONTRACT_RESULT_PORT,
+              ...(artifactPathTransport ? { outputKind: 'path<md>' } : {}),
             }
           : null,
         workflow: workContract.allowedToolKinds.includes('workflow')
@@ -1422,6 +1517,7 @@ const legacyBuiltinAgentContractRefs: Readonly<
   'conflict-repair': [{ contractId: 'development.repair-conflict', version: 1 }],
   'business-implementation': [{ contractId: 'development.analyze-implement', version: 1 }],
   'issue-repair': [{ contractId: 'development.analyze-implement', version: 1 }],
+  'implementation-planning': [{ contractId: 'development.analyze-plan', version: 1 }],
 }
 
 /**
@@ -1458,6 +1554,29 @@ const primaryRole = (
     ],
   },
 ]
+
+const implementationPlanningRole = {
+  roleRef: 'planning',
+  label: text('方案分析', 'Implementation planning'),
+  description: text(
+    '按当前业务理解需求和仓库现场，形成供人工审核的实现方案',
+    'Understand the request and repository in the current business context, then produce a plan for human review',
+  ),
+  order: 1,
+  workContractRef: { contractId: 'development.analyze-plan', version: 1 },
+  bindingSlots: [
+    {
+      slotRef: 'plan',
+      label: text('方案分析工具', 'Planning tool'),
+      description: text(
+        '启用方案审核时使用的确定性分析工具；岗位可替换平台内置默认项',
+        'The deterministic planning tool used when plan review is enabled; the job may replace the platform default',
+      ),
+      required: false,
+      cardinality: 'zero-or-one' as const,
+    },
+  ],
+}
 
 const optionalPrimaryRole = (
   labelZh: string,
@@ -1613,7 +1732,7 @@ const runtimePackage = {
           ),
           defaultValue: false,
           requiredWorkItemRef: 'analyze-implement',
-          requiredSlotRef: 'default',
+          requiredSlotRef: 'plan',
           requiredExecutorKind: 'agent',
         },
       ],
@@ -1818,7 +1937,7 @@ const runtimePackage = {
           regionId: 'delivery',
           responsibilityLaneId: 'delivery-main',
           order: 20,
-          label: text('分析并实现', 'Analyze and implement'),
+          label: text('分析与实现', 'Analyze and implement'),
           description: text(
             '理解需求或定位问题并形成代码修改',
             'Understand the request or diagnose the problem and produce code changes',
@@ -1830,22 +1949,27 @@ const runtimePackage = {
           humanReview: {
             optionRef: 'review-implementation-plan',
             artifactPort: 'analysis-plan',
-            label: text('人工审核修复计划', 'Human plan review'),
+            planningRoleRef: 'planning',
+            planningSlotRef: 'plan',
+            label: text('人工审核方案', 'Human plan review'),
             description: text(
               '任务受理时可选择先评审实现方案，批准后才执行实现工具',
               'The task may require plan approval before its implementation tool runs',
             ),
             reviewedPath: {
-              beforeReviewLabel: text('分析', 'Analyze'),
-              afterApprovalLabel: text('实现', 'Implement'),
+              beforeReviewLabel: text('方案分析', 'Implementation planning'),
+              afterApprovalLabel: text('分析与实现', 'Analyze and implement'),
             },
           },
-          toolRoleGroups: primaryRole(
-            '实现者',
-            'Implementer',
-            '完成分析和代码实现',
-            'Analyze and implement the change',
-          ),
+          toolRoleGroups: [
+            ...primaryRole(
+              '分析与实现',
+              'Analyze and implement',
+              '完成需求分析和代码实现',
+              'Analyze the request and implement the change',
+            ),
+            implementationPlanningRole,
+          ],
           nextWorkItemRefs: ['prepare-change'],
         },
         {
@@ -3597,6 +3721,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         eventJson: z.string().min(2),
         contextsJson: z.string().min(2),
         orderedDispatchConfigurationsJson: z.string().min(2).default('[]'),
+        toolBindingsJson: z.string().min(2).default('[]'),
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
@@ -3633,6 +3758,24 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const orderedDispatchConfigurations = orderedDispatchConfigurationRuntimeSchema.parse(
       JSON.parse(request.orderedDispatchConfigurationsJson) as unknown,
     )
+    const exactWorkItemTools = z
+      .array(
+        z
+          .object({
+            slotRef: z.string().min(1),
+            registrationRef: z
+              .object({ id: z.string().min(1), revision: z.number().int().positive() })
+              .strict(),
+            workContractRef: z
+              .object({ contractId: z.string().min(1), version: z.number().int().positive() })
+              .strict(),
+            implementation: z
+              .object({ kind: z.enum(['agent', 'workflow', 'program']) })
+              .passthrough(),
+          })
+          .strict(),
+      )
+      .parse(JSON.parse(request.toolBindingsJson) as unknown)
     const pipelineDispatch = orderedDispatchConfigurations.find(
       (configuration) => configuration.classifierWorkItemRef === 'classify-pipeline',
     )
@@ -3721,17 +3864,49 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       requirementDirectory,
       externalMaterialDirectory: materialTargetDirectory,
     }
-    const humanReview =
+    const planReviewEnabled =
       request.workItemRef === 'analyze-implement' &&
       issueState?.request.executionOptions['review-implementation-plan'] === true
-        ? {
-            kind: 'implementation-plan',
-            artifactPort: 'analysis-plan',
-            documentPath: implementationPlanPath,
-            title: '实现方案评审',
-            description: '请评审数字员工基于冻结工作材料和仓库现场形成的实现方案。',
-          }
-        : null
+    const rawPlanningTool = exactWorkItemTools.find((binding) => binding.slotRef === 'plan')
+    const planningTool =
+      rawPlanningTool === undefined
+        ? undefined
+        : z
+            .object({
+              slotRef: z.literal('plan'),
+              registrationRef: z
+                .object({ id: z.string().min(1), revision: z.number().int().positive() })
+                .strict(),
+              workContractRef: z
+                .object({
+                  contractId: z.literal('development.analyze-plan'),
+                  version: z.literal(1),
+                })
+                .strict(),
+              implementation: z
+                .object({
+                  kind: z.literal('agent'),
+                  agentRef: z
+                    .object({ id: z.string().min(1), revision: z.number().int().positive() })
+                    .strict(),
+                })
+                .strict(),
+            })
+            .strict()
+            .parse(rawPlanningTool)
+    if (planReviewEnabled && planningTool === undefined) {
+      throw new Error('review-implementation-plan requires an exact planning tool binding')
+    }
+    const humanReview = planReviewEnabled
+      ? {
+          kind: 'implementation-plan',
+          artifactPort: 'analysis-plan',
+          documentPath: implementationPlanPath,
+          title: '实现方案评审',
+          description: '请评审数字员工基于冻结工作材料和仓库现场形成的实现方案。',
+          planningTool: planningTool!,
+        }
+      : null
     return JSON.stringify({
       schemaVersion: request.schemaVersion,
       roundRef: request.roundRef,

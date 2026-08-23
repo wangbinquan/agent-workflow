@@ -20,6 +20,7 @@ export interface ExecutionContractResourcePort {
       ExecutionContractImplementation,
       { kind: 'agent' | 'workflow' }
     >
+    readonly expectedOutputPort: string
   }): Promise<ExecutionContractResourceProjection | null>
 }
 

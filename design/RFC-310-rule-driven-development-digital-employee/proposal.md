@@ -38,9 +38,11 @@
 >
 > **2026-08-23 PR-27（实施中，流程已确认）**：当前职责全景必须显式呈现两个需求和问题来源：`界面输入` 与 `ISSUE`。
 > 两个入口位于左侧同一来源列、上下并列为无前后顺序的并行分支，“准备工作材料”位于来源列右侧，任一入口都以独立连线汇入该节点；不得把两个来源沿主流程横排成伪前后关系，也不得把材料准备堆到来源列下方。其后按任务是否开启
-> 人工审核形成两条互斥路径：关闭审核时执行“分析并实现”；开启审核时执行
-> “分析 → 人工审核修复计划 → 实现”。两条路径重新汇入同一主链后，继续“校验并冻结代码修改 → 提交 MR”，不得把校验节点挤到第二行。
-> 这些入口和条件阶段都不增加工具槽、不改变 20 个可执行工作项，也不恢复伪造的 WorkStart Event。规范性增量见 §0A.12、design §22、
+> 人工审核形成两条互斥路径：关闭审核时直接进入唯一的“分析与实现”；开启审核时先执行
+> “方案分析 → 人工审核方案”，再汇入同一个“分析与实现”。方案分析工具由用户按业务配置并冻结 exact revision，
+> 只通过 `analysis-plan` 输出方案文档路径，不要求 `agent-result` envelope。两条路径汇入同一主链后，继续
+> “校验并冻结代码修改 → 提交 MR”，不得复制“分析与实现”节点或把校验节点挤到第二行。
+> 两个来源与人工门禁不增加工作项；“方案分析”增加一个独立可选工具槽，但不改变 20 个可执行工作项，也不恢复伪造的 WorkStart Event。规范性增量见 §0A.12、design §22、
 > plan §13m。
 >
 > **2026-08-23 PR-28（用户已确认）**：类型包升版后，平台必须自动升级所有可证明兼容的岗位与数字员工，用户侧不再出现
@@ -479,8 +481,8 @@ Agent/Workflow/ProgramTool 的合同错误、same-scene 尝试与 fresh-scene �
 
 ```text
 职责一：交付一个 MR
-  ([界面输入] | [ISSUE]) → [准备工作材料] ────┬─ 不启用审核：[分析并实现] ────────────────────┐
-                                              └─ 启用审核：[分析] → [人工审核修复计划] → [实现] ─┤→ [校验并冻结代码修改] → [提交 MR]
+  ([界面输入] | [ISSUE]) → [准备工作材料] ────┬─ 不启用审核：──────────────────────────────┐
+                                              └─ 启用审核：[方案分析] → [人工审核方案] ────┤→ [分析与实现] → [校验并冻结代码修改] → [提交 MR]
                                                                                                   │
                                                                                                   └─ 产出 MergeRequestContext
                                                                                                      自动建立 MR 关注
@@ -506,7 +508,7 @@ Package 固定。`MergeRequestContext` 一产生就通过 AttentionRule 扩张�
 | 职责区域    | 工作项                                   | 确定性输入                                                 | 确定性输出/完成标准                                                             | 工具槽位                                                         |
 | ----------- | ---------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | 交付一个 MR | 准备工作材料 (`work.materials.prepare`)  | 正文/上传文件/外部 ID 的 `WorkSubmissionContext`           | 完整 `RequirementBundleRef + IssueHandlingContext`；上传路径计划已校验          | 外部取件 ProgramTool；直接正文/文件由系统处理                    |
-| 交付一个 MR | 分析并实现 (`change.implement`)          | IssueHandlingContext、材料 refs、exact repo snapshot       | 合法 Agent envelope + 真实业务文件 delta，或 closed no-change/needs-information | `primary`，岗位模板默认 Java/C++/polyglot Agent 或 Workflow      |
+| 交付一个 MR | 分析与实现 (`change.implement`)          | IssueHandlingContext、材料 refs、exact repo snapshot       | 合法 Agent envelope + 真实业务文件 delta，或 closed no-change/needs-information | `primary`，岗位模板默认 Java/C++/polyglot Agent 或 Workflow      |
 | 交付一个 MR | 验证改动 (`change.verify`)               | candidate snapshot、验收条件                               | 程序化 `VerificationReceipt` 完整且通过；失败产出 typed ProblemSet              | `verification` ProgramTool/Workflow                              |
 | 交付一个 MR | 平台提交并创建 MR                        | validated candidate、上传履约计划、exact remote head       | commit/push/MR receipt + `MergeRequestContext`                                  | 系统节点，无可替换工具                                           |
 | 持续看护 MR | 处理检视意见 (`mr.feedback.handle`)      | exact head、未处理 thread revisions、feedback artifacts    | 每条 revision 有处理结果，修复 delta 已验证                                     | `primary` Agent/Workflow                                         |
@@ -519,7 +521,7 @@ Package 固定。`MergeRequestContext` 一产生就通过 AttentionRule 扩张�
 岗位模板只给上述工具槽位填默认注册，不复制这张图。C++、Java 的区别体现在 `change.implement`、verification 和各 repair slot
 选择的工具；两者的职责、Event、输入输出合同与系统发布节点完全相同。
 
-### 0A.12 双来源入口与人工审核修复计划（PR-27）
+### 0A.12 双来源入口与人工审核方案（PR-27）
 
 `界面输入` 与 `ISSUE` 都是“工作从哪里来”的来源能力，不是数字员工要执行的步骤。研发类型在 AuthoringManifest 中声明两张独立、只读的
 来源卡：`ui-input` 通过 `task-creation` 能力进入统一新建任务界面，承接正文、文件与外部需求编号；`issue` 通过
@@ -535,10 +537,13 @@ WorkStart subscriber。
 修绿回路。全景因此表达的是“两种来源 → 同一材料准备 → 同一分析/实现语义”，而不是为 ISSUE 复制一条特殊工作流。首版只消费事件目录已经公开的
 `code-host.issue.labeled@1` / `code-host.issue.comment-received@1`，不在本批扩展 Issue opened/assigned 等新业务事实。
 
-`人工审核修复计划` 是现有 `analyze-implement.humanReview` 的显式可视投影。职责图必须把父职责画成两条互斥路径：未开启审核时只有
-“分析并实现”；任务受理选择“先评审方案”后则为“分析 → 人工审核修复计划 → 实现”，批准前不得调度实现 Agent。两条路径在完成后重新汇合，
-其右侧同一主行继续显示“校验并冻结代码修改”和“提交 MR”。人工门禁不新增 WorkItem、WorkContract、工具绑定或 ReactionRound；点击时只
-打开父工作项详情并聚焦现有 review 合同，不能出现“增加工具”。运行态的等待/批准状态只能来自 TaskEngine 已冻结的 review receipt，不能从
+`人工审核方案` 是现有 `analyze-implement.humanReview` 的显式可视投影。职责图必须把审核画成同一父职责的可选前缀：未开启审核时直接进入
+唯一的“分析与实现”；任务受理选择“先评审方案”后则先执行“方案分析 → 人工审核方案”，批准后再汇入同一个“分析与实现”，批准前不得调度实现 Agent。
+“方案分析”拥有独立的可配置工具角色和 exact binding；平台内置方案分析 Agent 只是可替换默认项。该工具只发布 `analysis-plan` 指向的 Markdown，
+不输出也不需要 `agent-result` envelope。两个入口在“分析与实现”前汇合，
+其右侧同一主行继续显示“校验并冻结代码修改”和“提交 MR”。人工门禁本身不新增 WorkItem、工具绑定或 ReactionRound；点击时只
+打开父工作项详情并聚焦现有 review 合同，不能出现“增加工具”。“方案分析”工具则在同一父工作项下使用独立 role/slot 和
+`development.analyze-plan@1`，由岗位模板选择 exact revision。运行态的等待/批准状态只能来自 TaskEngine 已冻结的 review receipt，不能从
 日志或页面本地状态猜测。
 
 因此研发类型仍有 **20 个可执行工作项**；完整全景额外呈现 2 张来源卡及 `humanReview` 条件路径。旧类型 revision 默认没有来源卡，仍按原
@@ -1440,9 +1445,9 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   无前后顺序的并行来源。“准备工作材料”位于来源列右侧、中心落在两个来源节点之间；两个入口都以各自可见的连线指向
   `prepare-materials`；前者通过既有权限进入 `/tasks/new?kind=digital-employee`，后者进入 `/events?tab=subscriptions` 配置 ISSUE 事件到
   具体数字员工。两张卡都不进入 `workItems`、工具完整性、`enabledWorkItemRefs`、Reaction 或运行轮次；20 个工作项断言保持不变。
-- **AC-99** 每个声明 `humanReview.reviewedPath` 的工作项都由“阶段 → 能力泳道 → 工具”公共全景投影两条互斥路径：authoring 显示完整条件，
-  Case 按冻结 `active` 只显示实际路径；关闭审核为普通“分析并实现”且不出现人工审核文案，开启审核为
-  “分析 → 人工审核修复计划 → 实现”。人工门禁打开父 `analyze-implement` 的 review 合同且无工具编辑；运行态准确显示等待/批准/失败，
+- **AC-99** 每个声明 `humanReview.reviewedPath` 的工作项都由通用职责图投影一个可选审核前缀：关闭审核直接进入唯一的“分析与实现”；开启审核为
+  “方案分析 → 人工审核方案”，再汇入同一个“分析与实现”。“方案分析”使用独立、用户可配置且 exact-frozen 的工具绑定，只要求
+  `analysis-plan` 产物端口而不要求 `agent-result` envelope；人工门禁打开父 `analyze-implement` 的 review 合同且无工具编辑。运行态准确显示跳过/等待/批准/失败，
   批准前实现 Agent 不运行。两条路径汇合后的 `prepare-change` 与 `publish-mr` 必须继续处于同一主行。前端不得按 `development`、`issue` 或
   `review-implementation-plan` 写特例。
 - **AC-100** 生产级 system-mock E2E 必须从签名有效的 `issue_labeled` Webhook 开始，经标准 EventRecord、独立 Delivery、目标为
@@ -1515,7 +1520,7 @@ RFC-294 同步和实现门批准后另行开始。
 - **D38**：平台内置 Agent 通过 Digital Employee OS 的只读 `PlatformToolCatalog` 投影为正式工具注册，不复制为用户草稿；目录项区分
   `selectable` 与 `automatic`，二者共享同一 WorkContract 和 exact Agent revision 校验，但只有前者可进入岗位/员工绑定。
 - **D39**：人工方案评审不是新的审批系统或数字员工业务节点；它是类型包声明、Case 输入选择、TaskEngine review 执行的通用组合。
-  开发类型只负责提供“分析并实现”的评审指令，任务执行 owner 负责 review 生命周期，批准结果再喂给已绑定实现 Agent。
+  开发类型只负责提供“分析与实现”的评审指令和已冻结的方案分析工具，任务执行 owner 负责 review 生命周期，批准结果再喂给同一已绑定实现 Agent。
 - **D40**：材料入口使用平台分派而不是强制工具槽：正文/文件走平台材料接收器，外部 ID 走可选 exact 工具。输入 manifest 同时声明
   每种输入需要的工作项/槽位，供受理 UI 与 admission 共用，禁止前端自行猜测员工是否支持外部 ID。
 - **D41**：上传 placement 与路径都是 Agent 材料索引；仓库 placement 的目标路径进入最终提交，临时 placement 的目标路径由平台分配且

@@ -16,6 +16,7 @@ export interface ExecutionContractField {
 
 export interface ExecutionContractGuide {
   schemaVersion: 1
+  outputMode: 'envelope' | 'artifact-path'
   contractRef: { contractId: string; version: number }
   displayName: ContractLocalizedText
   description: ContractLocalizedText
@@ -43,6 +44,8 @@ export interface ExecutionContractGuide {
     {
       inputLocation: string
       outputLocation: string
+      outputPort?: string
+      outputKind?: string
       inputInstruction: ContractLocalizedText
       outputInstruction: ContractLocalizedText
     } | null
@@ -51,6 +54,7 @@ export interface ExecutionContractGuide {
 
 export interface ExecutionContractSummary {
   schemaVersion: 1
+  outputMode: 'envelope' | 'artifact-path'
   contractRef: { contractId: string; version: number }
   displayName: ContractLocalizedText
   description: ContractLocalizedText
@@ -58,6 +62,8 @@ export interface ExecutionContractSummary {
   outputSchemaId: string
   outputTopLevelFields: string[]
   allowedExecutorKinds: Array<'agent' | 'workflow' | 'program'>
+  agentOutputPort: string | null
+  agentOutputKind: string | null
 }
 
 export interface ExecutionContractValidationReceipt {

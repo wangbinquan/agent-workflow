@@ -35,12 +35,17 @@ export interface ExecutionContractSchemaGuide {
 interface ExecutionContractTransportGuide {
   inputLocation: string
   outputLocation: string
+  /** Exact executor port. Omitted guides keep the legacy agent-result port. */
+  outputPort?: string
+  /** Optional scheduler port kind for non-envelope artifacts such as path<md>. */
+  outputKind?: string
   inputInstruction: LocalizedContractText
   outputInstruction: LocalizedContractText
 }
 
 export interface ExecutionContractGuide {
   schemaVersion: 1
+  outputMode: 'envelope' | 'artifact-path'
   contractRef: ExecutionContractRef
   displayName: LocalizedContractText
   description: LocalizedContractText
@@ -57,6 +62,7 @@ export interface ExecutionContractGuide {
 /** Narrow cross-context projection; the full authoring guide stays serialized. */
 export interface ExecutionContractRuntimeView {
   schemaVersion: 1
+  outputMode: 'envelope' | 'artifact-path'
   contractRef: ExecutionContractRef
   displayName: LocalizedContractText
   description: LocalizedContractText
@@ -64,6 +70,8 @@ export interface ExecutionContractRuntimeView {
   outputSchemaId: string
   outputTopLevelFields: string[]
   allowedExecutorKinds: Array<'agent' | 'workflow' | 'program'>
+  agentOutputPort: string | null
+  agentOutputKind: string | null
   guideJson: string
 }
 
@@ -277,6 +285,8 @@ const transportGuideSchema = z
   .object({
     inputLocation: z.string().min(1).max(200),
     outputLocation: z.string().min(1).max(200),
+    outputPort: machineIdSchema.optional(),
+    outputKind: z.string().min(1).max(100).optional(),
     inputInstruction: localizedContractTextSchema,
     outputInstruction: localizedContractTextSchema,
   })
@@ -285,6 +295,7 @@ const transportGuideSchema = z
 export const executionContractGuideSchema = z
   .object({
     schemaVersion: z.literal(1),
+    outputMode: z.enum(['envelope', 'artifact-path']).default('envelope'),
     contractRef: executionContractRefSchema,
     displayName: localizedContractTextSchema,
     description: localizedContractTextSchema,
@@ -329,13 +340,15 @@ export const executionContractGuideSchema = z
         })
       }
     }
-    for (const field of ['schemaVersion', 'roundRef', 'executionNonce', 'status', 'summary']) {
-      if (!value.output.topLevelFields.includes(field)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['output', 'topLevelFields'],
-          message: `output envelope must include ${field}`,
-        })
+    if (value.outputMode === 'envelope') {
+      for (const field of ['schemaVersion', 'roundRef', 'executionNonce', 'status', 'summary']) {
+        if (!value.output.topLevelFields.includes(field)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['output', 'topLevelFields'],
+            message: `output envelope must include ${field}`,
+          })
+        }
       }
     }
   })
@@ -474,6 +487,13 @@ export function validateExactContractOutput(input: {
   readonly executionNonce: string
   readonly outputJson: string
 }): string {
+  if (input.guide.outputMode === 'artifact-path') {
+    const artifactPath = input.outputJson.trim()
+    if (artifactPath === '' || artifactPath.includes('\n') || artifactPath.includes('\r')) {
+      throw new Error('output must be one non-empty artifact path without surrounding prose')
+    }
+    return artifactPath
+  }
   const record = parseContractEnvelope('output', input.outputJson)
   validateEnvelopeShape({ kind: 'output', schema: input.guide.output, record })
   validateEnvelopeIdentity({ kind: 'output', record, ...input })
@@ -501,15 +521,24 @@ export function buildExecutionContractAgentPrompt(input: {
   readonly policyLines: readonly string[]
   readonly previousError: string | null
 }): string {
+  const outputInstructions =
+    input.guide.outputMode === 'artifact-path'
+      ? [
+          `Return only one artifact path through ${input.guide.agentOutputPort ?? 'the declared output port'}.`,
+          'Do not return an envelope, Markdown wrapper, or surrounding prose.',
+        ]
+      : [
+          `Return only one JSON object through ${input.guide.agentOutputPort ?? EXECUTION_CONTRACT_RESULT_PORT}.`,
+          `Copy schemaVersion=1, roundRef=${JSON.stringify(input.roundRef)}, and executionNonce=${JSON.stringify(input.executionNonce)} exactly.`,
+          `The output must contain exactly these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}.`,
+          'Never wrap the JSON in Markdown and never add text before or after it.',
+        ]
   return [
     `You are executing frozen platform contract ${executionContractRefKey(input.guide.contractRef)}.`,
     ...input.policyLines,
     `Input schema: ${input.guide.inputSchemaId}. Output schema: ${input.guide.outputSchemaId}.`,
-    `Return only one JSON object through ${EXECUTION_CONTRACT_RESULT_PORT}.`,
-    `Copy schemaVersion=1, roundRef=${JSON.stringify(input.roundRef)}, and executionNonce=${JSON.stringify(input.executionNonce)} exactly.`,
+    ...outputInstructions,
     `The platform selected tool slot ${JSON.stringify(input.toolSlotRef)}; do not select another tool or slot.`,
-    `The output must contain exactly these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}.`,
-    'Never wrap the JSON in Markdown and never add text before or after it.',
     `Semantic validator: ${input.semanticValidatorId}.`,
     ...(input.previousError === null
       ? []

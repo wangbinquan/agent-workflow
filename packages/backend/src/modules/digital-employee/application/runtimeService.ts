@@ -1939,6 +1939,31 @@ export class DigitalEmployeeRuntimeService {
           `no exact published tool for ${item.workItemRef}/${selectedSlotRef}`,
         )
       }
+      const exactWorkItemTools =
+        item.nodeKind !== 'business-tool'
+          ? []
+          : employee.content.exactToolBindings
+              .filter((candidate) => candidate.workItemRef === item.workItemRef)
+              .map((candidate) => {
+                const revision =
+                  tool !== null &&
+                  candidate.registrationRef.id === tool.ref.id &&
+                  candidate.registrationRef.revision === tool.ref.revision
+                    ? tool
+                    : this.#toolRevision(candidate.registrationRef)
+                if (revision === null || revision.state !== 'published') {
+                  throw new ValidationError(
+                    'employee-tool-binding-unavailable',
+                    `no exact published tool for ${candidate.workItemRef}/${candidate.slotRef}`,
+                  )
+                }
+                return {
+                  slotRef: candidate.slotRef,
+                  registrationRef: revision.ref,
+                  workContractRef: revision.content.workContractRef,
+                  implementation: revision.content.implementation,
+                }
+              })
       const collaborationBindings =
         item.nodeKind === 'collaboration'
           ? employee.content.exactCollaborationBindings.filter(
@@ -1966,6 +1991,7 @@ export class DigitalEmployeeRuntimeService {
         toolSlotRef: frozenSlotRef,
         workContractRef: item.workContractRef,
         toolRegistrationRef: tool?.ref ?? null,
+        exactWorkItemTools,
         orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
         executionPolicyRevision: caseRecord.executionPolicyRevision,
       })
@@ -1995,6 +2021,7 @@ export class DigitalEmployeeRuntimeService {
           orderedDispatchConfigurationsJson: JSON.stringify(
             employee.content.exactOrderedDispatchConfigurations,
           ),
+          toolBindingsJson: JSON.stringify(exactWorkItemTools),
         }),
       )
       const inputEnvelopeJson = this.#executionContracts.validateEnvelope({

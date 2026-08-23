@@ -15,7 +15,6 @@ import {
   type ExecutionContractRuntimeView,
 } from '@/modules/execution-contract/public/types'
 import { getAgentById } from '@/services/agent'
-import { DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID } from '@/services/digitalEmployeeAgentTemplates'
 import { getExecutionOutcome } from '@/services/execution/executor'
 import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
 import { sha256Hex } from '@/util/hash'
@@ -95,6 +94,16 @@ const humanReviewSchema = z
     documentPath: z.string().min(1),
     title: z.string().min(1),
     description: z.string().min(1),
+    planningTool: z
+      .object({
+        slotRef: z.literal('plan'),
+        registrationRef: exactRefSchema,
+        workContractRef: z
+          .object({ contractId: z.literal('development.analyze-plan'), version: z.literal(1) })
+          .strict(),
+        implementation: agentImplementationSchema,
+      })
+      .strict(),
   })
   .strict()
 
@@ -311,13 +320,12 @@ export function composeDigitalEmployeeExecution(deps: {
             synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
           )
         } else {
-          const planAgent = await getAgentById(deps.db, DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID)
-          if (
-            planAgent === null ||
-            planAgent.builtin !== true ||
-            planAgent.visibility !== 'public'
-          ) {
-            throw new Error('platform implementation plan Agent is unavailable')
+          const planAgentRef = reviewedExecution.planningTool.implementation.agentRef
+          const planAgent = await getAgentById(deps.db, planAgentRef.id)
+          if (planAgent === null || planAgent.updatedAt !== planAgentRef.revision) {
+            throw new Error(
+              `exact implementation plan Agent unavailable: ${planAgentRef.id}@${planAgentRef.revision}`,
+            )
           }
           if (!planAgent.outputs.includes(reviewedExecution.artifactPort)) {
             throw new Error(
