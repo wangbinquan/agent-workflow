@@ -159,6 +159,7 @@ export interface MockCodeHostMergeRequest {
   targetBranch: string
   baseSha: string
   headSha: string
+  mergeableState: 'mergeable' | 'conflict' | 'unknown'
   author: MockCodeHostUser
   drafts: MockCodeHostComment[]
   reviewComments: MockCodeHostComment[]

@@ -173,6 +173,7 @@ export class EventCenterService {
         eventTypeRef: eventExactRefSchema,
         subject: eventSubjectSchema,
         subscriber: eventSubscriberSchema,
+        replayLatest: z.boolean().default(true),
       })
       .strict()
       .parse(input)
@@ -206,6 +207,7 @@ export class EventCenterService {
       subject: parsed.subject,
       subscriber: parsed.subscriber,
       identityKey: subscriptionIdentity(parsed),
+      replayLatest: parsed.replayLatest,
       now: this.#now(),
     })
     return {

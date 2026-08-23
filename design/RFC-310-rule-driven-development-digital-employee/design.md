@@ -4373,10 +4373,8 @@ source-control owner 在 commit message 末尾追加 Case/Context 机器标记�
 
 ### 21.6.1 运行态职责图与阶段时间线
 
-数字员工任务详情不能另造一张运行图。公共 `EmployeeCapabilityPanorama` 固定抽象为“阶段 → 能力泳道 → 工具”三层，
-authoring、岗位和 Case runtime 都传入同一 manifest；Case 再以 pinned type revision、employee revision、冻结
-`executionOptions` 和 `exactOrderedDispatchConfigurations` 形成 `capabilityActivation`。组件按工具的通用 `active`
-标识裁剪空工具、空泳道和空阶段，不读取数字员工类型或工作项字面量。分类配置中的每个 route 仍派生一张等宽 `P1..Pn` 卡片。普通节点按最新
+数字员工任务详情不能另造一张运行图。它以 Case pinned type revision、employee revision 和
+`exactOrderedDispatchConfigurations` 调用同一职责图组件；分类配置中的每个 route 仍派生一张等宽 `P1..Pn` 卡片。普通节点按最新
 ReactionRound 的 `workItemRef` 投影状态，派生节点再以冻结 `plan.toolSlotRef === routeRef` 精确归属，不能把同一处理工作项的多种失败类型
 合并成一个模糊状态。点击卡片只选择该职责或该 route 对应的最近一轮，不改变调度。
 

@@ -48,6 +48,7 @@ function plan(input: {
   caseRef: string
   workItemRef: string
   contexts: readonly object[]
+  employeeTypeRef?: EmployeeReactionExecutionPlan['employeeTypeRef']
   workspacePolicy?: EmployeeReactionExecutionPlan['workspacePolicy']
   allowedEffectKinds?: readonly string[]
 }): EmployeeReactionExecutionPlan {
@@ -56,6 +57,7 @@ function plan(input: {
     roundRef: input.roundRef,
     executionNonce: 'a'.repeat(64),
     caseRef: { id: input.caseRef, revision: 1 },
+    employeeTypeRef: input.employeeTypeRef ?? null,
     inputContextRefs: [],
     triggeringEventRef: `continuation:${input.workItemRef}`,
     workItemRef: input.workItemRef,
@@ -639,11 +641,23 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const mrPatch = published.contextPatches.find(
       (patch) => patch.contextTypeId === 'development.merge-request',
     )!
-    expect(JSON.parse(mrPatch.stateJson)).toMatchObject({
+    const mrState = JSON.parse(mrPatch.stateJson) as { headSha: string }
+    expect(mrState).toMatchObject({
       mergeRequestRef: 'repo-1!42',
       repositoryRef: 'repo-1',
       providerMrRef: '42',
       readyToMerge: false,
+    })
+    const initialPipelinePatch = published.contextPatches.find(
+      (patch) => patch.contextTypeId === 'development.pipeline',
+    )!
+    expect(JSON.parse(initialPipelinePatch.stateJson)).toEqual({
+      status: 'pending',
+      mergeRequestRef: 'repo-1!42',
+      headSha: mrState.headSha,
+      targetSha: null,
+      evidenceArtifactRef: '.agent-workflow/pipeline/case-1/',
+      failureTypes: [],
     })
     const branch = 'agent-workflow/employee/case-1'
     const publishedSha = git(remoteRepo, 'rev-parse', `refs/heads/${branch}`)
@@ -679,6 +693,98 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     )
     const targetSha = git(baselineRepo, 'rev-parse', 'HEAD')
     git(baselineRepo, 'push', '-q', remoteRepo, 'HEAD:refs/heads/main')
+    const readyMrContext = {
+      id: 'mr-ready-context',
+      revision: 1,
+      typeId: 'development.merge-request',
+      stateJson: JSON.stringify({
+        ...JSON.parse(mrPatch.stateJson),
+        headSha: publishedSha,
+        factsHeadSha: publishedSha,
+        targetSha,
+        mergeableState: 'mergeable',
+      }),
+    }
+    const legacyPassedPipelineContext = {
+      id: 'pipeline-ready-context',
+      revision: 1,
+      typeId: 'development.pipeline',
+      stateJson: JSON.stringify({
+        ...JSON.parse(initialPipelinePatch.stateJson),
+        status: 'passed',
+        headSha: publishedSha,
+      }),
+    }
+    const evaluateReady = async (
+      revision: 7 | 8,
+      pipelineContext: typeof legacyPassedPipelineContext,
+    ) => {
+      const evaluated = JSON.parse(
+        await platform.execute(
+          plan({
+            roundRef: `round-evaluate-ready-v${revision}`,
+            caseRef: 'case-1',
+            workItemRef: 'evaluate-ready',
+            contexts: [readyMrContext, pipelineContext],
+            employeeTypeRef: { typeId: 'development', revision },
+          }),
+        ),
+      ) as { contextPatches: Array<{ contextTypeId: string; stateJson: string }> }
+      return JSON.parse(
+        evaluated.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.merge-request',
+        )!.stateJson,
+      ) as { readyToMerge: boolean }
+    }
+    // Runtime codecs are keyed by type id. The exact Case pin therefore has
+    // to preserve v7's head-only pipeline contract while v8 requires target.
+    expect((await evaluateReady(7, legacyPassedPipelineContext)).readyToMerge).toBe(true)
+    expect((await evaluateReady(8, legacyPassedPipelineContext)).readyToMerge).toBe(false)
+    expect(
+      (
+        await evaluateReady(8, {
+          ...legacyPassedPipelineContext,
+          stateJson: JSON.stringify({
+            ...JSON.parse(legacyPassedPipelineContext.stateJson),
+            targetSha,
+          }),
+        })
+      ).readyToMerge,
+    ).toBe(true)
+    const unknownTargetMrContext = {
+      ...readyMrContext,
+      stateJson: JSON.stringify({
+        ...JSON.parse(readyMrContext.stateJson),
+        targetSha: null,
+      }),
+    }
+    const unknownTargetEvaluation = JSON.parse(
+      await platform.execute(
+        plan({
+          roundRef: 'round-evaluate-ready-v8-unknown-target',
+          caseRef: 'case-1',
+          workItemRef: 'evaluate-ready',
+          contexts: [
+            unknownTargetMrContext,
+            {
+              ...legacyPassedPipelineContext,
+              stateJson: JSON.stringify({
+                ...JSON.parse(legacyPassedPipelineContext.stateJson),
+                targetSha: null,
+              }),
+            },
+          ],
+          employeeTypeRef: { typeId: 'development', revision: 8 },
+        }),
+      ),
+    ) as { contextPatches: Array<{ contextTypeId: string; stateJson: string }> }
+    expect(
+      JSON.parse(
+        unknownTargetEvaluation.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.merge-request',
+        )!.stateJson,
+      ).readyToMerge,
+    ).toBe(false)
     const conflictMrState = {
       ...(JSON.parse(mrPatch.stateJson) as object),
       headSha: publishedSha,
@@ -772,7 +878,19 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       roundRef: 'round-publish-conflict',
       caseRef: 'case-1',
       workItemRef: 'publish-conflict',
-      contexts: [conflictMrContext],
+      contexts: [
+        conflictMrContext,
+        {
+          id: 'pipeline-context',
+          revision: 2,
+          typeId: 'development.pipeline',
+          stateJson: JSON.stringify({
+            ...JSON.parse(initialPipelinePatch.stateJson),
+            status: 'passed',
+            headSha: publishedSha,
+          }),
+        },
+      ],
       allowedEffectKinds: ['source-control.commit', 'source-control.push'],
     })
     const conflictPublished = JSON.parse(await platform.execute(publishConflictPlan)) as {
@@ -784,18 +902,41 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const parents = git(baselineRepo, 'show', '-s', '--format=%P', mergeSha).split(' ')
     expect(parents).toEqual([publishedSha, targetSha])
     expect(git(remoteRepo, 'show', `${mergeSha}:src/feature.ts`)).toBe('export const feature = 3')
-    expect(JSON.parse(conflictPublished.contextPatches[0]!.stateJson)).toMatchObject({
+    const conflictMrPatch = conflictPublished.contextPatches.find(
+      (patch) => patch.contextTypeId === 'development.merge-request',
+    )!
+    expect(JSON.parse(conflictMrPatch.stateJson)).toMatchObject({
       headSha: mergeSha,
       factsHeadSha: null,
       mergeableState: 'unknown',
       readyToMerge: false,
     })
+    const conflictPipelinePatch = conflictPublished.contextPatches.find(
+      (patch) => patch.contextTypeId === 'development.pipeline',
+    )!
+    expect(conflictPipelinePatch).toMatchObject({
+      contextId: 'pipeline-context',
+      expectedRevision: 2,
+      lifecycleState: 'active',
+    })
+    expect(JSON.parse(conflictPipelinePatch.stateJson)).toMatchObject({
+      status: 'pending',
+      mergeRequestRef: 'repo-1!42',
+      headSha: mergeSha,
+      failureTypes: [],
+    })
     const replayedConflictPublish = JSON.parse(await platform.execute(publishConflictPlan)) as {
       status: string
-      contextPatches: Array<{ stateJson: string }>
+      contextPatches: Array<{ contextTypeId: string; stateJson: string }>
     }
     expect(replayedConflictPublish.status).toBe('ok')
-    expect(JSON.parse(replayedConflictPublish.contextPatches[0]!.stateJson)).toMatchObject({
+    expect(
+      JSON.parse(
+        replayedConflictPublish.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.merge-request',
+        )!.stateJson,
+      ),
+    ).toMatchObject({
       headSha: mergeSha,
     })
 
@@ -843,24 +984,69 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       id: 'mr-context',
       revision: 3,
       typeId: 'development.merge-request',
-      stateJson: conflictPublished.contextPatches[0]!.stateJson,
+      stateJson: conflictMrPatch.stateJson,
     }
+    const latestPipelineContext = {
+      id: 'pipeline-context',
+      revision: 3,
+      typeId: 'development.pipeline',
+      stateJson: JSON.stringify({
+        ...JSON.parse(conflictPipelinePatch.stateJson),
+        status: 'passed',
+      }),
+    }
+    // A pre-v8 Case freezes reaction inputs from its historical descriptor.
+    // Those observe-mr plans omit the already-existing pipeline Context; the
+    // platform must not mistake that omission for permission to create a
+    // duplicate Context identity.
+    const frozenLegacyReactionOutput = JSON.parse(
+      await platform.execute(
+        plan({
+          roundRef: 'round-observe-frozen-v7-reaction',
+          caseRef: 'case-1',
+          workItemRef: 'observe-mr',
+          contexts: [latestMrContext],
+        }),
+      ),
+    ) as { contextPatches: Array<{ contextTypeId: string }> }
+    expect(
+      frozenLegacyReactionOutput.contextPatches.some(
+        (patch) => patch.contextTypeId === 'development.pipeline',
+      ),
+    ).toBe(false)
+
     const observedOutput = JSON.parse(
       await platform.execute(
         plan({
           roundRef: 'round-observe-external-head',
           caseRef: 'case-1',
           workItemRef: 'observe-mr',
-          contexts: [latestMrContext],
+          contexts: [latestMrContext, latestPipelineContext],
         }),
       ),
-    ) as { status: string; contextPatches: Array<{ stateJson: string }> }
+    ) as {
+      status: string
+      contextPatches: Array<{ contextTypeId: string; stateJson: string }>
+    }
     expect(observedOutput.status).toBe('ok')
-    expect(JSON.parse(observedOutput.contextPatches[0]!.stateJson)).toMatchObject({
+    expect(
+      JSON.parse(
+        observedOutput.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.merge-request',
+        )!.stateJson,
+      ),
+    ).toMatchObject({
       headSha: externalSha,
       factsHeadSha: externalSha,
       targetSha,
     })
+    expect(
+      JSON.parse(
+        observedOutput.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.pipeline',
+        )!.stateJson,
+      ),
+    ).toMatchObject({ status: 'pending', headSha: externalSha, failureTypes: [] })
     expect(readFileSync(join(caseWorkspace, 'src', 'external.ts'), 'utf8')).toBe(
       'export const external = true\n',
     )

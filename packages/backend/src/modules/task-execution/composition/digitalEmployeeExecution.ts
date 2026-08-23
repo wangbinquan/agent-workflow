@@ -349,6 +349,7 @@ export function composeDigitalEmployeeExecution(deps: {
               implementationAgentId: agent.id,
               implementationAgentName: agent.name,
               artifactPort: reviewedExecution.artifactPort,
+              documentPath: reviewedExecution.documentPath,
               reviewTitle: reviewedExecution.title,
               reviewDescription: reviewedExecution.description,
             }),

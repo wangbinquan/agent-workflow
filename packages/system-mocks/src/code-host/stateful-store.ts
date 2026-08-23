@@ -48,6 +48,7 @@ export interface StoredMergeRequest {
   targetBranch: string
   baseSha: string
   headSha: string
+  mergeableState: 'mergeable' | 'conflict' | 'unknown'
   author: Required<MockCodeHostUser>
   drafts: StoredComment[]
   reviewComments: StoredComment[]
@@ -216,6 +217,7 @@ export class CodeHostStore {
       targetBranch: defaultBranch,
       baseSha,
       headSha,
+      mergeableState: 'mergeable',
       author: normalizeUser(seed.mrAuthor, DEFAULT_AUTHOR),
       drafts: [],
       reviewComments: [],
@@ -266,6 +268,11 @@ export class CodeHostStore {
           )
         }
         if (baseSha !== null) mr.baseSha = baseSha
+        mr.mergeableState = await inspectMergeability(
+          project.repositoryPath,
+          mr.baseSha,
+          mr.headSha,
+        )
       }
       this.#refreshSummary(project)
     }
@@ -331,6 +338,7 @@ export class CodeHostStore {
       targetBranch: input.targetBranch,
       baseSha,
       headSha,
+      mergeableState: 'unknown',
       author: normalizeUser(input.author, DEFAULT_AUTHOR),
       drafts: [],
       reviewComments: [],
@@ -341,6 +349,7 @@ export class CodeHostStore {
     await runChecked('git', ['update-ref', specialRef(project.provider, number), headSha], {
       cwd: project.repositoryPath,
     })
+    mr.mergeableState = await inspectMergeability(project.repositoryPath, baseSha, headSha)
     return mr
   }
 
@@ -738,6 +747,21 @@ async function applyFiles(root: string, files: Record<string, string | null>): P
 async function readRef(repositoryPath: string, ref: string): Promise<string | null> {
   const result = await runProcess('git', ['rev-parse', '--verify', ref], { cwd: repositoryPath })
   return result.exitCode === 0 ? result.stdout.toString('utf8').trim() : null
+}
+
+async function inspectMergeability(
+  repositoryPath: string,
+  baseSha: string,
+  headSha: string,
+): Promise<'mergeable' | 'conflict' | 'unknown'> {
+  // `merge-tree --write-tree` runs Git's real three-way merge without touching
+  // refs, an index, or a worktree. Exit 0 means a clean synthetic merge; exit 1
+  // is the documented conflict result. Any other failure is provider-unknown,
+  // never optimistic mergeability.
+  const result = await runProcess('git', ['merge-tree', '--write-tree', baseSha, headSha], {
+    cwd: repositoryPath,
+  })
+  return result.exitCode === 0 ? 'mergeable' : result.exitCode === 1 ? 'conflict' : 'unknown'
 }
 
 async function importCommit(

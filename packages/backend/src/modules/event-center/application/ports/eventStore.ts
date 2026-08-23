@@ -52,6 +52,7 @@ export interface EventStorePort {
     readonly subject: EventSubject
     readonly subscriber: EventSubscriber
     readonly identityKey: string
+    readonly replayLatest: boolean
     readonly now: number
   }): SubscriptionStoreReceipt
   cancelSubscription(id: string, now: number): SubscriptionStoreReceipt | null

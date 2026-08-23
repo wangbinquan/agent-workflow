@@ -307,6 +307,49 @@ describe('RFC-304 code-host state', () => {
     expect(await readFile(join(clone, 'README.md'), 'utf8')).toBe('head two\n')
   })
 
+  test('provider mergeability is computed from the real Git trees after the target advances', async () => {
+    const project = await suite.client.seedCodeHost({
+      provider: 'gitlab',
+      projectPath: 'mergeability/real-conflict',
+      baseFiles: { 'X.txt': 'base\n', 'untouched.txt': 'stable\n' },
+      headFiles: { 'X.txt': 'source change\n' },
+    })
+    const targetClone = await temporaryDirectory('system-mock-target-conflict-')
+    await runChecked('git', ['clone', '-q', project.repoHttpUrl, targetClone])
+    await runChecked('git', ['config', 'user.email', 'target@mock.test'], { cwd: targetClone })
+    await runChecked('git', ['config', 'user.name', 'Target Test'], { cwd: targetClone })
+    await writeFile(join(targetClone, 'X.txt'), 'target change\n')
+    await runChecked('git', ['add', 'X.txt'], { cwd: targetClone })
+    await runChecked(
+      'git',
+      ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'advance conflicting target'],
+      { cwd: targetClone },
+    )
+    await runChecked('git', ['push', '-q', 'origin', `HEAD:refs/heads/${project.defaultBranch}`], {
+      cwd: targetClone,
+    })
+
+    const mr = await apiJson<{
+      detailed_merge_status: string
+      merge_status: string
+      sha: string
+      diff_refs: { base_sha: string; head_sha: string }
+    }>(
+      'gitlab',
+      `/projects/${encodeURIComponent(project.projectPath)}/merge_requests/${String(project.number)}`,
+    )
+    expect(mr).toMatchObject({
+      detailed_merge_status: 'conflict',
+      merge_status: 'cannot_be_merged',
+      sha: project.headSha,
+      diff_refs: { head_sha: project.headSha },
+    })
+    expect(mr.diff_refs.base_sha).not.toBe(project.baseSha)
+    expect((await suite.client.snapshot()).codeHosts[0]?.mergeRequests[0]?.mergeableState).toBe(
+      'conflict',
+    )
+  })
+
   test('fork pull requests import the source commit into a fetchable target special ref', async () => {
     const source = await suite.client.seedCodeHost({
       provider: 'github',

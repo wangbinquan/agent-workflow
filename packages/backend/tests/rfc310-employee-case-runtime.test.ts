@@ -4,8 +4,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import { employeeCases } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import {
+  employeeAttentionBindings,
+  employeeCases,
+  employeeOsOutbox,
+  eventSubscriptions,
+} from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -171,6 +176,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       effectSuggestions: [],
       artifactRefs: [],
     }
+    let observedMergeRequestStatus: 'active' | 'merged' = 'active'
     const launchedPlans: unknown[] = []
     const launchedAttempts: Array<{ ordinal: number; mode: string }> = []
     const nextId = () => `resource-${String(++ordinal).padStart(4, '0')}`
@@ -241,6 +247,35 @@ describe('RFC-310 stateful employee Case runtime', () => {
               stateJson: string
               artifactRefs: string[]
             }>
+            if (plan.workItemRef === 'observe-mr' && observedMergeRequestStatus === 'merged') {
+              const mergeRequestContext = contexts.find(
+                (context) => context.typeId === 'development.merge-request',
+              )!
+              return JSON.stringify({
+                schemaVersion: 1,
+                roundRef: plan.roundRef,
+                executionNonce: plan.executionNonce,
+                status: 'ok',
+                summary: '平台已确认 MR merged 终态',
+                contextPatches: [
+                  {
+                    contextId: mergeRequestContext.id,
+                    contextTypeId: mergeRequestContext.typeId,
+                    schemaVersion: 1,
+                    expectedRevision: mergeRequestContext.revision,
+                    lifecycleState: 'terminal',
+                    stateJson: JSON.stringify({
+                      ...JSON.parse(mergeRequestContext.stateJson),
+                      status: 'merged',
+                      readyToMerge: false,
+                    }),
+                    artifactRefs: mergeRequestContext.artifactRefs,
+                  },
+                ],
+                effectSuggestions: [],
+                artifactRefs: [],
+              })
+            }
             if (plan.workItemRef === 'classify-feedback') {
               const mergeRequestContext = contexts.find(
                 (context) => context.typeId === 'development.merge-request',
@@ -409,6 +444,21 @@ describe('RFC-310 stateful employee Case runtime', () => {
                   }),
                   artifactRefs: [],
                 },
+                {
+                  contextId: null,
+                  contextTypeId: 'development.pipeline',
+                  schemaVersion: 1,
+                  expectedRevision: null,
+                  lifecycleState: 'active',
+                  stateJson: JSON.stringify({
+                    status: 'pending',
+                    mergeRequestRef: 'repo-1!42',
+                    headSha: 'a'.repeat(40),
+                    evidenceArtifactRef: '.agent-workflow/pipeline/case-1/',
+                    failureTypes: [],
+                  }),
+                  artifactRefs: [],
+                },
               ],
               effectSuggestions: [],
               artifactRefs: [],
@@ -426,17 +476,24 @@ describe('RFC-310 stateful employee Case runtime', () => {
               roundRef: string
               executionNonce: string
               workItemRef: string
+              inputEnvelopeJson: string
             }
+            const planContexts = JSON.parse(
+              (JSON.parse(plan.inputEnvelopeJson) as { contextsJson: string }).contextsJson,
+            ) as Array<{ id: string; revision: number; typeId: string }>
+            const pipelineContext = planContexts.find(
+              (context) => context.typeId === 'development.pipeline',
+            )
             const outputForRound =
               plan.workItemRef === 'collect-pipeline'
                 ? {
                     ...executionOutput,
                     contextPatches: [
                       {
-                        contextId: null,
+                        contextId: pipelineContext?.id ?? null,
                         contextTypeId: 'development.pipeline',
                         schemaVersion: 1,
-                        expectedRevision: null,
+                        expectedRevision: pipelineContext?.revision ?? null,
                         lifecycleState: 'active',
                         stateJson: JSON.stringify({
                           status: 'failed',
@@ -467,7 +524,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 7 }
+    const typeRef = { typeId: 'development', revision: 8 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const pipelineProblemDefinitions = [
@@ -629,6 +686,20 @@ describe('RFC-310 stateful employee Case runtime', () => {
       id: secondChildEmployee.id,
       revision: secondChildEmployee.revision,
     }
+    const thirdChildEmployee = module.commands.createEmployee({
+      typeRef,
+      actorUserId: 'author',
+      body: {
+        name: '协同开发员工三号',
+        jobTemplateRef: baseJobRef,
+        workScope: { kind: 'repository', repositoryId: 'repo-1' },
+        toolOverrides: [],
+      },
+    })
+    const thirdChildEmployeeRef = {
+      id: thirdChildEmployee.id,
+      revision: thirdChildEmployee.revision,
+    }
     const job = module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
@@ -684,6 +755,133 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const employeeRef = { id: employee.id, revision: employee.revision }
+    const quorumJob = module.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'author',
+      body: {
+        name: '三方协同开发岗位',
+        description: '三个独立子员工中任意两个完成后继续',
+        defaultToolBindings: bindings,
+        defaultCollaborationBindings: [
+          {
+            workItemRef: 'delegate',
+            memberRef: 'quorum-primary',
+            targetEmployeeRef: childEmployeeRef,
+            invocationContractId: 'development.cross-repository-work',
+            joinMode: 'quorum',
+            quorum: 2,
+          },
+          {
+            workItemRef: 'delegate',
+            memberRef: 'quorum-secondary',
+            targetEmployeeRef: secondChildEmployeeRef,
+            invocationContractId: 'development.cross-repository-work',
+            joinMode: 'quorum',
+            quorum: 2,
+          },
+          {
+            workItemRef: 'delegate',
+            memberRef: 'quorum-tertiary',
+            targetEmployeeRef: thirdChildEmployeeRef,
+            invocationContractId: 'development.cross-repository-work',
+            joinMode: 'quorum',
+            quorum: 2,
+          },
+        ],
+        orderedDispatchConfigurations: [
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routes: [
+              {
+                routeRef: 'external-dependency',
+                displayName: '跨仓依赖',
+                description: '需要另一个数字员工先完成工作',
+                destinationWorkItemRef: 'delegate',
+                registrationRef: null,
+                fallback: false,
+              },
+              repairFallbackRoute,
+            ],
+          },
+        ],
+      },
+    })
+    const quorumJobRef = module.commands.publishJobTemplate({
+      id: quorumJob.id,
+      actorUserId: 'author',
+    })
+    const quorumEmployee = module.commands.createEmployee({
+      typeRef,
+      actorUserId: 'author',
+      body: {
+        name: '三方协同员工',
+        jobTemplateRef: quorumJobRef,
+        workScope: { kind: 'repository', repositoryId: 'repo-1' },
+        toolOverrides: [],
+      },
+    })
+    const quorumEmployeeRef = {
+      id: quorumEmployee.id,
+      revision: quorumEmployee.revision,
+    }
+    const allJob = module.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'author',
+      body: {
+        name: '全员协同开发岗位',
+        description: '两个独立子员工必须全部完成后继续',
+        defaultToolBindings: bindings,
+        defaultCollaborationBindings: [
+          {
+            workItemRef: 'delegate',
+            memberRef: 'all-primary',
+            targetEmployeeRef: childEmployeeRef,
+            invocationContractId: 'development.cross-repository-work',
+            joinMode: 'all',
+            quorum: null,
+          },
+          {
+            workItemRef: 'delegate',
+            memberRef: 'all-secondary',
+            targetEmployeeRef: secondChildEmployeeRef,
+            invocationContractId: 'development.cross-repository-work',
+            joinMode: 'all',
+            quorum: null,
+          },
+        ],
+        orderedDispatchConfigurations: [
+          {
+            classifierWorkItemRef: 'classify-pipeline',
+            routes: [
+              {
+                routeRef: 'external-dependency',
+                displayName: '跨仓依赖',
+                description: '需要另一个数字员工先完成工作',
+                destinationWorkItemRef: 'delegate',
+                registrationRef: null,
+                fallback: false,
+              },
+              repairFallbackRoute,
+            ],
+          },
+        ],
+      },
+    })
+    const allJobRef = module.commands.publishJobTemplate({
+      id: allJob.id,
+      actorUserId: 'author',
+    })
+    const allEmployee = module.commands.createEmployee({
+      typeRef,
+      actorUserId: 'author',
+      body: {
+        name: '全员协同员工',
+        jobTemplateRef: allJobRef,
+        workScope: { kind: 'repository', repositoryId: 'repo-1' },
+        toolOverrides: [],
+      },
+    })
+    const allEmployeeRef = { id: allEmployee.id, revision: allEmployee.revision }
 
     const launched = runtime.commands.launch({
       employeeRef,
@@ -791,6 +989,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(launchedPlans).toHaveLength(1)
     expect(launchedPlans[0]).toMatchObject({
       roundRef: analyzeRound,
+      employeeTypeRef: typeRef,
       implementationKind: 'agent',
       inputSchemaId: 'development.requirement-context.v1',
       outputSchemaId: 'development.change-proposal.v1',
@@ -899,9 +1098,85 @@ describe('RFC-310 stateful employee Case runtime', () => {
     }
     const resultRound = runtime.worker.planOneReaction()
     expect(resultRound).not.toBeNull()
-    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-      // Older attention cleanup may precede the collaboration result outbox.
+
+    // Regression: an Attention can become desired again before its older
+    // unsubscribe effect runs. The reactivation must retain ownership of the
+    // live subscription, and the stale effect must not cancel it afterwards.
+    const pipelineAttentionBeforeReactivation = db
+      .select()
+      .from(employeeAttentionBindings)
+      .where(
+        and(
+          eq(employeeAttentionBindings.caseId, launched.caseRef.id),
+          eq(employeeAttentionBindings.eventTypeId, 'development.pipeline-check-due'),
+        ),
+      )
+      .get()!
+    expect(pipelineAttentionBeforeReactivation.state).toBe('active')
+    expect(pipelineAttentionBeforeReactivation.eventSubscriptionId).not.toBeNull()
+    const pipelineSubscriptionId = pipelineAttentionBeforeReactivation.eventSubscriptionId!
+    const delayedUnsubscribeAt = now + 10_000
+    db.update(employeeAttentionBindings)
+      .set({ state: 'cancel-requested', updatedAt: now })
+      .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
+      .run()
+    db.insert(employeeOsOutbox)
+      .values({
+        id: `attention-race-unsubscribe:${launched.caseRef.id}`,
+        caseId: launched.caseRef.id,
+        kind: 'event-unsubscribe',
+        payloadJson: JSON.stringify({
+          bindingId: pipelineAttentionBeforeReactivation.id,
+          subscriptionId: pipelineSubscriptionId,
+        }),
+        dedupeKey: `attention-race-unsubscribe:${launched.caseRef.id}`,
+        state: 'pending',
+        attemptCount: 0,
+        nextAttemptAt: delayedUnsubscribeAt,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+
+    let reactivatedPipelineAttention: typeof pipelineAttentionBeforeReactivation = {
+      ...pipelineAttentionBeforeReactivation,
+      state: 'cancel-requested' as const,
     }
+    for (let step = 0; step < 12 && reactivatedPipelineAttention.state !== 'desired'; step += 1) {
+      expect(await runtime.worker.runOneOutbox()).toBe('completed')
+      reactivatedPipelineAttention = db
+        .select()
+        .from(employeeAttentionBindings)
+        .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
+        .get()!
+    }
+    expect(reactivatedPipelineAttention).toMatchObject({
+      state: 'desired',
+      eventSubscriptionId: pipelineSubscriptionId,
+    })
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Activate the replacement Attention while its superseded cleanup stays delayed.
+    }
+    const activePipelineAttention = db
+      .select()
+      .from(employeeAttentionBindings)
+      .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
+      .get()!
+    expect(activePipelineAttention).toMatchObject({
+      state: 'active',
+      eventSubscriptionId: pipelineSubscriptionId,
+    })
+    now = delayedUnsubscribeAt
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // A superseded unsubscribe is completed as a guarded no-op.
+    }
+    expect(
+      db
+        .select({ state: eventSubscriptions.state })
+        .from(eventSubscriptions)
+        .where(eq(eventSubscriptions.id, pipelineSubscriptionId))
+        .get(),
+    ).toEqual({ state: 'active' })
     projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
     expect(projection.channels).toEqual(
       expect.arrayContaining([
@@ -910,9 +1185,31 @@ describe('RFC-310 stateful employee Case runtime', () => {
       ]),
     )
     expect(projection.case).toMatchObject({
-      state: 'active',
-      currentWorkItemRef: 'collect-pipeline',
+      state: 'waiting',
+      currentWorkItemRef: null,
+      blockReason: null,
     })
+    expect(
+      projection.contexts.find(
+        (context: { typeId: string }) => context.typeId === 'development.pipeline',
+      ),
+    ).toMatchObject({
+      lifecycleState: 'active',
+      state: { status: 'pending', failureTypes: [] },
+    })
+    expect(
+      projection.contexts.find(
+        (context: { typeId: string }) => context.typeId === 'development.problem-set',
+      ),
+    ).toBeUndefined()
+    expect(projection.attention).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
+          state: 'active',
+        }),
+      ]),
+    )
     const parentInboxCountAfterAnyJoin = projection.inbox.length
     runtime.commands.terminate(detachedChildCaseId, 'completed-late')
     expect(runtime.worker.publishOneChannelResult()).toBe('completed')
@@ -923,6 +1220,305 @@ describe('RFC-310 stateful employee Case runtime', () => {
       ).results,
     ).toEqual([expect.objectContaining({ milestoneType: 'observed-late' })])
     expect(projection.inbox).toHaveLength(parentInboxCountAfterAnyJoin)
+
+    // Persist the quorum path as a second real parent Case. Two of three child
+    // completions satisfy the join; the remaining channel is detached and a
+    // late result is retained as observation-only evidence.
+    const quorumLaunched = runtime.commands.launch({
+      employeeRef: quorumEmployeeRef,
+      primaryContextTypeId: 'development.issue-handling',
+      primaryContextSchemaVersion: 1,
+      primaryContextState: 'active',
+      primaryContextJson: JSON.stringify({
+        status: 'active',
+        subjectRef: 'REQ-QUORUM',
+        repositoryRef: 'repo-1',
+        request: {
+          kind: 'body',
+          body: '由三个独立数字员工中的任意两个完成协同修复',
+          externalId: null,
+          uploads: [],
+        },
+        materialArtifactRefs: [],
+      }),
+      artifactRefs: [],
+      workSubject: { typeId: 'work-request', subjectRef: 'REQ-QUORUM' },
+    })
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Publish the quorum parent launch before forcing its collaboration node.
+    }
+    const quorumParentRow = db
+      .select()
+      .from(employeeCases)
+      .where(eq(employeeCases.id, quorumLaunched.caseRef.id))
+      .get()!
+    db.update(employeeCases)
+      .set({
+        state: 'active',
+        currentWorkItemRef: 'delegate',
+        revision: quorumParentRow.revision + 1,
+        updatedAt: now + 1,
+      })
+      .where(eq(employeeCases.id, quorumLaunched.caseRef.id))
+      .run()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Create all three durable invocation channels and child Cases.
+    }
+    let quorumProjection = JSON.parse(
+      runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson,
+    )
+    expect(quorumProjection.channels).toHaveLength(3)
+    expect(quorumProjection.channels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ state: 'open', targetEmployeeRef: childEmployeeRef }),
+        expect.objectContaining({ state: 'open', targetEmployeeRef: secondChildEmployeeRef }),
+        expect.objectContaining({ state: 'open', targetEmployeeRef: thirdChildEmployeeRef }),
+      ]),
+    )
+    const quorumChannels = quorumProjection.channels as Array<{
+      childCaseId: string
+      targetEmployeeRef: { id: string }
+    }>
+    const quorumChildCaseId = (employeeId: string) =>
+      quorumChannels.find((channel) => channel.targetEmployeeRef.id === employeeId)!.childCaseId
+    const quorumPrimaryCaseId = quorumChildCaseId(childEmployeeRef.id)
+    const quorumSecondaryCaseId = quorumChildCaseId(secondChildEmployeeRef.id)
+    const quorumLateCaseId = quorumChildCaseId(thirdChildEmployeeRef.id)
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Activate all three exact invocation-result subscriptions.
+    }
+
+    runtime.commands.terminate(quorumPrimaryCaseId, 'quorum-primary-completed')
+    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Settle the first result; quorum must still be waiting.
+    }
+    quorumProjection = JSON.parse(runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson)
+    expect(
+      quorumProjection.channels.find(
+        (channel: { childCaseId: string }) => channel.childCaseId === quorumPrimaryCaseId,
+      ),
+    ).toMatchObject({ state: 'satisfied' })
+    expect(
+      quorumProjection.channels.filter((channel: { state: string }) => channel.state === 'open'),
+    ).toHaveLength(2)
+    expect(quorumProjection.case.state).toBe('waiting')
+
+    runtime.commands.terminate(quorumSecondaryCaseId, 'quorum-secondary-completed')
+    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // The second result satisfies 2/3 and durably detaches the final channel.
+    }
+    quorumProjection = JSON.parse(runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson)
+    expect(
+      quorumProjection.channels.filter(
+        (channel: { state: string }) => channel.state === 'satisfied',
+      ),
+    ).toHaveLength(2)
+    expect(
+      quorumProjection.channels.find(
+        (channel: { childCaseId: string }) => channel.childCaseId === quorumLateCaseId,
+      ),
+    ).toMatchObject({ state: 'detached' })
+    expect(quorumProjection.case).toMatchObject({
+      state: 'waiting',
+      currentWorkItemRef: null,
+      blockReason: null,
+    })
+    const quorumInboxCountAfterJoin = quorumProjection.inbox.length
+    runtime.commands.terminate(quorumLateCaseId, 'quorum-tertiary-completed-late')
+    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    quorumProjection = JSON.parse(runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson)
+    expect(
+      quorumProjection.channels.find(
+        (channel: { childCaseId: string }) => channel.childCaseId === quorumLateCaseId,
+      ).results,
+    ).toEqual([expect.objectContaining({ milestoneType: 'observed-late' })])
+    expect(quorumProjection.inbox).toHaveLength(quorumInboxCountAfterJoin)
+
+    const allLaunched = runtime.commands.launch({
+      employeeRef: allEmployeeRef,
+      primaryContextTypeId: 'development.issue-handling',
+      primaryContextSchemaVersion: 1,
+      primaryContextState: 'active',
+      primaryContextJson: JSON.stringify({
+        status: 'active',
+        subjectRef: 'REQ-ALL',
+        repositoryRef: 'repo-1',
+        request: {
+          kind: 'body',
+          body: '等待两个数字员工全部完成协同修复',
+          externalId: null,
+          uploads: [],
+        },
+        materialArtifactRefs: [],
+      }),
+      artifactRefs: [],
+      workSubject: { typeId: 'work-request', subjectRef: 'REQ-ALL' },
+    })
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Publish the all-join parent launch.
+    }
+    const allParentRow = db
+      .select()
+      .from(employeeCases)
+      .where(eq(employeeCases.id, allLaunched.caseRef.id))
+      .get()!
+    db.update(employeeCases)
+      .set({
+        state: 'active',
+        currentWorkItemRef: 'delegate',
+        revision: allParentRow.revision + 1,
+        updatedAt: now + 1,
+      })
+      .where(eq(employeeCases.id, allLaunched.caseRef.id))
+      .run()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Create both durable all-join child Cases and subscriptions.
+    }
+    let allProjection = JSON.parse(runtime.queries.getCase(allLaunched.caseRef.id).projectionJson)
+    expect(allProjection.channels).toHaveLength(2)
+    const allChildCaseIds = (allProjection.channels as Array<{ childCaseId: string }>).map(
+      (channel) => channel.childCaseId,
+    )
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Activate both exact invocation-result subscriptions.
+    }
+
+    runtime.commands.terminate(allChildCaseIds[0]!, 'all-primary-completed')
+    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // One satisfied member cannot complete an all join.
+    }
+    allProjection = JSON.parse(runtime.queries.getCase(allLaunched.caseRef.id).projectionJson)
+    expect(
+      allProjection.channels.filter((channel: { state: string }) => channel.state === 'satisfied'),
+    ).toHaveLength(1)
+    expect(
+      allProjection.channels.filter((channel: { state: string }) => channel.state === 'open'),
+    ).toHaveLength(1)
+    expect(allProjection.case.state).toBe('waiting')
+
+    runtime.commands.terminate(allChildCaseIds[1]!, 'all-secondary-completed')
+    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // The second member satisfies the exact all join.
+    }
+    allProjection = JSON.parse(runtime.queries.getCase(allLaunched.caseRef.id).projectionJson)
+    expect(
+      allProjection.channels.filter((channel: { state: string }) => channel.state === 'satisfied'),
+    ).toHaveLength(2)
+    expect(allProjection.case).toMatchObject({
+      state: 'waiting',
+      currentWorkItemRef: null,
+      blockReason: null,
+    })
+
+    const partialLaunched = runtime.commands.launch({
+      employeeRef: quorumEmployeeRef,
+      primaryContextTypeId: 'development.issue-handling',
+      primaryContextSchemaVersion: 1,
+      primaryContextState: 'active',
+      primaryContextJson: JSON.stringify({
+        status: 'active',
+        subjectRef: 'REQ-PARTIAL',
+        repositoryRef: 'repo-1',
+        request: {
+          kind: 'body',
+          body: '验证法定人数在部分成功后变得不可满足',
+          externalId: null,
+          uploads: [],
+        },
+        materialArtifactRefs: [],
+      }),
+      artifactRefs: [],
+      workSubject: { typeId: 'work-request', subjectRef: 'REQ-PARTIAL' },
+    })
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Publish the partial-result parent launch.
+    }
+    const partialParentRow = db
+      .select()
+      .from(employeeCases)
+      .where(eq(employeeCases.id, partialLaunched.caseRef.id))
+      .get()!
+    db.update(employeeCases)
+      .set({
+        state: 'active',
+        currentWorkItemRef: 'delegate',
+        revision: partialParentRow.revision + 1,
+        updatedAt: now + 1,
+      })
+      .where(eq(employeeCases.id, partialLaunched.caseRef.id))
+      .run()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Create the three quorum channels used by the partial-result branch.
+    }
+    let partialProjection = JSON.parse(
+      runtime.queries.getCase(partialLaunched.caseRef.id).projectionJson,
+    )
+    const partialChildCaseIds = (partialProjection.channels as Array<{ childCaseId: string }>).map(
+      (channel) => channel.childCaseId,
+    )
+    expect(partialChildCaseIds).toHaveLength(3)
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Activate every invocation-result subscription.
+    }
+
+    for (const [index, terminalKind] of (['completed', 'execution-failed'] as const).entries()) {
+      runtime.commands.terminate(partialChildCaseIds[index]!, terminalKind)
+      expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+      for (let pump = 0; pump < 8; pump += 1) runtime.worker.pumpOneDelivery()
+      expect(runtime.worker.planOneReaction()).not.toBeNull()
+      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+        // One success plus one failure still leaves quorum(2/3) reachable.
+      }
+    }
+    partialProjection = JSON.parse(
+      runtime.queries.getCase(partialLaunched.caseRef.id).projectionJson,
+    )
+    expect(partialProjection.case.state).toBe('waiting')
+    expect(
+      partialProjection.channels.filter(
+        (channel: { state: string }) => channel.state === 'satisfied',
+      ),
+    ).toHaveLength(1)
+    expect(
+      partialProjection.channels.filter((channel: { state: string }) => channel.state === 'failed'),
+    ).toHaveLength(1)
+    expect(
+      partialProjection.channels.filter((channel: { state: string }) => channel.state === 'open'),
+    ).toHaveLength(1)
+
+    runtime.commands.terminate(partialChildCaseIds[2]!, 'execution-failed')
+    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // A second failed member makes quorum impossible and blocks exactly once.
+    }
+    partialProjection = JSON.parse(
+      runtime.queries.getCase(partialLaunched.caseRef.id).projectionJson,
+    )
+    expect(
+      partialProjection.channels.map((channel: { state: string }) => channel.state).sort(),
+    ).toEqual(['failed', 'failed', 'satisfied'])
+    expect(partialProjection.case).toMatchObject({
+      state: 'blocked',
+      currentWorkItemRef: 'delegate',
+      blockReason: '协同汇合无法满足（1 成功，2 失败）',
+    })
 
     // A second delegated Case remains independent when the parent's globally
     // pinned wait deadline expires. The channel fails and wakes the parent,
@@ -1094,10 +1690,68 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const upgraded = runtime.commands.applyPolicyUpgrade(preview)
     expect(JSON.parse(upgraded.projectionJson).case.executionPolicyRevision).toBe(2)
 
-    const terminal = runtime.commands.terminate(launched.caseRef.id, 'merged')
-    expect(terminal.state).toBe('terminal')
-    now += 1
-    expect(await runtime.worker.runOneOutbox()).toBe('completed')
+    // A business-terminal settlement must never resurrect an Attention whose
+    // older unsubscribe is still pending. This is a real lifecycle reaction,
+    // not the administrative terminate command.
+    const pipelineAttentionBeforeTerminal = db
+      .select()
+      .from(employeeAttentionBindings)
+      .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
+      .get()!
+    expect(pipelineAttentionBeforeTerminal).toMatchObject({ state: 'active' })
+    expect(pipelineAttentionBeforeTerminal.eventSubscriptionId).not.toBeNull()
+    const terminalPipelineSubscriptionId = pipelineAttentionBeforeTerminal.eventSubscriptionId!
+    const terminalUnsubscribeAt = now + 10_000
+    db.update(employeeAttentionBindings)
+      .set({ state: 'cancel-requested', updatedAt: now })
+      .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeTerminal.id))
+      .run()
+    db.insert(employeeOsOutbox)
+      .values({
+        id: `attention-terminal-race-unsubscribe:${launched.caseRef.id}`,
+        caseId: launched.caseRef.id,
+        kind: 'event-unsubscribe',
+        payloadJson: JSON.stringify({
+          bindingId: pipelineAttentionBeforeTerminal.id,
+          subscriptionId: terminalPipelineSubscriptionId,
+        }),
+        dedupeKey: `attention-terminal-race-unsubscribe:${launched.caseRef.id}`,
+        state: 'pending',
+        attemptCount: 0,
+        nextAttemptAt: terminalUnsubscribeAt,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+    observedMergeRequestStatus = 'merged'
+    observeMrEvent('development.lifecycle-updated', 'lifecycle-merged-terminal-race')
+    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
+    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // The authoritative MR refresh settles the Case as terminal.
+    }
+    expect(runtime.queries.getCase(launched.caseRef.id)).toMatchObject({ state: 'terminal' })
+    expect(
+      db
+        .select()
+        .from(employeeAttentionBindings)
+        .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeTerminal.id))
+        .get(),
+    ).toMatchObject({
+      state: 'cancel-requested',
+      eventSubscriptionId: terminalPipelineSubscriptionId,
+    })
+    now = terminalUnsubscribeAt
+    while ((await runtime.worker.runOneOutbox()) !== 'idle') {
+      // Finish the cancellation that was already authoritative at terminal settlement.
+    }
+    expect(
+      db
+        .select({ state: eventSubscriptions.state })
+        .from(eventSubscriptions)
+        .where(eq(eventSubscriptions.id, terminalPipelineSubscriptionId))
+        .get(),
+    ).toEqual({ state: 'cancelled' })
 
     retryLimits = { defaultNodeRetries: 0, sessionRestartBudget: 0 }
     const latestPolicy = module.queries.getExecutionPolicy()

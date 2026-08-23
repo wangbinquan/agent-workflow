@@ -28,6 +28,8 @@ export const DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY = 'plan_prompt'
 export const DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY = 'implementation_plan'
 export const DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID = '__de_plan_agent__'
 export const DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID = '__de_plan_review__'
+export const DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID = '__de_plan_reader__'
+const DIGITAL_EMPLOYEE_APPROVED_PLAN_PATH_KEY = 'approved_plan_path'
 
 /**
  * Agent 唯一结果端口。与 development-automation/domain/agentEnvelope 的
@@ -128,6 +130,7 @@ export interface ReviewedDigitalEmployeeHostSnapshotInput {
   readonly implementationAgentId: string
   readonly implementationAgentName: string
   readonly artifactPort: string
+  readonly documentPath: string
   readonly reviewTitle: string
   readonly reviewDescription: string
 }
@@ -190,6 +193,24 @@ export function synthesizeReviewedDigitalEmployeeHostSnapshot(
         commentInjectTemplate: '\n\nHUMAN_REVIEW_COMMENTS\n{{__review_comments__}}',
       },
       {
+        id: DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID,
+        kind: 'script',
+        language: 'node',
+        script: [
+          "import { readFileSync } from 'node:fs'",
+          `const expectedPath = ${JSON.stringify(input.documentPath)}`,
+          `const approvedPath = process.env.AW_PORT_${DIGITAL_EMPLOYEE_APPROVED_PLAN_PATH_KEY.toUpperCase()} ?? ''`,
+          'if (approvedPath !== expectedPath) {',
+          "  console.error('approved implementation plan path does not match the frozen platform path')",
+          '  process.exit(64)',
+          '}',
+          "process.stdout.write(readFileSync(approvedPath, 'utf8'))",
+        ].join('\n'),
+        dependencies: [],
+        env: {},
+        readonly: true,
+      },
+      {
         id: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
         kind: 'agent-single',
         agentId: input.implementationAgentId,
@@ -233,8 +254,16 @@ export function synthesizeReviewedDigitalEmployeeHostSnapshot(
         target: { nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID, portName: DIGITAL_EMPLOYEE_PROMPT_KEY },
       },
       {
-        id: 'e_de_approved_plan',
+        id: 'e_de_approved_plan_path',
         source: { nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID, portName: 'approved_doc' },
+        target: {
+          nodeId: DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID,
+          portName: DIGITAL_EMPLOYEE_APPROVED_PLAN_PATH_KEY,
+        },
+      },
+      {
+        id: 'e_de_approved_plan',
+        source: { nodeId: DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID, portName: 'stdout' },
         target: {
           nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID,
           portName: DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,

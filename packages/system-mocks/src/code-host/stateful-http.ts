@@ -529,12 +529,22 @@ function gitlabMr(project: StoredProject, mr: StoredMergeRequest): Record<string
     target_branch: mr.targetBranch,
     sha: mr.headSha,
     diff_refs: { base_sha: mr.baseSha, start_sha: mr.baseSha, head_sha: mr.headSha },
-    // The seeded branches are conflict-free unless a test explicitly changes
-    // the repository. Expose the provider field a real GitLab collector reads
-    // so readiness can reach merge-ready instead of remaining conservatively
-    // unknown forever in a supposedly happy-path system mock.
-    detailed_merge_status: mr.state === 'opened' ? 'mergeable' : 'not_open',
-    merge_status: mr.state === 'opened' ? 'can_be_merged' : 'unchecked',
+    detailed_merge_status:
+      mr.state !== 'opened'
+        ? 'not_open'
+        : mr.mergeableState === 'conflict'
+          ? 'conflict'
+          : mr.mergeableState === 'mergeable'
+            ? 'mergeable'
+            : 'checking',
+    merge_status:
+      mr.state !== 'opened'
+        ? 'unchecked'
+        : mr.mergeableState === 'conflict'
+          ? 'cannot_be_merged'
+          : mr.mergeableState === 'mergeable'
+            ? 'can_be_merged'
+            : 'unchecked',
     author: gitlabUser(mr.author),
     web_url: `${project.webUrl}/-/merge_requests/${String(mr.number)}`,
     references: { full: `${project.projectPath}!${String(mr.number)}` },
@@ -635,8 +645,20 @@ function githubPr(project: StoredProject, mr: StoredMergeRequest): Record<string
     state: githubState(mr),
     html_url: `${project.webUrl}/pull/${String(mr.number)}`,
     merged: mr.state === 'merged',
-    mergeable: mr.state === 'opened' ? true : null,
-    mergeable_state: mr.state === 'opened' ? 'clean' : 'unknown',
+    mergeable:
+      mr.state !== 'opened'
+        ? null
+        : mr.mergeableState === 'unknown'
+          ? null
+          : mr.mergeableState === 'mergeable',
+    mergeable_state:
+      mr.state !== 'opened'
+        ? 'unknown'
+        : mr.mergeableState === 'conflict'
+          ? 'dirty'
+          : mr.mergeableState === 'mergeable'
+            ? 'clean'
+            : 'unknown',
     user: githubUser(mr.author),
     head: {
       ref: mr.sourceBranch,

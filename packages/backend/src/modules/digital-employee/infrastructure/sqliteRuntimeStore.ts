@@ -947,8 +947,13 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
 
     cancelAttention(bindingId, now) {
       db.update(employeeAttentionBindings)
-        .set({ state: 'cancelled', updatedAt: now })
-        .where(eq(employeeAttentionBindings.id, bindingId))
+        .set({ eventSubscriptionId: null, state: 'cancelled', updatedAt: now })
+        .where(
+          and(
+            eq(employeeAttentionBindings.id, bindingId),
+            eq(employeeAttentionBindings.state, 'cancel-requested'),
+          ),
+        )
         .run()
     },
 
@@ -1341,6 +1346,8 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             tx.update(employeeAttentionBindings)
               .set({
                 contextRevision: desired.binding.contextRevision,
+                eventSubscriptionId: desired.binding.eventSubscriptionId,
+                state: desired.binding.state,
                 updatedAt: input.now,
               })
               .where(eq(employeeAttentionBindings.id, desired.binding.id))

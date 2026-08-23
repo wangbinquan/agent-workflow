@@ -15,6 +15,7 @@
 // 本函数是纯执行体。
 
 import { executeCodeHostCall } from '@/services/codeHost/call'
+import { probeCodeHostConnection } from '@/services/codeHost/connections'
 import { callDeps, normalizedState, parseJson, type MrEnsureConnectionDeps } from './mrEnsure'
 
 export interface MrThreadMessageFact {
@@ -128,17 +129,34 @@ interface GithubReviewComment {
   readonly created_at?: string
 }
 
+// Source observers aggregate many employee-case subscriptions, so they cannot pin one Case ID
+// as the marker prefix. The opt-in path below recognizes only the platform's bounded, single-token
+// HTML marker shape; ordinary collectors remain exact-prefix by default.
+const PLATFORM_SELF_MARKER_RE = /<!-- aw-self:[^\s<>]{1,500} -->/
+
 function classifyAuthor(
   user: RawUser | undefined,
   body: string,
   selfMarker: string | null,
+  trustPlatformSelfMarkers: boolean,
+  verifiedPlatformLogin: string | null,
 ): MrThreadFact['authorClass'] {
+  const authorLogin = (user?.username ?? user?.login ?? '').toLowerCase()
+  const platformAuthored =
+    verifiedPlatformLogin !== null && authorLogin === verifiedPlatformLogin.toLowerCase()
   if (selfMarker !== null) {
     const markerPrefix = `<!-- aw-self:${selfMarker}`
-    if (body.includes(`${markerPrefix} -->`) || body.includes(`${markerPrefix}:`)) return 'self'
+    if (
+      platformAuthored &&
+      (body.includes(`${markerPrefix} -->`) || body.includes(`${markerPrefix}:`))
+    ) {
+      return 'self'
+    }
   }
-  const name = user?.username ?? user?.login ?? ''
-  if (name.endsWith('[bot]') || name.endsWith('-bot')) return 'bot'
+  if (trustPlatformSelfMarkers && platformAuthored && PLATFORM_SELF_MARKER_RE.test(body)) {
+    return 'self'
+  }
+  if (authorLogin.endsWith('[bot]') || authorLogin.endsWith('-bot')) return 'bot'
   return 'human'
 }
 
@@ -210,6 +228,8 @@ async function collectThreads(
   deps: MrEnsureConnectionDeps,
   mrRef: string,
   selfMarker: string | null,
+  trustPlatformSelfMarkers: boolean,
+  verifiedPlatformLogin: string | null,
 ): Promise<
   | { readonly ok: true; readonly threads: MrThreadFact[] }
   | {
@@ -256,7 +276,13 @@ async function collectThreads(
         const messages = notes.map((note, index) => ({
           messageRef: String(note.id),
           parentMessageRef: index === 0 ? null : rootRef,
-          authorClass: classifyAuthor(note.author, note.body ?? '', selfMarker),
+          authorClass: classifyAuthor(
+            note.author,
+            note.body ?? '',
+            selfMarker,
+            trustPlatformSelfMarkers,
+            verifiedPlatformLogin,
+          ),
           body: note.body ?? '',
           path: note.position?.new_path ?? null,
           createdAt: note.created_at ?? null,
@@ -293,7 +319,13 @@ async function collectThreads(
     const messages = notes.map((note) => ({
       messageRef: String(note.id),
       parentMessageRef: note.in_reply_to_id === undefined ? null : String(note.in_reply_to_id),
-      authorClass: classifyAuthor(note.user, note.body ?? '', selfMarker),
+      authorClass: classifyAuthor(
+        note.user,
+        note.body ?? '',
+        selfMarker,
+        trustPlatformSelfMarkers,
+        verifiedPlatformLogin,
+      ),
       body: note.body ?? '',
       path: note.path ?? null,
       createdAt: note.created_at ?? null,
@@ -346,13 +378,34 @@ async function collectApprovalHold(
 export async function collectMergeRequestFacts(
   deps: MrEnsureConnectionDeps,
   mrRef: string,
-  options: { readonly selfMarker?: string } = {},
+  options: {
+    readonly selfMarker?: string
+    /** Source observers only: recognize the platform marker family across subscribed Cases. */
+    readonly trustPlatformSelfMarkers?: boolean
+  } = {},
 ): Promise<MrFactsResult> {
   const first = await fetchMrDetail(deps, mrRef)
   if (!first.ok) return { ok: false, code: 'mr-facts-lookup-failed', detail: first.detail }
   const head1 = headOf(first)
 
-  const threads = await collectThreads(deps, mrRef, options.selfMarker ?? null)
+  const verifiedPlatformLogin =
+    options.selfMarker !== undefined || options.trustPlatformSelfMarkers === true
+      ? await probeCodeHostConnection({
+          provider: deps.provider,
+          baseUrl: deps.call.connection.baseUrl,
+          token: deps.call.connection.token,
+          rejectUnauthorized: deps.call.connection.rejectUnauthorized,
+          ...(deps.call.fetchImpl === undefined ? {} : { fetchImpl: deps.call.fetchImpl }),
+        }).then((result) => (result.ok && typeof result.login === 'string' ? result.login : null))
+      : null
+
+  const threads = await collectThreads(
+    deps,
+    mrRef,
+    options.selfMarker ?? null,
+    options.trustPlatformSelfMarkers ?? false,
+    verifiedPlatformLogin,
+  )
   if (!threads.ok) return { ok: false, code: threads.code, detail: threads.detail }
   const approvalHold = await collectApprovalHold(deps, mrRef, first.github)
 

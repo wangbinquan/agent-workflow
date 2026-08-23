@@ -86,8 +86,14 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 7 } as const
+const typeRef = { typeId: 'development', revision: 8 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
+const runtimeEmployeeTypeRefSchema = z
+  .object({ typeId: z.string().min(1), revision: z.number().int().positive() })
+  .strict()
+const isTargetAwarePipeline = (
+  employeeTypeRef: z.infer<typeof runtimeEmployeeTypeRefSchema> | null,
+): boolean => employeeTypeRef?.typeId === 'development' && employeeTypeRef.revision >= 8
 
 const scopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('repository'), repositoryId: z.string().min(1).max(200) }).strict(),
@@ -99,7 +105,7 @@ const scopeSchema = z.discriminatedUnion('kind', [
 
 // Revision 5 retired “global default” from authoring in favor of an explicit
 // task-time repository choice. Runtime codecs are keyed by type id, however,
-// so revision 7 must continue decoding frozen revision-3 employee scopes.
+// so revision 8 must continue decoding frozen revision-3 employee scopes.
 const runtimeScopeSchema = z.discriminatedUnion('kind', [
   ...scopeSchema.options,
   z.object({ kind: z.literal('global') }).strict(),
@@ -2394,6 +2400,7 @@ const runtimePackage = {
           { path: 'status', label: text('门禁结果', 'Gate result'), format: 'text' },
           { path: 'failureTypes', label: text('失败类型', 'Failure types'), format: 'list' },
           { path: 'headSha', label: text('对应提交', 'Commit'), format: 'short-hash' },
+          { path: 'targetSha', label: text('目标提交', 'Target commit'), format: 'short-hash' },
         ],
       },
       {
@@ -2602,12 +2609,6 @@ const runtimePackage = {
             deliveryClass: 'review',
           },
           {
-            eventTypeId: 'development.pipeline-check-due',
-            subjectPath: '$.mergeRequestRef',
-            sourceProfileRef: null,
-            deliveryClass: 'pipeline',
-          },
-          {
             eventTypeId: 'development.conflict-updated',
             subjectPath: '$.mergeRequestRef',
             sourceProfileRef: null,
@@ -2618,6 +2619,19 @@ const runtimePackage = {
             subjectPath: '$.mergeRequestRef',
             sourceProfileRef: null,
             deliveryClass: 'terminal',
+          },
+        ],
+      },
+      {
+        ruleId: 'watch-pipeline-gate',
+        contextTypeId: 'development.pipeline',
+        whenState: 'active',
+        subscriptions: [
+          {
+            eventTypeId: 'development.pipeline-check-due',
+            subjectPath: '$.mergeRequestRef',
+            sourceProfileRef: null,
+            deliveryClass: 'pipeline',
           },
         ],
       },
@@ -2654,7 +2668,11 @@ const runtimePackage = {
         eventTypeId: 'development.review-updated',
         priority: 900,
         preemptsContinuation: true,
-        requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
+        requiredContextTypes: [
+          'development.issue-handling',
+          'development.merge-request',
+          'development.pipeline',
+        ],
         capabilityWorkItemRef: 'classify-feedback',
         workItemRef: 'observe-mr',
         slotRef: 'system',
@@ -2665,7 +2683,11 @@ const runtimePackage = {
         eventTypeId: 'development.pipeline-check-due',
         priority: 700,
         preemptsContinuation: false,
-        requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
+        requiredContextTypes: [
+          'development.issue-handling',
+          'development.merge-request',
+          'development.pipeline',
+        ],
         workItemRef: 'collect-pipeline',
         slotRef: 'default',
         allowedEffectKinds: [],
@@ -2675,7 +2697,11 @@ const runtimePackage = {
         eventTypeId: 'development.conflict-updated',
         priority: 800,
         preemptsContinuation: true,
-        requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
+        requiredContextTypes: [
+          'development.issue-handling',
+          'development.merge-request',
+          'development.pipeline',
+        ],
         capabilityWorkItemRef: 'repair-conflict',
         workItemRef: 'observe-mr',
         slotRef: 'system',
@@ -2686,7 +2712,7 @@ const runtimePackage = {
         eventTypeId: 'development.lifecycle-updated',
         priority: 1_000,
         preemptsContinuation: true,
-        requiredContextTypes: ['development.merge-request'],
+        requiredContextTypes: ['development.merge-request', 'development.pipeline'],
         workItemRef: 'observe-mr',
         slotRef: 'system',
         allowedEffectKinds: [],
@@ -2969,11 +2995,16 @@ const changeCandidateContextSchema = z
   })
   .strict()
 
-const pipelineContextSchema = z
+export const pipelineContextSchema = z
   .object({
     status: z.enum(['pending', 'passed', 'failed']),
     mergeRequestRef: z.string().min(1).max(1_000),
     headSha: z.string().regex(/^[a-f0-9]{40}$/),
+    targetSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable()
+      .default(null),
     evidenceArtifactRef: z.string().regex(/^\.agent-workflow\/pipeline\/[a-zA-Z0-9._-]+\//),
     failureTypes: z.array(pipelineFailureTypeSchema),
   })
@@ -3615,6 +3646,41 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     if (schema === undefined) throw new Error(`unsupported development context: ${contextTypeId}`)
     return JSON.stringify(schema.parse(JSON.parse(stateJson) as unknown))
   },
+  resolveExternalSubjectBindingsJson(contextTypeId, stateJson) {
+    if (contextTypeId === 'development.merge-request') {
+      const state = mergeRequestContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status !== 'active') return '[]'
+      return JSON.stringify([
+        {
+          eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
+          subject: { typeId: 'merge-request', subjectRef: state.mergeRequestRef },
+        },
+      ])
+    }
+    if (contextTypeId === 'development.delegation') {
+      const state = delegationContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status === 'satisfied' || state.status === 'failed') return '[]'
+      return JSON.stringify(
+        state.members
+          .filter((member) => member.state === 'waiting')
+          .map((member) => ({
+            eventTypeRef: { id: 'development.employee-result', revision: 1 },
+            subject: { typeId: 'employee-invocation', subjectRef: member.invocationRef },
+          })),
+      )
+    }
+    if (contextTypeId === 'development.approval') {
+      const state = approvalContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status !== 'pending' || state.subjectRef === null) return '[]'
+      return JSON.stringify([
+        {
+          eventTypeRef: { id: 'development.approval-updated', revision: 1 },
+          subject: { typeId: 'external-approval', subjectRef: state.subjectRef },
+        },
+      ])
+    }
+    return '[]'
+  },
   resolveAttentionSubjectsJson(contextTypeId, stateJson) {
     if (contextTypeId === 'development.merge-request') {
       const state = mergeRequestContextSchema.parse(JSON.parse(stateJson) as unknown)
@@ -3622,7 +3688,6 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       return JSON.stringify(
         [
           { id: 'development.review-updated', revision: 2 },
-          { id: 'development.pipeline-check-due', revision: 1 },
           { id: 'development.conflict-updated', revision: 2 },
           { id: 'development.lifecycle-updated', revision: 2 },
         ].map((eventTypeRef) => ({
@@ -3630,6 +3695,16 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           subject: { typeId: 'merge-request', subjectRef: state.mergeRequestRef },
         })),
       )
+    }
+    if (contextTypeId === 'development.pipeline') {
+      const state = pipelineContextSchema.parse(JSON.parse(stateJson) as unknown)
+      if (state.status !== 'pending') return '[]'
+      return JSON.stringify([
+        {
+          eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
+          subject: { typeId: 'merge-request', subjectRef: state.mergeRequestRef },
+        },
+      ])
     }
     if (contextTypeId === 'development.delegation') {
       const state = delegationContextSchema.parse(JSON.parse(stateJson) as unknown)
@@ -3709,6 +3784,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const request = z
       .object({
         schemaVersion: z.literal(1),
+        employeeTypeRef: runtimeEmployeeTypeRefSchema.nullable().default(null),
         caseRef: z.string().min(1),
         roundRef: z.string().min(1),
         executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
@@ -3731,6 +3807,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const contexts = z
       .array(z.object({ typeId: z.string(), stateJson: z.string() }).passthrough())
       .parse(JSON.parse(request.contextsJson) as unknown)
+    const targetAwarePipeline = isTargetAwarePipeline(request.employeeTypeRef)
     const issue = contexts.find((context) => context.typeId === 'development.issue-handling')
     const mergeRequest = contexts.find((context) => context.typeId === 'development.merge-request')
     const pipeline = contexts.find((context) => context.typeId === 'development.pipeline')
@@ -3943,7 +4020,9 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         request.workItemRef === 'prepare-approval'
           ? 'Produce one development.approval context patch with status=draft. mergeRequestRef and headSha must exactly equal the frozen current MR, adapterRef must exactly equal connectionRef, approvalType must be gate-change, validatedDraftRef must identify the strict approval draft envelope, and all submission/observation fields must be null. Do not submit the approval and do not access credentials.'
           : request.workItemRef === 'collect-pipeline'
-            ? 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes. Do not choose another download path.'
+            ? targetAwarePipeline
+              ? 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head and target SHA, pending/passed/failed status, evidence path, and closed failureTypes. A provider snapshot not bound to both the frozen head and target must remain pending. Pending and passed must have no failureTypes. Do not choose another download path.'
+              : 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes. Do not choose another download path.'
             : request.workItemRef === 'classify-pipeline'
               ? `Read pipeline evidence only from platformPaths.pipelineDirectory and classify it using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier classifier-tool type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
               : request.workItemRef === 'repair-pipeline'
@@ -3966,6 +4045,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const request = z
       .object({
         schemaVersion: z.literal(1),
+        employeeTypeRef: runtimeEmployeeTypeRefSchema.nullable().default(null),
         workItemRef: z.string().min(1),
         toolSlotRef: z.string().min(1),
         connectionRef: z
@@ -3978,6 +4058,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
+    const targetAwarePipeline = isTargetAwarePipeline(request.employeeTypeRef)
     const parsedOutput = reactionOutputSchema.parse(JSON.parse(request.outputJson) as unknown)
     const output = {
       ...parsedOutput,
@@ -4175,6 +4256,18 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         ) {
           throw new Error('pipeline evidence does not belong to the current MR head')
         }
+        if (targetAwarePipeline && pipeline.targetSha !== mergeRequest.targetSha) {
+          throw new Error('pipeline evidence does not belong to the current MR target')
+        }
+        if (
+          targetAwarePipeline &&
+          mergeRequest.targetSha === null &&
+          pipeline.status !== 'pending'
+        ) {
+          throw new Error(
+            'pipeline evidence must remain pending while the current MR target is unknown',
+          )
+        }
         if (
           (pipeline.status === 'passed' && pipeline.failureTypes.length > 0) ||
           (pipeline.status === 'pending' && pipeline.failureTypes.length > 0) ||
@@ -4336,6 +4429,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const request = z
       .object({
         schemaVersion: z.literal(1),
+        employeeTypeRef: runtimeEmployeeTypeRefSchema.nullable().default(null),
         workItemRef: z.string().min(1),
         toolSlotRef: z.string().min(1),
         outputJson: z.string().min(2),
@@ -4523,7 +4617,64 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         .nullable()
         .parse(proposedState('development.delegation'))
       if (delegation?.status === 'satisfied') {
-        nextWorkItemRef = 'collect-pipeline'
+        // A child employee completing invalidates the pipeline failure snapshot
+        // that caused the delegation, but it does not prove that the provider
+        // has already published a replacement run. Recollecting synchronously
+        // here can observe the same red snapshot and immediately delegate the
+        // same problem again, creating an unbounded Case/round/task loop. Mark
+        // the exact head pending, retire the stale classified problem set, and
+        // let the normal pipeline Attention wake the Case when fresh provider
+        // evidence exists.
+        const currentPipeline = contexts.find(
+          (context) => context.typeId === 'development.pipeline',
+        )
+        if (currentPipeline !== undefined) {
+          const pipeline = pipelineContextSchema.parse(
+            JSON.parse(currentPipeline.stateJson) as unknown,
+          )
+          settlementPatches.push({
+            contextId: currentPipeline.id,
+            contextTypeId: 'development.pipeline',
+            schemaVersion: 1,
+            expectedRevision: currentPipeline.revision,
+            lifecycleState: 'active',
+            stateJson: JSON.stringify(
+              pipelineContextSchema.parse({
+                ...pipeline,
+                status: 'pending',
+                failureTypes: [],
+              }),
+            ),
+            artifactRefs: currentPipeline.artifactRefs,
+          })
+        }
+        const currentProblemSet = [...contexts]
+          .reverse()
+          .find((context) => context.typeId === 'development.problem-set')
+        if (currentProblemSet !== undefined) {
+          const problemSet = problemSetContextSchema.parse(
+            JSON.parse(currentProblemSet.stateJson) as unknown,
+          )
+          if (problemSet.source === 'pipeline' && problemSet.status === 'active') {
+            settlementPatches.push({
+              contextId: currentProblemSet.id,
+              contextTypeId: 'development.problem-set',
+              schemaVersion: 1,
+              expectedRevision: currentProblemSet.revision,
+              lifecycleState: 'terminal',
+              stateJson: JSON.stringify(
+                problemSetContextSchema.parse({
+                  ...problemSet,
+                  status: 'resolved',
+                  remainingTypes: [],
+                }),
+              ),
+              artifactRefs: currentProblemSet.artifactRefs,
+            })
+          }
+        }
+        caseState = 'waiting'
+        nextWorkItemRef = null
       } else if (delegation?.status === 'failed') {
         caseState = 'blocked'
         nextWorkItemRef = null

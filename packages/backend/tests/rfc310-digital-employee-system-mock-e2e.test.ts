@@ -522,6 +522,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           const mrState = JSON.parse(mr.stateJson) as {
             mergeRequestRef: string
             headSha: string
+            targetSha: string | null
           }
           const sink = join(scene.workspacePath, pipelineMount)
           expect(inputEnvelope.contractInput.pipelineDirectory).toBe(pipelineMount)
@@ -539,16 +540,39 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           ) as {
             completeness: string
             providerHeadSha: string | null
+            targetSha: string | null
             gates: Array<{ required: boolean; status: string; failureCategories: string[] }>
           }
           const required = adapterEnvelope.gates.filter((gate) => gate.required)
-          const passed =
+          const snapshotBound =
             adapterEnvelope.completeness === 'complete' &&
             adapterEnvelope.providerHeadSha === mrState.headSha &&
-            required.every((gate) => gate.status === 'pass')
+            adapterEnvelope.targetSha === mrState.targetSha
+          const stillRunning = required.some((gate) => ['queued', 'running'].includes(gate.status))
+          const passed = snapshotBound && required.every((gate) => gate.status === 'pass')
+          const status = !snapshotBound || stillRunning ? 'pending' : passed ? 'passed' : 'failed'
+          const failureTypes =
+            status !== 'failed'
+              ? []
+              : [
+                  ...new Set(
+                    required.flatMap((gate) =>
+                      gate.status === 'pass'
+                        ? []
+                        : gate.failureCategories.length > 0
+                          ? gate.failureCategories
+                          : ['unknown'],
+                    ),
+                  ),
+                ]
           const evidenceRef = `${pipelineMount}/`
           outputJson = output(plan, {
-            summary: passed ? '当前 head 的全部门禁已通过' : '当前 head 仍有失败门禁',
+            summary:
+              status === 'passed'
+                ? '当前 head 与 target 的全部门禁已通过'
+                : status === 'pending'
+                  ? '门禁事实不完整、仍在运行或未绑定当前 head/target，等待重新采集'
+                  : '当前 head 与 target 仍有失败门禁',
             contextPatches: [
               {
                 contextId: currentPipeline?.id ?? null,
@@ -557,17 +581,12 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
                 expectedRevision: currentPipeline?.revision ?? null,
                 lifecycleState: 'active',
                 stateJson: JSON.stringify({
-                  status: passed ? 'passed' : 'failed',
+                  status,
                   mergeRequestRef: mrState.mergeRequestRef,
                   headSha: mrState.headSha,
+                  targetSha: mrState.targetSha,
                   evidenceArtifactRef: evidenceRef,
-                  failureTypes: [
-                    ...new Set(
-                      required.flatMap((gate) =>
-                        gate.status === 'pass' ? [] : gate.failureCategories,
-                      ),
-                    ),
-                  ],
+                  failureTypes,
                 }),
                 artifactRefs: [evidenceRef],
               },
@@ -576,39 +595,81 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           })
         } else if (plan.workItemRef === 'classify-pipeline') {
           const pipeline = contexts.find((context) => context.typeId === 'development.pipeline')!
+          const currentProblemSet = contexts.find(
+            (context) => context.typeId === 'development.problem-set',
+          )
           const pipelineState = JSON.parse(pipeline.stateJson) as {
             headSha: string
             evidenceArtifactRef: string
             failureTypes: string[]
           }
-          expect(pipelineState.failureTypes).toContain('external-dependency')
+          expect(pipelineState.failureTypes.length).toBeGreaterThan(0)
+          const classifiedTypes = [
+            ...(pipelineState.failureTypes.includes('external-dependency')
+              ? ['external-dependency']
+              : []),
+            ...(pipelineState.failureTypes.some((type) => type !== 'external-dependency')
+              ? ['other-pipeline-failure']
+              : []),
+          ]
           outputJson = output(plan, {
-            summary: '识别到需要另一个仓库先完成的外部依赖',
+            summary: `按冻结顺序识别 ${classifiedTypes.length} 类流水线问题`,
             contextPatches: [
               {
-                contextId: null,
+                contextId: currentProblemSet?.id ?? null,
                 contextTypeId: 'development.problem-set',
                 schemaVersion: 1,
-                expectedRevision: null,
+                expectedRevision: currentProblemSet?.revision ?? null,
                 lifecycleState: 'active',
                 stateJson: JSON.stringify({
                   status: 'active',
                   source: 'pipeline',
                   headSha: pipelineState.headSha,
-                  remainingTypes: ['external-dependency'],
-                  problems: [
-                    {
-                      problemId: `external-dependency:${pipelineState.headSha}`,
-                      type: 'external-dependency',
-                      summary: '依赖仓库需要先完成配套变更',
-                      evidenceArtifactRefs: [pipelineState.evidenceArtifactRef],
-                    },
-                  ],
+                  remainingTypes: classifiedTypes,
+                  problems: classifiedTypes.map((type) => ({
+                    problemId: `${type}:${pipelineState.headSha}`,
+                    type,
+                    summary:
+                      type === 'external-dependency'
+                        ? '依赖仓库需要先完成配套变更'
+                        : '当前仓库需要修复编译失败',
+                    evidenceArtifactRefs: [pipelineState.evidenceArtifactRef],
+                  })),
                 }),
                 artifactRefs: [pipelineState.evidenceArtifactRef],
               },
             ],
             artifactRefs: [pipelineState.evidenceArtifactRef],
+          })
+        } else if (plan.workItemRef === 'repair-pipeline') {
+          const problemSet = contexts.find(
+            (context) => context.typeId === 'development.problem-set',
+          )!
+          const problemState = JSON.parse(problemSet.stateJson) as {
+            remainingTypes: string[]
+            problems: Array<{ type: string; evidenceArtifactRefs: string[] }>
+          }
+          expect(inputEnvelope.contractInput.assignedFailureType).toBe('other-pipeline-failure')
+          expect(problemState.remainingTypes).toContain('other-pipeline-failure')
+          expect(
+            problemState.problems.find((problem) => problem.type === 'other-pipeline-failure')
+              ?.evidenceArtifactRefs,
+          ).toEqual([expect.stringContaining(`${pipelineMount}/`)])
+          const sourceFile = join(scene.workspacePath, 'src', 'Main.java')
+          expect(readFileSync(sourceFile, 'utf8')).toContain('return "hello"')
+          writeFileSync(
+            sourceFile,
+            'public final class Main { public static String greeting() { return "hello pipeline-fixed"; } }\n',
+          )
+          outputJson = output(plan, {
+            summary: '读取完整流水线证据并修复当前仓库编译失败',
+            deliveryContent: {
+              commitMessage:
+                'repair pipeline failure\n\nUse the collected gate evidence to repair the current head.',
+              mergeRequestTitle: 'Implement Java greeting',
+              mergeRequestDescription:
+                '## Summary\n\nImplements the greeting and repairs the collected pipeline failure.',
+            },
           })
         } else if (plan.workItemRef === 'repair-feedback') {
           const problemSet = contexts.find(
@@ -673,6 +734,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           const mergeRequest = contexts.find(
             (context) => context.typeId === 'development.merge-request',
           )!
+          const currentApproval = contexts.find(
+            (context) => context.typeId === 'development.approval',
+          )
           const mergeRequestState = JSON.parse(mergeRequest.stateJson) as {
             mergeRequestRef: string
             headSha: string
@@ -682,10 +746,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             summary: '根据当前 MR head 生成确定性审批草稿',
             contextPatches: [
               {
-                contextId: null,
+                contextId: currentApproval?.id ?? null,
                 contextTypeId: 'development.approval',
                 schemaVersion: 1,
-                expectedRevision: null,
+                expectedRevision: currentApproval?.revision ?? null,
                 lifecycleState: 'active',
                 stateJson: JSON.stringify({
                   status: 'draft',
@@ -762,6 +826,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       ['repo-system-mock-dependency', 'opened'],
       ['repo-system-mock-delivery-only', 'opened'],
     ])
+    const approvalRequiredRepositoryIds = new Set(['repo-system-mock'])
     const mrHeads = new Map<string, string>()
     const mrRefs = new Map<string, string>()
     const mrDescriptions = new Map<string, string>()
@@ -897,7 +962,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
               targetBranch: 'main',
               draft: false,
               mergeableState: 'mergeable' as const,
-              approvalHold: repositoryId === 'repo-system-mock',
+              approvalHold: approvalRequiredRepositoryIds.has(repositoryId),
               mergedCommitSha: state === 'merged' ? head : null,
               unresolvedReviewCount: 0,
               reviewThreads: [],
@@ -1335,10 +1400,26 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       const caseDiagnostics = cases.map((candidate) => {
         const candidateProjection = JSON.parse(
           runtime.queries.getCase(candidate.id).projectionJson,
-        ) as { rounds?: unknown[] }
+        ) as { rounds?: Array<Record<string, unknown>> }
+        const summarizeRound = (round: Record<string, unknown> | undefined) =>
+          round === undefined
+            ? null
+            : {
+                id: round.id,
+                workItemRef: round.workItemRef,
+                state: round.state,
+                executionRef: round.executionRef,
+                attemptOrdinal: round.attemptOrdinal,
+                outputJson:
+                  typeof round.outputJson === 'string'
+                    ? round.outputJson.slice(0, 2_000)
+                    : round.outputJson,
+              }
+        const rounds = candidateProjection.rounds ?? []
         return {
           ...candidate,
-          recentRounds: candidateProjection.rounds?.slice(0, 3) ?? [],
+          activeRound: summarizeRound(rounds.find((round) => round.id === candidate.activeRoundId)),
+          recentRounds: rounds.slice(-3).map(summarizeRound),
         }
       })
       const pendingOutbox = db
@@ -1416,6 +1497,15 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       executionRef: 'system-mock-execution-2',
     })
     const parentMrHead = mrHeads.get('repo-system-mock')!
+    const initialPendingApproval = projection.contexts.find(
+      (context) => context.typeId === 'development.approval',
+    )!
+    expect(initialPendingApproval.state).toMatchObject({
+      status: 'pending',
+      headSha: parentMrHead,
+      externalRequestRef: 'APP-00001',
+    })
+    const initialApprovalKey = String(initialPendingApproval.state.idempotencyKey)
     const mr = projection.contexts.find(
       (context) => context.typeId === 'development.merge-request',
     )!
@@ -1452,9 +1542,147 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       ).case.id,
     ).toBe(caseId)
 
-    // The first parent pipeline reports an external dependency. The fixed
-    // type package must select collaboration, never ask the Agent to invent a
-    // repair strategy or choose a target employee.
+    const pipelineClassifierCount = () =>
+      projection.rounds.filter((round) => round.workItemRef === 'classify-pipeline').length
+    const classifierCountBeforeInconclusiveFacts = pipelineClassifierCount()
+    const emitParentPipelineWake = (suffix: string, summary: string, occurredAt: number) => {
+      eventCenter.commands.observe({
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
+        subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
+        occurredAt,
+        dedupeKey: `pipeline:${parentMrHead}:${suffix}`,
+        summary,
+        payloadArtifactRef: null,
+      })
+    }
+
+    // Provider facts that are partial, temporarily unavailable, or bound to a
+    // different head are all inconclusive. They must remain pending: neither
+    // "all pass" nor the failure classifier may run from those snapshots.
+    await suite.client.seedDevelopmentPipeline({
+      headSha: parentMrHead,
+      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
+      partial: true,
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'pass',
+          runRef: 'run-partial-42',
+          attempt: 1,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [],
+        },
+      ],
+    })
+    emitParentPipelineWake('partial', 'provider omitted the head binding', Date.now())
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({ status: 'pending', headSha: parentMrHead, failureTypes: [] })
+    expect(pipelineClassifierCount()).toBe(classifierCountBeforeInconclusiveFacts)
+
+    const requestsBeforeOutage = (await suite.client.requests('development-pipeline')).filter(
+      (request) => request.path.endsWith(`/pipelines/${parentMrHead}`),
+    ).length
+    await suite.client.addFault({
+      service: 'development-pipeline',
+      method: 'GET',
+      pathPrefix: `/development-pipeline/pipelines/${parentMrHead}`,
+      status: 503,
+      times: 1,
+    })
+    emitParentPipelineWake(
+      'transient-outage',
+      'provider returns one transient outage before recovering',
+      Date.now() + 1,
+    )
+    await driveUntilIdle(2_000)
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    expect(projection.case).toMatchObject({ state: 'waiting', blockReason: null })
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({ status: 'pending', headSha: parentMrHead, failureTypes: [] })
+    expect(pipelineClassifierCount()).toBe(classifierCountBeforeInconclusiveFacts)
+    const requestsAfterOutage = (await suite.client.requests('development-pipeline')).filter(
+      (request) => request.path.endsWith(`/pipelines/${parentMrHead}`),
+    ).length
+    expect(requestsAfterOutage - requestsBeforeOutage).toBeGreaterThanOrEqual(2)
+
+    const wrongProviderHead = 'f'.repeat(40)
+    await suite.client.seedDevelopmentPipeline({
+      headSha: parentMrHead,
+      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
+      headRace: { flipAfterReads: 0, newHeadSha: wrongProviderHead },
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'pass',
+          runRef: 'run-wrong-head-42',
+          attempt: 1,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [],
+        },
+      ],
+    })
+    emitParentPipelineWake(
+      'wrong-head',
+      'provider returned a different head than the MR snapshot',
+      Date.now() + 2,
+    )
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({ status: 'pending', headSha: parentMrHead, failureTypes: [] })
+    expect(pipelineClassifierCount()).toBe(classifierCountBeforeInconclusiveFacts)
+
+    const expectedTargetSha = git(baselineRepo, 'rev-parse', 'HEAD')
+    const wrongProviderTarget = 'e'.repeat(40)
+    await suite.client.seedDevelopmentPipeline({
+      headSha: parentMrHead,
+      targetSha: expectedTargetSha,
+      targetRace: { flipAfterReads: 0, newTargetSha: wrongProviderTarget },
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'pass',
+          runRef: 'run-wrong-target-42',
+          attempt: 1,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [],
+        },
+      ],
+    })
+    emitParentPipelineWake(
+      'wrong-target',
+      'provider returned gates bound to an advanced target snapshot',
+      Date.now() + 3,
+    )
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({
+      status: 'pending',
+      headSha: parentMrHead,
+      targetSha: expectedTargetSha,
+      failureTypes: [],
+    })
+    expect(pipelineClassifierCount()).toBe(classifierCountBeforeInconclusiveFacts)
+
+    // The first parent pipeline reports both an external dependency and an
+    // ordinary current-repository compile failure. The fixed route order must
+    // run collaboration first, then the configured repair Agent; neither the
+    // classifier nor the Agent may choose the next handler.
+    const largeLogBytes = 2 * 1024 * 1024 + 17
     await suite.client.seedDevelopmentPipeline({
       headSha: parentMrHead,
       targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
@@ -1469,6 +1697,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           failureCategories: ['external-dependency'],
           logs: [{ logId: 'dependency-output', bytes: 4096 }],
         },
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'fail',
+          runRef: 'run-compile-42',
+          attempt: 1,
+          retryability: 'safe',
+          failureCategories: ['compile-error'],
+          logs: [{ logId: 'compile-failure-output', bytes: largeLogBytes }],
+        },
       ],
     })
     eventCenter.commands.observe({
@@ -1476,8 +1714,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
       occurredAt: Date.now(),
-      dedupeKey: `pipeline:${parentMrHead}:external-dependency`,
-      summary: 'pipeline requires a dependency repository change',
+      dedupeKey: `pipeline:${parentMrHead}:external-dependency-and-compile`,
+      summary: 'pipeline requires a dependency repository change and a local compile repair',
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
@@ -1573,23 +1811,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       summary: 'dependency MR merged by its committer',
       payloadArtifactRef: null,
     })
-    const largeLogBytes = 2 * 1024 * 1024 + 17
-    await suite.client.seedDevelopmentPipeline({
-      headSha: parentMrHead,
-      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
-      gates: [
-        {
-          gateKey: 'compile',
-          required: true,
-          status: 'pass',
-          runRef: 'run-compile-42',
-          attempt: 2,
-          retryability: 'safe',
-          failureCategories: [],
-          logs: [{ logId: 'compile-output', bytes: largeLogBytes }],
-        },
-      ],
-    })
     await driveUntilIdle()
     dependencyProjection = JSON.parse(
       runtime.queries.getCase(dependencyCaseId).projectionJson,
@@ -1600,20 +1821,105 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     expect(
       projection.contexts.find((context) => context.typeId === 'development.delegation')?.state,
     ).toMatchObject({ status: 'satisfied' })
+    expect(mrHeads.get('repo-system-mock')).toBe(parentMrHead)
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({ status: 'pending', headSha: parentMrHead, failureTypes: [] })
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.problem-set')?.state,
+    ).toMatchObject({ status: 'resolved', remainingTypes: [] })
+
+    // Fresh provider evidence now confirms that the cross-repository problem
+    // is gone while the ordinary compile failure remains. The pending pipeline
+    // Attention resumes exactly once and routes that frozen fallback category
+    // to the configured current-repository repair Agent.
+    await suite.client.seedDevelopmentPipeline({
+      headSha: parentMrHead,
+      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'fail',
+          runRef: 'run-compile-42',
+          attempt: 2,
+          retryability: 'safe',
+          failureCategories: ['compile-error'],
+          logs: [{ logId: 'compile-failure-output', bytes: largeLogBytes }],
+        },
+      ],
+    })
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
+      subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
+      occurredAt: Date.now() + 3,
+      dedupeKey: `pipeline:${parentMrHead}:compile-only`,
+      summary: 'dependency is satisfied and the current repository compile gate remains red',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    const repairedParentMrHead = mrHeads.get('repo-system-mock')!
+    expect(repairedParentMrHead).not.toBe(parentMrHead)
+    expect(git(remoteRepo, 'show', `${repairedParentMrHead}:src/Main.java`)).toContain(
+      'return "hello pipeline-fixed"',
+    )
+    expect(
+      [...projection.rounds].reverse().find((round) => round.workItemRef === 'repair-pipeline'),
+    ).toMatchObject({ state: 'completed' })
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({ status: 'pending', headSha: repairedParentMrHead })
+
+    await suite.client.seedDevelopmentPipeline({
+      headSha: repairedParentMrHead,
+      targetSha: git(baselineRepo, 'rev-parse', 'HEAD'),
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'pass',
+          runRef: 'run-compile-42',
+          attempt: 3,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [{ logId: 'compile-output', bytes: 1024 }],
+        },
+      ],
+    })
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
+      subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
+      occurredAt: Date.now() + 4,
+      dedupeKey: `pipeline:${repairedParentMrHead}:pass`,
+      summary: 'repaired parent repository pipeline passed',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
     const pendingApproval = projection.contexts.find(
       (context) => context.typeId === 'development.approval',
     )!
     expect(pendingApproval.state).toMatchObject({
       status: 'pending',
+      headSha: repairedParentMrHead,
       adapterRef: approvalAdapterRef,
-      externalRequestRef: 'APP-00001',
+      externalRequestRef: 'APP-00002',
     })
+    expect(String(pendingApproval.state.idempotencyKey)).not.toBe(initialApprovalKey)
     const approvalSnapshot = await suite.client.snapshot()
-    expect(approvalSnapshot.approvals).toHaveLength(1)
-    expect(approvalSnapshot.approvals[0]).toMatchObject({
-      idempotencyKey: pendingApproval.state.idempotencyKey,
-      correlationRef: pendingApproval.state.correlationRef,
-    })
+    expect(approvalSnapshot.approvals).toHaveLength(2)
+    expect(approvalSnapshot.approvals).toContainEqual(
+      expect.objectContaining({ idempotencyKey: initialApprovalKey }),
+    )
+    expect(approvalSnapshot.approvals).toContainEqual(
+      expect.objectContaining({
+        idempotencyKey: pendingApproval.state.idempotencyKey,
+        correlationRef: pendingApproval.state.correlationRef,
+      }),
+    )
 
     // Make the next authoritative approval observation terminal, and make the
     // parent pipeline green before that result resumes collect-pipeline.
@@ -1628,7 +1934,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         typeId: 'external-approval',
         subjectRef: String(pendingApproval.state.subjectRef),
       },
-      occurredAt: Date.now() + 3,
+      occurredAt: Date.now() + 5,
       dedupeKey: `approval:${pendingApproval.state.correlationRef}:approved`,
       summary: 'external dependency change approved',
       payloadArtifactRef: null,
@@ -1637,7 +1943,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.approval')?.state,
-    ).toMatchObject({ status: 'approved', evidenceRef: 'approval-evidence:APP-00001' })
+    ).toMatchObject({
+      status: 'approved',
+      evidenceRef: `approval-evidence:${String(pendingApproval.state.externalRequestRef)}`,
+    })
     const readyMr = projection.contexts.find(
       (context) => context.typeId === 'development.merge-request',
     )!
@@ -1660,18 +1969,99 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       caseId,
       'logs',
       'compile',
-      'compile-output.log',
+      'compile-failure-output.log',
     )
     expect(existsSync(downloadedLog)).toBe(true)
     expect(statSync(downloadedLog).size).toBe(largeLogBytes)
+
+    // A target-only advance invalidates both the ready projection and the
+    // previously green gate snapshot even though the source head is unchanged.
+    // The Case may become ready again only after a gate snapshot bound to the
+    // new target arrives.
+    writeFileSync(join(baselineRepo, 'TARGET.md'), '# advanced target\n')
+    git(baselineRepo, 'add', 'TARGET.md')
+    git(
+      baselineRepo,
+      '-c',
+      'user.email=target-advance@example.com',
+      '-c',
+      'user.name=target-advance',
+      'commit',
+      '-q',
+      '-m',
+      'advance target branch',
+    )
+    const advancedTargetSha = git(baselineRepo, 'rev-parse', 'HEAD')
+    expect(advancedTargetSha).not.toBe(expectedTargetSha)
+    eventCenter.commands.observe({
+      sourceRef: { id: 'code-host.activity', revision: 1 },
+      eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
+      subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
+      occurredAt: Date.now() + 6,
+      dedupeKey: `target:${repairedParentMrHead}:${advancedTargetSha}`,
+      summary: 'target branch advanced while the source head stayed unchanged',
+      payloadArtifactRef: null,
+    })
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.merge-request')?.state,
+    ).toMatchObject({
+      headSha: repairedParentMrHead,
+      targetSha: advancedTargetSha,
+      readyToMerge: false,
+    })
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({
+      status: 'pending',
+      headSha: repairedParentMrHead,
+      targetSha: advancedTargetSha,
+      failureTypes: [],
+    })
+
+    await suite.client.seedDevelopmentPipeline({
+      headSha: repairedParentMrHead,
+      targetSha: advancedTargetSha,
+      gates: [
+        {
+          gateKey: 'compile',
+          required: true,
+          status: 'pass',
+          runRef: 'run-compile-target-advanced-42',
+          attempt: 4,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [{ logId: 'compile-output-target-advanced', bytes: 1024 }],
+        },
+      ],
+    })
+    emitParentPipelineWake(
+      'target-advanced-pass',
+      'the source head passed against the advanced target snapshot',
+      Date.now() + 7,
+    )
+    await driveUntilIdle()
+    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
+    ).toMatchObject({
+      status: 'passed',
+      headSha: repairedParentMrHead,
+      targetSha: advancedTargetSha,
+      failureTypes: [],
+    })
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.merge-request')?.state,
+    ).toMatchObject({ readyToMerge: true, targetSha: advancedTargetSha })
 
     mrStates.set('repo-system-mock', 'merged')
     eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
-      occurredAt: Date.now() + 4,
-      dedupeKey: `lifecycle:${parentMrHead}:merged`,
+      occurredAt: Date.now() + 8,
+      dedupeKey: `lifecycle:${repairedParentMrHead}:merged`,
       summary: 'MR merged by committer',
       payloadArtifactRef: null,
     })
@@ -1681,6 +2071,159 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     expect(
       projection.contexts.find((context) => context.typeId === 'development.merge-request')?.state,
     ).toMatchObject({ status: 'merged' })
+
+    // Terminal approval receipts are business-distinct, while a transport
+    // outage is not terminal at all. Each Case gets its own repository/MR so
+    // the OS external-subject uniqueness fence stays real. The first Case also
+    // sees one injected 503 and proves the pending Attention can wake it again
+    // without a manual resume.
+    for (const [index, approvalStatus] of (
+      ['rejected', 'expired', 'unavailable'] as const
+    ).entries()) {
+      const terminalRepositoryId = `repo-system-mock-approval-${approvalStatus}`
+      const terminalBaselineRepo = join(root, `approval-${approvalStatus}-baseline`)
+      const terminalRemoteRepo = join(root, `approval-${approvalStatus}-remote.git`)
+      mkdirSync(terminalBaselineRepo, { recursive: true })
+      git(terminalBaselineRepo, 'init', '-q', '-b', 'main')
+      writeFileSync(
+        join(terminalBaselineRepo, 'README.md'),
+        `# ${approvalStatus} approval baseline\n`,
+      )
+      git(terminalBaselineRepo, 'add', '-A')
+      git(
+        terminalBaselineRepo,
+        '-c',
+        'user.email=system-mock@example.com',
+        '-c',
+        'user.name=system-mock',
+        'commit',
+        '-q',
+        '-m',
+        `${approvalStatus} approval baseline`,
+      )
+      mkdirSync(terminalRemoteRepo, { recursive: true })
+      git(terminalRemoteRepo, 'init', '-q', '--bare')
+      db.insert(cachedRepos)
+        .values({
+          id: terminalRepositoryId,
+          urlHash: `rfc310-system-mock-approval-${approvalStatus}`,
+          urlEnc: null,
+          urlRedacted: terminalRemoteRepo,
+          localPath: terminalBaselineRepo,
+          defaultBranch: 'main',
+          lastFetchedAt: 1,
+          createdAt: 1,
+        })
+        .run()
+      repositoryFixtures.set(terminalRepositoryId, {
+        baselineRepo: terminalBaselineRepo,
+        remoteRepo: terminalRemoteRepo,
+        mrRef: String(310 + index),
+      })
+      mrStates.set(terminalRepositoryId, 'opened')
+      approvalRequiredRepositoryIds.add(terminalRepositoryId)
+
+      const terminalEmployee = employeeOs.commands.createEmployee({
+        typeRef,
+        actorUserId: 'system-mock-author',
+        body: {
+          name: `${approvalStatus} approval employee`,
+          jobTemplateRef: jobRef,
+          workScope: { kind: 'repository', repositoryId: terminalRepositoryId },
+          toolOverrides: [],
+        },
+      })
+      const terminalLaunch = runtime.commands.launchWork({
+        employeeId: terminalEmployee.id,
+        actorUserId: 'approval-requester',
+        intake: {
+          name: `Approval ${approvalStatus} branch`,
+          kind: 'external-id',
+          target: { repositoryId: terminalRepositoryId },
+          body: null,
+          externalId: 'REQ-OS-42',
+          uploads: [],
+          idempotencyKey: `REQ-OS-42:approval-${approvalStatus}`,
+        },
+      })
+      await driveUntilIdle()
+      let terminalProjection = JSON.parse(
+        runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+      ) as typeof projection
+      let terminalApproval = terminalProjection.contexts.find(
+        (context) => context.typeId === 'development.approval',
+      )!
+      expect(terminalApproval.state).toMatchObject({
+        status: 'pending',
+        adapterRef: approvalAdapterRef,
+      })
+
+      if (approvalStatus === 'rejected') {
+        await suite.client.addFault({
+          service: 'development-approval',
+          method: 'GET',
+          pathPrefix: `/development-approval/approvals/${String(
+            terminalApproval.state.correlationRef,
+          )}`,
+          status: 503,
+          times: 1,
+        })
+        eventCenter.commands.observe({
+          sourceRef: { id: 'development.approval-state', revision: 1 },
+          eventTypeRef: { id: 'development.approval-updated', revision: 1 },
+          subject: {
+            typeId: 'external-approval',
+            subjectRef: String(terminalApproval.state.subjectRef),
+          },
+          occurredAt: Date.now() + 100,
+          dedupeKey: `approval:${terminalApproval.state.correlationRef}:transient-outage`,
+          summary: 'one transient approval provider outage',
+          payloadArtifactRef: null,
+        })
+        await driveUntilIdle()
+        terminalProjection = JSON.parse(
+          runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+        ) as typeof projection
+        terminalApproval = terminalProjection.contexts.find(
+          (context) => context.typeId === 'development.approval',
+        )!
+        expect(terminalProjection.case).toMatchObject({ state: 'waiting', blockReason: null })
+        expect(terminalApproval.state).toMatchObject({ status: 'pending' })
+      }
+
+      await suite.client.seedDevelopmentApproval({
+        idempotencyKey: String(terminalApproval.state.idempotencyKey),
+        statuses: [approvalStatus],
+      })
+      eventCenter.commands.observe({
+        sourceRef: { id: 'development.approval-state', revision: 1 },
+        eventTypeRef: { id: 'development.approval-updated', revision: 1 },
+        subject: {
+          typeId: 'external-approval',
+          subjectRef: String(terminalApproval.state.subjectRef),
+        },
+        occurredAt: Date.now() + 200 + index,
+        dedupeKey: `approval:${terminalApproval.state.correlationRef}:${approvalStatus}`,
+        summary: `external approval ended as ${approvalStatus}`,
+        payloadArtifactRef: null,
+      })
+      await driveUntilIdle()
+      terminalProjection = JSON.parse(
+        runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+      ) as typeof projection
+      terminalApproval = terminalProjection.contexts.find(
+        (context) => context.typeId === 'development.approval',
+      )!
+      expect(terminalProjection.case).toMatchObject({
+        state: 'blocked',
+        currentWorkItemRef: 'observe-approval',
+        blockReason: expect.stringContaining(approvalStatus),
+      })
+      expect(terminalApproval.state).toMatchObject({
+        status: approvalStatus,
+        evidenceRef: null,
+      })
+    }
 
     // A second employee intentionally has none of the review, pipeline,
     // conflict, collaboration, or approval lanes configured. It must still

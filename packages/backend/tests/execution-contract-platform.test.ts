@@ -34,6 +34,7 @@ import {
 } from '@/services/digitalEmployeeAgentTemplates'
 import {
   DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,
+  DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID,
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
   DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
   synthesizeDigitalEmployeeScriptHostSnapshot,
@@ -463,6 +464,7 @@ describe('platform execution contracts', () => {
         implementationAgentId: 'employee-implementation-agent',
         implementationAgentName: 'Implementation',
         artifactPort: 'analysis-plan',
+        documentPath: implementationPlanPath,
         reviewTitle: '实现方案评审',
         reviewDescription: '批准后才开始修改代码。',
       }),
@@ -472,15 +474,24 @@ describe('platform execution contracts', () => {
       'input',
       'agent-single',
       'review',
+      'script',
       'agent-single',
       'output',
     ])
     expect(host.edges).toContainEqual({
       id: 'e_de_approved_plan',
-      source: { nodeId: '__de_plan_review__', portName: 'approved_doc' },
+      source: { nodeId: DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID, portName: 'stdout' },
       target: {
         nodeId: '__de_agent__',
         portName: DIGITAL_EMPLOYEE_IMPLEMENTATION_PLAN_KEY,
+      },
+    })
+    expect(host.edges).toContainEqual({
+      id: 'e_de_approved_plan_path',
+      source: { nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID, portName: 'approved_doc' },
+      target: {
+        nodeId: DIGITAL_EMPLOYEE_PLAN_READER_NODE_ID,
+        portName: 'approved_plan_path',
       },
     })
     const planningNode = host.nodes.find((node) => node.id === '__de_plan_agent__')

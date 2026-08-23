@@ -3,6 +3,8 @@ import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 
+import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
+
 import type { DbClient } from '@/db/client'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
@@ -18,6 +20,7 @@ import { encodeDevelopmentApprovalSubject } from '../domain/approvalSubject'
 import { canonicalDigest } from '../domain/canonicalJson'
 import {
   approvalContextSchema,
+  pipelineContextSchema,
   problemSetContextSchema,
   reviewResolutionContextSchema,
 } from './employeeTypePackage'
@@ -29,6 +32,10 @@ interface DevelopmentReactionPlan {
   readonly roundRef: string
   readonly executionNonce: string
   readonly caseRef: { readonly id: string }
+  readonly employeeTypeRef?: {
+    readonly typeId: string
+    readonly revision: number
+  } | null
   readonly triggeringEventRef: string
   readonly workItemRef: string
   readonly inputEnvelopeJson: string
@@ -257,6 +264,10 @@ function contextsOf(plan: DevelopmentReactionPlan): Context[] {
   return z.array(contextSchema).parse(JSON.parse(envelope.contextsJson) as unknown)
 }
 
+function isTargetAwarePipelinePlan(plan: DevelopmentReactionPlan): boolean {
+  return plan.employeeTypeRef?.typeId === 'development' && plan.employeeTypeRef.revision >= 8
+}
+
 function issueOf(contexts: readonly Context[]) {
   const context = contexts.find((candidate) => candidate.typeId === 'development.issue-handling')
   if (context === undefined) throw new Error('development issue context is missing')
@@ -279,6 +290,42 @@ function contextPatch(input: {
     stateJson: JSON.stringify(input.state),
     artifactRefs: [...(input.artifactRefs ?? [])],
   }
+}
+
+function pendingPipelinePatch(input: {
+  readonly current: Context | undefined
+  readonly caseId: string
+  readonly active: boolean
+  readonly allowCreate: boolean
+  readonly mergeRequestRef: string
+  readonly headSha: string
+  readonly targetSha: string | null
+}) {
+  if (!input.active) return null
+  if (input.current === undefined && !input.allowCreate) return null
+  if (input.current !== undefined) {
+    const currentState = pipelineContextSchema.parse(JSON.parse(input.current.stateJson) as unknown)
+    if (
+      currentState.mergeRequestRef === input.mergeRequestRef &&
+      currentState.headSha === input.headSha &&
+      currentState.targetSha === input.targetSha
+    ) {
+      return null
+    }
+  }
+  return contextPatch({
+    current: input.current,
+    contextTypeId: 'development.pipeline',
+    lifecycleState: 'active',
+    state: pipelineContextSchema.parse({
+      status: 'pending',
+      mergeRequestRef: input.mergeRequestRef,
+      headSha: input.headSha,
+      targetSha: input.targetSha,
+      evidenceArtifactRef: `${PLATFORM_WORKSPACE_DIR}/pipeline/${stableIdentityComponent(input.caseId)}/`,
+      failureTypes: [],
+    }),
+  })
 }
 
 function platformOutput(
@@ -592,6 +639,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
     async execute(plan) {
       const output = (value: Parameters<typeof platformOutput>[1]) => platformOutput(plan, value)
       const contexts = contextsOf(plan)
+      const targetAwarePipeline = isTargetAwarePipelinePlan(plan)
       if (plan.workItemRef === 'prepare-materials') {
         const issue = issueOf(contexts)
         if (issue.state.request.kind === 'external-id') {
@@ -1067,8 +1115,13 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             })
             if (!observed.ok) {
               return output({
-                status: 'blocked',
-                summary: `外部审批观察失败：${observed.failure.code} · ${observed.failure.remediation}`,
+                // The durable approval Attention remains armed while the
+                // Context is pending. A provider outage is therefore an
+                // inconclusive observation, not a business-terminal failure:
+                // leave the Context untouched and let the next webhook/timer
+                // wake retry the short call without user intervention.
+                status: 'needs-input',
+                summary: `外部审批暂时无法观察：${observed.failure.code} · ${observed.failure.remediation}`,
               })
             }
             status = observed.receipt.status
@@ -1361,6 +1414,9 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             .run()
         })
         const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
+        const currentPipeline = contexts.find(
+          (context) => context.typeId === 'development.pipeline',
+        )
         const mrState = mergeRequestStateSchema.parse({
           status:
             ensured.mr.state === 'opened'
@@ -1385,6 +1441,15 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           targetBranch: row.targetBranch,
           webUrl: ensured.mr.webUrl,
         })
+        const pipelinePatch = pendingPipelinePatch({
+          current: currentPipeline,
+          caseId: plan.caseRef.id,
+          active: mrState.status === 'active',
+          allowCreate: true,
+          mergeRequestRef: mrState.mergeRequestRef,
+          headSha: mrState.headSha,
+          targetSha: targetAwarePipeline ? mrState.targetSha : null,
+        })
         return output({
           summary: ensured.mr.created === true ? '已提交并创建 MR' : '已提交并更新 MR',
           contextPatches: [
@@ -1399,6 +1464,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               lifecycleState: mrState.status === 'active' ? 'active' : 'terminal',
               state: mrState,
             }),
+            ...(pipelinePatch === null ? [] : [pipelinePatch]),
           ],
           effectSuggestions: [
             'source-control.commit',
@@ -1410,6 +1476,9 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
 
       if (plan.workItemRef === 'publish-conflict') {
         const current = contexts.find((context) => context.typeId === 'development.merge-request')
+        const currentPipeline = contexts.find(
+          (context) => context.typeId === 'development.pipeline',
+        )
         if (current === undefined) {
           return output({ status: 'blocked', summary: '缺少需要发布冲突修复的 MR 上下文' })
         }
@@ -1511,6 +1580,15 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           mergeableState: 'unknown',
           readyToMerge: false,
         })
+        const pipelinePatch = pendingPipelinePatch({
+          current: currentPipeline,
+          caseId: plan.caseRef.id,
+          active: next.status === 'active',
+          allowCreate: true,
+          mergeRequestRef: next.mergeRequestRef,
+          headSha: next.headSha,
+          targetSha: targetAwarePipeline ? next.targetSha : null,
+        })
         return output({
           summary: '冲突已由平台形成 merge commit 并推送，等待重新获取 MR 事实',
           contextPatches: [
@@ -1519,6 +1597,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               contextTypeId: 'development.merge-request',
               state: next,
             }),
+            ...(pipelinePatch === null ? [] : [pipelinePatch]),
           ],
           effectSuggestions: ['source-control.commit', 'source-control.push'],
         })
@@ -1526,6 +1605,9 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
 
       if (plan.workItemRef === 'observe-mr' || plan.workItemRef === 'wait-merge') {
         const current = contexts.find((context) => context.typeId === 'development.merge-request')
+        const currentPipeline = contexts.find(
+          (context) => context.typeId === 'development.pipeline',
+        )
         if (current === undefined) {
           return output({ status: 'blocked', summary: '缺少需要看护的 MR 上下文' })
         }
@@ -1632,12 +1714,30 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             factsSnapshot?.headSha === null || factsSnapshot === null
               ? state.reviewThreads
               : factsSnapshot.reviewThreads,
-          readyToMerge: nextHead === state.headSha ? state.readyToMerge : false,
+          readyToMerge:
+            nextHead === state.headSha &&
+            (!targetAwarePipeline ||
+              factsSnapshot === null ||
+              factsSnapshot.targetSha === state.targetSha)
+              ? state.readyToMerge
+              : false,
           targetBranch:
             factsSnapshot?.targetBranch ?? observed.observation.targetBranch ?? state.targetBranch,
           webUrl: observed.observation.webUrl ?? state.webUrl,
           repositoryRef: repositoryId,
           providerMrRef,
+        })
+        const pipelinePatch = pendingPipelinePatch({
+          current: currentPipeline,
+          caseId: plan.caseRef.id,
+          active: next.status === 'active',
+          // Frozen pre-v8 reactions did not include the pipeline Context in
+          // observe-mr plans. Absence there means "not in this plan", not
+          // "missing from the Case", so creating would duplicate identity.
+          allowCreate: false,
+          mergeRequestRef: next.mergeRequestRef,
+          headSha: next.headSha,
+          targetSha: targetAwarePipeline ? next.targetSha : null,
         })
         return output({
           summary:
@@ -1653,6 +1753,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               lifecycleState: next.status === 'active' ? 'waiting' : 'terminal',
               state: next,
             }),
+            ...(pipelinePatch === null ? [] : [pipelinePatch]),
           ],
         })
       }
@@ -1673,11 +1774,19 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
                 .object({
                   status: z.enum(['pending', 'passed', 'failed']),
                   headSha: z.string().regex(/^[a-f0-9]{40}$/),
+                  targetSha: z
+                    .string()
+                    .regex(/^[a-f0-9]{40}$/)
+                    .nullable()
+                    .default(null),
                 })
                 .passthrough()
                 .parse(JSON.parse(pipelineContext.stateJson) as unknown)
         const sameHeadFacts = state.factsHeadSha === state.headSha
         const sameHeadPipeline = pipeline?.headSha === state.headSha
+        const sameTargetPipeline =
+          !targetAwarePipeline ||
+          (state.targetSha !== null && pipeline?.targetSha === state.targetSha)
         const approvalContext = contexts.find(
           (context) => context.typeId === 'development.approval',
         )
@@ -1697,6 +1806,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           state.unresolvedReviewCount === 0 &&
           sameHeadFacts &&
           sameHeadPipeline &&
+          sameTargetPipeline &&
           pipeline?.status === 'passed' &&
           approvalReady
         const next = mergeRequestStateSchema.parse({ ...state, readyToMerge })
@@ -1707,8 +1817,12 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             ? [`仍有 ${state.unresolvedReviewCount} 条未处理检视意见`]
             : []),
           ...(!sameHeadFacts ? ['MR 事实与当前 head 不一致'] : []),
-          ...(!sameHeadPipeline || pipeline?.status !== 'passed'
-            ? ['当前 head 的流水线门禁未通过']
+          ...(!sameHeadPipeline || !sameTargetPipeline || pipeline?.status !== 'passed'
+            ? [
+                targetAwarePipeline
+                  ? '当前 head 与 target 的流水线门禁未通过'
+                  : '当前 head 的流水线门禁未通过',
+              ]
             : []),
           ...(!approvalReady ? ['当前 MR head 的外部审批尚未通过'] : []),
         ]

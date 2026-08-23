@@ -118,7 +118,7 @@ const WORKGROUPS = [
 const DIGITAL_EMPLOYEE = {
   id: 'employee-fixed-repository',
   name: 'Fixed repository employee',
-  typeRef: { typeId: 'development', revision: 7 },
+  typeRef: { typeId: 'development', revision: 8 },
   configuration: {
     displayName: 'Fixed repository employee',
     jobTemplateRef: { id: 'development-job', revision: 1 },
@@ -344,7 +344,7 @@ function installFetch(): FetchCall[] {
         method === 'POST'
       )
         return json({ case: { id: 'employee-case-created' } }, 201)
-      if (decodeURIComponent(url).includes('/api/digital-employee-types/development@7'))
+      if (decodeURIComponent(url).includes('/api/digital-employee-types/development@8'))
         return json(DIGITAL_EMPLOYEE_TYPE)
       if (url.includes('/api/cached-repos')) return json({ items: [] })
       if (url.includes('/api/workflows/wf-1')) return json(WF_DETAIL)

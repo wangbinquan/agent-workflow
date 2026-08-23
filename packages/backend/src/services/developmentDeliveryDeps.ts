@@ -109,7 +109,9 @@ export function buildDevelopmentDeliveryDeps(
           detail: `no code-host binding for repository ${repositoryId}`,
         }
       }
-      const result = await collectMergeRequestFacts(binding, mrRef, { selfMarker })
+      const result = await collectMergeRequestFacts(binding, mrRef, {
+        selfMarker,
+      })
       if (!result.ok) return result
       return {
         ok: true as const,

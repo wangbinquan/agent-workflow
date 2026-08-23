@@ -16,6 +16,8 @@ export interface EventSubscriptionParticipant {
     readonly eventTypeRef: EventExactRef
     readonly subject: EventSubjectRef
     readonly subscriber: EventSubscriberRef
+    /** Defaults to true. Reactivated durable consumers may start from new facts only. */
+    readonly replayLatest?: boolean
   }): EventSubscriptionReceipt
   unsubscribe(subscriptionId: string): EventSubscriptionReceipt
 }

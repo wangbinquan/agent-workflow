@@ -71,9 +71,16 @@ import {
 const subscribePayloadSchema = z
   .object({
     bindingId: z.string().min(1),
+    // Optional for replaying durable outbox rows written before Attention
+    // reactivation became generation-aware. New rows always carry it so a
+    // cancelled identity can enqueue a distinct subscribe effect.
+    contextRevision: z.number().int().positive().optional(),
     eventTypeRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
     subject: z.object({ typeId: z.string().min(1), subjectRef: z.string().min(1) }),
     caseId: z.string().min(1),
+    // Old durable outbox rows predate this flag and keep the historical
+    // late-subscription behavior.
+    replayLatest: z.boolean().default(true),
   })
   .strict()
 
@@ -967,6 +974,7 @@ export class DigitalEmployeeRuntimeService {
         this.#codec(caseRecord.typeRef.typeId).resolveReactionSettlementJson(
           JSON.stringify({
             schemaVersion: 1,
+            employeeTypeRef: caseRecord.typeRef,
             workItemRef: round.workItemRef,
             toolSlotRef: plan.toolSlotRef,
             outputJson: validatedOutputJson,
@@ -1077,20 +1085,19 @@ export class DigitalEmployeeRuntimeService {
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       }
-      const subjects = z
+      const codec = this.#codec(caseRecord.typeRef.typeId)
+      const bindingSubjects = z
         .array(attentionSubjectSchema)
         .parse(
           JSON.parse(
-            this.#codec(caseRecord.typeRef.typeId).resolveAttentionSubjectsJson(
-              context.typeId,
-              context.stateJson,
-            ),
+            codec.resolveExternalSubjectBindingsJson?.(context.typeId, context.stateJson) ??
+              codec.resolveAttentionSubjectsJson(context.typeId, context.stateJson),
           ) as unknown,
         )
         .filter((subject) => eventCapabilityEnabled(subject.eventTypeRef.id))
       const externalSubjects = [
         ...new Map(
-          subjects.map((subject) => [
+          bindingSubjects.map((subject) => [
             `${subject.subject.typeId}\u0000${subject.subject.subjectRef}`,
             subject.subject,
           ]),
@@ -1125,12 +1132,16 @@ export class DigitalEmployeeRuntimeService {
       }
     }
     const existingAttention = this.#store.listAttention(caseRecord.id)
+    const cancelAll = settlement.caseState === 'terminal'
     const desiredIdentities = new Set<string>()
     const attentionUpserts: Array<{
       binding: AttentionBindingRecord
       subscribeOutbox: EmployeeOutboxRecord | null
     }> = []
-    for (const context of contextsAfter) {
+    // Terminal is an absorbing state for Attention. Re-evaluating desired
+    // subjects here can otherwise supersede an already queued unsubscribe and
+    // leave a terminal Case subscribed forever.
+    for (const context of cancelAll ? [] : contextsAfter) {
       const desired = z
         .array(attentionSubjectSchema)
         .parse(
@@ -1164,10 +1175,50 @@ export class DigitalEmployeeRuntimeService {
         const current = existingAttention.find(
           (binding) => binding.desiredIdentityKey === desiredIdentityKey,
         )
-        if (current !== undefined && !['cancel-requested', 'cancelled'].includes(current.state)) {
+        if (current !== undefined) {
+          if (!['cancel-requested', 'cancelled'].includes(current.state)) {
+            attentionUpserts.push({
+              binding: { ...current, contextRevision: context.revision, updatedAt: now },
+              subscribeOutbox: null,
+            })
+            continue
+          }
+          // desired_identity_key is the durable identity of an Attention, not
+          // only of its currently active subscription. A context may become
+          // relevant again after the prior subscription was cancelled (for
+          // example failed pipeline -> child work -> pending pipeline). Reuse
+          // that row and request a fresh subscription; inserting a new id would
+          // violate the identity index and leave the outbox retrying forever.
+          const binding: AttentionBindingRecord = {
+            ...current,
+            contextRevision: context.revision,
+            // A pending unsubscribe is only an intent, not proof that the
+            // Event Center subscription has gone away. Keep its identity while
+            // reactivation supersedes that intent so a second cancellation can
+            // still clean it up if the new subscribe has not run yet.
+            eventSubscriptionId:
+              current.state === 'cancel-requested' ? current.eventSubscriptionId : null,
+            state: 'desired',
+            updatedAt: now,
+          }
+          const payload = {
+            bindingId: binding.id,
+            contextRevision: context.revision,
+            eventTypeRef: subject.eventTypeRef,
+            subject: subject.subject,
+            caseId: caseRecord.id,
+            replayLatest: false,
+          }
           attentionUpserts.push({
-            binding: { ...current, contextRevision: context.revision, updatedAt: now },
-            subscribeOutbox: null,
+            binding,
+            subscribeOutbox: {
+              id: this.#id(),
+              caseId: caseRecord.id,
+              kind: 'event-subscribe',
+              payloadJson: JSON.stringify(payload),
+              dedupeKey: `event-subscribe:${runtimeDigest(payload)}`,
+              attemptCount: 0,
+            },
           })
           continue
         }
@@ -1187,9 +1238,11 @@ export class DigitalEmployeeRuntimeService {
         }
         const payload = {
           bindingId,
+          contextRevision: context.revision,
           eventTypeRef: subject.eventTypeRef,
           subject: subject.subject,
           caseId: caseRecord.id,
+          replayLatest: true,
         }
         attentionUpserts.push({
           binding,
@@ -1204,7 +1257,6 @@ export class DigitalEmployeeRuntimeService {
         })
       }
     }
-    const cancelAll = settlement.caseState === 'terminal'
     const attentionCancellations = existingAttention
       .filter(
         (binding) =>
@@ -1247,6 +1299,7 @@ export class DigitalEmployeeRuntimeService {
 
   #validateRoundOutput(round: ReactionRoundRecord, outputJson: string): string {
     const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
+    const caseRecord = this.getCase(round.caseId)
     const platformValidatedOutput = this.#executionContracts.validateEnvelope({
       direction: 'output',
       contractRef: plan.workContractRef,
@@ -1268,9 +1321,10 @@ export class DigitalEmployeeRuntimeService {
         'output envelope does not belong to the frozen reaction round',
       )
     }
-    return this.#codec(this.getCase(round.caseId).typeRef.typeId).validateReactionOutputJson(
+    return this.#codec(caseRecord.typeRef.typeId).validateReactionOutputJson(
       JSON.stringify({
         schemaVersion: 1,
+        employeeTypeRef: caseRecord.typeRef,
         workItemRef: round.workItemRef,
         toolSlotRef: plan.toolSlotRef,
         connectionRef: plan.connectionRef,
@@ -1750,12 +1804,27 @@ export class DigitalEmployeeRuntimeService {
           eventTypeRef: payload.eventTypeRef,
           subject: payload.subject,
           subscriber: { kind: 'employee-case', subscriberRef: payload.caseId },
+          replayLatest: payload.replayLatest,
         })
         this.#store.activateAttention(payload.bindingId, receipt.subscriptionId, now)
       } else if (outbox.kind === 'event-publish') {
         this.#eventCenter.observe(JSON.parse(outbox.payloadJson) as EventObservationInput)
       } else if (outbox.kind === 'event-unsubscribe') {
         const payload = unsubscribePayloadSchema.parse(JSON.parse(outbox.payloadJson) as unknown)
+        const binding = this.#store
+          .listAttention(outbox.caseId ?? '')
+          .find((candidate) => candidate.id === payload.bindingId)
+        if (
+          binding !== undefined &&
+          (binding.state !== 'cancel-requested' ||
+            binding.eventSubscriptionId !== payload.subscriptionId)
+        ) {
+          // Attention state is the current cancellation authority. A delayed
+          // effect must not cancel a subscription that has since been retained
+          // or replaced by reactivation.
+          this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
+          return 'completed'
+        }
         this.#eventCenter.unsubscribe(payload.subscriptionId)
         this.#store.cancelAttention(payload.bindingId, now)
       } else if (outbox.kind === 'execution-launch') {
@@ -2092,6 +2161,7 @@ export class DigitalEmployeeRuntimeService {
       const executionNonce = runtimeDigest({
         roundId,
         caseRef: { id: caseRecord.id, revision: caseRecord.revision },
+        employeeTypeRef: caseRecord.typeRef,
         inputContexts,
         triggeringEventRef,
         workItemRef: item.workItemRef,
@@ -2107,6 +2177,7 @@ export class DigitalEmployeeRuntimeService {
       ).assembleReactionInputJson(
         JSON.stringify({
           schemaVersion: 1,
+          employeeTypeRef: caseRecord.typeRef,
           caseRef: caseRecord.id,
           roundRef: roundId,
           executionNonce,
@@ -2161,6 +2232,7 @@ export class DigitalEmployeeRuntimeService {
         roundRef: roundId,
         executionNonce,
         caseRef: { id: caseRecord.id, revision: caseRecord.revision },
+        employeeTypeRef: caseRecord.typeRef,
         inputContextRefs: inputContexts,
         triggeringEventRef,
         workItemRef: item.workItemRef,

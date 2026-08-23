@@ -64,6 +64,7 @@ function reviewedHost(): WorkflowDefinition {
       implementationAgentId: 'builtin-implementation-agent',
       implementationAgentName: 'Implementation',
       artifactPort: 'analysis-plan',
+      documentPath: '.agent-workflow/reviews/implementation-plan.md',
       reviewTitle: '实现方案评审',
       reviewDescription: '批准后才开始修改代码。',
     }),

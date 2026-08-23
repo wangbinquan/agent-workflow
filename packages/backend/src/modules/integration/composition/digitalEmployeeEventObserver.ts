@@ -258,6 +258,7 @@ export function composeDevelopmentCodeHostEventObserver(input: {
         }
         const collected = await collectMergeRequestFacts(binding, parsed.mrRef, {
           selfMarker: subject.subjectRef,
+          trustPlatformSelfMarkers: true,
         })
         if (!collected.ok) {
           throw new Error(`${collected.code}: ${collected.detail}`)

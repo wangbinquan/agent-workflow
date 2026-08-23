@@ -3,7 +3,7 @@
 // 模拟企业自研 CI/门禁：按 head 提供多 gate 状态与日志清单，日志用**流式
 // 生成器**按需产出（服务端不在内存里拼整串，客户端才能证明自己的峰值内存
 // 不随日志总量线性增长——plan T6 的验收就是这条）。PR-6 T70 扩展了
-// trigger/rerun 幂等面与 partial/outage/head-race/retry-response-lost 故障
+// trigger/rerun 幂等面与 partial/outage/head-race/target-race/retry-response-lost 故障
 // 注入；全部行为**确定性**（零随机），同一 seed 序列永远产生同一响应序列。
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -37,6 +37,9 @@ export interface MockPipelineSeed {
   /** head race：GET 被读 flipAfterReads 次后响应里的 headSha 翻成 newHeadSha
    *（两次 head fence 的素材——URL 定位不变，内容里的 head 前进了）。 */
   headRace?: { flipAfterReads: number; newHeadSha: string }
+  /** target race：GET 被读 flipAfterReads 次后响应里的 targetSha 翻成
+   * newTargetSha（source head 不变、目标分支前进的门禁失效素材）。 */
+  targetRace?: { flipAfterReads: number; newTargetSha: string }
   /** retry-response-lost：第一次 trigger 成功创建 run 但响应 500；第二次同
    *  idempotencyKey 返回既有 run + adopted:true。 */
   retryResponseLost?: boolean
@@ -72,7 +75,7 @@ function json(res: ServerResponse, status: number, body: unknown): true {
 
 export class PipelineProviderMock {
   readonly #pipelines = new Map<string, MockPipelineSeed>()
-  /** GET /pipelines/<head> 的读计数（head-race 翻转判定）。 */
+  /** GET /pipelines/<head> 的读计数（head/target race 翻转判定）。 */
   readonly #reads = new Map<string, number>()
   /** idempotencyKey → 结算结果（trigger/rerun 幂等表）。 */
   readonly #triggerByKey = new Map<string, { runRef: string; lostOnce: boolean }>()
@@ -108,6 +111,10 @@ export class PipelineProviderMock {
         pipeline.headRace !== undefined && reads > pipeline.headRace.flipAfterReads
           ? pipeline.headRace.newHeadSha
           : pipeline.headSha
+      const flippedTarget =
+        pipeline.targetRace !== undefined && reads > pipeline.targetRace.flipAfterReads
+          ? pipeline.targetRace.newTargetSha
+          : pipeline.targetSha
       const payload: Record<string, unknown> = {
         gates: pipeline.gates.map((gate) => ({
           gateKey: gate.gateKey,
@@ -124,7 +131,7 @@ export class PipelineProviderMock {
         // partial 模式：响应不带 head 绑定（adapter 无法证明 head 一致 ⇒
         // completeness='partial'，绝不判 pass）。
         payload.headSha = flipped
-        payload.targetSha = pipeline.targetSha
+        payload.targetSha = flippedTarget
       }
       return json(res, 200, payload)
     }

@@ -6,7 +6,7 @@ import {
 import { z } from 'zod'
 
 import { sha256Hex } from '@/util/hash'
-import { exactResourceRefSchema } from './model'
+import { employeeTypeRefSchema, exactResourceRefSchema } from './model'
 
 const contextLifecycleSchema = z.enum(['active', 'waiting', 'terminal'])
 
@@ -323,6 +323,10 @@ export const reactionExecutionPlanSchema = z
     roundRef: z.string().min(1),
     executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
     caseRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }).strict(),
+    // Durable plans written before the type revision was frozen into the
+    // execution envelope remain readable. Every newly planned round sets the
+    // exact Case pin so an unversioned runtime codec can preserve old behavior.
+    employeeTypeRef: employeeTypeRefSchema.nullable().default(null),
     inputContextRefs: z.array(
       z.object({ id: z.string().min(1), revision: z.number().int().positive() }).strict(),
     ),

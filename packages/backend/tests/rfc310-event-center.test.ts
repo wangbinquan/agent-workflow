@@ -859,7 +859,7 @@ describe('RFC-310 shared Event Center', () => {
     expect(new Set(batches.flat()).size).toBe(101)
   })
 
-  test('a late subscriber receives the latest durable event for its exact subject', () => {
+  test('a late subscriber receives the latest durable event by default and may start fresh', () => {
     let ordinal = 0
     const eventCenter = composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
@@ -890,6 +890,17 @@ describe('RFC-310 shared Event Center', () => {
         summary: '子数字员工已完成',
       },
     ])
+    const freshSubscriber = {
+      kind: 'employee-case' as const,
+      subscriberRef: 'reactivated-parent-case',
+    }
+    eventCenter.participant.subscribe({
+      eventTypeRef: { id: 'development.employee-result', revision: 1 },
+      subject,
+      subscriber: freshSubscriber,
+      replayLatest: false,
+    })
+    expect(eventCenter.participant.pendingDeliveries(freshSubscriber, 10)).toEqual([])
   })
 
   test('Event Center preserves neutral event order and leaves business priority to subscribers', () => {

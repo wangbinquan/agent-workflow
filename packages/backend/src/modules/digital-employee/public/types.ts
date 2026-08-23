@@ -82,6 +82,12 @@ export interface EmployeeTypeContextCodec {
   readonly typeId: string
   buildInitialCaseJson(requestJson: string): string
   validateContextJson(contextTypeId: string, stateJson: string): string
+  /**
+   * Declares which Context owns external identity correlation independently
+   * from Attention. Multiple Contexts may watch one subject, but only the
+   * provider-designated owner may bind that subject back to the Case.
+   */
+  resolveExternalSubjectBindingsJson?(contextTypeId: string, stateJson: string): string
   resolveAttentionSubjectsJson(contextTypeId: string, stateJson: string): string
 }
 

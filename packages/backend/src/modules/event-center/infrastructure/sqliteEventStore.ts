@@ -347,25 +347,27 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
           })
           .run()
 
-        const latestEvent = tx
-          .select({ id: eventRecords.id })
-          .from(eventRecords)
-          .where(
-            and(
-              eq(eventRecords.eventTypeId, input.eventType.eventTypeRef.id),
-              eq(eventRecords.eventTypeRevision, input.eventType.eventTypeRef.revision),
-              eq(eventRecords.sourceId, input.source.sourceRef.id),
-              eq(eventRecords.sourceRevision, input.source.sourceRef.revision),
-              eq(eventRecords.subjectType, input.subject.typeId),
-              eq(eventRecords.subjectRef, input.subject.subjectRef),
-            ),
-          )
-          .orderBy(
-            desc(eventRecords.occurredAt),
-            desc(eventRecords.observedAt),
-            desc(eventRecords.id),
-          )
-          .get()
+        const latestEvent = input.replayLatest
+          ? tx
+              .select({ id: eventRecords.id })
+              .from(eventRecords)
+              .where(
+                and(
+                  eq(eventRecords.eventTypeId, input.eventType.eventTypeRef.id),
+                  eq(eventRecords.eventTypeRevision, input.eventType.eventTypeRef.revision),
+                  eq(eventRecords.sourceId, input.source.sourceRef.id),
+                  eq(eventRecords.sourceRevision, input.source.sourceRef.revision),
+                  eq(eventRecords.subjectType, input.subject.typeId),
+                  eq(eventRecords.subjectRef, input.subject.subjectRef),
+                ),
+              )
+              .orderBy(
+                desc(eventRecords.occurredAt),
+                desc(eventRecords.observedAt),
+                desc(eventRecords.id),
+              )
+              .get()
+          : undefined
         if (latestEvent !== undefined) {
           tx.insert(eventDeliveries)
             .values({

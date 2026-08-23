@@ -163,6 +163,24 @@ for (const provider of ['gitlab', 'github'] as const) {
         ).toBe('human')
       }
 
+      // Source-level observers aggregate subscriptions for many Cases and therefore do not
+      // possess one Case marker. They must explicitly opt in to recognizing the platform's
+      // well-formed marker family; otherwise an acknowledgement is emitted back as a fresh
+      // human review event and can preempt the repair publication continuation.
+      const observerView = await collectMergeRequestFacts(deps, mrRef, {
+        trustPlatformSelfMarkers: true,
+      })
+      expect(observerView.ok).toBe(true)
+      if (observerView.ok) {
+        const observerThread = observerView.snapshot.threads.find(
+          (thread) => thread.threadRef === humanThread.threadRef,
+        )!
+        expect(observerThread.authorClass).toBe('human')
+        expect(observerThread.revision).toBe(humanThread.revision)
+        expect(observerThread.lastBody).toBe(humanThread.lastBody)
+        expect(observerThread.messages[1]).toMatchObject({ authorClass: 'self' })
+      }
+
       // head race：threads 读取之后、第二次 mr.get 之前推新 head → 整组丢弃。
       let calls = 0
       const racingDeps = connectionFor(provider, projectPath, async (url, init) => {

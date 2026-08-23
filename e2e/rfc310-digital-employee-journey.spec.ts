@@ -69,7 +69,7 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@7'
+const TYPE_REF = 'development@8'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')

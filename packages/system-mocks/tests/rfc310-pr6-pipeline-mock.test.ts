@@ -123,7 +123,7 @@ describe('rfc310 pr6 T70 — pipeline provider mock', () => {
     expect((await rerun('nope', 'unit', 'rk3')).status).toBe(404)
   })
 
-  test('outage seeds 503 everywhere; partial omits head binding; head race flips after N reads', async () => {
+  test('outage seeds 503 everywhere; partial omits bindings; head/target races flip after N reads', async () => {
     const partialHead = '4'.repeat(40)
     provider.mock.seed({
       headSha: partialHead,
@@ -154,6 +154,24 @@ describe('rfc310 pr6 T70 — pipeline provider mock', () => {
     expect(await read()).toBe(raceHead)
     expect(await read()).toBe(raceHead)
     expect(await read()).toBe(newHead) // 第三次读：head 前进了（fence 素材）
+
+    const targetRaceHead = 'a'.repeat(40)
+    const oldTarget = 'b'.repeat(40)
+    const newTarget = 'c'.repeat(40)
+    provider.mock.seed({
+      headSha: targetRaceHead,
+      targetSha: oldTarget,
+      gates: [gate()],
+      targetRace: { flipAfterReads: 1, newTargetSha: newTarget },
+    })
+    const readTarget = async () =>
+      (
+        (await (await fetch(`${provider.url}/pipelines/${targetRaceHead}`)).json()) as {
+          targetSha: string
+        }
+      ).targetSha
+    expect(await readTarget()).toBe(oldTarget)
+    expect(await readTarget()).toBe(newTarget)
 
     // outage：注入后整站 503（独立 provider 实例避免污染其他 test）。
     const outage = await startPipelineProviderMock()
