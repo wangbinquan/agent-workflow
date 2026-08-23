@@ -21,7 +21,12 @@ export interface ResponsibilityDispatchNode {
 type ResponsibilityMapEntry =
   | { kind: 'item'; item: WorkItem }
   | { kind: 'ingress-branch'; item: WorkItem; ingresses: WorkIngress[] }
-  | { kind: 'review-branch'; item: WorkItem; gate: ResponsibilityReviewGate }
+  | {
+      kind: 'review-branch'
+      item: WorkItem
+      gate: ResponsibilityReviewGate
+      mode: 'conditional' | 'active'
+    }
   | { kind: 'dispatch'; node: ResponsibilityDispatchNode }
   | { kind: 'ingress'; ingress: WorkIngress }
 
@@ -30,12 +35,21 @@ type ResponsibilityMapLayoutEntry = {
   auxiliary?: { column: number; row: number }
 }
 
-type ResponsibilityCardState = {
+export type EmployeeCapabilityPhase =
+  EmployeeTypePackage['authoringManifest']['lifecycleRegions'][number]
+export type EmployeeCapabilityLane = EmployeeCapabilityPhase['responsibilityLanes'][number]
+export type EmployeeCapabilityTool = WorkItem
+
+export type EmployeeCapabilityToolState = {
+  /** False removes this tool from the phase/lane projection. */
+  active?: boolean
   state: 'configured' | 'missing' | 'neutral' | 'running' | 'failed' | 'completed' | 'waiting'
   detail: string
   compactDetail?: string
   attention?: boolean
 }
+
+type ResponsibilityCardState = EmployeeCapabilityToolState
 
 export interface ResponsibilityReviewGate {
   parentWorkItemRef: string
@@ -44,7 +58,7 @@ export interface ResponsibilityReviewGate {
   description: WorkItem['description']
 }
 
-export function ResponsibilitySwimlaneMap(props: {
+export interface EmployeeCapabilityPanoramaProps {
   type: EmployeeTypePackage
   selectedWorkItemRef: string | null
   toolsByWorkItem?: Readonly<Record<string, ToolRegistration[]>>
@@ -56,7 +70,16 @@ export function ResponsibilitySwimlaneMap(props: {
   cardIdPrefix?: string
   attentionPulse?: number
   compactChrome?: boolean
+  /** Public phase → capability lane → tool projection used by authoring and runtime pages. */
+  toolState?: (tool: EmployeeCapabilityTool) => EmployeeCapabilityToolState
+  /**
+   * Undefined active means authoring mode (show both conditional paths).
+   * True selects the review path; false collapses it to the ordinary tool.
+   */
+  reviewToolState?: (gate: ResponsibilityReviewGate) => EmployeeCapabilityToolState
+  /** @deprecated Use toolState. Kept for third-party employee pages during migration. */
   cardState?: (item: WorkItem) => ResponsibilityCardState
+  /** @deprecated Use reviewToolState. */
   reviewGateState?: (gate: ResponsibilityReviewGate) => ResponsibilityCardState
   onConfigureIngress?: (ingress: WorkIngress) => void
   onSelectReviewGate?: (gate: ResponsibilityReviewGate) => void
@@ -67,7 +90,9 @@ export function ResponsibilitySwimlaneMap(props: {
   /** Highest-priority event-driven duty lane first. Spine lanes stay fixed. */
   lanePriorityOrder?: readonly string[]
   onLanePriorityOrderChange?: (order: string[]) => void
-}): ReactElement {
+}
+
+export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProps): ReactElement {
   const zh = props.language.startsWith('zh')
   const [draggedLaneId, setDraggedLaneId] = useState<string | null>(null)
   const [dragTargetLaneId, setDragTargetLaneId] = useState<string | null>(null)
@@ -124,8 +149,15 @@ export function ResponsibilitySwimlaneMap(props: {
     }
     animateLaneReorder()
   }, [draggedLaneId, lanePrioritySignature])
-  const workItemsByRef = new Map(
-    props.type.authoringManifest.workItems.map((item) => [item.workItemRef, item]),
+  const capabilityToolState = (item: WorkItem) => props.toolState?.(item) ?? props.cardState?.(item)
+  const capabilityReviewState = (gate: ResponsibilityReviewGate) =>
+    props.reviewToolState?.(gate) ?? props.reviewGateState?.(gate)
+  const activeWorkItems = props.type.authoringManifest.workItems.filter(
+    (item) => capabilityToolState(item)?.active !== false,
+  )
+  const workItemsByRef = new Map(activeWorkItems.map((item) => [item.workItemRef, item]))
+  const activeIngresses = props.type.authoringManifest.workIngresses.filter((ingress) =>
+    workItemsByRef.has(ingress.nextWorkItemRef),
   )
   const reactionLaneIds = new Set(
     props.type.reactionRules.flatMap((rule) => {
@@ -134,15 +166,19 @@ export function ResponsibilitySwimlaneMap(props: {
     }),
   )
   const fanOutDestinationRefs = new Set(
-    props.type.authoringManifest.workItems.flatMap((source) =>
+    activeWorkItems.flatMap((source) =>
       (source.orderedDispatchAuthoring?.destinationWorkItemRefs ?? []).filter(
         (destinationRef) => workItemsByRef.get(destinationRef)?.nodeKind === 'business-tool',
       ),
     ),
   )
-  const regions = [...props.type.authoringManifest.lifecycleRegions].sort(
-    (left, right) => left.order - right.order,
-  )
+  const regions = [...props.type.authoringManifest.lifecycleRegions]
+    .filter(
+      (region) =>
+        activeWorkItems.some((item) => item.regionId === region.regionId) ||
+        activeIngresses.some((ingress) => ingress.regionId === region.regionId),
+    )
+    .sort((left, right) => left.order - right.order)
   const previewPriorityIndex = (sourceLaneId: string, targetIndex: number) => {
     const currentOrder = dragPreviewOrderRef.current ?? props.lanePriorityOrder ?? []
     const nextOrder = currentOrder.filter((laneId) => laneId !== sourceLaneId)
@@ -193,7 +229,7 @@ export function ResponsibilitySwimlaneMap(props: {
   const workItemPresentation = (item: WorkItem) => {
     const kind = nodeKind(item)
     const fanOut = fanOutDestinationRefs.has(item.workItemRef)
-    const state = props.cardState?.(item)
+    const state = capabilityToolState(item)
     const availableTools = (props.toolsByWorkItem?.[item.workItemRef] ?? []).filter(
       (tool) => tool.state === 'published',
     ).length
@@ -317,10 +353,30 @@ export function ResponsibilitySwimlaneMap(props: {
               if (rightPriority >= 0) return 1
               return left.order - right.order
             })
+            .filter((lane) => {
+              const includedLaneIds =
+                lane.kind === 'spine'
+                  ? new Set([lane.laneId, ...absorbedLaneIds])
+                  : new Set([lane.laneId])
+              return (
+                activeWorkItems.some(
+                  (item) =>
+                    item.regionId === region.regionId &&
+                    item.responsibilityLaneId !== null &&
+                    includedLaneIds.has(item.responsibilityLaneId),
+                ) ||
+                activeIngresses.some(
+                  (ingress) =>
+                    ingress.regionId === region.regionId &&
+                    includedLaneIds.has(ingress.responsibilityLaneId),
+                )
+              )
+            })
           return (
             <section
               key={region.regionId}
               className={`employee-toolbox-region employee-toolbox-region--${lanes.length > 1 ? 'branching' : 'single-lane'}`}
+              data-capability-phase-id={region.regionId}
             >
               <header>
                 <span className="employee-toolbox-region__phase">
@@ -337,7 +393,7 @@ export function ResponsibilitySwimlaneMap(props: {
                     lane.kind === 'spine'
                       ? new Set([lane.laneId, ...absorbedLaneIds])
                       : new Set([lane.laneId])
-                  const items = props.type.authoringManifest.workItems
+                  const items = activeWorkItems
                     .filter(
                       (item) =>
                         item.regionId === region.regionId &&
@@ -345,7 +401,7 @@ export function ResponsibilitySwimlaneMap(props: {
                         includedLaneIds.has(item.responsibilityLaneId),
                     )
                     .sort((left, right) => left.order - right.order)
-                  const ingresses = props.type.authoringManifest.workIngresses
+                  const ingresses = activeIngresses
                     .filter(
                       (ingress) =>
                         ingress.regionId === region.regionId &&
@@ -368,6 +424,29 @@ export function ResponsibilitySwimlaneMap(props: {
                     current.push(ingress)
                     ingressesByTarget.set(ingress.nextWorkItemRef, current)
                   }
+                  const primaryEntryFor = (item: WorkItem): ResponsibilityMapEntry => {
+                    if (item.humanReview !== null) {
+                      const gate: ResponsibilityReviewGate = {
+                        parentWorkItemRef: item.workItemRef,
+                        optionRef: item.humanReview.optionRef,
+                        label: item.humanReview.label,
+                        description: item.humanReview.description,
+                      }
+                      const reviewActive = capabilityReviewState(gate)?.active
+                      if (reviewActive !== false) {
+                        return {
+                          kind: 'review-branch',
+                          item,
+                          gate,
+                          mode: reviewActive === true ? 'active' : 'conditional',
+                        }
+                      }
+                    }
+                    const itemIngresses = ingressesByTarget.get(item.workItemRef) ?? []
+                    return itemIngresses.length > 0
+                      ? { kind: 'ingress-branch', item, ingresses: itemIngresses }
+                      : { kind: 'item', item }
+                  }
                   const primaryEntryBuckets: Array<{
                     order: number
                     identity: string
@@ -378,24 +457,7 @@ export function ResponsibilitySwimlaneMap(props: {
                     entries: replacedDestinationRefs.has(item.workItemRef)
                       ? []
                       : [
-                          item.humanReview === null
-                            ? (ingressesByTarget.get(item.workItemRef)?.length ?? 0) > 0
-                              ? {
-                                  kind: 'ingress-branch' as const,
-                                  item,
-                                  ingresses: ingressesByTarget.get(item.workItemRef)!,
-                                }
-                              : { kind: 'item' as const, item }
-                            : {
-                                kind: 'review-branch' as const,
-                                item,
-                                gate: {
-                                  parentWorkItemRef: item.workItemRef,
-                                  optionRef: item.humanReview.optionRef,
-                                  label: item.humanReview.label,
-                                  description: item.humanReview.description,
-                                },
-                              },
+                          primaryEntryFor(item),
                           ...laneDispatchNodes
                             .filter((node) => node.classifierWorkItemRef === item.workItemRef)
                             .map((node) => ({ kind: 'dispatch' as const, node })),
@@ -414,7 +476,7 @@ export function ResponsibilitySwimlaneMap(props: {
                   const laneTemplateColumns = hasParallelIngressBranch
                     ? [
                         '224px',
-                        ...Array.from({ length: laneColumns - 1 }, () => 'minmax(0, 168px)'),
+                        ...Array.from({ length: laneColumns - 1 }, () => 'minmax(0, 1fr)'),
                       ].join(' ')
                     : undefined
                   const primaryColumnByWorkItem = new Map<string, number>()
@@ -493,6 +555,7 @@ export function ResponsibilitySwimlaneMap(props: {
                         key={`ingress:${ingress.ingressRef}`}
                         id={`${props.cardIdPrefix ?? 'toolbox-duty'}-ingress-${ingress.ingressRef}`}
                         data-work-ingress-ref={ingress.ingressRef}
+                        data-capability-tool-ref={`ingress:${ingress.ingressRef}`}
                         data-next-work-item-ref={ingress.nextWorkItemRef}
                         type="button"
                         className={`employee-toolbox-card employee-toolbox-card--ingress ${
@@ -545,6 +608,7 @@ export function ResponsibilitySwimlaneMap(props: {
                           : undefined
                       }
                       data-lane-id={lane.laneId}
+                      data-capability-lane-id={lane.laneId}
                       aria-label={`${localized(lane.label, props.language)}：${localized(lane.description, props.language)}`}
                       title={localized(lane.description, props.language)}
                     >
@@ -695,6 +759,7 @@ export function ResponsibilitySwimlaneMap(props: {
                                 <button
                                   id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
                                   data-work-item-ref={item.workItemRef}
+                                  data-capability-tool-ref={`work-item:${item.workItemRef}`}
                                   type="button"
                                   className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
                                     state === undefined
@@ -723,7 +788,7 @@ export function ResponsibilitySwimlaneMap(props: {
                             const gate = entry.gate
                             const { kind, fanOut, state, detail, compactDetail, next } =
                               workItemPresentation(item)
-                            const gateState = props.reviewGateState?.(gate)
+                            const gateState = capabilityReviewState(gate)
                             const gateSelected =
                               props.selectedWorkItemRef === gate.parentWorkItemRef &&
                               props.selectedReviewOptionRef === gate.optionRef
@@ -733,6 +798,20 @@ export function ResponsibilitySwimlaneMap(props: {
                             const gateDetail =
                               gateState?.detail ??
                               (zh ? '可选，任务发起时决定' : 'Optional; decided when work starts')
+                            const beforeReviewState =
+                              entry.mode !== 'active'
+                                ? undefined
+                                : gateState?.state === 'waiting' ||
+                                    gateState?.state === 'completed' ||
+                                    gateState?.state === 'failed'
+                                  ? 'completed'
+                                  : state?.state
+                            const afterApprovalState =
+                              entry.mode !== 'active'
+                                ? undefined
+                                : gateState?.state === 'completed'
+                                  ? (state?.state ?? 'waiting')
+                                  : 'waiting'
                             const beforeReviewLabel = localized(
                               item.humanReview?.reviewedPath?.beforeReviewLabel ?? {
                                 'zh-CN': '分析',
@@ -758,49 +837,63 @@ export function ResponsibilitySwimlaneMap(props: {
                                 }`}
                                 data-review-branch-work-item-ref={item.workItemRef}
                                 aria-label={
-                                  zh
-                                    ? `${localized(item.label, props.language)}的审核分支`
-                                    : `Review branches for ${localized(item.label, props.language)}`
+                                  entry.mode === 'active'
+                                    ? zh
+                                      ? `${localized(item.label, props.language)}的已启用审核路径`
+                                      : `Active review path for ${localized(item.label, props.language)}`
+                                    : zh
+                                      ? `${localized(item.label, props.language)}的审核分支`
+                                      : `Review branches for ${localized(item.label, props.language)}`
                                 }
                               >
-                                <div className="employee-toolbox-review-branch__path">
-                                  <span className="employee-toolbox-review-branch__label">
-                                    {zh ? '不启用审核' : 'No review'}
-                                  </span>
-                                  <button
-                                    id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
-                                    data-work-item-ref={item.workItemRef}
-                                    type="button"
-                                    className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
-                                      state === undefined
-                                        ? ''
-                                        : ` employee-toolbox-card--${state.state}`
-                                    }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
-                                      state?.attention === true
-                                        ? ' employee-toolbox-card--attention'
-                                        : ''
-                                    }${itemSelected ? ' employee-toolbox-card--active' : ''}`}
-                                    aria-pressed={itemSelected}
-                                    aria-label={`${localized(item.label, props.language)} · ${zh ? '不启用审核' : 'No review'} · ${kind.label} · ${detail} · ${next}`}
-                                    title={localized(item.description, props.language)}
-                                    onClick={selectItem}
-                                  >
-                                    <span className="employee-toolbox-card__kind">
-                                      {kind.label}
+                                {entry.mode === 'conditional' ? (
+                                  <div className="employee-toolbox-review-branch__path">
+                                    <span className="employee-toolbox-review-branch__label">
+                                      {zh ? '不启用审核' : 'No review'}
                                     </span>
-                                    <strong>{localized(item.label, props.language)}</strong>
-                                    <small title={detail}>{compactDetail}</small>
-                                  </button>
-                                </div>
+                                    <button
+                                      id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
+                                      data-work-item-ref={item.workItemRef}
+                                      data-capability-tool-ref={`work-item:${item.workItemRef}`}
+                                      type="button"
+                                      className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
+                                        state === undefined
+                                          ? ''
+                                          : ` employee-toolbox-card--${state.state}`
+                                      }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
+                                        state?.attention === true
+                                          ? ' employee-toolbox-card--attention'
+                                          : ''
+                                      }${itemSelected ? ' employee-toolbox-card--active' : ''}`}
+                                      aria-pressed={itemSelected}
+                                      aria-label={`${localized(item.label, props.language)} · ${zh ? '不启用审核' : 'No review'} · ${kind.label} · ${detail} · ${next}`}
+                                      title={localized(item.description, props.language)}
+                                      onClick={selectItem}
+                                    >
+                                      <span className="employee-toolbox-card__kind">
+                                        {kind.label}
+                                      </span>
+                                      <strong>{localized(item.label, props.language)}</strong>
+                                      <small title={detail}>{compactDetail}</small>
+                                    </button>
+                                  </div>
+                                ) : null}
                                 <div className="employee-toolbox-review-branch__path">
-                                  <span className="employee-toolbox-review-branch__label">
-                                    {zh ? '启用审核' : 'Review enabled'}
-                                  </span>
+                                  {entry.mode === 'conditional' ? (
+                                    <span className="employee-toolbox-review-branch__label">
+                                      {zh ? '启用审核' : 'Review enabled'}
+                                    </span>
+                                  ) : null}
                                   <div className="employee-toolbox-review-branch__reviewed-flow">
                                     <button
                                       type="button"
-                                      className="employee-toolbox-card employee-toolbox-card--review-stage"
+                                      className={`employee-toolbox-card employee-toolbox-card--review-stage${
+                                        beforeReviewState === undefined
+                                          ? ''
+                                          : ` employee-toolbox-card--${beforeReviewState}`
+                                      }`}
                                       data-review-stage="analysis"
+                                      data-capability-tool-ref={`review:${gate.optionRef}:analysis`}
                                       aria-label={`${beforeReviewLabel} · ${localized(item.description, props.language)}`}
                                       title={localized(item.description, props.language)}
                                       onClick={selectItem}
@@ -810,6 +903,7 @@ export function ResponsibilitySwimlaneMap(props: {
                                     <button
                                       id={`${props.cardIdPrefix ?? 'toolbox-duty'}-review-${gate.optionRef}`}
                                       data-review-option-ref={gate.optionRef}
+                                      data-capability-tool-ref={`review:${gate.optionRef}`}
                                       type="button"
                                       className={`employee-toolbox-card employee-toolbox-card--human-gate employee-toolbox-card--review-stage${
                                         gateState === undefined
@@ -835,8 +929,13 @@ export function ResponsibilitySwimlaneMap(props: {
                                     </button>
                                     <button
                                       type="button"
-                                      className="employee-toolbox-card employee-toolbox-card--review-stage"
+                                      className={`employee-toolbox-card employee-toolbox-card--review-stage${
+                                        afterApprovalState === undefined
+                                          ? ''
+                                          : ` employee-toolbox-card--${afterApprovalState}`
+                                      }`}
                                       data-review-stage="implementation"
+                                      data-capability-tool-ref={`review:${gate.optionRef}:implementation`}
                                       aria-label={`${afterApprovalLabel} · ${localized(item.description, props.language)}`}
                                       title={localized(item.description, props.language)}
                                       onClick={selectItem}
@@ -866,6 +965,7 @@ export function ResponsibilitySwimlaneMap(props: {
                                 key={`${node.key}:${node.attention === true ? (props.attentionPulse ?? 0) : 0}`}
                                 id={`${props.cardIdPrefix ?? 'toolbox-duty'}-dispatch-${node.key}`}
                                 data-dispatch-route-key={node.key}
+                                data-capability-tool-ref={`dispatch:${node.key}`}
                                 type="button"
                                 className={`employee-toolbox-card employee-toolbox-card--${kind.className} employee-toolbox-card--${node.state ?? (node.configured ? 'configured' : 'missing')}${
                                   node.attention === true ? ' employee-toolbox-card--attention' : ''
@@ -894,6 +994,7 @@ export function ResponsibilitySwimlaneMap(props: {
                               key={`${item.workItemRef}:${state?.attention === true ? (props.attentionPulse ?? 0) : 0}`}
                               id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
                               data-work-item-ref={item.workItemRef}
+                              data-capability-tool-ref={`work-item:${item.workItemRef}`}
                               type="button"
                               className={`employee-toolbox-card employee-toolbox-card--${kind.className}${
                                 state === undefined ? '' : ` employee-toolbox-card--${state.state}`
@@ -934,3 +1035,6 @@ export function ResponsibilitySwimlaneMap(props: {
     </section>
   )
 }
+
+/** Compatibility export for extensions that still use the pre-panorama name. */
+export const ResponsibilitySwimlaneMap = EmployeeCapabilityPanorama

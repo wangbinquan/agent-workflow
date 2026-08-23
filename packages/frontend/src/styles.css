@@ -672,9 +672,9 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 108px) 16px minmax(0, 100px);
+  grid-template-columns: minmax(0, 1.08fr) 16px minmax(0, 1fr);
   align-items: center;
-  width: 224px;
+  width: 100%;
   min-width: 0;
 }
 
@@ -767,9 +767,9 @@
 .employee-toolbox-ingress-branch .employee-toolbox-card--source-node strong {
   font-size: 10px;
   text-align: center;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .employee-toolbox-review-branch {
@@ -777,8 +777,9 @@
   z-index: 1;
   display: grid;
   gap: 4px;
-  width: 168px;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   padding: 4px;
   border: 1px solid color-mix(in srgb, var(--warn) 34%, var(--border));
   border-radius: 11px;

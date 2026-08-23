@@ -19,7 +19,7 @@ import type {
 } from '@/components/digital-employees/types'
 import { localized } from '@/components/digital-employees/types'
 import {
-  ResponsibilitySwimlaneMap,
+  EmployeeCapabilityPanorama,
   type ResponsibilityDispatchNode,
 } from '@/components/digital-employees/ResponsibilitySwimlaneMap'
 import {
@@ -169,7 +169,7 @@ function DigitalEmployeeTypePage(): ReactElement {
           <div role="tabpanel" id={panelIds.panelId} aria-labelledby={panelIds.tabId} tabIndex={0}>
             {search.view === 'toolbox' ? (
               <div className="employee-toolbox-workspace">
-                <ResponsibilitySwimlaneMap
+                <EmployeeCapabilityPanorama
                   type={type}
                   selectedWorkItemRef={selectedRef}
                   selectedReviewOptionRef={selectedReview?.optionRef ?? null}
@@ -2682,7 +2682,7 @@ function JobTemplatesPanel(props: {
                 : 'Name and description were kept. Reconfigure tools, collaborators, and failure routes against the current contracts before publishing.'}
             </NoticeBanner>
           ) : null}
-          <ResponsibilitySwimlaneMap
+          <EmployeeCapabilityPanorama
             type={props.type}
             selectedWorkItemRef={selectedEditorItem?.workItemRef ?? null}
             selectedReviewOptionRef={selectedEditorReview?.optionRef ?? null}
@@ -2713,7 +2713,7 @@ function JobTemplatesPanel(props: {
             lanePriorityOrder={reactionLaneOrder}
             onLanePriorityOrderChange={setReactionLaneOrder}
             attentionPulse={validationAttempt}
-            cardState={jobCardState}
+            toolState={jobCardState}
             compactChrome
           />
           {validationAttempt > 0 && !complete ? (

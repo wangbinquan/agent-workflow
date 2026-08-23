@@ -12,7 +12,7 @@ import type {
 } from '@/components/digital-employees/types'
 import { localized, typeRefKey } from '@/components/digital-employees/types'
 import {
-  ResponsibilitySwimlaneMap,
+  EmployeeCapabilityPanorama,
   type ResponsibilityDispatchNode,
   type ResponsibilityReviewGate,
 } from '@/components/digital-employees/ResponsibilitySwimlaneMap'
@@ -39,6 +39,12 @@ interface EmployeeCaseProjection {
     updatedAt: number
   }
   employeeType: { displayName: LocalizedText; description: LocalizedText }
+  capabilityActivation: {
+    displayName: string
+    activeWorkItemRefs: string[]
+    executionOptions: Record<string, boolean>
+    exactOrderedDispatchConfigurations: DigitalEmployeeDefinition['definition']['exactOrderedDispatchConfigurations']
+  }
   contexts: Array<{
     id: string
     typeId: string
@@ -339,13 +345,6 @@ function EmployeeCaseDetailPage(): ReactElement {
         signal,
       ),
   })
-  const employeeId = projection.data?.case.employeeRef.id ?? null
-  const employee = useQuery<DigitalEmployeeDefinition>({
-    queryKey: ['digital-employee', employeeId, 'case'],
-    enabled: employeeId !== null,
-    queryFn: ({ signal }) =>
-      api.get(`/api/digital-employees/${encodeURIComponent(employeeId ?? '')}`, undefined, signal),
-  })
   const employeeDirectory = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', 'case-collaboration-directory'],
     enabled: (projection.data?.channels.length ?? 0) > 0,
@@ -397,37 +396,36 @@ function EmployeeCaseDetailPage(): ReactElement {
   )
   const latestRoundByWorkItem = new Map<string, ReactionRound>()
   for (const round of chronologicalRounds) latestRoundByWorkItem.set(round.workItemRef, round)
-  const enabledWorkItemRefs = new Set(employee.data?.definition.enabledWorkItemRefs ?? [])
-  const runtimeCardState = (
+  const activeWorkItemRefs = new Set(data.capabilityActivation.activeWorkItemRefs)
+  const runtimeToolState = (
     item: EmployeeTypePackage['authoringManifest']['workItems'][number],
   ) => {
     const round = latestRoundByWorkItem.get(item.workItemRef)
     const state = roundVisualState(round?.state)
-    const enabled = enabledWorkItemRefs.size === 0 || enabledWorkItemRefs.has(item.workItemRef)
+    const active = activeWorkItemRefs.has(item.workItemRef)
     const detail =
       round === undefined
-        ? enabled
-          ? zh
-            ? '尚未进入'
-            : 'Not reached yet'
-          : zh
-            ? '岗位未启用'
-            : 'Disabled by job template'
+        ? zh
+          ? '尚未进入'
+          : 'Not reached yet'
         : businessStateLabel(round.state, zh)
     return {
-      state: enabled ? state : ('neutral' as const),
+      active,
+      state,
       detail,
       compactDetail: detail,
     }
   }
-  const runtimeReviewGateState = (gate: ResponsibilityReviewGate) => {
+  const runtimeReviewToolState = (gate: ResponsibilityReviewGate) => {
     const projection = (data.reviewGates ?? []).find(
       (candidate) =>
         candidate.parentWorkItemRef === gate.parentWorkItemRef &&
         candidate.optionRef === gate.optionRef,
     )
+    const active = data.capabilityActivation.executionOptions[gate.optionRef] === true
     if (projection?.state === 'waiting') {
       return {
+        active,
         state: 'waiting' as const,
         detail: zh ? '等待人工审核' : 'Awaiting human review',
         compactDetail: zh ? '等待审核' : 'Awaiting review',
@@ -435,6 +433,7 @@ function EmployeeCaseDetailPage(): ReactElement {
     }
     if (projection?.state === 'approved') {
       return {
+        active,
         state: 'completed' as const,
         detail: zh ? '已批准并继续实现' : 'Approved; implementation continued',
         compactDetail: zh ? '已批准' : 'Approved',
@@ -442,6 +441,7 @@ function EmployeeCaseDetailPage(): ReactElement {
     }
     if (projection?.state === 'failed') {
       return {
+        active,
         state: 'failed' as const,
         detail: zh ? '评审分支执行失败' : 'Review branch failed',
         compactDetail: zh ? '失败' : 'Failed',
@@ -449,12 +449,14 @@ function EmployeeCaseDetailPage(): ReactElement {
     }
     if (projection?.state === 'skipped') {
       return {
+        active,
         state: 'neutral' as const,
         detail: zh ? '本任务未启用，已跳过' : 'Not enabled for this task; skipped',
         compactDetail: zh ? '已跳过' : 'Skipped',
       }
     }
     return {
+      active,
       state: 'neutral' as const,
       detail:
         projection?.state === 'planning'
@@ -489,7 +491,7 @@ function EmployeeCaseDetailPage(): ReactElement {
       )
     })
   const runtimeDispatchNodes: ResponsibilityDispatchNode[] =
-    employee.data?.definition.exactOrderedDispatchConfigurations.flatMap((configuration) =>
+    data.capabilityActivation.exactOrderedDispatchConfigurations.flatMap((configuration) =>
       configuration.routes.map((route, index) => {
         const latest = routeRound(route.destinationWorkItemRef, route.routeRef)
         const visualState = roundVisualState(latest?.state)
@@ -525,9 +527,7 @@ function EmployeeCaseDetailPage(): ReactElement {
         <PageHeader
           className="operations-surface__header"
           title={
-            employee.data?.definition.displayName ??
-            employee.data?.name ??
-            (zh ? '数字员工任务' : 'Digital employee task')
+            data.capabilityActivation.displayName || (zh ? '数字员工任务' : 'Digital employee task')
           }
           meta={<StatusChip kind={status.kind}>{status.label}</StatusChip>}
           actions={
@@ -585,11 +585,11 @@ function EmployeeCaseDetailPage(): ReactElement {
             >
               <div className="employee-map-section__heading">
                 <div>
-                  <h2>{zh ? '数字员工完整能力图' : 'Complete digital employee capability map'}</h2>
+                  <h2>{zh ? '数字员工实际能力图' : 'Active digital employee capability map'}</h2>
                   <p>
                     {zh
-                      ? '完整保留岗位中的确定性结构和未启用能力；已经完成的节点显示为绿色，正在执行的节点持续闪烁。'
-                      : 'The full deterministic job structure, including disabled capabilities, remains visible. Completed nodes are green and the running node pulses.'}
+                      ? '按任务冻结的员工能力与执行选项裁剪；已完成节点显示为绿色，正在执行的节点持续闪烁。'
+                      : 'The map is cropped to this task’s frozen active capabilities and options. Completed nodes are green and the running node pulses.'}
                   </p>
                 </div>
                 <span className="employee-map-section__legend">
@@ -602,7 +602,7 @@ function EmployeeCaseDetailPage(): ReactElement {
                       : 'Current work item highlighted'}
                 </span>
               </div>
-              <ResponsibilitySwimlaneMap
+              <EmployeeCapabilityPanorama
                 type={descriptor.data}
                 language={language}
                 selectedWorkItemRef={selectedWorkItemRef}
@@ -631,9 +631,9 @@ function EmployeeCaseDetailPage(): ReactElement {
                   const latest = routeRound(node.destinationWorkItemRef, node.routeRef)
                   if (latest !== undefined) setSelectedRoundId(latest.id)
                 }}
-                cardState={runtimeCardState}
-                reviewGateState={runtimeReviewGateState}
-                title={zh ? '完整能力图与运行状态' : 'Complete capability map and runtime state'}
+                toolState={runtimeToolState}
+                reviewToolState={runtimeReviewToolState}
+                title={zh ? '实际能力与运行状态' : 'Active capabilities and runtime state'}
                 description={
                   zh
                     ? '同一张岗位职责图展示未开始、等待、执行中、完成和失败；点击节点查看契约，点击任务流水查看每次真实执行。'
@@ -666,7 +666,7 @@ function EmployeeCaseDetailPage(): ReactElement {
                       <code>
                         {selectedItem.humanReview.artifactPort} ·{' '}
                         {
-                          runtimeReviewGateState({
+                          runtimeReviewToolState({
                             parentWorkItemRef: selectedItem.workItemRef,
                             optionRef: selectedItem.humanReview.optionRef,
                             label: selectedItem.humanReview.label,

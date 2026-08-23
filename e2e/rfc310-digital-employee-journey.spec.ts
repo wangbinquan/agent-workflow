@@ -711,16 +711,44 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(runtimeMap.locator('[data-work-item-ref]')).toHaveCount(20)
   await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input"]')).toHaveCount(1)
   await expect(runtimeMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
+  const overlappingCapabilityTools = await runtimeMap
+    .locator('.employee-toolbox-card')
+    .evaluateAll((cards) => {
+      const collisions: string[] = []
+      for (let leftIndex = 0; leftIndex < cards.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < cards.length; rightIndex += 1) {
+          const left = cards[leftIndex] as HTMLElement
+          const right = cards[rightIndex] as HTMLElement
+          if (
+            left.closest('[data-capability-lane-id]') !== right.closest('[data-capability-lane-id]')
+          )
+            continue
+          if (left.contains(right) || right.contains(left)) continue
+          const leftRect = left.getBoundingClientRect()
+          const rightRect = right.getBoundingClientRect()
+          const overlapWidth =
+            Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left)
+          const overlapHeight =
+            Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top)
+          if (overlapWidth > 0.5 && overlapHeight > 0.5) {
+            collisions.push(
+              `${left.getAttribute('data-capability-tool-ref')} -> ${right.getAttribute('data-capability-tool-ref')}`,
+            )
+          }
+        }
+      }
+      return collisions
+    })
+  expect(overlappingCapabilityTools).toEqual([])
   const runtimeReviewGate = runtimeMap.locator(
     '[data-review-option-ref="review-implementation-plan"]',
   )
-  await expect(runtimeReviewGate).toHaveCount(1)
-  await runtimeReviewGate.click()
-  await expect(runtimeReviewGate).toHaveClass(/employee-toolbox-card--active/)
-  await expect(page.getByTestId('employee-case-review-gate-detail')).toBeVisible()
+  await expect(runtimeReviewGate).toHaveCount(0)
+  await expect(runtimeMap.locator('[data-work-item-ref="analyze-implement"]')).toHaveCount(1)
+  await expect(runtimeMap).not.toContainText('Human plan review')
   await expect(page.getByText('Work context', { exact: true })).toBeVisible()
   await expect(
-    page.getByText('Complete digital employee capability map', { exact: true }),
+    page.getByText('Active digital employee capability map', { exact: true }),
   ).toBeVisible()
   const timeline = page.getByTestId('employee-work-timeline')
   await expect(timeline).toBeVisible()

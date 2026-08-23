@@ -41,10 +41,31 @@ describe('digital employee task runtime visualization', () => {
     expect(css).toContain('outline-offset: 1px')
   })
 
-  test('the page renders the whole capability map and every round on a chronological timeline', () => {
-    const detail = read('routes/employee-cases.$caseId.tsx')
+  test('composite ingress and review tools fit their capability-lane grid tracks', () => {
+    const css = read('styles.css')
+    const ingress = block(css, '.employee-toolbox-ingress-branch')
+    const review = block(css, '.employee-toolbox-review-branch')
+    const panorama = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
 
-    expect(detail).toContain("zh ? '数字员工完整能力图'")
+    expect(ingress).toContain('width: 100%')
+    expect(ingress).not.toContain('width: 224px')
+    expect(review).toContain('width: 100%')
+    expect(review).not.toContain('width: 168px')
+    expect(panorama).toContain("() => 'minmax(0, 1fr)'")
+  })
+
+  test('the page renders the active capability panorama and every round on a chronological timeline', () => {
+    const detail = read('routes/employee-cases.$caseId.tsx')
+    const panorama = read('components/digital-employees/ResponsibilitySwimlaneMap.tsx')
+
+    expect(detail).toContain("zh ? '数字员工实际能力图'")
+    expect(detail).toContain('<EmployeeCapabilityPanorama')
+    expect(detail).toContain('toolState={runtimeToolState}')
+    expect(detail).toContain('reviewToolState={runtimeReviewToolState}')
+    expect(detail).toContain('data.capabilityActivation.activeWorkItemRefs')
+    expect(panorama).toContain('export function EmployeeCapabilityPanorama')
+    expect(panorama).toContain("mode: 'conditional' | 'active'")
+    expect(panorama).toContain('capabilityToolState(item)?.active !== false')
     expect(detail).toContain("zh ? '任务流水 · 时间轴'")
     expect(detail).toContain("? '历史执行过的所有节点'")
     expect(detail).toContain('const chronologicalRounds = [...data.rounds].sort(')

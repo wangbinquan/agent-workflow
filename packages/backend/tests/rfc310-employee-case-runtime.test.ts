@@ -12,6 +12,7 @@ import {
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
+import { projectFrozenExecutionOptions } from '@/modules/digital-employee/application/runtimeService'
 import {
   digitalEmployeeLifecycleEventCatalogJson,
   EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
@@ -34,6 +35,30 @@ afterEach(() => {
 })
 
 describe('RFC-310 stateful employee Case runtime', () => {
+  // User regression 2026-08-23: task details must project the Case-pinned
+  // active capability set instead of rendering every authoring option.
+  test('projects frozen generic execution options without employee-type special cases', () => {
+    const definitions = [
+      { optionRef: 'review-plan', defaultValue: false },
+      { optionRef: 'collect-evidence', defaultValue: true },
+    ]
+
+    expect(
+      projectFrozenExecutionOptions({
+        definitions,
+        primaryContextState: {
+          request: { executionOptions: { 'review-plan': true, unknown: true } },
+        },
+      }),
+    ).toEqual({ 'review-plan': true, 'collect-evidence': true })
+    expect(
+      projectFrozenExecutionOptions({
+        definitions,
+        primaryContextState: { request: {} },
+      }),
+    ).toEqual({ 'review-plan': false, 'collect-evidence': true })
+  })
+
   test('cross-employee guard treats revisions as one identity and closes depth and child budgets', () => {
     expect(
       evaluateEmployeeInvocationGuard({
@@ -688,6 +713,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
     expect(launched.state).toBe('active')
     expect(JSON.parse(launched.projectionJson)).toMatchObject({
+      capabilityActivation: {
+        displayName: '开发一号',
+        activeWorkItemRefs: expect.arrayContaining(['prepare-materials', 'analyze-implement']),
+        executionOptions: { 'review-implementation-plan': false },
+        exactOrderedDispatchConfigurations: [
+          expect.objectContaining({ classifierWorkItemRef: 'classify-pipeline' }),
+        ],
+      },
       contexts: [
         {
           state: {

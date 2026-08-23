@@ -162,6 +162,43 @@ export function isEmployeeReactionEventEnabled(input: {
   )
 }
 
+function findFrozenExecutionOptions(
+  value: unknown,
+  depth = 0,
+): Readonly<Record<string, boolean>> | null {
+  if (depth > 4 || value === null || typeof value !== 'object') return null
+  if (!Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    const candidate = record.executionOptions
+    if (
+      candidate !== null &&
+      typeof candidate === 'object' &&
+      !Array.isArray(candidate) &&
+      Object.values(candidate).every((entry) => typeof entry === 'boolean')
+    ) {
+      return candidate as Record<string, boolean>
+    }
+  }
+  for (const child of Array.isArray(value) ? value : Object.values(value)) {
+    const found = findFrozenExecutionOptions(child, depth + 1)
+    if (found !== null) return found
+  }
+  return null
+}
+
+export function projectFrozenExecutionOptions(input: {
+  readonly definitions: readonly { readonly optionRef: string; readonly defaultValue: boolean }[]
+  readonly primaryContextState: unknown
+}): Record<string, boolean> {
+  const frozen = findFrozenExecutionOptions(input.primaryContextState)
+  return Object.fromEntries(
+    input.definitions.map((definition) => [
+      definition.optionRef,
+      frozen?.[definition.optionRef] ?? definition.defaultValue,
+    ]),
+  )
+}
+
 export class DigitalEmployeeRuntimeService {
   readonly #store: RuntimeCaseStorePort
   readonly #authoringStore: DigitalEmployeeAuthoringStore
@@ -666,6 +703,24 @@ export class DigitalEmployeeRuntimeService {
     const caseRecord = this.getCase(caseId)
     const descriptor = this.#descriptor(caseRecord)
     const contexts = this.#store.listContexts(caseId)
+    const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+    if (employee === null) throw new Error('pinned employee definition disappeared')
+    const primaryContext = contexts.find((context) => context.id === caseRecord.primaryContextId)
+    const primaryContextState =
+      primaryContext === undefined ? null : (JSON.parse(primaryContext.stateJson) as unknown)
+    const activeWorkItemRefs =
+      employee.content.enabledWorkItemRefs.length === 0
+        ? descriptor.authoringManifest.workItems.map((item) => item.workItemRef)
+        : employee.content.enabledWorkItemRefs
+    const capabilityActivation = {
+      displayName: employee.content.displayName,
+      activeWorkItemRefs,
+      executionOptions: projectFrozenExecutionOptions({
+        definitions: descriptor.workIntakeAuthoring.executionOptions,
+        primaryContextState,
+      }),
+      exactOrderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
+    }
     const attention = this.#store.listAttention(caseId)
     const inbox = this.#store.listInbox(caseId)
     const rounds = this.#store.listRounds(caseId)
@@ -735,6 +790,7 @@ export class DigitalEmployeeRuntimeService {
         displayName: descriptor.displayName,
         description: descriptor.description,
       },
+      capabilityActivation,
       contexts: contexts.map((context) => ({
         ...context,
         state: JSON.parse(context.stateJson) as unknown,

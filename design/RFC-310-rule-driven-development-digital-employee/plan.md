@@ -1546,14 +1546,14 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
 | T227 | 扩展通用 AuthoringManifest：`workIngresses` 默认空，支持 task-creation/event-response-rules，strict codec/交叉引用/WorkStart 一致性及旧 revision 反向测试 | T167,T196 | ✅   |
 | T228 | 追加 `development@6`，注册 ui-input 与 ISSUE 两个 ingress、既有公开 issue event refs、`humanReview.reviewedPath`；保持 20 WorkItem 与旧 digest 不变       | T227      | ✅   |
-| T229 | 共享职责图投影“并行双入口→材料准备”和审核开/关双分支；接入任务创建/Webhook 深链、父职责 Dialog、窄屏/汇聚布局及运行态状态                                 | T227,T228 | ✅   |
+| T229 | 公共“阶段→能力泳道→工具”全景投影并行双入口与审核条件路径；authoring 显示全集，Case 按冻结 active 裁剪；接入深链、Dialog、窄屏/汇聚布局及运行态状态        | T227,T228 | ✅   |
 | T230 | 补合同/authoring/runtime/frontend 回归及真实 signed ISSUE Webhook→Event Center→Case→MR→红灯修绿→ready system-mock；锁批准前后调度和拓扑顺序               | T228,T229 | ✅   |
 | T231 | 三轮功能自审、视觉核验、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态                                              | T227-T230 | ⏳   |
 
 ### 验收口径
 
 - proposal AC-98：20 张 WorkItem 卡不变，另有 `界面输入`、`ISSUE` 两张处于同一来源列的上下并行入口卡；材料准备位于右侧并由两者分别汇入，配置动作分别复用统一任务创建与事件中心实时订阅；
-- proposal AC-99：每个带 `reviewedPath` 的 `humanReview` 通用投影审核开/关双分支；人工门禁无工具槽、无新 writer，跳过/等待/批准/失败来自冻结事实；
+- proposal AC-99：每个带 `reviewedPath` 的 `humanReview` 都由公共组件投影；authoring 显示开/关条件，Case 只显示冻结 active 的实际路径，未启用时无审核节点或文案；
 - proposal AC-100：测试必须从签名 Webhook 和真实响应规则进入，不得直接 launch；红流水线由现有分类/修复回路恢复全绿并达到 ready-to-merge。
 
 ### 批次停止条件
@@ -1562,7 +1562,7 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 - 缺少界面输入或 ISSUE 任一入口、两个来源沿主流程横排成伪串行关系、没有处于同一来源列、没有分别汇入右侧的 `prepare-materials`、材料准备被堆到来源列下方、人工审核出现在实现后、或
   `prepare-change` 被挤到第二行；
 - ingress/review 展示节点被算入工作项完整性、工具绑定、enabled 集合、Reaction/Round，导致原 20 工作项合同漂移；
-- `ResponsibilitySwimlaneMap` 出现 `development`、`issue` 或 `review-implementation-plan` 的业务硬编码，而其他类型不能复用；
+- `EmployeeCapabilityPanorama` 出现 `development`、`issue` 或 `review-implementation-plan` 的业务硬编码，而其他类型不能复用；
 - review 卡只是静态说明，运行任务等待人工时没有 waiting 状态，或未开启的任务被误报为待审核；
 - 仅补 UI/截图，没有 signed ISSUE Webhook 到 MR 修绿的生产链 E2E；
 - 实现拓扑偏离用户确认的双入口、双分支结构。

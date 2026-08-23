@@ -1418,8 +1418,9 @@ RFC-304/307/309 保持 `Done` 作为历史交付事实；RFC-310 只声明它们
   无前后顺序的并行来源。“准备工作材料”位于来源列右侧、中心落在两个来源节点之间；两个入口都以各自可见的连线指向
   `prepare-materials`；前者通过既有权限进入 `/tasks/new?kind=digital-employee`，后者进入 `/events?tab=subscriptions` 配置 ISSUE 事件到
   具体数字员工。两张卡都不进入 `workItems`、工具完整性、`enabledWorkItemRefs`、Reaction 或运行轮次；20 个工作项断言保持不变。
-- **AC-99** 每个声明 `humanReview.reviewedPath` 的工作项都由通用职责图投影两条互斥路径：关闭审核为“分析并实现”；开启审核为
-  “分析 → 人工审核修复计划 → 实现”。人工门禁打开父 `analyze-implement` 的 review 合同且无工具编辑；运行态准确显示跳过/等待/批准/失败，
+- **AC-99** 每个声明 `humanReview.reviewedPath` 的工作项都由“阶段 → 能力泳道 → 工具”公共全景投影两条互斥路径：authoring 显示完整条件，
+  Case 按冻结 `active` 只显示实际路径；关闭审核为普通“分析并实现”且不出现人工审核文案，开启审核为
+  “分析 → 人工审核修复计划 → 实现”。人工门禁打开父 `analyze-implement` 的 review 合同且无工具编辑；运行态准确显示等待/批准/失败，
   批准前实现 Agent 不运行。两条路径汇合后的 `prepare-change` 与 `publish-mr` 必须继续处于同一主行。前端不得按 `development`、`issue` 或
   `review-implementation-plan` 写特例。
 - **AC-100** 生产级 system-mock E2E 必须从签名有效的 `issue_labeled` Webhook 开始，经标准 EventRecord、独立 Delivery、目标为
