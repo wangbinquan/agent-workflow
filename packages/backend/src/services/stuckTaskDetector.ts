@@ -27,11 +27,15 @@
 // for an operator; remediation stays on the per-incident fixup script
 // pattern that RFC-052 established (see scripts/fixup-rfc052-*).
 
+import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 
 import {
   TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES,
   nodeKindSettlesWithoutRow,
+  CANCELABLE_TASK_STATUSES,
+  taskWorkspacePhase,
+  type TaskWorkspacePhase,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { isWorkgroupTask } from '@agent-workflow/shared'
@@ -108,9 +112,13 @@ interface StuckCandidate {
   parentTaskId: string | null
   status: string
   startedAt: number
-  /** RFC-287 G7：判「是不是正卡在仓库准备第 0 步」用（见 S4 的豁免）。 */
-  worktreePath: string
-  workspacePrunedAt: number | null
+  /**
+   * RFC-287 G7：判「是不是正卡在仓库准备第 0 步」用（见 S4 的豁免）。
+   * RFC-317 T50（LC-05）—— 由携带两个原始列改为携带**判定结果**：判据是 shared 的
+   * `taskWorkspacePhase`，三个调用点共用。带结果而不是带原料，杜绝了「拿到列却按
+   * 自己那套判」的复发路径。
+   */
+  workspacePhase: TaskWorkspacePhase
   ownerUserId: string | null
   /** RFC-164: non-null = workgroup task (S1/S2 exempt — engine-owned parking). */
   workgroupId: string | null
@@ -122,7 +130,8 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
   // sense — they're a final state.
   const baseWhere = and(
     isNull(tasks.deletedAt),
-    inArray(tasks.status, ['pending', 'running', 'awaiting_review', 'awaiting_human']),
+    // RFC-317 T51（LC-06）—— 从转移表派生，不再内联手抄。
+    inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]),
   )
   const rows = await db
     .select({
@@ -133,6 +142,9 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
       workgroupId: tasks.workgroupId,
       parentTaskId: tasks.parentTaskId,
       worktreePath: tasks.worktreePath,
+      // RFC-317 T50（LC-05）—— 补上 `workspacePruningAt` 与准备行：此前少这两条判定，
+      // 与 assertWorktreePresentForResume 对同一行给出不同结论。
+      workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
@@ -141,13 +153,21 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
         ? baseWhere
         : and(baseWhere, inArray(tasks.id, filter as string[])),
     )
+  const prepRowTaskIds = taskIdsWithRepoPrepRow(
+    db,
+    rows.map((r) => r.id),
+  )
   return rows.map((r) => ({
     taskId: r.id,
     status: r.status,
     startedAt: r.startedAt,
     parentTaskId: r.parentTaskId,
-    worktreePath: r.worktreePath,
-    workspacePrunedAt: r.workspacePrunedAt,
+    workspacePhase: taskWorkspacePhase({
+      worktreePath: r.worktreePath,
+      workspacePruningAt: r.workspacePruningAt,
+      workspacePrunedAt: r.workspacePrunedAt,
+      hasRepoPrepRow: prepRowTaskIds.has(r.id),
+    }),
     ownerUserId: r.ownerUserId,
     workgroupId: r.workgroupId,
   }))
@@ -336,9 +356,10 @@ async function checkOne(
     // `gitCloneTimeoutMs`（默认 30min），G6 的窗口重试还叠在上面。默认 5 分钟阈值必然
     // 触发，且 S4 的文案「without scheduler pickup」与事实完全相反：调度器早就认领了，
     // 正在跑第 0 步。同一文件已为 RFC-284 的子任务排队开过同款豁免（D11），这里补上
-    // 准备窗口这一类。判据与 `assertWorktreePresentForResume` / autoResume 同源：
-    // 空路径 + 没打墓碑 = 还没建出工作树。
-    const preparingRepo = c.worktreePath === '' && c.workspacePrunedAt === null
+    // 准备窗口这一类。RFC-317 T50（LC-05）—— 判据现在**真的**三处同源：共用 shared 的
+    // `taskWorkspacePhase`。此前这句注释是错的：那时这里少判 `workspacePruningAt` 与
+    // 「确有 __repo_prep__ 行」两条，对存量物化失败行会错误地静音 S4 告警 45 分钟。
+    const preparingRepo = c.workspacePhase === 'preparing'
     const effectiveThresholdMs = preparingRepo
       ? Math.max(pendingThresholdMs, DEFAULT_REPO_PREP_PENDING_THRESHOLD_MS)
       : c.parentTaskId === null

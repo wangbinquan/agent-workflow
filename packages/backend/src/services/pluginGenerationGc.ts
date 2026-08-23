@@ -6,6 +6,7 @@
 // all active work is the only cheap proof that an old cachedPath is not still
 // being imported by a child process. Uncertainty retains data.
 
+import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
@@ -15,7 +16,8 @@ import { collectPluginGenerationGarbage } from './plugin'
 const log = createLogger('plugin-generation-gc')
 const DEFAULT_INTERVAL_MS = 60 * 60_000
 const DEFAULT_GRACE_MS = 24 * 60 * 60_000
-const NON_TERMINAL = ['pending', 'running', 'awaiting_review', 'awaiting_human'] as const
+// RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
+const NON_TERMINAL = CANCELABLE_TASK_STATUSES
 
 export async function runPluginGenerationGc(opts: {
   db: DbClient

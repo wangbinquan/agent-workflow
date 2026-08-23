@@ -16,8 +16,11 @@
 // The actual resume is injected so this stays unit-testable without the full
 // launch machinery; start.ts passes a thunk that calls resumeTask with real deps.
 
+import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
 import { and, eq, inArray } from 'drizzle-orm'
-import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
+import { DAEMON_RESTART_ERROR_SUMMARY,
+  taskWorkspacePhase,
+} from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
@@ -72,6 +75,9 @@ export async function autoResumeInterruptedTasks(
       workgroupConfigJson: tasks.workgroupConfigJson,
       // RFC-287 G7 / AC-10：判「还没建出工作树」用（见下方 skip 分支）。
       worktreePath: tasks.worktreePath,
+      // RFC-317 T50（LC-05）—— 补上 `workspacePruningAt`：此前只看 prunedAt，
+      // 于是「正在打墓碑」的任务会被当成「还在准备仓库」。
+      workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
@@ -94,6 +100,9 @@ export async function autoResumeInterruptedTasks(
       workgroupConfigJson: tasks.workgroupConfigJson,
       // RFC-287 G7 / AC-10：判「还没建出工作树」用（见下方 skip 分支）。
       worktreePath: tasks.worktreePath,
+      // RFC-317 T50（LC-05）—— 补上 `workspacePruningAt`：此前只看 prunedAt，
+      // 于是「正在打墓碑」的任务会被当成「还在准备仓库」。
+      workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
     })
     .from(tasks)
@@ -121,6 +130,14 @@ export async function autoResumeInterruptedTasks(
   for (const w of wedged) if (!byId.has(w.id)) byId.set(w.id, w)
   const candidates = [...byId.values()]
 
+  // RFC-317 T50（LC-05）—— 一次查出这批候选里谁有 `__repo_prep__` 行。
+  // 此前这里根本不看准备行，于是**存量**物化失败的任务行（空路径、无墓碑、也从来
+  // 没有过准备行）会被路由去 `retryRepoPrep()`——而 AC-11 的重试入口对它不存在。
+  const prepRowTaskIds = taskIdsWithRepoPrepRow(
+    db,
+    candidates.map((candidate) => candidate.id),
+  )
+
   const resumed: string[] = []
   const skipped: string[] = []
   for (const t of candidates) {
@@ -133,9 +150,18 @@ export async function autoResumeInterruptedTasks(
     // 一个还不存在的工作树。这里显式跳过，且**不计入熔断**——它不是一次失败的恢复
     // 尝试，是一次根本不该发起的尝试。
     //
-    // 判据与 `assertWorktreePresentForResume` 同源：空路径 + 没打墓碑。打了墓碑的是
-    // 老的「工作区已回收」形态，仍按既有路径处理（resume 报 410、计熔断）。
-    if (t.worktreePath === '' && t.workspacePrunedAt === null) {
+    // RFC-317 T50（LC-05）—— 判据现在**真的**与 `assertWorktreePresentForResume` 同源：
+    // 三处共用 shared 的 `taskWorkspacePhase`。此前这句注释是错的——那时这里少判
+    // `workspacePruningAt` 与「确有准备行」两条，对同一行给出的结论与 task.ts 不同。
+    // 打了墓碑的是老的「工作区已回收」形态，仍按既有路径处理（resume 报 410、计熔断）。
+    if (
+      taskWorkspacePhase({
+        worktreePath: t.worktreePath,
+        workspacePruningAt: t.workspacePruningAt,
+        workspacePrunedAt: t.workspacePrunedAt,
+        hasRepoPrepRow: prepRowTaskIds.has(t.id),
+      }) === 'preparing'
+    ) {
       // plan.md T13⑥ 要的是**重跑准备**，不是跳过——daemon 在克隆中途重启，用户期望
       // 的是它继续把仓库准备好，而不是留一个要手点重试的任务。resume 对它必然失败
       // （`task-repo-prep-incomplete`），所以走单独的注入口。

@@ -369,6 +369,103 @@ export function allowedFromForTaskEvent(ev: TaskTransitionEvent): readonly TaskS
   return allowed
 }
 
+/**
+ * RFC-317 T50（findings LC-05）—— 任务**工作区**处于哪一阶段。
+ *
+ * 这个判断此前被手写了**三份，三份互不相同**，而其中两份的注释还各自声称
+ * 「判据与 assertWorktreePresentForResume 同源」：
+ *
+ *   ① `services/task.ts assertWorktreePresentForResume`
+ *      `worktreePath === '' && workspaceState === 'available' && 有 __repo_prep__ 行`
+ *   ② `services/autoResume.ts`      `worktreePath === '' && workspacePrunedAt === null`
+ *   ③ `services/stuckTaskDetector.ts` 同 ②
+ *
+ * 两处分歧、后果各不相同：
+ *   · ②③ 不看 `workspacePruningAt`——正在打墓碑的任务会被它们当成「还在准备仓库」；
+ *   · ②③ 不要求存在 `__repo_prep__` 行。于是一条**存量**物化失败的任务行
+ *     （空路径、无墓碑、也从来没有过准备行——迁移 0034 回填过空路径的 task_repos，
+ *     迁移 0085 新增墓碑列时不回填）在三处得到三种结论：`task.ts` 判它「不是准备中」
+ *     → 落到 `existsSync('')` → 410「被 worktree GC 回收了」（归因错误但至少有个说法）；
+ *     `autoResume` 把它路由去 `retryRepoPrep()`——**而 AC-11 的重试入口对它根本不存在**，
+ *     等于把人指向一扇不存在的门；`stuckTaskDetector` 则把它的 S4 告警静音 45 分钟。
+ *
+ * 统一到 ① 的判据：它是三者里唯一考虑过存量行的。**这会改变 ②③ 对存量行的行为**
+ * ——那正是本次要修的 bug，不是附带损伤。
+ *
+ * 保持**纯函数**：`hasRepoPrepRow` 由调用方查库后传进来，本函数不碰 DB，
+ * 于是它能被 shared 持有、能被前端复用、也能被逐条断言。
+ */
+export type TaskWorkspacePhase = 'preparing' | 'available' | 'pruning' | 'pruned'
+
+export function taskWorkspacePhase(row: {
+  readonly worktreePath: string
+  readonly workspacePruningAt: number | null
+  readonly workspacePrunedAt: number | null
+  /** 该任务是否已落下 `__repo_prep__` 的 node_run 行。 */
+  readonly hasRepoPrepRow: boolean
+}): TaskWorkspacePhase {
+  // 墓碑优先：已打/正在打墓碑就是回收路径，与有没有准备行无关。
+  if (row.workspacePrunedAt !== null) return 'pruned'
+  if (row.workspacePruningAt !== null) return 'pruning'
+  // 空路径 + 无墓碑 + **确有准备行** = RFC-287 G7 的准备阶段。
+  // 少了最后一条，存量物化失败行会被谎报成「准备未完成」并劝人去重试准备。
+  if (row.worktreePath === '' && row.hasRepoPrepRow) return 'preparing'
+  return 'available'
+}
+
+// ---------------------------------------------------------------------------
+// RFC-317 T51（findings LC-06）—— 从转移表**派生**的状态集合。
+// ---------------------------------------------------------------------------
+//
+// 这三个集合此前是**六份手抄的字面量数组**，散在 services/task.ts、
+// task-execution 的两个文件、services/restore.ts、services/worktreeBackup.ts
+// 与 stuckTaskDetector.ts 里。代价是实测过的：
+//
+//   · 加第五个 TaskStatus 是一次六处人肉扫荡，编译器一句话都不会说——那些数组是
+//     字面量类型、仅仅「可赋值给 TaskStatus[]」，没有任何东西强制它们覆盖全集。
+//     实证：往 TASK_STATUS 里加 'paused' 再跑 typecheck + 全量测试，一条不红，
+//     而 cancelTask / restore 挂起 / worktree 备份 / 来源终止 / 卡死检测**全都会
+//     静默忽略** paused 任务。
+//   · 更糟的是**同名反义**：restore.ts 与 worktreeBackup.ts 各有一个
+//     `NON_TERMINAL_TASK_STATUSES`，里面**含** `interrupted`；而本文件的
+//     `TERMINAL_TASK_STATUSES` 把 `interrupted` 算作终态。同一个名字，隔两个文件
+//     意思正好相反，读代码的人无从判断哪个是对的。
+//
+// 下面三个各自说清自己是什么，并且**都从表里算出来**（`interrupted` 那一条是显式
+// 的并集，不是抄写——见其注释）。
+
+/**
+ * 可取消的任务状态 = `cancel` 事件的 allowed-from。
+ *
+ * 今天它恰好也等于「非终态」，但两者**不是同一个概念**：前者问「现在能不能取消」，
+ * 后者问「还会不会再动」。将来若出现一个非终态但不可取消的状态（例如某种不可中断的
+ * 收尾阶段），这里会自动跟着 `cancel` 走，而不需要谁记得去改。
+ */
+export const CANCELABLE_TASK_STATUSES: readonly TaskStatus[] = allowedFromForTaskEvent({
+  kind: 'cancel',
+})
+
+/** 可被 resume 复活的任务状态 = `resume` 事件的 allowed-from。 */
+export const RESUMABLE_TASK_STATUSES: readonly TaskStatus[] = allowedFromForTaskEvent({
+  kind: 'resume',
+})
+
+/**
+ * 可能仍占着一份**活工作区**的任务状态 = 可取消集 ∪ `{'interrupted'}`。
+ *
+ * `interrupted` 为什么在里面：它是唯一一个「已经是终态、却从没走过任何收尾」的状态
+ * ——daemon 在任务跑到一半时死了，进程没被回收、工作区原样躺在磁盘上。备份与
+ * restore 后的自动恢复挂起都必须把它算进来，否则会漏掉正是最需要处理的那一批。
+ *
+ * 这条并集是**显式声明**而不是从某个事件派生：转移表回答的是「状态之间怎么走」，
+ * 回答不了「磁盘上还有没有东西」。把它写成显式并集，至少让「为什么多这一个」有处可读，
+ * 而不是像此前那样躺在两个同名反义的字面量数组里。
+ */
+export const LIVE_WORKTREE_TASK_STATUSES: readonly TaskStatus[] = [
+  ...CANCELABLE_TASK_STATUSES,
+  'interrupted',
+]
+
 // ===========================================================================
 // RFC-144 — node_runs.merge_state state machine (the third lifecycle).
 //

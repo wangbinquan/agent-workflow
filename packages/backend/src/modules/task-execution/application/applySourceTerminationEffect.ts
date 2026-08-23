@@ -1,4 +1,5 @@
 // RFC-303 — canonical task-owned source-termination application service.
+import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { and, asc, eq, lt } from 'drizzle-orm'
 
@@ -27,12 +28,8 @@ import { setTaskStatus } from '@/services/lifecycle'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
 
-const CANCELABLE: readonly TaskStatus[] = [
-  'pending',
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-]
+// RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
+const CANCELABLE: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
 
 type AppliedTarget = {
   receipt: TaskSourceTerminationReceipt

@@ -1,6 +1,7 @@
 // RFC-303 — task-owned source termination snapshot, monotonic fence, and stop cause.
 // Domain-only: integration may depend on this public vocabulary, but this file
 // must never import webhook persistence or provider adapters.
+import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
 import type { TaskStatus } from '@agent-workflow/shared'
 
 export type SourceTerminationFence = 'closed' | 'merged'
@@ -58,12 +59,8 @@ export function taskStopProjection(cause: TaskStopCause): TaskStopProjection {
   }
 }
 
-const CANCELABLE_STATUSES: ReadonlySet<TaskStatus> = new Set([
-  'pending',
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-])
+// RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。Set 形态保留（本文件按单点查询用）。
+const CANCELABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(CANCELABLE_TASK_STATUSES)
 
 export type SourceTerminationTargetDisposition = 'cancel' | 'already-terminal'
 

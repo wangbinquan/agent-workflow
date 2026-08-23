@@ -15,8 +15,21 @@
 //     runtime depending on envelope parsing). Caller supplies the
 //     explicit `allowedFrom` allowlist. Still CAS-strict.
 //
-// ESLint rule `no-direct-node-run-status-write` enforces that direct
-// `db.update(nodeRuns).set({ status: ... })` only appears inside this file.
+// RFC-317 T49（findings LC-07）—— 这里原本有一句：「某条 ESLint 规则强制
+// `db.update(nodeRuns).set({ status: ... })` 只能出现在本文件内」，并点了那条规则的名字。
+// **那条规则在全仓不存在**：`eslint.config.js` 只有 js/tseslint recommended、react 规则
+// 与三个 `no-restricted-imports` 块，没有自定义插件、没有 rules 目录、没有本地规则包；
+// 全仓搜那个名字，唯一命中就是那句注释自己。
+//
+// 这是最坏的一类过期断言：**审内核是否密封的人第一眼读到的就是它**，会据此认定存在
+// 一条 lint 级、不可绕过的守卫，从而不再去查真正的防线。真正的防线是
+// `packages/backend/tests/lifecycle-grep-guard.test.ts` 的源码扫描——它挡得住直写，
+// 但**可被文件内的注释标记 opt out**（findings LC-02），强度与 lint 规则不是一回事。
+//
+// 直写 `db.update(nodeRuns).set({ status: ... })` 的约束由那个守卫承担；本文件是唯一
+// 被授权这么做的地方。⚠️ 别再把那个规则名写回任何注释里：
+// `tests/architecture/rfc317-allow-terminal-ledger.test.ts` 断言它在全仓零命中，
+// 写回去会红——那是刻意的，避免同一句谎话被复述。
 //
 // Broadcast ordering rule (RFC-098 B3, audit S-28): write the DB FIRST, then
 // broadcast. A `node.status` WS ping must always FOLLOW the CAS that produced
@@ -178,7 +191,19 @@ export async function setNodeRunStatus(args: {
   to: NodeRunStatus
   allowedFrom: readonly NodeRunStatus[]
   extra?: NodeRunStatusUpdateExtra
-  /** Default false. Set true ONLY for fixup scripts — never in normal flows. */
+  /**
+   * 允许把**终态**行改写掉。默认 false。
+   *
+   * ⚠️ RFC-317 T49（findings LC-03）—— 这里原本写着「Set true ONLY for fixup scripts
+   * — never in normal flows」。实测**不成立**：全仓 21 个生产站点传它，其中包含正常
+   * 用户流程（review supersede 把 `done` 的 node_run 改写成 `canceled`、评审兄弟级联
+   * 把 `done` 改回 `pending`）。共享表在这件事上是斩钉截铁的——`nextNodeRunStatus`
+   * 对任何终态 `cur` 直接抛。
+   *
+   * 现状逐文件记在 `tests/architecture/rfc317-allow-terminal-ledger.test.ts`（只减不增，
+   * 每条写清它改写的是哪种终态→X）。**新增站点前先去读那份账本**：文档说「五个持有者」
+   * 而实际二十一个的时候，审第 22 个站点的人是没有基线的。
+   */
   allowTerminal?: boolean
   /** Diagnostic label for errors — appears in the IllegalTransition message. */
   reason?: string
@@ -452,9 +477,12 @@ export function registerTerminalWorkspacePruneEffect(
 /**
  * CAS-strict task status write. `allowedFrom` is the explicit legal-source
  * set for this transition (RFC-097 design §1 matrix); terminal sources are
- * refused unless the caller holds the `allowTerminal` escape hatch (holders:
- * resumeTask, retryNode, repair CR-1, repair T3, and RFC-109 syncTaskWorkflow
- * — all via the `transitionTaskStatusByEvent` event path).
+ * refused unless the caller holds the `allowTerminal` escape hatch.
+ *
+ * ⚠️ RFC-317 T49（findings LC-03）—— 这里原本点名了**五个持有者**（resumeTask /
+ * retryNode / repair CR-1 / repair T3 / RFC-109 syncTaskWorkflow，「all via the
+ * `transitionTaskStatusByEvent` event path」）。实际是 21 个生产站点，且并非都走事件路径。
+ * 真实分布逐文件记在 `tests/architecture/rfc317-allow-terminal-ledger.test.ts`（只减不增）。
  *
  * Throws ConflictError('illegal-task-transition') when the current status is
  * outside `allowedFrom`, ConcurrentTaskTransition when the CAS lost a race.

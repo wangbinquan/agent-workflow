@@ -1,6 +1,7 @@
 // Task service — start / list / get.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
+import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
 import type {
   ScriptLanguage,
   PlannedDirectoryNode,
@@ -45,6 +46,8 @@ import {
   planCanonicalWorkflowLayout,
   parseTriggerContextJson,
   webhookTaskSourceLinkOf,
+  CANCELABLE_TASK_STATUSES,
+  taskWorkspacePhase,
 } from '@agent-workflow/shared'
 import type {
   CommitPushMeta,
@@ -3441,18 +3444,18 @@ function assertWorktreePresentForResume(db: DbClient, task: Task, verb: string):
   // `task_repos`、迁移 0085 新增墓碑列时不回填）。只凭这两个标量判，会把**存量**
   // 物化失败任务谎报成「repository preparation has not completed」并劝用户去重试准备
   // ——而它根本没有准备行，AC-11 的重试入口对它不存在，等于把人指向一扇不存在的门。
-  const hasPrepRow =
-    db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-      .limit(1)
-      .all().length > 0
-  if (
-    task.worktreePath === '' &&
-    (task.workspaceState ?? 'available') === 'available' &&
-    hasPrepRow
-  ) {
+  // RFC-317 T50（LC-05）—— 判据收进 `taskWorkspacePhase`（shared，纯函数）。
+  // 此前这里是三份手写判据中唯一考虑过存量行的那一份；另两份（autoResume /
+  // stuckTaskDetector）的注释声称与本处同源，实际上少了两条判定，对同一行给出不同结论。
+  // `workspaceState` 是 `workspacePruningAt` / `workspacePrunedAt` 的 DTO 投影，
+  // 这里把两个原始列还原回去，让三个调用点吃同一个函数。
+  const phase = taskWorkspacePhase({
+    worktreePath: task.worktreePath,
+    workspacePruningAt: (task.workspaceState ?? 'available') === 'pruning' ? 1 : null,
+    workspacePrunedAt: (task.workspaceState ?? 'available') === 'pruned' ? 1 : null,
+    hasRepoPrepRow: taskIdsWithRepoPrepRow(db, [task.id]).has(task.id),
+  })
+  if (phase === 'preparing') {
     throw new ConflictError(
       'task-repo-prep-incomplete',
       `task '${task.id}' has no worktree yet — repository preparation has not completed; ` +
@@ -3655,12 +3658,6 @@ async function reapHeldRuntimeSessionOwnersForTask(
 // awaiting_review / awaiting_human ARE cancelable (a user who does not want
 // to answer an agent's questions must have an exit; audit P1 F-15). The old
 // pending/running-only gate predated the awaiting statuses.
-const CANCELABLE_TASK_STATUSES = [
-  'pending',
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-] as const
 
 export async function cancelTask(
   db: DbClient,

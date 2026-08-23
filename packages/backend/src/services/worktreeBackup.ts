@@ -15,6 +15,7 @@
 // commits / branch live in the cached mirror under ~/.agent-workflow/repos which
 // the backup excludes.
 
+import { LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join, sep } from 'node:path'
@@ -26,13 +27,6 @@ import { createLogger } from '@/util/log'
 
 const log = createLogger('worktreeBackup')
 
-const NON_TERMINAL_TASK_STATUSES = [
-  'running',
-  'pending',
-  'awaiting_review',
-  'awaiting_human',
-  'interrupted',
-]
 
 /** Per-task worktree that exceeding this is skipped (recorded), not captured. */
 export const DEFAULT_MAX_WORKTREE_BYTES = 64 * 1024 * 1024
@@ -100,7 +94,7 @@ export async function captureWorktrees(
       baseCommit: tasks.baseCommit,
     })
     .from(tasks)
-    .where(inArray(tasks.status, NON_TERMINAL_TASK_STATUSES as never))
+    .where(inArray(tasks.status, [...LIVE_WORKTREE_TASK_STATUSES]))
     .all()
 
   const wtDir = join(stagingDir, 'worktrees')
@@ -199,7 +193,7 @@ export async function reconstructWorktrees(
       skipped.push({ taskId: meta.taskId, reason: 'task no longer in DB' })
       continue
     }
-    if (!NON_TERMINAL_TASK_STATUSES.includes(row.status)) {
+    if (!LIVE_WORKTREE_TASK_STATUSES.includes(row.status)) {
       skipped.push({ taskId: meta.taskId, reason: `terminal (${row.status})` })
       continue
     }

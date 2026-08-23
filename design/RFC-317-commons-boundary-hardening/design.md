@@ -205,6 +205,15 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
   - `DE-02` —— **关闭 finding 逐条点名的两处读**（`planJson` 泄漏、`state === 'completed'` 枚举泄漏），落为 `EmployeeReactionRoundQueryPort.frozenPlan / lastSettledRound`。**未关闭的更深一层**：development-automation 还在 insert/update `employeeCaseWorkspaces` 与 `employeeRoundWorkspaceStates`（**共同写**，不是借读），以及读 `employeeApprovalSagas` / `employeeChangeCandidates`。这需要先裁决工作区持久化归属哪一侧，是一次独立设计决策，不该塞进 T41——连同 `integration → development*Adapter*` 两条，共 8 条逐条入 R5 账本，各带 `why` + 指向 B7 / B10 的 `removeWhen`。
   - **遗留债（已记）**：`frozenPlan` 返回的仍是 `planJson` 原文，消费方用自己那份 zod 视图 parse。文档契约与 `ReactionExecutionPort.launch` 携带的是同一份，但没有声明成 DTO；收敛它需要 OS 侧提供运行期 schema，留给 B7。
 
+### B7 落地记录（T47–T51，findings LC-01 / LC-02 / LC-03 / LC-05 / LC-06 / LC-07）
+
+- **T47（LC-01）**：把「转移表是超集」那句 docstring 变成可执行判据——AST 抽出所有**静态可知**的 `(to, allowedFrom)` CAS 站点（74 个），逐个要求 `allowedFrom ⊆ 以 to 为目标的全部事件的 allowed-from 之并`。实测**23 处越界**（finding 说的「≥5」是低估），全部集中在终态改写一件事上，与 `allowTerminal` 账本高度重合。本次**不改语义**（修复动作把卡住的终态行拉回可续跑、调度器重新认领被打断的 run、评审 supersede 作废已完成轮次——都是产品行为，去留是独立决策），逐条入偏离账本、只减不增。已知盲区明写在负向 fixture 里：`allowedFrom: SOME_CONST` 之类的动态形态抽不到。
+- **T48（LC-02）**：`lifecycle-grep-guard` 的注释标记从**授权**降级为**文档**。改造前只要在前 5 行写下标记，任意文件、任意状态、任意次数的直写都会从扫描结果里消失——而它的两个兄弟棘轮（`tasks.status` 的 s14、`merge_state` 的 rfc144）都是逐文件精确计数的硬 allowlist。现在计数表说了算（`lifecycle.ts:3 / terminalSweep.ts:3 / clarify/seal.ts:1`），标记仍必须写（说明是有意为之）但不再放行。变异（加一处带标记的 `to:'running'` 直写）实测变红。
+- **T49（LC-03 / LC-07）**：`allowTerminal` 逐文件精确账本（21 个生产站点，AST 计数免疫注释），每条写清它改写的是哪种终态→X；同时更正内核里两处过期声明——「五个具名持有者」与**一条并不存在的 ESLint 规则**。后者是最坏的一类过期断言：审内核是否密封的人第一眼读到它，会据此认定存在 lint 级不可绕过的守卫，从而不再去查真正的（可被注释 opt out 的）防线。守卫顺带断言那个规则名在全仓零命中，避免同一句谎话被复述。
+- **T50（LC-05）**：抽出 `taskWorkspacePhase`（shared，纯函数，四相）。改造前三处手写、三处不同，其中两处的注释还各自声称与第三处同源。统一到最严格的那一份——它是唯一考虑过**存量物化失败行**的：那种行空路径、无墓碑、也从来没有过 `__repo_prep__` 行，此前在三处得到三种结论（410 归因错误 / 被路由到一个对它不存在的重试入口 / S4 告警被静音 45 分钟）。这**改变了 autoResume 与 stuckTaskDetector 对存量行的行为**，那正是要修的 bug。
+- **T51（LC-06）**：`CANCELABLE_TASK_STATUSES` / `RESUMABLE_TASK_STATUSES` 从转移表派生，`LIVE_WORKTREE_TASK_STATUSES` 显式声明为「可取消集 ∪ interrupted」并写清 interrupted 为何在内（唯一一个已是终态却从没走过收尾的状态）。六处手抄全部改 import，另外发现并迁移两处（`pluginGenerationGc` / `workgroup/room`）。棘轮判据几经收窄：初版「≥3 个任务状态字面量」在真实语料上报出 **24 处误报**（NodeRunStatus 清单、schema 列声明、语义不同的子集），最终定为**集合精确相等** + 三条带 `why`/`removeWhen` 的豁免，并加「豁免必须承重」自证——该自证当场抓出我自己写的两条空豁免。
+- **划分闭包**：`TASK_STATUS` 的每个成员必须落在「可取消」或「终态」之一且仅一个。变异（往 `TASK_STATUS` 加 `'paused'`）实测变红——而 finding 的证伪方式明确记着，改造前做同一件事「一条不红」。
+
 ### R6 — 注册表 → 消费者反向完备
 
 - **不变量**：`commons-manifest.json` 中标记 `registry: true` 的每个导出注册表，其**每个键**都必须有生产消费者；每个**维度**（行为表的列）都必须被生产代码读过至少一次。

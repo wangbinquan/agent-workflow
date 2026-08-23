@@ -26,6 +26,7 @@ import {
   parseMsgShardKey,
   WorkgroupRuntimeConfigSchema,
   type WorkgroupRuntimeConfig,
+  CANCELABLE_TASK_STATUSES,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 
@@ -348,7 +349,8 @@ export function buildRoomReads(
       .where(
         and(
           isNotNull(tasks.workgroupId),
-          inArray(tasks.status, ['pending', 'running', 'awaiting_review', 'awaiting_human']),
+          // RFC-317 T51（LC-06）—— 从转移表派生，不再内联手抄。
+          inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]),
         ),
       )
     // RFC-217 T2 — one batch read for every candidate's gate status (the old

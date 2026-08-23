@@ -16,7 +16,6 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
-const LIFECYCLE_HELPER = resolve(BACKEND_SRC, 'services', 'lifecycle.ts')
 
 /**
  * Match anything that looks like `.update(nodeRuns)` followed (eventually)
@@ -53,6 +52,13 @@ function listTsFiles(dir: string): string[] {
 }
 
 interface Match {
+  /**
+   * RFC-317 T48（findings LC-02）—— 这条**只是记录**，不再决定放行。
+   * 改造前：只要在前 5 行写下 `rfc053-allow-direct-status-write`，任意文件、任意状态、
+   * 任意次数的直写都会从扫描结果里消失——这是三台状态机里最弱的一道防线
+   * （tasks.status 与 merge_state 都是逐文件精确计数的硬 allowlist）。
+   */
+  marked: boolean
   file: string
   line: number
   preview: string
@@ -85,11 +91,8 @@ function findDirectStatusWrites(): Match[] {
           // further down).
           const lookbackStart = Math.max(0, upstreamLine - 5)
           const preceding = lines.slice(lookbackStart, i + 1).join('\n')
-          if (/rfc053-allow-direct-status-write/.test(preceding)) {
-            lookahead = 0
-            continue
-          }
           matches.push({
+            marked: /rfc053-allow-direct-status-write/.test(preceding),
             file: file.replace(`${BACKEND_SRC}/`, ''),
             line: i + 1,
             preview: lines
@@ -114,7 +117,7 @@ function findDirectStatusWrites(): Match[] {
       ) {
         const lookbackStart = Math.max(0, i - 5)
         const preceding = lines.slice(lookbackStart, i + 1).join('\n')
-        if (/rfc053-allow-direct-status-write/.test(preceding)) continue
+        const marked = /rfc053-allow-direct-status-write/.test(preceding)
         // Avoid duplicate of multi-line catch above — only add if not already
         // captured at this line.
         if (
@@ -123,6 +126,7 @@ function findDirectStatusWrites(): Match[] {
           )
         ) {
           matches.push({
+            marked,
             file: file.replace(`${BACKEND_SRC}/`, ''),
             line: i + 1,
             preview: `  ${i + 1}: ${line}`,
@@ -134,51 +138,76 @@ function findDirectStatusWrites(): Match[] {
   return matches
 }
 
-describe('RFC-053 PR-B — no direct node_runs.status writes outside lifecycle.ts', () => {
-  test('grep guard: zero direct status writes in services/ and routes/', () => {
-    const matches = findDirectStatusWrites()
-    // The lifecycle helper file itself is allowed to contain direct writes
-    // (it's THE single writer). Filter it out.
-    const offenders = matches.filter((m) => !m.file.endsWith('services/lifecycle.ts'))
-    if (offenders.length > 0) {
-      const msg = offenders.map((m) => `\n${m.file}:${m.line}\n${m.preview}\n`).join('\n---\n')
-      // Embed offending sites in the error so the dev sees exactly what to fix.
-      throw new Error(
-        `Found ${offenders.length} direct node_runs.status write(s) outside services/lifecycle.ts:\n${msg}\n` +
-          `Use transitionNodeRunStatus() or setNodeRunStatus() from @/services/lifecycle.`,
-      )
-    }
-    expect(offenders.length).toBe(0)
+/**
+ * 内核自己的直写条数：`transitionNodeRunStatus` / `setNodeRunStatus` 各一处，
+ * 外加 CAS 争用时的重试写。单独提出来是因为下面两条断言都要用到同一个数字——
+ * 写死两遍的话，改内核时只改一处会得到一个说谎的绿。
+ */
+const KERNEL_DIRECT_WRITES = 3
+
+/**
+ * RFC-317 T48（findings LC-02）—— **逐文件精确计数**的硬 allowlist。
+ *
+ * 改造前这条守卫的形态是：扫到直写 → 检查前 5 行有没有
+ * `rfc053-allow-direct-status-write` → 有就当作没看见。任意文件、任意状态、任意次数。
+ * 而它的两个兄弟棘轮（`tasks.status` 的 s14、`merge_state` 的 rfc144）**都是**逐文件
+ * 精确计数的硬 allowlist（`{ 'services/lifecycle.ts': 1 }` / `{ …: 2 }`，并各自单独断言
+ * 那个数字，防止空绿）。三台状态机里，调度器实际驱动的那一台防线最弱。
+ *
+ * 每一条被标记逃逸的直写同时绕过 `assertNodeRunSourceTerminationAdmission`
+ * （RFC-303 的 MR/PR 围栏）与终态覆写闸。今天这几处写的都是未设防的状态
+ * （'canceled' / 'done'），所以没坏事——但**同一条逃生口对写 'running' 或
+ * 'awaiting_review' 一视同仁**，而那正是 RFC-303 存在的理由。
+ *
+ * 现在：标记留作**文档**（非内核直写必须写，说明它是有意为之），但**授权改由这份
+ * 计数表给**。新增文件或增加次数 ⇒ 红；修掉一处却不销账 ⇒ 也红。
+ */
+const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
+  // 内核：`transitionNodeRunStatus` 与 `setNodeRunStatus` 各一处，外加 CAS 的重试写。
+  'services/lifecycle.ts': KERNEL_DIRECT_WRITES,
+  // RFC-303 之前就存在的三处终态清扫：把超时/孤儿 run 收成 'canceled'。
+  'services/terminalSweep.ts': 3,
+  // clarify 封存：把已回答的澄清 run 收成 'done'。
+  'services/clarify/seal.ts': 1,
+}
+
+describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件精确账本', () => {
+  const matches = findDirectStatusWrites()
+
+  test('语料非空：确实扫到了直写站点（扫空即假绿）', () => {
+    // 两个兄弟棘轮都单独断言过内核那个数字，理由相同：一个「零违规」的绿，
+    // 与一个「扫描根失效、什么都没扫到」的绿，在断言层面完全同形。
+    expect(matches.length).toBeGreaterThan(0)
   })
 
-  test('the helper itself contains its expected direct writes (regression guard)', () => {
-    const src = readFileSync(LIFECYCLE_HELPER, 'utf8')
-    const lines = src.split('\n')
-    let direct = 0
-    // Scan for any `.update(nodeRuns)` and find the following `.set({status:...})`
-    // within 6 lines. Each match must have the marker within 5 lines before
-    // the .update line.
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!
-      if (!PATTERN_HAS_UPDATE_NODE_RUNS.test(line)) continue
-      if (isCommentLine(line)) continue
-      let found = PATTERN_HAS_SET_STATUS.test(line)
-      if (!found) {
-        for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
-          if (PATTERN_HAS_SET_STATUS.test(lines[j]!)) {
-            found = true
-            break
-          }
-        }
-      }
-      if (!found) continue
-      direct += 1
-      const lookbackStart = Math.max(0, i - 5)
-      const preceding = lines.slice(lookbackStart, i + 1).join('\n')
-      expect(preceding).toContain('rfc053-allow-direct-status-write')
-    }
-    // Both transitionNodeRunStatus + setNodeRunStatus contain one direct write.
-    expect(direct).toBeGreaterThanOrEqual(2)
+  test('逐文件计数与 allowlist **逐条相等**（加一处或加一个文件都红）', () => {
+    const counts: Record<string, number> = {}
+    for (const match of matches) counts[match.file] = (counts[match.file] ?? 0) + 1
+    expect(
+      Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b))),
+      '新增了 node_runs.status 直写站点——改用 transitionNodeRunStatus() / setNodeRunStatus()；' +
+        '确有必要则在 allowlist 里显式加一条并说清它写的是哪个状态。' +
+        '反过来，修掉一处却没把数字改小也会红：差额会变成下一个人的免费槽位。',
+    ).toEqual(
+      Object.fromEntries(
+        Object.entries(DIRECT_STATUS_WRITE_ALLOWLIST).sort(([a], [b]) => a.localeCompare(b)),
+      ),
+    )
+  })
+
+  test('标记降级为**文档**：非内核的每一处直写仍必须带标记，但标记不再放行', () => {
+    // 标记还有价值——它让读代码的人知道「这是有意的，不是漏改」。
+    // 它失去的只是「让扫描器闭眼」这项权力。
+    const unmarked = matches
+      .filter((match) => match.file !== 'services/lifecycle.ts' && !match.marked)
+      .map((match) => `${match.file}:${match.line}`)
+    expect(unmarked, '非内核直写没有写明意图标记').toEqual([])
+  })
+
+  test('内核自己的直写都带标记（回归守卫）', () => {
+    const kernel = matches.filter((match) => match.file === 'services/lifecycle.ts')
+    expect(kernel.length).toBe(KERNEL_DIRECT_WRITES)
+    expect(kernel.every((match) => match.marked)).toBe(true)
   })
 })
 

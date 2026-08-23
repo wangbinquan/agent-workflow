@@ -13,6 +13,7 @@
 //   - pre-migration backups are binary-pinned: forward-rolling one onto a
 //     different binary just re-runs the migration that broke it.
 
+import { LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
 import { Database } from 'bun:sqlite'
 import {
   cpSync,
@@ -300,13 +301,6 @@ export function swapInDbFile(incomingDb: string, dbPath: string): void {
 
 // Non-terminal (still-active / recoverable) task statuses. Terminal = done /
 // failed / canceled. Kept local so restore doesn't couple to the lifecycle module.
-const NON_TERMINAL_TASK_STATUSES = [
-  'running',
-  'pending',
-  'awaiting_review',
-  'awaiting_human',
-  'interrupted',
-] as const
 
 /**
  * RFC-213 G4a — after a restore, set `auto_recovery_suspended = 1` on every
@@ -316,13 +310,13 @@ const NON_TERMINAL_TASK_STATUSES = [
  */
 function suspendNonTerminalTasksAfterRestore(db: DbClient): number {
   const sqlite = (db as unknown as { $client: Database }).$client
-  const placeholders = NON_TERMINAL_TASK_STATUSES.map(() => '?').join(',')
+  const placeholders = LIVE_WORKTREE_TASK_STATUSES.map(() => '?').join(',')
   const res = sqlite
     .query(
       `UPDATE tasks SET auto_recovery_suspended = 1 ` +
         `WHERE auto_recovery_suspended = 0 AND status IN (${placeholders})`,
     )
-    .run(...NON_TERMINAL_TASK_STATUSES)
+    .run(...LIVE_WORKTREE_TASK_STATUSES)
   return res.changes
 }
 

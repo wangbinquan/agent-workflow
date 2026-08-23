@@ -64,6 +64,18 @@
       "lines": 197
     },
     {
+      "id": "rfc317-allow-terminal-ledger",
+      "file": "packages/backend/tests/architecture/rfc317-allow-terminal-ledger.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 701,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 203
+    },
+    {
       "id": "rfc317-architecture-ledgers",
       "file": "packages/backend/tests/architecture/rfc317-architecture-ledgers.test.ts",
       "runner": "bun",
@@ -148,6 +160,18 @@
       "lines": 217
     },
     {
+      "id": "rfc317-lifecycle-status-sets",
+      "file": "packages/backend/tests/architecture/rfc317-lifecycle-status-sets.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 701,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 291
+    },
+    {
       "id": "rfc317-module-boundary",
       "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
       "runner": "bun",
@@ -194,6 +218,30 @@
       "negativeFixture": true,
       "classified": true,
       "lines": 242
+    },
+    {
+      "id": "rfc317-transition-table-oracle",
+      "file": "packages/backend/tests/architecture/rfc317-transition-table-oracle.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 701,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 409
+    },
+    {
+      "id": "rfc317-workspace-phase",
+      "file": "packages/backend/tests/architecture/rfc317-workspace-phase.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 701,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 227
     },
     {
       "id": "e2e-sqlite-fixture-lock-contention",
