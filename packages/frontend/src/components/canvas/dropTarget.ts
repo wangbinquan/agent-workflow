@@ -18,7 +18,7 @@
 // (reject inbound edges in v1) are NOT body-drop targets.
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { declaredPorts } from '@agent-workflow/shared'
+import { declaredPorts, CLARIFY_SOURCE_PORT_NAME } from '@agent-workflow/shared'
 
 /**
  * The target node's current input port names, mirroring how `computePorts`
@@ -130,7 +130,8 @@ export function findNewInputTarget(
   sourceNodeId: string,
   sourceHandle: string,
 ): { nodeId: string; portName: string } | null {
-  if (sourceHandle === '__clarify__') return null
+  // RFC-317 T59（NK-03）—— 改 import 共享常量，不再散写字面量。
+  if (sourceHandle === CLARIFY_SOURCE_PORT_NAME) return null
   const sourceNode = definition.nodes.find((n) => n.id === sourceNodeId)
   if (sourceNode?.kind === 'clarify' || sourceNode?.kind === 'clarify-cross-agent') return null
   for (let i = boxes.length - 1; i >= 0; i -= 1) {

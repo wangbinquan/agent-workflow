@@ -1660,6 +1660,18 @@
       "lines": 116
     },
     {
+      "id": "rfc317-wrapper-boundary-promoters",
+      "file": "packages/shared/tests/rfc317-wrapper-boundary-promoters.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 60
+    },
+    {
       "id": "signal-prompt-guard",
       "file": "packages/shared/tests/signal-prompt-guard.test.ts",
       "runner": "bun",

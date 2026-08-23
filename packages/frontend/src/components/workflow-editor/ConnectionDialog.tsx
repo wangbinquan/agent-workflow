@@ -4,6 +4,7 @@ import {
   type Agent,
   type WorkflowDefinition,
   type WorkflowNode,
+  CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
 } from '@agent-workflow/shared'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -157,7 +158,11 @@ function requestForSelection(fields: {
     (sourceNode.kind === 'agent-single' && targetNode.kind === 'clarify-cross-agent') ||
     (sourceNode.kind === 'clarify-cross-agent' && targetNode.kind === 'agent-single')
   ) {
-    if (sourceNode.kind === 'clarify-cross-agent' && fields.sourcePortName === 'to_designer') {
+    // RFC-317 T59（NK-03）—— 端口名改 import 共享常量。
+    if (
+      sourceNode.kind === 'clarify-cross-agent' &&
+      fields.sourcePortName === CROSS_CLARIFY_OUT_TO_DESIGNER_PORT
+    ) {
       return {
         kind: 'cross-designer',
         crossClarifyNodeId: sourceNode.id,

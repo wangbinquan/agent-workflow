@@ -29,7 +29,7 @@ import {
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { checkLexicalThenRealpath } from '@/util/safePath'
 import { and, eq, isNotNull } from 'drizzle-orm'
-import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-workflow/shared'
+import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitPortItems } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import { parseTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
@@ -170,7 +170,7 @@ export function archivePortArtifacts(opts: {
   taskId: string
   nodeRunId: string
   portName: string
-  /** 单值端口长度 1；list 端口按 splitListItems 行序。 */
+  /** 单值端口长度 1；list 端口按该 item kind 的 codec（`splitPortItems`）切分后的顺序。 */
   items: Array<{ sourceAbs: string; sourcePath: string }>
   /** repos[0] 的 worktreeDirName（容器相对化前缀；单 repo ''）。 */
   worktreeDirName: string
@@ -421,7 +421,10 @@ export function readPortArtifact(opts: {
       ],
     }
   }
-  const lines = parsed.kind === 'list' ? splitListItems(opts.content) : [opts.content.trim()]
+  // RFC-317 T57（findings NK-01）—— 按 item kind 选 codec，不再无条件按行切。
+  // 这是第二处忘了分支的站点：`list<markdown>` 的多行文档在这里同样会被按行拆碎。
+  const lines =
+    parsed.kind === 'list' ? splitPortItems(parsed, opts.content) : [opts.content.trim()]
   // 存量行的 line 是 repo0 相对——容器根下补 dirName 前缀（单 repo '' 恒等）。
   const dirName = opts.legacyRepoDirName ?? ''
   const items = lines.map((line, idx): PortArtifactReadItem => {

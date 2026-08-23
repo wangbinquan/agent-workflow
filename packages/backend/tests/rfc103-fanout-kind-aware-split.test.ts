@@ -54,10 +54,18 @@ describe('RFC-103 T4 — 切分结果（list<markdown> 不再按行裂分）', (
 
 describe('RFC-103 T4 — 源码层断言（scheduler 不再裸 split）', () => {
   const schedSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
-  test('fanout 用 isInlineMarkdownItemKind + listWire splitter，而非 rawContent.split', () => {
-    expect(schedSrc).toContain('isInlineMarkdownItemKind(itemKind)')
-    expect(schedSrc).toContain('splitMarkdownDocs(rawContent)')
-    expect(schedSrc).toContain('splitListItems(rawContent)')
+  // RFC-317 T57（findings NK-01）—— 证据锚点更新，性质不变。
+  //
+  // 这里原本钉的是 `isInlineMarkdownItemKind(itemKind)` + 两个 listWire splitter 的
+  // 具体调用形态。要锁的性质是「分片按 **item kind** 选 codec，而不是裸 split」；
+  // 那个 if 分支只是当时的实现。T57 把 codec 选择下沉进 handler 之后，
+  // 同一个判断由 `splitPortItems` 统一做——它内部按 item kind 取 handler 的
+  // `splitItems`。改锚到新形状，并多锁一条：调度器不得再自己直调 codec
+  //（那正是「第三份独立判据」的形态，而另两份当时都忘了分支）。
+  test('fanout 经 splitPortItems 按 item kind 选 codec，而非裸 split 或直调 codec', () => {
+    expect(schedSrc).toContain('splitPortItems(itemKind, rawContent)')
     expect(schedSrc).not.toContain('rawContent\n    .split')
+    expect(schedSrc).not.toContain('splitMarkdownDocs(')
+    expect(schedSrc).not.toContain('splitListItems(')
   })
 })

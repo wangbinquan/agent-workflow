@@ -220,9 +220,16 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
     // 谓词形态（=== '__clarify__' 等）意味着又一份散装语义拷贝。合法家：
     // schemas/workflow.ts（常量定义）与 systemChannelPorts.ts（注册表）。
     // 人读消息串/注释不受限（只扫比较运算符形态）。
+    // RFC-317 T59（findings NK-03）—— **补上 frontend**。
+    // 本条测试的标题写着「全仓禁绝」，而根只有两个包；前端当时确实躺着两处违例
+    // （`sourceHandle === '__clarify__'`、`fields.sourcePortName === 'to_designer'`），
+    // 已同批改 import 共享常量。对照 `rfc146-kind-predicate-guard.test.ts` —— 它一直
+    // 走全部三个根。一条声称「全仓」却只扫两个包的规则，比没有规则更糟：
+    // 它让人以为这件事已经有人管了。
     const roots = [
       ['backend', resolve(import.meta.dir, '..', 'src')],
       ['shared', resolve(import.meta.dir, '..', '..', 'shared', 'src')],
+      ['frontend', resolve(import.meta.dir, '..', '..', 'frontend', 'src')],
     ] as const
     const ALLOW = new Set(['schemas/workflow.ts', 'systemChannelPorts.ts'])
     const LIT =

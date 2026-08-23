@@ -254,10 +254,6 @@ const CORE_DISPATCHES: readonly DispatchSite[] = CORE_FILES.flatMap((rel) => {
  * **每条必须写清兜底行为**——说不出兜底做什么，就说明作者没想过新种类会走到哪。
  */
 const FAIL_CLOSED_DISPATCHES: Readonly<Record<string, { fallthrough: string; why: string }>> = {
-  'packages/shared/src/workflowScope.ts#promotedSourceForWrapper@wrapper.kind': {
-    fallthrough: 'return null',
-    why: 'wrapper-git 刻意只暴露自己生成的 git_diff，任意内部端口不得跨越 wrapper 边界；新增 wrapper 种类落到兜底得到的是「不提升」，即无法跨界——**失败关闭**，与 executor 那种「被当成 workflow 启动」不是一个量级。',
-  },
 }
 
 const siteKey = (site: DispatchSite): string => `${site.file}#${site.fn}@${site.discriminant}`

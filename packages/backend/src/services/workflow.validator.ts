@@ -90,6 +90,7 @@ import {
   WorkflowDefinitionSchema,
   type WorkflowByRef,
   type WorkflowRefSelector,
+  describeWrapperKind,
 } from '@agent-workflow/shared'
 import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
 import { asc, inArray } from 'drizzle-orm'
@@ -1163,7 +1164,7 @@ export function validateWorkflowDef(
       if (!sourceResolution.ok) {
         issues.push({
           code: 'wrapper-output-boundary-missing',
-          message: `edge '${edge.id}' reads '${edge.source.nodeId}.${edge.source.portName}' outside ${sourceResolution.wrapperKind} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
+          message: `edge '${edge.id}' reads '${edge.source.nodeId}.${edge.source.portName}' outside ${describeWrapperKind(sourceResolution.wrapperKind)} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
           pointer: edge.id,
           target: target.edge(edge.id),
         })
@@ -1910,7 +1911,7 @@ export function validateWorkflowDef(
           if (!sourceResolution.ok) {
             issues.push({
               code: 'wrapper-output-boundary-missing',
-              message: `output node '${node.id}' port '${b.name}' reads '${b.bind.nodeId}.${b.bind.portName}' outside ${sourceResolution.wrapperKind} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
+              message: `output node '${node.id}' port '${b.name}' reads '${b.bind.nodeId}.${b.bind.portName}' outside ${describeWrapperKind(sourceResolution.wrapperKind)} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
               pointer: node.id,
               target: target.outputBinding(node.id, b.name),
             })
@@ -2231,7 +2232,7 @@ export function validateWorkflowDef(
       if (!sourceResolution.ok) {
         issues.push({
           code: 'wrapper-output-boundary-missing',
-          message: `review node '${node.id}' reads '${srcNodeId}.${srcPort}' outside ${sourceResolution.wrapperKind} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
+          message: `review node '${node.id}' reads '${srcNodeId}.${srcPort}' outside ${describeWrapperKind(sourceResolution.wrapperKind)} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
           pointer: node.id,
           target: target.nodeField(node.id, 'review-source'),
         })

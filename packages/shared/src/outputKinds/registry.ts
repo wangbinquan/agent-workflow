@@ -30,6 +30,7 @@
 //   - subReasons 跨 handler 唯一性继续锁住（与 RFC-049 同款 invariant）；
 //     模块加载期 throw 让 PR 永远不能合入冲突命名。
 
+import { splitListItems } from '../listWire'
 import { tryParseKind, stringifyKind, REGISTERED_BASE_KINDS, type ParsedKind } from '../kindParser'
 import type { ValidateIO, ValidateResult } from './types'
 
@@ -104,6 +105,23 @@ export interface ParametricOutputKindHandler {
     ports: readonly string[]
     portKinds: ReadonlyMap<string, ParsedKind>
   }): string | null
+  /**
+   * RFC-317 T57（findings NK-01）—— 这个 kind 的**线格 codec**。
+   *
+   * 为什么必须是 handler 的方法而不是调用点的 if：`list<T>` 的 wire 形式取决于 T。
+   * `list<path<*>>` 的条目是单行路径，一行一条；`list<markdown>` 的条目是**多行文档
+   * 正文**，靠边界行分隔。改造前 `ListHandler.validate` 无条件用一行一条的
+   * `splitListItems`，而 `splitListItems` 会 **trim 每一行、丢掉所有空行**——
+   * 于是 `list<markdown>` 的正文在落库前就被改写了：段落间的空行没了、缩进没了、
+   * 代码块的相对缩进也没了。同一个文件里的 `bulletSuffix` / `buildPromptGuidance`
+   * **是**按 item kind 分支的，还告诉 agent「你的文档是多行的、用边界行分隔」——
+   * 也就是说协议这一半知道，校验那一半不知道。
+   *
+   * 默认实现是一行一条（`splitListItems` / `'\n'` 连接）；需要别的 codec 的 kind
+   * 自己覆盖。调用方一律经 `splitPortItems` / `joinPortItems` 走这里，不再各写各的判据。
+   */
+  splitItems?(parsed: ParsedKind, rawContent: string): string[]
+  joinItems?(parsed: ParsedKind, items: readonly string[]): string
   /** Validate one port's raw content. Same contract as RFC-049 ValidateResult. */
   validate(rawContent: string, ctx: ParametricValidateCtx, io: ValidateIO): ValidateResult
   /** Followup repair-prompt segment for failed ports of this handler.
@@ -332,4 +350,28 @@ export function composePerParsedKindRepairBlocks(
       )
     }
   }
+}
+
+/**
+ * RFC-317 T57（findings NK-01）—— 一个端口内容按其 kind 切成条目的**唯一**入口。
+ *
+ * 改造前这件事散在四处，其中两处忘了按 item kind 分支：
+ *   · `ListHandler.validate`（shared/outputKinds/list.ts）—— 无条件 `splitListItems`；
+ *   · `portArtifacts.ts` 的 `parsed.kind === 'list' ? splitListItems(...)` —— 同样。
+ * 另两处（scheduler 的分片、review 的多文档）**是**分支的——也就是说同一份内容，
+ * 落库时按行切、分片时按边界行切，两边对不上。
+ *
+ * 默认一行一条；需要别的 codec 的 kind 在自己的 handler 上覆盖 `splitItems`。
+ */
+export function splitPortItems(parsed: ParsedKind, rawContent: string): string[] {
+  const itemKind = parsed.kind === 'list' ? parsed.item : parsed
+  const handler = getHandlerForParsedKind(itemKind)
+  return handler.splitItems?.(itemKind, rawContent) ?? splitListItems(rawContent)
+}
+
+/** {@link splitPortItems} 的逆。默认换行连接。 */
+export function joinPortItems(parsed: ParsedKind, items: readonly string[]): string {
+  const itemKind = parsed.kind === 'list' ? parsed.item : parsed
+  const handler = getHandlerForParsedKind(itemKind)
+  return handler.joinItems?.(itemKind, items) ?? items.join('\n')
 }

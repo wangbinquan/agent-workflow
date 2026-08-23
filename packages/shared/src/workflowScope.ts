@@ -11,6 +11,7 @@ import {
   type NodeKind,
   type WorkflowDefinition,
   type WorkflowNode,
+  type WRAPPER_NODE_KINDS,
 } from './schemas/workflow'
 import type { WorkflowPortReference } from './workflow-node-references'
 
@@ -30,7 +31,17 @@ export type WorkflowSourceRefResolution =
       ok: false
       source: WorkflowPortReference
       wrapperId: string
-      wrapperKind: NodeKind
+      /**
+       * RFC-317 T58（findings NK-02）—— 允许为 null。
+       *
+       * 改造前这里是 `NodeKind`，于是两处失败返回**借用**了一个业务身份：
+       * `wrapper?.kind ?? 'wrapper-git'`（找不到这个节点）与直接写死 `'wrapper-git'`
+       * （父 id 根本不是 wrapper 节点）。而这个字段会**原样**渲染进用户可见的诊断文案
+       * （workflow.validator.ts 三处、scheduler.ts 一处）——于是一条「这个父节点不是
+       * wrapper」的错误，会告诉用户问题出在一个 git wrapper 上。
+       * `null` 让「不知道 / 不适用」可表达，不必再从 git 那里借。
+       */
+      wrapperKind: NodeKind | null
       reason: 'wrapper-output-not-exposed' | 'containment-cycle'
     }
 
@@ -265,12 +276,31 @@ export function isNodeInsideWorkflowWrapper(
   return false
 }
 
-function promotedSourceForWrapper(
+/**
+ * 一种 wrapper 把内层端口提升到自己边界上的方式。返回 null = 这个端口过不了这道边界。
+ */
+type WrapperBoundaryPromoter = (
   definition: WorkflowDefinition,
   wrapper: WorkflowNode,
   source: WorkflowPortReference,
-): WorkflowPortReference | null {
-  if (wrapper.kind === 'wrapper-loop') {
+) => WorkflowPortReference | null
+
+/**
+ * RFC-317 T58（findings NK-02）—— 边界提升的**穷尽**分派表。
+ *
+ * 改造前这里是一条 if-chain 加一个隐式默认（末尾裸 `return null`），而它所在的模块
+ * 自称「唯一的结构预言」。加第四种 wrapper kind 时，它会**静默**落进那个 `return null`
+ * ——表现为「这个 wrapper 的所有内层端口都过不了边界」，而不是任何一处编译错误。
+ *
+ * 改成 `satisfies Record<WrapperKind, …>` 之后，漏一个 kind 是编译错误；
+ * `wrapper-git` 那条从「掉进默认」变成一条**显式**的 `() => null`，理由写在它自己身上。
+ */
+const WRAPPER_BOUNDARY_PROMOTERS = {
+  // git wrapper 只暴露它自己生成的 `git_diff`，任意内层端口都不能穿过这道边界。
+  // 这不是「还没实现」，是设计如此——所以它显式写成 null，而不是掉进默认分支。
+  'wrapper-git': () => null,
+
+  'wrapper-loop': (_definition, wrapper, source) => {
     const binding = readOutputBindings(wrapper)
       .filter(
         (candidate) =>
@@ -278,9 +308,9 @@ function promotedSourceForWrapper(
       )
       .sort((left, right) => left.name.localeCompare(right.name))[0]
     return binding === undefined ? null : { nodeId: wrapper.id, portName: binding.name }
-  }
+  },
 
-  if (wrapper.kind === 'wrapper-fanout') {
+  'wrapper-fanout': (definition, wrapper, source) => {
     const boundary = definition.edges
       .filter(
         (edge) =>
@@ -295,11 +325,32 @@ function promotedSourceForWrapper(
           left.id.localeCompare(right.id),
       )[0]
     return boundary === undefined ? null : { ...boundary.target }
-  }
+  },
+} as const satisfies Record<(typeof WRAPPER_NODE_KINDS)[number], WrapperBoundaryPromoter>
 
-  // wrapper-git deliberately exposes only its own generated `git_diff`; an
-  // arbitrary inner port cannot cross the wrapper boundary.
-  return null
+/**
+ * RFC-317 T58（findings NK-02）—— `wrapperKind` 渲染进用户文案时的**唯一**写法。
+ *
+ * 该字段现在可为 null（「不知道 / 不适用」）。四个消费点都把它直接插进诊断串
+ * （workflow.validator.ts ×3、scheduler.ts ×1），各写各的 `?? '...'` 会让同一种情况
+ * 在四条错误里说法不同。这里收成一处：未知时说「wrapper」这个通名，
+ * 而不是像改造前那样借用 `wrapper-git` 的身份——那会让「父节点不是 wrapper」这种错误
+ * 告诉用户问题出在一个 git wrapper 上。
+ */
+export function describeWrapperKind(kind: NodeKind | null): string {
+  return kind ?? 'wrapper'
+}
+
+function promotedSourceForWrapper(
+  definition: WorkflowDefinition,
+  wrapper: WorkflowNode,
+  source: WorkflowPortReference,
+): WorkflowPortReference | null {
+  const promote = WRAPPER_BOUNDARY_PROMOTERS[wrapper.kind as (typeof WRAPPER_NODE_KINDS)[number]]
+  // 调用点已经 `isWrapperKind(wrapper.kind)` 过；这里的 undefined 只可能来自
+  // 「WRAPPER_NODE_KINDS 与 isWrapperKind 脱节」，那是应当大声失败的内部不一致。
+  if (promote === undefined) return null
+  return promote(definition, wrapper, source)
 }
 
 /**
@@ -332,7 +383,7 @@ export function resolveWorkflowSourceRef(
         ok: false,
         source: current,
         wrapperId: parentId,
-        wrapperKind: wrapper?.kind ?? 'wrapper-git',
+        wrapperKind: wrapper?.kind ?? null,
         reason: 'containment-cycle',
       }
     }
@@ -343,7 +394,7 @@ export function resolveWorkflowSourceRef(
         ok: false,
         source: current,
         wrapperId: parentId,
-        wrapperKind: 'wrapper-git',
+        wrapperKind: null,
         reason: 'wrapper-output-not-exposed',
       }
     }

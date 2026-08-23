@@ -56,7 +56,6 @@ import {
   findDesignerNodeForCrossClarify,
   findFanoutAggregator,
   findQuestionerNodeForCrossClarify,
-  isInlineMarkdownItemKind,
   isMergeStateSettled,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
@@ -65,11 +64,11 @@ import {
   readContinueOnMaxIterations,
   resolveWorkflowSourceRef,
   renderCallWorkgroupGoalTemplate,
-  splitListItems,
-  splitMarkdownDocs,
   stringifyKind,
   tryParseKind,
   exclusionPlanFor,
+  describeWrapperKind,
+  splitPortItems,
 } from '@agent-workflow/shared'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import {
@@ -7777,9 +7776,11 @@ async function runFanoutWrapperNode(
   // kind-aware — `list<markdown>` items are inline multi-line bodies framed by
   // MARKDOWN_DOC_BOUNDARY; `list<path<md>>` / `list<string>` are one-per-line.
   // Hand-rolling `.split('\n')` here shredded each markdown document per line.
-  const items = isInlineMarkdownItemKind(itemKind)
-    ? splitMarkdownDocs(rawContent)
-    : splitListItems(rawContent)
+  // RFC-317 T57（findings NK-01）—— codec 选择收进 handler（`splitPortItems`）。
+  // 这里的分支本身是对的，但它是**第三份**独立判据：另两处（list.ts 的 validate、
+  // portArtifacts）当时忘了分支，于是同一份内容落库时按行切、分片时按边界行切。
+  // 走同一个入口之后，"这个 kind 怎么切" 只有一个答案。
+  const items = splitPortItems(itemKind, rawContent)
   if (items.length === 0) {
     for (const port of derivedOutputs) {
       await upsertWrapperOutput(db, wrapperRunId, port.name, '')
@@ -10064,7 +10065,7 @@ export async function resolveUpstreamInputs(
         : resolveWorkflowSourceRef(definition, edge.source, nodeId, parents)
     if (!resolved.ok) {
       throw new Error(
-        `wrapper-output-boundary-missing: source '${edge.source.nodeId}.${edge.source.portName}' is not exposed by ${resolved.wrapperKind} '${resolved.wrapperId}'`,
+        `wrapper-output-boundary-missing: source '${edge.source.nodeId}.${edge.source.portName}' is not exposed by ${describeWrapperKind(resolved.wrapperKind)} '${resolved.wrapperId}'`,
       )
     }
     const source = resolved.source
