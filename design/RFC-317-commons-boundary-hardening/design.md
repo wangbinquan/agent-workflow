@@ -16,9 +16,9 @@
 
 RFC-294 `plan.md §4` 的 W0-R 动作清单里，本 RFC **承担**：
 
-- [x] 「把 gate source 从 `modules/**` 扩到 inbound/legacy callers」——R1，今天 66 条边入账
-- [x] 「给 `modules/*/{domain,application,engine,public}` 加出方向规则」——R2，今天 33 条边入账（其中 9 条 application 层）
-- [x] 「新 `modules/**` 启用层级规则，domain/application 立即 fail-closed」——R3，扩到全部 12 个 context
+- [x] 「把 gate source 从 `modules/**` 扩到 inbound/legacy callers」——R1，94 条边入账
+- [x] 「给 `modules/*/{domain,application,engine,public}` 加出方向规则」——R2，22 条边入账（全部出自 application 层）
+- [x] 「新 `modules/**` 启用层级规则，domain/application 立即 fail-closed」——R3，扩到全部 11 个 context
 - [x] 「扩 exact exception schema：`rule/from+symbol/to+symbol/edgeKind/owner/why/introducedByRFC/removeAfterWave/expiresOn/mutationTest`；禁 glob/目录豁免，unknown/stale/expired 全红」——R10 账本 schema
 - [x] 「给每条新 dependency rule 做配置变异测试，证明规则真的能红」——R11 守卫 manifest，并**回溯适用于全部既有机制**
 - [x] 「type-only 仅可指向 exact `public/{types,events,participants}`」的语料修正——R12
@@ -151,7 +151,7 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 - **不变量**：`packages/backend/src` 中**任何不在 `modules/` 下**的文件，若 import `@/modules/<ctx>/…`，目标必须是 `public/{commands,queries,participants,events,types}`；只有 bootstrap（`server.ts` / `cli/start.ts`）可额外指向 `<ctx>/composition`。
 - **机制**：AST。复用 `rfc294-architecture-preflight.test.ts` 已有的 `importEdges()`（它已覆盖 static / `import type` / `export … from` / `import()` / `require()` 五种形态——这正是 dependency-cruiser 看不见的四种），把 `productionModuleUnits()` 拆成 `moduleUnits()` + `backendUnits()`，规则二用后者做起点。
 - **语料**：`packages/backend/src/**`（`minCorpusFiles` 按实测下界）。
-- **账本**：今天 **66 条边 / 19 个文件**逐条入 `commons-debt.json`，`toEqual` 精确相等。
+- **账本**：**94 条边 / 28 个文件**逐条入 `commons-debt.json`，`toEqual` 精确相等（正式分母见 `census-2026-08-23.md §2`）。
 - **变异 fixture**：合成一个 `routes/x.ts` import `@/modules/task-execution/domain/y` ⇒ 必须报；合成一个指向 `public/queries` 的 ⇒ 必须不报。
 - **关闭**：`G-01`（P1）、`DE-09`、`CC-11`，以及「空 context 被判干净」的一半。
 
@@ -159,18 +159,18 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 
 - **不变量**：`modules/*/{domain,application,engine,public}/**` 不得 import `@/services/**`、`@/routes/**`、`@/ws/**`、`@/mcp/**`、`hono`、`drizzle-orm`。`infrastructure/` 与 `composition/` 暂不入网（它们是适配层，按 RFC-294 允许触碰具体实现），但其边同样入账以便后续波次收敛。
 - **机制**：同 R1 的 AST 通道；`domain` 额外禁 `node:fs` / `node:child_process` / `bun:sqlite`（RFC-294 `§G1` 的 domain 纯净要求）。
-- **账本**：今天 **33 条**（task-execution 19 / integration 6 / execution-contract 3 / event-center 2 / code-capability 2 / identity-access 1），其中 **9 条出自 `application`**，逐条带 `removeAfterWave`。
+- **账本**：**22 条**（code-capability 9 / task-execution 8 / integration 5），**全部出自 `application` 层**——`domain` / `engine` / `public` 今天零违规；11 条是 `drizzle-orm`、11 条是 `@/services/*`。逐条带 `removeAfterWave`。
 - **关闭**：`G-02`（P1）。
 
 ### R3 — 模块形状 + 层内矩阵 + composition 纯净 + 非空 public
 
 - **不变量**（对 `modules/` 下**每一个** context 生效）：
-  1. 顶层条目 ⊆ `{domain, application, engine, ports, infrastructure, public, composition}` + `composition.ts`；`task-execution/inbound/` 作为**具名偏离**入账（是否长期承认见 §10 D3）。
+  1. 顶层条目 ⊆ `{domain, application, engine, ports, infrastructure, public, composition, inbound}` + `composition.ts`（`inbound` 按 D3 已承认为合法层）。实测 11 个 context **零个**出现集合外目录。
   2. 层内导入矩阵：`domain` 不得导入本模块任何其它层；`application` / `engine` / `public` 不得导入 `infrastructure`；`composition/required-ports` 只能被 `composition` 与指定 provider adapter 导入。
   3. `composition.ts` 无业务分支（语句起始位置无 `if` / `switch`）、无 `@/db` 值导入。
   4. 每个 context 必须有非空 `public/`，否则显式标 `status:'skeleton'` + `removeWhen`。
 - **机制**：数据驱动，subject 来自 `readdirSync(MODULES_ROOT)`（**不是**硬编码清单——硬编码正是 `rfc310-architecture-lock.test.ts:27` 只覆盖一个模块的成因）。目录遍历必须在**目标目录缺失时抛错而非返回空**（`rfc310-architecture-lock.test.ts:55-62` 的 `try { … } catch { return out }` 使三条锁在模块改名后静默变绿——`G-10`）。
-- **关闭**：`G-03`（P1）、`CC-05`、`CC-11`、`G-10`。
+- **关闭**：`G-03`（P1）、`CC-05`、`CC-11`、`G-10`。实测偏离两处：`intent` 无 `public/`（仅 1 个文件）、`integration/public/mrTerminalControl.ts` 非 exact 入口。
 - **与 RFC-310 的重叠**：`rfc310-architecture-lock` / `rfc310-digital-employee-os-architecture` 的形状半边被 R3 覆盖；本 RFC **不删**它们（RFC-310 仍 In Progress），在 `guard-manifest.json` 里登记重叠与去重波次。
 
 ### R4 — 公共内核业务身份字面量预算（本 RFC 的核心新机制）
@@ -263,7 +263,7 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 
 ### 5.1 resource-catalog（P1 × 2 + P2 × 2）
 
-- **ACL-01**：`routes/developmentConfig.ts` 的 `requireVisible` 在**写路径**上换成公共 `requireResourceOwner`；读路径保持 `canViewResource`。**能力收缩 C1**。同批加 R1 类规则：任何 RouteMeta 的 `permissions` 含某 ACL 资源的 `:update` / `:delete` / `:archive` 点的路由，其 handler 传递闭包必须命中 `requireResourceOwner`，否则入账。
+- **ACL-01**：`routes/developmentConfig.ts` 的 `requireVisible` 在**写路径**上换成公共 `requireResourceOwner`（`resourceAcl.ts:470-482`：先 `requireResourceView` 保证不可见→404，再 owner-or-bypass→403）；读路径保持 `canViewResource`。**能力收缩 C1**，且注意 grant 不含写权（见 `proposal.md §4` 的订正）。同批加 R1 类规则：任何 RouteMeta 的 `permissions` 含某 ACL 资源的 `:update` / `:delete` / `:archive` 点的路由，其 handler 传递闭包必须命中 `requireResourceOwner`，否则入账。
 - **ACL-02**：`employee_definitions` 的三列惰性 —— 见 §10 D2，两条路都要能力影响确认。同批加 R5 类 schema 反射守卫：**任何同时声明 `owner_user_id` 与 `visibility` 的表必须是 `AclResourceType`**，否则入账。
 - **ACL-03**：ACL 端点入网守卫今天是**字符串字面量正则**（`rfc099-acl-endpoints-matrix.test.ts:296-308` 要求 `type: '<literal>'`），而 `developmentConfig.ts:231-236` 用变量 `cfg.aclType` 挂载 ⇒ 五类资源对该守卫**结构上不可见**（实测正则只命中 7 类）。改为**运行时注册表枚举**：`mountAclEndpoints` 把 `cfg.type` 追加进导出的模块级注册表，测试起真 app 后断言 `registeredAclMounts` 与 `ACL_RESOURCE_TYPES`、与矩阵 `CASES` 三者相等——「有类型无挂载」与「有挂载无矩阵行」都会红，且与挂载写法无关。
 - **ACL-04**：`routes/resourceAcl.ts` 里两条 `cfg.type === 'workflow' | 'workgroup'` 的广播分支移进调用方已有的 `afterUpdate` 钩子，规则起点即为零。

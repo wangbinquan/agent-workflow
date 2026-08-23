@@ -1,0 +1,6 @@
+# RFC-317：architecture/ 下的机器账本由 packages/backend/tests/architecture/census.ts
+# 的生成器产出（`JSON.stringify(doc, null, 2)`），是**可复算的确定性输出**。
+# prettier 会把单元素数组折成一行，与生成器输出不一致 —— 于是每次重新采数都会
+# 产生一堆与内容无关的格式 churn，且「账本是否与实测相等」的判据会被格式差污染。
+# 账本的规范形态以生成器为准，不进 prettier。
+architecture/

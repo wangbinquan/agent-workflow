@@ -6,7 +6,7 @@
 ## 0. 前置
 
 - ✅ **D1–D7 已裁决**（`design.md §10`）；✅ **能力影响清单 C1–C9 已逐项确认**（`proposal.md §4`）。两条关键取值：C1 **直接收紧、不做迁移**；D4 **核心内核预算直接归零**（非钉住现值）、D7 **fixture 本批全回填**。
-- 开工时重新在**干净、已发布的 exact SHA** 上采数（本文所有计数取自 `56755bc00`）。
+- ✅ **B0/T1 已在干净 SHA `efc1bdb01` 的分离 worktree 上采数完成**，正式分母见 `census-2026-08-23.md`。它订正了落档时用 `rg` 估算的三个数字：inbound 66/19 → **94/28**、outbound 33 → **22**、context 12 → **11**（`work-start` 是空目录残骸）。此后一律以该报告为准。
 
 ## 1. 批次依赖
 
@@ -35,8 +35,8 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 | --- | --- | --- |
 | T1 | 在干净 SHA 上复算全部计数：R1 的 inbound 边、R2 的 outbound 边（按 context / 按层）、R4 的逐文件业务字面量基数、各守卫的语料下界、既有账本条数 | 一份可复跑的采数脚本 + 数字 |
 | T2 | 落 `architecture/commons-manifest.json`：公共内核清单（含完整性批判点出的 12 个本轮才发现无人审计的内核） | 清单 v1 |
-| T3 | 落 `architecture/commons-debt.json`：R1 66 条 + R2 33 条 + 79 条 P3，每条带 `why` / `removeAfterWave` / `findingId` | 账本 v1 |
-| T4 | 落 `architecture/guard-manifest.json`：26 个既有机制逐条登记（file / runner / mechanism / kind / corpus / minCorpusFiles / guardsInvariants） | 守卫清单 v1 |
+| T3 | 落 `architecture/commons-debt.json`：R1 94 条 + R2 22 条 + 79 条 P3，每条带 `why` / `removeAfterWave` / `findingId` | 账本 v1 |
+| T4 | 落 `architecture/guard-manifest.json`：**116 个**守卫文件逐条登记 + 与磁盘两向钉死（`minCorpusFiles` / R11 fixture 元数据由 B2 补齐） | 守卫清单 v1 |
 
 **退出门**：三份 JSON 落地且被至少一条测试读到；`bun run gate:local` 绿。
 
@@ -76,8 +76,8 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 
 | id | 任务 | finding |
 | --- | --- | --- |
-| T22 | 拆 `productionModuleUnits()` 为 `moduleUnits()` + `backendUnits()`；R1 inbound 规则落地，66 条边 `toEqual` 精确入账 | G-01 |
-| T23 | R2 outbound 规则落地，33 条边入账（application 层 9 条单列，标最短 `removeAfterWave`） | G-02 |
+| T22 | R1 inbound 规则落地（census 已备好 `inboundBoundaryEdges`），**94 条边** `toEqual` 精确入账 + 正反 fixture | G-01 |
+| T23 | R2 outbound 规则落地，**22 条边**入账（全部在 application 层，标最短 `removeAfterWave`） | G-02 |
 | T24 | R3 模块形状：subject 由 `readdirSync(MODULES_ROOT)` 派生；顶层目录集 / 层内矩阵 / composition 纯净 / public 非空；目录缺失**抛错而非返回空** | G-03 / G-10 / CC-05 / CC-11 |
 | T25 | R12：解析语料扩到 `shared/src` + `backend/src/platform`；`FORBIDDEN_TYPE_IMPORT` 补 `@/platform` `@/embed`；public entrypoint 禁非字面量键 `Record`；扩面后新增违规逐条修或入账（**不得调高预算**） | G-05 |
 | T26 | R1–R3、R12 各自的正反 fixture | — |
@@ -185,9 +185,9 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 
 ## 4. 验收清单
 
-- [ ] AC-1 `architecture/commons-manifest.json` 落地且与源码双向闭合
-- [ ] AC-2 R1/R2 落地，66 + 33 条边精确入账
-- [ ] AC-3 R3 覆盖全部 12 个 context，两处具名偏离入账
+- [x] AC-1 `architecture/commons-manifest.json` 落地且与源码双向闭合（B0；82 个内核 / 31 个 core，闭合断言在 `rfc317-architecture-ledgers.test.ts`）
+- [ ] AC-2 R1/R2 落地，94 + 22 条边精确入账
+- [ ] AC-3 R3 覆盖全部 11 个 context，两处具名偏离（`intent` 无 public / `integration/public/mrTerminalControl.ts` 非 exact）入账
 - [ ] AC-4 R4 在清单文件集上生效，`toBe` 精确断言
 - [ ] AC-5 R5–R9 落地，各带正反 fixture
 - [ ] AC-6 R10 覆盖仓内每一个 allowlist，基线只降
@@ -210,4 +210,11 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 
 ## 6. 实施记录
 
-（各批落地后在此追加：commit SHA、门禁结果、hosted CI run id、变异实证记录、与设计的偏差。）
+### B0（2026-08-23）
+
+- **产出**：`packages/backend/tests/architecture/census.ts`（采数内核，守卫与报表共用）、`architecture/{commons-manifest,commons-debt,guard-manifest}.json`、`packages/backend/tests/architecture/rfc317-architecture-ledgers.test.ts`（12 条闭合断言）、`design/RFC-317-*/census-2026-08-23.md`（正式分母报告）。
+- **采数环境**：`git worktree add --detach` 物化的分离干净工作树（主树当时带并发 session 的大批未提改动）。
+- **数字订正**：inbound 66/19 → **94/28**、outbound 33 → **22**（全部在 application 层）、context 12 → **11**。口径差与原因见 `census-2026-08-23.md §0`。
+- **变异实证**：删守卫登记 ⇒ 1 fail；改守卫名 ⇒ 2 fail；账本 baseline 减 1 ⇒ 3 fail；三份文件 `cp` 还原后 `diff -q` 逐字一致，复跑 12/12 绿。
+- **偏差**：R1/R2 的**边相等断言**按计划留在 B3（连同正反 fixture 一起落）；B0 只落闭合断言。`guard-manifest.json` 的 `minCorpusFiles` 与 R11 导出式 fixture 元数据留给 B2，条目上以 `classified: false` 让缺口自己可见。
+- **顺带发现**：`modules/work-start/` 是零文件、未跟踪、无人引用的**空目录残骸**（不删，按仓规不动未跟踪文件）；生成清单时踩到正则 alternation 顺序 bug（`(?:ts|tsx)` 把 `.tsx` 匹成 `.ts`），漏掉 9 个前端原语，已修并列入 T69。

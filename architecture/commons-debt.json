@@ -1,0 +1,2681 @@
+{
+  "schemaVersion": 1,
+  "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
+  "baseline": {
+    "recordedAt": "2026-08-23",
+    "recordedAtSha": "efc1bdb01",
+    "inboundEdges": 94,
+    "outboundEdges": 22,
+    "registeredFindings": 79
+  },
+  "entries": [
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/auth/actor.ts",
+      "to": "packages/backend/src/modules/identity-access/composition",
+      "specifier": "@/modules/identity-access/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "identity-access",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/migrationReport.ts",
+      "to": "packages/backend/src/modules/development-automation/application/migrationAnalyzer",
+      "specifier": "@/modules/development-automation/application/migrationAnalyzer",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/migrationReport.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/migrationAssets",
+      "specifier": "@/modules/development-automation/infrastructure/migrationAssets",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/start.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteMissionStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/start.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteReconcilerReaders",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/start.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher",
+      "specifier": "@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/capabilityTemplates.ts",
+      "to": "packages/backend/src/modules/code-capability/application/templateUpstreamStatus",
+      "specifier": "@/modules/code-capability/application/templateUpstreamStatus",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/code.ts",
+      "to": "packages/backend/src/modules/code-capability/application/codeMatrixQuery",
+      "specifier": "@/modules/code-capability/application/codeMatrixQuery",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/code.ts",
+      "to": "packages/backend/src/modules/code-capability/application/codeMetricsQuery",
+      "specifier": "@/modules/code-capability/application/codeMetricsQuery",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/code.ts",
+      "to": "packages/backend/src/modules/code-capability/domain/capabilityRegistry",
+      "specifier": "@/modules/code-capability/domain/capabilityRegistry",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/code.ts",
+      "to": "packages/backend/src/modules/code-capability/domain/stageContract",
+      "specifier": "@/modules/code-capability/domain/stageContract",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/code.ts",
+      "to": "packages/backend/src/modules/code-capability/domain/stageGraph",
+      "specifier": "@/modules/code-capability/domain/stageGraph",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands",
+      "specifier": "@/modules/development-automation/application/commands/actionTemplateCommands",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands",
+      "specifier": "@/modules/development-automation/application/commands/verificationProfileCommands",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/decision",
+      "specifier": "@/modules/development-automation/domain/decision",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/digitalEmployee",
+      "specifier": "@/modules/development-automation/domain/digitalEmployee",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/factCell",
+      "specifier": "@/modules/development-automation/domain/factCell",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/facts",
+      "specifier": "@/modules/development-automation/domain/facts",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/journeyProjection",
+      "specifier": "@/modules/development-automation/domain/journeyProjection",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/predicate",
+      "specifier": "@/modules/development-automation/domain/predicate",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/engine/policy/evaluatePolicy",
+      "specifier": "@/modules/development-automation/engine/policy/evaluatePolicy",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "engine 是模块内的执行内核，按 RFC-294 §G3 不对外；调用方绕过 application 直接消费了引擎。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/engine/policy/workSelection",
+      "specifier": "@/modules/development-automation/engine/policy/workSelection",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "engine 是模块内的执行内核，按 RFC-294 §G3 不对外；调用方绕过 application 直接消费了引擎。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/publishLookup",
+      "specifier": "@/modules/development-automation/infrastructure/publishLookup",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteAssignmentStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteConfigResourceStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/integration/application/developmentAdapterCommands",
+      "specifier": "@/modules/integration/application/developmentAdapterCommands",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentConfig.ts",
+      "to": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore",
+      "specifier": "@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/application/commands/launchMission",
+      "specifier": "@/modules/development-automation/application/commands/launchMission",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/application/commands/launchMission",
+      "specifier": "@/modules/development-automation/application/commands/launchMission",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/application/cutover",
+      "specifier": "@/modules/development-automation/application/cutover",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/application/pipelineEvidenceRead",
+      "specifier": "@/modules/development-automation/application/pipelineEvidenceRead",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/composition",
+      "specifier": "@/modules/development-automation/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/journeyProjection",
+      "specifier": "@/modules/development-automation/domain/journeyProjection",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/operationFailure",
+      "specifier": "@/modules/development-automation/domain/operationFailure",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/pipelineManifest",
+      "specifier": "@/modules/development-automation/domain/pipelineManifest",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader",
+      "specifier": "@/modules/development-automation/infrastructure/gitBaselineReader",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/migrationAssets",
+      "specifier": "@/modules/development-automation/infrastructure/migrationAssets",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/missionReadModels",
+      "specifier": "@/modules/development-automation/infrastructure/missionReadModels",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/missionReadModels",
+      "specifier": "@/modules/development-automation/infrastructure/missionReadModels",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteAdmissionLookup",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteAdmissionLookup",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteCutoverStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteCutoverStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteMissionStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteReconcilerReaders",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteUploadPlanStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteUploadPlanStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteUploadSessionStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/integration/composition/approvalGateway",
+      "specifier": "@/modules/integration/composition/approvalGateway",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/integration/composition/requirementSource",
+      "specifier": "@/modules/integration/composition/requirementSource",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/source-control/composition",
+      "specifier": "@/modules/source-control/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "source-control",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W5（Source-control 边界）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/agentActionExecution",
+      "specifier": "@/modules/task-execution/composition/agentActionExecution",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/developmentMissions.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/scriptActionExecution",
+      "specifier": "@/modules/task-execution/composition/scriptActionExecution",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/digitalEmployees.ts",
+      "to": "packages/backend/src/modules/digital-employee/composition",
+      "specifier": "@/modules/digital-employee/composition",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "digital-employee",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/eventCenter.ts",
+      "to": "packages/backend/src/modules/event-center/composition",
+      "specifier": "@/modules/event-center/composition",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "event-center",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/fusions.ts",
+      "to": "packages/backend/src/modules/task-execution/inbound/directTaskInitiator",
+      "specifier": "@/modules/task-execution/inbound/directTaskInitiator",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "inbound 是模块自己的入站适配层（RFC-317 D3 承认），不对外提供合同；此处被 legacy 层当作入口调用。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/missionInputUploads.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/evidenceStore",
+      "specifier": "@/modules/development-automation/infrastructure/evidenceStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/missionInputUploads.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteUploadSessionStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/taskCatalog.ts",
+      "to": "packages/backend/src/modules/task-catalog/composition",
+      "specifier": "@/modules/task-catalog/composition",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-catalog",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/webhookDeliveries.ts",
+      "to": "packages/backend/src/modules/integration/composition/webhookTerminalControl",
+      "specifier": "@/modules/integration/composition/webhookTerminalControl",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/routes/webhooks.ts",
+      "to": "packages/backend/src/modules/integration/composition/webhookTerminalControl",
+      "specifier": "@/modules/integration/composition/webhookTerminalControl",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/integration/public/mrTerminalControl",
+      "specifier": "@/modules/integration/public/mrTerminalControl",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "public 目录存在但入口名不在 exact 五入口内，等于用 public 之名开了第六个自由入口（rfc294-architecture-preflight 已单独记账此条）。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter",
+      "specifier": "@/modules/task-execution/application/adapters/task-catalog-adapter",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/capabilityTemplates.ts",
+      "to": "packages/backend/src/modules/code-capability/domain/templateLayers",
+      "specifier": "@/modules/code-capability/domain/templateLayers",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/commitPushRunner.ts",
+      "to": "packages/backend/src/modules/source-control/composition",
+      "specifier": "@/modules/source-control/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "source-control",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W5（Source-control 边界）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/demoSeed.ts",
+      "to": "packages/backend/src/modules/code-capability/domain/capabilityRegistry",
+      "specifier": "@/modules/code-capability/domain/capabilityRegistry",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/development-automation/application/ports/reconcilerPorts",
+      "specifier": "@/modules/development-automation/application/ports/reconcilerPorts",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/canonicalJson",
+      "specifier": "@/modules/development-automation/domain/canonicalJson",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/development-automation/domain/mrFacts",
+      "specifier": "@/modules/development-automation/domain/mrFacts",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/integration/application/mrFacts",
+      "specifier": "@/modules/integration/application/mrFacts",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/integration/composition/codeHostEffects",
+      "specifier": "@/modules/integration/composition/codeHostEffects",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/integration/composition/codeHostEffects",
+      "specifier": "@/modules/integration/composition/codeHostEffects",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/integration/composition/pipelineEvidence",
+      "specifier": "@/modules/integration/composition/pipelineEvidence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/execution/executor.ts",
+      "to": "packages/backend/src/modules/task-execution/inbound/directTaskInitiator",
+      "specifier": "@/modules/task-execution/inbound/directTaskInitiator",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "inbound 是模块自己的入站适配层（RFC-317 D3 承认），不对外提供合同；此处被 legacy 层当作入口调用。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/fusion.ts",
+      "to": "packages/backend/src/modules/source-control/composition",
+      "specifier": "@/modules/source-control/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "source-control",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W5（Source-control 边界）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/fusion.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/taskLaunchOrigin",
+      "specifier": "@/modules/task-execution/domain/taskLaunchOrigin",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/turnEngine.ts",
+      "to": "packages/backend/src/modules/intent/domain/workflowCreateLayout",
+      "specifier": "@/modules/intent/domain/workflowCreateLayout",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduler.ts",
+      "to": "packages/backend/src/modules/source-control/composition",
+      "specifier": "@/modules/source-control/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "source-control",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W5（Source-control 边界）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduler.ts",
+      "to": "packages/backend/src/modules/task-execution/application/resolveNodeActivation",
+      "specifier": "@/modules/task-execution/application/resolveNodeActivation",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduler.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/inboundEdges",
+      "specifier": "@/modules/task-execution/domain/inboundEdges",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduler.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
+      "specifier": "@/modules/task-execution/domain/sourceTermination",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduler.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
+      "specifier": "@/modules/task-execution/domain/sourceTermination",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/source-control/composition",
+      "specifier": "@/modules/source-control/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "source-control",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W5（Source-control 边界）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/application/branchTrace",
+      "specifier": "@/modules/task-execution/application/branchTrace",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
+      "specifier": "@/modules/task-execution/domain/sourceTermination",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
+      "specifier": "@/modules/task-execution/domain/sourceTermination",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/taskLaunchOrigin",
+      "specifier": "@/modules/task-execution/domain/taskLaunchOrigin",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/taskLaunchOrigin",
+      "specifier": "@/modules/task-execution/domain/taskLaunchOrigin",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor",
+      "specifier": "@/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/ports/taskDriverSupervisor",
+      "specifier": "@/modules/task-execution/ports/taskDriverSupervisor",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "ports 是 application 自有的 SPI 声明，不是跨层合同；调用方直接引用了端口类型。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/users.ts",
+      "to": "packages/backend/src/modules/identity-access/composition",
+      "specifier": "@/modules/identity-access/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "identity-access",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/webhook/matching.ts",
+      "to": "packages/backend/src/modules/integration/domain/mrTerminalControl",
+      "specifier": "@/modules/integration/domain/mrTerminalControl",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/webhook/webhookDispatch.ts",
+      "to": "packages/backend/src/modules/integration/domain/mrTerminalControl",
+      "specifier": "@/modules/integration/domain/mrTerminalControl",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/webhook/webhookDispatch.ts",
+      "to": "packages/backend/src/modules/integration/domain/mrTerminalControl",
+      "specifier": "@/modules/integration/domain/mrTerminalControl",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/webhook/webhookDispatch.ts",
+      "to": "packages/backend/src/modules/integration/public/mrTerminalControl",
+      "specifier": "@/modules/integration/public/mrTerminalControl",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "public 目录存在但入口名不在 exact 五入口内，等于用 public 之名开了第六个自由入口（rfc294-architecture-preflight 已单独记账此条）。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/ws/registry.ts",
+      "to": "packages/backend/src/modules/identity-access/composition",
+      "specifier": "@/modules/identity-access/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "identity-access",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/readinessFacts.ts",
+      "to": "@/services/codeReviewAgentCaller",
+      "specifier": "@/services/codeReviewAgentCaller",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/codeReviewAgentCaller；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/readinessFacts.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/resolveRepoEndpoint.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts",
+      "to": "@/services/capabilityTemplates",
+      "specifier": "@/services/capabilityTemplates",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/capabilityTemplates；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts",
+      "to": "@/services/capabilityTemplates",
+      "specifier": "@/services/capabilityTemplates",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/capabilityTemplates；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "code-capability",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/integration/application/mrEnsure.ts",
+      "to": "@/services/codeHost/call",
+      "specifier": "@/services/codeHost/call",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/integration/application/mrEnsure.ts",
+      "to": "@/services/codeHost/call",
+      "specifier": "@/services/codeHost/call",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/integration/application/mrFacts.ts",
+      "to": "@/services/codeHost/call",
+      "specifier": "@/services/codeHost/call",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/integration/application/mrLaunchGuard.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts",
+      "to": "@/services/taskOperations",
+      "specifier": "@/services/taskOperations",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/taskOperations；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
+      "to": "@/services/lifecycle",
+      "specifier": "@/services/lifecycle",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/lifecycle；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
+      "to": "@/services/reviewMutationCoordinator",
+      "specifier": "@/services/reviewMutationCoordinator",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/reviewMutationCoordinator；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
+      "to": "@/services/task",
+      "specifier": "@/services/task",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/task；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/branchTrace.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts",
+      "to": "@/services/freshness",
+      "specifier": "@/services/freshness",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/freshness；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts",
+      "to": "drizzle-orm",
+      "specifier": "drizzle-orm",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-02"
+    }
+  ],
+  "registeredFindings": [
+    {
+      "findingId": "EK-04",
+      "kind": "business-special-case",
+      "title": "The \"runtime-neutral\" observation kernels take per-runtime-named source payloads, and the module header claims the opposite",
+      "anchors": [
+        "packages/backend/src/services/execution/inventoryObservation.ts:3-6",
+        "packages/backend/src/services/execution/inventoryObservation.ts:36-46",
+        "packages/backend/src/services/execution/inventoryObservation.ts:75-82",
+        "packages/backend/src/services/execution/inventoryObservation.ts:85-113",
+        "packages/backend/src/services/execution/startupVerification.ts:143-181",
+        "packages/backend/tests/rfc282-c0c2-runtime-fence.test.ts:69-89"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "EK-05",
+      "kind": "escape-hatch",
+      "title": "MCP stdio probe spawns arbitrary local commands through the SDK, invisible to the whole-repo spawn ratchet",
+      "anchors": [
+        "packages/backend/src/services/mcpProbe.ts:461",
+        "packages/backend/src/services/mcpProbe.ts:516-527",
+        "packages/backend/src/services/mcpProbe.ts:147-148",
+        "packages/backend/src/services/mcpProbe.ts:619-632",
+        "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts:127-135",
+        "docs/audit-backlog.md:672-679"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "EK-06",
+      "kind": "business-special-case",
+      "title": "managedProcess's drain-timeout semantics default to one caller family's legacy behaviour",
+      "anchors": [
+        "packages/backend/src/services/execution/managedProcess.ts:82-89",
+        "packages/backend/src/services/execution/managedProcess.ts:513-523",
+        "packages/backend/src/services/execution/agentProcess.ts:166-170",
+        "packages/backend/src/services/scriptRun.ts:481-495",
+        "packages/backend/tests/scheduler-audit-s15-sigterm-no-escalation-pid-unused.test.ts:108"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "EK-07",
+      "kind": "boundary-blur",
+      "title": "The unified outcome projection reaches directly into the workgroup domain's table and service",
+      "anchors": [
+        "packages/backend/src/services/execution/outcome.ts:25-30",
+        "packages/backend/src/services/execution/outcome.ts:240-263",
+        "packages/backend/src/services/execution/outcome.ts:313-330",
+        "packages/backend/src/services/execution/outcome.ts:266-270"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "EK-08",
+      "kind": "business-special-case",
+      "title": "Corrupt node_runs.runtime silently reads as opencode in the inventory read path, the exact behaviour RFC-282 决策 13 banned",
+      "anchors": [
+        "packages/backend/src/services/execution/inventoryRead.ts:155-157",
+        "packages/backend/src/services/runtime/index.ts:24-39",
+        "packages/backend/src/services/runtime/index.ts:41-46",
+        "packages/backend/src/services/runtime/index.ts:59-61"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "EK-09",
+      "kind": "stale-assertion",
+      "title": "The 2026-08-12 ledger's \"runtime 分支清零\" verdict is an artifact of the ratchet's regex shape, and its weak-spawn family list has drifted in both directions",
+      "anchors": [
+        "docs/audit-backlog.md:680-682",
+        "docs/audit-backlog.md:684-687",
+        "docs/audit-backlog.md:688-689",
+        "packages/backend/src/services/pluginInstaller.ts:775-799",
+        "packages/backend/src/services/scriptRun.ts:275-279",
+        "packages/backend/src/util/process.ts:376"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "EK-10",
+      "kind": "boundary-blur",
+      "title": "RunTaskOptions is a 47-key cross-domain config bag threaded into the execution kernel by name",
+      "anchors": [
+        "packages/backend/src/services/scheduler.ts:308-429",
+        "packages/backend/tests/rfc284-t20-child-inheritance.test.ts:36-78",
+        "packages/backend/tests/rfc284-t20-child-inheritance.test.ts:84-86"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-07",
+      "kind": "stale-assertion",
+      "title": "Kernel header cites an ESLint rule `no-direct-node-run-status-write` that does not exist anywhere in the repo",
+      "anchors": [
+        "packages/backend/src/services/lifecycle.ts:18-19",
+        "eslint.config.js:1-143",
+        "packages/backend/tests/lifecycle-grep-guard.test.ts:137-152"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-08",
+      "kind": "business-special-case",
+      "title": "The generic node_run CAS carries code-host (MR/PR closed|merged) vocabulary in its admission gate and error messages",
+      "anchors": [
+        "packages/backend/src/services/lifecycle.ts:45-50",
+        "packages/backend/src/services/lifecycle.ts:52-62",
+        "packages/backend/src/services/lifecycle.ts:143",
+        "packages/backend/src/services/lifecycle.ts:202",
+        "packages/backend/src/services/lifecycle.ts:261",
+        "packages/backend/src/services/lifecycle.ts:505-512",
+        "packages/backend/src/db/schema.ts:1050",
+        "packages/backend/tests/rfc303-node-revival-fence.test.ts:49-91"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-09",
+      "kind": "missing-guard",
+      "title": "S4's 45-minute repo-prep exemption is a business special case in the stuck detector with zero test coverage; the S1/S2 workgroup exemption likewise",
+      "anchors": [
+        "packages/backend/src/services/stuckTaskDetector.ts:75-76",
+        "packages/backend/src/services/stuckTaskDetector.ts:341-346",
+        "packages/backend/src/services/stuckTaskDetector.ts:358-371",
+        "packages/backend/src/services/stuckTaskDetector.ts:405-407",
+        "packages/backend/tests/stuck-task-detector.test.ts:162-180"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-10",
+      "kind": "boundary-blur",
+      "title": "The generic repair engine hard-branches on `isTurnEngineWorkgroupTask`, and the flag that gates the branch is optional with only a source-heuristic guard",
+      "anchors": [
+        "packages/backend/src/services/lifecycleRepair.ts:154-168",
+        "packages/backend/src/services/lifecycleRepair.ts:252-257",
+        "packages/shared/src/diagnose-repair.ts:50-59",
+        "packages/shared/src/dynamicWorkflow.ts:143-150",
+        "packages/backend/tests/rfc165-agent-launch.test.ts:671-696",
+        "packages/backend/tests/rfc165-agent-launch.test.ts:698"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-11",
+      "kind": "missing-guard",
+      "title": "Three single-slot global lifecycle registries silently overwrite on a second registration",
+      "anchors": [
+        "packages/backend/src/services/lifecycle.ts:417-430",
+        "packages/backend/src/services/lifecycle.ts:683-687",
+        "packages/backend/src/services/lifecycle.ts:651-673",
+        "packages/backend/src/services/lifecycle.ts:306-312",
+        "packages/backend/src/cli/start.ts:465-474",
+        "packages/backend/src/cli/start.ts:975-977"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-12",
+      "kind": "stale-assertion",
+      "title": "Three blind-write sites justify themselves with \"async lifecycle helpers cannot join a sync transaction\" — the sync transactional kernel entry point has existed since 2026-07-19",
+      "anchors": [
+        "packages/backend/src/services/terminalSweep.ts:92-99",
+        "packages/backend/src/services/workgroup/lifecycle.ts:348-359",
+        "packages/backend/src/services/lifecycle.ts:231-289",
+        "packages/backend/src/services/task.ts:5192",
+        "packages/backend/src/services/workgroup/taskActions.ts:387"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-13",
+      "kind": "stale-assertion",
+      "title": "The 2026-08-12 commons audit records the lifecycle family as fully converged (\"三条状态机全收敛 lifecycle.ts CAS+转移表 + 源文本棘轮\"); two of the three are not",
+      "anchors": [
+        "design/system-commons-unification-audit-2026-08-12.md:30",
+        "packages/backend/src/services/lifecycle.ts:828",
+        "packages/backend/src/services/lifecycle.ts:876-879",
+        "packages/backend/src/services/lifecycle.ts:442-491",
+        "packages/backend/tests/lifecycle-grep-guard.test.ts:86-91",
+        "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts:38-40"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-14",
+      "kind": "duplicate-implementation",
+      "title": "Frontend hand-rolls the terminal task set omitting `interrupted`, while importing the shared predicate two files away",
+      "anchors": [
+        "packages/frontend/src/routes/tasks.detail.tsx:320-331",
+        "packages/frontend/src/routes/tasks.detail.tsx:327",
+        "packages/frontend/src/lib/task-detail-tabs.ts:7",
+        "packages/frontend/src/lib/task-detail-tabs.ts:350-360",
+        "packages/frontend/src/components/home/RecentlyDoneList.tsx:12",
+        "packages/frontend/src/components/home/RecentlyDoneList.tsx:19-20",
+        "packages/shared/src/lifecycle.ts:203-208"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "LC-15",
+      "kind": "boundary-blur",
+      "title": "Two further CAS+transition-table kernels live outside the commons in incompatible shapes — and the satellite one actually enforces its table, which the shared one does not",
+      "anchors": [
+        "packages/backend/src/services/workgroup/lifecycle.ts:51-76",
+        "packages/backend/src/services/workgroup/lifecycle.ts:88-102",
+        "packages/backend/src/services/workgroup/lifecycle.ts:142",
+        "packages/backend/src/services/workgroup/lifecycle.ts:182",
+        "packages/backend/src/services/workgroup/lifecycle.ts:386-400",
+        "packages/backend/src/services/fusion.ts:1292-1321",
+        "packages/backend/src/services/fusion.ts:891-900",
+        "packages/backend/src/services/fusion.ts:1284-1287",
+        "packages/backend/src/services/fusion.ts:1729-1731"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-05",
+      "kind": "stale-assertion",
+      "title": "'Only agents and workflows have a builtin column' is stale in five places — capability_templates has it too",
+      "anchors": [
+        "packages/backend/src/db/schema.ts:89",
+        "packages/backend/src/db/schema.ts:483",
+        "packages/backend/src/db/schema.ts:4621",
+        "packages/backend/src/services/systemResources.ts:24-28",
+        "packages/backend/src/services/resourcePackage/closure.ts:55-62",
+        "packages/backend/src/services/resourcePackage/commit.ts:621-625",
+        "packages/backend/src/services/bundle/refs.ts:75-81",
+        "packages/shared/src/ref/ast.ts:88",
+        "packages/shared/src/ref/ast.ts:132-138",
+        "packages/shared/src/ref/codecs.ts:157-158",
+        "packages/backend/src/services/capabilityTemplates.ts:423-427"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-06",
+      "kind": "missing-guard",
+      "title": "OWNER_NAME_UNIQUE_TYPES is a silent-absence Set, and its only test duplicates it by hand at six of eleven entries",
+      "anchors": [
+        "packages/backend/src/services/resourceAcl.ts:146-164",
+        "packages/backend/src/services/resourceAcl.ts:664-679",
+        "packages/backend/src/services/resourceAcl.ts:709-723",
+        "packages/backend/tests/rfc223-owner-transfer.test.ts:27-34",
+        "packages/backend/src/db/schema.ts:4701",
+        "packages/backend/src/db/schema.ts:4982-4985"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-07",
+      "kind": "business-special-case",
+      "title": "directRefsOf — the export-closure edge extractor — is an if-chain whose default is a silent empty edge set",
+      "anchors": [
+        "packages/backend/src/services/resourcePackage/closure.ts:199-259",
+        "packages/backend/src/services/resourcePackage/closure.ts:235-240",
+        "packages/backend/src/services/resourcePackage/closure.ts:373-375",
+        "packages/shared/src/schemas/resourceAcl.ts:56-69",
+        "packages/backend/tests/rfc271-export-gates.test.ts:119-152",
+        "packages/backend/tests/rfc271-roundtrip.test.ts:447-455"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-08",
+      "kind": "forgeable-contract",
+      "title": "AclRow's optional visibility fails OPEN, and the whole config-package read path enters the ACL kernel through `as never`",
+      "anchors": [
+        "packages/backend/src/services/resourceAcl.ts:70-84",
+        "packages/backend/src/services/resourceAcl.ts:288-294",
+        "packages/backend/src/services/resourceAcl.ts:317-330",
+        "packages/backend/src/services/resourcePackage/closure.ts:285",
+        "packages/backend/src/services/resourcePackage/closure.ts:351",
+        "packages/backend/src/services/resourcePackage/export.ts:312",
+        "packages/backend/src/services/resourcePackage/export.ts:398",
+        "packages/backend/src/services/resourcePackage/preview.ts:415",
+        "packages/backend/src/services/resourcePackage/commit.ts:645",
+        "packages/backend/src/services/resourcePackage/commit.ts:674"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-09",
+      "kind": "duplicate-implementation",
+      "title": "A second, semantically divergent visibility oracle lives (tested, exported, unused) inside the development-automation module",
+      "anchors": [
+        "packages/backend/src/modules/development-automation/application/queries/configResourceQueries.ts:1-46",
+        "packages/backend/src/services/resourceAcl.ts:288-294",
+        "packages/backend/tests/rfc310-pr1b-action-template.test.ts:175-191"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-10",
+      "kind": "duplicate-implementation",
+      "title": "The ACL kernel hand-copies both halves of the owner-scoped-name fence it could have imported",
+      "anchors": [
+        "packages/backend/src/services/resourceAcl.ts:664-679",
+        "packages/backend/src/services/resourceAcl.ts:709-723",
+        "packages/backend/src/services/ownerScopedName.ts:8-34",
+        "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts:26-29"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-11",
+      "kind": "duplicate-implementation",
+      "title": "INTENT_HANDLE_RE re-encodes INTENT_RESOURCE_TYPES as a regex alternation with no lock between them",
+      "anchors": [
+        "packages/shared/src/ref/codecs.ts:29-42",
+        "packages/shared/src/ref/codecs.ts:211-216",
+        "packages/shared/src/schemas/resourceAcl.ts:95-103",
+        "packages/shared/src/schemas/intentChangeset.ts:48-56",
+        "packages/shared/tests/rfc271-resource-ref.test.ts:269-294",
+        "packages/backend/tests/docs-node-kind-coverage.test.ts:126-133"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-12",
+      "kind": "missing-guard",
+      "title": "The package secret-slot indexer's per-type switch silently skips capability_template and has no exhaustiveness check",
+      "anchors": [
+        "packages/backend/src/services/resourcePackage/secretInputs.ts:298-388",
+        "packages/backend/src/services/resourcePackage/secretInputs.ts:495-504",
+        "packages/backend/src/services/resourcePackage/serialize.ts:320-355",
+        "packages/backend/src/services/resourcePackage/serialize.ts:160",
+        "packages/backend/src/services/resourcePackage/serialize.ts:181",
+        "packages/backend/src/services/resourcePackage/serialize.ts:197-198",
+        "packages/backend/src/services/resourcePackage/serialize.ts:227",
+        "packages/shared/src/schemas/resourceAcl.ts:56-69"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-13",
+      "kind": "boundary-blur",
+      "title": "The RFC-310 five bypass the ACL kernel's create-default triple, inlining the literal instead",
+      "anchors": [
+        "packages/backend/src/services/resourceAcl.ts:86-124",
+        "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts:70-93",
+        "packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts:37-59",
+        "packages/backend/src/services/capabilityTemplates.ts:305-315",
+        "packagesets/shared/src/schemas/capabilityTemplate.ts:92",
+        "packages/backend/tests/rfc231-private-copy.test.ts:318-371"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "ACL-14",
+      "kind": "stale-assertion",
+      "title": "The kernel's own headers still describe a six-type world, including a mount exclusion that does not exist",
+      "anchors": [
+        "packages/backend/src/services/resourceAcl.ts:1-36",
+        "packages/backend/src/services/resourceAcl.ts:127-142",
+        "packages/backend/src/services/resourceAcl.ts:388-389",
+        "packages/shared/src/schemas/resourceAcl.ts:1-8",
+        "packages/backend/src/routes/resourceAcl.ts:34-40",
+        "packages/backend/src/routes/resourceAcl.ts:73-87",
+        "packages/backend/tests/contracts/registry.ts:867-888"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-04",
+      "kind": "business-special-case",
+      "title": "stageSkills — the shared two-runtime staging kernel hardcodes a Claude-Code plugin exclusion and applies it to opencode; its own header describes failure semantics the code no longer has",
+      "anchors": [
+        "packages/backend/src/services/runtime/stageSkills.ts:13-17",
+        "packages/backend/src/services/runtime/stageSkills.ts:25-44",
+        "packages/backend/src/services/runtime/stageSkills.ts:76-83",
+        "packages/backend/src/services/runtime/stageSkills.ts:90-95",
+        "packages/backend/tests/rfc154-runtime-config-dir.test.ts:455-463",
+        "packages/backend/tests/claude-skill-injection-2026-08-09.test.ts:143"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-05",
+      "kind": "business-special-case",
+      "title": "validateExtraArgs is capability-gated at the door but enforces Claude Code's argv dialect on every driver that opts in",
+      "anchors": [
+        "packages/backend/src/services/runtimeRegistry.ts:213-219",
+        "packages/backend/src/services/runtimeRegistry.ts:244-262",
+        "packages/backend/src/services/runtime/claudeCode/spawn.ts:70-100",
+        "packages/backend/src/services/runtime/claudeCode/spawn.ts:222-256",
+        "packages/backend/src/services/runtime/index.ts:75",
+        "packages/backend/src/services/runtime/claudeCode/driver.ts:475-478"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-06",
+      "kind": "business-special-case",
+      "title": "A live kind-discriminating branch in routes/runtime.ts escapes the ratchet on both halves of its regex, and silently answers with the wrong runtime's model list",
+      "anchors": [
+        "packages/backend/src/routes/runtime.ts:30-34",
+        "packages/backend/src/routes/runtime.ts:35-53",
+        "packages/backend/src/routes/runtime.ts:63-71",
+        "packages/frontend/src/components/ModelSelect.tsx:55",
+        "packages/frontend/src/components/ModelSelect.tsx:68-75"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-07",
+      "kind": "duplicate-implementation",
+      "title": "'the default runtime is opencode' has no single source — the bare literal is re-derived in 15 production sites across 7 files",
+      "anchors": [
+        "packages/backend/src/services/runner.ts:566",
+        "packages/backend/src/services/runtimeRegistry.ts:401",
+        "packages/backend/src/services/runtimeRegistry.ts:451-468",
+        "packages/backend/src/services/runtimeRegistry.ts:479",
+        "packages/backend/src/services/runtimeRegistry.ts:948",
+        "packages/backend/src/services/runtimeRegistry.ts:1004-1013",
+        "packages/backend/src/routes/runtimes.ts:174-180",
+        "packages/backend/src/services/memoryDistiller.ts:798"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-08",
+      "kind": "boundary-blur",
+      "title": "RuntimeBinaryConfig — the neutral defaultBinary port is parameterized by per-runtime config keys, and the probe-receipt invalidation re-derives protocols from those two literals",
+      "anchors": [
+        "packages/backend/src/services/runtime/types.ts:99-105",
+        "packages/backend/src/services/runtime/opencode/driver.ts:370-372",
+        "packages/backend/src/services/runtime/claudeCode/driver.ts:538-540",
+        "packages/backend/src/routes/config.ts:89-95",
+        "packages/backend/src/services/runtimeRegistry.ts:1096-1099"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-09",
+      "kind": "boundary-blur",
+      "title": "The unified inventory read dispatches on capability class but hard-wires opencode's implementation for that class, bypassing the driver.readInventory port selfCheck already guarantees",
+      "anchors": [
+        "packages/backend/src/services/execution/inventoryRead.ts:169-186",
+        "packages/backend/src/services/execution/inventoryRead.ts:49-77",
+        "packages/backend/src/services/runtime/index.ts:77",
+        "packages/backend/src/services/runtime/opencode/inventory.ts:193-197",
+        "packages/backend/src/services/execution/startupVerification.ts:143-155",
+        "packages/shared/src/schemas/startupVerification.ts:34",
+        "packages/backend/src/services/runtime/selfCheck.ts:60-67"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-10",
+      "kind": "business-special-case",
+      "title": "A dirty node_runs.runtime silently reads as opencode in the inventory read end, contradicting the read-path contract RFC-282 决策13 put in tryGetRuntimeDriver",
+      "anchors": [
+        "packages/backend/src/services/execution/inventoryRead.ts:155-158",
+        "packages/backend/src/services/runtime/index.ts:41-46",
+        "packages/backend/tests/rfc282-c0c2-runtime-fence.test.ts:46-51"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-11",
+      "kind": "business-special-case",
+      "title": "The shared stale-child kill kernel identifies 'our agent child' with an /opencode|bun/ regex; a live claude child on a row without spawn_binary_path is judged a recycled PID and left running",
+      "anchors": [
+        "packages/backend/src/util/process.ts:174-185",
+        "packages/backend/src/util/process.ts:246-257",
+        "packages/backend/src/services/runner.ts:1715-1730",
+        "packages/backend/src/services/scheduler.ts:5060-5067"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-12",
+      "kind": "duplicate-implementation",
+      "title": "runtimeSmoke re-implements claude's terminal-result detection inline instead of using the driver.parseTerminalResultError port, and applies a merged two-runtime error dialect to every runtime's streams",
+      "anchors": [
+        "packages/backend/src/services/runtimeSmoke.ts:256-264",
+        "packages/backend/src/services/runtimeSmoke.ts:366-372",
+        "packages/backend/src/services/runtime/types.ts:852-856",
+        "packages/backend/src/services/runner.ts:1461",
+        "packages/backend/src/services/systemAgentRun.ts:528"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-13",
+      "kind": "missing-guard",
+      "title": "MCP-playground support is a method-presence proxy — the exact shape RFC-282 C2 eliminated for inventory — and its two-method contract is not enforced together",
+      "anchors": [
+        "packages/backend/src/services/mcpRuntimeTest.ts:127-133",
+        "packages/backend/src/services/mcpRuntimeTest.ts:2232-2238",
+        "packages/backend/src/services/mcpRuntimeTest.ts:858",
+        "packages/backend/src/services/runtime/types.ts:781-792",
+        "packages/backend/src/services/runtime/claudeCode/driver.ts:485-488",
+        "packages/backend/tests/rfc282-a3-driver-selfcheck.test.ts:59-173"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-14",
+      "kind": "forgeable-contract",
+      "title": "The shared spawn-context translation forges an Agent by cast and carries per-driver knob names in its signature",
+      "anchors": [
+        "packages/backend/src/services/runtime/spawnCtx.ts:21-32",
+        "packages/backend/src/services/runtime/spawnCtx.ts:36-48",
+        "packages/backend/src/services/runtime/spawnCtx.ts:74-78",
+        "packages/backend/src/services/runtime/opencode/driver.ts:92-99"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "RT-15",
+      "kind": "stale-assertion",
+      "title": "Audit ledger claims 'runtime 字面量执行分支 driver 目录外真零' and 'driver.kind 目录外零引用'; source has at least three such branches today",
+      "anchors": [
+        "design/system-commons-unification-audit-2026-08-12.md:27",
+        "packages/backend/src/cli/start.ts:396-401",
+        "packages/backend/src/routes/runtime.ts:49-53",
+        "packages/backend/tests/rfc143-runtime-driver-capability.test.ts:244-247"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-04",
+      "kind": "stale-assertion",
+      "title": "`NODE_KIND_BEHAVIORS.isProcess` is a fake dimension — zero production consumers, and the table's own doc claims otherwise",
+      "anchors": [
+        "packages/shared/src/node-kind-behavior.ts:57-64",
+        "packages/shared/src/node-kind-behavior.ts:13-14",
+        "packages/shared/src/node-kind-behavior.ts:245-247",
+        "packages/backend/tests/node-kind-behavior-table.test.ts:125-139",
+        "packages/backend/tests/node-kind-behavior-table.test.ts:108-122",
+        "packages/backend/src/services/task.ts:5380",
+        "packages/backend/src/services/scheduler.ts:2428",
+        "packages/backend/src/services/stuckTaskDetector.ts:548"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-05",
+      "kind": "duplicate-implementation",
+      "title": "`isInlineMarkdownItemKind` claims to be the single anti-drift predicate but is hand-inlined three more times inside the list handler",
+      "anchors": [
+        "packages/shared/src/reviewMultiDoc.ts:12-22",
+        "packages/shared/src/outputKinds/list.ts:50-53",
+        "packages/shared/src/outputKinds/list.ts:61-64",
+        "packages/shared/src/outputKinds/list.ts:96-98",
+        "packages/backend/tests/rfc103-fanout-kind-aware-split.test.ts:55-62"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-06",
+      "kind": "duplicate-implementation",
+      "title": "Two output-kind registries co-exist; the dead one is fully exported from the barrel and its documented type-level exhaustiveness is now vacuous",
+      "anchors": [
+        "packages/shared/src/outputKinds/index.ts:22-38",
+        "packages/shared/src/outputKinds/index.ts:31-34",
+        "packages/shared/src/schemas/review.ts:52-69",
+        "packages/shared/src/outputKinds/registry.ts:14-22",
+        "packages/shared/src/index.ts:70"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-07",
+      "kind": "escape-hatch",
+      "title": "`shardingRegistry` is a mutable module-global with an exported writer, so any caller can rewrite persisted shard identity at runtime",
+      "anchors": [
+        "packages/shared/src/shardingRegistry.ts:32",
+        "packages/shared/src/shardingRegistry.ts:45-47",
+        "packages/shared/src/shardingRegistry.ts:66-73",
+        "packages/shared/src/index.ts:102",
+        "packages/backend/src/services/scheduler.ts:7803-7817",
+        "packages/shared/src/outputKinds/index.ts:9-13"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-08",
+      "kind": "boundary-blur",
+      "title": "Clarify node-side channel ports `questions` / `answers` are outside SYSTEM_CHANNEL_PORTS, outside the literal ratchet, and the registry↔declaredPorts drift lock only runs in one direction",
+      "anchors": [
+        "packages/shared/src/nodePorts.ts:271-286",
+        "packages/shared/src/schemas/workflow.ts:682-683",
+        "packages/shared/src/schemas/workflow.ts:755",
+        "packages/shared/src/systemChannelPorts.ts:61-87",
+        "packages/backend/tests/rfc147-system-channel-ports.test.ts:159-184",
+        "packages/backend/tests/rfc147-system-channel-ports.test.ts:219-252"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-09",
+      "kind": "missing-guard",
+      "title": "The runtime-builtin token switch has no exhaustiveness over its own registry: a new `agent-prompt` builtin silently falls through to the inbound-port lookup",
+      "anchors": [
+        "packages/shared/src/prompt.ts:562-608",
+        "packages/shared/src/prompt.ts:610-621",
+        "packages/shared/src/prompt.ts:425",
+        "packages/shared/src/prompt.ts:488-489",
+        "packages/shared/src/runtimeBuiltins.ts:54-160",
+        "packages/shared/tests/rfc295-runtime-parameter-authority.test.ts:50-64"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-10",
+      "kind": "duplicate-implementation",
+      "title": "`privilegedNodeAccessOf` re-derives the privileged-kind→permission mapping as an if-chain shadowing the table declared two lines above it",
+      "anchors": [
+        "packages/frontend/src/hooks/usePrivilegedNodes.ts:31-35",
+        "packages/frontend/src/hooks/usePrivilegedNodes.ts:60-65",
+        "packages/frontend/src/hooks/usePrivilegedNodes.ts:66-78",
+        "packages/frontend/src/hooks/usePrivilegedNodes.ts:9-12",
+        "packages/frontend/tests/rfc270-palette-permission.test.tsx:36-96"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-11",
+      "kind": "stale-assertion",
+      "title": "`code-round` still occupies a full row in the behavior table describing an execution chain RFC-310 deleted",
+      "anchors": [
+        "packages/shared/src/node-kind-behavior.ts:203-221",
+        "packages/backend/src/services/scheduler.ts:5664-5673",
+        "packages/backend/src/services/runLiveness.ts:127-136",
+        "packages/backend/tests/node-kind-behavior-table.test.ts:31-78"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-12",
+      "kind": "boundary-blur",
+      "title": "`git_diff` — a framework-minted port name — is a bare literal in three packages while its sibling `__done__` is an exported constant",
+      "anchors": [
+        "packages/shared/src/nodePorts.ts:235-238",
+        "packages/backend/src/services/scheduler.ts:9814",
+        "packages/frontend/src/lib/workflow-starters.ts:284-288",
+        "packages/shared/src/wrapperFanout.ts:169-175",
+        "packages/shared/tests/rfc199-git-diff-port-contract.test.ts:4-21"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-13",
+      "kind": "stale-assertion",
+      "title": "docs/dev-gotchas.md's NodeKind checklist names a file that no longer contains a compile-time exhaustiveness point",
+      "anchors": [
+        "docs/dev-gotchas.md:624",
+        "packages/frontend/src/components/canvas/wrapperFit.ts:1-30",
+        "packages/shared/src/workflowNodeGeometry.ts:50-67",
+        "packages/backend/src/services/runLiveness.ts:148-151"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "NK-14",
+      "kind": "stale-assertion",
+      "title": "Shared output-kind kernels still carry 'PR-A scope: not yet wired / PR-D will wire it' notes for code that has been in production for months",
+      "anchors": [
+        "packages/shared/src/shardingRegistry.ts:23-25",
+        "packages/shared/src/outputKinds/list.ts:21-22",
+        "packages/shared/src/outputKinds/signal.ts:17-20",
+        "packages/shared/src/outputKinds/registry.ts:6-22",
+        "packages/shared/src/kindParser.ts:175-179"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-07",
+      "kind": "missing-guard",
+      "title": "routes->db ratchet is import-shaped, so a route can query the database with zero @/db import and stay invisible",
+      "anchors": [
+        "scripts/depcheck.ts:216-282",
+        "scripts/depcheck.ts:403-410",
+        ".dependency-cruiser.cjs:87-95",
+        "packages/backend/src/routes/webhookDeliveries.ts:136",
+        "packages/backend/src/routes/developmentMissions.ts:208"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-08",
+      "kind": "boundary-blur",
+      "title": "AppDeps is a god-object with 6 declared test-only fields and 6 single-consumer fields, and nothing ratchets either",
+      "anchors": [
+        "packages/backend/src/server.ts:139-152",
+        "packages/backend/src/server.ts:154-243",
+        "packages/backend/src/server.ts:209",
+        "packages/backend/src/server.ts:215",
+        "packages/backend/src/server.ts:222",
+        "packages/backend/src/server.ts:230-242",
+        "packages/backend/src/server.ts:574-584",
+        "packages/backend/tests/rfc294-architecture-preflight.test.ts:23-39",
+        "packages/backend/tests/rfc284-env-flags-registry.test.ts:31-44"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-09",
+      "kind": "stale-assertion",
+      "title": "Security-relevant comment in the WS upgrade path asserts a defect that was closed, and contradicts the same file 130 lines earlier",
+      "anchors": [
+        "packages/backend/src/ws/server.ts:291-303",
+        "packages/backend/src/ws/server.ts:167-169",
+        "packages/backend/src/ws/registry.ts:746-767",
+        "packages/backend/tests/rfc152-ws-channel-registry.test.ts:181-184"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-10",
+      "kind": "business-special-case",
+      "title": "Generic HTTP error translator duck-types one domain's error-code literal",
+      "anchors": [
+        "packages/backend/src/util/errors.ts:133-155",
+        "packages/backend/src/util/errors.ts:157-161",
+        "packages/backend/src/server.ts:410",
+        "packages/backend/src/mcp/dispatch.ts:85",
+        "packages/shared/src/lifecycle.ts:62",
+        "packages/backend/src/services/lifecycle.ts:205-270"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-11",
+      "kind": "duplicate-implementation",
+      "title": "Three independent re-implementations of the claim-with-lease outbox protocol; platform/ owns no outbox kernel",
+      "anchors": [
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts:36-100",
+        "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts:835-915",
+        "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts:973-1032",
+        "packages/backend/src/db/schema.ts:5128-5135",
+        "packages/backend/src/db/schema.ts:5598-5600",
+        "packages/backend/src/platform/persistence/transactionScope.ts:1-9"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-12",
+      "kind": "stale-assertion",
+      "title": "DAEMON_CADENCE claims to be the single background-cadence registry, but ~6 loops keep their own literals and membership is unguarded",
+      "anchors": [
+        "packages/backend/src/services/daemonCadence.ts:1-40",
+        "packages/backend/tests/rfc284-daemon-cadence.test.ts:6-28",
+        "packages/backend/src/services/backupScheduler.ts:194",
+        "packages/backend/src/services/taskArchive.ts:573",
+        "packages/backend/src/services/maintenanceRetention.ts:185",
+        "packages/backend/src/services/pluginGenerationGc.ts:16",
+        "packages/backend/src/services/memoryDistillScheduler.ts:431",
+        "packages/backend/src/services/eventsArchive.ts:19",
+        "packages/backend/src/services/eventsArchive.ts:25"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-13",
+      "kind": "escape-hatch",
+      "title": "Double cast in a WS frame gate converts a compile-time union guarantee into a silent frame drop",
+      "anchors": [
+        "packages/backend/src/ws/registry.ts:493-517",
+        "packages/backend/src/ws/registry.ts:509-512",
+        "packages/shared/src/schemas/ws.ts:246-252",
+        "packages/backend/tests/routes-no-cast.test.ts:24-40"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "TP-14",
+      "kind": "boundary-blur",
+      "title": "One channel's concept is hard-wired into the channel-agnostic connection lifecycle, outside the ratchet's scope",
+      "anchors": [
+        "packages/backend/src/ws/registry.ts:208-217",
+        "packages/backend/src/ws/registry.ts:344-352",
+        "packages/backend/src/ws/registry.ts:355-385",
+        "packages/backend/src/ws/registry.ts:928-949",
+        "packages/backend/src/ws/connections.ts:79-81",
+        "packages/backend/tests/rfc152-ws-task-channel.test.ts:192-203"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "DE-10",
+      "kind": "forgeable-contract",
+      "title": "The execution-contract fixture prober validates program executors against a different environment than the one production gives them",
+      "anchors": [
+        "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts:208-216",
+        "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts:314-326",
+        "packages/backend/src/modules/execution-contract/domain/model.ts:489-492",
+        "packages/backend/src/modules/execution-contract/application/executionContractService.ts:135-136"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "DE-11",
+      "kind": "escape-hatch",
+      "title": "Two more Digital Employee ports are optional-with-fallback, and one of the fallbacks disables the platform-tool immutability invariant",
+      "anchors": [
+        "packages/backend/tests/rfc310-digital-employee-os-architecture.test.ts:133-157",
+        "packages/backend/tests/rfc310-digital-employee-os-architecture.test.ts:146-151",
+        "packages/backend/src/modules/digital-employee/composition.ts:240",
+        "packages/backend/src/modules/digital-employee/composition.ts:246",
+        "packages/backend/src/modules/digital-employee/composition.ts:331-340",
+        "packages/backend/src/modules/digital-employee/composition.ts:443-456",
+        "packages/backend/src/modules/digital-employee/application/authoringService.ts:219",
+        "packages/backend/src/modules/digital-employee/application/authoringService.ts:303-312",
+        "packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts:53-57"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "DE-12",
+      "kind": "missing-guard",
+      "title": "The code-capability retirement ratchet is module-scoped, and a live production writer to the retired round tables survives outside it",
+      "anchors": [
+        "packages/backend/tests/rfc310-architecture-lock.test.ts:274-287",
+        "packages/backend/tests/rfc310-architecture-lock.test.ts:296-319",
+        "packages/backend/src/services/demoSeed.ts:249-297",
+        "packages/backend/src/cli/start.ts:662-665",
+        "packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts",
+        "design/RFC-294-backend-layered-target-architecture/proposal.md:157-159"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "DE-13",
+      "kind": "escape-hatch",
+      "title": "The implicit-declaration hook is an optional kernel parameter that soft-fails malformed declarations into a development-specific legacy table",
+      "anchors": [
+        "packages/backend/src/modules/execution-contract/composition.ts:13-15",
+        "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts:24",
+        "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts:82-106",
+        "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts:1412-1436",
+        "packages/backend/src/modules/execution-contract/public/commands.ts:5-22",
+        "packages/backend/src/modules/execution-contract/domain/model.ts:105-116",
+        "packages/backend/src/services/agent.ts:143",
+        "packages/backend/src/services/agent.ts:375"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-03",
+      "kind": "duplicate-implementation",
+      "title": "TASK_QUERY_KEYS is a single source of truth only for the three WS hooks; every consuming useQuery/invalidate still spells the same key as a literal, and the guard only watches the producing side",
+      "anchors": [
+        "packages/frontend/src/lib/query-keys.ts:1-23",
+        "packages/frontend/tests/task-sync-rules.test.ts:137-149",
+        "packages/frontend/src/routes/tasks.detail.tsx:213-274",
+        "packages/frontend/src/components/NodeDetailDrawer.tsx:107-128",
+        "packages/frontend/src/components/tasks/WorkflowSyncBanner.tsx:55-58",
+        "packages/frontend/src/components/inventory/RuntimeInventorySection.tsx:39",
+        "packages/frontend/src/components/inventory/StartupVerificationBanner.tsx:25",
+        "design/system-commons-unification-audit-2026-08-12.md:124"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-04",
+      "kind": "forgeable-contract",
+      "title": "ErrorDetails decides 'safe to disclose resource names' from a plain object key name, so the ACL disclosure authority is structurally forgeable by any emitter",
+      "anchors": [
+        "packages/frontend/src/components/ErrorDetails.tsx:10-16",
+        "packages/frontend/src/components/ErrorDetails.tsx:104-117",
+        "packages/backend/src/services/resourceAcl.ts:336-367",
+        "packages/backend/src/services/skill.ts:460-463",
+        "packages/backend/tests/rfc203-refs-acl.test.ts:79-286",
+        "packages/backend/tests/rfc202-lifecycle-exits.test.ts:396-435",
+        "packages/backend/tests/rfc223-reverse-delete-races.test.ts:58-61",
+        "packages/frontend/tests/rfc203-error-details.test.tsx:53-83"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-05",
+      "kind": "duplicate-implementation",
+      "title": "WorkflowStarterDialog re-implements <ChoiceCards> as a raw radiogroup and drops its roving-tabindex contract",
+      "anchors": [
+        "packages/frontend/src/components/workflow-editor/WorkflowStarterDialog.tsx:310-332",
+        "packages/frontend/src/components/ChoiceCards.tsx:41-118",
+        "packages/frontend/src/styles.css:9426-9454",
+        "packages/frontend/tests/ux-source-ratchets.test.ts:131-234"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-06",
+      "kind": "business-special-case",
+      "title": "ModelSelect's provider ordering hard-codes opencode, and its runtime-switching prop plus a second query key are dead API surface",
+      "anchors": [
+        "packages/frontend/src/components/ModelSelect.tsx:206-221",
+        "packages/frontend/src/components/ModelSelect.tsx:34",
+        "packages/frontend/src/components/ModelSelect.tsx:55",
+        "packages/frontend/src/components/RuntimeList.tsx:555-556",
+        "packages/frontend/tests/model-select.test.tsx:55-70",
+        "packages/frontend/tests/runtime-claude-frontend.test.tsx:28-29",
+        "packages/frontend/tests/runtime-claude-frontend.test.tsx:116-135"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-07",
+      "kind": "business-special-case",
+      "title": "The shared dialog chrome carries a hardcoded dark-mode color override for one specific feature's primary button",
+      "anchors": [
+        "packages/frontend/src/styles.css:13758-13783",
+        "packages/frontend/tests/ux-source-ratchets.test.ts:214",
+        "packages/frontend/tests/theme-css-ratchet.test.ts:59-93"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-08",
+      "kind": "escape-hatch",
+      "title": "Four feature-name literals now appear inside the shared `.dialog__overlay` rule surface, re-specifying overlay geometry the Dialog primitive owns",
+      "anchors": [
+        "packages/frontend/src/styles.css:8530-8534",
+        "packages/frontend/src/styles.css:10145-10147",
+        "packages/frontend/src/styles.css:23013-23017",
+        "packages/frontend/src/styles.css:26386-26388",
+        "packages/frontend/src/components/Dialog.tsx:18",
+        "packages/frontend/src/components/Dialog.tsx:55",
+        "packages/frontend/src/components/Dialog.tsx:373-374",
+        "packages/frontend/tests/ux-source-ratchets.test.ts:211-234",
+        "packages/frontend/tests/overlay-ux-inventory.test.ts:367-379"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-09",
+      "kind": "duplicate-implementation",
+      "title": "TaskOutputPanel re-implements TabBar's roving-tabindex + arrow-key contract because the primitive has no vertical orientation",
+      "anchors": [
+        "packages/frontend/src/components/TaskOutputPanel.tsx:93-166",
+        "packages/frontend/src/components/TabBar.tsx:27",
+        "packages/frontend/src/components/TabBar.tsx:69-86",
+        "packages/frontend/src/components/TabBar.tsx:141-420",
+        "packages/frontend/tests/task-output-panel-source-guards.test.ts:33-42"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-10",
+      "kind": "duplicate-implementation",
+      "title": "Three independent implementations of the same `{items, nextCursor}` infinite-query pattern, and the newest 'unified' one has a single caller",
+      "anchors": [
+        "packages/frontend/src/hooks/usePagedList.ts:1-37",
+        "packages/frontend/src/hooks/useTaskOperationsPage.ts:12-44",
+        "packages/frontend/src/routes/intent.tsx:178",
+        "packages/frontend/src/routes/repos.tsx:198"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "FE-11",
+      "kind": "stale-assertion",
+      "title": "The 2026-08-12 commons audit's frontend row ('六大高危面…实测 100% 归一零逃逸', 'Segmented 37/TabBar 17 手拼零') is now false in source",
+      "anchors": [
+        "design/system-commons-unification-audit-2026-08-12.md:31",
+        "design/system-commons-unification-audit-2026-08-12.md:41",
+        "design/system-commons-unification-audit-2026-08-12.md:69",
+        "packages/frontend/src/components/canvas/inspector/JoinModeField.tsx:59-79",
+        "packages/frontend/src/components/workflow-editor/ConnectionDialog.tsx:455-540",
+        "packages/frontend/src/components/canvas/inspector/ClarifyEdit.tsx:72-94",
+        "packages/frontend/src/components/code/DevelopmentConfigEditor.tsx:169"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "G-10",
+      "kind": "escape-hatch",
+      "title": "rfc310's fs walk swallows a missing directory, so renaming or moving the module makes three of its locks vacuously green",
+      "anchors": [
+        "packages/backend/tests/rfc310-architecture-lock.test.ts:55-62",
+        "packages/backend/tests/rfc310-architecture-lock.test.ts:149-196",
+        "packages/backend/tests/rfc310-architecture-lock.test.ts:198-212"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "G-11",
+      "kind": "stale-assertion",
+      "title": "The no-auth-to-services cruiser rule's comment asserts a ledgered violation that does not exist in KNOWN_VIOLATIONS",
+      "anchors": [
+        ".dependency-cruiser.cjs:113-126",
+        "scripts/depcheck.ts:69-293",
+        "packages/backend/src/auth/oidc/identity.ts:20"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "G-12",
+      "kind": "stale-assertion",
+      "title": "The 2026-08-12 audit's own guard-inventory line is stale in three numbers, and it is the line a reader would trust when asking 'what protects us'",
+      "anchors": [
+        "design/system-commons-unification-audit-2026-08-12.md:40",
+        ".dependency-cruiser.cjs:41-149",
+        "scripts/depcheck.ts:69-293"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "CC-08",
+      "kind": "boundary-blur",
+      "title": "Path containment has no adoption ratchet, and the RFC-310 upload writer re-validates its target path with a schema strictly weaker than the one that produced it",
+      "anchors": [
+        "packages/backend/src/util/safePath.ts:14-41",
+        "packages/backend/src/modules/development-automation/domain/requirementManifest.ts:13-27",
+        "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts:2631-2668",
+        "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:57-70",
+        "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts:323-327",
+        "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts:59-63"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "CC-09",
+      "kind": "missing-guard",
+      "title": "The lifecycle alert-rule registry is not exhaustive over its own union, so a new rule's alerts would never be resolved — and its headers already miscount the rules they list",
+      "anchors": [
+        "packages/backend/src/services/lifecycleInvariants.ts:59-63",
+        "packages/backend/src/services/lifecycleInvariants.ts:73-81",
+        "packages/backend/src/services/lifecycleInvariants.ts:87-101",
+        "packages/backend/src/services/lifecycleInvariants.ts:826",
+        "packages/backend/src/services/lifecycleInvariants.ts:1-33"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "CC-10",
+      "kind": "stale-assertion",
+      "title": "The shared ref-resolution policy table declares itself the single source of truth for freeze/ACL timing and has zero production consumers",
+      "anchors": [
+        "packages/shared/src/ref/resolution.ts:87",
+        "packages/shared/src/ref/resolution.ts:89-100",
+        "packages/shared/src/ref/resolution.ts:103-110",
+        "packages/backend/tests/rfc271-ref-contract.test.ts:50-65",
+        "packages/backend/src/services/agentDeps.ts:1"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "CC-11",
+      "kind": "boundary-blur",
+      "title": "modules/intent is a one-file bounded context with no public/ surface whose only consumer is a legacy service deep-import — invisible to every public-surface and cross-context guard",
+      "anchors": [
+        "packages/backend/src/modules/intent/domain/workflowCreateLayout.ts:1-25",
+        "packages/backend/src/services/intent/turnEngine.ts:60",
+        "packages/backend/tests/rfc294-architecture-preflight.test.ts:18",
+        "packages/backend/tests/rfc294-architecture-preflight.test.ts:507-620"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "CC-12",
+      "kind": "duplicate-implementation",
+      "title": "The 'which space kind owns disk' predicate is hand-written four times across the workspace-GC commons with no SpaceKind-exhaustive table",
+      "anchors": [
+        "packages/backend/src/services/gc.ts:213-216",
+        "packages/backend/src/services/gc.ts:265-268",
+        "packages/backend/src/services/gc.ts:360-372",
+        "packages/backend/src/services/webhook/terminalWorkspaceCleanup.ts:25-36",
+        "packages/shared/src/schemas/task.ts:63"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
+      "findingId": "CC-13",
+      "kind": "escape-hatch",
+      "title": "Memory-body fencing in the shared injection kernel is opt-in through a defaulted empty-nonce parameter, and no guard bounds who may pass the empty string",
+      "anchors": [
+        "packages/backend/src/services/memoryInject.ts:306-322",
+        "packages/shared/src/promptFencing.ts:110-113",
+        "packages/backend/src/services/runner.ts:718",
+        "packages/backend/tests/rfc200-source-lock.test.ts:63-64"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    }
+  ]
+}

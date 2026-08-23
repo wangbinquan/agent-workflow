@@ -5,6 +5,7 @@
 - 审计基线：`56755bc00`（采数时 `main`、clean tree）。**落档时 `main` 已前进到 `dcb1476ac`，且工作树上有并发 session 的大批未提改动**（`modules/digital-employee`、`modules/task-execution/public`、`employeeTypePackage.ts` 等，对应他们的 RFC-316）——本文的 66 / 33 / 79 / 52 等计数与部分 `DE-*` 锚点**开工时必须在新的干净 exact SHA 上重采**（`plan.md §0` 已列为前置）
 - 直接输入：
   - 本目录 `findings.md` —— 2026-08-23 的 18-agent 并行审计产出，131 条经复核发现 + 95 条无人看守的违规类别
+  - 本目录 `census-2026-08-23.md` —— B0/T1 在干净 SHA 上的**正式分母**；它订正了本文落档时用 `rg` 行计数估算的三个数字（口径差见该报告 §0）
   - `design/RFC-294-backend-layered-target-architecture/{proposal,design,plan}.md`
   - `design/system-commons-unification-audit-2026-08-12.md`（§5 决策台账 D1–D22）
   - `docs/dev-gotchas.md`（守卫失效的三种形态、变异实证纪律）
@@ -24,9 +25,9 @@ RFC-294 `design.md §1.2` 给出了「什么才配进共享内核」的四条判
 | 事实 | 证据锚点 |
 | --- | --- |
 | RFC-294 preflight 只把 `modules/**` 当**边的起点**，起点在 `modules/` 之外的边结构上不可见 | `packages/backend/tests/rfc294-architecture-preflight.test.ts:18` + `:241-242` 的 `if (from === null) continue` |
-| 于是 legacy 层深入 module 内部的边完全无人看守：今天 **66 条边 / 19 个文件** | 实测 `rg -E "from '@/modules/[^/']+/(domain\|application\|engine\|ports\|infrastructure\|inbound)" packages/backend/src/{routes,services,cli,ws,mcp,auth,util}` |
-| 反向同样不可见：`modules/**` → `@/services/**` **33 条**，其中 **9 条出自 `application` 层**（RFC-294 `§G1` 硬禁止） | 实测；按 context：task-execution 19 / integration 6 / execution-contract 3 / event-center 2 / code-capability 2 / identity-access 1 |
-| 模块形状锁（顶层目录集、层内矩阵、composition 纯净）只覆盖 **4/12** 个 bounded context；`task-execution`——RFC-294 命名的执行内核本身——**零形状锁**，且已长出非规范的 `inbound/` 顶层目录 | `rfc310-architecture-lock.test.ts:27` 的 `MODULE_ROOT` 绑死单模块；`packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts` |
+| 于是 legacy 层深入 module 内部的边完全无人看守：**94 条边 / 28 个文件** | `census-2026-08-23.md §2`（AST 边计数，正式分母）。目标层分布：domain 28 / infrastructure 22 / composition 21 / application 16 / engine 2 / inbound 2 / public 2 / ports 1 |
+| 反向同样不可见：模块被围栏四层反向依赖 legacy 的边 **22 条，且 22 条全部出自 `application` 层**（RFC-294 `§G1` 硬禁止）——`domain` / `engine` / `public` 三层今天是干净的 | `census-2026-08-23.md §3`。按 context：code-capability 9 / task-execution 8 / integration 5；其中 11 条是 `drizzle-orm`、11 条是 `@/services/*` |
+| 模块形状锁（顶层目录集、层内矩阵、composition 纯净）只覆盖 **4/11** 个 bounded context；`task-execution`——RFC-294 命名的执行内核本身——**零形状锁**，且已长出非规范的 `inbound/` 顶层目录 | `rfc310-architecture-lock.test.ts:27` 的 `MODULE_ROOT` 绑死单模块；`packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts` |
 | `modules/intent` 只有 1 个文件、**没有 `public/`**，唯一消费者是 legacy 深导入——所有守卫都判它「干净」（空 context 得满分） | `packages/backend/src/modules/intent/domain/workflowCreateLayout.ts`；`packages/backend/src/services/intent/turnEngine.ts:60` |
 | 归档守卫只走**一跳** FK，`review_comments` 是两跳级联后代 ⇒ 归档**静默删除**且既不在 `ARCHIVED_TABLES` 也不在豁免表 | `packages/backend/tests/rfc311-task-archive.test.ts:495` 的 `if (target !== 'tasks' && target !== 'node_runs') continue`；`packages/backend/src/db/schema.ts:2211-2217`（`review_comments.doc_version_id → doc_versions` cascade）；`packages/backend/src/services/taskArchive.ts:223-232` |
 | RFC-310 的 5 类 ACL 资源写门**只校验「能看见」**，而 `permission.ts:952-965` 的注释白纸黑字写「per-row check 是 resource ACL，和这里其他类型一样」 | `packages/backend/src/routes/developmentConfig.ts:245-255` 自定义 `requireVisible`，`:343 / :350 / :357 / :392 / :399 / :406 / …` 全部只调它；7 个经典资源路由文件用的是 `requireResourceOwner`（28 处） |
@@ -56,7 +57,7 @@ RFC-294 `design.md §1.2` 给出了「什么才配进共享内核」的四条判
 
 | # | 收缩项 | 现状 | 收缩后 | 受影响 actor / 部署形态 | 判据来源 |
 | --- | --- | --- | --- | --- | --- |
-| **C1** | RFC-310 五类配置资源（`action_template` / `verification_profile` / `digital_employee` / `automation_policy` / `development_adapter`）的**写门** | 任何持 `<type>:update` / `:archive` 点的登录用户（= 默认 `user` 角色预设即持有，`permission.ts:955-998`）可以改写 / 发布 / 归档**别人的** public 资源 | 与其余 7 类 ACL 资源对齐：仅 owner、被授予 manage 者、`resource-acl:bypass` 持有者可写 | **所有非 owner 的普通用户**。已在生产把这些资源当共享编辑面用的团队会**立刻失去写权**，须改用 grant | `findings.md` ACL-01 |
+| **C1** | RFC-310 五类配置资源（`action_template` / `verification_profile` / `digital_employee` / `automation_policy` / `development_adapter`）的**写门** | 任何持 `<type>:update` / `:archive` 点的登录用户（= 默认 `user` 角色预设即持有，`permission.ts:955-998`）可以改写 / 发布 / 归档**别人的** public 资源 | 与其余 7 类 ACL 资源对齐：**仅 owner 本人与 `resource-acl:bypass` 持有者可写**。注意 `resource_grants` **不含写权**——`resourceAcl.ts:458-462` 的 `isResourceOwner` 只认 bypass 或 owner 本人，grant 只进 `canViewResource`（`:416-421`），即「授权」只授可见与可用 | **所有非 owner 的普通用户**。已在生产把这些资源当共享编辑面用的团队会**立刻失去写权**，且**没有 grant 级的替代品**；三条出路：①由 owner 操作；②给该用户授 `resource-acl:bypass`（manager+ 才有此点）；③转移 owner（RFC-223 owner transfer）。④自己复制一份 | `findings.md` ACL-01 |
 | **C2** | `employee_definitions` 的可见性 | 表已带 `owner_user_id` / `visibility` / `acl_revision` 三列且有 owner+name 唯一索引，但 `'employee_definition'` 不在 `ACL_RESOURCE_TYPES` 中 ⇒ 三列**完全惰性**，`listEmployeeDefinitions` 只按 `archivedAt` 过滤，**全员可见全部员工定义** | **裁决：(a) 立为第 13 类 ACL 资源**。存量行不回填——`ownerUserId` 恒等于创建者、`visibility` 恒为 `'private'`（`authoringService.ts:1073`），故入网后每个用户只看得见自己的员工定义 | **所有非 owner 用户**：别人的员工定义立刻从列表消失，需 owner 显式 grant 或设 public | `findings.md` ACL-02 |
 | **C3** | `POST /api/runtimes/probe` 的 `extraArgs` / `isSandbox` | **无能力门**：请求可对任意 runtime 带上这两个字段并真实拉起子进程；注册写路径的 `validateExtraArgs` / `validateIsSandbox` 在这条路上从不调用 | 两个校验前置到 handler 顶部，不支持该能力的 runtime 返回 400 | 直接调该端点、给不支持 `extraArgs` 的 runtime 传参的用户 / 脚本 | `findings.md` RT-01 |
 | **C4** | `spawnVersionProbe` 的「无 timeout」模式 | `timeoutMs` 可省略；省略时**无进程组、无树杀、无超时、stdout 无上限**。daemon 启动路径 `cli/start.ts:401` 与 `cli/doctor.ts:41` 正是这么调的 | `timeoutMs` 改必填（带具名默认常量），无 timeout 模式**删除**（delete > deprecate） | 无外部可见行为变化；探测本身耗时超过默认值的极端环境会从「永久挂起」变成「超时报错」 | `findings.md` EK-02 |
@@ -68,7 +69,9 @@ RFC-294 `design.md §1.2` 给出了「什么才配进共享内核」的四条判
 
 > **C1、C2(a)、C5、C6、C8 是真实的对外行为变化**，其余是开发期摩擦。
 >
-> **2026-08-23 逐项确认结果**：C1–C9 全部接受。C1 采**「直接收紧、不做迁移」**——不为存量 public 资源补发 grant；C2 采 **(a) 立为第 13 类 ACL 资源**，存量行不回填（见 `design.md §10 D2`）。
+> **2026-08-23 逐项确认结果**：C1–C9 全部接受。C1 采**「直接收紧、不做迁移」**。
+>
+> **⚠️ 确认后订正（B1 开工前读源码时发现，未改变裁决、但改变了代价）**：本表初稿把 C1 的替代路径写成「改用 grant」，**这是错的**。`resource_grants` 只进 `canViewResource`，不进 `isResourceOwner`，仓规也写明「Granted users can view and use；owner 与 `resource-acl:bypass` 持有者才能 modify」。因此收紧后**不存在 grant 级的写权替代品**，出路只有「由 owner 操作 / 授 `resource-acl:bypass` / 转移 owner / 自己复制一份」四条。C2 采 **(a) 立为第 13 类 ACL 资源**，存量行不回填；已复核 `resource-acl:private` 在 `USER_BASELINE` 内（`permission.ts:1032`），故 owner 仍能看见与编辑自己的私有员工定义。
 
 ## 5. 用户故事
 
@@ -81,8 +84,8 @@ RFC-294 `design.md §1.2` 给出了「什么才配进共享内核」的四条判
 ## 6. 验收标准
 
 - **AC-1**：`architecture/commons-manifest.json` 落地并覆盖本轮认定的全部公共内核；每条含 owner context、层、文件集、单一事实源声明、业务词汇预算、看守它的守卫 id。清单与源码双向闭合：清单里的文件必须存在，被 R4 规则扫到的文件必须在清单里。
-- **AC-2**：R1（inbound）与 R2（outbound）两条边界规则落地，今天的 66 + 33 条边**逐条**入 `architecture/commons-debt.json`（含 `from` / `to` / `symbol` / `edgeKind` / `owner` / `why` / `removeAfterWave`），断言用 `toEqual` 精确相等 ⇒ 新增会红、修好不销账也会红。
-- **AC-3**：R3（模块形状）覆盖 `modules/` 下**全部 12 个** context：顶层目录集闭合、层内导入矩阵、composition 纯净、`public/` 非空（或显式标 `status:'skeleton'` 带 `removeWhen`）。`task-execution/inbound/` 与 `intent` 无 `public/` 作为具名偏离入账。
+- **AC-2**：R1（inbound）与 R2（outbound）两条边界规则落地，今天的 **94 + 22** 条边**逐条**入 `architecture/commons-debt.json`（含 `from` / `to` / `symbol` / `edgeKind` / `owner` / `why` / `removeAfterWave`），断言用 `toEqual` 精确相等 ⇒ 新增会红、修好不销账也会红。
+- **AC-3**：R3（模块形状）覆盖 `modules/` 下**全部 11 个** context：顶层目录集闭合、层内导入矩阵、composition 纯净、`public/` 非空（或显式标 `status:'skeleton'` 带 `removeWhen`）。`task-execution/inbound/` 与 `intent` 无 `public/` 作为具名偏离入账。
 - **AC-4**：R4（业务身份字面量预算）在 `commons-manifest.json` 声明的文件集上生效，逐文件精确计数（`toBe` 而非 `toBeLessThanOrEqual`），涨要红、降到位不改账本也要红。按 **D4**，标记 `core: true` 的内核预算 **= 0**（业务字面量必须在本 RFC 内清空），其余按实测钉住。
 - **AC-5**：R5–R9 五条新规则落地（表归属 / 注册表反向完备 / 站点治理属性 / 级联闭包 / 前端设计系统全域棘轮），每条各带正反 fixture。
 - **AC-6**：R10 账本高水位对仓内**每一个** allowlist 生效（`KNOWN_VIOLATIONS`、spawn-site、ux-source-ratchets 三个 allowlist、`rfc143` kind-discrimination、`LEGACY_MIGRATION_HASHES`、rfc294 两条 debt list、本 RFC 新增账本）。
