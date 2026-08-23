@@ -142,9 +142,7 @@ describe('employee type package digest guard', () => {
     })
 
     expect(service.getType(historical.typeRef)).toEqual(historical)
-    expect(service.getAuthoringManifest(historical.typeRef)).toEqual(
-      historical.authoringManifest,
-    )
+    expect(service.getAuthoringManifest(historical.typeRef)).toEqual(historical.authoringManifest)
     expect(service.getType(descriptor.typeRef)).toEqual(descriptor)
   })
 
