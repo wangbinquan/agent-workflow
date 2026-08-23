@@ -58,6 +58,36 @@ export interface UserAccessReadRepository {
   listAccessSnapshots(): Promise<ReadonlyArray<UserAccessSnapshot>>
 }
 
+/**
+ * RFC-317 T41 —— 出站授权围栏所需的**最小**账户快照。
+ *
+ * 只有两个字段，是刻意的：围栏要回答的问题只有「这个账号还有效吗、它的授权版本还是
+ * 连接握手时那个吗」。给它一个完整的 `UserAccessSnapshot` 会让传输层重新拿到密码哈希、
+ * 角色、授权明细——那些它一概不该看见。
+ */
+export interface AuthorityFenceRecord {
+  readonly status: ManagedUserStatus
+  readonly accessRevision: number
+}
+
+/**
+ * **同步**读端口。
+ *
+ * 同步是硬约束、不是偷懒：唯一的消费者是 WS 广播器的发帧热路径，它必须在当前 tick 内
+ * 决定这一帧发不发（RFC-305 的出站围栏）。改成 async 会让判定落到下一个微任务，
+ * 而帧那时已经发出去了——围栏就此失效。Bun SQLite 的读本来就是同步的，
+ * 所以这里不存在「为了同步而牺牲什么」。
+ *
+ * 端口摆在这里、实现落在 identity-access 的 infrastructure：`users.status` /
+ * `users.access_revision` 是本 context 拥有的列，别的 context（尤其是 `ws/` 传输层）
+ * 不该知道它们叫什么。RFC-317 T41 之前 `ws/registry.ts` 手写了一条
+ * `SELECT status, access_revision FROM users WHERE id = ?` —— 那条字符串在列改名时
+ * **typecheck 全绿、运行期在授权围栏上失败**，而且任何基于 import 边的守卫都看不见它。
+ */
+export interface UserAccessFenceReader {
+  readAuthorityFence(id: string): AuthorityFenceRecord | null
+}
+
 export interface UserAccessTransactionParticipant {
   findUser(id: string): UserAccessRecord | null
   findUserByUsername(username: string): UserAccessRecord | null

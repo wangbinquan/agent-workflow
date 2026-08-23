@@ -1,13 +1,15 @@
-import { and, asc, count, eq, inArray, isNull, notInArray } from 'drizzle-orm'
+// RFC-317 T41（DE-01）—— 本文件此前直接 import development-automation 的四张表
+// （developmentMissions / MrClaims / MissionLinks / ApprovalSagas）并抄了一份
+// 「已了结审批状态」词表。那是 RFC-294 明令禁止的「共享 Drizzle table」形态：通用 OS
+// 离开 development 的 schema 就装配不起来，且 development 改一列会静默改坏这里。
+// 现在只经 `LegacyMissionDrainPort` 拿排空视图，实现落在
+// `modules/development-automation/composition/legacyMissionDrain.ts`。
+
+import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import {
-  developmentApprovalSagas,
-  developmentMissionLinks,
-  developmentMissions,
-  developmentMrClaims,
-  employeeOsWriterState,
-} from '@/db/schema'
+import { employeeOsWriterState } from '@/db/schema'
+import type { LegacyMissionDrainPort } from './required-ports'
 
 export interface DigitalEmployeeWriterState {
   readonly activeGeneration: number
@@ -18,17 +20,6 @@ export interface DigitalEmployeeWriterState {
 }
 
 const MIGRATION_REPORT_LIMIT = 100
-const SETTLED_APPROVAL_STATUSES = ['approved', 'rejected', 'expired', 'unavailable']
-
-function countOpenLegacyMissions(db: Pick<DbClient, 'select'>): number {
-  return (
-    db
-      .select({ value: count() })
-      .from(developmentMissions)
-      .where(isNull(developmentMissions.terminalAt))
-      .get()?.value ?? 0
-  )
-}
 
 function stateOf(row: typeof employeeOsWriterState.$inferSelect): DigitalEmployeeWriterState {
   return {
@@ -58,6 +49,7 @@ export function readDigitalEmployeeWriterState(db: DbClient): DigitalEmployeeWri
  */
 export function activateDigitalEmployeeOsWriter(
   db: DbClient,
+  drain: LegacyMissionDrainPort,
   now = Date.now(),
   options: { readonly legacyAdmissionsEnabled?: boolean } = {},
 ): DigitalEmployeeWriterState {
@@ -68,7 +60,7 @@ export function activateDigitalEmployeeOsWriter(
       .where(eq(employeeOsWriterState.id, 'global'))
       .get()
     if (current === undefined) throw new Error('digital employee writer state is not initialized')
-    const legacyOpenMissionCount = countOpenLegacyMissions(tx)
+    const legacyOpenMissionCount = drain.openMissionCount(tx)
     const legacyAdmissionsEnabled = options.legacyAdmissionsEnabled ?? false
     const mode = legacyOpenMissionCount > 0 ? 'legacy-draining' : 'os-active'
     const activeGeneration = Math.max(1, current.activeGeneration)
@@ -95,6 +87,7 @@ export function activateDigitalEmployeeOsWriter(
 /** Recounts the drain set without reopening legacy admission. */
 export function refreshDigitalEmployeeWriterState(
   db: DbClient,
+  drain: LegacyMissionDrainPort,
   now = Date.now(),
 ): DigitalEmployeeWriterState {
   return db.transaction((tx) => {
@@ -104,7 +97,7 @@ export function refreshDigitalEmployeeWriterState(
       .where(eq(employeeOsWriterState.id, 'global'))
       .get()
     if (current === undefined) throw new Error('digital employee writer state is not initialized')
-    const legacyOpenMissionCount = countOpenLegacyMissions(tx)
+    const legacyOpenMissionCount = drain.openMissionCount(tx)
     const mode = legacyOpenMissionCount > 0 ? 'legacy-draining' : 'os-active'
     tx.update(employeeOsWriterState)
       .set({ mode, legacyOpenMissionCount, updatedAt: now })
@@ -120,74 +113,18 @@ export function refreshDigitalEmployeeWriterState(
   })
 }
 
-export function analyzeDigitalEmployeeMigration(db: DbClient) {
-  const sampledOpenMissions = db
-    .select({ id: developmentMissions.id, status: developmentMissions.status })
-    .from(developmentMissions)
-    .where(isNull(developmentMissions.terminalAt))
-    .orderBy(asc(developmentMissions.createdAt), asc(developmentMissions.id))
-    .limit(MIGRATION_REPORT_LIMIT + 1)
-    .all()
-  const openMissions = sampledOpenMissions.slice(0, MIGRATION_REPORT_LIMIT)
-  const missionIds = openMissions.map((mission) => mission.id)
-  const activeMrClaims =
-    missionIds.length === 0
-      ? []
-      : db
-          .select({ missionId: developmentMrClaims.missionId, value: count() })
-          .from(developmentMrClaims)
-          .where(
-            and(
-              eq(developmentMrClaims.state, 'active'),
-              inArray(developmentMrClaims.missionId, missionIds),
-            ),
-          )
-          .groupBy(developmentMrClaims.missionId)
-          .all()
-  const childLinks =
-    missionIds.length === 0
-      ? []
-      : db
-          .select({ missionId: developmentMissionLinks.parentMissionId, value: count() })
-          .from(developmentMissionLinks)
-          .where(inArray(developmentMissionLinks.parentMissionId, missionIds))
-          .groupBy(developmentMissionLinks.parentMissionId)
-          .all()
-  const approvals =
-    missionIds.length === 0
-      ? []
-      : db
-          .select({ missionId: developmentApprovalSagas.missionId, value: count() })
-          .from(developmentApprovalSagas)
-          .where(
-            and(
-              inArray(developmentApprovalSagas.missionId, missionIds),
-              notInArray(developmentApprovalSagas.latestStatus, SETTLED_APPROVAL_STATUSES),
-            ),
-          )
-          .groupBy(developmentApprovalSagas.missionId)
-          .all()
-  const counts = (rows: readonly { readonly missionId: string; readonly value: number }[]) =>
-    new Map(rows.map((row) => [row.missionId, row.value]))
-  const mrClaimCounts = counts(activeMrClaims)
-  const childLinkCounts = counts(childLinks)
-  const pendingApprovalCounts = counts(approvals)
+export function analyzeDigitalEmployeeMigration(db: DbClient, drain: LegacyMissionDrainPort) {
+  const report = drain.drainReport(MIGRATION_REPORT_LIMIT)
   const writer = readDigitalEmployeeWriterState(db)
   return {
     schemaVersion: 1 as const,
     writer,
     mechanicallyAdoptable: [] as const,
     drainingTotal: writer.legacyOpenMissionCount,
-    drainingTruncated: sampledOpenMissions.length > MIGRATION_REPORT_LIMIT,
-    draining: openMissions.map((mission) => ({
-      missionId: mission.id,
-      status: mission.status,
-      activeMrClaimCount: mrClaimCounts.get(mission.id) ?? 0,
-      childLinkCount: childLinkCounts.get(mission.id) ?? 0,
-      pendingApprovalCount: pendingApprovalCounts.get(mission.id) ?? 0,
-    })),
+    drainingTruncated: report.truncated,
+    draining: report.entries,
     blockedReason:
-      openMissions.length === 0
+      report.entries.length === 0
         ? null
         : 'active legacy Missions retain their existing writer claims until terminal; they are never concurrently adopted by the OS',
   }

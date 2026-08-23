@@ -102,6 +102,30 @@ module.exports = {
       to: { path: '^packages/backend/src/db/', dependencyTypesNot: ['type-only'] },
     },
     {
+      // RFC-317 T41（findings TP-03）— ws/ 与 mcp/ 同样是传输层，禁止直查 db。
+      //
+      // 为什么补这一条：`no-routes-to-db` 的 from 只写了 `routes/`，于是 ws/ 与 mcp/
+      // **不被任何规则覆盖**（.dependency-cruiser.cjs 的 forbidden 全表都不匹配它们）。
+      // 实测代价：`ws/registry.ts` 直接 import 了 6 张业务表跑 Drizzle select，
+      // 还手写过一条 `SELECT status, access_revision FROM users`（另一个 context 的私表）
+      // ——RFC-294 的 preflight AST 扫描器看不见它，因为 ws/ 在 MODULES_ROOT 之外，
+      // 而一条 SQL 字符串根本不是 import 边。裸 SQL 已在 T41 改走 identity-access 的
+      // public 端口；剩下的 6 张表边逐条入账，棘轮只减不增。
+      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
+      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
+      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
+      // 眼里长得一模一样）。
+      name: 'no-transport-to-db',
+      severity: 'error',
+      comment:
+        'ws/ and mcp/ are transports, exactly like routes/. Reaching into @/db/ ' +
+        'from a transport bypasses the service/module layer (ACL, OCC, audit) and ' +
+        'is invisible to every import-based architecture guard once it degrades ' +
+        'into a raw SQL string. Existing debt is ledgered in scripts/depcheck.ts.',
+      from: { path: '^packages/backend/src/(ws|mcp)/' },
+      to: { path: '^packages/backend/src/db/', dependencyTypesNot: ['type-only'] },
+    },
+    {
       // RFC-284 T2（审计 A8-4）— util 是叶子层，不得反向依赖上层。此前唯一
       // 防线是 no-circular（只有恰好成环才被看见）；非环形态的单向 util→上层
       // 依赖会静默通过。util/git.ts 族的存量反向边（惰性 import）逐条入账。

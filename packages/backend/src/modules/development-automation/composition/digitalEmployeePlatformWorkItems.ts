@@ -1,16 +1,16 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
+import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import {
   cachedRepos,
   employeeApprovalSagas,
   employeeCaseWorkspaces,
   employeeChangeCandidates,
-  employeeReactionRounds,
   employeeRoundWorkspaceStates,
 } from '@/db/schema'
 import type { ApprovalGatewayPort } from '../application/ports/reconcilerPorts'
@@ -326,6 +326,12 @@ function reviewMarkerToken(marker: string): string {
 export function composeDevelopmentEmployeePlatformWorkItems(input: {
   readonly db: DbClient
   readonly appHome: string
+  /**
+   * RFC-317 T41（DE-02）—— 反应轮次的只读查询面。此前这里按
+   * `employeeReactionRounds.state === 'completed'` 直接查 Digital Employee OS 的
+   * 私表，把它的内部状态机枚举变成了一条没有主人的事实合同。
+   */
+  readonly reactionRounds: EmployeeReactionRoundQueryPort
   readonly approvalGateway?: ApprovalGatewayPort
   readonly repoRemote: {
     resolve(repositoryId: string): {
@@ -1408,25 +1414,17 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           return output({ status: 'blocked', summary: '缺少需要发布冲突修复的 MR 上下文' })
         }
         const state = mergeRequestStateSchema.parse(JSON.parse(current.stateJson) as unknown)
-        const repairRound = input.db
-          .select({ id: employeeReactionRounds.id })
-          .from(employeeReactionRounds)
-          .where(
-            and(
-              eq(employeeReactionRounds.caseId, plan.caseRef.id),
-              eq(employeeReactionRounds.workItemRef, 'repair-conflict'),
-              eq(employeeReactionRounds.state, 'completed'),
-            ),
-          )
-          .orderBy(desc(employeeReactionRounds.settledAt))
-          .get()
+        const repairRound = input.reactionRounds.lastSettledRound({
+          caseId: plan.caseRef.id,
+          workItemRef: 'repair-conflict',
+        })
         const repairState =
-          repairRound === undefined
+          repairRound === null
             ? undefined
             : input.db
                 .select({ validationJson: employeeRoundWorkspaceStates.validationJson })
                 .from(employeeRoundWorkspaceStates)
-                .where(eq(employeeRoundWorkspaceStates.roundId, repairRound.id))
+                .where(eq(employeeRoundWorkspaceStates.roundId, repairRound.roundRef))
                 .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
                 .get()
         const validation =

@@ -2,6 +2,7 @@
 // their dependencies via the `AppDeps` interface so tests can inject mocks
 // without monkey-patching the module.
 
+import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
 import type { WorkflowRevision } from '@agent-workflow/shared'
 import { dirname, join } from 'node:path'
@@ -466,6 +467,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     db: deps.db,
     appHome,
+    reactionRounds: createEmployeeReactionRoundQueries(deps.db),
     inputArtifacts,
     sourceControl: bindEmployeeCaseWorkspaceParticipant(),
     conflictMerge: bindConflictMergeParticipant(),
@@ -511,6 +513,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
         }),
       ),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        reactionRounds: createEmployeeReactionRoundQueries(deps.db),
         db: deps.db,
         appHome,
         approvalGateway,

@@ -1,5 +1,6 @@
 // `agent-workflow start` — daemon foreground entry.
 
+import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
 import { setPushCredentialResolver } from '@/services/gitCredential'
 import { tokenAuditRetentionDays } from '@/services/mcpSurface'
@@ -13,6 +14,7 @@ import {
   composeDevelopmentAutomation,
   createDevelopmentMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
+import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
 import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
@@ -761,7 +763,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   const developmentApprovalGateway = composeApprovalGatewayRunner(db)
   const missionEventContinuation = createDevelopmentMissionCodeHostEventContinuation(db)
-  const employeeWriterState = activateDigitalEmployeeOsWriter(db)
+  // RFC-317 T41（DE-01）—— 旧 Mission 排空视图的接线点。合同在 digital-employee，
+  // 实现在 development-automation；bootstrap 是唯一知道两者如何对接的地方。
+  const legacyMissionDrain = createLegacyMissionDrainPort(db)
+  const employeeWriterState = activateDigitalEmployeeOsWriter(db, legacyMissionDrain)
   log.info('digital employee writer activated', { ...employeeWriterState })
   const employeeHttpEventCenter = composeEventCenter({
     db,
@@ -1129,7 +1134,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   }
   const developmentWakeTimer = setInterval(() => {
-    const writer = refreshDigitalEmployeeWriterState(db)
+    const writer = refreshDigitalEmployeeWriterState(db, legacyMissionDrain)
     if (writer.mode === 'os-active' && !writer.legacyAdmissionsEnabled) return
     void developmentAutomation.sweepWakes().catch((err: unknown) => {
       log.warn('development wake sweep failed', {
@@ -1178,6 +1183,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     db,
     appHome: Paths.root,
+    reactionRounds: createEmployeeReactionRoundQueries(db),
     inputArtifacts: employeeInputArtifacts,
     sourceControl: bindEmployeeCaseWorkspaceParticipant(),
     conflictMerge: bindConflictMergeParticipant(),
@@ -1193,6 +1199,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const employeeOs = composeDigitalEmployee({
     db,
     appHome: Paths.root,
+    legacyMissionDrain,
     typePackages: [developmentEmployeeTypePackage],
     typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
     platformTools: composeDigitalEmployeeBuiltinToolCatalog({
@@ -1229,6 +1236,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         }),
       ),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        reactionRounds: createEmployeeReactionRoundQueries(db),
         db,
         appHome: Paths.root,
         approvalGateway: developmentApprovalGateway,

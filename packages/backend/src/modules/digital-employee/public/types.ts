@@ -185,3 +185,39 @@ export {
   type LegacyMissionTerminalKind,
   type TerminalKindClassification,
 } from '@agent-workflow/shared'
+
+/**
+ * RFC-317 T41（findings DE-02）—— 反应轮次的**只读**查询面。
+ *
+ * 为什么需要它：`employeeReactionRounds` 是 Digital Employee OS 的私表
+ * （`infrastructure/sqliteRuntimeStore.ts` 是唯一写者：createRound / retryRound /
+ * settleRound）。development-automation 此前从 `@/db/schema` 直接把这张表拿过去查，
+ * 一处读它冻结的 `planJson`，另一处按 `state === 'completed'` 过滤——**把 OS 的
+ * 内部状态机枚举变成了一条没有声明、没有 schema、没有主人的事实合同**。
+ * 而且这种耦合经全局 `@/db/schema` 命名空间发生，本仓所有基于 module import 边的
+ * 架构守卫都看不见它（`rfc294-architecture-preflight` 的 crossContextViolations
+ * 只认 `@/modules/...` 形态的边）。
+ *
+ * **落在 `public/types.ts` 而不是 `public/queries.ts`**：RFC-294 的跨界判据只允许
+ * `participants / events / types` 走 type-only 边，`commands / queries` 必须是 value 边
+ * ——因为后两者是「被调用的行为面」，只借它的类型等于借形状而不认合同。这条是**接口**，
+ * 消费方 type-only 引用它，故与 `DigitalEmployeePlatformToolCatalogParticipant` 同放这里。
+ *
+ * 两个方法各封一处泄漏：
+ *   · `frozenPlan` —— 隐藏表与列。**遗留债**：返回的仍是 `planJson` 原文，消费方
+ *     用自己那份 zod 视图去 parse。文档本身的形状契约与 `ReactionExecutionPort.launch`
+ *     携带的是同一份，但这里没有把它声明成 DTO；收敛它需要 OS 侧提供运行期
+ *     schema，留给 RFC-317 B7 的生命周期批次。
+ *   · `lastSettledRound` —— 隐藏**状态机枚举**。调用方说的是「最近一次已结算的轮次」，
+ *     而不是 `state === 'completed'`；OS 将来把结算态拆成多个值时，改一处即可。
+ */
+export interface EmployeeReactionRoundQueryPort {
+  frozenPlan(roundRef: string): {
+    readonly caseId: string
+    readonly planJson: string
+  } | null
+  lastSettledRound(input: {
+    readonly caseId: string
+    readonly workItemRef: string
+  }): { readonly roundRef: string } | null
+}

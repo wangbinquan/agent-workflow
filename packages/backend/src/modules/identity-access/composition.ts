@@ -30,6 +30,7 @@ import type {
   DelegatedAuthorityResolver,
   DelegatedOperationContextFactory as DelegatedOperationContextFactoryPort,
 } from './public/participants'
+import type { UserAccessFenceReader } from './application/ports/userAccessRepository'
 
 const SYSTEM_USER_ID = '__system__'
 
@@ -41,6 +42,14 @@ export interface IdentityAccessModule {
   readonly updateUserAccess: UpdateUserAccess
   readonly getUserAccess: GetUserAccess
   readonly resolveAuthority: ResolveAuthority
+  /**
+   * RFC-317 T41 —— 出站授权围栏的**同步**读。
+   *
+   * 唯一消费者是 WS 广播器（`ws/registry.ts`）：它此前手写
+   * `SELECT status, access_revision FROM users WHERE id = ?`，把本 context 的两列
+   * 硬编码在传输层里。走这条端口之后，列名只有 identity-access 知道。
+   */
+  readonly authorityFence: UserAccessFenceReader
   readonly diagnostics: IdentityAccessDiagnostics
   /** RFC-312 —— presence 写侧（由 WS 连接开/关驱动）。 */
   readonly trackUserPresence: TrackUserPresence
@@ -118,6 +127,8 @@ export function composeIdentityAccess(db: DbClient): IdentityAccessModule {
     trackUserPresence,
     getUserPresence,
     resolveAuthority,
+    // 同一个 SQLite 适配器同时实现读仓与围栏读——装配处是唯一知道这件事的地方。
+    authorityFence: repository,
     diagnostics: observability,
   })
   modules.set(db, module)

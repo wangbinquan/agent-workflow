@@ -1,6 +1,7 @@
 // RFC-310 OS: locks one durable Case scene from uploaded repository placement
 // through fresh-scene rollback, ChangeCandidate, platform commit/CAS push and MR ensure.
 
+import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -252,6 +253,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const workspace = composeDevelopmentEmployeeWorkspace({
       db,
       appHome,
+      reactionRounds: createEmployeeReactionRoundQueries(db),
       inputArtifacts: artifactStore,
       sourceControl: bindEmployeeCaseWorkspaceParticipant(),
       conflictMerge: bindConflictMergeParticipant(),
@@ -370,6 +372,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     let observedHead: string | null = null
     let observedTargetSha: string | null = null
     const platform = composeDevelopmentEmployeePlatformWorkItems({
+      reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
       appHome,
       conflictMerge: bindConflictMergeParticipant(),

@@ -5,6 +5,7 @@
 // in tests; Git candidate/commit/CAS push and the OS Context+Event lifecycle are
 // production participants.
 
+import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
   existsSync,
@@ -325,6 +326,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     const workspace = composeDevelopmentEmployeeWorkspace({
       db,
       appHome,
+      reactionRounds: createEmployeeReactionRoundQueries(db),
       inputArtifacts,
       sourceControl: bindEmployeeCaseWorkspaceParticipant(),
       conflictMerge: bindConflictMergeParticipant(),
@@ -782,6 +784,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
     })
     const platform = composeDevelopmentEmployeePlatformWorkItems({
+      reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
       appHome,
       approvalGateway,

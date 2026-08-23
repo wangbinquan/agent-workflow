@@ -7,12 +7,8 @@ import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import {
-  cachedRepos,
-  employeeCaseWorkspaces,
-  employeeReactionRounds,
-  employeeRoundWorkspaceStates,
-} from '@/db/schema'
+import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
+import { cachedRepos, employeeCaseWorkspaces, employeeRoundWorkspaceStates } from '@/db/schema'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
 import {
@@ -233,6 +229,12 @@ function businessDelta(
 export function composeDevelopmentEmployeeWorkspace(input: {
   readonly db: DbClient
   readonly appHome: string
+  /**
+   * RFC-317 T41（DE-02）—— 反应轮次的只读查询面。此前这里直接查
+   * `employeeReactionRounds`（Digital Employee OS 的私表），把它冻结的 planJson
+   * 与内部状态机枚举当成了事实合同。改经端口后，表与列只有 OS 知道。
+   */
+  readonly reactionRounds: EmployeeReactionRoundQueryPort
   readonly inputArtifacts: {
     copyBlobTo(blobRef: string, absoluteTargetPath: string): void
   }
@@ -609,15 +611,8 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     },
 
     async validate(request) {
-      const round = input.db
-        .select({
-          caseId: employeeReactionRounds.caseId,
-          planJson: employeeReactionRounds.planJson,
-        })
-        .from(employeeReactionRounds)
-        .where(eq(employeeReactionRounds.id, request.roundRef))
-        .get()
-      if (round === undefined) {
+      const round = input.reactionRounds.frozenPlan(request.roundRef)
+      if (round === null) {
         return {
           ok: false,
           // 轮次行不见了：这是平台侧的状态缺失，不是工作区被污染——换个干净场景重跑

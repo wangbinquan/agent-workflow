@@ -184,6 +184,18 @@
       "lines": 332
     },
     {
+      "id": "rfc317-table-ownership",
+      "file": "packages/backend/tests/architecture/rfc317-table-ownership.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 701,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 242
+    },
+    {
       "id": "e2e-sqlite-fixture-lock-contention",
       "file": "packages/backend/tests/e2e-sqlite-fixture-lock-contention.test.ts",
       "runner": "bun",

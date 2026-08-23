@@ -11,12 +11,15 @@ import { DigitalEmployeeRuntimeService } from './application/runtimeService'
 import type {
   EmployeeInputArtifactPort,
   EmployeeRetryLimitsPort,
+  LegacyMissionDrainPort,
   ProgramArtifactPort,
   PlatformWorkItemExecutionPort,
   ReactionExecutionPort,
   ToolConnectionCatalogPort,
 } from './composition/required-ports'
 import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
+import { createSqliteReactionRoundQueries } from './infrastructure/sqliteReactionRoundQueries'
+import type { EmployeeReactionRoundQueryPort } from './public/types'
 import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 import {
   createEmployeeInputUploadStore,
@@ -263,6 +266,12 @@ export interface ComposeDigitalEmployeeOptions {
   readonly onAutomaticUpgradeIssue?: (issue: AutomaticTypeUpgradeIssue) => void
   /** Read-only projection of Settings -> Limits; never employee-local config. */
   readonly retryLimits?: EmployeeRetryLimitsPort
+  /**
+   * RFC-317 T41（DE-01）—— 旧 Mission 的排空视图。可选：只有迁移报告用得到它，
+   * 没接线时报告说「零条待排空」而不是去猜 development 的表长什么样。
+   * 装配方（cli/start.ts）传入 development-automation 的实现。
+   */
+  readonly legacyMissionDrain?: LegacyMissionDrainPort
   readonly runtime?: {
     readonly eventCenter: EventCenterParticipant
     readonly execution: ReactionExecutionPort
@@ -272,6 +281,30 @@ export interface ComposeDigitalEmployeeOptions {
   }
   readonly now?: () => number
   readonly id?: () => string
+}
+
+/**
+ * RFC-317 T41（DE-02）—— 反应轮次只读查询面的装配入口。
+ *
+ * 走 composition 而不是让调用方直接 import `infrastructure/`：infrastructure 是本
+ * context 的私有实现层，装配面才是对外的那一层。development-automation 与 bootstrap
+ * 只认这个工厂与 `public/queries.ts` 里的接口。
+ */
+export function createEmployeeReactionRoundQueries(db: DbClient): EmployeeReactionRoundQueryPort {
+  return createSqliteReactionRoundQueries(db)
+}
+
+/**
+ * 未接线时的排空视图：**零条**。
+ *
+ * 刻意不是「抛错」也不是「去查 development 的表」——通用 OS 必须能在没有
+ * development-automation 的部署里装配起来（这正是 DE-01 要解决的问题）。
+ * 报告里 `drainingTotal` 仍取 writer 行上记录的计数，所以「有没有接排空实现」
+ * 与「切换状态机记了多少」两件事不会互相掩盖。
+ */
+const EMPTY_LEGACY_MISSION_DRAIN: LegacyMissionDrainPort = {
+  openMissionCount: () => 0,
+  drainReport: () => ({ truncated: false, entries: [] }),
 }
 
 function runtimePackageOf(
@@ -567,7 +600,11 @@ export function composeDigitalEmployee(
         return { id: record.id, ownerUserId: record.ownerUserId, visibility: record.visibility }
       },
       getExecutionPolicy: policyView,
-      getMigrationStatus: () => analyzeDigitalEmployeeMigration(options.db),
+      getMigrationStatus: () =>
+        analyzeDigitalEmployeeMigration(
+          options.db,
+          options.legacyMissionDrain ?? EMPTY_LEGACY_MISSION_DRAIN,
+        ),
     },
     commands: {
       createTool: async (input) =>

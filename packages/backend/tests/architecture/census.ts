@@ -1440,3 +1440,90 @@ export function declarationReadsSymbol(input: {
   visit(input.unit.source)
   return found
 }
+
+// ---------------------------------------------------------------------------
+// 表归属（RFC-317 T41 · R5 · findings DE-01 / DE-02）
+// ---------------------------------------------------------------------------
+//
+// 为什么必须按**前缀声明**归属，而不是按引用推断：按引用推断的话，「一张表只被某个
+// context 引用」就会被当成它归那个 context——而 DE-02 的实测正好是反例，
+// `employeeRoundWorkspaceStates` 明明是 digital-employee 的表，却**只**被
+// development-automation 引用过，按引用推断会得出「它归 development-automation」，
+// 于是最严重的那种越界（另一个 context 独占了你的表）反而不报。
+
+/** `db/schema.ts` 里 `export const X = sqliteTable(...)` 的全部符号名。 */
+export function drizzleTableSymbols(schemaUnit: SourceUnit): string[] {
+  const names: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === 'sqliteTable'
+    ) {
+      names.push(node.name.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(schemaUnit.source)
+  return names.sort()
+}
+
+export interface TableOwnershipCrossing {
+  /** 表符号名。 */
+  readonly table: string
+  /** 按前缀声明的归属 context。 */
+  readonly owner: string
+  /** 引用它的**外来**文件（相对 `modules/`）。 */
+  readonly file: string
+}
+
+/**
+ * 报出「某 context 的表被别的 context 引用」的全部交叉。
+ *
+ * 只看 `modules/<ctx>/**` 下的文件：`db/schema.ts` 自己、迁移、以及尚未模块化的
+ * `services/` / `routes/` 不在判据内——把它们一起纳入会让这条规则一上来就报出几百条，
+ * 失去「只减不增」的意义。RFC-294 的方向是这些横向层逐步迁入 module，届时它们自然
+ * 进入本判据的视野。
+ */
+export function tableOwnershipCrossings(input: {
+  readonly units: readonly SourceUnit[]
+  readonly tables: readonly string[]
+  /** 表名前缀 → 拥有它的 bounded context 目录名。 */
+  readonly ownerPrefixes: Readonly<Record<string, string>>
+}): TableOwnershipCrossing[] {
+  const prefixes = Object.keys(input.ownerPrefixes).sort((a, b) => b.length - a.length)
+  const ownerOf = (table: string): string | null => {
+    const prefix = prefixes.find((candidate) => table.startsWith(candidate))
+    return prefix === undefined ? null : (input.ownerPrefixes[prefix] ?? null)
+  }
+  const owned = new Map<string, string>()
+  for (const table of input.tables) {
+    const owner = ownerOf(table)
+    if (owner !== null) owned.set(table, owner)
+  }
+  const out: TableOwnershipCrossing[] = []
+  for (const unit of input.units) {
+    const location = /^packages\/backend\/src\/modules\/([^/]+)\//.exec(unit.path)
+    if (location === null) continue
+    const context = location[1]
+    const seen = new Set<string>()
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && owned.has(node.text) && owned.get(node.text) !== context) {
+        seen.add(node.text)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+    for (const table of seen) {
+      out.push({
+        table,
+        owner: owned.get(table) ?? '',
+        file: unit.path.replace('packages/backend/src/modules/', ''),
+      })
+    }
+  }
+  return out.sort((a, b) => `${a.table}|${a.file}`.localeCompare(`${b.table}|${b.file}`))
+}

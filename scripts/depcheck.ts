@@ -290,6 +290,30 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     removeWhen:
       '把 resolveSubmoduleParams/syncSubmodules/buildGitignoreBlock 以参数注入下沉（no-circular git 环族账目的同一方案）；RFC-284 后续批次或独立切片执行。',
   })),
+
+  // ── RFC-317 T41：no-transport-to-db 的开账存量（2 条）──────────────────
+  //
+  // 这条规则是本次新加的（TP-03：ws/ 与 mcp/ 此前**不被任何 dep 规则覆盖**）。
+  // 加规则当天的真实存量就是下面两条——同批已经修掉的是那条更糟的形态：
+  // `ws/registry.ts` 手写的 `SELECT status, access_revision FROM users`
+  // （另一个 context 的私表，且是 SQL 字符串，任何基于 import 边的守卫都看不见），
+  // 现已改走 identity-access 的同步 public 端口。
+  {
+    rule: 'no-transport-to-db',
+    from: `${B}/ws/registry.ts`,
+    to: `${B}/db/schema.ts`,
+    why: 'WS registry 的 frameGate 直接 import 6 张业务表（memories / nodeRunEvents / nodeRuns / tasks / workflows / workgroups）跑 Drizzle select 做逐帧可见性判定。这是 RFC-152 把三份手抄 per-frame 块收敛成单一管道时一并搬过来的形状，不是本次引入的。',
+    removeWhen:
+      'RFC-317 B10（传输/平台批次）把逐帧可见性判定下沉为各域 public query port（tasks / workflows / workgroups / memories 各一条），registry 只留 gate 组合逻辑。',
+  },
+  {
+    rule: 'no-transport-to-db',
+    from: `${B}/ws/server.ts`,
+    to: `${B}/db/client.ts`,
+    why: 'server.ts 取的是 `allowsLegacyDaemonTestAccess`（连接握手期的测试后门判据），不是业务表——它恰好住在 db/client.ts 里。危害与「传输层绕过 service 直查表」不同级，但规则按路径匹配，故照实入账而不是给规则开路径豁免（按文件排除会连带放过未来经过同一文件的新边）。',
+    removeWhen:
+      '把 allowsLegacyDaemonTestAccess 迁出 db/client.ts（它是鉴权判据，不是数据库客户端的职责）——RFC-317 B10 传输批次顺带处理。',
+  },
 ]
 
 // ---------------------------------------------------------------------------

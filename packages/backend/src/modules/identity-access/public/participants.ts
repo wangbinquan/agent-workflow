@@ -97,3 +97,16 @@ export interface DelegatedOperationContextFactory {
     attempt: DurableSourceAttemptRef,
   ): IdempotentCommandContext
 }
+
+// RFC-317 T41（findings TP-03）—— 出站授权围栏的**同步**读契约。传输层（ws/）经这条
+// 端口取「账号是否仍有效 + 当前授权版本」，不再自己拼 `users` 表的 SQL。
+//
+// 放在 participants 而不是 queries：本模块的约定是「可执行查询用例进 queries.ts
+// （GetUserAccess / requireUserAccess），**接口型端口**进 participants.ts
+// （DelegatedAuthorityResolver / CurrentSubjectAccessResolver …）」。RFC-294 的跨界判据
+// 也只允许 participants/events/types 走 type-only 边——一条被 type-only 引用的接口，
+// 放 queries.ts 会直接判违规。
+export type {
+  AuthorityFenceRecord,
+  UserAccessFenceReader,
+} from '../application/ports/userAccessRepository'

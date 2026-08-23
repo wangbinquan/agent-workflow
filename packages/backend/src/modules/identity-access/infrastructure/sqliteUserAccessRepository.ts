@@ -13,8 +13,10 @@ import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { withSQLiteTransaction } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { transitionOwnerRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import type {
+  AuthorityFenceRecord,
   ConditionalUserUpdate,
   InsertManagedUserRecord,
+  UserAccessFenceReader,
   UserAccessReadRepository,
   UserAccessRecord,
   UserAccessSnapshot,
@@ -79,8 +81,29 @@ const ACCESS_SNAPSHOT_SELECT = sql.raw(`
   LEFT JOIN user_permission_grants AS g ON g.user_id = u.id
 `)
 
-export class SQLiteUserAccessRepository implements UserAccessReadRepository {
+interface RawAuthorityFenceRow {
+  readonly status: string
+  readonly access_revision: number
+}
+
+const AUTHORITY_FENCE_SQL = 'SELECT status, access_revision FROM users WHERE id = ? LIMIT 1'
+
+export class SQLiteUserAccessRepository implements UserAccessReadRepository, UserAccessFenceReader {
   constructor(private readonly db: DbClient) {}
+
+  /**
+   * RFC-317 T41 —— 同步围栏读。用 raw client 是刻意的（消费者是 WS 发帧热路径，
+   * 见端口注释），但**这条 SQL 现在待在拥有 `users` 表的 context 里**：列改名时它和
+   * schema 一起被改，而不是留在传输层等运行期爆炸。
+   *
+   * 不 try/catch：失败该由调用方按自己的语义处置（围栏的语义是 fail closed——
+   * 读不到就当授权已失效），在这里吞掉会让两种调用方共用一套错误处置。
+   */
+  readAuthorityFence(id: string): AuthorityFenceRecord | null {
+    const row = this.db.$client.query(AUTHORITY_FENCE_SQL).get(id) as RawAuthorityFenceRow | null
+    if (row === null) return null
+    return { status: row.status as ManagedUserStatus, accessRevision: row.access_revision }
+  }
 
   async findAccessSnapshot(id: string): Promise<UserAccessSnapshot | null> {
     const rows = (await this.db.all(sql`

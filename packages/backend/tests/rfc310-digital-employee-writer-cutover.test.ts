@@ -13,10 +13,15 @@ import {
   readDigitalEmployeeWriterState,
   refreshDigitalEmployeeWriterState,
 } from '@/modules/digital-employee/composition/writerCutover'
+import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
 import { createApp } from '@/server'
 import { createUser } from '@/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+// RFC-317 T41（DE-01）—— 切换状态机不再自己 import development 的四张表，改经
+// `LegacyMissionDrainPort`。测试照实走真实现（development-automation 侧），这样
+// 「计数必须与 employeeOsWriterState 的写落在同一事务」这条性质仍被真实覆盖。
 const roots: string[] = []
 
 afterEach(() => {
@@ -32,15 +37,17 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       legacyAdmissionsEnabled: true,
     })
 
-    expect(activateDigitalEmployeeOsWriter(db, 10_000, { legacyAdmissionsEnabled: false })).toEqual(
-      {
-        activeGeneration: 1,
-        mode: 'os-active',
+    expect(
+      activateDigitalEmployeeOsWriter(db, createLegacyMissionDrainPort(db), 10_000, {
         legacyAdmissionsEnabled: false,
-        legacyOpenMissionCount: 0,
-        updatedAt: 10_000,
-      },
-    )
+      }),
+    ).toEqual({
+      activeGeneration: 1,
+      mode: 'os-active',
+      legacyAdmissionsEnabled: false,
+      legacyOpenMissionCount: 0,
+      updatedAt: 10_000,
+    })
   })
 
   test('existing Missions retain their claims until terminal and are never mechanically adopted', () => {
@@ -70,13 +77,15 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       .run()
 
     expect(
-      activateDigitalEmployeeOsWriter(db, 20_000, { legacyAdmissionsEnabled: false }),
+      activateDigitalEmployeeOsWriter(db, createLegacyMissionDrainPort(db), 20_000, {
+        legacyAdmissionsEnabled: false,
+      }),
     ).toMatchObject({
       mode: 'legacy-draining',
       legacyAdmissionsEnabled: false,
       legacyOpenMissionCount: 1,
     })
-    expect(analyzeDigitalEmployeeMigration(db)).toMatchObject({
+    expect(analyzeDigitalEmployeeMigration(db, createLegacyMissionDrainPort(db))).toMatchObject({
       mechanicallyAdoptable: [],
       blockedReason: expect.stringContaining('never concurrently adopted'),
       draining: [
@@ -94,7 +103,9 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       .set({ status: 'completed', terminalAt: 30_000, updatedAt: 30_000 })
       .where(eq(developmentMissions.id, 'legacy-mission-1'))
       .run()
-    expect(refreshDigitalEmployeeWriterState(db, 30_001)).toMatchObject({
+    expect(
+      refreshDigitalEmployeeWriterState(db, createLegacyMissionDrainPort(db), 30_001),
+    ).toMatchObject({
       mode: 'os-active',
       legacyOpenMissionCount: 0,
       legacyAdmissionsEnabled: false,
@@ -117,8 +128,10 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       )
       .run()
 
-    activateDigitalEmployeeOsWriter(db, 35_000, { legacyAdmissionsEnabled: false })
-    const report = analyzeDigitalEmployeeMigration(db)
+    activateDigitalEmployeeOsWriter(db, createLegacyMissionDrainPort(db), 35_000, {
+      legacyAdmissionsEnabled: false,
+    })
+    const report = analyzeDigitalEmployeeMigration(db, createLegacyMissionDrainPort(db))
 
     expect(report.drainingTotal).toBe(101)
     expect(report.drainingTruncated).toBe(true)
@@ -129,7 +142,9 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
 
   test('HTTP refuses new legacy Missions after cutover while exposing the drain report', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    activateDigitalEmployeeOsWriter(db, 40_000, { legacyAdmissionsEnabled: false })
+    activateDigitalEmployeeOsWriter(db, createLegacyMissionDrainPort(db), 40_000, {
+      legacyAdmissionsEnabled: false,
+    })
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-writer-route-'))
     roots.push(appHome)
     const app = createApp({

@@ -52,6 +52,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
+import type { AuthorityFenceRecord } from '@/modules/identity-access/public/participants'
 import type { DbClient } from '@/db/client'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import {
@@ -1151,21 +1152,22 @@ function sendJson(
   }
 }
 
-interface RawAuthorityRow {
-  readonly status: string
-  readonly access_revision: number
-}
-
 /** RFC-305 DB/current outbound fence. Notifications accelerate refresh, but
  * this check is authoritative when a notification is lost or a process races
- * an async frame continuation. The raw client is used intentionally: the
- * broadcaster hot path is synchronous and Bun SQLite reads are synchronous. */
+ * an async frame continuation.
+ *
+ * **同步**是硬约束：发帧要在当前 tick 内定夺，改成 async 会让判定落到下一个微任务，
+ * 而帧那时已经发出去了。Bun SQLite 的读本来就是同步的，所以这条约束不用付代价。
+ *
+ * RFC-317 T41 —— 这里原先直接 `db.$client.query('SELECT status, access_revision
+ * FROM users WHERE id = ?')`。同步没问题，越界才是问题：`users` 是 identity-access
+ * 的私表，那条字符串把它的两个列名硬编码进了传输层。列一改名，**这里 typecheck 全绿、
+ * 运行期在授权围栏上失败**，而且它不是 import 边，本仓所有基于 import 的架构守卫都
+ * 看不见它。现在走 identity-access 的同步 public 端口，SQL 回到拥有那张表的 context 里。 */
 function authorityRevisionCurrent(ws: ServerWebSocket<WsConnectionData>, db: DbClient): boolean {
-  let row: RawAuthorityRow | null
+  let fence: AuthorityFenceRecord | null
   try {
-    row = db.$client
-      .query('SELECT status, access_revision FROM users WHERE id = ? LIMIT 1')
-      .get(ws.data.actor.user.id) as RawAuthorityRow | null
+    fence = composeIdentityAccess(db).authorityFence.readAuthorityFence(ws.data.actor.user.id)
   } catch (error) {
     log.warn('authority revision fence failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -1173,15 +1175,15 @@ function authorityRevisionCurrent(ws: ServerWebSocket<WsConnectionData>, db: DbC
     onExpiredCredential?.(ws)
     return false
   }
-  if (row === null || row.status !== 'active') {
+  if (fence === null || fence.status !== 'active') {
     onExpiredCredential?.(ws)
     return false
   }
-  if (row.access_revision === (ws.data.actor.authorityRevision ?? 0)) return true
+  if (fence.accessRevision === (ws.data.actor.authorityRevision ?? 0)) return true
 
   // Drop this frame, synchronously freeze later ones, and ask the targeted
   // revalidation pass to rebuild the actor from the committed revision.
   ws.data.revalidating = true
-  triggerAuthorityRevalidation(db, ws.data.actor.user.id, row.access_revision)
+  triggerAuthorityRevalidation(db, ws.data.actor.user.id, fence.accessRevision)
   return false
 }

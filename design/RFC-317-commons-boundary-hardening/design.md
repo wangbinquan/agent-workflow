@@ -198,6 +198,12 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 - **机制**：AST 收集 `from '@/db/schema'` 的具名导入，按 context 聚合，冲突集必须为空或入账。
 - **为什么需要**：所有表活在同一个 `@/db/schema` 命名空间里，「读别人的私表」与「读自己的表」在导入图上完全同形——这是审计里 `DE-01` / `DE-02` 两条互相反向的越界能长期存在的结构原因。
 - **关闭**：`DE-01`、`DE-02`、`TP-03`（`ws/registry.ts` 手写 raw SQL 读 identity-access 的 `users.access_revision`）。
+- **落地时的规则修正（T41 实测后补）**：原文写的「只能被唯一一个 context 引用」在真实语料上**判错方向**。实测反例：`employeeRoundWorkspaceStates` 明明是 digital-employee 的表（与其余 13 张 `employee*` 同批建、同一个 store 写），却**只**被 development-automation 引用过——按「唯一一个 context」判据它完全合法，而这恰恰是最坏的一种越界（另一个 context 独占了你的表）。因此归属必须**声明**而非推断：落地为 `TABLE_OWNER_PREFIXES`（表名前缀 → 拥有它的 context），判据变成「带前缀的表只能被它的 owner context 引用」。没有专属前缀的域（tasks / workflows / memories …）目前还在 `services/` 横向层、尚未模块化，暂不纳入判据（纳入会一次报出几百条与本 RFC 无关的噪音，规则会因此失去「只减不增」的意义）；它们随 RFC-294 迁入 module 时在前缀表里加一行即可。
+- **T41 的实际收口范围**：
+  - `TP-03` —— **全部关闭**。identity-access 新增同步 public 端口 `UserAccessFenceReader`（`readAuthorityFence`），SQL 回到拥有 `users` 表的 context；`ws/registry.ts` 的 raw client 用量归零。同批新增 dep 规则 `no-transport-to-db`（`^packages/backend/src/(ws|mcp)/` → `^packages/backend/src/db/`）——此前 `no-routes-to-db` 的 `from` 只写了 `routes/`，ws/ 与 mcp/ **不被任何规则覆盖**；开账当天真实存量 2 条，逐条带 `why`/`removeWhen` 入 `scripts/depcheck.ts`，账本基线 35→37 并声明 `allowGrowth`。**同步是硬约束**：WS 发帧要在当前 tick 内定夺，异步化会让判定落到帧发出之后，围栏就此失效。
+  - `DE-01` —— **全部关闭**。`LegacyMissionDrainPort`（合同在 digital-employee、实现在 development-automation），四张 Mission 表与「已了结审批状态」词表回到 owner 侧。`openMissionCount` 收**事务读句柄**而非自取 db：计数与 `employeeOsWriterState` 的写必须原子，否则记下的 `legacyOpenMissionCount` 会与同一行的 `mode` 不一致。
+  - `DE-02` —— **关闭 finding 逐条点名的两处读**（`planJson` 泄漏、`state === 'completed'` 枚举泄漏），落为 `EmployeeReactionRoundQueryPort.frozenPlan / lastSettledRound`。**未关闭的更深一层**：development-automation 还在 insert/update `employeeCaseWorkspaces` 与 `employeeRoundWorkspaceStates`（**共同写**，不是借读），以及读 `employeeApprovalSagas` / `employeeChangeCandidates`。这需要先裁决工作区持久化归属哪一侧，是一次独立设计决策，不该塞进 T41——连同 `integration → development*Adapter*` 两条，共 8 条逐条入 R5 账本，各带 `why` + 指向 B7 / B10 的 `removeWhen`。
+  - **遗留债（已记）**：`frozenPlan` 返回的仍是 `planJson` 原文，消费方用自己那份 zod 视图 parse。文档契约与 `ReactionExecutionPort.launch` 携带的是同一份，但没有声明成 DTO；收敛它需要 OS 侧提供运行期 schema，留给 B7。
 
 ### R6 — 注册表 → 消费者反向完备
 

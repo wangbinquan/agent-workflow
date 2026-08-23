@@ -7,8 +7,11 @@
       "id": "depcheck-known-violations",
       "file": "scripts/depcheck.ts",
       "symbol": "KNOWN_VIOLATIONS",
-      "baseline": 35,
-      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数（35），与运行时 KNOWN_VIOLATIONS.length 一致——只数语法元素会得到 20，而展开内部涨条数时那个 20 纹丝不动"
+      "baseline": 37,
+      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数（35），与运行时 KNOWN_VIOLATIONS.length 一致——只数语法元素会得到 20，而展开内部涨条数时那个 20 纹丝不动",
+      "allowGrowth": {
+        "why": "RFC-317 T41（findings TP-03）新加了 `no-transport-to-db` 规则：ws/ 与 mcp/ 此前**不被任何 dep 规则覆盖**，于是 ws/registry.ts 直接 import 6 张业务表跑 Drizzle select、还手写过一条读另一个 context 私表的裸 SQL，全部无人看管。裸 SQL 已同批改走 identity-access 的同步 public 端口；余下两条边（ws/registry.ts → db/schema.ts、ws/server.ts → db/client.ts）是**开账当天的真实存量**，逐条带 why/removeWhen 入账。涨的这 2 条不是新增的耦合，而是既有耦合第一次被看见——不入账就只能不加规则，那样它们会继续无人看管。"
+      }
     },
     {
       "id": "spawn-site-allowlist",

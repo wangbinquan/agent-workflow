@@ -340,6 +340,10 @@ describe('RFC-305 identity-access architecture', () => {
     ])
     expect(exportedNames(resolve(publicRoot, 'participants.ts'))).toEqual([
       'AuthenticatedPrincipal',
+      // RFC-317 T41（findings TP-03）—— 出站授权围栏的同步读契约。传输层（ws/）此前
+      // 自己拼 `users` 表的 SQL；这两个名字是把那条读收进 public 面的代价，
+      // 也是它现在唯一的合法入口。
+      'AuthorityFenceRecord',
       'AuthorizationSubjectRef',
       'CommandContext',
       'CurrentSubjectAccessResolver',
@@ -354,6 +358,7 @@ describe('RFC-305 identity-access architecture', () => {
       'PrincipalSource',
       'QueryContext',
       'RequestAuthority',
+      'UserAccessFenceReader',
       'ValidatedIdempotencyKey',
     ])
   })
@@ -378,6 +383,12 @@ describe('RFC-305 identity-access architecture', () => {
       // 更干净的做法是把实例经 adapter deps 注入，但 `onOpenExtra(ws, params, db)` 的签名是
       // 注册表全局的，为一个通道改它会波及所有通道——留作后续 seam，不在本 RFC 承担。
       'packages/backend/src/ws/registry.ts -> @/modules/identity-access/composition',
+      // RFC-317 T41（findings TP-03）—— 出站授权围栏改走 public 端口。这条边是
+      // **净收益**：它替换掉的是同一文件里一条手写的
+      // `SELECT status, access_revision FROM users WHERE id = ?`——那条 SQL 把本模块的
+      // 两个列名硬编码在传输层里，列改名时 typecheck 全绿、运行期在授权围栏上失败，
+      // 而且它不是 import 边，本条账本连同所有基于 import 的守卫都对它失明。
+      'packages/backend/src/ws/registry.ts -> @/modules/identity-access/public/participants',
     ])
   })
 
@@ -699,9 +710,35 @@ describe('RFC-305 reusable-authority fences', () => {
       resolve(FRONTEND_SRC, 'components', 'shell', 'AppShell.tsx'),
       'utf8',
     )
-    expect(registry).toContain('SELECT status, access_revision FROM users WHERE id = ? LIMIT 1')
+    // RFC-317 T41（findings TP-03）—— 这里原本断言 registry.ts **包含**那条
+    // `SELECT status, access_revision FROM users WHERE id = ? LIMIT 1`。
+    // 要锁的性质是「出站发帧受已提交 DB 行的版本围栏保护」，那条字符串只是当时的
+    // 证据；而它同时也是一处跨 context 的裸 SQL——`users` 是 identity-access 的私表，
+    // 列名硬编码在传输层里，改名时**这里 typecheck 全绿、运行期在授权围栏上失败**。
+    // 现在把证据换成新形状：传输层经端口取围栏、SQL 待在拥有那张表的 context 里。
+    // 性质逐条不变，且多锁了一条「传输层不得再退回裸 SQL」。
+    const fenceRepository = readFileSync(
+      resolve(
+        BACKEND_SRC,
+        'modules',
+        'identity-access',
+        'infrastructure',
+        'sqliteUserAccessRepository.ts',
+      ),
+      'utf8',
+    )
+    expect(fenceRepository).toContain('SELECT status, access_revision FROM users WHERE id = ?')
+    expect(registry).toContain('authorityFence.readAuthorityFence(ws.data.actor.user.id)')
     expect(registry).toContain('if (!authorityRevisionCurrent(ws, db)) return')
-    expect(registry).not.toMatch(/\?\.\$client|\$client\?\?/)
+    // 传输层不得再出现任何 raw client 用法（裸 SQL 会绕过上面那条端口判据）。
+    // ⚠️ 必须先剥注释：上面那段解释自己就写着 `db.$client`，裸文本扫描会**撞上
+    // 描述自己的注释**而永远为真——这个坑本仓在 RFC-217 的架构守卫上踩过一次。
+    const registryCode = registry
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('//'))
+      .join('\n')
+    expect(registryCode).not.toContain('$client')
     expect(connections).toContain("type: 'authority.changed'")
     expect(hook).toContain("type === 'authority.changed'")
     expect(hook).toContain('invalidateQueries({ queryKey: ACTOR_QUERY_KEY })')
