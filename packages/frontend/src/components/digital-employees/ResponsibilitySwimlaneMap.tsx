@@ -473,11 +473,23 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                   const hasParallelIngressBranch = primaryEntries.some(
                     (entry) => entry.kind === 'ingress-branch' && entry.ingresses.length > 1,
                   )
+                  const hasConditionalReviewBranch = primaryEntries.some(
+                    (entry) => entry.kind === 'review-branch' && entry.mode === 'conditional',
+                  )
                   const laneTemplateColumns = hasParallelIngressBranch
-                    ? [
-                        '224px',
-                        ...Array.from({ length: laneColumns - 1 }, () => 'minmax(0, 1fr)'),
-                      ].join(' ')
+                    ? hasConditionalReviewBranch
+                      ? primaryEntries
+                          .slice(0, laneColumns)
+                          .map((entry) =>
+                            entry.kind === 'ingress-branch' || entry.kind === 'review-branch'
+                              ? '208px'
+                              : 'minmax(0, 168px)',
+                          )
+                          .join(' ')
+                      : [
+                          '224px',
+                          ...Array.from({ length: laneColumns - 1 }, () => 'minmax(0, 1fr)'),
+                        ].join(' ')
                     : undefined
                   const primaryColumnByWorkItem = new Map<string, number>()
                   primaryEntries.forEach((entry, index) => {

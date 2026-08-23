@@ -1118,6 +1118,47 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       .locator('.employee-toolbox-lane__cards > .employee-toolbox-card')
       .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width))
     expect(Math.max(...cardWidths) - Math.min(...cardWidths)).toBeLessThanOrEqual(0.5)
+    const phaseOneFlowGeometry = await responsibilityMap
+      .locator('.employee-toolbox-lane--parallel-ingress')
+      .evaluate((lane) => {
+        const centerY = (selector: string) => {
+          const element = lane.querySelector<HTMLElement>(selector)
+          if (element === null) throw new Error(`Missing Phase 1 flow node: ${selector}`)
+          const box = element.getBoundingClientRect()
+          return box.top + box.height / 2
+        }
+        const sourceCenters = Array.from(
+          lane.querySelectorAll<HTMLElement>('[data-work-ingress-ref]'),
+          (source) => {
+            const box = source.getBoundingClientRect()
+            return box.top + box.height / 2
+          },
+        )
+        return {
+          trunkCenters: [
+            centerY('.employee-toolbox-lane__axis'),
+            centerY('[data-ingress-branch-work-item-ref="prepare-materials"]'),
+            centerY(
+              '[data-ingress-branch-work-item-ref="prepare-materials"] > .employee-toolbox-card',
+            ),
+            centerY('[data-review-branch-work-item-ref="analyze-implement"]'),
+            centerY('[data-work-item-ref="prepare-change"]'),
+            centerY('[data-work-item-ref="publish-mr"]'),
+          ],
+          sourceCenters,
+        }
+      })
+    expect(
+      Math.max(...phaseOneFlowGeometry.trunkCenters) -
+        Math.min(...phaseOneFlowGeometry.trunkCenters),
+    ).toBeLessThanOrEqual(0.5)
+    expect(phaseOneFlowGeometry.sourceCenters).toHaveLength(2)
+    expect(
+      Math.abs(
+        (phaseOneFlowGeometry.sourceCenters[0]! + phaseOneFlowGeometry.sourceCenters[1]!) / 2 -
+          phaseOneFlowGeometry.trunkCenters[0]!,
+      ),
+    ).toBeLessThanOrEqual(0.5)
     await waitForStableAuthenticatedShell(page)
     await expect(responsibilityMap).toHaveScreenshot(
       'digital-employee-responsibility-map.png',

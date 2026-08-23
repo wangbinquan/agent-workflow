@@ -496,6 +496,8 @@
 }
 
 .employee-toolbox-lane__cards {
+  --employee-flow-gap: 13px;
+
   display: grid;
   grid-template-columns: var(
     --employee-lane-template,
@@ -504,9 +506,24 @@
   grid-auto-rows: minmax(48px, auto);
   align-items: start;
   justify-content: start;
-  gap: 13px;
+  gap: var(--employee-flow-gap);
   min-width: 0;
   padding: 1px 6px 1px 0;
+}
+
+/* Phase 1 combines two source cards with two implementation paths. Keep the
+ * composite branches as tall as the grid row and center every ordinary step
+ * on that row, so every 50% connector lands on one shared horizontal spine. */
+.employee-toolbox-lane--parallel-ingress .employee-toolbox-lane__cards {
+  --employee-flow-gap: 9px;
+
+  align-items: stretch;
+}
+
+.employee-toolbox-lane--parallel-ingress
+  .employee-toolbox-lane__cards
+  > .employee-toolbox-card:not(.employee-toolbox-card--auxiliary) {
+  align-self: center;
 }
 
 .employee-toolbox-card {
@@ -568,8 +585,8 @@
   + .employee-toolbox-card::before {
   position: absolute;
   top: calc(50% - 1px);
-  left: -13px;
-  width: 8px;
+  left: calc(0px - var(--employee-flow-gap));
+  width: calc(var(--employee-flow-gap) - 5px);
   height: 1px;
   background: color-mix(in srgb, var(--muted) 38%, transparent);
   pointer-events: none;
@@ -592,7 +609,7 @@
   + .employee-toolbox-card::after {
   position: absolute;
   top: calc(50% - 4px);
-  left: -10px;
+  left: calc(3px - var(--employee-flow-gap));
   width: 6px;
   height: 6px;
   border-top: 1.5px solid color-mix(in srgb, var(--muted) 58%, transparent);
@@ -717,8 +734,8 @@
 
 .employee-toolbox-ingress-branch__merge > span {
   position: absolute;
-  top: 25%;
-  bottom: 25%;
+  top: calc(50% - 24px);
+  bottom: calc(50% - 24px);
   left: 4px;
   width: 1px;
   background: color-mix(in srgb, var(--muted) 42%, transparent);
@@ -805,10 +822,12 @@
 }
 
 .employee-toolbox-review-branch__reviewed-flow {
+  --employee-flow-gap: 8px;
+
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
   align-items: stretch;
-  gap: 10px;
+  gap: var(--employee-flow-gap);
   min-width: 0;
 }
 
