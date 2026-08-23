@@ -90,12 +90,6 @@
     ],
     "allowlist": [
       {
-        "file": "packages/frontend/src/components/digital-employees/outcomes.ts",
-        "literals": ["merged", "completed-no-change", "no-change-confirmed"],
-        "why": "通用画布把 terminalKind 归入展示分桶时，直接认了开发域的三个终态。正解是让分桶来自类型包（terminalKind 闭合联合 + 穷尽分类表），属 RFC-317 T44 的范围。",
-        "removeWhen": "RFC-317 T44"
-      },
-      {
         "file": "packages/frontend/src/routes/employee-cases.$caseId.tsx",
         "literals": ["merged"],
         "why": "Case 详情页按 terminalKind === 'merged' 决定是否渲染「MR 已合入」文案。同上，随 T44 一并收口。",

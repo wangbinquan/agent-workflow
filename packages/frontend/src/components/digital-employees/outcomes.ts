@@ -1,3 +1,4 @@
+import { classifyTerminalKind } from '@agent-workflow/shared'
 export interface EmployeeTerminalOutcomeGroup {
   employeeId: string
   terminalKind: string
@@ -11,17 +12,14 @@ export interface EmployeeTerminalOutcomeCounts {
   failed: number
 }
 
+// RFC-317 T44（DE-06）—— 分桶走共享分类，不再就地手写第三张表。
+//
+// 这三张表（任务目录 / 协作 join / 本处分桶）此前互不一致，其中两张已经是错的。
+// 词汇放在 shared 而不是后端模块里，正是因为本文件 import 不到后端——留在后端就必然
+// 在这里被再抄一遍。未知终态仍然归 otherFinished（或按 `*-failed` 后缀归失败桶），
+// 让它们从总数里消失比归错桶更糟。
 function outcomeBucket(terminalKind: string): keyof EmployeeTerminalOutcomeCounts {
-  if (terminalKind === 'merged') return 'merged'
-  if (terminalKind === 'completed-no-change' || terminalKind === 'no-change-confirmed') {
-    return 'noChange'
-  }
-  if (terminalKind === 'failed' || terminalKind === 'blocked' || terminalKind.endsWith('-failed')) {
-    return 'failed'
-  }
-  // Unknown terminal kinds must remain visible instead of disappearing from
-  // the total. This bucket also contains closed/cancelled/operator termination.
-  return 'otherFinished'
+  return classifyTerminalKind(terminalKind).bucket
 }
 
 export function employeeTerminalOutcomeCounts(

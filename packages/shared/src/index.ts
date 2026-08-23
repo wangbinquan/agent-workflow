@@ -3,6 +3,7 @@
 export const SHARED_PACKAGE_VERSION = '0.0.0'
 
 export * from './schemas/agent'
+export * from './employeeTerminalKind'
 export * from './schemas/apiError'
 export * from './schemas/changeNarrative' // RFC-239
 export * from './schemas/cachedRepo'

@@ -1,5 +1,8 @@
 import { ulid } from 'ulid'
-import { PLATFORM_WORK_ITEM_SLOT_REF } from '@/modules/digital-employee/public/types'
+import {
+  classifyTerminalKind,
+  PLATFORM_WORK_ITEM_SLOT_REF,
+} from '@/modules/digital-employee/public/types'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { z } from 'zod'
 import {
@@ -1647,7 +1650,11 @@ export class DigitalEmployeeRuntimeService {
     const terminalKind = expired
       ? 'deadline-exceeded'
       : (candidate.childCase.terminalKind ?? 'completed')
-    const failed = expired || ['closed', 'cancelled', 'failed', 'blocked'].includes(terminalKind)
+    // RFC-317 T44（DE-06）—— 走共享分类。旧写法里的 'cancelled' 是**双 L 拼写**，
+    // 而全仓其它每一处都写 'canceled'——一个以 'canceled' 终结的子 Case 会被判成 satisfied。
+    // 另外 'failed' / 'blocked' 是 Case 的 **state**，不是 terminalKind，放在这张表里
+    // 从来不会命中；真正的失败终态是 'execution-failed' / 'deadline-exceeded'。
+    const failed = expired || classifyTerminalKind(terminalKind).failed
     const envelope = {
       schemaVersion: 1 as const,
       invocationRef: candidate.channel.invocationId,

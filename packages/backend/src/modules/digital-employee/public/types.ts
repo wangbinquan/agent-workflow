@@ -169,3 +169,19 @@ export type WorkspaceFailureClass = (typeof WORKSPACE_FAILURE_CLASSES)[number]
  * 「谁在使用这条逃生门」不再需要靠搜字符串。
  */
 export const PLATFORM_WORK_ITEM_SLOT_REF = 'platform'
+
+/**
+ * RFC-317 T44（DE-06）—— 终态种类词汇已迁往 `@agent-workflow/shared`。
+ *
+ * 它有三个消费者：后端任务目录适配器、后端协作 join、以及**前端**的展示分桶
+ * （components/digital-employees/outcomes.ts）。前端 import 不到后端模块，词汇留在这里
+ * 就必然在前端被再抄一遍——而再抄一遍正是本条 finding 的成因。
+ */
+export {
+  classifyTerminalKind,
+  EMPLOYEE_CASE_TERMINAL_KINDS,
+  LEGACY_MISSION_TERMINAL_KINDS,
+  type EmployeeCaseTerminalKind,
+  type LegacyMissionTerminalKind,
+  type TerminalKindClassification,
+} from '@agent-workflow/shared'

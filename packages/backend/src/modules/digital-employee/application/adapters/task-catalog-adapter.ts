@@ -7,6 +7,7 @@ import {
   type TaskLaunchOrigin,
   type TaskStatus,
 } from '@agent-workflow/shared'
+import { classifyTerminalKind } from '@/modules/digital-employee/public/types'
 
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import { ValidationError } from '@/util/errors'
@@ -46,8 +47,12 @@ function taskStatus(item: { state: EmployeeCaseState; terminalKind: string | nul
   if (item.state === 'active') return 'running'
   if (item.state === 'waiting') return 'awaiting_human'
   if (item.state === 'blocked') return 'failed'
-  if (item.terminalKind === 'canceled' || item.terminalKind === 'closed-unmerged') return 'canceled'
-  return 'done'
+  // RFC-317 T44（DE-06）—— 走共享分类，不再就地手写一张表。
+  //
+  // 旧写法认的是 'closed-unmerged'，那是**旧版 Mission** 的终态词，OS 从来不产出；
+  // OS 真正铸的 'closed' 于是掉进兜底被报成 'done'——按状态筛 canceled 会漏掉它们，
+  // 而它们在列表里显示成"完成"。
+  return classifyTerminalKind(item.terminalKind).catalog
 }
 
 export function composeDigitalEmployeeTaskCatalogSource(runtime: {
