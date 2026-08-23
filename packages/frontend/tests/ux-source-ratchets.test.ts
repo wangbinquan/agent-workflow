@@ -427,13 +427,13 @@ describe('RFC-317 T62（R9.4）—— 公共 class 不得被特性名限定', ()
   })
 
   test('四条布局规则确实换成了通用变体（防回潮）', () => {
-    for (const variant of [
-      '.dialog__overlay--flush',
-      '.dialog__overlay--sheet-start',
-      '.dialog__overlay--sheet-end',
-      '.dialog__overlay--flush-narrow',
-    ]) {
-      expect(css.includes(`${variant} {`), `${variant} 的定义没了`).toBe(true)
+    for (const variant of ['flush', 'sheet-start', 'sheet-end', 'flush-narrow']) {
+      // 选择器必须写成**双类**形式（特异度 0,2,0）——被替换掉的
+      // `.dialog__overlay:has(> .<特性面板>)` 就是这个特异度，需要它压过后面
+      // 媒体查询里的 `.dialog__overlay { padding: … }`。初版写成单类，窄屏下被压掉，
+      // e2e 的画布几何断言当场变红。
+      const selector = `.dialog__overlay.dialog__overlay--${variant} {`
+      expect(css.includes(selector), `${selector} 的定义没了（或退回了单类写法）`).toBe(true)
     }
     for (const retired of [
       '.dialog__overlay:has(> .workflow-editor-surface-dialog)',

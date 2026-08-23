@@ -1167,6 +1167,7 @@ export function WorkflowEditorLoaded({
             onClose={closeInspector}
             title={inspectorDialogTitle}
             restoreFocusFallbackRef={canvasFrameRef}
+            overlayClassName="dialog__overlay--sheet-end"
             panelClassName={`workflow-editor-surface-dialog workflow-editor-inspector-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
             data-testid="workflow-editor-inspector-surface"
           >

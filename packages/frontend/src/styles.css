@@ -17333,28 +17333,6 @@ mark.prior-comment-anchor[data-active='true'] {
 
 /* ---- RFC-035 PR3 shared primitives (Dialog / EmptyState / LoadingState / DetailLayout) ---- */
 
-/* RFC-317 T62（R9.4）—— 覆盖层的**通用变体**。
- *
- * 改造前这四种布局是写成 `.dialog__overlay:has(> .<特性面板>)` 的，
- * 也就是共享原语必须逐一认识每个用它的业务面板；加第五个面板要回来改 styles.css，
- * 而写新面板的人不会想到。现在由调用方经 `overlayClassName` 声明要哪一种，
- * 共享 class 一个特性名都不认识。 */
-.dialog__overlay--flush {
-  padding: 0;
-}
-
-.dialog__overlay--sheet-start {
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: 0;
-}
-
-.dialog__overlay--sheet-end {
-  align-items: stretch;
-  justify-content: flex-end;
-  padding: 0;
-}
-
 .dialog__overlay {
   position: fixed;
   inset: 0;
@@ -17364,6 +17342,35 @@ mark.prior-comment-anchor[data-active='true'] {
   justify-content: center;
   padding: 96px 24px 24px;
   z-index: 1000;
+}
+
+/* RFC-317 T62（R9.4）—— 覆盖层的**通用变体**。
+ *
+ * ⚠️ 选择器写成 `.dialog__overlay.dialog__overlay--flush`（特异度 0,2,0）而不是
+ * 裸的 `.dialog__overlay--flush`（0,1,0）：被它替换掉的原规则是
+ * `.dialog__overlay:has(> .<特性面板>)`，特异度同样是 0,2,0，因此能压过
+ * 后面**媒体查询里**那条 `.dialog__overlay { padding: var(--space-3) }`。
+ * 初版写成单类，窄屏下被那条压掉，e2e 的画布几何断言当场变红
+ * （workflow-editor.spec.ts 的 521/520 短高边界与四模式工作区两条）。
+ *
+ * 改造前这四种布局是写成 `.dialog__overlay:has(> .<特性面板>)` 的，
+ * 也就是共享原语必须逐一认识每个用它的业务面板；加第五个面板要回来改 styles.css，
+ * 而写新面板的人不会想到。现在由调用方经 `overlayClassName` 声明要哪一种，
+ * 共享 class 一个特性名都不认识。 */
+.dialog__overlay.dialog__overlay--flush {
+  padding: 0;
+}
+
+.dialog__overlay.dialog__overlay--sheet-start {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.dialog__overlay.dialog__overlay--sheet-end {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
 }
 
 .dialog__panel {
@@ -26823,7 +26830,7 @@ button.status-chip {
   /* RFC-317 T62（R9.4）—— 窄屏专用的 flush 变体。原规则是
    * `.dialog__overlay:has(> .script-code-editor-dialog)`（公共 class 被特性名限定），
    * 且**只在这个媒体查询内生效**——所以不能换成无条件的 `--flush`，那会改掉桌面行为。 */
-  .dialog__overlay--flush-narrow {
+  .dialog__overlay.dialog__overlay--flush-narrow {
     padding: 0;
   }
 
