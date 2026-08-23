@@ -245,11 +245,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     expect(
       descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-pipeline'),
     ).toMatchObject({
-      requiredContextTypes: [
-        'development.issue-handling',
-        'development.merge-request',
-        'development.pipeline',
-      ],
+      // `development.pipeline` **暂不在这里断言**：main 上的生产代码目前只给这条
+      // 反应规则挂两类上下文。它属于并行进行中的 RFC-310 改动，落地时连同生产代码
+      // 一起加回来。此前它单独躺在这里（我在 74e2526b0 为修 typecheck 顺带带进的
+      // 半截断言），把 main 的 backend shard 2 连红——同 7f4be0bbc 的教训。
+      requiredContextTypes: ['development.issue-handling', 'development.merge-request'],
       workItemRef: 'collect-pipeline',
       slotRef: 'default',
     })
