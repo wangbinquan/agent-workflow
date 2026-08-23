@@ -79,7 +79,14 @@ export function createDispatcher(deps: AppDeps): Dispatcher {
     scope.snapshot = takeDeleteSnapshot(c)
   }
   app.use('*', injectActor)
-  mountApiRoutes(app, deps)
+  // RFC-317 T54（findings TP-04）—— **不重绑进程级参与者**。
+  //
+  // 这个 app 是 MCP 通道的第二个路由面，与 REST app 各自 compose 一套模块实例。
+  // `mountApiRoutes` 里那句 `deps.digitalEmployeeWorkStart.bind(...)` 绑的是**进程级**
+  // 的 deferred participant（webhook dispatcher 拿的就是它），第二次绑会静默把
+  // webhook 的工作启动改道到本 app 的私有 runtime 上。去掉这一项，让 REST 那次绑定
+  // 保持有效；`bind` 侧同批改成「已绑定即抛」，防止第三条路径再引入同样的覆盖。
+  mountApiRoutes(app, { ...deps, digitalEmployeeWorkStart: undefined })
   // Same translation from DomainError to `{code, message}` the REST channel
   // uses, so a tool reports the code a REST caller would have seen.
   app.onError(errorHandler)

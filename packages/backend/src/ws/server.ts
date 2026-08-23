@@ -34,7 +34,13 @@ import {
 } from '@/auth/session'
 import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
-import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
+import {
+  checkUpgradeGate,
+  openWsChannel,
+  parseWsChannel,
+  type WsConnectionData,
+  type WsChannelKind,
+} from './registry'
 import {
   closeConnection,
   currentRevalidationEpoch,
@@ -178,7 +184,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
           403,
         )
       }
-      if (!TOKEN_ALLOWED_WS_CHANNELS.has(channel.kind)) {
+      if (!TOKEN_ALLOWED_WS_CHANNELS[channel.kind]) {
         return wsError(
           'token-forbidden-channel',
           `personal access tokens cannot open the '${channel.kind}' channel`,
@@ -292,7 +298,16 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
  * RFC-247 §3.5 — the channels a `general` token may open. DEFAULT DENY: a
  * channel absent from this set is closed to tokens.
  *
- * Two are deliberately excluded:
+ * RFC-317 T56（findings TP-06）—— 这份表此前有两个问题，都已修：
+ *   ① 类型是 `ReadonlySet<string>`，不是按 `WsChannelKind` 键控。新增通道**默认落进
+ *      拒绝side**且没有任何编译提示；一个拼错的字符串会静默关掉一条本该开放的通道。
+ *   ② 注释写着「Two are deliberately excluded」，**实际排除了四个**
+ *      （repo-import / intent-sessions / authority / presence）。
+ *   ③ 全仓零测试引用——`token-forbidden-channel` 这个错误码只在本文件出现一次。
+ * 改成穷尽 `Record<WsChannelKind, boolean>` 之后，新增通道**必须**在这里对
+ * 「token 能不能开它」表态，那是一次编译期决定，而不是一个静默的默认拒绝加一句过期注释。
+ *
+ * 四个排除项各自的理由：
  *   · `repo-import`     — its spec states it has "no gate of any kind"
  *     (RFC-152 D4 leftover); anyone who guesses a batchId sees another user's
  *     import. That is an existing defect, but leaving it open to tokens would
@@ -300,14 +315,22 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
  *   · `intent-sessions` — RFC-247 D7 puts `intent:*` permanently out of a
  *     token's reach, and every `/api/intent-sessions/*` route 403s for tokens.
  *     Allowing the socket would be a back door to exactly that data.
+ *   · `authority`       — 授权变更推送面向的是**交互式会话**的 actor 缓存刷新；
+ *     token 连接没有那份缓存，开放它只会多一条泄漏授权版本的旁路。
+ *   · `presence`        — RFC-312 的在线状态带 `users:presence` 升级门，是人的在线
+ *     状态而非任务数据；token 是机器身份，不参与「谁在线」。
  */
-const TOKEN_ALLOWED_WS_CHANNELS: ReadonlySet<string> = new Set([
-  'task',
-  'tasks-list',
-  'workflows',
-  'workgroups',
-  'memories',
-  'memory-distill-jobs',
-  'scheduled-tasks',
-  'mcp-runtime-tests',
-])
+export const TOKEN_ALLOWED_WS_CHANNELS: Readonly<Record<WsChannelKind, boolean>> = {
+  task: true,
+  'tasks-list': true,
+  workflows: true,
+  workgroups: true,
+  memories: true,
+  'memory-distill-jobs': true,
+  'scheduled-tasks': true,
+  'mcp-runtime-tests': true,
+  'repo-import': false,
+  'intent-sessions': false,
+  authority: false,
+  presence: false,
+}

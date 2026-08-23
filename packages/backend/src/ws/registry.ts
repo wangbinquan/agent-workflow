@@ -308,6 +308,20 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
   /** hello-frame channel name (parametrized channels compose with params). */
   helloName: (p: ChannelParamsByKind[K]) => string
   pathRe: RegExp
+  /**
+   * RFC-317 T56（findings TP-06）—— 一条**能被 `pathRe` 匹中**的样例路径。
+   *
+   * 为什么把它放进注册表而不是留在测试里：`pathRe` 的两条关键守卫（「每条路径只匹中
+   * 一个通道」「每条路径都 parse 得出来」）此前各自维护一份**手写样本数组**，而新增
+   * 通道**不需要**出现在样本里。RFC-312 的 presence 通道实测同时逃过了三处样本
+   * ——同一次改动里 paths-interlock 的双射断言被更新了（作者确实动过那个文件），
+   * 样本数组仍然没跟上。
+   *
+   * 放进 `ChannelSpec` 之后，新增通道漏填样本是**编译错误**（这是必填字段），
+   * 而两条守卫改为遍历 `WS_CHANNEL_KINDS`——它们要防的正是「新通道的 pathRe 意外
+   * 遮蔽了既有通道」，而那种通道恰恰最不可能被人想起来加进样本里。
+   */
+  samplePath: string
   parse: (m: RegExpMatchArray, url: URL) => ChannelParamsByKind[K] | null
   broadcaster: WsBroadcasterLike<M, ChannelBroadcastContextByKind[K]>
   /** Broadcaster channel key — always delegates to the broadcaster.ts constants so producers can never drift. */
@@ -588,6 +602,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'authority',
     pathRe: /^\/ws\/authority$/,
+    samplePath: '/ws/authority',
     parse: () => ({ kind: 'authority' }),
     broadcaster: authorityBroadcaster,
     channelKeyOf: () => AUTHORITY_CHANNEL,
@@ -606,6 +621,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: (p) => `tasks/${p.taskId}`,
     pathRe: /^\/ws\/tasks\/([^/?#]+)$/,
+    samplePath: '/ws/tasks/T1',
     parse: (m, url) => {
       const p: ChannelParamsByKind['task'] = {
         kind: 'task',
@@ -641,6 +657,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'tasks',
     pathRe: /^\/ws\/tasks$/,
+    samplePath: '/ws/tasks',
     parse: () => ({ kind: 'tasks-list' }),
     broadcaster: tasksListBroadcaster,
     channelKeyOf: () => TASKS_LIST_CHANNEL,
@@ -675,6 +692,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'workflows',
     pathRe: /^\/ws\/workflows$/,
+    samplePath: '/ws/workflows',
     parse: () => ({ kind: 'workflows' }),
     broadcaster: workflowsBroadcaster,
     channelKeyOf: () => WORKFLOWS_CHANNEL,
@@ -716,6 +734,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'workgroups',
     pathRe: /^\/ws\/workgroups$/,
+    samplePath: '/ws/workgroups',
     parse: () => ({ kind: 'workgroups' }),
     broadcaster: workgroupsBroadcaster,
     channelKeyOf: () => WORKGROUPS_CHANNEL,
@@ -757,6 +776,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: (p) => `repo-imports/${p.batchId}`,
     pathRe: /^\/ws\/repo-imports\/([^/?#]+)$/,
+    samplePath: '/ws/repo-imports/B1',
     parse: (m) => ({ kind: 'repo-import', batchId: decodeURIComponent(m[1] ?? '') }),
     broadcaster: repoImportsBroadcaster,
     channelKeyOf: (p) => REPO_IMPORT_CHANNEL(p.batchId),
@@ -781,6 +801,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'memories',
     pathRe: /^\/ws\/memories$/,
+    samplePath: '/ws/memories',
     parse: () => ({ kind: 'memories' }),
     broadcaster: memoryBroadcaster,
     channelKeyOf: () => MEMORY_CHANNEL,
@@ -835,6 +856,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'memory-distill-jobs',
     pathRe: /^\/ws\/memory-distill-jobs$/,
+    samplePath: '/ws/memory-distill-jobs',
     parse: () => ({ kind: 'memory-distill-jobs' }),
     broadcaster: memoryDistillJobBroadcaster,
     channelKeyOf: () => MEMORY_DISTILL_JOB_CHANNEL,
@@ -859,6 +881,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'scheduled-tasks',
     pathRe: /^\/ws\/scheduled-tasks$/,
+    samplePath: '/ws/scheduled-tasks',
     parse: () => ({ kind: 'scheduled-tasks' }),
     broadcaster: scheduledTaskBroadcaster,
     channelKeyOf: () => SCHEDULED_TASK_CHANNEL,
@@ -879,6 +902,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'intent-sessions',
     pathRe: /^\/ws\/intent-sessions$/,
+    samplePath: '/ws/intent-sessions',
     parse: () => ({ kind: 'intent-sessions' }),
     broadcaster: intentSessionsBroadcaster,
     channelKeyOf: () => INTENT_SESSIONS_CHANNEL,
@@ -897,6 +921,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'mcp-runtime-tests',
     pathRe: /^\/ws\/mcp-runtime-tests$/,
+    samplePath: '/ws/mcp-runtime-tests',
     parse: () => ({ kind: 'mcp-runtime-tests' }),
     broadcaster: mcpRuntimeTestsBroadcaster,
     channelKeyOf: () => MCP_RUNTIME_TESTS_CHANNEL,
@@ -916,6 +941,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     },
     helloName: () => 'presence',
     pathRe: /^\/ws\/presence$/,
+    samplePath: '/ws/presence',
     parse: () => ({ kind: 'presence' }),
     broadcaster: presenceBroadcaster,
     channelKeyOf: () => PRESENCE_CHANNEL,

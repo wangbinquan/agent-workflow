@@ -295,7 +295,17 @@ export function routeMetaCoverage(
     // visibility filter all land here. Filtering on the METHOD is a structural
     // distinction; adding each of them to EXEMPT_MOUNTS by path would be a
     // hand-maintained list that silently grows into a hole.
-    .filter((r) => r.method.toUpperCase() !== 'ALL')
+    //
+    // ⚠️ RFC-317 T53（findings TP-02）—— 但**「method 是 ALL」不等于「不是端点」**。
+    // `mcp/server.ts` 的 `app.all('/api/mcp', handler)` 就是一个真正处理请求的端点，
+    // 作者当时也知道，所以又把它塞进了 EXEMPT_MOUNTS 兜一道。换句话说：任何未来的
+    // `app.all('/api/x', handler)` 都会**无声地绕过声明检查**，`assertRouteMetaCoverage`
+    // 不会拒绝启动——而这条自检存在的全部意义就是「未声明的路由会 UNGATED 运行」。
+    //
+    // 现在按**路径**而不是按动词区分：`/api/` 前缀下的 ALL 挂载必须显式入
+    // EXEMPT_MOUNTS；`/api/` 之外的中间件（日志、鉴权、SPA fallback）仍按动词放行。
+    // 中间件与端点的真实区别是「挂在哪」，不是「用什么动词挂」。
+    .filter((r) => r.method.toUpperCase() !== 'ALL' || isUndeclaredApiAllMount(r.path))
     .filter((r) => !EXEMPT_MOUNTS.has(r.path))
     .filter((r) => !declared.has(key(r.method.toUpperCase(), r.path)))
     .map((r) => `${r.method.toUpperCase()} ${r.path}`)
@@ -311,11 +321,40 @@ export function routeMetaCoverage(
 }
 
 /**
+ * `/api/` 前缀判定——ALL 挂载是否落在 API 面上。
+ *
+ * 通配中间件（`/api/tasks/*` 这类）也算：它们如果真的处理请求，同样该有声明；
+ * 不处理请求的那些进 EXEMPT_MOUNTS，各带一条可审的理由。
+ */
+function isApiPath(path: string): boolean {
+  return path.startsWith('/api/') || path === '/api'
+}
+
+/**
+ * 一条 method='ALL' 的挂载是否**需要**声明。
+ *
+ * 判据换成了「挂在哪」而不是「用什么动词挂」：
+ *   · 不在 `/api/` 下 —— 请求日志、鉴权、SPA fallback，一律不是端点；
+ *   · 在 `/api/` 下但路径以 `*` 收尾 —— **通配中间件**（`/api/*` 的 multiAuth、
+ *     `/api/tasks/:id/*` 的任务可见性过滤）。通配段本身就是「我拦一片，不是我处理某个
+ *     资源」的结构性表达；
+ *   · 在 `/api/` 下且是**精确路径** —— 必须要么有声明、要么显式入 EXEMPT_MOUNTS。
+ *     `app.all('/api/mcp', handler)` 正是这一类：它是真正处理请求的端点，
+ *     此前只因为「动词是 ALL」就被整条判据放过了。
+ */
+function isUndeclaredApiAllMount(path: string): boolean {
+  return isApiPath(path) && !path.endsWith('*')
+}
+
+/**
  * Mounted paths that are deliberately not API endpoints and therefore carry no
  * declaration. Kept explicit and tiny — every entry is a hole in the forward
  * check, so each needs a reason a reader can audit.
+ *
+ * RFC-317 T53（findings TP-02）—— 导出并被测试冻结：这份名单每涨一条都是一个洞，
+ * 涨它必须是一次**有署名的编辑**，而不是某人顺手加一行。
  */
-const EXEMPT_MOUNTS = new Set<string>([
+export const EXEMPT_MOUNTS = new Set<string>([
   // The embedded SPA fallback: serves index.html for client-side routes. It is
   // not an API surface and explicitly 404s anything under /api/ or /ws/.
   '*',
@@ -328,6 +367,12 @@ const EXEMPT_MOUNTS = new Set<string>([
   // are already skipped above. Relying on that would make the exemption an
   // accident of how the route happens to be mounted rather than a decision.
   '/api/mcp',
+  // RFC-317 T53 —— 任务可见性过滤的**精确路径**那一半。
+  // `routes/tasks.ts:212` 用 `app.use('/api/tasks/:id', …)` 与
+  // `app.use('/api/tasks/:id/*', …)` 成对挂：后者是通配段（判据自动放行），
+  // 前者是精确路径。它不处理请求，只在 next() 之前决定这条任务对当前 actor 可不可见
+  // ——真正的端点声明在各自的 GET/PATCH/DELETE 上。
+  '/api/tasks/:id',
 ])
 
 /** Throw when either direction of the coverage check fails. */

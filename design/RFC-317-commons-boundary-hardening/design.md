@@ -205,6 +205,14 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
   - `DE-02` —— **关闭 finding 逐条点名的两处读**（`planJson` 泄漏、`state === 'completed'` 枚举泄漏），落为 `EmployeeReactionRoundQueryPort.frozenPlan / lastSettledRound`。**未关闭的更深一层**：development-automation 还在 insert/update `employeeCaseWorkspaces` 与 `employeeRoundWorkspaceStates`（**共同写**，不是借读），以及读 `employeeApprovalSagas` / `employeeChangeCandidates`。这需要先裁决工作区持久化归属哪一侧，是一次独立设计决策，不该塞进 T41——连同 `integration → development*Adapter*` 两条，共 8 条逐条入 R5 账本，各带 `why` + 指向 B7 / B10 的 `removeWhen`。
   - **遗留债（已记）**：`frozenPlan` 返回的仍是 `planJson` 原文，消费方用自己那份 zod 视图 parse。文档契约与 `ReactionExecutionPort.launch` 携带的是同一份，但没有声明成 DTO；收敛它需要 OS 侧提供运行期 schema，留给 B7。
 
+### B8 落地记录（T52–T56，findings TP-01 / TP-02 / TP-04 / TP-05 / TP-06）
+
+- **T52（TP-01）**：契约覆盖改用**运行期预言**。旧扫描器的两条正则都要求 `path: '<字面量>'`，而 `developmentConfig.ts` 用 `path: cfg.base` 注册一个六路由家族并挂了 5 次——四十来个端点从未进入视野；**它自己的盲点元守卫也看不见**（检测器的 `[^}]*?` 跨不过 `${cfg.base}` 里的 `}`），于是「所有盲点都已登记」照绿，正是那个文件头注释自己命名过的 silent completeness。新守卫在 `createApp` 之后问框架的 `allRouteMeta()`：462 条声明 vs 420 条契约，**43 条缺契约**（finding 估的 ~41 精确命中），逐条入只减不增的账本；旧扫描器保留为源码侧快速检查，但其「LOCKS every endpoint」的头注释已更正为「覆盖面不完整」。
+- **T53（TP-02，能力影响 C7）**：判据从「按动词」换成「按路径」。`method === 'ALL'` 一刀切放行的理由是「中间件不是端点」，但 `app.all('/api/mcp', handler)` 就是真正处理请求的端点——作者当时也知道，所以又塞进 `EXEMPT_MOUNTS` 兜了一道；也就是说任何未来的 `app.all('/api/x', …)` 都会无声绕过启动自检。现在 `/api/` 下的**精确路径** ALL 挂载必须声明或入账，通配挂载仍视为中间件（通配段本身就是「拦一片」的结构性表达）。`EXEMPT_MOUNTS` 导出并冻结为 3 条。
+- **T54（TP-04）**：修掉一个**真 bug**。`mountApiRoutes` 每进程被调用两次（REST app + MCP dispatcher 的私有 app，后者在第一次 MCP 请求时懒建），而它里面那句 `deps.digitalEmployeeWorkStart.bind(...)` 绑的是**进程级** deferred participant——webhook dispatcher 拿的就是它。`bind` 当时是一句裸赋值：一旦有人发过一次 MCP 请求，此后所有 webhook / 事件驱动的工作启动都改道到 MCP 那套私有 runtime 上，无日志、无报错、无测试会红。处置：`bind` 改「已绑定即抛」+ dispatcher 传 `digitalEmployeeWorkStart: undefined`。**未修的那一半**（装配仍在路由函数里，14 次 compose）钉成只减不增的数字——彻底做法是把装配提到 bootstrap，那是一次独立重构。
+- **T55（TP-05）**：通用 Digital Employee 面引用类型专属权限点（`development-missions:*`）的账本，今天 8 条。判据**没有**采用 finding 提的通用形式「路径域 == 点域」——那条在真实语料上报出 53 种错配，其中绝大多数正当（`reviews ← tasks` 是评审路由由任务权限守门、`memories ← memory` 是单复数），一条会报五十几处误报的规则最终只会被豁免糊住。
+- **T56（TP-06）**：WS 通道的样本改为**从注册表派生**——`ChannelSpec` 新增必填 `samplePath`，两条守卫改为遍历 `WS_CHANNEL_KINDS`。改造前三处手写样本数组，RFC-312 的 presence 通道同时逃过全部三处（而同一次改动里双射断言**是**被更新了的）。另外把 `TOKEN_ALLOWED_WS_CHANNELS` 从 `ReadonlySet<string>`（零测试引用、注释说排除两个而实际四个）改为穷尽 `Record<WsChannelKind, boolean>`，并把「排除了哪四个」钉成显式清单——新增通道对 token 可达性的表态从此是编译期决定。
+
 ### B7 落地记录（T47–T51，findings LC-01 / LC-02 / LC-03 / LC-05 / LC-06 / LC-07）
 
 - **T47（LC-01）**：把「转移表是超集」那句 docstring 变成可执行判据——AST 抽出所有**静态可知**的 `(to, allowedFrom)` CAS 站点（74 个），逐个要求 `allowedFrom ⊆ 以 to 为目标的全部事件的 allowed-from 之并`。实测**23 处越界**（finding 说的「≥5」是低估），全部集中在终态改写一件事上，与 `allowTerminal` 账本高度重合。本次**不改语义**（修复动作把卡住的终态行拉回可续跑、调度器重新认领被打断的 run、评审 supersede 作废已完成轮次——都是产品行为，去留是独立决策），逐条入偏离账本、只减不增。已知盲区明写在负向 fixture 里：`allowedFrom: SOME_CONST` 之类的动态形态抽不到。

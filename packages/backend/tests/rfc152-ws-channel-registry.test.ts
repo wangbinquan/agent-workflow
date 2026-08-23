@@ -15,6 +15,7 @@
 //   5. the gatedSubscribe pipeline: hello first, ACL-bypass short-circuit is
 //      synchronous, gate=false / gate-throw ⇒ frame dropped.
 
+import { TOKEN_ALLOWED_WS_CHANNELS } from '../src/ws/server'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import type { ServerWebSocket } from 'bun'
@@ -231,29 +232,41 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(parse('/ws/scheduled-tasks')).toEqual({ kind: 'scheduled-tasks' })
     expect(parse('/ws/intent-sessions')).toEqual({ kind: 'intent-sessions' })
     expect(parse('/ws/mcp-runtime-tests')).toEqual({ kind: 'mcp-runtime-tests' })
+    // RFC-317 T56 —— presence 此前漏在这里（RFC-312 加通道时没跟上）。
+    // 逐条列举保留（它是**意图确认**：每条路径解析成什么由人过一遍），
+    // 覆盖面则由上面那条「遍历 ALL_KINDS」的守卫兜住。
+    expect(parse('/ws/presence')).toEqual({ kind: 'presence' })
     // Unknown channels stay null (server maps to 404 ws-unknown-channel).
     expect(parse('/ws/bogus')).toBeNull()
     expect(parse('/ws/tasks/')).toBeNull()
     expect(parse('/ws/repo-imports/a/b')).toBeNull()
   })
 
-  test('every pathRe matches exactly one channel for the sample paths (no overlap)', () => {
-    const samples: Array<[string, WsChannelKind]> = [
-      ['/ws/authority', 'authority'],
-      ['/ws/tasks/T1', 'task'],
-      ['/ws/tasks', 'tasks-list'],
-      ['/ws/workflows', 'workflows'],
-      ['/ws/workgroups', 'workgroups'],
-      ['/ws/repo-imports/B1', 'repo-import'],
-      ['/ws/memories', 'memories'],
-      ['/ws/memory-distill-jobs', 'memory-distill-jobs'],
-      ['/ws/scheduled-tasks', 'scheduled-tasks'],
-      ['/ws/intent-sessions', 'intent-sessions'],
-      ['/ws/mcp-runtime-tests', 'mcp-runtime-tests'],
-    ]
-    for (const [path, expected] of samples) {
+  // RFC-317 T56（findings TP-06）—— 样本改为**从注册表派生**。
+  //
+  // 这里原本是一份手写的 `samples` 数组，而新增通道**不需要**出现在里面。
+  // 实测：RFC-312 的 presence 通道同时逃过了三处这样的样本数组，
+  // 而同一次改动里 paths-interlock 的双射断言是被更新了的——作者确实动过那些文件，
+  // 样本数组仍然没跟上。这条守卫要防的恰恰是「新通道的 pathRe 意外遮蔽了既有通道」，
+  // 而那种通道最不可能被人想起来加进样本里。
+  //
+  // 现在遍历 `ALL_KINDS`，样本取自各自 spec 的 `samplePath`（必填字段，漏填是编译错误）。
+  test('every pathRe matches exactly one channel（样本遍历全部 kind，漏一个即红）', () => {
+    for (const kind of ALL_KINDS) {
+      const path = WS_CHANNELS[kind].samplePath
       const matching = ALL_KINDS.filter((k) => WS_CHANNELS[k].pathRe.test(path))
-      expect(matching).toEqual([expected])
+      expect(matching, `${kind} 的样例路径 ${path} 匹中了多个通道（或一个都没匹中）`).toEqual([
+        kind,
+      ])
+    }
+  })
+
+  test('每条样例路径都 parse 得出它自己的 kind（样本与解析器不得脱节）', () => {
+    // 上一条只证明「pathRe 不重叠」；这条证明「样本确实是那条通道的合法路径」——
+    // 一个写错的 samplePath（比如少了参数段）会让上一条恒真而这条变红。
+    for (const kind of ALL_KINDS) {
+      const parsed = parseWsChannel(new URL(WS_CHANNELS[kind].samplePath, 'http://x'))
+      expect(parsed?.kind, `${kind} 的样例路径 parse 不出自己`).toBe(kind)
     }
   })
 })
@@ -560,5 +573,26 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
     owner.ws.data.unsubscribe()
     stranger.ws.data.unsubscribe()
     admin.ws.data.unsubscribe()
+  })
+})
+
+// RFC-317 T56（findings TP-06 后半）—— token 可达性此前**零测试引用**。
+//
+// `TOKEN_ALLOWED_WS_CHANNELS` 当时是 `ReadonlySet<string>`：新增通道默认落进拒绝侧、
+// 没有任何编译提示，一个拼错的字符串会静默关掉一条本该开放的通道，而
+// `token-forbidden-channel` 这个错误码在全仓只出现一次（就是那处判断）。
+// 现在它是穷尽 `Record<WsChannelKind, boolean>`（新增通道必须表态，漏填是编译错误），
+// 下面把「排除了哪几个」也钉成一份显式清单——注释曾说「排除两个」而实际排除四个。
+describe('RFC-317 T56 —— WS 通道的 token 可达性是一次显式决定', () => {
+  test('键集恰好等于全部通道（新增通道必须表态，漏填是编译错误）', () => {
+    expect(Object.keys(TOKEN_ALLOWED_WS_CHANNELS).sort()).toEqual([...ALL_KINDS].sort())
+  })
+
+  test('被排除的恰好是这四个（曾经的注释说「两个」）', () => {
+    const denied = ALL_KINDS.filter((kind) => !TOKEN_ALLOWED_WS_CHANNELS[kind]).sort()
+    expect(
+      denied as string[],
+      'token 可达性变了——这是一次安全决定，改动必须同时更新 ws/server.ts 里逐条写明的理由',
+    ).toEqual(['authority', 'intent-sessions', 'presence', 'repo-import'].sort())
   })
 })

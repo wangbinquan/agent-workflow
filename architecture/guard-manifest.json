@@ -184,6 +184,30 @@
       "lines": 490
     },
     {
+      "id": "rfc317-mount-assembly-ledger",
+      "file": "packages/backend/tests/architecture/rfc317-mount-assembly-ledger.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 112
+    },
+    {
+      "id": "rfc317-permission-domain-ownership",
+      "file": "packages/backend/tests/architecture/rfc317-permission-domain-ownership.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 80
+    },
+    {
       "id": "rfc317-prompt-fencing-adoption",
       "file": "packages/backend/tests/architecture/rfc317-prompt-fencing-adoption.test.ts",
       "runner": "bun",
@@ -206,6 +230,30 @@
       "negativeFixture": true,
       "classified": true,
       "lines": 332
+    },
+    {
+      "id": "rfc317-route-contract-oracle",
+      "file": "packages/backend/tests/architecture/rfc317-route-contract-oracle.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 126
+    },
+    {
+      "id": "rfc317-route-gate-exemptions",
+      "file": "packages/backend/tests/architecture/rfc317-route-gate-exemptions.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 69
     },
     {
       "id": "rfc317-table-ownership",

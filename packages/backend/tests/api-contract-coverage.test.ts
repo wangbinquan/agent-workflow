@@ -1,10 +1,17 @@
 // RFC-054 W1-2 — coverage guard for the API contract registry.
 //
-// LOCKS: every HTTP endpoint mounted under `packages/backend/src/routes/*.ts`
-// must be enumerated in `tests/contracts/registry.ts ENDPOINTS`. A new route
-// landing without a registry entry → CI red. This is the "did the contract
-// file actually keep up with reality" half of the W1-2 spec; the runtime
-// behavior half lives in `api-contract.test.ts`.
+// ⚠️ RFC-317 T52（findings TP-01）—— 这里原本写着「LOCKS: every HTTP endpoint …」。
+// **它做不到**：下面两条扫描正则都要求 `path: '<字面量>'`，而 `developmentConfig.ts`
+// 用 `path: cfg.base` 注册一个六路由家族并挂了 5 次，外加计算路径的 `mountAclEndpoints`
+// ——四十来个端点从未进入视野。更糟的是本文件的**盲点元守卫也看不见它们**
+// （检测器的 `[^}]*?` 跨不过 `${cfg.base}` 里的 `}`），于是「所有盲点都已登记」照绿。
+// 这正是本文件头注释自己命名过的失败模式：silent completeness。
+//
+// 权威的完备性判据现在是 `tests/architecture/rfc317-route-contract-oracle.test.ts`
+// ——它在 `createApp` 之后问框架的 `allRouteMeta()`，计算路径逃不掉。
+//
+// 本文件保留为**源码侧的快速检查**（不需要建 app，跑得快，且「zombie 注册」与
+// e2e 交叉核对这两条是它独有的）。它的覆盖面**不完整**，别再据此认为「全都注册了」。
 
 import { describe, test, expect } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
