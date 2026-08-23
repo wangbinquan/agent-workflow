@@ -27,6 +27,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
+import ts from 'typescript'
 
 import {
   backendUnits,
@@ -34,7 +35,6 @@ import {
   moduleShapes,
   outboundBoundaryEdges,
   sourceUnit,
-  type BoundaryEdge,
 } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
@@ -339,5 +339,152 @@ describe('RFC-317 T26 —— R2 正反 fixture', () => {
       "import { startTask } from '@/services/task'\n",
     )
     expect(outboundBoundaryEdges([unit]).length).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T25（R12 的一条）—— public 入口里的开放 Record 面，精确入账
+// ---------------------------------------------------------------------------
+//
+// **落地偏离，理由写在这里**：design.md 的 R12 原文写的是「public entrypoint **禁**
+// 非字面量键的 `Record`」。实测全仓 public 入口共 13 处 `Record<…>`，其中 4 处键是
+// 穷尽联合（`Record<CodeHostEventType, …>`，正解），9 处是 `Record<string, …>`——
+// 而这 9 处里绝大多数**本就该开放**：
+//   - frontmatter 附加字段（任意 YAML）、泛型 merge 助手的 `Record<string, T>`
+//   - `triggerParameters`（用户自定义的触发参数）
+//   - 错误 `details` 包
+// 对它们下禁令会制造约 89% 的假阳性，逼着后来的人要么给动态载荷编一个假的键联合，
+// 要么往账本里塞一堆「我也不知道为什么它是 string 键」的低信息条目——两种都让账本
+// 变质。本 RFC 一路在防的正是这个：**判据宽而掺水，和判据窄而漏，坏处不对称**，
+// 但「制造假阳性逼人绕过」是最坏的一种，因为它训练所有人学会忽略这条规则。
+//
+// 改成**精确账本**：现状逐条钉死，新增一处开放 Record 就红。棘轮效力保留（不会再
+// 悄悄多出一个开放面），同时不把既有的动态载荷诬告成违规。
+
+interface OpenRecordSite {
+  readonly site: string
+  readonly why: string
+}
+
+/**
+ * public 入口里键为 `string` / `number` 的 `Record`。**逐条相等**——新增红、消失也红。
+ *
+ * `integration/public/events.ts` 那条值得单独说：同一个文件里 34 行用的是
+ * `Record<CodeHostEventType, …>`（穷尽），50 行却退回 `Record<string, …>`。
+ * 同文件内的这种不一致最可能是穷尽性在某次改动里掉了，是这批里唯一**值得改**的一处。
+ */
+const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
+  {
+    site: 'modules/event-center/public/types.ts: Record<string, string>',
+    why: 'triggerParameters —— 用户在触发器上自定义的参数袋，键集合按定义就是开放的。',
+  },
+  {
+    site: 'modules/execution-contract/public/commands.ts: Record<string, T>',
+    why: '泛型 merge 助手（patched / existing / 返回值三处同形），对任意 frontmatter 形状工作。',
+  },
+  {
+    site: 'modules/execution-contract/public/commands.ts: Record<string, unknown>',
+    why: 'frontmatterExtra —— agent.md frontmatter 的附加字段，任意 YAML，键集合无法闭合。',
+  },
+  {
+    site: 'modules/identity-access/public/types.ts: Record<string, unknown>',
+    why: '错误 details 包，随错误类型而变，闭合它等于把每种错误的字段集写进公共类型。',
+  },
+  {
+    site: 'modules/integration/public/participants.ts: Record<string, string>',
+    why: 'WorkStartTarget 的 digital-employee 分支 intake.target —— 外部系统（ISSUE / MR 等）带来的标识键值对，键由对端决定，无法在本仓闭合。',
+  },
+  {
+    site: 'modules/integration/public/events.ts: Record<string, { zh-CN, en-US }>',
+    why: '**本批唯一值得改的一处**：同文件 34 行已用 Record<CodeHostEventType, …> 穷尽，50 行退回 string 键，疑为穷尽性在某次改动里掉了。修法属 integration 的 owning RFC。',
+  },
+]
+
+function publicEntrypointUnits(): ReturnType<typeof backendUnits> {
+  return UNITS.filter((unit) => /\/modules\/[^/]+\/public\/[^/]+$/.test(unit.path))
+}
+
+/** 归一化一处 Record 的展示形态：`模块路径: Record<键, 值>`（值只留骨架，避免噪声）。 */
+function openRecordSites(): string[] {
+  const found = new Set<string>()
+  for (const unit of publicEntrypointUnits()) {
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isTypeReferenceNode(node) &&
+        ts.isIdentifier(node.typeName) &&
+        node.typeName.text === 'Record' &&
+        node.typeArguments !== undefined &&
+        node.typeArguments.length >= 1
+      ) {
+        const key = node.typeArguments[0]!
+        const open =
+          key.kind === ts.SyntaxKind.StringKeyword || key.kind === ts.SyntaxKind.NumberKeyword
+        if (open) {
+          const value = node.typeArguments[1]
+          const valueText =
+            value === undefined
+              ? '?'
+              : value.getText(unit.source).replace(/\s+/g, ' ').replace(/readonly /g, '')
+          const shape = /^\{/.test(valueText)
+            ? `{ ${[...valueText.matchAll(/'([^']+)'\s*:/g)].map((m) => m[1]).join(', ')} }`
+            : valueText
+          found.add(
+            `${unit.path.replace('packages/backend/src/', '')}: Record<${key.getText(unit.source)}, ${shape}>`,
+          )
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+  }
+  return [...found].sort()
+}
+
+describe('RFC-317 T25 —— public 入口的开放 Record 面精确入账', () => {
+  test('语料非空：public 入口文件确实扫到了', () => {
+    expect(publicEntrypointUnits().length).toBeGreaterThanOrEqual(20)
+  })
+
+  test('开放 Record 面与账本逐条相等（新增一处就红）', () => {
+    expect(
+      openRecordSites(),
+      'public 合同里多了一个键集合开放的 Record。开放面本身不必然是错——' +
+        '动态载荷（frontmatter / 用户参数 / 错误 details）就该开放——但它必须是一次' +
+        '**有记录的决定**：带上 why 进 OPEN_RECORD_SITES，或者把键收成穷尽联合',
+    ).toEqual(OPEN_RECORD_SITES.map((entry) => entry.site).sort())
+  })
+
+  test('每条开放 Record 都写清了为什么它的键集合无法闭合', () => {
+    const bad = OPEN_RECORD_SITES.filter((entry) => entry.why.trim().length < 20).map(
+      (entry) => entry.site,
+    )
+    expect(bad, 'why 必须说明这个键集合为什么开放，不接受空占位').toEqual([])
+  })
+
+  test('自证：穷尽键的 Record 不被误报（否则规则会逼人给动态载荷编假联合）', () => {
+    const unit = sourceUnit(
+      'packages/backend/src/modules/probe/public/types.ts',
+      "type K = 'a' | 'b'\nexport type M = Record<K, string>\nexport type N = Record<'x', number>\n",
+    )
+    const saved = UNITS.length
+    expect(saved).toBeGreaterThan(0)
+    // 直接对 fixture 跑同一份判据：穷尽键不该进集合
+    const found: string[] = []
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isTypeReferenceNode(node) &&
+        ts.isIdentifier(node.typeName) &&
+        node.typeName.text === 'Record' &&
+        node.typeArguments?.[0] !== undefined
+      ) {
+        const key = node.typeArguments[0]
+        if (key.kind === ts.SyntaxKind.StringKeyword || key.kind === ts.SyntaxKind.NumberKeyword) {
+          found.push(key.getText(unit.source))
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+    expect(found, '穷尽键的 Record 被误判成开放面').toEqual([])
   })
 })

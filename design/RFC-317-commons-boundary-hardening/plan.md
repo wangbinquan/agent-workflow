@@ -383,3 +383,26 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 2. **`bun test` 21 条全绿，门禁 `tsc` 红**。`edgeKey` 的参数写成 `Pick<BoundaryEdge, …>`，吃不下从 JSON 读出来的账本条目（`edgeKind` 那边是 `string`）；另有两处 `Record<string, number>` 索引在 `noUncheckedIndexedAccess` 下是 `number | undefined`。**运行时不做类型检查，这类错只有 `tsc` 抓得到**——教训写进了 `edgeKey` 的注释。
 
 **门禁归属**：首轮全量门禁 13 条后端失败 + 1 条前端失败。逐条核实**无一属于本批**——本批只动 2 个文件（清单 JSON + 新守卫）。后端 13 条是负载（抽 `rfc258-file-symbols` 隔离跑 12 pass / 0 fail；无争用重跑 **11932 pass / 0 fail**），且负载有我一份责任：杀掉上一轮门禁后立刻重跑。前端 1 条是 `responsibility-swimlane-auxiliary-cards.test.tsx`，该文件**正被并发 session 编辑**（有未提交改动），组件本身与远端一致。
+
+### B3-b（2026-08-23）—— T25：R12 解析语料扩面
+
+**扩面本身比预想小**：解析器早就会跟 `export * from` 链，唯一缺的是 `resolveUnit` 认不出 `@agent-workflow/shared`（模块里 72 处这样的 import）。补上它 + 把 `shared/src`、`backend/src/platform` 加进**解析**语料（subject 不变，各规则内部仍按 `moduleLocation` 只认 `modules/**`）+ `FORBIDDEN_TYPE_IMPORT` 补 `@/platform` `@/embed`。
+
+**扩面后浮出 9 条**，逐条查证后的处置**与 design 原文有两处偏离**（已记进 `design.md` R12 的偏离栏）：
+
+1. **8 条 `unsafe/open type TypeQuery` 是判据假阳性，不是违规**。shared 的 740 个导出类型别名里 **586 个**是 `z.infer<typeof …>`，全仓另有 **85 处** `(typeof CONST)[number]`、6 处 `keyof typeof`；而**裸 `typeof value`**（真正开放的形态）全仓只有 **2 处**且都不在 public 链上。不加豁免 ⇒ 规则与「shared 可解析」结构性冲突；把它们当债务入账 ⇒ 把用了 586 次的单一事实源写法记成债，污染账本含义。新增「确定性 typeof 派生」豁免，只认那三种形态，裸 `typeof` 一个不放。
+2. **`Record` 从「禁令」改为「精确账本」**。public 入口 13 处 `Record<…>`，4 处键是穷尽联合（正解），9 处 `Record<string, …>` 里多数**本就该开放**（任意 YAML frontmatter / 用户自定义 trigger 参数 / 错误 details 包 / 外部系统标识键值对 / 泛型 merge 助手）。硬禁 ≈ 89% 假阳性。**判据宽而掺水与判据窄而漏，坏处不对称；而「制造假阳性逼人绕过」是最坏的一种——它训练所有人学会忽略这条规则。** 账本里点名了唯一值得改的一处：`integration/public/events.ts` 同文件 34 行已用穷尽键、50 行却退回 `string` 键。
+
+**唯一真违规已入账**：`identity-access` 的 public 合同 `insertInitialUserAccessInTransaction` 把 `@/platform` 的 `TransactionScope` 摆进签名，两个 legacy 消费者（`auth/loginPolicy.ts`、`services/userIdentities.ts`）因此必须认识平台层持久化类型——public 合同不自洽。修法要给 identity-access 定义模块自有事务端口，属该 context 的架构决策，本批只入账不代改。这条让债务表 1 → 2，**触发了 B2-c 建的 `allowGrowth` 闸门**：涨账必须写具名声明。机制反过来约束了作者本人。
+
+**预算一字未动**。扩面后 god-surface **仍然通过**——design 担心的「解析不到导致预算失明」属实（fallback 成 1 片叶子），但那个 mega-DTO 实例被真正解析后依然在 24 片叶子内。如实记录，不夸大。
+
+#### 本批最重要的一次自我暴露：改动在写出来的当天就是**不可证伪**的
+
+T25 落地后跑两条变异——**两条都没被抓住**：①撤掉 `resolveUnit` 对 shared 的识别（退回扩面前的失明）；②把豁免放宽成「任何 typeof 都放行」。全部断言照绿。原因与 T26 撞到的那次同源：**真实语料证明不了它当前没有触及的性质**——今天没有一条公共合同里躺着裸 `typeof value`，叶子数即使被低估也仍在预算内。
+
+补三组 fixture（27 字段的 shared DTO 嵌进 public 合同 / 三种确定性派生 / 裸 typeof）后，**三个方向全部转红**：撤掉扩面红、豁免放宽红、豁免收得过窄红（fixture 与真实棘轮同时红）。
+
+**教训**：给扫描器扩面时，「扩面后仍然全绿」既可能是「真的没有新违规」，也可能是「扩的那部分根本没被任何断言用到」。两者同形。**扩面必须同批给出一条会因为扩面而变色的 fixture**，否则这次扩面从第一天起就可以被无痕撤回。
+
+**门禁归属**：backend 4 分片全过、frontend 过、typecheck / format / depcheck 过；lint 红一条——`BoundaryEdge` 在我把 `Pick<BoundaryEdge,…>` 换成结构化类型后成了死引用（`--max-warnings 0`，正是 CLAUDE.md 记的 RFC-140 教训）。已删。另有一条 typecheck 错在 `execution-contract-platform.test.ts`，该文件有并发 session 未提交的 17 行新增，不属本批。

@@ -267,6 +267,14 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
 - **副作用**：扩面后 god-surface 与 type-taint 会新增违规——**逐条修或逐条入账，不得调高预算**。
 - **关闭**：`G-05`。
 
+  > **落地偏离（T25，2026-08-23）——两处，均已实测佐证**：
+  >
+  > **① 「public entrypoint 禁非字面量键 `Record`」改为「精确入账」**。实测 public 入口共 13 处 `Record<…>`：4 处键是穷尽联合（正解），9 处是 `Record<string, …>`，而这 9 处里绝大多数**本就该开放**——frontmatter 附加字段（任意 YAML）、用户自定义 trigger 参数、错误 `details` 包、外部系统带来的标识键值对、泛型 merge 助手。下硬禁 ⇒ 约 89% 假阳性，逼着后来的人要么给动态载荷编一个假的键联合，要么往账本里塞一堆「不知道为什么是 string 键」的低信息条目。**判据宽而掺水与判据窄而漏，坏处不对称；而「制造假阳性逼人绕过」是最坏的一种——它训练所有人学会忽略这条规则。** 改成逐条精确相等的账本：棘轮效力保留（不会再悄悄多出一个开放面），同时不把既有动态载荷诬告成违规。账本里点名了唯一**值得改**的一处：`integration/public/events.ts` 同文件 34 行已用 `Record<CodeHostEventType, …>` 穷尽、50 行却退回 `string` 键，疑为穷尽性在某次改动里掉了。
+  >
+  > **② taint 规则新增「确定性 `typeof` 派生」豁免**。解析语料扩到 shared 后，taint 走查第一次能走进 shared，立刻报出 8 条 `TypeQuery`。查证：shared 的 740 个导出类型别名里 **586 个**是 `z.infer<typeof …>`，全仓另有 **85 处** `(typeof CONST)[number]`、6 处 `keyof typeof`；而**裸 `typeof value`**（真正开放的形态）全仓只有 **2 处**，且都不在 public 合同链上。不加豁免 ⇒ 规则与「shared 可解析」结构性冲突；把它们当债务入账 ⇒ 把用了 586 次的单一事实源写法记成债，污染账本含义。豁免只认三种确定性形态，裸 `typeof` 一个不放。
+  >
+  > **预算一字未动**（`maxTransitiveLeaves: 24` 等全部保持）。扩面后 god-surface **仍然通过**——即 design 担心的「解析不到导致预算失明」属实，但那个 mega-DTO 实例被真正解析后依然在预算内。唯一真违规（identity-access 的 public 合同把 `@/platform` 的 `TransactionScope` 摆进签名）已按 T16 的 `allowGrowth` 机制入账，涨账留下了具名记录。
+
 ## 5. 生产修复设计（52 条 P1/P2 按 owner 归组）
 
 只给形状裁决，逐条明细在 `findings.md`。

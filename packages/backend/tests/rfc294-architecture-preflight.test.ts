@@ -38,7 +38,44 @@ const FORBIDDEN_TYPE_NAME = new Set([
   'WeakSet',
 ])
 const FORBIDDEN_TYPE_IMPORT =
-  /^(?:@\/(?:auth|cli|config|db|mcp|routes|server|services|util|ws)(?:\/|$)|drizzle-orm(?:\/|$)|hono(?:\/|$)|node:(?:child_process|fs|path|process)(?:\/|$)|(?:fs|path|process)$)/
+  /^(?:@\/(?:auth|cli|config|db|embed|mcp|platform|routes|server|services|util|ws)(?:\/|$)|drizzle-orm(?:\/|$)|hono(?:\/|$)|node:(?:child_process|fs|path|process)(?:\/|$)|(?:fs|path|process)$)/
+
+/** zod 从 schema 推导类型的三个入口。 */
+const ZOD_INFERENCE_HELPERS = new Set(['infer', 'input', 'output'])
+
+/**
+ * 该 `typeof X` 是不是一次**确定性派生**，而不是把某个值的类型原样敞给消费者。
+ *
+ * 三种确定性形态（全部是本仓「常量/schema 与类型单一事实源」的标准写法）：
+ *   - `z.infer<typeof XSchema>` / `z.input` / `z.output`  —— shared 740 个导出类型里 586 个
+ *   - `(typeof CONST_ARRAY)[number]`                        —— 全仓 85 处
+ *   - `keyof typeof CONST_MAP`                              —— 全仓 6 处
+ *
+ * 真正开放的是**裸** `typeof value`（`export type RepositoryGit = typeof defaultRunGit`
+ * 这种：类型等于某个值恰好是什么，消费者在编译期说不出它的形状）。全仓只有 2 处，
+ * 且都不在 public 合同链上——所以这条豁免收得住，不是「为了让规则变绿」。
+ */
+function isDeterministicTypeQuery(node: ts.TypeQueryNode): boolean {
+  let current: ts.Node = node
+  // 括号在类型层是透明的：`(typeof A)[number]` 的 TypeQuery 外面裹着 ParenthesizedType
+  while (current.parent !== undefined && ts.isParenthesizedTypeNode(current.parent)) {
+    current = current.parent
+  }
+  const parent = current.parent
+  if (parent === undefined) return false
+
+  // ① z.infer<typeof X>
+  if (ts.isTypeReferenceNode(parent)) {
+    if (!(parent.typeArguments ?? []).some((argument) => argument === current)) return false
+    const name = parent.typeName
+    return ts.isQualifiedName(name) && ZOD_INFERENCE_HELPERS.has(name.right.text)
+  }
+  // ② (typeof A)[number] —— 只认被索引的那一侧；索引位上的 typeof 不算
+  if (ts.isIndexedAccessTypeNode(parent)) return parent.objectType === current
+  // ③ keyof typeof A
+  if (ts.isTypeOperatorNode(parent)) return parent.operator === ts.SyntaxKind.KeyOfKeyword
+  return false
+}
 
 interface SourceUnit {
   path: string
@@ -115,6 +152,39 @@ function sourceUnits(files: Record<string, string>): SourceUnit[] {
   return Object.entries(files)
     .map(([path, text]) => sourceUnit(path, text))
     .sort((left, right) => left.path.localeCompare(right.path))
+}
+
+const SHARED_PACKAGE = '@agent-workflow/shared'
+
+/**
+ * RFC-317 T25 —— **解析**语料：模块 + shared + backend/src/platform。
+ *
+ * subject 不变：所有规则的主体仍由 `moduleLocation(unit.path)` 派生，只认
+ * `modules/**`，所以把这两处加进来不会让 shared / platform 自己变成被审对象。
+ * 加它们**只为了让类型解析走得下去**——解析不到的类型会在 shapeStats 末尾 fallback
+ * 成一片叶子，让 god-surface 预算对跨包 DTO 完全失明。
+ */
+function typeResolutionCorpus(): SourceUnit[] {
+  return [
+    ...productionModuleUnits(),
+    ...unitsUnder(resolve(REPO_ROOT, 'packages', 'shared', 'src')),
+    ...unitsUnder(resolve(REPO_ROOT, 'packages', 'backend', 'src', 'platform')),
+  ]
+}
+
+function unitsUnder(root: string): SourceUnit[] {
+  const files: string[] = []
+  const visit = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = resolve(dir, entry.name)
+      if (entry.isDirectory()) visit(path)
+      else if (entry.isFile() && /\.[cm]?tsx?$/.test(entry.name)) files.push(path)
+    }
+  }
+  visit(root)
+  return files
+    .sort()
+    .map((path) => sourceUnit(portable(relative(REPO_ROOT, path)), readFileSync(path, 'utf8')))
 }
 
 function productionModuleUnits(): SourceUnit[] {
@@ -276,6 +346,14 @@ function resolveUnit(
   let candidate: string | null = null
   if (specifier.startsWith('@/')) {
     candidate = `packages/backend/src/${specifier.slice(2)}`
+  } else if (specifier === SHARED_PACKAGE) {
+    // RFC-317 T25 —— 认识 shared 的**裸包名**。此前解析不到它，于是每个来自 shared 的
+    // 类型都在 shapeStats 末尾 fallback 成 `transitiveLeaves: 1`：一个把三个 shared
+    // mega-DTO 塞进 payload 的 public 合同，在 24 片叶子的预算里只算 3 片。预算不是
+    // 被调高的，是**根本没看见**——比调高更隐蔽，因为账面上它一直是绿的。
+    candidate = 'packages/shared/src/index'
+  } else if (specifier.startsWith(`${SHARED_PACKAGE}/`)) {
+    candidate = `packages/shared/src/${specifier.slice(SHARED_PACKAGE.length + 1)}`
   } else if (specifier.startsWith('.')) {
     candidate = posix.normalize(posix.join(posix.dirname(fromPath), specifier))
   }
@@ -545,6 +623,19 @@ function publicSurfaceViolations(units: readonly SourceUnit[]): string[] {
     const bindings = bindingIndexes.get(unit.path) ?? new Map()
     const localDeclarations = declarationIndexes.get(unit.path) ?? new Map()
     const visitType = (node: ts.Node): void => {
+      // RFC-317 T25 —— **确定性派生**的 `typeof` 不算「开放类型」。
+      //
+      // 本规则禁的是**被擦除 / 无界**的类型穿过 public 合同：any / unknown / object /
+      // 函数类型 / mapped / index signature——它们让消费者拿到一个编译期说不出形状的东西。
+      // `typeof X` 一般确实属于这一类，但 `z.infer<typeof XSchema>` 不是：它的形状由
+      // schema 完全确定，且是本仓 schema 与类型的**单一事实源**写法。
+      //
+      // 这条豁免是被实测逼出来的：T25 把解析语料扩到 shared 之后，taint 走查第一次能
+      // 走进 shared，立刻报出 8 条 TypeQuery。查证发现 shared 的 740 个导出类型别名里
+      // **586 个**是 z.infer<typeof …>，裸 typeof **零个**——也就是说不加这条豁免，
+      // 规则与「shared 可解析」结构性冲突，而把它们当债务入账等于把用了 586 次的
+      // 标准写法记成债，污染账本的含义。
+      if (ts.isTypeQueryNode(node) && isDeterministicTypeQuery(node)) return
       if (
         node.kind === ts.SyntaxKind.AnyKeyword ||
         node.kind === ts.SyntaxKind.UnknownKeyword ||
@@ -1137,6 +1228,85 @@ const VALID_TARGET_FIXTURE = sourceUnits({
   `,
 })
 
+// RFC-317 T25 —— 扩面与豁免各自的正反 fixture。
+//
+// **为什么必须有这一节**：T25 落地后跑了两条变异，**两条都没被抓住**——
+//   ① 撤掉 `resolveUnit` 对 `@agent-workflow/shared` 的识别（退回扩面前的失明）；
+//   ② 把「确定性 typeof」豁免放宽成「任何 typeof 都不算 taint」。
+// 全部断言照绿。原因和 RFC-317 T26 撞到的那次一模一样：**真实语料证明不了它当前
+// 没有触及的性质**——今天没有一条公共合同里躺着裸 `typeof value`，也没有哪条断言
+// 会因为 shared 解析不到而变色（叶子数即使被低估，也仍在预算内）。
+// 于是这次扩面在被写出来的当天就是**不可证伪**的：任何人把它改回去，没有一条测试会红。
+// 下面两组 fixture 把这两个性质变成可断言的事实。
+
+const SHARED_RESOLUTION_FIXTURE = sourceUnits({
+  'packages/shared/src/index.ts': `
+    export * from './schemas/probe'
+  `,
+  'packages/shared/src/schemas/probe.ts': `
+    export type ProbeDto = {
+      readonly a1: string; readonly a2: string; readonly a3: string; readonly a4: string
+      readonly a5: string; readonly a6: string; readonly a7: string; readonly a8: string
+      readonly a9: string; readonly b1: string; readonly b2: string; readonly b3: string
+      readonly b4: string; readonly b5: string; readonly b6: string; readonly b7: string
+      readonly b8: string; readonly b9: string; readonly c1: string; readonly c2: string
+      readonly c3: string; readonly c4: string; readonly c5: string; readonly c6: string
+      readonly c7: string; readonly c8: string; readonly c9: string
+    }
+  `,
+  'packages/backend/src/modules/probe/public/participants.ts': `
+    import type { ProbeDto } from '@agent-workflow/shared'
+    export type ProbeParticipant = Readonly<{ payload: ProbeDto }>
+  `,
+})
+
+const DETERMINISTIC_TYPEOF_FIXTURE = sourceUnits({
+  'packages/backend/src/modules/probe/public/types.ts': `
+    import { z } from 'zod'
+    const ProbeSchema = z.object({ a: z.string() })
+    const PROBE_KINDS = ['a', 'b'] as const
+    const PROBE_MAP = { a: 1, b: 2 } as const
+    export type FromSchema = z.infer<typeof ProbeSchema>
+    export type FromArray = (typeof PROBE_KINDS)[number]
+    export type FromKeys = keyof typeof PROBE_MAP
+  `,
+})
+
+const BARE_TYPEOF_FIXTURE = sourceUnits({
+  'packages/backend/src/modules/probe/public/types.ts': `
+    declare const runGit: (argv: readonly string[]) => Promise<string>
+    export type RepositoryGit = typeof runGit
+  `,
+})
+
+describe('RFC-317 T25 —— 解析扩面与 typeof 豁免的正反 fixture', () => {
+  test('shared 的类型确实被解析并计入叶子数（撤掉扩面 ⇒ 这条红）', () => {
+    // 27 个字段的 shared DTO 嵌进 public 合同：解析得到 ⇒ 超出 24 片叶子的预算 ⇒ 报违规。
+    // 解析不到 ⇒ fallback 成 1 片叶子 ⇒ 一条违规都没有，与「合同很小」完全同形。
+    expect(
+      godSurfaceViolations(SHARED_RESOLUTION_FIXTURE),
+      'shared 的类型没有被解析到——预算对跨包 DTO 失明，这正是 T25 要修的',
+    ).toEqual(['modules/probe/public/participants.ts#ProbeParticipant: 27 transitive leaf fields'])
+  })
+
+  test('三种确定性 typeof 派生都不算 taint（豁免被撤掉 ⇒ 这条红）', () => {
+    expect(
+      publicSurfaceViolations(DETERMINISTIC_TYPEOF_FIXTURE),
+      'z.infer<typeof S> / (typeof A)[number] / keyof typeof A 是本仓「schema·常量与类型' +
+        '单一事实源」的标准写法（全仓 586 + 85 + 6 处），把它们判成开放类型会逼着后来的人' +
+        '给动态载荷编假联合',
+    ).toEqual([])
+  })
+
+  test('**裸** typeof value 仍然算 taint（豁免被放宽 ⇒ 这条红）', () => {
+    expect(
+      publicSurfaceViolations(BARE_TYPEOF_FIXTURE),
+      '裸 typeof 才是真正开放的形态：类型等于某个值恰好是什么，消费者在编译期说不出它的形状。' +
+        '豁免一旦放宽成「任何 typeof 都放行」，这条就会漏',
+    ).toEqual(['modules/probe/public/types.ts#RepositoryGit: unsafe/open type TypeQuery'])
+  })
+})
+
 describe('RFC-294 W0-R target architecture scanner contract', () => {
   test('accepts exact public edges, same-context internals, and the narrow required-SPI adapter lane', () => {
     expect(crossContextViolations(VALID_TARGET_FIXTURE)).toEqual([])
@@ -1257,11 +1427,13 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
 ]
 
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
+  'modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#insertInitialUserAccessInTransaction: forbidden type import @/platform/persistence/transactionScope#TransactionScope',
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
 ]
 
 describe('RFC-294 W0-R current modules ratchet', () => {
-  const modules = productionModuleUnits()
+  // subject 仍是 modules/**（各规则内部按 moduleLocation 过滤）；这里给的是**解析**语料。
+  const modules = typeResolutionCorpus()
 
   test('cross-context internal imports equal the reviewed, expiring pilot debt', () => {
     // Exact equality is intentional: an unknown edge and a removed/stale debt

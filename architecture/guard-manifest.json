@@ -109,7 +109,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 325
+      "lines": 490
     },
     {
       "id": "e2e-sqlite-fixture-lock-contention",
@@ -721,7 +721,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 1297
+      "lines": 1469
     },
     {
       "id": "rfc294-background-worker-boundary",
