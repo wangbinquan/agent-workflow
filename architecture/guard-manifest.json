@@ -160,6 +160,18 @@
       "lines": 490
     },
     {
+      "id": "rfc317-prompt-fencing-adoption",
+      "file": "packages/backend/tests/architecture/rfc317-prompt-fencing-adoption.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 500,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 179
+    },
+    {
       "id": "e2e-sqlite-fixture-lock-contention",
       "file": "packages/backend/tests/e2e-sqlite-fixture-lock-contention.test.ts",
       "runner": "bun",
