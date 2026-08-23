@@ -7,6 +7,7 @@
 // binding（§3.8：反向依赖会成启动死锁）。upload 的 claim/plan 生成归 PR-3，
 // 此处冻结每项的目标路径形状与唯一性并入 contentDigest。
 
+import type { NotPromise } from '@/db/txSync'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
@@ -142,7 +143,17 @@ export interface UploadBaselineContext {
 export interface UploadAdmissionDeps {
   readonly sessions: UploadSessionStore
   /** launch 事务边界（生产 = drizzle db.transaction 嵌套安全；测试可传直调）。 */
-  readonly transact: <T>(fn: () => T) => T
+  /**
+   * RFC-317 T37（CC-04）—— 回调的返回类型套 `NotPromise`。
+   *
+   * 这是一个**可复用的事务端口**：不加约束时 `T = Promise<X>` 完全通得过类型检查，
+   * 而它的实现直接调 drizzle 的 `db.transaction`，于是 `dbTxSync` 那两道防线
+   * （类型层塌成 never + 运行期 thenable 抛错）一道都不生效。bun:sqlite 下 async 回调
+   * 在第一个 await 处就 COMMIT，后续语句全在 autocommit，之后再抛什么都回滚不了——
+   * RFC-052 的 approve 半提交事故就是这一类。今天的调用方都是同步的，所以这是**潜伏**
+   * 而不是活跃缺陷；加上约束后它连写都写不出来。
+   */
+  readonly transact: <T>(fn: () => NotPromise<T>) => T
   readonly resolveBaseline: (repositoryId: string) => Promise<UploadBaselineContext | null>
   readonly persistPlan: (plan: PersistUploadPlanInput) => void
 }
@@ -653,7 +664,10 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
   // launch 事务：mission 行 → claim → plan 落库 → source 行，任何失败整体回滚
   // （零 mission、零 upload 消费）。撞 idempotency 赢家用哨兵回滚后重放返回。
   const ua = deps.uploadAdmission
-  const runTx: <T>(fn: () => T) => T = ua !== undefined ? ua.transact : (fn) => fn()
+  // 直调分支：`NotPromise<T>` 与 `T` 在同步回调上等价，这里的断言只是把泛型
+  // 参数的位置对齐，不放宽任何约束（异步回调在调用点就已经塌成 never）。
+  const runTx: <T>(fn: () => NotPromise<T>) => T =
+    ua !== undefined ? ua.transact : <T>(fn: () => NotPromise<T>): T => fn() as T
   try {
     const mission = runTx(() => {
       const result = deps.store.createMission(row)

@@ -13,6 +13,7 @@
 // intent 与 decision 同事务落库、idempotency key 唯一、崩溃后可重扫，单独的
 // outbox 表只会引入两行漂移的可能。外部执行永远发生在事务之外。
 
+import type { NotPromise } from '@/db/txSync'
 import type { TransitionFence, MissionStatus } from '../../domain/mission'
 import type { DeferredWakeRow } from '../../domain/deferredWake'
 
@@ -343,5 +344,15 @@ export interface MissionStore {
   obsoleteFeedbackForOtherHeads(missionId: string, currentHeadSha: string, now: number): number
 
   /** decision + action/effect intents 的同事务原语；回调内禁止任何外部 IO。 */
-  inTx<T>(fn: () => T): T
+  /**
+   * RFC-317 T37（CC-04）—— 回调的返回类型套 `NotPromise`。
+   *
+   * 这是一个**可复用的事务端口**：不加约束时 `T = Promise<X>` 完全通得过类型检查，
+   * 而它的实现直接调 drizzle 的 `db.transaction`，于是 `dbTxSync` 那两道防线
+   * （类型层塌成 never + 运行期 thenable 抛错）一道都不生效。bun:sqlite 下 async 回调
+   * 在第一个 await 处就 COMMIT，后续语句全在 autocommit，之后再抛什么都回滚不了——
+   * RFC-052 的 approve 半提交事故就是这一类。今天的调用方都是同步的，所以这是**潜伏**
+   * 而不是活跃缺陷；加上约束后它连写都写不出来。
+   */
+  inTx<T>(fn: () => NotPromise<T>): T
 }
