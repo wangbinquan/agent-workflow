@@ -31,155 +31,155 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 
 ### B0 — 采数与账本初版（零生产改动）
 
-| id | 任务 | 产出 |
-| --- | --- | --- |
-| T1 | 在干净 SHA 上复算全部计数：R1 的 inbound 边、R2 的 outbound 边（按 context / 按层）、R4 的逐文件业务字面量基数、各守卫的语料下界、既有账本条数 | 一份可复跑的采数脚本 + 数字 |
-| T2 | 落 `architecture/commons-manifest.json`：公共内核清单（含完整性批判点出的 12 个本轮才发现无人审计的内核） | 清单 v1 |
-| T3 | 落 `architecture/commons-debt.json`：R1 94 条 + R2 22 条 + 79 条 P3，每条带 `why` / `removeAfterWave` / `findingId` | 账本 v1 |
-| T4 | 落 `architecture/guard-manifest.json`：**116 个**守卫文件逐条登记 + 与磁盘两向钉死（`minCorpusFiles` / R11 fixture 元数据由 B2 补齐） | 守卫清单 v1 |
+| id  | 任务                                                                                                                                           | 产出                        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| T1  | 在干净 SHA 上复算全部计数：R1 的 inbound 边、R2 的 outbound 边（按 context / 按层）、R4 的逐文件业务字面量基数、各守卫的语料下界、既有账本条数 | 一份可复跑的采数脚本 + 数字 |
+| T2  | 落 `architecture/commons-manifest.json`：公共内核清单（含完整性批判点出的 12 个本轮才发现无人审计的内核）                                      | 清单 v1                     |
+| T3  | 落 `architecture/commons-debt.json`：R1 94 条 + R2 22 条 + 79 条 P3，每条带 `why` / `removeAfterWave` / `findingId`                            | 账本 v1                     |
+| T4  | 落 `architecture/guard-manifest.json`：**116 个**守卫文件逐条登记 + 与磁盘两向钉死（`minCorpusFiles` / R11 fixture 元数据由 B2 补齐）          | 守卫清单 v1                 |
 
 **退出门**：三份 JSON 落地且被至少一条测试读到；`bun run gate:local` 绿。
 
 ### B1 — P1 安全与数据修复（最紧急）
 
-| id | 任务 | finding | 能力影响 |
-| --- | --- | --- | --- |
-| T5 | `routes/developmentConfig.ts` 五类资源的写路径由 `requireVisible` 改为 `requireResourceOwner`；读路径不动 | ACL-01 | **C1** |
-| T6 | 新守卫：RouteMeta 含某 ACL 资源 `:update`/`:delete`/`:archive` 点的路由，其 handler 传递闭包必须命中 `requireResourceOwner`，否则入账 | ACL-01 | — |
-| T7 | 行为用例：被授予 view 的**非 owner** 发 PUT / publish / archive ⇒ 403 **且零写入**（durable 与广播均为零） | ACL-01 | — |
-| T8 | `employee_definitions` 立为**第 13 类 ACL 资源**（D2(a)）：进 `ACL_RESOURCE_TYPES` / `ACL_TABLES`、列表 `filterVisibleRows`、详情 `canView→404` 同形、写门 `requireResourceOwner`、挂 `/acl` 端点、创建走统一默认三元组。存量行**不回填**；迁移只把 `owner_user_id IS NULL` 的历史孤儿行显式置 `visibility='public'` | ACL-02 | **C2** |
-| T9 | 新守卫（schema 反射）：任何同时声明 `owner_user_id` 与 `visibility` 的表必须是 `AclResourceType`，否则入显式收缩账本 | ACL-02 | — |
-| T9b | ACL 端点入网守卫由字符串正则改为**运行时注册表枚举**：`mountAclEndpoints` 追加导出注册表，起真 app 后断言 `registeredAclMounts` = `ACL_RESOURCE_TYPES` = 矩阵 `CASES`（今天正则只命中 7/12 类） | ACL-03 | — |
-| T10 | R8 级联闭包 helper `cascadeClosure(schema, roots)`；归档对账改闭包版；`review_comments` 进 `ARCHIVED_TABLES`（或显式豁免并写清理由） | CC-01 | **C6** |
-| T11 | R8 的孙表 fixture：合成两跳级联表 ⇒ 闭包版红、单跳版绿 | CC-01 | — |
+| id  | 任务                                                                                                                                                                                                                                                                                                                 | finding | 能力影响 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
+| T5  | `routes/developmentConfig.ts` 五类资源的写路径由 `requireVisible` 改为 `requireResourceOwner`；读路径不动                                                                                                                                                                                                            | ACL-01  | **C1**   |
+| T6  | 新守卫：RouteMeta 含某 ACL 资源 `:update`/`:delete`/`:archive` 点的路由，其 handler 传递闭包必须命中 `requireResourceOwner`，否则入账                                                                                                                                                                                | ACL-01  | —        |
+| T7  | 行为用例：被授予 view 的**非 owner** 发 PUT / publish / archive ⇒ 403 **且零写入**（durable 与广播均为零）                                                                                                                                                                                                           | ACL-01  | —        |
+| T8  | `employee_definitions` 立为**第 13 类 ACL 资源**（D2(a)）：进 `ACL_RESOURCE_TYPES` / `ACL_TABLES`、列表 `filterVisibleRows`、详情 `canView→404` 同形、写门 `requireResourceOwner`、挂 `/acl` 端点、创建走统一默认三元组。存量行**不回填**；迁移只把 `owner_user_id IS NULL` 的历史孤儿行显式置 `visibility='public'` | ACL-02  | **C2**   |
+| T9  | 新守卫（schema 反射）：任何同时声明 `owner_user_id` 与 `visibility` 的表必须是 `AclResourceType`，否则入显式收缩账本                                                                                                                                                                                                 | ACL-02  | —        |
+| T9b | ACL 端点入网守卫由字符串正则改为**运行时注册表枚举**：`mountAclEndpoints` 追加导出注册表，起真 app 后断言 `registeredAclMounts` = `ACL_RESOURCE_TYPES` = 矩阵 `CASES`（今天正则只命中 7/12 类）                                                                                                                      | ACL-03  | —        |
+| T10 | R8 级联闭包 helper `cascadeClosure(schema, roots)`；归档对账改闭包版；`review_comments` 进 `ARCHIVED_TABLES`（或显式豁免并写清理由）                                                                                                                                                                                 | CC-01   | **C6**   |
+| T11 | R8 的孙表 fixture：合成两跳级联表 ⇒ 闭包版红、单跳版绿                                                                                                                                                                                                                                                               | CC-01   | —        |
 
 **退出门**：三条 P1 各有红→绿对且做过变异复跑；C1/C2/C6 的拒绝分支各有用例；门禁 + hosted CI 全绿。
 
 ### B2 — 守卫的守卫与账本高水位（零生产改动）
 
-| id | 任务 | finding |
-| --- | --- | --- |
-| T12 | `architecture-guard-manifest.test.ts`：守卫文件两向钉死（删/改名 ⇒ 红） | CC-07 |
-| T13 | 每个源码扫描型守卫导出扫描文件数，manifest 断言 `>= minCorpusFiles` | CC-07 / dev-gotchas |
-| T14 | 守卫导出 `__mutationFixtures`，manifest 逐条喂给同一 matcher 并断言转红；fixture 一律内存字符串 | G-07 |
-| T15 | 按 D7 回填既有 16 个无 fixture 机制 | G-07 |
-| T16 | R10 高水位：`KNOWN_VIOLATIONS` / spawn-site / ux-source-ratchets ×3 / rfc143 kind-discrimination / `LEGACY_MIGRATION_HASHES` / rfc294 两条 debt list / `commons-debt.json` 各加 `LEDGER_BASELINE` | CC-06 / CC-03 |
-| T17 | 「基线只降」测试（读 `git show HEAD~1:<file>`；无 git 环境显式 skip 并打印原因，不假绿） | CC-06 |
-| T18 | `rfc217` G5：`<=` → `===`、删 `Infinity` 分支（当场收回 3 个免费槽位） | G-04 |
-| T19 | `rfc143` allowlist 加 stale 检测（当场清掉两条已死条目） | RT-02 |
-| T20 | `depcheck-gate` 加元断言：cruiser 规则注释声称「已入账」⇒ 账本必须有对应条目 | G-11 |
-| T21 | R11 自变异：改一条 `mustReport: true` fixture 为合法源码 ⇒ manifest 必须红 | — |
+| id  | 任务                                                                                                                                                                                              | finding             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| T12 | `architecture-guard-manifest.test.ts`：守卫文件两向钉死（删/改名 ⇒ 红）                                                                                                                           | CC-07               |
+| T13 | 每个源码扫描型守卫导出扫描文件数，manifest 断言 `>= minCorpusFiles`                                                                                                                               | CC-07 / dev-gotchas |
+| T14 | 守卫导出 `__mutationFixtures`，manifest 逐条喂给同一 matcher 并断言转红；fixture 一律内存字符串                                                                                                   | G-07                |
+| T15 | 按 D7 回填既有 16 个无 fixture 机制                                                                                                                                                               | G-07                |
+| T16 | R10 高水位：`KNOWN_VIOLATIONS` / spawn-site / ux-source-ratchets ×3 / rfc143 kind-discrimination / `LEGACY_MIGRATION_HASHES` / rfc294 两条 debt list / `commons-debt.json` 各加 `LEDGER_BASELINE` | CC-06 / CC-03       |
+| T17 | 「基线只降」测试（读 `git show HEAD~1:<file>`；无 git 环境显式 skip 并打印原因，不假绿）                                                                                                          | CC-06               |
+| T18 | `rfc217` G5：`<=` → `===`、删 `Infinity` 分支（当场收回 3 个免费槽位）                                                                                                                            | G-04                |
+| T19 | `rfc143` allowlist 加 stale 检测（当场清掉两条已死条目）                                                                                                                                          | RT-02               |
+| T20 | `depcheck-gate` 加元断言：cruiser 规则注释声称「已入账」⇒ 账本必须有对应条目                                                                                                                      | G-11                |
+| T21 | R11 自变异：改一条 `mustReport: true` fixture 为合法源码 ⇒ manifest 必须红                                                                                                                        | —                   |
 
 **退出门**：manifest 覆盖全部守卫；每条守卫的变异 fixture 跑过并转红；`LEDGER_BASELINE` 自变异红。
 
 ### B3 — 边界 scanner 扩面（零生产改动）
 
-| id | 任务 | finding |
-| --- | --- | --- |
-| T22 | R1 inbound 规则落地（census 已备好 `inboundBoundaryEdges`），**94 条边** `toEqual` 精确入账 + 正反 fixture | G-01 |
-| T23 | R2 outbound 规则落地，**22 条边**入账（全部在 application 层，标最短 `removeAfterWave`） | G-02 |
-| T24 | R3 模块形状：subject 由 `readdirSync(MODULES_ROOT)` 派生；顶层目录集 / 层内矩阵 / composition 纯净 / public 非空；目录缺失**抛错而非返回空** | G-03 / G-10 / CC-05 / CC-11 |
-| T25 | R12：解析语料扩到 `shared/src` + `backend/src/platform`；`FORBIDDEN_TYPE_IMPORT` 补 `@/platform` `@/embed`；public entrypoint 禁非字面量键 `Record`；扩面后新增违规逐条修或入账（**不得调高预算**） | G-05 |
-| T26 | R1–R3、R12 各自的正反 fixture | — |
+| id  | 任务                                                                                                                                                                                                | finding                     |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| T22 | R1 inbound 规则落地（census 已备好 `inboundBoundaryEdges`），**94 条边** `toEqual` 精确入账 + 正反 fixture                                                                                          | G-01                        |
+| T23 | R2 outbound 规则落地，**22 条边**入账（全部在 application 层，标最短 `removeAfterWave`）                                                                                                            | G-02                        |
+| T24 | R3 模块形状：subject 由 `readdirSync(MODULES_ROOT)` 派生；顶层目录集 / 层内矩阵 / composition 纯净 / public 非空；目录缺失**抛错而非返回空**                                                        | G-03 / G-10 / CC-05 / CC-11 |
+| T25 | R12：解析语料扩到 `shared/src` + `backend/src/platform`；`FORBIDDEN_TYPE_IMPORT` 补 `@/platform` `@/embed`；public entrypoint 禁非字面量键 `Record`；扩面后新增违规逐条修或入账（**不得调高预算**） | G-05                        |
+| T26 | R1–R3、R12 各自的正反 fixture                                                                                                                                                                       | —                           |
 
 **退出门**：四条规则各带正反 fixture；债务账本与实测逐条相等（新增红、销账不改也红）。
 
 ### B4 — R4 业务身份字面量预算 + 相关 P2
 
-| id | 任务 | finding |
-| --- | --- | --- |
-| T27 | R4 规则：从各注册表**派生**字面量集（不手抄）；匹配 `BinaryExpression` / `CaseClause` / `includes` / `startsWith`；`toBe` 精确断言；断言消息给出正确形状指引。**D4：`core: true` 内核预算直接为 0**，其余按实测钉住 | G-04 / G-08 |
-| T28 | `TerminalWorkspacePrunePolicy` 改返回 `{prune, cause}`；`lifecycle.ts` 内 webhook 选列与 `'webhook-terminal'` 字面量清零 | LC-04 |
-| T29 | `routes/resourceAcl.ts` 两条 `cfg.type ===` 广播分支移进调用方 `afterUpdate` | ACL-04 |
-| T30 | `event-center` 的 `development-missions:launch` 改由 composition 注入 + `Record<TargetKind, LaunchPermissionRef\|null>` 穷尽表 | DE-04 |
-| T31 | `workspace-boundary-` 前缀握手改闭合联合 `errorClass`；`'platform'` 魔法 slot 改闭合联合/共享常量 | DE-03 / DE-05 |
-| T32 | `genericTypeLiteralBan` 从单词升级为「派生禁用词集 + 精确 allowlist」 | DE-07 |
-| T33 | `rfc282-single-implementation-lock` 的 `services/runtime/` 整目录豁免收窄为 `opencode/` + `claudeCode/`；共享层重新入扫描，命中逐条修或入账 | RT-03 |
+| id  | 任务                                                                                                                                                                                                                | finding       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| T27 | R4 规则：从各注册表**派生**字面量集（不手抄）；匹配 `BinaryExpression` / `CaseClause` / `includes` / `startsWith`；`toBe` 精确断言；断言消息给出正确形状指引。**D4：`core: true` 内核预算直接为 0**，其余按实测钉住 | G-04 / G-08   |
+| T28 | `TerminalWorkspacePrunePolicy` 改返回 `{prune, cause}`；`lifecycle.ts` 内 webhook 选列与 `'webhook-terminal'` 字面量清零                                                                                            | LC-04         |
+| T29 | `routes/resourceAcl.ts` 两条 `cfg.type ===` 广播分支移进调用方 `afterUpdate`                                                                                                                                        | ACL-04        |
+| T30 | `event-center` 的 `development-missions:launch` 改由 composition 注入 + `Record<TargetKind, LaunchPermissionRef\|null>` 穷尽表                                                                                      | DE-04         |
+| T31 | `workspace-boundary-` 前缀握手改闭合联合 `errorClass`；`'platform'` 魔法 slot 改闭合联合/共享常量                                                                                                                   | DE-03 / DE-05 |
+| T32 | `genericTypeLiteralBan` 从单词升级为「派生禁用词集 + 精确 allowlist」                                                                                                                                               | DE-07         |
+| T33 | `rfc282-single-implementation-lock` 的 `services/runtime/` 整目录豁免收窄为 `opencode/` + `claudeCode/`；共享层重新入扫描，命中逐条修或入账                                                                         | RT-03         |
 
 ### B5 — R7 能力站点治理 + 执行/进程 P2
 
-| id | 任务 | finding | 能力影响 |
-| --- | --- | --- | --- |
-| T34 | R7：spawn / fs-write / transaction 三类站点 allowlist 值加 `governance`，非 exempt 条目须通过 AST 治理断言 | EK-01 / CC-08 / CC-04 | — |
-| T35 | 两个 RFC-310 runner 接入受管进程（或补 `detached` + `killProcessTree` + 有界读） | EK-01 | — |
-| T36 | `spawnVersionProbe` 的 `timeoutMs` 改必填，删无 timeout 模式 | EK-02 | **C4** |
-| T37 | `db/txSync.ts` 导出 `NotPromise`；两个事务端口签名加约束；S-10 词法禁令升级为站点账本 | CC-04 | — |
-| T38 | 导出唯一 `repoRelativePathSchema`，两处写侧 `z.string().min(1)` 改 import | CC-08 | — |
-| T39 | `memoryInject` 的 `envelopeNonce` 去默认值，改必传判别式 | CC-13 | — |
-| T40 | `development-automation` 第二套 prompt 围栏删除，改用 `shared/promptFencing`；补「含 prompt 结构字面量的文件必须 import 共享围栏」全域棘轮 + 对抗 payload fixture 表 | CC-02 | — |
+| id  | 任务                                                                                                                                                                 | finding               | 能力影响 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | -------- |
+| T34 | R7：spawn / fs-write / transaction 三类站点 allowlist 值加 `governance`，非 exempt 条目须通过 AST 治理断言                                                           | EK-01 / CC-08 / CC-04 | —        |
+| T35 | 两个 RFC-310 runner 接入受管进程（或补 `detached` + `killProcessTree` + 有界读）                                                                                     | EK-01                 | —        |
+| T36 | `spawnVersionProbe` 的 `timeoutMs` 改必填，删无 timeout 模式                                                                                                         | EK-02                 | **C4**   |
+| T37 | `db/txSync.ts` 导出 `NotPromise`；两个事务端口签名加约束；S-10 词法禁令升级为站点账本                                                                                | CC-04                 | —        |
+| T38 | 导出唯一 `repoRelativePathSchema`，两处写侧 `z.string().min(1)` 改 import                                                                                            | CC-08                 | —        |
+| T39 | `memoryInject` 的 `envelopeNonce` 去默认值，改必传判别式                                                                                                             | CC-13                 | —        |
+| T40 | `development-automation` 第二套 prompt 围栏删除，改用 `shared/promptFencing`；补「含 prompt 结构字面量的文件必须 import 共享围栏」全域棘轮 + 对抗 payload fixture 表 | CC-02                 | —        |
 
 ### B6 — 表归属 / 注册表反向完备 / 数字员工 P2
 
-| id | 任务 | finding |
-| --- | --- | --- |
-| T41 | R5 表归属规则；`DE-01` / `DE-02` 两条互反的私表越界各换 public query port；`ws/registry.ts` 的 raw SQL 读改走 identity-access 既有 port + 补 `no-transport-to-db` dep 规则 | DE-01 / DE-02 / TP-03 |
-| T42 | R6 共享 helper `assertEveryRegistryKeyHasAProductionConsumer`，逐注册表套用 | G-09 |
-| T43 | 按 R6 结果处置：`REF_DOMAIN_POLICIES` / `EXPORT_CALL_POLICY` 零消费者、`isProcess` 假维度、`code-round` 死行、`INVARIANT_RULES`/`STUCK_RULES` 非穷尽 | CC-10 / NK-04 / NK-11 / CC-09 |
-| T44 | `terminalKind` 定为闭合联合 + route 层校验 + 三份分类表改穷尽 `Record` | DE-06 |
-| T45 | 删 `task-execution` 手抄的 `implementationSchema`，改 import `execution-contract/public/types` | DE-08 |
-| T46 | `LEGACY_MIGRATION_HASHES` 测试改 import 生产常量 + 精确 8 项账本 + 每项 `why` | CC-03 |
+| id  | 任务                                                                                                                                                                       | finding                       |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| T41 | R5 表归属规则；`DE-01` / `DE-02` 两条互反的私表越界各换 public query port；`ws/registry.ts` 的 raw SQL 读改走 identity-access 既有 port + 补 `no-transport-to-db` dep 规则 | DE-01 / DE-02 / TP-03         |
+| T42 | R6 共享 helper `assertEveryRegistryKeyHasAProductionConsumer`，逐注册表套用                                                                                                | G-09                          |
+| T43 | 按 R6 结果处置：`REF_DOMAIN_POLICIES` / `EXPORT_CALL_POLICY` 零消费者、`isProcess` 假维度、`code-round` 死行、`INVARIANT_RULES`/`STUCK_RULES` 非穷尽                       | CC-10 / NK-04 / NK-11 / CC-09 |
+| T44 | `terminalKind` 定为闭合联合 + route 层校验 + 三份分类表改穷尽 `Record`                                                                                                     | DE-06                         |
+| T45 | 删 `task-execution` 手抄的 `implementationSchema`，改 import `execution-contract/public/types`                                                                             | DE-08                         |
+| T46 | `LEGACY_MIGRATION_HASHES` 测试改 import 生产常量 + 精确 8 项账本 + 每项 `why`                                                                                              | CC-03                         |
 
 ### B7 — 生命周期公共层（**串行，独占 `lifecycle.ts` / `task.ts`**）
 
-| id | 任务 | finding |
-| --- | --- | --- |
-| T47 | `allowedFrom` ⊆ 转移表的静态断言；越界站点逐条改对或入账 | LC-01 |
-| T48 | `lifecycle-grep-guard` 的注释标记从「授权」降级为「文档」，改 s14 式逐文件精确计数 allowlist | LC-02 |
-| T49 | `allowTerminal` 21 处逐条入账（只锁数量不改语义）；修正 `lifecycle.ts:18` 的**不存在的** ESLint 规则名与「5 个持有者」表述 | LC-03 / LC-07 |
-| T50 | 抽 `taskWorkspacePhase(row)`，三处 repo-prep 谓词改 import | LC-05 |
-| T51 | 从转移表派生 `CANCELABLE_TASK_STATUSES` / `RECOVERABLE_TASK_STATUSES`，六处手抄枚举 + 前端手写终态析取改 import；补「不得再手抄」棘轮 | LC-06 |
+| id  | 任务                                                                                                                                  | finding       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| T47 | `allowedFrom` ⊆ 转移表的静态断言；越界站点逐条改对或入账                                                                              | LC-01         |
+| T48 | `lifecycle-grep-guard` 的注释标记从「授权」降级为「文档」，改 s14 式逐文件精确计数 allowlist                                          | LC-02         |
+| T49 | `allowTerminal` 21 处逐条入账（只锁数量不改语义）；修正 `lifecycle.ts:18` 的**不存在的** ESLint 规则名与「5 个持有者」表述            | LC-03 / LC-07 |
+| T50 | 抽 `taskWorkspacePhase(row)`，三处 repo-prep 谓词改 import                                                                            | LC-05         |
+| T51 | 从转移表派生 `CANCELABLE_TASK_STATUSES` / `RECOVERABLE_TASK_STATUSES`，六处手抄枚举 + 前端手写终态析取改 import；补「不得再手抄」棘轮 | LC-06         |
 
 ### B8 — transport / platform
 
-| id | 任务 | finding | 能力影响 |
-| --- | --- | --- | --- |
-| T52 | 契约覆盖扫描器由正则改为运行时预言（`createApp` 后比对 `allRouteMeta()`） | TP-01 | — |
-| T53 | 冻结 `EXEMPT_MOUNTS`；`/api/*` 的 ALL 挂载必须入账 | TP-02 | **C7** |
-| T54 | `bind` 改「已绑定即抛」；`mountApiRoutes` 里 7 处 `compose*` 提到 `createApp` | TP-04 | — |
-| T55 | 权限点域归属断言；四条 `/api/digital-employee*` 引用 `development-missions:*` 按 D5 入账 | TP-05 | — |
-| T56 | WS 通道三处手写样本数组改为从 `WS_CHANNELS` 派生 | TP-06 | — |
+| id  | 任务                                                                                     | finding | 能力影响 |
+| --- | ---------------------------------------------------------------------------------------- | ------- | -------- |
+| T52 | 契约覆盖扫描器由正则改为运行时预言（`createApp` 后比对 `allRouteMeta()`）                | TP-01   | —        |
+| T53 | 冻结 `EXEMPT_MOUNTS`；`/api/*` 的 ALL 挂载必须入账                                       | TP-02   | **C7**   |
+| T54 | `bind` 改「已绑定即抛」；`mountApiRoutes` 里 7 处 `compose*` 提到 `createApp`            | TP-04   | —        |
+| T55 | 权限点域归属断言；四条 `/api/digital-employee*` 引用 `development-missions:*` 按 D5 入账 | TP-05   | —        |
+| T56 | WS 通道三处手写样本数组改为从 `WS_CHANNELS` 派生                                         | TP-06   | —        |
 
 ### B9 — shared 注册表
 
-| id | 任务 | finding | 能力影响 |
-| --- | --- | --- | --- |
-| T57 | `list<T>` 的 codec 选择下沉到 item handler；registry 级 round-trip 属性测试 | NK-01 | **C5** |
-| T58 | `promotedSourceForWrapper` 改 `satisfies Record<WrapperKind, Promoter>`；失败结果 `wrapperKind` 改 `NodeKind \| null` | NK-02 | — |
-| T59 | `rfc147-system-channel-ports` roots 补 frontend；两处命中改 import 常量 | NK-03 | — |
+| id  | 任务                                                                                                                  | finding | 能力影响 |
+| --- | --------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
+| T57 | `list<T>` 的 codec 选择下沉到 item handler；registry 级 round-trip 属性测试                                           | NK-01   | **C5**   |
+| T58 | `promotedSourceForWrapper` 改 `satisfies Record<WrapperKind, Promoter>`；失败结果 `wrapperKind` 改 `NodeKind \| null` | NK-02   | —        |
+| T59 | `rfc147-system-channel-ports` roots 补 frontend；两处命中改 import 常量                                               | NK-03   | —        |
 
 ### B10 — 前端
 
-| id | 任务 | finding | 能力影响 |
-| --- | --- | --- | --- |
-| T60 | R9.1/R9.2：原生 `<select>` / `__overlay` 类 / `segmented` / `role=radiogroup\|tablist` 的全域 AST 规则 | G-06 | — |
-| T61 | R9.3 死 class 全域不变量（替换 `rfc286-f1` 的硬编码三名单）；五个死 class 家族逐条修 | FE-02 | **C8** |
-| T62 | R9.4：`styles.css` 中公共 class 选择器不得被特性名限定（今天 4 处） | FE-* | — |
-| T63 | `JoinModeField` 改用 `<Segmented>` | FE-01 | — |
-| T64 | 既有四个「迁移白名单」测试各加 stale 断言 | G-06 | — |
-| T65 | 视觉基线：若动到已有 scene，按仓规「首次 hosted run 故意红 → 人工审 PNG → 只提交被接受的 Linux 基线」 | — | — |
+| id  | 任务                                                                                                   | finding | 能力影响 |
+| --- | ------------------------------------------------------------------------------------------------------ | ------- | -------- |
+| T60 | R9.1/R9.2：原生 `<select>` / `__overlay` 类 / `segmented` / `role=radiogroup\|tablist` 的全域 AST 规则 | G-06    | —        |
+| T61 | R9.3 死 class 全域不变量（替换 `rfc286-f1` 的硬编码三名单）；五个死 class 家族逐条修                   | FE-02   | **C8**   |
+| T62 | R9.4：`styles.css` 中公共 class 选择器不得被特性名限定（今天 4 处）                                    | FE-\*   | —        |
+| T63 | `JoinModeField` 改用 `<Segmented>`                                                                     | FE-01   | —        |
+| T64 | 既有四个「迁移白名单」测试各加 stale 断言                                                              | G-06    | —        |
+| T65 | 视觉基线：若动到已有 scene，按仓规「首次 hosted run 故意红 → 人工审 PNG → 只提交被接受的 Linux 基线」  | —       | —        |
 
 ### B11 — 收口
 
-| id | 任务 |
-| --- | --- |
-| T66 | 15 条 family + 4 条 critic 的 stale 断言逐条改对（含 `resourceAcl.ts` 的「六类资源」表述、`ref/resolution.ts:87` 的单一事实源声明、`depcheck.ts:28-30` 的「只能缩不能涨」、`system-commons-unification-audit-2026-08-12.md` 的三处过时计数与前端行） |
-| T67 | 79 条 P3 入账复核：`findings.md` 的 gid 与 `commons-debt.json` 条目一一对应 |
-| T68 | `design/plan.md` RFC 索引登记 RFC-317（状态四选一打头）；`STATE.md` 顶部「进行中 RFC」→ 完工后移入已完成表 |
-| T69 | `docs/dev-gotchas.md` 沉淀通用教训：①「守卫只覆盖自己诞生的那一块」的系统性自检定式（写完任一守卫先问「起点面全吗？终点面全吗？subject 是硬编码还是派生？」）；②`<=` 型棘轮会留下可复用的松弛槽位，快照降下去不销账等于白送分支额度；③ 单跳 schema 反射守卫看不见多跳级联；④ 默认参数会让安全语义变成 opt-in，且对导入图 / AST cast 禁令 / 源码文本三类扫描**全部隐形**；⑤ **`git ls-files` 型守卫看不见未跟踪的新文件**——`docs/dev-gotchas.md:12` 已记这条事故，但没写**本地的快解**：`git add` 进索引后 `git ls-files` 就能看见它，不必先提交再验（RFC-317 B1-c 实撞：新错误码守卫因看不见新测试文件而误报）；⑥ **AST 定位路由 handler 必须按 method + path**，只按 path 会永远取到最后注册的那条（同一 path 常有 GET/POST 或 GET/PUT 两条），断言看的是另一个 handler 却恒定「工作正常」；⑦ **正则剥注释会吃掉真代码**——非贪婪块注释正则从字符串里的 `/*` 一路吃到下一个 `*/`，吞掉几百行；判「某个名字有没有被调用」应当用 AST，对注释与字符串天然免疫；⑧ **正向锁也会被注释满足**：`text.includes('someGuardFn')` 会被文档注释里的提及满足，比它的镜像版（注释踩负向锁）更隐蔽，因为它不会让人怀疑；⑨ **design 文档里裸写正则会被 lychee 当成 markdown 链接**——`['"](?:a|b)['"]` 这种片段形如 `[...](...)`，CI 的 `Markdown link check (design/)` 会去请求 `(?:a|b)` 并红，本 RFC 落档时实撞（`findings.md` 三处），定式是**正则一律包进反引号** |
-| T70 | 若有机制被 R1–R12 完全覆盖，按 `docs/dev-gotchas.md` 三种处置逐条判并记录 |
+| id  | 任务                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| T66 | 15 条 family + 4 条 critic 的 stale 断言逐条改对（含 `resourceAcl.ts` 的「六类资源」表述、`ref/resolution.ts:87` 的单一事实源声明、`depcheck.ts:28-30` 的「只能缩不能涨」、`system-commons-unification-audit-2026-08-12.md` 的三处过时计数与前端行）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| T67 | 79 条 P3 入账复核：`findings.md` 的 gid 与 `commons-debt.json` 条目一一对应                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| T68 | `design/plan.md` RFC 索引登记 RFC-317（状态四选一打头）；`STATE.md` 顶部「进行中 RFC」→ 完工后移入已完成表                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| T69 | `docs/dev-gotchas.md` 沉淀通用教训：①「守卫只覆盖自己诞生的那一块」的系统性自检定式（写完任一守卫先问「起点面全吗？终点面全吗？subject 是硬编码还是派生？」）；②`<=` 型棘轮会留下可复用的松弛槽位，快照降下去不销账等于白送分支额度；③ 单跳 schema 反射守卫看不见多跳级联；④ 默认参数会让安全语义变成 opt-in，且对导入图 / AST cast 禁令 / 源码文本三类扫描**全部隐形**；⑤ **`git ls-files` 型守卫看不见未跟踪的新文件**——`docs/dev-gotchas.md:12` 已记这条事故，但没写**本地的快解**：`git add` 进索引后 `git ls-files` 就能看见它，不必先提交再验（RFC-317 B1-c 实撞：新错误码守卫因看不见新测试文件而误报）；⑥ **AST 定位路由 handler 必须按 method + path**，只按 path 会永远取到最后注册的那条（同一 path 常有 GET/POST 或 GET/PUT 两条），断言看的是另一个 handler 却恒定「工作正常」；⑦ **正则剥注释会吃掉真代码**——非贪婪块注释正则从字符串里的 `/*` 一路吃到下一个 `*/`，吞掉几百行；判「某个名字有没有被调用」应当用 AST，对注释与字符串天然免疫；⑧ **正向锁也会被注释满足**：`text.includes('someGuardFn')` 会被文档注释里的提及满足，比它的镜像版（注释踩负向锁）更隐蔽，因为它不会让人怀疑；⑨ **design 文档里裸写正则会被 lychee 当成 markdown 链接**——`['"](?:a | b)['"]`这种片段形如`[...](...)`，CI 的 `Markdown link check (design/)`会去请求`(?:a | b)` 并红，本 RFC 落档时实撞（`findings.md` 三处），定式是**正则一律包进反引号** |
+| T70 | 若有机制被 R1–R12 完全覆盖，按 `docs/dev-gotchas.md` 三种处置逐条判并记录                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## 3. 冲突矩阵（多人并发树）
 
-| 文件 / 目录 | 占用批 | 说明 |
-| --- | --- | --- |
-| `packages/backend/src/services/lifecycle.ts` | **B7 独占**（B4 的 T28 需先于 B7 或并入 B7） | 高冲突；RFC-294 点名严格串行 |
-| `packages/backend/src/services/task.ts` | **B7 独占** | 同上 |
-| `packages/backend/src/services/scheduler.ts` | 本 RFC 不改（仅 R4 计数读取） | 若 T47 需触碰则并入 B7 |
-| `architecture/**` | B0 建立，各批追加；**单 owner** | 账本冲突用「按路径精确 `git add`」处理 |
-| `.dependency-cruiser.cjs` / `scripts/depcheck.ts` | B2 / B3 / B6 | 单 owner，串行 |
-| `packages/backend/tests/rfc294-architecture-preflight.test.ts` | B3 独占 | |
-| `packages/frontend/tests/ux-source-ratchets.test.ts` | B10 独占 | |
-| `packages/backend/src/routes/developmentConfig.ts` | B1 独占 | RFC-310 仍 In Progress，开工前确认无他人在途改动 |
+| 文件 / 目录                                                    | 占用批                                       | 说明                                             |
+| -------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------ |
+| `packages/backend/src/services/lifecycle.ts`                   | **B7 独占**（B4 的 T28 需先于 B7 或并入 B7） | 高冲突；RFC-294 点名严格串行                     |
+| `packages/backend/src/services/task.ts`                        | **B7 独占**                                  | 同上                                             |
+| `packages/backend/src/services/scheduler.ts`                   | 本 RFC 不改（仅 R4 计数读取）                | 若 T47 需触碰则并入 B7                           |
+| `architecture/**`                                              | B0 建立，各批追加；**单 owner**              | 账本冲突用「按路径精确 `git add`」处理           |
+| `.dependency-cruiser.cjs` / `scripts/depcheck.ts`              | B2 / B3 / B6                                 | 单 owner，串行                                   |
+| `packages/backend/tests/rfc294-architecture-preflight.test.ts` | B3 独占                                      |                                                  |
+| `packages/frontend/tests/ux-source-ratchets.test.ts`           | B10 独占                                     |                                                  |
+| `packages/backend/src/routes/developmentConfig.ts`             | B1 独占                                      | RFC-310 仍 In Progress，开工前确认无他人在途改动 |
 
 并发纪律（仓规）：`git pull --rebase` 后立刻推；**绝不** `git reset --hard` / 无参 `git stash pop`；他人未追踪文件不入暂存区；commit message 只描述自己的改动。
 
@@ -194,10 +194,10 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 - [ ] AC-7 R11 manifest 落地并自变异转红
 - [ ] AC-8 R12 语料扩面，扩面后新增违规逐条修或入账（预算未调高）
 - [ ] AC-9 52 条 P1/P2 逐条修复 + 红→绿 + 变异复跑确认转红
-- [ ] AC-10 79 条 P3 逐条入账
+- [x] AC-10 79 条 P3 逐条入账（B0 入账 + B11 T67 复核：17 条已在本 RFC 内解决，加 `resolvedIn` 并由断言钉死任务号真实存在）
 - [ ] AC-11 能力影响 C1–C9 各有禁用/拒绝分支覆盖
 - [ ] AC-12 `bun run gate:local` 全绿 + 按 exact SHA 的 hosted CI 全绿（含 Playwright / visual）
-- [ ] AC-13 19 条 stale 断言逐条改对
+- [x] AC-13 19 条 stale 断言逐条改对（B11 T66；并立成 `rfc317-stale-assertion-invariants.test.ts` 的 6 条派生式不变量，规则③另捞出 4 处同类）
 - [ ] AC-14 索引 / STATE / dev-gotchas 同步
 
 ## 5. 本轮不做（登记）
@@ -219,7 +219,6 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 - **偏差**：R1/R2 的**边相等断言**按计划留在 B3（连同正反 fixture 一起落）；B0 只落闭合断言。`guard-manifest.json` 的 `minCorpusFiles` 与 R11 导出式 fixture 元数据留给 B2，条目上以 `classified: false` 让缺口自己可见。
 - **顺带发现**：`modules/work-start/` 是零文件、未跟踪、无人引用的**空目录残骸**（不删，按仓规不动未跟踪文件）；生成清单时踩到正则 alternation 顺序 bug（`(?:ts|tsx)` 把 `.tsx` 匹成 `.ts`），漏掉 9 个前端原语，已修并列入 T69。
 
-
 ### B1-a（2026-08-23）—— 两条 P1 + 一条 CI flake
 
 **落地任务**：T5 / T6 / T7 / T10 / T11（T8 / T9 / T9b 留 B1-b）。
@@ -232,12 +231,12 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 
 **变异实证（每条都做了红→还原→复绿）**
 
-| 变异 | 结果 |
-| --- | --- |
-| 16 处写门退回 `requireVisible` | **恰好 10 条红**（5 条 public-403 + 5 条 grant-403），private-404 与正向组不受影响——预言力对准写门本身 |
-| 把 `developmentConfig.ts` 唯一的 `requireResourceOwner` 调用退回（注释里仍提及该名字） | T6 **2 条红** |
-| `signalBackendShardProcessTree` 的 `process.kill(-pid)` 改 `process.kill(pid)` | `local-gate-runner` **3 条红**（含 CI 上红过的那条）——证明加余量没有把预言力抽空 |
-| 从 `guard-manifest.json` 删掉子目录里的守卫登记 | **1 条红**（修递归前是静默通过） |
+| 变异                                                                                   | 结果                                                                                                   |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 16 处写门退回 `requireVisible`                                                         | **恰好 10 条红**（5 条 public-403 + 5 条 grant-403），private-404 与正向组不受影响——预言力对准写门本身 |
+| 把 `developmentConfig.ts` 唯一的 `requireResourceOwner` 调用退回（注释里仍提及该名字） | T6 **2 条红**                                                                                          |
+| `signalBackendShardProcessTree` 的 `process.kill(-pid)` 改 `process.kill(pid)`         | `local-gate-runner` **3 条红**（含 CI 上红过的那条）——证明加余量没有把预言力抽空                       |
+| 从 `guard-manifest.json` 删掉子目录里的守卫登记                                        | **1 条红**（修递归前是静默通过）                                                                       |
 
 **本批踩到并已修的三个自伤**（都写进了对应文件的头注释，供后来者）
 
@@ -283,7 +282,6 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 
 **本批的一个自伤**：AST 定位 handler 时**只按 path 匹配**，而同一 path 上常有两条路由（GET 列表 / POST 创建、GET 详情 / PUT 更新），于是永远取到最后注册的那条——断言看的是创建/更新 handler，而不是它以为在看的列表/详情 handler。这类「锚错了但恒定错在同一处」的断言比漏测更坏，因为它看起来一直在工作。改成按 **method + path** 定位，教训已写进该文件头注释。
 
-
 ### B1-d（2026-08-23）—— 账本采数 SHA 订正 + 可复算守卫
 
 并发 session 在 `STATE.md` 里指出三份账本记的 `recordedAtSha: efc1bdb01` 走不到。查证属实：那是 rebase **前**的本地 commit，publish 出去的是 `b04cf0eb0`，`efc1bdb01` 从未进过 origin。已核对 `git diff efc1bdb01 b04cf0eb0 -- packages/{backend,shared}` 为空（采数内容逐字相同，只是 SHA 记错），三份账本改记 `b04cf0eb0` 并加 `recordedAtShaNote` 说明 rebase 由来。
@@ -303,6 +301,7 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 - **清单**：`guard-manifest.json` 全量重算，`classified` 全部转 true，新增 `corpusScanner` / `minCorpusFiles` 两列，守卫数 120 → 121。
 
 **变异实证（5 条，逐条 `diff -q` 还原）**：
+
 1. `rfc294` 扫描根指向空目录 ⇒ 新增的语料下限红（且暴露出它另外 5 条测试仍照绿——正是本批要消灭的形态）；
 2. 静默把 `rfc294` 下限 120 → 1、账本不动 ⇒ 两向钉死红；
 3. 整块删掉 `rfc305` 的语料下限 describe ⇒ 2 红（缺下限 + 账本漂移）；
@@ -319,17 +318,18 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 - **回填 34 个守卫，豁免为零**。其中 **12 个**是先把判据从 test 体里提到模块顶层 / 抽成纯函数才有得喂——`NAKED_STATUS_WRITE`、`countOccurrencesIn`、`DISJUNCTION`、`FORBIDDEN_TASK_INTERNALS`、`reviewedCallCounts`、`spawnHitsIn`、`sourceHasCodePattern`、`isSchedulerSourceLock`、`heavyColumnsIn`、`RETIRED_TRIGGER_SYMBOLS`、`isAgentMultiOffender`、`mentionsDeadClass`、`usesVariant`、`WG_CONSTANT_IMPORT`。**判据各留一份拷贝的话，fixture 证明的只是拷贝还活着**，这一步不是顺手重构而是前提。
 
 **变异实证**：
+
 1. **G-07 点名的那次证伪**：`SPAWN_PATTERNS` 全部改成匹配不到任何东西 + `ALLOWLIST` 清空 ⇒ 从「整个 suite 照绿」变成 **2 红**；
 2. 整块删掉 `rfc292` 的负 fixture ⇒ 2 红（缺 fixture + 账本漂移）。
 
 **判据本身写了四版，前三版都判错，两个方向的错都出现过**——每一版的错法都固化成了 T21 的 fixture：
 
-| 版本 | 错法 | 后果 |
-| --- | --- | --- |
-| v1 | 要求断言里语法上出现顶层 matcher 名 | 判**紧**：matcher 藏在局部 `probe()` / describe 作用域 helper / `Object.fromEntries` 外壳下的合格 fixture 全被判成不合格 |
-| v2 | 只把**顶层**名字算作语料 | 判**松**：`const offenders = files.filter(…includes('function describeError('))` 里的 `offenders` 被当成 fixture 载体，于是 `expect(offenders).toEqual([])` 这条彻头彻尾的**规则**断言被记成「有负 fixture」 |
-| v3 | 语料只传播一跳 | 判**松**：`files → offenders → filtered` 链条上后段脱管 |
-| v4 | 不要求具名 matcher；语料传播跑到不动点；伪造文件名也算输入 | 26 → 34 且假阳性归零 |
+| 版本 | 错法                                                       | 后果                                                                                                                                                                                                         |
+| ---- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| v1   | 要求断言里语法上出现顶层 matcher 名                        | 判**紧**：matcher 藏在局部 `probe()` / describe 作用域 helper / `Object.fromEntries` 外壳下的合格 fixture 全被判成不合格                                                                                     |
+| v2   | 只把**顶层**名字算作语料                                   | 判**松**：`const offenders = files.filter(…includes('function describeError('))` 里的 `offenders` 被当成 fixture 载体，于是 `expect(offenders).toEqual([])` 这条彻头彻尾的**规则**断言被记成「有负 fixture」 |
+| v3   | 语料只传播一跳                                             | 判**松**：`files → offenders → filtered` 链条上后段脱管                                                                                                                                                      |
+| v4   | 不要求具名 matcher；语料传播跑到不动点；伪造文件名也算输入 | 26 → 34 且假阳性归零                                                                                                                                                                                         |
 
 判**松**的方向更坏：缺 fixture 的守卫凭空达标，判据自己成了假绿源。所以 T21 的 fixture 表里两个方向各留了样本，任何一版回归都会当场红。这也是本 RFC 反复讲的那件事的又一次实例——**判据比现实窄，就会逼着后来的人把代码写成判据认得的样子**；判据比现实宽，豁免面就会悄悄扩大。
 
@@ -373,6 +373,7 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 **`work-start` 的处理**：`modules/work-start/` 是**零追踪文件的空目录残留**（git 追踪不了空目录，CI 的干净 checkout 根本没有它）。若直接进 subject，本地与 CI 的模块集合会不一致——规则本身变成环境依赖。处置：按 `git ls-files` 判定追踪面，零文件目录排除并打印警告，同时加一条**反向断言**「零文件目录必然零追踪文件」防止这个口径本身坏掉。
 
 **变异实证（3 条，均双向）**：
+
 1. 账本删一条 R1 ⇒ 红（模拟「新增越界边没入账」）；
 2. 账本加一条不存在的边 ⇒ 红（模拟「债还掉了没销账」）；
 3. 删掉 `importEdges` 的动态 `import()` 一支 ⇒ **只红 T26 那条 fixture，R1 主断言仍绿**——因为当前生产代码没有一条动态 import 越界边。**这正是 fixture 不可替代的实证**：真实语料证明不了「判据能处理一种当前没人用的写法」，而那恰恰是最容易被"整理"掉的一支。
@@ -411,18 +412,19 @@ T25 落地后跑两条变异——**两条都没被抓住**：①撤掉 `resolve
 
 **测量先于结论**。D4 原本裁的是「`core: true` 内核的业务身份字面量预算直接归零」。实测 31 个 core 内核里有 **18 处**身份字面量、涉及 6 个文件；逐条读过之后，「归零」这个口径需要修正——因为这 18 处分属**三种性质完全不同**的形态：
 
-| 站点 | 形态 | 判定 |
-| --- | --- | --- |
-| `executor.ts#startExecution` | 3 分支，兜底**静默当成 workflow** | 真隐患 → 本批修 |
-| `outcome.ts#projectExecutionOutcome` | 4 分支 + `const unhandled: never` | 前人已按 RFC-304 事故修好 ✅ |
-| `workflowScope.ts#promotedSourceForWrapper` | 3 分支，兜底 `return null`（**失败关闭**） | 入册留痕，不要求穷尽 |
-| `nodePorts.ts` / `wrapperFanout.ts` / `systemChannelPorts.ts` | `Record<NodeKind,…>` 穷尽表，或跨不同注册表的**合取守卫** | 不适用 |
+| 站点                                                          | 形态                                                      | 判定                         |
+| ------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------- |
+| `executor.ts#startExecution`                                  | 3 分支，兜底**静默当成 workflow**                         | 真隐患 → 本批修              |
+| `outcome.ts#projectExecutionOutcome`                          | 4 分支 + `const unhandled: never`                         | 前人已按 RFC-304 事故修好 ✅ |
+| `workflowScope.ts#promotedSourceForWrapper`                   | 3 分支，兜底 `return null`（**失败关闭**）                | 入册留痕，不要求穷尽         |
+| `nodePorts.ts` / `wrapperFanout.ts` / `systemChannelPorts.ts` | `Record<NodeKind,…>` 穷尽表，或跨不同注册表的**合取守卫** | 不适用                       |
 
 **判据落在「兜底」而不是「字面量」**。危险的从来不是代码里出现 `=== 'workgroup'`，而是**分派链的兜底会把新种类静默当成某个旧种类**。`outcome.ts` 里前人留的注释就是这个事故的一手记录：code-round 曾掉进 workgroup 分支，`workgroupModeOf(null)` 返回 null，结果是 `status: 'done'` + `outputs: {}` + 一条 `workgroup-config-unparsable` 警告——**一个看起来成功、实则空输出、还赖在它根本没有的配置头上的结果**；原话「the failure was in the arm NOBODY would think to check」。
 
 **生产改动（1 处）**：`executor.ts#startExecution` 的 `if` 链改为 `switch` + `const _exhaustive: never`（本仓既有写法，`shared/src/lifecycle.ts` 用了 5 处）。行为逐字不变。**变异实证**：给 `StartExecutionRequest` 加第四个变体 ⇒ 编译报错 `Type '{ kind: "probe-new-kind"; … }' is not assignable to type 'never'`；**改之前**同样的新增会被静默路由到 `startTask`（当成 workflow），编译与测试**零反应**。
 
 **判据三条边界，各配正反 fixture**（每条都对应判据实际犯过的错）：
+
 1. 字面量从注册表**派生**，不手抄——手抄的集合会随注册表增长而过期，而过期的表现是「扫不出违规」，与合规同形。另加一条自检：注册表派生不出值时**先红**（改名 ⇒ 三条断言同时红，实证过）。
 2. 按**判别表达式**分组，不是数字面量总数。初版数总数，把 `isAggregatorAgentNode`（`node.kind !== 'agent-single'` 加 `agent.role === 'aggregator'`，先判种类再判角色）误报成分派——那是**合取**，根本没有分支。
 3. 失败关闭的兜底入册即可。`return null` 与「被当成 workflow 启动」不是一个量级。
@@ -432,3 +434,28 @@ T25 落地后跑两条变异——**两条都没被抓住**：①撤掉 `resolve
 T17 的「基线只降不升」初版一律拿 `git show HEAD~1:` 比。**CI 里工作树 == HEAD，比 HEAD~1 是对的；本地带着未提交改动时，它跳过了 HEAD**——上一笔已经提交过的涨账会被重复算成「本次增长」，一次性的 `allowGrowth` 也就永远判不了过期。改为按**评估对象**选基准：基线文件脏 ⇒ 比 `HEAD`，干净 ⇒ 比 `HEAD~1`。
 
 **一次性许可完成了一个完整生命周期**：B3-b 涨账时声明 `allowGrowth` ⇒ 通过；本批不涨账，许可按 T17 收回 ⇒ 通过；把许可加回来（未涨账）⇒ **判过期转红**。机制刚刚约束了它的作者本人。
+
+### B11（2026-08-24）—— 收口：T66 / T67 / T69 / T70
+
+**落地任务**：T66 / T67 / T69 / T70（T68 见下一条提交，需在他人在改的共享索引文件上落笔）。
+
+- **T66（AC-13）**：19 条 stale-assertion 里 6 条已在前批修掉（LC-07 / NK-04 / NK-11 / CC-10 / DE-07 / G-11），本批改对剩下 13 条。新增 `tests/architecture/rfc317-stale-assertion-invariants.test.ts`（6 条规则 + 语料下限），每条判据的一端都是**活的源码**：`ACL_RESOURCE_TYPES` 长度 / `db/schema.ts` 的 `builtin` 列数 / 真实 import / `services/lifecycle.ts` 是否导出同步内核入口 / `ws/registry.ts` 是否挂了 upgradeGate / `design/plan.md` 的 RFC 索引状态。
+- **T67**：79 条 P3 的 gid 与 `commons-debt.json` 本就两向钉死且绿。真正的问题是**账本自己成了过期断言**——79 条统一写着「本 RFC 只登记不修」，而收口时其中 **17 条已在本 RFC 内被修掉**。已解决的加 `resolvedIn` 并改写 `why`，部分解决的写明「修了哪半、没修哪半」（ACL-05 / LC-12 / TP-12）；新增断言钉死 `resolvedIn` 必须点名**真实存在于本 plan.md 的任务号**。
+- **T69**：`docs/dev-gotchas.md` 追加 12 节。除计划列出的 9 条外，另沉淀本批实撞的三条：账本类的数只信程序打印的值（`grep -c` 数不到 `...ARRAY.map()` 展开，22 vs 真值 37）；订正过期断言时复述旧措辞会踩到自己刚写的守卫（定式：历史措辞进引号 + 扫描前剥引号 + 归属按注释块）；`:has()` 是 (0,2,0)，换成单类修饰符会被后面的基类规则压掉。
+- **T70**：见下。
+
+#### T70 —— 退役判定：**无一条机制被 R1–R12 完全覆盖，全部保留**
+
+判法不是读判据措辞，而是**删掉旧守卫后，新规则对同一变异还红不红**。逐条实测：
+
+| 候选                                                                       | 新规则                     | 同一变异下的实测                                                                                                  | 判定                                     |
+| -------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `rfc286-f1-dead-class-extinction`                                          | R9.3 全域死 class 不变量   | 重新引入 `error-text` ⇒ **两者都红**；但把 `form-error` 放进**非 ScriptEdit** 文件 ⇒ RFC-286 F1 红、**R9.3 照绿** | **保留**（判的不是同一件事）             |
+| 前端 `dialog-grep`                                                         | R9.1 modal chrome 全域规则 | R9.1 是**否定式**（不许自造 chrome），dialog-grep 还有**肯定式**断言（那三个文件必须 import 并渲染 `<Dialog>`）   | **保留**（T64 已加头注 + coverage 自证） |
+| `data-table-callsite` / `empty-loading-callsite` / `btn-variants-callsite` | R9                         | 同上：迁移白名单是「已迁移的不许退回」的**肯定证据**，R9 是「新写的不许跑偏」的否定规则                           | **保留**                                 |
+| `rfc294-architecture-preflight` 的两条 debt list                           | R1 / R2 精确边账本         | design §6 已定「原样保留」；R1/R2 记的是**边**，debt list 记的是**规则级存量**，粒度不同                          | **保留**                                 |
+
+`form-error` 那一条值得单独记，它是本次判定里唯一一个「看起来该退役、实测不能退」的：
+**R9.3 判的是「这个 class 在 CSS 里有没有定义」，RFC-286 F1 判的是「这个定义在这个语境里生效吗」**。`.script-env-table__row .form-error` 是一条**嵌套**定义——token 在 CSS 里确实存在，所以 R9.3 认为它已定义；但它只在 ScriptEdit 的 DOM 语境下生效，别处用就还是无样式裸文本。两条规则一强一弱不成立，是**正交**。
+
+顺带一条一般性教训（已进 `docs/dev-gotchas.md`）：判「新规则是否覆盖旧规则」不能比较判据的措辞，要比较**同一变异下的红绿**——措辞上「全域 ⊇ 三个文件」看起来天经地义，实测却是两条正交的判据。
