@@ -1247,6 +1247,19 @@ describe('RFC-294 W0-R target architecture scanner contract', () => {
   })
 })
 
+// RFC-317 T16 —— 两张试点债务表提到模块顶层并具名，让高水位棘轮
+// （architecture/rfc317-ledger-highwater.test.ts）能按名字清点条数。原本是匿名内联
+// 数组：`toEqual([...])` 的精确相等已经挡住「悄悄加一条」，但**账本自身在长**这件事
+// 没有任何地方看得见——每次加一条都只是 diff 里多两行，没有一个数字会变。
+const CROSS_CONTEXT_PILOT_DEBT: string[] = [
+  'modules/integration/application/mrTerminalControlWorker.ts -> modules/task-execution/application/sourceTerminationCapability.ts [type:static-import] cross-context internal import',
+  'modules/integration/composition/webhookTerminalControl.ts -> modules/task-execution/composition/sourceTermination.ts [value:static-import] cross-context internal import',
+]
+
+const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
+  'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
+]
+
 describe('RFC-294 W0-R current modules ratchet', () => {
   const modules = productionModuleUnits()
 
@@ -1254,18 +1267,13 @@ describe('RFC-294 W0-R current modules ratchet', () => {
     // Exact equality is intentional: an unknown edge and a removed/stale debt
     // both fail. A migration that deletes one edge must delete its snapshot row
     // in the same change, so the old path can never silently reopen later.
-    expect(crossContextViolations(modules)).toEqual([
-      'modules/integration/application/mrTerminalControlWorker.ts -> modules/task-execution/application/sourceTerminationCapability.ts [type:static-import] cross-context internal import',
-      'modules/integration/composition/webhookTerminalControl.ts -> modules/task-execution/composition/sourceTermination.ts [value:static-import] cross-context internal import',
-    ])
+    expect(crossContextViolations(modules)).toEqual(CROSS_CONTEXT_PILOT_DEBT)
   })
 
   test('public surface has only the reviewed non-exact pilot entrypoint debt and no type taint', () => {
     // Same stale discipline as the edge inventory above. The named pilot file
     // is debt, not an accepted alternative to exact public/{...} entrypoints.
-    expect(publicSurfaceViolations(modules)).toEqual([
-      'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
-    ])
+    expect(publicSurfaceViolations(modules)).toEqual(PUBLIC_SURFACE_PILOT_DEBT)
   })
 
   test('module capability ownership cannot be structurally forged or serialized', () => {

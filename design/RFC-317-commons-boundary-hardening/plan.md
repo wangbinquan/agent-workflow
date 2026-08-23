@@ -342,3 +342,24 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
    一般教训：**fixture 里的伪造样本仍然是仓里的真实文本**，会被别的源码扫描型守卫看见。写样本时避开其它守卫的 needle（尤其是文件路径、退役标识符这类高辨识度字符串）。
 
 2. **脚本化插入的代码不过 prettier**。本批多数编辑是脚本按行拼接进去的，11 个文件的格式与 prettier 不一致 ⇒ `format:check` 红。`bun run format` 修完后 **必须重算账本**——`guard-manifest.json` 记了每个守卫的 `lines`，重排会让它漂移。顺序是：改代码 → format → 重算账本 → 再跑门禁。
+
+### B2-c（2026-08-23）—— T16–T21：账本只许缩，棘轮不留免费槽位
+
+**T18 `rfc217` G5（findings G-04）**：原棘轮是 `toBeLessThanOrEqual` + `strategies/ ⇒ Infinity`，两处都漏水。`<=` 让收敛出来的差额变成**可复用的免费槽位**——实测漏了 3 个（`room.ts` 记 1、`dwActions.ts` 记 2，两者都已收敛到 0）；`Infinity` 让 `strategies/` 整个目录不设上限（「新增比较必须落在 strategies/」是**放置规则**，不等于放进去就不用记账）。改成 `toEqual` 逐字相等：**增**是新散射，**减**是收敛了、去把账本改小，收敛必须留下一次提交记录。变异实证：往 `strategies/freeCollab.ts` 与 `room.ts` 各加一处 `mode === '`，两次都红（改之前两次都绿）。
+
+**T19 `rfc143` 豁免表（findings RT-02）**：三条豁免里**两条已死**（`routes/runtimes.ts` / `services/runner.ts` 早已不含任何 kind 判别）。死豁免不是「多余的一行」，是**空白许可证**——那两个文件里以后新长出来的 kind 判别会被直接跳过。清掉两条，新增 stale 检测（豁免必须仍对应一处真实违规），并把**原本各写一遍**的判别正则提到模块顶层（扫描与自检共用一份，否则自检证明的只是拷贝还咬得动）。
+
+**T16/T17 高水位（findings CC-06 / CC-03）**：十二份债务账本各有精确相等或 stale 检测，挡得住「悄悄加一条**违规**」，挡不住「加一条**豁免**」——同一个 PR 里两边一起改，全绿。更根本的是「账本整体在长」此前没有任何地方看得见：加一条只是 diff 多两行，没有一个数字会变。新增 `architecture/ledger-baselines.json` + `rfc317-ledger-highwater.test.ts`：条目数与源码逐字相等，且相对上一个 commit **只降不升**（要升须显式 `allowGrowth` 并点名 RFC，且在下一个不涨的 commit 上被判过期、强制清理）。
+
+**T20 cruiser 声明**：四条规则的注释声称存量债「已入账」。实测 `no-auth-to-services` 的声明**已过期**——T24 把 `authLoginPolicy` 迁进 `auth/loginPolicy.ts` 后 `auth/` 对 `services/` 已零值边，`KNOWN_VIOLATIONS` 里一条都没有，而注释仍宣称债是有人管的。改为 `@ledger KNOWN_VIOLATIONS` **机器标记**双向钉死（有标记必须有条目，有条目必须有标记）。
+
+#### B2-c 的四个自伤（三个被自己抓住，一个被门禁抓住）
+
+1. **守卫自己静默跳过**。T17 初版把「比对上一版基线」写在 test 里，读不到上一版时 `return`。写这条守卫的当下 `ledger-baselines.json` 还没进过任何 commit，`git show HEAD~1:` 读不到 ⇒ 整条检查静默跳过，**实测「加豁免 + 把基线一起改大」照绿**——守卫犯了它要防的那个错。改：比对逻辑抽成纯函数（fixture 直接喂，不依赖 git）+ 「历史比对确实跑了」自陈断言，跑不成时把原因打印出来。
+2. **静态清点与运行时背离**。`ledgerEntryCount` 数语法元素，`KNOWN_VIOLATIONS` 因此得 20，运行时是 35——两处 `...ARRAY.map()` 展开没被展开计数。**展开内部从 15 条涨到 30 条时那个 20 纹丝不动**，正是本棘轮要堵的通路。改：展开按源数组长度计数，并加一条「静态清点 === 运行时 `.length`」对账断言。
+3. **散文判据分不出断言与其否定**。T20 初版用正则找「已入账 / Ledgered / KNOWN_VIOLATIONS」。把过期声明**改正**成「T24 已落地，KNOWN_VIOLATIONS 里不再有本规则的条目」之后，那段话仍命中同一个正则——一句断言和它的否定在正则眼里同形。改用 `@ledger` 机器标记。这条正是本 RFC 的核心命题在自己身上的实例：**要判定的东西必须机器可读，不能是写给人看的话**。
+4. **注释块用固定窗口取会串味**。T20 初版取「`name:` 行上下固定行数」，串到隔壁规则，把 `no-shared-to-app` 误判成「声称入账却没条目」。改为按规则块边界取。
+
+**顺带修掉的清单盲区**：`rfc317-ledger-highwater.test.ts` 放在 `tests/architecture/` 下，但文件名不含 `guard|lock|ratchet|architecture` 任一关键词，于是**没进 `guard-manifest.json`**——一条崭新的守卫从第一天起就能被静默删除，而两向钉死那条断言照绿（磁盘侧与清单侧同时看不见它）。改 `guardTestFiles`：`tests/architecture/` 下的每个测试都算守卫，**目录本身就是声明**。
+
+**留给 B3 的缺口**：`GUARD_FILE_NAME_PATTERN` 仍以文件名关键词圈定 `tests/` 顶层的守卫。实测 `rfc143-runtime-driver-capability.test.ts` 是扫语料 + 断言不存在的守卫，却因名字不含关键词而不在清单里、也不受 T13/T14 约束。放宽这个 pattern 会大量改变清单规模，需要单独测量后再动。

@@ -11,7 +11,7 @@
 //      在 PR-4 补齐后此骨架扩为完整的零调用点改动集成证明。
 
 import { afterEach, describe, expect, it } from 'bun:test'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import {
   getRuntimeDriver,
@@ -224,6 +224,11 @@ describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () 
   })
 })
 
+// RFC-317 T19 —— 判据提到模块顶层：全树扫描与「正则自检」原本**各写了一遍**同一条
+// 正则。各留一份拷贝时，自检证明的只是拷贝还咬得动，真扫描那份被改弱不会有人发现。
+const KIND_DISCRIMINATION =
+  /\b(?:runtime|protocol|kind|defaultRuntime)\s*[!=]==\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
+
 describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () => {
   const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
@@ -236,18 +241,16 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // systemAgentRun 已在 RFC-237 能力化消除；start.ts / routes/runtime.ts 入
     // 白名单）。新正则把三种逃逸拼写全部纳入。
     const offenders: string[] = []
+    // RFC-317 T19 / findings RT-02 —— 原表三条，实测其中**两条已死**：
+    // routes/runtimes.ts 与 services/runner.ts 早已不含任何 kind 判别，豁免却还挂着。
+    // 死豁免不是「多余的一行」，是一张**空白许可证**：那两个文件里以后新长出来的
+    // kind 判别会被直接跳过、永远不报。下面的 stale 检测保证这种情况不再出现。
     const kindDiscriminationAllowlist = new Set([
-      // Runtime administration and business session handling have product
-      // reasons to inspect protocol-specific capabilities at their boundary.
-      'routes/runtimes.ts',
-      'services/runner.ts',
       // RFC-237: boot-time probe prewarm keyed off config.defaultRuntime — a
       // startup probability optimization, not spawn assembly; removing it
       // needs a driver boot-probe declaration, out of proportion (design §5).
       'cli/start.ts',
     ])
-    const kindDiscrimination =
-      /\b(?:runtime|protocol|kind|defaultRuntime)\s*[!=]==\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
         const p = join(dir, name)
@@ -263,7 +266,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
         if (!name.endsWith('.ts')) continue
         if (kindDiscriminationAllowlist.has(rp)) continue
         const src = readFileSync(p, 'utf8')
-        if (kindDiscrimination.test(src)) offenders.push(rp)
+        if (KIND_DISCRIMINATION.test(src)) offenders.push(rp)
       }
     }
     walk(SRC_ROOT)
@@ -273,22 +276,20 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   it('RFC-237 ratchet 自检：三种历史逃逸拼写都被新正则命中', () => {
     // 防未来把正则改弱：曾真实逃逸过的三种拼写（`!==` / `kind ===` /
     // `defaultRuntime ===`）必须持续命中；合法非判别代码不误伤。
-    const kindDiscrimination =
-      /\b(?:runtime|protocol|kind|defaultRuntime)\s*[!=]==\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
     for (const escaped of [
       `if (runtime.protocol !== 'opencode') throw x`,
       `driver.kind === 'opencode'`,
       `config.defaultRuntime === 'claude-code'`,
       `a.runtime === "claude-code"`,
     ]) {
-      expect(kindDiscrimination.test(escaped)).toBe(true)
+      expect(KIND_DISCRIMINATION.test(escaped)).toBe(true)
     }
     for (const legit of [
       `getRuntimeDriver(runtime.protocol).buildSpawn(ctx)`,
       `protocol: 'opencode',`,
       `const kind = resolved.protocol`,
     ]) {
-      expect(kindDiscrimination.test(legit)).toBe(false)
+      expect(KIND_DISCRIMINATION.test(legit)).toBe(false)
     }
   })
 
@@ -407,5 +408,60 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     const src = SRC('services/runtimeRegistry.ts')
     expect(src).toContain('RFC-143 PR-5 audit')
     expect(src).toContain('explicitly opencode-only')
+  })
+})
+
+// RFC-317 T19 / findings RT-02 —— 豁免表不许有死条目。
+//
+// 事故形态
+// --------
+// 「零违规」型扫描的豁免表是按**文件**记的：`allowlist.has(rel) ⇒ continue`。一旦某个
+// 文件里的违规被清掉、豁免却留着，那一行就从「记录一处已知例外」变成**空白许可证**——
+// 该文件里以后新长出来的同类违规会被直接跳过，扫描永远报零。
+//
+// 实测（2026-08-23）：三条豁免里有**两条**已经这样了——`routes/runtimes.ts` 与
+// `services/runner.ts` 早已不含任何 kind 判别。它们不会让任何测试转红，因此谁都不知道。
+//
+// 这条检测把「豁免必须仍然对应一处真实违规」变成断言：清掉违规就必须同批删掉豁免。
+describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
+  const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
+  // 与上面扫描用的是同一个集合语义；这里重新声明是因为原表声明在 it() 体内。
+  // 两处一旦不一致，下面第一条断言会红。
+  const ALLOWLIST = ['cli/start.ts'] as const
+
+  it('豁免表与扫描里用的那份一致（防两份各改各的）', () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, 'rfc143-runtime-driver-capability.test.ts'),
+      'utf8',
+    )
+    const declared = [...source.matchAll(/^\s{6}'([^']+\.ts)',$/gm)].map((m) => m[1]!)
+    expect(declared, '扫描体里的豁免条目与本 describe 的 ALLOWLIST 不一致').toEqual([...ALLOWLIST])
+  })
+
+  it('每条豁免都仍然对应一处真实的 kind 判别（否则它是一张空白许可证）', () => {
+    const dead: string[] = []
+    for (const rel of ALLOWLIST) {
+      const p = resolve(SRC_ROOT, rel)
+      if (!existsSync(p)) {
+        dead.push(`${rel}（文件已不存在）`)
+        continue
+      }
+      if (!KIND_DISCRIMINATION.test(readFileSync(p, 'utf8'))) {
+        dead.push(`${rel}（已无 kind 判别）`)
+      }
+    }
+    expect(
+      dead,
+      '这些豁免已经不对应任何真实违规。**删掉它们**——留着等于给该文件里未来的 kind 判别发空白许可证',
+    ).toEqual([])
+  })
+
+  it('自证：豁免机制确实会跳过文件（否则上一条断言可能只是恰好为空）', () => {
+    const allowlisted = new Set<string>(ALLOWLIST)
+    expect(allowlisted.has('cli/start.ts')).toBe(true)
+    expect(allowlisted.has('services/scheduler.ts')).toBe(false)
+    expect(KIND_DISCRIMINATION.test("if (config.defaultRuntime === 'claude-code') prewarm()")).toBe(
+      true,
+    )
   })
 })

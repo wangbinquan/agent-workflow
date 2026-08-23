@@ -390,7 +390,13 @@ export function guardTestFiles(repoRoot: string): string[] {
         continue
       }
       if (!/\.test\.[cm]?tsx?$/.test(name)) continue
-      if (!GUARD_FILE_NAME_PATTERN.test(name)) continue
+      // `tests/architecture/` 底下的每个测试都是守卫——**目录本身就是声明**，不必再
+      // 在文件名里重复一遍。这条是被自己坑出来的：RFC-317 T16 的
+      // `rfc317-ledger-highwater.test.ts` 放在该目录下，名字里却没有 guard/lock/
+      // ratchet 任一关键词，于是**没进清单**——一条崭新的守卫从第一天起就可以被静默
+      // 删除，而两向钉死那条断言照绿（磁盘侧与清单侧同时看不见它）。
+      const inGuardDirectory = rel.endsWith('/architecture')
+      if (!inGuardDirectory && !GUARD_FILE_NAME_PATTERN.test(name)) continue
       out.push(`${rel}/${name}`)
     }
   }
@@ -898,4 +904,95 @@ export function assertsAbsence(unit: SourceUnit): boolean {
   }
   visit(source)
   return found
+}
+
+// ---------------------------------------------------------------------------
+// 账本清点（RFC-317 B2-c / T16 · findings CC-06 / CC-03）
+// ---------------------------------------------------------------------------
+//
+// 本仓的「已知违规 / 豁免」账本散在九处，形态各异：数组、对象、`new Set([...])`、
+// `new Map([...])`、`Record<string, …>`。它们各自都有精确相等或 stale 检测，但
+// **没有任何地方看得见账本整体在长**——每加一条只是 diff 里多两行，没有一个数字会变。
+//
+// 这里只做清点：从**源码文本**按符号名数出条目数。取文本而非 import，是因为高水位
+// 棘轮要拿 `git show HEAD~1:<file>` 的历史版本用同一把尺子量。
+
+/**
+ * 一个展开元素静态贡献多少条目。
+ *
+ * `...ARRAY.map(fn)` 贡献的条数等于 `ARRAY` 的长度——这是本仓账本里真实存在的写法
+ * （`scripts/depcheck.ts` 的 KNOWN_VIOLATIONS 有两处）。**不处理展开是危险的**：
+ * 只数语法元素的话，KNOWN_VIOLATIONS 是 20，运行时却是 35；其中一个展开从 15 条
+ * 涨到 30 条时，那个 20 纹丝不动——正好是本棘轮要堵的那条静默增长通路。
+ *
+ * 数不出来就返回 null，让调用方红，绝不编一个数出来。
+ */
+function spreadContribution(node: ts.SpreadElement): number | null {
+  let expression: ts.Expression = node.expression
+  // `...(X).map(fn)` / `...(X as const).map(fn)`
+  if (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    (expression.expression.name.text === 'map' || expression.expression.name.text === 'flatMap')
+  ) {
+    expression = expression.expression.expression
+  }
+  while (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression)) {
+    expression = ts.isParenthesizedExpression(expression) ? expression.expression : expression.expression
+  }
+  return ts.isArrayLiteralExpression(expression) ? expression.elements.length : null
+}
+
+/** 能被清点的账本容器形态。 */
+function ledgerElementCount(node: ts.Node): number | null {
+  if (ts.isArrayLiteralExpression(node)) {
+    let total = 0
+    for (const element of node.elements) {
+      if (!ts.isSpreadElement(element)) {
+        total += 1
+        continue
+      }
+      const contributed = spreadContribution(element)
+      if (contributed === null) return null
+      total += contributed
+    }
+    return total
+  }
+  if (ts.isObjectLiteralExpression(node)) return node.properties.length
+  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+    return ledgerElementCount(node.expression)
+  }
+  if (ts.isParenthesizedExpression(node)) return ledgerElementCount(node.expression)
+  if (ts.isNewExpression(node)) {
+    // new Set([...]) / new Map([...])
+    const argument = node.arguments?.[0]
+    return argument === undefined ? null : ledgerElementCount(argument)
+  }
+  return null
+}
+
+/**
+ * 数出某份源码里名为 `symbol` 的账本有多少条目；找不到该符号返回 `null`。
+ *
+ * 返回 `null` 而不是 0 很重要：符号被改名 / 删除时，0 会被当成「账本清空了，真棒」，
+ * 而实际是清点失效——又一次「零与合规同形」。调用方必须把 `null` 当成红。
+ */
+export function ledgerEntryCount(text: string, symbol: string): number | null {
+  const source = ts.createSourceFile('ledger.ts', text, ts.ScriptTarget.Latest, true)
+  let count: number | null = null
+  const visit = (node: ts.Node): void => {
+    if (count !== null) return
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === symbol &&
+      node.initializer !== undefined
+    ) {
+      count = ledgerElementCount(node.initializer)
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return count
 }

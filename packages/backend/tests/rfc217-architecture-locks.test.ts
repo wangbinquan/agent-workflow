@@ -177,9 +177,18 @@ describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', ()
 describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs', () => {
   const WG = 'packages/backend/src/services/workgroup'
 
-  test("G5 ratchet: per-file `mode === '` count may only shrink", () => {
+  // RFC-317 T18 / findings G-04 —— 这条棘轮原本是 `<=` + `strategies/ ⇒ Infinity`，
+  // 两处都漏水：
+  //   ① `<=`：某个文件收敛到低于快照后，差额变成**可复用的免费槽位**——下一个人
+  //      再加回一处 `mode === '` 不会红。实测漏了 3 个槽位（room.ts 1、dwActions.ts 2，
+  //      两者都已收敛到 0，账本却还许 1 和 2）。
+  //   ② `Infinity`：`strategies/` 整个目录不设上限。「新增比较必须落在 strategies/」
+  //      是**放置规则**，不等于放进去就不用记账——不记账就没人知道那里长了多少。
+  // 改成 `toBe`（逐字相等）后两个方向都会红：**增**是新散射，**减**是收敛了、去把
+  // 账本改小。收敛必须留下一次提交记录，这正是棘轮的意义。
+  test("G5 ratchet: per-file `mode === '` count is pinned exactly", () => {
     // T3b 收形后的快照（原 runner 单文件 15 处+全仓 40+ 散射）。新增比较必须
-    // 落在 strategies/（或先收掉别处一处）；数字只许降不许升。
+    // 落在 strategies/；数字**逐字相等**——增了是新散射，减了是收敛，都要改账本。
     const SNAPSHOT: Record<string, number> = {
       'memberTurns.ts': 6,
       'engine.ts': 4,
@@ -194,8 +203,8 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       'launch.ts': 3,
       // T4：config PUT 编排（含 dynamic_workflow 免疫判断）落 configActions
       'configActions.ts': 1,
-      'dwActions.ts': 2,
-      'room.ts': 1,
+      // RFC-317 T18：room.ts 与 dwActions.ts 原记 1 / 2，实际已收敛到 0——
+      // 那 3 个差额就是被回收的免费槽位，删掉条目即等于把上限收到 0。
     }
     const files: string[] = []
     const walk = (dir: string): void => {
@@ -205,12 +214,18 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       }
     }
     walk(WG)
+    const actual: Record<string, number> = {}
     for (const f of files) {
       const rel = f.slice(WG.length + 1)
       const count = read(f).split("mode === '").length - 1
-      const cap = SNAPSHOT[rel] ?? (rel.startsWith('strategies/') ? Infinity : 0)
-      expect(count, `${rel} 的 mode=== 计数 ${count} 超过棘轮上限 ${cap}`).toBeLessThanOrEqual(cap)
+      if (count > 0) actual[rel] = count
     }
+    expect(
+      actual,
+      "`mode === '` 的逐文件散射面与账本不符。**增**了说明新长了一处模式分支——" +
+        '要么收进 strategies/，要么解释清楚再记账；**减**了说明收敛发生了——' +
+        '把账本一起改小，否则差额会变成下一个人的免费槽位（G-04 实测漏过 3 个）',
+    ).toEqual(SNAPSHOT)
   })
 
   test('G7: no hand-rolled shardKey split/startsWith outside the shared codecs', () => {

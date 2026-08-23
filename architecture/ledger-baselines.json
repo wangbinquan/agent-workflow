@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。",
+  "recordedAtSha": "13a9cc035",
+  "ledgers": [
+    {
+      "id": "depcheck-known-violations",
+      "file": "scripts/depcheck.ts",
+      "symbol": "KNOWN_VIOLATIONS",
+      "baseline": 35,
+      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数（35），与运行时 KNOWN_VIOLATIONS.length 一致——只数语法元素会得到 20，而展开内部涨条数时那个 20 纹丝不动"
+    },
+    {
+      "id": "spawn-site-allowlist",
+      "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 13,
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
+    },
+    {
+      "id": "ux-role-dialog-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "ROLE_DIALOG_ALLOWLIST",
+      "baseline": 4,
+      "why": "未走 Dialog 公共组件的 role=dialog 站点。前端一致性原则要求收敛到 Dialog"
+    },
+    {
+      "id": "ux-input-implementation-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "INPUT_IMPLEMENTATION_ALLOWLIST",
+      "baseline": 10,
+      "why": "未走 Form primitives 的原生 input 站点。同上，只许收敛"
+    },
+    {
+      "id": "ux-embedded-table-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "EMBEDDED_TABLE_ALLOWLIST",
+      "baseline": 1,
+      "why": "抽屉内嵌表格（非独立页面表格）的例外"
+    },
+    {
+      "id": "rfc143-kind-discrimination-allowlist",
+      "file": "packages/backend/tests/rfc143-runtime-driver-capability.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 1,
+      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 已清掉两条死条目，只剩 cli/start.ts 的启动期 probe 预热"
+    },
+    {
+      "id": "legacy-migration-hashes",
+      "file": "packages/backend/src/db/schemaAdmission.ts",
+      "symbol": "LEGACY_MIGRATION_HASHES",
+      "baseline": 8,
+      "why": "历史迁移文件的可接受哈希（内容曾被改动过的迁移）。新迁移绝不该进这张表"
+    },
+    {
+      "id": "rfc294-cross-context-pilot-debt",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "CROSS_CONTEXT_PILOT_DEBT",
+      "baseline": 2,
+      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0"
+    },
+    {
+      "id": "rfc294-public-surface-pilot-debt",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
+      "baseline": 1,
+      "why": "RFC-294 试点期允许的非 exact public 入口。目标架构下终值为 0"
+    },
+    {
+      "id": "rfc317-no-corpus-floor",
+      "file": "packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts",
+      "symbol": "NO_FLOOR_YET",
+      "baseline": 0,
+      "why": "尚未声明语料下限的扫语料守卫。B2-a 已全部补齐，0 是目标态"
+    },
+    {
+      "id": "rfc317-no-negative-fixture",
+      "file": "packages/backend/tests/architecture/rfc317-guard-negative-fixture.test.ts",
+      "symbol": "NO_FIXTURE_YET",
+      "baseline": 0,
+      "why": "尚未配负 fixture 的受管守卫。B2-b 已全部补齐，0 是目标态"
+    },
+    {
+      "id": "rfc317-pending-acl-enrolment",
+      "file": "packages/backend/tests/architecture/rfc317-acl-column-enrolment-guard.test.ts",
+      "symbol": "PENDING_ENROLMENT",
+      "baseline": 0,
+      "why": "带 ACL 列却未入网的表。B1-c 已全部入网，0 是目标态"
+    }
+  ]
+}

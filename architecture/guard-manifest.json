@@ -88,6 +88,18 @@
       "lines": 308
     },
     {
+      "id": "rfc317-ledger-highwater",
+      "file": "packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 535
+    },
+    {
       "id": "e2e-sqlite-fixture-lock-contention",
       "file": "packages/backend/tests/e2e-sqlite-fixture-lock-contention.test.ts",
       "runner": "bun",
@@ -469,7 +481,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 389
+      "lines": 404
     },
     {
       "id": "rfc222-resource-admin-guard",
@@ -697,7 +709,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 1289
+      "lines": 1297
     },
     {
       "id": "rfc294-background-worker-boundary",

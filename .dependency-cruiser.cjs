@@ -59,6 +59,10 @@ module.exports = {
       to: { path: '^packages/backend/' },
     },
     {
+      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
+      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
+      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
+      // 眼里长得一模一样）。
       name: 'no-services-to-routes',
       severity: 'error',
       comment:
@@ -84,6 +88,10 @@ module.exports = {
       // 整个 CRUD 已经用脚投票漂进了路由层。存量违例逐条记在
       // scripts/depcheck.ts → KNOWN_VIOLATIONS（棘轮只减不增）；type-only
       // 边放行——类型引用在 emit 后消失，不构成绕过 service 的数据通路。
+      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
+      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
+      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
+      // 眼里长得一模一样）。
       name: 'no-routes-to-db',
       severity: 'error',
       comment:
@@ -97,6 +105,10 @@ module.exports = {
       // RFC-284 T2（审计 A8-4）— util 是叶子层，不得反向依赖上层。此前唯一
       // 防线是 no-circular（只有恰好成环才被看见）；非环形态的单向 util→上层
       // 依赖会静默通过。util/git.ts 族的存量反向边（惰性 import）逐条入账。
+      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
+      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
+      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
+      // 眼里长得一模一样）。
       name: 'no-util-to-upper',
       severity: 'error',
       comment:
@@ -112,9 +124,12 @@ module.exports = {
     },
     {
       // RFC-284 T2（审计 A8-9 / 决策 D22）— auth 下沉为底层：不得依赖 services。
-      // 现存唯一反向值边 auth/session.ts → services/authLoginPolicy 已入账，
-      // removeWhen = T24（authLoginPolicy 迁入 auth/）。auth→ws 的
-      // revalidationHook 注册边不在本规则射程（规则只封 auth→services）。
+      // T24 已落地（authLoginPolicy 迁入 auth/loginPolicy.ts），auth/ 现在对
+      // services/ **零值边**，KNOWN_VIOLATIONS 里也不再有本规则的条目。
+      // RFC-317 T20 勘误：此处原写「现存唯一反向值边…已入账，removeWhen = T24」，
+      // 那句话在 T24 落地后就过期了——账本里一条都没有，而注释仍宣称债是有人管的。
+      // 这类散文与账本的背离没有任何测试看得见，故新增 T20 元断言双向钉死。
+      // auth→ws 的 revalidationHook 注册边不在本规则射程（规则只封 auth→services）。
       name: 'no-auth-to-services',
       severity: 'error',
       comment:
@@ -141,6 +156,10 @@ module.exports = {
       // EXACTLY by (rule, from, to) and each annotated with why / removeWhen.
       // A known entry that stops firing fails the gate, so the list can only
       // shrink.
+      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
+      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
+      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
+      // 眼里长得一模一样）。
       name: 'no-circular',
       severity: 'error',
       from: {},
