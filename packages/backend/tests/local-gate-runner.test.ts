@@ -3,6 +3,23 @@
 // A previous direct `bun test --parallel` attempt deadlocked because workers
 // shared the daemon flock/home. The local runner instead launches complete,
 // serial Bun shards and gives every process a distinct home/temp namespace.
+//
+// 墙钟预算不得赛进程启动（2026-08-23，RFC-317 B1 期间 CI 实红后订正）
+// ------------------------------------------------------------------
+// 本文件里的杀链用例都要「在子进程还活着的时候让分片超时」，所以每条都有一组
+// 耦合的时间常数：分片 timeout / grace、以及孙进程写 survivor marker 的时刻。
+// 原先 `timeout still kills the process group when its TERM-compliant leader
+// exits first` 用的是 `timeoutMs: 100`，而它断言 `result.output` 里有子进程打的
+// 就绪行——这等于要求 `bun -e <script>` 在 100ms 内完成启动并 flush 一行。
+// 本机实测：空载 ~20ms，八个 CPU 忙循环下**实测到 100ms**。CI 的 macOS runner 上
+// 四个分片并行，于是这条在 run 32619463902 上红了，而杀链本身（TERM→KILL 到进程
+// 组）执行得完全正确——红的是就绪竞态，不是被测语义。
+//
+// 订正两件事，别再退回去：
+//   ① 所有墙钟预算按「实测最坏启动延迟的数倍」给，不要贴着走；相对间距（kill 时刻
+//      与 marker 时刻之间的余量）保持不变，预言力一字不改。
+//   ② 就绪行断言一律带**前提复核措辞**——前提破裂时要一眼看出是「没等到就绪」，
+//      而不是让人以为组杀语义回归了（`docs/dev-gotchas.md` 关于前提破裂的定式）。
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -229,8 +246,8 @@ describe('local backend shard wall-clock timeout', () => {
       setTimeout(async () => {
         await Bun.write(${JSON.stringify(survivorMarker)}, 'survived')
         process.exit(0)
-      }, 450)
-      setTimeout(() => process.exit(0), 700)
+      }, 1_600)
+      setTimeout(() => process.exit(0), 2_400)
     `
     const parentScript = `
       Bun.spawn([${JSON.stringify(process.execPath)}, '-e', ${JSON.stringify(grandchildScript)}], {
@@ -239,21 +256,24 @@ describe('local backend shard wall-clock timeout', () => {
       })
       process.on('SIGTERM', () => {})
       console.log('hung-parent-ready')
-      setTimeout(() => process.exit(0), 700)
+      setTimeout(() => process.exit(0), 2_400)
     `
     try {
       const result = await runBackendShard(
         repoRoot,
         runRoot,
         runtimePlan(runRoot, [process.execPath, '-e', parentScript]),
-        { timeoutMs: 150, killGraceMs: 50 },
+        { timeoutMs: 800, killGraceMs: 50 },
       )
 
       expect(result.exitCode).toBe(124)
       expect(result.timedOut).toBe(true)
-      expect(result.durationMs).toBeLessThan(1_500)
-      expect(result.output).toContain('hung-parent-ready')
-      expect(result.output).toContain('TIMEOUT after 150ms')
+      expect(result.durationMs).toBeLessThan(3_000)
+      expect(
+        result.output,
+        '前提不成立：子进程还没来得及打印就绪行，本用例此刻测不到组杀语义（见文件头「墙钟预算不得赛进程启动」）',
+      ).toContain('hung-parent-ready')
+      expect(result.output).toContain('TIMEOUT after 800ms')
       const logPath = join(runRoot, 'shard-1.log')
       expect(existsSync(logPath)).toBe(true)
       expect(readFileSync(logPath, 'utf8')).toContain('SIGKILL to process group')
@@ -262,7 +282,7 @@ describe('local backend shard wall-clock timeout', () => {
       // marker if only the direct parent was killed. POSIX detached shards must
       // remove the whole process group; Windows exercises the direct timeout
       // path because negative-pid process groups do not exist there.
-      await Bun.sleep(500)
+      await Bun.sleep(1_200)
       if (process.platform !== 'win32') expect(existsSync(survivorMarker)).toBe(false)
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
@@ -279,7 +299,7 @@ describe('local backend shard wall-clock timeout', () => {
       setTimeout(async () => {
         await Bun.write(${JSON.stringify(survivorMarker)}, 'survived')
         process.exit(0)
-      }, 800)
+      }, 1_800)
       setInterval(() => {}, 1000)
     `
     try {
@@ -292,10 +312,12 @@ describe('local backend shard wall-clock timeout', () => {
 
       expect(result.exitCode).toBe(124)
       expect(result.timedOut).toBe(true)
-      expect(result.durationMs).toBeLessThan(1_000)
-      expect(result.output).toContain('idle-process-ready')
+      expect(result.durationMs).toBeLessThan(2_500)
+      expect(result.output, '前提不成立：子进程还没打印就绪行，空闲计时根本没开始计').toContain(
+        'idle-process-ready',
+      )
       expect(result.output).toContain('IDLE TIMEOUT after 150ms without output')
-      await Bun.sleep(700)
+      await Bun.sleep(1_400)
       expect(existsSync(survivorMarker)).toBe(false)
     } finally {
       rmSync(runRoot, { recursive: true, force: true })
@@ -311,8 +333,8 @@ describe('local backend shard wall-clock timeout', () => {
       setTimeout(async () => {
         await Bun.write(${JSON.stringify(survivorMarker)}, 'survived')
         process.exit(0)
-      }, 350)
-      setTimeout(() => process.exit(0), 600)
+      }, 1_600)
+      setTimeout(() => process.exit(0), 2_400)
     `
     const parentScript = `
       Bun.spawn([${JSON.stringify(process.execPath)}, '-e', ${JSON.stringify(grandchildScript)}], {
@@ -328,14 +350,17 @@ describe('local backend shard wall-clock timeout', () => {
         repoRoot,
         runRoot,
         runtimePlan(runRoot, [process.execPath, '-e', parentScript]),
-        { timeoutMs: 100, killGraceMs: 50 },
+        { timeoutMs: 800, killGraceMs: 50 },
       )
 
       expect(result.exitCode).toBe(124)
       expect(result.timedOut).toBe(true)
-      expect(result.output).toContain('term-compliant-parent-ready')
+      expect(
+        result.output,
+        '前提不成立：TERM 顺从的父进程还没打印就绪行就被超时杀了，此刻断言不到「领头先退、组杀仍生效」',
+      ).toContain('term-compliant-parent-ready')
       expect(result.output).toContain('SIGKILL to process group')
-      await Bun.sleep(350)
+      await Bun.sleep(1_200)
       expect(existsSync(survivorMarker)).toBe(false)
     } finally {
       rmSync(runRoot, { recursive: true, force: true })

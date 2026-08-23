@@ -21,13 +21,13 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { count, eq, is } from 'drizzle-orm'
-import { SQLiteTable, getTableConfig } from 'drizzle-orm/sqlite-core'
+import { count, eq } from 'drizzle-orm'
 
 import type { Hono } from 'hono'
 
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import * as schema from '../src/db/schema'
+import { cascadeClosure, cascadeEdges, closureOverEdges } from './architecture/cascadeClosure'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   nodeRunEvents,
@@ -483,29 +483,66 @@ describe('RFC-311 T19 — 手动批量归档入口与审计行', () => {
 // 不在导出清单里,这就是一次静默丢失——目录里没有、库里也没有,而且没有任何报错。
 // 这条守卫把「schema 里有什么」和「归档导出了什么」直接对上,新表要么进清单、要么
 // 进豁免清单(并写明为什么)。
-describe('RFC-311 T19 — 级联表与导出清单的对账', () => {
-  test('每一张随 tasks/node_runs 级联删除的表,要么被归档,要么显式豁免', () => {
-    const cascading = new Set<string>()
-    for (const value of Object.values(schema)) {
-      if (!is(value, SQLiteTable)) continue
-      const config = getTableConfig(value)
-      for (const fk of config.foreignKeys) {
-        const ref = fk.reference()
-        const target = getTableConfig(ref.foreignTable).name
-        if (target !== 'tasks' && target !== 'node_runs') continue
-        if (fk.onDelete !== 'cascade') continue
-        cascading.add(config.name)
-      }
-    }
-    // 自身不是外键持有方,但显然属于归档单位。
-    expect(cascading.size).toBeGreaterThan(10)
+//
+// RFC-317 CC-01 订正:原来这里只走**一跳**(`if (target !== 'tasks' && target !==
+// 'node_runs') continue`),于是跨两跳才够到根的表一律被判成「够不着」。而
+// `ON DELETE CASCADE` 是**传递**的:删 tasks 带走 doc_versions,带走 doc_versions
+// 又带走 review_comments。`review_comments` 就是这么被静默删掉的——它既不在导出
+// 清单也不在豁免清单,而守卫全绿。现在改用不动点闭包 `cascadeClosure`,新表挂在
+// 任何一张已可达的表上都会自动进入分母。
+describe('RFC-311 T19 / RFC-317 R8 — 级联闭包与导出清单的对账', () => {
+  const ROOTS = ['tasks', 'node_runs'] as const
+
+  test('每一张随 tasks/node_runs **传递**级联删除的表,要么被归档,要么显式豁免', () => {
+    const reachable = cascadeClosure(schema, ROOTS)
+    for (const root of ROOTS) reachable.delete(root)
+
+    // 语料非空:闭包算出 0 张表说明 schema 反射或 roots 名字变了,本用例此刻零预言力。
+    expect(reachable.size, '级联闭包扫到 0 张表——反射口径已失效,不是「真的没有」').toBeGreaterThan(
+      10,
+    )
 
     const covered = new Set([...ARCHIVED_TABLES, ...ARCHIVE_EXEMPT_TABLES])
-    const uncovered = [...cascading].filter((name) => !covered.has(name)).sort()
+    const uncovered = [...reachable].filter((name) => !covered.has(name)).sort()
     expect(
       uncovered,
       `这些表会随归档删库消失,却既不在 ARCHIVED_TABLES 也不在 ARCHIVE_EXEMPT_TABLES 里:${uncovered.join(', ')}`,
     ).toEqual([])
+  })
+
+  test('闭包确实比一跳更宽——review_comments 只有闭包看得见', () => {
+    // 这条是上面那条的**预言力证明**:它锁死「闭包 ⊋ 一跳」,并点名当初漏掉的那张表。
+    // 如果哪天有人把 cascadeClosure 改回一跳,这里会红,而不是让守卫悄悄退化。
+    const oneHop = new Set<string>()
+    for (const edge of cascadeEdges(schema)) {
+      if ((ROOTS as readonly string[]).includes(edge.parent)) oneHop.add(edge.child)
+    }
+    const closure = cascadeClosure(schema, ROOTS)
+    for (const root of ROOTS) closure.delete(root)
+
+    const onlyInClosure = [...closure].filter((name) => !oneHop.has(name)).sort()
+    expect(onlyInClosure, '闭包必须真的比一跳宽,否则这次修复没有任何效果').toContain(
+      'review_comments',
+    )
+    expect([...ARCHIVED_TABLES]).toContain('review_comments')
+  })
+
+  test('合成孙表 fixture:闭包会报,一跳不会（RFC-317 R8 的算法证明）', () => {
+    // 不往真 schema 里塞故意的违规——用一份**手写边集**喂给同一个纯算法。
+    // `cascadeEdges` 已经把「非 cascade 的外键」过滤掉了,所以这里的边集按定义
+    // 只含 cascade 边;要证的是「传递」这一点。
+    const edges = [
+      { child: 'child', parent: 'tasks' },
+      { child: 'grandchild', parent: 'child' },
+      { child: 'unrelated', parent: 'some_other_root' },
+    ] as const
+
+    const closure = closureOverEdges(edges, ['tasks'])
+    expect([...closure].sort()).toEqual(['child', 'grandchild', 'tasks'])
+
+    const oneHop = edges.filter((edge) => edge.parent === 'tasks').map((edge) => edge.child)
+    expect(oneHop, '一跳看不见孙表——这正是 review_comments 当初逃掉的机制').toEqual(['child'])
+    expect(closure.has('unrelated'), '闭包不能过宽:够不到的根不该被拉进来').toBe(false)
   })
 
   test('豁免清单只放确实不值得归档的运行态', () => {

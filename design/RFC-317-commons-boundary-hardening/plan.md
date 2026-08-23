@@ -218,3 +218,31 @@ B4–B10 之间无依赖，可按工作树占用情况调序；**唯一硬约束
 - **变异实证**：删守卫登记 ⇒ 1 fail；改守卫名 ⇒ 2 fail；账本 baseline 减 1 ⇒ 3 fail；三份文件 `cp` 还原后 `diff -q` 逐字一致，复跑 12/12 绿。
 - **偏差**：R1/R2 的**边相等断言**按计划留在 B3（连同正反 fixture 一起落）；B0 只落闭合断言。`guard-manifest.json` 的 `minCorpusFiles` 与 R11 导出式 fixture 元数据留给 B2，条目上以 `classified: false` 让缺口自己可见。
 - **顺带发现**：`modules/work-start/` 是零文件、未跟踪、无人引用的**空目录残骸**（不删，按仓规不动未跟踪文件）；生成清单时踩到正则 alternation 顺序 bug（`(?:ts|tsx)` 把 `.tsx` 匹成 `.ts`），漏掉 9 个前端原语，已修并列入 T69。
+
+
+### B1-a（2026-08-23）—— 两条 P1 + 一条 CI flake
+
+**落地任务**：T5 / T6 / T7 / T10 / T11（T8 / T9 / T9b 留 B1-b）。
+
+- **T5**：`routes/developmentConfig.ts` 新增与 `requireVisible` 对称的写门 `requireOwned`（内部走公共 `requireResourceOwner`），**16 处写路径**（15 处 revise/publish/archive + 1 处 `PUT /api/code/digital-employees/:id/playbook`）切过去；**6 处读路径**原样保留。**能力收缩 C1 生效**。
+- **T7**：`tests/rfc317-config-resource-write-gate.test.ts`，五类资源 × 五种情形共 26 条。含**被 grant 的非 owner 写仍 403**——锁死「grant 只授可见、不授写」这条我在 B1 开工前读源码才发现、且与 RFC 初稿写反的事实。正向用例的被测面刻意收在**写门本身**（断言「非 403/404」+ 按实际结果分支断言持久效果），不被各类型的草稿 schema 绑架。
+- **T6**：`tests/architecture/rfc317-acl-write-gate-guard.test.ts`，两条不变量 + allowlist stale 检查：①凡**调用** `mountAclEndpoints` 的路由文件必须**调用** `requireResourceOwner`；②`routes/**` 里调用 `canViewResource` 的文件要么也调 owner 判据、要么进带 why 的只读 allowlist。
+- **T10/T11**：`tests/architecture/cascadeClosure.ts`（`cascadeEdges` 反射 + `closureOverEdges` 纯图算法分离）；归档对账由**一跳**改**传递闭包**；`review_comments` 进 `ARCHIVED_TABLES`（按 doc_version 归属回到 task 维度的子查询，不用 join 以保持 JSONL 行形状）。**能力收缩 C6 生效**。
+- **顺带**：修一条主干既有 CI flake。`local-gate-runner.test.ts` 的三条杀链用例拿 100/150ms 墙钟去赛 `bun -e` 进程启动——本机实测空载 ~20ms、八个忙循环下**达 100ms**，于是在 B0 的 CI run `32619463902` 上红了 `Backend tests (macos-latest shard 4/4)`（杀链本身执行正确，红的是就绪竞态）。按「实测最坏值的数倍」重设预算、保持 kill 时刻与 marker 时刻的相对余量不变，并给就绪断言补前提复核措辞。
+
+**变异实证（每条都做了红→还原→复绿）**
+
+| 变异 | 结果 |
+| --- | --- |
+| 16 处写门退回 `requireVisible` | **恰好 10 条红**（5 条 public-403 + 5 条 grant-403），private-404 与正向组不受影响——预言力对准写门本身 |
+| 把 `developmentConfig.ts` 唯一的 `requireResourceOwner` 调用退回（注释里仍提及该名字） | T6 **2 条红** |
+| `signalBackendShardProcessTree` 的 `process.kill(-pid)` 改 `process.kill(pid)` | `local-gate-runner` **3 条红**（含 CI 上红过的那条）——证明加余量没有把预言力抽空 |
+| 从 `guard-manifest.json` 删掉子目录里的守卫登记 | **1 条红**（修递归前是静默通过） |
+
+**本批踩到并已修的三个自伤**（都写进了对应文件的头注释，供后来者）
+
+1. **守卫枚举不递归**：`guardTestFiles` 初版只扫三个 `tests/` 顶层，而我把第一个新守卫放进了 `tests/architecture/` 子目录 ⇒ 两向钉死看不见它却全绿。这正是 T69 要沉淀的自检第二句（「递归吗？」），写守卫的人当场踩了一次。修成递归后另外还捞出一个**既有**漏网：`tests/integration-opencode/rfc281-boundary.integration.test.ts`。
+2. **正向检查被一句注释满足**：T6 第一版用 `text.includes('requireResourceOwner')`，而被测文件的文档注释里提到了这个名字 ⇒ 把导入与调用一起拿掉（事故前形状）仍然全绿。CLAUDE.md 记过它的镜像版（注释里的字面量会踩**负向**锁）；正向锁被注释满足更隐蔽，因为它不会让人怀疑。
+3. **正则剥注释会吃掉真代码**：第二版改成「先正则剥注释再匹配调用形态」，非贪婪块注释正则从字符串里的 `/*` 一路吃到下一个 `*/`，把 `tasks.ts` 中间几百行连同真正的 `canViewResource(` 调用一起吞掉，导致 allowlist stale 误报。终版改用 **TS AST 判「被调用过的名字」**，对注释与字符串天然免疫。
+
+**B0 的 CI 结论**：run `32619463902` = **30/31 job 绿**，唯一红格就是上面这条既有 flake，已在本批修复。

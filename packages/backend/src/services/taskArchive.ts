@@ -40,6 +40,7 @@ import {
   nodeRunOutputs,
   nodeRuns,
   recoveryEvents,
+  reviewComments,
   taskArchiveAudit,
   taskCollaborators,
   taskFeedback,
@@ -157,6 +158,34 @@ const TASK_SCOPED: readonly ExportSpec[] = [
     name: 'doc_versions',
     load: (db, ids) =>
       chunkedAll(ids, (c) => db.select().from(docVersions).where(inArray(docVersions.taskId, c))),
+  },
+  {
+    // RFC-317 CC-01 —— `review_comments` 是**两跳**级联后代
+    // (`review_comments` → `doc_versions` → `tasks` / `node_runs`)。原先的对账
+    // 守卫只走一跳，结构上看不见它，于是它随归档被**静默删除**且既不在导出清单
+    // 也不在豁免清单——目录里没有、库里也没有、还不报错。
+    //
+    // 注意 `doc_versions.comments_json` 只冻结了**决定时刻**的评论；未决文档上的
+    // 评论此前是真的丢了，所以这里必须逐行导出，不能拿那一列当替代品。
+    //
+    // 用子查询按 doc_version 归属回到 task 维度，不用 join——join 会让 JSONL 多
+    // 出一层包裹，与其它表的行形状不一致。
+    name: 'review_comments',
+    load: (db, ids) =>
+      chunkedAll(ids, (c) =>
+        db
+          .select()
+          .from(reviewComments)
+          .where(
+            inArray(
+              reviewComments.docVersionId,
+              db
+                .select({ id: docVersions.id })
+                .from(docVersions)
+                .where(inArray(docVersions.taskId, c)),
+            ),
+          ),
+      ),
   },
   {
     name: 'lifecycle_alerts',

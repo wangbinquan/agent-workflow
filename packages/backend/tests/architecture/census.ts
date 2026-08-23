@@ -12,7 +12,7 @@
 // 本模块**不含断言**，纯函数 + 文件系统读取，root 由调用方传入（不读 env，
 // 避免再造一个 env 型 test seam）。
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
 import { posix, relative, resolve } from 'node:path'
 
 import ts from 'typescript'
@@ -364,22 +364,37 @@ export const GUARD_TEST_DIRECTORIES = [
   'packages/shared/tests',
 ] as const
 
-/** 磁盘上全部「架构守卫」测试文件（仅顶层，不递归——三个 tests 目录都是平铺的）。 */
+/**
+ * 磁盘上全部「架构守卫」测试文件。
+ *
+ * **必须递归**。初版只扫了三个 tests 目录的顶层，理由是「它们都是平铺的」——
+ * 然后本 RFC 自己把第一个新守卫放进了 `tests/architecture/` 子目录，于是两向钉死
+ * 结构上看不见它、却全绿。这正是 `docs/dev-gotchas.md` 那条自检要问的第二句
+ * （「递归吗？」），写守卫的人当场踩了一次。判据按**文件名**匹配，与它躺在哪一层
+ * 目录无关。
+ */
 export function guardTestFiles(repoRoot: string): string[] {
   const out: string[] = []
-  for (const dir of GUARD_TEST_DIRECTORIES) {
-    let names: string[]
+  const visit = (dir: string, rel: string): void => {
+    let entries: Dirent[]
     try {
-      names = readdirSync(resolve(repoRoot, dir))
+      entries = readdirSync(dir, { withFileTypes: true })
     } catch {
-      continue
+      return
     }
-    for (const name of names) {
+    for (const entry of entries) {
+      const name = entry.name
+      if (entry.isDirectory()) {
+        if (name === 'node_modules' || name === 'fixtures' || name === '__snapshots__') continue
+        visit(resolve(dir, name), `${rel}/${name}`)
+        continue
+      }
       if (!/\.test\.[cm]?tsx?$/.test(name)) continue
       if (!GUARD_FILE_NAME_PATTERN.test(name)) continue
-      out.push(`${dir}/${name}`)
+      out.push(`${rel}/${name}`)
     }
   }
+  for (const dir of GUARD_TEST_DIRECTORIES) visit(resolve(repoRoot, dir), dir)
   return out.sort()
 }
 

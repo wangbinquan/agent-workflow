@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "RFC-317 守卫清单。v1 的作用是两向钉死（删守卫 / 改守卫名 ⇒ 红）——这一半就已经关掉 CC-07「守卫可被静默删除」的洞。minCorpusFiles 与 R11 导出式 fixture 由 B2 的 T13–T15 逐条补齐；classified:false 让未补齐的缺口自己可见，不假装完整。",
+  "note": "RFC-317 守卫清单。v1 的作用是两向钉死（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红）——这一半就已经关掉 CC-07「守卫可被静默删除」的洞。枚举与钉死它的守卫共用 census.guardTestFiles，且**递归**：初版只扫顶层，第一个放进子目录的守卫就逃掉了。minCorpusFiles 与 R11 导出式 fixture 由 B2 的 T13–T15 逐条补齐；classified:false 让未补齐的缺口自己可见，不假装完整。",
   "recordedAtSha": "efc1bdb01",
   "guards": [
     {
@@ -28,6 +28,30 @@
       "lines": 129
     },
     {
+      "id": "rfc317-acl-write-gate-guard",
+      "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "classified": false,
+      "r11FixturesExported": false,
+      "inFileNegativeFixture": false,
+      "prosePromisesMutation": true,
+      "minCorpusFiles": null,
+      "lines": 131
+    },
+    {
+      "id": "rfc317-architecture-ledgers",
+      "file": "packages/backend/tests/architecture/rfc317-architecture-ledgers.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "classified": false,
+      "r11FixturesExported": false,
+      "inFileNegativeFixture": false,
+      "prosePromisesMutation": false,
+      "minCorpusFiles": null,
+      "lines": 189
+    },
+    {
       "id": "e2e-sqlite-fixture-lock-contention",
       "file": "packages/backend/tests/e2e-sqlite-fixture-lock-contention.test.ts",
       "runner": "bun",
@@ -38,6 +62,18 @@
       "prosePromisesMutation": false,
       "minCorpusFiles": null,
       "lines": 146
+    },
+    {
+      "id": "rfc281-boundary.integration",
+      "file": "packages/backend/tests/integration-opencode/rfc281-boundary.integration.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "classified": false,
+      "r11FixturesExported": false,
+      "inFileNegativeFixture": false,
+      "prosePromisesMutation": false,
+      "minCorpusFiles": null,
+      "lines": 327
     },
     {
       "id": "lifecycle-grep-guard",

@@ -69,7 +69,7 @@ import {
   validateDigitalEmployeeForPublish,
 } from '@/modules/development-automation/domain/digitalEmployee'
 import { projectEmployeeSetupJourney } from '@/modules/development-automation/domain/journeyProjection'
-import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
+import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -254,6 +254,36 @@ async function requireVisible<T extends AclVisibleRow>(
   return row
 }
 
+/**
+ * 写门（revise / publish / archive / playbook PUT）。
+ *
+ * RFC-317 C1 之前，这五类资源的写路径只调 `requireVisible`——即**看得见就写得动**。
+ * 而 `user` 角色预设本就持有这五类的 `:update` / `:archive` 点
+ * （`shared/schemas/permission.ts` 的 `USER_RESOURCE_WRITES`），于是任何登录用户
+ * 都能改写 / 发布 / 归档**别人的** public 动作模板、验证档案、数字员工、自动化
+ * 策略与适配器定义。同一份 permission 文件的注释却写着「per-row check 是
+ * resource ACL，和这里其他类型一样」——名实不符。
+ *
+ * 现在与其余七类 ACL 资源走同一个公共判据 `requireResourceOwner`：它先做
+ * `requireResourceView`（不可见 ⇒ 404，与不存在同形，守 RFC-248 H9 反枚举），
+ * 再判 owner-or-bypass（可见但非 owner ⇒ 403）。
+ *
+ * **注意 grant 不含写权**：`resource_grants` 只进 `canViewResource`，不进
+ * `isResourceOwner`（`services/resourceAcl.ts`）。所以「授权给某人」只授可见与
+ * 可用；非 owner 要写只有三条路——由 owner 操作、授 `resource-acl:bypass`
+ * （manager+ 才有此点）、或转移 owner。
+ */
+async function requireOwned<T extends AclVisibleRow>(
+  deps: AppDeps,
+  actor: Actor,
+  aclType: AclResourceType,
+  row: T | null,
+): Promise<T> {
+  if (row === null) throw new NotFoundError('resource-not-found', 'not found')
+  await requireResourceOwner(deps.db, actor, aclType, row)
+  return row
+}
+
 export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
   const templateStore = createSqliteActionTemplateStore(deps.db)
   const profileStore = createSqliteVerificationProfileStore(deps.db)
@@ -340,21 +370,21 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       revise: async (actor, id, body) => {
-        await requireVisible(deps, actor, 'action_template', templateStore.getById(id))
+        await requireOwned(deps, actor, 'action_template', templateStore.getById(id))
         reviseActionTemplateDraft(
           { store: templateStore, now },
           { id, draft: body.draft ?? {}, ...(body.name === undefined ? {} : { name: body.name }) },
         )
       },
       publish: async (actor, id) => {
-        await requireVisible(deps, actor, 'action_template', templateStore.getById(id))
+        await requireOwned(deps, actor, 'action_template', templateStore.getById(id))
         return publishActionTemplate(
           { store: templateStore, now },
           { id, actorUserId: actor.user.id },
         )
       },
       archive: async (actor, id) => {
-        await requireVisible(deps, actor, 'action_template', templateStore.getById(id))
+        await requireOwned(deps, actor, 'action_template', templateStore.getById(id))
         archiveActionTemplate({ store: templateStore, now }, { id })
       },
     },
@@ -389,21 +419,21 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           ),
         ),
       revise: async (actor, id, body) => {
-        await requireVisible(deps, actor, 'verification_profile', profileStore.getById(id))
+        await requireOwned(deps, actor, 'verification_profile', profileStore.getById(id))
         reviseVerificationProfileDraft(
           { store: profileStore, now },
           { id, draft: body.draft ?? {}, ...(body.name === undefined ? {} : { name: body.name }) },
         )
       },
       publish: async (actor, id) => {
-        await requireVisible(deps, actor, 'verification_profile', profileStore.getById(id))
+        await requireOwned(deps, actor, 'verification_profile', profileStore.getById(id))
         return publishVerificationProfile(
           { store: profileStore, now },
           { id, actorUserId: actor.user.id },
         )
       },
       archive: async (actor, id) => {
-        await requireVisible(deps, actor, 'verification_profile', profileStore.getById(id))
+        await requireOwned(deps, actor, 'verification_profile', profileStore.getById(id))
         archiveVerificationProfile({ store: profileStore, now }, { id })
       },
     },
@@ -456,7 +486,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           }),
         ),
       revise: async (actor, id, body) => {
-        await requireVisible(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+        await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
         await reviseDigitalEmployeeDraft(deps.db, {
           id,
           draft: body.draft ?? {},
@@ -464,7 +494,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         })
       },
       publish: async (actor, id) => {
-        await requireVisible(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+        await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
         return publishDigitalEmployee(deps.db, {
           id,
           publishedBy: actor.user.id,
@@ -472,7 +502,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         })
       },
       archive: async (actor, id) => {
-        await requireVisible(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+        await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
         await archiveDigitalEmployee(deps.db, id)
       },
     },
@@ -553,7 +583,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const id = c.req.param('id')
-      await requireVisible(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+      await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
       const body = employeePlaybookBody.parse(await safeJsonOrEmpty(c.req.raw))
       // Reject an incomplete browser write before replacing the previous draft;
       // cross-resource closure violations remain visible and publish-blocking.
@@ -688,12 +718,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           }),
         ),
       revise: async (actor, id, body) => {
-        await requireVisible(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
+        await requireOwned(deps, actor, 'automation_policy', await getAutomationPolicy(deps.db, id))
         await reviseAutomationPolicyDraft(deps.db, {
           id,
           draft: body.draft ?? {},
@@ -701,21 +726,11 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         })
       },
       publish: async (actor, id) => {
-        await requireVisible(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
+        await requireOwned(deps, actor, 'automation_policy', await getAutomationPolicy(deps.db, id))
         return publishAutomationPolicy(deps.db, { id, publishedBy: actor.user.id })
       },
       archive: async (actor, id) => {
-        await requireVisible(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
+        await requireOwned(deps, actor, 'automation_policy', await getAutomationPolicy(deps.db, id))
         await archiveAutomationPolicy(deps.db, id)
       },
     },
@@ -772,7 +787,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       revise: async (actor, id, body) => {
-        await requireVisible(deps, actor, 'development_adapter', adapterStore.getById(id))
+        await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
         reviseDevelopmentAdapterDraft(
           adapterStore,
           { userId: actor.user.id, actorHasScriptsAuthor: actor.permissions.has('scripts:author') },
@@ -780,7 +795,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       publish: async (actor, id) => {
-        await requireVisible(deps, actor, 'development_adapter', adapterStore.getById(id))
+        await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
         return publishDevelopmentAdapter(
           adapterStore,
           { userId: actor.user.id, actorHasScriptsAuthor: actor.permissions.has('scripts:author') },
@@ -788,7 +803,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       archive: async (actor, id) => {
-        await requireVisible(deps, actor, 'development_adapter', adapterStore.getById(id))
+        await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
         archiveDevelopmentAdapter(adapterStore, { id, now: now() })
       },
     },
