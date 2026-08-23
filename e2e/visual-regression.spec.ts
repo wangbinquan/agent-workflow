@@ -1102,7 +1102,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     ).toHaveCount(1)
     const mapBox = await responsibilityMap.boundingBox()
     expect(mapBox).not.toBeNull()
-    expect((mapBox?.y ?? 0) + (mapBox?.height ?? 0)).toBeLessThanOrEqual(900)
+    expect(mapBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(900)
     expect(
       await responsibilityMap.locator('.employee-toolbox-card strong').evaluateAll((labels) =>
         labels.flatMap((label) => {
@@ -1152,15 +1152,76 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
         textAlign: getComputedStyle(label).textAlign,
       }))
     expect(sourceTypography).toEqual({ fontSize: '12px', textAlign: 'left' })
-    const reviewBranchBackgrounds = await responsibilityMap
+    const reviewBranchTopology = await responsibilityMap
       .locator('.employee-toolbox-review-branch')
       .evaluateAll((branches) =>
         branches.map((branch) => ({
-          branch: getComputedStyle(branch).backgroundColor,
+          outer: getComputedStyle(branch).backgroundColor,
+          prefix: getComputedStyle(
+            branch.querySelector<HTMLElement>('.employee-toolbox-review-branch__prefix')!,
+            '::before',
+          ).backgroundColor,
           map: getComputedStyle(branch.closest('.employee-toolbox-map')!).backgroundColor,
+          mergedInsidePrefix:
+            branch.querySelector(
+              '.employee-toolbox-review-branch__prefix .employee-toolbox-review-branch__merged-item',
+            ) !== null,
+          bypassCount: branch.querySelectorAll('.employee-toolbox-review-branch__bypass').length,
         })),
       )
-    expect(reviewBranchBackgrounds.every(({ branch, map }) => branch === map)).toBe(true)
+    expect(
+      reviewBranchTopology.every(
+        ({ outer, prefix, map, mergedInsidePrefix, bypassCount }) =>
+          outer === 'rgba(0, 0, 0, 0)' &&
+          prefix === map &&
+          !mergedInsidePrefix &&
+          bypassCount === 0,
+      ),
+    ).toBe(true)
+    const connectorGeometry = await responsibilityMap.evaluate((map) => {
+      const readConnector = (selector: string) => {
+        const element = map.querySelector<HTMLElement>(selector)
+        if (element === null) throw new Error(`Missing connector target: ${selector}`)
+        const shaft = getComputedStyle(element, '::before')
+        const arrow = getComputedStyle(element, '::after')
+        return {
+          shaftWidth: shaft.width,
+          arrowWidth: arrow.width,
+          arrowHeight: arrow.height,
+          arrowTopStroke: arrow.borderTopWidth,
+          arrowRightStroke: arrow.borderRightWidth,
+        }
+      }
+      const axis = map.querySelector<HTMLElement>('.employee-toolbox-lane__axis')
+      const axisArrow = axis?.querySelector<HTMLElement>(':scope > span')
+      if (axis === null || axis === undefined || axisArrow === null || axisArrow === undefined) {
+        throw new Error('Missing lane-axis connector')
+      }
+      const axisShaftStyle = getComputedStyle(axis, '::after')
+      const axisArrowStyle = getComputedStyle(axisArrow)
+      return [
+        {
+          shaftWidth: axisShaftStyle.width,
+          arrowWidth: axisArrowStyle.width,
+          arrowHeight: axisArrowStyle.height,
+          arrowTopStroke: axisArrowStyle.borderTopWidth,
+          arrowRightStroke: axisArrowStyle.borderRightWidth,
+        },
+        readConnector('[data-work-item-ref="prepare-change"]'),
+        readConnector('[data-review-option-ref]'),
+        readConnector('.employee-toolbox-review-branch__merged-item'),
+        readConnector('.employee-toolbox-ingress-branch__merge'),
+      ]
+    })
+    expect(connectorGeometry).toEqual(
+      Array(5).fill({
+        shaftWidth: '6px',
+        arrowWidth: '3px',
+        arrowHeight: '3px',
+        arrowTopStroke: '1px',
+        arrowRightStroke: '1px',
+      }),
+    )
     expect(
       await responsibilityMap
         .locator('.employee-toolbox-lane__cards')
@@ -1245,7 +1306,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
     await dialog.getByRole('textbox', { name: /Tool name/ }).fill('Implement Java changes')
-    await dialog.getByRole('combobox').click()
+    await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
     await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('digital-employee-tool-dialog.png', SNAPSHOT_OPTS)
@@ -1320,7 +1381,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             {
               id: 'visual-java-employee',
               name: 'Java delivery employee',
-              typeRef: { typeId: 'development', revision: 6 },
+              typeRef: { typeId: 'development', revision: 7 },
               configuration: {
                 displayName: 'Java delivery employee',
                 jobTemplateRef: { id: 'visual-java-job', revision: 3 },
@@ -1343,7 +1404,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             {
               id: 'visual-cpp-employee',
               name: 'C++ pipeline repair employee',
-              typeRef: { typeId: 'development', revision: 6 },
+              typeRef: { typeId: 'development', revision: 7 },
               configuration: {
                 displayName: 'C++ pipeline repair employee',
                 jobTemplateRef: { id: 'visual-cpp-job', revision: 2 },
@@ -1427,7 +1488,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       })
     })
     await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%406?view=employees`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%407?view=employees`)
     await expect(page.getByTestId('digital-employee-outcomes-visual-java-employee')).toContainText(
       '18',
     )

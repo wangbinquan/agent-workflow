@@ -438,9 +438,9 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const prepareMaterialsCenterY = prepareMaterialsBox.y + prepareMaterialsBox.height / 2
   expect(uiInputBox.y + uiInputBox.height / 2).toBeLessThan(prepareMaterialsCenterY)
   expect(issueInputBox.y + issueInputBox.height / 2).toBeGreaterThan(prepareMaterialsCenterY)
-  await expect(reviewBranch).toContainText('No review')
+  await expect(reviewBranch).toContainText('No review: start here')
   await expect(reviewBranch).toContainText('Analyze and implement')
-  await expect(reviewBranch).toContainText('Review enabled')
+  await expect(reviewBranch).toContainText('Optional review prefix')
   await expect(reviewBranch.locator('[data-review-stage="analysis"] strong')).toHaveText(
     'Implementation planning',
   )

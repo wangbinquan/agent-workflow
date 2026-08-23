@@ -144,8 +144,8 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
     expect(container.textContent).toContain('界面输入')
     expect(container.textContent).toContain('ISSUE')
     expect(container.textContent).toContain('分析与实现')
-    expect(container.textContent).toContain('不启用审核')
-    expect(container.textContent).toContain('启用审核')
+    expect(container.textContent).toContain('不审核：从此开始')
+    expect(container.textContent).toContain('可选审核前缀')
     expect(container.textContent).toContain('人工审核方案')
     expect(
       Array.from(
@@ -167,6 +167,12 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
     expect(container.querySelectorAll('.employee-toolbox-review-branch__merged-item')).toHaveLength(
       1,
     )
+    expect(
+      container.querySelector(
+        '.employee-toolbox-review-branch__prefix .employee-toolbox-review-branch__merged-item',
+      ),
+    ).toBeNull()
+    expect(container.querySelector('.employee-toolbox-review-branch__bypass')).toBeNull()
     expect(container.querySelectorAll('[data-work-item-ref="analyze"]')).toHaveLength(1)
     expect(
       Array.from(container.querySelectorAll('[data-work-ingress-ref]'), (card) =>

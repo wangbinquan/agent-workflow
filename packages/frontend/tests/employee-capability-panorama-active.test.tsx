@@ -135,7 +135,7 @@ describe('public employee capability panorama active projection', () => {
     expect(container.querySelector('[data-work-item-ref="implement"]')).not.toBeNull()
     expect(container.querySelector('[data-review-option-ref="review-plan"]')).toBeNull()
     expect(container.textContent).not.toContain('人工审核方案')
-    expect(container.textContent).not.toContain('不启用审核')
+    expect(container.textContent).not.toContain('不审核：从此开始')
   })
 
   test('active=true renders only the selected review tool path with runtime color', () => {
@@ -161,7 +161,7 @@ describe('public employee capability panorama active projection', () => {
     const gate = container.querySelector('[data-review-option-ref="review-plan"]')
     expect(gate).not.toBeNull()
     expect(gate?.classList.contains('employee-toolbox-card--completed')).toBe(true)
-    expect(container.textContent).not.toContain('不启用审核')
+    expect(container.textContent).not.toContain('不审核：从此开始')
     const analysis = container.querySelector(
       '[data-capability-tool-ref="review:review-plan:analysis"]',
     )

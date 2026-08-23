@@ -129,7 +129,10 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('data-review-stage="analysis"')
     expect(graph).not.toContain('data-review-stage="implementation"')
     expect(graph).toContain('employee-toolbox-review-branch__merged-item')
-    expect(graph).toContain('data-review-path="bypass"')
+    expect(graph).toContain('employee-toolbox-review-branch__prefix')
+    expect(graph).toContain('employee-toolbox-review-branch__merge-target')
+    expect(graph).toContain('employee-toolbox-review-branch__direct-label')
+    expect(graph).not.toContain('data-review-path="bypass"')
     expect(graph).toContain('data-review-option-ref={gate.optionRef}')
     expect(graph).toContain('item.humanReview !== null')
     expect(graph).toContain("mode: 'conditional' | 'active'")
@@ -165,16 +168,24 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(styles).toContain('grid-template-columns: minmax(0, 1fr)')
     expect(styles).toMatch(/\.employee-toolbox-lane__cards\s*\{[^}]*align-items:\s*center/)
     expect(styles).toMatch(
-      /\.employee-toolbox-review-branch\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--panel\)/,
+      /\.employee-toolbox-review-branch\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/,
     )
+    expect(styles).toMatch(
+      /\.employee-toolbox-review-branch__prefix::before\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--panel\)/,
+    )
+    expect(styles).not.toContain('.employee-toolbox-review-branch__bypass')
     expect(graph).toContain('new ResizeObserver(measureLaneColumns)')
     expect(graph).toContain('laneColumnCapacityById[lane.laneId] ?? totalColumnSpan')
     expect(graph).not.toContain('Math.min(totalColumnSpan, 5)')
     expect(styles).toContain('--employee-flow-gap: 10px')
+    expect(styles).toContain('--employee-flow-shaft-length: 6px')
+    expect(styles).toContain('--employee-flow-arrow-size: 3px')
+    expect(styles).toContain('--employee-flow-arrow-stroke: 1.25px')
+    expect(styles).toContain('--employee-flow-branch-trunk-inset: 2px')
     expect(styles).toContain('left: calc(0px - var(--employee-flow-gap))')
-    expect(styles).toMatch(
-      /\.employee-toolbox-review-branch__reviewed-flow[\s\S]*?\+ \.employee-toolbox-card::after\s*\{[\s\S]*?left:\s*-6px/,
-    )
+    expect(styles).toContain('width: var(--employee-flow-shaft-length)')
+    expect(styles).toContain('width: var(--employee-flow-arrow-size)')
+    expect(styles).not.toContain('--employee-flow-gap: 5px')
     expect(graph).toContain('options.sourceNode === true ? null')
     expect(graph).toContain("entry.kind === 'ingress-branch'")
     expect(styles).toContain('grid-column: span 2')

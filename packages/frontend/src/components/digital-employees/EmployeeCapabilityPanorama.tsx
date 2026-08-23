@@ -935,28 +935,16 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                       : `Review branches for ${localized(item.label, props.language)}`
                                 }
                               >
-                                {entry.mode === 'conditional' ? (
-                                  <div className="employee-toolbox-review-branch__path">
-                                    <span className="employee-toolbox-review-branch__label">
-                                      {zh ? '不启用审核' : 'No review'}
-                                    </span>
-                                    <span
-                                      className="employee-toolbox-review-branch__bypass"
-                                      data-review-path="bypass"
-                                      aria-label={
-                                        zh
-                                          ? '不启用方案审核，直接汇入分析与实现'
-                                          : 'Skip plan review and merge into Analyze and implement'
-                                      }
-                                    />
-                                  </div>
-                                ) : null}
-                                <div className="employee-toolbox-review-branch__path">
-                                  {entry.mode === 'conditional' ? (
-                                    <span className="employee-toolbox-review-branch__label">
-                                      {zh ? '启用审核' : 'Review enabled'}
-                                    </span>
-                                  ) : null}
+                                <div className="employee-toolbox-review-branch__prefix">
+                                  <span className="employee-toolbox-review-branch__label">
+                                    {entry.mode === 'active'
+                                      ? zh
+                                        ? '已启用审核前缀'
+                                        : 'Review prefix enabled'
+                                      : zh
+                                        ? '可选审核前缀'
+                                        : 'Optional review prefix'}
+                                  </span>
                                   <div className="employee-toolbox-review-branch__reviewed-flow">
                                     <button
                                       type="button"
@@ -1008,29 +996,38 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                     </button>
                                   </div>
                                 </div>
-                                <button
-                                  id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
-                                  data-work-item-ref={item.workItemRef}
-                                  data-capability-tool-ref={`work-item:${item.workItemRef}`}
-                                  type="button"
-                                  className={`employee-toolbox-card employee-toolbox-review-branch__merged-item employee-toolbox-card--${kind.className}${
-                                    afterApprovalState === undefined
-                                      ? ''
-                                      : ` employee-toolbox-card--${afterApprovalState}`
-                                  }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
-                                    state?.attention === true
-                                      ? ' employee-toolbox-card--attention'
-                                      : ''
-                                  }${itemSelected ? ' employee-toolbox-card--active' : ''}`}
-                                  aria-pressed={itemSelected}
-                                  aria-label={`${localized(item.label, props.language)} · ${kind.label} · ${detail} · ${next}`}
-                                  title={localized(item.description, props.language)}
-                                  onClick={selectItem}
-                                >
-                                  <span className="employee-toolbox-card__kind">{kind.label}</span>
-                                  <strong>{localized(item.label, props.language)}</strong>
-                                  <small title={detail}>{compactDetail}</small>
-                                </button>
+                                <div className="employee-toolbox-review-branch__merge-target">
+                                  {entry.mode === 'conditional' ? (
+                                    <span className="employee-toolbox-review-branch__direct-label">
+                                      {zh ? '不审核：从此开始' : 'No review: start here'}
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
+                                    data-work-item-ref={item.workItemRef}
+                                    data-capability-tool-ref={`work-item:${item.workItemRef}`}
+                                    type="button"
+                                    className={`employee-toolbox-card employee-toolbox-review-branch__merged-item employee-toolbox-card--${kind.className}${
+                                      afterApprovalState === undefined
+                                        ? ''
+                                        : ` employee-toolbox-card--${afterApprovalState}`
+                                    }${fanOut ? ' employee-toolbox-card--fan-out' : ''}${
+                                      state?.attention === true
+                                        ? ' employee-toolbox-card--attention'
+                                        : ''
+                                    }${itemSelected ? ' employee-toolbox-card--active' : ''}`}
+                                    aria-pressed={itemSelected}
+                                    aria-label={`${localized(item.label, props.language)} · ${kind.label} · ${detail} · ${next}`}
+                                    title={localized(item.description, props.language)}
+                                    onClick={selectItem}
+                                  >
+                                    <span className="employee-toolbox-card__kind">
+                                      {kind.label}
+                                    </span>
+                                    <strong>{localized(item.label, props.language)}</strong>
+                                    <small title={detail}>{compactDetail}</small>
+                                  </button>
+                                </div>
                                 <span className="sr-only">{next}</span>
                               </div>
                             )
