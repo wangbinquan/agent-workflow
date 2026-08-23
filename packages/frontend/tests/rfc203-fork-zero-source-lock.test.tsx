@@ -85,3 +85,27 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(walk(SRC).length).toBeGreaterThanOrEqual(250)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的复活写法喂给**扫描用的同一份 needle**。
+//
+// 上面两条都是「零命中」型断言：私有 `describeError` 不得复活、裸 `error-box`
+// className 只许出现在 ErrorBanner 自身。needle 一旦写歪（少个空格、改成正则却写错），
+// 复活的分叉不会被抓到，而断言仍报零——与「真的清零了」同形。
+describe('RFC-317 T14 —— matcher 自证：分叉复活写法必须被抓到', () => {
+  const contains = (text: string, needle: string): boolean => text.includes(needle)
+
+  test('私有 describeError 的声明形态命中', () => {
+    const fabricated = 'function describeError(err: unknown): string {\n  return String(err)\n}\n'
+    expect(contains(fabricated, 'function describeError(')).toBe(true)
+  })
+
+  test('调用而非声明不算（needle 刻意锁在声明上）', () => {
+    const fabricated = 'const msg = describeError(err)\n'
+    expect(contains(fabricated, 'function describeError(')).toBe(false)
+  })
+
+  test('裸 error-box className 命中；走 ErrorBanner 的写法不命中', () => {
+    expect(contains('<div className="error-box">{msg}</div>', 'className="error-box"')).toBe(true)
+    expect(contains('<ErrorBanner error={err} />', 'className="error-box"')).toBe(false)
+  })
+})

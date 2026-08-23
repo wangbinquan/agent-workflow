@@ -114,3 +114,22 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(ROOTS.flatMap((root) => walk(root.dir)).length).toBeGreaterThanOrEqual(700)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**本文件自己的 matcher**。
+//
+// 这条守卫的判据是「被删标识符零再现」，最容易的静默失效是有人改 `BANNED_IDENTIFIERS`
+// 时把某一项拼错——扫描照跑、永远零命中。
+describe('RFC-317 T14 —— matcher 自证：伪造的 fork 拷贝必须被抓到', () => {
+  test('伪造的本地拷贝逐个命中', () => {
+    for (const banned of BANNED_IDENTIFIERS) {
+      const fabricated = `export function ${banned}(kind: NodeKind): boolean {\n  return kind === 'agent'\n}\n`
+      expect(fabricated.includes(banned), `${banned} 的伪造样本没命中`).toBe(true)
+      expect(stripCommentLines(fabricated).includes(banned)).toBe(true)
+    }
+  })
+
+  test('注释里提到被删标识符不算违规', () => {
+    const fabricated = `// 历史上这里有 ${BANNED_IDENTIFIERS[0]}(kind)，已随 RFC-146 删除\nconst x = 1\n`
+    expect(stripCommentLines(fabricated).includes(BANNED_IDENTIFIERS[0])).toBe(false)
+  })
+})

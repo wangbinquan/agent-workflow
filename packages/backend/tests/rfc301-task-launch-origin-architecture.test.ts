@@ -36,32 +36,44 @@ const REVIEWED_CALL_NAMES = new Set([
 
 let identifierCallInventory: Map<string, Map<string, number>> | undefined
 
+/**
+ * 一份源码里每个受审调用名出现几次。**纯函数**——扫描与 RFC-317 T14 的
+ * 「matcher 自证」共用它，两边各留一份拷贝就等于 fixture 只在证明拷贝还活着。
+ */
+function reviewedCallCounts(text: string): Map<string, number> {
+  const source = ts.createSourceFile(
+    'probe.ts',
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  )
+  const counts = new Map<string, number>()
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      REVIEWED_CALL_NAMES.has(node.expression.text)
+    ) {
+      counts.set(node.expression.text, (counts.get(node.expression.text) ?? 0) + 1)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return counts
+}
+
 function identifierCalls(name: string): Map<string, number> {
   if (identifierCallInventory) return identifierCallInventory.get(name) ?? new Map()
 
   const inventory = new Map<string, Map<string, number>>()
   for (const file of sourceFiles(BACKEND_SRC)) {
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    )
-    const visit = (node: ts.Node): void => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        REVIEWED_CALL_NAMES.has(node.expression.text)
-      ) {
-        const rel = relative(BACKEND_SRC, file).replaceAll('\\', '/')
-        const counts = inventory.get(node.expression.text) ?? new Map<string, number>()
-        counts.set(rel, (counts.get(rel) ?? 0) + 1)
-        inventory.set(node.expression.text, counts)
-      }
-      ts.forEachChild(node, visit)
+    const rel = relative(BACKEND_SRC, file).replaceAll('\\', '/')
+    for (const [callName, hits] of reviewedCallCounts(readFileSync(file, 'utf8'))) {
+      const counts = inventory.get(callName) ?? new Map<string, number>()
+      counts.set(rel, (counts.get(rel) ?? 0) + hits)
+      inventory.set(callName, counts)
     }
-    visit(source)
   }
   identifierCallInventory = inventory
   return inventory.get(name) ?? new Map()
@@ -149,6 +161,42 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     for (const file of sourceFiles(resolve(BACKEND_SRC, 'routes'))) {
       const text = readFileSync(file, 'utf8')
       expect(text).not.toMatch(/\blaunchOrigin\b|\blaunch_origin\b/)
+    }
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份纯函数**。
+//
+// 这条 ratchet 的形状是「受审调用名 → 允许出现的文件与次数」逐字相等。它的静默
+// 失效面在第一环：AST 判据只认 `ts.isIdentifier(node.expression)`，也就是**裸调用**。
+// 如果哪天有人把 `startTask(...)` 改成 `deps.startTask(...)`，清点结果会从 3 掉到 0，
+// 而账本里的期望值也会被一起改成 0——两边同时归零，看起来仍然「逐字相等」。
+// 这里把「裸调用会被数到、成员调用不会」这个判据边界钉死，让上面的改动至少留下痕迹。
+describe('RFC-317 T14 —— matcher 自证：受审调用的清点判据', () => {
+  test('裸调用逐个数得到，重复调用累加', () => {
+    const fabricated =
+      "import { startTask } from '@/services/task'\n" +
+      'export async function launch(a: Input, b: Input) {\n' +
+      '  await startTask(a)\n' +
+      '  await startTask(b)\n' +
+      '  await createFusion(a)\n' +
+      '}\n'
+    expect(Object.fromEntries(reviewedCallCounts(fabricated))).toEqual({
+      startTask: 2,
+      createFusion: 1,
+    })
+  })
+
+  test('成员调用与同名标识符引用都不算（判据只认裸调用——这是它的已知边界）', () => {
+    const fabricated =
+      'await deps.startTask(input)\n' + 'const fn = startTask\n' + 'type T = typeof startTask\n'
+    expect(reviewedCallCounts(fabricated).size).toBe(0)
+  })
+
+  test('未受审的调用名不进清点（REVIEWED_CALL_NAMES 被误删一项就会在这里暴露）', () => {
+    expect(reviewedCallCounts('await someOtherLaunch(x)\n').size).toBe(0)
+    for (const name of REVIEWED_CALL_NAMES) {
+      expect(reviewedCallCounts(`await ${name}(x)\n`).get(name), `${name} 没被数到`).toBe(1)
     }
   })
 })

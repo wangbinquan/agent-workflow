@@ -192,3 +192,36 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(listTsFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**本文件自己的 matcher**。
+//
+// 语料下限（上一条）挡的是「扫了个寂寞」；这一条挡的是另一半：语料还在，但正则
+// 已经不咬了。生产代码换个写法（`.set({\n status:` 换行、`update( nodeRuns )` 多个
+// 空格）、或有人「整理」正则时手滑，违规集合同样回到空——与「合规」同形。
+// 散文里写「写的时候变异验证过」不是证据，能复跑的 fixture 才是。
+describe('RFC-317 T14 —— matcher 自证：伪造的违规必须被抓到', () => {
+  test('直写 nodeRuns.status 的三种常见写法都命中', () => {
+    for (const fabricated of [
+      'await db.update(nodeRuns).set({ status: "done" }).where(eq(nodeRuns.id, id))',
+      'await db.update( nodeRuns ).set({\n  status: nextStatus,\n})',
+      'tx.update(nodeRuns).set({ startedAt: now, status: "running" })',
+    ]) {
+      expect(
+        PATTERN_HAS_UPDATE_NODE_RUNS.test(fabricated) && PATTERN_HAS_SET_STATUS.test(fabricated),
+        `这段伪造的直写没被抓到：${fabricated}`,
+      ).toBe(true)
+    }
+  })
+
+  test('不碰 status 的 nodeRuns 更新不算违规（规则不能宽到把合法写法也报了）', () => {
+    const legitimate = 'await db.update(nodeRuns).set({ finishedAt: now }).where(cond)'
+    expect(PATTERN_HAS_UPDATE_NODE_RUNS.test(legitimate)).toBe(true)
+    expect(PATTERN_HAS_SET_STATUS.test(legitimate)).toBe(false)
+  })
+
+  test('注释掉的直写不算违规（否则规则没法在它适用的地方被解释）', () => {
+    expect(isCommentLine('  // await db.update(nodeRuns).set({ status: "done" })')).toBe(true)
+    expect(isCommentLine('  * 历史写法：db.update(nodeRuns).set({ status })')).toBe(true)
+    expect(isCommentLine('  await db.update(nodeRuns).set({ status: "done" })')).toBe(false)
+  })
+})

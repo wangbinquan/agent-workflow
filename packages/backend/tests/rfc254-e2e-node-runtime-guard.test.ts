@@ -103,3 +103,33 @@ describe('RFC-254 — the Playwright-loaded e2e files stay Node-compatible', () 
     expect(readFileSync(join(E2E_DIR, 'command.ts'), 'utf8')).toContain('sqlite-exec.ts')
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**本文件自己的 matcher**。
+//
+// 这两条正则要抓的是「Node 侧代码里混进了 Bun 专有 API」。它们都带 lookbehind /
+// 可选分组，最容易的静默失效是有人「整理」时删掉一支写法——扫描照跑、永远零违规。
+describe('RFC-317 T14 —— matcher 自证：伪造的 Bun 用法必须被抓到', () => {
+  test('bun: 模块的各种引入写法都命中', () => {
+    for (const fabricated of [
+      "import { file } from 'bun:sqlite'",
+      'const db = await import("bun:test")',
+      "export { x } from 'bun:ffi'",
+    ]) {
+      expect(BUN_MODULE_IMPORT.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+    expect(BUN_MODULE_IMPORT.test("import { readFileSync } from 'node:fs'")).toBe(false)
+  })
+
+  test('Bun 全局的属性访问 / 下标 / 赋值都命中，同名前缀不误报', () => {
+    for (const fabricated of ['Bun.spawn(cmd)', 'Bun["env"]', 'const runner = Bun']) {
+      expect(BUN_GLOBAL_USE.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+    expect(BUN_GLOBAL_USE.test('const BunnyHop = 1')).toBe(false)
+  })
+
+  test('注释 / 字符串里提到 Bun 不算违规（否则规则没法在它适用的地方被解释）', () => {
+    const fabricated = '// 这里以前用 Bun.spawn\nconst hint = "Bun.spawn 不可用"\nconst x = 1\n'
+    const cleaned = withoutCommentsOrStrings(fabricated)
+    expect(BUN_GLOBAL_USE.test(cleaned)).toBe(false)
+  })
+})

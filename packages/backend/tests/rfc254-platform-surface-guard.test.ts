@@ -378,3 +378,80 @@ describe('RFC-254 platform surface guard', () => {
     ).toBe(true)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给 **RULES 里那一份 pattern**。
+//
+// 本文件的注释里已经记了两次「初版正则漏掉一种写法、于是真实违规静默通过」
+// （`spawn-without-platform-options` 只匹配对象形态、`posix-path-prefix` 初版
+// 键在 call 上）。两次都是**事后人工读代码**才发现的——因为漏匹配的表现就是
+// 「零违规」，与合规同形。这一条把每条规则的「咬得动」变成可复跑的断言：规则被
+// 收窄到不再命中它自己的典型违规时，这里当场红。
+describe('RFC-317 T14 —— matcher 自证：每条规则都必须抓到它自己的典型违规', () => {
+  const byId = new Map(RULES.map((rule) => [rule.id, rule.pattern]))
+
+  const CASES: ReadonlyArray<{
+    rule: RuleId
+    offending: readonly string[]
+    clean: readonly string[]
+  }> = [
+    {
+      rule: 'null-device',
+      offending: ['stdout: "/dev/null"', "const sink = '/dev/null'"],
+      clean: ['const sink = nullDevice()'],
+    },
+    {
+      rule: 'posix-path-list',
+      offending: ['PATH: "/usr/local/bin:/usr/bin"', "entries.join(':')"],
+      clean: ['entries.join(delimiter)'],
+    },
+    {
+      rule: 'posix-dirname',
+      offending: ["const dir = p.slice(0, p.lastIndexOf('/'))"],
+      clean: ['const dir = dirname(p)'],
+    },
+    {
+      rule: 'posix-file-identity',
+      offending: ['if (a.dev === b.dev && a.ino === b.ino) return true'],
+      clean: ['if (await assertSameFileIdentity(a, b)) return true'],
+    },
+    {
+      rule: 'spawn-without-platform-options',
+      offending: [
+        'Bun.spawn({ cmd, cwd, stdout: "pipe" })',
+        'Bun.spawn([bin, "--version"], { cwd, stderr: "pipe" })',
+        'Bun.spawnSync({ cmd, cwd })',
+      ],
+      clean: [
+        'Bun.spawn({ cmd, cwd, ...platformSpawnOptions() })',
+        'Bun.spawn([bin], { cwd, ...platformSpawnOptions() })',
+      ],
+    },
+    {
+      rule: 'posix-path-prefix',
+      offending: ['const prefix = `${ctx.worktreePath}/`'],
+      clean: ['const inside = isLexicallyInside(root, candidate)'],
+    },
+  ]
+
+  test('每条规则都在 CASES 里有覆盖（新增规则忘了写 fixture 就红）', () => {
+    expect(CASES.map((c) => c.rule).sort()).toEqual(RULES.map((rule) => rule.id).sort())
+  })
+
+  const verdicts = (pick: 'offending' | 'clean'): string[] =>
+    CASES.flatMap((testCase) => {
+      const pattern = byId.get(testCase.rule)
+      if (pattern === undefined) return [`${testCase.rule}: 不在 RULES 里`]
+      return testCase[pick].filter((sample) => {
+        pattern.lastIndex = 0
+        return pattern.test(sample) !== (pick === 'offending')
+      })
+    })
+
+  test('每条规则都抓得到它自己的典型违规（判据被收窄就红）', () => {
+    expect(verdicts('offending'), '这些伪造的违规没有被对应规则抓到').toEqual([])
+  })
+
+  test('合规写法一个都不误伤（判据被放宽就红）', () => {
+    expect(verdicts('clean'), '这些合规写法被规则误报了').toEqual([])
+  })
+})

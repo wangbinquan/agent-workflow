@@ -21,6 +21,15 @@ function sourceFiles(root: string): string[] {
   return out
 }
 
+// RFC-317 T14 —— 退役符号表提到模块顶层：扫描与「matcher 自证」共用同一份实现。
+// 这四条正则是本守卫的全部判据；任何一条失配，对应的退役符号就能悄悄复活。
+const RETIRED_TRIGGER_SYMBOLS: readonly RegExp[] = [
+  /from\s+['"][^'"]*codeHost\/triggerContext['"]/,
+  /\bTRIGGER_CONTEXT_VARS\b/,
+  /\bisTriggerContextVar\b/,
+  /\btriggerContextOf\b/,
+]
+
 describe('RFC-292 trigger namespace source locks', () => {
   test('production code has no private code-host trigger import or retired alias', () => {
     expect(existsSync(resolve(REPO, 'packages/shared/src/codeHost/triggerContext.ts'))).toBe(false)
@@ -31,10 +40,9 @@ describe('RFC-292 trigger namespace source locks', () => {
     ]
     for (const file of roots.flatMap(sourceFiles)) {
       const text = readFileSync(file, 'utf8')
-      expect(text, file).not.toMatch(/from\s+['"][^'"]*codeHost\/triggerContext['"]/)
-      expect(text, file).not.toMatch(/\bTRIGGER_CONTEXT_VARS\b/)
-      expect(text, file).not.toMatch(/\bisTriggerContextVar\b/)
-      expect(text, file).not.toMatch(/\btriggerContextOf\b/)
+      for (const retired of RETIRED_TRIGGER_SYMBOLS) {
+        expect(text, `${file} 命中已退役符号 ${retired.source}`).not.toMatch(retired)
+      }
     }
   })
 
@@ -116,5 +124,50 @@ describe('RFC-292 trigger namespace source locks', () => {
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(sourceFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的复活写法喂给**扫描用的同一份判据**。
+//
+// 这是一条「退役符号零再现」的灭绝守卫，绿是常态。正则少认一种写法（改成裸
+// import、换个引号、加上 `type` 关键字），退役符号就能悄悄复活而扫描仍报零。
+describe('RFC-317 T14 —— matcher 自证：退役符号的复活写法必须被抓到', () => {
+  test('私有 triggerContext 的各种 import 写法都命中', () => {
+    for (const fabricated of [
+      "import { x } from '@/codeHost/triggerContext'",
+      'import type { Y } from "../codeHost/triggerContext"',
+      "export { z } from '@agent-workflow/shared/codeHost/triggerContext'",
+    ]) {
+      expect(
+        RETIRED_TRIGGER_SYMBOLS.some((re) => re.test(fabricated)),
+        `没抓到：${fabricated}`,
+      ).toBe(true)
+    }
+  })
+
+  test('三个退役标识符逐个命中', () => {
+    for (const fabricated of [
+      'const vars = TRIGGER_CONTEXT_VARS',
+      'if (isTriggerContextVar(name)) return',
+      'const ctx = triggerContextOf(trigger)',
+    ]) {
+      expect(
+        RETIRED_TRIGGER_SYMBOLS.some((re) => re.test(fabricated)),
+        `没抓到：${fabricated}`,
+      ).toBe(true)
+    }
+  })
+
+  test('公共 trigger 合同的正常用法放行（规则不能宽到把正解也报了）', () => {
+    for (const legitimate of [
+      "import { triggerContext } from '@/modules/integration/public/types'",
+      'const vars = TRIGGER_VARS',
+      'const ctx = triggerContextFromWebhook(payload)',
+    ]) {
+      expect(
+        RETIRED_TRIGGER_SYMBOLS.some((re) => re.test(legitimate)),
+        `误伤：${legitimate}`,
+      ).toBe(false)
+    }
   })
 })

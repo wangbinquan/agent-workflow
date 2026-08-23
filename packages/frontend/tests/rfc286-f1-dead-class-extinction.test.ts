@@ -25,6 +25,24 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+/**
+ * 剥掉注释后，某个死 class 是否仍出现在**任意引号字符串**里。**纯函数**——扫描与
+ * RFC-317 T14 的「matcher 自证」共用它。
+ *
+ * 双形态扫描（实现门路 1 P3-1 加固）：静态 `className="…"` 与模板字面量 / clsx /
+ * 三元拼接里的逃逸面都要覆盖；`(?<![\w-])` / `(?![\w-])` 两侧边界防的是
+ * `error-text` 命中 `error-text-strong` 这类误报。
+ */
+function mentionsDeadClass(text: string, dead: string): boolean {
+  // 注释行剥掉——MemoryDialogShell 有一处历史注释提及。
+  const stripped = text
+    .split('\n')
+    .map((l) => l.replace(/\/\/.*$/, ''))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+  return new RegExp(`['"\`][^'"\`\\n]*(?<![\\w-])${dead}(?![\\w-])[^'"\`\\n]*['"\`]`).test(stripped)
+}
+
 describe('RFC-286 F1 — 死 class 灭绝', () => {
   test('error-text / checkbox-row 作为 className 在 src 归零；form-error 仅限 allowlist', () => {
     const offenders: string[] = []
@@ -37,18 +55,7 @@ describe('RFC-286 F1 — 死 class 灭绝', () => {
         // 双形态扫描（实现门路 1 P3-1 加固）：① 静态 className="…"；② 任意
         // 引号字符串里携带该 class（模板字面量 / clsx / 三元拼接的逃逸面）。
         // 注释行剥掉——MemoryDialogShell 有一处历史注释提及。
-        const stripped = text
-          .split('\n')
-          .map((l) => l.replace(/\/\/.*$/, ''))
-          .join('\n')
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-        if (
-          new RegExp(`['"\`][^'"\`\\n]*(?<![\\w-])${dead}(?![\\w-])[^'"\`\\n]*['"\`]`).test(
-            stripped,
-          )
-        ) {
-          offenders.push(`${rel}: ${dead}`)
-        }
+        if (mentionsDeadClass(text, dead)) offenders.push(`${rel}: ${dead}`)
       }
       if (
         new RegExp('className="[^"]*\\bform-error\\b[^"]*"').test(text) &&
@@ -69,5 +76,37 @@ describe('RFC-286 F1 — 死 class 灭绝', () => {
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(walk(SRC).length).toBeGreaterThanOrEqual(250)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的复活写法喂给**扫描用的同一份判据**。
+//
+// 这条判据有两个容易被改坏的部件：注释剥离（剥少了会误报、剥多了会漏报）与两侧的
+// `(?<![\w-])` / `(?![\w-])` 边界（少了会把 `error-text-strong` 误当成 `error-text`）。
+// 两个方向都得钉住——只钉一边的话，另一边坏掉时守卫仍然报零。
+describe('RFC-317 T14 —— matcher 自证：死 class 扫描的两个边界', () => {
+  test('静态 className 与模板 / clsx 两种逃逸面都命中', () => {
+    for (const fabricated of [
+      '<span className="error-text">{msg}</span>',
+      'const cls = `error-text ${tone}`',
+      'const cls = clsx("checkbox-row", dense && "is-dense")',
+    ]) {
+      const dead = fabricated.includes('checkbox-row') ? 'checkbox-row' : 'error-text'
+      expect(mentionsDeadClass(fabricated, dead), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('前后缀相似的 class 不误报（边界断言的存在理由）', () => {
+    expect(mentionsDeadClass('<span className="error-text-strong" />', 'error-text')).toBe(false)
+    expect(mentionsDeadClass('<span className="form-error-text" />', 'error-text')).toBe(false)
+  })
+
+  test('注释里提及不算（行注释与块注释两种都要剥掉）', () => {
+    expect(mentionsDeadClass('// 历史上这里是 "error-text"\nconst x = 1\n', 'error-text')).toBe(
+      false,
+    )
+    expect(mentionsDeadClass('/* className="checkbox-row" */\nconst x = 1\n', 'checkbox-row')).toBe(
+      false,
+    )
   })
 })

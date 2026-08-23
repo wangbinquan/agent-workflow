@@ -126,3 +126,37 @@ function extractSection(src: string, startMarker: string, endMarker: string): st
   if (end === -1) throw new Error(`end marker not found: ${endMarker}`)
   return src.slice(start, end)
 }
+
+// RFC-317 T14 —— 负 fixture：把伪造的输入喂给**上面扫描用的同一份判据**。
+//
+// 本文件的所有断言都建立在 `extractSection` 之上：先按 marker 切出一段，再在段内
+// 断言某标识符在 / 不在。marker 一旦在生产代码里被改名，`extractSection` 会抛而不是
+// 静默返回空——这是好事，但**切错边界**（结束 marker 提前命中）不会抛：段被截短，
+// 段内断言「某标识符不在」于是永远成立。这里把切分语义本身钉住。
+describe('RFC-317 T14 —— matcher 自证：段落切分必须切在正确的边界上', () => {
+  const fabricated =
+    '// head\n' +
+    '// RFC-066: single-path byte-baseline branch\n' +
+    'const inside = overrideWorktreePath(x)\n' +
+    '// RFC-066: group branch\n' +
+    'const outside = overrideWorktreePath(y)\n'
+
+  test('只切出起止 marker 之间的内容，结束 marker 之后的不算', () => {
+    const section = extractSection(
+      fabricated,
+      '// RFC-066: single-path byte-baseline branch',
+      '// RFC-066: group branch',
+    )
+    expect(section.includes('const inside')).toBe(true)
+    expect(section.includes('const outside')).toBe(false)
+  })
+
+  test('marker 找不到时抛错，而不是静默返回空段（空段会让段内「零出现」断言假绿）', () => {
+    expect(() =>
+      extractSection(fabricated, '// 不存在的 marker', '// RFC-066: group branch'),
+    ).toThrow(/start marker not found/)
+    expect(() =>
+      extractSection(fabricated, '// RFC-066: single-path byte-baseline branch', '// 不存在的结束'),
+    ).toThrow(/end marker not found/)
+  })
+})

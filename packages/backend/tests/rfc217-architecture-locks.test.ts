@@ -29,6 +29,12 @@ import { resolve, join } from 'node:path'
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (p: string): string => readFileSync(resolve(ROOT, p), 'utf8')
 
+// RFC-317 T14 —— 判据提到模块顶层：扫描与「matcher 自证」共用同一份实现。
+// 这条正则是「生产代码不得从 workgroup/launch 取哨兵常量」的全部判据；三种
+// 导入路径写法少认一种，重开重模块环的那条边就能悄悄回来。
+const WG_CONSTANT_IMPORT =
+  /import\s*\{([^}]*)\}\s*from\s*'(?:@\/services\/workgroup\/launch|\.\/launch|\.\.\/workgroup\/launch)'/g
+
 describe('rfc217 G1 — no-circular guard is real', () => {
   test('dependency-cruiser config carries an error-severity no-circular rule', () => {
     const cfg = read('.dependency-cruiser.cjs')
@@ -75,9 +81,7 @@ describe('rfc217 G1 — no-circular guard is real', () => {
         if (e.isDirectory()) walk(rel)
         else if (e.name.endsWith('.ts')) {
           const src = read(rel)
-          const re =
-            /import\s*\{([^}]*)\}\s*from\s*'(?:@\/services\/workgroup\/launch|\.\/launch|\.\.\/workgroup\/launch)'/g
-          for (const m of src.matchAll(re)) {
+          for (const m of src.matchAll(WG_CONSTANT_IMPORT)) {
             if (/WG_|WORKGROUP_HOST/.test(m[1] ?? '')) offenders.push(rel)
           }
         }
@@ -349,5 +353,37 @@ describe('RFC-317 T13 —— 语料非空', () => {
       return out
     }
     expect(walkTs('packages/backend/src').length).toBeGreaterThanOrEqual(300)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**扫描用的同一份判据**。
+//
+// 这条锁的判据是一条带三个可选前缀的正则。少认一种导入路径写法，「生产代码从
+// workgroup/launch 取哨兵常量」这条重开重模块环的边就能悄悄回来，而扫描仍报零。
+describe('RFC-317 T14 —— matcher 自证：伪造的哨兵常量导入必须被抓到', () => {
+  const smuggled = (source: string): boolean => {
+    WG_CONSTANT_IMPORT.lastIndex = 0
+    for (const match of source.matchAll(WG_CONSTANT_IMPORT)) {
+      if (/WG_|WORKGROUP_HOST/.test(match[1] ?? '')) return true
+    }
+    return false
+  }
+
+  test('三种导入路径写法都命中', () => {
+    for (const fabricated of [
+      "import { WG_CLARIFY } from '@/services/workgroup/launch'",
+      "import { WORKGROUP_HOST_ID } from './launch'",
+      "import { WG_A, WG_B } from '../workgroup/launch'",
+    ]) {
+      expect(smuggled(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('从 launch 取非哨兵符号放行（锁的是常量，不是整个模块）', () => {
+    expect(smuggled("import { launchWorkgroup } from '@/services/workgroup/launch'")).toBe(false)
+  })
+
+  test('从别的模块取同名常量不算（判据锁的是来源）', () => {
+    expect(smuggled("import { WG_CLARIFY } from '@/services/workgroup/constants'")).toBe(false)
   })
 })

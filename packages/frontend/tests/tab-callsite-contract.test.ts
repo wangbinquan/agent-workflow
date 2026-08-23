@@ -353,3 +353,37 @@ describe('RFC-198 filters are not tabs', () => {
     expect(roles).not.toEqual(expect.arrayContaining(['tablist', 'tab', 'tabpanel']))
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份判据**。
+//
+// 本守卫先用 `stringConstants` 把「常量名 → 字符串值」建表，再用它把 JSX 属性里的
+// 标识符解析成静态字符串。这一环一旦漏掉一种声明形态（`as const` 断言、括号包裹），
+// 属性就解析不出值，契约检查会静默跳过那个调用点——「没有违规」于是与「没检查」同形。
+describe('RFC-317 T14 —— matcher 自证：静态字符串解析的边界', () => {
+  const probe = (text: string): ts.SourceFile =>
+    ts.createSourceFile('probe.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+
+  test('裸字面量 / as const / 括号包裹三种声明都解析得出', () => {
+    const constants = stringConstants(
+      probe(
+        "const plain = 'overview'\n" +
+          "const asConst = 'detail' as const\n" +
+          "const wrapped = ('history')\n",
+      ),
+    )
+    expect(Object.fromEntries(constants)).toMatchObject({
+      plain: 'overview',
+      asConst: 'detail',
+      wrapped: 'history',
+    })
+  })
+
+  test('非字符串常量不进表（进了会让属性解析出错误的值）', () => {
+    const constants = stringConstants(
+      probe('const n = 3\nconst arr = ["a"]\nconst tpl = `x${y}`\n'),
+    )
+    expect(constants.has('n')).toBe(false)
+    expect(constants.has('arr')).toBe(false)
+    expect(constants.has('tpl')).toBe(false)
+  })
+})

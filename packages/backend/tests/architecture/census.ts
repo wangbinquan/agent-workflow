@@ -535,3 +535,367 @@ export function corpusFloor(unit: SourceUnit): number | null {
   visit(unit.source)
   return floor
 }
+
+// ---------------------------------------------------------------------------
+// 负 fixture 采数（RFC-317 B2 / T14 · findings G-07）
+// ---------------------------------------------------------------------------
+//
+// 语料下限（上一节）挡住的是「扫了个寂寞」；这一节挡的是另一半：**语料还在，但
+// matcher 已经不咬了**。正则被重排、生产代码换了写法、AST 判据漏掉一种语法形态——
+// 违规集合同样回到空，同样与「合规」同形。
+//
+// G-07 的原话是「三条 ratchet 在散文里声称做过变异实证，但仓里没有一条今天还能
+// 复跑的 fixture」。散文不是证据：**能复跑的证据是把一段伪造的违规源码喂给守卫
+// 自己的 matcher，并断言它确实报**。
+//
+// 判定一条断言是不是「负 fixture」，要同时满足三件事：
+//   ① 断言引用了本文件顶层声明的 **matcher**（非语料产出者）；
+//   ② 断言的主体是一段**伪造的源码字面量**（内联、或同 test 体 / 顶层的 const），
+//      而不是一条指向真实树的路径——`'packages/backend/src/x.ts'` 不算；
+//   ③ 断言**不引用语料**。引用了语料就说明它在断言真实树的现状，那是规则本身，
+//      不是「matcher 还咬得动」的证据。
+//
+// 三条缺一不可。只要①②会把 `countOccurrences(SCHEDULER_SRC, FORK_MARKER)` 这类
+// 「拿真实源码 + 一个 needle 常量」的断言误判成 fixture（实测撞到两处）。
+
+/** 触及文件系统的调用名：其（传递）调用者被视为**语料产出者**。 */
+const CORPUS_PRODUCING_CALLEES = new Set([
+  'readdirSync',
+  'readdir',
+  'opendirSync',
+  'globSync',
+  'guardTestFiles',
+  'backendUnits',
+  'moduleShapes',
+  'readFileSync',
+  'readFile',
+  'existsSync',
+  'statSync',
+])
+
+/** 「像一段源码」而不是「像一条路径」。 */
+const CODE_SHAPED = /[(){};]|=>|\s=\s|\n|import |export |function |const /
+const PURE_PATH_LIKE = /^[\w./@*-]+$/
+
+/** 伪造的**文件名**输入：判据本身以文件名为主体时，fixture 喂的就是文件名。 */
+const FABRICATED_FILE_NAME = /\.(?:test|spec)\.[cm]?tsx?$|\.(?:ts|tsx|css|sql|json)$/
+
+function isFabricatedSource(text: string): boolean {
+  if (text.length < 8) return false
+  if (FABRICATED_FILE_NAME.test(text)) return true
+  return !PURE_PATH_LIKE.test(text) && CODE_SHAPED.test(text)
+}
+
+function containsFabricatedSource(node: ts.Node): boolean {
+  let found = false
+  const visit = (child: ts.Node): void => {
+    if (found) return
+    if (
+      (ts.isStringLiteral(child) || ts.isNoSubstitutionTemplateLiteral(child)) &&
+      isFabricatedSource(child.text)
+    ) {
+      found = true
+      return
+    }
+    if (ts.isTemplateExpression(child)) {
+      const joined =
+        child.head.text + child.templateSpans.map((span) => span.literal.text).join(' ')
+      if (isFabricatedSource(joined)) {
+        found = true
+        return
+      }
+    }
+    ts.forEachChild(child, visit)
+  }
+  visit(node)
+  return found
+}
+
+interface TopLevelFacts {
+  /** 语料产出者：（传递）调用了文件系统枚举 / 读取。 */
+  readonly corpus: ReadonlySet<string>
+  /** 候选 matcher：顶层声明且不产出语料。 */
+  readonly matcher: ReadonlySet<string>
+  /** fixture 载体：初始化式里含伪造源码字面量。 */
+  readonly carrier: ReadonlySet<string>
+}
+
+function topLevelFacts(source: ts.SourceFile): TopLevelFacts {
+  const declarations = new Map<string, ts.Node>()
+  // 被 import 进来的名字同样是候选 matcher——而且是**最好的**那种：判据抽进非 test
+  // 模块（如本文件）后，守卫与「守卫的守卫」才能各自 import 同一份实现。漏掉这一支
+  // 会把最规范的写法判成「没有 fixture」（实测把本 RFC 自己的 T21 判成缺）。
+  const imported = new Set<string>()
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement)) continue
+    const bindings = statement.importClause?.namedBindings
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) imported.add(element.name.text)
+    }
+    if (statement.importClause?.name !== undefined) imported.add(statement.importClause.name.text)
+  }
+  for (const statement of source.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
+      declarations.set(statement.name.text, statement)
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.initializer !== undefined) {
+          declarations.set(declaration.name.text, declaration.initializer)
+        }
+      }
+    }
+  }
+  const producesCorpus = (node: ts.Node, seen: Set<string>): boolean => {
+    let hit = false
+    const visit = (child: ts.Node): void => {
+      if (hit) return
+      if (ts.isCallExpression(child)) {
+        const target = child.expression
+        const name = ts.isIdentifier(target)
+          ? target.text
+          : ts.isPropertyAccessExpression(target)
+            ? target.name.text
+            : null
+        if (name !== null) {
+          if (CORPUS_PRODUCING_CALLEES.has(name)) {
+            hit = true
+            return
+          }
+          const referenced = declarations.get(name)
+          if (referenced !== undefined && !seen.has(name)) {
+            seen.add(name)
+            if (producesCorpus(referenced, seen)) {
+              hit = true
+              return
+            }
+          }
+        }
+      }
+      ts.forEachChild(child, visit)
+    }
+    visit(node)
+    return hit
+  }
+  const corpus = new Set<string>()
+  const matcher = new Set<string>()
+  const carrier = new Set<string>()
+  for (const [name, node] of declarations) {
+    if (producesCorpus(node, new Set([name]))) corpus.add(name)
+    else matcher.add(name)
+    if (containsFabricatedSource(node)) carrier.add(name)
+  }
+  for (const name of imported) {
+    if (declarations.has(name)) continue
+    if (CORPUS_PRODUCING_CALLEES.has(name)) corpus.add(name)
+    else matcher.add(name)
+  }
+  return { corpus, matcher, carrier }
+}
+
+interface ScopeFacts {
+  /** 作用域链上声明的、含伪造输入字面量的名字（fixture 载体）。 */
+  readonly carriers: ReadonlySet<string>
+  /** 作用域链上声明的、（传递）来自真实语料的名字。 */
+  readonly corpus: ReadonlySet<string>
+}
+
+/**
+ * 从断言处向外走完整作用域链，分出「伪造输入」与「真实语料」两类名字。
+ *
+ * 这里做到**局部**变量而不只是顶层声明，是被实测逼出来的。判据前三版都只看顶层：
+ *   - 只认紧邻 test 块的 const ⇒ 把 describe 作用域共享的 fixture 判成没有；
+ *   - 只把顶层名字算作语料 ⇒ `const offenders = files.filter((f) =>
+ *     readFileSync(f).includes('function describeError('))` 里的 `offenders`
+ *     被当成 fixture 载体（它的初始化式里确实有一段「像源码」的字面量），于是
+ *     `expect(offenders).toEqual([])`——一条彻头彻尾的**规则**断言——被记成了
+ *     「这条守卫有负 fixture」。
+ * 第二种错的方向最坏：它让本来缺 fixture 的守卫凭空达标，判据于是自己变成假绿源。
+ *
+ * 语料的传播要跑到不动点：`files → offenders → filtered` 这种链条上，只看一跳会漏。
+ */
+function scopeFacts(node: ts.Node, topLevel: TopLevelFacts): ScopeFacts {
+  const initializers = new Map<string, ts.Node>()
+  const forOfBindings = new Map<string, ts.Node>()
+  let current: ts.Node | undefined = node
+  while (current !== undefined) {
+    if (ts.isForOfStatement(current) && ts.isVariableDeclarationList(current.initializer)) {
+      for (const declaration of current.initializer.declarations) {
+        if (ts.isIdentifier(declaration.name)) forOfBindings.set(declaration.name.text, current.expression)
+      }
+    }
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      for (const statement of current.statements) {
+        if (ts.isVariableStatement(statement)) {
+          for (const declaration of statement.declarationList.declarations) {
+            if (ts.isIdentifier(declaration.name) && declaration.initializer !== undefined) {
+              initializers.set(declaration.name.text, declaration.initializer)
+            }
+          }
+        }
+      }
+    }
+    current = current.parent
+  }
+  for (const [name, iterable] of forOfBindings) initializers.set(name, iterable)
+
+  const corpus = new Set<string>(topLevel.corpus)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const [name, initializer] of initializers) {
+      if (corpus.has(name)) continue
+      let derived = false
+      const visit = (child: ts.Node): void => {
+        if (derived) return
+        if (ts.isCallExpression(child)) {
+          const target = child.expression
+          const callee = ts.isIdentifier(target)
+            ? target.text
+            : ts.isPropertyAccessExpression(target)
+              ? target.name.text
+              : null
+          if (callee !== null && CORPUS_PRODUCING_CALLEES.has(callee)) {
+            derived = true
+            return
+          }
+        }
+        if (ts.isIdentifier(child) && corpus.has(child.text)) {
+          derived = true
+          return
+        }
+        ts.forEachChild(child, visit)
+      }
+      visit(initializer)
+      if (derived) {
+        corpus.add(name)
+        grew = true
+      }
+    }
+  }
+
+  const carriers = new Set<string>()
+  for (const [name, initializer] of initializers) {
+    if (corpus.has(name)) continue
+    if (containsFabricatedSource(initializer)) carriers.add(name)
+  }
+  return { carriers, corpus }
+}
+
+/**
+ * 本守卫里「把伪造输入喂给某个决定过程、且完全不碰真实语料」的断言列表。
+ *
+ * 判据刻意**不**要求断言里语法上出现某个具名 matcher。要求过三版，每版都把本 RFC
+ * 自己刚写的合格 fixture 判成不合格（matcher 藏在局部 `probe()` 里、藏在 describe
+ * 作用域的 helper 里、藏在 `Object.fromEntries` 外壳下）。真正把 fixture 与「规则
+ * 本身」分开的是另外两件事：**喂的是伪造输入**，且**一点真实语料都不碰**。碰了语料
+ * 就是在断言现状——那是规则，不是「决定过程还工作」的证据。
+ */
+export function negativeFixtureAssertions(unit: SourceUnit): string[] {
+  const source = unit.source
+  const topLevel = topLevelFacts(source)
+  const found: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'expect' &&
+      node.arguments[0] !== undefined
+    ) {
+      const subject = node.arguments[0]
+      const scope = scopeFacts(node, topLevel)
+      let fabricated = containsFabricatedSource(subject)
+      let touchesCorpus = false
+      const walk = (child: ts.Node): void => {
+        if (ts.isIdentifier(child)) {
+          if (scope.corpus.has(child.text)) touchesCorpus = true
+          if (scope.carriers.has(child.text) || topLevel.carrier.has(child.text)) fabricated = true
+        }
+        if (ts.isCallExpression(child)) {
+          const target = child.expression
+          const callee = ts.isIdentifier(target)
+            ? target.text
+            : ts.isPropertyAccessExpression(target)
+              ? target.name.text
+              : null
+          if (callee !== null && CORPUS_PRODUCING_CALLEES.has(callee)) touchesCorpus = true
+        }
+        ts.forEachChild(child, walk)
+      }
+      walk(subject)
+      if (fabricated && !touchesCorpus) {
+        found.push(subject.getText(source).slice(0, 100).replace(/\s+/g, ' '))
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return found
+}
+
+/**
+ * 该守卫是否存在「对语料断言**不存在**」的检查。
+ *
+ * 只有断言不存在的守卫才有「静默零违规」这个失效面：`toEqual([])` 在「真的没有」
+ * 与「根本没扫到」之间不可分辨。断言**存在**的守卫（`expect(sites.length)
+ * .toBeGreaterThanOrEqual(4)`）自带证明——扫描一旦失效它立刻转红，再要求它配一条
+ * 负 fixture 就是纯仪式。判据窄一点、但每条都必要，比宽而掺水更耐用。
+ */
+const ABSENCE_MATCHERS = new Set([
+  'toEqual',
+  'toStrictEqual',
+  'toHaveLength',
+  'toBe',
+  'toMatch',
+  'toContain',
+  'toContainEqual',
+])
+
+function isEmptyExpectation(node: ts.CallExpression, matcher: string, negated: boolean): boolean {
+  const argument = node.arguments[0]
+  if (negated) return matcher === 'toMatch' || matcher === 'toContain' || matcher === 'toContainEqual'
+  if (matcher === 'toEqual' || matcher === 'toStrictEqual') {
+    return argument !== undefined && ts.isArrayLiteralExpression(argument) && argument.elements.length === 0
+  }
+  if (matcher === 'toHaveLength' || matcher === 'toBe') {
+    return argument !== undefined && ts.isNumericLiteral(argument) && argument.text === '0'
+  }
+  return false
+}
+
+export function assertsAbsence(unit: SourceUnit): boolean {
+  const source = unit.source
+  let found = false
+  const visit = (node: ts.Node): void => {
+    if (found) return
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const matcher = node.expression.name.text
+      if (ABSENCE_MATCHERS.has(matcher)) {
+        let receiver = node.expression.expression
+        let negated = false
+        if (ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'not') {
+          negated = true
+          receiver = receiver.expression
+        }
+        if (
+          ts.isCallExpression(receiver) &&
+          ts.isIdentifier(receiver.expression) &&
+          receiver.expression.text === 'expect' &&
+          receiver.arguments[0] !== undefined &&
+          isEmptyExpectation(node, matcher, negated)
+        ) {
+          // 不再要求断言主体**语法上**引用语料：真实写法里违规集合几乎总是先收进一个
+          // 局部 `violations` 再断言（`expect(violations).toEqual([])`）。初版加了这条
+          // 限制，于是把 rfc148 这类标准灭绝守卫判成「不断言不存在」而豁免掉——判据
+          // 比现实窄，豁免面就会悄悄变大。文件本身已经是扫语料型，这里只问它有没有
+          // 「不存在」形态的断言。
+          found = true
+          return
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return found
+}

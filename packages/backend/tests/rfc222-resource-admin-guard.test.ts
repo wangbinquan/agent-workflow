@@ -30,6 +30,10 @@ interface Hit {
   text: string
 }
 
+// RFC-317 T14 —— 判据提到模块顶层：扫描与「matcher 自证」共用同一份实现。
+const DISJUNCTION =
+  /'admin'\s*\|\|[^\n]*'manager'|'manager'\s*\|\|[^\n]*'admin'|===\s*'manager'[^\n]*\|\|[^\n]*===\s*'admin'/
+
 describe('RFC-222/RFC-305 — resource ACL bypass single source of truth', () => {
   test('retired isAdminActor identifier appears nowhere in production', () => {
     const offenders: Hit[] = []
@@ -59,8 +63,6 @@ describe('RFC-222/RFC-305 — resource ACL bypass single source of truth', () =>
   test('no admin∨manager role disjunction or retired shared predicate remains', () => {
     // Matches a hand-rolled union in either order, tolerant of whitespace and
     // an optional actor/user prefix on the second comparison.
-    const DISJUNCTION =
-      /'admin'\s*\|\|[^\n]*'manager'|'manager'\s*\|\|[^\n]*'admin'|===\s*'manager'[^\n]*\|\|[^\n]*===\s*'admin'/
     const offenders: Hit[] = []
     for (const file of [...listTsFiles(BACKEND_SRC), ...listTsFiles(SHARED_SRC)]) {
       // RFC-254: separator-safe relativization (see note above).
@@ -97,5 +99,30 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(listTsFiles(BACKEND_SRC).length + listTsFiles(SHARED_SRC).length).toBeGreaterThanOrEqual(
       350,
     )
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**上面扫描用的同一份判据**。
+//
+// DISJUNCTION 要抓的是「手写 admin || manager 的角色析取」，它有好几种等价写法。
+// 正则一旦被「整理」掉一支，真实的手写析取不再命中，扫描照跑、永远零违规。
+describe('RFC-317 T14 —— matcher 自证：伪造的手写角色析取必须被抓到', () => {
+  test('三种等价写法都命中', () => {
+    for (const fabricated of [
+      "if (role === 'admin' || role === 'manager') return true",
+      "if (role === 'manager' || role === 'admin') return true",
+      "const ok = actor.role === 'manager' || actor.role === 'admin'",
+    ]) {
+      expect(DISJUNCTION.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('只判一个角色不算违规（规则不能宽到误伤单角色判断）', () => {
+    expect(DISJUNCTION.test("if (role === 'admin') return true")).toBe(false)
+  })
+
+  test('注释行判定还在工作（注释里写析取不算违规）', () => {
+    expect(isCommentLine("  // if (role === 'admin' || role === 'manager') …")).toBe(true)
+    expect(isCommentLine("  if (role === 'admin' || role === 'manager') return true")).toBe(false)
   })
 })

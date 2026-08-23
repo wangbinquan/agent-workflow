@@ -38,18 +38,26 @@ function loadEngineSources(): { path: string; content: string }[] {
   return files
 }
 
+// RFC-317 T14 —— 两条判据提到模块顶层：扫描与「matcher 自证」必须走**同一份**
+// 实现。各留一份拷贝的话，fixture 证明的只是拷贝还活着，而不是真扫描还咬得动。
+const NAKED_STATUS_WRITE =
+  /\.update\(\s*nodeRuns\s*\)[\s\S]{0,400}\.set\(\s*\{\s*[\s\S]{0,80}status\s*:/
+
+function stripCommentsForDeleteScan(content: string): string {
+  return content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
 describe('RFC-057 grep guards', () => {
   test('no naked `db.update(nodeRuns).set({ status:` — must use state machine', () => {
     for (const { path, content } of loadEngineSources()) {
-      const naked = /\.update\(\s*nodeRuns\s*\)[\s\S]{0,400}\.set\(\s*\{\s*[\s\S]{0,80}status\s*:/
-      expect({ path, ok: !naked.test(content) }).toEqual({ path, ok: true })
+      expect({ path, ok: !NAKED_STATUS_WRITE.test(content) }).toEqual({ path, ok: true })
     }
   })
 
   test('no `db.delete(` — audit append-only, repair never deletes', () => {
     for (const { path, content } of loadEngineSources()) {
       // Allow comments mentioning the rule. Strip line comments, then check.
-      const stripped = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+      const stripped = stripCommentsForDeleteScan(content)
       expect({
         path,
         ok: !stripped.includes('db.delete(') && !stripped.includes('.delete('),
@@ -101,5 +109,33 @@ describe('RFC-057 grep guards', () => {
       })
       expect(REPAIR_OPTIONS[rule].length).toBeGreaterThan(0)
     }
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**上面扫描用的同一份判据**。
+//
+// 这两条判据都靠宽松跨行匹配（`[\s\S]{0,400}`）。最容易的静默失效是有人收紧跨度
+// 或改锚点后，真实的多行写法不再命中——扫描照跑、永远零违规，与「合规」同形。
+describe('RFC-317 T14 —— matcher 自证：伪造的违规必须被抓到', () => {
+  test('裸写 status 的单行与跨行形态都命中', () => {
+    for (const fabricated of [
+      'await db.update(nodeRuns).set({ status: "failed" }).where(eq(nodeRuns.id, id))',
+      'await db\n  .update(nodeRuns)\n  .set({\n    finishedAt: now,\n    status: "done",\n  })\n',
+    ]) {
+      expect(NAKED_STATUS_WRITE.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('不碰 status 的更新放行（规则不能宽到误伤合法写法）', () => {
+    expect(NAKED_STATUS_WRITE.test('await db.update(nodeRuns).set({ finishedAt: now })')).toBe(
+      false,
+    )
+  })
+
+  test('删除扫描的注释剥离两向都对', () => {
+    const withRealDelete = 'await db.delete(nodeRuns)\n// db.delete(x) 只在注释里\n'
+    expect(stripCommentsForDeleteScan(withRealDelete).includes('db.delete(')).toBe(true)
+    const commentOnly = '// db.delete(x)\n/* .delete( */\nconst y = 1\n'
+    expect(stripCommentsForDeleteScan(commentOnly).includes('.delete(')).toBe(false)
   })
 })

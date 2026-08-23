@@ -207,3 +207,33 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
     )
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给 `importSpecifiers` 自己。
+//
+// 见 rfc310-architecture-lock 同名 describe：解析漏掉一种语法形态 ⇒ 越界边根本
+// 不进集合 ⇒ 规则永远零违规，与「模块干净」同形。
+describe('RFC-317 T14 —— matcher 自证：五种 import 语法都必须被解析出来', () => {
+  test('static / type-only / export-from / 裸 import / 动态 import / require 全覆盖', () => {
+    const fabricated =
+      "import { a } from '@/modules/one/public/commands'\n" +
+      "import type { B } from '@/modules/two/public/types'\n" +
+      "export { c } from '@/modules/three/public/events'\n" +
+      "import '@/modules/four/composition'\n" +
+      "const e = await import('@/modules/five/application/service')\n" +
+      "const f = require('@/modules/six/infrastructure/store')\n"
+    expect(importSpecifiers(fabricated)).toEqual([
+      '@/modules/five/application/service',
+      '@/modules/four/composition',
+      '@/modules/one/public/commands',
+      '@/modules/six/infrastructure/store',
+      '@/modules/three/public/events',
+      '@/modules/two/public/types',
+    ])
+  })
+
+  test('路径归一化对 Windows 分隔符生效（否则 Windows 上整条规则形同虚设）', () => {
+    expect(portable('modules\\digital-employee\\public\\types.ts')).toBe(
+      'modules/digital-employee/public/types.ts',
+    )
+  })
+})

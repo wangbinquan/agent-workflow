@@ -113,24 +113,31 @@ function identityAccessImportsOutsideOwner(): string[] {
   return imports.sort()
 }
 
+/**
+ * 某份已解析源码里，是否存在命中 pattern 的**字符串 / 模板字面量**。**纯函数**
+ * ——扫描与 RFC-317 T14 的「matcher 自证」共用它，避免判据长出第二份实现。
+ */
+function sourceHasCodePattern(source: ts.SourceFile, pattern: RegExp): boolean {
+  let matched = false
+  const visit = (node: ts.Node): void => {
+    if (matched) return
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isTemplateExpression(node) ||
+      ts.isTaggedTemplateExpression(node)
+    ) {
+      if (pattern.test(node.getText(source))) matched = true
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return matched
+}
+
 function filesContainingCodePattern(root: string, pattern: RegExp): string[] {
   const matches: string[] = []
   for (const file of sourceFiles(root, ['.ts', '.tsx'])) {
-    const source = parse(file)
-    let matched = false
-    const visit = (node: ts.Node): void => {
-      if (matched) return
-      if (
-        ts.isStringLiteralLike(node) ||
-        ts.isTemplateExpression(node) ||
-        ts.isTaggedTemplateExpression(node)
-      ) {
-        if (pattern.test(node.getText(source))) matched = true
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(source)
-    if (matched) matches.push(relativeToRepo(file))
+    if (sourceHasCodePattern(parse(file), pattern)) matches.push(relativeToRepo(file))
   }
   return matches.sort()
 }
@@ -713,5 +720,45 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(
       sourceFiles(BACKEND_SRC).length + sourceFiles(FRONTEND_SRC, ['.ts', '.tsx']).length,
     ).toBeGreaterThanOrEqual(900)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份判据**。
+//
+// 本文件里若干条断言的形态是 `expect(filesContainingCodePattern(root, RE)).toEqual([…])`。
+// 这类断言的静默失效面在 **AST 遍历**那一环：`sourceHasCodePattern` 只看字符串 /
+// 模板字面量，一旦遍历漏掉一种字面量形态（模板串、tagged template），SQL 写在那种
+// 形态里就永远扫不到，`toEqual([])` 于是永远成立——与「没人这么写」同形。
+describe('RFC-317 T14 —— matcher 自证：字面量扫描必须覆盖三种字面量形态', () => {
+  const probe = (text: string): ts.SourceFile =>
+    ts.createSourceFile('probe.ts', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+
+  test('普通字符串 / 模板串 / tagged template 里的 SQL 都扫得到', () => {
+    const pattern = /INSERT\s+INTO\s+user_access_audit/i
+    for (const fabricated of [
+      'db.run("INSERT INTO user_access_audit (id) VALUES (?)")\n',
+      'db.run(`INSERT INTO user_access_audit (id) VALUES (${id})`)\n',
+      'const q = sql`INSERT INTO user_access_audit (id) VALUES (${id})`\n',
+    ]) {
+      expect(sourceHasCodePattern(probe(fabricated), pattern), `没扫到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('无关 SQL 不误报（规则不能宽到把别的表也算进来）', () => {
+    expect(
+      sourceHasCodePattern(
+        probe('db.run("INSERT INTO resource_grants (id) VALUES (?)")\n'),
+        /INSERT\s+INTO\s+user_access_audit/i,
+      ),
+    ).toBe(false)
+  })
+
+  test('注释里写 SQL 不算（注释不是字符串字面量）', () => {
+    expect(
+      sourceHasCodePattern(
+        probe('// INSERT INTO user_access_audit (id) VALUES (?)\nconst x = 1\n'),
+        /INSERT\s+INTO\s+user_access_audit/i,
+      ),
+    ).toBe(false)
   })
 })

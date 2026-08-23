@@ -32,8 +32,16 @@ function listFiles(dir: string): string[] {
 
 const allFiles = listFiles(SRC)
 
+/**
+ * 一份源码里是否用到了某个 btn 变体。**纯函数**——扫描与 RFC-317 T14 的
+ * 「matcher 自证」共用它，避免判据长出第二份实现。
+ */
+function usesVariant(text: string, variant: string): boolean {
+  return text.includes(variant)
+}
+
 function callsitesOf(variant: string): string[] {
-  return allFiles.filter((f) => readFileSync(f, 'utf8').includes(variant))
+  return allFiles.filter((f) => usesVariant(readFileSync(f, 'utf8'), variant))
 }
 
 describe('RFC-035 btn variants — callsite inventory', () => {
@@ -79,5 +87,29 @@ describe('RFC-150 ConfirmButton callsites — `danger` prop stays deleted', () =
       }
     }
     expect(offenders, offenders.join('\n')).toEqual([])
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的调用点喂给**扫描用的同一份判据**。
+//
+// 本文件多数断言是「某变体至少被 N 个文件用到」，这类**存在型**断言自带证明：扫描
+// 一失效就掉到 0、当场转红。但下面还有「零命中」型断言（退役变体不得复活），那一半
+// 就有静默失效面。这里把判据边界钉住：前缀相似的变体不得被算成同一个。
+describe('RFC-317 T14 —— matcher 自证：变体识别的边界', () => {
+  test('真实调用点形态都识别得出', () => {
+    for (const fabricated of [
+      '<button className="btn btn--ghost btn--sm" onClick={onCancel}>取消</button>',
+      'const cls = clsx("btn", isSmall && "btn--xs")',
+    ]) {
+      expect(usesVariant(fabricated, fabricated.includes('ghost') ? 'btn--ghost' : 'btn--xs')).toBe(
+        true,
+      )
+    }
+  })
+
+  test('不含该变体的源码不误报', () => {
+    const fabricated = '<button className="btn btn--primary">保存</button>'
+    expect(usesVariant(fabricated, 'btn--ghost')).toBe(false)
+    expect(usesVariant(fabricated, 'btn--xs')).toBe(false)
   })
 })

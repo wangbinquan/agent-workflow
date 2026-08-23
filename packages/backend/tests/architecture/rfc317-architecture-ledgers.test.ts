@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { guardTestFiles } from './census'
+import { GUARD_FILE_NAME_PATTERN, guardTestFiles } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -238,5 +238,36 @@ describe('RFC-317 — 守卫清单（architecture/guard-manifest.json）两向�
     expect(missing).toEqual([])
     const ids = guardManifest.guards.map((guard) => guard.id)
     expect([...new Set(ids)].sort()).toEqual([...ids].sort())
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的文件名喂给**枚举守卫用的同一份判据**。
+//
+// 上面所有「清单与磁盘两向相等」的断言，都建立在 `GUARD_FILE_NAME_PATTERN` 认得出
+// 「哪些测试文件是守卫」之上。这个正则一旦被收窄，守卫会安静地从枚举里掉出去：
+// 磁盘侧与清单侧**同时**少一条，两向相等依然成立——这正是 CC-07「守卫可被静默
+// 删除」的升级版，连删都不用删，改个名或收一下正则就够了。
+describe('RFC-317 T14 —— matcher 自证：守卫文件名判据的边界', () => {
+  test('六类命名都被认作守卫（少认一类 = 那一类守卫可以静默脱管）', () => {
+    for (const name of [
+      'rfc294-architecture-preflight.test.ts',
+      'rfc281-boundary.integration.test.ts',
+      'rfc284-spawn-site-ratchet.test.ts',
+      'rfc305-architecture-lock.test.ts',
+      'lifecycle-grep-guard.test.ts',
+      'scheduler-invariants.test.ts',
+    ]) {
+      expect(GUARD_FILE_NAME_PATTERN.test(name), `没认出守卫：${name}`).toBe(true)
+    }
+  })
+
+  test('普通行为测试不被误认（否则清单会被灌进几百个无关文件而失去意义）', () => {
+    for (const name of [
+      'rfc310-digital-employee-authoring.test.ts',
+      'task-archive.test.ts',
+      'clarify-dispatch.test.ts',
+    ]) {
+      expect(GUARD_FILE_NAME_PATTERN.test(name), `误认成守卫：${name}`).toBe(false)
+    }
   })
 })

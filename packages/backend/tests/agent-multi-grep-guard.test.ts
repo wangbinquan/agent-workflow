@@ -43,6 +43,35 @@ function walk(dir: string, out: string[] = []): string[] {
 // LIVE code paths must be free of the token; the comment-prefix check below
 // covers all comment shapes (//, *, /* …).
 
+/**
+ * 这一行是不是**活代码里**的 agent-multi 残留。**纯函数**——扫描与 RFC-317 T14 的
+ * 「matcher 自证」共用它。判据里三条豁免（注释 / i18n 文案 / palette 兼容 stub）各自
+ * 都是一次「宽一点」的决定，而宽过头的表现就是「零违规」，与真的清干净了同形。
+ */
+function isAgentMultiOffender(file: string, line: string): boolean {
+  if (!line.includes('agent-multi')) return false
+  const trimmed = line.trimStart()
+  // Comment lines are tolerated — historical context, RFC-x prior-art notes,
+  // JSDoc lists, removal markers all use the token. Only live code paths must
+  // be clean.
+  if (
+    trimmed.startsWith('//') ||
+    trimmed.startsWith('*') ||
+    trimmed.startsWith('/*') ||
+    trimmed.startsWith('{/*') // JSX comment
+  ) {
+    return false
+  }
+  // i18n-string lines referencing the legacy node kind in human-readable copy
+  // (e.g. `multiNotSupported:` messages) are tolerated — PR-F's i18n sweep
+  // will drop them.
+  if (file.endsWith('zh-CN.ts') || file.endsWith('en-US.ts')) return false
+  // The palette deserializer's legacy stub returns null for the legacy
+  // serialized form by name — that's the documented escape hatch.
+  if (file.endsWith('nodePalette.ts') && line.includes("kind === 'agent-multi'")) return false
+  return true
+}
+
 describe("RFC-060 PR-E — 'agent-multi' grep guard", () => {
   test("NODE_KIND enum does NOT contain 'agent-multi'", () => {
     expect(NODE_KIND).not.toContain('agent-multi' as never)
@@ -94,32 +123,8 @@ describe("RFC-060 PR-E — 'agent-multi' grep guard", () => {
         const lines = text.split('\n')
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i]!
-          if (!line.includes('agent-multi')) continue
-          // strip leading whitespace for comment-prefix detection
-          const trimmed = line.trimStart()
-          // Comment lines are tolerated — historical context, RFC-x
-          // prior-art notes, JSDoc lists, removal markers all use the
-          // token. Only live code paths must be clean.
-          const isCommentLine =
-            trimmed.startsWith('//') ||
-            trimmed.startsWith('*') ||
-            trimmed.startsWith('/*') ||
-            trimmed.startsWith('{/*') // JSX comment
-
-          if (isCommentLine) continue
-          // i18n-string lines referencing the legacy node kind in human-
-          // readable copy (e.g. `multiNotSupported:` messages) are flagged
-          // but tolerated — PR-F's i18n sweep will drop them.
-          const isI18nString =
-            line.includes('agent-multi') && (file.endsWith('zh-CN.ts') || file.endsWith('en-US.ts'))
-          if (isI18nString) continue
-          // The palette deserializer's legacy stub returns null for the
-          // legacy serialized form by name — that's the documented escape
-          // hatch (see nodePalette.ts).
-          const isLegacyStubReference =
-            file.endsWith('nodePalette.ts') && line.includes("kind === 'agent-multi'")
-          if (isLegacyStubReference) continue
-          offenders.push(`${file.replace(REPO_ROOT + '/', '')}:${i + 1}: ${trimmed}`)
+          if (!isAgentMultiOffender(file, line)) continue
+          offenders.push(`${file.replace(REPO_ROOT + '/', '')}:${i + 1}: ${line.trimStart()}`)
         }
       }
     }
@@ -135,5 +140,47 @@ describe("RFC-060 PR-E — 'agent-multi' grep guard", () => {
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(walk(resolve(REPO_ROOT, 'packages/backend/src')).length).toBeGreaterThanOrEqual(300)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的残留喂给**扫描用的同一份判据**。
+//
+// 这条守卫的三条豁免各自都是一次「宽一点」的决定，而宽过头的表现是「零违规」——
+// 与真的清干净了同形。这里把每条豁免的**边界**钉住：豁免被悄悄放宽（比如从
+// 「nodePalette.ts 里的 kind 比较」放宽成「nodePalette.ts 全文件」）会当场红。
+describe('RFC-317 T14 —— matcher 自证：活代码里的残留必须被抓到', () => {
+  const SRC = 'packages/backend/src/services/nodeExecutor.ts'
+
+  test('活代码里的残留命中', () => {
+    for (const line of [
+      "      if (node.kind === 'agent-multi') return shard(node)",
+      '  const KINDS = ["agent", "agent-multi"]',
+    ]) {
+      expect(isAgentMultiOffender(SRC, line), `没抓到：${line}`).toBe(true)
+    }
+  })
+
+  test('四种注释形态都豁免（含 JSX 注释）', () => {
+    for (const line of [
+      "  // 历史上这里是 'agent-multi'",
+      '   * agent-multi 已随 RFC-060 删除',
+      '  /* agent-multi */',
+      '      {/* agent-multi 的旧入口 */}',
+    ]) {
+      expect(isAgentMultiOffender(SRC, line), `不该报：${line}`).toBe(false)
+    }
+  })
+
+  test('i18n 文案豁免只对两个语言文件生效', () => {
+    const copy = "  multiNotSupported: 'agent-multi 节点已不再支持',"
+    expect(isAgentMultiOffender('packages/frontend/src/i18n/zh-CN.ts', copy)).toBe(false)
+    expect(isAgentMultiOffender('packages/frontend/src/i18n/en-US.ts', copy)).toBe(false)
+    expect(isAgentMultiOffender('packages/frontend/src/i18n/index.ts', copy)).toBe(true)
+  })
+
+  test('palette 兼容 stub 的豁免只覆盖那一种比较写法', () => {
+    const palette = 'packages/frontend/src/workflow/nodePalette.ts'
+    expect(isAgentMultiOffender(palette, "  if (kind === 'agent-multi') return null")).toBe(false)
+    expect(isAgentMultiOffender(palette, "  register('agent-multi', legacyStub)")).toBe(true)
   })
 })

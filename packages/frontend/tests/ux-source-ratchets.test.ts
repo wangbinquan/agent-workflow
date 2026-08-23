@@ -244,3 +244,58 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(SOURCES.length).toBeGreaterThanOrEqual(250)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的 JSX 喂给**扫描用的同一组 AST 判据**。
+//
+// 这几条 ratchet 的结论全部经过 `isIntrinsic` / `isNonTextInput` 这两道判据。它们
+// 认不出的形态就不会进违规集合，而断言恰恰是「违规集合为空」——判据被收窄和源码
+// 真的合规，在断言层面完全同形。
+describe('RFC-317 T14 —— matcher 自证：JSX 判据的边界', () => {
+  const parse = (text: string): ts.SourceFile =>
+    ts.createSourceFile('probe.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+
+  const firstOpening = (text: string): ts.JsxOpeningLikeElement => {
+    let found: ts.JsxOpeningLikeElement | undefined
+    walk(parse(text), (node) => {
+      if (
+        found === undefined &&
+        (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      ) {
+        found = node
+      }
+    })
+    if (found === undefined) throw new Error('fixture 里没有 JSX 开标签')
+    return found
+  }
+
+  test('原生标签认得出，同名自定义组件不算原生（大小写是唯一区别，最容易写反）', () => {
+    expect(isIntrinsic(firstOpening('<input type="text" />'), 'input')).toBe(true)
+    expect(isIntrinsic(firstOpening('<Input type="text" />'), 'input')).toBe(false)
+  })
+
+  test('非文本 input 的四种 type 都豁免，文本类不豁免', () => {
+    for (const type of ['hidden', 'file', 'checkbox', 'radio']) {
+      const attribute = jsxAttribute(firstOpening(`<input type="${type}" />`).attributes, 'type')
+      expect(isNonTextInput(attribute), `${type} 应豁免`).toBe(true)
+    }
+    const text = jsxAttribute(firstOpening('<input type="text" />').attributes, 'type')
+    expect(isNonTextInput(text)).toBe(false)
+  })
+
+  test('表达式形态的 type 也解析（三元里全是非文本才豁免，混了文本就不豁免）', () => {
+    const allNonText = jsxAttribute(
+      firstOpening('<input type={a ? "checkbox" : "radio"} />').attributes,
+      'type',
+    )
+    expect(isNonTextInput(allNonText)).toBe(true)
+    const mixed = jsxAttribute(
+      firstOpening('<input type={a ? "checkbox" : "text"} />').attributes,
+      'type',
+    )
+    expect(isNonTextInput(mixed)).toBe(false)
+  })
+
+  test('没写 type 的 input 不豁免（默认就是文本框）', () => {
+    expect(isNonTextInput(jsxAttribute(firstOpening('<input />').attributes, 'type'))).toBe(false)
+  })
+})

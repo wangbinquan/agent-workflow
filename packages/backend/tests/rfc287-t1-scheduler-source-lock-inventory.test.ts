@@ -147,15 +147,23 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'wrapper-git-list-path.test.ts',
 ]
 
+/**
+ * 一份测试源码算不算「scheduler.ts 源码文本锁」。**纯函数**——扫描与 RFC-317 T14
+ * 的「matcher 自证」共用它。判据只要有一支失配，清单就会安静地缩短，而
+ * `expect(scanActual()).toEqual(清单)` 会被同批「顺手更新清单」的动作抹平。
+ */
+function isSchedulerSourceLock(source: string): boolean {
+  const readsFile = /(readFileSync|readFile)\(/.test(source)
+  const namesScheduler = /services\/scheduler\.ts|'scheduler\.ts'/.test(source)
+  return readsFile && namesScheduler
+}
+
 function scanActual(): string[] {
   const out: string[] = []
   for (const name of readdirSync(TESTS_DIR)) {
     if (!name.endsWith('.test.ts')) continue
     if (name === 'rfc287-t1-scheduler-source-lock-inventory.test.ts') continue // 本清单自身
-    const src = readFileSync(resolve(TESTS_DIR, name), 'utf8')
-    const readsFile = /(readFileSync|readFile)\(/.test(src)
-    const namesScheduler = /services\/scheduler\.ts|'scheduler\.ts'/.test(src)
-    if (readsFile && namesScheduler) out.push(name)
+    if (isSchedulerSourceLock(readFileSync(resolve(TESTS_DIR, name), 'utf8'))) out.push(name)
   }
   return out.sort()
 }
@@ -182,5 +190,32 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(
       readdirSync(TESTS_DIR).filter((name) => name.endsWith('.test.ts')).length,
     ).toBeGreaterThanOrEqual(800)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的测试源码喂给**扫描用的同一份判据**。
+//
+// 本清单的断言是 `expect(scanActual()).toEqual(SCHEDULER_SOURCE_LOCK_FILES)`——两边
+// 一起动就永远相等。真正的静默失效在判据：`isSchedulerSourceLock` 少认一种写法
+// （比如只认 `services/scheduler.ts` 不认裸 `'scheduler.ts'`），清单会安静地缩短，
+// 而下一次「顺手更新清单」把差额抹平，从此没人知道少锁了哪几个文件。
+describe('RFC-317 T14 —— matcher 自证：清单判据的两支都必须还在', () => {
+  test('读文件 + 点名 scheduler，两支都命中才算源码文本锁', () => {
+    const readsAndNames =
+      "const src = readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8')\n"
+    expect(isSchedulerSourceLock(readsAndNames)).toBe(true)
+    const bareName = "const src = readFileSync(join(dir, 'scheduler.ts'), 'utf8')\n"
+    expect(isSchedulerSourceLock(bareName)).toBe(true)
+  })
+
+  test('只占一支不算：光读文件、或光提到 scheduler，都不是源码文本锁', () => {
+    expect(isSchedulerSourceLock("const src = readFileSync(p, 'utf8')\n")).toBe(false)
+    expect(isSchedulerSourceLock("import { dispatch } from '@/services/scheduler.ts'\n")).toBe(
+      false,
+    )
+  })
+
+  test('异步读法也算（判据刻意同时认 readFileSync 与 readFile）', () => {
+    expect(isSchedulerSourceLock("await readFile('services/scheduler.ts', 'utf8')\n")).toBe(true)
   })
 })

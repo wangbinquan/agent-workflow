@@ -55,3 +55,29 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(sourceFiles(SRC).length).toBeGreaterThanOrEqual(250)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的**真实用法**喂给同一份判据。
+//
+// 上面已有一条 sentinel（`legacyWriterHits(FORBIDDEN.join('\n'))`），它证明的是
+// 「每个 needle 单独成行时能被检出」。真实源码里退役写法从不单独成行——它出现在
+// JSX 属性、import 语句、className 拼接、模板串里。这一条把判据放到那些形态上，
+// 顺带钉住「注释里提到不算」这条边界。
+describe('RFC-317 T14 —— matcher 自证：真实形态下的退役写法', () => {
+  test('JSX / import / className / 模板串四种形态都命中', () => {
+    for (const fabricated of [
+      '<TemplateVarChips value={vars} onChange={setVars} />',
+      "import { WebhookTriggerVarChips } from '@/components/WebhookTriggerVarChips'",
+      'const cls = `template-var-chips ${active ? "is-active" : ""}`',
+      "const opt = { key: savedTemplateOption, label: t('x') }",
+    ]) {
+      expect(legacyWriterHits(fabricated).length, `没抓到：${fabricated}`).toBeGreaterThan(0)
+    }
+  })
+
+  test('现行写法零命中（判据不能宽到把正解也报了）', () => {
+    const fabricated =
+      "import { ChipsInput } from '@/components/ChipsInput'\n" +
+      '<ChipsInput values={vars} onChange={setVars} testidPrefix="runtime-param" />\n'
+    expect(legacyWriterHits(fabricated)).toEqual([])
+  })
+})

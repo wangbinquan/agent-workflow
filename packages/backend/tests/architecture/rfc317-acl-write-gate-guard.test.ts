@@ -160,3 +160,38 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
     expect(empty).toEqual([])
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的路由源码喂给**扫描用的同一份判据**。
+//
+// 本守卫的全部结论都建立在 `calledIdentifierNames` 之上：它认不出的调用形态，等于
+// 「这个文件没调用过写门」——而结论恰恰是「调用了才算合规」。判据一旦漏掉一种写法
+// （`await` 包裹、成员调用、链式调用里的中间环节），守卫会把**合规**的文件报成违规；
+// 反过来若它把注释 / 字符串里的名字也算进去，就会把**违规**的文件放行。后者更危险：
+// 本 RFC 的 B1 阶段就实撞过一次——正向检查 `text.includes('requireResourceOwner')`
+// 被一句文档注释满足，事故形态的变异照绿（见本文件头注释与 dev-gotchas）。
+describe('RFC-317 T14 —— matcher 自证：调用名提取的边界', () => {
+  test('裸调用 / 成员调用 / await / 链式中间环节都提取得到', () => {
+    const fabricated =
+      "app.get('/api/x/:id', async (c) => {\n" +
+      '  const row = loadVisibleThing(deps, id)\n' +
+      '  await requireResourceOwner(deps.db, actor, "thing", row)\n' +
+      '  return c.json(await deps.store.listThings())\n' +
+      '})\n'
+    const names = calledIdentifierNames('probe.ts', fabricated)
+    for (const expected of ['get', 'loadVisibleThing', 'requireResourceOwner', 'json', 'listThings'])
+      expect(names.has(expected), `没提取到 ${expected}`).toBe(true)
+  })
+
+  test('注释里出现的名字不算调用（正向检查被注释满足是本 RFC 实撞过的事故形态）', () => {
+    const fabricated =
+      '// 这里以前调用 requireResourceOwner，RFC-XXX 之后改走别的门\n' +
+      "const doc = 'requireResourceOwner 的说明'\n" +
+      'const x = 1\n'
+    expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceOwner')).toBe(false)
+  })
+
+  test('只是引用而不调用也不算（`const f = requireResourceOwner` 不构成一道门）', () => {
+    const fabricated = 'const gate = requireResourceOwner\nexport { gate }\n'
+    expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceOwner')).toBe(false)
+  })
+})

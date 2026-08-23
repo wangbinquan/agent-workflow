@@ -265,3 +265,23 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(files.length).toBeGreaterThanOrEqual(300)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份计数判据**。
+//
+// 本文件的断言形态是「某标记在 scheduler.ts 里恰好出现 N 次」。计数判据一旦失效
+// （比如 `indexOf` 的步进写错、把重叠出现算漏），期望值会被同批「顺手对齐」到新的
+// 错误值上，从此双方一起说谎。这里把计数语义本身钉死。
+describe('RFC-317 T14 —— matcher 自证：计数判据的语义', () => {
+  test('不重叠计数：出现几次数几次', () => {
+    const fabricated =
+      'const a = freshestForkSnapshot(run)\n' +
+      'const b = freshestForkSnapshot(other)\n' +
+      '// freshestForkSnapshot 在注释里也算一次（判据是纯文本计数，不剥注释）\n'
+    expect(countOccurrences(fabricated, 'freshestForkSnapshot')).toBe(3)
+  })
+
+  test('零出现返回 0，且不会把子串数错', () => {
+    expect(countOccurrences('const x = 1\n', 'freshestForkSnapshot')).toBe(0)
+    expect(countOccurrences('aaaa', 'aa')).toBe(2)
+  })
+})

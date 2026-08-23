@@ -74,3 +74,29 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(ROOTS.flatMap((root) => walk(root.dir)).length).toBeGreaterThanOrEqual(600)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**本文件自己的 matcher**。
+//
+// 语料还在、但正则不咬了，与「合规」同形。`errorMessage` 的读法有好几种写法变体
+// （`?.` / `!` 链、模板串比较），正则一旦被「整理」掉一支就永久静默。
+describe('RFC-317 T14 —— matcher 自证：伪造的机器读必须被抓到', () => {
+  test('方法读的几种链式写法都命中', () => {
+    for (const fabricated of [
+      'if (run.errorMessage.startsWith("clarify-required")) return',
+      'if (row.errorMessage?.includes("timeout")) retry()',
+      'return node.errorMessage!.startsWith("cancel")',
+    ]) {
+      expect(METHOD_READ.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('与非空字面量比较命中；与空串比较（存在性检查）放行', () => {
+    expect(LITERAL_COMPARE.test('if (run.errorMessage === "clarify-required") return')).toBe(true)
+    expect(LITERAL_COMPARE.test("if (run.errorMessage !== '') return")).toBe(false)
+  })
+
+  test('注释掉的机器读不算违规（否则规则没法在它适用的地方被解释）', () => {
+    const fabricated = '// if (run.errorMessage.startsWith("x")) return\nconst y = 1\n'
+    expect(METHOD_READ.test(stripCommentLines(fabricated))).toBe(false)
+  })
+})

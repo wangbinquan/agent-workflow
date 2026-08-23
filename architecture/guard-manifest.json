@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "RFC-317 守卫清单。两向钉死（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红），并对**扫语料型**守卫（corpusScanner）额外钉死语料下限 minCorpusFiles——扫描根失效时「零违规」与「合规」同形，语料下限是唯一能把二者分开的断言。枚举与判据全部走 census.ts 单一实现（guardTestFiles / isCorpusScanner / corpusFloor），guardTestFiles 递归子目录：初版只扫顶层，第一个放进子目录的守卫就逃掉了。r11FixturesExported / inFileNegativeFixture / prosePromisesMutation 由 B2 后续任务补齐。",
+  "note": "RFC-317 守卫清单。三向钉死：①两向枚举（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红）；②扫语料型守卫（corpusScanner）的语料下限 minCorpusFiles——扫描根失效时「零违规」与「合规」同形，语料下限是唯一能把二者分开的断言；③断言「不存在」的守卫（assertsAbsence）必须有负 fixture（negativeFixture）——语料还在但 matcher 不咬了，违规集合同样回到空。只断言存在的守卫自带证明，不在 ③ 的管辖内。全部判据走 census.ts 单一实现，与生成本账本的实现逐字相同。",
   "recordedAtSha": "b04cf0eb0",
   "guards": [
     {
@@ -10,10 +10,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 88
     },
     {
@@ -23,11 +22,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 139
+      "lines": 186
     },
     {
       "id": "rfc317-acl-column-enrolment-guard",
@@ -36,10 +34,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 127
     },
     {
@@ -49,11 +46,10 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 31,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": true,
-      "lines": 162
+      "lines": 197
     },
     {
       "id": "rfc317-architecture-ledgers",
@@ -62,11 +58,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 81,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 242
+      "lines": 273
     },
     {
       "id": "rfc317-guard-corpus-floor",
@@ -75,11 +70,22 @@
       "mechanism": "behaviour",
       "corpusScanner": true,
       "minCorpusFiles": 100,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 245
+    },
+    {
+      "id": "rfc317-guard-negative-fixture",
+      "file": "packages/backend/tests/architecture/rfc317-guard-negative-fixture.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": true,
+      "minCorpusFiles": 100,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 308
     },
     {
       "id": "e2e-sqlite-fixture-lock-contention",
@@ -88,10 +94,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 145
     },
     {
@@ -101,10 +106,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 326
     },
     {
@@ -114,11 +118,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 194
+      "lines": 227
     },
     {
       "id": "lifecycle-invariants-clarify",
@@ -127,10 +130,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 183
     },
     {
@@ -140,10 +142,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 496
     },
     {
@@ -153,10 +154,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 307
     },
     {
@@ -166,10 +166,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 250
     },
     {
@@ -179,11 +178,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 1,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 105
+      "lines": 141
     },
     {
       "id": "lock",
@@ -192,10 +190,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 149
     },
     {
@@ -205,10 +202,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 60
     },
     {
@@ -218,10 +214,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 242
     },
     {
@@ -231,10 +226,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 122
     },
     {
@@ -244,11 +238,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 350,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 100
+      "lines": 130
     },
     {
       "id": "rfc080-runtime-migration-source-guard",
@@ -257,10 +250,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 38
     },
     {
@@ -270,10 +262,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 242
     },
     {
@@ -283,10 +274,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 550
     },
     {
@@ -296,11 +286,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 110
+      "lines": 136
     },
     {
       "id": "rfc098-write-lock-registry",
@@ -309,10 +298,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 453
     },
     {
@@ -322,10 +310,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 97
     },
     {
@@ -335,10 +322,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 98
     },
     {
@@ -348,10 +334,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 391
     },
     {
@@ -361,10 +346,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 504
     },
     {
@@ -374,11 +358,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 600,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 76
+      "lines": 102
     },
     {
       "id": "rfc146-kind-predicate-guard",
@@ -387,11 +370,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 700,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 116
+      "lines": 135
     },
     {
       "id": "rfc148-dead-producer-guard",
@@ -400,11 +382,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 350,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 130
+      "lines": 152
     },
     {
       "id": "rfc152-ws-paths-interlock",
@@ -413,10 +394,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 87
     },
     {
@@ -426,10 +406,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 200
     },
     {
@@ -439,10 +418,9 @@
       "mechanism": "ast",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 345
     },
     {
@@ -452,10 +430,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 118
     },
     {
@@ -465,10 +442,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 27
     },
     {
@@ -478,10 +454,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 92
     },
     {
@@ -491,11 +466,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": true,
-      "lines": 353
+      "lines": 389
     },
     {
       "id": "rfc222-resource-admin-guard",
@@ -504,11 +478,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 350,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 99
+      "lines": 128
     },
     {
       "id": "rfc251-product-boundary",
@@ -517,10 +490,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 196
     },
     {
@@ -530,11 +502,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 21,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 105
+      "lines": 135
     },
     {
       "id": "rfc254-file-url-pathname-guard",
@@ -543,10 +514,9 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 501,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 102
     },
     {
@@ -556,10 +526,9 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 201,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 150
     },
     {
@@ -569,11 +538,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 201,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 380
+      "lines": 457
     },
     {
       "id": "rfc257-source-locks",
@@ -582,10 +550,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 39
     },
     {
@@ -595,10 +562,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 273
     },
     {
@@ -608,10 +574,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 686
     },
     {
@@ -621,10 +586,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": true,
-      "prosePromisesMutation": false,
       "lines": 99
     },
     {
@@ -634,10 +598,9 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 201,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": true,
-      "prosePromisesMutation": false,
       "lines": 357
     },
     {
@@ -647,10 +610,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 91
     },
     {
@@ -660,10 +622,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": true,
       "lines": 42
     },
     {
@@ -673,11 +634,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": true,
-      "lines": 180
+      "lines": 240
     },
     {
       "id": "rfc285-b6-import-visibility-locks",
@@ -686,10 +646,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 47
     },
     {
@@ -699,11 +658,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 800,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 184
+      "lines": 221
     },
     {
       "id": "rfc287-t9-exemptions-and-extinction",
@@ -712,10 +670,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 183
     },
     {
@@ -725,11 +682,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 120
+      "lines": 173
     },
     {
       "id": "rfc294-architecture-preflight",
@@ -738,10 +694,9 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 120,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": true,
-      "prosePromisesMutation": false,
       "lines": 1289
     },
     {
@@ -751,10 +706,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 247
     },
     {
@@ -764,11 +718,10 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 7,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 154
+      "lines": 202
     },
     {
       "id": "rfc303-architecture-lock",
@@ -777,11 +730,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 71
+      "lines": 103
     },
     {
       "id": "rfc305-architecture-lock",
@@ -790,11 +742,10 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 900,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 715
+      "lines": 764
     },
     {
       "id": "rfc310-architecture-lock",
@@ -803,11 +754,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": true,
-      "lines": 345
+      "lines": 388
     },
     {
       "id": "rfc310-digital-employee-os-architecture",
@@ -816,11 +766,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 21,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 209
+      "lines": 239
     },
     {
       "id": "rfc311-perf-guards",
@@ -829,11 +778,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 6,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 478
+      "lines": 535
     },
     {
       "id": "rfc313-source-locks",
@@ -842,10 +790,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 88
     },
     {
@@ -855,11 +802,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 267
+      "lines": 287
     },
     {
       "id": "scheduler-boundary-canceled-fanout-status",
@@ -868,10 +814,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 210
     },
     {
@@ -881,10 +826,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 238
     },
     {
@@ -894,10 +838,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 285
     },
     {
@@ -907,10 +850,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 195
     },
     {
@@ -920,10 +862,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 253
     },
     {
@@ -933,10 +874,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 180
     },
     {
@@ -946,10 +886,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 151
     },
     {
@@ -959,10 +898,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 204
     },
     {
@@ -972,10 +910,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 195
     },
     {
@@ -985,10 +922,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 280
     },
     {
@@ -998,10 +934,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 25
     },
     {
@@ -1011,10 +946,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 131
     },
     {
@@ -1024,11 +958,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 1,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 128
+      "lines": 162
     },
     {
       "id": "source-text-rfc066-pr-b-guards",
@@ -1037,10 +970,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 95
     },
     {
@@ -1050,10 +982,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 106
     },
     {
@@ -1063,10 +994,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 57
     },
     {
@@ -1076,10 +1006,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 51
     },
     {
@@ -1089,10 +1018,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 111
     },
     {
@@ -1102,10 +1030,9 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 250,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 250
     },
     {
@@ -1115,11 +1042,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 7,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 83
+      "lines": 115
     },
     {
       "id": "canvas-wrapper-inbound-guard",
@@ -1128,10 +1054,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 34
     },
     {
@@ -1141,10 +1066,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 101
     },
     {
@@ -1154,10 +1078,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 107
     },
     {
@@ -1167,10 +1090,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 45
     },
     {
@@ -1180,10 +1102,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 66
     },
     {
@@ -1193,10 +1114,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 59
     },
     {
@@ -1206,10 +1126,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 104
     },
     {
@@ -1219,10 +1138,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 80
     },
     {
@@ -1232,10 +1150,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 447
     },
     {
@@ -1245,10 +1162,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 45
     },
     {
@@ -1258,10 +1174,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 41
     },
     {
@@ -1271,11 +1186,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 250,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 87
+      "lines": 111
     },
     {
       "id": "rfc203-network-tagging-source-lock",
@@ -1284,10 +1198,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 45
     },
     {
@@ -1297,10 +1210,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 35
     },
     {
@@ -1310,10 +1222,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 32
     },
     {
@@ -1323,10 +1234,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 201
     },
     {
@@ -1336,10 +1246,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 98
     },
     {
@@ -1349,11 +1258,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 250,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 73
+      "lines": 112
     },
     {
       "id": "runtime-parameter-ratchet",
@@ -1362,11 +1270,10 @@
       "mechanism": "source-text",
       "corpusScanner": true,
       "minCorpusFiles": 250,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 57
+      "lines": 83
     },
     {
       "id": "subagent-block-nested",
@@ -1375,10 +1282,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 219
     },
     {
@@ -1388,11 +1294,10 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 1,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 355
+      "lines": 389
     },
     {
       "id": "tab-panel-hidden-guard",
@@ -1401,10 +1306,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 33
     },
     {
@@ -1414,10 +1318,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 53
     },
     {
@@ -1427,10 +1330,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 50
     },
     {
@@ -1440,10 +1342,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 107
     },
     {
@@ -1453,10 +1354,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 145
     },
     {
@@ -1466,10 +1366,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 32
     },
     {
@@ -1479,10 +1378,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 551
     },
     {
@@ -1492,10 +1390,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 34
     },
     {
@@ -1505,11 +1402,10 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 250,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
-      "lines": 246
+      "lines": 301
     },
     {
       "id": "wrapper-fanout-boundary-input-tag",
@@ -1518,10 +1414,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 154
     },
     {
@@ -1531,10 +1426,9 @@
       "mechanism": "source-text",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 68
     },
     {
@@ -1544,10 +1438,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 101
     },
     {
@@ -1557,10 +1450,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 116
     },
     {
@@ -1570,10 +1462,9 @@
       "mechanism": "behaviour",
       "corpusScanner": false,
       "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "r11FixturesExported": false,
-      "inFileNegativeFixture": false,
-      "prosePromisesMutation": false,
       "lines": 112
     }
   ],

@@ -108,3 +108,29 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(listTsFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**本文件自己的 matcher**。
+//
+// 见 lifecycle-grep-guard 同名 describe 的说明：语料还在但正则不咬了，与「合规」同形。
+describe('RFC-317 T14 —— matcher 自证：伪造的违规必须被抓到', () => {
+  test('绕过 mint 工厂直接 insert(nodeRuns) 的几种写法都命中', () => {
+    for (const fabricated of [
+      'await db.insert(nodeRuns).values({ id, taskId, nodeId })',
+      'await tx.insert( nodeRuns ).values(row)',
+      'const created = await db.insert(nodeRuns).values(rows).returning()',
+    ]) {
+      expect(PATTERN_INSERT_NODE_RUNS.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('插别的表不算违规', () => {
+    expect(PATTERN_INSERT_NODE_RUNS.test('await db.insert(nodeRunEvents).values(row)')).toBe(false)
+  })
+
+  test('豁免标记与注释行判定都还在工作', () => {
+    expect(ALLOW_MARKER.test('// rfc098-allow-direct-node-run-insert: 工厂自身')).toBe(true)
+    expect(ALLOW_MARKER.test('// 普通注释')).toBe(false)
+    expect(isCommentLine('  // await db.insert(nodeRuns).values(row)')).toBe(true)
+    expect(isCommentLine('  await db.insert(nodeRuns).values(row)')).toBe(false)
+  })
+})

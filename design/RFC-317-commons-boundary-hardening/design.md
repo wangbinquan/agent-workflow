@@ -248,7 +248,13 @@ L1  边界规则              R1..R12（AST / dep-graph / 类型层 / 源码文�
    > **落地偏离（B2-a，2026-08-23）**：原文写的是「守卫**导出**扫描到的文件数、manifest 断言」。实现时发现这条不可实施——manifest 要读到那个导出就得 `import` 该测试文件，而 import 一个 test 文件会把它的 `describe/test` **重复注册**一遍（前端 vitest 还会连带拖起 jsdom setup）。改为「守卫在文件内断言下限 + manifest 用 AST 两向钉死该下限」：目标失效形态（扫成空）覆盖相同，且下限就写在用它的地方、被调低会红，比导出一个数字更难悄悄失效。
    >
    > **subject 同时收窄**：从「所有 `source-text | ast` 守卫」（76 个）收窄到「真的枚举文件的守卫」（37 个）。读固定文件名的守卫不存在「静默扫成空」——文件没了 `readFileSync` 直接抛，是响亮的红，不需要这条规则。
-3. **变异必红**：每个守卫导出 `export const __mutationFixtures: ReadonlyArray<{ name, source, mustReport: boolean }>`，manifest 把每条喂给同一个导出的 matcher，断言 `mustReport` 的**确实报**、不报的**确实不报**。fixture 是**内存字符串**，绝不往工作树写故意的红（仓规）。
+3. **变异必红**：凡「扫语料 **且** 断言不存在」的守卫，必须至少有一条**负 fixture**——把伪造的输入喂给某个决定过程、且**完全不碰真实语料**的断言。fixture 是**内存字符串**，绝不往工作树写故意的红（仓规）。有无 fixture 两向钉进 manifest，删掉一条必须是一次有记录的决定。
+
+   > **落地偏离（B2-b，2026-08-23）**：原文写的是「守卫导出 `__mutationFixtures`，manifest 逐条喂给同一个**导出的 matcher**」。与 R11.2 同一个原因不可实施——manifest 要读那两个导出就得 `import` 该测试文件，会重复注册它的 `describe/test`。改为「守卫在文件内把伪造输入喂给自己的判据，manifest 用 AST 认出这类断言并两向钉死」。
+   >
+   > **受管面收窄**：从「每个守卫」收窄到「扫语料 **且** 断言不存在的守卫」（37 个里 34 个）。只断言**存在**的守卫（`expect(sites.length).toBeGreaterThanOrEqual(4)`）自带证明：扫描一失效就掉到 0、当场转红，再要求配 fixture 是纯仪式，只会让豁免账本变成停车场。
+   >
+   > **代价与前提**：34 个里有 12 个原本把判据内联在 test 体里，**先把判据提到模块顶层 / 抽成纯函数**才有得喂。这不是顺手重构——判据各留一份拷贝的话，fixture 证明的只是拷贝还活着。
 
 **本条自身的变异实证**：把某条 `mustReport: true` 的 fixture 改成合法源码 ⇒ manifest 必须红。
 

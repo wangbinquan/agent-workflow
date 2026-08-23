@@ -118,14 +118,24 @@ function walkTsFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-function countSpawnHits(filePath: string): number {
+/**
+ * 一份源码里的进程起点命中数。**纯函数**——扫描与 RFC-317 T14 的「matcher 自证」
+ * 共用它。findings G-07 点名过本文件的证伪方式：把 SPAWN_PATTERNS 改成匹配不到
+ * 任何东西、再清空 ALLOWLIST，整个 suite 照绿——因为「实际命中表为空」与「全部
+ * 合规」在断言层面同形。下面的 fixture 就是为了让那次证伪当场变红。
+ */
+function spawnHitsIn(source: string): number {
   let hits = 0
-  for (const rawLine of readFileSync(filePath, 'utf8').split('\n')) {
+  for (const rawLine of source.split('\n')) {
     const trimmed = rawLine.trim()
     if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue
     if (SPAWN_PATTERNS.some((re) => re.test(rawLine))) hits += 1
   }
   return hits
+}
+
+function countSpawnHits(filePath: string): number {
+  return spawnHitsIn(readFileSync(filePath, 'utf8'))
 }
 
 describe('RFC-284 T1 — spawn site ratchet', () => {
@@ -176,5 +186,55 @@ describe('RFC-284 T1 — spawn site ratchet', () => {
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(walkTsFiles(SRC_ROOT).length).toBeGreaterThanOrEqual(300)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的进程起点喂给 **SPAWN_PATTERNS 那一份判据**。
+//
+// findings G-07 点名过本文件的证伪方式：「把 SPAWN_PATTERNS 的条目改成匹配不到任何
+// 东西，再清空 ALLOWLIST，整个 suite 照绿」——因为实际命中表为空与全部合规同形。
+// 下面每条 pattern 都配一个它必须抓到的典型写法，那次证伪于是当场变红。
+//
+// 覆盖是**逐条**的：新增一条 pattern 而不给样本会红（下面第一个 test），这样
+// 「补了盲区却没证明补到位」不会悄悄溜过去——正是 T29 那次补 exec 族的教训。
+describe('RFC-317 T14 —— matcher 自证：每条 spawn pattern 都必须抓到它的典型写法', () => {
+  const SAMPLES: readonly string[] = [
+    'const p = Bun.spawn({ cmd })',
+    "const p = Bun['spawn']({ cmd })",
+    'const r = Bun.spawnSync({ cmd })',
+    "import { spawnSync } from 'node:child_process'",
+    'const child = spawn(bin, argv)',
+    "import cp from 'child_process'",
+    'const out = await Bun.$`git status`',
+    "execFile('git', ['status'], cb)",
+    'const r = execSync(cmd)',
+    'const w = fork(workerPath)',
+  ]
+
+  test('每条 pattern 至少被一个样本命中（新增 pattern 没配样本就红）', () => {
+    const uncovered = SPAWN_PATTERNS.filter(
+      (pattern) => !SAMPLES.some((sample) => pattern.test(sample)),
+    ).map((pattern) => pattern.source)
+    expect(uncovered, '这些 pattern 没有任何样本能证明它还咬得动').toEqual([])
+  })
+
+  test('每个样本都被扫描判据数到（判据被削弱时当场红）', () => {
+    for (const sample of SAMPLES) {
+      expect(spawnHitsIn(sample), `没抓到进程起点：${sample}`).toBe(1)
+    }
+  })
+
+  test('注释行不算命中（否则规则没法在它适用的地方被解释）', () => {
+    const commented = '// const p = Bun.spawn({ cmd })\n * fork(workerPath)\n/* execSync(cmd) */\n'
+    expect(spawnHitsIn(commented)).toBe(0)
+  })
+
+  test('负回顾里刻意排除的方法名不误报（sqlite / RegExp 的 .exec）', () => {
+    expect(spawnHitsIn('db.exec("PRAGMA journal_mode = WAL")\n')).toBe(0)
+    expect(spawnHitsIn('const m = RE.exec(line)\n')).toBe(0)
+  })
+
+  test('完全不起进程的源码计为 0（判据不能宽到把普通代码也算成能力触点）', () => {
+    expect(spawnHitsIn('export function add(a: number, b: number) {\n  return a + b\n}\n')).toBe(0)
   })
 })

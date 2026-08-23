@@ -343,3 +343,46 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(walk(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给**上面解析边用的同一组正则**。
+//
+// 边界锁的判据链是「解析出 import 边 → 判断目标是否越界」。第一环一旦漏掉一种
+// 语法形态（`export … from`、裸 import、`await import()`、`require()`），越界边
+// 根本不会出现在集合里，规则于是永远零违规——与「模块干净」完全同形。
+// 本仓已经因为「只查静态 import」漏过 dynamic import 绕过（见 docs/dev-gotchas.md）。
+describe('RFC-317 T14 —— matcher 自证：五种 import 语法都必须被解析出来', () => {
+  const specifiersOf = (text: string): string[] => {
+    const out: string[] = []
+    for (const m of text.matchAll(FROM_RE)) out.push(m[3]!)
+    for (const m of text.matchAll(BARE_IMPORT_RE)) out.push(m[1]!)
+    for (const m of text.matchAll(DYNAMIC_RE)) out.push(m[1]!)
+    return out
+  }
+
+  test('static / type-only / export-from / 裸 import / 动态 import / require 全覆盖', () => {
+    const fabricated =
+      "import { a } from '@/services/one'\n" +
+      "import type { B } from '@/services/two'\n" +
+      "export { c } from '@/services/three'\n" +
+      "import '@/services/four'\n" +
+      "const e = await import('@/services/five')\n" +
+      "const f = require('@/services/six')\n"
+    expect(new Set(specifiersOf(fabricated))).toEqual(
+      new Set([
+        '@/services/one',
+        '@/services/two',
+        '@/services/three',
+        '@/services/four',
+        '@/services/five',
+        '@/services/six',
+      ]),
+    )
+  })
+
+  test('type-only 标记被正确读出（type 边与 value 边的判据不同，认错就等于放行）', () => {
+    const typeOnly = [..."import type { B } from '@/x'\n".matchAll(FROM_RE)][0]
+    const valueEdge = [..."import { b } from '@/x'\n".matchAll(FROM_RE)][0]
+    expect(typeOnly?.[2]).toBeDefined()
+    expect(valueEdge?.[2]).toBeUndefined()
+  })
+})

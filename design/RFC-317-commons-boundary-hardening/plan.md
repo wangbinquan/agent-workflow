@@ -308,3 +308,37 @@ D2(a)「把 `employee_definitions` 立为第 13 类 ACL 资源」在批准时被
 3. 整块删掉 `rfc305` 的语料下限 describe ⇒ 2 红（缺下限 + 账本漂移）；
 4. 削弱判据：删 `corpusFloor` 的 `toBeGreaterThanOrEqual` 分支 ⇒ 6 红（含 4 条 T21 fixture——**判据变弱会先咬到自己**）；
 5. 放宽判据：`isCorpusScanner` 退回文本判据 ⇒ T21 的「注释里提到 readdirSync 不算」红。
+
+### B2-b（2026-08-23）—— T14 / T15 / T21：断言「不存在」的守卫必须证明自己还咬得动
+
+**动机（findings G-07）**：T13 挡的是「扫了个寂寞」；这一批挡的是另一半——**语料还在，但 matcher 不咬了**。正则被「整理」掉一支、AST 判据漏掉一种语法形态、needle 被改名，违规集合同样回到空，而语料下限还绿着，扫描器看上去健康得很。G-07 原话是三条最吃重的 ratchet 在**散文**里声称做过变异实证，但仓里没有一条今天还能复跑的 fixture；它还给了具体证伪方式：把 `rfc284` 的 `SPAWN_PATTERNS` 改成匹配不到任何东西、再清空 `ALLOWLIST`，整个 suite 照绿。
+
+- **判据（`census.ts`，与账本共用）**：`assertsAbsence`（有没有 `toEqual([])` / `toHaveLength(0)` / `toBe(0)` / `not.toMatch` 形态的断言）+ `negativeFixtureAssertions`（把**伪造输入**喂给某个决定过程、且**完全不碰真实语料**的断言）。
+- **受管面刻意收窄**：只管「扫语料 **且** 断言不存在」的守卫（37 个里 34 个）。只断言**存在**的守卫（`expect(sites.length).toBeGreaterThanOrEqual(4)`）自带证明——扫描一失效就掉到 0、当场转红，再要求配 fixture 就是纯仪式。判据窄一点但每条都必要，比宽而掺水更耐用；后者会让豁免账本慢慢变成停车场。
+- **新守卫 `rfc317-guard-negative-fixture.test.ts`**：受管守卫必须至少有一条负 fixture；`assertsAbsence` 与 `negativeFixture` 两向钉进账本（**删掉一条 fixture 必须是一次有记录的决定**）；豁免账本 `NO_FIXTURE_YET` 空表即目标态。
+- **回填 34 个守卫，豁免为零**。其中 **12 个**是先把判据从 test 体里提到模块顶层 / 抽成纯函数才有得喂——`NAKED_STATUS_WRITE`、`countOccurrencesIn`、`DISJUNCTION`、`FORBIDDEN_TASK_INTERNALS`、`reviewedCallCounts`、`spawnHitsIn`、`sourceHasCodePattern`、`isSchedulerSourceLock`、`heavyColumnsIn`、`RETIRED_TRIGGER_SYMBOLS`、`isAgentMultiOffender`、`mentionsDeadClass`、`usesVariant`、`WG_CONSTANT_IMPORT`。**判据各留一份拷贝的话，fixture 证明的只是拷贝还活着**，这一步不是顺手重构而是前提。
+
+**变异实证**：
+1. **G-07 点名的那次证伪**：`SPAWN_PATTERNS` 全部改成匹配不到任何东西 + `ALLOWLIST` 清空 ⇒ 从「整个 suite 照绿」变成 **2 红**；
+2. 整块删掉 `rfc292` 的负 fixture ⇒ 2 红（缺 fixture + 账本漂移）。
+
+**判据本身写了四版，前三版都判错，两个方向的错都出现过**——每一版的错法都固化成了 T21 的 fixture：
+
+| 版本 | 错法 | 后果 |
+| --- | --- | --- |
+| v1 | 要求断言里语法上出现顶层 matcher 名 | 判**紧**：matcher 藏在局部 `probe()` / describe 作用域 helper / `Object.fromEntries` 外壳下的合格 fixture 全被判成不合格 |
+| v2 | 只把**顶层**名字算作语料 | 判**松**：`const offenders = files.filter(…includes('function describeError('))` 里的 `offenders` 被当成 fixture 载体，于是 `expect(offenders).toEqual([])` 这条彻头彻尾的**规则**断言被记成「有负 fixture」 |
+| v3 | 语料只传播一跳 | 判**松**：`files → offenders → filtered` 链条上后段脱管 |
+| v4 | 不要求具名 matcher；语料传播跑到不动点；伪造文件名也算输入 | 26 → 34 且假阳性归零 |
+
+判**松**的方向更坏：缺 fixture 的守卫凭空达标，判据自己成了假绿源。所以 T21 的 fixture 表里两个方向各留了样本，任何一版回归都会当场红。这也是本 RFC 反复讲的那件事的又一次实例——**判据比现实窄，就会逼着后来的人把代码写成判据认得的样子**；判据比现实宽，豁免面就会悄悄扩大。
+
+**顺带发现（他人在制品，非本批引入）**：并发 session 未提交的 `digitalEmployeeBuiltinToolCatalog.ts` 里新增的 `agentParts.join(':')` 触发 `rfc254-platform-surface-guard` 的 `posix-path-list` 规则。`origin/main` 上该守卫 4 pass / 0 fail，属未落地改动踩到既有守卫——看起来是误报（拼的是 agent id 而非 PATH 列表），需要一条带 why 的 allowance，留给该改动的作者处置。
+
+#### B2-b 的两个自伤（都由既有门禁当场抓住）
+
+1. **fixture 自己触发了别的守卫**。给 `agent-multi-grep-guard` 写负 fixture 时，样本路径随手写成 `'packages/backend/src/services/scheduler.ts'`。该文件本来就调 `readFileSync`，于是它同时满足 `rfc287` 清单判据的两支（读文件 + 点名 scheduler.ts），被判成一条新的「scheduler.ts 源码文本锁」，`scanActual()` 与钉死的清单不再相等 ⇒ 全量门禁 shard 3 红。
+   **正确处置是改 fixture、不是改清单**——那个文件并不锁 scheduler.ts 源码，把它加进清单等于让清单开始说谎。样本路径改成 `services/nodeExecutor.ts` 即可。这条恰好演示了钉死清单的价值：**一个纯属巧合的字符串**都能让清单发现有东西变了。
+   一般教训：**fixture 里的伪造样本仍然是仓里的真实文本**，会被别的源码扫描型守卫看见。写样本时避开其它守卫的 needle（尤其是文件路径、退役标识符这类高辨识度字符串）。
+
+2. **脚本化插入的代码不过 prettier**。本批多数编辑是脚本按行拼接进去的，11 个文件的格式与 prettier 不一致 ⇒ `format:check` 红。`bun run format` 修完后 **必须重算账本**——`guard-manifest.json` 记了每个守卫的 `lines`，重排会让它漂移。顺序是：改代码 → format → 重算账本 → 再跑门禁。

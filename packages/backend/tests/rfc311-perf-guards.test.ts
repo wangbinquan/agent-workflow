@@ -201,13 +201,22 @@ interface GuardedPath {
  * 重列：按**命名约定**派生，不是人工清单——新加的 `*_json` 自动是重列，判据不会
  * 因为有人忘了登记而悄悄失效。
  */
-function heavyColumns(): string[] {
-  const schema = readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts'), 'utf-8')
+/**
+ * 从一份 schema 源码里挑出「重列」。**纯函数**——扫描与 RFC-317 T14 的
+ * 「matcher 自证」共用它，避免判据长出第二份实现。
+ */
+function heavyColumnsIn(schema: string): string[] {
   const cols = new Set(Array.from(schema.matchAll(/text\('([a-z0-9_]+)'\)/g), (m) => m[1]!))
   return [...cols].filter(
     (c) =>
       /(_json|_snapshot|_text|_body|_md|_yaml)$/.test(c) ||
       ['stdout', 'stderr', 'inputs', 'outputs', 'definition'].includes(c),
+  )
+}
+
+function heavyColumns(): string[] {
+  return heavyColumnsIn(
+    readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts'), 'utf-8'),
   )
 }
 
@@ -474,5 +483,53 @@ describe('RFC-311 性能防护 —— 未受保护的无界读只许减不许增
         `新增的读点要么接分页、要么加进上面的 GUARDED 注册表；确实无界且可接受的，\n` +
         `连同理由一起调低/说明这条棘轮。当前清单：\n${[...new Set(hits)].sort().join('\n')}`,
     ).toBeLessThanOrEqual(UNBOUNDED_READ_RATCHET)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的 schema 源码喂给**扫描用的同一份判据**。
+//
+// 「重列不得出现在列表读路径」这条守卫的强度完全取决于 `heavyColumnsIn` 认得出
+// 哪些列。正则或后缀表一旦漏掉一类（新加的 `_yaml`、或 drizzle 换了列声明写法），
+// 重列就不在集合里，「读路径没选重列」于是永远成立——与「真的没选」同形。
+describe('RFC-317 T14 —— matcher 自证：重列识别必须还认得出重列', () => {
+  test('六种后缀 + 五个具名列都识别得出', () => {
+    const fabricated = [
+      "  configurationJson: text('configuration_json')",
+      "  preSnapshot: text('pre_snapshot')",
+      "  promptText: text('prompt_text')",
+      "  bodyMd: text('body_md')",
+      "  noteBody: text('note_body')",
+      "  policyYaml: text('policy_yaml')",
+      "  stdout: text('stdout')",
+      "  stderr: text('stderr')",
+      "  inputs: text('inputs')",
+      "  outputs: text('outputs')",
+      "  definition: text('definition')",
+    ].join('\n')
+    expect(heavyColumnsIn(fabricated).sort()).toEqual(
+      [
+        'body_md',
+        'configuration_json',
+        'definition',
+        'inputs',
+        'note_body',
+        'outputs',
+        'policy_yaml',
+        'pre_snapshot',
+        'prompt_text',
+        'stderr',
+        'stdout',
+      ].sort(),
+    )
+  })
+
+  test('轻列不被误判成重列（否则守卫会把正常读路径也拦下）', () => {
+    const fabricated = [
+      "  id: text('id')",
+      "  taskId: text('task_id')",
+      "  status: text('status')",
+      "  ownerUserId: text('owner_user_id')",
+    ].join('\n')
+    expect(heavyColumnsIn(fabricated)).toEqual([])
   })
 })

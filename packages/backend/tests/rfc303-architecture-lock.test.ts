@@ -19,15 +19,18 @@ function tsFiles(root: string): string[] {
   return out
 }
 
+// RFC-317 T14 —— 判据提到模块顶层：扫描与「matcher 自证」共用同一份实现。
+const FORBIDDEN_TASK_INTERNALS =
+  /from ['"]@\/(?:services\/(?:task|gc|scheduler|execution)|util\/paths)/
+
 describe('RFC-303 architecture locks', () => {
   test('integration domain/application/infrastructure import only the task public contract', () => {
     const root = join(SRC, 'modules', 'integration')
-    const forbidden = /from ['"]@\/(?:services\/(?:task|gc|scheduler|execution)|util\/paths)/
     const violations = tsFiles(root)
       .filter((file) => !file.includes(`${join('integration', 'composition')}/`))
       .flatMap((file) => {
         const source = readFileSync(file, 'utf8')
-        return forbidden.test(source) ? [relative(SRC, file)] : []
+        return FORBIDDEN_TASK_INTERNALS.test(source) ? [relative(SRC, file)] : []
       })
     expect(violations).toEqual([])
   })
@@ -67,5 +70,34 @@ describe('RFC-303 architecture locks', () => {
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(tsFiles(SRC).length).toBeGreaterThanOrEqual(300)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份判据**。
+//
+// 这条规则要抓的是「integration 模块绕过 task public 合同、直接 import 任务内部」。
+// 正则一旦被收窄（少一个 service 名、`@/` 前缀写法变化），越界 import 不再命中，
+// 规则永远零违规——与「模块干净」同形。
+describe('RFC-317 T14 —— matcher 自证：伪造的越界 import 必须被抓到', () => {
+  test('四个被禁的内部模块逐个命中，单引号双引号都认', () => {
+    for (const fabricated of [
+      "import { startTask } from '@/services/task'",
+      'import { collect } from "@/services/gc"',
+      "import { dispatch } from '@/services/scheduler'",
+      "import { run } from '@/services/execution/kernel'",
+      "import { worktreePath } from '@/util/paths'",
+    ]) {
+      expect(FORBIDDEN_TASK_INTERNALS.test(fabricated), `没抓到：${fabricated}`).toBe(true)
+    }
+  })
+
+  test('走 public 合同的 import 放行（规则不能宽到把正解也报了）', () => {
+    for (const legitimate of [
+      "import { terminateTaskSource } from '@/modules/task-execution/public/commands'",
+      "import type { TaskView } from '@/modules/task-execution/public/types'",
+      "import { logger } from '@/util/logger'",
+    ]) {
+      expect(FORBIDDEN_TASK_INTERNALS.test(legitimate), `误伤：${legitimate}`).toBe(false)
+    }
   })
 })

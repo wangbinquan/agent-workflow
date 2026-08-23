@@ -23,12 +23,17 @@ function walk(dir: string): string[] {
   return out
 }
 
+// RFC-317 T14 —— 计数判据提到模块顶层：扫描与「matcher 自证」共用同一份实现。
+function countOccurrencesIn(source: string, needle: string): number {
+  return source.split(needle).length - 1
+}
+
 function countMatches(files: string[], needle: string): { count: number; files: string[] } {
   let count = 0
   const hit: string[] = []
   for (const f of files) {
     const src = readFileSync(f, 'utf8')
-    const occurrences = src.split(needle).length - 1
+    const occurrences = countOccurrencesIn(src, needle)
     if (occurrences > 0) {
       count += occurrences
       hit.push(`${f}:${occurrences}`)
@@ -96,5 +101,30 @@ describe('RFC-132 PR-F — consumed_by stamps stay deleted (no-revival lock)', (
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(walk(BACKEND_SRC).length + walk(SHARED_SRC).length).toBeGreaterThanOrEqual(350)
+  })
+})
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**上面扫描用的同一份计数判据**。
+//
+// 灭绝型守卫（断言 count === 0）有个特别阴的失效形态：needle 被拼错 / 被改名后，
+// 计数永远是 0，断言永远绿——而且它绿得和「真的灭绝了」一模一样。这里至少钉住
+// 「计数判据本身还会数」，配合上面的语料下限，把两种静默失效都挡掉。
+describe('RFC-317 T14 —— matcher 自证：计数判据必须还会数', () => {
+  test('伪造的源码里出现几次就数几次', () => {
+    const fabricated =
+      'import { computeHistoryCutoff } from "./aging"\n' +
+      'const a = computeHistoryCutoff(x)\n' +
+      'const b = computeHistoryCutoff(y)\n'
+    expect(countOccurrencesIn(fabricated, 'computeHistoryCutoff')).toBe(3)
+  })
+
+  test('不出现就是 0（不能把「没数到」和「数错了」混为一谈）', () => {
+    expect(countOccurrencesIn('const a = deriveCutoff(x)\n', 'computeHistoryCutoff')).toBe(0)
+  })
+
+  test('子串关系不被吞掉：historyCutoffClarifyIteration 同时算 historyCutoff 的一次出现', () => {
+    const fabricated = 'const n = row.historyCutoffClarifyIteration\n'
+    expect(countOccurrencesIn(fabricated, 'historyCutoffClarifyIteration')).toBe(1)
+    expect(countOccurrencesIn(fabricated, 'historyCutoff')).toBe(1)
   })
 })

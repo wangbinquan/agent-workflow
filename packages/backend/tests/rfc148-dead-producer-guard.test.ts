@@ -128,3 +128,25 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(ROOTS.flatMap((root) => walk(root.dir)).length).toBeGreaterThanOrEqual(350)
   })
 })
+
+// RFC-317 T14 —— 负 fixture：把伪造的违规喂给**本文件自己的判定过程**。
+//
+// 本守卫的判定 = `stripComments` + `line.includes(fn + '(')`。注释剥离一旦失效，
+// 「注释里提到死函数」会被误报；剥过了头，真调用会漏报。两个方向都要钉住。
+describe('RFC-317 T14 —— matcher 自证：伪造的死函数调用必须被抓到', () => {
+  test('真调用命中、注释掉的不命中', () => {
+    const fabricated =
+      'const block = buildClarifyPromptBlock(ctx)\n' +
+      '// renderCrossClarifySource(source)\n' +
+      ' * buildExternalFeedbackBlock(x)\n'
+    const live = stripComments(fabricated).split('\n')
+    expect(live.some((line) => line.includes('buildClarifyPromptBlock('))).toBe(true)
+    expect(live.some((line) => line.includes('renderCrossClarifySource('))).toBe(false)
+    expect(live.some((line) => line.includes('buildExternalFeedbackBlock('))).toBe(false)
+  })
+
+  test('同名前缀不误报（`renderManualFeedbackSectionTitle` 不是调用）', () => {
+    const fabricated = 'const t = renderManualFeedbackSectionTitle\n'
+    expect(stripComments(fabricated).includes('renderManualFeedbackSection(')).toBe(false)
+  })
+})

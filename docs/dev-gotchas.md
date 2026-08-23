@@ -1684,3 +1684,43 @@ dev-auth 7460。**`--filter` 不做联动**——某个包因 EADDRINUSE `Exited
   `rfc284-spawn-site-ratchet` / `ux-source-ratchets`）。把 `rfc294` 的扫描根指到一个不存在的目录，它
   6 条测试里 **5 条照绿**。现在由 `packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts`
   强制：凡枚举文件的守卫必须断言语料下限，下限两向钉进 `architecture/guard-manifest.json`，**静默调低也红**。
+
+## 写「判据的判据」时，判松比判紧更危险（RFC-317 B2-b 实测，2026-08-23）
+
+给守卫写元判据（「这条守卫有没有负 fixture」「它扫了多少语料」）时，判据本身会犯两个
+方向的错，代价**不对称**：
+
+- **判紧**（把合格的判成不合格）：表现是一堆假红，很吵，但当场就被发现。真实伤害是它
+  会逼着后来的人**把代码写成判据认得的样子**——本末倒置。实测三版都栽在这里：要求断言
+  里语法上出现顶层 matcher 名字，于是 matcher 藏在局部 `probe()` 里、藏在 describe
+  作用域 helper 里、藏在 `Object.fromEntries` 外壳下的合格 fixture 全被判成缺失。
+- **判松**（把不合格的判成合格）：**没有任何症状**。缺 fixture 的守卫凭空达标，元判据
+  自己成了新的假绿源——而它看起来正在工作。实测：只把**顶层**名字算作「语料」，于是
+  `const offenders = files.filter((f) => readFileSync(f).includes('function describeError('))`
+  里的 `offenders` 被当成「fixture 载体」（初始化式里确实有一段像源码的字面量），
+  `expect(offenders).toEqual([])` 这条彻头彻尾的**规则**断言被记成「这条守卫有负 fixture」。
+  一次改动让「达标数」从 26 跳到 33，看着像大丰收，实际是判据塌了。
+
+**定式**：①元判据每改一版，把**这一版的错法**固化成 fixture 留在测试里（两个方向都留），
+下一版回归会当场红；②「达标数突然变好」要当成可疑信号去抽查具体被判为达标的那几条，
+而不是当成进展；③涉及数据来源传播（这个值是不是来自真实语料）的判据要跑到**不动点**，
+只看一跳会让 `files → offenders → filtered` 链条后段脱管。
+
+## 负 fixture 里的伪造样本仍然是仓里的真实文本（RFC-317 B2-b 实测，2026-08-23）
+
+给守卫写「把伪造违规喂给自己的 matcher」类 fixture 时，那段伪造样本**是**仓库里的
+真实字符，别的源码扫描型守卫照样看得见。实撞：给 `agent-multi-grep-guard` 写 fixture
+时样本路径随手写成 `'packages/backend/src/services/scheduler.ts'`，该文件本就调
+`readFileSync`，于是同时满足 `rfc287-t1-scheduler-source-lock-inventory` 判据的两支
+（读文件 + 点名 scheduler.ts），被判成一条新的「scheduler.ts 源码文本锁」，钉死清单不
+再相等、全量门禁转红。
+
+- **正确处置是改 fixture，不是改清单**。那个文件并不锁 scheduler.ts 源码，把它加进清单
+  等于让清单开始说谎——而清单说谎正是它存在要防的事。
+- **写样本时避开其它守卫的 needle**：文件路径、退役标识符、错误码字面量这类高辨识度
+  字符串最容易撞。拿不准就用一个明显与本守卫无关的名字。
+- 反过来看这也是钉死清单的价值实证：**一个纯属巧合的字符串**都能让它发现有东西变了。
+
+**另一条同批教训**：脚本按行拼接进去的代码不过 prettier。`bun run format` 修完之后
+**必须重算机器账本**——`architecture/guard-manifest.json` 记了每个守卫的 `lines`，重排
+会让它漂移。顺序固定为：改代码 → format → 重算账本 → 再跑门禁。
