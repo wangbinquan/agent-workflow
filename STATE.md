@@ -254,6 +254,17 @@
 > 视觉基线 `de2b8a4c` 与 Select 焦点交接修复 `b48939f7` 收口；远端 exact SHA `b48939f7c48874ad92f15eb558babe0c41a5ccdc`
 > 上，CI `32588052788` **31/31 jobs success**，visual `32588052795` **56/56 tests success**，无失败或取消。
 >
+> **PR-26 工具定义输入输出契约对齐（2026-08-23，已完成）**：分类工具的主输入改为流水线失败证据与流水线目录；
+> 问题种类定义明确归属于该工具 revision，只约束它可产出的闭集，不再伪装成每次任务的上游输入。分类输出现显式展示
+> `development.problem-set`：包含逐条问题记录、去重后的待处理问题种类与当前头提交；平台再按岗位中有序问题种类确定性选择下一把
+> 修复工具。修复工具的主输入同步展示问题集、平台分派的问题种类、原始失败证据与流水线目录，输出继续是提交信息。工具定义页中英文
+> 文案、示例 JSON、后端 WorkContract 与真实运行时语义已经对齐。回归证据：backend contract **10/10**、frontend guide **1/1**、
+> 真实 Chromium 工具配置旅程 **1/1**；最终 `bun run gate:local` **10m43s 全绿**——backend
+> **11,649 pass / 36 skip / 0 fail**、frontend **6,687/6,687**、shared **2,222/2,222**、system-mocks **62/62**，
+> typecheck/lint/format/depcheck 全绿。实现提交 `c77f7c46f8bf52e86f2fa934b9b5186e37236fae` 已推送 `main`；visual
+> `32610899094` **56/56 tests success**，无快照漂移。CI `32610899098` 初次仅 macOS 后端 3/4 分片因既有测试 harness
+> 取得空 SHA、在测试正文前执行空 pathspec `git checkout` 而红；同一 exact SHA 重跑终态 **31/31 jobs success**。
+>
 > ### 📌 换 session 接手指引（2026-08-20 收工，读这一段就够开工）
 >
 > **主干状态**：`892c1bf3`，**CI 31/31 全绿**；`visual-regression-nightly` **53 passed**；
