@@ -234,7 +234,7 @@ test('a first-time user configures a work-item tool directly on the fixed respon
   const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill('First implementation tool')
-  await dialog.getByRole('combobox').click()
+  await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
   await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
   await dialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
 
@@ -271,7 +271,7 @@ test('a failed contract check is corrected on the same tool registration id', as
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill(name)
-  await dialog.getByRole('combobox').click()
+  await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
   await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
   await dialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
 
@@ -341,7 +341,7 @@ test('an existing invalid tool opens in the editor and publishes its correction'
 
   const dialog = page.getByRole('dialog', { name: `Edit tool: ${name}` })
   await expect(dialog.getByRole('textbox', { name: /Tool name/ })).toHaveValue(name)
-  await dialog.getByRole('combobox').click()
+  await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
   await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
   await dialog
     .getByRole('button', { name: 'Check contract and publish new version', exact: true })

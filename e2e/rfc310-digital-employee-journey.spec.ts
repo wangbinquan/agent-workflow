@@ -372,6 +372,7 @@ test.afterAll(async () => {
 test('body and repository-bound files enter a stateful employee case and the unified task list', async ({
   page,
 }) => {
+  const taskName = 'Implement the supplied acceptance change'
   await primeAuth(page)
 
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
@@ -798,6 +799,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
 
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-content')).toHaveAttribute('aria-current', 'step')
+  await page.getByTestId('wizard-task-name').fill(taskName)
   await page.getByRole('radio', { name: 'Request and files', exact: true }).click()
   await page
     .getByLabel('Requirement or problem body')
@@ -818,12 +820,14 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(page.getByTestId('stepper-step-confirm')).toHaveAttribute('aria-current', 'step')
   await expect(page.getByTestId('employee-case-summary-employee')).toContainText(employeeName)
   await expect(page.getByTestId('employee-case-summary-space')).toContainText(PROJECT_PATH)
+  await expect(page.getByTestId('employee-case-summary-name')).toContainText(taskName)
   await expect(page.getByTestId('employee-case-summary-content')).toContainText(
     'docs/acceptance.md',
   )
   await page.getByTestId('wizard-launch').click()
   const submitted = await launchRequest
   expect(submitted.postDataJSON()).toMatchObject({
+    name: taskName,
     kind: 'body-and-files',
     target: { repositoryId },
     body: 'Implement the requested change and keep the supplied acceptance document in Git.',
@@ -835,7 +839,20 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const runtimeCase = await requestJson<{
     capabilityActivation: { activeWorkItemRefs: string[] }
   }>(`/api/employee-cases/${encodeURIComponent(caseId)}`)
-  await expect(page.getByRole('heading', { name: employeeName, exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: taskName, exact: true })).toBeVisible()
+  await expect(
+    page.getByText(`Development employee · ${employeeName}`, { exact: true }),
+  ).toBeVisible()
+
+  await page.goto(`${daemon.baseUrl}/tasks?type=digital-employee`)
+  await expect(page.getByTestId('task-operations-list')).toBeVisible()
+  const taskRow = page.getByTestId(`task-row-${caseId}`)
+  await expect(taskRow).toBeVisible()
+  await expect(taskRow).toContainText(taskName)
+  await expect(taskRow).toContainText('Digital employee')
+  await expect(taskRow).toContainText(`Development employee · ${employeeName}`)
+
+  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}`)
   const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(runtimeMap).toBeVisible()
   await expectUniformCapabilityToolCards(runtimeMap, 100)
@@ -900,8 +917,4 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(
     timeline.getByText('Deterministic output / program output', { exact: true }),
   ).toBeVisible()
-
-  await page.goto(`${daemon.baseUrl}/tasks?type=digital-employee`)
-  await expect(page.getByTestId('task-operations-list')).toBeVisible()
-  await expect(page.getByTestId(`task-row-${caseId}`)).toBeVisible()
 })
