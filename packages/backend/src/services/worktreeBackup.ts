@@ -27,7 +27,6 @@ import { createLogger } from '@/util/log'
 
 const log = createLogger('worktreeBackup')
 
-
 /** Per-task worktree that exceeding this is skipped (recorded), not captured. */
 export const DEFAULT_MAX_WORKTREE_BYTES = 64 * 1024 * 1024
 
