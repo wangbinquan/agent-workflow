@@ -44,6 +44,7 @@ import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
+import { WORKGROUPS_CHANNEL, workgroupsBroadcaster } from '@/ws/broadcaster'
 import {
   evaluateAgentResourceIntegrity,
   loadAgentResourceInventory,
@@ -322,5 +323,11 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     base: '/api/workgroups',
     param: 'id',
     load: (db, id) => getWorkgroupById(db, id),
+    afterUpdate: (workgroupId) => {
+      workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+        type: 'workgroup.acl.updated',
+        workgroupId,
+      })
+    },
   })
 }

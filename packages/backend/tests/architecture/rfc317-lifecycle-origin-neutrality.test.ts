@@ -20,7 +20,7 @@ import { resolve } from 'node:path'
 
 import ts from 'typescript'
 
-import { sourceUnit, type SourceUnit } from './census'
+import { mintedVocabulary, sourceUnit, type SourceUnit } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -67,24 +67,6 @@ export function columnEnumValues(unit: SourceUnit, column: string): string[] {
   }
   visit(unit.source)
   return [...new Set(values)].sort()
-}
-
-/** 该文件里出现的、属于给定词汇表的字符串字面量（含出现位置，便于定位）。 */
-export function mintedVocabulary(unit: SourceUnit, vocabulary: readonly string[]): string[] {
-  const wanted = new Set(vocabulary)
-  const hits: string[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
-      wanted.has(node.text)
-    ) {
-      const line = unit.source.getLineAndCharacterOfPosition(node.getStart(unit.source)).line + 1
-      hits.push(`${unit.path}:${line} '${node.text}'`)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(unit.source)
-  return hits
 }
 
 /** `export type X = (row: { … }, …) => R` 的第一个参数的属性名集合。 */

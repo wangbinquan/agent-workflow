@@ -54,6 +54,12 @@ import {
 } from '../src/db/schema'
 import { ACL_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { allRouteMeta } from '../src/routes/registry'
+import {
+  WORKFLOWS_CHANNEL,
+  WORKGROUPS_CHANNEL,
+  workflowsBroadcaster,
+  workgroupsBroadcaster,
+} from '../src/ws/broadcaster'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 
@@ -613,3 +619,82 @@ for (const rc of CASES) {
     })
   })
 }
+
+// RFC-317 T29（ACL-04）—— 「ACL 改完之后还要发哪条广播」由每类资源自己的挂载配置给出。
+//
+// 这两条广播原本硬写在 `mountAclEndpoints` 里，按 `cfg.type === 'workflow' | 'workgroup'`
+// 分叉——一个服务全部 13 类资源的通用挂载器凭空认识了其中两类。搬进各自的
+// `afterUpdate` 之后，**路由 → 广播这条线没有任何测试覆盖**：既有的三个 WS 用例
+// （rfc152 / rfc099-ws-acl-filter / rfc225）都是直接调 `broadcaster.broadcast(...)`，
+// 绕过了路由，所以搬移是否接对了它们一条都看不见。这一节把那条线钉死。
+//
+// 写成表驱动而不是给这两类各写一个用例：第三类资源开始需要广播时，它必须在这张表里
+// 登记才能绿——而"不在表里的类型不得在这两个频道上发声"那条同时挡住"顺手又在通用
+// 挂载器里加一条 if"的回潮。
+const ACL_UPDATE_BROADCASTS: Readonly<
+  Record<string, { readonly channel: string; readonly frameType: string; readonly idKey: string }>
+> = {
+  workflow: {
+    channel: WORKFLOWS_CHANNEL,
+    frameType: 'workflow.acl.updated',
+    idKey: 'workflowId',
+  },
+  workgroup: {
+    channel: WORKGROUPS_CHANNEL,
+    frameType: 'workgroup.acl.updated',
+    idKey: 'workgroupId',
+  },
+}
+
+describe('RFC-317 T29 —— ACL 写完之后的广播由各资源自己的 afterUpdate 发出', () => {
+  test('广播表只登记真实存在的 AclResourceType', () => {
+    const unknown = Object.keys(ACL_UPDATE_BROADCASTS).filter(
+      (type) => !ACL_RESOURCE_TYPES.includes(type as (typeof ACL_RESOURCE_TYPES)[number]),
+    )
+    expect(unknown, '表里写了一个不存在的资源类型——改名后这里先红，而不是悄悄不再校验').toEqual([])
+  })
+
+  for (const rc of CASES) {
+    const expected = ACL_UPDATE_BROADCASTS[rc.type]
+    const label = expected === undefined ? '不发广播' : `发 ${expected.frameType}`
+
+    test(`${rc.type}：一次成功的 PUT /acl ${label}`, async () => {
+      const h = await buildHarness(rc.ownerActor === 'dept')
+      const owner = rc.ownerActor === 'dept' ? h.dept : h.alice
+      const key = rc.keyOf(await rc.seed(h.db, owner.id))
+
+      // 两个频道都订上：不在表里的类型必须**两个都不发**，否则「搬回通用挂载器」
+      // 这种回潮只会在恰好被订阅的那个频道上暴露。
+      const frames: Array<{ channel: string; msg: Record<string, unknown> }> = []
+      const stop = [
+        workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (msg) => {
+          frames.push({ channel: WORKFLOWS_CHANNEL, msg: msg as Record<string, unknown> })
+        }),
+        workgroupsBroadcaster.subscribe(WORKGROUPS_CHANNEL, (msg) => {
+          frames.push({ channel: WORKGROUPS_CHANNEL, msg: msg as Record<string, unknown> })
+        }),
+      ]
+      try {
+        const put = await req(h.app, owner.token, `${rc.base}/${key}/acl`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            userIds: [h.bob.id],
+            expectedResourceId: key,
+            expectedAclRevision: 0,
+          }),
+        })
+        expect(put.status, 'ACL 写本身要成功，否则下面断言的是「没写成所以没广播」').toBe(200)
+
+        const acl = frames.filter((f) => String(f.msg['type']).endsWith('.acl.updated'))
+        if (expected === undefined) {
+          expect(acl, `${rc.type} 不该在 workflows / workgroups 频道上发 ACL 广播`).toEqual([])
+          return
+        }
+        expect(acl.map((f) => f.channel)).toEqual([expected.channel])
+        expect(acl[0]?.msg).toEqual({ type: expected.frameType, [expected.idKey]: key })
+      } finally {
+        for (const off of stop) off()
+      }
+    })
+  }
+})

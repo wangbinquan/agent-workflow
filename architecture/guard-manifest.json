@@ -40,6 +40,18 @@
       "lines": 127
     },
     {
+      "id": "rfc317-acl-mounter-type-neutrality",
+      "file": "packages/backend/tests/architecture/rfc317-acl-mounter-type-neutrality.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 73
+    },
+    {
       "id": "rfc317-acl-write-gate-guard",
       "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
       "runner": "bun",
@@ -121,7 +133,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 235
+      "lines": 217
     },
     {
       "id": "rfc317-module-boundary",

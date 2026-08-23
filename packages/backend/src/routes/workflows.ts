@@ -60,6 +60,7 @@ import {
 import {} from '@/services/workflow.yaml'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
+import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
@@ -385,6 +386,14 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     base: '/api/workflows',
     param: 'id',
     load: (db, id) => getWorkflow(db, id),
+    // Lets connected /ws/workflows clients re-fetch AND lets the WS server
+    // invalidate its per-connection visibility cache for this workflow.
+    afterUpdate: (workflowId) => {
+      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+        type: 'workflow.acl.updated',
+        workflowId,
+      })
+    },
   })
 }
 

@@ -24,12 +24,6 @@ import {
 } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import {
-  WORKFLOWS_CHANNEL,
-  WORKGROUPS_CHANNEL,
-  workflowsBroadcaster,
-  workgroupsBroadcaster,
-} from '@/ws/broadcaster'
 
 /**
  * RFC-310 的五类数字员工配置资源已进 AclResourceType，但它们的 ACL 端点与
@@ -191,21 +185,11 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
               }
               return updateFresh(fresh)
             })
+      // RFC-317 T29（ACL-04）—— 每类资源「ACL 改完之后还要做什么」由**它自己的**
+      // 挂载配置给出。这里原本按 `cfg.type === 'workflow' | 'workgroup'` 分叉发广播：
+      // 一个服务全部 ACL 资源的通用挂载器，凭空认识了其中两类，第三类要发广播就只能
+      // 回来再加一条 if——而 `afterUpdate` 这个钩子当时就已经在了，两条分支纯属没走它。
       await cfg.afterUpdate?.(row.id)
-      if (cfg.type === 'workflow') {
-        // Lets connected /ws/workflows clients re-fetch AND lets the WS server
-        // invalidate its per-connection visibility cache for this workflow.
-        workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-          type: 'workflow.acl.updated',
-          workflowId: row.id,
-        })
-      }
-      if (cfg.type === 'workgroup') {
-        workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
-          type: 'workgroup.acl.updated',
-          workgroupId: row.id,
-        })
-      }
       return c.json(result)
     },
   )

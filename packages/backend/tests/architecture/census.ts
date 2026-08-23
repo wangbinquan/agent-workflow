@@ -1261,3 +1261,27 @@ export function ledgerEntryCount(text: string, symbol: string): number | null {
   visit(source)
   return count
 }
+
+/**
+ * 该文件里出现的、属于给定词汇表的字符串字面量（含出现位置，便于定位）。
+ *
+ * 判据走 **AST 字面量**而不是 grep：注释里写着「这里原本按 `cfg.type === 'workflow'`
+ * 分叉」不是违规，而一条 `grep -c "'workflow'"` 会把它算成违规——本判据自己的说明
+ * 注释就已经踩中过这一点（见 rfc317-acl-mounter-type-neutrality 的 fixture）。
+ */
+export function mintedVocabulary(unit: SourceUnit, vocabulary: readonly string[]): string[] {
+  const wanted = new Set(vocabulary)
+  const hits: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
+      wanted.has(node.text)
+    ) {
+      const line = unit.source.getLineAndCharacterOfPosition(node.getStart(unit.source)).line + 1
+      hits.push(`${unit.path}:${line} '${node.text}'`)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  return hits
+}
