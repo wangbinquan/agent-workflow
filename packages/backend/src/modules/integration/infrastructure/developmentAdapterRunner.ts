@@ -15,6 +15,7 @@ import type { Subprocess } from 'bun'
 import { z } from 'zod'
 
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { killProcessTree, readStreamCapped, reapDetachedGroup } from '@/util/process'
 
 // 镜像自 modules/development-automation/domain/operationFailure.ts（RFC-284
 // 镜像桥先例，同文件下方 canonicalStringify 的姿势）：integration 不能反向
@@ -39,6 +40,10 @@ export interface AdapterFailureReceipt {
 }
 
 const STDOUT_LIMIT = 256 * 1024
+/** TERM 之后给整组的宽限。 */
+const ADAPTER_KILL_GRACE_MS = 2_000
+/** 超时路径上等整组死透的上限——有界，绝不无限等。 */
+const ADAPTER_REAP_WINDOW_MS = 2_000
 
 export const acquireEnvelopeSchema = z
   .object({
@@ -360,6 +365,9 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
       stdout: 'pipe',
       stderr: 'pipe',
       ...platformSpawnOptionsForHost(),
+      // RFC-317 T35（EK-01）—— 自成进程组：这里跑的是**外部适配器可执行文件**，
+      // 它 fork 什么完全不受本仓控制。不 detached 时下面的杀链只能杀到直接子进程。
+      detached: true,
     })
   } catch {
     return failure(
@@ -373,14 +381,22 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true
-    proc.kill('SIGKILL')
+    // 整组杀，且 TERM 先行留一个宽限——改造前是一发裸 SIGKILL 打给直接子进程：
+    // 既没有优雅退出的机会，孙进程也全都活着。
+    killProcessTree(proc.pid, 'SIGTERM')
+    setTimeout(() => killProcessTree(proc.pid, 'SIGKILL'), ADAPTER_KILL_GRACE_MS).unref?.()
   }, input.adapterContent.timeoutMs)
+  // **边读边限**。改造前是 `new Response(proc.stdout).text()`——完整读进内存之后才去
+  // 判断 `stdout.length > STDOUT_LIMIT`。那条 256 KiB 的「上限」不提供任何内存保护：
+  // 字节早就在堆里了，一个话痨的适配器会在判断跑到之前把 daemon 撑爆。
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    readStreamCapped(proc.stdout as ReadableStream<Uint8Array> | undefined, STDOUT_LIMIT + 1),
+    readStreamCapped(proc.stderr as ReadableStream<Uint8Array> | undefined, STDOUT_LIMIT + 1),
     proc.exited,
   ])
   clearTimeout(timer)
+  // 有界收尸：超时路径上组里可能还有孙进程没死透。
+  if (timedOut) await reapDetachedGroup(proc.pid, ADAPTER_REAP_WINDOW_MS)
 
   if (timedOut) {
     return failure(

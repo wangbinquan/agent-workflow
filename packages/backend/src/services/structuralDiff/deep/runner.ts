@@ -25,6 +25,11 @@ export type SpawnFn = (opts: {
   stdout?: 'ignore' | 'pipe'
   stderr?: 'ignore' | 'pipe'
   stdin?: 'ignore'
+  /**
+   * RFC-317 T34（EK-01）—— 注入面也要能表达进程组，否则真实调用点想 detached 都写不出来。
+   * 测试 stub 忽略它即可（stub 没有真 pid，杀链走的是另一支）。
+   */
+  detached?: boolean
 }) => { exited: Promise<number>; kill: (signal?: number) => void; pid?: number }
 
 export async function runIndexer(opts: {
@@ -44,6 +49,13 @@ export async function runIndexer(opts: {
       stdout: 'ignore',
       stderr: 'ignore',
       stdin: 'ignore',
+      // RFC-317 T34（EK-01）—— 自成进程组，否则下面那句 killProcessTree **静默降级**。
+      //
+      // POSIX 上 killProcessTree 先打 `process.kill(-pid)`；子进程若不是组长（没有
+      // detached，它就待在 daemon 自己的组里），这一发抛 ESRCH，然后 catch 分支退回
+      // `process.kill(pid)` —— 只杀直接子进程。调用点看起来在做树杀，实际没有，
+      // 而且不报错。这里起的是 SCIP 索引器，它会 fork 整条编译工具链。
+      detached: true,
     })
     let timedOut = false
     const timer = setTimeout(() => {

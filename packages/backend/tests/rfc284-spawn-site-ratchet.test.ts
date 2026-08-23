@@ -17,7 +17,7 @@
 // 从名单删一行而站点仍在亦红。
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const SRC_ROOT = join(import.meta.dir, '../src')
@@ -40,8 +40,27 @@ const SPAWN_PATTERNS: readonly RegExp[] = [
  * 显式 allowlist：文件 → { count: 精确命中数, why: 为什么允许 }。
  * 收编类条目标了 removeWhen——对应 RFC-284 批次落地时必须同步更新本表。
  */
-const ALLOWLIST: Record<string, { count: number; why: string }> = {
+/**
+ * RFC-317 T34（EK-01）—— 每个被登记的 spawn 站点必须声明它**怎么被治理**。
+ *
+ * 改造前 allowlist 只有 `{ count, why }`：站点是可枚举的，但「它有没有自成进程组、
+ * 有没有整组杀、输出有没有上限」一条都没有断言。EK-01 就落在这个盲区里——两个
+ * RFC-310 runner 起的正是**存在意义就是 fork 子进程**的程序（npm/bun/cargo、外部
+ * 适配器可执行文件），却既不 detached 也不树杀；其中一个还先把 stdout 完整读进内存、
+ * 之后才去判断 256 KiB 的「上限」。站点被登记了，缺陷照样落地。
+ *
+ *   · `kernel`        —— 杀链 / 受管进程内核本身。
+ *   · `process-group` —— 自成进程组且整组杀。**有 AST 断言**：必须同时出现
+ *                        `detached: true` 与一处组杀（`killProcessTree` 或
+ *                        `process.kill(-pid)`）。
+ *   · `short-lived`   —— 不 fork、输出天然有界，无需组治理；why 必须说清为什么。
+ *   · `not-a-spawn`   —— 命中的是同名相位钩子等，本身不起进程。
+ */
+type SpawnGovernance = 'kernel' | 'process-group' | 'short-lived' | 'not-a-spawn'
+
+const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; why: string }> = {
   'services/schedulerAssembly.ts': {
+    governance: 'not-a-spawn',
     count: 3,
     why:
       'RFC-287 装配骨架的 `spawn` **相位钩子名**——本身不起进程，但五条装配线的真实' +
@@ -50,42 +69,52 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
       'T5b 模式 B 重试循环里的再次调用（跨 attempt 窗口内由 retryPolicy 驱动）。',
   },
   'services/execution/managedProcess.ts': {
+    governance: 'kernel',
     count: 1,
     why: 'THE agent spawn point（RFC-280）；全部 agent 类进程唯一入口。',
   },
   'util/git.ts': {
+    governance: 'process-group',
     count: 1,
     why: 'git spawn 双点之一（RFC-208 组杀/超时特化语义，豁免有据；与 gitRepoCache 镜像互锁）。',
   },
   'services/gitRepoCache.ts': {
+    governance: 'process-group',
     count: 1,
     why: 'git spawn 双点之二（镜像 util/git.ts，注释互指防漂移；RFC-284 T18 加文本锁）。',
   },
   'util/archive.ts': {
+    governance: 'short-lived',
     count: 2,
     why: 'tar czf/xzf 单模块收敛点（文件头自述存在目的就是防散落的手搓 tar spawn）。',
   },
   'util/process.ts': {
+    governance: 'kernel',
     count: 5,
     why: '平台杀链自身的 ps/探测 spawnSync ×3 + RFC-284 T8 的 spawnVersionProbe 骨架（三胞胎探针唯一 spawn 点）+ isProcessAlive 的 `ps -o stat=` 僵尸判定：POSIX `kill(pid,0)` 对等待回收的僵尸同样成功，把僵尸当活会让 TERM→KILL 恢复误判「agent 还活着」并中止 daemon 启动，故必须另读进程状态位。',
   },
   'util/win32Acl.ts': {
+    governance: 'short-lived',
     count: 3,
     why: 'win32 icacls DACL 平台工具（node:child_process import + 同步调用）。',
   },
   'cli/doctor.ts': {
+    governance: 'short-lived',
     count: 2,
     why: 'doctor 诊断探针（daemon 外一次性 CLI，独立于执行层）。',
   },
   'services/controlListener.ts': {
+    governance: 'short-lived',
     count: 1,
     why: 'hardKill 的同步 kill/taskkill 兜底（杀进程原语，同 util/process 豁免理由）。',
   },
   'services/structuralDiff/deep/runner.ts': {
+    governance: 'process-group',
     count: 2,
     why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',
   },
   'modules/development-automation/infrastructure/gitBaselineReader.ts': {
+    governance: 'short-lived',
     count: 1,
     why:
       'RFC-310 PR-3 baseline blob 读取：`git cat-file blob` 的 stdout 必须直连文件（Bun.file）' +
@@ -93,6 +122,7 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
       '只读 git 对象、nonInteractiveGitEnv、用后即删临时目录。',
   },
   'modules/development-automation/infrastructure/verificationRunner.ts': {
+    governance: 'process-group',
     count: 1,
     why:
       'RFC-310 PR-5 T57 verification 程序执行点：disposable workspace 内跑受管 build/test，' +
@@ -100,6 +130,7 @@ const ALLOWLIST: Record<string, { count: number; why: string }> = {
       '空 env（PATH/HOME/TMPDIR）+ platformSpawnOptionsForHost；receipt 只信 exit code。',
   },
   'modules/integration/infrastructure/developmentAdapterRunner.ts': {
+    governance: 'process-group',
     count: 1,
     why:
       'RFC-310 adapter runner：外部 adapter 程序的唯一执行点——one-shot staged sink 为 cwd、' +
@@ -236,5 +267,53 @@ describe('RFC-317 T14 —— matcher 自证：每条 spawn pattern 都必须抓�
 
   test('完全不起进程的源码计为 0（判据不能宽到把普通代码也算成能力触点）', () => {
     expect(spawnHitsIn('export function add(a: number, b: number) {\n  return a + b\n}\n')).toBe(0)
+  })
+})
+
+describe('RFC-317 T34（EK-01）—— 每个 spawn 站点的治理形态可断言', () => {
+  const read = (rel: string): string => readFileSync(join(SRC_ROOT, rel), 'utf8')
+
+  test('语料非空：allowlist 有条目、文件都在（否则下面几条零预言力）', () => {
+    expect(Object.keys(ALLOWLIST).length).toBeGreaterThanOrEqual(10)
+    const missing = Object.keys(ALLOWLIST).filter((rel) => !existsSync(join(SRC_ROOT, rel)))
+    expect(missing, '死条目会让该文件未来新增的 spawn 被静默放过').toEqual([])
+  })
+
+  test('每条都声明了 governance，且 why 说得出所以然', () => {
+    const bad = Object.entries(ALLOWLIST)
+      .filter(([, entry]) => entry.why.trim().length < 20)
+      .map(([rel]) => rel)
+    expect(bad, 'why 太短——说不出为什么允许，就不该在表里').toEqual([])
+  })
+
+  test('process-group 站点必须真的自成进程组 + 整组杀', () => {
+    const offenders: string[] = []
+    for (const [rel, entry] of Object.entries(ALLOWLIST)) {
+      if (entry.governance !== 'process-group') continue
+      const src = read(rel)
+      const grouped = /detached:\s*true/.test(src)
+      const treeKill = /killProcessTree\s*\(/.test(src) || /process\.kill\(\s*-/.test(src)
+      if (!grouped || !treeKill) {
+        offenders.push(`${rel}（detached=${grouped} 组杀=${treeKill}）`)
+      }
+    }
+    expect(
+      offenders,
+      '声明按进程组治理，实际却没有。不 detached 时杀链只能杀到直接子进程，' +
+        'fork 出来的孙进程会活下来继续写它本不该再碰的目录——这正是 EK-01 的形态',
+    ).toEqual([])
+  })
+
+  test('short-lived 站点确实没有在自称进程组（自相矛盾的声明先红）', () => {
+    const contradictory = Object.entries(ALLOWLIST)
+      .filter(
+        ([rel, entry]) => entry.governance === 'short-lived' && /detached:\s*true/.test(read(rel)),
+      )
+      .map(([rel]) => rel)
+    expect(
+      contradictory,
+      '声明成 short-lived 却设了 detached——要么改成 process-group（并补上组杀），' +
+        '要么这个 detached 是多余的',
+    ).toEqual([])
   })
 })

@@ -709,7 +709,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 240
+      "lines": 319
     },
     {
       "id": "rfc285-b6-import-visibility-locks",

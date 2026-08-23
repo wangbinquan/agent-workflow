@@ -369,7 +369,13 @@ export interface VersionProbeResult {
 // 语义照抄 opencode-models 原实现：**整 chunk 累计**（total<cap 才收、不裁
 // 边界 chunk——捕获可略超 cap），且读到 EOF 不提前停（保持排水、防子进程管道
 // 楔死）。勿"顺手"改成精确裁剪——那是行为变更。
-async function readStreamCapped(
+/**
+ * RFC-317 T35（EK-01）—— 导出给平台外的 spawn 站点复用。
+ *
+ * 「读完再判断长度」不是限制：字节已经在 daemon 的堆里了。一个话痨的外部适配器会在
+ * 那条 `if (stdout.length > LIMIT)` 跑到之前就把进程撑爆。
+ */
+export async function readStreamCapped(
   stream: ReadableStream<Uint8Array> | undefined,
   cap: number,
 ): Promise<string> {
@@ -407,7 +413,13 @@ function processGroupAlive(groupLeaderPid: number): boolean {
  * 正 PID 可能已被复用——回退会误杀无关进程；opencode-models 的既有安全裁决）。
  * `awaitMs` > 0 时在杀后给内核一个有界窗口确认组死（models 形态）。
  */
-async function reapDetachedGroup(pid: number | undefined, awaitMs: number): Promise<void> {
+/**
+ * RFC-317 T35（EK-01）—— 导出给平台外的 spawn 站点复用。
+ *
+ * 「杀完之后有界地等整组死透」和「杀」本身是一对：只杀不等，调用方紧接着删目录
+ * 就会和幸存孙进程的写入赛跑。
+ */
+export async function reapDetachedGroup(pid: number | undefined, awaitMs: number): Promise<void> {
   if (typeof pid !== 'number' || pid <= 0) return
   try {
     process.kill(-pid, 'SIGKILL')
