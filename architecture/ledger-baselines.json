@@ -238,8 +238,8 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 264,
-      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 462 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。"
+      "baseline": 223,
+      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 462 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。（2026-08-24：本轮 B4–B21 新增用例真实打到了 41 条此前从未被任何 e2e 触及的端点，按 111 份 journal 的正向证据销账 264 → 223。此次全量跑并非全绿——两条并发 session 的 rfc310 spec 红——所以只做**删除**、绝不新增，避免把「没跑到」误记成「没覆盖」。）"
     },
     {
       "id": "rfc319-e2e-route-coverage",

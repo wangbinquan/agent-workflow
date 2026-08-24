@@ -25,7 +25,15 @@ let daemon: DaemonHandle
 let sequence = 0
 
 test.beforeAll(async () => {
-  daemon = await startDaemon()
+  // `slow` stub + 一个足够长的睡眠：让模型回合在整条用例期间**始终在飞行中**。
+  // 这不是为了「等一等」，是为了让前提确定性成立——回合一旦自然结束，会话会
+  // 转 `ending / session-unusable`（`services/mcpRuntimeTest.ts:1228`），随后
+  // ACL 变更只会看到一个已经不是 `active` 的会话，什么也不做，用例就成了空洞绿。
+  // 本机跑时 ACL 恰好先到所以绿，CI 上回合先结束所以红——真实的时序缺陷在用例这边。
+  daemon = await startDaemon({
+    stubMode: 'slow',
+    extraEnv: { STUB_OPENCODE_SLEEP_MS: '60000' },
+  })
 })
 
 test.afterAll(async () => {
