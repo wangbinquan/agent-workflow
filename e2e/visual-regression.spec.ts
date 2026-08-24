@@ -1091,7 +1091,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%408?view=toolbox`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%409?view=toolbox`)
     const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
     await expect(responsibilityMap).toBeVisible()
     await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
@@ -1430,7 +1430,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%408?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%409?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
@@ -1621,7 +1621,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       })
     })
     await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%408?view=employees`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%409?view=employees`)
     await expect(page.getByTestId('digital-employee-outcomes-visual-java-employee')).toContainText(
       '18',
     )
