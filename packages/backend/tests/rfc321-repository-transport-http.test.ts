@@ -249,18 +249,14 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountAccountRepositoryTransportCredentialRoutes(
-      app,
-      { db: h.db, secretBox: box } as AppDeps,
-      {
-        credentials: composeRepositoryTransportCredentials(h.db, box).ownCredentials,
-        currentSubjects: {
-          async resolveCurrentSubject() {
-            return null
-          },
+    mountAccountRepositoryTransportCredentialRoutes(app, { db: h.db, secretBox: box } as AppDeps, {
+      credentials: composeRepositoryTransportCredentials(h.db, box).ownCredentials,
+      currentSubjects: {
+        async resolveCurrentSubject() {
+          return null
         },
       },
-    )
+    })
 
     const response = await app.request('/api/account/code-host-push-credentials')
     expect(response.status).toBe(403)

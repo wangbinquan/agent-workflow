@@ -287,9 +287,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(employeeRuntime).toContain('this.#platformWorkItems.execute(payload.plan, {')
     expect(employeeRuntime).toContain('ownedCase.ownerUserId === null')
     expect(platformWorkItems).not.toContain('caseOwnerUserId')
-    expect(
-      platformWorkItems.match(/publicationSubject: publicationSubject\(\)/g)?.length,
-    ).toBe(4)
+    expect(platformWorkItems.match(/publicationSubject: publicationSubject\(\)/g)?.length).toBe(4)
     expect(composition).toContain('fetchEmployeeWorkspaceRemoteHead({')
     expect(composition).toContain('{ publicationTransport: input.publicationTransport }')
     expect(
@@ -389,9 +387,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
 
   test('security mutation fixtures prove target binding, no-fallback, route, and URL guards carry weight', () => {
     const production: PublicationSecuritySources = {
-      helper: read(
-        'packages/backend/src/util/gitCredentialLease.ts',
-      ),
+      helper: read('packages/backend/src/util/gitCredentialLease.ts'),
       selector: read(
         'packages/backend/src/modules/source-control/domain/repositoryTransportCredential.ts',
       ),
