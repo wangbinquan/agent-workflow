@@ -1006,8 +1006,13 @@
       "title": "融合可见性隔离：非 owner 看不到列表行、详情 404、待审计数不含他人",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-access.spec.ts",
+          "test": "RFC-319 INTENT-58: a fusion is scoped to its owner across all three read surfaces — list, detail and the pending badge"
+        }
+      ]
     },
     {
       "id": "INTENT-X3",
@@ -1015,8 +1020,13 @@
       "title": "【原审计漏项】跨用户 approve / reject / cancel 融合被拒（fusion-forbidden），且与 GET 的 404 存在性隔离形状不一致",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-access.spec.ts",
+          "test": "RFC-319 INTENT-X3: no one but the fusion owner can approve, reject or cancel it"
+        }
+      ]
     },
     {
       "id": "MEM-09",
@@ -8240,13 +8250,11 @@
     "INTENT-55",
     "INTENT-56",
     "INTENT-57",
-    "INTENT-58",
     "INTENT-59",
     "INTENT-60",
     "INTENT-X1",
     "INTENT-X10",
     "INTENT-X2",
-    "INTENT-X3",
     "INTENT-X4",
     "INTENT-X5",
     "INTENT-X6",

@@ -245,7 +245,7 @@
       "id": "rfc319-capability-gaps",
       "file": "architecture/e2e-capability-ledger.json",
       "symbol": "gapIds",
-      "baseline": 620,
+      "baseline": 618,
       "why": "RFC-319 R3：820 条用户面能力里还没有 system-mock e2e 防护的那些（开工时 679，本 RFC 已补 11 条 ⇒ 668）。只许降——每降一条代表一个真实用户场景被端到端跑过了。涨了说明新增能力没带 e2e，必须在 review 里解释。"
     },
     {

@@ -362,10 +362,13 @@ test('RFC-319 IAM-32: transferring ownership actually hands over control — som
   expect(acl.ownerUserId, '归属没有落到新所有者身上').toBe(heir.id)
 
   // 归属只是**记录**；真正要验的是管理权跟着走了：新所有者能改这个资源的 ACL。
-  // 「原所有者从此不能管」这半边在 HTTP 面上证不出来——本仓的 `user` 角色没有
-  // `agents:create`（permission.ts:1030 的 USER_BASELINE 不含它），所以原所有者
-  // 只可能是自带 `resource-acl:bypass` 的管理档，而 bypass 本来就绕开归属。
-  // 前后对照（转让前 404 / 转让后可写）已经足以证明控制权确实移动了。
+  // 前后对照（转让前 404 / 转让后可写）证明控制权确实移动了。
+  //
+  // 「原所有者从此不能管」这半边这里没有断言：本用例的原所有者是管理档，
+  // 自带 `resource-acl:bypass`，而 bypass 按设计就绕开归属——拿它做否定断言
+  // 只会锁死一个错误的期望。要证那一半得让一个普通用户当原所有者
+  // （`user` 基线确实含 `agents:create`，见 USER_RESOURCE_WRITES），
+  // 那是一条独立的用例，不在本条的判据范围内。
   const heirWrite = await req(
     `/api/agents/${agent.id}/acl`,
     {
