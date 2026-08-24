@@ -1,27 +1,35 @@
-// RFC-319 B28 —— 融合的发起：从技能详情页选记忆 + 写意图，落到这次融合自己的详情页。
-// INTENT-48（P1）。
+// RFC-319 B28/B29 —— 融合的完整生命周期：发起 → 审阅 → 批准 → 记忆转终态。
+// INTENT-48 / INTENT-53 / INTENT-54 / MEM-50 / MEM-X1，五条 P1。
 //
-// **本批只到「发起」为止，原因写在明处**：为了覆盖后面三环（审阅 / 批准 / 记忆转
-// 终态），这里给 e2e stub 加了一个能真正跑完融合的 `fusion` 模式——它按产品自己的
-// 契约编辑技能文件并写下结果清单。用它跑真链路时暴露出一个**产品缺陷**：merger 节点
-// 跑在隔离工作树里（`<home>/iso/<taskId>/<nodeRunId>`），而结果清单要写进
-// `.agent-workflow/fusion/result.json`；该目录被平台自己的排除档写进了工作树的
-// git ignore（`workspaceExcludeProfile.ts:28`），逐节点 merge-back 又是 git 驱动的，
-// 于是清单永远回不到 `task.worktreePath`，`reconcileFusion` 每次都判
-// `agent did not write the fusion result manifest`。实测证据：同一次运行里
-// SKILL.md 的改动**merge 回来了**、同目录下的清单**没有**；`git check-ignore` 指向
-// `.git/agent-workflow/excludes/v1:3:/.agent-workflow/`。
+// 一次融合**改写一个托管技能的正文并递增它的版本**，而技能正文是往后每一次任务
+// 都会读到的东西。这条链路的每一环失效都不会报错，只会安静地跑偏：
 //
-// 既有的 `packages/backend/tests/fusion-engine.test.ts` 照不出它：那条用例把清单
-// **直接写进 task.worktreePath** 并把任务强制置为 done，从不跨越隔离边界——
-// 正是本 RFC 要找的那种「缝隙上没有防护」。缺陷详情见 `docs/audit-backlog.md`。
+//   * 审阅面漏了「已跳过」那一栏 ⇒ 审批的人以为选中的记忆全被吸收了，实际有一条
+//     被悄悄丢掉，而那条记忆在库里仍是 approved、看着一切正常；
+//   * 批准之后版本没递增 ⇒ 技能被就地改写、没有可回滚的版本，改动无从追溯；
+//   * 记忆没转 fused ⇒ 同一条知识既在技能正文里、又继续被注入进每一次任务的
+//     prompt，两份内容此后各自演化，冲突时模型看到自相矛盾的上下文。
 //
-// 因此 INTENT-53 / INTENT-54 / MEM-50 / MEM-X1 仍留在 gap，等缺陷处置定了再补。
+// 最后一条**必须端到端量**，不能只看行上的状态字段：判据是同一个探针任务在批准前后
+// 各跑一次，比较它 node run 的 `injectedMemories` 快照（RFC-046 的落库列）——
+// 被吸收的那条必须从注入里消失，而没被吸收的那条必须还在。只断言 `status==='fused'`
+// 的话，一个「状态改了但注入查询没跟着改」的实现照样全绿。
+//
+// **这条 spec 建起来的过程中挖出并修掉了一个真实缺陷**（B29）：merger 节点跑在
+// 逐节点隔离工作树里，产品契约要它把结果清单写进 `.agent-workflow/fusion/result.json`，
+// 而平台自己的排除档把整个 `.agent-workflow/` 写进了工作树 git ignore，逐节点
+// merge-back 又是 git 驱动的——清单永远回不到 `task.worktreePath`，于是**任何一次由
+// 真实 agent 执行的融合都必然失败**。既有的 `fusion-engine.test.ts` 照不出它：那条
+// 用例把清单直接写进 `task.worktreePath` 并把任务强制置 done，从不跨越隔离边界。
+// 修法是把清单路径登记进 launch-frozen 的 force-include 名册（
+// `services/fusion.ts` 两处 `startTask` + `taskPlatformInputPaths.ts` 的根白名单），
+// 快判据在 `packages/backend/tests/rfc319-fusion-manifest-merge-back.test.ts`。
 //
 // 判据取自源码单一事实源：
-//   components/fusion/FuseDialog.tsx:198,227   记忆多选 + 意图
-//   routes/fusions.ts:84                       POST /api/fusions
-//   services/memoryInject.ts:143               注入只取 status='approved'
+//   services/fusion.ts:222-232   MERGER_PROMPT_TEMPLATE / 结果清单契约
+//   services/fusion.ts:1411-1475 approveFusion：commitSkillVersion + fuseMemoriesTx
+//   services/memoryInject.ts:206 全局 scope 的注入只取 status='approved'
+//   routes/fusions.ts:161        POST /api/fusions/:id/approve
 
 import { expect, test, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -208,4 +216,126 @@ test('INTENT-48: 从技能详情页选记忆 + 写融合意图，落到这次融
   const launched = await api<{ skillId: string; memoryIds: string[] }>(`/api/fusions/${fusionId}`)
   expect(launched.skillId, '发起的融合指向的不是我打开的那个技能').toBe(skillId)
   expect([...launched.memoryIds].sort()).toEqual([keptMemoryId, skippedMemoryId].sort())
+})
+
+/**
+ * 回答融合的强制反问。
+ *
+ * 反问不是这条 spec 要覆盖的能力（`e2e/clarify.spec.ts` 已经锁住它），但它是
+ * **产品的硬契约**：merger 节点跑在强制 ask-back 模式下，第一轮直接出
+ * `<workflow-output>` 会被以 `clarify-required-output-emitted` 当场判失败。
+ * 所以这里必须真的答一轮，融合才能走到待审批——`directive: 'stop'` 是把节点
+ * 从强制反问里放出来的那个开关。
+ */
+async function answerFusionClarify(): Promise<void> {
+  const taskId = await pollFor(async () => {
+    const row = await api<{ currentTaskId: string | null }>(`/api/fusions/${fusionId}`)
+    return row.currentTaskId
+  }, '融合没有关联任务')
+
+  const session = await pollFor(async () => {
+    const rows = await api<Array<{ intermediaryNodeRunId: string; iteration: number }>>(
+      `/api/clarify?status=awaiting_human&taskId=${encodeURIComponent(taskId)}`,
+    )
+    return rows[0] ?? null
+  }, '融合任务没有停在反问上')
+
+  await api(`/api/clarify/${session.intermediaryNodeRunId}/answers`, {
+    method: 'POST',
+    body: JSON.stringify({
+      answers: [
+        {
+          questionId: 'q-merge',
+          selectedOptionIndices: [0],
+          selectedOptionLabels: [],
+          customText: '',
+        },
+      ],
+      directive: 'stop',
+      ifMatchIteration: session.iteration,
+    }),
+  })
+}
+
+/** 轮询到一个非空值，超时时用给定的话说明「等的是什么」。 */
+async function pollFor<T>(read: () => Promise<T | null>, what: string): Promise<T> {
+  let last: T | null = null
+  await expect
+    .poll(
+      async () => {
+        last = await read()
+        return last !== null
+      },
+      { timeout: 120_000 },
+    )
+    .toBe(true)
+  expect(last, what).not.toBeNull()
+  return last as T
+}
+
+test('INTENT-53: 待审批页把变更日志、已吸收与已跳过（含原因）三样都摆出来', async ({ page }) => {
+  await answerFusionClarify()
+
+  // 连 error 一起断言：融合失败时只报「期望 awaiting_approval、实得 failed」
+  // 等于把真正的原因留在服务端，接手的人要从头复现一遍才能看到它。
+  await expect
+    .poll(
+      async () => {
+        const row = await api<{ status: string; error?: string | null }>(`/api/fusions/${fusionId}`)
+        return row.status === 'awaiting_approval'
+          ? 'awaiting_approval'
+          : `${row.status}: ${row.error ?? '(no error recorded)'}`
+      },
+      { timeout: 120_000 },
+    )
+    .toBe('awaiting_approval')
+
+  await openApp(page, `/fusions/${fusionId}`)
+  await expect(page.getByRole('heading', { name: 'Changelog', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Incorporated memories (1)' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Skipped memories (1)' })).toBeVisible()
+  await expect(page.getByText(KEPT_TITLE, { exact: false }).first()).toBeVisible()
+  await expect(
+    page.getByText('the e2e fixture marked this memory SKIP-ME', { exact: false }),
+    '跳过必须带原因——只列出「被跳过」而不说为什么，审批的人无从判断该不该放行',
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Proposed change (current → proposed)' }),
+    '没有提案 diff 就等于让人盲签',
+  ).toBeVisible()
+})
+
+test('INTENT-54 / MEM-X1 / MEM-50: 批准后技能版本 +1，被吸收的记忆转 fused 且不再被注入', async ({
+  page,
+}) => {
+  const before = await api<{ contentVersion: number }>(`/api/skills/${skillId}`)
+
+  await openApp(page, `/fusions/${fusionId}`)
+  await page.getByRole('button', { name: 'Approve & apply', exact: true }).click()
+
+  await expect
+    .poll(async () => (await api<{ status: string }>(`/api/fusions/${fusionId}`)).status, {
+      timeout: 120_000,
+    })
+    .toBe('done')
+  await expect(page.getByText(/Applied as v\d+/)).toBeVisible()
+
+  const after = await api<{ contentVersion: number }>(`/api/skills/${skillId}`)
+  expect(
+    after.contentVersion,
+    '批准之后技能版本没递增 ⇒ 正文被就地改写、没有可回滚的版本，改动无从追溯',
+  ).toBe(before.contentVersion + 1)
+
+  const memories = await api<{ items: Array<{ id: string; status: string }> }>('/api/memories')
+  expect(memories.items.find((row) => row.id === keptMemoryId)?.status).toBe('fused')
+  expect(
+    memories.items.find((row) => row.id === skippedMemoryId)?.status,
+    '没被吸收的记忆必须留在审批池里——把它一起转终态等于悄悄丢掉一条知识',
+  ).toBe('approved')
+
+  expect(
+    await injectedTitles(),
+    '被吸收的记忆仍在注入 ⇒ 同一条知识既在技能正文里又在每次 prompt 里，' +
+      '两份内容此后各自演化，冲突时模型看到自相矛盾的上下文',
+  ).toEqual([SKIPPED_TITLE])
 })

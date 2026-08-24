@@ -2222,7 +2222,16 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
 - 这与 `docs/dev-gotchas.md` 反复讲的是同一族：**空的 / 全新的语料让守卫零预言力**——
   那边是「扫描扫到 0 个文件」，这边是「测试库里没有一行旧数据」。
 
-## 记忆→技能融合在真实 agent 下**必然失败**：结果清单被隔离 merge-back 丢弃（2026-08-24 实测，RFC-319 B28 挖出）
+## ~~记忆→技能融合在真实 agent 下**必然失败**：结果清单被隔离 merge-back 丢弃~~（2026-08-24 实测挖出，**同日 RFC-319 B29 已修**）
+
+> **状态：已修。** 用户拍板在 RFC-319 内直接修。修法与下文「候选修法」一致，外加一处：
+> 名册的路径文法 `taskPlatformInputPaths.ts` 的 `ALLOWED_ROOTS` 是**封闭集**，原本只放行
+> `PLATFORM_INPUTS_DIR` / `PLATFORM_PIPELINE_DIR`，所以光在 `fusion.ts` 传路径会被判
+> `task-platform-input-paths-invalid`——`PLATFORM_FUSION_DIR` 一并入册。
+> 防护两层：`packages/backend/tests/rfc319-fusion-manifest-merge-back.test.ts`（快判据，
+> 不依赖运行时）+ `e2e/fusion-lifecycle.spec.ts`（真实 agent 跑完整条链）。
+> 变异实证：抽掉那两行 `platformInputPaths`，单测与 e2e **双双转红**。
+> 下面的根因链原样保留——它是这类缺陷的形态说明，`.agent-workflow/` 下还有别的读写两端待对照。
 
 **症状**：任何一次由真实 agent 执行的融合，最终都停在
 `fusion-failed: agent did not write the fusion result manifest`。融合是产品里唯一
@@ -2260,7 +2269,7 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
 它验的是 reconcile 之后的逻辑，不是 agent → 框架这一段。这正是 RFC-319 立项要找的
 那类「缝隙上没有防护」。
 
-**候选修法**（未做，待拍板）：`services/fusion.ts` 的两处 `startTask`
+**修法（已落地）**：`services/fusion.ts` 的两处 `startTask`
 （初次 645、re-run 1606）加 `platformInputPaths: [PLATFORM_FUSION_MANIFEST]`——
 它们本来就带 `internalSource`（`space_kind='internal'`），正好满足
 `services/task.ts:2483` 对该名册的准入条件。回归防护应当是**跨隔离边界**的，

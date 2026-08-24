@@ -643,6 +643,15 @@ export async function createFusion(
       // excluded so the approval flow keeps its dirs), not via the retired
       // public repoPath wire field.
       internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
+      // RFC-319 B29 —— 结果清单必须能穿过逐节点隔离边界。
+      // merger 和其它 agent 节点一样跑在 `<home>/iso/<taskId>/<nodeRunId>` 里，
+      // 而 `MERGER_BODY` 让它把清单写进 `.agent-workflow/fusion/result.json`；
+      // 平台自己的排除档把整个 `.agent-workflow/` 写进了工作树 git ignore
+      // （modules/source-control/domain/workspaceExcludeProfile.ts），逐节点
+      // merge-back 又是 git 驱动的 —— 不登记进 force-include 名册，清单就永远
+      // 回不到 `task.worktreePath`，reconcile 每次判「agent did not write the
+      // fusion result manifest」，**任何一次真实融合都必然失败**。
+      platformInputPaths: [MANIFEST_REL],
       ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
       ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
       ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
@@ -1604,6 +1613,15 @@ export async function rejectFusion(
         // excluded so the approval flow keeps its dirs), not via the retired
         // public repoPath wire field.
         internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
+        // RFC-319 B29 —— 结果清单必须能穿过逐节点隔离边界。
+        // merger 和其它 agent 节点一样跑在 `<home>/iso/<taskId>/<nodeRunId>` 里，
+        // 而 `MERGER_BODY` 让它把清单写进 `.agent-workflow/fusion/result.json`；
+        // 平台自己的排除档把整个 `.agent-workflow/` 写进了工作树 git ignore
+        // （modules/source-control/domain/workspaceExcludeProfile.ts），逐节点
+        // merge-back 又是 git 驱动的 —— 不登记进 force-include 名册，清单就永远
+        // 回不到 `task.worktreePath`，reconcile 每次判「agent did not write the
+        // fusion result manifest」，**任何一次真实融合都必然失败**。
+        platformInputPaths: [MANIFEST_REL],
         ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
         ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
         ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),

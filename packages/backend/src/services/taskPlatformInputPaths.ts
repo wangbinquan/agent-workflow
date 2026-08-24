@@ -6,12 +6,29 @@
 // roster to force those inputs into every full-state snapshot. This module owns
 // that roster's closed path grammar; public launch bodies never reach it.
 
-import { PLATFORM_INPUTS_DIR, PLATFORM_PIPELINE_DIR } from '@agent-workflow/shared'
+import {
+  PLATFORM_FUSION_DIR,
+  PLATFORM_INPUTS_DIR,
+  PLATFORM_PIPELINE_DIR,
+} from '@agent-workflow/shared'
 
 export const TASK_PLATFORM_INPUT_PATHS_MAX = 128
 export const TASK_PLATFORM_INPUT_PATH_MAX_LENGTH = 512
 
-const ALLOWED_ROOTS = [PLATFORM_INPUTS_DIR, PLATFORM_PIPELINE_DIR] as const
+/**
+ * The closed set of roots a launch roster may name.
+ *
+ * RFC-319 B29 added `PLATFORM_FUSION_DIR`. The mechanism is the same one the
+ * header describes, used in the OTHER direction: the fusion result manifest is
+ * written by the merger agent INSIDE its isolated worktree and has to survive
+ * merge-back, rather than being seeded before the run. Force-include covers
+ * both — the roster is applied to `createNodeIso`'s base snapshot AND to
+ * `snapshotNodeIsoFinal`'s final one, and it is the final snapshot that carries
+ * the file home. Without this root, every real fusion failed with
+ * `agent did not write the fusion result manifest`: the agent DID write it, and
+ * a Git-driven merge-back dropped it because `.agent-workflow/` is ignored.
+ */
+const ALLOWED_ROOTS = [PLATFORM_INPUTS_DIR, PLATFORM_PIPELINE_DIR, PLATFORM_FUSION_DIR] as const
 
 function canonicalPath(raw: string): string | null {
   const path = raw.normalize('NFC')

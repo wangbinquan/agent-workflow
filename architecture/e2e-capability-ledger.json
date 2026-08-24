@@ -1026,8 +1026,13 @@
       "title": "融合详情：提案 diff、变更日志、已吸收 / 已跳过记忆清单（含跳过原因）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-lifecycle.spec.ts",
+          "test": "INTENT-53: 待审批页把变更日志、已吸收与已跳过（含原因）三样都摆出来"
+        }
+      ]
     },
     {
       "id": "INTENT-54",
@@ -1035,8 +1040,13 @@
       "title": "融合审批：Approve → 技能版本递增 + 记忆被融合，页面显示已应用版本号",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-lifecycle.spec.ts",
+          "test": "INTENT-54 / MEM-X1 / MEM-50: 批准后技能版本 +1，被吸收的记忆转 fused 且不再被注入"
+        }
+      ]
     },
     {
       "id": "INTENT-58",
@@ -1204,8 +1214,13 @@
       "title": "记忆被融合成技能后转为 fused 终态：行上显示技能徽标且不再注入",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-lifecycle.spec.ts",
+          "test": "INTENT-54 / MEM-X1 / MEM-50: 批准后技能版本 +1，被吸收的记忆转 fused 且不再被注入"
+        }
+      ]
     },
     {
       "id": "MEM-X1",
@@ -1213,8 +1228,13 @@
       "title": "【补漏】融合详情页：批准提议的技能改动（/fusions/:id → POST approve，技能版本 +1、记忆转 fused）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-lifecycle.spec.ts",
+          "test": "INTENT-54 / MEM-X1 / MEM-50: 批准后技能版本 +1，被吸收的记忆转 fused 且不再被注入"
+        }
+      ]
     },
     {
       "id": "OPS-001",
@@ -8367,8 +8387,6 @@
     "INTENT-50",
     "INTENT-51",
     "INTENT-52",
-    "INTENT-53",
-    "INTENT-54",
     "INTENT-55",
     "INTENT-56",
     "INTENT-57",
@@ -8412,8 +8430,6 @@
     "MEM-46",
     "MEM-47",
     "MEM-49",
-    "MEM-50",
-    "MEM-X1",
     "MEM-X10",
     "MEM-X11",
     "MEM-X2",
