@@ -3190,8 +3190,17 @@
       "title": "澄清 / 评审待办角标与 Inbox 抽屉入口（pending-count 聚合）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/inbox-badge-live.spec.ts",
+          "test": "真有一条待办时：角标亮出真实计数，抽屉列得出它，点进去落在那一屏"
+        },
+        {
+          "file": "e2e/inbox-badge-live.spec.ts",
+          "test": "待办没了：角标自己消失，不用刷新页面"
+        }
+      ]
     },
     {
       "id": "HUMAN-17",
@@ -8411,7 +8420,6 @@
     "HUMAN-10",
     "HUMAN-12",
     "HUMAN-13",
-    "HUMAN-14",
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17b",

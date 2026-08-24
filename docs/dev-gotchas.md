@@ -454,6 +454,29 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 ## git / 多人协作（共享工作树）
 
+- **`git commit -- <路径>` 提交的是「工作树」内容，不是 index —— 你精心 `git add` 的那一版会被静默忽略**（2026-08-25 实撞，同一个坑连着把 main 弄红两次）。
+  本仓强制「提交时带 pathspec」（`git commit -m … -- <你的路径>`），理由是共享 index 里躺着别人 `git add` 过的在制品，裸 `git commit` 会把它们一起发布。这条规则是对的，但它有一个**反方向**的后果，文档此前没写：
+  带 pathspec 的提交会**重新从工作树读取**这些路径，`git add` / `git update-index` 的结果对它们不起作用。实证（30 秒可复跑）：
+
+  ```
+  git init -q . && printf 'base\n' > f.txt && git add f.txt && git commit -qm base
+  printf 'WORKTREE-VERSION\n' > f.txt
+  SHA=$(printf 'INDEX-VERSION\n' | git hash-object -w --stdin)
+  git update-index --cacheinfo 100644,$SHA,f.txt
+  git show :f.txt            # => INDEX-VERSION
+  git commit -qm x -- f.txt
+  git show HEAD:f.txt        # => WORKTREE-VERSION   ← index 那版没了
+  ```
+
+  **后果**：对一个**双方同改的文件**，`git commit -- <file>` 必然把对方**未提交的工作树改动**一起发布——这正是「不要替别人发布半批」想避免的事，而 pathspec 纪律本身挡不住它。
+  实撞两次、症状相同：一份基线文件里躺着并发 session 尚未落地的降幅，我两次都以为自己只提了自己那一处（第二次甚至先用 `hash-object` + `update-index` 造好了只含自己 hunk 的 blob，并 `git show :<path>` 验过），提交后 main 两次红在同一条棘轮上——因为**那两步对带 pathspec 的提交毫无作用**。
+
+  **可用的定式**（本仓禁 `stash`、禁分支、禁开发用 worktree，所以选项有限）：
+
+  1. **能不碰就不碰**：把自己的改动挪到别的文件 / 别的行，让混文件根本不进 pathspec。
+  2. **必须碰时：写入 → 提交 → 写回**。把「只含自己 hunk」的版本写进工作树，`git commit -- <file>`，然后**立刻把对方那版原样写回**，并 `cmp` 验证字节相等。窗口是毫秒级，且写回的是逐字节相同的内容，对方无损。**提交前后各留一份对方版本的副本**，写回失败就人工比对。
+  3. **提交后必须复验**：`git show HEAD:<file>` 看落下去的到底是哪一版。`git diff --cached --stat` **验不出这件事**——它看的是 index，而 index 恰恰是被忽略的那一半。这一步是上面两次事故都缺的那一步。
+
 - **在共享工作树上「顺带提交别人半批改动」：本地绿证明不了 main 绿，因为你本地一直有他们尚未提交的另一半**（2026-08-23 实撞，我把 main 弄红了）。场景是并发开发的常态：我改了一个跨模块契约（RFC-317 T31），编译器要求另一个 context 的公共类型跟着改——而那个文件工作树里已经混着并行 session 在制的 `allowedEffectKinds` 一批改动。不带上它，main 上类型不通；带上它，就等于替对方发布了半批。我选了带上，并在 commit message 里写清「附带保留」，然后**只跑了自己改动所在的那几个面 + 全仓 typecheck**——全绿。推上去 CI 立刻红在 `Lint + Typecheck + Format` 那一格：`rfc310-digital-employee-authoring.test.ts` 调用那个被改签名的函数时少了一个新增实参。那个文件对方**也**改好了，就在我工作树里躺着，只是我没提。于是本地 typecheck 从头到尾都是绿的，而 main 从来没绿过。
   **为什么本地绿骗过了所有常规检查**：`bun run typecheck` 跑的是**工作树**，工作树 = 我的改动 + 对方已提交的 + 对方**未提交**的。CI 跑的是 checkout = 我的改动 + 对方已提交的。两者的差集正是「对方未提交的那部分」，而它恰好补全了我这次携带的半批。**这个差集在本地任何命令下都不可见**——`git status` 只告诉你有文件在改，不会告诉你「你刚提交的那个签名有 7 个调用点，其中 1 个的修复还在未提交区」。
   **可执行的判据**（比「小心一点」有用）：改了任何**被跨文件引用的签名 / 类型 / 导出**之后，提交前跑一次
