@@ -980,3 +980,53 @@ test('task canvas mounted in a hidden 0x0 pane refits once after reveal', async 
   expect(revealGeometry.canvas.height).toBeGreaterThan(0)
   expect(revealGeometry.offenders).toEqual([])
 })
+
+// ⚠️ RFC-319 T37（审计条目 WF-23）—— 「聚焦选中」这个相机动作此前**零覆盖**：
+// `workflow-camera-focus-selection`（WorkflowCanvas.tsx:3194）在 `e2e/` 与
+// `packages/frontend/tests/` 里一次都没出现过。模式切换、缩放带、wrapper 头部聚焦、
+// 边中点居中、隐藏面板重适配都有真断言，唯独这一个按钮没有——所以把这条能力算成
+// 「已覆盖」是过度声称。
+//
+// 独立成一条用例而不是并进上面那个共享场景函数，是被实测逼出来的：
+//   * 插在中段 ⇒ 扰动了后面 `wrapper.click` 的 `toHaveClass(/selected/)` 前置状态；
+//   * 放在末尾 ⇒ CI 的 Linux runner 上超时。那一段前面刚做过「远端改名 → 详情重取」，
+//     校验面板因此进入 `stale` 态并**盖住相机控件**；而 `stale` 在那之后是**终态**
+//     （本地草稿与服务端已分叉，不重新校验就不会回到 current），等不出来。
+// 自带一个干净的编辑器就没有这些耦合。
+test('RFC-319 WF-23: focus-selection is gated on a selection and actually moves the camera', async ({
+  page,
+}) => {
+  const seeded = await seedWorkflow('focus-selection')
+  await primeAuth(page)
+  await page.goto(`${daemon.baseUrl}/workflows/${seeded.id}`)
+
+  const canvas = page.locator('.workflow-canvas')
+  await expect(canvas).toBeVisible()
+  await expect(page.locator('.react-flow__node')).toHaveCount(COMPLEX_NODE_COUNT)
+
+  // 无选中 ⇒ 禁用。这是这个按钮唯一的前置条件。
+  await page.getByTestId('workflow-camera-overview').click()
+  await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview before focus-selection')
+  await page.keyboard.press('Escape')
+  await expect(
+    page.getByTestId('workflow-camera-focus-selection'),
+    '没有选中任何对象时「聚焦选中」仍可点 ⇒ 点了只会什么都不发生',
+  ).toBeDisabled()
+
+  // 选中 ⇒ 可用。选中本身会带来一次 readable-focus，所以先退回 overview，
+  // 这样「点按钮之后缩放上去」才是这个按钮的功劳，而不是选中的副作用。
+  const focusTarget = page.locator('.react-flow__node[data-id="agent_01"]')
+  await focusTarget.click({ force: true })
+  await expect(focusTarget).toHaveClass(/selected/)
+  await page.getByTestId('workflow-camera-overview').click()
+  await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview after selecting')
+  await expect(page.getByTestId('workflow-camera-focus-selection')).toBeEnabled()
+
+  await page.getByTestId('workflow-camera-focus-selection').click()
+  await waitForZoom(
+    page,
+    (zoom) => zoom >= READABLE_MIN_ZOOM,
+    'focus-selection did not move the camera onto the selected node',
+  )
+  await expect(canvas).toHaveAttribute('data-camera-mode', 'readable-focus')
+})
