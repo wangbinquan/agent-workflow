@@ -53,9 +53,6 @@ export function AccountCodePushCredentialsPanel({ me }: { me: MeResponse }) {
         <p>{t('account.sectionDescriptions.codePush')}</p>
       </header>
       <AccountGitIdentityCard me={me} />
-      <NoticeBanner tone="info" title={t('account.codePush.priorityTitle')} size="compact">
-        {t('account.codePush.priorityDescription')}
-      </NoticeBanner>
       {credentials.isLoading ? (
         <LoadingState label={t('account.codePush.loading')} />
       ) : credentials.isError ? (
@@ -177,6 +174,9 @@ function CredentialCard({
           save.mutate(token)
         }}
       >
+        <NoticeBanner tone="info" title={t('account.codePush.priorityTitle')} size="compact">
+          {t('account.codePush.priorityDescription')}
+        </NoticeBanner>
         {error !== null ? <ErrorBanner error={error} /> : null}
         {saved ? (
           <NoticeBanner tone="success" size="compact">

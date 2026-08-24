@@ -181,6 +181,8 @@ describe('/account security center', () => {
     expect(credentialCard.querySelector('form')?.classList.contains('account-code-push-form')).toBe(
       true,
     )
+    expect(within(credentialCard).getByText(enUS.account.codePush.priorityTitle)).toBeTruthy()
+    expect(within(credentialCard).getByText(enUS.account.codePush.priorityDescription)).toBeTruthy()
 
     const name = (await screen.findByRole('textbox', {
       name: new RegExp(enUS.account.displayName),
