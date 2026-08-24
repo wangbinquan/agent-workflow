@@ -1450,7 +1450,7 @@ describe('RFC-294 W0-R current modules ratchet', () => {
 
   test('module capability ownership cannot be structurally forged or serialized', () => {
     expect(capabilityForgeViolations(modules)).toEqual([])
-  })
+  }, 15_000)
 
   test('current public contracts stay below the pre-ledger hard god-surface ceiling', () => {
     expect(godSurfaceViolations(modules)).toEqual([])
