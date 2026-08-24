@@ -1435,7 +1435,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
     await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
+    const dialog = page.getByRole('dialog', { name: 'Add tool to Implement change' })
     await dialog.getByRole('textbox', { name: /Tool name/ }).fill('Implement Java changes')
     await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
     await page
