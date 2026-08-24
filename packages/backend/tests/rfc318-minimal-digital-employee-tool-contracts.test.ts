@@ -299,10 +299,12 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
           candidate.contractId === item.workContractRef.contractId &&
           candidate.version === item.workContractRef.version,
       )
-      expect(contract).toBeDefined()
-      expect(item.materialSummary).toEqual(contract?.materialSummary)
-      expect(item.completionStandard).toEqual(contract?.completionStandard)
-      expect(contract?.allowedToolKinds).toEqual([])
+      if (!contract) {
+        throw new Error(`Missing work contract ${item.workContractRef.contractId}`)
+      }
+      expect(item.materialSummary).toEqual(contract.materialSummary)
+      expect(item.completionStandard).toEqual(contract.completionStandard)
+      expect(contract.allowedToolKinds).toEqual([])
       expect(item.toolRoleGroups).toEqual([])
     }
   })
