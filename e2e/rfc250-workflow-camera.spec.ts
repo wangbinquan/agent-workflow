@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { initGitRepo, repoRemoteUrl } from './command'
+import { clickCanvasControl } from './canvas-controls'
 import { startDaemon, type DaemonHandle } from './harness'
 
 const READABLE_MIN_ZOOM = 1.1
@@ -689,7 +690,7 @@ async function runComplexCameraScenario(
 
   // Overview is explicit, exits through a named action, fits every object, and
   // removes undersized projected controls from both DOM and Tab order.
-  await page.getByTestId('workflow-camera-overview').click()
+  await clickCanvasControl(page, 'workflow-camera-overview')
   await expect(canvas).toHaveAttribute('data-camera-mode', 'overview')
   await waitForZoom(
     page,
@@ -701,7 +702,7 @@ async function runComplexCameraScenario(
   await expect(page.getByTestId('wrapper-add-inside-wrapper_empty')).toHaveCount(0)
   await expect(page.getByTestId('workflow-camera-readable')).toBeVisible()
 
-  await page.getByTestId('workflow-camera-readable').click()
+  await clickCanvasControl(page, 'workflow-camera-readable')
   await expect(canvas).toHaveAttribute('data-camera-mode', 'readable-focus')
   await waitForZoom(page, (zoom) => zoom >= READABLE_MIN_ZOOM, 'return-to-readable stayed tiny')
   await expectScreenPixelLabel(page)
@@ -709,7 +710,7 @@ async function runComplexCameraScenario(
 
   // Overview node activation uses the same readable-focus planner. A large
   // wrapper focuses its header rather than centering an unreadable empty body.
-  await page.getByTestId('workflow-camera-overview').click()
+  await clickCanvasControl(page, 'workflow-camera-overview')
   await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'wrapper overview did not settle')
   const wrapper = page.locator('.react-flow__node[data-id="wrapper_empty"]')
   await wrapper.click({ force: true })
@@ -732,7 +733,7 @@ async function runComplexCameraScenario(
   // In overview the midpoint action is absent, so clicking the interaction
   // path cannot accidentally open the insert picker. The selected edge is
   // lifted back to readable zoom and its action remounts at screen size.
-  await page.getByTestId('workflow-camera-overview').click()
+  await clickCanvasControl(page, 'workflow-camera-overview')
   await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'edge overview did not settle')
   const edge = page.locator(
     '.react-flow__edge[data-id="edge_entry_agent"] .react-flow__edge-interaction',
@@ -774,10 +775,10 @@ async function runComplexCameraScenario(
   // source-string lock.
   await page.keyboard.press('Escape')
   await expect(validationSurface).not.toBeVisible()
-  await page.getByTestId('workflow-camera-overview').click()
+  await clickCanvasControl(page, 'workflow-camera-overview')
   await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'marker overview did not settle')
   await expectLowZoomNodeMarkers(page, reviewNode, `${profile} low-zoom node`)
-  await page.getByTestId('workflow-camera-readable').click()
+  await clickCanvasControl(page, 'workflow-camera-readable')
   await waitForZoom(page, (zoom) => zoom >= READABLE_MIN_ZOOM, 'marker return stayed tiny')
 
   await page.getByTestId('workflow-validation-summary').click()
@@ -831,7 +832,7 @@ async function runComplexCameraScenario(
     // 弄红了——那条红与本条能力无关，纯粹是我扰动了它的前置状态）。
     //
     // 三段判据：无选中时禁用（唯一前置条件）、有选中时可用、点下去相机真的动了。
-    await page.getByTestId('workflow-camera-overview').click()
+    await clickCanvasControl(page, 'workflow-camera-overview')
     await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview before focus-selection')
     await page.keyboard.press('Escape')
     await expect(
@@ -844,10 +845,10 @@ async function runComplexCameraScenario(
     await expect(focusTarget).toHaveClass(/selected/)
     // 选中本身就会带来一次 readable-focus（前面几段已锁）。先退回 overview，
     // 这样「点按钮之后缩放上去」才是这个按钮的功劳，而不是选中的副作用。
-    await page.getByTestId('workflow-camera-overview').click()
+    await clickCanvasControl(page, 'workflow-camera-overview')
     await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview after selecting')
     await expect(page.getByTestId('workflow-camera-focus-selection')).toBeEnabled()
-    await page.getByTestId('workflow-camera-focus-selection').click()
+    await clickCanvasControl(page, 'workflow-camera-focus-selection')
     await waitForZoom(
       page,
       (zoom) => zoom >= READABLE_MIN_ZOOM,
@@ -1005,7 +1006,7 @@ test('RFC-319 WF-23: focus-selection is gated on a selection and actually moves 
   await expect(page.locator('.react-flow__node')).toHaveCount(COMPLEX_NODE_COUNT)
 
   // 无选中 ⇒ 禁用。这是这个按钮唯一的前置条件。
-  await page.getByTestId('workflow-camera-overview').click()
+  await clickCanvasControl(page, 'workflow-camera-overview')
   await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview before focus-selection')
   await page.keyboard.press('Escape')
   await expect(
@@ -1018,11 +1019,11 @@ test('RFC-319 WF-23: focus-selection is gated on a selection and actually moves 
   const focusTarget = page.locator('.react-flow__node[data-id="agent_01"]')
   await focusTarget.click({ force: true })
   await expect(focusTarget).toHaveClass(/selected/)
-  await page.getByTestId('workflow-camera-overview').click()
+  await clickCanvasControl(page, 'workflow-camera-overview')
   await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview after selecting')
   await expect(page.getByTestId('workflow-camera-focus-selection')).toBeEnabled()
 
-  await page.getByTestId('workflow-camera-focus-selection').click()
+  await clickCanvasControl(page, 'workflow-camera-focus-selection')
   await waitForZoom(
     page,
     (zoom) => zoom >= READABLE_MIN_ZOOM,
