@@ -345,26 +345,51 @@ describe('RFC-322 [db-slow] 的 CPU 判别', () => {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
   }
 
+  /**
+   * 停顿窗口取 300ms、且先做一次不记账的预热——**首版取 60ms、阈值 ms/4，在 CI 上红了**
+   * （ubuntu runner 实测 `cpuMs=22` vs 阈值 15）。原因是 `process.cpuUsage()` 统计的是
+   * **整个进程所有线程**的 CPU：bun 自带二十来个线程，JIT / GC / 首次 getrusage 的固定
+   * 成本都会落进测量窗口，本机安静时只有 0.03ms，CI 上是几十毫秒。
+   *
+   * 处置是把信噪比做够，而不是把判据调松到没意义：预热把固定成本挪出窗口，300ms 让残余
+   * 噪声摊薄。两种噪声模型下都留足余量——固定 ~22ms ⇒ 比值 0.07；即便按 CI 上那个
+   * 最坏的 37% 占空比外推 ⇒ 111ms、比值 0.37，都仍在 0.5 的判据之内。
+   */
+  const STALL_MS = 300
+
   test('进程被冻住时 cpuMs ≪ ms —— 慢的不是这条 SQL', () => {
     const seen: { ms: number; sql: string; cpuMs: number }[] = []
+    let sleepMs = 40
     const fake = {
       prepare: () => ({
         all: () => {
-          sleepWithoutCpu(60)
+          sleepWithoutCpu(sleepMs)
           return []
         },
       }),
       query: () => ({ all: () => [] }),
       exec: () => undefined,
     }
-    instrumentSlowStatements(fake as never, 10, (ms, sql, cpuMs) => seen.push({ ms, sql, cpuMs }))
-    ;(fake.prepare as unknown as (s: string) => { all: () => unknown[] })('SELECT 1').all()
+    // 阈值 100ms：预热那次（40ms）不记账，只把固定成本付掉。
+    instrumentSlowStatements(fake as never, 100, (ms, sql, cpuMs) => seen.push({ ms, sql, cpuMs }))
+    const run = (): void => {
+      ;(fake.prepare as unknown as (s: string) => { all: () => unknown[] })('SELECT 1').all()
+    }
+    run()
+    expect(seen, '预热那次不该被记账，否则固定成本还在测量窗口里').toEqual([])
 
+    sleepMs = STALL_MS
+    run()
     expect(seen.length).toBe(1)
     const rec = seen[0]!
-    expect(rec.ms).toBeGreaterThanOrEqual(50)
-    // 判据本身：CPU 时间远小于墙钟 ⇒ 进程在等，不是这条语句在算。
-    expect(rec.cpuMs).toBeLessThan(rec.ms / 4)
+    expect(rec.ms).toBeGreaterThanOrEqual(STALL_MS * 0.8)
+    // 判据本身：CPU 时间明显小于墙钟 ⇒ 进程在等，不是这条语句在算。
+    // 真正在算的语句是 cpuMs ≈ ms（下一条用例守的就是另一侧）。
+    expect(rec.cpuMs).toBeLessThan(rec.ms / 2)
+    expect(
+      rec.ms - rec.cpuMs,
+      '墙钟与 CPU 的绝对差要够大，比值再好看也不能只差几毫秒',
+    ).toBeGreaterThan(100)
   })
 
   test('真正吃 CPU 的语句 cpuMs 与 ms 同量级 —— 这才是查询问题', () => {
