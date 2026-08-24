@@ -460,8 +460,13 @@
       "title": "到点自动触发：轮询认领 → CAS 推进下次触发时间 → 启动任务并记录结果",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/scheduled-task-firing.spec.ts",
+          "test": "RFC-319 EVENT-42: an enabled schedule fires by itself — the claim advances the next slot and the launch is recorded on the row @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-46",
@@ -8147,7 +8152,6 @@
     "EVENT-39",
     "EVENT-40",
     "EVENT-41",
-    "EVENT-42",
     "EVENT-43",
     "EVENT-44",
     "EVENT-45",
