@@ -18,7 +18,6 @@
     "/fusions/$id",
     "/memory/distill-jobs/$jobId",
     "/outcomes",
-    "/setup/admin",
     "/tasks/$id/preview",
     "/workflows/new",
     "/workgroups/launch"

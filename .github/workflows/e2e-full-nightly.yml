@@ -60,13 +60,17 @@ jobs:
         run: bunx playwright install --with-deps chromium
 
       # 不加 `--grep-invert`：这条腿的全部意义就是**全量**。
+      # journal **刻意不放在 `test-results/` 下**：那个目录归 Playwright 所有，它在每次
+      # 运行开始时清空它。CI 里一次 checkout 只跑一次没问题，但开发机上共享工作树时，
+      # 另一个人跑一次 `bun run e2e` 就会把你刚采集的 journal 连锅端走——本 RFC 开发
+      # 期间实撞一次，账本当场被写成「全都没覆盖」。
       # `AW_E2E_ROUTE_JOURNAL` 打开 harness 的命中采集（见 e2e/route-journal.ts）：
       # 它把每个 daemon 的 `logLevel` 提到 debug，并在删临时 home 之前把逐请求
       # `req` 行捞进这个目录。没有这个变量时采集整套是空操作。
       - name: Run e2e (full tier, shard ${{ matrix.shard }}/4)
         env:
           CI: 'true'
-          AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/test-results/route-hits
+          AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/route-hits
         shell: bash
         run: bun run e2e -- --shard=${{ matrix.shard }}/4
 
@@ -77,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: route-hits-shard${{ matrix.shard }}
-          path: test-results/route-hits/
+          path: route-hits/
           if-no-files-found: error
 
       - name: Upload Playwright trace on failure
@@ -137,9 +141,9 @@ jobs:
             echo "::error::期望 4 个分片的 journal，实际 $shards 个——语料不全，拒绝对账"
             exit 1
           fi
-          mkdir -p test-results/route-hits
-          find merged-journals -name '*.jsonl' -exec cp {} test-results/route-hits/ \;
-          files=$(find test-results/route-hits -name '*.jsonl' | wc -l | tr -d ' ')
+          mkdir -p route-hits
+          find merged-journals -name '*.jsonl' -exec cp {} route-hits/ \;
+          files=$(find route-hits -name '*.jsonl' | wc -l | tr -d ' ')
           echo "merged journal files: $files"
           if [ "$files" -lt 20 ]; then
             echo "::error::合并后只有 $files 份 journal——采集多半坏了，拒绝对账"
@@ -148,7 +152,7 @@ jobs:
 
       - name: Reconcile endpoint + route coverage ledgers
         env:
-          AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/test-results/route-hits
+          AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/route-hits
         shell: bash
         working-directory: packages/backend
         run: |
@@ -160,5 +164,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: route-hits-merged
-          path: test-results/route-hits/
+          path: route-hits/
           if-no-files-found: ignore

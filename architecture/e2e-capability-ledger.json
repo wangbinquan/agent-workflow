@@ -533,8 +533,13 @@
       "title": "首次安装：/setup/admin 页面创建第一个管理员",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-01/03: the first-admin handoff creates a real account and retires itself"
+        }
+      ]
     },
     {
       "id": "IAM-03",
@@ -542,8 +547,13 @@
       "title": "bootstrap 未完成时全站被拦",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-01/03: the first-admin handoff creates a real account and retires itself"
+        }
+      ]
     },
     {
       "id": "IAM-04",
@@ -562,8 +572,13 @@
       "title": "/auth 密码表单登录并跳回原目标页",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-05/06: password sign-in lands on the requested page; three rejections are readable"
+        }
+      ]
     },
     {
       "id": "IAM-06",
@@ -571,8 +586,13 @@
       "title": "登录失败的三类拒绝：错密码 / 停用账号 / 无本地密码",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-05/06: password sign-in lands on the requested page; three rejections are readable"
+        }
+      ]
     },
     {
       "id": "IAM-08",
@@ -671,8 +691,13 @@
       "title": "/users：停用 / 启用用户（含会话立刻失效）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-26: disabling a user invalidates the session they already hold"
+        }
+      ]
     },
     {
       "id": "IAM-27",
@@ -740,8 +765,13 @@
       "title": "任务协作成员：把同事加进任务后他能看见并操作，所有者可转让",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "RFC-319: task owner grants a collaborator through the members panel, then transfers ownership"
+        }
+      ]
     },
     {
       "id": "IAM-40",
@@ -760,8 +790,13 @@
       "title": "退出登录：服务端会话吊销 + 客户端私有缓存清空 + 回到 /auth",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-43: signing out revokes the session server-side and clears client-side private state"
+        }
+      ]
     },
     {
       "id": "IAM-46",
@@ -1501,8 +1536,13 @@
       "title": "UserMenu 退出登录 → 会话终止 + 客户端私有状态清空 → 回到 /auth",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-43: signing out revokes the session server-side and clears client-side private state"
+        }
+      ]
     },
     {
       "id": "UX-08",
@@ -7936,11 +7976,7 @@
     "HUMAN-X4",
     "HUMAN-X5",
     "HUMAN-X6",
-    "IAM-01",
     "IAM-02",
-    "IAM-03",
-    "IAM-05",
-    "IAM-06",
     "IAM-07",
     "IAM-08",
     "IAM-09",
@@ -7953,7 +7989,6 @@
     "IAM-16",
     "IAM-21",
     "IAM-22",
-    "IAM-26",
     "IAM-27",
     "IAM-28",
     "IAM-29",
@@ -7962,10 +7997,8 @@
     "IAM-33",
     "IAM-34",
     "IAM-35",
-    "IAM-38",
     "IAM-41",
     "IAM-42",
-    "IAM-43",
     "IAM-44",
     "IAM-47",
     "IAM-48",
@@ -8261,7 +8294,6 @@
     "UX-04",
     "UX-05",
     "UX-06",
-    "UX-07",
     "UX-08",
     "UX-09",
     "UX-11",

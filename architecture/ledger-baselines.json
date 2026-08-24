@@ -231,21 +231,21 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 266,
+      "baseline": 264,
       "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 462 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。"
     },
     {
       "id": "rfc319-e2e-route-coverage",
       "file": "architecture/e2e-route-coverage.json",
       "symbol": "uncovered",
-      "baseline": 18,
+      "baseline": 17,
       "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。"
     },
     {
       "id": "rfc319-capability-gaps",
       "file": "architecture/e2e-capability-ledger.json",
       "symbol": "gapIds",
-      "baseline": 668,
+      "baseline": 660,
       "why": "RFC-319 R3：820 条用户面能力里还没有 system-mock e2e 防护的那些（开工时 679，本 RFC 已补 11 条 ⇒ 668）。只许降——每降一条代表一个真实用户场景被端到端跑过了。涨了说明新增能力没带 e2e，必须在 review 里解释。"
     },
     {
