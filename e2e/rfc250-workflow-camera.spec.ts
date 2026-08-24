@@ -840,8 +840,16 @@ async function runComplexCameraScenario(
       '没有选中任何对象时「聚焦选中」仍可点 ⇒ 点了只会什么都不发生',
     ).toBeDisabled()
 
+    // 先回到可读缩放再选中。原来是在 overview 下 `click({ force: true })`：
+    // 强制点击按元素中心投一次鼠标事件、跳过可操作性判定，而低缩放下节点只有
+    // 几个像素——落在哪、被谁接住，完全取决于引擎对合成事件的处理。实测它在
+    // chromium 与 macOS webkit 上选得中，唯独 **Linux 上的 webkit** 选不中
+    // （e2e-webkit-nightly：class 里始终没有 `selected`）。那不是这条用例想验的
+    // 东西。改在可读缩放下选中——节点是正常大小，点击对每个引擎都可靠。
     const focusTarget = page.locator('.react-flow__node[data-id="agent_01"]')
-    await focusTarget.click({ force: true })
+    await clickCanvasControl(page, 'workflow-camera-readable')
+    await waitForZoom(page, (zoom) => zoom >= READABLE_MIN_ZOOM, 'readable before selecting')
+    await focusTarget.click()
     await expect(focusTarget).toHaveClass(/selected/)
     // 选中本身就会带来一次 readable-focus（前面几段已锁）。先退回 overview，
     // 这样「点按钮之后缩放上去」才是这个按钮的功劳，而不是选中的副作用。
