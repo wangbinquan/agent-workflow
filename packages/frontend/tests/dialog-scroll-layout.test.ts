@@ -58,6 +58,16 @@ describe('Dialog scroll layout', () => {
     expect(rule('.dialog__footer')).toMatch(/flex-shrink:\s*0/)
   })
 
+  test('footer actions wrap instead of overflowing beyond the clipped panel', () => {
+    expect(rule('.dialog__footer')).toMatch(/flex-wrap:\s*wrap/)
+
+    const action = rule('.dialog__footer .btn')
+    expect(action).toMatch(/min-width:\s*0/)
+    expect(action).toMatch(/max-width:\s*100%/)
+    expect(action).toMatch(/white-space:\s*normal/)
+    expect(action).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
   // size="full" — canvas-like drilldowns (relation graph / call chain) render
   // in the whole viewport. Height must be EXPLICIT (not only max-height): the
   // graph's flex chain resolves percentages/flex against it; with max-height
