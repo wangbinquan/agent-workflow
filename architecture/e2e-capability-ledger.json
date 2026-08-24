@@ -3378,8 +3378,17 @@
       "title": "集中回答面板：跨轮多题一次性作答、逐题服务端草稿、重答已封存题",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/centralized-answer-pane.spec.ts",
+          "test": "只提交我真填了的那一题：没填的不许被当成「已答成空」封掉"
+        },
+        {
+          "file": "e2e/centralized-answer-pane.spec.ts",
+          "test": "重答一道已封存的题：必须带上显式的重答声明，否则会被 exactly-once 守卫整批拒掉"
+        }
+      ]
     },
     {
       "id": "HUMAN-26",
@@ -8589,7 +8598,6 @@
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17b",
-    "HUMAN-25",
     "HUMAN-36",
     "HUMAN-37",
     "HUMAN-40",
