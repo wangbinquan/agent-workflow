@@ -222,7 +222,7 @@
 > **`/api/overview` 为了出一个计数把整张表的 markdown 正文搬了一遍**。win32 视觉基线经查**非本 RFC 义务**
 > （无任何 CI 在 Windows 上跑视觉套件，43 张 `*-win32.png` 无人比对），已转仓级 backlog。
 >
-> 🚧 **进行中 RFC（In Progress，2026-08-19 按用户补充重新打开）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-24 收尾对账关闭）：[RFC-310 规则驱动的研发数字员工与 MR 生命周期看护](design/RFC-310-rule-driven-development-digital-employee/proposal.md)**
 >
 > **2026-08-21 数字员工 OS 实现（功能完成，待 hosted 验证）**：用户确认上层产品是可程序化定制员工类型的
 > “数字员工操作系统”，不是一条研发 Mission 长工作流。RFC-310 PR-14..PR-18/T142..T164 已实现 Context Graph、
@@ -662,6 +662,22 @@
 >     旅程当前止步于 development stub 未覆盖 `implement-gate-change`（T131/T132 范围），故该 spec
 >     进仓但**默认关**（`AW_RFC310_JOURNEY_E2E=1` 手动开，skip 已登记进 `test-suite-policy` 的
 >     `ALLOWED_SKIP_COUNTS`），解除条件写在 spec 顶部与 RFC plan.md。
+>
+> **2026-08-24 收尾对账（由 RFC-317 收口的同一 session 接手，详见 `plan.md §16`）**：开工时任务表 247 行里
+> 13 行非 ✅，逐条**对源码核实**后——**9 行是假红**（做完没销账，例如 T235 要删的 `upgrade-candidates`
+> 与单员工 upgrade 路由在 `src` 下零命中、前后端两条不复辟棘轮都已绿；PR-28 T233 的 6 条自动迁移红测全绿）；
+> **2 项有价值已做完**——T112 把 AC 证据索引从 71 补到 **100/100** 并加「缺口逐字相等」棘轮（往 proposal
+> 加 AC 不补证据行即红），T111① 写出 `docs/release-upgrade-rollback.md` 并加命令守卫（runbook 引用的每条
+> `agent-workflow <cmd>` 必须真实存在）；**2 项判定不做并登记理由**——T111② 运维 dashboards/alerts
+> （仓内零监控栈，形态取决于部署方的监控系统，凭空写等于交付没人用的文档）、T93 的逐态像素快照
+> （收益递减，且每个视觉场景都要人工审图）。
+>
+> ⚠️ **关闭范围只含 RFC-310 自身余项**：`AC-20/21/22` 依赖的 RFC-294 波次（W0-R / W4-E8～E10 / W5 / W7 / W9
+> 的 DA public/required SPI、route/bootstrap、WorkspaceRef、TaskCatalog public-only membership、
+> TE↔DE 双向 contract debt）**仍未完成**，由 RFC-294 承接——它们从来不是 RFC-310 能自行收口的项。
+>
+> 验收：任务表 247/247 ✅、AC 100/100；`bun run gate:local` 全绿 10m54s；`3e476faf9` CI 31/31 success；
+> `7b4076641` visual-regression success；RFC-310 的 108 个后端测试文件 587 pass / 1 skip / 0 fail。
 
 > ✅ **已完成 RFC（Done，2026-08-17）：[RFC-309 模板归一：一套模板，即流程，且能起跑](design/RFC-309-capability-template-unification/proposal.md)**
 > —— 起因是 RFC-307 之后用户连提三问，三问三答：
