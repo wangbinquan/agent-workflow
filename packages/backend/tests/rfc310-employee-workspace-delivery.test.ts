@@ -1329,6 +1329,20 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       '# Inherited issue 8 acceptance\n',
     )
     expect(
+      JSON.parse(
+        readFileSync(
+          join(
+            conflictScene.workspacePath,
+            '.agent-workflow/inputs/requirements/case-1/request.json',
+          ),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({ body: 'Implement deterministic delivery' })
+    expect(existsSync(join(conflictScene.workspacePath, '.agent-workflow/pipeline/case-1'))).toBe(
+      true,
+    )
+    expect(
       readFileSync(
         join(conflictScene.workspacePath, inheritedPipelineRef, 'typecheck.log'),
         'utf8',
@@ -1350,6 +1364,17 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     expect(readFileSync(join(freshConflictScene.workspacePath, inheritedMaterialRef), 'utf8')).toBe(
       '# Inherited issue 8 acceptance\n',
     )
+    expect(
+      JSON.parse(
+        readFileSync(
+          join(
+            freshConflictScene.workspacePath,
+            '.agent-workflow/inputs/requirements/case-1/request.json',
+          ),
+          'utf8',
+        ),
+      ),
+    ).toMatchObject({ body: 'Implement deterministic delivery' })
     expect(
       readFileSync(
         join(freshConflictScene.workspacePath, inheritedPipelineRef, 'typecheck.log'),

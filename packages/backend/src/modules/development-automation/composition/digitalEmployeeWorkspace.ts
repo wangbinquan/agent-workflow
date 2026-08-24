@@ -805,10 +805,22 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             platformCaseKey,
           )
           mkdirSync(requirementsRoot, { recursive: true })
-          mkdirSync(join(requirementsRoot, 'uploads'), { recursive: true })
-          mkdirSync(join(requirementsRoot, 'external'), { recursive: true })
-          mkdirSync(join(requirementsRoot, 'review'), { recursive: true })
           mkdirSync(pipelineRoot, { recursive: true })
+          const canonicalWorkspace = workspacePath(plan.caseRef.id)
+          copyFrozenPlatformEntry(
+            join(
+              canonicalWorkspace,
+              PLATFORM_WORKSPACE_DIR,
+              'inputs',
+              'requirements',
+              platformCaseKey,
+            ),
+            requirementsRoot,
+          )
+          copyFrozenPlatformEntry(
+            join(canonicalWorkspace, PLATFORM_WORKSPACE_DIR, 'pipeline', platformCaseKey),
+            pipelineRoot,
+          )
           const checkpoint = sourceControl.checkpoint({
             workspacePath: prepared.workspacePath,
             checkpointRoot: checkpointRoot(plan.caseRef.id, `${plan.roundRef}-${attempt.ordinal}`),

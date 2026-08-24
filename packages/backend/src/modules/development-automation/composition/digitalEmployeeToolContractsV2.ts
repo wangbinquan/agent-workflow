@@ -246,7 +246,10 @@ export const developmentWorkContractsV2: readonly DevelopmentWorkContractV2[] = 
 ]
 
 const conditionCompleted = text('outcome=completed 时必填', 'Required when outcome=completed')
-const conditionBlocked = text('outcome=blocked 时必填', 'Required when outcome=blocked')
+const conditionExplanation = text(
+  'outcome=blocked 时必填；outcome=completed 时可选',
+  'Required when outcome=blocked; optional when outcome=completed',
+)
 const conditionCodeChanged = text('实际修改代码时返回', 'Returned when code changed')
 const conditionTargetObserved = text(
   '提供方确认目标版本时返回',
@@ -363,13 +366,13 @@ const outcomeField = field({
 })
 const explanationField = field({
   path: 'explanation',
-  zh: '阻塞原因',
-  en: 'Blocking explanation',
-  descriptionZh: '具体说明为什么不能完成',
-  descriptionEn: 'Concrete reason the action cannot be completed',
+  zh: '补充说明',
+  en: 'Explanation',
+  descriptionZh: '完成时可补充结果摘要；阻塞时具体说明为什么不能完成',
+  descriptionEn: 'Optional completion summary, or the concrete reason the action is blocked',
   valueType: 'string',
   required: false,
-  condition: conditionBlocked,
+  condition: conditionExplanation,
 })
 
 const details: Record<DevelopmentToolContractIdV2, GuideDetails> = {

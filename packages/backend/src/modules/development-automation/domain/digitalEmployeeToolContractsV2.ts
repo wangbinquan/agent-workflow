@@ -19,8 +19,10 @@ const refSchema = z
   .strict()
 const pathSchema = z.string().min(1).max(2_000)
 const versionSchema = z.string().min(1).max(500)
+const explanationSchema = z.string().trim().min(1).max(8_000)
+const optionalCompletionExplanation = { explanation: explanationSchema.optional() } as const
 const blockedSchema = z
-  .object({ outcome: z.literal('blocked'), explanation: z.string().trim().min(1).max(8_000) })
+  .object({ outcome: z.literal('blocked'), explanation: explanationSchema })
   .strict()
 
 const prepareMaterialsInputSchema = z
@@ -183,10 +185,13 @@ export const developmentToolInputSchemasV2 = {
   'development.draft-approval': draftApprovalInputSchema,
 } as const
 
-const completedSignalSchema = z.object({ outcome: z.literal('completed') }).strict()
+const completedSignalSchema = z
+  .object({ outcome: z.literal('completed'), ...optionalCompletionExplanation })
+  .strict()
 const deliveryResultSchema = z
   .object({
     outcome: z.literal('completed'),
+    ...optionalCompletionExplanation,
     commitMessage: z.string().trim().min(1).max(5_000),
     mergeRequestTitle: z.string().trim().min(1).max(240),
     mergeRequestDescription: z.string().trim().min(1).max(32_000),
@@ -196,6 +201,7 @@ const deliveryResultSchema = z
 const reviewResultSchema = z
   .object({
     outcome: z.literal('completed'),
+    ...optionalCompletionExplanation,
     replies: z
       .array(
         z
@@ -229,6 +235,7 @@ const pipelineCheckSchema = z
 const pipelineStatusResultSchema = z
   .object({
     outcome: z.literal('completed'),
+    ...optionalCompletionExplanation,
     observedSourceVersion: versionSchema,
     observedTargetVersion: versionSchema.optional(),
     status: z.enum(['pending', 'passed', 'failed']),
@@ -259,6 +266,7 @@ const pipelineStatusResultSchema = z
 const classificationResultSchema = z
   .object({
     outcome: z.literal('completed'),
+    ...optionalCompletionExplanation,
     groups: z
       .array(
         z
@@ -285,12 +293,17 @@ const classificationResultSchema = z
 const commitResultSchema = z
   .object({
     outcome: z.literal('completed'),
+    ...optionalCompletionExplanation,
     commitMessage: z.string().trim().min(1).max(5_000),
   })
   .strict()
 
 const approvalDraftResultSchema = z
-  .object({ outcome: z.literal('completed'), draft: z.string().trim().min(1).max(32_000) })
+  .object({
+    outcome: z.literal('completed'),
+    ...optionalCompletionExplanation,
+    draft: z.string().trim().min(1).max(32_000),
+  })
   .strict()
 
 export const developmentToolOutputSchemasV2 = {
