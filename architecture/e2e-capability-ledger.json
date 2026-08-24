@@ -1277,8 +1277,13 @@
       "title": "技能详情「Save All」：元数据 + 多个文件作用域组合保存",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-07/09: a combined save persists metadata + body, and a stale token is refused"
+        }
+      ]
     },
     {
       "id": "RES-08",
@@ -1295,8 +1300,13 @@
       "title": "技能保存的并发冲突（他人先改 → 409 陈旧 token）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-07/09: a combined save persists metadata + body, and a stale token is refused"
+        }
+      ]
     },
     {
       "id": "RES-10",
@@ -1304,8 +1314,13 @@
       "title": "技能文件树：新增 / 编辑 / 删除文件（暂存 → 一次性保存）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-10: skill files are written, listed, read back and deleted through the real skill directory"
+        }
+      ]
     },
     {
       "id": "RES-13",
@@ -1313,8 +1328,13 @@
       "title": "回滚到历史版本（restore，带 OCC token 与确认）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-13: restoring an earlier version rewrites the content and keeps the version line moving forward"
+        }
+      ]
     },
     {
       "id": "RES-14",
@@ -1322,8 +1342,13 @@
       "title": "删除技能（输入名字确认）与「被 agent 引用时拒绝删除」",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-14/29: deleting a referenced skill / mcp / plugin is refused, and delete needs the typed name"
+        }
+      ]
     },
     {
       "id": "RES-15",
@@ -1331,8 +1356,13 @@
       "title": "技能可见性与授权（private 后陌生人不可见、详情 404）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-15: a private skill is invisible to strangers and its detail is indistinguishable from absent"
+        }
+      ]
     },
     {
       "id": "RES-28",
@@ -1349,8 +1379,13 @@
       "title": "MCP / 插件被 agent 引用时拒绝删除并披露引用方",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-14/29: deleting a referenced skill / mcp / plugin is refused, and delete needs the typed name"
+        }
+      ]
     },
     {
       "id": "RES-39",
@@ -1367,8 +1402,13 @@
       "title": "PAT 读取时 MCP / 插件的机密被脱敏",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-lifecycle.spec.ts",
+          "test": "RFC-319 RES-44: reading an MCP through a PAT masks its secrets while a session still sees them"
+        }
+      ]
     },
     {
       "id": "TASK-01",
@@ -8226,15 +8266,9 @@
     "RES-04",
     "RES-05",
     "RES-06",
-    "RES-07",
     "RES-08",
-    "RES-09",
-    "RES-10",
     "RES-11",
     "RES-12",
-    "RES-13",
-    "RES-14",
-    "RES-15",
     "RES-16",
     "RES-17",
     "RES-18",
@@ -8248,7 +8282,6 @@
     "RES-26",
     "RES-27",
     "RES-28",
-    "RES-29",
     "RES-30",
     "RES-31",
     "RES-32",
@@ -8263,7 +8296,6 @@
     "RES-41",
     "RES-42",
     "RES-43",
-    "RES-44",
     "RES-45",
     "RES-46",
     "RES-X1",
