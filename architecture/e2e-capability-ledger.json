@@ -3356,8 +3356,17 @@
       "title": "跨通道协调：已被别处封存/下发的题在澄清详情页变灰只读并排除出提交",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-cross-channel-lock.spec.ts",
+          "test": "正向对照：没被别处动过时，两题都可答"
+        },
+        {
+          "file": "e2e/clarify-cross-channel-lock.spec.ts",
+          "test": "别处封存过的那题：变灰、动不了、且不被这次提交带走"
+        }
+      ]
     },
     {
       "id": "HUMAN-27",
@@ -8553,7 +8562,6 @@
     "HUMAN-17b",
     "HUMAN-20",
     "HUMAN-25",
-    "HUMAN-26",
     "HUMAN-36",
     "HUMAN-37",
     "HUMAN-40",
