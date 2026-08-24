@@ -155,6 +155,57 @@ describe('CLI subcommands (P-1-05)', () => {
     expect(text).toContain('not running')
   })
 
+  // ⚠️ RFC-319 T36（审计条目 OPS-002）—— 「`--port` 压过 config.json 的 bindPort」
+  // 此前**不可分辨**：
+  //   * `e2e/harness.ts` 把同一个 bindPort 既写进 config.json 又传成 flag，两者恒等，
+  //     所以那条腿无论谁赢都绿；
+  //   * 下面那条 status/stop 用例跑 `start --port 0`，而它的临时 HOME 里**根本没有
+  //     config.json**（它不调 migrateCommand），走的是 `opts.port ?? 默认` 那一支。
+  // 两边都没有「config 里有一个不同的值」这个前提，于是优先级本身从未被断言过。
+  //
+  // 这里刻意让两者**不同**：config 里放一个具体端口，flag 传 0（临时端口）。
+  // 用 0 而不是第二个具体端口，是因为 docs/dev-gotchas.md 记过「探测端口 → 关闭 →
+  // 再绑定」在并发分片下会被抢走；0 让内核选，没有这个窗口。
+  // 判据方向也因此是安全的：如果 config 赢了，绑上的就正好是 configPort。
+  test('start --port overrides config.json bindPort (RFC-319 T36)', async () => {
+    const defaults = JSON.parse(configGetCommand([]).output) as Record<string, unknown>
+    // 一个空闲端口：只用来当「config 里的那个值」，不真的去绑它。
+    const probe = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data() {} } })
+    const configPort = probe.port
+    probe.stop(true)
+    writeFileSync(
+      join(tmp, 'config.json'),
+      JSON.stringify({ ...defaults, bindHost: '127.0.0.1', bindPort: configPort }, null, 2),
+      'utf-8',
+    )
+
+    const child = Bun.spawn({
+      cmd: ['bun', 'run', mainPath, 'start', '--port', '0'],
+      env: { ...(process.env as Record<string, string>), AGENT_WORKFLOW_HOME: tmp },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    try {
+      const ready = await waitForReady(child.stdout, 15_000, child.stderr, child)
+      const boundPort = Number(new URL(ready.url).port)
+      expect(boundPort).toBeGreaterThan(0)
+      expect(
+        boundPort,
+        'daemon 绑上了 config.json 里的 bindPort ⇒ 命令行 --port 被忽略了。' +
+          '运维用 --port 临时换端口是标准手段，它被静默忽略的症状是「改了没生效」',
+      ).not.toBe(configPort)
+      // config 文件确实带着那个不同的值（否则上面那条断言是空的）。
+      const onDisk = JSON.parse(readFileSync(join(tmp, 'config.json'), 'utf-8')) as {
+        bindPort: number
+      }
+      expect(onDisk.bindPort).toBe(configPort)
+    } finally {
+      await stopCommand({ timeoutMs: 10_000 }).catch(() => undefined)
+      child.kill()
+      await child.exited
+    }
+  })
+
   test('status + stop: end-to-end against a real daemon', async () => {
     const child = Bun.spawn({
       cmd: ['bun', 'run', mainPath, 'start', '--port', '0'],

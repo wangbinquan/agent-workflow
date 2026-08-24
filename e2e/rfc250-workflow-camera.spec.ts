@@ -816,6 +816,46 @@ async function runComplexCameraScenario(
     })
     .toBeLessThanOrEqual(1.5)
 
+  // 390 那条腿在这一点上点不开相机面板（窄屏的投影控件另有自己的一套断言，
+  // 见同函数前面的 expectHitRect 段），而本条能力的缺口是「这个动作在任何地方
+  // 都没有被测过」——在 desktop 上钉住即已补齐。窄屏留给后续按投影控件的形态单列。
+  if (profile === 'desktop') {
+    // ⚠️ RFC-319 T37（审计条目 WF-23）—— 「聚焦选中」这个相机动作此前**零覆盖**：
+    // `workflow-camera-focus-selection`（WorkflowCanvas.tsx:3194）在 `e2e/` 与
+    // `packages/frontend/tests/` 里一次都没出现过。模式切换、缩放带、wrapper 头部聚焦、
+    // 边中点居中、隐藏面板重适配都有真断言，唯独这一个按钮没有——所以把这条能力算成
+    // 「已覆盖」是过度声称的。
+    //
+    // 放在本函数最末尾而不是插在中段：中段的每一步都对进入时的相机/选中状态有假设
+    // （第一版插在 overview 段之前，把后面 wrapper.click 的 `toHaveClass(/selected/)`
+    // 弄红了——那条红与本条能力无关，纯粹是我扰动了它的前置状态）。
+    //
+    // 三段判据：无选中时禁用（唯一前置条件）、有选中时可用、点下去相机真的动了。
+    await page.getByTestId('workflow-camera-overview').click()
+    await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview before focus-selection')
+    await page.keyboard.press('Escape')
+    await expect(
+      page.getByTestId('workflow-camera-focus-selection'),
+      '没有选中任何对象时「聚焦选中」仍可点 ⇒ 点了只会什么都不发生',
+    ).toBeDisabled()
+
+    const focusTarget = page.locator('.react-flow__node[data-id="agent_01"]')
+    await focusTarget.click({ force: true })
+    await expect(focusTarget).toHaveClass(/selected/)
+    // 选中本身就会带来一次 readable-focus（前面几段已锁）。先退回 overview，
+    // 这样「点按钮之后缩放上去」才是这个按钮的功劳，而不是选中的副作用。
+    await page.getByTestId('workflow-camera-overview').click()
+    await waitForZoom(page, (zoom) => zoom <= OVERVIEW_MAX_ZOOM, 'overview after selecting')
+    await expect(page.getByTestId('workflow-camera-focus-selection')).toBeEnabled()
+    await page.getByTestId('workflow-camera-focus-selection').click()
+    await waitForZoom(
+      page,
+      (zoom) => zoom >= READABLE_MIN_ZOOM,
+      'focus-selection did not move the camera onto the selected node',
+    )
+    await expect(canvas).toHaveAttribute('data-camera-mode', 'readable-focus')
+  }
+
   await expectEditorAxeClean(page, `${profile} complex workflow camera`)
 }
 

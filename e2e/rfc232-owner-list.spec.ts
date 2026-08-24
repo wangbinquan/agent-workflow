@@ -14,6 +14,10 @@ interface OwnerFixtures {
   peerTaskId: string
   adminScheduleId: string
   peerScheduleId: string
+  /** RFC-319 T33：非 admin 会话令牌。此前 peer 只被用来播种数据，浏览器全程以
+   *  admin 身份跑，于是「可见性边界」在本文件里从未被验证过——它证明的是 owner
+   *  列渲染，不是 ACL。 */
+  peerSessionToken: string
 }
 
 let daemon: DaemonHandle
@@ -120,6 +124,7 @@ async function seedOwnerFixtures(): Promise<OwnerFixtures> {
     peerTaskId: peerRows.taskId,
     adminScheduleId: adminRows.scheduleId,
     peerScheduleId: peerRows.scheduleId,
+    peerSessionToken: peerLogin.sessionToken,
   }
 }
 
@@ -329,4 +334,62 @@ test('owner identity is visible, distinct, accessible, and reachable at 390px', 
   await expect(
     narrowSchedule.getByRole('button', { name: 'Run now', exact: true }),
   ).toBeInViewport()
+})
+
+// ⚠️ RFC-319 T33（审计条目 EVENT-46）—— 本文件此前被当作「定时任务列表可见性」的
+// 真 daemon 覆盖，但它**全程以 admin 身份跑**：peer 用户只被用来播种一行数据
+// （seedOwnerFixtures 里那次 seedActorRows），浏览器从未以 peer 登录过。
+// 于是它证明的是 owner 列的渲染与排版，**没有任何一处验证过可见性边界**。
+//
+// 这条用例补上缺的那一半：以非 admin 身份看列表与详情。
+test('RFC-319: a non-admin sees only their own scheduled task, and a stranger row is indistinguishable from absent', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext()
+  await ctx.addInitScript(
+    ({ baseUrl, token }) => {
+      window.localStorage.setItem('agent-workflow.baseUrl', baseUrl)
+      window.localStorage.setItem('agent-workflow.token', token)
+      window.localStorage.setItem('aw-language', 'en-US')
+    },
+    { baseUrl: daemon.baseUrl, token: fixtures.peerSessionToken },
+  )
+  const page = await ctx.newPage()
+
+  await page.goto(`${daemon.baseUrl}/scheduled`)
+  // 自己的那行看得见……
+  await expect(page.getByTestId(`scheduled-row-${fixtures.peerScheduleId}`)).toBeVisible()
+  // ……admin 的那行**必须**看不见。这一条是本文件此前完全缺失的判据。
+  await expect(
+    page.getByTestId(`scheduled-row-${fixtures.adminScheduleId}`),
+    '非 admin 在列表里看到了别人的定时任务 ⇒ 列表没有按可见性过滤',
+  ).toHaveCount(0)
+
+  // 直链也不能泄露存在性：把「真实但不可见的 id」与「不存在的 id」两次访问
+  // 呈现出来的正文逐字比较。任何一方多说一个字（名字、403 而不是 404）都会不等。
+  const bodyTextFor = async (id: string): Promise<string> => {
+    await page.goto(`${daemon.baseUrl}/scheduled/${id}`)
+    const banner = page.locator('.error-box').first()
+    await expect(banner).toBeVisible()
+    return (await banner.innerText()).trim()
+  }
+  const hiddenButReal = await bodyTextFor(fixtures.adminScheduleId)
+  const neverExisted = await bodyTextFor('01JZZZZZZZZZZZZZZZZZZZZZZZ')
+  expect(
+    hiddenButReal,
+    '别人的定时任务详情与「不存在」不同形 ⇒ id 的存在性从错误信息里泄露了',
+  ).toBe(neverExisted)
+
+  // API 面同样不许区分。
+  const statusFor = async (id: string): Promise<number> =>
+    (
+      await fetch(`${daemon.baseUrl}/api/scheduled-tasks/${id}`, {
+        headers: { Authorization: `Bearer ${fixtures.peerSessionToken}` },
+      })
+    ).status
+  expect(await statusFor(fixtures.adminScheduleId)).toBe(
+    await statusFor('01JZZZZZZZZZZZZZZZZZZZZZZZ'),
+  )
+
+  await ctx.close()
 })

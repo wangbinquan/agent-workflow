@@ -231,7 +231,7 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 268,
+      "baseline": 266,
       "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 462 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。"
     },
     {

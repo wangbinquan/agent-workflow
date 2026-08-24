@@ -352,3 +352,117 @@ test('/ws/tasks list channel filters per-frame by canViewTask (post-fix)', async
 
   await ctxBob.close()
 })
+
+// ⚠️ RFC-319 T34（审计条目 TASK-32）—— 任务成员面板此前**从未被打开过**。
+//
+// 全仓 `rg task-members e2e/` 只有一处命中：`visual-regression.spec.ts:1993` 的一行
+// `toBeVisible`，而且它嵌在一个截图用例（RFC-199 动态工作流预览）里，是顺手加的
+// 存在性锚，与成员管理无关。对话框从没被打开、`members-save` 从没被点、转让所有权
+// 从没被跑过。
+//
+// 成员即权限边界：任务成员（owner + collaborator）就是评审 / 反问的回答权范围
+// （CLAUDE.md §Resource ACL）。这条边界坏了，症状是「别人能回答我的评审」或
+// 「我的协作者看不见任务」，两者都不会有任何报错。
+test('RFC-319: task owner grants a collaborator through the members panel, then transfers ownership', async ({
+  browser,
+}) => {
+  const carol = await createUserAndLogin({
+    username: 'carol-members',
+    password: 'CarolMembersPass#1',
+    role: 'user',
+  })
+  const dave = await createUserAndLogin({
+    username: 'dave-members',
+    password: 'DaveMembersPass#1',
+    role: 'user',
+  })
+  const wf = await seedWorkflow()
+  const taskId = await createTaskAsUser(carol, wf.workflowId, 'carol-members-task')
+
+  const ctxCarol = await browser.newContext()
+  const ctxDave = await browser.newContext()
+  await primeAuthForContext(ctxCarol, carol)
+  await primeAuthForContext(ctxDave, dave)
+  const cPage = await ctxCarol.newPage()
+  const dPage = await ctxDave.newPage()
+
+  const membersOf = async (token: string) => {
+    const res = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}/members`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return { status: res.status, body: res.ok ? await res.json() : null }
+  }
+
+  // 起点：dave 完全看不见这个任务（任务是成员制私有模型）。
+  await dPage.goto(`${daemon.baseUrl}/tasks`)
+  await expect(dPage.getByText('carol-members-task')).toHaveCount(0)
+  expect((await membersOf(dave.sessionToken)).status).not.toBe(200)
+
+  // carol 打开成员面板，把 dave 加成协作者。
+  await cPage.goto(`${daemon.baseUrl}/tasks/${taskId}`)
+  await cPage.getByTestId('task-members-dialog-button').click()
+  const panel = cPage.getByTestId('task-members-panel')
+  await expect(panel).toBeVisible()
+  // 面板的 UserPicker onChange 里有一句 `if (!sessionIsCurrent()) return`——会话还没
+  // 落定时**静默丢弃**用户的选择，症状是「选了但保存按钮一直灰着」。满载并行下这个
+  // 窗口是真实存在的（这条用例单跑绿、全量跑红，就是这么红的）。
+  // `members-transfer-owner` 只在 canManage 为真时渲染，用它当就绪信号。
+  await expect(panel.getByTestId('members-transfer-owner')).toBeVisible()
+  await panel.getByTestId('members-users-input').click()
+  await panel.getByTestId('members-users-input').fill('dave')
+  // 结果列表被 portal 到 document.body（原本的 in-panel 下拉会被 .dialog__body 的
+  // 滚动区裁掉、点不到——`rfc099-ownership-acl.spec.ts:190-193` 的注释记着这个用户
+  // 报过的「搜索用户无法点击」缺陷）。所以选项要从 page 而不是 panel 子树里找。
+  await cPage.getByTestId(`members-users-option-${dave.username}`).click()
+  // 选择真的落进了 chip（而不是被上面那条早退悄悄丢掉）——这一步把「静默丢弃」
+  // 从一个 flaky 的超时变成一条说得清的失败。
+  await expect(cPage.getByTestId(`members-users-remove-${dave.username}`)).toBeVisible()
+  // 结果列表是 portal 出来的，且**会盖住 Save 按钮**——用户越多列表越长，覆盖越确定
+  // （这条用例单跑时库里只有两三个用户、列表短，所以隔离跑绿、全量跑红）。
+  // UserPicker 对 Dialog 内的第一个 Escape 做了 stopPropagation，专门用来只关列表
+  // 不关弹窗（UserPicker.tsx:181-188），正好是这里要的。
+  await panel.getByTestId('members-users-input').press('Escape')
+  await expect(cPage.getByRole('listbox')).toHaveCount(0)
+  await panel.getByTestId('members-save').click()
+
+  // 服务端真的记住了（不是只改了本地 state）。
+  await expect
+    .poll(async () => {
+      const { body } = (await membersOf(carol.sessionToken)) as {
+        body: { users?: Array<{ id: string }> } | null
+      }
+      return (body?.users ?? []).map((u) => u.id).includes(dave.userId)
+    })
+    .toBe(true)
+
+  // 于是 dave 看见了这个任务，并且能打开它的详情。
+  await dPage.goto(`${daemon.baseUrl}/tasks`)
+  await expect(
+    dPage.getByText('carol-members-task').first(),
+    '加成协作者之后对方仍然看不到任务 ⇒ 成员制没有真正生效',
+  ).toBeVisible()
+  await dPage.goto(`${daemon.baseUrl}/tasks/${taskId}`)
+  await expect(dPage.locator('.error-box')).toHaveCount(0)
+
+  // carol 把所有权转给 dave（带二次确认的独立弹窗）。
+  await cPage.reload()
+  await cPage.getByTestId('task-members-dialog-button').click()
+  await expect(cPage.getByTestId('task-members-panel')).toBeVisible()
+  await cPage.getByTestId('members-transfer-owner').click()
+  await cPage.getByTestId('members-transfer-input').click()
+  await cPage.getByTestId('members-transfer-input').fill('dave')
+  await cPage.getByTestId(`members-transfer-option-${dave.username}`).click()
+  await cPage.getByTestId('members-transfer-confirm').click()
+
+  await expect
+    .poll(async () => {
+      const { body } = (await membersOf(dave.sessionToken)) as {
+        body: { ownerUserId?: string | null } | null
+      }
+      return body?.ownerUserId ?? null
+    })
+    .toBe(dave.userId)
+
+  await ctxCarol.close()
+  await ctxDave.close()
+})
