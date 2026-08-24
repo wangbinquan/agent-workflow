@@ -3413,8 +3413,21 @@
       "title": "历史版本只读视图（?version=）：横幅、返回当前版、决策按钮不在 DOM、非法版本告警与跨评审版本 404",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-historical-version-view.spec.ts",
+          "test": "看旧版本时：只读横幅在，决策按钮**不在 DOM**；回到当前版按钮才回来"
+        },
+        {
+          "file": "e2e/review-historical-version-view.spec.ts",
+          "test": "版本号不存在时要说出来，而不是默默给你看当前稿"
+        },
+        {
+          "file": "e2e/review-historical-version-view.spec.ts",
+          "test": "拿别条评审的版本号来问：不许把那份文档渲染出来"
+        }
+      ]
     },
     {
       "id": "HUMAN-40",
@@ -8474,7 +8487,6 @@
     "HUMAN-35",
     "HUMAN-36",
     "HUMAN-37",
-    "HUMAN-38",
     "HUMAN-40",
     "HUMAN-42",
     "HUMAN-43",
