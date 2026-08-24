@@ -474,8 +474,22 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
   **可用的定式**（本仓禁 `stash`、禁分支、禁开发用 worktree，所以选项有限）：
 
   1. **能不碰就不碰**：把自己的改动挪到别的文件 / 别的行，让混文件根本不进 pathspec。
-  2. **必须碰时：写入 → 提交 → 写回**。把「只含自己 hunk」的版本写进工作树，`git commit -- <file>`，然后**立刻把对方那版原样写回**，并 `cmp` 验证字节相等。窗口是毫秒级，且写回的是逐字节相同的内容，对方无损。**提交前后各留一份对方版本的副本**，写回失败就人工比对。
-  3. **提交后必须复验**：`git show HEAD:<file>` 看落下去的到底是哪一版。`git diff --cached --stat` **验不出这件事**——它看的是 index，而 index 恰恰是被忽略的那一半。这一步是上面两次事故都缺的那一步。
+  2. **首选：临时索引 + `commit-tree`，全程不碰工作树**（由并发 session 提供，2026-08-25）。共享 index 与共享工作树是两个独立的污染源，这个姿势同时绕开两者：
+
+     ```
+     export GIT_INDEX_FILE=$(mktemp -u)          # 自己的私有索引，不动共享 index
+     git read-tree HEAD                           # 以 HEAD 为底
+     SHA=$(git hash-object -w /path/to/my-version.json)
+     git update-index --add --cacheinfo 100644,$SHA,<path>   # 只塞自己那几个 blob
+     TREE=$(git write-tree)
+     COMMIT=$(git commit-tree $TREE -p HEAD -F msg.txt)
+     git update-ref HEAD $COMMIT
+     unset GIT_INDEX_FILE
+     ```
+
+     零副作用：对方的工作树改动一个字节没动过，也没有任何时间窗口。
+  3. **兜底：写入 → 提交 → 写回**。把「只含自己 hunk」的版本写进工作树，`git commit -- <file>`，然后**立刻把对方那版原样写回**，并 `cmp` 验证字节相等。缺点是有一个毫秒级窗口——期间对方写同一文件就会被覆盖，所以能用第 2 条就别用它。**提交前后各留一份对方版本的副本**，写回失败就人工比对。
+  4. **提交后必须复验**：`git show HEAD:<file>` 看落下去的到底是哪一版。`git diff --cached --stat` **验不出这件事**——它看的是 index，而 index 恰恰是被忽略的那一半。这一步是上面两次事故都缺的那一步。
 
 - **在共享工作树上「顺带提交别人半批改动」：本地绿证明不了 main 绿，因为你本地一直有他们尚未提交的另一半**（2026-08-23 实撞，我把 main 弄红了）。场景是并发开发的常态：我改了一个跨模块契约（RFC-317 T31），编译器要求另一个 context 的公共类型跟着改——而那个文件工作树里已经混着并行 session 在制的 `allowedEffectKinds` 一批改动。不带上它，main 上类型不通；带上它，就等于替对方发布了半批。我选了带上，并在 commit message 里写清「附带保留」，然后**只跑了自己改动所在的那几个面 + 全仓 typecheck**——全绿。推上去 CI 立刻红在 `Lint + Typecheck + Format` 那一格：`rfc310-digital-employee-authoring.test.ts` 调用那个被改签名的函数时少了一个新增实参。那个文件对方**也**改好了，就在我工作树里躺着，只是我没提。于是本地 typecheck 从头到尾都是绿的，而 main 从来没绿过。
   **为什么本地绿骗过了所有常规检查**：`bun run typecheck` 跑的是**工作树**，工作树 = 我的改动 + 对方已提交的 + 对方**未提交**的。CI 跑的是 checkout = 我的改动 + 对方已提交的。两者的差集正是「对方未提交的那部分」，而它恰好补全了我这次携带的半批。**这个差集在本地任何命令下都不可见**——`git status` 只告诉你有文件在改，不会告诉你「你刚提交的那个签名有 7 个调用点，其中 1 个的修复还在未提交区」。
