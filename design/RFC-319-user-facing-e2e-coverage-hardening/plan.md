@@ -1,0 +1,128 @@
+# RFC-319 任务分解：用户面 system-mock e2e 覆盖加固
+
+读之前先读同目录 `proposal.md`（背景 / G1–G6 / AC-1–AC-8）与 `design.md`（层次落位规则 / 分流 /
+四层棘轮）。逐条缺口在 `findings.md`，机器索引在 `findings.json`。
+
+本仓**只在 `main` 上开发、不建分支、不开 PR**（CLAUDE.md 硬规则），所以下文的「批」= 一次或数次
+提交，不是 PR。每批都必须独立过 `bun run gate:local`、独立可 revert。
+
+## 0. 开工前置（必须先做，否则后面全部计数不可信）
+
+| 任务 | 内容 | 依赖 |
+| --- | --- | --- |
+| **T1** | 在**干净的 exact SHA** 上重采分母：`allRouteMeta()` 端点数（落档时 462）、`router.tsx` 路由数（58）、`e2e/*.spec.ts` 用例数（340）、`startSystemMockSuite` 文件数（6）。落档基线是 `92478e636`，且当时工作树上有并发 session 的大批未提改动（RFC-318 数字员工工具合同等） | — |
+| **T2** | 若 T1 与 `findings.md §1` 的数字有出入，**只订正分母**，不重跑 820 条审计；出入写进本文件 §7 变更记录 | T1 |
+| **T3** | 确认 `design/RFC-318-minimal-digital-employee-tool-contracts/`（并发 session 的 RFC）与本 RFC 无交叉改动面；若他们的实现会新增用户面能力，在 R3 账本里给它们留 `gapSince: RFC-318` 的位置而不是替他们补测 | T1 |
+
+## 1. B1 — 分档工装与 CI 拓扑（design §2）
+
+| 任务 | 内容 |
+| --- | --- |
+| **T10** | `e2e/` 引入 `@nightly` tag 约定；在 `e2e/README.md` 写清「不带 tag = PR 档」与选 tag 不选分目录的理由 |
+| **T11** | `ci.yml` 的 `e2e` job 增加 `--grep-invert`；**windows 腿必须与既有 `$AW_E2E_WINDOWS_EXCLUDE` 合成一条正则**（`(@nightly)\|(<既有>)`）——Playwright 只认一个 `--grep-invert`，写两次后一个静默覆盖前一个 |
+| **T12** | 新建 `.github/workflows/e2e-full-nightly.yml`：cron + `workflow_dispatch`，**不加任何 grep 过滤**跑全量，分片 4 起；产出 `route-hits/` artifact |
+| **T13** | `packages/backend/tests/nightly/` 目录 + `scripts/test-backend-sharded.ts` 与 `bun run test:backend` 的排除；`e2e-full-nightly` 增加一步跑它 |
+| **T14** | 守卫：①排除清单与目录两向钉死（目录存在但没被任何腿跑 ⇒ 红；排除项指向不存在的目录 ⇒ 红）；②windows grep 合成正则里必须同时含 `@nightly` 与既有排除项 |
+| **T15** | `gate:local` 增加**可选** Playwright 车道（默认关，显式开），并在 `packages/backend/tests/local-gate-runner.test.ts` 的车道断言里登记 |
+
+## 2. B2 — 四层棘轮（design §3–§5）
+
+棘轮**先于**补测落地：账本初值 = 今天的实测缺口集合，之后每个域批把它单调压小。
+这样「进度」本身是机器可见的，且任何一批中断都不留半截状态。
+
+| 任务 | 内容 |
+| --- | --- |
+| **T20** | `e2e/harness.ts`：`logLevel: 'info'` → `'debug'`（`harness.ts:556`）；`stop()` 在 `rmSync` 临时 home **之前**提取 `<home>/daemon.log*` 的 `req` 行 → `test-results/route-hits/<spec>-<pid>.jsonl`。覆盖 `keepHome=true` 的两次起停分支 |
+| **T21** | 归一器：具体路径 → 路由模式，**method 一并比对**、最多字面量段获胜；与 `api-contract-coverage.test.ts:275` 的逐段匹配器**共用一份实现**，不得各写一套 |
+| **T22** | `architecture/e2e-endpoint-coverage.json` 初值 = 全量 nightly 实测的未命中集合；汇总 job `route-coverage-ledger`：下载全部分片 artifact → 求并集 → 逐条相等断言 + 反方向 zombie 断言（日志里出现了注册表没有的端点） |
+| **T23** | R1 的 fail-closed：分片数 < 预期 / 并集为空 / 某分片无 journal / 认不出任何一行日志格式 —— 四种都必须红 |
+| **T24** | **R2-static**：从 `routes/*.tsx` 的 `createRoute({ path })` + `router.tsx` 派生路由集；`architecture/e2e-route-coverage.json` 初值 = 今天的 18 条未直达（其中 12 条零字符串命中）；守卫进 `gate:local` |
+| **T25** | **R2-runtime**：新建 `e2e/test.ts` 共享入口（`test.extend` 包 `page`，监听 `framenavigated` 写 journal）；62 个 spec 的 import 机械迁移；源码守卫「`e2e/**` 不得直接 import `@playwright/test`」。**本任务侵入面最大，单独一批、可独立 revert** |
+| **T26** | **R3**：`architecture/e2e-capability-ledger.json` 从 `findings.json` 播种 820 行；141 条 `covered` 的证据要**逐条归一**成 `{file, test}` 并验证 test 标题逐字存在——这一步会顺带照出 `findings.md` 里写歪的证据，照出来的就地订正 |
+| **T27** | R3 守卫四条断言（证据可达 / 状态与证据互斥 / gap 只减不增 / 总数可增但须有出处） |
+| **T28** | **入网**：三份账本注册进 `architecture/ledger-baselines.json`；R1–R4 全部守卫注册进 `architecture/guard-manifest.json`，按既有字段契约填 `corpusScanner` / `minCorpusFiles` / `assertsAbsence` / `negativeFixture` |
+| **T29** | **R4 变异实证**：逐条守卫注入真实事故形态 → 确认转红 → 撤销 → 确认转绿；证据记进本文件 §6 验收清单。**没做过变异实证的守卫不算交付** |
+
+## 3. B3 — 8 条空洞绿修复（design §6）
+
+逐条见 `findings.md §2`。口径：先写会红的断言并**确认它红**，再恢复被测行为；
+恒真成因写进 test 上方注释。
+
+| 任务 | 条目 | 处置要点 |
+| --- | --- | --- |
+| **T30** | `AGENT-31` | `rfc099-ownership-acl.spec.ts:188` 的 `acl-panel` 计数恒为 0（carol 从未打开该弹窗）。改成断言「详情页与不存在同形」，并先注释掉私有化那步验证会红 |
+| **T31** | `WF-49` | `workflow-editor.spec.ts` 的删除用例只开框跑 axe 点 Cancel；全仓无一处对 `/api/workflows` 发过 DELETE。补真删除 + 名字二次确认 + 版本 CAS |
+| **T32** | `AGENT-35` | 功能断言被误关在 `rfc250-visual-states.spec.ts:530` 的 `test.skip(!RUN_VISUAL_REGRESSION)` describe 里。**搬出去**到 PR 档功能 spec，不是给 visual describe 解 skip |
+| **T33** | `EVENT-46` | `rfc232-owner-list.spec.ts` 全程 admin 身份，peer 只用来播种。补真正的非 admin 会话可见性边界 |
+| **T34** | `TASK-32` | 任务成员面板对话框从未被打开、`members-save` 从未被点、转让所有权从未跑过 |
+| **T35** | `DE-10` | 泳道拖拽重排发生在未保存草稿里且以 Cancel 收尾，「刷新后仍生效」在源码里不存在。补 publish + reload + 序断言 |
+| **T36** | `OPS-002` | harness 把同一个 bindPort 既写进 config.json 又传成 flag，两者恒等，「flag 压过 config」不可分辨。构造两者不同的场景 |
+| **T37** | `UX-19` / `WF-23` | 覆盖面清单写错（前者漏记三处已有整页 axe 扫描，后者 `workflow-camera-focus-selection` 全仓零命中）。订正账本 + 补 focusSelection 断言 |
+
+## 4. B4–B18 — 逐域补测（design §1 层次落位）
+
+**同一个域的 P1 / P2 / P3 一起做**——它们大量共用 fixture 搭建（例如「建端点 → 取 secret」
+既是 P1 前置也是 P2 rotate 用例前置），分开做会逼出重复代码。档位靠 tag 区分：
+P1 不带 tag（PR 腿），P2 / P3 带 `@nightly`。
+
+按 P1 密度排序，先做风险最集中的：
+
+| 批 | 域 | 缺口 | P1 | P2 | P3 | 备注 |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| **B4** | 身份、认证、用户与资源权限 | 38 | 15 | 18 | 5 | P1 密度最高；`/setup/admin` 首屏、退出登录、会话失效、越权写他人 public 资源 |
+| **B5** | 技能 / 插件 / MCP | 50 | 11 | 30 | 9 | 技能详情整页零 e2e（Save All / 文件树 / 版本回滚 / 删除拒绝 / 可见性）；PAT 脱敏 |
+| **B6** | 事件自动化 | 47 | 10 | 23 | 14 | `scripts:author` 五处拒绝分支全仓零命中（违反 CLAUDE.md 硬规则）；rotate secret、去重、熔断、replay |
+| **B7** | 记忆与蒸馏 | 52 | 8 | 28 | 16 | 四类 scope 的 ACL 边界、候选行只对资源管理员可读、蒸馏任务详情页零直达 |
+| **B8** | 仓库、仓库组与 Git | 41 | 7 | 25 | 9 | 凭据脱敏、推送拒绝、镜像 GC、worktree 清理 |
+| **B9** | 代理 | 45 | 6 | 12 | 27 | 富字段保存往返（`agents.detail.tsx:315-353` 四条事故墓碑）、409 冲突、能力引用不丢 |
+| **B10** | 意图构建器与融合 | 62 | 6 | 41 | 15 | 融合可见性隔离、跨用户 approve/reject 拒绝形状 |
+| **B11** | 数字员工 / 开发任务 | 36 | 5 | 20 | 11 | UI 面为主（后端 journey 已有 6 个 system-mock 套件）；`/code/missions/*` 零直达；`retireTool` 零校验（可能是真缺陷，按 §5 处理） |
+| **B12** | 工作流与画布编辑器 | 50 | 5 | 34 | 11 | wrapper 归属拖放、连线弹窗提交、冲突三条恢复动作、code-host-call 检查器（全 e2e 零命中） |
+| **B13** | 任务生命周期 | 33 | 3 | 25 | 5 | 删除终态任务、成员面板、启动前置权限门的绕 UI 直打接口分支 |
+| **B14** | 前端横切 | 35 | 3 | 16 | 16 | 退出登录、WS 4401/4403 语义、WS 推送让**已打开的**页面自更新（今天全部是「先收 WS 再 goto」） |
+| **B15** | 人机交互门 | 42 | 2 | 28 | 12 | 引擎侧已扎实；缺的是浏览器里走完门 + 任务问题看板整条产品线（e2e 零字符串命中） |
+| **B16** | 设置、运行时、文档与总览 | 51 | 2 | 31 | 18 | 全仓没有一条 e2e 点过设置页的 Save；备份/恢复的「选文件 ≠ 上传」护栏 |
+| **B17** | 运维面 CLI / daemon / 备份恢复 | 48 | 2 | 22 | 24 | 备份→改数据→恢复→重启的完整往返（五组路径 e2e 全零命中）；`auth password-login` 零测试 |
+| **B18** | 工作组 | 49 | 1 | 30 | 18 | 自动保存的冲突处置（工作流侧有 5 条弱网用例，工作组侧 0 条） |
+
+每批的**收口检查项**（写进提交前的自查，来自 `docs/dev-gotchas.md` 的实测教训）：
+
+1. `grep -o "getByTestId('[^']*')" <新增/改动的 spec>` 逐个回 grep `packages/frontend/src` 确认存在；
+   动态拼接的按前缀比对。**RFC-310 T140 实测：一条 21 个 testid 的 spec，头三个在源码里根本不存在。**
+2. 新增 / 改动的 spec **在本机真跑过一次**（`bun run build:binary:e2e` + `bunx playwright test <spec>`）。
+   「本机跑不了、CI 会替我跑」通常是错的。
+3. 改了选择器 / 等待条件的，必须真浏览器跑——源码层守卫只能证明两处字符串一致，**它看不见 DOM**。
+4. 跑**根级** `bun run lint`（`e2e/` 只被 `lint:repo-ui` 覆盖，`--filter <pkg> lint` 漏它）。
+5. `bun run gate:local` 全绿；推完立刻按**本人 exact SHA** 查 CI。
+6. 账本单调性：本批把 R1/R2/R3 的 gap 计数**压小了多少**，写进 commit body。
+
+## 5. 补测过程中发现真缺陷时的处置
+
+审计已预判若干条（例如 `retireTool` 对「工具正被已发布岗位模板绑定」零校验、
+`forcePasswordChange` 后端发信号前端零消费）。口径：
+
+1. 先写一个**能稳定复现**的用例（红），再写修复（绿）——CLAUDE.md §Test-with-every-change。
+2. 生产改动**单独 commit**，与测试批分开，commit message 写清是本 RFC 补测时照出来的。
+3. 在本文件 §7 逐条登记；若缺陷涉及产品行为判断（不是明显 bug），**停下来问用户**，不自行裁决。
+
+## 6. 验收清单（对齐 `proposal.md` AC-1–AC-8）
+
+- [ ] **AC-1** 679 条缺口逐条有用例，且在 R3 账本里指向具名证据；账本守卫验证证据可达
+- [ ] **AC-2** 8 条空洞绿修复完毕，每条附变异实证记录（注入→红→撤销→绿）
+- [ ] **AC-3** R1/R2/R3/R4 四条棘轮全绿；每条自带负 fixture 能自证会红；每条断言语料非空
+- [ ] **AC-4** 三份账本注册进 `architecture/ledger-baselines.json`，条目数只减不增
+- [ ] **AC-5** PR 腿单片墙钟不超过今天的水平；`e2e-full-nightly` 能完整跑完
+- [ ] **AC-6** 每条新增 / 改动 spec 本机真跑过；testid 逐个回 grep 过
+- [ ] **AC-7** `bun run gate:local` 全绿；hosted CI 按 exact SHA 全绿
+- [ ] **AC-8** `e2e/CAPABILITY_COVERAGE.md` 改写为导读，删除被本次审计证伪的宣称，指向三份机器账本
+
+**两向对账**（RFC-317 收口时自查出的定式，写在这里免得重蹈）：收口前拿**编号**做一次
+双向核对——①`proposal.md` 的每条 AC 都能在本文件找到承载它的任务；②本文件的每个任务都能
+回指一条 AC 或一条 `findings.md` 条目。RFC-317 正是在这一步发现「52 条 P1/P2 逐条修复」
+与「C1–C9 各有拒绝分支覆盖」两条 AC 在「看起来做完了」的状态下静默不成立。
+
+## 7. 变更记录
+
+| 日期 | 内容 |
+| --- | --- |
+| 2026-08-24 | 落档。审计基线 `92478e636`。原拟编号 RFC-318，与并发 session 的「数字员工工具最小合同」撞号，改为 RFC-319 |
