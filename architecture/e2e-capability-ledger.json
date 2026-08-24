@@ -235,11 +235,16 @@
     {
       "id": "DE-18",
       "domain": "数字员工 / 开发任务",
-      "title": "编辑已存在的数字员工（改名 / 换岗位模板 / 改作用域）",
+      "title": "编辑已存在的数字员工，并在职责泳道覆盖 / 恢复岗位 Adapter",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "RFC-323 DE-18/39: employee Adapter override and restore live in the lane while retired URLs redirect"
+        }
+      ]
     },
     {
       "id": "DE-22",
@@ -2758,7 +2763,7 @@
     {
       "id": "DE-32",
       "domain": "数字员工 / 开发任务",
-      "title": "/code/config/{kind} 四类配置资源的列表、空态与创建对话框",
+      "title": "/code/config/{kind} 三类非 Adapter 配置资源的列表、空态与创建对话框",
       "risk": "P2",
       "tier": "nightly",
       "status": "gap",
@@ -3203,8 +3208,17 @@
       "title": "答案/决策已落库但后续 resume 失败时的警示（不假装成功跳走）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-resume-failure.spec.ts",
+          "test": "正向对照：工作树健在时，决策响应里不带任何 resume 警告"
+        },
+        {
+          "file": "e2e/review-resume-failure.spec.ts",
+          "test": "工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑"
+        }
+      ]
     },
     {
       "id": "HUMAN-19",
@@ -6685,11 +6699,16 @@
     {
       "id": "DE-39",
       "domain": "数字员工 / 开发任务",
-      "title": "/code/executors 执行器库（四组 + 平台内建）",
+      "title": "旧 /code/executors 与 Adapter 配置深链重定向到数字员工 owner surface",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "RFC-323 DE-18/39: employee Adapter override and restore live in the lane while retired URLs redirect"
+        }
+      ]
     },
     {
       "id": "DE-40",
@@ -8300,7 +8319,6 @@
     "DE-14",
     "DE-15",
     "DE-17",
-    "DE-18",
     "DE-19",
     "DE-20",
     "DE-21",
@@ -8318,7 +8336,6 @@
     "DE-36",
     "DE-37",
     "DE-38",
-    "DE-39",
     "DE-40",
     "DE-41",
     "DE-42",
@@ -8375,7 +8392,6 @@
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17",
-    "HUMAN-18",
     "HUMAN-20",
     "HUMAN-21",
     "HUMAN-22",
