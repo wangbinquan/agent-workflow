@@ -41,6 +41,10 @@ on:
       - 'packages/backend/src/services/task.ts'
       - 'packages/shared/src/git-url.ts'
       - 'scripts/git-protocols/**'
+      # Every test in this workflow starts the daemon through the shared
+      # browser harness; identity/bootstrap changes there can fail the suite
+      # before it reaches Git protocol behavior (RFC-320 handoff regression).
+      - 'e2e/harness.ts'
       - 'e2e/git-protocols.spec.ts'
       - '.github/workflows/git-protocols-e2e.yml'
   pull_request:
@@ -56,6 +60,7 @@ on:
       - 'packages/backend/src/services/task.ts'
       - 'packages/shared/src/git-url.ts'
       - 'scripts/git-protocols/**'
+      - 'e2e/harness.ts'
       - 'e2e/git-protocols.spec.ts'
       - '.github/workflows/git-protocols-e2e.yml'
 

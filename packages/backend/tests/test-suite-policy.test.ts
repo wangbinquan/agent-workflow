@@ -353,4 +353,12 @@ describe('repository test-suite policy', () => {
     }
     expect(checks).toEqual(Object.fromEntries(Object.keys(checks).map((key) => [key, true])))
   })
+
+  test('git-protocol workflow re-runs when its shared daemon harness changes', () => {
+    const source = readFileSync(
+      resolve(REPO_ROOT, '.github/workflows/git-protocols-e2e.yml'),
+      'utf8',
+    )
+    expect(source.match(/^\s+- 'e2e\/harness\.ts'$/gm)).toHaveLength(2)
+  })
 })
