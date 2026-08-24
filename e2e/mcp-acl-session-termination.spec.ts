@@ -13,6 +13,9 @@
 //   挂载点：`routes/mcps.ts:621` 的 `afterWriteInTx`。
 
 import { expect, test } from '@playwright/test'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { startDaemon, type DaemonHandle } from './harness'
 
@@ -23,22 +26,41 @@ const PASSWORD = 'Rfc319McpAclPass!1'
 
 let daemon: DaemonHandle
 let sequence = 0
+let holdDir: string
+let holdFile: string
 
 test.beforeAll(async () => {
-  // `slow` stub + 一个足够长的睡眠：让模型回合在整条用例期间**始终在飞行中**。
-  // 这不是为了「等一等」，是为了让前提确定性成立——回合一旦自然结束，会话会
-  // 转 `ending / session-unusable`（`services/mcpRuntimeTest.ts:1228`），随后
-  // ACL 变更只会看到一个已经不是 `active` 的会话，什么也不做，用例就成了空洞绿。
-  // 本机跑时 ACL 恰好先到所以绿，CI 上回合先结束所以红——真实的时序缺陷在用例这边。
+  // 前提必须是**确定性**的：撤权那条事务只处理 `status='active'` 的会话
+  //（`services/mcpRuntimeTest.ts`），而会话只在某个回合还在飞的时候才是 active。
+  // 回合一旦自然收尾，会话转 `ending / session-unusable`，撤权看到的已经不是
+  // active、什么也不标 —— 用例随即成为空洞绿或红在 endReason 上。
+  holdDir = mkdtempSync(join(tmpdir(), 'aw-rfc319-mcpacl-hold-'))
+  holdFile = join(holdDir, 'hold')
+  writeFileSync(holdFile, '')
   daemon = await startDaemon({
     stubMode: 'slow',
-    extraEnv: { STUB_OPENCODE_SLEEP_MS: '60000' },
+    extraEnv: { STUB_OPENCODE_HOLD_FILE: holdFile },
   })
 })
 
 test.afterAll(async () => {
+  releaseHold()
   if (daemon !== undefined) await daemon.stop()
+  try {
+    rmSync(holdDir, { recursive: true, force: true })
+  } catch {
+    /* best-effort */
+  }
 })
+
+/** 放开被扣住的那一回合（stub 见文件消失即返回）。 */
+function releaseHold(): void {
+  try {
+    rmSync(holdFile, { force: true })
+  } catch {
+    /* best-effort */
+  }
+}
 
 async function req(path: string, init?: RequestInit, token?: string): Promise<Response> {
   return fetch(`${daemon.baseUrl}${path}`, {
@@ -142,6 +164,10 @@ test('RFC-319 RES-28: taking an MCP back out of someone view ends the runtime-te
   )
   const readSession = async (token?: string): Promise<Response> =>
     req(`/api/mcps/${mcp.id}/runtime-test-sessions/${created.sessionId}`, undefined, token)
+
+  // 等 stub **真的起来**再往下走：它落 `<hold>.started` 之后就一直挂着，
+  // 于是这一回合确定性地停在飞行中，而不是靠「跑得够慢」去赌。
+  await expect.poll(() => existsSync(`${holdFile}.started`), { timeout: 120_000 }).toBe(true)
 
   const live = await jsonOf<{ status: string }>(await readSession(), 'read the fresh session')
   expect(live.status, '前提：会话得先是活的，否则「被终止」什么也证明不了').toBe('active')

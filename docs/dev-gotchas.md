@@ -2176,3 +2176,38 @@ RFC-319 的运行期覆盖账本要在跑 e2e 时采集 daemon 的请求命中�
 正确口径是把 journal 当**正向证据**：观察到被打中的就从账本里删掉，**绝不因为「这次没看到」
 而往账本里加**。`e2e-full-nightly` 的 `needs.e2e-full.result != 'success'` 就拒绝对账，
 本地重播也照此办理。
+
+## MCP runtime-test 的提示词**不带 RFC-200 信封**：调 `requireOutputOpen` 的 stub 模式在这条路径上会当场 exit 3（RFC-319 B37 实测，2026-08-25）
+
+`packages/system-mocks/src/runtime/skeleton.ts` 的 `requireOutputOpen` / `requireEnvelopeOpen`
+在提示词里找不到 `nonce="..."` 就 `process.exit(3)`。工作流执行链的每个提示词都带这个
+信封，所以绝大多数 stub 模式从来撞不到；**但 MCP runtime-test 是另一条 feature**
+（`services/mcpRuntimeTest.ts` 的 `feature: 'mcp-runtime-test'` + 它自己的 SYSTEM_PROMPT），
+提示词里没有信封。于是任何在这条路径上被启用、又调了 `requireOutputOpen` 的模式，
+子进程会在**几十毫秒内**退出：
+
+```
+turn: status=failed exit_code=3
+stderr: stub-opencode-slow: prompt is missing the RFC-200 envelope nonce
+```
+
+**为什么这件事很坏**：它不是把用例打红，而是把用例变成一场**赌局**。
+`e2e/mcp-acl-session-termination.spec.ts`（RES-28）守的是「撤权要终止**在飞的**
+runtime-test 会话」，而撤权那条事务只处理 `status='active'` 的会话——会话只在某个
+回合还在飞的时候才是 active。stub 76ms 就死了，于是：本机 ACL 请求赢了竞态 ⇒ 绿；
+CI 上慢一点就输 ⇒ 红成 `endReason: session-unusable`（那是回合自然收尾后的形态，
+撤权什么都没标到）。**先后两次「修 flaky」都只是在把窗口调宽**（第一次是换
+`slow` 模式，第二次是 `STUB_OPENCODE_SLEEP_MS=60000`），因为那个 sleep 排在
+`requireOutputOpen` 后面，一次都没执行过。
+
+**判据**：给这条路径写 e2e 时，别用「睡久一点」当前提。用 hold 文件把生命周期
+**观测化**——`mode-slow` 现在支持 `STUB_OPENCODE_HOLD_FILE`：stub 起来先落
+`<hold>.started`（调用方轮询到它才动手），然后一直挂着直到调用方删文件。
+这个块**必须排在 `requireOutputOpen` 之前**，否则在无信封的路径上根本执行不到。
+改完的实测证据：turn 变成 `interrupted` / `exit_code=143`（被 SIGTERM 掐断）、
+stderr 为空，`--repeat-each=3` 稳定绿——而不是之前的 `failed` / exit 3。
+
+**排查手法记一笔**：这类「本机绿 CI 红」不要靠加 sleep 猜。给 `startDaemon` 传一个
+自己拥有的 `home`，跑完直接读 `db.sqlite` 的 `mcp_runtime_test_turns`——
+`status` / `duration_ms` / `exit_code` / `stderr_tail` 四个字段一眼就把「进程是被谁
+结束的」讲清楚了（16ms/interrupted = 赢了竞态；76ms/failed/exit 3 = stub 自己死的）。

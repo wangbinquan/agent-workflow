@@ -9,6 +9,7 @@
 // sleep at all". Converting to true millisecond precision would silently change
 // the timing every existing spec was tuned against.
 
+import { existsSync, writeFileSync } from 'node:fs'
 import {
   emitPromptForContractTest,
   emitTextEvent,
@@ -40,6 +41,37 @@ export async function run(argv: readonly string[]): Promise<void> {
     process.exit(0)
   }
   emitPromptForContractTest(call.prompt)
+
+  // RFC-319 B37 —— `STUB_OPENCODE_HOLD_FILE`：把「这一回合还在飞」做成**确定性**的。
+  //
+  // `STUB_OPENCODE_SLEEP_MS` 只是把窗口调宽，赢不赢竞态仍看机器快慢：
+  // `e2e/mcp-acl-session-termination.spec.ts` 拿它守「撤权要终止在飞的会话」，
+  // 本机稳定绿、CI 上间歇红成 `session-unusable`（那是回合已自然收尾后的形态，
+  // 撤权那条事务只处理 `status='active'`，于是什么都没标）。
+  //
+  // hold 文件给出两个信号，把时序假设整个拿掉：
+  //   ① 起来了 —— stub 先落 `<hold>.started`，调用方轮询到它才动手；
+  //   ② 一直挂着 —— 文件在就不返回，调用方做完判定再删。
+  // 上界仍在（防止调用方崩了把进程永久挂住）。
+  //
+  // **必须排在 `requireOutputOpen` 之前**：MCP runtime-test 的提示词不带 RFC-200
+  // 信封（那是工作流执行链的协议，runtime-test 是另一条 feature），所以那一行会
+  // 让 stub 当场 exit 3。实测：turn 76ms 就 failed、stderr 是
+  // `prompt is missing the RFC-200 envelope nonce`——扣在信封检查后面的话，
+  // 这个 hold 一次也不会执行。
+  const holdFile = process.env.STUB_OPENCODE_HOLD_FILE
+  if (holdFile !== undefined && holdFile.length > 0) {
+    try {
+      writeFileSync(`${holdFile}.started`, '')
+    } catch {
+      /* 观察信号是尽力而为：写不进去也不该把这一回合变成另一种失败 */
+    }
+    const deadline = Date.now() + 120_000
+    while (existsSync(holdFile) && Date.now() < deadline) {
+      await Bun.sleep(25)
+    }
+  }
+
   const open = requireOutputOpen(call.prompt, NAME)
 
   const sleepMs = Number(process.env.STUB_OPENCODE_SLEEP_MS ?? '0')
