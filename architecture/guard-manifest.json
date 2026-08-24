@@ -145,7 +145,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 689
+      "lines": 692
     },
     {
       "id": "rfc317-lifecycle-origin-neutrality",
@@ -745,7 +745,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 457
+      "lines": 464
     },
     {
       "id": "rfc257-source-locks",

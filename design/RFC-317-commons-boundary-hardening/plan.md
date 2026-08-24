@@ -523,3 +523,33 @@ B10 的 T61 补齐五族「有调用无定义」的 CSS 之后，`visual-regress
 | B8   | `8cd175c6b`                                                 | T52–T56 transport/platform：契约覆盖由正则改为**问框架**（运行期预言）、路由门两个洞上棘轮、修掉 `work-start` 静默重绑                                                                                                                                                   |
 | B9   | `4168315ea`                                                 | T57–T59 shared 注册表：`list<markdown>` 落库前被按行切碎（**数据损坏**），codec 下沉进 handler                                                                                                                                                                           |
 | B10  | `4b72bb325` + `117767435`                                   | T60–T64 前端：五族 class 有调用无定义（渲染成裸文本）、设计系统约束由逐文件白名单改成全域棘轮；`117767435` 修 T62 引入的覆盖层特异度与遗漏调用点两处几何回归                                                                                                             |
+
+#### T73（2026-08-24）—— 替并发 session 的 `70ddac983` 止血（用户批准后代修）
+
+`7b4076641` 的 CI 红两格，且 **ubuntu / macos 同一分片同时红**（确定性，不是抖动）。归因：
+两条都出自并发 session 的 `70ddac983`（RFC-310 T232/T233）——**那笔自己没跑过 CI**，第一次
+带上它代码的 run 就是我的。用户拍板由我代修两条。
+
+**① `RFC-254 platform surface guard`**：`modules/integration/composition/codeHostEffects.ts`
+的 `` `${parsedPrefix.path}/` ``。**守卫的建议措辞（「use isLexicallyInside()」）在这里是错的**，
+照做会引入新 bug：两侧都是 **URL path** 而不是宿主文件系统路径——`parsedPrefix.path` 来自
+`new URL(url).pathname`（WHATWG URL 恒 `/` 分隔、百分号编码，`\` 不可能出现），`parsed.path`
+来自 `parseGitUrl`。`isLexicallyInsideForHost` 会在 Windows 上把路径小写化并把 `/` 换成 `\`，
+于是两个不同 namespace 的 code-host project 会被判成同一个。正确处置是走守卫自带的
+**permanent: posix-by-contract** 一档逐处入账，`why` 写清这个契约。
+
+> 一般性教训：**源码扫描型守卫的失败信息里那句「改用 X」是一条经验法则，不是判决**。
+> 它按**词法形态**匹配，分不出「宿主路径」与「URL path / 仓库相对路径」。照着改之前先问
+> 「这两个操作数到底是什么」——本仓 ALLOWANCES 里已有的 4 条 posix-by-contract 豁免全是
+> 这个原因。
+
+**② `RFC-317 T23 R2`**：`mrFacts.ts → @/services/codeHost/connections`（`probeCodeHostConnection`）
+是一条新增的 module→legacy 反向值边。与同文件既有的 `@/services/codeHost/call` 同形、同波次，
+按 R2 逐条入账；`introducedByRFC` 如实写 **RFC-310 T232/T233** 而不是「存量」，
+`outboundEdges` 22 → 23。替代它的 public 合同属于 integration context owner 的决定，
+本条只记账、不替人做架构决策。
+
+**顺带修掉 T72 判据自己的一个覆盖缺口**：`rfc254-platform-surface-guard` 的豁免表叫
+`ALLOWANCES`，而 T72 的账本词汇表里没有 `ALLOWANCE` 这个词——于是那份账本在覆盖规则眼里
+**根本不存在**。这个漏词是在**往那张表里加条目时**才发现的：判据的词汇表本身也会有覆盖缺口，
+而它和它要防的东西是同一个失效类。补词后该表入网（baseline 19）。

@@ -219,6 +219,13 @@
       "symbol": "SEGMENTED_ALLOWLIST",
       "baseline": 1,
       "why": "手拼 .segmented 家族的站点（R9.2）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "rfc254-platform-allowances",
+      "file": "packages/backend/tests/rfc254-platform-surface-guard.test.ts",
+      "symbol": "ALLOWANCES",
+      "baseline": 19,
+      "why": "POSIX-only 形态的逐处豁免（含 permanent posix-by-contract 与待迁移两类）。跨平台正确性的每一条例外都要能被数出来（RFC-317 T73 入网；判据词汇表此前漏了 ALLOWANCE 这个词）"
     }
   ]
 }

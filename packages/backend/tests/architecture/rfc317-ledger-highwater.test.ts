@@ -281,7 +281,10 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
   })
 })
 
-const LEDGER_NAME = /ALLOWLIST|ALLOWED_|EXEMPT|KNOWN_VIOLATIONS|_HASHES|DEBT|PENDING_/
+// RFC-317 T73 —— 补 `ALLOWANCE`：`rfc254-platform-surface-guard` 的豁免表叫
+// `ALLOWANCES`，判据初版的词汇表漏了它，于是那份账本在覆盖规则眼里根本不存在。
+// 这条漏词是在**往那张表里加条目时**才发现的——判据的词汇表本身也会有覆盖缺口。
+const LEDGER_NAME = /ALLOWLIST|ALLOWED_|ALLOWANCE|EXEMPT|KNOWN_VIOLATIONS|_HASHES|DEBT|PENDING_/
 
 /** 顶层的、名字命中账本词汇的、集合形状的常量名。纯函数——扫描与自证共用。 */
 function ledgerShapedSymbols(text: string): string[] {

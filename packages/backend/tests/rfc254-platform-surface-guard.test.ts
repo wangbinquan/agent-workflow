@@ -150,6 +150,13 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
+    file: 'modules/integration/composition/codeHostEffects.ts',
+    match: '`${parsedPrefix.path}/`',
+    count: 1,
+    why: '两侧都是 **URL path**，不是宿主文件系统路径：`parsedPrefix.path` 来自 `new URL(url).pathname`（WHATWG URL 恒 `/` 分隔、百分号编码，`\\` 不可能出现），`parsed.path` 来自 `parseGitUrl`。这里按平台折叠反而是**错的**——它会在 Windows 上把 code-host 的 project path 小写化，从而把两个不同的 namespace 判成同一个（RFC-310 T232 repositoryUrlPrefixes 最长前缀匹配）',
+  },
+  {
+    rule: 'posix-path-prefix',
     file: 'services/taskPlatformInputPaths.ts',
     match: '`${root}/`',
     count: 1,
