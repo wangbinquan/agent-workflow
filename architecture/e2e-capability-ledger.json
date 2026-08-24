@@ -238,13 +238,8 @@
       "title": "编辑已存在的数字员工，并在职责泳道覆盖 / 恢复岗位 Adapter",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered",
-      "evidence": [
-        {
-          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
-          "test": "RFC-323 DE-18/39: employee Adapter override and restore live in the lane while retired URLs redirect"
-        }
-      ]
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "DE-22",
@@ -3372,8 +3367,13 @@
       "title": "评审意见（comments）的新增 / 编辑 / 删除与锚点定位",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-comments-to-rerun-prompt.spec.ts",
+          "test": "意见的增 / 改 / 删都落在这一版上，且列表如实反映"
+        }
+      ]
     },
     {
       "id": "HUMAN-34",
@@ -3381,8 +3381,13 @@
       "title": "评审意见随迭代/驳回进入重跑 prompt（意见 → agent 修改依据）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-comments-to-rerun-prompt.spec.ts",
+          "test": "迭代之后：意见连同锚点一起进重跑提示词，并被归档进那一版的快照"
+        }
+      ]
     },
     {
       "id": "HUMAN-35",
@@ -6773,13 +6778,8 @@
       "title": "旧 /code/executors 与 Adapter 配置深链重定向到数字员工 owner surface",
       "risk": "P3",
       "tier": "pr",
-      "status": "covered",
-      "evidence": [
-        {
-          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
-          "test": "RFC-323 DE-18/39: employee Adapter override and restore live in the lane while retired URLs redirect"
-        }
-      ]
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "DE-40",
@@ -8390,6 +8390,7 @@
     "DE-14",
     "DE-15",
     "DE-17",
+    "DE-18",
     "DE-19",
     "DE-20",
     "DE-21",
@@ -8407,6 +8408,7 @@
     "DE-36",
     "DE-37",
     "DE-38",
+    "DE-39",
     "DE-40",
     "DE-41",
     "DE-42",
@@ -8469,8 +8471,6 @@
     "HUMAN-25",
     "HUMAN-26",
     "HUMAN-27",
-    "HUMAN-33",
-    "HUMAN-34",
     "HUMAN-35",
     "HUMAN-36",
     "HUMAN-37",
