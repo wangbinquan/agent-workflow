@@ -2028,8 +2028,21 @@
       "title": "code-host-call 节点检查器：provider/action/自定义请求、破坏性操作开关、入参绑定",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/code-host-call-inspector.spec.ts",
+          "test": "provider / action / 入参绑定原样落进定义"
+        },
+        {
+          "file": "e2e/code-host-call-inspector.spec.ts",
+          "test": "破坏性开关：不授权时 DELETE 根本不在方法列表里"
+        },
+        {
+          "file": "e2e/code-host-call-inspector.spec.ts",
+          "test": "取消授权时，已经选好的 DELETE 会被改回 GET 而不是留在定义里"
+        }
+      ]
     },
     {
       "id": "WF-39",
@@ -8671,7 +8684,6 @@
     "WF-33",
     "WF-34",
     "WF-35",
-    "WF-36",
     "WF-37",
     "WF-38",
     "WF-40",
