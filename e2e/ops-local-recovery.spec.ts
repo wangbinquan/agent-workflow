@@ -17,25 +17,29 @@
 // 并明写「daemon token remains retired」——找回密码登录**不**等于把一次性
 // 引导票放回来，那是两件事）。
 
-import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
+import { runCommandResult } from './command'
 import { defaultBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 test.setTimeout(180_000)
 
 const PASSWORD = 'Rfc319LockoutPass!1'
 
-function runCli(home: string, args: readonly string[]): { out: string; code: number } {
-  const res = spawnSync(defaultBinaryPath(), args, {
-    encoding: 'utf-8',
-    env: { ...process.env, AGENT_WORKFLOW_HOME: home },
+/**
+ * 跑发行二进制的一个子命令。走 `e2e/command.ts` 的受限边界而不是在 spec 里自己
+ * 起进程：所有 e2e 子进程都必须带上那份硬超时，否则一个挂住的探针会把整个 shard
+ * 卡死。`root-test-entrypoint.test.ts` 对每份 spec 源码做纯子串检查来强制这条。
+ */
+function runCli(home: string, args: string[]): { out: string; code: number } {
+  const res = runCommandResult(defaultBinaryPath(), args, {
+    env: { AGENT_WORKFLOW_HOME: home },
   })
-  return { out: `${res.stdout ?? ''}${res.stderr ?? ''}`, code: res.status ?? -1 }
+  return { out: res.output, code: res.status }
 }
 
 test('RFC-319 OPS-022: after password sign-in is switched off, the shipped binary can re-open it locally against the same home', async () => {

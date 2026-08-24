@@ -53,12 +53,15 @@ describe('RFC-254 T31 — windows e2e exclusions stay honest', () => {
   // Each entry declares HOW MANY tests it is allowed to remove, because the two
   // are deliberately different shapes and only the reader knows which is which:
   //   * `focus-ring-clip` — one broken test among six healthy ones ⇒ by title.
-  //   * `rfc250-workflow-camera` — all three blocked by one canvas defect;
-  //     excluding just the first promotes the second to the failure (measured on
-  //     POSIX) ⇒ by file, and honestly counted as three.
+  //   * `rfc250-workflow-camera` — blocked by one canvas defect; excluding just
+  //     the first promotes the second to the failure (measured on POSIX) ⇒ by
+  //     file, and honestly counted as however many tests that file holds.
+  //     RFC-319 T37 added a fourth test to that file (`WF-23`, camera focus
+  //     gating). It rides the same file-shaped exclusion for the same canvas
+  //     reason, so the count moves 3 → 4 rather than the entry changing shape.
   const EXPECTED_REMOVALS: Record<string, number> = {
     'focus rings are not clipped anywhere': 1,
-    'rfc250-workflow-camera': 3,
+    'rfc250-workflow-camera': 4,
   }
 
   test('every exclusion removes exactly the tests it declares', () => {

@@ -43,13 +43,60 @@ export function runGit(args: string[], cwd?: string): string {
   })
 }
 
-/** Run a non-shell CLI probe with the same hard deadline as every fixture command. */
+export interface RunCommandOptions {
+  /** Overlaid on the parent environment. */
+  readonly env?: NodeJS.ProcessEnv
+}
+
+export interface RunCommandResult {
+  /** stdout + stderr, in that order — a CLI's usage text often lands on stderr. */
+  readonly output: string
+  readonly status: number
+}
+
+/**
+ * Run a non-shell CLI probe with the same hard deadline as every fixture
+ * command, and hand back the exit status instead of throwing on it.
+ *
+ * RFC-319 added the `env` overlay and the captured status because
+ * `ops-local-recovery.spec.ts` has to run the SHIPPED binary against a specific
+ * `AGENT_WORKFLOW_HOME` and assert that a misused subcommand exits non-zero
+ * with usage text. Both are ordinary CLI-probe needs; the alternative was a
+ * spec-local `child_process` import, which `root-test-entrypoint.test.ts`
+ * rightly forbids — every e2e child must carry this file's deadline, or one
+ * hung probe wedges a whole shard.
+ */
+export function runCommandResult(
+  command: string,
+  args: string[],
+  options: RunCommandOptions = {},
+): RunCommandResult {
+  try {
+    const stdout = execFileSync(command, args, {
+      encoding: 'utf8',
+      ...(options.env === undefined ? {} : { env: { ...process.env, ...options.env } }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: COMMAND_TIMEOUT_MS,
+    })
+    return { output: stdout, status: 0 }
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string; status?: number | null }
+    // A signal kill (deadline) reports status null; -1 keeps "non-zero" true
+    // for callers that only ask "did it fail".
+    return {
+      output: `${failure.stdout ?? ''}${failure.stderr ?? ''}`,
+      status: failure.status ?? -1,
+    }
+  }
+}
+
+/** Same probe, but a non-zero exit is a test failure rather than a value. */
 export function runCommand(command: string, args: string[]): string {
-  return execFileSync(command, args, {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: COMMAND_TIMEOUT_MS,
-  })
+  const result = runCommandResult(command, args)
+  if (result.status !== 0) {
+    throw new Error(`${command} exited ${result.status}: ${result.output}`)
+  }
+  return result.output
 }
 
 export function initGitRepo(
