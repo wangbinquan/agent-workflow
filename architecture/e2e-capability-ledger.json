@@ -3299,11 +3299,24 @@
     {
       "id": "HUMAN-22",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "改派问题处理节点（reassign：added-designer / removed-designer / moved-manual）",
+      "title": "改派问题处理节点：moved-manual 与两道防死锁守卫（目标须为 agent 节点 / 人工提问目标须跑过；added/removed-designer 另计）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-question-reassign.spec.ts",
+          "test": "改派到非 agent 节点必须被拒 —— 那种目标永远不会回答，任务会安静地卡死"
+        },
+        {
+          "file": "e2e/task-question-reassign.spec.ts",
+          "test": "人工提问改派到「从没跑过」的节点也要被拒 —— 下发永远铸不出重跑"
+        },
+        {
+          "file": "e2e/task-question-reassign.spec.ts",
+          "test": "正向对照：改派到跑过的 agent 节点是允许的"
+        }
+      ]
     },
     {
       "id": "HUMAN-23",
@@ -8526,7 +8539,6 @@
     "HUMAN-16",
     "HUMAN-17b",
     "HUMAN-20",
-    "HUMAN-22",
     "HUMAN-25",
     "HUMAN-26",
     "HUMAN-27",
