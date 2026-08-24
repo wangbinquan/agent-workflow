@@ -689,13 +689,22 @@ jobs:
           # `rfc254-windows-e2e-exclusions.test.ts`, which fails if either title
           # stops naming exactly one test. Delete it when those two go green.
           AW_E2E_WINDOWS_EXCLUDE: 'focus rings are not clipped anywhere|rfc250-workflow-camera'
+          # RFC-319 —— 分档。不带 tag = PR 档（今天的 340 条一条不动）；
+          # `@nightly` = nightly 档，由 e2e-full-nightly.yml 跑全量。
+          #
+          # **Playwright 只认一个 `--grep-invert`**：写两次时后一个静默覆盖前一个，
+          # 于是 windows 腿会把整批 `@nightly` 放进 PR 门而没有任何提示。所以那条腿
+          # 必须把两个排除项**合成一条正则**。这条组合由
+          # `rfc319-ci-topology.test.ts` 钉死。
+          AW_E2E_TIER_EXCLUDE: '@nightly'
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             bun run e2e -- --shard=${{ matrix.shard }}/${{ matrix.shards }} \
-              --grep-invert "$AW_E2E_WINDOWS_EXCLUDE"
+              --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
           else
-            bun run e2e -- --shard=${{ matrix.shard }}/${{ matrix.shards }}
+            bun run e2e -- --shard=${{ matrix.shard }}/${{ matrix.shards }} \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE"
           fi
 
       - name: Upload Playwright trace on failure

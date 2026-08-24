@@ -1,0 +1,164 @@
+# RFC-319 —— 全量 e2e 夜跑 + 覆盖账本对账。
+#
+# 为什么单独一条腿：
+#   * PR 的 `e2e` job 只跑 **PR 档**（`--grep-invert '@nightly'`），这样每个 PR 的
+#     反馈时间不因为覆盖面变大而退化。P2 / P3 的用例带 `@nightly` tag，只在这里跑。
+#   * RFC-319 R1/R2 的**逐条对账**必须在**全量**跑上做。PR 腿的命中集合天然小于全量，
+#     拿它比账本会得到一份错误的、过大的未命中集合，于是账本会被「修」成更宽松的值。
+#     判据必须和它的语料同档——所以这条腿不加任何 grep 过滤。
+#
+# 红了怎么办：与仓内既有的三条 nightly 同待遇（webkit / visual-regression /
+# evidence-soak）——不 gate 合并，靠人看。`fail-fast: false` 让所有分片都报出状态。
+#
+# 触发：
+#   * `schedule` —— 06:00 UTC 每天，排在 webkit(07:00) / evidence-soak(08:30) /
+#     visual-regression(09:00) 之前，四条 nightly 互不挤兑 runner。
+#   * `workflow_dispatch` —— 改了覆盖面之后想立刻拿到账本对账结果时手动点。
+
+name: e2e-full-nightly
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-full:
+    name: Playwright full tier (shard ${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    # 全量档比 PR 档多跑 P2/P3，且开了 debug 日志。留出比 PR 腿(20) 更宽的余量，
+    # 但仍远小于 Actions 的六小时默认值——挂死必须以超时收场，不能占着 runner。
+    timeout-minutes: 40
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build production + test-only e2e binaries
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Install Playwright browsers (+ system deps)
+        shell: bash
+        run: bunx playwright install --with-deps chromium
+
+      # 不加 `--grep-invert`：这条腿的全部意义就是**全量**。
+      # `AW_E2E_ROUTE_JOURNAL` 打开 harness 的命中采集（见 e2e/route-journal.ts）：
+      # 它把每个 daemon 的 `logLevel` 提到 debug，并在删临时 home 之前把逐请求
+      # `req` 行捞进这个目录。没有这个变量时采集整套是空操作。
+      - name: Run e2e (full tier, shard ${{ matrix.shard }}/4)
+        env:
+          CI: 'true'
+          AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/test-results/route-hits
+        shell: bash
+        run: bun run e2e -- --shard=${{ matrix.shard }}/4
+
+      - name: Upload route-hit journal
+        # `always()`：分片红了它的 journal 仍然有价值（跑过的部分是真命中）。
+        # 下游聚合 job 会单独判断「上游是不是全绿」，不靠这里的有无来推断。
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: route-hits-shard${{ matrix.shard }}
+          path: test-results/route-hits/
+          if-no-files-found: error
+
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-trace-full-shard${{ matrix.shard }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
+  route-coverage-ledger:
+    name: RFC-319 覆盖账本对账
+    needs: e2e-full
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # 上游没全绿时**显式失败**，而不是拿残缺语料去比账本。
+      # 少一个分片 = 少一批命中 = 账本里凭空多出一堆「未覆盖」，那是误报，
+      # 而误报会训练人忽略这条腿。
+      - name: Refuse to reconcile on incomplete data
+        if: needs.e2e-full.result != 'success'
+        shell: bash
+        run: |
+          echo "::error::e2e-full 未全绿（${{ needs.e2e-full.result }}）——" \
+               "覆盖账本的语料不完整，本次不做对账。先修分片再看账本。"
+          exit 1
+
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Download every shard's journal
+        uses: actions/download-artifact@v6
+        with:
+          pattern: route-hits-shard*
+          path: merged-journals
+
+      # 分片数不足 = 语料不全。这一步是 R1 fail-closed 的第一道：
+      # 没有它，「少下载了一个 artifact」会安静地表现为「覆盖变差了」。
+      - name: Assert every shard contributed
+        shell: bash
+        run: |
+          set -euo pipefail
+          shards=$(find merged-journals -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+          echo "downloaded shard artifacts: $shards"
+          if [ "$shards" -ne 4 ]; then
+            echo "::error::期望 4 个分片的 journal，实际 $shards 个——语料不全，拒绝对账"
+            exit 1
+          fi
+          mkdir -p test-results/route-hits
+          find merged-journals -name '*.jsonl' -exec cp {} test-results/route-hits/ \;
+          files=$(find test-results/route-hits -name '*.jsonl' | wc -l | tr -d ' ')
+          echo "merged journal files: $files"
+          if [ "$files" -lt 20 ]; then
+            echo "::error::合并后只有 $files 份 journal——采集多半坏了，拒绝对账"
+            exit 1
+          fi
+
+      - name: Reconcile endpoint + route coverage ledgers
+        env:
+          AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/test-results/route-hits
+        shell: bash
+        working-directory: packages/backend
+        run: |
+          bun test tests/architecture/rfc319-endpoint-coverage.test.ts \
+                   tests/architecture/rfc319-route-coverage.test.ts
+
+      - name: Upload merged journal
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: route-hits-merged
+          path: test-results/route-hits/
+          if-no-files-found: ignore

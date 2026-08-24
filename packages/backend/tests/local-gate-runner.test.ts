@@ -28,6 +28,8 @@ import { join, resolve } from 'node:path'
 import {
   acquireLocalGateLock,
   LOCAL_GATE_LANES,
+  OPTIONAL_E2E_LANE,
+  localGateLanes,
   resolveLocalGateLockPath,
 } from '../../../scripts/local-gate'
 import {
@@ -500,6 +502,21 @@ describe('local backend shard wall-clock timeout', () => {
 describe('local full-gate plan', () => {
   test('runs the backend concurrently with every canonical quality and non-backend gate', () => {
     expect(LOCAL_GATE_LANES.map((lane) => lane.name)).toEqual(['backend', 'quality'])
+    // RFC-319 T15 —— 默认车道**不含** Playwright：跑它要先建二进制（本机数分钟）
+    // 再跑 340+ 条浏览器用例（4.1 分钟）。门禁一旦慢到让人想跳过，它保护的东西全失效。
+    expect(localGateLanes({} as NodeJS.ProcessEnv).map((lane) => lane.name)).toEqual([
+      'backend',
+      'quality',
+    ])
+    // 但它必须**开得起来**：docs/dev-gotchas.md 里「e2e 不在任何本地门禁覆盖面内」
+    // 这条已经复发三次，一条命令能开的车道比「记住要手动跑」有效。
+    expect(
+      localGateLanes({ AW_GATE_E2E: '1' } as NodeJS.ProcessEnv).map((lane) => lane.name),
+    ).toEqual(['backend', 'quality', 'e2e'])
+    // 可选车道只跑 PR 档——与 CI 的 PR 腿同一个过滤，否则本地绿 / CI 红的差集又回来了。
+    expect(OPTIONAL_E2E_LANE.commands.map((command) => command.args.join(' '))).toEqual([
+      'run e2e -- --grep-invert @nightly',
+    ])
     expect(LOCAL_GATE_LANES[0]?.commands).toEqual([
       { label: 'backend tests', args: ['run', 'test:backend'] },
     ])

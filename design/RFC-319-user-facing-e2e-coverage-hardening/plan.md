@@ -21,7 +21,7 @@
 | **T10** | `e2e/` 引入 `@nightly` tag 约定；在 `e2e/README.md` 写清「不带 tag = PR 档」与选 tag 不选分目录的理由 |
 | **T11** | `ci.yml` 的 `e2e` job 增加 `--grep-invert`；**windows 腿必须与既有 `$AW_E2E_WINDOWS_EXCLUDE` 合成一条正则**（`(@nightly)\|(<既有>)`）——Playwright 只认一个 `--grep-invert`，写两次后一个静默覆盖前一个 |
 | **T12** | 新建 `.github/workflows/e2e-full-nightly.yml`：cron + `workflow_dispatch`，**不加任何 grep 过滤**跑全量，分片 4 起；产出 `route-hits/` artifact |
-| **T13** | `packages/backend/tests/nightly/` 目录 + `scripts/test-backend-sharded.ts` 与 `bun run test:backend` 的排除；`e2e-full-nightly` 增加一步跑它 |
+| **T13**（未做，留待第一条 nightly 档后端用例落地时一起做）| `packages/backend/tests/nightly/` 目录 + `scripts/test-backend-sharded.ts` 与 `bun run test:backend` 的排除；`e2e-full-nightly` 增加一步跑它 |
 | **T14** | 守卫：①排除清单与目录两向钉死（目录存在但没被任何腿跑 ⇒ 红；排除项指向不存在的目录 ⇒ 红）；②windows grep 合成正则里必须同时含 `@nightly` 与既有排除项 |
 | **T15** | `gate:local` 增加**可选** Playwright 车道（默认关，显式开），并在 `packages/backend/tests/local-gate-runner.test.ts` 的车道断言里登记 |
 
@@ -126,4 +126,5 @@ P1 不带 tag（PR 腿），P2 / P3 带 `@nightly`。
 | 日期 | 内容 |
 | --- | --- |
 | 2026-08-24 | 落档。审计基线 `92478e636`。原拟编号 RFC-318，与并发 session 的「数字员工工具最小合同」撞号，改为 RFC-319 |
+| 2026-08-24 | **B1 落地**：T10/T11/T12/T14/T15 完成，T13 推迟到第一条 nightly 档后端用例落地时一起做（现在建空目录 + 排除清单，只会得到一条无人验证的配置）。分档用 Playwright 原生 tag：不带 tag = PR 档（今天 340 条一条不动），`@nightly` = 夜跑档。新增 `.github/workflows/e2e-full-nightly.yml`（06:00 UTC，4 分片，**不加任何 grep 过滤**，设 `AW_E2E_ROUTE_JOURNAL`，四分片 journal 汇总后跑两条账本守卫；上游没全绿或分片数不足时**拒绝对账**而不是拿残缺语料比账本）。`rfc319-ci-topology.test.ts` 钉死三处静默失效面，三条变异全部实证转红。`gate:local` 加 `AW_GATE_E2E=1` 可选 Playwright 车道（默认关——门禁慢到让人跳过就等于失效） |
 | 2026-08-24 | **B2 第一批落地**：T20/T21/T22/T23/T24/T28 完成，T29 对本批四条守卫做过变异实证。三处与落档设计不同，均已回写 `design.md`：①R1 采集挂在 `AW_E2E_ROUTE_JOURNAL` 开关下（落档时列为退化方案，实做直接采纳——PR 腿行为与今天逐字节相同）；②R2 的分子改用**同一份 journal 里的 SPA 文档请求**，不再需要 T25 的 fixture 迁移作为前提（T25 从必需项降级为增强项）；③R2 的「源码提过」从通过判据降级为纯诊断——实测发现它会把 `/code/*` 十条路由整族漂绿（那些出现全在默认不跑的视觉套件里）。实测值：端点 462 声明 / 191 命中 / **271 从未**；路由 60 / 42 / **18 从未**（其中 14 条「提过却从未加载」）；归一器反方向零失配 |

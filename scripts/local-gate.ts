@@ -37,6 +37,35 @@ export const LOCAL_GATE_LANES: LocalGateLane[] = [
   },
 ]
 
+/**
+ * RFC-319 T15 —— **可选**的 Playwright 车道。
+ *
+ * 为什么它是可选的、而不是默认加进 `LOCAL_GATE_LANES`：跑它要先
+ * `bun run build:binary:e2e`（前端 vite 构建 + 两个 bun --compile + stub + tool，
+ * 本机约数分钟），再跑 340+ 条浏览器用例（本机 4.1 分钟）。把这些无条件塞进
+ * 每次 `gate:local` 会让本地门禁从「几分钟」变成「十几分钟」，而门禁一旦慢到
+ * 让人想跳过，它保护的东西就全部失效。
+ *
+ * 为什么它必须存在：`docs/dev-gotchas.md` 里「删端点 / 改执行策略默认值时 `e2e/`
+ * 不在任何本地门禁的覆盖面内」这条已经复发三次（RFC-271 批次 I、RFC-310 PR-10、
+ * RFC-313）。有一个**一条命令就能开**的车道，比「记住要手动跑 Playwright」有效。
+ *
+ * 开法：`AW_GATE_E2E=1 bun run gate:local`。它假定二进制已经建好——**故意不替你建**，
+ * 因为构建产物是否与当前工作树一致只有你自己知道（改了后端就得重建，改了 spec 不用）。
+ * 二进制不存在时 harness 会明确报「binary not found」。
+ */
+export const OPTIONAL_E2E_LANE: LocalGateLane = {
+  name: 'e2e',
+  commands: [
+    { label: 'playwright (PR tier)', args: ['run', 'e2e', '--', '--grep-invert', '@nightly'] },
+  ],
+}
+
+/** 本次运行实际要跑的车道。`AW_GATE_E2E=1` 时在默认两条之外追加 Playwright 车道。 */
+export function localGateLanes(env: NodeJS.ProcessEnv = process.env): LocalGateLane[] {
+  return env.AW_GATE_E2E === '1' ? [...LOCAL_GATE_LANES, OPTIONAL_E2E_LANE] : LOCAL_GATE_LANES
+}
+
 interface KillableProcess {
   kill(signal?: NodeJS.Signals | number): void
 }
@@ -274,8 +303,11 @@ export async function runLocalGate(): Promise<number> {
   process.on('SIGTERM', onSigterm)
 
   const startedAt = performance.now()
-  console.log('[gate] running backend and quality lanes concurrently')
-  const lanes = LOCAL_GATE_LANES.map((lane) =>
+  const selectedLanes = localGateLanes()
+  console.log(
+    `[gate] running ${selectedLanes.map((lane) => lane.name).join(' + ')} lanes concurrently`,
+  )
+  const lanes = selectedLanes.map((lane) =>
     runLane(repoRoot, lane, active, () => interruptedSignal !== undefined),
   )
   try {
@@ -288,7 +320,7 @@ export async function runLocalGate(): Promise<number> {
     if (failures.length > 0) {
       for (const failure of failures) console.error(`[gate] ${String(failure.reason)}`)
       console.error(
-        `[gate] ${failures.length}/${LOCAL_GATE_LANES.length} lane(s) failed after ${durationLabel(performance.now() - startedAt)}`,
+        `[gate] ${failures.length}/${selectedLanes.length} lane(s) failed after ${durationLabel(performance.now() - startedAt)}`,
       )
       return 1
     }
