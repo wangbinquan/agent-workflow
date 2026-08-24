@@ -164,7 +164,7 @@ describe('CLI subcommands (P-1-05)', () => {
     })
 
     try {
-      await waitForReady(child.stdout, 10_000, child.stderr)
+      await waitForReady(child.stdout, 10_000, child.stderr, child)
 
       // status sees the daemon, /health is reachable.
       const status = await statusCommand()
@@ -223,7 +223,7 @@ describe('CLI subcommands (P-1-05)', () => {
       stderr: 'pipe',
     })
     try {
-      await waitForReady(child.stdout, 10_000, child.stderr)
+      await waitForReady(child.stdout, 10_000, child.stderr, child)
       expect(existsSync(scratch)).toBe(false)
       const verified = new Database(join(tmp, 'db.sqlite'), { readonly: true })
       expect(
@@ -276,7 +276,7 @@ describe('CLI subcommands (P-1-05)', () => {
       stderr: 'pipe',
     })
     try {
-      await waitForReady(child.stdout, 10_000, child.stderr)
+      await waitForReady(child.stdout, 10_000, child.stderr, child)
       const infoPath = join(tmp, '.daemon.info')
       expect(existsSync(infoPath)).toBe(true)
       const info = JSON.parse(readFileSync(infoPath, 'utf-8')) as Record<string, unknown>
@@ -319,10 +319,36 @@ describe('CLI subcommands (P-1-05)', () => {
  * 只有到「pre-migration backup written」为止的 stdout,真正的错误一个字都没有,
  * 本地又复现不出来——查不下去正是因为这个盲区。传进来就一起打出来。
  */
+/**
+ * 等 daemon 打印出 ready 行。
+ *
+ * `child` 是可选的**诊断**参数（2026-08-24 加）：`daemon exited before ready` 这条失败
+ * 此前只带 stdout/stderr，而 CI 上真出现过一次**日志停在 `git probe ok`、之后一个字都没有**
+ * 的静默退出——`main().catch` 会打印 `err.message`，所以「什么都没打印」本身就说明它不是
+ * 抛错退出的（`process.exit` 路径在 `cli/start.ts` 里也都先写了 stderr）。
+ * 剩下的可能是被信号杀死或原生崩溃，而**退出码与信号恰恰是当时唯一没被记下来的东西**。
+ * 传入 child 之后，下一次再发生时失败信息里直接带 `exit=… signal=…`，不必再猜。
+ */
+/** ` (exit=0 signal=SIGKILL)`；拿不到 child 或超时就返回空串，绝不把诊断变成新的挂起点。 */
+async function exitDetail(child?: {
+  readonly exited: Promise<number>
+  readonly signalCode: string | null
+}): Promise<string> {
+  if (child === undefined) return ''
+  const code = await Promise.race([
+    child.exited,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
+  ])
+  const signal = child.signalCode
+  if (code === null && signal === null) return ''
+  return ` (exit=${code ?? 'unknown'} signal=${signal ?? 'none'})`
+}
+
 async function waitForReady(
   stdout: ReadableStream<Uint8Array>,
   timeoutMs: number,
   stderr?: ReadableStream<Uint8Array>,
+  child?: { readonly exited: Promise<number>; readonly signalCode: string | null },
 ): Promise<{ url: string; token: string }> {
   const reader = stdout.getReader()
   const decoder = new TextDecoder()
@@ -350,7 +376,11 @@ async function waitForReady(
   try {
     while (Date.now() < deadline) {
       const { value, done } = await reader.read()
-      if (done) throw new Error(withStderr('daemon exited before ready:\n' + buffer))
+      if (done) {
+        throw new Error(
+          withStderr(`daemon exited before ready${await exitDetail(child)}:\n${buffer}`),
+        )
+      }
       buffer += decoder.decode(value, { stream: true })
       const m = buffer.match(/(http:\/\/[0-9.]+:\d+\/)\?token=([0-9a-f]+)/)
       if (m && m[1] !== undefined && m[2] !== undefined) {
