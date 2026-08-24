@@ -94,11 +94,15 @@ function emit(port: string, content: string) {
   console.log(JSON.stringify({ type: 'text', ts: Math.floor(Date.now() / 1000), text }))
 }
 
-const planMarker = 'EXPECTED_ANALYSIS_PLAN_PATH_JSON\\n'
-const planMarkerIndex = prompt.lastIndexOf(planMarker)
-if (planMarkerIndex >= 0) {
-  const encodedPath = prompt.slice(planMarkerIndex + planMarker.length).split('\\n', 1)[0]
-  const documentPath = JSON.parse(encodedPath)
+const inputMarker = prompt.includes('INPUT_JSON\\n\\n') ? 'INPUT_JSON\\n\\n' : 'INPUT_JSON\\n'
+const inputMarkerIndex = prompt.lastIndexOf(inputMarker)
+const encodedToolInput =
+  inputMarkerIndex < 0
+    ? null
+    : prompt.slice(inputMarkerIndex + inputMarker.length).trimStart().split('\\n', 1)[0]
+const toolInput = encodedToolInput === null ? null : JSON.parse(encodedToolInput)
+const documentPath = typeof toolInput?.outputFile === 'string' ? toolInput.outputFile : null
+if (documentPath !== null) {
   const planningOrdinal = Number(readFileSync(planningCountPath, 'utf8').trim()) + 1
   writeFileSync(planningCountPath, String(planningOrdinal))
   const body = '# Implementation plan v' + planningOrdinal
@@ -174,6 +178,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
             eventJson: JSON.stringify({ kind: 'work-item-continuation' }),
             contextsJson: JSON.stringify([
               {
+                id: 'review-issue-context',
                 typeId: 'development.issue-handling',
                 schemaVersion: 1,
                 revision: 1,
@@ -198,7 +203,10 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
               {
                 slotRef: 'plan',
                 registrationRef: { id: 'review-planning-tool', revision: 1 },
-                workContractRef: { contractId: 'development.analyze-plan', version: 1 },
+                workContractRef: {
+                  contractId: 'development.plan-implementation',
+                  version: 2,
+                },
                 implementation: {
                   kind: 'agent',
                   agentRef: { id: planningAgent.id, revision: planningAgent.updatedAt },
@@ -213,6 +221,10 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         kind: 'implementation-plan',
         documentPath: `${requirementDirectory}/review/implementation-plan.md`,
         planningTool: {
+          workContractRef: {
+            contractId: 'development.plan-implementation',
+            version: 2,
+          },
           implementation: {
             kind: 'agent',
             agentRef: { id: planningAgent.id, revision: planningAgent.updatedAt },

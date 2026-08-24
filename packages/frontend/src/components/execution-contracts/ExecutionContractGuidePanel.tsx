@@ -5,6 +5,8 @@ function FieldList(props: {
   language: string
   primary?: boolean
   testid?: string
+  directJson?: boolean
+  artifactValue?: boolean
 }): React.ReactElement {
   const zh = props.language.startsWith('zh')
   return (
@@ -38,7 +40,19 @@ function FieldList(props: {
           </div>
           {props.primary === true ? (
             <div className="execution-contract-field__path">
-              <span>{zh ? 'Envelope 读取路径' : 'Envelope path'}</span>
+              <span>
+                {props.artifactValue === true
+                  ? zh
+                    ? '输出值'
+                    : 'Output value'
+                  : props.directJson === true
+                    ? zh
+                      ? 'JSON 字段'
+                      : 'JSON field'
+                    : zh
+                      ? 'Envelope 读取路径'
+                      : 'Envelope path'}
+              </span>
               <code>{field.path}</code>
             </div>
           ) : (
@@ -54,7 +68,57 @@ function FieldList(props: {
   )
 }
 
-export function executionContractProgramStarter(language: 'bash' | 'node' | 'python'): string {
+export function executionContractProgramStarter(
+  language: 'bash' | 'node' | 'python',
+  guide?: ExecutionContractGuide,
+): string {
+  if (guide?.inputMode === 'direct-json') {
+    if (language === 'node') {
+      return `import { readFileSync } from 'node:fs'
+
+const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
+  readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
+const input = JSON.parse(inputJson)
+
+throw new Error('TODO_IMPLEMENT_CONTRACT')
+
+process.stdout.write(JSON.stringify({
+  outcome: 'blocked',
+  explanation: 'Replace TODO_IMPLEMENT_CONTRACT with this action',
+}))`
+    }
+    if (language === 'python') {
+      return `import json
+import os
+
+input_json = os.environ.get("AW_PORT_CONTRACT_INPUT")
+if input_json is None:
+    with open(os.environ["AW_PORT_FILE_CONTRACT_INPUT"], encoding="utf-8") as input_file:
+        input_json = input_file.read()
+contract_input = json.loads(input_json)
+
+raise RuntimeError("TODO_IMPLEMENT_CONTRACT")
+
+print(json.dumps({
+    "outcome": "blocked",
+    "explanation": "Replace TODO_IMPLEMENT_CONTRACT with this action",
+}, separators=(",", ":")))`
+    }
+    return `#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "\${AW_PORT_CONTRACT_INPUT:-}" ]]; then
+  contract_input="$AW_PORT_CONTRACT_INPUT"
+else
+  : "\${AW_PORT_FILE_CONTRACT_INPUT:?platform contract input is required}"
+  contract_input="$(<"$AW_PORT_FILE_CONTRACT_INPUT")"
+fi
+
+echo "TODO_IMPLEMENT_CONTRACT" >&2
+exit 2
+
+printf '{"outcome":"blocked","explanation":"Replace TODO_IMPLEMENT_CONTRACT with this action"}'`
+  }
   if (language === 'node') {
     return `import { readFileSync } from 'node:fs'
 
@@ -137,6 +201,12 @@ export function ExecutionContractGuidePanel(props: {
   const advancedInputFields = props.guide.input.fields.filter(
     (field) => !primaryPaths.has(field.path),
   )
+  const outputExample = (() => {
+    if (props.guide.outputMode !== 'artifact-path') return props.guide.output.exampleJson
+    const decoded = JSON.parse(props.guide.output.exampleJson) as Record<string, unknown>
+    const field = props.guide.output.primaryFieldPaths[0]
+    return field === undefined ? '' : String(decoded[field] ?? '')
+  })()
   return (
     <section className="execution-contract-guide" data-testid="execution-contract-guide">
       <header className="execution-contract-guide__primary-heading">
@@ -149,14 +219,19 @@ export function ExecutionContractGuidePanel(props: {
         </span>
       </header>
       <p className="execution-contract-guide__primary-copy">
-        {zh
-          ? '参数值来自每次任务，不在工具定义中固定填写。请确认所选 Agent、Workflow 或脚本能消费下面的路径。'
-          : 'Values come from each task and are not fixed in the tool definition. Confirm that the selected Agent, Workflow, or script consumes the path below.'}
+        {props.guide.inputMode === 'direct-json'
+          ? zh
+            ? '每次运行只收到下面这些业务字段；值由平台从当前任务生成。'
+            : 'Each run receives only these business fields; the platform derives their values from the current task.'
+          : zh
+            ? '参数值来自每次任务，不在工具定义中固定填写。请确认所选 Agent、Workflow 或脚本能消费下面的路径。'
+            : 'Values come from each task and are not fixed in the tool definition. Confirm that the selected Agent, Workflow, or script consumes the path below.'}
       </p>
       <FieldList
         fields={primaryFields}
         language={props.language}
         primary
+        directJson={props.guide.inputMode === 'direct-json'}
         testid="execution-contract-primary-input-fields"
       />
 
@@ -170,24 +245,46 @@ export function ExecutionContractGuidePanel(props: {
         </span>
       </header>
       <p className="execution-contract-guide__primary-copy">
-        {zh
-          ? '这些内容必须出现在输出 envelope 的明确路径中。Agent 或脚本只产出内容；评论回复、提交、推送和 MR 更新由平台执行。'
-          : 'These values must appear at the exact output-envelope paths. The Agent or script produces content; the platform posts replies, commits, pushes, and updates the merge request.'}
+        {props.guide.outputMode === 'direct-json'
+          ? zh
+            ? '完成时只返回下面的业务结果；无法完成时返回 blocked 和具体原因。未使用的可选字段直接省略。'
+            : 'On completion return only the business result below. When blocked, return blocked with a concrete explanation. Omit unused optional fields.'
+          : props.guide.outputMode === 'artifact-path'
+            ? zh
+              ? '只返回写好的文件路径，不返回 JSON、说明文字或其他路径。'
+              : 'Return only the written file path, with no JSON, prose, or additional path.'
+            : zh
+              ? '这些内容必须出现在输出 envelope 的明确路径中。Agent 或脚本只产出内容；评论回复、提交、推送和 MR 更新由平台执行。'
+              : 'These values must appear at the exact output-envelope paths. The Agent or script produces content; the platform posts replies, commits, pushes, and updates the merge request.'}
       </p>
       <FieldList
         fields={primaryOutputFields}
         language={props.language}
         primary
+        directJson={props.guide.outputMode === 'direct-json'}
+        artifactValue={props.guide.outputMode === 'artifact-path'}
         testid="execution-contract-primary-output-fields"
       />
 
       <details className="execution-contract-guide__advanced">
         <summary>
-          <span>{zh ? '系统执行参数' : 'System execution parameters'}</span>
+          <span>
+            {props.guide.inputMode === 'direct-json'
+              ? zh
+                ? '协议与示例'
+                : 'Protocol and examples'
+              : zh
+                ? '系统执行参数'
+                : 'System execution parameters'}
+          </span>
           <small>
-            {zh
-              ? `${advancedInputFields.length} 个输入字段 · ${props.guide.output.fields.length} 个输出字段`
-              : `${advancedInputFields.length} input fields · ${props.guide.output.fields.length} output fields`}
+            {props.guide.inputMode === 'direct-json'
+              ? zh
+                ? '输入输出格式与实现接入'
+                : 'Input/output shapes and implementation transport'
+              : zh
+                ? `${advancedInputFields.length} 个输入字段 · ${props.guide.output.fields.length} 个输出字段`
+                : `${advancedInputFields.length} input fields · ${props.guide.output.fields.length} output fields`}
           </small>
         </summary>
         <div className="execution-contract-guide__advanced-body">
@@ -239,9 +336,15 @@ export function ExecutionContractGuidePanel(props: {
           </details>
           <details>
             <summary>
-              {zh ? '查看必须输出的 JSON 模板' : 'View required output JSON template'}
+              {props.guide.outputMode === 'artifact-path'
+                ? zh
+                  ? '查看输出路径示例'
+                  : 'View output path example'
+                : zh
+                  ? '查看必须输出的 JSON 模板'
+                  : 'View required output JSON template'}
             </summary>
-            <pre>{props.guide.output.exampleJson}</pre>
+            <pre>{outputExample}</pre>
           </details>
         </div>
       </details>

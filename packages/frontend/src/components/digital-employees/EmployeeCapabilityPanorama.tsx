@@ -1047,6 +1047,12 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                               },
                               props.language,
                             )
+                            const planningDescription = localized(
+                              item.toolRoleGroups.find(
+                                (role) => role.roleRef === planningTarget.roleRef,
+                              )?.description ?? item.description,
+                              props.language,
+                            )
                             const selectItem = () => props.onSelect(item.workItemRef)
                             const rowStart = primaryRowStartIndices.has(itemIndex)
                             return (
@@ -1066,6 +1072,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 language={props.language}
                                 cardIdPrefix={props.cardIdPrefix ?? 'toolbox-duty'}
                                 beforeReviewLabel={beforeReviewLabel}
+                                planningDescription={planningDescription}
                                 planningRoleRef={planningTarget.roleRef}
                                 planningSlotRef={planningTarget.slotRef}
                                 planningPresentation={planningPresentation}

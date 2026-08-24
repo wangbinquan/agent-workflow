@@ -289,6 +289,12 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
       ),
     ).toEqual(['工具', '审核'])
     expect(container.querySelector('[data-review-stage="implementation"]')).toBeNull()
+    expect(
+      container.querySelector('[data-review-stage="analysis"]')?.getAttribute('aria-label'),
+    ).toContain('形成评审方案')
+    expect(
+      container.querySelector('[data-review-stage="analysis"]')?.getAttribute('aria-label'),
+    ).not.toContain('分析问题并实现修改')
     expect(container.querySelectorAll('.employee-toolbox-review-branch__merged-item')).toHaveLength(
       1,
     )

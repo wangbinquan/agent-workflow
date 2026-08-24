@@ -357,6 +357,7 @@ export interface ResponsibilityReviewBranchProps {
   language: string
   cardIdPrefix: string
   beforeReviewLabel: string
+  planningDescription: string
   planningRoleRef: string
   planningSlotRef: string
   planningPresentation?: Pick<ResponsibilityCardPresentation, 'detail' | 'compactDetail'>
@@ -414,15 +415,12 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
             data-tool-role-ref={props.planningRoleRef}
             data-tool-slot-ref={props.planningSlotRef}
             aria-pressed={props.planningSelected}
-            aria-label={`${props.beforeReviewLabel} · ${localized(props.item.description, props.language)}${
+            aria-label={`${props.beforeReviewLabel} · ${props.planningDescription}${
               props.planningPresentation === undefined
                 ? ''
                 : ` · ${props.planningPresentation.detail}`
             }`}
-            title={
-              props.planningPresentation?.detail ??
-              localized(props.item.description, props.language)
-            }
+            title={props.planningPresentation?.detail ?? props.planningDescription}
             onClick={props.onSelectPlanning}
             kindLabel={kind.label}
             label={props.beforeReviewLabel}

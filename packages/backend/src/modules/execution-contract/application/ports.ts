@@ -28,5 +28,6 @@ export interface ExecutionContractProgramFixturePort {
   validate(input: {
     readonly guide: ExecutionContractGuide
     readonly implementation: Extract<ExecutionContractImplementation, { kind: 'program' }>
+    readonly validateOutputJson?: (outputJson: string) => string
   }): Promise<readonly ExecutionContractCheck[]>
 }

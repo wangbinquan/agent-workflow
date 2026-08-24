@@ -235,7 +235,9 @@ test('a first-time user configures a work-item tool directly on the fixed respon
   await expect(dialog).toBeVisible()
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill('First implementation tool')
   await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
-  await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
+  await page
+    .getByRole('option', { name: /^Built in · General code implementation Compatible/ })
+    .click()
   await dialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
 
   await expect(dialog).toHaveCount(0)
@@ -272,7 +274,9 @@ test('a failed contract check is corrected on the same tool registration id', as
   const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill(name)
   await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
-  await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
+  await page
+    .getByRole('option', { name: /^Built in · General code implementation Compatible/ })
+    .click()
   await dialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
 
   await expect(dialog).toBeVisible()
@@ -342,7 +346,9 @@ test('an existing invalid tool opens in the editor and publishes its correction'
   const dialog = page.getByRole('dialog', { name: `Edit tool: ${name}` })
   await expect(dialog.getByRole('textbox', { name: /Tool name/ })).toHaveValue(name)
   await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
-  await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
+  await page
+    .getByRole('option', { name: /^Built in · General code implementation Compatible/ })
+    .click()
   await dialog
     .getByRole('button', { name: 'Check contract and publish new version', exact: true })
     .click()
@@ -398,7 +404,9 @@ test('pipeline failure types expand into equal-width required nodes and only sho
     .filter({ hasText: 'Choose from Agent library' })
     .getByRole('combobox')
     .click()
-  await page.getByRole('option', { name: /^Built in · Problem diagnosis Compatible/ }).click()
+  await page
+    .getByRole('option', { name: /^Built in · Pipeline failure classification Compatible/ })
+    .click()
   await toolDialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
   await expect(toolDialog).toHaveCount(0)
 
@@ -447,7 +455,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
     .filter({ hasText: 'Choose from Agent library' })
     .getByRole('combobox')
     .click()
-  await page.getByRole('option', { name: /^Built in · General pipeline repair Compatible/ }).click()
+  await page.getByRole('option', { name: /^Built in · Pipeline failure repair Compatible/ }).click()
   await toolDialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
   await expect(toolDialog).toHaveCount(0)
 

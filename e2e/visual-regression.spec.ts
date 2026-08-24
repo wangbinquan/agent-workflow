@@ -1438,7 +1438,9 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
     await dialog.getByRole('textbox', { name: /Tool name/ }).fill('Implement Java changes')
     await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
-    await page.getByRole('option', { name: /^Built in · Code writing Compatible/ }).click()
+    await page
+      .getByRole('option', { name: /^Built in · General code implementation Compatible/ })
+      .click()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('digital-employee-tool-dialog.png', SNAPSHOT_OPTS)
   })
@@ -1512,7 +1514,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             {
               id: 'visual-java-employee',
               name: 'Java delivery employee',
-              typeRef: { typeId: 'development', revision: 8 },
+              typeRef: { typeId: 'development', revision: 9 },
               configuration: {
                 displayName: 'Java delivery employee',
                 jobTemplateRef: { id: 'visual-java-job', revision: 3 },
@@ -1535,7 +1537,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             {
               id: 'visual-cpp-employee',
               name: 'C++ pipeline repair employee',
-              typeRef: { typeId: 'development', revision: 8 },
+              typeRef: { typeId: 'development', revision: 9 },
               configuration: {
                 displayName: 'C++ pipeline repair employee',
                 jobTemplateRef: { id: 'visual-cpp-job', revision: 2 },

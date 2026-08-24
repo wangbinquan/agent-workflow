@@ -1,7 +1,10 @@
 import { render } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
 
-import { ExecutionContractGuidePanel } from '../src/components/execution-contracts/ExecutionContractGuidePanel'
+import {
+  ExecutionContractGuidePanel,
+  executionContractProgramStarter,
+} from '../src/components/execution-contracts/ExecutionContractGuidePanel'
 import type { ExecutionContractGuide } from '../src/components/execution-contracts/types'
 
 const text = (value: string) => ({ 'zh-CN': value, 'en-US': value })
@@ -97,5 +100,119 @@ describe('<ExecutionContractGuidePanel />', () => {
     expect(advanced?.open).toBe(false)
     expect(advanced?.textContent).toContain('系统执行参数')
     expect(advanced?.textContent).toContain('执行轮次')
+  })
+
+  test('renders v2 as direct business JSON and generates direct Program starters', () => {
+    const directGuide: ExecutionContractGuide = {
+      ...guide,
+      inputMode: 'direct-json',
+      outputMode: 'direct-json',
+      contractRef: { contractId: 'development.implement-change', version: 2 },
+      input: {
+        ...guide.input,
+        topLevelFields: ['requirementsDirectory'],
+        primaryFieldPaths: ['requirementsDirectory'],
+        fields: [
+          {
+            path: 'requirementsDirectory',
+            label: text('需求材料目录'),
+            description: text('本次实现的完整需求材料'),
+            valueType: 'string',
+            required: true,
+            source: 'platform',
+            condition: null,
+            example: null,
+          },
+        ],
+      },
+      output: {
+        ...guide.output,
+        topLevelFields: ['outcome', 'commitMessage'],
+        primaryFieldPaths: ['outcome', 'commitMessage'],
+        fields: [
+          {
+            path: 'outcome',
+            label: text('结果'),
+            description: text('completed 或 blocked'),
+            valueType: 'enum',
+            required: true,
+            source: 'work-input',
+            condition: null,
+            example: null,
+          },
+          {
+            path: 'commitMessage',
+            label: text('提交信息'),
+            description: text('代码修改对应的提交信息'),
+            valueType: 'string',
+            required: false,
+            source: 'work-input',
+            condition: text('completed 时使用'),
+            example: null,
+          },
+        ],
+      },
+    }
+    const { container, getByTestId } = render(
+      <ExecutionContractGuidePanel guide={directGuide} language="zh-CN" kind="agent" />,
+    )
+    expect(container.textContent).toContain('每次运行只收到下面这些业务字段')
+    expect(container.textContent).toContain('完成时只返回下面的业务结果')
+    expect(getByTestId('execution-contract-primary-input-fields').textContent).toContain(
+      'JSON 字段requirementsDirectory',
+    )
+    expect(container.textContent).not.toContain('Envelope 读取路径')
+
+    for (const runtime of ['bash', 'node', 'python'] as const) {
+      const starter = executionContractProgramStarter(runtime, directGuide)
+      expect(starter).toContain('AW_PORT_CONTRACT_INPUT')
+      expect(starter).toContain('outcome')
+      expect(starter).toContain('blocked')
+      expect(starter).not.toContain('contextPatches')
+      expect(starter).not.toContain('effectSuggestions')
+      expect(starter).not.toContain('artifactRefs')
+      expect(starter).not.toContain('schemaVersion')
+    }
+  })
+
+  test('shows planning output as one raw file path rather than an envelope', () => {
+    const path = '.agent-workflow/inputs/requirements/case/review/implementation-plan.md'
+    const pathGuide: ExecutionContractGuide = {
+      ...guide,
+      inputMode: 'direct-json',
+      outputMode: 'artifact-path',
+      contractRef: { contractId: 'development.plan-implementation', version: 2 },
+      output: {
+        ...guide.output,
+        schemaId: 'development.plan-implementation.path.v2',
+        topLevelFields: ['artifactPath'],
+        primaryFieldPaths: ['artifactPath'],
+        fields: [
+          {
+            path: 'artifactPath',
+            label: text('方案文件路径'),
+            description: text('与输入 outputFile 完全相同'),
+            valueType: 'string',
+            required: true,
+            source: 'artifact',
+            condition: null,
+            example: null,
+          },
+        ],
+        exampleJson: JSON.stringify({ artifactPath: path }),
+      },
+    }
+    const { container, getByTestId, getByText } = render(
+      <ExecutionContractGuidePanel guide={pathGuide} language="zh-CN" kind="agent" />,
+    )
+    expect(container.textContent).toContain('只返回写好的文件路径')
+    expect(getByTestId('execution-contract-primary-output-fields').textContent).toContain(
+      '输出值artifactPath',
+    )
+    expect(container.textContent).not.toContain('输出 envelope')
+    expect(getByText('查看输出路径示例')).toBeTruthy()
+    expect(container.querySelector('.execution-contract-guide__advanced')?.textContent).toContain(
+      path,
+    )
   })
 })

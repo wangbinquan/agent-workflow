@@ -59,3 +59,14 @@ export interface ExecutionContractParticipant {
         },
   ): string
 }
+
+/** Tool-facing business input projection is a separate, single-purpose capability. */
+export interface ExecutionContractProjectionParticipant {
+  projectInput?(input: {
+    readonly contractRef: ExecutionContractRef
+    readonly roundRef: string
+    readonly executionNonce: string
+    readonly inputEnvelopeJson: string
+    readonly projectionJson?: string | null
+  }): string
+}

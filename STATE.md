@@ -17,6 +17,9 @@
 > `test-results` 污染阻断，因此不冒充全仓本地门禁全绿。批准裁决见
 > [proposal §5 C1–C8](design/RFC-320-user-profile-git-identity/proposal.md#5-待用户确认的裁决)。
 
+> 🚧 **进行中 RFC（实施候选验证中）：[RFC-318 直观、原子的数字员工研发节点](design/RFC-318-minimal-digital-employee-tool-contracts/proposal.md)**
+> —— 用户已批准实施并要求推送。`development@9` 已把九个业务位置绑定到九份 v2 contract：八个 JSON 节点只接收本动作消费的业务字段并直接返回 `completed/blocked` 结果，方案节点只接收需求目录与方案路径并输出同一 `analysis-plan: path<md>`。平台 round/nonce/Context/effect/route/外部发布状态不进入 tool wire；八个 v2 内置 Agent 各声明一个 contract，名称与动作一致。分类配置只保留问题类型、说明和兜底，处理者与顺序仍由岗位流程拥有。六轮设计门已收敛且无遗留 P1/P2；定向 contract/UI/主链/人工评审证据已通过。共享脏树的唯一一次完整本地门被并发 RFC-319/321 候选阻断，RFC-318 自有发现均已修复并定向复验；提交后的 exact-SHA hosted CI 才作为全仓终态。所有节点保留现有网络；未增加零网络、沙箱或安全措施，未修改 runner、`startTask` 及其下层。
+
 > ✅ **已完成 RFC（Done，2026-08-24；按 exact SHA 的 hosted CI 与 visual 双绿）：[RFC-317 公共内核架构边界加固](design/RFC-317-commons-boundary-hardening/proposal.md)**
 > —— 起于 RFC-294 `design.md §1.2` 四条判据里**从未落地的第四条**「存在防止第二实现再长出的棘轮」。
 > 18-agent 并行审计产出 **131 条经复核发现** 与 95 条无人看守的违规类别（全量证据在同目录 `findings.md`）。

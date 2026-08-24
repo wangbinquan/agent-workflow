@@ -21,6 +21,11 @@ import {
   type ExecutionContractRegistration,
 } from '@/modules/execution-contract/public/types'
 import { stableIdentityComponent } from '@/util/gitRef'
+import { projectDevelopmentToolResultV2 } from '../application/digitalEmployeeToolContractProjectionV2'
+import {
+  developmentExecutionContractRegistrationsV2,
+  developmentWorkContractsV2,
+} from './digitalEmployeeToolContractsV2'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
@@ -86,7 +91,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 8 } as const
+const typeRef = { typeId: 'development', revision: 9 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 const runtimeEmployeeTypeRefSchema = z
   .object({ typeId: z.string().min(1), revision: z.number().int().positive() })
@@ -94,6 +99,19 @@ const runtimeEmployeeTypeRefSchema = z
 const isTargetAwarePipeline = (
   employeeTypeRef: z.infer<typeof runtimeEmployeeTypeRefSchema> | null,
 ): boolean => employeeTypeRef?.typeId === 'development' && employeeTypeRef.revision >= 8
+const usesMinimalToolContracts = (
+  employeeTypeRef: z.infer<typeof runtimeEmployeeTypeRefSchema> | null,
+): boolean => employeeTypeRef?.typeId === 'development' && employeeTypeRef.revision >= 9
+const minimalDirectResultWorkItemRefs = new Set([
+  'prepare-materials',
+  'analyze-implement',
+  'repair-feedback',
+  'collect-pipeline',
+  'classify-pipeline',
+  'repair-pipeline',
+  'repair-conflict',
+  'prepare-approval',
+])
 
 const scopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('repository'), repositoryId: z.string().min(1).max(200) }).strict(),
@@ -436,6 +454,12 @@ const contracts: WorkContract[] = [
     WRITE_PLAN,
   ),
 ]
+
+const currentContract = (contractId: string): WorkContract => {
+  const found = developmentWorkContractsV2.find((candidate) => candidate.contractId === contractId)
+  if (found === undefined) throw new Error(`development v2 contract is missing: ${contractId}`)
+  return found
+}
 
 const contractField = (
   path: string,
@@ -1383,7 +1407,7 @@ const outputTopLevelFields = [
   'artifactRefs',
 ] as const
 
-export const developmentExecutionContractRegistrations: readonly ExecutionContractRegistration[] =
+const developmentExecutionContractRegistrationsV1: readonly ExecutionContractRegistration[] =
   contracts.map((workContract) => {
     const details = inputDetailsByContract[workContract.contractId]
     const outputDetails = outputDetailsByContract[workContract.contractId]
@@ -1513,6 +1537,11 @@ export const developmentExecutionContractRegistrations: readonly ExecutionContra
     }
   })
 
+export const developmentExecutionContractRegistrations: readonly ExecutionContractRegistration[] = [
+  ...developmentExecutionContractRegistrationsV1,
+  ...developmentExecutionContractRegistrationsV2,
+]
+
 const legacyBuiltinAgentContractRefs: Readonly<
   Record<string, readonly { contractId: string; version: number }[]>
 > = {
@@ -1566,20 +1595,20 @@ const primaryRole = (
 
 const implementationPlanningRole = {
   roleRef: 'planning',
-  label: text('方案分析', 'Implementation planning'),
+  label: text('编写实现方案', 'Write implementation plan'),
   description: text(
     '按当前业务理解需求和仓库现场，形成供人工审核的实现方案',
     'Understand the request and repository in the current business context, then produce a plan for human review',
   ),
   order: 1,
-  workContractRef: { contractId: 'development.analyze-plan', version: 1 },
+  workContractRef: { contractId: 'development.plan-implementation', version: 2 },
   bindingSlots: [
     {
       slotRef: 'plan',
-      label: text('方案分析工具', 'Planning tool'),
+      label: text('实现方案编写工具', 'Implementation plan writer'),
       description: text(
-        '启用方案审核时使用的确定性分析工具；岗位可替换平台内置默认项',
-        'The deterministic planning tool used when plan review is enabled; the job may replace the platform default',
+        '启用方案审核时负责写实现方案；岗位可替换平台内置默认项',
+        'Writes the implementation plan when plan review is enabled; the job may replace the platform default',
       ),
       required: false,
       cardinality: 'zero-or-one' as const,
@@ -1775,7 +1804,7 @@ const runtimePackage = {
       },
     },
     workStartWorkItemRef: 'prepare-materials',
-    workContracts: contracts,
+    workContracts: [...contracts, ...developmentWorkContractsV2],
     authoringManifest: {
       schemaVersion: 1,
       lifecycleRegions: [
@@ -1828,8 +1857,8 @@ const runtimePackage = {
               laneId: 'care-pipeline',
               label: text('流水线门禁', 'Pipeline gates'),
               description: text(
-                '取得证据、归类失败，再按固定优先级逐类修绿',
-                'Collect evidence, classify failures, then repair each type by fixed priority',
+                '取得证据、归类失败，再由岗位按配置顺序逐类修绿',
+                'Collect evidence, classify failures, then repair each type in the job-configured order',
               ),
               order: 20,
               kind: 'branch',
@@ -1924,14 +1953,14 @@ const runtimePackage = {
           regionId: 'delivery',
           responsibilityLaneId: 'delivery-main',
           order: 10,
-          label: text('准备工作材料', 'Prepare work materials'),
+          label: text('准备外部材料', 'Prepare external materials'),
           description: text(
-            '取得正文、附件或外部问题单多文件',
-            'Acquire body, attachments, or external work-item files',
+            '按外部事项编号把材料文件写入指定目录',
+            'Write external item materials to the designated directory',
           ),
-          workContractRef: { contractId: 'development.prepare-materials', version: 1 },
-          materialSummary: contracts[0]!.materialSummary,
-          completionStandard: contracts[0]!.completionStandard,
+          workContractRef: { contractId: 'development.prepare-materials', version: 2 },
+          materialSummary: currentContract('development.prepare-materials').materialSummary,
+          completionStandard: currentContract('development.prepare-materials').completionStandard,
           nodeKind: 'business-tool',
           toolRoleGroups: optionalPrimaryRole(
             '材料取得',
@@ -1946,14 +1975,14 @@ const runtimePackage = {
           regionId: 'delivery',
           responsibilityLaneId: 'delivery-main',
           order: 20,
-          label: text('分析与实现', 'Analyze and implement'),
+          label: text('实现变更', 'Implement change'),
           description: text(
-            '理解需求或定位问题并形成代码修改',
-            'Understand the request or diagnose the problem and produce code changes',
+            '读取需求材料并完成代码修改',
+            'Read the requirement materials and complete the code change',
           ),
-          workContractRef: { contractId: 'development.analyze-implement', version: 1 },
-          materialSummary: contracts[1]!.materialSummary,
-          completionStandard: contracts[1]!.completionStandard,
+          workContractRef: { contractId: 'development.implement-change', version: 2 },
+          materialSummary: currentContract('development.implement-change').materialSummary,
+          completionStandard: currentContract('development.implement-change').completionStandard,
           nodeKind: 'business-tool',
           humanReview: {
             optionRef: 'review-implementation-plan',
@@ -1966,16 +1995,16 @@ const runtimePackage = {
               'The task may require plan approval before its implementation tool runs',
             ),
             reviewedPath: {
-              beforeReviewLabel: text('方案分析', 'Implementation planning'),
-              afterApprovalLabel: text('分析与实现', 'Analyze and implement'),
+              beforeReviewLabel: text('编写实现方案', 'Write implementation plan'),
+              afterApprovalLabel: text('实现变更', 'Implement change'),
             },
           },
           toolRoleGroups: [
             ...primaryRole(
-              '分析与实现',
-              'Analyze and implement',
-              '完成需求分析和代码实现',
-              'Analyze the request and implement the change',
+              '实现变更',
+              'Implement change',
+              '根据需求材料完成代码实现',
+              'Implement the change from the requirement materials',
             ),
             implementationPlanningRole,
           ],
@@ -1988,8 +2017,8 @@ const runtimePackage = {
           order: 30,
           label: text('校验并冻结代码修改', 'Validate and freeze code changes'),
           description: text(
-            '只校验 envelope 与工作区差异并冻结待提交快照，不 commit、不 push',
-            'Validate the envelope and workspace delta, then freeze a pending snapshot without commit or push',
+            '校验工具结果与工作区修改，并冻结待提交快照',
+            'Validate the tool result and workspace change, then freeze the pending snapshot',
           ),
           workContractRef: { contractId: 'development.prepare-change', version: 1 },
           materialSummary: contracts[2]!.materialSummary,
@@ -2077,14 +2106,15 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-review',
           order: 70,
-          label: text('修复检视问题', 'Repair review feedback'),
+          label: text('处理检视意见', 'Resolve review feedback'),
           description: text(
-            '按问题集合修改代码并重新发布',
-            'Modify code for the problem set and republish',
+            '逐线程处理意见，需要时修改代码',
+            'Resolve every thread and change code when needed',
           ),
-          workContractRef: { contractId: 'development.repair-feedback', version: 1 },
-          materialSummary: contracts[6]!.materialSummary,
-          completionStandard: contracts[6]!.completionStandard,
+          workContractRef: { contractId: 'development.resolve-review-feedback', version: 2 },
+          materialSummary: currentContract('development.resolve-review-feedback').materialSummary,
+          completionStandard: currentContract('development.resolve-review-feedback')
+            .completionStandard,
           nodeKind: 'business-tool',
           inputMultiplicity: 'collection',
           toolRoleGroups: primaryRole(
@@ -2093,7 +2123,7 @@ const runtimePackage = {
             '修复检视问题',
             'Repair review problems',
           ),
-          nextWorkItemRefs: ['prepare-change'],
+          nextWorkItemRefs: ['prepare-change', 'reply-feedback'],
         },
         {
           workItemRef: 'reply-feedback',
@@ -2102,8 +2132,8 @@ const runtimePackage = {
           order: 75,
           label: text('回复修复结果', 'Reply with repair result'),
           description: text(
-            '提交更新 MR 后，平台把 Agent 的逐线程处理说明回复到原意见',
-            'After updating the MR, the platform replies to each thread with the Agent treatment',
+            '平台把逐线程处理说明回复到原意见；有代码修改时先更新 MR',
+            'The platform replies to each thread, updating the merge request first when code changed',
           ),
           workContractRef: { contractId: 'development.reply-feedback', version: 1 },
           materialSummary: contracts[19]!.materialSummary,
@@ -2117,14 +2147,15 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-pipeline',
           order: 80,
-          label: text('取得流水线门禁', 'Collect pipeline gates'),
+          label: text('采集流水线状态', 'Collect pipeline status'),
           description: text(
-            '调用自建系统程序取得详细门禁和大日志',
-            'Call system-specific programs for detailed gates and large logs',
+            '取得完整检查状态，并把大日志写入证据目录',
+            'Collect complete check status and write large logs to the evidence directory',
           ),
-          workContractRef: { contractId: 'development.collect-pipeline', version: 1 },
-          materialSummary: contracts[7]!.materialSummary,
-          completionStandard: contracts[7]!.completionStandard,
+          workContractRef: { contractId: 'development.collect-pipeline-status', version: 2 },
+          materialSummary: currentContract('development.collect-pipeline-status').materialSummary,
+          completionStandard: currentContract('development.collect-pipeline-status')
+            .completionStandard,
           nodeKind: 'business-tool',
           toolRoleGroups: primaryRole(
             '门禁采集器',
@@ -2139,22 +2170,25 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-pipeline',
           order: 90,
-          label: text('归类流水线失败', 'Classify pipeline failures'),
+          label: text('分类流水线失败', 'Classify pipeline failures'),
           description: text(
-            '按所选分类工具版本内的问题清单归类；清单顺序就是确定性处理优先级',
-            'Classify against the selected tool revision problem list; list order is deterministic priority',
+            '把每个失败检查恰好归入一个已配置类型',
+            'Assign every failed check to exactly one configured category',
           ),
-          workContractRef: { contractId: 'development.classify-pipeline', version: 1 },
-          materialSummary: contracts[8]!.materialSummary,
-          completionStandard: contracts[8]!.completionStandard,
+          workContractRef: { contractId: 'development.classify-pipeline-failures', version: 2 },
+          materialSummary: currentContract('development.classify-pipeline-failures')
+            .materialSummary,
+          completionStandard: currentContract('development.classify-pipeline-failures')
+            .completionStandard,
           nodeKind: 'business-tool',
           orderedDispatchAuthoring: {
             label: text('流水线问题与处理方式', 'Pipeline problems and handlers'),
             description: text(
-              '问题清单由分类工具定义；岗位只为派生问题选择兼容修复工具或协同员工',
-              'The classifier tool defines the problem list; the job only selects a compatible repair tool or employee for each derived problem',
+              '问题类型与兜底分类由分类工具定义；岗位为每类问题选择处理方式并决定顺序',
+              'The classifier tool defines problem types and the fallback; the job selects a handler and order for each type',
             ),
             destinationWorkItemRefs: ['repair-pipeline', 'delegate'],
+            processingOrderOwner: 'job',
           },
           toolRoleGroups: primaryRole(
             '问题识别者',
@@ -2169,14 +2203,15 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-pipeline',
           order: 100,
-          label: text('修复流水线问题', 'Repair pipeline failures'),
+          label: text('修复流水线失败', 'Repair pipeline failures'),
           description: text(
             '工具声明能解决的问题；岗位按分类工具清单逐类选择兼容处理者',
             'Tools declare the problems they solve; jobs select a compatible handler for each classifier-tool problem',
           ),
-          workContractRef: { contractId: 'development.repair-pipeline', version: 1 },
-          materialSummary: contracts[9]!.materialSummary,
-          completionStandard: contracts[9]!.completionStandard,
+          workContractRef: { contractId: 'development.repair-pipeline-failures', version: 2 },
+          materialSummary: currentContract('development.repair-pipeline-failures').materialSummary,
+          completionStandard: currentContract('development.repair-pipeline-failures')
+            .completionStandard,
           nodeKind: 'business-tool',
           toolRoleGroups: [
             {
@@ -2197,14 +2232,15 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-conflict',
           order: 110,
-          label: text('修复代码冲突', 'Repair merge conflict'),
+          label: text('解决合并冲突', 'Resolve merge conflicts'),
           description: text(
-            '在平台准备的冲突现场中修复授权文件',
-            'Repair authorized files in a platform-prepared conflict scene',
+            '解决平台列出的冲突文件',
+            'Resolve the conflict files listed by the platform',
           ),
-          workContractRef: { contractId: 'development.repair-conflict', version: 1 },
-          materialSummary: contracts[10]!.materialSummary,
-          completionStandard: contracts[10]!.completionStandard,
+          workContractRef: { contractId: 'development.resolve-merge-conflicts', version: 2 },
+          materialSummary: currentContract('development.resolve-merge-conflicts').materialSummary,
+          completionStandard: currentContract('development.resolve-merge-conflicts')
+            .completionStandard,
           nodeKind: 'business-tool',
           toolRoleGroups: primaryRole(
             '冲突修复者',
@@ -2254,20 +2290,20 @@ const runtimePackage = {
           regionId: 'care',
           responsibilityLaneId: 'care-approval',
           order: 122,
-          label: text('准备外部审批', 'Prepare external approval'),
+          label: text('编写审批草稿', 'Draft approval'),
           description: text(
-            '根据当前 MR 门禁形成审批材料；执行工具不持有审批系统凭据',
-            'Prepare approval material from current MR gates without approval credentials',
+            '根据当前 MR 和门禁结论形成审批草稿',
+            'Draft an approval from the current merge request and gate conclusions',
           ),
-          workContractRef: { contractId: 'development.prepare-approval', version: 1 },
-          materialSummary: contracts[15]!.materialSummary,
-          completionStandard: contracts[15]!.completionStandard,
+          workContractRef: { contractId: 'development.draft-approval', version: 2 },
+          materialSummary: currentContract('development.draft-approval').materialSummary,
+          completionStandard: currentContract('development.draft-approval').completionStandard,
           nodeKind: 'business-tool',
           toolRoleGroups: primaryRole(
             '审批材料准备者',
             'Approval material preparer',
-            '生成确定性的审批草稿 envelope',
-            'Produce a deterministic approval-draft envelope',
+            '生成可提交的审批草稿',
+            'Produce a submission-ready approval draft',
           ),
           nextWorkItemRefs: ['submit-approval'],
         },
@@ -3007,6 +3043,20 @@ export const pipelineContextSchema = z
       .default(null),
     evidenceArtifactRef: z.string().regex(/^\.agent-workflow\/pipeline\/[a-zA-Z0-9._-]+\//),
     failureTypes: z.array(pipelineFailureTypeSchema),
+    checks: z
+      .array(
+        z
+          .object({
+            checkRef: z.string().min(1).max(500),
+            name: z.string().min(1).max(500),
+            status: z.enum(['queued', 'running', 'passed', 'failed', 'canceled', 'skipped']),
+            summary: z.string().min(1).max(4_000).optional(),
+            evidenceFiles: z.array(z.string().min(1).max(2_000)).min(1).max(100).optional(),
+          })
+          .strict(),
+      )
+      .max(500)
+      .default([]),
   })
   .strict()
 
@@ -3204,6 +3254,7 @@ export const approvalContextSchema = z
       .object({ id: z.string().min(1).max(500), revision: z.number().int().positive() })
       .strict(),
     validatedDraftRef: z.string().min(1).max(500),
+    draft: z.string().min(1).max(32_000).nullable().default(null),
     subjectRef: z.string().min(1).max(1_000).nullable(),
     deadlineAt: z.string().datetime({ offset: true }).nullable(),
     idempotencyKey: z
@@ -3957,12 +4008,20 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
               registrationRef: z
                 .object({ id: z.string().min(1), revision: z.number().int().positive() })
                 .strict(),
-              workContractRef: z
-                .object({
-                  contractId: z.literal('development.analyze-plan'),
-                  version: z.literal(1),
-                })
-                .strict(),
+              workContractRef: z.union([
+                z
+                  .object({
+                    contractId: z.literal('development.analyze-plan'),
+                    version: z.literal(1),
+                  })
+                  .strict(),
+                z
+                  .object({
+                    contractId: z.literal('development.plan-implementation'),
+                    version: z.literal(2),
+                  })
+                  .strict(),
+              ]),
               implementation: z
                 .object({
                   kind: z.literal('agent'),
@@ -4059,7 +4118,26 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
     const targetAwarePipeline = isTargetAwarePipeline(request.employeeTypeRef)
-    const parsedOutput = reactionOutputSchema.parse(JSON.parse(request.outputJson) as unknown)
+    const directResult = z
+      .object({ directResult: z.record(z.string(), z.unknown()) })
+      .passthrough()
+      .safeParse(JSON.parse(request.outputJson) as unknown)
+    const requiresDirectV2Result =
+      usesMinimalToolContracts(request.employeeTypeRef) &&
+      minimalDirectResultWorkItemRefs.has(request.workItemRef)
+    if (requiresDirectV2Result && !directResult.success) {
+      throw new Error(`${request.workItemRef} must return its direct business result`)
+    }
+    const isDirectV2Result = requiresDirectV2Result && directResult.success
+    const projectedOutputJson = isDirectV2Result
+      ? projectDevelopmentToolResultV2({
+          workItemRef: request.workItemRef,
+          inputEnvelopeJson: request.inputEnvelopeJson,
+          connectionRef: request.connectionRef,
+          outputEnvelopeJson: request.outputJson,
+        })
+      : request.outputJson
+    const parsedOutput = reactionOutputSchema.parse(JSON.parse(projectedOutputJson) as unknown)
     const output = {
       ...parsedOutput,
       contextPatches: [...parsedOutput.contextPatches],
@@ -4118,7 +4196,11 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         'repair-pipeline',
         'repair-conflict',
       ])
-      if (deliveryWorkItems.has(request.workItemRef)) {
+      const replyOnlyReviewResult =
+        request.workItemRef === 'repair-feedback' &&
+        isDirectV2Result &&
+        typeof directResult.data.directResult.commitMessage !== 'string'
+      if (deliveryWorkItems.has(request.workItemRef) && !replyOnlyReviewResult) {
         if (
           parsedOutput.contextPatches.some(
             (patch) => patch.contextTypeId === 'development.issue-handling',
@@ -4154,24 +4236,45 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           )
         }
         const resolutionContext = platformContext('development.review-resolution')
+        const problemSet = inputState('development.problem-set', problemSetContextSchema)
         const current = inputState('development.review-resolution', reviewResolutionContextSchema)
         const replies = output.reviewReplies
+        const selectedThreads =
+          problemSet?.source === 'review'
+            ? problemSet.problems.map((problem) => problem.reviewThread)
+            : []
+        const selectedKeys = selectedThreads.map((thread) =>
+          thread == null ? null : `${thread.threadRef}\u0000${thread.revision}`,
+        )
         if (
           resolutionContext === null ||
+          problemSet === null ||
+          problemSet.source !== 'review' ||
           current === null ||
           current.status !== 'acknowledged' ||
           replies === undefined ||
-          replies.length !== current.threads.length ||
-          current.threads.some(
-            (thread, index) =>
-              replies[index]?.threadRef !== thread.threadRef ||
-              replies[index]?.revision !== thread.revision,
-          )
+          selectedKeys.some((key) => key === null) ||
+          new Set(selectedKeys).size !== selectedKeys.length ||
+          replies.length !== selectedKeys.length ||
+          selectedKeys.some((key, index) => {
+            const reply = replies[index]
+            return (
+              key === null ||
+              reply === undefined ||
+              `${reply.threadRef}\u0000${reply.revision}` !== key ||
+              !current.threads.some(
+                (thread) => `${thread.threadRef}\u0000${thread.revision}` === key,
+              )
+            )
+          })
         ) {
           throw new Error(
-            'repair-feedback must return one ordered review reply for every acknowledged thread revision',
+            'repair-feedback must return one ordered review reply for every selected thread revision',
           )
         }
+        const repliesByKey = new Map(
+          replies.map((reply) => [`${reply.threadRef}\u0000${reply.revision}`, reply] as const),
+        )
         appendPlatformContextPatch(
           resolutionContext,
           reviewResolutionContextSchema.parse({
@@ -4179,12 +4282,17 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             status: 'prepared',
             publishedHeadSha: null,
             commitSha: null,
-            threads: current.threads.map((thread, index) => ({
-              ...thread,
-              disposition: replies[index]!.disposition,
-              replyBody: replies[index]!.replyBody,
-              finalReply: null,
-            })),
+            threads: current.threads.map((thread) => {
+              const reply = repliesByKey.get(`${thread.threadRef}\u0000${thread.revision}`)
+              return reply === undefined
+                ? thread
+                : {
+                    ...thread,
+                    disposition: reply.disposition,
+                    replyBody: reply.replyBody,
+                    finalReply: null,
+                  }
+            }),
           }),
         )
       }
@@ -4271,9 +4379,27 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         if (
           (pipeline.status === 'passed' && pipeline.failureTypes.length > 0) ||
           (pipeline.status === 'pending' && pipeline.failureTypes.length > 0) ||
-          (pipeline.status === 'failed' && pipeline.failureTypes.length === 0)
+          (pipeline.status === 'failed' && pipeline.failureTypes.length === 0 && !isDirectV2Result)
         ) {
           throw new Error('pipeline status and failureTypes disagree')
+        }
+        if (targetAwarePipeline) {
+          const pipelinePatchIndex = output.contextPatches.findIndex(
+            (patch) => patch.contextTypeId === 'development.pipeline',
+          )
+          const pipelinePatch = output.contextPatches[pipelinePatchIndex]
+          if (pipelinePatch === undefined) {
+            throw new Error('collect-pipeline requires the current MR and a pipeline patch')
+          }
+          output.contextPatches[pipelinePatchIndex] = {
+            ...pipelinePatch,
+            stateJson: JSON.stringify(
+              pipelineContextSchema.parse({
+                ...pipeline,
+                targetSha: mergeRequest.targetSha,
+              }),
+            ),
+          }
         }
       }
       if (request.workItemRef === 'repair-feedback') {
@@ -4298,6 +4424,15 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         const actual = proposed.threads.map(
           (thread) => `${thread.threadRef}\u0000${thread.revision}`,
         )
+        const selectedKeys = new Set(
+          problemSet.problems.map((problem) => {
+            const thread = problem.reviewThread
+            if (thread == null) {
+              throw new Error('repair-feedback review problem lost its frozen thread revision')
+            }
+            return `${thread.threadRef}\u0000${thread.revision}`
+          }),
+        )
         if (
           expected.length !== actual.length ||
           expected.some((key, index) => actual[index] !== key) ||
@@ -4309,11 +4444,13 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             (thread, index) =>
               JSON.stringify(thread.acknowledgement) !==
                 JSON.stringify(current.threads[index]!.acknowledgement) ||
-              thread.finalReply !== null,
+              (selectedKeys.has(`${thread.threadRef}\u0000${thread.revision}`)
+                ? thread.finalReply !== null
+                : JSON.stringify(thread) !== JSON.stringify(current.threads[index]!)),
           )
         ) {
           throw new Error(
-            'repair-feedback must answer every acknowledged thread exactly once without changing platform receipts',
+            'repair-feedback must answer every selected thread exactly once without changing historical receipts',
           )
         }
       }
@@ -4566,7 +4703,10 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       )
       if (existingPatch === -1) settlementPatches.push(replacement)
       else settlementPatches[existingPatch] = replacement
-      nextWorkItemRef = 'prepare-change'
+      nextWorkItemRef =
+        usesMinimalToolContracts(request.employeeTypeRef) && output.deliveryContent == null
+          ? 'reply-feedback'
+          : 'prepare-change'
     } else if (request.workItemRef === 'publish-mr') {
       const reviewResolution = reviewResolutionContextSchema
         .nullable()

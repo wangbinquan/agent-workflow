@@ -55,9 +55,11 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-function guide(contractId: string) {
+function guide(contractId: string, version?: number) {
   const registration = developmentExecutionContractRegistrations.find(
-    (candidate) => candidate.contractRef.contractId === contractId,
+    (candidate) =>
+      candidate.contractRef.contractId === contractId &&
+      (version === undefined || candidate.contractRef.version === version),
   )
   if (registration === undefined) throw new Error(`missing fixture ${contractId}`)
   return executionContractGuideSchema.parse(JSON.parse(registration.guideJson) as unknown)
@@ -143,7 +145,6 @@ describe('platform execution contracts', () => {
     const contractGuide = guide('development.analyze-implement')
     const runtimeGuide = {
       schemaVersion: contractGuide.schemaVersion,
-      outputMode: contractGuide.outputMode,
       contractRef: contractGuide.contractRef,
       displayName: contractGuide.displayName,
       description: contractGuide.description,
@@ -192,6 +193,51 @@ describe('platform execution contracts', () => {
         }),
       }),
     ).toThrow('output status must be ok, needs-input, or blocked')
+  })
+
+  test('direct Agent prompts contain only the action, business result, and business input', () => {
+    const contractGuide = guide('development.implement-change', 2)
+    const prompt = buildDigitalEmployeeFixedPrompt(
+      {
+        roundRef: 'round-direct-input',
+        executionNonce: 'b'.repeat(64),
+        toolSlotRef: 'default',
+        semanticValidatorId: 'development.implement-change.v2.validator',
+        inputEnvelopeJson: JSON.stringify({
+          requirementsDirectory: '.agent-workflow/inputs/requirements/case',
+        }),
+        allowedEffectKinds: [],
+      },
+      { previousError: null },
+      {
+        schemaVersion: contractGuide.schemaVersion,
+        inputMode: contractGuide.inputMode,
+        contractRef: contractGuide.contractRef,
+        displayName: contractGuide.displayName,
+        description: contractGuide.description,
+        inputSchemaId: contractGuide.input.schemaId,
+        outputSchemaId: contractGuide.output.schemaId,
+        outputTopLevelFields: contractGuide.output.topLevelFields,
+        allowedExecutorKinds: contractGuide.allowedExecutorKinds,
+        agentOutputPort: contractGuide.transports.agent?.outputPort ?? null,
+        agentOutputKind: contractGuide.transports.agent?.outputKind ?? null,
+        guideJson: JSON.stringify(contractGuide),
+      },
+    )
+
+    expect(prompt).toContain('Action: Read the requirement materials and complete the code change')
+    expect(prompt).toContain('Use the available network')
+    expect(prompt).toContain('INPUT_JSON')
+    expect(prompt).toContain('"requirementsDirectory"')
+    expect(prompt).not.toContain('round-direct-input')
+    expect(prompt).not.toContain('development.implement-change@2')
+    expect(prompt).not.toContain('Input schema:')
+    expect(prompt).not.toContain('tool slot')
+    expect(prompt).not.toContain('Semantic validator:')
+    expect(prompt).not.toContain('schemaVersion')
+    expect(prompt).not.toContain('executionNonce')
+    expect(prompt).not.toContain('directResult')
+    expect(prompt).not.toContain('envelope')
   })
 
   // User regression 2026-08-23: the tool-definition guide had reversed the
@@ -442,9 +488,10 @@ describe('platform execution contracts', () => {
 
     const prompt = buildDigitalEmployeePlanPrompt(
       {
-        roundRef: 'round-plan',
-        executionNonce: '3'.repeat(64),
-        inputEnvelopeJson: JSON.stringify(envelope),
+        inputEnvelopeJson: JSON.stringify({
+          requirementsDirectory: requirementDirectory,
+          outputFile: implementationPlanPath,
+        }),
       },
       { previousError: null },
       implementationPlanPath,
@@ -453,9 +500,30 @@ describe('platform execution contracts', () => {
       `Write the complete Markdown plan only to this exact platform path: ${implementationPlanPath}`,
     )
     expect(prompt).toContain(
+      'Use the available network and repository, Git, or code-host reads when they help you verify the plan.',
+    )
+    expect(prompt).toContain(
+      'Do not publish external changes: the platform owns commit, push, merge, comment publication, and approval submission.',
+    )
+    expect(prompt).toContain('Do not modify business files while writing the plan.')
+    expect(prompt).toContain('"requirementsDirectory"')
+    expect(prompt).toContain('"outputFile"')
+    expect(prompt).toContain('INPUT_JSON')
+    expect(prompt).not.toContain('INPUT_ENVELOPE_JSON')
+    expect(prompt).not.toContain('EXPECTED_ANALYSIS_PLAN_PATH_JSON')
+    expect(prompt).not.toContain('ROUND_REF')
+    expect(prompt).not.toContain('EXECUTION_NONCE')
+
+    const legacyPrompt = buildDigitalEmployeePlanPrompt(
+      { inputEnvelopeJson: JSON.stringify(envelope) },
+      { previousError: null },
+      implementationPlanPath,
+      'host-envelope',
+    )
+    expect(legacyPrompt).toContain('INPUT_ENVELOPE_JSON')
+    expect(legacyPrompt).toContain(
       `EXPECTED_ANALYSIS_PLAN_PATH_JSON\n${JSON.stringify(implementationPlanPath)}`,
     )
-    expect(prompt).toContain('Do not modify any other file or run git, commit, push')
 
     const host = WorkflowDefinitionSchema.parse(
       synthesizeReviewedDigitalEmployeeHostSnapshot({
@@ -823,7 +891,7 @@ describe('platform execution contracts', () => {
       expect.objectContaining({ code: 'agent-contract-declared', ok: false }),
     )
     const compatiblePlanner = await service.validateExecutor({
-      contractRef: { contractId: 'development.analyze-plan', version: 1 },
+      contractRef: { contractId: 'development.plan-implementation', version: 2 },
       implementation: {
         kind: 'agent',
         agentRef: { id: planner.id, revision: planner.updatedAt },
@@ -961,6 +1029,33 @@ process.stdout.write(JSON.stringify({
     expect(executionContractRefKey(guide('development.prepare-materials').contractRef)).toBe(
       'development.prepare-materials@1',
     )
+
+    const invalidDirectArtifact = await createProgramArtifactStore(appHome).put({
+      runtimeKind: 'node',
+      source: `process.stdout.write(JSON.stringify({ outcome: 'completed' }))`,
+      parameterValues: null,
+    })
+    const directRegistration = developmentExecutionContractRegistrations.find(
+      (registration) =>
+        registration.contractRef.contractId === 'development.implement-change' &&
+        registration.contractRef.version === 2,
+    )!
+    const directChecks = await createExecutionContractProgramFixtureAdapter({
+      appHome,
+      scriptInterpreterOverrides: { node: process.execPath },
+    }).validate({
+      guide: guide('development.implement-change'),
+      implementation: {
+        kind: 'program',
+        runtimeKind: 'node',
+        ...invalidDirectArtifact,
+        runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
+      },
+      validateOutputJson: directRegistration.validateOutputJson,
+    })
+    expect(directChecks).toEqual([
+      expect.objectContaining({ code: 'program-fixture-exact-output', ok: false }),
+    ])
   })
 
   test('the shared Script host keeps the platform contract input port explicit', () => {

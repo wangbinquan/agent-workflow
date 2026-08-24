@@ -291,11 +291,13 @@ export class DigitalEmployeeAuthoringService {
         latestRuntimeByType.set(runtime.descriptor.typeRef.typeId, runtime)
       }
     }
-    for (const runtime of [...latestRuntimeByType.values()].sort((left, right) =>
+    const latestRuntimes = [...latestRuntimeByType.values()].sort((left, right) =>
       left.descriptor.typeRef.typeId.localeCompare(right.descriptor.typeRef.typeId),
-    )) {
+    )
+    for (const runtime of latestRuntimes) {
       this.#automaticallyUpgradeCompatibleClosures(runtime.descriptor.typeRef)
     }
+    this.#automaticallyReconcileCompatibleCollaborationTargets()
 
     this.#store.ensureExecutionPolicy({
       content: DEFAULT_GLOBAL_EXECUTION_POLICY,
@@ -440,7 +442,10 @@ export class DigitalEmployeeAuthoringService {
       employee.configuration.jobTemplateRef,
       targetTypeRef,
     )
-    for (const binding of employee.configuration.collaborationOverrides) {
+    const collaborationOverrides = employee.configuration.collaborationOverrides.map((binding) =>
+      this.#resolveAutomaticCollaborationBinding(binding),
+    )
+    for (const binding of collaborationOverrides) {
       this.#assertAutomaticCollaborationCompatibility(employee.typeRef, targetTypeRef, binding)
     }
     const toolOverrides = employee.configuration.toolOverrides.map((binding) => ({
@@ -457,6 +462,7 @@ export class DigitalEmployeeAuthoringService {
       typeRef: targetTypeRef,
       jobTemplateRef,
       toolOverrides,
+      collaborationOverrides,
     })
     const candidate: EmployeeDefinitionRecord = {
       ...employee,
@@ -485,11 +491,6 @@ export class DigitalEmployeeAuthoringService {
     workItemRef: string,
   ): ExactResourceRef {
     if (this.#platformTools.isPlatformTool(sourceRef.id)) {
-      this.#assertAutomaticPlatformToolContractCompatibility(
-        sourceTypeRef,
-        targetTypeRef,
-        workItemRef,
-      )
       const successor = this.#platformTools.resolveCompatibleRevision({
         sourceRef,
         targetTypeRef,
@@ -670,35 +671,6 @@ export class DigitalEmployeeAuthoringService {
     }
   }
 
-  #assertAutomaticPlatformToolContractCompatibility(
-    sourceTypeRef: EmployeeTypeRef,
-    targetTypeRef: EmployeeTypeRef,
-    workItemRef: string,
-  ): void {
-    const sourceDescriptor = this.#descriptor(sourceTypeRef)
-    const targetDescriptor = this.#descriptor(targetTypeRef)
-    const sourceItem = findWorkItem(sourceDescriptor, workItemRef)
-    const targetItem = findWorkItem(targetDescriptor, workItemRef)
-    const sourceContract =
-      sourceItem === null ? null : findWorkContract(sourceDescriptor, sourceItem.workContractRef)
-    const targetContract =
-      targetItem === null ? null : findWorkContract(targetDescriptor, targetItem.workContractRef)
-    if (
-      sourceItem === null ||
-      sourceItem.nodeKind !== 'business-tool' ||
-      targetItem === null ||
-      targetItem.nodeKind !== 'business-tool' ||
-      sourceContract === null ||
-      targetContract === null ||
-      contentDigest(sourceContract) !== contentDigest(targetContract)
-    ) {
-      throw new AutomaticTypeUpgradeError(
-        'work-contract-changed',
-        `work contract changed for ${targetTypeRef.typeId}/${workItemRef}`,
-      )
-    }
-  }
-
   #automaticallyUpgradeJobTemplate(
     sourceRef: ExactResourceRef,
     targetTypeRef: EmployeeTypeRef,
@@ -717,7 +689,10 @@ export class DigitalEmployeeAuthoringService {
         `job template is not an active older revision: ${sourceRef.id}@${sourceRef.revision}`,
       )
     }
-    for (const binding of source.content.defaultCollaborationBindings) {
+    const defaultCollaborationBindings = source.content.defaultCollaborationBindings.map(
+      (binding) => this.#resolveAutomaticCollaborationBinding(binding),
+    )
+    for (const binding of defaultCollaborationBindings) {
       this.#assertAutomaticCollaborationCompatibility(
         source.content.typeRef,
         targetTypeRef,
@@ -754,6 +729,7 @@ export class DigitalEmployeeAuthoringService {
       ...source.content,
       typeRef: targetTypeRef,
       defaultToolBindings,
+      defaultCollaborationBindings,
       orderedDispatchConfigurations,
       reactionLaneOrder: this.#normalizeReactionLaneOrder(
         targetTypeRef,
@@ -856,6 +832,185 @@ export class DigitalEmployeeAuthoringService {
       publishedBy: null,
     })
     return ref
+  }
+
+  #latestRegisteredTypeRevision(typeId: string): number | null {
+    let latest: number | null = null
+    for (const runtime of this.#types.values()) {
+      if (runtime.descriptor.typeRef.typeId !== typeId) continue
+      latest = Math.max(latest ?? 0, runtime.descriptor.typeRef.revision)
+    }
+    return latest
+  }
+
+  #resolveAutomaticCollaborationBinding(
+    binding: EmployeeCollaborationBinding,
+  ): EmployeeCollaborationBinding {
+    const frozenTarget = this.#store.getEmployeeDefinitionRevision(binding.targetEmployeeRef)
+    if (frozenTarget === null) return binding
+    const currentTypeRevision = this.#latestRegisteredTypeRevision(
+      frozenTarget.content.typeRef.typeId,
+    )
+    if (
+      currentTypeRevision === null ||
+      frozenTarget.content.typeRef.revision > currentTypeRevision
+    ) {
+      return binding
+    }
+    const currentTarget = this.#store.getEmployeeDefinition(binding.targetEmployeeRef.id)
+    if (
+      currentTarget === null ||
+      currentTarget.archivedAt !== null ||
+      currentTarget.currentRevision === null ||
+      currentTarget.currentRevision <= binding.targetEmployeeRef.revision
+    ) {
+      return binding
+    }
+    const successorRef = {
+      id: currentTarget.id,
+      revision: currentTarget.currentRevision,
+    }
+    const successor = this.#store.getEmployeeDefinitionRevision(successorRef)
+    if (
+      successor === null ||
+      successor.createdBy !== null ||
+      successor.content.typeRef.typeId !== frozenTarget.content.typeRef.typeId ||
+      successor.content.typeRef.revision !== currentTypeRevision
+    ) {
+      return binding
+    }
+    return employeeCollaborationBindingSchema.parse({
+      ...binding,
+      targetEmployeeRef: successorRef,
+    })
+  }
+
+  #automaticallyReconcileCompatibleCollaborationTargets(): void {
+    const employees = this.#store
+      .listEmployeeDefinitions()
+      .filter(
+        (employee) =>
+          employee.currentRevision !== null &&
+          this.#latestRegisteredTypeRevision(employee.typeRef.typeId) === employee.typeRef.revision,
+      )
+    const employeeById = new Map(employees.map((employee) => [employee.id, employee] as const))
+    const currentById = new Map(
+      employees.flatMap((employee) => {
+        const current = this.#store.getEmployeeDefinitionRevision({
+          id: employee.id,
+          revision: employee.currentRevision!,
+        })
+        return current === null ? [] : ([[employee.id, current]] as const)
+      }),
+    )
+    const visitState = new Map<string, 'visiting' | 'visited'>()
+    const stack: string[] = []
+    const cyclicIds = new Set<string>()
+    const orderedIds: string[] = []
+    const visit = (employeeId: string): void => {
+      const state = visitState.get(employeeId)
+      if (state === 'visited') return
+      if (state === 'visiting') {
+        const cycleStart = stack.lastIndexOf(employeeId)
+        for (const id of stack.slice(Math.max(0, cycleStart))) cyclicIds.add(id)
+        return
+      }
+      visitState.set(employeeId, 'visiting')
+      stack.push(employeeId)
+      const current = currentById.get(employeeId)
+      for (const targetId of [
+        ...new Set(
+          current?.content.exactCollaborationBindings.map(
+            (binding) => binding.targetEmployeeRef.id,
+          ) ?? [],
+        ),
+      ].sort()) {
+        if (employeeById.has(targetId)) visit(targetId)
+      }
+      stack.pop()
+      visitState.set(employeeId, 'visited')
+      orderedIds.push(employeeId)
+    }
+    for (const employeeId of [...employeeById.keys()].sort()) visit(employeeId)
+
+    for (const employeeId of [...cyclicIds].sort()) {
+      const employee = employeeById.get(employeeId)!
+      this.#reportAutomaticUpgradeIssue(
+        {
+          sourceTypeRef: employee.typeRef,
+          targetTypeRef: employee.typeRef,
+          resourceKind: 'employee',
+          resourceId: employee.id,
+        },
+        new AutomaticTypeUpgradeError(
+          'collaboration-cycle',
+          `automatic collaboration reconciliation found a cycle containing ${employee.id}`,
+        ),
+      )
+    }
+
+    for (const employeeId of orderedIds) {
+      if (cyclicIds.has(employeeId)) continue
+      const employee = this.#store.getEmployeeDefinition(employeeId)
+      if (employee === null || employee.currentRevision === null) continue
+      try {
+        const current = this.#store.getEmployeeDefinitionRevision({
+          id: employee.id,
+          revision: employee.currentRevision,
+        })
+        if (current === null) continue
+        const resolvedBindings = current.content.exactCollaborationBindings.map((binding) =>
+          this.#resolveAutomaticCollaborationBinding(binding),
+        )
+        const changedWorkItems = new Set(
+          current.content.exactCollaborationBindings.flatMap((binding, index) =>
+            binding.targetEmployeeRef.id !== resolvedBindings[index]?.targetEmployeeRef.id ||
+            binding.targetEmployeeRef.revision !==
+              resolvedBindings[index]?.targetEmployeeRef.revision
+              ? [binding.workItemRef]
+              : [],
+          ),
+        )
+        if (changedWorkItems.size === 0) continue
+        const collaborationOverrides = [
+          ...employee.configuration.collaborationOverrides.filter(
+            (binding) => !changedWorkItems.has(binding.workItemRef),
+          ),
+          ...resolvedBindings.filter((binding) => changedWorkItems.has(binding.workItemRef)),
+        ]
+        const configuration = digitalEmployeeDefinitionDraftSchema.parse({
+          ...employee.configuration,
+          collaborationOverrides,
+        })
+        const candidate: EmployeeDefinitionRecord = {
+          ...employee,
+          configuration,
+          updatedAt: this.#now(),
+        }
+        const compiled = this.#compileEmployeeDefinition(candidate, null)
+        this.#store.saveEmployeeDefinition({
+          ...compiled,
+          definitionMutation: {
+            kind: 'update',
+            expectedTypeRef: employee.typeRef,
+            targetTypeRef: employee.typeRef,
+            name: employee.name,
+            configuration,
+            updatedAt: compiled.revision.createdAt,
+          },
+        })
+      } catch (error) {
+        this.#reportAutomaticUpgradeIssue(
+          {
+            sourceTypeRef: employee.typeRef,
+            targetTypeRef: employee.typeRef,
+            resourceKind: 'employee',
+            resourceId: employee.id,
+          },
+          error,
+        )
+      }
+    }
   }
 
   #assertAutomaticCollaborationCompatibility(
@@ -1434,18 +1589,29 @@ export class DigitalEmployeeAuthoringService {
       // their existing job-owned list. Every newly authored classifier is
       // required to carry definitions by #prepareToolDraft above.
       if (definitions === undefined) continue
+      const classifier = findWorkItem(runtime.descriptor, configuration.classifierWorkItemRef)
+      const jobOwnsOrder = classifier?.orderedDispatchAuthoring?.processingOrderOwner === 'job'
+      const matchesDefinition = (
+        definition: (typeof definitions)[number],
+        route: (typeof configuration.routes)[number] | undefined,
+      ) =>
+        route !== undefined &&
+        route.routeRef === definition.routeRef &&
+        route.displayName === definition.displayName &&
+        route.description === definition.description &&
+        route.fallback === definition.fallback
       const matches =
         definitions.length === configuration.routes.length &&
-        definitions.every((definition, index) => {
-          const route = configuration.routes[index]
-          return (
-            route !== undefined &&
-            route.routeRef === definition.routeRef &&
-            route.displayName === definition.displayName &&
-            route.description === definition.description &&
-            route.fallback === definition.fallback
-          )
-        })
+        (jobOwnsOrder
+          ? definitions.every((definition) =>
+              matchesDefinition(
+                definition,
+                configuration.routes.find((route) => route.routeRef === definition.routeRef),
+              ),
+            )
+          : definitions.every((definition, index) =>
+              matchesDefinition(definition, configuration.routes[index]),
+            ))
       if (!matches) {
         throw new ValidationError(
           'employee-ordered-dispatch-definition-mismatch',

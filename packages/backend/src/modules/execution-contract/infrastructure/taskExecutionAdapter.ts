@@ -140,7 +140,7 @@ export function createExecutionContractProgramFixtureAdapter(input: {
   readonly scriptInterpreterOverrides?: Partial<Record<'bash' | 'node' | 'python', string>>
 }): ExecutionContractProgramFixturePort {
   return {
-    async validate({ guide, implementation }) {
+    async validate({ guide, implementation, validateOutputJson }) {
       const artifactPath = resolveArtifact(input.appHome, implementation.executableArtifactRef)
       if (artifactPath === null) {
         return [
@@ -212,8 +212,10 @@ export function createExecutionContractProgramFixtureAdapter(input: {
       const roundRef = `fixture-${ulid()}`
       const executionNonce = sha256Hex(roundRef)
       const fixtureInput = JSON.parse(guide.input.exampleJson) as Record<string, unknown>
-      fixtureInput.roundRef = roundRef
-      fixtureInput.executionNonce = executionNonce
+      if (guide.inputMode === 'host-envelope') {
+        fixtureInput.roundRef = roundRef
+        fixtureInput.executionNonce = executionNonce
+      }
       const node = {
         id: 'execution-contract-fixture',
         kind: 'script',
@@ -253,11 +255,17 @@ export function createExecutionContractProgramFixtureAdapter(input: {
           ]
         }
         try {
+          const rawOutput = outcome.result.rawStdout.trim()
+          const outputJson =
+            guide.outputMode === 'direct-json' ? validateOutputJson?.(rawOutput) : rawOutput
+          if (outputJson === undefined) {
+            throw new Error('direct JSON output contract has no registered validator')
+          }
           validateExactContractOutput({
             guide,
             roundRef,
             executionNonce,
-            outputJson: outcome.result.rawStdout.trim(),
+            outputJson,
           })
           return [
             {

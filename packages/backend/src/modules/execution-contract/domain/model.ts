@@ -45,7 +45,8 @@ interface ExecutionContractTransportGuide {
 
 export interface ExecutionContractGuide {
   schemaVersion: 1
-  outputMode: 'envelope' | 'artifact-path'
+  inputMode: 'host-envelope' | 'direct-json'
+  outputMode: 'envelope' | 'direct-json' | 'artifact-path'
   contractRef: ExecutionContractRef
   displayName: LocalizedContractText
   description: LocalizedContractText
@@ -62,7 +63,7 @@ export interface ExecutionContractGuide {
 /** Narrow cross-context projection; the full authoring guide stays serialized. */
 export interface ExecutionContractRuntimeView {
   schemaVersion: 1
-  outputMode: 'envelope' | 'artifact-path'
+  inputMode?: 'host-envelope' | 'direct-json'
   contractRef: ExecutionContractRef
   displayName: LocalizedContractText
   description: LocalizedContractText
@@ -265,14 +266,18 @@ export const executionContractSchemaGuideSchema = z
     if (exampleRecord !== null) {
       const actual = sortedKeys(exampleRecord)
       const expected = [...value.topLevelFields].sort((left, right) => left.localeCompare(right))
-      if (
-        actual.length !== expected.length ||
-        actual.some((field, index) => field !== expected[index])
-      ) {
+      const requiredRoots = new Set(
+        value.fields
+          .filter((field) => field.required && !field.path.includes('.'))
+          .map((field) => field.path),
+      )
+      const missingRequired = [...requiredRoots].filter((field) => !actual.includes(field))
+      const extra = actual.filter((field) => !expected.includes(field))
+      if (missingRequired.length > 0 || extra.length > 0) {
         ctx.addIssue({
           code: 'custom',
           path: ['exampleJson'],
-          message: 'example top-level fields must exactly match topLevelFields',
+          message: 'example must contain required top-level fields and no undeclared fields',
         })
       }
       for (const issue of fieldShapeIssues(value.fields, exampleRecord)) {
@@ -295,7 +300,8 @@ const transportGuideSchema = z
 export const executionContractGuideSchema = z
   .object({
     schemaVersion: z.literal(1),
-    outputMode: z.enum(['envelope', 'artifact-path']).default('envelope'),
+    inputMode: z.enum(['host-envelope', 'direct-json']).default('host-envelope'),
+    outputMode: z.enum(['envelope', 'direct-json', 'artifact-path']).default('envelope'),
     contractRef: executionContractRefSchema,
     displayName: localizedContractTextSchema,
     description: localizedContractTextSchema,
@@ -331,13 +337,15 @@ export const executionContractGuideSchema = z
         })
       }
     }
-    for (const field of ['schemaVersion', 'roundRef', 'executionNonce']) {
-      if (!value.input.topLevelFields.includes(field)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['input', 'topLevelFields'],
-          message: `input envelope must include ${field}`,
-        })
+    if (value.inputMode === 'host-envelope') {
+      for (const field of ['schemaVersion', 'roundRef', 'executionNonce']) {
+        if (!value.input.topLevelFields.includes(field)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['input', 'topLevelFields'],
+            message: `input envelope must include ${field}`,
+          })
+        }
       }
     }
     if (value.outputMode === 'envelope') {
@@ -356,6 +364,13 @@ export const executionContractGuideSchema = z
 export interface ExecutionContractRegistration {
   readonly contractRef: ExecutionContractRef
   readonly guideJson: string
+  /** Projects the platform-owned host envelope to the tool's direct business input. */
+  projectInputJson?(input: {
+    readonly inputEnvelopeJson: string
+    readonly projectionJson?: string | null
+  }): string
+  /** Performs the contract-owned nested validation for a direct JSON result. */
+  validateOutputJson?(outputJson: string): string
 }
 
 const exactResourceRefSchema = z
@@ -443,15 +458,21 @@ function validateEnvelopeShape(input: {
   readonly kind: 'input' | 'output'
   readonly schema: ExecutionContractSchemaGuide
   readonly record: Record<string, unknown>
+  readonly exactTopLevel?: boolean
 }): void {
   const actual = sortedKeys(input.record)
   const expected = [...input.schema.topLevelFields].sort((left, right) => left.localeCompare(right))
-  if (
-    actual.length !== expected.length ||
-    actual.some((field, index) => field !== expected[index])
-  ) {
-    const missing = expected.filter((field) => !actual.includes(field))
-    const extra = actual.filter((field) => !expected.includes(field))
+  const requiredRoots = new Set(
+    input.schema.fields
+      .filter((field) => field.required && !field.path.includes('.'))
+      .map((field) => field.path),
+  )
+  const missing = expected.filter(
+    (field) =>
+      !actual.includes(field) && (input.exactTopLevel !== false || requiredRoots.has(field)),
+  )
+  const extra = actual.filter((field) => !expected.includes(field))
+  if (missing.length > 0 || extra.length > 0) {
     throw new Error(
       `${input.kind} fields do not match ${input.schema.schemaId}; missing=[${missing.join(',')}], extra=[${extra.join(',')}]`,
     )
@@ -488,8 +509,15 @@ export function validateExactContractInput(input: {
   readonly inputJson: string
 }): string {
   const record = parseContractEnvelope('input', input.inputJson)
-  validateEnvelopeShape({ kind: 'input', schema: input.guide.input, record })
-  validateEnvelopeIdentity({ kind: 'input', record, ...input })
+  validateEnvelopeShape({
+    kind: 'input',
+    schema: input.guide.input,
+    record,
+    exactTopLevel: input.guide.inputMode === 'host-envelope',
+  })
+  if (input.guide.inputMode === 'host-envelope') {
+    validateEnvelopeIdentity({ kind: 'input', record, ...input })
+  }
   return JSON.stringify(record)
 }
 
@@ -507,7 +535,13 @@ export function validateExactContractOutput(input: {
     return artifactPath
   }
   const record = parseContractEnvelope('output', input.outputJson)
-  validateEnvelopeShape({ kind: 'output', schema: input.guide.output, record })
+  validateEnvelopeShape({
+    kind: 'output',
+    schema: input.guide.output,
+    record,
+    exactTopLevel: input.guide.outputMode === 'envelope',
+  })
+  if (input.guide.outputMode === 'direct-json') return JSON.stringify(record)
   validateEnvelopeIdentity({ kind: 'output', record, ...input })
   if (!['ok', 'needs-input', 'blocked'].includes(String(record.status))) {
     throw new Error('output status must be ok, needs-input, or blocked')
@@ -538,9 +572,11 @@ export function buildExecutionContractAgentPrompt(input: {
   const authoredGuide = executionContractGuideSchema.parse(
     JSON.parse(input.guide.guideJson) as unknown,
   )
+  const outputMode = authoredGuide.outputMode
   const outputExample = (() => {
-    if (input.guide.outputMode !== 'envelope') return null
+    if (outputMode === 'artifact-path') return null
     const decoded = JSON.parse(authoredGuide.output.exampleJson) as Record<string, unknown>
+    if (outputMode === 'direct-json') return JSON.stringify(decoded, null, 2)
     return JSON.stringify(
       {
         ...decoded,
@@ -553,7 +589,7 @@ export function buildExecutionContractAgentPrompt(input: {
     )
   })()
   const effectInstructions =
-    input.guide.outputMode !== 'envelope'
+    outputMode !== 'envelope'
       ? []
       : [
           'effectSuggestions must be an array of string effect IDs; never encode an effect as an object.',
@@ -568,29 +604,49 @@ export function buildExecutionContractAgentPrompt(input: {
                 ]),
         ]
   const outputInstructions =
-    input.guide.outputMode === 'artifact-path'
+    outputMode === 'artifact-path'
       ? [
           `Return only one artifact path through ${input.guide.agentOutputPort ?? 'the declared output port'}.`,
           'Do not return an envelope, Markdown wrapper, or surrounding prose.',
         ]
+      : outputMode === 'direct-json'
+        ? [
+            `Return only one JSON object through ${input.guide.agentOutputPort ?? EXECUTION_CONTRACT_RESULT_PORT}.`,
+            `The result may use only these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}; omit optional fields instead of returning null or placeholders.`,
+            'Use outcome="completed" for a completed action, or outcome="blocked" with a concrete explanation when the action cannot be completed.',
+            'Use the following authored example as the business result shape.',
+            'OUTPUT_SCHEMA_EXAMPLE_JSON',
+            outputExample!,
+            'Never wrap the JSON in Markdown and never add text before or after it.',
+          ]
+        : [
+            `Return only one JSON object through ${input.guide.agentOutputPort ?? EXECUTION_CONTRACT_RESULT_PORT}.`,
+            `Copy schemaVersion=1, roundRef=${JSON.stringify(input.roundRef)}, and executionNonce=${JSON.stringify(input.executionNonce)} exactly.`,
+            `The output must contain exactly these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}.`,
+            'Set status to exactly "ok", "needs-input", or "blocked". For successful completion use "ok", never "succeeded" or another synonym.',
+            ...effectInstructions,
+            'Use the following authored example as the exact JSON value shape; replace only business content while preserving field types.',
+            'OUTPUT_SCHEMA_EXAMPLE_JSON',
+            outputExample!,
+            'Never wrap the JSON in Markdown and never add text before or after it.',
+          ]
+  const header =
+    input.guide.inputMode === 'direct-json'
+      ? [
+          `Action: ${authoredGuide.description['en-US']}`,
+          ...input.policyLines,
+          ...outputInstructions,
+        ]
       : [
-          `Return only one JSON object through ${input.guide.agentOutputPort ?? EXECUTION_CONTRACT_RESULT_PORT}.`,
-          `Copy schemaVersion=1, roundRef=${JSON.stringify(input.roundRef)}, and executionNonce=${JSON.stringify(input.executionNonce)} exactly.`,
-          `The output must contain exactly these top-level fields: ${input.guide.outputTopLevelFields.join(', ')}.`,
-          'Set status to exactly "ok", "needs-input", or "blocked". For successful completion use "ok", never "succeeded" or another synonym.',
-          ...effectInstructions,
-          'Use the following authored example as the exact JSON value shape; replace only business content while preserving field types.',
-          'OUTPUT_SCHEMA_EXAMPLE_JSON',
-          outputExample!,
-          'Never wrap the JSON in Markdown and never add text before or after it.',
+          `You are executing frozen platform contract ${executionContractRefKey(input.guide.contractRef)}.`,
+          ...input.policyLines,
+          `Input schema: ${input.guide.inputSchemaId}. Output schema: ${input.guide.outputSchemaId}.`,
+          ...outputInstructions,
+          `The platform selected tool slot ${JSON.stringify(input.toolSlotRef)}; do not select another tool or slot.`,
+          `Semantic validator: ${input.semanticValidatorId}.`,
         ]
   return [
-    `You are executing frozen platform contract ${executionContractRefKey(input.guide.contractRef)}.`,
-    ...input.policyLines,
-    `Input schema: ${input.guide.inputSchemaId}. Output schema: ${input.guide.outputSchemaId}.`,
-    ...outputInstructions,
-    `The platform selected tool slot ${JSON.stringify(input.toolSlotRef)}; do not select another tool or slot.`,
-    `Semantic validator: ${input.semanticValidatorId}.`,
+    ...header,
     ...(input.previousError === null
       ? []
       : [
@@ -599,7 +655,7 @@ export function buildExecutionContractAgentPrompt(input: {
           'Correct the reported contract violation and return a complete replacement object.',
         ]),
     '',
-    'INPUT_ENVELOPE_JSON',
+    input.guide.inputMode === 'direct-json' ? 'INPUT_JSON' : 'INPUT_ENVELOPE_JSON',
     input.inputEnvelopeJson,
   ].join('\n')
 }

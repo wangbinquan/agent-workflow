@@ -11,12 +11,7 @@
         "infrastructure",
         "public"
       ],
-      "publicEntries": [
-        "commands.ts",
-        "events.ts",
-        "queries.ts",
-        "types.ts"
-      ],
+      "publicEntries": ["commands.ts", "events.ts", "queries.ts", "types.ts"],
       "externalImports": [
         "cli/start.ts -> composition",
         "cli/start.ts -> public/events",
@@ -42,13 +37,7 @@
         "infrastructure",
         "public"
       ],
-      "publicEntries": [
-        "commands.ts",
-        "events.ts",
-        "participants.ts",
-        "queries.ts",
-        "types.ts"
-      ],
+      "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
         "cli/start.ts -> composition",
         "modules/digital-employee/application/ports/runtimeStore.ts -> public/types",
@@ -69,19 +58,11 @@
     },
     "execution-contract": {
       "owner": "executor-neutral deterministic input and output guides, compatibility validation, fixture probes and exact output receipts",
-      "topLevelEntries": [
-        "application",
-        "composition.ts",
-        "domain",
-        "infrastructure",
-        "public"
-      ],
-      "publicEntries": [
-        "commands.ts",
-        "types.ts"
-      ],
+      "topLevelEntries": ["application", "composition.ts", "domain", "infrastructure", "public"],
+      "publicEntries": ["commands.ts", "types.ts"],
       "externalImports": [
         "cli/start.ts -> composition",
+        "modules/development-automation/composition/digitalEmployeeToolContractsV2.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
         "modules/digital-employee/application/authoringService.ts -> public/types",
         "modules/digital-employee/application/runtimeService.ts -> public/types",
@@ -112,9 +93,7 @@
     "allowlist": [
       {
         "file": "packages/frontend/src/routes/employee-cases.$caseId.tsx",
-        "literals": [
-          "merged"
-        ],
+        "literals": ["merged"],
         "why": "Case 详情页按 terminalKind === 'merged' 决定是否渲染「MR 已合入」文案。同上，随 T44 一并收口。",
         "removeWhen": "RFC-317 T44"
       }

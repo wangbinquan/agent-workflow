@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 
@@ -10,6 +10,7 @@ import type { DbClient } from '@/db/client'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { cachedRepos, employeeCaseWorkspaces, employeeRoundWorkspaceStates } from '@/db/schema'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
+import { sha256Hex } from '@/util/hash'
 import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
 import {
   snapshotProtectedRoots,
@@ -118,6 +119,7 @@ interface DevelopmentEmployeeWorkspaceParticipant {
         readonly workspacePath: string
         readonly baselineSha: string
         readonly platformInputPaths: readonly string[]
+        readonly contractProjectionJson?: string
       }
   >
   validate(input: {
@@ -221,10 +223,44 @@ function businessDelta(
   before: ReadonlyMap<string, string>,
   after: ReadonlyMap<string, string>,
 ): boolean {
-  if (before.size !== after.size) return true
-  for (const [path, digest] of before) if (after.get(path) !== digest) return true
+  return businessChangedPaths(before, after).length > 0
+}
+
+function businessChangedPaths(
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+): string[] {
+  const paths = new Set([...before.keys(), ...after.keys()])
+  return [...paths].filter((path) => before.get(path) !== after.get(path)).sort()
+}
+
+function businessSnapshotDigest(snapshot: ReadonlyMap<string, string>): string {
+  return sha256Hex(
+    JSON.stringify([...snapshot.entries()].sort(([left], [right]) => left.localeCompare(right))),
+  )
+}
+
+function directoryContainsFile(root: string): boolean {
+  if (!existsSync(root)) return false
+  const pending = [root]
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (entry.isFile()) return true
+      if (entry.isDirectory()) pending.push(join(current, entry.name))
+    }
+  }
   return false
 }
+
+const changedWorkspaceValidationSchema = z
+  .object({
+    ok: z.literal(true),
+    kind: z.literal('changed'),
+    changedPaths: z.array(z.string().min(1)).min(1),
+    postBusinessDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .passthrough()
 
 export function composeDevelopmentEmployeeWorkspace(input: {
   readonly db: DbClient
@@ -300,6 +336,82 @@ export function composeDevelopmentEmployeeWorkspace(input: {
   const workspacePath = (caseId: string) => join(sceneRoot(caseId), 'workspace')
   const checkpointRoot = (caseId: string, roundId: string) =>
     join(caseDirectory(caseId), 'checkpoints', roundId)
+
+  /**
+   * A completed write round can be followed by a preempting provider fact before
+   * prepare-change publishes its validated delta. If the same business action is
+   * then replayed, its action-local baseline already contains that delta and a
+   * correct Agent reports success without manufacturing another edit.
+   *
+   * Reuse is intentionally closed over platform evidence: the latest settled
+   * round must be the same work item and policy, its validation must be a trusted
+   * changed verdict on the same unpublished workspace baseline, and the current
+   * pre-state must differ from that round's pre-state by exactly the validated
+   * paths. Any extra, missing, published, or policy-incompatible delta fails
+   * closed and keeps the normal semantic retry behavior.
+   */
+  const carriedValidatedChange = (request: {
+    readonly plan: z.infer<typeof planSchema>
+    readonly stateBaselineSha: string
+    readonly currentPreBusiness: ReadonlyMap<string, string>
+  }): {
+    readonly ok: true
+    readonly kind: 'changed'
+    readonly changedPaths: readonly string[]
+  } | null => {
+    const priorRound = input.reactionRounds.lastSettledRound({
+      caseId: request.plan.caseRef.id,
+      workItemRef: request.plan.workItemRef,
+    })
+    if (priorRound === null || priorRound.roundRef === request.plan.roundRef) return null
+    const priorFrozen = input.reactionRounds.frozenPlan(priorRound.roundRef)
+    if (priorFrozen === null) return null
+    const priorPlan = planSchema.safeParse(JSON.parse(priorFrozen.planJson) as unknown)
+    if (
+      !priorPlan.success ||
+      JSON.stringify(priorPlan.data.workspacePolicy) !==
+        JSON.stringify(request.plan.workspacePolicy)
+    ) {
+      return null
+    }
+    const workspace = input.db
+      .select({ baselineSha: employeeCaseWorkspaces.baselineSha })
+      .from(employeeCaseWorkspaces)
+      .where(eq(employeeCaseWorkspaces.caseId, request.plan.caseRef.id))
+      .get()
+    if (workspace?.baselineSha !== request.stateBaselineSha) return null
+    const priorState = input.db
+      .select()
+      .from(employeeRoundWorkspaceStates)
+      .where(eq(employeeRoundWorkspaceStates.roundId, priorRound.roundRef))
+      .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
+      .get()
+    if (
+      priorState === undefined ||
+      priorState.baselineSha !== request.stateBaselineSha ||
+      priorState.validationJson === null
+    ) {
+      return null
+    }
+    const priorValidation = changedWorkspaceValidationSchema.safeParse(
+      JSON.parse(priorState.validationJson) as unknown,
+    )
+    if (!priorValidation.success) return null
+    if (
+      businessSnapshotDigest(request.currentPreBusiness) !== priorValidation.data.postBusinessDigest
+    ) {
+      return null
+    }
+    const priorPre = JSON.parse(priorState.preStateJson) as SerializedPreState
+    if (priorPre.conflict !== undefined) return null
+    const carriedPaths = businessChangedPaths(
+      new Map(priorPre.business),
+      request.currentPreBusiness,
+    )
+    const validatedPaths = [...priorValidation.data.changedPaths].sort()
+    if (JSON.stringify(carriedPaths) !== JSON.stringify(validatedPaths)) return null
+    return { ok: true, kind: 'changed', changedPaths: carriedPaths }
+  }
 
   return {
     async prepare(request) {
@@ -530,6 +642,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           kind: 'repository',
           workspacePath: conflict.workspacePath,
           baselineSha: conflict.sourceSha,
+          contractProjectionJson: JSON.stringify({ conflictFiles: conflict.conflictPaths }),
           platformInputPaths: [
             `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}`,
             `${PLATFORM_WORKSPACE_DIR}/pipeline/${platformCaseKey}`,
@@ -656,11 +769,35 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         .object({ status: z.enum(['ok', 'needs-input', 'blocked']) })
         .passthrough()
         .safeParse(decodedOutput)
-      if (!parsedOutput.success || request.taskStatus !== 'done') {
+      const directOutput = z
+        .object({
+          outcome: z.enum(['completed', 'blocked']),
+          commitMessage: z.string().min(1).optional(),
+        })
+        .passthrough()
+        .safeParse(decodedOutput)
+      const completedSuccessfully =
+        request.taskStatus === 'done' &&
+        ((parsedOutput.success && parsedOutput.data.status === 'ok') ||
+          (directOutput.success && directOutput.data.outcome === 'completed'))
+      if ((!parsedOutput.success && !directOutput.success) || request.taskStatus !== 'done') {
         outcome = businessDelta(beforeBusiness, afterBusiness) ? 'changed' : 'no-change'
-      } else if (parsedOutput.data.status === 'needs-input') {
+      } else if (directOutput.success && directOutput.data.outcome === 'blocked') {
+        outcome = 'blocked'
+      } else if (directOutput.success && plan.workItemRef === 'repair-feedback') {
+        outcome = directOutput.data.commitMessage === undefined ? 'no-change' : 'changed'
+      } else if (directOutput.success) {
+        outcome =
+          plan.workspacePolicy.businessChangeOnOk === 'required'
+            ? 'changed'
+            : plan.workspacePolicy.businessChangeOnOk === 'forbidden'
+              ? 'no-change'
+              : businessDelta(beforeBusiness, afterBusiness)
+                ? 'changed'
+                : 'no-change'
+      } else if (parsedOutput.success && parsedOutput.data.status === 'needs-input') {
         outcome = 'needs-information'
-      } else if (parsedOutput.data.status === 'blocked') {
+      } else if (parsedOutput.success && parsedOutput.data.status === 'blocked') {
         outcome = 'blocked'
       } else if (plan.workspacePolicy.businessChangeOnOk === 'required') {
         outcome = 'changed'
@@ -670,7 +807,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         outcome = businessDelta(beforeBusiness, afterBusiness) ? 'changed' : 'no-change'
       }
       const issue = resolveIssue(plan)
-      const verdict = validateWorkspaceOutcome({
+      let verdict = validateWorkspaceOutcome({
         workspacePath: activeWorkspacePath,
         preProtected: reviveProtected(pre.protected),
         protectedRoots: rootsOf(activeWorkspacePath),
@@ -694,6 +831,47 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             : [],
         budget: { maxChangedFiles: 2_000, maxTotalBytes: 128 * 1024 * 1024 },
       })
+      if (
+        !verdict.ok &&
+        verdict.kind === 'semantic' &&
+        verdict.code === 'outcome-workspace-mismatch' &&
+        pre.conflict === undefined &&
+        request.taskStatus === 'done' &&
+        completedSuccessfully &&
+        plan.workspacePolicy.businessChangeOnOk === 'required' &&
+        !businessDelta(beforeBusiness, afterBusiness)
+      ) {
+        verdict =
+          carriedValidatedChange({
+            plan,
+            stateBaselineSha: state.baselineSha,
+            currentPreBusiness: beforeBusiness,
+          }) ?? verdict
+      }
+      if (
+        verdict.ok &&
+        directOutput.success &&
+        directOutput.data.outcome === 'completed' &&
+        plan.workItemRef === 'prepare-materials' &&
+        issue.request.externalId !== null &&
+        !directoryContainsFile(
+          join(
+            activeWorkspacePath,
+            PLATFORM_WORKSPACE_DIR,
+            'inputs',
+            'requirements',
+            stableIdentityComponent(plan.caseRef.id),
+            'external',
+          ),
+        )
+      ) {
+        verdict = {
+          ok: false,
+          kind: 'semantic',
+          code: 'outcome-workspace-mismatch',
+          detail: 'prepare-materials completed without writing any material file',
+        }
+      }
       const conflictInspection =
         verdict.ok && pre.conflict !== undefined && outcome === 'changed'
           ? await input.conflictMerge.inspect({
@@ -703,6 +881,9 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           : null
       const validation = {
         ...verdict,
+        ...(verdict.ok && verdict.kind === 'changed'
+          ? { postBusinessDigest: businessSnapshotDigest(afterBusiness) }
+          : {}),
         ...(pre.conflict === undefined
           ? {}
           : {

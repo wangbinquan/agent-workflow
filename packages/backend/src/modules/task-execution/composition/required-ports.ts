@@ -12,6 +12,8 @@ export interface DigitalEmployeeWorkspacePort {
         readonly workspacePath: string
         readonly baselineSha: string
         readonly platformInputPaths: readonly string[]
+        /** Optional business facts discovered while materializing the scene. */
+        readonly contractProjectionJson?: string
       }
   >
   validate(input: {

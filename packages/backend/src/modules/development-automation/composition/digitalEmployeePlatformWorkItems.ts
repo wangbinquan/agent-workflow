@@ -268,6 +268,10 @@ function isTargetAwarePipelinePlan(plan: DevelopmentReactionPlan): boolean {
   return plan.employeeTypeRef?.typeId === 'development' && plan.employeeTypeRef.revision >= 8
 }
 
+function usesMinimalToolContracts(plan: DevelopmentReactionPlan): boolean {
+  return plan.employeeTypeRef?.typeId === 'development' && plan.employeeTypeRef.revision >= 9
+}
+
 function issueOf(contexts: readonly Context[]) {
   const context = contexts.find((candidate) => candidate.typeId === 'development.issue-handling')
   if (context === undefined) throw new Error('development issue context is missing')
@@ -643,10 +647,19 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       if (plan.workItemRef === 'prepare-materials') {
         const issue = issueOf(contexts)
         if (issue.state.request.kind === 'external-id') {
+          if (usesMinimalToolContracts(plan)) {
+            return JSON.stringify({
+              outcome: 'blocked',
+              explanation: '外部需求或问题编号需要已配置的材料取得工具',
+            })
+          }
           return output({
             status: 'blocked',
             summary: '外部需求或问题 ID 必须由已配置的材料取得工具处理',
           })
+        }
+        if (usesMinimalToolContracts(plan)) {
+          return JSON.stringify({ outcome: 'completed' })
         }
         return output({
           summary:

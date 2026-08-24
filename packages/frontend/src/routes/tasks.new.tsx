@@ -1972,7 +1972,12 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
               size="compact"
               title={t('taskWizard.gitCommitIdentityMissingTitle')}
               action={
-                <Link to="/account" className="btn btn--sm" data-testid="wizard-git-identity-fix">
+                <Link
+                  to="/account"
+                  search={{ section: 'codePush' }}
+                  className="btn btn--sm"
+                  data-testid="wizard-git-identity-fix"
+                >
                   {t('taskWizard.gitCommitIdentityFix')}
                 </Link>
               }

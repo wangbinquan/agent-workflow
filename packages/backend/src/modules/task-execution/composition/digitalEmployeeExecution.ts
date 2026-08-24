@@ -19,6 +19,7 @@ import {
   EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
   buildExecutionContractAgentPrompt,
   type ExecutionContractParticipant,
+  type ExecutionContractProjectionParticipant,
   type ExecutionContractRuntimeView,
 } from '@/modules/execution-contract/public/types'
 import { getAgentById } from '@/services/agent'
@@ -94,9 +95,17 @@ const humanReviewSchema = z
       .object({
         slotRef: z.literal('plan'),
         registrationRef: exactRefSchema,
-        workContractRef: z
-          .object({ contractId: z.literal('development.analyze-plan'), version: z.literal(1) })
-          .strict(),
+        workContractRef: z.union([
+          z
+            .object({ contractId: z.literal('development.analyze-plan'), version: z.literal(1) })
+            .strict(),
+          z
+            .object({
+              contractId: z.literal('development.plan-implementation'),
+              version: z.literal(2),
+            })
+            .strict(),
+        ]),
         implementation: executionContractAgentImplementationSchema,
       })
       .strict(),
@@ -163,31 +172,41 @@ export function buildDigitalEmployeeFixedPrompt(
     semanticValidatorId: plan.semanticValidatorId,
     inputEnvelopeJson: plan.inputEnvelopeJson,
     allowedEffectKinds: plan.allowedEffectKinds,
-    policyLines: [
-      'Do not run git, commit, push, merge, approve, call a code host, or choose the next action.',
-      'Only modify business files allowed by the supplied workspace contract.',
-    ],
+    policyLines:
+      guide.inputMode === 'direct-json'
+        ? [
+            'Use the available network and the repository, Git, and code-host read operations when they are useful for this action.',
+            'Do not publish external changes: the platform owns commit, push, merge, comment publication, and approval submission.',
+            'Only modify business files required by this action.',
+          ]
+        : [
+            'Do not run git, commit, push, merge, approve, call a code host, or choose the next action.',
+            'Only modify business files allowed by the supplied workspace contract.',
+          ],
     previousError: attempt.previousError,
   })
 }
 
 export function buildDigitalEmployeePlanPrompt(
-  plan: Pick<z.infer<typeof planSchema>, 'roundRef' | 'executionNonce' | 'inputEnvelopeJson'>,
+  plan: Pick<z.infer<typeof planSchema>, 'inputEnvelopeJson'>,
   attempt: Pick<z.infer<typeof attemptSchema>, 'previousError'>,
   documentPath: string,
+  inputMode: ExecutionContractRuntimeView['inputMode'] = 'direct-json',
 ): string {
   return [
-    'You are preparing a read-only implementation plan for human review.',
-    'Read every requirement body, uploaded repositoryPath, external material directory, and relevant repository file listed by the frozen input envelope.',
+    'You are writing an implementation plan for human review.',
+    'Read the requirements directory and the relevant repository files before planning.',
+    'Use the available network and repository, Git, or code-host reads when they help you verify the plan.',
     `Write the complete Markdown plan only to this exact platform path: ${documentPath}`,
-    'Do not modify any other file or run git, commit, push, merge, approve, or call a code host.',
+    'Do not publish external changes: the platform owns commit, push, merge, comment publication, and approval submission.',
+    'Do not modify business files while writing the plan.',
     `Publish exactly ${documentPath} through the analysis-plan output port; no other output path is accepted.`,
     'The plan must cover requirement understanding, affected code, implementation steps, tests, risks, assumptions, and unresolved questions.',
-    `ROUND_REF: ${plan.roundRef}`,
-    `EXECUTION_NONCE: ${plan.executionNonce}`,
-    `EXPECTED_ANALYSIS_PLAN_PATH_JSON\n${JSON.stringify(documentPath)}`,
+    inputMode === 'direct-json'
+      ? ''
+      : `EXPECTED_ANALYSIS_PLAN_PATH_JSON\n${JSON.stringify(documentPath)}`,
     attempt.previousError === null ? '' : `PREVIOUS_ERROR:\n${attempt.previousError}`,
-    'INPUT_ENVELOPE_JSON',
+    inputMode === 'direct-json' ? 'INPUT_JSON' : 'INPUT_ENVELOPE_JSON',
     plan.inputEnvelopeJson,
   ]
     .filter((line) => line.length > 0)
@@ -243,7 +262,7 @@ export function composeDigitalEmployeeExecution(deps: {
   readonly appHome: string
   readonly startDeps: StartTaskDeps
   readonly workspace?: DigitalEmployeeWorkspacePort
-  readonly executionContracts: ExecutionContractParticipant
+  readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
 }): DigitalEmployeeExecutionParticipant {
   return {
     async launch(planJson, attemptJson) {
@@ -291,20 +310,51 @@ export function composeDigitalEmployeeExecution(deps: {
               },
             }
       const guide = deps.executionContracts.get(plan.workContractRef)
-      const prompt = buildDigitalEmployeeFixedPrompt(plan, attempt, guide)
+      const toolInputJson =
+        deps.executionContracts.projectInput?.({
+          contractRef: plan.workContractRef,
+          roundRef: plan.roundRef,
+          executionNonce: plan.executionNonce,
+          inputEnvelopeJson: plan.inputEnvelopeJson,
+          projectionJson: scene.kind === 'repository' ? scene.contractProjectionJson : null,
+        }) ?? plan.inputEnvelopeJson
+      const prompt = buildDigitalEmployeeFixedPrompt(
+        { ...plan, inputEnvelopeJson: toolInputJson },
+        attempt,
+        guide,
+      )
       const reviewedExecution = envelope.humanReview
       if (reviewedExecution && implementation.kind !== 'agent') {
         throw new Error('implementation plan review requires an Agent implementation')
       }
       const planPrompt = reviewedExecution
-        ? buildDigitalEmployeePlanPrompt(plan, attempt, reviewedExecution.documentPath)
+        ? (() => {
+            const planningGuide = deps.executionContracts.get(
+              reviewedExecution.planningTool.workContractRef,
+            )
+            return buildDigitalEmployeePlanPrompt(
+              {
+                ...plan,
+                inputEnvelopeJson:
+                  deps.executionContracts.projectInput?.({
+                    contractRef: reviewedExecution.planningTool.workContractRef,
+                    roundRef: plan.roundRef,
+                    executionNonce: plan.executionNonce,
+                    inputEnvelopeJson: plan.inputEnvelopeJson,
+                  }) ?? plan.inputEnvelopeJson,
+              },
+              attempt,
+              reviewedExecution.documentPath,
+              planningGuide.inputMode,
+            )
+          })()
         : null
       const startInput: StartTask = {
         workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
         name: `employee:${plan.roundRef}`.slice(0, 255),
         inputs:
           implementation.kind === 'program'
-            ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: plan.inputEnvelopeJson }
+            ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: toolInputJson }
             : reviewedExecution
               ? {
                   [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt,
@@ -502,13 +552,27 @@ export function composeDigitalEmployeeExecution(deps: {
         .parse(JSON.parse(task.inputs) as unknown)
       const planPrompt = parsedInputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
       if (typeof planPrompt === 'string') {
-        const expectedMatch = /EXPECTED_ANALYSIS_PLAN_PATH_JSON\n("[^"\\]*(?:\\.[^"\\]*)*")/.exec(
-          planPrompt,
-        )
-        const expectedPath =
-          expectedMatch?.[1] === undefined
+        const legacyExpectedMatch =
+          /EXPECTED_ANALYSIS_PLAN_PATH_JSON\n("[^"\\]*(?:\\.[^"\\]*)*")/.exec(planPrompt)
+        const directInputMarker = '\n\nINPUT_JSON\n\n'
+        const directInputStart = planPrompt.lastIndexOf(directInputMarker)
+        const directInput =
+          directInputStart < 0
             ? null
-            : z.string().parse(JSON.parse(expectedMatch[1]) as unknown)
+            : z
+                .object({ outputFile: z.string().min(1) })
+                .passthrough()
+                .safeParse(
+                  JSON.parse(
+                    planPrompt.slice(directInputStart + directInputMarker.length),
+                  ) as unknown,
+                )
+        const expectedPath =
+          directInput?.success === true
+            ? directInput.data.outputFile
+            : legacyExpectedMatch?.[1] === undefined
+              ? null
+              : z.string().parse(JSON.parse(legacyExpectedMatch[1]) as unknown)
         const planOutput = deps.db
           .select({ content: nodeRunOutputs.content })
           .from(nodeRunOutputs)

@@ -271,6 +271,7 @@ const workItemDefinitionSchema = z
         label: localizedTextSchema,
         description: localizedTextSchema,
         destinationWorkItemRefs: z.array(machineIdSchema).min(1).max(20),
+        processingOrderOwner: z.enum(['tool', 'job']).optional(),
       })
       .strict()
       .nullable()

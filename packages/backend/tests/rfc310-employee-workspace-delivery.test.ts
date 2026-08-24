@@ -657,6 +657,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       headSha: mrState.headSha,
       targetSha: null,
       evidenceArtifactRef: '.agent-workflow/pipeline/case-1/',
+      checks: [],
       failureTypes: [],
     })
     const branch = 'agent-workflow/employee/case-1'

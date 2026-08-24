@@ -233,7 +233,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     const types = read('components/digital-employees/types.ts')
 
     expect(types).toContain('dispatchRouteDefinitions?: Array<{')
-    expect(typePage).toContain("zh ? '问题清单归工具所有' : 'Problem list belongs to the tool'")
+    expect(typePage).toContain("'问题清单归工具所有'")
+    expect(typePage).toContain("'Problem list belongs to the tool'")
     expect(typePage).toContain("zh ? '该工具解决哪些问题' : 'Problems solved by this tool'")
     expect(typePage).toContain('deriveDispatchRouteDrafts(')
     expect(typePage).toContain('preferredDispatchTool(')
@@ -241,6 +242,29 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain('data-testid="tool-dispatch-route-definitions"')
     expect(typePage).not.toContain('填写岗位模板中使用的类型标识')
     expect(typePage).not.toContain('关联流水线错误类型')
+  })
+
+  test('v2 classifier configuration is plain categories while the job owns processing order', () => {
+    const typePage = read('routes/digital-employees.$typeRef.tsx')
+
+    expect(typePage).toContain("processingOrderOwner === 'job'")
+    expect(typePage).toContain("? '问题类型归工具所有'")
+    expect(typePage).toContain("? '本工具的问题类型'")
+    expect(typePage).not.toContain(
+      "contract?.contractId === 'development.classify-pipeline-failures'",
+    )
+    expect(typePage).toContain("? '类型标识'")
+    expect(typePage).toContain("? '名称'")
+    expect(typePage).toContain("? '说明'")
+    expect(typePage).toContain("label={zh ? '兜底分类' : 'Fallback category'}")
+    expect(typePage).toContain('setFallbackRouteLocalRef')
+    expect(typePage).toContain('fallback: route.fallback')
+    expect(typePage).toContain("'问题类型尚未完成'")
+    expect(typePage).toContain("'还没有已发布的问题类型'")
+    expect(typePage).toContain('内置流水线失败修复 Agent')
+    expect(typePage).toContain('const moveDispatchRoute = (')
+    expect(typePage).toContain('岗位为每个类型选择处理方式并决定处理顺序')
+    expect(typePage).toContain('岗位可调整非兜底类型的处理顺序')
   })
 
   // User regressions 2026-08-22/23: native drag was throttled, lagged behind

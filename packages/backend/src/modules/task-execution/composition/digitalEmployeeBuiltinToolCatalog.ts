@@ -10,6 +10,8 @@ import { sha256Hex } from '@/util/hash'
 import { getAgentByIdSync } from '@/services/agent'
 import {
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+  digitalEmployeeBuiltinAgentSuccessorId,
+  digitalEmployeeBuiltinToolConfiguration,
   digitalEmployeeAgentToolPresentation,
 } from '@/services/digitalEmployeeAgentTemplates'
 
@@ -141,8 +143,10 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
             if (agent === null || agent.builtin !== true || agent.visibility !== 'public') return []
             const template = agent.frontmatterExtra.digitalEmployeeTemplate
             if (typeof template !== 'string') return []
+            const builtinConfiguration = digitalEmployeeBuiltinToolConfiguration(agentId)
             const dispatchRouteDefinitions = declaredDispatchRoutes(
-              agent.frontmatterExtra.dispatchRouteDefinitions,
+              agent.frontmatterExtra.dispatchRouteDefinitions ??
+                builtinConfiguration?.dispatchRouteDefinitions,
             )
             if (item.orderedDispatchAuthoring != null && dispatchRouteDefinitions === undefined) {
               return []
@@ -275,7 +279,9 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
           candidate.workItemRef === workItemRef &&
           candidate.selection === 'selectable' &&
           candidate.content.implementation.kind === 'agent' &&
-          candidate.content.implementation.agentRef.id === identity.agentId,
+          [identity.agentId, digitalEmployeeBuiltinAgentSuccessorId(identity.agentId)].includes(
+            candidate.content.implementation.agentRef.id,
+          ),
       )
       if (record === undefined || record.publishedRevision === null) return null
       const ref = { id: record.id, revision: record.publishedRevision }

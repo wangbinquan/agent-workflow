@@ -80,28 +80,8 @@ async function gitAsync(cwd: string, ...args: string[]): Promise<string> {
   return stdout.trim()
 }
 
-function output(
-  plan: ReactionExecutionPlan,
-  input: {
-    readonly summary: string
-    readonly deliveryContent?: {
-      readonly commitMessage: string
-      readonly mergeRequestTitle: string
-      readonly mergeRequestDescription: string
-    }
-  },
-): string {
-  return JSON.stringify({
-    schemaVersion: 1,
-    roundRef: plan.roundRef,
-    executionNonce: plan.executionNonce,
-    status: 'ok',
-    summary: input.summary,
-    ...(input.deliveryContent === undefined ? {} : { deliveryContent: input.deliveryContent }),
-    contextPatches: [],
-    effectSuggestions: [],
-    artifactRefs: [],
-  })
+function directOutput(result: Record<string, unknown>): string {
+  return JSON.stringify({ outcome: 'completed', ...result })
 }
 
 describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
@@ -256,13 +236,10 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
           if (plan.workItemRef === 'analyze-implement') {
             expect(readFileSync(join(scene.workspacePath, 'X.txt'), 'utf8')).toBe('base\n')
             writeFileSync(join(scene.workspacePath, 'X.txt'), 'source change\n')
-            outputJson = output(plan, {
-              summary: 'implemented source-side change',
-              deliveryContent: {
-                commitMessage: 'implement source-side change',
-                mergeRequestTitle: 'Implement source-side change',
-                mergeRequestDescription: 'Creates the source-side change used by the conflict E2E.',
-              },
+            outputJson = directOutput({
+              commitMessage: 'implement source-side change',
+              mergeRequestTitle: 'Implement source-side change',
+              mergeRequestDescription: 'Creates the source-side change used by the conflict E2E.',
             })
           } else if (plan.workItemRef === 'repair-conflict') {
             const conflicted = readFileSync(join(scene.workspacePath, 'X.txt'), 'utf8')
@@ -273,14 +250,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
               'must remain unchanged\n',
             )
             writeFileSync(join(scene.workspacePath, 'X.txt'), 'source + target resolved\n')
-            outputJson = output(plan, {
-              summary: 'resolved only the platform-authorized conflict file',
-              deliveryContent: {
-                commitMessage: 'resolve target branch conflict',
-                mergeRequestTitle: 'Implement source-side change',
-                mergeRequestDescription: 'Resolves the real target-branch conflict.',
-              },
-            })
+            outputJson = directOutput({ commitMessage: 'resolve target branch conflict' })
           } else {
             throw new Error(`unexpected Agent work item: ${plan.workItemRef}`)
           }
@@ -486,9 +456,15 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         }>
         attention: Array<{ eventTypeRef: { id: string }; subject: { subjectRef: string } }>
       }
-      const initialMr = projection.contexts.find(
+      const initialMrContext = projection.contexts.find(
         (context) => context.typeId === 'development.merge-request',
-      )!.state
+      )
+      if (initialMrContext === undefined) {
+        throw new Error(
+          `conflict E2E did not produce its initial MR: ${JSON.stringify(projection)}`,
+        )
+      }
+      const initialMr = initialMrContext.state
       const mrRef = String(initialMr.providerMrRef)
       const mergeRequestRef = String(initialMr.mergeRequestRef)
       const sourceHead = String(initialMr.headSha)

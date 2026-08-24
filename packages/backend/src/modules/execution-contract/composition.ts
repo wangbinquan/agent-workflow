@@ -4,7 +4,11 @@ import {
   createExecutionContractProgramFixtureAdapter,
   createExecutionContractResourceAdapter,
 } from './infrastructure/taskExecutionAdapter'
-import type { ExecutionContractParticipant, ExecutionContractRegistration } from './public/types'
+import type {
+  ExecutionContractParticipant,
+  ExecutionContractProjectionParticipant,
+  ExecutionContractRegistration,
+} from './public/types'
 
 export function composeExecutionContract(input: {
   readonly db: DbClient
@@ -13,7 +17,7 @@ export function composeExecutionContract(input: {
   readonly implicitAgentDeclarations?: (input: {
     readonly frontmatterExtra: Readonly<Record<string, unknown>>
   }) => readonly { readonly contractId: string; readonly version: number }[]
-}): ExecutionContractParticipant {
+}): ExecutionContractParticipant & ExecutionContractProjectionParticipant {
   const service = new ExecutionContractService({
     registrations: input.registrations,
     resources: createExecutionContractResourceAdapter(input.db, input.implicitAgentDeclarations),
@@ -22,6 +26,7 @@ export function composeExecutionContract(input: {
   return {
     list: () => service.list(),
     get: (ref) => service.get(ref),
+    projectInput: (request) => service.projectInput(request),
     validateExecutor: (request) => service.validateExecutor(request),
     validateAgentCandidates: (request) => service.validateAgentCandidates(request),
     validateEnvelope: (request) => service.validateEnvelope(request),

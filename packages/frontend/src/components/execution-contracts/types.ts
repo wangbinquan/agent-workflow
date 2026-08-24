@@ -16,7 +16,8 @@ export interface ExecutionContractField {
 
 export interface ExecutionContractGuide {
   schemaVersion: 1
-  outputMode: 'envelope' | 'artifact-path'
+  inputMode?: 'host-envelope' | 'direct-json'
+  outputMode: 'envelope' | 'direct-json' | 'artifact-path'
   contractRef: { contractId: string; version: number }
   displayName: ContractLocalizedText
   description: ContractLocalizedText
@@ -54,7 +55,8 @@ export interface ExecutionContractGuide {
 
 export interface ExecutionContractSummary {
   schemaVersion: 1
-  outputMode: 'envelope' | 'artifact-path'
+  inputMode?: 'host-envelope' | 'direct-json'
+  outputMode: 'envelope' | 'direct-json' | 'artifact-path'
   contractRef: { contractId: string; version: number }
   displayName: ContractLocalizedText
   description: ContractLocalizedText

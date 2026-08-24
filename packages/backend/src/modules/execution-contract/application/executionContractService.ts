@@ -35,7 +35,7 @@ function runtimeView(guide: ExecutionContractGuide): ExecutionContractRuntimeVie
   const agentTransport = guide.transports.agent
   return {
     schemaVersion: 1,
-    outputMode: guide.outputMode,
+    inputMode: guide.inputMode,
     contractRef: guide.contractRef,
     displayName: guide.displayName,
     description: guide.description,
@@ -54,6 +54,7 @@ function runtimeView(guide: ExecutionContractGuide): ExecutionContractRuntimeVie
 
 export class ExecutionContractService {
   readonly #guides = new Map<string, ExecutionContractGuide>()
+  readonly #registrations = new Map<string, ExecutionContractRegistration>()
   readonly #resources: ExecutionContractResourcePort
   readonly #programFixtures: ExecutionContractProgramFixturePort
 
@@ -73,6 +74,7 @@ export class ExecutionContractService {
       const key = executionContractRefKey(guide.contractRef)
       if (this.#guides.has(key)) throw new ConflictError('execution-contract-duplicate', key)
       this.#guides.set(key, guide)
+      this.#registrations.set(key, registration)
     }
   }
 
@@ -141,7 +143,14 @@ export class ExecutionContractService {
     ]
 
     if (implementation.kind === 'program') {
-      checks.push(...(await this.#programFixtures.validate({ guide, implementation })))
+      checks.push(
+        ...(await this.#programFixtures.validate({
+          guide,
+          implementation,
+          validateOutputJson: this.#registrations.get(executionContractRefKey(guide.contractRef))
+            ?.validateOutputJson,
+        })),
+      )
     } else {
       const transport =
         implementation.kind === 'agent' ? guide.transports.agent : guide.transports.workflow
@@ -189,19 +198,76 @@ export class ExecutionContractService {
     readonly envelopeJson: string
   }): string {
     const guide = this.#getGuide(input.contractRef)
-    return input.direction === 'input'
-      ? validateExactContractInput({
-          guide,
-          roundRef: input.roundRef,
-          executionNonce: input.executionNonce,
-          inputJson: input.envelopeJson,
-        })
-      : validateExactContractOutput({
-          guide,
-          roundRef: input.roundRef,
-          executionNonce: input.executionNonce,
-          outputJson: input.envelopeJson,
-        })
+    if (input.direction === 'input') {
+      if (guide.inputMode === 'direct-json') {
+        let decoded: unknown
+        try {
+          decoded = JSON.parse(input.envelopeJson) as unknown
+        } catch {
+          throw new Error('platform input envelope must be valid JSON')
+        }
+        if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) {
+          throw new Error('platform input envelope must be one JSON object')
+        }
+        return JSON.stringify(decoded)
+      }
+      return validateExactContractInput({
+        guide,
+        roundRef: input.roundRef,
+        executionNonce: input.executionNonce,
+        inputJson: input.envelopeJson,
+      })
+    }
+    if (guide.outputMode !== 'direct-json') {
+      return validateExactContractOutput({
+        guide,
+        roundRef: input.roundRef,
+        executionNonce: input.executionNonce,
+        outputJson: input.envelopeJson,
+      })
+    }
+    const registration = this.#registrations.get(executionContractRefKey(input.contractRef))!
+    const contractValidated = registration.validateOutputJson?.(input.envelopeJson)
+    if (contractValidated === undefined) {
+      throw new Error('direct JSON output contract has no registered validator')
+    }
+    const exactResult = validateExactContractOutput({
+      guide,
+      roundRef: input.roundRef,
+      executionNonce: input.executionNonce,
+      outputJson: contractValidated,
+    })
+    return JSON.stringify({
+      schemaVersion: 1,
+      roundRef: input.roundRef,
+      executionNonce: input.executionNonce,
+      directResult: JSON.parse(exactResult) as unknown,
+    })
+  }
+
+  projectInput(input: {
+    readonly contractRef: ExecutionContractRef
+    readonly roundRef: string
+    readonly executionNonce: string
+    readonly inputEnvelopeJson: string
+    readonly projectionJson?: string | null
+  }): string {
+    const guide = this.#getGuide(input.contractRef)
+    if (guide.inputMode === 'host-envelope') return input.inputEnvelopeJson
+    const registration = this.#registrations.get(executionContractRefKey(input.contractRef))!
+    const projected = registration.projectInputJson?.({
+      inputEnvelopeJson: input.inputEnvelopeJson,
+      projectionJson: input.projectionJson,
+    })
+    if (projected === undefined) {
+      throw new Error('direct JSON input contract has no registered projector')
+    }
+    return validateExactContractInput({
+      guide,
+      roundRef: input.roundRef,
+      executionNonce: input.executionNonce,
+      inputJson: projected,
+    })
   }
 
   async validateAgentCandidates(input: {

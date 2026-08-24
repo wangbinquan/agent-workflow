@@ -11,7 +11,7 @@ import {
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,
   developmentBuiltinAgentConfigurationV2,
-} from '@/modules/development-automation/public/digitalEmployeeAgentTemplatesV2'
+} from '@/modules/development-automation/public/participants'
 import { ConflictError } from '@/util/errors'
 import { createAgent, getAgentById, renameAgent, updateAgent } from './agent'
 

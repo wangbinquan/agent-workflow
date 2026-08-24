@@ -165,16 +165,10 @@ describe('RFC-310 stateful employee Case runtime', () => {
     let retryLimits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
     let corruptOutputsRemaining = 3
     let executionOutput: Record<string, unknown> = {
-      status: 'ok',
-      summary: '需求已实现并形成交付文案',
-      deliveryContent: {
-        commitMessage: 'implement deterministic employee runtime',
-        mergeRequestTitle: 'Implement deterministic employee runtime',
-        mergeRequestDescription: 'Implements the requested deterministic employee runtime.',
-      },
-      contextPatches: [],
-      effectSuggestions: [],
-      artifactRefs: [],
+      outcome: 'completed',
+      commitMessage: 'implement deterministic employee runtime',
+      mergeRequestTitle: 'Implement deterministic employee runtime',
+      mergeRequestDescription: 'Implements the requested deterministic employee runtime.',
     }
     let observedMergeRequestStatus: 'active' | 'merged' = 'active'
     const launchedPlans: unknown[] = []
@@ -226,11 +220,17 @@ describe('RFC-310 stateful employee Case runtime', () => {
       id: nextId,
       connectionCatalog: {
         async resolve(ref) {
+          const purpose =
+            ref.id === 'pipeline-adapter'
+              ? 'pipeline-gate'
+              : ref.id === 'requirement-adapter'
+                ? 'requirement-source'
+                : 'approval-gateway'
           return {
             ref,
-            purpose: 'approval-gateway',
+            purpose,
             available: true,
-            closureSummary: 'exact approval-gateway fixture',
+            closureSummary: `exact ${purpose} fixture`,
           }
         },
       },
@@ -247,6 +247,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
               stateJson: string
               artifactRefs: string[]
             }>
+            if (
+              plan.workItemRef === 'prepare-materials' &&
+              plan.employeeTypeRef?.typeId === 'development' &&
+              plan.employeeTypeRef.revision >= 9
+            ) {
+              return JSON.stringify({ outcome: 'completed' })
+            }
             if (plan.workItemRef === 'observe-mr' && observedMergeRequestStatus === 'merged') {
               const mergeRequestContext = contexts.find(
                 (context) => context.typeId === 'development.merge-request',
@@ -473,36 +480,20 @@ describe('RFC-310 stateful employee Case runtime', () => {
           },
           async inspect(executionRef) {
             const plan = launchedPlans[Number(executionRef.split('-').at(-1)) - 1] as {
-              roundRef: string
-              executionNonce: string
               workItemRef: string
-              inputEnvelopeJson: string
             }
-            const planContexts = JSON.parse(
-              (JSON.parse(plan.inputEnvelopeJson) as { contextsJson: string }).contextsJson,
-            ) as Array<{ id: string; revision: number; typeId: string }>
-            const pipelineContext = planContexts.find(
-              (context) => context.typeId === 'development.pipeline',
-            )
             const outputForRound =
               plan.workItemRef === 'collect-pipeline'
                 ? {
-                    ...executionOutput,
-                    contextPatches: [
+                    outcome: 'completed',
+                    observedSourceVersion: 'a'.repeat(40),
+                    status: 'failed',
+                    checks: [
                       {
-                        contextId: pipelineContext?.id ?? null,
-                        contextTypeId: 'development.pipeline',
-                        schemaVersion: 1,
-                        expectedRevision: pipelineContext?.revision ?? null,
-                        lifecycleState: 'active',
-                        stateJson: JSON.stringify({
-                          status: 'failed',
-                          mergeRequestRef: 'repo-1!42',
-                          headSha: 'a'.repeat(40),
-                          evidenceArtifactRef: '.agent-workflow/pipeline/case-1/result.json',
-                          failureTypes: ['unknown'],
-                        }),
-                        artifactRefs: [],
+                        checkRef: 'unknown',
+                        name: 'unknown',
+                        status: 'failed',
+                        evidenceFiles: ['.agent-workflow/pipeline/case-1/result.json'],
                       },
                     ],
                   }
@@ -510,13 +501,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
             return {
               kind: 'completed',
               executionRef,
-              outputJson: JSON.stringify({
-                schemaVersion: 1,
-                roundRef: plan.roundRef,
-                executionNonce:
-                  corruptOutputsRemaining-- > 0 ? '0'.repeat(64) : plan.executionNonce,
-                ...outputForRound,
-              }),
+              outputJson: JSON.stringify(
+                corruptOutputsRemaining-- > 0
+                  ? { ...outputForRound, unexpectedEnvelopeField: true }
+                  : outputForRound,
+              ),
             }
           },
           async cancel() {},
@@ -524,7 +513,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 8 }
+    const typeRef = { typeId: 'development', revision: 9 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const pipelineProblemDefinitions = [
@@ -576,7 +565,15 @@ describe('RFC-310 stateful employee Case runtime', () => {
               connectionRef:
                 contract.requiredConnectionPurpose === null
                   ? null
-                  : { id: 'approval-adapter', revision: 1 },
+                  : {
+                      id:
+                        contract.requiredConnectionPurpose === 'pipeline-gate'
+                          ? 'pipeline-adapter'
+                          : contract.requiredConnectionPurpose === 'requirement-source'
+                            ? 'requirement-adapter'
+                            : 'approval-adapter',
+                      revision: 1,
+                    },
               ...(item.workItemRef === 'classify-pipeline'
                 ? { dispatchRouteDefinitions: pipelineProblemDefinitions }
                 : {}),
@@ -991,8 +988,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
       roundRef: analyzeRound,
       employeeTypeRef: typeRef,
       implementationKind: 'agent',
-      inputSchemaId: 'development.requirement-context.v1',
-      outputSchemaId: 'development.change-proposal.v1',
+      inputSchemaId: 'development.implement-change.input.v2',
+      outputSchemaId: 'development.implement-change.result.v2',
       allowedEffectKinds: [],
     })
     const retryDelays = [2_000, 4_000, 8_000]
@@ -1806,11 +1803,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
 
     executionOutput = {
-      status: 'blocked',
-      summary: 'not used',
-      contextPatches: [],
-      effectSuggestions: [],
-      artifactRefs: [],
+      outcome: 'blocked',
+      explanation: 'not used',
     }
 
     const eventOrigin = {

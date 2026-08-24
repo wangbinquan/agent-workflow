@@ -38,6 +38,7 @@ export interface WorkItem {
     label: LocalizedText
     description: LocalizedText
     destinationWorkItemRefs: string[]
+    processingOrderOwner?: 'tool' | 'job'
   } | null
   humanReview: {
     optionRef: string
