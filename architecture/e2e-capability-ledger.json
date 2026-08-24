@@ -3181,8 +3181,21 @@
       "title": "澄清收件箱列表页：三态过滤、按任务分组、空态与错误重试、打开按钮",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-inbox-list.spec.ts",
+          "test": "两个任务各自成节、行不串组，「打开」落在正确的那一轮"
+        },
+        {
+          "file": "e2e/clarify-inbox-list.spec.ts",
+          "test": "答过的那一轮：从「待回答」里消失、在「已回答」里出现，「全部」两条都在"
+        },
+        {
+          "file": "e2e/clarify-inbox-list.spec.ts",
+          "test": "列表读不到时报故障并可重试，绝不画成「没有待回答的问题」"
+        }
+      ]
     },
     {
       "id": "HUMAN-14",
@@ -8419,7 +8432,6 @@
     "HUMAN-07",
     "HUMAN-10",
     "HUMAN-12",
-    "HUMAN-13",
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17b",
