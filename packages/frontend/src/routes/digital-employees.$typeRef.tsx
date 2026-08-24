@@ -491,6 +491,7 @@ function ToolboxPanel(props: {
   const [open, setOpen] = useState(false)
   const [editingTool, setEditingTool] = useState<ToolRegistration | null>(null)
   const zh = props.language.startsWith('zh')
+  const business = props.item?.nodeKind === 'business-tool'
   const contractKey =
     props.contract === null
       ? null
@@ -500,7 +501,7 @@ function ToolboxPanel(props: {
         })
   const contractGuide = useQuery<ExecutionContractGuide>({
     queryKey: ['execution-contract', contractKey, 'toolbox-card'],
-    enabled: contractKey !== null,
+    enabled: business && contractKey !== null,
     queryFn: ({ signal }) =>
       api.get(
         `/api/execution-contracts/${encodeURIComponent(contractKey ?? '')}`,
@@ -521,7 +522,6 @@ function ToolboxPanel(props: {
     },
   })
   if (props.item === null) return <div />
-  const business = props.item.nodeKind === 'business-tool'
   const orderedDispatch = props.item.orderedDispatchAuthoring
   const jobOwnsProcessingOrder = orderedDispatch?.processingOrderOwner === 'job'
   const adapterBackedSystem =
@@ -588,20 +588,22 @@ function ToolboxPanel(props: {
         language={props.language}
         toolRole={props.toolRole}
       />
-      {contractGuide.isPending ? (
-        <LoadingState
-          size="compact"
-          label={zh ? '正在加载输入输出契约…' : 'Loading I/O contract…'}
-        />
-      ) : contractGuide.isError ? (
-        <ErrorBanner error={contractGuide.error} onRetry={() => void contractGuide.refetch()} />
-      ) : contractGuide.data === undefined ? null : (
-        <ExecutionContractGuidePanel
-          guide={contractGuide.data}
-          language={props.language}
-          kind={props.contract?.allowedToolKinds[0] ?? 'agent'}
-        />
-      )}
+      {business ? (
+        contractGuide.isPending ? (
+          <LoadingState
+            size="compact"
+            label={zh ? '正在加载输入输出契约…' : 'Loading I/O contract…'}
+          />
+        ) : contractGuide.isError ? (
+          <ErrorBanner error={contractGuide.error} onRetry={() => void contractGuide.refetch()} />
+        ) : contractGuide.data === undefined ? null : (
+          <ExecutionContractGuidePanel
+            guide={contractGuide.data}
+            language={props.language}
+            kind={props.contract?.allowedToolKinds[0] ?? 'agent'}
+          />
+        )
+      ) : null}
       {business && orderedDispatch !== null ? (
         <section className="employee-dispatch-card" data-testid="employee-runtime-dispatch">
           <header>

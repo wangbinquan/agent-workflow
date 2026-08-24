@@ -277,6 +277,36 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
     })
   })
 
+  test('platform-owned nodes expose their own input and output instead of a shared tool template', () => {
+    const descriptor = employeeTypePackageDescriptorSchema.parse(
+      JSON.parse(developmentEmployeeTypePackage.descriptorJson) as unknown,
+    )
+    const platformNodes = descriptor.authoringManifest.workItems.filter(
+      (item) => item.nodeKind !== 'business-tool',
+    )
+
+    expect(platformNodes).toHaveLength(12)
+    expect(new Set(platformNodes.map((item) => JSON.stringify(item.materialSummary))).size).toBe(
+      platformNodes.length,
+    )
+    expect(new Set(platformNodes.map((item) => JSON.stringify(item.completionStandard))).size).toBe(
+      platformNodes.length,
+    )
+
+    for (const item of platformNodes) {
+      const contract = descriptor.workContracts.find(
+        (candidate) =>
+          candidate.contractId === item.workContractRef.contractId &&
+          candidate.version === item.workContractRef.version,
+      )
+      expect(contract).toBeDefined()
+      expect(item.materialSummary).toEqual(contract?.materialSummary)
+      expect(item.completionStandard).toEqual(contract?.completionStandard)
+      expect(contract?.allowedToolKinds).toEqual([])
+      expect(item.toolRoleGroups).toEqual([])
+    }
+  })
+
   test('guides expose direct business fields without the host envelope', () => {
     expect(developmentExecutionContractRegistrationsV2).toHaveLength(9)
     for (const registration of developmentExecutionContractRegistrationsV2) {

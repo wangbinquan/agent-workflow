@@ -1424,6 +1424,18 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
         maxDiffPixelRatio: 0.007,
       },
     )
+
+    await dutyDialog.getByRole('button', { name: 'Close' }).click()
+    await responsibilityMap.locator('[data-work-item-ref="prepare-change"]').click()
+    await expect(dutyDialog).toBeVisible()
+    const platformStep = page.getByTestId('employee-node-toolbox')
+    await expect(platformStep.getByText('Validated change proposal', { exact: true })).toBeVisible()
+    await expect(
+      platformStep.getByText('The platform has produced a committable change candidate', {
+        exact: true,
+      }),
+    ).toBeVisible()
+    await expect(platformStep.getByTestId('execution-contract-guide')).toHaveCount(0)
   })
 
   test('/digital-employees add work-item tool dialog (light)', async ({ page }) => {
