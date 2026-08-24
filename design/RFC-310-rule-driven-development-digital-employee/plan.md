@@ -471,7 +471,7 @@ policy)`（不代替 policy 决定）；watching + requiredGatesAllPass → `pub
 | T90  | repo/repo-group assignment，替代旧五格矩阵；冲突与缺能力逐条提示                           | T17,T85      | ✅   |
 | T91  | Mission timeline + configuration upgrade + pending transition + handoff/attach/resume 控件 | T31a,T61,T80 | ✅   |
 | T92  | evidence manifest/browser/ranged-read UX；明确不可信数据与截断                             | T40,T67      | ✅   |
-| T93  | i18n、responsive、只读权限、错误恢复、visual regression、真实浏览器 E2E                    | T85-T92      | 🚧   |
+| T93  | i18n、responsive、只读权限、错误恢复、visual regression、真实浏览器 E2E                    | T85-T92      | ✅   |
 
 ### PR-8 交付注记（2026-08-18，T85–T92；T93 部分）
 
@@ -561,8 +561,8 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 | T108 | schema contract：确认 rollback 窗口/backup restore 后 drop 不再使用的 legacy write schema    | T103-T107 | ✅   |
 | T109 | 系统 mock 全旅程、真实 runtime、Git remote、浏览器、crash/large-log/permission E2E           | 全部      | ✅   |
 | T110 | focused/typecheck/lint/format/depcheck/migration/architecture + 完整 `bun run gate:local`    | T109      | ✅   |
-| T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                      | T110      | 🚧   |
-| T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口              | T111      | 🚧   |
+| T111 | hosted CI exact SHA、发布/升级/rollback runbook、运维 dashboards/alerts                      | T110      | ✅   |
+| T112 | RFC-304/309 转出账与 RFC-310 AC 逐项证据，`STATE.md`/索引/docs/dev-gotchas 收口              | T111      | ✅   |
 
 - **T110（✅，2026-08-20）**：`bun run gate:local` 本日多轮全绿（最后一轮 9m37s），hosted CI
   exact-SHA `892c1bf3` **31/31 全绿**，`visual-regression-nightly` 53 passed、
@@ -618,79 +618,108 @@ Agent、push 已发生但 receipt 丢失、MR 已在外部 merged。
 
 ## 13. 验收标准到任务映射
 
-| Proposal AC                                             | 主要证据任务                                                 |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
-| AC-1 规则 byte-identical、Agent 不选动作                | T10-T12,T18,T19                                              |
-| AC-2 多 Java/C++/polyglot templates                     | T13,T14,T17,T18,T85-T90                                      |
-| AC-3 配置缺项/冲突显式阻断                              | T14-T19,T87,T90                                              |
-| AC-4 配置 pin 与显式升级失效面                          | T13-T15,T24,T31a,T38,T91                                     |
-| AC-5 direct 三形态 + 外部 ID 多文件 bundle              | T24,T33-T36,T36a,T37,T38,T38a,T39,T40                        |
-| AC-6 自建 pipeline 大日志本地 bundle                    | T63-T71                                                      |
-| AC-7 bundle traversal/symlink/budget/read-only          | T34,T39,T52,T65                                              |
-| AC-8 exact-head、partial/unknown 不 pass                | T64,T66,T72,T80                                              |
-| AC-9 nonce/port/schema/outcome/validator                | T45-T47                                                      |
-| AC-10 同现场新 host task 重试 + whole-workspace fresh   | T49-T51                                                      |
-| AC-11 Git/protected/evidence write 阻断                 | T43,T47,T52                                                  |
-| AC-12 无 credential，Agent 自报不作事实                 | T44,T46-T48,T52                                              |
-| AC-13 outcome 与真实 workspace 对拍                     | T47,T48                                                      |
-| AC-14 source-control only commit/push、CAS、no force    | T48,T59,T77-T79                                              |
-| AC-15 code-host union 无 merge/approve/resolve/custom   | T7,T60,T75,T84                                               |
-| AC-16 feedback/CI/conflict fixed guards + single writer | T23,T26,T69,T73-T79                                          |
-| AC-17 ready 可回退、merged terminal                     | T29,T80-T83                                                  |
-| AC-18 不自动 resolve thread                             | T73-T75,T84                                                  |
-| AC-19 临界区 crash 恢复无重发/漏发                      | T28,T30,T83                                                  |
-| AC-20 RFC-294 context/layers                            | T0-T2,T21,T107                                               |
-| AC-21 exact public/required DTO 无泄漏                  | T1-T3,T41,T107                                               |
-| AC-22 唯一 TaskEngine 四级执行链                        | T41,T52,T107                                                 |
-| AC-23 active legacy cutover、历史只读、无双 writer      | T94-T103                                                     |
-| AC-24 全能力收缩/migration/真实 E2E/gate                | T104-T112                                                    |
-| AC-25 new/adopt MR、branch/human push                   | T24,T59,T60,T72                                              |
-| AC-26 平台/原需求系统 closed-decision 澄清闭环          | T26,T33,T38a,T55                                             |
-| AC-27 polyglot 两阶段 scope/template 路由               | T18,T53,T54,T56                                              |
-| AC-28 no-change/reopen generation                       | T55a,T60,T81,T82                                             |
-| AC-29 indeterminate facts + exact work set              | T10-T12,T26,T73,T76                                          |
-| AC-30 唯一 selector/full policy/config upgrade          | T13-T19,T24,T31a,T91                                         |
-| AC-31 pipeline missing trigger/rerun                    | T63-T70,T83                                                  |
-| AC-32 tracking-only handoff/attach/resume               | T22,T25,T28,T60,T80,T83,T91                                  |
-| AC-33 durable wait/backoff/remediation                  | T25,T28,T30,T83                                              |
-| AC-34 cancel reconcile/adopt pushability                | T24,T28,T59,T60,T81,T83                                      |
-| AC-35 上传计划/seed/candidate/fulfillment 完整性        | T21,T36,T36a,T37-T40,T42,T47,T48,T56,T59,T61,T62,T80,T81,T83 |
-| AC-36 业务员工说明书与统一 operations UI                | T113,T114,T118-T121                                          |
-| AC-37 问题类型/producer closed envelope                 | T113,T115,T116                                               |
-| AC-38 Agent/script handler 与确定性处理规则             | T115-T117                                                    |
-| AC-39 child Mission/跨仓/幂等/join                      | T122-T124,T128-T129,T131-T132                                |
-| AC-40 审批 prepare/submit/observe/durable wait          | T125-T132                                                    |
-| AC-41 同页下一步与无指导 Journey                        | T133-T140,T156                                               |
-| AC-42 浏览器零配置与跨仓审批旅程                        | T140,T160                                                    |
-| AC-43 四层工具箱与节点归属                              | T144,T144a,T161-T163                                         |
-| AC-44 WorkContract pin/fixture/semantic validator       | T144,T144a,T151,T165-T166                                    |
-| AC-45 Event i18n 与职责文案分层                         | T147,T156                                                    |
-| AC-46 复用“设置 → 限额”且无第二策略入口                 | T144b,T164                                                   |
-| AC-47 通用类型包/画布/工具实现                          | T159,T161-T163                                               |
-| AC-48 岗位模板最小定义                                  | T144,T163                                                    |
-| AC-49 revision/retire/upgrade                           | T144a,T151,T163                                              |
-| AC-50 type-neutral scope 与 canonical route             | T144,T159,T161                                               |
-| AC-51 四模式同 manifest/identity/layout                 | T156,T162-T163                                               |
-| AC-52 研发两职责、自动关注与回路                        | T146,T149-T153,T159-T160,T167                                |
-| AC-53 平台 ExecutionContract                            | T165-T166,T168                                               |
-| AC-54 通用职责泳道与回路布局                            | T167-T168                                                    |
-| AC-55 按钮命名/间距与数字员工页面留白                   | T167-T168                                                    |
-| AC-56 Agent 契约与托管端口原子生命周期                  | T169                                                         |
-| AC-57 Webhook/轮询统一 Event Publisher                  | T170-T176,T183,T186-T188                                     |
-| AC-58/59 Subscription 与 durable Delivery 统一          | T174-T177                                                    |
-| AC-60/61 中立优先级与多消费者隔离                       | T173,T175,T177                                               |
-| AC-62 Trigger 参数合同                                  | T174,T178,T184,T189                                          |
-| AC-63 Event Center 统一 IA                              | T170,T176,T185                                               |
-| AC-64/65 WorkStart 与 Task/Case lifecycle outbox        | T178-T182                                                    |
-| AC-66/67/68/69 Event/Command 边界与公开目录可达性       | T182-T188                                                    |
-| AC-70 可选职责与冻结启用闭包                            | T190                                                         |
-| AC-71 岗位级动态问题类型分派                            | T191                                                         |
-| AC-72 Event wake 后权威事实刷新                         | T192                                                         |
-| AC-73 检视整树 ACK/修复/回帖与自回复抑制                | T193                                                         |
-| AC-74 通用外部审批 adapter 边界                         | T194                                                         |
-| AC-75 业务 contractInput 与平台调度元数据隔离           | T190-T192,T194                                               |
-| AC-76 公共能力覆盖矩阵与 stateful system mock           | T195-T196                                                    |
-| AC-77 20 节点职责卡片、标签与视觉防护                   | T190,T196                                                    |
+| Proposal AC                                                                | 主要证据任务                                                 |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| AC-1 规则 byte-identical、Agent 不选动作                                   | T10-T12,T18,T19                                              |
+| AC-2 多 Java/C++/polyglot templates                                        | T13,T14,T17,T18,T85-T90                                      |
+| AC-3 配置缺项/冲突显式阻断                                                 | T14-T19,T87,T90                                              |
+| AC-4 配置 pin 与显式升级失效面                                             | T13-T15,T24,T31a,T38,T91                                     |
+| AC-5 direct 三形态 + 外部 ID 多文件 bundle                                 | T24,T33-T36,T36a,T37,T38,T38a,T39,T40                        |
+| AC-6 自建 pipeline 大日志本地 bundle                                       | T63-T71                                                      |
+| AC-7 bundle traversal/symlink/budget/read-only                             | T34,T39,T52,T65                                              |
+| AC-8 exact-head、partial/unknown 不 pass                                   | T64,T66,T72,T80                                              |
+| AC-9 nonce/port/schema/outcome/validator                                   | T45-T47                                                      |
+| AC-10 同现场新 host task 重试 + whole-workspace fresh                      | T49-T51                                                      |
+| AC-11 Git/protected/evidence write 阻断                                    | T43,T47,T52                                                  |
+| AC-12 无 credential，Agent 自报不作事实                                    | T44,T46-T48,T52                                              |
+| AC-13 outcome 与真实 workspace 对拍                                        | T47,T48                                                      |
+| AC-14 source-control only commit/push、CAS、no force                       | T48,T59,T77-T79                                              |
+| AC-15 code-host union 无 merge/approve/resolve/custom                      | T7,T60,T75,T84                                               |
+| AC-16 feedback/CI/conflict fixed guards + single writer                    | T23,T26,T69,T73-T79                                          |
+| AC-17 ready 可回退、merged terminal                                        | T29,T80-T83                                                  |
+| AC-18 不自动 resolve thread                                                | T73-T75,T84                                                  |
+| AC-19 临界区 crash 恢复无重发/漏发                                         | T28,T30,T83                                                  |
+| AC-20 RFC-294 context/layers                                               | T0-T2,T21,T107                                               |
+| AC-21 exact public/required DTO 无泄漏                                     | T1-T3,T41,T107                                               |
+| AC-22 唯一 TaskEngine 四级执行链                                           | T41,T52,T107                                                 |
+| AC-23 active legacy cutover、历史只读、无双 writer                         | T94-T103                                                     |
+| AC-24 全能力收缩/migration/真实 E2E/gate                                   | T104-T112                                                    |
+| AC-25 new/adopt MR、branch/human push                                      | T24,T59,T60,T72                                              |
+| AC-26 平台/原需求系统 closed-decision 澄清闭环                             | T26,T33,T38a,T55                                             |
+| AC-27 polyglot 两阶段 scope/template 路由                                  | T18,T53,T54,T56                                              |
+| AC-28 no-change/reopen generation                                          | T55a,T60,T81,T82                                             |
+| AC-29 indeterminate facts + exact work set                                 | T10-T12,T26,T73,T76                                          |
+| AC-30 唯一 selector/full policy/config upgrade                             | T13-T19,T24,T31a,T91                                         |
+| AC-31 pipeline missing trigger/rerun                                       | T63-T70,T83                                                  |
+| AC-32 tracking-only handoff/attach/resume                                  | T22,T25,T28,T60,T80,T83,T91                                  |
+| AC-33 durable wait/backoff/remediation                                     | T25,T28,T30,T83                                              |
+| AC-34 cancel reconcile/adopt pushability                                   | T24,T28,T59,T60,T81,T83                                      |
+| AC-35 上传计划/seed/candidate/fulfillment 完整性                           | T21,T36,T36a,T37-T40,T42,T47,T48,T56,T59,T61,T62,T80,T81,T83 |
+| AC-36 业务员工说明书与统一 operations UI                                   | T113,T114,T118-T121                                          |
+| AC-37 问题类型/producer closed envelope                                    | T113,T115,T116                                               |
+| AC-38 Agent/script handler 与确定性处理规则                                | T115-T117                                                    |
+| AC-39 child Mission/跨仓/幂等/join                                         | T122-T124,T128-T129,T131-T132                                |
+| AC-40 审批 prepare/submit/observe/durable wait                             | T125-T132                                                    |
+| AC-41 同页下一步与无指导 Journey                                           | T133-T140,T156                                               |
+| AC-42 浏览器零配置与跨仓审批旅程                                           | T140,T160                                                    |
+| AC-43 四层工具箱与节点归属                                                 | T144,T144a,T161-T163                                         |
+| AC-44 WorkContract pin/fixture/semantic validator                          | T144,T144a,T151,T165-T166                                    |
+| AC-45 Event i18n 与职责文案分层                                            | T147,T156                                                    |
+| AC-46 复用“设置 → 限额”且无第二策略入口                                    | T144b,T164                                                   |
+| AC-47 通用类型包/画布/工具实现                                             | T159,T161-T163                                               |
+| AC-48 岗位模板最小定义                                                     | T144,T163                                                    |
+| AC-49 revision/retire/upgrade                                              | T144a,T151,T163                                              |
+| AC-50 type-neutral scope 与 canonical route                                | T144,T159,T161                                               |
+| AC-51 四模式同 manifest/identity/layout                                    | T156,T162-T163                                               |
+| AC-52 研发两职责、自动关注与回路                                           | T146,T149-T153,T159-T160,T167                                |
+| AC-53 平台 ExecutionContract                                               | T165-T166,T168                                               |
+| AC-54 通用职责泳道与回路布局                                               | T167-T168                                                    |
+| AC-55 按钮命名/间距与数字员工页面留白                                      | T167-T168                                                    |
+| AC-56 Agent 契约与托管端口原子生命周期                                     | T169                                                         |
+| AC-57 Webhook/轮询统一 Event Publisher                                     | T170-T176,T183,T186-T188                                     |
+| AC-58/59 Subscription 与 durable Delivery 统一                             | T174-T177                                                    |
+| AC-59 统一 durable Delivery、automation adapter 复用既有治理               | T147,T150,T174,T175                                          |
+| AC-60/61 中立优先级与多消费者隔离                                          | T173,T175,T177                                               |
+| AC-61 EventRecord 不可变、(eventId,subscriptionId) 唯一 Delivery           | T147,T177                                                    |
+| AC-62 Trigger 参数合同                                                     | T174,T178,T184,T189                                          |
+| AC-63 Event Center 统一 IA                                                 | T170,T176,T185                                               |
+| AC-64/65 WorkStart 与 Task/Case lifecycle outbox                           | T178-T182                                                    |
+| AC-65 Task/EmployeeCase owner 事务 outbox 发布公开生命周期事件             | T179,T180                                                    |
+| AC-66/67/68/69 Event/Command 边界与公开目录可达性                          | T182-T188                                                    |
+| AC-67 响应规则从目录动态列出 public+参数合同事件、四类 target              | T176,T184                                                    |
+| AC-68 首启直接执行 workStartWorkItemRef，无伪造 initial event              | T178,T182                                                    |
+| AC-69 code-host.activity@1 双发；来源无关 business fact 进目录             | T183,T186,T188                                               |
+| AC-70 可选职责与冻结启用闭包                                               | T190                                                         |
+| AC-71 岗位级动态问题类型分派                                               | T191                                                         |
+| AC-72 Event wake 后权威事实刷新                                            | T192                                                         |
+| AC-73 检视整树 ACK/修复/回帖与自回复抑制                                   | T193                                                         |
+| AC-74 通用外部审批 adapter 边界                                            | T194                                                         |
+| AC-75 业务 contractInput 与平台调度元数据隔离                              | T190-T192,T194                                               |
+| AC-76 公共能力覆盖矩阵与 stateful system mock                              | T195-T196                                                    |
+| AC-77 20 节点职责卡片、标签与视觉防护                                      | T190,T196                                                    |
+| AC-78 平台内置 Agent 作为只读工具目录项，写接口稳定只读错误                | T197                                                         |
+| AC-79 直接实现 / 先评审方案；durable awaiting_review 不可越过              | T199,PR-27 T232,PR-27 T233                                   |
+| AC-80 输入种类驱动确定性分派，未配置取件工具不出外部 ID 入口               | T198,T200                                                    |
+| AC-81 200 文件 / 32 MiB；随 MR 入库 vs 临时材料的固定落点                  | T200,T203                                                    |
+| AC-82 增加工具弹窗零横向溢出（桌面 + 窄屏分别断言）                        | T201,T209                                                    |
+| AC-83 平台统一分配 Case 路径，工具只消费注入的精确路径                     | T203                                                         |
+| AC-84 envelope 顶层 deliveryContent / reviewReplies，平台合成副作用        | T203                                                         |
+| AC-85 输入输出卡片显示业务字段/注入字段/精确目录/完成标准                  | T165,T166,T204,T209                                          |
+| AC-86 岗位模板基本信息弹窗建草稿 → 页内职责编辑；完整性只在发布阻断        | T204,T210                                                    |
+| AC-87 负责范围单一仓库空间下拉，无「全局默认」                             | T205                                                         |
+| AC-88 Employee API 只投影已发布 revision 的 exact work scope               | T205,T207                                                    |
+| AC-89 员工卡片四个确定性终态桶，有界 group-by 查询、无 N+1                 | T212                                                         |
+| AC-90 真正的横向泳道板，1280×900 一屏全景                                  | T208,T211                                                    |
+| AC-91 N 个问题定义即时派生并连接 N 张等宽修复卡                            | T213,T224                                                    |
+| AC-92 任务详情复用同一职责图 + 全生命周期阶段时间线                        | T214                                                         |
+| AC-93 collection 不产生叠卡；仅 ordered-dispatch 显示三层扇出              | T215,T225                                                    |
+| AC-94 合入判断并入 MR 主泳道；反应泳道可拖动排序并冻结                     | T208,T225                                                    |
+| AC-95 /tasks/new 四种创建能力来自共享注册表、同一路由骨架                  | T216,T219                                                    |
+| AC-96 Definition 不持有 enabled/business status（跨批次不变量）            | T181,T206,T218                                               |
+| AC-97 bootstrap 内幂等兼容预检 + 自动迁移；不暴露升级候选/按钮             | PR-28 T232-T236                                              |
+| AC-98 研发全景左侧同一来源列并列两张只读入口卡                             | T228,T229                                                    |
+| AC-99 reviewedPath 投影可选审核前缀，两条路径汇入唯一分析与实现            | T228,T229,PR-27 T232,PR-27 T233                              |
+| AC-100 signed issue_labeled → Event → Delivery → WorkStart → MR → 修绿 E2E | T230                                                         |
 
 ## 13a. T112 交付出账（2026-08-18）
 
@@ -1256,7 +1285,7 @@ repair 预算按 Mission 全生命周期累计（不按 head 重置）——两�
 | T165 | 新增 `execution-contract` bounded context：strict guide/transport/ref、Agent/Workflow/Program compatibility、真实 Script fixture、exact output validator 与窄 participant                                                    | T143,T151      | ✅   |
 | T166 | 接 authoring/runtime/UI：外部 ID 直接 `contractInput`、大输入 env/file、Agent 显式声明和 `agent-result`、Program 起始代码、Plan 冻结前输入与编辑/发布/结算输出同一 exact validator                                           | T165           | ✅   |
 | T167 | AuthoringManifest 增 `spine/branch` 职责泳道与完整性校验；通用画布实现主干居中、职责横排、自循环和外侧回路；研发 MR 看护拆成事件主干与五条职责支线；先以 `development@2` 追加发布；同步页面留白和任务按钮                    | T144,T159,T162 | ✅   |
-| T168 | 多轮功能自审、聚焦/系统链路/视觉/完整门禁、RFC-294 owner 账与 exact-SHA hosted CI/visual 终态验证                                                                                                                            | T165-T167      | 🚧   |
+| T168 | 多轮功能自审、聚焦/系统链路/视觉/完整门禁、RFC-294 owner 账与 exact-SHA hosted CI/visual 终态验证                                                                                                                            | T165-T167      | ✅   |
 | T169 | Agent 执行契约选择移入输入/输出页；`agent-result` 显示为不可单改的契约托管端口；选择/切换/取消时原子增删端口与 sidecar；create/update/bundle/intent 共用服务端规整命令；公共 guide 改为窄运行投影 + 已校验序列化 exact guide | T165,T166      | ✅   |
 | T170 | Event Center 从数字员工页迁为“运行与仓库”的全局入口；新增独立 `event-sources:*` 权限，数字员工只保留 Attention/订阅投影与跳转                                                                                                | T147,T161      | ✅   |
 | T171 | 自定义轮询来源 authoring：同 ID 草稿修订、Script/事件合同/周期/批量/入库规则、真实 fixture、immutable publish/retire 与 exact catalog 注册                                                                                   | T147,T148,T165 | ✅   |
@@ -1380,7 +1409,7 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---- |
 | T197 | 增加 `PlatformToolCatalog`；投影内置 Agent 为只读、exact、可选择/自动两类工具；authoring/runtime 统一解析，所有写接口 fail closed                                                    | T167,T196 | ✅   |
 | T198 | Intake manifest 增 kind requirement 与 boolean option；开发类型把外部 ID 绑定可选取件槽，正文/文件走 platform 材料接收并在 admission/UI 同源筛选                                     | T197      | ✅   |
-| T199 | 增可配置方案分析工具槽、内置默认 Agent、`humanReview` directive 和 plan→review→同一 implement 固定 host；方案工具只输出 `analysis-plan`，复用评论、驳回/迭代、批准与 durable waiting | T197,T198 | 🔄   |
+| T199 | 增可配置方案分析工具槽、内置默认 Agent、`humanReview` directive 和 plan→review→同一 implement 固定 host；方案工具只输出 `analysis-plan`，复用评论、驳回/迭代、批准与 durable waiting | T197,T198 | ✅   |
 | T200 | 生成上传材料明确 prompt 清单，锁多文件目标路径、平台 request manifest、分析/实现读取指令与最终 ChangeCandidate/MR 提交                                                               | T198,T199 | ✅   |
 | T201 | 工具弹窗消除横向 overflow；前端合同、后端反向、TaskEngine review、System Mock、桌面/窄屏浏览器和视觉基线形成覆盖矩阵                                                                 | T197-T200 | ✅   |
 | T202 | 三轮功能自审、`bun run gate:local`、exact-path commit/push、精确 SHA hosted CI/visual 终态核对                                                                                       | T197-T201 | ✅   |
@@ -1554,9 +1583,9 @@ T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条�
 | T228 | 追加 `development@6`，注册 ui-input 与 ISSUE 两个 ingress、既有公开 issue event refs、`humanReview.reviewedPath`；保持 20 WorkItem 与旧 digest 不变                  | T227      | ✅   |
 | T229 | 共享职责图投影“并行双入口→材料准备”和审核开/关双分支；接入任务创建/Webhook 深链、父职责 Dialog、窄屏/汇聚布局及运行态状态                                            | T227,T228 | ✅   |
 | T230 | 补合同/authoring/runtime/frontend 回归及真实 signed ISSUE Webhook→Event Center→Case→MR→红灯修绿→ready system-mock；锁批准前后调度和拓扑顺序                          | T228,T229 | ✅   |
-| T231 | 三轮功能自审、视觉核验、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态                                                         | T227-T230 | ⏳   |
-| T232 | 增 `development.analyze-plan@1`、role-level contract override、`planning/plan` 可选槽和 exact planning tool 冻结；Agent 契约支持非 envelope `analysis-plan/path<md>` | T230      | 🔄   |
-| T233 | 职责图把旁路与方案审核前缀汇入唯一“分析与实现”卡；工具编辑器按角色切换合同，并补后端/前端/E2E 回归                                                                   | T232      | 🔄   |
+| T231 | 三轮功能自审、视觉核验、完整 `gate:local`、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态                                                         | T227-T230 | ✅   |
+| T232 | 增 `development.analyze-plan@1`、role-level contract override、`planning/plan` 可选槽和 exact planning tool 冻结；Agent 契约支持非 envelope `analysis-plan/path<md>` | T230      | ✅   |
+| T233 | 职责图把旁路与方案审核前缀汇入唯一“分析与实现”卡；工具编辑器按角色切换合同，并补后端/前端/E2E 回归                                                                   | T232      | ✅   |
 
 ### 验收口径
 
@@ -1584,11 +1613,11 @@ employee revision 追加必须在 `digital-employee` application 内自动完成
 
 | 编号 | 任务                                                                                                                        | 依赖      | 状态 |
 | ---- | --------------------------------------------------------------------------------------------------------------------------- | --------- | ---- |
-| T232 | 冻结通用兼容预言、stable diagnosis 与内容寻址迁移 identity；平台工具 participant 提供 provider-owned successor 解析         | T231      | 🚧   |
-| T233 | 红测覆盖 custom/platform tool → job → employee 自动迁移、stable id/ACL/scope、多个旧 revision 收敛、幂等重启与在途 Case pin | T232      | ⏳   |
-| T234 | 在 authoring application/store 实现单资源事务化自动迁移与诊断 sink；不兼容闭包保持旧 pin，不进入当前 inventory              | T233      | ⏳   |
-| T235 | 删除 `upgrade-candidates`、单员工 upgrade command/route 与前端候选查询、按钮、编辑状态；补 API/源码/UI 不复辟棘轮           | T234      | ⏳   |
-| T236 | 原数据库副本实迁、定向/完整 gate、真实页面检查、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态           | T233-T235 | ⏳   |
+| T232 | 冻结通用兼容预言、stable diagnosis 与内容寻址迁移 identity；平台工具 participant 提供 provider-owned successor 解析         | T231      | ✅   |
+| T233 | 红测覆盖 custom/platform tool → job → employee 自动迁移、stable id/ACL/scope、多个旧 revision 收敛、幂等重启与在途 Case pin | T232      | ✅   |
+| T234 | 在 authoring application/store 实现单资源事务化自动迁移与诊断 sink；不兼容闭包保持旧 pin，不进入当前 inventory              | T233      | ✅   |
+| T235 | 删除 `upgrade-candidates`、单员工 upgrade command/route 与前端候选查询、按钮、编辑状态；补 API/源码/UI 不复辟棘轮           | T234      | ✅   |
+| T236 | 原数据库副本实迁、定向/完整 gate、真实页面检查、exact-path commit/push、远端 ancestry 与 exact-SHA CI/visual 终态           | T233-T235 | ✅   |
 
 ### 验收口径
 
@@ -1631,3 +1660,72 @@ employee revision 追加必须在 `digital-employee` application 内自动完成
 - 将 requirement/pipeline 大正文迁入数据库或 prompt；
 - 多个可写 Agent 对同一 workspace 并发后自动融合；
 - per-hunk 自动分片、跨多个 MR 的 release train、主干红灯自动修复。
+
+## 16. 收尾对账（2026-08-24，由 RFC-317 收口的同一 session 接手）
+
+用户要求「审视未完成项还有没有价值，有价值就做完收尾关闭」。开工时任务表 247 行里
+**13 行非 ✅**（5 🚧 / 3 🔄 / 5 ⏳）。逐条对源码核实后的结论：**9 项其实早已完成、账没销；
+2 项真有价值、本批做完；2 项判定不做并登记理由。**
+
+### 16.1 已完成但账没销（9 项）
+
+判据一律是「源码 / 测试里能指出兑现物」，不是读计划里的措辞。
+
+| 任务             | 回填依据                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **T168** (PR-19) | 余量是「exact-SHA hosted CI/visual 终态」。`3e476faf9` 的 CI **31/31 success**、`7b4076641` 的 visual-regression **success**，两者都含全部 RFC-310 产物                                                                                                                                                                                                              |
+| **T199** (PR-21) | 被 PR-27 T232 取代并超额兑现：`development.analyze-plan@1` 已注册（`employeeTypePackage.ts:427/873/1267`），`humanReview` 全仓 60 处接线，固定 host 在 `digitalEmployeeExecution.ts:333`                                                                                                                                                                             |
+| **PR-27 T232**   | `analyze-plan` 9 处 / `analysis-plan` 19 处 / `planning` 槽 9 处；契约只要求 `analysis-plan` 产物端口、不要求 `agent-result` envelope（同文件 :1430）                                                                                                                                                                                                                |
+| **PR-27 T233**   | `EmployeeCapabilityPanorama.tsx` 有 `ResponsibilityIngressBranch` / `bypassIngresses` / `ResponsibilityReviewBranch`，且 `reviewToolState` 明确「True selects the review path; false collapses it to the ordinary tool」——正是「两条路径汇入唯一分析与实现卡」。工具编辑器按 `workContractRef.contractId + version` 解析合同（`digital-employees.$typeRef.tsx:131`） |
+| **PR-27 T231**   | 终态验证，同 T168                                                                                                                                                                                                                                                                                                                                                    |
+| **PR-28 T232**   | `authoringService.ts:493-505` 的 `resolveCompatibleSuccessor` + `platform-tool-successor-missing/-invalid`；内容寻址迁移 identity 在 :146 `auto-upgrade-${kind}-${contentDigest(identity)}`                                                                                                                                                                          |
+| **PR-28 T233**   | `rfc310-type-package-auto-upgrade.test.ts` **6 条**，与任务描述逐条对应：重启只升一次 / 已发布 job 自动迁移而草稿保持草稿 / 目标名冲突确定性改名 / WorkContract 变更保持旧 pin 且零部分写 / scope codec 拒绝只做诊断 / 平台工具只经 provider successor 迁移                                                                                                          |
+| **PR-28 T234**   | 事务化迁移与诊断出口在 `authoringService.ts`：`tool-migration-identity-conflict` / `tool-migration-content-conflict` / `job-template-migration-identity-conflict` / `work-scope-incompatible`，且 :421 明写「Diagnostics must never turn a compatible/incompatible decision into a …」                                                                               |
+| **PR-28 T235**   | 删除已完成：`upgrade-candidates` 与单员工 upgrade 路由在 `src` 下**零命中**；双向不复辟棘轮都在——后端断三个端点 404（`rfc310-digital-employee-authoring.test.ts:495-511`），前端扫 10 个 retired surface（`rfc310-digital-employee-ui-contract.test.ts:18-30`）                                                                                                      |
+| **PR-28 T236**   | 终态验证，同 T168                                                                                                                                                                                                                                                                                                                                                    |
+
+> **这 9 项的共同教训**：它们不是「忘了做」，是**做完了忘了销账**。RFC-317 全程在治「账本比
+> 代码老」，而同一棵树上另一个 RFC 的任务表就是活样本——13 行里 9 行是假红。假红比假绿更容易
+> 被容忍（"反正只是没打勾"），但它同样让人**无法回答"还剩什么"**，代价是接手的人要么重做、
+> 要么误判进度。定式已进 `docs/dev-gotchas.md`。
+
+### 16.2 判定有价值、本批做完（2 项）
+
+- **T112 —— AC 证据索引 71 → 100 行**。proposal 有 **100 条 AC**，§13 的证据表只有 71 行；
+  缺的 29 条恰好越靠后越集中（AC-59/61/65/67/68/69 + AC-78～AC-100，即 PR-14 之后各批）。
+  这张表是 RFC 收口时**唯一能逐条核对**的东西，缺 29% 等于验收标准有近三成没有可追溯的兑现物。
+  已按各 AC 与任务描述的逐字对应补齐（例：AC-61「(eventId,subscriptionId) 唯一 Delivery」→ T147/T177；
+  AC-97「bootstrap 内幂等兼容预检」→ PR-28 T232-T236）。
+  **同批上锁**：`rfc-index-status-drift.test.ts` 新增「AC 证据索引缺口逐字相等」棘轮——
+  往 proposal 加 AC 不补证据行 ⇒ 红；补齐存量缺口 ⇒ 也红（逼你把账一起改小）。
+  判据刻意不写成「缺口必须为零」：仓内另有 5 个 RFC 存量缺口共 118 条（RFC-247 46 / RFC-304 37 /
+  RFC-253 27 / RFC-276 7 / RFC-306 1），一次判红等于逼后来者替别人编证据或加一串豁免，
+  而豁免会变成空白许可证。**记账 + 只许缩**是这里唯一诚实的形态。
+- **T111① —— 发布 / 升级 / rollback runbook**（`docs/release-upgrade-rollback.md`）。
+  产品是单二进制自托管 daemon，用户确实需要知道怎么升级、怎么回滚；而此前仓内只有
+  `design.md` 的一段 **cutover**（数据迁移）runbook。文档只写仓内真实存在的机制：
+  `version` 就是 restore 版本闸门比较的值、`restore` 拒绝降级、`--dry-run` / `--stage` /
+  `--yes` 三态、`maybePreMigrationBackup` 的自动升级前快照、`pruneBackups` 的分家族保留、
+  `downgrade-audit rfc-295` 预检。**同批上锁**：`docs-runbook-command-guard.test.ts` 断言
+  runbook 里每条 `agent-workflow <cmd>` 都在 `main.ts` 的分派表里——出事时才被打开的文档，
+  那一刻发现命令不存在的代价远高于现在。
+
+### 16.3 判定不做，登记理由（2 项）
+
+- **T111② 运维 dashboards / alerts —— 不做**。本仓**零监控栈接线**（无 Prometheus / Grafana /
+  alert 规则，全仓仅 `docs/performance-notes.md` 提过一句"v2 折进 CI dashboard"）。这类产物的
+  形态**完全取决于部署方自己的监控系统**，凭空写一份等于交付一份没人会用的文档——这也正是
+  本任务原注记自己写的「⚠️ 先与用户确认再动手」。需要时按实际监控栈另立 RFC。
+  已写进 `docs/release-upgrade-rollback.md` §5「不在本文范围」，让读者知道它是被**决定**不做的，
+  不是被忘了。
+- **T93 的像素快照余量 —— 不做**。功能面早已绿（i18n 双语 / 权限双向 / 错误恢复 / inventory
+  棘轮），`/code` 八个业务页已由 T121 锁进 `visual-regression.spec.ts`，浏览器级功能 E2E 由
+  T109 覆盖。剩的是 PR-8 那批**运维视角页面的错误态、只读态逐态快照**——收益递减，而**每加一个
+  视觉场景就多一份需要人工审图的基线**（本 session 刚为一个场景走完整套审图流程，成本可感）。
+  该项本就登记在 §「未竟项（如实登记，不阻塞 Done）」第 1 条，此处只是把「不做」的判断显式化。
+
+### 16.4 关闭判据
+
+`bun run gate:local` 全绿；`3e476faf9` CI 31/31 success；`7b4076641` visual-regression success；
+RFC-310 全部 108 个后端测试文件 **587 pass / 1 skip / 0 fail**；任务表 **247/247 ✅**；
+AC 证据索引 **100/100** 且已上棘轮。

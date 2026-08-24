@@ -17,7 +17,7 @@
 // 不可狼来了——一条天天误报的检查会被训练成无视，比没有更糟。
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -95,6 +95,65 @@ describe('RFC 索引状态漂移守卫', () => {
   })
 
   // 硬信号 3：STATE.md 与索引互相矛盾（一边说完成、一边说没完成）。
+  /**
+   * RFC-310 收尾（2026-08-24）加：**验收标准与它的证据索引之间没有任何机器判据。**
+   *
+   * 多个 RFC 的 `plan.md` 里有一张「AC → 证据任务」表，用来回答「这条验收标准是被哪几个
+   * 任务兑现的」。它是 RFC 收口时唯一能逐条核对的东西——而**往 proposal 里加一条 AC 不会
+   * 让任何地方变红**，于是表会慢慢落后于验收标准本身。
+   *
+   * 实撞：RFC-310 的 proposal 有 100 条 AC，证据表只有 71 行——缺的 29 条恰好是 PR-21～PR-28
+   * 那几批（越靠后越缺）。而它的任务表里 `T112「AC 逐项证据」`一直挂着 🚧，也就是说
+   * **账本自己知道它不全，却没有任何东西会因此变红**。
+   *
+   * 判据取「缺口逐字相等」而不是「缺口为零」：仓内另外几个 RFC 也有存量缺口（RFC-247 46 条、
+   * RFC-304 37 条…），把它们一次性判红等于逼着后来的人替别人编证据，或者加一串豁免——
+   * 而豁免会变成空白许可证（`docs/dev-gotchas.md` 有这条）。记账 + 只许缩，是这里唯一诚实的形态：
+   * 新增 AC 却不补证据行 ⇒ 缺口变大 ⇒ 红；补齐了 ⇒ 缺口变小 ⇒ 也红，逼你把这张表一起改小。
+   */
+  const AC_EVIDENCE_GAP: Readonly<Record<string, number>> = {
+    'RFC-217-workgroup-architecture-refactor': 0,
+    'RFC-247-mcp-remote-access': 46,
+    'RFC-253-script-execution-node': 27,
+    'RFC-276-runtime-hardening-deprecation': 7,
+    'RFC-297-runtime-inventory-unification': 0,
+    'RFC-304-code-capability-platform': 37,
+    'RFC-306-workflow-conditional-branching': 1,
+    'RFC-310-rule-driven-development-digital-employee': 0,
+  }
+
+  test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {
+    const measured: Record<string, number> = {}
+    for (const dir of readdirSync(resolve(ROOT, 'design'), { withFileTypes: true })) {
+      if (!dir.isDirectory()) continue
+      const proposalPath = resolve(ROOT, 'design', dir.name, 'proposal.md')
+      const planPath = resolve(ROOT, 'design', dir.name, 'plan.md')
+      if (!existsSync(proposalPath) || !existsSync(planPath)) continue
+      const acs = new Set(
+        [...readFileSync(proposalPath, 'utf8').matchAll(/^- \*\*AC-(\d+)\*\*/gm)].map((m) =>
+          Number(m[1]),
+        ),
+      )
+      const rows = new Set(
+        [...readFileSync(planPath, 'utf8').matchAll(/^\|\s*AC-(\d+)\b/gm)].map((m) => Number(m[1])),
+      )
+      // 只管「两边都有」的 RFC：没有证据表的 RFC 不适用这条约定，不该被这条判据绑架。
+      if (acs.size === 0 || rows.size === 0) continue
+      measured[dir.name] = [...acs].filter((n) => !rows.has(n)).length
+    }
+
+    expect(
+      Object.keys(measured).length,
+      'design/ 下一个「同时有 AC 列表与证据表」的 RFC 都没扫到——判据的被测面没了',
+    ).toBeGreaterThan(4)
+
+    expect(
+      measured,
+      'AC 证据索引与 proposal 的验收标准对不上了。' +
+        '往 proposal 加 AC 就要同批往 plan 的证据表加行；补齐存量缺口时也要把这张账一起改小。',
+    ).toEqual(AC_EVIDENCE_GAP)
+  })
+
   test('STATE.md 标记「已完成」的 RFC，索引状态必须是 Done/Superseded', () => {
     const done = new Set<string>([
       ...[...STATE.matchAll(/✅ \*\*已完成 RFC[^:：]*[:：]\s*\[RFC-(\d+)/g)].map(
