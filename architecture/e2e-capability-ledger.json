@@ -3212,8 +3212,21 @@
       "title": "澄清的 defer 控制通道：只封存不下发，以及 questionIds / resubmitQuestionIds 的非法组合被拒",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-control-channel.spec.ts",
+          "test": "快速通道上带子集上限被当场拒绝，而不是「过滤掉再往下走」"
+        },
+        {
+          "file": "e2e/clarify-control-channel.spec.ts",
+          "test": "快速通道上带重答声明同样被拒（两条组合各有各的 code）"
+        },
+        {
+          "file": "e2e/clarify-control-channel.spec.ts",
+          "test": "控制通道只封存不下发：被点名那题进待下发，另一题不动，任务仍停在等人上"
+        }
+      ]
     },
     {
       "id": "HUMAN-20",
@@ -8363,7 +8376,6 @@
     "HUMAN-16",
     "HUMAN-17",
     "HUMAN-18",
-    "HUMAN-19",
     "HUMAN-20",
     "HUMAN-21",
     "HUMAN-22",
