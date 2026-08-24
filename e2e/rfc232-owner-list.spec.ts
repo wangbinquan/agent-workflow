@@ -106,6 +106,7 @@ async function seedOwnerFixtures(): Promise<OwnerFixtures> {
     method: 'POST',
     body: {
       username: PEER_USERNAME,
+      email: `${PEER_USERNAME}@example.com`,
       displayName: LONG_DISPLAY_NAME,
       role: 'user',
       password: PEER_PASSWORD,

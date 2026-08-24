@@ -49,6 +49,7 @@ async function createUserAndLogin(opts: {
     },
     body: JSON.stringify({
       username: opts.username,
+      email: `${opts.username}@example.com`,
       displayName: opts.username,
       role: opts.role,
       password: opts.password,

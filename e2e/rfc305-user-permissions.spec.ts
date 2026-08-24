@@ -190,6 +190,7 @@ test('390px create/edit catalog, OCC, dark mode and live script authority', asyn
   // 这两处计数必须一起改——上一轮只改了行数，CI 在第一处就停下，第二处直到下一次 run 才现形。
   await expect(dialog.locator('input[type="checkbox"]:not(:disabled)')).toHaveCount(27)
   await dialog.getByRole('textbox', { name: /Username/ }).fill(username)
+  await dialog.getByRole('textbox', { name: /Email/ }).fill(`${username}@example.com`)
   await dialog.getByRole('textbox', { name: /Display name/ }).fill('RFC-305 Browser User')
   await dialog.getByLabel(/^Password/).fill(password)
   await dialog.getByTestId('user-permission-search').fill('scripts:author')
