@@ -227,10 +227,19 @@ test('RFC-319 INTENT-X3: no one but the fusion owner can approve, reject or canc
     '陌生人对别人的融合做出了决定 ⇒ 他可以把任意内容合进别人的技能，而技能改了不通知任何人',
   ).toEqual([])
 
-  // 融合确实没被推进：owner 读回来的状态没有变成任何终态。
+  // 融合确实没被陌生人推进。判据只排除**他的三个动作会产生的那两个终态**，
+  // 而不是白名单 `['running','awaiting_approval']`——融合引擎任务可能因为它
+  // 自己的原因失败（环境、runtime），那与「陌生人有没有得逞」无关。写成白名单
+  // 会让这条断言在一个与它无关的原因下变红（RES-28 就是这么在 CI 上炸的）。
   const after = await jsonOf<{ status: string }>(
     await req(`/api/fusions/${fusionId}`),
     'owner re-reads the fusion',
   )
-  expect(['running', 'awaiting_approval']).toContain(after.status)
+  expect(
+    after.status,
+    'approve 被拒了，融合却变成了 done ⇒ 别人的技能被合进了不该有的内容',
+  ).not.toBe('done')
+  expect(after.status, 'cancel 被拒了，融合却变成了 canceled ⇒ 陌生人取消了别人的工作').not.toBe(
+    'canceled',
+  )
 })
