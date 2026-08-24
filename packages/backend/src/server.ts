@@ -120,6 +120,7 @@ import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/c
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
+  createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
@@ -130,9 +131,13 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  buildRepositoryTransportConnectionProjection,
+  composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
+  reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
+import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 
 /**
  * Narrow in-process dependency seams for route tests that exercise diagnostics
@@ -466,10 +471,55 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     join(appHome, 'artifacts', 'employee-inputs'),
   )
   const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
+  const repositoryTransportModule =
+    deps.secretBox === undefined
+      ? null
+      : composeRepositoryTransportCredentials(deps.db, deps.secretBox)
+  const repositoryTransportCoordinator =
+    repositoryTransportModule === null
+      ? null
+      : {
+          participant: repositoryTransportModule.adminConnections,
+          project: buildRepositoryTransportConnectionProjection,
+        }
+  if (repositoryTransportModule !== null) {
+    reconcileRepositoryTransportConnectionProjections(
+      deps.db,
+      repositoryTransportModule.adminConnections,
+    )
+  }
+  const codeHostConnections =
+    deps.secretBox === undefined || repositoryTransportCoordinator === null
+      ? null
+      : createCodeHostConnectionsService({
+          db: deps.db,
+          secretBox: deps.secretBox,
+          repositoryTransport: repositoryTransportCoordinator,
+        })
+  const repositoryEndpointDiscovery =
+    codeHostConnections === null
+      ? undefined
+      : createRepositoryEndpointDiscovery({
+          resolveConnection(provider) {
+            const connection = codeHostConnections.resolve(provider)
+            if (connection?.connectionGeneration === undefined) return null
+            return {
+              provider: connection.provider,
+              apiBaseUrl: connection.baseUrl,
+              connectionGeneration: connection.connectionGeneration,
+              token: connection.token,
+              rejectUnauthorized: connection.rejectUnauthorized,
+            }
+          },
+          ...(deps.codeHostFetch === undefined ? {} : { fetchImpl: deps.codeHostFetch }),
+        })
   const repositoryPublicationTransport = createRepositoryPublicationTransport({
     db: deps.db,
     ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
     appHome,
+    ...(repositoryEndpointDiscovery === undefined
+      ? {}
+      : { endpointDiscovery: repositoryEndpointDiscovery }),
   })
   const approvalGateway = composeApprovalGatewayRunner(deps.db)
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
@@ -596,8 +646,13 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountMaintenanceDiskRoutes(app, deps) // RFC-311 T20
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
-  mountCodeHostRoutes(app, deps) // RFC-269
-  mountAccountRepositoryTransportCredentialRoutes(app, deps, identityAccess.resolveAuthority) // RFC-321
+  mountCodeHostRoutes(app, deps, codeHostConnections) // RFC-269
+  if (repositoryTransportModule !== null) {
+    mountAccountRepositoryTransportCredentialRoutes(app, deps, {
+      credentials: repositoryTransportModule.ownCredentials,
+      currentSubjects: identityAccess.resolveAuthority,
+    })
+  }
   mountCodeRoutes(app, deps) // RFC-304 T31b
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
   mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
@@ -606,6 +661,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountDevelopmentConfigRoutes(app, deps) // RFC-310 PR-1B
   mountDevelopmentMissionRoutes(app, deps, {
     legacyAdmissionsEnabled: () => readDigitalEmployeeWriterState(deps.db).legacyAdmissionsEnabled,
+    repositoryPublicationTransport,
   }) // RFC-310 legacy drain facade
   mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8

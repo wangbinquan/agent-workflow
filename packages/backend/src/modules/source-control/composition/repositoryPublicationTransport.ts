@@ -17,7 +17,7 @@ import { createSecretBoxFromKey } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
-import { createRepositoryEndpointDiscovery } from '@/modules/integration/application/repositoryEndpointDiscovery'
+import { runGit as defaultRunGit } from '@/util/git'
 import type { RepositoryGit } from '../application/repositoryCommit'
 import { RepositoryTransportCredentials } from '../application/repositoryTransportCredentials'
 import {
@@ -25,44 +25,15 @@ import {
   leaseGitCredential,
   leaseTargetBoundGitCredential,
   type GitCredentialLease,
-} from '../infrastructure/gitCredentialLease'
+} from '@/util/gitCredentialLease'
 import { SQLiteRepositoryTransportCredentialRepository } from '../infrastructure/sqliteRepositoryTransportCredentialRepository'
 import type { StoredRepositoryTransportConnection } from '../ports/repositoryTransportCredentialRepository'
-
-export type RepositoryPublicationSubject =
-  | { readonly kind: 'user'; readonly userId: string }
-  | { readonly kind: 'system' }
-
-export type OpenRepositoryPublicationSessionResult =
-  | { readonly ok: true; readonly session: RepositoryPublicationSession }
-  | {
-      readonly ok: false
-      readonly code:
-        | 'code-host-push-credential-stale'
-        | 'code-host-push-credential-unavailable'
-        | 'repository-http-endpoint-unresolved'
-        | 'repository-http-endpoint-untrusted'
-      readonly detail: string
-    }
-
-export interface RepositoryPublicationSession {
-  readonly endpointUrl: string
-  readonly receipt: RepositoryPublicationReceipt
-  runNetwork(
-    runGit: RepositoryGit,
-    repoPath: string,
-    args: readonly string[],
-    options?: Parameters<RepositoryGit>[2],
-  ): ReturnType<RepositoryGit>
-  close(): void
-}
-
-export interface RepositoryPublicationTransport {
-  open(input: {
-    readonly subject: RepositoryPublicationSubject
-    readonly remoteUrl: string
-  }): Promise<OpenRepositoryPublicationSessionResult>
-}
+import type {
+  OpenRepositoryPublicationSessionResult,
+  RepositoryPublicationSession,
+  RepositoryPublicationTransport,
+} from '../public/types'
+import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
 
 function baseMatchesHost(raw: string, host: string): boolean {
   try {
@@ -106,13 +77,18 @@ function connectionMayOwnRemote(
   return connection.allowedHttpBaseUrls.some((base) => baseMatchesHost(base, remote.host))
 }
 
-function legacySession(remoteUrl: string, appHome: string): RepositoryPublicationSession {
+function legacySession(
+  remoteUrl: string,
+  appHome: string,
+  runGit: RepositoryGit,
+): RepositoryPublicationSession {
   const described = describeRepositoryRemote(remoteUrl)
   const endpointUrl = credentialFreeHttpUrl(remoteUrl) ?? remoteUrl
   const lease = leaseGitCredential(remoteUrl, appHome)
   return sessionOf({
     endpointUrl,
     lease,
+    runGit,
     receipt: {
       credentialSource: 'legacy',
       credentialRevision: null,
@@ -128,15 +104,16 @@ function legacySession(remoteUrl: string, appHome: string): RepositoryPublicatio
 function sessionOf(input: {
   readonly endpointUrl: string
   readonly lease: GitCredentialLease | null
+  readonly runGit: RepositoryGit
   readonly receipt: RepositoryPublicationReceipt
 }): RepositoryPublicationSession {
   let closed = false
   return {
     endpointUrl: input.endpointUrl,
     receipt: input.receipt,
-    runNetwork(runGit, repoPath, args, options) {
+    runNetwork(repoPath, args, options) {
       if (closed) throw new Error('repository publication session is closed')
-      return runGit(
+      return input.runGit(
         repoPath,
         [...(input.lease?.leadingArgs ?? []), ...args],
         input.lease === null
@@ -162,25 +139,10 @@ function usernameFor(provider: CodeHostProvider): string {
 async function discoverEndpointCandidate(input: {
   readonly connection: StoredRepositoryTransportConnection
   readonly project: string
-  readonly secretBox: SecretBox
-  readonly fetchImpl?: (url: string, init?: BunFetchRequestInit) => Promise<Response>
+  readonly endpointDiscovery?: RepositoryEndpointDiscoveryParticipant
 }): Promise<RepositoryEndpointCandidate | null> {
-  let globalLookupToken: string
-  try {
-    globalLookupToken = input.secretBox.unseal(input.connection.globalTokenEnc)
-  } catch {
-    // Metadata discovery is best-effort. A missing/corrupt global API credential
-    // still permits an administrator mapping or trusted SaaS fallback.
-    return null
-  }
-  return createRepositoryEndpointDiscovery({
-    provider: input.connection.provider,
-    apiBaseUrl: input.connection.apiBaseUrl,
-    connectionGeneration: input.connection.connectionGeneration,
-    token: globalLookupToken,
-    rejectUnauthorized: input.connection.rejectUnauthorized,
-    ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
-  }).discover({
+  if (input.endpointDiscovery === undefined) return null
+  return input.endpointDiscovery.discover({
     provider: input.connection.provider,
     project: input.project,
     connectionGeneration: input.connection.connectionGeneration,
@@ -191,9 +153,11 @@ export function createRepositoryPublicationTransport(input: {
   readonly db: DbClient
   readonly secretBox?: SecretBox
   readonly appHome: string
-  readonly fetchImpl?: (url: string, init?: BunFetchRequestInit) => Promise<Response>
+  readonly runGit?: RepositoryGit
+  readonly endpointDiscovery?: RepositoryEndpointDiscoveryParticipant
 }): RepositoryPublicationTransport {
   const repository = new SQLiteRepositoryTransportCredentialRepository(input.db)
+  const runGit = input.runGit ?? defaultRunGit
   const secretBox = input.secretBox
   const credentialSupply =
     secretBox === undefined ? null : new RepositoryTransportCredentials(repository, secretBox)
@@ -202,7 +166,7 @@ export function createRepositoryPublicationTransport(input: {
       const described = describeRepositoryRemote(request.remoteUrl)
       if (!described.ok) {
         if (isLocalRepositoryRemote(request.remoteUrl)) {
-          return { ok: true, session: legacySession(request.remoteUrl, input.appHome) }
+          return { ok: true, session: legacySession(request.remoteUrl, input.appHome, runGit) }
         }
         return {
           ok: false,
@@ -211,7 +175,7 @@ export function createRepositoryPublicationTransport(input: {
         }
       }
       if (described.value.transport === 'file') {
-        return { ok: true, session: legacySession(request.remoteUrl, input.appHome) }
+        return { ok: true, session: legacySession(request.remoteUrl, input.appHome, runGit) }
       }
       const connections = repository.listConnections()
       const candidates = connections.filter((connection) =>
@@ -230,8 +194,11 @@ export function createRepositoryPublicationTransport(input: {
       if (candidates.length === 1) {
         connection = candidates[0]!
       } else {
-        if (described.value.transport !== 'ssh' || secretBox === undefined) {
-          return { ok: true, session: legacySession(request.remoteUrl, input.appHome) }
+        if (described.value.transport !== 'ssh') {
+          return { ok: true, session: legacySession(request.remoteUrl, input.appHome, runGit) }
+        }
+        if (input.endpointDiscovery === undefined) {
+          return { ok: true, session: legacySession(request.remoteUrl, input.appHome, runGit) }
         }
 
         // A self-hosted provider may expose a dedicated SSH authority which is
@@ -248,8 +215,7 @@ export function createRepositoryPublicationTransport(input: {
           const apiCandidate = await discoverEndpointCandidate({
             connection: possibleConnection,
             project: described.value.project,
-            secretBox,
-            ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
+            endpointDiscovery: input.endpointDiscovery,
           })
           if (apiCandidate === null) continue
           const resolved = resolveManagedRepositoryHttpEndpoint({
@@ -287,7 +253,7 @@ export function createRepositoryPublicationTransport(input: {
           }
         }
         if (discovered.length === 0) {
-          return { ok: true, session: legacySession(request.remoteUrl, input.appHome) }
+          return { ok: true, session: legacySession(request.remoteUrl, input.appHome, runGit) }
         }
         connection = discovered[0]!.connection
         endpoint = discovered[0]!.endpoint
@@ -327,8 +293,9 @@ export function createRepositoryPublicationTransport(input: {
         apiCandidate = await discoverEndpointCandidate({
           connection,
           project: described.value.project,
-          secretBox,
-          ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
+          ...(input.endpointDiscovery === undefined
+            ? {}
+            : { endpointDiscovery: input.endpointDiscovery }),
         })
       }
 
@@ -375,6 +342,7 @@ export function createRepositoryPublicationTransport(input: {
         session: sessionOf({
           endpointUrl: endpoint.url,
           lease,
+          runGit,
           receipt: {
             credentialSource: credential.credentialSource,
             credentialRevision: credential.credentialRevision,
@@ -395,7 +363,7 @@ export function createRepositoryPublicationTransport(input: {
 export function resolveRepositoryPublicationTransportFromKeyFile(input: {
   readonly db: DbClient
   readonly appHome: string
-  readonly fetchImpl?: (url: string, init?: BunFetchRequestInit) => Promise<Response>
+  readonly endpointDiscovery?: RepositoryEndpointDiscoveryParticipant
 }): RepositoryPublicationTransport {
   let secretBox: SecretBox | undefined
   try {
@@ -407,6 +375,8 @@ export function resolveRepositoryPublicationTransportFromKeyFile(input: {
     db: input.db,
     appHome: input.appHome,
     ...(secretBox === undefined ? {} : { secretBox }),
-    ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
+    ...(input.endpointDiscovery === undefined
+      ? {}
+      : { endpointDiscovery: input.endpointDiscovery }),
   })
 }

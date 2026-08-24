@@ -2054,7 +2054,15 @@ export class DigitalEmployeeRuntimeService {
           .find((candidate) => candidate.id === payload.roundId)
         if (round === undefined)
           throw new Error(`platform work item round missing: ${payload.roundId}`)
-        const output = await this.#platformWorkItems.execute(payload.plan)
+        if (ownedCase === null) {
+          throw new Error(`platform work item case missing: ${outbox.caseId ?? 'null'}`)
+        }
+        const output = await this.#platformWorkItems.execute(payload.plan, {
+          publicationSubject:
+            ownedCase.ownerUserId === null
+              ? { kind: 'system' }
+              : { kind: 'user', userId: ownedCase.ownerUserId },
+        })
         const validated = this.#validateRoundOutput(round, output)
         this.#settleCompletedRound(round, validated)
       } else if (outbox.kind === 'invocation-create') {

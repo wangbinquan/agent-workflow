@@ -10,7 +10,7 @@
 //   backup   P-5-02
 
 import { appVersion } from './util/version'
-import { runGitCredentialSubcommand } from './services/gitCredential'
+import { runGitCredentialSubcommand } from './util/gitCredentialLease'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'

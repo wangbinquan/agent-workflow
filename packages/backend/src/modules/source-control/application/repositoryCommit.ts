@@ -536,9 +536,8 @@ export async function publishRepositoryCommit(input: {
       ? [
           ...(input.mode.leadingArgs ?? []),
           'push',
-          '-u',
           input.mode.remote,
-          `${input.mode.branch}:${input.mode.branch}`,
+          `${input.tipSha}:refs/heads/${input.mode.branch}`,
         ]
       : input.mode.kind === 'cas'
         ? [

@@ -25,7 +25,6 @@ import {
   createRepositoryPublicationTransport,
 } from '../src/modules/source-control/composition'
 import { pushCandidate } from '../src/modules/source-control/application/deliverCandidate'
-import type { ResolvedAuthoritySubject } from '../src/modules/identity-access/public/types'
 import { createUser } from '../src/services/users'
 import { runGit } from '../src/util/git'
 
@@ -67,16 +66,8 @@ function checkedGit(cwd: string, ...args: string[]): string {
   return result.stdout.toString().trim()
 }
 
-function subjectOf(user: Awaited<ReturnType<typeof createUser>>): ResolvedAuthoritySubject {
-  return {
-    userId: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    role: user.role,
-    status: user.status,
-    additionalPermissions: [],
-    accessRevision: 0,
-  }
+function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
+  return { kind: 'user' as const, userId: user.id }
 }
 
 function commitProof(worktree: string, label: string): string {

@@ -7,7 +7,6 @@ import type {
   TestOwnCodeHostPushCredentialRequest,
 } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
-import type { ResolvedAuthoritySubject } from '@/modules/identity-access/public/types'
 import { selectRepositoryTransportCredential } from '../domain/repositoryTransportCredential'
 import type {
   RepositoryTransportConnectionProjectionInput,
@@ -16,8 +15,12 @@ import type {
 } from '../ports/repositoryTransportCredentialRepository'
 import type { OwnRepositoryTransportCredentialCommands } from '../public/commands'
 import type { OwnRepositoryTransportCredentialQueries } from '../public/queries'
-import type { RepositoryTransportCredentialSelectionParticipant } from '../public/repositoryTransportParticipants'
-import type { RepositoryTransportCredentialSelection } from '../public/types'
+import type { RepositoryTransportCredentialSelectionParticipant } from '../public/participants'
+import {
+  RepositoryTransportCredentialError,
+  type OwnRepositoryCredentialSubject,
+  type RepositoryTransportCredentialSelection,
+} from '../public/types'
 
 export interface ManagedCodeHostCredential {
   readonly provider: CodeHostProvider
@@ -47,19 +50,6 @@ export type ManagedCodeHostCredentialResolution =
         | 'code-host-push-credential-unavailable'
     }
 
-export type RepositoryTransportCredentialErrorKind = 'validation' | 'conflict' | 'not-found'
-
-export class RepositoryTransportCredentialError extends Error {
-  constructor(
-    readonly kind: RepositoryTransportCredentialErrorKind,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message)
-    this.name = 'RepositoryTransportCredentialError'
-  }
-}
-
 function hintOf(token: string): string {
   return token.slice(-4)
 }
@@ -75,7 +65,7 @@ export class RepositoryTransportCredentials
     private readonly secretBox: SecretBox,
   ) {}
 
-  list(subject: ResolvedAuthoritySubject): OwnCodeHostPushCredentialList {
+  list(subject: OwnRepositoryCredentialSubject): OwnCodeHostPushCredentialList {
     const personal = new Map(
       this.repository.listPersonal(subject.userId).map((row) => [row.provider, row] as const),
     )
@@ -96,7 +86,7 @@ export class RepositoryTransportCredentials
   }
 
   put(
-    subject: ResolvedAuthoritySubject,
+    subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: PutOwnCodeHostPushCredentialRequest,
   ): OwnCodeHostPushCredentialSummary {
@@ -138,7 +128,7 @@ export class RepositoryTransportCredentials
   }
 
   remove(
-    subject: ResolvedAuthoritySubject,
+    subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
   ): { readonly removed: boolean } {
     return { removed: this.repository.removePersonal(subject.userId, provider) }
@@ -197,7 +187,7 @@ export class RepositoryTransportCredentials
 
   /** Stored-personal or one-shot draft resolution for the account identity probe. */
   resolvePersonalForTest(
-    subject: ResolvedAuthoritySubject,
+    subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: TestOwnCodeHostPushCredentialRequest,
   ): ManagedCodeHostCredentialResolution {

@@ -1,7 +1,7 @@
 # RFC-321 — 实施计划：用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析
 
 - 状态：Implementation Complete / Phase 2；等待 exact-SHA hosted CI/visual 终态
-- 当前完成度：T1–T19 已闭合；T20 已完成 targeted E2E/visual，余唯一 full gate、精确发布与托管终态
+- 当前完成度：T1–T19 已闭合；T20 已完成 targeted E2E/visual，余精确发布与托管终态
 - 交付策略：一个 RFC，按可独立验证的小批 commit 发布到共享 `main`；不建立长期兼容双轨
 
 ## 实施进度（2026-08-24）
@@ -266,13 +266,13 @@
 ### RFC-321-T20 — 收口与发布
 
 - 更新 RFC 状态、STATE、design/plan、用户/管理员文档、灾备说明（secret.key 丢失需重录）。
-- 确认本任务 candidate content 稳定且没有等价 full gate 在跑后，运行一次 `bun run gate:local`。
-- full gate 后若只集成无关 main delta，按 shared-main policy 做 proportionate targeted check，不重复 gate。
+- 遵循用户 2026-08-24 的明确发布裁决：不在本地运行任何 `bun` 测试、类型检查、构建、gate 或 E2E，
+  最终候选只以 GitHub 上包含最终提交 SHA 的托管 CI/visual 终态验收。
 - 进入短 publication critical section：fetch、确认同步、cached index 为空、精确路径 stage、审 staged diff/
   message/co-author、commit、fetch/sync、push、验证远端 ancestry。
 - 以 exact SHA 等 hosted CI/visual terminal result；cancelled 不是绿色，含 successor 必须证明包含该 SHA。
 
-退出：local candidate evidence、remote SHA、CI/visual terminal attribution、并发文件说明完整。
+退出：静态 candidate evidence、remote SHA、CI/visual terminal attribution、并发文件说明完整。
 
 ## 3. 建议提交批次
 
@@ -345,6 +345,6 @@ docs/**
 
 ## 6. 当前下一步
 
-RFC-321 实现与 targeted E2E/visual 已闭合。保持 RFC-320 后端范围不动，执行唯一一次
-`bun run gate:local` 后进入共享 `main` 精确 staging、提交与推送；托管结果只按包含本提交的 exact SHA
-归因，Linux visual 缺失时按仓库基线流程从 Ubuntu artifact 人工验图后补齐。
+RFC-321 实现与既有 targeted E2E/visual 证据已闭合。保持 RFC-320 后端范围不动，直接进入共享 `main`
+精确 staging、提交与推送，不运行任何本地 `bun` 验证；托管结果只按包含本提交的 exact SHA 归因，
+Linux visual 缺失时按仓库基线流程从 Ubuntu artifact 人工验图后补齐。

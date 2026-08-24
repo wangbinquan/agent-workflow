@@ -21,7 +21,7 @@
 | AC-11 | account code-push section 使用 SettingsCard/Form/ErrorBanner/ConfirmDialog；Git identity 为独立同宽兄弟卡；Settings mapping/rebind confirmation 复用既有 primitives                        | `account-query-continuity.test.tsx`；`rfc269-code-host-settings.test.tsx`；Chromium/WebKit RFC-321 E2E；四张 light/dark、desktop/390px baseline                                        | E2E 断言 390px 零横溢、键盘 focus、axe critical/serious 为零；Alice/Bob 独立 context 不共享 hint/delete；overlay inventory 锁 destructive dialogs              |
 | AC-12 | 新 domain/application/ports/infrastructure/composition 均在 `modules/source-control`；integration 只返回无 secret metadata；public contracts 无 raw token                                  | `rfc321-repository-publication-ratchet.test.ts` 的 public-contract secret-free 与 source-owned call-site ledger                                                                        | fabricated public `password` field mutation 转红；scheduler/development REST 继续解析 global code-host connection，personal subject 不进入 MR/评论/审批/流水线 |
 | AC-13 | `architecture/repository-publication-call-sites.json` 已接 `ledger-baselines.json`；guard manifest 注册 RFC-321 AST corpus ratchet                                                         | ratchet 扫描 801 个 backend TypeScript 文件并锁 push/fetch/ls-remote 账本、tokenAccess、固定 session、global REST 边界                                                                 | mutation fixtures 分别伪造裸 Git network 命令、移除 helper path binding、允许 stale→global、放宽 tokenAccess、拼 token URL，均产生命名违规                     |
-| AC-14 | 本索引汇总 shared/backend/frontend/system-mock/browser/visual；T20 记录唯一 full gate 与 exact-SHA 托管结果                                                                                | 候选稳定后运行一次 `bun run gate:local`；推送后按完整 SHA 等 CI 与 visual terminal success                                                                                             | queued/cancelled/不包含目标 SHA 的 successor 不记绿色；Linux baseline 缺失先从 Ubuntu artifact 人工验图再补提交                                                |
+| AC-14 | 本索引汇总 shared/backend/frontend/system-mock/browser/visual；T20 记录 exact-SHA 托管结果                                                                                                 | 遵循用户 2026-08-24 裁决，不运行本地 `bun` 验证；推送后按完整 SHA 等 GitHub CI 与 visual terminal success                                                                              | queued/cancelled/不包含目标 SHA 的 successor 不记绿色；Linux baseline 缺失先从 Ubuntu artifact 人工验图再补提交                                                |
 
 ## Task closure
 
@@ -46,11 +46,11 @@
 | T17  | migration/domain/HTTP/publication/helper/security/upgrade targeted suites                           | AC-1–AC-10         |
 | T18  | Alice/Bob Chromium+WebKit E2E、task SSH real push、candidate smart-HTTP test、axe 与四张视觉基线    | AC-1, AC-3, AC-11  |
 | T19  | guard manifest、ledger baseline、mutation fixtures 与本 AC/Task 零遗漏索引                          | AC-12, AC-13       |
-| T20  | 用户/管理员/灾备文档、唯一 full gate、精确提交推送、exact-SHA CI/visual                             | AC-14              |
+| T20  | 用户/管理员/灾备文档、精确提交推送、exact-SHA GitHub CI/visual                                      | AC-14              |
 
 ## Reproducible validation ledger
 
-最终发布前把候选验证记录在这里；完整门禁只允许一次，托管结果必须绑定最终远端 SHA。
+最终发布前把候选验证记录在这里；按用户裁决不运行本地 `bun` 门禁，托管结果必须绑定最终远端 SHA。
 
 | Scope              | Command/evidence                                                                          | Result                            |
 | ------------------ | ----------------------------------------------------------------------------------------- | --------------------------------- |
@@ -59,6 +59,6 @@
 | browser Chromium   | RFC-321 spec，账号/PAT 拒绝/真实 task push 三条 journey                                   | 3 pass / 0 fail                   |
 | browser WebKit     | RFC-321 spec，`PLAYWRIGHT_WEBKIT=1`                                                       | 3 pass / 0 fail                   |
 | local visual       | RFC-321 四个场景，Chromium Darwin                                                         | 4 pass / 0 fail；四图人工检查通过 |
-| full local gate    | `bun run gate:local`                                                                      | 待候选稳定后唯一一次执行          |
+| local Bun gate     | 用户明确禁止本地 `bun` 测试、类型检查、构建、gate 与 E2E                                  | 未运行；以 GitHub CI 为准         |
 | hosted CI          | 最终 `origin/main` exact SHA                                                              | 待推送                            |
 | hosted visual      | 最终 `origin/main` exact SHA；Ubuntu authoritative baselines                              | 待推送与 artifact 收口            |

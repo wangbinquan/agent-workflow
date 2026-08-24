@@ -1,3 +1,4 @@
+import type { CodeHostProvider, RepositoryEndpointCandidate } from '@agent-workflow/shared'
 import type {
   CommitPreparedResult,
   PrepareRepositoryCommitResult,
@@ -5,9 +6,26 @@ import type {
   RepositoryPublishMode,
   RepositoryPublishResult,
   WorkspaceExcludeProfileReceipt,
+  RepositoryTransportCredentialSelection,
 } from './types'
 
-export type { RepositoryTransportCredentialSelectionParticipant } from './repositoryTransportParticipants'
+export interface RepositoryTransportCredentialSelectionParticipant {
+  select(input: {
+    readonly subject:
+      | { readonly kind: 'user'; readonly userId: string }
+      | { readonly kind: 'system' }
+    readonly provider: CodeHostProvider
+  }): RepositoryTransportCredentialSelection
+}
+
+/** Secret-free provider metadata query used by repository endpoint resolution. */
+export interface RepositoryEndpointDiscoveryParticipant {
+  discover(input: {
+    readonly provider: CodeHostProvider
+    readonly project: string
+    readonly connectionGeneration: string
+  }): Promise<RepositoryEndpointCandidate | null>
+}
 
 /** A worktree-bound participant; absolute paths never cross this interface. */
 export interface WorkspaceExcludeParticipant {

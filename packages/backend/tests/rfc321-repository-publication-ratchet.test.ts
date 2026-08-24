@@ -1,10 +1,7 @@
 // RFC-321 T19 — repository publication boundary ratchet.
 //
-// The machine ledger is only useful when it is closed over the real call sites.
-// These assertions lock the persisted owner at each boundary, the single-session
-// transport wiring, session-only credential administration, and the extinction
-// of the legacy push-credential resolver. The fabricated violation proves the
-// absence matcher still detects a bypass if one is reintroduced.
+// The ledger closes over real call sites: persisted ownership, single-session
+// transport, session-only administration, legacy extinction, and bypass detection.
 
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
@@ -219,7 +216,11 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       ['merge-base', '--is-ancestor', LEDGER.recordedAtSha, 'HEAD'],
       { cwd: REPO_ROOT },
     )
-    expect(reachable.status).toBe(0)
+    const shallow = spawnSync('git', ['rev-parse', '--is-shallow-repository'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    })
+    expect(reachable.status === 0 || shallow.stdout.trim() === 'true').toBe(true)
 
     const baselines = JSON.parse(read('architecture/ledger-baselines.json')) as {
       ledgers: Array<{ id: string; baseline: number; file: string; symbol: string }>
@@ -265,6 +266,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const platformWorkItems = read(
       'packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
     )
+    const employeeRuntime = read(
+      'packages/backend/src/modules/digital-employee/application/runtimeService.ts',
+    )
     const composition = read('packages/backend/src/modules/source-control/composition.ts')
     const cli = read('packages/backend/src/cli/start.ts')
     const server = read('packages/backend/src/server.ts')
@@ -280,17 +284,23 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(employeeWorkspace).toContain(
       "throw new Error('employee workspace publication transport and owner are required')",
     )
-    expect(platformWorkItems).toContain('.select({ ownerUserId: employeeCases.ownerUserId })')
+    expect(employeeRuntime).toContain('this.#platformWorkItems.execute(payload.plan, {')
+    expect(employeeRuntime).toContain('ownedCase.ownerUserId === null')
+    expect(platformWorkItems).not.toContain('caseOwnerUserId')
     expect(
-      platformWorkItems.match(
-        /publicationSubject: employeeCasePublicationSubject\(input\.db, plan\.caseRef\.id\)/g,
-      )?.length,
+      platformWorkItems.match(/publicationSubject: publicationSubject\(\)/g)?.length,
     ).toBe(4)
     expect(composition).toContain('fetchEmployeeWorkspaceRemoteHead({')
     expect(composition).toContain('{ publicationTransport: input.publicationTransport }')
     expect(
       cli.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
     ).toBeGreaterThanOrEqual(4)
+    expect(cli).toContain('const repositoryTransportModule = composeRepositoryTransportCredentials')
+    expect(cli).toContain('participant: repositoryTransportModule.adminConnections')
+    expect(
+      cli.indexOf('reconcileRepositoryTransportConnectionProjections(\n    db') <
+        cli.indexOf('const repositoryPublicationTransport = createRepositoryPublicationTransport'),
+    ).toBe(true)
     expect(
       server.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
     ).toBeGreaterThanOrEqual(3)
@@ -309,6 +319,10 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const publication = read(
       'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
     )
+    const endpointDiscovery = read(
+      'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
+    )
+    const server = read('packages/backend/src/server.ts')
     const scheduler = read('packages/backend/src/services/scheduler.ts')
     const developmentRest = read('packages/backend/src/services/developmentDeliveryDeps.ts')
     const integrationRest = read(
@@ -319,10 +333,18 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     )
 
     expect(publication).toContain('credentialSupply.resolveExecution(')
-    expect(publication).toContain('secretBox.unseal(connection.globalTokenEnc)')
-    expect(publication).toContain('token: globalLookupToken')
     expect(publication).toContain('password: credential.token')
     expect(publication).not.toContain('token: credential.token')
+    expect(publication).not.toContain('globalLookupToken')
+    expect(server).toContain('const connection = codeHostConnections.resolve(provider)')
+    expect(server).toContain('token: connection.token')
+    expect(endpointDiscovery).toContain(
+      'const connection = input.resolveConnection(request.provider)',
+    )
+    expect(endpointDiscovery).toContain(
+      'headers: headersFor(connection.provider, connection.token)',
+    )
+    expect(endpointDiscovery).not.toContain('RepositoryCredentialSubject')
     expect(scheduler).toContain('resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)')
     expect(developmentRest).toContain('resolveCodeHostConnectionsFromKeyFile(')
     expect(integrationRest).not.toContain('RepositoryCredentialSubject')
@@ -334,7 +356,6 @@ describe('RFC-321 repository publication architecture ratchet', () => {
   test('publication public contracts stay secret-free', () => {
     const publicContracts = [
       'packages/backend/src/modules/source-control/public/participants.ts',
-      'packages/backend/src/modules/source-control/public/repositoryTransportParticipants.ts',
       'packages/backend/src/modules/source-control/public/types.ts',
     ].map((file) => ({ file, source: read(file) }))
     expect(secretBearingPublicationFields(publicContracts)).toEqual([])
@@ -349,7 +370,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/source-control/application/deliverCandidate.ts',
       'packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts',
       'packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts',
-      'packages/backend/src/modules/source-control/infrastructure/gitCredentialLease.ts',
+      'packages/backend/src/util/gitCredentialLease.ts',
     ].map((file) => ({ file, source: read(file) }))
     expect(repositoryPublicationBoundaryViolations(publicationSources)).toEqual([])
 
@@ -369,7 +390,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
   test('security mutation fixtures prove target binding, no-fallback, route, and URL guards carry weight', () => {
     const production: PublicationSecuritySources = {
       helper: read(
-        'packages/backend/src/modules/source-control/infrastructure/gitCredentialLease.ts',
+        'packages/backend/src/util/gitCredentialLease.ts',
       ),
       selector: read(
         'packages/backend/src/modules/source-control/domain/repositoryTransportCredential.ts',

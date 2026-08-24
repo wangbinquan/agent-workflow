@@ -8,9 +8,7 @@
 // `discardNodeIso(...) >= 8` 与 rfc208 的 try-depth 扫描器都属此类，一改数字/
 // 换文件，不变量就静默失守。
 //
-// 本文件不锁任何行为，只锁**清单本身**：迁移期每动一个文件，这里必须同步；
-// 新增一个读 scheduler.ts 源码的测试也必须登记。它是 T1 交付物①，也是 T3-T7
-// 各批的改锚检查表。
+// 本文件只锁清单：迁移期每次改动与新增 scheduler.ts 源码锁都须登记，是 T1① / T3-T7 的检查表。
 //
 // 处置分类（见 design §10.2/§10.10）：
 //   · 纯改锚      —— 锁的文本随代码搬家，改成新文件路径即可。
@@ -122,6 +120,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc305-architecture-lock.test.ts',
   // RFC-313：锁住「升级预算只有一处推进、形状判定只有一个定义点」。
   'rfc313-source-locks.test.ts',
+  // RFC-321：发布架构棘轮仍读取 scheduler 源码，必须登记在迁移清单。
+  'rfc321-repository-publication-ratchet.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',

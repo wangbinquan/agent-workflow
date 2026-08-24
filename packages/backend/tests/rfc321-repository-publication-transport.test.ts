@@ -24,13 +24,18 @@ import type { RepositoryGit } from '../src/modules/source-control/application/re
 import { fetchEmployeeWorkspaceRemoteHead } from '../src/modules/source-control/application/employeeCaseWorkspace'
 import type { CandidatePublicationTransport } from '../src/modules/source-control/application/deliverCandidate'
 import {
+  createRepositoryEndpointDiscovery,
+  type RepositoryEndpointConnection,
+  type RepositoryEndpointFetch,
+} from '../src/modules/integration/application/repositoryEndpointDiscovery'
+import {
   composeRepositoryTransportCredentials,
   classifyRepositoryPushFailure,
   createRepositoryPublicationTransport,
   type RepositoryPublicationSession,
 } from '../src/modules/source-control/composition'
-import type { GitCredentialLeasePayloadV1 } from '../src/modules/source-control/infrastructure/gitCredentialLease'
-import type { ResolvedAuthoritySubject } from '../src/modules/identity-access/public/types'
+import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
+import { runGit as executeGit } from '../src/util/git'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -50,16 +55,8 @@ function appHome(): string {
   return root
 }
 
-function subjectOf(user: Awaited<ReturnType<typeof createUser>>): ResolvedAuthoritySubject {
-  return {
-    userId: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    role: user.role,
-    status: user.status,
-    additionalPermissions: [],
-    accessRevision: 0,
-  }
+function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
+  return { kind: 'user' as const, userId: user.id }
 }
 
 function git(cwd: string, ...args: string[]): string {
@@ -70,16 +67,12 @@ function git(cwd: string, ...args: string[]): string {
   return process.stdout.toString().trim()
 }
 
-async function captureLease(session: RepositoryPublicationSession): Promise<{
-  payload: GitCredentialLeasePayloadV1
-  credentialFile: string
-  calls: Array<{
-    args: string[]
-    options: Parameters<RepositoryGit>[2]
-  }>
-}> {
+function createCapturingGit(): {
+  readonly runGit: RepositoryGit
+  readonly calls: Array<{ args: string[]; options: Parameters<RepositoryGit>[2] }>
+} {
   const calls: Array<{ args: string[]; options: Parameters<RepositoryGit>[2] }> = []
-  const fakeGit = (async (
+  const runGit = (async (
     _repoPath: string,
     args: string[],
     options?: Parameters<RepositoryGit>[2],
@@ -87,8 +80,35 @@ async function captureLease(session: RepositoryPublicationSession): Promise<{
     calls.push({ args, options })
     return { stdout: '', stderr: '', exitCode: 0 }
   }) as RepositoryGit
-  await session.runNetwork(fakeGit, '/fixture/repo', ['push', 'origin', 'main'])
-  await session.runNetwork(fakeGit, '/fixture/repo', ['ls-remote', 'origin'])
+  return { runGit, calls }
+}
+
+function metadataDiscovery(
+  connections: readonly RepositoryEndpointConnection[],
+  fetchImpl: RepositoryEndpointFetch,
+) {
+  return createRepositoryEndpointDiscovery({
+    resolveConnection: (provider) =>
+      connections.find((connection) => connection.provider === provider) ?? null,
+    fetchImpl,
+  })
+}
+
+async function captureLease(
+  session: RepositoryPublicationSession,
+  capture: ReturnType<typeof createCapturingGit>,
+): Promise<{
+  payload: GitCredentialLeasePayloadV1
+  credentialFile: string
+  calls: Array<{
+    args: string[]
+    options: Parameters<RepositoryGit>[2]
+  }>
+}> {
+  const start = capture.calls.length
+  await session.runNetwork('/fixture/repo', ['push', 'origin', 'main'])
+  await session.runNetwork('/fixture/repo', ['ls-remote', 'origin'])
+  const calls = capture.calls.slice(start)
   const credentialFile = calls[0]?.options?.env?.AW_GIT_CRED_FILE
   if (typeof credentialFile !== 'string') throw new Error('credential lease path was not injected')
   return {
@@ -167,14 +187,27 @@ describe('RFC-321 repository publication transport', () => {
     })
     const discoveryHeaders: Array<NonNullable<BunFetchRequestInit['headers']>> = []
     const root = appHome()
+    const capture = createCapturingGit()
     const transport = createRepositoryPublicationTransport({
       db,
       secretBox: box,
       appHome: root,
-      fetchImpl: async (_url, init) => {
-        discoveryHeaders.push(init?.headers ?? {})
-        return new Response('', { status: 404 })
-      },
+      runGit: capture.runGit,
+      endpointDiscovery: metadataDiscovery(
+        [
+          {
+            provider: 'gitlab',
+            apiBaseUrl: 'https://git.example.test/api/v4',
+            connectionGeneration: 'gitlab-generation',
+            token: GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+        ],
+        async (_url, init) => {
+          discoveryHeaders.push(init?.headers ?? {})
+          return new Response('', { status: 404 })
+        },
+      ),
     })
     const remoteUrl = 'ssh://git@ssh.git.example.test:2222/platform/team/repository.git'
 
@@ -191,7 +224,7 @@ describe('RFC-321 repository publication transport', () => {
       endpointSource: 'admin-mapping',
       endpointBindingDigest: DIGEST,
     })
-    const captured = await captureLease(opened.session)
+    const captured = await captureLease(opened.session, capture)
     expect(captured.payload).toEqual({
       version: 1,
       protocol: 'https',
@@ -216,7 +249,7 @@ describe('RFC-321 repository publication transport', () => {
     expect(bobOpened.ok).toBe(true)
     if (!bobOpened.ok) throw new Error(bobOpened.code)
     expect(bobOpened.session.receipt.credentialSource).toBe('global')
-    const bobLease = await captureLease(bobOpened.session)
+    const bobLease = await captureLease(bobOpened.session, capture)
     expect(bobLease.payload.password).toBe(GLOBAL_TOKEN)
     bobOpened.session.close()
 
@@ -245,16 +278,29 @@ describe('RFC-321 repository publication transport', () => {
       updatedBy: null,
     })
     const fetches: Array<{ url: string; headers: BunFetchRequestInit['headers'] }> = []
+    const capture = createCapturingGit()
     const transport = createRepositoryPublicationTransport({
       db,
       secretBox: box,
       appHome: appHome(),
-      fetchImpl: async (url, init) => {
-        fetches.push({ url, headers: init?.headers })
-        return Response.json({
-          clone_url: 'https://github.enterprise.test/acme/repository.git',
-        })
-      },
+      runGit: capture.runGit,
+      endpointDiscovery: metadataDiscovery(
+        [
+          {
+            provider: 'github',
+            apiBaseUrl: 'https://github.enterprise.test/api/v3',
+            connectionGeneration: 'github-generation',
+            token: GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+        ],
+        async (url, init) => {
+          fetches.push({ url, headers: init?.headers })
+          return Response.json({
+            clone_url: 'https://github.enterprise.test/acme/repository.git',
+          })
+        },
+      ),
     })
 
     const sshOpened = await transport.open({
@@ -323,19 +369,39 @@ describe('RFC-321 repository publication transport', () => {
       endpointBindingDigest: DIGEST,
     })
     const fetches: Array<{ url: string; headers: BunFetchRequestInit['headers'] }> = []
+    const capture = createCapturingGit()
     const transport = createRepositoryPublicationTransport({
       db,
       secretBox: box,
       appHome: appHome(),
-      fetchImpl: async (url, init) => {
-        fetches.push({ url, headers: init?.headers })
-        if (url.startsWith('https://api.code.company.test/')) {
-          return Response.json({
-            http_url_to_repo: 'https://code.company.test/git/platform/app.git',
-          })
-        }
-        return new Response('', { status: 404 })
-      },
+      runGit: capture.runGit,
+      endpointDiscovery: metadataDiscovery(
+        [
+          {
+            provider: 'gitlab',
+            apiBaseUrl: 'https://api.code.company.test/v4',
+            connectionGeneration: 'gitlab-cross-authority-generation',
+            token: GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+          {
+            provider: 'github',
+            apiBaseUrl: 'https://api.github.company.test',
+            connectionGeneration: 'github-cross-authority-generation',
+            token: GITHUB_GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+        ],
+        async (url, init) => {
+          fetches.push({ url, headers: init?.headers })
+          if (url.startsWith('https://api.code.company.test/')) {
+            return Response.json({
+              http_url_to_repo: 'https://code.company.test/git/platform/app.git',
+            })
+          }
+          return new Response('', { status: 404 })
+        },
+      ),
     })
 
     const opened = await transport.open({
@@ -351,7 +417,7 @@ describe('RFC-321 repository publication transport', () => {
       endpointSource: 'provider-api',
       endpointBindingDigest: DIGEST,
     })
-    const lease = await captureLease(opened.session)
+    const lease = await captureLease(opened.session, capture)
     expect(lease.payload.password).toBe(PERSONAL_TOKEN)
     expect(fetches.map((item) => item.url).sort()).toEqual([
       'https://api.code.company.test/v4/projects/platform%2Fapp',
@@ -398,10 +464,28 @@ describe('RFC-321 repository publication transport', () => {
       db,
       secretBox: box,
       appHome: root,
-      fetchImpl: async (url) =>
-        url.includes('gitlab')
-          ? Response.json({ http_url_to_repo: 'https://gitlab.company.test/team/app.git' })
-          : Response.json({ clone_url: 'https://github.company.test/team/app.git' }),
+      endpointDiscovery: metadataDiscovery(
+        [
+          {
+            provider: 'gitlab',
+            apiBaseUrl: 'https://api.gitlab.company.test/v4',
+            connectionGeneration: 'gitlab-ambiguous-generation',
+            token: GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+          {
+            provider: 'github',
+            apiBaseUrl: 'https://api.github.company.test',
+            connectionGeneration: 'github-ambiguous-generation',
+            token: GITHUB_GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+        ],
+        async (url) =>
+          url.includes('gitlab')
+            ? Response.json({ http_url_to_repo: 'https://gitlab.company.test/team/app.git' })
+            : Response.json({ clone_url: 'https://github.company.test/team/app.git' }),
+      ),
     })
 
     expect(
@@ -413,6 +497,49 @@ describe('RFC-321 repository publication transport', () => {
       ok: false,
       code: 'repository-http-endpoint-untrusted',
       detail: 'repository remote is claimed by more than one managed code-host connection',
+    })
+
+    expect(readdirSync(root).filter((name) => name.startsWith('.gitcred-'))).toEqual([])
+  })
+
+  test('known ambiguous SSH ownership never falls back when discovery is unavailable', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const box = createSecretBoxFromKey(Buffer.alloc(32, 37))
+    const credentials = composeRepositoryTransportCredentials(db, box)
+    for (const [provider, token] of [
+      ['gitlab', GLOBAL_TOKEN],
+      ['github', GITHUB_GLOBAL_TOKEN],
+    ] as const) {
+      credentials.adminConnections.synchronize({
+        provider,
+        connectionGeneration: `${provider}-known-ambiguous-generation`,
+        endpointBindingDigest: DIGEST,
+        apiBaseUrl: `https://api.${provider}.company.test`,
+        rejectUnauthorized: true,
+        transportMappings: [],
+        allowedHttpBaseUrls: ['https://ssh.company.test'],
+        globalTokenEnc: box.seal(token),
+        globalTokenHint: token.slice(-4),
+        updatedAt: 1,
+        updatedBy: null,
+      })
+    }
+    const root = appHome()
+    const transport = createRepositoryPublicationTransport({
+      db,
+      secretBox: box,
+      appHome: root,
+    })
+
+    expect(
+      await transport.open({
+        subject: { kind: 'system' },
+        remoteUrl: 'git@ssh.company.test:team/app.git',
+      }),
+    ).toEqual({
+      ok: false,
+      code: 'repository-http-endpoint-untrusted',
+      detail: 'repository remote matches more than one managed code-host connection',
     })
     expect(readdirSync(root).filter((name) => name.startsWith('.gitcred-'))).toEqual([])
   })
@@ -455,10 +582,21 @@ describe('RFC-321 repository publication transport', () => {
       db,
       secretBox: box,
       appHome: root,
-      fetchImpl: async () => {
-        fetches += 1
-        return Response.json({ clone_url: 'https://github.com/acme/repository.git' })
-      },
+      endpointDiscovery: metadataDiscovery(
+        [
+          {
+            provider: 'github',
+            apiBaseUrl: 'https://api.github.com',
+            connectionGeneration: 'github-generation',
+            token: GLOBAL_TOKEN,
+            rejectUnauthorized: true,
+          },
+        ],
+        async () => {
+          fetches += 1
+          return Response.json({ clone_url: 'https://github.com/acme/repository.git' })
+        },
+      ),
     })
 
     const opened = await transport.open({
@@ -522,9 +660,9 @@ describe('RFC-321 repository publication transport', () => {
                 endpointSource: 'admin-mapping' as const,
                 endpointBindingDigest: DIGEST,
               },
-              runNetwork(runGit, repoPath, args, options) {
+              runNetwork(repoPath, args, options) {
                 networkCalls.push([...args])
-                return runGit(repoPath, [...args], options)
+                return executeGit(repoPath, [...args], options)
               },
               close() {
                 closes += 1

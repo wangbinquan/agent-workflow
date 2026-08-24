@@ -165,8 +165,8 @@ describe('RFC-210 recursive commit & push', () => {
               endpointSource: 'local-fixture',
               endpointBindingDigest: null,
             },
-            runNetwork(run, repoPath, args, options) {
-              return run(repoPath, [...args], options)
+            runNetwork(repoPath, args, options) {
+              return runGit(repoPath, [...args], options)
             },
             close() {
               closes += 1
@@ -209,14 +209,14 @@ describe('RFC-210 recursive commit & push', () => {
               endpointSource: 'admin-mapping',
               endpointBindingDigest: 'a'.repeat(64),
             },
-            runNetwork(run, repoPath, args, options) {
+            runNetwork(repoPath, args, options) {
               return args.includes('push')
                 ? Promise.resolve({
                     stdout: '',
                     stderr: 'remote: Write access to repository not granted',
                     exitCode: 1,
                   })
-                : run(repoPath, [...args], options)
+                : runGit(repoPath, [...args], options)
             },
             close() {
               closes += 1

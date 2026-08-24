@@ -17,14 +17,9 @@ import {
 import { actorOf } from '@/auth/actor'
 import {
   normalizeCodeHostRejectUnauthorized,
-  createCodeHostConnectionsService,
   probeCodeHostConnection,
+  type CodeHostConnectionsService,
 } from '@/services/codeHost/connections'
-import {
-  buildRepositoryTransportConnectionProjection,
-  composeRepositoryTransportCredentials,
-  reconcileRepositoryTransportConnectionProjections,
-} from '@/modules/source-control/composition'
 import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -39,21 +34,14 @@ function providerOf(raw: string): CodeHostProvider {
   return parsed.data
 }
 
-export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
-  const secretBox = deps.secretBox
+export function mountCodeHostRoutes(
+  app: Hono,
+  deps: AppDeps,
+  service: CodeHostConnectionsService | null,
+): void {
   // 对齐 OIDC / webhook 端点的自我跳过：没有密封器就不开凭据面，而不是退化成
   // 明文存储。
-  if (!secretBox) return
-  const repositoryTransport = composeRepositoryTransportCredentials(deps.db, secretBox)
-  reconcileRepositoryTransportConnectionProjections(deps.db, repositoryTransport.adminConnections)
-  const service = createCodeHostConnectionsService({
-    db: deps.db,
-    secretBox,
-    repositoryTransport: {
-      participant: repositoryTransport.adminConnections,
-      project: buildRepositoryTransportConnectionProjection,
-    },
-  })
+  if (service === null) return
 
   registerRoute(
     app,

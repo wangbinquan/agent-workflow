@@ -1,9 +1,18 @@
-// RFC-321 T7 — exact GitHub/GitLab repository metadata query. The centrally
-// selected token is captured by bootstrap and never appears in the public
-// participant or any returned failure/detail.
+// RFC-321 T7 — provider-owned GitHub/GitLab repository metadata query.
+// Integration resolves the daemon's global code-host connection at call time;
+// source-control receives only a secret-free endpoint candidate.
 
 import { RepositoryEndpointCandidateSchema, type CodeHostProvider } from '@agent-workflow/shared'
-import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
+
+import { timeoutSignal } from '@/util/timeoutSignal'
+
+export interface RepositoryEndpointConnection {
+  readonly provider: CodeHostProvider
+  readonly apiBaseUrl: string
+  readonly connectionGeneration: string
+  readonly token: string
+  readonly rejectUnauthorized: boolean
+}
 
 export type RepositoryEndpointFetch = (url: string, init?: BunFetchRequestInit) => Promise<Response>
 
@@ -26,57 +35,63 @@ function headersFor(provider: CodeHostProvider, token: string): Record<string, s
 }
 
 export function createRepositoryEndpointDiscovery(input: {
-  readonly provider: CodeHostProvider
-  readonly apiBaseUrl: string
-  readonly connectionGeneration: string
-  readonly token: string
-  readonly rejectUnauthorized: boolean
+  readonly resolveConnection: (
+    provider: CodeHostProvider,
+  ) => RepositoryEndpointConnection | null
   readonly fetchImpl?: RepositoryEndpointFetch
-}): RepositoryEndpointDiscoveryParticipant {
+}) {
   return {
-    async discover(request) {
+    async discover(request: {
+      readonly provider: CodeHostProvider
+      readonly project: string
+      readonly connectionGeneration: string
+    }) {
+      const connection = input.resolveConnection(request.provider)
       if (
-        request.provider !== input.provider ||
-        request.connectionGeneration !== input.connectionGeneration
+        connection === null ||
+        connection.provider !== request.provider ||
+        connection.connectionGeneration !== request.connectionGeneration
       ) {
         return null
       }
       const path = metadataPath(request.provider, request.project)
       if (path === null) return null
       const doFetch = input.fetchImpl ?? ((url, init) => fetch(url, init))
-      let response: Response
+      const deadline = timeoutSignal(15_000)
       try {
-        response = await doFetch(`${input.apiBaseUrl.replace(/\/+$/, '')}${path}`, {
+        const response = await doFetch(`${connection.apiBaseUrl.replace(/\/+$/, '')}${path}`, {
           method: 'GET',
-          headers: headersFor(input.provider, input.token),
+          headers: headersFor(connection.provider, connection.token),
           redirect: 'manual',
-          signal: AbortSignal.timeout(15_000),
-          ...(input.rejectUnauthorized ? {} : { tls: { rejectUnauthorized: false } }),
+          signal: deadline.signal,
+          ...(connection.rejectUnauthorized ? {} : { tls: { rejectUnauthorized: false } }),
         })
+        if (!response.ok) return null
+        const text = await response.text()
+        if (text.length > 64 * 1024) return null
+        let body: unknown
+        try {
+          body = JSON.parse(text)
+        } catch {
+          return null
+        }
+        if (body === null || typeof body !== 'object') return null
+        const url = (body as Record<string, unknown>)[
+          connection.provider === 'gitlab' ? 'http_url_to_repo' : 'clone_url'
+        ]
+        const parsed = RepositoryEndpointCandidateSchema.safeParse({
+          provider: connection.provider,
+          project: request.project,
+          connectionGeneration: connection.connectionGeneration,
+          url,
+          source: 'provider-api',
+        })
+        return parsed.success ? parsed.data : null
       } catch {
         return null
+      } finally {
+        deadline.cancel()
       }
-      if (!response.ok) return null
-      const text = await response.text()
-      if (text.length > 64 * 1024) return null
-      let body: unknown
-      try {
-        body = JSON.parse(text)
-      } catch {
-        return null
-      }
-      if (body === null || typeof body !== 'object') return null
-      const url = (body as Record<string, unknown>)[
-        input.provider === 'gitlab' ? 'http_url_to_repo' : 'clone_url'
-      ]
-      const parsed = RepositoryEndpointCandidateSchema.safeParse({
-        provider: input.provider,
-        project: request.project,
-        connectionGeneration: input.connectionGeneration,
-        url,
-        source: 'provider-api',
-      })
-      return parsed.success ? parsed.data : null
     },
   }
 }

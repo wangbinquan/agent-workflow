@@ -98,7 +98,14 @@ export interface ReactionExecutionPort {
  * participant must return the same exact output envelope as every other tool.
  */
 export interface PlatformWorkItemExecutionPort {
-  execute(plan: ReactionExecutionPlan): Promise<string>
+  execute(
+    plan: ReactionExecutionPlan,
+    context: {
+      readonly publicationSubject:
+        | { readonly kind: 'user'; readonly userId: string }
+        | { readonly kind: 'system' }
+    },
+  ): Promise<string>
 }
 
 /** RFC-317 T41（DE-01）—— 一条待排空的旧 Mission 在迁移报告里的样子。 */

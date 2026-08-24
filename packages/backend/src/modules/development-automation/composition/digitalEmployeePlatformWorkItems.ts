@@ -6,13 +6,11 @@ import { z } from 'zod'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import {
   cachedRepos,
   employeeApprovalSagas,
-  employeeCases,
   employeeCaseWorkspaces,
   employeeChangeCandidates,
   employeeRoundWorkspaceStates,
@@ -47,21 +45,6 @@ interface DevelopmentReactionPlan {
   readonly workItemRef: string
   readonly inputEnvelopeJson: string
   readonly externalWaitDeadlineMs: number
-}
-
-function employeeCasePublicationSubject(
-  db: DbClient,
-  caseId: string,
-): { readonly kind: 'user'; readonly userId: string } | { readonly kind: 'system' } {
-  const row = db
-    .select({ ownerUserId: employeeCases.ownerUserId })
-    .from(employeeCases)
-    .where(eq(employeeCases.id, caseId))
-    .get()
-  if (row === undefined) throw new Error(`employee case owner is missing: ${caseId}`)
-  return row.ownerUserId === null || row.ownerUserId === SYSTEM_USER_ID
-    ? { kind: 'system' }
-    : { kind: 'user', userId: row.ownerUserId }
 }
 
 const contextSchema = z
@@ -407,6 +390,10 @@ function reviewMarkerToken(marker: string): string {
 export function composeDevelopmentEmployeePlatformWorkItems(input: {
   readonly db: DbClient
   readonly appHome: string
+  /** Direct fixture calls may bind a subject; runtime calls pass the frozen Case owner. */
+  readonly directPublicationSubject?:
+    | { readonly kind: 'user'; readonly userId: string }
+    | { readonly kind: 'system' }
   /**
    * RFC-317 T41（DE-02）—— 反应轮次的只读查询面。此前这里按
    * `employeeReactionRounds.state === 'completed'` 直接查 Digital Employee OS 的
@@ -657,7 +644,16 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
     >
   }
   readonly now?: () => number
-}): { execute(plan: DevelopmentReactionPlan): Promise<string> } {
+}): {
+  execute(
+    plan: DevelopmentReactionPlan,
+    executionContext?: {
+      readonly publicationSubject:
+        | { readonly kind: 'user'; readonly userId: string }
+        | { readonly kind: 'system' }
+    },
+  ): Promise<string>
+} {
   const candidateOps = input.sourceControl
   const delivery = input.sourceControl
   const workspaceOps = input.sourceControl
@@ -685,7 +681,14 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
   }
 
   return {
-    async execute(plan) {
+    async execute(plan, executionContext) {
+      const publicationSubject = () => {
+        const subject = executionContext?.publicationSubject ?? input.directPublicationSubject
+        if (subject === undefined) {
+          throw new Error(`platform publication subject missing for case: ${plan.caseRef.id}`)
+        }
+        return subject
+      }
       const output = (value: Parameters<typeof platformOutput>[1]) => platformOutput(plan, value)
       const contexts = contextsOf(plan)
       const targetAwarePipeline = isTargetAwarePipelinePlan(plan)
@@ -1472,7 +1475,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           expectedRemoteSha: row.remoteHeadSha,
           expectedTreeOid: receipt.treeOid,
           baselineSha: candidate.baselineSha,
-          publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
+          publicationSubject: publicationSubject(),
         })
         if (!pushed.ok) {
           return output({
@@ -1689,7 +1692,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             expectedRemoteSha: conflict.sourceSha,
             expectedTreeOid: finished.treeOid,
             baselineSha: conflict.sourceSha,
-            publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
+            publicationSubject: publicationSubject(),
           })
           if (!pushed.ok) {
             return output({
@@ -1805,7 +1808,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               remoteUrl: remote.remoteUrl,
               branch: conflictTargetBranch,
               expectedHeadSha: conflictTargetHead,
-              publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
+              publicationSubject: publicationSubject(),
             })
             if (!fetchedTarget.ok) {
               return output({
@@ -1821,7 +1824,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               remoteUrl: remote.remoteUrl,
               branch: sourceBranch,
               expectedHeadSha: nextHead,
-              publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
+              publicationSubject: publicationSubject(),
             })
             if (!fetchedSource.ok) {
               return output({

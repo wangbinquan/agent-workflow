@@ -398,6 +398,10 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
     site: 'modules/integration/public/events.ts: Record<string, { zh-CN, en-US }>',
     why: '**本批唯一值得改的一处**：同文件 34 行已用 Record<CodeHostEventType, …> 穷尽，50 行退回 string 键，疑为穷尽性在某次改动里掉了。修法属 integration 的 owning RFC。',
   },
+  {
+    site: 'modules/source-control/public/types.ts: Record<string, string | undefined>',
+    why: 'Git 子进程环境由运行器、凭据租约与调用方共同扩展，变量名属于开放的进程协议，无法伪装成仓内穷尽键联合。',
+  },
 ]
 
 function publicEntrypointUnits(): ReturnType<typeof backendUnits> {

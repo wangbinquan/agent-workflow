@@ -10,14 +10,16 @@ import {
   PutOwnCodeHostPushCredentialRequestSchema,
   TestOwnCodeHostPushCredentialRequestSchema,
   type CodeHostProvider,
+  type OwnCodeHostPushCredentialList,
+  type OwnCodeHostPushCredentialSummary,
+  type PutOwnCodeHostPushCredentialRequest,
+  type TestOwnCodeHostPushCredentialRequest,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
-import type { CurrentSubjectAccessResolver } from '@/modules/identity-access/public/participants'
 import {
   RepositoryTransportCredentialError,
-  type RepositoryTransportCredentials,
-} from '@/modules/source-control/application/repositoryTransportCredentials'
-import { composeRepositoryTransportCredentials } from '@/modules/source-control/composition'
+  type OwnRepositoryCredentialSubject,
+} from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { probeCodeHostConnection } from '@/services/codeHost/connections'
 import type { AppDeps } from '@/server'
@@ -32,6 +34,49 @@ import { safeJsonOrEmpty } from '@/util/http'
 
 const OPERATION_LIMIT_PER_MINUTE = 20
 const OPERATION_LIMIT_WINDOW_MS = 60_000
+
+type AccountPersonalCredentialResolution =
+  | {
+      readonly ok: true
+      readonly credential: {
+        readonly provider: CodeHostProvider
+        readonly baseUrl: string
+        readonly token: string
+        readonly rejectUnauthorized: boolean
+      }
+    }
+  | {
+      readonly ok: false
+      readonly code:
+        | 'code-host-push-credential-connection-missing'
+        | 'code-host-push-credential-stale'
+        | 'code-host-push-credential-unavailable'
+    }
+
+interface AccountRepositoryTransportCredentials {
+  list(subject: OwnRepositoryCredentialSubject): OwnCodeHostPushCredentialList
+  put(
+    subject: OwnRepositoryCredentialSubject,
+    provider: CodeHostProvider,
+    request: PutOwnCodeHostPushCredentialRequest,
+  ): OwnCodeHostPushCredentialSummary
+  remove(
+    subject: OwnRepositoryCredentialSubject,
+    provider: CodeHostProvider,
+  ): { readonly removed: boolean }
+  resolvePersonalForTest(
+    subject: OwnRepositoryCredentialSubject,
+    provider: CodeHostProvider,
+    request: TestOwnCodeHostPushCredentialRequest,
+  ): AccountPersonalCredentialResolution
+}
+
+export interface AccountRepositoryTransportCredentialRouteDeps {
+  readonly credentials: AccountRepositoryTransportCredentials
+  readonly currentSubjects: {
+    resolveCurrentSubject(userId: string): Promise<{ readonly userId: string } | null>
+  }
+}
 
 class AccountCredentialOperationLimiter {
   private readonly hits = new Map<string, number[]>()
@@ -70,8 +115,8 @@ function credentialCall<T>(operation: () => T): T {
 
 async function currentSessionSubject(
   c: Parameters<typeof actorOf>[0],
-  currentSubjects: CurrentSubjectAccessResolver,
-) {
+  currentSubjects: AccountRepositoryTransportCredentialRouteDeps['currentSubjects'],
+): Promise<OwnRepositoryCredentialSubject> {
   const actor = actorOf(c)
   if (actor.source !== 'session') {
     throw new ForbiddenError(
@@ -83,7 +128,7 @@ async function currentSessionSubject(
   if (subject === null) {
     throw new ForbiddenError('account-subject-unavailable', 'the current account is not active')
   }
-  return subject
+  return { kind: 'user', userId: subject.userId }
 }
 
 function requireOperationBudget(limiter: AccountCredentialOperationLimiter, userId: string): void {
@@ -98,13 +143,9 @@ function requireOperationBudget(limiter: AccountCredentialOperationLimiter, user
 export function mountAccountRepositoryTransportCredentialRoutes(
   app: Hono,
   deps: AppDeps,
-  currentSubjects: CurrentSubjectAccessResolver,
+  routeDeps: AccountRepositoryTransportCredentialRouteDeps,
 ): void {
-  if (deps.secretBox === undefined) return
-  const credentials: RepositoryTransportCredentials = composeRepositoryTransportCredentials(
-    deps.db,
-    deps.secretBox,
-  ).ownCredentials
+  const credentials = routeDeps.credentials
   const limiter = new AccountCredentialOperationLimiter()
 
   registerRoute(
@@ -116,7 +157,8 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       tokenAccess: 'never',
       summary: 'List the current user code-host push credential summaries',
     },
-    async (c) => c.json(credentials.list(await currentSessionSubject(c, currentSubjects))),
+    async (c) =>
+      c.json(credentials.list(await currentSessionSubject(c, routeDeps.currentSubjects))),
   )
 
   registerRoute(
@@ -129,7 +171,7 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       summary: 'Create or replace the current user code-host push credential',
     },
     async (c) => {
-      const subject = await currentSessionSubject(c, currentSubjects)
+      const subject = await currentSessionSubject(c, routeDeps.currentSubjects)
       requireOperationBudget(limiter, subject.userId)
       const provider = providerOf(c.req.param('provider'))
       const parsed = PutOwnCodeHostPushCredentialRequestSchema.safeParse(
@@ -155,7 +197,7 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       summary: 'Test the current user code-host push credential identity',
     },
     async (c) => {
-      const subject = await currentSessionSubject(c, currentSubjects)
+      const subject = await currentSessionSubject(c, routeDeps.currentSubjects)
       requireOperationBudget(limiter, subject.userId)
       const provider = providerOf(c.req.param('provider'))
       const parsed = TestOwnCodeHostPushCredentialRequestSchema.safeParse(
@@ -203,7 +245,7 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       summary: 'Remove the current user code-host push credential',
     },
     async (c) => {
-      const subject = await currentSessionSubject(c, currentSubjects)
+      const subject = await currentSessionSubject(c, routeDeps.currentSubjects)
       requireOperationBudget(limiter, subject.userId)
       return c.json(
         credentialCall(() => credentials.remove(subject, providerOf(c.req.param('provider')))),

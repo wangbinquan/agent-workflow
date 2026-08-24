@@ -1,6 +1,6 @@
 import type { OwnCodeHostPushCredentialList } from '@agent-workflow/shared'
-import type { ResolvedAuthoritySubject } from '@/modules/identity-access/public/types'
+import type { OwnRepositoryCredentialSubject } from './types'
 
 export interface OwnRepositoryTransportCredentialQueries {
-  list(subject: ResolvedAuthoritySubject): OwnCodeHostPushCredentialList
+  list(subject: OwnRepositoryCredentialSubject): OwnCodeHostPushCredentialList
 }

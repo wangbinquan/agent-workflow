@@ -3,16 +3,16 @@ import type {
   OwnCodeHostPushCredentialSummary,
   PutOwnCodeHostPushCredentialRequest,
 } from '@agent-workflow/shared'
-import type { ResolvedAuthoritySubject } from '@/modules/identity-access/public/types'
+import type { OwnRepositoryCredentialSubject } from './types'
 
 export interface OwnRepositoryTransportCredentialCommands {
   put(
-    subject: ResolvedAuthoritySubject,
+    subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: PutOwnCodeHostPushCredentialRequest,
   ): OwnCodeHostPushCredentialSummary
   remove(
-    subject: ResolvedAuthoritySubject,
+    subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
   ): { readonly removed: boolean }
 }

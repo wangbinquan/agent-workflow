@@ -4,7 +4,6 @@
 // 任何子进程环境、不进日志、不进任何响应（读路径只回尾 4 位）。
 
 import { existsSync, readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
@@ -25,6 +24,7 @@ import type { DbClient } from '@/db/client'
 import { codeHostConnections } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { ConflictError, ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 
 /** 解封后的凭据；只在进程内流转。 */
 export interface ResolvedCodeHostConnection {
@@ -247,7 +247,7 @@ function revocationDigest(input: {
   readonly nextEndpointBindingDigest: string | null
   readonly personalCredentialCount: number
 }): string {
-  return createHash('sha256').update(JSON.stringify(input)).digest('hex')
+  return sha256Hex(JSON.stringify(input))
 }
 
 function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {

@@ -354,8 +354,11 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
       (r) => r.nodeId === commitPushNodeId('n1') && r.commitPushJson !== null,
     )
     expect(commitRow).toBeDefined()
-    expect(commitRow!.status).toBe('done')
     const meta = JSON.parse(commitRow!.commitPushJson!) as CommitPushMeta
+    expect({ status: commitRow!.status, meta }).toMatchObject({
+      status: 'done',
+      meta: { pushOutcome: 'pushed' },
+    })
     expect(meta.pushOutcome).toBe('pushed')
 
     // Drain determinism on the OK path: nothing is left un-settled after
@@ -487,24 +490,25 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
       })
       writeFileSync(join(h.stateDir, releaseN2), 'go')
 
-      // n2's completion starts one independent commit, then the n1 rerun starts
-      // another commit under the SAME nodeId/iteration as held call 0. Wait until
-      // both later commit calls have settled while call 0 remains gated.
+      // n2 and the n1 rerun both finish while call 0 remains gated. Their
+      // publication synthetics must stay queued behind that first canonical
+      // worktree writer; a second commit process starting here would race the
+      // same Git index and can make the first attempt observe an empty stage.
       await waitFor(
         () => {
           const trace = readTrace(h.stateDir)
           return (
-            trace.filter(
-              (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex > 0 && e.phase === 'end',
-            ).length >= 2
+            trace.some((e) => e.agent === 'n1' && e.callIndex === 1 && e.phase === 'end') &&
+            trace.some((e) => e.agent === 'n2' && e.phase === 'end')
           )
         },
-        'two later commit sessions to settle',
+        'n2 and the n1 rerun to settle',
         20_000,
       )
+      await Bun.sleep(500)
       expect(
         readTrace(h.stateDir).some(
-          (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex === 0 && e.phase === 'end',
+          (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex > 0 && e.phase === 'start',
         ),
       ).toBe(false)
 
@@ -523,6 +527,11 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
 
     expect(settledBeforeRelease).toBe(false)
     expect(existsSync(join(h.stateDir, 'wait-timeout-commit-release-0'))).toBe(false)
+    expect(
+      readTrace(h.stateDir).filter(
+        (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex > 0 && e.phase === 'start',
+      ).length,
+    ).toBeGreaterThanOrEqual(1)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(rows.filter((r) => r.status === 'running' || r.status === 'pending')).toEqual([])
   }, 40_000)
@@ -532,11 +541,31 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf-8',
     )
+    const publicationSrc = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'application',
+        'repositoryCommit.ts',
+      ),
+      'utf-8',
+    )
     // Non-node key: a real node id can never collide with the prefix, so
     // deriveFrontier's in-flight set cannot freeze a scope node on it.
     expect(src).toContain('`commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`')
     // Diagnostics name the exact trigger generation whose promise failed.
     expect(src).toMatch(/auto commit&push trigger failed \(ignored\)[\s\S]{0,180}syntheticKey/)
+    // Canonical worktree Git mutations serialize without moving the synthetic
+    // out of the non-node in-flight lane used by the dispatch race.
+    expect(src).toContain('let commitPushTail: Promise<void> = Promise.resolve()')
+    expect(src).toContain('const commitWork = commitPushTail.then(() =>')
+    // The history scan and the push must use the same immutable tip even when
+    // an ordinary node advances the local branch while publication is live.
+    expect(publicationSrc).toContain('`${input.tipSha}:refs/heads/${input.mode.branch}`')
+    expect(publicationSrc).not.toContain('`${input.mode.branch}:${input.mode.branch}`')
     // Revision #2: every canceled return inside the dispatch loop drains the
     // synthetics first. Two exits: loop-head aborted check + raced node
     // 'canceled' result.

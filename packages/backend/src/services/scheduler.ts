@@ -73,8 +73,8 @@ import {
 import {
   bindWorkspaceExcludeParticipant,
   resolveRepositoryPublicationTransportFromKeyFile,
-  type RepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import {
   applyAutoPromote,
   computeShardScope,
@@ -1789,6 +1789,11 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // nodeId+iteration; otherwise Map.set overwrites the older live Promise and
   // cancel/normal drain can return while that worktree writer still runs.
   let nextCommitPushSequence = 0
+  // Synthetic publication stays non-blocking for the DAG, but two publication
+  // attempts for the same canonical task worktree must never mutate its Git
+  // index concurrently. The tail only orders commit synthetics created by this
+  // scope invocation; ordinary node promises continue racing in `inFlight`.
+  let commitPushTail: Promise<void> = Promise.resolve()
   // RFC-092 (audit S-1): pending anchor rows already released this invocation.
   // A node in `dispatchedThisInvocation` re-dispatches when an out-of-band
   // rerun mints a FRESH pending row (mid-run clarify answer / review
@@ -1975,9 +1980,16 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
       const node = scopeNodeById.get(nodeId)
       if (node !== undefined) {
         const syntheticKey = `commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`
+        const commitWork = commitPushTail.then(() =>
+          maybeRunCommitPush(state, node, iteration, log),
+        )
+        commitPushTail = commitWork.then(
+          () => undefined,
+          () => undefined,
+        )
         inFlight.set(
           syntheticKey,
-          maybeRunCommitPush(state, node, iteration, log)
+          commitWork
             .catch((err) => {
               log.warn('auto commit&push trigger failed (ignored)', {
                 nodeId,

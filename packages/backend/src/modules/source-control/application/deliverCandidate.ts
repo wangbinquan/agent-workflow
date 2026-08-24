@@ -25,6 +25,11 @@ import { stageCandidateTree } from './changeCandidate'
 import type { RepositoryGit } from './repositoryCommit'
 import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
 import { redactSensitiveString } from '@/util/redact'
+import type {
+  RepositoryPublicationSession,
+  RepositoryPublicationSubject,
+  RepositoryPublicationTransport,
+} from '../public/types'
 
 /** baseline 镜像里承载 candidate commit 的内部 ref（durable、不污染分支命名空间）。 */
 export function missionCandidateRef(missionId: string): string {
@@ -169,31 +174,9 @@ export interface PushCandidateInput {
   readonly runGit?: RepositoryGit
 }
 
-export type CandidatePublicationSubject =
-  | { readonly kind: 'user'; readonly userId: string }
-  | { readonly kind: 'system' }
-
-export interface CandidatePublicationSession {
-  readonly endpointUrl: string
-  readonly receipt: RepositoryPublicationReceipt
-  runNetwork(
-    runGit: RepositoryGit,
-    repoPath: string,
-    args: readonly string[],
-    options?: Parameters<RepositoryGit>[2],
-  ): ReturnType<RepositoryGit>
-  close(): void
-}
-
-export interface CandidatePublicationTransport {
-  open(input: {
-    readonly subject: CandidatePublicationSubject
-    readonly remoteUrl: string
-  }): Promise<
-    | { readonly ok: true; readonly session: CandidatePublicationSession }
-    | { readonly ok: false; readonly code: string; readonly detail: string }
-  >
-}
+export type CandidatePublicationSubject = RepositoryPublicationSubject
+export type CandidatePublicationSession = RepositoryPublicationSession
+export type CandidatePublicationTransport = RepositoryPublicationTransport
 
 export type PushCandidateResult =
   | {
@@ -254,7 +237,10 @@ async function remoteHeadOf(
   }
 }
 
-function localFixtureSession(remoteUrl: string): CandidatePublicationSession | null {
+function localFixtureSession(
+  remoteUrl: string,
+  runGit: RepositoryGit,
+): CandidatePublicationSession | null {
   const described = describeRepositoryRemote(remoteUrl)
   const local =
     (described.ok && described.value.transport === 'file') ||
@@ -271,7 +257,7 @@ function localFixtureSession(remoteUrl: string): CandidatePublicationSession | n
       endpointSource: 'local-fixture',
       endpointBindingDigest: null,
     },
-    runNetwork(runGit, repoPath, args, options) {
+    runNetwork(repoPath, args, options) {
       return runGit(repoPath, [...args], options)
     },
     close() {},
@@ -296,7 +282,7 @@ export async function pushCandidate(input: PushCandidateInput): Promise<PushCand
     }
     session = opened.session
   } else {
-    const local = localFixtureSession(input.remoteUrl)
+    const local = localFixtureSession(input.remoteUrl, runGit)
     if (local === null) {
       return {
         ok: false,
@@ -307,7 +293,7 @@ export async function pushCandidate(input: PushCandidateInput): Promise<PushCand
     session = local
   }
   const networkRunGit: RepositoryGit = (repoPath, args, options) =>
-    session.runNetwork(runGit, repoPath, args, options)
+    session.runNetwork(repoPath, args, options)
 
   try {
     const actualResult = await remoteHeadOf(

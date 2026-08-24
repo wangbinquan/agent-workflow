@@ -47,7 +47,7 @@ import {
 } from '@/util/git'
 import { hardenGitArgs } from '@/util/gitHardening'
 import { createLogger } from '@/util/log'
-import { leaseGitCredential } from '@/services/gitCredential'
+import { leaseGitCredential } from '@/util/gitCredentialLease'
 import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'

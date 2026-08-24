@@ -45,9 +45,11 @@ import {
   bindRepositoryCommitParticipant,
   classifyRepositoryPushFailure,
   createRepositoryPublicationTransport,
-  type RepositoryPublicationSubject,
-  type RepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
+import type {
+  RepositoryPublicationSubject,
+  RepositoryPublicationTransport,
+} from '@/modules/source-control/public/types'
 import { Paths } from '@/util/paths'
 
 type RunGit = typeof realRunGit
@@ -154,7 +156,8 @@ export async function runCommitPush(
   const W = params.worktreePath
   const remote = params.pushRemote ?? 'origin'
   const publicationTransport =
-    deps.publicationTransport ?? createRepositoryPublicationTransport({ db, appHome: Paths.root })
+    deps.publicationTransport ??
+    createRepositoryPublicationTransport({ db, appHome: Paths.root, runGit })
   const publicationSubject: RepositoryPublicationSubject =
     params.ownerUserId === undefined ||
     params.ownerUserId === null ||
@@ -453,7 +456,7 @@ export async function runCommitPush(
   const session = opened.session
   publicationReceipt = session.receipt
   const sessionRunGit: RunGit = (repoPath, args, options) =>
-    session.runNetwork(runGit, repoPath, args, options)
+    session.runNetwork(repoPath, args, options)
   const remoteOverride = ['-c', `remote.${remote}.url=${session.endpointUrl}`]
   let attempts = 0
   try {
@@ -497,7 +500,7 @@ export async function runCommitPush(
       })
       if (publication.ok) {
         exclusionPolicyDigest = publication.policyDigest
-        const verified = await session.runNetwork(runGit, W, [
+        const verified = await session.runNetwork(W, [
           ...remoteOverride,
           'ls-remote',
           '--heads',
@@ -508,7 +511,15 @@ export async function runCommitPush(
           .split('\n')
           .find((line) => line.trim() !== '')
           ?.split(/\s+/)[0]
-        if (verified.exitCode !== 0 || remoteSha !== tipSha) {
+        const remoteContainsTip =
+          verified.exitCode === 0 && remoteSha !== undefined && remoteSha !== tipSha
+            ? await g(['merge-base', '--is-ancestor', tipSha, remoteSha])
+            : null
+        if (
+          verified.exitCode !== 0 ||
+          remoteSha === undefined ||
+          (remoteSha !== tipSha && remoteContainsTip?.exitCode !== 0)
+        ) {
           const managedFailure =
             verified.exitCode === 0
               ? null
@@ -579,7 +590,7 @@ export async function runCommitPush(
       attempts += 1
 
       if (cls === 'non-fast-forward') {
-        const fetch = await session.runNetwork(runGit, W, [
+        const fetch = await session.runNetwork(W, [
           ...remoteOverride,
           'fetch',
           remote,
@@ -896,7 +907,7 @@ async function commitPushSubmodules(args: {
     const session = opened.session
     entry.publicationReceipt = session.receipt
     const sessionRunGit: RunGit = (repoPath, gitArgs, options) =>
-      session.runNetwork(args.runGit, repoPath, gitArgs, options)
+      session.runNetwork(repoPath, gitArgs, options)
     const remoteOverride = ['-c', `remote.${remote}.url=${session.endpointUrl}`]
     let publication: Awaited<
       ReturnType<ReturnType<typeof bindRepositoryCommitParticipant>['publish']>

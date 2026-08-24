@@ -13,7 +13,6 @@ import {
 } from '../src/db/schema'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { selectRepositoryTransportCredential } from '../src/modules/source-control/domain/repositoryTransportCredential'
-import type { ResolvedAuthoritySubject } from '../src/modules/identity-access/public/types'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -21,16 +20,8 @@ const DIGEST = 'a'.repeat(64)
 const PERSONAL_TOKEN = 'aw-personal-fixture-token-9999'
 const GLOBAL_TOKEN = 'aw-global-fixture-token-1111'
 
-function subject(user: Awaited<ReturnType<typeof createUser>>): ResolvedAuthoritySubject {
-  return {
-    userId: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    role: user.role,
-    status: user.status,
-    additionalPermissions: [],
-    accessRevision: 0,
-  }
+function subject(user: Awaited<ReturnType<typeof createUser>>) {
+  return { kind: 'user' as const, userId: user.id }
 }
 
 describe('RFC-321 credential selector truth table', () => {

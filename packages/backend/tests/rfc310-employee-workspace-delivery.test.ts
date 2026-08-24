@@ -501,6 +501,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
       appHome,
+      directPublicationSubject: { kind: 'system' },
       conflictMerge: bindConflictMergeParticipant(),
       sourceControl: {
         ...bindChangeCandidateParticipant(),

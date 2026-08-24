@@ -328,7 +328,7 @@ describe('runCommitPush', () => {
               endpointSource: 'admin-mapping',
               endpointBindingDigest: 'a'.repeat(64),
             },
-            runNetwork(run, repoPath, args, options) {
+            runNetwork(repoPath, args, options) {
               if (args.includes('push')) {
                 networkPushes += 1
                 return Promise.resolve({
@@ -337,7 +337,7 @@ describe('runCommitPush', () => {
                   exitCode: 1,
                 })
               }
-              return run(repoPath, [...args], options)
+              return runGit(repoPath, [...args], options)
             },
             close() {
               closes += 1

@@ -22,8 +22,11 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  buildRepositoryTransportConnectionProjection,
   cleanupOrphanedGitCredentialLeases,
+  composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
+  reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
@@ -134,6 +137,7 @@ import {
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
+  createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -142,6 +146,7 @@ import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/e
 import { createSqliteTaskLifecycleEventPublisher } from '@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
+import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 
 export interface StartOptions {
   port?: number
@@ -507,10 +512,37 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const secretBox = createSecretBox(Paths.secretKeyFile)
   log.info('secret box ready', { keyFile: Paths.secretKeyFile })
   ensureCredentialsSealed(db, secretBox)
+  const repositoryTransportModule = composeRepositoryTransportCredentials(db, secretBox)
+  reconcileRepositoryTransportConnectionProjections(
+    db,
+    repositoryTransportModule.adminConnections,
+  )
+  const repositoryMetadataConnections = createCodeHostConnectionsService({
+    db,
+    secretBox,
+    repositoryTransport: {
+      participant: repositoryTransportModule.adminConnections,
+      project: buildRepositoryTransportConnectionProjection,
+    },
+  })
+  const repositoryEndpointDiscovery = createRepositoryEndpointDiscovery({
+    resolveConnection(provider) {
+      const connection = repositoryMetadataConnections.resolve(provider)
+      if (connection?.connectionGeneration === undefined) return null
+      return {
+        provider: connection.provider,
+        apiBaseUrl: connection.baseUrl,
+        connectionGeneration: connection.connectionGeneration,
+        token: connection.token,
+        rejectUnauthorized: connection.rejectUnauthorized,
+      }
+    },
+  })
   const repositoryPublicationTransport = createRepositoryPublicationTransport({
     db,
     secretBox,
     appHome: Paths.root,
+    endpointDiscovery: repositoryEndpointDiscovery,
   })
   const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
   if (removedCredentialLeases > 0) {

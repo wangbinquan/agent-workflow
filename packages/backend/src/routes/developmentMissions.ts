@@ -53,8 +53,8 @@ import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
-  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
@@ -145,25 +145,21 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
 export function mountDevelopmentMissionRoutes(
   app: Hono,
   deps: AppDeps,
-  cutover: { readonly legacyAdmissionsEnabled: () => boolean } = {
-    legacyAdmissionsEnabled: () => true,
+  routeDeps: {
+    readonly legacyAdmissionsEnabled: () => boolean
+    readonly repositoryPublicationTransport: RepositoryPublicationTransport
   },
 ): void {
   const uploadSessions = createSqliteUploadSessionStore(deps.db)
   const snapshots = createSqliteFactSnapshotReader(deps.db)
   const missionStore = createSqliteMissionStore(deps.db)
-  const repositoryPublicationTransport = createRepositoryPublicationTransport({
-    db: deps.db,
-    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-    appHome: Paths.root,
-  })
   const automation = composeDevelopmentAutomation({
     db: deps.db,
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
-      publicationTransport: repositoryPublicationTransport,
+      publicationTransport: routeDeps.repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant(),
     ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
@@ -285,7 +281,7 @@ export function mountDevelopmentMissionRoutes(
       summary: 'Launch a development mission (direct body/uploads or external id)',
     },
     async (c) => {
-      if (!cutover.legacyAdmissionsEnabled()) {
+      if (!routeDeps.legacyAdmissionsEnabled()) {
         throw new ConflictError(
           'legacy-mission-admission-retired',
           'new work must be launched through a published Digital Employee; existing Missions remain available until they reach terminal state',

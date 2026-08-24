@@ -8,6 +8,12 @@ import { createSqliteCodeHostEventResponseDirectory } from './infrastructure/sql
 import type { DigitalEmployeeWorkStartPort } from './public/participants'
 import type { CodeHostEventContinuationPort } from './application/ports/codeHostEventResponse'
 
+export {
+  createRepositoryEndpointDiscovery,
+  type RepositoryEndpointConnection,
+  type RepositoryEndpointFetch,
+} from './application/repositoryEndpointDiscovery'
+
 export interface DeferredDigitalEmployeeWorkStart {
   readonly participant: DigitalEmployeeWorkStartPort
   bind(participant: DigitalEmployeeWorkStartPort): void

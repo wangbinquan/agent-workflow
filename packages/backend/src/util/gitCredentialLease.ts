@@ -1,4 +1,5 @@
-// RFC-321 — exact-target, one-shot Git credential helper lease.
+// RFC-321 — exact-target, one-shot Git credential helper lease shared by
+// source-control publication and legacy clone/background-refresh consumers.
 //
 // The secret exists only in a mode-0600 lease file. Git receives a sanitized
 // endpoint in argv and only the lease-file path in env. The hidden helper
@@ -31,7 +32,7 @@ export interface GitCredentialLease {
 
 function gitCredentialSelfArgv(): string[] {
   if (IS_EMBEDDED) return [process.execPath, GIT_CREDENTIAL_SUBCOMMAND]
-  const mainPath = resolve(import.meta.dir, '..', '..', '..', 'main.ts')
+  const mainPath = resolve(import.meta.dir, '..', 'main.ts')
   return [process.execPath, 'run', mainPath, GIT_CREDENTIAL_SUBCOMMAND]
 }
 

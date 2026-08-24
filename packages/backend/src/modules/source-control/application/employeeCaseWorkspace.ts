@@ -180,7 +180,7 @@ export async function fetchEmployeeWorkspaceRemoteHead(input: {
       throw new Error(`employee workspace publication transport failed: ${opened.code}`)
     }
     try {
-      fetched = await opened.session.runNetwork(runGit, input.baselineRepoPath, [
+      fetched = await opened.session.runNetwork(input.baselineRepoPath, [
         'fetch',
         '--quiet',
         '--no-tags',

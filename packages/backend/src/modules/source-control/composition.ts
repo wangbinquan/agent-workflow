@@ -3,7 +3,7 @@ import type {
   RepositoryCommitPublicationParticipant,
   WorkspaceExcludeParticipant,
 } from './public/participants'
-import type { RepositoryPublishMode } from './public/types'
+import type { RepositoryPublicationTransport, RepositoryPublishMode } from './public/types'
 import { ensureWorkspaceExcludeProfile } from './infrastructure/workspaceExcludeManager'
 import {
   prepareRepositoryCommit,
@@ -18,7 +18,6 @@ import {
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import { deriveChangeCandidate, stageCandidateTree } from './application/changeCandidate'
 import { commitCandidate, pushCandidate } from './application/deliverCandidate'
-import type { RepositoryPublicationTransport } from './composition/repositoryPublicationTransport'
 import {
   discardConflictMergeWorkspace,
   finishConflictMerge,
@@ -34,11 +33,11 @@ import {
   type CodeHostProvider,
   type RepositoryTransportMappingV1,
 } from '@agent-workflow/shared'
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { codeHostConnections } from '@/db/schema'
+import { sha256Hex } from '@/util/hash'
 import { RepositoryTransportCredentials } from './application/repositoryTransportCredentials'
 import { SQLiteRepositoryTransportCredentialRepository } from './infrastructure/sqliteRepositoryTransportCredentialRepository'
 import type { RepositoryTransportConnectionProjectionInput } from './ports/repositoryTransportCredentialRepository'
@@ -56,13 +55,16 @@ import {
 export {
   createRepositoryPublicationTransport,
   resolveRepositoryPublicationTransportFromKeyFile,
-  type OpenRepositoryPublicationSessionResult,
-  type RepositoryPublicationSession,
-  type RepositoryPublicationSubject,
-  type RepositoryPublicationTransport,
 } from './composition/repositoryPublicationTransport'
 
-export { cleanupOrphanedGitCredentialLeases } from './infrastructure/gitCredentialLease'
+export type {
+  OpenRepositoryPublicationSessionResult,
+  RepositoryPublicationSession,
+  RepositoryPublicationSubject,
+  RepositoryPublicationTransport,
+} from './public/types'
+
+export { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 
 export {
   classifyRepositoryPushFailure,
@@ -205,7 +207,7 @@ export function buildRepositoryTransportConnectionProjection(input: {
   return {
     provider: input.provider,
     connectionGeneration: input.connectionGeneration,
-    endpointBindingDigest: createHash('sha256').update(canonical).digest('hex'),
+    endpointBindingDigest: sha256Hex(canonical),
     apiBaseUrl: input.baseUrl,
     rejectUnauthorized: input.rejectUnauthorized,
     transportMappings,
