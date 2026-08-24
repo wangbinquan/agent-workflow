@@ -21,6 +21,7 @@ import { localized } from '@/components/digital-employees/types'
 import {
   EmployeeCapabilityPanorama,
   type ResponsibilityDispatchNode,
+  type ResponsibilityToolSlotTarget,
 } from '@/components/digital-employees/EmployeeCapabilityPanorama'
 import {
   employeeTerminalOutcomeCounts,
@@ -56,11 +57,15 @@ interface WorkspaceSearch extends Record<string, unknown> {
   jobTemplateId?: string
   workItem?: string
   reviewOption?: string
+  toolRole?: string
+  toolSlot?: string
 }
 
 export function validateDigitalEmployeeTypeSearch(raw: Record<string, unknown>): WorkspaceSearch {
   const view = raw.view === 'jobs' || raw.view === 'toolbox' ? raw.view : 'employees'
   const jobTemplateId = typeof raw.jobTemplateId === 'string' ? raw.jobTemplateId.trim() : ''
+  const toolRole = typeof raw.toolRole === 'string' ? raw.toolRole.trim() : ''
+  const toolSlot = typeof raw.toolSlot === 'string' ? raw.toolSlot.trim() : ''
   return {
     view,
     ...(view === 'jobs' && jobTemplateId !== '' ? { jobTemplateId } : {}),
@@ -68,7 +73,26 @@ export function validateDigitalEmployeeTypeSearch(raw: Record<string, unknown>):
     ...(typeof raw.reviewOption === 'string' && raw.reviewOption !== ''
       ? { reviewOption: raw.reviewOption }
       : {}),
+    ...(toolRole !== '' && toolSlot !== '' ? { toolRole, toolSlot } : {}),
   }
+}
+
+function primaryToolRoleRefs(item: WorkItem): string[] {
+  const planningRoleRef = item.humanReview?.planningRoleRef
+  return item.toolRoleGroups
+    .map((role) => role.roleRef)
+    .filter((roleRef) => planningRoleRef === undefined || roleRef !== planningRoleRef)
+}
+
+function resolveToolSlotTarget(
+  item: WorkItem | null,
+  roleRef: string | undefined,
+  slotRef: string | undefined,
+): ResponsibilityToolSlotTarget | null {
+  if (item === null || roleRef === undefined || slotRef === undefined) return null
+  const role = item.toolRoleGroups.find((candidate) => candidate.roleRef === roleRef)
+  if (role?.bindingSlots.some((candidate) => candidate.slotRef === slotRef) !== true) return null
+  return { workItemRef: item.workItemRef, roleRef, slotRef }
 }
 
 export const Route = createRoute({
@@ -117,8 +141,18 @@ function DigitalEmployeeTypePage(): ReactElement {
     return out
   }, [toolQueries, workItems])
   const selectedItem = workItems.find((item) => item.workItemRef === selectedRef) ?? null
+  const selectedToolSlotTarget = resolveToolSlotTarget(
+    selectedItem,
+    search.toolRole,
+    search.toolSlot,
+  )
+  const selectedToolRole =
+    selectedItem?.toolRoleGroups.find((role) => role.roleRef === selectedToolSlotTarget?.roleRef) ??
+    null
   const selectedReview =
-    selectedItem !== null && selectedItem.humanReview?.optionRef === search.reviewOption
+    selectedToolSlotTarget === null &&
+    selectedItem !== null &&
+    selectedItem.humanReview?.optionRef === search.reviewOption
       ? selectedItem.humanReview
       : null
   const panelIds = tabDomIds('digital-employee-type-sections', search.view)
@@ -126,12 +160,25 @@ function DigitalEmployeeTypePage(): ReactElement {
   if (typeQuery.isPending) return <LoadingState />
   if (typeQuery.isError) return <ErrorBanner error={typeQuery.error} />
   const type = typeQuery.data
+  const selectedContractRef = selectedToolRole?.workContractRef ?? selectedItem?.workContractRef
   const selectedContract =
     type.workContracts.find(
       (contract) =>
-        contract.contractId === selectedItem?.workContractRef.contractId &&
-        contract.version === selectedItem.workContractRef.version,
+        contract.contractId === selectedContractRef?.contractId &&
+        contract.version === selectedContractRef.version,
     ) ?? null
+  const selectedToolRoleRefs =
+    selectedItem === null
+      ? []
+      : selectedToolRole === null
+        ? primaryToolRoleRefs(selectedItem)
+        : [selectedToolRole.roleRef]
+  const selectedTools =
+    selectedRef === null
+      ? []
+      : (toolsByWorkItem[selectedRef] ?? []).filter((tool) =>
+          selectedToolRoleRefs.includes(tool.content.roleRef),
+        )
   return (
     <div className="page page--operations digital-employee-type-page">
       <div className="operations-surface">
@@ -149,7 +196,13 @@ function DigitalEmployeeTypePage(): ReactElement {
               void navigate({
                 search:
                   view === 'toolbox' && search.workItem !== undefined
-                    ? { view, workItem: search.workItem }
+                    ? {
+                        view,
+                        workItem: search.workItem,
+                        ...(search.toolRole === undefined || search.toolSlot === undefined
+                          ? {}
+                          : { toolRole: search.toolRole, toolSlot: search.toolSlot }),
+                      }
                     : { view },
                 replace: true,
               })
@@ -171,11 +224,23 @@ function DigitalEmployeeTypePage(): ReactElement {
                   type={type}
                   selectedWorkItemRef={selectedRef}
                   selectedReviewOptionRef={selectedReview?.optionRef ?? null}
+                  selectedToolSlotTarget={selectedToolSlotTarget}
                   toolsByWorkItem={toolsByWorkItem}
                   language={language}
                   onSelect={(workItem) =>
                     void navigate({
                       search: { view: 'toolbox', workItem },
+                      replace: true,
+                    })
+                  }
+                  onSelectToolSlot={(target) =>
+                    void navigate({
+                      search: {
+                        view: 'toolbox',
+                        workItem: target.workItemRef,
+                        toolRole: target.roleRef,
+                        toolSlot: target.slotRef,
+                      },
                       replace: true,
                     })
                   }
@@ -210,9 +275,13 @@ function DigitalEmployeeTypePage(): ReactElement {
                         : 'Configure duty'
                       : selectedReview !== null
                         ? localized(selectedReview.label, language)
-                        : zh
-                          ? `配置职责：${localized(selectedItem.label, language)}`
-                          : `Configure duty: ${localized(selectedItem.label, language)}`
+                        : selectedToolRole !== null
+                          ? zh
+                            ? `配置工具：${localized(selectedToolRole.label, language)}`
+                            : `Configure tools: ${localized(selectedToolRole.label, language)}`
+                          : zh
+                            ? `配置职责：${localized(selectedItem.label, language)}`
+                            : `Configure duty: ${localized(selectedItem.label, language)}`
                   }
                   size="lg"
                   panelClassName="employee-duty-dialog"
@@ -223,7 +292,10 @@ function DigitalEmployeeTypePage(): ReactElement {
                     item={selectedItem}
                     contract={selectedContract}
                     contracts={type.workContracts}
-                    tools={selectedRef === null ? [] : (toolsByWorkItem[selectedRef] ?? [])}
+                    tools={selectedTools}
+                    toolRole={selectedToolRole}
+                    toolRoleRefs={selectedToolRoleRefs}
+                    toolSlotTarget={selectedToolSlotTarget}
                     toolsByWorkItem={toolsByWorkItem}
                     reviewOnly={selectedReview !== null}
                     dispatchSources={
@@ -246,6 +318,7 @@ function DigitalEmployeeTypePage(): ReactElement {
                 toolsByWorkItem={toolsByWorkItem}
                 language={language}
                 requestedWorkItemRef={selectedRef}
+                requestedToolSlotTarget={selectedToolSlotTarget}
                 requestedJobTemplateId={search.jobTemplateId}
                 onRequestedJobTemplateClose={() =>
                   void navigate({
@@ -274,8 +347,23 @@ function WorkItemContractCard(props: {
   contract?: EmployeeWorkContract | null
   language: string
   focusHumanReview?: boolean
+  toolRole?: WorkItem['toolRoleGroups'][number] | null
 }): ReactElement {
   const zh = props.language.startsWith('zh')
+  const planningRoleSelected =
+    props.toolRole !== null &&
+    props.toolRole !== undefined &&
+    props.item.humanReview?.planningRoleRef === props.toolRole.roleRef
+  const materialSummary = planningRoleSelected
+    ? zh
+      ? '冻结的工作材料、执行现场和平台指定的方案文档路径'
+      : 'Frozen work materials, execution context, and the platform-designated plan path'
+    : localized(props.item.materialSummary, props.language)
+  const completionStandard = planningRoleSelected
+    ? zh
+      ? `只写入指定 Markdown 方案，并从 ${props.item.humanReview?.artifactPort ?? 'artifact'} 输出同一路径；不输出父工作项的 agent-result envelope`
+      : `Write only the designated Markdown plan and emit the same path from ${props.item.humanReview?.artifactPort ?? 'artifact'}; do not emit the parent work item's agent-result envelope`
+    : localized(props.item.completionStandard, props.language)
   const reviewElement = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (props.focusHumanReview === true) reviewElement.current?.focus()
@@ -284,14 +372,14 @@ function WorkItemContractCard(props: {
     <div className="work-item-contract-card">
       <div>
         <span>{zh ? '输入材料' : 'Input material'}</span>
-        <p>{localized(props.item.materialSummary, props.language)}</p>
+        <p>{materialSummary}</p>
         {props.contract === null || props.contract === undefined ? null : (
           <code>{props.contract.inputSchemaId}</code>
         )}
       </div>
       <div>
         <span>{zh ? '确定性产出与完成标准' : 'Deterministic output and completion'}</span>
-        <p>{localized(props.item.completionStandard, props.language)}</p>
+        <p>{completionStandard}</p>
         {props.contract === null || props.contract === undefined ? null : (
           <code>{props.contract.outputSchemaId}</code>
         )}
@@ -381,6 +469,9 @@ function ToolboxPanel(props: {
   contract: EmployeeWorkContract | null
   contracts: EmployeeWorkContract[]
   tools: ToolRegistration[]
+  toolRole: WorkItem['toolRoleGroups'][number] | null
+  toolRoleRefs: readonly string[]
+  toolSlotTarget: ResponsibilityToolSlotTarget | null
   toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
   dispatchSources: WorkItem[]
   language: string
@@ -457,7 +548,7 @@ function ToolboxPanel(props: {
     <section className="employee-node-panel" data-testid="employee-node-toolbox">
       <header>
         <div>
-          <p>{localized(props.item.description, props.language)}</p>
+          <p>{localized(props.toolRole?.description ?? props.item.description, props.language)}</p>
         </div>
         {business && canUpdate ? (
           <button
@@ -482,7 +573,12 @@ function ToolboxPanel(props: {
           </StatusChip>
         )}
       </header>
-      <WorkItemContractCard item={props.item} contract={props.contract} language={props.language} />
+      <WorkItemContractCard
+        item={props.item}
+        contract={props.contract}
+        language={props.language}
+        toolRole={props.toolRole}
+      />
       {contractGuide.isPending ? (
         <LoadingState
           size="compact"
@@ -704,7 +800,16 @@ function ToolboxPanel(props: {
               <Link
                 to="/digital-employees/$typeRef"
                 params={{ typeRef: props.typeRef }}
-                search={{ view: 'jobs', workItem: props.item.workItemRef }}
+                search={{
+                  view: 'jobs',
+                  workItem: props.item.workItemRef,
+                  ...(props.toolSlotTarget === null
+                    ? {}
+                    : {
+                        toolRole: props.toolSlotTarget.roleRef,
+                        toolSlot: props.toolSlotTarget.slotRef,
+                      }),
+                }}
                 className="btn btn--sm"
               >
                 {zh ? '配置岗位模板' : 'Configure job template'}
@@ -726,6 +831,7 @@ function ToolboxPanel(props: {
         tool={editingTool}
         dispatchSources={props.dispatchSources}
         toolsByWorkItem={props.toolsByWorkItem}
+        roleRefs={props.toolRoleRefs}
         language={props.language}
       />
     </section>
@@ -779,10 +885,16 @@ function AddToolDialog(props: {
   tool: ToolRegistration | null
   dispatchSources: WorkItem[]
   toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
+  roleRefs: readonly string[]
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
   const qc = useQueryClient()
+  const roleScopeKey = props.roleRefs.join('\u0000')
+  const availableRoles = useMemo(() => {
+    const roleRefs = new Set(roleScopeKey === '' ? [] : roleScopeKey.split('\u0000'))
+    return props.item.toolRoleGroups.filter((role) => roleRefs.has(role.roleRef))
+  }, [props.item.toolRoleGroups, roleScopeKey])
   const [kind, setKind] = useState<'agent' | 'workflow' | 'program'>('agent')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -796,14 +908,14 @@ function AddToolDialog(props: {
     DispatchRouteDefinitionDraft[]
   >([])
   const dispatchDefinitionOrdinal = useRef(0)
-  const [roleRef, setRoleRef] = useState(props.item.toolRoleGroups[0]?.roleRef ?? '')
+  const [roleRef, setRoleRef] = useState(availableRoles[0]?.roleRef ?? '')
   const workingToolId = useRef<string | null>(null)
   const editorSessionKey = useRef<string | null>(null)
   const hydratedToolId = useRef<string | null>(null)
   const [validationChecks, setValidationChecks] = useState<
     Array<{ code: string; ok: boolean; detail: string }>
   >([])
-  const selectedRole = props.item.toolRoleGroups.find((role) => role.roleRef === roleRef)
+  const selectedRole = availableRoles.find((role) => role.roleRef === roleRef)
   const selectedContractRef = selectedRole?.workContractRef ?? props.item.workContractRef
   const contract =
     props.contracts.find(
@@ -884,7 +996,7 @@ function AddToolDialog(props: {
             },
           ],
     )
-    setRoleRef(props.item.toolRoleGroups[0]?.roleRef ?? '')
+    setRoleRef(availableRoles[0]?.roleRef ?? '')
     setValidationChecks([])
   }, [
     allowedKinds,
@@ -893,6 +1005,7 @@ function AddToolDialog(props: {
     props.item.toolRoleGroups,
     props.open,
     props.tool?.id,
+    availableRoles,
   ])
   useEffect(() => {
     if (
@@ -967,10 +1080,10 @@ function AddToolDialog(props: {
   useEffect(() => {
     if (!props.open) return
     if (!allowedKinds.includes(kind)) setKind(allowedKinds[0] ?? 'agent')
-    if (!props.item.toolRoleGroups.some((role) => role.roleRef === roleRef)) {
-      setRoleRef(props.item.toolRoleGroups[0]?.roleRef ?? '')
+    if (!availableRoles.some((role) => role.roleRef === roleRef)) {
+      setRoleRef(availableRoles[0]?.roleRef ?? '')
     }
-  }, [allowedKinds, kind, props.item.toolRoleGroups, props.open, roleRef])
+  }, [allowedKinds, availableRoles, kind, props.open, roleRef])
   useEffect(() => {
     if (props.open && kind === 'program' && source.trim() === '') {
       setSource(executionContractProgramStarter(runtimeKind))
@@ -1225,7 +1338,10 @@ function AddToolDialog(props: {
       onClose={props.onClose}
       title={
         props.tool === null
-          ? `${zh ? '给工作项增加工具：' : 'Add tool to '}${localized(props.item.label, props.language)}`
+          ? `${zh ? '给工具职责增加工具：' : 'Add tool to '}${localized(
+              availableRoles.length === 1 ? availableRoles[0]!.label : props.item.label,
+              props.language,
+            )}`
           : `${zh ? '编辑工具：' : 'Edit tool: '}${props.tool.content.displayName}`
       }
       size="lg"
@@ -1280,7 +1396,12 @@ function AddToolDialog(props: {
         ) : props.tool !== null && authoring.isError ? (
           <ErrorBanner error={authoring.error} onRetry={() => void authoring.refetch()} />
         ) : null}
-        <WorkItemContractCard item={props.item} contract={contract} language={props.language} />
+        <WorkItemContractCard
+          item={props.item}
+          contract={contract}
+          language={props.language}
+          toolRole={selectedRole}
+        />
         {contractGuide.isPending ? (
           <LoadingState label={zh ? '正在加载平台执行契约…' : 'Loading platform contract…'} />
         ) : contractGuide.isError ? (
@@ -1536,12 +1657,12 @@ function AddToolDialog(props: {
             />
           </Field>
         ) : null}
-        {props.item.toolRoleGroups.length > 1 ? (
+        {availableRoles.length > 1 ? (
           <Field label={zh ? '工具职责' : 'Tool responsibility'} required>
             <Select
               value={roleRef}
               onChange={setRoleRef}
-              options={props.item.toolRoleGroups.map((role) => ({
+              options={availableRoles.map((role) => ({
                 value: role.roleRef,
                 label: localized(role.label, props.language),
                 description: localized(role.description, props.language),
@@ -1870,6 +1991,7 @@ function JobTemplatesPanel(props: {
   toolsByWorkItem: Record<string, ToolRegistration[]>
   language: string
   requestedWorkItemRef: string | null
+  requestedToolSlotTarget: ResponsibilityToolSlotTarget | null
   requestedJobTemplateId?: string
   onRequestedJobTemplateClose: () => void
   onConfigureIngress: (ingress: WorkIngress) => void
@@ -1880,6 +2002,10 @@ function JobTemplatesPanel(props: {
     props.type.authoringManifest.workItems.find(
       (item) => item.workItemRef === props.requestedWorkItemRef,
     ) ?? null
+  const requestedToolRole =
+    requestedWorkItem?.toolRoleGroups.find(
+      (role) => role.roleRef === props.requestedToolSlotTarget?.roleRef,
+    ) ?? null
   const [open, setOpen] = useState(false)
   const [identityOpen, setIdentityOpen] = useState(false)
   const [dutyOpen, setDutyOpen] = useState(false)
@@ -1889,6 +2015,8 @@ function JobTemplatesPanel(props: {
   const [identityName, setIdentityName] = useState('')
   const [identityDescription, setIdentityDescription] = useState('')
   const [editorWorkItemRef, setEditorWorkItemRef] = useState('')
+  const [editorToolSlotTarget, setEditorToolSlotTarget] =
+    useState<ResponsibilityToolSlotTarget | null>(null)
   const [editorReviewOptionRef, setEditorReviewOptionRef] = useState<string | null>(null)
   const [editorDispatchRouteKey, setEditorDispatchRouteKey] = useState<string | null>(null)
   const [validationAttempt, setValidationAttempt] = useState(0)
@@ -2048,6 +2176,7 @@ function JobTemplatesPanel(props: {
       setIdentityOpen(false)
       setDutyOpen(false)
       setEditingJob(null)
+      setEditorToolSlotTarget(null)
       setEditorDispatchRouteKey(null)
       setName('')
       setDescription('')
@@ -2072,6 +2201,7 @@ function JobTemplatesPanel(props: {
     resetDraft()
     setEditingJob(null)
     setEditorWorkItemRef(requestedWorkItem?.workItemRef ?? '')
+    setEditorToolSlotTarget(props.requestedToolSlotTarget)
     setEditorDispatchRouteKey(null)
     setValidationAttempt(0)
     setIdentityName('')
@@ -2086,6 +2216,7 @@ function JobTemplatesPanel(props: {
     dispatchOrdinal.current = 0
     setEditingJob(job)
     setEditorWorkItemRef(requestedWorkItem?.workItemRef ?? '')
+    setEditorToolSlotTarget(props.requestedToolSlotTarget)
     setEditorDispatchRouteKey(null)
     setValidationAttempt(0)
     setName(job.name)
@@ -2194,6 +2325,7 @@ function JobTemplatesPanel(props: {
     setIdentityOpen(false)
     setDutyOpen(false)
     setEditingJob(null)
+    setEditorToolSlotTarget(null)
     setEditorDispatchRouteKey(null)
     setValidationAttempt(0)
     createDraft.reset()
@@ -2279,16 +2411,34 @@ function JobTemplatesPanel(props: {
   const selectedEditorItem =
     props.type.authoringManifest.workItems.find((item) => item.workItemRef === editorWorkItemRef) ??
     null
+  const selectedEditorToolSlotTarget = resolveToolSlotTarget(
+    selectedEditorItem,
+    editorToolSlotTarget?.roleRef,
+    editorToolSlotTarget?.slotRef,
+  )
+  const selectedEditorRole =
+    selectedEditorItem?.toolRoleGroups.find(
+      (role) => role.roleRef === selectedEditorToolSlotTarget?.roleRef,
+    ) ?? null
   const selectedEditorReview =
+    selectedEditorToolSlotTarget === null &&
     selectedEditorItem?.humanReview?.optionRef === editorReviewOptionRef
       ? selectedEditorItem.humanReview
       : null
+  const selectedEditorContractRef =
+    selectedEditorRole?.workContractRef ?? selectedEditorItem?.workContractRef
   const selectedEditorContract =
     props.type.workContracts.find(
       (contract) =>
-        contract.contractId === selectedEditorItem?.workContractRef.contractId &&
-        contract.version === selectedEditorItem.workContractRef.version,
+        contract.contractId === selectedEditorContractRef?.contractId &&
+        contract.version === selectedEditorContractRef.version,
     ) ?? null
+  const selectedEditorRoleRefs =
+    selectedEditorItem === null
+      ? []
+      : selectedEditorRole === null
+        ? primaryToolRoleRefs(selectedEditorItem)
+        : [selectedEditorRole.roleRef]
   const dispatchRouteEntries = dispatchItems.flatMap((classifier) =>
     (orderedDispatchRoutes[classifier.workItemRef] ?? []).map((route, index) => ({
       classifier,
@@ -2422,6 +2572,31 @@ function JobTemplatesPanel(props: {
           ...(requiredMissing && validationAttempt > 0 ? { attention: true } : {}),
         }
   }
+  const jobToolSlotState = (
+    target: ResponsibilityToolSlotTarget,
+  ): {
+    state: 'configured' | 'neutral'
+    detail: string
+    compactDetail: string
+  } => {
+    const toolId = bindings[`${target.workItemRef}/${target.slotRef}`]
+    const tool = (props.toolsByWorkItem[target.workItemRef] ?? []).find(
+      (candidate) => candidate.id === toolId && candidate.content.roleRef === target.roleRef,
+    )
+    return tool === undefined
+      ? {
+          state: 'neutral',
+          detail: zh ? '尚未选择方案分析工具' : 'No planning tool selected',
+          compactDetail: zh ? '未配置' : 'Missing',
+        }
+      : {
+          state: 'configured',
+          detail: zh
+            ? `已配置：${tool.content.displayName}`
+            : `Configured: ${tool.content.displayName}`,
+          compactDetail: zh ? '已配置' : 'Configured',
+        }
+  }
   const firstMissingToolItem = configurableSlots.find(
     ({ item, role, slot }) =>
       slot.required &&
@@ -2481,11 +2656,13 @@ function JobTemplatesPanel(props: {
       setValidationAttempt((current) => current + 1)
       if (firstMissingDispatchTool !== undefined) {
         setEditorWorkItemRef('')
+        setEditorToolSlotTarget(null)
         setEditorDispatchRouteKey(firstMissingDispatchTool.route.localRef)
         setDutyOpen(true)
       } else if (firstMissing !== undefined) {
         setEditorDispatchRouteKey(null)
         setEditorWorkItemRef(firstMissing)
+        setEditorToolSlotTarget(null)
         setDutyOpen(true)
       }
       return
@@ -2508,8 +2685,8 @@ function JobTemplatesPanel(props: {
                 : `Configure job template: ${name}`
               : requestedWorkItem !== null
                 ? zh
-                  ? `配置“${localized(requestedWorkItem.label, props.language)}”`
-                  : `Configure “${localized(requestedWorkItem.label, props.language)}”`
+                  ? `配置“${localized(requestedToolRole?.label ?? requestedWorkItem.label, props.language)}”`
+                  : `Configure “${localized(requestedToolRole?.label ?? requestedWorkItem.label, props.language)}”`
                 : zh
                   ? '给每个职责节点设定默认工具'
                   : 'Choose a default tool for every responsibility'}
@@ -2636,16 +2813,26 @@ function JobTemplatesPanel(props: {
             type={props.type}
             selectedWorkItemRef={selectedEditorItem?.workItemRef ?? null}
             selectedReviewOptionRef={selectedEditorReview?.optionRef ?? null}
+            selectedToolSlotTarget={selectedEditorToolSlotTarget}
             toolsByWorkItem={props.toolsByWorkItem}
             language={props.language}
             onSelect={(workItemRef) => {
               setEditorDispatchRouteKey(null)
               setEditorReviewOptionRef(null)
+              setEditorToolSlotTarget(null)
               setEditorWorkItemRef(workItemRef)
+              setDutyOpen(true)
+            }}
+            onSelectToolSlot={(target) => {
+              setEditorDispatchRouteKey(null)
+              setEditorReviewOptionRef(null)
+              setEditorToolSlotTarget(target)
+              setEditorWorkItemRef(target.workItemRef)
               setDutyOpen(true)
             }}
             onSelectReviewGate={(gate) => {
               setEditorDispatchRouteKey(null)
+              setEditorToolSlotTarget(null)
               setEditorWorkItemRef(gate.parentWorkItemRef)
               setEditorReviewOptionRef(gate.optionRef)
               setDutyOpen(true)
@@ -2656,6 +2843,7 @@ function JobTemplatesPanel(props: {
             onSelectDispatchNode={(node) => {
               setEditorWorkItemRef('')
               setEditorReviewOptionRef(null)
+              setEditorToolSlotTarget(null)
               setEditorDispatchRouteKey(node.key)
               setDutyOpen(true)
             }}
@@ -2664,6 +2852,7 @@ function JobTemplatesPanel(props: {
             onLanePriorityOrderChange={setReactionLaneOrder}
             attentionPulse={validationAttempt}
             cardState={jobCardState}
+            toolSlotState={jobToolSlotState}
             compactChrome
           />
           {validationAttempt > 0 && !complete ? (
@@ -2685,19 +2874,23 @@ function JobTemplatesPanel(props: {
             title={
               selectedEditorReview !== null
                 ? localized(selectedEditorReview.label, props.language)
-                : selectedDispatchRoute !== null
-                  ? `${zh ? '配置修复优先级' : 'Configure repair priority'} P${selectedDispatchRoute.priority}：${
-                      selectedDispatchRoute.route.displayName.trim() ||
-                      selectedDispatchRoute.route.routeRef ||
-                      (zh ? '未命名错误类型' : 'Unnamed failure type')
-                    }`
-                  : selectedEditorItem === null
-                    ? zh
-                      ? '配置职责'
-                      : 'Configure duty'
-                    : zh
-                      ? `配置职责：${localized(selectedEditorItem.label, props.language)}`
-                      : `Configure duty: ${localized(selectedEditorItem.label, props.language)}`
+                : selectedEditorRole !== null
+                  ? zh
+                    ? `配置工具：${localized(selectedEditorRole.label, props.language)}`
+                    : `Configure tools: ${localized(selectedEditorRole.label, props.language)}`
+                  : selectedDispatchRoute !== null
+                    ? `${zh ? '配置修复优先级' : 'Configure repair priority'} P${selectedDispatchRoute.priority}：${
+                        selectedDispatchRoute.route.displayName.trim() ||
+                        selectedDispatchRoute.route.routeRef ||
+                        (zh ? '未命名错误类型' : 'Unnamed failure type')
+                      }`
+                    : selectedEditorItem === null
+                      ? zh
+                        ? '配置职责'
+                        : 'Configure duty'
+                      : zh
+                        ? `配置职责：${localized(selectedEditorItem.label, props.language)}`
+                        : `Configure duty: ${localized(selectedEditorItem.label, props.language)}`
             }
             size="lg"
             panelClassName="employee-job-duty-dialog"
@@ -2926,7 +3119,12 @@ function JobTemplatesPanel(props: {
                   <div>
                     <span>{zh ? '当前职责' : 'Selected duty'}</span>
                     {selectedEditorItem === null ? null : (
-                      <p>{localized(selectedEditorItem.description, props.language)}</p>
+                      <p>
+                        {localized(
+                          selectedEditorRole?.description ?? selectedEditorItem.description,
+                          props.language,
+                        )}
+                      </p>
                     )}
                   </div>
                 </header>
@@ -3020,6 +3218,7 @@ function JobTemplatesPanel(props: {
                                           className="btn btn--sm btn--primary"
                                           onClick={() => {
                                             setEditorWorkItemRef('')
+                                            setEditorToolSlotTarget(null)
                                             setEditorDispatchRouteKey(route.localRef)
                                           }}
                                         >
@@ -3055,93 +3254,122 @@ function JobTemplatesPanel(props: {
                     })}
                   {configurableGroups
                     .filter(({ item }) => item.workItemRef === selectedEditorItem?.workItemRef)
-                    .map(({ item, slots }) => (
-                      <section key={item.workItemRef} className="job-binding-group">
-                        <header>
-                          <strong>{localized(item.label, props.language)}</strong>
-                          {item.responsibilityLaneId !== null &&
-                          laneOptional.get(item.responsibilityLaneId) === true ? (
-                            <StatusChip kind="neutral">
-                              {zh ? '可选能力 · 配置后启用' : 'Optional · enabled when configured'}
-                            </StatusChip>
-                          ) : slots.length > 1 ? (
-                            <span>
-                              {zh
-                                ? `${slots.length} 类工具槽位 · 按显示顺序动态调度`
-                                : `${slots.length} tool slots · dispatched in display order`}
-                            </span>
-                          ) : null}
-                        </header>
-                        {slots.map(({ role, slot }) => {
-                          const key = `${item.workItemRef}/${slot.slotRef}`
-                          const optionalLane =
-                            item.responsibilityLaneId !== null &&
-                            laneOptional.get(item.responsibilityLaneId) === true
-                          const candidates = (props.toolsByWorkItem[item.workItemRef] ?? []).filter(
-                            (tool) =>
-                              tool.state === 'published' &&
-                              tool.selection === 'selectable' &&
-                              tool.content.roleRef === role.roleRef,
-                          )
-                          return (
-                            <Field
-                              key={key}
-                              label={localized(slot.label, props.language)}
-                              hint={
-                                slot.required
-                                  ? localized(slot.description, props.language) +
-                                    (item.responsibilityLaneId !== null &&
-                                    laneOptional.get(item.responsibilityLaneId) === true
-                                      ? zh
-                                        ? ' · 启用本泳道后必填'
-                                        : ' · Required after enabling this lane'
-                                      : '')
-                                  : `${localized(slot.description, props.language)} · ${zh ? '可选，未绑定时使用未知错误兜底' : 'Optional; falls back to unknown'}`
-                              }
-                              required={
-                                slot.required &&
-                                (item.responsibilityLaneId === null ||
-                                  laneOptional.get(item.responsibilityLaneId) !== true)
-                              }
-                            >
-                              <Select
-                                value={bindings[key] ?? ''}
-                                onChange={(value) => updateToolBinding(item, slot.slotRef, value)}
-                                placeholder={
-                                  candidates.length === 0
-                                    ? zh
-                                      ? '请先在该节点增加工具'
-                                      : 'Add a tool to this node first'
-                                    : zh
-                                      ? '选择默认工具'
-                                      : 'Choose default tool'
+                    .map(({ item, slots }) => {
+                      const visibleSlots = slots.filter(({ role }) =>
+                        selectedEditorRoleRefs.includes(role.roleRef),
+                      )
+                      if (visibleSlots.length === 0) return null
+                      return (
+                        <section key={item.workItemRef} className="job-binding-group">
+                          <header>
+                            <strong>
+                              {selectedEditorRole === null
+                                ? localized(item.label, props.language)
+                                : localized(selectedEditorRole.label, props.language)}
+                            </strong>
+                            {item.responsibilityLaneId !== null &&
+                            laneOptional.get(item.responsibilityLaneId) === true ? (
+                              <StatusChip kind="neutral">
+                                {zh
+                                  ? '可选能力 · 配置后启用'
+                                  : 'Optional · enabled when configured'}
+                              </StatusChip>
+                            ) : visibleSlots.length > 1 ? (
+                              <span>
+                                {zh
+                                  ? `${visibleSlots.length} 类工具槽位 · 按显示顺序动态调度`
+                                  : `${visibleSlots.length} tool slots · dispatched in display order`}
+                              </span>
+                            ) : null}
+                          </header>
+                          {visibleSlots.map(({ role, slot }) => {
+                            const key = `${item.workItemRef}/${slot.slotRef}`
+                            const planningSlot =
+                              item.humanReview?.planningRoleRef === role.roleRef &&
+                              item.humanReview.planningSlotRef === slot.slotRef
+                            const optionalLane =
+                              item.responsibilityLaneId !== null &&
+                              laneOptional.get(item.responsibilityLaneId) === true
+                            const candidates = (
+                              props.toolsByWorkItem[item.workItemRef] ?? []
+                            ).filter(
+                              (tool) =>
+                                tool.state === 'published' &&
+                                tool.selection === 'selectable' &&
+                                tool.content.roleRef === role.roleRef,
+                            )
+                            return (
+                              <Field
+                                key={key}
+                                label={localized(slot.label, props.language)}
+                                hint={
+                                  slot.required
+                                    ? localized(slot.description, props.language) +
+                                      (item.responsibilityLaneId !== null &&
+                                      laneOptional.get(item.responsibilityLaneId) === true
+                                        ? zh
+                                          ? ' · 启用本泳道后必填'
+                                          : ' · Required after enabling this lane'
+                                        : '')
+                                    : `${localized(slot.description, props.language)} · ${
+                                        planningSlot
+                                          ? zh
+                                            ? '可选；未绑定时该岗位不能启用方案评审'
+                                            : 'Optional; without a binding this job cannot enable plan review'
+                                          : zh
+                                            ? '可选，未绑定时使用未知错误兜底'
+                                            : 'Optional; falls back to unknown'
+                                      }`
                                 }
-                                options={[
-                                  ...(!slot.required || optionalLane
-                                    ? [
-                                        {
-                                          value: '',
-                                          label: optionalLane
-                                            ? zh
-                                              ? '不启用这项能力'
-                                              : 'Disable this capability'
-                                            : zh
-                                              ? '不配置（使用未知错误兜底）'
-                                              : 'Not configured (use unknown fallback)',
-                                        },
-                                      ]
-                                    : []),
-                                  ...candidates.map((tool) => ({
-                                    value: tool.id,
-                                    label: tool.content.displayName,
-                                  })),
-                                ]}
-                              />
-                            </Field>
-                          )
-                        })}
-                      </section>
-                    ))}
+                                required={
+                                  slot.required &&
+                                  (item.responsibilityLaneId === null ||
+                                    laneOptional.get(item.responsibilityLaneId) !== true)
+                                }
+                              >
+                                <Select
+                                  value={bindings[key] ?? ''}
+                                  onChange={(value) => updateToolBinding(item, slot.slotRef, value)}
+                                  placeholder={
+                                    candidates.length === 0
+                                      ? zh
+                                        ? '请先在该节点增加工具'
+                                        : 'Add a tool to this node first'
+                                      : zh
+                                        ? '选择默认工具'
+                                        : 'Choose default tool'
+                                  }
+                                  options={[
+                                    ...(!slot.required || optionalLane
+                                      ? [
+                                          {
+                                            value: '',
+                                            label: optionalLane
+                                              ? zh
+                                                ? '不启用这项能力'
+                                                : 'Disable this capability'
+                                              : planningSlot
+                                                ? zh
+                                                  ? '不配置（不能启用方案评审）'
+                                                  : 'Not configured (plan review unavailable)'
+                                                : zh
+                                                  ? '不配置（使用未知错误兜底）'
+                                                  : 'Not configured (use unknown fallback)',
+                                          },
+                                        ]
+                                      : []),
+                                    ...candidates.map((tool) => ({
+                                      value: tool.id,
+                                      label: tool.content.displayName,
+                                    })),
+                                  ]}
+                                />
+                              </Field>
+                            )
+                          })}
+                        </section>
+                      )
+                    })}
                   {props.type.authoringManifest.workItems
                     .filter(
                       (item) =>

@@ -357,14 +357,19 @@ export interface ResponsibilityReviewBranchProps {
   language: string
   cardIdPrefix: string
   beforeReviewLabel: string
+  planningRoleRef: string
+  planningSlotRef: string
+  planningPresentation?: Pick<ResponsibilityCardPresentation, 'detail' | 'compactDetail'>
   gateDetail: string
   gateState?: { state: string; attention?: boolean }
   beforeReviewState?: string
   afterApprovalState?: string
   gateSelected: boolean
+  planningSelected: boolean
   itemSelected: boolean
   incoming: boolean
   rowStart: boolean
+  onSelectPlanning: () => void
   onSelectItem: () => void
   onSelectGate: () => void
 }
@@ -403,14 +408,26 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
               props.beforeReviewState === undefined
                 ? ''
                 : ` employee-toolbox-card--${props.beforeReviewState}`
-            }`}
+            }${props.planningSelected ? ' employee-toolbox-card--active' : ''}`}
             data-review-stage="analysis"
             data-capability-tool-ref={`review:${props.gate.optionRef}:analysis`}
-            aria-label={`${props.beforeReviewLabel} · ${localized(props.item.description, props.language)}`}
-            title={localized(props.item.description, props.language)}
-            onClick={props.onSelectItem}
+            data-tool-role-ref={props.planningRoleRef}
+            data-tool-slot-ref={props.planningSlotRef}
+            aria-pressed={props.planningSelected}
+            aria-label={`${props.beforeReviewLabel} · ${localized(props.item.description, props.language)}${
+              props.planningPresentation === undefined
+                ? ''
+                : ` · ${props.planningPresentation.detail}`
+            }`}
+            title={
+              props.planningPresentation?.detail ??
+              localized(props.item.description, props.language)
+            }
+            onClick={props.onSelectPlanning}
             kindLabel={kind.label}
             label={props.beforeReviewLabel}
+            detailText={props.planningPresentation?.compactDetail}
+            detailTitle={props.planningPresentation?.detail}
           />
           <ResponsibilityFlowCard
             id={`${props.cardIdPrefix}-review-${props.gate.optionRef}`}

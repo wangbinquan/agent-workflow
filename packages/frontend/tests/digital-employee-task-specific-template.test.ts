@@ -31,6 +31,29 @@ describe('digital employee task specific template navigation', () => {
     ).toEqual({ view: 'employees' })
   })
 
+  test('preserves a role-level tool target only when both role and slot are present', () => {
+    expect(
+      validateDigitalEmployeeTypeSearch({
+        view: 'toolbox',
+        workItem: 'analyze-implement',
+        toolRole: ' planning ',
+        toolSlot: ' plan ',
+      }),
+    ).toEqual({
+      view: 'toolbox',
+      workItem: 'analyze-implement',
+      toolRole: 'planning',
+      toolSlot: 'plan',
+    })
+    expect(
+      validateDigitalEmployeeTypeSearch({
+        view: 'toolbox',
+        workItem: 'analyze-implement',
+        toolRole: 'planning',
+      }),
+    ).toEqual({ view: 'toolbox', workItem: 'analyze-implement' })
+  })
+
   test('the Case action carries the frozen job template id', () => {
     expect(caseDetailSource).toContain("view: 'jobs'")
     expect(caseDetailSource).toContain('jobTemplateId: data.capabilityActivation.jobTemplateRef.id')

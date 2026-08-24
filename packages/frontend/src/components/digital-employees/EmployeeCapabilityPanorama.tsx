@@ -72,6 +72,12 @@ export interface ResponsibilityReviewGate {
   description: WorkItem['description']
 }
 
+export interface ResponsibilityToolSlotTarget {
+  workItemRef: string
+  roleRef: string
+  slotRef: string
+}
+
 export interface EmployeeCapabilityPanoramaProps {
   type: EmployeeTypePackage
   selectedWorkItemRef: string | null
@@ -98,6 +104,9 @@ export interface EmployeeCapabilityPanoramaProps {
   onConfigureIngress?: (ingress: WorkIngress) => void
   onSelectReviewGate?: (gate: ResponsibilityReviewGate) => void
   selectedReviewOptionRef?: string | null
+  selectedToolSlotTarget?: ResponsibilityToolSlotTarget | null
+  onSelectToolSlot?: (target: ResponsibilityToolSlotTarget) => void
+  toolSlotState?: (target: ResponsibilityToolSlotTarget) => EmployeeCapabilityToolState
   dispatchNodes?: readonly ResponsibilityDispatchNode[]
   selectedDispatchNodeKey?: string | null
   onSelectDispatchNode?: (node: ResponsibilityDispatchNode) => void
@@ -379,13 +388,47 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
       : item.nodeKind === 'system'
         ? { label: zh ? '平台' : 'Platform', className: 'platform' }
         : { label: zh ? '协同' : 'Collaboration', className: 'collaboration' }
+  const availableToolCount = (item: WorkItem, roleRefs?: ReadonlySet<string>): number =>
+    (props.toolsByWorkItem?.[item.workItemRef] ?? []).filter(
+      (tool) =>
+        tool.state === 'published' &&
+        (roleRefs === undefined || roleRefs.has(tool.content.roleRef)),
+    ).length
+  const mainToolRoleRefs = (item: WorkItem): ReadonlySet<string> | undefined => {
+    const planningRoleRef = item.humanReview?.planningRoleRef
+    if (planningRoleRef === undefined) return undefined
+    return new Set(
+      item.toolRoleGroups
+        .map((role) => role.roleRef)
+        .filter((roleRef) => roleRef !== planningRoleRef),
+    )
+  }
+  const toolCountPresentation = (
+    count: number,
+  ): Pick<ResponsibilityCardPresentation, 'detail' | 'compactDetail'> => ({
+    detail:
+      count > 0
+        ? zh
+          ? `${count} 个可用工具`
+          : `${count} available tool${count === 1 ? '' : 's'}`
+        : zh
+          ? '尚未配置工具'
+          : 'No tool configured',
+    compactDetail:
+      count > 0
+        ? zh
+          ? `${count} 个工具`
+          : `${count} tool${count === 1 ? '' : 's'}`
+        : zh
+          ? '未配置'
+          : 'Missing',
+  })
   const workItemPresentation = (item: WorkItem): ResponsibilityCardPresentation => {
     const kind = nodeKind(item)
     const fanOut = fanOutDestinationRefs.has(item.workItemRef)
     const state = capabilityToolState(item)
-    const availableTools = (props.toolsByWorkItem?.[item.workItemRef] ?? []).filter(
-      (tool) => tool.state === 'published',
-    ).length
+    const availableTools = availableToolCount(item, mainToolRoleRefs(item))
+    const availableToolPresentation = toolCountPresentation(availableTools)
     const nextLabels = item.nextWorkItemRefs
       .map((ref) => workItemsByRef.get(ref))
       .filter((next): next is WorkItem => next !== undefined)
@@ -393,13 +436,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
     const detail =
       state?.detail ??
       (item.nodeKind === 'business-tool'
-        ? availableTools > 0
-          ? zh
-            ? `${availableTools} 个可用工具`
-            : `${availableTools} available tool${availableTools === 1 ? '' : 's'}`
-          : zh
-            ? '尚未配置工具'
-            : 'No tool configured'
+        ? availableToolPresentation.detail
         : item.nodeKind === 'system'
           ? zh
             ? '平台按固定规则执行'
@@ -410,13 +447,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
     const compactDetail =
       state?.compactDetail ??
       (item.nodeKind === 'business-tool'
-        ? availableTools > 0
-          ? zh
-            ? `${availableTools} 个工具`
-            : `${availableTools} tool${availableTools === 1 ? '' : 's'}`
-          : zh
-            ? '未配置'
-            : 'Missing'
+        ? availableToolPresentation.compactDetail
         : item.nodeKind === 'system'
           ? zh
             ? '固定'
@@ -962,18 +993,42 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                             const { kind, fanOut, state, detail, compactDetail, next } =
                               workItemPresentation(item)
                             const gateState = capabilityReviewState(gate)
+                            const planningTarget: ResponsibilityToolSlotTarget = {
+                              workItemRef: item.workItemRef,
+                              roleRef: item.humanReview!.planningRoleRef,
+                              slotRef: item.humanReview!.planningSlotRef,
+                            }
+                            const planningToolState = props.toolSlotState?.(planningTarget)
+                            const planningPresentation =
+                              planningToolState !== undefined
+                                ? {
+                                    detail: planningToolState.detail,
+                                    compactDetail:
+                                      planningToolState.compactDetail ?? planningToolState.detail,
+                                  }
+                                : props.toolsByWorkItem === undefined
+                                  ? undefined
+                                  : toolCountPresentation(
+                                      availableToolCount(item, new Set([planningTarget.roleRef])),
+                                    )
                             const gateSelected =
                               props.selectedWorkItemRef === gate.parentWorkItemRef &&
                               props.selectedReviewOptionRef === gate.optionRef
+                            const planningSelected =
+                              props.selectedToolSlotTarget?.workItemRef ===
+                                planningTarget.workItemRef &&
+                              props.selectedToolSlotTarget.roleRef === planningTarget.roleRef &&
+                              props.selectedToolSlotTarget.slotRef === planningTarget.slotRef
                             const itemSelected =
                               props.selectedWorkItemRef === item.workItemRef &&
-                              props.selectedReviewOptionRef == null
+                              props.selectedReviewOptionRef == null &&
+                              props.selectedToolSlotTarget == null
                             const gateDetail =
                               gateState?.detail ??
                               (zh ? '可选，任务发起时决定' : 'Optional; decided when work starts')
                             const beforeReviewState =
                               entry.mode !== 'active'
-                                ? undefined
+                                ? planningToolState?.state
                                 : gateState?.state === 'waiting' ||
                                     gateState?.state === 'completed' ||
                                     gateState?.state === 'failed'
@@ -1011,14 +1066,25 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 language={props.language}
                                 cardIdPrefix={props.cardIdPrefix ?? 'toolbox-duty'}
                                 beforeReviewLabel={beforeReviewLabel}
+                                planningRoleRef={planningTarget.roleRef}
+                                planningSlotRef={planningTarget.slotRef}
+                                planningPresentation={planningPresentation}
                                 gateDetail={gateDetail}
                                 gateState={gateState}
                                 beforeReviewState={beforeReviewState}
                                 afterApprovalState={afterApprovalState}
                                 gateSelected={gateSelected}
+                                planningSelected={planningSelected}
                                 itemSelected={itemSelected}
                                 incoming={itemIndex > 0 && !rowStart}
                                 rowStart={rowStart}
+                                onSelectPlanning={() => {
+                                  if (props.onSelectToolSlot === undefined) {
+                                    props.onSelect(item.workItemRef)
+                                  } else {
+                                    props.onSelectToolSlot(planningTarget)
+                                  }
+                                }}
                                 onSelectItem={selectItem}
                                 onSelectGate={() => {
                                   if (props.onSelectReviewGate === undefined) {

@@ -2,12 +2,19 @@
 // description/document intake and external-ID intake into one source card,
 // then routed both through material preparation. Keep all three public inputs
 // and their distinct graph edges visible.
+// User regression 2026-08-24: the projected planning card shared the parent
+// work-item click target and omitted its role-scoped available-tool count.
+// Keep planning/plan distinct from the parent implementation role without
+// inventing a second executable WorkItem.
 
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import { ResponsibilitySwimlaneMap } from '../src/components/digital-employees/ResponsibilitySwimlaneMap'
-import type { EmployeeTypePackage } from '../src/components/digital-employees/types'
+import type {
+  EmployeeTypePackage,
+  ToolRegistration,
+} from '../src/components/digital-employees/types'
 
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
@@ -120,7 +127,39 @@ function fixtureType(): EmployeeTypePackage {
               afterApprovalLabel: text('分析与实现'),
             },
           },
-          toolRoleGroups: [],
+          toolRoleGroups: [
+            {
+              roleRef: 'primary',
+              label: text('分析与实现'),
+              description: text('形成代码修改'),
+              order: 0,
+              bindingSlots: [
+                {
+                  slotRef: 'default',
+                  label: text('默认工具'),
+                  description: text('实现工具'),
+                  required: true,
+                  cardinality: 'exactly-one',
+                },
+              ],
+            },
+            {
+              roleRef: 'planning',
+              label: text('方案分析'),
+              description: text('形成评审方案'),
+              order: 1,
+              workContractRef: { contractId: 'support.plan', version: 1 },
+              bindingSlots: [
+                {
+                  slotRef: 'plan',
+                  label: text('方案分析工具'),
+                  description: text('输出方案路径'),
+                  required: false,
+                  cardinality: 'zero-or-one',
+                },
+              ],
+            },
+          ],
           nextWorkItemRefs: [],
         },
       ],
@@ -129,7 +168,56 @@ function fixtureType(): EmployeeTypePackage {
   } as unknown as EmployeeTypePackage
 }
 
+function tool(id: string, roleRef: string, state: 'draft' | 'published'): ToolRegistration {
+  return {
+    id,
+    state,
+    content: { roleRef },
+  } as unknown as ToolRegistration
+}
+
 describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
+  test('keeps planning tool selection and counts separate from implementation', () => {
+    const onSelect = vi.fn()
+    const onSelectToolSlot = vi.fn()
+    const planningTarget = { workItemRef: 'analyze', roleRef: 'planning', slotRef: 'plan' }
+    const { container } = render(
+      <ResponsibilitySwimlaneMap
+        type={fixtureType()}
+        selectedWorkItemRef="analyze"
+        selectedToolSlotTarget={planningTarget}
+        toolsByWorkItem={{
+          analyze: [
+            tool('implementation-a', 'primary', 'published'),
+            tool('implementation-b', 'primary', 'published'),
+            tool('planning-a', 'planning', 'published'),
+            tool('planning-draft', 'planning', 'draft'),
+          ],
+        }}
+        language="zh-CN"
+        onSelect={onSelect}
+        onSelectToolSlot={onSelectToolSlot}
+      />,
+    )
+
+    const planning = container.querySelector<HTMLElement>('[data-review-stage="analysis"]')!
+    const implementation = container.querySelector<HTMLElement>('[data-work-item-ref="analyze"]')!
+    expect(planning.querySelector('small')?.textContent).toBe('1 个工具')
+    expect(planning.getAttribute('title')).toBe('1 个可用工具')
+    expect(planning.getAttribute('data-tool-role-ref')).toBe('planning')
+    expect(planning.getAttribute('data-tool-slot-ref')).toBe('plan')
+    expect(planning.classList.contains('employee-toolbox-card--active')).toBe(true)
+    expect(implementation.querySelector('small')?.textContent).toBe('2 个工具')
+    expect(implementation.classList.contains('employee-toolbox-card--active')).toBe(false)
+
+    fireEvent.click(planning)
+    expect(onSelectToolSlot).toHaveBeenCalledWith(planningTarget)
+    expect(onSelect).not.toHaveBeenCalled()
+
+    fireEvent.click(implementation)
+    expect(onSelect).toHaveBeenCalledWith('analyze')
+  })
+
   test('runtime review collapse still renders every projected ingress exactly once', () => {
     const { container } = render(
       <ResponsibilitySwimlaneMap
