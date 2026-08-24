@@ -3285,11 +3285,16 @@
     {
       "id": "HUMAN-21",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "手动新增/复制问题（用户自主提问）",
+      "title": "手动新增问题（用户自主提问；「复制」已于 2026-07-02 按用户拍板移除）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-questions-board.spec.ts",
+          "test": "人工提问进得了看板：带来源标记、建出来就待下发，并且把任务扣住"
+        }
+      ]
     },
     {
       "id": "HUMAN-22",
@@ -3306,8 +3311,17 @@
       "title": "暂存/取消暂存 + 批量下发（释放 deferred park，任务离开 awaiting_human）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-questions-board.spec.ts",
+          "test": "暂存不等于下发：任务必须仍停在等人上，直到真的下发"
+        },
+        {
+          "file": "e2e/task-questions-board.spec.ts",
+          "test": "没答过的题不许推进「待下发」；答过之后撤回是**题**级的，动一题不该拖下另一题"
+        }
+      ]
     },
     {
       "id": "HUMAN-25",
@@ -7015,8 +7029,17 @@
       "title": "已处理待确认 → 完成（confirm），含跨任务 entryId 的 404 边界",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-questions-board.spec.ts",
+          "test": "承接 run 跑完之后：条目进「已处理待确认」，确认一下才收尾"
+        },
+        {
+          "file": "e2e/task-questions-board.spec.ts",
+          "test": "跨任务的条目 id：确认 / 暂存都必须 404，而不是悄悄成功"
+        }
+      ]
     },
     {
       "id": "HUMAN-36",
@@ -8503,10 +8526,7 @@
     "HUMAN-16",
     "HUMAN-17b",
     "HUMAN-20",
-    "HUMAN-21",
     "HUMAN-22",
-    "HUMAN-23",
-    "HUMAN-24",
     "HUMAN-25",
     "HUMAN-26",
     "HUMAN-27",
