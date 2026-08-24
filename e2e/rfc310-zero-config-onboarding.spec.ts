@@ -607,7 +607,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
 
   await dispatchNodes.filter({ hasText: 'Compile error' }).click()
   let repairDialog = page.getByTestId('employee-job-duty-dialog')
-  await expect(repairDialog).toContainText('Repair priority P1')
+  await expect(repairDialog).toContainText('Processing order 1')
   await repairDialog
     .locator('label.form-field')
     .filter({ hasText: 'Tool for this failure type' })
@@ -619,7 +619,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
 
   await dispatchNodes.filter({ hasText: 'Test failure' }).click()
   repairDialog = page.getByTestId('employee-job-duty-dialog')
-  await expect(repairDialog).toContainText('Repair priority P2')
+  await expect(repairDialog).toContainText('Processing order 2')
   await repairDialog
     .locator('label.form-field')
     .filter({ hasText: 'Tool for this failure type' })
