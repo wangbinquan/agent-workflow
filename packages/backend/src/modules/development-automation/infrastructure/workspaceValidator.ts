@@ -56,6 +56,12 @@ export function businessTreeSnapshot(root: string): Map<string, string> {
   return out
 }
 
+export function businessTreeSnapshotDigest(snapshot: ReadonlyMap<string, string>): string {
+  return sha256Hex(
+    JSON.stringify([...snapshot.entries()].sort(([left], [right]) => left.localeCompare(right))),
+  )
+}
+
 export type BoundaryViolationCode =
   | 'protected-root-write'
   | 'symlink-created'

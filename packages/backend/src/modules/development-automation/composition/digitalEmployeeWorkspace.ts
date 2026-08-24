@@ -10,7 +10,6 @@ import type { DbClient } from '@/db/client'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { cachedRepos, employeeCaseWorkspaces, employeeRoundWorkspaceStates } from '@/db/schema'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
-import { sha256Hex } from '@/util/hash'
 import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
 import {
   snapshotProtectedRoots,
@@ -18,6 +17,7 @@ import {
 } from '../infrastructure/protectedSnapshot'
 import {
   businessTreeSnapshot,
+  businessTreeSnapshotDigest,
   validateWorkspaceOutcome,
 } from '../infrastructure/workspaceValidator'
 
@@ -234,12 +234,6 @@ function businessChangedPaths(
   return [...paths].filter((path) => before.get(path) !== after.get(path)).sort()
 }
 
-function businessSnapshotDigest(snapshot: ReadonlyMap<string, string>): string {
-  return sha256Hex(
-    JSON.stringify([...snapshot.entries()].sort(([left], [right]) => left.localeCompare(right))),
-  )
-}
-
 function directoryContainsFile(root: string): boolean {
   if (!existsSync(root)) return false
   const pending = [root]
@@ -317,6 +311,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     inspect(request: {
       readonly workspacePath: string
       readonly conflictPaths: readonly string[]
+      readonly validatedChangedPaths?: readonly string[]
     }): Promise<
       | { readonly ok: true }
       | {
@@ -398,7 +393,8 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     )
     if (!priorValidation.success) return null
     if (
-      businessSnapshotDigest(request.currentPreBusiness) !== priorValidation.data.postBusinessDigest
+      businessTreeSnapshotDigest(request.currentPreBusiness) !==
+      priorValidation.data.postBusinessDigest
     ) {
       return null
     }
@@ -521,17 +517,24 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         ) {
           throw new Error('conflict source head no longer matches the employee workspace')
         }
-        const stateOrdinal = attempt.mode === 'same-scene' ? 0 : attempt.ordinal
-        const existingState = input.db
-          .select()
-          .from(employeeRoundWorkspaceStates)
-          .where(
-            and(
-              eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-              eq(employeeRoundWorkspaceStates.attemptOrdinal, stateOrdinal),
-            ),
-          )
-          .get()
+        const existingState =
+          attempt.mode === 'same-scene'
+            ? input.db
+                .select()
+                .from(employeeRoundWorkspaceStates)
+                .where(eq(employeeRoundWorkspaceStates.roundId, plan.roundRef))
+                .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
+                .get()
+            : input.db
+                .select()
+                .from(employeeRoundWorkspaceStates)
+                .where(
+                  and(
+                    eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
+                    eq(employeeRoundWorkspaceStates.attemptOrdinal, attempt.ordinal),
+                  ),
+                )
+                .get()
         let state = existingState
         let pre =
           state === undefined ? undefined : (JSON.parse(state.preStateJson) as SerializedPreState)
@@ -877,12 +880,13 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           ? await input.conflictMerge.inspect({
               workspacePath: pre.conflict.workspacePath,
               conflictPaths: pre.conflict.conflictPaths,
+              validatedChangedPaths: verdict.kind === 'changed' ? verdict.changedPaths : [],
             })
           : null
       const validation = {
         ...verdict,
         ...(verdict.ok && verdict.kind === 'changed'
-          ? { postBusinessDigest: businessSnapshotDigest(afterBusiness) }
+          ? { postBusinessDigest: businessTreeSnapshotDigest(afterBusiness) }
           : {}),
         ...(pre.conflict === undefined
           ? {}

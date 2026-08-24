@@ -476,7 +476,7 @@ describe('RFC-310 shared Event Center', () => {
     ])
   })
 
-  test('polling emits only actionable review/conflict events and lifecycle facts clear old readiness blockers', () => {
+  test('polling emits review tombstones and lifecycle facts clear old readiness blockers', () => {
     const clean = {
       mrRef: '42',
       headSha: 'a'.repeat(40),
@@ -493,8 +493,10 @@ describe('RFC-310 shared Event Center', () => {
     const cleanFacts = buildDevelopmentCodeHostFacts(clean)
     expect(cleanFacts.map((fact) => fact.eventTypeId)).toEqual([
       'development.lifecycle-updated',
+      'development.review-updated',
       'development.pipeline-check-due',
     ])
+    expect(cleanFacts[1]!.payload).toEqual([])
 
     const blocked = {
       ...clean,
@@ -529,13 +531,10 @@ describe('RFC-310 shared Event Center', () => {
     ])
     expect(blockedFacts[0]!.payload).toMatchObject({
       mergeableState: 'conflict',
-      unresolvedReviewCount: 1,
-      reviewDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
     })
-    expect(cleanFacts[0]!.payload).toMatchObject({
-      mergeableState: 'mergeable',
-      unresolvedReviewCount: 0,
-    })
+    expect(blockedFacts[0]!.payload).not.toHaveProperty('unresolvedReviewCount')
+    expect(blockedFacts[0]!.payload).not.toHaveProperty('reviewDigest')
+    expect(cleanFacts[0]!.payload).toMatchObject({ mergeableState: 'mergeable' })
     expect(
       buildDevelopmentCodeHostFacts({
         ...blocked,
@@ -598,10 +597,67 @@ describe('RFC-310 shared Event Center', () => {
     const first = advance(null, clean, 'activation-1')
     expect(first.changes.map((change) => change.fact.eventTypeId)).toEqual([
       'development.lifecycle-updated',
+      'development.review-updated',
       'development.pipeline-check-due',
     ])
     expect(
       advance(first.cursorJson, clean, 'unused').changes.map((change) => change.fact.eventTypeId),
+    ).toEqual(['development.pipeline-check-due'])
+
+    // Review facts have their own event lane. A new human thread, and especially
+    // a later platform acknowledgement in that same thread, must not mutate the
+    // lifecycle digest: lifecycle preempts a pending publication continuation.
+    // Treating review content as lifecycle state can therefore strand a repaired
+    // workspace before prepare-change / publish-mr runs.
+    const reviewOnly = {
+      ...clean,
+      threads: [
+        {
+          threadRef: 'thread-review-only',
+          revision: '1:10',
+          authorClass: 'human' as const,
+          resolved: false,
+          lastBody: 'please add a regression test',
+          path: 'src/main.ts',
+          messages: [
+            {
+              messageRef: '10',
+              parentMessageRef: null,
+              authorClass: 'human' as const,
+              body: 'please add a regression test',
+              path: 'src/main.ts',
+              createdAt: '2026-08-24T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    } satisfies MrFactsSnapshot
+    const reviewFirst = advance(first.cursorJson, reviewOnly, 'unused')
+    expect(reviewFirst.changes.map((change) => change.fact.eventTypeId)).toEqual([
+      'development.review-updated',
+      'development.pipeline-check-due',
+    ])
+    const acknowledged = {
+      ...reviewOnly,
+      threads: reviewOnly.threads.map((thread) => ({
+        ...thread,
+        messages: [
+          ...thread.messages,
+          {
+            messageRef: '11',
+            parentMessageRef: '10',
+            authorClass: 'self' as const,
+            body: 'received',
+            path: 'src/main.ts',
+            createdAt: '2026-08-24T00:00:01.000Z',
+          },
+        ],
+      })),
+    } satisfies MrFactsSnapshot
+    expect(
+      advance(reviewFirst.cursorJson, acknowledged, 'unused').changes.map(
+        (change) => change.fact.eventTypeId,
+      ),
     ).toEqual(['development.pipeline-check-due'])
 
     const blockedFirst = advance(first.cursorJson, blocked, 'unused')
@@ -613,6 +669,15 @@ describe('RFC-310 shared Event Center', () => {
     ])
     const blockedKeys = blockedFirst.changes.map((change) => change.dedupeKey)
     const cleanAgain = advance(blockedFirst.cursorJson, clean, 'unused')
+    expect(cleanAgain.changes.map((change) => change.fact.eventTypeId)).toEqual([
+      'development.lifecycle-updated',
+      'development.review-updated',
+      'development.pipeline-check-due',
+    ])
+    expect(
+      cleanAgain.changes.find((change) => change.fact.eventTypeId === 'development.review-updated')
+        ?.fact.payload,
+    ).toEqual([])
     const blockedAgain = advance(cleanAgain.cursorJson, blocked, 'unused')
     expect(blockedAgain.changes.map((change) => change.fact.eventTypeId)).toEqual([
       'development.lifecycle-updated',

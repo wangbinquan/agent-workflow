@@ -5,10 +5,10 @@
 // will not survive lsFiles, which we accept as a v1 limitation.
 
 import type { GitRef } from '@agent-workflow/shared'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { hardenGitArgs } from '@/util/gitHardening'
 import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
@@ -2891,6 +2891,47 @@ export function residualConflictMarkers(text: string): boolean {
   return /^(<{7}|={7}|>{7})(\s|$)/m.test(text)
 }
 
+const GIT_MERGE_OPERATION_FILES = ['MERGE_HEAD', 'MERGE_MSG', 'MERGE_MODE', 'AUTO_MERGE'] as const
+
+interface GitMergeOperationFile {
+  readonly path: string
+  readonly content: Buffer
+}
+
+/**
+ * `git reset --mixed`, used by materialization to leave product changes
+ * unstaged, also clears an in-progress merge. A conflict-repair workspace is
+ * intentionally born with MERGE_HEAD and friends owned by the platform; node
+ * isolation must merge the Agent's business-tree delta back without silently
+ * terminating that outer operation.
+ */
+async function captureGitMergeOperationFiles(
+  worktreePath: string,
+): Promise<readonly GitMergeOperationFile[]> {
+  const resolved = await runGit(worktreePath, ['rev-parse', '--git-path', 'MERGE_HEAD'])
+  if (resolved.exitCode !== 0) {
+    throw new DomainError(
+      'materialize-failed',
+      `resolve MERGE_HEAD: ${resolved.stderr.trim()}`,
+      500,
+    )
+  }
+  const mergeHeadPath = resolve(worktreePath, resolved.stdout.trim())
+  if (!existsSync(mergeHeadPath)) return []
+  const gitOperationDir = dirname(mergeHeadPath)
+  return GIT_MERGE_OPERATION_FILES.flatMap((name) => {
+    const path = join(gitOperationDir, name)
+    return existsSync(path) ? [{ path, content: readFileSync(path) }] : []
+  })
+}
+
+function restoreGitMergeOperationFiles(files: readonly GitMergeOperationFile[]): void {
+  for (const file of files) {
+    mkdirSync(dirname(file.path), { recursive: true })
+    writeFileSync(file.path, file.content)
+  }
+}
+
 /**
  * RFC-130 §5.3 / D28: make the canonical worktree's working tree equal `mergedTree`
  * while keeping HEAD at `taskBaseHead`, leaving the delta UNSTAGED (I-2 "uncommitted
@@ -2909,33 +2950,41 @@ export async function materializeTree(
     log?: Logger
   },
 ): Promise<void> {
-  // ① removals (deleted + type-changed) — checkout-index never deletes.
-  const removed = await gitDiffNames(worktreePath, opts.canonCurrentTree, opts.mergedTree, 'DT')
-  for (const p of removed) {
-    await rm(join(worktreePath, p), { recursive: true, force: true })
-  }
-  // ② added paths: remove any worktree DIR blocking a new file (dir→file replace).
-  const added = await gitDiffNames(worktreePath, opts.canonCurrentTree, opts.mergedTree, 'A')
-  for (const p of added) {
-    const abs = join(worktreePath, p)
-    const st = await stat(abs).catch(() => null)
-    if (st?.isDirectory() === true) {
-      await rm(abs, { recursive: true, force: true })
+  const mergeOperationFiles = await captureGitMergeOperationFiles(worktreePath)
+  try {
+    // ① removals (deleted + type-changed) — checkout-index never deletes.
+    const removed = await gitDiffNames(worktreePath, opts.canonCurrentTree, opts.mergedTree, 'DT')
+    for (const p of removed) {
+      await rm(join(worktreePath, p), { recursive: true, force: true })
     }
-  }
-  // ③ write the merged tree into index + worktree.
-  const readTree = await runGit(worktreePath, ['read-tree', opts.mergedTree])
-  if (readTree.exitCode !== 0) {
-    throw new DomainError('materialize-failed', `read-tree: ${readTree.stderr.trim()}`, 500)
-  }
-  const checkout = await runGit(worktreePath, ['checkout-index', '-f', '-a'])
-  if (checkout.exitCode !== 0) {
-    throw new DomainError('materialize-failed', `checkout-index: ${checkout.stderr.trim()}`, 500)
-  }
-  // ④ index → base so the delta is UNSTAGED (worktree unchanged = merged tree).
-  const reset = await runGit(worktreePath, ['reset', '--mixed', opts.taskBaseHead])
-  if (reset.exitCode !== 0) {
-    throw new DomainError('materialize-failed', `reset --mixed: ${reset.stderr.trim()}`, 500)
+    // ② added paths: remove any worktree DIR blocking a new file (dir→file replace).
+    const added = await gitDiffNames(worktreePath, opts.canonCurrentTree, opts.mergedTree, 'A')
+    for (const p of added) {
+      const abs = join(worktreePath, p)
+      const st = await stat(abs).catch(() => null)
+      if (st?.isDirectory() === true) {
+        await rm(abs, { recursive: true, force: true })
+      }
+    }
+    // ③ write the merged tree into index + worktree.
+    const readTree = await runGit(worktreePath, ['read-tree', opts.mergedTree])
+    if (readTree.exitCode !== 0) {
+      throw new DomainError('materialize-failed', `read-tree: ${readTree.stderr.trim()}`, 500)
+    }
+    const checkout = await runGit(worktreePath, ['checkout-index', '-f', '-a'])
+    if (checkout.exitCode !== 0) {
+      throw new DomainError('materialize-failed', `checkout-index: ${checkout.stderr.trim()}`, 500)
+    }
+    // ④ index → base so the delta is UNSTAGED (worktree unchanged = merged tree).
+    const reset = await runGit(worktreePath, ['reset', '--mixed', opts.taskBaseHead])
+    if (reset.exitCode !== 0) {
+      throw new DomainError('materialize-failed', `reset --mixed: ${reset.stderr.trim()}`, 500)
+    }
+  } finally {
+    // The reset above removes MERGE_HEAD/MERGE_MSG/MERGE_MODE/AUTO_MERGE.
+    // Restore the exact platform-created bytes before validation or conflict
+    // publication can observe the canonical workspace.
+    restoreGitMergeOperationFiles(mergeOperationFiles)
   }
   // ⑤ refresh submodule working dirs for any changed gitlink (D20/D22).
   const { syncSubmodules } = await import('@/services/gitSubmodule')

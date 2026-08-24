@@ -22,6 +22,7 @@ import { encodeDevelopmentApprovalSubject } from '../domain/approvalSubject'
 import { canonicalDigest } from '../domain/canonicalJson'
 import {
   approvalContextSchema,
+  mergeRequestContextSchema as mergeRequestStateSchema,
   pipelineContextSchema,
   problemSetContextSchema,
   reviewResolutionContextSchema,
@@ -29,6 +30,10 @@ import {
 import { sha256Hex } from '@/util/hash'
 import { stableIdentityComponent } from '@/util/gitRef'
 import { createGitBaselineReader } from '../infrastructure/gitBaselineReader'
+import {
+  businessTreeSnapshot,
+  businessTreeSnapshotDigest,
+} from '../infrastructure/workspaceValidator'
 
 interface DevelopmentReactionPlan {
   readonly roundRef: string
@@ -192,76 +197,15 @@ const candidateStateSchema = z
   })
   .strict()
 
-const reviewThreadStateSchema = z
-  .object({
-    threadRef: z.string().min(1).max(500),
-    revision: z.string().min(1).max(500),
-    authorClass: z.enum(['human', 'bot', 'self']),
-    resolved: z.boolean(),
-    body: z.string().max(32_000),
-    path: z.string().min(1).max(1_000).nullable(),
-    messages: z
-      .array(
-        z
-          .object({
-            messageRef: z.string().min(1).max(500),
-            parentMessageRef: z.string().min(1).max(500).nullable(),
-            authorClass: z.enum(['human', 'bot', 'self']),
-            body: z.string().max(32_000),
-            path: z.string().min(1).max(1_000).nullable(),
-            createdAt: z.string().nullable(),
-          })
-          .strict(),
-      )
-      .max(500)
-      .default([]),
-  })
-  .strict()
-
-const mergeRequestStateSchema = z
-  .object({
-    status: z.enum(['active', 'merged', 'closed']),
-    mergeRequestRef: z.string().min(1),
-    headSha: z.string().regex(/^[a-f0-9]{40}$/),
-    issueHandlingContextRef: z.string().min(1),
-    readyToMerge: z.boolean(),
-    factsHeadSha: z
-      .string()
-      .regex(/^[a-f0-9]{40}$/)
-      .nullable()
-      .default(null),
-    targetSha: z
-      .string()
-      .regex(/^[a-f0-9]{40}$/)
-      .nullable()
-      .default(null),
-    draft: z.boolean().default(false),
-    mergeableState: z.enum(['mergeable', 'conflict', 'unknown']).default('unknown'),
-    approvalHold: z.boolean().nullable().default(null),
-    unresolvedReviewCount: z.number().int().nonnegative().default(0),
-    reviewThreads: z.array(reviewThreadStateSchema).max(100).default([]),
-    repositoryRef: z.string().nullable().default(null),
-    providerMrRef: z.string().nullable().default(null),
-    sourceBranch: z.string().nullable().default(null),
-    targetBranch: z.string().nullable().default(null),
-    webUrl: z.string().nullable().default(null),
-  })
-  .strict()
-  .superRefine((value, ctx) => {
-    const actionableReviews = (value.reviewThreads ?? []).filter(
-      (thread) => !thread.resolved && thread.authorClass !== 'self',
-    ).length
-    if (value.unresolvedReviewCount !== actionableReviews) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'unresolvedReviewCount does not match actionable reviewThreads',
-      })
-    }
-  })
+type MergeRequestReviewThreadState = z.infer<
+  typeof mergeRequestStateSchema
+>['reviewThreads'][number]
 
 const conflictValidationSchema = z
   .object({
     ok: z.literal(true),
+    changedPaths: z.array(z.string().min(1)).min(1),
+    postBusinessDigest: z.string().regex(/^[a-f0-9]{64}$/),
     conflict: z
       .object({
         workspacePath: z.string().min(1),
@@ -347,6 +291,75 @@ function pendingPipelinePatch(input: {
       failureTypes: [],
     }),
   })
+}
+
+function reconcileStaleReviewSelection(input: {
+  readonly contexts: readonly Context[]
+  readonly liveReviewThreads: readonly MergeRequestReviewThreadState[]
+}): ReturnType<typeof contextPatch>[] {
+  const currentProblemSet = input.contexts.find(
+    (context) => context.typeId === 'development.problem-set',
+  )
+  const currentResolution = input.contexts.find(
+    (context) => context.typeId === 'development.review-resolution',
+  )
+  if (currentProblemSet === undefined || currentResolution === undefined) return []
+  const problemSet = problemSetContextSchema.parse(
+    JSON.parse(currentProblemSet.stateJson) as unknown,
+  )
+  if (problemSet.source !== 'review' || problemSet.status !== 'active') return []
+  const resolution = reviewResolutionContextSchema.parse(
+    JSON.parse(currentResolution.stateJson) as unknown,
+  )
+  const liveActionableRevisions = new Set(
+    input.liveReviewThreads
+      .filter((thread) => !thread.resolved && thread.authorClass !== 'self')
+      .map((thread) => `${thread.threadRef}\u0000${thread.revision}`),
+  )
+  const staleRevisions = new Set(
+    problemSet.problems.flatMap((problem) => {
+      const thread = problem.reviewThread
+      if (thread === null) return []
+      const key = `${thread.threadRef}\u0000${thread.revision}`
+      return liveActionableRevisions.has(key) ? [] : [key]
+    }),
+  )
+  if (staleRevisions.size === 0) return []
+  const nextProblems = problemSet.problems.filter((problem) => {
+    const thread = problem.reviewThread
+    return thread === null || !staleRevisions.has(`${thread.threadRef}\u0000${thread.revision}`)
+  })
+  const noCurrentReviewProblems = nextProblems.length === 0
+  const nextThreads = resolution.threads.filter(
+    (thread) =>
+      thread.acknowledgement !== null ||
+      thread.finalReply !== null ||
+      !staleRevisions.has(`${thread.threadRef}\u0000${thread.revision}`),
+  )
+  return [
+    contextPatch({
+      current: currentResolution,
+      contextTypeId: 'development.review-resolution',
+      state: reviewResolutionContextSchema.parse({
+        ...resolution,
+        status: 'collected',
+        publishedHeadSha: null,
+        commitSha: null,
+        threads: nextThreads,
+      }),
+    }),
+    contextPatch({
+      current: currentProblemSet,
+      contextTypeId: 'development.problem-set',
+      lifecycleState: noCurrentReviewProblems ? 'terminal' : 'active',
+      state: problemSetContextSchema.parse({
+        ...problemSet,
+        status: noCurrentReviewProblems ? 'resolved' : 'active',
+        remainingTypes: noCurrentReviewProblems ? [] : ['review'],
+        problems: nextProblems,
+      }),
+    }),
+  ]
 }
 
 function platformOutput(
@@ -632,6 +645,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       readonly sourceSha: string
       readonly targetSha: string
       readonly conflictPaths: readonly string[]
+      readonly validatedChangedPaths?: readonly string[]
       readonly missionId: string
     }): Promise<
       | { readonly ok: true; readonly mergeCommitSha: string; readonly treeOid: string }
@@ -801,11 +815,18 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
 
       if (plan.workItemRef === 'acknowledge-feedback') {
         const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
+        const currentProblemSet = contexts.find(
+          (context) => context.typeId === 'development.problem-set',
+        )
         const currentResolution = contexts.find(
           (context) => context.typeId === 'development.review-resolution',
         )
-        if (currentMr === undefined || currentResolution === undefined) {
-          return output({ status: 'blocked', summary: '缺少待确认的检视线程上下文' })
+        if (
+          currentMr === undefined ||
+          currentProblemSet === undefined ||
+          currentResolution === undefined
+        ) {
+          return output({ status: 'blocked', summary: '缺少待确认的检视问题或线程上下文' })
         }
         if (input.mrFacts === undefined) {
           return output({ status: 'blocked', summary: 'MR 检视事实采集程序尚未接入平台' })
@@ -819,6 +840,12 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         const resolution = reviewResolutionContextSchema.parse(
           JSON.parse(currentResolution.stateJson) as unknown,
         )
+        const problemSet = problemSetContextSchema.parse(
+          JSON.parse(currentProblemSet.stateJson) as unknown,
+        )
+        if (problemSet.source !== 'review') {
+          return output({ status: 'blocked', summary: '待确认的问题集合不是检视意见' })
+        }
         const live = await input.mrFacts.collect(
           mergeRequest.repositoryRef,
           mergeRequest.providerMrRef,
@@ -830,10 +857,33 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             summary: `确认检视意见前刷新线程失败：${live.code} · ${live.detail}`,
           })
         }
+        if (
+          live.snapshot.state !== 'opened' ||
+          live.snapshot.headSha !== mergeRequest.headSha ||
+          problemSet.headSha !== mergeRequest.headSha ||
+          resolution.sourceHeadSha !== mergeRequest.headSha
+        ) {
+          return output({
+            status: 'needs-input',
+            summary: 'MR head 已在检视分类后变化，等待下一份权威 MR 事实重新分类',
+          })
+        }
+        const liveActionableRevisions = new Set(
+          live.snapshot.reviewThreads
+            .filter((thread) => !thread.resolved && thread.authorClass !== 'self')
+            .map((thread) => `${thread.threadRef}\u0000${thread.revision}`),
+        )
+        const retiredRevisions = new Set<string>()
         const nextThreads = []
+        let replyCount = 0
         for (const thread of resolution.threads) {
           if (thread.acknowledgement !== null || thread.finalReply !== null) {
             nextThreads.push(thread)
+            continue
+          }
+          const revisionKey = `${thread.threadRef}\u0000${thread.revision}`
+          if (!liveActionableRevisions.has(revisionKey)) {
+            retiredRevisions.add(revisionKey)
             continue
           }
           const marker = reviewReplyMarker({
@@ -864,25 +914,57 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               summary: `回复检视意见失败：${replied.code} · ${replied.detail}`,
             })
           }
+          replyCount += 1
           nextThreads.push({
             ...thread,
             acknowledgement: { marker, noteRef: replied.noteRef },
           })
         }
+        const nextProblems = problemSet.problems.filter((problem) => {
+          if (problem.reviewThread === null) return true
+          return !retiredRevisions.has(
+            `${problem.reviewThread.threadRef}\u0000${problem.reviewThread.revision}`,
+          )
+        })
+        const problemSetRetired = nextProblems.length !== problemSet.problems.length
+        const noCurrentReviewProblems = nextProblems.length === 0
+        const nextResolution = reviewResolutionContextSchema.parse({
+          ...resolution,
+          status: nextThreads.length === 0 ? 'collected' : 'acknowledged',
+          publishedHeadSha: nextThreads.length === 0 ? null : resolution.publishedHeadSha,
+          commitSha: nextThreads.length === 0 ? null : resolution.commitSha,
+          threads: nextThreads,
+        })
         return output({
-          summary: `已逐线程确认 ${nextThreads.filter((thread) => thread.finalReply === null).length} 条检视意见`,
+          summary:
+            retiredRevisions.size === 0
+              ? `已逐线程确认 ${nextThreads.filter((thread) => thread.finalReply === null).length} 条检视意见`
+              : noCurrentReviewProblems
+                ? `权威 MR 快照已不再包含 ${retiredRevisions.size} 条待确认检视意见，已自动淘汰并继续观察 MR`
+                : `已淘汰 ${retiredRevisions.size} 条失效检视意见，并确认其余 ${replyCount} 条`,
           contextPatches: [
             contextPatch({
               current: currentResolution,
               contextTypeId: 'development.review-resolution',
-              state: reviewResolutionContextSchema.parse({
-                ...resolution,
-                status: 'acknowledged',
-                threads: nextThreads,
-              }),
+              state: nextResolution,
             }),
+            ...(problemSetRetired
+              ? [
+                  contextPatch({
+                    current: currentProblemSet,
+                    contextTypeId: 'development.problem-set',
+                    lifecycleState: noCurrentReviewProblems ? 'terminal' : 'active',
+                    state: problemSetContextSchema.parse({
+                      ...problemSet,
+                      status: noCurrentReviewProblems ? 'resolved' : 'active',
+                      remainingTypes: noCurrentReviewProblems ? [] : ['review'],
+                      problems: nextProblems,
+                    }),
+                  }),
+                ]
+              : []),
           ],
-          effectSuggestions: ['code-host.merge-request.reply'],
+          effectSuggestions: replyCount > 0 ? ['code-host.merge-request.reply'] : [],
         })
       }
 
@@ -1470,7 +1552,10 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
                 ? 'merged'
                 : 'closed',
           mergeRequestRef: `${issue.state.repositoryRef}!${ensured.mr.mrRef}`,
-          headSha: ensured.mr.sourceSha ?? committed.commitSha,
+          // The successful CAS push is the authority for the revision published
+          // by this work item. An existing MR response may still expose its
+          // pre-push source SHA while the provider converges.
+          headSha: committed.commitSha,
           issueHandlingContextRef: issue.context.id,
           readyToMerge: false,
           factsHeadSha: null,
@@ -1557,8 +1642,18 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         ) {
           return output({ status: 'blocked', summary: 'MR 头已变化，冲突修复现场必须重新生成' })
         }
+        if (
+          businessTreeSnapshotDigest(businessTreeSnapshot(conflict.workspacePath)) !==
+          validation.data.postBusinessDigest
+        ) {
+          return output({
+            status: 'blocked',
+            summary: '冲突修复现场在平台校验后发生变化，必须重新生成',
+          })
+        }
         const finished = await input.conflictMerge.finish({
           ...conflict,
+          validatedChangedPaths: validation.data.changedPaths,
           missionId: plan.caseRef.id,
         })
         if (!finished.ok) {
@@ -1763,6 +1858,8 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           headSha: nextHead,
           factsHeadSha: factsSnapshot === null ? state.factsHeadSha : factsSnapshot.headSha,
           targetSha: factsSnapshot === null ? state.targetSha : factsSnapshot.targetSha,
+          mergedCommitSha:
+            factsSnapshot === null ? state.mergedCommitSha : factsSnapshot.mergedCommitSha,
           draft: factsSnapshot?.draft ?? state.draft,
           mergeableState: factsSnapshot?.mergeableState ?? state.mergeableState,
           approvalHold: factsSnapshot === null ? state.approvalHold : factsSnapshot.approvalHold,
@@ -1775,6 +1872,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               ? state.reviewThreads
               : factsSnapshot.reviewThreads,
           readyToMerge:
+            observedState === 'opened' &&
             nextHead === state.headSha &&
             (!targetAwarePipeline ||
               factsSnapshot === null ||
@@ -1799,10 +1897,22 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           headSha: next.headSha,
           targetSha: targetAwarePipeline ? next.targetSha : null,
         })
+        const reviewReconciliationPatches =
+          factsSnapshot?.headSha === null || factsSnapshot === null
+            ? []
+            : reconcileStaleReviewSelection({
+                contexts,
+                liveReviewThreads: factsSnapshot.reviewThreads.map((thread) => ({
+                  ...thread,
+                  messages: thread.messages.map((message) => ({ ...message })),
+                })),
+              })
         return output({
           summary:
             next.status === 'active'
-              ? 'MR 仍在看护中，等待新的检视或门禁事件'
+              ? reviewReconciliationPatches.length > 0
+                ? 'MR 仍在看护中；已按权威快照自动淘汰失效检视事实'
+                : 'MR 仍在看护中，等待新的检视或门禁事件'
               : next.status === 'merged'
                 ? 'MR 已由 committer 合入'
                 : 'MR 已关闭',
@@ -1814,6 +1924,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               state: next,
             }),
             ...(pipelinePatch === null ? [] : [pipelinePatch]),
+            ...reviewReconciliationPatches,
           ],
         })
       }

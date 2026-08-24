@@ -15,6 +15,7 @@ import {
   employeeCases,
   employeeChangeCandidates,
   employeeReactionRounds,
+  employeeRoundWorkspaceStates,
 } from '@/db/schema'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
@@ -320,6 +321,125 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         settledAt: 20,
       })
       .run()
+
+    writeFileSync(join(fresh.workspacePath, 'src', 'feature.ts'), 'export const feature = 999\n')
+
+    // A provider fact may preempt prepare-change after a completed Agent round.
+    // Replaying the same action sees the already validated Case delta in its
+    // initial snapshot and must be able to carry that exact unpublished delta
+    // forward without forcing the Agent to manufacture an unrelated edit.
+    const recoveryPlan = plan({
+      roundRef: 'round-analyze-recovery',
+      caseRef: 'case-1',
+      workItemRef: 'analyze-implement',
+      contexts: [issueContext],
+      workspacePolicy: writePolicy,
+    })
+    db.insert(employeeReactionRounds)
+      .values({
+        id: 'round-analyze-recovery',
+        caseId: 'case-1',
+        caseRevision: 2,
+        inboxId: null,
+        employeeId: 'employee-1',
+        employeeRevision: 1,
+        ruleId: 'continue-analyze-recovery',
+        workItemRef: 'analyze-implement',
+        workContractId: 'development.analyze-implement',
+        workContractVersion: 1,
+        toolId: null,
+        toolRevision: null,
+        executionPolicyRevision: 1,
+        inputContextRefsJson: '[]',
+        planJson: JSON.stringify(recoveryPlan),
+        state: 'running',
+        executionRef: 'task-recovery',
+        outputJson: null,
+        attemptOrdinal: 0,
+        createdAt: 21,
+        updatedAt: 21,
+        settledAt: null,
+      })
+      .run()
+    expect(
+      await workspace.prepare({
+        planJson: JSON.stringify(recoveryPlan),
+        attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null }),
+      }),
+    ).toMatchObject({ kind: 'repository' })
+    expect(
+      await workspace.validate({
+        roundRef: 'round-analyze-recovery',
+        taskStatus: 'done',
+        outputJson: JSON.stringify({ status: 'ok' }),
+      }),
+    ).toMatchObject({
+      ok: false,
+      errorClass: 'semantic',
+      errorCode: 'workspace-semantic-outcome-workspace-mismatch',
+    })
+    db.update(employeeReactionRounds)
+      .set({ state: 'failed', settledAt: 22, updatedAt: 22 })
+      .where(eq(employeeReactionRounds.id, 'round-analyze-recovery'))
+      .run()
+    writeFileSync(join(fresh.workspacePath, 'src', 'feature.ts'), 'export const feature = 2\n')
+    const exactRecoveryPlan = {
+      ...recoveryPlan,
+      roundRef: 'round-analyze-recovery-exact',
+    }
+    const failedRecoveryRound = db
+      .select()
+      .from(employeeReactionRounds)
+      .where(eq(employeeReactionRounds.id, 'round-analyze-recovery'))
+      .get()!
+    db.insert(employeeReactionRounds)
+      .values({
+        ...failedRecoveryRound,
+        id: exactRecoveryPlan.roundRef,
+        planJson: JSON.stringify(exactRecoveryPlan),
+        state: 'running',
+        executionRef: 'task-recovery-exact',
+        outputJson: null,
+        createdAt: 23,
+        updatedAt: 23,
+        settledAt: null,
+      })
+      .run()
+    expect(
+      await workspace.prepare({
+        planJson: JSON.stringify(exactRecoveryPlan),
+        attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null }),
+      }),
+    ).toMatchObject({ kind: 'repository' })
+    expect(
+      await workspace.validate({
+        roundRef: exactRecoveryPlan.roundRef,
+        taskStatus: 'done',
+        outputJson: JSON.stringify({ status: 'ok' }),
+      }),
+    ).toEqual({ ok: true })
+    expect(
+      JSON.parse(
+        db
+          .select({ validationJson: employeeRoundWorkspaceStates.validationJson })
+          .from(employeeRoundWorkspaceStates)
+          .where(eq(employeeRoundWorkspaceStates.roundId, exactRecoveryPlan.roundRef))
+          .get()!.validationJson!,
+      ),
+    ).toEqual({
+      ok: true,
+      kind: 'changed',
+      changedPaths: ['config/editable-same.txt', 'src/feature.ts'],
+      postBusinessDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })
+    db.update(employeeReactionRounds)
+      .set({
+        state: 'completed',
+        outputJson: JSON.stringify({ status: 'ok', summary: 'Carry validated feature change' }),
+        settledAt: 24,
+      })
+      .where(eq(employeeReactionRounds.id, exactRecoveryPlan.roundRef))
+      .run()
     const deliveryIssueContext = {
       ...issueContext,
       revision: 2,
@@ -369,10 +489,14 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       })
       .run()
     let ensureCalls = 0
+    let replyCalls = 0
     let approvalSubmits = 0
     let approvalObserves = 0
     let observedHead: string | null = null
     let observedTargetSha: string | null = null
+    let observedMergeableState: 'mergeable' | 'conflict' = 'mergeable'
+    let observedState: 'opened' | 'merged' | 'closed' = 'opened'
+    let observedMergedCommitSha: string | null = null
     const platform = composeDevelopmentEmployeePlatformWorkItems({
       reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
@@ -386,6 +510,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       repoRemote: { resolve: () => ({ remoteUrl: remoteRepo, defaultBranch: 'main' }) },
       mrEffects: {
         async reply() {
+          replyCalls += 1
           return { ok: true as const, noteRef: 'note-1' }
         },
         async ensure() {
@@ -396,8 +521,9 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
               mrRef: '42',
               webUrl: 'https://code.example/mr/42',
               state: 'opened',
-              sourceSha: null,
-              created: true,
+              // An existing provider MR may still return its pre-push head.
+              sourceSha: baselineSha,
+              created: false,
             },
           }
         },
@@ -405,7 +531,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
           return {
             ok: true,
             observation: {
-              state: 'opened',
+              state: observedState,
               sourceSha: observedHead,
               targetBranch: 'main',
               webUrl: 'https://code.example/mr/42',
@@ -418,14 +544,14 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
           return {
             ok: true as const,
             snapshot: {
-              state: 'opened' as const,
+              state: observedState,
               headSha: observedHead,
               targetSha: observedTargetSha,
               targetBranch: 'main',
               draft: false,
-              mergeableState: 'mergeable' as const,
+              mergeableState: observedMergeableState,
               approvalHold: false,
-              mergedCommitSha: null,
+              mergedCommitSha: observedMergedCommitSha,
               unresolvedReviewCount: 0,
               reviewThreads: [],
             },
@@ -663,6 +789,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const branch = 'agent-workflow/employee/case-1'
     const publishedSha = git(remoteRepo, 'rev-parse', `refs/heads/${branch}`)
     expect(publishedSha).toMatch(/^[a-f0-9]{40}$/)
+    expect(mrState.headSha).toBe(publishedSha)
     expect(git(remoteRepo, 'show', `${publishedSha}:src/feature.ts`)).toBe(
       'export const feature = 2',
     )
@@ -674,6 +801,143 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     expect(git(remoteRepo, 'show', `${publishedSha}:config/editable-same.txt`)).toBe(
       'same upload edited by agent',
     )
+
+    const staleReviewThread = {
+      threadRef: 'system-discussion',
+      revision: '1:14',
+      authorClass: 'human',
+      resolved: false,
+      body: 'added 1 commit',
+      path: null,
+      messages: [],
+    }
+    const staleProblemContext = {
+      id: 'problem-stale-system-note',
+      revision: 1,
+      typeId: 'development.problem-set',
+      stateJson: JSON.stringify({
+        status: 'active',
+        source: 'review',
+        headSha: publishedSha,
+        remainingTypes: ['review'],
+        problems: [
+          {
+            problemId: staleReviewThread.threadRef,
+            type: 'review',
+            summary: staleReviewThread.body,
+            evidenceArtifactRefs: [],
+            reviewThread: staleReviewThread,
+          },
+        ],
+      }),
+    }
+    const staleResolutionContext = {
+      id: 'resolution-stale-system-note',
+      revision: 1,
+      typeId: 'development.review-resolution',
+      stateJson: JSON.stringify({
+        status: 'collected',
+        mergeRequestRef: 'repo-1!42',
+        sourceHeadSha: publishedSha,
+        publishedHeadSha: null,
+        commitSha: null,
+        threads: [
+          {
+            threadRef: staleReviewThread.threadRef,
+            revision: staleReviewThread.revision,
+            acknowledgement: null,
+            disposition: null,
+            replyBody: null,
+            finalReply: null,
+          },
+        ],
+      }),
+    }
+    const staleAcknowledgePlan = plan({
+      roundRef: 'round-acknowledge-stale-system-note',
+      caseRef: 'case-1',
+      workItemRef: 'acknowledge-feedback',
+      contexts: [
+        { ...mrPatch, id: 'mr-context', revision: 1, typeId: mrPatch.contextTypeId },
+        staleProblemContext,
+        staleResolutionContext,
+      ],
+      allowedEffectKinds: ['code-host.merge-request.reply'],
+    })
+    observedHead = 'f'.repeat(40)
+    expect(JSON.parse(await platform.execute(staleAcknowledgePlan))).toMatchObject({
+      status: 'needs-input',
+      summary: expect.stringContaining('MR head'),
+    })
+    expect(replyCalls).toBe(0)
+    observedHead = publishedSha
+    const reconciledReview = JSON.parse(await platform.execute(staleAcknowledgePlan)) as {
+      status: string
+      contextPatches: Array<{ contextTypeId: string; lifecycleState: string; stateJson: string }>
+      effectSuggestions: string[]
+    }
+    expect(reconciledReview.status).toBe('ok')
+    expect(replyCalls).toBe(0)
+    expect(reconciledReview.effectSuggestions).toEqual([])
+    expect(
+      JSON.parse(
+        reconciledReview.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.review-resolution',
+        )!.stateJson,
+      ),
+    ).toMatchObject({ status: 'collected', threads: [] })
+    const retiredProblemPatch = reconciledReview.contextPatches.find(
+      (patch) => patch.contextTypeId === 'development.problem-set',
+    )!
+    expect(retiredProblemPatch.lifecycleState).toBe('terminal')
+    expect(JSON.parse(retiredProblemPatch.stateJson)).toMatchObject({
+      status: 'resolved',
+      remainingTypes: [],
+      problems: [],
+    })
+
+    // An upgraded blocked Case may resume at observe-mr instead of replaying
+    // acknowledge-feedback. The observation boundary must reconcile the same
+    // stale provider fact so old persisted Contexts heal without manual edits.
+    observedHead = publishedSha
+    const observedReviewReconciliation = JSON.parse(
+      await platform.execute(
+        plan({
+          roundRef: 'round-observe-stale-system-note',
+          caseRef: 'case-1',
+          workItemRef: 'observe-mr',
+          contexts: [
+            { ...mrPatch, id: 'mr-context', revision: 1, typeId: mrPatch.contextTypeId },
+            {
+              ...initialPipelinePatch,
+              id: 'pipeline-context',
+              revision: 1,
+              typeId: initialPipelinePatch.contextTypeId,
+            },
+            staleProblemContext,
+            staleResolutionContext,
+          ],
+        }),
+      ),
+    ) as {
+      summary: string
+      contextPatches: Array<{ contextTypeId: string; lifecycleState: string; stateJson: string }>
+    }
+    expect(observedReviewReconciliation.summary).toContain('自动淘汰失效检视事实')
+    expect(
+      JSON.parse(
+        observedReviewReconciliation.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.review-resolution',
+        )!.stateJson,
+      ),
+    ).toMatchObject({ status: 'collected', threads: [] })
+    expect(
+      JSON.parse(
+        observedReviewReconciliation.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.problem-set',
+        )!.stateJson,
+      ),
+    ).toMatchObject({ status: 'resolved', remainingTypes: [], problems: [] })
 
     // A later target-branch change conflicts with the employee's source head.
     // The OS must give the Agent a real marker scene, then platform code alone
@@ -694,6 +958,33 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     )
     const targetSha = git(baselineRepo, 'rev-parse', 'HEAD')
     git(baselineRepo, 'push', '-q', remoteRepo, 'HEAD:refs/heads/main')
+    observedHead = publishedSha
+    observedTargetSha = baselineSha
+    observedMergeableState = 'conflict'
+    const staleTargetObservation = JSON.parse(
+      await platform.execute(
+        plan({
+          roundRef: 'round-observe-target-race',
+          caseRef: 'case-1',
+          workItemRef: 'observe-mr',
+          contexts: [
+            { ...mrPatch, id: 'mr-context', revision: 1, typeId: mrPatch.contextTypeId },
+            {
+              ...initialPipelinePatch,
+              id: 'pipeline-context',
+              revision: 1,
+              typeId: initialPipelinePatch.contextTypeId,
+            },
+          ],
+        }),
+      ),
+    ) as { status: string; summary: string; contextPatches: unknown[] }
+    expect(staleTargetObservation).toMatchObject({
+      status: 'needs-input',
+      summary: expect.stringContaining('MR target 在事实读取与 Git 获取之间已前进'),
+      contextPatches: [],
+    })
+    observedTargetSha = targetSha
     const readyMrContext = {
       id: 'mr-ready-context',
       revision: 1,
@@ -856,6 +1147,21 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       attemptJson: JSON.stringify({ ordinal: 1, mode: 'fresh-scene', previousError: 'retry' }),
     })
     expect(replayedFreshConflictScene).toMatchObject({
+      kind: 'repository',
+      workspacePath: freshConflictScene.workspacePath,
+    })
+    // A semantic retry after a fresh scene must keep the newest scene. Falling
+    // back to attempt 0 resurrects an already rejected workspace and can carry
+    // its out-of-contract edits into every later retry.
+    const sameSceneAfterFresh = await workspace.prepare({
+      planJson: JSON.stringify(repairConflictPlan),
+      attemptJson: JSON.stringify({
+        ordinal: 2,
+        mode: 'same-scene',
+        previousError: 'semantic inspection retry',
+      }),
+    })
+    expect(sameSceneAfterFresh).toMatchObject({
       kind: 'repository',
       workspacePath: freshConflictScene.workspacePath,
     })
@@ -1063,6 +1369,44 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         .where(eq(employeeCaseWorkspaces.caseId, 'case-1'))
         .get(),
     ).toEqual({ baselineSha: externalSha, remoteHeadSha: externalSha })
+
+    const observedMrPatch = observedOutput.contextPatches.find(
+      (patch) => patch.contextTypeId === 'development.merge-request',
+    )!
+    const providerMergeCommitSha = 'd'.repeat(40)
+    observedState = 'merged'
+    observedTargetSha = providerMergeCommitSha
+    observedMergedCommitSha = providerMergeCommitSha
+    const terminalObservation = JSON.parse(
+      await platform.execute(
+        plan({
+          roundRef: 'round-observe-terminal-merge',
+          caseRef: 'case-1',
+          workItemRef: 'wait-merge',
+          contexts: [
+            {
+              ...observedMrPatch,
+              id: 'mr-context',
+              revision: 4,
+              typeId: observedMrPatch.contextTypeId,
+            },
+          ],
+        }),
+      ),
+    ) as {
+      contextPatches: Array<{ contextTypeId: string; lifecycleState: string; stateJson: string }>
+    }
+    const terminalMrPatch = terminalObservation.contextPatches.find(
+      (patch) => patch.contextTypeId === 'development.merge-request',
+    )!
+    expect(terminalMrPatch.lifecycleState).toBe('terminal')
+    expect(JSON.parse(terminalMrPatch.stateJson)).toMatchObject({
+      status: 'merged',
+      headSha: externalSha,
+      targetSha: providerMergeCommitSha,
+      mergedCommitSha: providerMergeCommitSha,
+      readyToMerge: false,
+    })
     expect(baselineSha).not.toBe(publishedSha)
   })
 })

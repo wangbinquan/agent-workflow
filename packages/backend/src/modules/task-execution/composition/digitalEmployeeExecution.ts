@@ -180,7 +180,9 @@ export function buildDigitalEmployeeFixedPrompt(
             'Only modify business files required by this action.',
           ]
         : [
-            'Do not run git, commit, push, merge, approve, call a code host, or choose the next action.',
+            'Use read-only repository and Git inspection when it is useful for this action.',
+            'Do not run Git commands that mutate the worktree or metadata, including add, commit, push, merge, rebase, reset, or checkout.',
+            'Do not approve, call a code host, or choose the next action.',
             'Only modify business files allowed by the supplied workspace contract.',
           ],
     previousError: attempt.previousError,

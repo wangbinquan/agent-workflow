@@ -79,6 +79,17 @@ function handleGitlab(input: Parameters<typeof handleCodeHostApi>[0] & { path: s
   if (/^\/pipelines\/\d+\/jobs$/.test(rest))
     return json(input.response, [{ id: 601, name: 'system-mock-job', status: 'failed' }])
   if (/^\/jobs\/\d+\/trace$/.test(rest)) return text(input.response, 'system mock job log\n')
+  const branchMatch = /^\/repository\/branches\/(.+)$/.exec(rest)
+  if (branchMatch !== null && input.request.method === 'GET') {
+    const branch = decodeURIComponent(branchMatch[1]!)
+    if (branch !== project.defaultBranch && branch !== project.headBranch)
+      return notFound(input.response)
+    const sha = branch === project.defaultBranch ? project.baseSha : project.headSha
+    return json(input.response, {
+      name: branch,
+      commit: { id: sha, short_id: sha.slice(0, 8) },
+    })
+  }
   const fileMatch = /^\/repository\/files\/(.+)\/raw$/.exec(rest)
   if (fileMatch !== null) {
     const content = project.headFiles[decodeURIComponent(fileMatch[1]!)]

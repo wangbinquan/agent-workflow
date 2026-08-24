@@ -3,9 +3,10 @@
 //
 // §10.1「事实优先于事件」：webhook 只是 wake hint，reconciler 主动取得同一个
 // logical snapshot——head/target、draft/terminal/mergeability、approval holds、
-// thread revisions。采集是三读 fence：mr.get（head₁）→ threads/approvals →
-// mr.get（head₂）；两读之间 head 变化即整组丢弃（`mr-facts-head-race`），调用
-// 方重采，不缝合跨 head 的两半事实。读不到的面（approvals 无权限/字段缺失）
+// thread revisions。采集同时 fence source 与 target：mr.get + target branch（h₁/t₁）
+// → threads/approvals → mr.get + target branch（h₂/t₂）；两读之间任一分支变化即
+// 整组丢弃（`mr-facts-head-race` / `mr-facts-target-race`），调用方重采，不缝合
+// 跨 revision 的两半事实。读不到的面（approvals 无权限/字段缺失）
 // 一律 null/unknown——**不伪造**，规则侧按 indeterminate 语义处置。
 //
 // reply（§10.2/§8.3）：平台**只回复，绝不 resolve**——本文件不出现任何
@@ -62,7 +63,11 @@ export type MrFactsResult =
   | { readonly ok: true; readonly snapshot: MrFactsSnapshot }
   | {
       readonly ok: false
-      readonly code: 'mr-facts-lookup-failed' | 'mr-facts-head-race' | 'mr-facts-threads-truncated'
+      readonly code:
+        | 'mr-facts-lookup-failed'
+        | 'mr-facts-head-race'
+        | 'mr-facts-target-race'
+        | 'mr-facts-threads-truncated'
       readonly detail: string
     }
 
@@ -92,10 +97,17 @@ interface GitlabMrDetail {
   readonly merged_at?: string | null
 }
 
+interface GitlabBranchDetail {
+  readonly name?: string
+  readonly commit?: { readonly id?: string }
+}
+
 interface GitlabNote {
   readonly id: number
   readonly body?: string
   readonly author?: RawUser
+  /** Provider-generated timeline notes (pushes, title changes, etc.) are not review feedback. */
+  readonly system?: boolean
   readonly resolved?: boolean
   readonly position?: { readonly new_path?: string } | null
   readonly created_at?: string
@@ -224,6 +236,43 @@ function headOf(detail: {
   return detail.gitlab?.sha ?? detail.github?.head?.sha ?? null
 }
 
+async function targetOf(
+  deps: MrEnsureConnectionDeps,
+  detail: { readonly gitlab?: GitlabMrDetail; readonly github?: GithubPrDetail },
+): Promise<
+  | { readonly ok: true; readonly branch: string | null; readonly sha: string | null }
+  | { readonly ok: false; readonly detail: string }
+> {
+  if (deps.provider === 'github') {
+    return {
+      ok: true,
+      branch: detail.github?.base?.ref ?? null,
+      sha: detail.github?.base?.sha ?? null,
+    }
+  }
+  const branch = detail.gitlab?.target_branch ?? null
+  if (branch === null) return { ok: true, branch: null, sha: null }
+  const got = await executeCodeHostCall(
+    {
+      provider: 'gitlab',
+      action: 'custom',
+      params: {},
+      request: {
+        method: 'GET',
+        path: `/projects/${deps.project}/repository/branches/${encodeURIComponent(branch)}`,
+      },
+    },
+    callDeps(deps),
+  )
+  if (!got.ok) return { ok: false, detail: `${got.code}: ${got.summary}` }
+  const parsed = parseJson<GitlabBranchDetail>(got.body)
+  const sha = parsed?.commit?.id
+  if (sha === undefined || !/^[a-f0-9]{40}$/.test(sha)) {
+    return { ok: false, detail: 'target branch lookup returned no exact commit id' }
+  }
+  return { ok: true, branch, sha }
+}
+
 async function collectThreads(
   deps: MrEnsureConnectionDeps,
   mrRef: string,
@@ -269,9 +318,17 @@ async function collectThreads(
       }
     }
     const threads = discussions
-      .filter((d) => (d.notes?.length ?? 0) > 0)
-      .map((d) => {
-        const notes = d.notes!
+      .map((discussion) => ({
+        discussion,
+        // GitLab exposes timeline entries such as "added 1 commit" through the
+        // discussions endpoint as individual system notes. They are neither
+        // actionable review feedback nor replyable discussion threads; treating
+        // them as human feedback creates a repair loop and POST /discussions/:id
+        // /notes fails with HTTP 400.
+        notes: (discussion.notes ?? []).filter((note) => note.system !== true),
+      }))
+      .filter(({ notes }) => notes.length > 0)
+      .map(({ discussion, notes }) => {
         const rootRef = String(notes[0]!.id)
         const messages = notes.map((note, index) => ({
           messageRef: String(note.id),
@@ -289,7 +346,7 @@ async function collectThreads(
         }))
         const summary = summarizeThreadMessages(messages)
         return {
-          threadRef: d.id,
+          threadRef: discussion.id,
           ...summary,
           resolved: notes.every((n) => n.resolved === true),
           messages,
@@ -387,6 +444,10 @@ export async function collectMergeRequestFacts(
   const first = await fetchMrDetail(deps, mrRef)
   if (!first.ok) return { ok: false, code: 'mr-facts-lookup-failed', detail: first.detail }
   const head1 = headOf(first)
+  const target1 = await targetOf(deps, first)
+  if (!target1.ok) {
+    return { ok: false, code: 'mr-facts-lookup-failed', detail: target1.detail }
+  }
 
   const verifiedPlatformLogin =
     options.selfMarker !== undefined || options.trustPlatformSelfMarkers === true
@@ -412,11 +473,22 @@ export async function collectMergeRequestFacts(
   const second = await fetchMrDetail(deps, mrRef)
   if (!second.ok) return { ok: false, code: 'mr-facts-lookup-failed', detail: second.detail }
   const head2 = headOf(second)
+  const target2 = await targetOf(deps, second)
+  if (!target2.ok) {
+    return { ok: false, code: 'mr-facts-lookup-failed', detail: target2.detail }
+  }
   if (head1 !== head2) {
     return {
       ok: false,
       code: 'mr-facts-head-race',
       detail: `head moved during collection (${head1 ?? 'none'} -> ${head2 ?? 'none'})`,
+    }
+  }
+  if (target1.branch !== target2.branch || target1.sha !== target2.sha) {
+    return {
+      ok: false,
+      code: 'mr-facts-target-race',
+      detail: `target moved during collection (${target1.branch ?? 'none'}@${target1.sha ?? 'none'} -> ${target2.branch ?? 'none'}@${target2.sha ?? 'none'})`,
     }
   }
 
@@ -426,8 +498,8 @@ export async function collectMergeRequestFacts(
   const snapshot: MrFactsSnapshot = {
     mrRef,
     headSha: head1,
-    targetSha: gitlab?.diff_refs?.base_sha ?? github?.base?.sha ?? null,
-    targetBranch: gitlab?.target_branch ?? github?.base?.ref ?? null,
+    targetSha: target1.sha,
+    targetBranch: target1.branch,
     state: normalizedState({
       provider: deps.provider,
       rawState,

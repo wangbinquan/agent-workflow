@@ -149,6 +149,13 @@ function porcelainPaths(line: string): string[] {
 export async function inspectConflictMerge(input: {
   readonly workspacePath: string
   readonly conflictPaths: readonly string[]
+  /**
+   * Platform-authoritative delta relative to the prepared merge scene. When
+   * present, this is stronger than `git status`: checkpoint materialization
+   * intentionally flattens the merge index, so status also lists untouched
+   * automatic merge results as working-tree changes relative to source HEAD.
+   */
+  readonly validatedChangedPaths?: readonly string[]
   readonly runGit?: RepositoryGit
 }): Promise<InspectConflictMergeResult> {
   const runGit = input.runGit ?? defaultRunGit
@@ -171,6 +178,20 @@ export async function inspectConflictMerge(input: {
   }
 
   const allowed = new Set(input.conflictPaths)
+  if (input.validatedChangedPaths !== undefined) {
+    const extras = input.validatedChangedPaths.filter((path) => !allowed.has(path))
+    if (extras.length > 0) {
+      return {
+        ok: false,
+        code: 'conflict-extra-changes',
+        detail: `workspace has validated changes outside the conflict set: ${[...new Set(extras)]
+          .sort()
+          .join(', ')}`,
+      }
+    }
+    return { ok: true }
+  }
+
   const status = await runGit(input.workspacePath, ['status', '--porcelain'])
   if (status.exitCode !== 0) {
     return { ok: false, code: 'finish-failed', detail: status.stderr.slice(0, 300) }
@@ -200,14 +221,17 @@ export function discardConflictMergeWorkspace(input: { readonly workspacePath: s
 
 /**
  * 收口：冲突集必须全部解决（残留 U 即拒），且工作区除冲突集外不得有任何
- * 其它改动（Agent 顺手改的文件如实拒绝，绝不顺手收编）。通过后只 add 冲突集、
- * 以平台身份产 merge commit（MERGE_HEAD 已在，两 parent = source/target）。
+ * 其它改动（Agent 顺手改的文件如实拒绝，绝不顺手收编）。通过后以平台身份产
+ * merge commit（MERGE_HEAD 已在，两 parent = source/target）。当调用方提供了
+ * 平台验证过的 delta 时，重建整个 merge index，确保现场物化时被扁平化的自动
+ * 合并结果也进入 merge commit；否则保留旧接口的仅 add 冲突集行为。
  */
 export async function finishConflictMerge(input: {
   readonly workspacePath: string
   readonly sourceSha: string
   readonly targetSha: string
   readonly conflictPaths: readonly string[]
+  readonly validatedChangedPaths?: readonly string[]
   readonly missionId: string
   readonly runGit?: RepositoryGit
 }): Promise<FinishConflictMergeResult> {
@@ -240,12 +264,19 @@ export async function finishConflictMerge(input: {
   const inspected = await inspectConflictMerge({
     workspacePath: ws,
     conflictPaths: input.conflictPaths,
+    validatedChangedPaths: input.validatedChangedPaths,
     runGit,
   })
   if (!inspected.ok) return inspected
 
-  if (input.conflictPaths.length > 0) {
-    const add = await runGit(ws, ['add', '--', ...input.conflictPaths])
+  const stageArgs =
+    input.validatedChangedPaths !== undefined
+      ? ['add', '-A', '--', '.']
+      : input.conflictPaths.length > 0
+        ? ['add', '--', ...input.conflictPaths]
+        : null
+  if (stageArgs !== null) {
+    const add = await runGit(ws, stageArgs)
     if (add.exitCode !== 0) {
       return { ok: false, code: 'finish-failed', detail: add.stderr.slice(0, 300) }
     }

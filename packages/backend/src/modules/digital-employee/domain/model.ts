@@ -551,6 +551,8 @@ const reactionRuleSchema = z
     priority: z.number().int().min(0).max(100_000),
     preemptsContinuation: z.boolean(),
     requiredContextTypes: z.array(machineIdSchema).min(1).max(20),
+    /** Existing Contexts to freeze when present without making the reaction unavailable. */
+    optionalContextTypes: z.array(machineIdSchema).max(20).default([]),
     /**
      * The employee capability whose publication enables this event reaction.
      * It can differ from workItemRef when an external event must first enter a
@@ -1500,11 +1502,15 @@ export function validateTypePackage(
         detail: rule.eventTypeId,
       })
     }
-    for (const context of rule.requiredContextTypes) {
-      if (!contexts.has(context)) {
+    for (const [kind, contextTypes] of [
+      ['requiredContextTypes', rule.requiredContextTypes],
+      ['optionalContextTypes', rule.optionalContextTypes],
+    ] as const) {
+      for (const context of contextTypes) {
+        if (contexts.has(context)) continue
         violations.push({
           code: 'unknown-context-type',
-          at: `reactionRules.${rule.ruleId}.requiredContextTypes`,
+          at: `reactionRules.${rule.ruleId}.${kind}`,
           detail: context,
         })
       }

@@ -2,9 +2,19 @@ import { extractTemplateRefs } from '@agent-workflow/shared'
 import { z } from 'zod'
 
 import { ValidationError } from '@/util/errors'
-import { eventExactRefSchema, machineIdSchema } from './model'
+import { eventExactRefSchema } from './model'
 
 const templateText = z.string().max(64 * 1024)
+
+// Response targets carry field refs declared by the selected resource. These
+// refs are form identifiers (for example `repositoryId`), not Event Center
+// machine ids. Keep the wire boundary source-neutral while accepting the
+// identifier grammar used by public authoring contracts.
+const targetFieldRefSchema = z
+  .string()
+  .min(1)
+  .max(160)
+  .regex(/^[a-z][a-zA-Z0-9]*(?:[._-][a-zA-Z0-9]+)*$/)
 
 export const eventResponseTargetSchema = z.discriminatedUnion('kind', [
   z
@@ -40,7 +50,7 @@ export const eventResponseTargetSchema = z.discriminatedUnion('kind', [
       kind: z.literal('digital-employee'),
       refId: z.string().min(1).max(200),
       intakeKind: z.enum(['body', 'external-id']),
-      target: z.record(machineIdSchema, templateText),
+      target: z.record(targetFieldRefSchema, templateText),
       valueTemplate: z
         .string()
         .min(1)

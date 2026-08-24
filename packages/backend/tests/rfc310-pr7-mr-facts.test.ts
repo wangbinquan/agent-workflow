@@ -1,7 +1,8 @@
 // RFC-310 PR-7 T72/T75 —— MR facts snapshot collector 与 feedback reply。
 //
-// 锁：①同 snapshot 三读 fence——两次 mr.get 之间 head 变化即 `mr-facts-head-race`
-// 整组丢弃（不缝合跨 head 的两半事实）；②threads 采集与 authorClass 三分类
+// 锁：①同 snapshot source/target 双 fence——两次读取之间任一分支变化即
+// `mr-facts-head-race` / `mr-facts-target-race`，整组丢弃（不缝合跨 revision 的
+// 两半事实）；GitLab target 取 Branch API 的当前 tip，绝不误用 diff merge-base；②threads 采集与 authorClass 三分类
 // （human / bot 后缀 / self-marker），业务 revision 只随外部 note 追加而变；③读不到的面
 // 不伪造——mock 自 PR-12 起如实暴露 provider 的 merge status（种子分支无冲突 ⇒
 // mergeableState='mergeable'），但**不**暴露 approvals，于是 approvalHold 仍是
@@ -105,7 +106,32 @@ for (const provider of ['gitlab', 'github'] as const) {
         actor: { username: 'ci-bot' },
       })
 
-      const deps = connectionFor(provider, projectPath)
+      const deps = connectionFor(
+        provider,
+        projectPath,
+        provider === 'gitlab'
+          ? async (url, init) => {
+              const response = await fetch(url as string, init)
+              const path =
+                typeof url === 'string' ? url : url instanceof URL ? url.pathname : url.url
+              if (init?.method !== 'POST' && /merge_requests\/\d+$/.test(String(path))) {
+                const detail = (await response.json()) as Record<string, unknown>
+                return new Response(
+                  JSON.stringify({
+                    ...detail,
+                    // GitLab documents this as the merge base, not target tip.
+                    diff_refs: {
+                      ...(detail.diff_refs as Record<string, unknown>),
+                      base_sha: 'f'.repeat(40),
+                    },
+                  }),
+                  { status: response.status, headers: response.headers },
+                )
+              }
+              return response
+            }
+          : undefined,
+      )
       const first = await collectMergeRequestFacts(deps, mrRef, { selfMarker: 'm-777' })
       expect(first.ok).toBe(true)
       if (!first.ok) return
@@ -204,9 +230,80 @@ for (const provider of ['gitlab', 'github'] as const) {
       })
       const raced = await collectMergeRequestFacts(racingDeps, mrRef, { selfMarker: 'm-777' })
       expect(raced).toMatchObject({ ok: false, code: 'mr-facts-head-race' })
+
+      if (provider === 'gitlab') {
+        let branchReads = 0
+        const targetRacingDeps = connectionFor(provider, projectPath, async (url, init) => {
+          const response = await fetch(url as string, init)
+          const path = typeof url === 'string' ? url : url instanceof URL ? url.pathname : url.url
+          if (init?.method !== 'POST' && /\/repository\/branches\//.test(String(path))) {
+            branchReads += 1
+            if (branchReads === 2) {
+              const branch = (await response.json()) as Record<string, unknown>
+              return new Response(
+                JSON.stringify({
+                  ...branch,
+                  commit: { ...(branch.commit as Record<string, unknown>), id: 'e'.repeat(40) },
+                }),
+                { status: response.status, headers: response.headers },
+              )
+            }
+          }
+          return response
+        })
+        const targetRaced = await collectMergeRequestFacts(targetRacingDeps, mrRef, {
+          selfMarker: 'm-777',
+        })
+        expect(targetRaced).toMatchObject({ ok: false, code: 'mr-facts-target-race' })
+      }
     })
   })
 }
+
+describe('rfc310 pr7 — GitLab discussion taxonomy', () => {
+  test('provider system timeline notes never become actionable review threads', async () => {
+    const projectPath = 'rfc310/gitlab-system-note-filter'
+    const project = await suite.client.seedCodeHost({
+      provider: 'gitlab',
+      projectPath,
+      title: 'system note baseline',
+      baseFiles: { 'src/a.ts': 'export const a = 1\n' },
+      headFiles: { 'src/a.ts': 'export const a = 2\n' },
+    })
+    const deps = connectionFor('gitlab', projectPath, async (url, init) => {
+      const response = await fetch(url as string, init)
+      const path = typeof url === 'string' ? url : url instanceof URL ? url.pathname : url.url
+      if (init?.method !== 'POST' && /\/discussions(?:\?|$)/.test(String(path))) {
+        const discussions = (await response.json()) as unknown[]
+        return new Response(
+          JSON.stringify([
+            ...discussions,
+            {
+              id: 'system-push-note',
+              individual_note: true,
+              notes: [
+                {
+                  id: 999,
+                  system: true,
+                  resolvable: false,
+                  resolved: false,
+                  body: 'added 1 commit',
+                  author: { username: 'project-bot' },
+                  position: null,
+                },
+              ],
+            },
+          ]),
+          { status: response.status, headers: response.headers },
+        )
+      }
+      return response
+    })
+    const collected = await collectMergeRequestFacts(deps, String(project.number))
+    expect(collected.ok).toBe(true)
+    if (collected.ok) expect(collected.snapshot.threads).toEqual([])
+  })
+})
 
 describe('rfc310 pr7 — no merge/approve/resolve reachability (T84 pairing)', () => {
   test('facts/reply source never references resolving or merging actions', () => {

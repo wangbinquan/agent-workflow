@@ -47,8 +47,6 @@ export function buildDevelopmentCodeHostFacts(snapshot: MrFactsSnapshot) {
     draft: snapshot.draft,
     mergeableState: snapshot.mergeableState,
     approvalHold: snapshot.approvalHold,
-    unresolvedReviewCount: unresolvedReview.length,
-    reviewDigest: sha256Hex(canonicalJson(snapshot.threads)),
   }
   const lifecycleFact = {
     eventTypeId: 'development.lifecycle-updated',
@@ -63,25 +61,21 @@ export function buildDevelopmentCodeHostFacts(snapshot: MrFactsSnapshot) {
   if (snapshot.state !== 'opened' || snapshot.headSha === null) return [lifecycleFact] as const
   return [
     lifecycleFact,
-    ...(unresolvedReview.length === 0
-      ? []
-      : [
-          {
-            eventTypeId: 'development.review-updated',
-            payload: review,
-            summary: [
-              `MR 检视意见已刷新：${unresolvedReview.length} 条待处理`,
-              ...unresolvedReview
-                .slice(0, 5)
-                .map(
-                  (thread) =>
-                    `${thread.threadRef}${thread.path === null ? '' : ` @ ${thread.path}`}: ${thread.body.slice(0, 280)}`,
-                ),
-            ]
-              .join('\n')
-              .slice(0, 2_000),
-          },
-        ]),
+    {
+      eventTypeId: 'development.review-updated',
+      payload: review,
+      summary: [
+        `MR 检视意见已刷新：${unresolvedReview.length} 条待处理`,
+        ...unresolvedReview
+          .slice(0, 5)
+          .map(
+            (thread) =>
+              `${thread.threadRef}${thread.path === null ? '' : ` @ ${thread.path}`}: ${thread.body.slice(0, 280)}`,
+          ),
+      ]
+        .join('\n')
+        .slice(0, 2_000),
+    },
     ...(snapshot.mergeableState !== 'conflict' || snapshot.targetSha === null
       ? []
       : [

@@ -8,6 +8,8 @@ import {
   employeeAttentionBindings,
   employeeCases,
   employeeOsOutbox,
+  employeeReactionRounds,
+  employeeToolRegistrationRevisions,
   eventSubscriptions,
 } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
@@ -154,6 +156,236 @@ describe('RFC-310 stateful employee Case runtime', () => {
         memberStates: ['waiting', 'waiting', 'waiting'],
       }),
     ).toThrow('outside member cardinality')
+  })
+
+  test('one invalid Case is blocked without starving another plannable Case', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-case-planning-isolation-'))
+    roots.push(appHome)
+    let now = 20_000
+    let ordinal = 0
+    const id = () => `planning-isolation-${++ordinal}`
+    const eventCenter = composeEventCenter({
+      db,
+      typePackageDescriptorJsons: [
+        developmentEmployeeTypePackage.descriptorJson,
+        digitalEmployeeLifecycleEventCatalogJson,
+      ],
+      now: () => now,
+      id,
+    })
+    const executionContracts = new ExecutionContractService({
+      registrations: developmentExecutionContractRegistrations,
+      resources: {
+        async inspect({ implementation }) {
+          return {
+            kind: implementation.kind,
+            name:
+              implementation.kind === 'agent'
+                ? implementation.agentRef.id
+                : implementation.workflowRef.id,
+            available: true,
+            detail: 'planning isolation fixture',
+            declaredContractRefs:
+              implementation.kind === 'agent'
+                ? developmentExecutionContractRegistrations.map(
+                    (registration) => registration.contractRef,
+                  )
+                : null,
+          }
+        },
+      },
+      programFixtures: {
+        async validate() {
+          return [{ code: 'planning-isolation', ok: true, detail: 'fixture validated' }]
+        },
+      },
+    })
+    const module = composeDigitalEmployee({
+      db,
+      appHome,
+      typePackages: [developmentEmployeeTypePackage],
+      executionContracts,
+      now: () => now,
+      id,
+      runtime: {
+        eventCenter: eventCenter.participant,
+        codecs: [developmentEmployeeRuntimeCodec],
+        platformWorkItems: {
+          async execute() {
+            throw new Error('planning isolation does not execute platform work')
+          },
+        },
+        execution: {
+          async launch() {
+            throw new Error('planning isolation does not launch business work')
+          },
+          async inspect() {
+            return { kind: 'pending' as const, executionRef: 'unused' }
+          },
+          async cancel() {},
+        },
+      },
+    })
+    const typeRef = { typeId: 'development', revision: 9 }
+    const analyzeTool = await module.commands.createTool({
+      typeRef,
+      workItemRef: 'analyze-implement',
+      actorUserId: 'planning-author',
+      body: {
+        displayName: '仅实现工具',
+        description: '故意不提供外部材料获取工具',
+        roleRef: 'primary',
+        implementation: { kind: 'agent', agentRef: { id: 'planning-agent', revision: 1 } },
+      },
+    })
+    const analyzeToolRef = await module.commands.publishTool({
+      typeRef,
+      workItemRef: 'analyze-implement',
+      toolId: analyzeTool.id,
+      actorUserId: 'planning-author',
+    })
+    const job = module.commands.createJobTemplate({
+      typeRef,
+      actorUserId: 'planning-author',
+      body: {
+        name: '仅正文输入岗位',
+        description: '正文可走平台材料节点，外部编号缺少所需工具',
+        defaultToolBindings: [
+          {
+            workItemRef: 'analyze-implement',
+            slotRef: 'default',
+            registrationRef: analyzeToolRef,
+          },
+        ],
+      },
+    })
+    const jobRef = module.commands.publishJobTemplate({
+      id: job.id,
+      actorUserId: 'planning-author',
+    })
+    const employee = module.commands.createEmployee({
+      typeRef,
+      actorUserId: 'planning-author',
+      body: {
+        name: '规划隔离员工',
+        jobTemplateRef: jobRef,
+        workScope: { kind: 'repository', repositoryId: 'repo-planning' },
+      },
+    })
+    const employeeRef = { id: employee.id, revision: employee.revision }
+    const launch = (subjectRef: string, request: Record<string, unknown>) =>
+      module.runtime!.commands.launch({
+        employeeRef,
+        primaryContextTypeId: 'development.issue-handling',
+        primaryContextSchemaVersion: 1,
+        primaryContextState: 'active',
+        primaryContextJson: JSON.stringify({
+          status: 'active',
+          subjectRef,
+          repositoryRef: 'repo-planning',
+          request,
+          materialArtifactRefs: [],
+        }),
+        artifactRefs: [],
+        workSubject: { typeId: 'work-request', subjectRef },
+      })
+    const healthy = launch('BODY-1', {
+      kind: 'body',
+      body: '正文输入应由平台材料节点处理',
+      externalId: null,
+      uploads: [],
+      executionOptions: {},
+    })
+    now += 1
+    const invalid = launch('EXTERNAL-1', {
+      kind: 'external-id',
+      body: null,
+      externalId: 'EXTERNAL-1',
+      uploads: [],
+      executionOptions: {},
+    })
+
+    const planned = module.runtime!.worker.planOneReaction()
+    const plannedRound = db
+      .select()
+      .from(employeeReactionRounds)
+      .where(eq(employeeReactionRounds.id, planned!))
+      .get()
+    expect(plannedRound?.caseId).toBe(healthy.caseRef.id)
+    expect(
+      JSON.parse(module.runtime!.queries.getCase(invalid.caseRef.id).projectionJson).case,
+    ).toMatchObject({
+      state: 'blocked',
+      blockReason: expect.stringContaining('employee-tool-binding-unavailable'),
+    })
+    expect(
+      JSON.parse(module.runtime!.queries.getCase(healthy.caseRef.id).projectionJson).case,
+    ).toMatchObject({
+      state: 'active',
+      activeRoundId: planned,
+    })
+
+    const recoverable = launch('BODY-RECOVERABLE', {
+      kind: 'body',
+      body: '精确工具暂时不可用后应自动恢复规划',
+      externalId: null,
+      uploads: [],
+      executionOptions: {},
+    })
+    now += 1
+    const recoverableRow = db
+      .select()
+      .from(employeeCases)
+      .where(eq(employeeCases.id, recoverable.caseRef.id))
+      .get()!
+    db.update(employeeCases)
+      .set({
+        currentWorkItemRef: 'analyze-implement',
+        revision: recoverableRow.revision + 1,
+        updatedAt: now,
+      })
+      .where(eq(employeeCases.id, recoverable.caseRef.id))
+      .run()
+    const frozenToolRevision = db
+      .select()
+      .from(employeeToolRegistrationRevisions)
+      .where(
+        and(
+          eq(employeeToolRegistrationRevisions.toolId, analyzeToolRef.id),
+          eq(employeeToolRegistrationRevisions.revision, analyzeToolRef.revision),
+        ),
+      )
+      .get()!
+    db.delete(employeeToolRegistrationRevisions)
+      .where(
+        and(
+          eq(employeeToolRegistrationRevisions.toolId, analyzeToolRef.id),
+          eq(employeeToolRegistrationRevisions.revision, analyzeToolRef.revision),
+        ),
+      )
+      .run()
+    expect(module.runtime!.worker.planOneReaction()).toBeNull()
+    expect(
+      JSON.parse(module.runtime!.queries.getCase(recoverable.caseRef.id).projectionJson).case,
+    ).toMatchObject({
+      state: 'blocked',
+      currentWorkItemRef: 'analyze-implement',
+      blockReason: expect.stringContaining('employee-tool-binding-unavailable'),
+    })
+
+    db.insert(employeeToolRegistrationRevisions).values(frozenToolRevision).run()
+    now += 1
+    const recoveredRound = module.runtime!.worker.planOneReaction()
+    expect(recoveredRound).not.toBeNull()
+    expect(
+      JSON.parse(module.runtime!.queries.getCase(recoverable.caseRef.id).projectionJson).case,
+    ).toMatchObject({
+      state: 'active',
+      blockReason: null,
+      currentWorkItemRef: 'analyze-implement',
+      activeRoundId: recoveredRound,
+    })
   })
 
   test('WorkStart directly fixes the first work item while lifecycle facts remain durable and multicast', async () => {
@@ -1082,9 +1314,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
     )!
     const childCaseId = primaryChannel.childCaseId as string
     const detachedChildCaseId = secondaryChannel.childCaseId as string
+    const childProjection = JSON.parse(runtime.queries.getCase(childCaseId).projectionJson)
+    expect(childProjection.case.employeeRef).toEqual(childEmployeeRef)
+    expect(childProjection.channels).toEqual([])
+    const collaborationCases = JSON.parse(runtime.queries.listCasePage({ limit: 100 })) as {
+      items: Array<{ id: string; openChannelCount: number }>
+    }
     expect(
-      JSON.parse(runtime.queries.getCase(childCaseId).projectionJson).case.employeeRef,
-    ).toEqual(childEmployeeRef)
+      collaborationCases.items.find((candidate) => candidate.id === launched.caseRef.id),
+    ).toMatchObject({ openChannelCount: 2 })
+    expect(
+      collaborationCases.items.find((candidate) => candidate.id === childCaseId),
+    ).toMatchObject({ openChannelCount: 0 })
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Activate the collaboration result subscription and settle child ingress outbox.
     }
@@ -1670,6 +1911,32 @@ describe('RFC-310 stateful employee Case runtime', () => {
       workItemRef: 'observe-mr',
       ruleId: 'handle-lifecycle',
     })
+    const lifecycleCase = db
+      .select({ activeRoundId: employeeCases.activeRoundId })
+      .from(employeeCases)
+      .where(eq(employeeCases.id, launched.caseRef.id))
+      .get()!
+    const lifecycleRound = db
+      .select({ planJson: employeeReactionRounds.planJson })
+      .from(employeeReactionRounds)
+      .where(eq(employeeReactionRounds.id, lifecycleCase.activeRoundId!))
+      .get()!
+    const lifecyclePlan = JSON.parse(lifecycleRound.planJson) as { inputEnvelopeJson: string }
+    const lifecycleEnvelope = JSON.parse(lifecyclePlan.inputEnvelopeJson) as {
+      contextsJson: string
+    }
+    expect(
+      (JSON.parse(lifecycleEnvelope.contextsJson) as Array<{ typeId: string }>).map(
+        (context) => context.typeId,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'development.merge-request',
+        'development.pipeline',
+        'development.problem-set',
+        'development.review-resolution',
+      ]),
+    )
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Drain the lifecycle preemption settlement.
     }

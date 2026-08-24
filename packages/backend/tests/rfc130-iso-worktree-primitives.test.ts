@@ -205,6 +205,61 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     rmSync(repo, { recursive: true, force: true })
   })
 
+  test('materializeTree preserves a platform-created conflict merge for deterministic finish', async () => {
+    const repo = await initRepo({ 'conflict.txt': 'base\n' })
+    const base = await head(repo)
+    await runGit(repo, ['checkout', '-qb', 'target'])
+    writeFileSync(join(repo, 'conflict.txt'), 'target\n')
+    await runGit(repo, ['commit', '-qam', 'target change'])
+    const target = await head(repo)
+    await runGit(repo, ['checkout', '-q', 'main'])
+    writeFileSync(join(repo, 'conflict.txt'), 'source\n')
+    await runGit(repo, ['commit', '-qam', 'source change'])
+    const source = await head(repo)
+
+    const merge = await runGit(repo, ['merge', '--no-commit', '--no-ff', target])
+    expect(merge.exitCode).not.toBe(0)
+    const markerBody = readFileSync(join(repo, 'conflict.txt'), 'utf8')
+    expect(markerBody).toContain('<<<<<<<')
+    const operationFiles = ['MERGE_HEAD', 'MERGE_MSG', 'MERGE_MODE', 'AUTO_MERGE']
+      .map((name) => ({ name, path: join(repo, '.git', name) }))
+      .filter(({ path }) => existsSync(path))
+      .map(({ name, path }) => ({ name, content: readFileSync(path) }))
+    expect(
+      operationFiles
+        .find((file) => file.name === 'MERGE_HEAD')
+        ?.content.toString()
+        .trim(),
+    ).toBe(target)
+
+    const canonicalSnapshot = await snapshotFullState(repo)
+    const canonCurrentTree = await treeOf(repo, canonicalSnapshot)
+    writeFileSync(join(repo, 'conflict.txt'), 'source + target\n')
+    const resolvedSnapshot = await snapshotFullState(repo)
+    const mergedTree = await treeOf(repo, resolvedSnapshot)
+    writeFileSync(join(repo, 'conflict.txt'), markerBody)
+
+    await materializeTree(repo, {
+      mergedTree,
+      canonCurrentTree,
+      taskBaseHead: source,
+    })
+    expect(readFileSync(join(repo, 'conflict.txt'), 'utf8')).toBe('source + target\n')
+    expect(await head(repo)).toBe(source)
+    for (const file of operationFiles) {
+      expect(readFileSync(join(repo, '.git', file.name))).toEqual(file.content)
+    }
+
+    await runGit(repo, ['add', '--', 'conflict.txt'])
+    const committed = await runGit(repo, ['commit', '-qm', 'platform conflict finish'])
+    expect(committed.exitCode).toBe(0)
+    expect((await runGit(repo, ['show', '-s', '--format=%P', 'HEAD'])).stdout.trim()).toBe(
+      `${source} ${target}`,
+    )
+    expect(base).not.toBe(source)
+    rmSync(repo, { recursive: true, force: true })
+  })
+
   test('materializeTree handles file→dir replacement (blocking path removed before checkout, Codex 五/六轮)', async () => {
     const repo = await initRepo({ foo: 'i am a file\n' })
     const taskBase = await head(repo)

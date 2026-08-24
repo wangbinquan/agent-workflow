@@ -14,7 +14,7 @@ import {
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { EventObservationInput } from '@/modules/event-center/public/types'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { stableIdentityComponent } from '@/util/gitRef'
 import type {
   EmployeeTypeCollaborationCodec,
@@ -50,6 +50,7 @@ import {
   findWorkItem,
   findToolSlot,
   type EmployeeTypePackageDescriptor,
+  type EmployeeCollaborationBinding,
   type EmployeeTypeRef,
   type ExactResourceRef,
 } from '../domain/model'
@@ -213,6 +214,14 @@ const ESCALATES_TO_FRESH_SCENE = {
 
 export function boundaryEscalates(errorClass: WorkspaceFailureClass): boolean {
   return ESCALATES_TO_FRESH_SCENE[errorClass]
+}
+
+function parseJsonOrUndefined(input: string): unknown {
+  try {
+    return JSON.parse(input) as unknown
+  } catch {
+    return undefined
+  }
 }
 
 export function projectFrozenExecutionOptions(input: {
@@ -779,7 +788,8 @@ export class DigitalEmployeeRuntimeService {
           .filter((event) => event.state === 'pending').length,
         openChannelCount: this.#store
           .listChannels(caseRecord.id)
-          .filter((channel) => channel.state === 'open').length,
+          .filter((channel) => channel.parentCaseId === caseRecord.id && channel.state === 'open')
+          .length,
         createdAt: caseRecord.createdAt,
         updatedAt: caseRecord.updatedAt,
       }
@@ -929,22 +939,25 @@ export class DigitalEmployeeRuntimeService {
       activeRound,
       rounds,
       reviewGates,
-      channels: this.#store.listChannels(caseId).map((channel) => {
-        const invocation = this.#store
-          .listInvocationsForRound(channel.correlationRef)
-          .find((candidate) => candidate.id === channel.invocationId)
-        if (invocation === undefined) {
-          throw new Error(`employee channel ${channel.id} lost its invocation projection`)
-        }
-        return {
-          ...channel,
-          targetEmployeeRef: invocation.targetEmployeeRef,
-          results: this.#store.listChannelResults(channel.id).map((result) => ({
-            ...result,
-            envelope: JSON.parse(result.envelopeJson) as unknown,
-          })),
-        }
-      }),
+      channels: this.#store
+        .listChannels(caseId)
+        .filter((channel) => channel.parentCaseId === caseId)
+        .map((channel) => {
+          const invocation = this.#store
+            .listInvocationsForRound(channel.correlationRef)
+            .find((candidate) => candidate.id === channel.invocationId)
+          if (invocation === undefined) {
+            throw new Error(`employee channel ${channel.id} lost its invocation projection`)
+          }
+          return {
+            ...channel,
+            targetEmployeeRef: invocation.targetEmployeeRef,
+            results: this.#store.listChannelResults(channel.id).map((result) => ({
+              ...result,
+              envelope: JSON.parse(result.envelopeJson) as unknown,
+            })),
+          }
+        }),
       nextAction: projectEmployeeCaseNextAction({
         caseState: caseRecord.state,
         activeRoundExists: activeRound !== undefined,
@@ -1388,6 +1401,191 @@ export class DigitalEmployeeRuntimeService {
     if (!guard.ok) throw new ValidationError(guard.code, guard.detail)
   }
 
+  #resolveCompatibleSuccessorBindings(
+    parentCase: EmployeeCaseRecord,
+    frozenBindings: readonly EmployeeCollaborationBinding[],
+  ): EmployeeCollaborationBinding[] {
+    const currentParent = this.#authoringStore.getEmployeeDefinition(parentCase.employeeRef.id)
+    if (
+      currentParent === null ||
+      currentParent.archivedAt !== null ||
+      currentParent.currentRevision === null ||
+      currentParent.currentRevision <= parentCase.employeeRef.revision
+    ) {
+      return [...frozenBindings]
+    }
+    const successor = this.#authoringStore.getEmployeeDefinitionRevision({
+      id: currentParent.id,
+      revision: currentParent.currentRevision,
+    })
+    if (
+      successor === null ||
+      successor.createdBy !== null ||
+      successor.content.typeRef.typeId !== parentCase.typeRef.typeId ||
+      successor.content.typeRef.revision !==
+        this.#currentTypeRevisions.get(parentCase.typeRef.typeId)
+    ) {
+      return [...frozenBindings]
+    }
+
+    return frozenBindings.map((binding) => {
+      const frozenTarget = this.#authoringStore.getEmployeeDefinitionRevision(
+        binding.targetEmployeeRef,
+      )
+      if (frozenTarget === null) return binding
+      const currentTargetTypeRevision = this.#currentTypeRevisions.get(
+        frozenTarget.content.typeRef.typeId,
+      )
+      if (
+        currentTargetTypeRevision === undefined ||
+        frozenTarget.content.typeRef.revision > currentTargetTypeRevision
+      ) {
+        return binding
+      }
+      const compatible = successor.content.exactCollaborationBindings.find(
+        (candidate) =>
+          candidate.workItemRef === binding.workItemRef &&
+          candidate.memberRef === binding.memberRef &&
+          candidate.invocationContractId === binding.invocationContractId &&
+          candidate.joinMode === binding.joinMode &&
+          candidate.quorum === binding.quorum &&
+          candidate.targetEmployeeRef.id === binding.targetEmployeeRef.id,
+      )
+      if (compatible === undefined) return binding
+      const compatibleTarget = this.#authoringStore.getEmployeeDefinitionRevision(
+        compatible.targetEmployeeRef,
+      )
+      if (
+        compatibleTarget === null ||
+        compatibleTarget.content.typeRef.typeId !== frozenTarget.content.typeRef.typeId ||
+        compatibleTarget.content.typeRef.revision !== currentTargetTypeRevision
+      ) {
+        return binding
+      }
+      return compatible
+    })
+  }
+
+  #resolveCompatibleInvocationBindings(
+    parentCase: EmployeeCaseRecord,
+    round: ReactionRoundRecord,
+    frozenBindings: readonly EmployeeCollaborationBinding[],
+  ): EmployeeCollaborationBinding[] {
+    const compatibleBindings = this.#resolveCompatibleSuccessorBindings(parentCase, frozenBindings)
+    const durableInvocations = this.#store.listInvocationsForRound(round.id)
+    return frozenBindings.map((binding, index) => {
+      const invocation = durableInvocations.find(
+        (candidate) => candidate.id === `invocation:${round.id}:${binding.memberRef}`,
+      )
+      return invocation === undefined
+        ? compatibleBindings[index]!
+        : employeeCollaborationBindingSchema.parse({
+            ...binding,
+            targetEmployeeRef: invocation.targetEmployeeRef,
+          })
+    })
+  }
+
+  #automaticallyResumeCompatibleInvocationUpgrade(caseRecord: EmployeeCaseRecord): boolean {
+    if (
+      caseRecord.state !== 'blocked' ||
+      caseRecord.activeRoundId !== null ||
+      caseRecord.currentWorkItemRef === null
+    ) {
+      return false
+    }
+    const failedRound = this.#store
+      .listRounds(caseRecord.id)
+      .find(
+        (round) => round.state === 'failed' && round.workItemRef === caseRecord.currentWorkItemRef,
+      )
+    if (failedRound === undefined || failedRound.outputJson === null) return false
+    const failure = z
+      .object({
+        kind: z.literal('platform-dispatch-failed'),
+        outboxKind: z.literal('invocation-create'),
+        errorCode: z.string().min(1).optional(),
+        detail: z.string().optional(),
+      })
+      .passthrough()
+      .safeParse(parseJsonOrUndefined(failedRound.outputJson))
+    if (!failure.success) return false
+    const legacyUpgradeFailure =
+      failure.data.errorCode === undefined &&
+      failure.data.detail?.includes('cannot start new work; upgrade it to') === true
+    if (failure.data.errorCode !== 'employee-upgrade-required' && !legacyUpgradeFailure) {
+      return false
+    }
+    const plan = reactionExecutionPlanSchema.safeParse(parseJsonOrUndefined(failedRound.planJson))
+    if (
+      !plan.success ||
+      plan.data.implementationKind !== 'collaboration' ||
+      plan.data.implementationJson === null
+    ) {
+      return false
+    }
+    const bindings = z
+      .array(employeeCollaborationBindingSchema)
+      .min(1)
+      .safeParse(parseJsonOrUndefined(plan.data.implementationJson))
+    if (!bindings.success) return false
+    const invocations = this.#store.listInvocationsForRound(failedRound.id)
+    if (
+      invocations.length === 0 ||
+      invocations.some(
+        (invocation) =>
+          invocation.state !== 'requested' ||
+          invocation.childCaseId !== null ||
+          this.#store.getChannelByInvocation(invocation.id) !== null,
+      )
+    ) {
+      return false
+    }
+    const compatible = this.#resolveCompatibleSuccessorBindings(caseRecord, bindings.data)
+    const changed = bindings.data.some(
+      (binding, index) => !sameRef(binding.targetEmployeeRef, compatible[index]!.targetEmployeeRef),
+    )
+    if (!changed) return false
+    this.#store.resumeCase(caseRecord.id, this.#now())
+    return true
+  }
+
+  #automaticallyResumeRecoveredToolBinding(caseRecord: EmployeeCaseRecord): boolean {
+    const prefix =
+      'reaction-planning-failed: employee-tool-binding-unavailable: no exact published tool for '
+    if (
+      caseRecord.state !== 'blocked' ||
+      caseRecord.activeRoundId !== null ||
+      caseRecord.currentWorkItemRef === null ||
+      caseRecord.blockReason?.startsWith(prefix) !== true
+    ) {
+      return false
+    }
+    const identity = caseRecord.blockReason.slice(prefix.length)
+    // This is a domain identity (`workItemRef/slotRef`), not a filesystem
+    // path. Split the contract delimiter explicitly so the recovery logic does
+    // not encode a POSIX-only dirname operation.
+    const identityParts = identity.split('/')
+    const slotRef = identityParts.pop()
+    const workItemRef = identityParts.join('/')
+    if (workItemRef.length === 0 || slotRef === undefined || slotRef.length === 0) return false
+    if (workItemRef !== caseRecord.currentWorkItemRef) return false
+    const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+    if (employee === null) return false
+    const dispatchBinding = employee.content.exactOrderedDispatchConfigurations
+      .flatMap((configuration) => configuration.routes)
+      .find((route) => route.routeRef === slotRef && route.destinationWorkItemRef === workItemRef)
+    const toolBinding = employee.content.exactToolBindings.find(
+      (binding) => binding.workItemRef === workItemRef && binding.slotRef === slotRef,
+    )
+    const registrationRef = dispatchBinding?.registrationRef ?? toolBinding?.registrationRef ?? null
+    if (registrationRef === null || this.#toolRevision(registrationRef)?.state !== 'published') {
+      return false
+    }
+    this.#store.resumeCase(caseRecord.id, this.#now())
+    return true
+  }
+
   #executeInvocationRound(round: ReactionRoundRecord, plan: ReactionExecutionPlan): void {
     if (plan.implementationJson === null) {
       throw new ValidationError(
@@ -1395,11 +1593,12 @@ export class DigitalEmployeeRuntimeService {
         'collaboration plan has no exact target binding',
       )
     }
-    const bindings = z
+    const frozenBindings = z
       .array(employeeCollaborationBindingSchema)
       .min(1)
       .parse(JSON.parse(plan.implementationJson) as unknown)
     const parentCase = this.getCase(round.caseId)
+    const bindings = this.#resolveCompatibleInvocationBindings(parentCase, round, frozenBindings)
     const contexts = this.#store.listContexts(round.caseId)
     const event = this.#invocationEvent(plan)
     if (event?.subject.typeId === 'employee-invocation') {
@@ -1897,6 +2096,7 @@ export class DigitalEmployeeRuntimeService {
       })
       if (terminal && outbox.caseId !== null) {
         const detail = error instanceof Error ? error.message : String(error)
+        const errorCode = error instanceof DomainError ? error.code : 'internal-error'
         const parsed = z
           .object({ roundId: z.string().min(1) })
           .passthrough()
@@ -1914,6 +2114,7 @@ export class DigitalEmployeeRuntimeService {
             outputJson: JSON.stringify({
               kind: 'platform-dispatch-failed',
               outboxKind: outbox.kind,
+              errorCode,
               detail: detail.slice(0, 4_000),
             }),
             nextCaseState: policy?.content.handoffOnExhausted === false ? 'terminal' : undefined,
@@ -1971,355 +2172,377 @@ export class DigitalEmployeeRuntimeService {
 
   planOneReaction(): ReactionRoundRecord | null {
     for (const caseRecord of this.#store.listCases()) {
+      if (
+        this.#automaticallyResumeRecoveredToolBinding(caseRecord) ||
+        this.#automaticallyResumeCompatibleInvocationUpgrade(caseRecord)
+      ) {
+        break
+      }
+    }
+    for (const caseRecord of this.#store.listCases()) {
       if (!['active', 'waiting'].includes(caseRecord.state) || caseRecord.activeRoundId !== null) {
         continue
       }
-      const policy = this.#authoringStore.getExecutionPolicyRevision(
-        caseRecord.executionPolicyRevision,
-      )
-      if (policy === null) throw new Error('pinned execution policy disappeared')
-      if (caseRecord.createdAt + policy.content.caseBudgetMs <= this.#now()) {
-        if (policy.content.handoffOnExhausted) {
-          this.#store.blockCase(caseRecord.id, 'case-budget-exhausted', this.#now())
-        } else {
-          this.#store.terminateCase(caseRecord.id, 'case-budget-exhausted', this.#now())
-        }
-        continue
-      }
-      const descriptor = this.#descriptor(caseRecord)
-      const contexts = this.#store.listContexts(caseRecord.id)
-      const pendingInbox = this.#store
-        .listInbox(caseRecord.id)
-        .find((item) => item.state === 'pending')
-      const continuationItem =
-        caseRecord.currentWorkItemRef === null
-          ? null
-          : findWorkItem(descriptor, caseRecord.currentWorkItemRef)
-      if (caseRecord.currentWorkItemRef !== null && continuationItem === null) {
-        throw new Error(`case points to missing work item: ${caseRecord.currentWorkItemRef}`)
-      }
-      const pendingRule =
-        pendingInbox === undefined
-          ? undefined
-          : descriptor.reactionRules.find(
-              (candidate) => candidate.eventTypeId === pendingInbox.eventTypeRef.id,
-            )
-      const eventPreemptsContinuation =
-        continuationItem !== null && pendingRule?.preemptsContinuation === true
-      const selectedContinuation = eventPreemptsContinuation ? null : continuationItem
-      const inbox = selectedContinuation === null ? pendingInbox : undefined
-      const rule =
-        selectedContinuation !== null || inbox === undefined ? null : (pendingRule ?? null)
-      if (selectedContinuation === null && inbox === undefined) continue
-      if (selectedContinuation === null && rule === null) {
-        this.#store.markInbox(inbox!.id, 'obsolete', this.#now())
-        continue
-      }
-      const requiredContextTypes =
-        selectedContinuation === null
-          ? rule!.requiredContextTypes
-          : contexts.map((context) => context.typeId)
-      if (
-        requiredContextTypes.some(
-          (contextType) => !contexts.some((context) => context.typeId === contextType),
+      try {
+        const policy = this.#authoringStore.getExecutionPolicyRevision(
+          caseRecord.executionPolicyRevision,
         )
-      ) {
-        if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
-        continue
-      }
-      const item = selectedContinuation ?? findWorkItem(descriptor, rule!.workItemRef)
-      if (item === null)
-        throw new Error(`reaction points to missing work item: ${rule!.workItemRef}`)
-      const contract = findWorkContract(descriptor, item.workContractRef)
-      if (contract === null) throw new Error(`work item contract missing: ${item.workItemRef}`)
-      const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
-      if (employee === null) {
-        if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
-        continue
-      }
-      const enabledWorkItemRefs =
-        employee.content.enabledWorkItemRefs.length === 0
-          ? descriptor.authoringManifest.workItems.map((candidate) => candidate.workItemRef)
-          : employee.content.enabledWorkItemRefs
-      const capabilityWorkItemRef = rule?.capabilityWorkItemRef ?? item.workItemRef
-      if (
-        !enabledWorkItemRefs.includes(item.workItemRef) ||
-        !enabledWorkItemRefs.includes(capabilityWorkItemRef)
-      ) {
-        if (inbox !== undefined) {
-          this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+        if (policy === null) throw new Error('pinned execution policy disappeared')
+        if (caseRecord.createdAt + policy.content.caseBudgetMs <= this.#now()) {
+          if (policy.content.handoffOnExhausted) {
+            this.#store.blockCase(caseRecord.id, 'case-budget-exhausted', this.#now())
+          } else {
+            this.#store.terminateCase(caseRecord.id, 'case-budget-exhausted', this.#now())
+          }
           continue
         }
-        throw new ValidationError(
-          'employee-continuation-capability-disabled',
-          `continuation points to disabled optional capability: ${item.workItemRef}`,
+        const descriptor = this.#descriptor(caseRecord)
+        const contexts = this.#store.listContexts(caseRecord.id)
+        const pendingInbox = this.#store
+          .listInbox(caseRecord.id)
+          .find((item) => item.state === 'pending')
+        const continuationItem =
+          caseRecord.currentWorkItemRef === null
+            ? null
+            : findWorkItem(descriptor, caseRecord.currentWorkItemRef)
+        if (caseRecord.currentWorkItemRef !== null && continuationItem === null) {
+          throw new Error(`case points to missing work item: ${caseRecord.currentWorkItemRef}`)
+        }
+        const pendingRule =
+          pendingInbox === undefined
+            ? undefined
+            : descriptor.reactionRules.find(
+                (candidate) => candidate.eventTypeId === pendingInbox.eventTypeRef.id,
+              )
+        const eventPreemptsContinuation =
+          continuationItem !== null && pendingRule?.preemptsContinuation === true
+        const selectedContinuation = eventPreemptsContinuation ? null : continuationItem
+        const inbox = selectedContinuation === null ? pendingInbox : undefined
+        const rule =
+          selectedContinuation !== null || inbox === undefined ? null : (pendingRule ?? null)
+        if (selectedContinuation === null && inbox === undefined) continue
+        if (selectedContinuation === null && rule === null) {
+          this.#store.markInbox(inbox!.id, 'obsolete', this.#now())
+          continue
+        }
+        const requiredContextTypes =
+          selectedContinuation === null
+            ? rule!.requiredContextTypes
+            : contexts.map((context) => context.typeId)
+        const inputContextTypes =
+          selectedContinuation === null
+            ? [...requiredContextTypes, ...rule!.optionalContextTypes]
+            : requiredContextTypes
+        if (
+          requiredContextTypes.some(
+            (contextType) => !contexts.some((context) => context.typeId === contextType),
+          )
+        ) {
+          if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+          continue
+        }
+        const item = selectedContinuation ?? findWorkItem(descriptor, rule!.workItemRef)
+        if (item === null)
+          throw new Error(`reaction points to missing work item: ${rule!.workItemRef}`)
+        const contract = findWorkContract(descriptor, item.workContractRef)
+        if (contract === null) throw new Error(`work item contract missing: ${item.workItemRef}`)
+        const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+        if (employee === null) {
+          if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+          continue
+        }
+        const enabledWorkItemRefs =
+          employee.content.enabledWorkItemRefs.length === 0
+            ? descriptor.authoringManifest.workItems.map((candidate) => candidate.workItemRef)
+            : employee.content.enabledWorkItemRefs
+        const capabilityWorkItemRef = rule?.capabilityWorkItemRef ?? item.workItemRef
+        if (
+          !enabledWorkItemRefs.includes(item.workItemRef) ||
+          !enabledWorkItemRefs.includes(capabilityWorkItemRef)
+        ) {
+          if (inbox !== undefined) {
+            this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+            continue
+          }
+          throw new ValidationError(
+            'employee-continuation-capability-disabled',
+            `continuation points to disabled optional capability: ${item.workItemRef}`,
+          )
+        }
+        const defaultSlotRef =
+          rule?.slotRef ??
+          (item.nodeKind === 'collaboration' ? 'collaboration' : undefined) ??
+          item.toolRoleGroups.flatMap((group) => group.bindingSlots).find((slot) => slot.required)
+            ?.slotRef ??
+          item.toolRoleGroups.flatMap((group) => group.bindingSlots)[0]?.slotRef ??
+          'system'
+        const selectedSlotRef = z
+          .object({ slotRef: z.string().min(1).max(160) })
+          .strict()
+          .parse(
+            JSON.parse(
+              this.#codec(caseRecord.typeRef.typeId).selectReactionToolSlotJson(
+                JSON.stringify({
+                  schemaVersion: 1,
+                  workItemRef: item.workItemRef,
+                  defaultSlotRef,
+                  contextsJson: JSON.stringify(contexts),
+                  orderedDispatchConfigurationsJson: JSON.stringify(
+                    employee.content.exactOrderedDispatchConfigurations,
+                  ),
+                }),
+              ),
+            ) as unknown,
+          ).slotRef
+        const selectedDispatchRoute = employee.content.exactOrderedDispatchConfigurations
+          .flatMap((configuration) => configuration.routes)
+          .find(
+            (route) =>
+              route.routeRef === selectedSlotRef &&
+              route.destinationWorkItemRef === item.workItemRef,
+          )
+        const platformSelected =
+          item.nodeKind === 'business-tool' && selectedSlotRef === PLATFORM_WORK_ITEM_SLOT_REF
+        if (
+          item.nodeKind === 'business-tool' &&
+          !platformSelected &&
+          findToolSlot(item, selectedSlotRef) === null &&
+          selectedDispatchRoute === undefined
+        ) {
+          throw new ValidationError(
+            'employee-tool-slot-selection-invalid',
+            `type package selected unknown slot ${item.workItemRef}/${selectedSlotRef}`,
+          )
+        }
+        const selectedBinding = employee.content.exactToolBindings.find(
+          (candidate) =>
+            candidate.workItemRef === item.workItemRef && candidate.slotRef === selectedSlotRef,
         )
-      }
-      const defaultSlotRef =
-        rule?.slotRef ??
-        (item.nodeKind === 'collaboration' ? 'collaboration' : undefined) ??
-        item.toolRoleGroups.flatMap((group) => group.bindingSlots).find((slot) => slot.required)
-          ?.slotRef ??
-        item.toolRoleGroups.flatMap((group) => group.bindingSlots)[0]?.slotRef ??
-        'system'
-      const selectedSlotRef = z
-        .object({ slotRef: z.string().min(1).max(160) })
-        .strict()
-        .parse(
-          JSON.parse(
-            this.#codec(caseRecord.typeRef.typeId).selectReactionToolSlotJson(
-              JSON.stringify({
-                schemaVersion: 1,
-                workItemRef: item.workItemRef,
-                defaultSlotRef,
-                contextsJson: JSON.stringify(contexts),
-                orderedDispatchConfigurationsJson: JSON.stringify(
-                  employee.content.exactOrderedDispatchConfigurations,
-                ),
-              }),
-            ),
-          ) as unknown,
-        ).slotRef
-      const selectedDispatchRoute = employee.content.exactOrderedDispatchConfigurations
-        .flatMap((configuration) => configuration.routes)
-        .find(
-          (route) =>
-            route.routeRef === selectedSlotRef && route.destinationWorkItemRef === item.workItemRef,
-        )
-      const platformSelected =
-        item.nodeKind === 'business-tool' && selectedSlotRef === PLATFORM_WORK_ITEM_SLOT_REF
-      if (
-        item.nodeKind === 'business-tool' &&
-        !platformSelected &&
-        findToolSlot(item, selectedSlotRef) === null &&
-        selectedDispatchRoute === undefined
-      ) {
-        throw new ValidationError(
-          'employee-tool-slot-selection-invalid',
-          `type package selected unknown slot ${item.workItemRef}/${selectedSlotRef}`,
-        )
-      }
-      const selectedBinding = employee.content.exactToolBindings.find(
-        (candidate) =>
-          candidate.workItemRef === item.workItemRef && candidate.slotRef === selectedSlotRef,
-      )
-      const binding = selectedBinding
-      const frozenSlotRef = selectedSlotRef
-      const selectedRegistrationRef =
-        selectedDispatchRoute?.registrationRef ?? binding?.registrationRef ?? null
-      const tool =
-        selectedRegistrationRef === null ? null : this.#toolRevision(selectedRegistrationRef)
-      if (item.nodeKind === 'business-tool' && !platformSelected && tool === null) {
-        throw new ValidationError(
-          'employee-tool-binding-unavailable',
-          `no exact published tool for ${item.workItemRef}/${selectedSlotRef}`,
-        )
-      }
-      const exactWorkItemTools =
-        item.nodeKind !== 'business-tool'
-          ? []
-          : employee.content.exactToolBindings
-              .filter((candidate) => candidate.workItemRef === item.workItemRef)
-              .map((candidate) => {
-                const revision =
-                  tool !== null &&
-                  candidate.registrationRef.id === tool.ref.id &&
-                  candidate.registrationRef.revision === tool.ref.revision
-                    ? tool
-                    : this.#toolRevision(candidate.registrationRef)
-                if (revision === null || revision.state !== 'published') {
-                  throw new ValidationError(
-                    'employee-tool-binding-unavailable',
-                    `no exact published tool for ${candidate.workItemRef}/${candidate.slotRef}`,
-                  )
-                }
-                return {
-                  slotRef: candidate.slotRef,
-                  registrationRef: revision.ref,
-                  workContractRef: revision.content.workContractRef,
-                  implementation: revision.content.implementation,
-                }
-              })
-      const collaborationBindings =
-        item.nodeKind === 'collaboration'
-          ? employee.content.exactCollaborationBindings.filter(
-              (candidate) => candidate.workItemRef === item.workItemRef,
-            )
-          : []
-      if (item.nodeKind === 'collaboration' && collaborationBindings.length === 0) {
-        throw new ValidationError(
-          'employee-collaboration-binding-unavailable',
-          `no target employee is configured for ${item.workItemRef}`,
-        )
-      }
-      const roundId = this.#id()
-      const inputContexts = contexts
-        .filter((context) => requiredContextTypes.includes(context.typeId))
-        .map((context) => ({ id: context.id, revision: context.revision }))
-      const triggeringEventRef =
-        inbox?.eventId ?? `continuation:${caseRecord.revision}:${item.workItemRef}`
-      const executionNonce = runtimeDigest({
-        roundId,
-        caseRef: { id: caseRecord.id, revision: caseRecord.revision },
-        employeeTypeRef: caseRecord.typeRef,
-        inputContexts,
-        triggeringEventRef,
-        workItemRef: item.workItemRef,
-        toolSlotRef: frozenSlotRef,
-        workContractRef: item.workContractRef,
-        toolRegistrationRef: tool?.ref ?? null,
-        exactWorkItemTools,
-        orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
-        executionPolicyRevision: caseRecord.executionPolicyRevision,
-      })
-      const assembledInputEnvelopeJson = this.#codec(
-        caseRecord.typeRef.typeId,
-      ).assembleReactionInputJson(
-        JSON.stringify({
-          schemaVersion: 1,
+        const binding = selectedBinding
+        const frozenSlotRef = selectedSlotRef
+        const selectedRegistrationRef =
+          selectedDispatchRoute?.registrationRef ?? binding?.registrationRef ?? null
+        const tool =
+          selectedRegistrationRef === null ? null : this.#toolRevision(selectedRegistrationRef)
+        if (item.nodeKind === 'business-tool' && !platformSelected && tool === null) {
+          throw new ValidationError(
+            'employee-tool-binding-unavailable',
+            `no exact published tool for ${item.workItemRef}/${selectedSlotRef}`,
+          )
+        }
+        const exactWorkItemTools =
+          item.nodeKind !== 'business-tool'
+            ? []
+            : employee.content.exactToolBindings
+                .filter((candidate) => candidate.workItemRef === item.workItemRef)
+                .map((candidate) => {
+                  const revision =
+                    tool !== null &&
+                    candidate.registrationRef.id === tool.ref.id &&
+                    candidate.registrationRef.revision === tool.ref.revision
+                      ? tool
+                      : this.#toolRevision(candidate.registrationRef)
+                  if (revision === null || revision.state !== 'published') {
+                    throw new ValidationError(
+                      'employee-tool-binding-unavailable',
+                      `no exact published tool for ${candidate.workItemRef}/${candidate.slotRef}`,
+                    )
+                  }
+                  return {
+                    slotRef: candidate.slotRef,
+                    registrationRef: revision.ref,
+                    workContractRef: revision.content.workContractRef,
+                    implementation: revision.content.implementation,
+                  }
+                })
+        const collaborationBindings =
+          item.nodeKind === 'collaboration'
+            ? employee.content.exactCollaborationBindings.filter(
+                (candidate) => candidate.workItemRef === item.workItemRef,
+              )
+            : []
+        if (item.nodeKind === 'collaboration' && collaborationBindings.length === 0) {
+          throw new ValidationError(
+            'employee-collaboration-binding-unavailable',
+            `no target employee is configured for ${item.workItemRef}`,
+          )
+        }
+        const roundId = this.#id()
+        const inputContexts = contexts
+          .filter((context) => inputContextTypes.includes(context.typeId))
+          .map((context) => ({ id: context.id, revision: context.revision }))
+        const triggeringEventRef =
+          inbox?.eventId ?? `continuation:${caseRecord.revision}:${item.workItemRef}`
+        const executionNonce = runtimeDigest({
+          roundId,
+          caseRef: { id: caseRecord.id, revision: caseRecord.revision },
           employeeTypeRef: caseRecord.typeRef,
-          caseRef: caseRecord.id,
-          roundRef: roundId,
-          executionNonce,
+          inputContexts,
+          triggeringEventRef,
           workItemRef: item.workItemRef,
           toolSlotRef: frozenSlotRef,
+          workContractRef: item.workContractRef,
+          toolRegistrationRef: tool?.ref ?? null,
+          exactWorkItemTools,
+          orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
+          executionPolicyRevision: caseRecord.executionPolicyRevision,
+        })
+        const assembledInputEnvelopeJson = this.#codec(
+          caseRecord.typeRef.typeId,
+        ).assembleReactionInputJson(
+          JSON.stringify({
+            schemaVersion: 1,
+            employeeTypeRef: caseRecord.typeRef,
+            caseRef: caseRecord.id,
+            roundRef: roundId,
+            executionNonce,
+            workItemRef: item.workItemRef,
+            toolSlotRef: frozenSlotRef,
+            connectionRef: tool?.content.connectionRef ?? null,
+            inputSchemaId: contract.inputSchemaId,
+            outputSchemaId: contract.outputSchemaId,
+            eventJson: JSON.stringify(
+              inbox ?? {
+                kind: 'work-item-continuation',
+                caseId: caseRecord.id,
+                workItemRef: item.workItemRef,
+              },
+            ),
+            contextsJson: JSON.stringify(
+              contexts.filter((context) => inputContextTypes.includes(context.typeId)),
+            ),
+            orderedDispatchConfigurationsJson: JSON.stringify(
+              employee.content.exactOrderedDispatchConfigurations,
+            ),
+            toolBindingsJson: JSON.stringify(exactWorkItemTools),
+          }),
+        )
+        const inputEnvelopeJson = this.#executionContracts.validateEnvelope({
+          direction: 'input',
+          contractRef: item.workContractRef,
+          roundRef: roundId,
+          executionNonce,
+          envelopeJson: assembledInputEnvelopeJson,
+        })
+        let implementationRef: ExactResourceRef | null = null
+        let implementationKind: ReactionExecutionPlan['implementationKind'] =
+          item.nodeKind === 'system' || platformSelected
+            ? 'system'
+            : item.nodeKind === 'collaboration'
+              ? 'collaboration'
+              : 'agent'
+        if (tool !== null) {
+          implementationKind = tool.content.implementation.kind
+          implementationRef =
+            tool.content.implementation.kind === 'agent'
+              ? tool.content.implementation.agentRef
+              : tool.content.implementation.kind === 'workflow'
+                ? tool.content.implementation.workflowRef
+                : tool.ref
+        } else if (collaborationBindings.length === 1) {
+          implementationRef = collaborationBindings[0]!.targetEmployeeRef
+        }
+        const plan = reactionExecutionPlanSchema.parse({
+          schemaVersion: 1,
+          roundRef: roundId,
+          executionNonce,
+          caseRef: { id: caseRecord.id, revision: caseRecord.revision },
+          employeeTypeRef: caseRecord.typeRef,
+          inputContextRefs: inputContexts,
+          triggeringEventRef,
+          workItemRef: item.workItemRef,
+          toolSlotRef: frozenSlotRef,
+          workContractRef: item.workContractRef,
+          toolRegistrationRef: tool?.ref ?? null,
           connectionRef: tool?.content.connectionRef ?? null,
+          implementationRef,
+          implementationKind,
+          implementationJson:
+            tool !== null
+              ? JSON.stringify(tool.content.implementation)
+              : collaborationBindings.length === 0
+                ? null
+                : JSON.stringify(
+                    z.array(employeeCollaborationBindingSchema).parse(collaborationBindings),
+                  ),
           inputSchemaId: contract.inputSchemaId,
           outputSchemaId: contract.outputSchemaId,
-          eventJson: JSON.stringify(
-            inbox ?? {
-              kind: 'work-item-continuation',
-              caseId: caseRecord.id,
-              workItemRef: item.workItemRef,
-            },
-          ),
-          contextsJson: JSON.stringify(
-            contexts.filter((context) => requiredContextTypes.includes(context.typeId)),
-          ),
-          orderedDispatchConfigurationsJson: JSON.stringify(
-            employee.content.exactOrderedDispatchConfigurations,
-          ),
-          toolBindingsJson: JSON.stringify(exactWorkItemTools),
-        }),
-      )
-      const inputEnvelopeJson = this.#executionContracts.validateEnvelope({
-        direction: 'input',
-        contractRef: item.workContractRef,
-        roundRef: roundId,
-        executionNonce,
-        envelopeJson: assembledInputEnvelopeJson,
-      })
-      let implementationRef: ExactResourceRef | null = null
-      let implementationKind: ReactionExecutionPlan['implementationKind'] =
-        item.nodeKind === 'system' || platformSelected
-          ? 'system'
-          : item.nodeKind === 'collaboration'
-            ? 'collaboration'
-            : 'agent'
-      if (tool !== null) {
-        implementationKind = tool.content.implementation.kind
-        implementationRef =
-          tool.content.implementation.kind === 'agent'
-            ? tool.content.implementation.agentRef
-            : tool.content.implementation.kind === 'workflow'
-              ? tool.content.implementation.workflowRef
-              : tool.ref
-      } else if (collaborationBindings.length === 1) {
-        implementationRef = collaborationBindings[0]!.targetEmployeeRef
-      }
-      const plan = reactionExecutionPlanSchema.parse({
-        schemaVersion: 1,
-        roundRef: roundId,
-        executionNonce,
-        caseRef: { id: caseRecord.id, revision: caseRecord.revision },
-        employeeTypeRef: caseRecord.typeRef,
-        inputContextRefs: inputContexts,
-        triggeringEventRef,
-        workItemRef: item.workItemRef,
-        toolSlotRef: frozenSlotRef,
-        workContractRef: item.workContractRef,
-        toolRegistrationRef: tool?.ref ?? null,
-        connectionRef: tool?.content.connectionRef ?? null,
-        implementationRef,
-        implementationKind,
-        implementationJson:
-          tool !== null
-            ? JSON.stringify(tool.content.implementation)
-            : collaborationBindings.length === 0
-              ? null
-              : JSON.stringify(
-                  z.array(employeeCollaborationBindingSchema).parse(collaborationBindings),
-                ),
-        inputSchemaId: contract.inputSchemaId,
-        outputSchemaId: contract.outputSchemaId,
-        semanticValidatorId: contract.semanticValidatorId,
-        executionPolicyRevision: caseRecord.executionPolicyRevision,
-        roundBudgetMs: policy.content.roundBudgetMs,
-        externalWaitDeadlineMs: policy.content.externalWaitDeadlineMs,
-        allowedEffectKinds: rule?.allowedEffectKinds ?? contract.allowedEffectKinds,
-        workspacePolicy: contract.workspacePolicy,
-        inputEnvelopeJson,
-      })
-      const now = this.#now()
-      const round: ReactionRoundRecord = {
-        id: roundId,
-        caseId: caseRecord.id,
-        caseRevision: caseRecord.revision,
-        inboxId: selectedContinuation === null ? inbox!.id : null,
-        employeeRef: caseRecord.employeeRef,
-        ruleId: rule?.ruleId ?? `continue-${item.workItemRef}`,
-        workItemRef: item.workItemRef,
-        workContractRef: item.workContractRef,
-        toolRef: tool?.ref ?? null,
-        executionPolicyRevision: caseRecord.executionPolicyRevision,
-        inputContextRefsJson: JSON.stringify(inputContexts),
-        planJson: JSON.stringify(plan),
-        state: 'planned',
-        executionRef: null,
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: now,
-        updatedAt: now,
-        settledAt: null,
-      }
-      const launchOutbox: EmployeeOutboxRecord = {
-        id: this.#id(),
-        caseId: caseRecord.id,
-        kind:
-          item.nodeKind === 'business-tool' && !platformSelected
-            ? 'execution-launch'
-            : item.nodeKind === 'system' || platformSelected
-              ? 'platform-work-item-execute'
-              : 'invocation-create',
-        payloadJson: JSON.stringify(
-          item.nodeKind === 'business-tool' && !platformSelected
-            ? {
-                roundId,
-                plan,
-                attempt: { ordinal: 0, mode: 'initial', previousError: null },
-              }
-            : { roundId, plan },
-        ),
-        dedupeKey:
-          item.nodeKind === 'business-tool' && !platformSelected
-            ? `execution-launch:${roundId}:0`
-            : item.nodeKind === 'system' || platformSelected
-              ? `platform-work-item-execute:${roundId}`
-              : `invocation-create:${roundId}`,
-        attemptCount: 0,
-      }
-      if (
-        !this.#store.createRound({
-          expectedCaseRevision: caseRecord.revision,
-          inboxId: selectedContinuation === null ? inbox!.id : null,
-          round,
-          plan,
-          launchOutbox,
+          semanticValidatorId: contract.semanticValidatorId,
+          executionPolicyRevision: caseRecord.executionPolicyRevision,
+          roundBudgetMs: policy.content.roundBudgetMs,
+          externalWaitDeadlineMs: policy.content.externalWaitDeadlineMs,
+          allowedEffectKinds: rule?.allowedEffectKinds ?? contract.allowedEffectKinds,
+          workspacePolicy: contract.workspacePolicy,
+          inputEnvelopeJson,
         })
-      ) {
-        continue
+        const now = this.#now()
+        const round: ReactionRoundRecord = {
+          id: roundId,
+          caseId: caseRecord.id,
+          caseRevision: caseRecord.revision,
+          inboxId: selectedContinuation === null ? inbox!.id : null,
+          employeeRef: caseRecord.employeeRef,
+          ruleId: rule?.ruleId ?? `continue-${item.workItemRef}`,
+          workItemRef: item.workItemRef,
+          workContractRef: item.workContractRef,
+          toolRef: tool?.ref ?? null,
+          executionPolicyRevision: caseRecord.executionPolicyRevision,
+          inputContextRefsJson: JSON.stringify(inputContexts),
+          planJson: JSON.stringify(plan),
+          state: 'planned',
+          executionRef: null,
+          outputJson: null,
+          attemptOrdinal: 0,
+          createdAt: now,
+          updatedAt: now,
+          settledAt: null,
+        }
+        const launchOutbox: EmployeeOutboxRecord = {
+          id: this.#id(),
+          caseId: caseRecord.id,
+          kind:
+            item.nodeKind === 'business-tool' && !platformSelected
+              ? 'execution-launch'
+              : item.nodeKind === 'system' || platformSelected
+                ? 'platform-work-item-execute'
+                : 'invocation-create',
+          payloadJson: JSON.stringify(
+            item.nodeKind === 'business-tool' && !platformSelected
+              ? {
+                  roundId,
+                  plan,
+                  attempt: { ordinal: 0, mode: 'initial', previousError: null },
+                }
+              : { roundId, plan },
+          ),
+          dedupeKey:
+            item.nodeKind === 'business-tool' && !platformSelected
+              ? `execution-launch:${roundId}:0`
+              : item.nodeKind === 'system' || platformSelected
+                ? `platform-work-item-execute:${roundId}`
+                : `invocation-create:${roundId}`,
+          attemptCount: 0,
+        }
+        if (
+          !this.#store.createRound({
+            expectedCaseRevision: caseRecord.revision,
+            inboxId: selectedContinuation === null ? inbox!.id : null,
+            round,
+            plan,
+            launchOutbox,
+          })
+        ) {
+          continue
+        }
+        return round
+      } catch (error) {
+        if (!(error instanceof DomainError)) throw error
+        this.#store.blockCase(
+          caseRecord.id,
+          `reaction-planning-failed: ${error.code}: ${error.message}`.slice(0, 2_000),
+          this.#now(),
+        )
       }
-      return round
     }
     return null
   }

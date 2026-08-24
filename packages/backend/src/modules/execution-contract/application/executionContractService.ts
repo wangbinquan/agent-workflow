@@ -253,12 +253,18 @@ export class ExecutionContractService {
     readonly projectionJson?: string | null
   }): string {
     const guide = this.#getGuide(input.contractRef)
-    if (guide.inputMode === 'host-envelope') return input.inputEnvelopeJson
     const registration = this.#registrations.get(executionContractRefKey(input.contractRef))!
     const projected = registration.projectInputJson?.({
       inputEnvelopeJson: input.inputEnvelopeJson,
       projectionJson: input.projectionJson,
     })
+    if (guide.inputMode === 'host-envelope') {
+      // Host-envelope contracts normally use the platform envelope unchanged.
+      // A registered projector is an explicit opt-in for adding late-bound,
+      // platform-owned scene facts that did not exist when the reaction plan
+      // was frozen (for example, a workspace participant's closed path set).
+      return projected ?? input.inputEnvelopeJson
+    }
     if (projected === undefined) {
       throw new Error('direct JSON input contract has no registered projector')
     }

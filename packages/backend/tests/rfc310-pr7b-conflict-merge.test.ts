@@ -39,7 +39,10 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 /** base → source 分支改 X 行 1 → target 分支按 targetEdit 改。 */
-function conflictRepo(targetEdit: { file: string; content: string }): {
+function conflictRepo(
+  targetEdit: { file: string; content: string },
+  additionalTargetEdits: readonly { file: string; content: string }[] = [],
+): {
   repo: string
   sourceSha: string
   targetSha: string
@@ -59,7 +62,9 @@ function conflictRepo(targetEdit: { file: string; content: string }): {
 
   git(repo, 'checkout', '-q', 'main')
   git(repo, 'checkout', '-q', '-b', 'target')
-  writeFileSync(join(repo, targetEdit.file), targetEdit.content)
+  for (const edit of [targetEdit, ...additionalTargetEdits]) {
+    writeFileSync(join(repo, edit.file), edit.content)
+  }
   git(repo, 'add', '-A')
   git(repo, 'commit', '-q', '-m', 'target edit')
   const targetSha = git(repo, 'rev-parse', 'HEAD').trim()
@@ -140,6 +145,53 @@ describe('rfc310 pr7b T77 — conflict merge prepare/finish', () => {
       targetSha: clean.targetSha,
     })
     expect(cleanPrep).toMatchObject({ ok: false, code: 'no-conflict' })
+  })
+
+  test('validated scene delta rebuilds a flattened index without dropping automatic target merges', async () => {
+    const { repo, sourceSha, targetSha } = conflictRepo(
+      { file: 'X.txt', content: 'line1-from-target\nline2\n' },
+      [{ file: 'automatic.txt', content: 'target automatic merge result\n' }],
+    )
+    const prepared = await prepareConflictMerge({
+      baselineRepoPath: repo,
+      sourceSha,
+      targetSha,
+    })
+    expect(prepared.ok).toBe(true)
+    if (!prepared.ok) return
+
+    // Agent scene materialization can preserve MERGE_HEAD and the business
+    // tree while flattening the index back to source HEAD. The automatic target
+    // result then looks like an ordinary out-of-conflict working-tree change.
+    git(prepared.workspacePath, 'reset', '-q', 'HEAD', '--', '.')
+    expect(git(prepared.workspacePath, 'diff', '--cached', '--name-only')).toBe('')
+    expect(readFileSync(join(prepared.workspacePath, '.git', 'MERGE_HEAD'), 'utf8').trim()).toBe(
+      targetSha,
+    )
+    expect(readFileSync(join(prepared.workspacePath, 'automatic.txt'), 'utf8')).toBe(
+      'target automatic merge result\n',
+    )
+
+    writeFileSync(join(prepared.workspacePath, 'X.txt'), 'line1-merged\nline2\n')
+    const finished = await finishConflictMerge({
+      workspacePath: prepared.workspacePath,
+      sourceSha,
+      targetSha,
+      conflictPaths: prepared.conflictPaths,
+      validatedChangedPaths: ['X.txt'],
+      missionId: 'm-t77-flattened-index',
+    })
+    expect(finished.ok).toBe(true)
+    if (!finished.ok) return
+    expect(git(prepared.workspacePath, 'show', 'HEAD:X.txt')).toBe('line1-merged\nline2\n')
+    expect(git(prepared.workspacePath, 'show', 'HEAD:automatic.txt')).toBe(
+      'target automatic merge result\n',
+    )
+    const parents = git(prepared.workspacePath, 'show', '-s', '--format=%P', 'HEAD')
+      .trim()
+      .split(' ')
+    expect(parents).toEqual([sourceSha, targetSha])
+    prepared.cleanup()
   })
 
   // T78：prepare 出来的现场要**直接交给 Agent 跑**，所以它必须与普通 action

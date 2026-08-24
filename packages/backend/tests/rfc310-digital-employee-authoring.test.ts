@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 
 import { createSession } from '@/auth/sessionStore'
 import { createInMemoryDb } from '@/db/client'
+import { employeeTypePackages } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -231,6 +232,10 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       toolRoleGroups: [],
       nextWorkItemRefs: ['acknowledge-feedback'],
     })
+    expect(workItems.get('acknowledge-feedback')?.nextWorkItemRefs).toEqual([
+      'repair-feedback',
+      'observe-mr',
+    ])
     expect(workItems.get('repair-feedback')).toMatchObject({
       nodeKind: 'business-tool',
       inputMultiplicity: 'collection',
@@ -251,6 +256,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         'development.merge-request',
         'development.pipeline',
       ],
+      optionalContextTypes: ['development.problem-set', 'development.review-resolution'],
       capabilityWorkItemRef: 'classify-feedback',
       workItemRef: 'observe-mr',
       slotRef: 'system',
@@ -333,13 +339,17 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         'development.merge-request',
         'development.pipeline',
       ],
+      optionalContextTypes: ['development.problem-set', 'development.review-resolution'],
       capabilityWorkItemRef: 'repair-conflict',
       workItemRef: 'observe-mr',
       slotRef: 'system',
     })
     expect(
       descriptor.reactionRules.find((rule) => rule.ruleId === 'handle-lifecycle'),
-    ).toMatchObject({ requiredContextTypes: ['development.merge-request', 'development.pipeline'] })
+    ).toMatchObject({
+      requiredContextTypes: ['development.merge-request', 'development.pipeline'],
+      optionalContextTypes: ['development.problem-set', 'development.review-resolution'],
+    })
     expect(validateTypePackage(descriptor)).toEqual([])
 
     const invalid = structuredClone(descriptor)
@@ -542,6 +552,31 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     ).toBe(true)
     expect(await listAgents(db)).toHaveLength(16)
 
+    const historicalDescriptorJson = JSON.stringify({
+      typeRef: { typeId: 'development', revision: 8 },
+      workContracts: [{ contractId: 'development.repair-feedback', version: 1 }],
+      authoringManifest: {
+        workItems: [
+          {
+            workItemRef: 'repair-feedback',
+            nodeKind: 'business-tool',
+            workContractRef: { contractId: 'development.repair-feedback', version: 1 },
+            toolRoleGroups: [{ roleRef: 'primary' }],
+          },
+        ],
+      },
+    })
+    db.insert(employeeTypePackages)
+      .values({
+        typeId: 'development',
+        revision: 8,
+        descriptorJson: historicalDescriptorJson,
+        descriptorDigest: 'historical-development-8',
+        state: 'published',
+        registeredAt: 1,
+      })
+      .run()
+
     // User regression 2026-08-22: the classifier's problem list must be part
     // of the exact tool revision, while the built-in repair Agent explicitly
     // declares that it can solve every problem emitted by that classifier.
@@ -598,6 +633,21 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         }),
       }),
     )
+    const historicalReviewTools = JSON.parse(
+      catalog.listJson(JSON.stringify({ typeId: 'development', revision: 8 }), 'repair-feedback'),
+    ) as Array<{ id: string; publishedRevision: number }>
+    expect(historicalReviewTools).toHaveLength(1)
+    expect(historicalReviewTools[0]?.id).toContain(
+      'platform:employee-tool:development:8:repair-feedback:',
+    )
+    expect(
+      catalog.getRevisionJson(
+        JSON.stringify({
+          id: historicalReviewTools[0]!.id,
+          revision: historicalReviewTools[0]!.publishedRevision,
+        }),
+      ),
+    ).not.toBeNull()
   })
 
   test('classifier tools own problem definitions and repair tools declare exact capabilities', async () => {
@@ -1724,6 +1774,86 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       }),
     }
+    const staleResolution = {
+      id: 'resolution-stale-review',
+      revision: 1,
+      typeId: 'development.review-resolution',
+      stateJson: JSON.stringify({
+        status: 'collected',
+        mergeRequestRef: 'repo!42',
+        sourceHeadSha: 'b'.repeat(40),
+        publishedHeadSha: null,
+        commitSha: null,
+        threads: [
+          {
+            threadRef: 'review-1',
+            revision: '1:1',
+            acknowledgement: null,
+            disposition: null,
+            replyBody: null,
+            finalReply: null,
+          },
+        ],
+      }),
+      artifactRefs: [],
+    }
+    const resolvedReviewProblem = {
+      ...reviewProblem,
+      stateJson: JSON.stringify({
+        ...JSON.parse(reviewProblem.stateJson),
+        status: 'resolved',
+        remainingTypes: [],
+        problems: [],
+      }),
+    }
+    const reconciledReview = JSON.parse(
+      developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          workItemRef: 'acknowledge-feedback',
+          toolSlotRef: 'system',
+          outputJson: JSON.stringify({
+            schemaVersion: 1,
+            roundRef: 'round-acknowledge-stale-review',
+            executionNonce: 'f'.repeat(64),
+            status: 'ok',
+            summary: 'retired a review fact absent from the authoritative snapshot',
+            contextPatches: [
+              {
+                contextId: staleResolution.id,
+                contextTypeId: staleResolution.typeId,
+                schemaVersion: 1,
+                expectedRevision: staleResolution.revision,
+                lifecycleState: 'active',
+                stateJson: JSON.stringify({
+                  ...JSON.parse(staleResolution.stateJson),
+                  threads: [],
+                }),
+                artifactRefs: [],
+              },
+              {
+                contextId: reviewProblem.id,
+                contextTypeId: reviewProblem.typeId,
+                schemaVersion: 1,
+                expectedRevision: reviewProblem.revision,
+                lifecycleState: 'terminal',
+                stateJson: resolvedReviewProblem.stateJson,
+                artifactRefs: [],
+              },
+            ],
+            effectSuggestions: [],
+            artifactRefs: [],
+          }),
+          contextsJson: JSON.stringify([reviewProblem, staleResolution]),
+          allowedNextWorkItemRefs: ['repair-feedback', 'observe-mr'],
+        }),
+      ),
+    )
+    expect(reconciledReview).toMatchObject({
+      caseState: 'active',
+      nextWorkItemRef: 'observe-mr',
+    })
+
     const repaired = JSON.parse(
       developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
         JSON.stringify({
@@ -2090,7 +2220,19 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       )
 
     expect(() => validate(7)).not.toThrow()
-    expect(() => validate(8)).toThrow('pipeline evidence does not belong to the current MR target')
+    const upgradedLegacyOutput = JSON.parse(validate(8)) as {
+      contextPatches: Array<{ contextTypeId: string; stateJson: string }>
+    }
+    expect(
+      JSON.parse(
+        upgradedLegacyOutput.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.pipeline',
+        )!.stateJson,
+      ),
+    ).toMatchObject({ status: 'passed', targetSha: 'b'.repeat(40) })
+    expect(() => validate(8, { targetSha: 'c'.repeat(40) })).toThrow(
+      'pipeline evidence does not belong to the current MR target',
+    )
 
     const unknownTargetMergeRequest = {
       ...mergeRequest,
@@ -2208,6 +2350,133 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         }),
       ),
     ).toThrow('problem set is stale')
+  })
+
+  test('classifier upserts a prior terminal problem set using its frozen identity', () => {
+    const headSha = 'a'.repeat(40)
+    const mergeRequest = {
+      id: 'mr-pipeline-reclassification',
+      revision: 4,
+      typeId: 'development.merge-request',
+      schemaVersion: 1,
+      lifecycleState: 'active',
+      stateJson: JSON.stringify({
+        status: 'active',
+        mergeRequestRef: 'repo!42',
+        headSha,
+        factsHeadSha: headSha,
+        targetSha: 'b'.repeat(40),
+        issueHandlingContextRef: 'issue-context',
+        readyToMerge: false,
+      }),
+      artifactRefs: [],
+    }
+    const pipeline = {
+      id: 'pipeline-reclassification',
+      revision: 3,
+      typeId: 'development.pipeline',
+      schemaVersion: 1,
+      lifecycleState: 'active',
+      stateJson: JSON.stringify({
+        status: 'failed',
+        mergeRequestRef: 'repo!42',
+        headSha,
+        targetSha: 'b'.repeat(40),
+        evidenceArtifactRef: '.agent-workflow/pipeline/case-reclassification/',
+        failureTypes: ['test-failure'],
+      }),
+      artifactRefs: ['.agent-workflow/pipeline/case-reclassification/'],
+    }
+    const priorProblemSet = {
+      id: 'problem-set-from-prior-review',
+      revision: 6,
+      typeId: 'development.problem-set',
+      schemaVersion: 1,
+      lifecycleState: 'terminal',
+      stateJson: JSON.stringify({
+        status: 'resolved',
+        source: 'review',
+        headSha: 'c'.repeat(40),
+        remainingTypes: [],
+        problems: [],
+      }),
+      artifactRefs: [],
+    }
+    const validated = JSON.parse(
+      developmentEmployeeRuntimeCodec.validateReactionOutputJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          workItemRef: 'classify-pipeline',
+          toolSlotRef: 'default',
+          inputEnvelopeJson: JSON.stringify({
+            contextsJson: JSON.stringify([mergeRequest, pipeline, priorProblemSet]),
+            contractInput: {
+              failureTypeDefinitions: [
+                {
+                  typeId: 'test-failure',
+                  priority: 1,
+                  fallback: false,
+                  handlingWorkItemRef: 'repair-pipeline',
+                },
+              ],
+            },
+          }),
+          outputJson: JSON.stringify({
+            schemaVersion: 1,
+            roundRef: 'round-pipeline-reclassification',
+            executionNonce: 'f'.repeat(64),
+            status: 'ok',
+            summary: 'classified the current pipeline failure',
+            contextPatches: [
+              {
+                contextId: null,
+                contextTypeId: 'development.problem-set',
+                schemaVersion: 1,
+                expectedRevision: null,
+                lifecycleState: 'active',
+                stateJson: JSON.stringify({
+                  status: 'active',
+                  source: 'pipeline',
+                  headSha,
+                  remainingTypes: ['test-failure'],
+                  problems: [
+                    {
+                      problemId: 'pipeline:test-failure:1',
+                      type: 'test-failure',
+                      summary: 'the test job failed',
+                      evidenceArtifactRefs: [
+                        '.agent-workflow/pipeline/case-reclassification/job.log',
+                      ],
+                      reviewThread: null,
+                    },
+                  ],
+                }),
+                artifactRefs: ['.agent-workflow/pipeline/case-reclassification/job.log'],
+              },
+            ],
+            effectSuggestions: [],
+            artifactRefs: [],
+          }),
+        }),
+      ),
+    ) as {
+      contextPatches: Array<{
+        contextId: string | null
+        contextTypeId: string
+        schemaVersion: number
+        expectedRevision: number | null
+        lifecycleState: string
+      }>
+    }
+    expect(validated.contextPatches).toContainEqual(
+      expect.objectContaining({
+        contextId: priorProblemSet.id,
+        contextTypeId: priorProblemSet.typeId,
+        schemaVersion: priorProblemSet.schemaVersion,
+        expectedRevision: priorProblemSet.revision,
+        lifecycleState: 'active',
+      }),
+    )
   })
 
   test('review classification covers each actionable MR thread exactly once', () => {
@@ -2369,6 +2638,217 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         }),
       ),
     ).toThrow('unresolvedReviewCount does not match actionable reviewThreads')
+  })
+
+  test('a later review revision answers only its frozen problem set and preserves prior treatment', () => {
+    const issue = {
+      id: 'issue-review-revision',
+      revision: 2,
+      typeId: 'development.issue-handling',
+      schemaVersion: 1,
+      lifecycleState: 'active',
+      stateJson: JSON.stringify({
+        status: 'active',
+        subjectRef: 'repo:ISSUE-8',
+        repositoryRef: 'repo',
+        request: {
+          kind: 'external-id',
+          body: null,
+          externalId: 'ISSUE-8',
+          uploads: [],
+          executionOptions: {},
+        },
+        materialArtifactRefs: [],
+        deliveryContent: null,
+      }),
+      artifactRefs: [],
+    }
+    const selectedRevision = {
+      threadRef: 'thread-1',
+      revision: '2:10',
+      authorClass: 'human',
+      resolved: false,
+      body: 'publish the existing repair',
+      path: 'test/calc.test.mjs',
+      messages: [],
+    }
+    const problemSet = {
+      id: 'problem-review-revision',
+      revision: 1,
+      typeId: 'development.problem-set',
+      schemaVersion: 1,
+      lifecycleState: 'active',
+      stateJson: JSON.stringify({
+        status: 'active',
+        source: 'review',
+        headSha: 'a'.repeat(40),
+        remainingTypes: ['review'],
+        problems: [
+          {
+            problemId: 'thread-1',
+            type: 'review',
+            summary: 'publish the existing repair',
+            evidenceArtifactRefs: [],
+            reviewThread: selectedRevision,
+          },
+        ],
+      }),
+      artifactRefs: [],
+    }
+    const priorThread = {
+      threadRef: 'thread-1',
+      revision: '1:8',
+      acknowledgement: { marker: 'received-old', noteRef: '9' },
+      disposition: 'addressed',
+      replyBody: 'old revision was repaired',
+      finalReply: { marker: 'resolved-old', noteRef: '11' },
+    }
+    const resolution = {
+      id: 'resolution-review-revision',
+      revision: 4,
+      typeId: 'development.review-resolution',
+      schemaVersion: 1,
+      lifecycleState: 'active',
+      stateJson: JSON.stringify({
+        status: 'acknowledged',
+        mergeRequestRef: 'repo!3',
+        sourceHeadSha: 'a'.repeat(40),
+        publishedHeadSha: null,
+        commitSha: null,
+        threads: [
+          priorThread,
+          {
+            threadRef: selectedRevision.threadRef,
+            revision: selectedRevision.revision,
+            acknowledgement: { marker: 'received-new', noteRef: '12' },
+            disposition: null,
+            replyBody: null,
+            finalReply: null,
+          },
+        ],
+      }),
+      artifactRefs: [],
+    }
+    const validate = (
+      reviewReplies: readonly object[],
+      resolutionContext: typeof resolution = resolution,
+    ) =>
+      developmentEmployeeRuntimeCodec.validateReactionOutputJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          workItemRef: 'repair-feedback',
+          toolSlotRef: 'default',
+          inputEnvelopeJson: JSON.stringify({
+            contextsJson: JSON.stringify([issue, problemSet, resolutionContext]),
+          }),
+          outputJson: JSON.stringify({
+            schemaVersion: 1,
+            roundRef: 'round-review-revision',
+            executionNonce: 'e'.repeat(64),
+            status: 'ok',
+            summary: 'repaired the selected review revision',
+            deliveryContent: {
+              commitMessage: 'test: publish decimal regression',
+              mergeRequestTitle: 'Publish decimal regression',
+              mergeRequestDescription: 'Publishes the reviewed decimal regression test.',
+            },
+            reviewReplies,
+            contextPatches: [],
+            effectSuggestions: [],
+            artifactRefs: [],
+          }),
+        }),
+      )
+    const validated = JSON.parse(
+      validate([
+        {
+          threadRef: selectedRevision.threadRef,
+          revision: selectedRevision.revision,
+          disposition: 'addressed',
+          replyBody: 'published the requested decimal regression',
+        },
+      ]),
+    ) as { contextPatches: Array<{ contextTypeId: string; stateJson: string }> }
+    const patched = JSON.parse(
+      validated.contextPatches.find(
+        (patch) => patch.contextTypeId === 'development.review-resolution',
+      )!.stateJson,
+    ) as { status: string; threads: unknown[] }
+    expect(patched.status).toBe('prepared')
+    expect(patched.threads).toEqual([
+      priorThread,
+      {
+        threadRef: selectedRevision.threadRef,
+        revision: selectedRevision.revision,
+        acknowledgement: { marker: 'received-new', noteRef: '12' },
+        disposition: 'addressed',
+        replyBody: 'published the requested decimal regression',
+        finalReply: null,
+      },
+    ])
+    const supersededAcknowledgement = {
+      ...priorThread,
+      disposition: null,
+      replyBody: null,
+      finalReply: null,
+    }
+    const healed = JSON.parse(
+      validate(
+        [
+          {
+            threadRef: supersededAcknowledgement.threadRef,
+            revision: supersededAcknowledgement.revision,
+            disposition: 'addressed',
+            replyBody: 'duplicate reply for the superseded revision must not be published',
+          },
+          {
+            threadRef: selectedRevision.threadRef,
+            revision: selectedRevision.revision,
+            disposition: 'addressed',
+            replyBody: 'published the requested decimal regression',
+          },
+        ],
+        {
+          ...resolution,
+          stateJson: JSON.stringify({
+            ...JSON.parse(resolution.stateJson),
+            threads: [supersededAcknowledgement, JSON.parse(resolution.stateJson).threads[1]],
+          }),
+        },
+      ),
+    ) as { contextPatches: Array<{ contextTypeId: string; stateJson: string }> }
+    expect(
+      JSON.parse(
+        healed.contextPatches.find(
+          (patch) => patch.contextTypeId === 'development.review-resolution',
+        )!.stateJson,
+      ).threads,
+    ).toEqual([
+      {
+        threadRef: selectedRevision.threadRef,
+        revision: selectedRevision.revision,
+        acknowledgement: { marker: 'received-new', noteRef: '12' },
+        disposition: 'addressed',
+        replyBody: 'published the requested decimal regression',
+        finalReply: null,
+      },
+    ])
+    expect(() =>
+      validate([
+        {
+          threadRef: priorThread.threadRef,
+          revision: priorThread.revision,
+          disposition: 'addressed',
+          replyBody: 'duplicate historical treatment',
+        },
+        {
+          threadRef: selectedRevision.threadRef,
+          revision: selectedRevision.revision,
+          disposition: 'addressed',
+          replyBody: 'new treatment',
+        },
+      ]),
+    ).toThrow('one ordered review reply for every selected thread revision')
   })
 
   test('system nodes reject tools and employee retries are derived from global Limits', async () => {
@@ -2612,7 +3092,10 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         version: 1,
       }),
     )
-    expect(prompt).toContain('Do not run git, commit, push, merge, approve')
+    expect(prompt).toContain('Use read-only repository and Git inspection')
+    expect(prompt).toContain(
+      'Do not run Git commands that mutate the worktree or metadata, including add, commit, push, merge, rebase, reset, or checkout',
+    )
     expect(prompt).toContain('or choose the next action')
     expect(prompt).toContain(`executionNonce=${JSON.stringify('a'.repeat(64))}`)
     expect(prompt).toContain('tool slot "compile"')

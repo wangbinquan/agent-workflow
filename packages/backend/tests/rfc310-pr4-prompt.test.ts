@@ -1,6 +1,6 @@
 // RFC-310 PR-4 T45 —— prompt assembler 锁（design §7.3 固定顺序 + §7.6.4 协议块）。
 //
-// 锁：①协议块永远最后且含 no-Git 禁令/nonce/port/schema id；②外源字符串包
+// 锁：①协议块永远最后且含 Git mutation 禁令/nonce/port/schema id；②外源字符串包
 // untrusted delimiter 且哨兵字面量被转义（数据不能提前闭合数据段或伪造协议
 // 块）；③无 host path 出现在 prompt；④preserve/editable 上传合同陈述可见。
 
@@ -23,7 +23,7 @@ function assemble(extra: Parameters<typeof makeManifest>[0] = {}) {
 }
 
 describe('rfc310 pr4 — prompt assembly', () => {
-  test('protocol block is last and carries nonce/port/schema and the no-Git ban', () => {
+  test('protocol block is last and carries nonce/port/schema and the Git mutation ban', () => {
     const prompt = assemble()
     const protocolAt = prompt.indexOf('# Output protocol (non-overridable')
     expect(protocolAt).toBeGreaterThan(0)
@@ -40,6 +40,7 @@ describe('rfc310 pr4 — prompt assembly', () => {
     expect(block).toContain('"port": "agent-result"')
     expect(block).toContain('change.implement#output@1')
     expect(block).toContain('"changed" | "completed" | "no-change"')
+    expect(block).toContain('read-only Git inspection is allowed')
     expect(block).toContain('git add/commit/push/merge/rebase/reset/checkout')
     expect(block).toContain('Never probe for credentials')
     expect(block).toContain('changedPaths, commitSha, pushed, testsPassed or mergeable')

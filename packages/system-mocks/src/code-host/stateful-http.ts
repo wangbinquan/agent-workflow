@@ -277,6 +277,20 @@ async function handleGitlab(
     const job = findProjectJob(project, Number(jobTrace[1]))
     return job === null ? notFound(input.response) : text(input.response, job.log)
   }
+  const branchMatch = /^\/repository\/branches\/(.+)$/.exec(rest)
+  if (branchMatch !== null && input.request.method === 'GET') {
+    const branch = decodeURIComponent(branchMatch[1]!)
+    const sha =
+      branch === project.defaultBranch
+        ? project.baseSha
+        : [...project.mergeRequests.values()].find((mr) => mr.sourceBranch === branch)?.headSha
+    return sha === undefined
+      ? notFound(input.response)
+      : json(input.response, {
+          name: branch,
+          commit: { id: sha, short_id: sha.slice(0, 8) },
+        })
+  }
   const fileMatch = /^\/repository\/files\/(.+)\/raw$/.exec(rest)
   if (fileMatch !== null) {
     const ref = input.url.searchParams.get('ref') ?? project.headSha

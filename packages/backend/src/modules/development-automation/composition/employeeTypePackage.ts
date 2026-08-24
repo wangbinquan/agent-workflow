@@ -1391,6 +1391,28 @@ const outputDetailsByContract: Record<
   },
 }
 
+function projectLegacyConflictRepairInput(input: {
+  readonly inputEnvelopeJson: string
+  readonly projectionJson?: string | null
+}): string {
+  const envelope = z
+    .object({ contractInput: z.record(z.string(), z.unknown()) })
+    .passthrough()
+    .parse(JSON.parse(input.inputEnvelopeJson) as unknown)
+  const event = z.record(z.string(), z.unknown()).parse(envelope.contractInput.event)
+  const projection = z
+    .object({ conflictFiles: z.array(z.string().min(1)).min(1) })
+    .passthrough()
+    .parse(JSON.parse(input.projectionJson ?? '{}') as unknown)
+  return JSON.stringify({
+    ...envelope,
+    contractInput: {
+      ...envelope.contractInput,
+      event: { ...event, conflictFiles: projection.conflictFiles },
+    },
+  })
+}
+
 const genericContractInput = {
   event: { eventTypeId: 'platform.event', subjectRef: 'subject' },
   contexts: [{ typeId: 'registered.context', revision: 1, state: {} }],
@@ -1534,6 +1556,9 @@ const developmentExecutionContractRegistrationsV1: readonly ExecutionContractReg
     return {
       contractRef: guide.contractRef,
       guideJson: JSON.stringify(guide),
+      ...(workContract.contractId === 'development.repair-conflict'
+        ? { projectInputJson: projectLegacyConflictRepairInput }
+        : {}),
     }
   })
 
@@ -2099,7 +2124,7 @@ const runtimePackage = {
           completionStandard: contracts[18]!.completionStandard,
           nodeKind: 'system',
           toolRoleGroups: [],
-          nextWorkItemRefs: ['repair-feedback'],
+          nextWorkItemRefs: ['repair-feedback', 'observe-mr'],
         },
         {
           workItemRef: 'repair-feedback',
@@ -2453,6 +2478,24 @@ const runtimePackage = {
         ],
       },
       {
+        typeId: 'development.review-resolution',
+        schemaVersion: 1,
+        displayName: text('检视处理台账', 'Review resolution ledger'),
+        description: text(
+          '保存每个检视线程版本的确认、处理结论、发布提交和最终回复回执',
+          'Stores acknowledgements, dispositions, published commits, and final reply receipts for every review-thread revision',
+        ),
+        projectionFields: [
+          { path: 'status', label: text('处理状态', 'Resolution status'), format: 'text' },
+          { path: 'threads', label: text('线程版本', 'Thread revisions'), format: 'count' },
+          {
+            path: 'publishedHeadSha',
+            label: text('发布提交', 'Published commit'),
+            format: 'short-hash',
+          },
+        ],
+      },
+      {
         typeId: 'development.delegation',
         schemaVersion: 1,
         displayName: text('协同上下文', 'Delegation context'),
@@ -2709,6 +2752,7 @@ const runtimePackage = {
           'development.merge-request',
           'development.pipeline',
         ],
+        optionalContextTypes: ['development.problem-set', 'development.review-resolution'],
         capabilityWorkItemRef: 'classify-feedback',
         workItemRef: 'observe-mr',
         slotRef: 'system',
@@ -2738,6 +2782,7 @@ const runtimePackage = {
           'development.merge-request',
           'development.pipeline',
         ],
+        optionalContextTypes: ['development.problem-set', 'development.review-resolution'],
         capabilityWorkItemRef: 'repair-conflict',
         workItemRef: 'observe-mr',
         slotRef: 'system',
@@ -2749,6 +2794,7 @@ const runtimePackage = {
         priority: 1_000,
         preemptsContinuation: true,
         requiredContextTypes: ['development.merge-request', 'development.pipeline'],
+        optionalContextTypes: ['development.problem-set', 'development.review-resolution'],
         workItemRef: 'observe-mr',
         slotRef: 'system',
         allowedEffectKinds: [],
@@ -2992,6 +3038,11 @@ export const mergeRequestContextSchema = z
       .regex(/^[a-f0-9]{40}$/)
       .nullable()
       .default(null),
+    mergedCommitSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/)
+      .nullable()
+      .default(null),
     draft: z.boolean().default(false),
     mergeableState: z.enum(['mergeable', 'conflict', 'unknown']).default('unknown'),
     approvalHold: z.boolean().nullable().default(null),
@@ -3164,11 +3215,20 @@ export const reviewResolutionContextSchema = z
           })
           .strict(),
       )
-      .min(1)
       .max(100),
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (
+      value.threads.length === 0 &&
+      (value.status !== 'collected' || value.publishedHeadSha !== null || value.commitSha !== null)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['threads'],
+        message: 'an empty reconciled review resolution must remain collected and unpublished',
+      })
+    }
     const refs = new Set<string>()
     for (const [index, thread] of value.threads.entries()) {
       const key = `${thread.threadRef}\u0000${thread.revision}`
@@ -3530,7 +3590,12 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const request = invokedCaseRequestSchema.parse(JSON.parse(requestJson) as unknown)
     const scope = runtimeScopeSchema.parse(JSON.parse(request.targetWorkScopeJson) as unknown)
     const parentEnvelope = z
-      .object({ contextsJson: z.string().min(2) })
+      .object({
+        contextsJson: z.string().min(2),
+        contractInput: z
+          .object({ assignedFailureType: pipelineFailureTypeSchema.optional() })
+          .passthrough(),
+      })
       .passthrough()
       .parse(JSON.parse(request.inputEnvelopeJson) as unknown)
     const parentContexts = z
@@ -3545,13 +3610,98 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const parentIssue = issueHandlingContextSchema.parse(
       JSON.parse(parentIssueContext.stateJson) as unknown,
     )
+    const parentProblemSetContext = parentContexts.find(
+      (context) => context.typeId === 'development.problem-set',
+    )
+    const parentProblemSet = problemSetContextSchema.parse(
+      parentProblemSetContext === undefined
+        ? {
+            status: 'resolved',
+            source: 'pipeline',
+            headSha: null,
+            remainingTypes: [],
+            problems: [],
+          }
+        : (JSON.parse(parentProblemSetContext.stateJson) as unknown),
+    )
+    const assignedFailureType = parentEnvelope.contractInput.assignedFailureType ?? null
+    const delegatedProblems =
+      assignedFailureType === null
+        ? []
+        : parentProblemSet.problems.filter((problem) => problem.type === assignedFailureType)
+    if (
+      assignedFailureType !== null &&
+      (parentProblemSet.status !== 'active' || delegatedProblems.length === 0)
+    ) {
+      throw new Error('delegated development work requires unresolved typed problems')
+    }
+    const parentPipelineContext = parentContexts.find(
+      (context) => context.typeId === 'development.pipeline',
+    )
+    const parentPipeline =
+      parentPipelineContext === undefined
+        ? null
+        : pipelineContextSchema.parse(JSON.parse(parentPipelineContext.stateJson) as unknown)
     const repositoryRef =
       scope.kind === 'repository' ? scope.repositoryId : parentIssue.repositoryRef
+    const evidenceArtifactRefs = [
+      ...new Set([
+        ...(parentPipeline === null ? [] : [parentPipeline.evidenceArtifactRef]),
+        ...delegatedProblems.flatMap((problem) => problem.evidenceArtifactRefs),
+      ]),
+    ]
+    const delegatedRequest = {
+      schemaVersion: 1,
+      kind: 'development.cross-repository-work',
+      parentCaseRef: request.parentCaseRef,
+      sourceRepositoryRef: parentIssue.repositoryRef,
+      targetRepositoryRef: repositoryRef,
+      sourceHeadSha: parentProblemSet.headSha,
+      assignedFailureType,
+      evidenceArtifactRefs,
+      sourceRequest: {
+        kind: parentIssue.request.kind,
+        body: parentIssue.request.body,
+        externalId: parentIssue.request.externalId,
+        uploads: parentIssue.request.uploads.map((upload) => ({
+          originalName: upload.originalName,
+          placement: upload.placement,
+          targetPath: upload.targetPath,
+        })),
+      },
+      pipeline:
+        parentPipeline === null
+          ? null
+          : {
+              mergeRequestRef: parentPipeline.mergeRequestRef,
+              headSha: parentPipeline.headSha,
+              targetSha: parentPipeline.targetSha,
+              failureTypes:
+                assignedFailureType === null ? parentPipeline.failureTypes : [assignedFailureType],
+            },
+      problems: delegatedProblems.map((problem) => ({
+        problemId: problem.problemId,
+        type: problem.type,
+        summary: problem.summary,
+        evidenceArtifactRefs: problem.evidenceArtifactRefs,
+      })),
+    }
     const primaryContext = issueHandlingContextSchema.parse({
-      ...parentIssue,
       status: 'active',
       subjectRef: `invocation:${request.invocationRef}`,
       repositoryRef,
+      request: {
+        kind: 'body',
+        body: [
+          'Complete the delegated cross-repository work described by this frozen request:',
+          JSON.stringify(delegatedRequest, null, 2),
+        ].join('\n\n'),
+        externalId: null,
+        uploads: [],
+        executionOptions: parentIssue.request.executionOptions,
+      },
+      materialArtifactRefs: [],
+      deliveryContent: null,
     })
     return JSON.stringify({
       employeeRef: request.targetEmployeeRef,
@@ -3559,7 +3709,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       primaryContextSchemaVersion: 1,
       primaryContextState: 'active',
       primaryContextJson: JSON.stringify(primaryContext),
-      artifactRefs: parentIssue.materialArtifactRefs,
+      artifactRefs: [],
       workSubject: {
         typeId: 'work-request',
         subjectRef: `invocation:${request.invocationRef}`,
@@ -3886,6 +4036,12 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       artifactRefs: Array.isArray(context.artifactRefs) ? context.artifactRefs : [],
     }))
     const event = JSON.parse(request.eventJson) as unknown
+    const invocationResultEvent = z
+      .object({
+        subject: z.object({ typeId: z.literal('employee-invocation') }).passthrough(),
+      })
+      .passthrough()
+      .safeParse(event).success
     const orderedDispatchConfigurations = orderedDispatchConfigurationRuntimeSchema.parse(
       JSON.parse(request.orderedDispatchConfigurationsJson) as unknown,
     )
@@ -3919,6 +4075,23 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         fallback: route.fallback,
         handlingWorkItemRef: route.destinationWorkItemRef,
       })) ?? []
+    const pipelineProblemSet =
+      problemSet === undefined
+        ? null
+        : problemSetContextSchema.parse(JSON.parse(problemSet.stateJson) as unknown)
+    const assignedDelegationFailureType = pipelineDispatch?.routes.find(
+      (route) =>
+        route.destinationWorkItemRef === 'delegate' &&
+        pipelineProblemSet?.remainingTypes.includes(route.routeRef),
+    )?.routeRef
+    if (
+      request.workItemRef === 'delegate' &&
+      !invocationResultEvent &&
+      pipelineProblemSet?.status === 'active' &&
+      assignedDelegationFailureType === undefined
+    ) {
+      throw new Error('delegation has no deterministic assigned pipeline failure type')
+    }
     const platformCaseKey = stableIdentityComponent(request.caseRef)
     const requirementDirectory = `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}`
     const materialTargetDirectory = `${requirementDirectory}/external`
@@ -3961,18 +4134,25 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
                         assignedFailureType: request.toolSlotRef,
                         pipelineDirectory,
                       }
-                    : request.workItemRef === 'repair-conflict'
+                    : request.workItemRef === 'delegate' &&
+                        assignedDelegationFailureType !== undefined
                       ? {
-                          mergeRequest: stateOf(mergeRequest),
-                          event,
-                          requirementContext: issueState,
+                          problemSet: stateOf(problemSet),
+                          pipelineEvidence: stateOf(pipeline),
+                          assignedFailureType: assignedDelegationFailureType,
                         }
-                      : request.workItemRef === 'prepare-approval'
+                      : request.workItemRef === 'repair-conflict'
                         ? {
                             mergeRequest: stateOf(mergeRequest),
-                            connectionRef: request.connectionRef,
+                            event,
+                            requirementContext: issueState,
                           }
-                        : { event, contexts: genericContexts }
+                        : request.workItemRef === 'prepare-approval'
+                          ? {
+                              mergeRequest: stateOf(mergeRequest),
+                              connectionRef: request.connectionRef,
+                            }
+                          : { event, contexts: genericContexts }
     const executionEnvironment =
       issue === undefined
         ? { kind: 'scratch' as const }
@@ -4080,7 +4260,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           ? 'Produce one development.approval context patch with status=draft. mergeRequestRef and headSha must exactly equal the frozen current MR, adapterRef must exactly equal connectionRef, approvalType must be gate-change, validatedDraftRef must identify the strict approval draft envelope, and all submission/observation fields must be null. Do not submit the approval and do not access credentials.'
           : request.workItemRef === 'collect-pipeline'
             ? targetAwarePipeline
-              ? 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head and target SHA, pending/passed/failed status, evidence path, and closed failureTypes. A provider snapshot not bound to both the frozen head and target must remain pending. Pending and passed must have no failureTypes. Do not choose another download path.'
+              ? 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Verify the provider snapshot against both the frozen head and target; the platform owns and freezes targetSha, so it may be omitted from the tool patch, while an explicitly returned value must match. A provider snapshot not bound to both identities must remain pending. Pending and passed must have no failureTypes. Do not choose another download path.'
               : 'Write complete gate evidence and large logs only under platformPaths.pipelineDirectory, then upsert development.pipeline with the exact MR head, pending/passed/failed status, evidence path, and closed failureTypes. Pending and passed must have no failureTypes. Do not choose another download path.'
             : request.workItemRef === 'classify-pipeline'
               ? `Read pipeline evidence only from platformPaths.pipelineDirectory and classify it using only contractInput.failureTypeDefinitions. Upsert development.problem-set with source=pipeline, the current MR head, typed problems, and unique remainingTypes. Use the one fallback type only when no earlier classifier-tool type matches. The list order is platform-frozen priority; do not invent a type or choose a handler.`
@@ -4093,7 +4273,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
                     : request.workItemRef === 'analyze-implement'
                       ? 'Before analysis or implementation, read every body, external ID, uploaded workspacePath, and requirementDirectory entry in materialInstructions. Respect commitWithMergeRequest: temporary documents are read-only materials and must never be copied into a commit. When humanReview is present, implementation starts only after the platform review has approved the generated plan; consume that approved plan together with this frozen envelope. Do not omit an uploaded document. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit the issue Context or perform Git/MR operations.'
                       : request.workItemRef === 'repair-conflict'
-                        ? 'Repair only the platform-frozen conflict scene and authorized files. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit platform Contexts and do not perform commit, push, merge, or MR updates.'
+                        ? 'The exact writable conflict-file set is contractInput.event.conflictFiles. Modify only those paths. The isolated execution checkout does not preserve the merge index, so never infer the writable set from Git status, Git diff, conflict markers, tests, or prior delivery content. The platform has already preserved every path outside that closed set: do not rewrite, restore, format, or otherwise touch one, even when an automatically merged result looks broken. Return top-level deliveryContent with the commit message, MR title, and MR description; do not edit platform Contexts and do not perform commit, push, merge, or MR updates.'
                         : request.workItemRef === 'prepare-materials'
                           ? 'For an external ID, download every source file only into contractInput.materialTargetDirectory, which the platform has already allocated and created. Do not choose another path, do not write Git metadata, and do not copy these temporary materials into business paths.'
                           : 'Follow the frozen work contract and return only its deterministic result.',
@@ -4246,6 +4426,30 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         const selectedKeys = selectedThreads.map((thread) =>
           thread == null ? null : `${thread.threadRef}\u0000${thread.revision}`,
         )
+        const normalizedSelectedKeys = selectedKeys.filter((key): key is string => key !== null)
+        const selectedKeySet = new Set(normalizedSelectedKeys)
+        const selectedThreadRefs = new Set(
+          selectedThreads.flatMap((thread) => (thread == null ? [] : [thread.threadRef])),
+        )
+        const currentThreadsByKey = new Map(
+          (current?.threads ?? []).map(
+            (thread) =>
+              [`${thread.threadRef}\u0000${thread.revision}`, thread] as [string, typeof thread],
+          ),
+        )
+        const selectedReplies = (replies ?? []).filter((reply) =>
+          selectedKeySet.has(`${reply.threadRef}\u0000${reply.revision}`),
+        )
+        const hasInvalidExtraReply = (replies ?? []).some((reply) => {
+          const key = `${reply.threadRef}\u0000${reply.revision}`
+          if (selectedKeySet.has(key)) return false
+          const historical = currentThreadsByKey.get(key)
+          return (
+            historical === undefined ||
+            historical.finalReply !== null ||
+            !selectedThreadRefs.has(reply.threadRef)
+          )
+        })
         if (
           resolutionContext === null ||
           problemSet === null ||
@@ -4255,9 +4459,12 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           replies === undefined ||
           selectedKeys.some((key) => key === null) ||
           new Set(selectedKeys).size !== selectedKeys.length ||
-          replies.length !== selectedKeys.length ||
+          new Set(replies.map((reply) => `${reply.threadRef}\u0000${reply.revision}`)).size !==
+            replies.length ||
+          hasInvalidExtraReply ||
+          selectedReplies.length !== normalizedSelectedKeys.length ||
           selectedKeys.some((key, index) => {
-            const reply = replies[index]
+            const reply = selectedReplies[index]
             return (
               key === null ||
               reply === undefined ||
@@ -4273,8 +4480,29 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           )
         }
         const repliesByKey = new Map(
-          replies.map((reply) => [`${reply.threadRef}\u0000${reply.revision}`, reply] as const),
+          selectedReplies.map(
+            (reply) => [`${reply.threadRef}\u0000${reply.revision}`, reply] as const,
+          ),
         )
+        const preparedThreads = current.threads.flatMap((thread) => {
+          const reply = repliesByKey.get(`${thread.threadRef}\u0000${thread.revision}`)
+          if (reply !== undefined) {
+            return [
+              {
+                ...thread,
+                disposition: reply.disposition,
+                replyBody: reply.replyBody,
+                finalReply: null,
+              },
+            ]
+          }
+          // A newer revision of an unresolved discussion can arrive after the
+          // platform acknowledged the previous revision but before it prepared
+          // a final reply. Context revisions retain that receipt for audit; the
+          // current resolution must not let the superseded, unfinished row
+          // prevent the selected revision from becoming prepared.
+          return thread.finalReply === null ? [] : [thread]
+        })
         appendPlatformContextPatch(
           resolutionContext,
           reviewResolutionContextSchema.parse({
@@ -4282,17 +4510,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             status: 'prepared',
             publishedHeadSha: null,
             commitSha: null,
-            threads: current.threads.map((thread) => {
-              const reply = repliesByKey.get(`${thread.threadRef}\u0000${thread.revision}`)
-              return reply === undefined
-                ? thread
-                : {
-                    ...thread,
-                    disposition: reply.disposition,
-                    replyBody: reply.replyBody,
-                    finalReply: null,
-                  }
-            }),
+            threads: preparedThreads,
           }),
         )
       }
@@ -4314,6 +4532,29 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         throw new Error(
           `${request.workItemRef} must produce a ${requiredContextType} context patch`,
         )
+      }
+      const upsertContextTypes =
+        request.workItemRef === 'classify-feedback'
+          ? ['development.problem-set', 'development.review-resolution']
+          : requiredContextType === null
+            ? []
+            : [requiredContextType]
+      for (const contextTypeId of upsertContextTypes) {
+        const patchIndex = output.contextPatches.findIndex(
+          (patch) => patch.contextTypeId === contextTypeId,
+        )
+        const patch = output.contextPatches[patchIndex]
+        if (patch === undefined || patch.contextId !== null || patch.expectedRevision !== null) {
+          continue
+        }
+        const frozenContext = platformContext(contextTypeId)
+        if (frozenContext === null) continue
+        output.contextPatches[patchIndex] = {
+          ...patch,
+          contextId: frozenContext.id,
+          schemaVersion: frozenContext.schemaVersion,
+          expectedRevision: frozenContext.revision,
+        }
       }
       if (request.workItemRef === 'prepare-materials') {
         const issue = inputState('development.issue-handling', issueHandlingContextSchema)
@@ -4364,7 +4605,16 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         ) {
           throw new Error('pipeline evidence does not belong to the current MR head')
         }
-        if (targetAwarePipeline && pipeline.targetSha !== mergeRequest.targetSha) {
+        // targetSha is a platform-frozen MR identity, not tool-authored evidence.
+        // Revision-7 program tools already verified the provider snapshot against
+        // the frozen target but did not echo the field; automatic type upgrades
+        // must keep those tools usable without asking every user to rewrite them.
+        // A tool may echo the value for diagnostics, but it cannot override it.
+        if (
+          targetAwarePipeline &&
+          pipeline.targetSha !== null &&
+          pipeline.targetSha !== mergeRequest.targetSha
+        ) {
           throw new Error('pipeline evidence does not belong to the current MR target')
         }
         if (
@@ -4418,12 +4668,6 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             'repair-feedback requires an acknowledged review set and a prepared resolution',
           )
         }
-        const expected = current.threads.map(
-          (thread) => `${thread.threadRef}\u0000${thread.revision}`,
-        )
-        const actual = proposed.threads.map(
-          (thread) => `${thread.threadRef}\u0000${thread.revision}`,
-        )
         const selectedKeys = new Set(
           problemSet.problems.map((problem) => {
             const thread = problem.reviewThread
@@ -4433,6 +4677,17 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             return `${thread.threadRef}\u0000${thread.revision}`
           }),
         )
+        const retainedCurrentThreads = current.threads.filter(
+          (thread) =>
+            thread.finalReply !== null ||
+            selectedKeys.has(`${thread.threadRef}\u0000${thread.revision}`),
+        )
+        const expected = retainedCurrentThreads.map(
+          (thread) => `${thread.threadRef}\u0000${thread.revision}`,
+        )
+        const actual = proposed.threads.map(
+          (thread) => `${thread.threadRef}\u0000${thread.revision}`,
+        )
         if (
           expected.length !== actual.length ||
           expected.some((key, index) => actual[index] !== key) ||
@@ -4440,14 +4695,17 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           proposed.sourceHeadSha !== current.sourceHeadSha ||
           proposed.publishedHeadSha !== null ||
           proposed.commitSha !== null ||
-          proposed.threads.some(
-            (thread, index) =>
+          proposed.threads.some((thread, index) => {
+            const currentThread = retainedCurrentThreads[index]
+            return (
+              currentThread === undefined ||
               JSON.stringify(thread.acknowledgement) !==
-                JSON.stringify(current.threads[index]!.acknowledgement) ||
+                JSON.stringify(currentThread.acknowledgement) ||
               (selectedKeys.has(`${thread.threadRef}\u0000${thread.revision}`)
                 ? thread.finalReply !== null
-                : JSON.stringify(thread) !== JSON.stringify(current.threads[index]!)),
-          )
+                : JSON.stringify(thread) !== JSON.stringify(currentThread))
+            )
+          })
         ) {
           throw new Error(
             'repair-feedback must answer every selected thread exactly once without changing historical receipts',
@@ -4677,6 +4935,9 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         throw new Error('failed pipeline classification must produce an active problem set')
       }
       nextWorkItemRef = nextConfiguredPipelineWorkItem(problemSet.remainingTypes)
+    } else if (request.workItemRef === 'acknowledge-feedback') {
+      const problemSet = problemSetContextSchema.parse(proposedState('development.problem-set'))
+      nextWorkItemRef = problemSet.status === 'resolved' ? 'observe-mr' : 'repair-feedback'
     } else if (request.workItemRef === 'repair-feedback') {
       const current = contexts.find((context) => context.typeId === 'development.problem-set')
       if (current === undefined) throw new Error('review repair has no problem-set context')
