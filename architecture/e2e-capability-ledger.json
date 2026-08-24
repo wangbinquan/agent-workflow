@@ -1765,8 +1765,17 @@
       "title": "会话中途失效（HTTP 401 / WS 4401 / WS 4403）→ 清 token 或刷新权威 → 回登录",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/session-invalidation.spec.ts",
+          "test": "RFC-319 UX-08: when the credential dies mid-session the app clears it and returns to sign-in instead of reconnecting forever"
+        },
+        {
+          "file": "e2e/session-invalidation.spec.ts",
+          "test": "RFC-319 UX-08: a 4403 close means the credential is still good — the user keeps their session instead of being signed out"
+        }
+      ]
     },
     {
       "id": "UX-10",
@@ -8486,7 +8495,6 @@
     "UX-04",
     "UX-05",
     "UX-06",
-    "UX-08",
     "UX-09",
     "UX-11",
     "UX-13",
