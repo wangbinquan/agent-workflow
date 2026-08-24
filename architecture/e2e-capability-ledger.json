@@ -1071,8 +1071,17 @@
       "title": "无 memory-distill-jobs:manage 时隐藏「蒸馏任务」分区，并把 ?tab=distill-jobs 重定向 + 提示不可用",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-distill-gating.spec.ts",
+          "test": "RFC-319 MEM-24/31: without memory-distill-jobs:manage the section is hidden, a deep link falls back with a stated reason, and no request is sent for it"
+        },
+        {
+          "file": "e2e/memory-distill-gating.spec.ts",
+          "test": "RFC-319 MEM-24/31: a plain user gets no distill section, and the deep link lands on All with an explicit notice"
+        }
+      ]
     },
     {
       "id": "MEM-31",
@@ -1080,8 +1089,13 @@
       "title": "蒸馏详情页的权限占位（无 memory-distill-jobs:manage → 明确的「需要权限」空态，且不发请求）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-distill-gating.spec.ts",
+          "test": "RFC-319 MEM-24/31: a plain user gets no distill section, and the deep link lands on All with an explicit notice"
+        }
+      ]
     },
     {
       "id": "MEM-34",
@@ -8304,14 +8318,12 @@
     "MEM-21",
     "MEM-22",
     "MEM-23",
-    "MEM-24",
     "MEM-25",
     "MEM-26",
     "MEM-27",
     "MEM-28",
     "MEM-29",
     "MEM-30",
-    "MEM-31",
     "MEM-32",
     "MEM-33",
     "MEM-40",
