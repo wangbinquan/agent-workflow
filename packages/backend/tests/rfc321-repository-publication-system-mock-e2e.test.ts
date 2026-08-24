@@ -138,7 +138,15 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,
     apiBaseUrl: suite.endpoints.gitlabApiBaseUrl,
     rejectUnauthorized: true,
-    transportMappings: [],
+    // Trust the mock's cleartext HTTP base without directly mapping the
+    // port-22 SSH remote: the endpoint must still come from provider metadata.
+    transportMappings: [
+      {
+        sshHost: 'ssh.system-mock.test',
+        sshPort: 2200,
+        httpBaseUrl: suite.endpoints.baseUrl,
+      },
+    ],
     allowedHttpBaseUrls: [suite.endpoints.baseUrl],
     globalTokenEnc: secretBox.seal(SYSTEM_MOCK_GIT_GLOBAL_TOKEN),
     globalTokenHint: SYSTEM_MOCK_GIT_GLOBAL_TOKEN.slice(-4),
@@ -185,8 +193,8 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     publicationSubject: { kind: 'user', userId: alice.id },
     publicationTransport: transport,
   })
-  expect(personal.ok).toBe(true)
   if (!personal.ok) throw new Error(`${personal.code}: ${personal.detail}`)
+  expect(personal.ok).toBe(true)
   expect(personal.receipt.publication).toMatchObject({
     credentialSource: 'personal',
     credentialRevision: 1,
@@ -219,8 +227,8 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     publicationSubject: { kind: 'user', userId: bob.id },
     publicationTransport: transport,
   })
-  expect(global.ok).toBe(true)
   if (!global.ok) throw new Error(global.code)
+  expect(global.ok).toBe(true)
   expect(global.receipt.publication.credentialSource).toBe('global')
   const afterGlobal = await suite.client.requests()
   const globalRequests = gitRequestsFor(afterGlobal.slice(beforeGlobal), projectPath)
