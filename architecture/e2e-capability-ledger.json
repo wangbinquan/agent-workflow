@@ -1434,8 +1434,17 @@
       "title": "代码平台凭据的存储与读取隔离（只回尾 4 位、PAT 完全够不着这组路由）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc321-code-push-credentials.spec.ts",
+          "test": "account UI validates, masks, replaces and deletes while Alice/Bob stay isolated at 390px"
+        },
+        {
+          "file": "e2e/rfc321-code-push-credentials.spec.ts",
+          "test": "even a maximal general PAT cannot read, write, probe, or delete personal push credentials"
+        }
+      ]
     },
     {
       "id": "REPO-38",
@@ -1997,8 +2006,21 @@
       "title": "连线弹窗（ConnectionDialog）：源/目标端口、NEW vs REUSE、fanout 分片与广播角色",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/canvas-connection-dialog.spec.ts",
+          "test": "「新建输入」把线接到一个此前不存在的端口上，并原样落进定义"
+        },
+        {
+          "file": "e2e/canvas-connection-dialog.spec.ts",
+          "test": "「复用已有输入」接到同一个端口上，会顶掉原来那条边而不是并存"
+        },
+        {
+          "file": "e2e/canvas-connection-dialog.spec.ts",
+          "test": "分片扇出边界：选「广播」时每个分片拿整份，选「分片」会把原来的分片口降级"
+        }
+      ]
     },
     {
       "id": "WF-36",
@@ -8509,7 +8531,6 @@
     "REPO-30",
     "REPO-33",
     "REPO-34",
-    "REPO-35",
     "REPO-36",
     "REPO-37",
     "REPO-39",
@@ -8635,7 +8656,6 @@
     "WF-15",
     "WF-16",
     "WF-17",
-    "WF-19",
     "WF-20",
     "WF-21",
     "WF-22",
