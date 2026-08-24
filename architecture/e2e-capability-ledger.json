@@ -3459,8 +3459,21 @@
       "title": "澄清页离开时的未保存草稿拦截（保存并离开 / 放弃）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-unsaved-draft-guard.spec.ts",
+          "test": "草稿还没落盘就想离开：拦下来；选「留下」则停在原地且答案还在"
+        },
+        {
+          "file": "e2e/clarify-unsaved-draft-guard.spec.ts",
+          "test": "「保存并离开」必须先确认落盘：落盘回执没到之前不许跳走"
+        },
+        {
+          "file": "e2e/clarify-unsaved-draft-guard.spec.ts",
+          "test": "「放弃」放行：不再拦，直接走到目标页"
+        }
+      ]
     },
     {
       "id": "HUMAN-X1",
@@ -8465,7 +8478,6 @@
     "HUMAN-40",
     "HUMAN-42",
     "HUMAN-43",
-    "HUMAN-46",
     "HUMAN-47",
     "HUMAN-48",
     "HUMAN-X1",
