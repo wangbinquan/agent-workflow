@@ -91,7 +91,9 @@ async function buildTaskStats(
   const countWhere = async (cond: SQL<unknown>): Promise<number> => {
     // RFC-243 §8 — child executions stay out of the homepage cards (the parent
     // task represents its tree), matching the task list's top-level default.
-    const topLevel = and(cond, isNull(tasks.parentTaskId))!
+    // The overview is also a public task-catalog projection. Keep the boundary
+    // generic so every internal execution host is excluded uniformly.
+    const topLevel = and(cond, isNull(tasks.parentTaskId), eq(tasks.catalogVisibility, 'public'))!
     const where = vis === undefined ? topLevel : and(vis, topLevel)!
     const r = await db.select({ n: count() }).from(tasks).where(where)
     return r[0]?.n ?? 0

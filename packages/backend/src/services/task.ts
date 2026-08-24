@@ -5840,6 +5840,11 @@ export interface ListTasksFilters {
   status?: Task['status']
   workflowId?: string
   repoPath?: string
+  /**
+   * Generic catalog boundary. Public list surfaces pass `public`; internal
+   * executions remain durable and directly addressable through their id.
+   */
+  catalogVisibility?: TaskCatalogVisibility
   /** RFC-159: filter to tasks launched by a given `scheduled_tasks` id (run history). */
   scheduledTaskId?: string
   /**
@@ -5897,6 +5902,8 @@ async function listTaskSummaryRows(
   if (filters.status !== undefined) conditions.push(eq(tasks.status, filters.status))
   if (filters.workflowId !== undefined) conditions.push(eq(tasks.workflowId, filters.workflowId))
   if (filters.repoPath !== undefined) conditions.push(eq(tasks.repoPath, filters.repoPath))
+  if (filters.catalogVisibility !== undefined)
+    conditions.push(eq(tasks.catalogVisibility, filters.catalogVisibility))
   if (filters.scheduledTaskId !== undefined)
     conditions.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
   if (filters.topLevelOnly === true) conditions.push(isNull(tasks.parentTaskId))
@@ -6000,12 +6007,14 @@ export async function listTasks(
 async function loadChildCounts(
   db: DbClient,
   parentIds: readonly string[],
-  visibility: ListTasksFilters['visibility'],
+  filters: Pick<ListTasksFilters, 'visibility' | 'catalogVisibility'>,
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
   if (parentIds.length === 0) return counts
   const conditions: SQL<unknown>[] = [inArray(tasks.parentTaskId, [...parentIds])]
-  if (visibility) conditions.push(taskVisibilityCondition(db, visibility))
+  if (filters.visibility) conditions.push(taskVisibilityCondition(db, filters.visibility))
+  if (filters.catalogVisibility !== undefined)
+    conditions.push(eq(tasks.catalogVisibility, filters.catalogVisibility))
   const rows = await db
     .select({ parentTaskId: tasks.parentTaskId, n: count() })
     .from(tasks)
@@ -6030,7 +6039,7 @@ export async function listTaskItems(
   const childCounts = await loadChildCounts(
     db,
     rows.map((row) => row.summary.id),
-    filters.visibility,
+    filters,
   )
   return rows.map(({ summary, ownerUserId }) => ({
     ...summary,

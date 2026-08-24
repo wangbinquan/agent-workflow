@@ -142,7 +142,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const includeOwner = parseBoolQuery(c, 'include_owner', { default: false })
-      const filters: Parameters<typeof listTasks>[1] = {}
+      // The legacy homepage feed shares the same generic catalog boundary as
+      // the task-catalog route: durable internal executions stay out of public
+      // pagination without any execution-kind-specific branch.
+      const filters: Parameters<typeof listTasks>[1] = { catalogVisibility: 'public' }
       const status = c.req.query('status')
       if (status !== undefined) {
         const parsed = TaskStatusSchema.safeParse(status)

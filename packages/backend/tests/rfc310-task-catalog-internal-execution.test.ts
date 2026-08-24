@@ -11,6 +11,7 @@ import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows } from '../src/db/schema'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/application/adapters/task-catalog-adapter'
+import { listTaskItems, listTasks } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -74,6 +75,11 @@ describe('task catalog internal execution boundary', () => {
         parentTaskId: 'internal-host',
         rootTaskId: 'internal-host',
       }),
+      task('internal-under-public', 450, {
+        catalogVisibility: 'internal',
+        parentTaskId: 'public-new',
+        rootTaskId: 'public-new',
+      }),
       task('public-old', 100),
     ])
 
@@ -105,6 +111,16 @@ describe('task catalog internal execution boundary', () => {
     expect(second.items.map((item) => item.id)).toEqual(['public-old'])
     expect(second.nextCursor).toBeNull()
 
+    const [legacyRows, legacyItems] = await Promise.all([
+      listTasks(db, { catalogVisibility: 'public' }),
+      listTaskItems(db, { catalogVisibility: 'public' }),
+    ])
+    expect(legacyRows.map((item) => item.id)).toEqual(['public-new', 'public-old'])
+    expect(legacyItems.map((item) => [item.id, item.childCount])).toEqual([
+      ['public-new', 0],
+      ['public-old', 0],
+    ])
+
     const durableInternalRows = await db
       .select({ id: tasks.id })
       .from(tasks)
@@ -119,6 +135,7 @@ describe('task catalog internal execution boundary', () => {
       'internal-attempt-2',
       'internal-host',
       'internal-host-child',
+      'internal-under-public',
     ])
   })
 
@@ -140,12 +157,17 @@ describe('task catalog internal execution boundary', () => {
       ),
       'utf8',
     )
+    const legacyRoute = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'),
+      'utf8',
+    )
 
-    for (const source of [commonService, catalogAdapter]) {
+    for (const source of [commonService, catalogAdapter, legacyRoute]) {
       expect(source).not.toContain('digitalEmployee')
       expect(source).not.toContain('digital_employee')
     }
     expect(commonService).toContain('catalogVisibility')
     expect(catalogAdapter).toContain("catalogVisibility: 'public'")
+    expect(legacyRoute).toContain("catalogVisibility: 'public'")
   })
 })

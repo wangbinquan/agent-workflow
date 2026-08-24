@@ -319,7 +319,12 @@ function taskRow(
   id: string,
   owner: string,
   status: string,
-  opts: { startedAt?: number; finishedAt?: number | null; workflowId?: string } = {},
+  opts: {
+    startedAt?: number
+    finishedAt?: number | null
+    workflowId?: string
+    catalogVisibility?: 'public' | 'internal'
+  } = {},
 ) {
   return {
     id,
@@ -345,6 +350,7 @@ function taskRow(
     deletedAt: null,
     schemaVersion: 1,
     ownerUserId: owner,
+    catalogVisibility: opts.catalogVisibility ?? 'public',
   }
 }
 
@@ -363,18 +369,20 @@ async function seedTasks(h: Harness): Promise<void> {
     description: '',
     definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
   })
-  await h.db
-    .insert(tasks)
-    .values([
-      taskRow('t1', h.alice.id, 'running'),
-      taskRow('t2', h.alice.id, 'awaiting_review'),
-      taskRow('t3', h.bob.id, 'awaiting_human'),
-      taskRow('t4', h.alice.id, 'done', { finishedAt: now }),
-      taskRow('t5', h.alice.id, 'failed', { finishedAt: now }),
-      taskRow('t6', h.alice.id, 'done', { finishedAt: now - 8 * 86_400_000 }),
-      taskRow('t7', h.bob.id, 'done', { finishedAt: now }),
-      taskRow('t8', h.alice.id, 'canceled', { finishedAt: now }),
-    ])
+  await h.db.insert(tasks).values([
+    taskRow('t1', h.alice.id, 'running'),
+    taskRow('t2', h.alice.id, 'awaiting_review'),
+    taskRow('t3', h.bob.id, 'awaiting_human'),
+    taskRow('t4', h.alice.id, 'done', { finishedAt: now }),
+    taskRow('t5', h.alice.id, 'failed', { finishedAt: now }),
+    taskRow('t6', h.alice.id, 'done', { finishedAt: now - 8 * 86_400_000 }),
+    taskRow('t7', h.bob.id, 'done', { finishedAt: now }),
+    taskRow('t8', h.alice.id, 'canceled', { finishedAt: now }),
+    taskRow('internal-done', h.alice.id, 'done', {
+      finishedAt: now,
+      catalogVisibility: 'internal',
+    }),
+  ])
   await h.db.insert(taskCollaborators).values([
     { taskId: 't3', userId: h.bob.id, role: 'owner', addedBy: h.bob.id, addedAt: now },
     { taskId: 't3', userId: h.alice.id, role: 'collaborator', addedBy: h.bob.id, addedAt: now },
@@ -491,6 +499,17 @@ describe('RFC-190 /api/overview — 口径 oracle（逐 actor 与列表接口相
     const adm = await getOverview(h, h.admin.token)
     // t8 canceled + t6 done@-8d prove the exclusions (else done7d would be 3+).
     expect(adm.tasks).toEqual({ running: 1, awaiting: 2, done7d: 2, failed7d: 1 })
+  })
+
+  test('旧任务列表和首页统计共同排除 durable internal executions', async () => {
+    const response = await req(h.app, h.admin.token, '/api/tasks?limit=100&scope=all')
+    expect(response.status).toBe(200)
+    const rows = (await response.json()) as Array<{ id: string }>
+    expect(rows.some((row) => row.id === 'internal-done')).toBe(false)
+    expect((await getOverview(h, h.admin.token)).tasks?.done7d).toBe(2)
+    expect(
+      (await h.db.select({ id: tasks.id }).from(tasks)).some((row) => row.id === 'internal-done'),
+    ).toBe(true)
   })
 
   test('响应过 shared schema，generatedAt 可解析', async () => {
