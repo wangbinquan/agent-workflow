@@ -1575,8 +1575,21 @@
       "title": "配置包导入（三个新建页的「Import config package」页签）：预览 → 逐项决策 → 提交",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/config-package-import.spec.ts",
+          "test": "预览是干跑：只问不写，连一次提交请求都不许发出去"
+        },
+        {
+          "file": "e2e/config-package-import.spec.ts",
+          "test": "两项都选「新建」：新建两份，且新代理指向新技能而不是原来那个"
+        },
+        {
+          "file": "e2e/config-package-import.spec.ts",
+          "test": "技能改选「复用既有」：只新建代理，它指向的是本机原来那个技能"
+        }
+      ]
     },
     {
       "id": "RES-44",
@@ -8517,7 +8530,6 @@
     "RES-36",
     "RES-37",
     "RES-38",
-    "RES-39",
     "RES-40",
     "RES-41",
     "RES-42",
