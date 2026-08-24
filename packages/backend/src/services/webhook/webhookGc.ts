@@ -14,11 +14,12 @@ import {
   gcDeliveries,
   type DeliveryRetention,
 } from '@/services/webhook/deliveryStore'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('webhook-gc')
 
-const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
 type RetentionConfig = Pick<
@@ -48,24 +49,21 @@ export async function runDeliveryGcSweep(
 export function startWebhookDeliveryGc(
   db: DbClient,
   getConfig?: () => RetentionConfig,
+  // RFC-322：相位偏移；再入闸（原「评审门 P1-②」那条：保留期收缩后的首次 sweep 可能
+  // 超一小时，不允许下一 tick 叠加第二个 sweep）现由 startMaintenanceTicker 统一提供。
+  phaseOffsetMs: number = MAINTENANCE_PHASE.webhookDeliveryGc,
 ): { stop(): void } {
-  // 再入闸（services/gc.ts 同款，评审门 P1-②）：保留期收缩后的首次 sweep 可能
-  // 超一小时，不允许下一 tick 叠加第二个 sweep。
-  let running = false
-  const timer = setInterval(() => {
-    if (running) return
-    running = true
-    void runDeliveryGcSweep(db, getConfig)
-      .then(({ bodiesCleared, rowsDeleted }) => {
-        if (bodiesCleared > 0 || rowsDeleted > 0) {
-          log.info('webhook delivery retention sweep', { bodiesCleared, rowsDeleted })
-        }
-      })
-      .catch((err) => log.warn('webhook delivery gc failed', { error: String(err) }))
-      .finally(() => {
-        running = false
-      })
-  }, HOUR_MS)
-  timer.unref()
-  return { stop: () => clearInterval(timer) }
+  return startMaintenanceTicker({
+    job: 'webhookDeliveryGc',
+    intervalMs: HOUR_MS,
+    phaseOffsetMs,
+    onTick: () =>
+      runDeliveryGcSweep(db, getConfig)
+        .then(({ bodiesCleared, rowsDeleted }) => {
+          if (bodiesCleared > 0 || rowsDeleted > 0) {
+            log.info('webhook delivery retention sweep', { bodiesCleared, rowsDeleted })
+          }
+        })
+        .catch((err) => log.warn('webhook delivery gc failed', { error: String(err) })),
+  })
 }

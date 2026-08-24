@@ -28,6 +28,8 @@ import {
   webhookTriggerFires,
   tasks,
 } from '@/db/schema'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('maintenance-retention')
@@ -182,19 +184,17 @@ export async function runRetentionSweep(
 export function startRetentionSweeper(
   db: DbClient,
   loadRetentionConfig: () => RetentionConfig,
-  intervalMs: number = 3_600_000,
+  intervalMs: number = HOUR_MS,
+  // RFC-322：相位由 daemonCadence 的注册表给，避免与其它 hourly 维护同刻引爆。
+  phaseOffsetMs: number = MAINTENANCE_PHASE.retentionSweep,
 ): { stop: () => void } {
-  let running = false
-  const tick = (): void => {
-    if (running) return
-    running = true
-    runRetentionSweep(db, loadRetentionConfig())
-      .catch((err) => log.warn('retention sweep threw', { error: (err as Error).message }))
-      .finally(() => {
-        running = false
-      })
-  }
-  const handle = setInterval(tick, intervalMs)
-  ;(handle as { unref?: () => void }).unref?.()
-  return { stop: () => clearInterval(handle) }
+  return startMaintenanceTicker({
+    job: 'retentionSweep',
+    intervalMs,
+    phaseOffsetMs,
+    onTick: () =>
+      runRetentionSweep(db, loadRetentionConfig()).catch((err) =>
+        log.warn('retention sweep threw', { error: (err as Error).message }),
+      ),
+  })
 }

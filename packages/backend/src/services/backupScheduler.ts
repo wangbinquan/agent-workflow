@@ -17,6 +17,8 @@ import { createBackup, isDbSnapshotInProgress } from '@/services/backup'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { readDbMigrationIdentity, readMigrationAxisFromJournal } from './backupManifest'
+import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
+import { startMaintenanceTicker } from './maintenanceTicker'
 import { rawCopyDb } from './rawDbSnapshot'
 
 const log = createLogger('backupScheduler')
@@ -191,11 +193,17 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
   // — the very L3-2 shape C4 exists to fix, just with a narrower trigger.
   // Implementation-gate finding P2-1 / mutation #19.
   safePrune('boot prune')
-  const pruneHandle = setInterval(() => safePrune('prune tick'), 3_600_000)
-  ;(pruneHandle as { unref?: () => void }).unref?.()
+  // RFC-322：这里原本是 `setInterval(…, 3_600_000)` 裸字面量——正是 daemonCadence
+  // 头部注释点名的那种形状，现收编进相位注册表。
+  const pruneTicker = startMaintenanceTicker({
+    job: 'backupPrune',
+    intervalMs: HOUR_MS,
+    phaseOffsetMs: MAINTENANCE_PHASE.backupPrune,
+    onTick: () => safePrune('prune tick'),
+  })
 
   if (!opts.intervalMs || opts.intervalMs <= 0) {
-    return { stop: () => clearInterval(pruneHandle) }
+    return { stop: () => pruneTicker.stop() }
   }
   let running = false // reentrancy guard: a slow createBackup must not overlap
   const handle = setInterval(() => {
@@ -216,7 +224,7 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
   return {
     stop: () => {
       clearInterval(handle)
-      clearInterval(pruneHandle)
+      pruneTicker.stop()
     },
   }
 }

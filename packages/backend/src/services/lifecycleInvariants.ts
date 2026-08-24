@@ -48,7 +48,8 @@ import type { DbClient } from '@/db/client'
 import { clarifyRounds, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
 import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
 import { createLogger, type Logger } from '@/util/log'
-import { DAEMON_CADENCE } from './daemonCadence'
+import { DAEMON_CADENCE, MAINTENANCE_PHASE } from './daemonCadence'
+import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('lifecycle.invariants')
 
@@ -904,6 +905,8 @@ export function startLifecycleInvariantsLoop(opts: {
   intervalMs?: number
   /** Incremental window: how far back to look (default 2h). */
   incrementalWindowMs?: number
+  /** RFC-322：周期拍的错峰相位。 */
+  phaseOffsetMs?: number
 }): { stop: () => void } {
   const bootDelay = opts.bootDelayMs ?? 5_000
   const interval = opts.intervalMs ?? DAEMON_CADENCE.lifecycleInvariants
@@ -927,12 +930,20 @@ export function startLifecycleInvariantsLoop(opts: {
       })
   }
 
+  // RFC-322：boot 拍与周期拍跑的是**不同 scope**（全量 vs 增量窗口），所以不能把 boot
+  // 交给 startMaintenanceTicker 的 bootDelayMs（那是同一个 onTick）；只把周期拍纳入
+  // 错峰。`safeRun` 自带的 running 闸仍是两者共享的那一个，语义逐字不变。
   const bootTimer = setTimeout(() => safeRun({ all: true }), bootDelay)
-  const periodicTimer = setInterval(() => safeRun({ since: Date.now() - window }), interval)
+  const periodicTicker = startMaintenanceTicker({
+    job: 'lifecycleInvariants',
+    intervalMs: interval,
+    phaseOffsetMs: opts.phaseOffsetMs ?? MAINTENANCE_PHASE.lifecycleInvariants,
+    onTick: () => safeRun({ since: Date.now() - window }),
+  })
   return {
     stop: (): void => {
       clearTimeout(bootTimer)
-      clearInterval(periodicTimer)
+      periodicTicker.stop()
     },
   }
 }

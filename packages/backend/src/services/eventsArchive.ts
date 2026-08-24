@@ -16,7 +16,8 @@ import { dirname, join } from 'node:path'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns } from '@/db/schema'
-import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS } from '@/services/daemonCadence'
+import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { readMaintenanceNumber, writeMaintenanceValue } from '@/services/maintenanceState'
 import { createLogger } from '@/util/log'
 
@@ -440,28 +441,20 @@ export function startEventsArchiver(
   logsDir: string,
   intervalMs: number = HOUR_MS,
   bootDelayMs: number = MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
+  // RFC-322：boot 首拍（体积封顶，见 MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS）与相位
+  // 正交——前者管「重启频繁的部署也得跑一次」，后者管「别和另外 13 个同刻引爆」。
+  phaseOffsetMs: number = MAINTENANCE_PHASE.eventsArchive,
 ): { stop: () => void } {
-  let running = false
-  const tick = (): void => {
-    if (running) return
-    running = true
-    archiveEvents(db, loadConfig(), logsDir)
-      .catch((err: unknown) => {
+  return startMaintenanceTicker({
+    job: 'eventsArchive',
+    intervalMs,
+    phaseOffsetMs,
+    bootDelayMs,
+    onTick: () =>
+      archiveEvents(db, loadConfig(), logsDir).catch((err: unknown) => {
         log.error('archiveEvents failed', {
           error: err instanceof Error ? err.message : String(err),
         })
-      })
-      .finally(() => {
-        running = false
-      })
-  }
-  const bootTimer = setTimeout(tick, bootDelayMs)
-  ;(bootTimer as { unref?: () => void }).unref?.()
-  const handle = setInterval(tick, intervalMs)
-  return {
-    stop: () => {
-      clearTimeout(bootTimer)
-      clearInterval(handle)
-    },
-  }
+      }),
+  })
 }

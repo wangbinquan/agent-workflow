@@ -40,6 +40,8 @@ import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { resolveCachedRepo as defaultResolveCachedRepo } from '@/services/gitRepoCache'
+import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
+import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('repo-batch-import')
 
@@ -328,8 +330,6 @@ export interface GcResult {
   evicted: number
 }
 
-const HOUR_MS = 60 * 60 * 1000
-
 /**
  * Start an hourly ticker that GC's completed batches past their retention.
  * Mirrors the shape of `startWorktreeGc` / `startEventsArchiver`.
@@ -337,17 +337,24 @@ const HOUR_MS = 60 * 60 * 1000
 export function startBatchImportGc(
   intervalMs: number = HOUR_MS,
   retentionMs: number = DEFAULT_RETENTION_MS,
+  // RFC-322：错峰相位。原实现的 handle 没有 unref()，收编后统一 unref——本 GC 的
+  // 定时器不该独自把进程吊活着，daemon 寿命由 HTTP server 与 shutdown 路径决定。
+  phaseOffsetMs: number = MAINTENANCE_PHASE.batchImportGc,
 ): { stop: () => void } {
-  const handle = setInterval(() => {
-    try {
-      gcBatches({ retentionMs })
-    } catch (err) {
-      log.warn('gcBatches threw', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }, intervalMs)
-  return { stop: () => clearInterval(handle) }
+  return startMaintenanceTicker({
+    job: 'batchImportGc',
+    intervalMs,
+    phaseOffsetMs,
+    onTick: () => {
+      try {
+        gcBatches({ retentionMs })
+      } catch (err) {
+        log.warn('gcBatches threw', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  })
 }
 
 export function gcBatches(deps: { retentionMs?: number; now?: () => number } = {}): GcResult {

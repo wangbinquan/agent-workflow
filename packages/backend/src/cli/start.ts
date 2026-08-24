@@ -108,7 +108,8 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import { isBootstrapRequired } from '@/auth/loginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { DAEMON_CADENCE, MAINTENANCE_PHASE } from '@/services/daemonCadence'
+import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
 import {
@@ -513,10 +514,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   log.info('secret box ready', { keyFile: Paths.secretKeyFile })
   ensureCredentialsSealed(db, secretBox)
   const repositoryTransportModule = composeRepositoryTransportCredentials(db, secretBox)
-  reconcileRepositoryTransportConnectionProjections(
-    db,
-    repositoryTransportModule.adminConnections,
-  )
+  reconcileRepositoryTransportConnectionProjections(db, repositoryTransportModule.adminConnections)
   const repositoryMetadataConnections = createCodeHostConnectionsService({
     db,
     secretBox,
@@ -1171,35 +1169,42 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }, DAEMON_CADENCE.developmentWakeSweep)
   developmentWakeTimer.unref?.()
-  const developmentUploadGcTimer = setInterval(() => {
-    try {
-      const swept = developmentAutomation.sweepUploads()
-      if (swept.swept > 0) log.info('mission input uploads swept', swept)
-    } catch (err) {
-      log.warn('mission upload sweep failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }, DAEMON_CADENCE.developmentUploadGc)
-  developmentUploadGcTimer.unref?.()
+  const developmentUploadGcTimer = startMaintenanceTicker({
+    job: 'developmentUploadGc',
+    intervalMs: DAEMON_CADENCE.developmentUploadGc,
+    phaseOffsetMs: MAINTENANCE_PHASE.developmentUploadGc,
+    onTick: () => {
+      try {
+        const swept = developmentAutomation.sweepUploads()
+        if (swept.swept > 0) log.info('mission input uploads swept', swept)
+      } catch (err) {
+        log.warn('mission upload sweep failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  })
 
   // RFC-310 T71 —— retention 的执行者。此前 policy 的 `retention.*TtlDays` 一个
   // 消费者都没有：字段在、设置页能改，而终态 Mission 的台账与证据只增不减。
-  const developmentRetentionTimer = setInterval(() => {
-    void developmentAutomation
-      .sweepRetention()
-      .then((result) => {
-        if (result.prunedAttempts > 0 || result.markedBundleRefs > 0) {
-          log.info('mission retention swept', { ...result })
-        }
-      })
-      .catch((err: unknown) => {
-        log.warn('mission retention sweep failed', {
-          err: err instanceof Error ? err.message : String(err),
+  const developmentRetentionTimer = startMaintenanceTicker({
+    job: 'developmentRetentionSweep',
+    intervalMs: DAEMON_CADENCE.developmentRetentionSweep,
+    phaseOffsetMs: MAINTENANCE_PHASE.developmentRetentionSweep,
+    onTick: () =>
+      developmentAutomation
+        .sweepRetention()
+        .then((result) => {
+          if (result.prunedAttempts > 0 || result.markedBundleRefs > 0) {
+            log.info('mission retention swept', { ...result })
+          }
         })
-      })
-  }, DAEMON_CADENCE.developmentRetentionSweep)
-  developmentRetentionTimer.unref?.()
+        .catch((err: unknown) => {
+          log.warn('mission retention sweep failed', {
+            err: err instanceof Error ? err.message : String(err),
+          })
+        }),
+  })
 
   // RFC-310 OS runtime: the HTTP composition is intentionally stateless and
   // may be recreated by tests; the daemon owns the one durable driver that
@@ -1330,44 +1335,56 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       }
     },
   })
-  const employeeInputGcTimer = setInterval(() => {
-    try {
-      const swept = employeeOs.inputUploads.sweepExpired()
-      if (swept > 0) log.info('digital employee input uploads swept', { swept })
-    } catch (err) {
-      log.warn('digital employee input upload sweep failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }, DAEMON_CADENCE.developmentUploadGc)
-  employeeInputGcTimer.unref?.()
+  // 周期与 developmentUploadGc 相同、**相位不同**——两者曾在同一秒装配、同刻引爆。
+  const employeeInputGcTimer = startMaintenanceTicker({
+    job: 'employeeInputGc',
+    intervalMs: DAEMON_CADENCE.developmentUploadGc,
+    phaseOffsetMs: MAINTENANCE_PHASE.employeeInputGc,
+    onTick: () => {
+      try {
+        const swept = employeeOs.inputUploads.sweepExpired()
+        if (swept > 0) log.info('digital employee input uploads swept', { swept })
+      } catch (err) {
+        log.warn('digital employee input upload sweep failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  })
 
-  const intentGcTimer = setInterval(() => {
-    try {
-      const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
-      sweepIntentScratch(db, Paths.root, retention)
-      void convergeIntentApplyJournal(db, Paths.root)
-      void resumeQueuedIntentWorkingSets({
-        db,
-        appHome: Paths.root,
-        configSnapshot: loadConfig(Paths.config),
-      })
-      // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
-      // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
-      void convergeResourceBundleApplies(db, Paths.root)
-    } catch (err) {
-      log.warn('intent hourly maintenance failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }, DAEMON_CADENCE.intentScratchGc)
-  intentGcTimer.unref?.()
+  const intentGcTimer = startMaintenanceTicker({
+    job: 'intentScratchGc',
+    intervalMs: DAEMON_CADENCE.intentScratchGc,
+    phaseOffsetMs: MAINTENANCE_PHASE.intentScratchGc,
+    onTick: () => {
+      try {
+        const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
+        sweepIntentScratch(db, Paths.root, retention)
+        void convergeIntentApplyJournal(db, Paths.root)
+        void resumeQueuedIntentWorkingSets({
+          db,
+          appHome: Paths.root,
+          configSnapshot: loadConfig(Paths.config),
+        })
+        // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
+        // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
+        void convergeResourceBundleApplies(db, Paths.root)
+      } catch (err) {
+        log.warn('intent hourly maintenance failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  })
 
   // RFC-247 D16 — token-audit retention. Rides the same hourly cadence as the
   // other sweeps rather than adding a scheduler: an audit row that lingers an
   // extra hour past its retention window is not a problem worth a new timer.
-  const tokenAuditGcTimer = setInterval(() => {
-    void (async () => {
+  const tokenAuditGcTimer = startMaintenanceTicker({
+    job: 'tokenAuditGc',
+    intervalMs: DAEMON_CADENCE.tokenAuditGc,
+    phaseOffsetMs: MAINTENANCE_PHASE.tokenAuditGc,
+    onTick: async () => {
       try {
         const days = tokenAuditRetentionDays(Paths.config)
         const pruned = await pruneTokenAudit(db, days)
@@ -1379,9 +1396,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           err: err instanceof Error ? err.message : String(err),
         })
       }
-    })()
-  }, DAEMON_CADENCE.tokenAuditGc)
-  tokenAuditGcTimer.unref?.()
+    },
+  })
 
   // RFC-053 P-3 — lifecycle invariant scan. Boot-time scan (~5s after the
   // listener comes up) catches historic stuck tasks; hourly incremental
@@ -1548,9 +1564,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     employeeOsWorker.stop()
     eventCenterWorker.stop()
     clearInterval(developmentWakeTimer)
-    clearInterval(developmentUploadGcTimer)
-    clearInterval(developmentRetentionTimer)
-    clearInterval(employeeInputGcTimer)
+    developmentUploadGcTimer.stop()
+    developmentRetentionTimer.stop()
+    employeeInputGcTimer.stop()
+    // RFC-322：这两个此前只 unref、从未在关停路径里清掉。收编成 ticker 后顺手补上。
+    intentGcTimer.stop()
+    tokenAuditGcTimer.stop()
     await webhookTerminalControl.stop()
     removeDaemonInfo()
     server.stop(true)

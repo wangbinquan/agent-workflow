@@ -107,13 +107,15 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
           scans++
         },
       })
-      // Loop registered exactly one setTimeout (boot) + one setInterval (periodic).
-      expect(intervals.length).toBeGreaterThanOrEqual(1)
-      expect(timeouts.length).toBeGreaterThanOrEqual(1)
+      // RFC-322 起，周期拍先经过一个相位 setTimeout 才装 setInterval，所以构造完成的
+      // 瞬间是「boot setTimeout + 相位 setTimeout + 0 个 setInterval」，而不是原来的
+      // 「1 个 setTimeout + 1 个 setInterval」。本用例守的是 stop() 的完备性，不是
+      // 定时器种类，所以断言改成**注册了几个就必须清掉几个**（比原来的 >=1 更强）。
+      const registered = intervals.length + timeouts.length
+      expect(registered).toBeGreaterThanOrEqual(2)
       ticker.stop()
-      // Both cleared.
-      expect(cleared).toBeGreaterThanOrEqual(1)
-      expect(timeoutsCleared).toBeGreaterThanOrEqual(1)
+      // 每一个注册过的 timer 都被清掉，一个不漏。
+      expect(cleared + timeoutsCleared).toBeGreaterThanOrEqual(registered)
       // After stop(), no scan should have run (timers were huge and we just cleared them).
       expect(scans).toBe(0)
     } finally {

@@ -12,9 +12,10 @@ import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { createLogger } from '@/util/log'
 import { collectPluginGenerationGarbage } from './plugin'
+import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
+import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('plugin-generation-gc')
-const DEFAULT_INTERVAL_MS = 60 * 60_000
 const DEFAULT_GRACE_MS = 24 * 60 * 60_000
 // RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
 const NON_TERMINAL = CANCELABLE_TASK_STATUSES
@@ -43,6 +44,8 @@ export function startPluginGenerationGc(opts: {
   pluginsDir?: string
   intervalMs?: number
   graceMs?: number
+  /** RFC-322：错峰相位。 */
+  phaseOffsetMs?: number
 }): { stop: () => void } {
   const tick = async (): Promise<void> => {
     try {
@@ -55,8 +58,12 @@ export function startPluginGenerationGc(opts: {
       })
     }
   }
+  // boot 拍保持原样（同步发起，不经定时器）：它与相位正交。
   void tick()
-  const timer = setInterval(() => void tick(), opts.intervalMs ?? DEFAULT_INTERVAL_MS)
-  timer.unref?.()
-  return { stop: () => clearInterval(timer) }
+  return startMaintenanceTicker({
+    job: 'pluginGenerationGc',
+    intervalMs: opts.intervalMs ?? HOUR_MS,
+    phaseOffsetMs: opts.phaseOffsetMs ?? MAINTENANCE_PHASE.pluginGenerationGc,
+    onTick: tick,
+  })
 }

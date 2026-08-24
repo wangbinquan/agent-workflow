@@ -2,6 +2,23 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（实现已落主干，待 CI 终态）：[RFC-322 维护节奏错峰与停顿归因](design/RFC-322-maintenance-cadence-stagger/proposal.md)**
+> —— 起于生产「每隔一段时间全站冻结约 30 秒、随后自行恢复」。已实测证伪「慢查询」这个前提：
+> `[db-slow]` 报 32648ms 的那条 `tasks` 查询，同库走索引仅 **10ms**（表 346 行 / 3MB），
+> 外部进程 1Hz 连测 14 分钟**零次超 300ms**——报出来的是**进程停顿**，被慢查询日志栽赃给了 SQL。
+> 根因是 daemon 单条 bun:sqlite **同步**连接（`db/client.ts:50-53` 自述：一条慢语句冻结全部 HTTP/WS）
+> 叠加 **14 个 hourly 维护定时器在 boot 同一秒内装配、零相位零抖动**（`cli/start.ts:885–1376`），
+> 每小时同刻首尾相接执行；最重一拍是 `gc.ts:815-826` 单拍串跑 6 段遍历文件系统的 GC。
+> 本 RFC **只动调度与观测层**（零 migration、零 wire 变化、不改任何维护任务自身算法）：
+> ① `daemonCadence.ts` 增 `MAINTENANCE_PHASE` 确定性相位表；② 新增 `services/maintenanceTicker.ts`
+> 收编 14 份重复调度样板并计时告警；③ `instrumentSlowStatements` 加 CPU 时间字段，使
+> 「查询真慢」与「进程被冻住」当场可判别。**接手须知**：任务分解与验收清单见该目录 `plan.md`；
+> §4 列了 4 项明确不做、各自另立（GC 链内部拆分 / 同步 `ps` fork / `ensureCredentialsSealed`
+> 的 `maintenance_state` 闸门漏接 / WAL checkpoint 与备份 VACUUM 回落主线程）。
+> **实现状态**：批 A/B/C 全落——相位表 + `services/maintenanceTicker.ts` 原语 + `[db-slow]`
+> cpu 尾参判别；9 个具名 ticker 与 `cli/start.ts` 5 处内联定时器全部接入；15 条用例绿，
+> 错峰实证与登记棘轮各做了变异检验。用户裁决记录见该目录 `plan.md` §5。
+
 > 🚧 **实现完成、等待发布终态（Implementation Complete / Phase 2）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
 > —— 用户确认 RFC-320 已推送并要求两个会话各管各的阶段；RFC-321 已进入实现收口，不接手
 > RFC-320 的后端问题。migration、个人凭据 API/账号页、管理员 mapping、统一 publication transport、

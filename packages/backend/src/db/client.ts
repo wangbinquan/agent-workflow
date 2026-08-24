@@ -57,6 +57,16 @@ export interface OpenDbOptions {
   slowQueryMs?: number
 }
 
+/** 进程累计 CPU 时间（微秒）。不可用时返回 null——诊断字段绝不能成为新的崩溃源。 */
+function cpuMicros(): number | null {
+  try {
+    const u = process.cpuUsage()
+    return u.user + u.system
+  } catch {
+    return null
+  }
+}
+
 /**
  * RFC-311 — slow-statement telemetry for the daemon's synchronous connection.
  *
@@ -65,23 +75,40 @@ export interface OpenDbOptions {
  * (bun's cached variant used by our own maintenance code). Timing covers the
  * synchronous execution only; iterator consumption (`iterate`) is not timed.
  * Exported for direct unit testing with an injected log sink.
+ *
+ * RFC-322 —— 墙钟之外再记一个 **CPU 时间**，因为墙钟单独一个量是会骗人的：daemon 只有
+ * 一条同步连接，进程被饿死 / 阻塞在 IO 时，整段停顿会被算到当时正在执行的那条语句头上。
+ * 生产实测的 `[db-slow] 32648ms` 就是这样来的——那条 SELECT 同库实测 10ms、走索引、表
+ * 仅 346 行。判据：
+ *   · `cpuMs ≈ ms` ⇒ 这条语句真的在算，是查询问题（查计划 / 索引 / 数据量）；
+ *   · `cpuMs ≪ ms` ⇒ 进程在等，**与这条 SQL 无关**（去查谁占住了事件循环，
+ *     典型是同刻引爆的维护任务——见 `services/daemonCadence.ts` 的 MAINTENANCE_PHASE）。
  */
 export function instrumentSlowStatements(
   sqlite: Database,
   thresholdMs: number,
-  logSlow: (ms: number, sql: string) => void = (ms, sql) =>
-    console.warn(`[db-slow] ${ms}ms: ${sql}`),
+  // RFC-322：`cpuMs` 是**尾参**，既有 2 参回调（tests/rfc311-perf-foundation.test.ts
+  // 有 4 处）逐字不受影响。
+  logSlow: (ms: number, sql: string, cpuMs: number) => void = (ms, sql, cpuMs) =>
+    console.warn(`[db-slow] ${ms}ms (cpu ${cpuMs < 0 ? 'n/a' : `${cpuMs}ms`}): ${sql}`),
 ): void {
   if (thresholdMs <= 0) return
   const clip = (sql: string): string => (sql.length > 300 ? `${sql.slice(0, 300)}…` : sql)
   const timed = <A extends unknown[], R>(sql: string, fn: (...args: A) => R) => {
     return (...args: A): R => {
       const t0 = performance.now()
+      // 实测 0.40µs/次（`performance.now()` 是 11ns）。第二次只在超阈时才付，
+      // 所以快路径的固定成本是一次调用；相对最便宜的索引查询（~10µs）可以接受。
+      const c0 = cpuMicros()
       try {
         return fn(...args)
       } finally {
         const ms = performance.now() - t0
-        if (ms >= thresholdMs) logSlow(Math.round(ms), clip(sql))
+        if (ms >= thresholdMs) {
+          const c1 = c0 === null ? null : cpuMicros()
+          const cpuMs = c0 === null || c1 === null ? -1 : Math.round((c1 - c0) / 1000)
+          logSlow(Math.round(ms), clip(sql), cpuMs)
+        }
       }
     }
   }

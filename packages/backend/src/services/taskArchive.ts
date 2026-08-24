@@ -54,7 +54,12 @@ import {
   workgroupMessages,
   workgroupTaskState,
 } from '@/db/schema'
-import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS } from '@/services/daemonCadence'
+import {
+  HOUR_MS,
+  MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
+  MAINTENANCE_PHASE,
+} from '@/services/daemonCadence'
+import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
@@ -599,29 +604,21 @@ export async function runManualTaskArchive(
 export function startTaskArchiveSweeper(
   db: DbClient,
   loadConfig: () => TaskArchiveConfig,
-  intervalMs: number = 3_600_000,
+  intervalMs: number = HOUR_MS,
   bootDelayMs: number = MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
+  // RFC-322：与 boot 首拍正交的相位偏移，见 MAINTENANCE_PHASE。
+  phaseOffsetMs: number = MAINTENANCE_PHASE.taskArchive,
 ): { stop: () => void } {
-  let running = false
-  const tick = (): void => {
-    if (running) return
-    running = true
-    runTaskArchiveSweep(db, loadConfig())
-      .catch((err) => log.warn('archive sweep threw', { error: (err as Error).message }))
-      .finally(() => {
-        running = false
-      })
-  }
-  const bootTimer = setTimeout(tick, bootDelayMs)
-  ;(bootTimer as { unref?: () => void }).unref?.()
-  const handle = setInterval(tick, intervalMs)
-  ;(handle as { unref?: () => void }).unref?.()
-  return {
-    stop: () => {
-      clearTimeout(bootTimer)
-      clearInterval(handle)
-    },
-  }
+  return startMaintenanceTicker({
+    job: 'taskArchive',
+    intervalMs,
+    phaseOffsetMs,
+    bootDelayMs,
+    onTick: () =>
+      runTaskArchiveSweep(db, loadConfig()).catch((err) =>
+        log.warn('archive sweep threw', { error: (err as Error).message }),
+      ),
+  })
 }
 
 /** 供 CLI / admin API 使用:按条件预览可归档的树,不动任何数据。 */
