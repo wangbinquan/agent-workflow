@@ -832,6 +832,7 @@ function ToolboxPanel(props: {
         dispatchSources={props.dispatchSources}
         toolsByWorkItem={props.toolsByWorkItem}
         roleRefs={props.toolRoleRefs}
+        roleScoped={props.toolRole !== null}
         language={props.language}
       />
     </section>
@@ -886,6 +887,7 @@ function AddToolDialog(props: {
   dispatchSources: WorkItem[]
   toolsByWorkItem: Readonly<Record<string, ToolRegistration[]>>
   roleRefs: readonly string[]
+  roleScoped: boolean
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
@@ -1339,7 +1341,9 @@ function AddToolDialog(props: {
       title={
         props.tool === null
           ? `${zh ? '给工具职责增加工具：' : 'Add tool to '}${localized(
-              availableRoles.length === 1 ? availableRoles[0]!.label : props.item.label,
+              props.roleScoped && availableRoles.length === 1
+                ? availableRoles[0]!.label
+                : props.item.label,
               props.language,
             )}`
           : `${zh ? '编辑工具：' : 'Edit tool: '}${props.tool.content.displayName}`

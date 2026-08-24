@@ -158,6 +158,8 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(typePage).toContain('selectedToolRole?.workContractRef ?? selectedItem?.workContractRef')
     expect(typePage).toContain('candidate.content.roleRef === target.roleRef')
     expect(typePage).toContain('props.item.toolRoleGroups.length > 1')
+    expect(typePage).toContain('roleScoped={props.toolRole !== null}')
+    expect(typePage).toContain('props.roleScoped && availableRoles.length === 1')
     expect(typePage).toContain('requestedToolRole?.label ?? requestedWorkItem.label')
     expect(typePage).toContain('selectedEditorRole?.description ?? selectedEditorItem.description')
     expect(typePage).toContain('data-testid="employee-review-gate-detail"')
