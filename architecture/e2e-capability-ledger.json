@@ -649,8 +649,13 @@
       "title": "我的账号 → 令牌：吊销自己的令牌 / 越权吊销他人令牌",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-21/47: a PAT manages only its own tokens and can never reach ownership/ACL writes"
+        }
+      ]
     },
     {
       "id": "IAM-23",
@@ -714,8 +719,13 @@
       "title": "用户访问变更的三条硬不变量：__system__ 不可改、不能改自己的权限、最后一个管理员保护",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-30: three hard invariants on user access changes are enforced end to end"
+        }
+      ]
     },
     {
       "id": "IAM-31",
@@ -815,8 +825,13 @@
       "title": "令牌永远够不到「归属与授权」写面（tokenAccess: never）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-21/47: a PAT manages only its own tokens and can never reach ownership/ACL writes"
+        }
+      ]
     },
     {
       "id": "INTENT-01",
@@ -7987,12 +8002,10 @@
     "IAM-14",
     "IAM-15",
     "IAM-16",
-    "IAM-21",
     "IAM-22",
     "IAM-27",
     "IAM-28",
     "IAM-29",
-    "IAM-30",
     "IAM-32",
     "IAM-33",
     "IAM-34",
@@ -8000,7 +8013,6 @@
     "IAM-41",
     "IAM-42",
     "IAM-44",
-    "IAM-47",
     "IAM-48",
     "IAM-X1",
     "IAM-X2",
