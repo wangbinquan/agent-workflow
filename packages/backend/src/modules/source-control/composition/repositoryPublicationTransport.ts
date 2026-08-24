@@ -28,10 +28,7 @@ import {
 } from '@/util/gitCredentialLease'
 import { SQLiteRepositoryTransportCredentialRepository } from '../infrastructure/sqliteRepositoryTransportCredentialRepository'
 import type { StoredRepositoryTransportConnection } from '../ports/repositoryTransportCredentialRepository'
-import type {
-  RepositoryPublicationSession,
-  RepositoryPublicationTransport,
-} from '../public/types'
+import type { RepositoryPublicationSession, RepositoryPublicationTransport } from '../public/types'
 import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
 
 function baseMatchesHost(raw: string, host: string): boolean {
