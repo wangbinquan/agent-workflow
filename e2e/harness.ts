@@ -184,6 +184,9 @@ export type StubMode =
   // RFC-310 — capability-aware digital employee Agent stand-in. The daemon,
   // execution kernel, workspace validator and delivery chain remain real.
   | 'development'
+  // RFC-319 B28 —— 唯一能把一次融合推到「待审批」的模式：它同时留下改过的
+  // 技能文件与 `.agent-workflow/fusion/result.json` 清单，审批面才有东西可看。
+  | 'fusion'
   | 'intent'
   | 'runtime-scenario'
   | 'slow'

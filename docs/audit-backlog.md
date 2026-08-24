@@ -2221,3 +2221,53 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
   或更通用的「schema 新增必填字段时，必须同批给出存量行的迁移 / 兼容路径」检查。
 - 这与 `docs/dev-gotchas.md` 反复讲的是同一族：**空的 / 全新的语料让守卫零预言力**——
   那边是「扫描扫到 0 个文件」，这边是「测试库里没有一行旧数据」。
+
+## 记忆→技能融合在真实 agent 下**必然失败**：结果清单被隔离 merge-back 丢弃（2026-08-24 实测，RFC-319 B28 挖出）
+
+**症状**：任何一次由真实 agent 执行的融合，最终都停在
+`fusion-failed: agent did not write the fusion result manifest`。融合是产品里唯一
+一条会**改写托管技能正文并递增版本**的链路，这条缺陷让它整条不可用。
+
+**根因链**（每一环都可复跑）：
+
+1. merger 节点和其它 agent 节点一样跑在**逐节点隔离工作树**里——
+   `<home>/iso/<taskId>/<nodeRunId>`（`services/nodeIsolation.ts:173`
+   `isoWorktreePathFor`）。daemon 日志里 `spawning agent runtime … cwd=…/iso/…`。
+2. 产品自己的契约要求 merger 把结果清单写进
+   `.agent-workflow/fusion/result.json`（`services/fusion.ts:216-219` 的
+   `MERGER_BODY` 第 3 步）。
+3. 平台的工作区排除档把整个 `.agent-workflow/` 写进工作树的 git ignore
+   （`modules/source-control/domain/workspaceExcludeProfile.ts:28`
+   `gitignoreDirectoryRule(PLATFORM_WORKSPACE_DIR)`）。实测
+   `git check-ignore -v .agent-workflow/fusion/result.json` →
+   `.git/agent-workflow/excludes/v1:3:/.agent-workflow/`。
+4. 逐节点 merge-back 是 **git 驱动**的，被 ignore 的路径不会被带回；唯一的逃生门是
+   force-include 名册 `forcedPortPathsForTask`（`services/portArtifacts.ts:535`），
+   它只收 `tasks.platform_input_paths_json` 与端口归档条目——而
+   `services/fusion.ts:645` 的 `startTask` **没有**传 `platformInputPaths`。
+5. 于是 `reconcileFusion`（`services/fusion.ts:753-760`）在
+   `task.worktreePath` 下找不到清单，判 fail。注意它在检查前会调用
+   `ensureBoundPlatformWorkspaceDirectory` **创建那个空目录**——所以事后看现场会
+   看到 `.agent-workflow/fusion/` 存在但为空，容易误判成「agent 写了又被删」。
+
+**同一次运行里的对照证据**（这是最有说服力的一条）：stub agent 在**同一个目录**里
+既改了 `SKILL.md` 又写了清单；merge 回来的工作树里 `SKILL.md` 的改动**在**
+（`## Fused by the e2e stub` + `- fused <memoryId>`），清单**不在**。差别只有一个：
+后者被 ignore 了。
+
+**为什么现有测试照不出来**：`packages/backend/tests/fusion-engine.test.ts:325-345`
+把清单**直接写进 `task.worktreePath`** 并把任务行强制置为 `done`，从不跨越隔离边界。
+它验的是 reconcile 之后的逻辑，不是 agent → 框架这一段。这正是 RFC-319 立项要找的
+那类「缝隙上没有防护」。
+
+**候选修法**（未做，待拍板）：`services/fusion.ts` 的两处 `startTask`
+（初次 645、re-run 1606）加 `platformInputPaths: [PLATFORM_FUSION_MANIFEST]`——
+它们本来就带 `internalSource`（`space_kind='internal'`），正好满足
+`services/task.ts:2483` 对该名册的准入条件。回归防护应当是**跨隔离边界**的，
+即用真实 agent 跑完一次融合（`e2e` 的 `fusion` stub 模式已具备该能力），
+而不是再加一条直接写 worktree 的单测——那种写法正是这次漏掉它的原因。
+
+**影响面待确认（同形隐患，未追）**：凡是「agent 把结果写进 `.agent-workflow/` 由
+框架回读」的链路都可能同形。`PLATFORM_RUNS_DIR` / `PLATFORM_PIPELINE_DIR` /
+`PLATFORM_REQUIREMENTS_DIR` 各自的读写两端需要逐条对照，确认它们要么不跨隔离边界，
+要么已进 force-include 名册。

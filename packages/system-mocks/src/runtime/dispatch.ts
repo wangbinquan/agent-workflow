@@ -18,6 +18,7 @@ import { run as runClarifyInline } from './mode-clarify-inline'
 import { run as runCommit } from './mode-commit'
 import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runDevelopment } from './mode-development'
+import { run as runFusion } from './mode-fusion'
 import { run as runIntent } from './mode-intent'
 import { run as runRuntimeScenario } from './mode-runtime-scenario'
 import { run as runSlow } from './mode-slow'
@@ -36,6 +37,7 @@ const MODES: Record<string, ModeRunner> = {
   commit: runCommit,
   'cross-clarify': runCrossClarify,
   development: runDevelopment,
+  fusion: runFusion,
   intent: runIntent,
   'runtime-scenario': runRuntimeScenario,
   slow: runSlow,

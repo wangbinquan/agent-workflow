@@ -1012,8 +1012,13 @@
       "title": "从技能详情页发起融合（选记忆 + 写融合意图 → 跳转融合详情）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-lifecycle.spec.ts",
+          "test": "INTENT-48: 从技能详情页选记忆 + 写融合意图，落到这次融合自己的详情页"
+        }
+      ]
     },
     {
       "id": "INTENT-53",
@@ -8358,7 +8363,6 @@
     "INTENT-44",
     "INTENT-45",
     "INTENT-46",
-    "INTENT-48",
     "INTENT-49",
     "INTENT-50",
     "INTENT-51",
