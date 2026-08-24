@@ -1,11 +1,21 @@
-import type { Agent, CreateAgent } from '@agent-workflow/shared'
+import {
+  canonicalJson,
+  CreateAgentSchema,
+  type Agent,
+  type CreateAgent,
+} from '@agent-workflow/shared'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DbClient } from '@/db/client'
+import {
+  DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
+  DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,
+  developmentBuiltinAgentConfigurationV2,
+} from '@/modules/development-automation/public/digitalEmployeeAgentTemplatesV2'
 import { ConflictError } from '@/util/errors'
-import { createAgent, getAgentById, updateAgent } from './agent'
+import { createAgent, getAgentById, renameAgent, updateAgent } from './agent'
 
-export const DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
+export const LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
   '00000000000000DECODEWRITER',
   '00000000000000DEDIAGNOSE',
   '00000000000000DEPIPEFIX',
@@ -16,7 +26,15 @@ export const DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
   '00000000000000DEPLANANALYZE',
 ] as const
 
-export const DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[7]
+export const DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
+  ...LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+  ...DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,
+] as const
+
+const LEGACY_DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID = LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[7]
+export const DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID = LEGACY_DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID
+export const DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID_V2 =
+  DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[7]
 
 const DIGITAL_EMPLOYEE_AGENT_TOOL_PRESENTATION: Readonly<
   Record<
@@ -24,24 +42,40 @@ const DIGITAL_EMPLOYEE_AGENT_TOOL_PRESENTATION: Readonly<
     { readonly zh: string; readonly en: string; readonly selection: 'selectable' | 'automatic' }
   >
 > = {
-  'code-writing': { zh: '代码编写', en: 'Code writing', selection: 'selectable' },
-  'problem-diagnosis': { zh: '问题定位', en: 'Problem diagnosis', selection: 'selectable' },
-  'pipeline-repair': {
-    zh: '通用流水线修复',
-    en: 'General pipeline repair',
+  'code-writing': {
+    zh: '通用代码实现',
+    en: 'General code implementation',
     selection: 'selectable',
   },
-  'review-repair': { zh: '检视意见修复', en: 'Review feedback repair', selection: 'selectable' },
-  'conflict-repair': { zh: '代码冲突修复', en: 'Merge conflict repair', selection: 'selectable' },
+  'problem-diagnosis': {
+    zh: '流水线失败分类',
+    en: 'Pipeline failure classification',
+    selection: 'selectable',
+  },
+  'pipeline-repair': {
+    zh: '流水线失败修复',
+    en: 'Pipeline failure repair',
+    selection: 'selectable',
+  },
+  'review-repair': {
+    zh: '检视意见处理',
+    en: 'Review feedback handling',
+    selection: 'selectable',
+  },
+  'conflict-repair': {
+    zh: '合并冲突处理',
+    en: 'Merge conflict handling',
+    selection: 'selectable',
+  },
   'business-implementation': {
     zh: '业务需求实现',
     en: 'Business implementation',
     selection: 'selectable',
   },
-  'issue-repair': { zh: '代码问题修复', en: 'Issue repair', selection: 'selectable' },
+  'issue-repair': { zh: '缺陷修复', en: 'Defect repair', selection: 'selectable' },
   'implementation-planning': {
-    zh: '实现方案分析',
-    en: 'Implementation planning',
+    zh: '编写实现方案',
+    en: 'Write implementation plan',
     selection: 'selectable',
   },
 }
@@ -51,7 +85,7 @@ export function digitalEmployeeAgentToolPresentation(template: string) {
 }
 
 interface DigitalEmployeeAgentTemplate {
-  readonly id: (typeof DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS)[number]
+  readonly id: (typeof LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS)[number]
   readonly definition: CreateAgent
 }
 
@@ -60,7 +94,7 @@ const DELIVERY_CONTENT_INSTRUCTION =
 
 const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] = [
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[0],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[0],
     definition: {
       name: 'digital-employee-code-writer',
       description: '根据冻结的工作合同和上下文实现代码修改，只返回数字员工 exact envelope。',
@@ -84,7 +118,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[1],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[1],
     definition: {
       name: 'digital-employee-problem-diagnoser',
       description: '基于冻结现场定位根因并形成可执行结论，只返回数字员工 exact envelope。',
@@ -138,7 +172,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[2],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[2],
     definition: {
       name: 'digital-employee-pipeline-repairer',
       description: '读取流水线证据包和大日志引用，按闭集失败类型修复代码，只返回 exact envelope。',
@@ -159,7 +193,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[3],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[3],
     definition: {
       name: 'digital-employee-review-feedback-repairer',
       description: '读取每棵检视线程的根评论和全部多轮回复，修复代码并逐线程输出处理说明。',
@@ -180,7 +214,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[4],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[4],
     definition: {
       name: 'digital-employee-conflict-repairer',
       description: '在平台冻结的冲突现场中修复授权冲突文件，只返回 exact envelope。',
@@ -201,7 +235,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[5],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[5],
     definition: {
       name: 'digital-employee-business-implementer',
       description: '面向新需求与业务逻辑实现，依据验收目标完成最小完整代码变更。',
@@ -222,7 +256,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[6],
+    id: LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[6],
     definition: {
       name: 'digital-employee-issue-repairer',
       description: '面向问题单与缺陷修复，先定位可验证根因，再完成最小修复和回归验证。',
@@ -243,7 +277,7 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
     },
   },
   {
-    id: DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID,
+    id: LEGACY_DIGITAL_EMPLOYEE_PLAN_ANALYZER_ID,
     definition: {
       name: 'digital-employee-implementation-planner',
       description: '只读分析需求、材料与仓库，形成供人工评审的实现方案，不修改任何文件。',
@@ -275,32 +309,99 @@ const DIGITAL_EMPLOYEE_AGENT_TEMPLATES: readonly DigitalEmployeeAgentTemplate[] 
 ]
 
 /**
+ * The stored form of one builtin row, re-expressed in the exact shape a
+ * template declares it. Comparing two parsed `CreateAgent` values as one
+ * canonical string beats a field-by-field checklist, which silently stops
+ * covering whatever field `CreateAgent` grows next.
+ */
+function storedBuiltinAgentDefinition(existing: Agent): CreateAgent {
+  return CreateAgentSchema.parse({
+    name: existing.name,
+    description: existing.description,
+    outputs: existing.outputs,
+    ...(existing.outputKinds === undefined ? {} : { outputKinds: existing.outputKinds }),
+    ...(existing.branchPorts === undefined ? {} : { branchPorts: existing.branchPorts }),
+    inputs: existing.inputs,
+    ...(existing.outputWrapperPortNames === undefined
+      ? {}
+      : { outputWrapperPortNames: existing.outputWrapperPortNames }),
+    ...(existing.role === undefined ? {} : { role: existing.role }),
+    syncOutputsOnIterate: existing.syncOutputsOnIterate,
+    ...(existing.runtime === undefined ? {} : { runtime: existing.runtime }),
+    permission: existing.permission,
+    skills: existing.skills,
+    dependsOn: existing.dependsOn,
+    mcp: existing.mcp,
+    plugins: existing.plugins,
+    frontmatterExtra: existing.frontmatterExtra,
+    bodyMd: existing.bodyMd,
+  })
+}
+
+/** Everything except the name, which is repaired through `renameAgent`. */
+function builtinAgentContentSignature(definition: CreateAgent): string {
+  const { name: _name, ...content } = CreateAgentSchema.parse(definition)
+  return canonicalJson(content)
+}
+
+/**
+ * Bring one platform-owned row back onto its template.
+ *
+ * The code is the source of truth for builtin definitions, so drift is
+ * REPAIRED at boot, never refused. The earlier create-or-equal rule threw on
+ * any difference, which meant one reworded `description` in this repository
+ * stopped the daemon dead on every machine that had already seeded the old
+ * text — dev boxes and upgraded installs alike — for an edit that cannot break
+ * anything. Convergence is also what keeps the two sync paths honest: the
+ * legacy loop used to re-sync only when `frontmatterExtra.schemaVersion`
+ * moved, so a body edit without a version bump stayed stale forever.
+ */
+async function reconcileBuiltinAgentTemplate(
+  db: DbClient,
+  existing: Agent,
+  definition: CreateAgent,
+): Promise<void> {
+  if (existing.name !== definition.name) {
+    await renameAgent(db, existing.id, { newName: definition.name })
+  }
+  if (
+    builtinAgentContentSignature(storedBuiltinAgentDefinition(existing)) !==
+    builtinAgentContentSignature(definition)
+  ) {
+    const { name: _stableName, ...contentPatch } = definition
+    await updateAgent(db, existing.id, contentPatch, null)
+  }
+}
+
+/**
  * Seed platform-owned templates at daemon boot, not in a schema migration.
  * Migrations must leave an otherwise empty resource database empty; the daemon
  * owns business-resource initialization and can therefore validate collisions.
  */
 export async function ensureDigitalEmployeeAgentTemplates(db: DbClient): Promise<void> {
-  for (const template of DIGITAL_EMPLOYEE_AGENT_TEMPLATES) {
+  const templates: readonly { readonly id: string; readonly definition: CreateAgent }[] = [
+    ...DIGITAL_EMPLOYEE_AGENT_TEMPLATES,
+    ...DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
+  ]
+  for (const template of templates) {
     const existing = await getAgentById(db, template.id)
     if (existing !== null) {
-      if (
-        existing.name !== template.definition.name ||
-        existing.ownerUserId !== SYSTEM_USER_ID ||
-        existing.visibility !== 'public' ||
-        existing.builtin !== true
-      ) {
+      // The one unrecoverable case: a row that is not ours squats the stable
+      // id. Converging that would overwrite somebody's own Agent, so the
+      // daemon refuses instead of repairing.
+      //
+      // `visibility` is deliberately NOT part of this check. It is an ACL
+      // decision with its own endpoint and audit trail, so a builtin that an
+      // administrator made private drops out of
+      // `listDigitalEmployeeAgentTemplates` (which filters on public) without
+      // costing anyone their daemon.
+      if (existing.ownerUserId !== SYSTEM_USER_ID || existing.builtin !== true) {
         throw new ConflictError(
           'builtin-agent-id-collision',
           `stable digital employee Agent id '${template.id}' is occupied`,
         )
       }
-      if (
-        existing.frontmatterExtra.schemaVersion !==
-        template.definition.frontmatterExtra.schemaVersion
-      ) {
-        const { name: _stableName, ...contentPatch } = template.definition
-        await updateAgent(db, template.id, contentPatch, null)
-      }
+      await reconcileBuiltinAgentTemplate(db, existing, template.definition)
       continue
     }
     await createAgent(db, template.definition, {
@@ -313,10 +414,21 @@ export async function ensureDigitalEmployeeAgentTemplates(db: DbClient): Promise
 
 export async function listDigitalEmployeeAgentTemplates(db: DbClient): Promise<Agent[]> {
   const resolved = await Promise.all(
-    DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.map((id) => getAgentById(db, id)),
+    DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2.map((id) => getAgentById(db, id)),
   )
   return resolved.filter(
     (agent): agent is Agent =>
       agent !== null && agent.builtin === true && agent.visibility === 'public',
   )
+}
+
+export function digitalEmployeeBuiltinToolConfiguration(agentId: string) {
+  return developmentBuiltinAgentConfigurationV2(agentId)
+}
+
+export function digitalEmployeeBuiltinAgentSuccessorId(agentId: string): string | null {
+  const index = LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.indexOf(
+    agentId as (typeof LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS)[number],
+  )
+  return index < 0 ? null : DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[index]!
 }
