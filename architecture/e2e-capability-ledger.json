@@ -3395,8 +3395,25 @@
       "title": "评审决策确认弹窗：有未提交草稿/已有意见时的二次确认、驳回必填理由、重跑节点预告",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-decision-confirm-dialog.spec.ts",
+          "test": "一条意见都没有就要迭代：弹窗必须说「agent 会收到一份空清单」，并预告谁会重跑"
+        },
+        {
+          "file": "e2e/review-decision-confirm-dialog.spec.ts",
+          "test": "驳回不写理由：弹窗当场拦下，一个决策请求都不许发出去"
+        },
+        {
+          "file": "e2e/review-decision-confirm-dialog.spec.ts",
+          "test": "带着已提交的意见按「通过」：弹窗要点明这些意见不会被处理"
+        },
+        {
+          "file": "e2e/review-decision-confirm-dialog.spec.ts",
+          "test": "反向对照：没有意见也没有草稿时按「通过」，不弹窗、直接过"
+        }
+      ]
     },
     {
       "id": "HUMAN-37",
@@ -8484,7 +8501,6 @@
     "HUMAN-25",
     "HUMAN-26",
     "HUMAN-27",
-    "HUMAN-35",
     "HUMAN-36",
     "HUMAN-37",
     "HUMAN-40",
