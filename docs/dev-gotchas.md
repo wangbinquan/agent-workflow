@@ -32,6 +32,24 @@
 > 一律不执行**。产品自身的 worktree 能力（任务隔离 `~/.agent-workflow/worktrees/`、
 > git wrapper 快照）不在此列——那是被开发的功能，与开发流程无关。
 
+> ## ⚠️ 作废通知（2026-08-24，用户明令）：`gate:local` 不再是提交前置条件
+>
+> `CLAUDE.md` §Test-with-every-change 的「运行门槛」已改为：**本地不跑门禁，直接提交，让 GitHub
+> Actions 跑**。原因是本仓多 session 并发共用一棵工作树，本地全量门禁 8–10 分钟、吃满 CPU、还带
+> 跨 worktree 单实例锁，互相挤占把提交吞吐压到极低。
+>
+> 因此本文件下面凡是把「push 前跑一遍 `gate:local` / 跑到全绿再推 / 先 `git add -N` 再跑门禁 /
+> 推之前补跑 `RUN_GIT_NETWORK=1 …`」写成**定式**的段落，其**处方部分作废**——不必为了推代码去跑它们。
+>
+> 这些条目**保留**的价值在于它们记录的**失败模式**依然真实，只是暴露点从「本地门禁」挪到了 CI：
+> `git ls-files` 型守卫看不见 untracked 文件、e2e / gitleaks / system-mock / `RUN_GIT_NETWORK`
+> 用例本来就不在本地覆盖面内、贴着 5s 超时的用例在负载下假红、`| tail` 吞掉退出码……**读它们的正确
+> 姿势是「CI 红成这样时，多半是这个原因」**，而不是「所以我推之前要先在本地跑一遍」。
+>
+> 相应地，**push 之后的责任变重**：按自己的确切 sha 查 CI、盯到绿为止，红了立刻补一提或 revert
+> 自己那笔——`main` 是全员共用的主干。`bun run gate:local` / `bun run test:backend:serial` 仍是
+> 复现 CI 红、排查顺序依赖的**诊断入口**。
+
 ## 测试 / CI
 
 - **门禁在跑的时候别在同一台机器上另跑 `bun test`——有 5s 硬超时的用例会成批假红**（2026-08-20 实撞三次）：同一轮里先后收到 `rfc098-process-governance`、`scheduler-clarify-dispatch`、`rfc193-port-artifacts`（archive-at-emit）的红，**三条单跑全绿**，且失败耗时都是 ~5.2s——正好压在那些用例的 5s 超时上。成因是 backend 四分片本来就吃满 CPU，我又在共享树里并行跑单文件测试。

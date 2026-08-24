@@ -18,8 +18,10 @@ v1 **已发布**：M0–M5 的 81 个 issue 全部完工（`STATE.md` §路线�
 
 When a batch of work (RFC tasks, fixes) completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
 
-`bun install` then `bun run gate:local` to run the complete local quality/test gate. For a
-tests-only pass, `bun run test` verifies backend, shared, and frontend.
+`bun install` 装依赖。**质量 / 测试门禁以 GitHub Actions 为准，本地不再要求跑**（2026-08-24
+用户明令，详见 §Test-with-every-change 的「运行门槛」）：`bun run gate:local`（完整本地门禁）与
+`bun run test`（backend + shared + frontend）保留为**可选的诊断入口**——用于复现 CI 报出的红，
+不是提交的前置条件。
 
 ## RFC workflow（新增 / 修改前的强制流程）
 
@@ -61,11 +63,15 @@ tests-only pass, `bun run test` verifies backend, shared, and frontend.
 **任何代码改动落 commit 之前必须带上对应的测试用例**——既包含新功能的正向覆盖，也包含 bug 修复的回归防护。
 没有"先实现、之后补测试"这一档；测试用例是改动本身的一部分。
 
-- **新功能**：实现的同时给所有正向 / 边界 / 错误路径写测试。RFC 的 `design.md §测试策略` 列出哪些 case 必写，PR 必须把它们都跑绿才算交付。
+- **新功能**：实现的同时给所有正向 / 边界 / 错误路径写测试。RFC 的 `design.md §测试策略` 列出哪些 case 必写，**CI** 必须把它们都跑绿才算交付。
 - **bug 修复**：先写一个能稳定复现该 bug 的测试用例（红），再写修复（绿）。把"为什么这条测试存在"写进 test 文件顶端的注释（链接 commit / RFC / issue），让未来任何 refactor 一旦把它变红能立刻看出意图。
 - **首选可断言面**：抽出纯函数 / 纯数据预言（典型例子见 `affectsDefinition` / `affectsEdgeDefinition` / `selectionSig` / `deriveSelection` / `extractMissingRefs` / `hasConflict`），在用户层面 wire 进去后再写少量集成断言。运行时巨型组件难直接覆盖时，**最低限度也要保留一条源代码层文本断言**作为兜底（例如"`selectionOnDrag` 不得出现在 `WorkflowCanvas.tsx`"）。
 - **回归防护命名**：测试文件 / describe 标题应能让人一眼识别它锁的是哪类回归（例如 `canvas-edge-changes.test.ts` 顶部直接写明"locks in EdgeInspector reachability fixes from commit 9b7ba31"）。
-- **运行门槛**：`bun run gate:local` 必须全绿才能 push。它把 backend 与 quality 两条车道并发：backend 保留 `--isolate --randomize`，拆成 4 个各自拥有独立 home/tmp 的完整串行 shard；quality 依次跑 typecheck / lint / format / depcheck / shared / frontend。`bun run test:backend:serial` 是复现单进程顺序问题的诊断入口，不能替代完整门禁。lint 是 `--max-warnings 0`——一个 unused import 就双 OS 红（RFC-140 事故）。GitHub Actions 同样会跑这些检查 + 单二进制 build smoke + Playwright e2e。**推完立刻查 CI**：用 GitHub Actions API 按**自己的确切 sha** 查——共享 `main` 上并发 push 会取消你的 run，须看含你 commit 的 superseding commit 的绿、按失败测试的 owning commit 归属（详见 `docs/dev-gotchas.md`）。
+- **运行门槛（2026-08-24 变更：本地不跑，直接推，让 CI 跑）**：**不再要求 push 前跑 `bun run gate:local`**——本仓多个 session 并发开发、共用同一棵工作树，本地全量门禁要 8–10 分钟且吃满 CPU，`gate:local` 又带跨 worktree 单实例锁，几个 session 互相挤占后提交吞吐极低；而它看到的还是被别人实时写入的中间态快照，红了也无法归因（见 `docs/dev-gotchas.md`）。**唯一权威门禁是 GitHub Actions**：它在干净 checkout 上跑 typecheck / lint（`--max-warnings 0`，一个 unused import 就双 OS 红，RFC-140 事故）/ format / depcheck / backend 四分片 / shared / frontend / 单二进制 build smoke / Playwright e2e，覆盖面本来就**大于**本地门禁（本地不跑 e2e、不跑 gitleaks、不跑 system-mock 包、`RUN_GIT_NETWORK` 门控的用例也不跑）。
+  - **代价由推的人自己兜**：`main` 是全员共用的主干，你推红就是全员红。**push 完立刻按自己的确切 sha 查 CI**（GitHub Actions API；共享 `main` 上并发 push 会取消你的 run，须看含你 commit 的 superseding commit 的绿、按失败测试的 owning commit 归属，详见 `docs/dev-gotchas.md`），**盯到绿为止**：红了立刻修（小改直接补一提），确认一时修不完就 revert 自己那笔，别把红的主干留给下一个人。
+  - **本地仍推荐的秒级自查（不抢资源、可选）**：只对**本次改动的文件**跑 `bunx prettier --check <files>` 与 `bunx eslint <files> --max-warnings 0`，以及直接相关的那几个测试文件（`bun test <file>`）。这是建议不是门槛，不做也可以，由 CI 兜底。
+  - `bun run gate:local` / `bun run test:backend:serial` 保留为**诊断入口**：CI 红了要在本地复现、或排查单进程顺序依赖时才用，不作为提交前置条件。
+- **测试照写不误**：本条只改「在哪里跑」，没改「要不要写」——本节其余各条（新功能正向 / 边界 / 错误路径覆盖、bug 先红后绿、回归防护命名）全部照旧生效，改动仍必须自带测试。
 - **flaky 不能掩盖红 case**：发现某测试间歇性失败，先确认是不是真 bug；如果确属环境 / 时序，要么修测试（首选 `findByRole` / class 选择器去掉 i18n race），要么显式用注释标记并开 issue，**绝不允许"重跑就过了"作为通过依据**。
 - **不写测试的极少数例外**：纯文档 / 注释改动、依赖版本号 bump（且 lock 文件锁住了 minor）、CI 配置微调、prettier 自动 format。**任何触及生产代码或测试代码的改动都没有这个豁免**。
 
