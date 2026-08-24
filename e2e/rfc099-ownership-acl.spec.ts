@@ -181,11 +181,35 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // A successful save CLOSES the dialog (user feedback).
   await expect(alicePage.getByTestId('acl-panel')).toHaveCount(0)
 
-  // (2) carol: list no longer contains the agent; direct URL dead-ends.
+  // (2) carol: list no longer contains the agent; direct URL is INDISTINGUISHABLE
+  //     from a resource that never existed.
+  //
+  // ⚠️ RFC-319 T30 —— 这里原本是 `expect(carolPage.getByTestId('acl-panel')).toHaveCount(0)`，
+  // 一条**恒真断言**：`acl-panel` 只在 More→Permissions 弹窗内渲染（见 openAgentAcl），
+  // 而 carol 从未点开过那个弹窗。无论权限如何它都是 0——即便私有化彻底失效、carol
+  // 看到了完整详情页，那条断言照样绿。上一行的列表过滤是真覆盖，两半判若两人。
+  //
+  // 换成**存在性不可区分**：把「真实但不可见的 id」与「根本不存在的 id」两次访问
+  // 呈现出来的文本逐字比较。私有化一旦泄露——哪怕只泄露一个名字、或者把 404 换成
+  // 403（403 本身就是「这个 id 存在」的信号）——两者就不再相等。
   await carolPage.goto(`${daemon.baseUrl}/agents`)
   await expect(carolPage.getByRole('link', { name: AGENT_NAME })).toHaveCount(0)
-  await carolPage.goto(`${daemon.baseUrl}/agents/${agentId}`)
-  await expect(carolPage.getByTestId('acl-panel')).toHaveCount(0)
+
+  const denialShownTo = async (id: string): Promise<string> => {
+    await carolPage.goto(`${daemon.baseUrl}/agents/${id}`)
+    const banner = carolPage.locator('.error-box').first()
+    await expect(banner).toBeVisible()
+    // 名字不得出现在任何位置（标题、面包屑、列表 rail）。
+    await expect(carolPage.getByText(AGENT_NAME)).toHaveCount(0)
+    return (await banner.innerText()).trim()
+  }
+  const hiddenButReal = await denialShownTo(agentId)
+  const neverExisted = await denialShownTo('01JZZZZZZZZZZZZZZZZZZZZZZZ')
+  expect(
+    hiddenButReal,
+    '私有资源的详情页必须与「这个 id 从来不存在」逐字同形；两者一旦不同，' +
+      'id 的存在性就从错误信息里泄露出去了',
+  ).toBe(neverExisted)
 
   // (3) alice grants carol through the UserPicker and saves. The results
   // list is PORTALED to document.body (the original in-panel dropdown was

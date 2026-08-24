@@ -1177,4 +1177,117 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     })
     expect(light.ok).toBe(true)
   })
+
+  // ⚠️ RFC-319 T31 —— 在这条用例之前，全仓 e2e **没有任何一处**对 `/api/workflows`
+  // 发过 DELETE。唯一「测过删除」的地方是上面那条 axe 用例：它打开确认框、跑一遍
+  // axe、点 Cancel、断言焦点回到 more-actions——形状、可访问性、焦点都锁住了，
+  // 唯独「删除这件事到底成不成」一个字都没断言。删除是不可逆操作，它的守卫却是
+  // 一条永远不会真删的路径。
+  //
+  // 这条用例把三件事一起钉住：
+  //   ① 逐字二次确认——不输名字 / 输错名字都不放行（防误删的唯一护栏）；
+  //   ② 版本 CAS——确认框开着时别人推进了版本，这次删除必须被拒绝，
+  //      而不是把「我没看见的那一版」一起删掉；
+  //   ③ 真的删了——不是只清了前端缓存：直接问 API 要 404。
+  test('RFC-319: deleting a workflow needs the typed name, refuses a stale version, and really removes the row', async ({
+    page,
+  }) => {
+    const detail = await fetch(`${daemon.baseUrl}/api/workflows/${workflowId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    expect(detail.ok).toBe(true)
+    const {
+      name,
+      version: seededVersion,
+      definition,
+    } = (await detail.json()) as {
+      name: string
+      version: number
+      definition: Record<string, unknown>
+    }
+
+    await openEditor(page)
+
+    const openDeleteDialog = async () => {
+      await page.getByTestId('workflow-more-actions').click()
+      const actions = page.getByTestId('workflow-actions-dialog')
+      await expect(actions).toBeVisible()
+      await actions.getByTestId('workflow-delete-button').click()
+      const dialog = page.getByRole('dialog', { name: 'Delete workflow' })
+      await expect(dialog).toBeVisible()
+      return dialog
+    }
+
+    // ① 逐字二次确认
+    let dialog = await openDeleteDialog()
+    const confirmButton = () => dialog.getByRole('button', { name: 'Delete', exact: true })
+    await expect(confirmButton(), '还没输名字就能点删除 ⇒ 防误删护栏没接上').toBeDisabled()
+    await dialog.getByTestId('confirm-input').fill(`${name}-not-quite`)
+    await expect(confirmButton(), '名字不匹配也放行 ⇒ 逐字确认形同虚设').toBeDisabled()
+
+    // ② 版本 CAS —— 在 **API 层**断言，不走 UI。
+    //
+    // 一开始想通过 UI 造这个场景：确认框开着时用另一个写者推进版本，然后点删除、
+    // 期待 409。实测**造不出来**——编辑器通过 WS 立刻收到了那次外部保存并更新了
+    // serverRevision，于是这次删除携带的已经是新版本，删除成功。那是产品做对了，
+    // 不是缺陷。所以这一条改在合同层证明护栏本身存在：带一个确定过期的
+    // expectedVersion 去删，必须被拒绝、且资源必须还在。
+    const bumped = await fetch(`${daemon.baseUrl}/api/workflows/${workflowId}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${daemon.token}`,
+        'Content-Type': 'application/json',
+      },
+      // PUT 要完整 draft snapshot + expectedVersion + clientMutationId
+      // （UpdateWorkflowSchema 是 .strict()）。definition 原样回写，只改描述。
+      body: JSON.stringify({
+        expectedVersion: seededVersion,
+        clientMutationId: '01HZZZZZZZZZZZZZZZZZZZZZZZ',
+        snapshot: { name, description: 'bumped by another writer', definition },
+      }),
+    })
+    expect(bumped.ok).toBe(true)
+    expect(
+      ((await bumped.json()) as { revision: { version: number } }).revision.version,
+    ).toBeGreaterThan(seededVersion)
+
+    const staleDelete = await fetch(`${daemon.baseUrl}/api/workflows/${workflowId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${daemon.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        expectedVersion: seededVersion,
+        clientMutationId: '01HZZZZZZZZZZZZZZZZZZZZZZY',
+        confirm: name,
+      }),
+    })
+    expect(
+      staleDelete.status,
+      '带过期 expectedVersion 的删除竟然通过了 ⇒ 删除没有版本护栏，' +
+        '两个标签页可以互相删掉对方没看见的那一版',
+    ).toBe(409)
+    const survived = await fetch(`${daemon.baseUrl}/api/workflows/${workflowId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    expect(survived.status, '被拒绝的删除仍然把资源删掉了').toBe(200)
+
+    // ③ 拿到新版本后重新确认 → 真删
+    await page.reload()
+    await expect(page.locator('.workflow-canvas')).toBeVisible()
+    dialog = await openDeleteDialog()
+    await dialog.getByTestId('confirm-input').fill(name)
+    await confirmButton().click()
+
+    // 成功路径导航回列表，且卡片消失。
+    await expect(page).toHaveURL(/\/workflows(\?.*)?$/)
+    await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0)
+
+    // 真的删了，不是只清了前端缓存。
+    const gone = await fetch(`${daemon.baseUrl}/api/workflows/${workflowId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    expect(gone.status, '前端跳走了但资源还在 ⇒ 删除只改了缓存').toBe(404)
+  })
 })

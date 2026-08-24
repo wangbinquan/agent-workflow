@@ -176,10 +176,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 31,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）",
-      "allowGrowth": {
-        "why": "RFC-319 R1/R2：覆盖账本的逐条对账需要一次跑过全量 e2e 的 route journal（AW_E2E_ROUTE_JOURNAL，由 e2e-full-nightly 提供）。PR 腿只跑 PR 档，命中集合天然小于全量，拿它比账本会把账本修成更宽松的值——所以这两个 describe 必须是 env 门控。两条守卫的**结构检查**（幽灵条目 / 排序去重 / 语料上下界）不带门，始终跑。"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -234,7 +231,7 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 271,
+      "baseline": 268,
       "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 462 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。"
     },
     {
