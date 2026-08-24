@@ -1019,8 +1019,13 @@
       "title": "候选（未审蒸馏产物）对无 resource-acl:bypass 者不可见：列表过滤 + 详情 404 同形",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-34: candidate rows stay invisible to non-bypass actors until they are promoted"
+        }
+      ]
     },
     {
       "id": "MEM-35",
@@ -1028,8 +1033,13 @@
       "title": "逐行管理权（canManage）驱动按钮可用性：非 owner 的行不给 Edit / Archive / Delete / 勾选",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-35: a user who can see an agent-scoped memory still cannot edit, archive or delete it"
+        }
+      ]
     },
     {
       "id": "MEM-36",
@@ -1037,8 +1047,13 @@
       "title": "资源 scope 记忆随资源可见性：不可见资源的记忆在列表被过滤、详情 404（存在性隔离）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-36: an agent-scoped memory follows the agent visibility — filtered from the list and indistinguishable from absent"
+        }
+      ]
     },
     {
       "id": "MEM-37",
@@ -1046,8 +1061,13 @@
       "title": "repo / repo_group / global 记忆：全员可读、仅 resource-acl:bypass 可管",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-37: repo and global memories are readable by everyone but manageable only with resource-acl:bypass"
+        }
+      ]
     },
     {
       "id": "MEM-38",
@@ -3675,8 +3695,13 @@
       "title": "新建记忆被服务端权限拒绝（对无管理权的 scope 创建 → 403）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-04: creating a memory on a scope you do not manage is refused"
+        }
+      ]
     },
     {
       "id": "MEM-05",
@@ -3695,8 +3720,13 @@
       "title": "审批候选：Reject 拒绝（candidate → rejected，不写 approvedAt，永不注入）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited"
+        }
+      ]
     },
     {
       "id": "MEM-11",
@@ -3744,8 +3774,13 @@
       "title": "删除的双重确认门：缺 ?confirm=true → 422；token 调用方还须回显标题",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-19: deleting a memory needs ?confirm=true, and a token caller must additionally echo the title"
+        }
+      ]
     },
     {
       "id": "MEM-20",
@@ -6847,8 +6882,13 @@
       "title": "编辑终态记忆被拒（superseded / rejected / fused → 409 memory-terminal-status 专属文案）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited"
+        }
+      ]
     },
     {
       "id": "MEM-13",
@@ -6939,8 +6979,13 @@
       "title": "记忆列表的搜索 / 标签 / scope 过滤与非法过滤值 422",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-access.spec.ts",
+          "test": "RFC-319 MEM-48: list filters narrow the result set, and an invalid filter value is refused rather than silently ignored"
+        }
+      ]
     },
     {
       "id": "MEM-X11",
@@ -8139,16 +8184,12 @@
     "INTENT-X9",
     "MEM-02",
     "MEM-03",
-    "MEM-04",
     "MEM-06",
     "MEM-07",
-    "MEM-08",
-    "MEM-10",
     "MEM-11",
     "MEM-12",
     "MEM-13",
     "MEM-14",
-    "MEM-19",
     "MEM-20",
     "MEM-21",
     "MEM-22",
@@ -8163,10 +8204,6 @@
     "MEM-31",
     "MEM-32",
     "MEM-33",
-    "MEM-34",
-    "MEM-35",
-    "MEM-36",
-    "MEM-37",
     "MEM-40",
     "MEM-41",
     "MEM-42",
@@ -8175,7 +8212,6 @@
     "MEM-45",
     "MEM-46",
     "MEM-47",
-    "MEM-48",
     "MEM-49",
     "MEM-50",
     "MEM-X1",
