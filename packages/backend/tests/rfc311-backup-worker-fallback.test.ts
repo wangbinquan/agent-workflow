@@ -24,8 +24,10 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
       'utf8',
     )
     expect(src).toContain("join(backendSrc, 'services', 'backupVacuumWorker.ts')")
-    // 主二进制与 e2e 二进制两处 --compile 都要带上。
-    expect(src.match(/\.\.\.WORKER_ENTRIES,/g)).toHaveLength(2)
+    // 主二进制与 e2e 二进制共用同一个 compile helper；worker 必须作为
+    // 额外入口进入该 helper，且两个产物都通过它构建。
+    expect(src).toContain('entrypoints: [mainEntry, ...WORKER_ENTRIES]')
+    expect(src.match(/await buildDaemonBinary\(\{/g)).toHaveLength(2)
   })
 
   test('a real file DB copies through the worker', async () => {
