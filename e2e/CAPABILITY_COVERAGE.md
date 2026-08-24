@@ -1,5 +1,36 @@
 # Task execution capability protection
 
+> ## ⚠️ 这份文件是**导读**，不是判据（RFC-319）
+>
+> 下面的每一句「已覆盖」都是**散文**：要验证它，人得回到用例源码去读。RFC-319 的审计
+> 逐条读过之后推翻了其中若干条——最典型的三种形态是：
+>
+> - 断言**恒真**：`rfc099-ownership-acl.spec.ts:188` 用只在弹窗内渲染的 `acl-panel`
+>   计数为 0 去断言「陌生人直链进不去」，而那个弹窗从未被打开。
+> - 用例**只走到一半**：`workflow-editor.spec.ts` 的「删除工作流」打开确认框、跑 axe、
+>   点 Cancel——全仓 e2e 对 `/api/workflows` 曾经**零 DELETE**。
+> - 断言**根本不跑**：代理引用完整性告警的唯一浏览器断言被关在
+>   `test.skip(!RUN_VISUAL_REGRESSION)` 里，PR CI 的 Playwright 腿从不执行它；
+>   而它还用 `page.route` 把被测响应整个换掉，后端计算一行都没跑过。
+>
+> **权威判据已移交三份机器账本**（都在 `architecture/`，都由 RFC-317 的高水位机制
+> 管「只减不增」）：
+>
+> | 账本                         | 问的问题                                                     | 守卫                               |
+> | ---------------------------- | ------------------------------------------------------------ | ---------------------------------- |
+> | `e2e-endpoint-coverage.json` | `allRouteMeta()` 声明的端点里，哪些一次都没被任何 e2e 打到   | `rfc319-endpoint-coverage.test.ts` |
+> | `e2e-route-coverage.json`    | `router.tsx` 的前端路由里，哪些从未被真实加载过              | `rfc319-route-coverage.test.ts`    |
+> | `e2e-capability-ledger.json` | 820 条用户面能力各自被哪条**具名**用例守着（证据须逐字可达） | `rfc319-capability-ledger.test.ts` |
+>
+> 前两份的分子来自**运行期实测**（`e2e/route-journal.ts` 从 daemon 请求日志采集，
+> 由 `e2e-full-nightly` 驱动全量对账），不是静态扫描。第三份把「哪条用例守着哪条能力」
+> 从散文变成 `{file, test}`——用例改名或被删就红。
+>
+> 逐条审计依据：`design/RFC-319-user-facing-e2e-coverage-hardening/findings.md`。
+>
+> 下文保留，因为它讲清了**分层策略**与**发版前真运行时门**这两件账本表达不了的事。
+> 但凡下文与账本冲突，**账本为准**。
+
 This catalog turns durable task behavior into three complementary test layers.
 It deliberately separates platform correctness from upstream CLI/provider drift,
 so ordinary CI is deterministic while a release candidate can still be tested

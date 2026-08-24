@@ -240,6 +240,20 @@
       "symbol": "uncovered",
       "baseline": 18,
       "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。"
+    },
+    {
+      "id": "rfc319-capability-gaps",
+      "file": "architecture/e2e-capability-ledger.json",
+      "symbol": "gapIds",
+      "baseline": 668,
+      "why": "RFC-319 R3：820 条用户面能力里还没有 system-mock e2e 防护的那些（开工时 679，本 RFC 已补 11 条 ⇒ 668）。只许降——每降一条代表一个真实用户场景被端到端跑过了。涨了说明新增能力没带 e2e，必须在 review 里解释。"
+    },
+    {
+      "id": "rfc319-capability-prose-evidence",
+      "file": "architecture/e2e-capability-ledger.json",
+      "symbol": "unverifiedIds",
+      "baseline": 141,
+      "why": "RFC-319 R3：审计判定有 e2e 防护、但证据仍是散文（path:line + 说明）而没归一成可校验 {file, test} 的存量条目（开工时 141）。只许降——它衡量的是「账本还有多少话是不可验证的」。这个状态是存量专用，新增行不许用它（守卫另有一条上界断言）。"
     }
   ]
 }
