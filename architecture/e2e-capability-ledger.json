@@ -3121,11 +3121,16 @@
     {
       "id": "HUMAN-07",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "澄清页「提交并停止澄清」的二次确认弹窗（自澄清 / 跨节点文案不同）",
+      "title": "澄清页「提交并停止澄清」的二次确认弹窗（自澄清；跨节点文案另计）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-stop-controls.spec.ts",
+          "test": "澄清页的「提交并停止澄清」必须先问一句；取消掉就什么都不发"
+        }
+      ]
     },
     {
       "id": "HUMAN-08",
@@ -3360,8 +3365,17 @@
       "title": "画布上的「继续反问 / 停止反问」开关（per task+asking node，含非提问节点 422）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-stop-controls.spec.ts",
+          "test": "画布开关只认「提问 agent 节点」：挂到 clarify / io 节点上必须被拒，且不留下任何记录"
+        },
+        {
+          "file": "e2e/clarify-stop-controls.spec.ts",
+          "test": "开关一旦置 stop：即使用户按的是「继续追问」，下一轮也不再带追问协议块"
+        }
+      ]
     },
     {
       "id": "HUMAN-30",
@@ -8532,7 +8546,6 @@
     "EVENT-X6",
     "EVENT-X7",
     "HUMAN-05",
-    "HUMAN-07",
     "HUMAN-10",
     "HUMAN-12",
     "HUMAN-15",
@@ -8541,7 +8554,6 @@
     "HUMAN-20",
     "HUMAN-25",
     "HUMAN-26",
-    "HUMAN-27",
     "HUMAN-36",
     "HUMAN-37",
     "HUMAN-40",
