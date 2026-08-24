@@ -1993,6 +1993,19 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           (approval?.status === 'approved' &&
             approval.mergeRequestRef === state.mergeRequestRef &&
             approval.headSha === state.headSha)
+        const delegationContext = contexts.find(
+          (context) => context.typeId === 'development.delegation',
+        )
+        const delegationStatus =
+          delegationContext === undefined
+            ? null
+            : z
+                .object({
+                  status: z.enum(['requested', 'waiting', 'satisfied', 'failed']),
+                })
+                .passthrough()
+                .parse(JSON.parse(delegationContext.stateJson) as unknown).status
+        const delegationReady = delegationStatus === null || delegationStatus === 'satisfied'
         const readyToMerge =
           state.status === 'active' &&
           !state.draft &&
@@ -2002,7 +2015,8 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           sameHeadPipeline &&
           sameTargetPipeline &&
           pipeline?.status === 'passed' &&
-          approvalReady
+          approvalReady &&
+          delegationReady
         const next = mergeRequestStateSchema.parse({ ...state, readyToMerge })
         const reasons = [
           ...(state.draft ? ['MR 仍是草稿'] : []),
@@ -2019,6 +2033,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               ]
             : []),
           ...(!approvalReady ? ['当前 MR head 的外部审批尚未通过'] : []),
+          ...(!delegationReady ? ['协同员工结果尚未满足'] : []),
         ]
         return output({
           summary: readyToMerge

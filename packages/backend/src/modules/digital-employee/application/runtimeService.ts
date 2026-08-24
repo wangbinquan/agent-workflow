@@ -985,9 +985,13 @@ export class DigitalEmployeeRuntimeService {
           if (invocation === undefined) {
             throw new Error(`employee channel ${channel.id} lost its invocation projection`)
           }
+          const completion = invocationCompletionSchema.parse(
+            JSON.parse(invocation.completionContractRefJson) as unknown,
+          )
           return {
             ...channel,
             targetEmployeeRef: invocation.targetEmployeeRef,
+            invocationContractId: completion.contractId,
             results: this.#store.listChannelResults(channel.id).map((result) => ({
               ...result,
               envelope: JSON.parse(result.envelopeJson) as unknown,

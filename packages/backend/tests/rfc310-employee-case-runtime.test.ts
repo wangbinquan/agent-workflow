@@ -1362,8 +1362,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(projection.channels).toHaveLength(2)
     expect(projection.channels).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ state: 'open', targetEmployeeRef: childEmployeeRef }),
-        expect.objectContaining({ state: 'open', targetEmployeeRef: secondChildEmployeeRef }),
+        expect.objectContaining({
+          state: 'open',
+          targetEmployeeRef: childEmployeeRef,
+          invocationContractId: 'development.cross-repository-work',
+        }),
+        expect.objectContaining({
+          state: 'open',
+          targetEmployeeRef: secondChildEmployeeRef,
+          invocationContractId: 'development.cross-repository-work',
+        }),
       ]),
     )
     const primaryChannel = projection.channels.find(

@@ -1152,6 +1152,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     const evaluateReady = async (
       revision: 7 | 8,
       pipelineContext: typeof legacyPassedPipelineContext,
+      additionalContexts: readonly object[] = [],
     ) => {
       const evaluated = JSON.parse(
         await platform.execute(
@@ -1159,7 +1160,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
             roundRef: `round-evaluate-ready-v${revision}`,
             caseRef: 'case-1',
             workItemRef: 'evaluate-ready',
-            contexts: [readyMrContext, pipelineContext],
+            contexts: [readyMrContext, pipelineContext, ...additionalContexts],
             employeeTypeRef: { typeId: 'development', revision },
           }),
         ),
@@ -1183,6 +1184,56 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
             targetSha,
           }),
         })
+      ).readyToMerge,
+    ).toBe(true)
+    const targetBoundPassedPipelineContext = {
+      ...legacyPassedPipelineContext,
+      stateJson: JSON.stringify({
+        ...JSON.parse(legacyPassedPipelineContext.stateJson),
+        targetSha,
+      }),
+    }
+    const delegationContext = {
+      id: 'delegation-context',
+      revision: 1,
+      typeId: 'development.delegation',
+      stateJson: JSON.stringify({
+        status: 'waiting',
+        groupRef: 'delegation-group',
+        joinMode: 'all',
+        quorum: null,
+        members: [
+          {
+            memberRef: 'primary',
+            invocationRef: 'invocation-1',
+            targetEmployeeRef: 'employee-child@1',
+            state: 'waiting',
+            resultArtifactRefs: [],
+          },
+        ],
+        resultArtifactRefs: [],
+      }),
+    }
+    expect(
+      (await evaluateReady(8, targetBoundPassedPipelineContext, [delegationContext])).readyToMerge,
+    ).toBe(false)
+    expect(
+      (
+        await evaluateReady(8, targetBoundPassedPipelineContext, [
+          {
+            ...delegationContext,
+            stateJson: JSON.stringify({
+              ...JSON.parse(delegationContext.stateJson),
+              status: 'satisfied',
+              members: [
+                {
+                  ...JSON.parse(delegationContext.stateJson).members[0],
+                  state: 'satisfied',
+                },
+              ],
+            }),
+          },
+        ])
       ).readyToMerge,
     ).toBe(true)
     const unknownTargetMrContext = {
