@@ -50,6 +50,28 @@ afterEach(() => {
 })
 
 describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
+  // RFC-317 T36（B5，`6a16bcaa7`）给 `isProcessAlive` 加了僵尸判定：`process.kill(pid, 0)`
+  // 对一个**已退出但尚未被 reap** 的子进程仍然成功，于是「这个 pid 还活着」会把一个
+  // 早就死掉的 writer 判成活的——resume 会因此拒绝拉起，任务卡死。判据改为再读一次
+  // `/proc/<pid>/stat` 的 state 字段，`Z` 开头即视为已死。
+  //
+  // 这条用例本身是 RFC-317 收口时发现的**覆盖缺口**：生产改动进了 `6a16bcaa7`，
+  // 覆盖它的用例却一直躺在工作树里没提交（本仓 test-with-every-change 的反例）。
+  // `readProcessStat` 注入点存在的唯一理由就是让这两个分支可断言——没有它，
+  // 「僵尸」这个状态在单测里造不出来。
+  test('a reaped child waiting as a POSIX zombie is not a live worktree writer', () => {
+    expect(
+      isProcessAlive(process.pid, {
+        readProcessStat: () => 'Z+',
+      }),
+    ).toBe(false)
+    expect(
+      isProcessAlive(process.pid, {
+        readProcessStat: () => 'S+',
+      }),
+    ).toBe(true)
+  })
+
   test('pidCommandContainsBinary matches the spawned binary path, not a foreign one', async () => {
     const child = spawnLongLived()
     await Bun.sleep(120)
