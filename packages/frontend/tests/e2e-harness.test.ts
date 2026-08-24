@@ -98,6 +98,13 @@ afterEach(() => {
 })
 
 describe('e2e harness startup lifecycle', () => {
+  test('canonical administrator has a complete RFC-320 Git identity', () => {
+    expect(harnessTestApi.e2eAdmin).toMatchObject({
+      displayName: 'E2E Administrator',
+      email: 'e2e-admin@example.com',
+    })
+  })
+
   test('retries two EADDRINUSE starts, then removes its owned home on stop', async () => {
     const { root, homes, binary } = createFixture(`
 const fs = require('node:fs')

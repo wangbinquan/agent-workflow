@@ -402,6 +402,10 @@ async function waitForDaemonReady(child: DaemonChild): Promise<ReadyDaemon> {
 const E2E_ADMIN = {
   username: 'e2e_admin',
   displayName: 'E2E Administrator',
+  // RFC-320 task admission freezes the creator's complete Git identity.
+  // Keep the canonical browser actor launch-capable so task-seeding specs
+  // exercise their own behavior instead of failing at the profile precondition.
+  email: 'e2e-admin@example.com',
   password: 'E2EAdministrator123!',
 } as const
 const E2E_OPENCODE_MODEL = 'test/model'
@@ -688,5 +692,6 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
 
 /** Test-only seam: lifecycle tests inject deterministic ports without binding sockets. */
 export const harnessTestApi = {
+  e2eAdmin: E2E_ADMIN,
   startDaemonWithPortAllocator,
 }
