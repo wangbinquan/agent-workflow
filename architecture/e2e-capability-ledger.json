@@ -115,8 +115,13 @@
       "title": "设置分区表单保存成功回执",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/settings-save-receipt.spec.ts",
+          "test": "RFC-319 CFG-04: saving a settings section shows an explicit receipt, and the receipt corresponds to a value that really landed"
+        }
+      ]
     },
     {
       "id": "CFG-31",
@@ -8067,7 +8072,6 @@
     "CFG-01",
     "CFG-02",
     "CFG-03",
-    "CFG-04",
     "CFG-05",
     "CFG-06",
     "CFG-07",
