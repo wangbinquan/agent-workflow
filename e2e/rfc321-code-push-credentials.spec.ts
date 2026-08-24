@@ -228,7 +228,14 @@ test('account UI validates, masks, replaces and deletes while Alice/Bob stay iso
     'section.account-section-panel[aria-labelledby="account-section-title-code-push"]',
   )
   await expect(section).toBeVisible()
-  await expect(section.getByTestId('account-git-identity-card')).toBeVisible()
+  const identityCard = section.getByTestId('account-git-identity-card')
+  await expect(identityCard).toBeVisible()
+  await identityCard.getByRole('textbox', { name: /Display name/ }).fill(`${alice.username} Git`)
+  await identityCard
+    .getByRole('textbox', { name: /Email/ })
+    .fill(`${alice.username}.git@example.test`)
+  await identityCard.getByRole('button', { name: 'Save profile' }).click()
+  await expect(identityCard.getByText('Profile and Git commit identity saved.')).toBeVisible()
   const card = section.getByTestId('account-code-push-card-gitlab')
   const input = card.getByTestId('account-code-push-token-gitlab')
   await expect(card.getByTestId('account-code-push-status-gitlab')).toContainText(
