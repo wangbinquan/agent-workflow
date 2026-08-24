@@ -362,6 +362,32 @@ JIT / GC / 首次 `getrusage` 的固定成本全会落进那 60ms 的测量窗�
 一条绝对差**（`ms - cpuMs > 100`）——比值再好看也不能只差几毫秒。定阈值时按两种噪声模型
 各算一遍（固定成本 / 按比例占空比），两种都留足余量再推。
 
+## zsh 里 `path=` 会当场毁掉 `PATH`（2026-08-25 实撞，正好撞在上面那套 commit-tree 姿势里）
+
+zsh 把 `path` 绑定成 `PATH` 的**数组视图**（`cdpath` / `fpath` / `manpath` 同理）。于是一句再普通不过的循环变量赋值：
+
+```
+for pair in "a:b" "c:d"; do
+  path="${pair%%:*}"      # ← 这一行把 $PATH 换成了 "a"
+  ...
+done
+```
+
+**当场把 PATH 打成一个不存在的目录**，同一次调用里后续的 `git` / `python3` / `tail` 全部
+`command not found`。它没有任何报错前兆——赋值成功，只是环境没了。实撞形态：一个用
+`git hash-object` + `git update-index` 精确提交多个文件的循环，第一轮就把 PATH 毁掉，
+后面每条 git 命令静默失败，脚本却照常 `echo "committed"`，看上去像是提交成功了
+（实际 `git update-ref` 根本没跑）。
+
+定式：
+
+1. **循环 / 临时变量别叫 `path`**（也别叫 `cdpath`/`fpath`/`manpath`/`status`——
+   `status` 是 zsh 只读的 `$?` 别名，赋值会直接报 `read-only variable`，那次至少还报了错）。
+   用 `target` / `dst` / `p_` 之类。
+2. 需要局部变量时写在函数里并 `local`：`local target="$1"` 与全局特殊变量无关。
+3. 脚本里做了一串命令后，**别只看最后一句的 echo**——它可能是 shell 内建、在 PATH 毁掉之后
+   照样打印。判据取实际结果（这里是 `git log --oneline -1` 有没有变），不是脚本自己的口播。
+
 ## ANSI 色码会让「自己拼的 grep 检查」恒不匹配（2026-08-24 一天内踩两次）
 
 工具带色输出时，`[warn]` 实际是 `[\e[33mwarn\e[39m]`、`fixture failed` 实际是 `\e[0m\e[31mfixture failed\e[0m`。于是两类东西会静默失效：
