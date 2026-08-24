@@ -3425,11 +3425,20 @@
     {
       "id": "HUMAN-X2",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "澄清作答的答案类型矩阵：多选题、自定义文本（「其他」）、必填与空答校验",
+      "title": "澄清作答的答案类型矩阵：多选并入、单选「其他」自定义文本，以及空答/越界 index/伪造标签的服务端归一化（必填 chip 已废弃，submit 接受空答）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-answer-type-matrix.spec.ts",
+          "test": "多选并入与单选「其他」文本，都要原样穿到下一轮提示词里"
+        },
+        {
+          "file": "e2e/clarify-answer-type-matrix.spec.ts",
+          "test": "空答如实上报、越界 index 退化成没答、客户端伪造的标签一律不算数"
+        }
+      ]
     },
     {
       "id": "IAM-02",
@@ -8414,7 +8423,6 @@
     "HUMAN-47",
     "HUMAN-48",
     "HUMAN-X1",
-    "HUMAN-X2",
     "HUMAN-X3",
     "HUMAN-X4",
     "HUMAN-X5",
