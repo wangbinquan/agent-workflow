@@ -1825,8 +1825,13 @@
       "title": "WS 实时推送让**已打开的**列表/详情在不导航的情况下自更新",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/live-list-updates.spec.ts",
+          "test": "RFC-319 UX-30: a list that is already open picks up an out-of-band change without any navigation"
+        }
+      ]
     },
     {
       "id": "UX-31",
@@ -8514,7 +8519,6 @@
     "UX-24",
     "UX-26",
     "UX-28",
-    "UX-30",
     "UX-32",
     "UX-33",
     "UX-34",
