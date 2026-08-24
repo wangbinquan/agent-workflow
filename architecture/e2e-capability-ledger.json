@@ -1995,8 +1995,17 @@
       "title": "把节点拖进 wrapper 建立归属（drop 后真正入组并持久化）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/canvas-wrapper-membership.spec.ts",
+          "test": "拖进 wrapper 的矩形 ⇒ 真的入组，并落进定义"
+        },
+        {
+          "file": "e2e/canvas-wrapper-membership.spec.ts",
+          "test": "拖出 wrapper ⇒ 真的出组（只增不减的实现会在这里露馅）"
+        }
+      ]
     },
     {
       "id": "WF-18",
@@ -8675,7 +8684,6 @@
     "WF-13",
     "WF-14",
     "WF-15",
-    "WF-16",
     "WF-17",
     "WF-20",
     "WF-21",
