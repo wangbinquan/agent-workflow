@@ -375,8 +375,11 @@ describe('RFC-322 [db-slow] 的 CPU 判别', () => {
     const run = (): void => {
       ;(fake.prepare as unknown as (s: string) => { all: () => unknown[] })('SELECT 1').all()
     }
+    // 预热只为把固定成本付掉，**本身不做任何断言**：负载高的 runner 上
+    // `Atomics.wait(40)` 实测能睡到 185ms（macOS CI 实测），断言「预热不该被记账」
+    // 等于把测试押在定时器精度上——首版这么写过，CI 上就是这么红的。
     run()
-    expect(seen, '预热那次不该被记账，否则固定成本还在测量窗口里').toEqual([])
+    seen.length = 0
 
     sleepMs = STALL_MS
     run()
