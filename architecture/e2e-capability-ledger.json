@@ -3112,11 +3112,20 @@
     {
       "id": "HUMAN-05",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "跨节点澄清多源等齐：一个 designer 被多个 cross-clarify 指向时的等待横幅与延后重跑",
+      "title": "跨节点澄清多源等齐：等待横幅点名到具体节点、答完一家不放行、两家答完后任务往前走（服务端 readiness 栅栏本身需 continue 作答才可观测，另计）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/cross-clarify-multi-source.spec.ts",
+          "test": "答完一家不算数：designer 不许重跑，页面要点名还差谁"
+        },
+        {
+          "file": "e2e/cross-clarify-multi-source.spec.ts",
+          "test": "两家都答完之后：栅栏放行，任务必须往前走而不是无声卡死"
+        }
+      ]
     },
     {
       "id": "HUMAN-07",
@@ -8611,7 +8620,6 @@
     "EVENT-X5",
     "EVENT-X6",
     "EVENT-X7",
-    "HUMAN-05",
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17b",
