@@ -1438,32 +1438,14 @@ export class DigitalEmployeeRuntimeService {
   }
 
   #resolveCompatibleSuccessorBindings(
-    parentCase: EmployeeCaseRecord,
+    _parentCase: EmployeeCaseRecord,
     frozenBindings: readonly EmployeeCollaborationBinding[],
   ): EmployeeCollaborationBinding[] {
-    const currentParent = this.#authoringStore.getEmployeeDefinition(parentCase.employeeRef.id)
-    if (
-      currentParent === null ||
-      currentParent.archivedAt !== null ||
-      currentParent.currentRevision === null ||
-      currentParent.currentRevision <= parentCase.employeeRef.revision
-    ) {
-      return [...frozenBindings]
-    }
-    const successor = this.#authoringStore.getEmployeeDefinitionRevision({
-      id: currentParent.id,
-      revision: currentParent.currentRevision,
-    })
-    if (
-      successor === null ||
-      successor.createdBy !== null ||
-      successor.content.typeRef.typeId !== parentCase.typeRef.typeId ||
-      successor.content.typeRef.revision !==
-        this.#currentTypeRevisions.get(parentCase.typeRef.typeId)
-    ) {
-      return [...frozenBindings]
-    }
-
+    // The frozen parent binding remains the authority for an in-flight Case.
+    // Its employee may be unable to upgrade because of an unrelated tool or
+    // scope contract, while the stable target employee has a proven automatic
+    // successor. Requiring a current parent revision here deadlocks that
+    // historical invocation even though only the target must start new work.
     return frozenBindings.map((binding) => {
       const frozenTarget = this.#authoringStore.getEmployeeDefinitionRevision(
         binding.targetEmployeeRef,
@@ -1478,27 +1460,32 @@ export class DigitalEmployeeRuntimeService {
       ) {
         return binding
       }
-      const compatible = successor.content.exactCollaborationBindings.find(
-        (candidate) =>
-          candidate.workItemRef === binding.workItemRef &&
-          candidate.memberRef === binding.memberRef &&
-          candidate.invocationContractId === binding.invocationContractId &&
-          candidate.joinMode === binding.joinMode &&
-          candidate.quorum === binding.quorum &&
-          candidate.targetEmployeeRef.id === binding.targetEmployeeRef.id,
-      )
-      if (compatible === undefined) return binding
-      const compatibleTarget = this.#authoringStore.getEmployeeDefinitionRevision(
-        compatible.targetEmployeeRef,
-      )
+      const currentTarget = this.#authoringStore.getEmployeeDefinition(binding.targetEmployeeRef.id)
+      if (
+        currentTarget === null ||
+        currentTarget.archivedAt !== null ||
+        currentTarget.currentRevision === null ||
+        currentTarget.currentRevision <= binding.targetEmployeeRef.revision
+      ) {
+        return binding
+      }
+      const successorRef = {
+        id: currentTarget.id,
+        revision: currentTarget.currentRevision,
+      }
+      const compatibleTarget = this.#authoringStore.getEmployeeDefinitionRevision(successorRef)
       if (
         compatibleTarget === null ||
+        compatibleTarget.createdBy !== null ||
         compatibleTarget.content.typeRef.typeId !== frozenTarget.content.typeRef.typeId ||
         compatibleTarget.content.typeRef.revision !== currentTargetTypeRevision
       ) {
         return binding
       }
-      return compatible
+      return employeeCollaborationBindingSchema.parse({
+        ...binding,
+        targetEmployeeRef: successorRef,
+      })
     })
   }
 

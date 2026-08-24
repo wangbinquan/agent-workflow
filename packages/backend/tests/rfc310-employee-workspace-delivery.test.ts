@@ -18,6 +18,7 @@ import {
   employeeRoundWorkspaceStates,
 } from '@/db/schema'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { developmentEmployeeRuntimeCodec } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   bindCandidateDeliveryParticipant,
@@ -593,6 +594,72 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       },
       now: () => 40,
     })
+    const legacyMaterialRef = '.agent-workflow/inputs/requirements/legacy-child/external/issue-8.md'
+    const legacyDelegatedIssueContext = {
+      id: 'legacy-delegated-issue-context',
+      revision: 1,
+      typeId: 'development.issue-handling',
+      lifecycleState: 'active',
+      stateJson: JSON.stringify({
+        status: 'active',
+        subjectRef: 'invocation:legacy-child',
+        repositoryRef: 'repo-1',
+        request: {
+          kind: 'external-id',
+          body: null,
+          externalId: 'ISSUE-8',
+          uploads: [],
+          executionOptions: {},
+        },
+        materialArtifactRefs: [legacyMaterialRef],
+        deliveryContent: null,
+      }),
+      artifactRefs: [legacyMaterialRef],
+    }
+    const legacyPreparedMaterialsPlan = plan({
+      roundRef: 'round-legacy-prepared-materials',
+      caseRef: 'employee-child:legacy',
+      workItemRef: 'prepare-materials',
+      contexts: [legacyDelegatedIssueContext],
+      employeeTypeRef: { typeId: 'development', revision: 8 },
+    })
+    const legacyPreparedMaterials = JSON.parse(
+      await platform.execute(legacyPreparedMaterialsPlan),
+    ) as { status: string; contextPatches: Array<{ stateJson: string }> }
+    expect(legacyPreparedMaterials.status).toBe('ok')
+    expect(JSON.parse(legacyPreparedMaterials.contextPatches[0]!.stateJson)).toMatchObject({
+      request: { kind: 'external-id', externalId: 'ISSUE-8' },
+      materialArtifactRefs: [legacyMaterialRef],
+    })
+    const validatedLegacyPreparedMaterials =
+      developmentEmployeeRuntimeCodec.validateReactionOutputJson(
+        JSON.stringify({
+          schemaVersion: 1,
+          employeeTypeRef: { typeId: 'development', revision: 8 },
+          workItemRef: 'prepare-materials',
+          toolSlotRef: 'platform',
+          connectionRef: null,
+          inputEnvelopeJson: legacyPreparedMaterialsPlan.inputEnvelopeJson,
+          outputJson: JSON.stringify(legacyPreparedMaterials),
+        }),
+      )
+    expect(
+      JSON.parse(
+        developmentEmployeeRuntimeCodec.resolveReactionSettlementJson(
+          JSON.stringify({
+            schemaVersion: 1,
+            employeeTypeRef: { typeId: 'development', revision: 8 },
+            workItemRef: 'prepare-materials',
+            toolSlotRef: 'platform',
+            outputJson: validatedLegacyPreparedMaterials,
+            contextsJson: JSON.stringify([legacyDelegatedIssueContext]),
+            inputEnvelopeJson: legacyPreparedMaterialsPlan.inputEnvelopeJson,
+            enabledWorkItemRefsJson: '[]',
+            allowedNextWorkItemRefs: ['analyze-implement'],
+          }),
+        ),
+      ),
+    ).toMatchObject({ caseState: 'active', nextWorkItemRef: 'analyze-implement' })
     const approvalDraftContext = {
       id: 'approval-context',
       revision: 1,

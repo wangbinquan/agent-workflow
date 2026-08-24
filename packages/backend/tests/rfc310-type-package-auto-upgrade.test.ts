@@ -581,7 +581,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     }
   })
 
-  test('automatically re-plans a legacy upgrade-blocked invocation without user action', async () => {
+  test('automatically re-plans a legacy invocation when only its target can upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-invocation-'))
     try {
       const db = createInMemoryDb(MIGRATIONS)
@@ -718,12 +718,24 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           })
         },
       }
-      const composeRuntime = (typePackage: EmployeeTypePackageRegistration) =>
+      const composeRuntime = (
+        typePackage: EmployeeTypePackageRegistration,
+        issues?: Array<{ reasonCode: string; resourceId: string }>,
+      ) =>
         composeDigitalEmployee({
           db,
           appHome,
           typePackages: [typePackage],
           executionContracts: runtimeContracts,
+          ...(issues === undefined
+            ? {}
+            : {
+                onAutomaticUpgradeIssue: (issue) =>
+                  issues.push({
+                    reasonCode: issue.reasonCode,
+                    resourceId: issue.resourceId,
+                  }),
+              }),
           now: () => now,
           id,
           runtime: {
@@ -923,9 +935,43 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         .where(eq(employeeCases.id, launched.caseRef.id))
         .run()
 
-      const v2 = composeRuntime(versionedCollaboratingDesignPackage(2))
+      const parentDefinition = db
+        .select()
+        .from(employeeDefinitions)
+        .where(eq(employeeDefinitions.id, parent.id))
+        .get()!
+      db.update(employeeDefinitions)
+        .set({
+          configurationJson: JSON.stringify({
+            ...JSON.parse(parentDefinition.configurationJson),
+            workScope: { kind: 'global', legacyOnly: true },
+          }),
+          updatedAt: ++now,
+        })
+        .where(eq(employeeDefinitions.id, parent.id))
+        .run()
+      const v2Base = versionedCollaboratingDesignPackage(2)
+      const v2Package: EmployeeTypePackageRegistration = {
+        ...v2Base,
+        parseWorkScopeJson(inputJson) {
+          const scope = JSON.parse(inputJson) as { legacyOnly?: boolean }
+          if (scope.legacyOnly === true) {
+            throw new Error('the parent keeps an intentionally incompatible legacy scope')
+          }
+          return v2Base.parseWorkScopeJson(inputJson)
+        },
+      }
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+      const v2 = composeRuntime(v2Package, issues)
       expect(v2.queries.getEmployee(target.id)).toMatchObject({ revision: 2 })
-      expect(v2.queries.getEmployee(parent.id)).toMatchObject({ revision: 2 })
+      expect(v2.queries.getEmployee(parent.id)).toMatchObject({
+        revision: 1,
+        typeRef: { typeId: 'design', revision: 1 },
+      })
+      expect(issues).toContainEqual({
+        resourceId: parent.id,
+        reasonCode: 'work-scope-incompatible',
+      })
       const recoveredRoundId = v2.runtime!.worker.planOneReaction()!
       expect(recoveredRoundId).not.toBe(failedRoundId)
 

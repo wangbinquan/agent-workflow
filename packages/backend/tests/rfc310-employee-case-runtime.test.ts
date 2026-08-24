@@ -274,7 +274,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const employeeRef = { id: employee.id, revision: employee.revision }
-    const launch = (subjectRef: string, request: Record<string, unknown>) =>
+    const launch = (
+      subjectRef: string,
+      request: Record<string, unknown>,
+      materialArtifactRefs: readonly string[] = [],
+    ) =>
       module.runtime!.commands.launch({
         employeeRef,
         primaryContextTypeId: 'development.issue-handling',
@@ -285,9 +289,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
           subjectRef,
           repositoryRef: 'repo-planning',
           request,
-          materialArtifactRefs: [],
+          materialArtifactRefs,
         }),
-        artifactRefs: [],
+        artifactRefs: materialArtifactRefs,
         workSubject: { typeId: 'work-request', subjectRef },
       })
     const healthy = launch('BODY-1', {
@@ -326,18 +330,24 @@ describe('RFC-310 stateful employee Case runtime', () => {
       activeRoundId: planned,
     })
 
-    // Real-environment regression 2026-08-24: a collaboration child Case was
-    // frozen as missing prepare-materials/default by an older process even
-    // though the current type codec now routes its body intake to the platform
-    // slot. Recovery must re-evaluate the current deterministic selection.
+    // Real-environment regression 2026-08-24: an older collaboration codec
+    // copied an external-id intake into the child after the parent had already
+    // materialized it. The child retained those frozen material artifacts but
+    // was blocked on a now-unconfigured acquisition tool. Current planning
+    // must recognize the durable materials and recover through the platform.
     now += 1
-    const legacyPlatformRecovery = launch('BODY-LEGACY-PLATFORM', {
-      kind: 'body',
-      body: '旧进程误选 default 后，当前平台槽位必须自动恢复',
-      externalId: null,
-      uploads: [],
-      executionOptions: {},
-    })
+    const legacyMaterialRef = '.agent-workflow/inputs/requirements/legacy-child/external/issue-8.md'
+    const legacyPlatformRecovery = launch(
+      'INVOCATION-LEGACY-PLATFORM',
+      {
+        kind: 'external-id',
+        body: null,
+        externalId: 'ISSUE-8',
+        uploads: [],
+        executionOptions: {},
+      },
+      [legacyMaterialRef],
+    )
     const legacyPlatformRecoveryRow = db
       .select()
       .from(employeeCases)
@@ -357,6 +367,17 @@ describe('RFC-310 stateful employee Case runtime', () => {
       .run()
     const legacyRecoveredRound = module.runtime!.worker.planOneReaction()
     expect(legacyRecoveredRound).not.toBeNull()
+    const legacyRecoveredPlan = JSON.parse(
+      db
+        .select({ planJson: employeeReactionRounds.planJson })
+        .from(employeeReactionRounds)
+        .where(eq(employeeReactionRounds.id, legacyRecoveredRound!))
+        .get()!.planJson,
+    )
+    expect(legacyRecoveredPlan).toMatchObject({
+      workItemRef: 'prepare-materials',
+      toolSlotRef: 'platform',
+    })
     expect(
       JSON.parse(module.runtime!.queries.getCase(legacyPlatformRecovery.caseRef.id).projectionJson)
         .case,

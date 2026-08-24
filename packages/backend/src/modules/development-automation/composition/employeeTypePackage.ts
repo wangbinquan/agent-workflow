@@ -3947,12 +3947,14 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         .array(z.object({ typeId: z.string(), stateJson: z.string() }).passthrough())
         .parse(JSON.parse(request.contextsJson) as unknown)
       const issue = contexts.find((context) => context.typeId === 'development.issue-handling')
-      const kind =
+      const issueState =
         issue === undefined
           ? null
-          : issueHandlingContextSchema.parse(JSON.parse(issue.stateJson) as unknown).request.kind
+          : issueHandlingContextSchema.parse(JSON.parse(issue.stateJson) as unknown)
+      const requiresExternalAcquisition =
+        issueState?.request.kind === 'external-id' && issueState.materialArtifactRefs.length === 0
       return JSON.stringify({
-        slotRef: kind === 'external-id' ? request.defaultSlotRef : PLATFORM_WORK_ITEM_SLOT_REF,
+        slotRef: requiresExternalAcquisition ? request.defaultSlotRef : PLATFORM_WORK_ITEM_SLOT_REF,
       })
     }
     if (request.workItemRef !== 'repair-pipeline') {

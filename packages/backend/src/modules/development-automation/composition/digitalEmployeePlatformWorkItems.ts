@@ -53,6 +53,8 @@ const contextSchema = z
     revision: z.number().int().positive(),
     typeId: z.string().min(1),
     stateJson: z.string().min(2),
+    lifecycleState: z.enum(['active', 'waiting', 'terminal']).default('active'),
+    artifactRefs: z.array(z.string().min(1)).default([]),
   })
   .passthrough()
 
@@ -84,6 +86,7 @@ const issueSchema = z
         ),
       })
       .passthrough(),
+    materialArtifactRefs: z.array(z.string().min(1)).default([]),
     deliveryContent: z
       .object({
         commitMessage: z.string().trim().min(1).max(5_000),
@@ -694,7 +697,10 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       const targetAwarePipeline = isTargetAwarePipelinePlan(plan)
       if (plan.workItemRef === 'prepare-materials') {
         const issue = issueOf(contexts)
-        if (issue.state.request.kind === 'external-id') {
+        if (
+          issue.state.request.kind === 'external-id' &&
+          issue.state.materialArtifactRefs.length === 0
+        ) {
           if (usesMinimalToolContracts(plan)) {
             return JSON.stringify({
               outcome: 'blocked',
@@ -709,11 +715,25 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         if (usesMinimalToolContracts(plan)) {
           return JSON.stringify({ outcome: 'completed' })
         }
+        const reusesPreparedExternalMaterials = issue.state.request.kind === 'external-id'
         return output({
-          summary:
-            issue.state.request.uploads.length > 0
+          summary: reusesPreparedExternalMaterials
+            ? `平台已沿用 ${issue.state.materialArtifactRefs.length} 份冻结的外部材料`
+            : issue.state.request.uploads.length > 0
               ? `平台已接收正文并冻结 ${issue.state.request.uploads.length} 个上传文件落点`
               : '平台已接收并冻结需求或问题正文',
+          contextPatches: reusesPreparedExternalMaterials
+            ? [
+                contextPatch({
+                  current: issue.context,
+                  contextTypeId: issue.context.typeId,
+                  lifecycleState: issue.context.lifecycleState,
+                  state: issue.state,
+                  artifactRefs: issue.context.artifactRefs,
+                }),
+              ]
+            : [],
+          artifactRefs: reusesPreparedExternalMaterials ? issue.state.materialArtifactRefs : [],
         })
       }
       if (plan.workItemRef === 'classify-feedback') {
