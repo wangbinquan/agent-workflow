@@ -2032,7 +2032,7 @@ export const enUS: Resources = {
     email: 'Email',
     gitIdentityTitle: 'Git commit identity',
     gitIdentityDescription:
-      'New tasks freeze these values as Git user.name and user.email. Push authentication continues to use the repository credential configured by the platform.',
+      'New tasks freeze these values as Git user.name and user.email. Push authentication is configured separately below.',
     gitIdentityNameHint: 'Used as Git user.name for commits created by your tasks.',
     gitIdentityEmailHint: 'Used as Git user.email for commits created by your tasks.',
     saveProfile: 'Save profile',
@@ -2173,6 +2173,43 @@ export const enUS: Resources = {
       leaveForceWarning:
         'This only stops the browser wait; it cannot prove that the server did not create a token. The safety receipt remains, so the result check will reopen next time.',
     },
+    codePush: {
+      priorityTitle: 'Personal credential wins',
+      priorityDescription:
+        'When you configure a credential here, your tasks and development missions use it for Git pushes. When none is configured, the platform connection credential is used instead.',
+      loading: 'Loading code-host push credentials…',
+      noConnections: 'No code host connection is available',
+      noConnectionsDescription:
+        'An administrator must configure GitLab or GitHub in Settings before you can add a personal push credential.',
+      stale: 'Connection changed',
+      personalActive: 'Personal credential',
+      platformFallback: 'Platform fallback',
+      stored:
+        'A personal token ending in {{hint}} is stored. Its plaintext can never be read back.',
+      fallbackDescription:
+        'No personal token is stored. Git pushes use the administrator-managed platform credential.',
+      updated: 'Updated',
+      tokenLabel: 'Personal Git push token',
+      tokenHint: 'Paste a token with permission to push the repositories you own.',
+      replaceHint:
+        'Paste a new token to replace the stored value; leaving this field empty changes nothing.',
+      scope_gitlab: 'GitLab tokens need at least write_repository access to the target repository.',
+      scope_github:
+        'GitHub tokens need at least Contents: Read and write access to the target repository.',
+      boundaryDescription:
+        'This credential is used only for platform-owned Git publication and your explicit identity check. It does not change commit authorship or authorize MR, comment, approval, or pipeline API calls.',
+      save: 'Save credential',
+      replace: 'Replace credential',
+      saved: 'Personal Git push credential saved.',
+      test: 'Validate token',
+      testing: 'Validating…',
+      testOk: 'Token is valid. Code-host user: {{login}}',
+      testFailed: 'Token validation failed: {{reason}}',
+      remove: 'Remove credential',
+      removeTitle: 'Remove this personal push credential?',
+      removeDescription:
+        'Future pushes will use the administrator-managed platform credential. The removed token cannot be recovered.',
+    },
     pleaseSignIn: 'Please sign in.',
     pleaseSignInDescription: 'Sign in to view your profile and security settings.',
     sectionGroup: 'Account settings',
@@ -2181,12 +2218,15 @@ export const enUS: Resources = {
       overview: 'Account overview',
       security: 'Sign-in & security',
       tokens: 'Integration tokens',
+      codePush: 'Code commits & pushes',
     },
     sectionDescriptions: {
       overview: 'Review your account status and linked sign-in identities.',
       security: 'Manage a local password and your active web sessions.',
       tokens:
         'Create and manage the personal access tokens external models and scripts use to drive this platform over the API and MCP.',
+      codePush:
+        'Manage the author identity on Git commits and the GitLab or GitHub credential used to publish them.',
     },
     oidcManaged: 'OIDC managed',
     localAccount: 'Local account',
@@ -7121,6 +7161,22 @@ export const enUS: Resources = {
       'GitLab only. Add alternate clone URL hosts or path prefixes that map to this API connection; press Enter or comma after each entry. A match against any entry is accepted.',
     repositoryUrlPrefixesPlaceholder: 'https://gitlab-mirror.example.com/team',
     repositoryUrlPrefixInvalid: 'Enter an HTTP(S) URL without credentials, query or fragment.',
+    transportMappings: 'SSH to HTTP(S) push mappings',
+    transportMappingsHint:
+      'Optional for self-hosted or alternate clone hosts. A matching SSH host, port and path prefix is converted to the HTTP(S) base before Git authentication. github.com and gitlab.com work without a mapping.',
+    transportMappingsEmpty:
+      'No explicit mapping. Public GitHub and GitLab repositories still use their verified HTTPS convention.',
+    addTransportMapping: 'Add mapping',
+    sshHost: 'SSH host',
+    sshPort: 'SSH port',
+    sshPathPrefix: 'SSH path prefix (optional)',
+    httpBaseUrl: 'HTTP(S) repository base URL',
+    transportMappingInvalid:
+      'Complete every mapping with a valid SSH host, port and HTTP(S) base URL before saving.',
+    transportMappingConflict:
+      'One SSH host, port and path prefix can map to only one HTTP(S) repository base URL.',
+    transportMappingPreview: 'Conversion preview: {{preview}}',
+    transportMappingPreviewUnavailable: 'Complete and correct this mapping to see its preview.',
     token: 'Access token',
     tokenHint: 'Use a dedicated bot account with least-privilege scopes',
     tokenStored: 'Stored (ends with {{hint}}). Leave empty to keep it',
@@ -7136,7 +7192,18 @@ export const enUS: Resources = {
     'testCode_bad-response': 'The response is not an identity payload (a proxy login page?)',
     loading: 'Loading code-host settings…',
     intro:
-      'Code-host call nodes in your workflows use these credentials. Tokens are stored encrypted and only their last characters are ever shown.',
+      'Code-host calls and Git publication use these platform credentials. A user-owned push credential takes precedence when configured. Tokens are encrypted and only their last characters are ever shown.',
+    rebindTitle: 'Change this repository connection?',
+    rebindDescription:
+      'The endpoint identity changes with this save. Continuing revokes {{count}} personal push credential(s), so their owners must configure them again for the new connection.',
+    confirmRebind: 'Save and revoke',
+    removeTitle: 'Delete {{provider}} connection?',
+    removeDescription:
+      'Code-host calls and Git pushes can no longer use this platform connection. The stored platform token cannot be recovered.',
+    removeWithCredentialsDescription:
+      'Deleting this connection also revokes {{count}} personal push credential(s). Code-host calls and Git pushes lose this connection, and the removed tokens cannot be recovered.',
+    removeConfirmAgain:
+      'The server prepared a current confirmation for {{count}} personal credential(s). Review the impact, then choose Delete again.',
   },
   codeRoundNode: {
     label: 'Code capability round',

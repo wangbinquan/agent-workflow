@@ -11,7 +11,11 @@
 // CAS 面与同一套 effects 台账（`conflict-push` 已在 DELIVERY_EFFECT_KINDS
 // 里，悬挂行按 idempotencyKey 撞回重放）。平台在此绝不 force、绝不改方向。
 
-import { claimDeliveryEffect, type DeliveryChainDeps } from './missionDeliveryChain'
+import {
+  claimDeliveryEffect,
+  missionPublicationSubject,
+  type DeliveryChainDeps,
+} from './missionDeliveryChain'
 import type { MissionRow } from './ports/missionStore'
 
 export interface ConflictRepairPublishInput {
@@ -142,6 +146,7 @@ export async function publishConflictRepair(
     expectedRemoteSha: input.sourceSha,
     expectedTreeOid: finished.treeOid,
     baselineSha: input.sourceSha,
+    publicationSubject: missionPublicationSubject(mission),
   })
   const now = deps.now()
   if (!pushed.ok) {

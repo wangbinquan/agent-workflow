@@ -13,6 +13,7 @@ import {
   type MockRequirementSeed,
 } from './development/requirement-provider'
 import { CodeHostStore } from './code-host/stateful-store'
+import { authenticateMockGitPush } from './code-host/stateful-store'
 import { SystemMockClient } from './client'
 import {
   applyFault,
@@ -145,12 +146,21 @@ class SystemMockGateway {
     const body = await readRequestBody(request)
     const codeHostGit = this.#codeHosts.gitRequest(url.pathname)
     const service = codeHostGit === null ? serviceFor(url.pathname) : 'git'
+    const isReceivePack =
+      service === 'git' &&
+      (url.searchParams.get('service') === 'git-receive-pack' ||
+        url.pathname.endsWith('/git-receive-pack'))
+    const gitAuthentication =
+      codeHostGit === null || !isReceivePack
+        ? null
+        : authenticateMockGitPush(codeHostGit.gitPushCredentialMode, request.headers.authorization)
     this.#journal.add(service, {
       method: request.method ?? 'GET',
       path: url.pathname,
       query: queryRecord(url),
       headers: headerRecord(request.headers),
       bodyText: body.toString('utf8'),
+      ...(gitAuthentication === null ? {} : { credentialIdentity: gitAuthentication.identity }),
     })
     const fault = this.#faults.take(service, request.method ?? 'GET', url.pathname)
     if (await applyFault(response, request.socket, fault)) return
@@ -160,6 +170,12 @@ class SystemMockGateway {
       return
     }
     if (service === 'git') {
+      if (gitAuthentication?.required === true && !gitAuthentication.accepted) {
+        writeText(response, 401, 'Git push authentication required', 'text/plain; charset=utf-8', {
+          'www-authenticate': 'Basic realm="system-mock-git"',
+        })
+        return
+      }
       await handleGitSmartHttp({
         request,
         response,

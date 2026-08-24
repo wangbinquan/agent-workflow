@@ -29,6 +29,7 @@ describe('tasks.new.tsx — RFC-320 account-owned Git identity', () => {
     expect(ROUTE).toContain('wizard-git-identity-missing')
     expect(ROUTE).toContain('wizard-git-identity-fix')
     expect(ROUTE).toContain('to="/account"')
+    expect(ROUTE).toContain("search={{ section: 'codePush' }}")
   })
 
   test('confirmation renders the source identity as read-only text', () => {

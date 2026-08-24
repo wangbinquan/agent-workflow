@@ -1,16 +1,7 @@
-import type { UserPrivateProfile } from '@agent-workflow/shared'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
 import type { MeResponse } from '@/hooks/useActor'
-import { meQueryOptions, useAuthSessionRevision } from '@/hooks/useActor'
-import { api } from '@/api/client'
 import { Card } from '@/components/Card'
-import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextInput } from '@/components/Form'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
-import { getAuthSessionRevision, getToken } from '@/stores/auth'
 import {
   USER_ROLE_PRESENTATION,
   USER_STATUS_PRESENTATION,
@@ -64,8 +55,6 @@ export function AccountOverviewPanel({ me }: { me: MeResponse }) {
         </dl>
       </Card>
 
-      <GitIdentityCard me={me} />
-
       <Card as="section" title={t('account.linkedIdentities')} className="account-identities-card">
         {me.linkedIdentities.length === 0 ? (
           <div className="account-inline-empty">
@@ -107,108 +96,5 @@ export function AccountOverviewPanel({ me }: { me: MeResponse }) {
         )}
       </Card>
     </section>
-  )
-}
-
-function GitIdentityCard({ me }: { me: MeResponse }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const authSessionRevision = useAuthSessionRevision()
-  const [displayName, setDisplayName] = useState(me.profile.displayName)
-  const [email, setEmail] = useState(me.profile.email ?? '')
-  const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    setDisplayName(me.profile.displayName)
-    setEmail(me.profile.email ?? '')
-  }, [me.profile.displayName, me.profile.email])
-
-  const normalizedName = displayName.trim()
-  const normalizedEmail = email.trim().toLowerCase()
-  const changed =
-    normalizedName !== me.profile.displayName || normalizedEmail !== (me.profile.email ?? '')
-  const updateProfile = useMutation({
-    mutationFn: async () => {
-      const response = await api.patch<{ profile: UserPrivateProfile }>('/api/auth/me/profile', {
-        displayName: normalizedName,
-        email: normalizedEmail,
-      })
-      return { response, authSessionRevision }
-    },
-    onSuccess: ({ response: { profile }, authSessionRevision: requestRevision }) => {
-      // A sign-out/sign-in or credential rotation while this PATCH was in
-      // flight must not write the old response into the new auth generation.
-      if (requestRevision !== getAuthSessionRevision()) return
-      queryClient.setQueryData<MeResponse | null>(meQueryOptions(getToken()).queryKey, (current) =>
-        current?.user.id === me.user.id
-          ? {
-              ...current,
-              user: { ...current.user, displayName: profile.displayName },
-              profile,
-            }
-          : current,
-      )
-      setDisplayName(profile.displayName)
-      setEmail(profile.email ?? '')
-      setSaved(true)
-    },
-  })
-
-  return (
-    <Card
-      as="section"
-      title={t('account.gitIdentityTitle')}
-      header={<p className="account-card-description">{t('account.gitIdentityDescription')}</p>}
-      className="account-security-card"
-    >
-      <form
-        className="form-grid account-password-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          setSaved(false)
-          updateProfile.mutate()
-        }}
-      >
-        <Field label={t('account.displayName')} hint={t('account.gitIdentityNameHint')} required>
-          <TextInput
-            value={displayName}
-            onChange={setDisplayName}
-            maxLength={128}
-            autoComplete="name"
-            required
-          />
-        </Field>
-        <Field label={t('account.email')} hint={t('account.gitIdentityEmailHint')} required>
-          <TextInput
-            type="email"
-            value={email}
-            onChange={setEmail}
-            maxLength={254}
-            autoComplete="email"
-            required
-          />
-        </Field>
-        {updateProfile.error !== null && <ErrorBanner error={updateProfile.error} />}
-        {saved && <NoticeBanner tone="success">{t('account.profileSaved')}</NoticeBanner>}
-        {me.linkedIdentities.length > 0 && (
-          <NoticeBanner tone="info">{t('account.oidcProfileRefreshHint')}</NoticeBanner>
-        )}
-        <div className="account-form-actions">
-          <button
-            type="submit"
-            className="btn btn--primary"
-            disabled={
-              updateProfile.isPending ||
-              !changed ||
-              normalizedName.length === 0 ||
-              normalizedEmail.length === 0
-            }
-            aria-busy={updateProfile.isPending || undefined}
-          >
-            {updateProfile.isPending ? t('common.saving') : t('account.saveProfile')}
-          </button>
-        </div>
-      </form>
-    </Card>
   )
 }

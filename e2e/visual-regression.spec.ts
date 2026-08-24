@@ -1,4 +1,4 @@
-// RFC-054 W2-5 + RFC-198 T8 + RFC-199 T16 + RFC-219 T6 — visual regression
+// RFC-054 W2-5 + RFC-198 T8 + RFC-199 T16 + RFC-219 T6 + RFC-321 T18 — visual regression
 // baselines for the canonical shell pages, workflow-editor workspace modes,
 // a large categorized node catalog, and a deterministic dynamic-workflow preview.
 //
@@ -43,7 +43,7 @@ import { routeTaskOperationsFixture } from './task-operations-fixtures'
 import { routeCodeSurfaceFixtures } from './code-surface-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 47
+const EXPECTED_VISUAL_SCENE_COUNT = 51
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -210,10 +210,10 @@ async function prepareScene(
   return options.fixture === 'seeded-resources' ? seedResources() : null
 }
 
-async function postJson(path: string, body: unknown): Promise<unknown> {
+async function requestJson(method: 'PATCH' | 'POST' | 'PUT', path: string, body: unknown) {
   const d = requireDaemon()
   const response = await fetch(`${d.baseUrl}${path}`, {
-    method: 'POST',
+    method,
     headers: {
       Authorization: `Bearer ${d.token}`,
       'Content-Type': 'application/json',
@@ -221,9 +221,71 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
     body: JSON.stringify(body),
   })
   if (!response.ok) {
-    throw new Error(`visual-regression: failed to seed ${path} (${response.status})`)
+    throw new Error(`visual-regression: failed to ${method} ${path} (${response.status})`)
   }
   return response.json()
+}
+
+async function postJson(path: string, body: unknown): Promise<unknown> {
+  return requestJson('POST', path, body)
+}
+
+async function seedRfc321AccountCredentials(): Promise<void> {
+  await requestJson('PATCH', '/api/auth/me/profile', {
+    displayName: 'E2E Administrator',
+    email: 'e2e-admin@example.test',
+  })
+  await requestJson('PUT', '/api/code-hosts/gitlab', {
+    baseUrl: 'https://gitlab.example.test/api/v4',
+    token: 'visual-global-token-g321',
+  })
+  const d = requireDaemon()
+  const response = await fetch(`${d.baseUrl}/api/account/code-host-push-credentials`, {
+    headers: { Authorization: `Bearer ${d.token}` },
+  })
+  if (!response.ok) {
+    throw new Error(`visual-regression: failed to list RFC-321 credentials (${response.status})`)
+  }
+  const list = (await response.json()) as {
+    items: Array<{
+      provider: string
+      connectionGeneration: string
+      endpointBindingDigest: string
+    }>
+  }
+  const gitlab = list.items.find((item) => item.provider === 'gitlab')
+  if (gitlab === undefined) {
+    throw new Error('visual-regression: seeded GitLab connection is absent')
+  }
+  await requestJson('PUT', '/api/account/code-host-push-credentials/gitlab', {
+    token: 'visual-personal-token-p321',
+    connectionGeneration: gitlab.connectionGeneration,
+    endpointBindingDigest: gitlab.endpointBindingDigest,
+  })
+}
+
+async function openRfc321AccountScene(page: Page, theme: 'light' | 'dark'): Promise<Locator> {
+  await prepareScene(page, { theme, fixture: 'clean' })
+  await seedRfc321AccountCredentials()
+  // Keep RelativeTime deterministic without coupling the baseline to the day
+  // on which it was generated: the backend write above and this browser clock
+  // are always only milliseconds apart, so the UI renders "just now".
+  await page.clock.setFixedTime(new Date())
+  await primeAuth(page)
+  await page.goto(`${requireDaemon().baseUrl}/account?section=codePush`)
+  const panel = page.locator(
+    'section.account-section-panel[aria-labelledby="account-section-title-code-push"]',
+  )
+  await expect(panel).toBeVisible()
+  await expect(panel.getByTestId('account-git-identity-card')).toBeVisible()
+  const credentialCard = panel.getByTestId('account-code-push-card-gitlab')
+  await expect(credentialCard.getByTestId('account-code-push-status-gitlab')).toContainText(
+    'Personal credential',
+  )
+  await expect(credentialCard).toContainText('p321')
+  await expect(credentialCard.getByTestId('account-code-push-token-gitlab')).toHaveValue('')
+  await page.waitForLoadState('networkidle')
+  return panel
 }
 
 /**
@@ -1014,6 +1076,49 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.locator('.settings-card')).toHaveCount(6)
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('settings-system-agents.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-321 account code-push credentials · 1280 light', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openRfc321AccountScene(page, 'light')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('rfc321-account-code-push-1280-light.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-321 account code-push credentials · 1280 dark', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openRfc321AccountScene(page, 'dark')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page).toHaveScreenshot('rfc321-account-code-push-1280-dark.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-321 account code-push credentials · 390 light', async ({ page }) => {
+    // Keep the phone breakpoint while making both full-width cards visible in
+    // one component baseline; the functional E2E owns the canonical 390×844
+    // scroll journey.
+    await page.setViewportSize({ width: 390, height: 1600 })
+    const panel = await openRfc321AccountScene(page, 'light')
+    await expect
+      .poll(async () => panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+      .toBe(true)
+    await expect(panel).toHaveScreenshot(
+      'rfc321-account-code-push-390-light.png',
+      COMPONENT_SNAPSHOT_OPTS,
+    )
+  })
+
+  test('RFC-321 account code-push credentials · 390 dark', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 1600 })
+    const panel = await openRfc321AccountScene(page, 'dark')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect
+      .poll(async () => panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+      .toBe(true)
+    await expect(panel).toHaveScreenshot(
+      'rfc321-account-code-push-390-dark.png',
+      COMPONENT_SNAPSHOT_OPTS,
+    )
   })
 
   // RFC-190: keep both true first-run and seeded dashboard scenes. Each owns

@@ -83,6 +83,12 @@ const OVERLAY_CALLSITES = {
     family: 'access-and-settings',
     count: 1,
   },
+  // RFC-321 — deleting a personal push credential is an explicit destructive
+  // confirmation; account-query-continuity.test.tsx owns the rendered flow.
+  'components/account/AccountCodePushCredentialsPanel.tsx': {
+    family: 'access-and-settings',
+    count: 1,
+  },
   'components/account/AccountTokensPanel.tsx': {
     family: 'access-and-settings',
     count: 1,
@@ -97,6 +103,12 @@ const OVERLAY_CALLSITES = {
   },
   // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
   'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
+  // RFC-321 — connection rebind and deletion can revoke personal credentials;
+  // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
+  'components/settings/CodeHostsSection.tsx': {
+    family: 'access-and-settings',
+    count: 2,
+  },
   'components/users/CreateUserDialog.tsx': { family: 'access-and-settings', count: 1 },
   'components/users/EditUserDialog.tsx': { family: 'access-and-settings', count: 1 },
   'components/users/ResetUserPasswordDialog.tsx': {

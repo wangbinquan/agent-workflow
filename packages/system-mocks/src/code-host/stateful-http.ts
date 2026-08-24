@@ -5,6 +5,10 @@ import { readStoredDiff, type StoredDiffEntry } from './diff'
 import {
   DEFAULT_AUTHOR,
   SYSTEM_MOCK_CODE_HOST_TOKEN,
+  SYSTEM_MOCK_GIT_GLOBAL_TOKEN,
+  SYSTEM_MOCK_GIT_PERSONAL_TOKEN,
+  SYSTEM_GLOBAL_USER,
+  SYSTEM_PERSONAL_USER,
   SYSTEM_USER,
   type CodeHostStore,
   type StoredComment,
@@ -33,7 +37,8 @@ export async function handleCodeHostApi(input: {
     const job = findJob(input.store, jobId)
     return job === null ? notFound(input.response) : text(input.response, job.log)
   }
-  if (!authorized(input.request, input.provider)) {
+  const authenticatedUser = identityFor(input.request, input.provider)
+  if (authenticatedUser === null) {
     writeJson(input.response, 401, { message: 'Bad credentials' })
     return true
   }
@@ -41,8 +46,16 @@ export async function handleCodeHostApi(input: {
     return json(
       input.response,
       input.provider === 'gitlab'
-        ? { id: SYSTEM_USER.id, username: SYSTEM_USER.username, name: SYSTEM_USER.name }
-        : { id: SYSTEM_USER.id, login: SYSTEM_USER.username, name: SYSTEM_USER.name },
+        ? {
+            id: authenticatedUser.id,
+            username: authenticatedUser.username,
+            name: authenticatedUser.name,
+          }
+        : {
+            id: authenticatedUser.id,
+            login: authenticatedUser.username,
+            name: authenticatedUser.name,
+          },
     )
   }
   if (path === '/')
@@ -498,14 +511,19 @@ async function handleGithub(
   return notFound(input.response)
 }
 
-function authorized(request: IncomingMessage, provider: 'gitlab' | 'github'): boolean {
-  if (provider === 'gitlab') {
-    return (
-      request.headers['private-token'] === SYSTEM_MOCK_CODE_HOST_TOKEN ||
-      request.headers.authorization === `Bearer ${SYSTEM_MOCK_CODE_HOST_TOKEN}`
-    )
-  }
-  return request.headers.authorization === `Bearer ${SYSTEM_MOCK_CODE_HOST_TOKEN}`
+function identityFor(
+  request: IncomingMessage,
+  provider: 'gitlab' | 'github',
+): typeof SYSTEM_USER | null {
+  const token =
+    provider === 'gitlab'
+      ? (request.headers['private-token'] ??
+        request.headers.authorization?.replace(/^Bearer\s+/i, ''))
+      : request.headers.authorization?.replace(/^Bearer\s+/i, '')
+  if (token === SYSTEM_MOCK_GIT_PERSONAL_TOKEN) return SYSTEM_PERSONAL_USER
+  if (token === SYSTEM_MOCK_GIT_GLOBAL_TOKEN) return SYSTEM_GLOBAL_USER
+  if (token === SYSTEM_MOCK_CODE_HOST_TOKEN) return SYSTEM_USER
+  return null
 }
 
 function gitlabProject(project: StoredProject): Record<string, unknown> {

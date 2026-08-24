@@ -308,13 +308,13 @@ repository's current working agreements.
 
 ## Documentation
 
-| Topic               | Guide                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Workflow definition | [Live workflow schema](./docs/workflow-yaml.md)                                                        |
-| Portable resources  | [Configuration packages](./docs/resource-packages.md) · [Resource bundles](./docs/resource-bundles.md) |
-| Runtime behavior    | [OpenCode configuration](./docs/OPENCODE_CONFIG.md) · [Disaster recovery](./docs/disaster-recovery.md) |
-| Integrations        | [Webhook triggers](./docs/webhook-triggers.md) · [Code-host calls](./docs/code-host-calls.md)          |
-| Design evolution    | [RFC index and implementation plans](./design/plan.md)                                                 |
+| Topic               | Guide                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workflow definition | [Live workflow schema](./docs/workflow-yaml.md)                                                                                                              |
+| Portable resources  | [Configuration packages](./docs/resource-packages.md) · [Resource bundles](./docs/resource-bundles.md)                                                       |
+| Runtime behavior    | [OpenCode configuration](./docs/OPENCODE_CONFIG.md) · [Disaster recovery](./docs/disaster-recovery.md)                                                       |
+| Integrations        | [Webhook triggers](./docs/webhook-triggers.md) · [Code-host calls](./docs/code-host-calls.md) · [Git push credentials](./docs/code-host-push-credentials.md) |
+| Design evolution    | [RFC index and implementation plans](./design/plan.md)                                                                                                       |
 
 ## Design essays
 

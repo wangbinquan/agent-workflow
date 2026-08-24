@@ -9,6 +9,7 @@ import type { Hono } from 'hono'
 
 import {
   CodeHostProviderSchema,
+  DeleteCodeHostConnectionSchema,
   TestCodeHostConnectionSchema,
   UpsertCodeHostConnectionSchema,
   type CodeHostProvider,
@@ -19,10 +20,15 @@ import {
   createCodeHostConnectionsService,
   probeCodeHostConnection,
 } from '@/services/codeHost/connections'
+import {
+  buildRepositoryTransportConnectionProjection,
+  composeRepositoryTransportCredentials,
+  reconcileRepositoryTransportConnectionProjections,
+} from '@/modules/source-control/composition'
 import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
 
 function providerOf(raw: string): CodeHostProvider {
   // safeParse 而不是 `as`：RFC-054 W1-7 要求路由层的窄化走 Zod，而不是断言。
@@ -38,7 +44,16 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
   // 对齐 OIDC / webhook 端点的自我跳过：没有密封器就不开凭据面，而不是退化成
   // 明文存储。
   if (!secretBox) return
-  const service = createCodeHostConnectionsService({ db: deps.db, secretBox })
+  const repositoryTransport = composeRepositoryTransportCredentials(deps.db, secretBox)
+  reconcileRepositoryTransportConnectionProjections(deps.db, repositoryTransport.adminConnections)
+  const service = createCodeHostConnectionsService({
+    db: deps.db,
+    secretBox,
+    repositoryTransport: {
+      participant: repositoryTransport.adminConnections,
+      project: buildRepositoryTransportConnectionProjection,
+    },
+  })
 
   registerRoute(
     app,
@@ -67,9 +82,7 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
         await safeJsonOrThrowInvalid(c.req.raw),
       )
       if (!parsed.success) {
-        throw new ValidationError('code-host-connection-invalid', 'invalid connection body', {
-          issues: parsed.error.issues,
-        })
+        throw new ValidationError('code-host-connection-invalid', 'invalid connection body')
       }
       return c.json(
         service.upsert(provider, {
@@ -77,9 +90,20 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
           ...(parsed.data.repositoryUrlPrefixes !== undefined
             ? { repositoryUrlPrefixes: parsed.data.repositoryUrlPrefixes }
             : {}),
+          ...(parsed.data.transportMappings !== undefined
+            ? { transportMappings: parsed.data.transportMappings }
+            : {}),
           ...(parsed.data.token !== undefined ? { token: parsed.data.token } : {}),
           ...(parsed.data.rejectUnauthorized !== undefined
             ? { rejectUnauthorized: parsed.data.rejectUnauthorized }
+            : {}),
+          ...(parsed.data.expectedConnectionGeneration !== undefined
+            ? { expectedConnectionGeneration: parsed.data.expectedConnectionGeneration }
+            : {}),
+          ...(parsed.data.confirmCredentialRevocationDigest !== undefined
+            ? {
+                confirmCredentialRevocationDigest: parsed.data.confirmCredentialRevocationDigest,
+              }
             : {}),
           actorUserId: actorOf(c).user.id,
         }),
@@ -96,9 +120,13 @@ export function mountCodeHostRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'never',
       summary: 'Remove a code-host connection',
     },
-    (c) => {
+    async (c) => {
       const provider = providerOf(c.req.param('provider'))
-      const removed = service.remove(provider)
+      const parsed = DeleteCodeHostConnectionSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('code-host-connection-invalid', 'invalid connection body')
+      }
+      const removed = service.remove(provider, parsed.data)
       if (!removed) {
         throw new NotFoundError('code-host-not-configured', `${provider} is not configured`)
       }

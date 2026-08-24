@@ -70,7 +70,11 @@ import {
   describeWrapperKind,
   splitPortItems,
 } from '@agent-workflow/shared'
-import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
+import {
+  bindWorkspaceExcludeParticipant,
+  resolveRepositoryPublicationTransportFromKeyFile,
+  type RepositoryPublicationTransport,
+} from '@/modules/source-control/composition'
 import {
   applyAutoPromote,
   computeShardScope,
@@ -371,6 +375,8 @@ export interface RunTaskOptions {
   codeHostConnections?: CodeHostConnectionsService
   /** RFC-269: outbound fetch seam; production omits it, tests inject a stub. */
   codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
+  /** RFC-321 exact publication transport; tests may inject, production resolves the daemon key. */
+  repositoryPublicationTransport?: RepositoryPublicationTransport
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
   multiProcessSubprocessConcurrency?: number
   /**
@@ -2311,6 +2317,7 @@ async function maybeRunCommitPush(
         repoBranch: branch,
         baseRef,
         ...(repoSlug ? { repoSlug } : {}),
+        ownerUserId: task.ownerUserId,
         gitUserName: task.gitUserName,
         gitUserEmail: task.gitUserEmail,
         maxRepairRetries:
@@ -2356,7 +2363,16 @@ async function maybeRunCommitPush(
             rctx,
           ),
       },
-      { db, log: log.child('commit') },
+      {
+        db,
+        log: log.child('commit'),
+        publicationTransport:
+          state.opts.repositoryPublicationTransport ??
+          resolveRepositoryPublicationTransportFromKeyFile({
+            db,
+            appHome: state.opts.appHome,
+          }),
+      },
     )
     if (commitResult.processUnreaped === true) return { processUnreaped: true }
   }

@@ -6,11 +6,13 @@ import { z } from 'zod'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import {
   cachedRepos,
   employeeApprovalSagas,
+  employeeCases,
   employeeCaseWorkspaces,
   employeeChangeCandidates,
   employeeRoundWorkspaceStates,
@@ -40,6 +42,21 @@ interface DevelopmentReactionPlan {
   readonly workItemRef: string
   readonly inputEnvelopeJson: string
   readonly externalWaitDeadlineMs: number
+}
+
+function employeeCasePublicationSubject(
+  db: DbClient,
+  caseId: string,
+): { readonly kind: 'user'; readonly userId: string } | { readonly kind: 'system' } {
+  const row = db
+    .select({ ownerUserId: employeeCases.ownerUserId })
+    .from(employeeCases)
+    .where(eq(employeeCases.id, caseId))
+    .get()
+  if (row === undefined) throw new Error(`employee case owner is missing: ${caseId}`)
+  return row.ownerUserId === null || row.ownerUserId === SYSTEM_USER_ID
+    ? { kind: 'system' }
+    : { kind: 'user', userId: row.ownerUserId }
 }
 
 const contextSchema = z
@@ -550,6 +567,9 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       readonly expectedRemoteSha: string | null
       readonly expectedTreeOid: string
       readonly baselineSha: string
+      readonly publicationSubject:
+        | { readonly kind: 'user'; readonly userId: string }
+        | { readonly kind: 'system' }
     }): Promise<
       | {
           readonly ok: true
@@ -588,7 +608,18 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       readonly remoteUrl: string
       readonly branch: string
       readonly expectedHeadSha: string
-    }): Promise<void>
+      readonly publicationSubject:
+        | { readonly kind: 'user'; readonly userId: string }
+        | { readonly kind: 'system' }
+    }): Promise<
+      | { readonly ok: true; readonly headSha: string }
+      | {
+          readonly ok: false
+          readonly code: 'remote-head-moved'
+          readonly expectedHeadSha: string
+          readonly actualHeadSha: string
+        }
+    >
     importCommit(request: {
       readonly baselineRepoPath: string
       readonly sourceRepoPath: string
@@ -1359,6 +1390,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           expectedRemoteSha: row.remoteHeadSha,
           expectedTreeOid: receipt.treeOid,
           baselineSha: candidate.baselineSha,
+          publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
         })
         if (!pushed.ok) {
           return output({
@@ -1562,6 +1594,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             expectedRemoteSha: conflict.sourceSha,
             expectedTreeOid: finished.treeOid,
             baselineSha: conflict.sourceSha,
+            publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
           })
           if (!pushed.ok) {
             return output({
@@ -1672,21 +1705,35 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             return output({ status: 'blocked', summary: '目标仓库的远端凭据或地址不可用' })
           }
           if (conflictTargetHead !== null && conflictTargetBranch !== null) {
-            await workspaceOps.fetchRemoteHead({
+            const fetchedTarget = await workspaceOps.fetchRemoteHead({
               baselineRepoPath: workspace.repository.localPath,
               remoteUrl: remote.remoteUrl,
               branch: conflictTargetBranch,
               expectedHeadSha: conflictTargetHead,
+              publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
             })
+            if (!fetchedTarget.ok) {
+              return output({
+                status: 'needs-input',
+                summary: 'MR target 在事实读取与 Git 获取之间已前进，等待下一份权威 MR 事实后重试',
+              })
+            }
           }
           if (sourceHeadChanged) {
             const sourceBranch = state.sourceBranch ?? workspace.row.sourceBranch
-            await workspaceOps.fetchRemoteHead({
+            const fetchedSource = await workspaceOps.fetchRemoteHead({
               baselineRepoPath: workspace.repository.localPath,
               remoteUrl: remote.remoteUrl,
               branch: sourceBranch,
               expectedHeadSha: nextHead,
+              publicationSubject: employeeCasePublicationSubject(input.db, plan.caseRef.id),
             })
+            if (!fetchedSource.ok) {
+              return output({
+                status: 'needs-input',
+                summary: 'MR source 在事实读取与 Git 获取之间已前进，等待下一份权威 MR 事实后重试',
+              })
+            }
             await workspaceOps.rematerialize({
               caseRoot: sceneRoot(plan.caseRef.id),
               baselineRepoPath: workspace.repository.localPath,

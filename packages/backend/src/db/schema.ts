@@ -10,6 +10,7 @@ import { TASK_CATALOG_VISIBILITIES, TASK_LAUNCH_ORIGINS } from '@agent-workflow/
 import {
   type AnySQLiteColumn,
   check,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -1590,6 +1591,12 @@ export const codeHostConnections = sqliteTable('code_host_connections', {
   baseUrl: text('base_url').notNull(),
   /** GitLab-only normalized repository URL prefixes; JSON string array. */
   repositoryUrlPrefixesJson: text('repository_url_prefixes_json').notNull().default('[]'),
+  /** RFC-321 typed SSH authority/path -> HTTP base mappings; JSON V1 array. */
+  transportMappingsJson: text('transport_mappings_json').notNull().default('[]'),
+  /** Opaque logical-connection generation; delete + recreate must mint a new value. */
+  connectionGeneration: text('connection_generation')
+    .notNull()
+    .default(sql`(lower(hex(randomblob(16))))`),
   /** RFC-277: true by default; only a GitLab connection may opt out. */
   rejectUnauthorized: integer('reject_unauthorized', { mode: 'boolean' }).notNull().default(true),
   tokenEnc: text('token_enc').notNull(), // secretBox.seal(token)
@@ -1602,6 +1609,37 @@ export const codeHostConnections = sqliteTable('code_host_connections', {
     .default(sql`(unixepoch() * 1000)`),
   updatedBy: text('updated_by'), // users.id (audit)
 })
+
+// RFC-321 source-control-owned projection of the administrator connection.
+// The ciphertext is purpose-limited to platform-owned Git publication and is
+// never exposed through this table's public module surface.
+export const repositoryTransportConnections = sqliteTable(
+  'repository_transport_connections',
+  {
+    provider: text('provider', { enum: ['gitlab', 'github'] }).primaryKey(),
+    connectionGeneration: text('connection_generation').notNull(),
+    endpointBindingDigest: text('endpoint_binding_digest').notNull(),
+    apiBaseUrl: text('api_base_url').notNull(),
+    rejectUnauthorized: integer('reject_unauthorized', { mode: 'boolean' }).notNull(),
+    transportMappingsJson: text('transport_mappings_json').notNull(),
+    allowedHttpBaseUrlsJson: text('allowed_http_base_urls_json').notNull(),
+    globalTokenEnc: text('global_token_enc').notNull(),
+    globalTokenHint: text('global_token_hint').notNull(),
+    credentialRevision: integer('credential_revision').notNull().default(1),
+    updatedAt: integer('updated_at').notNull(),
+    updatedBy: text('updated_by'),
+  },
+  (t) => ({
+    generationUq: uniqueIndex('repository_transport_connections_provider_generation_uq').on(
+      t.provider,
+      t.connectionGeneration,
+    ),
+    generationLength: check(
+      'repository_transport_connections_generation_length',
+      sql`length(${t.connectionGeneration}) BETWEEN 1 AND 128`,
+    ),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // task_repos — RFC-066. One row per repo in a task. Single-repo tasks have
@@ -2465,6 +2503,42 @@ export const users = sqliteTable(
   },
   (t) => ({
     statusIdx: index('idx_users_status').on(t.status),
+  }),
+)
+
+// RFC-321 — one write-only Git publication credential per user × provider.
+// Personal rows are bound to both the logical connection generation and its
+// endpoint trust digest; source-control treats mismatch as stale, never absent.
+export const userRepositoryTransportCredentials = sqliteTable(
+  'user_repository_transport_credentials',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider', { enum: ['gitlab', 'github'] }).notNull(),
+    connectionGeneration: text('connection_generation').notNull(),
+    endpointBindingDigest: text('endpoint_binding_digest').notNull(),
+    tokenEnc: text('token_enc').notNull(),
+    tokenHint: text('token_hint').notNull(),
+    credentialRevision: integer('credential_revision').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.provider] }),
+    providerGenerationIdx: index(
+      'idx_user_repository_transport_credentials_provider_generation',
+    ).on(t.provider, t.connectionGeneration),
+    connectionFk: foreignKey({
+      name: 'user_repository_transport_credentials_connection_fk',
+      columns: [t.provider, t.connectionGeneration],
+      foreignColumns: [
+        repositoryTransportConnections.provider,
+        repositoryTransportConnections.connectionGeneration,
+      ],
+    })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
   }),
 )
 

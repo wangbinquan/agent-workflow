@@ -10,12 +10,15 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
+import { describeRepositoryRemote, PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import { runGit } from '@/util/git'
 import { createSha256DigestBuilder } from '@/util/hash'
+import { redactSensitiveString } from '@/util/redact'
+import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
+import type { CandidatePublicationSubject, CandidatePublicationTransport } from './deliverCandidate'
 
 function copyTree(
   source: string,
@@ -150,25 +153,80 @@ export async function fetchEmployeeWorkspaceRemoteHead(input: {
   readonly remoteUrl: string
   readonly branch: string
   readonly expectedHeadSha: string
-}): Promise<void> {
-  const fetched = await runGit(input.baselineRepoPath, [
-    'fetch',
-    '--quiet',
-    '--no-tags',
-    input.remoteUrl,
-    `refs/heads/${input.branch}`,
-  ])
+  readonly publicationSubject?: CandidatePublicationSubject
+  readonly publicationTransport?: CandidatePublicationTransport
+}): Promise<
+  | { readonly ok: true; readonly headSha: string }
+  | {
+      readonly ok: false
+      readonly code: 'remote-head-moved'
+      readonly expectedHeadSha: string
+      readonly actualHeadSha: string
+    }
+> {
+  const described = describeRepositoryRemote(input.remoteUrl)
+  const localRemote =
+    (described.ok && described.value.transport === 'file') ||
+    isAbsolute(input.remoteUrl) ||
+    input.remoteUrl.startsWith('./') ||
+    input.remoteUrl.startsWith('../')
+  let fetched: Awaited<ReturnType<typeof runGit>>
+  if (input.publicationTransport !== undefined && input.publicationSubject !== undefined) {
+    const opened = await input.publicationTransport.open({
+      subject: input.publicationSubject,
+      remoteUrl: input.remoteUrl,
+    })
+    if (!opened.ok) {
+      throw new Error(`employee workspace publication transport failed: ${opened.code}`)
+    }
+    try {
+      fetched = await opened.session.runNetwork(runGit, input.baselineRepoPath, [
+        'fetch',
+        '--quiet',
+        '--no-tags',
+        opened.session.endpointUrl,
+        `refs/heads/${input.branch}`,
+      ])
+    } finally {
+      opened.session.close()
+    }
+  } else {
+    if (!localRemote) {
+      throw new Error('employee workspace publication transport and owner are required')
+    }
+    fetched = await runGit(input.baselineRepoPath, [
+      'fetch',
+      '--quiet',
+      '--no-tags',
+      input.remoteUrl,
+      `refs/heads/${input.branch}`,
+    ])
+  }
   if (fetched.exitCode !== 0) {
-    throw new Error(`employee workspace remote-head fetch failed: ${fetched.stderr.slice(0, 500)}`)
+    const detail = `${fetched.stderr}\n${fetched.stdout}`
+    throw new Error(
+      classifyRepositoryPushFailure(detail) ??
+        `employee workspace remote-head fetch failed: ${redactSensitiveString(detail).slice(0, 500)}`,
+    )
   }
   const actual = await runGit(input.baselineRepoPath, [
     'rev-parse',
     '--verify',
     'FETCH_HEAD^{commit}',
   ])
-  if (actual.exitCode !== 0 || actual.stdout.trim() !== input.expectedHeadSha) {
-    throw new Error('employee workspace remote head changed while facts were being applied')
+  if (actual.exitCode !== 0) {
+    throw new Error(`employee workspace fetched head is unreadable: ${actual.stderr.slice(0, 500)}`)
   }
+  const actualHeadSha = actual.stdout.trim()
+  if (actualHeadSha !== input.expectedHeadSha) {
+    return {
+      ok: false,
+      code: 'remote-head-moved',
+      expectedHeadSha: input.expectedHeadSha,
+      actualHeadSha,
+    }
+  }
+  return { ok: true, headSha: actualHeadSha }
 }
 
 export async function resolveEmployeeWorkspaceBaseline(input: {

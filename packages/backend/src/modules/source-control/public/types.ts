@@ -46,3 +46,18 @@ export type RepositoryPublishResult =
       excludedPaths: readonly string[]
     }
   | { ok: false; reason: 'failed'; error: string }
+
+/**
+ * Secret-free result of selecting the credential identity for one managed
+ * publication. The opaque ref can only be redeemed inside source-control's
+ * infrastructure boundary.
+ */
+export type RepositoryTransportCredentialSelection =
+  | {
+      readonly ok: true
+      readonly source: 'personal' | 'global'
+      readonly credentialRef: string
+      readonly credentialRevision: number
+    }
+  | { readonly ok: true; readonly source: 'legacy'; readonly credentialRevision: null }
+  | { readonly ok: false; readonly code: 'code-host-push-credential-stale' }

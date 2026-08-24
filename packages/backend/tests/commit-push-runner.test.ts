@@ -14,6 +14,7 @@ import { nodeRuns } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
 import type { CommitPushMeta } from '@agent-workflow/shared'
+import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -292,7 +293,7 @@ describe('runCommitPush', () => {
     writeFileSync(join(f.repo, 'b.txt'), 'x\n')
     // Inject a push that always reports an auth failure; everything else is real git.
     const fakeRunGit = (async (cwd: string, args: string[]) =>
-      args[0] === 'push'
+      args.includes('push')
         ? { stdout: '', stderr: 'fatal: Authentication failed for https://host/x.git', exitCode: 1 }
         : runGit(cwd, args)) as typeof runGit
 
@@ -305,6 +306,67 @@ describe('runCommitPush', () => {
     // Local commit exists on feature/x even though push failed.
     const head = (await runGit(f.repo, ['log', '-1', '--format=%s'])).stdout.trim()
     expect(head).toBe('feat: change a')
+  })
+
+  test('RFC-321 personal auth failure keeps one fixed session and never falls back to global', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+    let openings = 0
+    let closes = 0
+    let networkPushes = 0
+    const publicationTransport: RepositoryPublicationTransport = {
+      async open(input) {
+        openings += 1
+        expect(input.subject).toEqual({ kind: 'user', userId: 'owner-user' })
+        return {
+          ok: true,
+          session: {
+            endpointUrl: 'https://git.example.test/team/repository.git',
+            receipt: {
+              credentialSource: 'personal',
+              credentialRevision: 7,
+              endpointSource: 'admin-mapping',
+              endpointBindingDigest: 'a'.repeat(64),
+            },
+            runNetwork(run, repoPath, args, options) {
+              if (args.includes('push')) {
+                networkPushes += 1
+                return Promise.resolve({
+                  stdout: '',
+                  stderr: 'fatal: Authentication failed for repository',
+                  exitCode: 1,
+                })
+              }
+              return run(repoPath, [...args], options)
+            },
+            close() {
+              closes += 1
+            },
+          },
+        }
+      },
+    }
+
+    const { meta } = await runCommitPush(
+      baseParams(f, {
+        ownerUserId: 'owner-user',
+        generateRepair: async () => {
+          throw new Error('authentication failures must not enter repair')
+        },
+      }),
+      { db: f.db, publicationTransport },
+    )
+
+    expect(meta.pushOutcome).toBe('commit-local-auth')
+    expect(meta.pushError).toBe('repository-push-authentication-failed')
+    expect(meta.repairAttempts).toBe(0)
+    expect(meta.publicationReceipt).toMatchObject({
+      credentialSource: 'personal',
+      credentialRevision: 7,
+    })
+    expect(openings).toBe(1)
+    expect(networkPushes).toBe(1)
+    expect(closes).toBe(1)
   })
 
   test('server-hook rejection → repair → success (repairAttempts=1)', async () => {

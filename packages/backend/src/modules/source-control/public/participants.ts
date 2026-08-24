@@ -7,6 +7,8 @@ import type {
   WorkspaceExcludeProfileReceipt,
 } from './types'
 
+export type { RepositoryTransportCredentialSelectionParticipant } from './repositoryTransportParticipants'
+
 /** A worktree-bound participant; absolute paths never cross this interface. */
 export interface WorkspaceExcludeParticipant {
   ensure(input?: { directChildMounts?: readonly string[] }): Promise<WorkspaceExcludeProfileReceipt>

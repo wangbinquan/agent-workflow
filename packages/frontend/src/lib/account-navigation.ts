@@ -1,4 +1,4 @@
-export const ACCOUNT_SECTIONS = ['overview', 'security', 'tokens'] as const
+export const ACCOUNT_SECTIONS = ['overview', 'security', 'tokens', 'codePush'] as const
 export type AccountSection = (typeof ACCOUNT_SECTIONS)[number]
 
 export interface AccountSearch extends Record<string, unknown> {

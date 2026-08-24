@@ -158,6 +158,8 @@ export * from './platformEnv'
 // 与运行期渲染同源）。零 DB / 零 fs 依赖，前后端共用。
 export * from './schemas/webhook'
 export * from './schemas/codeHost' // RFC-269
+export * from './schemas/repositoryTransport' // RFC-321
+export * from './repository-transport' // RFC-321 — pure managed Git transport resolution
 export * from './webhookTemplate'
 // RFC-262 — upload 文件名净化与落点判重的纯函数面。启动表单提交前与 daemon
 // 收到 multipart 后跑的是同一套规则，两边不可能给出不同判定。零依赖叶子。

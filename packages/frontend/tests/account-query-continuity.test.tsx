@@ -2,6 +2,7 @@
 // stale-data continuity.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { OwnCodeHostPushCredentialSummary } from '@agent-workflow/shared'
 import {
   Outlet,
   RouterProvider,
@@ -52,6 +53,18 @@ const oidcActor: MeResponse = {
       linkedAt: 1_700_000_000_000,
     },
   ],
+}
+
+const gitlabPushCredential = {
+  provider: 'gitlab' as const,
+  displayBaseUrl: 'https://gitlab.example.test',
+  connectionGeneration: 'gitlab-generation',
+  endpointBindingDigest: 'a'.repeat(64),
+  configured: false,
+  tokenHint: null,
+  updatedAt: null,
+  stale: false,
+  fallback: 'platform-global' as const,
 }
 
 function json(payload: unknown, status = 200): Response {
@@ -124,7 +137,7 @@ describe('/account security center', () => {
     expect(screen.getByText('00u-long-technical-subject')).toBeTruthy()
   })
 
-  test('overview updates the account-owned Git identity and refreshes the actor cache', async () => {
+  test('code commit and push tab owns the Git identity card and refreshes the actor cache', async () => {
     const calls: Array<{ method: string; path: string; body: unknown }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (request: RequestInfo | URL, init?: RequestInit) => {
@@ -133,6 +146,9 @@ describe('/account security center', () => {
         const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
         calls.push({ method, path, body })
         if (path === '/api/auth/me' && method === 'GET') return json(actor)
+        if (path === '/api/account/code-host-push-credentials' && method === 'GET') {
+          return json({ items: [gitlabPushCredential] })
+        }
         if (path === '/api/auth/me/profile' && method === 'PATCH') {
           return json({
             profile: {
@@ -150,7 +166,21 @@ describe('/account security center', () => {
     )
     const qc = queryClient()
     qc.setQueryData([...ACTOR_QUERY_KEY, 'stale-auth-generation'], actor)
-    renderAccount(qc)
+    renderAccount(qc, '/account?section=codePush')
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: enUS.account.sections.codePush }),
+    ).toBeTruthy()
+    const identityCard = screen.getByTestId('account-git-identity-card')
+    const credentialCard = await screen.findByTestId('account-code-push-card-gitlab')
+    expect(identityCard.classList.contains('settings-card')).toBe(true)
+    expect(credentialCard.classList.contains('settings-card')).toBe(true)
+    expect(identityCard.querySelector('form')?.classList.contains('account-code-push-form')).toBe(
+      true,
+    )
+    expect(credentialCard.querySelector('form')?.classList.contains('account-code-push-form')).toBe(
+      true,
+    )
 
     const name = (await screen.findByRole('textbox', {
       name: new RegExp(enUS.account.displayName),
@@ -186,6 +216,108 @@ describe('/account security center', () => {
     expect(
       qc.getQueryData<MeResponse>([...ACTOR_QUERY_KEY, 'stale-auth-generation'])?.profile,
     ).toEqual(actor.profile)
+  })
+
+  test('personal push credential is write-only, replaces platform fallback, and deletes through confirmation', async () => {
+    let current: OwnCodeHostPushCredentialSummary = gitlabPushCredential
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (request: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(request.toString()).pathname
+        const method = init?.method ?? 'GET'
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+        calls.push({ method, path, body })
+        if (path === '/api/auth/me' && method === 'GET') return json(actor)
+        if (path === '/api/account/code-host-push-credentials' && method === 'GET') {
+          return json({ items: [current] })
+        }
+        if (path === '/api/account/code-host-push-credentials/gitlab/test' && method === 'POST') {
+          const candidate = (body as { token?: string } | undefined)?.token
+          return candidate?.includes('invalid') === true
+            ? json({ ok: false, at: 1_700_000_000_000, code: 'unauthorized', message: 'HTTP 401' })
+            : json({ ok: true, at: 1_700_000_000_000, login: 'alice-code-host' })
+        }
+        if (path === '/api/account/code-host-push-credentials/gitlab' && method === 'PUT') {
+          current = {
+            ...gitlabPushCredential,
+            configured: true,
+            tokenHint: '7890',
+            updatedAt: 1_700_000_000_000,
+          }
+          return json(current)
+        }
+        if (path === '/api/account/code-host-push-credentials/gitlab' && method === 'DELETE') {
+          current = gitlabPushCredential
+          return json({ removed: true })
+        }
+        throw new Error(`unexpected account request: ${method} ${path}`)
+      },
+    )
+    renderAccount(queryClient(), '/account?section=codePush')
+
+    const token = (await screen.findByTestId('account-code-push-token-gitlab')) as HTMLInputElement
+    expect(token.type).toBe('password')
+    expect(token.value).toBe('')
+    expect(screen.getByTestId('account-code-push-status-gitlab').textContent).toContain(
+      enUS.account.codePush.platformFallback,
+    )
+
+    fireEvent.change(token, { target: { value: 'personal-token-7890' } })
+    fireEvent.click(screen.getByTestId('account-code-push-test-gitlab'))
+    expect(await screen.findByText('Token is valid. Code-host user: alice-code-host')).toBeTruthy()
+    expect(calls.find((call) => call.method === 'POST')).toEqual({
+      method: 'POST',
+      path: '/api/account/code-host-push-credentials/gitlab/test',
+      body: {
+        token: 'personal-token-7890',
+        connectionGeneration: 'gitlab-generation',
+        endpointBindingDigest: 'a'.repeat(64),
+      },
+    })
+    fireEvent.click(screen.getByTestId('account-code-push-save-gitlab'))
+    expect(await screen.findByText(enUS.account.codePush.saved)).toBeTruthy()
+    expect(token.value).toBe('')
+    expect(calls.find((call) => call.method === 'PUT')).toEqual({
+      method: 'PUT',
+      path: '/api/account/code-host-push-credentials/gitlab',
+      body: {
+        token: 'personal-token-7890',
+        connectionGeneration: 'gitlab-generation',
+        endpointBindingDigest: 'a'.repeat(64),
+      },
+    })
+    expect(await screen.findByText(/7890/)).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('account-code-push-test-gitlab'))
+    await waitFor(() => {
+      expect(calls.filter((call) => call.method === 'POST')).toHaveLength(2)
+    })
+    expect(calls.filter((call) => call.method === 'POST')[1]).toEqual({
+      method: 'POST',
+      path: '/api/account/code-host-push-credentials/gitlab/test',
+      body: {
+        connectionGeneration: 'gitlab-generation',
+        endpointBindingDigest: 'a'.repeat(64),
+      },
+    })
+
+    fireEvent.change(token, { target: { value: 'personal-invalid-token' } })
+    fireEvent.click(screen.getByTestId('account-code-push-test-gitlab'))
+    expect(
+      await screen.findByText(
+        'Token validation failed: The token is invalid or lacks the required scope',
+      ),
+    ).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('account-code-push-remove-gitlab'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: enUS.account.codePush.remove }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(calls).toContainEqual({
+      method: 'DELETE',
+      path: '/api/account/code-host-push-credentials/gitlab',
+      body: undefined,
+    })
   })
 
   test('local password change installs the fresh session token before invalidation', async () => {

@@ -23,6 +23,7 @@ import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
+import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 
@@ -143,6 +144,100 @@ const baseParams = {
 }
 
 describe('RFC-210 recursive commit & push', () => {
+  test('RFC-321 opens a separate owner-bound publication session for each remote', async () => {
+    const { parent } = await fixture(true)
+    writeFileSync(join(parent, 'vendor', 'a.txt'), 'separate-remote-credential\n')
+    const opens: Array<{
+      subject: { readonly kind: 'user'; readonly userId: string } | { readonly kind: 'system' }
+      remoteUrl: string
+    }> = []
+    let closes = 0
+    const publicationTransport: RepositoryPublicationTransport = {
+      async open(input) {
+        opens.push(input)
+        return {
+          ok: true,
+          session: {
+            endpointUrl: input.remoteUrl,
+            receipt: {
+              credentialSource: 'legacy',
+              credentialRevision: null,
+              endpointSource: 'local-fixture',
+              endpointBindingDigest: null,
+            },
+            runNetwork(run, repoPath, args, options) {
+              return run(repoPath, [...args], options)
+            },
+            close() {
+              closes += 1
+            },
+          },
+        }
+      },
+    }
+
+    const result = await runCommitPush(
+      { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
+      { db: await db(parent), publicationTransport },
+    )
+
+    expect(result.meta.pushOutcome).toBe('pushed')
+    expect(opens).toHaveLength(2)
+    expect(opens[0]?.remoteUrl).not.toBe(opens[1]?.remoteUrl)
+    expect(opens.map((opened) => opened.subject)).toEqual([
+      { kind: 'user', userId: 'submodule-owner' },
+      { kind: 'user', userId: 'submodule-owner' },
+    ])
+    expect(closes).toBe(2)
+  }, 120_000)
+
+  test('RFC-321 submodule authentication failure is stable and never reaches the parent remote', async () => {
+    const { parent } = await fixture(true)
+    writeFileSync(join(parent, 'vendor', 'a.txt'), 'rejected-submodule-credential\n')
+    let openings = 0
+    let closes = 0
+    const publicationTransport: RepositoryPublicationTransport = {
+      async open(input) {
+        openings += 1
+        return {
+          ok: true,
+          session: {
+            endpointUrl: input.remoteUrl,
+            receipt: {
+              credentialSource: 'personal',
+              credentialRevision: 3,
+              endpointSource: 'admin-mapping',
+              endpointBindingDigest: 'a'.repeat(64),
+            },
+            runNetwork(run, repoPath, args, options) {
+              return args.includes('push')
+                ? Promise.resolve({
+                    stdout: '',
+                    stderr: 'remote: Write access to repository not granted',
+                    exitCode: 1,
+                  })
+                : run(repoPath, [...args], options)
+            },
+            close() {
+              closes += 1
+            },
+          },
+        }
+      },
+    }
+
+    const result = await runCommitPush(
+      { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
+      { db: await db(parent), publicationTransport },
+    )
+
+    expect(result.meta.pushOutcome).toBe('commit-local-subrepo-failed')
+    expect(result.meta.subrepos?.[0]?.error).toBe('repository-push-authorization-failed')
+    expect(result.meta.pushError).toContain('repository-push-authorization-failed')
+    expect(openings).toBe(1)
+    expect(closes).toBe(1)
+  }, 120_000)
+
   test('dirty submodule content is committed through — no longer skipped-empty', async () => {
     const { parent } = await fixture(true)
     // Agent edits INSIDE the submodule and leaves it uncommitted. The parent's

@@ -21,11 +21,32 @@ import type {
 import { buildWebhook, gitlabEventHeader } from './webhook'
 
 export const SYSTEM_MOCK_CODE_HOST_TOKEN = 'system-mock-token'
+export const SYSTEM_MOCK_GIT_PERSONAL_TOKEN = 'system-mock-git-personal-p321'
+export const SYSTEM_MOCK_GIT_GLOBAL_TOKEN = 'system-mock-git-global-g321'
+
+export type MockGitCredentialIdentity = 'none' | 'personal' | 'global' | 'invalid'
+export type MockGitPushCredentialMode = NonNullable<MockCodeHostSeed['gitPushCredentialMode']>
+
+export interface MockGitPushAuthentication {
+  readonly required: boolean
+  readonly accepted: boolean
+  readonly identity: MockGitCredentialIdentity
+}
 
 export const SYSTEM_USER: Required<MockCodeHostUser> = {
   id: 7,
   username: 'system-mock-user',
   name: 'System Mock User',
+}
+export const SYSTEM_PERSONAL_USER: Required<MockCodeHostUser> = {
+  id: 9,
+  username: 'system-mock-personal-user',
+  name: 'System Mock Personal User',
+}
+export const SYSTEM_GLOBAL_USER: Required<MockCodeHostUser> = {
+  id: 10,
+  username: 'system-mock-global-user',
+  name: 'System Mock Global User',
 }
 export const DEFAULT_AUTHOR: Required<MockCodeHostUser> = {
   id: 8,
@@ -82,6 +103,7 @@ export interface StoredProject {
   repoHttpUrl: string
   gitTransportUrl: string
   webUrl: string
+  gitPushCredentialMode: MockGitPushCredentialMode
   diffOmissions: Record<string, 'binary' | 'too-large'>
   mergeRequests: Map<number, StoredMergeRequest>
   issues: Map<number, StoredIssue>
@@ -123,13 +145,19 @@ export class CodeHostStore {
   }
 
   /** Resolve a provider-shaped clone request to the isolated bare repository. */
-  gitRequest(
-    pathname: string,
-  ): { readonly repositoryPath: string; readonly clonePath: string } | null {
+  gitRequest(pathname: string): {
+    readonly repositoryPath: string
+    readonly clonePath: string
+    readonly gitPushCredentialMode: MockGitPushCredentialMode
+  } | null {
     for (const project of this.#projects.values()) {
       const clonePath = new URL(project.repoHttpUrl).pathname
       if (pathname === clonePath || pathname.startsWith(`${clonePath}/`)) {
-        return { repositoryPath: project.repositoryPath, clonePath }
+        return {
+          repositoryPath: project.repositoryPath,
+          clonePath,
+          gitPushCredentialMode: project.gitPushCredentialMode,
+        }
       }
     }
     return null
@@ -238,6 +266,7 @@ export class CodeHostStore {
       repoHttpUrl: providerRepoHttpUrl,
       gitTransportUrl: gitRemoteUrl(this.#baseUrl(), this.#gitRoot, repositoryPath),
       webUrl: `${this.#baseUrl()}${hostPrefix}/${seed.projectPath}`,
+      gitPushCredentialMode: seed.gitPushCredentialMode ?? 'public',
       diffOmissions: structuredClone(seed.diffOmissions ?? {}),
       mergeRequests: new Map([[number, mr]]),
       issues: new Map(),
@@ -682,6 +711,44 @@ export class CodeHostStore {
     project.baseSha = primary.baseSha
     project.headSha = primary.headSha
   }
+}
+
+function basicPassword(authorization: string | undefined): string | null {
+  const match = /^Basic\s+([^\s]+)$/i.exec(authorization ?? '')
+  if (match === null) return null
+  let decoded: string
+  try {
+    decoded = Buffer.from(match[1]!, 'base64').toString('utf8')
+  } catch {
+    return null
+  }
+  const separator = decoded.indexOf(':')
+  return separator < 0 ? null : decoded.slice(separator + 1)
+}
+
+/**
+ * RFC-321 fixture boundary: recognize deterministic canaries, but return only
+ * a safe identity label. Callers must never copy the Authorization header into
+ * journals, errors, or snapshots.
+ */
+export function authenticateMockGitPush(
+  mode: MockGitPushCredentialMode,
+  authorization: string | undefined,
+): MockGitPushAuthentication {
+  if (mode === 'public') return { required: false, accepted: true, identity: 'none' }
+  const password = basicPassword(authorization)
+  const identity: MockGitCredentialIdentity =
+    password === null
+      ? 'none'
+      : password === SYSTEM_MOCK_GIT_PERSONAL_TOKEN
+        ? 'personal'
+        : password === SYSTEM_MOCK_GIT_GLOBAL_TOKEN
+          ? 'global'
+          : 'invalid'
+  const accepted =
+    (identity === 'personal' && (mode === 'personal-only' || mode === 'personal-and-global')) ||
+    (identity === 'global' && (mode === 'global-only' || mode === 'personal-and-global'))
+  return { required: true, accepted, identity }
 }
 
 function wireProject(project: StoredProject): MockCodeHostProject {

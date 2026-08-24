@@ -1,4 +1,19 @@
-import type { StartAgentTask, StartTask, StartWorkgroupTask } from '@agent-workflow/shared'
+import type {
+  CodeHostProvider,
+  RepositoryEndpointCandidate,
+  StartAgentTask,
+  StartTask,
+  StartWorkgroupTask,
+} from '@agent-workflow/shared'
+
+/** Secret-free provider metadata query used by source-control endpoint resolution. */
+export interface RepositoryEndpointDiscoveryParticipant {
+  discover(input: {
+    readonly provider: CodeHostProvider
+    readonly project: string
+    readonly connectionGeneration: string
+  }): Promise<RepositoryEndpointCandidate | null>
+}
 
 export interface EventWorkStartOrigin {
   readonly eventSubscriptionId: string

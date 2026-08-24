@@ -1105,6 +1105,35 @@ export interface Resources {
       leaveForce: string
       leaveForceWarning: string
     }
+    codePush: {
+      priorityTitle: string
+      priorityDescription: string
+      loading: string
+      noConnections: string
+      noConnectionsDescription: string
+      stale: string
+      personalActive: string
+      platformFallback: string
+      stored: string
+      fallbackDescription: string
+      updated: string
+      tokenLabel: string
+      tokenHint: string
+      replaceHint: string
+      scope_gitlab: string
+      scope_github: string
+      boundaryDescription: string
+      save: string
+      replace: string
+      saved: string
+      test: string
+      testing: string
+      testOk: string
+      testFailed: string
+      remove: string
+      removeTitle: string
+      removeDescription: string
+    }
     pleaseSignIn: string
     pleaseSignInDescription: string
     sectionGroup: string
@@ -1113,11 +1142,13 @@ export interface Resources {
       overview: string
       security: string
       tokens: string
+      codePush: string
     }
     sectionDescriptions: {
       overview: string
       security: string
       tokens: string
+      codePush: string
     }
     oidcManaged: string
     localAccount: string
@@ -5656,6 +5687,18 @@ export interface Resources {
     repositoryUrlPrefixesHint: string
     repositoryUrlPrefixesPlaceholder: string
     repositoryUrlPrefixInvalid: string
+    transportMappings: string
+    transportMappingsHint: string
+    transportMappingsEmpty: string
+    addTransportMapping: string
+    sshHost: string
+    sshPort: string
+    sshPathPrefix: string
+    httpBaseUrl: string
+    transportMappingInvalid: string
+    transportMappingConflict: string
+    transportMappingPreview: string
+    transportMappingPreviewUnavailable: string
     token: string
     tokenHint: string
     tokenStored: string
@@ -5670,6 +5713,13 @@ export interface Resources {
     'testCode_bad-response': string
     loading: string
     intro: string
+    rebindTitle: string
+    rebindDescription: string
+    confirmRebind: string
+    removeTitle: string
+    removeDescription: string
+    removeWithCredentialsDescription: string
+    removeConfirmAgain: string
   }
   codeRoundNode: {
     label: string
@@ -7322,7 +7372,7 @@ export const zhCN: Resources = {
     email: '邮箱',
     gitIdentityTitle: 'Git 提交身份',
     gitIdentityDescription:
-      '新任务会把这里的值冻结为 Git user.name 和 user.email；推送认证仍使用平台为仓库配置的凭据。',
+      '新任务会把这里的值冻结为 Git user.name 和 user.email；推送认证在下方单独配置。',
     gitIdentityNameHint: '你的任务创建提交时使用的 Git user.name。',
     gitIdentityEmailHint: '你的任务创建提交时使用的 Git user.email。',
     saveProfile: '保存资料',
@@ -7450,6 +7500,38 @@ export const zhCN: Resources = {
       leaveForceWarning:
         '这只会终止浏览器等待，无法证明服务端没有创建令牌。安全恢复标记会保留，下次进入令牌管理时必须先检查结果。',
     },
+    codePush: {
+      priorityTitle: '个人凭据优先',
+      priorityDescription:
+        '在这里配置后，你的任务与开发 Mission 推送 Git 仓库时使用个人凭据；未配置时使用管理员维护的平台公共凭据。',
+      loading: '正在加载代码平台推送凭据…',
+      noConnections: '当前没有可用的代码平台连接',
+      noConnectionsDescription:
+        '需要管理员先在“设置 → 代码平台”中配置 GitLab 或 GitHub，才能添加个人推送凭据。',
+      stale: '连接已变更',
+      personalActive: '个人凭据',
+      platformFallback: '平台公共凭据',
+      stored: '已保存一枚尾号为 {{hint}} 的个人 token；系统永远不会回显其明文。',
+      fallbackDescription: '未保存个人 token，Git 推送会使用管理员维护的平台公共凭据。',
+      updated: '更新于',
+      tokenLabel: '个人 Git 推送 token',
+      tokenHint: '粘贴一枚对你负责的仓库具有推送权限的 token。',
+      replaceHint: '粘贴新 token 会替换已有值；留空不会产生任何变更。',
+      scope_gitlab: 'GitLab token 至少需要目标仓库的 write_repository 权限。',
+      scope_github: 'GitHub token 至少需要目标仓库的 Contents: Read and write 权限。',
+      boundaryDescription:
+        '该凭据只用于平台拥有的 Git 发布和你主动发起的身份校验；不会改变 Git 提交署名，也不会用于 MR、评论、审批或流水线 API。',
+      save: '保存凭据',
+      replace: '替换凭据',
+      saved: '个人 Git 推送凭据已保存。',
+      test: '校验 token',
+      testing: '正在校验…',
+      testOk: 'Token 有效，对应代码平台用户：{{login}}',
+      testFailed: 'Token 校验失败：{{reason}}',
+      remove: '删除凭据',
+      removeTitle: '删除这枚个人推送凭据？',
+      removeDescription: '此后的推送将回退到管理员维护的平台公共凭据；被删除的 token 无法恢复。',
+    },
     pleaseSignIn: '请先登录。',
     pleaseSignInDescription: '登录后即可查看账户资料与安全设置。',
     sectionGroup: '账户设置',
@@ -7458,11 +7540,13 @@ export const zhCN: Resources = {
       overview: '账户概览',
       security: '登录与安全',
       tokens: '外部对接令牌',
+      codePush: '代码提交与推送',
     },
     sectionDescriptions: {
       overview: '查看账户状态和已关联的登录身份。',
       security: '管理本地密码与当前 Web 会话。',
       tokens: '创建并管理个人访问令牌——外部模型与脚本通过 API / MCP 驱动本平台时用它。',
+      codePush: '管理 Git 提交的作者身份，以及发布代码时使用的 GitLab 或 GitHub 推送凭据。',
     },
     oidcManaged: 'OIDC 托管',
     localAccount: '本地账户',
@@ -13176,6 +13260,20 @@ export const zhCN: Resources = {
       '仅 GitLab。配置与当前 API 连接属于同一实例的其他克隆地址域名或路径前缀；每项输入后按 Enter 或逗号确认，任务仓库命中任一项即可执行。',
     repositoryUrlPrefixesPlaceholder: 'https://gitlab-mirror.example.com/team',
     repositoryUrlPrefixInvalid: '请输入不含凭据、查询参数或片段的 HTTP(S) 地址。',
+    transportMappings: 'SSH 到 HTTP(S) 推送映射',
+    transportMappingsHint:
+      '自建平台或备用克隆域名可在这里显式配置。SSH 主机、端口与路径前缀命中后，Git 鉴权前会转换到对应 HTTP(S) 仓库根地址；github.com 与 gitlab.com 无需配置。',
+    transportMappingsEmpty:
+      '尚未配置显式映射；GitHub.com 与 GitLab.com 仓库仍会使用经过校验的 HTTPS 约定。',
+    addTransportMapping: '添加映射',
+    sshHost: 'SSH 主机',
+    sshPort: 'SSH 端口',
+    sshPathPrefix: 'SSH 路径前缀（可选）',
+    httpBaseUrl: 'HTTP(S) 仓库根地址',
+    transportMappingInvalid: '保存前请为每条映射填写有效的 SSH 主机、端口和 HTTP(S) 根地址。',
+    transportMappingConflict: '同一 SSH 主机、端口和路径前缀只能映射到一个 HTTP(S) 根地址。',
+    transportMappingPreview: '转换预览：{{preview}}',
+    transportMappingPreviewUnavailable: '补全并修正这条映射后将显示转换预览。',
     token: '访问令牌',
     tokenHint: '建议用专用机器人账号的最小权限令牌',
     tokenStored: '已保存（尾号 {{hint}}）。留空保存则保留原令牌',
@@ -13191,7 +13289,18 @@ export const zhCN: Resources = {
     'testCode_bad-response': '响应不是预期的身份信息（可能被反代拦到了登录页）',
     loading: '正在读取代码平台配置…',
     intro:
-      '工作流里的「代码平台调用」节点用这里配置的凭据调用 GitLab / GitHub。令牌加密存储，读取时只显示尾号。',
+      '「代码平台调用」和 Git 代码发布会使用这里的平台公共凭据；用户配置个人推送凭据后优先使用个人值。令牌加密存储，读取时只显示尾号。',
+    rebindTitle: '变更这项仓库连接？',
+    rebindDescription:
+      '本次保存会改变仓库端点身份。继续后将吊销 {{count}} 枚个人推送凭据，相关用户需要基于新连接重新配置。',
+    confirmRebind: '保存并吊销',
+    removeTitle: '删除 {{provider}} 连接？',
+    removeDescription:
+      '代码平台调用和 Git 推送将无法再使用这项平台连接；已保存的平台 token 无法恢复。',
+    removeWithCredentialsDescription:
+      '删除连接还会吊销 {{count}} 枚个人推送凭据。代码平台调用和 Git 推送将失去这项连接，已删除的 token 均无法恢复。',
+    removeConfirmAgain:
+      '服务端已为当前 {{count}} 枚个人凭据生成确认信息。请复核影响后再次点击“删除”。',
   },
   codeRoundNode: {
     label: '代码能力轮次',

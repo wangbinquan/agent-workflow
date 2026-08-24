@@ -3542,6 +3542,13 @@ code {
   justify-content: flex-end;
 }
 
+/* RFC-321 — commit identity and push authentication share one visual rhythm.
+   Both cards use SettingsCard and fill its content column so their fields and
+   right-aligned action rows share the same left and right edges. */
+.account-code-push-form {
+  width: 100%;
+}
+
 /* RFC-247 — token issuance. */
 
 .account-section-panel__header--row {
@@ -8939,7 +8946,6 @@ details.form-section[open] > summary {
 .inspector__primary-actions > .btn {
   width: 100%;
 }
-
 
 .dialog__panel.workflow-editor-surface-dialog {
   width: min(88vw, 420px);
@@ -17672,6 +17678,63 @@ fieldset.settings-card {
   min-inline-size: 0;
 }
 
+/* RFC-321 — deterministic SSH-to-HTTP publication mappings. The controls use
+   the shared form primitives; these rules only provide a dense responsive row. */
+.code-host-transport-mappings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.code-host-transport-mapping {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.code-host-transport-mapping__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.code-host-transport-mapping__fields {
+  display: grid;
+  grid-template-columns:
+    minmax(10rem, 1fr) minmax(6rem, 0.45fr) minmax(10rem, 1fr)
+    minmax(14rem, 1.35fr);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.code-host-transport-mappings__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+@media (max-width: 960px) {
+  .code-host-transport-mapping {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .code-host-transport-mapping__fields {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .code-host-transport-mapping__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* RFC-038 — AgentForm "auto-detect dependencies" button + dialog. */
 .agent-form__autodetect-row {
   display: flex;
@@ -23458,7 +23521,6 @@ button.status-chip {
   margin: 0;
   padding-inline: 5px;
 }
-
 
 .dialog__panel.mobile-nav-dialog {
   position: fixed;

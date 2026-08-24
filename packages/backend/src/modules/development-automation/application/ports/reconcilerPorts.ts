@@ -18,6 +18,7 @@ import type {
   ChildMissionReceipt,
 } from '../../domain/stepSaga'
 import type { PlaybookSagaStore } from './playbookSagaStore'
+import type { RepositoryPublicationReceipt } from '@agent-workflow/shared'
 
 export interface RepositoryFactsCollectorPort {
   collect(input: { readonly missionId: string; readonly repositoryId: string }): Promise<{
@@ -434,6 +435,9 @@ export interface CandidateDeliveryPort {
     readonly expectedRemoteSha: string | null
     readonly expectedTreeOid: string
     readonly baselineSha: string
+    readonly publicationSubject:
+      | { readonly kind: 'user'; readonly userId: string }
+      | { readonly kind: 'system' }
   }): Promise<
     | {
         readonly ok: true
@@ -442,6 +446,7 @@ export interface CandidateDeliveryPort {
           readonly oldSha: string | null
           readonly newSha: string
           readonly reused: boolean
+          readonly publication?: RepositoryPublicationReceipt
         }
       }
     | { readonly ok: false; readonly code: string; readonly detail: string }

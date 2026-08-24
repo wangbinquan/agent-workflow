@@ -4,27 +4,37 @@
 // 任何子进程环境、不进日志、不进任何响应（读路径只回尾 4 位）。
 
 import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import type {
   CodeHostConnectionWire,
   CodeHostProvider,
   CodeHostTestCode,
   CodeHostTestResult,
+  RepositoryTransportMappingV1,
 } from '@agent-workflow/shared'
 import {
   normalizeCodeHostBaseUrl,
   normalizeGitLabRepositoryUrlPrefix,
+  normalizeRepositoryTransportMappings,
+  RepositoryTransportMappingV1Schema,
 } from '@agent-workflow/shared'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { codeHostConnections } from '@/db/schema'
-import { ValidationError } from '@/util/errors'
+import { dbTxSync } from '@/db/txSync'
+import { ConflictError, ValidationError } from '@/util/errors'
 
 /** 解封后的凭据；只在进程内流转。 */
 export interface ResolvedCodeHostConnection {
   provider: CodeHostProvider
   baseUrl: string
   repositoryUrlPrefixes: string[]
+  /** Present on persisted connections; optional keeps legacy test/adaptor stubs source-compatible. */
+  transportMappings?: RepositoryTransportMappingV1[]
+  /** Present on persisted connections; optional keeps legacy test/adaptor stubs source-compatible. */
+  connectionGeneration?: string
   token: string
   /** false is an explicit, GitLab-only TLS trust downgrade. */
   rejectUnauthorized: boolean
@@ -34,11 +44,58 @@ export interface UpsertInput {
   baseUrl: string
   /** GitLab-only; omission preserves the stored collection. */
   repositoryUrlPrefixes?: readonly string[]
+  /** Both providers; omission preserves the stored collection. */
+  transportMappings?: readonly RepositoryTransportMappingV1[]
   /** 省略 = 保留原 token（要求该 provider 已有行）。 */
   token?: string
   /** 省略 = 首次为 true、已有行保留；false 只允许 GitLab。 */
   rejectUnauthorized?: boolean
+  expectedConnectionGeneration?: string
+  confirmCredentialRevocationDigest?: string
   actorUserId?: string | null
+}
+
+export interface CodeHostConnectionMutationConfirmation {
+  readonly expectedConnectionGeneration?: string
+  readonly confirmCredentialRevocationDigest?: string
+}
+
+export interface RepositoryTransportConnectionCoordinator {
+  readonly participant: {
+    inspect(provider: CodeHostProvider): {
+      readonly personalCredentialCount: number
+      readonly currentConnectionGeneration: string | null
+      readonly currentEndpointBindingDigest: string | null
+    }
+    synchronize(input: RepositoryTransportConnectionProjection): void
+    removeConnection(provider: CodeHostProvider): boolean
+  }
+  readonly project: (input: {
+    readonly provider: CodeHostProvider
+    readonly connectionGeneration: string
+    readonly baseUrl: string
+    readonly rejectUnauthorized: boolean
+    readonly repositoryUrlPrefixesJson: string
+    readonly transportMappingsJson: string
+    readonly tokenEnc: string
+    readonly tokenHint: string
+    readonly updatedAt: number
+    readonly updatedBy: string | null
+  }) => RepositoryTransportConnectionProjection
+}
+
+interface RepositoryTransportConnectionProjection {
+  readonly provider: CodeHostProvider
+  readonly connectionGeneration: string
+  readonly endpointBindingDigest: string
+  readonly apiBaseUrl: string
+  readonly rejectUnauthorized: boolean
+  readonly transportMappings: readonly RepositoryTransportMappingV1[]
+  readonly allowedHttpBaseUrls: readonly string[]
+  readonly globalTokenEnc: string
+  readonly globalTokenHint: string
+  readonly updatedAt: number
+  readonly updatedBy: string | null
 }
 
 export interface CodeHostConnectionsService {
@@ -48,7 +105,7 @@ export interface CodeHostConnectionsService {
   list(): CodeHostConnectionWire[]
   get(provider: CodeHostProvider): CodeHostConnectionWire
   upsert(provider: CodeHostProvider, input: UpsertInput): CodeHostConnectionWire
-  remove(provider: CodeHostProvider): boolean
+  remove(provider: CodeHostProvider, confirmation?: CodeHostConnectionMutationConfirmation): boolean
   recordTest(provider: CodeHostProvider, result: CodeHostTestResult): void
 }
 
@@ -108,6 +165,27 @@ function repositoryUrlPrefixesOf(row: typeof codeHostConnections.$inferSelect): 
   return normalized
 }
 
+function transportMappingsOf(
+  row: typeof codeHostConnections.$inferSelect,
+): RepositoryTransportMappingV1[] {
+  let raw: unknown
+  try {
+    raw = JSON.parse(row.transportMappingsJson)
+  } catch {
+    return []
+  }
+  const parsed = RepositoryTransportMappingV1Schema.array().max(32).safeParse(raw)
+  if (!parsed.success) return []
+  const normalized = normalizeRepositoryTransportMappings(parsed.data)
+  if (!normalized.ok) return []
+  return normalized.value.map((mapping) => ({
+    sshHost: mapping.sshHost,
+    sshPort: mapping.sshPort,
+    ...(mapping.sshPathPrefix === '' ? {} : { sshPathPrefix: mapping.sshPathPrefix }),
+    httpBaseUrl: mapping.httpBaseUrl,
+  }))
+}
+
 function normalizeRepositoryUrlPrefixes(
   provider: CodeHostProvider,
   raw: readonly string[],
@@ -135,12 +213,53 @@ function normalizeRepositoryUrlPrefixes(
   return normalized
 }
 
+function normalizeTransportMappings(
+  raw: readonly RepositoryTransportMappingV1[],
+): RepositoryTransportMappingV1[] {
+  const parsed = RepositoryTransportMappingV1Schema.array().max(32).safeParse(raw)
+  if (!parsed.success) {
+    throw new ValidationError(
+      'code-host-transport-mapping-invalid',
+      'repository transport mapping does not satisfy the input contract',
+    )
+  }
+  const normalized = normalizeRepositoryTransportMappings(parsed.data)
+  if (!normalized.ok) {
+    throw new ValidationError(
+      'code-host-transport-mapping-invalid',
+      `repository transport mapping is invalid (${normalized.issue})`,
+      { issue: normalized.issue },
+    )
+  }
+  return normalized.value.map((mapping) => ({
+    sshHost: mapping.sshHost,
+    sshPort: mapping.sshPort,
+    ...(mapping.sshPathPrefix === '' ? {} : { sshPathPrefix: mapping.sshPathPrefix }),
+    httpBaseUrl: mapping.httpBaseUrl,
+  }))
+}
+
+function revocationDigest(input: {
+  readonly operation: 'update' | 'delete'
+  readonly provider: CodeHostProvider
+  readonly connectionGeneration: string
+  readonly currentEndpointBindingDigest: string
+  readonly nextEndpointBindingDigest: string | null
+  readonly personalCredentialCount: number
+}): string {
+  return createHash('sha256').update(JSON.stringify(input)).digest('hex')
+}
+
 function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {
   return {
     provider,
     configured: false,
     baseUrl: '',
     repositoryUrlPrefixes: [],
+    transportMappings: [],
+    connectionGeneration: null,
+    endpointBindingDigest: null,
+    personalPushCredentialCount: 0,
     rejectUnauthorized: true,
     tokenHint: '',
     updatedAt: null,
@@ -183,8 +302,9 @@ export function resolveCodeHostConnectionsFromKeyFile(
 export function createCodeHostConnectionsService(deps: {
   db: DbClient
   secretBox: SecretBox
+  repositoryTransport?: RepositoryTransportConnectionCoordinator
 }): CodeHostConnectionsService {
-  const { db, secretBox } = deps
+  const { db, secretBox, repositoryTransport } = deps
 
   function rowOf(provider: CodeHostProvider): typeof codeHostConnections.$inferSelect | undefined {
     return db
@@ -209,6 +329,12 @@ export function createCodeHostConnectionsService(deps: {
       configured: true,
       baseUrl: row.baseUrl,
       repositoryUrlPrefixes: repositoryUrlPrefixesOf(row),
+      transportMappings: transportMappingsOf(row),
+      connectionGeneration: row.connectionGeneration,
+      endpointBindingDigest:
+        repositoryTransport?.participant.inspect(row.provider).currentEndpointBindingDigest ?? null,
+      personalPushCredentialCount:
+        repositoryTransport?.participant.inspect(row.provider).personalCredentialCount ?? 0,
       rejectUnauthorized: normalizeCodeHostRejectUnauthorized(row.provider, row.rejectUnauthorized),
       tokenHint: row.tokenHint,
       updatedAt: row.updatedAt,
@@ -233,6 +359,8 @@ export function createCodeHostConnectionsService(deps: {
         provider,
         baseUrl: row.baseUrl,
         repositoryUrlPrefixes: repositoryUrlPrefixesOf(row),
+        transportMappings: transportMappingsOf(row),
+        connectionGeneration: row.connectionGeneration,
         token,
         rejectUnauthorized: normalizeCodeHostRejectUnauthorized(provider, row.rejectUnauthorized),
       }
@@ -266,6 +394,12 @@ export function createCodeHostConnectionsService(deps: {
             ? []
             : repositoryUrlPrefixesOf(existing)
           : normalizeRepositoryUrlPrefixes(provider, input.repositoryUrlPrefixes)
+      const transportMappings =
+        input.transportMappings === undefined
+          ? existing === undefined
+            ? []
+            : transportMappingsOf(existing)
+          : normalizeTransportMappings(input.transportMappings)
       let tokenEnc: string
       let tokenHint: string
       if (input.token !== undefined) {
@@ -286,10 +420,13 @@ export function createCodeHostConnectionsService(deps: {
         input.rejectUnauthorized ?? existing?.rejectUnauthorized,
       )
       const now = Date.now()
+      const connectionGeneration = existing?.connectionGeneration ?? ulid()
       const values = {
         provider,
         baseUrl: normalized.value,
         repositoryUrlPrefixesJson: JSON.stringify(repositoryUrlPrefixes),
+        transportMappingsJson: JSON.stringify(transportMappings),
+        connectionGeneration,
         rejectUnauthorized,
         tokenEnc,
         tokenHint,
@@ -299,18 +436,123 @@ export function createCodeHostConnectionsService(deps: {
         updatedAt: now,
         updatedBy: input.actorUserId ?? null,
       }
-      db.insert(codeHostConnections)
-        .values(values)
-        .onConflictDoUpdate({ target: codeHostConnections.provider, set: values })
-        .run()
+      const nextProjection = repositoryTransport?.project(values)
+      const impact = repositoryTransport?.participant.inspect(provider)
+      if (
+        input.expectedConnectionGeneration !== undefined &&
+        impact?.currentConnectionGeneration !== input.expectedConnectionGeneration
+      ) {
+        throw new ConflictError(
+          'code-host-push-credential-stale',
+          'the code-host connection changed; refresh before saving',
+        )
+      }
+      const endpointBindingChanged =
+        nextProjection !== undefined &&
+        impact !== undefined &&
+        impact.currentEndpointBindingDigest !== null &&
+        impact.currentEndpointBindingDigest !== nextProjection.endpointBindingDigest
+      if (endpointBindingChanged && impact.personalCredentialCount > 0) {
+        const required = revocationDigest({
+          operation: 'update',
+          provider,
+          connectionGeneration,
+          currentEndpointBindingDigest: impact.currentEndpointBindingDigest,
+          nextEndpointBindingDigest: nextProjection.endpointBindingDigest,
+          personalCredentialCount: impact.personalCredentialCount,
+        })
+        if (input.confirmCredentialRevocationDigest === undefined) {
+          throw new ConflictError(
+            'code-host-transport-rebind-confirmation-required',
+            'changing this connection revokes personal code-host push credentials',
+            {
+              personalPushCredentialCount: impact.personalCredentialCount,
+              expectedConnectionGeneration: connectionGeneration,
+              confirmCredentialRevocationDigest: required,
+            },
+          )
+        }
+        if (input.confirmCredentialRevocationDigest !== required) {
+          throw new ConflictError(
+            'code-host-push-credential-stale',
+            'the code-host connection impact changed; refresh before saving',
+          )
+        }
+      } else if (input.confirmCredentialRevocationDigest !== undefined) {
+        // A confirmation is a one-shot CAS proof, not a reusable consent bit.
+        // If another writer already rebound the endpoint or removed the impacted
+        // personal rows, the old digest must not turn into an unconditional
+        // last-writer-wins update.
+        throw new ConflictError(
+          'code-host-push-credential-stale',
+          'the code-host connection impact changed; refresh before saving',
+        )
+      }
+      dbTxSync(db, () => {
+        db.insert(codeHostConnections)
+          .values(values)
+          .onConflictDoUpdate({ target: codeHostConnections.provider, set: values })
+          .run()
+        if (nextProjection !== undefined)
+          repositoryTransport?.participant.synchronize(nextProjection)
+      })
       const row = rowOf(provider)
       return row === undefined ? unconfigured(provider) : toWire(row)
     },
 
-    remove(provider) {
+    remove(provider, confirmation = {}) {
       const existing = rowOf(provider)
       if (existing === undefined) return false
-      db.delete(codeHostConnections).where(eq(codeHostConnections.provider, provider)).run()
+      const impact = repositoryTransport?.participant.inspect(provider)
+      if (
+        confirmation.expectedConnectionGeneration !== undefined &&
+        confirmation.expectedConnectionGeneration !== existing.connectionGeneration
+      ) {
+        throw new ConflictError(
+          'code-host-push-credential-stale',
+          'the code-host connection changed; refresh before deleting',
+        )
+      }
+      if (
+        impact !== undefined &&
+        impact.currentEndpointBindingDigest !== null &&
+        impact.personalCredentialCount > 0
+      ) {
+        const required = revocationDigest({
+          operation: 'delete',
+          provider,
+          connectionGeneration: existing.connectionGeneration,
+          currentEndpointBindingDigest: impact.currentEndpointBindingDigest,
+          nextEndpointBindingDigest: null,
+          personalCredentialCount: impact.personalCredentialCount,
+        })
+        if (confirmation.confirmCredentialRevocationDigest === undefined) {
+          throw new ConflictError(
+            'code-host-transport-rebind-confirmation-required',
+            'deleting this connection revokes personal code-host push credentials',
+            {
+              personalPushCredentialCount: impact.personalCredentialCount,
+              expectedConnectionGeneration: existing.connectionGeneration,
+              confirmCredentialRevocationDigest: required,
+            },
+          )
+        }
+        if (confirmation.confirmCredentialRevocationDigest !== required) {
+          throw new ConflictError(
+            'code-host-push-credential-stale',
+            'the code-host connection impact changed; refresh before deleting',
+          )
+        }
+      } else if (confirmation.confirmCredentialRevocationDigest !== undefined) {
+        throw new ConflictError(
+          'code-host-push-credential-stale',
+          'the code-host connection impact changed; refresh before deleting',
+        )
+      }
+      dbTxSync(db, () => {
+        db.delete(codeHostConnections).where(eq(codeHostConnections.provider, provider)).run()
+        repositoryTransport?.participant.removeConnection(provider)
+      })
       return true
     },
 

@@ -1,0 +1,82 @@
+// RFC-321 T7 — exact GitHub/GitLab repository metadata query. The centrally
+// selected token is captured by bootstrap and never appears in the public
+// participant or any returned failure/detail.
+
+import { RepositoryEndpointCandidateSchema, type CodeHostProvider } from '@agent-workflow/shared'
+import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
+
+export type RepositoryEndpointFetch = (url: string, init?: BunFetchRequestInit) => Promise<Response>
+
+function metadataPath(provider: CodeHostProvider, project: string): string | null {
+  const segments = project.split('/').filter((segment) => segment !== '')
+  if (segments.length < 2) return null
+  if (provider === 'gitlab') return `/projects/${encodeURIComponent(segments.join('/'))}`
+  if (segments.length !== 2) return null
+  return `/repos/${encodeURIComponent(segments[0]!)}/${encodeURIComponent(segments[1]!)}`
+}
+
+function headersFor(provider: CodeHostProvider, token: string): Record<string, string> {
+  return provider === 'gitlab'
+    ? { 'PRIVATE-TOKEN': token, Accept: 'application/json' }
+    : {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      }
+}
+
+export function createRepositoryEndpointDiscovery(input: {
+  readonly provider: CodeHostProvider
+  readonly apiBaseUrl: string
+  readonly connectionGeneration: string
+  readonly token: string
+  readonly rejectUnauthorized: boolean
+  readonly fetchImpl?: RepositoryEndpointFetch
+}): RepositoryEndpointDiscoveryParticipant {
+  return {
+    async discover(request) {
+      if (
+        request.provider !== input.provider ||
+        request.connectionGeneration !== input.connectionGeneration
+      ) {
+        return null
+      }
+      const path = metadataPath(request.provider, request.project)
+      if (path === null) return null
+      const doFetch = input.fetchImpl ?? ((url, init) => fetch(url, init))
+      let response: Response
+      try {
+        response = await doFetch(`${input.apiBaseUrl.replace(/\/+$/, '')}${path}`, {
+          method: 'GET',
+          headers: headersFor(input.provider, input.token),
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15_000),
+          ...(input.rejectUnauthorized ? {} : { tls: { rejectUnauthorized: false } }),
+        })
+      } catch {
+        return null
+      }
+      if (!response.ok) return null
+      const text = await response.text()
+      if (text.length > 64 * 1024) return null
+      let body: unknown
+      try {
+        body = JSON.parse(text)
+      } catch {
+        return null
+      }
+      if (body === null || typeof body !== 'object') return null
+      const url = (body as Record<string, unknown>)[
+        input.provider === 'gitlab' ? 'http_url_to_repo' : 'clone_url'
+      ]
+      const parsed = RepositoryEndpointCandidateSchema.safeParse({
+        provider: input.provider,
+        project: request.project,
+        connectionGeneration: input.connectionGeneration,
+        url,
+        source: 'provider-api',
+      })
+      return parsed.success ? parsed.data : null
+    },
+  }
+}

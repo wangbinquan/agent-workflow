@@ -26,6 +26,11 @@ export interface RecordedMockRequest {
   query: Record<string, string>
   headers: Record<string, string>
   bodyText: string
+  /**
+   * Safe, secret-free identity observed by an authenticated Git receive-pack.
+   * The request journal never stores the Authorization value itself.
+   */
+  credentialIdentity?: 'none' | 'personal' | 'global' | 'invalid'
 }
 
 export interface MockFaultPlan {
@@ -135,6 +140,12 @@ export interface MockCodeHostSeed {
   sourceProjectPath?: string
   issues?: MockCodeHostIssueSeed[]
   pipelines?: MockCodeHostPipelineSeed[]
+  /**
+   * Optional RFC-321 push-only authentication policy. Upload-pack remains
+   * readable so a task can prepare its checkout before publication; only
+   * receive-pack challenges for one of the deterministic mock credentials.
+   */
+  gitPushCredentialMode?: 'public' | 'personal-and-global' | 'personal-only' | 'global-only'
 }
 
 export interface MockCodeHostComment {

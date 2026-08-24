@@ -61,6 +61,7 @@ const DISPOSITION = {
   fanoutMaxShardTotal: 'dropped-registered',
   codeHostConnections: 'dropped-registered',
   codeHostFetch: 'dropped-registered',
+  repositoryPublicationTransport: 'dropped-registered',
   // RFC-304: the daemon generation fencing MR leases. INHERITED, unlike the
   // service instances above — it identifies the process, and a child task runs
   // in the same one. Giving a child a different generation would make it treat
@@ -94,6 +95,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'fanoutMaxShardTotal',
         'codeHostConnections',
         'codeHostFetch',
+        'repositoryPublicationTransport',
         'commitPushModel',
         'commitPushRuntime',
         'commitPushMaxRepairRetries',

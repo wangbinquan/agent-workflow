@@ -22,9 +22,22 @@ export async function readRequestBody(
 
 export function headerRecord(headers: IncomingHttpHeaders): Record<string, string> {
   const out: Record<string, string> = {}
+  const sensitive = new Set([
+    'authorization',
+    'proxy-authorization',
+    'private-token',
+    'x-gitlab-token',
+    'cookie',
+    'set-cookie',
+  ])
   for (const [name, value] of Object.entries(headers)) {
     if (value === undefined) continue
-    out[name.toLowerCase()] = Array.isArray(value) ? value.join(', ') : value
+    const normalizedName = name.toLowerCase()
+    out[normalizedName] = sensitive.has(normalizedName)
+      ? '[redacted]'
+      : Array.isArray(value)
+        ? value.join(', ')
+        : value
   }
   return out
 }

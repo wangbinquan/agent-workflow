@@ -14,6 +14,8 @@
 // ref/远端）上是否已有 tree==treeOid 且 parent==baseline 的 commit，有则复用。
 
 import { runGit as defaultRunGit, AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
+import { describeRepositoryRemote, type RepositoryPublicationReceipt } from '@agent-workflow/shared'
+import { isAbsolute } from 'node:path'
 import {
   candidateCommitMessage,
   missionGitRefComponent,
@@ -21,6 +23,8 @@ import {
 } from '../domain/deliveryPolicy'
 import { stageCandidateTree } from './changeCandidate'
 import type { RepositoryGit } from './repositoryCommit'
+import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
+import { redactSensitiveString } from '@/util/redact'
 
 /** baseline 镜像里承载 candidate commit 的内部 ref（durable、不污染分支命名空间）。 */
 export function missionCandidateRef(missionId: string): string {
@@ -158,7 +162,37 @@ export interface PushCandidateInput {
   readonly expectedRemoteSha: string | null
   readonly expectedTreeOid: string
   readonly baselineSha: string
+  /** Persisted mission owner, never the actor performing a retry. */
+  readonly publicationSubject?: CandidatePublicationSubject
+  /** Bootstrap-owned session factory. Omission is admitted only for local fixtures. */
+  readonly publicationTransport?: CandidatePublicationTransport
   readonly runGit?: RepositoryGit
+}
+
+export type CandidatePublicationSubject =
+  | { readonly kind: 'user'; readonly userId: string }
+  | { readonly kind: 'system' }
+
+export interface CandidatePublicationSession {
+  readonly endpointUrl: string
+  readonly receipt: RepositoryPublicationReceipt
+  runNetwork(
+    runGit: RepositoryGit,
+    repoPath: string,
+    args: readonly string[],
+    options?: Parameters<RepositoryGit>[2],
+  ): ReturnType<RepositoryGit>
+  close(): void
+}
+
+export interface CandidatePublicationTransport {
+  open(input: {
+    readonly subject: CandidatePublicationSubject
+    readonly remoteUrl: string
+  }): Promise<
+    | { readonly ok: true; readonly session: CandidatePublicationSession }
+    | { readonly ok: false; readonly code: string; readonly detail: string }
+  >
 }
 
 export type PushCandidateResult =
@@ -170,99 +204,199 @@ export type PushCandidateResult =
         readonly newSha: string
         /** 已发布（本次或此前同身份 push）——幂等重放为 true。 */
         readonly reused: boolean
+        readonly publication: RepositoryPublicationReceipt
       }
     }
   | {
       readonly ok: false
-      readonly code: 'remote-head-changed' | 'push-failed'
+      readonly code:
+        | 'remote-head-changed'
+        | 'push-failed'
+        | 'publication-transport-unavailable'
+        | 'repository-push-authentication-failed'
+        | 'repository-push-authorization-failed'
       readonly detail: string
     }
+
+type RemoteHeadResult =
+  | { readonly ok: true; readonly sha: string | null }
+  | { readonly ok: false; readonly detail: string }
+
+function failedPublicationResult(
+  detail: string,
+  fallback: 'push-failed' | 'remote-head-changed' = 'push-failed',
+): Extract<PushCandidateResult, { readonly ok: false }> {
+  const safeDetail = redactSensitiveString(detail).trim().slice(0, 300)
+  return {
+    ok: false,
+    code: classifyRepositoryPushFailure(detail) ?? fallback,
+    detail: safeDetail,
+  }
+}
 
 async function remoteHeadOf(
   runGit: RepositoryGit,
   repoPath: string,
   remoteUrl: string,
   branch: string,
-): Promise<string | null> {
+): Promise<RemoteHeadResult> {
   const out = await runGit(repoPath, ['ls-remote', remoteUrl, `refs/heads/${branch}`])
-  if (out.exitCode !== 0) return null
+  if (out.exitCode !== 0) {
+    return {
+      ok: false,
+      detail: `${out.stderr}\n${out.stdout}`.trim().slice(0, 300),
+    }
+  }
   const line = out.stdout.split('\n').find((l) => l.trim().length > 0)
-  return line === undefined ? null : (line.split('\t')[0]?.trim() ?? null)
+  return {
+    ok: true,
+    sha: line === undefined ? null : (line.split('\t')[0]?.trim() ?? null),
+  }
+}
+
+function localFixtureSession(remoteUrl: string): CandidatePublicationSession | null {
+  const described = describeRepositoryRemote(remoteUrl)
+  const local =
+    (described.ok && described.value.transport === 'file') ||
+    isAbsolute(remoteUrl) ||
+    remoteUrl.startsWith('./') ||
+    remoteUrl.startsWith('../') ||
+    /^[A-Za-z]:[\\/]/.test(remoteUrl)
+  if (!local) return null
+  return {
+    endpointUrl: remoteUrl,
+    receipt: {
+      credentialSource: 'legacy',
+      credentialRevision: null,
+      endpointSource: 'local-fixture',
+      endpointBindingDigest: null,
+    },
+    runNetwork(runGit, repoPath, args, options) {
+      return runGit(repoPath, [...args], options)
+    },
+    close() {},
+  }
 }
 
 export async function pushCandidate(input: PushCandidateInput): Promise<PushCandidateResult> {
   const runGit = input.runGit ?? defaultRunGit
   const remoteRef = `refs/heads/${input.branch}`
-  const actual = await remoteHeadOf(runGit, input.baselineRepoPath, input.remoteUrl, input.branch)
-
-  if (actual !== null) {
-    // 幂等：远端已是同身份 candidate commit ⇒ 视为已发布。
-    const fetched = await runGit(input.baselineRepoPath, [
-      'fetch',
-      '--quiet',
-      input.remoteUrl,
-      actual,
-    ])
-    const identity =
-      fetched.exitCode === 0
-        ? await commitTreeIdentityOf(runGit, input.baselineRepoPath, actual)
-        : null
-    if (
-      identity !== null &&
-      identity.tree === input.expectedTreeOid &&
-      identity.parent === input.baselineSha
-    ) {
+  let session: CandidatePublicationSession
+  if (input.publicationTransport !== undefined && input.publicationSubject !== undefined) {
+    const opened = await input.publicationTransport.open({
+      subject: input.publicationSubject,
+      remoteUrl: input.remoteUrl,
+    })
+    if (!opened.ok) {
       return {
-        ok: true,
-        receipt: { remoteRef, oldSha: input.expectedRemoteSha, newSha: actual, reused: true },
+        ok: false,
+        code: 'publication-transport-unavailable',
+        detail: opened.code,
       }
     }
-  }
-  if (actual !== input.expectedRemoteSha) {
-    return {
-      ok: false,
-      code: 'remote-head-changed',
-      detail: `remote ${remoteRef} is ${actual ?? 'absent'}, expected ${input.expectedRemoteSha ?? 'absent'}`,
+    session = opened.session
+  } else {
+    const local = localFixtureSession(input.remoteUrl)
+    if (local === null) {
+      return {
+        ok: false,
+        code: 'publication-transport-unavailable',
+        detail: 'a managed publication transport and persisted subject are required',
+      }
     }
+    session = local
   }
+  const networkRunGit: RepositoryGit = (repoPath, args, options) =>
+    session.runNetwork(runGit, repoPath, args, options)
 
-  // 普通 push：git 缺省拒 non-fast-forward——对拍窗口后的并发推进也会在这里
-  // 被拒并归为 remote-head-changed。本文件没有任何强推形态。
-  const pushed = await runGit(input.baselineRepoPath, [
-    'push',
-    '--quiet',
-    input.remoteUrl,
-    `${input.commitSha}:${remoteRef}`,
-  ])
-  if (pushed.exitCode !== 0) {
-    const text = `${pushed.stderr}\n${pushed.stdout}`
-    const raced = /fast-forward|fetch first|stale info|rejected/i.test(text)
-    return {
-      ok: false,
-      code: raced ? 'remote-head-changed' : 'push-failed',
-      detail: text.trim().slice(0, 300),
+  try {
+    const actualResult = await remoteHeadOf(
+      networkRunGit,
+      input.baselineRepoPath,
+      session.endpointUrl,
+      input.branch,
+    )
+    if (!actualResult.ok) {
+      return failedPublicationResult(actualResult.detail)
     }
-  }
-  const confirmed = await remoteHeadOf(
-    runGit,
-    input.baselineRepoPath,
-    input.remoteUrl,
-    input.branch,
-  )
-  if (confirmed !== input.commitSha) {
-    return {
-      ok: false,
-      code: 'push-failed',
-      detail: `post-push verification saw ${confirmed ?? 'absent'}`,
+    const actual = actualResult.sha
+
+    if (actual !== null) {
+      // 幂等：远端已是同身份 candidate commit ⇒ 视为已发布。
+      const fetched = await networkRunGit(input.baselineRepoPath, [
+        'fetch',
+        '--quiet',
+        session.endpointUrl,
+        actual,
+      ])
+      if (fetched.exitCode !== 0) {
+        return failedPublicationResult(`${fetched.stderr}\n${fetched.stdout}`)
+      }
+      const identity = await commitTreeIdentityOf(runGit, input.baselineRepoPath, actual)
+      if (
+        identity !== null &&
+        identity.tree === input.expectedTreeOid &&
+        identity.parent === input.baselineSha
+      ) {
+        return {
+          ok: true,
+          receipt: {
+            remoteRef,
+            oldSha: input.expectedRemoteSha,
+            newSha: actual,
+            reused: true,
+            publication: session.receipt,
+          },
+        }
+      }
     }
-  }
-  return {
-    ok: true,
-    receipt: {
-      remoteRef,
-      oldSha: input.expectedRemoteSha,
-      newSha: input.commitSha,
-      reused: false,
-    },
+    if (actual !== input.expectedRemoteSha) {
+      return {
+        ok: false,
+        code: 'remote-head-changed',
+        detail: `remote ${remoteRef} is ${actual ?? 'absent'}, expected ${input.expectedRemoteSha ?? 'absent'}`,
+      }
+    }
+
+    // 普通 push：git 缺省拒 non-fast-forward——对拍窗口后的并发推进也会在这里
+    // 被拒并归为 remote-head-changed。本文件没有任何强推形态。
+    const pushed = await networkRunGit(input.baselineRepoPath, [
+      'push',
+      '--quiet',
+      session.endpointUrl,
+      `${input.commitSha}:${remoteRef}`,
+    ])
+    if (pushed.exitCode !== 0) {
+      const text = `${pushed.stderr}\n${pushed.stdout}`
+      const raced =
+        /non-fast-forward|fetch first|stale info|tip of your current branch is behind|updates were rejected because/i.test(
+          text,
+        )
+      return failedPublicationResult(text, raced ? 'remote-head-changed' : 'push-failed')
+    }
+    const confirmedResult = await remoteHeadOf(
+      networkRunGit,
+      input.baselineRepoPath,
+      session.endpointUrl,
+      input.branch,
+    )
+    if (!confirmedResult.ok || confirmedResult.sha !== input.commitSha) {
+      const detail = confirmedResult.ok
+        ? `post-push verification saw ${confirmedResult.sha ?? 'absent'}`
+        : confirmedResult.detail
+      return failedPublicationResult(detail)
+    }
+    return {
+      ok: true,
+      receipt: {
+        remoteRef,
+        oldSha: input.expectedRemoteSha,
+        newSha: input.commitSha,
+        reused: false,
+        publication: session.receipt,
+      },
+    }
+  } finally {
+    session.close()
   }
 }

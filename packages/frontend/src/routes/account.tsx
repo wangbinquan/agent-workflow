@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AccountOverviewPanel } from '@/components/account/AccountOverviewPanel'
 import { AccountSecurityPanel } from '@/components/account/AccountSecurityPanel'
 import { AccountTokensPanel } from '@/components/account/AccountTokensPanel'
+import { AccountCodePushCredentialsPanel } from '@/components/account/AccountCodePushCredentialsPanel'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
@@ -50,6 +51,11 @@ function AccountPage() {
           key: 'tokens',
           label: t('account.sections.tokens'),
           description: t('account.sectionDescriptions.tokens'),
+        },
+        {
+          key: 'codePush',
+          label: t('account.sections.codePush'),
+          description: t('account.sectionDescriptions.codePush'),
         },
       ],
     },
@@ -114,5 +120,7 @@ function AccountPanel({ section, me }: { section: AccountSection; me: MeResponse
       return <AccountSecurityPanel me={me} />
     case 'tokens':
       return <AccountTokensPanel me={me} />
+    case 'codePush':
+      return <AccountCodePushCredentialsPanel me={me} />
   }
 }

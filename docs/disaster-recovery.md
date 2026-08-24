@@ -264,15 +264,16 @@ curl -X DELETE -H "Authorization: Bearer <admin token>" http://127.0.0.1:8720/ap
 
 ## 4. 异机恢复与凭据
 
-备份**不含 `secret.key`**（有意为之——备份文件外泄不应连带凭据泄漏）。仓库凭据
-（`cached_repos` 里的 `url_enc`）是用本机 `secret.key` 加密封存的，因此把备份恢复到
-**另一台机器**后这些凭据**解不开**：
+备份**不含 `secret.key`**（有意为之——备份文件外泄不应连带凭据泄漏）。仓库 URL 凭据
+（`cached_repos.url_enc`）、管理员代码平台 connection token 与每个用户的个人 Git push token
+都用本机 `secret.key` 加密封存，因此把备份恢复到**另一台机器**后这些凭据**解不开**：
 
 - `agent-workflow doctor` 的 `repo credentials` 项会**响亮报错**（`secret.key` 缺失，或
   N 条凭据解密失败），不会让你在克隆神秘失败时抓瞎；
 - **处置二选一**：
   1. 把旧机的 `~/.agent-workflow/secret.key` 一并迁移到新机同路径（权限保持 0600），或
-  2. 在新机上对相关仓库重新发起接入、重新录入凭据。
+  2. 在新机上对相关仓库重新发起接入，并由管理员重录代码平台公共 token、各用户在
+     “我的账号 → 代码提交与推送”重录个人 token。个人密文损坏不会静默回退公共身份。
 
 worktree 重建同样默认**同机**（依赖 `repos/` 镜像与既有快照）；异机恢复后活跃任务的
 工作树无法重建，只能靠重新克隆 + 手工处理。

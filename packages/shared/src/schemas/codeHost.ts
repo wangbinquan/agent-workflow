@@ -6,6 +6,12 @@
 
 import { z } from 'zod'
 import { CodeHostProviderSchema } from './webhook'
+import {
+  CodeHostConnectionMutationConfirmationSchema,
+  RepositoryConnectionGenerationSchema,
+  RepositoryEndpointBindingDigestSchema,
+  RepositoryTransportMappingV1Schema,
+} from './repositoryTransport'
 
 /** 「测试连接」的四类可区分结果（design D7）。 */
 export const CODE_HOST_TEST_CODES = [
@@ -40,6 +46,11 @@ export const CodeHostConnectionWireSchema = z.object({
   baseUrl: z.string(),
   /** GitLab-only clone URL prefixes that belong to the configured API instance. */
   repositoryUrlPrefixes: z.array(z.string().min(1).max(2048)).max(32),
+  /** Typed SSH authority/path -> HTTP(S) mappings used only for managed Git publication. */
+  transportMappings: z.array(RepositoryTransportMappingV1Schema).max(32),
+  connectionGeneration: RepositoryConnectionGenerationSchema.nullable(),
+  endpointBindingDigest: RepositoryEndpointBindingDigestSchema.nullable(),
+  personalPushCredentialCount: z.number().int().nonnegative(),
   /** 是否拒绝无法通过证书链/主机身份校验的 HTTPS 对端；仅 GitLab 可关闭。 */
   rejectUnauthorized: z.boolean(),
   /** token 尾 4 位；读路径唯一可见的部分。密封值损坏时为空串。 */
@@ -62,11 +73,20 @@ export const UpsertCodeHostConnectionSchema = z
     token: z.string().min(1).max(4096).optional(),
     /** GitLab-only; omission preserves the stored collection. */
     repositoryUrlPrefixes: z.array(z.string().min(1).max(2048)).max(32).optional(),
+    /** Both providers; omission preserves the stored mapping collection. */
+    transportMappings: z.array(RepositoryTransportMappingV1Schema).max(32).optional(),
     /** 省略 = 首次配置为 true，已配置时保留原值；false 只允许 GitLab。 */
     rejectUnauthorized: z.boolean().optional(),
+    expectedConnectionGeneration:
+      CodeHostConnectionMutationConfirmationSchema.shape.expectedConnectionGeneration,
+    confirmCredentialRevocationDigest:
+      CodeHostConnectionMutationConfirmationSchema.shape.confirmCredentialRevocationDigest,
   })
   .strict()
 export type UpsertCodeHostConnection = z.infer<typeof UpsertCodeHostConnectionSchema>
+
+export const DeleteCodeHostConnectionSchema = CodeHostConnectionMutationConfirmationSchema
+export type DeleteCodeHostConnection = z.infer<typeof DeleteCodeHostConnectionSchema>
 
 /**
  * 测试连接请求体。两个字段都可省：省略即用已保存的值，所以「先保存再测」与

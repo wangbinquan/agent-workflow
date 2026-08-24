@@ -5,7 +5,9 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 也不进模型上下文。
 
 配套阅读：[webhook-triggers.md](./webhook-triggers.md)（入站事件与
-`{{trigger.webhook.*}}` 变量来源）。
+`{{trigger.webhook.*}}` 变量来源）以及
+[代码提交身份与推送凭据](./code-host-push-credentials.md)（个人优先 Git publication 与
+SSH→HTTP(S) 解析）。
 
 ## 1. 配置凭据（管理员）
 
@@ -19,6 +21,8 @@ commit status、触发流水线、拉 job 日志……**令牌只留在 daemon �
 - 只配一家也能用，另一家的动作在节点里会提示未配置。
 - **建议用专用 bot 账号 + 最小权限**：GitLab 勾 `api`（或更细的 project access token）；
   GitHub 用 fine-grained PAT，按仓库限定 Pull requests / Commit statuses 权限。
+- 这份连接 token 同时是 Git publication 在用户没有个人配置时的公共 fallback；若启用自动推送，
+  还必须给目标仓库写权限。个人 push token 不接管本页描述的 REST 节点动作。
 - 保存后点**测试连接**。失败原因是可区分的：令牌无效 / 地址不是 API 根 / 网络不通 /
   响应不是身份信息（通常是被反代拦到了登录页）。
 - GitLab 默认开启“验证 HTTPS 证书”。如果内网 GitLab 的证书链暂时不完整，可以显式关闭；

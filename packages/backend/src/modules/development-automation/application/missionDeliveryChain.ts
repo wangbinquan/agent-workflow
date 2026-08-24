@@ -16,6 +16,7 @@
 // 被谓词读到，属 PR-6 注记（plan.md 交付注记）。
 
 import { ulid } from 'ulid'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 
 import type { AutomationPolicyContent } from '../domain/automationPolicy'
 import { canonicalDigest } from '../domain/canonicalJson'
@@ -52,6 +53,14 @@ export interface DeliveryChainDeps {
 }
 
 type Cells = Readonly<Record<string, FactCell<FactCellValue>>>
+
+export function missionPublicationSubject(
+  mission: Pick<MissionRow, 'createdBy'>,
+): { readonly kind: 'user'; readonly userId: string } | { readonly kind: 'system' } {
+  return mission.createdBy === null || mission.createdBy === SYSTEM_USER_ID
+    ? { kind: 'system' }
+    : { kind: 'user', userId: mission.createdBy }
+}
 
 function knownString(cells: Cells, id: string): string | null {
   const cell = cells[id]
@@ -543,6 +552,7 @@ export async function handleCommitAndPublish(
       expectedRemoteSha,
       expectedTreeOid: ctx.treeOid,
       baselineSha: ctx.baselineSha,
+      publicationSubject: missionPublicationSubject(mission),
     })
     const now = deps.now()
     if (!out.ok) {

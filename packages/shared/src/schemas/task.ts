@@ -6,6 +6,7 @@ import { WebhookTaskSourceLinkSchema } from '../webhookTaskSourceLink'
 import { InjectedMemorySnapshotSchema } from './memory'
 import { PlannedDirectoryNodeSchema } from './repoGroup'
 import { OwnerIdentitySchema } from './user'
+import { RepositoryPublicationReceiptSchema } from './repositoryTransport'
 
 export const TASK_STATUS = [
   'pending',
@@ -1213,6 +1214,8 @@ export const SubrepoPushResultSchema = z.object({
   pushed: z.boolean(),
   /** Redacted push/commit error, or null. */
   error: z.string().nullable(),
+  /** RFC-321 per-remote credential/endpoint provenance. */
+  publicationReceipt: RepositoryPublicationReceiptSchema.optional(),
 })
 export type SubrepoPushResult = z.infer<typeof SubrepoPushResultSchema>
 
@@ -1248,6 +1251,8 @@ export const CommitPushMetaSchema = z.object({
   pushOutcome: CommitPushOutcomeSchema,
   /** Redacted push stderr summary, or null. */
   pushError: z.string().nullable(),
+  /** RFC-321 credential/endpoint provenance; optional for historical rows. */
+  publicationReceipt: RepositoryPublicationReceiptSchema.optional(),
   /** RFC-308 strict platform exclusion receipt. Optional for historical rows. */
   exclusions: TaskCommitExclusionSummarySchema.optional(),
   /**

@@ -2,10 +2,9 @@
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
-import { setPushCredentialResolver } from '@/services/gitCredential'
 import { tokenAuditRetentionDays } from '@/services/mcpSurface'
 import { pruneTokenAudit } from '@/services/tokenAudit'
-import { ensureCredentialsSealed, unsealRepoUrl } from '@/services/repoCredentials'
+import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
@@ -23,6 +22,8 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  cleanupOrphanedGitCredentialLeases,
+  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
@@ -41,7 +42,7 @@ import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
-import { cachedRepos, nodeRuns, tasks } from '@/db/schema'
+import { nodeRuns } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
@@ -506,6 +507,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const secretBox = createSecretBox(Paths.secretKeyFile)
   log.info('secret box ready', { keyFile: Paths.secretKeyFile })
   ensureCredentialsSealed(db, secretBox)
+  const repositoryPublicationTransport = createRepositoryPublicationTransport({
+    db,
+    secretBox,
+    appHome: Paths.root,
+  })
+  const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
+  if (removedCredentialLeases > 0) {
+    log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
+  }
 
   // 5a. RFC-223 PR-5: the ONE fail-closed skill identity barrier. It must be
   // the first skill DB/FS behavior after credential convergence: recover every
@@ -711,22 +721,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 6. Token (generate-on-first-run, chmod 600).
   const token = ensureTokenFile(Paths.tokenFile)
   log.info('token ready', { tokenFile: Paths.tokenFile })
-
-  // RFC-205 G1 — push credential resolver: the mirror origin is
-  // credential-free now, so the framework's own auto-push leases the secret
-  // per push (askpass file, never argv/env/on-disk-config). Agents can't reach
-  // it: no resolver in their process, no credential in the worktree's origin.
-  setPushCredentialResolver(async (taskId) => {
-    const rows = await db
-      .select({ urlEnc: cachedRepos.urlEnc })
-      .from(cachedRepos)
-      .innerJoin(tasks, eq(tasks.cachedRepoId, cachedRepos.id))
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    const row = rows[0]
-    if (row === undefined) return null
-    return unsealRepoUrl(row, secretBox)
-  })
 
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes resolve the same DB-keyed daemon singleton.
@@ -1055,7 +1049,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(db),
     changeCandidate: bindChangeCandidateParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant(),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      publicationTransport: repositoryPublicationTransport,
+    }),
     conflictMerge: bindConflictMergeParticipant(),
     ...buildDevelopmentDeliveryDeps(db, secretBox),
     ...buildDevelopmentPipelineDeps(db),
@@ -1185,7 +1181,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     reactionRounds: createEmployeeReactionRoundQueries(db),
     inputArtifacts: employeeInputArtifacts,
-    sourceControl: bindEmployeeCaseWorkspaceParticipant(),
+    sourceControl: bindEmployeeCaseWorkspaceParticipant({
+      publicationTransport: repositoryPublicationTransport,
+    }),
     conflictMerge: bindConflictMergeParticipant(),
   })
   const employeeEventCenter = employeeHttpEventCenter
@@ -1244,8 +1242,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         conflictMerge: bindConflictMergeParticipant(),
         sourceControl: {
           ...bindChangeCandidateParticipant(),
-          ...bindCandidateDeliveryParticipant(),
-          ...bindEmployeeCaseWorkspaceParticipant(),
+          ...bindCandidateDeliveryParticipant({
+            publicationTransport: repositoryPublicationTransport,
+          }),
+          ...bindEmployeeCaseWorkspaceParticipant({
+            publicationTransport: repositoryPublicationTransport,
+          }),
         },
       }),
     },

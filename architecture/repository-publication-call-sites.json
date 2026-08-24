@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "recordedAtSha": "f11a46d28aaa484dbcf3482c22c6cd4b144e8206",
+  "owner": "source-control",
+  "callSites": [
+    {
+      "id": "task-auto-push",
+      "file": "packages/backend/src/services/commitPushRunner.ts",
+      "operations": ["push"],
+      "subject": "tasks.owner_user_id",
+      "target": "repository-publication-participant"
+    },
+    {
+      "id": "task-non-fast-forward-repair",
+      "file": "packages/backend/src/services/commitPushRunner.ts",
+      "operations": ["fetch", "push", "post-verify"],
+      "subject": "tasks.owner_user_id",
+      "target": "repository-publication-participant"
+    },
+    {
+      "id": "task-submodule-publication",
+      "file": "packages/backend/src/services/commitPushRunner.ts",
+      "operations": ["push"],
+      "subject": "tasks.owner_user_id",
+      "target": "per-remote-repository-publication-participant"
+    },
+    {
+      "id": "repository-commit-publication",
+      "file": "packages/backend/src/modules/source-control/application/repositoryCommit.ts",
+      "operations": ["push"],
+      "subject": "bound-by-caller",
+      "target": "repository-publication-session"
+    },
+    {
+      "id": "development-candidate-delivery",
+      "file": "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
+      "operations": ["ls-remote", "fetch", "push", "post-verify"],
+      "subject": "development_missions.created_by",
+      "target": "repository-publication-participant"
+    },
+    {
+      "id": "employee-case-conflict-refresh",
+      "file": "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
+      "operations": ["fetch", "post-verify"],
+      "subject": "employee_cases.owner_user_id",
+      "target": "repository-publication-session"
+    }
+  ],
+  "gitCommandFiles": {
+    "push": [
+      "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
+      "packages/backend/src/modules/source-control/application/repositoryCommit.ts"
+    ],
+    "fetch": [
+      "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
+      "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
+      "packages/backend/src/services/commitPushRunner.ts",
+      "packages/backend/src/services/gitRepoCache.ts",
+      "packages/backend/src/services/gitSubmodule.ts",
+      "packages/backend/src/util/git.ts"
+    ],
+    "ls-remote": [
+      "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
+      "packages/backend/src/services/commitPushRunner.ts",
+      "packages/backend/src/util/git.ts"
+    ]
+  },
+  "excludedReadPaths": [
+    {
+      "id": "cached-repository-clone-refresh",
+      "file": "packages/backend/src/services/gitRepoCache.ts",
+      "reason": "repository preparation and background refresh are outside RFC-321 publication transactions"
+    },
+    {
+      "id": "submodule-object-pool-copy",
+      "file": "packages/backend/src/services/gitSubmodule.ts",
+      "reason": "fetches from an already-local git directory into a local object pool"
+    },
+    {
+      "id": "working-branch-preparation",
+      "file": "packages/backend/src/util/git.ts",
+      "reason": "task preparation reads are outside a platform-owned publication attempt"
+    }
+  ]
+}

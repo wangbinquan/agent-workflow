@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（In Progress / Phase 2）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
+> 🚧 **实现完成、等待发布终态（Implementation Complete / Phase 2）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
 > —— 用户确认 RFC-320 已推送并要求两个会话各管各的阶段；RFC-321 已进入实现收口，不接手
 > RFC-320 的后端问题。migration、个人凭据 API/账号页、管理员 mapping、统一 publication transport、
 > task/candidate/conflict/submodule/employee workspace 接线与架构棘轮均已落候选。
@@ -18,8 +18,9 @@
 > RFC-320 是 Phase 1，profile/task identity/author-committer 的实现已发布；RFC-321 是 Phase 2，只消费
 > 持久化工作归属并治理 push authentication/transport。按用户追加要求，Git 提交身份卡片仅在展示层移到
 > “代码提交与推送”页签，并与推送凭据卡片统一宽度和样式；两个后端合同仍保持正交。
-> 当前共享树协调要求不得启动/停止服务或运行会自启服务的 E2E；本轮三包 typecheck 与不启服务的定向
-> shared/backend/frontend 测试已绿，新交互的 live E2E/visual 与完整 gate 留待允许的收口窗口。
+> 当前源码已重编为隔离 E2E 二进制；账号/PAT 拒绝/真实 task smart-HTTP push 在 Chromium 与 WebKit
+> 各 3/3 通过，四张 Darwin 视觉基线重录并人工验图通过。剩余只执行唯一 full gate、共享 main 精确
+> 提交/推送与 exact-SHA hosted CI/visual 终态；不启动、停止或改动用户现有的开发服务。
 
 > 🚧 **进行中 RFC（In Progress）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
 > —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**

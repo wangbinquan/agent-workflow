@@ -53,6 +53,7 @@ import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
+  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
@@ -151,12 +152,19 @@ export function mountDevelopmentMissionRoutes(
   const uploadSessions = createSqliteUploadSessionStore(deps.db)
   const snapshots = createSqliteFactSnapshotReader(deps.db)
   const missionStore = createSqliteMissionStore(deps.db)
+  const repositoryPublicationTransport = createRepositoryPublicationTransport({
+    db: deps.db,
+    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    appHome: Paths.root,
+  })
   const automation = composeDevelopmentAutomation({
     db: deps.db,
     appHome: Paths.root,
     requirementSource: composeRequirementSourceRunner(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant(),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      publicationTransport: repositoryPublicationTransport,
+    }),
     conflictMerge: bindConflictMergeParticipant(),
     ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
     ...buildDevelopmentPipelineDeps(deps.db),

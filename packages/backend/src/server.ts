@@ -61,6 +61,7 @@ import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
+import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
 import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
 import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
@@ -129,6 +130,7 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 
@@ -464,13 +466,20 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     join(appHome, 'artifacts', 'employee-inputs'),
   )
   const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
+  const repositoryPublicationTransport = createRepositoryPublicationTransport({
+    db: deps.db,
+    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    appHome,
+  })
   const approvalGateway = composeApprovalGatewayRunner(deps.db)
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     db: deps.db,
     appHome,
     reactionRounds: createEmployeeReactionRoundQueries(deps.db),
     inputArtifacts,
-    sourceControl: bindEmployeeCaseWorkspaceParticipant(),
+    sourceControl: bindEmployeeCaseWorkspaceParticipant({
+      publicationTransport: repositoryPublicationTransport,
+    }),
     conflictMerge: bindConflictMergeParticipant(),
   })
   const executionContracts = composeExecutionContract({
@@ -522,8 +531,12 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
         conflictMerge: bindConflictMergeParticipant(),
         sourceControl: {
           ...bindChangeCandidateParticipant(),
-          ...bindCandidateDeliveryParticipant(),
-          ...bindEmployeeCaseWorkspaceParticipant(),
+          ...bindCandidateDeliveryParticipant({
+            publicationTransport: repositoryPublicationTransport,
+          }),
+          ...bindEmployeeCaseWorkspaceParticipant({
+            publicationTransport: repositoryPublicationTransport,
+          }),
         },
       }),
     },
@@ -584,6 +597,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
   mountCodeHostRoutes(app, deps) // RFC-269
+  mountAccountRepositoryTransportCredentialRoutes(app, deps, identityAccess.resolveAuthority) // RFC-321
   mountCodeRoutes(app, deps) // RFC-304 T31b
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
   mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center

@@ -55,7 +55,7 @@ async function main(): Promise<void> {
     case '__git-credential': {
       // RFC-254 T20 (D11): git credential-helper protocol. `get`/`store`/`erase`
       // in argv[3]; request fields on stdin. Answers a `get` for the lease host
-      // only (env AW_GIT_CRED_HOST / AW_GIT_CRED_FILE). Silent success otherwise —
+      // only (exact protocol + authority + path from AW_GIT_CRED_FILE). Silent success otherwise —
       // never prompts, never logs (a stray log line would land in git's stderr).
       const operation = Bun.argv[3] ?? ''
       const stdin = await Bun.stdin.text().catch(() => '')
