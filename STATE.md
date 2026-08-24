@@ -2,22 +2,36 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（实现已落主干，待 CI 终态）：[RFC-322 维护节奏错峰与停顿归因](design/RFC-322-maintenance-cadence-stagger/proposal.md)**
-> —— 起于生产「每隔一段时间全站冻结约 30 秒、随后自行恢复」。已实测证伪「慢查询」这个前提：
-> `[db-slow]` 报 32648ms 的那条 `tasks` 查询，同库走索引仅 **10ms**（表 346 行 / 3MB），
-> 外部进程 1Hz 连测 14 分钟**零次超 300ms**——报出来的是**进程停顿**，被慢查询日志栽赃给了 SQL。
-> 根因是 daemon 单条 bun:sqlite **同步**连接（`db/client.ts:50-53` 自述：一条慢语句冻结全部 HTTP/WS）
+> 📝 **进行中 RFC（Draft / 待批准）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
+> —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在
+> 最前方显示一张**非 WorkItem、不可调度**的配置卡。岗位模板提供默认 Adapter，具体数字员工可覆盖，员工发布
+> revision 冻结 exact Adapter revision，流水线采集与外部审批运行时消费同一冻结绑定。默认 Dialog 只显示
+> 继承/覆盖、连接选择与状态；资源创建/管理进入权限受控的二级 Dialog。旧 `/code/executors` 与
+> `/code/config/adapters[/<id>]` UI 退役并只保留重定向，Integration Adapter API/ACL/revision 保留。
+> **尚未取得实现许可**：等待用户批准 proposal C1～C12，并逐项接受能力影响 I1～I5；批准前不改生产代码。
+
+> ✅ **已完成 RFC（Done，2026-08-25；含本笔的 superseding commit `817b54a7b` 上 CI 31/31 全绿）：[RFC-322 维护节奏错峰与停顿归因](design/RFC-322-maintenance-cadence-stagger/proposal.md)**
+> —— 起于生产「每隔一段时间全站冻结约 30 秒、随后自行恢复」。**先证伪了「慢查询」这个前提**：
+> `[db-slow]` 报 32648ms 的那条 `tasks` 查询，同库走索引仅 **10ms**（表 346 行 / 3MB），外部
+> 进程 1Hz 连测 14 分钟**零次超 300ms**——报出来的是**进程停顿**，被慢查询日志栽赃给了 SQL。
+> 根因是 daemon 单条 bun:sqlite **同步**连接（`db/client.ts` 自述：一条慢语句冻结全部 HTTP/WS）
 > 叠加 **14 个 hourly 维护定时器在 boot 同一秒内装配、零相位零抖动**（`cli/start.ts:885–1376`），
 > 每小时同刻首尾相接执行；最重一拍是 `gc.ts:815-826` 单拍串跑 6 段遍历文件系统的 GC。
-> 本 RFC **只动调度与观测层**（零 migration、零 wire 变化、不改任何维护任务自身算法）：
-> ① `daemonCadence.ts` 增 `MAINTENANCE_PHASE` 确定性相位表；② 新增 `services/maintenanceTicker.ts`
-> 收编 14 份重复调度样板并计时告警；③ `instrumentSlowStatements` 加 CPU 时间字段，使
-> 「查询真慢」与「进程被冻住」当场可判别。**接手须知**：任务分解与验收清单见该目录 `plan.md`；
-> §4 列了 4 项明确不做、各自另立（GC 链内部拆分 / 同步 `ps` fork / `ensureCredentialsSealed`
-> 的 `maintenance_state` 闸门漏接 / WAL checkpoint 与备份 VACUUM 回落主线程）。
-> **实现状态**：批 A/B/C 全落——相位表 + `services/maintenanceTicker.ts` 原语 + `[db-slow]`
-> cpu 尾参判别；9 个具名 ticker 与 `cli/start.ts` 5 处内联定时器全部接入；15 条用例绿，
-> 错峰实证与登记棘轮各做了变异检验。用户裁决记录见该目录 `plan.md` §5。
+> 终态（零 migration、零 wire 变化、不改任何维护任务自身算法）：①`daemonCadence.ts` 增
+> `MAINTENANCE_PHASE` 确定性相位表（4→56 分钟、间距 ≥3 分钟）+ `MIN_PHASE_GAP_MS` /
+> `MAINTENANCE_SLOW_TICK_MS`；②新增 `services/maintenanceTicker.ts` 收编 14 份重复的
+> 「重入守卫 + 吞错 + unref + stop」样板，加相位、每拍计时与超阈点名告警，相位夹到一个周期
+> 以内（否则调用方传短 `intervalMs` 时 ticker 会被相位饿死）；③`instrumentSlowStatements`
+> 增 cpu **尾参**（既有 2 参回调不受影响），`cpuMs ≈ ms` 是查询真慢、`cpuMs ≪ ms` 是进程被
+> 冻住；④9 个具名 ticker + `cli/start.ts` 5 处内联定时器全部接入，顺带收编 3 处私有周期常量、
+> 补上 `intentGcTimer` / `tokenAuditGcTimer` 此前从未进关停路径的遗漏。
+> 主实现 `6d261ba07`，CI 收口 `2d1ae54f3`（修 RFC-261 文本锁 + RFC-317 T54 装配棘轮）与
+> `2e924df3c`（修本 RFC 自身在 CI 上信噪比不足的 CPU 判别用例）。验收清单逐条证据、三次
+> 变异检验与两次实现期自查修正见该目录 `plan.md` §3/§5。
+> **§4 明确不做、各自另立**：`gc.ts` 6 段 GC 链内部拆分 / `util/process.ts` 同步 `ps` fork 改
+> 异步 / `ensureCredentialsSealed` 的 `maintenance_state` 闸门漏接（`db/schema.ts:6611` 声称有、
+> `services/repoCredentials.ts` 无任何引用）/ WAL checkpoint 默认 10 分钟主线程 TRUNCATE 与
+> 备份 `VACUUM INTO` 回落主线程。
 
 > 🚧 **实现完成、等待发布终态（Implementation Complete / Phase 2）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
 > —— 用户确认 RFC-320 已推送并要求两个会话各管各的阶段；RFC-321 已进入实现收口，不接手

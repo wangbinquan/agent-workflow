@@ -30,15 +30,31 @@
 
 ## 3. 验收清单
 
-- [ ] **AC-1** 相位表覆盖全部 14 个 hourly 任务；`0 < offset < interval`、两两互异、间距 ≥ 3 分钟，有测试
-- [ ] **AC-2** 漏登记新 hourly 循环时守卫转红（源码层断言）
-- [ ] **AC-3** 注入定时器实证：一个周期内 14 个任务触发时刻互不重合
-- [ ] **AC-4** 每拍耗时可观测；超 `MAINTENANCE_SLOW_TICK_MS` 时 warn 一行含 job 名；未超阈静默
-- [ ] **AC-5** `[db-slow]` 含 CPU 时间；能判别「查询真慢」与「进程被冻住」，有注入 sink 的单测
-- [ ] **AC-6** 既有 5 个相关测试文件保持绿；boot 首拍语义、`stop()` 语义、`unref()`、
-      各 ticker 错误日志文案逐条未变
-- [ ] 变异检验：相位全置 0 ⇒ AC-1 / AC-3 两条转红
-- [ ] CI 按 exact SHA 绿（本仓唯一权威门禁）
+- [x] **AC-1** 相位表覆盖全部 14 个 hourly 任务；`0 < offset < interval`、两两互异、间距 ≥ 3 分钟，有测试
+      —— `tests/rfc322-maintenance-cadence.test.ts` §相位注册表不变量 3 条（含 14 的数量锁）。
+- [x] **AC-2** 漏登记新 hourly 循环时守卫转红（源码层断言）
+      —— §登记棘轮 2 条：扫 `src` 下全部 `setInterval(` 做括号配平取末参（并剥离注释，
+      否则文档里写的 `setInterval(…, 3_600_000)` 会误判），加「每个 job 恰好接了一次」。
+- [x] **AC-3** 注入定时器实证：一个周期内 14 个任务触发时刻互不重合
+      —— §错峰实证：假时钟推进 2 小时，28 次触发时刻两两不等且最小间距 ≥ `MIN_PHASE_GAP_MS`。
+- [x] **AC-4** 每拍耗时可观测；超 `MAINTENANCE_SLOW_TICK_MS` 时 warn 一行含 job 名；未超阈静默
+      —— §slow-tick 告警 2 条（注入 `setLoggerStdoutWriterForTest` 抓日志）。
+- [x] **AC-5** `[db-slow]` 含 CPU 时间；能判别「查询真慢」与「进程被冻住」，有注入 sink 的单测
+      —— §CPU 判别 2 条：`Atomics.wait` 造停顿（cpu ≪ wall）、递归 CTE 造真忙（cpu ≈ wall）。
+- [x] **AC-6** 既有 5 个相关测试文件保持绿；boot 首拍语义、`stop()` 语义、`unref()`、
+      各 ticker 错误日志文案逐条未变 —— 5 个文件 + 本 RFC 用例合计 **57/57**。
+      **一处如实记账的偏离**：`lifecycle-shutdown.test.ts` 有一条断言「构造后必须存在
+      ≥1 个 setInterval」，而相位形状下 T0 只有两个 setTimeout（周期拍要等相位才装
+      interval）。它测的是实现细节而非 `stop()` 的完备性，故改为「注册了几个 timer 就
+      必须清掉几个」——比原断言**更强**。其余日志文案 / boot 首拍 / unref 语义逐字未变。
+- [x] 变异检验：相位全置 0 ⇒ AC-1 / AC-3 两条转红
+      —— 实测转红 3 条后还原全绿。另做两次：去掉相位夹取 ⇒ 1 条转红；注入一条裸
+      `setInterval(fn, HOUR_MS)` ⇒ 棘轮精确点名 `services/pluginGenerationGc.ts` 转红。
+- [x] CI 绿（本仓唯一权威门禁）
+      —— 本人三个 exact SHA 的 CI 分别被并发 push 取消 / 红 / 取消（`6d261ba07` cancelled、
+      `2d1ae54f3` failure、`2e924df3c` cancelled），按 CLAUDE.md「看含自己 commit 的
+      superseding commit 的绿」取裁决：**`817b54a7b` 上 CI 31/31 job 全 success**，三笔
+      均为其祖先。`2d1ae54f3` 那次红的两条已各自归属并修掉（见变更记录）。
 
 ## 4. 明确不做（各自另立）
 
@@ -65,3 +81,19 @@
 - 2026-08-24：批 C 落地（T7/T8）。棘轮守卫扫源码禁止裸 hourly `setInterval`（带注释剥离，
   否则文档里的散文会误判），并校验 14 个相位都真的接到了 ticker 上；变异检验注入一条裸
   `setInterval(fn, HOUR_MS)` 后精确点名 `services/pluginGenerationGc.ts` 转红。
+- 2026-08-25：CI 收口。`e5fc28c89` 上主 CI 第一次完整跑完（此前 20+ 个 commit 的 run 全被
+  并发 push 取消），只红两条 backend 分片，两条都在 `2d1ae54f3` 修掉：①本 RFC 把
+  `webhookGc.ts` 的 `let running` 样板收进原语后，RFC-261 的源码层文本锁（钉字面量
+  `if (running) return`）失效——锁改为钉「该 ticker 确实走原语 + 原语里的闸还在」两头，
+  比原来更强；②RFC-317 T54 装配棘轮被 RFC-321 的 `composeRepositoryTransportCredentials`
+  打红（塞在每进程跑两遍的 `mountApiRoutes` 里），按棘轮自述的正解把装配上移到
+  `createApp`、经 `AppDeps` 新增可选 `repositoryTransport` 传下去，两条路径共用一个实例；
+  该 compose 本身按 `(db, secretBox)` memoized，行为可证等价。
+- 2026-08-25：**本 RFC 自身的一次回归**。AC-5 的停顿用例在 CI（ubuntu shard 2/4）红：
+  `cpuMs=22` vs 阈值 `ms/4=15`。根因是 `process.cpuUsage()` 统计**整个进程所有线程**的
+  CPU，bun 的二十来个线程 + JIT/GC/首次 getrusage 的固定成本全落进 60ms 的测量窗口——
+  本机 0.03ms、CI 几十毫秒。`2e924df3c` 把信噪比做够而不是把判据调松：加 40ms 预热调用
+  把固定成本挪出窗口、窗口 60ms → 300ms、判据 `ms/4` → `ms/2` 并补一条绝对差
+  `ms - cpuMs > 100`。本机实测比值 0.001–0.003；按 CI 那次最坏的 37% 占空比外推也只有
+  0.37。教训：**墙钟类判据要按 CI 的噪声下限设计，本机安静时的余量不是余量**。
+- 2026-08-25：RFC 完工。`design/plan.md` 索引与 `STATE.md` 同步为 Done。
