@@ -1657,7 +1657,7 @@ function AddToolDialog(props: {
             />
           </Field>
         ) : null}
-        {availableRoles.length > 1 ? (
+        {props.item.toolRoleGroups.length > 1 ? (
           <Field label={zh ? '工具职责' : 'Tool responsibility'} required>
             <Select
               value={roleRef}
