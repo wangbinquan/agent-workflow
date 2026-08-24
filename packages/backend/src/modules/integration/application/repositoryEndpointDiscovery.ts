@@ -35,9 +35,7 @@ function headersFor(provider: CodeHostProvider, token: string): Record<string, s
 }
 
 export function createRepositoryEndpointDiscovery(input: {
-  readonly resolveConnection: (
-    provider: CodeHostProvider,
-  ) => RepositoryEndpointConnection | null
+  readonly resolveConnection: (provider: CodeHostProvider) => RepositoryEndpointConnection | null
   readonly fetchImpl?: RepositoryEndpointFetch
 }) {
   return {
