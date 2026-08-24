@@ -13,6 +13,11 @@
 //   `deleteCachedRepo` / `CachedRepoHasReferencesError`（gitRepoCache.ts:1593）
 //   `deleteRepoGroup` / `RepoGroupHasReferencesError`（repoGroup.ts:44,618）
 //   `clipAndRedact` / `redactGitUrl`（repoBatchImport.ts:496-506）
+//
+// fixture 里的「令牌」刻意**不带任何真实供应商前缀**（`glpat-` / `ghp_` …）：
+// 仓库的 gitleaks 扫描按前缀 + 熵判定，用真实形状的假令牌会让 Static scans 变红，
+// 而那条红与本用例要证的东西毫无关系（实撞，2026-08-24）。这些断言只需要一个
+// 足够长、足够独特的字符串，形状不重要。
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -117,7 +122,7 @@ async function cachedRepoIdFor(url: string): Promise<string> {
 test('RFC-319 REPO-13: a repo URL carrying a token never appears in cleartext on any wire response', async () => {
   // 这个 host 不可解析（RFC 2606 保留了 .invalid），所以克隆必然失败——
   // 失败正是我们要看的那条路径：git 的 stderr 里会带着完整的 URL。
-  const secret = 'ghp_rfc319SUPERSECRETtokenVALUE'
+  const secret = 'rfc319-fixture-embedded-credential-9x7Q'
   const url = `https://x-access-token:${secret}@example.invalid/org/private-repo.git`
 
   const { rows, raw } = await batchImport([url])
@@ -296,7 +301,7 @@ test('RFC-319 REPO-35: a stored code-host push token is never readable back — 
   //      暴露给任何能拿到一次会话的人。
   //   ② 三条路由都是 `tokenAccess: 'never'`。模型 / MCP 通道永远够不着它们:
   //      让 agent 能读或能改用户的推送凭据，是本仓最不该出现的能力。
-  const secret = 'glpat-rfc319SUPERSECRETpushTOKEN9x7Q'
+  const secret = 'rfc319-fixture-push-credential-9x7Q'
 
   // 个人推送凭据挂在**某一条已配置的代码平台连接**上：generation / digest 必须
   // 与那条连接当前的值逐字相等，否则服务端以 `code-host-push-credential-stale`
@@ -309,7 +314,7 @@ test('RFC-319 REPO-35: a stored code-host push token is never readable back — 
       method: 'PUT',
       body: JSON.stringify({
         baseUrl: 'https://gitlab.example.invalid/api/v4',
-        token: 'glpat-rfc319PLATFORMlevelTOKEN',
+        token: 'rfc319-fixture-platform-credential',
       }),
     }),
     'configure code host',
@@ -390,7 +395,7 @@ test('RFC-319 REPO-35: a stored code-host push token is never readable back — 
       {
         method: 'PUT',
         body: JSON.stringify({
-          token: 'glpat-rfc319REPLACEDbyTOKENchannel',
+          token: 'rfc319-fixture-token-channel-write',
           connectionGeneration: connection.connectionGeneration,
           endpointBindingDigest: connection.endpointBindingDigest,
         }),

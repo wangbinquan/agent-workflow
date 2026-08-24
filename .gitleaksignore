@@ -39,3 +39,11 @@ af5d0826921bb01e6085194f19c7ae81784ebedc:packages/backend/tests/rfc269-code-host
 66a79be2d746820786ae5260c607fb574744ead6:packages/backend/tests/rfc310-pr3-upload-security.test.ts:generic-api-key:195
 66a79be2d746820786ae5260c607fb574744ead6:packages/backend/tests/rfc310-pr3-journey.test.ts:generic-api-key:614
 bf12afdcd6c5769aba60bcc01bd6dbae99835486:.gitleaksignore:generic-api-key:8
+
+# RFC-319 B12（a8e4d77d）：代码平台推送凭据用例的假令牌最初误用了 `glpat-`
+# 前缀，命中 gitlab-pat 规则。当前文件里已全部改成不带任何供应商前缀的
+# `rfc319-fixture-…`（形状对断言无关紧要，那几条只需要一个足够长且独特的串），
+# 但历史 commit 消不掉——gitleaks detect 扫的是全部历史。此处只钉历史指纹。
+a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:299
+a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:312
+a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:393
