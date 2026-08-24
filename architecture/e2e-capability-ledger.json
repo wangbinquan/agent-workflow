@@ -665,8 +665,21 @@
       "title": "OIDC 开户策略拒绝：未受邀 / 邮箱域不允许 / 邮箱未验证",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/oidc-provisioning-refusals.spec.ts",
+          "test": "allowlist 开户：邮箱域不在白名单里，IdP 验过身份也不开户"
+        },
+        {
+          "file": "e2e/oidc-provisioning-refusals.spec.ts",
+          "test": "invite 开户：没有对应邀请的邮箱一律不开户"
+        },
+        {
+          "file": "e2e/oidc-provisioning-refusals.spec.ts",
+          "test": "allowlist 开户：邮箱域命中但 IdP 没验过邮箱，同样不开户"
+        }
+      ]
     },
     {
       "id": "IAM-12",
@@ -8238,7 +8251,6 @@
     "HUMAN-X6",
     "IAM-02",
     "IAM-07",
-    "IAM-08",
     "IAM-09",
     "IAM-10",
     "IAM-11",
