@@ -29,7 +29,6 @@ import {
 import { SQLiteRepositoryTransportCredentialRepository } from '../infrastructure/sqliteRepositoryTransportCredentialRepository'
 import type { StoredRepositoryTransportConnection } from '../ports/repositoryTransportCredentialRepository'
 import type {
-  OpenRepositoryPublicationSessionResult,
   RepositoryPublicationSession,
   RepositoryPublicationTransport,
 } from '../public/types'
