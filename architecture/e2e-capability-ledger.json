@@ -3426,8 +3426,21 @@
       "title": "评审收件箱列表：五态过滤、逐行版本历史展开、加载失败重试、空态",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-inbox-list.spec.ts",
+          "test": "逐行展开取的是自己那一行的版本史，另一行不受影响"
+        },
+        {
+          "file": "e2e/review-inbox-list.spec.ts",
+          "test": "决策过的那一条：待评审里消失、已通过里出现、已驳回里没有，全部两条都在"
+        },
+        {
+          "file": "e2e/review-inbox-list.spec.ts",
+          "test": "列表读不到时报故障并可重试，绝不画成「没有待评审」"
+        }
+      ]
     },
     {
       "id": "HUMAN-45",
@@ -8450,7 +8463,6 @@
     "HUMAN-37",
     "HUMAN-38",
     "HUMAN-40",
-    "HUMAN-41",
     "HUMAN-42",
     "HUMAN-43",
     "HUMAN-46",
