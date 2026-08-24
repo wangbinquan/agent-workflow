@@ -2,29 +2,33 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（In Progress，2026-08-24；D1–D7 与能力影响 C1–C9 已批准；T10～T64、T66～T70 全部落主干、按 exact SHA 的 hosted CI 全绿；仅剩 T65）：[RFC-317 公共内核架构边界加固](design/RFC-317-commons-boundary-hardening/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-24；按 exact SHA 的 hosted CI 与 visual 双绿）：[RFC-317 公共内核架构边界加固](design/RFC-317-commons-boundary-hardening/proposal.md)**
 > —— 起于 RFC-294 `design.md §1.2` 四条判据里**从未落地的第四条**「存在防止第二实现再长出的棘轮」。
-> 18-agent 并行审计（8 路公共内核族 × 逐族对抗复核 + 守卫机制元审计 + 完整性批判）产出 **131 条经复核发现**
-> 与 95 条无人看守的违规类别，全量证据在同目录 `findings.md`。核心事实：既有架构守卫机制**无一例外只覆盖
-> 各自诞生时的那一块**——`rfc294-architecture-preflight` 只把 `modules/**` 当边的起点，于是 legacy 层深入 module 内部的
-> **94 条边 / 28 文件**、以及模块被围栏四层反向依赖 legacy 的 **22 条边（全部出自 `application`）**全部不可见；
-> 模块形状锁只覆盖 4/11 个 context（`task-execution` 自己零锁）；账本只有 stale 检测没有增长上限（同一 PR 加违规 + 加豁免
-> 全绿）；开工时 **116 个架构守卫文件里只有 3 个自带能自证会红的负 fixture**。
+> 18-agent 并行审计产出 **131 条经复核发现** 与 95 条无人看守的违规类别（全量证据在同目录 `findings.md`）。
+> 核心事实：既有架构守卫机制**无一例外只覆盖各自诞生时的那一块**——`rfc294-architecture-preflight`
+> 只把 `modules/**` 当边的**起点**，于是 legacy 层深入 module 内部的 **94 条边 / 28 文件**、
+> 以及模块被围栏四层反向依赖 legacy 的 **22 条边（全部出自 `application`）**全部不可见；
+> 模块形状锁只覆盖 4/11 个 context；账本只有 stale 检测没有增长上限（同一 PR 加违规 + 加豁免全绿）；
+> 开工时 **116 个架构守卫文件里只有 3 个自带能自证会红的负 fixture**。
 >
-> **已落地（B0～B11）**：三层防护全部就位。①边界规则 R1–R12——模块 inbound/outbound 精确边账本（逐条相等，不是上限）、
-> 11 个 context 形状锁、业务身份字面量预算、表归属、能力站点治理、注册表反向完备、前端设计系统从「逐文件迁移白名单」
-> 改成全域棘轮。②仓根 `architecture/{commons-manifest,commons-debt,guard-manifest,ledger-baselines}.json` 四份机器账本，
-> 条目数与源码逐字相等且**只降不升**（要升须显式 `allowGrowth` 并点名 RFC，且在下一笔不涨的提交上被判过期、强制清理——
-> 该一次性许可已完整跑过一个生命周期）。③守卫的守卫 manifest 现 **142** 条：凡扫语料的守卫必须声明语料下限并两向钉死，
+> **交付**：①边界规则 R1–R12；②仓根 `architecture/` 四份机器账本，条目数与源码逐字相等且**只降不升**
+> （要升须显式 `allowGrowth` 并点名 RFC，且在下一笔不涨的提交上被判过期、强制清理）；
+> ③守卫的守卫 manifest **143** 条——凡扫语料的守卫必须声明语料下限并两向钉死，
 > 凡断言「不存在」的必须配自变异转红的负 fixture。
-> 同批修 **52 条 P1/P2**（三条 P1：RFC-310 五类 ACL 资源写门只校验「能看见」⇒ 任何登录用户可改写他人 public 资源；
-> 归档沿两跳 FK 静默删除 `review_comments`；`employee_definitions` 的 ACL 三列完全惰性），**79 条 P3 入账锁死**
-> （其中 17 条顺带修掉，账本以 `resolvedIn` 如实记录并钉死任务号真实存在），**19 条过期断言逐条改对**
+> 同批修 **52 条 P1/P2**（三条 P1：RFC-310 五类 ACL 资源写门只校验「能看见」⇒ 任何登录用户可改写他人
+> public 资源；归档沿两跳 FK 静默删除 `review_comments`；`employee_definitions` 的 ACL 三列完全惰性）、
+> **79 条 P3 入账锁死**（17 条顺带修掉，账本以 `resolvedIn` 如实记录）、**19 条过期断言逐条改对**
 > 并立成 6 条派生式不变量（判据的一端永远是活的源码：枚举长度 / schema 列 / 真实 import / RFC 索引状态）。
 >
-> **仅剩 T65（需用户）**：T61 补齐五族「有调用无定义」的 CSS 之后，`/code/policies` 的一个视觉基线场景发生了
-> 真实外观变化（hosted Linux，35,673 px / ratio 0.04）。按仓规新基线必须**人工审 PNG** 后才能接受，
-> 不在自动提交范围内——请审图后决定是否刷新 Linux 基线。
+> **收口时的两处自查发现值得后来者知道**，它们是同一个形态——**两份账本之间没有任何机器判据**：
+> ①`RT-01` / 能力影响 **C3** 用户开工时逐项确认过，却**从未落进任务分解**，于是「52 条 P1/P2 逐条修复」
+> 与「C1–C9 各有拒绝分支覆盖」两条验收标准在「看起来做完了」的状态下静默不成立（补 T71）；
+> ②R10 号称「覆盖仓内每一个 allowlist」，实测 **27 处账本只覆盖 8 处**，且**没有任何东西要求新账本入网**
+> ——「加一份新的豁免表」是绕过整套高水位机制最省事的办法（补 T72）。
+> 定式已进 `docs/dev-gotchas.md`：收口前拿 gid / 编号做一次**两向对账**。
+>
+> 验收：`bun run gate:local` 全绿；`f3775ad69` CI **31/31 success**；`7b4076641` visual-regression
+> **success**（`/code/policies` 基线按仓规「先红→人工审图→只提交被接受的 Linux 基线」流程刷新）。
 
 > 🛠 **开发工装（非 RFC，2026-08-22）：`bun dev` 现在会多起一个开发登录服务**
 > —— `packages/system-mocks/src/dev-auth/`（test-only 包，产品代码零改动，`AW_DEV_AUTH=0` 可关）。
