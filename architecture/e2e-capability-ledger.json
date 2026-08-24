@@ -2021,8 +2021,21 @@
       "title": "冲突后的三条恢复动作：另存为副本 / 载入远端 / 覆盖远端（含二次确认）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/draft-conflict-recovery.spec.ts",
+          "test": "冲突后「载入远端」：确认前什么都不做，确认后丢掉的是本地这一份"
+        },
+        {
+          "file": "e2e/draft-conflict-recovery.spec.ts",
+          "test": "冲突后「覆盖远端」：确认前服务端不动，确认后本地这一份成为服务端的版本"
+        },
+        {
+          "file": "e2e/draft-conflict-recovery.spec.ts",
+          "test": "冲突后「另存为副本」：本地工作原样落到新文档，原文档一个字节都不动"
+        }
+      ]
     },
     {
       "id": "WF-49",
@@ -8589,7 +8602,6 @@
     "WF-37",
     "WF-38",
     "WF-40",
-    "WF-44",
     "WF-45",
     "WF-46",
     "WF-48",
