@@ -1450,8 +1450,13 @@
       "title": "保存结果未知（响应丢失）时页面锁死 +「重新判定」恢复",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/settings-outcome-unknown.spec.ts",
+          "test": "RFC-319 RES-08: a save whose response is lost fails closed — the section locks, writes stop for the connection, and nothing is silently retried"
+        }
+      ]
     },
     {
       "id": "RES-09",
@@ -8443,7 +8448,6 @@
     "RES-04",
     "RES-05",
     "RES-06",
-    "RES-08",
     "RES-11",
     "RES-12",
     "RES-16",
