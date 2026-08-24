@@ -195,7 +195,20 @@ async function stableCenter(
   await expect
     .poll(
       async () => {
-        const latest = await locator.boundingBox()
+        // 几何稳定**不等于**能被命中。xyflow v12 在节点被测量出来之前把它渲染成
+        // `visibility: hidden`，而 `fitView`（本用例点的 `workflow-camera-overview`）
+        // 会把已渲染的节点重新打回未测量态——机器忙时那扇窗口能持续到下一次
+        // ResizeObserver 回调。窗口里两件事同时成立：`boundingBox()` 照样给出坐标
+        // （隐藏元素仍占布局），`document.elementFromPoint` 却会跳过隐藏元素。于是
+        // 这个函数会 settle 在一个**永远命中不到**的点上，调用方的拖拽从一个空点起手，
+        // 报出来的却是「data-connect-preview 没变成 new」这种离病因十万八千里的话。
+        //
+        // 实证：CI run 32756812144（macOS 分片，首跑与 retry 各红一次）的 trace 里，
+        // 命中测试那一帧两个节点的 style 都是 `visibility: hidden`，而此前 60 多帧
+        // 一直是 `visibility: visible`——正是 fitView 之后那扇窗口。
+        //
+        // 所以可见性不满足时清零重数：等的是「测量完成」，不是「坐标不动了」。
+        const latest = (await locator.isVisible()) ? await locator.boundingBox() : null
         if (latest === null) {
           previous = null
           stableSamples = 0
@@ -215,7 +228,11 @@ async function stableCenter(
         previous = latest
         return stableSamples
       },
-      { message: `${label} geometry never settled`, timeout: 5_000, intervals: [50] },
+      {
+        message: `${label} 迟迟没有同时满足「可见」与「几何稳定」`,
+        timeout: 15_000,
+        intervals: [50],
+      },
     )
     .toBeGreaterThanOrEqual(2)
   const settled = await locator.boundingBox()
@@ -277,11 +294,22 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
   const targetCard = page.locator(`.react-flow__node[data-id="${consumerId}"] .canvas-node`)
   const sourceCenter = await stableCenter(sourceHandle, 'producer source handle')
   const targetCenter = await stableCenter(targetCard, 'consumer card')
+  // 命中失败时要说得出**谁**挡在那儿：裸 `toBe(true)` 只会打印 `false`，
+  // 而这条路径上的病因（浮层遮挡 / 节点被打回未测量态）光看 false 分不出来，
+  // 上一次归因是靠翻 CI 的 trace 才做到的。
+  const hitProbe = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y)
+    if (!(hit instanceof Element)) return { onHandle: false, desc: 'null（该点上没有任何元素）' }
+    const cls = typeof hit.className === 'string' ? hit.className : ''
+    return {
+      onHandle: hit.closest('.react-flow__handle-right') !== null,
+      desc: `${hit.tagName.toLowerCase()}.${cls}`.trim(),
+    }
+  }, sourceCenter)
   expect(
-    await page.evaluate(({ x, y }) => {
-      const hit = document.elementFromPoint(x, y)
-      return hit instanceof Element && hit.closest('.react-flow__handle-right') !== null
-    }, sourceCenter),
+    hitProbe.onHandle,
+    `producer 右把手的中心点没命中把手本身，实际命中：${hitProbe.desc}。` +
+      `拖拽会从一个空点起手，随后报出来的是「data-connect-preview 没变成 new」——离病因很远。`,
   ).toBe(true)
   await page.mouse.move(sourceCenter.x, sourceCenter.y)
   await page.mouse.down()

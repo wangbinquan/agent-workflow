@@ -358,6 +358,35 @@
 
 顺带：`ps aux | grep -c "[b]un"` 这类自拼判断同理——它数的是恰好匹配的行，进程名一变就静默失真。能用退出码就别数行。
 
+## 画布用例：`boundingBox()` 稳定 ≠ 这个点能被命中（xyflow v12，2026-08-25 实测）
+
+xyflow v12 在节点被 ResizeObserver 测量出来之前，把它渲染成 `visibility: hidden`；而
+**`fitView` 会把已经渲染好的节点重新打回未测量态**。本仓的相机控件（`workflow-camera-overview`
+等）走的正是 fitView，所以「点一下概览再去量坐标」这条极常见的写法自带一扇窗口。
+
+窗口里两件事同时成立，且方向相反：
+
+- `locator.boundingBox()` **照样返回坐标**——`visibility: hidden` 的元素仍占布局；
+- `document.elementFromPoint(x, y)` **会跳过**隐藏元素，Playwright 的可操作性判定同理。
+
+于是「轮询到几何不再变化」的稳定器会 settle 在一个**永远命中不到**的点上，随后的
+`mouse.down()` 从空点起手，报出来的却是下游那句「`data-connect-preview` 没变成 `new`」/
+「边没连出来」——离病因十万八千里。机器越忙窗口越长，所以它表现为**只在 CI 上间歇红**，
+本地怎么跑都绿（实撞：CI run 32756812144 的 macOS 分片，首跑与 retry 各红一次；trace 里
+命中那一帧两个节点都是 `visibility: hidden`，此前 60 多帧一直是 `visible`）。
+
+定式两条：
+
+1. **稳定器要同时等「可见」与「几何不动」**，可见性不满足就把稳定计数清零重数——等的是
+   「测量完成」，不是「坐标不动了」。`await locator.isVisible()` 已经把 `visibility: hidden`
+   与空盒子都算进去了（`visibility` 会继承，祖先隐藏时后代的计算样式也是 hidden，所以查把手
+   本身就够，不用去查它的节点祖先）。
+2. **命中断言必须报出拦截者**。`expect(hitOk).toBe(true)` 失败时只打印一个 `false`，
+   「浮层挡住」与「节点被打回未测量态」在这条信息上完全同形，只能去翻 trace 才分得开。
+   照 `e2e/canvas-controls.ts` 的 `clickCanvasControl` 那样，把实际命中的元素描述进断言消息。
+
+范例落在 `e2e/rfc253-script-node.spec.ts` 的 `stableCenter` 与它下面那条命中探针。
+
 ## 「写了两行库、回执长得对」≠ 这件事在跑（RFC-309 实测，2026-08-17）
 
 新增一个**发起入口**（把某件已有的工作从新的门开始）时，本仓的实测规律是：照着既有入口
