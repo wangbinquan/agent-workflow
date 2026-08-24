@@ -1623,8 +1623,13 @@
       "title": "删除终态任务（管理员 + 输入任务名逐字确认 + 级联清理）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-lifecycle-gates.spec.ts",
+          "test": "RFC-319 TASK-28: deleting a task requires it to be terminal and the name typed back verbatim"
+        }
+      ]
     },
     {
       "id": "TASK-29",
@@ -1690,8 +1695,13 @@
       "title": "启动前置校验与权限门：不可用/不可见工作流、内置只读工作流、缺 tasks:execute 的拒绝形态",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-lifecycle-gates.spec.ts",
+          "test": "RFC-319 TASK-46: launching refuses an invisible workflow exactly as it refuses one that never existed, and refuses a caller without tasks:execute"
+        }
+      ]
     },
     {
       "id": "UX-01",
@@ -8443,7 +8453,6 @@
     "TASK-24",
     "TASK-26",
     "TASK-27",
-    "TASK-28",
     "TASK-30",
     "TASK-31",
     "TASK-33",
@@ -8454,7 +8463,6 @@
     "TASK-39",
     "TASK-44",
     "TASK-45",
-    "TASK-46",
     "TASK-X1",
     "TASK-X2",
     "TASK-X5",
