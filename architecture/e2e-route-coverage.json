@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "note": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由。只减不增；派生自 router.tsx 路由树 + 同一份 route journal。mentionedButNeverLoaded 是纯诊断栏：源码提过却从未加载，多半只存在于默认不跑的套件里。",
+  "recordedAtSha": "00289395c24e85832279694368b0e772670fea22",
+  "routeTotal": 60,
+  "uncovered": [
+    "/code",
+    "/code/assignments",
+    "/code/config/$kind",
+    "/code/config/$kind/$id",
+    "/code/executors",
+    "/code/missions",
+    "/code/missions/$missionId",
+    "/code/missions/new",
+    "/code/outcomes",
+    "/code/policies",
+    "/code/policies/$policyId",
+    "/fusions/$id",
+    "/memory/distill-jobs/$jobId",
+    "/outcomes",
+    "/setup/admin",
+    "/tasks/$id/preview",
+    "/workflows/new",
+    "/workgroups/launch"
+  ],
+  "mentionedButNeverLoaded": [
+    "/code",
+    "/code/assignments",
+    "/code/config/$kind",
+    "/code/config/$kind/$id",
+    "/code/executors",
+    "/code/missions",
+    "/code/missions/$missionId",
+    "/code/missions/new",
+    "/code/outcomes",
+    "/code/policies",
+    "/code/policies/$policyId",
+    "/fusions/$id",
+    "/outcomes",
+    "/workflows/new"
+  ]
+}

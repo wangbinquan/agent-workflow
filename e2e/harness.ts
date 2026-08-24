@@ -29,6 +29,8 @@ import { dirname, join, resolve } from 'node:path'
 import { type Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 
+import { captureRouteHits, harnessLogLevel } from './route-journal'
+
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..')
 
@@ -553,7 +555,10 @@ async function startDaemonWithPortAllocator(
             bindPort,
             language: 'en-US',
             theme: 'light',
-            logLevel: 'info',
+            // RFC-319 R1：只有开了 `AW_E2E_ROUTE_JOURNAL` 才提到 debug，
+            // 否则与今天逐字节相同。start.ts:375-378 的
+            // `if (config.logLevel !== 'info')` 决定了写非 info 才会改级别。
+            logLevel: harnessLogLevel(),
           },
           null,
           2,
@@ -612,6 +617,9 @@ async function startDaemonWithPortAllocator(
         const startedChild = attemptChild
         const stop = async (): Promise<void> => {
           await signalChildAndWait(startedChild, 'SIGTERM', 5_000)
+          // RFC-319 R1：必须排在 removeOwnedHome 之前——日志就在那个 home 里。
+          // 未开启采集时是一个 env 判断后立即返回的空操作。
+          captureRouteHits(home)
           removeOwnedHome(home, keepHome)
         }
 

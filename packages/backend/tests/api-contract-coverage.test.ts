@@ -17,6 +17,7 @@ import { describe, test, expect } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { ENDPOINTS, type HttpMethod } from './contracts/registry'
+import { CALL_WILDCARD, callIsRegistered, compilePatterns } from './architecture/routeMatch'
 
 const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
 
@@ -275,24 +276,18 @@ describe('API contract registry coverage', () => {
   test('every daemon /api call an e2e spec makes still exists in the registry', () => {
     const e2eDir = resolve(import.meta.dir, '..', '..', '..', 'e2e')
     const specs = listTsFilesRecursive(e2eDir)
-    const WILDCARD = '\u0001'
-    const registry = ENDPOINTS.map((e) => ({ method: e.method, segs: e.path.split('/') }))
-    /**
-     * 逐段比较 + method。两侧的「通配段」（注册表的 `:param` / e2e 的 `${...}`）
-     * 匹配任意一段。**method 必须一并核对**——RFC-310 PR-10 删的是
-     * `PUT /api/code/matrix/:repoId` 而 `GET` 同路径仍在，只比 path 的守卫会
-     * 放行那三条 e2e（这正是当时 CI 上红的形态）。
-     */
+    // RFC-319 T21 —— 逐段比较 + method 的实现已抽到 `architecture/routeMatch.ts`。
+    // 抽取的理由不是省代码：RFC-319 的运行期端点命中账本问的是**反方向**的问题
+    //（哪些注册端点一次都没被打到）。两处判据一旦分叉，「账本说没覆盖」与
+    //「守卫说覆盖了」可以同时为真，而没有任何东西会红。
+    //
+    // method 必须一并核对——RFC-310 PR-10 删的是 `PUT /api/code/matrix/:repoId`
+    // 而 `GET` 同路径仍在，只比 path 的守卫会放行那三条 e2e（当时 CI 上红的形态）。
+    const WILDCARD = CALL_WILDCARD
+    const compiled = compilePatterns(ENDPOINTS.map((e) => ({ method: e.method, path: e.path })))
     const known = (method: string, called: readonly string[]): boolean =>
-      registry.some(
-        (r) =>
-          r.method === method &&
-          r.segs.length === called.length &&
-          r.segs.every((seg, i) => {
-            const other = called[i]!
-            return seg.startsWith(':') || other === WILDCARD || seg === other
-          }),
-      )
+      callIsRegistered(compiled, method, called)
+
     /**
      * 调用动词：`page.request.put(` / `api.delete(` 之类在 URL 之前，或
      * `{ method: 'PUT' }` 在其后的 init 对象里。都找不到 ⇒ GET（fetch 缺省）。

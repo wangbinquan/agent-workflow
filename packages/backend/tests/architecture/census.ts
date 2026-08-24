@@ -1265,6 +1265,24 @@ function ledgerElementCount(node: ts.Node): number | null {
  * 而实际是清点失效——又一次「零与合规同形」。调用方必须把 `null` 当成红。
  */
 export function ledgerEntryCount(text: string, symbol: string): number | null {
+  // RFC-319 T28 —— JSON 账本（`architecture/*.json`）也要能被高水位机制清点。
+  //
+  // 这条分支存在的理由不是「顺手支持一种格式」：RFC-317 T72 的收口自查发现
+  // 「加一份新的豁免表」是绕过整套高水位机制最省事的办法。如果 JSON 账本天生
+  // 数不出来，那么把债务写成 JSON 就等于免检——新账本必须能入网，机制才成立。
+  //
+  // TS 源码不会以 `{` 开头，所以既有的 32 份 TS 账本不受影响。数组以外的值
+  // 返回 null（而不是 0）：0 会被上层读成「账本清空了，真棒」，而实际是清点失效。
+  const trimmed = text.trimStart()
+  if (trimmed.startsWith('{')) {
+    try {
+      const doc = JSON.parse(trimmed) as Record<string, unknown>
+      const value = doc[symbol]
+      return Array.isArray(value) ? value.length : null
+    } catch {
+      return null
+    }
+  }
   const source = ts.createSourceFile('ledger.ts', text, ts.ScriptTarget.Latest, true)
   let count: number | null = null
   const visit = (node: ts.Node): void => {
