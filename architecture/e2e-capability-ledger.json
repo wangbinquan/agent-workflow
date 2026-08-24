@@ -1188,8 +1188,13 @@
       "title": "删除被引用的镜像 → 二次确认 → 强制删除",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-governance.spec.ts",
+          "test": "RFC-319 REPO-07: deleting a mirror that a repo group still points at is refused, and force removes it"
+        }
+      ]
     },
     {
       "id": "REPO-13",
@@ -1197,8 +1202,13 @@
       "title": "仓库 URL 凭据脱敏（带 token 的 URL 入库 / 出 wire / 落草稿时永不明文）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-governance.spec.ts",
+          "test": "RFC-319 REPO-13: a repo URL carrying a token never appears in cleartext on any wire response"
+        }
+      ]
     },
     {
       "id": "REPO-14",
@@ -1248,8 +1258,13 @@
       "title": "删除仓库组（连带归档组记忆 / 摘除引用 / 停发计划的回报）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-governance.spec.ts",
+          "test": "RFC-319 REPO-24 & REPO-23: deleting a nested repo group is refused while a parent points at it, and force detaches references and archives its memories"
+        }
+      ]
     },
     {
       "id": "REPO-24",
@@ -1257,8 +1272,13 @@
       "title": "删除被引用的仓库组 → 409 → 在同一对话框里改成「强制删除」重试",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-governance.spec.ts",
+          "test": "RFC-319 REPO-24 & REPO-23: deleting a nested repo group is refused while a parent points at it, and force detaches references and archives its memories"
+        }
+      ]
     },
     {
       "id": "REPO-31",
@@ -8278,20 +8298,16 @@
     "REPO-04",
     "REPO-05",
     "REPO-06",
-    "REPO-07",
     "REPO-08",
     "REPO-09",
     "REPO-10",
     "REPO-11",
     "REPO-12",
-    "REPO-13",
     "REPO-15",
     "REPO-16",
     "REPO-17",
     "REPO-18",
     "REPO-19",
-    "REPO-23",
-    "REPO-24",
     "REPO-25",
     "REPO-26",
     "REPO-27",
