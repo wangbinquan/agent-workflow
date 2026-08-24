@@ -1348,8 +1348,15 @@ describe('RFC-254 T28b — dispatcher', () => {
    *            `e2e/rfc306-conditional-branching.spec.ts`, which fails outright
    *            if the marker stops being emitted (the branch then runs and the
    *            skipped-node assertions go red).
+   *   fusion — RFC-319 B28/B29. The skill-merger stand-in: it answers the
+   *            mandatory clarify round, edits the skill files in place and
+   *            writes `.agent-workflow/fusion/result.json`. Proven by
+   *            `e2e/fusion-lifecycle.spec.ts`, which drives a real fusion to
+   *            `awaiting_approval` and then approves it — drop any one of those
+   *            three behaviours and the fusion never leaves `running`
+   *            (or reconcile reports a missing manifest) and the spec goes red.
    */
-  const POST_PORT_MODES = new Set(['branch', 'development'])
+  const POST_PORT_MODES = new Set(['branch', 'development', 'fusion'])
 
   test('every ported mode has a golden, and every golden has a mode', () => {
     // A mode with no recording is unproven; a recording with no mode is a
