@@ -629,8 +629,13 @@
       "title": "设置 → 登录方式策略：关闭密码登录、OIDC 默认角色、最后一个 provider 保护",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-credentials.spec.ts",
+          "test": "RFC-319 IAM-12: password sign-in cannot be switched off without a way back in, and once off the login endpoint really refuses"
+        }
+      ]
     },
     {
       "id": "IAM-13",
@@ -638,8 +643,13 @@
       "title": "我的账号 → 安全：修改自己的密码并踢掉其它会话",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-credentials.spec.ts",
+          "test": "RFC-319 IAM-13: changing your own password kills every other session and retires the old password"
+        }
+      ]
     },
     {
       "id": "IAM-18",
@@ -730,8 +740,13 @@
       "title": "/users：管理员重置他人密码（可强制下次改密 + 吊销全部会话）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-credentials.spec.ts",
+          "test": "RFC-319 IAM-27: an administrator password reset revokes the target sessions and can force a change on next sign-in"
+        }
+      ]
     },
     {
       "id": "IAM-30",
@@ -764,8 +779,13 @@
       "title": "资源所有者转让真的完成（不是只打开弹窗）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-credentials.spec.ts",
+          "test": "RFC-319 IAM-32: transferring ownership actually hands over control — someone who could not even see the resource can now manage its ACL"
+        }
+      ]
     },
     {
       "id": "IAM-36",
@@ -8118,16 +8138,12 @@
     "IAM-09",
     "IAM-10",
     "IAM-11",
-    "IAM-12",
-    "IAM-13",
     "IAM-14",
     "IAM-15",
     "IAM-16",
     "IAM-22",
-    "IAM-27",
     "IAM-28",
     "IAM-29",
-    "IAM-32",
     "IAM-33",
     "IAM-34",
     "IAM-35",
