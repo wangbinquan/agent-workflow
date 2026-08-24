@@ -3196,7 +3196,21 @@
     {
       "id": "HUMAN-17",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "轮次被系统封存后的只读态与原因说明（任务终态清扫 / 工作组自主关闭反问）",
+      "title": "轮次被任务终态清扫封存后的只读态与原因说明（sealedCause=task-done / task-canceled）",
+      "risk": "P2",
+      "tier": "nightly",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-round-sealed-readonly.spec.ts",
+          "test": "任务走到终态时，开着的那一轮反问必须被封存并说明原因，而不是继续挂着等人"
+        }
+      ]
+    },
+    {
+      "id": "HUMAN-17b",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "轮次被工作组自主关闭反问撤销后的只读态与原因说明（sealedCause=wg-clarify-disabled）",
       "risk": "P2",
       "tier": "nightly",
       "status": "gap",
@@ -8400,7 +8414,7 @@
     "HUMAN-14",
     "HUMAN-15",
     "HUMAN-16",
-    "HUMAN-17",
+    "HUMAN-17b",
     "HUMAN-20",
     "HUMAN-21",
     "HUMAN-22",

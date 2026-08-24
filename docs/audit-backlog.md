@@ -395,6 +395,22 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **被任务终态封存的澄清轮，作答被拒时的错误码把原因说反了（RFC-319 B40 实测，2026-08-25）**：
+  任务走到 done/canceled 时，终态清扫把开着的 self 轮封成 `canceled`
+  （`services/terminalSweep.ts:76-110`）。此后再作答会被拒——但拒它的是外层那道
+  `round.status !== 'awaiting_human'` 守卫（`services/clarify/autoDispatch.ts:550-555`），
+  返回码是 **`clarify-already-answered`**。**没有人答过它，是任务结束了。**
+  真正贴切的码在更深一层：把外层放开后实测仍被 `sealRoundQuestions` 拦住，返回
+  `clarify-round-terminal`——即「能不能答」本身是双保险，这条**不是安全问题**，只是措辞问题。
+  用户可见的形态：cancel 之前就打开了澄清页的那个人（页面不会自己变），点提交拿到
+  「已经有人答过这一轮」——他会去找那个并不存在的同事，而不是去看任务为什么被取消。
+  **建议处置**：让外层守卫对 `canceled` / `abandoned` 走 `clarify-round-terminal`，
+  `clarify-already-answered` 只留给真的 `answered`。改动落地时
+  `e2e/clarify-round-sealed-readonly.spec.ts` 那条码断言会红——它锁的是当前实际行为，
+  红了正是提醒改的人顺手看一眼那段注释。
+  未在 RFC-319 里顺手改：这条守卫同时服务快速通道 / 控制通道 / 自动下发三条路径，
+  改码值要连它们的判据一起过一遍，超出「补 e2e 覆盖」的范围。
+
 - ⏳ **backend 分片「静默 120s 被 SIGKILL」实撞一次（2026-08-16，未复现，但**杀进程时不报是哪条用例**）**：
   `gate:local` 一次红在 `[backend 4/4] FAIL timeout 239.9s`，日志形态是
   `IDLE TIMEOUT after 120000ms without output; sent SIGTERM to process group … SIGKILL`
