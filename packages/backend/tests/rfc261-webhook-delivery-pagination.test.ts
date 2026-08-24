@@ -422,7 +422,15 @@ describe('RFC-261 · 源码层文本锁（行为等价面的兜底，CLAUDE.md �
   })
 
   test('GC ticker 保有再入闸（收缩后的长 sweep 不叠加——P1-② 附带）', () => {
-    const text = readFileSync(join(SRC, 'services', 'webhook', 'webhookGc.ts'), 'utf8')
-    expect(text).toContain('if (running) return')
+    // RFC-322：再入闸不再是本文件里的一句 `if (running) return`——它和另外 13 个
+    // hourly 循环的同款样板一起被收进了共享原语 `services/maintenanceTicker.ts`。
+    // 守的东西没变（保留期收缩后的首次 sweep 可能超一小时，下一拍不许叠加第二个
+    // sweep），所以这里改锁两头，比原来只钉一处字面量更强：
+    //   ① 本 ticker 确实走那个原语（绕开它自己写 setInterval ⇒ 红）；
+    //   ② 原语里的闸本身还在（谁把它删了 ⇒ 红，而不是只在这一个 ticker 上失守）。
+    const gc = readFileSync(join(SRC, 'services', 'webhook', 'webhookGc.ts'), 'utf8')
+    expect(gc).toContain('startMaintenanceTicker(')
+    const ticker = readFileSync(join(SRC, 'services', 'maintenanceTicker.ts'), 'utf8')
+    expect(ticker).toContain('if (stopped || running) return')
   })
 })

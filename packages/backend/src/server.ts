@@ -136,6 +136,7 @@ import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
   reconcileRepositoryTransportConnectionProjections,
+  type RepositoryTransportCredentialModule,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
@@ -161,6 +162,20 @@ export interface RuntimeDiagnosticTestDependencies {
 }
 
 export interface AppDeps {
+  /**
+   * RFC-317 T54 —— RFC-321 传输凭据模块，**由 bootstrap 装配**后传进来。
+   *
+   * 为什么不在 `mountApiRoutes` 里 compose：那个函数每进程被调用两次（REST 的
+   * `createApp` 一次，MCP dispatcher 的私有 Hono app 在首次 MCP 请求时懒建一次），
+   * 装配写在那里就是写在一个会跑两遍的地方。`composeRepositoryTransportCredentials`
+   * 自己按 `(db, secretBox)` memoized，所以搬家前后行为逐字等价——搬的是位置，
+   * 让代码落到它自己注释说的那个位置（"Bootstrap-owned"），也让 T54 的
+   * 「路由函数里的装配只减不增」棘轮重新成立。
+   *
+   * `undefined`（直接调 `mountApiRoutes` 的调用方）与 `null`（没有 secretBox）
+   * 都表示「没有传输凭据模块」。
+   */
+  repositoryTransport?: RepositoryTransportCredentialModule | null
   /** Token required for /api/*. */
   token: string
   /** Absolute path to config.json (lets tests use a temp file). */
@@ -313,10 +328,18 @@ export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
   const identityAccess = composeIdentityAccess(deps.db)
-  const effectiveDeps: AppDeps =
-    deps.digitalEmployeeEventCenter === undefined
+  const effectiveDeps: AppDeps = {
+    ...(deps.digitalEmployeeEventCenter === undefined
       ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
-      : deps
+      : deps),
+    // RFC-317 T54：装配落在 bootstrap。`mountApiRoutes` 与 `mountMcpTransport`
+    // 拿到的是**同一个**实例，dispatcher 那次懒建不再各建一套。
+    repositoryTransport:
+      deps.repositoryTransport ??
+      (deps.secretBox === undefined
+        ? null
+        : composeRepositoryTransportCredentials(deps.db, deps.secretBox)),
+  }
 
   app.use('*', async (c, next) => {
     const started = performance.now()
@@ -472,10 +495,8 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     join(appHome, 'artifacts', 'employee-inputs'),
   )
   const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
-  const repositoryTransportModule =
-    deps.secretBox === undefined
-      ? null
-      : composeRepositoryTransportCredentials(deps.db, deps.secretBox)
+  // 装配已上移到 `createApp`（RFC-317 T54）——本函数每进程跑两遍，不该装配任何东西。
+  const repositoryTransportModule = deps.repositoryTransport ?? null
   const repositoryTransportCoordinator =
     repositoryTransportModule === null
       ? null
