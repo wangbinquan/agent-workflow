@@ -1,6 +1,6 @@
 # RFC-320 — 用户档案驱动的 Git 提交身份与 OIDC 邮箱刷新
 
-- 状态：Accepted / implementation complete（用户于 2026-08-24 明确批准；等待 T13 发布与 hosted 验证）
+- 状态：Done（2026-08-24；实现、发布与 RFC-320 相关 hosted 验证已完成）
 - 发起：用户，2026-08-24
 - 追加裁决：2026-08-24，OIDC Provider 配置界面必须同时允许指定 userinfo 的用户名字段与邮箱字段
 - 前置：RFC-036（OIDC）、RFC-067（任务级 Git identity）、RFC-220（userinfo 与呈现名刷新）、RFC-294（context ownership）
@@ -175,3 +175,16 @@ OIDC 用户在 IdP 把邮箱从 A 改为 B。下次登录时 identity 旧快照�
 
 用户已于 2026-08-24 明确批准 RFC-320，proposal §5 的 C1–C8 生效。允许进入 migration、
 shared schema、后端、前端与测试实现；任何超出这些裁决的能力扩张仍须回到设计门确认。
+
+## 9. 实施与发布结果
+
+- 主实现提交为 `5a6b36c572d9286a122c048f504e52c4e9fb3a41`；共享 E2E 管理员身份补齐提交为
+  `09a46912e10a0dc4513587e477a39f27efd8bcec`；其余直接创建任务的 E2E 用户邮箱补齐提交为
+  `82f4bad38b14a4dd7a8cd2e82552c2cf49a604fa`。三者均已进入 `origin/main`，后者包含前两者。
+- 本任务定向 typecheck、格式、lint、后端/shared/frontend/OIDC/task/migration 测试全绿；修复后四个受影响
+  Playwright 文件本地 **17/17** 通过。完整 `bun run gate:local` 只执行一次，RFC-320 暴露的问题均已修复并
+  定向复验；整体被共享树中并发 RFC-318 的格式问题及门禁生成的 `test-results` 污染阻断，未冒充全绿。
+- hosted visual `32697952937` 在包含主实现的 `09a46912e` 上成功；git-protocol `32698452846` 在包含主实现的
+  `1884294ce` 上成功。精确 SHA `82f4bad38` 的 CI `32699593415` 终态为 **29/31 jobs success**；两格失败分别是
+  RFC-250 workflow camera 遮挡点击与 macOS RFC-199 版本提示用例，均不涉及本 RFC 文件或行为。此前的
+  `git-identity-email-missing` E2E 缺口已消失，RFC-320 相关 jobs/tests 全部通过。

@@ -2,6 +2,21 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ✅ **已完成 RFC（Done，2026-08-24）：[RFC-320 用户档案驱动的 Git 提交身份与 OIDC 邮箱刷新](design/RFC-320-user-profile-git-identity/proposal.md)**
+> —— proposal C1–C8 与 implementation T2–T13 已落地。终态是：Git `user.name = users.display_name`、
+> Git `user.email = users.email`；任务启动请求不再接收逐任务 `gitUserName/gitUserEmail`，由 identity-access 在任务实际创建时
+> 解析 creator profile 并冻结进既有 task 两列。OIDC Provider 界面并列配置 `usernameClaim` / `emailClaim` 两个自定义
+> userinfo 字段，配置 profile selector 时强制从 userinfo 取值并与已验签 id-token `sub` 绑定；每次登录统一刷新 identity
+> snapshot，空账号邮箱首见即补齐。账号页新增自助 profile 修复入口，任务向导只读展示提交身份；旧 launch
+> identity 键 fail closed 并由 migration 清理持久 payload。push 的 SSH/HTTPS credential 完全不变。主实现
+> `5a6b36c57`、共享管理员夹具 `09a46912e` 与任务创建者夹具 `82f4bad38` 已进入 `origin/main`，后者包含前两者；
+> 修复后的四个受影响 Playwright 文件本地 **17/17** 通过。visual `32697952937` 与 git-protocol
+> `32698452846` 成功；精确 SHA `82f4bad38` 的 CI `32699593415` 为 **29/31 jobs success**，两格失败分别是
+> 无关的 RFC-250 camera 点击遮挡与 macOS RFC-199 wizard mismatch，RFC-320 相关 jobs/tests 全绿。完整
+> `bun run gate:local` 只执行一次，本 RFC 问题均已修复并定向复验；整体被并发 RFC-318 格式问题与门禁
+> `test-results` 污染阻断，因此不冒充全仓本地门禁全绿。批准裁决见
+> [proposal §5 C1–C8](design/RFC-320-user-profile-git-identity/proposal.md#5-待用户确认的裁决)。
+
 > ✅ **已完成 RFC（Done，2026-08-24；按 exact SHA 的 hosted CI 与 visual 双绿）：[RFC-317 公共内核架构边界加固](design/RFC-317-commons-boundary-hardening/proposal.md)**
 > —— 起于 RFC-294 `design.md §1.2` 四条判据里**从未落地的第四条**「存在防止第二实现再长出的棘轮」。
 > 18-agent 并行审计产出 **131 条经复核发现** 与 95 条无人看守的违规类别（全量证据在同目录 `findings.md`）。

@@ -347,3 +347,17 @@ GIT_COMMITTER_EMAIL
 先跑 changed-area unit/component tests，再跑 OIDC route full-chain 与 task launch integration；候选内容稳定后按共享
 main 规则只启动一次 `bun run gate:local`。同步进来的无关提交不自动触发第二次 full gate，最终以 hosted exact-SHA
 CI/visual 归因。
+
+## 11. 终态证据
+
+- `5a6b36c572d9286a122c048f504e52c4e9fb3a41`：RFC-320 生产代码、迁移、合同、前端与测试主实现。
+- `09a46912e10a0dc4513587e477a39f27efd8bcec`：共享 E2E 管理员补齐提交身份；其 visual run
+  `32697952937` 成功。
+- `1884294cea7016bc6377cbc0aec3c812f7f9f6e6`：git-protocol workflow 覆盖共享 harness；run
+  `32698452846` 成功。
+- `82f4bad38b14a4dd7a8cd2e82552c2cf49a604fa`：其余任务创建者夹具补齐 email；四个受影响 Playwright
+  文件本地 17/17 通过。精确 SHA CI `32699593415` 的 31 个 jobs 中 29 个成功；两格失败仅为 RFC-250
+  camera 点击遮挡与 macOS RFC-199 wizard mismatch，和本 RFC 的 identity/OIDC/task/runtime 路径无关。
+
+上述最后一笔提交包含主实现；发布时已验证 `origin/main` 祖先关系与 trailer。完整本地 gate 的非任务阻断按
+proposal §9 如实保留，不据此声称全仓本地门禁全绿。
