@@ -3513,11 +3513,20 @@
     {
       "id": "HUMAN-X1",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "任务详情内进入人工门的入口：node-runs 表的「去评审 / 去回答」跳转按钮与画布待答问题角标",
+      "title": "任务详情内进入人工门的入口：node-runs 表的「去评审 / 去回答」跳转按钮（画布待答角标另计）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-detail-human-gate-entry.spec.ts",
+          "test": "任务卡在等人回答时：节点表里那一行有「Answer」，别的行没有，点下去落在那一轮"
+        },
+        {
+          "file": "e2e/task-detail-human-gate-entry.spec.ts",
+          "test": "答完之后任务卡在等人评审：那一行换成「Review」，「Answer」不再出现"
+        }
+      ]
     },
     {
       "id": "HUMAN-X2",
@@ -8508,7 +8517,6 @@
     "HUMAN-43",
     "HUMAN-47",
     "HUMAN-48",
-    "HUMAN-X1",
     "HUMAN-X3",
     "HUMAN-X4",
     "HUMAN-X5",
