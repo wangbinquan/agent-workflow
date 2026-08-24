@@ -221,17 +221,19 @@ test('a first-time user configures a work-item tool directly on the fixed respon
 
   await responsibilityMap.locator('[data-work-item-ref="analyze-implement"]').click()
   await page.waitForURL(/view=toolbox&workItem=analyze-implement/)
-  const dutyDialog = page.getByRole('dialog', { name: 'Configure duty: Analyze and implement' })
+  const dutyDialog = page.getByRole('dialog', { name: 'Configure duty: Implement change' })
   await expect(dutyDialog).toBeVisible()
   const toolbox = page.getByTestId('employee-node-toolbox')
   await expect(toolbox).toBeVisible()
-  await expect(toolbox).toContainText('Understand the request or diagnose the problem')
-  await expect(toolbox).toContainText('Input material')
-  await expect(toolbox).toContainText('Deterministic output and completion')
+  await expect(toolbox).toContainText('Read the requirement materials and complete the code change')
+  await expect(toolbox).toContainText('Requirements directory')
+  await expect(toolbox).toContainText(
+    'The code change is complete with commit and merge-request text',
+  )
   await expect(toolbox.getByRole('combobox', { name: /stage/i })).toHaveCount(0)
 
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
+  const dialog = page.getByRole('dialog', { name: 'Add tool to Implement change' })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill('First implementation tool')
   await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
@@ -271,7 +273,7 @@ test('a failed contract check is corrected on the same tool registration id', as
   )
   const toolbox = page.getByTestId('employee-node-toolbox')
   await toolbox.getByRole('button', { name: 'Add tool', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Add tool to Analyze and implement' })
+  const dialog = page.getByRole('dialog', { name: 'Add tool to Implement change' })
   await dialog.getByRole('textbox', { name: /Tool name/ }).fill(name)
   await dialog.getByRole('combobox', { name: 'Choose an Agent', exact: true }).click()
   await page

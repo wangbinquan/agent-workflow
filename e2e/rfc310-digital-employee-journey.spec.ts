@@ -425,7 +425,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const ingressBranch = responsibilityMap.locator(
     '[data-ingress-branch-work-item-ref="prepare-materials"]',
   )
-  await expect(ingressBranch).toContainText('Prepare work materials')
+  await expect(ingressBranch).toContainText('Prepare external materials')
   const parallelIngressBoxes = await Promise.all(
     [
       directInputCard,
@@ -453,7 +453,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   ).toBeLessThanOrEqual(1)
   expect(issueInputBox.y + issueInputBox.height / 2).toBeGreaterThan(prepareMaterialsCenterY)
   await expect(reviewBranch).toContainText('No human review')
-  await expect(reviewBranch).toContainText('Analyze and implement')
+  await expect(reviewBranch).toContainText('Implement change')
   await expect(reviewBranch).toContainText('Human review required')
   await expect(reviewBranch.locator('[data-review-stage="analysis"] strong')).toHaveText(
     'Implementation planning',
@@ -653,7 +653,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(classifierCard).toHaveClass(/employee-toolbox-card--active/)
   const dutyDialog = page.getByTestId('employee-toolbox-duty-dialog')
   await expect(dutyDialog).toBeVisible()
-  await expect(dutyDialog.getByText('Input material', { exact: true })).toBeVisible()
+  await expect(dutyDialog).toContainText('Failed checks, categories, and fallback type')
   expect(
     await dutyDialog
       .locator('.dialog__body')
