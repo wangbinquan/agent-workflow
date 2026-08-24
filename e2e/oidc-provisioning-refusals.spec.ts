@@ -131,10 +131,16 @@ async function loginAs(page: Page, slug: string, sub: string): Promise<number> {
   await expect(
     page.getByRole('heading', { name: 'Choose a mock identity', exact: true }),
   ).toBeVisible()
-  const callback = page.waitForResponse(
-    (res) =>
-      res.url().startsWith(`${daemon.baseUrl}/api/auth/oidc/`) && res.url().includes('/callback'),
-  )
+  // 按 **pathname 逐段**匹配，不用 `${daemon.baseUrl}/api/...` 拼前缀：
+  // ①前缀写法会被 `api-contract-coverage` 的 e2e 调用扫描器当成一次真实
+  //   API 调用，而 `/api/auth/oidc`（去掉尾斜杠后的形态）不是注册端点，守卫即红；
+  // ②逐段匹配同时更准——它钉死了 callback 的路径形状，而不只是「URL 里有
+  //   /callback」。
+  const daemonOrigin = new URL(daemon.baseUrl).origin
+  const callback = page.waitForResponse((res) => {
+    const url = new URL(res.url())
+    return url.origin === daemonOrigin && /^\/api\/auth\/oidc\/[^/]+\/callback$/.test(url.pathname)
+  })
   await page.getByTestId(`oidc-user-${sub}`).click()
   return (await callback).status()
 }

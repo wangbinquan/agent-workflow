@@ -212,6 +212,20 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
 }
 
 describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () => {
+  /**
+   * 显式预算，不吃 bun 的 5s 缺省。
+   *
+   * 这条判据要**逐字节读完** tests / scripts 下的全部源码（2026-08-24 实测 2044 个
+   * 文件），成本随两个 RFC 并行加测试单调上涨。实测三档：本机整文件 37 条 1.7s；
+   * CI ubuntu 单条 2.3s；CI macOS 单条 **5.6s —— 刚好越过 5s 缺省而红**（四个分片
+   * 同机并行，I/O 争抢）。
+   *
+   * 这不是「重跑就过了」：判据本身没有时序依赖，红的原因是预算比语料小。给一个
+   * 数量级留白的显式预算，既让受压 runner 不再假红，也不至于把真的挂死藏起来——
+   * 扫描断了会立刻抛错，真跑飞会远超 30s。
+   */
+  const CORPUS_SCAN_TIMEOUT_MS = 30_000
+
   test('tests / scripts 下的账本形状常量，要么入基线、要么在具名豁免表里', () => {
     const roots = [
       'packages/backend/tests',
@@ -247,7 +261,7 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
         '「加一份新账本」是绕过整套高水位机制最省事的办法，必须留痕：' +
         '要么给它钉一个只降不升的条目数，要么在 NOT_A_LEDGER 里写清它为什么不是账本。',
     ).toEqual([])
-  })
+   }, CORPUS_SCAN_TIMEOUT_MS)
 
   test('豁免表逐条相等（删一条消红也会红）', () => {
     expect(Object.keys(NOT_A_LEDGER).sort()).toEqual([
