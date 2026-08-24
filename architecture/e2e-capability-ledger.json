@@ -506,8 +506,13 @@
       "title": "澄清的回答权边界：任务成员才能作答，陌生人读也读不到（404 与不存在同形）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/human-gate-access.spec.ts",
+          "test": "RFC-319 HUMAN-09: a clarify gate is invisible to non-members — byte-identical to one that never existed — and only a task member can answer it"
+        }
+      ]
     },
     {
       "id": "HUMAN-28",
@@ -537,8 +542,13 @@
       "title": "评审的可见性与回答权：陌生人 404（与不存在同形）、非成员写操作 403",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/human-gate-access.spec.ts",
+          "test": "RFC-319 HUMAN-32: a review gate answers a stranger exactly as it answers someone asking about an id that never existed, and a stranger cannot decide"
+        }
+      ]
     },
     {
       "id": "HUMAN-39",
@@ -8120,7 +8130,6 @@
     "HUMAN-05",
     "HUMAN-07",
     "HUMAN-08",
-    "HUMAN-09",
     "HUMAN-10",
     "HUMAN-12",
     "HUMAN-13",
@@ -8139,7 +8148,6 @@
     "HUMAN-26",
     "HUMAN-27",
     "HUMAN-31",
-    "HUMAN-32",
     "HUMAN-33",
     "HUMAN-34",
     "HUMAN-35",
