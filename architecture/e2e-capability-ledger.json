@@ -288,8 +288,13 @@
       "title": "轮换端点 secret（旧签名立即失效）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/event-automation-guards.spec.ts",
+          "test": "RFC-319 EVENT-02/09: rotating the secret kills the old signature, and a rejected delivery is audited without consuming the dedup slot"
+        }
+      ]
     },
     {
       "id": "EVENT-07",
@@ -308,8 +313,13 @@
       "title": "验签失败拒绝（token 错 / 缺签名头）→ 401 + rejected 审计行，且不占 UUID 去重位",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/event-automation-guards.spec.ts",
+          "test": "RFC-319 EVENT-02/09: rotating the secret kills the old signature, and a rejected delivery is audited without consuming the dedup slot"
+        }
+      ]
     },
     {
       "id": "EVENT-15",
@@ -379,8 +389,13 @@
       "title": "投递重放（replay）及其拒绝规则",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/event-automation-guards.spec.ts",
+          "test": "RFC-319 EVENT-27: replaying a delivery is possible for an accepted row and refused for a rejected one"
+        }
+      ]
     },
     {
       "id": "EVENT-30",
@@ -406,8 +421,13 @@
       "title": "自定义轮询事件来源的编写：新建草稿 → 用真样例校验 → 发布不可变版本 → 退役",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/event-automation-guards.spec.ts",
+          "test": "RFC-319 EVENT-35: all five scripts:author refusals fire for an actor that holds the event-source permissions but not scripts:author"
+        }
+      ]
     },
     {
       "id": "EVENT-42",
@@ -7944,13 +7964,11 @@
     "DE-X4",
     "DE-X5",
     "EVENT-01",
-    "EVENT-02",
     "EVENT-03",
     "EVENT-04",
     "EVENT-05",
     "EVENT-06",
     "EVENT-08",
-    "EVENT-09",
     "EVENT-10",
     "EVENT-11",
     "EVENT-12",
@@ -7963,7 +7981,6 @@
     "EVENT-24",
     "EVENT-25",
     "EVENT-26",
-    "EVENT-27",
     "EVENT-28",
     "EVENT-29",
     "EVENT-30",
@@ -7971,7 +7988,6 @@
     "EVENT-32",
     "EVENT-33",
     "EVENT-34",
-    "EVENT-35",
     "EVENT-36",
     "EVENT-39",
     "EVENT-40",
