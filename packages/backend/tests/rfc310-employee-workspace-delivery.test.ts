@@ -291,8 +291,58 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       }),
     ).toEqual({ ok: true })
 
+    // Real-environment regression 2026-08-24: a delegated Case can retain the
+    // parent's frozen requirement and pipeline refs while its already-created
+    // scene/checkpoint only contains the child namespace. A fresh retry must
+    // hydrate those explicit grants without any manual DB or workspace repair.
+    const inheritedMaterialRef =
+      '.agent-workflow/inputs/requirements/source-case/external/issue-8.md'
+    const inheritedPipelineRef = '.agent-workflow/pipeline/source-case/'
+    const sourceCaseWorkspace = join(
+      appHome,
+      'workspaces',
+      'employee-cases',
+      'source-case',
+      'scene',
+      'workspace',
+    )
+    mkdirSync(
+      join(sourceCaseWorkspace, '.agent-workflow/inputs/requirements/source-case/external'),
+      { recursive: true },
+    )
+    writeFileSync(
+      join(sourceCaseWorkspace, inheritedMaterialRef),
+      '# Inherited issue 8 acceptance\n',
+    )
+    mkdirSync(join(sourceCaseWorkspace, inheritedPipelineRef), { recursive: true })
+    writeFileSync(
+      join(sourceCaseWorkspace, inheritedPipelineRef, 'typecheck.log'),
+      'source dependency failed typecheck\n',
+    )
+    const inheritedIssueState = {
+      ...issueState,
+      materialArtifactRefs: [...issueState.materialArtifactRefs, inheritedMaterialRef],
+    }
+    const inheritedIssueContext = {
+      ...issueContext,
+      revision: 2,
+      stateJson: JSON.stringify(inheritedIssueState),
+      artifactRefs: [inheritedMaterialRef, inheritedPipelineRef],
+    }
+    const inheritedAnalyzePlan = plan({
+      roundRef: 'round-analyze',
+      caseRef: 'case-1',
+      workItemRef: 'analyze-implement',
+      contexts: [inheritedIssueContext],
+      workspacePolicy: writePolicy,
+    })
+    db.update(employeeReactionRounds)
+      .set({ planJson: JSON.stringify(inheritedAnalyzePlan), updatedAt: 11 })
+      .where(eq(employeeReactionRounds.id, 'round-analyze'))
+      .run()
+
     const fresh = await workspace.prepare({
-      planJson: JSON.stringify(analyzePlan),
+      planJson: JSON.stringify(inheritedAnalyzePlan),
       attemptJson: JSON.stringify({
         ordinal: 1,
         mode: 'fresh-scene',
@@ -302,6 +352,15 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     expect(fresh.kind).toBe('repository')
     if (fresh.kind !== 'repository') return
     expect(() => readFileSync(join(fresh.workspacePath, 'src', 'feature.ts'))).toThrow()
+    expect(readFileSync(join(fresh.workspacePath, inheritedMaterialRef), 'utf8')).toBe(
+      '# Inherited issue 8 acceptance\n',
+    )
+    expect(
+      readFileSync(join(fresh.workspacePath, inheritedPipelineRef, 'typecheck.log'), 'utf8'),
+    ).toBe('source dependency failed typecheck\n')
+    expect(fresh.platformInputPaths).toEqual(
+      expect.arrayContaining([inheritedMaterialRef, inheritedPipelineRef.slice(0, -1)]),
+    )
     mkdirSync(join(fresh.workspacePath, 'src'), { recursive: true })
     writeFileSync(join(fresh.workspacePath, 'src', 'feature.ts'), 'export const feature = 2\n')
     writeFileSync(
@@ -315,6 +374,21 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         outputJson: JSON.stringify({ status: 'ok' }),
       }),
     ).toEqual({ ok: true })
+    writeFileSync(join(fresh.workspacePath, inheritedMaterialRef), 'tampered child material\n')
+    await expect(
+      workspace.prepare({
+        planJson: JSON.stringify(inheritedAnalyzePlan),
+        attemptJson: JSON.stringify({
+          ordinal: 2,
+          mode: 'same-scene',
+          previousError: 'retry after material tamper',
+        }),
+      }),
+    ).rejects.toThrow('frozen artifact target disagrees with its source')
+    writeFileSync(
+      join(fresh.workspacePath, inheritedMaterialRef),
+      '# Inherited issue 8 acceptance\n',
+    )
     db.update(employeeReactionRounds)
       .set({
         state: 'completed',
@@ -333,7 +407,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       roundRef: 'round-analyze-recovery',
       caseRef: 'case-1',
       workItemRef: 'analyze-implement',
-      contexts: [issueContext],
+      contexts: [inheritedIssueContext],
       workspacePolicy: writePolicy,
     })
     db.insert(employeeReactionRounds)
@@ -442,10 +516,10 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       .where(eq(employeeReactionRounds.id, exactRecoveryPlan.roundRef))
       .run()
     const deliveryIssueContext = {
-      ...issueContext,
-      revision: 2,
+      ...inheritedIssueContext,
+      revision: 3,
       stateJson: JSON.stringify({
-        ...issueState,
+        ...inheritedIssueState,
         deliveryContent: {
           commitMessage:
             'implement deterministic delivery\n\nApply the requested repository files and feature change.',
@@ -1200,6 +1274,18 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     expect(readFileSync(join(conflictScene.workspacePath, 'src/feature.ts'), 'utf8')).toContain(
       '<<<<<<<',
     )
+    expect(readFileSync(join(conflictScene.workspacePath, inheritedMaterialRef), 'utf8')).toBe(
+      '# Inherited issue 8 acceptance\n',
+    )
+    expect(
+      readFileSync(
+        join(conflictScene.workspacePath, inheritedPipelineRef, 'typecheck.log'),
+        'utf8',
+      ),
+    ).toBe('source dependency failed typecheck\n')
+    expect(conflictScene.platformInputPaths).toEqual(
+      expect.arrayContaining([inheritedMaterialRef, inheritedPipelineRef.slice(0, -1)]),
+    )
     const freshConflictScene = await workspace.prepare({
       planJson: JSON.stringify(repairConflictPlan),
       attemptJson: JSON.stringify({ ordinal: 1, mode: 'fresh-scene', previousError: 'retry' }),
@@ -1210,6 +1296,15 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     expect(
       readFileSync(join(freshConflictScene.workspacePath, 'src/feature.ts'), 'utf8'),
     ).toContain('<<<<<<<')
+    expect(readFileSync(join(freshConflictScene.workspacePath, inheritedMaterialRef), 'utf8')).toBe(
+      '# Inherited issue 8 acceptance\n',
+    )
+    expect(
+      readFileSync(
+        join(freshConflictScene.workspacePath, inheritedPipelineRef, 'typecheck.log'),
+        'utf8',
+      ),
+    ).toBe('source dependency failed typecheck\n')
     const replayedFreshConflictScene = await workspace.prepare({
       planJson: JSON.stringify(repairConflictPlan),
       attemptJson: JSON.stringify({ ordinal: 1, mode: 'fresh-scene', previousError: 'retry' }),

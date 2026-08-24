@@ -26,6 +26,26 @@ export interface SnapshotViolation {
   readonly kind: 'added' | 'removed' | 'modified'
 }
 
+/** Stable digest for a caller-assembled protected-root snapshot. */
+export function protectedRootSnapshotDigest(
+  entries: ReadonlyMap<string, ReadonlyMap<string, string>>,
+): string {
+  const parts: string[] = []
+  for (const [label, files] of [...entries.entries()].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
+    parts.push(`root:${label}\n`)
+    for (const [rel, digest] of [...files.entries()].sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    )) {
+      // rel 与 digest 之间的 \x01 分隔字节（probe 同款）：没有它，
+      // `a.txt`+hash 与 `a.tx`+`t...` 的拼接会产生同串歧义。
+      parts.push(`${rel}\x01${digest}\n`)
+    }
+  }
+  return sha256Hex(parts.join(''))
+}
+
 function walk(
   absRoot: string,
   rel: string,
@@ -74,18 +94,7 @@ export function snapshotProtectedRoots(
     walk(roots[label]!, '', files, skipPrefixes)
     entries.set(label, files)
   }
-  const parts: string[] = []
-  for (const [label, files] of entries) {
-    parts.push(`root:${label}\n`)
-    for (const [rel, digest] of [...files.entries()].sort(([a], [b]) =>
-      a < b ? -1 : a > b ? 1 : 0,
-    )) {
-      // rel 与 digest 之间的 \x01 分隔字节（probe 同款）：没有它，
-      // `a.txt`+hash 与 `a.tx`+`t...` 的拼接会产生同串歧义。
-      parts.push(`${rel}\x01${digest}\n`)
-    }
-  }
-  return { entries, digest: sha256Hex(parts.join('')) }
+  return { entries, digest: protectedRootSnapshotDigest(entries) }
 }
 
 /** 前后快照逐项对拍；空数组 = 无违规。 */

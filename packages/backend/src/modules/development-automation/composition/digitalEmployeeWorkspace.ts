@@ -1,7 +1,17 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 
@@ -12,6 +22,7 @@ import { cachedRepos, employeeCaseWorkspaces, employeeRoundWorkspaceStates } fro
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
 import {
+  protectedRootSnapshotDigest,
   snapshotProtectedRoots,
   type ProtectedRootSnapshot,
 } from '../infrastructure/protectedSnapshot'
@@ -72,6 +83,7 @@ const issueContextSchema = z
         ),
       })
       .passthrough(),
+    materialArtifactRefs: z.array(z.string().min(1)).default([]),
   })
   .passthrough()
 
@@ -82,7 +94,11 @@ const inputEnvelopeSchema = z
   .passthrough()
 
 const contextRecordSchema = z
-  .object({ typeId: z.string().min(1), stateJson: z.string().min(2) })
+  .object({
+    typeId: z.string().min(1),
+    stateJson: z.string().min(2),
+    artifactRefs: z.array(z.string().min(1)).default([]),
+  })
   .passthrough()
 
 const mergeRequestContextSchema = z
@@ -184,6 +200,155 @@ function skipPrefixes(
   } as const
 }
 
+interface FrozenPlatformArtifactRef {
+  readonly path: string
+  readonly sourceCaseKey: string
+}
+
+const REQUIREMENT_ARTIFACT_PREFIX = `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/`
+const PIPELINE_ARTIFACT_PREFIX = `${PLATFORM_WORKSPACE_DIR}/pipeline/`
+
+function parseFrozenPlatformArtifactRef(raw: string): FrozenPlatformArtifactRef | null {
+  const recognized =
+    raw.startsWith(REQUIREMENT_ARTIFACT_PREFIX) || raw.startsWith(PIPELINE_ARTIFACT_PREFIX)
+  if (!recognized) return null
+  const canonical = raw.endsWith('/') ? raw.slice(0, -1) : raw
+  const parsed = repoRelativePathSchema.safeParse(canonical)
+  if (!parsed.success) throw new Error(`frozen platform artifact ref is unsafe: ${raw}`)
+  const parts = parsed.data.split('/')
+  const sourceCaseKey =
+    parts[1] === 'inputs' && parts[2] === 'requirements'
+      ? parts.length >= 4
+        ? parts[3]!
+        : null
+      : parts[1] === 'pipeline' && parts.length >= 3
+        ? parts[2]!
+        : null
+  if (
+    sourceCaseKey === null ||
+    sourceCaseKey.length === 0 ||
+    stableIdentityComponent(sourceCaseKey) !== sourceCaseKey
+  ) {
+    throw new Error(`frozen platform artifact ref has an invalid Case namespace: ${raw}`)
+  }
+  return { path: parsed.data, sourceCaseKey }
+}
+
+function frozenPlatformArtifactRefs(refs: readonly string[]): FrozenPlatformArtifactRef[] {
+  const exact = new Map<string, FrozenPlatformArtifactRef>()
+  for (const raw of refs) {
+    const parsed = parseFrozenPlatformArtifactRef(raw)
+    if (parsed !== null) exact.set(parsed.path, parsed)
+  }
+  const ordered = [...exact.values()].sort((a, b) =>
+    a.path.length === b.path.length ? a.path.localeCompare(b.path) : a.path.length - b.path.length,
+  )
+  return ordered.filter(
+    (candidate, index) =>
+      !ordered.slice(0, index).some((ancestor) => candidate.path.startsWith(ancestor.path + '/')),
+  )
+}
+
+function requirePlainDirectory(path: string, label: string): void {
+  const stat = lstatSync(path, { throwIfNoEntry: false })
+  if (stat === undefined || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error(`${label} is not a plain directory: ${path}`)
+  }
+}
+
+function requirePlainDirectoryPath(root: string, relativeDirectory: string): void {
+  requirePlainDirectory(root, 'frozen artifact source workspace')
+  let current = root
+  for (const segment of relativeDirectory.split('/').filter((part) => part.length > 0)) {
+    current = join(current, segment)
+    requirePlainDirectory(current, 'frozen artifact source path')
+  }
+}
+
+function ensurePlainDirectoryPath(root: string, relativeDirectory: string): void {
+  requirePlainDirectory(root, 'frozen artifact target workspace')
+  let current = root
+  for (const segment of relativeDirectory.split('/').filter((part) => part.length > 0)) {
+    current = join(current, segment)
+    const stat = lstatSync(current, { throwIfNoEntry: false })
+    if (stat === undefined) {
+      mkdirSync(current)
+      continue
+    }
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error(`frozen artifact target path is not a plain directory: ${current}`)
+    }
+  }
+}
+
+function copyFrozenPlatformEntry(source: string, target: string): void {
+  const sourceStat = lstatSync(source, { throwIfNoEntry: false })
+  if (sourceStat === undefined || sourceStat.isSymbolicLink()) {
+    throw new Error(`frozen platform artifact is missing or linked: ${source}`)
+  }
+  if (sourceStat.isDirectory()) {
+    const targetStat = lstatSync(target, { throwIfNoEntry: false })
+    if (targetStat === undefined) mkdirSync(target)
+    else if (targetStat.isSymbolicLink() || !targetStat.isDirectory()) {
+      throw new Error(`frozen artifact target is not a plain directory: ${target}`)
+    }
+    const sourceNames = readdirSync(source).sort()
+    for (const name of sourceNames) {
+      copyFrozenPlatformEntry(join(source, name), join(target, name))
+    }
+    const extras = readdirSync(target)
+      .filter((name) => !sourceNames.includes(name))
+      .sort()
+    if (extras.length > 0) {
+      throw new Error(`frozen artifact target contains ungranted entries: ${extras.join(', ')}`)
+    }
+    return
+  }
+  if (!sourceStat.isFile() || sourceStat.nlink > 1) {
+    throw new Error(`frozen platform artifact is not a plain file: ${source}`)
+  }
+  const sourceContent = readFileSync(source)
+  const targetStat = lstatSync(target, { throwIfNoEntry: false })
+  if (targetStat === undefined) {
+    copyFileSync(source, target, constants.COPYFILE_EXCL)
+    chmodSync(target, sourceStat.mode & 0o777)
+    return
+  }
+  if (targetStat.isSymbolicLink() || !targetStat.isFile() || targetStat.nlink > 1) {
+    throw new Error(`frozen artifact target is not a plain file: ${target}`)
+  }
+  if (!readFileSync(target).equals(sourceContent)) {
+    throw new Error(`frozen artifact target disagrees with its source: ${target}`)
+  }
+}
+
+function hydrateFrozenPlatformArtifacts(input: {
+  readonly appHome: string
+  readonly workspacePath: string
+  readonly refs: readonly string[]
+}): FrozenPlatformArtifactRef[] {
+  const artifacts = frozenPlatformArtifactRefs(input.refs)
+  for (const artifact of artifacts) {
+    const sourceWorkspace = join(
+      input.appHome,
+      'workspaces',
+      'employee-cases',
+      artifact.sourceCaseKey,
+      'scene',
+      'workspace',
+    )
+    requirePlainDirectory(sourceWorkspace, 'frozen artifact source workspace')
+    const artifactParent = artifact.path.split('/').slice(0, -1).join('/')
+    requirePlainDirectoryPath(sourceWorkspace, artifactParent)
+    ensurePlainDirectoryPath(input.workspacePath, artifactParent)
+    copyFrozenPlatformEntry(
+      join(sourceWorkspace, artifact.path),
+      join(input.workspacePath, artifact.path),
+    )
+  }
+  return artifacts
+}
+
 function hasImplementationPlanReview(plan: z.infer<typeof planSchema>): boolean {
   return (
     z
@@ -199,6 +364,55 @@ function hasImplementationPlanReview(plan: z.infer<typeof planSchema>): boolean 
   )
 }
 
+function preStateWithFrozenPlatformArtifacts(input: {
+  readonly pre: SerializedPreState
+  readonly plan: z.infer<typeof planSchema>
+  readonly workspacePath: string
+  readonly artifacts: readonly FrozenPlatformArtifactRef[]
+}): SerializedPreState {
+  if (input.artifacts.length === 0) return input.pre
+  const actual = snapshotProtectedRoots(rootsOf(input.workspacePath), {
+    skipPrefixesByRoot: skipPrefixes(
+      input.plan.workspacePolicy,
+      input.plan.caseRef.id,
+      input.plan.workItemRef,
+      hasImplementationPlanReview(input.plan),
+    ),
+  })
+  const prior = reviveProtected(input.pre.protected)
+  const entries = new Map(
+    [...prior.entries.entries()].map(([root, paths]) => [root, new Map(paths)] as const),
+  )
+  const priorEvidence = entries.get('evidence') ?? new Map<string, string>()
+  const actualEvidence = actual.entries.get('evidence') ?? new Map<string, string>()
+  const relativeRefs = input.artifacts.map((artifact) =>
+    artifact.path.slice(PLATFORM_WORKSPACE_DIR.length + 1),
+  )
+  for (const [path, digest] of actualEvidence) {
+    const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path
+    const granted = relativeRefs.some(
+      (ref) =>
+        normalizedPath === ref ||
+        normalizedPath.startsWith(ref + '/') ||
+        ref.startsWith(normalizedPath + '/'),
+    )
+    if (!granted) continue
+    const frozenDigest = priorEvidence.get(path)
+    if (frozenDigest !== undefined && frozenDigest !== digest) {
+      throw new Error(`frozen platform artifact changed after the round checkpoint: ${path}`)
+    }
+    priorEvidence.set(path, digest)
+  }
+  entries.set('evidence', priorEvidence)
+  return {
+    ...input.pre,
+    protected: serializeProtected({
+      entries,
+      digest: protectedRootSnapshotDigest(entries),
+    }),
+  }
+}
+
 function contextsOf(plan: z.infer<typeof planSchema>) {
   const envelope = inputEnvelopeSchema.parse(JSON.parse(plan.inputEnvelopeJson) as unknown)
   return z.array(contextRecordSchema).parse(JSON.parse(envelope.contextsJson) as unknown)
@@ -208,7 +422,11 @@ function resolveIssue(plan: z.infer<typeof planSchema>): z.infer<typeof issueCon
   const contexts = contextsOf(plan)
   const issue = contexts.find((context) => context.typeId === 'development.issue-handling')
   if (issue === undefined) throw new Error('development employee scene has no issue context')
-  return issueContextSchema.parse(JSON.parse(issue.stateJson) as unknown)
+  const state = issueContextSchema.parse(JSON.parse(issue.stateJson) as unknown)
+  return {
+    ...state,
+    materialArtifactRefs: [...new Set([...state.materialArtifactRefs, ...issue.artifactRefs])],
+  }
 }
 
 function resolveMergeRequest(plan: z.infer<typeof planSchema>) {
@@ -416,6 +634,21 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       const platformCaseKey = stableIdentityComponent(plan.caseRef.id)
       if (plan.workspacePolicy.mode === 'none') return { kind: 'scratch' }
       const issue = resolveIssue(plan)
+      const hydrateArtifacts = (targetWorkspacePath: string) =>
+        hydrateFrozenPlatformArtifacts({
+          appHome: input.appHome,
+          workspacePath: targetWorkspacePath,
+          refs: issue.materialArtifactRefs,
+        })
+      const platformInputPaths = (
+        artifacts: readonly FrozenPlatformArtifactRef[],
+      ): readonly string[] => [
+        ...new Set([
+          `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}`,
+          `${PLATFORM_WORKSPACE_DIR}/pipeline/${platformCaseKey}`,
+          ...artifacts.map((artifact) => artifact.path),
+        ]),
+      ]
       let row = input.db
         .select()
         .from(employeeCaseWorkspaces)
@@ -630,7 +863,35 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             })
             .run()
           state = replacement
-        } else if (attempt.ordinal !== state!.attemptOrdinal) {
+        }
+        const conflict = pre?.conflict
+        if (conflict === undefined) throw new Error('conflict scene state was not persisted')
+        const artifacts = hydrateArtifacts(conflict.workspacePath)
+        const expandedPre = preStateWithFrozenPlatformArtifacts({
+          pre: pre!,
+          plan,
+          workspacePath: conflict.workspacePath,
+          artifacts,
+        })
+        if (JSON.stringify(expandedPre) !== state!.preStateJson) {
+          state = {
+            ...state!,
+            preStateJson: JSON.stringify(expandedPre),
+            updatedAt: now(),
+          }
+          input.db
+            .update(employeeRoundWorkspaceStates)
+            .set({ preStateJson: state.preStateJson, updatedAt: state.updatedAt })
+            .where(
+              and(
+                eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
+                eq(employeeRoundWorkspaceStates.attemptOrdinal, state.attemptOrdinal),
+              ),
+            )
+            .run()
+          pre = expandedPre
+        }
+        if (attempt.ordinal !== state!.attemptOrdinal) {
           state = {
             ...state!,
             attemptOrdinal: attempt.ordinal,
@@ -639,17 +900,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           }
           input.db.insert(employeeRoundWorkspaceStates).values(state).onConflictDoNothing().run()
         }
-        const conflict = pre?.conflict
-        if (conflict === undefined) throw new Error('conflict scene state was not persisted')
         return {
           kind: 'repository',
           workspacePath: conflict.workspacePath,
           baselineSha: conflict.sourceSha,
           contractProjectionJson: JSON.stringify({ conflictFiles: conflict.conflictPaths }),
-          platformInputPaths: [
-            `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}`,
-            `${PLATFORM_WORKSPACE_DIR}/pipeline/${platformCaseKey}`,
-          ],
+          platformInputPaths: platformInputPaths(artifacts),
         }
       }
 
@@ -676,6 +932,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         throw new Error('employee case workspace is missing; explicit recovery is required')
       }
 
+      const artifacts = hydrateArtifacts(workspacePath(plan.caseRef.id))
       let state = initialState
       if (state === undefined) {
         const checkpoint = sourceControl.checkpoint({
@@ -707,22 +964,73 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           updatedAt: timestamp,
         }
         input.db.insert(employeeRoundWorkspaceStates).values(state).run()
+      } else {
+        const expandedPre = preStateWithFrozenPlatformArtifacts({
+          pre: JSON.parse(state.preStateJson) as SerializedPreState,
+          plan,
+          workspacePath: workspacePath(plan.caseRef.id),
+          artifacts,
+        })
+        if (JSON.stringify(expandedPre) !== state.preStateJson) {
+          state = {
+            ...state,
+            preStateJson: JSON.stringify(expandedPre),
+            updatedAt: now(),
+          }
+          input.db
+            .update(employeeRoundWorkspaceStates)
+            .set({ preStateJson: state.preStateJson, updatedAt: state.updatedAt })
+            .where(
+              and(
+                eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
+                eq(employeeRoundWorkspaceStates.attemptOrdinal, 0),
+              ),
+            )
+            .run()
+        }
       }
       if (attempt.ordinal !== 0) {
-        input.db
-          .insert(employeeRoundWorkspaceStates)
-          .values({ ...state, attemptOrdinal: attempt.ordinal, updatedAt: now() })
-          .onConflictDoNothing()
-          .run()
+        const existingAttempt = input.db
+          .select()
+          .from(employeeRoundWorkspaceStates)
+          .where(
+            and(
+              eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
+              eq(employeeRoundWorkspaceStates.attemptOrdinal, attempt.ordinal),
+            ),
+          )
+          .get()
+        if (existingAttempt === undefined) {
+          input.db
+            .insert(employeeRoundWorkspaceStates)
+            .values({ ...state, attemptOrdinal: attempt.ordinal, updatedAt: now() })
+            .run()
+        } else {
+          const expandedPre = preStateWithFrozenPlatformArtifacts({
+            pre: JSON.parse(existingAttempt.preStateJson) as SerializedPreState,
+            plan,
+            workspacePath: workspacePath(plan.caseRef.id),
+            artifacts,
+          })
+          if (JSON.stringify(expandedPre) !== existingAttempt.preStateJson) {
+            input.db
+              .update(employeeRoundWorkspaceStates)
+              .set({ preStateJson: JSON.stringify(expandedPre), updatedAt: now() })
+              .where(
+                and(
+                  eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
+                  eq(employeeRoundWorkspaceStates.attemptOrdinal, attempt.ordinal),
+                ),
+              )
+              .run()
+          }
+        }
       }
       return {
         kind: 'repository',
         workspacePath: workspacePath(plan.caseRef.id),
         baselineSha: row.baselineSha,
-        platformInputPaths: [
-          `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}`,
-          `${PLATFORM_WORKSPACE_DIR}/pipeline/${platformCaseKey}`,
-        ],
+        platformInputPaths: platformInputPaths(artifacts),
       }
     },
 
