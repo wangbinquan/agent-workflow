@@ -20,9 +20,7 @@ import {
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import {
-  createRepositoryEndpointDiscovery,
-} from '../src/modules/integration/application/repositoryEndpointDiscovery'
+import { createRepositoryEndpointDiscovery } from '../src/modules/integration/application/repositoryEndpointDiscovery'
 import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
