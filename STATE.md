@@ -2,6 +2,55 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（In Progress / Phase 2）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
+> —— 用户确认 RFC-320 已推送并要求两个会话各管各的阶段；RFC-321 已进入实现收口，不接手
+> RFC-320 的后端问题。migration、个人凭据 API/账号页、管理员 mapping、统一 publication transport、
+> task/candidate/conflict/submodule/employee workspace 接线与架构棘轮均已落候选。
+> 终态候选为：账号页按代码平台连接保存个人 push token；平台 publication 按工作归属用户选择
+> “个人凭据 → 现有全局 connection token”，且个人已配置后的认证失败不回退公共身份；受管 SSH remote
+> 采用 provider API clone URL → 管理员 mapping → GitHub/GitLab SaaS 约定三级解析，未知平台不猜。
+> 账号页现可一次性校验草稿 token 或在不回显明文的前提下复测已保存 token，结果显示合法性与对应平台
+> 用户；个人记录缺失时不改测公共 token。供给边界明确分层：Git publication 唯一走 personal-first
+> source-control supply；MR/评论/审批/流水线与 workflow code-host call 继续唯一走 global connection。
+> task auto-push、non-FF fetch、数字员工 candidate/conflict delivery、post-verify 与 submodule 必须统一进入
+> source-control transport participant，token 不进 agent/URL/argv/env/config/log。用户已批准
+> [proposal §5 C1–C14、§6 I1–I8 与追加阶段裁决 S1](design/RFC-321-user-code-host-push-credentials/proposal.md#阶段关系追加裁决-s1)：
+> RFC-320 是 Phase 1，profile/task identity/author-committer 的实现已发布；RFC-321 是 Phase 2，只消费
+> 持久化工作归属并治理 push authentication/transport。按用户追加要求，Git 提交身份卡片仅在展示层移到
+> “代码提交与推送”页签，并与推送凭据卡片统一宽度和样式；两个后端合同仍保持正交。
+> 当前共享树协调要求不得启动/停止服务或运行会自启服务的 E2E；本轮三包 typecheck 与不启服务的定向
+> shared/backend/frontend 测试已绿，新交互的 live E2E/visual 与完整 gate 留待允许的收口窗口。
+
+> 🚧 **进行中 RFC（In Progress）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
+> —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**
+> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本从 679 条缺口收敛到 **610**（covered **69**，
+> 其中 `covered-unverified` 存量 141 只减不增）。已交付 12 个新 spec 文件 + 5 条守卫，逐条本机实跑并**变异实证**
+> （注入→红→还原→重建→绿）。**接手须知**：①逐批进度与每一条实测契约、每一次判据被真实行为纠正的记录，全在
+> `design/RFC-319-.../plan.md` §7 变更记录里，按批次倒序；②新增 spec 走 API 级断言 + 编译后 daemon，单条约
+> 50–150ms，慢用例（唯一一条 `@nightly`：EVENT-42 定时自触发，1.5 分钟）按分档进夜跑；③写用例前先
+> `git ls-files <实现文件>` —— 共享工作树上「能跑通」不等于「已上库」（REPO-35 曾因此被撤回）。
+> **下一批建议**：剩余 P1 集中在数字员工（DE-07/17/18/27/X1）、意图与融合详情（INTENT-39/48/53/54）、
+> 画布编辑器（WF-16/19/36/44）、工作组自动保存（WG-08）——都需要较重的编排 fixture，与前 20 批的
+> API 级模式不同，宜按域整批推进。
+> 30-agent 双向审计（15 领域审计员 + 15 对抗性复核员，复核员既找能推翻「缺口」的既有覆盖、也打开被宣称
+> 「已覆盖」的用例读它真正断言了什么）逐条对账 **820 条用户面能力**：**679 条缺口**（P1 86 / P2 383 / P3 210）、
+> **44 条零自动化**（含 `/setup/admin` 首屏、退出登录、`agent-workflow auth password-login`）、
+> **8 条空洞绿**——既有用例本身是坏的，例如 `e2e/rfc099-ownership-acl.spec.ts:188` 拿只在 More→Permissions
+> 弹窗里渲染的 `acl-panel` 计数为 0 去断言「陌生人直链进不去」，而 carol 从未打开过那个弹窗（即便她拥有全部
+> 权限该断言照样为 0）；`workflow-editor` 的删除用例只开确认框、跑 axe、点 Cancel，全仓 e2e 对 `/api/workflows`
+> **零 DELETE**；代理「引用完整性告警」的唯一浏览器断言被关在 `rfc250-visual-states.spec.ts:530` 的
+> `test.skip(!RUN_VISUAL_REGRESSION)` 里，PR CI 的 Playwright 腿根本不跑它。
+> **根因与 RFC-317 同形**：没有任何机器判据在问「新增用户面能力有 e2e 吗」——`tests/architecture/` 的 25 个守卫
+> 无一覆盖 e2e，`allRouteMeta()` 的 462 条端点声明与 e2e 证据从未对账，`router.tsx` 的 58 条前端路由有 **18 条**
+> 从未被任何 spec 直达（12 条连字符串都不出现）。后端 system-mock e2e 全仓只有 **6 个文件且全是 RFC-310 一个域**。
+> **交付**：①四层棘轮——R1 运行期端点命中账本（**零生产改动**：`cli/start.ts:274` 本就把日志写进
+> `<home>/daemon.log`、`:376` 的 `if (config.logLevel !== 'info')` 让 harness 把 `harness.ts:556` 的 `'info'` 改成
+> `'debug'` 即可拿到 `server.ts:317` 的逐请求 `req` 行）；R2 前端路由账本 static + runtime 双层；
+> R3 820 条能力账本（证据须逐字可达，终结散文账本漂移）；R4 守卫自证负 fixture。三份账本**全部入网**
+> RFC-317 既有的 `architecture/ledger-baselines.json` 高水位机制（T72 教训：不入网的新账本就是绕过整套机制
+> 最省事的办法）。②全量补齐 679 条并按风险分流：P1 进 PR 腿、P2/P3 进新增的 `e2e-full-nightly`，分片数按用例数上调。
+> 零产品行为变更。用户已拍板范围（全做、不取舍）、棘轮四层全要、分层落位、允许扩分片。
+
 > ✅ **已完成 RFC（Done，2026-08-24）：[RFC-320 用户档案驱动的 Git 提交身份与 OIDC 邮箱刷新](design/RFC-320-user-profile-git-identity/proposal.md)**
 > —— proposal C1–C8 与 implementation T2–T13 已落地。终态是：Git `user.name = users.display_name`、
 > Git `user.email = users.email`；任务启动请求不再接收逐任务 `gitUserName/gitUserEmail`，由 identity-access 在任务实际创建时
