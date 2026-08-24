@@ -1377,13 +1377,8 @@
       "title": "代码平台凭据的存储与读取隔离（只回尾 4 位、PAT 完全够不着这组路由）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered",
-      "evidence": [
-        {
-          "file": "e2e/repo-governance.spec.ts",
-          "test": "RFC-319 REPO-35: a stored code-host push token is never readable back — only a four-character hint — and no token can reach the account credential routes at all"
-        }
-      ]
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "REPO-38",
@@ -8409,6 +8404,7 @@
     "REPO-30",
     "REPO-33",
     "REPO-34",
+    "REPO-35",
     "REPO-36",
     "REPO-37",
     "REPO-39",
