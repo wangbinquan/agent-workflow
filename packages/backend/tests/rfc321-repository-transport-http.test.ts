@@ -3,9 +3,12 @@
 // connection trust boundary.
 
 import { describe, expect, test } from 'bun:test'
+import { Hono } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
+import { buildActor } from '../src/auth/actor'
 import { createPat } from '../src/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from '../src/auth/sessionStore'
@@ -16,7 +19,10 @@ import {
   userRepositoryTransportCredentials,
 } from '../src/db/schema'
 import { createApp } from '../src/server'
+import type { AppDeps } from '../src/server'
+import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
 import { createUser } from '../src/services/users'
+import { errorHandler } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
@@ -221,6 +227,36 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     const staleText = await stale.text()
     expect(staleText).not.toContain(staleCanary)
     expect(JSON.parse(staleText)).toMatchObject({ code: 'code-host-push-credential-stale' })
+  })
+
+  test('a session whose current account disappears fails closed with a named subject error', async () => {
+    const h = await fixture()
+    const app = new Hono()
+    const actor = buildActor({
+      user: {
+        id: h.alice.id,
+        username: h.alice.username,
+        displayName: h.alice.displayName,
+        role: h.alice.role,
+        status: 'active',
+      },
+      source: 'session',
+    })
+    const injectActor: MiddlewareHandler = async (c, next) => {
+      c.set('actor', actor)
+      await next()
+    }
+    app.use('*', injectActor)
+    app.onError(errorHandler)
+    mountAccountRepositoryTransportCredentialRoutes(app, { db: h.db, secretBox: box } as AppDeps, {
+      async resolveCurrentSubject() {
+        return null
+      },
+    })
+
+    const response = await app.request('/api/account/code-host-push-credentials')
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'account-subject-unavailable' })
   })
 
   test('identity probe validates a draft or stored personal token and never falls back to global', async () => {

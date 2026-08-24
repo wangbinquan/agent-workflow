@@ -41,6 +41,7 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 
 setDefaultTimeout(180_000)
@@ -108,6 +109,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       git(baselineRepo, 'checkout', '-q', 'main')
       const baseSha = git(baselineRepo, 'rev-parse', 'HEAD')
       const db = createInMemoryDb(MIGRATIONS)
+      const publicationTransport = createRepositoryPublicationTransport({ db, appHome })
       db.insert(cachedRepos)
         .values({
           id: repositoryId,
@@ -129,7 +131,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         appHome,
         reactionRounds: createEmployeeReactionRoundQueries(db),
         inputArtifacts,
-        sourceControl: bindEmployeeCaseWorkspaceParticipant(),
+        sourceControl: bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
         conflictMerge: bindConflictMergeParticipant(),
       })
       const eventCenter = composeEventCenter({
@@ -161,8 +163,8 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       })
       const sourceControl = {
         ...bindChangeCandidateParticipant(),
-        ...bindCandidateDeliveryParticipant(),
-        ...bindEmployeeCaseWorkspaceParticipant(),
+        ...bindCandidateDeliveryParticipant({ publicationTransport }),
+        ...bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
       }
       const platform = composeDevelopmentEmployeePlatformWorkItems({
         db,

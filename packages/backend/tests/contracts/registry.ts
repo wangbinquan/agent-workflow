@@ -126,6 +126,14 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/auth/identities' },
   { method: 'DELETE', path: '/api/auth/identities/:id' },
 
+  // RFC-321 — interactive-account-only repository publication credentials.
+  // Route metadata additionally rejects PATs; the contract registry still
+  // owns the complete method/path inventory used by the HTTP coverage gate.
+  { method: 'GET', path: '/api/account/code-host-push-credentials' },
+  { method: 'PUT', path: '/api/account/code-host-push-credentials/:provider' },
+  { method: 'POST', path: '/api/account/code-host-push-credentials/:provider/test' },
+  { method: 'DELETE', path: '/api/account/code-host-push-credentials/:provider' },
+
   // ---- RFC-247 admin token inventory + audit (read-only, admin identity) ----
   { method: 'GET', path: '/api/tokens' },
   { method: 'GET', path: '/api/tokens/audit' },
