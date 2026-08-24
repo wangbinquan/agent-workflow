@@ -3508,11 +3508,28 @@
     {
       "id": "HUMAN-37",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "评审 diff 视图：原文/词/行/块四段切换、Cmd+1/2/3 粒度快捷键、上一版意见只读侧栏与三种加载失败态",
+      "title": "评审 diff 视图：原文/词/行/块四段切换、Cmd+1/2/3 粒度快捷键、两种首次加载失败态（版本列表 / 上一版正文；「陈旧刷新失败」与上一版意见侧栏另计）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-diff-granularity.spec.ts",
+          "test": "四段切换：选哪一段，渲染出来的就必须是哪一段的粒度"
+        },
+        {
+          "file": "e2e/review-diff-granularity.spec.ts",
+          "test": "Cmd/Ctrl+1/2/3 切粒度；裸的 1/2/3 不许动它"
+        },
+        {
+          "file": "e2e/review-diff-granularity.spec.ts",
+          "test": "上一版正文取不到时要报出来，而不是画成「什么都没改」"
+        },
+        {
+          "file": "e2e/review-diff-granularity.spec.ts",
+          "test": "版本列表本身取不到时，报的是另一条错，而不是含糊地「没有上一版」"
+        }
+      ]
     },
     {
       "id": "HUMAN-38",
@@ -8599,7 +8616,6 @@
     "HUMAN-16",
     "HUMAN-17b",
     "HUMAN-36",
-    "HUMAN-37",
     "HUMAN-40",
     "HUMAN-42",
     "HUMAN-43",
