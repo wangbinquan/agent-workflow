@@ -11,7 +11,7 @@
 // matrix is preserved by the fact that it never had its own version string.
 
 import { emitTextEvent, parseInvocation, requireOutputOpen } from './skeleton'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const NAME = 'stub-opencode-intent'
 
@@ -104,6 +104,71 @@ const NESTED_CYCLE_WORKFLOW_CHANGESET = JSON.stringify({
   ],
 })
 
+/**
+ * RFC-319 B32 —— `STUB_INTENT_VARIANT=update` 变体：产出一条 **update** 操作。
+ *
+ * 提交策略步（「原地修改 vs 复制一份」）只在 changeset 里存在 update 操作时才
+ * 出现，而此前所有 intent 变体产出的都是 create——那一整步因此没有任何 e2e
+ * 能走到。
+ *
+ * update 的 `target` 必须是会话作用域的句柄（`res#<type>#<n>`），它由平台每轮
+ * 现铸，stub 无法静态知道。句柄写在**工作目录里的清单文件**
+ * （`inventory/agents.md`，形如 "- res#agent#1 `name` — …"，见
+ * services/intent/dumpBuilder.ts:694），所以这里按名字从那份清单里认它——
+ * 和真实模型读到的是同一份东西。
+ */
+function updateChangeset(prompt: string): string {
+  // 目标名从**用户消息**里取（`rfc319-target:<name>`），不走环境变量：一个 daemon
+  // 要服务多条用例，而 daemon 级的环境变量对所有会话是同一个值。
+  //
+  // 消息不在 CLI 提示词里，而在工作目录的 `INTENT.md`（实测：提示词只是壳，
+  // 会话正文、清单、挂载全部落在工作目录里，真实模型也是从那里读的）。
+  let intentDoc = ''
+  try {
+    intentDoc = readFileSync('INTENT.md', 'utf8')
+  } catch {
+    intentDoc = ''
+  }
+  const targetName =
+    /rfc319-target:([A-Za-z0-9._-]+)/.exec(intentDoc)?.[1] ??
+    /rfc319-target:([A-Za-z0-9._-]+)/.exec(prompt)?.[1] ??
+    ''
+  let inventory = ''
+  try {
+    inventory = readFileSync('inventory/agents.md', 'utf8')
+  } catch {
+    inventory = ''
+  }
+  const escaped = targetName.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const found = new RegExp(`(res#agent#\\d+)\\s+\`${escaped}\``).exec(inventory)
+  if (found === null) {
+    process.stderr.write(
+      `${NAME}: no handle for ${JSON.stringify(targetName)} in inventory/agents.md\n`,
+    )
+    process.exit(4)
+  }
+  return JSON.stringify({
+    $schema_version: 1,
+    ops: [
+      {
+        opId: 'op-1',
+        action: 'update',
+        resourceType: 'agent',
+        target: found[1],
+        payload: {
+          // 同名写回：intent 的 update **不支持改名**（服务端判
+          // `intent-rename-unsupported`，改名要走副本上的 finalName 槽）。
+          // 「谁被改了」因此靠 description / bodyMd 区分。
+          name: targetName,
+          description: 'updated by the e2e intent stub',
+          outputs: ['answer'],
+          bodyMd: 'Body rewritten by the e2e intent stub.',
+        },
+      },
+    ],
+  })
+}
+
 export async function run(argv: readonly string[]): Promise<void> {
   const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
@@ -114,16 +179,21 @@ export async function run(argv: readonly string[]): Promise<void> {
 
   const workflowVariant = process.env.STUB_INTENT_VARIANT === 'workflow'
   const layoutFixture = process.env.STUB_INTENT_LAYOUT_FIXTURE
-  const changeset = workflowVariant
-    ? layoutFixture === 'overlap'
-      ? OVERLAPPING_WORKFLOW_CHANGESET
-      : layoutFixture === 'nested-cycle'
-        ? NESTED_CYCLE_WORKFLOW_CHANGESET
-        : WORKFLOW_CHANGESET
-    : AGENT_CHANGESET
-  const summary = workflowVariant
-    ? 'stub intent build: workflow preview'
-    : 'stub intent build: one auditor agent'
+  const updateVariant = process.env.STUB_INTENT_VARIANT === 'update'
+  const changeset = updateVariant
+    ? updateChangeset(call.prompt)
+    : workflowVariant
+      ? layoutFixture === 'overlap'
+        ? OVERLAPPING_WORKFLOW_CHANGESET
+        : layoutFixture === 'nested-cycle'
+          ? NESTED_CYCLE_WORKFLOW_CHANGESET
+          : WORKFLOW_CHANGESET
+      : AGENT_CHANGESET
+  const summary = updateVariant
+    ? 'stub intent build: one agent update'
+    : workflowVariant
+      ? 'stub intent build: workflow preview'
+      : 'stub intent build: one auditor agent'
 
   const holdFile = process.env.STUB_INTENT_HOLD_FILE
   if (holdFile !== undefined) {

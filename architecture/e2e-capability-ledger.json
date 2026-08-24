@@ -1003,8 +1003,17 @@
       "title": "提交策略步：更新型操作的「原地修改 vs 复制一份」二选一",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-apply-mode.spec.ts",
+          "test": "选「修改」：改动落在原来那个 id 上，不铸新资源"
+        },
+        {
+          "file": "e2e/intent-apply-mode.spec.ts",
+          "test": "选「复制一份」：铸出新 id，而原件一个字节都不动"
+        }
+      ]
     },
     {
       "id": "INTENT-48",
@@ -8410,7 +8419,6 @@
     "INTENT-36",
     "INTENT-37",
     "INTENT-38",
-    "INTENT-39",
     "INTENT-40",
     "INTENT-41",
     "INTENT-42",
