@@ -2068,8 +2068,29 @@
       "title": "自动保存的失败与冲突处置（离线队列、响应丢失重对账、版本冲突三选一：载入远端 / 覆盖远端 / 另存副本）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workgroup-draft-recovery.spec.ts",
+          "test": "发不出去的保存排队重发：同一次尝试原样重来，期间的新编辑排在它后面"
+        },
+        {
+          "file": "e2e/workgroup-draft-recovery.spec.ts",
+          "test": "响应丢了但服务端其实写成功了：按版本对账收敛，不重复写第二遍"
+        },
+        {
+          "file": "e2e/workgroup-draft-recovery.spec.ts",
+          "test": "冲突后「载入远端」：取消不生效，确认后编辑器里剩下的是别人那一份"
+        },
+        {
+          "file": "e2e/workgroup-draft-recovery.spec.ts",
+          "test": "冲突后「覆盖远端」：取消时服务端不动，确认后本地这一份成为服务端的版本"
+        },
+        {
+          "file": "e2e/workgroup-draft-recovery.spec.ts",
+          "test": "冲突后「另存为副本」：本地这一份原样落到新文档，原文档一个字节都不动"
+        }
+      ]
     },
     {
       "id": "WG-25",
@@ -8624,7 +8645,6 @@
     "WG-05",
     "WG-06",
     "WG-07",
-    "WG-08",
     "WG-09",
     "WG-10",
     "WG-11",
