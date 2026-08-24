@@ -1373,8 +1373,17 @@
       "title": "推送被拒（非快进 / 权限）→ 有界修复重试 → 降级为本地提交",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/commit-push-rejection.spec.ts",
+          "test": "非快进：取回合并后重推成功，而且没把别人刚推上去的提交吞掉"
+        },
+        {
+          "file": "e2e/commit-push-rejection.spec.ts",
+          "test": "认证被拒：不重试、改动留在本地提交里，并如实报出降级结局"
+        }
+      ]
     },
     {
       "id": "REPO-20",
@@ -8551,7 +8560,6 @@
     "REPO-15",
     "REPO-16",
     "REPO-17",
-    "REPO-18",
     "REPO-19",
     "REPO-25",
     "REPO-26",
