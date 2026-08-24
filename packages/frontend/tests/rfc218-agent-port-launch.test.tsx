@@ -33,6 +33,11 @@ vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({
     data: {
       user: { id: 'me', username: 'me', displayName: 'Me', role: 'user', status: 'active' },
+      profile: {
+        displayName: 'Me',
+        email: 'me@example.test',
+        gitCommitIdentity: { name: 'Me', email: 'me@example.test' },
+      },
       source: 'session',
       permissions: ['tasks:read'],
       linkedIdentities: [],

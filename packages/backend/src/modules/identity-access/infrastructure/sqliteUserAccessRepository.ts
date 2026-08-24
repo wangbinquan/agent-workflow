@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import {
   normalizeStoredAdditionalPermissions,
   resolveEffectiveAccountPermissions,
@@ -7,7 +8,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { initialGrantsForRole } from '../domain/initialGrants'
-import { users } from '@/db/schema'
+import { oidcProviders, userIdentities, users } from '@/db/schema'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { withSQLiteTransaction } from '@/platform/persistence/sqlite/existingTransactionScope'
@@ -16,6 +17,7 @@ import type {
   AuthorityFenceRecord,
   ConditionalUserUpdate,
   InsertManagedUserRecord,
+  OidcProfileIdentityUpdate,
   UserAccessFenceReader,
   UserAccessReadRepository,
   UserAccessRecord,
@@ -29,6 +31,12 @@ import type {
 import type { UserAccessAuditRecord } from '../application/ports/userAccessAuditRepository'
 import type { ManagedUserStatus } from '../public/types'
 import { appendUserAccessAudit } from './sqliteUserAccessAuditRepository'
+import {
+  mapOidcEmailConstraint,
+  syncOidcProfileTransaction,
+  type SyncOidcProfileCommand,
+  type SyncOidcProfileResult,
+} from '../application/commands/syncOidcProfile'
 
 interface RawUserAccessRow {
   id: string
@@ -204,6 +212,31 @@ export function insertInitialUserAccessInTransaction(
   })
 }
 
+/** Cross-context bridge for OIDC create/bind/link, whose identity row must be
+ * inserted in the same SQLite transaction as the identity-access profile
+ * refresh. The Drizzle handle remains infrastructure-private. */
+export function syncOidcProfileInTransaction(
+  transactionScope: TransactionScope,
+  command: SyncOidcProfileCommand,
+  now = Date.now(),
+): SyncOidcProfileResult {
+  let result: SyncOidcProfileResult | undefined
+  try {
+    withSQLiteTransaction(transactionScope, (transaction) => {
+      result = syncOidcProfileTransaction(new SQLiteUserAccessTransaction(transaction), command, {
+        now,
+        operationId: ulid(),
+        auditId: ulid,
+      })
+      return undefined
+    })
+  } catch (error) {
+    throw mapOidcEmailConstraint(error)
+  }
+  if (result === undefined) throw new Error('OIDC profile transaction did not execute')
+  return result
+}
+
 class SQLiteUserAccessTransaction implements UserAccessTransaction {
   constructor(private readonly transaction: DbTxSync) {}
 
@@ -219,6 +252,59 @@ class SQLiteUserAccessTransaction implements UserAccessTransaction {
       sql`${USER_SELECT} WHERE username = ${username} LIMIT 1`,
     ) as RawUserAccessRow[]
     return rows[0] === undefined ? null : mapUser(rows[0])
+  }
+
+  findUserByEmail(email: string): UserAccessRecord | null {
+    const rows = this.transaction.all(
+      sql`${USER_SELECT} WHERE email = ${email} LIMIT 1`,
+    ) as RawUserAccessRow[]
+    return rows[0] === undefined ? null : mapUser(rows[0])
+  }
+
+  findOidcProfileIdentity(providerId: string, subject: string) {
+    const row = this.transaction
+      .select({
+        id: userIdentities.id,
+        userId: userIdentities.userId,
+        email: userIdentities.email,
+        emailVerified: userIdentities.emailVerified,
+        preferredSnapshot: userIdentities.preferredSnapshot,
+      })
+      .from(userIdentities)
+      .where(and(eq(userIdentities.providerId, providerId), eq(userIdentities.subject, subject)))
+      .limit(1)
+      .all()[0]
+    return row === undefined ? null : { ...row, emailVerified: row.emailVerified === 1 }
+  }
+
+  findOidcProfileSelectors(providerId: string) {
+    const row = this.transaction
+      .select({
+        subjectClaim: oidcProviders.subjectClaim,
+        usernameClaim: oidcProviders.usernameClaim,
+        emailClaim: oidcProviders.emailClaim,
+      })
+      .from(oidcProviders)
+      .where(eq(oidcProviders.id, providerId))
+      .limit(1)
+      .all()[0]
+    return row ?? null
+  }
+
+  updateOidcProfileIdentity(update: OidcProfileIdentityUpdate): void {
+    const values: Partial<typeof userIdentities.$inferInsert> = {}
+    if (update.email !== undefined) values.email = update.email
+    if (update.emailVerified !== undefined) {
+      values.emailVerified = update.emailVerified ? 1 : 0
+    }
+    if (update.preferredSnapshot !== undefined) {
+      values.preferredSnapshot = update.preferredSnapshot
+    }
+    this.transaction
+      .update(userIdentities)
+      .set(values)
+      .where(eq(userIdentities.id, update.id))
+      .run()
   }
 
   listGrants(userId: string): ReadonlyArray<UserPermissionGrantRecord> {

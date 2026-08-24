@@ -113,7 +113,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(rows[0]!.worktreePath).toBe(scratchDir)
   })
 
-  test('S2 root-commit identity: platform default, overridden by per-task identity', async () => {
+  test('S2 root-commit identity: platform default, overridden by resolved task identity', async () => {
     h = buildHarness()
     const plain = await startTask(
       { ...BODY },
@@ -131,10 +131,11 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(plainAuthor.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
 
     const withId = await startTask(
-      { ...BODY, name: 'scratch-task-2', gitUserName: 'Alice', gitUserEmail: 'a@example.com' },
+      { ...BODY, name: 'scratch-task-2' },
       {
         db: h.db,
         appHome: h.appHome,
+        gitCommitIdentity: { name: 'Alice', email: 'a@example.com' },
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
     )

@@ -61,6 +61,7 @@ const MANUAL = {
   jwksUri: 'https://idp.corp.test/jwks.json',
   trustEmailVerified: true,
   usernameClaim: 'login signature',
+  emailClaim: 'mail',
   subjectClaim: 'id',
 }
 
@@ -155,6 +156,16 @@ describe('RFC-220 S1 — CreateOidcProviderBodySchema field validation', () => {
     expect(parse({ usernameClaim: 'name __proto__' }).success).toBe(false)
     expect(parse({ usernameClaim: '' }).success).toBe(false)
   })
+
+  test('RFC-320 emailClaim: one plain claim name only', () => {
+    expect(parse({ emailClaim: 'email' }).success).toBe(true)
+    expect(parse({ emailClaim: 'profile.mail' }).success).toBe(true)
+    expect(parse({ emailClaim: null }).success).toBe(true)
+    expect(parse({ emailClaim: 'mail alternate_mail' }).success).toBe(false)
+    expect(parse({ emailClaim: '__proto__' }).success).toBe(false)
+    expect(parse({ emailClaim: 'constructor' }).success).toBe(false)
+    expect(parse({ emailClaim: '' }).success).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -176,10 +187,11 @@ describe('RFC-220 S2 — provider service', () => {
     expect(p.jwksUri).toBeNull()
     expect(p.trustEmailVerified).toBe(false)
     expect(p.usernameClaim).toBeNull()
+    expect(p.emailClaim).toBeNull()
     expect(p.subjectClaim).toBeNull()
   })
 
-  test('create + materialize roundtrips all 7 new fields', async () => {
+  test('create + materialize roundtrips all profile and endpoint fields', async () => {
     const p = await h.svc.create({ ...BASE, ...MANUAL })
     expect(p.authorizationEndpoint).toBe(MANUAL.authorizationEndpoint)
     expect(p.tokenEndpoint).toBe(MANUAL.tokenEndpoint)
@@ -187,9 +199,11 @@ describe('RFC-220 S2 — provider service', () => {
     expect(p.jwksUri).toBe(MANUAL.jwksUri)
     expect(p.trustEmailVerified).toBe(true)
     expect(p.usernameClaim).toBe(MANUAL.usernameClaim)
+    expect(p.emailClaim).toBe(MANUAL.emailClaim)
     expect(p.subjectClaim).toBe(MANUAL.subjectClaim)
     const redacted = redactedProvider(p)
     expect(redacted.userinfoEndpoint).toBe(MANUAL.userinfoEndpoint)
+    expect(redacted.emailClaim).toBe(MANUAL.emailClaim)
     expect(redacted.subjectClaim).toBe(MANUAL.subjectClaim)
     expect(redacted.clientSecret).toBe('***')
   })
@@ -211,13 +225,16 @@ describe('RFC-220 S2 — provider service', () => {
     // untouched fields survive a partial patch
     expect(afterSet.tokenEndpoint).toBe(MANUAL.tokenEndpoint)
     expect(afterSet.usernameClaim).toBe(MANUAL.usernameClaim)
+    expect(afterSet.emailClaim).toBe(MANUAL.emailClaim)
     const afterClear = await h.svc.patch(p.id, {
       userinfoEndpoint: null,
       usernameClaim: null,
+      emailClaim: null,
       trustEmailVerified: false,
     })
     expect(afterClear.userinfoEndpoint).toBeNull()
     expect(afterClear.usernameClaim).toBeNull()
+    expect(afterClear.emailClaim).toBeNull()
     expect(afterClear.trustEmailVerified).toBe(false)
   })
 
@@ -265,7 +282,7 @@ describe('RFC-220 S2 — provider service', () => {
 // ---------------------------------------------------------------------------
 
 describe('RFC-220 S9 — migration columns', () => {
-  test('oidc_providers gained all 7 columns with expected nullability/defaults', () => {
+  test('oidc_providers has endpoint and profile-selector columns with expected defaults', () => {
     const { db } = buildHarness()
     const cols = db.all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(
       sql`PRAGMA table_info(oidc_providers)`,
@@ -277,6 +294,7 @@ describe('RFC-220 S9 — migration columns', () => {
       'userinfo_endpoint',
       'jwks_uri',
       'username_claim',
+      'email_claim',
       'subject_claim',
     ]) {
       const col = byName.get(name)

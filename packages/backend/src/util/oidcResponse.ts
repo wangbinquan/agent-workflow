@@ -24,6 +24,11 @@ const REASON_TO_TEXT: Record<string, string> = {
     'The id_token cannot be verified (no JWKS available) and no userinfo endpoint is configured. Contact your administrator.',
   'userinfo-fetch-failed': 'Could not fetch identity information from the provider.',
   'userinfo-shape-invalid': 'The provider returned an unusable userinfo response.',
+  'oidc-email-claim-invalid':
+    'The configured userinfo email field is missing or is not a valid email address.',
+  'userinfo-subject-mismatch':
+    'The userinfo response does not belong to the verified identity. Contact your administrator.',
+  'oidc-email-conflict': 'That email address already belongs to another account.',
   'provider-config-changed': 'The provider configuration changed during sign-in. Please try again.',
   'email-domain-not-allowed':
     'Your email domain is not on the allowlist. Please contact your administrator.',

@@ -1010,11 +1010,11 @@ export const tasks = sqliteTable(
     catalogVisibility: text('catalog_visibility', { enum: TASK_CATALOG_VISIBILITIES })
       .notNull()
       .default('public'),
-    // RFC-067: optional per-task Git commit identity. Both NULL → daemon
-    // default (legacy behavior). Both set → runner injects GIT_AUTHOR_* /
-    // GIT_COMMITTER_* env at spawn time AND startTask writes [user] into the
-    // worktree's .git/config. XOR rejected at StartTaskSchema superRefine
-    // and never persisted.
+    // RFC-320: immutable creator Git identity snapshot. User-owned root tasks
+    // always freeze a complete pair from identity-access; child tasks inherit
+    // their parent's pair. Both NULL is reserved for explicit system-internal
+    // work. Runtime commit paths inject these columns as GIT_AUTHOR_* /
+    // GIT_COMMITTER_* and never re-read the user profile.
     gitUserName: text('git_user_name'),
     gitUserEmail: text('git_user_email'),
     // RFC-075: user-specified working branch. NULL → framework default
@@ -2674,6 +2674,8 @@ export const oidcProviders = sqliteTable(
       .notNull()
       .default(false),
     usernameClaim: text('username_claim'),
+    // RFC-320 — custom userinfo field mapped to users.email / Git user.email.
+    emailClaim: text('email_claim'),
     subjectClaim: text('subject_claim'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),

@@ -45,14 +45,17 @@ export interface EffectiveEndpoints {
 
 export type ResolveEndpointsInput = Pick<
   OidcProvider,
-  // subjectClaim feeds loginViable (D6 mode needs userinfo as the identity
-  // channel) — the cache gates cannot judge viability without it.
+  // Identity/profile selectors feed loginViable: each is explicitly sourced
+  // from subject-bound userinfo, so the cache gates need them to judge whether
+  // a complete callback is possible.
   | 'issuerUrl'
   | 'authorizationEndpoint'
   | 'tokenEndpoint'
   | 'userinfoEndpoint'
   | 'jwksUri'
   | 'subjectClaim'
+  | 'usernameClaim'
+  | 'emailClaim'
 >
 
 const POS_TTL_MS = 60 * 60 * 1000
@@ -113,18 +116,21 @@ function sanitizeUrlField(value: unknown): string | null {
  * Can the merged endpoint set carry a whole login — start AND callback AND
  * claims acquisition? Both cache gates share this predicate. A "half viable"
  * set (start would redirect but the callback could never source an identity)
- * must not be served from cache: subjectClaim mode (D6) locks the identity
- * source to userinfo, otherwise either userinfo or a configured JWKS works.
+ * must not be served from cache: subjectClaim mode (D6) and configured
+ * profile selectors lock their claims source to userinfo; otherwise either
+ * userinfo or a configured JWKS works.
  */
 export function loginViable(
   effective: Pick<
     EffectiveEndpoints,
     'authorizationEndpoint' | 'tokenEndpoint' | 'userinfoEndpoint' | 'jwksUri'
   >,
-  provider: Pick<OidcProvider, 'subjectClaim'>,
+  provider: Pick<OidcProvider, 'subjectClaim' | 'usernameClaim' | 'emailClaim'>,
 ): boolean {
   if (!effective.authorizationEndpoint || !effective.tokenEndpoint) return false
-  if (provider.subjectClaim) return effective.userinfoEndpoint !== null
+  if (provider.subjectClaim || provider.usernameClaim || provider.emailClaim) {
+    return effective.userinfoEndpoint !== null
+  }
   return effective.userinfoEndpoint !== null || effective.jwksUri !== null
 }
 

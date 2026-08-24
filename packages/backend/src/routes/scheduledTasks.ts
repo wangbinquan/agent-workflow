@@ -111,9 +111,12 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
           (rawBody as { launchPayload?: unknown } | null)?.launchPayload ?? null,
         )
         if (retired !== null) {
+          const clientOwnedGitIdentity = retired === 'gitUserName' || retired === 'gitUserEmail'
           throw new ValidationError(
-            'start-task-path-retired',
-            `RFC-165 retired path-mode launches; remove '${retired}' from launchPayload (push the repo to a real remote and register it, then launch by cachedRepoId)`,
+            clientOwnedGitIdentity ? 'task-git-identity-client-owned' : 'start-task-path-retired',
+            clientOwnedGitIdentity
+              ? `RFC-320 derives Git commit identity from the schedule owner; remove '${retired}' from launchPayload`
+              : `RFC-165 retired path-mode launches; remove '${retired}' from launchPayload (push the repo to a real remote and register it, then launch by cachedRepoId)`,
           )
         }
       }
@@ -158,9 +161,12 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
           (rawPatch as { launchPayload?: unknown } | null)?.launchPayload ?? null,
         )
         if (retired !== null) {
+          const clientOwnedGitIdentity = retired === 'gitUserName' || retired === 'gitUserEmail'
           throw new ValidationError(
-            'start-task-path-retired',
-            `RFC-165 retired path-mode launches; remove '${retired}' from launchPayload (push the repo to a real remote and register it, then launch by cachedRepoId)`,
+            clientOwnedGitIdentity ? 'task-git-identity-client-owned' : 'start-task-path-retired',
+            clientOwnedGitIdentity
+              ? `RFC-320 derives Git commit identity from the schedule owner; remove '${retired}' from launchPayload`
+              : `RFC-165 retired path-mode launches; remove '${retired}' from launchPayload (push the repo to a real remote and register it, then launch by cachedRepoId)`,
           )
         }
       }

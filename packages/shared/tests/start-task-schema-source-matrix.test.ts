@@ -108,52 +108,52 @@ describe('RFC-248 —— `repos[]` 的硬拒（非 strict zod 的静默剥除防
 })
 
 describe('RFC-248 —— 组来源与其余启动字段共存', () => {
-  test('组 + git 身份 + workingBranch + autoCommitPush 一起通过', () => {
+  test('组 + workingBranch + autoCommitPush 一起通过', () => {
     const r = StartTaskSchema.safeParse({
       ...BASE,
       repoGroupId: 'grp_1',
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@example.com',
       workingBranch: 'feat/x',
       autoCommitPush: true,
     })
     expect(r.success).toBe(true)
   })
 
-  test('组 + 半套 git 身份 + 非法分支名 → 两条 issue 都在，且不是 source-conflict', () => {
+  test('组 + 退役 git 身份 → raw guard 命中服务端所有权错误', () => {
+    expect(
+      rejectRetiredStartTaskKeys({
+        ...BASE,
+        repoGroupId: 'grp_1',
+        gitUserName: 'forged',
+      }),
+    ).toBe('gitUserName')
+  })
+
+  test('组 + 非法分支名仍由 workingBranch 自己报错', () => {
     const r = StartTaskSchema.safeParse({
       ...BASE,
       repoGroupId: 'grp_1',
-      gitUserName: 'bot',
       workingBranch: 'bad branch',
     })
     expect(r.success).toBe(false)
     if (!r.success) {
-      // 三条 refinement 住在**同一个** superRefine 里，来源分支的早 `return`
-      // 一旦被误触发就会把后面两条整个跳过——那会让半套身份 / 非法分支名
-      // 静默通过。所以这里连 issue 的 path 一起锁。
-      const identity = r.error.issues.find((i) => i.message === 'git-identity-incomplete')
-      expect(identity?.path).toEqual(['gitUserEmail'])
       const branch = r.error.issues.find((i) => i.message === 'working-branch-invalid')
       expect(branch?.path).toEqual(['workingBranch'])
       expect(r.error.issues.some((i) => i.message === 'start-task-source-conflict')).toBe(false)
     }
   })
 
-  test('组 + 合法身份 + 合法分支 + autoCommitPush → 字段原样落到 data 上', () => {
+  test('组 + 合法分支 + autoCommitPush → 字段原样落到 data 上', () => {
     const r = StartTaskSchema.safeParse({
       ...BASE,
       repoGroupId: 'grp_1',
-      gitUserName: 'Bot',
-      gitUserEmail: 'bot@local',
       workingBranch: 'feature/x',
       autoCommitPush: true,
     })
     expect(r.success).toBe(true)
     if (r.success) {
       expect(r.data.repoGroupId).toBe('grp_1')
-      expect(r.data.gitUserName).toBe('Bot')
-      expect(r.data.gitUserEmail).toBe('bot@local')
+      expect('gitUserName' in r.data).toBe(false)
+      expect('gitUserEmail' in r.data).toBe(false)
       expect(r.data.workingBranch).toBe('feature/x')
       expect(r.data.autoCommitPush).toBe(true)
     }

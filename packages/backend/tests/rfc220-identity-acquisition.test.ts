@@ -184,6 +184,35 @@ describe('RFC-220 extractUserinfoClaims', () => {
     expect(claims.preferred_username).toBeNull()
   })
 
+  test('RFC-320 custom emailClaim is authoritative, trimmed and normalized', () => {
+    const claims = extractUserinfoClaims(
+      { sub: 'u-1', email: 'ignored@example.test', mail: ' Alice@Example.TEST ' },
+      { ...opts, emailClaim: 'mail' },
+    )
+    expect(claims.email).toBe('alice@example.test')
+  })
+
+  test('RFC-320 custom emailClaim is strict; optional standard email remains compatible', () => {
+    for (const source of [
+      { sub: 'u-1' },
+      { sub: 'u-1', mail: 42 },
+      { sub: 'u-1', mail: 'not-an-email' },
+    ]) {
+      let error: unknown
+      try {
+        extractUserinfoClaims(source, { ...opts, emailClaim: 'mail' })
+      } catch (caught) {
+        error = caught
+      }
+      expect(error).toBeInstanceOf(OidcTokenError)
+      expect((error as OidcTokenError).code).toBe('oidc-email-claim-invalid')
+    }
+    expect(extractUserinfoClaims({ sub: 'u-1' }, opts).email).toBeNull()
+    expect(() => extractUserinfoClaims({ sub: 'u-1', email: 'invalid' }, opts)).toThrow(
+      OidcTokenError,
+    )
+  })
+
   test('non-object payloads are shape failures', () => {
     expect(() => extractUserinfoClaims([1], opts)).toThrow(OidcTokenError)
     expect(() => extractUserinfoClaims('jwt-ish-string', opts)).toThrow(OidcTokenError)
@@ -342,18 +371,69 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
     expect(claims.preferred_username).toBe('idt-user')
   })
 
-  test('usernameClaim composes from the id_token payload too (D5 both paths)', async () => {
+  test('configured usernameClaim is sourced from subject-bound userinfo', async () => {
     const { publicKey, privateKey } = await generateKeyPair('ES256')
-    const idToken = await signIdToken(privateKey, { sub: 'idt-1', family: '张', given: '三' })
+    const idToken = await signIdToken(privateKey, {
+      sub: 'idt-1',
+      family: 'untrusted-token-value',
+      given: 'ignored',
+    })
     const claims = await acquireIdentityClaims({
       tokens: { access_token: 'at', id_token: idToken },
-      effective: effective({ jwksUri: `${ISSUER}/jwks` }),
+      effective: effective({
+        jwksUri: `${ISSUER}/jwks`,
+        userinfoEndpoint: `${ISSUER}/userinfo`,
+      }),
       clientId: AUDIENCE,
       nonce: NONCE,
       usernameClaim: 'family given',
       jwks: staticJwks(publicKey),
+      fetcher: userinfoFetcher({ sub: 'idt-1', family: '张', given: '三' }),
     })
     expect(claims.preferred_username).toBe('张 三')
+  })
+
+  test('configured profile selectors reject missing, malformed, or mismatched userinfo sub', async () => {
+    const { publicKey, privateKey } = await generateKeyPair('ES256')
+    const idToken = await signIdToken(privateKey, { sub: 'canonical-subject' })
+    for (const sub of [undefined, 42, 'different-subject']) {
+      await expectTokenError(
+        acquireIdentityClaims({
+          tokens: { access_token: 'at', id_token: idToken },
+          effective: effective({
+            jwksUri: `${ISSUER}/jwks`,
+            userinfoEndpoint: `${ISSUER}/userinfo`,
+          }),
+          clientId: AUDIENCE,
+          nonce: NONCE,
+          emailClaim: 'mail',
+          jwks: staticJwks(publicKey),
+          fetcher: userinfoFetcher({ sub, mail: 'alice@example.test' }),
+        }),
+        'userinfo-subject-mismatch',
+      )
+    }
+  })
+
+  test('userinfo-owned profile ignores malformed optional id-token email', async () => {
+    const { publicKey, privateKey } = await generateKeyPair('ES256')
+    const idToken = await signIdToken(privateKey, {
+      sub: 'canonical-subject',
+      email: 'not-an-email',
+    })
+    const claims = await acquireIdentityClaims({
+      tokens: { access_token: 'at', id_token: idToken },
+      effective: effective({
+        jwksUri: `${ISSUER}/jwks`,
+        userinfoEndpoint: `${ISSUER}/userinfo`,
+      }),
+      clientId: AUDIENCE,
+      nonce: NONCE,
+      emailClaim: 'mail',
+      jwks: staticJwks(publicKey),
+      fetcher: userinfoFetcher({ sub: 'canonical-subject', mail: 'alice@example.test' }),
+    })
+    expect(claims.email).toBe('alice@example.test')
   })
 
   test('empty id_token sub is rejected (behavior change #4)', async () => {

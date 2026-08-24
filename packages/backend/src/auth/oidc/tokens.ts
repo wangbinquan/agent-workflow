@@ -38,7 +38,11 @@ export class OidcTokenError extends Error {
       | 'userinfo-fetch-failed'
       | 'userinfo-shape-invalid'
       | 'userinfo-unavailable'
-      | 'jwks-unavailable',
+      | 'jwks-unavailable'
+      // RFC-320 — configured profile selectors are strict and a userinfo
+      // profile must bind to the verified id-token subject.
+      | 'oidc-email-claim-invalid'
+      | 'userinfo-subject-mismatch',
   ) {
     super(message)
     this.name = 'OidcTokenError'

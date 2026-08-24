@@ -23,6 +23,42 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
+/** RFC-320 — exact author/committer pair frozen onto a task at launch. */
+export const GitCommitIdentitySchema = z
+  .object({
+    name: UserSchema.shape.displayName,
+    email: z.string().email().max(254),
+  })
+  .strict()
+
+export type GitCommitIdentity = z.infer<typeof GitCommitIdentitySchema>
+
+/** Private self-profile returned only by /api/auth/me. */
+export const UserPrivateProfileSchema = z
+  .object({
+    displayName: UserSchema.shape.displayName,
+    email: UserSchema.shape.email,
+    gitCommitIdentity: GitCommitIdentitySchema.nullable(),
+  })
+  .strict()
+
+export type UserPrivateProfile = z.infer<typeof UserPrivateProfileSchema>
+
+/** RFC-320 — users edit their canonical commit identity at account scope. */
+export const UpdateOwnProfileBodySchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(128),
+    email: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+  })
+  .strict()
+
+export type UpdateOwnProfileBody = z.infer<typeof UpdateOwnProfileBodySchema>
+
 /** Admin-facing user row. OIDC ownership is materialized server-side so the
  *  UI can omit inapplicable password actions without an N+1 identity query. */
 export const AdminUserViewSchema = UserSchema.extend({

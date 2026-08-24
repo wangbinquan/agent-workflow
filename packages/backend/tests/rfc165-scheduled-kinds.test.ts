@@ -28,7 +28,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from '../src/auth/patStore'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, scheduledTasks, tasks } from '../src/db/schema'
+import { agents, scheduledTasks, tasks, users } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { buildScheduleLaunch } from '../src/services/scheduleLaunch'
@@ -88,6 +88,7 @@ async function seedOwner(db: DbClient): Promise<string> {
   const u = await createUser(db, {
     username: 'alice',
     displayName: 'alice',
+    email: 'alice@example.test',
     role: 'admin',
     password: 'longEnoughPassword',
   })
@@ -423,6 +424,12 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
         }),
       })
       .where(eq(scheduledTasks.id, created.id))
+    // RFC-320: the durable schedule stores no identity snapshot. Whatever the
+    // owner profile contains at the actual fire becomes the new task snapshot.
+    await db
+      .update(users)
+      .set({ displayName: 'Alice At Fire', email: 'alice.fire@example.test' })
+      .where(eq(users.id, ownerId))
     const row = (await getScheduledTaskRow(db, created.id))!
     const { taskId } = await fireSchedule(
       db,
@@ -435,6 +442,8 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     expect(task.scheduledTaskId).toBe(created.id)
     expect(task.spaceKind).toBe('scratch')
     expect(task.name).toContain('nightly') // decorateTaskName keeps the base
+    expect(task.gitUserName).toBe('Alice At Fire')
+    expect(task.gitUserEmail).toBe('alice.fire@example.test')
   })
 
   test('a corrupted legacy name-only row fails closed before launch', async () => {

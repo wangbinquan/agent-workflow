@@ -69,6 +69,7 @@ async function seed(db: DbClient): Promise<{ workflowId: string; userId: string 
   await db.insert(users).values({
     id: userId,
     username: userId,
+    email: `${userId}@example.test`,
     displayName: 'tester',
     role: 'admin',
     createdAt: Date.now(),

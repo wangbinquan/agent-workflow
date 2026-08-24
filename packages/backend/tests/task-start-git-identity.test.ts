@@ -1,56 +1,53 @@
-// RFC-067 — task-level Git commit identity. End-to-end behaviour:
-//   - startTask persists `gitUserName` / `gitUserEmail` (or NULL) on `tasks`.
-//   - startTask writes `[user]` to the worktree's `.git/config` ONLY when
-//     both halves are set.
-//   - runner spawn env contains `GIT_AUTHOR_*` + `GIT_COMMITTER_*` four-tuple
-//     ONLY when both halves are set, and the task identity outranks any
-//     inherited `GIT_AUTHOR_*` on the daemon process.
-//   - Two concurrent tasks with different identities do not bleed env vars
-//     into each other's spawn.
-//   - Default behaviour (both omitted) is byte-identical to pre-RFC-067:
-//     no env injected, no `[user]` block written.
+// RFC-320 — account profile is the only user-task Git identity source. The
+// task row freezes it once and every runtime spawn consumes that snapshot.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { execFileSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
-import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import type { DbClient } from '../src/db/client'
-import { tasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
+
+import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { tasks, users } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { createWorkflow } from '../src/services/workflow'
 import {
   abortAllActiveTasks,
   isTaskActive,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+  resolveTaskGitCommitIdentity,
+  startTaskWithLocalRepo,
 } from '../src/services/task'
+import { createWorkflow } from '../src/services/workflow'
+import { DomainError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
-const FLOW_TIMEOUT_MS = 20_000
+const FLOW_TIMEOUT_MS = 60_000
 const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
-
-let cleanupDirs: string[] = []
-let watchdog: ReturnType<typeof setTimeout> | undefined
 
 setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
 
+interface Harness {
+  readonly db: DbClient
+  readonly root: string
+  readonly appHome: string
+  readonly repoPath: string
+  readonly workflowId: string
+  readonly envLog: string
+}
+
+let roots: string[] = []
+let databases: DbClient[] = []
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
 beforeEach(() => {
-  cleanupDirs = []
+  roots = []
+  databases = []
   watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
 })
 
@@ -59,15 +56,10 @@ afterEach(async () => {
   try {
     await abortActiveTasksAndWait('test-cleanup')
   } finally {
-    for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
+    for (const db of databases.reverse()) db.$client.close()
+    for (const root of roots.reverse()) rmSync(root, { recursive: true, force: true })
   }
 })
-
-function makeTempDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix))
-  cleanupDirs.push(dir)
-  return dir
-}
 
 async function abortActiveTasksAndWait(reason: string): Promise<void> {
   const taskIds = abortAllActiveTasks(reason)
@@ -79,110 +71,48 @@ async function abortActiveTasksAndWait(reason: string): Promise<void> {
   if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
 }
 
-function git(...args: string[]): void {
+function git(cwd: string, ...args: string[]): void {
   execFileSync('git', args, {
+    cwd,
     stdio: 'ignore',
     timeout: GIT_TIMEOUT_MS,
     env: nonInteractiveGitEnv(),
   })
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
-) {
-  return startTaskWithLocalRepoBase(input, {
-    ...deps,
-    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
-    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-  })
-}
-
-interface Harness {
-  appHome: string
-  repoPath: string
-  db: DbClient
-  stubOpencode: string
-  envCaptureDir: string
-  wfId: string
-}
-
-/**
- * Stub opencode that — on `run` — writes its inherited env vars to a
- * deterministic JSON file (one per node_run, keyed by OPENCODE_CONFIG_DIR
- * tail segment so concurrent tasks don't collide) and then emits the
- * standard <workflow-output> envelope so the scheduler marks the run done.
- */
-function makeEnvCapturingStub(dir: string, captureDir: string): string {
-  // RFC-254: ported from a `#!/usr/bin/env bash` + `jq` stub — Windows has
-  // neither a shebang launcher nor jq. This runs under `bun run <this>` (the
-  // caller spawns `[process.execPath, 'run', <path>]`, the same seam as
-  // e2e-stub-argv-contract), so it's a portable interpreter on all three OSes.
-  // The OPENCODE_CONFIG_DIR last segment is the per-node_run key (runner builds
-  // `.../{nodeRun}/.opencode`); `basename` yields the nodeRunId, PID fallback.
-  // Output bytes mirror the bash stub: the four-var capture JSON + one
-  // `{"type":"text",...}` line carrying the <workflow-output> envelope (the
-  // runner's raw-text fallback + envelope regex extract it — the wrapping line
-  // is deliberately not strict JSON, exactly as the bash stub emitted).
-  const path = join(dir, 'stub-opencode-env.ts')
-  const script = `import { writeFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
-
-const CAPTURE_DIR = ${JSON.stringify(captureDir)}
-const args = process.argv.slice(2)
-if (args[0] === '--version') {
-  console.log('stub-opencode 1.14.99')
-  process.exit(0)
-}
-if (args[0] === 'run') {
-  const m = args.join(' ').match(/nonce="([^"]*)"/)
-  const open = m ? '<workflow-output nonce="' + m[1] + '">' : '<workflow-output>'
-  let key = basename(process.env.OPENCODE_CONFIG_DIR || ('pid-' + process.pid))
-  if (key.endsWith('.opencode')) key = key.slice(0, -'.opencode'.length)
-  if (key === '') key = 'pid-' + process.pid
-  writeFileSync(
-    join(CAPTURE_DIR, 'env-' + key + '.json'),
-    JSON.stringify({
-      GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || '__unset__',
-      GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || '__unset__',
-      GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || '__unset__',
-      GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || '__unset__',
-    }) + '\\n',
-  )
-  const env = open + '<port name="out">ok</port></workflow-output>'
-  console.log('{"type":"text","ts":' + Date.now() + ',"text":"' + env + '"}')
-  process.exit(0)
-}
-process.exit(1)
-`
-  writeFileSync(path, script)
-  return path
-}
-
 async function setup(): Promise<Harness> {
-  const tmp = makeTempDir('aw-rfc067-')
-  const appHome = join(tmp, 'appHome')
-  const repoPath = join(tmp, 'repo')
-  const envCaptureDir = join(tmp, 'env-capture')
-  mkdirSync(envCaptureDir, { recursive: true })
+  const root = mkdtempSync(join(tmpdir(), 'aw-rfc320-git-identity-'))
+  roots.push(root)
+  const appHome = join(root, 'home')
+  const repoPath = join(root, 'repo')
+  const envLog = join(root, 'env.jsonl')
+  mkdirSync(appHome, { recursive: true })
+  mkdirSync(repoPath, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  databases.push(db)
   await seedTestDefaultOpencodeRuntime(db)
 
-  git('init', '-b', 'main', repoPath)
-  git('-C', repoPath, 'config', 'user.email', 't@t.test')
-  git('-C', repoPath, 'config', 'user.name', 't')
-  writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  git('-C', repoPath, 'add', '.')
-  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+  git(repoPath, 'init', '-q', '-b', 'main')
+  writeFileSync(join(repoPath, 'README.md'), '# fixture\n')
+  git(repoPath, 'add', '.')
+  git(
+    repoPath,
+    '-c',
+    'user.email=fixture@example.test',
+    '-c',
+    'user.name=fixture',
+    'commit',
+    '-q',
+    '-m',
+    'init',
+  )
 
-  const stubOpencode = makeEnvCapturingStub(tmp, envCaptureDir)
-
-  const echoer = await createAgent(db, {
+  const agent = await createAgent(db, {
     name: 'echoer',
     description: '',
     outputs: ['out'],
     outputKinds: { out: 'string' },
-    syncOutputsOnIterate: true,
+    syncOutputsOnIterate: false,
     permission: {},
     skills: [],
     dependsOn: [],
@@ -191,366 +121,252 @@ async function setup(): Promise<Harness> {
     frontmatterExtra: {},
     bodyMd: '',
   })
-
-  const wf = await createWorkflow(db, {
-    name: 'trivial',
+  const workflow = await createWorkflow(db, {
+    name: 'identity-fixture',
     description: '',
     definition: {
       $schema_version: 2,
       inputs: [{ kind: 'text', key: 'topic', label: 'topic' }],
       nodes: [
-        { id: 'in_1', kind: 'input', inputKey: 'topic' },
+        { id: 'in', kind: 'input', inputKey: 'topic' },
         {
-          id: 'echoer',
+          id: 'agent',
           kind: 'agent-single',
-          agentId: echoer.id,
-          agentName: 'echoer',
+          agentId: agent.id,
+          agentName: agent.name,
           promptTemplate: '{{topic}}',
         },
       ],
       edges: [
         {
-          id: 'e1',
-          source: { nodeId: 'in_1', portName: 'topic' },
-          target: { nodeId: 'echoer', portName: 'topic' },
+          id: 'edge',
+          source: { nodeId: 'in', portName: 'topic' },
+          target: { nodeId: 'agent', portName: 'topic' },
         },
       ],
     },
   })
-
-  return { appHome, repoPath, db, stubOpencode, envCaptureDir, wfId: wf.id }
+  return { db, root, appHome, repoPath, workflowId: workflow.id, envLog }
 }
 
-interface CapturedEnv {
-  GIT_AUTHOR_NAME: string
-  GIT_AUTHOR_EMAIL: string
-  GIT_COMMITTER_NAME: string
-  GIT_COMMITTER_EMAIL: string
-}
-
-function readCapturedEnvs(captureDir: string): CapturedEnv[] {
-  if (!existsSync(captureDir)) return []
-  const files = readdirSync(captureDir).filter((file) => file.endsWith('.json'))
-  return files.map((f) => JSON.parse(readFileSync(join(captureDir, f), 'utf8')))
-}
-
-describe('RFC-067 — startTask + runner Git identity wiring', () => {
-  // Each test installs and restores env vars under defer().
-  const envSavers: Array<() => void> = []
-  beforeEach(() => {
-    envSavers.length = 0
+async function seedUser(
+  db: DbClient,
+  id: string,
+  displayName: string,
+  email: string | null,
+): Promise<void> {
+  await db.insert(users).values({
+    id,
+    username: id,
+    email,
+    displayName,
+    passwordHash: null,
+    role: 'user',
+    status: 'active',
+    forcePasswordChange: false,
+    createdBy: null,
+    createdAt: 1,
+    updatedAt: 1,
+    lastLoginAt: null,
+    schemaVersion: 1,
   })
-  afterEach(() => {
-    for (const restore of envSavers.reverse()) restore()
-  })
+}
 
-  function patchEnv(key: string, value: string | undefined): void {
-    const prior = process.env[key]
-    if (value === undefined) delete process.env[key]
-    else process.env[key] = value
-    envSavers.push(() => {
-      if (prior === undefined) delete process.env[key]
-      else process.env[key] = prior
-    })
+function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
+  const prior = new Map<string, string | undefined>()
+  for (const [key, value] of Object.entries(env)) {
+    prior.set(key, process.env[key])
+    process.env[key] = value
   }
+  return body().finally(() => {
+    for (const [key, value] of prior) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+}
 
-  test('AC-1: both omitted → DB columns NULL, no env injected', async () => {
+async function launch(h: Harness, name: string, actorUserId?: string) {
+  return await withEnv(
+    {
+      MOCK_OPENCODE_OUTPUTS: JSON.stringify({ out: 'ok' }),
+      MOCK_OPENCODE_CAPTURE_ENV_TO: h.envLog,
+    },
+    () => launchWithoutEnv(h, name, actorUserId),
+  )
+}
+
+function launchWithoutEnv(h: Harness, name: string, actorUserId?: string) {
+  return startTaskWithLocalRepo(
+    {
+      workflowId: h.workflowId,
+      name,
+      repoPath: h.repoPath,
+      baseBranch: 'main',
+      inputs: { topic: name },
+    },
+    {
+      db: h.db,
+      appHome: h.appHome,
+      ...(actorUserId === undefined ? {} : { actorUserId }),
+      binaryOverride: [process.execPath, 'run', MOCK_OPENCODE],
+      awaitScheduler: true,
+      defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+      defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+    },
+  )
+}
+
+function readCaptured(h: Harness): Array<Record<string, string | null>> {
+  if (!Bun.file(h.envLog).size) return []
+  return readFileSync(h.envLog, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, string | null>)
+}
+
+describe('RFC-320 task Git identity snapshot', () => {
+  test('human root task freezes displayName/email and injects the four Git variables', async () => {
     const h = await setup()
-    const task = await startTaskWithLocalRepo(
-      {
-        workflowId: h.wfId,
-        name: 'no-identity-task',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-      },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
-      },
-    )
+    await seedUser(h.db, 'alice', 'Alice Chen', 'alice@example.test')
+    const task = await launch(h, 'human-root', 'alice')
 
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
-    expect(row.gitUserName).toBeNull()
-    expect(row.gitUserEmail).toBeNull()
-
-    // No spawned process saw any of the four RFC-067 env vars.
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    expect(envs.length).toBeGreaterThan(0)
-    for (const e of envs) {
-      expect(e.GIT_AUTHOR_NAME).toBe('__unset__')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('__unset__')
-      expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
-      expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
+    expect(task.gitUserName).toBe('Alice Chen')
+    expect(task.gitUserEmail).toBe('alice@example.test')
+    for (const env of readCaptured(h)) {
+      expect(env.GIT_AUTHOR_NAME).toBe('Alice Chen')
+      expect(env.GIT_AUTHOR_EMAIL).toBe('alice@example.test')
+      expect(env.GIT_COMMITTER_NAME).toBe('Alice Chen')
+      expect(env.GIT_COMMITTER_EMAIL).toBe('alice@example.test')
     }
   })
 
-  test('AC-2: both set → DB columns persist, env has 4-tuple on every spawn', async () => {
+  test('profile changes affect future tasks only; the first row stays frozen', async () => {
     const h = await setup()
-    const task = await startTaskWithLocalRepo(
-      {
-        workflowId: h.wfId,
-        name: 'bot-identity-task',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-        gitUserName: 'AI Bot',
-        gitUserEmail: 'bot@workflow.local',
-      },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
-      },
-    )
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
-    expect(row.gitUserName).toBe('AI Bot')
-    expect(row.gitUserEmail).toBe('bot@workflow.local')
+    await seedUser(h.db, 'alice', 'Alice A', 'alice-a@example.test')
+    const first = await launch(h, 'first', 'alice')
+    await h.db
+      .update(users)
+      .set({ displayName: 'Alice B', email: 'alice-b@example.test', updatedAt: 2 })
+      .where(eq(users.id, 'alice'))
+    const second = await launch(h, 'second', 'alice')
 
-    // Stub captured the four env vars on every spawn.
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    expect(envs.length).toBeGreaterThan(0)
-    for (const e of envs) {
-      expect(e.GIT_AUTHOR_NAME).toBe('AI Bot')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('bot@workflow.local')
-      expect(e.GIT_COMMITTER_NAME).toBe('AI Bot')
-      expect(e.GIT_COMMITTER_EMAIL).toBe('bot@workflow.local')
+    const rows = await h.db
+      .select({ id: tasks.id, name: tasks.gitUserName, email: tasks.gitUserEmail })
+      .from(tasks)
+    expect(rows.find((row) => row.id === first.id)).toMatchObject({
+      name: 'Alice A',
+      email: 'alice-a@example.test',
+    })
+    expect(rows.find((row) => row.id === second.id)).toMatchObject({
+      name: 'Alice B',
+      email: 'alice-b@example.test',
+    })
+    expect(new Set(readCaptured(h).map((env) => env.GIT_AUTHOR_NAME))).toEqual(
+      new Set(['Alice A', 'Alice B']),
+    )
+  })
+
+  test('missing account email rejects a human task instead of using daemon identity', async () => {
+    const h = await setup()
+    await seedUser(h.db, 'alice', 'Alice', null)
+    const error = await launch(h, 'missing-email', 'alice').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(DomainError)
+    expect((error as DomainError).code).toBe('git-identity-email-missing')
+    expect((await h.db.select().from(tasks)).length).toBe(0)
+  })
+
+  test('task snapshot overrides daemon Git environment without mutating process.env', async () => {
+    const h = await setup()
+    await seedUser(h.db, 'alice', 'Task Owner', 'owner@example.test')
+    await withEnv(
+      {
+        GIT_AUTHOR_NAME: 'daemon',
+        GIT_AUTHOR_EMAIL: 'daemon@example.test',
+        GIT_COMMITTER_NAME: 'daemon',
+        GIT_COMMITTER_EMAIL: 'daemon@example.test',
+      },
+      () => launch(h, 'override', 'alice'),
+    )
+    for (const env of readCaptured(h)) {
+      expect(env.GIT_AUTHOR_NAME).toBe('Task Owner')
+      expect(env.GIT_AUTHOR_EMAIL).toBe('owner@example.test')
+      expect(env.GIT_COMMITTER_NAME).toBe('Task Owner')
+      expect(env.GIT_COMMITTER_EMAIL).toBe('owner@example.test')
     }
   })
 
-  test('AC-3: leading/trailing whitespace trimmed before persistence + env', async () => {
+  test('concurrent user tasks keep their own profile identity', async () => {
     const h = await setup()
-    const task = await startTaskWithLocalRepo(
+    await seedUser(h.db, 'alice', 'Alice', 'alice@example.test')
+    await seedUser(h.db, 'bob', 'Bob', 'bob@example.test')
+    await withEnv(
       {
-        workflowId: h.wfId,
-        name: 'trim-task',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-        gitUserName: '  Padded Bot  ',
-        gitUserEmail: '  padded@bot.local  ',
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ out: 'ok' }),
+        MOCK_OPENCODE_CAPTURE_ENV_TO: h.envLog,
       },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
+      async () => {
+        const [taskA, taskB] = await Promise.all([
+          launchWithoutEnv(h, 'parallel-a', 'alice'),
+          launchWithoutEnv(h, 'parallel-b', 'bob'),
+        ])
+        expect([taskA.gitUserName, taskB.gitUserName].sort()).toEqual(['Alice', 'Bob'])
+
+        const captured = readCaptured(h)
+          .map((env) => ({
+            authorName: env.GIT_AUTHOR_NAME,
+            authorEmail: env.GIT_AUTHOR_EMAIL,
+            committerName: env.GIT_COMMITTER_NAME,
+            committerEmail: env.GIT_COMMITTER_EMAIL,
+          }))
+          .sort((a, b) => String(a.authorName).localeCompare(String(b.authorName)))
+        expect(captured).toEqual([
+          {
+            authorName: 'Alice',
+            authorEmail: 'alice@example.test',
+            committerName: 'Alice',
+            committerEmail: 'alice@example.test',
+          },
+          {
+            authorName: 'Bob',
+            authorEmail: 'bob@example.test',
+            committerName: 'Bob',
+            committerEmail: 'bob@example.test',
+          },
+        ])
       },
     )
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
-    expect(row.gitUserName).toBe('Padded Bot')
-    expect(row.gitUserEmail).toBe('padded@bot.local')
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    for (const e of envs) {
-      expect(e.GIT_AUTHOR_NAME).toBe('Padded Bot')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('padded@bot.local')
-    }
   })
 
-  test('AC-4: daemon GIT_AUTHOR_NAME set, task identity wins inside spawn', async () => {
+  test('explicit system-internal task keeps the nullable snapshot branch', async () => {
     const h = await setup()
-    patchEnv('GIT_AUTHOR_NAME', 'daemonbot')
-    patchEnv('GIT_AUTHOR_EMAIL', 'daemon@bot.test')
-    const task = await startTaskWithLocalRepo(
-      {
-        workflowId: h.wfId,
-        name: 'override-task',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-        gitUserName: 'Task Bot',
-        gitUserEmail: 'task@bot.test',
-      },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
-      },
-    )
-    expect(task.gitUserName).toBe('Task Bot')
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    for (const e of envs) {
-      // Task value wins because runner.ts writes it AFTER `...process.env`
-      // is spread into the env dict.
-      expect(e.GIT_AUTHOR_NAME).toBe('Task Bot')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('task@bot.test')
-      expect(e.GIT_COMMITTER_NAME).toBe('Task Bot')
-      expect(e.GIT_COMMITTER_EMAIL).toBe('task@bot.test')
-    }
+    const task = await launch(h, 'internal')
+    expect(task.gitUserName).toBeNull()
+    expect(task.gitUserEmail).toBeNull()
   })
 
-  test('AC-5: daemon GIT_AUTHOR_NAME set, no task identity → daemon value falls through (legacy)', async () => {
+  test('child resolution inherits the parent snapshot after the owner profile changes', async () => {
     const h = await setup()
-    patchEnv('GIT_AUTHOR_NAME', 'daemonbot')
-    patchEnv('GIT_AUTHOR_EMAIL', 'daemon@bot.test')
-    await startTaskWithLocalRepo(
-      {
-        workflowId: h.wfId,
-        name: 'no-task-identity',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-      },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
-      },
-    )
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    for (const e of envs) {
-      // Daemon-level env still flows through normally — runner does not
-      // strip it just because the task didn't set its own identity.
-      expect(e.GIT_AUTHOR_NAME).toBe('daemonbot')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('daemon@bot.test')
-      // Committer was NOT set on the daemon → stays unset, matches pre-RFC-067.
-      expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
-      expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
-    }
-  })
+    await seedUser(h.db, 'alice', 'Parent Owner', 'parent@example.test')
+    const parent = await launch(h, 'parent', 'alice')
+    await h.db
+      .update(users)
+      .set({ displayName: 'Later Name', email: 'later@example.test', updatedAt: 2 })
+      .where(eq(users.id, 'alice'))
 
-  test('AC-6: two concurrent tasks with different identities do not leak env into each other', async () => {
-    const hA = await setup()
-    // Reuse the same DB / capture dir / repo for the second task: simulates a
-    // single daemon driving multiple tasks concurrently. Different capture
-    // dirs per task would cheat the isolation check.
-    const [taskA, taskB] = await Promise.all([
-      startTaskWithLocalRepo(
-        {
-          workflowId: hA.wfId,
-          name: 'task-A',
-          repoPath: hA.repoPath,
-          baseBranch: 'main',
-          inputs: { topic: 'tA' },
-          gitUserName: 'Bot A',
-          gitUserEmail: 'a@bot.test',
+    expect(
+      await resolveTaskGitCommitIdentity({
+        db: h.db,
+        actorUserId: 'alice',
+        callLaunch: {
+          parentTaskId: parent.id,
+          parentNodeRunId: 'node-run',
+          invocationDepth: 1,
+          frozenSnapshotJson: null,
+          refClosureJson: null,
         },
-        {
-          db: hA.db,
-          appHome: hA.appHome,
-          binaryOverride: [process.execPath, 'run', hA.stubOpencode],
-          awaitScheduler: true,
-        },
-      ),
-      startTaskWithLocalRepo(
-        {
-          workflowId: hA.wfId,
-          name: 'task-B',
-          repoPath: hA.repoPath,
-          baseBranch: 'main',
-          inputs: { topic: 'tB' },
-          gitUserName: 'Bot B',
-          gitUserEmail: 'b@bot.test',
-        },
-        {
-          db: hA.db,
-          appHome: hA.appHome,
-          binaryOverride: [process.execPath, 'run', hA.stubOpencode],
-          awaitScheduler: true,
-        },
-      ),
-    ])
-    expect(taskA.gitUserName).toBe('Bot A')
-    expect(taskB.gitUserName).toBe('Bot B')
-
-    const captured = readCapturedEnvs(hA.envCaptureDir)
-      .map((env) => ({
-        authorName: env.GIT_AUTHOR_NAME,
-        authorEmail: env.GIT_AUTHOR_EMAIL,
-        committerName: env.GIT_COMMITTER_NAME,
-        committerEmail: env.GIT_COMMITTER_EMAIL,
-      }))
-      .sort((a, b) => a.authorName.localeCompare(b.authorName))
-    expect(captured).toEqual([
-      {
-        authorName: 'Bot A',
-        authorEmail: 'a@bot.test',
-        committerName: 'Bot A',
-        committerEmail: 'a@bot.test',
-      },
-      {
-        authorName: 'Bot B',
-        authorEmail: 'b@bot.test',
-        committerName: 'Bot B',
-        committerEmail: 'b@bot.test',
-      },
-    ])
-
-    // process.env survives the spawn — runner mutates only the spawn-local
-    // dict, never the parent process. Confirms no env leakage at the daemon
-    // level either.
-    expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
-    expect(process.env.GIT_AUTHOR_EMAIL).toBeUndefined()
-  })
-
-  test('AC-7: half-identity (only name, schema bypass) → service defensively nullifies BOTH', async () => {
-    // Schema-level rejection is locked in
-    // `packages/shared/tests/start-task-schema-git-identity.test.ts`.
-    // This test exercises the defense-in-depth nullification inside
-    // services/task.ts: if a caller bypasses the HTTP route + schema (e.g. a
-    // future internal call, a hand-crafted multipart payload), neither half
-    // of a partial identity lands in the DB and no env is injected.
-    const h = await setup()
-    const task = await startTaskWithLocalRepo(
-      {
-        workflowId: h.wfId,
-        name: 'half-name-task',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-        gitUserName: 'Lonely Bot',
-      },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
-      },
-    )
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
-    // BOTH columns must be NULL — half-identity is never persisted.
-    expect(row.gitUserName).toBeNull()
-    expect(row.gitUserEmail).toBeNull()
-    // Env injection skipped entirely.
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    for (const e of envs) {
-      expect(e.GIT_AUTHOR_NAME).toBe('__unset__')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('__unset__')
-      expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
-      expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
-    }
-  })
-
-  test('AC-8: half-identity (only email, schema bypass) → service defensively nullifies BOTH', async () => {
-    const h = await setup()
-    const task = await startTaskWithLocalRepo(
-      {
-        workflowId: h.wfId,
-        name: 'half-email-task',
-        repoPath: h.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 't' },
-        gitUserEmail: 'lonely@bot.local',
-      },
-      {
-        db: h.db,
-        appHome: h.appHome,
-        binaryOverride: [process.execPath, 'run', h.stubOpencode],
-        awaitScheduler: true,
-      },
-    )
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
-    expect(row.gitUserName).toBeNull()
-    expect(row.gitUserEmail).toBeNull()
-    const envs = readCapturedEnvs(h.envCaptureDir)
-    for (const e of envs) {
-      expect(e.GIT_AUTHOR_NAME).toBe('__unset__')
-      expect(e.GIT_AUTHOR_EMAIL).toBe('__unset__')
-    }
+      }),
+    ).toEqual({ name: 'Parent Owner', email: 'parent@example.test' })
   })
 })

@@ -41,7 +41,7 @@ describe('tasks.new.tsx — RFC-037 task name wiring', () => {
     // RFC-199 additionally requires this mount to observe fresh server truth,
     // bind inputs to one normalized revision, and reject a version mismatch.
     const start = SRC.indexOf('const contentReady =')
-    const end = SRC.indexOf('const gitNameTrim =', start)
+    const end = SRC.indexOf('const gitCommitIdentity =', start)
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     const gate = SRC.slice(start, end)

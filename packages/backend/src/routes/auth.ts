@@ -10,6 +10,7 @@ import {
   CreateBootstrapAdminBodySchema,
   LoginBodySchema,
   SESSION_TOKEN_PREFIX,
+  UpdateOwnProfileBodySchema,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 // RFC-285 B4：本文件原有一份同名 extractRawToken 私有副本（第二读点，含
@@ -43,10 +44,30 @@ import {
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { listTokenAuditForUser } from '@/services/tokenAudit'
-import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
+import type { UpdateOwnProfile } from '@/modules/identity-access/public/commands'
+import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type { GetUserProfile } from '@/modules/identity-access/public/queries'
+import { UserAccessError } from '@/modules/identity-access/public/types'
 
-export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
+interface AuthRouteIdentityAccess {
+  readonly contexts: DirectOperationContextFactory
+  readonly getUserProfile: GetUserProfile
+  readonly updateOwnProfile: UpdateOwnProfile
+}
+
+export function mountAuthRoutes(
+  app: Hono,
+  deps: AppDeps,
+  identityAccess: AuthRouteIdentityAccess,
+): void {
   // Public — uses username + password, no session required.
   registerRoute(
     app,
@@ -205,13 +226,44 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const identities = await listIdentitiesForUser(deps.db, actor.user.id)
       const pats = await listPatsForUser(deps.db, actor.user.id)
+      const profile = await identityAccess.getUserProfile.execute(actor.user.id)
+      if (profile === null) throw new NotFoundError('user-not-found', 'user not found')
       return c.json({
         user: actor.user,
+        profile,
         source: actor.source,
         permissions: [...actor.permissions],
         linkedIdentities: identities,
         pats,
       })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PATCH',
+      path: '/api/auth/me/profile',
+      permissions: ['account:self'],
+      tokenAccess: 'never',
+      summary: 'Update current account profile and Git commit identity',
+    },
+    async (c) => {
+      const parsed = UpdateOwnProfileBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('profile-invalid', 'invalid profile payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const actor = actorOf(c)
+      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+      )
+      const profile = accessCall(() =>
+        identityAccess.updateOwnProfile.execute(context, parsed.data),
+      )
+      return c.json({ profile })
     },
   )
 
@@ -467,4 +519,22 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       throw new ForbiddenError('identity-unlink-disabled', 'linked identities are read-only')
     },
   )
+}
+
+function accessCall<T>(body: () => T): T {
+  try {
+    return body()
+  } catch (error) {
+    if (!(error instanceof UserAccessError)) throw error
+    switch (error.kind) {
+      case 'conflict':
+        throw new ConflictError(error.code, error.message, error.details)
+      case 'forbidden':
+        throw new ForbiddenError(error.code, error.message, error.details)
+      case 'not-found':
+        throw new NotFoundError(error.code, error.message, error.details)
+      case 'validation':
+        throw new ValidationError(error.code, error.message, error.details)
+    }
+  }
 }

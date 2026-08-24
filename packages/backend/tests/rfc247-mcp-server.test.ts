@@ -705,8 +705,6 @@ describe('RFC-247 impl-gate — launch_task can reach every field the route acce
       'maxDurationMs',
       'maxTotalTokens',
       'collaboratorUserIds',
-      'gitUserName',
-      'gitUserEmail',
       'expectedWorkflowVersion',
       // RFC-248: `repos` 退役，多仓改由 `repoGroupId` 表达。这条断言的意义
       // 不变——多仓能力必须在这个通道上**可达**，只是字段名换了。
@@ -717,6 +715,8 @@ describe('RFC-247 impl-gate — launch_task can reach every field the route acce
     // 退役字段反过来必须**不可达**：MCP 的入参是闭合 schema，留着 `repos`
     // 只会让调用方发出一个注定 422 的 body。
     expect(keys).not.toContain('repos')
+    expect(keys).not.toContain('gitUserName')
+    expect(keys).not.toContain('gitUserEmail')
   })
 
   test('inputs tells the caller where port keys come from', () => {

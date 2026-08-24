@@ -68,6 +68,7 @@ const FULL_ROW = {
   jwksUri: null,
   trustEmailVerified: true,
   usernameClaim: 'login sig',
+  emailClaim: 'mail',
   subjectClaim: 'id',
   createdAt: 1,
   updatedAt: 1,
@@ -194,6 +195,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     expect(body.userinfoEndpoint).toBeNull()
     expect(body.jwksUri).toBeNull()
     expect(body.usernameClaim).toBeNull()
+    expect(body.emailClaim).toBeNull()
     expect(body.subjectClaim).toBe('id')
     expect(body.trustEmailVerified).toBe(false)
     expect(body.userinfoRequestStyle).toBe('get_bearer') // untouched default
@@ -254,6 +256,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     expect((screen.getByPlaceholderText('preferred_username') as HTMLInputElement).value).toBe(
       'login sig',
     )
+    expect((screen.getByPlaceholderText('email') as HTMLInputElement).value).toBe('mail')
     const trust = screen.getByRole('checkbox', {
       name: /Trust emails as verified/,
     }) as HTMLInputElement
@@ -271,6 +274,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     >
     expect(body.authorizationEndpoint).toBeNull() // cleared field → null
     expect(body.trustEmailVerified).toBe(false)
+    expect(body.emailClaim).toBe('mail')
     expect(body.subjectClaim).toBe('id') // untouched values survive
   })
 
@@ -279,6 +283,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     delete (legacy as Record<string, unknown>).authorizationEndpoint
     delete (legacy as Record<string, unknown>).trustEmailVerified
     delete (legacy as Record<string, unknown>).usernameClaim
+    delete (legacy as Record<string, unknown>).emailClaim
     renderAuthentication([legacy])
     fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
     await screen.findByRole('dialog')
@@ -286,6 +291,29 @@ describe('RFC-220 S10 — provider dialog fields', () => {
       (screen.getByPlaceholderText('https://idp.corp.com/oauth/authorize') as HTMLInputElement)
         .value,
     ).toBe('')
+    expect((screen.getByPlaceholderText('email') as HTMLInputElement).value).toBe('')
+  })
+
+  test('username/email selectors fail in their own fields before submit', async () => {
+    renderAuthentication([FULL_ROW])
+    ;(api.patch as ReturnType<typeof vi.fn>).mockResolvedValue({})
+    fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+    await screen.findByRole('dialog')
+
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    const email = screen.getByPlaceholderText('email')
+    fireEvent.change(email, { target: { value: 'mail alternate_mail' } })
+    expect(email.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByText(/Use one plain claim name/)).toBeTruthy()
+    expect(save.disabled).toBe(true)
+
+    fireEvent.change(email, { target: { value: 'mail' } })
+    const username = screen.getByPlaceholderText('preferred_username')
+    fireEvent.change(username, { target: { value: '__proto__' } })
+    expect(username.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByText(/Use 1–8 plain claim names/)).toBeTruthy()
+    expect(save.disabled).toBe(true)
+    expect(api.patch).not.toHaveBeenCalled()
   })
 
   test('test connection renders the ProbeResult: verdict, sources, jwks warning', async () => {

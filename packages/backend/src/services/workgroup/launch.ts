@@ -298,8 +298,6 @@ export async function startWorkgroupTask(
       name: input.name,
       inputs: {},
       ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
-      ...(input.gitUserName !== undefined ? { gitUserName: input.gitUserName } : {}),
-      ...(input.gitUserEmail !== undefined ? { gitUserEmail: input.gitUserEmail } : {}),
       ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
       ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
       ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
@@ -349,8 +347,6 @@ export interface StartWorkgroupTaskFromFrozenArgs {
   name: string
   /** Parent task members (D11) — merged with the roster's human members. */
   collaboratorUserIds: readonly string[]
-  gitUserName?: string | undefined
-  gitUserEmail?: string | undefined
   maxDurationMs?: number | undefined
   maxTotalTokens?: number | undefined
 }
@@ -422,8 +418,6 @@ export async function startWorkgroupTaskFromFrozen(
       name: args.name,
       inputs: {},
       ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
-      ...(args.gitUserName !== undefined ? { gitUserName: args.gitUserName } : {}),
-      ...(args.gitUserEmail !== undefined ? { gitUserEmail: args.gitUserEmail } : {}),
       ...(args.maxDurationMs !== undefined ? { maxDurationMs: args.maxDurationMs } : {}),
       ...(args.maxTotalTokens !== undefined ? { maxTotalTokens: args.maxTotalTokens } : {}),
       // publication belongs to the parent (D12): no workingBranch / auto push.

@@ -7,6 +7,7 @@ import type {
   PlannedDirectoryNode,
   PlannedRepo,
   FailureCode,
+  GitCommitIdentity,
   NodeKind,
   NodeRun,
   NodeRunEvent,
@@ -156,7 +157,13 @@ import {
 } from '@/util/git'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
 import {
   TASK_CHANNEL,
@@ -174,7 +181,9 @@ import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRou
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
-import type { Actor } from '@/auth/actor'
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { UserAccessError } from '@/modules/identity-access/public/types'
+import { getUserGitCommitIdentity } from '@/services/users'
 import { freezeCallClosure } from '@/services/execution/closure'
 import {
   assertTriggerPreflight,
@@ -573,6 +582,12 @@ export interface StartTaskDeps {
    */
   actorUserId?: string
   /**
+   * RFC-320 — server-resolved creator identity. `undefined` means the launch
+   * boundary still needs to resolve/inherit it; `null` is the explicit
+   * system-owned branch. Public payloads can never populate this field.
+   */
+  gitCommitIdentity?: GitCommitIdentity | null
+  /**
    * RFC-301 — trusted, task-owned root launch provenance. Required for every
    * root production launch; forbidden for call children, which read the exact
    * parent row inside the initial INSERT transaction instead.
@@ -677,6 +692,57 @@ export interface StartTaskDeps {
   workflowLaunchCommitHook?: (event: WorkflowLaunchCommitHookEvent) => void | Promise<void>
   /** RFC-199 test seam for deterministic remove/ref/root cleanup failures. */
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
+}
+
+/**
+ * RFC-320 — the single task-creation identity resolver. Root user launches
+ * read the creator profile once; call children inherit the immutable parent
+ * pair; system-owned internal tasks stay explicitly identity-less.
+ */
+export async function resolveTaskGitCommitIdentity(
+  deps: StartTaskDeps,
+): Promise<GitCommitIdentity | null> {
+  if (deps.gitCommitIdentity !== undefined) return deps.gitCommitIdentity
+
+  if (deps.callLaunch !== undefined) {
+    const parent = await deps.db
+      .select({ name: tasks.gitUserName, email: tasks.gitUserEmail })
+      .from(tasks)
+      .where(eq(tasks.id, deps.callLaunch.parentTaskId))
+      .limit(1)
+    const snapshot = parent[0]
+    if (snapshot === undefined) {
+      throw new NotFoundError(
+        'parent-task-not-found',
+        `parent task '${deps.callLaunch.parentTaskId}' was not found`,
+      )
+    }
+    if (snapshot.name === null && snapshot.email === null) return null
+    if (snapshot.name === null || snapshot.email === null) {
+      throw new ConflictError(
+        'git-identity-snapshot-invalid',
+        `parent task '${deps.callLaunch.parentTaskId}' has an incomplete Git identity snapshot`,
+      )
+    }
+    return { name: snapshot.name, email: snapshot.email }
+  }
+
+  const userId = deps.actorUserId
+  if (userId === undefined || userId === SYSTEM_USER_ID) return null
+  try {
+    return await getUserGitCommitIdentity(deps.db, userId)
+  } catch (error) {
+    if (!(error instanceof UserAccessError)) throw error
+    switch (error.kind) {
+      case 'conflict':
+      case 'validation':
+        throw new ConflictError(error.code, error.message, error.details)
+      case 'forbidden':
+        throw new ForbiddenError(error.code, error.message, error.details)
+      case 'not-found':
+        throw new NotFoundError(error.code, error.message, error.details)
+    }
+  }
 }
 
 export interface WorkflowLaunchCommitHookEvent {
@@ -1893,8 +1959,8 @@ export async function materializeSpace(
     materializingSpaces.set(taskId, { dir: scratchDir, startedAt: Date.now() })
     const init = await initScratchRepo({
       dir: scratchDir,
-      gitUserName: input.gitUserName ?? null,
-      gitUserEmail: input.gitUserEmail ?? null,
+      gitUserName: deps.gitCommitIdentity?.name ?? null,
+      gitUserEmail: deps.gitCommitIdentity?.email ?? null,
       ...(deps.sourceTerminationLaunchSignal !== undefined
         ? { signal: deps.sourceTerminationLaunchSignal }
         : {}),
@@ -2067,8 +2133,8 @@ export async function materializeSpace(
         taskId,
         appHome,
         ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-        gitUserName: input.gitUserName ?? null,
-        gitUserEmail: input.gitUserEmail ?? null,
+        gitUserName: deps.gitCommitIdentity?.name ?? null,
+        gitUserEmail: deps.gitCommitIdentity?.email ?? null,
         ...(deps.sourceTerminationLaunchSignal !== undefined
           ? { signal: deps.sourceTerminationLaunchSignal }
           : {}),
@@ -2100,8 +2166,8 @@ export async function materializeSpace(
       appHome,
       // RFC-075: working branch (task-level) + identity for the merge commit.
       ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-      gitUserName: input.gitUserName ?? null,
-      gitUserEmail: input.gitUserEmail ?? null,
+      gitUserName: deps.gitCommitIdentity?.name ?? null,
+      gitUserEmail: deps.gitCommitIdentity?.email ?? null,
       ...(deps.sourceTerminationLaunchSignal !== undefined
         ? { signal: deps.sourceTerminationLaunchSignal }
         : {}),
@@ -2301,7 +2367,8 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     taskRowCommitted: false,
   }
   try {
-    return await startTaskImpl(input, deps, ownership)
+    const gitCommitIdentity = await resolveTaskGitCommitIdentity(deps)
+    return await startTaskImpl(input, { ...deps, gitCommitIdentity }, ownership)
   } catch (error) {
     if (!ownership.taskRowCommitted && ownership.cleanup !== null) {
       const report = await cleanupMaterializedSpaceLease(
@@ -2766,16 +2833,10 @@ async function startTaskImpl(
   const resolvedSources = space.resolvedSources
   ownership.cleanup = space.cleanup
 
-  // RFC-067: trim and pair-validate the optional Git commit identity.
-  // StartTaskSchema's superRefine already rejected the half-set case, but we
-  // re-derive defensively here so even a hand-crafted bypass cannot land a
-  // single-field row into the DB.
-  const trimGitName = input.gitUserName?.trim() ?? ''
-  const trimGitEmail = input.gitUserEmail?.trim() ?? ''
-  const persistedGitUserName =
-    trimGitName.length > 0 && trimGitEmail.length > 0 ? trimGitName : null
-  const persistedGitUserEmail =
-    trimGitName.length > 0 && trimGitEmail.length > 0 ? trimGitEmail : null
+  // RFC-320: the pair was resolved once at the creation boundary. Never read
+  // profile state (or client input) again after workspace materialization.
+  const persistedGitUserName = deps.gitCommitIdentity?.name ?? null
+  const persistedGitUserEmail = deps.gitCommitIdentity?.email ?? null
 
   // RFC-066: `tasks.*` legacy columns mirror `materializedRepos[0]` for back-
   // compat. When materialize failed early (only possible in multi-repo path —
@@ -2987,8 +3048,8 @@ async function startTaskImpl(
           inputs: JSON.stringify(input.inputs),
           maxDurationMs: input.maxDurationMs ?? null,
           maxTotalTokens: input.maxTotalTokens ?? null,
-          // RFC-067: per-task Git commit identity (NULL when omitted or only
-          // half-set; runner.ts skips env injection when these are NULL).
+          // RFC-320: immutable creator snapshot; NULL only for explicit
+          // system-owned internal tasks.
           gitUserName: persistedGitUserName,
           gitUserEmail: persistedGitUserEmail,
           // RFC-075: user-specified working branch (NULL → isolation branch) +
@@ -4755,10 +4816,6 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
     // 占位行把请求的 ref 存进了 `base_branch`(见落行处的长注释)，这里取回来。
     // 组启动不需要——成员 ref 在组定义里，`repoGroupId` 已经带了。
     ...(!hasGroup && task.baseBranch !== '' ? { ref: task.baseBranch } : {}),
-    // 同因丢失的还有平台预置 commit 的作者身份(RFC-067)：不带上，重试后那条
-    // commit 会改由 daemon 兜底身份署名。任务行上本来就存着，取回来即可。
-    ...(task.gitUserName !== null ? { gitUserName: task.gitUserName } : {}),
-    ...(task.gitUserEmail !== null ? { gitUserEmail: task.gitUserEmail } : {}),
   } as unknown as StartTask
   const ownership: StartTaskOwnership = {
     cleanup: createMaterializedSpaceCleanup(task.id, null),
@@ -4767,7 +4824,14 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
   }
   const runPrepThenTask = async (): Promise<Task | null> => {
     const r = await runDeferredRepoPreparation({
-      deps: { ...deps, db },
+      deps: {
+        ...deps,
+        db,
+        gitCommitIdentity:
+          task.gitUserName !== null && task.gitUserEmail !== null
+            ? { name: task.gitUserName, email: task.gitUserEmail }
+            : null,
+      },
       input,
       appHome,
       controller,

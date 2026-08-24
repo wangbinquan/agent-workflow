@@ -16,6 +16,11 @@ import { z } from 'zod'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { RESOURCE_DISPLAY_NAME_RE, ResourceDisplayNameSchema } from './resourceName'
 
+const ClientOwnedGitIdentityFieldSchema = z.custom<never>(
+  () => false,
+  'task-git-identity-client-owned',
+)
+
 /**
  * RFC-217 T3 (G7) — message-turn shardKey codec: `msg:<memberId>:<maxMsgId>`.
  * The SINGLE build/parse pair for the `msg:` wire family (engine adoption,
@@ -616,8 +621,9 @@ export const StartWorkgroupTaskSchema = z.object({
   /** RFC-248 H9: 按另一任务的**冻结** task_repos 快照重放布局（重启）。 */
   sourceTaskId: z.string().min(1).optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),
-  gitUserName: z.string().max(255).optional(),
-  gitUserEmail: z.string().max(255).optional(),
+  /** RFC-320: task identity comes from the authenticated creator profile. */
+  gitUserName: ClientOwnedGitIdentityFieldSchema.optional(),
+  gitUserEmail: ClientOwnedGitIdentityFieldSchema.optional(),
   workingBranch: z.string().optional(),
   autoCommitPush: z.boolean().optional(),
   maxDurationMs: z.number().int().positive().optional(),

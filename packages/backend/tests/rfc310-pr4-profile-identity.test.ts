@@ -3,7 +3,7 @@
 // 正向锁在 rfc310-pr4-execution-host.test.ts（DE 启动 → 子进程 env 四键缺席）。
 // 本文件补两面：
 //   1. 对照组：RFC-067 普通任务的 per-task identity 注入**必须还活着**——
-//      同一 spawn 装配、同一 mock、带 gitUserName/gitUserEmail 启动 → 子进程
+//      同一 spawn 装配、同一 mock、带服务端已解析 task identity 启动 → 子进程
 //      env 四键在场。没有这半边，「缺席」断言会在注入分支整体坏死时假绿。
 //   2. 文本锁：digital-employee 执行链两个新文件的代码行不得出现
 //      GIT_AUTHOR/COMMITTER、SSH agent、token/secret 注入 token（对齐
@@ -62,7 +62,7 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for digital employees', () => {
-  test('对照组：普通任务带 gitUserName/gitUserEmail → 子进程 env 四键在场', async () => {
+  test('对照组：普通任务带服务端已解析 identity → 子进程 env 四键在场', async () => {
     await seedTestDefaultOpencodeRuntime(db)
     const appHome = join(tmp, 'home')
     mkdirSync(appHome, { recursive: true })
@@ -127,10 +127,14 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
             repoPath,
             baseBranch: 'main',
             inputs: { topic: 't' },
-            gitUserName: 'DE Control',
-            gitUserEmail: 'control@example.test',
           },
-          { db, appHome, binaryOverride: ['bun', 'run', MOCK_OPENCODE], awaitScheduler: true },
+          {
+            db,
+            appHome,
+            gitCommitIdentity: { name: 'DE Control', email: 'control@example.test' },
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+            awaitScheduler: true,
+          },
         ),
     )
     const captured = JSON.parse(readFileSync(envLog, 'utf8').trim().split('\n')[0]!) as Record<

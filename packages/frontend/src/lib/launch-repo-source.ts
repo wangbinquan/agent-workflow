@@ -36,16 +36,6 @@ export interface LaunchCommonPayload {
   name: string
   inputs: Record<string, string>
   /**
-   * RFC-067: optional per-task Git commit identity. Caller has already
-   * trimmed; both must be non-empty together or both omitted (XOR enforced
-   * client-side via the launcher's `gitIdentityOk` gate + server-side via
-   * StartTaskSchema's superRefine). When present, the helper writes both
-   * keys into the body; when undefined or blank, the helper omits both keys
-   * so the wire is byte-identical to pre-RFC-067 launches.
-   */
-  gitUserName?: string
-  gitUserEmail?: string
-  /**
    * RFC-125: when true, the created task defers designer-scoped clarify answers
    * to the task-center board for manual batch-dispatch (the launch UI now always
    * sends true; the on/off toggle was removed). Both body helpers emit it onto
@@ -88,13 +78,6 @@ export function buildLaunchBody(
   source: RepoSource,
   common: LaunchCommonPayload,
 ): Record<string, unknown> {
-  // RFC-067: identity pair-check echoes superRefine. Drop both keys if
-  // either side is blank — the helper never emits a half-identity wire.
-  const hasGitIdentity =
-    typeof common.gitUserName === 'string' &&
-    common.gitUserName.length > 0 &&
-    typeof common.gitUserEmail === 'string' &&
-    common.gitUserEmail.length > 0
   const out: Record<string, unknown> = {
     workflowId: common.workflowId,
     name: common.name,
@@ -102,10 +85,6 @@ export function buildLaunchBody(
     inputs: common.inputs,
   }
   if (source.ref.trim().length > 0) out.ref = source.ref.trim()
-  if (hasGitIdentity) {
-    out.gitUserName = common.gitUserName
-    out.gitUserEmail = common.gitUserEmail
-  }
   stampLaunchExtras(out, common)
   return out
 }

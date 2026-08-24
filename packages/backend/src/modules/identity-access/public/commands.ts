@@ -9,6 +9,15 @@ export {
   type UpdateUserAccessResult,
 } from '../application/commands/updateUserAccess'
 export {
+  UpdateOwnProfile,
+  type UpdateOwnProfileCommand,
+} from '../application/commands/updateOwnProfile'
+export {
+  SyncOidcProfile,
+  type SyncOidcProfileCommand,
+  type SyncOidcProfileResult,
+} from '../application/commands/syncOidcProfile'
+export {
   insertInitialUserAccessInTransaction,
   type InitialUserAccessProvision,
 } from '../infrastructure/sqliteUserAccessRepository'

@@ -133,6 +133,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
 
     const owner = await createUser(db, {
       username: 'rfc269-context-owner',
+      email: 'rfc269-context-owner@example.test',
       displayName: 'RFC 269 Context Owner',
       role: 'admin',
       password: 'longEnoughPassword',
@@ -269,6 +270,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     })
     const owner = await createUser(db, {
       username: 'rfc292-intent-owner',
+      email: 'rfc292-intent-owner@example.test',
       displayName: 'RFC 292 Intent Owner',
       role: 'admin',
       password: 'longEnoughPassword',

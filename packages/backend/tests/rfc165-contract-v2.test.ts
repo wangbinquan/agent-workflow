@@ -74,34 +74,22 @@ describe('RFC-165 T1 — StartTaskSchema scratch matrix', () => {
     })
   }
 
-  // Implementation-gate P2: the scratch early-return must NOT skip the git
-  // identity refinements — a scratch task's commits consume a supplied
-  // identity, so half/invalid identities are rejected on scratch bodies too.
-  test('scratch + half git identity → git-identity-incomplete', () => {
-    expect(firstMessage({ ...BASE, scratch: true, gitUserName: 'Alice' })).toBe(
-      'git-identity-incomplete',
-    )
+  test('scratch + retired git identity → client-owned field rejection', () => {
+    const body = { ...BASE, scratch: true, gitUserName: 'Alice' }
+    expect(rejectRetiredStartTaskKeys(body)).toBe('gitUserName')
+    expect(firstMessage(body)).toBe('task-git-identity-client-owned')
   })
 
-  test('scratch + invalid email → git-identity-email-invalid', () => {
+  test('scratch + retired git email is rejected regardless of value validity', () => {
+    const body = { ...BASE, scratch: true, gitUserEmail: 'alice@example.test' }
+    expect(rejectRetiredStartTaskKeys(body)).toBe('gitUserEmail')
+    expect(firstMessage(body)).toBe('task-git-identity-client-owned')
+  })
+
+  test('scratch coexists with collaborators / limits', () => {
     const r = StartTaskSchema.safeParse({
       ...BASE,
       scratch: true,
-      gitUserName: 'Alice',
-      gitUserEmail: 'not an email',
-    })
-    expect(r.success).toBe(false)
-    if (!r.success) {
-      expect(r.error.issues.some((i) => i.message === 'git-identity-email-invalid')).toBe(true)
-    }
-  })
-
-  test('scratch coexists with git identity / collaborators / limits', () => {
-    const r = StartTaskSchema.safeParse({
-      ...BASE,
-      scratch: true,
-      gitUserName: 'Alice',
-      gitUserEmail: 'a@example.com',
       collaboratorUserIds: ['u1'],
       maxDurationMs: 60_000,
       maxTotalTokens: 1000,

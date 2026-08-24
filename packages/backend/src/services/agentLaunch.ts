@@ -34,6 +34,7 @@ import { getAgentById } from '@/services/agent'
 import {
   cleanupMaterializedSpace,
   materializeSpace,
+  resolveTaskGitCommitIdentity,
   startTask,
   type StartTaskDeps,
 } from '@/services/task'
@@ -420,8 +421,6 @@ export async function startAgentTask(
         ...(input.collaboratorUserIds !== undefined && input.collaboratorUserIds.length > 0
           ? { collaboratorUserIds: input.collaboratorUserIds }
           : {}),
-        ...(input.gitUserName !== undefined ? { gitUserName: input.gitUserName } : {}),
-        ...(input.gitUserEmail !== undefined ? { gitUserEmail: input.gitUserEmail } : {}),
         ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
         ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
         ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
@@ -441,6 +440,8 @@ export async function startAgentTask(
       agentId: agent.id,
       snapshotJson: JSON.stringify(def),
     }
+    const gitCommitIdentity = await resolveTaskGitCommitIdentity(deps)
+    const effectiveDeps = { ...deps, gitCommitIdentity }
 
     // RFC-218 upload flow — mirrors the workflow multipart route step-for-step
     // (validate plan → materialize → land files → hand off), inside the
@@ -456,14 +457,14 @@ export async function startAgentTask(
       const appHome = deps.appHome ?? Paths.root
       // RFC-248（实现门 P1）：同 routes/tasks.ts——组成员按 cachedRepoId 解析，
       // 私有仓 URL 是封存的，缺 secretBox 会 `cached-repo-credential-unavailable`。
-      const space = await materializeSpace(
-        parsed.data,
-        { db, ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}) },
-        appHome,
-      )
+      const space = await materializeSpace(parsed.data, effectiveDeps, appHome)
       if (space.earlyError !== null) {
         // Failed task row so the user sees the error; no files were written.
-        return await startTask(parsed.data, { ...deps, materializedSpace: space, agentLaunch })
+        return await startTask(parsed.data, {
+          ...effectiveDeps,
+          materializedSpace: space,
+          agentLaunch,
+        })
       }
       let inputsOut: Record<string, string>
       try {
@@ -488,11 +489,11 @@ export async function startAgentTask(
       }
       return await startTask(
         { ...parsed.data, inputs: inputsOut },
-        { ...deps, materializedSpace: space, agentLaunch },
+        { ...effectiveDeps, materializedSpace: space, agentLaunch },
       )
     }
 
-    return await startTask(parsed.data, { ...deps, agentLaunch })
+    return await startTask(parsed.data, { ...effectiveDeps, agentLaunch })
   } finally {
     releaseAgentLaunch(agent.id)
   }

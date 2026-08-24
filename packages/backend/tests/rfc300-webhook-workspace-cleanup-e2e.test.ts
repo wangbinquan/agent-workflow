@@ -110,6 +110,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   const box = createSecretBoxFromKey(Buffer.alloc(32, 30))
   const owner = await createUser(db, {
     username: 'rfc300-owner',
+    email: 'rfc300-owner@example.test',
     displayName: 'RFC 300 Owner',
     role: 'admin',
     password: 'longEnoughPassword',
@@ -407,6 +408,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   const box = createSecretBoxFromKey(Buffer.alloc(32, 31))
   const owner = await createUser(db, {
     username: 'rfc303-owner',
+    email: 'rfc303-owner@example.test',
     displayName: 'RFC 303 Owner',
     role: 'admin',
     password: 'longEnoughPassword',

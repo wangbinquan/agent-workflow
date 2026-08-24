@@ -2,8 +2,8 @@
 //
 //   ① 执行方式 + 对象   (workflow / single agent / workgroup + which one)
 //   ② 执行空间          (remote URL repos ⊕ scratch temp space)
-//   ③ 名称 + 任务内容    (+ advanced fold: collaborators / git identity /
-//                        branch & auto-push / limits / allowClarify)
+//   ③ 名称 + 任务内容    (+ advanced fold: collaborators / branch & auto-push /
+//                        limits / allowClarify)
 //   ④ 只读确认          (summary with per-step "modify" backlinks; primary
 //                        launch + secondary save-as-scheduled — swapped when
 //                        `?schedule=1`)
@@ -16,7 +16,7 @@
 
 import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, useNavigate } from '@tanstack/react-router'
+import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -467,8 +467,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
   // relaunch/edit 会经 applyWizardSeed → setAllowClarify(seed.allowClarify) 覆盖此默认。
   const [allowClarify, setAllowClarify] = useState(false)
   const [collaborators, setCollaborators] = useState<UserPublic[]>([])
-  const [gitUserName, setGitUserName] = useState('')
-  const [gitUserEmail, setGitUserEmail] = useState('')
   const [workingBranch, setWorkingBranch] = useState('')
   const [autoCommitPush, setAutoCommitPush] = useState(loadAutoCommitPushPref())
   const [maxDurationMin, setMaxDurationMin] = useState<number | undefined>(undefined)
@@ -612,8 +610,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     setDescription(seed.description)
     setGoal(seed.goal)
     setAllowClarify(seed.allowClarify)
-    setGitUserName(seed.gitUserName)
-    setGitUserEmail(seed.gitUserEmail)
     setWorkingBranch(seed.workingBranch)
     setAutoCommitPush(seed.autoCommitPush)
     // Keep the exact stored value: fractional minutes round-trip back to the
@@ -1133,13 +1129,11 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
             ? agentBlockers.length === 0 && !missingRequired && uploadDuplicate === null
             : description.trim().length > 0)
         : goal.trim().length > 0
-  const gitNameTrim = gitUserName.trim()
-  const gitEmailTrim = gitUserEmail.trim()
-  const gitBoth = gitNameTrim !== '' && gitEmailTrim !== ''
-  const gitNeither = gitNameTrim === '' && gitEmailTrim === ''
-  const gitPairingError = !gitBoth && !gitNeither
-  const gitEmailFormatError = gitEmailTrim !== '' && !/^[^\s@]+@[^\s@]+$/.test(gitEmailTrim)
-  const gitIdentityOk = gitNeither || (gitBoth && !gitEmailFormatError)
+  const gitCommitIdentity = actor.data?.profile.gitCommitIdentity ?? null
+  const resolvesIdentityAtScheduleFire = isEdit || search.schedule === true
+  const requiresCurrentGitIdentity = !isEdit && actor.data?.source !== 'daemon'
+  const immediateGitIdentityReady = !requiresCurrentGitIdentity || gitCommitIdentity !== null
+  const admissionGitIdentityReady = resolvesIdentityAtScheduleFire || immediateGitIdentityReady
   const workingBranchTrim = workingBranch.trim()
   const workingBranchError =
     space.kind === 'remote' &&
@@ -1153,7 +1147,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     maxTotalTokens !== undefined && (maxTotalTokens <= 0 || !Number.isInteger(maxTotalTokens))
   const limitsOk = !durationInvalid && !tokensInvalid
   const stepContentReady =
-    nameReady && contentReady && gitIdentityOk && !workingBranchError && limitsOk
+    nameReady && contentReady && admissionGitIdentityReady && !workingBranchError && limitsOk
   // RFC-159 P2: editing a schedule with collaborators must wait for the id →
   // UserPublic lookup, else Save rebuilds the body with an empty set.
   const collabReady = !isEdit || seedCollabIds.current.length === 0 || collabLookup.isSuccess
@@ -1216,8 +1210,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     goal,
     allowClarify,
     collaboratorIds: collaborators.map((user) => user.id),
-    gitUserName,
-    gitUserEmail,
     workingBranch,
     autoCommitPush,
     maxDurationMin,
@@ -1241,8 +1233,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
       goal,
       allowClarify,
       collaboratorIds: collaborators.map((user) => user.id),
-      gitUserName,
-      gitUserEmail,
       workingBranch,
       autoCommitPush,
       ...(maxDurationMin !== undefined ? { maxDurationMin } : {}),
@@ -1438,8 +1428,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     setGoal(draft.values.goal)
     setAllowClarify(draft.values.allowClarify)
     setRestoredCollaboratorIds(draft.values.collaboratorIds)
-    setGitUserName(draft.values.gitUserName)
-    setGitUserEmail(draft.values.gitUserEmail)
     setWorkingBranch(draft.values.workingBranch)
     setAutoCommitPush(draft.values.autoCommitPush)
     setMaxDurationMin(draft.values.maxDurationMin)
@@ -1500,7 +1488,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     ...(collaborators.length > 0
       ? { collaboratorUserIds: collaborators.map((user) => user.id) }
       : {}),
-    ...(gitBoth ? { gitUserName: gitNameTrim, gitUserEmail: gitEmailTrim } : {}),
     ...(workingBranchTrim !== '' ? { workingBranch: workingBranchTrim } : {}),
     ...(autoCommitPush ? { autoCommitPush: true } : {}),
     ...(maxDurationMin !== undefined && maxDurationMin > 0
@@ -1872,6 +1859,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     !relaunchError &&
     !submitPending &&
     outcomeUnknown === null
+  const canStartNow = canSubmit && immediateGitIdentityReady
   // RFC-159: upload files can't be persisted into a schedule's JSON payload.
   // RFC-218 (impl-gate P2-7): agent path<ext> ports are upload inputs too —
   // scheduled fires are JSON-only, so scheduling them is refused server-side;
@@ -1978,6 +1966,22 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
       sourceId={kind}
       feedback={
         <FeedbackStack variant="section">
+          {requiresCurrentGitIdentity && !immediateGitIdentityReady && (
+            <NoticeBanner
+              tone="warning"
+              size="compact"
+              title={t('taskWizard.gitCommitIdentityMissingTitle')}
+              action={
+                <Link to="/account" className="btn btn--sm" data-testid="wizard-git-identity-fix">
+                  {t('taskWizard.gitCommitIdentityFix')}
+                </Link>
+              }
+              testid="wizard-git-identity-missing"
+            >
+              {t('taskWizard.gitCommitIdentityMissingBody')}
+            </NoticeBanner>
+          )}
+
           {draftWarning !== null && (
             <NoticeBanner tone="warning" size="compact" data-testid="wizard-draft-warning">
               {t(draftWarning)}
@@ -2210,7 +2214,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                 type="button"
                 className="btn"
                 onClick={runStart}
-                disabled={!canSubmit}
+                disabled={!canStartNow}
                 data-testid="wizard-launch"
                 data-tour="task-submit"
               >
@@ -2223,7 +2227,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                 type="button"
                 className="btn btn--primary"
                 onClick={runStart}
-                disabled={!canSubmit}
+                disabled={!canStartNow}
                 data-testid="wizard-launch"
                 data-tour="task-submit"
               >
@@ -2595,32 +2599,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                       />
                     </>
                   )}
-                  <Field label={t('launch.gitIdentity.name')} hint={t('launch.gitIdentity.hint')}>
-                    <TextInput
-                      value={gitUserName}
-                      onChange={setGitUserName}
-                      maxLength={255}
-                      data-testid="wizard-git-user-name"
-                    />
-                  </Field>
-                  <Field
-                    label={t('launch.gitIdentity.email')}
-                    {...(gitEmailFormatError ? { hint: t('launch.gitIdentity.emailInvalid') } : {})}
-                  >
-                    <TextInput
-                      value={gitUserEmail}
-                      onChange={setGitUserEmail}
-                      maxLength={255}
-                      data-testid="wizard-git-user-email"
-                    />
-                  </Field>
-                  {gitPairingError && (
-                    <ErrorBanner
-                      error={null}
-                      message={t('launch.gitIdentity.pairingError')}
-                      testid="wizard-git-pair-error"
-                    />
-                  )}
                   <Field
                     label={t('taskWizard.maxDurationMin')}
                     hint={t('taskWizard.maxDurationMinHint')}
@@ -2725,8 +2703,19 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                   )}
                 </dd>
               </div>
+              <div className="wizard-summary__row">
+                <dt>{t('taskWizard.gitCommitIdentity')}</dt>
+                <dd data-testid="wizard-summary-git-identity">
+                  {resolvesIdentityAtScheduleFire
+                    ? t('taskWizard.gitCommitIdentityScheduleOwner')
+                    : gitCommitIdentity !== null
+                      ? `${gitCommitIdentity.name} <${gitCommitIdentity.email}>`
+                      : actor.data?.source === 'daemon'
+                        ? t('taskWizard.gitCommitIdentityInternal')
+                        : t('taskWizard.gitCommitIdentityMissing')}
+                </dd>
+              </div>
               {(collaborators.length > 0 ||
-                gitBoth ||
                 (space.kind === 'remote' && workingBranchTrim !== '') ||
                 (space.kind === 'remote' && autoCommitPush) ||
                 maxDurationMin !== undefined ||
@@ -2741,7 +2730,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                             count: collaborators.length,
                           })
                         : null,
-                      gitBoth ? `${gitNameTrim} <${gitEmailTrim}>` : null,
                       space.kind === 'remote' && workingBranchTrim !== ''
                         ? workingBranchTrim
                         : null,

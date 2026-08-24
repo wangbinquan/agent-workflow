@@ -14,7 +14,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import i18n from '../src/i18n'
 import { enUS } from '../src/i18n/en-US'
-import type { MeResponse } from '../src/hooks/useActor'
+import { ACTOR_QUERY_KEY, type MeResponse } from '../src/hooks/useActor'
 import { Route as AccountRoute } from '../src/routes/account'
 import { clearToken, getToken, setBaseUrl, setToken } from '../src/stores/auth'
 
@@ -25,6 +25,11 @@ const actor: MeResponse = {
     displayName: 'Alice Chen',
     role: 'user',
     status: 'active',
+  },
+  profile: {
+    displayName: 'Alice Chen',
+    email: 'alice@example.com',
+    gitCommitIdentity: { name: 'Alice Chen', email: 'alice@example.com' },
   },
   source: 'session',
   permissions: ['account:self'],
@@ -117,6 +122,70 @@ describe('/account security center', () => {
 
     fireEvent.click(screen.getByText(enUS.account.technicalIdentity))
     expect(screen.getByText('00u-long-technical-subject')).toBeTruthy()
+  })
+
+  test('overview updates the account-owned Git identity and refreshes the actor cache', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (request: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(request.toString()).pathname
+        const method = init?.method ?? 'GET'
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+        calls.push({ method, path, body })
+        if (path === '/api/auth/me' && method === 'GET') return json(actor)
+        if (path === '/api/auth/me/profile' && method === 'PATCH') {
+          return json({
+            profile: {
+              displayName: 'Alice Updated',
+              email: 'alice.updated@example.test',
+              gitCommitIdentity: {
+                name: 'Alice Updated',
+                email: 'alice.updated@example.test',
+              },
+            },
+          })
+        }
+        throw new Error(`unexpected account request: ${method} ${path}`)
+      },
+    )
+    const qc = queryClient()
+    qc.setQueryData([...ACTOR_QUERY_KEY, 'stale-auth-generation'], actor)
+    renderAccount(qc)
+
+    const name = (await screen.findByRole('textbox', {
+      name: new RegExp(enUS.account.displayName),
+    })) as HTMLInputElement
+    const email = screen.getByRole('textbox', {
+      name: new RegExp(enUS.account.email),
+    }) as HTMLInputElement
+    expect(name.value).toBe('Alice Chen')
+    expect(email.value).toBe('alice@example.com')
+    fireEvent.change(name, { target: { value: ' Alice Updated ' } })
+    fireEvent.change(email, { target: { value: 'ALICE.UPDATED@EXAMPLE.TEST' } })
+    fireEvent.click(screen.getByRole('button', { name: enUS.account.saveProfile }))
+
+    expect(await screen.findByText(enUS.account.profileSaved)).toBeTruthy()
+    expect(name.value).toBe('Alice Updated')
+    expect(email.value).toBe('alice.updated@example.test')
+    expect(calls.find((call) => call.path === '/api/auth/me/profile')).toEqual({
+      method: 'PATCH',
+      path: '/api/auth/me/profile',
+      body: {
+        displayName: 'Alice Updated',
+        email: 'alice.updated@example.test',
+      },
+    })
+    expect(qc.getQueryData<MeResponse>([...ACTOR_QUERY_KEY, 'tok'])?.profile).toEqual({
+      displayName: 'Alice Updated',
+      email: 'alice.updated@example.test',
+      gitCommitIdentity: {
+        name: 'Alice Updated',
+        email: 'alice.updated@example.test',
+      },
+    })
+    expect(
+      qc.getQueryData<MeResponse>([...ACTOR_QUERY_KEY, 'stale-auth-generation'])?.profile,
+    ).toEqual(actor.profile)
   })
 
   test('local password change installs the fresh session token before invalidation', async () => {

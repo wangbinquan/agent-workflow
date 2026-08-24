@@ -317,6 +317,11 @@ describe('RFC-305 identity-access architecture', () => {
       'CreateManagedUserCommand',
       'ExactAccessSnapshot',
       'InitialUserAccessProvision',
+      'SyncOidcProfile',
+      'SyncOidcProfileCommand',
+      'SyncOidcProfileResult',
+      'UpdateOwnProfile',
+      'UpdateOwnProfileCommand',
       'UpdateUserAccess',
       'UpdateUserAccessCommand',
       'UpdateUserAccessResult',
@@ -329,6 +334,8 @@ describe('RFC-305 identity-access architecture', () => {
     expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual([
       'GetUserAccess',
       'GetUserAccessQuery',
+      'GetUserGitCommitIdentity',
+      'GetUserProfile',
       'requireUserAccess',
     ])
     expect(exportedNames(resolve(publicRoot, 'types.ts'))).toEqual([
@@ -369,13 +376,22 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/auth/loginPolicy.ts -> @/modules/identity-access/public/commands',
+      // RFC-320 — auth receives exact profile commands/queries through the
+      // server-composed module; it never imports module internals or storage.
+      'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
+      'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/queries',
+      'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/services/task.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/commands',
+      'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/services/users.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/public/types',
       // RFC-312 —— presence 通道的 onOpenExtra 需要 presence 的 command/query。
       // 与既有三处（auth/actor.ts、server.ts、services/users.ts）同型：composeIdentityAccess

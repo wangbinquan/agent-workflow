@@ -17,7 +17,13 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import { tasks, webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
+import {
+  tasks,
+  users,
+  webhookDeliveries,
+  webhookEndpoints,
+  webhookTriggers,
+} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { cancelExecution } from '../src/services/execution/executor'
 import { createRuntime } from '../src/services/runtimeRegistry'
@@ -55,6 +61,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     const owner = await createUser(db, {
       username: 'rfc268-owner',
       displayName: 'RFC 268 Owner',
+      email: 'owner.before@example.test',
       role: 'admin',
       password: 'longEnoughPassword',
     })
@@ -152,6 +159,13 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       })
     }
 
+    // RFC-320: triggers retain owner identity, not a copied author pair. A
+    // profile change after trigger save must be the snapshot used at fire.
+    await db
+      .update(users)
+      .set({ displayName: 'RFC 268 Owner At Fire', email: 'owner.fire@example.test' })
+      .where(eq(users.id, owner.id))
+
     const event: CodeHostEvent = {
       provider: 'gitlab',
       eventUuid: ulid(),
@@ -193,6 +207,8 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       expect(JSON.parse(task.triggerContextJson!)).toEqual(expectedTriggerContext)
       expect(JSON.parse(task.triggerContextJson!)).toHaveProperty('trigger.webhook.event_json')
       expect(task.spaceKind).toBe('scratch')
+      expect(task.gitUserName).toBe('RFC 268 Owner At Fire')
+      expect(task.gitUserEmail).toBe('owner.fire@example.test')
       expect(task.repoPath).toBe(task.worktreePath)
       expect(
         execFileSync('git', ['-C', task.worktreePath, 'branch', '--show-current'], {

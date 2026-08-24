@@ -38,8 +38,6 @@ describe('buildWorkflowStartBody (RFC-165 T13)', () => {
       workflowId: 'wf1',
       name: 'T',
       inputs: { k: 'v' },
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@x.io',
       workingBranch: 'feat/x',
       autoCommitPush: true,
       collaboratorUserIds: ['u1'],
@@ -52,8 +50,6 @@ describe('buildWorkflowStartBody (RFC-165 T13)', () => {
       inputs: { k: 'v' },
       repoUrl: 'https://github.com/o/r.git',
       ref: 'dev',
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@x.io',
       workingBranch: 'feat/x',
       autoCommitPush: true,
       collaboratorUserIds: ['u1'],
@@ -87,8 +83,6 @@ describe('buildWorkflowStartBody (RFC-165 T13)', () => {
       workflowId: 'wf1',
       name: 'T',
       inputs: { k: 'v' },
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@x.io',
       // Lingering remote-mode state — the builder must strip these (schema
       // rejects them with scratch: true).
       workingBranch: 'feat/x',
@@ -101,8 +95,6 @@ describe('buildWorkflowStartBody (RFC-165 T13)', () => {
       name: 'T',
       inputs: { k: 'v' },
       scratch: true,
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@x.io',
       collaboratorUserIds: ['u1'],
       maxTotalTokens: 42,
     })
@@ -164,8 +156,6 @@ describe('buildAgentStartBody', () => {
       name: 'T',
       description: 'fix the bug',
       allowClarify: true,
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@x.io',
       workingBranch: 'feat/x',
       autoCommitPush: true,
       collaboratorUserIds: ['u1'],
@@ -177,8 +167,6 @@ describe('buildAgentStartBody', () => {
       description: 'fix the bug',
       repoUrl: 'https://github.com/o/r.git',
       ref: 'dev',
-      gitUserName: 'bot',
-      gitUserEmail: 'bot@x.io',
       workingBranch: 'feat/x',
       autoCommitPush: true,
       collaboratorUserIds: ['u1'],
@@ -537,7 +525,7 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(groupPayload.workgroupId).toBeUndefined()
   })
 
-  test('advanced fields: git identity pair-gated, workingBranch, autoCommitPush, limits', () => {
+  test('advanced fields: historical identity is not replayed; branch/push/limits remain', () => {
     const { payload } = taskToLaunchPayload(
       task({
         gitUserName: 'A',
@@ -549,14 +537,12 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
         repos: [repo('https://x/r.git')],
       }),
     )
-    expect(payload.gitUserName).toBe('A')
-    expect(payload.gitUserEmail).toBe('a@b.c')
+    expect('gitUserName' in payload).toBe(false)
+    expect('gitUserEmail' in payload).toBe(false)
     expect(payload.workingBranch).toBe('feat/x')
     expect(payload.autoCommitPush).toBe(true)
     expect(payload.maxDurationMs).toBe(60000)
     expect(payload.maxTotalTokens).toBe(5000)
-    // Half-set git identity → neither field on the wire.
-    expect(taskToLaunchPayload(task({ gitUserName: 'A' })).payload.gitUserName).toBeUndefined()
   })
 
   test('spaceResolvable: internal / empty-local false; scratch / url-local true', () => {

@@ -114,6 +114,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/auth/bootstrap/admin' },
   { method: 'POST', path: '/api/auth/logout' },
   { method: 'GET', path: '/api/auth/me' },
+  { method: 'PATCH', path: '/api/auth/me/profile' },
   { method: 'POST', path: '/api/auth/change-password' },
   { method: 'GET', path: '/api/auth/sessions' },
   { method: 'POST', path: '/api/auth/sessions/:id/revoke' },

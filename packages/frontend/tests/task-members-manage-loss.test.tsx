@@ -107,6 +107,11 @@ describe('TaskMembersPanel manage-session loss', () => {
     })
     const actorB: MeResponse = {
       user: user('actor-b', 'actor-b'),
+      profile: {
+        displayName: 'actor-b',
+        email: 'actor-b@example.test',
+        gitCommitIdentity: { name: 'actor-b', email: 'actor-b@example.test' },
+      },
       source: 'session',
       permissions: [],
       linkedIdentities: [],

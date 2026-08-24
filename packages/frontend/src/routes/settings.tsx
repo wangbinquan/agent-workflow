@@ -19,12 +19,13 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { createRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type {
-  AuthLoginPolicy,
-  Config,
-  ConfigPatch,
-  OidcProvider,
-  UpdateAuthLoginPolicyBody,
+import {
+  CreateOidcProviderBodySchema,
+  type AuthLoginPolicy,
+  type Config,
+  type ConfigPatch,
+  type OidcProvider,
+  type UpdateAuthLoginPolicyBody,
 } from '@agent-workflow/shared'
 import { api, apiPostMultipart, ApiError } from '@/api/client'
 import {
@@ -2545,6 +2546,7 @@ function OidcProviderDialog(props: {
   const [jwksUri, setJwksUri] = useState(initial?.jwksUri ?? '')
   const [trustEmailVerified, setTrustEmailVerified] = useState(initial?.trustEmailVerified ?? false)
   const [usernameClaim, setUsernameClaim] = useState(initial?.usernameClaim ?? '')
+  const [emailClaim, setEmailClaim] = useState(initial?.emailClaim ?? '')
   const [subjectClaim, setSubjectClaim] = useState(initial?.subjectClaim ?? '')
   const [testResult, setTestResult] = useState<null | OidcTestView>(null)
   const [error, setError] = useState<string | null>(null)
@@ -2555,6 +2557,16 @@ function OidcProviderDialog(props: {
   const operationRef = useRef<'save' | 'test' | null>(null)
   const dirtyRef = useRef<string | null>(null)
   const busyRef = useRef(false)
+
+  const normalizedUsernameClaim = usernameClaim.trim()
+  const normalizedEmailClaim = emailClaim.trim()
+  const usernameClaimValid = CreateOidcProviderBodySchema.shape.usernameClaim.safeParse(
+    normalizedUsernameClaim === '' ? null : normalizedUsernameClaim,
+  ).success
+  const emailClaimValid = CreateOidcProviderBodySchema.shape.emailClaim.safeParse(
+    normalizedEmailClaim === '' ? null : normalizedEmailClaim,
+  ).success
+  const profileClaimSelectorsValid = usernameClaimValid && emailClaimValid
 
   const currentDraftSignature = JSON.stringify({
     slug,
@@ -2573,6 +2585,7 @@ function OidcProviderDialog(props: {
     jwksUri,
     trustEmailVerified,
     usernameClaim,
+    emailClaim,
     subjectClaim,
   })
   const baselineSignatureRef = useRef(currentDraftSignature)
@@ -2639,6 +2652,7 @@ function OidcProviderDialog(props: {
         jwksUri: blankToNull(jwksUri),
         trustEmailVerified,
         usernameClaim: blankToNull(usernameClaim),
+        emailClaim: blankToNull(emailClaim),
         subjectClaim: blankToNull(subjectClaim),
       }
       return strategy.submit(body)
@@ -2697,7 +2711,7 @@ function OidcProviderDialog(props: {
     props.onClose()
   }
   const runSave = (): void => {
-    if (operationRef.current !== null) return
+    if (operationRef.current !== null || !profileClaimSelectorsValid) return
     operationRef.current = 'save'
     busyRef.current = true
     setError(null)
@@ -2734,7 +2748,7 @@ function OidcProviderDialog(props: {
               type="submit"
               form="oidc-provider-form"
               className="btn btn--primary"
-              disabled={busy}
+              disabled={busy || !profileClaimSelectorsValid}
             >
               {save.isPending ? '…' : t('settings.auth.save', { defaultValue: 'Save' })}
             </button>
@@ -3007,7 +3021,18 @@ function OidcProviderDialog(props: {
             />
             <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
-                label={t('settings.auth.usernameClaim', { defaultValue: 'Username fields' })}
+                label={t('settings.auth.usernameClaim', {
+                  defaultValue: 'Username fields (Git user.name)',
+                })}
+                error={
+                  usernameClaimValid
+                    ? undefined
+                    : t('settings.auth.usernameClaimInvalid', {
+                        defaultValue:
+                          'Use 1–8 plain claim names separated by single spaces; reserved object keys are not allowed.',
+                      })
+                }
+                errorId="oidc-username-claim-error"
                 hint={t('settings.auth.usernameClaimHint', {
                   defaultValue:
                     'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
@@ -3017,8 +3042,38 @@ function OidcProviderDialog(props: {
                   value={usernameClaim}
                   onChange={setUsernameClaim}
                   placeholder="preferred_username"
+                  aria-invalid={!usernameClaimValid}
+                  aria-errormessage={usernameClaimValid ? undefined : 'oidc-username-claim-error'}
                 />
               </Field>
+              <Field
+                label={t('settings.auth.emailClaim', {
+                  defaultValue: 'Email field (Git user.email)',
+                })}
+                error={
+                  emailClaimValid
+                    ? undefined
+                    : t('settings.auth.emailClaimInvalid', {
+                        defaultValue:
+                          'Use one plain claim name; spaces and reserved object keys are not allowed.',
+                      })
+                }
+                errorId="oidc-email-claim-error"
+                hint={t('settings.auth.emailClaimHint', {
+                  defaultValue:
+                    'Userinfo field carrying the account and Git commit email. Blank = standard email. The value refreshes on every sign-in.',
+                })}
+              >
+                <TextInput
+                  value={emailClaim}
+                  onChange={setEmailClaim}
+                  placeholder="email"
+                  aria-invalid={!emailClaimValid}
+                  aria-errormessage={emailClaimValid ? undefined : 'oidc-email-claim-error'}
+                />
+              </Field>
+            </div>
+            <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
                 label={t('settings.auth.subjectClaim', { defaultValue: 'Subject field' })}
                 hint={t('settings.auth.subjectClaimHint', {

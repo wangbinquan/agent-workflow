@@ -280,9 +280,12 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       // silent-degrade 同型）——四个 launch 入口一致挂 raw-key 拒收。
       const retired = rejectRetiredStartTaskKeys(body)
       if (retired !== null) {
+        const clientOwnedGitIdentity = retired === 'gitUserName' || retired === 'gitUserEmail'
         throw new ValidationError(
-          'start-task-path-retired',
-          `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
+          clientOwnedGitIdentity ? 'task-git-identity-client-owned' : 'start-task-path-retired',
+          clientOwnedGitIdentity
+            ? `RFC-320 derives Git commit identity from the task creator; remove '${retired}'`
+            : `field '${retired}' was retired by RFC-165 — launch with repoUrl/repos (file:// for local repos) or scratch`,
         )
       }
 

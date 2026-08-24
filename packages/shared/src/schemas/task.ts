@@ -39,6 +39,14 @@ export const TaskNameSchema = z
   .min(1, 'name is required (1..255 chars after trim)')
   .max(TASK_NAME_MAX, `name must be ≤ ${TASK_NAME_MAX} chars`)
 
+/** RFC-320 — keep a schema-level fail-closed ratchet in addition to the raw
+ * route gate. `never` preserves the output contract: successful parses cannot
+ * materialize either retired key. */
+const ClientOwnedGitIdentityFieldSchema = z.custom<never>(
+  () => false,
+  'task-git-identity-client-owned',
+)
+
 /**
  * RFC-066: maximum repos per multi-repo task. Hard cap to bound the
  * concurrent `git worktree add` work and submodule init storm. 8 covers all
@@ -770,16 +778,8 @@ export const StartTaskSchema = z
      * still carrying it with 422 `assignments-removed`.
      */
     collaboratorUserIds: z.array(z.string().min(1)).optional(),
-    /**
-     * RFC-067 — optional per-task Git commit identity. Both must be set
-     * together or both omitted (XOR enforced in superRefine). When both set,
-     * the runner injects `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` /
-     * `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` at opencode spawn time
-     * AND the launcher writes `user.name` / `user.email` into the worktree's
-     * `.git/config` as a fallback for non-opencode git invocations.
-     */
-    gitUserName: z.string().min(1).max(255).optional(),
-    gitUserEmail: z.string().min(1).max(255).optional(),
+    gitUserName: ClientOwnedGitIdentityFieldSchema.optional(),
+    gitUserEmail: ClientOwnedGitIdentityFieldSchema.optional(),
     /**
      * RFC-248: 用一个仓库组作为执行空间。与 `scratch` / 单仓字段 / `sourceTaskId`
      * 互斥。服务端展平该组（深度 ≤ 5、展平 ≤ 32）后按布局物化。
@@ -830,32 +830,6 @@ export const StartTaskSchema = z
     // RFC-204: same url ⊕ id + query-credential rules the repos[] entries get.
     // requireSource:false — "at least one source" is decided below vs scratch/group.
     refineRepoSourceFields(value, ctx, { requireSource: false })
-
-    // RFC-067: Git identity XOR + format check — runs for EVERY space kind
-    // (implementation-gate P2 fix: the scratch early-return below used to
-    // skip it, silently accepting half identities on scratch launches; a
-    // scratch task's root/agent commits DO consume a supplied identity).
-    // Trim before testing so whitespace-only strings can't sneak through.
-    // Loose email check: must contain `@`, no whitespace on either side —
-    // git itself accepts any `Name <email>` shape, so no TLD/DNS pedantry.
-    const trimName = value.gitUserName?.trim() ?? ''
-    const trimEmail = value.gitUserEmail?.trim() ?? ''
-    const hasName = trimName.length > 0
-    const hasEmail = trimEmail.length > 0
-    if (hasName !== hasEmail) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'git-identity-incomplete',
-        path: hasName ? ['gitUserEmail'] : ['gitUserName'],
-      })
-    }
-    if (hasEmail && !/^[^\s@]+@[^\s@]+$/.test(trimEmail)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'git-identity-email-invalid',
-        path: ['gitUserEmail'],
-      })
-    }
 
     // RFC-165: scratch ⊕ every repo source. A scratch task has no source repo,
     // no ref, no remote — so workingBranch / autoCommitPush are meaningless
@@ -1002,6 +976,10 @@ export const RETIRED_START_TASK_KEYS = [
   'baseBranch',
   'fetchBeforeLaunch',
   'repos',
+  // RFC-320: commit identity is server-owned account state. Keep these in the
+  // raw-key gate because the public zod objects intentionally strip unknowns.
+  'gitUserName',
+  'gitUserEmail',
 ] as const
 
 export function rejectRetiredStartTaskKeys(raw: unknown): string | null {
@@ -1638,8 +1616,8 @@ export const StartAgentTaskSchema = z.object({
   /** RFC-248 H9: 按另一任务的**冻结** task_repos 快照重放布局（重启）。 */
   sourceTaskId: z.string().min(1).optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),
-  gitUserName: z.string().max(255).optional(),
-  gitUserEmail: z.string().max(255).optional(),
+  gitUserName: ClientOwnedGitIdentityFieldSchema.optional(),
+  gitUserEmail: ClientOwnedGitIdentityFieldSchema.optional(),
   workingBranch: z.string().optional(),
   autoCommitPush: z.boolean().optional(),
   maxDurationMs: z.number().int().positive().optional(),

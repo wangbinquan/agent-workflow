@@ -82,7 +82,12 @@ function readPreferred(
 
 export function extractUserinfoClaims(
   json: unknown,
-  opts: { subjectClaim: string | null; usernameClaim: string | null },
+  opts: {
+    subjectClaim: string | null
+    usernameClaim: string | null
+    /** RFC-320 compatibility: omitted by pre-RFC direct callers = standard email. */
+    emailClaim?: string | null
+  },
 ): IdTokenClaims {
   if (typeof json !== 'object' || json === null || Array.isArray(json)) {
     throw new OidcTokenError('userinfo-shape-invalid', 'userinfo-shape-invalid')
@@ -104,29 +109,74 @@ export function extractUserinfoClaims(
   }
   return {
     sub,
-    email: typeof source.email === 'string' ? source.email : null,
+    email: readEmail(source, opts.emailClaim ?? null),
     email_verified: source.email_verified === true,
     name: typeof source.name === 'string' ? source.name : null,
     preferred_username: readPreferred(source, opts.usernameClaim),
   }
 }
 
+function normalizeEmail(value: string | null, strict: boolean): string | null {
+  if (value === null) {
+    if (strict) {
+      throw new OidcTokenError(
+        'configured userinfo email claim is missing',
+        'oidc-email-claim-invalid',
+      )
+    }
+    return null
+  }
+  const normalized = value.trim().toLowerCase()
+  if (normalized.length === 0 || normalized.length > 254 || !/^[^\s@]+@[^\s@]+$/.test(normalized)) {
+    throw new OidcTokenError('userinfo email claim is invalid', 'oidc-email-claim-invalid')
+  }
+  return normalized
+}
+
+function readEmail(source: Record<string, unknown>, emailClaim: string | null): string | null {
+  const value =
+    emailClaim === null
+      ? typeof source.email === 'string'
+        ? source.email
+        : null
+      : readClaimField(source, emailClaim)
+  return normalizeEmail(value, emailClaim !== null)
+}
+
 function claimsFromIdToken(payload: JWTPayload, usernameClaim: string | null): IdTokenClaims {
   const source = payload as Record<string, unknown>
+  const sub = subjectFromVerifiedIdToken(payload)
+  return {
+    sub,
+    email: normalizeEmail(typeof source.email === 'string' ? source.email : null, false),
+    email_verified: source.email_verified === true,
+    name: typeof source.name === 'string' ? source.name : null,
+    preferred_username: readPreferred(source, usernameClaim),
+  }
+}
+
+function subjectFromVerifiedIdToken(payload: JWTPayload): string {
   const rawSub = payload.sub
   // Empty-subject rejection (behavior change #4): the pre-RFC callback
   // stringified a missing sub into '' and happily created a subject-less
   // identity row.
-  const sub = typeof rawSub === 'string' && rawSub.length > 0 ? rawSub : null
-  if (sub === null) {
+  if (typeof rawSub !== 'string' || rawSub.length === 0) {
     throw new OidcTokenError('id-token-verify-failed empty-sub', 'id-token-verify-failed')
   }
-  return {
-    sub,
-    email: typeof source.email === 'string' ? source.email : null,
-    email_verified: source.email_verified === true,
-    name: typeof source.name === 'string' ? source.name : null,
-    preferred_username: readPreferred(source, usernameClaim),
+  return rawSub
+}
+
+function assertUserinfoSubjectBinding(json: unknown, verifiedSubject: string): void {
+  // Leave top-level shape reporting to extractUserinfoClaims. Once the
+  // response is an object, however, a configured profile selector requires a
+  // usable standard `sub` that exactly binds it to the verified id token.
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) return
+  const rawSub = (json as Record<string, unknown>)['sub']
+  if (typeof rawSub !== 'string' || rawSub.length === 0 || rawSub !== verifiedSubject) {
+    throw new OidcTokenError(
+      'userinfo sub does not match verified id-token sub',
+      'userinfo-subject-mismatch',
+    )
   }
 }
 
@@ -136,6 +186,7 @@ export interface AcquireIdentityInput {
   clientId: string
   nonce: string
   usernameClaim?: string | null
+  emailClaim?: string | null
   subjectClaim?: string | null
   /** RFC-220 D8 — userinfo invocation style + the scope string the post_json
    * body carries (provider.scopes verbatim). */
@@ -150,8 +201,10 @@ export interface AcquireIdentityInput {
 export async function acquireIdentityClaims(input: AcquireIdentityInput): Promise<IdTokenClaims> {
   const subjectClaim = input.subjectClaim ?? null
   const usernameClaim = input.usernameClaim ?? null
+  const emailClaim = input.emailClaim ?? null
   const { tokens, effective } = input
   const subjectMode = subjectClaim !== null
+  const profileSelectorsConfigured = usernameClaim !== null || emailClaim !== null
 
   if (!subjectMode && typeof tokens.id_token === 'string' && effective.jwksUri !== null) {
     const payload = await verifyIdToken({
@@ -161,7 +214,29 @@ export async function acquireIdentityClaims(input: AcquireIdentityInput): Promis
       audience: input.clientId,
       nonce: input.nonce,
     })
-    return claimsFromIdToken(payload, usernameClaim)
+    if (!profileSelectorsConfigured) return claimsFromIdToken(payload, usernameClaim)
+    // With explicit profile selectors the verified token owns only the
+    // canonical subject. Profile values (including email) are authoritative
+    // from userinfo, so malformed optional profile claims in the id_token must
+    // not pre-empt that bound source.
+    const verifiedSubject = subjectFromVerifiedIdToken(payload)
+    if (effective.userinfoEndpoint === null) {
+      throw new OidcTokenError('userinfo-unavailable', 'userinfo-unavailable')
+    }
+    const raw = await fetchUserinfo({
+      userinfoEndpoint: effective.userinfoEndpoint,
+      accessToken: tokens.access_token,
+      requestStyle: input.userinfoRequestStyle ?? 'get_bearer',
+      clientId: input.clientId,
+      ...(input.scopes !== undefined ? { scope: input.scopes } : {}),
+      ...(input.fetcher ? { fetcher: input.fetcher } : {}),
+    })
+    assertUserinfoSubjectBinding(raw, verifiedSubject)
+    return extractUserinfoClaims(raw, {
+      subjectClaim: null,
+      usernameClaim,
+      emailClaim,
+    })
   }
 
   if (effective.userinfoEndpoint !== null) {
@@ -173,7 +248,7 @@ export async function acquireIdentityClaims(input: AcquireIdentityInput): Promis
       ...(input.scopes !== undefined ? { scope: input.scopes } : {}),
       ...(input.fetcher ? { fetcher: input.fetcher } : {}),
     })
-    return extractUserinfoClaims(raw, { subjectClaim, usernameClaim })
+    return extractUserinfoClaims(raw, { subjectClaim, usernameClaim, emailClaim })
   }
 
   if (!subjectMode && typeof tokens.id_token === 'string') {

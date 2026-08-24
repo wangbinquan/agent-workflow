@@ -53,6 +53,8 @@ const NO_MANUAL = {
   userinfoEndpoint: null,
   jwksUri: null,
   subjectClaim: null,
+  usernameClaim: null,
+  emailClaim: null,
 }
 
 const FULL_MANUAL = {
@@ -62,6 +64,8 @@ const FULL_MANUAL = {
   userinfoEndpoint: 'https://manual.test/userinfo',
   jwksUri: 'https://manual.test/jwks',
   subjectClaim: null,
+  usernameClaim: null,
+  emailClaim: null,
 }
 
 const FULL_DOC = {
@@ -195,10 +199,26 @@ describe('RFC-220 S3 — resolveEndpoints', () => {
       tokenEndpoint: 'https://manual.test/token',
       jwksUri: 'https://manual.test/jwks',
     }
-    expect(loginViable(jwksOnly, { subjectClaim: null })).toBe(true)
-    expect(loginViable(jwksOnly, { subjectClaim: 'id' })).toBe(false)
+    expect(
+      loginViable(jwksOnly, { subjectClaim: null, usernameClaim: null, emailClaim: null }),
+    ).toBe(true)
+    expect(
+      loginViable(jwksOnly, { subjectClaim: 'id', usernameClaim: null, emailClaim: null }),
+    ).toBe(false)
+    expect(
+      loginViable(jwksOnly, { subjectClaim: null, usernameClaim: 'login', emailClaim: null }),
+    ).toBe(false)
+    expect(
+      loginViable(jwksOnly, { subjectClaim: null, usernameClaim: null, emailClaim: 'mail' }),
+    ).toBe(false)
     const withUserinfo = { ...jwksOnly, userinfoEndpoint: 'https://manual.test/userinfo' }
-    expect(loginViable(withUserinfo, { subjectClaim: 'id' })).toBe(true)
+    expect(
+      loginViable(withUserinfo, {
+        subjectClaim: 'id',
+        usernameClaim: 'login',
+        emailClaim: 'mail',
+      }),
+    ).toBe(true)
     // and the negative cache respects the mode: jwks-only manual + subjectClaim
     // re-probes every call instead of serving the half-viable window
     const { fetcher, calls } = failingFetch()

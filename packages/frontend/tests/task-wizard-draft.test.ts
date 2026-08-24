@@ -62,8 +62,6 @@ function draft(overrides: Partial<TaskWizardDraftV1> = {}): TaskWizardDraftV1 {
       goal: '',
       allowClarify: false,
       collaboratorIds: ['user-2'],
-      gitUserName: '',
-      gitUserEmail: '',
       workingBranch: '',
       autoCommitPush: false,
     },

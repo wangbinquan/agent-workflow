@@ -67,6 +67,9 @@ export const OidcProviderSchema = z.object({
   jwksUri: HttpUrlSchema.nullable(),
   trustEmailVerified: z.boolean(),
   usernameClaim: ClaimNameListSchema.nullable(),
+  // RFC-320 — userinfo field carrying the account/Git email. null keeps the
+  // standard OIDC `email` claim; an explicit selector is authoritative.
+  emailClaim: ClaimNameSchema.nullable().default(null),
   subjectClaim: ClaimNameSchema.nullable(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
@@ -98,6 +101,7 @@ export const CreateOidcProviderBodySchema = OidcProviderSchema.omit({
   jwksUri: HttpUrlSchema.nullable().optional(),
   trustEmailVerified: z.boolean().optional(),
   usernameClaim: ClaimNameListSchema.nullable().optional(),
+  emailClaim: ClaimNameSchema.nullable().optional(),
   subjectClaim: ClaimNameSchema.nullable().optional(),
 })
 

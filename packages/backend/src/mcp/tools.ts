@@ -146,7 +146,8 @@ const LAUNCH_TASK_INPUT_SCHEMA = {
   // reach the route, whatever the caller sends. The first version stopped
   // after `autoCommitPush`, which silently made the per-task budgets,
   // collaborators, git identity and multi-repo launches unreachable over
-  // MCP even though the route accepts them all.
+  // MCP even though the route accepts them all. RFC-320 removed client-owned
+  // Git identity from every launch surface; it is intentionally absent here.
   maxDurationMs: z
     .number()
     .int()
@@ -158,13 +159,6 @@ const LAUNCH_TASK_INPUT_SCHEMA = {
     .array(z.string().min(1))
     .optional()
     .describe('Users added alongside the launcher (who becomes owner)'),
-  gitUserName: z
-    .string()
-    .min(1)
-    .max(255)
-    .optional()
-    .describe('Per-task commit identity; set together with gitUserEmail or not at all'),
-  gitUserEmail: z.string().min(1).max(255).optional(),
   expectedWorkflowVersion: z
     .number()
     .int()

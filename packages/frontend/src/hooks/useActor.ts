@@ -9,12 +9,19 @@
 
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
-import type { PatPublic, Permission, UserIdentity, UserPublic } from '@agent-workflow/shared'
+import type {
+  PatPublic,
+  Permission,
+  UserIdentity,
+  UserPrivateProfile,
+  UserPublic,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { getAuthSessionRevision, getToken, subscribeAuth } from '@/stores/auth'
 
 export interface MeResponse {
   user: UserPublic
+  profile: UserPrivateProfile
   source: 'session' | 'pat' | 'daemon'
   permissions: Permission[]
   linkedIdentities: UserIdentity[]

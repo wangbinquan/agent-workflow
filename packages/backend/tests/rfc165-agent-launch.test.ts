@@ -439,6 +439,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     })
     const admin = await createUser(db, {
       username: 'alice',
+      email: 'alice@example.test',
       displayName: 'alice',
       role: 'admin',
       password: 'longEnoughPassword',
@@ -572,6 +573,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   test('A9 F15 carve-out: tasks:launch suffices; agents:write alone does not', async () => {
     const bob = await createUser(db, {
       username: 'bob',
+      email: 'bob@example.test',
       displayName: 'bob',
       role: 'user',
       password: 'longEnoughPassword',

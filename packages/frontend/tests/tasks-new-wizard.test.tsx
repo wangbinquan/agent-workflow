@@ -36,12 +36,21 @@ import '../src/i18n'
 
 const permissionHarness = vi.hoisted(() => ({
   permissions: new Set<string>(),
+  gitCommitIdentity: { name: 'Me', email: 'me@example.test' } as {
+    name: string
+    email: string
+  } | null,
 }))
 
 vi.mock('../src/hooks/useActor', () => ({
   useActor: () => ({
     data: {
       user: { id: 'me', username: 'me', displayName: 'Me', role: 'user', status: 'active' },
+      profile: {
+        displayName: 'Me',
+        email: 'me@example.test',
+        gitCommitIdentity: permissionHarness.gitCommitIdentity,
+      },
       source: 'session',
       permissions: [...permissionHarness.permissions],
       linkedIdentities: [],
@@ -301,6 +310,7 @@ beforeEach(() => {
     'scheduled-tasks:update',
     'users:search',
   ])
+  permissionHarness.gitCommitIdentity = { name: 'Me', email: 'me@example.test' }
   window.localStorage.clear()
   window.sessionStorage.clear()
 })
@@ -665,6 +675,49 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
         ].some((path) => call.url.includes(path)),
       ),
     ).toEqual([])
+  })
+
+  test('RFC-320 missing account email blocks an immediate task and links to account settings', async () => {
+    permissionHarness.gitCommitIdentity = null
+    installFetch()
+    await renderWizard(AGENT_NEW_URL)
+
+    const warning = await screen.findByTestId('wizard-git-identity-missing')
+    expect(warning.textContent).toContain('email')
+    expect(screen.getByTestId('wizard-git-identity-fix').getAttribute('href')).toBe('/account')
+
+    await fillAgentDraft('Needs identity', 'Do not launch without an account email')
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true),
+    )
+  })
+
+  test('RFC-320 schedule saves resolve owner identity at fire time while Run now stays fenced', async () => {
+    permissionHarness.gitCommitIdentity = null
+    installFetch()
+    await renderWizard('/tasks/new?schedule=1&kind=agent&agentId=agent-auditor')
+    await screen.findByTestId('wizard-scratch-hint')
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), {
+      target: { value: 'Future audit' },
+    })
+    fireEvent.change(screen.getByTestId('wizard-description'), {
+      target: { value: 'Resolve the schedule owner when the task fires' },
+    })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    await screen.findByTestId('wizard-launch')
+
+    expect(screen.getByTestId('wizard-summary-git-identity').textContent).toContain(
+      'schedule owner',
+    )
+    expect((screen.getByTestId('wizard-save-scheduled') as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByTestId('wizard-launch') as HTMLButtonElement).disabled).toBe(true)
   })
 
   test.each([
@@ -1785,19 +1838,10 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     installFetch()
     await renderWizard(AGENT_NEW_URL)
     await fillAgentDraft('Agent A only', 'Do not leak this prompt')
-    const advancedSummary = screen.getByTestId('wizard-advanced').querySelector('summary')
-    if (!(advancedSummary instanceof HTMLElement)) throw new Error('advanced summary not found')
-    fireEvent.click(advancedSummary)
-    fireEvent.change(screen.getByTestId('wizard-git-user-name'), {
-      target: { value: 'Source A User' },
-    })
-    fireEvent.change(screen.getByTestId('wizard-git-user-email'), {
-      target: { value: 'source-a@example.test' },
-    })
     await waitFor(() =>
-      expect(
-        (readAgentNewDraft()?.values as { gitUserName?: string } | undefined)?.gitUserName,
-      ).toBe('Source A User'),
+      expect((readAgentNewDraft()?.values as { taskName?: string } | undefined)?.taskName).toBe(
+        'Agent A only',
+      ),
     )
     const sourceARaw = window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY)
     expect(sourceARaw).not.toBeNull()
@@ -1844,10 +1888,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
         throw new Error(`advanced summary not found for ${source.label}`)
       }
       fireEvent.click(sourceAdvancedSummary)
-      expect(
-        (screen.getByTestId('wizard-git-user-name') as HTMLInputElement).value,
-        source.label,
-      ).toBe('')
+      expect(screen.queryByTestId('wizard-git-user-name'), source.label).toBeNull()
       expect(window.sessionStorage.getItem(AGENT_NEW_DRAFT_KEY), source.label).toBe(sourceARaw)
     }
   })

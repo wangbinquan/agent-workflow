@@ -55,11 +55,14 @@ const stripComments = (src: string): string =>
 const mentionsAsKey = (src: string, key: string): boolean =>
   new RegExp(String.raw`(?<![\w-])${key}\s*:`).test(stripComments(src))
 
-// RFC-165 的三个 path-mode 键 + RFC-248 退役的顶层 `repos`。
-const KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch', 'repos'] as const
+// RFC-165 的三个 path-mode 键 + RFC-248 退役的顶层 `repos` +
+// RFC-320 收归服务端解析的 Git 提交身份键。
+const STRIPPED_KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch', 'repos'] as const
+const CLIENT_OWNED_IDENTITY_KEYS = ['gitUserName', 'gitUserEmail'] as const
+const KEYS = [...STRIPPED_KEYS, ...CLIENT_OWNED_IDENTITY_KEYS] as const
 
 describe('RFC-165 — retired-key registry', () => {
-  test('RETIRED_START_TASK_KEYS 恰好是这四个键（RFC-165 三个 + RFC-248 的 repos）', () => {
+  test('RETIRED_START_TASK_KEYS 恰好包含 RFC-165、RFC-248 与 RFC-320 的退役键', () => {
     expect([...RETIRED_START_TASK_KEYS].sort()).toEqual([...KEYS].sort())
   })
 })
@@ -69,7 +72,7 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
   // happens route-side); the invariant locked here is that the parsed output
   // a route hands to the service can never carry a retired key — i.e. nobody
   // quietly re-declared one of the three as an accepted field.
-  for (const k of KEYS) {
+  for (const k of STRIPPED_KEYS) {
     test(`StartTaskSchema output never carries ${k}`, () => {
       const parsed = StartTaskSchema.safeParse({
         workflowId: 'wf',
@@ -83,6 +86,19 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
     })
   }
 
+  for (const k of CLIENT_OWNED_IDENTITY_KEYS) {
+    test(`StartTaskSchema fails closed for client-owned ${k}`, () => {
+      const parsed = StartTaskSchema.safeParse({
+        workflowId: 'wf',
+        name: 'n',
+        inputs: {},
+        scratch: true,
+        [k]: '/x',
+      })
+      expect(parsed.success).toBe(false)
+    })
+  }
+
   test('RFC-248: 顶层 repos 整个被硬拒（原「repos[i] 行内不得含退役键」）', () => {
     // RFC-248: 这条原本锁「`repos[]` 的行内不得含退役键」。顶层 `repos` 现在
     // 整个进了 RETIRED_START_TASK_KEYS 硬拒清单（非 strict zod 会静默剥除，
@@ -91,7 +107,7 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
     expect(rejectRetiredStartTaskKeys({ workflowId: 'w', name: 'n', repos: [] })).toBe('repos')
   })
 
-  for (const k of KEYS) {
+  for (const k of STRIPPED_KEYS) {
     test(`StartWorkgroupTaskSchema output never carries ${k}`, () => {
       const parsed = StartWorkgroupTaskSchema.safeParse({
         name: 'run',
@@ -101,6 +117,18 @@ describe('RFC-165 — public request schemas never emit the retired keys', () =>
       })
       expect(parsed.success).toBe(true)
       if (parsed.success) expect(k in parsed.data).toBe(false)
+    })
+  }
+
+  for (const k of CLIENT_OWNED_IDENTITY_KEYS) {
+    test(`StartWorkgroupTaskSchema fails closed for client-owned ${k}`, () => {
+      const parsed = StartWorkgroupTaskSchema.safeParse({
+        name: 'run',
+        goal: 'g',
+        repoUrl: 'https://h/o/r.git',
+        [k]: '/x',
+      })
+      expect(parsed.success).toBe(false)
     })
   }
 })

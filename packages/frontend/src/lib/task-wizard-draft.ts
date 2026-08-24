@@ -56,8 +56,6 @@ export interface TaskWizardDraftValues {
   goal: string
   allowClarify: boolean
   collaboratorIds: string[]
-  gitUserName: string
-  gitUserEmail: string
   workingBranch: string
   autoCommitPush: boolean
   maxDurationMin?: number
@@ -352,8 +350,6 @@ function isDraftValues(value: unknown): value is TaskWizardDraftValues {
     typeof value.allowClarify === 'boolean' &&
     Array.isArray(value.collaboratorIds) &&
     value.collaboratorIds.every((id) => typeof id === 'string') &&
-    typeof value.gitUserName === 'string' &&
-    typeof value.gitUserEmail === 'string' &&
     typeof value.workingBranch === 'string' &&
     typeof value.autoCommitPush === 'boolean' &&
     isOptionalPositiveNumber(value.maxDurationMin) &&

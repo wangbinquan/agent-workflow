@@ -458,6 +458,7 @@ export function createApp(deps: AppDeps): Hono {
  * for the dispatcher), while authorization belongs to the route declarations.
  */
 export function mountApiRoutes(app: Hono, deps: AppDeps): void {
+  const identityAccess = composeIdentityAccess(deps.db)
   const appHome = deps.appHome ?? dirname(deps.configPath)
   const inputArtifacts = createEmployeeInputArtifactStore(
     join(appHome, 'artifacts', 'employee-inputs'),
@@ -610,9 +611,9 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountTaskFeedbackRoutes(app, deps)
   // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always
   // mounted; OIDC routes self-skip when deps.secretBox is omitted.
-  mountAuthRoutes(app, deps)
+  mountAuthRoutes(app, deps, identityAccess)
   mountOidcAuthRoutes(app, deps)
   mountOidcRoutes(app, deps)
-  mountUserRoutes(app, deps, composeIdentityAccess(deps.db))
+  mountUserRoutes(app, deps, identityAccess)
   mountDocsRoutes(app, deps) // RFC-247 D17
 }

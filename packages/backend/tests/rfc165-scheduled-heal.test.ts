@@ -126,6 +126,30 @@ describe('RFC-165 T4 — scheduled payload heal + tolerant repair', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
+  test('RFC-320 identity-only legacy row drops the retired pair and stays enabled', async () => {
+    const id = await seedRow({
+      workflowId: 'wf1',
+      name: 't',
+      inputs: { topic: 'preserve' },
+      repoUrl: 'https://example.com/a.git',
+      gitUserName: 'Legacy Author',
+      gitUserEmail: 'legacy@example.test',
+    })
+
+    const first = await healScheduledLaunchPayloads(db)
+    expect(first).toEqual({ scanned: 1, converted: 1, disabled: 0 })
+    expect(await rawPayload(id)).toEqual({
+      workflowId: 'wf1',
+      name: 't',
+      inputs: { topic: 'preserve' },
+      repoUrl: 'https://example.com/a.git',
+    })
+    const row = await rawRow(id)
+    expect(row.enabled).toBe(true)
+
+    expect(await healScheduledLaunchPayloads(db)).toEqual({ scanned: 1, converted: 0, disabled: 0 })
+  })
+
   test('H2 fetchBeforeLaunch:true → disabled with semantic-review breadcrumb', async () => {
     const repo = await seedRepo('r2')
     const id = await seedRow({

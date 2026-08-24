@@ -168,12 +168,13 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
   })
 
   test('access-token-only callback: provisioning + identity + session + redirect', async () => {
-    const h = await buildHarness()
+    const h = await buildHarness({ emailClaim: 'mail' })
     idpState.userinfoBody = {
       id: 42, // subjectClaim: 'id' — numeric platform id
       login: 'zhang',
       sig: '我爱写代码',
-      email: 'zhang@corp.test',
+      email: 'ignored-standard@corp.test',
+      mail: 'zhang@corp.test',
       // note: NO email_verified field — trustEmailVerified covers it
     }
     const { state } = await startLogin(h)
@@ -186,12 +187,14 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     const identities = await h.db.select().from(userIdentities)
     expect(identities.length).toBe(1)
     expect(identities[0]!.subject).toBe('42')
+    expect(identities[0]!.email).toBe('zhang@corp.test')
     expect(identities[0]!.emailVerified).toBe(1) // trustEmailVerified applied
     expect(identities[0]!.preferredSnapshot).toBe('zhang 我爱写代码')
 
     // auto-provisioned user: composed presented name + derived username
     const userRows = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
     expect(userRows[0]!.displayName).toBe('zhang 我爱写代码')
+    expect(userRows[0]!.email).toBe('zhang@corp.test')
     expect(userRows[0]!.status).toBe('active')
     expect(userRows[0]!.role).toBe('guest')
     const firstSessions = await h.db
@@ -202,12 +205,18 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     expect(userRows[0]!.lastLoginAt).toBe(firstSessions[0]!.createdAt)
 
     // second login with a changed IdP-side signature refreshes the name (D7)
-    idpState.userinfoBody = { ...idpState.userinfoBody, sig: '换个签名' }
+    idpState.userinfoBody = {
+      ...idpState.userinfoBody,
+      sig: '换个签名',
+      mail: 'zhang.next@corp.test',
+    }
     const second = await startLogin(h)
     const res2 = await h.app.request(`/api/auth/oidc/pure/callback?code=def&state=${second.state}`)
     expect(res2.status).toBe(302)
     const refreshed = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
     expect(refreshed[0]!.displayName).toBe('zhang 换个签名')
+    expect(refreshed[0]!.email).toBe('zhang.next@corp.test')
+    expect((await h.db.select().from(userIdentities))[0]!.email).toBe('zhang.next@corp.test')
     const allSessions = await h.db
       .select()
       .from(userSessions)

@@ -16,6 +16,11 @@ function actor(permissions: MeResponse['permissions']): MeResponse {
       role: 'user',
       status: 'active',
     },
+    profile: {
+      displayName: 'Dev',
+      email: 'dev@example.test',
+      gitCommitIdentity: { name: 'Dev', email: 'dev@example.test' },
+    },
     source: 'session',
     permissions,
     linkedIdentities: [],

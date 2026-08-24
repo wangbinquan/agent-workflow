@@ -9,7 +9,13 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { authLoginPolicy, oidcProviders, userIdentities, users } from '@/db/schema'
 import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
+import { UserAccessError } from '@/modules/identity-access/public/types'
 import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
+import {
+  mapOidcUserProfilePersistenceError,
+  syncOidcUserProfile,
+  syncOidcUserProfileInTransaction,
+} from '@/services/users'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -62,28 +68,57 @@ export interface CreateIdentityArgs {
    * persist a row into the new one (write-time TOCTOU gate, design §2.3).
    */
   expectedSubjectClaim?: string | null
+  /** RFC-320 — profile selector snapshots share the same callback/write fence. */
+  expectedUsernameClaim?: string | null
+  expectedEmailClaim?: string | null
   now?: number
+}
+
+function assertProviderSnapshot(
+  tx: DbTxSync,
+  args: Pick<
+    CreateIdentityArgs,
+    'providerId' | 'expectedSubjectClaim' | 'expectedUsernameClaim' | 'expectedEmailClaim'
+  >,
+): void {
+  if (
+    args.expectedSubjectClaim === undefined &&
+    args.expectedUsernameClaim === undefined &&
+    args.expectedEmailClaim === undefined
+  ) {
+    return
+  }
+  const provider = tx
+    .select({
+      subjectClaim: oidcProviders.subjectClaim,
+      usernameClaim: oidcProviders.usernameClaim,
+      emailClaim: oidcProviders.emailClaim,
+    })
+    .from(oidcProviders)
+    .where(eq(oidcProviders.id, args.providerId))
+    .limit(1)
+    .all()[0]
+  const changed =
+    provider === undefined ||
+    (args.expectedSubjectClaim !== undefined &&
+      (provider.subjectClaim ?? null) !== args.expectedSubjectClaim) ||
+    (args.expectedUsernameClaim !== undefined &&
+      (provider.usernameClaim ?? null) !== args.expectedUsernameClaim) ||
+    (args.expectedEmailClaim !== undefined &&
+      (provider.emailClaim ?? null) !== args.expectedEmailClaim)
+  if (changed) {
+    throw new ConflictError(
+      'provider-config-changed',
+      'provider identity/profile selectors changed while the sign-in was in flight',
+    )
+  }
 }
 
 function insertIdentityTx(
   tx: DbTxSync,
   args: CreateIdentityArgs,
 ): typeof userIdentities.$inferSelect {
-  if (args.expectedSubjectClaim !== undefined) {
-    const provider = tx
-      .select({ subjectClaim: oidcProviders.subjectClaim })
-      .from(oidcProviders)
-      .where(eq(oidcProviders.id, args.providerId))
-      .limit(1)
-      .all()
-    const current = provider[0]?.subjectClaim ?? null
-    if (current !== args.expectedSubjectClaim) {
-      throw new ConflictError(
-        'provider-config-changed',
-        'provider subjectClaim changed while the sign-in was in flight',
-      )
-    }
-  }
+  assertProviderSnapshot(tx, args)
   const existing = tx
     .select()
     .from(userIdentities)
@@ -122,7 +157,11 @@ export async function createIdentity(
   // dbTxSync (not a plain insert): the duplicate check, the subjectClaim
   // revalidation, and the insert must be one serialization unit against the
   // PATCH-side namespace lock (services/oidcProviders.ts).
-  return dbTxSync(db, (tx) => insertIdentityTx(tx, args))
+  return dbTxSync(db, (tx) => {
+    const identity = insertIdentityTx(tx, args)
+    syncInsertedIdentityProfile(db, tx, args.userId, args, args.now ?? Date.now())
+    return identity
+  })
 }
 
 /**
@@ -136,57 +175,77 @@ export async function createUserWithIdentity(
   args: {
     username: string
     displayName: string
-    email: string | null
+    email?: string | null
     identity: Omit<CreateIdentityArgs, 'userId'>
     now?: number
   },
 ): Promise<{ userId: string }> {
   const now = args.now ?? Date.now()
-  return dbTxSync(db, (tx) => {
-    // The policy read and account insert share the same SQLite transaction.
-    // A concurrent administrator change therefore has one linearization point:
-    // the new account receives either the complete old preset or the complete
-    // new preset, never a route-level stale snapshot.
-    const policy = tx
-      .select({ oidcDefaultRole: authLoginPolicy.oidcDefaultRole })
-      .from(authLoginPolicy)
-      .where(eq(authLoginPolicy.id, 'global'))
-      .get()
-    if (policy === undefined) {
-      throw new Error('authentication policy singleton is missing')
-    }
-    const userId = ulid()
-    const operationId = ulid()
-    withExistingSQLiteTransactionScope(tx, (transactionScope) => {
-      insertInitialUserAccessInTransaction(transactionScope, {
-        user: {
-          id: userId,
-          username: args.username,
-          email: args.email,
-          displayName: args.displayName,
-          passwordHash: null,
-          // Only self-provisioning consults this policy. Invited identities
-          // retain the administrator-selected preset in the bind path below.
-          role: policy.oidcDefaultRole,
-          // The IdP verified the identity, so the user lands as `active`
-          // immediately (same rationale as the pre-RFC-220 createUser call).
-          status: 'active',
-          forcePasswordChange: false,
-          createdBy: null,
-          createdAt: now,
-        },
-        audit: {
-          id: ulid(),
-          actorUserId: null,
-          actorKind: 'system',
-          operationId,
-        },
+  try {
+    return dbTxSync(db, (tx) => {
+      // The policy read and account insert share the same SQLite transaction.
+      // A concurrent administrator change therefore has one linearization point:
+      // the new account receives either the complete old preset or the complete
+      // new preset, never a route-level stale snapshot.
+      const policy = tx
+        .select({ oidcDefaultRole: authLoginPolicy.oidcDefaultRole })
+        .from(authLoginPolicy)
+        .where(eq(authLoginPolicy.id, 'global'))
+        .get()
+      if (policy === undefined) {
+        throw new Error('authentication policy singleton is missing')
+      }
+      if (args.email !== undefined && args.email !== null) {
+        const conflict = tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, args.email))
+          .limit(1)
+          .all()[0]
+        if (conflict !== undefined) {
+          throw new ConflictError(
+            'oidc-email-conflict',
+            'the identity provider email already belongs to another user',
+          )
+        }
+      }
+      const userId = ulid()
+      const operationId = ulid()
+      withExistingSQLiteTransactionScope(tx, (transactionScope) => {
+        insertInitialUserAccessInTransaction(transactionScope, {
+          user: {
+            id: userId,
+            username: args.username,
+            email: args.email ?? null,
+            displayName: args.displayName,
+            passwordHash: null,
+            // Only self-provisioning consults this policy. Invited identities
+            // retain the administrator-selected preset in the bind path below.
+            role: policy.oidcDefaultRole,
+            // The IdP verified the identity, so the user lands as `active`
+            // immediately (same rationale as the pre-RFC-220 createUser call).
+            status: 'active',
+            forcePasswordChange: false,
+            createdBy: null,
+            createdAt: now,
+          },
+          audit: {
+            id: ulid(),
+            actorUserId: null,
+            actorKind: 'system',
+            operationId,
+          },
+        })
+        return undefined
       })
-      return undefined
+      const identityArgs = { ...args.identity, userId, now }
+      insertIdentityTx(tx, identityArgs)
+      syncInsertedIdentityProfile(db, tx, userId, identityArgs, now)
+      return { userId }
     })
-    insertIdentityTx(tx, { ...args.identity, userId, now })
-    return { userId }
-  })
+  } catch (error) {
+    throw identityAccessDomainError(mapOidcUserProfilePersistenceError(db, error))
+  }
 }
 
 /**
@@ -208,7 +267,60 @@ export async function bindInvitedUserWithIdentity(
       .set({ status: 'active', updatedAt: now })
       .where(eq(users.id, args.userId))
       .run()
-    insertIdentityTx(tx, { ...args.identity, userId: args.userId, now })
+    const identityArgs = { ...args.identity, userId: args.userId, now }
+    insertIdentityTx(tx, identityArgs)
+    syncInsertedIdentityProfile(db, tx, args.userId, identityArgs, now)
+    return undefined
+  })
+}
+
+function syncInsertedIdentityProfile(
+  db: DbClient,
+  tx: DbTxSync,
+  userId: string,
+  identity: CreateIdentityArgs,
+  now: number,
+): void {
+  // Undefined on all three fields is the pre-RFC direct-link API. Callback
+  // flows snapshot at least subjectClaim and RFC-320 snapshots all three.
+  if (
+    identity.expectedSubjectClaim === undefined &&
+    identity.expectedUsernameClaim === undefined &&
+    identity.expectedEmailClaim === undefined
+  ) {
+    return
+  }
+  withExistingSQLiteTransactionScope(tx, (transactionScope) => {
+    try {
+      syncOidcUserProfileInTransaction(
+        db,
+        transactionScope,
+        {
+          providerId: identity.providerId,
+          subject: identity.subject,
+          userId,
+          composed: identity.preferredSnapshot === '' ? null : (identity.preferredSnapshot ?? null),
+          email: identity.email,
+          emailVerified: identity.emailVerified,
+          usernameClaimConfigured:
+            identity.expectedUsernameClaim !== undefined
+              ? identity.expectedUsernameClaim !== null
+              : identity.preferredSnapshot !== null,
+          ...(identity.expectedSubjectClaim !== undefined
+            ? { expectedSubjectClaim: identity.expectedSubjectClaim }
+            : {}),
+          ...(identity.expectedUsernameClaim !== undefined
+            ? { expectedUsernameClaim: identity.expectedUsernameClaim }
+            : {}),
+          ...(identity.expectedEmailClaim !== undefined
+            ? { expectedEmailClaim: identity.expectedEmailClaim }
+            : {}),
+        },
+        now,
+      )
+    } catch (error) {
+      throw identityAccessDomainError(error)
+    }
     return undefined
   })
 }
@@ -232,73 +344,46 @@ export function syncPreferredSnapshot(
     userId: string
     /** composePreferred result; null when the claim list yielded nothing. */
     composed: string | null
+    /** RFC-320 — normalized IdP email snapshot; null means absent standard claim. */
+    email?: string | null
     /** Normalized claims value (post applyEmailTrust) — synced bidirectionally. */
     emailVerified: boolean
     /** D7 refresh only runs for providers with usernameClaim configured. */
     usernameClaimConfigured: boolean
+    expectedSubjectClaim?: string | null
+    expectedUsernameClaim?: string | null
+    expectedEmailClaim?: string | null
     now?: number
   },
-): { displayNameRefreshed: boolean } {
-  const now = args.now ?? Date.now()
-  return dbTxSync(db, (tx) => {
-    const rows = tx
-      .select()
-      .from(userIdentities)
-      .where(
-        and(
-          eq(userIdentities.providerId, args.providerId),
-          eq(userIdentities.subject, args.subject),
-        ),
-      )
-      .limit(1)
-      .all()
-    const identity = rows[0]
-    if (!identity) return { displayNameRefreshed: false }
+): { displayNameRefreshed: boolean; emailRefreshed: boolean } {
+  try {
+    return syncOidcUserProfile(db, {
+      providerId: args.providerId,
+      subject: args.subject,
+      userId: args.userId,
+      composed: args.composed,
+      email: args.email ?? null,
+      emailVerified: args.emailVerified,
+      usernameClaimConfigured: args.usernameClaimConfigured,
+      ...(args.expectedSubjectClaim !== undefined
+        ? { expectedSubjectClaim: args.expectedSubjectClaim }
+        : {}),
+      ...(args.expectedUsernameClaim !== undefined
+        ? { expectedUsernameClaim: args.expectedUsernameClaim }
+        : {}),
+      ...(args.expectedEmailClaim !== undefined
+        ? { expectedEmailClaim: args.expectedEmailClaim }
+        : {}),
+    })
+  } catch (error) {
+    throw identityAccessDomainError(error)
+  }
+}
 
-    const wantVerified = args.emailVerified ? 1 : 0
-    if (identity.emailVerified !== wantVerified) {
-      // trustEmailVerified toggled after the identity was created: the stored
-      // flag follows the normalized claims (gate round 6 — without this, an
-      // existing identity would stay unverified forever).
-      tx.update(userIdentities)
-        .set({ emailVerified: wantVerified })
-        .where(eq(userIdentities.id, identity.id))
-        .run()
-    }
-
-    if (!args.usernameClaimConfigured) return { displayNameRefreshed: false }
-
-    const cur = args.composed ?? ''
-    const snapshot = identity.preferredSnapshot
-    if (snapshot === null) {
-      // Legacy row: record only. Overwriting on first sight could clobber an
-      // in-app rename that predates RFC-220.
-      tx.update(userIdentities)
-        .set({ preferredSnapshot: cur })
-        .where(eq(userIdentities.id, identity.id))
-        .run()
-      return { displayNameRefreshed: false }
-    }
-    if (snapshot === cur) return { displayNameRefreshed: false }
-    if (cur === '') {
-      // IdP-side value disappeared: track it, but a missing value never
-      // clears the presented name.
-      tx.update(userIdentities)
-        .set({ preferredSnapshot: cur })
-        .where(eq(userIdentities.id, identity.id))
-        .run()
-      return { displayNameRefreshed: false }
-    }
-    tx.update(userIdentities)
-      .set({ preferredSnapshot: cur })
-      .where(eq(userIdentities.id, identity.id))
-      .run()
-    tx.update(users)
-      .set({ displayName: cur, updatedAt: now })
-      .where(eq(users.id, args.userId))
-      .run()
-    return { displayNameRefreshed: true }
-  })
+function identityAccessDomainError(error: unknown): unknown {
+  if (!(error instanceof UserAccessError)) return error
+  if (error.kind === 'not-found') return new NotFoundError(error.code, error.message, error.details)
+  return new ConflictError(error.code, error.message, error.details)
 }
 
 export async function deleteIdentity(db: DbClient, identityId: string): Promise<void> {

@@ -160,6 +160,7 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
             clientId: provider.clientId,
             nonce: flow.nonce,
             usernameClaim: provider.usernameClaim,
+            emailClaim: provider.emailClaim,
             subjectClaim: provider.subjectClaim,
             userinfoRequestStyle: provider.userinfoRequestStyle,
             scopes: provider.scopes,
@@ -191,10 +192,15 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
             emailVerified: !!claims.email_verified,
             preferredSnapshot: snapshotInit,
             expectedSubjectClaim: provider.subjectClaim,
+            expectedUsernameClaim: provider.usernameClaim,
+            expectedEmailClaim: provider.emailClaim,
           })
         } catch (err) {
           if (isDomainCode(err, 'provider-config-changed')) {
             return c.html(friendly('provider-config-changed'), 400)
+          }
+          if (isDomainCode(err, 'oidc-email-conflict')) {
+            return c.html(friendly('oidc-email-conflict'), 409)
           }
           return c.html(friendly('identity-already-linked'), 409)
         }
@@ -221,6 +227,8 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
         emailVerified: !!claims.email_verified,
         preferredSnapshot: snapshotInit,
         expectedSubjectClaim: provider.subjectClaim,
+        expectedUsernameClaim: provider.usernameClaim,
+        expectedEmailClaim: provider.emailClaim,
       }
       let userId: string
       try {
@@ -235,8 +243,12 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
               userId,
               composed:
                 provider.usernameClaim !== null ? (claims.preferred_username ?? null) : null,
+              email: claims.email ?? null,
               emailVerified: !!claims.email_verified,
               usernameClaimConfigured: provider.usernameClaim !== null,
+              expectedSubjectClaim: provider.subjectClaim,
+              expectedUsernameClaim: provider.usernameClaim,
+              expectedEmailClaim: provider.emailClaim,
             })
             break
           case 'create': {
@@ -274,6 +286,9 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
         }
         if (isDomainCode(err, 'identity-already-linked')) {
           return c.html(friendly('identity-already-linked'), 409)
+        }
+        if (isDomainCode(err, 'oidc-email-conflict')) {
+          return c.html(friendly('oidc-email-conflict'), 409)
         }
         throw err
       }

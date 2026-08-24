@@ -25,6 +25,30 @@ export interface UserPermissionGrantRecord {
   readonly grantedAt: number
 }
 
+/** RFC-320 — identity-side profile snapshot owned by identity-access. Subject
+ * remains the immutable login key; these fields only drive account profile
+ * refresh after the callback has established that subject. */
+export interface OidcProfileIdentityRecord {
+  readonly id: string
+  readonly userId: string
+  readonly email: string | null
+  readonly emailVerified: boolean
+  readonly preferredSnapshot: string | null
+}
+
+export interface OidcProfileSelectorRecord {
+  readonly subjectClaim: string | null
+  readonly usernameClaim: string | null
+  readonly emailClaim: string | null
+}
+
+export interface OidcProfileIdentityUpdate {
+  readonly id: string
+  readonly email?: string
+  readonly emailVerified?: boolean
+  readonly preferredSnapshot?: string
+}
+
 /** One database-statement snapshot of the account preset and its explicit
  * grants. Consumers must materialize effective authority from this value,
  * rather than combining independently observed user and grant rows. */
@@ -91,6 +115,10 @@ export interface UserAccessFenceReader {
 export interface UserAccessTransactionParticipant {
   findUser(id: string): UserAccessRecord | null
   findUserByUsername(username: string): UserAccessRecord | null
+  findUserByEmail(email: string): UserAccessRecord | null
+  findOidcProfileIdentity(providerId: string, subject: string): OidcProfileIdentityRecord | null
+  findOidcProfileSelectors(providerId: string): OidcProfileSelectorRecord | null
+  updateOidcProfileIdentity(update: OidcProfileIdentityUpdate): void
   listGrants(userId: string): ReadonlyArray<UserPermissionGrantRecord>
   countOtherActiveAccessAdministrators(excludeId: string, systemUserId: string): number
   insertUser(record: InsertManagedUserRecord): void

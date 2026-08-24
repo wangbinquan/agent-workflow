@@ -211,21 +211,25 @@ export class UpdateUserAccess {
               grantedAt: context.now,
             })
           }
-          transaction.appendAudit({
-            id: this.deps.auditId(),
-            targetUserId: current.id,
-            actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
-            actorKind: userAccessAuditKind(contextMeta.source),
-            operationId: context.operationId,
-            correlationId: context.correlationId,
-            beforeRole: current.role,
-            afterRole: transition.role,
-            addedPermissions: transition.addedPermissions,
-            removedPermissions: transition.removedPermissions,
-            accessRevision: nextRevision,
-            createdAt: context.now,
-          })
         }
+        // The access audit is also the append-only account mutation audit.
+        // Profile-only writes carry a zero permission delta and the unchanged
+        // revision; this records who changed the account without persisting
+        // the old/new email values in an audit table.
+        transaction.appendAudit({
+          id: this.deps.auditId(),
+          targetUserId: current.id,
+          actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
+          actorKind: userAccessAuditKind(contextMeta.source),
+          operationId: context.operationId,
+          correlationId: context.correlationId,
+          beforeRole: current.role,
+          afterRole: transition.role,
+          addedPermissions: transition.addedPermissions,
+          removedPermissions: transition.removedPermissions,
+          accessRevision: nextRevision,
+          createdAt: context.now,
+        })
         const becameDisabled = current.status !== 'disabled' && nextStatus === 'disabled'
         if (becameDisabled) transaction.transitionDisabledOwner(current.id, context.now)
         const nextRecord: UserAccessRecord = {

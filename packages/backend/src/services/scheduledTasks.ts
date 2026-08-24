@@ -876,6 +876,22 @@ export async function healScheduledLaunchPayloads(
     if (rejectRetiredStartTaskKeys(payload) === null) continue // already v2-clean
     const body = payload as Record<string, unknown>
 
+    // RFC-320: unlike path-mode payloads, a stored client-owned Git identity
+    // needs no semantic conversion. Drop it; the schedule owner is resolved at
+    // each actual fire. This also makes rows injected after the SQL migration
+    // self-heal instead of being misclassified as path migrations.
+    const hadClientGitIdentity = 'gitUserName' in body || 'gitUserEmail' in body
+    delete body['gitUserName']
+    delete body['gitUserEmail']
+    if (hadClientGitIdentity && rejectRetiredStartTaskKeys(body) === null) {
+      await db
+        .update(scheduledTasks)
+        .set({ launchPayload: JSON.stringify(body), updatedAt: now })
+        .where(eq(scheduledTasks.id, row.id))
+      converted += 1
+      continue
+    }
+
     if (body['fetchBeforeLaunch'] === true) {
       await disable(
         row,

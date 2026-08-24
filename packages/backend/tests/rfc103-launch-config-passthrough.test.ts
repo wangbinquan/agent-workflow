@@ -146,8 +146,8 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const calls = routesSrc.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []
     // RFC-159 T2: JSON 启动改走 buildStartTaskDeps（工厂内 thread resolveLaunchRuntimeConfig），
     // 第 8 个逻辑入口（JSON）经工厂覆盖。RFC-284 T25：multipart 臂整体迁
-    // services/multipartTaskStart.ts（在任何副作用前解析一次、fail/success 两
-    // 分支复用同一 launchRuntime——原三 spread 一解析的约束随体走，下方双断言）。
+    // services/multipartTaskStart.ts（在任何副作用前解析一次，先汇入统一的
+    // routeLaunchDeps；identity 解析、物化、fail/success 三条路径复用同一份 deps）。
     // tasks.ts 剩 5 个解析点：resume / retry / repair-options / repair /
     // sync-workflow。
     expect(calls.length).toBe(5)
@@ -156,7 +156,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       'utf8',
     )
     expect((orch.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []).length).toBe(1)
-    expect((orch.match(/\.\.\.launchRuntime/g) ?? []).length).toBe(3)
+    expect((orch.match(/\.\.\.launchRuntime/g) ?? []).length).toBe(1)
+    expect((orch.match(/\.\.\.resolvedRouteLaunchDeps/g) ?? []).length).toBe(2)
+    expect(orch).toContain('materializeSpace(startInput, resolvedRouteLaunchDeps, appHome)')
     // T25 后路由侧不再持有 launchRuntime spread（三处全随编排体走）。
     expect(routesSrc.includes('...launchRuntime')).toBe(false)
     // JSON 入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。

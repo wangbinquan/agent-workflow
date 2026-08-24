@@ -177,13 +177,115 @@ describe('/api/auth/me', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       user: { id: string }
+      profile: { displayName: string; email: string | null; gitCommitIdentity: unknown }
       source: string
       linkedIdentities: unknown[]
       pats: unknown[]
     }
     expect(body.source).toBe('daemon')
+    expect(body.profile.displayName.length).toBeGreaterThan(0)
     expect(Array.isArray(body.linkedIdentities)).toBe(true)
     expect(Array.isArray(body.pats)).toBe(true)
+  })
+
+  test('session profile is private, self-editable as one complete Git identity pair, and audited', async () => {
+    const alice = await createUser(h.db, {
+      username: 'alice',
+      displayName: 'Alice',
+      email: 'alice@example.test',
+      role: 'user',
+      password: 'alicePassword123',
+    })
+    await createUser(h.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      email: 'bob@example.test',
+      role: 'user',
+      password: 'bobPassword123',
+    })
+    const login = await reqRaw(h.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'alice', password: 'alicePassword123' }),
+    })
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+    const authorization = { Authorization: `Bearer ${sessionToken}` }
+
+    const before = await reqRaw(h.app, '/api/auth/me', {}, authorization)
+    expect((await before.json()) as unknown).toMatchObject({
+      user: { username: 'alice', displayName: 'Alice' },
+      profile: {
+        displayName: 'Alice',
+        email: 'alice@example.test',
+        gitCommitIdentity: { name: 'Alice', email: 'alice@example.test' },
+      },
+    })
+
+    const updated = await reqRaw(
+      h.app,
+      '/api/auth/me/profile',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          displayName: ' Alice Chen ',
+          email: 'ALICE.CHEN@EXAMPLE.TEST',
+        }),
+      },
+      authorization,
+    )
+    expect(updated.status).toBe(200)
+    expect((await updated.json()) as unknown).toEqual({
+      profile: {
+        displayName: 'Alice Chen',
+        email: 'alice.chen@example.test',
+        gitCommitIdentity: { name: 'Alice Chen', email: 'alice.chen@example.test' },
+      },
+    })
+
+    const audit = h.db.$client
+      .query(
+        `SELECT actor_user_id, actor_kind, before_role, after_role,
+                added_permissions_json, removed_permissions_json
+         FROM user_access_audit
+         WHERE target_user_id = ? AND actor_user_id = ?
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(alice.id, alice.id)
+    expect(audit).toEqual({
+      actor_user_id: alice.id,
+      actor_kind: 'session',
+      before_role: 'user',
+      after_role: 'user',
+      added_permissions_json: '[]',
+      removed_permissions_json: '[]',
+    })
+
+    const conflict = await reqRaw(
+      h.app,
+      '/api/auth/me/profile',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ displayName: 'Alice', email: 'bob@example.test' }),
+      },
+      authorization,
+    )
+    expect(conflict.status).toBe(409)
+    expect(((await conflict.json()) as { code: string }).code).toBe('profile-email-conflict')
+
+    const widened = await reqRaw(
+      h.app,
+      '/api/auth/me/profile',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          displayName: 'Alice',
+          email: 'alice@example.test',
+          role: 'admin',
+        }),
+      },
+      authorization,
+    )
+    expect(widened.status).toBe(422)
+    expect(((await widened.json()) as { code: string }).code).toBe('profile-invalid')
   })
 })
 

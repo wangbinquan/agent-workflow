@@ -988,6 +988,14 @@ export interface Resources {
     profile: string
     username: string
     displayName: string
+    email: string
+    gitIdentityTitle: string
+    gitIdentityDescription: string
+    gitIdentityNameHint: string
+    gitIdentityEmailHint: string
+    saveProfile: string
+    profileSaved: string
+    oidcProfileRefreshHint: string
     role: string
     status: string
     source: string
@@ -2353,6 +2361,10 @@ export interface Resources {
       trustEmailHint: string
       usernameClaim: string
       usernameClaimHint: string
+      usernameClaimInvalid: string
+      emailClaim: string
+      emailClaimHint: string
+      emailClaimInvalid: string
       subjectClaim: string
       subjectClaimHint: string
       enabledLabel: string
@@ -4536,6 +4548,13 @@ export interface Resources {
     spaceGroupLayoutTitle: string
     contentDescription: string
     contentDescriptionHint: string
+    gitCommitIdentity: string
+    gitCommitIdentityScheduleOwner: string
+    gitCommitIdentityInternal: string
+    gitCommitIdentityMissing: string
+    gitCommitIdentityMissingTitle: string
+    gitCommitIdentityMissingBody: string
+    gitCommitIdentityFix: string
     agentPortsBlocked: string
     agentNotFound: string
     portKindHint: string
@@ -4678,20 +4697,6 @@ export interface Resources {
       label: string
       switchLabel: string
       switchHint: string
-    }
-    /**
-     * RFC-067 — optional per-task Git commit identity. Toggle is rendered
-     * collapsed by default. Both fields blank → daemon default identity;
-     * both filled → runner injects GIT_AUTHOR_* / GIT_COMMITTER_*.
-     * pairingError / emailInvalid surface as inline alerts.
-     */
-    gitIdentity: {
-      toggle: string
-      name: string
-      email: string
-      hint: string
-      pairingError: string
-      emailInvalid: string
     }
     workingBranch: {
       label: string
@@ -7314,6 +7319,16 @@ export const zhCN: Resources = {
     profile: '基本信息',
     username: '用户名',
     displayName: '显示名',
+    email: '邮箱',
+    gitIdentityTitle: 'Git 提交身份',
+    gitIdentityDescription:
+      '新任务会把这里的值冻结为 Git user.name 和 user.email；推送认证仍使用平台为仓库配置的凭据。',
+    gitIdentityNameHint: '你的任务创建提交时使用的 Git user.name。',
+    gitIdentityEmailHint: '你的任务创建提交时使用的 Git user.email。',
+    saveProfile: '保存资料',
+    profileSaved: '账户资料和 Git 提交身份已保存。',
+    oidcProfileRefreshHint:
+      '如果身份提供商配置了用户名和邮箱字段，每次 OIDC 登录都会用最新字段刷新这里。',
     role: '角色',
     status: '状态',
     source: '登录方式',
@@ -9236,9 +9251,14 @@ export const zhCN: Resources = {
       trustEmailLabel: '信任邮箱已验证',
       trustEmailHint:
         '该 IdP 返回的 email 一律视为已验证（纯 OAuth 2.0 IdP 配合邀请制/白名单时必开）。若 IdP 允许用户自填未验证邮箱请勿开启。',
-      usernameClaim: '呈现名字段',
+      usernameClaim: '用户名字段（Git user.name）',
       usernameClaimHint:
         '从身份响应读取呈现名的字段名，可空格分隔多个、按序拼接（如 name signature）。留空用标准 preferred_username。配置后每次登录跟随 IdP 刷新呈现名。',
+      usernameClaimInvalid: '请输入 1–8 个普通字段名，并用单个空格分隔；不能使用保留对象键。',
+      emailClaim: '邮箱字段（Git user.email）',
+      emailClaimHint:
+        'userinfo 中承载账号与 Git 提交邮箱的字段名。留空使用标准 email；每次登录都会刷新。',
+      emailClaimInvalid: '请输入一个普通字段名；不能包含空格，也不能使用保留对象键。',
       subjectClaim: '用户标识字段',
       subjectClaimHint:
         'userinfo 中承载用户唯一 ID 的字段名（如 id）。留空用标准 sub。仅纯 OAuth 2.0 IdP 需要配置——配置后不再走 id_token 验签，且存在关联身份后不可再改。',
@@ -12010,6 +12030,14 @@ export const zhCN: Resources = {
     spaceGroupLayoutTitle: '目录布局',
     contentDescription: '任务描述',
     contentDescriptionHint: '将作为提示词直接交给 Agent。',
+    gitCommitIdentity: 'Git 提交身份',
+    gitCommitIdentityScheduleOwner: '任务运行时从定时任务所有者的账户信息中获取',
+    gitCommitIdentityInternal: '系统内部任务（不使用用户提交身份）',
+    gitCommitIdentityMissing: '尚未配置',
+    gitCommitIdentityMissingTitle: '启动任务前请先补全 Git 提交身份',
+    gitCommitIdentityMissingBody:
+      '任务会使用你账户中的姓名和邮箱创建 Git 提交。请到账户概览补全这两个字段，再返回此处启动。',
+    gitCommitIdentityFix: '打开账户概览',
     agentPortsBlocked: '该 Agent 的输入端口声明阻止手动启动：',
     agentNotFound: '找不到 Agent「{{name}}」——它可能已被删除或不可见，请回到第一步重新选择。',
     portKindHint: '期望格式：{{kind}}',
@@ -12151,14 +12179,6 @@ export const zhCN: Resources = {
         upload:
           'v1 多仓任务不支持 multipart 上传输入；请回到工作流编辑器移除上传节点，或改用单仓启动。',
       },
-    },
-    gitIdentity: {
-      toggle: 'Git 提交身份（可选）',
-      name: 'Git 用户名',
-      email: 'Git 邮箱',
-      hint: '留空则使用系统默认身份',
-      pairingError: '用户名和邮箱必须同时填或同时留空',
-      emailInvalid: '请输入合法的邮箱（含 @）',
     },
     workingBranch: {
       label: '工作分支（可选）',
@@ -14007,6 +14027,14 @@ export const zhCN: Resources = {
     'user-permission-not-grantable': '该权限属于账号内在能力，不能单独授予。',
     'user-permission-redundant': '所选权限预设已经包含该权限。',
     'user-permission-duplicate': '权限清单中含有重复项。',
+    'profile-invalid': '请输入有效的显示名称和邮箱地址。',
+    'profile-update-forbidden': '只有已登录的活跃账号可以修改此档案。',
+    'profile-email-conflict': '该邮箱已属于另一个账号。',
+    'profile-update-conflict': '保存期间账号档案已发生变化。',
+    'profile-update-conflict__hint': '请重新加载账户页，确认最新内容后重试。',
+    'git-identity-email-missing': '启动任务前需要先为账号补充邮箱。',
+    'git-identity-email-missing__hint': '请到账户概览补全 Git 提交身份后重试。',
+    'task-git-identity-client-owned': 'Git 提交身份由账号管理，不能通过任务启动请求传入。',
     'oidc-not-configured': '尚未配置 OIDC 登录。',
     'oidc-provider-not-found': '登录提供方不存在。',
     'oidc-provider-invalid': '登录提供方配置不合法。',

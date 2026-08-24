@@ -60,9 +60,9 @@ describe('RFC-067 source-text guards', () => {
     expect(RUNNER_SRC).toMatch(/gitUserEmail\?:\s*string\s*\|\s*null/)
   })
 
-  test('task.ts persists the trimmed identity into the tasks INSERT', () => {
-    // Service-level XOR defense AND the actual INSERT must reference the
-    // derived `persistedGitUserName` / `persistedGitUserEmail` values.
+  test('task.ts persists the server-resolved identity into the tasks INSERT', () => {
+    expect(TASK_SRC).toContain('resolveTaskGitCommitIdentity')
+    expect(TASK_SRC).toContain('getUserGitCommitIdentity')
     expect(TASK_SRC).toContain('persistedGitUserName')
     expect(TASK_SRC).toContain('persistedGitUserEmail')
     expect(TASK_SRC).toMatch(/gitUserName:\s*persistedGitUserName/)
@@ -91,9 +91,10 @@ describe('RFC-067 source-text guards', () => {
     expect(emailMatches.length).toBeGreaterThanOrEqual(3)
   })
 
-  test('shared schemas/task.ts exposes the canonical RFC-067 error codes', () => {
-    expect(SCHEMA_SRC).toContain("'git-identity-incomplete'")
-    expect(SCHEMA_SRC).toContain("'git-identity-email-invalid'")
+  test('shared schema retires client-owned identity with one stable code', () => {
+    expect(SCHEMA_SRC).toContain("'task-git-identity-client-owned'")
+    expect(SCHEMA_SRC).toContain("'gitUserName'")
+    expect(SCHEMA_SRC).toContain("'gitUserEmail'")
   })
 
   test('TaskSchema (shared) carries gitUserName + gitUserEmail nullable fields', () => {

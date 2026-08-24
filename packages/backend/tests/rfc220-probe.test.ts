@@ -169,6 +169,36 @@ describe('RFC-220 S2 — probe readiness', () => {
     expect(r2.ok).toBe(false)
   })
 
+  test('RFC-320 configured profile selectors require userinfo even when JWKS is healthy', async () => {
+    for (const [slug, selector] of [
+      ['idp-username', { usernameClaim: 'login' }],
+      ['idp-email', { emailClaim: 'mail' }],
+    ] as const) {
+      clearEndpointCaches()
+      const p = await h.svc.create({
+        ...BASE,
+        slug,
+        authorizationEndpoint: 'https://m.test/a',
+        tokenEndpoint: 'https://m.test/t',
+        jwksUri: 'https://m.test/jwks',
+        ...selector,
+      })
+      const withoutUserinfo = await h.svc.probe(
+        p,
+        stubFetch({ discoveryStatus: 404, jwksOk: true }).fetcher,
+      )
+      expect(withoutUserinfo.jwksReachable).toBe(true)
+      expect(withoutUserinfo.ok).toBe(false)
+
+      const ready = await h.svc.patch(p.id, { userinfoEndpoint: 'https://m.test/me' })
+      const withUserinfo = await h.svc.probe(
+        ready,
+        stubFetch({ discoveryStatus: 404, jwksOk: true }).fetcher,
+      )
+      expect(withUserinfo.ok).toBe(true)
+    }
+  })
+
   test('discovery down + full manual → ready with sources=manual and discovery.error surfaced', async () => {
     const p = await h.svc.create({
       ...BASE,

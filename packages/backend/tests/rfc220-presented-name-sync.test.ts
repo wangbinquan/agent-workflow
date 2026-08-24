@@ -49,11 +49,16 @@ async function makeProvider(db: DbClient, subjectClaim: string | null = null) {
   })
 }
 
-async function seedUser(db: DbClient, id: string, displayName: string) {
+async function seedUser(
+  db: DbClient,
+  id: string,
+  displayName: string,
+  email: string | null = null,
+) {
   await db.insert(users).values({
     id,
     username: `u-${id}`,
-    email: null,
+    email,
     displayName,
     passwordHash: null,
     role: 'user',
@@ -65,6 +70,15 @@ async function seedUser(db: DbClient, id: string, displayName: string) {
     lastLoginAt: null,
     schemaVersion: 1,
   })
+}
+
+async function emailOf(db: DbClient, userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  return rows[0]!.email
 }
 
 async function displayNameOf(db: DbClient, userId: string): Promise<string> {
@@ -183,6 +197,169 @@ describe('RFC-220 S14 — syncPreferredSnapshot', () => {
       emailVerified: false,
     })
     expect((await snapshotOf(db, providerId, 's1'))!.emailVerified).toBe(0)
+  })
+})
+
+describe('RFC-320 — OIDC email snapshot merge', () => {
+  let db: DbClient
+  let providerId: string
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    providerId = (await makeProvider(db)).id
+  })
+
+  const callbackFence = {
+    expectedSubjectClaim: null,
+    expectedUsernameClaim: 'login sig',
+    expectedEmailClaim: null,
+  }
+
+  async function seedEmailIdentity(userEmail: string | null, snapshotEmail: string | null) {
+    await seedUser(db, 'u1', 'Alice', userEmail)
+    await createIdentity(db, {
+      userId: 'u1',
+      providerId,
+      subject: 's1',
+      email: snapshotEmail,
+      emailVerified: true,
+      preferredSnapshot: 'alice',
+    })
+  }
+
+  test('empty account email is filled immediately and audited', async () => {
+    await seedEmailIdentity(null, null)
+    const result = syncPreferredSnapshot(db, {
+      providerId,
+      subject: 's1',
+      userId: 'u1',
+      composed: 'alice',
+      email: 'alice@example.test',
+      emailVerified: true,
+      usernameClaimConfigured: true,
+      ...callbackFence,
+    })
+    expect(result.emailRefreshed).toBe(true)
+    expect(await emailOf(db, 'u1')).toBe('alice@example.test')
+    expect((await snapshotOf(db, providerId, 's1'))!.email).toBe('alice@example.test')
+    expect(
+      db.$client
+        .query('SELECT actor_kind FROM user_access_audit WHERE target_user_id = ?')
+        .get('u1'),
+    ).toEqual({ actor_kind: 'system' })
+  })
+
+  test('unchanged IdP email preserves an in-app edit; a later IdP change wins', async () => {
+    await seedEmailIdentity('local@example.test', 'idp-old@example.test')
+    syncPreferredSnapshot(db, {
+      providerId,
+      subject: 's1',
+      userId: 'u1',
+      composed: 'alice',
+      email: 'idp-old@example.test',
+      emailVerified: true,
+      usernameClaimConfigured: true,
+      ...callbackFence,
+    })
+    expect(await emailOf(db, 'u1')).toBe('local@example.test')
+
+    syncPreferredSnapshot(db, {
+      providerId,
+      subject: 's1',
+      userId: 'u1',
+      composed: 'alice',
+      email: 'idp-new@example.test',
+      emailVerified: true,
+      usernameClaimConfigured: true,
+      ...callbackFence,
+    })
+    expect(await emailOf(db, 'u1')).toBe('idp-new@example.test')
+  })
+
+  test('legacy null snapshot records first sight without replacing an existing account email', async () => {
+    await seedEmailIdentity('local@example.test', null)
+    const result = syncPreferredSnapshot(db, {
+      providerId,
+      subject: 's1',
+      userId: 'u1',
+      composed: 'alice',
+      email: 'idp@example.test',
+      emailVerified: true,
+      usernameClaimConfigured: true,
+      ...callbackFence,
+    })
+    expect(result.emailRefreshed).toBe(false)
+    expect(await emailOf(db, 'u1')).toBe('local@example.test')
+    expect((await snapshotOf(db, providerId, 's1'))!.email).toBe('idp@example.test')
+  })
+
+  test('unique conflict rolls back both user and identity snapshots', async () => {
+    await seedEmailIdentity('old@example.test', 'old@example.test')
+    await seedUser(db, 'u2', 'Bob', 'taken@example.test')
+    const error = (() => {
+      try {
+        syncPreferredSnapshot(db, {
+          providerId,
+          subject: 's1',
+          userId: 'u1',
+          composed: 'alice',
+          email: 'taken@example.test',
+          emailVerified: true,
+          usernameClaimConfigured: true,
+          ...callbackFence,
+        })
+      } catch (caught) {
+        return caught
+      }
+      return null
+    })()
+    expect(error).toBeInstanceOf(DomainError)
+    expect((error as DomainError).code).toBe('oidc-email-conflict')
+    expect(await emailOf(db, 'u1')).toBe('old@example.test')
+    expect((await snapshotOf(db, providerId, 's1'))!.email).toBe('old@example.test')
+  })
+
+  test('link and invite branches run profile sync inside their insert transaction', async () => {
+    await seedUser(db, 'linked', 'Linked')
+    await createIdentity(db, {
+      userId: 'linked',
+      providerId,
+      subject: 'linked-sub',
+      email: 'linked@example.test',
+      emailVerified: true,
+      preferredSnapshot: 'linked',
+      ...callbackFence,
+    })
+    expect(await emailOf(db, 'linked')).toBe('linked@example.test')
+
+    await db.insert(users).values({
+      id: 'invited',
+      username: 'invited',
+      email: null,
+      displayName: 'Invited',
+      passwordHash: null,
+      role: 'user',
+      status: 'invited',
+      forcePasswordChange: false,
+      createdBy: null,
+      createdAt: 0,
+      updatedAt: 0,
+      lastLoginAt: null,
+      schemaVersion: 1,
+    })
+    await bindInvitedUserWithIdentity(db, {
+      userId: 'invited',
+      identity: {
+        providerId,
+        subject: 'invited-sub',
+        email: 'invited@example.test',
+        emailVerified: true,
+        preferredSnapshot: 'invited',
+        ...callbackFence,
+      },
+    })
+    expect(await emailOf(db, 'invited')).toBe('invited@example.test')
+    const invited = await db.select().from(users).where(eq(users.id, 'invited')).limit(1)
+    expect(invited[0]!.status).toBe('active')
   })
 })
 

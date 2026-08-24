@@ -39,6 +39,11 @@ const userActor: MeResponse = {
     role: 'user',
     status: 'active',
   },
+  profile: {
+    displayName: 'Alice',
+    email: 'alice@example.test',
+    gitCommitIdentity: { name: 'Alice', email: 'alice@example.test' },
+  },
   source: 'session',
   permissions: ['memory:update'],
   linkedIdentities: [],

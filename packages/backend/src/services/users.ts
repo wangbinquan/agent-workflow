@@ -5,6 +5,7 @@
 import { inArray, and, eq, like, ne, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
+  type GitCommitIdentity,
   type CreateUserBody,
   type PatchUserBody,
   type Role,
@@ -16,11 +17,48 @@ import { revokeAllSessionsForUser } from '@/auth/sessionStore'
 import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
+import type {
+  SyncOidcProfileCommand,
+  SyncOidcProfileResult,
+} from '@/modules/identity-access/public/commands'
 import { UserAccessError } from '@/modules/identity-access/public/types'
+import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { isOidcManagedUser, writeLocalPasswordIfUnmanaged } from '@/services/accountAuthPolicy'
 
 export type UserRow = typeof users.$inferSelect
+
+/** RFC-320 legacy-service adapter: callers consume the exact identity-access
+ * query while the already-reviewed users service remains the sole composition
+ * edge outside the module. */
+export function getUserGitCommitIdentity(db: DbClient, userId: string): Promise<GitCommitIdentity> {
+  return composeIdentityAccess(db).getUserGitCommitIdentity.execute(userId)
+}
+
+/** Existing-identity login refresh. Domain errors intentionally remain
+ * identity-access errors so the OIDC coordinator can preserve its established
+ * HTTP error mapping. */
+export function syncOidcUserProfile(
+  db: DbClient,
+  command: SyncOidcProfileCommand,
+): SyncOidcProfileResult {
+  return composeIdentityAccess(db).syncOidcProfile.execute(command)
+}
+
+/** Create/bind/link refresh joins the coordinator's already-open SQLite
+ * transaction without putting TransactionScope on the module public surface. */
+export function syncOidcUserProfileInTransaction(
+  db: DbClient,
+  transactionScope: TransactionScope,
+  command: SyncOidcProfileCommand,
+  now?: number,
+): SyncOidcProfileResult {
+  return composeIdentityAccess(db).syncOidcProfileInTransaction(transactionScope, command, now)
+}
+
+export function mapOidcUserProfilePersistenceError(db: DbClient, error: unknown): unknown {
+  return composeIdentityAccess(db).mapOidcEmailConstraint(error)
+}
 
 export async function countNonSystemUsers(db: DbClient): Promise<number> {
   const rows = await db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))

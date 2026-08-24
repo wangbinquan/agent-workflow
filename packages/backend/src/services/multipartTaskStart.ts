@@ -31,6 +31,7 @@ import {
   cleanupMaterializedSpace,
   materializeSpace,
   prepareWorkflowTriggerLaunch,
+  resolveTaskGitCommitIdentity,
 } from '@/services/task'
 import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -68,9 +69,12 @@ export async function handleMultipartTaskStart(
   {
     const retired = rejectRetiredStartTaskKeys(payloadJson)
     if (retired !== null) {
+      const clientOwnedGitIdentity = retired === 'gitUserName' || retired === 'gitUserEmail'
       throw new ValidationError(
-        'start-task-path-retired',
-        `RFC-165 retired path-mode launches; remove '${retired}' (push the repo to a real remote and register it, then launch by cachedRepoId)`,
+        clientOwnedGitIdentity ? 'task-git-identity-client-owned' : 'start-task-path-retired',
+        clientOwnedGitIdentity
+          ? `RFC-320 derives Git commit identity from the task creator; remove '${retired}'`
+          : `RFC-165 retired path-mode launches; remove '${retired}' (push the repo to a real remote and register it, then launch by cachedRepoId)`,
       )
     }
 
@@ -128,11 +132,13 @@ export async function handleMultipartTaskStart(
     ...launchRuntime,
     launchActor: actor,
   }
+  const gitCommitIdentity = await resolveTaskGitCommitIdentity(routeLaunchDeps)
+  const resolvedRouteLaunchDeps = { ...routeLaunchDeps, gitCommitIdentity }
   // RFC-292: freeze and scan root + call closure before repo resolution,
   // cloning, worktree creation or upload writes. startTask repeats this check
   // after the handoff to close the route/service race.
   const frozenClosureJson = await prepareWorkflowTriggerLaunch({
-    deps: routeLaunchDeps,
+    deps: resolvedRouteLaunchDeps,
     workflowId: workflow.id,
     definition: workflow.definition,
   })
@@ -197,11 +203,7 @@ export async function handleMultipartTaskStart(
   // 解析，私有仓的 URL 是**封存**的，没有 box 就解不开 ⇒
   // `cached-repo-credential-unavailable`。少了它，「私有仓组 + 上传」这条被 D12
   // 明确解禁的组合会必失败，而完全等价的 JSON 启动却能成功。
-  const space = await materializeSpace(
-    startInput,
-    { db: deps.db, ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}) },
-    appHome,
-  )
+  const space = await materializeSpace(startInput, resolvedRouteLaunchDeps, appHome)
   const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
   if (space.earlyError !== null) {
     // Create a failed task row so the user sees the error. No files were
@@ -216,15 +218,9 @@ export async function handleMultipartTaskStart(
         payload: startInput,
       },
       {
-        db: deps.db,
-        actorUserId: actor.user.id,
-        ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
-        configPath: deps.configPath,
+        ...resolvedRouteLaunchDeps,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        // RFC-103 T2: multipart (upload) start must thread runtime config too.
-        ...launchRuntime,
         materializedSpace: space,
-        launchActor: actor,
       },
     )
     return task
@@ -272,15 +268,9 @@ export async function handleMultipartTaskStart(
       payload: { ...startInput, inputs: inputsOut },
     },
     {
-      db: deps.db,
-      actorUserId: actor.user.id,
-      ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
-      configPath: deps.configPath,
+      ...resolvedRouteLaunchDeps,
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-      // RFC-103 T2: multipart (upload) start must thread runtime config too.
-      ...launchRuntime,
       materializedSpace: space,
-      launchActor: actor,
     },
   )
 }

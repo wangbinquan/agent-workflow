@@ -4108,8 +4108,6 @@ async function launchCallChild(
   const taskRow = task as unknown as {
     refClosureJson?: string | null
     ownerUserId?: string | null
-    gitUserName?: string | null
-    gitUserEmail?: string | null
   }
   const { node, nodeRunId, childId, frozen, workflowName, inputs, iso, childDepth } = args
   const frozenSnapshotJson = JSON.stringify(frozen.definition)
@@ -4179,9 +4177,6 @@ async function launchCallChild(
     workflowId: frozen.id,
     name: childName,
     inputs,
-    ...(taskRow.gitUserName != null && taskRow.gitUserEmail != null
-      ? { gitUserName: taskRow.gitUserName, gitUserEmail: taskRow.gitUserEmail }
-      : {}),
     ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
     ...limits,
     // publication belongs to the parent (D12): no workingBranch, no auto push.
@@ -4309,8 +4304,6 @@ async function launchCallWorkgroupChild(
   const { db, task, taskId } = state
   const taskRow = task as unknown as {
     ownerUserId?: string | null
-    gitUserName?: string | null
-    gitUserEmail?: string | null
   }
   const { node, nodeRunId, childId, frozenGroup, inputs, iso, childDepth } = args
 
@@ -4404,8 +4397,6 @@ async function launchCallWorkgroupChild(
       goal,
       name: childName,
       collaboratorUserIds,
-      ...(taskRow.gitUserName != null ? { gitUserName: taskRow.gitUserName } : {}),
-      ...(taskRow.gitUserEmail != null ? { gitUserEmail: taskRow.gitUserEmail } : {}),
       ...limits,
     },
     {

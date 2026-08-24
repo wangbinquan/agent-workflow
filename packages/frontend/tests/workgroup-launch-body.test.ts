@@ -72,7 +72,7 @@ describe('buildWorkgroupStartBody', () => {
     expect(body.inputs).toBeUndefined()
   })
 
-  test('optional extras ride the wire: collaborators / git identity / branch / push / limits', () => {
+  test('optional extras ride the wire: collaborators / branch / push / limits', () => {
     const space: WizardSpace = {
       kind: 'remote',
       repos: [{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }],
@@ -81,23 +81,21 @@ describe('buildWorkgroupStartBody', () => {
       name: 't',
       goal: 'g',
       collaboratorUserIds: ['u1', 'u2'],
-      gitUserName: 'Bot',
-      gitUserEmail: 'bot@x.dev',
       workingBranch: 'feat/x',
       autoCommitPush: true,
       maxDurationMs: 600_000,
       maxTotalTokens: 42_000,
     })
     expect(body.collaboratorUserIds).toEqual(['u1', 'u2'])
-    expect(body.gitUserName).toBe('Bot')
-    expect(body.gitUserEmail).toBe('bot@x.dev')
+    expect('gitUserName' in body).toBe(false)
+    expect('gitUserEmail' in body).toBe(false)
     expect(body.workingBranch).toBe('feat/x')
     expect(body.autoCommitPush).toBe(true)
     expect(body.maxDurationMs).toBe(600_000)
     expect(body.maxTotalTokens).toBe(42_000)
   })
 
-  test('omitted extras keep the wire minimal (no half-identity, no false flags)', () => {
+  test('omitted extras keep the wire minimal (no identity, no false flags)', () => {
     const body = buildWorkgroupStartBody(
       { kind: 'remote', repos: [{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }] },
       {
@@ -109,7 +107,8 @@ describe('buildWorkgroupStartBody', () => {
     )
     expect(body.autoCommitPush).toBeUndefined()
     expect(body.collaboratorUserIds).toBeUndefined()
-    expect(body.gitUserName).toBeUndefined()
+    expect('gitUserName' in body).toBe(false)
+    expect('gitUserEmail' in body).toBe(false)
     expect(body.maxDurationMs).toBeUndefined()
     expect(body.maxTotalTokens).toBeUndefined()
   })

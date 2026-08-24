@@ -2029,6 +2029,16 @@ export const enUS: Resources = {
     profile: 'Profile',
     username: 'Username',
     displayName: 'Display name',
+    email: 'Email',
+    gitIdentityTitle: 'Git commit identity',
+    gitIdentityDescription:
+      'New tasks freeze these values as Git user.name and user.email. Push authentication continues to use the repository credential configured by the platform.',
+    gitIdentityNameHint: 'Used as Git user.name for commits created by your tasks.',
+    gitIdentityEmailHint: 'Used as Git user.email for commits created by your tasks.',
+    saveProfile: 'Save profile',
+    profileSaved: 'Profile and Git commit identity saved.',
+    oidcProfileRefreshHint:
+      'Your identity provider refreshes these fields at sign-in when username and email claims are configured for it.',
     role: 'Role',
     status: 'Status',
     source: 'Authenticated via',
@@ -2903,9 +2913,16 @@ export const enUS: Resources = {
       trustEmailLabel: 'Trust emails as verified',
       trustEmailHint:
         'Treat every email from this IdP as verified (needed for invite/allowlist with pure OAuth 2.0 IdPs). Leave off if users can set unverified emails there.',
-      usernameClaim: 'Username fields',
+      usernameClaim: 'Username fields (Git user.name)',
       usernameClaimHint:
         'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
+      usernameClaimInvalid:
+        'Use 1–8 plain claim names separated by single spaces; reserved object keys are not allowed.',
+      emailClaim: 'Email field (Git user.email)',
+      emailClaimHint:
+        'Userinfo field carrying the account and Git commit email. Blank = standard email. The value refreshes on every sign-in.',
+      emailClaimInvalid:
+        'Use one plain claim name; spaces and reserved object keys are not allowed.',
       subjectClaim: 'Subject field',
       subjectClaimHint:
         'Userinfo field carrying the stable unique user ID (e.g. id). Blank = standard sub. Pure OAuth 2.0 only — when set, id_token verification is skipped and the field cannot change once identities exist.',
@@ -5868,6 +5885,14 @@ export const enUS: Resources = {
     spaceGroupLayoutTitle: 'Directory layout',
     contentDescription: 'Task description',
     contentDescriptionHint: 'Passed to the agent verbatim as its prompt.',
+    gitCommitIdentity: 'Git commit identity',
+    gitCommitIdentityScheduleOwner: 'Resolved from the schedule owner when the task runs',
+    gitCommitIdentityInternal: 'System-internal task (no user commit identity)',
+    gitCommitIdentityMissing: 'Not configured',
+    gitCommitIdentityMissingTitle: 'Complete your Git commit identity before launching',
+    gitCommitIdentityMissingBody:
+      'Tasks use your account name and email for Git commits. Add both fields in Account Overview, then return here to launch.',
+    gitCommitIdentityFix: 'Open Account Overview',
     agentPortsBlocked: 'This agent’s declared input ports block manual launch:',
     agentNotFound:
       'Agent “{{name}}” was not found — it may have been deleted or is not visible to you; go back to step 1 and pick again.',
@@ -6026,14 +6051,6 @@ export const enUS: Resources = {
         upload:
           'multipart upload inputs are not supported in multi-repo tasks (v1); remove them in the editor or launch with a single repository.',
       },
-    },
-    gitIdentity: {
-      toggle: 'Git commit identity (optional)',
-      name: 'Git user name',
-      email: 'Git user email',
-      hint: 'Leave blank to use the system default identity',
-      pairingError: 'Name and email must both be set or both be blank',
-      emailInvalid: 'Enter a valid email address (must include @)',
     },
     workingBranch: {
       label: 'Working branch (optional)',
@@ -8080,6 +8097,17 @@ export const enUS: Resources = {
     'user-permission-not-grantable': 'That permission is intrinsic and cannot be granted.',
     'user-permission-redundant': 'That permission is already supplied by the selected preset.',
     'user-permission-duplicate': 'The permission list contains a duplicate permission.',
+    'profile-invalid': 'Enter a valid display name and email address.',
+    'profile-update-forbidden': 'Only an active signed-in account can update this profile.',
+    'profile-email-conflict': 'That email address already belongs to another account.',
+    'profile-update-conflict': 'Your profile changed while it was being saved.',
+    'profile-update-conflict__hint':
+      'Reload the account page, review the latest values, and retry.',
+    'git-identity-email-missing': 'Your account needs an email address before launching a task.',
+    'git-identity-email-missing__hint':
+      'Open Account Overview, complete the Git commit identity, and retry.',
+    'task-git-identity-client-owned':
+      'Git commit identity is account-owned and cannot be supplied in a launch request.',
     'oidc-not-configured': 'OIDC sign-in is not configured.',
     'oidc-provider-not-found': 'OIDC provider not found.',
     'oidc-provider-invalid': 'Invalid OIDC provider payload.',

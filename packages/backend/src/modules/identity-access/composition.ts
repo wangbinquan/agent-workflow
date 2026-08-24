@@ -1,5 +1,6 @@
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
@@ -16,12 +17,22 @@ import {
   DirectOperationContextFactory,
 } from './application/operationContext'
 import { GetUserAccess } from './application/queries/getUserAccess'
+import { GetUserGitCommitIdentity } from './application/queries/getUserGitCommitIdentity'
+import { GetUserProfile } from './application/queries/getUserProfile'
+import { UpdateOwnProfile } from './application/commands/updateOwnProfile'
+import { SyncOidcProfile } from './application/commands/syncOidcProfile'
 import { ResolveAuthority } from './application/queries/resolveAuthority'
 import { ResolveDelegatedAuthority } from './application/queries/resolveDelegatedAuthority'
 import {
   SQLiteUserAccessRepository,
   SQLiteUserAccessTransactionRunner,
+  syncOidcProfileInTransaction,
 } from './infrastructure/sqliteUserAccessRepository'
+import { mapOidcEmailConstraint } from './application/commands/syncOidcProfile'
+import type {
+  SyncOidcProfileCommand,
+  SyncOidcProfileResult,
+} from './application/commands/syncOidcProfile'
 import {
   IdentityAccessObservability,
   type IdentityAccessDiagnostics,
@@ -41,6 +52,19 @@ export interface IdentityAccessModule {
   readonly createManagedUser: CreateManagedUser
   readonly updateUserAccess: UpdateUserAccess
   readonly getUserAccess: GetUserAccess
+  readonly getUserProfile: GetUserProfile
+  readonly getUserGitCommitIdentity: GetUserGitCommitIdentity
+  readonly updateOwnProfile: UpdateOwnProfile
+  readonly syncOidcProfile: SyncOidcProfile
+  /** Composition-only bridge for the legacy OIDC coordinator. It is kept off
+   * the exact public command surface so platform transaction types never leak
+   * through an identity-access public contract. */
+  readonly syncOidcProfileInTransaction: (
+    transactionScope: TransactionScope,
+    command: SyncOidcProfileCommand,
+    now?: number,
+  ) => SyncOidcProfileResult
+  readonly mapOidcEmailConstraint: (error: unknown) => unknown
   readonly resolveAuthority: ResolveAuthority
   /**
    * RFC-317 T41 —— 出站授权围栏的**同步**读。
@@ -124,6 +148,21 @@ export function composeIdentityAccess(db: DbClient): IdentityAccessModule {
       observer: observability,
     }),
     getUserAccess: new GetUserAccess(repository),
+    getUserProfile: new GetUserProfile(repository),
+    getUserGitCommitIdentity: new GetUserGitCommitIdentity(repository, SYSTEM_USER_ID),
+    updateOwnProfile: new UpdateOwnProfile({
+      transactions,
+      systemUserId: SYSTEM_USER_ID,
+      auditId: ulid,
+    }),
+    syncOidcProfile: new SyncOidcProfile({
+      transactions,
+      auditId: ulid,
+      operationId: ulid,
+      now: Date.now,
+    }),
+    syncOidcProfileInTransaction,
+    mapOidcEmailConstraint,
     trackUserPresence,
     getUserPresence,
     resolveAuthority,

@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 206 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 207 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -498,7 +498,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 共用 digital_employee_round_id 的旧 Development Automation action run 保持 NULL。
     // RFC-310 task-name bump 到 206 with 0206_rfc310_employee_case_name：Case
     // 持久化自己的逻辑任务名，历史行沿用此前详情可见的 Context subject/title。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(206)
+    // RFC-320 bump 到 207 with 0207_rfc320_oidc_email_claim：OIDC Provider
+    // 可把自定义 userinfo 邮箱字段同步为账号/Git 提交邮箱。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(207)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {
@@ -669,6 +671,81 @@ describe('RFC-120 §18 — migration 0063 dispatched_at backfill', () => {
       // non-deferred → untouched (golden-lock; that contract never set trigger_run_id this way).
       expect(dispatchedAt('tq_nondef_bound')).toBeNull()
       sqlite.close()
+    }
+  })
+})
+
+describe('RFC-320 — migration 0207 profile selector and durable launch cleanup', () => {
+  test('adds email_claim and removes retired Git identity keys without changing other payload data', () => {
+    const home = mkdtempSync(join(tmpdir(), 'aw-0207-backfill-'))
+    const dbPath = join(home, 'db.sqlite')
+    try {
+      freezeAt(205, dbPath)
+      const legacyPayload = JSON.stringify({
+        name: 'legacy launch',
+        gitUserName: 'Legacy Author',
+        gitUserEmail: 'legacy@example.test',
+        inputs: { topic: 'preserve me' },
+      })
+      {
+        const sqlite = new Database(dbPath)
+        sqlite.exec('PRAGMA foreign_keys = OFF;')
+        sqlite.run(
+          `INSERT INTO scheduled_tasks
+             (id, name, owner_user_id, launch_kind, launch_payload, schedule_spec)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          ['sched-rfc320', 'legacy schedule', 'user-owner', 'workflow', legacyPayload, '{}'],
+        )
+        sqlite.run(
+          `INSERT INTO webhook_endpoints
+             (id, name, provider, url_token, secret_enc)
+           VALUES (?, ?, ?, ?, ?)`,
+          ['endpoint-rfc320', 'endpoint', 'gitlab', 'token-rfc320', 'sealed'],
+        )
+        sqlite.run(
+          `INSERT INTO webhook_triggers
+             (id, name, endpoint_id, owner_user_id, repo_scope, event_types,
+              launch_kind, launch_ref_id, launch_payload)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            'trigger-rfc320',
+            'legacy trigger',
+            'endpoint-rfc320',
+            'user-owner',
+            '{}',
+            '[]',
+            'workflow',
+            'workflow-1',
+            legacyPayload,
+          ],
+        )
+        migrate(drizzle(sqlite, {}), { migrationsFolder: MIGRATIONS })
+
+        const columns = sqlite.query('PRAGMA table_info(oidc_providers)').all() as {
+          name: string
+          notnull: number
+          dflt_value: string | null
+        }[]
+        const emailClaim = columns.find((column) => column.name === 'email_claim')
+        expect(emailClaim).toEqual(
+          expect.objectContaining({ name: 'email_claim', notnull: 0, dflt_value: null }),
+        )
+        for (const [table, id] of [
+          ['scheduled_tasks', 'sched-rfc320'],
+          ['webhook_triggers', 'trigger-rfc320'],
+        ] as const) {
+          const row = sqlite
+            .query(`SELECT launch_payload AS payload FROM ${table} WHERE id = ?`)
+            .get(id) as { payload: string }
+          expect(JSON.parse(row.payload)).toEqual({
+            name: 'legacy launch',
+            inputs: { topic: 'preserve me' },
+          })
+        }
+        sqlite.close()
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true })
     }
   })
 })

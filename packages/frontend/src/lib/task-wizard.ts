@@ -59,9 +59,6 @@ export function defaultWizardSpace(kind: 'remote' | 'scratch' = 'remote'): Wizar
 /** Optional fields shared by all three kinds' advanced fold. */
 export interface WizardAdvancedFields {
   collaboratorUserIds?: string[]
-  /** Pair-gated (both or neither) — callers trim before passing. */
-  gitUserName?: string
-  gitUserEmail?: string
   /** Remote-space only; the builder strips them under scratch (schema rejects). */
   workingBranch?: string
   autoCommitPush?: boolean
@@ -230,9 +227,6 @@ export function buildAgentStartBody(
     workflowId: '',
     inputs: {},
     name: common.name,
-    ...(common.gitUserName !== undefined && common.gitUserEmail !== undefined
-      ? { gitUserName: common.gitUserName, gitUserEmail: common.gitUserEmail }
-      : {}),
     ...(common.workingBranch !== undefined ? { workingBranch: common.workingBranch } : {}),
     ...(common.autoCommitPush === true ? { autoCommitPush: true } : {}),
     ...(common.collaboratorUserIds !== undefined && common.collaboratorUserIds.length > 0
@@ -289,9 +283,6 @@ export function buildWorkgroupStartBody(
     workflowId: '',
     inputs: {},
     name: common.name,
-    ...(common.gitUserName !== undefined && common.gitUserEmail !== undefined
-      ? { gitUserName: common.gitUserName, gitUserEmail: common.gitUserEmail }
-      : {}),
     ...(common.workingBranch !== undefined ? { workingBranch: common.workingBranch } : {}),
     ...(common.autoCommitPush === true ? { autoCommitPush: true } : {}),
     ...(common.collaboratorUserIds !== undefined && common.collaboratorUserIds.length > 0
@@ -347,8 +338,6 @@ export interface WizardSeed {
   goal: string
   allowClarify: boolean
   collaboratorUserIds: string[]
-  gitUserName: string
-  gitUserEmail: string
   workingBranch: string
   autoCommitPush: boolean
   maxDurationMs?: number
@@ -396,8 +385,6 @@ export function payloadToWizardSeed(
     collaboratorUserIds: Array.isArray(payload.collaboratorUserIds)
       ? payload.collaboratorUserIds.filter((v): v is string => typeof v === 'string')
       : [],
-    gitUserName: str(payload.gitUserName),
-    gitUserEmail: str(payload.gitUserEmail),
     workingBranch: str(payload.workingBranch),
     autoCommitPush: payload.autoCommitPush === true,
   }
@@ -557,11 +544,8 @@ export function taskToLaunchPayload(task: Task): {
     }
   }
 
-  // Common advanced fields (git identity is pair-gated; only send set ones).
-  if (task.gitUserName && task.gitUserEmail) {
-    payload.gitUserName = task.gitUserName
-    payload.gitUserEmail = task.gitUserEmail
-  }
+  // Common advanced fields. Git identity is server-owned account state and is
+  // deliberately not replayed from the historical task snapshot.
   if (task.workingBranch) payload.workingBranch = task.workingBranch
   if (task.autoCommitPush) payload.autoCommitPush = true
   if (task.maxDurationMs != null) payload.maxDurationMs = task.maxDurationMs
