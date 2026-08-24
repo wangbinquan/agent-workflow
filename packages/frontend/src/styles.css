@@ -10415,10 +10415,25 @@ details.form-section[open] > summary {
   padding-left: 18px;
 }
 
+/* RFC-319（2026-08-24，由 e2e-full-nightly 的 Linux 腿实测坐标定位）——
+   这枚状态芯片必须让开画布右上工具条的横带。
+   事故：画布被检查器栏挤窄（约 578px）时，右上工具条几乎横贯整条画布
+   （实测占 canvas 相对 80..563），而本芯片锚在 `left: 48px`、宽约 178px，
+   两者撞进同一条横带；`.react-flow` 自身是 `z-index: 0` 的层叠上下文，
+   工具条在它内部**抢不到**层级，于是 z=7 的本芯片吃掉了「View full graph」
+   这类主操作的点击——Linux CI 实测按钮中心 462 落在芯片 301..479 内。
+   为什么不是别的修法：①抬工具条层级无效（跨不出那个层叠上下文）；
+   ②给工具条设宽度上限让它换行，会把它撑高转而盖住画布节点，实测
+   `workflow-editor.spec.ts` 的 four-mode 用例当场红——把一个拦截换成另一个。
+   画布四角已被占满（controls 左下 / minimap 右下 / 工具条右上），因此唯一
+   不引入新拦截的位置是**同在左上但下移一行**：`top` 从 12px 移到 68px，
+   越过单行工具条（canvas 相对 20..58）并留 10px 余量。
+   视觉基线零影响：本芯片只在点过 Validate 之后才挂载，而视觉套件从不点它。
+   回归锁：`e2e/canvas-toolbar-collision.spec.ts`。 */
 .workflow-validation__summary {
   position: absolute;
   z-index: 7;
-  top: 12px;
+  top: 68px;
   left: 48px;
   gap: 5px;
   background: color-mix(in srgb, var(--panel) 94%, transparent);
