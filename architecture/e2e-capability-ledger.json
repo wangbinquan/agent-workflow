@@ -403,8 +403,13 @@
       "title": "事件响应规则（source-neutral）的增删改：选事件、主体匹配、目标与值模板",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/event-response-rules.spec.ts",
+          "test": "RFC-319 EVENT-30: an event response rule round-trips through create / update / delete, and refuses a template that names a parameter the event never declares"
+        }
+      ]
     },
     {
       "id": "EVENT-31",
@@ -412,8 +417,13 @@
       "title": "事件自动化规则的权限分层（user 只读 / manager 管自己的 / admin 跨 owner）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/event-response-rules.spec.ts",
+          "test": "RFC-319 EVENT-31: rule authoring is tiered — a plain user can only read, a manager cannot touch another manager rule, and an access administrator can"
+        }
+      ]
     },
     {
       "id": "EVENT-35",
@@ -8068,8 +8078,6 @@
     "EVENT-26",
     "EVENT-28",
     "EVENT-29",
-    "EVENT-30",
-    "EVENT-31",
     "EVENT-32",
     "EVENT-33",
     "EVENT-34",
