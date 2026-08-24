@@ -354,8 +354,13 @@
       "title": "触发规则五维条件匹配（仓库范围 / 事件类型 / 分支 glob / 评论命令前缀 / 忽略作者）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/webhook-trigger-matching.spec.ts",
+          "test": "RFC-319 EVENT-18: all five matching dimensions gate a fire independently, and the author list deliberately does not gate pipeline facts"
+        }
+      ]
     },
     {
       "id": "EVENT-19",
@@ -363,8 +368,13 @@
       "title": "熔断（连续同流触发达上限 → skipped-circuit-open）与人工重置流计数",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/webhook-trigger-matching.spec.ts",
+          "test": "RFC-319 EVENT-19: consecutive fires on one stream trip the breaker, and a manual reset re-arms it"
+        }
+      ]
     },
     {
       "id": "EVENT-21",
@@ -8118,8 +8128,6 @@
     "EVENT-12",
     "EVENT-13",
     "EVENT-16",
-    "EVENT-18",
-    "EVENT-19",
     "EVENT-20",
     "EVENT-23",
     "EVENT-24",
