@@ -3266,8 +3266,17 @@
       "title": "轮次被工作组自主关闭反问撤销后的只读态与原因说明（sealedCause=wg-clarify-disabled）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-round-dismissed-no-human.spec.ts",
+          "test": "最后一个人类成员被移出后：这一轮反问必须被撤销、页面要说清是被撤了、迟到的答案要被拒"
+        },
+        {
+          "file": "e2e/clarify-round-dismissed-no-human.spec.ts",
+          "test": "撤销之后任务不能继续停在「等人回答」上——那正是这个开关存在的理由"
+        }
+      ]
     },
     {
       "id": "HUMAN-18",
@@ -8622,7 +8631,6 @@
     "EVENT-X7",
     "HUMAN-15",
     "HUMAN-16",
-    "HUMAN-17b",
     "HUMAN-36",
     "HUMAN-40",
     "HUMAN-42",
