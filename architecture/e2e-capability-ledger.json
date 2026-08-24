@@ -1510,8 +1510,13 @@
       "title": "MCP 的 ACL / 可见性变更会终止相关的 runtime-test 会话",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/mcp-acl-session-termination.spec.ts",
+          "test": "RFC-319 RES-28: taking an MCP back out of someone view ends the runtime-test session they already have open"
+        }
+      ]
     },
     {
       "id": "RES-29",
@@ -8423,7 +8428,6 @@
     "RES-25",
     "RES-26",
     "RES-27",
-    "RES-28",
     "RES-30",
     "RES-31",
     "RES-32",
