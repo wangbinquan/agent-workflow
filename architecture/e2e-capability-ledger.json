@@ -124,8 +124,13 @@
       "title": "备份创建、恢复上传（确认前不上传）、待生效恢复的取消与失败横幅",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ops-local-recovery.spec.ts",
+          "test": "RFC-319 OPS-020 & CFG-31: a backup taken now can be armed and applied on the next boot, and an armed restore can be called off before it fires"
+        }
+      ]
     },
     {
       "id": "DE-01",
@@ -1156,8 +1161,13 @@
       "title": "备份 → 改数据 → 恢复 → 重启 daemon → 数据回到备份时点（完整往返）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ops-local-recovery.spec.ts",
+          "test": "RFC-319 OPS-020 & CFG-31: a backup taken now can be armed and applied on the next boot, and an armed restore can be called off before it fires"
+        }
+      ]
     },
     {
       "id": "OPS-022",
@@ -1165,8 +1175,13 @@
       "title": "agent-workflow auth password-login status|enable：本地找回密码登录",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ops-local-recovery.spec.ts",
+          "test": "RFC-319 OPS-022: after password sign-in is switched off, the shipped binary can re-open it locally against the same home"
+        }
+      ]
     },
     {
       "id": "OPS-024",
@@ -8001,7 +8016,6 @@
     "CFG-28",
     "CFG-29",
     "CFG-30",
-    "CFG-31",
     "CFG-32",
     "CFG-33",
     "CFG-34",
@@ -8286,9 +8300,7 @@
     "OPS-017",
     "OPS-018",
     "OPS-019",
-    "OPS-020",
     "OPS-021",
-    "OPS-022",
     "OPS-023",
     "OPS-026",
     "OPS-027",
