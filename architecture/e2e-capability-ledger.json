@@ -3185,8 +3185,17 @@
       "title": "澄清页的实时协作提示与多标签同步（clarify.draft.updated / clarify.answered WS）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-realtime-collab.spec.ts",
+          "test": "同事改了某题：这一屏不刷新就要看见提示，并把那题的值接过来"
+        },
+        {
+          "file": "e2e/clarify-realtime-collab.spec.ts",
+          "test": "同事把整轮提交了：这一屏必须自己转成只读，而不是继续让我打字"
+        }
+      ]
     },
     {
       "id": "HUMAN-13",
@@ -8568,7 +8577,6 @@
     "EVENT-X6",
     "EVENT-X7",
     "HUMAN-05",
-    "HUMAN-12",
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17b",
