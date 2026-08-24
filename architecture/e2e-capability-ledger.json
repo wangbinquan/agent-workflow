@@ -3306,8 +3306,17 @@
       "title": "任务问题看板：按来源节点过滤、按阶段（待指派/待下发/处理中/待确认/完成）分列展示",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-questions-board-ui.spec.ts",
+          "test": "五列都在、顺序固定，且卡片按阶段落在对的那一列"
+        },
+        {
+          "file": "e2e/task-questions-board-ui.spec.ts",
+          "test": "按承接节点过滤：点一个节点只剩它的卡，「全部」把两边都放回来"
+        }
+      ]
     },
     {
       "id": "HUMAN-21",
@@ -8580,7 +8589,6 @@
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-17b",
-    "HUMAN-20",
     "HUMAN-25",
     "HUMAN-36",
     "HUMAN-37",
