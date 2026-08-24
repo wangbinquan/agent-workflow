@@ -134,6 +134,10 @@ function sameType(left: EmployeeTypeRef, right: EmployeeTypeRef): boolean {
   return left.typeId === right.typeId && left.revision === right.revision
 }
 
+function exactRefKey(ref: ExactResourceRef): string {
+  return JSON.stringify([ref.id, ref.revision])
+}
+
 function validationFailure(code: string, detail: string): ContractValidationCheck {
   return { code, ok: false, detail }
 }
@@ -344,12 +348,34 @@ export class DigitalEmployeeAuthoringService {
   }
 
   #automaticallyUpgradeCompatibleClosures(targetTypeRef: EmployeeTypeRef): void {
+    const employeeDefinitions = this.#store.listEmployeeDefinitions()
+    const currentEmployeeJobRefs = new Set(
+      employeeDefinitions
+        .filter((employee) => employee.archivedAt === null && employee.currentRevision !== null)
+        .map((employee) => exactRefKey(employee.configuration.jobTemplateRef)),
+    )
     const templates = this.#store
       .listJobTemplatesByTypeId(targetTypeRef.typeId)
       .filter(
         (template) =>
           template.publishedRevision !== null && template.typeRef.revision < targetTypeRef.revision,
       )
+      .filter((template) => {
+        const publishedRevision = template.publishedRevision
+        if (publishedRevision === null) return false
+        const source = this.#store.getJobTemplateRevision({
+          id: template.id,
+          revision: publishedRevision,
+        })
+        if (source === null) return false
+        // User-published standalone jobs remain migration roots forever. A
+        // system-published job is an automatic intermediate and only needs a
+        // successor while a current employee still references that exact ref;
+        // otherwise every later Type Package revision replays all historical
+        // intermediates and produces duplicate jobs or noisy incompatibility
+        // diagnostics.
+        return source.publishedBy !== null || currentEmployeeJobRefs.has(exactRefKey(source.ref))
+      })
     for (const template of templates) {
       const publishedRevision = template.publishedRevision
       if (publishedRevision === null) continue
@@ -371,8 +397,7 @@ export class DigitalEmployeeAuthoringService {
       }
     }
 
-    const candidates = this.#store
-      .listEmployeeDefinitions()
+    const candidates = employeeDefinitions
       .filter(
         (employee) =>
           employee.currentRevision !== null &&

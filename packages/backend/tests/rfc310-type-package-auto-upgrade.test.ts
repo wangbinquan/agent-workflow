@@ -1177,6 +1177,105 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     }
   })
 
+  test('orphaned automatic intermediate jobs do not multiply across later type revisions', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-orphan-chain-'))
+    try {
+      const db = createInMemoryDb(MIGRATIONS)
+      const futureTypeRef = { typeId: 'design', revision: 2 }
+      const future = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedDesignPackage(2),
+      })
+      future.commands.createJobTemplate({
+        typeRef: futureTypeRef,
+        actorUserId: 'draft-owner',
+        body: {
+          name: 'Standalone evolving job',
+          description: 'An unpublished same-name draft forces a deterministic migrated name.',
+          defaultToolBindings: [],
+        },
+      })
+
+      const v1 = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedDesignPackage(1),
+      })
+      const typeRef = { typeId: 'design', revision: 1 }
+      const tool = await v1.commands.createTool({
+        typeRef,
+        workItemRef: 'design-work',
+        actorUserId: 'standalone-owner',
+        body: {
+          displayName: 'design-work tool',
+          description: 'Published for a standalone job.',
+          roleRef: 'primary',
+          implementation: {
+            kind: 'agent',
+            agentRef: { id: 'design-work-agent', revision: 1 },
+          },
+        },
+      })
+      const toolRef = await v1.commands.publishTool({
+        typeRef,
+        workItemRef: 'design-work',
+        toolId: tool.id,
+        actorUserId: 'standalone-owner',
+      })
+      const published = v1.commands.createJobTemplate({
+        typeRef,
+        actorUserId: 'standalone-owner',
+        body: {
+          name: 'Standalone evolving job',
+          description: 'The platform keeps one current descendant for this published job.',
+          defaultToolBindings: [
+            {
+              workItemRef: 'design-work',
+              slotRef: 'primary',
+              registrationRef: toolRef,
+            },
+          ],
+        },
+      })
+      v1.commands.publishJobTemplate({ id: published.id, actorUserId: 'standalone-owner' })
+
+      const v2 = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedDesignPackage(2),
+      })
+      const v2Jobs = v2.queries.listJobTemplates(futureTypeRef)
+      expect(v2Jobs).toHaveLength(2)
+      expect(v2Jobs.filter((job) => job.publishedRevision !== null)).toHaveLength(1)
+      expect(v2Jobs.find((job) => job.publishedRevision !== null)?.name).not.toBe(
+        'Standalone evolving job',
+      )
+
+      const v3Package = versionedDesignPackage(3)
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+      const v3 = createFixtureModule({ db, appHome, typePackage: v3Package, issues })
+      expect(issues).toEqual([])
+      const currentJobs = v3.queries.listJobTemplates({ typeId: 'design', revision: 3 })
+      expect(currentJobs).toHaveLength(1)
+      expect(
+        currentJobs[0]?.draft.defaultToolBindings.map((binding) => binding.workItemRef).sort(),
+      ).toEqual(['design-work'])
+
+      const counts = {
+        jobs: db.select().from(employeeJobTemplates).all().length,
+        tools: db.select().from(employeeToolRegistrations).all().length,
+      }
+      createFixtureModule({ db, appHome, typePackage: v3Package })
+      expect({
+        jobs: db.select().from(employeeJobTemplates).all().length,
+        tools: db.select().from(employeeToolRegistrations).all().length,
+      }).toEqual(counts)
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  })
+
   test('target name collisions migrate under a deterministic name without user work', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-name-collision-'))
     try {
