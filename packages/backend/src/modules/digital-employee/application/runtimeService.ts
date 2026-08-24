@@ -53,6 +53,8 @@ import {
   type EmployeeCollaborationBinding,
   type EmployeeTypeRef,
   type ExactResourceRef,
+  type OrderedDispatchConfiguration,
+  type WorkItemDefinition,
 } from '../domain/model'
 import {
   attentionSubjectSchema,
@@ -377,6 +379,40 @@ export class DigitalEmployeeRuntimeService {
 
   #toolRevision(ref: ExactResourceRef) {
     return this.#platformTools.getRevision(ref) ?? this.#authoringStore.getToolRevision(ref)
+  }
+
+  #selectWorkItemSlot(input: {
+    readonly caseRecord: EmployeeCaseRecord
+    readonly item: WorkItemDefinition
+    readonly contexts: readonly EmployeeContextRecord[]
+    readonly orderedDispatchConfigurations: readonly OrderedDispatchConfiguration[]
+    readonly preferredSlotRef: string | undefined
+  }): string {
+    const defaultSlotRef =
+      input.preferredSlotRef ??
+      (input.item.nodeKind === 'collaboration' ? 'collaboration' : undefined) ??
+      input.item.toolRoleGroups.flatMap((group) => group.bindingSlots).find((slot) => slot.required)
+        ?.slotRef ??
+      input.item.toolRoleGroups.flatMap((group) => group.bindingSlots)[0]?.slotRef ??
+      'system'
+    return z
+      .object({ slotRef: z.string().min(1).max(160) })
+      .strict()
+      .parse(
+        JSON.parse(
+          this.#codec(input.caseRecord.typeRef.typeId).selectReactionToolSlotJson(
+            JSON.stringify({
+              schemaVersion: 1,
+              workItemRef: input.item.workItemRef,
+              defaultSlotRef,
+              contextsJson: JSON.stringify(input.contexts),
+              orderedDispatchConfigurationsJson: JSON.stringify(
+                input.orderedDispatchConfigurations,
+              ),
+            }),
+          ),
+        ) as unknown,
+      ).slotRef
   }
 
   launchWork(input: {
@@ -1572,14 +1608,50 @@ export class DigitalEmployeeRuntimeService {
     if (workItemRef !== caseRecord.currentWorkItemRef) return false
     const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
     if (employee === null) return false
+    const typePackage = this.#authoringStore.getTypePackage(caseRecord.typeRef)
+    if (typePackage === null || typePackage.state !== 'published') return false
+    const item = findWorkItem(typePackage.descriptor, workItemRef)
+    if (item === null || item.nodeKind !== 'business-tool') return false
+    let selectedSlotRef: string
+    try {
+      selectedSlotRef = this.#selectWorkItemSlot({
+        caseRecord,
+        item,
+        contexts: this.#store.listContexts(caseRecord.id),
+        orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
+        preferredSlotRef: undefined,
+      })
+    } catch {
+      return false
+    }
     const dispatchBinding = employee.content.exactOrderedDispatchConfigurations
       .flatMap((configuration) => configuration.routes)
-      .find((route) => route.routeRef === slotRef && route.destinationWorkItemRef === workItemRef)
+      .find(
+        (route) =>
+          route.routeRef === selectedSlotRef && route.destinationWorkItemRef === workItemRef,
+      )
     const toolBinding = employee.content.exactToolBindings.find(
-      (binding) => binding.workItemRef === workItemRef && binding.slotRef === slotRef,
+      (binding) => binding.workItemRef === workItemRef && binding.slotRef === selectedSlotRef,
     )
+    if (
+      selectedSlotRef !== PLATFORM_WORK_ITEM_SLOT_REF &&
+      findToolSlot(item, selectedSlotRef) === null &&
+      dispatchBinding === undefined
+    ) {
+      return false
+    }
     const registrationRef = dispatchBinding?.registrationRef ?? toolBinding?.registrationRef ?? null
-    if (registrationRef === null || this.#toolRevision(registrationRef)?.state !== 'published') {
+    if (
+      selectedSlotRef !== PLATFORM_WORK_ITEM_SLOT_REF &&
+      (registrationRef === null || this.#toolRevision(registrationRef)?.state !== 'published')
+    ) {
+      return false
+    }
+    if (
+      employee.content.exactToolBindings
+        .filter((binding) => binding.workItemRef === workItemRef)
+        .some((binding) => this.#toolRevision(binding.registrationRef)?.state !== 'published')
+    ) {
       return false
     }
     this.#store.resumeCase(caseRecord.id, this.#now())
@@ -2277,31 +2349,13 @@ export class DigitalEmployeeRuntimeService {
             `continuation points to disabled optional capability: ${item.workItemRef}`,
           )
         }
-        const defaultSlotRef =
-          rule?.slotRef ??
-          (item.nodeKind === 'collaboration' ? 'collaboration' : undefined) ??
-          item.toolRoleGroups.flatMap((group) => group.bindingSlots).find((slot) => slot.required)
-            ?.slotRef ??
-          item.toolRoleGroups.flatMap((group) => group.bindingSlots)[0]?.slotRef ??
-          'system'
-        const selectedSlotRef = z
-          .object({ slotRef: z.string().min(1).max(160) })
-          .strict()
-          .parse(
-            JSON.parse(
-              this.#codec(caseRecord.typeRef.typeId).selectReactionToolSlotJson(
-                JSON.stringify({
-                  schemaVersion: 1,
-                  workItemRef: item.workItemRef,
-                  defaultSlotRef,
-                  contextsJson: JSON.stringify(contexts),
-                  orderedDispatchConfigurationsJson: JSON.stringify(
-                    employee.content.exactOrderedDispatchConfigurations,
-                  ),
-                }),
-              ),
-            ) as unknown,
-          ).slotRef
+        const selectedSlotRef = this.#selectWorkItemSlot({
+          caseRecord,
+          item,
+          contexts,
+          orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
+          preferredSlotRef: rule?.slotRef,
+        })
         const selectedDispatchRoute = employee.content.exactOrderedDispatchConfigurations
           .flatMap((configuration) => configuration.routes)
           .find(

@@ -326,6 +326,47 @@ describe('RFC-310 stateful employee Case runtime', () => {
       activeRoundId: planned,
     })
 
+    // Real-environment regression 2026-08-24: a collaboration child Case was
+    // frozen as missing prepare-materials/default by an older process even
+    // though the current type codec now routes its body intake to the platform
+    // slot. Recovery must re-evaluate the current deterministic selection.
+    now += 1
+    const legacyPlatformRecovery = launch('BODY-LEGACY-PLATFORM', {
+      kind: 'body',
+      body: '旧进程误选 default 后，当前平台槽位必须自动恢复',
+      externalId: null,
+      uploads: [],
+      executionOptions: {},
+    })
+    const legacyPlatformRecoveryRow = db
+      .select()
+      .from(employeeCases)
+      .where(eq(employeeCases.id, legacyPlatformRecovery.caseRef.id))
+      .get()!
+    db.update(employeeCases)
+      .set({
+        state: 'blocked',
+        blockReason:
+          'reaction-planning-failed: employee-tool-binding-unavailable: no exact published tool for prepare-materials/default',
+        currentWorkItemRef: 'prepare-materials',
+        activeRoundId: null,
+        revision: legacyPlatformRecoveryRow.revision + 1,
+        updatedAt: now,
+      })
+      .where(eq(employeeCases.id, legacyPlatformRecovery.caseRef.id))
+      .run()
+    const legacyRecoveredRound = module.runtime!.worker.planOneReaction()
+    expect(legacyRecoveredRound).not.toBeNull()
+    expect(
+      JSON.parse(module.runtime!.queries.getCase(legacyPlatformRecovery.caseRef.id).projectionJson)
+        .case,
+    ).toMatchObject({
+      state: 'active',
+      blockReason: null,
+      currentWorkItemRef: 'prepare-materials',
+      activeRoundId: legacyRecoveredRound,
+    })
+
     const recoverable = launch('BODY-RECOVERABLE', {
       kind: 'body',
       body: '精确工具暂时不可用后应自动恢复规划',
