@@ -93,6 +93,8 @@ tool I/O 中没有 `schemaVersion`、`roundRef`、`executionNonce`、Context pat
 
 合同详情和 JSON 示例放在“协议与示例”折叠区；默认卡片只展示动作、输入、输出和可用实现。
 
+详细合同字段只在 `business-tool` 节点展示。平台、系统与协作节点只展示自身 WorkItem contract 的真实输入和输出；没有节点自有参数时不渲染参数区，不得用通用 execution-contract fallback 填充“关键业务参数”。
+
 ## 八个 v2 内置 Agent
 
 | 展示名         | 单一 Contract                              | 说明                                  |
@@ -111,6 +113,7 @@ v2 使用新稳定 ID，平台内置定义 create-or-converge；非平台资源�
 ## 验收
 
 - 九张节点卡片的名称、动作、输入和输出与本 RFC 一致。
+- 平台、系统和协作节点不渲染业务工具 guide；其可见输入输出逐节点唯一并与自身 WorkItem contract 一致。
 - 八个 JSON contract 只接受自己的 direct completed/blocked 结果；plan 只接受指定路径。
 - 每个输入字段有明确 consumer；平台字段不回流 tool I/O。
 - 八个 v2 built-in 都只有一个 contract；三个实现 intent 互斥。

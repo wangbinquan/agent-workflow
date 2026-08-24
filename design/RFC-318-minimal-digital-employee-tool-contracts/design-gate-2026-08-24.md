@@ -2,7 +2,7 @@
 
 - 审查对象：`development@9` 的九个业务节点、九份 v2 contract、八个 v2 内置 Agent、节点卡片与分类配置
 - 开工基线：`main@9a6961727b8dd5a946310f34d0f378ab0b57ab13`
-- 当前结论：六轮设计问题已收敛，无遗留 P1/P2；共享 dirty tree 的完整本地门已执行并按路径归因，提交后 hosted CI 待 exact SHA 执行
+- 当前结论：七轮设计问题已收敛，无遗留 P1/P2；共享 dirty tree 的完整本地门已执行并按路径归因，提交后 hosted CI 待 exact SHA 执行
 
 ## 不变量
 
@@ -149,6 +149,27 @@
 - 完整本地门的其余红项均落在 RFC-319 新 E2E、RFC-321 route/transport/credential/architecture 账本或其已知冲突发布前置条件；不据此宣称完整门通过。
 
 结论：RFC-318 自身架构问题收敛，无遗留 P1/P2；完整仓库终态由干净 exact-SHA hosted CI 判定。
+
+## 第七轮：节点可见信息归属
+
+### 发现
+
+- 平台节点虽然各自声明了不同的 `materialSummary/completionStandard`，节点详情仍无条件查询 execution-contract guide。
+- v1 registration 对没有专用字段的合同使用通用 fallback，导致多个平台节点的“关键业务参数”看起来完全相同；真实节点合同与可见参数产生冲突。
+
+### 修正
+
+- `business-tool` 才查询并渲染详细 execution-contract guide。
+- 平台、系统与协作节点只展示自己的 WorkItem contract 输入和输出；不存在自有参数时不渲染参数区。
+- 增加 12 个平台节点输入/输出逐项唯一且对拍自身合同的后端锁，以及真实页面点击平台节点后没有 `execution-contract-guide` 的 hosted visual 断言。
+
+### 复核
+
+- 12 个非业务节点拥有 12 组不同输入和 12 组不同输出，均与所引用 WorkContract 一致。
+- 前端查询与渲染同时受 `nodeKind === 'business-tool'` 约束，平台节点不会再因 fallback 显示模板参数。
+- 没有修改网络、沙箱、runner、`startTask`、executor 或平台节点执行语义。
+
+结论：通过，无遗留 P1/P2。
 
 ## 最终验证状态
 

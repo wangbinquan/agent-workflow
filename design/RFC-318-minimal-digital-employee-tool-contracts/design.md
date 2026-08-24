@@ -10,7 +10,7 @@ RFC-318 不建立新的执行器或通用节点 DSL，只在现有边界增加 v
 - `development-automation/public/participants.ts`：八个单职责 Agent 定义；
 - 现有 execution-contract service：按 `inputMode/outputMode` 路由 direct JSON 或既有 envelope/path；
 - 现有 task-execution composition：把投影后的内容交给原有 Agent、Workflow、Program 入口；
-- 前端：把 contract guide 作为节点的输入输出说明，并把协议细节折叠。
+- 前端：业务工具把 exact contract guide 作为输入输出说明并折叠协议细节；平台、系统和协作节点只展示自身 WorkItem contract，不读取或渲染业务工具 guide。
 
 `development@9` 使用 v2；v1 registration、Agent 和历史 Case 保留。
 
@@ -79,6 +79,8 @@ RFC-318 不建立新的执行器或通用节点 DSL，只在现有边界增加 v
 
 guide 的字段表与 schema 由测试对拍。高级折叠区只用于 contract ID、端口和 JSON 示例。
 
+详细 guide 只属于 `business-tool`。`system`、平台适配和 `collaboration` 节点没有可配置的业务工具实现，只展示各自 `materialSummary/completionStandard`；不得把 v1 execution-contract 的通用 fallback 当成这些节点的“关键业务参数”。如果没有该节点自己的可见参数，就不额外渲染参数区。
+
 分类节点沿用现有 `dispatchRouteDefinitions` 发布结构；UI 将它表达为“类型标识、名称、说明、兜底分类”。输入 projector 转换为 `categories + fallbackType`。岗位流程拥有处理者、去向和执行顺序，分类工具不拥有顺序。
 
 ## 5. Agent 定义
@@ -108,7 +110,7 @@ RFC-318 没有新增或修改：
 
 ## 7. 设计门
 
-本次以六个角度迭代，问题必须收敛后才发布：
+本次以七个角度迭代，问题必须收敛后才发布：
 
 1. **合同门**：逐字段核对消费者、strict schema、direct output 和平台 owner；
 2. **职责门**：逐个审视九个节点与八个 Agent 是否重叠、是否复制协议；
@@ -116,8 +118,9 @@ RFC-318 没有新增或修改：
 4. **可理解性门**：在真实 UI 逐张查看节点卡片、配置弹窗和协议折叠区。
 5. **范围门**：反向确认网络、沙箱、执行器、调度和外部发布 owner 没有越界。
 6. **架构门**：用全仓 ratchet 检查 public 入口、participant 大小和跨层面是否保持最小。
+7. **展示归属门**：逐类核对业务工具、平台、系统和协作节点，只展示该节点真实拥有的参数与结果。
 
-已收敛的问题包括：方案卡片名称与说明错位、分类顺序 owner 错位、Program fixture 对 direct output 的假绿、审批空结论、旧 envelope 被 v2 接受、prompt 暴露 round/nonce/contract 元数据、检视提交信息和目标版本的可选条件不准确、内置 Agent 展示名过于泛化。
+已收敛的问题包括：方案卡片名称与说明错位、分类顺序 owner 错位、Program fixture 对 direct output 的假绿、审批空结论、旧 envelope 被 v2 接受、prompt 暴露 round/nonce/contract 元数据、检视提交信息和目标版本的可选条件不准确、内置 Agent 展示名过于泛化，以及平台节点误渲染同一份通用业务参数模板。
 
 最终证据记录在同目录 `design-gate-2026-08-24.md`；共享 dirty tree 上的完整本地门结果按
 失败路径逐项归因，不把并发 RFC-319/321 的红项记成 RFC-318 通过或失败。
