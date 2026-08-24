@@ -456,7 +456,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(reviewBranch).toContainText('Implement change')
   await expect(reviewBranch).toContainText('Human review required')
   await expect(reviewBranch.locator('[data-review-stage="analysis"] strong')).toHaveText(
-    'Implementation planning',
+    'Write implementation plan',
   )
   await expect(reviewBranch.locator('[data-review-stage="implementation"]')).toHaveCount(0)
   await expect(reviewBranch.locator('[data-work-item-ref="analyze-implement"]')).toHaveCount(1)
@@ -529,7 +529,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
       .evaluateAll((cards) =>
         cards.map((card) => card.querySelector('strong')?.textContent?.trim()),
       ),
-  ).toEqual(['Implementation planning', 'Human plan review'])
+  ).toEqual(['Write implementation plan', 'Human plan review'])
   await expect(directInputCard).not.toHaveAttribute('data-work-item-ref')
   await expect(idInputCard).not.toHaveAttribute('data-work-item-ref')
   await expect(issueIngressCard).not.toHaveAttribute('data-work-item-ref')

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { sha256Hex } from '@/util/hash'
+import { isLexicallyInsideForHost } from '@/util/platformExec'
 import {
   developmentToolInputSchemasV2,
   type DevelopmentToolContractIdV2,
@@ -467,9 +468,9 @@ export function projectDevelopmentToolResultV2(input: {
     if (mergeRequest.targetSha === null && collected.status !== 'pending') {
       throw new Error('pipeline result must remain pending while target version is unknown')
     }
-    const evidenceDirectory = host.envelope.platformPaths.pipelineDirectory.replace(/\/$/, '')
+    const evidenceDirectory = host.envelope.platformPaths.pipelineDirectory
     for (const file of collected.checks.flatMap((check) => check.evidenceFiles ?? [])) {
-      if (file !== evidenceDirectory && !file.startsWith(`${evidenceDirectory}/`)) {
+      if (!isLexicallyInsideForHost(evidenceDirectory, file)) {
         throw new Error(`pipeline evidence file is outside evidenceDirectory: ${file}`)
       }
     }
@@ -482,7 +483,7 @@ export function projectDevelopmentToolResultV2(input: {
           mergeRequestRef: mergeRequest.mergeRequestRef,
           headSha: mergeRequest.headSha,
           targetSha: mergeRequest.targetSha,
-          evidenceArtifactRef: `${evidenceDirectory}/`,
+          evidenceArtifactRef: evidenceDirectory.concat('/'),
           failureTypes: [],
           checks: collected.checks,
         },
