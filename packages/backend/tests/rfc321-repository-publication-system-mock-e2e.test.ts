@@ -21,6 +21,9 @@ import {
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import {
+  createRepositoryEndpointDiscovery,
+} from '../src/modules/integration/application/repositoryEndpointDiscovery'
+import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
 } from '../src/modules/source-control/composition'
@@ -137,13 +140,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,
     apiBaseUrl: suite.endpoints.gitlabApiBaseUrl,
     rejectUnauthorized: true,
-    transportMappings: [
-      {
-        sshHost: 'ssh.system-mock.test',
-        sshPort: 22,
-        httpBaseUrl: suite.endpoints.baseUrl,
-      },
-    ],
+    transportMappings: [],
     allowedHttpBaseUrls: [suite.endpoints.baseUrl],
     globalTokenEnc: secretBox.seal(SYSTEM_MOCK_GIT_GLOBAL_TOKEN),
     globalTokenHint: SYSTEM_MOCK_GIT_GLOBAL_TOKEN.slice(-4),
@@ -155,7 +152,24 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     connectionGeneration: 'rfc321-system-mock-generation',
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,
   })
-  const transport = createRepositoryPublicationTransport({ db, secretBox, appHome })
+  const endpointDiscovery = createRepositoryEndpointDiscovery({
+    resolveConnection(provider) {
+      if (provider !== 'gitlab') return null
+      return {
+        provider,
+        apiBaseUrl: suite.endpoints.gitlabApiBaseUrl,
+        connectionGeneration: 'rfc321-system-mock-generation',
+        token: SYSTEM_MOCK_GIT_GLOBAL_TOKEN,
+        rejectUnauthorized: true,
+      }
+    },
+  })
+  const transport = createRepositoryPublicationTransport({
+    db,
+    secretBox,
+    appHome,
+    endpointDiscovery,
+  })
   const sshRemote = `git@ssh.system-mock.test:${projectPath}.git`
 
   const personalSha = commitProof(worktree, 'personal identity publication')
