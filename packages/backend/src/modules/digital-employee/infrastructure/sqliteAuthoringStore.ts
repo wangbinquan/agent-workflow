@@ -263,6 +263,14 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .sort((a, b) => compareTypeRefs(a.typeRef, b.typeRef))
     },
 
+    listTypePackageDescriptorJsons() {
+      return db
+        .select({ descriptorJson: employeeTypePackages.descriptorJson })
+        .from(employeeTypePackages)
+        .all()
+        .map((row) => row.descriptorJson)
+    },
+
     listTypePackages() {
       return db
         .select()

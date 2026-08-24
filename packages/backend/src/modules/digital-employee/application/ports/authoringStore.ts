@@ -143,6 +143,15 @@ export interface ExecutionPolicyRevisionRecord {
 export interface DigitalEmployeeAuthoringStore {
   ensureTypePackage(input: TypePackageRecord): void
   listTypePackageRegistrations(): TypePackageRegistrationRecord[]
+  /**
+   * Raw immutable descriptors for schema-tolerant bootstrap projections.
+   *
+   * A historical row can predate the current authoring schema while still
+   * carrying the minimal work-item contract needed by a compatibility
+   * catalog. Callers that need current authoring semantics must continue to
+   * use list/getTypePackages, which parse the full descriptor.
+   */
+  listTypePackageDescriptorJsons(): string[]
   listTypePackages(): TypePackageRecord[]
   getTypePackage(ref: EmployeeTypeRef): TypePackageRecord | null
 

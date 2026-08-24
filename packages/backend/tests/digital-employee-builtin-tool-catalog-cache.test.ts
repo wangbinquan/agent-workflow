@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
+import { readPersistedDigitalEmployeeTypePackageDescriptorJsons } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
@@ -29,7 +30,10 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
 
     const catalog = composeDigitalEmployeeBuiltinToolCatalog({
       db: countedDb,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      typePackageDescriptorJsons: [
+        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(countedDb),
+        developmentEmployeeTypePackage.descriptorJson,
+      ],
     })
     const selectsAtComposition = selectCalls
     const typeRefJson = JSON.stringify({ typeId: 'development', revision: 9 })

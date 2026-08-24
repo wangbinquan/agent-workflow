@@ -2,7 +2,6 @@ import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
-import { employeeTypePackages } from '@/db/schema'
 import {
   normalizeDispatchRouteDefinitionsJson,
   type DigitalEmployeePlatformToolCatalogParticipant,
@@ -95,12 +94,7 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
   readonly typePackageDescriptorJsons: readonly string[]
 }): DigitalEmployeePlatformToolCatalogParticipant {
   const descriptorsByTypeRef = new Map<string, z.infer<typeof descriptorSchema>>()
-  const persistedDescriptorJsons = input.db
-    .select({ descriptorJson: employeeTypePackages.descriptorJson })
-    .from(employeeTypePackages)
-    .all()
-    .map((row) => row.descriptorJson)
-  for (const value of [...persistedDescriptorJsons, ...input.typePackageDescriptorJsons]) {
+  for (const value of input.typePackageDescriptorJsons) {
     const descriptor = descriptorSchema.parse(JSON.parse(value) as unknown)
     descriptorsByTypeRef.set(
       `${descriptor.typeRef.typeId}@${descriptor.typeRef.revision}`,

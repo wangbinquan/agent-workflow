@@ -72,6 +72,13 @@ export {
 } from './composition/writerCutover'
 export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 
+/** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
+export function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
+  db: DbClient,
+): readonly string[] {
+  return createSqliteDigitalEmployeeAuthoringStore(db).listTypePackageDescriptorJsons()
+}
+
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
   EmployeeTypeCollaborationCodec

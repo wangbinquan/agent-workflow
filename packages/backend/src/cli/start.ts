@@ -117,6 +117,7 @@ import {
   composeDigitalEmployee,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
+  readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   refreshDigitalEmployeeWriterState,
   startDigitalEmployeeOsWorker,
 } from '@/modules/digital-employee/composition'
@@ -1239,7 +1240,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
     platformTools: composeDigitalEmployeeBuiltinToolCatalog({
       db,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      typePackageDescriptorJsons: [
+        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
+        developmentEmployeeTypePackage.descriptorJson,
+      ],
     }),
     onAutomaticUpgradeIssue: (issue) => {
       log.warn('automatic digital employee type upgrade could not prove compatibility', {

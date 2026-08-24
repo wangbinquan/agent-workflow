@@ -56,6 +56,9 @@ test('a copied self marker remains human unless the authenticated platform accou
     if (url.pathname.endsWith('/merge_requests/1/approvals')) {
       return json({ message: 'not exposed' }, 404)
     }
+    if (url.pathname.endsWith('/repository/branches/main')) {
+      return json({ commit: { id: TARGET } })
+    }
     if (url.pathname.endsWith('/merge_requests/1')) {
       return json({
         iid: 1,

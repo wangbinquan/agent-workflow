@@ -11,7 +11,10 @@ import {
   developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
-import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
+import {
+  composeDigitalEmployee,
+  readPersistedDigitalEmployeeTypePackageDescriptorJsons,
+} from '@/modules/digital-employee/composition'
 import { isEmployeeReactionEventEnabled } from '@/modules/digital-employee/application/runtimeService'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { inspectExecutionContractWorkflowDefinition } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
@@ -582,7 +585,10 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     // declares that it can solve every problem emitted by that classifier.
     const catalog = composeDigitalEmployeeBuiltinToolCatalog({
       db,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      typePackageDescriptorJsons: [
+        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
+        developmentEmployeeTypePackage.descriptorJson,
+      ],
     })
     const classifierTools = JSON.parse(
       catalog.listJson(JSON.stringify({ typeId: 'development', revision: 9 }), 'classify-pipeline'),

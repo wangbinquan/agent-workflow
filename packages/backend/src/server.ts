@@ -88,6 +88,7 @@ import {
   composeDigitalEmployeeTaskCatalogSource,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
+  readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   readDigitalEmployeeWriterState,
 } from '@/modules/digital-employee/composition'
 import {
@@ -546,7 +547,10 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
     platformTools: composeDigitalEmployeeBuiltinToolCatalog({
       db: deps.db,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      typePackageDescriptorJsons: [
+        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(deps.db),
+        developmentEmployeeTypePackage.descriptorJson,
+      ],
     }),
     executionContracts,
     retryLimits: {
