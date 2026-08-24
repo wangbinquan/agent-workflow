@@ -3133,8 +3133,13 @@
       "title": "澄清答案的乐观锁：iteration 过期时提交被拒（clarify-iteration-mismatch 409）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/human-gate-optimistic-locks.spec.ts",
+          "test": "HUMAN-08 澄清：拿过期轮次号提交被 409 拒绝，且服务端状态一个字节不变"
+        }
+      ]
     },
     {
       "id": "HUMAN-10",
@@ -3290,8 +3295,13 @@
       "title": "评审决策的乐观锁：reviewIteration 过期时决策被拒（review-iteration-mismatch 409）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/human-gate-optimistic-locks.spec.ts",
+          "test": "HUMAN-31 评审：拿过期轮次号决策被 409 拒绝，任务仍停在等人评审上"
+        }
+      ]
     },
     {
       "id": "HUMAN-33",
@@ -8345,7 +8355,6 @@
     "EVENT-X7",
     "HUMAN-05",
     "HUMAN-07",
-    "HUMAN-08",
     "HUMAN-10",
     "HUMAN-12",
     "HUMAN-13",
@@ -8363,7 +8372,6 @@
     "HUMAN-25",
     "HUMAN-26",
     "HUMAN-27",
-    "HUMAN-31",
     "HUMAN-33",
     "HUMAN-34",
     "HUMAN-35",

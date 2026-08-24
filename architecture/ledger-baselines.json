@@ -245,14 +245,14 @@
       "id": "rfc319-e2e-route-coverage",
       "file": "architecture/e2e-route-coverage.json",
       "symbol": "uncovered",
-      "baseline": 17,
-      "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。"
+      "baseline": 16,
+      "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。（2026-08-25：RFC-319 B28/B29 的 e2e/fusion-lifecycle.spec.ts 真正加载了 /fusions/$id，e2e-full-nightly 的对账据此转红「补了 spec 却没把账本一起改小」。按该 nightly 产出的 126 份 route journal 正向销账 17 → 16，诊断栏 mentionedButNeverLoaded 同步 14 → 13 以维持「诊断栏是主栏子集」。只做删除，不新增。）"
     },
     {
       "id": "rfc319-capability-gaps",
       "file": "architecture/e2e-capability-ledger.json",
       "symbol": "gapIds",
-      "baseline": 592,
+      "baseline": 590,
       "why": "RFC-319 R3：820 条用户面能力里还没有 system-mock e2e 防护的那些（开工时 679，本 RFC 已补 11 条 ⇒ 668）。只许降——每降一条代表一个真实用户场景被端到端跑过了。涨了说明新增能力没带 e2e，必须在 review 里解释。（2026-08-24：REPO-35 因测到未上库端点而退回缺口，曾一次性上涨 611 → 612 并按 T17 署名 allowGrowth；本批 MEM-24/31 落地后回落至 610，署名按机制过期已清理。）"
     },
     {

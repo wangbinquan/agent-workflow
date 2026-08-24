@@ -15,7 +15,6 @@
     "/code/outcomes",
     "/code/policies",
     "/code/policies/$policyId",
-    "/fusions/$id",
     "/memory/distill-jobs/$jobId",
     "/outcomes",
     "/tasks/$id/preview",
@@ -34,7 +33,6 @@
     "/code/outcomes",
     "/code/policies",
     "/code/policies/$policyId",
-    "/fusions/$id",
     "/outcomes",
     "/workflows/new"
   ]
