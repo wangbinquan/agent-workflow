@@ -1170,6 +1170,19 @@ test('RFC-319 TASK-27: 卡在仓库准备的任务点「重试准备」，打的
   // 旧尝试自此过期：对它再点重试必须被拒。少了这道门，一条自然序列
   // （失败 → 重试成功 → 后面某个节点才失败）下点旧行 = 对一个已经准备好的任务
   // 重做准备（task.ts:5424-5437 的实测缺陷）。
+  //
+  // 先等任务离开 pending/running 再点：`retryNode` 开头有一道**通用**的
+  // `task-still-running` 闸（services/task.ts:5346-5357），它排在 `__repo_prep__`
+  // 分支的过期判据（:5429）之前。重试真的把准备跑起来之后，紧接着点旧行拿到的是
+  // `task-still-running` 而不是 `repo-prep-superseded`——那是闸序使然，不是过期判据
+  // 失效。2026-08-26 `3cc81b245` 给重试补上 secretBox（此前凡配了 secret.key 的部署
+  // 重试必然 409）之后，这条腿才第一次真的走到「重试成功」，这个先后关系也才浮出来。
+  await expect
+    .poll(async () => (await getTask(matrixDaemon, taskId)).status, {
+      timeout: 180_000,
+      message: '任务一直没离开 pending/running ⇒ 过期判据这一段永远够不着',
+    })
+    .not.toMatch(/^(pending|running)$/)
   const supersededRes = await req(
     matrixDaemon,
     `/api/tasks/${taskId}/nodes/${stalePrepRunId}/retry?cascade=false`,
