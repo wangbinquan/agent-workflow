@@ -21,7 +21,7 @@ import { RoutePortalScope } from '@/components/AppPortal'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { LoadingState } from '@/components/LoadingState'
 import { UserMenu } from '@/components/UserMenu'
-import { useActor, useCurrentPermissions, usePermission } from '@/hooks/useActor'
+import { useActor, useLastResolvedPermissions } from '@/hooks/useActor'
 import { useAuthoritySync } from '@/hooks/useAuthoritySync'
 import { usePresenceSubscription } from '@/hooks/usePresence'
 import { navPermissionsForPath, resolveActiveNav, type ActiveNav, type SubNavItem } from '@/lib/nav'
@@ -69,7 +69,10 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const actor = useActor()
   const compact = useCompactShell()
   const active = resolveActiveNav(pathname)
-  const permissions = useCurrentPermissions()
+  // 呈现面读的是**末次已解析**的权限快照，不是「此刻是否 idle」——见
+  // useLastResolvedPermissions 的注释：一次例行的 /me 后台刷新曾让整条已授权路由被
+  // 挂起、body 上的 portal（用户正开着的弹窗）被整体摘掉。写权判定不走这里。
+  const { permissions } = useLastResolvedPermissions()
   const destinationPermissions = navPermissionsForPath(pathname)
   // RFC-305 guest follow-up: navigation remains a complete discovery surface,
   // but a destination without its catalog read capability must not mount route
@@ -78,7 +81,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
     destinationPermissions.length === 0 ||
     destinationPermissions.some((permission) => permissions.has(permission))
   const canReadMemory = permissions.has('memory:read')
-  const canReadTasks = usePermission('tasks:read')
+  const canReadTasks = permissions.has('tasks:read')
   const inboxOpen = useInboxOpen()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -89,21 +92,22 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const lastAuthorizedDestinationRef = useRef<string | null>(null)
   const authorityNavigationBlockedRef = useRef(false)
 
-  // A WS-driven /me refresh must fail closed immediately, but unmounting the
-  // routed subtree throws away unsaved local drafts without consulting that
-  // route's navigation guard. Preserve only the exact path that was already
-  // authorized inside React's Activity boundary: hidden mode keeps component
-  // state, hides ordinary host nodes, and disconnects effects so a stale-
-  // authority page cannot keep polling. RoutePortalScope separately removes
-  // body-level portals, which sit outside Activity's host tree. A fresh
-  // explicit denial still unmounts the subtree entirely.
+  // 授权**解析不出来**时（从未成功解析 / 解析失败），已授权路由不能就地卸载——那会连同
+  // 未保存的草稿一起丢，且绕过该路由自己的导航守卫。这里只保留「同一条此前已授权的
+  // 路径」，塞进 React 的 Activity 边界：hidden 模式保住组件 state、隐藏宿主节点、断开
+  // effect，于是一个授权已陈旧的页面不会继续轮询；RoutePortalScope 另行摘掉 body 层
+  // portal（它在 Activity 的宿主树之外）。明确的拒绝仍然整棵卸载。
+  //
+  // 2026-08-25 修正（用户实测的严重体验问题）：**例行的后台 refetch 不属于「解析不
+  // 出来」**。此前这里把 `fetchStatus === 'fetching' | 'paused'` 也算进去，而
+  // `destinationGranted` 又读的是"此刻是否 idle"的严格快照，于是每一次 /me 续期
+  //（WS 重连、staleTime 到期后任一新观察者挂载都会触发）都走完整套挂起动作：页面闪成
+  // loading、正开着的 Dialog 连同所有 body portal 被摘掉、导航点击被 blocker 吞掉。
+  // 现在 refetch 期间 `destinationGranted` 由末次已解析快照给出（照旧为真），本判定
+  // 只留真正的两种未解析态。
   const destinationKey = `${pathname}\u0000${destinationPermissions.join(',') || 'public'}`
   const destinationAuthorityUnsettled =
-    destinationPermissions.length > 0 &&
-    (actor.status === 'pending' ||
-      actor.status === 'error' ||
-      actor.fetchStatus === 'fetching' ||
-      actor.fetchStatus === 'paused')
+    destinationPermissions.length > 0 && (actor.status === 'pending' || actor.status === 'error')
   if (destinationGranted) {
     lastAuthorizedDestinationRef.current = destinationKey
   } else if (
@@ -420,7 +424,9 @@ function focusStableTrigger(trigger: HTMLButtonElement | null): void {
 }
 
 function AdminGear({ active }: { active: boolean }) {
-  const allowed = usePermission('settings:read')
-  if (!allowed) return null
+  // 呈现面（露不露这个入口）同样走末次已解析快照：/settings 路由自己还有守卫
+  // （RFC-270 的 ensureQueryData），这里没必要为一次 /me 续期把齿轮闪掉。
+  const { permissions } = useLastResolvedPermissions()
+  if (!permissions.has('settings:read')) return null
   return <SettingsGearButton active={active} />
 }

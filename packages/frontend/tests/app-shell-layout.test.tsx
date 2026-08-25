@@ -113,43 +113,53 @@ vi.mock('@/components/LanguageSwitch', async () => {
 // 其余导出（例如 `useAuthSessionRevision`，它是 stores/auth 的薄包装、与 actor 无关）
 // 应当保持真实。原先的全量工厂一旦被测子树用到任何**未列出**的导出就整片 18 条全红，
 // 报错还是 "No X export is defined on the mock"，与被测行为毫无关系。
-vi.mock('@/hooks/useActor', async (importOriginal) => ({
-  ...(await importOriginal<typeof UseActorModule>()),
-  usePermission: (permission: string) =>
-    harness.permissions === null
-      ? harness.permissionAllowed
-      : harness.permissions.includes(permission),
-  useCurrentPermissions: () =>
-    new Set(
-      harness.permissions ??
-        (harness.permissionAllowed
-          ? [
-              'agents:read',
-              'skills:read',
-              'mcps:read',
-              'plugins:read',
-              'workflows:read',
-              'workgroups:read',
-              'intent:read',
-              'tasks:read',
-              'scheduled-tasks:read',
-              'repos:read',
-              'webhook-endpoints:read',
-              'memory:read',
-            ]
-          : []),
-    ),
-  useActor: () => ({
-    data: null,
-    isLoading: harness.actorStatus === 'pending',
-    status: harness.actorStatus,
-    fetchStatus: harness.actorFetchStatus,
-    error: harness.actorError,
-    refetch: () => {
-      harness.actorRefetchCalls += 1
-    },
-  }),
-}))
+vi.mock('@/hooks/useActor', async (importOriginal) => {
+  const grantedPermissions = (): string[] =>
+    harness.permissions ??
+    (harness.permissionAllowed
+      ? [
+          'agents:read',
+          'skills:read',
+          'mcps:read',
+          'plugins:read',
+          'workflows:read',
+          'workgroups:read',
+          'intent:read',
+          'tasks:read',
+          'scheduled-tasks:read',
+          'repos:read',
+          'webhook-endpoints:read',
+          'memory:read',
+          // AdminGear 也改读末次已解析快照（不再是 usePermission 的布尔开关），
+          // 所以 "permissionAllowed = 全给" 这层语义必须把它列进来。
+          'settings:read',
+        ]
+      : [])
+  return {
+    ...(await importOriginal<typeof UseActorModule>()),
+    usePermission: (permission: string) =>
+      harness.permissions === null
+        ? harness.permissionAllowed
+        : harness.permissions.includes(permission),
+    useCurrentPermissions: () => new Set(grantedPermissions()),
+    // 末次**已解析**快照：与真实实现同形——只看 `status`，不看 `fetchStatus`
+    // （后台 refetch 期间 react-query 保留上一份 data，所以权限集照旧）。
+    useLastResolvedPermissions: () => ({
+      resolved: harness.actorStatus === 'success',
+      permissions: new Set(harness.actorStatus === 'success' ? grantedPermissions() : []),
+    }),
+    useActor: () => ({
+      data: null,
+      isLoading: harness.actorStatus === 'pending',
+      status: harness.actorStatus,
+      fetchStatus: harness.actorFetchStatus,
+      error: harness.actorError,
+      refetch: () => {
+        harness.actorRefetchCalls += 1
+      },
+    }),
+  }
+})
 
 vi.mock('@/components/shell/SettingsGearButton', async () => {
   const React = await import('react')
@@ -342,7 +352,63 @@ describe('RFC-198 responsive AppShell', () => {
     expect(screen.queryByTestId('memory-badge')).toBeNull()
   })
 
-  test('authority refresh pauses effects and portals while preserving the exact routed draft', () => {
+  // 2026-08-25 用户实测的严重体验问题：正看着某个任务的结构图，一有新任务 / event
+  // 产生，页面就"刷新一下"，弹窗被关掉。根因就在这段挂起逻辑——一次**例行**的 /me
+  // 后台 refetch（/ws/authority 每次物理重连都会失效它；staleTime 30s 过后任何一个新
+  // 挂载的观察者也会触发 refetchOnMount）曾被当成「授权不明」：整条已授权路由被塞进
+  // Activity(hidden)、RoutePortalScope 一关，**body 上的 portal（Dialog / Select 浮层）
+  // 被整体摘除**，导航点击还被 blocker 吞掉。续期不是撤权，这条锁住"刷新期间什么都不动"。
+  test('a background /me refresh leaves the routed page, its portals and its effects untouched', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    let activeRouteEffects = 0
+    function ProtectedRoute() {
+      useEffect(() => {
+        activeRouteEffects += 1
+        return () => {
+          activeRouteEffects -= 1
+        }
+      }, [])
+      return (
+        <>
+          <input data-testid="routed-draft" defaultValue="seed" />
+          <AppPortal>
+            <button type="button" data-testid="routed-portal">
+              Protected overlay
+            </button>
+          </AppPortal>
+        </>
+      )
+    }
+    const route = () => (
+      <AppShell pathname="/agents/new">
+        <ProtectedRoute />
+      </AppShell>
+    )
+    const view = render(route())
+    const draft = screen.getByTestId('routed-draft') as HTMLInputElement
+    fireEvent.change(draft, { target: { value: 'unsaved local draft' } })
+    expect(activeRouteEffects).toBe(1)
+
+    // 续期中：react-query 保留上一份 /me data，所以已解析的权限快照照旧授权。
+    harness.actorFetchStatus = 'fetching'
+    view.rerender(route())
+    expect(screen.getByTestId('routed-draft')).toBe(draft)
+    expect(draft.value).toBe('unsaved local draft')
+    expect(screen.getByTestId('app-shell-route-content').className).not.toContain(
+      'app-shell__route-content--suspended',
+    )
+    expect(activeRouteEffects).toBe(1)
+    expect(screen.getByRole('button', { name: 'Protected overlay' })).toBeTruthy()
+    expect(screen.getByTestId('routed-portal')).toBeTruthy()
+    expect(screen.queryByTestId('authority-refresh-loading')).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
+    expect(harness.linkClicks.map((click) => click.to)).toEqual(['/tasks'])
+  })
+
+  // 真正解析不出当前授权（首次 pending / 解析失败）时，原有的挂起契约照旧：页面留在
+  // 树上但不可交互、portal 摘除、effect 断开、导航吞掉，草稿一个字符都不能丢；权限
+  // **确定**没有了才整棵卸载。
+  test('unresolved authority still pauses effects and portals while preserving the exact routed draft', () => {
     vi.stubGlobal('matchMedia', undefined)
     let activeRouteEffects = 0
     function ProtectedRoute() {
@@ -374,33 +440,21 @@ describe('RFC-198 responsive AppShell', () => {
     expect(activeRouteEffects).toBe(1)
     expect(screen.getByRole('button', { name: 'Protected overlay' })).toBeTruthy()
 
-    harness.permissionAllowed = false
-    harness.actorFetchStatus = 'fetching'
+    harness.actorStatus = 'error'
+    harness.actorError = new Error('authority refresh failed')
     view.rerender(route())
     expect(screen.getByTestId('routed-draft')).toBe(draft)
     expect(draft.value).toBe('unsaved local draft')
     expect(screen.getByTestId('app-shell-route-content').className).toContain(
       'app-shell__route-content--suspended',
     )
+    expect(screen.getByTestId('authority-refresh-error')).toBeTruthy()
     expect(activeRouteEffects).toBe(0)
     expect(screen.queryByRole('button', { name: 'Protected overlay' })).toBeNull()
     expect(screen.queryByTestId('routed-portal')).toBeNull()
     fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
     expect(harness.linkClicks).toEqual([])
 
-    harness.actorFetchStatus = 'idle'
-    harness.actorStatus = 'error'
-    harness.actorError = new Error('authority refresh failed')
-    view.rerender(route())
-    expect(screen.getByTestId('routed-draft')).toBe(draft)
-    expect(draft.value).toBe('unsaved local draft')
-    expect(screen.getByTestId('authority-refresh-error')).toBeTruthy()
-    expect(activeRouteEffects).toBe(0)
-    expect(screen.queryByRole('button', { name: 'Protected overlay' })).toBeNull()
-    fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
-    expect(harness.linkClicks).toEqual([])
-
-    harness.permissionAllowed = true
     harness.actorStatus = 'success'
     harness.actorError = null
     view.rerender(route())
@@ -414,6 +468,7 @@ describe('RFC-198 responsive AppShell', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Tasks', exact: true }))
     expect(harness.linkClicks.map((click) => click.to)).toEqual(['/tasks'])
 
+    // 权限确定没有了（已解析、且不含该 read 点）：整棵卸载，不再保留。
     harness.permissionAllowed = false
     view.rerender(route())
     expect(screen.queryByTestId('routed-draft')).toBeNull()

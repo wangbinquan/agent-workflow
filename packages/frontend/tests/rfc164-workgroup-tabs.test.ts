@@ -97,9 +97,11 @@ describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
     )
     expect(SRC).toMatch(/deriveTaskDetailCapabilities\(task\.data, \{/)
     expect(SRC).toMatch(/canReadQuestions: true/)
-    expect(SRC).toMatch(
-      /canReadFeedback:\s*permissionsReady && Array\.isArray\(actor\.data\?\.permissions\)\s*\? actor\.data\.permissions\.includes\('memory:read'\)\s*: false/,
-    )
+    // 2026-08-25：反馈页签的可见性改由**末次已解析**的权限快照给出。原先那串
+    // `permissionsReady && actor.data.permissions.includes(...)` 里的 permissionsReady
+    // 要求 fetchStatus 为 idle，于是每次 /me 后台续期都会连带整页塌成 LoadingState
+    // （见 task-detail-route-history.test.tsx 的两条回归）。
+    expect(SRC).toMatch(/canReadFeedback: resolvedPermissions\.has\('memory:read'\)/)
     expect(SRC).toMatch(/resolveTaskDetailTabs\(\{/)
     expect(SRC).toMatch(/capabilitiesReady: permissionsReady/)
     expect(SRC).toMatch(/capabilities: taskCapabilities/)

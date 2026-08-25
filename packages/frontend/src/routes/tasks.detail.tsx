@@ -92,7 +92,7 @@ import {
   withTaskDetailTab,
 } from '@/lib/task-detail-route-tabs'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
-import { hasPermissionAtRequest, useActor, usePermission } from '@/hooks/useActor'
+import { hasPermissionAtRequest, useActor, useLastResolvedPermissions } from '@/hooks/useActor'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useTaskChildren } from '@/hooks/useTaskChildren'
@@ -139,6 +139,10 @@ function TaskDetailPage() {
   const navigateTaskRoute = Route.useNavigate()
   const qc = useQueryClient()
   const actor = useActor()
+  // 呈现面（这一页长什么样、有哪些 tab、露不露删除入口）读末次已解析的权限快照；
+  // 动作面仍走严格的 hasPermissionAtRequest。展开理由见下面 permissionsReady 处。
+  const { resolved: permissionsReady, permissions: resolvedPermissions } =
+    useLastResolvedPermissions()
   useTaskSync(id)
   const [selectedNodeRunId, setSelectedNodeRunId] = useState<string | null>(null)
   const [dismissedBanners, setDismissedBanners] = useState<ReadonlySet<string>>(() => new Set())
@@ -278,7 +282,12 @@ function TaskDetailPage() {
 
   // RFC-222/RFC-305 — `tasks:delete` hard delete (type-to-confirm). Gated in the UI by the
   // tasks:delete permission; the server re-checks name + terminality.
-  const canDeleteTask = usePermission('tasks:delete')
+  //
+  // 2026-08-25：入口的可见性（以及下面 `open={canDeleteTask && deleteOpen}` 这条弹窗
+  // 存续判据）改读末次已解析快照。原先用 usePermission 时，一次 /me 后台续期就会把
+  // 打开着的确认弹窗关掉、用户输了一半的任务名清空；而真正的把关在 mutationFn 里的
+  // hasPermissionAtRequest（严格、要求 idle）与服务端复核，二者都没有放松。
+  const canDeleteTask = resolvedPermissions.has('tasks:delete')
   const [deleteOpen, setDeleteOpen] = useState(false)
   useEffect(() => {
     if (!canDeleteTask) setDeleteOpen(false)
@@ -350,8 +359,13 @@ function TaskDetailPage() {
   // deep-link with the default tab and make a transient outage look like a
   // durable access decision.  Keep resolution pending until we have data; the
   // rendered error state below preserves the raw URL and offers a retry.
-  const permissionsReady =
-    actor.status === 'success' && actor.fetchStatus === 'idle' && actor.data !== undefined
+  //
+  // 2026-08-25：`permissionsReady` 读的是**末次已解析**的快照（在页首取得），不是
+  // "此刻是否 idle"。之前要求 `fetchStatus === 'idle'`，于是每一次 /me 后台续期都会让
+  // resolveTaskDetailTabs 返回 pending，本组件整页早退成 <LoadingState>——面板连同它
+  // 持有的 UI 状态（正开着的结构图弹窗、选中的文件、展开的分组、画布缩放）一起被卸掉，
+  // 续期结束后重新挂载出来的是一份全新的空状态，用户看到的就是"页面刷新了一下，弹窗
+  // 被关了"。删除任务这类**动作**仍走严格的 hasPermissionAtRequest（见 del 的 mutationFn）。
   const taskCapabilities =
     task.data === undefined
       ? {
@@ -369,10 +383,7 @@ function TaskDetailPage() {
           // The questions GET endpoint inherits the task-view gate and has no
           // additional global permission. Writes remain member-gated server-side.
           canReadQuestions: true,
-          canReadFeedback:
-            permissionsReady && Array.isArray(actor.data?.permissions)
-              ? actor.data.permissions.includes('memory:read')
-              : false,
+          canReadFeedback: resolvedPermissions.has('memory:read'),
         })
   const tabResolution = resolveTaskDetailTabs({
     taskLoaded: task.data !== undefined,

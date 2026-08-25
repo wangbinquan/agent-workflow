@@ -42,6 +42,12 @@ vi.mock('@/hooks/useActor', () => ({
     actorState.error === null &&
     actorState.fetchStatus === 'idle' &&
     actorState.permissions.includes(perm),
+  // 2026-08-25 —— 呈现面读的「末次已解析」快照：与真实实现同形，只看解析成没成功，
+  // 不看 fetchStatus（后台续期期间 react-query 保留上一份 data，权限集照旧）。
+  useLastResolvedPermissions: () => ({
+    resolved: actorState.error === null,
+    permissions: new Set(actorState.error === null ? actorState.permissions : []),
+  }),
   hasPermissionAtRequest: (_client: unknown, perm: string) =>
     actorState.requestAllowed && actorState.permissions.includes(perm),
 }))
@@ -373,7 +379,42 @@ afterEach(() => {
 })
 
 describe('/tasks/$id rendered URL-backed panels', () => {
-  test('delete dialog closes on fetching/error and connected stale confirms send zero DELETE', async () => {
+  // 2026-08-25 用户实测：看着某个任务的结构图，一有新任务 / event 产生，页面就"刷新
+  // 一下"、弹窗被关掉。那个"刷新"就是本页的整页早退分支——`permissionsReady` 一旦按
+  // `fetchStatus` 判定，每一次 /me 后台续期（/ws/authority 重连、staleTime 到期后任一
+  // 新观察者挂载都会触发）都会让 resolveTaskDetailTabs 返回 pending，整页被换成
+  // <LoadingState>，面板连同它持有的 UI 状态（开着的弹窗、选中的文件、展开的分组）一起
+  // 被卸载，续期结束后重新挂载的是全新空状态。这条锁住"续期期间这一页什么都不动"。
+  test('a background /me refresh never collapses the page into its loading state', async () => {
+    installFetch(() => undefined)
+    const row = task('plain')
+    const { router, qc } = renderTaskRoute('/tasks/plain?tab=details', [row])
+    await waitFor(() => expectActivePanel('details'))
+    const panel = document.getElementById('task-detail-section-details')
+
+    await act(async () => {
+      // 现场就是这样发生的：一条 WS 帧带来任务数据刷新，与此同时 /me 正在后台续期。
+      actorState.fetchStatus = 'fetching'
+      qc.setQueryData(['tasks', 'plain'], { ...row, name: 'Task plain (live update)' })
+      await router.invalidate()
+    })
+    // `.task-detail__name` 只存在于完整页面上：它拿到新名字，就同时证明了「这一帧确实
+    // 重渲染过」和「页面没有塌成 <LoadingState>」（早退分支只剩 PageHeader + 转圈）。
+    await waitFor(() =>
+      expect(document.querySelector('.task-detail__name')?.textContent).toBe(
+        'Task plain (live update)',
+      ),
+    )
+    expectActivePanel('details')
+    // 同一个 DOM 实例 = 没有重挂载，面板里的局部状态（开着的弹窗等）才留得住。
+    expect(document.getElementById('task-detail-section-details')).toBe(panel)
+  })
+
+  // 2026-08-25 修正：**后台续期不是撤权**。此前 `fetching` 期间 `canDeleteTask` 翻假，
+  // 打开着的确认弹窗被关掉、用户输了一半的任务名被清空——而一次 /me 续期在真实会话里
+  // 几秒就来一次。现在续期期间弹窗照旧留着，真正的把关仍在请求边界
+  // （hasPermissionAtRequest）：陈旧的确认点击一个 DELETE 都发不出去。
+  test('delete dialog survives a background refresh, closes on error, and stale confirms send zero DELETE', async () => {
     actorState.permissions = ['memory:read', 'tasks:delete']
     const row = task('deletable', { name: 'Delete me', spaceKind: 'remote' })
     const fetchSpy = installFetch((path) =>
@@ -385,7 +426,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
     fireEvent.change(within(dialog).getByTestId('confirm-input'), {
       target: { value: 'Delete me' },
     })
-    let staleConfirm = within(dialog).getByRole('button', { name: 'Delete' })
+    const staleConfirm = within(dialog).getByRole('button', { name: 'Delete' })
     let invocations = 0
     staleConfirm.addEventListener('click', () => {
       invocations += 1
@@ -402,22 +443,18 @@ describe('/tasks/$id rendered URL-backed panels', () => {
         (call: [RequestInfo | URL, RequestInit?]) => call[1]?.method === 'DELETE',
       ),
     ).toHaveLength(0)
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Delete Delete me?' })).toBeNull(),
+    // 续期中：弹窗还在，用户输入的确认文本也还在（页面没有整页重挂）。
+    dialog = screen.getByRole('dialog', { name: 'Delete Delete me?' })
+    expect((within(dialog).getByTestId('confirm-input') as HTMLInputElement).value).toBe(
+      'Delete me',
     )
 
     actorState.fetchStatus = 'idle'
     actorState.requestAllowed = true
     await router.invalidate()
-    fireEvent.click(await screen.findByTestId('task-detail-delete'))
+    // 弹窗自始至终是同一个实例（没有被卸载重建），所以点击计数器也照旧挂在它身上。
     dialog = await screen.findByRole('dialog', { name: 'Delete Delete me?' })
-    fireEvent.change(within(dialog).getByTestId('confirm-input'), {
-      target: { value: 'Delete me' },
-    })
-    staleConfirm = within(dialog).getByRole('button', { name: 'Delete' })
-    staleConfirm.addEventListener('click', () => {
-      invocations += 1
-    })
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBe(staleConfirm)
     await act(async () => {
       actorState.error = new Error('me refresh failed')
       actorState.requestAllowed = false
