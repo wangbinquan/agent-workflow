@@ -126,7 +126,10 @@ function designPublicContexts(): string[] {
       table
         .split('\n')
         .map((line) => /^\|\s*([^|]+?)\s*\|/.exec(line)?.[1]?.replaceAll('`', '').trim())
-        .filter((value): value is string => value !== undefined && !excluded.has(value))
+        .filter(
+          (value): value is string =>
+            value !== undefined && !/^:?-{3,}:?$/.test(value) && !excluded.has(value),
+        )
         .map((value) => (value === 'resource-catalog/core' ? 'resource-catalog' : value)),
     ),
   ].sort()

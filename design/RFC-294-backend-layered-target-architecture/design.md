@@ -331,21 +331,21 @@ flowchart LR
   TE --> XC
   INTEG --> EC
   INTEG --> DA
-  COL -. "implements HumanGatePreparationPort / HumanGateOpenParticipantInTx" .-> TE
+  COL -. "implements HumanGatePreparationPort/HumanGateOpenParticipantInTx" .-> TE
   MEM -. "implements TaskMemoryInjectionPort" .-> TE
   INTEG -. "implements CodeHostExecutionPort" .-> TE
   TE -. "implements AgentActionExecutionPort" .-> DA
   TE -. "implements ReactionExecutionPortV1" .-> DE
   TE -. "implements ReactionExecutionAdmissionParticipantInTxV1" .-> DE
-  INTEG -. "implements development effect SPI" .-> DA
+  INTEG -. "implements development-effect-spi" .-> DA
   TE -. "implements TaskCatalogSource" .-> TC
   DE -. "implements TaskCatalogSource" .-> TC
   TE -. "implements TaskAutomationWorkStartPort" .-> EC
   DE -. "implements EmployeeAutomationWorkStartPort" .-> EC
   IA -. "implements EventAutomationDelegatedContextFactory" .-> EC
-  INTEG -. "implements event source/routing SPI" .-> EC
-  RC -. "implements contract resource projection SPI" .-> XC
-  TE -. "implements contract fixture SPI" .-> XC
+  INTEG -. "implements event-source-routing-spi" .-> EC
+  RC -. "implements contract-resource-projection-spi" .-> XC
+  TE -. "implements contract-fixture-spi" .-> XC
 ```
 
 实线箭头表示“左侧消费右侧受控 offered `public/*` entrypoint”；虚线箭头仅表示 provider adapter 实现右侧
