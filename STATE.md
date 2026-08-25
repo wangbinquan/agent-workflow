@@ -190,12 +190,17 @@
 
 > 🚧 **进行中 RFC（In Progress）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
 > —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**
-> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本已从 679 条缺口收敛到 **552**。
+> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本已从 679 条缺口收敛到 **179**
+> （840 条能力覆盖 661；2026-08-26 一夜从 223 推进到 179，落地 B93～B97 五批共 46 条）。
 > 每个新 spec 都逐条本机实跑并**变异实证**（注入→红→还原→重建→绿），未咬中的变异也如实记录（见 B45 / B51）。
 > **接手须知**：①逐批进度与每一条实测契约、每一次判据被真实行为纠正的记录，全在
 > `design/RFC-319-.../plan.md` §7 变更记录里，按批次倒序；②新增 spec 走 API 级断言 + 编译后 daemon，单条约
 > 50–150ms，慢用例（唯一一条 `@nightly`：EVENT-42 定时自触发，1.5 分钟）按分档进夜跑；③写用例前先
 > `git ls-files <实现文件>` —— 共享工作树上「能跑通」不等于「已上库」（REPO-35 曾因此被撤回）；
+> ⑤**新增守卫测试必须同时登记进 `architecture/guard-manifest.json`**（并自带语料下限 + 负 fixture），
+> 漏了会让 backend 四个分片一起红——红在 backend、锅在 frontend，细节见 `docs/dev-gotchas.md` 同名小节；
+> ⑥测试里从绝对路径切相对路径（`indexOf('src/')` 之流）会在 **Windows shard** 上全量误报，用
+> `relative()` + `split(sep).join('/')` 归一。⑤⑥两条都是 2026-08-26 当夜把 main 推红后补上的。
 > ④**两份 `architecture/*.json` 账本是共享工作树里的混文件**：一律以 `origin/main` 为底、只叠加自己那几处再提，
 > 姿势见 `docs/dev-gotchas.md` 的「`git commit -- <路径>` 读的是工作树不是 index」（同一个坑把 main 弄红过两次）。
 > **2026-08-25 这一轮（B39–B51）**：人机交互门整域推进，覆盖澄清答案类型矩阵 / 轮次封存只读态 / 待办角标 /

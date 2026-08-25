@@ -3042,8 +3042,10 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
 
 ## RFC-319 B97 起草期撞到的产品缺陷（2026-08-26，任务详情页签域）
 
-1. **【真实缺陷，严重度高，本人逐处复核过】「重试仓库准备」在任何启用了 `secret.key` 的部署里
-   必然失败，且错误文案把原因指错方向。**
+1. **【真实缺陷，严重度高，本人逐处复核过】~~「重试仓库准备」在任何启用了 `secret.key` 的部署里
+   必然失败，且错误文案把原因指错方向。~~ —— 已于 2026-08-26 的 `3cc81b245` 修复（两处补 `secretBox`
+   + `packages/backend/tests/repo-prep-retry-secretbox.test.ts` 先红后绿上锁）。下文保留原始诊断作为
+   同类 bug 的判例：手搓 deps 就会漏字段，这已是第二次复发。**
    启动路径构造依赖时带着密钥箱：`packages/backend/src/routes/tasks.ts:321`
    `...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox)`。
    而**重试路径手搓 deps、没有 `secretBox`**（`routes/tasks.ts:998-1006` 只给了
@@ -3059,8 +3061,9 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `autoResumeOnBoot` 下这类任务每次 boot 白撞一次，直到被熔断隔离。
    **RFC-287 AC-11 承诺的这条唯一出口在真实部署里 100% 不可用**；它能活到今天，是因为
    `e2e/rfc319-repo-mirrors-and-launch.spec.ts` 的 REPO-15 只断言按钮**可见**、从没点过它。
-   B97 **刻意不把「必然失败」写进断言**——那会变成一条阻止修复的用例。修法是两处各补一个
-   `secretBox`，属 CLAUDE.md §RFC workflow 第 6 条的「单行 bug 修复」例外。
+   B97 **刻意不把「必然失败」写进断言**——那会变成一条阻止修复的用例。**修复已落地**（`3cc81b245`）：
+   两处各补一个 `secretBox`，属 CLAUDE.md §RFC workflow 第 6 条的「单行 bug 修复」例外；
+   错误文案的误导性措辞（「sealed with a different secret.key?」）**尚未改**，仍是待办。
 2. **【真实缺陷，P2 / 可用性】节点抽屉对 `done` 的 run 不给重试入口，后端却是允许的。**
    `components/tasks/NodeDetailDrawer.tsx:675-686` 的 `canRetryNodeRun` 不放行 `done`，而
    `services/task.ts:5526-5536` 的 `retryNode` allowedFrom **含 `done`**。结果「重跑一个已成功的
