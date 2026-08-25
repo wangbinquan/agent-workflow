@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-08-24",
   "note": "逐条依据/证据/补测建议见同目录 findings.md；本文件只是它的机器索引",
-  "total": 822,
+  "total": 835,
   "rows": [
     {
       "id": "AGENT-01",
@@ -159,11 +159,20 @@
     {
       "id": "DE-16",
       "domain": "数字员工 / 开发任务",
-      "title": "创建数字员工（默认 task 作用域）",
+      "title": "创建数字员工（默认 task 作用域的断言见 DE-16b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "DE-16b",
+      "domain": "数字员工 / 开发任务",
+      "title": "【拆自 DE-16】创建数字员工时默认落 task 作用域 —— POST /employees 的 workScope 从未被任何 e2e 断言过",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "DE-17",
@@ -213,11 +222,20 @@
     {
       "id": "DE-31",
       "domain": "数字员工 / 开发任务",
-      "title": "统一任务列表按 type=digital-employee 过滤并显示员工归属",
+      "title": "统一任务列表显示数字员工归属（type 过滤的排他性见 DE-31b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "DE-31b",
+      "domain": "数字员工 / 开发任务",
+      "title": "【拆自 DE-31】统一任务列表 type=digital-employee 过滤的排他性 —— 现有用例只做正向存在断言，过滤器退化成返回全量照样绿",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "DE-X1",
@@ -690,11 +708,20 @@
     {
       "id": "INTENT-13",
       "domain": "意图构建器",
-      "title": "用自然语言迭代当前草稿（refine-current）→ 修订号递增、历史保留",
+      "title": "用自然语言迭代当前草稿（refine-current）→ 修订号递增（历史保留见 INTENT-13b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "INTENT-13b",
+      "domain": "意图构建器",
+      "title": "【拆自 INTENT-13】迭代之后历史修订仍可回看 —— e2e 零断言，修订号单调递增只是间接推论",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "INTENT-14",
@@ -942,11 +969,20 @@
     {
       "id": "OPS-044",
       "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
-      "title": "单二进制打包冒烟：编译产物能启动并跑通 version / doctor",
+      "title": "单二进制打包冒烟：编译产物能启动并跑通 version（doctor 见 OPS-044b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "OPS-044b",
+      "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
+      "title": "【拆自 OPS-044】单二进制冒烟跑通 doctor —— 唯一守卫是 CI 的一个步骤，不是可校验的 {file,test}",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "OPS-X1",
@@ -978,11 +1014,20 @@
     {
       "id": "REPO-14",
       "domain": "仓库、仓库组与 Git 工作面",
-      "title": "从远端 URL 启动任务：克隆进缓存、建 worktree、任务详情显示脱敏 URL",
+      "title": "从远端 URL 启动任务：克隆进缓存、建 worktree（详情页脱敏见 REPO-14b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "REPO-14b",
+      "domain": "仓库、仓库组与 Git 工作面",
+      "title": "【拆自 REPO-14】任务详情页对**含凭据**远端 URL 的脱敏渲染 —— 现有 fixture 的本地 URL 无凭据，脱敏在那条链路上是 no-op",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "REPO-18",
@@ -1050,11 +1095,29 @@
     {
       "id": "REPO-38",
       "domain": "仓库、仓库组与 Git 工作面",
-      "title": "工作树生命周期：任务取消保留工作树、恢复回滚到 pre_snapshot、daemon 重启后修复中断行",
+      "title": "工作树生命周期：daemon 重启后修复中断行（另两件见 REPO-38b / REPO-38c）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "REPO-38b",
+      "domain": "仓库、仓库组与 Git 工作面",
+      "title": "【拆自 REPO-38】任务取消后工作树保留在盘上 —— e2e 里 existsSync 与 worktree 同现零命中",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
+    },
+    {
+      "id": "REPO-38c",
+      "domain": "仓库、仓库组与 Git 工作面",
+      "title": "【拆自 REPO-38】恢复时把重试节点回滚到 pre_snapshot —— e2e 里 pre_snapshot / preSnapshot 零命中",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "REPO-41",
@@ -1383,11 +1446,20 @@
     {
       "id": "UX-35",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
-      "title": "未保存改动守卫：站内导航与 beforeunload 的 Stay / Discard",
+      "title": "未保存改动守卫：站内导航的 Stay / Discard（beforeunload 见 UX-35b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P1",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "UX-35b",
+      "domain": "前端横切：导航、可访问性、键盘、实时同步",
+      "title": "【拆自 UX-35】未保存改动守卫的 beforeunload（刷新 / 关标签页）半边 —— PR 档无任何断言，既有 helper 只注册 dialog handler 后 reload，守卫武装与否都一样过",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P1",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "UX-X1",
@@ -4587,11 +4659,20 @@
     {
       "id": "TASK-X4",
       "domain": "任务启动、执行与生命周期操作",
-      "title": "子任务嵌套：call-workflow / call-workgroup 节点创建子任务，列表里形成可展开的父子树并继承启动来源",
+      "title": "子任务嵌套：call-workflow 节点创建子任务并继承启动来源（call-workgroup 与父子树展开见 TASK-X4b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P2",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "TASK-X4b",
+      "domain": "任务启动、执行与生命周期操作",
+      "title": "【拆自 TASK-X4】call-workgroup 产生的子任务，以及真实子任务在列表里展开成父子树 —— call-workgroup 在 e2e 里零命中，展开只对 page.route 假数据点过",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P2",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "TASK-X5",
@@ -4668,11 +4749,20 @@
     {
       "id": "UX-14",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
-      "title": "Segmented 单选组键盘模型：单 Tab 停靠点 + 方向键移动焦点与选择 + 选择跨开合保持",
+      "title": "Segmented 单选组键盘模型：方向键移动焦点与选择 + 选择跨开合保持（单 Tab 停靠点见 UX-14b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P2",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "UX-14b",
+      "domain": "前端横切：导航、可访问性、键盘、实时同步",
+      "title": "【拆自 UX-14】Segmented 单选组的单 Tab 停靠点（roving tabindex）—— 全仓 e2e 对 tabindex 零断言，改成全部 tabindex=0 也不会红",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P2",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "UX-15",
@@ -4830,11 +4920,20 @@
     {
       "id": "UX-X5",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
-      "title": "/docs/api 生成式 API 手册：从活注册表派生 + 390px 页面不横滚而宽块内部滚动",
+      "title": "/docs/api 生成式手册：从活注册表派生 + 390px 页面不横滚（宽块内部滚动见 UX-X5b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P2",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "UX-X5b",
+      "domain": "前端横切：导航、可访问性、键盘、实时同步",
+      "title": "【拆自 UX-X5】/docs/api 的宽块（table / pre）在自身容器内横向滚动而非撑横页面 —— 现有断言近似恒真（谓词含 scrollWidth > 0，任何已渲染元素都成立）",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P2",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "UX-X6",
@@ -5118,11 +5217,20 @@
     {
       "id": "WF-47",
       "domain": "工作流定义与画布编辑器",
-      "title": "重命名工作流（名称与描述，一次复合本地事务 + 名称折叠）",
+      "title": "重命名工作流（名称）（描述与名称折叠见 WF-47b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P2",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "WF-47b",
+      "domain": "工作流定义与画布编辑器",
+      "title": "【拆自 WF-47】重命名工作流的描述字段与名称折叠（normalizeResourceDisplayName）—— e2e 零覆盖，仅 shared 单测",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P2",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "WF-48",
@@ -6234,11 +6342,20 @@
     {
       "id": "IAM-45",
       "domain": "身份、认证、用户与资源权限",
-      "title": "API 与 MCP 文档页按当前身份呈现可授予权限目录",
+      "title": "API 与 MCP 文档页从活注册表派生权限目录（按身份分档见 IAM-45b）",
       "coverage": "browser-e2e",
       "gapKind": "covered",
       "risk": "P3",
       "verdict": "confirmed-covered"
+    },
+    {
+      "id": "IAM-45b",
+      "domain": "身份、认证、用户与资源权限",
+      "title": "【拆自 IAM-45】/docs/api 按当前身份裁剪权限目录 —— notAvailableToYou 分支从未在浏览器里被渲染过（整份 spec 只用管理员打开）",
+      "coverage": "none",
+      "gapKind": "no-e2e-but-unit",
+      "risk": "P3",
+      "verdict": "confirmed-gap"
     },
     {
       "id": "IAM-48",

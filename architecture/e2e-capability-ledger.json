@@ -79,9 +79,12 @@
       "title": "通过 AclPanel 的用户选择器授权他人 → 对方恢复可见且为只读",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc099-ownership-acl.spec.ts:194-199（授权）；e2e/rfc099-ownership-acl.spec.ts:223-230（被授权者只读 + 列表恢复可见）；packages/backend/tests/rfc203-refs-acl.test.ts"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc099-ownership-acl.spec.ts",
+          "test": "RFC-099: private agent disappears for strangers; granting via AclPanel restores read-only access"
+        }
       ]
     },
     {
@@ -90,9 +93,12 @@
       "title": "无写权限用户的代理详情：只读渲染，隐藏保存/删除/权限入口，仅保留导出",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc305-user-permissions.spec.ts:582-590 —— guest 在 /agents/<publicId> 上的四条断言 + runtimeRegistryRequests 为空；e2e/rfc305-user-permissions.spec.ts:433 'guest browser exposes public resources without mutation or task affordances'；packages/frontend/src/routes/agents.detail.tsx:163-213 —— canUpdate / canDelete 门"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "guest browser exposes public resources without mutation or task affordances"
+        }
       ]
     },
     {
@@ -143,9 +149,12 @@
       "title": "数字员工分类目录列表与进入分类工作台",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:210-213；/Users/wangbinquan/dev/proj/agent-workflow/e2e/visual-regression.spec.ts:1061-1068 — test '/digital-employees type catalog (light)'，prepareScene fixture 'clean'，无 routeCodeSurfaceFixtures；/Users/wangbinquan/dev/proj/agent-workflow/packages/frontend/src/lib/nav.ts:71-80 — NAV_GROUPS 里 digitalEmployees 组只有 /digital-employees 一条"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "a first-time user configures a work-item tool directly on the fixed responsibility cards"
+        }
       ]
     },
     {
@@ -154,9 +163,12 @@
       "title": "工具箱固定职责图渲染（泳道、卡片等宽、无重叠、无裁字）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:306-325 — expectUniformCapabilityToolCards 的精确尺寸预言；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:575-625 — 7 条泳道、lane 宽度≥94%、裁字检测、卡片等宽 ≤0.5px；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:871-899 — 同泳道逐对几何重叠检测，期望 []；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:429-454 — 三张入口卡与 prepare-materials 的相对位置（x/y 中心线）逐条断言"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
     },
     {
@@ -165,9 +177,12 @@
       "title": "在固定职责卡上为工作项新增 Agent 工具并发布",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:222-246 — test 'a first-time user configures a work-item tool directly on the fixed responsibility cards'；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:228-231 — 断言工具箱三段业务文案与「无 stage 下拉」"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "a first-time user configures a work-item tool directly on the fixed responsibility cards"
+        }
       ]
     },
     {
@@ -176,9 +191,12 @@
       "title": "契约校验失败后在同一个工具注册 id 上纠正并发布",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:278-290 — 失败态：弹窗仍在 + 同名行 1 条 + publishedRevision 为 null；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:300-304 — 纠正后 toEqual([objectContaining({id: failedRows[0].id, publishedRevision: 1})])"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "a failed contract check is corrected on the same tool registration id"
+        }
       ]
     },
     {
@@ -201,9 +219,12 @@
       "title": "分类工具声明问题类型 → 自动生成等量修复调度节点",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:490-507 — 派生问题列表 2 项 + 无 'Add failure type' + dispatchNodes 2 个 + 等宽；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:589-611 — P1 可选到 toolName、P2 断言 toHaveCount(0)；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:380-402 — 契约输入/输出字段清单（含反向断言 not.toContainText('Failure type definitions')）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "pipeline failure types expand into equal-width required nodes and only show compatible tools"
+        }
       ]
     },
     {
@@ -212,21 +233,40 @@
       "title": "新建岗位模板草稿 → 逐职责选默认工具 → 保存并发布 v1",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:63-102 — 含 postDataJSON 的 toMatchObject 与 'Draft'→'Published · v1'；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:684-712 — 第二份覆盖，另加 :697-698 断言编辑器里没有内联的 Template name / Description 字段"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "a first-time user publishes a job template with the built-in implementation tool"
+        },
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
     },
     {
       "id": "DE-16",
       "domain": "数字员工 / 开发任务",
-      "title": "创建数字员工（默认 task 作用域）",
+      "title": "创建数字员工（默认 task 作用域的断言见 DE-16b）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:104-124；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:123-124 — 反向断言 Enabled/Disabled 不出现"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "a first-time user publishes a job template with the built-in implementation tool"
+        }
       ]
+    },
+    {
+      "id": "DE-16b",
+      "domain": "数字员工 / 开发任务",
+      "title": "【拆自 DE-16】创建数字员工时默认落 task 作用域 —— POST /employees 的 workScope 从未被任何 e2e 断言过",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "DE-17",
@@ -262,9 +302,12 @@
       "title": "数字员工任务向导：正文 + 文件（body-and-files）发起并落到 case 详情",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:794-838；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:829-835 — postDataJSON 的 toMatchObject；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:842-845 — case 页头部任务名 + 'Development employee · {name}'"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
     },
     {
@@ -273,9 +316,12 @@
       "title": "员工案例详情：实际能力图 + 工作上下文 + 执行时间轴",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:860-867 — 渲染集合 === API activeWorkItemRefs；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:871-899 — 运行时图的逐对重叠检测；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:906-919 — 'Work context' + 时间轴首步 + 冻结输入/输出"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
     },
     {
@@ -295,13 +341,25 @@
     {
       "id": "DE-31",
       "domain": "数字员工 / 开发任务",
-      "title": "统一任务列表按 type=digital-employee 过滤并显示员工归属",
+      "title": "统一任务列表显示数字员工归属（type 过滤的排他性见 DE-31b）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:847-853；/Users/wangbinquan/dev/proj/agent-workflow/packages/frontend/tests/task-digital-employee-source-link.test.tsx — 归属链接的组件层覆盖"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
+    },
+    {
+      "id": "DE-31b",
+      "domain": "数字员工 / 开发任务",
+      "title": "【拆自 DE-31】统一任务列表 type=digital-employee 过滤的排他性 —— 现有用例只做正向存在断言，过滤器退化成返回全量照样绿",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "DE-X1",
@@ -377,9 +435,12 @@
       "title": "provider UUID 去重：同 UUID 重投不重复启动，只 bump attemptCount",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc294-webhook-runtime-failures.spec.ts:502-510 — Promise.all 双投 + `expect(ingress.map(r=>r.status).sort()).toEqual(['duplicate','received'])` + deliveryId Set size 1 + attemptCount 2；e2e/rfc294-webhook-runtime-failures.spec.ts:518-525 `expect(history.filter(r=>r.deliveryId===deliveryId)).toHaveLength(1)`；packages/backend/src/routes/webhooks.ts:269-279 duplicate 分支；packages/backend/tests/rfc257-webhook-ingress.test.ts:354 「UUID 缺失 → 无去重，逐条处理（F-18 降级模式）」（唯一覆盖，无 e2e）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc294-webhook-runtime-failures.spec.ts",
+          "test": "concurrent duplicate delivery launches one crashing task; manual retry proves driver/process release"
+        }
       ]
     },
     {
@@ -388,9 +449,16 @@
       "title": "触发规则创建向导（4 步：范围 → 事件 → 目标 → 复核）与编辑回填",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc295-runtime-parameter-picker.spec.ts:151-206 「Webhook Agent picker creates through the real POST and reloads the XOR description」；e2e/rfc295-runtime-parameter-picker.spec.ts:189-193 `expect(created.launchPayload).toMatchObject({description:'Handle {{trigger.webhook.repo_path}}'})` + `expect(created.launchPayload.inputs).toBeUndefined()`；e2e/rfc295-runtime-parameter-picker.spec.ts:208-258 「RFC-303 terminal protection is conditional, persists, and remains usable at 390px」；packages/frontend/src/routes/webhooks.tsx:38-53 — /webhooks 是 redirect 到 /events，故上述用例实际渲染的是 EventsPage"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc295-runtime-parameter-picker.spec.ts",
+          "test": "Webhook Agent picker creates through the real POST and reloads the XOR description"
+        },
+        {
+          "file": "e2e/rfc295-runtime-parameter-picker.spec.ts",
+          "test": "RFC-303 terminal protection is conditional, persists, and remains usable at 390px"
+        }
       ]
     },
     {
@@ -427,9 +495,12 @@
       "title": "同流 supersede：新事件取消同一 MR 流上仍在跑的旧任务",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/webhook-mr-runtime-races.spec.ts:878 「different-UUID launch-eligible facts serialize, supersede to one live runtime, then close clears the stream」；packages/backend/src/services/webhook/webhookDispatch.ts:907-946 supersede 判定与 supersededTaskId 落 fire；packages/backend/tests/rfc257-webhook-dispatch.test.ts:461/503（跨流不误杀、并发互斥）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/webhook-mr-runtime-races.spec.ts",
+          "test": "different-UUID launch-eligible facts serialize, supersede to one live runtime, then close clears the stream"
+        }
       ]
     },
     {
@@ -438,9 +509,20 @@
       "title": "MR/PR 终态保护（cancelOnMrTerminal）：closed/merged 停掉在跑的任务且不再启动",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/webhook-mr-runtime-races.spec.ts:702 close/reopen/absorbing merge、:1010 terminal close 对抗活 runtime + reaped PID、:1056 crash 后 close 只加 fence、:1111 SIGKILL 后收敛；e2e/rfc295-runtime-parameter-picker.spec.ts:208-258 wt-cancel-on-mr-terminal 条件可见性 + 保存 + reload 回填；packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts；packages/backend/tests/rfc300-webhook-workspace-cleanup-e2e.test.ts:396"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/webhook-mr-runtime-races.spec.ts",
+          "test": "terminal close wins against an active runtime with a canceled node, reaped PID and no output"
+        },
+        {
+          "file": "e2e/webhook-mr-runtime-races.spec.ts",
+          "test": "different-UUID close/update facts on one MR stream linearize; reopen and absorbing merge leave no stale runtime work"
+        },
+        {
+          "file": "e2e/rfc295-runtime-parameter-picker.spec.ts",
+          "test": "RFC-303 terminal protection is conditional, persists, and remains usable at 390px"
+        }
       ]
     },
     {
@@ -533,9 +615,12 @@
       "title": "自澄清（clarify 节点）完整回路：agent 提问 → 用户作答 → agent 重跑 → 下游评审 → done",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/clarify.spec.ts:274 test('cycle: launch → awaiting_human → POST answers → designer reruns → review approve → done')；e2e/clarify.spec.ts:308-318 断言 askingNodeId/askingShardKey/iteration/questionCount；e2e/clarify.spec.ts:379-386 断言 submit.kind='autodispatch' + roundFullySealed + sealedQuestionIds；e2e/clarify.spec.ts:404-408 重读 detail 断言 sealed.answers 的 selectedOptionLabels=['Postgres']；e2e/clarify.spec.ts:425-432 断言 final.status='done' 与 pending-count=0"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify.spec.ts",
+          "test": "cycle: launch → awaiting_human → POST answers → designer reruns → review approve → done"
+        }
       ]
     },
     {
@@ -544,9 +629,16 @@
       "title": "跨节点澄清（clarify-cross-agent）：下游提问者反向问上游，作答后只重跑提问者",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/cross-clarify.spec.ts:268 test('full cycle: ... RFC-162: designer does NOT rerun by default ... → done')；e2e/cross-clarify.spec.ts:298-303 断言 kind='cross' / targetConsumerNodeId='designer' / questionCount=1；e2e/cross-clarify.spec.ts:373-379 断言 questioner round 2 prompt 含 '## Clarify Q&A' 且 log 不含 designer round 2；e2e/cross-clarify.spec.ts:392-402 断言 topLevelDesigners.length===1 且 questionerRuns>=2；e2e/workflow-matrix.spec.ts:1180 clarify-cross-agent 同构断言（cross_designer 1 次、cross_questioner 2 次）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/cross-clarify.spec.ts",
+          "test": "full cycle: launch → questioner emits cross-clarify → user submits → questioner reruns with the Q&A (RFC-162: designer does NOT rerun by default) → done"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "clarify-cross-agent: only the asker reruns with Q&A and the upstream designer stays stable"
+        }
       ]
     },
     {
@@ -555,9 +647,16 @@
       "title": "澄清指令 continue / stop：继续反问 vs 停止反问对下一轮的影响",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/cross-clarify.spec.ts:14-22 头注释锁定三轮 stub 序列；e2e/cross-clarify.spec.ts:322 directive:'continue'；:353 directive:'stop'；e2e/cross-clarify.spec.ts:336-338 断言 continue 后又出现一轮新的 cross round（intermediaryNodeRunId 不同）；e2e/workflow-matrix.spec.ts:1155 clarify 用例：stop 后重跑发布 output（outputValue==='self-clarify-complete'）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/cross-clarify.spec.ts",
+          "test": "full cycle: launch → questioner emits cross-clarify → user submits → questioner reruns with the Q&A (RFC-162: designer does NOT rerun by default) → done"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "clarify: agent asks, the user stops ask-back, and the rerun publishes output"
+        }
       ]
     },
     {
@@ -626,9 +725,12 @@
       "title": "多文档评审：逐项接受 / 不接受，只有被接受的文档进入下游产出",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/business-workflow-scenarios.spec.ts:528 test('文档批处理与合规审阅：fanout 只跑一次，驳回修订后只发布人工接受项')；e2e/business-workflow-scenarios.spec.ts:637-650 逐份 PATCH selection；e2e/business-workflow-scenarios.spec.ts:643-650 未 approve 前 releaser/output 均 0 行、任务仍 awaiting_review、worktree 无发布文件；e2e/business-workflow-scenarios.spec.ts:657-668 approved 只含 v2 客户通知、published_paths 单条、releaser prompt 不含被拒路径"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/business-workflow-scenarios.spec.ts",
+          "test": "文档批处理与合规审阅：fanout 只跑一次，驳回修订后只发布人工接受项"
+        }
       ]
     },
     {
@@ -637,9 +739,12 @@
       "title": "daemon 崩溃重启后人工门仍在、身份不变、可继续",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc294-human-gate-restart.spec.ts:216 test('clarify and review keep their durable identities across separate daemon crashes')；e2e/rfc294-human-gate-restart.spec.ts:262-266 重启后 intermediaryNodeRunId / iteration 与崩前相等；e2e/rfc294-human-gate-restart.spec.ts:311-314 第二次崩后 review nodeRunId / reviewIteration 相等；e2e/rfc294-human-gate-restart.spec.ts:337-351 最终 node-runs 里原两行 status='done' + outputs 含 doc 端口"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc294-human-gate-restart.spec.ts",
+          "test": "clarify and review keep their durable identities across separate daemon crashes"
+        }
       ]
     },
     {
@@ -676,9 +781,16 @@
       "title": "密码登录（API 契约）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/auth-isolation.spec.ts:81-92；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:47-56；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc099-ownership-acl.spec.ts:48-55、e2e/collab-multi-user.spec.ts:62-70、e2e/rfc223-tenant-identity.spec.ts:43、e2e/rfc232-owner-list.spec.ts:110、e2e/harness.ts:424"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/identity-credentials.spec.ts",
+          "test": "RFC-319 IAM-13: changing your own password kills every other session and retires the old password"
+        },
+        {
+          "file": "e2e/identity-credentials.spec.ts",
+          "test": "RFC-319 IAM-12: password sign-in cannot be switched off without a way back in, and once off the login endpoint really refuses"
+        }
       ]
     },
     {
@@ -765,9 +877,12 @@
       "title": "发出的 PAT 恰好只持有其矩阵所列的权限",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/auth-isolation.spec.ts:501-546；/Users/wangbinquan/dev/proj/agent-workflow/e2e/auth-isolation.spec.ts:547 —— tokenAccess:'never' 的 /api/auth/me 断言"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/auth-isolation.spec.ts",
+          "test": "a minted PAT holds exactly its matrix — reads on, unticked verbs off"
+        }
       ]
     },
     {
@@ -776,9 +891,12 @@
       "title": "PAT 作用域不得超过发放账号，且随账号授权实时收缩/恢复",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:367-378（422 ungrantable）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:405-428（撤销 → 收缩 → 重授 → 恢复）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "real daemon PAT range/resource cap follows grant revoke and regrant"
+        }
       ]
     },
     {
@@ -801,9 +919,12 @@
       "title": "/users：按权限目录建号（角色预设 + 逐项加点），回执与目录逐项对账",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:184-192；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:207-224"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "390px create/edit catalog, OCC, dark mode and live script authority"
+        }
       ]
     },
     {
@@ -812,9 +933,12 @@
       "title": "/users：编辑权限的并发冲突（OCC）与「加载最新」",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:266-292"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "390px create/edit catalog, OCC, dark mode and live script authority"
+        }
       ]
     },
     {
@@ -823,9 +947,12 @@
       "title": "授权变更实时穿透到另一个已登录浏览器",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:92-131；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:319-333"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "390px create/edit catalog, OCC, dark mode and live script authority"
+        }
       ]
     },
     {
@@ -876,9 +1003,12 @@
       "title": "资源可见性：私有资源对陌生人完全不可见（列表过滤 + 详情不出内容）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc099-ownership-acl.spec.ts:170-186（public→private→列表消失→详情空）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc099-ownership-acl.spec.ts:188-197（UserPicker 授权）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc099-ownership-acl.spec.ts:222-232（被授权者只读）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc099-ownership-acl.spec.ts",
+          "test": "RFC-099: private agent disappears for strangers; granting via AclPanel restores read-only access"
+        }
       ]
     },
     {
@@ -901,9 +1031,12 @@
       "title": "guest 角色：看得到完整产品地图，但只读 public、无写入口、无权目标页零请求",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:533-556（导航快照 + 零请求）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc305-user-permissions.spec.ts:581-590（详情页写入口计数为 0）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "guest browser exposes public resources without mutation or task affordances"
+        }
       ]
     },
     {
@@ -912,9 +1045,20 @@
       "title": "跨用户任务隔离：列表、详情与 WebSocket 帧都不泄漏",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/collab-multi-user.spec.ts:249-262；/Users/wangbinquan/dev/proj/agent-workflow/e2e/collab-multi-user.spec.ts:338-352 —— leakingFrames toHaveLength(0)"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "two browsers, two users: each only sees their own task on /tasks (admin sees both)"
+        },
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "two browsers, two users: bob CANNOT navigate to alice's task detail (403)"
+        },
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "/ws/tasks list channel filters per-frame by canViewTask (post-fix)"
+        }
       ]
     },
     {
@@ -937,9 +1081,12 @@
       "title": "多租户同名资源：不同 owner 的同名资源在管理员视角下不串号",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc223-tenant-identity.spec.ts:129-136（两行分别回读）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc223-tenant-identity.spec.ts:160-166（删除后 A 仍完好）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc223-tenant-identity.spec.ts",
+          "test": "admin same-name MCP actions remain bound to the selected tenant id"
+        }
       ]
     },
     {
@@ -962,9 +1109,16 @@
       "title": "管理端点对普通用户的拒绝矩阵（settings 读 / users 写）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/auth-isolation.spec.ts:393-422；/Users/wangbinquan/dev/proj/agent-workflow/e2e/auth-isolation.spec.ts:440-450"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/auth-isolation.spec.ts",
+          "test": "regular bob can NOT GET /api/config → 403 forbidden"
+        },
+        {
+          "file": "e2e/auth-isolation.spec.ts",
+          "test": "regular bob can NOT POST /api/users → 403 forbidden"
+        }
       ]
     },
     {
@@ -987,21 +1141,36 @@
       "title": "内联 composer 创建会话 → 落到详情页 → 首轮生成草稿",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:45-59 createSessionAndAwaitDraft（真 daemon，等 intent-draft 可见）；e2e/intent-builder.spec.ts:61-94 test 'US-1: intent create → draft preview → commit → resource lands with provenance'，L81-87 fetch /api/agents 断言 e2e-auditor 真存在；e2e/harness.ts:1-14 编译二进制 spawn；e2e/harness.ts:163-173 system-mocks runtime stub"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "US-1: intent create → draft preview → commit → resource lands with provenance"
+        }
       ]
     },
     {
       "id": "INTENT-13",
       "domain": "意图构建器",
-      "title": "用自然语言迭代当前草稿（refine-current）→ 修订号递增、历史保留",
+      "title": "用自然语言迭代当前草稿（refine-current）→ 修订号递增（历史保留见 INTENT-13b）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:189-196 composer.fill + intent-composer-submit → getByRole('heading',{name:/Draft changeset \\(revision 3\\)/})；packages/backend/tests/rfc293-intent-state.test.ts:219 'refine keeps the source current; discard is permanent across failure retry'；packages/frontend/src/routes/intent.detail.tsx:106-118 refine-current 分支（带 sourceDraftHash + expectedContextRevision）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently"
+        }
       ]
+    },
+    {
+      "id": "INTENT-13b",
+      "domain": "意图构建器",
+      "title": "【拆自 INTENT-13】迭代之后历史修订仍可回看 —— e2e 零断言，修订号单调递增只是间接推论",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "INTENT-14",
@@ -1009,9 +1178,12 @@
       "title": "从已提交的 checkpoint 继续（continue-checkpoint）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:206-220 提交 → 断言 'Continuing from checkpoint #1' → composer 再发 → revision 5；packages/backend/tests/rfc293-intent-state.test.ts:307 'continues from a committed checkpoint with no current candidate'；packages/frontend/src/routes/intent.detail.tsx:119-128 continue-checkpoint 分支；:625-637 checkpoint-continue 区块"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently"
+        }
       ]
     },
     {
@@ -1020,9 +1192,12 @@
       "title": "运行中排队工作上下文变更（Refresh after this turn），本轮结束后自动跑一个后继轮",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:166-187 打开 'Manage working context' → intent-mount-picker → 'Refresh after this turn' → 上下文条出现 e2e-working-context + revision 2；packages/backend/tests/rfc293-intent-state.test.ts:151 'running save queues, cancel drains exactly one successor, and a failed delta is replaceable'；packages/frontend/src/components/IntentMountDialog.tsx:158-167 inFlight 分支的 queue 按钮"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently"
+        }
       ]
     },
     {
@@ -1031,9 +1206,16 @@
       "title": "workflow 草稿的节点图预览：内联画布几何 + 放大对话框 + 提交后编辑器复用同一几何",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:287-506 'workflow draft makes the node graph a primary, expandable review surface'（:345-348 草稿几何、:350-364 DOM 位置、:387-391 放大对话框、:478-502 提交后编辑器几何一致）；e2e/intent-builder.spec.ts:508-621 'RFC-302 nested wrappers and a legal loop cycle remain commit-ready and geometry-exact'；packages/backend/tests/rfc302-intent-workflow-layout.test.ts；packages/frontend/tests/intent-workflow-preview-layout.test.ts:25/33/42"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "workflow draft makes the node graph a primary, expandable review surface"
+        },
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "RFC-302 nested wrappers and a legal loop cycle remain commit-ready and geometry-exact"
+        }
       ]
     },
     {
@@ -1042,9 +1224,16 @@
       "title": "三步提交向导（策略 → 明细 → 复核）在无 slot 时直通并落地资源",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:72-87 stepper 三步 + fetch /api/agents 断言 e2e-auditor 真存在；e2e/intent-builder.spec.ts:687-725 '390px touch flow creates a session and advances the commit stepper'（:719 断言当前步为 Details）；packages/backend/tests/rfc234-apply-changeset.test.ts:254 'happy bundle: six resources land atomically with wiring + provenance + epoch close'"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "US-1: intent create → draft preview → commit → resource lands with provenance"
+        },
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "390px touch flow creates a session and advances the commit stepper"
+        }
       ]
     },
     {
@@ -1141,9 +1330,12 @@
       "title": "审批候选：Approve 通过（candidate → approved，落入 All 库）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/memory-manual-create-edit.spec.ts:98-110 Approve→候选卡片 toHaveCount(0)→切 memory-section-all→approvedRow 可见且含编辑后的 tag；packages/frontend/src/components/memory/MemoryAllList.tsx:79-82 queryFn 用 { status: view }（默认 approved）；packages/backend/tests/routes-memories.test.ts:208 'promote(approve) flips status; subsequent promote → 409'"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-manual-create-edit.spec.ts",
+          "test": "RFC-045: admin manually creates a candidate, edits it, then approves it"
+        }
       ]
     },
     {
@@ -1152,9 +1344,12 @@
       "title": "硬删除记忆：确认框 + ?confirm=true + 失败重试",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-interaction-integrity.spec.ts:610-632 deleteUrls 计数 / memory-confirm-ok disabled / memory-confirm-error / Retry / 行 hidden / every(url => pathname.endsWith(id) && searchParams.get('confirm')==='true')；packages/backend/tests/routes-memories.test.ts:293 'DELETE without confirm=true → 422'、:301 'DELETE with confirm=true → 200 and row gone'"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Memory archive, delete, and unarchive stay target-scoped through pending/error/retry"
+        }
       ]
     },
     {
@@ -1251,9 +1446,12 @@
       "title": "无 memory:read 的账号访问 /memory：页面为空且不发任何记忆请求（稳定导航契约）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc305-user-permissions.spec.ts:496-508 page.on('request') 收集 /api/memories 与 /api/fusions/pending-count；e2e/rfc305-user-permissions.spec.ts:550-553 goto /memory → app-shell-main :scope > * toHaveCount(0)，随后 expect(protectedDestinationRequests).toEqual([])；packages/frontend/src/components/shell/AppShell.tsx:73-78,118 destinationGranted / mountDestination 决定是否挂载路由子树；packages/shared/src/schemas/permission.ts:915-923 GUEST_BASELINE 不含 memory:read"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "guest browser exposes public resources without mutation or task affordances"
+        }
       ]
     },
     {
@@ -1262,9 +1460,12 @@
       "title": "已批准记忆注入下一次任务的真实 runtime prompt；候选不注入",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/runtime-scenario-matrix.spec.ts:524 'approved memory reaches the actual native runtime prompt; candidates stay behind approval'；e2e/runtime-scenario-matrix.spec.ts:385 场景计划把 'PERMANENT_MEMORY_PROOF' 配成 prompt needle；:531 记忆正文写入同一串；packages/system-mocks/src/runtime/mode-runtime-scenario.ts:449 `fail(\\`${invocation.agent}@${callIndex} prompt is missing ${JSON.stringify(needle)}\\`, 10)`；e2e/runtime-scenario-matrix.spec.ts:541-556 未批准 → 任务 failed、事件含 'prompt is missing'；:557-567 批准后 done 且 output === `memory-injected/${protocol}`"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "approved memory reaches the actual native runtime prompt; candidates stay behind approval"
+        }
       ]
     },
     {
@@ -1301,9 +1502,16 @@
       "title": "agent-workflow start：守护进程启动并打印 ready URL（含 bootstrap token）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/harness.ts:563-566 — spawn 编译二进制 `start --host 127.0.0.1 --port <n>`；e2e/harness.ts:360-370 — 正则 `/agent-workflow ready[^\\n]*\\n\\s+(https?:\\/\\/[^\\s?]+)(?:\\?token=([A-Za-z0-9]+))?\\r?\\n/` 解析 baseUrl + bootstrapToken；packages/backend/src/cli/start.ts:1591-1594 — ready 行的产出点；packages/backend/tests/rfc221-cli-auth.test.ts:6 'ready URL includes daemon token only while bootstrap is required'；packages/backend/tests/cli.test.ts:158 'status + stop: end-to-end against a real daemon'"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/cli.test.ts",
+          "test": "status + stop: end-to-end against a real daemon"
+        },
+        {
+          "file": "packages/backend/tests/rfc221-cli-auth.test.ts",
+          "test": "ready URL includes daemon token only while bootstrap is required"
+        }
       ]
     },
     {
@@ -1340,9 +1548,16 @@
       "title": "守护进程优雅停机 30s：在飞任务被 park 成 interrupted 且仍可 resume",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/crash-recovery.spec.ts:307-364 'SIGTERM (graceful) → task ends interrupted and remains resumable'；e2e/crash-recovery.spec.ts:337-352 断言 afterRestart==='interrupted'、resumeRes.ok、resumed==='done'、relaunch 亦 done；packages/backend/tests/shutdown.test.ts:75 'flips survivors to interrupted after budget elapses'；packages/backend/src/cli/start.ts:1477-1532"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "SIGTERM (graceful) → task ends interrupted and remains resumable"
+        },
+        {
+          "file": "packages/backend/tests/shutdown.test.ts",
+          "test": "flips survivors to interrupted after budget elapses"
+        }
       ]
     },
     {
@@ -1351,21 +1566,44 @@
       "title": "崩溃恢复：SIGKILL → 重启 → 孤儿 run 被 reap 成 interrupted → 前端点 Resume → done",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/crash-recovery.spec.ts:237 'SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done'；e2e/crash-recovery.spec.ts:370-420 'multiple SIGKILL → restart cycles, final resume reaches done (idempotent)' —— 三轮 daemon，:412 断言 UI .status-chip 含 interrupted；e2e/task-lifecycle-states.spec.ts:579 'task lifecycle: interrupted (SIGKILL → restart → orphan reap)'；packages/backend/src/services/orphans.ts"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done"
+        },
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "multiple SIGKILL → restart cycles, final resume reaches done (idempotent)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: interrupted (SIGKILL → restart → orphan reap)"
+        }
       ]
     },
     {
       "id": "OPS-044",
       "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
-      "title": "单二进制打包冒烟：编译产物能启动并跑通 version / doctor",
+      "title": "单二进制打包冒烟：编译产物能启动并跑通 version（doctor 见 OPS-044b）",
       "risk": "P1",
-      "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "scripts/build-binary.ts:298-320（production outfile）与 :335-348（e2e outfile）—— mainEntry / WORKER_ENTRIES / --compile / --target=bun / --minify / AW_BUILD_VERSION 完全一致，只差 --outfile；e2e/harness.ts:149-151 defaultBinaryPath() → dist/agent-workflow-e2e-<plat>-<arch>；harness.ts:563 spawn 之；'.github/workflows/ci.yml:490-501' —— production 产物上 `chmod +x` 后 `\"$bin\" version` + `\"$bin\" doctor`，set -euxo pipefail；'.github/workflows/windows-platform.yml:213' `\"$binary\" doctor \\"
+      "tier": "nightly",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-017: version / help / 未知子命令各走各的出口，且打错字不留下任何状态 @nightly"
+        }
       ]
+    },
+    {
+      "id": "OPS-044b",
+      "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
+      "title": "【拆自 OPS-044】单二进制冒烟跑通 doctor —— 唯一守卫是 CI 的一个步骤，不是可校验的 {file,test}",
+      "risk": "P1",
+      "tier": "nightly",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "OPS-X1",
@@ -1373,9 +1611,24 @@
       "title": "任务诊断面板 + 一键修复（S3 / R1 / U1 三类不变量违例 + preflight-stale 冲突）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/diagnose-repair.spec.ts:307 'S3 happy: demote-task resolves the alert' —— :335 断言 task-diagnose-repair-S3 计数归零；e2e/diagnose-repair.spec.ts:340 'R1 happy: approve-run resolves the alert'；e2e/diagnose-repair.spec.ts:362 'U1 happy: cancel-older-keep-newest resolves the alert'；e2e/diagnose-repair.spec.ts:382 'preflight-stale: option-id unknown after DB drift surfaces error' —— :394 中途 `UPDATE tasks SET status='canceled'` 制造漂移；packages/backend/tests/contracts/registry.ts:697-698 —— repair-options / repair 两端点的 401 面"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "S3 happy: demote-task resolves the alert"
+        },
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "R1 happy: approve-run resolves the alert"
+        },
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "U1 happy: cancel-older-keep-newest resolves the alert"
+        },
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "preflight-stale: option-id unknown after DB drift surfaces error"
+        }
       ]
     },
     {
@@ -1409,13 +1662,25 @@
     {
       "id": "REPO-14",
       "domain": "仓库、仓库组与 Git 工作面",
-      "title": "从远端 URL 启动任务：克隆进缓存、建 worktree、任务详情显示脱敏 URL",
+      "title": "从远端 URL 启动任务：克隆进缓存、建 worktree（详情页脱敏见 REPO-14b）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/main.spec.ts:413 test('RFC-024: launch task from git URL clones into cache and renders redacted URL')；e2e/main.spec.ts:489-511 向导四步 + waitForURL + pollUntilTerminal 断言 status==='done'；e2e/main.spec.ts:512-518 details 页签断言 task-detail-repo-url；e2e/main.spec.ts:521-531 断言镜像存在且 referencingTaskCount ≥ 1；e2e/command.ts:153-167 repoRemoteUrl 强制走 system-mock smart-HTTP（file:// 会抛错）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/main.spec.ts",
+          "test": "RFC-024: launch task from git URL clones into cache and renders redacted URL"
+        }
       ]
+    },
+    {
+      "id": "REPO-14b",
+      "domain": "仓库、仓库组与 Git 工作面",
+      "title": "【拆自 REPO-14】任务详情页对**含凭据**远端 URL 的脱敏渲染 —— 现有 fixture 的本地 URL 无凭据，脱敏在那条链路上是 no-op",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "REPO-18",
@@ -1441,9 +1706,32 @@
       "title": "git wrapper 捕获工作树 diff 并向下游输出 git_diff（含嵌套组合与空 diff 边界）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-matrix.spec.ts:739 'wrapper-git: waits for its external input, captures both changed paths, and feeds downstream'（:748-756 断言具体路径 + 下游 prompt）；e2e/workflow-matrix.spec.ts:758-768 空 scope 断言 git_diff === ''；e2e/workflow-matrix.spec.ts:886-902 git 包 fanout 合并全部 shard 改动；e2e/workflow-matrix.spec.ts:937-950 git in loop 只暴露最后一轮（并断言 not.toContain iter-0）；e2e/workflow-matrix.spec.ts:951-975 loop in git 累计 / git in git 内外边界一致；e2e/workflow-matrix.spec.ts:376/406 `repoUrl: repoRemoteUrl(repoDir)` 真克隆"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-git: waits for its external input, captures both changed paths, and feeds downstream"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-git: a successful no-op inner scope completes with an empty generated diff"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "nested wrappers: git around fanout merges every shard change before computing one outer diff"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "nested wrappers: git inside loop exposes only the last iteration diff"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "nested wrappers: loop inside git produces one cumulative full-loop diff"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "nested wrappers: git inside git preserves the complete mutation at both boundaries"
+        }
       ]
     },
     {
@@ -1452,9 +1740,12 @@
       "title": "在 UI 里新建仓库组：平铺加仓 → 整理成目录层级 → 保存 → 重开 → 启动 → 重跑",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/repo-group-launch.spec.ts:525 test('UI 新建平铺组→整理层级→保存重开→启动→详情→sourceTask 重跑')；e2e/repo-group-launch.spec.ts:530 importCachedRepos（真 batch-import + 轮询到 completed，:174-206）；e2e/repo-group-launch.spec.ts:541-556 批量加仓 + 新建目录 + 改 parent 到 vendor；e2e/repo-group-launch.spec.ts:558-565 保存后从行内 Edit 重开，断言两个节点路径持久化；e2e/repo-group-launch.spec.ts:583-585 任务详情断言 task-detail-repo-layout-row-vendor/<repoB>；e2e/repo-group-launch.spec.ts:618-628 relaunch 后断言 repos mountPath 与 spaceNodes"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "UI 新建平铺组→整理层级→保存重开→启动→详情→sourceTask 重跑"
+        }
       ]
     },
     {
@@ -1491,9 +1782,16 @@
       "title": "从仓库下拉里选中一个仓库组启动多仓任务（含切回单仓的回退路径）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/repo-group-launch.spec.ts:271 test('从仓库下拉里选中一个组 → 任务按组布局物化（repoCount=2 + 挂载点）')；e2e/repo-group-launch.spec.ts:296-302 断言选择器文本、wizard-space-group 可见且含 '2'；e2e/repo-group-launch.spec.ts:321-325 断言 repoCount=2 / repoIndex=[0,1] / mountPath=['','vendor/sdk']；e2e/repo-group-launch.spec.ts:328 test('在同一选择器里从仓库组切回仓库输入') :342-362 完整回退断言；packages/backend/tests/rfc248-legacy-multi-repo-retired.test.ts（repos[] wire 退役 422）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "从仓库下拉里选中一个组 → 任务按组布局物化（repoCount=2 + 挂载点）"
+        },
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "在同一选择器里从仓库组切回仓库输入"
+        }
       ]
     },
     {
@@ -1517,13 +1815,34 @@
     {
       "id": "REPO-38",
       "domain": "仓库、仓库组与 Git 工作面",
-      "title": "工作树生命周期：任务取消保留工作树、恢复回滚到 pre_snapshot、daemon 重启后修复中断行",
+      "title": "工作树生命周期：daemon 重启后修复中断行（另两件见 REPO-38b / REPO-38c）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/crash-recovery.spec.ts:237 test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done')；e2e/crash-recovery.spec.ts:254 `await daemonA.killChild('SIGKILL')`；:269-271 断言 interrupted；e2e/crash-recovery.spec.ts:274-288 UI 断言 status-chip + 走 UI Resume + 终态 done + 二次 chip 断言；e2e/crash-recovery.spec.ts:307 SIGTERM 分支；:370 多次 SIGKILL 循环；e2e/crash-recovery.spec.ts:151 repoUrl: repoRemoteUrl(repoPath)"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done"
+        }
       ]
+    },
+    {
+      "id": "REPO-38b",
+      "domain": "仓库、仓库组与 Git 工作面",
+      "title": "【拆自 REPO-38】任务取消后工作树保留在盘上 —— e2e 里 existsSync 与 worktree 同现零命中",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
+    },
+    {
+      "id": "REPO-38c",
+      "domain": "仓库、仓库组与 Git 工作面",
+      "title": "【拆自 REPO-38】恢复时把重试节点回滚到 pre_snapshot —— e2e 里 pre_snapshot / preSnapshot 零命中",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "REPO-41",
@@ -1531,9 +1850,16 @@
       "title": "git smart-HTTP 协议兼容（克隆 / 抓取 / 推送都走真 CGI 后端）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "packages/system-mocks/src/git/http.ts:32-46 spawn `git http-backend` + GIT_HTTP_EXPORT_ALL=1 + GIT_HTTP_RECEIVE_PACK=1；e2e/command.ts:153-167 repoRemoteUrl 强制 smart-HTTP，非临时目录直接抛错；e2e/main.spec.ts:428 / e2e/commit-push.spec.ts:128 / e2e/crash-recovery.spec.ts:151 / e2e/repo-group-launch.spec.ts:164-169 均经此协议；e2e/commit-push.spec.ts:159-162 在 bare remote rev-parse 验证推送落地（证明 receive-pack 生效）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/commit-push.spec.ts",
+          "test": "writer change is committed with an LLM message and pushed to the remote"
+        },
+        {
+          "file": "e2e/main.spec.ts",
+          "test": "RFC-024: launch task from git URL clones into cache and renders redacted URL"
+        }
       ]
     },
     {
@@ -1713,9 +2039,12 @@
       "title": "工作流任务完整启动链路（编辑器 → 向导 → 远程仓库 → 输入 → 启动 → done → Outputs 见值）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/main.spec.ts:171 test('happy path: agents → workflow → launch → task done → outputs visible')；e2e/main.spec.ts:228-232 expect(answerOutput?.value).toBe('stub e2e output')；e2e/main.spec.ts:264-266 expect(page.locator('.task-outputs-panel__pre', { hasText: 'stub e2e output' })).toBeVisible()"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/main.spec.ts",
+          "test": "happy path: agents → workflow → launch → task done → outputs visible"
+        }
       ]
     },
     {
@@ -1724,9 +2053,16 @@
       "title": "Agent 任务向导（scratch 空间）与端口表单替代描述框",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/task-wizard.spec.ts:91 test('agent + scratch: wizard chain reaches done and the diff tab opens')；e2e/task-wizard.spec.ts:150 test('agent with declared input ports: port form replaces description')；e2e/task-wizard.spec.ts:190-192 expect(task.inputs.report).toBe('weekly numbers look fine'); expect(task.inputs.description).toBeUndefined()"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-wizard.spec.ts",
+          "test": "agent + scratch: wizard chain reaches done and the diff tab opens"
+        },
+        {
+          "file": "e2e/task-wizard.spec.ts",
+          "test": "agent with declared input ports: port form replaces description"
+        }
       ]
     },
     {
@@ -1735,9 +2071,12 @@
       "title": "向导草稿自动落盘 + 离开守卫（Stay/Discard）+ 刷新后恢复对话框",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-task-wizard-recovery.spec.ts:139 test(`${viewport.label}: deep-link draft blocks Stay/Discard and restores after reload`)；e2e/rfc250-task-wizard-recovery.spec.ts:200-203 toHaveValue(`recover-${viewport.label}`) / toHaveValue(`draft body retained at ${viewport.width}px`)；e2e/rfc250-task-wizard-recovery.spec.ts:205-213 unsaved-guard-dialog → unsaved-discard → expect.poll(draftCount).toBe(0)"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-task-wizard-recovery.spec.ts",
+          "test": "${viewport.label}: deep-link draft blocks Stay/Discard and restores after reload"
+        }
       ]
     },
     {
@@ -1746,9 +2085,12 @@
       "title": "带凭据的仓库 URL 在草稿里被脱敏并强制重新输入",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-task-wizard-recovery.spec.ts:215 test(`${viewport.label}: credentialed repository URL is redacted and requires re-entry`)；e2e/rfc250-task-wizard-recovery.spec.ts:252-262 containsCredential 逐条 raw.includes 检查（含 query/fragment secret）；e2e/rfc250-task-wizard-recovery.spec.ts:263-268 baselineIsHash / redactedUrl / requiresReentry 断言"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-task-wizard-recovery.spec.ts",
+          "test": "${viewport.label}: credentialed repository URL is redacted and requires re-entry"
+        }
       ]
     },
     {
@@ -1757,9 +2099,16 @@
       "title": "任务可见性边界：列表只显示自己可见的任务，直接访问他人任务详情不渲染任何内容",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/collab-multi-user.spec.ts:222 test('two browsers, two users: each only sees their own task on /tasks (admin sees both)')；e2e/collab-multi-user.spec.ts:260-261 await expect(bPage.getByText('alice-task')).toHaveCount(0)；e2e/collab-multi-user.spec.ts:275 test(\"two browsers, two users: bob CANNOT navigate to alice's task detail (403)\")；e2e/collab-multi-user.spec.ts:309 /ws/tasks 逐帧 canViewTask 过滤"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "two browsers, two users: each only sees their own task on /tasks (admin sees both)"
+        },
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "two browsers, two users: bob CANNOT navigate to alice's task detail (403)"
+        }
       ]
     },
     {
@@ -1768,9 +2117,36 @@
       "title": "任务七种生命周期状态在 API / WS / UI 三层一致可见（running/done/failed/canceled/interrupted/awaiting_review/awaiting_human）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/task-lifecycle-states.spec.ts:445/481/511/541/579/623/659 七个状态各一例；e2e/task-lifecycle-states.spec.ts:421-436 waitForWsStatus 的真帧缓冲轮询；e2e/task-lifecycle-states.spec.ts:571-577 interrupted 的 WS 缺口注释"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: running (slow stub + dispatch)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: done (fast stub happy path)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: failed (stub exit 1, retries=0)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: canceled (POST /api/tasks/:id/cancel mid-running)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: interrupted (SIGKILL → restart → orphan reap)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: awaiting_review (agent → review node)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: awaiting_human (clarify stub asks question)"
+        }
       ]
     },
     {
@@ -1779,9 +2155,16 @@
       "title": "daemon 崩溃后恢复：任务被判 interrupted，用户点 Resume 跑完",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/crash-recovery.spec.ts:198-214 resumeTaskThroughUi —— waitForResponse(POST /resume) + getByRole click；e2e/crash-recovery.spec.ts:237 test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done')；e2e/crash-recovery.spec.ts:307 SIGTERM 用例 / :370 多次 SIGKILL 幂等用例"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done"
+        },
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "multiple SIGKILL → restart cycles, final resume reaches done (idempotent)"
+        }
       ]
     },
     {
@@ -1804,9 +2187,24 @@
       "title": "卡住任务横幅 → 诊断面板 → 修复选项选择 → 二次确认 → 告警消解",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/diagnose-repair.spec.ts:307/340/362 三种修复（demote-task / approve-run / cancel-older-keep-newest）；e2e/diagnose-repair.spec.ts:382 test('preflight-stale: option-id unknown after DB drift surfaces error')；e2e/diagnose-repair.spec.ts:396 runSql(`UPDATE tasks SET status='canceled' …`) 制造漂移；e2e/lifecycle-diagnose.spec.ts:224 healthy → 断言 stuck-task-banner toHaveCount(0)（负向锚）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "S3 happy: demote-task resolves the alert"
+        },
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "R1 happy: approve-run resolves the alert"
+        },
+        {
+          "file": "e2e/diagnose-repair.spec.ts",
+          "test": "U1 happy: cancel-older-keep-newest resolves the alert"
+        },
+        {
+          "file": "e2e/lifecycle-diagnose.spec.ts",
+          "test": "R1 violation surfaces banner + Diagnose panel renders the rule"
+        }
       ]
     },
     {
@@ -1829,9 +2227,28 @@
       "title": "fanout 分片：按 list 逐项分片、广播上下文、join 后按 shard_key 字典序聚合、任一分片失败即整体失败（无部分聚合）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-matrix.spec.ts:803/831/847/868 四条 wrapper-fanout 用例；e2e/business-workflow-scenarios.spec.ts:676 test('文档批处理与合规审阅：任一分片失败时不生成草稿、不打开人工门、不发布')；e2e/workflow-matrix.spec.ts:1-9 文件头：真 daemon/SQLite/scheduler/wrapper scopes/git worktrees/输出解析器，仅模型替身；packages/backend/tests/scheduler-audit-s18-s19-fanout-failure-semantics.test.ts"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-fanout: shards paths, broadcasts context, joins, aggregates, and renames output"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-fanout: empty shard source completes without minting inner rows"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-fanout: one failed shard waits for the join and fails the wrapper without aggregation"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-fanout: duplicate source values receive distinct stable shard keys and both reach aggregation"
+        },
+        {
+          "file": "e2e/business-workflow-scenarios.spec.ts",
+          "test": "文档批处理与合规审阅：任一分片失败时不生成草稿、不打开人工门、不发布"
+        }
       ]
     },
     {
@@ -1840,9 +2257,28 @@
       "title": "运行时失败与重试预算：进程崩溃自动重试、缺信封的协议反馈重试、重试预算耗尽后失败、每次重试都套用超时",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-matrix.spec.ts:1258-1270 每次重试都套超时 + errorMessage 含 'node-timeout: exceeded 2000ms'；e2e/runtime-scenario-matrix.spec.ts:571 process crash 重试 · :581 缺信封协议反馈重试；e2e/runtime-scenario-matrix.spec.ts:589-591 expect(traces[1]?.prompt).toContain('Envelope missing — follow-up')；e2e/workflow-matrix.spec.ts:1233/1246 重试成功 / 预算耗尽两条"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "process crash retries in a fresh runtime process and recovers"
+        },
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "missing envelope gets protocol feedback, retries and recovers"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "runtime lifecycle: a fresh-session process retry fails once, then succeeds on the configured retry"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "runtime lifecycle: a permanent process failure exhausts the configured retry budget"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "runtime lifecycle: the global per-node timeout is applied to every retry and ends in failure"
+        }
       ]
     },
     {
@@ -1851,9 +2287,24 @@
       "title": "取消/超时时真正终止 runtime 子进程且绝不投影迟到的输出",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/runtime-scenario-matrix.spec.ts:648-659 cancel → expect(agentRuns(data).map(r=>r.status)).toEqual(['canceled']) + outputs 过滤后为空数组；e2e/runtime-scenario-matrix.spec.ts:636-646 timeout → 同样断言 outputs 为空；e2e/workflow-matrix.spec.ts:1272-1286 cancel → expect(runsFor(data,'final_output')).toEqual([])"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "cancel terminates the in-flight runtime and never projects output"
+        },
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "timeout applies to every retry and never projects a late output"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "runtime lifecycle: cancel interrupts a running subprocess and prevents output projection"
+        },
+        {
+          "file": "e2e/webhook-mr-runtime-races.spec.ts",
+          "test": "terminal close wins against an active runtime with a canceled node, reaped PID and no output"
+        }
       ]
     },
     {
@@ -1876,9 +2327,12 @@
       "title": "侧栏分组导航：点击子项跳转并高亮 active",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/nav-redesign.spec.ts:47-66 —「RFC-032 nav-redesign happy path: agents group → click Skills → URL flips + active class」；e2e/nav-redesign.spec.ts:57-65 — waitForURL + a.nav-item--active 双断言；packages/frontend/src/lib/nav.ts:37-105 — NAV_GROUPS 是桌面/移动共用的唯一事实源"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/nav-redesign.spec.ts",
+          "test": "RFC-032 nav-redesign happy path: agents group → click Skills → URL flips + active class"
+        }
       ]
     },
     {
@@ -1887,9 +2341,12 @@
       "title": "未登录路由守卫：无 token 访问受保护路由 → /auth 且不渲染 shell",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/nav-redesign.spec.ts:87-93 —「auth gate: no token → /auth, no sidebar」；packages/frontend/src/routes/__root.tsx:38-49 — beforeLoad 的 getToken()===null 分支"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/nav-redesign.spec.ts",
+          "test": "RFC-032 nav-redesign auth gate: no token → /auth, no sidebar"
+        }
       ]
     },
     {
@@ -1930,9 +2387,12 @@
       "title": "导航目录完整可见 + 无权限目标页空渲染且零请求",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc305-user-permissions.spec.ts:517-541 — 侧栏 pathname 精确数组 toEqual（14 项，含 /events、/intent、/digital-employees）；e2e/rfc305-user-permissions.spec.ts:544-550 — 三个无权目标 app-shell-main 子元素数 0 + protectedDestinationRequests 为空；packages/frontend/src/lib/nav.ts:37-105"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "guest browser exposes public resources without mutation or task affordances"
+        }
       ]
     },
     {
@@ -1941,9 +2401,32 @@
       "title": "Dialog 键盘契约：初始焦点 / Tab 与 Shift+Tab 陷阱 / ESC 关闭并归还焦点 / aria-modal",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/keyboard-flows.spec.ts:63-77 / :79-99 / :101-118 / :120-133 / :135-143 — 五条契约；e2e/agent-port-editor.spec.ts:176-201 — 嵌套 Select 与父 Dialog 的 ESC 分层 + 焦点逐级归还；e2e/rfc099-ownership-acl.spec.ts:219/265 — 嵌套 Dialog 焦点"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/keyboard-flows.spec.ts",
+          "test": "opens with focus inside the dialog (not stuck on the trigger)"
+        },
+        {
+          "file": "e2e/keyboard-flows.spec.ts",
+          "test": "Escape closes the dialog and restores focus to the trigger"
+        },
+        {
+          "file": "e2e/keyboard-flows.spec.ts",
+          "test": "Tab cycle does not escape the dialog (focus trap)"
+        },
+        {
+          "file": "e2e/keyboard-flows.spec.ts",
+          "test": "Shift+Tab cycle also stays trapped (backward direction)"
+        },
+        {
+          "file": "e2e/keyboard-flows.spec.ts",
+          "test": "dialog carries aria-modal=true so screen readers announce modal context"
+        },
+        {
+          "file": "e2e/agent-port-editor.spec.ts",
+          "test": "output path+md+list selection consumes the first Escape; the second closes and restores focus"
+        }
       ]
     },
     {
@@ -1952,9 +2435,20 @@
       "title": "响应式断点：1080 / 900 / 720 三条独立断点与 resize 交接、全程无横向溢出",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:505-563（1081/1080 焦点交接 + 草稿保持）、:644（901/900 唯一 shell 边界）、:848（721/720）、:613（1024）、:814（768）、:731（640×400 ≈200% 缩放）、:904（390）；e2e/ux-consistency.spec.ts:110-130 — expectNoPageOverflow 助手；packages/frontend/src/components/shell/AppShell.tsx:37-58"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "1081 to 1080 split resize hands off only hidden-list focus and preserves detail draft focus"
+        },
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "901/900 is the single shell boundary and resize never focuses hidden chrome"
+        },
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "721/720 changes content and form while compact resource split stays route-owned"
+        }
       ]
     },
     {
@@ -1977,21 +2471,40 @@
       "title": "WS 逐帧 ACL 过滤：无权用户的连接收不到他人任务的帧",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/collab-multi-user.spec.ts:309-353 —「/ws/tasks list channel filters per-frame by canViewTask (post-fix)」；e2e/collab-multi-user.spec.ts:335-352 — 收集全部帧 + leakingFrames 长度 0；packages/backend/src/ws/registry.ts:649-685"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/collab-multi-user.spec.ts",
+          "test": "/ws/tasks list channel filters per-frame by canViewTask (post-fix)"
+        }
       ]
     },
     {
       "id": "UX-35",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
-      "title": "未保存改动守卫：站内导航与 beforeunload 的 Stay / Discard",
+      "title": "未保存改动守卫：站内导航的 Stay / Discard（beforeunload 见 UX-35b）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:539-560 — Stay/Discard 两分支 + 草稿值 + 焦点 + 脏标记点；e2e/rfc250-task-wizard-recovery.spec.ts:139 / :187-207 — unsaved-guard-dialog、unsaved-stay 初始聚焦、unsaved-discard、reloadAcceptingBeforeUnload；e2e/repo-group-launch.spec.ts:390-430 — 多次 Stay 后草稿逐字保留"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "1081 to 1080 split resize hands off only hidden-list focus and preserves detail draft focus"
+        },
+        {
+          "file": "e2e/rfc250-task-wizard-recovery.spec.ts",
+          "test": ": deep-link draft blocks Stay/Discard and restores after reload"
+        }
       ]
+    },
+    {
+      "id": "UX-35b",
+      "domain": "前端横切：导航、可访问性、键盘、实时同步",
+      "title": "【拆自 UX-35】未保存改动守卫的 beforeunload（刷新 / 关标签页）半边 —— PR 档无任何断言，既有 helper 只注册 dialog handler 后 reload，守卫武装与否都一样过",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "UX-X1",
@@ -1999,9 +2512,12 @@
       "title": "非安全上下文（plain-HTTP LAN 部署）下 crypto.subtle 缺失仍能自动保存 / 校验 / 启动",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/insecure-context-save.spec.ts:1-15 — 事故背景与「Playwright 无法让 127.0.0.1 变得不安全，所以精确移除该 API」的做法；e2e/insecure-context-save.spec.ts:32-39 — Object.defineProperty(window.crypto,'subtle',{get:()=>undefined})；packages/frontend/tests/workflow-hash-insecure-context.test.ts — 单元层兄弟用例"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/insecure-context-save.spec.ts",
+          "test": "editor saves nodes, survives reload, and launch validation completes without SubtleCrypto"
+        }
       ]
     },
     {
@@ -2010,9 +2526,12 @@
       "title": "快速创建工作流（名称校验 + 直接进入编辑器）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc264-unicode-names.spec.ts:38-89 test('a workflow can be created and renamed with a Chinese name')；e2e/rfc264-unicode-names.spec.ts:47-48 await nameInput.fill('_reserved'); expect(workflow-create-confirm).toBeDisabled()；e2e/rfc264-unicode-names.spec.ts:56-57 toHaveURL(/\\/workflows\\/[0-9A-HJKMNP-TV-Z]{26}/)"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc264-unicode-names.spec.ts",
+          "test": "a workflow can be created and renamed with a Chinese name"
+        }
       ]
     },
     {
@@ -2021,9 +2540,16 @@
       "title": "从调色板轨 HTML5 拖拽新增节点",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-editor.spec.ts:373-436 test('drag-from-sidebar synthesizes HTML5 drag → new node appended')；e2e/rfc253-script-node.spec.ts:249/:255 dragPaletteNode(page,'script',…) 后断言 .canvas-node--script 计数 1→2"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "drag-from-sidebar synthesizes HTML5 drag → new node appended"
+        },
+        {
+          "file": "e2e/rfc253-script-node.spec.ts",
+          "test": "RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 → stdout 可见 → 下游 output 拿到上游的值"
+        }
       ]
     },
     {
@@ -2032,9 +2558,24 @@
       "title": "节点选择器弹窗新增节点（分类页签 / 搜索过滤 / 点击与键盘激活）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-editor.spec.ts:437-503 点击与 Space 两条路径各断言 nodes toHaveCount(before+1) 与 .react-flow__node.selected 计数 1；e2e/workflow-editor.spec.ts:677-702 filter.fill('zzz-no-such-item-1729') → items toHaveCount(0)；e2e/rfc243-call-nodes.spec.ts:84 picker.getByRole('tab', { name: /Calls/ })"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "390px palette click and keyboard activation add one selected node without overflow"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "palette filter input narrows the visible drag items"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "RFC-219 large catalog reaches Wrapper and Human in one category action"
+        },
+        {
+          "file": "e2e/rfc243-call-nodes.spec.ts",
+          "test": "palette Calls section creates a call-workflow node that selects a child and saves clean"
+        }
       ]
     },
     {
@@ -2043,9 +2584,28 @@
       "title": "节点选择 / 取消选择 / 多选 / Delete·Backspace 删除",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-editor.spec.ts:294-312 选中与点空白清空；e2e/workflow-editor.spec.ts:314-328 Backspace 后 toHaveCount(2)；e2e/workflow-editor.spec.ts:347-372 Shift+click 两节点均 toHaveClass(/selected/)（webkit skip 有 run 号）"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "clicking a node selects it (selected class applied)"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "clicking empty canvas clears the selection"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "pressing Backspace with a node selected removes it"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "Shift+click extends node selection (xyflow multi-select default)"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "Ctrl+Z undoes the deletion (RFC-016 undo invariant)"
+        }
       ]
     },
     {
@@ -2072,9 +2632,16 @@
       "title": "端口拖拽连线（NEW 新建输入 / REUSE 复用已有输入）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-editor.spec.ts:224-292 data-connect-preview 'new'/'reuse' + canvas-connect-badge 文案；e2e/rfc253-script-node.spec.ts:281-306 松手后 .react-flow__edge toHaveCount(1)，随后 expect(saved.definition.edges[0]?.source.portName).toBe('stdout') 与 target.portName 同断言"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "port drag keeps NEW and REUSE target feedback visible in overview"
+        },
+        {
+          "file": "e2e/rfc253-script-node.spec.ts",
+          "test": "RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 → stdout 可见 → 下游 output 拿到上游的值"
+        }
       ]
     },
     {
@@ -2127,9 +2694,20 @@
       "title": "显式校验：精确修订版校验回执、问题清单、点问题跳到对应节点/字段、短屏切换",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-workflow-camera.spec.ts:753-795 完整校验→跳转链；e2e/workflow-editor.spec.ts:543-574 从校验问题跳到 review 来源字段并修好后成功启动；e2e/workflow-editor.spec.ts:768 起 521/520 短屏边界 overlay↔dialog 切换"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-workflow-camera.spec.ts",
+          "test": "desktop complex workflow keeps camera readable, explicit, and user-owned"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "390px zero-drag path adds, follows launch validation, connects, and launches"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "launch validation details switch at the 521/520 short-height boundary without resizing canvas"
+        }
       ]
     },
     {
@@ -2138,9 +2716,20 @@
       "title": "自动保存（1s 防抖）→ Saved 状态 → 刷新不丢",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/insecure-context-save.spec.ts:110-140 含 expect(subtle===undefined) 的自证断言与全链复核；e2e/rfc243-call-nodes.spec.ts:104-118 waitForResponse 抓含子工作流名的 PUT 后断言 Saved 并 reload；e2e/rfc253-script-node.spec.ts:298-306 Saved 后从 API 复核端口命名"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/insecure-context-save.spec.ts",
+          "test": "editor saves nodes, survives reload, and launch validation completes without SubtleCrypto"
+        },
+        {
+          "file": "e2e/rfc243-call-nodes.spec.ts",
+          "test": "palette Calls section creates a call-workflow node that selects a child and saves clean"
+        },
+        {
+          "file": "e2e/rfc253-script-node.spec.ts",
+          "test": "RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 → stdout 可见 → 下游 output 拿到上游的值"
+        }
       ]
     },
     {
@@ -2149,9 +2738,20 @@
       "title": "弱网保存可靠性：在途 PUT 期间继续编辑、响应丢失后重连对账、离线重试同一次尝试",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc199-save-reliability.spec.ts:211 response loss plus offline reconcile —— :364-373 序列与 clientMutationId 断言；e2e/rfc199-save-reliability.spec.ts:165 editing while a PUT is in flight；e2e/rfc199-save-reliability.spec.ts:318 offline before the PUT reaches the server"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc199-save-reliability.spec.ts",
+          "test": "editing while a PUT is in flight saves the queued revision and survives reload"
+        },
+        {
+          "file": "e2e/rfc199-save-reliability.spec.ts",
+          "test": "response loss plus offline reconcile preserves the attempt and sends queued work after exact convergence"
+        },
+        {
+          "file": "e2e/rfc199-save-reliability.spec.ts",
+          "test": "offline before the PUT reaches the server retries the same attempt before queued work"
+        }
       ]
     },
     {
@@ -2160,9 +2760,12 @@
       "title": "双标签页版本冲突的检测",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc199-save-reliability.spec.ts:416-457 test('two tabs converge to an explicit conflict without overwriting either draft')；e2e/rfc199-save-reliability.spec.ts:449-451 三条断言"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc199-save-reliability.spec.ts",
+          "test": "two tabs converge to an explicit conflict without overwriting either draft"
+        }
       ]
     },
     {
@@ -2207,9 +2810,16 @@
       "title": "启动前的精确修订版交接（编辑器 → 任务向导版本不一致提示）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc199-save-reliability.spec.ts:375-414 完整竞态构造与三条断言；e2e/workflow-editor.spec.ts:570-574 launchUrl.searchParams.get('workflowVersion') 断言；e2e/rfc243-call-nodes.spec.ts:133-138 同姿势复核"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc199-save-reliability.spec.ts",
+          "test": "editor exact revision handoff shows a wizard mismatch before any stale launch"
+        },
+        {
+          "file": "e2e/workflow-editor.spec.ts",
+          "test": "390px zero-drag path adds, follows launch validation, connects, and launches"
+        }
       ]
     },
     {
@@ -2248,9 +2858,12 @@
       "title": "leader-worker 模式全链运行（leader 澄清 → 同成员 fan-out 派单 → 协议重试 → 完成门驳回并修订 → 再审批 → done）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workgroup-matrix.spec.ts:270 test('leader-worker: clarify → same-member fan-out → protocol retry → gate reject/revise/approve')；e2e/workgroup-matrix.spec.ts:311-315 —— assignments 标题集合 ['implementation-v1-code','implementation-v1-tests','research-release'] + every status==='done'；e2e/workgroup-matrix.spec.ts:352-357 —— codeRuns retryIndex [0,1]、rerunCause 'wg-protocol-retry'、prompt 含 '## Protocol errors in your previous reply'；e2e/workgroup-matrix.spec.ts:376-381 —— readWorktree('showcase/app.txt') === 'implementation v2 after gate rejection\\n'；e2e/workgroup-matrix.spec.ts:95 —— for (const protocol of ['opencode','claude-code'])"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workgroup-matrix.spec.ts",
+          "test": "leader-worker: clarify → same-member fan-out → protocol retry → gate reject/revise/approve"
+        }
       ]
     },
     {
@@ -2259,9 +2872,16 @@
       "title": "free-collab 模式全链运行（并行规划 → 归一去重 → 消息/任务双轨 → 批量合并 → 单卡失败只重开该卡 → 完成门）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workgroup-matrix.spec.ts:400 test('free-collab: parallel planning, normalized dedup, dual message/task tracks, batch merge and gate')；:408-424 开关/卡数/去重/双信号断言；e2e/business-workgroup-scenarios.spec.ts:244 test('客户数据迁移作战室：单卡失败只重开该卡，保留成功实物并经人工门收敛')；e2e/business-workgroup-scenarios.spec.ts:226-233 persistedAssignmentAttempts() —— 直读 workgroup_assignments.attempt_count；e2e/business-workgroup-scenarios.spec.ts:265-276 —— 三张卡标题集合 + every done + every resultMessageId !== null + gate.summary"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workgroup-matrix.spec.ts",
+          "test": "free-collab: parallel planning, normalized dedup, dual message/task tracks, batch merge and gate"
+        },
+        {
+          "file": "e2e/business-workgroup-scenarios.spec.ts",
+          "test": "客户数据迁移作战室：单卡失败只重开该卡，保留成功实物并经人工门收敛"
+        }
       ]
     },
     {
@@ -2353,10 +2973,13 @@
       "domain": "代理",
       "title": "agent.md 导入（粘贴文本）→ 逐段披露评审 → 应用到草稿（明确不创建）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/agent-import.spec.ts:115-202 'full paste review is responsive, accessible, draft-only, and focus-safe'；e2e/agent-import.spec.ts:183/194 `expect(agentCreates).toEqual([])`；:196-201 GET /api/agents 断言该名字不存在；e2e/agent-import.spec.ts:193 断言 apply 后 Name 输入框值为 'responsive-reviewer'"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/agent-import.spec.ts",
+          "test": "full paste review is responsive, accessible, draft-only, and focus-safe"
+        }
       ]
     },
     {
@@ -2382,10 +3005,21 @@
       "domain": "代理",
       "title": "从代理详情启动单代理任务（launch 入口 → 任务向导 → 任务落地）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/task-wizard.spec.ts:91 'agent + scratch: wizard chain reaches done and the diff tab opens'；e2e/task-wizard.spec.ts:150 'agent with declared input ports: port form replaces description'，:186-191 断言 task.inputs 的线上真值；e2e/tour-spotlight.spec.ts:142 'clicking Launch submits the task and advances the tour to the result step'；packages/backend/tests/rfc218-agent-launch-ports.test.ts（path<ext> 的 multipart 上传仅后端覆盖）"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/tour-spotlight.spec.ts",
+          "test": "clicking Launch submits the task and advances the tour to the result step"
+        },
+        {
+          "file": "e2e/task-wizard.spec.ts",
+          "test": "agent + scratch: wizard chain reaches done and the diff tab opens"
+        },
+        {
+          "file": "e2e/task-wizard.spec.ts",
+          "test": "agent with declared input ports: port form replaces description"
+        }
       ]
     },
     {
@@ -2824,10 +3458,13 @@
       "domain": "数字员工 / 开发任务",
       "title": "已存在的 Invalid 工具在编辑器中打开并发布纠正",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:326-360 — test 'an existing invalid tool opens in the editor and publishes its correction'；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:343 — toHaveValue(name) 的回填断言"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "an existing invalid tool opens in the editor and publishes its correction"
+        }
       ]
     },
     {
@@ -2853,10 +3490,13 @@
       "domain": "数字员工 / 开发任务",
       "title": "人工评审门禁卡片的只读详情（不可挂工具）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:557-569 — 门禁详情可见、'Add tool' toHaveCount(0)、关闭后消失；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:561-563 — 选中态互斥断言；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:533-536 — 入口卡与门禁卡都 not.toHaveAttribute('data-work-item-ref')"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
     },
     {
@@ -2864,10 +3504,13 @@
       "domain": "数字员工 / 开发任务",
       "title": "工作入口卡（正文 / 需求ID / ISSUE）的 Configure 跳转",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:552-553 — `await directInputCard.click(); await page.waitForURL(/\\/tasks\\/new\\?kind=digital-employee$/)`；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-digital-employee-journey.spec.ts:571-572 — `await issueIngressCard.click(); await page.waitForURL(/\\/events\\?tab=subscriptions$/)`；/Users/wangbinquan/dev/proj/agent-workflow/packages/frontend/src/routes/digital-employees.$typeRef.tsx:251-258 — onConfigureIngress 的两条分支，与上面两条断言一一对应"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "body and repository-bound files enter a stateful employee case and the unified task list"
+        }
       ]
     },
     {
@@ -3019,10 +3662,13 @@
       "domain": "数字员工 / 开发任务",
       "title": "【漏项·已覆盖】旧版类型包定义永不变成用户可见的迁移任务或手工 API",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:127-204 — test 'an older definition never becomes a user migration task or manual API'；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:190-195、:203 — staleTypeRequests 收集与 toEqual([])；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc310-zero-config-onboarding.spec.ts:141-143 — 用 raw 行验证读边界会剥掉已退役的 enabled 字段；/Users/wangbinquan/dev/proj/agent-workflow/packages/backend/tests/rfc310-type-package-auto-upgrade.test.ts — 后端自动升级的领域覆盖"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-zero-config-onboarding.spec.ts",
+          "test": "an older definition never becomes a user migration task or manual API"
+        }
       ]
     },
     {
@@ -3169,10 +3815,13 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "验签通过但 body 非 JSON → 400 + parse-failed 审计行，且零 fire / 零任务",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/webhook-mr-runtime-races.spec.ts:654-699 「verified malformed JSON is a parse-failed audit row and creates zero fire/task」；e2e/webhook-mr-runtime-races.spec.ts:671-672 `expect(response.status).toBe(400)` + `toEqual({ error: 'invalid-json' })`；e2e/webhook-mr-runtime-races.spec.ts:686-698 750ms 稳定窗口内轮询断言 fires 无新增、task-catalog 为空；packages/backend/src/routes/webhooks.ts:168-184 对应生产分支"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/webhook-mr-runtime-races.spec.ts",
+          "test": "verified malformed JSON is a parse-failed audit row and creates zero fire/task"
+        }
       ]
     },
     {
@@ -3261,10 +3910,17 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "任务详情上的事件来源回链（评论 / MR / 流水线 / commit / 项目 与逐级回退）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc298-webhook-task-source-link.spec.ts:288-343 source matrix（API 投影 + DOM + 泄露负向断言）；e2e/rfc298-webhook-task-source-link.spec.ts:345-362 390px 布局与 ordinary task 无占位；e2e/rfc294-webhook-runtime-failures.spec.ts:331-334 真 webhook 启动的任务 webhookSourceLink 等于 pipeline URL；packages/backend/tests/rfc298-webhook-task-source-link.test.ts:73-175"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc298-webhook-task-source-link.spec.ts",
+          "test": "source matrix: ${sourceCase.key} projects and renders ${sourceCase.expected?.kind ?? 'no link'}"
+        },
+        {
+          "file": "e2e/rfc298-webhook-task-source-link.spec.ts",
+          "test": "390px layout keeps the source group contained and ordinary tasks render no placeholder"
+        }
       ]
     },
     {
@@ -3272,10 +3928,13 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "任务来源归属：webhook / scheduled 触发的任务在任务目录里按来源可筛",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc244-task-operations.spec.ts:461 「real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit」；e2e/rfc244-task-operations.spec.ts:523-538 建 schedule 并 run-now；:540-578 建端点+触发器并真投递；:581-586 轮询 fires 取 launched taskId；e2e/rfc244-task-operations.spec.ts:595-612 pageFor('manual'/'api'/'scheduled') 交叉断言；packages/backend/tests/tasks-scheduled-link.test.ts"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc244-task-operations.spec.ts",
+          "test": "real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit"
+        }
       ]
     },
     {
@@ -3348,10 +4007,13 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "fanout 分片内的澄清：只有提问的那一片停在 awaiting_human，作答后父节点聚合",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/clarify.spec.ts:580 test('only the b/x.md shard parks awaiting_human; answering it lets the parent aggregate')；e2e/clarify.spec.ts:618-623 断言 rows.length===1 / askingNodeId='fanout' / askingShardKey='b/x.md'；e2e/clarify.spec.ts:650-660 断言 final.status='done' 与 pending.count===0"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify.spec.ts",
+          "test": "only the b/x.md shard parks awaiting_human; answering it lets the parent aggregate"
+        }
       ]
     },
     {
@@ -3359,10 +4021,21 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "inline 澄清会话模式：重跑复用原生 session（--session <id>），会话缺失时降级",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/clarify.spec.ts:791 test('inline rerun argv contains --session <prior-id> and node_runs persists the id')；e2e/clarify.spec.ts:854-858 断言 sessionLog 精确等于 ['','opc_e2e_e2e-rfc026-designer','']；e2e/clarify.spec.ts:876 断言 round0Run.opencodeSessionId；e2e/runtime-scenario-matrix.spec.ts:595 inline clarify 暂停/恢复原生会话；:612 missing inline session 降级为新会话"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify.spec.ts",
+          "test": "inline rerun argv contains --session <prior-id> and node_runs persists the id"
+        },
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "inline clarify pauses, accepts a human answer and resumes the native session"
+        },
+        {
+          "file": "e2e/runtime-scenario-matrix.spec.ts",
+          "test": "missing inline session warns and falls back to a fresh native session"
+        }
       ]
     },
     {
@@ -3438,10 +4111,13 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清草稿的持久性与降级：服务端写失败降为 local-only 并可手动重试",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-interaction-integrity.spec.ts:452 test('Clarify late ack cannot bless the latest generation; retry preserves and saves it')；e2e/rfc250-interaction-integrity.spec.ts:485-511 断言 data-draft-status saved→local-only→saved、putBodies=[[0],[1],[1]]、重试后 sqlite 仍 checked；e2e/rfc250-interaction-integrity.spec.ts:133-215 seedClarifySession 造真实 workflow+task；e2e/rfc250-visual-states.spec.ts:530 test.skip(!RUN_VISUAL_REGRESSION) —— 该文件的 clarify 用例默认不跑"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Clarify late ack cannot bless the latest generation; retry preserves and saves it"
+        }
       ]
     },
     {
@@ -3705,10 +4381,25 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审门嵌在 wrapper 内（loop / git / fanout）时的挂起与恢复",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-matrix.spec.ts:1089-1111 断言 parked.status='awaiting_review'、批准后 loop.status='done'、outputValue(final_doc) 含 review-ready-document；e2e/workflow-matrix.spec.ts:1113 loop 内驳回→重跑→二次批准退出；e2e/workflow-matrix.spec.ts:966 test('mixed wrappers + humans: clarified decision survives review rejection before fanout and final approval')；e2e/business-workflow-scenarios.spec.ts:528 文档批处理：fanout 只跑一次、驳回修订后只发布人工接受项"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-loop review: awaiting_review bubbles, approval resumes the same wrapper, port-not-empty exits"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-loop review: rejection injects reason and prior output into the rerun, then a second approval exits"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "mixed wrappers + humans: clarified decision survives review rejection before fanout and final approval"
+        },
+        {
+          "file": "e2e/business-workflow-scenarios.spec.ts",
+          "test": "文档批处理与合规审阅：fanout 只跑一次，驳回修订后只发布人工接受项"
+        }
       ]
     },
     {
@@ -3876,10 +4567,17 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务状态面对人工门的可见反馈（awaiting_human / awaiting_review 状态 chip + WS 推送）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/task-lifecycle-states.spec.ts:623 test('task lifecycle: awaiting_review (agent → review node)')；:637-647 API + WS + 'Awaiting review' chip；e2e/task-lifecycle-states.spec.ts:659 test('task lifecycle: awaiting_human (clarify stub asks question)')；:673-682 API + WS + 'Awaiting (input\\"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: awaiting_review (agent → review node)"
+        },
+        {
+          "file": "e2e/task-lifecycle-states.spec.ts",
+          "test": "task lifecycle: awaiting_human (clarify stub asks question)"
+        }
       ]
     },
     {
@@ -4027,10 +4725,13 @@
       "domain": "身份、认证、用户与资源权限",
       "title": "PAT 权限矩阵在 390px 上可发现、可聚焦、可勾选且不横向溢出",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc250-pat-permission-matrix.spec.ts:41-54（live 目录对账）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc250-pat-permission-matrix.spec.ts:82-93（渲染集合 === 目录集合）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc250-pat-permission-matrix.spec.ts:95-136（逐点 focus/热区/toggle）"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-pat-permission-matrix.spec.ts",
+          "test": "390px admin can discover, focus, and toggle every grantable PAT permission"
+        }
       ]
     },
     {
@@ -4038,10 +4739,13 @@
       "domain": "身份、认证、用户与资源权限",
       "title": "mcp_only 令牌不得走 REST 通道",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/auth-isolation.spec.ts:576-583"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/auth-isolation.spec.ts",
+          "test": "an mcp_only PAT authenticates but cannot use the REST API"
+        }
       ]
     },
     {
@@ -4251,10 +4955,13 @@
       "domain": "意图构建器",
       "title": "丢弃并重新生成当前草稿（Discard and regenerate）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:198-204 点 'Discard and regenerate' → revision 4 + 'Discarded' 可见；packages/backend/tests/rfc293-intent-state.test.ts:219 锁 discard 的永久性（跨失败重试）；packages/frontend/src/routes/intent.detail.tsx:748-756 data-testid='intent-regenerate-draft'"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently"
+        }
       ]
     },
     {
@@ -4535,10 +5242,17 @@
       "domain": "意图构建器",
       "title": "Intent 详情页的响应式双工作区：宽屏并排独立滚动、窄屏 Build/Review 页签切换且不横向溢出",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:222-257 desktop 六项几何 toEqual（fillsContent / buildScrollable / reviewUnaffectedByBuildScroll…）；e2e/intent-builder.spec.ts:263-279 1080px 页签切换 + documentElement.scrollWidth <= innerWidth；e2e/intent-builder.spec.ts:393-448 390px 页签与画布适配四项 toEqual；:623-685 axe + dark；packages/frontend/tests/intent-detail-inline.test.tsx:791 / :840 页签初值与分组"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "RFC-293 workbench queues context, iterates around checkpoints, discards, and scrolls independently"
+        },
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "workflow draft makes the node graph a primary, expandable review surface"
+        }
       ]
     },
     {
@@ -4683,10 +5397,13 @@
       "domain": "记忆",
       "title": "手工新建记忆（global scope）并进入审批队列",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/memory-manual-create-edit.spec.ts:39 'RFC-045: admin manually creates a candidate, edits it, then approves it'；e2e/memory-manual-create-edit.spec.ts:49-50 打开并断言 memory-new-dialog 可见；e2e/memory-manual-create-edit.spec.ts:61-75 Save→dialog toHaveCount(0)→memory-section-approval-queue aria-current=page→.memory-candidate-card 含标题可见；packages/frontend/src/routes/memory.tsx:148-157 onCreated → selectTab('approval-queue')"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-manual-create-edit.spec.ts",
+          "test": "RFC-045: admin manually creates a candidate, edits it, then approves it"
+        }
       ]
     },
     {
@@ -4722,10 +5439,13 @@
       "domain": "记忆",
       "title": "就地编辑记忆（改 tag / 标题 / 正文）并回写列表",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/memory-manual-create-edit.spec.ts:78-95 点 Edit→memory-form-tag-remove-e2e-tag-orig→输入新 tag→Save→dialog count 0→卡片 toContainText('e2e-tag-edited') 且 not.toContainText('e2e-tag-orig')；packages/backend/tests/routes-memories-patch.test.ts、packages/backend/tests/memory-service-patch.test.ts"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/memory-manual-create-edit.spec.ts",
+          "test": "RFC-045: admin manually creates a candidate, edits it, then approves it"
+        }
       ]
     },
     {
@@ -4775,10 +5495,13 @@
       "domain": "记忆",
       "title": "All 库的 approved / archived 分段筛选",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-interaction-integrity.spec.ts:634-637 点 memory-all-filter-archived → memory-all-<unarchiveId>-unarchive toBeVisible；packages/frontend/src/components/memory/MemoryAllList.tsx:172-184 Segmented testid `memory-all-filter-<v>`；:374-394 view 决定渲染 archive 还是 unarchive 按钮"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Memory archive, delete, and unarchive stay target-scoped through pending/error/retry"
+        }
       ]
     },
     {
@@ -4786,10 +5509,13 @@
       "domain": "记忆",
       "title": "归档记忆：确认框 + 进行中锁定 + 失败横幅 + 行内重试",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-interaction-integrity.spec.ts:518 'Memory archive, delete, and unarchive stay target-scoped through pending/error/retry'；e2e/rfc250-interaction-integrity.spec.ts:583-608 双击去重 / pending 三控件 disabled / Escape 后 dialog 仍可见 / memory-confirm-error / Retry 后行 hidden / archiveUrls.every(...) 目标隔离；packages/frontend/src/components/memory/MemoryAllList.tsx:114-144 destructiveOperationRef 同步锁"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Memory archive, delete, and unarchive stay target-scoped through pending/error/retry"
+        }
       ]
     },
     {
@@ -5225,10 +5951,17 @@
       "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
       "title": "卡住任务横幅（StuckTaskBanner）+ 诊断规则渲染 / 健康任务不打扰",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/lifecycle-diagnose.spec.ts:224 'healthy task → no stuck-task banner rendered' —— :230 toHaveCount(0)；e2e/lifecycle-diagnose.spec.ts:233 'R1 violation surfaces banner + Diagnose panel renders the rule' —— :251-259 断言 banner 可见 + 含 /R1/ + 面板与表格可见；e2e/lifecycle-diagnose.spec.ts:236-245 用 sqlite3 CLI 种 R1 违例并 POST /api/tasks/:id/diagnose"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/lifecycle-diagnose.spec.ts",
+          "test": "healthy task → no stuck-task banner rendered"
+        },
+        {
+          "file": "e2e/lifecycle-diagnose.spec.ts",
+          "test": "R1 violation surfaces banner + Diagnose panel renders the rule"
+        }
       ]
     },
     {
@@ -5405,10 +6138,13 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "仓库组编辑器的未保存草稿护栏（× / Esc / 遮罩 / 浏览器 Back / 保存中冻结 / 保存失败保留草稿）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/repo-group-launch.spec.ts:388 test('仓库组编辑草稿覆盖 dismiss、Back、URL 草稿、保存 pending 与失败保留')；e2e/repo-group-launch.spec.ts:406-415 三种 dismiss × 每次断言草稿值保留；e2e/repo-group-launch.spec.ts:419-427 残留目录草稿 disable Save + 'Finish or clear the pending edit before saving.'；e2e/repo-group-launch.spec.ts:432-437 Escape 只取消单字段；e2e/repo-group-launch.spec.ts:466-497 PUT pending 冻结全部 dismiss 路径；e2e/repo-group-launch.spec.ts:499-518 500 失败后草稿保留 + 控件解锁"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "仓库组编辑草稿覆盖 dismiss、Back、URL 草稿、保存 pending 与失败保留"
+        }
       ]
     },
     {
@@ -5461,10 +6197,13 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 的 tab 由 URL 严格驱动（深链、刷新、前进后退、非法 tab 归一）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/repo-group-launch.spec.ts:365 test('/repos tab 由 strict URL 驱动，并支持刷新与 Back/Forward')；e2e/repo-group-launch.spec.ts:369-372 深链 + 归一 URL 断言（保留 q 与 hash）；e2e/repo-group-launch.spec.ts:373-381 reload / Back / Forward；e2e/repo-group-launch.spec.ts:383-385 tab=GROUPS 非法值归一；e2e/ux-consistency.spec.ts:943 默认落在 repos 页签"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "/repos tab 由 strict URL 驱动，并支持刷新与 Back/Forward"
+        }
       ]
     },
     {
@@ -5558,10 +6297,13 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "技能 ZIP 导入：选包 → 解析 → 审阅 → 冲突改名 → 提交 → 结果摘要",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/skill-import.spec.ts:56 —— test 'real ZIP reaches responsive review and stable result with clean axe/focus contracts'；e2e/skill-import.spec.ts:71-81 —— zipSync 造含 fresh-skill/ 与 existing-skill/ 两个候选的真 ZIP；e2e/skill-import.spec.ts:100-108 —— zip-action-existing-skill 选 Rename → 填 'Bad Name' → aria-invalid=true；e2e/skill-import.spec.ts:141-148 —— commit 后 zip-import-summary 含 'Import complete' + 两条结果链接 + 标题获焦"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/skill-import.spec.ts",
+          "test": "real ZIP reaches responsive review and stable result with clean axe/focus contracts"
+        }
       ]
     },
     {
@@ -5879,10 +6621,13 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "任务会话的 Runtime Inventory 展示本次注入的技能 / MCP / 插件及其状态",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/main.spec.ts:782 —— test 'RFC-029: Runtime Inventory section renders on the Session tab'；e2e/main.spec.ts:797-803 —— 真起任务 + pollUntilTerminal 断言 status 为 done；e2e/main.spec.ts:824-828 —— 断言 section 含 e2e-stub-coder / fixture-skill / fixture-mcp-ok / fixture-mcp-warn；e2e/main.spec.ts:831-832 —— 断言 .status-chip--warn 与 .status-chip--success 各至少一个可见"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/main.spec.ts",
+          "test": "RFC-029: Runtime Inventory section renders on the Session tab"
+        }
       ]
     },
     {
@@ -5917,10 +6662,17 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "从仓库组启动（多仓物化 + 挂载布局预览 + 详情页多仓折叠区）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/repo-group-launch.spec.ts:271 test('从仓库下拉里选中一个组 → 任务按组布局物化（repoCount=2 + 挂载点）')；e2e/repo-group-launch.spec.ts:525 test('UI 新建平铺组→整理层级→保存重开→启动→详情→sourceTask 重跑')；e2e/repo-group-launch.spec.ts:581-583 展开 task-detail-multi-repo 并断言 repo-layout 行；packages/frontend/tests/task-detail-multi-repo-header.test.ts:57 expect(SRC).toContain(...) —— 源码文本断言，非行为覆盖"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "从仓库下拉里选中一个组 → 任务按组布局物化（repoCount=2 + 挂载点）"
+        },
+        {
+          "file": "e2e/repo-group-launch.spec.ts",
+          "test": "UI 新建平铺组→整理层级→保存重开→启动→详情→sourceTask 重跑"
+        }
       ]
     },
     {
@@ -5946,10 +6698,13 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "把向导配置保存为定时任务（?schedule=1）并「立即运行一次」",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/task-wizard.spec.ts:254 test('scheduled agent (?schedule=1): save-as-scheduled is primary; run-now fires a task')；e2e/task-wizard.spec.ts:270-272 await expect(saveBtn).toHaveClass(/btn--primary/)；e2e/task-wizard.spec.ts:283-285 expect(sched!.launchKind).toBe('agent')；e2e/task-wizard.spec.ts:294-296 run-now → pollUntilTerminal → done"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-wizard.spec.ts",
+          "test": "scheduled agent (?schedule=1): save-as-scheduled is primary; run-now fires a task"
+        }
       ]
     },
     {
@@ -6003,10 +6758,17 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表按启动来源过滤（手动 / 定时 / 事件中心 / API），且定时子任务继承来源",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc244-task-operations.spec.ts:461 test('real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit')；e2e/rfc244-task-operations.spec.ts:596-605 manualPage/apiPage 正反双向断言；e2e/rfc244-task-operations.spec.ts:606-633 scheduled 父→子→孙三层继承断言；e2e/rfc244-task-operations.spec.ts:634-636 每页每项 expect(Object.hasOwn(item,'launchOrigin')).toBe(false)"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc244-task-operations.spec.ts",
+          "test": "real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit"
+        },
+        {
+          "file": "e2e/rfc244-task-operations.spec.ts",
+          "test": "Event Center and API origin filters keep complete trees and reset cursor identity"
+        }
       ]
     },
     {
@@ -6105,10 +6867,21 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "节点抽屉：Events（逐行 stdout）、Output、Session（会话对话）、Runtime Inventory 四个页签",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc253-script-node.spec.ts:403-405 tabBar Events → expect(.events-list, { hasText: PRODUCED })；e2e/rfc253-script-node.spec.ts:410-413 Output 页签 → .task-output-card__body 含拼接值；e2e/main.spec.ts:710 Session tab 用例 · :766-770 <aw-input> 围栏正则断言；e2e/main.spec.ts:782 Runtime Inventory 用例 · :832-833 status-chip--warn/--success"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc253-script-node.spec.ts",
+          "test": "RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 → stdout 可见 → 下游 output 拿到上游的值"
+        },
+        {
+          "file": "e2e/main.spec.ts",
+          "test": "RFC-027: NodeDetailDrawer Session tab renders the agent conversation"
+        },
+        {
+          "file": "e2e/main.spec.ts",
+          "test": "RFC-029: Runtime Inventory section renders on the Session tab"
+        }
       ]
     },
     {
@@ -6134,10 +6907,17 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "loop wrapper：三种退出条件与触顶（exhausted）时的终态失败",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/workflow-matrix.spec.ts:788 三个 wrapper-loop-* fixture 参数化用例；e2e/workflow-matrix.spec.ts:1206 test('wrapper-loop exhaustion is a terminal failure and preserves the exhausted wrapper row')；e2e/workflow-matrix.spec.ts:885/904/921/936/950 五条嵌套组合用例；e2e/workflow-matrix.spec.ts:1288 invalid loop-in-loop 启动门 422 + 精确 issue code"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "${scenario.file}: exits after two iterations and promotes the terminal port"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-loop exhaustion is a terminal failure and preserves the exhausted wrapper row"
+        }
       ]
     },
     {
@@ -6177,22 +6957,41 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "条件分支执行：未走的分支在详情页画布上置灰、喂它的边画成非活跃线",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc306-conditional-branching.spec.ts:254 test('the task detail canvas greys out the path that was not taken')；e2e/rfc306-conditional-branching.spec.ts:285-287 expect(page.locator('.canvas-node[data-status=\"skipped\"]')).toHaveCount(2)；e2e/rfc306-conditional-branching.spec.ts:288 expect(page.locator('.react-flow__edge.canvas-edge--inactive')).toHaveCount(1)；e2e/rfc306-conditional-branching.spec.ts:192/231 两条执行语义用例"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc306-conditional-branching.spec.ts",
+          "test": "the task detail canvas greys out the path that was not taken"
+        },
+        {
+          "file": "e2e/rfc306-conditional-branching.spec.ts",
+          "test": "closing a branch skips its chain, keeps the task done, and records the trace"
+        }
       ]
     },
     {
       "id": "TASK-X4",
       "domain": "任务启动、执行与生命周期操作",
-      "title": "子任务嵌套：call-workflow / call-workgroup 节点创建子任务，列表里形成可展开的父子树并继承启动来源",
+      "title": "子任务嵌套：call-workflow 节点创建子任务并继承启动来源（call-workgroup 与父子树展开见 TASK-X4b）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc244-task-operations.spec.ts:479-494 root/middle/leaf 三层 call-workflow 工作流构造；e2e/rfc244-task-operations.spec.ts:606-612 pageFor('scheduled', scheduled.taskId) → expect(page.items.length === 1)；e2e/rfc244-task-operations.spec.ts:613-632 再下一层 grandchild 断言 + 诊断性错误消息；packages/backend/tests/rfc291-call-edge-binding.test.ts（端口绑定语义的单测层）"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc244-task-operations.spec.ts",
+          "test": "real session, PAT, schedule, and webhook launches filter exactly and scheduled children inherit"
+        }
       ]
+    },
+    {
+      "id": "TASK-X4b",
+      "domain": "任务启动、执行与生命周期操作",
+      "title": "【拆自 TASK-X4】call-workgroup 产生的子任务，以及真实子任务在列表里展开成父子树 —— call-workgroup 在 e2e 里零命中，展开只对 page.route 假数据点过",
+      "risk": "P2",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "TASK-X5",
@@ -6213,10 +7012,13 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务详情页在任务推进时免刷新自动收敛（轮询 + WS）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/crash-recovery.spec.ts:275-278 page.goto(/tasks/{id}) → 断言 chip 为 interrupted；e2e/crash-recovery.spec.ts:282 await resumeTaskThroughUi(page, daemonB, taskId) —— 期间无 goto/reload；e2e/crash-recovery.spec.ts:289-291 同一 page 断言 chip 翻成 done；packages/frontend/src/routes/tasks.detail.tsx:216 refetchInterval: (q) => taskDetailRefetchInterval(q.state.data)"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/crash-recovery.spec.ts",
+          "test": "SIGKILL daemon mid-task → restart → task=interrupted → click Resume → done"
+        }
       ]
     },
     {
@@ -6233,10 +7035,13 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "页脚设置齿轮 → /settings 并高亮",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/nav-redesign.spec.ts:68-84 —「settings gear: click → /settings + --active outline」；e2e/nav-redesign.spec.ts:74 — 点击前 not.toHaveClass(/settings-gear--active/) 负向基线；e2e/nav-redesign.spec.ts:79-83 — toHaveURL(/\\/settings\\?tab=runtime$/) + aria-current=page"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/nav-redesign.spec.ts",
+          "test": "RFC-032 nav-redesign settings gear: click → /settings + --active outline"
+        }
       ]
     },
     {
@@ -6278,13 +7083,25 @@
     {
       "id": "UX-14",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
-      "title": "Segmented 单选组键盘模型：单 Tab 停靠点 + 方向键移动焦点与选择 + 选择跨开合保持",
+      "title": "Segmented 单选组键盘模型：方向键移动焦点与选择 + 选择跨开合保持（单 Tab 停靠点见 UX-14b）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/keyboard-flows.spec.ts:146-183 —「selected filter receives initial focus and Escape restores the inbox trigger」；e2e/keyboard-flows.spec.ts:164-170 — ArrowRight ×2 + aria-checked + toBeFocused；e2e/keyboard-flows.spec.ts:176-179 — 重开后仍聚焦上次选中项"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/keyboard-flows.spec.ts",
+          "test": "selected filter receives initial focus and Escape restores the inbox trigger"
+        }
       ]
+    },
+    {
+      "id": "UX-14b",
+      "domain": "前端横切：导航、可访问性、键盘、实时同步",
+      "title": "【拆自 UX-14】Segmented 单选组的单 Tab 停靠点（roving tabindex）—— 全仓 e2e 对 tabindex 零断言，改成全部 tabindex=0 也不会红",
+      "risk": "P2",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "UX-15",
@@ -6309,10 +7126,13 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "焦点环不被任何 overflow 祖先裁切（21 条路由全扫）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/focus-ring-clip.spec.ts:902-923 — ROUTES 21 条 + NARROW_ROUTES 6 条；e2e/focus-ring-clip.spec.ts:925-940 — 「ONE test sweeps everything, on purpose」的反空洞绿说明；e2e/focus-ring-clip.spec.ts:681-880 — 引擎自检 6 条；packages/frontend/tests/focus-ring-inset.test.ts — 源码文本兜底"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/focus-ring-clip.spec.ts",
+          "test": "focus rings are not clipped anywhere"
+        }
       ]
     },
     {
@@ -6329,10 +7149,17 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "路由提交后的焦点落点（移动端菜单导航 → 新页 h1 获得焦点）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:941-958 — URL + heading toBeFocused + 抽屉卸载三断言；e2e/ux-consistency.spec.ts:912-934 — 键盘打开抽屉 + ESC + 触发器焦点归还；e2e/ux-consistency.spec.ts:960-971 — 移动详情返回后焦点回 split-card；e2e/ux-consistency.spec.ts:644-682 — 901→900 回桌面时 app-shell-main 获焦（不聚焦已卸载 chrome）"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "390 light keeps mobile navigation, split focus, and tasks table reachable"
+        },
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "901/900 is the single shell boundary and resize never focuses hidden chrome"
+        }
       ]
     },
     {
@@ -6340,10 +7167,29 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "Inbox 抽屉：三端摆位、ESC 归还焦点、空态、390 全屏 sheet、局部数据源失败仍显示已知内容",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:683-730 — 901/900/720 三档 boundingBox + ESC 焦点归还；e2e/nav-redesign.spec.ts:140-171（空态 + ESC）、:173-218（390 全屏四元组）；e2e/rfc250-interaction-integrity.spec.ts:1029-1073 — 736 zh-CN、peer 源失败仍保留已知内容 + 源级重试；e2e/a11y.spec.ts:240-254 — 6 行 + workgroupError 的 axe 扫描"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "Inbox follows desktop, tablet, and mobile placement with focus restoration"
+        },
+        {
+          "file": "e2e/nav-redesign.spec.ts",
+          "test": "RFC-195 inbox dialog: footer button opens an accessible empty-state dialog"
+        },
+        {
+          "file": "e2e/nav-redesign.spec.ts",
+          "test": "RFC-195 inbox dialog: populated 390px panel keeps content and footer in bounds"
+        },
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "736 zh-CN Inbox keeps long known content when the peer source fails"
+        },
+        {
+          "file": "e2e/a11y.spec.ts",
+          "test": "/agents inbox dialog open passes a11y"
+        }
       ]
     },
     {
@@ -6360,10 +7206,25 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "主题：显式 light/dark 压过相反系统配色；暗色令牌在状态芯片/表格/弹窗/diff 上一致",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:1125-1147 — 显式主题压过相反 OS 配色（两向具体 rgb）；e2e/ux-consistency.spec.ts:1149-1187 — 1280 暗色状态芯片/按钮/diff 四色/弹窗底色；e2e/ux-consistency.spec.ts:1190 / :1235 — 390 暗色、explicit-dark 与 system-dark 主按钮同色；packages/frontend/tests/theme-css-ratchet.test.ts / theme-contrast.test.ts"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "explicit app themes win over the opposite OS color scheme on desktop"
+        },
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "1280 dark covers status, settings, and dialog surfaces"
+        },
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "390 dark keeps compact navigation, form, and dialog representative surfaces usable"
+        },
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "Skill ZIP primary matches the global primary in explicit-dark and system-dark modes"
+        }
       ]
     },
     {
@@ -6371,10 +7232,13 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "语言切换（普通用户本地生效、不写 daemon 配置）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc305-user-permissions.spec.ts:249-259 — aria-checked + localStorage + regularUserConfigWrites 为 []；e2e/rfc305-user-permissions.spec.ts:236-242 — PUT /api/config 请求监听器；packages/frontend/src/components/LanguageSwitch.tsx:121-127 — !canWriteConfig 分支只 setLanguage"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc305-user-permissions.spec.ts",
+          "test": "390px create/edit catalog, OCC, dark mode and live script authority"
+        }
       ]
     },
     {
@@ -6382,10 +7246,25 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "中文界面下的布局完整性（长中文、分区导航、中文资源名）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:759-778 — zh-CN 1280 与 390 的分区导航形态 + 无溢出；e2e/rfc250-interaction-integrity.spec.ts:1038-1054 — 736 zh-CN 长中文换行几何断言；e2e/rfc264-unicode-names.spec.ts:40 / :93 — 中文名工作流创建+重命名、中文名工作组创建；packages/frontend/tests/i18n-keys-symmetry.test.ts"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "Chinese page-section navigation stays discoverable at 1280 and 390"
+        },
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "736 zh-CN Inbox keeps long known content when the peer source fails"
+        },
+        {
+          "file": "e2e/rfc264-unicode-names.spec.ts",
+          "test": "a workflow can be created and renamed with a Chinese name"
+        },
+        {
+          "file": "e2e/rfc264-unicode-names.spec.ts",
+          "test": "a workgroup can be created with a Chinese name"
+        }
       ]
     },
     {
@@ -6454,23 +7333,50 @@
     {
       "id": "UX-X5",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
-      "title": "/docs/api 生成式 API 手册：从活注册表派生 + 390px 页面不横滚而宽块内部滚动",
+      "title": "/docs/api 生成式手册：从活注册表派生 + 390px 页面不横滚（宽块内部滚动见 UX-X5b）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc247-api-docs-page.spec.ts:42-55 — 三元交叉派生断言；e2e/rfc247-api-docs-page.spec.ts:65-75 — 390px 页面不横滚；e2e/rfc247-api-docs-page.spec.ts:77-94 — 「Without this check, a page that rendered nothing would also 'not overflow'」的前提断言；e2e/rfc247-api-docs-page.spec.ts:96-102 — /.well-known/mcp 免凭据"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc247-api-docs-page.spec.ts",
+          "test": "renders content derived from the live route and tool registries"
+        },
+        {
+          "file": "e2e/rfc247-api-docs-page.spec.ts",
+          "test": "at 390px the page does not scroll sideways"
+        }
       ]
+    },
+    {
+      "id": "UX-X5b",
+      "domain": "前端横切：导航、可访问性、键盘、实时同步",
+      "title": "【拆自 UX-X5】/docs/api 的宽块（table / pre）在自身容器内横向滚动而非撑横页面 —— 现有断言近似恒真（谓词含 scrollWidth > 0，任何已渲染元素都成立）",
+      "risk": "P2",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "UX-X6",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "破坏性操作的两段确认原语（ConfirmButton / ConfirmDialog）含 pending、禁用与错误态",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/agent-port-editor.spec.ts:149-172 — Delete → Confirm deletion of <port> 两段式 + 删除后焦点落点；e2e/rfc250-interaction-integrity.spec.ts:745 / :793 — Run now 的无障碍名翻成 /confirm/i（列表与详情各一次）；e2e/rfc250-interaction-integrity.spec.ts:586-621 — memory-confirm-dialog 的 ok/cancel 同时 disabled + memory-confirm-error；e2e/rfc250-interaction-integrity.spec.ts:550 / :633 — 断言 DELETE 带 confirm=true"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/agent-port-editor.spec.ts",
+          "test": "input add/edit/delete keeps transactional data and deterministic focus hand-off"
+        },
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Scheduled list/detail share blocked reason, two-click confirmation, pending, and retry"
+        },
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Memory archive, delete, and unarchive stay target-scoped through pending/error/retry"
+        }
       ]
     },
     {
@@ -6858,13 +7764,29 @@
     {
       "id": "WF-47",
       "domain": "工作流定义与画布编辑器",
-      "title": "重命名工作流（名称与描述，一次复合本地事务 + 名称折叠）",
+      "title": "重命名工作流（名称）（描述与名称折叠见 WF-47b）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc264-unicode-names.spec.ts:60-89；e2e/insecure-context-save.spec.ts:86-96 renameDraft 与 :124 poll(readWorkflowName).toBe(renamedName)"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc264-unicode-names.spec.ts",
+          "test": "a workflow can be created and renamed with a Chinese name"
+        },
+        {
+          "file": "e2e/insecure-context-save.spec.ts",
+          "test": "editor saves nodes, survives reload, and launch validation completes without SubtleCrypto"
+        }
       ]
+    },
+    {
+      "id": "WF-47b",
+      "domain": "工作流定义与画布编辑器",
+      "title": "【拆自 WF-47】重命名工作流的描述字段与名称折叠（normalizeResourceDisplayName）—— e2e 零覆盖，仅 shared 单测",
+      "risk": "P2",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "WF-48",
@@ -7293,10 +8215,13 @@
       "domain": "代理",
       "title": "Runtime 选择：pin 到具体 runtime 与回到 inherit 双向往返",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:438-501 'a single enabled runtime stays visible and round-trips inherit and explicit pin'；packages/frontend/tests/agent-detail-runtime-roundtrip.test.ts、packages/frontend/tests/agent-put-body.test.ts；packages/backend/tests/agents.test.ts:220 'update writes runtime: pin, preserve on unrelated patch, clear to inherit'"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "a single enabled runtime stays visible and round-trips inherit and explicit pin"
+        }
       ]
     },
     {
@@ -7501,10 +8426,17 @@
       "domain": "代理",
       "title": "Intent 生成的代理：详情页出现来源徽章，并可从代理详情发起「修改」会话",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/intent-builder.spec.ts:61 'US-1: intent create → draft preview → commit → resource lands with provenance'，:88-94 徽章可见并可点开跳转；e2e/intent-builder.spec.ts:96 'US-6: modify entry pre-mounts the target resource in a new session'，:115-124；packages/frontend/src/routes/agents.detail.tsx:230-240"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "US-1: intent create → draft preview → commit → resource lands with provenance"
+        },
+        {
+          "file": "e2e/intent-builder.spec.ts",
+          "test": "US-6: modify entry pre-mounts the target resource in a new session"
+        }
       ]
     },
     {
@@ -8265,10 +9197,13 @@
       "domain": "身份、认证、用户与资源权限",
       "title": "归属展示：任务与定时任务列表的所有者列（含长名折行与 390px 不溢出）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc232-owner-list.spec.ts:256-272；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc232-owner-list.spec.ts:291-332（390px 布局断言）"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc232-owner-list.spec.ts",
+          "test": "owner identity is visible, distinct, accessible, and reachable at 390px"
+        }
       ]
     },
     {
@@ -8302,13 +9237,25 @@
     {
       "id": "IAM-45",
       "domain": "身份、认证、用户与资源权限",
-      "title": "API 与 MCP 文档页按当前身份呈现可授予权限目录",
+      "title": "API 与 MCP 文档页从活注册表派生权限目录（按身份分档见 IAM-45b）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc247-api-docs-page.spec.ts:43-54；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc247-api-docs-page.spec.ts:76-93（防空转前提）；/Users/wangbinquan/dev/proj/agent-workflow/e2e/rfc250-pat-permission-matrix.spec.ts:41-54（交叉引用）"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc247-api-docs-page.spec.ts",
+          "test": "renders content derived from the live route and tool registries"
+        }
       ]
+    },
+    {
+      "id": "IAM-45b",
+      "domain": "身份、认证、用户与资源权限",
+      "title": "【拆自 IAM-45】/docs/api 按当前身份裁剪权限目录 —— notAvailableToYou 分支从未在浏览器里被渲染过（整份 spec 只用管理员打开）",
+      "risk": "P3",
+      "tier": "pr",
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "IAM-48",
@@ -8572,10 +9519,13 @@
       "domain": "记忆",
       "title": "取消归档（unarchive）：行内 pending / 逐行错误横幅 / 重试",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc250-interaction-integrity.spec.ts:634-651 unarchive disabled → memory-unarchive-error-<id> → Retry → 行 hidden → unarchiveUrls.every(endsWith(`/${unarchiveId}/unarchive`))；packages/frontend/src/components/memory/MemoryAllList.tsx:146-165,331-338 逐行 pending set 与 error map"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-interaction-integrity.spec.ts",
+          "test": "Memory archive, delete, and unarchive stay target-scoped through pending/error/retry"
+        }
       ]
     },
     {
@@ -9166,10 +10116,13 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表根层/子分支加载失败时的错误横幅与重试",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc244-task-operations.spec.ts:403 test('root and branch failures are retryable and the populated view has no serious axe findings')；e2e/rfc244-task-operations.spec.ts:410/421 两处 getByRole('button', { name: /retry/i }).click()；e2e/task-operations-fixtures.ts:361/365 failRoot / failChildFor 的 503 注入点"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc244-task-operations.spec.ts",
+          "test": "root and branch failures are retryable and the populated view has no serious axe findings"
+        }
       ]
     },
     {
@@ -9322,10 +10275,8 @@
       "title": "视觉门的触发条件本身（夜间 + 路径过滤）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        ".github/workflows/visual-regression-nightly.yml:24-72 — schedule + workflow_dispatch + push(paths) + pull_request(paths)，首条 path 即 packages/frontend/**；.github/workflows/visual-regression-nightly.yml:30-31 — 后端只列了一个文件；e2e/visual-regression.spec.ts:18-27 + :45 — RUN_VISUAL_REGRESSION==='1' 开关与「ubuntu only」说明"
-      ]
+      "status": "gap",
+      "gapSince": "RFC-319"
     },
     {
       "id": "UX-X3",
@@ -9364,10 +10315,13 @@
       "domain": "工作流定义与画布编辑器",
       "title": "?create=1 一次性深链打开创建弹窗（前进/后退不重放）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/ux-consistency.spec.ts:994-1020 goto ?create=1&scope=all → poll {create:false,scope:'all'} → reload/goBack/goForward 后 toHaveCount(0)；packages/frontend/src/routes/workflows.tsx:112-134 deepCreateConsumedRef 一次性消费"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/ux-consistency.spec.ts",
+          "test": "390 workflow deep-create is one-shot and import dialog fits with focus restoration"
+        }
       ]
     },
     {
@@ -9669,7 +10623,15 @@
     }
   ],
   "gapIds": [
+    "DE-16b",
+    "DE-31b",
+    "INTENT-13b",
+    "OPS-044b",
+    "REPO-14b",
+    "REPO-38b",
+    "REPO-38c",
     "REPO-43",
+    "UX-35b",
     "AGENT-28",
     "AGENT-33",
     "AGENT-39",
@@ -9844,11 +10806,13 @@
     "TASK-39",
     "TASK-44",
     "TASK-X1",
+    "TASK-X4b",
     "TASK-X7",
     "UX-04",
     "UX-05",
     "UX-09",
     "UX-11",
+    "UX-14b",
     "UX-15",
     "UX-16",
     "UX-19",
@@ -9860,6 +10824,7 @@
     "UX-43",
     "UX-47",
     "UX-X2",
+    "UX-X5b",
     "UX-X7",
     "WF-02",
     "WF-11",
@@ -9870,6 +10835,7 @@
     "WF-37",
     "WF-40",
     "WF-45",
+    "WF-47b",
     "WF-52",
     "WG-05",
     "WG-09",
@@ -9938,6 +10904,7 @@
     "EVENT-X6",
     "EVENT-X7",
     "IAM-22",
+    "IAM-45b",
     "IAM-48",
     "INTENT-02",
     "INTENT-20",
@@ -10006,6 +10973,7 @@
     "UX-40",
     "UX-44",
     "UX-45",
+    "UX-46",
     "UX-X3",
     "UX-X4",
     "WF-15",
@@ -10028,144 +10996,5 @@
     "WG-X2",
     "WG-X4"
   ],
-  "unverifiedIds": [
-    "AGENT-05",
-    "AGENT-27",
-    "AGENT-32",
-    "AGENT-34",
-    "AGENT-37",
-    "AGENT-43",
-    "DE-01",
-    "DE-03",
-    "DE-04",
-    "DE-05",
-    "DE-06",
-    "DE-09",
-    "DE-11",
-    "DE-12",
-    "DE-13",
-    "DE-16",
-    "DE-22",
-    "DE-26",
-    "DE-31",
-    "DE-X3",
-    "EVENT-14",
-    "EVENT-15",
-    "EVENT-17",
-    "EVENT-21",
-    "EVENT-22",
-    "EVENT-37",
-    "EVENT-38",
-    "HUMAN-01",
-    "HUMAN-02",
-    "HUMAN-03",
-    "HUMAN-04",
-    "HUMAN-06",
-    "HUMAN-11",
-    "HUMAN-30",
-    "HUMAN-39",
-    "HUMAN-44",
-    "HUMAN-45",
-    "IAM-04",
-    "IAM-17",
-    "IAM-18",
-    "IAM-19",
-    "IAM-20",
-    "IAM-23",
-    "IAM-24",
-    "IAM-25",
-    "IAM-31",
-    "IAM-36",
-    "IAM-37",
-    "IAM-39",
-    "IAM-40",
-    "IAM-45",
-    "IAM-46",
-    "INTENT-01",
-    "INTENT-13",
-    "INTENT-14",
-    "INTENT-15",
-    "INTENT-22",
-    "INTENT-29",
-    "INTENT-34",
-    "INTENT-47",
-    "MEM-01",
-    "MEM-05",
-    "MEM-09",
-    "MEM-15",
-    "MEM-16",
-    "MEM-17",
-    "MEM-18",
-    "MEM-38",
-    "MEM-39",
-    "OPS-001",
-    "OPS-024",
-    "OPS-025",
-    "OPS-044",
-    "OPS-X1",
-    "OPS-X2",
-    "REPO-14",
-    "REPO-20",
-    "REPO-21",
-    "REPO-22",
-    "REPO-31",
-    "REPO-32",
-    "REPO-38",
-    "REPO-41",
-    "RES-03",
-    "RES-X4",
-    "TASK-01",
-    "TASK-02",
-    "TASK-07",
-    "TASK-09",
-    "TASK-10",
-    "TASK-12",
-    "TASK-18",
-    "TASK-20",
-    "TASK-22",
-    "TASK-23",
-    "TASK-25",
-    "TASK-29",
-    "TASK-37",
-    "TASK-40",
-    "TASK-41",
-    "TASK-42",
-    "TASK-43",
-    "TASK-X3",
-    "TASK-X4",
-    "TASK-X6",
-    "UX-01",
-    "UX-02",
-    "UX-03",
-    "UX-10",
-    "UX-12",
-    "UX-14",
-    "UX-18",
-    "UX-21",
-    "UX-22",
-    "UX-23",
-    "UX-25",
-    "UX-27",
-    "UX-29",
-    "UX-31",
-    "UX-35",
-    "UX-46",
-    "UX-X1",
-    "UX-X5",
-    "UX-X6",
-    "WF-01",
-    "WF-07",
-    "WF-09",
-    "WF-10",
-    "WF-12",
-    "WF-18",
-    "WF-39",
-    "WF-41",
-    "WF-42",
-    "WF-43",
-    "WF-47",
-    "WF-54",
-    "WG-25",
-    "WG-26"
-  ]
+  "unverifiedIds": []
 }
