@@ -223,6 +223,40 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
   })
 })
 
+describe('RFC-324 —— 授权面变更要通知客户端让 ACL 判定失效', () => {
+  test('resource-acl-changed 给每条活连接发一帧；不关连接、不发 authority.changed', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const alice = await seedUser(db, 'acl-alice', 'user')
+    const bob = await seedUser(db, 'acl-bob', 'user')
+    const aliceConn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
+    const bobConn = fakeConn(bob.actor, bob.credential, { kind: 'memories' })
+    trackConnection(aliceConn.ws)
+    trackConnection(bobConn.ws)
+
+    const stats = await revalidateAllConnections({ db, log }, 'resource-acl-changed')
+
+    expect(stats).toMatchObject({ scanned: 2, refreshed: 2, closedAuth: 0, closedGate: 0 })
+    // 这一帧是「降档后不刷新页面也切只读」的唯一信号：重扫本身只回答「这条连接还能
+    // 不能留着」，而 write → read 的人仍然看得见，重扫对他什么也不做。
+    expect(aliceConn.sent).toEqual([{ type: 'resource-acl.changed' }])
+    expect(bobConn.sent, '与频道无关：任何页面都可能正拿着一份 ACL 判定').toEqual([
+      { type: 'resource-acl.changed' },
+    ])
+    expect(aliceConn.closes, '授权面变更不该关任何连接——降档的人仍然看得见').toEqual([])
+    expect(bobConn.closes).toEqual([])
+  })
+
+  test('其它 reason 不发这一帧（避免变成"什么都刷一遍"的广播）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const alice = await seedUser(db, 'acl-quiet', 'user')
+    const conn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
+    trackConnection(conn.ws)
+
+    await revalidateAllConnections({ db, log }, 'task-members-changed')
+    expect(conn.sent).toEqual([])
+  })
+})
+
 describe('RFC-305 targeted authority refresh', () => {
   test('refreshes only the changed subject and emits a revision-only control frame', async () => {
     const db = createInMemoryDb(MIGRATIONS)

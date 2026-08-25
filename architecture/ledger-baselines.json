@@ -95,6 +95,13 @@
       "why": "routes/ 下只读消费 canViewResource、无 owner 写门的文件。每一条都是「这个路由确实只读」的断言，新增一条等于新增一处需要人复核的写门缺口（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
+      "id": "acl-edit-gate-elsewhere-allowlist",
+      "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
+      "symbol": "EDIT_GATE_ELSEWHERE_ALLOWLIST",
+      "baseline": 2,
+      "why": "RFC-324：挂了 /acl 端点、却没有任何 requireResourceEdit 的路由文件。每一条都是「这类资源的内容写门在别处」的断言；新增一条等于新增一处「可编辑档对该资源不生效」的缺口——那种失败不报错、不变红，只留下一个不生效的开关，必须人复核。当前两条：mountAclEndpoints 的定义处本身不承载任何资源的内容写；workflows.ts 的保存门在 services/workflow.ts 的 assertPrincipalCanEditInTx（它要拿事务内的当前名字做改名围栏，路由层做不到）"
+    },
+    {
       "id": "lifecycle-status-set-exemptions",
       "file": "packages/backend/tests/architecture/rfc317-lifecycle-status-sets.test.ts",
       "symbol": "EXEMPTIONS",

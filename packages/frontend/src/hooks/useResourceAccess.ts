@@ -4,11 +4,18 @@
 // there are thirteen ACL resource types, so a `canEdit` on every detail
 // response is thirteen parallel backend changes, thirteen serializers and
 // thirteen sets of fixtures to keep in agreement — for one fact that the ACL
-// endpoint already computes in one place. This shares `AclPanel`'s exact query
-// key, so a page that also hosts the permissions dialog pays for ONE request,
-// and both collapse to the same cache entry when `resource-acl-changed`
-// invalidates it (that is what makes a live downgrade land on the page without
-// a reload).
+// endpoint already computes in one place.
+//
+// It deliberately does NOT share `AclPanel`'s query key, and that is a lesson
+// paid for in an e2e failure. Sharing looks like a free win (one request for a
+// page that also hosts the permissions dialog) right up until something has to
+// INVALIDATE it: the `resource-acl.changed` frame arrives at the owner's own
+// browser too, and an invalidation puts the shared entry into `fetching` —
+// which trips `AclPanel`'s own "is my management session still live?" guard
+// (it requires `fetchStatus === 'idle'`), so the owner's save silently stopped
+// closing its dialog. Two consumers with different invalidation needs must not
+// share one cache entry. The extra request is one GET on a page the actor is
+// already authorized to read.
 //
 // Unresolved is OPTIMISTIC, and that is a deliberate reversal of the first cut.
 //
@@ -65,7 +72,8 @@ export function useResourceAccess(resourceBaseUrl: string | null): ResourceAcces
   const isDaemon = actorSettled && actor.data?.source === 'daemon'
 
   const query = useQuery<ResourceAcl>({
-    queryKey: ['acl', aclUrl, authRevision] as const,
+    // 独立于 AclPanel 的 `['acl', …]`——见文件头注释。
+    queryKey: ['resource-access', aclUrl, authRevision] as const,
     queryFn: ({ signal }) => api.get(aclUrl as string, undefined, signal),
     enabled: aclUrl !== null && actorSettled && !isDaemon,
   })

@@ -367,9 +367,12 @@ export function useResourceAccess(resourceBaseUrl: string): {
 }
 ```
 
-- 复用**已有**的 `GET {base}/acl` 端点与 `AclPanel` 相同的 query key `['acl', aclUrl, authRevision]`
-  （`components/AclPanel.tsx:118-131`），因此详情页与权限面板共享一份缓存，`resource-acl-changed`
-  重校验（`services/resourceAcl.ts:761`）一到就同时收敛（AC-15）。
+- 复用**已有**的 `GET {base}/acl` 端点，但**用自己的 query key** `['resource-access', aclUrl,
+authRevision]`。初版与 `AclPanel` 共享 `['acl', …]`（省一次请求），实现期被 e2e 否掉：
+  授权变更的通知帧会送到 **owner 自己**的浏览器，共享 key 一失效就把面板正在编辑的那份
+  快照打成 `fetching`，绊倒 `AclPanel` 既有的「管理会话是否仍有效」守卫（要求
+  `fetchStatus === 'idle'`），后果是 owner 每次保存权限后弹窗都不关闭。**两个消费者对
+  「何时失效」的需求不同，就不该共享一个缓存条目**；多出来的那次 GET 打在一个本来就有读权的页面上。
 - **不改 13 个 detail DTO**：那是 13 处平行改动 + 13 处平行测试，而档位是同一件事；单点 hook 是
   RFC-294 G6「同一种机制只有一个内核」在前端侧的对应做法。
 - daemon token 模式下 `AclPanel` 本就整块隐藏（D19），hook 在该模式返回 `canEdit: true`
@@ -432,8 +435,23 @@ export function useResourceAccess(resourceBaseUrl: string): {
 
 - ACL 写仍是 `dbTxSync` 单事务：CAS + 引用用户 active 检查 + grant 全量替换 + `afterWriteInTx`
   （`services/resourceAcl.ts:596-745` 的既有形状不变，只是 insert 多带一列 `level`）。
-- 提交后仍 `triggerRevalidation(db, 'resource-acl-changed')`（`:759-761`）——档位降级因此与撤权走
-  同一条重校验路径，前端无需新增通道。
+- 提交后仍 `triggerRevalidation(db, 'resource-acl-changed')`。**但那条路径原本不足以支撑 AC-15**：
+  RFC-212 的重扫只回答「这条连接还能不能留着」——它对**降档**（`write → read`，仍然看得见）
+  什么也不做，于是被降档的人会一直停在可编辑的界面上，直到他自己刷新，而他没有任何理由刷新。
+  实现期因此补了缺的那个信号：
+  1. 新增控制帧 `resource-acl.changed`（`shared/schemas/ws.ts` 的 `WsControlMessageSchema`）。
+     刻意**不带 resourceId**：客户端要做的只是让本地判定失效，而它同时持有的判定至多是屏幕上
+     那一两个；带上 id 就要服务端算出「谁关心这一行」，那份账比它防的问题贵。
+  2. `ws/connections.ts` 的重扫在 `reason === 'resource-acl-changed'` 时给每条活连接发这一帧。
+     丢帧的处置比 `authority.changed` 轻——那条丢了意味着客户端拿着已撤销的权限继续渲染，
+     必须关连接；这条丢了只意味着某个页面的只读态晚到一次交互，关连接（进而重连风暴）
+     比问题本身更贵，所以吞掉。
+  3. 前端 `useWebSocket` 收到该帧 → `invalidateQueries({ queryKey: ['resource-access'] })`。
+     **刻意不碰 `['acl', …]`**，理由见 §10.1。
+
+  锁：`rfc212-revalidation-behavior.test.ts` 的两条（发帧 / 其它 reason 不发）+
+  `e2e/rfc324-graded-grants.spec.ts` 的升档与降档两个方向。
+
 - 定时任务 ACL PUT 复用同一形状（新增的 `acl_revision` 列）。
 
 ## 13. 测试策略
@@ -468,14 +486,15 @@ export function useResourceAccess(resourceBaseUrl: string): {
 
 ## 14. 偏离项与风险登记（呈用户确认）
 
-| 编号 | 偏离 / 风险                                                                                                    | 处置                                                                                                                                                                                          |
-| ---- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| X1   | `scheduled_task` 复用 `resource_grants` 但不进 `ACL_RESOURCE_TYPES`，于是 grants 表的类型域比 ACL 资源域宽一格 | §7.1 已论证；用两个类型（`GrantResourceType` ⊃ `AclResourceType`）让编译器守住边界                                                                                                            |
-| X2   | 详情页档位靠额外一次 `GET /acl`，而非各 detail DTO 自带 `canEdit`                                              | §10.1 已论证（单点 > 13 处平行改动）；系统规模小、列表本就全表加载                                                                                                                            |
-| X3   | `isResourceOwner` → `canGovernResource`、`requireResourceOwner` → `requireResourceGovern` 是全仓改名           | 一次性完成，不留别名；改名本身由类型系统保证无遗漏                                                                                                                                            |
-| X4   | 可编辑者能改 MCP `config`（等价换命令）与技能可执行文件                                                        | 用户 D7 明确裁定；面板给风险提示（I6），`scripts:author` 字段门不变                                                                                                                           |
-| X5   | 任务 `task_collaborators` 主键含 `role`，同一 user 可能多行                                                    | 写入 dedupe + 读取取高档（§6.1），不改主键（改主键要迁数据且无收益）                                                                                                                          |
-| X6   | 本 RFC 不搬模块目录，只改门                                                                                    | RFC-294 演进步已在 §1.2 明示：本次只承担 ACL kernel 的纯函数抽离，其余债留给各资源模块化波次                                                                                                  |
-| X7   | 定时任务的 `write` 档**不含**改绑启动目标与改名                                                                | §7.3 已论证（执行身份提权面，对齐既有设计门 F-9）。用户 D6 裁定的三件事（cron / 启停 / 立即运行）全部落在 `write` 档内                                                                        |
-| X8   | 前端判定未到达时**乐观**而非 fail-closed                                                                       | §10.1 已论证；无人值守写入（heal 自动保存）仍严格要求 `isResolved`                                                                                                                            |
-| X9   | `digital-employees.$typeRef` 类型页未接只读态                                                                  | 该页面对应的是**员工类型**（含多个员工定义），不是单一 ACL 行，`useResourceAccess` 的"一页一资源"形状套不上。后端写门已按档位生效；该页的逐卡只读态留给数字员工侧的下一个 RFC，登记在此不遗忘 |
+| 编号 | 偏离 / 风险                                                                                                    | 处置                                                                                                                                                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| X1   | `scheduled_task` 复用 `resource_grants` 但不进 `ACL_RESOURCE_TYPES`，于是 grants 表的类型域比 ACL 资源域宽一格 | §7.1 已论证；用两个类型（`GrantResourceType` ⊃ `AclResourceType`）让编译器守住边界                                                                                                                                                                                     |
+| X2   | 详情页档位靠额外一次 `GET /acl`，而非各 detail DTO 自带 `canEdit`                                              | §10.1 已论证（单点 > 13 处平行改动）；系统规模小、列表本就全表加载                                                                                                                                                                                                     |
+| X3   | `isResourceOwner` → `canGovernResource`、`requireResourceOwner` → `requireResourceGovern` 是全仓改名           | 一次性完成，不留别名；改名本身由类型系统保证无遗漏                                                                                                                                                                                                                     |
+| X4   | 可编辑者能改 MCP `config`（等价换命令）与技能可执行文件                                                        | 用户 D7 明确裁定；面板给风险提示（I6），`scripts:author` 字段门不变                                                                                                                                                                                                    |
+| X5   | 任务 `task_collaborators` 主键含 `role`，同一 user 可能多行                                                    | 写入 dedupe + 读取取高档（§6.1），不改主键（改主键要迁数据且无收益）                                                                                                                                                                                                   |
+| X6   | 本 RFC 不搬模块目录，只改门                                                                                    | RFC-294 演进步已在 §1.2 明示：本次只承担 ACL kernel 的纯函数抽离，其余债留给各资源模块化波次                                                                                                                                                                           |
+| X7   | 定时任务的 `write` 档**不含**改绑启动目标与改名                                                                | §7.3 已论证（执行身份提权面，对齐既有设计门 F-9）。用户 D6 裁定的三件事（cron / 启停 / 立即运行）全部落在 `write` 档内                                                                                                                                                 |
+| X8   | 前端判定未到达时**乐观**而非 fail-closed                                                                       | §10.1 已论证；无人值守写入（heal 自动保存）仍严格要求 `isResolved`                                                                                                                                                                                                     |
+| X10  | 权限面板入口挂**方法级权限点**，不挂行级档位                                                                   | 实现期由 `rfc099-ownership-acl` 的 e2e 抓出：第一版把 ACL 入口一起挂在收紧后的 `canUpdate` 上，于是被授权者再也看不到权限面板——而那正是他确认「我是被谁、以什么档位授权的」的唯一地方。面板对只读者本就是只读视图（内部按 `canManage` 决定），入口因此维持改造前的条件 |
+| X9   | `digital-employees.$typeRef` 类型页未接只读态                                                                  | 该页面对应的是**员工类型**（含多个员工定义），不是单一 ACL 行，`useResourceAccess` 的"一页一资源"形状套不上。后端写门已按档位生效；该页的逐卡只读态留给数字员工侧的下一个 RFC，登记在此不遗忘                                                                          |

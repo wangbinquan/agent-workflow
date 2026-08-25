@@ -44,9 +44,20 @@ describe('RFC-324 —— 编辑器只读态的三处接缝', () => {
   test('①canUpdate = 方法级权限点 ∧ 行级授权档', () => {
     expect(
       SOURCE,
-      'canUpdate 只看 usePermission 就是「看得见 = 编辑得动」——workflows:update 人人都有',
-    ).toMatch(/const canUpdate = usePermission\('workflows:update'\) && workflowAccess\.canEdit/)
+      'canUpdate 只看权限点就是「看得见 = 编辑得动」——workflows:update 在 user 预设里人人都有',
+    ).toMatch(/const canUpdate = canManageAcl && workflowAccess\.canEdit/)
     expect(SOURCE).toContain('useResourceAccess(`/api/workflows/${workflowId}`)')
+    // 权限面板入口**不能**跟着收紧：它对只读者是只读视图，藏起来等于让被授权者
+    // 看不到自己是被谁、以什么档位授权的（rfc099 的 e2e 当场抓到过这一点）。
+    expect(SOURCE).toMatch(/const canManageAcl = usePermission\('workflows:update'\)/)
+    const guardAt = SOURCE.indexOf('{canManageAcl &&')
+    const aclButtonAt = SOURCE.indexOf('data-testid="workflow-acl-button"')
+    expect(guardAt, '权限入口的守卫必须是 canManageAcl').toBeGreaterThan(0)
+    expect(aclButtonAt).toBeGreaterThan(guardAt)
+    expect(
+      SOURCE.slice(guardAt, aclButtonAt),
+      '两者之间不该夹着另一个按钮——那说明这个守卫守的是别的东西',
+    ).not.toContain('data-testid="workflow-')
   })
 
   test('②heal 的自动保存等的是已解析的判定，不是乐观值', () => {

@@ -85,7 +85,10 @@ DEFAULT 'read'`、`scheduled_tasks.acl_revision INTEGER NOT NULL DEFAULT 0`。�
       `rfc324-grant-level-matrix`；bypass 不变由等价性穷举覆盖（比单独一个文件更强）。
 - [x] **RFC-324-T23** 前端测试：`rfc324-acl-panel-levels.test.tsx`（档位控件 + hook 的乐观/严格
       双语义，8 例）、`rfc324-editor-readonly-source-lock.test.ts`（编辑器三处接缝的源码锁，5 例）。
-- [ ] **RFC-324-T24** `e2e/rfc324-graded-grants.spec.ts` —— **未做**。理由与去向见 §7。
+- [x] **RFC-324-T24** `e2e/rfc324-graded-grants.spec.ts`：只读态 + 零自动保存 + 升档/降档两个方向
+      的不刷新收敛。**做的过程中发现 AC-15 原本不成立**，补了 `resource-acl.changed` 控制帧这条
+      缺失的通道（design §12），并被 e2e 逼出两处修正——`useResourceAccess` 不再与 `AclPanel`
+      共享 query key（design §10.1）、权限面板入口不跟着 `canUpdate` 收紧（design §14 X10）。
 - [x] **RFC-324-T25** 文档收口：`design/plan.md` RFC 索引登记；`STATE.md` 顶部进行中 → 完工后移入已完成表；
       `docs/audit-backlog.md:108` 与 `:489-499` 两条**标记为已修并注明本 RFC**（不删除历史记录）。
 - [ ] **RFC-324-T26** Codex 实现门（declare done 前）+ push 后按 exact SHA 盯 CI 到绿 —— **待做**。
@@ -132,7 +135,7 @@ wire 是破坏性变更，**批次 1 必须前后端同批**，否则 main 上�
 - [x] **AC-13** —— `rfc324-editor-readonly-source-lock.test.ts`（编辑器三处接缝）+ `rfc324-acl-panel-levels.test.tsx` 的 hook 语义组。详情页只读态由类型系统保证
       （`canUpdate` 是那些页面所有写入口的唯一开关），未单独写渲染测试。
 - [x] **AC-14** —— 三条错误码的中英文案随 T20 落地；工作流编辑器的 403 分流由源码锁覆盖。
-- [ ] **AC-15** —— **未覆盖**：`e2e/rfc324-graded-grants.spec.ts` 未写（T24）。见 §7。
+- [x] **AC-15** —— `e2e/rfc324-graded-grants.spec.ts`（升档与降档两个方向都不刷新页面）+ `rfc212-revalidation-behavior.test.ts` 的发帧两条。
 - [x] **AC-17** —— 既有 `rfc099-*` / `rfc170-*` / `rfc223-*` / `rfc203` / `rfc271` / `rfc282` /
       `rfc317` / `fusion` / `task-collab` 等套件按 wire 变更更新后全绿。
 
@@ -148,11 +151,17 @@ wire 是破坏性变更，**批次 1 必须前后端同批**，否则 main 上�
 
 ## 7. 未完成项与去向
 
-- **RFC-324-T24 / AC-15（e2e 旅程）未做。** 应覆盖的是「owner 把某人从可编辑降回只读 → 对方
-  **不刷新页面**就切进只读态」。判据链条上的每一环都已有测试：后端降档后 `canEdit` 立刻为假
-  （`rfc324-acl-wire-contract` 的降档用例）、`updateResourceAcl` 提交后触发
-  `resource-acl-changed` 重校验（RFC-212 既有机制，本 RFC 未改动它）、前端面板与详情页共享同一个
-  `['acl', url, authRevision]` query key（`useResourceAccess` 的实现与测试）。缺的是把三者串起来
-  在真浏览器里跑一遍。**建议随下一批 e2e 工作补上**，不值得为它单独开 RFC。
 - **`digital-employees.$typeRef` 的逐卡只读态**（design §14 X9）：后端写门已按档位生效，缺的只是
-  该页面的视觉只读态。留给数字员工侧的下一个 RFC。
+  该页面的视觉只读态。它是**员工类型**页、一页对多行 ACL 资源，`useResourceAccess` 的「一页一资源」
+  形状套不上，需要逐卡判定——留给数字员工侧的下一个 RFC。
+
+## 8. e2e 逼出来的三件事（写在这里，因为它们都不是设计时能想到的）
+
+1. **AC-15 原本不成立。** 设计里写「`resource-acl-changed` 重校验一到就同时收敛」——查过才知道
+   RFC-212 的重扫只回答「这条连接还能不能留着」，对**降档**（仍然看得见）什么也不做。补了
+   `resource-acl.changed` 控制帧（design §12）。**没有 e2e 就不会发现**：所有单测都在链条的一端。
+2. **共享 query key 是错的耦合。** `useResourceAccess` 原本复用 `AclPanel` 的 `['acl', …]` 省一次
+   请求；帧到达 owner 自己的浏览器时把面板的编辑态快照打成 `fetching`，绊倒它的管理会话守卫，
+   owner 每次保存权限弹窗都不关闭。
+3. **收紧 `canUpdate` 会连坐权限面板入口。** 第一版把 ACL 入口也挂在收紧后的 `canUpdate` 上，
+   被授权者从此看不到自己是以什么档位被授权的——`rfc099-ownership-acl` 的既有 e2e 当场变红。

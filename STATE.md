@@ -38,7 +38,13 @@
 > 三条 403 文案分流。**清掉 `docs/audit-backlog.md:108` 与 `:489-499` 两条既有缺陷**。
 > 测试：后端 6 个新文件 45 例（含 872 断言的穷举等价性——它机器证明了「存量全迁 read ⇒ 判定逐位
 > 不变」）、前端 2 个新文件 13 例、架构守卫新增「挂 /acl 的路由必须有内容写门」一条；前端全量
-> 6807 全绿。**未做**：e2e 旅程（AC-15，去向见该 RFC `plan.md` §7）与 Codex 实现门。
+> 6807 全绿。**e2e 已补**（`e2e/rfc324-graded-grants.spec.ts`）——写它的过程逼出三件设计时想不到
+> 的事：①**AC-15 原本不成立**：RFC-212 的连接重扫只回答「这条连接还能不能留着」，对降档（仍然
+> 看得见）什么也不做，于是补了 `resource-acl.changed` 控制帧这条缺失的通道；②`useResourceAccess`
+> 不能与 `AclPanel` 共享 query key——帧也会送到 owner 自己的浏览器，共享 key 一失效就把面板的
+> 编辑态快照打成 fetching，绊倒它的管理会话守卫，owner 每次保存权限弹窗都不关；③收紧 `canUpdate`
+> 会连坐**权限面板入口**，被授权者从此看不到自己是以什么档位被授权的（`rfc099-ownership-acl` 的
+> 既有 e2e 当场抓到）。**仍未做**：Codex 实现门。
 >
 > ✅ **已完成 RFC（Done，本地收尾；待发布后复验/回填最终 run，2026-08-25）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在

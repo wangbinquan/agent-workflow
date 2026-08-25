@@ -97,7 +97,11 @@ function SkillDetailPage() {
   // （docs/audit-backlog.md:108 记的就是这个）。删除挂 canManage 而不是 canEdit：
   // 删除是治理动作，可编辑授权不覆盖。
   const resourceAccess = useResourceAccess(`/api/skills/${id}`)
-  const canUpdate = usePermission('skills:update') && resourceAccess.canEdit
+  // 权限面板的入口挂**方法级权限点**，不挂行级档位：面板本身对只读者是只读视图
+  // （内部按 canManage 决定），把它藏起来等于让被授权者看不到自己是被谁、以什么
+  // 档位授权的——RFC-324 的第一版就这么藏了，rfc099 的 e2e 当场变红。
+  const canManageAcl = usePermission('skills:update')
+  const canUpdate = canManageAcl && resourceAccess.canEdit
   const canDelete = usePermission('skills:delete') && resourceAccess.canManage
   const canExecuteTasks = usePermission('tasks:execute')
   const remoteReadEpochRef = useRef(0)
@@ -910,7 +914,7 @@ function SkillDetailPage() {
         title={skillName}
         headingLevel={2}
         acl={
-          canUpdate
+          canManageAcl
             ? {
                 resourceBaseUrl: `/api/skills/${encodeURIComponent(id)}`,
                 invalidateKey: ['skills'],

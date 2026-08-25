@@ -190,6 +190,13 @@ export async function revalidateAllConnections(
       sendAuthorityChanged(ws, freshActor.authorityRevision ?? target?.revision ?? 0)
       if (ws.data.closing) continue
     }
+    // RFC-324 —— 授权面变了。重扫本身只做「这条连接还能不能留着」，对**降档**
+    // （write → read，仍然看得见）什么也不做，于是被降档的人会一直停在可编辑的
+    // 界面上，直到他自己刷新——而他没有任何理由去刷新。这一帧就是缺的那个信号。
+    if (reason === 'resource-acl-changed') {
+      sendResourceAclChanged(ws)
+      if (ws.data.closing) continue
+    }
     // ⑤ re-run the whole-connection gate where the channel has one.
     if (spec.revalidation.rerunUpgradeGate === true) {
       let verdict
@@ -237,6 +244,23 @@ function sendAuthorityChanged(ws: ServerWebSocket<WsConnectionData>, revision: n
     }
   } catch {
     closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'authority-notification-failed')
+  }
+}
+
+/**
+ * RFC-324 —— 通知客户端让本地的授权判定失效。
+ *
+ * 丢帧的处置比 `authority.changed` 轻：那条丢了意味着客户端会拿着已撤销的权限继续
+ * 渲染导航与路由守卫，所以要关连接逼它重连；这条丢了只意味着某个页面的只读态晚到
+ * 一次交互——把连接关掉（进而触发重连风暴）是比问题本身更大的代价。客户端在重连
+ * 后本来就会重新拉取，所以这里吞掉即可。
+ */
+function sendResourceAclChanged(ws: ServerWebSocket<WsConnectionData>): void {
+  const frame: WsControlMessage = { type: 'resource-acl.changed' }
+  try {
+    ws.send(JSON.stringify(frame))
+  } catch {
+    /* 背压或已关闭：重连后客户端自会重新解析，不值得为此关掉连接 */
   }
 }
 

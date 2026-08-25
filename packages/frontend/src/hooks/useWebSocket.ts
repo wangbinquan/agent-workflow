@@ -184,6 +184,23 @@ function connect(conn: SharedConn): void {
     ) {
       void appQueryClient.invalidateQueries({ queryKey: ACTOR_QUERY_KEY })
     }
+    // RFC-324 —— 某个资源的授权面变了：让页面持有的**授权判定**失效。整个
+    // `['resource-access']` 前缀一起失效是刻意的：一个会话同时持有的判定至多是屏幕上
+    // 那一两个，逐 id 精确失效要服务端算出"谁关心这一行"，那份账比它防的问题贵。
+    //
+    // 这条帧是「降档后不刷新页面也切只读」的唯一信号：连接重扫只回答"这条连接还能不能
+    // 留着"，而 write → read 的人**仍然看得见**，重扫对他什么也不做。
+    //
+    // 刻意**不碰** `['acl', …]`（AclPanel 的编辑态快照）：owner 自己也会收到这一帧，
+    // 而把面板正在编辑的那份快照打成 fetching 会绊倒它「管理会话是否仍有效」的守卫
+    // （要求 fetchStatus 为 idle），后果是 owner 每次保存权限后弹窗都不关闭。
+    if (
+      msg !== null &&
+      typeof msg === 'object' &&
+      (msg as { type?: unknown }).type === 'resource-acl.changed'
+    ) {
+      void appQueryClient.invalidateQueries({ queryKey: ['resource-access'] })
+    }
     // Snapshot so a listener that (un)subscribes mid-dispatch doesn't mutate
     // the live set; swallow listener throws so one bad subscriber can't
     // starve its siblings on the shared socket (the pre-share hook swallowed

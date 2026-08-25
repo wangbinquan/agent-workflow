@@ -304,7 +304,10 @@ export function WorkflowEditorLoaded({
   // ACL 未解析时 canEdit 为 false（fail closed）：宁可 owner 首屏短暂只读，也不能
   // 让只读授权者先编辑一通再被拒。
   const workflowAccess = useResourceAccess(`/api/workflows/${workflowId}`)
-  const canUpdate = usePermission('workflows:update') && workflowAccess.canEdit
+  // 权限面板入口挂**方法级点**，不挂行级档位：面板对只读者是只读视图（内部按
+  // canManage 决定），把它一起藏掉等于让被授权者看不到自己是被谁、以什么档位授权的。
+  const canManageAcl = usePermission('workflows:update')
+  const canUpdate = canManageAcl && workflowAccess.canEdit
   const canCreate = usePermission('workflows:create')
   const canDelete = usePermission('workflows:delete')
   const canValidate = usePermission('workflows:execute')
@@ -1257,7 +1260,7 @@ export function WorkflowEditorLoaded({
                 <span>{t('editor.renameActionHint')}</span>
               </button>
             )}
-            {canUpdate &&
+            {canManageAcl &&
             actor.data !== null &&
             actor.data !== undefined &&
             actor.data.source !== 'daemon' ? (

@@ -503,6 +503,18 @@ export const WsControlMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), channel: z.string(), since: z.number().int().optional() }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   z.object({ type: z.literal('authority.changed'), revision: z.number().int().nonnegative() }),
+  /**
+   * RFC-324 —— 某个资源的授权面变了（档位、名单、可见性或 owner）。
+   *
+   * 刻意**不带 resourceId**：客户端要做的是让本地缓存的授权判定失效，而它同时
+   * 持有的 ACL 判定至多是屏幕上打开的那一两个（权限面板 + 当前详情页）。带上 id
+   * 就得让服务端算出"谁关心这一行"，那是一份比它防的问题更贵的账。
+   *
+   * 与 `authority.changed` 分开：那条说的是**账号自己的**权限集变了（刷新 /me），
+   * 这条说的是**某个资源行**的授权变了（刷新 ACL 判定）。合并会让任一侧的变更
+   * 都去拉另一侧的接口。
+   */
+  z.object({ type: z.literal('resource-acl.changed') }),
 ])
 export type WsControlMessage = z.infer<typeof WsControlMessageSchema>
 
