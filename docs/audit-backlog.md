@@ -2942,3 +2942,36 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
      用例写成 `toHaveCount(0)` + 说明可见，**并已把账本标题改准**（本批同一提交）。
    - RES-41：账本说的「提示」确实只是**提示**，不是拒绝——根类型不符时照样能提交，最终落到真正
      那类资源上。用例按这个实际形态写（info 通知 + 提交后落点断言），未把它当成一道闸。
+
+## RFC-319 B94 起草期撞到的产品缺陷（2026-08-26，任务向导域）
+
+1. **【真实缺陷，P3 / 工程质量，已量化爆炸半径】`tasks.new.tsx` 有三个测试锚点从未进入 DOM。**
+   `packages/frontend/src/routes/tasks.new.tsx:1996`（`wizard-draft-warning`）、`:2030`
+   （`wizard-draft-reentry`）、`:2072`（`wizard-outcome-unknown`）都以 **`data-testid=`** 传给
+   `<NoticeBanner>`，而该组件只声明 **`testid`**（`components/NoticeBanner.tsx:29` 声明、`:110`
+   渲染）且**不 spread 未声明属性**，于是这三个属性被静默丢弃。TypeScript 对**带连字符**的 JSX
+   属性名不做 props 校验，所以既不报错也不生效——`getByTestId('wizard-outcome-unknown')` 恒 0 命中。
+   **全仓扫描确认爆炸半径正好是这 3 处**：其余把 `data-testid` 传给自研组件的调用点，其组件要么
+   显式声明了该属性、要么 spread 了 props，均正常落地。
+   旁证：既有的 `e2e/rfc250-task-wizard-recovery.spec.ts:286-288` 已经改用
+   `getByRole('status').filter({hasText})` 绕开它——这个坑之前踩过、没修。
+   B94 按源码实际写（`.notice-banner` + 文案定位），**未改产品**；修法是三处 `data-testid=` 改
+   `testid=`，属 CLAUDE.md §RFC workflow 第 6 条的「单行 bug 修复」例外，建议单独一提交并补锚点守卫。
+2. **【真实缺陷，P3 / a11y】`EnumPicker` 的单选组在原生语义上不是一个 radio group。**
+   `packages/frontend/src/components/launch/EnumPicker.tsx:69` 给每个选项写
+   ``name={`enum-${c}`}``——**每个 radio 各自一个 name**，于是键盘方向键不能在组内移动、屏幕
+   阅读器读不出「第 N / 共 M」，互斥只靠 React 受控 `checked` 维持；同页出现两个 choices 相同的
+   enum 输入时 name 还会撞车。
+3. **【账本措辞偏差，两处，已按源码实际写】**
+   - TASK-14：账本把「git 身份」列进「高级折叠区」，它**不是**折叠区里的字段——确认页上是一行
+     只读摘要（`tasks.new.tsx:2716-2727`），值由服务端从账户档案派生（RFC-320，
+     `modules/identity-access/application/queries/getUserProfile.ts:14-16`），用户在向导里改不了。
+     照账本字面写会得到一条永远红的用例。
+   - TASK-13：实际「拦截」比措辞更彻底——快照过期时 `normalizedWorkflowRevision` 永不设置 ⇒
+     `draftSeedReady` 恒 false ⇒ `materialLocked` 恒 true，**整块 `fieldset.task-wizard__material`
+     冻结**，用户连执行空间都改不了，而不只是启动键置灰。用例按实际形态写，并配了「不带版本参数
+     时表单可编辑」的正向对照，避免变成恒真断言。
+4. **【设计取舍，非缺陷，但账本一句话读不出来】TASK-06 的「失败可见性」在两条启动臂上形状不同。**
+   agent 臂 = 同步 422 + 向导原地横幅 + **不铸任务行**；workflow 臂 = RFC-287 G7 的延后准备 ⇒
+   **先铸 pending 行、后台失败转 failed**（`packages/backend/src/routes/tasks.ts:330-334` 注释明说
+   只有那条 JSON-body 路由打开 `deferRepoPreparation`）。B94 只覆盖了 agent 臂那一半。

@@ -7103,8 +7103,13 @@
       "title": "向导非上传类输入控件（files / enum / git 选择器）在浏览器中取值并进入任务",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-04：files / enum 单选 / enum 多选 / git 分支四个选择器在浏览器里取到值，并按各自的打包格式原样进入任务 inputs @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-05",
@@ -7112,8 +7117,13 @@
       "title": "upload 类型输入：浏览器选本地文件 → multipart 启动 → 文件落进工作树并被 prompt 引用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-05：向导里选本地文件 → multipart 启动 → 文件真的落进工作树的目标目录，并被节点 prompt 逐字引用 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-06",
@@ -7121,8 +7131,13 @@
       "title": "基线分支 / ref 选择与非法 ref 的失败可见性",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-06：基线 ref 填什么就检出什么；非法 ref 的启动当场报服务端原话与可用引用，而且一行任务都不落库 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-07",
@@ -7148,8 +7163,17 @@
       "title": "从终态任务一键重放（Relaunch → relaunchFrom 深链 → replay 空间冻结布局）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-08：终态任务一键重放，向导按源任务预填执行对象 / 内容 / 限额 / 协作者，再启动得到一条等价的新任务 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-08：重放多仓任务用的是源任务冻结的布局——仓库组事后被改成单仓，重启出来的仍是原来那两仓 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-11",
@@ -7157,8 +7181,13 @@
       "title": "提交结果未知（网络中断/超时）时的对账横幅与「去清单核对 / 我已确认」收口",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-11：提交结果未知时向导冻结并弹对账横幅，「去清单核对」与「我已确认」各自收口，库里只落了一条任务 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-12",
@@ -7180,8 +7209,17 @@
       "title": "工作流版本失配拦截（深链进向导时快照已过期 / 提交时版本冲突）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-13：深链带着已经过期的工作流版本进向导时拦住启动，并把人送回编辑器校验最新版 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-13：提交瞬间工作流被改掉时后端 409，向导报「没有创建任务」并支持载入最新版重来 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-14",
@@ -7189,8 +7227,13 @@
       "title": "向导高级折叠区：工作分支 / 自动 commit&push / git 身份 / 最长时长 / token 上限 / 协作者",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提交推送 / 最长时长 / token 上限逐项进入启动载荷并落库，git 身份由服务端从账户冻结 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-16",
@@ -10992,8 +11035,13 @@
       "title": "向导分步必填校验：缺任务名或缺必填输入时不得进入下一步 / 启动",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-wizard.spec.ts",
+          "test": "RFC-319 TASK-15：任务名或必填输入缺一样，向导的下一步就按不下去；从确认页折回清空后启动键同样失效，一个请求都不发 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-19",
@@ -11657,13 +11705,6 @@
     "RES-46",
     "RES-X1",
     "RES-X2",
-    "TASK-04",
-    "TASK-05",
-    "TASK-06",
-    "TASK-08",
-    "TASK-11",
-    "TASK-13",
-    "TASK-14",
     "TASK-26",
     "TASK-27",
     "TASK-30",
@@ -11764,7 +11805,6 @@
     "RES-20",
     "RES-X6",
     "TASK-03",
-    "TASK-15",
     "TASK-36",
     "TASK-X2",
     "UX-06",
