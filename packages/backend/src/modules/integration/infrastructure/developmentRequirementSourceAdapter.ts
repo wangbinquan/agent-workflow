@@ -3,7 +3,7 @@
 // 把「已发布 adapter binding + 一次操作」落成 runner 子进程调用，并把
 // envelope/失败映射成 closed 结果。分工（design §5.2/§5.3）：本文件只负责
 // 取件到 sink + 转述 envelope 事实；safe import、平台 manifest 生成与
-// digest 全部在消费侧（development-automation 的 requirementMaterializer）
+// digest 全部在消费侧（development-automation workspace participant）
 // ——adapter 自报的 file/digest 不作数。跨模块不 import：消费侧以结构同形
 // 的窄函数依赖接住本工厂的返回值（rfc294 preflight 禁止反向内部 import）。
 //
@@ -67,6 +67,7 @@ export interface RequirementSourceAdapterDeps {
   readonly resolveBinding: (adapterBindingRef: string) => DevelopmentAdapterContent | null
   /** 测试/装配注入的额外子进程 env（如 mock 上游 URL）；不含 daemon 环境。 */
   readonly extraEnv?: Record<string, string>
+  readonly secretSource?: Readonly<Record<string, string | undefined>>
 }
 
 function fail(
@@ -128,6 +129,7 @@ export function createRequirementSourceAdapter(
         operation: { kind: 'acquire', externalId: input.externalId },
         stagedRoot: input.sinkPath,
         extraEnv: deps.extraEnv,
+        secretSource: deps.secretSource,
       })
       if (!run.ok) return run
       return {
@@ -151,6 +153,7 @@ export function createRequirementSourceAdapter(
         },
         stagedRoot: input.sinkPath,
         extraEnv: deps.extraEnv,
+        secretSource: deps.secretSource,
       })
       if (!run.ok) return run
       return { ok: true, correlationRef: run.envelope.correlationRef }
@@ -168,6 +171,7 @@ export function createRequirementSourceAdapter(
         },
         stagedRoot: input.sinkPath,
         extraEnv: deps.extraEnv,
+        secretSource: deps.secretSource,
       })
       if (!run.ok) return run
       return {

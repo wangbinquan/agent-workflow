@@ -15,7 +15,10 @@ import {
   employeeChangeCandidates,
   employeeRoundWorkspaceStates,
 } from '@/db/schema'
-import type { ApprovalGatewayPort } from '../application/ports/reconcilerPorts'
+import type {
+  ApprovalGatewayPort,
+  PipelineEvidencePort,
+} from '../application/ports/reconcilerPorts'
 import { encodeDevelopmentApprovalSubject } from '../domain/approvalSubject'
 import { canonicalDigest } from '../domain/canonicalJson'
 import {
@@ -32,6 +35,9 @@ import {
   businessTreeSnapshot,
   businessTreeSnapshotDigest,
 } from '../infrastructure/workspaceValidator'
+import { EvidenceStore } from '../infrastructure/evidenceStore'
+import { createPipelineImportAdapter } from '../infrastructure/pipelineEvidenceImport'
+import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 
 interface DevelopmentReactionPlan {
   readonly roundRef: string
@@ -43,6 +49,7 @@ interface DevelopmentReactionPlan {
   } | null
   readonly triggeringEventRef: string
   readonly workItemRef: string
+  readonly connectionRef?: { readonly id: string; readonly revision: number } | null
   readonly inputEnvelopeJson: string
   readonly externalWaitDeadlineMs: number
 }
@@ -404,6 +411,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
    */
   readonly reactionRounds: EmployeeReactionRoundQueryPort
   readonly approvalGateway?: ApprovalGatewayPort
+  readonly pipelineEvidence?: PipelineEvidencePort
   readonly repoRemote: {
     resolve(repositoryId: string): {
       readonly remoteUrl: string
@@ -661,6 +669,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
   const delivery = input.sourceControl
   const workspaceOps = input.sourceControl
   const now = input.now ?? Date.now
+  const pipelineEvidenceStore = new EvidenceStore(join(input.appHome, 'evidence'))
   const caseDirectory = (caseId: string) =>
     join(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
   const sceneRoot = (caseId: string) => join(caseDirectory(caseId), 'scene')
@@ -735,6 +744,182 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             : [],
           artifactRefs: reusesPreparedExternalMaterials ? issue.state.materialArtifactRefs : [],
         })
+      }
+      if (plan.workItemRef === 'collect-pipeline') {
+        const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
+        if (currentMr === undefined) {
+          return JSON.stringify({
+            outcome: 'blocked',
+            explanation: '缺少当前 MR 上下文，无法采集流水线状态',
+          })
+        }
+        const mergeRequest = mergeRequestStateSchema.parse(
+          JSON.parse(currentMr.stateJson) as unknown,
+        )
+        if (input.pipelineEvidence === undefined || plan.connectionRef == null) {
+          return JSON.stringify({
+            outcome: 'blocked',
+            explanation: '流水线泳道缺少已冻结的企业流水线连接',
+          })
+        }
+        const pending = () =>
+          JSON.stringify({
+            outcome: 'completed',
+            observedSourceVersion: mergeRequest.headSha,
+            ...(mergeRequest.targetSha === null
+              ? {}
+              : { observedTargetVersion: mergeRequest.targetSha }),
+            status: 'pending',
+            checks: [],
+          })
+        if (
+          mergeRequest.targetSha === null ||
+          mergeRequest.repositoryRef === null ||
+          mergeRequest.providerMrRef === null ||
+          input.mrFacts === undefined
+        ) {
+          return pending()
+        }
+        const targetSha = mergeRequest.targetSha
+        const collected = await input.pipelineEvidence.collect({
+          adapterBindingRef: `${plan.connectionRef.id}@${plan.connectionRef.revision}`,
+          headSha: mergeRequest.headSha,
+          targetSha,
+          gateKeys: [],
+        })
+        if (!collected.ok) {
+          if (
+            collected.failure.category === 'transient' &&
+            collected.failure.retryability === 'same-input'
+          ) {
+            // Throw into Digital Employee OS's durable outbox retry path. The
+            // current pending Context remains authoritative; a provider outage
+            // never becomes a business-terminal "blocked" result.
+            throw new Error(`pipeline-adapter-transient:${collected.failure.code}`)
+          }
+          if (collected.failure.category === 'stale-input') return pending()
+          return JSON.stringify({
+            outcome: 'blocked',
+            explanation: `${collected.failure.code}: ${collected.failure.remediation}`,
+          })
+        }
+        try {
+          const refreshed = await input.mrFacts.collect(
+            mergeRequest.repositoryRef,
+            mergeRequest.providerMrRef,
+            plan.caseRef.id,
+          )
+          const headStillCurrent =
+            refreshed.ok && refreshed.snapshot.headSha === mergeRequest.headSha
+          const targetStillCurrent =
+            refreshed.ok && refreshed.snapshot.targetSha === mergeRequest.targetSha
+          const providerHeadMatches =
+            collected.envelope.providerHeadSha === mergeRequest.headSha &&
+            collected.envelope.completeness === 'complete'
+          const providerTargetMatches = collected.envelope.targetSha === mergeRequest.targetSha
+          if (
+            !headStillCurrent ||
+            !targetStillCurrent ||
+            !providerHeadMatches ||
+            !providerTargetMatches
+          ) {
+            return pending()
+          }
+          if (!collected.envelope.gates.some((gate) => gate.required)) {
+            return JSON.stringify({
+              outcome: 'blocked',
+              explanation: 'pipeline-required-gates-missing: 流水线证据未声明任何必需门禁',
+            })
+          }
+          const imported = await createPipelineImportAdapter(
+            pipelineEvidenceStore,
+            collected.outputBudget,
+          ).import({
+            stagedRoot: collected.stagedRoot,
+            envelope: collected.envelope,
+            expectedHeadSha: mergeRequest.headSha,
+            expectedTargetSha: targetSha,
+          })
+          if (!imported.ok) {
+            return JSON.stringify({
+              outcome: 'blocked',
+              explanation: `${imported.code}: ${imported.detail}`,
+            })
+          }
+          const manifest = pipelineEvidenceManifestV1Schema.parse(
+            JSON.parse(imported.manifestJson) as unknown,
+          )
+          const required = manifest.gates.filter((gate) => gate.required)
+          if (required.length === 0) {
+            return JSON.stringify({
+              outcome: 'blocked',
+              explanation: 'pipeline-required-gates-missing: 流水线证据未声明任何必需门禁',
+            })
+          }
+          if (manifest.redaction !== 'complete') {
+            return JSON.stringify({
+              outcome: 'blocked',
+              explanation: 'pipeline-evidence-redaction-incomplete: 流水线证据脱敏未完成',
+            })
+          }
+          const caseKey = stableIdentityComponent(plan.caseRef.id)
+          const pipelineRelativeRoot = `${PLATFORM_WORKSPACE_DIR}/pipeline/${caseKey}`
+          const snapshotRelativeRoot = `${pipelineRelativeRoot}/${manifest.bundleId}`
+          const destination = join(workspacePath(plan.caseRef.id), snapshotRelativeRoot)
+          // Completed rounds may still reference evidence from an earlier
+          // failed attempt. A later green/pending snapshot must not erase that
+          // audit material; materialize only the current immutable bundle and
+          // leave unrelated prior files in the platform-owned directory.
+          pipelineEvidenceStore.materializeBundle(manifest.bundleId, destination)
+          const fileById = new Map(manifest.files.map((file) => [file.fileId, file] as const))
+          const checks = required.map((gate) => {
+            const status =
+              gate.status === 'pass'
+                ? ('passed' as const)
+                : gate.status === 'fail' ||
+                    gate.status === 'unknown' ||
+                    gate.status === 'unavailable' ||
+                    gate.status === 'skipped'
+                  ? ('failed' as const)
+                  : gate.status
+            const evidenceFiles = gate.evidenceFileIds.flatMap((fileId) => {
+              const file = fileById.get(fileId)
+              return file === undefined ? [] : [`${snapshotRelativeRoot}/${file.relativePath}`]
+            })
+            return {
+              checkRef: gate.gateKey,
+              name: gate.gateKey,
+              status,
+              summary: `${manifest.providerKey} run ${gate.runRef}, attempt ${gate.attempt}`,
+              ...(evidenceFiles.length === 0 ? {} : { evidenceFiles }),
+            }
+          })
+          const hasFailure = checks.some(
+            (check) => check.status === 'failed' || check.status === 'canceled',
+          )
+          const hasPending = checks.some(
+            (check) => check.status === 'queued' || check.status === 'running',
+          )
+          const allRequiredPass = required.every((gate) => gateCountsAsPass(gate.status))
+          const status = hasFailure
+            ? ('failed' as const)
+            : hasPending
+              ? ('pending' as const)
+              : !allRequiredPass
+                ? ('failed' as const)
+                : ('passed' as const)
+          return JSON.stringify({
+            outcome: 'completed',
+            observedSourceVersion: mergeRequest.headSha,
+            ...(mergeRequest.targetSha === null
+              ? {}
+              : { observedTargetVersion: mergeRequest.targetSha }),
+            status,
+            checks,
+          })
+        } finally {
+          collected.cleanup()
+        }
       }
       if (plan.workItemRef === 'classify-feedback') {
         const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
@@ -1102,6 +1287,13 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         if (approval.status !== 'draft') {
           return output({ status: 'blocked', summary: '外部审批草稿状态不允许再次提交' })
         }
+        if (
+          plan.connectionRef != null &&
+          (approval.adapterRef.id !== plan.connectionRef.id ||
+            approval.adapterRef.revision !== plan.connectionRef.revision)
+        ) {
+          return output({ status: 'blocked', summary: '外部审批草稿未使用员工冻结的企业连接' })
+        }
         const deadlineAt = new Date(now() + plan.externalWaitDeadlineMs).toISOString()
         const idempotencyKey = sha256Hex(
           JSON.stringify({
@@ -1234,6 +1426,13 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           return output({ status: 'blocked', summary: '外部审批程序尚未接入平台' })
         }
         const approval = approvalContextSchema.parse(JSON.parse(current.stateJson) as unknown)
+        if (
+          plan.connectionRef != null &&
+          (approval.adapterRef.id !== plan.connectionRef.id ||
+            approval.adapterRef.revision !== plan.connectionRef.revision)
+        ) {
+          return output({ status: 'blocked', summary: '外部审批观察未使用员工冻结的企业连接' })
+        }
         if (
           approval.correlationRef === null ||
           approval.idempotencyKey === null ||

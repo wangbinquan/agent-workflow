@@ -1244,8 +1244,8 @@ function ExecutorLibraryLinks(props: { onCreate?: () => void }): ReactElement {
           {t('code.employeePlaybook.createExecutor')}
         </button>
       )}
-      <Link to="/code/executors" className="link">
-        {t('code.employeePlaybook.openExecutorLibrary')}
+      <Link to="/digital-employees" className="link">
+        {t('nav.digitalEmployees')}
       </Link>
     </span>
   )

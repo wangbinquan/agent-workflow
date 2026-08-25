@@ -16,6 +16,7 @@ import type {
   PlatformWorkItemExecutionPort,
   ReactionExecutionPort,
   ToolConnectionCatalogPort,
+  ToolConnectionVisibilitySubject,
 } from './composition/required-ports'
 import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
 import { createSqliteReactionRoundQueries } from './infrastructure/sqliteReactionRoundQueries'
@@ -30,7 +31,11 @@ import { withTypePackageDraftOverlay } from './application/typePackageDraftOverl
 import { createSqliteRuntimeStore } from './infrastructure/sqliteRuntimeStore'
 import { analyzeDigitalEmployeeMigration } from './composition/writerCutover'
 import { z } from 'zod'
-import { contractValidationCheckSchema, employeeTypePackageDescriptorSchema } from './domain/model'
+import {
+  contractValidationCheckSchema,
+  employeeTypePackageDescriptorSchema,
+  workContractSchema,
+} from './domain/model'
 import {
   employeeTypeRefSchema,
   exactResourceRefSchema,
@@ -48,6 +53,7 @@ import type {
   EmployeeTypeRuntimePackage,
   ExactResourceRef,
   GlobalExecutionPolicy,
+  LaneAdapterBinding,
   ToolRegistrationContent,
   ToolValidationReceipt,
 } from './domain/model'
@@ -119,6 +125,12 @@ export interface EmployeeDefinitionView {
   readonly configuration: DigitalEmployeeDefinitionDraft
   readonly revision: number
   readonly definition: DigitalEmployeeDefinitionContent
+  /** Defaults from the exact immutable job revision referenced by configuration.jobTemplateRef. */
+  readonly inheritedAdapterBindings: readonly LaneAdapterBinding[]
+  /** Secret-free provenance for every exact binding in the compiled employee closure. */
+  readonly adapterBindingSources: readonly (LaneAdapterBinding & {
+    readonly source: 'job-default' | 'employee-override'
+  })[]
   /** Exact decoded scope frozen into the current employee revision. */
   readonly workScope: unknown
   /**
@@ -161,6 +173,7 @@ export interface DigitalEmployeeCommands {
     readonly typeRef: EmployeeTypeRef
     readonly body: unknown
     readonly actorUserId: string | null
+    readonly adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): JobTemplateView
   updateJobTemplate(
     input: Parameters<DigitalEmployeeAuthoringService['updateJobTemplate']>[0],
@@ -172,11 +185,13 @@ export interface DigitalEmployeeCommands {
     readonly typeRef: EmployeeTypeRef
     readonly body: unknown
     readonly actorUserId: string | null
+    readonly adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): EmployeeDefinitionView
   updateEmployee(input: {
     readonly id: string
     readonly body: unknown
     readonly actorUserId: string | null
+    readonly adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): EmployeeDefinitionView
 }
 
@@ -212,6 +227,10 @@ export interface DigitalEmployeeQueries {
 export interface DigitalEmployeeModule {
   readonly commands: DigitalEmployeeCommands
   readonly queries: DigitalEmployeeQueries
+  readonly maintenance: {
+    /** Bootstrap-only async validation for changed WorkContract successors. */
+    settleAutomaticUpgrades(): Promise<void>
+  }
   readonly inputUploads: {
     create(input: {
       readonly absolutePath: string
@@ -320,6 +339,12 @@ function runtimePackageOf(
   const descriptor = employeeTypePackageDescriptorSchema.parse(
     JSON.parse(registration.descriptorJson) as unknown,
   )
+  const programUpgradeResultSchema = z
+    .object({
+      runtimeKind: z.enum(['bash', 'node', 'python']),
+      source: z.string().min(1).max(5_000_000),
+    })
+    .strict()
   return {
     descriptor,
     parseWorkScope(input) {
@@ -335,6 +360,22 @@ function runtimePackageOf(
           JSON.parse(registration.validateContractFixtureJson(JSON.stringify(input))) as unknown,
         )
     },
+    ...(registration.upgradeProgramSourceJson === undefined
+      ? {}
+      : {
+          upgradeProgramSource(input) {
+            const request = {
+              sourceContract: workContractSchema.parse(input.sourceContract),
+              targetContract: workContractSchema.parse(input.targetContract),
+              implementation: input.implementation,
+              source: input.source,
+            }
+            const resultJson = registration.upgradeProgramSourceJson!(JSON.stringify(request))
+            return resultJson === null
+              ? null
+              : programUpgradeResultSchema.parse(JSON.parse(resultJson) as unknown)
+          },
+        }),
   }
 }
 
@@ -460,7 +501,7 @@ export function composeDigitalEmployee(
     store,
     typePackages: runtimePackages,
     connectionCatalog: options.connectionCatalog ?? {
-      async resolve() {
+      resolve() {
         return null
       },
     },
@@ -487,6 +528,13 @@ export function composeDigitalEmployee(
     if (revision === null) throw new Error(`employee revision is missing: ${record.id}`)
     const workScope = store.getWorkScopeRevision(revision.content.workScopeRef)
     if (workScope === null) throw new Error(`employee work scope is missing: ${record.id}`)
+    const jobRevision = store.getJobTemplateRevision(record.configuration.jobTemplateRef)
+    if (jobRevision === null) throw new Error(`employee job revision is missing: ${record.id}`)
+    const overrideKeys = new Set(
+      record.configuration.adapterOverrides.map(
+        (binding) => `${binding.laneId}\u0000${binding.slotRef}`,
+      ),
+    )
     return {
       id: record.id,
       name: record.name,
@@ -494,6 +542,13 @@ export function composeDigitalEmployee(
       configuration: record.configuration,
       revision: record.currentRevision,
       definition: revision.content,
+      inheritedAdapterBindings: jobRevision.content.defaultAdapterBindings,
+      adapterBindingSources: revision.content.exactAdapterBindings.map((binding) => ({
+        ...binding,
+        source: overrideKeys.has(`${binding.laneId}\u0000${binding.slotRef}`)
+          ? 'employee-override'
+          : 'job-default',
+      })),
       workScope: workScope.encodedScope,
       ownerUserId: record.ownerUserId,
       visibility: record.visibility,
@@ -565,6 +620,9 @@ export function composeDigitalEmployee(
   }
 
   return {
+    maintenance: {
+      settleAutomaticUpgrades: () => service.settleAutomaticUpgrades(),
+    },
     inputUploads: {
       async create(input) {
         const artifact = await inputArtifacts.putFile(input.absolutePath)
@@ -633,6 +691,7 @@ export function composeDigitalEmployee(
             typeRef: input.typeRef,
             body: input.body,
             ownerUserId: input.actorUserId,
+            adapterVisibilitySubject: input.adapterVisibilitySubject,
           }),
         ),
       updateJobTemplate: (input) => jobView(service.updateJobTemplate(input)),
@@ -643,6 +702,7 @@ export function composeDigitalEmployee(
             typeRef: input.typeRef,
             body: input.body,
             ownerUserId: input.actorUserId,
+            adapterVisibilitySubject: input.adapterVisibilitySubject,
           }),
         ),
       updateEmployee: (input) => employeeView(service.updateEmployeeDefinition(input)),

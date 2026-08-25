@@ -20,6 +20,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { DEVELOPMENT_CONFIG_API_BASE } from '@agent-workflow/shared'
 
 import { CONFIG_KIND_SPECS } from '../src/routes/code.config'
 
@@ -69,9 +70,8 @@ describe('RFC-310 — the config pages call the endpoints the backend actually m
     expect(mismatches).toEqual([])
   })
 
-  test('adapters stay integration-owned (the exact drift that shipped a 404 page)', () => {
-    // 单独钉死这一条：它是真实事故的形态，也是唯一一个前缀与页面归属不同的
-    // 资源——最容易被下一个人"顺手改成和其它四个一致"。
-    expect(CONFIG_KIND_SPECS.adapters.apiBase).toBe('/api/integrations/development-adapters')
+  test('adapters keep their integration API but are absent from the retired config UI', () => {
+    expect('adapters' in CONFIG_KIND_SPECS).toBe(false)
+    expect(DEVELOPMENT_CONFIG_API_BASE.adapters).toBe('/api/integrations/development-adapters')
   })
 })

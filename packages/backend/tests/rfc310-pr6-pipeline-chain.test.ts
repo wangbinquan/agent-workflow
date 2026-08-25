@@ -433,6 +433,11 @@ function fakePipeline(script: {
         ok: true,
         envelope,
         stagedRoot: parent,
+        outputBudget: {
+          maxFiles: 100,
+          maxFileBytes: 8 * 1024 * 1024,
+          maxTotalBytes: 32 * 1024 * 1024,
+        },
         cleanup: () => rmSync(parent, { recursive: true, force: true }),
       }
     },

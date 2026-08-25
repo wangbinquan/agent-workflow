@@ -13,19 +13,32 @@ import type { TaskCatalogSource } from '@/modules/task-catalog/composition/requi
 import { ValidationError } from '@/util/errors'
 
 type EmployeeCaseState = 'active' | 'waiting' | 'blocked' | 'terminal'
+type EmployeeTerminalCatalogStatus = Extract<TaskStatus, 'done' | 'canceled'>
 
-function caseStatesFromTaskStatuses(
-  statuses: readonly TaskStatus[],
-): EmployeeCaseState[] | undefined {
-  if (statuses.length === 0) return undefined
-  const states = new Set<EmployeeCaseState>()
-  for (const status of statuses) {
-    if (status === 'pending' || status === 'running') states.add('active')
-    else if (status === 'awaiting_human' || status === 'awaiting_review') states.add('waiting')
-    else if (status === 'failed' || status === 'interrupted') states.add('blocked')
-    else states.add('terminal')
+function caseCatalogFilterFromTaskStatuses(statuses: readonly TaskStatus[]): {
+  readonly states: EmployeeCaseState[] | undefined
+  readonly terminalCatalogStatuses: EmployeeTerminalCatalogStatus[] | undefined
+} {
+  if (statuses.length === 0) {
+    return { states: undefined, terminalCatalogStatuses: undefined }
   }
-  return [...states]
+  const states = new Set<EmployeeCaseState>()
+  const terminalCatalogStatuses = new Set<EmployeeTerminalCatalogStatus>()
+  for (const status of statuses) {
+    if (status === 'running') {
+      states.add('active')
+      states.add('waiting')
+    } else if (status === 'failed') {
+      states.add('blocked')
+    } else if (status === 'done' || status === 'canceled') {
+      states.add('terminal')
+      terminalCatalogStatuses.add(status)
+    }
+  }
+  return {
+    states: [...states],
+    terminalCatalogStatuses: [...terminalCatalogStatuses],
+  }
 }
 
 function text(value: string) {
@@ -45,7 +58,9 @@ function employeeLabel(
 
 function taskStatus(item: { state: EmployeeCaseState; terminalKind: string | null }): TaskStatus {
   if (item.state === 'active') return 'running'
-  if (item.state === 'waiting') return 'awaiting_human'
+  // A waiting Case has deliberately released its writer while its source-owned
+  // subscriptions observe the next external event. No human answer is pending.
+  if (item.state === 'waiting') return 'running'
   if (item.state === 'blocked') return 'failed'
   // RFC-317 T44（DE-06）—— 走共享分类，不再就地手写一张表。
   //
@@ -62,6 +77,7 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
       readonly ownerUserId?: string
       readonly launchOrigin?: TaskLaunchOrigin
       readonly states?: readonly EmployeeCaseState[]
+      readonly terminalCatalogStatuses?: readonly EmployeeTerminalCatalogStatus[]
       readonly view?: 'all' | 'active' | 'attention' | 'finished'
       readonly q?: string
       readonly cursor?: string
@@ -113,14 +129,17 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
         }
         limit = Number(input.limit)
       }
-      const states = caseStatesFromTaskStatuses(statuses)
+      const filter = caseCatalogFilterFromTaskStatuses(statuses)
       const page = DigitalEmployeeTaskPageSchema.parse(
         JSON.parse(
           runtime.queries.listCasePage({
             view: view as 'all' | 'active' | 'attention' | 'finished',
             ...(scope === 'mine' ? { ownerUserId: input.actor.user.id } : {}),
             ...(launchOrigin === undefined ? {} : { launchOrigin }),
-            ...(states === undefined ? {} : { states }),
+            ...(filter.states === undefined ? {} : { states: filter.states }),
+            ...(filter.terminalCatalogStatuses === undefined
+              ? {}
+              : { terminalCatalogStatuses: filter.terminalCatalogStatuses }),
             ...(input.q === undefined ? {} : { q: input.q }),
             ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
             ...(limit === undefined ? {} : { limit }),
@@ -131,7 +150,12 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
         items: page.items.map((item): TaskCatalogListItem => {
           const status = taskStatus(item)
           const detail =
-            item.currentWorkItemName ?? (item.blockReason === null ? null : text(item.blockReason))
+            item.currentWorkItemName ??
+            (item.state === 'waiting'
+              ? { 'zh-CN': '等待事件', 'en-US': 'Waiting for events' }
+              : item.blockReason === null
+                ? null
+                : text(item.blockReason))
           return {
             id: item.id,
             sourceId: 'digital-employee',

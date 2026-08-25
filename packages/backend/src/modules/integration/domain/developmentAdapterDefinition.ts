@@ -77,6 +77,7 @@ export interface AdapterContractViolation {
     | 'operation-outside-purpose'
     | 'writeback-collect-must-pair'
     | 'duplicate-secret-key'
+    | 'invalid-secret-key'
   readonly detail: string
 }
 
@@ -134,6 +135,15 @@ export function validateAdapterContract(
   const secrets = new Set<string>()
   for (const key of content.secretProjection) {
     if (secrets.has(key)) violations.push({ code: 'duplicate-secret-key', detail: key })
+    if (
+      !/^[A-Z_][A-Z0-9_]*$/.test(key) ||
+      key.startsWith('AW_') ||
+      key === 'PATH' ||
+      key === 'HOME' ||
+      key === 'TMPDIR'
+    ) {
+      violations.push({ code: 'invalid-secret-key', detail: key })
+    }
     secrets.add(key)
   }
   return violations

@@ -110,7 +110,7 @@ describe('employee type package digest guard', () => {
     expect(store.getTypePackage(descriptor.typeRef)?.descriptorDigest).toBe(currentDigest)
   })
 
-  test('a frozen development@1 registration upgrades by appending development@9', () => {
+  test('a frozen development@1 registration upgrades by appending development@10', () => {
     const store = newStore()
     const previous = structuredClone(descriptor)
     previous.typeRef.revision = 1
@@ -124,7 +124,7 @@ describe('employee type package digest guard', () => {
     store.ensureTypePackage(record(currentDigest))
 
     expect(store.listTypePackages().map((entry) => entry.descriptor.typeRef)).toEqual([
-      { typeId: 'development', revision: 9 },
+      { typeId: 'development', revision: 10 },
       { typeId: 'development', revision: 1 },
     ])
   })
@@ -436,7 +436,7 @@ function runtimePackage(): EmployeeTypeRuntimePackage {
 }
 
 const stubConnectionCatalog: ToolConnectionCatalogPort = {
-  resolve: () => Promise.resolve(null),
+  resolve: () => null,
 }
 const stubProgramArtifacts: ProgramArtifactPort = {
   put: () => Promise.reject(new Error('program artifacts unused in this test')),

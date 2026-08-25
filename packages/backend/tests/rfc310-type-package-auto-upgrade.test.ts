@@ -20,8 +20,10 @@ import {
   employeeOsOutbox,
   employeeReactionRounds,
   employeeToolRegistrations,
+  employeeToolRegistrationRevisions,
 } from '@/db/schema'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
+import type { ToolConnectionCatalogPort } from '@/modules/digital-employee/composition/required-ports'
 import { contentDigest } from '@/modules/digital-employee/domain/model'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import type {
@@ -71,6 +73,109 @@ function versionedDesignPackage(
     validateContractFixtureJson: (requestJson) =>
       designEmployeeTypePackage.validateContractFixtureJson(requestJson),
   }
+}
+
+function versionedAdapterDesignPackage(input: {
+  revision: number
+  adapterSlot: boolean
+  secondWorkItem?: boolean
+}): EmployeeTypePackageRegistration {
+  return versionedDesignPackage(input.revision, (descriptor) => {
+    const manifest = descriptor.authoringManifest as {
+      lifecycleRegions: Array<Record<string, unknown>>
+      workItems: Array<Record<string, unknown>>
+    }
+    const lane = {
+      laneId: 'design-main',
+      label: { 'zh-CN': '设计执行', 'en-US': 'Design execution' },
+      description: { 'zh-CN': '执行设计职责', 'en-US': 'Perform design duties' },
+      order: 0,
+      kind: 'spine',
+      optional: false,
+      adapterSlots: input.adapterSlot
+        ? [
+            {
+              slotRef: 'primary',
+              label: { 'zh-CN': '设计系统连接', 'en-US': 'Design system connection' },
+              description: {
+                'zh-CN': '读取设计门禁事实',
+                'en-US': 'Collect design gate facts',
+              },
+              purpose: 'pipeline-gate',
+              // The lane itself remains usable for inline work without an
+              // Adapter, but the enabled WorkContract below requires this
+              // purpose for external material acquisition.
+              requiredWhenLaneEnabled: false,
+            },
+          ]
+        : [],
+    }
+    manifest.lifecycleRegions[0]!.responsibilityLanes = [lane]
+    manifest.workItems[0]!.responsibilityLaneId = 'design-main'
+    if (input.secondWorkItem) {
+      const second = structuredClone(manifest.workItems[0]!)
+      second.workItemRef = 'design-review'
+      second.order = 1
+      second.label = { 'zh-CN': '复核设计', 'en-US': 'Review design' }
+      second.description = { 'zh-CN': '复核设计结果', 'en-US': 'Review the design result' }
+      second.nextWorkItemRefs = []
+      manifest.workItems.push(second)
+    }
+    const contracts = descriptor.workContracts as Array<Record<string, unknown>>
+    contracts[0]!.requiredConnectionPurpose = 'pipeline-gate'
+  })
+}
+
+const catalogDefaultAdapterRef = { id: 'catalog-pipeline-default', revision: 4 } as const
+
+const adapterCatalog: ToolConnectionCatalogPort = {
+  resolve(ref) {
+    return {
+      ref,
+      purpose: 'pipeline-gate',
+      available: true,
+      visible: true,
+      contentDigest: `${ref.revision % 10}`.repeat(64),
+      closureSummary: `${ref.id}@${ref.revision}; pipeline-gate; available`,
+    }
+  },
+  selectAutomatic(input) {
+    const candidates =
+      input.candidates.length === 0 ? [catalogDefaultAdapterRef] : [...input.candidates]
+    candidates.sort(
+      (left, right) => left.id.localeCompare(right.id) || left.revision - right.revision,
+    )
+    const ref = candidates[0]
+    return ref === undefined ? null : this.resolve(ref, input.subject)
+  },
+}
+
+function writeLegacyToolConnection(
+  db: ReturnType<typeof createInMemoryDb>,
+  ref: { id: string; revision: number },
+  connectionRef: { id: string; revision: number },
+): void {
+  const row = db
+    .select()
+    .from(employeeToolRegistrationRevisions)
+    .where(
+      and(
+        eq(employeeToolRegistrationRevisions.toolId, ref.id),
+        eq(employeeToolRegistrationRevisions.revision, ref.revision),
+      ),
+    )
+    .get()
+  if (row === undefined) throw new Error(`missing tool revision ${ref.id}@${ref.revision}`)
+  const content = { ...(JSON.parse(row.contentJson) as Record<string, unknown>), connectionRef }
+  db.update(employeeToolRegistrationRevisions)
+    .set({ contentJson: JSON.stringify(content), contentDigest: contentDigest(content) })
+    .where(
+      and(
+        eq(employeeToolRegistrationRevisions.toolId, ref.id),
+        eq(employeeToolRegistrationRevisions.revision, ref.revision),
+      ),
+    )
+    .run()
 }
 
 function versionedCollaboratingDesignPackage(revision: number): EmployeeTypePackageRegistration {
@@ -142,11 +247,37 @@ function versionedCollaboratingDesignPackage(revision: number): EmployeeTypePack
   })
 }
 
+function versionedOrderedDispatchDesignPackage(revision: number): EmployeeTypePackageRegistration {
+  return versionedDesignPackage(revision, (descriptor) => {
+    const workItems = (
+      descriptor.authoringManifest as { workItems: Array<Record<string, unknown>> }
+    ).workItems
+    const classifier = workItems[0]!
+    classifier.nextWorkItemRefs = ['design-repair']
+    classifier.orderedDispatchAuthoring = {
+      label: { 'zh-CN': '问题分类', 'en-US': 'Problem classification' },
+      description: { 'zh-CN': '按分类路由修复', 'en-US': 'Route repairs by category' },
+      destinationWorkItemRefs: ['design-repair'],
+      processingOrderOwner: 'job',
+    }
+    const repair = structuredClone(classifier)
+    repair.workItemRef = 'design-repair'
+    repair.order = 1
+    repair.label = { 'zh-CN': '修复设计问题', 'en-US': 'Repair design problem' }
+    repair.description = { 'zh-CN': '处理分类后的问题', 'en-US': 'Handle the classified problem' }
+    repair.orderedDispatchAuthoring = null
+    repair.nextWorkItemRefs = []
+    workItems.push(repair)
+  })
+}
+
 function createFixtureModule(input: {
   db: ReturnType<typeof createInMemoryDb>
   appHome: string
   typePackage: EmployeeTypePackageRegistration
   platformTools?: DigitalEmployeePlatformToolCatalogParticipant
+  connectionCatalog?: ToolConnectionCatalogPort
+  executionContracts?: ExecutionContractParticipant
   issues?: Array<{ reasonCode: string; resourceId: string }>
   idPrefix?: string
   id?: () => string
@@ -156,8 +287,11 @@ function createFixtureModule(input: {
     db: input.db,
     appHome: input.appHome,
     typePackages: [input.typePackage],
-    executionContracts,
+    executionContracts: input.executionContracts ?? executionContracts,
     ...(input.platformTools === undefined ? {} : { platformTools: input.platformTools }),
+    ...(input.connectionCatalog === undefined
+      ? {}
+      : { connectionCatalog: input.connectionCatalog }),
     id: input.id ?? (() => `${input.idPrefix ?? 'auto-upgrade-resource'}-${++ordinal}`),
     now: () => 10_000 + ordinal,
     onAutomaticUpgradeIssue: (issue) => input.issues?.push(issue),
@@ -267,6 +401,117 @@ function platformToolCatalog(): DigitalEmployeePlatformToolCatalogParticipant {
   }
 }
 
+function orderedDispatchPlatformToolCatalog(): DigitalEmployeePlatformToolCatalogParticipant {
+  const record = (typeRevision: number, workItemRef: 'design-work' | 'design-repair') => {
+    const classifier = workItemRef === 'design-work'
+    const content = {
+      schemaVersion: 1 as const,
+      typeRef: { typeId: 'design', revision: typeRevision },
+      workItemRef,
+      workContractRef: { contractId: 'design.perform-work', version: 1 },
+      roleRef: 'primary',
+      displayName: classifier ? '平台问题分类器' : '平台问题修复器',
+      description: classifier ? '按冻结定义分类' : '处理分类后的问题',
+      implementation: {
+        kind: 'agent' as const,
+        agentRef: { id: classifier ? 'dispatch-classifier' : 'dispatch-repairer', revision: 1 },
+      },
+      connectionRef: null,
+      ...(classifier
+        ? {
+            dispatchRouteDefinitions: [
+              {
+                routeRef: 'problem',
+                displayName: '设计问题',
+                description:
+                  typeRevision === 1 ? '旧版设计问题说明' : '新版类型包拥有的设计问题说明',
+                fallback: true,
+              },
+            ],
+          }
+        : { acceptedDispatchRoutes: [{ classifierWorkItemRef: 'design-work', routeRefs: ['*'] }] }),
+    }
+    const receiptCore = {
+      schemaVersion: 1 as const,
+      status: 'valid' as const,
+      contractRef: content.workContractRef,
+      implementationDigest: contentDigest(content.implementation),
+      checks: [{ code: 'platform-contract', ok: true, detail: 'provider validated successor' }],
+      checkedAt: 99,
+    }
+    const id = `platform-dispatch:design:${typeRevision}:${workItemRef}`
+    const publishedRevision = 200 + typeRevision
+    return {
+      draft: {
+        id,
+        typeRef: content.typeRef,
+        workItemRef,
+        content,
+        validationReceipt: { ...receiptCore, receiptDigest: contentDigest(receiptCore) },
+        publishedRevision,
+        ownerUserId: null,
+        createdAt: 99,
+        updatedAt: 99,
+        retiredAt: null,
+        origin: 'platform' as const,
+        selection: 'selectable' as const,
+      },
+      revision: {
+        ref: { id, revision: publishedRevision },
+        content,
+        contentDigest: contentDigest(content),
+        validationReceipt: { ...receiptCore, receiptDigest: contentDigest(receiptCore) },
+        state: 'published' as const,
+        publishedAt: 99,
+        publishedBy: null,
+      },
+    }
+  }
+  const records = ([1, 2] as const).flatMap((revision) => [
+    record(revision, 'design-work'),
+    record(revision, 'design-repair'),
+  ])
+  return {
+    listJson(typeRefJson, workItemRef) {
+      const typeRef = JSON.parse(typeRefJson) as { typeId: string; revision: number }
+      return JSON.stringify(
+        records
+          .map((candidate) => candidate.draft)
+          .filter(
+            (candidate) =>
+              candidate.typeRef.revision === typeRef.revision &&
+              candidate.workItemRef === workItemRef,
+          ),
+      )
+    },
+    getRevisionJson(refJson) {
+      const ref = JSON.parse(refJson) as { id: string; revision: number }
+      const found = records.find(
+        (candidate) =>
+          candidate.revision.ref.id === ref.id && candidate.revision.ref.revision === ref.revision,
+      )
+      return found === undefined ? null : JSON.stringify(found.revision)
+    },
+    resolveCompatibleRevisionJson(sourceRefJson, targetTypeRefJson, workItemRef) {
+      const sourceRef = JSON.parse(sourceRefJson) as { id: string; revision: number }
+      const targetTypeRef = JSON.parse(targetTypeRefJson) as { revision: number }
+      const source = records.find(
+        (candidate) =>
+          candidate.revision.ref.id === sourceRef.id &&
+          candidate.revision.ref.revision === sourceRef.revision,
+      )
+      if (source === undefined || source.revision.content.workItemRef !== workItemRef) return null
+      const target = records.find(
+        (candidate) =>
+          candidate.revision.content.typeRef.revision === targetTypeRef.revision &&
+          candidate.revision.content.workItemRef === workItemRef,
+      )
+      return target === undefined ? null : JSON.stringify(target.revision)
+    },
+    isPlatformTool: (toolId) => toolId.startsWith('platform-dispatch:'),
+  }
+}
+
 async function seedPublishedEmployee(input: {
   db: ReturnType<typeof createInMemoryDb>
   appHome: string
@@ -317,6 +562,390 @@ async function seedPublishedEmployee(input: {
 }
 
 describe('RFC-310 Type Package automatic compatible upgrades', () => {
+  test('work-contract-required legacy lane connections auto-select a stable Adapter and keep immutable source rows', async () => {
+    const runScenario = async (
+      connections: readonly { id: string; revision: number }[],
+      connectionCatalog: ToolConnectionCatalogPort = adapterCatalog,
+    ): Promise<{
+      issues: Array<{ reasonCode: string; resourceId: string }>
+      employeeTypeRevision: number
+      exactAdapterBindings: unknown[]
+      sourceConnections: unknown[]
+      targetToolConnections: unknown[]
+    }> => {
+      const appHome = mkdtempSync(join(tmpdir(), 'rfc323-legacy-adapter-projection-'))
+      try {
+        const db = createInMemoryDb(MIGRATIONS)
+        const secondWorkItem = connections.length > 1
+        const v1 = createFixtureModule({
+          db,
+          appHome,
+          typePackage: versionedAdapterDesignPackage({
+            revision: 1,
+            adapterSlot: false,
+            secondWorkItem,
+          }),
+          connectionCatalog,
+          idPrefix: 'legacy-adapter-v1',
+        })
+        const typeRef = { typeId: 'design', revision: 1 }
+        const workItemRefs = secondWorkItem
+          ? (['design-work', 'design-review'] as const)
+          : (['design-work'] as const)
+        const toolRefs: Array<{ id: string; revision: number }> = []
+        for (const workItemRef of workItemRefs) {
+          const tool = await v1.commands.createTool({
+            typeRef,
+            workItemRef,
+            actorUserId: 'legacy-owner',
+            body: {
+              displayName: `${workItemRef} legacy tool`,
+              description: 'Published before lane Adapter bindings existed.',
+              roleRef: 'primary',
+              implementation: {
+                kind: 'agent',
+                agentRef: { id: `${workItemRef}-agent`, revision: 1 },
+              },
+            },
+          })
+          toolRefs.push(
+            await v1.commands.publishTool({
+              typeRef,
+              workItemRef,
+              toolId: tool.id,
+              actorUserId: 'legacy-owner',
+            }),
+          )
+        }
+        const job = v1.commands.createJobTemplate({
+          typeRef,
+          actorUserId: 'legacy-owner',
+          body: {
+            name: 'Legacy Adapter role',
+            description: 'Legacy exact tool connections are projected on upgrade.',
+            defaultToolBindings: workItemRefs.map((workItemRef, index) => ({
+              workItemRef,
+              slotRef: 'primary',
+              registrationRef: toolRefs[index]!,
+            })),
+          },
+        })
+        const jobRef = v1.commands.publishJobTemplate({
+          id: job.id,
+          actorUserId: 'legacy-owner',
+        })
+        const employee = v1.commands.createEmployee({
+          typeRef,
+          actorUserId: 'legacy-owner',
+          body: {
+            name: 'Legacy Adapter employee',
+            jobTemplateRef: jobRef,
+            workScope: { kind: 'global' },
+          },
+        })
+        connections.forEach((connectionRef, index) =>
+          writeLegacyToolConnection(db, toolRefs[index]!, connectionRef),
+        )
+        const sourceRows = toolRefs.map(
+          (ref) =>
+            db
+              .select()
+              .from(employeeToolRegistrationRevisions)
+              .where(
+                and(
+                  eq(employeeToolRegistrationRevisions.toolId, ref.id),
+                  eq(employeeToolRegistrationRevisions.revision, ref.revision),
+                ),
+              )
+              .get()!,
+        )
+
+        const issues: Array<{ reasonCode: string; resourceId: string }> = []
+        const v2 = createFixtureModule({
+          db,
+          appHome,
+          typePackage: versionedAdapterDesignPackage({
+            revision: 2,
+            adapterSlot: true,
+            secondWorkItem,
+          }),
+          connectionCatalog,
+          issues,
+          idPrefix: 'legacy-adapter-v2',
+        })
+        const current = v2.queries.getEmployee(employee.id)
+        const sourceConnections = sourceRows.map((source) => {
+          const after = db
+            .select()
+            .from(employeeToolRegistrationRevisions)
+            .where(
+              and(
+                eq(employeeToolRegistrationRevisions.toolId, source.toolId),
+                eq(employeeToolRegistrationRevisions.revision, source.revision),
+              ),
+            )
+            .get()!
+          expect(after.contentJson).toBe(source.contentJson)
+          expect(after.contentDigest).toBe(source.contentDigest)
+          return (
+            (JSON.parse(after.contentJson) as { connectionRef?: unknown }).connectionRef ?? null
+          )
+        })
+        const targetToolConnections = current.definition.exactToolBindings.map((binding) => {
+          const row = db
+            .select()
+            .from(employeeToolRegistrationRevisions)
+            .where(
+              and(
+                eq(employeeToolRegistrationRevisions.toolId, binding.registrationRef.id),
+                eq(employeeToolRegistrationRevisions.revision, binding.registrationRef.revision),
+              ),
+            )
+            .get()
+          return row === undefined
+            ? 'missing'
+            : ((JSON.parse(row.contentJson) as { connectionRef?: unknown }).connectionRef ?? null)
+        })
+        return {
+          issues,
+          employeeTypeRevision: current.typeRef.revision,
+          exactAdapterBindings: current.definition.exactAdapterBindings,
+          sourceConnections,
+          targetToolConnections,
+        }
+      } finally {
+        rmSync(appHome, { recursive: true, force: true })
+      }
+    }
+
+    const missing = await runScenario([])
+    expect(missing.issues).toEqual([])
+    expect(missing.employeeTypeRevision).toBe(2)
+    expect(missing.exactAdapterBindings).toEqual([
+      {
+        laneId: 'design-main',
+        slotRef: 'primary',
+        adapterRef: catalogDefaultAdapterRef,
+      },
+    ])
+
+    const exact = await runScenario([{ id: 'jenkins', revision: 3 }])
+    expect(exact.issues).toEqual([])
+    expect(exact.employeeTypeRevision).toBe(2)
+    expect(exact.exactAdapterBindings).toEqual([
+      {
+        laneId: 'design-main',
+        slotRef: 'primary',
+        adapterRef: { id: 'jenkins', revision: 3 },
+      },
+    ])
+    expect(exact.sourceConnections).toEqual([{ id: 'jenkins', revision: 3 }])
+    expect(exact.targetToolConnections).toEqual([null])
+
+    const ambiguous = await runScenario([
+      { id: 'jenkins-a', revision: 1 },
+      { id: 'jenkins-b', revision: 2 },
+    ])
+    expect(ambiguous.issues).toEqual([])
+    expect(ambiguous.employeeTypeRevision).toBe(2)
+    expect(ambiguous.exactAdapterBindings).toEqual([
+      {
+        laneId: 'design-main',
+        slotRef: 'primary',
+        adapterRef: { id: 'jenkins-a', revision: 1 },
+      },
+    ])
+
+    const unavailable = await runScenario([], { resolve: () => null })
+    expect(unavailable.employeeTypeRevision).toBe(1)
+    expect(unavailable.issues).toContainEqual(
+      expect.objectContaining({ reasonCode: 'adapter-binding-missing' }),
+    )
+  })
+
+  test('a current employee auto-reconciles a contract-required Adapter published later', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc323-current-adapter-reconcile-'))
+    try {
+      const db = createInMemoryDb(MIGRATIONS)
+      const typeRef = { typeId: 'design', revision: 2 }
+      const typePackage = versionedAdapterDesignPackage({
+        revision: 2,
+        adapterSlot: true,
+      })
+      const initial = createFixtureModule({
+        db,
+        appHome,
+        typePackage,
+        connectionCatalog: { resolve: () => null },
+        idPrefix: 'current-adapter-initial',
+      })
+      const tool = await initial.commands.createTool({
+        typeRef,
+        workItemRef: 'design-work',
+        actorUserId: 'legacy-owner',
+        body: {
+          displayName: 'Late Adapter tool',
+          description: 'The required Adapter is published after this employee.',
+          roleRef: 'primary',
+          implementation: {
+            kind: 'agent',
+            agentRef: { id: 'late-adapter-agent', revision: 1 },
+          },
+        },
+      })
+      const toolRef = await initial.commands.publishTool({
+        typeRef,
+        workItemRef: 'design-work',
+        toolId: tool.id,
+        actorUserId: 'legacy-owner',
+      })
+      const job = initial.commands.createJobTemplate({
+        typeRef,
+        actorUserId: 'legacy-owner',
+        body: {
+          name: 'Late Adapter role',
+          description: 'Published before its provider Adapter exists.',
+          defaultToolBindings: [
+            { workItemRef: 'design-work', slotRef: 'primary', registrationRef: toolRef },
+          ],
+        },
+      })
+      const jobRef = initial.commands.publishJobTemplate({
+        id: job.id,
+        actorUserId: 'legacy-owner',
+      })
+      const employee = initial.commands.createEmployee({
+        typeRef,
+        actorUserId: 'legacy-owner',
+        body: {
+          name: 'Late Adapter employee',
+          jobTemplateRef: jobRef,
+          workScope: { kind: 'global' },
+        },
+      })
+      expect(initial.queries.getEmployee(employee.id).definition.exactAdapterBindings).toEqual([])
+
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+      const reloaded = createFixtureModule({
+        db,
+        appHome,
+        typePackage,
+        connectionCatalog: adapterCatalog,
+        issues,
+        idPrefix: 'current-adapter-reloaded',
+      })
+      const current = reloaded.queries.getEmployee(employee.id)
+      expect(issues).toEqual([])
+      expect(current.revision).toBe(2)
+      expect(current.definition.exactAdapterBindings).toEqual([
+        {
+          laneId: 'design-main',
+          slotRef: 'primary',
+          adapterRef: catalogDefaultAdapterRef,
+        },
+      ])
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  })
+
+  test('rebuilds job route metadata from the upgraded classifier revision', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-ordered-dispatch-'))
+    try {
+      const db = createInMemoryDb(MIGRATIONS)
+      const platformTools = orderedDispatchPlatformToolCatalog()
+      const sourceTypeRef = { typeId: 'design', revision: 1 }
+      const source = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedOrderedDispatchDesignPackage(1),
+        platformTools,
+        idPrefix: 'ordered-dispatch-v1',
+      })
+      const classifier = source.queries.listTools(sourceTypeRef, 'design-work')[0]!
+      const repair = source.queries.listTools(sourceTypeRef, 'design-repair')[0]!
+      const job = source.commands.createJobTemplate({
+        typeRef: sourceTypeRef,
+        actorUserId: 'ordered-dispatch-owner',
+        body: {
+          name: 'Ordered dispatch role',
+          description: 'The classifier owns route labels while the job owns handling order.',
+          defaultToolBindings: [
+            {
+              workItemRef: 'design-work',
+              slotRef: 'primary',
+              registrationRef: {
+                id: classifier.id,
+                revision: classifier.publishedRevision!,
+              },
+            },
+            {
+              workItemRef: 'design-repair',
+              slotRef: 'primary',
+              registrationRef: { id: repair.id, revision: repair.publishedRevision! },
+            },
+          ],
+          orderedDispatchConfigurations: [
+            {
+              classifierWorkItemRef: 'design-work',
+              routes: [
+                {
+                  routeRef: 'problem',
+                  displayName: '设计问题',
+                  description: '旧版设计问题说明',
+                  destinationWorkItemRef: 'design-repair',
+                  registrationRef: { id: repair.id, revision: repair.publishedRevision! },
+                  fallback: true,
+                },
+              ],
+            },
+          ],
+        },
+      })
+      const jobRef = source.commands.publishJobTemplate({
+        id: job.id,
+        actorUserId: 'ordered-dispatch-owner',
+      })
+      const employee = source.commands.createEmployee({
+        typeRef: sourceTypeRef,
+        actorUserId: 'ordered-dispatch-owner',
+        body: {
+          name: 'Ordered dispatch employee',
+          jobTemplateRef: jobRef,
+          workScope: { kind: 'global' },
+        },
+      })
+
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+      const target = createFixtureModule({
+        db,
+        appHome,
+        typePackage: versionedOrderedDispatchDesignPackage(2),
+        platformTools,
+        issues,
+        idPrefix: 'ordered-dispatch-v2',
+      }).queries.getEmployee(employee.id)
+
+      expect(issues).toEqual([])
+      expect(target).toMatchObject({ typeRef: { typeId: 'design', revision: 2 } })
+      expect(target.definition.exactOrderedDispatchConfigurations).toEqual([
+        {
+          classifierWorkItemRef: 'design-work',
+          routes: [
+            expect.objectContaining({
+              routeRef: 'problem',
+              description: '新版类型包拥有的设计问题说明',
+              destinationWorkItemRef: 'design-repair',
+              fallback: true,
+            }),
+          ],
+        },
+      ])
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  })
+
   test('reconciles nested collaboration targets after every compatible employee upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-collaboration-'))
     try {
@@ -1354,7 +1983,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     }
   })
 
-  test('changed WorkContract stays pinned and reports a machine issue without partial writes', async () => {
+  test('a target-rejected WorkContract successor stays pinned without partial writes', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-blocked-'))
     try {
       const db = createInMemoryDb(MIGRATIONS)
@@ -1370,13 +1999,25 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         appHome,
         typePackage: incompatiblePackage,
         issues,
+        executionContracts: {
+          ...executionContracts,
+          async validateExecutor({ contractRef }) {
+            return {
+              schemaVersion: 1,
+              contractRef,
+              status: 'invalid',
+              checks: [{ code: 'fixture-contract', ok: false, detail: 'target rejected' }],
+            }
+          },
+        },
       })
+      await module.maintenance.settleAutomaticUpgrades()
 
       expect(module.queries.listLaunchableEmployees()).toEqual([])
       expect(issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            reasonCode: 'work-contract-changed',
+            reasonCode: 'work-contract-successor-invalid',
             resourceId: original.id,
           }),
         ]),
@@ -1389,6 +2030,62 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         }),
       ])
       expect(db.select().from(employeeDefinitionRevisions).all()).toHaveLength(1)
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  })
+
+  test('changed WorkContract auto-upgrades after its target successor validates', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-revalidated-'))
+    try {
+      const db = createInMemoryDb(MIGRATIONS)
+      const original = await seedPublishedEmployee({ db, appHome })
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+      const compatiblePackage = versionedDesignPackage(2, (descriptor) => {
+        const contracts = descriptor.workContracts as Array<Record<string, unknown>>
+        contracts[0]!.version = 2
+        contracts[0]!.outputSchemaId = 'design.output.v2'
+        const workItems = (
+          descriptor.authoringManifest as { workItems: Array<Record<string, unknown>> }
+        ).workItems
+        workItems[0]!.workContractRef = { contractId: 'design.perform-work', version: 2 }
+      })
+
+      const module = createFixtureModule({
+        db,
+        appHome,
+        typePackage: compatiblePackage,
+        issues,
+      })
+      issues.length = 0
+      await module.maintenance.settleAutomaticUpgrades()
+
+      expect(issues).toEqual([])
+      expect(module.queries.getEmployee(original.id)).toMatchObject({
+        id: original.id,
+        revision: 2,
+        typeRef: { typeId: 'design', revision: 2 },
+        definition: {
+          exactToolBindings: [
+            expect.objectContaining({
+              registrationRef: expect.objectContaining({ revision: 1 }),
+            }),
+          ],
+        },
+      })
+      const migratedTool = db
+        .select()
+        .from(employeeToolRegistrations)
+        .where(eq(employeeToolRegistrations.typeRevision, 2))
+        .get()
+      expect(migratedTool).toBeDefined()
+      expect(
+        (
+          JSON.parse(migratedTool!.draftJson) as {
+            content: { workContractRef: unknown }
+          }
+        ).content.workContractRef,
+      ).toEqual({ contractId: 'design.perform-work', version: 2 })
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }

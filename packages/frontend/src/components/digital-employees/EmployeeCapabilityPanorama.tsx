@@ -11,7 +11,13 @@ import {
   type ResponsibilityCardPresentation,
   type ResponsibilityProjectedIngress,
 } from './ResponsibilityFlowDisplay'
-import type { EmployeeTypePackage, ToolRegistration, WorkIngress, WorkItem } from './types'
+import type {
+  EmployeeTypePackage,
+  LaneAdapterSlot,
+  ToolRegistration,
+  WorkIngress,
+  WorkItem,
+} from './types'
 import { localized } from './types'
 
 export interface ResponsibilityDispatchNode {
@@ -28,6 +34,7 @@ export interface ResponsibilityDispatchNode {
 }
 
 type ResponsibilityMapEntry =
+  | { kind: 'adapter'; laneId: string; slot: LaneAdapterSlot }
   | { kind: 'item'; item: WorkItem }
   | {
       kind: 'ingress-branch'
@@ -78,6 +85,19 @@ export interface ResponsibilityToolSlotTarget {
   slotRef: string
 }
 
+export interface ResponsibilityAdapterSlotTarget {
+  laneId: string
+  slotRef: string
+  slot: LaneAdapterSlot
+}
+
+export interface ResponsibilityAdapterSlotState {
+  state: 'configured' | 'missing' | 'neutral'
+  detail: string
+  compactDetail?: string
+  attention?: boolean
+}
+
 export interface EmployeeCapabilityPanoramaProps {
   type: EmployeeTypePackage
   selectedWorkItemRef: string | null
@@ -90,6 +110,8 @@ export interface EmployeeCapabilityPanoramaProps {
   cardIdPrefix?: string
   attentionPulse?: number
   compactChrome?: boolean
+  /** Keep duty nodes visible as context while only lane Adapter cards remain actionable. */
+  workItemsReadOnly?: boolean
   /** Public phase → capability lane → tool projection used by authoring and runtime pages. */
   toolState?: (tool: EmployeeCapabilityTool) => EmployeeCapabilityToolState
   /**
@@ -107,6 +129,9 @@ export interface EmployeeCapabilityPanoramaProps {
   selectedToolSlotTarget?: ResponsibilityToolSlotTarget | null
   onSelectToolSlot?: (target: ResponsibilityToolSlotTarget) => void
   toolSlotState?: (target: ResponsibilityToolSlotTarget) => EmployeeCapabilityToolState
+  selectedAdapterSlotKey?: string | null
+  onSelectAdapterSlot?: (target: ResponsibilityAdapterSlotTarget) => void
+  adapterSlotState?: (target: ResponsibilityAdapterSlotTarget) => ResponsibilityAdapterSlotState
   dispatchNodes?: readonly ResponsibilityDispatchNode[]
   selectedDispatchNodeKey?: string | null
   onSelectDispatchNode?: (node: ResponsibilityDispatchNode) => void
@@ -707,15 +732,26 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                             .map((node) => ({ kind: 'dispatch' as const, node })),
                         ],
                   }))
-                  const primaryEntries = primaryEntryBuckets
+                  const workItemEntries = primaryEntryBuckets
                     .sort(
                       (left, right) =>
                         left.order - right.order || left.identity.localeCompare(right.identity),
                     )
                     .flatMap((entry) => entry.entries)
+                  // Adapter slots are configuration dependencies owned by the lane, not
+                  // schedulable WorkItems. Project them first without adding them to the
+                  // manifest graph, reaction rules, rounds, or runtime status counts.
+                  const primaryEntries: ResponsibilityMapEntry[] = [
+                    ...(lane.adapterSlots ?? []).map((slot) => ({
+                      kind: 'adapter' as const,
+                      laneId: lane.laneId,
+                      slot,
+                    })),
+                    ...workItemEntries,
+                  ]
                   const entryColumnSpan = (entry: ResponsibilityMapEntry): number =>
                     entry.kind === 'review-branch' ? 3 : entry.kind === 'ingress-branch' ? 2 : 1
-                  const totalColumnSpan = primaryEntries.reduce(
+                  const totalColumnSpan = workItemEntries.reduce(
                     (total, entry) => total + entryColumnSpan(entry),
                     0,
                   )
@@ -725,7 +761,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                       totalColumnSpan,
                       laneColumnCapacityById[lane.laneId] ?? totalColumnSpan,
                     ),
-                    ...primaryEntries.map(entryColumnSpan),
+                    ...workItemEntries.map(entryColumnSpan),
                   )
                   const hasParallelIngressBranch = primaryEntries.some(
                     (entry) =>
@@ -735,6 +771,20 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                   let nextPrimaryColumn = 1
                   let nextPrimaryRow = 1
                   const primaryPlacements = primaryEntries.map((entry, index) => {
+                    // Adapter is the first configuration card in the lane, but it is not an
+                    // executable predecessor. Give each Adapter a dedicated leading row so
+                    // adding the card never breaks the horizontal WorkItem flow or draws a
+                    // false sequence arrow from configuration into execution.
+                    if (entry.kind === 'adapter') {
+                      const placement = {
+                        column: 1,
+                        row: nextPrimaryRow,
+                        rowStart: true,
+                      }
+                      nextPrimaryColumn = 1
+                      nextPrimaryRow += 1
+                      return placement
+                    }
                     const columnSpan = entryColumnSpan(entry)
                     if (nextPrimaryColumn + columnSpan - 1 > laneColumns) {
                       nextPrimaryColumn = 1
@@ -826,12 +876,15 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                           : ''
                       }`}
                       style={
-                        draggedLaneId === lane.laneId
-                          ? ({
-                              '--employee-lane-drag-offset': `${dragTranslateY}px`,
-                              transform: `translate3d(0, ${dragTranslateY}px, 0)`,
-                            } as CSSProperties)
-                          : undefined
+                        {
+                          '--employee-adapter-axis-offset': `${(lane.adapterSlots?.length ?? 0) * 20}px`,
+                          ...(draggedLaneId === lane.laneId
+                            ? {
+                                '--employee-lane-drag-offset': `${dragTranslateY}px`,
+                                transform: `translate3d(0, ${dragTranslateY}px, 0)`,
+                              }
+                            : {}),
+                        } as CSSProperties
                       }
                       data-lane-id={lane.laneId}
                       data-capability-lane-id={lane.laneId}
@@ -943,6 +996,49 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                         }
                       >
                         {entries.map(({ entry, auxiliary }, itemIndex) => {
+                          if (entry.kind === 'adapter') {
+                            const target: ResponsibilityAdapterSlotTarget = {
+                              laneId: entry.laneId,
+                              slotRef: entry.slot.slotRef,
+                              slot: entry.slot,
+                            }
+                            const state = props.adapterSlotState?.(target) ?? {
+                              state: 'neutral' as const,
+                              detail: zh ? '管理企业连接资源' : 'Manage enterprise connections',
+                              compactDetail: zh ? '连接' : 'Links',
+                            }
+                            const key = `${entry.laneId}/${entry.slot.slotRef}`
+                            const selected = props.selectedAdapterSlotKey === key
+                            const rowStart = primaryRowStartIndices.has(itemIndex)
+                            return (
+                              <ResponsibilityFlowCard
+                                key={`adapter:${key}:${state.attention === true ? (props.attentionPulse ?? 0) : 0}`}
+                                id={`${props.cardIdPrefix ?? 'toolbox-duty'}-adapter-${entry.laneId}-${entry.slot.slotRef}`}
+                                data-lane-adapter-slot={key}
+                                data-capability-adapter-purpose={entry.slot.purpose}
+                                type="button"
+                                className={`employee-toolbox-card--adapter employee-toolbox-card--${state.state}${
+                                  state.attention === true
+                                    ? ' employee-toolbox-card--attention'
+                                    : ''
+                                }${selected ? ' employee-toolbox-card--active' : ''}${
+                                  rowStart ? ' employee-toolbox-card--row-start' : ''
+                                }`}
+                                aria-pressed={selected}
+                                aria-label={`${localized(entry.slot.label, props.language)} · ${
+                                  zh ? '企业连接' : 'Enterprise connection'
+                                } · ${state.detail}`}
+                                title={localized(entry.slot.description, props.language)}
+                                disabled={props.onSelectAdapterSlot === undefined}
+                                onClick={() => props.onSelectAdapterSlot?.(target)}
+                                incoming={itemIndex > 0 && !rowStart}
+                                kindLabel="Adapter"
+                                label={null}
+                                detailText={state.compactDetail ?? state.detail}
+                                detailTitle={state.detail}
+                              />
+                            )
+                          }
                           if (entry.kind === 'ingress') {
                             return (
                               <ResponsibilityIngressCard
@@ -952,6 +1048,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 cardIdPrefix={props.cardIdPrefix ?? 'toolbox-duty'}
                                 auxiliary={auxiliary}
                                 nextLabel={nextLabelForIngress(entry.ingress)}
+                                readOnly={props.workItemsReadOnly}
                                 onConfigure={props.onConfigureIngress}
                               />
                             )
@@ -981,6 +1078,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 selected={selected}
                                 incoming={itemIndex > 0 && !rowStart}
                                 rowStart={rowStart}
+                                readOnly={props.workItemsReadOnly}
                                 onSelect={() => props.onSelect(item.workItemRef)}
                                 onConfigureIngress={props.onConfigureIngress}
                                 nextLabelFor={nextLabelForIngress}
@@ -1085,6 +1183,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 itemSelected={itemSelected}
                                 incoming={itemIndex > 0 && !rowStart}
                                 rowStart={rowStart}
+                                readOnly={props.workItemsReadOnly}
                                 onSelectPlanning={() => {
                                   if (props.onSelectToolSlot === undefined) {
                                     props.onSelect(item.workItemRef)
@@ -1130,6 +1229,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 }`}
                                 aria-pressed={selected}
                                 aria-label={`${zh ? '优先级' : 'Priority'} ${node.priority} · ${displayName} · ${node.detail}`}
+                                disabled={props.workItemsReadOnly === true}
                                 onClick={() => props.onSelectDispatchNode?.(node)}
                                 incoming={itemIndex > 0 && !rowStart}
                                 kindLabel={`P${node.priority} · ${kind.label}`}
@@ -1165,6 +1265,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 fanOut ? (zh ? ' · 多项扇出' : ' · Fan-out collection') : ''
                               } · ${detail} · ${next}`}
                               title={localized(item.description, props.language)}
+                              disabled={props.workItemsReadOnly === true}
                               onClick={() => props.onSelect(item.workItemRef)}
                               incoming={itemIndex > 0 && !rowStart}
                               kindLabel={kind.label}

@@ -114,6 +114,16 @@ export async function importPipelineEvidence(
     readonly budget: EvidenceBudget
   },
 ): Promise<ImportPipelineEvidenceResult> {
+  // A provider that could not complete redaction must not get its bytes into
+  // the durable evidence pool. Reject before safe-walk/import, not merely
+  // after a manifest describing the unsafe bundle has already been stored.
+  if (input.envelope.redaction !== 'complete') {
+    return {
+      ok: false,
+      code: 'pipeline-evidence-redaction-incomplete',
+      detail: 'pipeline evidence redaction did not complete',
+    }
+  }
   let record
   try {
     record = await deps.evidence.importStagedTree(input.stagedRoot, input.budget)
@@ -160,8 +170,6 @@ export async function importPipelineEvidence(
     }
   }
 
-  const perFileRedaction =
-    input.envelope.redaction === 'complete' ? ('none' as const) : ('failed' as const)
   const files = record.entries
     .map((entry) => ({
       fileId: fileIdByPath.get(entry.relativePath) ?? entry.relativePath,
@@ -169,7 +177,7 @@ export async function importPipelineEvidence(
       mediaType: mediaTypeOf(entry.relativePath),
       bytes: entry.bytes,
       sha256: entry.sha256,
-      redaction: perFileRedaction,
+      redaction: 'none' as const,
     }))
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 

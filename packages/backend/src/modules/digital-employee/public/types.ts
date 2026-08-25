@@ -56,6 +56,8 @@ export interface EmployeeTypePackageRegistration {
   parseWorkScopeJson(inputJson: string): string
   summarizeWorkScopeJson(scopeJson: string, locale: 'zh-CN' | 'en-US'): string
   validateContractFixtureJson(requestJson: string): string
+  /** Optional provider-owned bridge for a program crossing WorkContract revisions. */
+  upgradeProgramSourceJson?(requestJson: string): string | null
 }
 
 /**

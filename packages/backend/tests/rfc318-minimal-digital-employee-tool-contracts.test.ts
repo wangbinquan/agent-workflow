@@ -13,6 +13,7 @@ import {
   developmentWorkContractsV2,
 } from '@/modules/development-automation/composition/digitalEmployeeToolContractsV2'
 import {
+  developmentExecutionContractRegistrations,
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
 } from '@/modules/development-automation/composition/employeeTypePackage'
@@ -126,7 +127,12 @@ function hostEnvelope(problemSource: 'review' | 'pipeline' = 'review') {
   return JSON.stringify({
     connectionRef: { id: 'connection-1', revision: 3 },
     contractInput: {
-      workRequest: { externalId: 'ISSUE-1234' },
+      workRequest: {
+        kind: 'external-id',
+        body: null,
+        externalId: 'ISSUE-1234',
+        uploads: [],
+      },
       failureTypeDefinitions: [
         {
           typeId: 'compile-error',
@@ -235,31 +241,31 @@ const validOutputs: Record<DevelopmentToolJsonOutputContractIdV2, Record<string,
 }
 
 describe('RFC-318 minimal digital employee tool contracts', () => {
-  test('development@9 exposes exactly nine intuitive v2 actions', () => {
+  test('development@10 keeps the minimal contracts while pipeline collection becomes platform-owned', () => {
     const descriptor = employeeTypePackageDescriptorSchema.parse(
       JSON.parse(developmentEmployeeTypePackage.descriptorJson) as unknown,
     )
-    expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 9 })
+    expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 10 })
     expect(developmentWorkContractsV2.map((contract) => contract.contractId)).toEqual([
       ...DEVELOPMENT_TOOL_CONTRACT_IDS_V2,
     ])
 
     const expected = {
-      'prepare-materials': ['准备外部材料', 'development.prepare-materials'],
-      'analyze-implement': ['实现变更', 'development.implement-change'],
-      'repair-feedback': ['处理检视意见', 'development.resolve-review-feedback'],
-      'collect-pipeline': ['采集流水线状态', 'development.collect-pipeline-status'],
-      'classify-pipeline': ['分类流水线失败', 'development.classify-pipeline-failures'],
-      'repair-pipeline': ['修复流水线失败', 'development.repair-pipeline-failures'],
-      'repair-conflict': ['解决合并冲突', 'development.resolve-merge-conflicts'],
-      'prepare-approval': ['编写审批草稿', 'development.draft-approval'],
+      'prepare-materials': ['准备输入材料', 'development.prepare-materials', 3],
+      'analyze-implement': ['实现变更', 'development.implement-change', 2],
+      'repair-feedback': ['处理检视意见', 'development.resolve-review-feedback', 2],
+      'collect-pipeline': ['采集流水线状态', 'development.collect-pipeline-status', 3],
+      'classify-pipeline': ['分类流水线失败', 'development.classify-pipeline-failures', 2],
+      'repair-pipeline': ['修复流水线失败', 'development.repair-pipeline-failures', 2],
+      'repair-conflict': ['解决合并冲突', 'development.resolve-merge-conflicts', 2],
+      'prepare-approval': ['编写审批草稿', 'development.draft-approval', 2],
     } as const
-    for (const [workItemRef, [label, contractId]] of Object.entries(expected)) {
+    for (const [workItemRef, [label, contractId, version]] of Object.entries(expected)) {
       const item = descriptor.authoringManifest.workItems.find(
         (candidate) => candidate.workItemRef === workItemRef,
       )
       expect(item?.label['zh-CN']).toBe(label)
-      expect(item?.workContractRef).toEqual({ contractId, version: 2 })
+      expect(item?.workContractRef).toEqual({ contractId, version })
     }
     const implementation = descriptor.authoringManifest.workItems.find(
       (item) => item.workItemRef === 'analyze-implement',
@@ -275,6 +281,43 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
       'zh-CN': '编写实现方案',
       'en-US': 'Write implementation plan',
     })
+
+    const platformRegistration = developmentExecutionContractRegistrations.find(
+      (registration) =>
+        registration.contractRef.contractId === 'development.collect-pipeline-status' &&
+        registration.contractRef.version === 3,
+    )
+    expect(platformRegistration).toBeDefined()
+    const platformGuide = executionContractGuideSchema.parse(
+      JSON.parse(platformRegistration!.guideJson) as unknown,
+    )
+    expect(platformGuide).toMatchObject({
+      inputMode: 'direct-json',
+      outputMode: 'direct-json',
+      contractRef: { contractId: 'development.collect-pipeline-status', version: 3 },
+      allowedExecutorKinds: [],
+      transports: { agent: null, workflow: null, program: null },
+    })
+    expect(platformRegistration?.projectInputJson).toBeFunction()
+    expect(platformRegistration?.validateOutputJson).toBeFunction()
+
+    const materialRegistration = developmentExecutionContractRegistrations.find(
+      (registration) =>
+        registration.contractRef.contractId === 'development.prepare-materials' &&
+        registration.contractRef.version === 3,
+    )
+    expect(materialRegistration).toBeDefined()
+    const materialGuide = executionContractGuideSchema.parse(
+      JSON.parse(materialRegistration!.guideJson) as unknown,
+    )
+    expect(materialGuide.input.topLevelFields).toEqual(['workRequest', 'outputDirectory'])
+    expect(materialGuide.input.topLevelFields).not.toContain('connection')
+    expect(
+      JSON.parse(materialRegistration!.projectInputJson!({ inputEnvelopeJson: hostEnvelope() })),
+    ).toMatchObject({
+      workRequest: { kind: 'external-id', externalId: 'ISSUE-1234' },
+      outputDirectory: '.agent-workflow/inputs/requirements/case/external',
+    })
   })
 
   test('platform-owned nodes expose their own input and output instead of a shared tool template', () => {
@@ -285,7 +328,7 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
       (item) => item.nodeKind !== 'business-tool',
     )
 
-    expect(platformNodes).toHaveLength(12)
+    expect(platformNodes).toHaveLength(13)
     expect(new Set(platformNodes.map((item) => JSON.stringify(item.materialSummary))).size).toBe(
       platformNodes.length,
     )
@@ -526,12 +569,12 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
     ).toThrow('current source version')
   })
 
-  test('development@9 rejects the legacy agent-result envelope for v2 business tools', () => {
+  test('development@10 rejects the legacy agent-result envelope for v2 business tools', () => {
     expect(() =>
       developmentEmployeeRuntimeCodec.validateReactionOutputJson(
         JSON.stringify({
           schemaVersion: 1,
-          employeeTypeRef: { typeId: 'development', revision: 9 },
+          employeeTypeRef: { typeId: 'development', revision: 10 },
           workItemRef: 'analyze-implement',
           toolSlotRef: 'default',
           connectionRef: null,

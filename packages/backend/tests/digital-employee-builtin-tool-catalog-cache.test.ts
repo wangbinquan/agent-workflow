@@ -36,7 +36,7 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
       ],
     })
     const selectsAtComposition = selectCalls
-    const typeRefJson = JSON.stringify({ typeId: 'development', revision: 9 })
+    const typeRefJson = JSON.stringify({ typeId: 'development', revision: 10 })
     const tools = JSON.parse(catalog.listJson(typeRefJson, 'repair-feedback')) as Array<{
       id: string
       publishedRevision: number

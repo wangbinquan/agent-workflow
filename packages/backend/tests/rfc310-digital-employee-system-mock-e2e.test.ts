@@ -1,7 +1,8 @@
 // RFC-310 Digital Employee OS system-mock journey.
 //
-// External requirement and pipeline systems are real HTTP mocks and their
-// adapters are real child programs. The model lane is deterministic by design
+// Issue ingress is normalized by the real webhook/Event Center path. Pipeline
+// and approval systems are real HTTP mocks and their adapters are real child
+// programs. The model lane is deterministic by design
 // in tests; Git candidate/commit/CAS push and the OS Context+Event lifecycle are
 // production participants.
 
@@ -32,6 +33,7 @@ import { createInMemoryDb } from '@/db/client'
 import { cachedRepos, employeeOsOutbox, webhookDeliveries, webhookEndpoints } from '@/db/schema'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   developmentEmployeeRuntimeCodec,
@@ -45,6 +47,9 @@ import {
 } from '@/modules/integration/application/developmentAdapterCommands'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
+import { createPipelineEvidenceAdapter } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
+import type { AdapterFailureReceipt } from '@/modules/integration/infrastructure/developmentAdapterRunner'
+import { createDbAdapterBindingResolver } from '@/modules/integration/infrastructure/developmentRequirementSourceAdapter'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
@@ -97,42 +102,12 @@ function mockRepoDiskPath(repoHttpUrl: string): string {
   return join(realpathSync(tmpdir()), pathname.replace(/^\/git\//, ''))
 }
 
-function naturalEnv(extra: Readonly<Record<string, string>>): Record<string, string> {
-  return {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => typeof entry[1] === 'string',
-      ),
-    ),
-    ...extra,
-  }
-}
-
-async function runAdapter(input: {
-  readonly file: string
-  readonly args: readonly string[]
-  readonly cwd: string
-  readonly env: Readonly<Record<string, string>>
-}): Promise<string> {
-  const child = Bun.spawn({
-    cmd: [process.execPath, input.file, ...input.args],
-    cwd: input.cwd,
-    env: naturalEnv(input.env),
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const [exitCode, stdout, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ])
-  if (exitCode !== 0) throw new Error(`adapter exited ${exitCode}: ${stderr.slice(-2_000)}`)
-  return stdout.trim()
-}
-
 function directOutput(body: Readonly<Record<string, unknown>>): string {
   return JSON.stringify(body)
 }
+
+const STANDARD_ISSUE_BODY =
+  '# Generate src/Main.java and keep the MR green\n\nImplement the generated Java greeting and repair every required gate.'
 
 function contextsOf(plan: ReactionExecutionPlan): Array<{
   id: string
@@ -269,28 +244,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       })
       .run()
 
-    await suite.client.seedRequirement({
-      externalId: 'REQ-OS-42',
-      revision: 'r7',
-      title: 'Implement the generated Java greeting',
-      files: [
-        {
-          fileId: 'body',
-          name: 'requirement.md',
-          role: 'body',
-          mediaType: 'text/markdown',
-          content: '# Requirement\nGenerate src/Main.java and keep the MR green.\n',
-        },
-        {
-          fileId: 'design',
-          name: 'design.md',
-          role: 'design',
-          mediaType: 'text/markdown',
-          content: '# Design\nUse a deterministic greeting.\n',
-        },
-      ],
-    })
-
     const inputArtifacts = createEmployeeInputArtifactStore(
       join(appHome, 'artifacts', 'employee-inputs'),
     )
@@ -387,16 +340,104 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       id: adapterIdentity.id,
       revision: approvalAdapterRevision.revision,
     }
-    const requirementConnectionRef = { id: 'system-mock-requirement-source', revision: 1 }
-    const pipelineConnectionRef = { id: 'system-mock-pipeline-gate', revision: 1 }
+    const pipelineAdapterIdentity = createDevelopmentAdapter(
+      adapterStore,
+      { userId: 'system-mock-author', actorHasScriptsAuthor: true },
+      {
+        name: 'system-mock pipeline gateway',
+        content: {
+          schemaVersion: 1,
+          purpose: 'pipeline-gate',
+          operations: ['collect', 'trigger', 'rerun'],
+          contractVersion: 1,
+          executableRef: join(SYSTEM_MOCKS, 'pipeline-adapter-cli.ts'),
+          parameterSchemaRef: null,
+          connectionRef: null,
+          secretProjection: [],
+          outputBudget: {
+            maxFiles: 100,
+            maxFileBytes: 8 * 1024 * 1024,
+            maxTotalBytes: 32 * 1024 * 1024,
+          },
+          timeoutMs: 30_000,
+        },
+        now: 3,
+      },
+    )
+    const pipelineAdapterRevision = publishDevelopmentAdapter(
+      adapterStore,
+      { userId: 'system-mock-author', actorHasScriptsAuthor: true },
+      { id: pipelineAdapterIdentity.id, now: 4 },
+    )
+    const pipelineConnectionRef = {
+      id: pipelineAdapterIdentity.id,
+      revision: pipelineAdapterRevision.revision,
+    }
     const connectionByPurpose = {
-      'requirement-source': requirementConnectionRef,
       'pipeline-gate': pipelineConnectionRef,
       'approval-gateway': approvalAdapterRef,
     } as const
     const approvalGateway = composeApprovalGatewayRunner(db, {
       approvalMockUrl: suite.endpoints.developmentApprovalBaseUrl,
     })
+    const pipelineRunner = createPipelineEvidenceAdapter({
+      resolveBinding: createDbAdapterBindingResolver((id, revision) =>
+        adapterStore.getRevision(id, revision),
+      ),
+      extraEnv: { AW_PIPELINE_MOCK_URL: suite.endpoints.developmentPipelineBaseUrl },
+      secretSource: {},
+    })
+    const pipelineFailure = (failure: AdapterFailureReceipt) => ({
+      ok: false as const,
+      failure,
+    })
+    const pipelineEvidence: PipelineEvidencePort = {
+      async collect(input) {
+        const stagedRoot = mkdtempSync(join(tmpdir(), 'rfc323-system-mock-pipeline-'))
+        const result = await pipelineRunner.collect({ ...input, sinkPath: stagedRoot })
+        if (!result.ok) {
+          rmSync(stagedRoot, { recursive: true, force: true })
+          return pipelineFailure(result.failure)
+        }
+        return {
+          ok: true as const,
+          envelope: result.envelope,
+          stagedRoot,
+          outputBudget: result.outputBudget,
+          cleanup: () => rmSync(stagedRoot, { recursive: true, force: true }),
+        }
+      },
+      async trigger(input) {
+        const stagedRoot = mkdtempSync(join(tmpdir(), 'rfc323-system-mock-trigger-'))
+        try {
+          const result = await pipelineRunner.trigger({ ...input, sinkPath: stagedRoot })
+          if (!result.ok) return pipelineFailure(result.failure)
+          return {
+            ok: true,
+            runRef: result.envelope.runRef,
+            providerReceiptRef: result.envelope.providerReceiptRef,
+            adopted: result.envelope.adopted,
+          }
+        } finally {
+          rmSync(stagedRoot, { recursive: true, force: true })
+        }
+      },
+      async rerun(input) {
+        const stagedRoot = mkdtempSync(join(tmpdir(), 'rfc323-system-mock-rerun-'))
+        try {
+          const result = await pipelineRunner.rerun({ ...input, sinkPath: stagedRoot })
+          if (!result.ok) return pipelineFailure(result.failure)
+          return {
+            ok: true,
+            runRef: result.envelope.runRef,
+            attempt: result.envelope.attempt,
+            providerReceiptRef: result.envelope.providerReceiptRef,
+          }
+        } finally {
+          rmSync(stagedRoot, { recursive: true, force: true })
+        }
+      },
+    }
 
     const completed = new Map<
       string,
@@ -428,30 +469,17 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         const contexts = contextsOf(plan)
         let outputJson: string
         if (plan.workItemRef === 'prepare-materials') {
+          expect(plan.connectionRef).toBeNull()
           const issue = contexts.find((context) => context.typeId === 'development.issue-handling')!
           const issueState = JSON.parse(issue.stateJson) as {
-            request: { externalId: string | null }
+            request: { kind: string; body: string | null; externalId: string | null }
             materialArtifactRefs: string[]
           }
+          expect(issueState.request).toMatchObject({ kind: 'body', externalId: null })
+          expect(issueState.request.body).toContain('Generate src/Main.java')
           expect(inputEnvelope.contractInput.materialTargetDirectory).toBe(
             externalMaterialDirectory,
           )
-          const sink = join(scene.workspacePath, externalMaterialDirectory)
-          const adapterEnvelope = JSON.parse(
-            await runAdapter({
-              file: join(SYSTEM_MOCKS, 'requirement-adapter-cli.ts'),
-              args: ['--acquire', issueState.request.externalId!],
-              cwd: scene.workspacePath,
-              env: {
-                AW_ADAPTER_SINK: sink,
-                AW_REQUIREMENT_MOCK_URL: suite.endpoints.developmentRequirementBaseUrl,
-              },
-            }),
-          ) as { files: Array<{ relativePath: string }> }
-          const materialRefs = adapterEnvelope.files.map(
-            (file) => `${externalMaterialDirectory}/${file.relativePath}`,
-          )
-          expect(materialRefs.length).toBeGreaterThan(0)
           outputJson = directOutput({ outcome: 'completed' })
         } else if (plan.workItemRef === 'analyze-implement') {
           const issue = contexts.find((context) => context.typeId === 'development.issue-handling')!
@@ -467,13 +495,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             expect(issueState.request.body).toContain('repo-system-mock-dependency')
             expect(issueState.request.body).not.toContain('当前仓库需要修复编译失败')
           } else {
-            const requirement = join(
-              scene.workspacePath,
-              externalMaterialDirectory,
-              'files',
-              'requirement.md',
-            )
-            expect(readFileSync(requirement, 'utf8')).toContain('Generate src/Main.java')
+            expect(issueState.request.kind).toBe('body')
+            expect(issueState.request.body).toContain('Generate src/Main.java')
           }
           mkdirSync(join(scene.workspacePath, 'src'), { recursive: true })
           writeFileSync(
@@ -491,88 +514,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             mergeRequestDescription: delegated
               ? '## Summary\n\nImplements the frozen cross-repository dependency request.'
               : '## Summary\n\nImplements the requested Java greeting and its verification.',
-          })
-        } else if (plan.workItemRef === 'collect-pipeline') {
-          const mr = contexts.find((context) => context.typeId === 'development.merge-request')!
-          const mrState = JSON.parse(mr.stateJson) as {
-            mergeRequestRef: string
-            headSha: string
-            targetSha: string | null
-          }
-          const sink = join(scene.workspacePath, pipelineMount)
-          expect(inputEnvelope.contractInput.pipelineDirectory).toBe(pipelineMount)
-          const adapterEnvelope = JSON.parse(
-            await runAdapter({
-              file: join(SYSTEM_MOCKS, 'pipeline-adapter-cli.ts'),
-              args: ['--collect-pipeline', mrState.headSha],
-              cwd: scene.workspacePath,
-              env: {
-                AW_ADAPTER_SINK: sink,
-                AW_PIPELINE_MOCK_URL: suite.endpoints.developmentPipelineBaseUrl,
-                AW_PIPELINE_HEAD: mrState.headSha,
-              },
-            }),
-          ) as {
-            completeness: string
-            providerHeadSha: string | null
-            targetSha: string | null
-            gates: Array<{
-              gateKey: string
-              required: boolean
-              status: string
-              failureCategories: string[]
-              files: Array<{ relativePath: string }>
-            }>
-          }
-          const required = adapterEnvelope.gates.filter((gate) => gate.required)
-          const snapshotBound =
-            adapterEnvelope.completeness === 'complete' &&
-            adapterEnvelope.providerHeadSha === mrState.headSha &&
-            adapterEnvelope.targetSha === mrState.targetSha
-          const stillRunning = required.some((gate) => ['queued', 'running'].includes(gate.status))
-          const hasFailure = required.some(
-            (gate) => !['pass', 'queued', 'running', 'skipped'].includes(gate.status),
-          )
-          const passed = snapshotBound && required.every((gate) => gate.status === 'pass')
-          const status = !snapshotBound
-            ? 'pending'
-            : hasFailure
-              ? 'failed'
-              : stillRunning
-                ? 'pending'
-                : passed
-                  ? 'passed'
-                  : 'failed'
-          const checks = snapshotBound
-            ? required.map((gate) => ({
-                checkRef: gate.gateKey,
-                name: gate.gateKey,
-                status:
-                  gate.status === 'pass'
-                    ? ('passed' as const)
-                    : gate.status === 'fail'
-                      ? ('failed' as const)
-                      : (gate.status as 'queued' | 'running' | 'canceled' | 'skipped'),
-                ...(gate.failureCategories.length === 0
-                  ? {}
-                  : { summary: gate.failureCategories.join(', ') }),
-                ...(gate.files.length === 0
-                  ? {}
-                  : {
-                      evidenceFiles: gate.files.map(
-                        (file) => `${pipelineMount}/${file.relativePath}`,
-                      ),
-                    }),
-              }))
-            : []
-          outputJson = directOutput({
-            outcome: 'completed',
-            observedSourceVersion: mrState.headSha,
-            ...(!snapshotBound || adapterEnvelope.targetSha === null
-              ? {}
-              : { observedTargetVersion: adapterEnvelope.targetSha }),
-            status,
-            checks,
           })
         } else if (plan.workItemRef === 'classify-pipeline') {
           const pipeline = contexts.find((context) => context.typeId === 'development.pipeline')!
@@ -773,6 +714,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       db,
       appHome,
       approvalGateway,
+      pipelineEvidence,
       conflictMerge: bindConflictMergeParticipant(),
       sourceControl: {
         ...bindChangeCandidateParticipant(),
@@ -927,7 +869,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       inputArtifacts,
       id: () => `os-${String(++idOrdinal).padStart(5, '0')}`,
       connectionCatalog: {
-        async resolve(ref) {
+        resolve(ref) {
           const match = Object.entries(connectionByPurpose).find(
             ([, candidate]) => candidate.id === ref.id && candidate.revision === ref.revision,
           )
@@ -936,6 +878,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             ref,
             purpose: match[0],
             available: true,
+            visible: true,
+            contentDigest: '0'.repeat(64),
             closureSummary: `system-mock exact ${match[0]} connection`,
           }
         },
@@ -986,14 +930,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
               candidate.version === item.workContractRef.version,
           )!
           const implementation =
-            item.workItemRef === 'prepare-materials' || item.workItemRef === 'collect-pipeline'
+            item.workItemRef === 'prepare-materials'
               ? {
                   kind: 'program' as const,
                   runtimeKind: 'bash' as const,
-                  source:
-                    item.workItemRef === 'prepare-materials'
-                      ? `printf '%s\\n' '{"outcome":"completed"}'`
-                      : `printf '%s\\n' '{"outcome":"completed","observedSourceVersion":"${'0'.repeat(40)}","observedTargetVersion":"${'1'.repeat(40)}","status":"failed","checks":[{"checkRef":"build","name":"Build","status":"failed"}]}'`,
+                  source: `printf '%s\\n' '{"outcome":"completed"}'`,
                   runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
                 }
               : contract.allowedToolKinds.includes('agent')
@@ -1014,12 +955,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
               description: 'system-mock journey tool',
               roleRef: role.roleRef,
               implementation,
-              connectionRef:
-                contract.requiredConnectionPurpose === null
-                  ? null
-                  : connectionByPurpose[
-                      contract.requiredConnectionPurpose as keyof typeof connectionByPurpose
-                    ],
               ...(item.workItemRef === 'classify-pipeline'
                 ? { dispatchRouteDefinitions: pipelineProblemDefinitions }
                 : {}),
@@ -1061,7 +996,6 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           kind: 'agent',
           agentRef: { id: 'system-mock-agent-repair-pipeline', revision: 1 },
         },
-        connectionRef: null,
         acceptedDispatchRoutes: [{ classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] }],
       },
     })
@@ -1071,6 +1005,18 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       toolId: pipelineRepairTool.id,
       actorUserId: 'system-mock-author',
     })
+    const defaultAdapterBindings = [
+      {
+        laneId: 'care-pipeline',
+        slotRef: 'primary',
+        adapterRef: pipelineConnectionRef,
+      },
+      {
+        laneId: 'care-approval',
+        slotRef: 'primary',
+        adapterRef: approvalAdapterRef,
+      },
+    ]
     const dependencyJob = employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
@@ -1078,6 +1024,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         name: '依赖仓库 Java 岗位',
         description: '在另一个仓库完成配套变更',
         defaultToolBindings: bindings,
+        defaultAdapterBindings,
         orderedDispatchConfigurations: [
           {
             classifierWorkItemRef: 'classify-pipeline',
@@ -1128,6 +1075,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         name: 'Java system-mock 岗位',
         description: '需求、流水线、跨仓协同和外部审批完整链路',
         defaultToolBindings: bindings,
+        defaultAdapterBindings,
         defaultCollaborationBindings: [
           {
             workItemRef: 'delegate',
@@ -1212,12 +1160,13 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         target: {
           kind: 'digital-employee',
           refId: employeeRef.id,
-          intakeKind: 'external-id',
+          intakeKind: 'body',
           // Public employee authoring contracts use camelCase form refs. Keep
           // this full ingress chain as the regression for Event Center accepting
           // and rendering the real `repositoryId` target field.
           target: { repositoryId: 'repo-system-mock' },
-          valueTemplate: '{{trigger.code_host.issue_iid}}',
+          valueTemplate:
+            '# {{trigger.code_host.issue_title}}\n\n{{trigger.code_host.issue_body}}\n\nIssue: {{trigger.code_host.issue_iid}}\nURL: {{trigger.code_host.issue_url}}',
         },
       },
       {
@@ -1241,7 +1190,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       object_attributes: {
         iid: 'REQ-OS-42',
         title: 'Generate src/Main.java and keep the MR green',
-        description: 'Use the attached requirement and repair every required gate.',
+        description: 'Implement a deterministic greeting and repair every required gate.',
         url: 'https://gitlab.example/rfc310/digital-employee-os/-/issues/42',
         action: 'update',
       },
@@ -1423,49 +1372,36 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     ])
     // `executionRef` 是 RFC-310 新增的回指：闸口要能把人带到**具体哪一次执行**去完成
     // 检视，否则前端只知道「有个闸口在等」却不知道等在哪。这里钉死具体的
-    // `system-mock-execution-2` 而不是「非空即可」——本用例整条链路都是确定性 system
+    // `system-mock-execution-1` 而不是「非空即可」——标准 Issue 的 prepare-materials
+    // 由平台处理，不占用外部 executor；本用例整条链路都是确定性 system
     // mock（上一条断言同样钉死了轮次的精确顺序），所以这个 id 是可预言的；它要是漂了，
     // 说明 mock 的确定性真的坏了，那正是本用例该报的事。
     expect(projection.reviewGates).toContainEqual({
       parentWorkItemRef: 'analyze-implement',
       optionRef: 'review-implementation-plan',
       state: 'skipped',
-      executionRef: 'system-mock-execution-2',
+      executionRef: 'system-mock-execution-1',
     })
     const parentMrHead = mrHeads.get('repo-system-mock')!
-    const initialPendingApproval = projection.contexts.find(
-      (context) => context.typeId === 'development.approval',
-    )!
-    expect(initialPendingApproval.state).toMatchObject({
-      status: 'pending',
-      headSha: parentMrHead,
-      externalRequestRef: 'APP-00001',
-    })
-    const initialApprovalKey = String(initialPendingApproval.state.idempotencyKey)
+    // RFC-323: approval drafting is downstream of terminal pipeline evidence.
+    // A pending gate must not submit a draft that becomes stale before repair.
+    expect(
+      projection.contexts.find((context) => context.typeId === 'development.approval'),
+    ).toBeUndefined()
     const mr = projection.contexts.find(
       (context) => context.typeId === 'development.merge-request',
     )!
     expect(mr.state).toMatchObject({ status: 'active', headSha: parentMrHead })
-    expect(
-      readFileSync(
-        join(
-          appHome,
-          'workspaces',
-          'employee-cases',
-          caseId,
-          'scene',
-          'workspace',
-          '.agent-workflow',
-          'inputs',
-          'requirements',
-          caseId,
-          'external',
-          'files',
-          'design.md',
-        ),
-        'utf8',
-      ),
-    ).toContain('deterministic greeting')
+    const rootIssue = projection.contexts.find(
+      (context) => context.typeId === 'development.issue-handling',
+    )!
+    expect(rootIssue.state).toMatchObject({
+      request: { kind: 'body', externalId: null },
+    })
+    expect((rootIssue.state.request as { body: string }).body).toContain(
+      'Generate src/Main.java and keep the MR green',
+    )
+    expect((rootIssue.state.request as { body: string }).body).toContain('Issue: REQ-OS-42')
     expect(git(remoteRepo, 'show', `${parentMrHead}:src/Main.java`)).toContain('return "hello"')
     expect(git(remoteRepo, 'show', '-s', '--format=%B', parentMrHead)).toContain(
       `Agent-Workflow-Case: ${caseId}`,
@@ -1657,6 +1593,20 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     await driveUntilIdle()
     projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
     expect(projection.case).toMatchObject({ state: 'waiting', currentWorkItemRef: null })
+    const failedCompileEvidenceRef = (
+      projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state
+        .checks as Array<{ checkRef: string; evidenceFiles?: string[] }> | undefined
+    )
+      ?.find((check) => check.checkRef === 'compile')
+      ?.evidenceFiles?.find((path) => path.endsWith('/logs/compile/compile-failure-output.log'))
+    if (failedCompileEvidenceRef === undefined) {
+      throw new Error('failed compile evidence was not frozen into the pipeline Context')
+    }
+    expect(failedCompileEvidenceRef).toMatch(
+      new RegExp(
+        `^\\.agent-workflow/pipeline/${caseId}/[^/]+/logs/compile/compile-failure-output\\.log$`,
+      ),
+    )
     const delegatedRound = [...projection.rounds]
       .reverse()
       .find((round) => round.workItemRef === 'delegate')
@@ -1860,20 +1810,16 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       status: 'pending',
       headSha: repairedParentMrHead,
       adapterRef: approvalAdapterRef,
-      externalRequestRef: 'APP-00002',
+      externalRequestRef: 'APP-00001',
     })
-    expect(String(pendingApproval.state.idempotencyKey)).not.toBe(initialApprovalKey)
     const approvalSnapshot = await suite.client.snapshot()
-    expect(approvalSnapshot.approvals).toHaveLength(2)
-    expect(approvalSnapshot.approvals).toContainEqual(
-      expect.objectContaining({ idempotencyKey: initialApprovalKey }),
-    )
-    expect(approvalSnapshot.approvals).toContainEqual(
+    expect(approvalSnapshot.approvals).toHaveLength(1)
+    expect(approvalSnapshot.approvals).toEqual([
       expect.objectContaining({
         idempotencyKey: pendingApproval.state.idempotencyKey,
         correlationRef: pendingApproval.state.correlationRef,
       }),
-    )
+    ])
 
     // Make the next authoritative approval observation terminal, and make the
     // parent pipeline green before that result resumes collect-pipeline.
@@ -1919,11 +1865,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       'scene',
       'workspace',
       '.agent-workflow',
-      'pipeline',
-      caseId,
-      'logs',
-      'compile',
-      'compile-failure-output.log',
+      ...failedCompileEvidenceRef.replace(/^\.agent-workflow\//, '').split('/'),
     )
     expect(existsSync(downloadedLog)).toBe(true)
     expect(statSync(downloadedLog).size).toBe(largeLogBytes)
@@ -2092,16 +2034,49 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         actorUserId: 'approval-requester',
         intake: {
           name: `Approval ${approvalStatus} branch`,
-          kind: 'external-id',
+          kind: 'body',
           target: { repositoryId: terminalRepositoryId },
-          body: null,
-          externalId: 'REQ-OS-42',
+          body: STANDARD_ISSUE_BODY,
+          externalId: null,
           uploads: [],
           idempotencyKey: `REQ-OS-42:approval-${approvalStatus}`,
         },
       })
       await driveUntilIdle()
       let terminalProjection = JSON.parse(
+        runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+      ) as typeof projection
+      const terminalMrHead = mrHeads.get(terminalRepositoryId)!
+      await suite.client.seedDevelopmentPipeline({
+        headSha: terminalMrHead,
+        targetSha: git(terminalBaselineRepo, 'rev-parse', 'HEAD'),
+        gates: [
+          {
+            gateKey: 'compile',
+            required: true,
+            status: 'pass',
+            runRef: `run-${approvalStatus}-approval`,
+            attempt: 1,
+            retryability: 'safe',
+            failureCategories: [],
+            logs: [],
+          },
+        ],
+      })
+      eventCenter.commands.observe({
+        sourceRef: { id: 'code-host.activity', revision: 1 },
+        eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
+        subject: {
+          typeId: 'merge-request',
+          subjectRef: `${terminalRepositoryId}!${repositoryFixtures.get(terminalRepositoryId)!.mrRef}`,
+        },
+        occurredAt: Date.now() + 90 + index,
+        dedupeKey: `pipeline:${terminalMrHead}:approval-${approvalStatus}`,
+        summary: `pipeline passed before ${approvalStatus} approval scenario`,
+        payloadArtifactRef: null,
+      })
+      await driveUntilIdle()
+      terminalProjection = JSON.parse(
         runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
       ) as typeof projection
       let terminalApproval = terminalProjection.contexts.find(
@@ -2219,10 +2194,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       actorUserId: 'requester',
       intake: {
         name: '交付 REQ-OS-42',
-        kind: 'external-id',
+        kind: 'body',
         target: { repositoryId: 'repo-system-mock-delivery-only' },
-        body: null,
-        externalId: 'REQ-OS-42',
+        body: STANDARD_ISSUE_BODY,
+        externalId: null,
         uploads: [],
         idempotencyKey: 'REQ-OS-42:delivery-only',
       },
@@ -2309,10 +2284,10 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       actorUserId: 'requester',
       intake: {
         name: '检视并修复 REQ-OS-42',
-        kind: 'external-id',
+        kind: 'body',
         target: { repositoryId: 'repo-system-mock-review' },
-        body: null,
-        externalId: 'REQ-OS-42',
+        body: STANDARD_ISSUE_BODY,
+        externalId: null,
         uploads: [],
         idempotencyKey: 'REQ-OS-42:review-protocol',
       },

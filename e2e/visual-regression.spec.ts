@@ -43,7 +43,7 @@ import { routeTaskOperationsFixture } from './task-operations-fixtures'
 import { routeCodeSurfaceFixtures } from './code-surface-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 51
+const EXPECTED_VISUAL_SCENE_COUNT = 50
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 const VISUAL_RUNTIME_STATUS = {
   runtimes: [
@@ -1196,7 +1196,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%409?view=toolbox`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%4010?view=toolbox`)
     const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
     await expect(responsibilityMap).toBeVisible()
     await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
@@ -1225,15 +1225,22 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       ),
     ).toEqual([])
     expect(
-      await responsibilityMap
-        .locator('.employee-toolbox-card')
-        .evaluateAll((cards) =>
-          cards.flatMap((card) =>
-            card.scrollWidth > card.clientWidth + 1 || card.scrollHeight > card.clientHeight + 1
-              ? [card.getAttribute('data-capability-tool-ref')]
-              : [],
-          ),
-        ),
+      await responsibilityMap.locator('.employee-toolbox-card').evaluateAll((cards) =>
+        cards.flatMap((card) => {
+          if (
+            card.scrollWidth <= card.clientWidth + 1 &&
+            card.scrollHeight <= card.clientHeight + 1
+          ) {
+            return []
+          }
+          const identity =
+            card.getAttribute('data-capability-tool-ref') ??
+            `adapter:${card.getAttribute('data-lane-adapter-slot') ?? 'unknown'}`
+          return [
+            `${identity} scroll=${card.scrollWidth}x${card.scrollHeight} client=${card.clientWidth}x${card.clientHeight}`,
+          ]
+        }),
+      ),
     ).toEqual([])
     const cardWidths = await responsibilityMap
       .locator('.employee-toolbox-lane__cards > .employee-toolbox-card')
@@ -1463,7 +1470,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
         return {
           flowGap: getComputedStyle(cards).columnGap,
           trunkCenters: [
-            centerY('.employee-toolbox-lane__axis'),
+            centerY('.employee-responsibility-flow-connector--axis'),
             centerY('[data-ingress-branch-work-item-ref="prepare-materials"]'),
             centerY(
               '[data-ingress-branch-work-item-ref="prepare-materials"] > .employee-toolbox-card',
@@ -1547,7 +1554,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%409?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%4010?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
@@ -1582,17 +1589,6 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.locator('.empty-state')).toBeVisible()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('code-employees-empty.png', SNAPSHOT_OPTS)
-  })
-
-  test('/code/executors library (light)', async ({ page }) => {
-    await prepareScene(page, { theme: 'light', fixture: 'clean' })
-    await routeCodeSurfaceFixtures(page)
-    await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/code/executors`)
-    await expect(page.locator('.executor-library-grid')).toBeVisible()
-    await expect(page.getByText('Run repository formatter', { exact: true })).toBeVisible()
-    await waitForStableAuthenticatedShell(page)
-    await expect(page).toHaveScreenshot('code-executors.png', SNAPSHOT_OPTS)
   })
 
   test('/code/policies list (light)', async ({ page }) => {
@@ -1631,12 +1627,13 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             {
               id: 'visual-java-employee',
               name: 'Java delivery employee',
-              typeRef: { typeId: 'development', revision: 9 },
+              typeRef: { typeId: 'development', revision: 10 },
               configuration: {
                 displayName: 'Java delivery employee',
                 jobTemplateRef: { id: 'visual-java-job', revision: 3 },
                 workScope: { kind: 'repository', repositoryId: 'visual-repo' },
                 toolOverrides: [],
+                adapterOverrides: [],
                 collaborationOverrides: [],
               },
               revision: 4,
@@ -1645,6 +1642,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
                 displayName: 'Java delivery employee',
                 workScopeSummary: 'Repository · team/orders-service',
                 exactToolBindings: [],
+                exactAdapterBindings: [],
                 exactCollaborationBindings: [],
                 exactOrderedDispatchConfigurations: [],
                 exactReactionLaneOrder: [],
@@ -1654,12 +1652,13 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             {
               id: 'visual-cpp-employee',
               name: 'C++ pipeline repair employee',
-              typeRef: { typeId: 'development', revision: 9 },
+              typeRef: { typeId: 'development', revision: 10 },
               configuration: {
                 displayName: 'C++ pipeline repair employee',
                 jobTemplateRef: { id: 'visual-cpp-job', revision: 2 },
                 workScope: { kind: 'repository-group', repositoryGroupId: 'firmware' },
                 toolOverrides: [],
+                adapterOverrides: [],
                 collaborationOverrides: [],
               },
               revision: 2,
@@ -1671,6 +1670,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
                 displayName: 'C++ pipeline repair employee',
                 workScopeSummary: 'Repository group · Firmware repositories',
                 exactToolBindings: [],
+                exactAdapterBindings: [],
                 exactCollaborationBindings: [],
                 exactOrderedDispatchConfigurations: [],
                 exactReactionLaneOrder: [],
@@ -1691,6 +1691,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
               draft: {
                 description: '',
                 defaultToolBindings: [],
+                defaultAdapterBindings: [],
                 defaultCollaborationBindings: [],
                 orderedDispatchConfigurations: [],
               },
@@ -1702,6 +1703,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
               draft: {
                 description: '',
                 defaultToolBindings: [],
+                defaultAdapterBindings: [],
                 defaultCollaborationBindings: [],
                 orderedDispatchConfigurations: [],
               },
@@ -1738,7 +1740,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       })
     })
     await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%409?view=employees`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%4010?view=employees`)
     await expect(page.getByTestId('digital-employee-outcomes-visual-java-employee')).toContainText(
       '18',
     )

@@ -72,7 +72,7 @@ import { projectEmployeeSetupJourney } from '@/modules/development-automation/do
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 
 type PermissionPrefix =
@@ -749,12 +749,16 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           (r) => ({ ...identityView(r), purpose: (r as { purpose?: unknown }).purpose }),
         ),
       get: async (actor, id) => {
-        const row = await requireVisible(
-          deps,
-          actor,
-          'development_adapter',
-          adapterStore.getById(id),
-        )
+        if (
+          !actor.permissions.has('adapter-definitions:update') ||
+          !actor.permissions.has('scripts:author')
+        ) {
+          throw new ForbiddenError(
+            'adapter-technical-details-forbidden',
+            'reading Adapter executable and secret projection names requires adapter-definitions:update and scripts:author',
+          )
+        }
+        const row = await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
         return {
           ...identityView(row),
           purpose: (row as { purpose?: unknown }).purpose,

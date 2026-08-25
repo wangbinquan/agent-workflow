@@ -127,7 +127,7 @@ function BuildCard(props: {
       </Link>
     )
   }
-  const path = props.to === 'executors' ? '/code/executors' : '/code/assignments'
+  const path = props.to === 'executors' ? '/digital-employees' : '/code/assignments'
   return (
     <Link
       to={path}

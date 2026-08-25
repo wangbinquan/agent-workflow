@@ -512,9 +512,14 @@ export interface PipelineEvidencePort {
         readonly ok: true
         readonly envelope: PipelineCollectEnvelopeDto
         readonly stagedRoot: string
+        readonly outputBudget: {
+          readonly maxFiles: number
+          readonly maxFileBytes: number
+          readonly maxTotalBytes: number
+        }
         cleanup(): void
       }
-    | { readonly ok: false; readonly code: string; readonly detail: string }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
   >
   trigger(input: {
     readonly adapterBindingRef: string
@@ -528,7 +533,7 @@ export interface PipelineEvidencePort {
         readonly providerReceiptRef: string
         readonly adopted: boolean
       }
-    | { readonly ok: false; readonly code: string; readonly detail: string }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
   >
   rerun(input: {
     readonly adapterBindingRef: string
@@ -543,7 +548,7 @@ export interface PipelineEvidencePort {
         readonly attempt: number
         readonly providerReceiptRef: string
       }
-    | { readonly ok: false; readonly code: string; readonly detail: string }
+    | { readonly ok: false; readonly failure: OperationFailureReceipt }
   >
 }
 

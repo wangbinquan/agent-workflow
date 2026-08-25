@@ -11,8 +11,10 @@ import { resolve } from 'node:path'
 
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { developmentAdapterDefinitions } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
+import { eq } from 'drizzle-orm'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -78,6 +80,66 @@ describe('rfc310 config routes — route-local error codes behave and are named'
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('development-adapter-purpose-required')
+  })
+
+  test('Adapter picker is readable but technical detail requires scripts:author and ownership', async () => {
+    const created = await reqAs(h.app, h.token, '/api/integrations/development-adapters', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'public pipeline picker fixture',
+        purpose: 'pipeline-gate',
+        draft: {
+          schemaVersion: 1,
+          purpose: 'pipeline-gate',
+          operations: ['collect'],
+          contractVersion: 1,
+          executableRef: '/opt/adapter/pipeline',
+          parameterSchemaRef: null,
+          connectionRef: 'enterprise-pipeline',
+          secretProjection: ['PIPELINE_TOKEN'],
+          outputBudget: { maxFiles: 10, maxFileBytes: 1024, maxTotalBytes: 4096 },
+          timeoutMs: 10_000,
+        },
+      }),
+    })
+    expect(created.status).toBe(201)
+    const { id } = (await created.json()) as { id: string }
+    h.db
+      .update(developmentAdapterDefinitions)
+      .set({ visibility: 'public' })
+      .where(eq(developmentAdapterDefinitions.id, id))
+      .run()
+    const ordinary = await createUser(h.db, {
+      username: 'ordinary-310',
+      displayName: 'Ordinary',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    const { token } = await createSession({ db: h.db, userId: ordinary.id })
+
+    const list = await reqAs(h.app, token, '/api/integrations/development-adapters')
+    expect(list.status).toBe(200)
+    const listed = (await list.json()) as { items: Array<Record<string, unknown>> }
+    expect(listed.items).toContainEqual(expect.objectContaining({ id, purpose: 'pipeline-gate' }))
+    expect(listed.items.find((item) => item.id === id)).not.toHaveProperty('draft')
+
+    const hidden = await reqAs(
+      h.app,
+      token,
+      `/api/integrations/development-adapters/${encodeURIComponent(id)}`,
+    )
+    expect(hidden.status).toBe(403)
+    expect((await hidden.json()) as { code: string }).toMatchObject({
+      code: 'adapter-technical-details-forbidden',
+    })
+
+    const ownerDetail = await reqAs(
+      h.app,
+      h.token,
+      `/api/integrations/development-adapters/${encodeURIComponent(id)}`,
+    )
+    expect(ownerDetail.status).toBe(200)
+    expect((await ownerDetail.json()) as Record<string, unknown>).toHaveProperty('draft')
   })
 
   test('GET a missing mission id → mission-not-found (404)', async () => {

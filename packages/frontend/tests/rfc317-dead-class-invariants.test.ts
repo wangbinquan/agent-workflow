@@ -109,7 +109,6 @@ const UNDEFINED_CLASS_SNAPSHOT: readonly string[] = [
   'event-source-row',
   'event-source-section',
   'execution-contract-guide__primary-heading',
-  'executor-library-page',
   'field__hint',
   'form-checkbox__label',
   'form-hint',

@@ -69,7 +69,7 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-const TYPE_REF = 'development@9'
+const TYPE_REF = 'development@10'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')
@@ -84,12 +84,24 @@ process.stdout.write(JSON.stringify({
   effectSuggestions: [],
   artifactRefs: [],
 }))`
+const APPROVAL_PROGRAM_FIXTURE = `process.stdout.write(JSON.stringify({
+  outcome: 'completed',
+  draft: '## Browser approval\\n\\nAll required gates are satisfied.',
+}))`
 
 let daemon: DaemonHandle
 let mocks: SystemMockClient
 let repositoryId = ''
 let employeeId = ''
 let employeeName = ''
+let defaultPipelineAdapterName = ''
+
+type BrowserAdapterPurpose = 'pipeline-gate' | 'approval-gateway'
+
+const BROWSER_ADAPTER_OPERATIONS: Record<BrowserAdapterPurpose, string[]> = {
+  'pipeline-gate': ['collect', 'trigger', 'rerun'],
+  'approval-gateway': ['submit', 'lookup-by-idempotency-key', 'observe'],
+}
 
 function requiredEnv(name: string): string {
   const value = process.env[name]
@@ -138,16 +150,19 @@ async function importRepository(repoUrl: string): Promise<string> {
   return repository.id
 }
 
-async function createPublishedApprovalAdapter(): Promise<ExactRef> {
+async function createPublishedAdapter(
+  purpose: BrowserAdapterPurpose,
+  name: string,
+): Promise<ExactRef> {
   const draft = await requestJson<{ id: string }>('/api/integrations/development-adapters', {
     method: 'POST',
     body: {
-      name: `Browser approval system ${RUN_TAG}`,
-      purpose: 'approval-gateway',
+      name,
+      purpose,
       draft: {
         schemaVersion: 1,
-        purpose: 'approval-gateway',
-        operations: ['submit', 'lookup-by-idempotency-key', 'observe'],
+        purpose,
+        operations: BROWSER_ADAPTER_OPERATIONS[purpose],
         contractVersion: 1,
         executableRef: defaultSystemMockToolPath(),
         parameterSchemaRef: null,
@@ -175,7 +190,15 @@ async function seedPublishedEmployee(): Promise<void> {
   )
   const agents = await requestJson<AgentChoice[]>('/api/agents/builtins/digital-employee-templates')
   if (agents.length === 0) throw new Error('built-in Digital Employee Agent templates are missing')
-  const approvalAdapterRef = await createPublishedApprovalAdapter()
+  defaultPipelineAdapterName = `Browser pipeline system ${RUN_TAG}`
+  const pipelineAdapterRef = await createPublishedAdapter(
+    'pipeline-gate',
+    defaultPipelineAdapterName,
+  )
+  const approvalAdapterRef = await createPublishedAdapter(
+    'approval-gateway',
+    `Browser approval system ${RUN_TAG}`,
+  )
   const optionalLaneIds = new Set(
     typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
       region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
@@ -188,7 +211,11 @@ async function seedPublishedEmployee(): Promise<void> {
   }> = []
 
   for (const item of typePackage.authoringManifest.workItems) {
-    if (item.responsibilityLaneId !== null && optionalLaneIds.has(item.responsibilityLaneId)) {
+    if (
+      item.responsibilityLaneId !== null &&
+      optionalLaneIds.has(item.responsibilityLaneId) &&
+      item.responsibilityLaneId !== 'care-approval'
+    ) {
       continue
     }
     for (const role of item.toolRoleGroups) {
@@ -217,7 +244,10 @@ async function seedPublishedEmployee(): Promise<void> {
               ? {
                   kind: 'program' as const,
                   runtimeKind: 'node' as const,
-                  source: PROGRAM_FIXTURE,
+                  source:
+                    contract.contractId === 'development.draft-approval'
+                      ? APPROVAL_PROGRAM_FIXTURE
+                      : PROGRAM_FIXTURE,
                   parameterValues: {},
                   runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
                 }
@@ -234,8 +264,6 @@ async function seedPublishedEmployee(): Promise<void> {
               description: 'Current Digital Employee OS browser fixture',
               roleRef: role.roleRef,
               implementation,
-              connectionRef:
-                contract.requiredConnectionPurpose === null ? null : approvalAdapterRef,
             },
           },
         )
@@ -265,6 +293,18 @@ async function seedPublishedEmployee(): Promise<void> {
         name: `Browser development role ${RUN_TAG}`,
         description: 'One deterministic tool binding for every required work-item slot.',
         defaultToolBindings: bindings,
+        defaultAdapterBindings: [
+          {
+            laneId: 'care-pipeline',
+            slotRef: 'primary',
+            adapterRef: pipelineAdapterRef,
+          },
+          {
+            laneId: 'care-approval',
+            slotRef: 'primary',
+            adapterRef: approvalAdapterRef,
+          },
+        ],
         defaultCollaborationBindings: [],
       },
     },
@@ -284,6 +324,7 @@ async function seedPublishedEmployee(): Promise<void> {
         jobTemplateRef: jobRef.ref,
         workScope: { kind: 'repository', repositoryId },
         toolOverrides: [],
+        adapterOverrides: [],
         collaborationOverrides: [],
       },
     },
@@ -369,6 +410,117 @@ test.afterAll(async () => {
   await daemon?.stop()
 })
 
+test('RFC-323 DE-18/39: employee Adapter override and restore live in the lane while retired URLs redirect', async ({
+  page,
+}) => {
+  await primeAuth(page)
+  await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=employees`)
+
+  const employeeCard = page.locator('.employee-summary-card').filter({ hasText: employeeName })
+  await employeeCard.getByRole('button', { name: 'Edit', exact: true }).click()
+  const generalEditor = page.getByRole('dialog', { name: 'Edit digital employee' })
+  await expect(generalEditor).toBeVisible()
+  await expect(generalEditor.getByTestId('employee-toolbox-responsibility-map')).toHaveCount(0)
+  await generalEditor.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  await employeeCard
+    .getByRole('button', { name: 'Configure responsibilities', exact: true })
+    .click()
+  const employeeEditor = page.getByTestId('employee-responsibilities-dialog')
+  await expect(employeeEditor).toBeVisible()
+  const responsibilityMap = employeeEditor.getByTestId('employee-toolbox-responsibility-map')
+  const pipelineLaneCards = responsibilityMap.locator(
+    '[data-capability-lane-id="care-pipeline"] .employee-toolbox-lane__cards',
+  )
+  const pipelineAdapterCard = pipelineLaneCards.locator(
+    '[data-lane-adapter-slot="care-pipeline/primary"]',
+  )
+  await expect(pipelineAdapterCard).toBeVisible()
+  await expect(pipelineAdapterCard).toBeEnabled()
+  await expect(pipelineLaneCards.locator('[data-work-item-ref]').first()).toBeDisabled()
+  expect(
+    await pipelineLaneCards.evaluate(
+      (cards, selector) => cards.firstElementChild?.matches(selector) ?? false,
+      '[data-lane-adapter-slot="care-pipeline/primary"]',
+    ),
+  ).toBe(true)
+  await expect(pipelineAdapterCard).not.toHaveAttribute('data-work-item-ref')
+  await expect(pipelineAdapterCard).toHaveAttribute(
+    'aria-label',
+    new RegExp(defaultPipelineAdapterName),
+  )
+
+  await pipelineAdapterCard.click()
+  const bindingDialog = page.getByTestId('lane-adapter-dialog')
+  await expect(bindingDialog).toBeVisible()
+  await expect(bindingDialog.getByText(defaultPipelineAdapterName, { exact: true })).toBeVisible()
+  await bindingDialog.getByRole('radio', { name: 'Employee override' }).click()
+  await bindingDialog.getByRole('button', { name: 'New connection', exact: true }).click()
+
+  const inlineAdapterName = `Browser employee pipeline ${RUN_TAG}`
+  await expect(bindingDialog.locator('details.lane-adapter-dialog__advanced')).not.toHaveAttribute(
+    'open',
+  )
+  await bindingDialog.getByLabel('Name *').fill(inlineAdapterName)
+  await bindingDialog.getByLabel(/^Executable \/ script path/).fill(defaultSystemMockToolPath())
+  await bindingDialog.getByRole('button', { name: 'Save and publish', exact: true }).click()
+  await expect(bindingDialog.getByText(inlineAdapterName, { exact: true })).toBeVisible()
+  await bindingDialog.getByRole('button', { name: 'Manage connection', exact: true }).click()
+  await expect(bindingDialog.getByLabel(/^Executable \/ script path/)).toHaveValue(
+    defaultSystemMockToolPath(),
+  )
+  await bindingDialog.getByRole('button', { name: 'Back', exact: true }).click()
+  await bindingDialog.getByRole('button', { name: 'Save connection', exact: true }).click()
+  await expect(bindingDialog).toHaveCount(0)
+  await expect(pipelineAdapterCard).toHaveAttribute('aria-label', new RegExp(inlineAdapterName))
+
+  await employeeEditor.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(employeeEditor).toHaveCount(0)
+  const overridden = await requestJson<{
+    configuration: { adapterOverrides: Array<{ adapterRef: ExactRef }> }
+  }>(`/api/digital-employees/${encodeURIComponent(employeeId)}`)
+  expect(overridden.configuration.adapterOverrides).toHaveLength(1)
+
+  await employeeCard
+    .getByRole('button', { name: 'Configure responsibilities', exact: true })
+    .click()
+  const reopenedEditor = page.getByTestId('employee-responsibilities-dialog')
+  const reopenedPipelineCard = reopenedEditor.locator(
+    '[data-lane-adapter-slot="care-pipeline/primary"]',
+  )
+  await expect(reopenedPipelineCard).toHaveAttribute('aria-label', new RegExp(inlineAdapterName))
+  await reopenedPipelineCard.click()
+  const reopenedBindingDialog = page.getByTestId('lane-adapter-dialog')
+  await page.setViewportSize({ width: 760, height: 900 })
+  expect(
+    await reopenedBindingDialog
+      .locator('.dialog__body')
+      .evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1)
+  await reopenedBindingDialog.getByRole('radio', { name: 'Inherit job default' }).click()
+  await reopenedBindingDialog
+    .getByRole('button', { name: 'Restore inherited', exact: true })
+    .click()
+  await reopenedEditor.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(reopenedEditor).toHaveCount(0)
+  const restored = await requestJson<{
+    configuration: { adapterOverrides: Array<{ adapterRef: ExactRef }> }
+  }>(`/api/digital-employees/${encodeURIComponent(employeeId)}`)
+  expect(restored.configuration.adapterOverrides).toEqual([])
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  for (const retiredPath of [
+    '/code/executors',
+    '/code/config/adapters',
+    '/code/config/adapters/retired-adapter',
+  ]) {
+    await page.goto(`${daemon.baseUrl}${retiredPath}`)
+    await expect(page).toHaveURL(`${daemon.baseUrl}/digital-employees`)
+    await expect(page.locator('.executor-library-grid')).toHaveCount(0)
+    await expect(page.getByTestId('config-guided-editor-adapter')).toHaveCount(0)
+  }
+})
+
 test('body and repository-bound files enter a stateful employee case and the unified task list', async ({
   page,
 }) => {
@@ -425,7 +577,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const ingressBranch = responsibilityMap.locator(
     '[data-ingress-branch-work-item-ref="prepare-materials"]',
   )
-  await expect(ingressBranch).toContainText('Prepare external materials')
+  await expect(ingressBranch).toContainText('Prepare input materials')
   const parallelIngressBoxes = await Promise.all(
     [
       directInputCard,
@@ -553,6 +705,30 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.waitForURL(/\/tasks\/new\?kind=digital-employee$/)
   await page.goto(`${daemon.baseUrl}/digital-employees/${TYPE_REF}?view=toolbox`)
   await expect(responsibilityMap).toBeVisible()
+
+  // User regression 2026-08-25: the type toolbox Adapter card follows the
+  // same ownership model as a tool card. It manages reusable resources here;
+  // job/employee binding remains in those authoring contexts.
+  const toolboxPipelineAdapter = responsibilityMap.locator(
+    '[data-lane-adapter-slot="care-pipeline/primary"]',
+  )
+  await expect(toolboxPipelineAdapter).toBeEnabled()
+  await toolboxPipelineAdapter.click()
+  const adapterResourceDialog = page.getByTestId('lane-adapter-dialog')
+  await expect(adapterResourceDialog).toBeVisible()
+  await expect(adapterResourceDialog.getByTestId('lane-adapter-resource-library')).toBeVisible()
+  await expect(
+    adapterResourceDialog.getByText(defaultPipelineAdapterName, { exact: true }),
+  ).toBeVisible()
+  await expect(adapterResourceDialog.getByRole('radio', { name: 'Employee override' })).toHaveCount(
+    0,
+  )
+  await expect(adapterResourceDialog.getByRole('radio', { name: 'Job default' })).toHaveCount(0)
+  await adapterResourceDialog
+    .locator('.dialog__footer')
+    .getByRole('button', { name: 'Close', exact: true })
+    .click()
+  await expect(adapterResourceDialog).toHaveCount(0)
 
   await repairPlanReviewCard.click()
   const reviewGateDialog = page.getByTestId('employee-toolbox-duty-dialog')
@@ -719,6 +895,13 @@ test('body and repository-bound files enter a stateful employee case and the uni
   const jobMapBox = await jobMap.boundingBox()
   expect(jobMapBox).not.toBeNull()
   expect(jobMapBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(900)
+  const jobAdapterCard = jobMap.locator('[data-lane-adapter-slot]').first()
+  await expect(jobAdapterCard).toBeEnabled()
+  await jobAdapterCard.click()
+  const jobAdapterDialog = page.getByTestId('lane-adapter-dialog')
+  await expect(jobAdapterDialog).toBeVisible()
+  await jobAdapterDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(jobAdapterDialog).toHaveCount(0)
   await jobMap.locator('[data-work-item-ref="analyze-implement"]').click()
   const jobDutyDialog = page.getByTestId('employee-job-duty-dialog')
   await expect(jobDutyDialog).toBeVisible()
@@ -837,7 +1020,14 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
   const caseId = page.url().split('/').at(-1)!
   const runtimeCase = await requestJson<{
-    capabilityActivation: { activeWorkItemRefs: string[] }
+    capabilityActivation: {
+      activeWorkItemRefs: string[]
+      exactAdapterBindings: Array<{
+        laneId: string
+        slotRef: string
+        adapterRef: ExactRef
+      }>
+    }
   }>(`/api/employee-cases/${encodeURIComponent(caseId)}`)
   await expect(page.getByRole('heading', { name: taskName, exact: true })).toBeVisible()
   await expect(
@@ -855,6 +1045,21 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}`)
   const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(runtimeMap).toBeVisible()
+  const runtimeAdapterCards = runtimeMap.locator('[data-lane-adapter-slot]')
+  await expect(runtimeAdapterCards).toHaveCount(1)
+  await expect(runtimeAdapterCards.locator('[data-work-item-ref]')).toHaveCount(0)
+  const activeRuntimeAdapterBindings = runtimeCase.capabilityActivation.exactAdapterBindings.filter(
+    (binding) => binding.laneId === 'care-approval',
+  )
+  expect(activeRuntimeAdapterBindings).toHaveLength(1)
+  for (const binding of activeRuntimeAdapterBindings) {
+    await expect(
+      runtimeMap.locator(`[data-lane-adapter-slot="${binding.laneId}/${binding.slotRef}"]`),
+    ).toHaveAttribute(
+      'aria-label',
+      new RegExp(`${binding.adapterRef.id}@${binding.adapterRef.revision}`),
+    )
+  }
   await expectUniformCapabilityToolCards(runtimeMap, 100)
   expect(await capabilityLaneRowCount(runtimeMap, 'delivery-main')).toBe(1)
   const renderedRuntimeWorkItemRefs = await runtimeMap

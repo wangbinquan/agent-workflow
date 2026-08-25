@@ -8,11 +8,14 @@ import {
   like,
   lt,
   lte,
+  ne,
   notExists,
+  notInArray,
   or,
   sql,
   type SQL,
 } from 'drizzle-orm'
+import { EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
@@ -441,13 +444,39 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
       if (input.launchOrigin !== undefined) {
         conditions.push(eq(employeeCases.launchOrigin, input.launchOrigin))
       }
-      if (input.states !== undefined && input.states.length > 0) {
-        conditions.push(inArray(employeeCases.state, [...input.states]))
+      if (input.states !== undefined) {
+        conditions.push(
+          input.states.length === 0 ? sql`0 = 1` : inArray(employeeCases.state, [...input.states]),
+        )
+      }
+      if (input.terminalCatalogStatuses !== undefined) {
+        const wantsDone = input.terminalCatalogStatuses.includes('done')
+        const wantsCanceled = input.terminalCatalogStatuses.includes('canceled')
+        if (wantsDone !== wantsCanceled) {
+          conditions.push(
+            wantsCanceled
+              ? or(
+                  ne(employeeCases.state, 'terminal'),
+                  inArray(employeeCases.terminalKind, [
+                    ...EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS,
+                  ]),
+                )!
+              : or(
+                  ne(employeeCases.state, 'terminal'),
+                  isNull(employeeCases.terminalKind),
+                  notInArray(employeeCases.terminalKind, [
+                    ...EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS,
+                  ]),
+                )!,
+          )
+        } else if (!wantsDone) {
+          conditions.push(ne(employeeCases.state, 'terminal'))
+        }
       }
       if (input.view === 'active') {
         conditions.push(inArray(employeeCases.state, ['active', 'waiting']))
       } else if (input.view === 'attention') {
-        conditions.push(inArray(employeeCases.state, ['waiting', 'blocked']))
+        conditions.push(eq(employeeCases.state, 'blocked'))
       } else if (input.view === 'finished') {
         conditions.push(eq(employeeCases.state, 'terminal'))
       }
@@ -516,7 +545,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         facets: {
           all: countWhere(),
           active: countWhere(inArray(employeeCases.state, ['active', 'waiting'])),
-          attention: countWhere(inArray(employeeCases.state, ['waiting', 'blocked'])),
+          attention: countWhere(eq(employeeCases.state, 'blocked')),
           finished: countWhere(eq(employeeCases.state, 'terminal')),
         },
       }

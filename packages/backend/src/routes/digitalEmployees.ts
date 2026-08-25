@@ -9,7 +9,11 @@ import type { DigitalEmployeeModule } from '@/modules/digital-employee/compositi
 import { registerRoute } from '@/routes/registry'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import type { AppDeps } from '@/server'
-import { filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  filterVisibleRows,
+  requireResourceOwner,
+  resourceAclAudienceAuthority,
+} from '@/services/resourceAcl'
 import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -32,6 +36,14 @@ function parseEmployeeTypeRef(value: string): {
 
 function actorId(c: Parameters<typeof actorOf>[0]): string | null {
   return actorOf(c).user.id
+}
+
+function adapterVisibilitySubject(c: Parameters<typeof actorOf>[0]) {
+  const actor = actorOf(c)
+  return {
+    userId: actor.user.id,
+    authority: resourceAclAudienceAuthority(actor),
+  }
 }
 
 function actorForToolAuthoring(c: Parameters<typeof actorOf>[0], body: unknown) {
@@ -499,6 +511,7 @@ export function mountDigitalEmployeeRoutes(
           typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
           body: await safeJsonOrEmpty(c.req.raw),
           actorUserId: actorId(c),
+          adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
         201,
       ),
@@ -518,6 +531,7 @@ export function mountDigitalEmployeeRoutes(
         module.commands.updateJobTemplate({
           id: c.req.param('id'),
           body: await safeJsonOrEmpty(c.req.raw),
+          adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
       ),
   )
@@ -536,6 +550,7 @@ export function mountDigitalEmployeeRoutes(
         ref: module.commands.publishJobTemplate({
           id: c.req.param('id'),
           actorUserId: actorId(c),
+          adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
       }),
   )
@@ -573,6 +588,7 @@ export function mountDigitalEmployeeRoutes(
           typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
           body: await safeJsonOrEmpty(c.req.raw),
           actorUserId: actorId(c),
+          adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
         201,
       ),
@@ -654,6 +670,7 @@ export function mountDigitalEmployeeRoutes(
           id,
           body: await safeJsonOrEmpty(c.req.raw),
           actorUserId: actorId(c),
+          adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
       )
     },

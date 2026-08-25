@@ -4,12 +4,14 @@
 //   - cwd = one-shot staged sink（adapter 只被给这个目录写；close 后由
 //     EvidenceStore safe-walk 重扫，adapter 自报的 file/digest 不作数）；
 //   - env 从**空对象**构造：PATH/HOME/TMPDIR + AW_ADAPTER_SINK/AW_EXTERNAL_ID
-//     + 声明的 secret projection（PR-3 恒空）+ mock 上游 URL（测试注入）——
+//     + 非秘密 connection ref + 声明的 daemon-boot secret projection + mock 上游 URL（测试注入）——
 //     不继承 daemon 环境（这是 adapter 与 Agent 的关键差异：adapter 是平台
 //     自己拉起的受约束程序，空环境从第一天就成立）；
 //   - stdout 只收一行小 envelope（256KB 上限，zod strict）；大文件走 sink。
-// 失败一律映射 closed OperationFailureReceipt（§4.8）：超时/信号→transient、
-// 非零退出→business-failure、envelope 破损→contract-violation。
+// 失败一律映射 closed OperationFailureReceipt（§4.8）：超时/信号→transient；
+// aw-adapter@1 的保留退出码 2/4/5/6 分别表示 configuration/business/
+// transient/stale-input；其余非零退出→business-failure；envelope 破损→
+// contract-violation。retry 判断只读这些 closed fields，不解析 stderr 文案。
 
 import type { Subprocess } from 'bun'
 import { z } from 'zod'
@@ -44,6 +46,10 @@ const STDOUT_LIMIT = 256 * 1024
 const ADAPTER_KILL_GRACE_MS = 2_000
 /** 超时路径上等整组死透的上限——有界，绝不无限等。 */
 const ADAPTER_REAP_WINDOW_MS = 2_000
+const DAEMON_BOOT_ENV: Readonly<Record<string, string | undefined>> = Object.freeze({
+  ...process.env,
+})
+const SECRET_ENV_KEY = /^[A-Z_][A-Z0-9_]*$/
 
 export const acquireEnvelopeSchema = z
   .object({
@@ -212,6 +218,8 @@ export interface AdapterRunInput {
   readonly adapterContent: {
     readonly executableRef: string
     readonly timeoutMs: number
+    readonly connectionRef: string | null
+    readonly secretProjection: readonly string[]
   }
   readonly operation:
     | { readonly kind: 'acquire'; readonly externalId: string }
@@ -257,6 +265,8 @@ export interface AdapterRunInput {
   readonly stagedRoot: string
   /** 测试/装配注入的额外 env（如 mock 上游 URL）；不含 daemon 环境。 */
   readonly extraEnv?: Record<string, string>
+  /** Daemon-boot snapshot; injectable only at the Integration composition/test boundary. */
+  readonly secretSource?: Readonly<Record<string, string | undefined>>
 }
 
 export type AdapterRunResult<T> =
@@ -276,6 +286,34 @@ function failure(
 }
 
 async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unknown>> {
+  const secretSource = input.secretSource ?? DAEMON_BOOT_ENV
+  const projectedSecrets: Record<string, string> = {}
+  for (const key of input.adapterContent.secretProjection) {
+    if (
+      !SECRET_ENV_KEY.test(key) ||
+      key.startsWith('AW_') ||
+      key === 'PATH' ||
+      key === 'HOME' ||
+      key === 'TMPDIR'
+    ) {
+      return failure(
+        'configuration',
+        'adapter-secret-projection-invalid',
+        'after-configuration',
+        `replace invalid projected environment key ${key}`,
+      )
+    }
+    const value = secretSource[key]
+    if (value === undefined) {
+      return failure(
+        'configuration',
+        'adapter-secret-projection-missing',
+        'after-configuration',
+        `configure declared adapter environment key ${key} before restarting the daemon`,
+      )
+    }
+    projectedSecrets[key] = value
+  }
   const exec = input.adapterContent.executableRef
   const scriptLike = /\.(?:ts|js|mjs|cjs)$/.test(exec)
   const argv: string[] = scriptLike ? [process.execPath, exec] : [exec]
@@ -310,12 +348,16 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
   }
   const op = input.operation
   const env: Record<string, string> = {
+    ...(input.extraEnv ?? {}),
     // 空环境构造：只给运行所需的最小面。AW_EXTERNAL_ID 是 requirement 三 op
     // 专属；pipeline 三 op 用 AW_PIPELINE_* 面。
-    PATH: process.env.PATH ?? '',
-    HOME: process.env.HOME ?? '',
-    TMPDIR: process.env.TMPDIR ?? '/tmp',
+    PATH: DAEMON_BOOT_ENV.PATH ?? '',
+    HOME: DAEMON_BOOT_ENV.HOME ?? '',
+    TMPDIR: DAEMON_BOOT_ENV.TMPDIR ?? '/tmp',
     AW_ADAPTER_SINK: input.stagedRoot,
+    ...(input.adapterContent.connectionRef === null
+      ? {}
+      : { AW_ADAPTER_CONNECTION_REF: input.adapterContent.connectionRef }),
     ...(op.kind === 'acquire' || op.kind === 'questions.writeback' || op.kind === 'answers.collect'
       ? { AW_EXTERNAL_ID: op.externalId }
       : {}),
@@ -352,7 +394,7 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
       : {}),
     ...(op.kind === 'approval.lookup' ? { AW_IDEMPOTENCY_KEY: op.idempotencyKey } : {}),
     ...(op.kind === 'approval.observe' ? { AW_APPROVAL_CORRELATION_REF: op.correlationRef } : {}),
-    ...(input.extraEnv ?? {}),
+    ...projectedSecrets,
   }
 
   let proc: Subprocess<'ignore', 'pipe', 'pipe'>
@@ -389,7 +431,7 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
   // **边读边限**。改造前是 `new Response(proc.stdout).text()`——完整读进内存之后才去
   // 判断 `stdout.length > STDOUT_LIMIT`。那条 256 KiB 的「上限」不提供任何内存保护：
   // 字节早就在堆里了，一个话痨的适配器会在判断跑到之前把 daemon 撑爆。
-  const [stdout, stderr, exitCode] = await Promise.all([
+  const [stdout, , exitCode] = await Promise.all([
     readStreamCapped(proc.stdout as ReadableStream<Uint8Array> | undefined, STDOUT_LIMIT + 1),
     readStreamCapped(proc.stderr as ReadableStream<Uint8Array> | undefined, STDOUT_LIMIT + 1),
     proc.exited,
@@ -415,11 +457,19 @@ async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unkn
     )
   }
   if (exitCode !== 0) {
+    const mapped =
+      exitCode === 2
+        ? (['configuration', 'after-configuration'] as const)
+        : exitCode === 5
+          ? (['transient', 'same-input'] as const)
+          : exitCode === 6
+            ? (['stale-input', 'after-refresh'] as const)
+            : (['business-failure', 'never'] as const)
     return failure(
-      'business-failure',
+      mapped[0],
       `adapter-exit-${exitCode}`,
-      'never',
-      `adapter failed: ${stderr.slice(0, 500)}`,
+      mapped[1],
+      `inspect the Adapter's provider-side diagnostics for exit code ${exitCode}`,
     )
   }
   const lines = stdout.split('\n').filter((l) => l.trim().length > 0)

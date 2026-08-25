@@ -69,6 +69,38 @@ function item(sourceId: TaskSourceId): TaskCatalogListItem {
   }
 }
 
+function digitalEmployeeCase(
+  overrides: Partial<{
+    state: 'active' | 'waiting' | 'blocked' | 'terminal'
+    terminalKind: string | null
+    currentWorkItemRef: string | null
+    currentWorkItemName: { 'zh-CN': string; 'en-US': string } | null
+  }> = {},
+) {
+  return {
+    id: 'case-1',
+    revision: 1,
+    state: 'active' as const,
+    terminalKind: null,
+    blockReason: null,
+    employeeRef: { id: 'employee-1', revision: 1 },
+    employeeName: 'Developer',
+    typeRef: { typeId: 'development', revision: 10 },
+    typeName: { 'zh-CN': '开发数字员工', 'en-US': 'Development employee' },
+    taskName: '验证任务目录语义',
+    subjectRef: 'issue-1',
+    targetRef: 'repository-1',
+    currentWorkItemRef: 'analyze',
+    currentWorkItemName: { 'zh-CN': '分析', 'en-US': 'Analyze' },
+    activeRound: null,
+    pendingEventCount: 0,
+    openChannelCount: 0,
+    createdAt: 1,
+    updatedAt: 2,
+    ...overrides,
+  }
+}
+
 function source(sourceId: TaskSourceId, calls: TaskCatalogSourceListInput[]): TaskCatalogSource {
   return {
     sourceId,
@@ -263,6 +295,69 @@ describe('RFC-310 unified task catalog', () => {
           },
         },
       }),
+    ])
+  })
+
+  test('waiting for an automatic event remains active instead of asking the user to answer', async () => {
+    const employeeSource = composeDigitalEmployeeTaskCatalogSource({
+      queries: {
+        listCasePage() {
+          return JSON.stringify({
+            items: [
+              digitalEmployeeCase({
+                state: 'waiting',
+                currentWorkItemRef: null,
+                currentWorkItemName: null,
+              }),
+            ],
+            nextCursor: null,
+            facets: { all: 1, active: 1, attention: 0, finished: 0 },
+          })
+        },
+      },
+    })
+
+    const page = await employeeSource.list({
+      actor: actor(['tasks:read', 'digital-employees:read']),
+    })
+
+    expect(page.items).toEqual([
+      expect.objectContaining({
+        status: 'running',
+        statusDetail: {
+          'zh-CN': '等待事件',
+          'en-US': 'Waiting for events',
+        },
+      }),
+    ])
+  })
+
+  test('task-status filters translate to actual Case catalog states', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const employeeSource = composeDigitalEmployeeTaskCatalogSource({
+      queries: {
+        listCasePage(input) {
+          calls.push(input)
+          return JSON.stringify({
+            items: [],
+            nextCursor: null,
+            facets: { all: 0, active: 0, attention: 0, finished: 0 },
+          })
+        },
+      },
+    })
+    const requestActor = actor(['tasks:read', 'digital-employees:read'])
+
+    await employeeSource.list({ actor: requestActor, statuses: 'running' })
+    await employeeSource.list({ actor: requestActor, statuses: 'awaiting_human' })
+    await employeeSource.list({ actor: requestActor, statuses: 'done' })
+    await employeeSource.list({ actor: requestActor, statuses: 'canceled' })
+
+    expect(calls).toEqual([
+      expect.objectContaining({ states: ['active', 'waiting'], terminalCatalogStatuses: [] }),
+      expect.objectContaining({ states: [], terminalCatalogStatuses: [] }),
+      expect.objectContaining({ states: ['terminal'], terminalCatalogStatuses: ['done'] }),
+      expect.objectContaining({ states: ['terminal'], terminalCatalogStatuses: ['canceled'] }),
     ])
   })
 

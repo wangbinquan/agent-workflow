@@ -1,4 +1,4 @@
-# visual-regression — 66 pixel baselines
+# visual-regression — 65 pixel baselines
 
 Specs: `e2e/visual-regression.spec.ts` and `e2e/rfc250-visual-states.spec.ts`. Baselines live in each
 spec's `*-snapshots/` directory. Coverage belongs to RFC-054/198/199/219/246/249/250/299/310/321.
@@ -28,7 +28,7 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 | 736×900 compact      | RFC-249 repository-group inline node settings                                                                                                                                                                                                                                                                                                                                                       |
 | 390px mobile         | seeded home + navigation, workflow gallery, agent split detail, settings Network, settings OIDC card dialog, task detail, editor modes, open Webhook runtime-parameter picker, RFC-249 batch mode, and RFC-321 full account credential panels in light/dark                                                                                                                                         |
 
-The canonical suite has 51 scenes and 48 full-page baselines: the unified creation scene records both
+The canonical suite has 50 scenes and 47 full-page baselines: the unified creation scene records both
 the four task-type cards and the Digital Employee first step. The genuine-empty workflow scene and
 the Digital Employee responsibility/toolbox scene use focused component locks. Nine
 focused locator baselines lock mobile navigation open, a real overflowing TableViewport edge, the
@@ -40,7 +40,7 @@ RFC-250 adds nine populated high-risk baselines: PAT permission matrix and maske
 Wizard dirty guard at desktop and 390px; complex Workflow readable and explicit-overview cameras;
 Clarify local-only durability; grouped Changes navigation; and Agent resource-integrity feedback.
 Five are full-page locks and four are focused dialog/panel locks. Together with the canonical
-suite's 48 full-page and nine focused baselines, the entry point compares 66 PNGs.
+suite's 47 full-page and nine focused baselines, the entry point compares 65 PNGs.
 
 RFC-250 also deliberately refreshes six canonical baselines. `mobile-settings-network` records the
 44px coarse/mobile Switch target. The five `workflow-editor-*` baselines record readable-first
@@ -51,12 +51,12 @@ RFC-295 refreshes the five selected-Agent editor baselines after removing the al
 Webhook token wall. It also adds a desktop open-picker scene and a 390px Webhook Agent open-picker
 scene so the classified label/token/explanation rows, portal placement, and mobile clamp are locked.
 
-RFC-310 now has eleven digital-employee scenes. The unified `/tasks/new` scene locks Agent, Workflow,
+RFC-310 now has ten digital-employee scenes. The unified `/tasks/new` scene locks Agent, Workflow,
 Workgroup, and Digital Employee into one task-creation card group, then locks the selected Digital
 Employee in the same four-step shell. Three current `/digital-employees`
 scenes lock the employee-type catalog, the complete fixed responsibility card map plus selected node
-toolbox, and the same-context Add Tool dialog. Seven retained read/compatibility scenes cover the legacy employee
-list populated and empty, executor library, policy list, assignment list, employee-card outcomes, and employee
+toolbox, and the same-context Add Tool dialog. Six retained read/compatibility scenes cover the legacy employee
+list populated and empty, policy list, assignment list, employee-card outcomes, and employee
 detail. Six retained list/history scenes take their data from `e2e/code-surface-fixtures.ts` (route
 interception with fixed JSON) because the real rows carry ULIDs and relative timestamps that no pixel
 baseline can survive. The employee detail scene deliberately does NOT: its projection is a

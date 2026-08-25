@@ -3,7 +3,11 @@ import { z } from 'zod'
 
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import type { ProgramArtifactPort, ToolConnectionCatalogPort } from '../composition/required-ports'
+import type {
+  ProgramArtifactPort,
+  ToolConnectionCatalogPort,
+  ToolConnectionVisibilitySubject,
+} from '../composition/required-ports'
 import {
   DEFAULT_GLOBAL_EXECUTION_POLICY,
   buildToolValidationReceipt,
@@ -21,6 +25,8 @@ import {
   findWorkContract,
   findWorkItem,
   globalExecutionPolicySchema,
+  laneAdapterBindingSchema,
+  mergeExactAdapterBindings,
   mergeExactToolBindings,
   orderedDispatchConfigurationSchema,
   packageDigest,
@@ -38,6 +44,7 @@ import {
   type EmployeeTypeRef,
   type EmployeeTypeRuntimePackage,
   type ExactResourceRef,
+  type LaneAdapterBinding,
   type OrderedDispatchConfiguration,
   type ToolImplementation,
   type ToolRegistrationContent,
@@ -61,6 +68,7 @@ export const createJobTemplateBodySchema = z
     name: z.string().min(1).max(200),
     description: z.string().max(2_000),
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
+    defaultAdapterBindings: z.array(laneAdapterBindingSchema).max(100).default([]),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100).default([]),
     orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
     reactionLaneOrder: z.array(z.string().min(1).max(160)).max(30).default([]),
@@ -75,6 +83,7 @@ export const createEmployeeDefinitionBodySchema = z
     jobTemplateRef: exactResourceRefSchema,
     workScope: z.unknown(),
     toolOverrides: z.array(workItemToolBindingSchema).max(300).default([]),
+    adapterOverrides: z.array(laneAdapterBindingSchema).max(100).default([]),
     collaborationOverrides: z.array(employeeCollaborationBindingSchema).max(100).default([]),
   })
   .strict()
@@ -101,6 +110,13 @@ export interface AutomaticTypeUpgradeIssue {
   readonly resourceId: string
   readonly reasonCode: string
   readonly detail: string
+}
+
+interface PendingAutomaticToolRevalidation {
+  readonly sourceRef: ExactResourceRef
+  readonly sourceTypeRef: EmployeeTypeRef
+  readonly targetTypeRef: EmployeeTypeRef
+  readonly workItemRef: string
 }
 
 function typeKey(ref: EmployeeTypeRef): string {
@@ -138,8 +154,25 @@ function exactRefKey(ref: ExactResourceRef): string {
   return JSON.stringify([ref.id, ref.revision])
 }
 
-function validationFailure(code: string, detail: string): ContractValidationCheck {
-  return { code, ok: false, detail }
+function automaticToolRevalidationKey(input: PendingAutomaticToolRevalidation): string {
+  return JSON.stringify([
+    input.sourceRef.id,
+    input.sourceRef.revision,
+    input.targetTypeRef.typeId,
+    input.targetTypeRef.revision,
+    input.workItemRef,
+  ])
+}
+
+function ownerVisibilitySubject(
+  ownerUserId: string | null,
+): ToolConnectionVisibilitySubject | null {
+  return ownerUserId === null
+    ? null
+    : {
+        userId: ownerUserId,
+        authority: { bypass: false, private: true },
+      }
 }
 
 function nextRevision(current: number | null): number {
@@ -249,6 +282,9 @@ export class DigitalEmployeeAuthoringService {
   readonly #onAutomaticUpgradeIssue: (issue: AutomaticTypeUpgradeIssue) => void
   readonly #now: () => number
   readonly #id: () => string
+  readonly #pendingAutomaticToolRevalidations = new Map<string, PendingAutomaticToolRevalidation>()
+  readonly #automaticToolRevalidationFailures = new Map<string, AutomaticTypeUpgradeError>()
+  readonly #automaticToolRevalidatedSuccessors = new Map<string, ExactResourceRef>()
 
   constructor(deps: DigitalEmployeeAuthoringServiceDependencies) {
     this.#store = deps.store
@@ -301,6 +337,7 @@ export class DigitalEmployeeAuthoringService {
     for (const runtime of latestRuntimes) {
       this.#automaticallyUpgradeCompatibleClosures(runtime.descriptor.typeRef)
     }
+    this.#automaticallyReconcileCompatibleAdapterBindings()
     this.#automaticallyReconcileCompatibleCollaborationTargets()
 
     this.#store.ensureExecutionPolicy({
@@ -309,6 +346,65 @@ export class DigitalEmployeeAuthoringService {
       publishedAt: this.#now(),
       publishedBy: null,
     })
+  }
+
+  /**
+   * A changed WorkContract cannot reuse its source validation receipt. The
+   * bootstrap calls this asynchronous second phase so the target contract
+   * authority can validate the exact implementation before a successor is
+   * frozen and the owning job/employee closures are retried.
+   */
+  async settleAutomaticUpgrades(): Promise<void> {
+    const attempted = new Set<string>()
+    while (this.#pendingAutomaticToolRevalidations.size > 0) {
+      const pending = [...this.#pendingAutomaticToolRevalidations.entries()].sort(
+        ([left], [right]) => left.localeCompare(right),
+      )
+      this.#pendingAutomaticToolRevalidations.clear()
+      for (const [key, input] of pending) {
+        if (attempted.has(key)) {
+          this.#automaticToolRevalidationFailures.set(
+            key,
+            new AutomaticTypeUpgradeError(
+              'work-contract-successor-loop',
+              `automatic tool successor did not converge for ${input.sourceRef.id}@${input.sourceRef.revision}`,
+            ),
+          )
+          continue
+        }
+        attempted.add(key)
+        try {
+          await this.#revalidateAutomaticToolRevision(input)
+          this.#automaticToolRevalidationFailures.delete(key)
+        } catch (error) {
+          this.#automaticToolRevalidationFailures.set(
+            key,
+            error instanceof AutomaticTypeUpgradeError
+              ? error
+              : new AutomaticTypeUpgradeError(
+                  'work-contract-successor-validation-failed',
+                  error instanceof Error ? error.message : String(error),
+                ),
+          )
+        }
+      }
+
+      const latestByType = new Map<string, EmployeeTypeRef>()
+      for (const runtime of this.#types.values()) {
+        const ref = runtime.descriptor.typeRef
+        const current = latestByType.get(ref.typeId)
+        if (current === undefined || current.revision < ref.revision) {
+          latestByType.set(ref.typeId, ref)
+        }
+      }
+      for (const ref of [...latestByType.values()].sort((left, right) =>
+        left.typeId.localeCompare(right.typeId),
+      )) {
+        this.#automaticallyUpgradeCompatibleClosures(ref)
+      }
+      this.#automaticallyReconcileCompatibleAdapterBindings()
+      this.#automaticallyReconcileCompatibleCollaborationTargets()
+    }
   }
 
   #runtime(ref: EmployeeTypeRef): EmployeeTypeRuntimePackage {
@@ -430,6 +526,12 @@ export class DigitalEmployeeAuthoringService {
     resource: Omit<AutomaticTypeUpgradeIssue, 'reasonCode' | 'detail'>,
     error: unknown,
   ): void {
+    if (
+      error instanceof AutomaticTypeUpgradeError &&
+      error.reasonCode === 'work-contract-revalidation-pending'
+    ) {
+      return
+    }
     const errorCode =
       typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
     const issue: AutomaticTypeUpgradeIssue = {
@@ -473,20 +575,33 @@ export class DigitalEmployeeAuthoringService {
     for (const binding of collaborationOverrides) {
       this.#assertAutomaticCollaborationCompatibility(employee.typeRef, targetTypeRef, binding)
     }
-    const toolOverrides = employee.configuration.toolOverrides.map((binding) => ({
-      ...binding,
-      registrationRef: this.#automaticallyUpgradeToolRevision(
-        binding.registrationRef,
-        employee.typeRef,
-        targetTypeRef,
-        binding.workItemRef,
-      ),
-    }))
+    const adapterOverrides = this.#projectLegacyAdapterBindings({
+      targetTypeRef,
+      toolBindings: employee.configuration.toolOverrides,
+      explicitBindings: employee.configuration.adapterOverrides,
+      requireForEnabledLanes: false,
+      subject: ownerVisibilitySubject(employee.ownerUserId),
+    })
+    const toolOverrides = employee.configuration.toolOverrides
+      .filter((binding) => {
+        const item = findWorkItem(runtime.descriptor, binding.workItemRef)
+        return item?.nodeKind === 'business-tool' && findToolSlot(item, binding.slotRef) !== null
+      })
+      .map((binding) => ({
+        ...binding,
+        registrationRef: this.#automaticallyUpgradeToolRevision(
+          binding.registrationRef,
+          employee.typeRef,
+          targetTypeRef,
+          binding.workItemRef,
+        ),
+      }))
     const configuration = digitalEmployeeDefinitionDraftSchema.parse({
       ...employee.configuration,
       typeRef: targetTypeRef,
       jobTemplateRef,
       toolOverrides,
+      adapterOverrides,
       collaborationOverrides,
     })
     const candidate: EmployeeDefinitionRecord = {
@@ -495,7 +610,7 @@ export class DigitalEmployeeAuthoringService {
       configuration,
       updatedAt: this.#now(),
     }
-    const compiled = this.#compileEmployeeDefinition(candidate, null)
+    const compiled = this.#compileEmployeeDefinition(candidate, null, null)
     this.#store.saveEmployeeDefinition({
       ...compiled,
       definitionMutation: {
@@ -531,6 +646,71 @@ export class DigitalEmployeeAuthoringService {
       return successor.ref
     }
 
+    const migration = this.#automaticToolMigrationCandidate(
+      sourceRef,
+      sourceTypeRef,
+      targetTypeRef,
+      workItemRef,
+    )
+    const pending: PendingAutomaticToolRevalidation = {
+      sourceRef,
+      sourceTypeRef,
+      targetTypeRef,
+      workItemRef,
+    }
+    const revalidationKey = automaticToolRevalidationKey(pending)
+    const revalidatedRef = this.#automaticToolRevalidatedSuccessors.get(revalidationKey)
+    if (revalidatedRef !== undefined) {
+      const revalidated = this.#store.getToolRevision(revalidatedRef)
+      if (revalidated === null) {
+        throw new AutomaticTypeUpgradeError(
+          'work-contract-successor-missing',
+          `automatic tool successor is unavailable: ${revalidatedRef.id}@${revalidatedRef.revision}`,
+        )
+      }
+      this.#assertTargetToolRevision(revalidated, targetTypeRef, workItemRef)
+      return revalidated.ref
+    }
+    const id = automaticUpgradeResourceId('tool', {
+      targetTypeRef,
+      ownerUserId: migration.sourceRecord.ownerUserId,
+      content: migration.content,
+    })
+    const existing = this.#publishedAutomaticToolRevision({
+      id,
+      sourceRecord: migration.sourceRecord,
+      targetTypeRef,
+      workItemRef,
+      content: migration.content,
+    })
+    if (existing !== null) return existing
+
+    if (contentDigest(migration.sourceContract) !== contentDigest(migration.targetContract)) {
+      const failure = this.#automaticToolRevalidationFailures.get(revalidationKey)
+      if (failure !== undefined) throw failure
+      this.#pendingAutomaticToolRevalidations.set(revalidationKey, pending)
+      throw new AutomaticTypeUpgradeError(
+        'work-contract-revalidation-pending',
+        `target WorkContract validation is pending for ${targetTypeRef.typeId}/${workItemRef}`,
+      )
+    }
+
+    return this.#persistAutomaticToolRevision({
+      id,
+      sourceRecord: migration.sourceRecord,
+      targetTypeRef,
+      workItemRef,
+      content: migration.content,
+      validationReceipt: migration.source.validationReceipt,
+    })
+  }
+
+  #automaticToolMigrationCandidate(
+    sourceRef: ExactResourceRef,
+    sourceTypeRef: EmployeeTypeRef,
+    targetTypeRef: EmployeeTypeRef,
+    workItemRef: string,
+  ) {
     const source = this.#store.getToolRevision(sourceRef)
     const sourceRecord = this.#store.getTool(sourceRef.id)
     if (
@@ -576,8 +756,7 @@ export class DigitalEmployeeAuthoringService {
       sourceContract === null ||
       targetItem === null ||
       targetItem.nodeKind !== 'business-tool' ||
-      targetContract === null ||
-      contentDigest(sourceContract) !== contentDigest(targetContract)
+      targetContract === null
     ) {
       throw new AutomaticTypeUpgradeError(
         'work-contract-changed',
@@ -595,71 +774,109 @@ export class DigitalEmployeeAuthoringService {
       ...source.content,
       typeRef: targetTypeRef,
       workContractRef: targetRoleContractRef,
+      connectionRef: null,
     })
-    const id = automaticUpgradeResourceId('tool', {
-      targetTypeRef,
-      ownerUserId: sourceRecord.ownerUserId,
-      content,
-    })
-    let target = this.#store.getTool(id)
-    if (target === null) {
-      const now = this.#now()
-      this.#store.createTool({
-        id,
-        typeRef: targetTypeRef,
-        workItemRef,
-        content,
-        validationReceipt: source.validationReceipt,
-        publishedRevision: null,
-        ownerUserId: sourceRecord.ownerUserId,
-        createdAt: now,
-        updatedAt: now,
-        retiredAt: null,
-      })
-      target = this.#store.getTool(id)
-    }
+    return { source, sourceRecord, sourceContract, targetContract, content }
+  }
+
+  #publishedAutomaticToolRevision(input: {
+    readonly id: string
+    readonly sourceRecord: ToolDraftRecord
+    readonly targetTypeRef: EmployeeTypeRef
+    readonly workItemRef: string
+    readonly content: ToolRegistrationContent
+  }): ExactResourceRef | null {
+    const target = this.#store.getTool(input.id)
+    if (target === null) return null
     if (
-      target === null ||
-      !sameType(target.typeRef, targetTypeRef) ||
-      target.workItemRef !== workItemRef ||
-      target.ownerUserId !== sourceRecord.ownerUserId ||
+      !sameType(target.typeRef, input.targetTypeRef) ||
+      target.workItemRef !== input.workItemRef ||
+      target.ownerUserId !== input.sourceRecord.ownerUserId ||
       target.retiredAt !== null
     ) {
       throw new AutomaticTypeUpgradeError(
         'tool-migration-identity-conflict',
-        `automatic tool migration identity conflicts with an existing resource: ${id}`,
+        `automatic tool migration identity conflicts with an existing resource: ${input.id}`,
       )
     }
-    if (target.publishedRevision !== null) {
-      const published = this.#store.getToolRevision({
-        id: target.id,
-        revision: target.publishedRevision,
-      })
-      if (
-        published === null ||
-        published.state !== 'published' ||
-        contentDigest(published.content) !== contentDigest(content)
-      ) {
-        throw new AutomaticTypeUpgradeError(
-          'tool-migration-content-conflict',
-          `automatic tool migration content conflicts with ${id}@${target.publishedRevision}`,
-        )
-      }
-      return published.ref
-    }
+    if (target.publishedRevision === null) return null
+    const published = this.#store.getToolRevision({
+      id: target.id,
+      revision: target.publishedRevision,
+    })
     if (
-      contentDigest(target.content) !== contentDigest(content) ||
-      target.validationReceipt.status !== 'valid'
+      published === null ||
+      published.state !== 'published' ||
+      published.validationReceipt.status !== 'valid' ||
+      published.validationReceipt.contractRef.contractId !==
+        input.content.workContractRef.contractId ||
+      published.validationReceipt.contractRef.version !== input.content.workContractRef.version ||
+      contentDigest(published.content) !== contentDigest(input.content)
     ) {
       throw new AutomaticTypeUpgradeError(
         'tool-migration-content-conflict',
-        `automatic tool migration draft conflicts with the expected content: ${id}`,
+        `automatic tool migration content conflicts with ${input.id}@${target.publishedRevision}`,
+      )
+    }
+    return published.ref
+  }
+
+  #persistAutomaticToolRevision(input: {
+    readonly id: string
+    readonly sourceRecord: ToolDraftRecord
+    readonly targetTypeRef: EmployeeTypeRef
+    readonly workItemRef: string
+    readonly content: ToolRegistrationContent
+    readonly validationReceipt: ToolValidationReceipt
+  }): ExactResourceRef {
+    const published = this.#publishedAutomaticToolRevision(input)
+    if (published !== null) return published
+
+    let target = this.#store.getTool(input.id)
+    if (target === null) {
+      const now = this.#now()
+      this.#store.createTool({
+        id: input.id,
+        typeRef: input.targetTypeRef,
+        workItemRef: input.workItemRef,
+        content: input.content,
+        validationReceipt: input.validationReceipt,
+        publishedRevision: null,
+        ownerUserId: input.sourceRecord.ownerUserId,
+        createdAt: now,
+        updatedAt: now,
+        retiredAt: null,
+      })
+      target = this.#store.getTool(input.id)
+    }
+    if (
+      target === null ||
+      !sameType(target.typeRef, input.targetTypeRef) ||
+      target.workItemRef !== input.workItemRef ||
+      target.ownerUserId !== input.sourceRecord.ownerUserId ||
+      target.retiredAt !== null
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-migration-identity-conflict',
+        `automatic tool migration identity conflicts with an existing resource: ${input.id}`,
+      )
+    }
+    if (
+      contentDigest(target.content) !== contentDigest(input.content) ||
+      target.validationReceipt.status !== 'valid' ||
+      target.validationReceipt.contractRef.contractId !==
+        input.content.workContractRef.contractId ||
+      target.validationReceipt.contractRef.version !== input.content.workContractRef.version
+    ) {
+      throw new AutomaticTypeUpgradeError(
+        'tool-migration-content-conflict',
+        `automatic tool migration draft conflicts with the expected content: ${input.id}`,
       )
     }
     const revision: ToolRevisionRecord = {
-      ref: { id, revision: 1 },
-      content,
-      contentDigest: contentDigest(content),
+      ref: { id: input.id, revision: 1 },
+      content: input.content,
+      contentDigest: contentDigest(input.content),
       validationReceipt: target.validationReceipt,
       state: 'published',
       publishedAt: this.#now(),
@@ -667,6 +884,80 @@ export class DigitalEmployeeAuthoringService {
     }
     this.#store.publishTool(revision)
     return revision.ref
+  }
+
+  async #revalidateAutomaticToolRevision(input: PendingAutomaticToolRevalidation): Promise<void> {
+    const migration = this.#automaticToolMigrationCandidate(
+      input.sourceRef,
+      input.sourceTypeRef,
+      input.targetTypeRef,
+      input.workItemRef,
+    )
+    const targetRuntime = this.#runtime(input.targetTypeRef)
+    let content = migration.content
+    let validationReceipt = await this.#validateTool(targetRuntime, content)
+    if (
+      validationReceipt.status !== 'valid' &&
+      migration.source.content.implementation.kind === 'program' &&
+      targetRuntime.upgradeProgramSource !== undefined
+    ) {
+      const sourceImplementation = migration.source.content.implementation
+      const sourceArtifact = this.#programArtifacts.read(sourceImplementation)
+      if (sourceArtifact === null) {
+        throw new AutomaticTypeUpgradeError(
+          'program-source-unavailable',
+          `program source is unavailable for ${input.sourceRef.id}@${input.sourceRef.revision}`,
+        )
+      }
+      const upgraded = targetRuntime.upgradeProgramSource({
+        sourceContract: migration.sourceContract,
+        targetContract: migration.targetContract,
+        implementation: sourceImplementation,
+        source: sourceArtifact.source,
+      })
+      if (upgraded !== null) {
+        const upgradedArtifact = await this.#programArtifacts.put({
+          runtimeKind: upgraded.runtimeKind,
+          source: upgraded.source,
+          parameterValues: sourceArtifact.parameterValues,
+        })
+        content = toolRegistrationContentSchema.parse({
+          ...migration.content,
+          implementation: {
+            ...sourceImplementation,
+            runtimeKind: upgraded.runtimeKind,
+            executableArtifactRef: upgradedArtifact.executableArtifactRef,
+            executableDigest: upgradedArtifact.executableDigest,
+            parameterValuesRef: upgradedArtifact.parameterValuesRef,
+          },
+        })
+        validationReceipt = await this.#validateTool(targetRuntime, content)
+      }
+    }
+    if (validationReceipt.status !== 'valid') {
+      const failedChecks = validationReceipt.checks
+        .filter((check) => !check.ok)
+        .map((check) => `${check.code}: ${check.detail}`)
+        .join('; ')
+      throw new AutomaticTypeUpgradeError(
+        'work-contract-successor-invalid',
+        `target WorkContract rejected ${input.sourceRef.id}@${input.sourceRef.revision}${failedChecks.length === 0 ? '' : `; ${failedChecks}`}`,
+      )
+    }
+    const id = automaticUpgradeResourceId('tool', {
+      targetTypeRef: input.targetTypeRef,
+      ownerUserId: migration.sourceRecord.ownerUserId,
+      content,
+    })
+    const successorRef = this.#persistAutomaticToolRevision({
+      id,
+      sourceRecord: migration.sourceRecord,
+      targetTypeRef: input.targetTypeRef,
+      workItemRef: input.workItemRef,
+      content,
+      validationReceipt,
+    })
+    this.#automaticToolRevalidatedSuccessors.set(automaticToolRevalidationKey(input), successorRef)
   }
 
   #assertTargetToolRevision(
@@ -724,16 +1015,35 @@ export class DigitalEmployeeAuthoringService {
         binding,
       )
     }
-    const defaultToolBindings = source.content.defaultToolBindings.map((binding) => ({
-      ...binding,
-      registrationRef: this.#automaticallyUpgradeToolRevision(
-        binding.registrationRef,
-        source.content.typeRef,
+    const defaultAdapterBindings = this.#projectLegacyAdapterBindings({
+      targetTypeRef,
+      toolBindings: source.content.defaultToolBindings,
+      explicitBindings: source.content.defaultAdapterBindings,
+      requireForEnabledLanes: true,
+      subject: ownerVisibilitySubject(sourceRecord.ownerUserId),
+    })
+    const targetDescriptor = this.#runtime(targetTypeRef).descriptor
+    const defaultToolBindings = source.content.defaultToolBindings
+      .filter((binding) => {
+        const item = findWorkItem(targetDescriptor, binding.workItemRef)
+        return item?.nodeKind === 'business-tool' && findToolSlot(item, binding.slotRef) !== null
+      })
+      .map((binding) => ({
+        ...binding,
+        registrationRef: this.#automaticallyUpgradeToolRevision(
+          binding.registrationRef,
+          source.content.typeRef,
+          targetTypeRef,
+          binding.workItemRef,
+        ),
+      }))
+    const reconciledOrderedDispatchConfigurations =
+      this.#reconcileAutomaticOrderedDispatchConfigurations(
         targetTypeRef,
-        binding.workItemRef,
-      ),
-    }))
-    const orderedDispatchConfigurations = source.content.orderedDispatchConfigurations.map(
+        source.content.orderedDispatchConfigurations,
+        defaultToolBindings,
+      )
+    const orderedDispatchConfigurations = reconciledOrderedDispatchConfigurations.map(
       (configuration) => ({
         ...configuration,
         routes: configuration.routes.map((route) => ({
@@ -754,6 +1064,7 @@ export class DigitalEmployeeAuthoringService {
       ...source.content,
       typeRef: targetTypeRef,
       defaultToolBindings,
+      defaultAdapterBindings,
       defaultCollaborationBindings,
       orderedDispatchConfigurations,
       reactionLaneOrder: this.#normalizeReactionLaneOrder(
@@ -866,6 +1177,82 @@ export class DigitalEmployeeAuthoringService {
       latest = Math.max(latest ?? 0, runtime.descriptor.typeRef.revision)
     }
     return latest
+  }
+
+  /**
+   * A provider Adapter can be published after an otherwise current employee.
+   * Freeze the newly available exact revision into a system-authored employee
+   * successor so external work starts without a user migration/edit step.
+   */
+  #automaticallyReconcileCompatibleAdapterBindings(): void {
+    const employees = this.#store
+      .listEmployeeDefinitions()
+      .filter(
+        (employee) =>
+          employee.currentRevision !== null &&
+          this.#latestRegisteredTypeRevision(employee.typeRef.typeId) === employee.typeRef.revision,
+      )
+      .sort((left, right) => left.id.localeCompare(right.id))
+
+    for (const employee of employees) {
+      try {
+        const currentRevision = employee.currentRevision
+        if (currentRevision === null) continue
+        const current = this.#store.getEmployeeDefinitionRevision({
+          id: employee.id,
+          revision: currentRevision,
+        })
+        if (current === null) continue
+        const projected = this.#projectLegacyAdapterBindings({
+          targetTypeRef: employee.typeRef,
+          toolBindings: current.content.exactToolBindings,
+          explicitBindings: current.content.exactAdapterBindings,
+          requireForEnabledLanes: true,
+          subject: ownerVisibilitySubject(employee.ownerUserId),
+        })
+        const exactKeys = new Set(
+          current.content.exactAdapterBindings.map(
+            (binding) => `${binding.laneId}\u0000${binding.slotRef}`,
+          ),
+        )
+        const additions = projected.filter(
+          (binding) => !exactKeys.has(`${binding.laneId}\u0000${binding.slotRef}`),
+        )
+        if (additions.length === 0) continue
+
+        const configuration = digitalEmployeeDefinitionDraftSchema.parse({
+          ...employee.configuration,
+          adapterOverrides: [...employee.configuration.adapterOverrides, ...additions],
+        })
+        const candidate: EmployeeDefinitionRecord = {
+          ...employee,
+          configuration,
+          updatedAt: this.#now(),
+        }
+        const compiled = this.#compileEmployeeDefinition(candidate, null, null)
+        this.#store.saveEmployeeDefinition({
+          ...compiled,
+          definitionMutation: {
+            kind: 'update',
+            expectedTypeRef: employee.typeRef,
+            targetTypeRef: employee.typeRef,
+            name: employee.name,
+            configuration,
+            updatedAt: compiled.revision.createdAt,
+          },
+        })
+      } catch (error) {
+        this.#reportAutomaticUpgradeIssue(
+          {
+            sourceTypeRef: employee.typeRef,
+            targetTypeRef: employee.typeRef,
+            resourceKind: 'employee',
+            resourceId: employee.id,
+          },
+          error,
+        )
+      }
+    }
   }
 
   #resolveAutomaticCollaborationBinding(
@@ -1012,7 +1399,7 @@ export class DigitalEmployeeAuthoringService {
           configuration,
           updatedAt: this.#now(),
         }
-        const compiled = this.#compileEmployeeDefinition(candidate, null)
+        const compiled = this.#compileEmployeeDefinition(candidate, null, null)
         this.#store.saveEmployeeDefinition({
           ...compiled,
           definitionMutation: {
@@ -1098,6 +1485,22 @@ export class DigitalEmployeeAuthoringService {
         { violations: merged.violations },
       )
     }
+    const adapterBindings = mergeExactAdapterBindings({
+      manifest: this.#runtime(content.typeRef).descriptor.authoringManifest,
+      defaults: content.defaultAdapterBindings,
+      overrides: [],
+      enabledWorkItemRefs,
+    })
+    if (adapterBindings.violations.length > 0) {
+      throw new ValidationError(
+        'employee-job-template-adapter-bindings-incomplete',
+        'automatically migrated job template does not cover every required lane Adapter slot',
+        { violations: adapterBindings.violations },
+      )
+    }
+    for (const binding of adapterBindings.bindings) {
+      this.#validateAdapterBinding(content.typeRef, binding, null)
+    }
     this.#validateOrderedDispatchConfigurations(
       content.typeRef,
       content.orderedDispatchConfigurations,
@@ -1159,6 +1562,16 @@ export class DigitalEmployeeAuthoringService {
     readonly content: ToolRegistrationContent
     readonly validationReceipt: ToolValidationReceipt
   }> {
+    if (
+      typeof input.body === 'object' &&
+      input.body !== null &&
+      Object.prototype.hasOwnProperty.call(input.body, 'connectionRef')
+    ) {
+      throw new ValidationError(
+        'tool-connection-moved-to-employee-binding',
+        'connectionRef is configured by the lane Adapter card on a job template or employee',
+      )
+    }
     const runtime = this.#runtime(input.typeRef)
     const item = findWorkItem(runtime.descriptor, input.workItemRef)
     if (item === null) {
@@ -1226,7 +1639,7 @@ export class DigitalEmployeeAuthoringService {
       displayName: body.displayName,
       description: body.description,
       implementation,
-      connectionRef: body.connectionRef ?? null,
+      connectionRef: null,
       ...(body.dispatchRouteDefinitions === undefined
         ? {}
         : { dispatchRouteDefinitions: body.dispatchRouteDefinitions }),
@@ -1254,50 +1667,6 @@ export class DigitalEmployeeAuthoringService {
     const checks: ContractValidationCheck[] = [
       ...runtime.validateContractFixture({ contract, implementation: content.implementation }),
     ]
-    if (contract.requiredConnectionPurpose !== null) {
-      if (content.connectionRef === null) {
-        checks.push(
-          validationFailure(
-            'required-connection-present',
-            `${contract.requiredConnectionPurpose} connection is required`,
-          ),
-        )
-      } else {
-        const projection = await this.#connectionCatalog.resolve(content.connectionRef)
-        checks.push(
-          projection === null
-            ? validationFailure(
-                'required-connection-exact-revision-resolves',
-                `${content.connectionRef.id}@${content.connectionRef.revision} not found`,
-              )
-            : {
-                code: 'required-connection-exact-revision-resolves',
-                ok: true,
-                detail: projection.closureSummary,
-              },
-        )
-        if (projection !== null) {
-          checks.push({
-            code: 'required-connection-purpose-matches',
-            ok: projection.purpose === contract.requiredConnectionPurpose,
-            detail: `expected ${contract.requiredConnectionPurpose}; resolved ${projection.purpose}`,
-          })
-          checks.push({
-            code: 'required-connection-available',
-            ok: projection.available,
-            detail: projection.closureSummary,
-          })
-        }
-      }
-    } else if (content.connectionRef !== null) {
-      checks.push(
-        validationFailure(
-          'connection-not-accepted-by-contract',
-          `${contract.contractId}@${contract.version} does not accept a connection`,
-        ),
-      )
-    }
-
     const receipt = await this.#executionContracts.validateExecutor({
       contractRef: { contractId: contract.contractId, version: contract.version },
       implementation: content.implementation,
@@ -1382,7 +1751,6 @@ export class DigitalEmployeeAuthoringService {
         description: record.content.description,
         roleRef: record.content.roleRef,
         implementation,
-        connectionRef: record.content.connectionRef,
         ...(record.content.dispatchRouteDefinitions === undefined
           ? {}
           : { dispatchRouteDefinitions: record.content.dispatchRouteDefinitions }),
@@ -1490,6 +1858,215 @@ export class DigitalEmployeeAuthoringService {
       )
     }
     return tool
+  }
+
+  #validateAdapterBinding(
+    typeRef: EmployeeTypeRef,
+    binding: LaneAdapterBinding,
+    subject: ToolConnectionVisibilitySubject | null,
+  ): string {
+    const descriptor = this.#runtime(typeRef).descriptor
+    const lane = descriptor.authoringManifest.lifecycleRegions
+      .flatMap((region) => region.responsibilityLanes)
+      .find((candidate) => candidate.laneId === binding.laneId)
+    const slot = lane?.adapterSlots.find((candidate) => candidate.slotRef === binding.slotRef)
+    if (lane === undefined || slot === undefined) {
+      throw new ValidationError(
+        'employee-adapter-binding-invalid',
+        `unknown lane Adapter slot: ${binding.laneId}/${binding.slotRef}`,
+      )
+    }
+    const projection = this.#connectionCatalog.resolve(binding.adapterRef, subject)
+    if (projection === null) {
+      throw new ValidationError(
+        'employee-adapter-revision-unavailable',
+        `Adapter revision is not published: ${binding.adapterRef.id}@${binding.adapterRef.revision}`,
+      )
+    }
+    if (!projection.visible) {
+      throw new ValidationError(
+        'employee-adapter-revision-not-visible',
+        `Adapter revision is not visible: ${binding.adapterRef.id}@${binding.adapterRef.revision}`,
+      )
+    }
+    if (projection.purpose !== slot.purpose) {
+      throw new ValidationError(
+        'employee-adapter-purpose-mismatch',
+        `${binding.laneId}/${binding.slotRef} requires ${slot.purpose}; resolved ${projection.purpose}`,
+      )
+    }
+    if (!projection.available) {
+      throw new ValidationError('employee-adapter-revision-archived', projection.closureSummary)
+    }
+    return projection.contentDigest
+  }
+
+  #projectLegacyAdapterBindings(input: {
+    readonly targetTypeRef: EmployeeTypeRef
+    readonly toolBindings: readonly WorkItemToolBinding[]
+    readonly explicitBindings: readonly LaneAdapterBinding[]
+    readonly requireForEnabledLanes: boolean
+    readonly subject: ToolConnectionVisibilitySubject | null
+  }): LaneAdapterBinding[] {
+    const descriptor = this.#runtime(input.targetTypeRef).descriptor
+    const manifest = descriptor.authoringManifest
+    const explicitKeys = new Set(
+      input.explicitBindings.map((binding) => `${binding.laneId}\u0000${binding.slotRef}`),
+    )
+    const projected: LaneAdapterBinding[] = []
+    for (const region of manifest.lifecycleRegions) {
+      for (const lane of region.responsibilityLanes) {
+        const laneWorkItemRefs = new Set(
+          manifest.workItems
+            .filter(
+              (item) =>
+                item.regionId === region.regionId && item.responsibilityLaneId === lane.laneId,
+            )
+            .map((item) => item.workItemRef),
+        )
+        for (const slot of lane.adapterSlots) {
+          const key = `${lane.laneId}\u0000${slot.slotRef}`
+          if (explicitKeys.has(key)) continue
+          const laneEnabled = input.toolBindings.some((binding) =>
+            laneWorkItemRefs.has(binding.workItemRef),
+          )
+          const requiredByEnabledContract = input.toolBindings.some((binding) => {
+            if (!laneWorkItemRefs.has(binding.workItemRef)) return false
+            const item = findWorkItem(descriptor, binding.workItemRef)
+            const tool = this.#toolRevision(binding.registrationRef)
+            if (item === null || item.nodeKind !== 'business-tool' || tool === null) return false
+            const contractRef = workContractRefForToolRole(item, tool.content.roleRef)
+            const contract =
+              contractRef === null ? null : findWorkContract(descriptor, contractRef)
+            return contract?.requiredConnectionPurpose === slot.purpose
+          })
+          const candidates = new Map<string, ExactResourceRef>()
+          for (const binding of input.toolBindings) {
+            if (!laneWorkItemRefs.has(binding.workItemRef)) continue
+            const connectionRef = this.#toolRevision(binding.registrationRef)?.content.connectionRef
+            if (connectionRef === null || connectionRef === undefined) continue
+            const projection = this.#connectionCatalog.resolve(connectionRef, input.subject)
+            if (projection?.purpose !== slot.purpose) continue
+            candidates.set(`${connectionRef.id}@${connectionRef.revision}`, connectionRef)
+          }
+          const historicalCandidates = [...candidates.values()]
+          const bindingRequired =
+            input.requireForEnabledLanes &&
+            laneEnabled &&
+            (slot.requiredWhenLaneEnabled || requiredByEnabledContract)
+          const selected =
+            historicalCandidates.length === 0 && !bindingRequired
+              ? null
+              : this.#connectionCatalog.selectAutomatic === undefined
+                ? historicalCandidates.length === 1
+                  ? this.#connectionCatalog.resolve(historicalCandidates[0]!, input.subject)
+                  : null
+                : this.#connectionCatalog.selectAutomatic({
+                    purpose: slot.purpose,
+                    candidates: historicalCandidates,
+                    subject: input.subject,
+                  })
+          if (
+            selected !== null &&
+            selected.purpose === slot.purpose &&
+            selected.available &&
+            selected.visible
+          ) {
+            projected.push({
+              laneId: lane.laneId,
+              slotRef: slot.slotRef,
+              adapterRef: selected.ref,
+            })
+          } else if (bindingRequired) {
+            throw new AutomaticTypeUpgradeError(
+              historicalCandidates.length > 1
+                ? 'legacy-adapter-binding-ambiguous'
+                : 'adapter-binding-missing',
+              `${lane.laneId}/${slot.slotRef} has no compatible published Adapter available for automatic upgrade`,
+            )
+          }
+        }
+      }
+    }
+    return [...input.explicitBindings, ...projected]
+  }
+
+  #validateAdapterDraftBindings(
+    typeRef: EmployeeTypeRef,
+    bindings: readonly LaneAdapterBinding[],
+    subject: ToolConnectionVisibilitySubject | null,
+  ): void {
+    const merged = mergeExactAdapterBindings({
+      manifest: this.#runtime(typeRef).descriptor.authoringManifest,
+      defaults: bindings,
+      overrides: [],
+      enabledWorkItemRefs: [],
+    })
+    if (merged.violations.length > 0) {
+      throw new ValidationError(
+        'employee-adapter-bindings-invalid',
+        'lane Adapter bindings contain an unknown or duplicate slot',
+        { violations: merged.violations },
+      )
+    }
+    for (const binding of merged.bindings) {
+      this.#validateAdapterBinding(typeRef, binding, subject)
+    }
+  }
+
+  #reconcileAutomaticOrderedDispatchConfigurations(
+    typeRef: EmployeeTypeRef,
+    configurations: readonly OrderedDispatchConfiguration[],
+    toolBindings: readonly WorkItemToolBinding[],
+  ): OrderedDispatchConfiguration[] {
+    const runtime = this.#runtime(typeRef)
+    return configurations.map((configuration) => {
+      const classifierBinding = toolBindings.find(
+        (binding) => binding.workItemRef === configuration.classifierWorkItemRef,
+      )
+      const classifierTool =
+        classifierBinding === undefined
+          ? null
+          : this.#toolRevision(classifierBinding.registrationRef)
+      const definitions = classifierTool?.content.dispatchRouteDefinitions
+      if (definitions === undefined) return configuration
+
+      const sourceByRouteRef = new Map(
+        configuration.routes.map((route) => [route.routeRef, route] as const),
+      )
+      const missing = definitions.filter((definition) => !sourceByRouteRef.has(definition.routeRef))
+      if (missing.length > 0) {
+        throw new AutomaticTypeUpgradeError(
+          'ordered-dispatch-route-missing',
+          `${configuration.classifierWorkItemRef} added routes without historical destinations: ${missing.map((definition) => definition.routeRef).join(', ')}`,
+        )
+      }
+
+      const definitionByRouteRef = new Map(
+        definitions.map((definition) => [definition.routeRef, definition] as const),
+      )
+      const classifier = findWorkItem(runtime.descriptor, configuration.classifierWorkItemRef)
+      const jobOwnsOrder = classifier?.orderedDispatchAuthoring?.processingOrderOwner === 'job'
+      const orderedDefinitions = jobOwnsOrder
+        ? configuration.routes
+            .map((route) => definitionByRouteRef.get(route.routeRef))
+            .filter((definition): definition is (typeof definitions)[number] => Boolean(definition))
+            .sort((left, right) => Number(left.fallback) - Number(right.fallback))
+        : [...definitions]
+
+      return orderedDispatchConfigurationSchema.parse({
+        ...configuration,
+        routes: orderedDefinitions.map((definition) => {
+          const source = sourceByRouteRef.get(definition.routeRef)!
+          return {
+            ...source,
+            displayName: definition.displayName,
+            description: definition.description,
+            fallback: definition.fallback,
+          }
+        }),
+      })
+    })
   }
 
   #validateOrderedDispatchConfigurations(
@@ -1741,10 +2318,16 @@ export class DigitalEmployeeAuthoringService {
     typeRef: EmployeeTypeRef
     body: unknown
     ownerUserId: string | null
+    adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): JobTemplateRecord {
     this.#runtime(input.typeRef)
     const body = createJobTemplateBodySchema.parse(input.body)
     for (const binding of body.defaultToolBindings) this.#validateBinding(input.typeRef, binding)
+    this.#validateAdapterDraftBindings(
+      input.typeRef,
+      body.defaultAdapterBindings,
+      input.adapterVisibilitySubject ?? null,
+    )
     for (const binding of body.defaultCollaborationBindings) {
       this.#validateCollaborationBinding(input.typeRef, binding)
     }
@@ -1759,6 +2342,7 @@ export class DigitalEmployeeAuthoringService {
       typeRef: input.typeRef,
       description: body.description,
       defaultToolBindings: body.defaultToolBindings,
+      defaultAdapterBindings: body.defaultAdapterBindings,
       defaultCollaborationBindings: body.defaultCollaborationBindings,
       orderedDispatchConfigurations: body.orderedDispatchConfigurations,
       reactionLaneOrder: this.#normalizeReactionLaneOrder(input.typeRef, body.reactionLaneOrder),
@@ -1779,7 +2363,11 @@ export class DigitalEmployeeAuthoringService {
     return record
   }
 
-  updateJobTemplate(input: { id: string; body: unknown }): JobTemplateRecord {
+  updateJobTemplate(input: {
+    id: string
+    body: unknown
+    adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
+  }): JobTemplateRecord {
     const existing = this.#store.getJobTemplate(input.id)
     if (existing === null || existing.archivedAt !== null) {
       throw new NotFoundError(
@@ -1791,6 +2379,11 @@ export class DigitalEmployeeAuthoringService {
     for (const binding of body.defaultToolBindings) {
       this.#validateBinding(existing.typeRef, binding)
     }
+    this.#validateAdapterDraftBindings(
+      existing.typeRef,
+      body.defaultAdapterBindings,
+      input.adapterVisibilitySubject ?? null,
+    )
     for (const binding of body.defaultCollaborationBindings) {
       this.#validateCollaborationBinding(existing.typeRef, binding)
     }
@@ -1805,6 +2398,7 @@ export class DigitalEmployeeAuthoringService {
       typeRef: existing.typeRef,
       description: body.description,
       defaultToolBindings: body.defaultToolBindings,
+      defaultAdapterBindings: body.defaultAdapterBindings,
       defaultCollaborationBindings: body.defaultCollaborationBindings,
       orderedDispatchConfigurations: body.orderedDispatchConfigurations,
       reactionLaneOrder: this.#normalizeReactionLaneOrder(existing.typeRef, body.reactionLaneOrder),
@@ -1820,7 +2414,11 @@ export class DigitalEmployeeAuthoringService {
     return this.#store.listJobTemplates(typeRef)
   }
 
-  publishJobTemplate(input: { id: string; actorUserId: string | null }): ExactResourceRef {
+  publishJobTemplate(input: {
+    id: string
+    actorUserId: string | null
+    adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
+  }): ExactResourceRef {
     const template = this.#store.getJobTemplate(input.id)
     if (template === null || template.archivedAt !== null) {
       throw new NotFoundError(
@@ -1846,6 +2444,26 @@ export class DigitalEmployeeAuthoringService {
         'employee-job-template-bindings-incomplete',
         'job template does not cover every required work-item tool slot',
         { violations: merged.violations },
+      )
+    }
+    const adapterBindings = mergeExactAdapterBindings({
+      manifest: runtime.descriptor.authoringManifest,
+      defaults: template.draft.defaultAdapterBindings,
+      overrides: [],
+      enabledWorkItemRefs,
+    })
+    if (adapterBindings.violations.length > 0) {
+      throw new ValidationError(
+        'employee-job-template-adapter-bindings-incomplete',
+        'job template does not cover every required lane Adapter slot',
+        { violations: adapterBindings.violations },
+      )
+    }
+    for (const binding of adapterBindings.bindings) {
+      this.#validateAdapterBinding(
+        template.typeRef,
+        binding,
+        input.adapterVisibilitySubject ?? null,
       )
     }
     for (const binding of template.draft.defaultToolBindings) {
@@ -1883,6 +2501,7 @@ export class DigitalEmployeeAuthoringService {
     typeRef: EmployeeTypeRef
     body: unknown
     ownerUserId: string | null
+    adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): EmployeeDefinitionRecord {
     const runtime = this.#runtime(input.typeRef)
     const body = createEmployeeDefinitionBodySchema.parse(input.body)
@@ -1902,6 +2521,7 @@ export class DigitalEmployeeAuthoringService {
       displayName: body.name,
       workScope: body.workScope,
       toolOverrides: body.toolOverrides,
+      adapterOverrides: body.adapterOverrides,
       collaborationOverrides: body.collaborationOverrides,
     })
     const now = this.#now()
@@ -1917,7 +2537,11 @@ export class DigitalEmployeeAuthoringService {
       updatedAt: now,
       archivedAt: null,
     }
-    const compiled = this.#compileEmployeeDefinition(record, input.ownerUserId)
+    const compiled = this.#compileEmployeeDefinition(
+      record,
+      input.ownerUserId,
+      input.adapterVisibilitySubject ?? null,
+    )
     this.#store.saveEmployeeDefinition({
       ...compiled,
       definitionMutation: { kind: 'create', record },
@@ -1933,6 +2557,7 @@ export class DigitalEmployeeAuthoringService {
     id: string
     body: unknown
     actorUserId: string | null
+    adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): EmployeeDefinitionRecord {
     const existing = this.#store.getEmployeeDefinition(input.id)
     if (existing === null || existing.archivedAt !== null) {
@@ -1956,6 +2581,7 @@ export class DigitalEmployeeAuthoringService {
       displayName: body.name,
       workScope: body.workScope,
       toolOverrides: body.toolOverrides,
+      adapterOverrides: body.adapterOverrides,
       collaborationOverrides: body.collaborationOverrides,
     }
     const candidate: EmployeeDefinitionRecord = {
@@ -1964,7 +2590,11 @@ export class DigitalEmployeeAuthoringService {
       configuration,
       updatedAt: this.#now(),
     }
-    const compiled = this.#compileEmployeeDefinition(candidate, input.actorUserId)
+    const compiled = this.#compileEmployeeDefinition(
+      candidate,
+      input.actorUserId,
+      input.adapterVisibilitySubject ?? null,
+    )
     this.#store.saveEmployeeDefinition({
       ...compiled,
       definitionMutation: {
@@ -2024,6 +2654,7 @@ export class DigitalEmployeeAuthoringService {
   #compileEmployeeDefinition(
     employee: EmployeeDefinitionRecord,
     actorUserId: string | null,
+    adapterVisibilitySubject: ToolConnectionVisibilitySubject | null,
   ): {
     readonly revision: EmployeeDefinitionRevisionRecord
     readonly workScope: WorkScopeRevisionRecord
@@ -2062,6 +2693,22 @@ export class DigitalEmployeeAuthoringService {
         { violations: merged.violations },
       )
     }
+    const mergedAdapters = mergeExactAdapterBindings({
+      manifest: runtime.descriptor.authoringManifest,
+      defaults: template.content.defaultAdapterBindings,
+      overrides: employee.configuration.adapterOverrides,
+      enabledWorkItemRefs,
+    })
+    if (mergedAdapters.violations.length > 0) {
+      throw new ValidationError(
+        'employee-adapter-bindings-incomplete',
+        'employee Adapter bindings do not cover the enabled lane contract',
+        { violations: mergedAdapters.violations },
+      )
+    }
+    const adapterDigests = mergedAdapters.bindings.map((binding) =>
+      this.#validateAdapterBinding(employee.typeRef, binding, adapterVisibilitySubject),
+    )
     const toolDigests: string[] = []
     for (const binding of merged.bindings) {
       const revision = this.#validateBinding(employee.typeRef, binding)
@@ -2103,6 +2750,8 @@ export class DigitalEmployeeAuthoringService {
       workScopeRef: scopeRef,
       bindings: merged.bindings,
       toolDigests,
+      adapterBindings: mergedAdapters.bindings,
+      adapterDigests,
       collaborationBindings,
       collaborationTargetDigests,
       orderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
@@ -2117,6 +2766,7 @@ export class DigitalEmployeeAuthoringService {
       workScopeRef: scopeRef,
       workScopeSummary: runtime.summarizeWorkScope(encodedScope, 'zh-CN'),
       exactToolBindings: merged.bindings,
+      exactAdapterBindings: mergedAdapters.bindings,
       exactCollaborationBindings: collaborationBindings,
       exactOrderedDispatchConfigurations: template.content.orderedDispatchConfigurations,
       exactReactionLaneOrder: template.content.reactionLaneOrder,

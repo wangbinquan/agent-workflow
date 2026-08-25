@@ -19,7 +19,10 @@ import {
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
-import { projectFrozenExecutionOptions } from '@/modules/digital-employee/application/runtimeService'
+import {
+  DigitalEmployeeRuntimeService,
+  projectFrozenExecutionOptions,
+} from '@/modules/digital-employee/application/runtimeService'
 import {
   digitalEmployeeLifecycleEventCatalogJson,
   EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
@@ -64,6 +67,91 @@ describe('RFC-310 stateful employee Case runtime', () => {
         primaryContextState: { request: {} },
       }),
     ).toEqual({ 'review-plan': false, 'collect-evidence': true })
+  })
+
+  test('a pending execution does not starve a later terminal execution', async () => {
+    type RuntimeDependencies = ConstructorParameters<typeof DigitalEmployeeRuntimeService>[0]
+    type RunningRound = ReturnType<RuntimeDependencies['store']['listRunningRounds']>[number]
+    type SettleRoundInput = Parameters<RuntimeDependencies['store']['settleRound']>[0]
+    type ExecutionRef = Parameters<RuntimeDependencies['execution']['inspect']>[0]
+
+    const runningRound = (id: string, executionRef: string, updatedAt: number): RunningRound => ({
+      id,
+      caseId: `case-${id}`,
+      caseRevision: 1,
+      inboxId: null,
+      employeeRef: { id: 'employee-1', revision: 1 },
+      ruleId: 'fixture-rule',
+      workItemRef: 'fixture-work',
+      workContractRef: { contractId: 'fixture.contract', version: 1 },
+      toolRef: { id: 'fixture-tool', revision: 1 },
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: '{}',
+      state: 'running',
+      executionRef,
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: updatedAt,
+      updatedAt,
+      settledAt: null,
+    })
+    const inspected: string[] = []
+    const settled: string[] = []
+    const runtime = new DigitalEmployeeRuntimeService({
+      store: {
+        listRunningRounds: () => [
+          runningRound('round-pending', 'execution-pending', 1),
+          runningRound('round-failed', 'execution-failed', 2),
+        ],
+        settleRound(input: SettleRoundInput) {
+          settled.push(input.roundId)
+        },
+      },
+      authoringStore: {
+        getExecutionPolicyRevision() {
+          return {
+            revision: 1,
+            content: {
+              schemaVersion: 1,
+              sameSceneAttempts: 0,
+              freshSceneAttempts: 0,
+              initialBackoffMs: 0,
+              maxBackoffMs: 0,
+              roundBudgetMs: 1_000,
+              caseBudgetMs: 1_000,
+              externalWaitDeadlineMs: 1_000,
+              handoffOnExhausted: true,
+            },
+            contentDigest: 'fixture-policy',
+            publishedAt: 1,
+            publishedBy: null,
+          }
+        },
+      },
+      execution: {
+        async inspect(executionRef: ExecutionRef) {
+          inspected.push(executionRef)
+          if (executionRef === 'execution-pending') {
+            return { kind: 'pending', executionRef }
+          }
+          return {
+            kind: 'failed',
+            executionRef,
+            errorClass: 'semantic',
+            errorCode: 'fixture-failure',
+            errorDetail: 'terminal fixture execution',
+          }
+        },
+      },
+      runtimeCodecs: [],
+      currentTypeRefs: [],
+      now: () => 3,
+    } as unknown as RuntimeDependencies)
+
+    expect(await runtime.inspectOneExecution()).toBe('failed')
+    expect(inspected).toEqual(['execution-pending', 'execution-failed'])
+    expect(settled).toEqual(['round-failed'])
   })
 
   test('cross-employee guard treats revisions as one identity and closes depth and child budgets', () => {
@@ -227,7 +315,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
       },
     })
-    const typeRef = { typeId: 'development', revision: 9 }
+    const typeRef = { typeId: 'development', revision: 10 }
     const analyzeTool = await module.commands.createTool({
       typeRef,
       workItemRef: 'analyze-implement',
@@ -513,17 +601,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
       now: () => now,
       id: nextId,
       connectionCatalog: {
-        async resolve(ref) {
-          const purpose =
-            ref.id === 'pipeline-adapter'
-              ? 'pipeline-gate'
-              : ref.id === 'requirement-adapter'
-                ? 'requirement-source'
-                : 'approval-gateway'
+        resolve(ref) {
+          const purpose = ref.id === 'pipeline-adapter' ? 'pipeline-gate' : 'approval-gateway'
           return {
             ref,
             purpose,
             available: true,
+            visible: true,
+            contentDigest: '0'.repeat(64),
             closureSummary: `exact ${purpose} fixture`,
           }
         },
@@ -547,6 +632,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
               plan.employeeTypeRef.revision >= 9
             ) {
               return JSON.stringify({ outcome: 'completed' })
+            }
+            if (plan.workItemRef === 'collect-pipeline') {
+              return JSON.stringify({
+                outcome: 'completed',
+                observedSourceVersion: 'a'.repeat(40),
+                status: 'failed',
+                checks: [{ checkRef: 'unknown', name: 'unknown', status: 'failed' }],
+              })
             }
             if (plan.workItemRef === 'observe-mr' && observedMergeRequestStatus === 'merged') {
               const mergeRequestContext = contexts.find(
@@ -807,7 +900,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const runtime = module.runtime!
-    const typeRef = { typeId: 'development', revision: 9 }
+    const typeRef = { typeId: 'development', revision: 10 }
     const typePackage = module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const pipelineProblemDefinitions = [
@@ -856,18 +949,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
               description: slot.description['en-US'],
               roleRef: role.roleRef,
               implementation,
-              connectionRef:
-                contract.requiredConnectionPurpose === null
-                  ? null
-                  : {
-                      id:
-                        contract.requiredConnectionPurpose === 'pipeline-gate'
-                          ? 'pipeline-adapter'
-                          : contract.requiredConnectionPurpose === 'requirement-source'
-                            ? 'requirement-adapter'
-                            : 'approval-adapter',
-                      revision: 1,
-                    },
               ...(item.workItemRef === 'classify-pipeline'
                 ? { dispatchRouteDefinitions: pipelineProblemDefinitions }
                 : {}),
@@ -905,7 +986,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           kind: 'agent',
           agentRef: { id: 'agent-repair-pipeline', revision: 1 },
         },
-        connectionRef: null,
         acceptedDispatchRoutes: [{ classifierWorkItemRef: 'classify-pipeline', routeRefs: ['*'] }],
       },
     })
@@ -923,6 +1003,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
       registrationRef: pipelineRepairRef,
       fallback: true,
     }
+    const defaultAdapterBindings = [
+      {
+        laneId: 'care-pipeline',
+        slotRef: 'primary',
+        adapterRef: { id: 'pipeline-adapter', revision: 1 },
+      },
+      {
+        laneId: 'care-approval',
+        slotRef: 'primary',
+        adapterRef: { id: 'approval-adapter', revision: 1 },
+      },
+    ]
     const baseJob = module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
@@ -930,6 +1022,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         name: '协同目标岗位',
         description: '固定节点默认工具',
         defaultToolBindings: bindings,
+        defaultAdapterBindings,
         orderedDispatchConfigurations: [
           {
             classifierWorkItemRef: 'classify-pipeline',
@@ -998,6 +1091,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         name: '开发岗位',
         description: '固定节点默认工具与协同员工',
         defaultToolBindings: bindings,
+        defaultAdapterBindings,
         defaultCollaborationBindings: [
           {
             workItemRef: 'delegate',
@@ -1053,6 +1147,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         name: '三方协同开发岗位',
         description: '三个独立子员工中任意两个完成后继续',
         defaultToolBindings: bindings,
+        defaultAdapterBindings,
         defaultCollaborationBindings: [
           {
             workItemRef: 'delegate',
@@ -1122,6 +1217,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         name: '全员协同开发岗位',
         description: '两个独立子员工必须全部完成后继续',
         defaultToolBindings: bindings,
+        defaultAdapterBindings,
         defaultCollaborationBindings: [
           {
             workItemRef: 'delegate',
@@ -1207,6 +1303,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         jobTemplateRef: jobRef,
         activeWorkItemRefs: expect.arrayContaining(['prepare-materials', 'analyze-implement']),
         executionOptions: { 'review-implementation-plan': false },
+        exactAdapterBindings: expect.arrayContaining(
+          defaultAdapterBindings.map((binding) => expect.objectContaining(binding)),
+        ),
         exactOrderedDispatchConfigurations: [
           expect.objectContaining({ classifierWorkItemRef: 'classify-pipeline' }),
         ],

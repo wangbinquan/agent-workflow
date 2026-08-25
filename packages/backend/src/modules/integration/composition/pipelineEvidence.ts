@@ -6,7 +6,8 @@
 // composeDevelopmentAutomation——两个模块互不 import 对方内部。
 //
 // AW_PIPELINE_MOCK_URL：system-mocks E2E 座席（AW_REQUIREMENT_MOCK_URL 同款
-// 透传）；真实内网 adapter 的连接语义走 connectionRef（后续批次）。
+// 透传）；真实内网 adapter 只读取已发布定义点名的 connectionRef 与
+// daemon-boot secretProjection。
 
 import type { DbClient } from '@/db/client'
 import {
@@ -18,11 +19,13 @@ import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDev
 
 export function composePipelineEvidenceRunner(db: DbClient): PipelineEvidenceExecution {
   const store = createSqliteDevelopmentAdapterStore(db)
+  const secretSource = Object.freeze({ ...process.env })
   const mockUrl = process.env.AW_PIPELINE_MOCK_URL
   return createPipelineEvidenceAdapter({
     resolveBinding: createDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
     ),
+    secretSource,
     ...(mockUrl === undefined ? {} : { extraEnv: { AW_PIPELINE_MOCK_URL: mockUrl } }),
   })
 }

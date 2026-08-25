@@ -26,6 +26,7 @@ import {
   developmentExecutionContractRegistrationsV2,
   developmentWorkContractsV2,
 } from './digitalEmployeeToolContractsV2'
+import { upgradeLegacyDevelopmentProgram } from './legacyDevelopmentProgramUpgrade'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
@@ -91,7 +92,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 9 } as const
+const typeRef = { typeId: 'development', revision: 10 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 const runtimeEmployeeTypeRefSchema = z
   .object({ typeId: z.string().min(1), revision: z.number().int().positive() })
@@ -461,6 +462,55 @@ const currentContract = (contractId: string): WorkContract => {
   return found
 }
 
+const collectPipelinePlatformContract: WorkContract = {
+  ...currentContract('development.collect-pipeline-status'),
+  version: 3,
+  allowedToolKinds: [],
+  allowedEffectKinds: ['integration.adapter.execute'],
+}
+
+const prepareMaterialsStandardContract: WorkContract = {
+  ...currentContract('development.prepare-materials'),
+  version: 3,
+  inputSchemaId: 'development.prepare-materials.input.v3',
+  materialSummary: text(
+    '平台标准工作请求与材料输出目录',
+    'Platform-standard work request and material output directory',
+  ),
+  completionStandard: text(
+    '标准 Issue 正文与上传材料已在指定目录就绪',
+    'Standard Issue content and uploads are ready in the designated directory',
+  ),
+  requiredConnectionPurpose: null,
+}
+
+const collectPipelinePlatformRegistration: ExecutionContractRegistration = (() => {
+  const source = developmentExecutionContractRegistrationsV2.find(
+    (candidate) =>
+      candidate.contractRef.contractId === collectPipelinePlatformContract.contractId &&
+      candidate.contractRef.version === 2,
+  )
+  if (source === undefined) {
+    throw new Error('development v2 execution contract is missing: collect-pipeline-status')
+  }
+
+  const contractRef = {
+    contractId: collectPipelinePlatformContract.contractId,
+    version: collectPipelinePlatformContract.version,
+  }
+  const sourceGuide = JSON.parse(source.guideJson) as Record<string, unknown>
+  return {
+    ...source,
+    contractRef,
+    guideJson: JSON.stringify({
+      ...sourceGuide,
+      contractRef,
+      allowedExecutorKinds: [],
+      transports: { agent: null, workflow: null, program: null },
+    }),
+  }
+})()
+
 const contractField = (
   path: string,
   labelZh: string,
@@ -482,6 +532,112 @@ const contractField = (
   condition,
   example,
 })
+
+const standardWorkRequestSchema = z
+  .object({
+    kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
+    body: z.string().max(1_000_000).nullable(),
+    externalId: z.string().trim().min(1).max(500).nullable(),
+    uploads: z.array(z.unknown()).max(1_000),
+  })
+  .passthrough()
+
+const prepareMaterialsStandardInputSchema = z
+  .object({
+    workRequest: standardWorkRequestSchema,
+    outputDirectory: z.string().min(1).max(2_000),
+  })
+  .strict()
+
+const prepareMaterialsStandardRegistration: ExecutionContractRegistration = (() => {
+  const source = developmentExecutionContractRegistrationsV2.find(
+    (candidate) =>
+      candidate.contractRef.contractId === prepareMaterialsStandardContract.contractId &&
+      candidate.contractRef.version === 2,
+  )
+  if (source === undefined) {
+    throw new Error('development v2 execution contract is missing: prepare-materials')
+  }
+  const sourceGuide = JSON.parse(source.guideJson) as {
+    readonly input: Readonly<Record<string, unknown>>
+    readonly [key: string]: unknown
+  }
+  const contractRef = {
+    contractId: prepareMaterialsStandardContract.contractId,
+    version: prepareMaterialsStandardContract.version,
+  }
+  const fields: ExecutionContractField[] = [
+    contractField(
+      'workRequest',
+      '标准工作请求',
+      'Standard work request',
+      '平台归一化的 Issue 正文、标识与上传材料',
+      'Platform-normalized Issue content, identity, and uploads',
+      'work-input',
+      'object',
+    ),
+    contractField(
+      'outputDirectory',
+      '输出目录',
+      'Output directory',
+      '材料准备工具只在这个平台目录内写入',
+      'The material-preparation tool writes only in this platform directory',
+      'platform',
+      'string',
+    ),
+  ]
+  return {
+    ...source,
+    contractRef,
+    guideJson: JSON.stringify({
+      ...sourceGuide,
+      contractRef,
+      displayName: text('准备输入材料', 'Prepare input materials'),
+      description: text(
+        '把标准 Issue 正文与上传材料准备到指定目录',
+        'Prepare standard Issue content and uploads in the designated directory',
+      ),
+      input: {
+        ...sourceGuide.input,
+        schemaId: prepareMaterialsStandardContract.inputSchemaId,
+        description: prepareMaterialsStandardContract.materialSummary,
+        topLevelFields: ['workRequest', 'outputDirectory'],
+        primaryFieldPaths: ['workRequest', 'outputDirectory'],
+        fields,
+        exampleJson: JSON.stringify(
+          {
+            workRequest: {
+              kind: 'body',
+              body: '# ISSUE-1234\n\nImplement the requested change.',
+              externalId: null,
+              uploads: [],
+            },
+            outputDirectory: '.agent-workflow/inputs/requirements/case/external',
+          },
+          null,
+          2,
+        ),
+      },
+    }),
+    projectInputJson: ({ inputEnvelopeJson }) => {
+      const envelope = z
+        .object({
+          contractInput: z.object({ workRequest: standardWorkRequestSchema }).passthrough(),
+          platformPaths: z
+            .object({ externalMaterialDirectory: z.string().min(1).max(2_000) })
+            .passthrough(),
+        })
+        .passthrough()
+        .parse(JSON.parse(inputEnvelopeJson) as unknown)
+      return JSON.stringify(
+        prepareMaterialsStandardInputSchema.parse({
+          workRequest: envelope.contractInput.workRequest,
+          outputDirectory: envelope.platformPaths.externalMaterialDirectory,
+        }),
+      )
+    },
+  }
+})()
 
 const commonInputFields: ExecutionContractField[] = [
   contractField(
@@ -1565,6 +1721,8 @@ const developmentExecutionContractRegistrationsV1: readonly ExecutionContractReg
 export const developmentExecutionContractRegistrations: readonly ExecutionContractRegistration[] = [
   ...developmentExecutionContractRegistrationsV1,
   ...developmentExecutionContractRegistrationsV2,
+  prepareMaterialsStandardRegistration,
+  collectPipelinePlatformRegistration,
 ]
 
 const legacyBuiltinAgentContractRefs: Readonly<
@@ -1822,14 +1980,19 @@ const runtimePackage = {
       externalId: {
         label: text('外部需求或问题 ID', 'External requirement or issue ID'),
         description: text(
-          '由当前工作项配置的取得工具下载对应多文件',
-          'The current work item acquisition tool downloads the referenced multi-file work item',
+          '作为平台标准工作请求交给材料准备工具，不选择 provider Adapter',
+          'Passed to the material-preparation tool as a platform-standard request without selecting a provider Adapter',
         ),
         placeholder: text('例如 ISSUE-1234', 'For example ISSUE-1234'),
       },
     },
     workStartWorkItemRef: 'prepare-materials',
-    workContracts: [...contracts, ...developmentWorkContractsV2],
+    workContracts: [
+      ...contracts,
+      ...developmentWorkContractsV2,
+      prepareMaterialsStandardContract,
+      collectPipelinePlatformContract,
+    ],
     authoringManifest: {
       schemaVersion: 1,
       lifecycleRegions: [
@@ -1888,6 +2051,18 @@ const runtimePackage = {
               order: 20,
               kind: 'branch',
               optional: true,
+              adapterSlots: [
+                {
+                  slotRef: 'primary',
+                  label: text('企业流水线连接', 'Enterprise pipeline connection'),
+                  description: text(
+                    '平台通过该连接取得当前 MR head 的门禁事实',
+                    'The platform uses this connection to collect gate facts for the current merge-request head',
+                  ),
+                  purpose: 'pipeline-gate',
+                  requiredWhenLaneEnabled: true,
+                },
+              ],
             },
             {
               laneId: 'care-conflict',
@@ -1921,6 +2096,18 @@ const runtimePackage = {
               order: 50,
               kind: 'branch',
               optional: true,
+              adapterSlots: [
+                {
+                  slotRef: 'primary',
+                  label: text('企业审批连接', 'Enterprise approval connection'),
+                  description: text(
+                    '审批草稿、提交与等待统一使用该冻结连接',
+                    'Approval drafting, submission, and observation share this frozen connection',
+                  ),
+                  purpose: 'approval-gateway',
+                  requiredWhenLaneEnabled: true,
+                },
+              ],
             },
             {
               laneId: 'care-readiness',
@@ -1978,20 +2165,20 @@ const runtimePackage = {
           regionId: 'delivery',
           responsibilityLaneId: 'delivery-main',
           order: 10,
-          label: text('准备外部材料', 'Prepare external materials'),
+          label: text('准备输入材料', 'Prepare input materials'),
           description: text(
-            '按外部事项编号把材料文件写入指定目录',
-            'Write external item materials to the designated directory',
+            '把标准 Issue 正文与上传材料准备到指定目录',
+            'Prepare standard Issue content and uploads in the designated directory',
           ),
-          workContractRef: { contractId: 'development.prepare-materials', version: 2 },
-          materialSummary: currentContract('development.prepare-materials').materialSummary,
-          completionStandard: currentContract('development.prepare-materials').completionStandard,
+          workContractRef: { contractId: 'development.prepare-materials', version: 3 },
+          materialSummary: prepareMaterialsStandardContract.materialSummary,
+          completionStandard: prepareMaterialsStandardContract.completionStandard,
           nodeKind: 'business-tool',
           toolRoleGroups: optionalPrimaryRole(
-            '材料取得',
-            'Material acquisition',
-            '取得并规范化工作材料',
-            'Acquire and normalize work materials',
+            '材料准备',
+            'Material preparation',
+            '规范化标准工作请求与上传材料',
+            'Normalize the standard work request and uploaded materials',
           ),
           nextWorkItemRefs: ['analyze-implement'],
         },
@@ -2177,17 +2364,11 @@ const runtimePackage = {
             '取得完整检查状态，并把大日志写入证据目录',
             'Collect complete check status and write large logs to the evidence directory',
           ),
-          workContractRef: { contractId: 'development.collect-pipeline-status', version: 2 },
-          materialSummary: currentContract('development.collect-pipeline-status').materialSummary,
-          completionStandard: currentContract('development.collect-pipeline-status')
-            .completionStandard,
-          nodeKind: 'business-tool',
-          toolRoleGroups: primaryRole(
-            '门禁采集器',
-            'Gate collector',
-            '程序化取得门禁事实',
-            'Programmatically collect gate facts',
-          ),
+          workContractRef: { contractId: 'development.collect-pipeline-status', version: 3 },
+          materialSummary: collectPipelinePlatformContract.materialSummary,
+          completionStandard: collectPipelinePlatformContract.completionStandard,
+          nodeKind: 'system',
+          toolRoleGroups: [],
           nextWorkItemRefs: ['classify-pipeline', 'observe-mr'],
         },
         {
@@ -2769,7 +2950,7 @@ const runtimePackage = {
           'development.pipeline',
         ],
         workItemRef: 'collect-pipeline',
-        slotRef: 'default',
+        slotRef: 'system',
         allowedEffectKinds: [],
       },
       {
@@ -2901,6 +3082,11 @@ export const developmentEmployeeTypePackage: EmployeeTypePackageRegistration = {
       readonly implementation: ToolImplementation
     }
     return JSON.stringify(runtimePackage.validateContractFixture(request))
+  },
+  upgradeProgramSourceJson(requestJson) {
+    const request = JSON.parse(requestJson) as Parameters<typeof upgradeLegacyDevelopmentProgram>[0]
+    const upgraded = upgradeLegacyDevelopmentProgram(request)
+    return upgraded === null ? null : JSON.stringify(upgraded)
   },
 }
 
@@ -5116,7 +5302,19 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           const approval = approvalContextSchema
             .nullable()
             .parse(proposedState('development.approval'))
+          const pipeline = pipelineContextSchema
+            .nullable()
+            .parse(proposedState('development.pipeline'))
           const approvalRequired = mergeRequest.approvalHold === true
+          const terminalPipelineForCurrentRevision =
+            pipeline !== null &&
+            pipeline.status !== 'pending' &&
+            pipeline.mergeRequestRef === mergeRequest.mergeRequestRef &&
+            pipeline.headSha === mergeRequest.headSha &&
+            (!isTargetAwarePipeline(request.employeeTypeRef) ||
+              (mergeRequest.targetSha !== null && pipeline.targetSha === mergeRequest.targetSha))
+          const pipelineReadyForApproval =
+            !capabilityEnabled('collect-pipeline') || terminalPipelineForCurrentRevision
           const currentHeadApproval =
             approval?.mergeRequestRef === mergeRequest.mergeRequestRef &&
             approval.headSha === mergeRequest.headSha
@@ -5136,6 +5334,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           } else {
             nextWorkItemRef =
               approvalRequired &&
+              pipelineReadyForApproval &&
               !currentHeadApproved &&
               !currentHeadApproval &&
               capabilityEnabled('prepare-approval')

@@ -2,13 +2,15 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 📝 **进行中 RFC（Draft / 待批准）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
+> 🚧 **进行中 RFC（实现完成 / 待发布与 hosted CI）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在
-> 最前方显示一张**非 WorkItem、不可调度**的配置卡。岗位模板提供默认 Adapter，具体数字员工可覆盖，员工发布
-> revision 冻结 exact Adapter revision，流水线采集与外部审批运行时消费同一冻结绑定。默认 Dialog 只显示
+> 最前方显示一张**非 WorkItem、不可调度**的紧凑配置卡（流水线、审批）。岗位模板提供默认 Adapter，具体数字员工可覆盖，员工发布
+> revision 冻结 exact Adapter revision，流水线采集与外部审批运行时消费同一冻结绑定。Issue provider 差异由
+> Integration 归一化为标准 `code-host.issue.*` 事件，经 Event Center 直接进入 WorkStart，不配置员工来源 Adapter。默认 Dialog 只显示
 > 继承/覆盖、连接选择与状态；资源创建/管理进入权限受控的二级 Dialog。旧 `/code/executors` 与
 > `/code/config/adapters[/<id>]` UI 退役并只保留重定向，Integration Adapter API/ACL/revision 保留。
-> **尚未取得实现许可**：等待用户批准 proposal C1～C12，并逐项接受能力影响 I1～I5；批准前不改生产代码。
+> 2026-08-25 用户已批准完整 RFC 并要求提交上库，并追加确认 Issue 全部走标准协议；当前候选已按该边界删除
+> `delivery-main/requirement-source` 卡与运行接线。当前只剩 shared-main 精确提交、推送与 exact-SHA hosted CI/visual 终态。
 
 > ✅ **已完成 RFC（Done，2026-08-25；含本笔的 superseding commit `817b54a7b` 上 CI 31/31 全绿）：[RFC-322 维护节奏错峰与停顿归因](design/RFC-322-maintenance-cadence-stagger/proposal.md)**
 > —— 起于生产「每隔一段时间全站冻结约 30 秒、随后自行恢复」。**先证伪了「慢查询」这个前提**：

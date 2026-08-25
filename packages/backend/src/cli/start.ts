@@ -1294,6 +1294,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       }),
     },
   })
+  await employeeOs.maintenance.settleAutomaticUpgrades()
   if (employeeOs.runtime === null) {
     throw new Error('digital employee runtime composition unexpectedly unavailable')
   }

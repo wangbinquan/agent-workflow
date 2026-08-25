@@ -8,11 +8,7 @@ import { Select } from '@/components/Select'
 import { AGENT_CAPABILITY_IDS } from '@/data/policyFactCatalog'
 import { DigitalEmployeePlaybookEditor } from './DigitalEmployeePlaybookEditor'
 
-export type DevelopmentEditorKind =
-  | 'employees'
-  | 'action-templates'
-  | 'verification-profiles'
-  | 'adapters'
+export type DevelopmentEditorKind = 'employees' | 'action-templates' | 'verification-profiles'
 
 interface Props {
   kind: DevelopmentEditorKind
@@ -22,27 +18,6 @@ interface Props {
 }
 
 type VersionedRef = { id: string; revision: number }
-
-const ADAPTER_PURPOSES = [
-  'requirement-source',
-  'pipeline-gate',
-  'pipeline-classifier',
-  'approval-gateway',
-] as const
-
-const PURPOSE_OPERATIONS: Record<(typeof ADAPTER_PURPOSES)[number], readonly string[]> = {
-  'requirement-source': ['acquire', 'questions.writeback', 'answers.collect'],
-  'pipeline-gate': ['collect', 'trigger', 'rerun'],
-  'pipeline-classifier': ['classify'],
-  'approval-gateway': ['submit', 'lookup-by-idempotency-key', 'observe'],
-}
-
-const REQUIRED_OPERATION: Record<(typeof ADAPTER_PURPOSES)[number], string> = {
-  'requirement-source': 'acquire',
-  'pipeline-gate': 'collect',
-  'pipeline-classifier': 'classify',
-  'approval-gateway': 'submit',
-}
 
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -122,8 +97,7 @@ function VersionedRefFields(props: {
 export function DevelopmentConfigEditor(props: Props): ReactElement {
   if (props.kind === 'employees') return <EmployeeEditor {...props} />
   if (props.kind === 'action-templates') return <TemplateEditor {...props} />
-  if (props.kind === 'verification-profiles') return <VerificationEditor {...props} />
-  return <AdapterEditor {...props} />
+  return <VerificationEditor {...props} />
 }
 
 function EmployeeEditor(props: Props): ReactElement {
@@ -707,148 +681,6 @@ function VerificationEditor(props: Props): ReactElement {
         >
           {t('code.config.editor.addStep')}
         </button>
-      </FormSection>
-    </div>
-  )
-}
-
-function AdapterEditor(props: Props): ReactElement {
-  const { t } = useTranslation()
-  const draft = props.draft
-  const update = (patch: Record<string, unknown>) => props.onChange({ ...draft, ...patch })
-  const purpose = ADAPTER_PURPOSES.includes(draft.purpose as (typeof ADAPTER_PURPOSES)[number])
-    ? (draft.purpose as (typeof ADAPTER_PURPOSES)[number])
-    : ADAPTER_PURPOSES[0]
-  const operations = stringArray(draft.operations)
-  const budget = record(draft.outputBudget)
-
-  return (
-    <div className="config-editor" data-testid="config-guided-editor-adapter">
-      <FormSection title={t('code.config.editor.adapterProgramSection')}>
-        <Field label={t('code.config.purpose')} required>
-          <Select
-            value={purpose}
-            onChange={(nextPurpose) => {
-              const typed = nextPurpose as (typeof ADAPTER_PURPOSES)[number]
-              const allowed = new Set(PURPOSE_OPERATIONS[typed])
-              const nextOperations = operations.filter((operation) => allowed.has(operation))
-              if (!nextOperations.includes(REQUIRED_OPERATION[typed])) {
-                nextOperations.unshift(REQUIRED_OPERATION[typed])
-              }
-              update({ purpose: typed, operations: nextOperations })
-            }}
-            options={ADAPTER_PURPOSES.map((value) => ({ value, label: value }))}
-            data-testid="config-adapter-purpose"
-          />
-        </Field>
-        <Field
-          label={t('code.config.operations')}
-          hint={t('code.config.editor.operationsHint')}
-          group
-          required
-        >
-          <div className="config-editor__checks">
-            {PURPOSE_OPERATIONS[purpose].map((operation) => (
-              <Checkbox
-                key={operation}
-                checked={operations.includes(operation)}
-                disabled={operation === REQUIRED_OPERATION[purpose]}
-                label={operation}
-                onChange={(checked) =>
-                  update({
-                    operations: checked
-                      ? [...operations, operation]
-                      : operations.filter((candidate) => candidate !== operation),
-                  })
-                }
-              />
-            ))}
-          </div>
-        </Field>
-        <Field label={t('code.config.executable')} required>
-          <TextInput
-            value={stringValue(draft.executableRef)}
-            onChange={(executableRef) => update({ executableRef })}
-            data-testid="config-adapter-executable"
-          />
-        </Field>
-        <div className="form-grid form-grid--two">
-          <Field label={t('code.config.editor.parameterSchema')}>
-            <TextInput
-              value={stringValue(draft.parameterSchemaRef)}
-              onChange={(value) =>
-                update({ parameterSchemaRef: value.trim() === '' ? null : value })
-              }
-            />
-          </Field>
-          <Field label={t('code.config.connection')}>
-            <TextInput
-              value={stringValue(draft.connectionRef)}
-              onChange={(value) => update({ connectionRef: value.trim() === '' ? null : value })}
-            />
-          </Field>
-        </div>
-        <Field
-          label={t('code.config.secretProjection')}
-          hint={t('code.config.editor.secretKeysHint')}
-        >
-          <ChipsInput
-            value={stringArray(draft.secretProjection)}
-            onChange={(secretProjection) => update({ secretProjection })}
-          />
-        </Field>
-      </FormSection>
-
-      <FormSection title={t('code.config.outputBudget')}>
-        <p className="form-section__hint">{t('code.config.editor.outputBudgetHint')}</p>
-        <div className="form-grid form-grid--cols-3">
-          <Field label={t('code.config.editor.maxFiles')} required>
-            <NumberInput
-              value={numberValue(budget.maxFiles, 200)}
-              min={1}
-              max={10_000}
-              step={1}
-              onChange={(maxFiles) =>
-                update({ outputBudget: { ...budget, maxFiles: maxFiles ?? 1 } })
-              }
-            />
-          </Field>
-          <Field label={t('code.config.editor.maxFileBytes')} required>
-            <NumberInput
-              value={numberValue(budget.maxFileBytes, 32 * 1024 * 1024)}
-              min={1}
-              max={64 * 1024 * 1024 * 1024}
-              step={1024}
-              unit="bytes"
-              onChange={(maxFileBytes) =>
-                update({ outputBudget: { ...budget, maxFileBytes: maxFileBytes ?? 1 } })
-              }
-            />
-          </Field>
-          <Field label={t('code.config.editor.maxTotalBytes')} required>
-            <NumberInput
-              value={numberValue(budget.maxTotalBytes, 256 * 1024 * 1024)}
-              min={1}
-              max={64 * 1024 * 1024 * 1024}
-              step={1024}
-              unit="bytes"
-              onChange={(maxTotalBytes) =>
-                update({ outputBudget: { ...budget, maxTotalBytes: maxTotalBytes ?? 1 } })
-              }
-            />
-          </Field>
-        </div>
-        <Field label={t('code.config.timeout')} required>
-          <NumberInput
-            value={numberValue(draft.timeoutMs, 120_000)}
-            min={1_000}
-            max={1_800_000}
-            step={1000}
-            unit="ms"
-            onChange={(timeoutMs) => update({ timeoutMs: timeoutMs ?? 1000 })}
-            data-testid="config-adapter-timeout"
-          />
-        </Field>
       </FormSection>
     </div>
   )

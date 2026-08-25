@@ -499,6 +499,7 @@
 }
 
 .employee-responsibility-flow-connector--axis {
+  top: calc(50% + var(--employee-adapter-axis-offset, 0px));
   right: 0;
 }
 
@@ -529,7 +530,7 @@
 .employee-toolbox-lane__cards {
   display: grid;
   grid-template-columns: repeat(var(--employee-lane-columns, 1), var(--employee-tool-card-width));
-  grid-auto-rows: minmax(var(--employee-tool-card-height), auto);
+  grid-auto-rows: minmax(min-content, auto);
   align-items: center;
   justify-content: start;
   gap: var(--employee-flow-gap);
@@ -538,6 +539,10 @@
      six spare pixels make the seventh Responsibility 1 card wrap while leaving almost
      a full card of empty space. Fan-out lanes add their own shadow clearance. */
   padding: 1px 0;
+}
+
+.employee-toolbox-lane__cards:has(> .employee-toolbox-card--adapter) {
+  row-gap: 8px;
 }
 
 /* Responsibility 1 combines three source cards with two implementation paths.
@@ -637,6 +642,57 @@
 .employee-toolbox-card--ingress .employee-toolbox-card__kind {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.employee-toolbox-card--adapter .employee-toolbox-card__kind {
+  color: var(--info);
+  background: color-mix(in srgb, var(--info) 8%, transparent);
+}
+
+.employee-toolbox-card--adapter {
+  --employee-card-border: color-mix(in srgb, var(--info) 44%, var(--border));
+  --employee-card-background: color-mix(in srgb, var(--info) 5%, var(--panel));
+
+  /* Adapter is lane configuration, not an executable predecessor. Keep it as the
+     first card on its own leading row so WorkItem arrows stay on one horizontal axis. */
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
+  align-content: center;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  height: 32px;
+  min-height: 32px;
+  padding: 3px 5px;
+}
+
+.employee-toolbox-card.employee-toolbox-card--adapter .employee-toolbox-card__kind {
+  grid-row: 1;
+  grid-column: 1;
+  padding-inline: 4px;
+}
+
+.employee-toolbox-card.employee-toolbox-card--adapter strong {
+  display: block;
+  grid-row: 1;
+  grid-column: 2;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-line-clamp: unset;
+}
+
+.employee-toolbox-card.employee-toolbox-card--adapter strong:empty {
+  display: none;
+}
+
+.employee-toolbox-card.employee-toolbox-card--adapter small {
+  grid-row: 1;
+  grid-column: 3;
+  font-size: 9px;
 }
 
 .employee-toolbox-card--ingress {
@@ -1110,6 +1166,69 @@
   border-radius: 18px;
   background: var(--panel);
   box-shadow: var(--shadow-sm);
+}
+
+.lane-adapter-dialog__status,
+.lane-adapter-dialog__secondary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lane-adapter-dialog__status > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lane-adapter-dialog__status small {
+  color: var(--muted);
+}
+
+.lane-adapter-dialog__secondary-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.lane-adapter-dialog__advanced {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.lane-adapter-dialog__advanced > summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.lane-adapter-dialog__advanced > .employee-dialog-form {
+  margin-top: 12px;
+}
+
+.employee-definition-adapter-map {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.employee-definition-adapter-map > div > p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.lane-adapter-dialog__budget-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .lane-adapter-dialog__budget-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .employee-node-panel > header > div {
@@ -28504,8 +28623,7 @@ button.status-chip {
   }
 }
 
-.digital-employee-build-grid,
-.executor-library-grid {
+.digital-employee-build-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
@@ -28513,8 +28631,6 @@ button.status-chip {
 }
 
 .digital-employee-build-card,
-.executor-library-group,
-.executor-library-builtins,
 .digital-employee-runtime-handoff {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -28542,8 +28658,7 @@ button.status-chip {
   font-size: 1.4rem;
 }
 
-.digital-employee-runtime-handoff,
-.executor-library-builtins {
+.digital-employee-runtime-handoff {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -28552,58 +28667,11 @@ button.status-chip {
   padding: var(--space-5);
 }
 
-.digital-employee-runtime-handoff p,
-.executor-library-group p,
-.executor-library-builtins p {
+.digital-employee-runtime-handoff p {
   margin: var(--space-1) 0 0;
   color: var(--muted);
 }
 
-.executor-library-group {
-  min-width: 0;
-  padding: var(--space-4);
-}
-
-.executor-library-group__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.executor-library-list {
-  display: grid;
-  gap: var(--space-2);
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.executor-library-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
-  color: inherit;
-  text-decoration: none;
-}
-
-.executor-library-row > span:first-child {
-  display: grid;
-  min-width: 0;
-}
-
-.executor-library-row small {
-  overflow: hidden;
-  color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.executor-library-builtins__items,
 .employee-step-executor-picker__actions {
   display: flex;
   flex-wrap: wrap;
@@ -28633,13 +28701,11 @@ button.status-chip {
 }
 
 @media (max-width: 840px) {
-  .digital-employee-build-grid,
-  .executor-library-grid {
+  .digital-employee-build-grid {
     grid-template-columns: 1fr;
   }
 
-  .digital-employee-runtime-handoff,
-  .executor-library-builtins {
+  .digital-employee-runtime-handoff {
     align-items: flex-start;
     flex-direction: column;
   }

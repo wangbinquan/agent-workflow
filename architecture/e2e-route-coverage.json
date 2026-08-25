@@ -6,9 +6,6 @@
   "uncovered": [
     "/code",
     "/code/assignments",
-    "/code/config/$kind",
-    "/code/config/$kind/$id",
-    "/code/executors",
     "/code/missions",
     "/code/missions/$missionId",
     "/code/missions/new",
@@ -24,9 +21,6 @@
   "mentionedButNeverLoaded": [
     "/code",
     "/code/assignments",
-    "/code/config/$kind",
-    "/code/config/$kind/$id",
-    "/code/executors",
     "/code/missions",
     "/code/missions/$missionId",
     "/code/missions/new",

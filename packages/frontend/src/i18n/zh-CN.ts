@@ -376,7 +376,6 @@ export interface Resources {
     events: string
     code: string
     digitalEmployees: string
-    executors: string
     employeeAssignments: string
     settings: string
     brand: string
@@ -1395,7 +1394,6 @@ export interface Resources {
     journey: Record<string, unknown>
     employeePlaybook: Record<string, unknown>
     build: Record<string, unknown>
-    executors: Record<string, unknown>
     control: {
       eyebrow: string
       headline: string
@@ -1456,7 +1454,6 @@ export interface Resources {
         employees: string
         actionTemplates: string
         verificationProfiles: string
-        adapters: string
       }
       backToList: string
       colName: string
@@ -1472,9 +1469,6 @@ export interface Resources {
       createTitle: string
       name: string
       capability: string
-      purpose: string
-      executableRef: string
-      executableRefHint: string
       edit: string
       editTitle: string
       save: string
@@ -1514,15 +1508,6 @@ export interface Resources {
       colProgram: string
       colTimeout: string
       colExitCodes: string
-      adapterSummary: string
-      operations: string
-      executable: string
-      connection: string
-      secretProjection: string
-      outputBudget: string
-      budgetText: string
-      timeout: string
-      scriptsAuthorHint: string
       editor: {
         identitySection: string
         versionedRefHint: string
@@ -1572,14 +1557,6 @@ export interface Resources {
         exitCodeInvalid: string
         evidenceSelectorsPreserved: string
         addStep: string
-        adapterProgramSection: string
-        operationsHint: string
-        parameterSchema: string
-        secretKeysHint: string
-        outputBudgetHint: string
-        maxFiles: string
-        maxFileBytes: string
-        maxTotalBytes: string
         advancedReadOnly: string
         advancedJson: string
         advancedJsonHint: string
@@ -6980,7 +6957,6 @@ export const zhCN: Resources = {
     events: '事件中心',
     code: '代码',
     digitalEmployees: '数字员工',
-    executors: '执行者库',
     employeeAssignments: '适用仓库',
     settings: '设置',
     brand: 'Agent Workflow',
@@ -7813,39 +7789,6 @@ export const zhCN: Resources = {
       runtimeBody: '发起、阻塞处理、MR 看护与合入生命周期都在任务列表的“数字员工”分类中完成。',
       openTasks: '查看数字员工任务',
     },
-    executors: {
-      title: '执行者库',
-      subtitle: '这里是每个员工步骤都能直接选择的完整执行者清单。',
-      back: '← 数字员工',
-      addAi: '新增 AI 执行者',
-      addProgram: '新增程序',
-      addEmployee: '新增数字员工',
-      addSystem: '新增外部系统',
-      ai: {
-        title: 'AI 执行者',
-        body: '在明确输入输出封套内执行的 Agent 实现。',
-        empty: '还没有已发布 AI 执行者',
-      },
-      program: {
-        title: '程序',
-        body: '由平台任务引擎运行的确定性脚本。',
-        empty: '还没有已发布程序执行者',
-      },
-      employee: {
-        title: '可调用数字员工',
-        body: '可接手 child 任务的已发布员工，也可在另一仓库工作。',
-        empty: '还没有可调用数字员工',
-      },
-      system: {
-        title: '外部系统',
-        body: '负责需求取件、流水线门禁、审批提交与观察的程序。',
-        empty: '还没有已发布外部系统',
-      },
-      platform: {
-        title: '平台内建动作',
-        body: '平台固定执行，无需单独创建资源，也不能由 AI 改写。',
-      },
-    },
     journey: {
       progress: '完整操作进度',
       current: '当前位置 · 第 {{current}} / {{total}} 步',
@@ -7995,7 +7938,6 @@ export const zhCN: Resources = {
       executorApprovalObserve: '等待审批（程序）',
       chooseExecutor: '选择已发布执行者',
       createExecutor: '新增执行者',
-      openExecutorLibrary: '查看执行者库',
       createPublishAndSelect: '创建、发布并选中',
       inlineExecutorHint:
         '执行者会在当前页面创建并发布，然后直接选给这一步，不会丢失数字员工草稿。',
@@ -8203,14 +8145,13 @@ export const zhCN: Resources = {
     tab: { matrix: '仓库', activity: '活动', metrics: '成效', templates: '模板' },
     config: {
       title: '员工配置',
-      subtitle: '数字员工、动作模板、验证 profile 与 adapter',
+      subtitle: '数字员工、动作模板与验证 profile',
       technicalSubtitle: '高级技术资源；仅供平台管理员维护执行实现与系统连接。',
       kindSwitch: '配置类型',
       kind: {
         employees: '数字员工',
         actionTemplates: '动作模板',
         verificationProfiles: '验证 profile',
-        adapters: 'Adapter',
       },
       backToList: '← 员工配置',
       colName: '名称',
@@ -8226,10 +8167,6 @@ export const zhCN: Resources = {
       createTitle: '创建{{kind}}',
       name: '名称',
       capability: '能力',
-      purpose: '用途',
-      executableRef: '可执行引用',
-      executableRefHint:
-        'daemon 为该适配器执行的程序。创建时必填——适配器写入即严格校验，不能以空草稿保存。本用途的操作：{{operations}}。',
       edit: '编辑草稿',
       editTitle: '编辑草稿',
       save: '保存',
@@ -8269,16 +8206,6 @@ export const zhCN: Resources = {
       colProgram: '程序',
       colTimeout: '超时',
       colExitCodes: '成功退出码',
-      adapterSummary: 'Adapter 合同',
-      operations: '操作',
-      executable: '可执行程序',
-      connection: '连接',
-      secretProjection: '密钥（仅显示名称）',
-      outputBudget: '输出预算',
-      budgetText: '{{files}} 个文件，共 {{bytes}} 字节',
-      timeout: '超时',
-      scriptsAuthorHint:
-        '编辑 adapter 草稿需要 scripts:author 权限（可执行程序与密钥投影是 daemon 级字段）。',
       editor: {
         identitySection: '员工定位与默认策略',
         versionedRefHint: '引用已发布的精确修订，任务运行后不会随新草稿漂移。',
@@ -8329,14 +8256,6 @@ export const zhCN: Resources = {
         exitCodeInvalid: '请输入 0–255 之间的整数退出码。',
         evidenceSelectorsPreserved: '已保留 {{count}} 个高级证据选择器。',
         addStep: '添加验证步骤',
-        adapterProgramSection: '外部系统程序与操作',
-        operationsHint: '必需操作已锁定；只能启用该用途允许的附加操作。',
-        parameterSchema: '参数 schema 引用（可选）',
-        secretKeysHint: '只配置注入的密钥名称，密钥值不进入该资源。',
-        outputBudgetHint: '程序输出会先落入任务临时目录，超出这里的文件数或字节预算即拒绝收编。',
-        maxFiles: '最大文件数',
-        maxFileBytes: '单文件最大字节',
-        maxTotalBytes: '总字节上限',
         advancedReadOnly: '高级：查看完整草稿',
         advancedJson: '高级：编辑完整 JSON',
         advancedJsonHint: '仅在配置事实谓词、证据选择器等高级字段时使用。修改后必须先应用回表单。',
@@ -8512,8 +8431,8 @@ export const zhCN: Resources = {
         mergeRequestRefHint: '填写代码托管系统中的 MR 编号或平台可识别引用。',
         directLabel: '直接描述或上传文件',
         directHint: '正文、文件可任选，也可以同时提供；上传文件会按指定路径随提交进入仓库。',
-        externalLabel: '从内建系统读取 ID',
-        externalHint: '数字员工通过已配置的需求源程序下载该 ID 对应的多文件需求包。',
+        externalLabel: '输入标准 Issue ID',
+        externalHint: '平台把该 ID 作为标准工作请求传入，不选择 provider Adapter。',
         bodyHint: '可粘贴完整需求、问题现象、验收标准；若已上传文件，正文可以留空。',
         filesHint: '每个文件必须明确仓库路径、碰撞方式以及 Agent 是否可编辑。',
         filesDropTitle: '拖入需求附件或待提交文件',

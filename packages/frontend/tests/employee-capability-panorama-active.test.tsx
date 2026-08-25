@@ -138,6 +138,39 @@ function responsibilityNumberingFixture(): EmployeeTypePackage {
   }
 }
 
+function adapterLaneFixture(): EmployeeTypePackage {
+  const type = fixtureType()
+  const region = type.authoringManifest.lifecycleRegions[0]!
+  const mainLane = region.responsibilityLanes[0]!
+  return {
+    ...type,
+    authoringManifest: {
+      ...type.authoringManifest,
+      lifecycleRegions: [
+        {
+          ...region,
+          responsibilityLanes: [
+            {
+              ...mainLane,
+              adapterSlots: [
+                {
+                  slotRef: 'primary',
+                  purpose: 'pipeline-gate',
+                  label: text('企业流水线连接'),
+                  description: text('采集企业流水线证据'),
+                  requiredWhenLaneEnabled: true,
+                },
+              ],
+            },
+            ...region.responsibilityLanes.slice(1),
+          ],
+        },
+        ...type.authoringManifest.lifecycleRegions.slice(1),
+      ],
+    },
+  }
+}
+
 const neutral = (active?: boolean): EmployeeCapabilityToolState => ({
   active,
   state: 'neutral',
@@ -145,6 +178,55 @@ const neutral = (active?: boolean): EmployeeCapabilityToolState => ({
 })
 
 describe('public employee capability panorama active projection', () => {
+  test('projects the lane Adapter as the first non-WorkItem configuration card', () => {
+    const onSelectWorkItem = vi.fn()
+    const onSelectAdapter = vi.fn()
+    const { container, rerender } = render(
+      <EmployeeCapabilityPanorama
+        type={adapterLaneFixture()}
+        selectedWorkItemRef={null}
+        language="zh-CN"
+        onSelect={onSelectWorkItem}
+        onSelectAdapterSlot={onSelectAdapter}
+        workItemsReadOnly
+      />,
+    )
+
+    const lane = container.querySelector('[data-capability-lane-id="main"]')
+    const cards = lane?.querySelector('.employee-toolbox-lane__cards')
+    const adapter = cards?.querySelector('[data-lane-adapter-slot="main/primary"]')
+    expect(adapter).toBe(cards?.firstElementChild)
+    expect(adapter?.getAttribute('data-capability-adapter-purpose')).toBe('pipeline-gate')
+    expect(adapter?.hasAttribute('data-work-item-ref')).toBe(false)
+    expect(adapter?.textContent).toContain('连接')
+    expect(adapter?.getAttribute('aria-label')).toContain('管理企业连接资源')
+    expect(cards?.querySelectorAll('[data-work-item-ref]')).toHaveLength(2)
+    expect((adapter as HTMLButtonElement).disabled).toBe(false)
+    for (const workItem of cards?.querySelectorAll<HTMLButtonElement>('[data-work-item-ref]') ??
+      []) {
+      expect(workItem.disabled).toBe(true)
+    }
+
+    ;(adapter as HTMLButtonElement).click()
+    expect(onSelectAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({ laneId: 'main', slotRef: 'primary' }),
+    )
+    expect(onSelectWorkItem).not.toHaveBeenCalled()
+
+    rerender(
+      <EmployeeCapabilityPanorama
+        type={adapterLaneFixture()}
+        selectedWorkItemRef={null}
+        language="zh-CN"
+        onSelect={onSelectWorkItem}
+      />,
+    )
+    expect(
+      (container.querySelector('[data-lane-adapter-slot="main/primary"]') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
+  })
+
   test('presents numbered lifecycle regions as responsibilities in both languages', () => {
     const renderPanorama = (language: string) => (
       <EmployeeCapabilityPanorama

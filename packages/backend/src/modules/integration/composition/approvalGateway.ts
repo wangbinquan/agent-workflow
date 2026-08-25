@@ -9,11 +9,13 @@ export function composeApprovalGatewayRunner(
   options: { readonly approvalMockUrl?: string } = {},
 ) {
   const store = createSqliteDevelopmentAdapterStore(db)
+  const secretSource = Object.freeze({ ...process.env })
   const mockUrl = options.approvalMockUrl ?? process.env.AW_APPROVAL_MOCK_URL
   const execution = createApprovalExecutionAdapter({
     resolveBinding: createDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
     ),
+    secretSource,
     ...(mockUrl === undefined ? {} : { extraEnv: { AW_APPROVAL_MOCK_URL: mockUrl } }),
   })
   const binding = (ref: { id: string; revision: number }): string => `${ref.id}@${ref.revision}`

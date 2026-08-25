@@ -13,6 +13,22 @@ export interface EmployeeTypeRef {
   revision: number
 }
 
+export type LaneAdapterPurpose = 'pipeline-gate' | 'pipeline-classifier' | 'approval-gateway'
+
+export interface LaneAdapterSlot {
+  slotRef: string
+  label: LocalizedText
+  description: LocalizedText
+  purpose: LaneAdapterPurpose
+  requiredWhenLaneEnabled: boolean
+}
+
+export interface LaneAdapterBinding {
+  laneId: string
+  slotRef: string
+  adapterRef: ExactRef
+}
+
 export interface ToolSlot {
   slotRef: string
   label: LocalizedText
@@ -172,6 +188,8 @@ export interface EmployeeTypePackage {
         order: number
         kind: 'spine' | 'branch'
         optional: boolean
+        /** Defaults to [] when reading type packages published before RFC-323. */
+        adapterSlots?: LaneAdapterSlot[]
       }>
     }>
     workIngresses: WorkIngress[]
@@ -273,7 +291,6 @@ export interface ToolAuthoringView extends ToolRegistration {
     description: string
     roleRef: string
     implementation: ToolAuthoringImplementation
-    connectionRef?: ExactRef | null
     dispatchRouteDefinitions?: Array<{
       routeRef: string
       displayName: string
@@ -298,6 +315,7 @@ export interface JobTemplate {
       slotRef: string
       registrationRef: ExactRef
     }>
+    defaultAdapterBindings: LaneAdapterBinding[]
     defaultCollaborationBindings: Array<{
       workItemRef: string
       memberRef: string
@@ -335,6 +353,7 @@ export interface DigitalEmployeeDefinition {
       slotRef: string
       registrationRef: ExactRef
     }>
+    adapterOverrides: LaneAdapterBinding[]
     collaborationOverrides: Array<{
       workItemRef: string
       memberRef: string
@@ -345,6 +364,8 @@ export interface DigitalEmployeeDefinition {
     }>
   }
   revision: number
+  inheritedAdapterBindings: LaneAdapterBinding[]
+  adapterBindingSources: Array<LaneAdapterBinding & { source: 'job-default' | 'employee-override' }>
   workScope: unknown
   definition: {
     displayName: string
@@ -354,6 +375,7 @@ export interface DigitalEmployeeDefinition {
       slotRef: string
       registrationRef: ExactRef
     }>
+    exactAdapterBindings: LaneAdapterBinding[]
     exactCollaborationBindings: Array<{
       workItemRef: string
       memberRef: string

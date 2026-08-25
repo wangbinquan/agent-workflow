@@ -739,6 +739,7 @@ export class DigitalEmployeeRuntimeService {
     readonly ownerUserId?: string
     readonly launchOrigin?: TaskLaunchOrigin
     readonly states?: readonly EmployeeCaseRecord['state'][]
+    readonly terminalCatalogStatuses?: readonly ('done' | 'canceled')[]
     readonly view?: 'all' | 'active' | 'attention' | 'finished'
     readonly q?: string
     readonly cursor?: string
@@ -761,6 +762,9 @@ export class DigitalEmployeeRuntimeService {
       ...(input.ownerUserId === undefined ? {} : { ownerUserId: input.ownerUserId }),
       ...(input.launchOrigin === undefined ? {} : { launchOrigin: input.launchOrigin }),
       ...(input.states === undefined ? {} : { states: input.states }),
+      ...(input.terminalCatalogStatuses === undefined
+        ? {}
+        : { terminalCatalogStatuses: input.terminalCatalogStatuses }),
       view: input.view ?? 'all',
       ...(input.q === undefined || input.q.trim() === ''
         ? {}
@@ -868,6 +872,7 @@ export class DigitalEmployeeRuntimeService {
         definitions: descriptor.workIntakeAuthoring.executionOptions,
         primaryContextState,
       }),
+      exactAdapterBindings: employee.content.exactAdapterBindings,
       exactOrderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
     }
     const attention = this.#store.listAttention(caseId)
@@ -2408,6 +2413,33 @@ export class DigitalEmployeeRuntimeService {
                     implementation: revision.content.implementation,
                   }
                 })
+        const adapterSlot =
+          item.responsibilityLaneId === null || contract.requiredConnectionPurpose === null
+            ? null
+            : (descriptor.authoringManifest.lifecycleRegions
+                .flatMap((region) => region.responsibilityLanes)
+                .find((lane) => lane.laneId === item.responsibilityLaneId)
+                ?.adapterSlots.find(
+                  (slot) => slot.purpose === contract.requiredConnectionPurpose,
+                ) ?? null)
+        const exactAdapterRef =
+          adapterSlot === null
+            ? (tool?.content.connectionRef ?? null)
+            : (employee.content.exactAdapterBindings.find(
+                (candidate) =>
+                  candidate.laneId === item.responsibilityLaneId &&
+                  candidate.slotRef === adapterSlot.slotRef,
+              )?.adapterRef ?? null)
+        if (
+          adapterSlot !== null &&
+          adapterSlot.requiredWhenLaneEnabled &&
+          exactAdapterRef === null
+        ) {
+          throw new ValidationError(
+            'employee-adapter-binding-unavailable',
+            `no exact Adapter for ${item.responsibilityLaneId}/${adapterSlot.slotRef}`,
+          )
+        }
         const collaborationBindings =
           item.nodeKind === 'collaboration'
             ? employee.content.exactCollaborationBindings.filter(
@@ -2436,6 +2468,7 @@ export class DigitalEmployeeRuntimeService {
           toolSlotRef: frozenSlotRef,
           workContractRef: item.workContractRef,
           toolRegistrationRef: tool?.ref ?? null,
+          adapterRef: exactAdapterRef,
           exactWorkItemTools,
           orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
           executionPolicyRevision: caseRecord.executionPolicyRevision,
@@ -2451,7 +2484,7 @@ export class DigitalEmployeeRuntimeService {
             executionNonce,
             workItemRef: item.workItemRef,
             toolSlotRef: frozenSlotRef,
-            connectionRef: tool?.content.connectionRef ?? null,
+            connectionRef: exactAdapterRef,
             inputSchemaId: contract.inputSchemaId,
             outputSchemaId: contract.outputSchemaId,
             eventJson: JSON.stringify(
@@ -2507,7 +2540,7 @@ export class DigitalEmployeeRuntimeService {
           toolSlotRef: frozenSlotRef,
           workContractRef: item.workContractRef,
           toolRegistrationRef: tool?.ref ?? null,
-          connectionRef: tool?.content.connectionRef ?? null,
+          connectionRef: exactAdapterRef,
           implementationRef,
           implementationKind,
           implementationJson:
@@ -2674,31 +2707,39 @@ export class DigitalEmployeeRuntimeService {
   }
 
   async inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'> {
-    const round = this.#store.listRunningRounds()[0]
-    if (round === undefined || round.executionRef === null) return 'idle'
-    const snapshot = await this.#execution.inspect(round.executionRef)
-    if (snapshot.kind === 'pending') return 'pending'
-    if (snapshot.kind === 'failed') {
-      return this.#retryOrFailExecution(
-        round,
-        snapshot.errorClass,
-        snapshot.errorCode,
-        snapshot.errorDetail,
-      )
+    const rounds = this.#store.listRunningRounds()
+    if (rounds.length === 0) return 'idle'
+    let hasPendingExecution = false
+    for (const round of rounds) {
+      if (round.executionRef === null) continue
+      const snapshot = await this.#execution.inspect(round.executionRef)
+      if (snapshot.kind === 'pending') {
+        hasPendingExecution = true
+        continue
+      }
+      if (snapshot.kind === 'failed') {
+        return this.#retryOrFailExecution(
+          round,
+          snapshot.errorClass,
+          snapshot.errorCode,
+          snapshot.errorDetail,
+        )
+      }
+      try {
+        const validated = this.#validateRoundOutput(round, snapshot.outputJson)
+        this.#settleCompletedRound(round, validated)
+        return 'completed'
+      } catch (error) {
+        return this.#retryOrFailExecution(
+          round,
+          // agent 交回来的信封不合契约：与工作区边界无关，按同场景重试（行为同改造前）。
+          'semantic',
+          'execution-envelope-invalid',
+          error instanceof Error ? error.message : String(error),
+        )
+      }
     }
-    try {
-      const validated = this.#validateRoundOutput(round, snapshot.outputJson)
-      this.#settleCompletedRound(round, validated)
-      return 'completed'
-    } catch (error) {
-      return this.#retryOrFailExecution(
-        round,
-        // agent 交回来的信封不合契约：与工作区边界无关，按同场景重试（行为同改造前）。
-        'semantic',
-        'execution-envelope-invalid',
-        error instanceof Error ? error.message : String(error),
-      )
-    }
+    return hasPendingExecution ? 'pending' : 'idle'
   }
 
   terminate(caseId: string, terminalKind: string): EmployeeCaseRecord {

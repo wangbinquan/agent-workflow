@@ -16,6 +16,7 @@ import type {
 } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
+import type { OperationFailureReceipt } from '@/modules/development-automation/domain/operationFailure'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { developmentMissions, developmentMrClaims } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
@@ -39,6 +40,7 @@ export function buildDevelopmentDeliveryDeps(
 ): {
   readonly repoRemote: RepoRemotePort
   readonly mrEffects: DevelopmentMrEffects
+  readonly pipelineEvidence: PipelineEvidencePort
   readonly mrFacts: {
     collect(
       repositoryId: string,
@@ -140,7 +142,12 @@ export function buildDevelopmentDeliveryDeps(
       }
     },
   }
-  return { repoRemote, mrEffects, mrFacts }
+  return {
+    repoRemote,
+    mrEffects,
+    mrFacts,
+    pipelineEvidence: buildDevelopmentPipelineDeps(db).pipelineEvidence,
+  }
 }
 
 /**
@@ -270,16 +277,16 @@ export function buildDevelopmentMrFactsDeps(
 /**
  * PR-6 T63/T68 —— integration pipeline 执行面 → DA 结构同形端口的装配胶水：
  * sink 生命周期归平台（collect 的 cleanup 交给消费侧、trigger/rerun 即用即弃）、
- * AdapterFailureReceipt 压平为 code/detail。
+ * AdapterFailureReceipt 以 consumer-owned closed failure shape 原样跨过装配缝；
+ * retry policy 不解析 provider stderr。
  */
 export function buildDevelopmentPipelineDeps(db: DbClient): {
   readonly pipelineEvidence: PipelineEvidencePort
 } {
   const runner = composePipelineEvidenceRunner(db)
-  const flat = (failure: { code: string; remediation: string }) => ({
+  const failed = (failure: OperationFailureReceipt) => ({
     ok: false as const,
-    code: failure.code,
-    detail: failure.remediation,
+    failure,
   })
   return {
     pipelineEvidence: {
@@ -288,12 +295,13 @@ export function buildDevelopmentPipelineDeps(db: DbClient): {
         const out = await runner.collect({ ...input, sinkPath: parent })
         if (!out.ok) {
           rmSync(parent, { recursive: true, force: true })
-          return flat(out.failure)
+          return failed(out.failure)
         }
         return {
           ok: true,
           envelope: out.envelope,
           stagedRoot: parent,
+          outputBudget: out.outputBudget,
           cleanup: () => rmSync(parent, { recursive: true, force: true }),
         }
       },
@@ -301,7 +309,7 @@ export function buildDevelopmentPipelineDeps(db: DbClient): {
         const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-trigger-'))
         try {
           const out = await runner.trigger({ ...input, sinkPath: parent })
-          if (!out.ok) return flat(out.failure)
+          if (!out.ok) return failed(out.failure)
           return {
             ok: true,
             runRef: out.envelope.runRef,
@@ -316,7 +324,7 @@ export function buildDevelopmentPipelineDeps(db: DbClient): {
         const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-rerun-'))
         try {
           const out = await runner.rerun({ ...input, sinkPath: parent })
-          if (!out.ok) return flat(out.failure)
+          if (!out.ok) return failed(out.failure)
           return {
             ok: true,
             runRef: out.envelope.runRef,

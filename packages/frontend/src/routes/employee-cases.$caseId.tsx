@@ -45,6 +45,7 @@ export interface EmployeeCaseProjection {
     jobTemplateRef: { id: string; revision: number }
     activeWorkItemRefs: string[]
     executionOptions: Record<string, boolean>
+    exactAdapterBindings: DigitalEmployeeDefinition['definition']['exactAdapterBindings']
     exactOrderedDispatchConfigurations: DigitalEmployeeDefinition['definition']['exactOrderedDispatchConfigurations']
   }
   contexts: Array<{
@@ -428,6 +429,24 @@ function EmployeeCaseDetailPage(): ReactElement {
   const latestRoundByWorkItem = new Map<string, ReactionRound>()
   for (const round of chronologicalRounds) latestRoundByWorkItem.set(round.workItemRef, round)
   const activeWorkItemRefs = new Set(data.capabilityActivation.activeWorkItemRefs)
+  const runtimeAdapterSlotState = (target: { laneId: string; slotRef: string }) => {
+    const binding = data.capabilityActivation.exactAdapterBindings.find(
+      (candidate) => candidate.laneId === target.laneId && candidate.slotRef === target.slotRef,
+    )
+    if (binding === undefined) {
+      return {
+        state: 'missing' as const,
+        detail: zh ? '此任务未冻结企业连接' : 'No enterprise connection was frozen for this task',
+        compactDetail: zh ? '未冻结' : 'Not frozen',
+      }
+    }
+    const exactRef = `${binding.adapterRef.id}@${binding.adapterRef.revision}`
+    return {
+      state: 'configured' as const,
+      detail: zh ? `任务冻结版本：${exactRef}` : `Task-frozen revision: ${exactRef}`,
+      compactDetail: `v${binding.adapterRef.revision}`,
+    }
+  }
   const runtimeToolState = (
     item: EmployeeTypePackage['authoringManifest']['workItems'][number],
   ) => {
@@ -683,6 +702,7 @@ function EmployeeCaseDetailPage(): ReactElement {
                 }}
                 toolState={runtimeToolState}
                 reviewToolState={runtimeReviewToolState}
+                adapterSlotState={runtimeAdapterSlotState}
                 title={zh ? '实际能力与运行状态' : 'Active capabilities and runtime state'}
                 description={
                   zh

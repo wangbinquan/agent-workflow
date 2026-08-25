@@ -70,6 +70,24 @@ export const workItemToolBindingSchema = z
 
 export type WorkItemToolBinding = z.infer<typeof workItemToolBindingSchema>
 
+export const laneAdapterPurposeSchema = z.enum([
+  'pipeline-gate',
+  'pipeline-classifier',
+  'approval-gateway',
+])
+
+export type LaneAdapterPurpose = z.infer<typeof laneAdapterPurposeSchema>
+
+export const laneAdapterBindingSchema = z
+  .object({
+    laneId: machineIdSchema,
+    slotRef: machineIdSchema,
+    adapterRef: exactResourceRefSchema,
+  })
+  .strict()
+
+export type LaneAdapterBinding = z.infer<typeof laneAdapterBindingSchema>
+
 export const dispatchRouteDefinitionSchema = z
   .object({
     routeRef: machineIdSchema,
@@ -215,6 +233,18 @@ const toolRoleGroupSchema = z
   })
   .strict()
 
+export const laneAdapterSlotSchema = z
+  .object({
+    slotRef: machineIdSchema,
+    label: localizedTextSchema,
+    description: localizedTextSchema,
+    purpose: laneAdapterPurposeSchema,
+    requiredWhenLaneEnabled: z.boolean(),
+  })
+  .strict()
+
+export type LaneAdapterSlot = z.infer<typeof laneAdapterSlotSchema>
+
 const responsibilityLaneSchema = z
   .object({
     laneId: machineIdSchema,
@@ -223,6 +253,7 @@ const responsibilityLaneSchema = z
     order: z.number().int().nonnegative(),
     kind: z.enum(['spine', 'branch']),
     optional: z.boolean().default(false),
+    adapterSlots: z.array(laneAdapterSlotSchema).max(10).default([]),
   })
   .strict()
 
@@ -793,6 +824,12 @@ export interface EmployeeTypeRuntimePackage {
     readonly contract: WorkContract
     readonly implementation: ToolImplementation
   }): readonly ContractValidationCheck[]
+  upgradeProgramSource?(input: {
+    readonly sourceContract: WorkContract
+    readonly targetContract: WorkContract
+    readonly implementation: Extract<ToolImplementation, { readonly kind: 'program' }>
+    readonly source: string
+  }): { readonly runtimeKind: 'bash' | 'node' | 'python'; readonly source: string } | null
 }
 
 export interface ContractValidationCheck {
@@ -908,7 +945,6 @@ export const createToolRegistrationBodySchema = z
     description: z.string().max(2_000),
     roleRef: machineIdSchema,
     implementation: toolAuthoringImplementationSchema,
-    connectionRef: exactResourceRefSchema.nullable().optional(),
     dispatchRouteDefinitions: dispatchRouteDefinitionsSchema.optional(),
     acceptedDispatchRoutes: acceptedDispatchRoutesSchema.optional(),
   })
@@ -926,7 +962,9 @@ export const toolRegistrationContentSchema = z
     displayName: z.string().min(1).max(200),
     description: z.string().max(2_000),
     implementation: toolImplementationSchema,
-    connectionRef: exactResourceRefSchema.nullable(),
+    // Historical immutable revisions may still carry the field. New writes
+    // always persist null and bind adapters at the employee lane instead.
+    connectionRef: exactResourceRefSchema.nullable().default(null),
     // Optional only for immutable classifier revisions published before the
     // problem taxonomy moved from job authoring into the classifier tool.
     dispatchRouteDefinitions: dispatchRouteDefinitionsSchema.optional(),
@@ -964,6 +1002,7 @@ export const employeeJobTemplateContentSchema = z
     typeRef: employeeTypeRefSchema,
     description: z.string().max(2_000),
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
+    defaultAdapterBindings: z.array(laneAdapterBindingSchema).max(100).default([]),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),
     orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
     /**
@@ -986,6 +1025,7 @@ export const digitalEmployeeDefinitionDraftSchema = z
     displayName: z.string().min(1).max(200),
     workScope: z.unknown(),
     toolOverrides: z.array(workItemToolBindingSchema).max(300),
+    adapterOverrides: z.array(laneAdapterBindingSchema).max(100).default([]),
     collaborationOverrides: z.array(employeeCollaborationBindingSchema).max(100),
   })
   .strip()
@@ -1001,6 +1041,7 @@ export const digitalEmployeeDefinitionContentSchema = z
     workScopeRef: exactResourceRefSchema,
     workScopeSummary: z.string().min(1).max(500),
     exactToolBindings: z.array(workItemToolBindingSchema).max(300),
+    exactAdapterBindings: z.array(laneAdapterBindingSchema).max(100).default([]),
     exactCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),
     exactOrderedDispatchConfigurations: z
       .array(orderedDispatchConfigurationSchema)
@@ -1121,7 +1162,23 @@ export function validateTypePackage(
       `authoringManifest.lifecycleRegions.${region.regionId}.responsibilityLanes`,
       region.responsibilityLanes.map((lane) => lane.laneId),
     )
+    for (const lane of region.responsibilityLanes) {
+      addDuplicates(
+        `authoringManifest.lifecycleRegions.${region.regionId}.responsibilityLanes.${lane.laneId}.adapterSlots`,
+        lane.adapterSlots.map((slot) => slot.slotRef),
+      )
+      addDuplicates(
+        `authoringManifest.lifecycleRegions.${region.regionId}.responsibilityLanes.${lane.laneId}.adapterPurposes`,
+        lane.adapterSlots.map((slot) => slot.purpose),
+      )
+    }
   }
+  addDuplicates(
+    'authoringManifest.responsibilityLanes',
+    descriptor.authoringManifest.lifecycleRegions.flatMap((region) =>
+      region.responsibilityLanes.map((lane) => lane.laneId),
+    ),
+  )
   addDuplicates(
     'authoringManifest.workIngresses',
     descriptor.authoringManifest.workIngresses.map((ingress) => ingress.ingressRef),
@@ -1751,4 +1808,90 @@ export function mergeExactToolBindings(input: {
     return left < right ? -1 : left > right ? 1 : 0
   })
   return { bindings, violations }
+}
+
+export function mergeExactAdapterBindings(input: {
+  readonly manifest: EmployeeAuthoringManifest
+  readonly defaults: readonly LaneAdapterBinding[]
+  readonly overrides: readonly LaneAdapterBinding[]
+  readonly enabledWorkItemRefs?: readonly string[]
+}): { bindings: LaneAdapterBinding[]; violations: TypePackageViolation[] } {
+  const violations: TypePackageViolation[] = []
+  const allowed = new Map<
+    string,
+    {
+      laneId: string
+      slotRef: string
+      required: boolean
+      laneWorkItemRefs: readonly string[]
+    }
+  >()
+  for (const region of input.manifest.lifecycleRegions) {
+    for (const lane of region.responsibilityLanes) {
+      const laneWorkItemRefs = input.manifest.workItems
+        .filter(
+          (item) => item.regionId === region.regionId && item.responsibilityLaneId === lane.laneId,
+        )
+        .map((item) => item.workItemRef)
+      for (const slot of lane.adapterSlots) {
+        allowed.set(`${lane.laneId}\u0000${slot.slotRef}`, {
+          laneId: lane.laneId,
+          slotRef: slot.slotRef,
+          required: slot.requiredWhenLaneEnabled,
+          laneWorkItemRefs,
+        })
+      }
+    }
+  }
+
+  const merged = new Map<string, LaneAdapterBinding>()
+  const apply = (bindings: readonly LaneAdapterBinding[], source: string) => {
+    const seen = new Set<string>()
+    for (const binding of bindings) {
+      const key = `${binding.laneId}\u0000${binding.slotRef}`
+      if (!allowed.has(key)) {
+        violations.push({
+          code: 'unknown-lane-adapter-slot',
+          at: source,
+          detail: `${binding.laneId}/${binding.slotRef}`,
+        })
+        continue
+      }
+      if (seen.has(key)) {
+        violations.push({
+          code: 'duplicate-lane-adapter-binding',
+          at: source,
+          detail: `${binding.laneId}/${binding.slotRef}`,
+        })
+        continue
+      }
+      seen.add(key)
+      merged.set(key, binding)
+    }
+  }
+  apply(input.defaults, 'jobTemplate.defaultAdapterBindings')
+  apply(input.overrides, 'employee.adapterOverrides')
+
+  const enabled =
+    input.enabledWorkItemRefs === undefined ? null : new Set(input.enabledWorkItemRefs)
+  for (const [key, slot] of allowed) {
+    const laneEnabled =
+      enabled === null || slot.laneWorkItemRefs.some((workItemRef) => enabled.has(workItemRef))
+    if (slot.required && laneEnabled && !merged.has(key)) {
+      violations.push({
+        code: 'required-lane-adapter-binding-missing',
+        at: `responsibilityLanes.${slot.laneId}`,
+        detail: `${slot.laneId}/${slot.slotRef}`,
+      })
+    }
+  }
+
+  return {
+    bindings: [...merged.values()].sort((left, right) => {
+      const leftKey = `${left.laneId}\u0000${left.slotRef}`
+      const rightKey = `${right.laneId}\u0000${right.slotRef}`
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+    }),
+    violations,
+  }
 }

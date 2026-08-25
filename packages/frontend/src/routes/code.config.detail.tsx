@@ -1,16 +1,10 @@
 // RFC-310 PR-8 T85/T86/T89 —— 配置资源详情：`/code/config/$kind/$id`。
 //
-// 同一骨架承载四族：identity 头（发布修订 / 可见性 / Publish / Archive /
-// ACL）+ per-kind 只读摘要（员工的 capability routes / 模板的执行合同 /
-// profile 的 steps 表 / adapter 的 purpose·operations·secret 名单）+ draft
-// 编辑 Dialog（name + 常用字段结构化 + 完整 JSON——publish 的 zod/闭包校验
-// 是合法性的最终裁判，violations 逐条示人）。adapter 的 executableRef /
-// secretProjection 是 daemon 高危字段：无 `scripts:author` 时编辑入口整体
-// 禁用（后端亦按字段强制，这里不给「填了也保存不了」的假入口）。secret
-// projection 永远只显示 key 名，不显示任何值。
+// RFC-323 后同一骨架只承载员工、动作模板和验证 profile。Adapter 详情、
+// 原始 JSON 与独立 ACL 页面已退役，旧 URL 在路由门直接回到数字员工页。
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, redirect } from '@tanstack/react-router'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -43,6 +37,9 @@ import { Route as RootRoute } from './__root'
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/code/config/$kind/$id',
+  beforeLoad: ({ params }) => {
+    if (params.kind === 'adapters') throw redirect({ to: '/digital-employees' })
+  },
   component: ConfigDetailPage,
 })
 
@@ -56,7 +53,6 @@ interface ConfigDetail {
   updatedAt: number
   archivedAt: number | null
   capabilityId?: string
-  purpose?: string
   draft: unknown
   playbook?: unknown
   readyToPublish?: boolean
@@ -94,9 +90,7 @@ function ConfigDetailPage(): ReactElement {
   const canUpdate = usePermission(`${spec.permissionPrefix}:update`)
   const canArchive = usePermission(`${spec.permissionPrefix}:archive`)
   const canAuthorScripts = usePermission('scripts:author')
-  // adapter 的 draft 含 executableRef/secretProjection（daemon 高危字段）：
-  // 编辑入口要求 scripts:author（后端字段级强制的前端如实呈现）。
-  const canEditDraft = canUpdate && (kind !== 'adapters' || canAuthorScripts)
+  const canEditDraft = canUpdate
 
   const detail = useQuery<ConfigDetail>({
     queryKey: ['code-config', kind, params.id],
@@ -209,12 +203,6 @@ function ConfigDetailPage(): ReactElement {
         />
 
         <div className="employee-manual-panel">
-          {kind === 'adapters' && canUpdate && !canAuthorScripts ? (
-            <p className="page__subtitle" data-testid="config-scripts-author-hint">
-              {t('code.config.scriptsAuthorHint')}
-            </p>
-          ) : null}
-
           {publish.isError && publishViolations.length === 0 ? (
             <ErrorBanner error={publish.error} />
           ) : null}
@@ -325,8 +313,7 @@ function DraftSummary(props: {
     )
   }
   if (props.kind === 'action-templates') return <TemplateSummary draft={draft} />
-  if (props.kind === 'verification-profiles') return <ProfileSummary draft={draft} />
-  return <AdapterSummary draft={draft} />
+  return <ProfileSummary draft={draft} />
 }
 
 /**
@@ -706,52 +693,6 @@ function ProfileSummary(props: { draft: Record<string, unknown> }): ReactElement
           </table>
         </TableViewport>
       )}
-    </Card>
-  )
-}
-
-function AdapterSummary(props: { draft: Record<string, unknown> }): ReactElement {
-  const { t } = useTranslation()
-  const operations = Array.isArray(props.draft.operations) ? props.draft.operations : []
-  const secrets = Array.isArray(props.draft.secretProjection) ? props.draft.secretProjection : []
-  const budget = (props.draft.outputBudget ?? {}) as {
-    maxFiles?: number
-    maxTotalBytes?: number
-  }
-  return (
-    <Card title={t('code.config.adapterSummary')} data-testid="config-summary-adapter">
-      <dl className="mission-kv">
-        <dt>{t('code.config.purpose')}</dt>
-        <dd>
-          <code>{refText(props.draft.purpose)}</code>
-        </dd>
-        <dt>{t('code.config.operations')}</dt>
-        <dd>{operations.length === 0 ? '—' : operations.map(String).join(', ')}</dd>
-        <dt>{t('code.config.executable')}</dt>
-        <dd>
-          <code>{refText(props.draft.executableRef)}</code>
-        </dd>
-        <dt>{t('code.config.connection')}</dt>
-        <dd>
-          <code>{refText(props.draft.connectionRef)}</code>
-        </dd>
-        <dt>{t('code.config.secretProjection')}</dt>
-        <dd data-testid="config-adapter-secrets">
-          {/* 只显示 key 名——值永远不出 daemon。 */}
-          {secrets.length === 0 ? '—' : secrets.map(String).join(', ')}
-        </dd>
-        <dt>{t('code.config.outputBudget')}</dt>
-        <dd>
-          {typeof budget.maxFiles === 'number' && typeof budget.maxTotalBytes === 'number'
-            ? t('code.config.budgetText', {
-                files: budget.maxFiles,
-                bytes: budget.maxTotalBytes,
-              })
-            : '—'}
-        </dd>
-        <dt>{t('code.config.timeout')}</dt>
-        <dd>{typeof props.draft.timeoutMs === 'number' ? `${props.draft.timeoutMs} ms` : '—'}</dd>
-      </dl>
     </Card>
   )
 }

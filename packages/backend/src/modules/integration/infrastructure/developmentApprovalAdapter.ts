@@ -46,6 +46,7 @@ function fail(code: string): { readonly ok: false; readonly failure: AdapterFail
 export function createApprovalExecutionAdapter(deps: {
   readonly resolveBinding: (ref: string) => DevelopmentAdapterContent | null
   readonly extraEnv?: Record<string, string>
+  readonly secretSource?: Readonly<Record<string, string | undefined>>
 }): ApprovalExecution {
   const resolve = (
     ref: string,
@@ -81,6 +82,7 @@ export function createApprovalExecutionAdapter(deps: {
           },
           stagedRoot,
           extraEnv: deps.extraEnv,
+          secretSource: deps.secretSource,
         }),
       )
     },
@@ -93,6 +95,7 @@ export function createApprovalExecutionAdapter(deps: {
           operation: { kind: 'approval.lookup', idempotencyKey: input.idempotencyKey },
           stagedRoot,
           extraEnv: deps.extraEnv,
+          secretSource: deps.secretSource,
         }),
       )
     },
@@ -105,6 +108,7 @@ export function createApprovalExecutionAdapter(deps: {
           operation: { kind: 'approval.observe', correlationRef: input.correlationRef },
           stagedRoot,
           extraEnv: deps.extraEnv,
+          secretSource: deps.secretSource,
         }),
       )
     },

@@ -7,7 +7,17 @@ export interface ToolConnectionProjection {
   readonly ref: ExactResourceRef
   readonly purpose: string
   readonly available: boolean
+  readonly visible: boolean
+  readonly contentDigest: string
   readonly closureSummary: string
+}
+
+export interface ToolConnectionVisibilitySubject {
+  readonly userId: string
+  readonly authority: {
+    readonly bypass: boolean
+    readonly private: boolean
+  }
 }
 
 /**
@@ -28,7 +38,23 @@ export interface EmployeeRetryLimitsPort {
  * cross into Digital Employee authoring or Agent input.
  */
 export interface ToolConnectionCatalogPort {
-  resolve(ref: ExactResourceRef): Promise<ToolConnectionProjection | null>
+  resolve(
+    ref: ExactResourceRef,
+    subject?: ToolConnectionVisibilitySubject | null,
+  ): ToolConnectionProjection | null
+
+  /**
+   * Chooses a stable published Adapter for a compatible legacy upgrade.
+   * Historical exact refs are preferences, not a requirement: providers may
+   * fall back to their deterministic catalog default when those refs are
+   * absent, archived, or ambiguous. An empty preference list means "use the
+   * catalog default". The selected exact ref is frozen into the new revision.
+   */
+  selectAutomatic?(input: {
+    readonly purpose: string
+    readonly candidates: readonly ExactResourceRef[]
+    readonly subject?: ToolConnectionVisibilitySubject | null
+  }): ToolConnectionProjection | null
 }
 
 export interface ProgramArtifactPort {

@@ -140,6 +140,7 @@ export interface RuntimeCaseStorePort {
     readonly ownerUserId?: string
     readonly launchOrigin?: TaskLaunchOrigin
     readonly states?: readonly EmployeeCaseRecord['state'][]
+    readonly terminalCatalogStatuses?: readonly ('done' | 'canceled')[]
     readonly view: 'all' | 'active' | 'attention' | 'finished'
     readonly q?: string
     readonly cursor: { readonly updatedAt: number; readonly id: string } | null

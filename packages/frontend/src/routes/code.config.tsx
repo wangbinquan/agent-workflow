@@ -1,23 +1,16 @@
 // RFC-310 PR-8 T85/T86/T89 —— 数字员工配置资源（员工 / 动作模板 / 验证
-// profile / adapter）的统一列表页。
+// profile）的统一列表页。RFC-323 将 Adapter 生命周期移入职责泳道卡片。
 //
-// 五类配置资源后端是同构 CRUD（mountConfigResource：list/create/get/revise/
-// publish/archive + ACL），前端同样用一个参数化路由承载四族（automation
-// policy 由 T87 的 rule builder 单独成页）：`/code/config/$kind`。同一张表、
-// 同一个创建 Dialog，per-kind 只差列补充与创建时的最小必填（模板要
-// capabilityId、adapter 要 purpose）。draft 内容的深度编辑在详情页。
+// 后端/shared 仍保留四类版本化资源的 API 合同；RFC-323 将 Adapter 生命周期
+// 收进职责泳道 Dialog，所以这个旧参数化页面只承载员工、动作模板和验证
+// profile 三族。`kind=adapters` 在取数前重定向，不再渲染列表、详情或 raw JSON。
 
 import {
-  ADAPTER_PURPOSES,
-  ADAPTER_REQUIRED_OPERATIONS,
   DEVELOPMENT_CONFIG_API_BASE,
-  DEVELOPMENT_CONFIG_KINDS,
   buildDevelopmentConfigCreateBody,
-  type AdapterPurpose,
-  type DevelopmentConfigKind,
 } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, Link } from '@tanstack/react-router'
+import { createRoute, Link, redirect } from '@tanstack/react-router'
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -40,27 +33,21 @@ import {
 } from '@/components/code/employeePlaybook'
 import { Route as RootRoute } from './__root'
 
-// 族清单同样只存一份（shared）——页签顺序、路由参数校验与后端契约测试遍历的
-// 是同一个数组，不会出现"前端多了一族 / 少了一族"这种只有用户点得出来的漂移。
-export const CONFIG_KINDS = DEVELOPMENT_CONFIG_KINDS
-export type ConfigKind = DevelopmentConfigKind
+// 这是旧配置 UI 的有意子集，不是 shared 后端资源清单的镜像。Adapter 仍有
+// Integration API，但唯一业务管理入口是数字员工职责泳道卡片。
+export const CONFIG_KINDS = ['employees', 'action-templates', 'verification-profiles'] as const
+export type ConfigKind = (typeof CONFIG_KINDS)[number]
 
 export interface ConfigKindSpec {
   /** 后端 CRUD base（ACL 面同 base + /:id/acl）。 */
   apiBase: string
   /** usePermission 的前缀（backend PermissionPrefix 同名）。 */
-  permissionPrefix:
-    | 'digital-employees'
-    | 'action-templates'
-    | 'verification-profiles'
-    | 'adapter-definitions'
-  i18nKey: 'employees' | 'actionTemplates' | 'verificationProfiles' | 'adapters'
+  permissionPrefix: 'digital-employees' | 'action-templates' | 'verification-profiles'
+  i18nKey: 'employees' | 'actionTemplates' | 'verificationProfiles'
 }
 
-// apiBase 一律取自 shared 的单一事实源（`DEVELOPMENT_CONFIG_API_BASE`）——
-// 这里不再各写一份字面量。adapter 是唯一前缀与页面归属不同的资源（integration
-// bounded context），PR-8 在此处写成 `/api/code/...` 导致整页 404；现在这一列
-// 与后端挂载点由 code-config-api-base 测试逐条对账。
+// 保留的三族 apiBase 仍取 shared 的单一事实源
+// `DEVELOPMENT_CONFIG_API_BASE`，由 code-config-api-base 测试逐条对账。
 export const CONFIG_KIND_SPECS: Record<ConfigKind, ConfigKindSpec> = {
   employees: {
     apiBase: DEVELOPMENT_CONFIG_API_BASE.employees,
@@ -76,11 +63,6 @@ export const CONFIG_KIND_SPECS: Record<ConfigKind, ConfigKindSpec> = {
     apiBase: DEVELOPMENT_CONFIG_API_BASE['verification-profiles'],
     permissionPrefix: 'verification-profiles',
     i18nKey: 'verificationProfiles',
-  },
-  adapters: {
-    apiBase: DEVELOPMENT_CONFIG_API_BASE.adapters,
-    permissionPrefix: 'adapter-definitions',
-    i18nKey: 'adapters',
   },
 }
 
@@ -124,6 +106,9 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/code/config/$kind',
   validateSearch: validateConfigListSearch,
+  beforeLoad: ({ params }) => {
+    if (params.kind === 'adapters') throw redirect({ to: '/digital-employees' })
+  },
   component: ConfigListPage,
 })
 
@@ -425,10 +410,6 @@ function TechnicalCreateDialog(props: { kind: ConfigKind; onClose: () => void })
   const spec = CONFIG_KIND_SPECS[props.kind]
   const [name, setName] = useState('')
   const [capabilityId, setCapabilityId] = useState<string>(AGENT_CAPABILITY_IDS[1])
-  const [purpose, setPurpose] = useState<AdapterPurpose>(ADAPTER_PURPOSES[0])
-  // executableRef 由**用户**填：机械造一个占位值等于产出一个说不出话的资源
-  // （迁移分析器对同一字段做过同样的裁决——宁可标 manual-authoring-required）。
-  const [executableRef, setExecutableRef] = useState('')
 
   const create = useMutation({
     // 载荷由 shared 的共用契约产出（不在页面里即兴拼）——后端契约测试拿同一个
@@ -440,8 +421,6 @@ function TechnicalCreateDialog(props: { kind: ConfigKind; onClose: () => void })
           kind: props.kind,
           name,
           capabilityId,
-          purpose,
-          executableRef,
         }),
       ) as Promise<ConfigIdentityRow>,
     onSuccess: (created) => {
@@ -471,11 +450,7 @@ function TechnicalCreateDialog(props: { kind: ConfigKind; onClose: () => void })
           <button
             type="button"
             className="btn btn--sm btn--primary"
-            disabled={
-              name.trim() === '' ||
-              create.isPending ||
-              (props.kind === 'adapters' && executableRef.trim() === '')
-            }
+            disabled={name.trim() === '' || create.isPending}
             onClick={() => create.mutate()}
             data-testid="config-create-submit"
           >
@@ -498,32 +473,6 @@ function TechnicalCreateDialog(props: { kind: ConfigKind; onClose: () => void })
             data-testid="config-create-capability"
           />
         </Field>
-      ) : null}
-      {props.kind === 'adapters' ? (
-        <>
-          <Field label={t('code.config.purpose')} required>
-            <Select
-              value={purpose}
-              onChange={(v) => setPurpose(v as AdapterPurpose)}
-              options={ADAPTER_PURPOSES.map((p) => ({ value: p, label: p }))}
-              ariaLabel={t('code.config.purpose')}
-              data-testid="config-create-purpose"
-            />
-          </Field>
-          <Field
-            label={t('code.config.executableRef')}
-            hint={t('code.config.executableRefHint', {
-              operations: ADAPTER_REQUIRED_OPERATIONS[purpose].join(', '),
-            })}
-            required
-          >
-            <TextInput
-              value={executableRef}
-              onChange={setExecutableRef}
-              data-testid="config-create-executable-ref"
-            />
-          </Field>
-        </>
       ) : null}
     </Dialog>
   )

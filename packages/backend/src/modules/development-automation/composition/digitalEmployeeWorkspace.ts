@@ -45,6 +45,11 @@ const planSchema = z
   .object({
     roundRef: z.string().min(1),
     caseRef: z.object({ id: z.string().min(1) }).passthrough(),
+    employeeTypeRef: z
+      .object({ typeId: z.string().min(1), revision: z.number().int().positive() })
+      .strict()
+      .nullable()
+      .optional(),
     workItemRef: z.string().min(1),
     inputEnvelopeJson: z.string().min(2),
     workspacePolicy: workspacePolicySchema,

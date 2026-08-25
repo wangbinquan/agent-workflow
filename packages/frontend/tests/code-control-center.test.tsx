@@ -116,7 +116,7 @@ test('/code is a self-guided digital employee capability builder', async () => {
     '/code/config/employees',
   )
   expect(screen.getByTestId('digital-employee-build-executors').getAttribute('href')).toBe(
-    '/code/executors',
+    '/digital-employees',
   )
   expect(screen.getByTestId('digital-employee-build-assignments').getAttribute('href')).toBe(
     '/code/assignments',

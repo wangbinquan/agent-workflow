@@ -111,6 +111,7 @@ export interface ResponsibilityIngressCardProps {
   sourceNode?: boolean
   auxiliary?: { column: number; row: number }
   nextLabel: string
+  readOnly?: boolean
   onConfigure?: (ingress: WorkIngress) => void
 }
 
@@ -148,6 +149,7 @@ export function ResponsibilityIngressCard(props: ResponsibilityIngressCardProps)
       style={auxiliaryStyle}
       aria-label={`${localized(props.ingress.label, props.language)} · ${localized(props.ingress.valueLabel, props.language)} · ${action} · ${zh ? '下一步' : 'Next'}：${props.nextLabel}`}
       title={localized(props.ingress.description, props.language)}
+      disabled={props.readOnly === true}
       onClick={() => props.onConfigure?.(props.ingress.sourceIngress)}
       kindLabel={localized(props.ingress.valueLabel, props.language)}
       label={localized(props.ingress.label, props.language)}
@@ -262,6 +264,7 @@ export interface ResponsibilityIngressBranchProps {
   selected: boolean
   incoming: boolean
   rowStart: boolean
+  readOnly?: boolean
   onSelect: () => void
   onConfigureIngress?: (ingress: WorkIngress) => void
   nextLabelFor: (ingress: ResponsibilityProjectedIngress) => string
@@ -291,6 +294,7 @@ export function ResponsibilityIngressBranch(props: ResponsibilityIngressBranchPr
             cardIdPrefix={props.cardIdPrefix}
             sourceNode
             nextLabel={props.nextLabelFor(ingress)}
+            readOnly={props.readOnly}
             onConfigure={props.onConfigureIngress}
           />
         ))}
@@ -310,6 +314,7 @@ export function ResponsibilityIngressBranch(props: ResponsibilityIngressBranchPr
         aria-pressed={props.selected}
         aria-label={`${localized(props.item.label, props.language)} · ${kind.label} · ${detail} · ${next}`}
         title={localized(props.item.description, props.language)}
+        disabled={props.readOnly === true}
         onClick={props.onSelect}
         kindLabel={kind.label}
         label={localized(props.item.label, props.language)}
@@ -370,6 +375,7 @@ export interface ResponsibilityReviewBranchProps {
   itemSelected: boolean
   incoming: boolean
   rowStart: boolean
+  readOnly?: boolean
   onSelectPlanning: () => void
   onSelectItem: () => void
   onSelectGate: () => void
@@ -421,6 +427,7 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
                 : ` · ${props.planningPresentation.detail}`
             }`}
             title={props.planningPresentation?.detail ?? props.planningDescription}
+            disabled={props.readOnly === true}
             onClick={props.onSelectPlanning}
             kindLabel={kind.label}
             label={props.beforeReviewLabel}
@@ -442,6 +449,7 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
             aria-pressed={props.gateSelected}
             aria-label={`${localized(props.gate.label, props.language)} · ${zh ? '人工门禁' : 'Human gate'} · ${props.gateDetail}`}
             title={`${localized(props.gate.description, props.language)} · ${props.gateDetail}`}
+            disabled={props.readOnly === true}
             onClick={props.onSelectGate}
             incoming
             kindLabel={zh ? '审核' : 'Review'}
@@ -465,6 +473,7 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
           aria-pressed={props.itemSelected}
           aria-label={`${localized(props.item.label, props.language)} · ${kind.label} · ${detail} · ${next}`}
           title={localized(props.item.description, props.language)}
+          disabled={props.readOnly === true}
           onClick={props.onSelectItem}
           incoming
           kindLabel={kind.label}

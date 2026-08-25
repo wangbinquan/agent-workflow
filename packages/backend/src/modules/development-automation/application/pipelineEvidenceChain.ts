@@ -269,7 +269,7 @@ export async function handleCollectPipelineEvidence(
     gateKeys,
   })
   if (!collected.ok) {
-    deps.block(mission.id, collected.code, collected.detail)
+    deps.block(mission.id, collected.failure.code, collected.failure.remediation)
     return 'blocked'
   }
 
@@ -384,10 +384,10 @@ export async function handleTriggerPipeline(
     if (!out.ok) {
       deps.store.failEffect(
         claim.effectId,
-        JSON.stringify({ code: out.code, detail: out.detail }),
+        JSON.stringify({ code: out.failure.code, detail: out.failure.remediation }),
         now,
       )
-      deps.block(mission.id, out.code, out.detail)
+      deps.block(mission.id, out.failure.code, out.failure.remediation)
       return 'blocked'
     }
     deps.store.confirmEffect(claim.effectId, out.runRef, now)
@@ -460,10 +460,10 @@ export async function handleRerunPipeline(
     if (!out.ok) {
       deps.store.failEffect(
         claim.effectId,
-        JSON.stringify({ code: out.code, detail: out.detail }),
+        JSON.stringify({ code: out.failure.code, detail: out.failure.remediation }),
         now,
       )
-      deps.block(mission.id, out.code, out.detail)
+      deps.block(mission.id, out.failure.code, out.failure.remediation)
       return 'blocked'
     }
     deps.store.confirmEffect(claim.effectId, out.runRef, now)

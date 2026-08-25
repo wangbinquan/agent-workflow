@@ -34,13 +34,16 @@ export interface PipelineEvidenceExecution {
     readonly gateKeys: readonly string[]
     readonly sinkPath: string
   }): Promise<
-    PipelineEvidenceOutcome<z.infer<typeof pipelineCollectEnvelopeSchema>> & {
-      readonly outputBudget?: {
-        readonly maxFiles: number
-        readonly maxFileBytes: number
-        readonly maxTotalBytes: number
+    | {
+        readonly ok: true
+        readonly envelope: z.infer<typeof pipelineCollectEnvelopeSchema>
+        readonly outputBudget: {
+          readonly maxFiles: number
+          readonly maxFileBytes: number
+          readonly maxTotalBytes: number
+        }
       }
-    }
+    | { readonly ok: false; readonly failure: AdapterFailureReceipt }
   >
   trigger(input: {
     readonly adapterBindingRef: string
@@ -64,6 +67,7 @@ export interface PipelineEvidenceAdapterDeps {
   readonly resolveBinding: (adapterBindingRef: string) => DevelopmentAdapterContent | null
   /** 测试/装配注入的额外子进程 env（如 mock 上游 URL）；不含 daemon 环境。 */
   readonly extraEnv?: Record<string, string>
+  readonly secretSource?: Readonly<Record<string, string | undefined>>
 }
 
 function fail(
@@ -130,6 +134,7 @@ export function createPipelineEvidenceAdapter(
         },
         stagedRoot: input.sinkPath,
         extraEnv: deps.extraEnv,
+        secretSource: deps.secretSource,
       })
       if (!run.ok) return run
       return { ok: true, envelope: run.envelope, outputBudget: resolved.content.outputBudget }
@@ -148,6 +153,7 @@ export function createPipelineEvidenceAdapter(
         },
         stagedRoot: input.sinkPath,
         extraEnv: deps.extraEnv,
+        secretSource: deps.secretSource,
       })
     },
 
@@ -165,6 +171,7 @@ export function createPipelineEvidenceAdapter(
         },
         stagedRoot: input.sinkPath,
         extraEnv: deps.extraEnv,
+        secretSource: deps.secretSource,
       })
     },
   }

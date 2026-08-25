@@ -623,13 +623,8 @@ export const ROUTE_UX_INVENTORY = {
   },
   '@/routes/code.executors#Route': {
     surface: '/code/executors',
-    classification: 'standard',
-    owners: [rendered('code-executor-library.test.tsx')],
-    header: {
-      mode: 'direct',
-      sourceFile: 'routes/code.executors.tsx',
-      primitive: 'PageHeader',
-    },
+    classification: 'redirect',
+    owners: [source('rfc323-adapter-surface-retirement.test.ts')],
   },
   // RFC-310 —— DevelopmentMission 列表与详情（launch 三形态 / questions /
   // action / effects / readiness；平台永不自动 merge）。

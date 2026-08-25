@@ -95,6 +95,7 @@ interface GitlabMrDetail {
   readonly detailed_merge_status?: string
   readonly merge_commit_sha?: string | null
   readonly merged_at?: string | null
+  readonly reviewers?: readonly unknown[]
 }
 
 interface GitlabBranchDetail {
@@ -400,10 +401,34 @@ async function collectThreads(
   return { ok: true, threads }
 }
 
+interface GitlabApprovalSummary {
+  readonly approvals_left?: unknown
+  readonly approved?: unknown
+}
+
+/**
+ * GitLab EE exposes the required-rule count, while GitLab CE exposes only the
+ * aggregate `approved` bit.  CE's false bit alone is not a merge hold: every
+ * unapproved MR has it.  An explicitly requested reviewer gives that bit the
+ * same soft-approval meaning that the GitHub collector already applies to
+ * `requested_reviewers`.
+ */
+export function resolveGitlabApprovalHold(
+  summary: GitlabApprovalSummary | null,
+  reviewers: readonly unknown[] | undefined,
+): boolean | null {
+  if (summary === null) return null
+  if (typeof summary.approvals_left === 'number') return summary.approvals_left > 0
+  if (summary.approved === true) return false
+  if (summary.approved === false && reviewers !== undefined && reviewers.length > 0) return true
+  return null
+}
+
 /** approvals：best effort——404/无权限/字段缺失 ⇒ null（不伪造 hold 状态）。 */
 async function collectApprovalHold(
   deps: MrEnsureConnectionDeps,
   mrRef: string,
+  gitlabDetail: GitlabMrDetail | undefined,
   githubDetail: GithubPrDetail | undefined,
 ): Promise<boolean | null> {
   if (deps.provider === 'github') {
@@ -424,9 +449,10 @@ async function collectApprovalHold(
     callDeps(deps),
   )
   if (!got.ok) return null
-  const parsed = parseJson<{ approvals_left?: number }>(got.body)
-  if (parsed === null || typeof parsed.approvals_left !== 'number') return null
-  return parsed.approvals_left > 0
+  return resolveGitlabApprovalHold(
+    parseJson<GitlabApprovalSummary>(got.body),
+    gitlabDetail?.reviewers,
+  )
 }
 
 /**
@@ -468,7 +494,7 @@ export async function collectMergeRequestFacts(
     verifiedPlatformLogin,
   )
   if (!threads.ok) return { ok: false, code: threads.code, detail: threads.detail }
-  const approvalHold = await collectApprovalHold(deps, mrRef, first.github)
+  const approvalHold = await collectApprovalHold(deps, mrRef, first.gitlab, first.github)
 
   const second = await fetchMrDetail(deps, mrRef)
   if (!second.ok) return { ok: false, code: 'mr-facts-lookup-failed', detail: second.detail }

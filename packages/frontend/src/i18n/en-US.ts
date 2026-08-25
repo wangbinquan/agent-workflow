@@ -431,7 +431,6 @@ export const enUS: Resources = {
     events: 'Event Center',
     code: 'Code',
     digitalEmployees: 'Digital employees',
-    executors: 'Executor library',
     employeeAssignments: 'Repository scope',
     settings: 'Settings',
     brand: 'Agent Workflow',
@@ -608,39 +607,6 @@ export const enUS: Resources = {
         'Launch, blockers, MR care, and merge lifecycle all live in Tasks under the Digital employee category.',
       openTasks: 'Open digital employee tasks',
     },
-    executors: {
-      title: 'Executor library',
-      subtitle: 'The complete selectable executor inventory shown on every employee step.',
-      back: '← Digital employees',
-      addAi: 'Add AI executor',
-      addProgram: 'Add program',
-      addEmployee: 'Add employee',
-      addSystem: 'Add system',
-      ai: {
-        title: 'AI executors',
-        body: 'Bounded Agent implementations with an exact input/output envelope.',
-        empty: 'No published AI executor',
-      },
-      program: {
-        title: 'Programs',
-        body: 'Deterministic scripts executed by the platform task engine.',
-        empty: 'No published program executor',
-      },
-      employee: {
-        title: 'Callable digital employees',
-        body: 'Published employees that may own a child task, including another repository.',
-        empty: 'No callable digital employee',
-      },
-      system: {
-        title: 'External systems',
-        body: 'Programs for requirement intake, pipeline gates, and approval submit/observe.',
-        empty: 'No published external system',
-      },
-      platform: {
-        title: 'Built-in platform actions',
-        body: 'Fixed platform-owned actions need no separate resource and cannot be redefined by AI.',
-      },
-    },
     journey: {
       progress: 'End-to-end progress',
       current: 'Current position · step {{current}} of {{total}}',
@@ -813,7 +779,6 @@ export const enUS: Resources = {
       executorApprovalObserve: 'Wait for approval (program)',
       chooseExecutor: 'Choose a published executor',
       createExecutor: 'Add an executor',
-      openExecutorLibrary: 'View executor library',
       createPublishAndSelect: 'Create, publish, and select',
       inlineExecutorHint:
         'This executor is created and published here, then selected for the current step without losing the employee draft.',
@@ -1035,7 +1000,7 @@ export const enUS: Resources = {
     },
     config: {
       title: 'Employee configuration',
-      subtitle: 'Digital employees, action templates, verification profiles and adapters',
+      subtitle: 'Digital employees, action templates, and verification profiles',
       technicalSubtitle:
         'Advanced technical resources for platform administrators maintaining execution implementations and system connections.',
       kindSwitch: 'Configuration kind',
@@ -1043,7 +1008,6 @@ export const enUS: Resources = {
         employees: 'Employees',
         actionTemplates: 'Action templates',
         verificationProfiles: 'Verification profiles',
-        adapters: 'Adapters',
       },
       backToList: '← Configuration',
       colName: 'Name',
@@ -1059,10 +1023,6 @@ export const enUS: Resources = {
       createTitle: 'Create {{kind}}',
       name: 'Name',
       capability: 'Capability',
-      purpose: 'Purpose',
-      executableRef: 'Executable ref',
-      executableRefHint:
-        'The program the daemon runs for this adapter. Required at creation — an adapter is parsed strictly on write, so it cannot be saved as an empty draft. Operations for this purpose: {{operations}}.',
       edit: 'Edit draft',
       editTitle: 'Edit draft',
       save: 'Save',
@@ -1104,16 +1064,6 @@ export const enUS: Resources = {
       colProgram: 'Program',
       colTimeout: 'Timeout',
       colExitCodes: 'Success exit codes',
-      adapterSummary: 'Adapter contract',
-      operations: 'Operations',
-      executable: 'Executable',
-      connection: 'Connection',
-      secretProjection: 'Secret keys (names only)',
-      outputBudget: 'Output budget',
-      budgetText: '{{files}} files, {{bytes}} bytes total',
-      timeout: 'Timeout',
-      scriptsAuthorHint:
-        'Editing adapter drafts requires the scripts:author permission (executable and secret projection are daemon-level fields).',
       editor: {
         identitySection: 'Employee identity and default policy',
         versionedRefHint:
@@ -1168,17 +1118,6 @@ export const enUS: Resources = {
         exitCodeInvalid: 'Enter an integer exit code between 0 and 255.',
         evidenceSelectorsPreserved: '{{count}} advanced evidence selectors are preserved.',
         addStep: 'Add verification step',
-        adapterProgramSection: 'External-system program and operations',
-        operationsHint:
-          'The required operation is locked; only optional operations allowed for this purpose can be enabled.',
-        parameterSchema: 'Parameter schema ref (optional)',
-        secretKeysHint:
-          'Configure names of injected secrets only. Secret values are never stored in this resource.',
-        outputBudgetHint:
-          'Program output is staged in the mission temporary directory and rejected if it exceeds these file or byte limits.',
-        maxFiles: 'Maximum files',
-        maxFileBytes: 'Maximum bytes per file',
-        maxTotalBytes: 'Maximum total bytes',
         advancedReadOnly: 'Advanced: view complete draft',
         advancedJson: 'Advanced: edit complete JSON',
         advancedJsonHint:
@@ -1361,9 +1300,9 @@ export const enUS: Resources = {
         directLabel: 'Describe it or attach files',
         directHint:
           'Use body, files, or both. Attached files are committed at the explicit repository paths.',
-        externalLabel: 'Load an ID from an internal system',
+        externalLabel: 'Enter a standard Issue ID',
         externalHint:
-          'The employee uses its requirement-source program to download the ID as a multi-file bundle.',
+          'The platform passes the ID as a standard work request; no provider Adapter is selected.',
         bodyHint:
           'Paste the requirement, problem context and acceptance criteria. It may be empty when files are attached.',
         filesHint: 'Every file needs a repository path, collision mode and Agent edit policy.',

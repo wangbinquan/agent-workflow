@@ -12,6 +12,7 @@ import type {
   EmployeeWorkContract,
   EmployeeTypePackage,
   JobTemplate,
+  LaneAdapterBinding,
   ToolAuthoringView,
   ToolRegistration,
   WorkIngress,
@@ -20,9 +21,16 @@ import type {
 import { localized } from '@/components/digital-employees/types'
 import {
   EmployeeCapabilityPanorama,
+  type ResponsibilityAdapterSlotTarget,
   type ResponsibilityDispatchNode,
   type ResponsibilityToolSlotTarget,
 } from '@/components/digital-employees/EmployeeCapabilityPanorama'
+import {
+  LaneAdapterBindingDialog,
+  LaneAdapterResourceDialog,
+  adapterBindingAt,
+  type LaneAdapterChoice,
+} from '@/components/digital-employees/LaneAdapterBindingDialog'
 import {
   employeeTerminalOutcomeCounts,
   type EmployeeTerminalOutcomeGroup,
@@ -109,6 +117,8 @@ function DigitalEmployeeTypePage(): ReactElement {
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
+  const [toolboxAdapterTarget, setToolboxAdapterTarget] =
+    useState<ResponsibilityAdapterSlotTarget | null>(null)
   const typeQuery = useQuery<EmployeeTypePackage>({
     queryKey: ['digital-employee-type', typeRef],
     queryFn: ({ signal }) =>
@@ -244,6 +254,12 @@ function DigitalEmployeeTypePage(): ReactElement {
                       replace: true,
                     })
                   }
+                  selectedAdapterSlotKey={
+                    toolboxAdapterTarget === null
+                      ? null
+                      : `${toolboxAdapterTarget.laneId}/${toolboxAdapterTarget.slotRef}`
+                  }
+                  onSelectAdapterSlot={setToolboxAdapterTarget}
                   onSelectReviewGate={(gate) =>
                     void navigate({
                       search: {
@@ -260,6 +276,14 @@ function DigitalEmployeeTypePage(): ReactElement {
                       : void navigate({ to: '/events', search: { tab: 'subscriptions' } })
                   }
                 />
+                {toolboxAdapterTarget === null ? null : (
+                  <LaneAdapterResourceDialog
+                    open
+                    onClose={() => setToolboxAdapterTarget(null)}
+                    language={language}
+                    slot={toolboxAdapterTarget.slot}
+                  />
+                )}
                 <Dialog
                   open={selectedItem !== null}
                   onClose={() =>
@@ -320,12 +344,12 @@ function DigitalEmployeeTypePage(): ReactElement {
                 requestedWorkItemRef={selectedRef}
                 requestedToolSlotTarget={selectedToolSlotTarget}
                 requestedJobTemplateId={search.jobTemplateId}
-                onRequestedJobTemplateClose={() =>
+                onRequestedJobTemplateClose={() => {
                   void navigate({
                     search: (previous) => ({ ...previous, jobTemplateId: undefined }),
                     replace: true,
                   })
-                }
+                }}
                 onConfigureIngress={(ingress) =>
                   ingress.configurationSurface === 'task-creation'
                     ? void navigate({ to: '/tasks/new', search: { kind: 'digital-employee' } })
@@ -902,13 +926,6 @@ function agentChoiceLabel(agent: AgentChoice, language: string): string {
     : label[zh ? 0 : 1]
 }
 
-interface DevelopmentAdapterChoice {
-  id: string
-  name: string
-  purpose: string
-  publishedRevision: number | null
-}
-
 interface DispatchRouteDefinitionDraft {
   localRef: string
   routeRef: string
@@ -943,7 +960,6 @@ function AddToolDialog(props: {
   const [source, setSource] = useState('')
   const [parameterValuesJson, setParameterValuesJson] = useState('{}')
   const [runtimeKind, setRuntimeKind] = useState<'bash' | 'node' | 'python'>('bash')
-  const [connectionId, setConnectionId] = useState('')
   const [acceptedDispatchRoutes, setAcceptedDispatchRoutes] = useState<Record<string, string[]>>({})
   const [dispatchRouteDefinitions, setDispatchRouteDefinitions] = useState<
     DispatchRouteDefinitionDraft[]
@@ -1022,7 +1038,6 @@ function AddToolDialog(props: {
     setSource('')
     setParameterValuesJson('{}')
     setRuntimeKind('bash')
-    setConnectionId('')
     setAcceptedDispatchRoutes(
       Object.fromEntries(props.dispatchSources.map((source) => [source.workItemRef, []])),
     )
@@ -1069,7 +1084,6 @@ function AddToolDialog(props: {
     setName(body.displayName)
     setDescription(body.description)
     setRoleRef(body.roleRef)
-    setConnectionId(body.connectionRef?.id ?? '')
     setAcceptedDispatchRoutes(
       Object.fromEntries(
         props.dispatchSources.map((source) => [
@@ -1257,11 +1271,6 @@ function AddToolDialog(props: {
     enabled: props.open && kind === 'workflow',
     queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
   })
-  const connections = useQuery<{ items: DevelopmentAdapterChoice[] }>({
-    queryKey: ['digital-employee-tool-connections', contract?.requiredConnectionPurpose],
-    enabled: props.open && contract?.requiredConnectionPurpose != null,
-    queryFn: ({ signal }) => api.get('/api/integrations/development-adapters', undefined, signal),
-  })
   const save = useMutation({
     mutationFn: async () => {
       const implementation =
@@ -1303,15 +1312,6 @@ function AddToolDialog(props: {
         ...(parsedDispatchRoutes === null || parsedDispatchRoutes.length === 0
           ? {}
           : { acceptedDispatchRoutes: parsedDispatchRoutes }),
-        connectionRef:
-          contract?.requiredConnectionPurpose == null
-            ? null
-            : {
-                id: connectionId,
-                revision:
-                  connections.data?.items.find((candidate) => candidate.id === connectionId)
-                    ?.publishedRevision ?? 0,
-              },
       }
       const basePath = `/api/digital-employee-types/${encodeURIComponent(props.typeRef)}/work-items/${encodeURIComponent(props.item.workItemRef)}/tools`
       const existingId = props.tool?.id ?? workingToolId.current
@@ -1338,7 +1338,6 @@ function AddToolDialog(props: {
       setResource('')
       setSource('')
       setParameterValuesJson('{}')
-      setConnectionId('')
       setAcceptedDispatchRoutes(
         Object.fromEntries(props.dispatchSources.map((sourceItem) => [sourceItem.workItemRef, []])),
       )
@@ -1358,15 +1357,6 @@ function AddToolDialog(props: {
         (kind !== 'agent' ||
           (agents.data?.some((agent) => agent.id === resource && agentSupportsContract(agent)) ??
             false))
-  const connectionValid =
-    contract?.requiredConnectionPurpose == null ||
-    (connections.data?.items.some(
-      (candidate) =>
-        candidate.id === connectionId &&
-        candidate.purpose === contract?.requiredConnectionPurpose &&
-        candidate.publishedRevision !== null,
-    ) ??
-      false)
   const addDispatchRouteDefinition = () => {
     const localRef = `problem-${++dispatchDefinitionOrdinal.current}`
     setDispatchRouteDefinitions((current) => [
@@ -1444,7 +1434,6 @@ function AddToolDialog(props: {
               (props.tool !== null && authoring.data === undefined) ||
               name.trim() === '' ||
               !resourceValid ||
-              !connectionValid ||
               parsedDispatchRoutes === null ||
               parsedDispatchRouteDefinitions === null
             }
@@ -1483,6 +1472,16 @@ function AddToolDialog(props: {
           language={props.language}
           toolRole={selectedRole}
         />
+        {contract?.requiredConnectionPurpose == null ? null : (
+          <NoticeBanner
+            tone="info"
+            title={zh ? '企业连接由岗位或员工配置' : 'Connection configured by job or employee'}
+          >
+            {zh
+              ? '工具只描述实现方式，不再保存企业系统连接。请在对应职责泳道最前面的企业连接卡中设置岗位默认值或员工覆盖。'
+              : 'Tools describe implementation only and no longer store enterprise connections. Configure the job default or employee override from the first connection card in the matching lane.'}
+          </NoticeBanner>
+        )}
         {contractGuide.isPending ? (
           <LoadingState label={zh ? '正在加载平台执行契约…' : 'Loading platform contract…'} />
         ) : contractGuide.isError ? (
@@ -1796,31 +1795,6 @@ function AddToolDialog(props: {
             ]}
           />
         </Field>
-        {contract?.requiredConnectionPurpose != null ? (
-          <Field
-            label={zh ? '使用哪个已注册系统' : 'Registered system connection'}
-            hint={
-              zh
-                ? '执行时只使用这个冻结版本；Agent 只能看到引用，不能取得凭据。'
-                : 'Execution pins this revision; the Agent sees only its reference, never credentials.'
-            }
-            required
-          >
-            <Select
-              value={connectionId}
-              onChange={setConnectionId}
-              searchable
-              placeholder={zh ? '请选择已发布的系统程序' : 'Choose a published system program'}
-              options={(connections.data?.items ?? [])
-                .filter(
-                  (candidate) =>
-                    candidate.purpose === contract?.requiredConnectionPurpose &&
-                    candidate.publishedRevision !== null,
-                )
-                .map((candidate) => ({ value: candidate.id, label: candidate.name }))}
-            />
-          </Field>
-        ) : null}
         {props.item.toolRoleGroups.length > 1 ? (
           <Field label={zh ? '工具职责' : 'Tool responsibility'} required>
             <Select
@@ -2196,6 +2170,9 @@ function JobTemplatesPanel(props: {
     useState<ResponsibilityToolSlotTarget | null>(null)
   const [editorReviewOptionRef, setEditorReviewOptionRef] = useState<string | null>(null)
   const [editorDispatchRouteKey, setEditorDispatchRouteKey] = useState<string | null>(null)
+  const [editorAdapterTarget, setEditorAdapterTarget] =
+    useState<ResponsibilityAdapterSlotTarget | null>(null)
+  const [adapterOpen, setAdapterOpen] = useState(false)
   const [validationAttempt, setValidationAttempt] = useState(0)
   const dispatchOrdinal = useRef(0)
   const configurableGroups = props.type.authoringManifest.workItems
@@ -2208,6 +2185,7 @@ function JobTemplatesPanel(props: {
     .filter((group) => group.slots.length > 0)
   const configurableSlots = configurableGroups.flatMap((group) => group.slots)
   const [bindings, setBindings] = useState<Record<string, string>>({})
+  const [adapterBindings, setAdapterBindings] = useState<LaneAdapterBinding[]>([])
   const [collaborationBindings, setCollaborationBindings] = useState<Record<string, string>>({})
   const [orderedDispatchRoutes, setOrderedDispatchRoutes] = useState<
     Record<string, OrderedDispatchRouteDraft[]>
@@ -2232,6 +2210,11 @@ function JobTemplatesPanel(props: {
     enabled: open,
     queryFn: ({ signal }) => api.get('/api/digital-employees/launchable', undefined, signal),
   })
+  const adapters = useQuery<{ items: LaneAdapterChoice[] }>({
+    queryKey: ['digital-employee-adapters'],
+    enabled: open,
+    queryFn: ({ signal }) => api.get('/api/integrations/development-adapters', undefined, signal),
+  })
   const createDraft = useMutation({
     mutationFn: (identity: { name: string; description: string }) =>
       api.post<JobTemplate>(
@@ -2240,6 +2223,7 @@ function JobTemplatesPanel(props: {
           name: identity.name,
           description: identity.description,
           defaultToolBindings: [],
+          defaultAdapterBindings: [],
           defaultCollaborationBindings: [],
           orderedDispatchConfigurations: [],
           reactionLaneOrder: defaultReactionLaneOrder(props.type),
@@ -2277,6 +2261,7 @@ function JobTemplatesPanel(props: {
             },
           ]
         }),
+        defaultAdapterBindings: adapterBindings,
         defaultCollaborationBindings: props.type.authoringManifest.workItems
           .filter(
             (item) =>
@@ -2352,12 +2337,15 @@ function JobTemplatesPanel(props: {
       setOpen(false)
       setIdentityOpen(false)
       setDutyOpen(false)
+      setAdapterOpen(false)
       setEditingJob(null)
       setEditorToolSlotTarget(null)
       setEditorDispatchRouteKey(null)
+      setEditorAdapterTarget(null)
       setName('')
       setDescription('')
       setBindings({})
+      setAdapterBindings([])
       setCollaborationBindings({})
       setOrderedDispatchRoutes({})
       setValidationAttempt(0)
@@ -2367,6 +2355,7 @@ function JobTemplatesPanel(props: {
     setName('')
     setDescription('')
     setBindings({})
+    setAdapterBindings([])
     setCollaborationBindings({})
     setOrderedDispatchRoutes({})
     setReactionLaneOrder(defaultReactionLaneOrder(props.type))
@@ -2380,6 +2369,7 @@ function JobTemplatesPanel(props: {
     setEditorWorkItemRef(requestedWorkItem?.workItemRef ?? '')
     setEditorToolSlotTarget(props.requestedToolSlotTarget)
     setEditorDispatchRouteKey(null)
+    setEditorAdapterTarget(null)
     setValidationAttempt(0)
     setIdentityName('')
     setIdentityDescription('')
@@ -2395,6 +2385,8 @@ function JobTemplatesPanel(props: {
     setEditorWorkItemRef(requestedWorkItem?.workItemRef ?? '')
     setEditorToolSlotTarget(props.requestedToolSlotTarget)
     setEditorDispatchRouteKey(null)
+    setEditorAdapterTarget(null)
+    setAdapterOpen(false)
     setValidationAttempt(0)
     setName(job.name)
     setDescription(job.draft.description)
@@ -2405,6 +2397,7 @@ function JobTemplatesPanel(props: {
       ]),
     )
     setBindings(loadedBindings)
+    setAdapterBindings(job.draft.defaultAdapterBindings)
     setCollaborationBindings(
       Object.fromEntries(
         job.draft.defaultCollaborationBindings.map((binding) => [
@@ -2502,9 +2495,11 @@ function JobTemplatesPanel(props: {
     setOpen(false)
     setIdentityOpen(false)
     setDutyOpen(false)
+    setAdapterOpen(false)
     setEditingJob(null)
     setEditorToolSlotTarget(null)
     setEditorDispatchRouteKey(null)
+    setEditorAdapterTarget(null)
     setValidationAttempt(0)
     createDraft.reset()
     save.reset()
@@ -2538,6 +2533,51 @@ function JobTemplatesPanel(props: {
     item.responsibilityLaneId === null ||
     laneOptional.get(item.responsibilityLaneId) !== true ||
     activeOptionalLanes.has(item.responsibilityLaneId)
+  const adapterTargets: ResponsibilityAdapterSlotTarget[] =
+    props.type.authoringManifest.lifecycleRegions.flatMap((region) =>
+      region.responsibilityLanes.flatMap((lane) =>
+        (lane.adapterSlots ?? []).map((slot) => ({
+          laneId: lane.laneId,
+          slotRef: slot.slotRef,
+          slot,
+        })),
+      ),
+    )
+  const laneEnabled = (laneId: string): boolean =>
+    laneOptional.get(laneId) !== true || activeOptionalLanes.has(laneId)
+  const adapterBindingAvailable = (binding: LaneAdapterBinding | null): boolean =>
+    binding !== null &&
+    adapters.status === 'success' &&
+    adapters.fetchStatus === 'idle' &&
+    adapters.data.items.some(
+      (candidate) =>
+        candidate.id === binding.adapterRef.id &&
+        candidate.purpose ===
+          adapterTargets.find(
+            (target) => target.laneId === binding.laneId && target.slotRef === binding.slotRef,
+          )?.slot.purpose &&
+        candidate.publishedRevision !== null &&
+        candidate.archivedAt === null,
+    )
+  const requiredMissingAdapterTargets = adapterTargets.filter(
+    (target) =>
+      laneEnabled(target.laneId) &&
+      target.slot.requiredWhenLaneEnabled &&
+      !adapterBindingAvailable(adapterBindingAt(adapterBindings, target.laneId, target.slotRef)),
+  )
+  const unavailableBoundAdapterTargets = adapterTargets.filter((target) => {
+    const binding = adapterBindingAt(adapterBindings, target.laneId, target.slotRef)
+    return binding !== null && !adapterBindingAvailable(binding)
+  })
+  const adapterIssueTargets = [
+    ...requiredMissingAdapterTargets,
+    ...unavailableBoundAdapterTargets.filter(
+      (target) =>
+        !requiredMissingAdapterTargets.some(
+          (required) => required.laneId === target.laneId && required.slotRef === target.slotRef,
+        ),
+    ),
+  ]
   const dispatchRouteComplete = (
     classifier: WorkItem,
     route: OrderedDispatchRouteDraft,
@@ -2575,7 +2615,9 @@ function JobTemplatesPanel(props: {
         !itemEnabled(item) ||
         !slot.required ||
         Boolean(bindings[`${item.workItemRef}/${slot.slotRef}`]),
-    ) && dispatchComplete
+    ) &&
+    dispatchComplete &&
+    adapterIssueTargets.length === 0
   const requiredMissingWorkItemRefs = new Set<string>([
     ...configurableSlots.flatMap(({ item, slot }) =>
       slot.required && itemEnabled(item) && !bindings[`${item.workItemRef}/${slot.slotRef}`]
@@ -2750,6 +2792,49 @@ function JobTemplatesPanel(props: {
           ...(requiredMissing && validationAttempt > 0 ? { attention: true } : {}),
         }
   }
+  const jobAdapterSlotState = (target: ResponsibilityAdapterSlotTarget) => {
+    const binding = adapterBindingAt(adapterBindings, target.laneId, target.slotRef)
+    const choice = adapters.data?.items.find(
+      (candidate) =>
+        candidate.id === binding?.adapterRef.id &&
+        candidate.purpose === target.slot.purpose &&
+        candidate.archivedAt === null &&
+        candidate.publishedRevision !== null,
+    )
+    const configured = binding !== null && choice !== undefined
+    const requiredMissing = requiredMissingAdapterTargets.some(
+      (candidate) => candidate.laneId === target.laneId && candidate.slotRef === target.slotRef,
+    )
+    if (configured) {
+      return {
+        state: 'configured' as const,
+        detail: `${choice.name} · v${binding.adapterRef.revision}`,
+        compactDetail: `v${binding.adapterRef.revision}`,
+      }
+    }
+    if (binding !== null) {
+      return {
+        state: 'missing' as const,
+        detail: zh
+          ? `已选连接 ${binding.adapterRef.id}@${binding.adapterRef.revision} 缺失或不可用`
+          : `Selected connection ${binding.adapterRef.id}@${binding.adapterRef.revision} is missing or unavailable`,
+        compactDetail: zh ? '不可用' : 'Unavailable',
+        ...(validationAttempt > 0 ? { attention: true } : {}),
+      }
+    }
+    return {
+      state: requiredMissing ? ('missing' as const) : ('neutral' as const),
+      detail: requiredMissing
+        ? zh
+          ? '必需的企业连接尚未配置'
+          : 'Required enterprise connection is missing'
+        : zh
+          ? '尚未配置岗位默认连接'
+          : 'No job default configured',
+      compactDetail: requiredMissing ? (zh ? '必选未配' : 'Required') : zh ? '未配置' : 'Missing',
+      ...(requiredMissing && validationAttempt > 0 ? { attention: true } : {}),
+    }
+  }
   const jobToolSlotState = (
     target: ResponsibilityToolSlotTarget,
   ): {
@@ -2842,6 +2927,7 @@ function JobTemplatesPanel(props: {
   const submitJob = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!complete) {
+      const firstMissingAdapter = adapterIssueTargets[0]
       const firstMissing = [...requiredMissingWorkItemRefs][0]
       const firstMissingDispatchTool = dispatchRouteEntries.find(
         ({ classifier, route }) =>
@@ -2850,7 +2936,11 @@ function JobTemplatesPanel(props: {
           !dispatchRouteComplete(classifier, route),
       )
       setValidationAttempt((current) => current + 1)
-      if (firstMissingDispatchTool !== undefined) {
+      if (firstMissingAdapter !== undefined) {
+        setEditorAdapterTarget(firstMissingAdapter)
+        setAdapterOpen(true)
+        setDutyOpen(false)
+      } else if (firstMissingDispatchTool !== undefined) {
         setEditorWorkItemRef('')
         setEditorToolSlotTarget(null)
         setEditorDispatchRouteKey(firstMissingDispatchTool.route.localRef)
@@ -3008,11 +3098,17 @@ function JobTemplatesPanel(props: {
           <EmployeeCapabilityPanorama
             type={props.type}
             selectedWorkItemRef={selectedEditorItem?.workItemRef ?? null}
+            selectedAdapterSlotKey={
+              editorAdapterTarget === null
+                ? null
+                : `${editorAdapterTarget.laneId}/${editorAdapterTarget.slotRef}`
+            }
             selectedReviewOptionRef={selectedEditorReview?.optionRef ?? null}
             selectedToolSlotTarget={selectedEditorToolSlotTarget}
             toolsByWorkItem={props.toolsByWorkItem}
             language={props.language}
             onSelect={(workItemRef) => {
+              setAdapterOpen(false)
               setEditorDispatchRouteKey(null)
               setEditorReviewOptionRef(null)
               setEditorToolSlotTarget(null)
@@ -3020,6 +3116,7 @@ function JobTemplatesPanel(props: {
               setDutyOpen(true)
             }}
             onSelectToolSlot={(target) => {
+              setAdapterOpen(false)
               setEditorDispatchRouteKey(null)
               setEditorReviewOptionRef(null)
               setEditorToolSlotTarget(target)
@@ -3027,6 +3124,7 @@ function JobTemplatesPanel(props: {
               setDutyOpen(true)
             }}
             onSelectReviewGate={(gate) => {
+              setAdapterOpen(false)
               setEditorDispatchRouteKey(null)
               setEditorToolSlotTarget(null)
               setEditorWorkItemRef(gate.parentWorkItemRef)
@@ -3034,6 +3132,12 @@ function JobTemplatesPanel(props: {
               setDutyOpen(true)
             }}
             onConfigureIngress={props.onConfigureIngress}
+            onSelectAdapterSlot={(target) => {
+              setDutyOpen(false)
+              setEditorAdapterTarget(target)
+              setAdapterOpen(true)
+            }}
+            adapterSlotState={jobAdapterSlotState}
             dispatchNodes={dispatchNodes}
             selectedDispatchNodeKey={editorDispatchRouteKey}
             onSelectDispatchNode={(node) => {
@@ -3051,6 +3155,31 @@ function JobTemplatesPanel(props: {
             toolSlotState={jobToolSlotState}
             compactChrome
           />
+          {editorAdapterTarget === null ? null : (
+            <LaneAdapterBindingDialog
+              open={adapterOpen}
+              onClose={() => setAdapterOpen(false)}
+              language={props.language}
+              laneId={editorAdapterTarget.laneId}
+              slot={editorAdapterTarget.slot}
+              mode="job-default"
+              value={adapterBindingAt(
+                adapterBindings,
+                editorAdapterTarget.laneId,
+                editorAdapterTarget.slotRef,
+              )}
+              inherited={null}
+              onChange={(binding) => {
+                const key = `${editorAdapterTarget.laneId}/${editorAdapterTarget.slotRef}`
+                setAdapterBindings((current) => [
+                  ...current.filter(
+                    (candidate) => `${candidate.laneId}/${candidate.slotRef}` !== key,
+                  ),
+                  ...(binding === null ? [] : [binding]),
+                ])
+              }}
+            />
+          )}
           {validationAttempt > 0 && !complete ? (
             <NoticeBanner
               tone="warning"
@@ -3725,6 +3854,13 @@ function EmployeesPanel(props: {
   const [editing, setEditing] = useState<DigitalEmployeeDefinition | null>(null)
   const [name, setName] = useState('')
   const [jobId, setJobId] = useState('')
+  const [responsibilityEmployee, setResponsibilityEmployee] =
+    useState<DigitalEmployeeDefinition | null>(null)
+  const [responsibilityAdapterOverrides, setResponsibilityAdapterOverrides] = useState<
+    LaneAdapterBinding[]
+  >([])
+  const [adapterOpen, setAdapterOpen] = useState(false)
+  const [adapterTarget, setAdapterTarget] = useState<ResponsibilityAdapterSlotTarget | null>(null)
   const firstVariant = props.type.workScopeAuthoring.variants[0]
   const taskLaunchVariant = props.type.workScopeAuthoring.variants.find(
     (variant) => variant.kind === 'task',
@@ -3749,6 +3885,11 @@ function EmployeesPanel(props: {
         undefined,
         signal,
       ),
+  })
+  const adapters = useQuery<{ items: LaneAdapterChoice[] }>({
+    queryKey: ['digital-employee-adapters'],
+    enabled: responsibilityEmployee !== null,
+    queryFn: ({ signal }) => api.get('/api/integrations/development-adapters', undefined, signal),
   })
   const runtimeOutcomes = useQuery<{ items: EmployeeTerminalOutcomeGroup[] }>({
     queryKey: ['digital-employee-outcomes', 'runtime'],
@@ -3819,6 +3960,7 @@ function EmployeesPanel(props: {
         jobTemplateRef: { id: job.id, revision: job.publishedRevision },
         workScope,
         toolOverrides: editing?.configuration.toolOverrides ?? [],
+        adapterOverrides: editing?.configuration.adapterOverrides ?? [],
         collaborationOverrides: editing?.configuration.collaborationOverrides ?? [],
       }
       return editing === null
@@ -3838,6 +3980,77 @@ function EmployeesPanel(props: {
     },
   })
   const publishedJobs = (jobs.data?.items ?? []).filter((job) => job.publishedRevision !== null)
+  const closeResponsibilities = () => {
+    setResponsibilityEmployee(null)
+    setResponsibilityAdapterOverrides([])
+    setAdapterOpen(false)
+    setAdapterTarget(null)
+  }
+  const openResponsibilities = (employee: DigitalEmployeeDefinition) => {
+    setResponsibilityEmployee(employee)
+    setResponsibilityAdapterOverrides(employee.configuration.adapterOverrides)
+    setAdapterOpen(false)
+    setAdapterTarget(null)
+  }
+  const saveResponsibilities = useMutation({
+    mutationFn: async () => {
+      if (responsibilityEmployee === null) throw new Error('employee is not selected')
+      return api.put<DigitalEmployeeDefinition>(
+        `/api/digital-employees/${encodeURIComponent(responsibilityEmployee.id)}`,
+        {
+          name: responsibilityEmployee.configuration.displayName,
+          jobTemplateRef: responsibilityEmployee.configuration.jobTemplateRef,
+          workScope: responsibilityEmployee.configuration.workScope,
+          toolOverrides: responsibilityEmployee.configuration.toolOverrides,
+          adapterOverrides: responsibilityAdapterOverrides,
+          collaborationOverrides: responsibilityEmployee.configuration.collaborationOverrides,
+        },
+      )
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['digital-employees', props.typeRef] })
+      await qc.invalidateQueries({ queryKey: ['digital-employees', 'all'] })
+      closeResponsibilities()
+    },
+  })
+  const responsibilityAdapterSlotState = (target: ResponsibilityAdapterSlotTarget) => {
+    const override = adapterBindingAt(responsibilityAdapterOverrides, target.laneId, target.slotRef)
+    const inherited = adapterBindingAt(
+      responsibilityEmployee?.inheritedAdapterBindings ?? [],
+      target.laneId,
+      target.slotRef,
+    )
+    const effective = override ?? inherited
+    const choice = adapters.data?.items.find(
+      (candidate) =>
+        candidate.id === effective?.adapterRef.id &&
+        candidate.purpose === target.slot.purpose &&
+        candidate.archivedAt === null &&
+        candidate.publishedRevision !== null,
+    )
+    if (effective !== null && choice !== undefined) {
+      const sourceLabel = override === null ? (zh ? '继承' : 'Inherited') : zh ? '覆盖' : 'Override'
+      return {
+        state: 'configured' as const,
+        detail: `${sourceLabel} · ${choice.name} · v${effective.adapterRef.revision}`,
+        compactDetail: `${sourceLabel} · v${effective.adapterRef.revision}`,
+      }
+    }
+    if (effective !== null) {
+      return {
+        state: 'missing' as const,
+        detail: zh
+          ? `冻结连接 ${effective.adapterRef.id}@${effective.adapterRef.revision} 缺失或不可用`
+          : `Frozen connection ${effective.adapterRef.id}@${effective.adapterRef.revision} is missing or unavailable`,
+        compactDetail: zh ? '不可用' : 'Unavailable',
+      }
+    }
+    return {
+      state: 'neutral' as const,
+      detail: zh ? '岗位模板未启用此连接' : 'Connection is not enabled by the job',
+      compactDetail: zh ? '未启用' : 'Disabled',
+    }
+  }
   const valid =
     name.trim() !== '' &&
     jobId !== '' &&
@@ -3961,6 +4174,14 @@ function EmployeesPanel(props: {
                 <button type="button" className="btn btn--sm" onClick={() => openEditor(employee)}>
                   {zh ? '编辑' : 'Edit'}
                 </button>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  data-testid={`digital-employee-configure-responsibilities-${employee.id}`}
+                  onClick={() => openResponsibilities(employee)}
+                >
+                  {zh ? '配置职责' : 'Configure responsibilities'}
+                </button>
                 <Link
                   to="/tasks/new"
                   search={{ kind: 'digital-employee', employeeId: employee.id }}
@@ -4057,6 +4278,104 @@ function EmployeesPanel(props: {
           {save.isError ? <ErrorBanner error={save.error} /> : null}
         </form>
       </Dialog>
+      <Dialog
+        open={responsibilityEmployee !== null}
+        onClose={closeResponsibilities}
+        title={
+          responsibilityEmployee === null
+            ? zh
+              ? '配置职责'
+              : 'Configure responsibilities'
+            : zh
+              ? `配置职责：${responsibilityEmployee.name}`
+              : `Configure responsibilities: ${responsibilityEmployee.name}`
+        }
+        size="full"
+        dismissDisabled={saveResponsibilities.isPending}
+        data-testid="employee-responsibilities-dialog"
+        footer={
+          <>
+            <button type="button" className="btn" onClick={closeResponsibilities}>
+              {zh ? '取消' : 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              form="employee-responsibilities-form"
+              className="btn btn--primary"
+              disabled={saveResponsibilities.isPending}
+            >
+              {zh ? '保存' : 'Save'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="employee-responsibilities-form"
+          className="employee-dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            saveResponsibilities.mutate()
+          }}
+        >
+          {responsibilityEmployee === null ? null : (
+            <section className="employee-definition-adapter-map">
+              <div>
+                <strong>{zh ? '职责与企业连接' : 'Responsibilities and connections'}</strong>
+                <p>
+                  {zh
+                    ? '工作项只读；点击每条泳道最前面的企业连接卡，可覆盖或恢复岗位默认值。'
+                    : 'Work items are read-only. Select the first connection card in a lane to override or restore the job default.'}
+                </p>
+              </div>
+              <EmployeeCapabilityPanorama
+                type={props.type}
+                selectedWorkItemRef={null}
+                selectedAdapterSlotKey={
+                  adapterTarget === null ? null : `${adapterTarget.laneId}/${adapterTarget.slotRef}`
+                }
+                language={props.language}
+                onSelect={() => {}}
+                onSelectAdapterSlot={(target) => {
+                  setAdapterTarget(target)
+                  setAdapterOpen(true)
+                }}
+                adapterSlotState={responsibilityAdapterSlotState}
+                cardIdPrefix="employee-duty"
+                compactChrome
+                workItemsReadOnly
+              />
+            </section>
+          )}
+          {saveResponsibilities.isError ? <ErrorBanner error={saveResponsibilities.error} /> : null}
+        </form>
+      </Dialog>
+      {adapterTarget === null ? null : (
+        <LaneAdapterBindingDialog
+          open={adapterOpen}
+          onClose={() => setAdapterOpen(false)}
+          language={props.language}
+          laneId={adapterTarget.laneId}
+          slot={adapterTarget.slot}
+          mode="employee-override"
+          value={adapterBindingAt(
+            responsibilityAdapterOverrides,
+            adapterTarget.laneId,
+            adapterTarget.slotRef,
+          )}
+          inherited={adapterBindingAt(
+            responsibilityEmployee?.inheritedAdapterBindings ?? [],
+            adapterTarget.laneId,
+            adapterTarget.slotRef,
+          )}
+          onChange={(binding) => {
+            const key = `${adapterTarget.laneId}/${adapterTarget.slotRef}`
+            setResponsibilityAdapterOverrides((current) => [
+              ...current.filter((candidate) => `${candidate.laneId}/${candidate.slotRef}` !== key),
+              ...(binding === null ? [] : [binding]),
+            ])
+          }}
+        />
+      )}
     </section>
   )
 }
