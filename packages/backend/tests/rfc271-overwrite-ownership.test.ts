@@ -150,7 +150,9 @@ describe('AC-15 · 包级导入链上的 overwrite 归属边界', () => {
     // 会落到引擎的 `bundle-overwrite-not-owned` —— 已实测，两层都真的在。
     // 若这里变红且实际码是 `bundle-overwrite-not-owned`，说明域服务那道门被动过，
     // 该去确认是有意重构还是回归，而不是顺手把期望值改掉。
-    expect(out).toEqual({ ok: false, code: 'forbidden' })
+    // RFC-324 —— 码从裸 `forbidden` 分流成只读档专用码：覆盖是**内容写**，而这个
+    // 导入者对别人那份工作组只有可见性（public ⇒ 全员只读），拒绝理由正是这一条。
+    expect(out).toEqual({ ok: false, code: 'resource-read-only' })
 
     // 不只断言被拒——还要断言**什么都没写下去**。写了一半才抛错的拒绝，与提前拒绝
     // 的，对受害者的数据是两回事。

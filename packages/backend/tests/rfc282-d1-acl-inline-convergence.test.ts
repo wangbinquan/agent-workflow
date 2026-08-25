@@ -233,13 +233,16 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
     })
   })
 
-  test('agent: visible-but-not-owner → 403 forbidden, even with a stale fence (403 precedes stale)', async () => {
+  test('agent: visible-but-not-owner → 403 resource-govern-owner-only, even with a stale fence (403 precedes stale)', async () => {
     await expect(
       deleteAgent(db, agentRow.id, actorOf(grantedId), {
         expectedUpdatedAt: fence().expectedUpdatedAt + 999,
         expectedAclRevision: fence().expectedAclRevision,
       }),
-    ).rejects.toMatchObject({ code: 'forbidden' })
+      // RFC-324 —— 拒绝码从裸 `forbidden` 分流成治理档专用码。锁的东西没变：
+      // 「看得见但不是 owner」在删除面必须 403，且 403 先于 stale。分流是为了让前端
+      // 能把「你只有只读授权」与「可能已删除」讲成两句不同的话。
+    ).rejects.toMatchObject({ code: 'resource-govern-owner-only' })
   })
 
   test('agent: owner with stale fence → resource-operation-stale (stale comes after the ACL gates)', async () => {
@@ -262,7 +265,7 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
   })
 
-  test('workflow: visible-but-not-owner → 403 forbidden (after builtin check position)', async () => {
+  test('workflow: visible-but-not-owner → 403 resource-govern-owner-only (after builtin check position)', async () => {
     await expect(
       deleteWorkflow(
         db,
@@ -270,7 +273,10 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
         { expectedVersion: 1, clientMutationId: ulid() },
         { kind: 'actor', actor: actorOf(grantedId) },
       ),
-    ).rejects.toMatchObject({ code: 'forbidden' })
+      // RFC-324 —— 拒绝码从裸 `forbidden` 分流成治理档专用码。锁的东西没变：
+      // 「看得见但不是 owner」在删除面必须 403，且 403 先于 stale。分流是为了让前端
+      // 能把「你只有只读授权」与「可能已删除」讲成两句不同的话。
+    ).rejects.toMatchObject({ code: 'resource-govern-owner-only' })
   })
 
   test('workflow: builtin outranks 403 — visible non-owner on a builtin row gets builtin-readonly', async () => {
@@ -307,7 +313,7 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
     ).rejects.toMatchObject({ code: 'workgroup-not-found' })
   })
 
-  test('workgroup: visible-but-not-owner → 403 forbidden', async () => {
+  test('workgroup: visible-but-not-owner → 403 resource-govern-owner-only', async () => {
     await expect(
       deleteWorkgroup(
         db,
@@ -315,7 +321,10 @@ describe('RFC-282 D1 — write-path assertion triples (agent / workflow / workgr
         { expectedVersion: 1, clientMutationId: ulid() },
         { kind: 'actor', actor: actorOf(grantedId) },
       ),
-    ).rejects.toMatchObject({ code: 'forbidden' })
+      // RFC-324 —— 拒绝码从裸 `forbidden` 分流成治理档专用码。锁的东西没变：
+      // 「看得见但不是 owner」在删除面必须 403，且 403 先于 stale。分流是为了让前端
+      // 能把「你只有只读授权」与「可能已删除」讲成两句不同的话。
+    ).rejects.toMatchObject({ code: 'resource-govern-owner-only' })
   })
 
   test('workgroup: owner with wrong version → resource-operation-stale（RFC-285 B5 归一）', async () => {

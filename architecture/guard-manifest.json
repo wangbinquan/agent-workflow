@@ -1240,6 +1240,18 @@
       "lines": 250
     },
     {
+      "id": "rfc324-editor-readonly-source-lock",
+      "file": "packages/frontend/tests/rfc324-editor-readonly-source-lock.test.ts",
+      "runner": "vitest",
+      "mechanism": "source-text",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 92
+    },
+    {
       "id": "btn-variants-callsite",
       "file": "packages/frontend/tests/btn-variants-callsite.test.ts",
       "runner": "vitest",

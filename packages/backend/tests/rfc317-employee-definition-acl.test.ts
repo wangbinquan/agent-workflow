@@ -307,17 +307,28 @@ describe('RFC-317 T8 —— 三个列表面都接了可见性过滤（AST 断言
     ).toEqual([])
   })
 
-  test('详情走可见性门，保留的写入口走 owner 门', () => {
+  test('详情走可见性门，保留的写入口走内容写门', () => {
     const detail = handlerFor('GET', '/api/digital-employees/:id')
     expect(detail, '找不到详情 handler').not.toBeNull()
     expect(calledNames(detail!).has('loadVisibleEmployee')).toBe(true)
 
+    // RFC-324 —— 门从 `requireOwnedEmployee`（owner-only）换成
+    // `requireEditableEmployee`（owner / `write` 授权 / bypass）。本条锁的东西没变：
+    // 这个写入口必须过**一道行级判据**，而不是只判「看得见」——那正是 RFC-317 C1
+    // 修掉的越权形态。换的是判据的档位，不是有没有判据。
+    //
+    // 员工定义的保存同时原子创建下一个可执行 revision，按 RFC-324 D8「发布算改内容」
+    // 整体归内容写；删除 / 归档仍在 developmentConfig 的治理门上。
     for (const [method, path] of [['PUT', '/api/digital-employees/:id']] as const) {
       const handler = handlerFor(method, path)
       expect(handler, `找不到写入口 ${method} ${path}`).not.toBeNull()
       expect(
-        calledNames(handler!).has('requireOwnedEmployee'),
-        `${method} ${path} 没有过 owner 门`,
+        calledNames(handler!).has('requireEditableEmployee'),
+        `${method} ${path} 没有过行级写门`,
+      ).toBe(true)
+      expect(
+        calledNames(handler!).has('assertNameUnchangedForEditor'),
+        `${method} ${path} 缺改名围栏：保存 body 带 name，而改名归 owner`,
       ).toBe(true)
     }
   })

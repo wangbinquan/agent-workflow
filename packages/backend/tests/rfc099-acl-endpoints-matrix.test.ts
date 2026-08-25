@@ -459,9 +459,21 @@ describe('RFC-099 / RFC-317 T9b ACL endpoint matrix — enrolment（运行时预
         .filter((meta) => meta.path.endsWith('/acl'))
         .map((meta) => meta.path.replace(/\/:[^/]+\/acl$/, '')),
     )
+    // RFC-324 §7 —— 定时任务也有一对 `/acl` 端点，但它**不是** ACL 资源类型：
+    // 它借用 `resource_grants` 拿两档授权，却没有 visibility / builtin /
+    // owner×name 唯一域，也不进配置包或 Intent。把它塞进 `ACL_RESOURCE_TYPES`
+    // 会给 bundle / intent / name-unique 四个集合各留一个例外分支，所以它由
+    // routes/scheduledTasks.ts 自己挂端点。这里显式扣掉它，而不是把等号放松成
+    // `>=`——放松之后「新增一类却没挂端点」就再也测不出来了。
+    const NON_ACL_TYPE_ACL_BASES = new Set(['/api/scheduled-tasks'])
+    const aclTypeBases = [...basesWithAcl].filter((base) => !NON_ACL_TYPE_ACL_BASES.has(base))
     expect(
-      basesWithAcl.size,
-      `注册上的 /acl 基路径数应等于 ACL 资源类型数；实际基路径=${[...basesWithAcl].sort().join(', ')}`,
+      [...basesWithAcl].filter((base) => NON_ACL_TYPE_ACL_BASES.has(base)).sort(),
+      '扣除项必须真的挂在路由表上，否则它会变成一个永久的免费槽位',
+    ).toEqual([...NON_ACL_TYPE_ACL_BASES].sort())
+    expect(
+      aclTypeBases.length,
+      `注册上的 /acl 基路径数应等于 ACL 资源类型数；实际基路径=${aclTypeBases.sort().join(', ')}`,
     ).toBe(ACL_RESOURCE_TYPES.length)
 
     // GET 与 PUT 成对，缺一不可。
@@ -536,7 +548,9 @@ for (const rc of CASES) {
     })
 
     test('a stranger cannot grant themselves access, and the ACL is unchanged', async () => {
-      const body = JSON.stringify(mutation({ userIds: [h.carol.id], visibility: 'public' }))
+      const body = JSON.stringify(
+        mutation({ grants: [{ userId: h.carol.id, level: 'read' }], visibility: 'public' }),
+      )
       const attack = await req(h.app, h.carol.token, aclPath(key), { method: 'PUT', body })
       // Indistinguishable from the SAME request against an id that does not
       // exist — which is the actual invariant, and stricter than pinning one
@@ -563,11 +577,11 @@ for (const rc of CASES) {
       const acl = (await (await req(h.app, owner.token, aclPath(key))).json()) as {
         ownerUserId: string
         visibility: string
-        users: Array<{ id: string }>
+        grants: Array<{ user: { id: string }; level: string }>
       }
       expect(acl.ownerUserId).toBe(owner.id)
       expect(acl.visibility).toBe('private')
-      expect(acl.users).toEqual([])
+      expect(acl.grants).toEqual([])
       // …and the stranger still cannot see it.
       expect((await req(h.app, h.carol.token, aclPath(key))).status).toBe(404)
     })
@@ -580,17 +594,18 @@ for (const rc of CASES) {
 
       const grant = await req(h.app, owner.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify(mutation({ userIds: [h.bob.id] })),
+        body: JSON.stringify(mutation({ grants: [{ userId: h.bob.id, level: 'read' }] })),
       })
       expect(grant.status).toBe(200)
 
       const asBob = (await (await req(h.app, h.bob.token, aclPath(key))).json()) as {
         ownerUserId: string
-        users: Array<{ id: string }>
+        grants: Array<{ user: { id: string }; level: string }>
         canManage: boolean
       }
       expect(asBob.ownerUserId).toBe(owner.id)
-      expect(asBob.users.map((u) => u.id)).toEqual([h.bob.id])
+      // RFC-324 —— 名单带档位；被授权者读得到自己那条，但 canManage 仍是 false。
+      expect(asBob.grants.map((g) => [g.user.id, g.level])).toEqual([[h.bob.id, 'read']])
       expect(asBob.canManage).toBe(false)
 
       const bobEscalates = await req(h.app, h.bob.token, aclPath(key), {
@@ -606,14 +621,16 @@ for (const rc of CASES) {
     test('granting an unknown or system user is refused with a typed 422', async () => {
       const unknown = await req(h.app, owner.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify(mutation({ userIds: ['01HFAKEUSERID0000000000000'] })),
+        body: JSON.stringify(
+          mutation({ grants: [{ userId: '01HFAKEUSERID0000000000000', level: 'read' }] }),
+        ),
       })
       expect(unknown.status).toBe(422)
       expect(((await unknown.json()) as { code: string }).code).toBe('acl-user-invalid')
 
       const system = await req(h.app, owner.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify(mutation({ userIds: ['__system__'] })),
+        body: JSON.stringify(mutation({ grants: [{ userId: '__system__', level: 'read' }] })),
       })
       expect(system.status).toBe(422)
     })
@@ -678,7 +695,7 @@ describe('RFC-317 T29 —— ACL 写完之后的广播由各资源自己的 afte
         const put = await req(h.app, owner.token, `${rc.base}/${key}/acl`, {
           method: 'PUT',
           body: JSON.stringify({
-            userIds: [h.bob.id],
+            grants: [{ userId: h.bob.id, level: 'read' as const }],
             expectedResourceId: key,
             expectedAclRevision: 0,
           }),
