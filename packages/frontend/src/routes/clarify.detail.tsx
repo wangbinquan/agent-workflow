@@ -650,7 +650,11 @@ export function ClarifyDetailPage() {
     return (
       <div className="page">
         <PageHeader title={nodeRunId} />
-        <ErrorBanner error={session.error} onRetry={() => void session.refetch()} />
+        <ErrorBanner
+          error={session.error}
+          onRetry={() => void session.refetch()}
+          testid="clarify-session-error"
+        />
       </div>
     )
   }
@@ -747,11 +751,21 @@ export function ClarifyDetailPage() {
 
       <FeedbackStack variant="section">
         {session.error !== null && session.error !== undefined && (
-          <ErrorBanner error={session.error} onRetry={() => void session.refetch()} />
+          <ErrorBanner
+            error={session.error}
+            onRetry={() => void session.refetch()}
+            testid="clarify-session-error"
+          />
         )}
 
+        {/* RFC-319 B62: 同伴（分片邻居）这条是**辅助**信息，它挂掉只出这一条错误条，
+            不许把整页顶掉。给它一个独立锚点，测试才能把两条查询的失败分开断言。 */}
         {peers.error !== null && peers.error !== undefined && (
-          <ErrorBanner error={peers.error} onRetry={() => void peers.refetch()} />
+          <ErrorBanner
+            error={peers.error}
+            onRetry={() => void peers.refetch()}
+            testid="clarify-peers-error"
+          />
         )}
 
         {draftStatus.kind === 'error' && (

@@ -7153,7 +7153,7 @@
     {
       "id": "HUMAN-15",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "澄清详情的分片切换器：同一 clarify 节点多个待答分片时页内横跳",
+      "title": "澄清详情的分片切换器：同一 clarify 节点多个待答分片时页内横跳（负向半边「只有一份时不出现」已由 e2e/clarify-detail-states.spec.ts 锁住；正向半边当前走工作流 fan-out 到不了——内层节点收不到 clarify 邀请，per-shard clarify 自 RFC-060 PR-D 推迟至今未接线——只剩工作组 worker park 一条路，详见 docs/audit-backlog.md）",
       "risk": "P3",
       "tier": "nightly",
       "status": "gap",
@@ -7165,8 +7165,17 @@
       "title": "澄清截断告警：agent 超发题目/选项时页面显式提示被截断",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-detail-states.spec.ts",
+          "test": "agent 超发题目时，页面必须说「被截断了」——否则人以为自己看到的就是全部"
+        },
+        {
+          "file": "e2e/clarify-detail-states.spec.ts",
+          "test": "不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器"
+        }
+      ]
     },
     {
       "id": "HUMAN-24",
@@ -7246,8 +7255,21 @@
       "title": "澄清 / 评审的归属展示（谁提交、每题最后谁编辑、决策人及角色）且绝不进 prompt",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-detail-states.spec.ts",
+          "test": "答完之后：页面写清是谁提交的"
+        },
+        {
+          "file": "e2e/review-single-doc-keyboard-download.spec.ts",
+          "test": "驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词"
+        },
+        {
+          "file": "e2e/clarify-collab-draft.spec.ts",
+          "test": "同一题再写一次：后写的赢，且逐题归属跟着更新"
+        }
+      ]
     },
     {
       "id": "HUMAN-X3",
@@ -7278,8 +7300,13 @@
       "title": "澄清详情页的加载态 / 错误态与两条查询各自的重试（session 与 peers）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-detail-states.spec.ts",
+          "test": "两条查询各自坏掉：本轮坏了要整页报错可重试，同伴坏了不许把整页拖垮"
+        }
+      ]
     },
     {
       "id": "HUMAN-X6",
@@ -8687,12 +8714,9 @@
     "EVENT-X6",
     "EVENT-X7",
     "HUMAN-15",
-    "HUMAN-16",
     "HUMAN-43",
     "HUMAN-47",
-    "HUMAN-48",
     "HUMAN-X3",
-    "HUMAN-X5",
     "HUMAN-X6",
     "IAM-02",
     "IAM-07",
