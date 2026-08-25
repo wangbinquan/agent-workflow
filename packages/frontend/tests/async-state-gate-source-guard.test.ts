@@ -102,7 +102,9 @@ const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClic
 // former escapees join the grandfather set with their real counts.
 // ---------------------------------------------------------------------------
 const ALLOW_EMPTY = new Map<string, number>([
-  ['components/AclPanel.tsx', 1],
+  // components/AclPanel.tsx 曾有 1 处（`<span className="muted">{t('acl.noMembers')}</span>`）。
+  // RFC-324 把成员区改成逐人一行的档位列表，空态随之走 QueryState，条目就此归零 —— 按本文件
+  // 「drift down 即条目过期」的约定移除，不是把计数改成 0（0 会让它永远绕过 offendersOver）。
   ['components/WorktreeFilesPanel.tsx', 1],
   ['components/agents/NodeDependencyTreeSection.tsx', 1],
   ['components/fusion/FuseDialog.tsx', 2],
