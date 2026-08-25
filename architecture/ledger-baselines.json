@@ -246,10 +246,7 @@
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
       "baseline": 206,
-      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。",
-      "allowGrowth": {
-        "why": "RFC-324 资源授权分档：新挂了 GET / PUT /api/scheduled-tasks/:id/acl 两个端点，本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径（把工作流授权给别人用但不想让他改），这两条的档位判定由后端 rfc324-scheduled-task-acl 覆盖、端到端只差「面板点得开」一层。加豁免比现在补两条 e2e 更值得的理由是覆盖面本身不假：后端判据已被穷举等价性与档位矩阵锁死，缺的是一层 UI 冒烟。销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。"
-      }
+      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。"
     },
     {
       "id": "rfc319-e2e-route-coverage",
