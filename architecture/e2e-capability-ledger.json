@@ -3072,9 +3072,23 @@
       "domain": "代理",
       "title": "从配置包创建代理（/agents/new 的「导入配置包」页签）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/config-package-import.spec.ts",
+          "test": "预览是干跑：只问不写，连一次提交请求都不许发出去"
+        },
+        {
+          "file": "e2e/config-package-import.spec.ts",
+          "test": "两项都选「新建」：新建两份，且新代理指向新技能而不是原来那个"
+        },
+        {
+          "file": "e2e/config-package-import.spec.ts",
+          "test": "技能改选「复用既有」：只新建代理，它指向的是本机原来那个技能"
+        }
+      ]
     },
     {
       "id": "AGENT-40",
@@ -8494,9 +8508,15 @@
       "domain": "工作流定义与画布编辑器",
       "title": "模板起步弹窗（WorkflowStarterDialog）：选模板 → 实时草稿校验 → 应用生成整张图",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-24 空画布引导：「添加第一个节点」落下第一步，「从模板开始」把整套审计模板一次接好且一次撤销退得回来"
+        }
+      ]
     },
     {
       "id": "WF-26",
@@ -9661,9 +9681,15 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "设置保存响应丢失后的 outcomeUnknown 对账",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/settings-outcome-unknown.spec.ts",
+          "test": "RFC-319 RES-08: a save whose response is lost fails closed — the section locks, writes stop for the connection, and nothing is silently retried"
+        }
+      ]
     },
     {
       "id": "CFG-09",
@@ -11722,9 +11748,15 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "登录失败（错密码 / 账号禁用）在表单上给出可读错误",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/identity-access.spec.ts",
+          "test": "RFC-319 IAM-05/06: password sign-in lands on the requested page; three rejections are readable"
+        }
+      ]
     },
     {
       "id": "UX-13",
@@ -11823,9 +11855,15 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "长列表窗口化 + 分页加载更多（VirtualList）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/rfc244-task-operations.spec.ts",
+          "test": "1280px keeps 30+ tasks dense and paginates roots and child branches independently"
+        }
+      ]
     },
     {
       "id": "UX-37",
@@ -12059,9 +12097,15 @@
       "domain": "工作流定义与画布编辑器",
       "title": "「聚焦选中」相机动作",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/rfc250-workflow-camera.spec.ts",
+          "test": "RFC-319 WF-23: focus-selection is gated on a selection and actually moves the camera"
+        }
+      ]
     },
     {
       "id": "WF-X3",
@@ -12351,7 +12395,6 @@
   "gapIds": [
     "REPO-43",
     "UX-35b",
-    "AGENT-39",
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
@@ -12385,7 +12428,6 @@
     "UX-41",
     "UX-47",
     "UX-X5b",
-    "WF-25",
     "WF-47b",
     "WG-27",
     "WG-28",
@@ -12396,7 +12438,6 @@
     "AGENT-38",
     "AGENT-46",
     "CFG-03",
-    "CFG-08",
     "CFG-32",
     "CFG-X5",
     "DE-39",
@@ -12413,12 +12454,9 @@
     "OPS-X7",
     "OPS-X9",
     "REPO-42",
-    "UX-06",
-    "UX-36",
     "UX-39",
     "UX-45",
     "UX-46",
-    "WF-X2",
     "WG-06",
     "WG-X2"
   ],
