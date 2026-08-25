@@ -3229,8 +3229,13 @@
       "title": "claude-code 专属 extraArgs / IS_SANDBOX 字段，及非法参数在 spawn 前被拒",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-18：extraArgs / IS_SANDBOX 只对 claude-code 露面；非法参数在拉起子进程之前就被拒 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-20",
@@ -3256,8 +3261,13 @@
       "title": "System agents 分区：内置 agent 的运行时 + 语言 + 参数一次保存",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-21：System agents 一次保存落齐运行时 + 语言 + 数值参数，且只写本分区自己的键 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-23",
@@ -3279,8 +3289,13 @@
       "title": "Recovery 分区：自动恢复开关与断路器阈值",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-25：Recovery 的三个自动执行开关与四个断路器阈值整体落库，越界的巡检间隔当场拦下 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-26",
@@ -3325,8 +3340,13 @@
       "title": "MCP 外部访问开关：关闭后 /api/mcp 与新 token 铸造同时关停",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-33：关掉外部访问后 /api/mcp 与新令牌铸造同时关停，已签发令牌的 REST 通道不受牵连 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-35",
@@ -3362,8 +3382,13 @@
       "title": "渲染分区：PlantUML 端点/鉴权头保存 +「测试连接」四种结果",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-37：渲染分区存下端点与鉴权头，「测试连接」的四种结果各自成立 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-39",
@@ -3444,8 +3469,13 @@
       "title": "Limits 执行预算默认值（任务时长 / token / 节点超时 / 重试 / 会话重启预算 / 大输出阈值）保存后被新任务采用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-X1：Limits 的执行预算保存后被新任务采用——超时值逐字出现在被杀节点上，重试次数按预算生长 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-X2",
@@ -9239,8 +9269,13 @@
       "title": "运行时 config-dir 覆盖字段的校验（非法 leaf / 保留 env 名）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-19：config-dir 覆盖的保留 env 名（大小写折叠）与非法叶子名，前端拦一层、服务端再拦一层 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-22",
@@ -9248,8 +9283,13 @@
       "title": "System agents 的双端点保存顺序（fusion-only 不重复 PUT；config 失败时 fusion 不半应用）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-22：只改融合就不再 PUT config；config 被拒时融合一格都不写 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-24",
@@ -9307,8 +9347,13 @@
       "title": "PlantUML 后端代理渲染的五种响应（svg / unconfigured / errorSvg / 400 / 413）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-38：PlantUML 后端代理的五种响应各自成立，鉴权头只出现在服务端到渲染器那一跳 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-43",
@@ -11635,14 +11680,8 @@
     "AGENT-28",
     "AGENT-39",
     "AGENT-X1",
-    "CFG-18",
-    "CFG-21",
-    "CFG-25",
     "CFG-29",
-    "CFG-33",
-    "CFG-37",
     "CFG-45",
-    "CFG-X1",
     "CFG-X2",
     "CFG-X3",
     "CFG-X4",
@@ -11761,13 +11800,10 @@
     "CFG-03",
     "CFG-06",
     "CFG-08",
-    "CFG-19",
-    "CFG-22",
     "CFG-24",
     "CFG-28",
     "CFG-30",
     "CFG-32",
-    "CFG-38",
     "CFG-44",
     "CFG-X5",
     "DE-02",

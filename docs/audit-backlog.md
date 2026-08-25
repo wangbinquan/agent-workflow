@@ -2975,3 +2975,30 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    agent 臂 = 同步 422 + 向导原地横幅 + **不铸任务行**；workflow 臂 = RFC-287 G7 的延后准备 ⇒
    **先铸 pending 行、后台失败转 failed**（`packages/backend/src/routes/tasks.ts:330-334` 注释明说
    只有那条 JSON-body 路由打开 `deferRepoPreparation`）。B94 只覆盖了 agent 臂那一半。
+
+## RFC-319 B95 起草期撞到的产品缺陷（2026-08-26，设置 / 配置分区）
+
+1. **【真实缺陷，P3 / 死旋钮，已全仓核实】`largeOutputThresholdBytes` 全仓零消费方。**
+   设置页 Limits 分区那格「Large output threshold (bytes)」改得动、存得下、落得进
+   `config.json`，但**没有任何代码读它**。全仓命中只有 schema + 默认值 + patch
+   （`shared/schemas/config.ts`）、数值边界（`shared/settingsNumericBounds.ts`）、
+   前端草稿白名单与设置页控件（`frontend/src/lib/settings-drafts.ts`、`routes/settings.tsx`）
+   与 i18n；**`packages/backend/src` 下 0 命中**（本人复核：`grep -rni largeoutput
+   packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置里有值 → 起任何任务、
+   产出任意大小输出，行为与默认值毫无区别。建议要么接线、要么从设置页下架。
+   B95 **未就此写断言**——断言「它不生效」等于把缺陷固化进判据。
+2. **【账本措辞与实现不符，已按源码实际写】CFG-X1 的六项预算只有三项真被新任务采用。**
+   进启动漏斗的只有 `defaultPerNodeTimeoutMs` / `defaultNodeRetries` / `sessionRestartBudget`
+   （`services/launchRuntimeConfig.ts:154-171` → `services/startTaskDeps.ts:51`，每次启动重读）。
+   `defaultPerTaskMaxDurationMs` / `defaultPerTaskMaxTotalTokens` 是 **RFC-108 PR-B 刻意不接线**
+   （存量 config 持久化着旧的 1h 默认值，一旦消费会被 limits ticker 当硬上限取消任务，而
+   `canceled` 不可 resume），并由 `packages/backend/tests/rfc108-launch-budget-timeout-floor.test.ts:50-56`
+   正面锁着「不许泄漏这两个字段」——**照账本字面写会得到一条永远红的用例**。用例因此对这三项只断言
+   「存得住 + 落盘」，对另外三项断言「新任务真的按它跑」。
+3. **【文档层面容易误导，非缺陷】两条实现细节**
+   - `POST /api/auth/pats` 的 scopes **不接受读点**：`grantableMatrixPoints`
+     （`shared/schemas/permission.ts:1312-1318`）显式排除 `READ_POINTS`，写
+     `scopes:['tasks:read']` 会被 `pat-scope-ungrantable` 拒；读权限由 `resolveTokenPermissions`
+     （:1293-1303）按账号自动并入。
+   - `mcpSurfaceEnabled` 的界面入口在 **Network 分区**（`?tab=network`），不是一个独立的
+     「MCP 外部访问」分区——账本措辞会让人去找一个不存在的分区。
