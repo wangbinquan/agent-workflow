@@ -7290,8 +7290,21 @@
       "title": "首页 Inbox 预览区块在真实待办数据下的呈现与跳转",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/home-inbox-preview.spec.ts",
+          "test": "首页「等你处理」要把两类待办都摆出来，而不是只显示其中一类"
+        },
+        {
+          "file": "e2e/home-inbox-preview.spec.ts",
+          "test": "点一行要落到那条待办自己的详情页——落错页面比不给点更糟"
+        },
+        {
+          "file": "e2e/home-inbox-preview.spec.ts",
+          "test": "一条 feed 挂了：要说清是哪条、能重试，而另一条的待办照常显示"
+        }
+      ]
     },
     {
       "id": "HUMAN-X4",
@@ -8737,7 +8750,6 @@
     "EVENT-X7",
     "HUMAN-15",
     "HUMAN-43",
-    "HUMAN-X3",
     "IAM-02",
     "IAM-07",
     "IAM-09",
