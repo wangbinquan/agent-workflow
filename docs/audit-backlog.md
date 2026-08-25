@@ -2410,3 +2410,76 @@ RFC-060 PR-D 推迟到 PR-D2，至今未落地。
 9. **`repos.tsx:534` 的空态分支与 `PageHeader` 争同一个 `data-testid`**（`repos-batch-import-button`，
    互斥出现）。`e2e/keyboard-flows.spec.ts` 的四条 Dialog 用例正是靠「零仓时按钮落在空态里」拿到它——
    一旦有人给页头补上「空态也显示导入按钮」，那四条会 strict-mode 撞车。埋着的 testid 唯一性地雷。
+
+## RFC-319 B75 起草期撞到的产品缺陷（2026-08-25，均未写成断言）
+
+行号按 `origin/main`。「未写成断言」的理由一律相同：把缺陷锁进测试等于把它固化。
+
+**运维 CLI**
+
+1. **端口绑定失败会漏掉一个陈旧锁文件。** `start` 在 `cli/start.ts:322` 之后就持锁，而 `Bun.serve`
+   （`:853`）抛 EADDRINUSE 时进程经 `main.ts:212-216` 直接 exit 1——那时退出/信号处理器（`:1539`、
+   `:1625`）**还没注册**，`lock.release()` 从不执行。实测：一次端口冲突后 `.daemon.lock` 里躺着已死 PID，
+   随后 `status` 报「陈旧锁」。`acquireLock` 下次会自愈，但用户在两次操作之间看到的是一句吓人的话。
+2. **端口冲突的报错是 Bun 的原始异常文本，不是产品自己的话**：`Failed to start server. Is port N in use?`
+   ——没有 `agent-workflow:` 前缀（其余启动失败都有，见 `start.ts:325/374/404`）、没说是哪个 host、
+   没提示可以 `--port`，而且随 Bun 版本漂移。
+3. **`stop` 的等待预算（30s）等于 daemon 自己的排空预算（30s），必然误报。** 实测：一个正在排空的 daemon
+   在 SIGTERM 后 **30.1s** 干净退出，而 `stop` 在 30.0s 就放弃并报 `did not exit within 30000ms` + exit 1。
+   **只要 daemon 用满预算，`stop` 一定报失败**，哪怕它下一毫秒就停了。脚本化的 `stop && start` 会被无谓中断。
+   建议 `stop` 的等待 = daemon 预算 + 缓冲，或直接做成 `--timeout`（那也正好解开 OPS-007 的不可测，见下）。
+4. **`--port " "`（未展开的 shell 变量）被静默当成 `--port 0`。** `Number(' ') === 0` 通过 `readPortFlag`
+   （`main.ts:41-48`）全部校验，daemon 绑到内核随机端口。用户写 `--port "$PORT"` 而变量未设置时，
+   会得到一个「起来了但不知道在哪个端口」的实例。
+5. **OPS-007 目前不可测**（已如实留 gap）：`stop` 的等待预算 30s 硬编码、CLI 无 `--timeout` 旋钮，
+   而 `e2e/command.ts:15` 的 `COMMAND_TIMEOUT_MS` 是 15s——子进程会先被 harness 打死，拿到的是 harness
+   行为而非产品契约。`forced` 那一档在 POSIX 上根本不可达（`cli/stop.ts:104` 只在 win32 硬杀）。
+
+**Webhook 端点**
+
+6. **`POST /api/webhook-endpoints/:id/rotate-url-token` 全仓零调用方。** 入站地址泄露后用户在界面上
+   无法轮换，只能新建端点并回代码平台重配。
+7. **端点「改名 / 改 clone 协议」同样没有 UI**：`WebhookEndpointCard.tsx:156-158` 是唯一的 PUT 调用点，
+   body 恒为 `{ enabled }`。clone 协议选错的端点（自动注册永远失败）只能靠 API 或重建修复，而重建会
+   换掉 URL 与 secret。
+8. **未知 provider 的请求白烧全局限流配额**：`routes/webhooks.ts:105-108` 调了
+   `limiters.unmatched.allow('global')` 却**丢弃返回值**直接 404。扫路径的人永远不会被 429，但他消耗的是
+   和「真实误配置的 hook」共用的那一个桶；桶满后，一个地址配错的正经 hook 拿到的是 429 而不是能说明
+   问题的 404。
+9. **`data-testid="webhook-endpoint-add"` 在空列表时重复出现两次**（`WebhookEndpointCard.tsx:258` 与 `:308`），
+   任何用 `getByTestId` 的 spec 在空列表下都会 strict-mode 撞车。
+10. **启停开关没有 pending 反馈**：受控 checkbox 在服务端回执前 `checked` 不变，用户看到「点了弹回去」；
+    Playwright 的 `check()` 会直接报「Clicking the checkbox did not change its state」。
+
+**定时任务**
+
+11. **手动暂停一条曾经失败过的排期，详情页谎称「系统自动停用」。** `scheduled.$id.tsx:199-203` 的条件是
+    `!enabled && consecutiveFailures > 0`，而**手动停用不清零** `consecutive_failures`
+    （`services/scheduledTasks.ts:697-705` 只在启用方向清零）。用户会去追一个不存在的自动停用事故。
+12. **真正被自动停用的一类反而不显示该横幅**：`scheduledTaskScheduler.ts:65-77` 在 `schedule_spec` 损坏时
+    直接 `enabled=false`，但**不动** `consecutive_failures`（保持 0）。与上一条是同一判据的两面：既误报也漏报。
+13. **总开关与失败阈值在前台完全没有入口**：`grep -rn "scheduledTasksEnabled\|scheduledTasksMaxFailures"
+    packages/frontend/src` → **0 命中**。出事时最该点得到的急停闸，界面上没有。
+14. **自动停用没有任何对外通知**：`onAutoDisable` 回调在 daemon 装配处（`cli/start.ts:1476-1480`）根本没传。
+    「排期被系统关掉了」只落在库里。`WHERE enabled=1 RETURNING` 的「只停一次」设计目前是为一个不存在的
+    消费者服务的。
+15. **RFC-324 给 `scheduled_tasks` 接了 grants 与 `/acl` 端点，前台没有任何授权面**
+    （`grep -c AclPanel packages/frontend/src/routes/scheduled.$id.tsx` → 0）。
+
+**任务列表**
+
+16. **RFC-311 的「默认视图」快路径在生产中永不可达（双重失效）。** 唯一生产调用方
+    `task-catalog-adapter.ts:76` ①恒传 `subject: sourceId`（`:83`），而 `isDefaultView` 要求
+    `subject === 'all'`（`taskOperations.ts:760`）；②恒传 `catalogVisibility: 'public'`（`:90-91`），
+    而 `defaultFastPath` 要求它 `undefined`（`:1119-1120`）。`fastDefaultRootQuery` 及其 O(page) keyset
+    优化是死代码。仍有兜底故非 P0，但 RFC-311 声称守住的那条已不成立。
+17. **筛选弹窗里两个不同维度的单选项撞了同一个可及名**：`tasks.operations.category.all` 与
+    `tasks.operations.scope.all` 在 en-US 里都是 `'All tasks'`，两个 radiogroup 同屏并列，读屏用户
+    无法区分「类别」与「范围」。
+18. **`pruned` 的文案承诺与导航不一致**：文案明写 files / diff / node retry / workflow sync 都不再可用，
+    但 `deriveTaskDetailCapabilities`（`task-detail-tabs.ts:107-134`）只看 `worktreePath`/`baseCommit`，
+    而 GC 只落墓碑列、**不清空** `tasks.worktree_path`（`services/gc.ts:170-180`）。三个页签回收后照旧
+    可点，点进去撞到的是裸错误而不是「这里已经回收了」。
+19. **`available → pruning` 这一跳在已打开的详情页上不可观测**：终态任务的轮询已停
+    （`tasks.detail.tsx:2042-2047`），而工作区 GC 认领不发 WS 帧。用户仍看得见「重试节点」按钮，
+    点下去撞 409。建议 GC 认领时广播一帧，或把终态任务的轮询保留到工作区进入终态。

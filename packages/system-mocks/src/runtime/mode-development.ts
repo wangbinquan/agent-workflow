@@ -6,6 +6,19 @@
 // and emits the inner nonce-bound AgentOutcomeEnvelope on the declared
 // `agent-result` port. The platform still owns diff validation, verification,
 // commit/push/MR effects and readiness; the mock only stands in for the model.
+//
+// 它要同时站在**两套** Agent 协议前面（2026-08-25 补齐第二套）：
+//
+//   1. RFC-310 老协议 —— prompt 里带 `<agent-result nonce="…">` 与
+//      actionRunRef / inputDigest / capabilityId，回执是端口里再套一层 nonce 帧。
+//   2. 数字员工 v2 的 execution-contract 直接 JSON 协议（`inputMode:
+//      'direct-json'`）—— prompt 末尾是 `INPUT_JSON` + 一行业务 JSON，回执直接
+//      在声明的 workflow-output 端口里放一个平铺 JSON 对象，没有内层帧、没有 nonce
+//      可回抄（后端构造见 `buildExecutionContractAgentPrompt`）。
+//
+// 只认第一套的后果不是「报错」而是**空洞绿**：v2 的 `analyze-implement` 每一轮都以
+// `exit 2 / prompt is missing the RFC-310 agent-result identity` 失败并被退避重试，
+// 而浏览器 journey 当时只断言「卡片渲染出来了」，于是连跑 7 次失败、两分钟里全绿。
 
 import {
   appendFileSync,
@@ -13,6 +26,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -169,6 +183,175 @@ function boundActionContext<T>(prompt: string, label: string): T {
   }
 }
 
+// --------------------------------------------------------------------------
+// 数字员工 v2：execution-contract 的直接 JSON 协议
+// --------------------------------------------------------------------------
+
+/** v2 prompt 里业务输入所在的行标记。老协议用的是 `INPUT_ENVELOPE_JSON`，不会误命中。 */
+const DIRECT_INPUT_MARKER = 'INPUT_JSON'
+/** v2 prompt 里作者示例输出所在的行标记；只有 `outputMode: 'direct-json'` 才有。 */
+const DIRECT_OUTPUT_EXAMPLE_MARKER = 'OUTPUT_SCHEMA_EXAMPLE_JSON'
+
+/**
+ * 取「单独成行的 `marker` 之后第一个配平的 JSON 对象」的原文。
+ *
+ * 三个刻意的选择：
+ *
+ * - **按整行匹配**，不是 `indexOf`：`INPUT_ENVELOPE_JSON`（老 envelope 协议的标记）
+ *   与 `INPUT_JSON` 只差一个中缀，用子串匹配会把两套协议搅在一起。
+ * - **取最后一个**标记：prompt 里可能夹带被引述的上游材料，而框架为本轮追加的那份
+ *   永远在最后——这和 `skeleton.envelopeNonce` 的 last-match-wins 是同一条理由。
+ * - **自己数括号**而不是 `JSON.parse(剩余全文)`：标记后面还跟着框架追加的
+ *   `<workflow-output nonce="…">` 协议块，整体不是合法 JSON；示例块又是缩进过的多行
+ *   JSON，按行截断同样不行。数括号时跳过字符串内的括号与转义，才不会被业务文案里的
+ *   `{` / `"` 骗到。
+ */
+export function jsonBlockAfterMarker(prompt: string, marker: string): string | null {
+  let searchFrom: number | null = null
+  for (const match of prompt.matchAll(new RegExp(`^${marker}\\r?$`, 'gm'))) {
+    searchFrom = (match.index ?? 0) + match[0].length
+  }
+  if (searchFrom === null) return null
+  const open = prompt.indexOf('{', searchFrom)
+  if (open === -1) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = open; index < prompt.length; index += 1) {
+    const char = prompt[index]!
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === '{') depth += 1
+    else if (char === '}') {
+      depth -= 1
+      if (depth === 0) return prompt.slice(open, index + 1)
+    }
+  }
+  return null
+}
+
+function parseDirectJson(raw: string, label: string): Record<string, unknown> {
+  let value: unknown
+  try {
+    value = JSON.parse(raw)
+  } catch (error) {
+    fail(`cannot parse ${label}: ${String(error)}`)
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    fail(`${label} is not a JSON object`)
+  }
+  return value as Record<string, unknown>
+}
+
+/**
+ * 结果要发到哪个端口，从 prompt 里的输出指令原样读出来。
+ *
+ * 不写死 `agent-result`：端口名是每份合同自己声明的（`agentOutputPort`），写死等于
+ * 把「合同换了端口」这类回归变成一次沉默的空输出——平台只会说「没拿到结果」，
+ * 而不会说「你发错端口了」。
+ */
+function directResultPort(prompt: string): string {
+  const match = [...prompt.matchAll(/^Return only one JSON object through (\S+)\.\r?$/gm)].at(
+    -1,
+  )?.[1]
+  if (match === undefined) fail('direct-JSON prompt does not name its result port')
+  return match
+}
+
+/**
+ * 递归列出平台挂载到工作区里的需求材料（相对 `directory` 的路径，字典序）。
+ *
+ * 目录不存在或为空一律 fail：`development.implement-change` 的整个前提就是「需求材料
+ * 已经在工作区里」，材料没挂上却照样回一个 completed，等于把平台挂载环节的故障洗白
+ * 成一次成功交付。
+ */
+function requirementMaterials(directory: string): string[] {
+  if (!existsSync(directory) || !statSync(directory).isDirectory()) {
+    fail(`mounted requirement directory is missing: ${directory}`)
+  }
+  const found: string[] = []
+  const walk = (relative: string): void => {
+    const absolute = relative === '' ? directory : join(directory, relative)
+    for (const entry of readdirSync(absolute, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
+      const next = relative === '' ? entry.name : `${relative}/${entry.name}`
+      if (entry.isDirectory()) walk(next)
+      else found.push(next)
+    }
+  }
+  walk('')
+  if (found.length === 0) fail(`mounted requirement directory is empty: ${directory}`)
+  return found
+}
+
+/**
+ * 执行一轮 v2 直接 JSON 动作。
+ *
+ * 认动作靠的是 prompt 自己带的形状，而不是 contract id —— direct-json 的 prompt 里
+ * **根本没有** contract id（`buildExecutionContractAgentPrompt` 的 direct-json 分支
+ * 只写 `Action: <人类可读描述>`），所以模型能用来判断的信息就只有输入字段和作者示例
+ * 输出的字段，stub 也只用这些。不认识的形状必须显式 fail 并把两边字段名打出来：
+ * 静默回一个「差不多像」的对象只会把下一次协议漂移再变成一条空洞绿。
+ */
+function runDirectJsonAction(outerOpen: string, prompt: string, inputRaw: string): never {
+  const exampleRaw = jsonBlockAfterMarker(prompt, DIRECT_OUTPUT_EXAMPLE_MARKER)
+  if (exampleRaw === null) {
+    fail(`direct-JSON prompt has no ${DIRECT_OUTPUT_EXAMPLE_MARKER} block`)
+  }
+  const input = parseDirectJson(inputRaw, DIRECT_INPUT_MARKER)
+  const example = parseDirectJson(exampleRaw, DIRECT_OUTPUT_EXAMPLE_MARKER)
+  const port = directResultPort(prompt)
+
+  // `development.implement-change@2`（工作项 `analyze-implement`）：输入只有需求目录
+  // （外加可选的已批准方案），输出是交付三件套。
+  const deliveryShape =
+    typeof example.commitMessage === 'string' &&
+    typeof example.mergeRequestTitle === 'string' &&
+    typeof example.mergeRequestDescription === 'string'
+  const requirementsDirectory = input.requirementsDirectory
+  if (deliveryShape && typeof requirementsDirectory === 'string' && input.threads === undefined) {
+    const materials = requirementMaterials(requirementsDirectory)
+    // 必须真的改一个业务文件：该合同的 workspacePolicy 是
+    // `businessChangeOnOk: 'required'`，只回 JSON 不动工作区的话平台会判本轮失败。
+    ensureParentDir(RESULT_PATH)
+    writeFileSync(
+      RESULT_PATH,
+      [
+        'Implemented by the RFC-310 digital employee system mock.',
+        ...materials.map((item) => `requirement material: ${item}`),
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+    emitTextEvent(
+      envelope(outerOpen, [
+        [
+          port,
+          JSON.stringify({
+            outcome: 'completed',
+            commitMessage: 'implement the accepted requirement',
+            mergeRequestTitle: 'Implement the accepted requirement',
+            mergeRequestDescription: `Implemented the change from ${materials.length} mounted requirement material(s): ${materials.join(', ')}.`,
+          }),
+        ],
+      ]),
+    )
+    process.exit(0)
+  }
+
+  fail(
+    `unsupported direct-JSON action; input fields ${JSON.stringify(
+      Object.keys(input).sort(),
+    )}, result fields ${JSON.stringify(Object.keys(example).sort())}`,
+  )
+}
+
 export function run(argv: readonly string[]): void {
   const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
@@ -177,6 +360,12 @@ export function run(argv: readonly string[]): void {
   }
   emitPromptForContractTest(call.prompt)
   const outerOpen = requireOutputOpen(call.prompt, NAME)
+
+  // 协议分流放在 `promptIdentity` 之前：老协议的失败信息（"missing the RFC-310
+  // agent-result identity"）对 v2 prompt 毫无意义，正是它把真正的原因盖了两个月。
+  const directInput = jsonBlockAfterMarker(call.prompt, DIRECT_INPUT_MARKER)
+  if (directInput !== null) runDirectJsonAction(outerOpen, call.prompt, directInput)
+
   const identity = promptIdentity(call.prompt)
 
   if (identity.capabilityId === 'change.implement') {

@@ -3049,8 +3049,13 @@
       "title": "新建 Webhook 端点（provider + clone 协议 + 一次性 secret）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-01：在事件中心新建 Webhook 端点 —— provider 与 clone 协议真的落库，一次性 secret 只显示一次而且就是能验签的那一条 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-03",
@@ -3058,8 +3063,13 @@
       "title": "轮换端点 URL token（入站地址换新、旧地址 404）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-03：轮换端点 URL token —— 新地址立刻可用、旧地址与从不存在的地址同形 404，且 secret 不受牵连 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-04",
@@ -3067,8 +3077,13 @@
       "title": "编辑端点（改名 / 启停 / clone 协议偏好；provider 不可变）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-04：编辑端点 —— 改名与 clone 协议真的落库、界面上的启停开关真的改变入站行为、provider 不可变 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-06",
@@ -3076,8 +3091,13 @@
       "title": "端点入站 URL 明文按 viewer 分层（session 管理权限才见明文，PAT/普通用户只见尾 4 位）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-06：入站 URL 明文只给持管理权限的 session —— PAT 与普通用户只见尾 4 位，且写面对 PAT 整个关闭 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-08",
@@ -3094,8 +3114,13 @@
       "title": "未知 provider / 未知 URL token / provider 与端点不匹配一律 404 同形",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-10：未知 provider / 未知 URL token / provider 与端点不匹配三者 404 同形，都不留投递行，而验签失败仍然是 401 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-11",
@@ -3103,8 +3128,13 @@
       "title": "超大 body（>1MiB）流式截断 → 413 且不落行",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-11：超过 1MiB 的 body 在流式读取中就被截断成 413，一行审计都不落；正好 1MiB 仍然收下 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-12",
@@ -3112,8 +3142,13 @@
       "title": "限流：端点 300/min → 429；未命中 token 全局 600/min → 429",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-12：端点 300/min 与未命中 600/min 两档限流各自在越线那一下开始 429，且互不牵连 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-13",
@@ -3121,8 +3156,13 @@
       "title": "合法但平台不支持的事件 → 200 + ignored(unsupported-event)",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-13：平台不处理的合法事件一律 200 + ignored(unsupported-event)，绝不回 4xx @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-14",
@@ -3243,27 +3283,42 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "新建定时任务（间隔 / 每日 / 每周 / 每月 + 时区 + 下次触发预览）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-39 新建定时任务：四种频率逐字段落成服务端的 scheduleSpec，时区随创建者，下次触发时刻与弹窗预告的第一条指向同一时刻"
+        }
+      ]
     },
     {
       "id": "EVENT-40",
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "立即运行（run now）：不动 next_run_at / last_* / 失败水位，且对已禁用的定时任务也生效",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-40 立即运行：下次触发时刻、上次结果与失败水位一格不动，只多出一个任务；已暂停的定时任务在详情页也照样跑得动"
+        }
+      ]
     },
     {
       "id": "EVENT-41",
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "定时任务启停开关（列表与详情两处）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-41 启停开关：列表里关掉就清空下次触发时刻，详情页重新打开则按频率重算时刻并把失败水位清零"
+        }
+      ]
     },
     {
       "id": "EVENT-43",
@@ -3271,8 +3326,13 @@
       "title": "连续失败达上限后自动停用（且只停一次）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-43 连续失败到达配置的阈值当场自动停用，而且只停这一次——停用之后不再被认领、失败水位不再上涨 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-X2",
@@ -4973,8 +5033,13 @@
       "title": "agent-workflow stop：优雅排空并删除锁文件",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-006: stop 等到进程真的走完才报「已停」，并把锁 / info / control 三件套一起清干净 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-018",
@@ -5036,8 +5101,13 @@
       "title": "GET /health 公共存活探针与其载荷（opencode 版本 / dbVersion / uptime / 运行中任务数 / recovery 计数 / identityAccess 计数）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-031: /health 不带凭据就能读，且每个读数都是活的 —— 在跑任务数 / 恢复计数 / 身份访问计数都跟着真实动作变 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-033",
@@ -5865,18 +5935,28 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表：视图页签（全部/进行中/需关注/已结束）+ 搜索去抖 + 状态过滤 + 清除过滤，且状态经 URL 往返",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-16：四个视图页签的计数与行数一致、搜索去抖只打一次、状态过滤经 URL 双向往返"
+        }
+      ]
     },
     {
       "id": "TASK-17",
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表分页：根层「加载更多」与子分支「加载更多子任务」各自独立翻页",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-17：根层「加载更多」与子分支「加载更多子任务」各自独立翻页，互不清空对方"
+        }
+      ]
     },
     {
       "id": "TASK-18",
@@ -5894,18 +5974,28 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表实时刷新：WS 推送后出现「已更新，点击刷新」横幅",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-21：别处新建的任务通过 WS 推出「已更新」横幅，点刷新才把新行取回来"
+        }
+      ]
     },
     {
       "id": "TASK-24",
       "domain": "任务启动、执行与生命周期操作",
       "title": "取消运行中的任务（详情页 Cancel 按钮 + 二次确认）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-24：详情页取消运行中的任务需要两击，第一击只换文案、一个请求都不发"
+        }
+      ]
     },
     {
       "id": "TASK-26",
@@ -6024,9 +6114,14 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "工作区回收后的详情页降级（pruning → pruned，产物页签与重试按钮相应关闭）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-45：工作区从 pruning 走到 pruned，详情页自己收敛并关掉节点重试"
+        }
+      ]
     },
     {
       "id": "TASK-X1",
@@ -6064,9 +6159,14 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表过滤弹窗的范围切换（我的 / 共享给我 / 全部）与类别过滤（agent / workflow / workgroup）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-X5：筛选弹窗的范围三档与类别三档各自独立收敛，默认档不写进 URL"
+        }
+      ]
     },
     {
       "id": "TASK-X6",
@@ -7652,8 +7752,13 @@
       "title": "删除端点：被触发规则引用时拒绝（409），清空引用后可删",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-webhook-endpoints.spec.ts",
+          "test": "RFC-319 EVENT-05：被触发规则引用的端点拒绝删除并保持完好，解除引用后才真正消失 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-16",
@@ -7687,27 +7792,42 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "定时任务详情页的运行历史",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-44 详情页运行历史：从「还没跑过」变成两行，每行对得上服务端的任务清单，点进去就是那个任务"
+        }
+      ]
     },
     {
       "id": "EVENT-45",
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "定时任务列表的搜索 / 视图切换（全部·已暂停）/ 稠密行 / 无横向溢出",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-45 定时任务列表：搜索只留下命中的行，「已暂停」视图只留下关掉的那条，行高保持稠密且整页不横向溢出"
+        }
+      ]
     },
     {
       "id": "EVENT-47",
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "降级 / 需修复的历史定时任务：禁用「立即运行」并给出可修复提示",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-47 配置已经读不出来的定时任务：列表禁掉「立即运行」并说明原因，详情页给出具体的解析理由，同列表其它行照常渲染"
+        }
+      ]
     },
     {
       "id": "EVENT-48",
@@ -7724,17 +7844,27 @@
       "title": "定时任务全局总开关与失败阈值配置（scheduledTasksEnabled / scheduledTasksMaxFailures）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-X1 定时任务总开关：关掉之后已经到点的排期一个 tick 都不会被认领；打开之后同一行立刻被认领并如实记账 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-X3",
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "删除定时任务（详情页二次确认 → DELETE）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-scheduled-tasks.spec.ts",
+          "test": "EVENT-X3 删除定时任务：第一次点击只是待确认（服务端仍在），第二次才真的删掉并回到列表"
+        }
+      ]
     },
     {
       "id": "EVENT-X4",
@@ -8443,8 +8573,13 @@
       "title": "start 的非法 flag 值以退出码 2 拒绝",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-003: start 的非法 flag 值以退出码 2 拒绝，且一个字节的状态都不落 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-004",
@@ -8452,8 +8587,13 @@
       "title": "单实例 flock：第二个 daemon 启动被拒并报出占用 PID",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-004: 第二个 daemon 起不来，并报出正在占用的那个 PID 与锁文件路径 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-005",
@@ -8461,8 +8601,13 @@
       "title": "启动时绑定端口被占用的失败反馈",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-005: 端口被别人占着时启动失败要指名道姓说是哪个端口，且不会把这个 home 卡死 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-007",
@@ -8479,8 +8624,13 @@
       "title": "stop 的无锁 / 陈旧锁自愈",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-008: 没有锁与陈旧锁，stop 都要自愈成功而不是把人拦在门外 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-009",
@@ -8488,8 +8638,13 @@
       "title": "agent-workflow status：running / not-running / stale-lock 三态与 /health 读数",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-009: status 的三态各说各的话，running 那一档的读数与 /health 逐项对得上 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-010",
@@ -8560,8 +8715,13 @@
       "title": "CLI 顶层调度：version / help / 未知子命令",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-cli-lifecycle.spec.ts",
+          "test": "RFC-319 OPS-017: version / help / 未知子命令各走各的出口，且打错字不留下任何状态 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-028",
@@ -8852,9 +9012,14 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表空态（全新安装）与「无匹配」态（过滤过窄）的区分",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-list-and-filters.spec.ts",
+          "test": "RFC-319 TASK-19：全新安装的空列表教用户开工，而过滤过窄的空列表给的是退回全量的出口"
+        }
+      ]
     },
     {
       "id": "TASK-20",
@@ -9392,15 +9557,7 @@
     "DE-X2",
     "DE-X4",
     "DE-X5",
-    "EVENT-01",
-    "EVENT-03",
-    "EVENT-04",
-    "EVENT-06",
     "EVENT-08",
-    "EVENT-10",
-    "EVENT-11",
-    "EVENT-12",
-    "EVENT-13",
     "EVENT-20",
     "EVENT-23",
     "EVENT-24",
@@ -9410,10 +9567,6 @@
     "EVENT-32",
     "EVENT-33",
     "EVENT-36",
-    "EVENT-39",
-    "EVENT-40",
-    "EVENT-41",
-    "EVENT-43",
     "EVENT-X2",
     "IAM-02",
     "IAM-07",
@@ -9468,14 +9621,12 @@
     "MEM-X5",
     "MEM-X8",
     "MEM-X9",
-    "OPS-006",
     "OPS-018",
     "OPS-019",
     "OPS-021",
     "OPS-023",
     "OPS-026",
     "OPS-027",
-    "OPS-031",
     "OPS-033",
     "OPS-034",
     "OPS-036",
@@ -9538,10 +9689,6 @@
     "TASK-11",
     "TASK-13",
     "TASK-14",
-    "TASK-16",
-    "TASK-17",
-    "TASK-21",
-    "TASK-24",
     "TASK-26",
     "TASK-27",
     "TASK-30",
@@ -9552,9 +9699,7 @@
     "TASK-38",
     "TASK-39",
     "TASK-44",
-    "TASK-45",
     "TASK-X1",
-    "TASK-X5",
     "TASK-X7",
     "UX-04",
     "UX-05",
@@ -9657,16 +9802,10 @@
     "DE-42",
     "DE-43",
     "DE-45",
-    "EVENT-05",
     "EVENT-16",
     "EVENT-28",
     "EVENT-34",
-    "EVENT-44",
-    "EVENT-45",
-    "EVENT-47",
     "EVENT-48",
-    "EVENT-X1",
-    "EVENT-X3",
     "EVENT-X4",
     "EVENT-X5",
     "EVENT-X6",
@@ -9691,12 +9830,7 @@
     "MEM-42",
     "MEM-44",
     "MEM-X11",
-    "OPS-003",
-    "OPS-004",
-    "OPS-005",
     "OPS-007",
-    "OPS-008",
-    "OPS-009",
     "OPS-010",
     "OPS-011",
     "OPS-012",
@@ -9704,7 +9838,6 @@
     "OPS-014",
     "OPS-015",
     "OPS-016",
-    "OPS-017",
     "OPS-028",
     "OPS-029",
     "OPS-030",
@@ -9733,7 +9866,6 @@
     "RES-X6",
     "TASK-03",
     "TASK-15",
-    "TASK-19",
     "TASK-36",
     "TASK-X2",
     "UX-06",

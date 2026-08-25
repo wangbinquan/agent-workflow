@@ -379,6 +379,37 @@ async function capabilityLaneRowCount(map: Locator, laneId: string): Promise<num
     })
 }
 
+interface CaseRound {
+  workItemRef: string
+  state: string
+  attemptOrdinal: number
+  outputJson: string | null
+}
+
+/**
+ * 等某个工作项这一轮**落定**，并在失败时把失败现场直接抛出来。
+ *
+ * 失败重试会把轮次状态打回 `planned`，失败现场只留在 `outputJson` 里。不主动把它
+ * 抛出来的话，这里只会得到一条「等了 N 秒还没 completed」的超时——正是这种无信息
+ * 量的红让上一次的空洞绿拖了那么久才被发现。
+ */
+async function settledRound(caseId: string, workItemRef: string): Promise<CaseRound> {
+  const deadline = Date.now() + 120_000
+  let latest: CaseRound | undefined
+  while (Date.now() < deadline) {
+    const projection = await requestJson<{ rounds: CaseRound[] }>(
+      `/api/employee-cases/${encodeURIComponent(caseId)}`,
+    )
+    latest = projection.rounds.find((round) => round.workItemRef === workItemRef)
+    if (latest?.state === 'completed' || latest?.state === 'failed') return latest
+    if (latest?.outputJson?.includes('"kind":"failed"') === true) {
+      throw new Error(`${workItemRef} failed and is being retried: ${latest.outputJson}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  throw new Error(`${workItemRef} never settled: ${JSON.stringify(latest)}`)
+}
+
 test.beforeAll(async () => {
   mocks = new SystemMockClient(
     requiredEnv('AW_SYSTEM_MOCK_CONTROL_URL'),
@@ -1122,4 +1153,72 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(
     timeline.getByText('Deterministic output / program output', { exact: true }),
   ).toBeVisible()
+
+  // RFC-319 空洞绿修复（2026-08-25）。
+  //
+  // 到上一行为止，本用例证明的全部内容是「案例被建出来了、卡片渲染对了」。它对
+  // **执行**一个字都没断言，于是下面这件事整整两分钟都没被看见：`analyze-implement`
+  // 每一轮都以 `opencode exited with code 2; stderr tail: stub-development-agent:
+  // prompt is missing the RFC-310 agent-result identity` 失败，被指数退避重试了
+  // 七次，而用例照样全绿。用户那边的体感是：任务永远停在「正在工作」，时间轴上
+  // 第一张卡片确实在，点开也有输入——什么都没坏，只是永远不会完成。
+  //
+  // 因此断言的锚点选在**轮次落定的事实**，而不是「卡片存在」：
+  //   - `state === 'completed'`：这一轮真的产出了被平台接受的结果；
+  //   - `attemptOrdinal === 0`：**第一次**就成功。少了这条，「跑了七次才对」这种
+  //     退化仍然是绿的——而它恰恰就是这次事故的形状；
+  //   - `deliveryContent`：平台确实把 Agent 的业务结果投影成了交付内容。它是空的，
+  //     用户的 MR 就会没有标题和说明。
+  const implementRound = await settledRound(caseId, 'analyze-implement')
+  expect({ state: implementRound.state, attemptOrdinal: implementRound.attemptOrdinal }).toEqual({
+    state: 'completed',
+    attemptOrdinal: 0,
+  })
+  const implementOutput = JSON.parse(implementRound.outputJson ?? 'null') as {
+    status?: string
+    deliveryContent?: {
+      commitMessage?: string
+      mergeRequestTitle?: string
+      mergeRequestDescription?: string
+    }
+  }
+  expect(implementOutput.status).toBe('ok')
+  expect(implementOutput.deliveryContent?.commitMessage).toBe('implement the accepted requirement')
+  expect(implementOutput.deliveryContent?.mergeRequestTitle).toBe(
+    'Implement the accepted requirement',
+  )
+  // 描述里带着这一轮**实际读到的**平台需求材料条数。数字回到 0 意味着材料没被挂进
+  // 工作区，员工是在空目录上「完成」了需求——用户会收到一个与自己提交的文档毫无关系
+  // 的 MR。
+  expect(implementOutput.deliveryContent?.mergeRequestDescription).toMatch(
+    /Implemented the change from [1-9]\d* mounted requirement material\(s\)/,
+  )
+
+  // 平台侧的下一环：`prepare-change` 只有在工作区里**真的**存在业务改动时才会完成
+  // （该合同的 workspacePolicy 是 businessChangeOnOk: 'required'）。它证明上面那个
+  // completed 不是一次「只回 JSON、没碰代码」的空转——那种空转对用户来说就是一个
+  // 空 MR。
+  const prepareChangeRound = await settledRound(caseId, 'prepare-change')
+  expect(prepareChangeRound.state).toBe('completed')
+
+  // 同一个事实必须在用户看得见的地方成立。时间轴上这一格显示 Failed 或停在
+  // Preparing，用户才会知道员工卡住了；显示 `Attempt 1` 则是「没有反复重试」的
+  // 唯一可见证据。
+  await page.reload()
+  const implementStep = timeline
+    .locator('.employee-execution-timeline__step')
+    .filter({ hasText: 'Implement change' })
+  await expect(implementStep).toHaveCount(1)
+  await expect(implementStep).toContainText('Completed')
+  await expect(implementStep).toContainText('Attempt 1')
+  await implementStep.click()
+  // 点开这一格，「确定性输出」面板必须是这一轮的真实产物，而不是那句
+  // 「This stage has not produced output yet.」——它是用户唯一能自证「员工到底交了
+  // 什么」的地方。
+  await expect(
+    timeline
+      .locator('.employee-execution-io-grid section')
+      .filter({ hasText: 'Deterministic output / program output' })
+      .locator('pre'),
+  ).toContainText('"deliveryContent"')
 })
