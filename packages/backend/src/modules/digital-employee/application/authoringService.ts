@@ -1936,8 +1936,7 @@ export class DigitalEmployeeAuthoringService {
             const tool = this.#toolRevision(binding.registrationRef)
             if (item === null || item.nodeKind !== 'business-tool' || tool === null) return false
             const contractRef = workContractRefForToolRole(item, tool.content.roleRef)
-            const contract =
-              contractRef === null ? null : findWorkContract(descriptor, contractRef)
+            const contract = contractRef === null ? null : findWorkContract(descriptor, contractRef)
             return contract?.requiredConnectionPurpose === slot.purpose
           })
           const candidates = new Map<string, ExactResourceRef>()

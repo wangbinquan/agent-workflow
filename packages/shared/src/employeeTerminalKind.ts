@@ -99,3 +99,13 @@ export function classifyTerminalKind(kind: string | null): TerminalKindClassific
   const legacyFailed = kind === 'failed' || kind === 'blocked' || kind.endsWith('-failed')
   return { catalog: 'done', failed: false, bucket: legacyFailed ? 'failed' : 'otherFinished' }
 }
+
+/**
+ * Known persisted terminal kinds that the unified task catalog presents as
+ * canceled. SQL-backed readers consume this derived list instead of copying a
+ * second terminal-kind classification table.
+ */
+export const EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS = [
+  ...EMPLOYEE_CASE_TERMINAL_KINDS,
+  ...LEGACY_MISSION_TERMINAL_KINDS,
+].filter((kind) => classifyTerminalKind(kind).catalog === 'canceled')
