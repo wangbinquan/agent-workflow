@@ -326,8 +326,13 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
   test('transitionNodeRunStatus delegates to transitionNodeRunStatusTx and writes nothing itself', () => {
     const src = readFileSync(resolve(SRC, 'lifecycle.ts'), 'utf8')
     const body = bodyOf(src, 'export async function transitionNodeRunStatus(')
-    expect(body).toContain('dbTxSync(args.db, (tx) => transitionNodeRunStatusTx({ tx, ...args }))')
+    expect(body).toContain('transitionNodeRunStatusTx({ tx: args.db, ...args })')
     expect(body).not.toContain('.update(nodeRuns)')
+    // A standalone CAS is one statement: the wrapper must NOT open a transaction
+    // of its own (an extra BEGIN/COMMIT per transition changed the session-lease
+    // retry behaviour — runner.test.ts on CI, 430717cae).
+    expect(body).not.toContain('dbTxSync(')
+    expect(body).not.toContain('.transaction(')
     // The single allow-listed writer for this event family sits in the Tx twin.
     const twin = bodyOf(src, 'export function transitionNodeRunStatusTx(')
     expect(twin).toContain('rfc053-allow-direct-status-write')

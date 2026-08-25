@@ -154,8 +154,10 @@ describe('决策分支棘轮（args.decision 散装比较清零，白名单=路�
 
   test("args.decision === '…' 仅存两处骨架：multi-doc approve gate + approve 早返回", () => {
     const hits = lines.filter((l) => l.includes("args.decision === '")).map((l) => l.trim())
+    // RFC-326 (design §6.1): the multi-doc gate reads the EFFECTIVE view — the
+    // pending rows overlaid with the batch selections — hence `effectiveDvs`.
     expect(hits).toEqual([
-      "if (isMultiDoc && args.decision === 'approved' && !allDocumentsDecided(dvs)) {",
+      "if (isMultiDoc && args.decision === 'approved' && !allDocumentsDecided(effectiveDvs)) {",
       "if (args.decision === 'approved') {",
     ])
   })

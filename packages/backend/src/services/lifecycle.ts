@@ -144,7 +144,11 @@ export async function transitionNodeRunStatus(args: {
   // RFC-326: a pure wrapper around the transactional companion — the ONLY
   // status write for this event kind now lives in transitionNodeRunStatusTx, so
   // the kernel's direct-write count (lifecycle-grep-guard) stays at three.
-  return dbTxSync(args.db, (tx) => transitionNodeRunStatusTx({ tx, ...args }))
+  // Deliberately NOT wrapped in its own transaction: the CAS is a single
+  // statement (atomic on its own), callers may already be inside one, and an
+  // extra BEGIN/COMMIT per transition changed the retry behaviour of the
+  // session-lease claim (runner.test.ts caught it on CI).
+  return transitionNodeRunStatusTx({ tx: args.db, ...args })
 }
 
 /**
@@ -155,7 +159,8 @@ export async function transitionNodeRunStatus(args: {
  * commit (see the ordering rule at the top of this file).
  */
 export function transitionNodeRunStatusTx(args: {
-  tx: DbTxSync
+  /** A transaction handle, or the connection itself for a standalone CAS (same sync surface). */
+  tx: DbTxSync | DbClient
   nodeRunId: string
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra

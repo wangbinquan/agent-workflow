@@ -2567,8 +2567,13 @@ async function submitReviewDecisionUnlocked(
   if (taskRow === undefined) {
     throw new NotFoundError('task-not-found', `task ${run.taskId} not found`)
   }
-  const policy = REVIEW_DECISION_POLICY[args.decision]
-  const targetSelfStatus: NodeRunStatus = args.decision === 'approved' ? 'done' : 'pending'
+  // Widened to the lookup view (RFC-149): `rerun` is absent on approve and the
+  // full re-run policy on reject / iterate — the ONE place the path forks.
+  const policy: ReviewDecisionPolicy = REVIEW_DECISION_POLICY[args.decision]
+  // The review row closes (`done`) when the decision carries no re-run slot and
+  // re-opens (`pending`) otherwise — read off the policy table (RFC-149), not a
+  // second decision comparison.
+  const targetSelfStatus: NodeRunStatus = policy.rerun === undefined ? 'done' : 'pending'
   const memberBefore =
     args.actor === undefined ? false : await hasActingMembership(db, run.taskId, args.actor.user.id)
   assertDecisionAdmissible(args, run, taskRow, memberBefore, targetSelfStatus)
@@ -2714,7 +2719,7 @@ async function submitReviewDecisionUnlocked(
 
   // ── prepare F: re-run plan (reject / iterate) ─────────────────────────────
   let rerun: PreparedRerun | null = null
-  if (args.decision !== 'approved') {
+  if (policy.rerun !== undefined) {
     rerun = await planRerun(args, run, taskRow, dv)
   }
 
