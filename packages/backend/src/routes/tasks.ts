@@ -1000,6 +1000,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         deps: {
           db: deps.db,
           configPath: deps.configPath,
+          // 重试走到 `__repo_prep__` 时会分流进 retryRepoPreparation → startTask，
+          // 那里要 unseal `cached_repos.url_enc`。漏了 secretBox 的话，凡是配了
+          // secret.key 的部署一律 409 cached-repo-credential-unavailable。
+          ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
           ...resolveLaunchRuntimeConfig(deps.configPath),

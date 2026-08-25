@@ -1493,6 +1493,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       db,
       // RFC-282 C1-2: the scheduler resolves config heads at the mint freeze.
       configPath: Paths.config,
+      // boot 恢复同样会走到 unseal（同文件另外三处都经 buildStartTaskDeps 带上了它）。
+      ...(secretBox !== undefined ? { secretBox } : {}),
       ...(config.subagentLiveCapture !== undefined
         ? { subagentLiveCapture: config.subagentLiveCapture }
         : {}),
