@@ -7153,11 +7153,24 @@
     {
       "id": "HUMAN-15",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "澄清详情的分片切换器：同一 clarify 节点多个待答分片时页内横跳（负向半边「只有一份时不出现」已由 e2e/clarify-detail-states.spec.ts 锁住；正向半边当前走工作流 fan-out 到不了——内层节点收不到 clarify 邀请，per-shard clarify 自 RFC-060 PR-D 推迟至今未接线——只剩工作组 worker park 一条路，详见 docs/audit-backlog.md）",
+      "title": "澄清详情的分片切换器：同一 clarify 节点多个待答分片时页内横跳（正向经工作组 worker park 覆盖；负向「只剩一份不显示」另有一条。工作流 fan-out 那条路至今到不了——内层节点收不到 clarify 邀请，见 docs/audit-backlog.md）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/clarify-shard-switcher.spec.ts",
+          "test": "两个分片同时在等人回答：这一屏要把兄弟分片摆出来并且真的跳得过去"
+        },
+        {
+          "file": "e2e/clarify-shard-switcher.spec.ts",
+          "test": "答掉其中一份之后：只剩一份在等，切换器就该收起来"
+        },
+        {
+          "file": "e2e/clarify-detail-states.spec.ts",
+          "test": "不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器"
+        }
+      ]
     },
     {
       "id": "HUMAN-16",
@@ -8757,7 +8770,6 @@
     "EVENT-X5",
     "EVENT-X6",
     "EVENT-X7",
-    "HUMAN-15",
     "IAM-02",
     "IAM-07",
     "IAM-09",

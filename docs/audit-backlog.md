@@ -2316,3 +2316,22 @@ self-clarify 的旧行为「跳回任务详情」。所以落点取决于**提�
 
 E2E 侧的现状：`e2e/cross-clarify-multi-source.spec.ts` 已不再断言落点，改为**显式回访**该页再断言
 「横幅点名还差谁」——那句承诺与落点无关，两条路上都成立。落点本身没有任何用例锁定。
+
+## wrapper-fanout 内层节点收不到 clarify 邀请（per-shard clarify 自 RFC-060 PR-D 推迟至今未接线）
+
+RFC-319 B62 实测：把 `clarify` 节点接到 `wrapper-fanout` 的内层 `agent-single` 上，工作流**能过静态校验**、
+三个分片也都正常跑完，但渲染出来的提示词里**根本没有 clarify 邀请**——三份 `promptText` 只列了 `design`
+输出端口，于是一轮 clarify 都不会被 mint，任务直接 `done`。也就是说「fan-out 的某个分片想反问」这条产品
+路径目前是**静默不可达**的：不报错、不校验失败，只是问不出来。
+
+与 `e2e/clarify.spec.ts:442-450` 那段被 `test.describe.skip` 的旧用例注释一致——per-shard clarify 从
+RFC-060 PR-D 推迟到 PR-D2，至今未落地。
+
+现状与影响面：
+
+- 分片切换器（HUMAN-15）本身**是活的**，只是只能经**工作组** worker park 触达（`askingShardKey` 是任务卡 id、
+  `WG_CLARIFY_NODE_ID` 全组共用）。正向覆盖见 `e2e/clarify-shard-switcher.spec.ts`。
+- 工作流侧：validator 允许这样连线，用户会以为配好了。**要么接线，要么在校验期就明确拒绝并给出理由**——
+  当前这种「能连、能跑、就是永远不问」是最难排查的一档。
+
+留给 RFC-060 后续波次判定。

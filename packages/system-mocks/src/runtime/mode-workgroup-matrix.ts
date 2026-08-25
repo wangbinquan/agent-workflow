@@ -17,6 +17,9 @@ type Protocol = 'opencode' | 'claude-code'
 
 const AGENT_MARKER = /\[AW_SCENARIO_AGENT:([A-Za-z0-9._-]+)\]/
 
+/** RFC-319 B66 —— WG_WORKER_CLARIFY 支线的问题原文，同时用作「本卡答过没有」的判据。 */
+const WORKER_CLARIFY_TITLE = 'Which build target should this shard produce?'
+
 export async function run(argv: readonly string[]): Promise<void> {
   function fail(message: string, code = 2): never {
     process.stderr.write(`stub-opencode-workgroup-matrix: ${message}\n`)
@@ -258,6 +261,31 @@ export async function run(argv: readonly string[]): Promise<void> {
         writeFixture('showcase/app.txt', 'implementation v2 after gate rejection\n')
         emitPorts({
           wg_result: JSON.stringify({ summary: 'implementation-v2 complete' }),
+        })
+      }
+      // RFC-319 B66 —— 环境变量门控的 worker 反问支线。默认**完全不生效**，
+      // 所以既有 showcase 行为与 rfc254 差分基线逐字不变（录制时不带这个变量）。
+      // 打开时，两个 v1 任务卡各自在第一轮反问一次：这是仓内唯一能同时造出
+      // 「同一个 clarify 节点上有 ≥2 个分片待答」的路径——工作流 fan-out 那条路
+      // 至今没给内层节点发过 clarify 邀请（实测见 e2e/clarify-detail-states.spec.ts 头注）。
+      if (
+        process.env.WG_WORKER_CLARIFY === '1' &&
+        // 判「这一卡自己答过没有」只能用**本卡问题的原文**：leader 那一轮的 Q&A 会被灌进
+        // 全组上下文，于是每个 worker 的首轮提示词里都已经带着 `## Clarify Q&A` 了
+        // （实测三条 member run 全是 true），拿它当判据会把本支线整个抑制掉。
+        !prompt.includes(WORKER_CLARIFY_TITLE) &&
+        (prompt.includes('Title: implementation-v1-code') ||
+          prompt.includes('Title: implementation-v1-tests'))
+      ) {
+        emitClarify({
+          questions: [
+            {
+              id: 'q-build-target',
+              title: WORKER_CLARIFY_TITLE,
+              kind: 'single',
+              options: [{ label: 'debug', recommended: true }, { label: 'release' }],
+            },
+          ],
         })
       }
       if (prompt.includes('Title: implementation-v1-tests')) {
