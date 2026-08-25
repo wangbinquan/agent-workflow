@@ -2508,3 +2508,47 @@ await expect(row).toHaveAttribute('aria-selected', 'false')
 
 不加 `force` 时第②条锁不到任何东西；只有 ① 时，「aria-disabled 只是画上去的」这种退化不会红。
 两条一起，才能分辨「灰得对」与「灰得只是好看」。
+
+## 变异不咬人有三种成因，只有一种说明用例是假的（RFC-319 B83 实撞，2026-08-25）
+
+抽样变异是本仓 e2e 的核心质量门：注入一个语义变异 → 用例必须红 → 还原 → 必须绿。
+但 **NO-BITE 不等于「用例是假的」**，把三种成因分开才知道下一步该做什么：
+
+1. **变异本身语义恒等**（我改的东西根本没改行为）。
+   实撞：`FuseDialog.tsx` 的 re-seed effect 依赖数组 `[open, seededMemoryIds, seededSkillId]`
+   被我改成 `[open]`，想造出「重开弹窗不跟当前勾选」。**它不咬是因为它没错**——
+   `open` 从 false 翻 true 的那一次渲染里，闭包拿到的本来就是**当前**的
+   `seededMemoryIds`，多出来的两个依赖只在「开着的时候源变了」才有意义。
+   真正会错的那种是让第二次打开**不覆盖**已有选择：
+   `setPicked(new Set(...))` → `setPicked((prev) => (prev.size > 0 ? prev : new Set(...)))`。
+   **判别法**：写完变异先说清「产品在这个变异下，用户看得见的行为差在哪一步」，
+   说不出具体那一步就说明变异是恒等的。
+
+2. **被变异的那条分支在产品里不可达**——它是死防御，用例照不到它天经地义。
+   实撞：`MemoryPendingBadge.tsx:26` 的 `items.filter((item) => item.canManage === true)`
+   去掉过滤后一条 e2e 都没红。回源查实：候选行只对持 `resource-acl:bypass` 的操作者可见
+   （`packages/backend/src/routes/memories.ts:133` 先跑 `dropCandidates`），而**对 bypass
+   操作者，每一行都被逐行盖成 `canManage: true`**（`packages/backend/src/services/memory.ts:882-883`
+   的短路）。也就是说「看得见但管不了的候选」这一态**在产品里不存在**，那个过滤永远
+   删不掉任何行。**判别法**：把变异后本该出现的那个状态用接口/夹具**手工造一次**；
+   造不出来就是不可达。造不出来时**不要**为了让变异咬人去改产品，也不要把不可达状态
+   写进断言。
+
+3. **用例真的是假的**——它声称守着这行，实际断言恒真。这才是要改用例的那一种。
+
+另外：第 2 种情形下，那条守卫往往**在另一层**已经有人管了。上例的
+`countManageableMemoryCandidates` 在 `packages/frontend/tests/memory-admin-gate-role.test.ts:31-42`
+既有纯函数单测、又有一条源码文本断言（`toContain('item.canManage === true')`），
+我那个变异会把**前端单测**打红，只是打不红 e2e。所以 NO-BITE 之后的第一件事是
+`grep` 一下这个符号在别处有没有守卫，别急着给账本记债。
+
+## `docs/**` 不在 CI 的 prettier 扫描面内，别对它跑 `--write`（2026-08-25 实撞）
+
+`package.json` 的 `format:check` 只覆盖 `packages/**`、`package.json`、`playwright.config.ts`、
+`e2e/**`、`.github/workflows/*` 与两个 scripts——`docs/**` 与 `design/**` 都在外面。
+往 `docs/dev-gotchas.md` 追加一节后顺手跑 `bunx prettier --write docs/*.md`，会把**存量**
+内容一起重排（实撞：一张 markdown 表格整体重算列宽 + 若干段落重新折行，20 行删改与本次
+改动毫无关系），在多人共享工作树上等于替别人改文件。判别法：改完先看
+`git diff --stat`，纯追加应当是「N insertions, 0 deletions」；出现 deletions 就说明
+碰了存量。校验 prettier 状态时也注意**把文件拷到仓外再 `--check` 会用默认配置**，
+结论不可信（仓内有 `.prettierrc`）。

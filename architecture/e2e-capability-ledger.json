@@ -5571,8 +5571,13 @@
       "title": "All 库多选 → 「融合成技能」批量操作",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-22: 已批准库里勾几条就融合几条——按钮带着条数，重开弹窗跟得上改过的选择，提交后落在这次融合自己的详情页 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-25",
@@ -5677,8 +5682,21 @@
       "title": "导航栏 Memory 待办徽标（可管候选数 + 待审融合数，>99 显示 99+）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-14 / MEM-41: 空库时审批队列说的是「没有待审记忆」，导航徽标整块不出现 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-41: 导航徽标是「可管候选 + 待审融合」之和，批准一条候选当场少一个 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-41: 待办数超过 99 时徽标显示 99+，而不是把三位数塞进那个小圆点 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-43",
@@ -5695,8 +5713,13 @@
       "title": "多标签页实时同步：/ws/memories 推送后各分区自动刷新",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-45: 一个标签页里批准，另一个标签页不刷新就跟上——已批准库、审批队列与徽标一起变 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-46",
@@ -5704,8 +5727,13 @@
       "title": "/ws/memory-distill-jobs 升级门禁（无 memory-distill-jobs:manage 的连接被拒 / 浏览器侧不建连）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-46: 没有 memory-distill-jobs:manage 的人连不上蒸馏任务通道——服务端在升级门就拒，浏览器侧压根不建这条连接 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-49",
@@ -5758,8 +5786,13 @@
       "title": "【补漏】/ws/memories 逐帧 scope 可见性过滤：不可见 scope 的记忆事件不得推给陌生人",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-X5: /ws/memories 逐帧过滤——看不见那个 scope 的人收不到它的记忆事件，全局记忆的事件照常送到 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X8",
@@ -6299,8 +6332,13 @@
       "title": "在 /skills/new「手动」页签创建托管技能",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-01/RES-02: 手动页签建出的托管技能内容真的落库，名字不合格式时创建按钮压根按不下去 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-03",
@@ -6322,8 +6360,13 @@
       "title": "ZIP 解析失败 / 包内无候选技能的错误态与重试",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-05: ZIP 解不开与包里没技能是两种错，各自给出可重试的出口而不是把人卡死 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-11",
@@ -6331,8 +6374,13 @@
       "title": "SKILL.md 主文件保护（不可新建同名、不可删除）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-11: SKILL.md 在文件树里既建不出同名、也删不掉，绕道接口同样被 409 挡住 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-12",
@@ -6340,8 +6388,13 @@
       "title": "技能版本历史列表与版本对比（diff 弹窗）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-12: 版本历史列出每一版并标出当前版，对比弹窗给的是两版之间真正的差异 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-16",
@@ -6573,8 +6626,17 @@
       "title": "三类资源详情的未保存离开守卫（含技能特有的 outcome-unknown 强制留守）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-43: 技能 / MCP / 插件详情的未保存改动都拦得住离开，留守与丢弃各自生效 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-43/RES-X5: 保存结果未知时既不许离开也不给「丢弃」，页签转红且 History 只剩复核入口 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-45",
@@ -6582,8 +6644,13 @@
       "title": "权限不足时三类资源详情隐藏新建 / 保存 / 删除 / ACL 入口",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-45: 无写权的用户在三类资源详情里看不到新建 / 保存 / 删除 / 权限入口 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-46",
@@ -9552,8 +9619,13 @@
       "title": "长正文候选的展开 / 收起切换（>8 行时出现 toggle）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-13: 长正文候选默认收起、点一次展开再点一次收回；短正文根本不给这个按钮 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-14",
@@ -9561,8 +9633,17 @@
       "title": "审批队列空态（无可管候选时的 EmptyState）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-14 / MEM-41: 空库时审批队列说的是「没有待审记忆」，导航徽标整块不出现 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-14: 未经人审的候选不进普通用户的读面——他的审批队列给的是空态说明，不是空白也不是一直转圈 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-18",
@@ -9626,8 +9707,13 @@
       "title": "首页能力网格的 Memory 磁贴（记忆总数 + 深链到 ?tab=all，无 memory:read 时整块隐藏）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-42: 首页记忆磁贴数的是「已批准」那一档，候选与已归档都不算，落地页行数与它一致 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-44",
@@ -10054,8 +10140,13 @@
       "title": "技能名称格式校验（SKILL_NAME_RE）阻止创建",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-01/RES-02: 手动页签建出的托管技能内容真的落库，名字不合格式时创建按钮压根按不下去 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-04",
@@ -10108,8 +10199,13 @@
       "title": "三类资源列表页的搜索过滤、计数与空态",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-42: 三类资源列表页的搜索、计数与空态各自说真话 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-X5",
@@ -10117,8 +10213,17 @@
       "title": "技能详情页签的脏 / 错 / 陈旧徽标，与「有未保存改动时禁止进 History」",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-X5: 脏与陈旧徽标各自只落在出问题的那个页签，有未保存改动时 History 拒绝开门 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-skills-management.spec.ts",
+          "test": "RFC-319 RES-43/RES-X5: 保存结果未知时既不许离开也不给「丢弃」，页签转红且 History 只剩复核入口 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-X6",
@@ -10761,18 +10866,13 @@
     "INTENT-X2",
     "INTENT-X8",
     "MEM-21",
-    "MEM-22",
     "MEM-40",
-    "MEM-41",
     "MEM-43",
-    "MEM-45",
-    "MEM-46",
     "MEM-49",
     "MEM-X10",
     "MEM-X2",
     "MEM-X3",
     "MEM-X4",
-    "MEM-X5",
     "MEM-X8",
     "MEM-X9",
     "OPS-018",
@@ -10813,10 +10913,6 @@
     "REPO-X2",
     "REPO-X4",
     "REPO-X5",
-    "RES-01",
-    "RES-05",
-    "RES-11",
-    "RES-12",
     "RES-18",
     "RES-19",
     "RES-24",
@@ -10831,8 +10927,6 @@
     "RES-38",
     "RES-40",
     "RES-41",
-    "RES-43",
-    "RES-45",
     "RES-46",
     "RES-X1",
     "RES-X2",
@@ -10956,9 +11050,6 @@
     "INTENT-X5",
     "INTENT-X6",
     "INTENT-X7",
-    "MEM-13",
-    "MEM-14",
-    "MEM-42",
     "MEM-44",
     "MEM-X11",
     "OPS-007",
@@ -10986,14 +11077,11 @@
     "REPO-40",
     "REPO-42",
     "REPO-X3",
-    "RES-02",
     "RES-04",
     "RES-06",
     "RES-20",
     "RES-34",
     "RES-35",
-    "RES-42",
-    "RES-X5",
     "RES-X6",
     "TASK-03",
     "TASK-15",

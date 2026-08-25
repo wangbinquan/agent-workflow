@@ -2573,3 +2573,43 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
 5. **【已知但值得记】`agents.new.tsx:185-192` 的创建键 disabled 条件只含 `draft.name === ''`**，
    非法名格式没有前置闸（`AgentForm.tsx:528` 的 HTML5 `pattern` 没有 submit 事件可拦）。
    用例因此**刻意没有**断言「非法名时按钮禁用」——那会把不存在的行为写成期望。
+
+## RFC-319 B83 起草期撞到的产品缺陷（2026-08-25，均未写成断言）
+
+1. **【P2】四个资源名输入框的 `pattern` 属性在现代浏览器里是聋的，native 校验从不触发。**
+   `packages/frontend/src/routes/skills.new.tsx:225`、`packages/frontend/src/components/McpFields.tsx:48`、
+   `packages/frontend/src/components/PluginFields.tsx:57`（以及代理表单用的 `AGENT_NAME_RE`）都写
+   `pattern={XXX_NAME_RE.source}`，而这四个正则同形：`/^[a-z0-9][a-z0-9_-]*$/`
+   （`packages/shared/src/schemas/skill.ts:7`、`schemas/mcp.ts:19`、`schemas/plugin.ts:21`、
+   `schemas/agent.ts:112`）。当前 HTML 规范要求浏览器把 `pattern` 编译成 `^(?:…)$` 并带 **`v` 标志**；
+   `v` 模式下字符类里未转义的 `-` 是语法错误，编译失败时约束被**静默丢弃**。实测：
+   `new RegExp('^(?:^[a-z0-9][a-z0-9_-]*$)$','v')` → `Invalid character in character class`，
+   同一串用 `u` 编译正常。后果：`:invalid` 样式、`validity.patternMismatch`、表单提交拦截全部失效——
+   目前真正拦住用户的只有那个 `disabled` 的按钮（MCP / 插件新建页则是 `mcp-form.ts` 的手写校验）。
+   修法：`[a-z0-9_\-]`，或给 `pattern` 传一份转义过的 source。
+   用例里**只锁了「表单声明的规则字符串 == 共享正则」**，没有把这个聋态写进断言（那等于把缺陷固化）。
+2. **【P3】`skills.zipArchiveErrorsTitle` / `zipArchiveErrorsCount` 缺复数形式，单数时出中式英语。**
+   实测渲染 `1 rejected entries` / `1 entries did not pass validation`
+   （`packages/frontend/src/i18n/en-US.ts`）。同文件的 `splitPage.itemsCount` 已用 `_one` / `_other`，
+   说明本仓有这个惯例，这两条漏了；`zipCandidatesCount` / `zipConflictsCount` 同病。
+3. **【账本文案与实现不符】RES-X5 账本行写的「有未保存改动时点 History 不切换」与源码不符。**
+   `packages/frontend/src/routes/skills.detail.tsx:256-275` 的 `historyTab` 没有 `disabled`，
+   `onSelect={setTab}` 也无条件——点击**会**切到 History 页签，只是面板换成 `EmptyState`（`:877-899`）。
+   产品行为本身合理（徽标 + 说明 + 出路都在），但照账本措辞写会得到一条永远红的用例。
+   覆盖按源码实际行为写成「History 拒绝开门（切过去只有空态说明）」。
+4. **【P3】ZIP「无候选」态里 `Replace ZIP` 出现两次**：一次在归档头
+   （`packages/frontend/src/components/skills/ImportZipPanel.tsx:451-459`），一次在 EmptyState 的
+   action（`:477-487`）。同屏两个同名按钮，对屏幕阅读器是两个无法区分的控件。
+5. **【覆盖缺口，非缺陷】技能版本「回滚」的 UI 路径目前无 e2e。** RES-13 由
+   `e2e/skill-lifecycle.spec.ts:152` 在接口层锁住，但 `SkillVersionHistory.tsx:164-177` 的
+   `ConfirmButton → restore`（`onRestoreStart` / `onPendingChange` / `handleRestored` 的 busy 交接）
+   零浏览器覆盖。建议另立一条能力行。
+6. **【覆盖缺口，非缺陷】`UnsavedChangesGuard.tsx:239-253` 的 `unsaved-force-leave` 逃生口无覆盖。**
+   它只在 busy 满 `BUSY_ESCAPE_AFTER_MS = 10_000` 后出现；断言「它不存在」会随 CI 机器忙闲变成
+   时序赌博，断言「它存在」则要每条用例白等 10 秒。B83 刻意只锁了恒真的那部分
+   （无 Discard + 有 Stay + 走不掉）。
+7. **【死防御，非缺陷但值得记】`MemoryPendingBadge.tsx:26` 的 `canManage === true` 过滤永远删不掉行。**
+   候选行只对 `resource-acl:bypass` 可见（`routes/memories.ts:133` 先跑 `dropCandidates`），
+   而 bypass 操作者的每一行都被盖成 `canManage: true`（`services/memory.ts:882-883` 短路）。
+   「看得见但管不了的候选」这一态在产品里不存在。该符号的守卫在前端单测
+   （`packages/frontend/tests/memory-admin-gate-role.test.ts:31-42`），e2e 照不到它是应然。
