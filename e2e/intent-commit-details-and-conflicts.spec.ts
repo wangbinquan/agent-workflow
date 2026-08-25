@@ -24,6 +24,9 @@
 //   packages/frontend/src/routes/intent.detail.tsx:1592-1601  复核步逐槽 Provided / Required / Default 读数
 //   packages/frontend/src/routes/intent.detail.tsx:650-659    阻断性错误红横幅（NoticeBanner tone=error）
 //   packages/frontend/src/routes/intent.detail.tsx:425-436    评审页签红色计数徽章（badgeTone danger）
+//   packages/frontend/src/routes/intent.detail.tsx:60-67      REVIEW_FIRST_REASONS（含 draft-invalid）
+//   packages/frontend/src/routes/intent.detail.tsx:254-258    工作区页签初值：每会话只按首读的 journey.reason 定一次
+//   packages/backend/src/services/intent/journey.ts:44-52     reason 投影：inFlight ⇒ generation-running；否则草稿有错 ⇒ draft-invalid
 //   packages/frontend/src/routes/intent.detail.tsx:757-762    错误未清空时 Commit 入口禁用
 //   packages/backend/src/services/intent/resolveChangeset.ts:437-449  intent-secret-required
 //   packages/backend/src/services/intent/resolveChangeset.ts:420-435  未豁免的凭据发现 ⇒ intent-secret-value-forbidden
@@ -61,6 +64,16 @@ import { join } from 'node:path'
 import { startDaemon, type DaemonHandle } from './harness'
 
 test.describe.configure({ mode: 'serial' })
+
+// 拆环境前先把在飞的 route handler 等完（docs/dev-gotchas.md 有整节）。本仓前端普遍是
+// 「useQuery 挂载打一次 → WS 连上后 reconcile 再补打一次」，第二次的 handler 常常只比正文
+// 结束点早几十毫秒；机器一忙就翻成负数，页面已关而 handler 还在 `route.fetch()` 里飞，
+// 于是抛 "Target page, context or browser has been closed"——Route 动词里只有 fetch() 没被
+// `_raceWithTargetClose` 包住。必须是 'wait'（趁 page 还活着等它跑完），
+// 'ignoreErrors' 只是把错吞掉，那等于「重跑就过了」。
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' })
+})
 test.setTimeout(180_000)
 
 /** 默认（create-agent）变体；HOLD 文件默认不存在 ⇒ 每一轮都立即返回。 */
@@ -69,6 +82,14 @@ let daemon: DaemonHandle
 let updateDaemon: DaemonHandle
 let holdDir: string
 let holdFile: string
+/**
+ * updateDaemon 的 HOLD 开关（与 daemon 的分开，免得两个 daemon 互相挂住）。
+ *
+ * INTENT-30 要断言的是「工作区页签的初值」，而初值只在**详情第一次可读**的那一刻
+ * 按 journey.reason 定一次（intent.detail.tsx:254-258）。不挂住这一轮的话，「首次
+ * 可读」落在生成中还是落在草稿已就绪，纯看机器快慢——见 INTENT-30 用例内的说明。
+ */
+let updateHoldFile: string
 let sequence = 0
 
 interface AgentRow {
@@ -131,6 +152,7 @@ async function seedAgent(
 test.beforeAll(async () => {
   holdDir = mkdtempSync(join(tmpdir(), 'aw-intent-commit-'))
   holdFile = join(holdDir, 'turn.hold')
+  updateHoldFile = join(holdDir, 'update-turn.hold')
   daemon = await startDaemon({
     stubMode: 'intent',
     // 文件不存在时 stub 的等待循环立即退出（mode-intent.ts:198-205），所以这只是
@@ -139,7 +161,8 @@ test.beforeAll(async () => {
   })
   updateDaemon = await startDaemon({
     stubMode: 'intent',
-    extraEnv: { STUB_INTENT_VARIANT: 'update' },
+    // 同样默认不存在 ⇒ 平时零成本；只有 INTENT-30 会临时写出它来钉死时序。
+    extraEnv: { STUB_INTENT_VARIANT: 'update', STUB_INTENT_HOLD_FILE: updateHoldFile },
   })
 })
 
@@ -393,15 +416,82 @@ test('INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审�
   const name = `rfc319-intent30-${++sequence}`
   await seedAgent(updateDaemon, name, 'original description')
 
-  // 不走资源详情页的「Modify via intent」入口 ⇒ 目标只在清单里可见、未挂载，
-  // 服务端据此把草稿判为有阻断性错误（resolveChangeset.ts:144-148）。
-  const sessionId = await createSessionAndAwaitDraft(
-    page,
-    updateDaemon,
-    `rework rfc319-target:${name}`,
-  )
+  const buildTab = page.getByRole('tab', { name: 'Build workspace' })
+  const reviewTab = page.getByRole('tab', { name: 'Draft review workspace' })
+  const badge = reviewTab.locator('.tabs__tab-badge')
 
-  // ① 红横幅：tone=error 的 NoticeBanner 渲染成 role=alert（NoticeBanner.tsx:103）。
+  // ── 前置：把这一轮挂住，钉死「详情第一次可读时会话处在什么状态」 ──────────
+  //
+  // 工作区页签的初值**只**在详情第一次可读的那一刻按 journey.reason 定一次，
+  // 之后同一会话再不自动切换（intent.detail.tsx:254-258 的 once-per-session ref；
+  // REVIEW_FIRST_REASONS 见 :60-67）。所以「用户落在哪个页签」取决于首读时的
+  // reason，而**不**取决于草稿最终长什么样。
+  //
+  // 不挂住这一轮的话，首读到底撞上 `generation-running`（⇒ Build）还是撞上
+  // 草稿已就绪的 `draft-invalid`（⇒ Review），纯粹取决于「浏览器发出首个详情
+  // GET 并拿到响应」和「stub 这一轮跑完」谁快 —— 本机快，首读落在生成中；CI 的
+  // macOS 腿慢，首读落在草稿之后。这正是本用例此前在 CI 上红的原因（本机注入
+  // 1.5s 的首个详情 GET 延迟即可 100% 复现：build=false / review=true）。
+  // 挂住这一轮 ⇒ 首读时**必然**还没有任何草稿 ⇒ reason 必然不在
+  // REVIEW_FIRST_REASONS 里 ⇒ 初值必然是 Build，与机器快慢无关。
+  writeFileSync(updateHoldFile, 'held')
+  let sessionId = ''
+  try {
+    // 不走资源详情页的「Modify via intent」入口 ⇒ 目标只在清单里可见、未挂载，
+    // 服务端据此把草稿判为有阻断性错误（resolveChangeset.ts:144-148）。
+    await page.goto(`${updateDaemon.baseUrl}/intent`)
+    const composer = page.getByTestId('intent-create-inline')
+    await composer.getByTestId('intent-create-message').fill(`rework rfc319-target:${name}`)
+    await composer.getByRole('button', { name: 'Start building' }).click()
+    await page.waitForURL(/\/intent\/[0-9A-Z]+/i)
+    const parsed = /\/intent\/([0-9A-Z]+)/i.exec(page.url())?.[1]
+    expect(parsed, `会话 id 未能从 URL 解析：${page.url()}`).toBeTruthy()
+    sessionId = parsed as string
+
+    // 「Cancel generation」只在 detail.session.inFlight 为真时渲染
+    // （intent.detail.tsx:309-317）。它可见 = 详情已经读到了，且读到的是**生成中**
+    // —— 这就是上面那段初值论证的前提，必须显式钉住，不能默认。
+    await expect(
+      page.getByRole('button', { name: 'Cancel generation' }),
+      '挂住的那一轮里详情必须已可读且处于生成中，否则下面的页签初值断言测的不是它想测的东西',
+    ).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByTestId('intent-draft'), '挂住期间不该有任何草稿').toHaveCount(0)
+
+    // 窄布局才有页签：宽屏两栏同时可见，TabBar 被 CSS 收起；窄屏下未选中的那一栏
+    // 整个 display:none（styles.css:25386 起的 max-width:1080px 断点，
+    // :25392-25394 放出页签、:25405-25407 藏掉未选中的栏）。这也是下面所有
+    // 评审栏内容都必须先点开评审页签才断言的原因。
+    await page.setViewportSize({ width: 900, height: 1000 })
+    await expect(buildTab, '生成中首读 ⇒ 初值必须落在 Build 页签').toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect(reviewTab).toHaveAttribute('aria-selected', 'false')
+    // 草稿还没落地就先亮红角标 ⇒ 用户被一个还不存在的「问题」催着去看空的评审栏。
+    await expect(badge, '还没有草稿时不得有任何计数徽章').toHaveCount(0)
+  } finally {
+    rmSync(updateHoldFile, { force: true })
+  }
+
+  // ── ① 评审页签的红色计数徽章 ───────────────────────────────────────────────
+  //
+  // 窄屏上右栏整个是隐藏的，用户此刻停在 Build 页签（刚刚断言过），这颗徽章是
+  // 「有东西要处理」的**唯一**信号：它不显形 ⇒ 用户对着一个已经生成完、但服务端
+  // 必拒的草稿干等，界面上没有任何东西提示他去看评审栏。
+  await expect(badge).toHaveText('1', { timeout: 60_000 })
+  await expect(badge, '徽章必须是危险色，中性色读起来只是「有 1 条内容」').toHaveAttribute(
+    'data-tone',
+    'danger',
+  )
+  // 契约的另一半，也是本用例真正的回归防线：草稿**带着阻断性错误落地**这件事
+  // 本身不得改动页签选中态。它若被改成「一落地就自动跳评审栏」，用户正在 Build
+  // 栏敲的追加指令会被当场从视野里挪走（页签是互斥的，右栏一亮左栏就整个隐藏）。
+  await expect(buildTab, '草稿落地不得抢走页签选中态').toHaveAttribute('aria-selected', 'true')
+  await expect(reviewTab).toHaveAttribute('aria-selected', 'false')
+
+  // ── ② 跟着徽章切过去：红横幅 + Commit 入口禁用 ────────────────────────────
+  await reviewTab.click()
+  // 红横幅：tone=error 的 NoticeBanner 渲染成 role=alert（NoticeBanner.tsx:103）。
   const banner = page.getByRole('alert').filter({ hasText: 'blocking validation errors' })
   await expect(banner).toBeVisible({ timeout: 30_000 })
   await expect(banner).toHaveClass(/notice-banner--error/)
@@ -411,38 +501,28 @@ test('INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审�
   await expect(banner.locator('li')).toContainText('intent-target-not-mounted')
   // 大纲上也要挂到具体那条操作上（多操作草稿里这是唯一的定位手段）。
   await expect(page.getByTestId('intent-op-outline-item')).toContainText('1 issues')
-
-  // ② 评审页签的红色计数徽章 —— 只在窄布局出现（styles.css:24195 / :25134 起的
-  //    max-width:1080px 断点），因为宽屏两栏同时可见、不需要角标。
-  //
-  //    实跑确认的一个关键事实：窄屏用户此刻**正停在 Build 页签上**。页签初值只在
-  //    详情第一次到达时定一次（intent.detail.tsx:254-258），而那一刻这一轮还在
-  //    generating（reason='generation-running'，不在 REVIEW_FIRST_REASONS 里），
-  //    之后草稿带着错误落下来也不会再改页签。所以在窄屏上，右栏整个是隐藏的，
-  //    这颗徽章是用户「有东西要处理」的**唯一**信号：它不显形 ⇒ 用户对着一个
-  //    已经生成完、但服务端必拒的草稿干等，界面上没有任何东西提示他去看评审栏。
-  await page.setViewportSize({ width: 900, height: 1000 })
-  const reviewTab = page.getByRole('tab', { name: 'Draft review workspace' })
-  const badge = reviewTab.locator('.tabs__tab-badge')
-  await expect(badge).toHaveText('1')
-  await expect(badge, '徽章必须是危险色，中性色读起来只是「有 1 条内容」').toHaveAttribute(
-    'data-tone',
-    'danger',
-  )
-  // 徽章旁边必须仍是 Build 页签处于选中态 —— 这就是上面那段「用户看不到右栏」的
-  // 前提；若它已自动跳到评审栏，徽章的必要性论证就换了一套，得重写这条。
-  await expect(page.getByRole('tab', { name: 'Build workspace' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
-
-  // ③ 跟着徽章切过去之后：Commit 入口禁用 + 说明为什么。只禁用不解释，
-  //    用户会以为界面坏了、反复点。
-  await reviewTab.click()
+  // Commit 入口禁用 + 说明为什么。只禁用不解释，用户会以为界面坏了、反复点。
   await expect(page.getByTestId('intent-open-commit')).toBeDisabled()
   await expect(
     page.getByText('Resolve the validation issues above before opening commit review.'),
   ).toBeVisible()
+
+  // ── ③ 初值契约的另一支：首读就是 draft-invalid 时必须直接落在评审栏 ────────
+  //
+  // 上面锁的是「首读=生成中」那一支；刷新（= 从列表页/书签重新进入这个会话）走的
+  // 是另一支：首读时草稿已在、且带阻断性错误 ⇒ reason='draft-invalid' ∈
+  // REVIEW_FIRST_REASONS（intent.detail.tsx:60-67）⇒ 直接落在评审栏。
+  // 这一支不成立 ⇒ 一个「已知必被服务端拒收」的会话，用户重新进来时被扔回 Build
+  // 栏，窄屏上要自己想到去点评审页签才看得见错在哪。
+  await page.reload()
+  await expect(reviewTab, '重新进入一个草稿已失效的会话必须直接落在评审栏').toHaveAttribute(
+    'aria-selected',
+    'true',
+    { timeout: 60_000 },
+  )
+  await expect(buildTab).toHaveAttribute('aria-selected', 'false')
+  // 直接落在评审栏 ⇒ 红横幅不点任何东西就该在眼前（这才是这一支存在的意义）。
+  await expect(banner).toBeVisible({ timeout: 30_000 })
 
   // ④ 服务端真值：禁用只是第一道门，绕过前端直接打 API 也必须被拒。
   //    这条不成立 ⇒ 禁用按钮就是全部防线，任何脚本/旧标签页都能把非法草稿入库。

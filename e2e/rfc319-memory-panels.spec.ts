@@ -99,6 +99,16 @@ import { startDaemon, type DaemonHandle } from './harness'
 // serial：MEM-X7 需要「库里一条记忆都没有」的前提，而其余每条用例都会往库里写。
 // 顺序是这个文件的一部分，别改成 parallel，也别把 MEM-X7 挪到后面去。
 test.describe.configure({ mode: 'serial' })
+
+// 拆环境前先把在飞的 route handler 等完（docs/dev-gotchas.md 有整节）。本仓前端普遍是
+// 「useQuery 挂载打一次 → WS 连上后 reconcile 再补打一次」，第二次的 handler 常常只比正文
+// 结束点早几十毫秒；机器一忙就翻成负数，页面已关而 handler 还在 `route.fetch()` 里飞，
+// 于是抛 "Target page, context or browser has been closed"——Route 动词里只有 fetch() 没被
+// `_raceWithTargetClose` 包住。必须是 'wait'（趁 page 还活着等它跑完），
+// 'ignoreErrors' 只是把错吞掉，那等于「重跑就过了」。
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' })
+})
 test.setTimeout(180_000)
 
 let daemon: DaemonHandle

@@ -196,31 +196,70 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
+// ---------------------------------------------------------------------------
+// route handler 生命周期纪律（2026-08-24 macOS CI 那条红的根治点）
+// ---------------------------------------------------------------------------
+// CI 报的是：
+//   `"route.fetch: Target page, context or browser has been closed" while running route callback`
+// 根因实测（本机 chromium 探针，逐次打时间戳）：
+//
+//   1. 详情页一次冷加载会打**两次** `GET /api/clarify/{nodeRunId}`——第 1 次是 `session`
+//      useQuery 挂载时打的（routes/clarify.detail.tsx:101-105），第 2 次是 `/ws/tasks/{taskId}`
+//      握手成功后 `reconcileOnOpen` 触发的 invalidate 补打的（hooks/useClarifyWs.ts:75 →
+//      hooks/useWsInvalidation.ts:117-124）。本机实测两次相隔约 60ms。
+//   2. 断言只要第 1 次的响应就能满足，于是用例正文常常在第 2 次请求的 route callback 还在飞的
+//      时候就跑完了——本机实测正文结束点只比第 2 次 callback 收尾晚 **29ms**。macOS runner 负载
+//      更高、WS 握手落得更晚，这 29ms 余量翻成负数，那条腿就红。
+//   3. 为什么偏偏炸在 `route.fetch()`：Playwright 的 Route 动词里，`fulfill` / `continue` /
+//      `fallback` / `abort` 全都包在 `_raceWithTargetClose()`（= `_targetClosedScope().safeRace`）
+//      里——页面关掉时它们被**静默放弃**，不抛错；只有 `route.fetch()` 走的是 `_wrapApiCall`，
+//      没有这层 race，页面一关它就 reject 并被 Playwright 冒泡成上面那条测试失败。
+//      （playwright-core@1.60.0 `lib/coreBundle.js` 里 Route 各动词的实现，逐个可查。）
+//
+// 所以本文件有两道锁，缺一不可：
+//   * 锁 A（各用例内）——handler 里不许出现 `route.fetch()`。要回源的数据一律在 Node 侧预取好，
+//     handler 只留 `fulfill` / `fallback`。这直接掐掉唯一会抛的那个动词。
+//   * 锁 B（本 hook）——每条用例收尾时摘掉全部 handler，并**趁 page 还活着**把已经在跑的 handler
+//     等完，于是拆环境时根本不存在「还在飞的 callback」。用 `'wait'` 而不是 `'ignoreErrors'`：
+//     前者让 handler 正常跑完、竞态被真正消除，后者只是把错吞掉——那等于「重跑就过了」，禁止。
+//
+// 反向验证（都在干净 origin/main 构建上跑过）：把第 2 次 callback 人为延后 40ms，**旧写法**
+// 稳定复现同一条报错、同一个行号；换成现在这两道锁后，即便把第 2 次 callback 拖慢 500ms 也全绿
+// （用例 1 时长从 ~0.5s 涨到 ~1.0s，正是锁 B 在等它跑完）。
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' })
+})
+
 test('agent 超发题目时，页面必须说「被截断了」——否则人以为自己看到的就是全部', async ({ page }) => {
   await seedAuth(page)
   // 截断发生在**解析**那一层（超上限即截断 + 记 warning），stub 固定只发 2 题；真造一次
   // 超发就得改 stub，而那会废掉 RFC-254 的 shell↔TS 差分基线。这里改在请求层注入
   // warning，锁的正是本条真正欠缺的那一段：**页面到底说不说**。
-  await page.route('**/api/clarify/**', async (route) => {
-    if (new URL(route.request().url()).pathname !== `/api/clarify/${nodeRunId}`) {
-      await route.fallback()
-      return
-    }
-    const json = JSON.parse(await (await route.fetch()).text()) as Record<string, unknown>
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ...json,
-        truncationWarnings: [
-          { code: 'too-many-questions', detail: 'got 7 questions, truncated to 5' },
-          { code: 'too-many-options', detail: 'question "q-db" had 9 options, truncated to 6' },
-        ],
-      }),
-    })
+  //
+  //
+  // 锁 A（见上面 afterEach 那段的根因）：注入体在 **Node 侧一次性取好**，handler 里只剩一次
+  // `route.fulfill()`，不再有 `route.fetch()`。取的是同一个 daemon、同一个 token 的同一条
+  // 路径，拿到的就是页面本来会拿到的那份真响应——注入的保真度没变，变的只是「回源发生在
+  // 用例正文里」而不是「发生在随时可能跨过用例边界的 route callback 里」。
+  const real = await api<Record<string, unknown>>(`/api/clarify/${nodeRunId}`)
+  const injectedBody = JSON.stringify({
+    ...real,
+    truncationWarnings: [
+      { code: 'too-many-questions', detail: 'got 7 questions, truncated to 5' },
+      { code: 'too-many-options', detail: 'question "q-db" had 9 options, truncated to 6' },
+    ],
   })
+  // 只拦「本轮详情」这一条**精确路径**：用 URL 谓词而不是 `**/api/clarify/**` 通配。同屏还在飞的
+  // `/api/clarify/pending-count`、`/api/clarify?taskId=…` 因此根本不进 handler，`route.fallback()`
+  // 这条分支也随之消失——少一类能活过用例边界的 callback 调用。
+  await page.route(
+    (url) => url.pathname === `/api/clarify/${nodeRunId}`,
+    (route) => route.fulfill({ status: 200, contentType: 'application/json', body: injectedBody }),
+  )
   await openClarify(page, nodeRunId)
   const warning = page.getByTestId('clarify-truncation-warning')
+  // 不成立时：解析层已经悄悄砍掉了第 6、7 题，页面却一个字都不说，人答完 5 题就走人，
+  // agent 真正问的后两题从此没有人知道存在过。
   await expect(warning).toBeVisible()
   // 逐条都要在场：只说「有截断」而不说截了什么，人无从判断该不该回去追 agent。
   await expect(warning).toContainText('[too-many-questions] got 7 questions, truncated to 5')
@@ -262,7 +301,11 @@ test('两条查询各自坏掉：本轮坏了要整页报错可重试，同伴�
   failDetail = false
   await page.getByRole('button', { name: 'Retry' }).first().click()
   await expect(page.getByTestId('clarify-question-q-db')).toBeVisible()
-  await page.unroute('**/api/clarify/**')
+  // 摘掉 ① 的注入。用 unrouteAll('wait') 而不是 unroute()：此刻 WS 的 reconcile 补打的那次详情
+  // 请求很可能正在 handler 里飞，而 `unroute()` 不等它——被摘掉的 handler 会继续跑到 ② 的
+  // `openClarify` 重新导航之后，拿着一个已经不该生效的 500 去 fulfill 新页面的请求。
+  // 同上面 afterEach 的锁 B：先摘、再趁页面还活着等它跑完，两段注入才互不串味。
+  await page.unrouteAll({ behavior: 'wait' })
 
   // ② 同伴查询（分片邻居）坏掉 ⇒ 只出一条错误条，问卷照常能答。
   // 它是辅助信息，为它白屏是把小故障放大成大故障。

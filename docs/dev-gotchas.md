@@ -56,6 +56,10 @@
   - 判据：失败耗时高度一致且贴着某个硬超时 + 改动面与该用例无关 + 单跑绿 ⇒ 资源竞争，不是回归。**但别就此放行**：先单跑确认，再看这一轮门禁里有没有同族的真红被淹没（RFC-304 PR-2 那条「并发红与自己的红同时出现」是同一个坑的另一半）。
   - 定式：门禁跑起来之后就等它，要验证别的用例就等门禁结束，或者把它放进另一台机器/另一棵树并接受它同样会互相抢。
 
+- **本仓有三个包，`bun test` 跑的是「当前目录那一个」——改了 `packages/shared` 就必须单独跑它**（2026-08-25 实撞，RFC-324）：改动同时动了 shared 的 schema（资源 ACL 与任务成员的 wire）与 backend / frontend 的消费方。我跑了 backend 的相关子集（全绿）和 frontend 全量 6807（全绿）就推了，**CI 上 8 个 backend shard 全红 + Lint 腿红**——Lint 腿里跑的是 `@agent-workflow/shared` 的 2245 条，其中 4 条断言的正是我改掉的那两个 schema。
+  - 为什么容易漏：`bun test <路径>` 在仓根跑会按路径过滤，看起来「跑过了」；而 shared 的测试在 `packages/shared/tests/` 下、由 CI 的 **Lint + Typecheck + Format + Shared + system mock** 那条腿执行，跟 backend 四分片不是同一个 job，名字里也没有 "test"，扫 job 名的时候最容易划过去。
+  - 定式：**改了 `packages/shared/src/schemas/` 下的任何文件就同时跑 `cd packages/shared && bun test`**。更一般地——推之前问一句「这次改动跨了几个包？我是不是每个包都跑了？」三个包各有各的 runner（backend/shared 是 `bun test`，frontend 是 `vitest`）。
+  - 同一批还暴露了第二种漏法：**改了公共判据的名字或错误码，要 grep 的不只是生产代码**。`requireResourceOwner → requireResourceGovern` 在生产代码里零残留了，但**测试**里还有三类引用活着——按旧名断言的架构守卫（`requireOwnedEmployee`）、按旧错误码断言的行为测试（`code: 'forbidden'` 被分流成 `resource-read-only` / `resource-govern-owner-only`）、以及**账本类守卫**（新增的 allowlist 要入 `ledger-baselines.json`、新增的源码锁要入 `guard-manifest.json`、新增的端点要进 `tests/contracts/registry.ts`）。这三类都不会被 `tsc` 抓到，只会在 CI 上红。
 - **起真进程做验收时,失败信息必须同时打印 stderr——只读 stdout 会让崩溃「无因可查」**（2026-08-19 实撞）：`tests/cli.test.ts` 的 `waitForReady` 只读 daemon 的 stdout，于是 CI 上一次「daemon exited before ready」的报错里，只有到「pre-migration backup written」为止的正常日志，**真正的错误一个字都没有**（它写在 stderr）；本地又复现不出来，等于线索归零。判据：**任何 `Bun.spawn` + 等待就绪的测试助手，失败路径都要把 stderr 一并附上**——正常路径不需要它，恰恰是失败路径唯一需要它。修法见该文件 `waitForReady` 的第三个参数（后台异步读 stderr、失败时拼进 message）。
 - **本地门禁对「本批新增的文件」可能整批假绿——用 `git ls-files` 枚举源码的守卫看不见 untracked 文件**（2026-08-19 实测，RFC-311 T19）：`tests/route-error-code-coverage.test.ts` 这类守卫先 `git ls-files -- 'src/routes/*.ts'` 再扫描，而**未跟踪的新文件不在输出里**。我连跑三轮 `gate:local` 全绿，`git commit` 之后 CI 立刻红在「新错误码没有测试点名」——同一台机器、同一份代码，差别只是文件从 untracked 变成 tracked。同类枚举式守卫（端点↔契约注册表、卡片计数、AST ratchet…）都吃这一口。
   - 定式：**新增文件的批次，跑门禁前先 `git add -N <新文件>`**（intent-to-add，只登记路径不入暂存内容），让所有 `git ls-files` 类扫描立刻看见它们；批次全绿再正常 `git add` 提交。
@@ -2391,3 +2395,41 @@ case "$R" in "$SANDBOX"/*) echo "✅ 在沙箱内";; *) echo "❌ 逃出沙箱�
 钉住的那份也必须来自干净树，否则只是把上面那个坑固化了一遍（实撞：第一版钉的副本恰好是 RFC-324 的半程
 构建——后端新、内嵌前端旧，打开 ACL 弹窗当场 `undefined.map`，连既有的 `rfc099-ownership-acl.spec.ts`
 一起红）。
+
+## e2e 里凡是 `page.route` 拦 API 的，handler 里都不许出现 `route.fetch()`（2026-08-25 实撞并实测定因）
+
+一条本机与 ubuntu 腿都绿的用例在 macOS 腿上稳定红，报的是：
+
+```
+Error: "route.fetch: Target page, context or browser has been closed
+```
+
+而且**红在 648ms**——不是超时，是竞态。两个事实叠出来的：
+
+**① 前端一次冷加载会给同一个接口打两次请求。** 本仓大量页面是「useQuery 先挂载打一次 → WS 连上后
+`reconcileOnOpen` 再 invalidate 补打一次」（例如
+`packages/frontend/src/hooks/useClarifyWs.ts:75` → `packages/frontend/src/hooks/useWsInvalidation.ts:117-124`）。
+用例的断言只要第一次的响应就满足了，于是**正文结束点可能只比第二个 handler 收尾早几十毫秒**（实测探针：
+第二次 callback 收尾在 +399ms，正文结束在 +428ms，余量 **29ms**）。CI 机器忙一点、WS 握手晚一点，
+这 29ms 就翻成负数：正文已经结束、拆环境把 page 关了，第二个 handler 还在飞。
+
+**② Route 动词里只有 `fetch()` 会因此抛错。** `playwright-core` 的 `fulfill` / `continue` /
+`fallback` / `abort` / 重定向全都包在 `_raceWithTargetClose()` 里，页面关掉时**静默放弃**；只有
+`route.fetch()` 走 `_wrapApiCall`，没有这层 race。所以同一个竞态下，红永远落在那一句上——
+这也解释了为什么这类红看起来「毫无道理」，以及为什么把 handler 拖慢一点时**报错归属会漂到下一条用例上**。
+
+**两把锁，缺一不可：**
+
+- **锁 A：handler 里不要 `route.fetch()`。** 要回源的真实响应，就在 **Node 侧**用测试自己的 API
+  helper 预取好（同一个 daemon、同一个 token、同一条路径，拿到的就是页面本来会拿到的那份），
+  handler 里只剩一次 `route.fulfill(注入体)`。顺带把 `page.route('**/api/xxx/**')` 这种通配换成
+  **URL 谓词精确匹配**本轮那一条路径，无关请求不再进 handler，`route.fallback()` 分支也一并消失。
+- **锁 B：`test.afterEach` 里 `await page.unrouteAll({ behavior: 'wait' })`。** 先摘掉全部 handler，
+  再**趁 page 还活着**把已经在跑的等完，拆环境时就不存在「还在飞的 callback」。
+  **必须是 `'wait'`，不是 `'ignoreErrors'`**——后者只是把错吞掉，那等于「重跑就过了」。
+  同理，用例中途摘注入也要用 `unrouteAll({behavior:'wait'})` 而不是 `unroute()`：后者不等在飞的
+  handler，被摘掉的注入可能 fulfill 到重新导航后的**新页面**上。
+
+**怎么确认自己真修掉了而不是碰巧躲过去**：人为把第二次 callback 延后（`await new Promise(r=>setTimeout(r,500))`
+塞进 handler）。旧写法下这会**稳定复现**同一条报错、同一个行号；两把锁都上之后应当仍然绿，且那条用例的
+耗时会明显变长——那正是锁 B 在等它跑完。

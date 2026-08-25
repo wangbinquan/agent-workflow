@@ -55,7 +55,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 import { startDaemon, type DaemonHandle } from './harness'
 
@@ -72,8 +72,25 @@ let holdFile: string
 const FORK = 'e2e-fork'
 /** 对照用：不填二进制路径，创建时**不应**产生任何冒烟回执。 */
 const NO_PATH = 'e2e-nopath'
-/** 探测中途改路径要换成的另一个真实可执行文件（canonical 绝对路径，过得了写入闸）。 */
-const OTHER_BINARY = '/bin/echo'
+/**
+ * 换路径用的「另一条真实二进制」：只要求过得了服务端写入闸并且与 stub 不同，
+ * 用例从不真的执行它（CFG-12 只保存、CFG-13 只在探测半空中改这一行）。
+ *
+ * **必须逐平台成立**：写入闸 `validateBinaryPath`
+ * （packages/backend/src/services/runtimeRegistry.ts:567-588）对绝对路径只收
+ * **canonical** 形式——`resolve(p) === p`，否则 422 `runtime-binary-invalid`。
+ * 这个判据是平台相关的：原先写死的 `/bin/echo` 在 win32 上 `isAbsolute()` 为真
+ * （无盘符的根路径也算绝对），但 `path.win32.resolve('/bin/echo')` 会补上当前
+ * 盘符并换成反斜杠（`D:\bin\echo`），两者不等 ⇒ **保存被 422 拒、弹窗按设计
+ * 留在原地**（RuntimeList.tsx:445-449 的 `onSuccess` 才关窗）。2026-08-25 的
+ * Windows CI 实红（commit 188dda224，shard 2/3，`toHaveCount(0)` 收到 1）就是
+ * 这一条：不是慢、不是竞态，是夹具值在那台机器上本来就非法。
+ *
+ * 改用 `process.execPath`——跑这份用例的 node/bun 自己：三个平台上都是**存在的、
+ * 可执行的、canonical 的**绝对路径（Windows 上带盘符与反斜杠，天然满足
+ * `resolve(p) === p`），且必然不是 stub，正是这两条用例需要的语义。
+ */
+const OTHER_BINARY = process.execPath
 
 // packages/frontend/src/i18n/en-US.ts:3350-3357 —— 冒烟结论 → 界面文案的唯一映射。
 // 用例不预设 stub 会得出哪一种结论，只要求「界面显示的那一句 == 服务端存的那一条」。
@@ -112,6 +129,21 @@ interface RuntimeRow {
 }
 
 test.beforeAll(async () => {
+  // 夹具自检（不是产品面）：把「这条路径在本平台合不合法」提前到这里判，
+  // 而不是留给 CFG-12 的「保存后弹窗该关」去表达。前者一眼能看出是夹具值不对，
+  // 后者只会显示「弹窗没关」，读的人会去查产品的关窗逻辑——2026-08-25 的
+  // Windows 红就白烧了一轮排查。
+  expect(
+    isAbsolute(OTHER_BINARY) && resolve(OTHER_BINARY) === OTHER_BINARY,
+    `夹具不成立：OTHER_BINARY=${OTHER_BINARY} 在本平台不是 canonical 绝对路径，` +
+      '服务端写入闸（runtimeRegistry.ts:567-588）会以 422 拒掉它，' +
+      '下面「改二进制 → 保存」的用例验的将是夹具而不是产品',
+  ).toBe(true)
+  expect(
+    existsSync(OTHER_BINARY),
+    `夹具不成立：OTHER_BINARY=${OTHER_BINARY} 不存在，「换成另一条真实二进制」的前提落空`,
+  ).toBe(true)
+
   holdDir = mkdtempSync(join(tmpdir(), 'aw-rfc319-runtimes-'))
   holdFile = join(holdDir, 'hold')
   daemon = await startDaemon({
@@ -483,8 +515,25 @@ test('RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 co
     dialog.getByRole('button', { name: 'Save', exact: true }),
     '改回合法值后保存仍是灰的 ⇒ 用户被永久卡住',
   ).toBeEnabled()
+  // 保存这一步分两件事，必须分别断言，否则「弹窗没关」会同时代表两种完全不同的
+  // 故障（服务端拒了 / 关窗逻辑坏了），读红的人无从分辨。
+  const saved = page.waitForResponse(
+    (r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === `/api/runtimes/${FORK}`,
+    { timeout: 60_000 },
+  )
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
-  await expect(dialog).toHaveCount(0)
+  const savedResponse = await saved
+  // ① 服务端事实：这组编辑真的被接受了。被拒时这里直接把服务端原话打出来
+  //   （例如 `binaryPath must be a canonical absolute path`），用户侧的对应遭遇是
+  //   「填了半天点保存，弹窗一动不动」。
+  expect(savedResponse.status(), `保存运行时编辑被服务端拒了：${await savedResponse.text()}`).toBe(
+    200,
+  )
+  // ② 界面事实：保存成功后弹窗必须收起。不收起 ⇒ 用户不知道自己到底存没存上，
+  //   会反复点保存（每点一次就是一次真实写入）。
+  //   这里用默认超时是有意的：上一行已经等到了写入回执，剩下的只是 React 的一次
+  //   状态翻转，再给它更长的窗口只会把「关窗逻辑坏了」拖成慢性红。
+  await expect(dialog, '保存成功后编辑弹窗没关 ⇒ 用户不知道存没存上，只会反复点保存').toHaveCount(0)
 
   const after = await runtimeRow(FORK)
   expect(after?.binaryPath, '改过的二进制路径没落库 ⇒ 界面显示新路径、实际仍拉旧的').toBe(
