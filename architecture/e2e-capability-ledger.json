@@ -3976,8 +3976,13 @@
       "title": "触发规则启停开关 / 删除（fires 与 stream 级联）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-24: 关掉触发规则的开关后同样的事件不再点火，重新打开又能点，删除规则连带清掉它的点火历史与熔断计数 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-25",
@@ -3985,8 +3990,13 @@
       "title": "投递审计列表：分页、状态/事件类型/仓库过滤、仓库下拉选项源",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-25: 投递审计按事件类型与仓库分别收窄且两者可叠加，仓库下拉列的是投递里出现过的仓库（含没落在当前页的那一个），翻页前后两页互不相交 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-26",
@@ -3994,8 +4004,17 @@
       "title": "投递详情（含原始 body 与终态控制审计、不可见任务计数）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-26: 投递详情原样保留入站 body 并给出终态控制的逐任务结果，看不见那些任务的人只拿到一个计数、拿不到任务 id @nightly"
+        },
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-26: 看不见那个任务的人在终态控制审计里只拿到一个「被权限隐藏」的计数，任务 id 一个字都不外泄 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-29",
@@ -4003,8 +4022,13 @@
       "title": "事件中心「事件总览」页签：来源树 + 事件目录 + 观察器健康 + 四个汇总卡片",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-29: 事件总览的来源树按观察方式分出三种健康态，四张汇总卡片各自的口径都咬得住——已取消的订阅不再计入、已确认的投递退出待处理 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-32",
@@ -4012,8 +4036,13 @@
       "title": "订阅审计视图：统一分页 + 按消费者标识精确筛选 + 状态渲染",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-32: 订阅审计把精确关注与条件响应并进同一份分页里，消费者标识是精确匹配而非前缀，已取消的订阅仍要列出并标成已取消 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-33",
@@ -4021,8 +4050,13 @@
       "title": "事件投递记录视图：按处理状态（待处理/处理中/已确认/处理失败）与消费者筛选 + 分页",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-33: 投递记录的四档处理状态各自筛出互不重叠的子集，消费者筛选与状态筛选可叠加，失败原因跟着死信一起显示 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-36",
@@ -9548,8 +9582,13 @@
       "title": "全局事件记录审计（按来源筛选、分页）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-34: 全局事件记录只列公开目录里的事件、按来源筛选换出的是另一批行，来源下拉的选项来自事件目录而不是记录里出现过的来源 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-44",
@@ -9654,8 +9693,13 @@
       "title": "/webhooks → /events 兼容重定向（endpoints→sources / triggers→subscriptions / deliveries→deliveries）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-X6: 老的 /webhooks 三个页签各自落到事件中心对应的页签上，且不在浏览历史里留下一个会把人弹回来的中转页 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-X7",
@@ -9663,8 +9707,13 @@
       "title": "触发规则向导的草稿撤销 / 重做（webhook-trigger-undo / -redo）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-X7: 触发规则向导里连续打字算一步、换控件算另一步，撤销逐步回退、重做逐步前进，撤销之后再改一次就把重做分支截断 @nightly"
+        }
+      ]
     },
     {
       "id": "HUMAN-15",
@@ -11697,12 +11746,6 @@
     "EVENT-08",
     "EVENT-20",
     "EVENT-23",
-    "EVENT-24",
-    "EVENT-25",
-    "EVENT-26",
-    "EVENT-29",
-    "EVENT-32",
-    "EVENT-33",
     "EVENT-36",
     "EVENT-X2",
     "IAM-02",
@@ -11815,12 +11858,9 @@
     "DE-43",
     "EVENT-16",
     "EVENT-28",
-    "EVENT-34",
     "EVENT-48",
     "EVENT-X4",
     "EVENT-X5",
-    "EVENT-X6",
-    "EVENT-X7",
     "IAM-22",
     "IAM-45b",
     "IAM-48",

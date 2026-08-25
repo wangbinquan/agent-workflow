@@ -3002,3 +3002,40 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
      （:1293-1303）按账号自动并入。
    - `mcpSurfaceEnabled` 的界面入口在 **Network 分区**（`?tab=network`），不是一个独立的
      「MCP 外部访问」分区——账本措辞会让人去找一个不存在的分区。
+
+## RFC-319 B96 起草期撞到的产品缺陷（2026-08-26，事件中心视图域）
+
+1. **【真实缺陷，P2】事件总览的「待处理投递」卡片统计的是「当前那一页」，不是全局。**
+   `packages/frontend/src/routes/events.tsx:589-600` + `:257-270` 统计 `deliveries.data.items`
+   （`limit=50`）。投递超过 50 条时系统性低估积压；更糟的是这个 query 跟着用户在「投递记录」
+   页签里选的**状态 / 消费者筛选与页码**走——在投递页选了「已确认」再切回总览，卡片显示 0。
+   复现：种 60 条 pending 投递 → 总览显示 50；再去投递页选「已确认」→ 回总览显示 0。
+   用例因此**没有钉绝对值**，改成「翻某几条投递的状态、看卡片相对增减」的因果断言。
+2. **【真实缺陷，P3】投递记录的空态不区分「真的没有」与「筛出来是空」。**
+   `events.tsx:1075-1079` 恒用「还没有事件投递」文案。同一页面的 `DeliveriesPanel` 已经区分了
+   `empty` / `filteredEmpty` 两档，这里没跟上。
+3. **【真实缺陷，P3 / 死代码】`routes/webhooks.tsx:38-53` 的 `beforeLoad` 无条件
+   `throw redirect`，`component: WebhooksPage` 永不渲染。** `WebhooksPage` / `WebhookManagement`
+   整块、`webhooksPage.*` 一族 i18n key、`webhooks-tab-*` / `webhooks-panel-*` 全是死代码。
+   **附带（本人变异实测）**：该重定向上的 `replace: true`（`:50`）在**任何可达路径上都没有可观测
+   差异**——全仓没有任何指向 `/webhooks` 的应用内客户端链接（`to=`/`href=`/`navigate()` 三种写法
+   均 0 命中），只能靠书签 / 粘贴地址整页加载进入，而整页加载时路由器的重定向本就替换而非压栈。
+   去掉它 EVENT-X6 不红，这是「分支不可达」而非「用例假」。清理该页时可一并处置。
+4. **【无缺陷，但反直觉，值得记档】触发规则的 `enabled` 闸有三层，改错层会白忙。**
+   `services/webhookDispatch.ts:1184` 在现行事件中心链路上**不生效**（实测去掉行为不变）；
+   真正生效的是 `modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts:76`
+   的 `matching()`；第三层是 `event-routing-subscription-inactive` 的 422 兜底。
+5. **【账本措辞与实现不符，四处，已按源码实际写】**
+   - EVENT-34 漏掉最强的那条语义：**只出公开目录里的事件类型**。每次 Webhook 入站会发布**两条**
+     `event_records`（兼容层 `code-host.event.*` + 公开的 `code-host.*`），全靠
+     `sqliteEventStore.ts:896` 的 `eq(catalogVisibility,'public')` 挡住；这层一破用户会把同一次推送
+     数成两次，且泄漏行标题退化成裸 id。照账本字面写只会得到「筛完还有行」级别的弱断言。
+   - EVENT-29 措辞暗示四张卡都是全局统计，实际「待处理投递」是当前页统计（见第 1 条）。
+   - EVENT-32 的「统一分页」不是一次 SQL 查两种，而是「exact 表分页 + 路由目录**全量内存合并**」
+     （`eventCenterService.ts:352-376`），不加筛选的总数会随触发规则条数浮动。
+   - EVENT-24 的级联**不在服务层**（`services/webhookTriggers.ts:373-381` 只删主行），靠 FK
+     `ON DELETE CASCADE` + 运行时 `foreign_keys=ON`（`db/client.ts:243-250`）。
+6. **【语料设计取舍，接手者须知】** 事件中心有个后台通知 worker 会认领并 dead-letter 所有
+   `subscriberKind='automation'` 的投递（`eventCenterService.ts:668-693` + `cli/start.ts:820-822`）。
+   本文件的消费者刻意用 `employee-case` / `system` 两种**没有注册消费者**的 kind——否则种下的投递
+   状态几秒内就被后台改光，所有状态断言全是薄冰。改这份语料的人请保留这一点。

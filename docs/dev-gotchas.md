@@ -2795,3 +2795,31 @@ mirror: git fetch --all --prune          # 不带 --tags
 `--tags` 影响的只是**不被任何已取回 ref 可达**的 tag（例如指向已被删分支的悬空 tag）。
 夹具若不构造那种形态，去掉 `--tags` 就是**语义恒等变异**——属于「NO-BITE 三种成因」的第 1 种。
 这条同时是个方法示范：**定因靠十行的本地实验，不靠推测**。
+
+## 新增守卫测试必须同时登记进 `architecture/guard-manifest.json`（否则当场推红 main）
+
+2026-08-26 实撞：往 `packages/frontend/tests/` 加了一个扫源码的守卫，没登记，
+**backend 四个分片一起红七条**——RFC-317 的三套棘轮同时开火：
+
+* `rfc317-architecture-ledgers.test.ts` ——「清单与磁盘逐条相等：删守卫 / 改守卫名 /
+  **加守卫不登记**，三种都红」；
+* `rfc317-guard-corpus-floor.test.ts`（T13）——扫语料的守卫必须自带
+  `expect(<语料>.length).toBeGreaterThanOrEqual(N)`，且 N 与清单的 `minCorpusFiles` 两向相等；
+* `rfc317-guard-negative-fixture.test.ts`（T14）——「扫语料 + 断言不存在」的守卫必须配负
+  fixture：把伪造的违规喂给**扫描用的同一份判据**并断言它报。
+
+**三个容易漏的点**：
+
+1. **红在 backend，锅在 frontend**。守卫扫描面是 `packages/backend/tests` + `packages/frontend/tests`
+   两棵树（`rfc317-ledger-highwater.test.ts:231-232`），但跑它的是 backend 分片。加了个前端测试
+   却看到 backend 红，第一反应容易归因给别人——先跑
+   `cd packages/backend && bun test ./tests/architecture/` 再判。
+2. **负 fixture 必须喂「同一份」判据**。判据内联在 `test()` 体里是喂不进去的，得先提到模块顶层 /
+   抽成纯函数；各留一份拷贝的话，fixture 证明的只是拷贝还活着——T14 的报错原文就这么写。
+   再配一半反向断言（「组件接得住时必须闭嘴」），否则判据退化成恒报也照绿。
+3. **`corpusScanner` 是按 AST 自动判定的**，不是自己填的：只要调了 `readdirSync` / `globSync` /
+   `guardTestFiles` 等枚举语料的函数（`census.ts:482` 的 `CORPUS_ENUMERATION_CALLEES`）就算，
+   躲不掉。清单里 `runner` 按所在包填（前端 36 条全是 `vitest`，后端是 `bun`）。
+
+**动手顺序**：先写守卫 + 语料下限 + 负 fixture → `bun test ./tests/architecture/` 全绿 →
+再 append 清单条目（`lines` 按实际行数填）→ 再提交。反过来先提交必然红一轮。
