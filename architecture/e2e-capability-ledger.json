@@ -3924,8 +3924,13 @@
       "title": "GitHub HMAC 签名投递 → 规则命中 → 真任务启动",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 EVENT-08: 带正确 HMAC 签名的 GitHub 投递一路走到「真的开了一个任务」，签名改一个字节就是 401 且一次都不点火 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-10",
@@ -4012,8 +4017,13 @@
       "title": "仓库自动注册 / 未注册跳过（autoRegisterRepos）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 EVENT-23: autoRegisterRepos 打开时事件里的仓库被真的注册进镜像库并开出任务，关着时只留一条 skipped-repo-unregistered 且盘上不多一份镜像 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-24",
@@ -4109,8 +4119,13 @@
       "title": "按需观察器：有订阅才轮询、无人关注即停止、异常显示 blocked",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 EVENT-36: 没人关注时按需观察器一拍都不跑，来一个订阅就起、最后一个订阅撤走就停 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-37",
@@ -4206,8 +4221,13 @@
       "title": "编辑既有定时任务：频率弹窗（scheduled-edit）与全量载荷重编辑（/tasks/new?editScheduled=）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 EVENT-X2: 频率弹窗改周期真落库并重算下一次触发，全量重编辑按原载荷回填并整体替换而不动频率 @nightly"
+        }
+      ]
     },
     {
       "id": "HUMAN-02",
@@ -6411,8 +6431,13 @@
       "title": "运维旋钮的保存与热生效（PUT /api/config 立刻改变 daemon 行为，不必重启）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 OPS-X4/OPS-X10: 周期孤儿对账关着时一行都不动，PUT /api/config 打开之后同一个进程就把它收掉了，中途没有重启 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X2",
@@ -6447,8 +6472,13 @@
       "title": "周期性孤儿对账（periodicOrphanReconcileMs）：进程已死但 run 还挂在 running",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 OPS-X4/OPS-X10: 周期孤儿对账关着时一行都不动，PUT /api/config 打开之后同一个进程就把它收掉了，中途没有重启 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X5",
@@ -9849,8 +9879,13 @@
       "title": "daemon 重启修复中断投递（received/processing → failed(interrupted)）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 EVENT-16: daemon 重启把停在 received / processing 的投递判成 failed(interrupted)，已经终态的那些一个字节都不动 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-28",
@@ -9923,8 +9958,13 @@
       "title": "定时任务列表的多标签实时同步（/ws/scheduled-tasks）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 EVENT-48: 一次点火经 /ws/scheduled-tasks 推到每一个打开的标签页，看不见这条规则的人一帧都收不到 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-X1",
@@ -11274,8 +11314,13 @@
       "title": "工作树自动 GC 与孤儿工作树回收",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 REPO-39: 没有任务行锚定的孤儿工作树与半成品镜像目录被后台拍回收，而有主的、未到龄的都原样留着 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-40",
@@ -11283,8 +11328,13 @@
       "title": "git 相关设置（子模块递归模式 / 并行度 / upstream 跟踪 / 自动刷新周期）保存并对后续克隆生效",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-events-and-repo-sweeps.spec.ts",
+          "test": "RFC-319 REPO-40: 在设置页把子模块模式改成「从不」之后，下一次克隆真的不再拉子模块；改回「总是」的那一次又拉回来了 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-42",
@@ -12103,11 +12153,7 @@
     "DE-21",
     "DE-44",
     "DE-X2",
-    "EVENT-08",
     "EVENT-20",
-    "EVENT-23",
-    "EVENT-36",
-    "EVENT-X2",
     "IAM-02",
     "IAM-34",
     "IAM-X2",
@@ -12120,9 +12166,7 @@
     "MEM-X2",
     "MEM-X3",
     "MEM-X4",
-    "OPS-X10",
     "OPS-X3",
-    "OPS-X4",
     "OPS-X5",
     "RES-19",
     "RES-24",
@@ -12168,9 +12212,7 @@
     "DE-39",
     "DE-41",
     "DE-43",
-    "EVENT-16",
     "EVENT-28",
-    "EVENT-48",
     "EVENT-X4",
     "EVENT-X5",
     "IAM-22",
@@ -12181,8 +12223,6 @@
     "OPS-007",
     "OPS-X7",
     "OPS-X9",
-    "REPO-39",
-    "REPO-40",
     "REPO-42",
     "RES-04",
     "RES-06",

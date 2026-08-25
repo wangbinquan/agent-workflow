@@ -3335,3 +3335,48 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    只差 `danger`；INTENT-X8 → `rfc319-intent-timeline-and-turns.spec.ts:951`（INTENT-21）已 SIGKILL 重启并
    断言 `intent-run-daemon-restart` + `captureState='incomplete'`。
    **本批同样未据此改任何行的 status**——与 B98/B102/B103 一致，留待一次独立的账本对账。
+
+## RFC-319 B105 起草期撞到的产品缺陷（2026-08-26，运维清扫 + 事件入站 + 仓库）
+
+1. **【真实缺陷，中危，未写成断言】`/tasks/new?editScheduled=` 回填丢掉工作流输入，可选输入会被静默清空。**
+   `packages/frontend/src/routes/tasks.new.tsx:641-661` 的 seed 效应调了 `applyWizardSeed(seed)`，`:609`
+   里有 `setInputs(seed.inputs)`，`lib/task-wizard.ts:374-381` 也确实把 `payload.inputs` 的字符串项带了
+   出来——**但界面上那个输入框是空的**。起草侧本机实测：建一条 `launchKind:'workflow'` 的定时任务、
+   `launchPayload.inputs = {topic:'scheduled'}`（`GET /api/scheduled-tasks/{id}` 回读确认原样在库）→
+   详情页点 `scheduled-edit-config` → `wizard-task-name` **正确回填**，而工作流声明的 `Topic` 输入框
+   value 为空串，`stepper-next` 因 `missingRequired` 恒灰（`tasks.new.tsx:1119-1127`）。
+   **危害分两档**：必填输入 ⇒ 用户每次改配置都要把输入重打一遍（可见的烦人）；**可选输入 ⇒
+   `missingRequired` 不拦，而保存是整份 `launchPayload` 替换（`:1690-1697`），那个值被静默清空**
+   ——这是数据丢失形态。B105 的用例按产品实际行为走（自己把 `Topic` 填上再保存）并断言「填进去的值
+   原样落库」，所以将来修好也不会红。
+2. **【账本措辞与实现不符】`observer_activations.state` 的 `'blocked'` 是**从未被任何代码写入**的状态。**
+   `modules/event-center/public/types.ts:101`、`domain/model.ts:220`、`db/schema.ts:5373` 三处都声明了它，
+   前端 `routes/events.tsx:677,684` 还为它写了渲染分支；但 `modules/event-center/**` 里除这三处类型声明
+   外零命中，`sqliteEventStore.ts` 的 `settleObserver` 失败路径只写 `lastErrorCode`（`:1205-1226`）、
+   不改 `state`。EVENT-36 账本行写的「异常显示 blocked」照字面写就是一条**永远红**的用例。B105 按源码
+   实际只写了前两个分句（有订阅才轮询 / 无人关注即停止）。
+3. **【死列 + 死索引，建议单独立项】`tasks.webhook_trigger_id` / `webhook_fire_id` 在现行入站链路上恒为 NULL。**
+   RFC-300 之后 webhook 投递统一经事件中心分发，`services/webhook/webhookDispatch.ts:1049-1064` 的 invoker
+   分流只要 `eventSubscriptionId`/`eventDeliveryId` 有值就走 `type:'event'`，任务上写的是
+   `launch_origin='event'` + `event_subscription_id='route:<触发规则 id>:<摘要>'` + `event_delivery_id`，
+   那两列全空（起草侧实测原始行为证）。`db/schema.ts:1225` 还挂着 `idx_tasks_webhook_trigger`。
+   B105 的断言写在**活着**的那三列上。
+4. **【审计文案与实现不符，照抄会得到假红】OPS-X4 的建议参数 `periodicOrphanReconcileMs: 2000` 不可用。**
+   `packages/shared/src/settingsNumericBounds.ts:72-78` 声明 `positiveMin: 60_000`（`PUT /api/config` 会 422），
+   `services/managedPeriodicJob.ts:75-92` 的 `minPositiveMs: 60_000` 会把 2000 判非法并**把这条 loop 整个
+   禁用**（`onInvalid` → `enabled=false`）。照抄那个数字会得到一条「怎么等都不发生」的假红。B105 用的是
+   合法下限 60_000，代价是那条腿真等 60 多秒。
+5. **【账本噪声，建议清理】`e2e/git-protocols.spec.ts:192-198` 是一个用例体为空的 `test.describe.skip`。**
+   注释自述需要 daemon 先长出自定义 `GIT_SSH_COMMAND` 能力。它让 REPO-42 看起来「有覆盖」而实际一行断言
+   都没有。本批未动（不改别人的 spec）。
+6. **【测试判据自身的强度缺口，已就地收紧】EVENT-X2 原本只断言 `nextRunAt` 「变了」。**
+   把重算换成**任何**别的数字都能满足 `not.toBe(原值)`（本人变异实测：写成 `now + 999_999_999`
+   用例照样绿）。已补一条与时区无关的硬性质——每周规则的下一次触发必然落在此刻之后、且不超过 7 天
+   ——把「变了」收紧成「算对了」，补后同一变异当场红。
+7. **【账本核对：两条假 gap，未改状态】**
+   - **UX-42**（仓库批量导入的浏览器实时进度表）**并非空白**：
+     `e2e/rfc319-repos-list-and-import.spec.ts:539` 的 REPO-03 已在浏览器里挂 `page.on('websocket')`、
+     断言 socket pathname 逐字等于 `/ws/repo-imports/{batchId}`、数 `row.update` / `batch.completed` 帧，
+     并用「快照接口只被读过 1 次」排除轮询解释——比账本对 UX-42 的描述覆盖得更严。
+   - **OPS-044b**（单二进制冒烟跑通 doctor）已被 `e2e/rfc319-ops-doctor-and-migrate.spec.ts:247`（OPS-010）
+     覆盖；唯一分歧是「跑的是 `dist/agent-workflow-e2e-*` 而非 release 产物」，属产物命名口径。
