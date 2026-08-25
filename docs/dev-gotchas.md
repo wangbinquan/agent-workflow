@@ -2337,3 +2337,38 @@ stderr 为空，`--repeat-each=3` 稳定绿——而不是之前的 `failed` / e
 自己拥有的 `home`，跑完直接读 `db.sqlite` 的 `mcp_runtime_test_turns`——
 `status` / `duration_ms` / `exit_code` / `stderr_tail` 四个字段一眼就把「进程是被谁
 结束的」讲清楚了（16ms/interrupted = 赢了竞态；76ms/failed/exit 3 = stub 自己死的）。
+
+## e2e 用共享工作树的构建验绿，等于**没验**——并发 session 的未提交生产改动会漏进去（2026-08-25 实撞）
+
+`bun run build:binary:e2e` 编的是**工作树**，而 CI 编的是 `origin/main` 的干净 checkout。本仓常年有并发
+session 的在制品躺在工作树里（实撞当天 58 个 ` M` + 若干未追踪文件），于是两者差着一整批未提交的生产代码。
+后果是**双向**的，两个方向当天都真实发生了：
+
+- **假绿**：用例依赖了**尚未提交**的生产代码。RFC-319 的一份工作组 ACL spec 按「testid 一律源码实读」写了
+  `acl-level-*` / write 授权档 / `resource-read-only`，在工作树构建上 5/5 全绿——而 `origin/main` 上
+  `AclPanel.tsx` 里 `acl-level-` 出现 **0** 次、`services/resourceAccessPolicy.ts` 根本不存在。真提交上去
+  就是 CI 必红。
+- **假红**：用例本身没问题，是**别人的**未提交改动把它打红了。同一批的首页/文档 spec 在工作树构建上
+  5 失败 / 5 通过，在干净构建上 **10/10 全绿**。照着假红去「修」用例，等于把别人的在制品固化进自己的断言。
+
+**定式：验收一律用「干净 `origin/main` 构建」，工作树构建只用于写用例时的快速反馈。**
+
+```
+SANDBOX=$(mktemp -d)
+git archive origin/main | tar -x -C "$SANDBOX"
+ln -s "$PWD/node_modules" "$SANDBOX/node_modules"
+for d in packages/backend packages/frontend packages/shared packages/system-mocks; do
+  ln -s "$PWD/$d/node_modules" "$SANDBOX/$d/node_modules"
+done
+(cd "$SANDBOX" && bun run build:binary:e2e)
+AGENT_WORKFLOW_E2E_BINARY="$SANDBOX/dist/agent-workflow-e2e-<plat>-<arch>" bunx playwright test <spec…>
+```
+
+`git archive` 解出来的是一棵**普通目录**，不是 `git worktree`，不触犯本仓「禁开发用 worktree」那条硬规则：
+它没有分支、不接收提交、只读用于构建。node_modules 用软链复用，省掉一次全量安装。
+
+**并行跑用例时还有一层**：多个 agent / session 同时跑 e2e 会争 `dist/` 这一个共享产物——一边在 rebuild、
+另一边跑的就是半截构建。把干净构建**复制一份钉住**，各自 `AGENT_WORKFLOW_E2E_BINARY` 指过去即可；但要记住
+钉住的那份也必须来自干净树，否则只是把上面那个坑固化了一遍（实撞：第一版钉的副本恰好是 RFC-324 的半程
+构建——后端新、内嵌前端旧，打开 ACL 弹窗当场 `undefined.map`，连既有的 `rfc099-ownership-acl.spec.ts`
+一起红）。

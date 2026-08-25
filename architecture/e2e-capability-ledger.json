@@ -2371,8 +2371,13 @@
       "title": "非 admin 直接输入 /settings URL 被重定向",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-02：非管理员直接敲 /settings URL 被弹回首页，管理员照常进入"
+        }
+      ]
     },
     {
       "id": "CFG-05",
@@ -2380,8 +2385,13 @@
       "title": "设置保存被服务端拒绝时的错误呈现",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-05：服务端明确拒绝时，页面说清原因、原样保留草稿、且不进入写屏障"
+        }
+      ]
     },
     {
       "id": "CFG-07",
@@ -2389,8 +2399,13 @@
       "title": "设置项被他人并发改动后的 stale 横幅与「放弃本地」",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-07：他人改了同一项时给出提示、保住我的草稿，「用服务端的值」落到对方的新值"
+        }
+      ]
     },
     {
       "id": "CFG-10",
@@ -2398,8 +2413,13 @@
       "title": "运行时列表渲染（默认标记 / 协议 / 启停 / smoke 结果 / 二进制路径）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-10：运行时表把「会拉起哪个二进制」逐行摊开，且每一格都对得上服务端"
+        }
+      ]
     },
     {
       "id": "CFG-11",
@@ -2407,8 +2427,13 @@
       "title": "新增自定义运行时（含保存前 smoke 预检）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-11：新增自定义运行时时，保存前真的把那个二进制拉起来跑了一遍"
+        }
+      ]
     },
     {
       "id": "CFG-14",
@@ -2416,8 +2441,13 @@
       "title": "在运行时表内「设为默认」（写 config.defaultRuntime）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-14：在表内「设为默认」既要改界面，也要真的写进 config.defaultRuntime"
+        }
+      ]
     },
     {
       "id": "CFG-15",
@@ -2425,8 +2455,13 @@
       "title": "启用/禁用运行时；有效默认不可被禁用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-15：非默认运行时能真停用；有效默认停不掉——按钮拦一层，服务端还要再拦一层"
+        }
+      ]
     },
     {
       "id": "CFG-16",
@@ -2434,8 +2469,17 @@
       "title": "删除运行时及其拒绝分支（被引用 / 是默认 / 被 config 字段引用 / 最后一行）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代理引用 / 是默认 / 被 config 功能字段引用"
+        },
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-16（二）：没有引用的运行时确实删得掉；删到只剩一行时必须停手"
+        }
+      ]
     },
     {
       "id": "CFG-17",
@@ -2443,8 +2487,13 @@
       "title": "运行时模型下拉与 Refresh，及探测失败的 502 提示",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-17：模型下拉能列能刷新；探测不出清单时降级成可输入并说明原因，而不是给一个空下拉"
+        }
+      ]
     },
     {
       "id": "CFG-18",
@@ -2461,8 +2510,17 @@
       "title": "首页 hero 的运行时状态行（ready / not-found / protocol-incompatible）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-20 首页运行时状态行：三种失败各说各的话，缺失的默认运行时必须是红点"
+        },
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-20 protocol-incompatible 这一档：与「没装」必须是两句不同的话，当默认时同样是红点"
+        }
+      ]
     },
     {
       "id": "CFG-21",
@@ -2479,8 +2537,13 @@
       "title": "并发与配额六项保存后立即热生效（无需重启）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-23：并发/配额六项一次保存全部落地，同一个进程立刻按新值应答，且不要求重启"
+        }
+      ]
     },
     {
       "id": "CFG-25",
@@ -2497,8 +2560,13 @@
       "title": "Git 分区：任务提交排除模式的校验与保存",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-26：越界的提交排除规则前端拦、服务端也拦；合法规则原样落库并归一化"
+        }
+      ]
     },
     {
       "id": "CFG-27",
@@ -2506,8 +2574,13 @@
       "title": "GC 分区：worktree 自动回收、事件归档阈值、保留期三项",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-27：GC 三组旋钮整体落库——嵌套对象不被拆散，且只写本分区自己的键"
+        }
+      ]
     },
     {
       "id": "CFG-29",
@@ -2533,8 +2606,13 @@
       "title": "外观分区：主题切换（system / light / dark）保存并应用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-35：主题保存后当场换肤、刷新仍在，选「跟随系统」则真的跟随系统"
+        }
+      ]
     },
     {
       "id": "CFG-36",
@@ -2542,8 +2620,13 @@
       "title": "外观分区：语言切换保存并落地（含 onSaved 立即 setLanguage）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-36：语言保存后整页当场切换，刷新仍在，且守护进程的值压过浏览器本地猜测"
+        }
+      ]
     },
     {
       "id": "CFG-37",
@@ -2560,8 +2643,13 @@
       "title": "/docs/api 从实时注册表生成，且按调用者权限裁剪",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：低权账号读不到写端点清单"
+        }
+      ]
     },
     {
       "id": "CFG-40",
@@ -2569,8 +2657,13 @@
       "title": "/.well-known/mcp 公开发现文档与 publicOrigin 推导（配置 / X-Forwarded-* / Host）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-40 /.well-known/mcp：无凭据可读，endpoint 用调用者真正到得了的 origin"
+        }
+      ]
     },
     {
       "id": "CFG-41",
@@ -2578,8 +2671,17 @@
       "title": "首页能力网格：六类资源的按人可见计数与跳转（含无权限时的占位）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-41 能力网格的计数按人算：两个账号同一时刻看到不同的数字，改成公开后当场跟上"
+        },
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-41 没有读权限的分区整块不渲染，有权限的磁贴点进去落在自己的列表页"
+        }
+      ]
     },
     {
       "id": "CFG-42",
@@ -2587,8 +2689,17 @@
       "title": "首页任务脉冲行（7 天统计）与 /api/overview 失败时的软降级",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-42 任务脉冲行：只数 7 天内的终态、只数自己看得见的任务"
+        },
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消失，首页其余部分仍然能用"
+        }
+      ]
     },
     {
       "id": "CFG-45",
@@ -6367,8 +6478,13 @@
       "title": "快速新建工作组对话框（名称+描述 → 201 → 跳详情）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-04 快速新建：空名与非法名不给提交，合法输入落成 private 组并直接进详情页"
+        }
+      ]
     },
     {
       "id": "WG-05",
@@ -6385,8 +6501,13 @@
       "title": "详情页配置自动保存（编辑 → 债务化 PUT → 版本自增 → header 与状态 chip 同步）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-07 / WG-13 配置自动保存：版本只在回执落地后前进，七个字段逐个落库并在刷新后回读"
+        }
+      ]
     },
     {
       "id": "WG-09",
@@ -6403,8 +6524,13 @@
       "title": "成员增删与 leader 指派（agent 成员 / human 成员 / 设为 leader / 移除后焦点交接）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-10 / WG-14 成员增删与 leader 指派：就绪性提示逐条消失、启动按钮随之解禁、移除后焦点交给邻卡"
+        }
+      ]
     },
     {
       "id": "WG-11",
@@ -6412,8 +6538,13 @@
       "title": "成员校验与错误路径（重复别名、别名含 @/逗号/空白、human 必须是活跃用户、引用不存在的 agent）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-11 成员校验：重复别名 / @ / 逗号 / 空白当场拦住且一次保存都不发；human 必须活跃、agent 必须真实存在（服务端同样拦）"
+        }
+      ]
     },
     {
       "id": "WG-13",
@@ -6421,8 +6552,13 @@
       "title": "配置字段落库（instructions / outputContract / 三开关 / maxRounds / completionGate / clarifyBudget / fanOut）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-07 / WG-13 配置自动保存：版本只在回执落地后前进，七个字段逐个落库并在刷新后回读"
+        }
+      ]
     },
     {
       "id": "WG-14",
@@ -6430,8 +6566,13 @@
       "title": "启动就绪性提示与启动按钮门（no-agent-member / leader-missing / no-non-leader-worker）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-10 / WG-14 成员增删与 leader 指派：就绪性提示逐条消失、启动按钮随之解禁、移除后焦点交给邻卡"
+        }
+      ]
     },
     {
       "id": "WG-15",
@@ -6448,8 +6589,13 @@
       "title": "重命名工作组（名称+描述原子保存，重名冲突）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-16 重命名：名称+描述一次原子落库，撞上同 owner 重名时整笔回退"
+        }
+      ]
     },
     {
       "id": "WG-18",
@@ -6457,8 +6603,13 @@
       "title": "删除工作组（输入名称确认 + 版本 fence + 非终态任务引用拒删）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-18 删除：输入名称确认 + 版本 fence + 非终态任务引用拒删"
+        }
+      ]
     },
     {
       "id": "WG-19",
@@ -6902,8 +7053,13 @@
       "title": "/settings 分区导航与 ?tab= 深链接",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-01：?tab= 是设置分区的唯一事实源——深链接直达、导航改 URL、脏值回落默认分区"
+        }
+      ]
     },
     {
       "id": "CFG-03",
@@ -6938,8 +7094,13 @@
       "title": "离开有未保存改动的设置分区时的拦截",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-09：带着未保存改动离开设置页会被拦下；没有改动时不拦，同页换分区也不拦"
+        }
+      ]
     },
     {
       "id": "CFG-12",
@@ -6947,8 +7108,13 @@
       "title": "编辑已注册运行时的二进制路径 / profile / config-dir 覆盖",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 config-dir 覆盖真的落库，且旧的冒烟结论随之失效"
+        }
+      ]
     },
     {
       "id": "CFG-13",
@@ -6956,8 +7122,13 @@
       "title": "对已注册运行时点 Test 重新 smoke，并处理探测期间被改的 409",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-runtimes.spec.ts",
+          "test": "RFC-319 CFG-13：对已注册运行时重测会留下新结论；探测期间那一行被改掉，结论必须作废而不是贴到新配置上"
+        }
+      ]
     },
     {
       "id": "CFG-19",
@@ -7019,8 +7190,13 @@
       "title": "Network 分区到 API 文档页的跳转",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档页"
+        }
+      ]
     },
     {
       "id": "CFG-38",
@@ -7037,8 +7213,13 @@
       "title": "首次运行分支：空环境显示 Onboarding，有资源后显示 Dashboard",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-overview-and-docs.spec.ts",
+          "test": "CFG-43 首次运行分支：空实例给 Onboarding，建出资源后换成 Dashboard，且引导只给动得了手的人"
+        }
+      ]
     },
     {
       "id": "CFG-44",
@@ -8609,8 +8790,13 @@
       "title": "工作组列表画廊渲染（模式 chip / 成员数 / leader / 人类成员 / 可见性徽章 / 归属人）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-01 列表画廊：模式/成员数/leader/人类成员/可见性/归属人逐格对账，未就绪的组不给启动入口"
+        }
+      ]
     },
     {
       "id": "WG-02",
@@ -8618,8 +8804,13 @@
       "title": "列表搜索过滤与清空搜索",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-02 列表搜索：按卡片可见事实过滤、无匹配给空态、清空搜索复原列表并把焦点还回搜索框"
+        }
+      ]
     },
     {
       "id": "WG-03",
@@ -8627,8 +8818,13 @@
       "title": "列表空态与空态主行动按钮",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-03 列表空态：主行动按钮随建组权限出现，有数据后空态消失且按钮搬回页头"
+        }
+      ]
     },
     {
       "id": "WG-06",
@@ -8645,8 +8841,13 @@
       "title": "三种模式切换在编辑器里的 UI 后果（free_collab 三开关强制 ON+提示、dynamic_workflow 隐藏开关段与「加人类成员」）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-12 模式切换的 UI 后果：free_collab 把三开关显示成强制 ON 却不改存储、dynamic_workflow 抹掉开关段与「加人类成员」"
+        }
+      ]
     },
     {
       "id": "WG-17",
@@ -8654,8 +8855,13 @@
       "title": "复制工作组为私有副本（exact-revision copy，自动取 -copy 名）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-crud.spec.ts",
+          "test": "WG-17 复制：exact-revision 复制出 -copy 私有副本，陈旧版本一律拒绝"
+        }
+      ]
     },
     {
       "id": "WG-23",
@@ -8663,8 +8869,13 @@
       "title": "未保存离开守卫（含成员面板的临时草稿）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-editor.spec.ts",
+          "test": "WG-23 未保存离开守卫：干净时不打扰，成员面板的半截草稿拦住侧栏跳转与刷新，「留下」保住草稿、「放弃」才放行"
+        }
+      ]
     },
     {
       "id": "WG-30",
@@ -8806,47 +9017,22 @@
     "AGENT-X3",
     "AGENT-X4",
     "AGENT-X5",
-    "CFG-01",
-    "CFG-02",
     "CFG-03",
-    "CFG-05",
     "CFG-06",
-    "CFG-07",
     "CFG-08",
-    "CFG-09",
-    "CFG-10",
-    "CFG-11",
-    "CFG-12",
-    "CFG-13",
-    "CFG-14",
-    "CFG-15",
-    "CFG-16",
-    "CFG-17",
     "CFG-18",
     "CFG-19",
-    "CFG-20",
     "CFG-21",
     "CFG-22",
-    "CFG-23",
     "CFG-24",
     "CFG-25",
-    "CFG-26",
-    "CFG-27",
     "CFG-28",
     "CFG-29",
     "CFG-30",
     "CFG-32",
     "CFG-33",
-    "CFG-34",
-    "CFG-35",
-    "CFG-36",
     "CFG-37",
     "CFG-38",
-    "CFG-39",
-    "CFG-40",
-    "CFG-41",
-    "CFG-42",
-    "CFG-43",
     "CFG-44",
     "CFG-45",
     "CFG-X1",
@@ -9245,28 +9431,14 @@
     "WF-X3",
     "WF-X4",
     "WF-X5",
-    "WG-01",
-    "WG-02",
-    "WG-03",
-    "WG-04",
     "WG-05",
     "WG-06",
-    "WG-07",
     "WG-09",
-    "WG-10",
-    "WG-11",
-    "WG-12",
-    "WG-13",
-    "WG-14",
     "WG-15",
-    "WG-16",
-    "WG-17",
-    "WG-18",
     "WG-19",
     "WG-20",
     "WG-21",
     "WG-22",
-    "WG-23",
     "WG-24",
     "WG-27",
     "WG-28",
