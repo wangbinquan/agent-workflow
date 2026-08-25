@@ -3039,3 +3039,44 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `subscriberKind='automation'` 的投递（`eventCenterService.ts:668-693` + `cli/start.ts:820-822`）。
    本文件的消费者刻意用 `employee-case` / `system` 两种**没有注册消费者**的 kind——否则种下的投递
    状态几秒内就被后台改光，所有状态断言全是薄冰。改这份语料的人请保留这一点。
+
+## RFC-319 B97 起草期撞到的产品缺陷（2026-08-26，任务详情页签域）
+
+1. **【真实缺陷，严重度高，本人逐处复核过】「重试仓库准备」在任何启用了 `secret.key` 的部署里
+   必然失败，且错误文案把原因指错方向。**
+   启动路径构造依赖时带着密钥箱：`packages/backend/src/routes/tasks.ts:321`
+   `...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox)`。
+   而**重试路径手搓 deps、没有 `secretBox`**（`routes/tasks.ts:998-1006` 只给了
+   `db` / `configPath` / `subagentLiveCapture` / `resolveLaunchRuntimeConfig`）。于是
+   `retryRepoPreparation → startTask` 走到 `services/task.ts:1050` 的
+   `unsealRepoUrl(row, deps.secretBox /* undefined */, deps.db)`：
+   `services/repoCredentials.ts:105-111` 对「已封存但没有密钥箱」这一档**直接返回 null**，
+   `task.ts:1051-1057` 随即抛 409 `cached-repo-credential-unavailable`，文案却写着
+   **「sealed with a different secret.key?」**——真实原因是压根没接密钥箱，不是密钥换了。
+   **同一缺口也在 boot 自动恢复的注入点**：`cli/start.ts:1492-1500` 的 `resumeDeps` 同样手搓、
+   同样没有 `secretBox`（对照同文件 `:1097` / `:1128` / `:1282` 三处都老老实实走
+   `buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox)`）。因此
+   `autoResumeOnBoot` 下这类任务每次 boot 白撞一次，直到被熔断隔离。
+   **RFC-287 AC-11 承诺的这条唯一出口在真实部署里 100% 不可用**；它能活到今天，是因为
+   `e2e/rfc319-repo-mirrors-and-launch.spec.ts` 的 REPO-15 只断言按钮**可见**、从没点过它。
+   B97 **刻意不把「必然失败」写进断言**——那会变成一条阻止修复的用例。修法是两处各补一个
+   `secretBox`，属 CLAUDE.md §RFC workflow 第 6 条的「单行 bug 修复」例外。
+2. **【真实缺陷，P2 / 可用性】节点抽屉对 `done` 的 run 不给重试入口，后端却是允许的。**
+   `components/tasks/NodeDetailDrawer.tsx:675-686` 的 `canRetryNodeRun` 不放行 `done`，而
+   `services/task.ts:5526-5536` 的 `retryNode` allowedFrom **含 `done`**。结果「重跑一个已成功的
+   节点」在界面上没有任何入口，只能直接调接口。这直接决定了 TASK-26 的可测形状——必须构造
+   「上游有一次失败的历史尝试、重试后成功、下游已跑完」，再从 Stats 页签的运行历史点回那次失败尝试。
+3. **【真实缺陷，P3 / UX】「全部改动被排除」呈现为绿色成功 chip。**
+   `routes/tasks.detail.tsx:1930` 用 `nodeRunStatusToKind(run.status)`，而 `skipped-excluded` 的 run
+   状态是 `done`，于是「什么都没推上去」显示成绿色成功（文案 `Only excluded changes`）。未写成断言。
+4. **【账本措辞与实现不符，已按源码实际写】TASK-26 的「级联下游开关」并不控制「下游是否重跑」。**
+   实测 `rerunCause` 序列：`cascade=false` 时下游**照样重跑**——上游产出变新，引擎按
+   `stale-redispatch` 自行重派（`services/scheduler.ts:2565` 的 `isNodeRunFresh`）。开关真正控制的是
+   「是否给下游铸 `retry-node-cascade` 作废行」以及是否取消下游 CALL 行的子任务。照账本字面写
+   「下游不被重跑」会得到一条**永远红**的用例。判据因此改成对账 `rerunCause`：关掉 =
+   `['initial','stale-redispatch']`，打开 = `['initial','stale-redispatch','retry-node-cascade','revival']`。
+5. **【环境边界，非产品缺陷】TASK-X2 的「按需生成」在 e2e 里必然以失败收场**：变更叙述走
+   `runSystemAgent`，其提示词不带 RFC-200 信封 nonce，而所有 stub 都在
+   `packages/system-mocks/src/runtime/skeleton.ts:137-143` 的 `requireOutputOpen` 上 exit 3。
+   所以「按需生成」那支锁的是**接线**（按钮真发 POST、守护进程真跑一趟、界面真把结果轮询回来
+   并改写自己），「查看」那支按产品真实读路径（磁盘缓存 → GET → ready）写。

@@ -7379,8 +7379,13 @@
       "title": "单节点重试 + 级联下游开关（节点抽屉里的 Retry）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-26: 节点抽屉里的重试受「同时重跑下游」开关支配——关掉时下游一行不动，打开时下游被作废并重铸，两侧发出的请求也各带各的 cascade @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-27",
@@ -7388,8 +7393,13 @@
       "title": "卡在仓库准备时的横幅与「重试准备」按钮（G7 延后准备）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-27: 卡在仓库准备的任务点「重试准备」，打的是合成准备行自己的重试端点（永不级联），服务端真的重新发起一次准备尝试并把上一次判为过期 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-30",
@@ -7397,8 +7407,13 @@
       "title": "系统恢复事件区与解除自动恢复隔离（crash-loop 熔断后的一键放行）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-30: 被熔断隔离的任务在恢复事件区里如实标注并给出一键放行——解除之前 boot 自动恢复跳过它，解除之后同一条 boot 路径真的把它跑完 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-31",
@@ -7406,8 +7421,13 @@
       "title": "「工作流已更新」横幅与同步对话框（把任务快照对齐到最新工作流定义）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-31: 工作流在任务跑完之后又改了，详情页给出版本差横幅，同步对话框逐项列出新增节点，确认之后任务快照真的换成了最新定义 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-33",
@@ -7415,8 +7435,13 @@
       "title": "Outputs 页签：端口两栏浏览器 + 复制 + 文件类端口下载 + Markdown 预览跳转",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-33: Outputs 页签按声明顺序列出全部端口，只有「单行文件路径」端口才给下载与预览，复制/下载拿到的是真内容 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-34",
@@ -7523,8 +7548,13 @@
       "title": "详情页 commit&push 行：提交结果、排除项、子仓逐项结果与「打开生成 commit message 的会话」入口",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-X1: 详情页的 commit&push 行如实呈现两种结局——推送成功那行能打开生成 commit message 的会话，被排除那行点名了每一个没进提交的文件 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-X3",
@@ -7601,8 +7631,13 @@
       "title": "只读仓库成员被改动时的警告横幅（那些改动不会被提交推送）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-X7: 只读成员被改动过的任务，详情页以告警横幅点名那个挂载点——干净的只读成员不触发，改脏之后才触发 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-02",
@@ -11171,8 +11206,13 @@
       "title": "独立 Markdown 预览页 /tasks/$id/preview（文件源 / 端口源 / 归档源 / 非法链接）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-36: 预览页四种来源各走各的路——文件源读工作树、端口源读产出值、归档源在工作树文件被删后仍渲染、参数不全直接判非法 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-X2",
@@ -11180,8 +11220,17 @@
       "title": "变更叙述（change-narrative）：按需生成、查看、以及尚未生成时的空态",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-X2: 尚未生成变更叙述时给的是「生成」按钮而不是空白，点下去真的驱动了一次服务端生成并把结果回写到界面上 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-task-detail-tabs.spec.ts",
+          "test": "RFC-319 TASK-X2: 已生成的变更叙述从磁盘缓存读回并完整渲染——总述、阅读顺序与每一步的理由都在，折叠开关真的把正文收走 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-06",
@@ -11787,19 +11836,12 @@
     "RES-46",
     "RES-X1",
     "RES-X2",
-    "TASK-26",
-    "TASK-27",
-    "TASK-30",
-    "TASK-31",
-    "TASK-33",
     "TASK-34",
     "TASK-35",
     "TASK-38",
     "TASK-39",
     "TASK-44",
-    "TASK-X1",
     "TASK-X4b",
-    "TASK-X7",
     "UX-04",
     "UX-05",
     "UX-09",
@@ -11881,8 +11923,6 @@
     "RES-20",
     "RES-X6",
     "TASK-03",
-    "TASK-36",
-    "TASK-X2",
     "UX-06",
     "UX-26",
     "UX-28",
