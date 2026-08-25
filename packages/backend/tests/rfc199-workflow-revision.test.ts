@@ -307,7 +307,9 @@ describe('RFC-199 workflow revision fencing', () => {
       save(db, workflow, snapshot(workflow, { description: 'stale-owner' }), {
         principal: alice,
       }),
-    ).rejects.toMatchObject({ code: 'forbidden', status: 403 })
+      // RFC-324 把 `forbidden` 拆成可分辨的两个码：这里是**内容写**被拒，
+      // 前任 owner 对这份 public 工作流只剩只读 —— `resource-read-only`。
+    ).rejects.toMatchObject({ code: 'resource-read-only', status: 403 })
 
     await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, workflow.id))
     await expect(
@@ -400,7 +402,8 @@ describe('RFC-199 workflow revision fencing', () => {
 
     await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, workflow.id))
     await expect(deleteWorkflow(db, workflow.id, fence(), bob)).rejects.toMatchObject({
-      code: 'forbidden',
+      // 删除是**治理写**：RFC-324 的可编辑档也不覆盖它，只有 owner（与 bypass）能删。
+      code: 'resource-govern-owner-only',
       status: 403,
     })
 
@@ -408,7 +411,7 @@ describe('RFC-199 workflow revision fencing', () => {
     // owner remains visible but must fail the service's current-row owner gate.
     await db.update(workflows).set({ ownerUserId: 'bob' }).where(eq(workflows.id, workflow.id))
     await expect(deleteWorkflow(db, workflow.id, fence(), alice)).rejects.toMatchObject({
-      code: 'forbidden',
+      code: 'resource-govern-owner-only',
       status: 403,
     })
 

@@ -35,6 +35,20 @@ const EDITOR = resolve(
 )
 const SOURCE = readFileSync(EDITOR, 'utf8')
 
+// ⑤的语料：**自己手写 ACL 弹窗**的两条路由。其余 4 个详情页把入口与弹窗一起交给
+// `DetailHeaderActions` 的单个 `acl` prop，结构上不可能两边守卫不一致；只有这两条
+// 路由把按钮和 <Dialog> 分开写，才有写歪的余地（下面那条用例就是被它咬出来的）。
+const HAND_ROLLED_ACL_DIALOGS = [
+  { rel: 'routes/workflows.edit.tsx', testid: 'workflow-acl-dialog' },
+  { rel: 'routes/workgroups.detail.tsx', testid: 'workgroup-acl-dialog' },
+].map((f) => ({
+  ...f,
+  source: readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', ...f.rel.split('/')),
+    'utf8',
+  ),
+}))
+
 describe('RFC-324 —— 编辑器只读态的三处接缝', () => {
   test('语料自证：读到的确实是编辑器路由（读空文件的话下面全是空转）', () => {
     expect(SOURCE.length).toBeGreaterThan(10_000)
@@ -89,4 +103,32 @@ describe('RFC-324 —— 编辑器只读态的三处接缝', () => {
       /workflowAccess\.isResolved && !workflowAccess\.canEdit && \(\s*<span[^>]*data-testid="workflow-readonly-badge"/s,
     )
   })
+
+  // 红→绿对：把任一处的 `{canManageAcl && (` 改回 `{canUpdate && (`，本条立刻红。
+  //
+  // 这是实撞出来的缺陷（e2e-full-nightly 在 722c82499 上红在
+  // `rfc319-workgroup-acl.spec.ts:421`，报 `workgroup-acl-dialog` element(s) not found）：
+  // 收紧 canUpdate 时我把**入口按钮**改挂了 canManageAcl（好让被授权者看得见自己的
+  // 档位），却漏了**弹窗本体**——它还挂在 canUpdate 上。于是被授权者点得到「权限」
+  // 按钮、什么也不弹。一个点了没反应的按钮比藏起来更糟：藏起来至少是个明确的答案。
+  test.each(HAND_ROLLED_ACL_DIALOGS)(
+    '⑤$rel：ACL 入口与 ACL 弹窗必须挂同一个守卫',
+    ({ source, testid }) => {
+      expect(source.length, '语料自证：读到的是真文件').toBeGreaterThan(10_000)
+      const dialogAt = source.indexOf(`data-testid="${testid}"`)
+      expect(dialogAt, `没找到 ${testid} —— 弹窗改名了就来改这条锁`).toBeGreaterThan(0)
+      // 往回找紧挨着这个 <Dialog> 的那个条件渲染守卫。
+      const guard = source.slice(0, dialogAt).match(/\{(\w+) && \(\s*<Dialog(?![\s\S]*<Dialog)/)
+      expect(guard, '弹窗必须处在一个 `{xxx && (<Dialog` 守卫下').not.toBeNull()
+      expect(
+        guard?.[1],
+        `${testid} 挂在 ${guard?.[1]} 上：入口按钮挂的是 canManageAcl，两边不一致就是个点不开的按钮`,
+      ).toBe('canManageAcl')
+      // 对照：入口按钮那一侧确实也是 canManageAcl（否则上面那条可能只是两边一起写错）。
+      const buttonAt = source.indexOf(`data-testid="${testid.replace('-dialog', '-button')}"`)
+      expect(buttonAt).toBeGreaterThan(0)
+      const buttonGuard = source.slice(0, buttonAt).match(/\{(\w+) &&(?![\s\S]*\{\w+ &&)/)
+      expect(buttonGuard?.[1]).toBe('canManageAcl')
+    },
+  )
 })

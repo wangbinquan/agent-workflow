@@ -285,7 +285,11 @@ describe('RFC-225 workgroup revision fencing', () => {
         },
         actorPrincipal('owner-a'),
       ),
-    ).rejects.toMatchObject({ code: 'forbidden', status: 403 })
+      // RFC-324 把笼统的 `forbidden` 拆成了可分辨的两个码。这里前任 owner 面对的是
+      // 一个 public 工作组：看得见、没有 write 授权 —— 正是「只读」，不是「治理保留」。
+      // 断言这个具体的码而不是退回 403，是因为前端据它决定说哪句话（「你只有只读
+      // 权限」vs「此工作组可能已删除」），码错了用户就会被告知一件没发生的事。
+    ).rejects.toMatchObject({ code: 'resource-read-only', status: 403 })
     expect((await getWorkgroupById(db, group.id))?.description).toBe('')
   })
 })

@@ -497,6 +497,15 @@ describe('RFC-305 permission catalog architecture', () => {
       // These two `role` fields belong to task/intent attribution, not AccountRole.
       'packages/frontend/src/components/AttributionChip.tsx',
       'packages/frontend/src/routes/intent.detail.tsx',
+      // RFC-324 权限面板：给管理员被授权人渲染一句「只读档对他无效」的提示。
+      // 它渲染的是一个 <p>，不闸任何动作——面板照常允许把他设成 read，服务端
+      // 判定也完全不看这里。已知局限（有意接受）：bypass 真正的来源是
+      // `resource-acl:bypass` 权限点而非角色本身，所以某人若把 manager 预设改成
+      // 不含该点，这句提示会多提醒一次。多提醒的代价是一句多余的说明，漏提醒的
+      // 代价是 owner 以为自己锁住了一个锁不住的人——两害相权取其轻。要根治得让
+      // 后端逐 grantee 回一个 bypass 标记（`grants[].bypasses`），记在
+      // design/RFC-324-graded-resource-grants/design.md §14。
+      'packages/frontend/src/components/AclPanel.tsx',
     ])
     const retiredAuthorizationHelpers = new Set([
       'adminShortCircuit',
@@ -566,6 +575,9 @@ describe('RFC-305 permission catalog architecture', () => {
       'packages/backend/src/server.ts',
     ])
     expect(filesReadingAccountRole(FRONTEND_SRC)).toEqual([
+      // RFC-324 权限面板：只用来渲染「只读档对管理员无效」那句提示（display
+      // metadata），不闸任何动作；局限与根治方向见上面 allowlist 处的注释。
+      'packages/frontend/src/components/AclPanel.tsx',
       'packages/frontend/src/components/UserMenu.tsx',
       'packages/frontend/src/components/account/AccountOverviewPanel.tsx',
       'packages/frontend/src/components/users/EditUserDialog.tsx',

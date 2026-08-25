@@ -1009,7 +1009,9 @@ export function WorkgroupEditor(props: {
         </ResourceActionList>
       </Dialog>
 
-      {canUpdate && (
+      {/* 入口按钮挂 canManageAcl，弹窗本体也必须挂同一个守卫：只读被授权者要看得见
+          自己是以什么档位被授权的。两个守卫不一致 = 按钮点得到、面板弹不出来。 */}
+      {canManageAcl && (
         <Dialog
           open={headerSurface === 'acl'}
           onClose={() => setHeaderSurface(null)}

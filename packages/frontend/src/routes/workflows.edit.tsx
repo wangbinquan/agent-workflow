@@ -1291,7 +1291,9 @@ export function WorkflowEditorLoaded({
           </ResourceActionList>
         </Dialog>
 
-        {canUpdate && (
+        {/* 与入口按钮同一个守卫（canManageAcl）。挂 canUpdate 会让只读被授权者
+            点得到「权限」却弹不出面板 —— 比藏起来更糟，那是个坏掉的按钮。 */}
+        {canManageAcl && (
           <Dialog
             open={modalSurface === 'acl'}
             onClose={() => setModalSurface('none')}

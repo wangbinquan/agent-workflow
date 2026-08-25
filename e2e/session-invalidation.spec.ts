@@ -225,7 +225,8 @@ test('RFC-319 UX-08: a 4403 close means the credential is still good — the use
   await jsonOf(
     await req(`/api/tasks/${task.id}/members`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: [user.id] }),
+      // RFC-324：`userIds` 退役，成员带档位。
+      body: JSON.stringify({ members: [{ userId: user.id, role: 'collaborator' }] }),
     }),
     'add the user as a task member',
   )
@@ -241,7 +242,7 @@ test('RFC-319 UX-08: a 4403 close means the credential is still good — the use
   await jsonOf(
     await req(`/api/tasks/${task.id}/members`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: [] }),
+      body: JSON.stringify({ members: [] }),
     }),
     'remove the user from the task',
   )

@@ -260,7 +260,9 @@ test.beforeAll(async () => {
   colleague = await createUserAndLogin('rfc319-b54-mate', 'Rfc319-b54-mate!')
   const put = await asUser(admin.sessionToken, `/api/tasks/${live.taskId}/members`, {
     method: 'PUT',
-    body: JSON.stringify({ userIds: [colleague.userId] }),
+    // RFC-324：成员改成带档位的 `members`。这里要的是「能答反问」，即 collaborator——
+    // observer 档看得见但**没有回答权**，用它这条 spec 会从头红到尾。
+    body: JSON.stringify({ members: [{ userId: colleague.userId, role: 'collaborator' }] }),
   })
   expect(put.status, `add member: ${JSON.stringify(put.body)}`).toBe(200)
 })

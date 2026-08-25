@@ -502,7 +502,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 可把自定义 userinfo 邮箱字段同步为账号/Git 提交邮箱。
     // RFC-321 bump 到 208 with 0208_rfc321_repository_transport_credentials：
     // 代码平台连接 generation、公共 Git transport 密封投影与用户级凭据表。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(208)
+    // RFC-324 bump 到 209 with 0209_rfc324_grant_levels：resource_grants 增
+    // level（read/write，存量与新行默认 read —— 与 RFC-324 之前 grant 的唯一含义
+    // 逐字相同，所以这条迁移零行为变化）、scheduled_tasks 增 acl_revision。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(209)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

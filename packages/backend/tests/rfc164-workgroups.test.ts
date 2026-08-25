@@ -647,7 +647,9 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     await req(alice.token, `/api/workgroups/${created.id}/acl`, {
       method: 'PUT',
       body: JSON.stringify({
-        userIds: [bob.id],
+        // RFC-324：授权带档位。这条用例锁的正是「只读被授权者改不动」，
+        // 所以必须是 read —— 换成 write 它就该 200 了。
+        grants: [{ userId: bob.id, level: 'read' }],
         expectedResourceId: created.id,
         expectedAclRevision: 0,
       }),

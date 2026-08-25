@@ -430,9 +430,10 @@ test('RFC-319: task owner grants a collaborator through the members panel, then 
   await expect
     .poll(async () => {
       const { body } = (await membersOf(carol.sessionToken)) as {
-        body: { users?: Array<{ id: string }> } | null
+        // RFC-324：裸 `users` 换成带档位的 `members`。
+        body: { members?: Array<{ user: { id: string } }> } | null
       }
-      return (body?.users ?? []).map((u) => u.id).includes(dave.userId)
+      return (body?.members ?? []).map((m) => m.user.id).includes(dave.userId)
     })
     .toBe(true)
 

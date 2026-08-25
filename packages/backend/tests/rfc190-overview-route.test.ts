@@ -143,7 +143,9 @@ async function seedResources(h: Harness): Promise<void> {
       await req(h.app, h.alice.token, `/api/agents/${agentIds.get('granted-agent')!}/acl`, {
         method: 'PUT',
         body: JSON.stringify({
-          userIds: [h.bob.id],
+          // RFC-324：`userIds` 退役，授权带档位。这里锁的是「被授权者能不能数到
+          // 这条私有资源」，read 档就够——它与 RFC-324 之前 grant 的含义逐字相同。
+          grants: [{ userId: h.bob.id, level: 'read' }],
           expectedResourceId: agentIds.get('granted-agent')!,
           expectedAclRevision: 0,
         }),

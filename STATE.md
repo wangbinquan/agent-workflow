@@ -44,7 +44,31 @@
 > 不能与 `AclPanel` 共享 query key——帧也会送到 owner 自己的浏览器，共享 key 一失效就把面板的
 > 编辑态快照打成 fetching，绊倒它的管理会话守卫，owner 每次保存权限弹窗都不关；③收紧 `canUpdate`
 > 会连坐**权限面板入口**，被授权者从此看不到自己是以什么档位被授权的（`rfc099-ownership-acl` 的
-> 既有 e2e 当场抓到）。**仍未做**：Codex 实现门。
+> 既有 e2e 当场抓到）。
+>
+> **已推 main 并按 exact SHA 盯 CI**（`cdaba7645` → `48e3f1fae` → `722c82499` → `2e077e408` → 本轮）。
+> CI 逐轮咬出**四类**本地没跑到的红，各自都已修 + 带回归：①**跨包漏跑**——改了
+> `packages/shared` 的 schema 却只跑了 backend/frontend，shared 自己的 2247 条在 Lint 腿上红
+> （教训已落 `docs/dev-gotchas.md`）；②**存量测试仍用旧 wire**——`userIds` / 裸 `users` 分散在
+> 8 个后端测试文件与 3 份 e2e 里，`tsc` 一个都抓不到（它们都在 `JSON.stringify` 的字面量里、
+> 或 `as {…}` 的手写断言类型里）；③**错误码分流的连坐**——`forbidden` 拆成
+> `resource-read-only` / `resource-govern-owner-only` 之后，rfc199 / rfc225 里按裸 `forbidden`
+> 断言的三条随之红；④**账本类守卫**——新迁移要在 `upgrade-rolling` 的迁移头账本里承认
+> （208→209），新的 role 读法要进 `rfc305-architecture-lock` 的两张清单，`AclPanel` 从
+> `async-state-gate` 允许清单里过期的条目要删。
+>
+> 其中**唯一的产品缺陷**（其余都是测试/账本）：收紧 `canUpdate` 时把 ACL **入口按钮**改挂了
+> `canManageAcl`，却漏了 **ACL 弹窗本体**——它还挂在 `canUpdate` 上，于是被授权者点得到「权限」
+> 按钮、什么也不弹出来（一个点了没反应的按钮比藏起来更糟）。两条手写弹窗的路由
+> （`workflows.edit.tsx` / `workgroups.detail.tsx`）都中招；另外 4 个详情页把入口与弹窗一起交给
+> `DetailHeaderActions` 的单个 `acl` prop，结构上不会写歪。已修，并在
+> `rfc324-editor-readonly-source-lock` 加了一条**逐文件**的锁（入口与弹窗必须同守卫），实证变异
+> 咬中。它是 `e2e-full-nightly` 咬出来的——**这条 workflow 跑的 spec 不在常规 CI 的 e2e 腿里**，
+> 接手时别只看 `CI` 那个 run。
+>
+> **仍未做**：Codex 实现门。**非本 RFC 的红**（别代修）：gitleaks 5 条指纹全在
+> `e2e/rfc319-*.spec.ts`（RFC-319 B68/B69 的 commit），`api-contract-coverage` 的
+> `GET /api/mcp` 也出自 `rfc319-overview-and-docs.spec.ts`——都归 RFC-319 session。
 >
 > ✅ **已完成 RFC（Done，本地收尾；待发布后复验/回填最终 run，2026-08-25）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在

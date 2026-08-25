@@ -84,7 +84,8 @@ DEFAULT 'read'`、`scheduled_tasks.acl_revision INTEGER NOT NULL DEFAULT 0`。�
       与 design §13 表的出入：改名拒绝与 wire 契约合并进 `rfc324-acl-wire-contract` /
       `rfc324-grant-level-matrix`；bypass 不变由等价性穷举覆盖（比单独一个文件更强）。
 - [x] **RFC-324-T23** 前端测试：`rfc324-acl-panel-levels.test.tsx`（档位控件 + hook 的乐观/严格
-      双语义，8 例）、`rfc324-editor-readonly-source-lock.test.ts`（编辑器三处接缝的源码锁，5 例）。
+      双语义，8 例）、`rfc324-editor-readonly-source-lock.test.ts`（编辑器三处接缝的源码锁，5 例；后补第 4 条
+      「入口与弹窗必须同守卫」的逐文件锁，见 §8.4，共 7 例）。
 - [x] **RFC-324-T24** `e2e/rfc324-graded-grants.spec.ts`：只读态 + 零自动保存 + 升档/降档两个方向
       的不刷新收敛。**做的过程中发现 AC-15 原本不成立**，补了 `resource-acl.changed` 控制帧这条
       缺失的通道（design §12），并被 e2e 逼出两处修正——`useResourceAccess` 不再与 `AclPanel`
@@ -165,3 +166,10 @@ wire 是破坏性变更，**批次 1 必须前后端同批**，否则 main 上�
    owner 每次保存权限弹窗都不关闭。
 3. **收紧 `canUpdate` 会连坐权限面板入口。** 第一版把 ACL 入口也挂在收紧后的 `canUpdate` 上，
    被授权者从此看不到自己是以什么档位被授权的——`rfc099-ownership-acl` 的既有 e2e 当场变红。
+4. **上一条只改了一半。** 入口按钮改挂 `canManageAcl` 之后，**弹窗本体**还留在 `canUpdate` 上：
+   被授权者点得到「权限」、什么也不弹。两条**手写**弹窗的路由（`workflows.edit.tsx` /
+   `workgroups.detail.tsx`）都中招；另外 4 个详情页把入口与弹窗一起交给 `DetailHeaderActions`
+   的单个 `acl` prop，结构上写不歪。这条是 **`e2e-full-nightly`** 咬出来的
+   （`rfc319-workgroup-acl.spec.ts:421` 报 `workgroup-acl-dialog` element(s) not found）——
+   那条 workflow 跑的 spec **不在常规 CI 的 e2e 腿里**，只看 `CI` 那个 run 会漏掉。
+   已在 `rfc324-editor-readonly-source-lock` 补一条逐文件的锁（入口与弹窗必须同守卫）。

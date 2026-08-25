@@ -216,7 +216,9 @@ describe('RFC-099 — agents route ACL', () => {
     await setPrivate(agentId)
     const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { userIds: [h.bob.id] }, 1)),
+      body: JSON.stringify(
+        aclMutation(agentId, { grants: [{ userId: h.bob.id, level: 'read' }] }, 1),
+      ),
     })
     expect(put.status).toBe(200)
     expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(200)
@@ -255,15 +257,22 @@ describe('RFC-099 — agents route ACL', () => {
     await setPrivate(agentId)
     await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { userIds: [h.bob.id] }, 1)),
+      body: JSON.stringify(
+        aclMutation(agentId, { grants: [{ userId: h.bob.id, level: 'read' }] }, 1),
+      ),
     })
     const asBob = (await (await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`)).json()) as {
       ownerUserId: string
-      users: Array<{ id: string }>
+      // RFC-324：裸 `users` 换成带档位的 `grants`（旧字段是删除，不是并存）。
+      grants: Array<{ user: { id: string }; level: 'read' | 'write' }>
       canManage: boolean
     }
     expect(asBob.ownerUserId).toBe(h.alice.id)
-    expect(asBob.users.map((u) => u.id)).toEqual([h.bob.id])
+    expect(asBob.grants.map((g) => g.user.id)).toEqual([h.bob.id])
+    expect(
+      asBob.grants.map((g) => g.level),
+      'RFC-324 之前的 grant 就是只读，迁移后照旧',
+    ).toEqual(['read'])
     expect(asBob.canManage).toBe(false)
     // grantee cannot PUT the acl
     const bobPut = await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`, {
@@ -285,10 +294,10 @@ describe('RFC-099 — agents route ACL', () => {
     expect(put.status).toBe(200)
     const acl = (await put.json()) as {
       ownerUserId: string
-      users: Array<{ id: string }>
+      grants: Array<{ user: { id: string }; level: 'read' | 'write' }>
     }
     expect(acl.ownerUserId).toBe(h.bob.id)
-    expect(acl.users.map((u) => u.id)).toContain(h.alice.id)
+    expect(acl.grants.map((g) => g.user.id)).toContain(h.alice.id)
     // alice (now a grantee) still sees it but can no longer manage
     expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
     const alicePut = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
@@ -346,14 +355,18 @@ describe('RFC-099 — agents route ACL', () => {
     const agentId = await createAgentAsAlice()
     const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { userIds: ['01HFAKEUSERID0000000000000'] })),
+      body: JSON.stringify(
+        aclMutation(agentId, { grants: [{ userId: '01HFAKEUSERID0000000000000', level: 'read' }] }),
+      ),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('acl-user-invalid')
     const sys = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify(aclMutation(agentId, { userIds: ['__system__'] })),
+      body: JSON.stringify(
+        aclMutation(agentId, { grants: [{ userId: '__system__', level: 'read' }] }),
+      ),
     })
     expect(sys.status).toBe(422)
   })

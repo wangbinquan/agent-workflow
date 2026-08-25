@@ -176,11 +176,16 @@ describe('RFC-099 — task members endpoints + member operational rights', () =>
       await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`)
     ).json()) as {
       ownerUserId: string
-      users: Array<{ id: string }>
+      // RFC-324：裸 `users` 换成带档位的 `members`（observer 档随之进来）。
+      members: Array<{ user: { id: string }; role: 'collaborator' | 'observer' }>
       canManage: boolean
     }
     expect(asCarol.ownerUserId).toBe(h.alice.id)
-    expect(asCarol.users.map((u) => u.id)).toEqual([h.carol.id])
+    expect(asCarol.members.map((m) => m.user.id)).toEqual([h.carol.id])
+    expect(
+      asCarol.members.map((m) => m.role),
+      '存量成员一律迁 collaborator',
+    ).toEqual(['collaborator'])
     expect(asCarol.canManage).toBe(false)
     // stranger blocked by the task visibility middleware —— RFC-285 B1：
     // 与不存在同形 404（旧 403 退役）
@@ -191,18 +196,23 @@ describe('RFC-099 — task members endpoints + member operational rights', () =>
       (
         await req(h.app, h.carol.token, `/api/tasks/${taskId}/members`, {
           method: 'PUT',
-          body: JSON.stringify({ userIds: [h.dave.id] }),
+          body: JSON.stringify({ members: [{ userId: h.dave.id, role: 'collaborator' }] }),
         })
       ).status,
     ).toBe(403)
     // owner adds dave
     const put = await req(h.app, h.alice.token, `/api/tasks/${taskId}/members`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: [h.carol.id, h.dave.id] }),
+      body: JSON.stringify({
+        members: [
+          { userId: h.carol.id, role: 'collaborator' },
+          { userId: h.dave.id, role: 'collaborator' },
+        ],
+      }),
     })
     expect(put.status).toBe(200)
-    const after = (await put.json()) as { users: Array<{ id: string }> }
-    expect(after.users.map((u) => u.id).sort()).toEqual([h.carol.id, h.dave.id].sort())
+    const after = (await put.json()) as { members: Array<{ user: { id: string } }> }
+    expect(after.members.map((m) => m.user.id).sort()).toEqual([h.carol.id, h.dave.id].sort())
     // dave can now see the task
     expect((await req(h.app, h.dave.token, `/api/tasks/${taskId}`)).status).toBe(200)
   })
@@ -214,9 +224,16 @@ describe('RFC-099 — task members endpoints + member operational rights', () =>
       body: JSON.stringify({ ownerUserId: h.carol.id }),
     })
     expect(put.status).toBe(200)
-    const body = (await put.json()) as { ownerUserId: string; users: Array<{ id: string }> }
+    const body = (await put.json()) as {
+      ownerUserId: string
+      members: Array<{ user: { id: string }; role: string }>
+    }
     expect(body.ownerUserId).toBe(h.carol.id)
-    expect(body.users.map((u) => u.id)).toContain(h.alice.id)
+    expect(body.members.map((m) => m.user.id)).toContain(h.alice.id)
+    expect(
+      body.members.find((m) => m.user.id === h.alice.id)?.role,
+      '转移之后前任落协作者档：他本来就是全权操作者，降成观察者等于顺手削权',
+    ).toBe('collaborator')
   })
 
   test('collaborator may cancel the task (D13 user-equal operational rights)', async () => {
