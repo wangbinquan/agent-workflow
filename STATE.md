@@ -59,7 +59,7 @@
 > `services/repoCredentials.ts` 无任何引用）/ WAL checkpoint 默认 10 分钟主线程 TRUNCATE 与
 > 备份 `VACUUM INTO` 回落主线程。
 
-> 🚧 **实现完成、等待发布终态（Implementation Complete / Phase 2）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-25；包含最终发布批次的 `089015b1a` 上 CI 31/31、visual 1/1 全绿）：[RFC-321 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析](design/RFC-321-user-code-host-push-credentials/proposal.md)**
 > —— 用户确认 RFC-320 已推送并要求两个会话各管各的阶段；RFC-321 已进入实现收口，不接手
 > RFC-320 的后端问题。migration、个人凭据 API/账号页、管理员 mapping、统一 publication transport、
 > task/candidate/conflict/submodule/employee workspace 接线与架构棘轮均已落候选。
@@ -75,9 +75,10 @@
 > RFC-320 是 Phase 1，profile/task identity/author-committer 的实现已发布；RFC-321 是 Phase 2，只消费
 > 持久化工作归属并治理 push authentication/transport。按用户追加要求，Git 提交身份卡片仅在展示层移到
 > “代码提交与推送”页签，并与推送凭据卡片统一宽度和样式；两个后端合同仍保持正交。
-> 当前源码已重编为隔离 E2E 二进制；账号/PAT 拒绝/真实 task smart-HTTP push 在 Chromium 与 WebKit
-> 各 3/3 通过，四张 Darwin 视觉基线重录并人工验图通过。剩余只执行唯一 full gate、共享 main 精确
-> 提交/推送与 exact-SHA hosted CI/visual 终态；不启动、停止或改动用户现有的开发服务。
+> 账号/PAT 拒绝/真实 task smart-HTTP push 在 Chromium 与 WebKit 各 3/3 通过，四张 Darwin 视觉基线
+> 重录并人工验图通过。最终发布批次 `cde92d4c6`、`3a0e237c9` 均已入 `origin/main`，且均为
+> `089015b1a` 的祖先；该 SHA 的 CI run `32806211369` 31/31 全绿，visual-regression run
+> `32806211353` 1/1 全绿。按用户裁决未运行本地 Bun gate，托管结果为最终权威门禁。
 
 > 🚧 **进行中 RFC（In Progress）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
 > —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**
@@ -130,8 +131,8 @@
 > `test-results` 污染阻断，因此不冒充全仓本地门禁全绿。批准裁决见
 > [proposal §5 C1–C8](design/RFC-320-user-profile-git-identity/proposal.md#5-待用户确认的裁决)。
 
-> 🚧 **进行中 RFC（实施候选验证中）：[RFC-318 直观、原子的数字员工研发节点](design/RFC-318-minimal-digital-employee-tool-contracts/proposal.md)**
-> —— 用户已批准实施并要求推送。`development@9` 已把九个业务位置绑定到九份 v2 contract：八个 JSON 节点只接收本动作消费的业务字段并直接返回 `completed/blocked` 结果，方案节点只接收需求目录与方案路径并输出同一 `analysis-plan: path<md>`。平台 round/nonce/Context/effect/route/外部发布状态不进入 tool wire；八个 v2 内置 Agent 各声明一个 contract，名称与动作一致。分类配置只保留问题类型、说明和兜底，处理者与顺序仍由岗位流程拥有。六轮设计门已收敛且无遗留 P1/P2；定向 contract/UI/主链/人工评审证据已通过。共享脏树的唯一一次完整本地门被并发 RFC-319/321 候选阻断，RFC-318 自有发现均已修复并定向复验；提交后的 exact-SHA hosted CI 才作为全仓终态。所有节点保留现有网络；未增加零网络、沙箱或安全措施，未修改 runner、`startTask` 及其下层。
+> ✅ **已完成 RFC（Done，2026-08-25）：[RFC-318 直观、原子的数字员工研发节点](design/RFC-318-minimal-digital-employee-tool-contracts/proposal.md)**
+> —— `development@9` 已把九个业务位置绑定到九份 v2 contract：八个 JSON 节点只接收本动作消费的业务字段并直接返回 `completed/blocked`，方案节点只接收需求目录与方案路径并输出同一 `analysis-plan: path<md>`。平台 round/nonce/Context/effect/route/外部发布状态不进入 tool wire；八个 v2 内置 Agent 各声明一个 exact contract，名称与动作一致。分类配置只保留问题类型、说明和兜底，处理者与顺序仍由岗位流程拥有。七轮设计门无遗留 P1/P2；主实现 `985483b02`、平台节点展示归属修复 `721eaf79a` 及后续收口提交均已进入 `origin/main`。直接收口 SHA `ff1290659` 的 CI 被后续推送取消前，RFC-318 后端合同门 10/10 与目标 Playwright 已通过；包含该提交的 exact SHA `089015b1` 上，CI `32806211369` 31/31 jobs、visual `32806211353` 1/1 job 全绿。所有节点保留现有网络；未增加零网络、沙箱或安全措施，未修改 runner、`startTask` 及其下层。
 
 > ✅ **已完成 RFC（Done，2026-08-24；按 exact SHA 的 hosted CI 与 visual 双绿）：[RFC-317 公共内核架构边界加固](design/RFC-317-commons-boundary-hardening/proposal.md)**
 > —— 起于 RFC-294 `design.md §1.2` 四条判据里**从未落地的第四条**「存在防止第二实现再长出的棘轮」。

@@ -23,7 +23,7 @@
 - [x] 合同/schema/projector/Agent 定向测试通过。
 - [x] 前端节点卡片、配置和职责图定向测试通过。
 - [x] development@9 主链、人工评审和直接输出 E2E 通过；冲突路径已完成 RFC-318 动作，当前仅受并发 RFC-321 发布前置条件影响。
-- [x] 六轮设计门记录无遗留 P1/P2。
+- [x] 七轮设计门记录无遗留 P1/P2。
 - [x] 唯一一次 `bun run gate:local` 已执行并逐项归因；RFC-318 自身架构红项已修复并定向通过，共享 tree 仍受并发 RFC-319/321 红项影响。
-- [ ] exact-path stage；缓存区无意外文件；提交包含正确 co-author trailer。
-- [ ] 推送后 `main == origin/main`，并按 exact SHA 核验 hosted CI/visual 终态。
+- [x] 实现提交均按 exact path 发布，缓存区无意外文件，并包含正确 co-author trailer。
+- [x] 实现已进入 `origin/main`；包含最终 RFC-318 收口提交 `ff1290659` 的 exact SHA `089015b1` 上，CI `32806211369` 31/31 jobs success、visual `32806211353` 1/1 job success。

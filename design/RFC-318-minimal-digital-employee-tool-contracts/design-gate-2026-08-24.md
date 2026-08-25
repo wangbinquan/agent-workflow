@@ -2,7 +2,7 @@
 
 - 审查对象：`development@9` 的九个业务节点、九份 v2 contract、八个 v2 内置 Agent、节点卡片与分类配置
 - 开工基线：`main@9a6961727b8dd5a946310f34d0f378ab0b57ab13`
-- 当前结论：七轮设计问题已收敛，无遗留 P1/P2；共享 dirty tree 的完整本地门已执行并按路径归因，提交后 hosted CI 待 exact SHA 执行
+- 当前结论：Done；七轮设计问题已收敛，无遗留 P1/P2，包含全部 RFC-318 提交的 exact SHA hosted CI/visual 已全绿
 
 ## 不变量
 
@@ -180,4 +180,11 @@
 | 人工评审 TaskEngine/system-mock          | 通过                                                                                 |
 | 冲突 system-mock                         | RFC-318 动作已完成；当前 shared dirty tree 随后被并发 RFC-321 的发布凭据前置条件阻断 |
 | 唯一一次 `bun run gate:local`            | 已执行；共享 dirty tree 因并发 RFC-319/321 红，RFC-318 自身发现已修复并定向复验      |
-| exact-SHA hosted CI/visual               | 待提交推送                                                                           |
+| exact-SHA hosted CI/visual               | `089015b1`：CI `32806211369` 31/31 jobs success；visual `32806211353` 1/1 job success |
+
+## 收口（2026-08-25）
+
+- 主实现 `985483b02`、平台节点展示归属修复 `721eaf79a` 与最终 RFC-318 收口提交 `ff1290659` 均已进入 `origin/main`。
+- `ff1290659` 的直接 CI `32725484666` 被更高优先级主干推送取消；取消前 RFC-318 后端合同门 10/10 与目标 Playwright 已通过，故只记定向证据，不记全仓绿。
+- `ff1290659` 是 `089015b1a53071b151f2e6b73268517390eb4b55` 的祖先；后者的 CI `32806211369` 31/31 jobs success、visual `32806211353` 1/1 job success，提供完整 hosted 终态。
+- RFC-318 没有遗留设计项或实现项，状态收口为 Done。

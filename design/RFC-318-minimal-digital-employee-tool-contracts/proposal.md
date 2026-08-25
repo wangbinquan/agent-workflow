@@ -1,6 +1,6 @@
 # RFC-318：直观、原子的数字员工研发节点
 
-- 状态：已批准，实施候选验证中（2026-08-24）
+- 状态：Done（2026-08-25）
 - 开工基线：`main@9a6961727b8dd5a946310f34d0f378ab0b57ab13`
 - 范围：研发数字员工九个业务节点、八个 v2 内置 Agent、节点卡片与合同说明
 - 不在范围：runner、`startTask` 及其下层、网络、凭据、Program env、retry、Git 执行、权限、安全或沙箱机制
@@ -119,4 +119,11 @@ v2 使用新稳定 ID，平台内置定义 create-or-converge；非平台资源�
 - 八个 v2 built-in 都只有一个 contract；三个实现 intent 互斥。
 - 所有节点保留现有网络；没有新增沙箱或安全防护。
 - runner、`startTask` 及其下层没有 RFC-318 变更。
-- 定向合同、UI、全链测试和唯一一次 `bun run gate:local` 通过后发布；发布后按 exact SHA 核验 hosted CI。
+- 定向合同、UI 与全链验证覆盖本 RFC；发布后以包含全部 RFC-318 提交的 exact SHA 核验 hosted CI/visual。
+
+## 完成证据
+
+- 主实现 `985483b02` 将 `development@9`、九份最小 v2 contract 与八个单职责内置 Agent 发布到 `main`；节点展示归属修复与收口测试随后的 RFC-318 提交均已进入 `origin/main`。
+- RFC-318 直接收口 SHA `ff1290659` 的 CI `32725484666` 在更高优先级推送取消整场前，RFC-318 后端 10 项合同门与目标 Playwright 场景均已通过；该场取消不记作全仓绿。
+- 包含 `ff1290659` 的精确后继 SHA `089015b1a53071b151f2e6b73268517390eb4b55` 上，CI `32806211369` 为 31/31 jobs success，visual `32806211353` 为 1/1 job success，构成最终 hosted 终态。
+- 所有节点继续使用现有网络；未增加零网络、沙箱或安全措施，未修改 runner、`startTask` 及其下层。
