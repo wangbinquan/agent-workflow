@@ -6196,8 +6196,18 @@
       "title": "【补漏】蒸馏源事件深链：feedback 跳到 /tasks/:id?tab=feedback#feedback-<id> 并滚动+聚焦；已删除源灰显无链接",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-29 蒸馏任务详情页：六段各自有内容，且每一段读的是这条 job 自己的数据 @nightly"
+        },
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X5",
@@ -7134,18 +7144,30 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "MCP runtime playground：开对话框 / 选 runtime / 发首条消息 / 失败诊断 / ESC 关闭不改后端",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/mcp-runtime-playground.spec.ts",
+          "test": "offers both runtimes, remains usable at 390px, restores focus, and renders failures"
+        }
+      ]
     },
     {
       "id": "RES-25",
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "playground 成功路径：多轮对话 + 复用同一原生会话 + 真实调用挂载的 MCP 工具",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts",
+          "test": "Claude resumes one native session and calls exactly the mounted stateful MCP"
+        }
+      ]
     },
     {
       "id": "RES-26",
@@ -7153,8 +7175,13 @@
       "title": "playground 取消当前轮 / 主动结束会话",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-import-and-playground.spec.ts",
+          "test": "RFC-319 RES-26: playground 的「取消当前轮」与「立即结束」各自真的改了服务端——一个把回合标成取消，一个把会话收成 user 结束 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-27",
@@ -9479,8 +9506,13 @@
       "title": "导入引用歧义：同名的 skill/mcp/plugin/agent 多份 → 必须逐项选定归属才能应用",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-import-and-playground.spec.ts",
+          "test": "RFC-319 AGENT-29: 同名的两份 MCP 让导入停在归属选择上——没选定就应用不了，选定之后落库的是被选中的那一份 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-30",
@@ -9488,8 +9520,13 @@
       "title": "导入的阻断性警告与端口 sidecar 冲突 → 阻止应用并提供「去修端口」入口",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-import-and-playground.spec.ts",
+          "test": "RFC-319 AGENT-30: 解析失败与端口孤儿冲突各自挡住「应用到草稿」，冲突还给一条真能落到端口页的出口 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-36",
@@ -9511,8 +9548,13 @@
       "title": "导出代理为配置包（.zip），且草稿脏时禁用并说明原因",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-import-and-playground.spec.ts",
+          "test": "RFC-319 AGENT-38: 代理导出配置包——草稿脏时入口按不动，保存后能落盘；两段式 fence 少一半 422、串类型 422、陈旧 409 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-41",
@@ -9580,8 +9622,13 @@
       "title": "内置数字员工代理模板列表（GET /api/agents/builtins/digital-employee-templates）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-import-and-playground.spec.ts",
+          "test": "RFC-319 AGENT-46: 内置数字员工模板端点只回当代那八条、每条都带执行契约，且它们一条都不混进普通代理列表 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-X2",
@@ -11008,8 +11055,13 @@
       "title": "【补漏】FuseDialog 的提交前校验与「没有可选托管技能」空态",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-import-and-playground.spec.ts",
+          "test": "RFC-319 MEM-X11: 从记忆页发起融合——没挑目标技能就提交被本地拦下且一个请求都不发；一个可写托管技能都没有时给的是空态而不是空下拉 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X6",
@@ -12409,12 +12461,8 @@
     "MEM-49",
     "MEM-X10",
     "MEM-X3",
-    "MEM-X4",
     "OPS-X3",
     "OPS-X5",
-    "RES-24",
-    "RES-25",
-    "RES-26",
     "RES-30",
     "RES-32",
     "RES-33",
@@ -12433,10 +12481,6 @@
     "WG-28",
     "WG-42",
     "WG-X5",
-    "AGENT-29",
-    "AGENT-30",
-    "AGENT-38",
-    "AGENT-46",
     "CFG-03",
     "CFG-32",
     "CFG-X5",
@@ -12449,7 +12493,6 @@
     "IAM-45b",
     "INTENT-X5",
     "INTENT-X7",
-    "MEM-X11",
     "OPS-007",
     "OPS-X7",
     "OPS-X9",

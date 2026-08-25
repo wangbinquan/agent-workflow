@@ -3483,3 +3483,41 @@ MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-3
 6. **【刻意设计，记一笔免得再踩】edit 授权不能改名**：被授权者 PUT 改名得 403
    `resource-rename-owner-only`（"an edit grant covers content only"）。这意味着**「重命名」不能当作
    被授权者的脏化手段**——B107 因此改用「自动布局」这类内容改动。
+
+## RFC-319 B108（2026-08-26，代理导入 + playground）：六条新覆盖 + 三条假 gap 销账
+
+**账本文案与实现不符（已按源码实际写）**
+
+- **AGENT-46 不能按「八条模板的执行契约互不相同」写**——起草侧第一版这么写当场红，实测只有 **6 个**
+  不同契约：`development.implement-change` 被 `code-writing` / `business-implementation` / `issue-repair`
+  **三条**模板共享（`modules/development-automation/public/participants.ts:40,118,134`）。真正的主键是
+  `frontmatterExtra.digitalEmployeeTemplate`。用例改成逐条比 `id → 岗位 → 契约` 整张映射表。
+  **顺带暴露一条隐式契约**：四个 DE spec 的 `findAgent(contractId)` 取的是**第一条匹配**，所以这个目录的
+  **顺序**是它们的依赖——用例已把顺序钉住。
+
+**三条假 gap 已销账（逐条核实证据逐字存在 + tier 与标签一致）**
+
+- **RES-24** → `e2e/mcp-runtime-playground.spec.ts` 的
+  `offers both runtimes, remains usable at 390px, restores focus, and renders failures`
+  逐条对上账本那句（开对话框 / 两种 runtime / 发首条消息 / 诊断码 / ESC 关闭后 session 仍为空）。
+  该用例**不带 @nightly**，因此该行 tier 同批改成 `pr`（同前一批六条的处置）。
+- **RES-25** → `packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts` 的
+  `Claude resumes one native session and calls exactly the mounted stateful MCP`：两轮 succeeded、
+  `runtimeSessionId` 两轮相同、真 MCP 服务器收到 `initialize/tools/list/tools/call ×2`、transcript 里
+  出现 `counter=1/2`。**账本里已有 5 行以 `packages/backend/tests/**` 为证据（EVENT-07 / HUMAN-28 /
+  OPS-001 / OPS-002 / OPS-024），且全部 tier=pr**，本行同形处置。
+  **保留的边界**：该用例 `test.skipIf(process.platform === 'win32')`——Windows 上不跑，是夹具限制。
+- **MEM-X4** → 两条既有用例合起来盖满：`rfc319-memory-distill-jobs.spec.ts` 的 MEM-29 逐字断言
+  `/tasks/<id>?tab=feedback#feedback-<id>` 且已删除源那行**没有链接**；`task-feedback-distill.spec.ts` 的
+  深链用例带同样的 hash 打开并轮询断言 `document.activeElement.id`，还有「认不出的锚点不许乱扔焦点」的
+  负向对照。唯一没人做的是「从详情页把链接点下去」这一跳，而两端都已各自钉死。
+
+**MEM-49 仍留在 gap（不是假 gap，是一半够不到）**：设置页那半已被 CFG-21 覆盖；**候选行语言徽标那半是
+死代码**——`components/memory/MemoryRow.tsx:70-79` 只在 `status==='candidate'` 渲染，而三个消费方
+（`MemoryAllList.tsx:81`、`MemoryScopedList.tsx:30`、`MemoryByScopeBrowser.tsx:24`）**全部只拉
+approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryRow`。属「变异不咬人三成因」第 2 类，
+不该用 e2e 去追。**这一行要么改口径（只保留设置页那半）、要么把死代码清掉，请裁决。**
+
+**观察到但未写成断言**：`AgentImportDialog.tsx:695-745` 的端口 sidecar 冲突横幅只在
+`blockingWarning === undefined` 时渲染——一份既 YAML 解析失败、又会造成端口冲突的 agent.md，用户要
+**修完 YAML 再导一次**才看得到第二个问题。两段式暴露，属设计选择。
