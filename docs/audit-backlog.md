@@ -3083,3 +3083,43 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `packages/system-mocks/src/runtime/skeleton.ts:137-143` 的 `requireOutputOpen` 上 exit 3。
    所以「按需生成」那支锁的是**接线**（按钮真发 POST、守护进程真跑一趟、界面真把结果轮询回来
    并改写自己），「查看」那支按产品真实读路径（磁盘缓存 → GET → ready）写。
+
+## RFC-319 B98 起草期撞到的产品缺陷（2026-08-26，前端外壳 / 登录回环 / 恢复）
+
+1. **【真实缺陷，P2】全仓没有任何路由级错误边界。**
+   `packages/frontend/src` 里 `errorComponent` / `notFoundComponent` / `CatchBoundary` /
+   `ErrorBoundary` **零命中**，`router.tsx:184-188` 也没有 `defaultErrorComponent`。未知路由今天靠
+   TanStack 的默认 Not Found 呈现（外壳仍在、可恢复，所以 UX-38 是绿的），但**任何路由组件抛异常
+   都会整树白屏**，没有兜底。账本 UX-38 写的「路由级错误边界」这一半在产品里并不存在。
+2. **【真实缺陷，P2】`copyText()` 的成功回执可以说谎。**
+   `packages/frontend/src/lib/clipboard.ts:49` 拿 `document.execCommand('copy')` 的返回值当「复制
+   成功」。变异实测：Chromium 在**选区为空**时照样返回 `true`，界面报「Copied」而剪贴板一个字节
+   都没变。今天靠 `:47` 的 `ta.select()` 兜着，但一旦有人重构掉它，**只显示一次的 PAT 明文会静默
+   丢失**。B98 已把这条钉死——UX-X2 改成「写哨兵值 → 复制 → 从另一个 page 读回系统剪贴板」，
+   不再信任返回值。
+3. **【真实缺陷，P3 / i18n】`RelativeTime` 的 `aria-label` 在英文界面里硬编码 CJK 全角括号。**
+   `packages/frontend/src/components/RelativeTime.tsx:41` 是 ``aria-label={`${label}（${absolute}）`}``，
+   不走 i18n，英文读屏用户会听到全角括号。UX-X4 的断言**按源码实际写**（`/3 min ago（.+）/`），
+   不是按「应该」写。
+4. **【真实缺陷，P3 / 一致性】`/agents` 列表行不显示相对时间，`/skills` `/mcps` `/plugins` 显示。**
+   后三者都往 `ResourceSplitPage` 传了 `updatedAt`，只有 `routes/agents.tsx` 没传，于是
+   `ResourceSplitPage.tsx:470-473` 那段在 `/agents` 上整段不渲染。同一套分栏列表四个域三种行为。
+5. **【真实缺陷，P3 / 文案】首启欢迎屏说「Four tracks」，界面只渲染三张。**
+   `packages/frontend/src/i18n/en-US.ts:2932-2933` 写 `'Four tracks: …'` 并列举四件事，而
+   `components/Onboarding.tsx:93` 的 `tracks` 与 `routes/onboarding.tsx:24-28` 的 `FLOWS` 都只有三条。
+6. **【测试判据自身的缺口，已就地补强】开放重定向防线的「协议相对」半边此前没人守。**
+   `routes/auth.tsx:29-32` 的 `safeInternalRedirect` 用 `/^\/(?![/\\])/`，那个 lookahead 专为
+   `//evil.example/x`（浏览器当成另一个主机）与 `/\evil.example/x` 写。起草版只试了
+   `https://evil.example/x`——把 lookahead 去掉只留 `/^\//`，绝对地址那条照样被拒、用例照样绿。
+   本人变异实测发现后已在 UX-04 补上这两种形态，补后同一变异当场红。
+7. **【可测性缺口，记档】UX-11 的「Activity hidden + 导航阻断」半边今天无法从测试端构造。**
+   `AppShell.tsx:119-124` 的 `preserveDestination` 需要「同一路径先被授权过、随后 `/me` 回到
+   pending/error」；React Query 在已有 data 后失败会保留 `status:'success'`，只有 queryKey 变
+   （换 token）才回 pending，而 `stores/auth.ts` 没有 storage 监听，测试端换不了 token。B98 覆盖的
+   是冷加载那一支（未解出 → 不挂载 + 可重试横幅 + 重试恢复）。
+8. **【账本核对，未改状态】UX 域有十行标着 gap、实际已有真覆盖**（UX-05/06 → `identity-access.spec.ts`；
+   UX-24 → `inbox-badge-live.spec.ts`；UX-26 → `rfc319-settings-sections.spec.ts`；UX-34 →
+   `rfc319-agent-delete-and-refs.spec.ts`；UX-36 → `rfc244-task-operations.spec.ts` 等；UX-39 →
+   `rfc319-users-and-account.spec.ts`；UX-40 → `rfc319-memory-fusion-and-badges.spec.ts`；UX-41 →
+   `rfc199-save-reliability.spec.ts`；UX-33 → `rfc319-event-center-views.spec.ts`）。**本批没有据此
+   改状态**——逐条核验证据标题是否逐字存在、tier 是否对得上，是一次独立的对账工作，留给后续批次。

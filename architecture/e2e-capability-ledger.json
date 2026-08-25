@@ -7659,8 +7659,13 @@
       "title": "深链接经登录回环后原样恢复（?redirect= 携带 pathname+search）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-04: 未登录点开带查询串的深链接，登录后原样回到那一页（不退化成「链接无效」），而外站地址一律不采信 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-05",
@@ -7677,8 +7682,13 @@
       "title": "首次启动：bootstrap token URL 落地 → 地址栏擦除 → /setup/admin 建首个管理员",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-09: 带一次性 token 的首启链接进来后，地址栏当场不再有它，人被送到建管理员那一屏，且原本要去的页面被记住 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-11",
@@ -7686,8 +7696,13 @@
       "title": "权威变更中的路由挂起态（Activity hidden + 加载/错误横幅 + 导航阻断）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-11: 当前账号权限解不出来时，页面不抢跑也不白屏——只给一条可重试的横幅，重试成功后正常进入 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-14",
@@ -7901,8 +7916,13 @@
       "title": "WS 断线重连 + 重连后的补偿（指数退避、connectionEpoch 重取、?since= 补发）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-32: 实时通道断掉后自己接回来，并补上断线那一段错过的变更——不是「连着但永远停在断线那一刻」 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-33",
@@ -7937,8 +7957,13 @@
       "title": "引导巡览（SpotlightTour）：三条 flow、点击式步进、锚点定位、跳过与进度持久化",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-43: 引导巡览的进度写得住——刷新还在原步；退出之后彻底清干净，刷新也不会又罩上来 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-47",
@@ -7955,8 +7980,13 @@
       "title": "复制到剪贴板（任务输出 / 一次性 PAT / 评审文档）及非安全上下文的 execCommand 兜底与焦点归还",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-X2: 局域网 http 部署上没有剪贴板 API 时，「复制」仍然真的复制、焦点回到按钮上、不留下任何残渣 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-X5",
@@ -11342,8 +11372,13 @@
       "title": "未知路由（404）与路由级错误边界",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-38: 敲错一个 URL 不白屏、不被踢回登录页，外壳还在、点一下就能回到正常页面 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-39",
@@ -11369,8 +11404,13 @@
       "title": "首启欢迎页（Onboarding hero）与三张引导流程卡的入口",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-44: 首启欢迎屏上那个唯一的主行动真的通到三条引导流程，而且点一条真的开始走 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-45",
@@ -11410,8 +11450,13 @@
       "title": "列表层相对时间戳（RelativeTime）与共享 30s 时钟：页面停留期间标签自行前进",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ux-shell-and-recovery.spec.ts",
+          "test": "RFC-319 UX-X4: 停在列表页不动，行上的相对时间自己往前走（数据没变、只有标签变） @nightly"
+        }
+      ]
     },
     {
       "id": "WF-05",
@@ -11842,19 +11887,13 @@
     "TASK-39",
     "TASK-44",
     "TASK-X4b",
-    "UX-04",
     "UX-05",
-    "UX-09",
-    "UX-11",
     "UX-19",
     "UX-24",
-    "UX-32",
     "UX-33",
     "UX-41",
     "UX-42",
-    "UX-43",
     "UX-47",
-    "UX-X2",
     "UX-X5b",
     "WF-02",
     "WF-11",
@@ -11929,13 +11968,10 @@
     "UX-34",
     "UX-36",
     "UX-37",
-    "UX-38",
     "UX-39",
     "UX-40",
-    "UX-44",
     "UX-45",
     "UX-46",
-    "UX-X4",
     "WF-15",
     "WF-55",
     "WF-56",
