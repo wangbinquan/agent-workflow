@@ -47,7 +47,13 @@ export class McpHttpMock {
       const transport = new SSEServerTransport('/mcp/messages', input.response)
       this.#sse.set(transport.sessionId, { server, transport })
       transport.onclose = () => {
-        this.#sse.delete(transport.sessionId)
+        // 幂等闸，别删：`server.close()` 走 SDK 的 `Protocol.close()`，它会**再次**调
+        // `transport.close()`，而 `SSEServerTransport.close()` 又无条件回调 `onclose`
+        // —— 两者互相重入直到爆栈。（`Protocol.connect` 的 `_onclose` 是链式包裹而非
+        // 覆盖，所以这个 handler 一直在。）症状不是失败而是噪声：修之前单跑一条走 SSE
+        // 的 e2e，共享 mock 进程会刷出 152 条 `RangeError: Maximum call stack size
+        // exceeded`，足以淹掉真错误。`Map.delete` 的返回值就是天然的一次性闸。
+        if (!this.#sse.delete(transport.sessionId)) return
         void server.close().catch(() => {})
       }
       await server.connect(transport)
