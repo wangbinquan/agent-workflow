@@ -132,6 +132,9 @@ function isNamedSomewhere(code: string): boolean {
 // BASELINE — route error codes that no test names yet, frozen 2026-07-21.
 // 销账记录：`invalid-filter` 于 2026-08-24 被 RFC-319 的 `e2e/memory-access.spec.ts`
 // （MEM-48，记忆列表的非法过滤值必须 422 而不是静默忽略）点名，按「只减不增」移除。
+// `user-invalid` 于 2026-08-25 被 RFC-319 B80 的 `e2e/rfc319-users-and-account.spec.ts`
+// （IAM-41，用户选择器对非法查询答 422 `user-invalid`）点名，同样按「只减不增」移除
+// （B80 那笔的 CI run 被后续 push 取消，这条红在下一笔的 run 上才现形）。
 //
 // This list may only SHRINK. Adding to it requires a deliberate edit and shows
 // up in review as "this change ships an unverifiable failure path".
@@ -151,7 +154,6 @@ const UNCOVERED_BASELINE: readonly string[] = [
   'members-invalid',
   'port-artifact-bad-item',
   'retry-request-invalid',
-  'user-invalid',
   'workflow-draft-validation-invalid',
   'workgroup-assignment-not-found',
   'workgroup-message-invalid',
