@@ -2823,3 +2823,32 @@ mirror: git fetch --all --prune          # 不带 --tags
 
 **动手顺序**：先写守卫 + 语料下限 + 负 fixture → `bun test ./tests/architecture/` 全绿 →
 再 append 清单条目（`lines` 按实际行数填）→ 再提交。反过来先提交必然红一轮。
+
+## 共享工作树上「改完账本再去跑测试」有一个窗口，别人会在窗口里覆写你的文件
+
+2026-08-26 实撞，把 `main` 推红一次（RFC-317 T16「条目数与基线逐字相等」）：
+
+1. 我改了 `architecture/e2e-endpoint-coverage.json`（来源 164 → 147）**并同批改了**
+   `architecture/ledger-baselines.json` 的 baseline，脚本打印「基线已同步」；
+2. 跑测试确认 46 pass 0 fail；
+3. 跑了别的、又跑了一遍全量守卫；
+4. `commit-mine.py` 提交这三个文件。
+
+结果 committed 出来是「来源 147 / 基线 164」。原因：**②③④ 之间有几分钟窗口**，共享工作树上
+另一个 session 覆写了 `ledger-baselines.json`（他们在 pin 自己的 provenance），而
+`commit-mine.py` 取的是**工作树内容**，不是我写下去的那一份。测试当时是绿的，因为测试跑在
+覆写**之前**——绿本身没有说谎，只是它证明的那份文件已经不是被提交的那份了。
+
+**处置（两条，缺一不可）**：
+
+* **账本 / 生成物这类「多 session 都会写」的文件，改完立刻提交**，别在中间插入长耗时步骤。
+  中间要跑全量守卫的话，跑完**回到第 1 步重跑一遍写入**再提交。
+* **提交后回读 committed 内容复核**，不要只信提交前的测试：
+  ```
+  git show HEAD:architecture/ledger-baselines.json | python3 -c '…' # 与来源逐条对数
+  ```
+  这一步几秒，是唯一能抓住「窗口期被覆写」的判据——提交前的任何检查都抓不到它。
+
+同理适用于 `STATE.md` / `design/plan.md` / `docs/*.md` 等共享索引：那些文件用
+「HEAD 内容 + 只有我这几行」的覆盖副本入库（`commit-mine.py` 的 `路径=覆盖文件` 形式），
+从根上绕开这个窗口。账本类因为要跟着测试结果走，绕不开，只能靠「立刻提交 + 回读复核」。
