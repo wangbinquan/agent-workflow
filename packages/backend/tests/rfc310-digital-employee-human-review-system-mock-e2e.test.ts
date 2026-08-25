@@ -32,7 +32,7 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { addReviewComment, submitReviewDecision } from '@/services/review'
-import { abortAllActiveTasks, isTaskActive, resumeTask } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive, listTaskItems, resumeTask } from '@/services/task'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -140,7 +140,7 @@ emit('agent-result', output)
 }
 
 describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', () => {
-  test('reject and iterate rerun only planning; approval feeds the exact reviewed document to implementation', async () => {
+  test('review iterations gate implementation while the internal TaskEngine execution stays out of the public task catalog', async () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc310-human-review-'))
     roots.push(root)
     const appHome = join(root, 'home')
@@ -290,6 +290,13 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       taskIds.push(taskId)
 
       expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+        status: 'awaiting_review',
+        catalogVisibility: 'internal',
+      })
+      expect(
+        (await listTaskItems(db, { catalogVisibility: 'public' })).map((item) => item.id),
+      ).not.toContain(taskId)
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('1')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
@@ -430,7 +437,11 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
 
       expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
         status: 'done',
+        catalogVisibility: 'internal',
       })
+      expect(
+        (await listTaskItems(db, { catalogVisibility: 'public' })).map((item) => item.id),
+      ).not.toContain(taskId)
       expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('approved')
       expect(
         db

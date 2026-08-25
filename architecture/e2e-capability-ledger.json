@@ -312,9 +312,20 @@
       "title": "GitLab 合法签名投递 → 规则命中 → 真任务启动（完整血缘）",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/rfc294-webhook-runtime-failures.spec.ts:313-364 waitForLaunchedLineage（含 querySqlite 直读 tasks 血缘列）；e2e/rfc294-webhook-runtime-failures.spec.ts:502-545 「concurrent duplicate delivery launches one crashing task…」——真 GitLab ingress → matched → launched → 终态 + node_runs retryIndex/exitCode/进程回收断言；e2e/webhook-mr-runtime-races.spec.ts:878 「different-UUID launch-eligible facts serialize, supersede to one live runtime…」；routes/webhooks.ts:216-260 — ingress 现在只 publish 到 Event Center，由 createCodeHostWebhookDeliveryConsumer（cli/start.ts:792）回调 webhookDispatcher，该新增 hop 也被上面的 event_subscription_id 断言锁住"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/rfc310-digital-employee-system-mock-e2e.test.ts",
+          "test": "signed ISSUE -> Event Center -> MR -> red gates -> repair -> ready -> merged"
+        },
+        {
+          "file": "e2e/rfc294-webhook-runtime-failures.spec.ts",
+          "test": "concurrent duplicate delivery launches one crashing task; manual retry proves driver/process release"
+        },
+        {
+          "file": "e2e/webhook-mr-runtime-races.spec.ts",
+          "test": "different-UUID launch-eligible facts serialize, supersede to one live runtime, then close clears the stream"
+        }
       ]
     },
     {
@@ -540,9 +551,16 @@
       "title": "评审门完整回路：驳回 → 迭代 → 通过，每次决策落一版 doc_version",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/review.spec.ts:240 test('review cycle: awaiting → reject → awaiting → iterate → awaiting → approve → done')；e2e/review.spec.ts:277-279 断言 second.nodeRunId===first.nodeRunId；e2e/review.spec.ts:311-315 byIter 断言 rejected/iterated/approved；e2e/review.spec.ts:317-325 断言 approved 版本 body 含 'stub e2e output'"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review.spec.ts",
+          "test": "review cycle: awaiting → reject → awaiting → iterate → awaiting → approve → done"
+        },
+        {
+          "file": "packages/backend/tests/rfc310-digital-employee-human-review-system-mock-e2e.test.ts",
+          "test": "review iterations gate implementation while the internal TaskEngine execution stays out of the public task catalog"
+        }
       ]
     },
     {
@@ -551,9 +569,12 @@
       "title": "带意见驳回后的回流：驳回理由与上一版正文注入重跑 prompt",
       "risk": "P1",
       "tier": "pr",
-      "status": "covered-unverified",
-      "proseEvidence": [
-        "e2e/business-workflow-scenarios.spec.ts:606-616 断言 promptText 含 '## Review Rejection' / 驳回原文 / '## Prior Output' / '# Customer notice v1' / 'Retention period: 30 days.'；e2e/workflow-matrix.spec.ts:1113 test('wrapper-loop review: rejection injects reason and prior output into the rerun, then a second approval exits')；e2e/workflow-matrix.spec.ts:1132-1138 断言 rerun.promptText 含理由与 'review-ready-document-v1'，且 outputValue 为 v2"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "wrapper-loop review: rejection injects reason and prior output into the rerun, then a second approval exits"
+        }
       ]
     },
     {
@@ -9086,7 +9107,6 @@
     "DE-26",
     "DE-31",
     "DE-X3",
-    "EVENT-07",
     "EVENT-14",
     "EVENT-15",
     "EVENT-17",
@@ -9100,8 +9120,6 @@
     "HUMAN-04",
     "HUMAN-06",
     "HUMAN-11",
-    "HUMAN-28",
-    "HUMAN-29",
     "HUMAN-30",
     "HUMAN-39",
     "HUMAN-44",
