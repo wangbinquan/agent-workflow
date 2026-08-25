@@ -54,7 +54,8 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
  *        listed the obvious one:
  *          · `PUT /api/{res}/:id/acl`            (the six ACL'd resources)
  *          · `PUT /api/tasks/:id/members`        (tasks carry their own ACL:
- *            `services/taskCollab.ts` accepts `{ownerUserId, userIds}` and task
+ *            `services/taskCollab.ts` accepts `{ownerUserId, members}` — RFC-324
+ *            put a grade on each member (`collaborator` / `observer`) — and task
  *            membership IS the review/clarify answering boundary — and the
  *            grant survives revoking the token that made it)
  *          · `PUT /api/workgroup-tasks/:taskId/config` (its `addMembers` writes

@@ -745,10 +745,13 @@ export async function getResourceAcl(
 }
 
 /**
- * PUT /acl — owner or `resource-acl:bypass`. `userIds` is full-replace. On owner transfer
- * the previous owner is auto-appended to the grant list so they don't lock
- * themselves out of their own (now someone else's) resource. The new owner is
- * never materialised as a grant row (canViewResource short-circuits owners).
+ * PUT /acl — owner or `resource-acl:bypass`. `grants` is full-replace (RFC-324;
+ * it replaced the bare `userIds`, and each entry now carries its `level`). On
+ * owner transfer the previous owner is auto-appended to the grant list at `read`
+ * so they don't lock themselves out of their own (now someone else's) resource —
+ * `read` is exactly what a pre-RFC-324 grant meant, so a transfer never hands out
+ * an edit right nobody chose to give. The new owner is never materialised as a
+ * grant row (canViewResource short-circuits owners).
  */
 export async function updateResourceAcl(
   db: DbClient,
