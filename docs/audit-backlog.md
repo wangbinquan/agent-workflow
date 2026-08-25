@@ -3284,3 +3284,54 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `lib/task-detail-tabs.ts:263` 的 capability、`DYNAMIC_WORKGROUP_TAB_ORDER`（不含 chatroom）、
    以及 `routes/tasks.detail.tsx:376` 的硬编码 `chatroom: false`。本人变异实测：前两层同时掐死，
    WG-X3 仍绿——决定性的是路由层那一处覆盖。记此以免未来重构误判前两层是死代码。
+
+## RFC-319 B104 起草期撞到的产品缺陷（2026-08-26，意图会话 + 设置分区）
+
+1. **【疑似真缺陷，中高，未写成断言，建议单独立 issue 复核】call-workgroup 节点在 scratch 父任务下
+   永久卡在「发起子任务之前」，且零日志。**
+   起草侧全走产品接口复现：建普通 agent → 建 `mode:'leader_worker'` 且成员只含该 agent 的工作组 →
+   建只含 `{kind:'call-workgroup', workgroupName, workgroupId, goalTemplate}` + `output` 的工作流 →
+   `POST /api/tasks { workflowId, name, scratch: true }`。
+   现象：`node_runs` 里 `call_wg` 一直 `status='running'`、`child_task_id=null`、`merge_state=null`、
+   `finished_at=null`；`tasks` 表只有父任务一行；跑满 120s 无变化；**daemon.log 一行 WARN/ERROR 都没有**
+   （logLevel 提到 debug 也只多出 `req` 行，调度链零日志）。
+   定位区间：`services/scheduler.ts:3499-3600`。`child_task_id` 的写入（:3601）在
+   `launchCallWorkgroupChild` **之前**，它是 null ⇒ 卡在 `mark-running`(:3496) 与该写入之间，即
+   **深度闸 / `budget.acquire` / `createIsoUnderLock`** 三者之一。已排除：深度闸（默认 3、childDepth=1，
+   且失败会落 `failed` 而非挂起）、闭包缺失（会落 `workflow-call-ref-missing`）、`createNodeIso` 的
+   passthrough 分支（无论如何都会打一行 `canonical worktree is not a git repo` 的 warn，日志里没有）、
+   `ChildTaskBudget` 容量（默认 8，`counted`/`held` 皆空）。
+   即便夹具本身不成立（比如 call-workgroup 本就不支持 scratch 父任务），**产品也应当判定失败并落 typed
+   error，而不是无声挂到超时**——这是 RFC-243 call-workgroup 运行期的唯一入口，失败形态是「任务永远
+   转圈 + 零日志」，运维无从归因。
+2. **【账本措辞与实现不符，已按源码实际写】CFG-45 的判别面不是运行时名。**
+   `node_runs.runtime` 存的是**协议**（`'opencode' | 'claude-code'`，`scheduler.ts:1221` 的
+   `frozen.protocol`），不是运行时行的名字。照账本字面写「node_runs.runtime 变成新运行时的名字」会得到
+   一条永远红的用例。B104 改用 `runtime_params_json` 里的运行时档案（model）做判别面，并顺带锁住
+   「冻结不可被事后改默认改写」。
+3. **【测试判据自身的边界缺口，已就地补上】CFG-28 漏了「两个值相等」这一格。**
+   判据是「正文期 > 整行期才拒」，等号那一格合法。起草版用的三组值（30/90、120/90、30/10）里没有
+   等值对，因此把闸从 `>` 放宽/收紧成 `>=` 用例照样绿（本人变异实测）。已补一段「相等必须放行 +
+   两个值一起落库」的断言，补后同一变异当场红。
+4. **【账本核对：TASK 域 7 条 gap 里 6 条名不副实，本批因此一条 TASK 用例都没交】**
+   - TASK-34 → `e2e/rfc319-worktree-and-commit.spec.ts:828`（REPO-X1）已覆盖懒加载 / 真实内容预览 /
+     超 2 MiB 降级 / 原始字节下载。
+   - TASK-35 → 同文件 `:909`（REPO-X2）已覆盖真工作树 → 接口 → 面板的 diff 渲染。**真缺**的只剩
+     结构化 diff 的作用域切换（`scope=node:<runId>`）与 1 MiB 截断提示（`util/git.ts:2263`）。
+   - TASK-38 → `e2e/task-feedback-distill.spec.ts` 四条已覆盖。
+   - TASK-39 → `e2e/task-questions-board.spec.ts`（5 条）+ `task-questions-board-ui.spec.ts`（2 条）。
+   - TASK-44 与 CFG-29 → **两行互为重复且都假**，`e2e/rfc319-ops-settings-panels.spec.ts:740`（OPS-037）
+     已覆盖 dry-run 预览一行不删 → 确认后真删 → 审计行 → 未超期任务不受牵连。
+   - TASK-03 → `e2e/rfc319-workgroup-launch-and-config.spec.ts:928`（WG-24）已覆盖。
+   - TASK-X4b → 账本写「展开只对 `page.route` 假数据点过」**已不成立**：
+     `e2e/rfc319-task-list-and-filters.spec.ts:1051`（TASK-17）用的是 `seedTasks` 真落库的 1 父 + 60 子。
+     真缺的只剩「子任务由 call-workgroup 在运行期真的启出来」，而它撞上第 1 条的卡死。
+     **注意这行 tier 是 `pr`（TASK 域唯一一条），接手者标题不要带 `@nightly`。**
+5. **【账本核对：CFG / INTENT 另有 7 条假 gap，本批据此换行】** CFG-08 →
+   `e2e/settings-outcome-unknown.spec.ts:49`（RES-08）；CFG-30 → OPS-036；CFG-32 → OPS-032（只差
+   「保存后真落库」一格，已由本批 CFG-06 顺带补上）；CFG-44 → OPS-016；CFG-X6 → webhook ingress URL 由
+   `rfc319-webhook-endpoints.spec.ts:313`、文档片段 origin 由 CFG-40 覆盖（只差 MCP endpoint 的 origin）；
+   CFG-03 → `e2e/ux-consistency.spec.ts:602/772/981`；CFG-X5 → CFG-07 已覆盖 neutral/attention 两种，
+   只差 `danger`；INTENT-X8 → `rfc319-intent-timeline-and-turns.spec.ts:951`（INTENT-21）已 SIGKILL 重启并
+   断言 `intent-run-daemon-restart` + `captureState='incomplete'`。
+   **本批同样未据此改任何行的 status**——与 B98/B102/B103 一致，留待一次独立的账本对账。

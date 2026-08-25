@@ -3475,8 +3475,13 @@
       "title": "设置页在真实运行时下的端到端联动：改默认运行时 → 新任务用它跑",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 CFG-45: 在设置页把默认运行时改到另一行之后，新任务真的按那一行的运行时档案派发 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-X1",
@@ -3498,8 +3503,13 @@
       "title": "Git 分区：子模块检出策略与后台刷新（gitRecurseSubmodules / gitSubmoduleJobs / gitSubmoduleRemote / submoduleAutoRefresh）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 CFG-X2: Git 分区四个子模块旋钮整体落库并读得回来，嵌套的后台刷新对象不被拆散，且只写本分区自己的键 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-X3",
@@ -5161,8 +5171,13 @@
       "title": "从资源详情页的「修改」入口开新会话并预挂载该资源",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 INTENT-10: 从代理详情页「修改」开出的会话，创建负载里带着这个资源，落地后它就是会话的挂载根 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-11",
@@ -5536,8 +5551,13 @@
       "title": "多标签页 / 后台轮次的实时同步（/ws/intent-sessions 驱动列表与详情失效）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 INTENT-46: 别处发生的会话变化经 /ws/intent-sessions 推到已经打开的列表页——不刷新就出现、不刷新就改状态 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-47",
@@ -9478,8 +9498,13 @@
       "title": "需要重启的设置项保存后的横幅提示",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 CFG-06: 只有改动「重启才生效」的键才弹重启横幅——同一分区里改别的键保存后不弹 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-08",
@@ -9566,8 +9591,13 @@
       "title": "日志级别保存后即时应用到 logger",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 CFG-24: 日志级别保存后当场作用到运行中的守护进程——调到 debug 逐请求日志立刻出现，调到 error 立刻停写 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-28",
@@ -9575,8 +9605,13 @@
       "title": "webhook 投递保留天数的自相矛盾校验（body > row → 422）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 CFG-28: webhook 正文保留期长于整行保留期时保存被服务端当场拒绝，草稿原样保住、一个字段都不落库 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-30",
@@ -10367,8 +10402,13 @@
       "title": "资源类型提示卡（auto / agent / skill / mcp / plugin / workflow / workgroup）影响创建负载",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 INTENT-02: 资源类型提示卡决定创建负载——auto 一个字都不发，选中哪张卡就发哪个类型 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-03",
@@ -10525,8 +10565,13 @@
       "title": "【原审计漏项】提交进行中（commit.isPending）时页面级离开守卫 + 对话框不可关闭",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 INTENT-X6: 提交还在飞的时候向导既关不掉也走不开——取消禁用、ESC 与遮罩无效、切走页面被守卫拦下 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X7",
@@ -12051,8 +12096,6 @@
     "AGENT-39",
     "AGENT-X1",
     "CFG-29",
-    "CFG-45",
-    "CFG-X2",
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
@@ -12069,8 +12112,6 @@
     "IAM-34",
     "IAM-X2",
     "IAM-X4",
-    "INTENT-10",
-    "INTENT-46",
     "INTENT-X8",
     "MEM-21",
     "MEM-43",
@@ -12118,10 +12159,7 @@
     "AGENT-38",
     "AGENT-46",
     "CFG-03",
-    "CFG-06",
     "CFG-08",
-    "CFG-24",
-    "CFG-28",
     "CFG-30",
     "CFG-32",
     "CFG-44",
@@ -12137,9 +12175,7 @@
     "EVENT-X5",
     "IAM-22",
     "IAM-45b",
-    "INTENT-02",
     "INTENT-X5",
-    "INTENT-X6",
     "INTENT-X7",
     "MEM-X11",
     "OPS-007",
