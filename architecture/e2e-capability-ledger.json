@@ -7171,8 +7171,17 @@
       "title": "评审页键盘快捷键 A / R / I，且不被 Cmd+A 等组合键误触发、不在输入框内劫持",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-single-doc-keyboard-download.spec.ts",
+          "test": "A / R / I：单键能开，但组合键、输入框里打字、历史版本都不许触发"
+        },
+        {
+          "file": "e2e/review-single-doc-keyboard-download.spec.ts",
+          "test": "驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词"
+        }
+      ]
     },
     {
       "id": "HUMAN-42",
@@ -7180,8 +7189,17 @@
       "title": "评审文档下载为 markdown（含文件名清洗与空正文禁用）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-single-doc-keyboard-download.spec.ts",
+          "test": "下载：文件名把标题里的斜杠冒号清干净，存下来的就是页面上那一篇"
+        },
+        {
+          "file": "e2e/review-single-doc-keyboard-download.spec.ts",
+          "test": "正文是空的时候，下载按钮必须是禁的 —— 否则存下来一个 0 字节的 .md"
+        }
+      ]
     },
     {
       "id": "HUMAN-43",
@@ -8649,8 +8667,6 @@
     "EVENT-X7",
     "HUMAN-15",
     "HUMAN-16",
-    "HUMAN-36",
-    "HUMAN-42",
     "HUMAN-43",
     "HUMAN-47",
     "HUMAN-48",
