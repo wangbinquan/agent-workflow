@@ -53,7 +53,10 @@
 //   packages/backend/src/services/fusion.ts:1264-1299               claimFusionDecision 的 token CAS
 //   packages/backend/src/services/fusion.ts:1445-1453               approve：先 requireCurrentSkillWritable 再 claim
 //   packages/backend/src/services/fusion.ts:1547-1558               reject：同一把 claim，在任何副作用之前
-//   packages/backend/src/services/intent/session.ts:429-444         assertGenerationBudget
+//   packages/backend/src/services/intent/iteration.ts:59-70        assertBudget —— composer 在
+//     「当前有草稿」时走 /iterations，**这条**才是 INTENT-20 实际打到的判据（变异实证：
+//     只改 session.ts 的那份，用例照绿）。同一个谓词在仓内有四份副本：
+//     session.ts:437（/messages、/retry）、iteration.ts:64、workingSet.ts:86、turnEngine.ts:335。
 //   packages/backend/src/services/intent/turnEngine.ts:793-800      intent-question-budget-exhausted
 //   packages/backend/src/services/intent/workingSet.ts:163-178      validateAdditionsInTx（看不见 = not found）
 //   packages/backend/src/services/intent/workingSet.ts:441-445      活化失败 → state='failed'

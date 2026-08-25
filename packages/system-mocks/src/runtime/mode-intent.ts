@@ -169,6 +169,64 @@ function updateChangeset(prompt: string): string {
   })
 }
 
+/**
+ * RFC-319 —— `STUB_INTENT_VARIANT=questions`：先追问一轮，再产出 changeset。
+ *
+ * 意图构建器的**结构化追问**（`questions` 端口）与**资源挂载建议**（`requests` 端口）
+ * 此前没有任何 stub 产出过，于是「AI 追问 → 用户作答」「AI 建议挂载 → 用户逐项批准」
+ * 这两条用户面主路径在 e2e 里一次都没被走过（能力账本 INTENT-12 / 18 / 19）。
+ *
+ * 轮次判定读工作目录里的 `INTENT.md`——平台把会话历史逐轮渲染进去
+ * （`services/intent/intentDoc.ts:120-144` 的 `### turn N (user/answers)` /
+ * `- turn N (user/answers) [compacted]`），所以「用户已经答过了吗」这件事对 stub
+ * 是可观测的，不需要跨进程状态文件。答过 ⇒ 回到正常的 changeset 轮。
+ */
+const CLARIFY_QUESTIONS = JSON.stringify([
+  {
+    id: 'q-scope',
+    question: 'Which repositories should the auditor cover?',
+    options: ['Only this repository', 'Every repository in the group'],
+    multiSelect: false,
+  },
+  {
+    id: 'q-sections',
+    question: 'Which report sections must the auditor emit?',
+    options: ['findings', 'severity', 'remediation'],
+    multiSelect: true,
+  },
+])
+
+/**
+ * 三条挂载建议，覆盖候选解析的三种形态（`routes/intentSessions.ts:414-449` 按
+ * **同类型同名**匹配 actor 可见资源）：调用方建两个同名工作流 ⇒ 多候选下拉；
+ * 建一个同名代理 ⇒ 单候选直显；技能名故意不建 ⇒ 零候选告警。
+ */
+const MOUNT_REQUESTS = JSON.stringify([
+  {
+    resourceType: 'agent',
+    name: 'e2e-intent-suggested-agent',
+    reason: 'Reuse the existing auditor persona',
+  },
+  {
+    resourceType: 'workflow',
+    name: 'e2e-intent-suggested-workflow',
+    reason: 'Start from the existing review pipeline',
+  },
+  {
+    resourceType: 'skill',
+    name: 'e2e-intent-missing-skill',
+    reason: 'Apply the house audit checklist',
+  },
+])
+
+function intentDocText(): string {
+  try {
+    return readFileSync('INTENT.md', 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 export async function run(argv: readonly string[]): Promise<void> {
   const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
@@ -209,6 +267,39 @@ export async function run(argv: readonly string[]): Promise<void> {
     if (Number.isFinite(delayMs) && delayMs > 0) {
       await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
     }
+  }
+
+  // RFC-319 —— 失败注入：文件在就「跑完了但一个信封都没吐」，这正是产品的
+  // `intent-envelope-missing` 分支（`services/intent/turnEngine.ts:721-730`）。
+  // 用文件而不是环境变量，是因为一个 daemon 要连着跑「先失败 → 再重试成功」，
+  // 而 daemon 级环境变量对整条会话是同一个值。
+  const failFile = process.env.STUB_INTENT_FAIL_FILE
+  if (failFile !== undefined && existsSync(failFile)) {
+    emitTextEvent(`${NAME}: deliberate envelope-less turn (STUB_INTENT_FAIL_FILE)`)
+    process.exit(0)
+  }
+
+  // RFC-319 —— 把「执行详情」的事件捕获推过 8 MiB 上限
+  // （`services/intent/turnSession.ts:21,127-134`），让 `truncated` 这一态可观测。
+  // 调用方须同时把 `intentBuilderStdoutCapBytes` 抬到信封仍能被解析的水位。
+  const fillerBytes = Number.parseInt(process.env.STUB_INTENT_FILLER_BYTES ?? '0', 10)
+  if (Number.isFinite(fillerBytes) && fillerBytes > 0) {
+    const chunk = 'f'.repeat(1024 * 1024)
+    for (let sent = 0; sent < fillerBytes; sent += chunk.length) emitTextEvent(chunk)
+  }
+
+  if (process.env.STUB_INTENT_VARIANT === 'questions') {
+    const answered = /\(user\/(answers|mount-approval)\)/.test(intentDocText())
+    const requests =
+      process.env.STUB_INTENT_MOUNT_REQUESTS === '1'
+        ? `\n  <port name="requests">${MOUNT_REQUESTS}</port>`
+        : ''
+    emitTextEvent(
+      answered
+        ? `${open}\n  <port name="summary">${summary}</port>\n  <port name="changeset">${changeset}</port>${requests}\n</workflow-output>`
+        : `${open}\n  <port name="summary">stub intent build: clarification needed</port>\n  <port name="questions">${CLARIFY_QUESTIONS}</port>${requests}\n</workflow-output>`,
+    )
+    process.exit(0)
   }
 
   emitTextEvent(

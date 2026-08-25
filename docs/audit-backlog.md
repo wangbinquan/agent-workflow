@@ -2792,3 +2792,47 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `while :; do :; done` 忙循环**（启动于当日 14:32 / 14:42，已跑 7.5 小时，是某次 CPU 加压实验的
    父 shell 死掉后没执行 `kill $HOGS` 留下的）。按「ppid==1 且命令含忙循环」精确清理后，
    同一份 spec 的墙钟从 55s 降到 20s。**建议给加压脚本加 `trap`**，否则这类孤儿会一直吃满 CPU。
+
+## RFC-319 B90 起草期撞到的产品缺陷（2026-08-25，意图时间线 + 工作组房间）
+
+1. **【中，仅 API 可达】`POST /mount-approvals` 会把同一批追问永久锁死。**
+   `services/intent/session.ts:653` 的批准事务把 `turnSeq` 推进到 `approvalTurnSeq`，而
+   `services/intent/iteration.ts:472-478` 的 `reserveIntentCurrentAction` 要求
+   `source.seq === session.turnSeq`。于是「先用老入口批挂载、再答追问」这条顺序下，前端
+   `IntentCurrentAction` 仍渲染出待答问题（`pendingQuestions` 只看最后一条 agent turn），
+   但提交必然 409 `intent-current-action-stale`，**刷新也不会好**——用户在这条会话里再也答不了
+   这批追问。UI 自己不调老入口所以碰不到，任何脚本 / 集成走了老入口就会踩。
+2. **【中，覆盖面】生成预算判据在仓内有四份手抄副本**：`services/intent/session.ts:437`、
+   `iteration.ts:64`、`workingSet.ts:86`、`turnEngine.ts:335`，连报错文案都是复制的。
+   **已被变异实证**：只改 `session.ts` 那份，UI 上的预算耗尽路径毫无变化——因为 composer 在
+   「当前有草稿」时提交的是 `/iterations`，走的是 `iteration.ts` 里的另一份。
+3. **【中】意图构建器整族报错没有 i18n 域，用户看到的永远是泛泛的「Request failed」。**
+   `packages/frontend/src/i18n/errors.ts:57-92` 的 `DOMAIN_PREFIXES` 没有 `intent-` 条目。
+   后果正落在 INTENT-20 上：唯一告诉运维「该怎么办」的那句
+   `session reached its generation budget (1); raise intentBuilderMaxGenerateRounds or archive`
+   **必须手动展开 `<details>` 的「Raw error message」才看得到**。`fusion-precondition-stale` 同病
+   （`fusion` 域有标题没有逐码条目），而 OCC 冲突恰恰是用户必须知道原因才能决定「重发 vs 放弃」的一格。
+4. **【低，UX】「回到最新」恢复的贴底状态会被异步长高的执行详情面板悄悄弄丢。**
+   点击后 `intent.detail.tsx:524-530` 平滑回底并置 `conversationPinnedRef = true`，但最后一轮的
+   执行详情面板是 `defaultOpen` 且事件流异步填充，回底之后卡片继续长高（实测 +220~+471px），
+   顶过 `:455` 的 96px 贴底阈值 → `onScroll` 清掉贴底标记 →「回到最新」在用户没滚动的情况下自己又冒出来。
+5. **【外观】意图会话页对同一个 mutation 错误渲染两遍横幅**：`intent.detail.tsx:291-298`（顶部汇总）
+   与 `:589`（composer 旁）同时挂 `<ErrorBanner>`，Playwright strict mode 会撞上两个一模一样的 `<pre>`。
+6. **【低，可用性】`clarifyBudget: 0` + 会反问的 agent 会让 leader 连吃 16 条失败回合而无人解释。**
+   每轮 4 次 `clarify-forbidden` × 4 轮，再吃满 3 次自动 nudge 才停到 `leader-idle`。行为与 RFC-181 C 的
+   drop-and-continue 设计一致，但用户在运行记录里看到 16 条红色回合、房间里只有 3 条 nudge 系统留言，
+   **没有任何一句说明「它在反复想反问但被禁了」**（`clarifySuppressedNote` 确实渲染了，只是被噪音掩盖）。
+7. **【测试基建，中】`fixtures/sqlite-exec.ts` 的 exec 模式建议改成逐语句 `prepare/run` 或校验 `changes()`。**
+   `bun:sqlite` 的 `db.exec()` 对多语句脚本里的约束错误不抛异常（事务回滚、零行落库、调用方看到「成功」），
+   全仓 e2e 的 SQL 夹具都走这条路径。最小复现与写夹具的纪律见 `docs/dev-gotchas.md` 新增的那一节。
+8. **【账本文案偏差】WG-37 的四格（回复预览 / 点击跳转+聚焦+高亮 / 390px 不撑破 / reduced-motion 立即跳）
+   其实已被 `e2e/rfc229-workgroup-message-quotes.spec.ts` 全覆盖**，账本记成 gap 不准。B90 补的是它没做的
+   两格：被引用的是**系统**消息时作者头落到 `System`，以及高亮的**一过性**且熄灭时不收走焦点——
+   因此该行的用例标题与账本措辞不同。
+   另：「原消息不在房间里 ⇒ 不可用占位」这一格**在产品里不成立**（`trigger_message_id` 是自引用外键 +
+   `ON DELETE SET NULL`，悬空指针存不进库；房间聚合又是按 task 全量取消息、无分页），
+   要保它不腐烂应落在 `packages/frontend/tests/` 的组件单测，而不是 e2e。
+9. **【账本文案偏差】WG-29「无 @ 落黑板并唤醒停机任务」有前提**：只有停机成因是 `leader-idle` /
+   `clarify-or-delivery` 时，一条黑板留言才真的唤醒 leader；停在 `leader-clarify` 时
+   `services/workgroup/wake.ts:249` 的 `leaderClarifyParked` 会结构性抑制 leader，此时发言不唤醒任何人。
+   照字面理解成「任何 awaiting_human 都能被唤醒」会写出一条不成立的期望。

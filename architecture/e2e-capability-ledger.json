@@ -4962,8 +4962,13 @@
       "title": "对话时间线按语义渲染各类 turn（message / changeset / questions / answers / mount-approval / error）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-12: 时间线按语义渲染 message / questions / answers / changeset / mount-approval / error 六类 turn @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-15",
@@ -4985,8 +4990,13 @@
       "title": "取消进行中的生成轮次（Cancel generation）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-16: 取消生成——服务端轮次落成 intent-run-aborted，子进程真的死了（解除 hold 后不再改写结果） @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-17",
@@ -4994,8 +5004,13 @@
       "title": "失败轮次的诊断卡片 + 「Retry turn」重跑",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-17: 失败轮的诊断卡片（分类标题 + 建议 + 三行证据）与「Retry turn」重跑成功 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-18",
@@ -5003,8 +5018,13 @@
       "title": "AI 追问（questions）→ 用户用单选/多选作答并提交",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-18: AI 追问——单选互斥、多选可多选，答完才放行，答案原样进服务端 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-19",
@@ -5012,8 +5032,13 @@
       "title": "AI 建议挂载资源 → 用户逐项批准/拒绝（含多候选下拉、候选不可用告警），与作答一次原子提交",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-19: 挂载建议逐项批准/拒绝（多候选下拉 / 单候选 / 零候选告警），与作答**一次**原子提交 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-21",
@@ -5021,8 +5046,13 @@
       "title": "每个 agent turn 的执行详情（SessionTree）折叠面板：事件数、live/complete/truncated/incomplete 状态与告警",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-21: 每轮的执行详情面板——live/complete/incomplete 三态、事件数取自真实捕获、用户轮没有面板 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-23",
@@ -5030,8 +5060,13 @@
       "title": "打断当前轮并立即刷新上下文（Stop turn and refresh now）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-23: 「停止本轮并立即刷新」——当前轮落成 aborted，新一轮带着新挂载立刻起来 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-24",
@@ -8348,8 +8383,13 @@
       "title": "房间发言（无 @ 落黑板并唤醒停机任务；带 @ 直接派单给被点名成员）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-29: 房间发言的两条分支 —— 不带 @ 只落黑板并把停机的任务唤回引擎，带 @ 当场给被点名成员开一张派单卡 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-31",
@@ -8357,8 +8397,13 @@
       "title": "人类成员卡交付（快捷输入 / 表单双形态，dispatched→delivered，重复交付被拒）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-31: 人类成员卡交付 —— 快捷输入与结构化表单两种形态都把卡推到 delivered，同一张卡再交付一次被服务端 409 挡下 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-33",
@@ -8366,8 +8411,13 @@
       "title": "完成门 UI 审批 / 驳回（approve 直发；reject 必须填评论）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-33: 完成门 —— 空评论的驳回按钮按不下去也发不出请求，填了才提交；审批直接把任务收到 done @nightly"
+        }
+      ]
     },
     {
       "id": "WG-34",
@@ -9823,8 +9873,13 @@
       "title": "【原审计漏项】时间线滚动脱离底部时出现「回到最新」按钮，点击平滑回到底部并重新贴底",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-X4: 翻历史时新 turn 不抢滚动位置，「回到最新」点一下回底并重新贴底 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X5",
@@ -11132,8 +11187,13 @@
       "title": "@-mention 花名册补全（弹层出现、键盘上下选择、Enter 提交、Esc 关闭且同 token 不重开）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-30: @ 花名册补全 —— 弹层随输入收敛、上下键换选中项、Enter 提交成「@别名 」，Esc 关掉后同一个 token 不会自己弹回来 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-32",
@@ -11141,8 +11201,13 @@
       "title": "取消派单卡（仅 open/dispatched 可取消，其余 409）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-32: 取消派单卡 —— dispatched 的卡两下确认才取消并留下系统留言；已交付 / 已取消的卡界面不给取消入口，接口也一律 409 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-35",
@@ -11150,8 +11215,13 @@
       "title": "房间右栏花名册状态（working/awaiting/queued/idle 四态、并发 ×N 徽章、人类成员在线点、点击进 session drawer）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-35: 房间右栏花名册 —— 四种状态各按自己的数据源着色、并发实例出 ×N、人类成员带在线点、点成员名进 session 抽屉 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-36",
@@ -11159,8 +11229,13 @@
       "title": "房间运行日志与回合卡 / NodeDetailDrawer 成员作用域（不串成员）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-36: 运行日志与成员抽屉 —— 点哪一行开哪一条 run，抽屉里的历史只列同一个成员的回合，不把别人的 run 串进来 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-37",
@@ -11168,8 +11243,13 @@
       "title": "消息引用（回复预览上一条、点击跳转+聚焦+高亮、390px 不撑破气泡、reduced-motion 立即跳）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-37: 消息引用的两处缺口 —— 被引用的系统消息也认得出作者；跳转高亮是一过性的、熄灭时不把焦点一起收走 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-38",
@@ -11177,8 +11257,13 @@
       "title": "澄清静音后的恢复（房间信息卡里的「已停止追问」chip + 恢复按钮）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-room-and-delivery.spec.ts",
+          "test": "RFC-319 WG-38: 澄清静音的恢复 —— 停掉的 asker 在房间信息卡上留一条 chip，点「恢复追问」把指令翻回 continue、chip 当场消失 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-39",
@@ -11294,13 +11379,6 @@
     "IAM-X2",
     "IAM-X4",
     "INTENT-10",
-    "INTENT-12",
-    "INTENT-16",
-    "INTENT-17",
-    "INTENT-18",
-    "INTENT-19",
-    "INTENT-21",
-    "INTENT-23",
     "INTENT-46",
     "INTENT-X8",
     "MEM-21",
@@ -11400,9 +11478,6 @@
     "WF-52",
     "WG-27",
     "WG-28",
-    "WG-29",
-    "WG-31",
-    "WG-33",
     "WG-42",
     "WG-X3",
     "WG-X5",
@@ -11451,7 +11526,6 @@
     "IAM-45b",
     "IAM-48",
     "INTENT-02",
-    "INTENT-X4",
     "INTENT-X5",
     "INTENT-X6",
     "INTENT-X7",
@@ -11498,12 +11572,6 @@
     "WF-X4",
     "WF-X5",
     "WG-06",
-    "WG-30",
-    "WG-32",
-    "WG-35",
-    "WG-36",
-    "WG-37",
-    "WG-38",
     "WG-39",
     "WG-40",
     "WG-46",

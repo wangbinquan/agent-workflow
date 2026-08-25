@@ -1351,6 +1351,9 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
   **定式**：①**版本号 / 主键 / 标识符类常量的变异验证，一律换隔离 home**（`AGENT_WORKFLOW_HOME=~/aw-<slug>`，别放 symlink 下，见上上条）——判据不是「代码是不是原型」，而是「这个常量会不会成为持久化行的键」；②要证明守卫能红，**优先在测试 fixture / 内存语料里造反例**，别动生产常量；③真撞上了，**先停 daemon 再动手**（不然 `--watch` 会边清边写回），备份 `db.sqlite`+`-wal`+`-shm`，然后按「升级产物带同一个可判别列」做手术回滚（本次判据是 `type_revision = 8`，20:32 的真实用户活动全是 7，分得干干净净）。
   **回滚时的两个真坑**：④**别用 `auto-upgrade-*` 这类前缀当删除判据**——它同时匹配到**更早那次合法升级**（6→7）留下的行，本次据此多删了 9 行 `employee_job_template_revisions` + 3 行 `employee_tool_registration_revisions`，靠「删除行数 ≠ 预期行数」当场发现并从备份补回。**判据必须是本次独有的那一列**（`type_revision=8`），前缀是跨批次共享的。⑤删之前先确认 `pragma foreign_keys`（本库是 **0**）与有没有 FK 指向被删表——都没有就**不会级联**，每张关联表必须显式清，漏一张就留悬空引用。收尾核对手法：把每张带 `type_id`/`type_revision` 的表的 distinct 组合与 `employee_type_packages` 现存集合对一遍，全 ✓ 才算干净。
   **这类事故 CI 结构上看不见**：CI 每次用全新临时库，跑的是「从零建库 + 升级」，永远不会遇到「库里有一个代码里已不存在的版本」。唯一的防线就是别在真实 home 上跑。
+- **同一句 `employee type not found: development@N` 有两种成因，别按上一条的事故去套**（2026-08-25 实撞）。上一条讲的是「revision 常量被变异后留下的孤儿行」；这次是**正常升版**的必然后果，库里那一行完全合法：`development@8` 是 08-22 正式发布的修订，`employee_type_packages` 里 @1..@10 十行都在（`ensureTypePackage` 只 insert-if-absent，历史行永不删），而 `#types` 那张**编译期**注册表只装当前 build 的 @10。于是每次内置包升版，都会把上一版的岗位模板 / 工具 / 员工行整体孤儿化——凡是拿 `#runtime(ref)` 做存在性校验的查询都答不出来。**触发面是用户点得到的常规链接**：EmployeeCase 冻结了自己的 typeRef，`employee-cases.$caseId.tsx` 的「查看岗位模板」与 `TaskDigitalEmployeeSourceLink.tsx` 直接生成 `/digital-employees/development@8?view=jobs&jobTemplateId=…`。症状还很有迷惑性——**页头和职责图照常渲染**（`getType` / `getAuthoringManifest` 本来就走 store），只有三个面板 404，看着像「模板丢了」而不像「整版被孤儿化」。
+  **通用规律（不限于数字员工）**：一类资源同时存在于**持久化表**和**编译期内存注册表**时，**读路径的存在性校验必须查表，只有写和执行才查注册表**。判据是「这次调用要不要用到只有编译产物才有的东西（codec / parser / validator）」——列几行数据不需要。修复见 `authoringService.ts` 的 `listTools` / `listJobTemplates` / `listEmployeeDefinitions` 改走 `#descriptor()`。
+  **顺带一条错误信息纪律**：`#runtime()` 未命中时现在分两种答——库里还在 = 冻结历史，409 `employee-type-revision-not-executable` 并点名本 build 实际执行的修订；库里也没有才是 404。同一句 not-found 同时表达「你写错了」和「这版已成历史」，就是这次多花掉的排查时间。
 - **门禁 5000ms 家族翻车前，先 `ps aux | sort -rk3 | head` 看基线——凶手可能根本不是 bun**（2026-08-12 实测）：三 session 约好门禁时间片串行后第三轮仍红，top 抓到基线已被吃掉 4-5 核：`fseventsd` 98.5%（**48 个 worktree ≈ 22 万文件条目**压在 FSEvents 监视面上，绝大多数属早已结束的 session；累计 CPU 3752 分钟）+ **Parallels VM 常驻 94.3%、突发 348%**（RFC-254 的 Windows 验收 VM 忘了挂起）。此基线下 4 分片门禁分片耗时膨胀 ~1.5×（健康 ~420-510s → 664-900s+），5000ms 硬顶家族必然间歇翻车、与并发 session 无关。定式：①跑门禁前看一眼 top，**Windows VM 不用就挂起**；②分片耗时整体 >600s 是「基线被吃」的指纹，先查环境再怀疑代码；③自己 session 的 pin worktree **用完立刻删**（`git worktree remove`），别给 fseventsd 留坟场；存量坟场清理属破坏性操作，呈报用户裁决；④隔离复跑仍是归属判据（每轮失败集**全量枚举**逐文件复跑，枚举命令别接 `head` 截断——同日三次栽在截断上）；⑤**全量跑测输出必须 tee 落盘再截尾**（2026-08-13 实测：全量前端一红、只留了 `| tail -6`，失败用例名随输出丢失，复跑两轮未再现 → 永久无法归属，只能在 backlog 留痕待复发对照）。
 - **「CI 绿」与「CI 绿在含你改动的那棵树上」是两件事——祖先关系成立还不够，再抓一两个具体符号**（2026-08-14，由并发 session 示范）。共享 main 上你的 commit 常常是靠「含它的后继 commit 那条绿」来互认的，而那棵树上还混着别人的改动。只验 `git merge-base --is-ancestor` 只能证明**提交在链上**，证明不了**你改的那几行真的进了被测的那棵树**（rebase 冲突解错、他人 revert、`git add` 漏文件都会造成「提交在、内容不在」）。**定式**：认领一条别人 SHA 的绿时，顺手 `git show <绿的那个 sha>:<你改的文件> | grep <你新增的符号>` 抓一两个具体标识符，确认非空绿。
   两个边界条件，缺一条这个核验就会给假阳性：
@@ -2469,11 +2472,11 @@ CI 跑的是 `gitleaks detect --source . --no-banner --redact --verbose`，即**
 
 `architecture/` 下三份机器账本问的是三个不同的问题：
 
-| 账本 | 分子从哪来 | 什么时候对账 |
-| --- | --- | --- |
-| `e2e-capability-ledger.json`（R3） | 人工填 `{file, test}`，守卫验证标题逐字存在 | **本地 / PR 腿都跑** |
-| `e2e-endpoint-coverage.json`（R1） | **运行期实测**：daemon 请求日志 → `route-hits/*.jsonl` | **只有夜跑** |
-| `e2e-route-coverage.json`（R2） | **运行期实测**：浏览器 `framenavigated` | **只有夜跑** |
+| 账本                               | 分子从哪来                                             | 什么时候对账         |
+| ---------------------------------- | ------------------------------------------------------ | -------------------- |
+| `e2e-capability-ledger.json`（R3） | 人工填 `{file, test}`，守卫验证标题逐字存在            | **本地 / PR 腿都跑** |
+| `e2e-endpoint-coverage.json`（R1） | **运行期实测**：daemon 请求日志 → `route-hits/*.jsonl` | **只有夜跑**         |
+| `e2e-route-coverage.json`（R2）    | **运行期实测**：浏览器 `framenavigated`                | **只有夜跑**         |
 
 后两份的守卫是 `describe.skipIf(JOURNAL_DIR === null)`——没有 journal 就整段跳过（这本身是对的：
 没有语料就不该假装能对账）。**净效果是：你补了一批 e2e、只改了 R3，本地全绿、PR 腿全绿，
@@ -2586,10 +2589,10 @@ await expect(row).toHaveAttribute('aria-selected', 'false')
 
 对照实验（同一个 page、同一段 `setContent`）：
 
-| 写法 | matchMedia 结果 |
-| --- | --- |
-| `test.use({ reducedMotion: 'reduce' })` | `false` |
-| `await page.emulateMedia({ reducedMotion: 'reduce' })` | `true` |
+| 写法                                                   | matchMedia 结果 |
+| ------------------------------------------------------ | --------------- |
+| `test.use({ reducedMotion: 'reduce' })`                | `false`         |
+| `await page.emulateMedia({ reducedMotion: 'reduce' })` | `true`          |
 
 仓内既有的 5 处（`rfc250-interaction-integrity` / `rfc250-workflow-camera` /
 `rfc229-workgroup-message-quotes` / `ux-consistency` / `rfc250-visual-states`）本来就
@@ -2622,6 +2625,7 @@ expect(state.reducedMotion, '浏览器没有报告 reduced-motion ⇒ 这条用�
 判成假绿并去动它们。
 
 两条处置，缺一不可：
+
 1. 匹配放宽成 `^\s*(\d+\)\s+)?\[[a-z]+\]\s+›`，把带序号与不带序号两种形状都收进来；
 2. **把变异跑的完整 stdout 落盘**，别只在结果 JSON 里留个几百字的 tail——判定存疑时
    要能回看原文，而不是靠截断的尾巴猜。
@@ -2704,7 +2708,7 @@ async function settleX(id: string): Promise<void> {
   const deadline = Date.now() + 10_000
   for (;;) {
     const s = await getXStatus(id)
-    if (s?.status !== 'generating') return          // 终态就返回
+    if (s?.status !== 'generating') return // 终态就返回
     if (Date.now() > deadline) throw new Error('10s 内没有落定，仍停在 generating')
     await new Promise((r) => setTimeout(r, 10))
   }
@@ -2719,3 +2723,49 @@ async function settleX(id: string): Promise<void> {
 顺带一提：`setTimeout` 本身不是罪——用在「模拟被测对象要跑多久」（放在 `runFn` 里）是对的，
 罪在「用它替代对终态的等待」。全仓 `packages/backend/tests/` 下还有十来个文件带固定 sleep，
 逐个甄别成本不低，但**下次谁的分片红在这类断言上，先照上面的对照实验判一次**，别急着重跑。
+
+## `bun:sqlite` 的 `db.exec()` 对多语句脚本里的约束错误**不抛异常**——夹具会「报成功、种零行」（2026-08-25 实测最小复现）
+
+`e2e/command.ts` 的 `runSqlite`（走 `fixtures/sqlite-exec.ts` 的 `db.exec(sql)`）是全仓 e2e 造数据的
+主力。它有一个会静默毁掉整条用例的行为：**一段多语句脚本里只要有一条撞了约束，整个事务回滚、
+一行都不落库，而 `exec()` 本身不抛任何异常**，调用方看到的是「成功」。
+
+最小复现（实跑）：
+
+```ts
+db.exec(`CREATE TABLE m (id TEXT PRIMARY KEY, trig TEXT REFERENCES m(id) ON DELETE SET NULL);`)
+db.exec(`PRAGMA foreign_keys=ON;
+BEGIN IMMEDIATE;
+INSERT INTO m (id,trig) VALUES ('a',NULL),('b','a'),('c','ghost');
+COMMIT;`)
+// → exec 没有抛；rows: []   ← 连合法的 a / b 两行也一起没了
+```
+
+后果不是「夹具没生效」这么温和：**随后的 UI 断言会红在一个完全错误的原因上**，排查的人会先去怀疑
+产品、怀疑选择器、怀疑时序，而真正的原因在几十行之前那句「成功」的夹具里。
+
+**写夹具的纪律**：种完必须**回读自证**（`SELECT` 出来数一下行数 / 关键字段），别信 `runSqlite`
+的返回。`e2e/rfc319-workgroup-room-and-delivery.spec.ts` 的 WG-37 有一处按这条写的注释可参考。
+**根治建议**（未做，登记在 `docs/audit-backlog.md`）：`fixtures/sqlite-exec.ts` 的 exec 模式改成
+逐语句 `prepare/run`，或执行后校验 `changes()`。
+
+## 沙箱重新同步到更新的 `origin/main` 之后，必须**重新 `bun install`**（2026-08-25 实撞）
+
+`docs/dev-gotchas.md` 已有的那条说「clean sandbox 必须在里面自己 `bun install`」，但没说**每次
+重新展开之后都要再来一次**。实撞：沙箱按新的 `origin/main` 重新 `git archive | tar -x` 之后，
+前端构建红在
+
+```
+[vite]: Rollup failed to resolve import "decode-named-character-reference" from
+  packages/frontend/src/components/prose/rehypeWrapAnchors.ts
+```
+
+——那是并发 session 刚落的一笔带进来的**新依赖**，而沙箱的 `node_modules` 还是上一次装的。
+
+**更阴的是它伪装成什么**：我当时用 `bun run build:binary:e2e 2>&1 | tail -1` 取输出，正好只取到
+一行空行，而外层 wrapper 的退出码是 0，于是**构建失败被完全吞掉**；playwright 随后用**上一次的
+旧二进制**跑，4 条用例红——看起来像是用例假绿，实际是我在用一个过期的产品跑新用例。
+`strings dist/stub-opencode-* | grep <新分支里的字符串>` 一查就现形（0 命中，且产物 mtime 停在上一次）。
+
+两条纪律：①重新展开沙箱之后**无条件** `bun install --frozen-lockfile`；②**构建输出要看退出码，
+不要 `| tail -1`**——管道会把退出码换成末段命令的，失败信息又常在中间几十行。
