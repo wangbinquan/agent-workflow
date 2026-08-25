@@ -265,6 +265,27 @@ describe('MultiSelect — tags + dropdown', () => {
     })
   })
 
+  // RFC-325 —— MultiSelect 与 Select 现在共用同一个匹配纯函数（lib/option-search.ts）。
+  // 这两条锁住归一化确实接进来了：全角查询要能命中半角选项，描述仍然可搜。
+  describe('normalized search (RFC-325)', () => {
+    test('全角查询命中半角标题', () => {
+      render(<Harness options={[{ value: 'gpt-4', label: 'gpt-4' }, ...OPTS]} />)
+      openList()
+      fireEvent.change(input(), { target: { value: 'ＧＰＴ－４' } })
+      // 命中行 + allowCustom 的「添加」行
+      expect(within(screen.getByRole('listbox')).getByText('gpt-4')).toBeTruthy()
+      expect(within(screen.getByRole('listbox')).queryByText('Charlie')).toBeNull()
+    })
+
+    test('description 仍然可搜（大小写不敏感）', () => {
+      render(<Harness />)
+      openList()
+      fireEvent.change(input(), { target: { value: 'FIRST LETTER' } })
+      expect(within(screen.getByRole('listbox')).getByText('Alpha')).toBeTruthy()
+      expect(within(screen.getByRole('listbox')).queryByText('Bravo')).toBeNull()
+    })
+  })
+
   test('loading shows the loading row; disabled input blocks interaction', () => {
     const { rerender } = render(<Harness loading loadingLabel="Loading skills…" />)
     fireEvent.focus(input())

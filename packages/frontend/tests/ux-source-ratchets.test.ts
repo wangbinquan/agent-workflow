@@ -519,3 +519,105 @@ describe('RFC-317 T14 —— matcher 自证：JSX 判据的边界', () => {
     expect(isNonTextInput(jsxAttribute(firstOpening('<input />').attributes, 'type'))).toBe(false)
   })
 })
+
+// RFC-325 —— 下拉框搜索：判断留在原语里，实现只有一份。
+//
+// 这次改动的全部价值在于「调用点不用再操心要不要搜索」。两条最容易回潮的路：
+//   ① 有人又在调用点手写 `searchable={xs.length > 8}`（改动前 CodeHostCallEdit
+//      正是这么写的），阈值于是重新散回 153 个调用点，改一次要改一片；
+//   ② 有人给 Select 或 MultiSelect 新写一份"顺手"的过滤逻辑，于是"全角能不能
+//      搜到半角"又变成两个答案（改动前是四个）。
+// 单测覆盖不到这两件事——它们的症状是"多了一处实现"，不是"某个行为错了"。
+
+/** 调用点手写阈值的形态：`searchable={<任意>.length <比较> <数字>}`。 */
+const HAND_ROLLED_THRESHOLD_RE = /\.length\s*(?:>=|<=|>|<)\s*\d+/
+
+function isHandRolledSearchThreshold(attribute: ts.JsxAttribute | undefined): boolean {
+  const initializer = attribute?.initializer
+  if (initializer === undefined) return false
+  if (!ts.isJsxExpression(initializer) || initializer.expression === undefined) return false
+  return HAND_ROLLED_THRESHOLD_RE.test(initializer.expression.getText())
+}
+
+describe('RFC-325 —— 下拉框搜索的单一判断与单一实现', () => {
+  test('没有任何调用点手写 searchable 阈值（阈值归 SELECT_SEARCH_THRESHOLD）', () => {
+    const violations: string[] = []
+    for (const source of SOURCES) {
+      walk(source.ast, (node) => {
+        if (!ts.isJsxOpeningElement(node) && !ts.isJsxSelfClosingElement(node)) return
+        const attribute = jsxAttribute(node.attributes, 'searchable')
+        if (!isHandRolledSearchThreshold(attribute)) return
+        violations.push(
+          `${source.file}:${lineOf(source, node)} 手写阈值: ${attribute?.getText() ?? ''}`,
+        )
+      })
+    }
+    expect(
+      violations,
+      '删掉它——Select 已按 options.length >= SELECT_SEARCH_THRESHOLD 自动开启搜索',
+    ).toEqual([])
+  })
+
+  test('Select 与 MultiSelect 共用同一个匹配实现（lib/option-search）', () => {
+    const owners = ['components/Select.tsx', 'components/MultiSelect.tsx']
+    const missing: string[] = []
+    for (const file of owners) {
+      const source = SOURCES.find((candidate) => candidate.file === file)
+      if (source === undefined) {
+        missing.push(`${file} 不在扫描语料里（文件被移动/改名？）`)
+        continue
+      }
+      let importsMatcher = false
+      walk(source.ast, (node) => {
+        if (!ts.isImportDeclaration(node)) return
+        if (!ts.isStringLiteral(node.moduleSpecifier)) return
+        if (!node.moduleSpecifier.text.endsWith('lib/option-search')) return
+        const bindings = node.importClause?.namedBindings
+        if (bindings === undefined || !ts.isNamedImports(bindings)) return
+        if (bindings.elements.some((element) => element.name.text === 'matchesSearchQuery')) {
+          importsMatcher = true
+        }
+      })
+      if (!importsMatcher) missing.push(`${file} 没有引用 matchesSearchQuery`)
+    }
+    expect(missing, '两个下拉原语必须共用 lib/option-search 的匹配纯函数').toEqual([])
+  })
+
+  // 负 fixture：语料还在、matcher 不咬了，与"合规"在断言层面完全同形。
+  test('判据自证：伪造的手写阈值必须被抓到，正常用法必须放过', () => {
+    const probe = (text: string): ts.JsxAttribute | undefined => {
+      const file = ts.createSourceFile(
+        'probe.tsx',
+        text,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      )
+      let attribute: ts.JsxAttribute | undefined
+      walk(file, (node) => {
+        if (attribute !== undefined) return
+        if (!ts.isJsxOpeningElement(node) && !ts.isJsxSelfClosingElement(node)) return
+        attribute = jsxAttribute(node.attributes, 'searchable')
+      })
+      return attribute
+    }
+
+    for (const fixture of [
+      '<Select searchable={options.length > 8} />',
+      '<Select searchable={selectOptions.length >= 10} />',
+      '<Select searchable={rows.length < 4} />',
+      '<Select searchable={props.options.length  >  8} />',
+    ]) {
+      expect(isHandRolledSearchThreshold(probe(fixture)), fixture).toBe(true)
+    }
+
+    for (const fixture of [
+      '<Select searchable />',
+      '<Select searchable={false} />',
+      '<Select searchable={isAdvancedMode} />',
+      '<Select options={xs} />',
+    ]) {
+      expect(isHandRolledSearchThreshold(probe(fixture)), fixture).toBe(false)
+    }
+  })
+})

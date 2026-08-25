@@ -21,6 +21,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { useTranslation } from 'react-i18next'
 import { AppPortal } from '@/components/AppPortal'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
+import { matchesSearchQuery } from '@/lib/option-search'
 import { useChipsCommit } from './ChipsInput'
 
 export interface MultiSelectOption {
@@ -63,7 +64,7 @@ export interface MultiSelectProps {
 type NavItem = { kind: 'option'; row: MultiSelectOption } | { kind: 'custom'; token: string }
 
 export function MultiSelect(props: MultiSelectProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { value, onChange, options, ariaLabel } = props
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -113,16 +114,16 @@ export function MultiSelect(props: MultiSelectProps) {
     return out
   }, [options, value])
 
+  // RFC-325: same matcher as <Select> (normalized: NFKC + locale-lowercase +
+  // whitespace folding), so "does full-width ＡＢＣ find abc" has ONE answer
+  // across the platform. No length threshold here — unlike Select's popover, the
+  // text field IS this control, so there is no extra chrome to conditionally add.
   const searchable = props.searchable !== false
+  const locale = i18n.language
   const filtered = useMemo(() => {
     if (!searchable || q === '') return rows
-    return rows.filter(
-      (r) =>
-        r.label.toLowerCase().includes(q) ||
-        r.value.toLowerCase().includes(q) ||
-        (r.description?.toLowerCase().includes(q) ?? false),
-    )
-  }, [rows, q, searchable])
+    return rows.filter((r) => matchesSearchQuery([r.label, r.value, r.description], query, locale))
+  }, [rows, q, query, searchable, locale])
 
   const showCustom =
     props.allowCustom === true && trimmed !== '' && !rows.some((r) => r.value === trimmed)

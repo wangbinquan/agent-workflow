@@ -903,7 +903,6 @@ export function CodeHostCallEdit({
                     <Select
                       value={value}
                       options={selectOptions}
-                      searchable={selectOptions.length > 8}
                       ariaLabel={label}
                       data-testid={`code-host-field-${field.name}`}
                       renderUnknownValue={

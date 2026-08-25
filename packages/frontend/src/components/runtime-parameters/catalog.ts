@@ -5,6 +5,7 @@ import {
   type RuntimeBuiltinSurface,
   type WebhookTemplateVar,
 } from '@agent-workflow/shared'
+import { normalizeSearchText } from '@/lib/option-search'
 
 export type RuntimeParameterSurface =
   | 'agent-prompt'
@@ -254,14 +255,20 @@ export function buildRuntimeParameterCatalog(
   return [...local, ...global]
 }
 
+/**
+ * RFC-325: NFKC / lowercase / whitespace folding now comes from the shared
+ * normalizer; stripping the template braces stays local to this surface.
+ *
+ * Normalize FIRST so a CJK IME's full-width ｛｛ folds to {{ before the strip
+ * (the pre-RFC-325 order did the same), then normalize again because removing
+ * the braces can leave two spaces adjacent.
+ *
+ * The single-haystack join in runtimeParameterMatches below is deliberate and
+ * NOT shared: breadcrumb search is meant to match across label + path + alias
+ * ("trigger webhook repo_path"), unlike the per-field option matcher.
+ */
 function normalizedSearch(value: string): string {
-  return value
-    .normalize('NFKC')
-    .toLocaleLowerCase()
-    .replaceAll('{{', '')
-    .replaceAll('}}', '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return normalizeSearchText(normalizeSearchText(value).replaceAll('{{', '').replaceAll('}}', ''))
 }
 
 export function runtimeParameterMatches(entry: RuntimeParameterEntry, query: string): boolean {

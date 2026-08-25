@@ -2,6 +2,30 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（实现完成 / 待推送与 hosted CI）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**
+> —— 起于用户诉求「给平台所有的下拉框都要配置搜索能力」。源码实测：自建 `Select`（RFC-036 popover）共 **153 处**
+> 调用，`searchable` 是 opt-in，**只有 25 处显式传、128 处没有搜索**；`MultiSelect`（17 处）默认已带搜索、
+> `UserPicker` 走服务端搜索、`RuntimeParameterPicker` 自带搜索框，原生 `<select>` 全仓已为 0。最痛的一个是
+> `ModelSelect.tsx:148`——provider 分组的全量模型列表（可上百条）竟无搜索。终态：`Select` 的默认值改为
+> `props.searchable ?? options.length >= SELECT_SEARCH_THRESHOLD(=8)`（显式 prop 双向覆盖仍生效），匹配面从
+> `label+value` 扩到 `+description +group`，Esc 改两段语义（有词清词、无词关闭，均不冒泡关外层 Dialog）；
+> 阈值以下的小枚举**保持现状**，首字母 typeahead 与空格选中不被误伤。同时把散成四份的搜索归一化/匹配
+> （`Select` / `MultiSelect` / `lib/user-permissions.ts:41-55` / `runtime-parameters/catalog.ts:257-282`）收敛到
+> 单一纯函数 `lib/option-search.ts`（NFKC + locale 小写 + 空白折叠、逐字段匹配），并删掉
+> `CodeHostCallEdit.tsx:906` 手写的同款阈值。四条口径已于 2026-08-25 逐条获用户裁定（阈值触发 / 四字段匹配 +
+> 归一化 / 只覆盖选择器类控件 / 打字即搜索），随后获批实现。**T1–T15 已全部落地**：本机 frontend 全量
+> **803/803 文件、6807/6807 用例绿**，8 条变异实证（阈值默认值 / Esc 两段 / 匹配面 / 空格闸门 / typeahead 闸门 /
+> NFKC / 棘轮 matcher / 阈值取值）全部咬中。**接手须知**：①153 个 `<Select>` 调用点里**只有 1 处**既有锁测
+> 需要改（`select-searchable.test.tsx` 的 S6，原本靠"一次 Esc 关闭"收尾），理由与改法逐条写在该 RFC
+> `plan.md` §3，**不许静默改测试**；②`architecture/guard-manifest.json` 的 `lines` 字段经查**全仓无消费者**，
+> 故本 RFC 不动它（三个 RFC-317 守卫 58 条断言跑绿佐证），别再为它去碰那个混文件；③`bunx tsc --noEmit` 现有
+> 5 个文件报错（`AclPanel` / `TaskMembersPanel` / `tasks.new` 及两个 acl 测试）**全部归属并发的 RFC-324
+> session**（`schemas/resourceAcl.ts` 摘掉 `users` 的跨文件重构半截态），与本 RFC 无关、勿代为修改。
+> 当前只剩共享 main 上的精确提交/推送与 exact-SHA hosted CI 终态。
+
+> 📝 **待批 RFC（Draft，2026-08-25；三轮澄清完成，尚未取得实现许可，零生产改动）：[RFC-324 资源授权分档（只读 / 可编辑）](design/RFC-324-graded-resource-grants/proposal.md)**
+> —— 起于用户「想把工作流授权给别人用但不想让他改，现在没有好的权限设置方式」。**先证伪了「现在的授权都是可改授权」这个前提**：`resource_grants` 主键就是 `(type,id,user)`、没有任何档位列（`db/schema.ts:502-538`），写面一律 `requireResourceOwner`（`services/resourceAcl.ts:481-499`），后端的 grant **本来就是只读**。真正的缺口有两个：①前台从不表达档位，且详情页与工作流编辑器**没有只读态**——非 owner 打开就能随便拖改、第一次自动保存才吃 403 且文案是「可能已删除」（`docs/audit-backlog.md:108` 与 `:489-499` 两条早已登记）；②反过来**没有可编辑授权**，想让第二个人能改只能转移 owner 或把他升成 manager（拿全局 `resource-acl:bypass`，能改全站）。终态：grants 增 `level ∈ {read, write}`（存量全迁 read，零行为变化），ACL 判据升为四值 `ResourceAccess`，纯判据抽成零依赖模块；13 类资源写门按「内容写 / 治理写」分流（可编辑只覆盖内容，改名 / 删除 / 转移 / 授权仍 owner-only）；任务补 `observer` 纯观察者档；定时任务接入同一张 grants 表 + 新增 ACL 端点；前端补齐逐人档位、8 个详情页与编辑器只读态、403 文案分流。用户裁定：bypass 不动、public 仍只表示全员只读可用、只读者照常复制导出、执行面字段（MCP command/env 等）可编辑者可改且既有 `scripts:author` 字段门不变、发布类动作归可编辑、记忆管理随可编辑档。
+>
 > 🚧 **进行中 RFC（实现完成 / 待发布与 hosted CI）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在
 > 最前方显示一张**非 WorkItem、不可调度**的紧凑配置卡（流水线、审批）。岗位模板提供默认 Adapter，具体数字员工可覆盖，员工发布

@@ -21,6 +21,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { AppPortal } from '@/components/AppPortal'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
+import { matchesSearchQuery } from '@/lib/option-search'
 
 export interface SelectOption<V extends string> {
   value: V
@@ -44,6 +45,15 @@ export interface SelectOption<V extends string> {
   groupBadgeTone?: 'neutral' | 'attention' | 'danger'
   groupBadgeAriaLabel?: string
 }
+
+/**
+ * RFC-325 —— 选项数达到该阈值时，Select **默认**开启搜索。
+ *
+ * 「要不要搜索」以前是 128 个调用点各自的记性；这里把它收进共享原语。取 8 而不是更小值：
+ * 更小会把「是/否」「升序/降序」这类小枚举卷进来，白顶一个搜索框，还会连带废掉它们的
+ * 首字母 typeahead 与空格选中。显式传 `searchable` 仍然双向覆盖这个默认值。
+ */
+export const SELECT_SEARCH_THRESHOLD = 8
 
 function hasBadge(value: ReactNode): boolean {
   return value !== undefined && value !== null && value !== false
@@ -95,6 +105,26 @@ function OptionBadge({
   )
 }
 
+/**
+ * RFC-325 —— 唯一一份「哪些选项命中查询词」的实现。
+ *
+ * 此前 `visible` 的 useMemo 与搜索框 onChange 里各抄了一份逐字重复的过滤逻辑（后者只为
+ * 算出新的高亮行），改一处忘一处就会让「看到的列表」与「Enter 会选中的那行」对不上。
+ */
+function optionsMatchingQuery<V extends string>(
+  options: ReadonlyArray<SelectOption<V>>,
+  query: string,
+  locale?: string,
+): ReadonlyArray<SelectOption<V>> {
+  return options.filter((option) =>
+    matchesSearchQuery(
+      [option.label, option.value, option.description, option.group],
+      query,
+      locale,
+    ),
+  )
+}
+
 function OptionTitle<V extends string>({ option }: { option: SelectOption<V> }) {
   return (
     <span className="select__option-title-row">
@@ -123,9 +153,14 @@ interface Props<V extends string> {
   /** Render a custom row body. Default = `option.label`. */
   renderOption?: (opt: SelectOption<V>) => React.ReactNode
   /**
-   * RFC-165 UI 精修 — show a filter input at the top of the popover and
-   * narrow the options to case-insensitive label/value matches. Keyboard
-   * focus lands on the input; arrows/Enter/Escape keep working.
+   * RFC-165 UI 精修 → RFC-325 — show a filter input at the top of the popover
+   * and narrow the options to normalized label/value/description/group matches.
+   * Keyboard focus lands on the input; arrows/Enter/Escape keep working.
+   *
+   * OMITTED is no longer "off": it defaults to `options.length >=
+   * SELECT_SEARCH_THRESHOLD`, so every long list gets search without the
+   * callsite having to remember. Pass `false` to force it off on a long list,
+   * `true` to force it on for a short one.
    */
   searchable?: boolean
   /**
@@ -143,7 +178,7 @@ interface Props<V extends string> {
 }
 
 export function Select<V extends string>(props: Props<V>) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   // Keep the highlighted option by its stable identity, never by its current
@@ -155,17 +190,17 @@ export function Select<V extends string>(props: Props<V>) {
     )
     return selected?.value ?? props.options[firstEnabledIndex(props.options)]?.value ?? null
   })
-  // The list every render path (keyboard nav, aria ids, option rows) works
-  // on. Without `searchable` it is exactly props.options, so the pre-existing
-  // behaviour is untouched.
+  // RFC-325: search is on by default once the list is long enough. An explicit
+  // `searchable` (either direction) still wins — it is the one escape hatch.
+  const searchable = props.searchable ?? props.options.length >= SELECT_SEARCH_THRESHOLD
+  const locale = i18n.language
+  // The list every render path (keyboard nav, aria ids, option rows) works on.
+  // Not searchable ⇒ exactly props.options, so short lists are untouched (their
+  // typeahead and space-to-select below read the same flag).
   const visible = useMemo(() => {
-    if (props.searchable !== true) return props.options
-    const q = query.trim().toLowerCase()
-    if (q === '') return props.options
-    return props.options.filter(
-      (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
-    )
-  }, [props.options, props.searchable, query])
+    if (!searchable) return props.options
+    return optionsMatchingQuery(props.options, query, locale)
+  }, [props.options, searchable, query, locale])
   const activeIndex = visible.findIndex(
     (option) => option.value === activeValue && option.disabled !== true,
   )
@@ -223,7 +258,7 @@ export function Select<V extends string>(props: Props<V>) {
               : props.options[firstEnabledIndex(props.options)]
       setActiveValue(nextOption?.value ?? null)
       const t = window.setTimeout(() => {
-        if (props.searchable === true) searchRef.current?.focus()
+        if (searchable) searchRef.current?.focus()
         else listRef.current?.focus()
       }, 0)
       return () => window.clearTimeout(t)
@@ -306,7 +341,7 @@ export function Select<V extends string>(props: Props<V>) {
         setOpen(false)
         triggerRef.current?.focus()
       }
-    } else if (e.key === ' ' && props.searchable !== true) {
+    } else if (e.key === ' ' && !searchable) {
       // Space selects in the plain listbox; in searchable mode it types.
       e.preventDefault()
       const opt = visible[activeIndex]
@@ -322,17 +357,20 @@ export function Select<V extends string>(props: Props<V>) {
       // listener and dismisses both layers at once (RFC-194).
       e.stopPropagation()
       e.preventDefault()
+      if (searchable && query !== '') {
+        // RFC-325 two-stage Escape: the first one clears a narrowed list back to
+        // the full one WITHOUT closing — otherwise the only way back from a typo
+        // is to close and reopen. The active row needs no fixup here: `visible`
+        // only grows, and the [open, visible] effect below re-seats it when the
+        // previous query had filtered everything away.
+        setQuery('')
+        return
+      }
       setOpen(false)
       triggerRef.current?.focus()
     } else if (e.key === 'Tab') {
       setOpen(false)
-    } else if (
-      props.searchable !== true &&
-      e.key.length === 1 &&
-      !e.ctrlKey &&
-      !e.metaKey &&
-      !e.altKey
-    ) {
+    } else if (!searchable && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const key = e.key.toLocaleLowerCase()
       typeaheadRef.current += key
       if (typeaheadTimerRef.current !== null) window.clearTimeout(typeaheadTimerRef.current)
@@ -437,7 +475,7 @@ export function Select<V extends string>(props: Props<V>) {
               minWidth: popPos.width,
             }}
           >
-            {props.searchable === true && (
+            {searchable && (
               <li className="select__search" role="presentation">
                 <input
                   ref={searchRef}
@@ -455,15 +493,7 @@ export function Select<V extends string>(props: Props<V>) {
                   onChange={(e) => {
                     const nextQuery = e.target.value
                     setQuery(nextQuery)
-                    const normalized = nextQuery.trim().toLocaleLowerCase()
-                    const nextVisible =
-                      normalized === ''
-                        ? props.options
-                        : props.options.filter(
-                            (option) =>
-                              option.label.toLocaleLowerCase().includes(normalized) ||
-                              option.value.toLocaleLowerCase().includes(normalized),
-                          )
+                    const nextVisible = optionsMatchingQuery(props.options, nextQuery, locale)
                     setActiveValue(nextVisible[firstEnabledIndex(nextVisible)]?.value ?? null)
                   }}
                   onKeyDown={(e) => {

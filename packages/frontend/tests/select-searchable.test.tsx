@@ -5,6 +5,9 @@
 //   S2 searchable: typing narrows to case-insensitive label/value matches;
 //      zero matches show the empty row; Enter picks the first visible match.
 //   S3 the filter resets on every open.
+//   RFC-325: `searchable` 不再只是 opt-in（省略时按 options.length >= 8 自动开），
+//      Escape 也变成两段（先清词、再关闭）。本文件仍只覆盖**显式** searchable 的
+//      行为；默认值与两段 Escape 的契约由 select-search-default.test.tsx 拥有。
 //   RFC-250 T25 follow-up: empty source, search miss, and all-disabled results
 //      are three distinct non-option presentation states.
 
@@ -129,7 +132,16 @@ describe('Select searchable (RFC-165 UI 精修)', () => {
     fireEvent.click(getByTestId('sel'))
     // Filter down to one row (index 0 in the FILTERED array), then close.
     fireEvent.change(screen.getByTestId('sel-search'), { target: { value: 'audit' } })
+    // RFC-325 made Escape two-stage (first clears the query, second closes), so
+    // closing here now goes through the trigger. Deliberately NOT "Escape twice":
+    // this case must close while the list is STILL filtered — that is the exact
+    // state whose reopen used to commit the wrong row. Clearing first would close
+    // over the full list and stop reproducing the regression.
     fireEvent.keyDown(screen.getByTestId('sel-search'), { key: 'Escape' })
+    expect(screen.getByRole('listbox')).toBeTruthy() // stage 1 keeps it open
+    fireEvent.change(screen.getByTestId('sel-search'), { target: { value: 'audit' } })
+    fireEvent.click(getByTestId('sel'))
+    expect(screen.queryByRole('listbox')).toBeNull()
     // Reopen over the full list: Enter must adopt the CURRENT selection
     // (reviewer, index 2), not whatever index 0 now points at.
     fireEvent.click(getByTestId('sel'))

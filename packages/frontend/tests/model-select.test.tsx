@@ -144,6 +144,51 @@ describe('ModelSelect render', () => {
     expect(onChange).toHaveBeenLastCalledWith('future/v2')
   })
 
+  // RFC-325 —— ModelSelect 是「全平台下拉框搜索」这条诉求最痛的一个：provider 分组的
+  // 全量模型列表可达上百条，改动前它连 searchable 都没传，用户只能滚。现在它什么都不用
+  // 传就自动获得搜索（options.length = 10 个模型 + 占位行 + custom 行 = 12 ≥ 8）。
+  test('RFC-325: a long model list auto-gets search, and the provider name narrows it', async () => {
+    const models: OpencodeModel[] = [
+      ...Array.from({ length: 5 }, (_unused, index) => ({
+        id: `anthropic/sonnet-${index}`,
+        provider: 'anthropic',
+        modelID: `sonnet-${index}`,
+      })),
+      ...Array.from({ length: 5 }, (_unused, index) => ({
+        id: `openai/gpt-${index}`,
+        provider: 'openai',
+        modelID: `gpt-${index}`,
+      })),
+    ]
+    const payload: RuntimeModelsResponse = { binary: 'opencode', cached: false, models }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    wrap(<ModelSelect value={undefined} onChange={() => {}} />)
+    const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
+    await waitFor(() => expect(trigger.disabled).toBe(false))
+    fireEvent.click(trigger)
+    const list = screen.getByRole('listbox')
+
+    // 没有任何调用点改动 —— 搜索框是共享原语按条目数自己加上的。
+    const search = within(list).getByRole('textbox')
+    expect(within(list).getAllByRole('option')).toHaveLength(12)
+
+    // 按 group（provider 名）收敛：这是改动前搜不到的字段。
+    fireEvent.change(search, { target: { value: 'openai' } })
+    expect(within(list).getAllByRole('option')).toHaveLength(5)
+    expect(within(list).getByText('gpt-0')).toBeTruthy()
+    expect(within(list).queryByText('sonnet-0')).toBeNull()
+
+    // 按模型名收敛。
+    fireEvent.change(search, { target: { value: 'sonnet-3' } })
+    expect(within(list).getAllByRole('option')).toHaveLength(1)
+    expect(within(list).getByText('sonnet-3')).toBeTruthy()
+  })
+
   test('grouped dropdown renders provider headers and selecting a model emits its id', async () => {
     const payload: RuntimeModelsResponse = {
       binary: 'opencode',

@@ -10,6 +10,7 @@ import {
   type Role,
   type UserAccessPatch,
 } from '@agent-workflow/shared'
+import { matchesSearchQuery } from './option-search'
 
 export type PermissionRowSource = 'baseline' | 'additional' | 'available' | 'intrinsic'
 
@@ -38,10 +39,6 @@ export interface DerivedPermissionRows {
   readonly additionalCount: number
 }
 
-function searchable(value: string, locale: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase(locale)
-}
-
 export function derivePermissionRows(input: DerivePermissionRowsInput): DerivedPermissionRows {
   const canonical = normalizeAdditionalPermissionsForWrite(input)
   const additional = new Set(canonical)
@@ -50,9 +47,12 @@ export function derivePermissionRows(input: DerivePermissionRowsInput): DerivedP
     role: input.role,
     additionalPermissions: canonical,
   })
-  const needle = searchable(input.search?.trim() ?? '', input.locale)
+  // RFC-325: the private NFKC/lowercase copy that used to live here is now the
+  // platform-wide matcher. Behaviour is unchanged — the old haystack joined the
+  // three fields with '\n' and never folded it, so a needle could not span two
+  // fields either; matchesSearchQuery makes that per-field semantics explicit.
   const matches = (label: string, description: string, rawId: string): boolean =>
-    needle === '' || searchable(`${label}\n${description}\n${rawId}`, input.locale).includes(needle)
+    matchesSearchQuery([label, description, rawId], input.search ?? '', input.locale)
 
   const permissions = PERMISSIONS.map((permission): UserPermissionRow => {
     const entry = PERMISSION_CATALOG[permission]
