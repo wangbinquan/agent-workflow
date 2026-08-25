@@ -183,10 +183,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 32,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。",
-      "allowGrowth": {
-        "why": "RFC-319 B80：e2e/rfc319-canvas-editing-ops.spec.ts:776 WF-22「仅整理所选」必须先 Shift+click 精确选出两个节点，xyflow 的第二次点击在 Playwright webkit 构建上会顶掉第一次的选择（workflow-editor.spec.ts:358 记录的同一上游问题），整条用例在 webkit 上不成立；chromium 上照跑。加登记比删 skip 更值得：删了 skip 是让 webkit 夜跑对一个上游缺陷稳定红，不是多一条覆盖。B80 那笔的 CI run 被后续 push 取消，这条涨账在下一笔（abea42bef）的 run 上才现形。"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。"
     },
     {
       "id": "frontend-inline-loading-allowlist",
