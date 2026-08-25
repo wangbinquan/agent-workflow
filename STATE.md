@@ -2,6 +2,22 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft v2，2026-08-25；三件套已过两路设计门并修订，待用户批准后实现）：[RFC-326 评审门的 MCP / API 完整面](design/RFC-326-review-gate-mcp-api-surface/proposal.md)**
+> —— 起于用户「MCP 和 API 没有检视设计文档的接口，没法让设计在本地检视文档并提交意见」。研究结论：仓内的「设计文档检视」就是
+> RFC-005 的人工评审门；REST `/api/reviews/*` 十条端点齐全（`routes/reviews.ts:137-460`），**MCP 只有三个门工具且 `submit_review`
+> 只送决策**（`mcp/tools.ts:410-505`）——RFC-247 D11 / plan T18 写着「逐文档评论 + 通过/打回」并打了勾，评论那一半从未落地，
+> 三个门工具在 tests / e2e 里零引用；REST 加意见要前端从 DOM 算的复合锚点（`shared/schemas/review.ts:354-363`），程序方等于没开。
+> 用户四选一逐项拍板（D1–D4）：MCP 为主 + REST 同步补齐 / 读写四类能力全要 / 简化锚点服务端解析 / 逐条与打包都支持。
+> 设计要点：`packages/shared/src/reviewAnchor.ts` 纯函数解析「引文 + 第几次 + 章节」→ 复合锚点（歧义列候选不猜、无引文锚到标题行）；
+> 两个既有写端点接受简化锚点与打包（校验全部前置、任一无效零写入）；零新端点 / 零迁移 / 网页零改动；MCP 补 7 个具名工具 +
+> 扩 `submit_review`；新增「`/api/reviews*` 路由 ⟷ 门工具分发」双向完整守卫。**设计门（Codex gpt-5.6-sol + 独立子代理两路，24 条去重 findings，
+> 记录在 proposal §8）后用户追加拍板 D5–D8**：网页高亮改按源文偏移映射（hast `position` 实测可用，围栏代码 / KaTeX 无位置须回退）、
+> 整条决策路径收进单个 `dbTxSync`（准备段 / 外部回滚段 / 事务段 / 提交后事件段，需补 `transitionNodeRunStatusTx` / `mintNodeRunTx` /
+> `hasActingMembershipTx`）、解析器落 `modules/collaboration/domain` + exact public、只读令牌硬调保持 SDK unknown-tool。设计门还抓出
+> 一条既有 P0：`mcp/tools.ts:488` 的 `submit_review` 枚举写成 `iterate`，REST 认 `iterated`——**iterate 经 MCP 今天打不通**。
+> **接手须知**：用户批准后才动代码；两个 PR（A：解析 + 事务 + REST；B：MCP + 前端 + e2e）；
+> 工作树里 `e2e/rfc319-*.spec.ts` / `packages/system-mocks` 的未提交改动属并发 RFC-319 session，勿动。
+
 > ✅ **已完成 RFC（Done，2026-08-25；主实现 `72e648327`）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**
 > —— 起于用户诉求「给平台所有的下拉框都要配置搜索能力」。源码实测：自建 `Select`（RFC-036 popover）共 **153 处**
 > 调用，`searchable` 是 opt-in，**只有 25 处显式传、128 处没有搜索**；`MultiSelect`（17 处）默认已带搜索、
@@ -23,7 +39,7 @@
 > session**（`schemas/resourceAcl.ts` 摘掉 `users` 的跨文件重构半截态），与本 RFC 无关、勿代为修改。
 > 当前只剩共享 main 上的精确提交/推送与 exact-SHA hosted CI 终态。
 
-> 🚧 **进行中 RFC（Implementation Complete，2026-08-25；用户已批准，待发布与 exact-SHA CI）：[RFC-324 资源授权分档（只读 / 可编辑）](design/RFC-324-graded-resource-grants/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-25；用户明示「不跑 codex，直接收口」，故 Codex 实现门未执行——理由见文末）：[RFC-324 资源授权分档（只读 / 可编辑）](design/RFC-324-graded-resource-grants/proposal.md)**
 > —— 起于用户「想把工作流授权给别人用但不想让他改，现在没有好的权限设置方式」。**先证伪了「现在的授权都是可改授权」这个前提**：`resource_grants` 主键就是 `(type,id,user)`、没有任何档位列（`db/schema.ts:502-538`），写面一律 `requireResourceOwner`（`services/resourceAcl.ts:481-499`），后端的 grant **本来就是只读**。真正的缺口有两个：①前台从不表达档位，且详情页与工作流编辑器**没有只读态**——非 owner 打开就能随便拖改、第一次自动保存才吃 403 且文案是「可能已删除」（`docs/audit-backlog.md:108` 与 `:489-499` 两条早已登记）；②反过来**没有可编辑授权**，想让第二个人能改只能转移 owner 或把他升成 manager（拿全局 `resource-acl:bypass`，能改全站）。终态：grants 增 `level ∈ {read, write}`（存量全迁 read，零行为变化），ACL 判据升为四值 `ResourceAccess`，纯判据抽成零依赖模块；13 类资源写门按「内容写 / 治理写」分流（可编辑只覆盖内容，改名 / 删除 / 转移 / 授权仍 owner-only）；任务补 `observer` 纯观察者档；定时任务接入同一张 grants 表 + 新增 ACL 端点；前端补齐逐人档位、8 个详情页与编辑器只读态、403 文案分流。用户裁定：bypass 不动、public 仍只表示全员只读可用、只读者照常复制导出、执行面字段（MCP command/env 等）可编辑者可改且既有 `scripts:author` 字段门不变、发布类动作归可编辑、记忆管理随可编辑档。
 >
 > **实现已完成**（提交前的本地状态）：迁移 `0209` 两列 + journal；判据抽成零依赖的
@@ -66,9 +82,33 @@
 > 咬中。它是 `e2e-full-nightly` 咬出来的——**这条 workflow 跑的 spec 不在常规 CI 的 e2e 腿里**，
 > 接手时别只看 `CI` 那个 run。
 >
-> **仍未做**：Codex 实现门。**非本 RFC 的红**（别代修）：gitleaks 5 条指纹全在
-> `e2e/rfc319-*.spec.ts`（RFC-319 B68/B69 的 commit），`api-contract-coverage` 的
-> `GET /api/mcp` 也出自 `rfc319-overview-and-docs.spec.ts`——都归 RFC-319 session。
+> 最后一轮（`757c5efb9` → `5eb976fc3`）是 **webkit 腿**咬出来的，且**一进一退各一次**，值得记：
+> 先是发现 `UserPicker` 的 `onFocus` 无条件展开列表，与 `Dialog.resolveInitialDialogFocus`
+> （把初始焦点给 `.dialog__body` 第一个可聚焦元素）叠加，导致**一打开权限弹窗下拉就盖住弹窗
+> 自己的按钮**——chromium 侥幸点得中、webkit 稳定拦截。把「聚焦即展开」改成规则级的「不展开」
+> 之后，当场踩坏另一半契约：`rfc099-ownership-acl.spec.ts:290` 要求**转让弹窗**的 picker 一打开
+> 就是展开的（`9d8acc311` 立的，两段式 Escape 依赖它），四个 e2e 分片一起红。终态是显式
+> `openOnMount` prop：两处「弹窗里只有一个 picker」的转让弹窗打开，权限面板的加人搜索框不开，
+> `MemberFields` 那种字段型 picker 也不开。**教训：只活在 e2e 里的契约，改公共组件时看不见**
+> ——改坏的那一笔本地 frontend 全量 6826 条全绿，因为当时没有任何单测在讲「转让弹窗要展开」。
+> 现已把两条断言**成对**写进 `rfc324-acl-panel-levels`，注释点明这不是口味问题而是两个场合两个
+> 答案；两个方向都做了实证变异。
+>
+> **交付验证**：`e2e/rfc324-graded-grants.spec.ts` 与 `e2e/rfc099-ownership-acl.spec.ts` 已在**三条腿**
+> 上验过——`e2e-webkit-nightly`（最初报红处，重跑后该用例从失败列表消失）、`e2e-full-nightly`
+> （4 分片全绿）、常规 CI 的 Playwright 腿；本地另起真二进制在 chromium + webkit 各跑过一遍。
+> 前端全量 805 文件 / 6827 用例绿，shared 2247 绿，backend / frontend `tsc --noEmit` 干净。
+>
+> **收口时的已知偏差（不是遗漏，是用户裁定）**：CLAUDE.md §Codex review 双门要求 declare done 前
+> 跑一次实现门。用户 2026-08-25 明示「不跑 codex，直接收口」，因此 **RFC-324-T26 未执行**。
+> 接手若要补跑，范围限定在本 RFC 触及的路径（见 `design/RFC-324-graded-resource-grants/plan.md`），
+> 并按 `docs/dev-gotchas.md` §Codex 的规矩剔除指向他人路径的 findings。
+>
+> **非本 RFC 的红**（别代修）：`api-contract-coverage` 的 `GET /api/mcp` 与
+> `rfc319-*` 各腿的红都归 RFC-319 session；`e2e-full-nightly` 的 `RFC-319 覆盖账本对账` 现在只剩
+> `-` 项（账本列着、实际已被打到），是他们补 spec 之后该同批销的账，我这两条
+> `scheduled-tasks/:id/acl` 已登记、不再被点名。gitleaks 那 5 条指纹已由本 session 钉进
+> `.gitleaksignore`（`7bb9799f3`，纯追加）。
 >
 > ✅ **已完成 RFC（Done，本地收尾；待发布后复验/回填最终 run，2026-08-25）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在
