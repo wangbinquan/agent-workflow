@@ -38,11 +38,12 @@ Two levels of parallelism stack:
    plants a DB violation in test 2 that test 1 expects to be absent —
    intra-file parallelism would race them).
 2. **Shards (CI matrix-level, in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml))** —
-   `--shard=N/4` flag splits the spec-file list into four buckets that
-   different CI runners pick up. Shard N runs file indexes
-   `(N - 1) mod 4`, `(N - 1 + 4) mod 4`, … from the alphabetised file
-   list. Splitting at file granularity preserves `test.beforeAll`
-   semantics within a single shard.
+   the built-in `--shard=N/M` flag splits the discovered test groups across
+   different CI runners. CI uses `M=3` on Ubuntu/macOS and `M=4` on Windows.
+   With `fullyParallel` disabled, Playwright keeps every spec file as one test
+   group and partitions those groups by test count; every group is selected by
+   exactly one shard. File-local `test.beforeAll` and ordered-test semantics
+   therefore stay intact.
 
 CI wall-clock today (RFC-054 W1-8 baseline):
 
@@ -59,7 +60,7 @@ CI wall-clock today (RFC-054 W1-8 baseline):
 | All chromium tests           | `bun run e2e`                                                    |
 | One spec file                | `bun run e2e e2e/main.spec.ts`                                   |
 | One test (substring match)   | `bun run e2e -g "happy path"`                                    |
-| First shard of 4 (CI parity) | `bun run e2e -- --shard=1/4`                                     |
+| First Windows CI shard       | `bun run e2e -- --shard=1/4`                                     |
 | All shards sequentially      | `for i in 1 2 3 4; do bun run e2e -- --shard=$i/4; done`         |
 | Single worker (debug a race) | `bun run e2e -- --workers=1`                                     |
 | Headed (visible browser)     | `bun run e2e -- --headed`                                        |
@@ -115,8 +116,9 @@ because `trace: 'retain-on-failure'` is set for non-CI runs in the config.
    than the spec).
 4. Run `bun run e2e e2e/<feature>.spec.ts` until green locally.
 5. Verify it passes on webkit too: `PLAYWRIGHT_WEBKIT=1 bun run e2e -- --project=webkit -g "<test name>"`.
-6. CI shard split is round-robin by file index; no manual update needed
-   unless you have a reason to pin a spec to a particular shard (you don't).
+6. CI shard assignment is derived from the discovered file-level test groups;
+   no manual update is needed unless you have a reason to pin a spec to a
+   particular shard (you don't).
 
 ## Why workers can't be higher than 4 today
 

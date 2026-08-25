@@ -15,8 +15,9 @@
 //     coverage runs daily and surfaces Safari-specific selector / focus /
 //     animation drift without blocking iteration speed.
 //   * CI shard via `--shard=N/M` (built-in Playwright flag) — see
-//     e2e/README.md for the sharding contract. The CI `e2e` job sets a
-//     `matrix.shard` so each runner picks one quarter of the suite.
+//     e2e/README.md for the sharding contract. CI uses three shards on
+//     Ubuntu/macOS and four on Windows; each runner gets one complete
+//     file-granularity group subset for its platform.
 //
 // The spec spawns its own daemon via e2e/harness.ts so the binary path
 // and stub-opencode wiring stay co-located with the test.

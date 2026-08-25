@@ -261,20 +261,26 @@ describe('repository test entrypoint', () => {
       { job: 'build-binary-windows', os: 'windows-latest', steps: '*build-binary-steps' },
     ] as const
     const e2ePlatforms = [
-      { job: 'e2e', build: 'build-binary', os: 'ubuntu-latest', shards: '[1, 2]', total: 2 },
+      {
+        job: 'e2e',
+        build: 'build-binary',
+        os: 'ubuntu-latest',
+        shards: '[1, 2, 3]',
+        total: 3,
+      },
       {
         job: 'e2e-macos',
         build: 'build-binary-macos',
         os: 'macos-latest',
-        shards: '[1, 2]',
-        total: 2,
+        shards: '[1, 2, 3]',
+        total: 3,
       },
       {
         job: 'e2e-windows',
         build: 'build-binary-windows',
         os: 'windows-latest',
-        shards: '[1, 2, 3]',
-        total: 3,
+        shards: '[1, 2, 3, 4]',
+        total: 4,
       },
     ] as const
 

@@ -565,16 +565,19 @@ jobs:
     #
     # RFC-054 W1-8 — `shard` splits the suite at file granularity. Across the
     # seven successful main runs measured on 2026-08-15, four shards per OS
-    # created macOS/Windows runner waves and pushed CI as high as 12m53s.
-    # The first two-shard run removed those queue positions, but its Windows
-    # legs took 6m18s and 7m15s and made Windows the 10m16s critical path;
-    # a comparable four-shard run topped out at 4m45s there. Keep two shards
-    # on Ubuntu/macOS and three on Windows: all test/platform coverage remains
-    # while five repeated checkout/install/cache jobs disappear. Each runner
-    # uses Playwright's
-    # built-in `--shard=N/M` flag (which distributes test files round-robin
-    # at file granularity, so a single file's tests stay co-located and
-    # `test.beforeAll` semantics hold).
+    # created a synchronized twelve-job macOS/Windows runner wave and pushed CI
+    # as high as 12m53s. That justified the old 2/2/3 split while the PR tier was
+    # smaller, but it is not a permanent shard ceiling.
+    #
+    # By runs 32813031397 and 32814714841 the PR tier had grown to 621-627 tests:
+    # Ubuntu's two legs reached 310-314 tests / 5.1-8.0m, while Windows' three
+    # reached 192-221 tests / 5.1-8.6m. Ratchet one runner per OS to 3/3/4 so
+    # the per-runner workload returns below that measured envelope. This is ten
+    # e2e jobs, not the old twelve, and the platform-local build dependencies
+    # above stagger their release instead of making every OS enter one wave.
+    # Every runner still uses Playwright's built-in `--shard=N/M`: each spec
+    # file remains one test group, every group is selected exactly once per OS,
+    # and file-local `test.beforeAll` semantics remain unchanged.
     name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: build-binary
     # Same reasoning as build-binary's `if`: a red unit shard must not silently
@@ -587,8 +590,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        shard: [1, 2]
-        shards: [2]
+        shard: [1, 2, 3]
+        shards: [3]
     runs-on: ${{ matrix.os }}
     # Cold browser/system-dependency installation needs more headroom than the
     # unit jobs, but must not inherit Actions' six-hour default.
@@ -735,8 +738,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest]
-        shard: [1, 2]
-        shards: [2]
+        shard: [1, 2, 3]
+        shards: [3]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -751,8 +754,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest]
-        shard: [1, 2, 3]
-        shards: [3]
+        shard: [1, 2, 3, 4]
+        shards: [4]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
