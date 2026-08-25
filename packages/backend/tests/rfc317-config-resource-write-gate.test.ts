@@ -235,6 +235,14 @@ describe('RFC-317 C1 —— 配置资源写门只认 owner', () => {
       const id = await seed(harness.db, subject, harness.owner.id, 'public')
       const before = await readRow(harness.db, subject, id)
 
+      if (subject.type === 'development_adapter') {
+        const detail = await req(harness.app, harness.stranger.token, `${subject.base}/${id}`)
+        expect(detail.status, 'public visibility alone must not expose Adapter detail').toBe(403)
+        expect((await detail.json()) as { code: string }).toMatchObject({
+          code: 'adapter-technical-details-forbidden',
+        })
+      }
+
       for (const attempt of writeAttempts(subject.base, id)) {
         const res = await req(harness.app, harness.stranger.token, attempt.path, attempt.init)
         expect(res.status, `${subject.type} ${attempt.label} 应 403（可见但非 owner）`).toBe(403)
@@ -263,6 +271,11 @@ describe('RFC-317 C1 —— 配置资源写门只认 owner', () => {
       expect(visible.status, '前提不成立：被授权者应当看得见这一行，否则本用例测的不是写门').toBe(
         200,
       )
+      if (subject.type === 'development_adapter') {
+        const metadata = (await visible.json()) as Record<string, unknown>
+        expect(metadata).toMatchObject({ id, purpose: 'requirement-source' })
+        expect(metadata).not.toHaveProperty('draft')
+      }
 
       for (const attempt of writeAttempts(subject.base, id)) {
         const res = await req(harness.app, harness.grantee.token, attempt.path, attempt.init)
@@ -317,4 +330,18 @@ describe('RFC-317 C1 —— 配置资源写门只认 owner', () => {
       })
     }
   }
+
+  test('development_adapter：technical owner detail includes the draft', async () => {
+    const harness = await buildHarness()
+    const subject = CASES.find((candidate) => candidate.type === 'development_adapter')
+    expect(subject).toBeDefined()
+    const id = await seed(harness.db, subject!, harness.admin.id, 'private')
+
+    const detail = await req(harness.app, harness.admin.token, `${subject!.base}/${id}`)
+    expect(detail.status).toBe(200)
+    expect((await detail.json()) as Record<string, unknown>).toMatchObject({
+      id,
+      draft: { seeded: true },
+    })
+  })
 })

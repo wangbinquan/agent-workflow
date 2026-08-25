@@ -69,7 +69,13 @@ import {
   validateDigitalEmployeeForPublish,
 } from '@/modules/development-automation/domain/digitalEmployee'
 import { projectEmployeeSetupJourney } from '@/modules/development-automation/domain/journeyProjection'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  canViewResource,
+  filterVisibleRows,
+  isResourceOwner,
+  listGrantedResourceIds,
+  requireResourceOwner,
+} from '@/services/resourceAcl'
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
@@ -96,7 +102,7 @@ interface IdentityView {
 
 interface ResourceHandlers {
   list(actor: Actor): Promise<IdentityView[]>
-  get(actor: Actor, id: string): Promise<(IdentityView & { draft: unknown }) | null>
+  get(actor: Actor, id: string): Promise<(IdentityView & { draft?: unknown }) | null>
   create(
     actor: Actor,
     body: { name: string; draft: unknown; extra: Record<string, unknown> },
@@ -749,21 +755,36 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           (r) => ({ ...identityView(r), purpose: (r as { purpose?: unknown }).purpose }),
         ),
       get: async (actor, id) => {
+        const row = adapterStore.getById(id)
+        const hasTechnicalAuthority =
+          actor.permissions.has('adapter-definitions:update') &&
+          actor.permissions.has('scripts:author')
+        if (row !== null && hasTechnicalAuthority && isResourceOwner(actor, row)) {
+          return {
+            ...identityView(row),
+            purpose: (row as { purpose?: unknown }).purpose,
+            draft: JSON.parse(row.draftJson),
+          }
+        }
+
+        // A private Adapter can be granted for selection/use without exposing
+        // its executableRef or secretProjection. Public visibility alone is
+        // deliberately insufficient for this detail endpoint: only an exact
+        // grant receives the same safe identity projection as the picker.
         if (
-          !actor.permissions.has('adapter-definitions:update') ||
-          !actor.permissions.has('scripts:author')
+          row !== null &&
+          (await canViewResource(deps.db, actor, 'development_adapter', row)) &&
+          (await listGrantedResourceIds(deps.db, actor, 'development_adapter')).has(row.id)
         ) {
-          throw new ForbiddenError(
-            'adapter-technical-details-forbidden',
-            'reading Adapter executable and secret projection names requires adapter-definitions:update and scripts:author',
-          )
+          return {
+            ...identityView(row),
+            purpose: (row as { purpose?: unknown }).purpose,
+          }
         }
-        const row = await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
-        return {
-          ...identityView(row),
-          purpose: (row as { purpose?: unknown }).purpose,
-          draft: JSON.parse(row.draftJson),
-        }
+        throw new ForbiddenError(
+          'adapter-technical-details-forbidden',
+          'reading Adapter executable and secret projection names requires adapter-definitions:update, scripts:author, and ownership',
+        )
       },
       create: async (actor, body) => {
         const purpose = body.extra.purpose

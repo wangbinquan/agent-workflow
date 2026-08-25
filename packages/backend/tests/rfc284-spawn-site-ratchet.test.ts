@@ -129,6 +129,13 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       'stdout/stderr 直连文件（管道会被脚本的长命孙进程钉住不闭合）、timeout TERM→KILL、' +
       '空 env（PATH/HOME/TMPDIR）+ platformSpawnOptionsForHost；receipt 只信 exit code。',
   },
+  'modules/development-automation/composition/legacyDevelopmentProgramUpgrade.ts': {
+    governance: 'short-lived',
+    count: 2,
+    why:
+      'RFC-323 legacy program 升级只生成一次性 Node 兼容包装器；包装器同步执行一笔已冻结程序，' +
+      '以 120 秒 timeout 和 5 MiB maxBuffer 双重封顶，不把 spawn 能力导出给平台调用方。',
+  },
   'modules/integration/infrastructure/developmentAdapterRunner.ts': {
     governance: 'process-group',
     count: 1,

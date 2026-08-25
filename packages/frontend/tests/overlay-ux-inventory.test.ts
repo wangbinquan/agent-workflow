@@ -222,14 +222,22 @@ const OVERLAY_CALLSITES = {
     family: 'resource-management',
     count: 1,
   },
+  // RFC-323: the lane-scoped Adapter resource/binding editor is a compact
+  // shared Dialog with its own rendered behavior coverage.
+  'components/digital-employees/LaneAdapterBindingDialog.tsx': {
+    family: 'resource-management',
+    count: 1,
+  },
   // RFC-310 PR-8 T90 — assignment 编辑 Dialog。
   'routes/code.assignments.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 PR-8 T87 — policy 创建对话框。
   'routes/code.policies.tsx': { family: 'resource-management', count: 1 },
   // RFC-310 Digital Employee OS: responsibility details and job-template
   // identity/duty authoring use shared dialogs; add-tool and employee editing
-  // remain their existing resource-management overlays.
-  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 5 },
+  // remain their existing resource-management overlays. RFC-323 adds the
+  // employee responsibilities editor while its lane Adapter editor lives in
+  // the component-level entry above.
+  'routes/digital-employees.$typeRef.tsx': { family: 'resource-management', count: 6 },
   // RFC-310 Event Center: custom polling-source authoring stays in one shared
   // Dialog while source/catalog/delivery browsing remains inline.
   'routes/events.tsx': { family: 'resource-management', count: 1 },

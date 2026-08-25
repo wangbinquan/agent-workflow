@@ -120,6 +120,7 @@ describe('RFC 索引状态漂移守卫', () => {
     'RFC-304-code-capability-platform': 37,
     'RFC-306-workflow-conditional-branching': 1,
     'RFC-310-rule-driven-development-digital-employee': 0,
+    'RFC-323-employee-scoped-adapter-cards': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

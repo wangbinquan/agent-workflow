@@ -18,7 +18,6 @@ import type {
 } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
-import type { OperationFailureReceipt } from '@/modules/development-automation/domain/operationFailure'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { developmentMissions, developmentMrClaims } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
@@ -409,7 +408,11 @@ export function buildDevelopmentPipelineDeps(db: DbClient): {
   readonly pipelineEvidence: PipelineEvidencePort
 } {
   const runner = composePipelineEvidenceRunner(db)
-  const failed = (failure: OperationFailureReceipt) => ({
+  type RunnerFailure = Extract<
+    Awaited<ReturnType<typeof runner.collect>>,
+    { readonly ok: false }
+  >['failure']
+  const failed = (failure: RunnerFailure) => ({
     ok: false as const,
     failure,
   })

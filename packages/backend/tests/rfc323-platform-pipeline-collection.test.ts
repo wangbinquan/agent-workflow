@@ -190,6 +190,11 @@ function harness(input: {
 }
 
 describe('RFC-323 platform-owned pipeline collection', () => {
+  test('composition does not create the pipeline evidence store before collection', () => {
+    const fixture = harness({ envelope })
+    expect(existsSync(join(fixture.appHome, 'evidence'))).toBe(false)
+  })
+
   test('uses the frozen Adapter ref and observes pending then passed only for the exact head/target', async () => {
     let current = envelope({ targetSha: 'd'.repeat(40) })
     const fixture = harness({ envelope: () => current })

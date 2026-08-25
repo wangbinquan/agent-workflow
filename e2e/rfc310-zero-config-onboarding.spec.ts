@@ -326,7 +326,6 @@ test('an existing invalid tool opens in the editor and publishes its correction'
         kind: 'agent',
         agentRef: { id: 'missing:editable-agent', revision: 1 },
       },
-      connectionRef: null,
     },
   })
   expect(seededResponse.status()).toBe(201)

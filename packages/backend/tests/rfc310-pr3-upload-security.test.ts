@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -113,6 +114,23 @@ async function uploadBytes(
 }
 
 describe('rfc310 pr3 upload security — HTTP surface', () => {
+  test('upload routes resolve their evidence store on the first request, not while mounting', async () => {
+    const h = await buildHarness()
+    const requestHome = mkdtempSync(join(tmpdir(), 'aw-upsec-lazy-request-'))
+    process.env.AGENT_WORKFLOW_HOME = requestHome
+    try {
+      const evidenceRoot = join(requestHome, 'evidence')
+      expect(existsSync(evidenceRoot)).toBe(false)
+
+      const uploaded = await uploadBytes(h, h.tokenA, 'lazy evidence')
+      expect(uploaded.status).toBe(201)
+      expect(existsSync(evidenceRoot)).toBe(true)
+    } finally {
+      process.env.AGENT_WORKFLOW_HOME = appHome
+      rmSync(requestHome, { recursive: true, force: true })
+    }
+  })
+
   test('unauthenticated requests are rejected before any byte lands', async () => {
     const h = await buildHarness()
     const res = await h.app.request('/api/code/mission-input-uploads', {

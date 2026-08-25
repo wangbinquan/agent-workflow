@@ -57,7 +57,7 @@
 
 > 🚧 **进行中 RFC（In Progress）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
 > —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**
-> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本已从 679 条缺口收敛到 **572**。
+> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本已从 679 条缺口收敛到 **552**。
 > 每个新 spec 都逐条本机实跑并**变异实证**（注入→红→还原→重建→绿），未咬中的变异也如实记录（见 B45 / B51）。
 > **接手须知**：①逐批进度与每一条实测契约、每一次判据被真实行为纠正的记录，全在
 > `design/RFC-319-.../plan.md` §7 变更记录里，按批次倒序；②新增 spec 走 API 级断言 + 编译后 daemon，单条约

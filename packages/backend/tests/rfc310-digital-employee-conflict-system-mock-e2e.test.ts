@@ -354,7 +354,6 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
                   kind: 'agent' as const,
                   agentRef: { id: `conflict-agent-${item.workItemRef}`, revision: 1 },
                 },
-                connectionRef: null,
               },
             })
             bindings.push({

@@ -22,7 +22,13 @@ export const MISSION_UPLOAD_MAX_BYTES = 32 * 1024 * 1024
 
 export function mountMissionInputUploadRoutes(app: Hono, deps: AppDeps): void {
   const store = createSqliteUploadSessionStore(deps.db)
-  const evidence = new EvidenceStore(join(Paths.root, 'evidence'))
+  // Mounting routes is a pure composition step. Constructing EvidenceStore
+  // creates its blob/bundle directories, so doing that here leaked an
+  // `evidence/` directory into whichever cwd-backed AGENT_WORKFLOW_HOME a test
+  // happened to use before a single upload was requested.
+  let evidence: EvidenceStore | undefined
+  const evidenceStore = (): EvidenceStore =>
+    (evidence ??= new EvidenceStore(join(Paths.root, 'evidence')))
 
   registerRoute(
     app,
@@ -52,7 +58,7 @@ export function mountMissionInputUploadRoutes(app: Hono, deps: AppDeps): void {
       try {
         const tmpFile = join(staging, 'payload')
         writeFileSync(tmpFile, bytes)
-        const blob = await evidence.putBlobFromFile(tmpFile)
+        const blob = await evidenceStore().putBlobFromFile(tmpFile)
         const row = store.createUpload({
           actorUserId: actor.user.id,
           originalName,
