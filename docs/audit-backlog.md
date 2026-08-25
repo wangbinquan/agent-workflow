@@ -2748,3 +2748,47 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `{code:number}` 却返回 `runCommandResult` 的 `{status}`，lint 与构建全绿、运行时拿到
    `undefined`。②**同步子进程边界与同进程 HTTP 服务端会死锁**：`execFileSync` 堵死事件循环，
    git 的请求 15s 内一次都不被 accept；最后把探针服务端挪进 worker 线程才成立。
+
+## RFC-319 B89 起草期撞到的产品缺陷（2026-08-25，意图构建器 + 工作组）
+
+1. **【中】过期草稿在界面上是死路，而横幅的指引是错的。**
+   `services/intent/session.ts:929-951` 的 `rebaseIntentSession` 只把 `session.contextRevision + 1`，
+   **不动草稿**——按下「Rebase」之后 `draft.contextRevision !== session.contextRevision` 依旧成立，
+   草稿还是过期的（而且更旧），界面上按完没有任何可见变化。而
+   `services/intent/iteration.ts:261-263` 的 stale 判定排在 `regenerate` 分支**之前**，于是
+   `refine-current` 与「Discard and regenerate」**两条路都被 `intent-baseline-stale` 拒掉**。
+   偏偏 `intent.draftStaleNotice` 的文案写的是「send a new message to regenerate」，照做必失败。
+   **实际唯一出路**是去「Manage working context」改一次工作上下文（Save and generate）。
+   复现：起会话拿到草稿 → `POST /api/intent-sessions/:id/mounts` 挂一个资源 → 页面转 stale →
+   点 Rebase（无变化）→ composer 发消息（`intent-baseline-stale`）。
+   用例**刻意没有把这个行为写成断言**（写进去等于把 bug 锁死），只断言纪元真的推进了一格。
+2. **【低-中】候选历史没有内容回看入口。** `intent.detail.tsx:814-844` 只渲染「修订号 + 生命周期 chip」，
+   没有任何进入旧版内容的入口；而 `GET /api/intent-sessions/:id` 其实把每一版完整的
+   `changeset / validation / slots` 都返回了。账本 INTENT-13b 说「历史修订仍可回看」——
+   **数据面成立、界面面不成立**。P1 用例因此把「原样读回」锁在浏览器实际收到的那份详情载荷上。
+3. **【低】失败的提交不广播、前端也不 invalidate。** `routes/intentSessions.ts:970` 的广播在
+   `applyIntentChangeset` 抛出后不执行，`commit.onError` 也什么都不做。提交失败时弹窗里有错误横幅，
+   但**关掉弹窗后会话页的「提交记录」区不会多一条**，必须刷新页面才看得到那条 Failed 记录。
+4. **【中低】`workgroup.acl.updated` 帧必然被同一次 ACL 写触发的 revalidation freeze 吞掉。**
+   `services/resourceAcl.ts:944` 的 `triggerRevalidation` → `ws/connections.ts:283-288` **同步**把每条
+   活连接标 `revalidating` → `routes/workgroups.ts:337-341` 的 `afterUpdate` 才广播 →
+   `ws/registry.ts:1090` 对 `revalidating` 连接**直接丢帧**；而 `workgroups` 通道没实现 `resync`
+   （`ws/registry.ts:729-766`），丢了就没了。实测另一标签页 30 秒内对 `/api/workgroups/{id}` 的
+   GET 次数一次都不涨。`resource-acl.changed` 控制帧仍到达，所以只读/可写的界面收口是对的，
+   陈旧的只是数据本身。**同形问题很可能也在 `workflow.acl.updated`（同一挂载器 + 同一 freeze）。**
+5. **【低】中途改配置的判空是「键在不在」而不是「值变没变」。** `services/workgroup/configActions.ts:271-283`：
+   把 `maxRounds` 原样再写一遍返回 200，并往房间插一条 `config updated: maxRounds → 4` 的系统消息。
+   前端按值比对所以界面走不到；脚本 / MCP / 直调 API 的路径会。**账本 WG-34「空 patch 422」照字面写
+   会得到一条永远红的用例**——覆盖按源码实际改成「空对象 + 白名单外的键」两条。
+6. **【账本文案偏差】WG-45 的 `agent-missing`** 给的是**被删 agent 的名字**
+   （`services/workgroup/launch.ts:249-251` 取 `member.agentName`），不是成员在组里的 displayName；
+   按 displayName 写断言会永远红。
+7. **【覆盖缺口，非缺陷】`workgroup-config-conflict`（并发 roster 变更 409）在 HTTP 面不可达。**
+   实测 8 路并发 × 6 轮 **48/48 全 200**：handler 从入口到 `dbTxSync` 之间只有几次本地 SQLite await，
+   Bun 在下一发请求到达前就跑完了。产品为此专门留了确定性竞态缝
+   （`configActions.ts:110` 的 `beforeWriteTransaction`，用法见 `rfc164-workgroups.test.ts:405-430`），
+   **这条闸属于后端单测层**。覆盖换成了同一 handler 里确定性可达的 `workgroup-task-terminal` 409。
+8. **【环境事故，已处置】** 开工时机器 load average 194，`ps` 里有 **28 个 PPID=1 的孤儿
+   `while :; do :; done` 忙循环**（启动于当日 14:32 / 14:42，已跑 7.5 小时，是某次 CPU 加压实验的
+   父 shell 死掉后没执行 `kill $HOGS` 留下的）。按「ppid==1 且命令含忙循环」精确清理后，
+   同一份 spec 的墙钟从 55s 降到 20s。**建议给加压脚本加 `trap`**，否则这类孤儿会一直吃满 CPU。

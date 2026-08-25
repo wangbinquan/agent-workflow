@@ -221,7 +221,20 @@ function isExecutableFile(path: string): boolean {
 const DAEMON_START_ATTEMPTS = 3
 const STARTUP_KILL_TIMEOUT_MS = 1_000
 const CHILD_EXIT_GRACE_MS = 1_000
-const READY_TIMEOUT_MS = 30_000
+// Windows 上这个预算必须更宽：编译二进制每次启动都要把**嵌入的迁移**解包到
+// `~/.agent-workflow/runtime/migrations`，代价是 O(迁移条数) 次文件写、且每一次都被
+// AV 过滤器扫描。RFC-254 时 171 个文件就要 ~23.5s、把这条 30s 预算撑爆过一次；今天
+// 迁移已经 209 条（解包 223 个文件），2026-08-25 主干实测同一分片里
+// `extracted embedded migrations count=223 ms=26885 / 16959 / 16163`——27s 顶着 30s，
+// 任何抖动都会变成「timed out after 30s waiting for daemon ready line」，而红的那几条
+// 用例与提交者的改动毫无关系（本次是 rfc225 / rfc199 / rfc223 / rfc244 / rfc294 五份
+// 互不相干的 spec 同时中枪）。
+//
+// 注意这不是「把超时调大掩盖慢」：解包本身已经按 RFC-254 优化过（目录一次性建好 +
+// 有界并发），慢的是 Windows 的每文件 AV 扫描，产品侧没有更多可压的空间；而这段成本
+// **随每条新迁移线性增长**，预算不跟着走就是一枚定时炸弹。POSIX 上解包只要 1~2s，
+// 维持 30s 不变，好让真正的启动挂起仍然能被这条预算逮住。
+const READY_TIMEOUT_MS = process.platform === 'win32' ? 90_000 : 30_000
 const OUTPUT_TAIL_BYTES = 32 * 1024
 
 type DaemonChild = ChildProcessByStdio<null, Readable, Readable>

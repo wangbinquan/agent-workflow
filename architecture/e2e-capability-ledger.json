@@ -1169,8 +1169,13 @@
       "title": "【拆自 INTENT-13】迭代之后历史修订仍可回看 —— e2e 零断言，修订号单调递增只是间接推论",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-13b: 迭代之后每一版历史修订的内容仍能原样读回——changeset 与当时的校验结论逐字保留"
+        }
+      ]
     },
     {
       "id": "INTENT-14",
@@ -5034,8 +5039,13 @@
       "title": "空闲态保存工作上下文并直接生成（Save and generate）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-24: 空闲态用「Save and generate」保存工作上下文，同一步就把下一轮跑起来 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-26",
@@ -5043,8 +5053,13 @@
       "title": "从工作上下文中移除已挂载资源（勾选 removals）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-26: 勾选移除后保存，只有被勾的那个离开工作上下文，没勾的原样留下 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-27",
@@ -5066,8 +5081,13 @@
       "title": "草稿 op 大纲 + 选中项富预览",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-28: 草稿 op 大纲逐条可选，选中项换成对应资源类型的富预览 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-30",
@@ -5093,8 +5113,13 @@
       "title": "草稿过期（stale）横幅 + 「Rebase」重建上下文纪元",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-31: 别处改动工作上下文后草稿转过期——横幅显形、提交入口锁死、Rebase 推进纪元 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-33",
@@ -5102,8 +5127,13 @@
       "title": "提交记录列表：成功回执（落地了哪些资源、是否 fromCopy）与失败提交的错误文本",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-33: 提交记录既给成功回执（落地了什么、是不是复制）也留下失败提交的错误原文 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-35",
@@ -5167,8 +5197,13 @@
       "title": "提交响应丢失后的幂等重试（同一 clientMutationId 只落一次）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-40: 提交响应丢失后原样重试，同一 clientMutationId 只在服务端落一次 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-41",
@@ -5271,8 +5306,13 @@
       "title": "从记忆页批量选中记忆发起融合（选目标技能，含同名技能按 owner 消歧）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-49: 从记忆页批量勾选后选目标技能——同名技能靠 owner 与短 id 消歧，融进去的是选中的那一个 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-51",
@@ -5354,8 +5394,13 @@
       "title": "融合 OCC：发起后技能被别人改过 → 批准/重跑 409 且零副作用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-59: 融合待审期间技能被别人改过——批准与重跑双双 409，技能正文与版本号一个字节都没动 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-60",
@@ -5363,8 +5408,13 @@
       "title": "融合发起前置拒绝：记忆未批准 / 技能无版本快照 / 无写权限",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-60: 发起融合的三条前置拒绝各说各的原因——记忆未批准 / 技能无版本快照 / 无写权限，且一条都没落库 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X1",
@@ -5390,8 +5440,13 @@
       "title": "【原审计漏项】没有 skills:update + tasks:execute 时，技能详情页的融合按钮与 FuseDialog 整体不挂载",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-X2: 没有 skills:update + tasks:execute 的账号，技能详情页既没有融合按钮也开不出 FuseDialog，服务端同口径拒绝 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X8",
@@ -8061,8 +8116,13 @@
       "title": "从资源包导入创建工作组（ResourcePackageImportDialog，expectedRootType='workgroup'）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-05: 从资源包新建工作组：成员 agent 一起新建并重新接线到新 agent，根类型不符时当场说明 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-07",
@@ -8084,8 +8144,13 @@
       "title": "工作组多标签页实时同步（/ws/workgroups 的 workgroup.updated / deleted / acl.updated 帧）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-09: 工作组详情页的实时同步：另一个标签页改完这一页不刷新就跟上，组被删当场报废 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-10",
@@ -8149,8 +8214,13 @@
       "title": "引用资源完整性横幅（GET /resource-status，成员 agent 的技能/MCP/插件闭包坏了就禁启动）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-15: 成员 agent 的技能闭包坏掉：完整性横幅亮起、启动键禁用、绕过界面直接打接口同样被拒 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-16",
@@ -8246,8 +8316,13 @@
       "title": "从工作组启动任务（详情页/卡片 → 任务向导预选 → 启动到 done）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-24: 从卡片与详情页启动：深链带上组 id 与版本 fence，向导预选到这个组，目标一路落进房间并跑到 done @nightly"
+        }
+      ]
     },
     {
       "id": "WG-27",
@@ -8300,8 +8375,17 @@
       "title": "运行中修改任务配置（PUT /config：成员增删、开关、maxRounds、完成门、澄清预算、fanOut、输出契约；空 patch 422；并发 roster 变更 409）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-34: 运行中改任务配置：六类标量逐格落库且不回写组资源，成员增删各自留痕与拒绝码 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-34: 运行中改任务配置的两道闸：无改动不给提交（前端禁用 + 服务端 422），任务收场之后连入口都不给 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-41",
@@ -8309,8 +8393,13 @@
       "title": "收件箱工作组待办徽章（pending-count：待我交付的卡 + 可确认的完成门，按任务可见性过滤）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-41: 收件箱工作组待办：待我交付的卡与可确认的完成门各记一格，非成员一格都看不到 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-42",
@@ -8327,8 +8416,13 @@
       "title": "定时任务以 workgroup 形态启动（scheduled kind='workgroup'）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-43: 定时任务以工作组形态启动：目标 id 冻进 payload、一次性 fence 键拒收、列表按执行主体筛得出来、run-now 真跑出一条组任务 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-44",
@@ -8336,8 +8430,13 @@
       "title": "Webhook 触发工作组任务（launchKind='workgroup' 的 fire）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-44: Webhook 触发工作组任务：事件变量渲染进组目标、fire 记 launched，任务带着 workgroupId 跑到 done @nightly"
+        }
+      ]
     },
     {
       "id": "WG-45",
@@ -8345,8 +8444,13 @@
       "title": "启动时的 fence 与拒绝路径（expectedWorkgroupVersion 不符 409、not-ready 422、成员 agent 被删 agent-missing、退役键 scratch+repoPath 拒收、sourceTaskId 越权重放）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-45: 启动的五条拒绝路径各有可辨的状态码与原因：版本 409、未就绪 422、成员 agent 已删 422 agent-missing、退役键 422、越权重放 404 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-X1",
@@ -9565,8 +9669,13 @@
       "title": "生成轮次预算耗尽 → 409 并提示提高 intentBuilderMaxGenerateRounds 或归档",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-20: 生成轮次预算耗尽 → 409 点名 intentBuilderMaxGenerateRounds 或归档，把预算提上去之后同一条消息就发得出去 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-25",
@@ -9574,8 +9683,13 @@
       "title": "工作上下文变更失败后的告警 + 重试 / 丢弃待处理更新",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-25: 工作上下文刷新失败后给告警与两条出路——重试能救回来，丢弃能把待处理的那条清掉 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-32",
@@ -9583,8 +9697,13 @@
       "title": "草稿历史列表与生命周期状态（current / committed / discarded / superseded）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-32: 候选历史逐版列出四种生命周期（current / committed / discarded / superseded） @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-42",
@@ -9592,8 +9711,13 @@
       "title": "提交对话框在底层草稿身份变化时自动关闭（避免提交陈旧内容）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-draft-and-commit.spec.ts",
+          "test": "RFC-319 INTENT-42: 底层草稿换了修订时提交对话框自动关闭，只是会话状态变了则不关 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-50",
@@ -9615,8 +9739,13 @@
       "title": "【原审计漏项】追问轮次预算耗尽（intent-question-budget-exhausted）——AI 反复追问时被截停",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-fusion-and-gates.spec.ts",
+          "test": "RFC-319 INTENT-X10: 追问轮次预算耗尽——AI 再追问一次就被 intent-question-budget-exhausted 截停，预算够时同一轮追问照常落地 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X4",
@@ -11030,7 +11159,6 @@
   "gapIds": [
     "DE-16b",
     "DE-31b",
-    "INTENT-13b",
     "OPS-044b",
     "REPO-14b",
     "REPO-38b",
@@ -11103,17 +11231,7 @@
     "INTENT-19",
     "INTENT-21",
     "INTENT-23",
-    "INTENT-24",
-    "INTENT-26",
-    "INTENT-28",
-    "INTENT-31",
-    "INTENT-33",
-    "INTENT-40",
     "INTENT-46",
-    "INTENT-49",
-    "INTENT-59",
-    "INTENT-60",
-    "INTENT-X2",
     "INTENT-X8",
     "MEM-21",
     "MEM-40",
@@ -11210,21 +11328,12 @@
     "WF-45",
     "WF-47b",
     "WF-52",
-    "WG-05",
-    "WG-09",
-    "WG-15",
-    "WG-24",
     "WG-27",
     "WG-28",
     "WG-29",
     "WG-31",
     "WG-33",
-    "WG-34",
-    "WG-41",
     "WG-42",
-    "WG-43",
-    "WG-44",
-    "WG-45",
     "WG-X3",
     "WG-X5",
     "AGENT-24",
@@ -11272,11 +11381,6 @@
     "IAM-45b",
     "IAM-48",
     "INTENT-02",
-    "INTENT-20",
-    "INTENT-25",
-    "INTENT-32",
-    "INTENT-42",
-    "INTENT-X10",
     "INTENT-X4",
     "INTENT-X5",
     "INTENT-X6",
