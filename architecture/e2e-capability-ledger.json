@@ -2241,8 +2241,13 @@
       "title": "删除代理：More → Delete → 输入名称确认 → 204 → 回到空态列表",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表"
+        }
+      ]
     },
     {
       "id": "AGENT-09",
@@ -2250,8 +2255,13 @@
       "title": "删除被工作流引用的代理 → 409 agent-in-use 并列出引用它的工作流",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-09 删除被工作流引用的代理：409 agent-in-use 并点名引用它的工作流；解引用后可删"
+        }
+      ]
     },
     {
       "id": "AGENT-13",
@@ -2259,8 +2269,13 @@
       "title": "删除确认名不匹配时拒绝执行",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表"
+        }
+      ]
     },
     {
       "id": "AGENT-14",
@@ -2268,8 +2283,13 @@
       "title": "输出端口的新增 / 编辑 / 删除（卡片 + 事务式对话框）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-14: 输出端口的增/改/删经保存后落库，kind sidecar 跟着端口名一起搬家"
+        }
+      ]
     },
     {
       "id": "AGENT-15",
@@ -2277,8 +2297,13 @@
       "title": "输入端口的新增 / 编辑 / 删除，含 required 开关与描述",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-15: 输入端口的增/改/删落库，required 开关与描述各自按语义持久化"
+        }
+      ]
     },
     {
       "id": "AGENT-19",
@@ -2286,8 +2311,13 @@
       "title": "把输出端口标记为「分支端口」并让运行期真的能关闭该分支",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-19: 勾上「分支端口」才让运行期真的关得掉分支——同一个工作流勾选前后各跑一次"
+        }
+      ]
     },
     {
       "id": "AGENT-27",
@@ -2344,8 +2374,13 @@
       "title": "代理列表：搜索过滤 / 计数 / 空态 / 卡片徽章（runtime、端口数、private、owner、builtin、aggregator）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-40 代理列表：计数 / 卡片徽章逐格 / 按卡片可见事实搜索 / 无匹配空态 / 真空态"
+        }
+      ]
     },
     {
       "id": "AGENT-42",
@@ -4541,8 +4576,13 @@
       "title": "新建记忆时选择非 global scope（agent / workflow / repo / repo_group）并从下拉选中具体资源",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-02: 四个非 global 档都能从下拉选中真实目标，服务端记下的 scope 与所选一致"
+        }
+      ]
     },
     {
       "id": "MEM-04",
@@ -4589,8 +4629,13 @@
       "title": "冲突候选的 Compare 对比弹窗与「批准并取代」（approve_and_supersede + supersede 链）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-11: 冲突候选能并排对比，「批准并取代」之后旧条目退出可用面并接上 supersede 链"
+        }
+      ]
     },
     {
       "id": "MEM-12",
@@ -4598,8 +4643,13 @@
       "title": "审批操作失败时的错误反馈（promote 5xx → memory-approve-error 横幅）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-12: 批准失败时页面把失败摆出来，候选留在原地，服务端状态一动不动"
+        }
+      ]
     },
     {
       "id": "MEM-15",
@@ -4643,8 +4693,13 @@
       "title": "按 scope 浏览（五档分组 + 每档计数 + 每档空态 + 行内编辑）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-20: 按 scope 浏览的五档计数与服务端逐档一致，空档给空态，行内编辑改得动"
+        }
+      ]
     },
     {
       "id": "MEM-21",
@@ -4670,8 +4725,17 @@
       "title": "蒸馏任务列表：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误 + 空态",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-25 空队列：给的是「没有蒸馏任务」的说明，不是一张空表格"
+        },
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-25 列表六列：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误各自读的是行上的真值"
+        }
+      ]
     },
     {
       "id": "MEM-26",
@@ -4679,8 +4743,13 @@
       "title": "重试失败的蒸馏任务（failed → pending，attempts 归零并重新拉起模型进程）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-26 重试失败的蒸馏任务：attempts 归零、状态真的流转，并且模型进程被重新拉起来了"
+        }
+      ]
     },
     {
       "id": "MEM-27",
@@ -4688,8 +4757,13 @@
       "title": "取消待执行的蒸馏任务（pending → canceled）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-27 取消待执行的蒸馏任务：pending → canceled，且取消后不再提供任何操作"
+        }
+      ]
     },
     {
       "id": "MEM-29",
@@ -4697,8 +4771,13 @@
       "title": "蒸馏任务详情页六段内容（头部元信息 / 失败诊断 / 源事件 / scope + 去重快照 / 产出候选 / 模型会话）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-29 蒸馏任务详情页：六段各自有内容，且每一段读的是这条 job 自己的数据"
+        }
+      ]
     },
     {
       "id": "MEM-30",
@@ -4706,8 +4785,13 @@
       "title": "蒸馏失败诊断卡（attempts / exitCode / lastError / stderr 摘录）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-30 失败诊断卡：attempts / exitCode / lastError / stderr 摘录四样齐全，且不该出现时不出现"
+        }
+      ]
     },
     {
       "id": "MEM-33",
@@ -4715,8 +4799,13 @@
       "title": "从蒸馏候选行「在审批队列中打开」的深链（?focus=<memoryId>）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-33 候选行的「在审批队列中打开」深链：带着 memoryId 落到记忆页且参数不被吃掉"
+        }
+      ]
     },
     {
       "id": "MEM-40",
@@ -6287,8 +6376,13 @@
       "title": "agent-single 检查器：选代理、prompt 模板、参数选择器插入 token、缺失 {{ref}} 诊断",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{ref}} 被点名，参数选择器按光标插入端口 token"
+        }
+      ]
     },
     {
       "id": "WF-27",
@@ -6296,8 +6390,17 @@
       "title": "input 节点检查器：五种输入类型及 upload 的 targetDir / onConflict 编辑",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-27 input 检查器：五种字段类型逐一落库，enum 选项与 upload 的 targetDir / onConflict 一并落库"
+        },
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改成合法值则整棵定义同步改名"
+        }
+      ]
     },
     {
       "id": "WF-28",
@@ -6305,8 +6408,13 @@
       "title": "output 节点检查器：输出端口列表与 bind 绑定",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步"
+        }
+      ]
     },
     {
       "id": "WF-29",
@@ -6314,8 +6422,13 @@
       "title": "review（人工门）检查器：内容来源与端口、驳回/迭代可重跑集合、文件回滚开关",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库"
+        }
+      ]
     },
     {
       "id": "WF-30",
@@ -6323,8 +6436,17 @@
       "title": "clarify / clarify-cross-agent 检查器：绑定提问代理与被问设计者、迭代上限、loop 内警告",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-30 clarify 检查器：绑定的提问代理与 loop 内外状态如实呈现，会话模式两个方向都落库"
+        },
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-30 cross-clarify 检查器：提问者与被问设计者双向绑定如实呈现，缺一方当场报错"
+        }
+      ]
     },
     {
       "id": "WF-31",
@@ -6332,8 +6454,17 @@
       "title": "wrapper-git / wrapper-loop 检查器：最大迭代数、退出条件、触顶继续开关、输出绑定",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出现任何循环旋钮"
+        },
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库"
+        }
+      ]
     },
     {
       "id": "WF-32",
@@ -6341,8 +6472,13 @@
       "title": "wrapper-fanout 检查器：分片来源（shardSource 单例不变量）与入站类型/广播角色",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现"
+        }
+      ]
     },
     {
       "id": "WF-33",
@@ -6855,8 +6991,13 @@
       "title": "删除被其它代理 dependsOn 引用的代理 → 409 agent-dependency-still-referenced",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-10 删除被其它代理 dependsOn 引用的代理：409 agent-dependency-still-referenced；解依赖后可删"
+        }
+      ]
     },
     {
       "id": "AGENT-11",
@@ -6864,8 +7005,13 @@
       "title": "删除有非终态单代理任务 / 正在启动中的代理 → 409",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-active；任务落终态后可删"
+        }
+      ]
     },
     {
       "id": "AGENT-12",
@@ -6873,8 +7019,13 @@
       "title": "删除被定时任务引用的代理 → 409 agent-scheduled-referenced",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-12 删除被定时任务引用的代理：409 agent-scheduled-referenced；删掉定时任务后可删"
+        }
+      ]
     },
     {
       "id": "AGENT-16",
@@ -6882,8 +7033,13 @@
       "title": "端口名校验：必填 / 格式非法 / 超长 / 同向重名 → 对话框内报错且保存禁用",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-16: 端口名必填/格式/长度/同向重名——对话框内报错且保存禁用，改对了就能存"
+        }
+      ]
     },
     {
       "id": "AGENT-17",
@@ -6891,8 +7047,13 @@
       "title": "端口对话框开着时底层数据被后台刷新（stale target）→ 拒绝提交",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-17: 对话框开着时底层端口被别人改了——拒绝提交，重开才放行"
+        }
+      ]
     },
     {
       "id": "AGENT-18",
@@ -6900,8 +7061,13 @@
       "title": "聚合器代理的 wrapperPortName 编辑与重名校验",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-18: 聚合器 wrapperPortName 的编辑与重名——重名不许存，改名后落库"
+        }
+      ]
     },
     {
       "id": "AGENT-20",
@@ -6909,8 +7075,13 @@
       "title": "孤儿 sidecar 清理：outputKinds / outputWrapperPortNames 残留无对应端口的键",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-20: 孤儿 sidecar 清理只删被点的那一条，且真的从库里消失"
+        }
+      ]
     },
     {
       "id": "AGENT-21",
@@ -7046,8 +7217,13 @@
       "title": "代理列表加载失败 → 列表区 ErrorBanner + 重试恢复",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成「你还没有代理」"
+        }
+      ]
     },
     {
       "id": "AGENT-X3",
@@ -7073,8 +7249,13 @@
       "title": "代理表单五个页签的角标：端口数 / 阻断错误数 / 引用数 / 引用问题数 / 非法 JSON 数",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-ports.spec.ts",
+          "test": "RFC-319 AGENT-X5: 代理表单五个页签角标——端口数/阻断错误数/引用数/引用问题数/非法 JSON 数"
+        }
+      ]
     },
     {
       "id": "CFG-01",
@@ -7950,8 +8131,13 @@
       "title": "记忆表单校验拦截（标题/正文空或超长、非 global 缺 scopeId、tag 超限）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-03: 空/超长标题、空/超长正文、非 global 缺目标、超长标签——都在本地拦下且不发请求"
+        }
+      ]
     },
     {
       "id": "MEM-06",
@@ -7959,8 +8145,13 @@
       "title": "编辑弹窗的详情加载失败 / 重试（列表只有 summary，弹窗自己拉 detail）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-06: 编辑弹窗的详情拉不到时只给错误与重试，绝不摆出一个能写空值的保存按钮"
+        }
+      ]
     },
     {
       "id": "MEM-07",
@@ -7968,8 +8159,13 @@
       "title": "编辑无改动时不发 PATCH、直接关闭（幂等无 version bump）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-07: 编辑弹窗里什么都没改就保存 —— 不发 PATCH、version 不动，改一个字才发"
+        }
+      ]
     },
     {
       "id": "MEM-08",
@@ -8020,8 +8216,13 @@
       "title": "/memory 分区导航与 ?tab= 深链（含未知 tab 回落 all、hash 保留、标题获焦）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-23: /memory 的分区由 URL 决定——默认落在 All、深链直达、未知 tab 静默回落且保住 hash"
+        }
+      ]
     },
     {
       "id": "MEM-28",
@@ -8029,8 +8230,13 @@
       "title": "蒸馏任务整行点击跳详情页（Retry / Cancel 按钮不触发跳转）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-28 整行点击进详情，而 Retry / Cancel 是行内操作、不许顺带把人跳走"
+        }
+      ]
     },
     {
       "id": "MEM-32",
@@ -8038,8 +8244,13 @@
       "title": "会话查询失败不拖垮详情页（session 报错时其余五段仍可读 + 段内重试）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-32 会话查询挂掉时：错误只落在第六段，前五段照常可读，并且能就地重试"
+        }
+      ]
     },
     {
       "id": "MEM-42",
@@ -8065,8 +8276,13 @@
       "title": "daemon 重启后中断的蒸馏任务被回收（running → pending 重排，attempts 不清零）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
+          "test": "MEM-47 daemon 重启：中断在 running 的蒸馏任务被重排回 pending，且 attempts 不许被清零"
+        }
+      ]
     },
     {
       "id": "MEM-48",
@@ -8097,8 +8313,17 @@
       "title": "【补漏】六个记忆面板的加载失败态与重试（列表 500 → ErrorBanner + Retry，缓存数据不被清空）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-X6: 五个记忆面板拉取失败时都给错误 + 重试，绝不冒充空态；重试成功后恢复原样"
+        },
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-X6: 已经加载出来的行不会被一次失败的后台刷新清空——错误横幅与列表同时在场"
+        }
+      ]
     },
     {
       "id": "MEM-X7",
@@ -8106,8 +8331,13 @@
       "title": "【补漏】All 库的两个空态（approved 空 / archived 空，文案不同）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-panels.spec.ts",
+          "test": "RFC-319 MEM-X7: 空库时「已批准」与「已归档」各说各的话，不是同一句套话，也不是错误态假扮的空"
+        }
+      ]
     },
     {
       "id": "OPS-003",
@@ -8792,8 +9022,13 @@
       "title": "逐节点显示名（NodeTitleField）：自定义标题、清空回落到 kind 派生名",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-inspectors.spec.ts",
+          "test": "WF-X3 显示名：自定义标题落库并改写画布卡片，清空则删掉字段本身并回落到 kind 派生名"
+        }
+      ]
     },
     {
       "id": "WF-X4",
@@ -9007,142 +9242,72 @@
     }
   ],
   "gapIds": [
-    "AGENT-02",
-    "AGENT-03",
-    "AGENT-06",
-    "AGENT-08",
-    "AGENT-09",
-    "AGENT-10",
-    "AGENT-11",
-    "AGENT-12",
-    "AGENT-13",
-    "AGENT-14",
-    "AGENT-15",
-    "AGENT-16",
-    "AGENT-17",
-    "AGENT-18",
-    "AGENT-19",
-    "AGENT-20",
-    "AGENT-21",
-    "AGENT-22",
-    "AGENT-24",
-    "AGENT-25",
-    "AGENT-26",
+    "DE-07",
+    "DE-17",
+    "DE-18",
+    "DE-27",
+    "DE-X1",
+    "REPO-43",
     "AGENT-28",
-    "AGENT-29",
-    "AGENT-30",
     "AGENT-33",
-    "AGENT-36",
-    "AGENT-38",
     "AGENT-39",
-    "AGENT-40",
-    "AGENT-41",
     "AGENT-42",
-    "AGENT-44",
-    "AGENT-45",
-    "AGENT-46",
     "AGENT-X1",
-    "AGENT-X2",
-    "AGENT-X3",
-    "AGENT-X4",
-    "AGENT-X5",
-    "CFG-03",
-    "CFG-06",
-    "CFG-08",
     "CFG-18",
-    "CFG-19",
     "CFG-21",
-    "CFG-22",
-    "CFG-24",
     "CFG-25",
-    "CFG-28",
     "CFG-29",
-    "CFG-30",
-    "CFG-32",
     "CFG-33",
     "CFG-37",
-    "CFG-38",
-    "CFG-44",
     "CFG-45",
     "CFG-X1",
     "CFG-X2",
     "CFG-X3",
     "CFG-X4",
-    "CFG-X5",
     "CFG-X6",
-    "DE-02",
-    "DE-07",
     "DE-08",
     "DE-10",
     "DE-14",
-    "DE-15",
-    "DE-17",
-    "DE-18",
     "DE-19",
-    "DE-20",
     "DE-21",
     "DE-23",
     "DE-24",
     "DE-25",
-    "DE-27",
     "DE-28",
     "DE-29",
     "DE-30",
     "DE-32",
     "DE-33",
-    "DE-34",
     "DE-35",
     "DE-36",
-    "DE-37",
     "DE-38",
-    "DE-39",
-    "DE-40",
-    "DE-41",
-    "DE-42",
-    "DE-43",
     "DE-44",
-    "DE-45",
-    "DE-X1",
     "DE-X2",
     "DE-X4",
     "DE-X5",
     "EVENT-01",
     "EVENT-03",
     "EVENT-04",
-    "EVENT-05",
     "EVENT-06",
     "EVENT-08",
     "EVENT-10",
     "EVENT-11",
     "EVENT-12",
     "EVENT-13",
-    "EVENT-16",
     "EVENT-20",
     "EVENT-23",
     "EVENT-24",
     "EVENT-25",
     "EVENT-26",
-    "EVENT-28",
     "EVENT-29",
     "EVENT-32",
     "EVENT-33",
-    "EVENT-34",
     "EVENT-36",
     "EVENT-39",
     "EVENT-40",
     "EVENT-41",
     "EVENT-43",
-    "EVENT-44",
-    "EVENT-45",
-    "EVENT-47",
-    "EVENT-48",
-    "EVENT-X1",
     "EVENT-X2",
-    "EVENT-X3",
-    "EVENT-X4",
-    "EVENT-X5",
-    "EVENT-X6",
-    "EVENT-X7",
     "IAM-02",
     "IAM-07",
     "IAM-09",
@@ -9151,135 +9316,72 @@
     "IAM-14",
     "IAM-15",
     "IAM-16",
-    "IAM-22",
     "IAM-28",
     "IAM-29",
     "IAM-33",
     "IAM-34",
     "IAM-35",
-    "IAM-41",
-    "IAM-42",
     "IAM-44",
-    "IAM-48",
     "IAM-X1",
     "IAM-X2",
     "IAM-X3",
     "IAM-X4",
-    "IAM-X5",
-    "INTENT-02",
     "INTENT-10",
     "INTENT-12",
     "INTENT-16",
     "INTENT-17",
     "INTENT-18",
     "INTENT-19",
-    "INTENT-20",
     "INTENT-21",
     "INTENT-23",
     "INTENT-24",
-    "INTENT-25",
     "INTENT-26",
     "INTENT-28",
     "INTENT-31",
-    "INTENT-32",
     "INTENT-33",
     "INTENT-40",
-    "INTENT-42",
     "INTENT-46",
     "INTENT-49",
     "INTENT-59",
     "INTENT-60",
-    "INTENT-X10",
     "INTENT-X2",
-    "INTENT-X4",
-    "INTENT-X5",
-    "INTENT-X6",
-    "INTENT-X7",
     "INTENT-X8",
-    "MEM-02",
-    "MEM-03",
-    "MEM-06",
-    "MEM-07",
-    "MEM-11",
-    "MEM-12",
-    "MEM-13",
-    "MEM-14",
-    "MEM-20",
     "MEM-21",
     "MEM-22",
-    "MEM-23",
-    "MEM-25",
-    "MEM-26",
-    "MEM-27",
-    "MEM-28",
-    "MEM-29",
-    "MEM-30",
-    "MEM-32",
-    "MEM-33",
     "MEM-40",
     "MEM-41",
-    "MEM-42",
     "MEM-43",
-    "MEM-44",
     "MEM-45",
     "MEM-46",
-    "MEM-47",
     "MEM-49",
     "MEM-X10",
-    "MEM-X11",
     "MEM-X2",
     "MEM-X3",
     "MEM-X4",
     "MEM-X5",
-    "MEM-X6",
-    "MEM-X7",
     "MEM-X8",
     "MEM-X9",
-    "OPS-003",
-    "OPS-004",
-    "OPS-005",
     "OPS-006",
-    "OPS-007",
-    "OPS-008",
-    "OPS-009",
-    "OPS-010",
-    "OPS-011",
-    "OPS-012",
-    "OPS-013",
-    "OPS-014",
-    "OPS-015",
-    "OPS-016",
-    "OPS-017",
     "OPS-018",
     "OPS-019",
     "OPS-021",
     "OPS-023",
     "OPS-026",
     "OPS-027",
-    "OPS-028",
-    "OPS-029",
-    "OPS-030",
     "OPS-031",
-    "OPS-032",
     "OPS-033",
     "OPS-034",
-    "OPS-035",
     "OPS-036",
     "OPS-037",
     "OPS-038",
     "OPS-039",
     "OPS-040",
     "OPS-041",
-    "OPS-042",
-    "OPS-043",
     "OPS-X10",
     "OPS-X3",
     "OPS-X4",
     "OPS-X5",
-    "OPS-X6",
-    "OPS-X7",
     "OPS-X8",
-    "OPS-X9",
     "REPO-01",
     "REPO-02",
     "REPO-03",
@@ -9288,45 +9390,31 @@
     "REPO-06",
     "REPO-08",
     "REPO-09",
-    "REPO-10",
-    "REPO-11",
     "REPO-12",
     "REPO-15",
     "REPO-16",
     "REPO-17",
-    "REPO-19",
     "REPO-25",
     "REPO-26",
     "REPO-27",
-    "REPO-28",
     "REPO-29",
     "REPO-30",
     "REPO-33",
     "REPO-34",
-    "REPO-36",
     "REPO-37",
-    "REPO-39",
-    "REPO-40",
-    "REPO-42",
-    "REPO-43",
     "REPO-44",
     "REPO-X1",
     "REPO-X2",
-    "REPO-X3",
     "REPO-X4",
     "REPO-X5",
     "RES-01",
-    "RES-02",
-    "RES-04",
     "RES-05",
-    "RES-06",
     "RES-11",
     "RES-12",
     "RES-16",
     "RES-17",
     "RES-18",
     "RES-19",
-    "RES-20",
     "RES-21",
     "RES-22",
     "RES-23",
@@ -9338,23 +9426,17 @@
     "RES-31",
     "RES-32",
     "RES-33",
-    "RES-34",
-    "RES-35",
     "RES-36",
     "RES-37",
     "RES-38",
     "RES-40",
     "RES-41",
-    "RES-42",
     "RES-43",
     "RES-45",
     "RES-46",
     "RES-X1",
     "RES-X2",
     "RES-X3",
-    "RES-X5",
-    "RES-X6",
-    "TASK-03",
     "TASK-04",
     "TASK-05",
     "TASK-06",
@@ -9362,10 +9444,8 @@
     "TASK-11",
     "TASK-13",
     "TASK-14",
-    "TASK-15",
     "TASK-16",
     "TASK-17",
-    "TASK-19",
     "TASK-21",
     "TASK-24",
     "TASK-26",
@@ -9375,70 +9455,43 @@
     "TASK-33",
     "TASK-34",
     "TASK-35",
-    "TASK-36",
     "TASK-38",
     "TASK-39",
     "TASK-44",
     "TASK-45",
     "TASK-X1",
-    "TASK-X2",
     "TASK-X5",
     "TASK-X7",
     "UX-04",
     "UX-05",
-    "UX-06",
     "UX-09",
     "UX-11",
-    "UX-13",
     "UX-15",
     "UX-16",
-    "UX-17",
     "UX-19",
-    "UX-20",
     "UX-24",
-    "UX-26",
-    "UX-28",
     "UX-32",
     "UX-33",
-    "UX-34",
-    "UX-36",
-    "UX-37",
-    "UX-38",
-    "UX-39",
-    "UX-40",
     "UX-41",
     "UX-42",
     "UX-43",
-    "UX-44",
-    "UX-45",
     "UX-47",
     "UX-X2",
-    "UX-X3",
-    "UX-X4",
     "UX-X7",
     "WF-02",
     "WF-03",
     "WF-04",
-    "WF-05",
     "WF-06",
     "WF-08",
     "WF-11",
     "WF-13",
     "WF-14",
-    "WF-15",
     "WF-17",
     "WF-20",
     "WF-21",
     "WF-22",
     "WF-24",
     "WF-25",
-    "WF-26",
-    "WF-27",
-    "WF-28",
-    "WF-29",
-    "WF-30",
-    "WF-31",
-    "WF-32",
     "WF-33",
     "WF-34",
     "WF-35",
@@ -9451,44 +9504,183 @@
     "WF-50",
     "WF-51",
     "WF-52",
-    "WF-53",
-    "WF-55",
-    "WF-56",
-    "WF-57",
     "WF-X1",
-    "WF-X2",
-    "WF-X3",
-    "WF-X4",
-    "WF-X5",
     "WG-05",
-    "WG-06",
     "WG-09",
     "WG-15",
     "WG-24",
     "WG-27",
     "WG-28",
     "WG-29",
-    "WG-30",
     "WG-31",
-    "WG-32",
     "WG-33",
     "WG-34",
+    "WG-41",
+    "WG-42",
+    "WG-43",
+    "WG-44",
+    "WG-45",
+    "WG-X3",
+    "WG-X5",
+    "AGENT-02",
+    "AGENT-03",
+    "AGENT-06",
+    "AGENT-21",
+    "AGENT-22",
+    "AGENT-24",
+    "AGENT-25",
+    "AGENT-26",
+    "AGENT-29",
+    "AGENT-30",
+    "AGENT-36",
+    "AGENT-38",
+    "AGENT-41",
+    "AGENT-44",
+    "AGENT-45",
+    "AGENT-46",
+    "AGENT-X3",
+    "AGENT-X4",
+    "CFG-03",
+    "CFG-06",
+    "CFG-08",
+    "CFG-19",
+    "CFG-22",
+    "CFG-24",
+    "CFG-28",
+    "CFG-30",
+    "CFG-32",
+    "CFG-38",
+    "CFG-44",
+    "CFG-X5",
+    "DE-02",
+    "DE-15",
+    "DE-20",
+    "DE-34",
+    "DE-37",
+    "DE-39",
+    "DE-40",
+    "DE-41",
+    "DE-42",
+    "DE-43",
+    "DE-45",
+    "EVENT-05",
+    "EVENT-16",
+    "EVENT-28",
+    "EVENT-34",
+    "EVENT-44",
+    "EVENT-45",
+    "EVENT-47",
+    "EVENT-48",
+    "EVENT-X1",
+    "EVENT-X3",
+    "EVENT-X4",
+    "EVENT-X5",
+    "EVENT-X6",
+    "EVENT-X7",
+    "IAM-22",
+    "IAM-41",
+    "IAM-42",
+    "IAM-48",
+    "IAM-X5",
+    "INTENT-02",
+    "INTENT-20",
+    "INTENT-25",
+    "INTENT-32",
+    "INTENT-42",
+    "INTENT-X10",
+    "INTENT-X4",
+    "INTENT-X5",
+    "INTENT-X6",
+    "INTENT-X7",
+    "MEM-13",
+    "MEM-14",
+    "MEM-42",
+    "MEM-44",
+    "MEM-X11",
+    "OPS-003",
+    "OPS-004",
+    "OPS-005",
+    "OPS-007",
+    "OPS-008",
+    "OPS-009",
+    "OPS-010",
+    "OPS-011",
+    "OPS-012",
+    "OPS-013",
+    "OPS-014",
+    "OPS-015",
+    "OPS-016",
+    "OPS-017",
+    "OPS-028",
+    "OPS-029",
+    "OPS-030",
+    "OPS-032",
+    "OPS-035",
+    "OPS-042",
+    "OPS-043",
+    "OPS-X6",
+    "OPS-X7",
+    "OPS-X9",
+    "REPO-10",
+    "REPO-11",
+    "REPO-19",
+    "REPO-28",
+    "REPO-36",
+    "REPO-39",
+    "REPO-40",
+    "REPO-42",
+    "REPO-X3",
+    "RES-02",
+    "RES-04",
+    "RES-06",
+    "RES-20",
+    "RES-34",
+    "RES-35",
+    "RES-42",
+    "RES-X5",
+    "RES-X6",
+    "TASK-03",
+    "TASK-15",
+    "TASK-19",
+    "TASK-36",
+    "TASK-X2",
+    "UX-06",
+    "UX-13",
+    "UX-17",
+    "UX-20",
+    "UX-26",
+    "UX-28",
+    "UX-34",
+    "UX-36",
+    "UX-37",
+    "UX-38",
+    "UX-39",
+    "UX-40",
+    "UX-44",
+    "UX-45",
+    "UX-X3",
+    "UX-X4",
+    "WF-05",
+    "WF-15",
+    "WF-53",
+    "WF-55",
+    "WF-56",
+    "WF-57",
+    "WF-X2",
+    "WF-X4",
+    "WF-X5",
+    "WG-06",
+    "WG-30",
+    "WG-32",
     "WG-35",
     "WG-36",
     "WG-37",
     "WG-38",
     "WG-39",
     "WG-40",
-    "WG-41",
-    "WG-42",
-    "WG-43",
-    "WG-44",
-    "WG-45",
     "WG-46",
     "WG-X2",
-    "WG-X3",
-    "WG-X4",
-    "WG-X5"
+    "WG-X4"
   ],
   "unverifiedIds": [
     "AGENT-05",

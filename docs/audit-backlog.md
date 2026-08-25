@@ -2344,3 +2344,23 @@ RFC-060 PR-D 推迟到 PR-D2，至今未落地。
   当前这种「能连、能跑、就是永远不问」是最难排查的一档。
 
 留给 RFC-060 后续波次判定。
+
+## RFC-319 B70 起草期撞到的三条用户面缺陷（2026-08-25，均未写成断言）
+
+三条都**没有**写进 e2e 断言——把 bug 锁进测试等于把它固化。逐条给了 `file:line`，行号按 `origin/main`。
+
+1. **清理一条孤儿 sidecar 会把草稿里的分支端口声明整体归零。** `removeOrphanOutputSidecars`
+   （`packages/backend/src/services/agent-ports.ts:424-447`）的返回值里**没有 `branchPorts`**，
+   而 `OutputsEditor.cleanupOrphan → emit`（`packages/frontend/src/components/OutputsEditor.tsx:81-83, 97-99`）
+   把它当 `undefined` 一路传给 `onChange`。净效果：清理任意一条孤儿映射后，卡片上的「branch port」标记
+   当场全部消失。这一次保存靠 `JSON.stringify` 丢掉 `undefined` + 后端 sparse-patch 语义侥幸没清库，但
+   用户接着再动任何一个分支开关，PUT 就会带上一个不含原有声明的新数组，把分支端口声明**永久覆盖掉**。
+2. **记忆表单 repo 档的下拉每一行都是空白。** `MemoryDialogShell.tsx:34-38` 把 `/api/cached-repos` 的行
+   声明成 `{id,url,localPath}`、`:194-196` 取 `r.url` 当标签；而 RFC-204 早已把明文 `url` 从 wire 上摘掉，
+   服务端只回 `urlRedacted`（`packages/shared/src/schemas/cachedRepo.ts:15`、
+   `packages/backend/src/services/gitRepoCache.ts:353-359`）。全仓只剩这一个消费方还在读 `url`。
+   用户后果：给 repo 挂记忆时只能靠位置盲选。
+3. **`?focus=` 是个空载参数，「在审批队列中打开」实际落在 All Approved。** `routes/memory.tsx:54-61` 只把
+   `focus` 透传，全仓**没有任何组件消费 `search.focus`**；且 `CandidatesList.tsx:55` 用 `search={{ focus }}`
+   **整体替换**了 search，`tab` 因而回落到默认值。深链既不进审批队列，也不滚动/高亮那条候选。
+   MEM-33 因此只锁「链接带对了 memoryId、点开不白屏、参数不被 `validateSearch` 吃掉」。
