@@ -3895,8 +3895,13 @@
       "title": "创建请求失败（422 / 网络错）→ ErrorBanner + composer 解锁 + 不产生僵尸会话",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-04 创建失败（服务端 422 / 断网）：报错读得懂、composer 立刻解锁、服务端不留僵尸会话"
+        }
+      ]
     },
     {
       "id": "INTENT-05",
@@ -3904,8 +3909,17 @@
       "title": "创建进行中锁死所有离开路径（弹窗关闭 / 侧边栏跳转 / 浏览器前进后退 / 刷新）+ 防重复提交",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷新全被锁死，重复提交只发一次 POST"
+        },
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-05 创建进行中：新建弹窗的关闭按钮 / Esc / 点遮罩 / 取消四条路径全被封死"
+        }
+      ]
     },
     {
       "id": "INTENT-08",
@@ -3913,8 +3927,13 @@
       "title": "最近会话卡片展示四阶段业务状态 chip（goal/generate/review/apply）与轮次/提交计数",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-08 最近会话卡片：状态 chip 随真实进度从 Generate 走到 Review 再到 Apply，轮次/提交计数逐条独立"
+        }
+      ]
     },
     {
       "id": "INTENT-09",
@@ -3922,8 +3941,13 @@
       "title": "最近会话 keyset 分页「Load more tasks」",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全"
+        }
+      ]
     },
     {
       "id": "INTENT-10",
@@ -3940,8 +3964,13 @@
       "title": "已提交资源上的 provenance 徽章：可见者可点回源会话；不可见者 DOM 里完全没有",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-11 provenance 徽章：源会话可见者点得回去，不可见者 DOM 里一个都没有"
+        }
+      ]
     },
     {
       "id": "INTENT-12",
@@ -4041,8 +4070,13 @@
       "title": "挂载不可见/不存在的资源被拒（404，与不存在同形）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-27 挂载不可见资源与挂载不存在资源回同一个 404，可见的照常挂得上"
+        }
+      ]
     },
     {
       "id": "INTENT-28",
@@ -4059,8 +4093,17 @@
       "title": "草稿含阻断性校验错误时：红色横幅列出错误、评审页签红色计数徽章、Commit 按钮禁用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审页签红计数、Commit 入口禁用、服务端同样拒收"
+        },
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-30 负向对照：目标已挂载、草稿无错误时，横幅与徽章都不许出现，Commit 入口可用"
+        }
+      ]
     },
     {
       "id": "INTENT-31",
@@ -4086,8 +4129,13 @@
       "title": "提交明细步：secret slot（密码输入）必须填满才能进复核/提交",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-35 提交明细步：密码型 secret 槽没填满就进不了复核，也提交不了"
+        }
+      ]
     },
     {
       "id": "INTENT-36",
@@ -4095,8 +4143,13 @@
       "title": "提交明细步：secretWaiver（凭据豁免）必须逐项显式勾选",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-36 提交明细步：凭据豁免必须逐项显式勾选，未勾选一律挡在复核之前"
+        }
+      ]
     },
     {
       "id": "INTENT-37",
@@ -4104,8 +4157,13 @@
       "title": "提交明细步：humanBinding slot 用 UserPicker 指定真人",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-37 提交明细步：占位真人成员用 UserPicker 绑定，不绑就是「默认丢弃」"
+        }
+      ]
     },
     {
       "id": "INTENT-38",
@@ -4113,8 +4171,13 @@
       "title": "提交明细步：finalName slot 解决重名冲突（改名后提交）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-38 提交明细步：重名被服务端挡下，用 finalName 槽改名后才落地"
+        }
+      ]
     },
     {
       "id": "INTENT-40",
@@ -4131,8 +4194,25 @@
       "title": "提交冲突拒绝：草稿哈希不匹配 / 轮次在跑 / 会话已归档 / 修订被取代",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-41 提交冲突：草稿哈希不匹配时拒收；不篡改时同一向导必须能提交成功"
+        },
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-41 提交冲突：确认的修订已被更新的修订取代时拒收（旧标签页形态）"
+        },
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-41 提交冲突：会话已归档时拒收"
+        },
+        {
+          "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
+          "test": "INTENT-41 提交冲突：生成轮次还在跑时拒收"
+        }
+      ]
     },
     {
       "id": "INTENT-43",
@@ -4140,8 +4220,13 @@
       "title": "归档 / 重新打开会话（含归档后只读横幅）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-43 归档：整页转只读且写接口 409，重新打开后控件原样回来"
+        }
+      ]
     },
     {
       "id": "INTENT-44",
@@ -4149,8 +4234,13 @@
       "title": "管理员审计只读视图（?all=1）：完整历史可见但零变更控件",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-44 管理员审计视图：历史一条不少，变更控件一个不剩，写面照样 404"
+        }
+      ]
     },
     {
       "id": "INTENT-45",
@@ -4158,8 +4248,13 @@
       "title": "非成员访问他人会话与不存在会话完全同形（404）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-45 非成员看他人会话与看不存在的会话：状态码、响应体、页面文案逐字节同形"
+        }
+      ]
     },
     {
       "id": "INTENT-46",
@@ -4196,8 +4291,17 @@
       "title": "记忆页「融合」页签：待审批融合列表 / 空态 / 错误重试 / 点行进详情",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 没有待审融合时是空态且无徽章；列表拉取失败时给得出重试，且绝不冒充空态"
+        },
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情"
+        }
+      ]
     },
     {
       "id": "INTENT-52",
@@ -4205,8 +4309,13 @@
       "title": "融合详情：运行中提示条 + 指向澄清收件箱的链接 + 2s 轮询自动进入待审批",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-52: 融合运行中把人指向澄清收件箱，答完之后详情页自己翻到待审批（不用刷新）"
+        }
+      ]
     },
     {
       "id": "INTENT-55",
@@ -4214,8 +4323,13 @@
       "title": "融合驳回：填写反馈 → 重跑下一轮迭代（iteration+1）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-55: 驳回并写下反馈 → 融合带着反馈重跑下一轮（iteration+1），上一轮提案不再摆在审批位上"
+        }
+      ]
     },
     {
       "id": "INTENT-56",
@@ -4223,8 +4337,13 @@
       "title": "融合取消（带二次确认）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-56: 取消要点两次——单击只是预备；确认之后连引擎任务一起停，服务端也不再接受审批"
+        }
+      ]
     },
     {
       "id": "INTENT-57",
@@ -4232,8 +4351,13 @@
       "title": "融合失败态：显示失败原因，且不再提供审批按钮",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-57: 融合失败时把失败原因摆在页面上，且不再提供任何审批入口"
+        }
+      ]
     },
     {
       "id": "INTENT-59",
@@ -4259,8 +4383,17 @@
       "title": "【原审计漏项】没有 intent:write 权限时，六类资源页上的「用 AI 构建 / 修改」入口按钮整体不渲染",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-X1 没有 intent:write：六类资源页的「用 AI 构建 / 修改」入口整体不挂载"
+        },
+        {
+          "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
+          "test": "INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:write 收放"
+        }
+      ]
     },
     {
       "id": "INTENT-X2",
@@ -7456,8 +7589,13 @@
       "title": "空白 composer 的示例提示语（examples）一键填入并聚焦",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-03 空 composer 的示例语：一键填入、焦点与光标跟过去，且不在弹窗里重复出现"
+        }
+      ]
     },
     {
       "id": "INTENT-06",
@@ -7465,8 +7603,13 @@
       "title": "目标文本 16 KiB 上限与字数计数器",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-06 目标 16 KiB 上限：计数器如实计数，键盘打不进第 16385 个字符，服务端按同一个数拒收"
+        }
+      ]
     },
     {
       "id": "INTENT-07",
@@ -7474,8 +7617,13 @@
       "title": "/intent 列表空态",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-create-and-list.spec.ts",
+          "test": "INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全"
+        }
+      ]
     },
     {
       "id": "INTENT-20",
@@ -7519,8 +7667,13 @@
       "title": "融合发起的前置校验：未选技能 / 未选记忆 → 本地错误提示",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-50: 未选记忆 / 未选技能时，发起融合被本地拦下——不发请求、不清空已写的意图"
+        }
+      ]
     },
     {
       "id": "INTENT-X10",
@@ -7573,8 +7726,13 @@
       "title": "【原审计漏项】记忆页「融合」页签徽章计数（/api/fusions/pending-count）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情"
+        }
+      ]
     },
     {
       "id": "MEM-03",
@@ -8794,15 +8952,7 @@
     "IAM-X4",
     "IAM-X5",
     "INTENT-02",
-    "INTENT-03",
-    "INTENT-04",
-    "INTENT-05",
-    "INTENT-06",
-    "INTENT-07",
-    "INTENT-08",
-    "INTENT-09",
     "INTENT-10",
-    "INTENT-11",
     "INTENT-12",
     "INTENT-16",
     "INTENT-17",
@@ -8814,33 +8964,16 @@
     "INTENT-24",
     "INTENT-25",
     "INTENT-26",
-    "INTENT-27",
     "INTENT-28",
-    "INTENT-30",
     "INTENT-31",
     "INTENT-32",
     "INTENT-33",
-    "INTENT-35",
-    "INTENT-36",
-    "INTENT-37",
-    "INTENT-38",
     "INTENT-40",
-    "INTENT-41",
     "INTENT-42",
-    "INTENT-43",
-    "INTENT-44",
-    "INTENT-45",
     "INTENT-46",
     "INTENT-49",
-    "INTENT-50",
-    "INTENT-51",
-    "INTENT-52",
-    "INTENT-55",
-    "INTENT-56",
-    "INTENT-57",
     "INTENT-59",
     "INTENT-60",
-    "INTENT-X1",
     "INTENT-X10",
     "INTENT-X2",
     "INTENT-X4",
@@ -8848,7 +8981,6 @@
     "INTENT-X6",
     "INTENT-X7",
     "INTENT-X8",
-    "INTENT-X9",
     "MEM-02",
     "MEM-03",
     "MEM-06",
