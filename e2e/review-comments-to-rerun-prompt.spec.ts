@@ -232,7 +232,7 @@ test.afterAll(async () => {
   if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true })
 })
 
-test('意见的增 / 改 / 删都落在这一版上，且列表如实反映', async () => {
+test('意见的增 / 改 / 删都落在这一版上，且列表如实反映 @nightly', async () => {
   const { review } = await launchAndAwaitReview('rfc319-revcomments-crud')
   const detail = await api<Detail>(`/api/reviews/${review.nodeRunId}`)
   expect(detail.comments, '新开的评审不该带着上一轮的意见').toHaveLength(0)
@@ -271,7 +271,7 @@ test('意见的增 / 改 / 删都落在这一版上，且列表如实反映', as
   expect(after.comments.map((c) => c.commentText)).toEqual([COMMENT_TWO])
 })
 
-test('迭代之后：意见连同锚点一起进重跑提示词，并被归档进那一版的快照', async () => {
+test('迭代之后：意见连同锚点一起进重跑提示词，并被归档进那一版的快照 @nightly', async () => {
   const { taskId, review } = await launchAndAwaitReview('rfc319-revcomments-iterate')
   const detail = await api<Detail>(`/api/reviews/${review.nodeRunId}`)
   const word = detail.currentBody.trim().split(/\s+/)[0] ?? ''

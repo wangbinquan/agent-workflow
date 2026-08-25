@@ -377,7 +377,7 @@ test.afterAll(async () => {
   if (stateDir !== undefined) rmSync(stateDir, { recursive: true, force: true })
 })
 
-test('评审列表：多文档看得出是多文档，展开的是「轮」而不是版本', async ({ page }) => {
+test('评审列表：多文档看得出是多文档，展开的是「轮」而不是版本 @nightly', async ({ page }) => {
   await openPage(page, '/reviews')
   // 两条评审各自一个任务分组（`.reviews-group`）；按分组取，避免两张表的行 / 面板
   // 在整页 DOM 顺序上互相错位。
@@ -419,7 +419,7 @@ test('评审列表：多文档看得出是多文档，展开的是「轮」而�
   await expect(singlePanel.locator('.reviews-version-list__item').first()).toContainText('v1')
 })
 
-test('历史轮：只读、点名第几轮、并写清那一轮为什么被打回', async ({ page }) => {
+test('历史轮：只读、点名第几轮、并写清那一轮为什么被打回 @nightly', async ({ page }) => {
   await openPage(page, `/reviews/${encodeURIComponent(multiDocNodeRunId)}?round=${firstRoundKey}`)
 
   // 只读横幅点名「第 1 轮 · rejected」——只说「只读」不说是哪一轮，人分不清自己在看什么。
@@ -450,7 +450,7 @@ test('历史轮：只读、点名第几轮、并写清那一轮为什么被打�
   await expect(page.locator('.readonly-banner')).toHaveCount(0)
 })
 
-test('上一轮接受过、这一轮内容变了的文档，必须打「已变更」', async ({ page }) => {
+test('上一轮接受过、这一轮内容变了的文档，必须打「已变更」 @nightly', async ({ page }) => {
   // 服务端先对账：继承来的选择还在，且只有内容变了的那篇是 stale。
   const docs = await documents(multiDocNodeRunId)
   expect(docs.map((d) => [d.title, d.selection, d.stale === true])).toEqual([
@@ -469,7 +469,9 @@ test('上一轮接受过、这一轮内容变了的文档，必须打「已变�
   await expect(rows.nth(1).getByTestId('multidoc-stale-badge')).toHaveCount(0)
 })
 
-test('逐篇接受 / 不接受：界面按钮与 q / w 快捷键，且带修饰键一律不接管', async ({ page }) => {
+test('逐篇接受 / 不接受：界面按钮与 q / w 快捷键，且带修饰键一律不接管 @nightly', async ({
+  page,
+}) => {
   await openPage(page, `/reviews/${encodeURIComponent(multiDocNodeRunId)}`)
   const rows = page.locator('.review-multidoc__doc')
   await expect(rows).toHaveCount(2)

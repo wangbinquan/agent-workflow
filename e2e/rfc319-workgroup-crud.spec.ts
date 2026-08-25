@@ -328,7 +328,7 @@ test.afterAll(async () => {
 // WG-04
 // ---------------------------------------------------------------------------
 
-test('WG-04 快速新建：空名与非法名不给提交，合法输入落成 private 组并直接进详情页', async ({
+test('WG-04 快速新建：空名与非法名不给提交，合法输入落成 private 组并直接进详情页 @nightly', async ({
   browser,
 }) => {
   const owner = await seedUser('user', 'wg04')
@@ -427,7 +427,7 @@ test('WG-04 快速新建：空名与非法名不给提交，合法输入落成 p
 // WG-01
 // ---------------------------------------------------------------------------
 
-test('WG-01 列表画廊：模式/成员数/leader/人类成员/可见性/归属人逐格对账，未就绪的组不给启动入口', async ({
+test('WG-01 列表画廊：模式/成员数/leader/人类成员/可见性/归属人逐格对账，未就绪的组不给启动入口 @nightly', async ({
   browser,
 }) => {
   const owner = await seedUser('user', 'wg01')
@@ -581,7 +581,7 @@ test('WG-01 列表画廊：模式/成员数/leader/人类成员/可见性/归属
 // WG-02
 // ---------------------------------------------------------------------------
 
-test('WG-02 列表搜索：按卡片可见事实过滤、无匹配给空态、清空搜索复原列表并把焦点还回搜索框', async ({
+test('WG-02 列表搜索：按卡片可见事实过滤、无匹配给空态、清空搜索复原列表并把焦点还回搜索框 @nightly', async ({
   browser,
 }) => {
   const owner = await seedUser('user', 'wg02')
@@ -711,7 +711,7 @@ test('WG-02 列表搜索：按卡片可见事实过滤、无匹配给空态、�
 // WG-03
 // ---------------------------------------------------------------------------
 
-test('WG-03 列表空态：主行动按钮随建组权限出现，有数据后空态消失且按钮搬回页头', async ({
+test('WG-03 列表空态：主行动按钮随建组权限出现，有数据后空态消失且按钮搬回页头 @nightly', async ({
   browser,
 }) => {
   const owner = await seedUser('user', 'wg03')
@@ -806,7 +806,9 @@ test('WG-03 列表空态：主行动按钮随建组权限出现，有数据后�
 // WG-16
 // ---------------------------------------------------------------------------
 
-test('WG-16 重命名：名称+描述一次原子落库，撞上同 owner 重名时整笔回退', async ({ browser }) => {
+test('WG-16 重命名：名称+描述一次原子落库，撞上同 owner 重名时整笔回退 @nightly', async ({
+  browser,
+}) => {
   const owner = await seedUser('user', 'wg16')
   const prefix = `rfc319-wg16-${owner.username}`
   const agentId = await seedAgent(owner, `${prefix}-agent`)
@@ -933,7 +935,9 @@ test('WG-16 重命名：名称+描述一次原子落库，撞上同 owner 重名
 // WG-17
 // ---------------------------------------------------------------------------
 
-test('WG-17 复制：exact-revision 复制出 -copy 私有副本，陈旧版本一律拒绝', async ({ browser }) => {
+test('WG-17 复制：exact-revision 复制出 -copy 私有副本，陈旧版本一律拒绝 @nightly', async ({
+  browser,
+}) => {
   const owner = await seedUser('user', 'wg17')
   const bystander = await seedUser('user', 'wg17other')
   const prefix = `rfc319-wg17-${owner.username}`
@@ -1094,7 +1098,7 @@ test('WG-17 复制：exact-revision 复制出 -copy 私有副本，陈旧版本�
 // WG-18
 // ---------------------------------------------------------------------------
 
-test('WG-18 删除：输入名称确认 + 版本 fence + 非终态任务引用拒删', async ({ browser }) => {
+test('WG-18 删除：输入名称确认 + 版本 fence + 非终态任务引用拒删 @nightly', async ({ browser }) => {
   // 这条用例要真的起一个任务并把它扣在运行中，比其余用例慢得多。
   test.setTimeout(180_000)
 

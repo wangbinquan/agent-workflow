@@ -173,7 +173,9 @@ test.afterAll(async () => {
   if (stateDir !== undefined) rmSync(stateDir, { recursive: true, force: true })
 })
 
-test('两个分片同时在等人回答：这一屏要把兄弟分片摆出来并且真的跳得过去', async ({ page }) => {
+test('两个分片同时在等人回答：这一屏要把兄弟分片摆出来并且真的跳得过去 @nightly', async ({
+  page,
+}) => {
   await seedAuth(page)
   const [first, second] = shardRounds
   await page.goto(`${daemon.baseUrl}/clarify/${encodeURIComponent(first!.nodeRunId)}`)
@@ -198,7 +200,7 @@ test('两个分片同时在等人回答：这一屏要把兄弟分片摆出来�
   ).toHaveAttribute('aria-current', /page|true/)
 })
 
-test('答掉其中一份之后：只剩一份在等，切换器就该收起来', async ({ page }) => {
+test('答掉其中一份之后：只剩一份在等，切换器就该收起来 @nightly', async ({ page }) => {
   await seedAuth(page)
   const [first, second] = shardRounds
   const detail = await api<{ iteration: number }>(`/api/clarify/${second!.nodeRunId}`)

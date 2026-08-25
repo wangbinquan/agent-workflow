@@ -511,7 +511,7 @@ test.afterAll(async () => {
 // WG-19
 // ---------------------------------------------------------------------------
 
-test('WG-19a ACL 面板的可见性开关：public→private→public 双向生效，read 档与 write 档的面板全程只读', async ({
+test('WG-19a ACL 面板的可见性开关：public→private→public 双向生效，read 档与 write 档的面板全程只读 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({ username: 'rfc319-wg19a-alice', role: 'user' })
@@ -666,7 +666,7 @@ test('WG-19a ACL 面板的可见性开关：public→private→public 双向生�
   }
 })
 
-test('WG-19b ACL 面板的逐用户授权：加人默认落 read、提到 write 才拿到内容写、移出后彻底看不见', async ({
+test('WG-19b ACL 面板的逐用户授权：加人默认落 read、提到 write 才拿到内容写、移出后彻底看不见 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({ username: 'rfc319-wg19b-alice', role: 'user' })
@@ -796,7 +796,7 @@ test('WG-19b ACL 面板的逐用户授权：加人默认落 read、提到 write 
 // WG-20
 // ---------------------------------------------------------------------------
 
-test('WG-20 私有工作组对无关用户完全不可见：列表过滤 + 详情/ACL/写面与「不存在」逐字节同形', async ({
+test('WG-20 私有工作组对无关用户完全不可见：列表过滤 + 详情/ACL/写面与「不存在」逐字节同形 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({ username: 'rfc319-wg20-alice', role: 'user' })
@@ -927,7 +927,7 @@ test('WG-20 私有工作组对无关用户完全不可见：列表过滤 + 详�
 // WG-21
 // ---------------------------------------------------------------------------
 
-test('WG-21 read 档看得见改不动、write 档只够得着内容：四条写路径按门分流成三个拒绝码，界面同步收口', async ({
+test('WG-21 read 档看得见改不动、write 档只够得着内容：四条写路径按门分流成三个拒绝码，界面同步收口 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({ username: 'rfc319-wg21-alice', role: 'user' })
@@ -1201,7 +1201,7 @@ test('WG-21 read 档看得见改不动、write 档只够得着内容：四条写
 // WG-22
 // ---------------------------------------------------------------------------
 
-test('WG-22 新增成员引用不可见的私有代理 → 422 acl-missing-refs；存量引用豁免，可见引用照常加得上', async () => {
+test('WG-22 新增成员引用不可见的私有代理 → 422 acl-missing-refs；存量引用豁免，可见引用照常加得上 @nightly', async () => {
   const alice = await createUserAndLogin({ username: 'rfc319-wg22-alice', role: 'user' })
   const bob = await createUserAndLogin({ username: 'rfc319-wg22-bob', role: 'user' })
 
@@ -1344,7 +1344,7 @@ test('WG-22 新增成员引用不可见的私有代理 → 422 acl-missing-refs�
 // WG-X1
 // ---------------------------------------------------------------------------
 
-test('WG-X1 意图构建器入口：有 intent:write 时列表/详情各挂一个且导航参数正确，没有时整体不挂载', async ({
+test('WG-X1 意图构建器入口：有 intent:write 时列表/详情各挂一个且导航参数正确，没有时整体不挂载 @nightly', async ({
   browser,
 }) => {
   // guest 是产品里唯一「登录了、看得见资源、但没有 intent:*」的档位

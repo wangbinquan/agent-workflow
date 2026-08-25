@@ -2269,12 +2269,12 @@
       "domain": "代理",
       "title": "删除代理：More → Delete → 输入名称确认 → 204 → 回到空态列表",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表"
+          "test": "AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表 @nightly"
         }
       ]
     },
@@ -2283,12 +2283,12 @@
       "domain": "代理",
       "title": "删除被工作流引用的代理 → 409 agent-in-use 并列出引用它的工作流",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-09 删除被工作流引用的代理：409 agent-in-use 并点名引用它的工作流；解引用后可删"
+          "test": "AGENT-09 删除被工作流引用的代理：409 agent-in-use 并点名引用它的工作流；解引用后可删 @nightly"
         }
       ]
     },
@@ -2297,12 +2297,12 @@
       "domain": "代理",
       "title": "删除确认名不匹配时拒绝执行",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表"
+          "test": "AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表 @nightly"
         }
       ]
     },
@@ -2311,12 +2311,12 @@
       "domain": "代理",
       "title": "输出端口的新增 / 编辑 / 删除（卡片 + 事务式对话框）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-14: 输出端口的增/改/删经保存后落库，kind sidecar 跟着端口名一起搬家"
+          "test": "RFC-319 AGENT-14: 输出端口的增/改/删经保存后落库，kind sidecar 跟着端口名一起搬家 @nightly"
         }
       ]
     },
@@ -2325,12 +2325,12 @@
       "domain": "代理",
       "title": "输入端口的新增 / 编辑 / 删除，含 required 开关与描述",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-15: 输入端口的增/改/删落库，required 开关与描述各自按语义持久化"
+          "test": "RFC-319 AGENT-15: 输入端口的增/改/删落库，required 开关与描述各自按语义持久化 @nightly"
         }
       ]
     },
@@ -2339,12 +2339,12 @@
       "domain": "代理",
       "title": "把输出端口标记为「分支端口」并让运行期真的能关闭该分支",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-19: 勾上「分支端口」才让运行期真的关得掉分支——同一个工作流勾选前后各跑一次"
+          "test": "RFC-319 AGENT-19: 勾上「分支端口」才让运行期真的关得掉分支——同一个工作流勾选前后各跑一次 @nightly"
         }
       ]
     },
@@ -2402,12 +2402,12 @@
       "domain": "代理",
       "title": "代理列表：搜索过滤 / 计数 / 空态 / 卡片徽章（runtime、端口数、private、owner、builtin、aggregator）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-40 代理列表：计数 / 卡片徽章逐格 / 按卡片可见事实搜索 / 无匹配空态 / 真空态"
+          "test": "AGENT-40 代理列表：计数 / 卡片徽章逐格 / 按卡片可见事实搜索 / 无匹配空态 / 真空态 @nightly"
         }
       ]
     },
@@ -2434,12 +2434,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "非 admin 直接输入 /settings URL 被重定向",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-02：非管理员直接敲 /settings URL 被弹回首页，管理员照常进入"
+          "test": "RFC-319 CFG-02：非管理员直接敲 /settings URL 被弹回首页，管理员照常进入 @nightly"
         }
       ]
     },
@@ -2448,12 +2448,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "设置保存被服务端拒绝时的错误呈现",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-05：服务端明确拒绝时，页面说清原因、原样保留草稿、且不进入写屏障"
+          "test": "RFC-319 CFG-05：服务端明确拒绝时，页面说清原因、原样保留草稿、且不进入写屏障 @nightly"
         }
       ]
     },
@@ -2462,12 +2462,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "设置项被他人并发改动后的 stale 横幅与「放弃本地」",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-07：他人改了同一项时给出提示、保住我的草稿，「用服务端的值」落到对方的新值"
+          "test": "RFC-319 CFG-07：他人改了同一项时给出提示、保住我的草稿，「用服务端的值」落到对方的新值 @nightly"
         }
       ]
     },
@@ -2476,12 +2476,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "运行时列表渲染（默认标记 / 协议 / 启停 / smoke 结果 / 二进制路径）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-10：运行时表把「会拉起哪个二进制」逐行摊开，且每一格都对得上服务端"
+          "test": "RFC-319 CFG-10：运行时表把「会拉起哪个二进制」逐行摊开，且每一格都对得上服务端 @nightly"
         }
       ]
     },
@@ -2490,12 +2490,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "新增自定义运行时（含保存前 smoke 预检）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-11：新增自定义运行时时，保存前真的把那个二进制拉起来跑了一遍"
+          "test": "RFC-319 CFG-11：新增自定义运行时时，保存前真的把那个二进制拉起来跑了一遍 @nightly"
         }
       ]
     },
@@ -2504,12 +2504,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "在运行时表内「设为默认」（写 config.defaultRuntime）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-14：在表内「设为默认」既要改界面，也要真的写进 config.defaultRuntime"
+          "test": "RFC-319 CFG-14：在表内「设为默认」既要改界面，也要真的写进 config.defaultRuntime @nightly"
         }
       ]
     },
@@ -2518,12 +2518,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "启用/禁用运行时；有效默认不可被禁用",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-15：非默认运行时能真停用；有效默认停不掉——按钮拦一层，服务端还要再拦一层"
+          "test": "RFC-319 CFG-15：非默认运行时能真停用；有效默认停不掉——按钮拦一层，服务端还要再拦一层 @nightly"
         }
       ]
     },
@@ -2532,16 +2532,16 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "删除运行时及其拒绝分支（被引用 / 是默认 / 被 config 字段引用 / 最后一行）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代理引用 / 是默认 / 被 config 功能字段引用"
+          "test": "RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代理引用 / 是默认 / 被 config 功能字段引用 @nightly"
         },
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-16（二）：没有引用的运行时确实删得掉；删到只剩一行时必须停手"
+          "test": "RFC-319 CFG-16（二）：没有引用的运行时确实删得掉；删到只剩一行时必须停手 @nightly"
         }
       ]
     },
@@ -2550,12 +2550,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "运行时模型下拉与 Refresh，及探测失败的 502 提示",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-17：模型下拉能列能刷新；探测不出清单时降级成可输入并说明原因，而不是给一个空下拉"
+          "test": "RFC-319 CFG-17：模型下拉能列能刷新；探测不出清单时降级成可输入并说明原因，而不是给一个空下拉 @nightly"
         }
       ]
     },
@@ -2573,16 +2573,16 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首页 hero 的运行时状态行（ready / not-found / protocol-incompatible）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-20 首页运行时状态行：三种失败各说各的话，缺失的默认运行时必须是红点"
+          "test": "CFG-20 首页运行时状态行：三种失败各说各的话，缺失的默认运行时必须是红点 @nightly"
         },
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-20 protocol-incompatible 这一档：与「没装」必须是两句不同的话，当默认时同样是红点"
+          "test": "CFG-20 protocol-incompatible 这一档：与「没装」必须是两句不同的话，当默认时同样是红点 @nightly"
         }
       ]
     },
@@ -2600,12 +2600,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "并发与配额六项保存后立即热生效（无需重启）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-23：并发/配额六项一次保存全部落地，同一个进程立刻按新值应答，且不要求重启"
+          "test": "RFC-319 CFG-23：并发/配额六项一次保存全部落地，同一个进程立刻按新值应答，且不要求重启 @nightly"
         }
       ]
     },
@@ -2623,12 +2623,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "Git 分区：任务提交排除模式的校验与保存",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-26：越界的提交排除规则前端拦、服务端也拦；合法规则原样落库并归一化"
+          "test": "RFC-319 CFG-26：越界的提交排除规则前端拦、服务端也拦；合法规则原样落库并归一化 @nightly"
         }
       ]
     },
@@ -2637,12 +2637,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "GC 分区：worktree 自动回收、事件归档阈值、保留期三项",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-27：GC 三组旋钮整体落库——嵌套对象不被拆散，且只写本分区自己的键"
+          "test": "RFC-319 CFG-27：GC 三组旋钮整体落库——嵌套对象不被拆散，且只写本分区自己的键 @nightly"
         }
       ]
     },
@@ -2669,12 +2669,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "外观分区：主题切换（system / light / dark）保存并应用",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-35：主题保存后当场换肤、刷新仍在，选「跟随系统」则真的跟随系统"
+          "test": "RFC-319 CFG-35：主题保存后当场换肤、刷新仍在，选「跟随系统」则真的跟随系统 @nightly"
         }
       ]
     },
@@ -2683,12 +2683,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "外观分区：语言切换保存并落地（含 onSaved 立即 setLanguage）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-36：语言保存后整页当场切换，刷新仍在，且守护进程的值压过浏览器本地猜测"
+          "test": "RFC-319 CFG-36：语言保存后整页当场切换，刷新仍在，且守护进程的值压过浏览器本地猜测 @nightly"
         }
       ]
     },
@@ -2706,12 +2706,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "/docs/api 从实时注册表生成，且按调用者权限裁剪",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：低权账号读不到写端点清单"
+          "test": "CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：低权账号读不到写端点清单 @nightly"
         }
       ]
     },
@@ -2720,12 +2720,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "/.well-known/mcp 公开发现文档与 publicOrigin 推导（配置 / X-Forwarded-* / Host）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-40 /.well-known/mcp：无凭据可读，endpoint 用调用者真正到得了的 origin"
+          "test": "CFG-40 /.well-known/mcp：无凭据可读，endpoint 用调用者真正到得了的 origin @nightly"
         }
       ]
     },
@@ -2734,16 +2734,16 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首页能力网格：六类资源的按人可见计数与跳转（含无权限时的占位）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-41 能力网格的计数按人算：两个账号同一时刻看到不同的数字，改成公开后当场跟上"
+          "test": "CFG-41 能力网格的计数按人算：两个账号同一时刻看到不同的数字，改成公开后当场跟上 @nightly"
         },
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-41 没有读权限的分区整块不渲染，有权限的磁贴点进去落在自己的列表页"
+          "test": "CFG-41 没有读权限的分区整块不渲染，有权限的磁贴点进去落在自己的列表页 @nightly"
         }
       ]
     },
@@ -2752,16 +2752,16 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首页任务脉冲行（7 天统计）与 /api/overview 失败时的软降级",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-42 任务脉冲行：只数 7 天内的终态、只数自己看得见的任务"
+          "test": "CFG-42 任务脉冲行：只数 7 天内的终态、只数自己看得见的任务 @nightly"
         },
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消失，首页其余部分仍然能用"
+          "test": "CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消失，首页其余部分仍然能用 @nightly"
         }
       ]
     },
@@ -3283,12 +3283,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "新建定时任务（间隔 / 每日 / 每周 / 每月 + 时区 + 下次触发预览）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-39 新建定时任务：四种频率逐字段落成服务端的 scheduleSpec，时区随创建者，下次触发时刻与弹窗预告的第一条指向同一时刻"
+          "test": "EVENT-39 新建定时任务：四种频率逐字段落成服务端的 scheduleSpec，时区随创建者，下次触发时刻与弹窗预告的第一条指向同一时刻 @nightly"
         }
       ]
     },
@@ -3297,12 +3297,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "立即运行（run now）：不动 next_run_at / last_* / 失败水位，且对已禁用的定时任务也生效",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-40 立即运行：下次触发时刻、上次结果与失败水位一格不动，只多出一个任务；已暂停的定时任务在详情页也照样跑得动"
+          "test": "EVENT-40 立即运行：下次触发时刻、上次结果与失败水位一格不动，只多出一个任务；已暂停的定时任务在详情页也照样跑得动 @nightly"
         }
       ]
     },
@@ -3311,12 +3311,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "定时任务启停开关（列表与详情两处）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-41 启停开关：列表里关掉就清空下次触发时刻，详情页重新打开则按频率重算时刻并把失败水位清零"
+          "test": "EVENT-41 启停开关：列表里关掉就清空下次触发时刻，详情页重新打开则按频率重算时刻并把失败水位清零 @nightly"
         }
       ]
     },
@@ -3370,16 +3370,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "跨节点澄清多源等齐：等待横幅点名到具体节点、答完一家不放行、两家答完后任务往前走（服务端 readiness 栅栏本身需 continue 作答才可观测，另计）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/cross-clarify-multi-source.spec.ts",
-          "test": "答完一家不算数：designer 不许重跑，页面要点名还差谁"
+          "test": "答完一家不算数：designer 不许重跑，页面要点名还差谁 @nightly"
         },
         {
           "file": "e2e/cross-clarify-multi-source.spec.ts",
-          "test": "两家都答完之后：栅栏放行，任务必须往前走而不是无声卡死"
+          "test": "两家都答完之后：栅栏放行，任务必须往前走而不是无声卡死 @nightly"
         }
       ]
     },
@@ -3388,12 +3388,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清页「提交并停止澄清」的二次确认弹窗（自澄清；跨节点文案另计）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-stop-controls.spec.ts",
-          "test": "澄清页的「提交并停止澄清」必须先问一句；取消掉就什么都不发"
+          "test": "澄清页的「提交并停止澄清」必须先问一句；取消掉就什么都不发 @nightly"
         }
       ]
     },
@@ -3402,12 +3402,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清答案的乐观锁：iteration 过期时提交被拒（clarify-iteration-mismatch 409）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/human-gate-optimistic-locks.spec.ts",
-          "test": "HUMAN-08 澄清：拿过期轮次号提交被 409 拒绝，且服务端状态一个字节不变"
+          "test": "HUMAN-08 澄清：拿过期轮次号提交被 409 拒绝，且服务端状态一个字节不变 @nightly"
         }
       ]
     },
@@ -3416,20 +3416,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "反问逐题协作草稿：逐题 last-write-wins、逐题归属记录、提交后冻结",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-collab-draft.spec.ts",
-          "test": "草稿是**逐题**的：写第二题不该把第一题冲掉"
+          "test": "草稿是**逐题**的：写第二题不该把第一题冲掉 @nightly"
         },
         {
           "file": "e2e/clarify-collab-draft.spec.ts",
-          "test": "同一题再写一次：后写的赢，且逐题归属跟着更新"
+          "test": "同一题再写一次：后写的赢，且逐题归属跟着更新 @nightly"
         },
         {
           "file": "e2e/clarify-collab-draft.spec.ts",
-          "test": "提交之后草稿必须冻住：否则它会把已封存的答案盖回去"
+          "test": "提交之后草稿必须冻住：否则它会把已封存的答案盖回去 @nightly"
         }
       ]
     },
@@ -3449,16 +3449,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清页的实时协作提示与多标签同步（clarify.draft.updated / clarify.answered WS）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-realtime-collab.spec.ts",
-          "test": "同事改了某题：这一屏不刷新就要看见提示，并把那题的值接过来"
+          "test": "同事改了某题：这一屏不刷新就要看见提示，并把那题的值接过来 @nightly"
         },
         {
           "file": "e2e/clarify-realtime-collab.spec.ts",
-          "test": "同事把整轮提交了：这一屏必须自己转成只读，而不是继续让我打字"
+          "test": "同事把整轮提交了：这一屏必须自己转成只读，而不是继续让我打字 @nightly"
         }
       ]
     },
@@ -3467,20 +3467,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清收件箱列表页：三态过滤、按任务分组、空态与错误重试、打开按钮",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-inbox-list.spec.ts",
-          "test": "两个任务各自成节、行不串组，「打开」落在正确的那一轮"
+          "test": "两个任务各自成节、行不串组，「打开」落在正确的那一轮 @nightly"
         },
         {
           "file": "e2e/clarify-inbox-list.spec.ts",
-          "test": "答过的那一轮：从「待回答」里消失、在「已回答」里出现，「全部」两条都在"
+          "test": "答过的那一轮：从「待回答」里消失、在「已回答」里出现，「全部」两条都在 @nightly"
         },
         {
           "file": "e2e/clarify-inbox-list.spec.ts",
-          "test": "列表读不到时报故障并可重试，绝不画成「没有待回答的问题」"
+          "test": "列表读不到时报故障并可重试，绝不画成「没有待回答的问题」 @nightly"
         }
       ]
     },
@@ -3489,16 +3489,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清 / 评审待办角标与 Inbox 抽屉入口（pending-count 聚合）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/inbox-badge-live.spec.ts",
-          "test": "真有一条待办时：角标亮出真实计数，抽屉列得出它，点进去落在那一屏"
+          "test": "真有一条待办时：角标亮出真实计数，抽屉列得出它，点进去落在那一屏 @nightly"
         },
         {
           "file": "e2e/inbox-badge-live.spec.ts",
-          "test": "待办没了：角标自己消失，不用刷新页面"
+          "test": "待办没了：角标自己消失，不用刷新页面 @nightly"
         }
       ]
     },
@@ -3507,12 +3507,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "轮次被任务终态清扫封存后的只读态与原因说明（sealedCause=task-done / task-canceled）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-round-sealed-readonly.spec.ts",
-          "test": "任务走到终态时，开着的那一轮反问必须被封存并说明原因，而不是继续挂着等人"
+          "test": "任务走到终态时，开着的那一轮反问必须被封存并说明原因，而不是继续挂着等人 @nightly"
         }
       ]
     },
@@ -3521,16 +3521,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "轮次被工作组自主关闭反问撤销后的只读态与原因说明（sealedCause=wg-clarify-disabled）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-round-dismissed-no-human.spec.ts",
-          "test": "最后一个人类成员被移出后：这一轮反问必须被撤销、页面要说清是被撤了、迟到的答案要被拒"
+          "test": "最后一个人类成员被移出后：这一轮反问必须被撤销、页面要说清是被撤了、迟到的答案要被拒 @nightly"
         },
         {
           "file": "e2e/clarify-round-dismissed-no-human.spec.ts",
-          "test": "撤销之后任务不能继续停在「等人回答」上——那正是这个开关存在的理由"
+          "test": "撤销之后任务不能继续停在「等人回答」上——那正是这个开关存在的理由 @nightly"
         }
       ]
     },
@@ -3539,16 +3539,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "答案/决策已落库但后续 resume 失败时的警示（不假装成功跳走）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-resume-failure.spec.ts",
-          "test": "正向对照：工作树健在时，决策响应里不带任何 resume 警告"
+          "test": "正向对照：工作树健在时，决策响应里不带任何 resume 警告 @nightly"
         },
         {
           "file": "e2e/review-resume-failure.spec.ts",
-          "test": "工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑"
+          "test": "工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑 @nightly"
         }
       ]
     },
@@ -3557,20 +3557,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清的 defer 控制通道：只封存不下发，以及 questionIds / resubmitQuestionIds 的非法组合被拒",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-control-channel.spec.ts",
-          "test": "快速通道上带子集上限被当场拒绝，而不是「过滤掉再往下走」"
+          "test": "快速通道上带子集上限被当场拒绝，而不是「过滤掉再往下走」 @nightly"
         },
         {
           "file": "e2e/clarify-control-channel.spec.ts",
-          "test": "快速通道上带重答声明同样被拒（两条组合各有各的 code）"
+          "test": "快速通道上带重答声明同样被拒（两条组合各有各的 code） @nightly"
         },
         {
           "file": "e2e/clarify-control-channel.spec.ts",
-          "test": "控制通道只封存不下发：被点名那题进待下发，另一题不动，任务仍停在等人上"
+          "test": "控制通道只封存不下发：被点名那题进待下发，另一题不动，任务仍停在等人上 @nightly"
         }
       ]
     },
@@ -3579,16 +3579,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务问题看板：按来源节点过滤、按阶段（待指派/待下发/处理中/待确认/完成）分列展示",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-questions-board-ui.spec.ts",
-          "test": "五列都在、顺序固定，且卡片按阶段落在对的那一列"
+          "test": "五列都在、顺序固定，且卡片按阶段落在对的那一列 @nightly"
         },
         {
           "file": "e2e/task-questions-board-ui.spec.ts",
-          "test": "按承接节点过滤：点一个节点只剩它的卡，「全部」把两边都放回来"
+          "test": "按承接节点过滤：点一个节点只剩它的卡，「全部」把两边都放回来 @nightly"
         }
       ]
     },
@@ -3597,12 +3597,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "手动新增问题（用户自主提问；「复制」已于 2026-07-02 按用户拍板移除）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-questions-board.spec.ts",
-          "test": "人工提问进得了看板：带来源标记、建出来就待下发，并且把任务扣住"
+          "test": "人工提问进得了看板：带来源标记、建出来就待下发，并且把任务扣住 @nightly"
         }
       ]
     },
@@ -3611,20 +3611,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "改派问题处理节点：moved-manual 与两道防死锁守卫（目标须为 agent 节点 / 人工提问目标须跑过；added/removed-designer 另计）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-question-reassign.spec.ts",
-          "test": "改派到非 agent 节点必须被拒 —— 那种目标永远不会回答，任务会安静地卡死"
+          "test": "改派到非 agent 节点必须被拒 —— 那种目标永远不会回答，任务会安静地卡死 @nightly"
         },
         {
           "file": "e2e/task-question-reassign.spec.ts",
-          "test": "人工提问改派到「从没跑过」的节点也要被拒 —— 下发永远铸不出重跑"
+          "test": "人工提问改派到「从没跑过」的节点也要被拒 —— 下发永远铸不出重跑 @nightly"
         },
         {
           "file": "e2e/task-question-reassign.spec.ts",
-          "test": "正向对照：改派到跑过的 agent 节点是允许的"
+          "test": "正向对照：改派到跑过的 agent 节点是允许的 @nightly"
         }
       ]
     },
@@ -3633,16 +3633,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "暂存/取消暂存 + 批量下发（释放 deferred park，任务离开 awaiting_human）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-questions-board.spec.ts",
-          "test": "暂存不等于下发：任务必须仍停在等人上，直到真的下发"
+          "test": "暂存不等于下发：任务必须仍停在等人上，直到真的下发 @nightly"
         },
         {
           "file": "e2e/task-questions-board.spec.ts",
-          "test": "没答过的题不许推进「待下发」；答过之后撤回是**题**级的，动一题不该拖下另一题"
+          "test": "没答过的题不许推进「待下发」；答过之后撤回是**题**级的，动一题不该拖下另一题 @nightly"
         }
       ]
     },
@@ -3651,16 +3651,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "集中回答面板：跨轮多题一次性作答、逐题服务端草稿、重答已封存题",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/centralized-answer-pane.spec.ts",
-          "test": "只提交我真填了的那一题：没填的不许被当成「已答成空」封掉"
+          "test": "只提交我真填了的那一题：没填的不许被当成「已答成空」封掉 @nightly"
         },
         {
           "file": "e2e/centralized-answer-pane.spec.ts",
-          "test": "重答一道已封存的题：必须带上显式的重答声明，否则会被 exactly-once 守卫整批拒掉"
+          "test": "重答一道已封存的题：必须带上显式的重答声明，否则会被 exactly-once 守卫整批拒掉 @nightly"
         }
       ]
     },
@@ -3669,16 +3669,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "跨通道协调：已被别处封存/下发的题在澄清详情页变灰只读并排除出提交",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-cross-channel-lock.spec.ts",
-          "test": "正向对照：没被别处动过时，两题都可答"
+          "test": "正向对照：没被别处动过时，两题都可答 @nightly"
         },
         {
           "file": "e2e/clarify-cross-channel-lock.spec.ts",
-          "test": "别处封存过的那题：变灰、动不了、且不被这次提交带走"
+          "test": "别处封存过的那题：变灰、动不了、且不被这次提交带走 @nightly"
         }
       ]
     },
@@ -3687,16 +3687,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "画布上的「继续反问 / 停止反问」开关（per task+asking node，含非提问节点 422）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-stop-controls.spec.ts",
-          "test": "画布开关只认「提问 agent 节点」：挂到 clarify / io 节点上必须被拒，且不留下任何记录"
+          "test": "画布开关只认「提问 agent 节点」：挂到 clarify / io 节点上必须被拒，且不留下任何记录 @nightly"
         },
         {
           "file": "e2e/clarify-stop-controls.spec.ts",
-          "test": "开关一旦置 stop：即使用户按的是「继续追问」，下一轮也不再带追问协议块"
+          "test": "开关一旦置 stop：即使用户按的是「继续追问」，下一轮也不再带追问协议块 @nightly"
         }
       ]
     },
@@ -3716,12 +3716,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审决策的乐观锁：reviewIteration 过期时决策被拒（review-iteration-mismatch 409）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/human-gate-optimistic-locks.spec.ts",
-          "test": "HUMAN-31 评审：拿过期轮次号决策被 409 拒绝，任务仍停在等人评审上"
+          "test": "HUMAN-31 评审：拿过期轮次号决策被 409 拒绝，任务仍停在等人评审上 @nightly"
         }
       ]
     },
@@ -3730,12 +3730,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审意见（comments）的新增 / 编辑 / 删除与锚点定位",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-comments-to-rerun-prompt.spec.ts",
-          "test": "意见的增 / 改 / 删都落在这一版上，且列表如实反映"
+          "test": "意见的增 / 改 / 删都落在这一版上，且列表如实反映 @nightly"
         }
       ]
     },
@@ -3744,12 +3744,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审意见随迭代/驳回进入重跑 prompt（意见 → agent 修改依据）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-comments-to-rerun-prompt.spec.ts",
-          "test": "迭代之后：意见连同锚点一起进重跑提示词，并被归档进那一版的快照"
+          "test": "迭代之后：意见连同锚点一起进重跑提示词，并被归档进那一版的快照 @nightly"
         }
       ]
     },
@@ -3758,24 +3758,24 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审决策确认弹窗：有未提交草稿/已有意见时的二次确认、驳回必填理由、重跑节点预告",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-decision-confirm-dialog.spec.ts",
-          "test": "一条意见都没有就要迭代：弹窗必须说「agent 会收到一份空清单」，并预告谁会重跑"
+          "test": "一条意见都没有就要迭代：弹窗必须说「agent 会收到一份空清单」，并预告谁会重跑 @nightly"
         },
         {
           "file": "e2e/review-decision-confirm-dialog.spec.ts",
-          "test": "驳回不写理由：弹窗当场拦下，一个决策请求都不许发出去"
+          "test": "驳回不写理由：弹窗当场拦下，一个决策请求都不许发出去 @nightly"
         },
         {
           "file": "e2e/review-decision-confirm-dialog.spec.ts",
-          "test": "带着已提交的意见按「通过」：弹窗要点明这些意见不会被处理"
+          "test": "带着已提交的意见按「通过」：弹窗要点明这些意见不会被处理 @nightly"
         },
         {
           "file": "e2e/review-decision-confirm-dialog.spec.ts",
-          "test": "反向对照：没有意见也没有草稿时按「通过」，不弹窗、直接过"
+          "test": "反向对照：没有意见也没有草稿时按「通过」，不弹窗、直接过 @nightly"
         }
       ]
     },
@@ -3784,24 +3784,24 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审 diff 视图：原文/词/行/块四段切换、Cmd+1/2/3 粒度快捷键、两种首次加载失败态（版本列表 / 上一版正文；「陈旧刷新失败」与上一版意见侧栏另计）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-diff-granularity.spec.ts",
-          "test": "四段切换：选哪一段，渲染出来的就必须是哪一段的粒度"
+          "test": "四段切换：选哪一段，渲染出来的就必须是哪一段的粒度 @nightly"
         },
         {
           "file": "e2e/review-diff-granularity.spec.ts",
-          "test": "Cmd/Ctrl+1/2/3 切粒度；裸的 1/2/3 不许动它"
+          "test": "Cmd/Ctrl+1/2/3 切粒度；裸的 1/2/3 不许动它 @nightly"
         },
         {
           "file": "e2e/review-diff-granularity.spec.ts",
-          "test": "上一版正文取不到时要报出来，而不是画成「什么都没改」"
+          "test": "上一版正文取不到时要报出来，而不是画成「什么都没改」 @nightly"
         },
         {
           "file": "e2e/review-diff-granularity.spec.ts",
-          "test": "版本列表本身取不到时，报的是另一条错，而不是含糊地「没有上一版」"
+          "test": "版本列表本身取不到时，报的是另一条错，而不是含糊地「没有上一版」 @nightly"
         }
       ]
     },
@@ -3810,20 +3810,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "历史版本只读视图（?version=）：横幅、返回当前版、决策按钮不在 DOM、非法版本告警与跨评审版本 404",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-historical-version-view.spec.ts",
-          "test": "看旧版本时：只读横幅在，决策按钮**不在 DOM**；回到当前版按钮才回来"
+          "test": "看旧版本时：只读横幅在，决策按钮**不在 DOM**；回到当前版按钮才回来 @nightly"
         },
         {
           "file": "e2e/review-historical-version-view.spec.ts",
-          "test": "版本号不存在时要说出来，而不是默默给你看当前稿"
+          "test": "版本号不存在时要说出来，而不是默默给你看当前稿 @nightly"
         },
         {
           "file": "e2e/review-historical-version-view.spec.ts",
-          "test": "拿别条评审的版本号来问：不许把那份文档渲染出来"
+          "test": "拿别条评审的版本号来问：不许把那份文档渲染出来 @nightly"
         }
       ]
     },
@@ -3832,20 +3832,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "多文档评审的轮次历史（?round=）、陈旧徽标、整轮驳回理由与列表多文档徽标",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-multidoc-round-history.spec.ts",
-          "test": "评审列表：多文档看得出是多文档，展开的是「轮」而不是版本"
+          "test": "评审列表：多文档看得出是多文档，展开的是「轮」而不是版本 @nightly"
         },
         {
           "file": "e2e/review-multidoc-round-history.spec.ts",
-          "test": "历史轮：只读、点名第几轮、并写清那一轮为什么被打回"
+          "test": "历史轮：只读、点名第几轮、并写清那一轮为什么被打回 @nightly"
         },
         {
           "file": "e2e/review-multidoc-round-history.spec.ts",
-          "test": "上一轮接受过、这一轮内容变了的文档，必须打「已变更」"
+          "test": "上一轮接受过、这一轮内容变了的文档，必须打「已变更」 @nightly"
         }
       ]
     },
@@ -3854,20 +3854,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审收件箱列表：五态过滤、逐行版本历史展开、加载失败重试、空态",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-inbox-list.spec.ts",
-          "test": "逐行展开取的是自己那一行的版本史，另一行不受影响"
+          "test": "逐行展开取的是自己那一行的版本史，另一行不受影响 @nightly"
         },
         {
           "file": "e2e/review-inbox-list.spec.ts",
-          "test": "决策过的那一条：待评审里消失、已通过里出现、已驳回里没有，全部两条都在"
+          "test": "决策过的那一条：待评审里消失、已通过里出现、已驳回里没有，全部两条都在 @nightly"
         },
         {
           "file": "e2e/review-inbox-list.spec.ts",
-          "test": "列表读不到时报故障并可重试，绝不画成「没有待评审」"
+          "test": "列表读不到时报故障并可重试，绝不画成「没有待评审」 @nightly"
         }
       ]
     },
@@ -3887,20 +3887,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清页离开时的未保存草稿拦截（保存并离开 / 放弃）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-unsaved-draft-guard.spec.ts",
-          "test": "草稿还没落盘就想离开：拦下来；选「留下」则停在原地且答案还在"
+          "test": "草稿还没落盘就想离开：拦下来；选「留下」则停在原地且答案还在 @nightly"
         },
         {
           "file": "e2e/clarify-unsaved-draft-guard.spec.ts",
-          "test": "「保存并离开」必须先确认落盘：落盘回执没到之前不许跳走"
+          "test": "「保存并离开」必须先确认落盘：落盘回执没到之前不许跳走 @nightly"
         },
         {
           "file": "e2e/clarify-unsaved-draft-guard.spec.ts",
-          "test": "「放弃」放行：不再拦，直接走到目标页"
+          "test": "「放弃」放行：不再拦，直接走到目标页 @nightly"
         }
       ]
     },
@@ -3909,16 +3909,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务详情内进入人工门的入口：node-runs 表的「去评审 / 去回答」跳转按钮（画布待答角标另计）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-detail-human-gate-entry.spec.ts",
-          "test": "任务卡在等人回答时：节点表里那一行有「Answer」，别的行没有，点下去落在那一轮"
+          "test": "任务卡在等人回答时：节点表里那一行有「Answer」，别的行没有，点下去落在那一轮 @nightly"
         },
         {
           "file": "e2e/task-detail-human-gate-entry.spec.ts",
-          "test": "答完之后任务卡在等人评审：那一行换成「Review」，「Answer」不再出现"
+          "test": "答完之后任务卡在等人评审：那一行换成「Review」，「Answer」不再出现 @nightly"
         }
       ]
     },
@@ -3927,16 +3927,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清作答的答案类型矩阵：多选并入、单选「其他」自定义文本，以及空答/越界 index/伪造标签的服务端归一化（必填 chip 已废弃，submit 接受空答）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-answer-type-matrix.spec.ts",
-          "test": "多选并入与单选「其他」文本，都要原样穿到下一轮提示词里"
+          "test": "多选并入与单选「其他」文本，都要原样穿到下一轮提示词里 @nightly"
         },
         {
           "file": "e2e/clarify-answer-type-matrix.spec.ts",
-          "test": "空答如实上报、越界 index 退化成没答、客户端伪造的标签一律不算数"
+          "test": "空答如实上报、越界 index 退化成没答、客户端伪造的标签一律不算数 @nightly"
         }
       ]
     },
@@ -4129,12 +4129,12 @@
       "domain": "意图构建器",
       "title": "创建请求失败（422 / 网络错）→ ErrorBanner + composer 解锁 + 不产生僵尸会话",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-04 创建失败（服务端 422 / 断网）：报错读得懂、composer 立刻解锁、服务端不留僵尸会话"
+          "test": "INTENT-04 创建失败（服务端 422 / 断网）：报错读得懂、composer 立刻解锁、服务端不留僵尸会话 @nightly"
         }
       ]
     },
@@ -4143,16 +4143,16 @@
       "domain": "意图构建器",
       "title": "创建进行中锁死所有离开路径（弹窗关闭 / 侧边栏跳转 / 浏览器前进后退 / 刷新）+ 防重复提交",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷新全被锁死，重复提交只发一次 POST"
+          "test": "INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷新全被锁死，重复提交只发一次 POST @nightly"
         },
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-05 创建进行中：新建弹窗的关闭按钮 / Esc / 点遮罩 / 取消四条路径全被封死"
+          "test": "INTENT-05 创建进行中：新建弹窗的关闭按钮 / Esc / 点遮罩 / 取消四条路径全被封死 @nightly"
         }
       ]
     },
@@ -4161,12 +4161,12 @@
       "domain": "意图构建器",
       "title": "最近会话卡片展示四阶段业务状态 chip（goal/generate/review/apply）与轮次/提交计数",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-08 最近会话卡片：状态 chip 随真实进度从 Generate 走到 Review 再到 Apply，轮次/提交计数逐条独立"
+          "test": "INTENT-08 最近会话卡片：状态 chip 随真实进度从 Generate 走到 Review 再到 Apply，轮次/提交计数逐条独立 @nightly"
         }
       ]
     },
@@ -4175,12 +4175,12 @@
       "domain": "意图构建器",
       "title": "最近会话 keyset 分页「Load more tasks」",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全"
+          "test": "INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全 @nightly"
         }
       ]
     },
@@ -4198,12 +4198,12 @@
       "domain": "意图构建器",
       "title": "已提交资源上的 provenance 徽章：可见者可点回源会话；不可见者 DOM 里完全没有",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-11 provenance 徽章：源会话可见者点得回去，不可见者 DOM 里一个都没有"
+          "test": "INTENT-11 provenance 徽章：源会话可见者点得回去，不可见者 DOM 里一个都没有 @nightly"
         }
       ]
     },
@@ -4304,12 +4304,12 @@
       "domain": "意图构建器",
       "title": "挂载不可见/不存在的资源被拒（404，与不存在同形）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-27 挂载不可见资源与挂载不存在资源回同一个 404，可见的照常挂得上"
+          "test": "INTENT-27 挂载不可见资源与挂载不存在资源回同一个 404，可见的照常挂得上 @nightly"
         }
       ]
     },
@@ -4327,16 +4327,16 @@
       "domain": "意图构建器",
       "title": "草稿含阻断性校验错误时：红色横幅列出错误、评审页签红色计数徽章、Commit 按钮禁用",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审页签红计数、Commit 入口禁用、服务端同样拒收"
+          "test": "INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审页签红计数、Commit 入口禁用、服务端同样拒收 @nightly"
         },
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-30 负向对照：目标已挂载、草稿无错误时，横幅与徽章都不许出现，Commit 入口可用"
+          "test": "INTENT-30 负向对照：目标已挂载、草稿无错误时，横幅与徽章都不许出现，Commit 入口可用 @nightly"
         }
       ]
     },
@@ -4363,12 +4363,12 @@
       "domain": "意图构建器",
       "title": "提交明细步：secret slot（密码输入）必须填满才能进复核/提交",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-35 提交明细步：密码型 secret 槽没填满就进不了复核，也提交不了"
+          "test": "INTENT-35 提交明细步：密码型 secret 槽没填满就进不了复核，也提交不了 @nightly"
         }
       ]
     },
@@ -4377,12 +4377,12 @@
       "domain": "意图构建器",
       "title": "提交明细步：secretWaiver（凭据豁免）必须逐项显式勾选",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-36 提交明细步：凭据豁免必须逐项显式勾选，未勾选一律挡在复核之前"
+          "test": "INTENT-36 提交明细步：凭据豁免必须逐项显式勾选，未勾选一律挡在复核之前 @nightly"
         }
       ]
     },
@@ -4391,12 +4391,12 @@
       "domain": "意图构建器",
       "title": "提交明细步：humanBinding slot 用 UserPicker 指定真人",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-37 提交明细步：占位真人成员用 UserPicker 绑定，不绑就是「默认丢弃」"
+          "test": "INTENT-37 提交明细步：占位真人成员用 UserPicker 绑定，不绑就是「默认丢弃」 @nightly"
         }
       ]
     },
@@ -4405,12 +4405,12 @@
       "domain": "意图构建器",
       "title": "提交明细步：finalName slot 解决重名冲突（改名后提交）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-38 提交明细步：重名被服务端挡下，用 finalName 槽改名后才落地"
+          "test": "INTENT-38 提交明细步：重名被服务端挡下，用 finalName 槽改名后才落地 @nightly"
         }
       ]
     },
@@ -4428,24 +4428,24 @@
       "domain": "意图构建器",
       "title": "提交冲突拒绝：草稿哈希不匹配 / 轮次在跑 / 会话已归档 / 修订被取代",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-41 提交冲突：草稿哈希不匹配时拒收；不篡改时同一向导必须能提交成功"
+          "test": "INTENT-41 提交冲突：草稿哈希不匹配时拒收；不篡改时同一向导必须能提交成功 @nightly"
         },
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-41 提交冲突：确认的修订已被更新的修订取代时拒收（旧标签页形态）"
+          "test": "INTENT-41 提交冲突：确认的修订已被更新的修订取代时拒收（旧标签页形态） @nightly"
         },
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-41 提交冲突：会话已归档时拒收"
+          "test": "INTENT-41 提交冲突：会话已归档时拒收 @nightly"
         },
         {
           "file": "e2e/intent-commit-details-and-conflicts.spec.ts",
-          "test": "INTENT-41 提交冲突：生成轮次还在跑时拒收"
+          "test": "INTENT-41 提交冲突：生成轮次还在跑时拒收 @nightly"
         }
       ]
     },
@@ -4454,12 +4454,12 @@
       "domain": "意图构建器",
       "title": "归档 / 重新打开会话（含归档后只读横幅）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-43 归档：整页转只读且写接口 409，重新打开后控件原样回来"
+          "test": "INTENT-43 归档：整页转只读且写接口 409，重新打开后控件原样回来 @nightly"
         }
       ]
     },
@@ -4468,12 +4468,12 @@
       "domain": "意图构建器",
       "title": "管理员审计只读视图（?all=1）：完整历史可见但零变更控件",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-44 管理员审计视图：历史一条不少，变更控件一个不剩，写面照样 404"
+          "test": "INTENT-44 管理员审计视图：历史一条不少，变更控件一个不剩，写面照样 404 @nightly"
         }
       ]
     },
@@ -4482,12 +4482,12 @@
       "domain": "意图构建器",
       "title": "非成员访问他人会话与不存在会话完全同形（404）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-45 非成员看他人会话与看不存在的会话：状态码、响应体、页面文案逐字节同形"
+          "test": "INTENT-45 非成员看他人会话与看不存在的会话：状态码、响应体、页面文案逐字节同形 @nightly"
         }
       ]
     },
@@ -4525,16 +4525,16 @@
       "domain": "意图构建器",
       "title": "记忆页「融合」页签：待审批融合列表 / 空态 / 错误重试 / 点行进详情",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-51 / INTENT-X9: 没有待审融合时是空态且无徽章；列表拉取失败时给得出重试，且绝不冒充空态"
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 没有待审融合时是空态且无徽章；列表拉取失败时给得出重试，且绝不冒充空态 @nightly"
         },
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情"
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情 @nightly"
         }
       ]
     },
@@ -4543,12 +4543,12 @@
       "domain": "意图构建器",
       "title": "融合详情：运行中提示条 + 指向澄清收件箱的链接 + 2s 轮询自动进入待审批",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-52: 融合运行中把人指向澄清收件箱，答完之后详情页自己翻到待审批（不用刷新）"
+          "test": "RFC-319 INTENT-52: 融合运行中把人指向澄清收件箱，答完之后详情页自己翻到待审批（不用刷新） @nightly"
         }
       ]
     },
@@ -4557,12 +4557,12 @@
       "domain": "意图构建器",
       "title": "融合驳回：填写反馈 → 重跑下一轮迭代（iteration+1）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-55: 驳回并写下反馈 → 融合带着反馈重跑下一轮（iteration+1），上一轮提案不再摆在审批位上"
+          "test": "RFC-319 INTENT-55: 驳回并写下反馈 → 融合带着反馈重跑下一轮（iteration+1），上一轮提案不再摆在审批位上 @nightly"
         }
       ]
     },
@@ -4571,12 +4571,12 @@
       "domain": "意图构建器",
       "title": "融合取消（带二次确认）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-56: 取消要点两次——单击只是预备；确认之后连引擎任务一起停，服务端也不再接受审批"
+          "test": "RFC-319 INTENT-56: 取消要点两次——单击只是预备；确认之后连引擎任务一起停，服务端也不再接受审批 @nightly"
         }
       ]
     },
@@ -4585,12 +4585,12 @@
       "domain": "意图构建器",
       "title": "融合失败态：显示失败原因，且不再提供审批按钮",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-57: 融合失败时把失败原因摆在页面上，且不再提供任何审批入口"
+          "test": "RFC-319 INTENT-57: 融合失败时把失败原因摆在页面上，且不再提供任何审批入口 @nightly"
         }
       ]
     },
@@ -4617,16 +4617,16 @@
       "domain": "意图构建器",
       "title": "【原审计漏项】没有 intent:write 权限时，六类资源页上的「用 AI 构建 / 修改」入口按钮整体不渲染",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-X1 没有 intent:write：六类资源页的「用 AI 构建 / 修改」入口整体不挂载"
+          "test": "INTENT-X1 没有 intent:write：六类资源页的「用 AI 构建 / 修改」入口整体不挂载 @nightly"
         },
         {
           "file": "e2e/rfc319-intent-access-boundaries.spec.ts",
-          "test": "INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:write 收放"
+          "test": "INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:write 收放 @nightly"
         }
       ]
     },
@@ -4664,12 +4664,12 @@
       "domain": "记忆",
       "title": "新建记忆时选择非 global scope（agent / workflow / repo / repo_group）并从下拉选中具体资源",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-02: 四个非 global 档都能从下拉选中真实目标，服务端记下的 scope 与所选一致"
+          "test": "RFC-319 MEM-02: 四个非 global 档都能从下拉选中真实目标，服务端记下的 scope 与所选一致 @nightly"
         }
       ]
     },
@@ -4678,12 +4678,12 @@
       "domain": "记忆",
       "title": "新建记忆被服务端权限拒绝（对无管理权的 scope 创建 → 403）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/memory-access.spec.ts",
-          "test": "RFC-319 MEM-04: creating a memory on a scope you do not manage is refused"
+          "test": "RFC-319 MEM-04: creating a memory on a scope you do not manage is refused @nightly"
         }
       ]
     },
@@ -4703,12 +4703,12 @@
       "domain": "记忆",
       "title": "审批候选：Reject 拒绝（candidate → rejected，不写 approvedAt，永不注入）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/memory-access.spec.ts",
-          "test": "RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited"
+          "test": "RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited @nightly"
         }
       ]
     },
@@ -4717,12 +4717,12 @@
       "domain": "记忆",
       "title": "冲突候选的 Compare 对比弹窗与「批准并取代」（approve_and_supersede + supersede 链）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-11: 冲突候选能并排对比，「批准并取代」之后旧条目退出可用面并接上 supersede 链"
+          "test": "RFC-319 MEM-11: 冲突候选能并排对比，「批准并取代」之后旧条目退出可用面并接上 supersede 链 @nightly"
         }
       ]
     },
@@ -4731,12 +4731,12 @@
       "domain": "记忆",
       "title": "审批操作失败时的错误反馈（promote 5xx → memory-approve-error 横幅）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-12: 批准失败时页面把失败摆出来，候选留在原地，服务端状态一动不动"
+          "test": "RFC-319 MEM-12: 批准失败时页面把失败摆出来，候选留在原地，服务端状态一动不动 @nightly"
         }
       ]
     },
@@ -4767,12 +4767,12 @@
       "domain": "记忆",
       "title": "删除的双重确认门：缺 ?confirm=true → 422；token 调用方还须回显标题",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/memory-access.spec.ts",
-          "test": "RFC-319 MEM-19: deleting a memory needs ?confirm=true, and a token caller must additionally echo the title"
+          "test": "RFC-319 MEM-19: deleting a memory needs ?confirm=true, and a token caller must additionally echo the title @nightly"
         }
       ]
     },
@@ -4781,12 +4781,12 @@
       "domain": "记忆",
       "title": "按 scope 浏览（五档分组 + 每档计数 + 每档空态 + 行内编辑）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-20: 按 scope 浏览的五档计数与服务端逐档一致，空档给空态，行内编辑改得动"
+          "test": "RFC-319 MEM-20: 按 scope 浏览的五档计数与服务端逐档一致，空档给空态，行内编辑改得动 @nightly"
         }
       ]
     },
@@ -4813,16 +4813,16 @@
       "domain": "记忆",
       "title": "蒸馏任务列表：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误 + 空态",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-25 空队列：给的是「没有蒸馏任务」的说明，不是一张空表格"
+          "test": "MEM-25 空队列：给的是「没有蒸馏任务」的说明，不是一张空表格 @nightly"
         },
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-25 列表六列：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误各自读的是行上的真值"
+          "test": "MEM-25 列表六列：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误各自读的是行上的真值 @nightly"
         }
       ]
     },
@@ -4831,12 +4831,12 @@
       "domain": "记忆",
       "title": "重试失败的蒸馏任务（failed → pending，attempts 归零并重新拉起模型进程）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-26 重试失败的蒸馏任务：attempts 归零、状态真的流转，并且模型进程被重新拉起来了"
+          "test": "MEM-26 重试失败的蒸馏任务：attempts 归零、状态真的流转，并且模型进程被重新拉起来了 @nightly"
         }
       ]
     },
@@ -4845,12 +4845,12 @@
       "domain": "记忆",
       "title": "取消待执行的蒸馏任务（pending → canceled）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-27 取消待执行的蒸馏任务：pending → canceled，且取消后不再提供任何操作"
+          "test": "MEM-27 取消待执行的蒸馏任务：pending → canceled，且取消后不再提供任何操作 @nightly"
         }
       ]
     },
@@ -4859,12 +4859,12 @@
       "domain": "记忆",
       "title": "蒸馏任务详情页六段内容（头部元信息 / 失败诊断 / 源事件 / scope + 去重快照 / 产出候选 / 模型会话）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-29 蒸馏任务详情页：六段各自有内容，且每一段读的是这条 job 自己的数据"
+          "test": "MEM-29 蒸馏任务详情页：六段各自有内容，且每一段读的是这条 job 自己的数据 @nightly"
         }
       ]
     },
@@ -4873,12 +4873,12 @@
       "domain": "记忆",
       "title": "蒸馏失败诊断卡（attempts / exitCode / lastError / stderr 摘录）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-30 失败诊断卡：attempts / exitCode / lastError / stderr 摘录四样齐全，且不该出现时不出现"
+          "test": "MEM-30 失败诊断卡：attempts / exitCode / lastError / stderr 摘录四样齐全，且不该出现时不出现 @nightly"
         }
       ]
     },
@@ -4887,12 +4887,12 @@
       "domain": "记忆",
       "title": "从蒸馏候选行「在审批队列中打开」的深链（?focus=<memoryId>）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-33 候选行的「在审批队列中打开」深链：带着 memoryId 落到记忆页且参数不被吃掉"
+          "test": "MEM-33 候选行的「在审批队列中打开」深链：带着 memoryId 落到记忆页且参数不被吃掉 @nightly"
         }
       ]
     },
@@ -5242,12 +5242,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "批量导入远端仓库（/repos 弹窗，混合合法 + 非法 URL）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-01 批量导入：合法行各自落库、非法行当场判失败，一行坏的不拖垮整批"
+          "test": "REPO-01 批量导入：合法行各自落库、非法行当场判失败，一行坏的不拖垮整批 @nightly"
         }
       ]
     },
@@ -5256,12 +5256,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "批量导入失败行的「改 URL 重试」",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-02 导入失败的那一行可以就地改 URL 重试，并且只重跑它自己"
+          "test": "REPO-02 导入失败的那一行可以就地改 URL 重试，并且只重跑它自己 @nightly"
         }
       ]
     },
@@ -5270,12 +5270,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "批量导入进度经 /ws/repo-imports/{batchId} 实时推送",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也会自己走到完成"
+          "test": "REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也会自己走到完成 @nightly"
         }
       ]
     },
@@ -5311,12 +5311,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 主表用真后端数据渲染仓库行（脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-08 主表逐列渲染真后端数据：脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标"
+          "test": "REPO-08 主表逐列渲染真后端数据：脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标 @nightly"
         }
       ]
     },
@@ -5325,12 +5325,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 服务端搜索、业务视图（全部 / 被引用 / 需关注 / 闲置）与高级过滤弹窗",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-09 搜索 / 视图 / 高级过滤全部下推服务端，不是在已加载的那一页里挑"
+          "test": "REPO-09 搜索 / 视图 / 高级过滤全部下推服务端，不是在已加载的那一页里挑 @nightly"
         }
       ]
     },
@@ -5442,12 +5442,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 的写权限门（无 create/update/delete/execute 时按钮不渲染且请求不发出）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-33 只有 repos:read 的账号：读得到全部镜像，四个写入口一个都不渲染、一条请求都不发"
+          "test": "REPO-33 只有 repos:read 的账号：读得到全部镜像，四个写入口一个都不渲染、一条请求都不发 @nightly"
         }
       ]
     },
@@ -5566,12 +5566,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "在 /mcps/new 新建 MCP（local/remote 分段切换 + 必填校验）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-16: 新建 MCP 的必填校验挡在请求之前，local ↔ remote 分段切换换掉整组必填字段"
+          "test": "RFC-319 RES-16: 新建 MCP 的必填校验挡在请求之前，local ↔ remote 分段切换换掉整组必填字段 @nightly"
         }
       ]
     },
@@ -5580,12 +5580,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "编辑并保存 MCP 配置（写入严格绑定所选的 id）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废"
+          "test": "RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废 @nightly"
         }
       ]
     },
@@ -5612,12 +5612,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "探测失败的错误码渲染（connect-failed / handshake-failed / auth-required / partial；60 秒总时限那一档见 RES-21b）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partial 各自渲染自己的错误码与详情"
+          "test": "RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partial 各自渲染自己的错误码与详情 @nightly"
         }
       ]
     },
@@ -5640,12 +5640,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "探测结果随配置保存失效（needs re-probe 状态与过期空态）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废"
+          "test": "RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废 @nightly"
         }
       ]
     },
@@ -5654,12 +5654,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "草稿未保存时的探测选择：「保存并探测」/「用已保存版本探测」",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-23: 草稿未保存时「用已保存版本探测」与「保存并探测」用的是两份不同的配置"
+          "test": "RFC-319 RES-23: 草稿未保存时「用已保存版本探测」与「保存并探测」用的是两份不同的配置 @nightly"
         }
       ]
     },
@@ -5749,12 +5749,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "MCP / 插件的 exact-operation 陈旧冲突提示（resource-operation-stale）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-37: MCP 探测与插件保存都必须认出「这条资源已经被人改过」，而不是拿旧版本继续"
+          "test": "RFC-319 RES-37: MCP 探测与插件保存都必须认出「这条资源已经被人改过」，而不是拿旧版本继续 @nightly"
         }
       ]
     },
@@ -5835,12 +5835,12 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "MCP / 插件的 enabled 开关及「引用了 disabled 插件的 agent 保存被拒」",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-X3: 关掉 enabled 之后 MCP 不再可探测，插件让引用它的代理保存被拒"
+          "test": "RFC-319 RES-X3: 关掉 enabled 之后 MCP 不再可探测，插件让引用它的代理保存被拒 @nightly"
         }
       ]
     },
@@ -5945,12 +5945,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表：视图页签（全部/进行中/需关注/已结束）+ 搜索去抖 + 状态过滤 + 清除过滤，且状态经 URL 往返",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-16：四个视图页签的计数与行数一致、搜索去抖只打一次、状态过滤经 URL 双向往返"
+          "test": "RFC-319 TASK-16：四个视图页签的计数与行数一致、搜索去抖只打一次、状态过滤经 URL 双向往返 @nightly"
         }
       ]
     },
@@ -5959,12 +5959,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表分页：根层「加载更多」与子分支「加载更多子任务」各自独立翻页",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-17：根层「加载更多」与子分支「加载更多子任务」各自独立翻页，互不清空对方"
+          "test": "RFC-319 TASK-17：根层「加载更多」与子分支「加载更多子任务」各自独立翻页，互不清空对方 @nightly"
         }
       ]
     },
@@ -5984,12 +5984,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表实时刷新：WS 推送后出现「已更新，点击刷新」横幅",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-21：别处新建的任务通过 WS 推出「已更新」横幅，点刷新才把新行取回来"
+          "test": "RFC-319 TASK-21：别处新建的任务通过 WS 推出「已更新」横幅，点刷新才把新行取回来 @nightly"
         }
       ]
     },
@@ -5998,12 +5998,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "取消运行中的任务（详情页 Cancel 按钮 + 二次确认）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-24：详情页取消运行中的任务需要两击，第一击只换文案、一个请求都不发"
+          "test": "RFC-319 TASK-24：详情页取消运行中的任务需要两击，第一击只换文案、一个请求都不发 @nightly"
         }
       ]
     },
@@ -6124,12 +6124,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "工作区回收后的详情页降级（pruning → pruned，产物页签与重试按钮相应关闭）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-45：工作区从 pruning 走到 pruned，详情页自己收敛并关掉节点重试"
+          "test": "RFC-319 TASK-45：工作区从 pruning 走到 pruned，详情页自己收敛并关掉节点重试 @nightly"
         }
       ]
     },
@@ -6169,12 +6169,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表过滤弹窗的范围切换（我的 / 共享给我 / 全部）与类别过滤（agent / workflow / workgroup）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-X5：筛选弹窗的范围三档与类别三档各自独立收敛，默认档不写进 URL"
+          "test": "RFC-319 TASK-X5：筛选弹窗的范围三档与类别三档各自独立收敛，默认档不写进 URL @nightly"
         }
       ]
     },
@@ -6583,12 +6583,12 @@
       "domain": "工作流定义与画布编辑器",
       "title": "agent-single 检查器：选代理、prompt 模板、参数选择器插入 token、缺失 {{ref}} 诊断",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{ref}} 被点名，参数选择器按光标插入端口 token"
+          "test": "WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{ref}} 被点名，参数选择器按光标插入端口 token @nightly"
         }
       ]
     },
@@ -6597,16 +6597,16 @@
       "domain": "工作流定义与画布编辑器",
       "title": "input 节点检查器：五种输入类型及 upload 的 targetDir / onConflict 编辑",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-27 input 检查器：五种字段类型逐一落库，enum 选项与 upload 的 targetDir / onConflict 一并落库"
+          "test": "WF-27 input 检查器：五种字段类型逐一落库，enum 选项与 upload 的 targetDir / onConflict 一并落库 @nightly"
         },
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改成合法值则整棵定义同步改名"
+          "test": "WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改成合法值则整棵定义同步改名 @nightly"
         }
       ]
     },
@@ -6615,12 +6615,12 @@
       "domain": "工作流定义与画布编辑器",
       "title": "output 节点检查器：输出端口列表与 bind 绑定",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步"
+          "test": "WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步 @nightly"
         }
       ]
     },
@@ -6629,12 +6629,12 @@
       "domain": "工作流定义与画布编辑器",
       "title": "review（人工门）检查器：内容来源与端口、驳回/迭代可重跑集合、文件回滚开关",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库"
+          "test": "WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库 @nightly"
         }
       ]
     },
@@ -6643,16 +6643,16 @@
       "domain": "工作流定义与画布编辑器",
       "title": "clarify / clarify-cross-agent 检查器：绑定提问代理与被问设计者、迭代上限、loop 内警告",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-30 clarify 检查器：绑定的提问代理与 loop 内外状态如实呈现，会话模式两个方向都落库"
+          "test": "WF-30 clarify 检查器：绑定的提问代理与 loop 内外状态如实呈现，会话模式两个方向都落库 @nightly"
         },
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-30 cross-clarify 检查器：提问者与被问设计者双向绑定如实呈现，缺一方当场报错"
+          "test": "WF-30 cross-clarify 检查器：提问者与被问设计者双向绑定如实呈现，缺一方当场报错 @nightly"
         }
       ]
     },
@@ -6661,16 +6661,16 @@
       "domain": "工作流定义与画布编辑器",
       "title": "wrapper-git / wrapper-loop 检查器：最大迭代数、退出条件、触顶继续开关、输出绑定",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出现任何循环旋钮"
+          "test": "WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出现任何循环旋钮 @nightly"
         },
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库"
+          "test": "WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库 @nightly"
         }
       ]
     },
@@ -6679,12 +6679,12 @@
       "domain": "工作流定义与画布编辑器",
       "title": "wrapper-fanout 检查器：分片来源（shardSource 单例不变量）与入站类型/广播角色",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现"
+          "test": "WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现 @nightly"
         }
       ]
     },
@@ -6821,12 +6821,12 @@
       "domain": "工作组",
       "title": "快速新建工作组对话框（名称+描述 → 201 → 跳详情）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-04 快速新建：空名与非法名不给提交，合法输入落成 private 组并直接进详情页"
+          "test": "WG-04 快速新建：空名与非法名不给提交，合法输入落成 private 组并直接进详情页 @nightly"
         }
       ]
     },
@@ -6844,12 +6844,12 @@
       "domain": "工作组",
       "title": "详情页配置自动保存（编辑 → 债务化 PUT → 版本自增 → header 与状态 chip 同步）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-07 / WG-13 配置自动保存：版本只在回执落地后前进，七个字段逐个落库并在刷新后回读"
+          "test": "WG-07 / WG-13 配置自动保存：版本只在回执落地后前进，七个字段逐个落库并在刷新后回读 @nightly"
         }
       ]
     },
@@ -6867,12 +6867,12 @@
       "domain": "工作组",
       "title": "成员增删与 leader 指派（agent 成员 / human 成员 / 设为 leader / 移除后焦点交接）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-10 / WG-14 成员增删与 leader 指派：就绪性提示逐条消失、启动按钮随之解禁、移除后焦点交给邻卡"
+          "test": "WG-10 / WG-14 成员增删与 leader 指派：就绪性提示逐条消失、启动按钮随之解禁、移除后焦点交给邻卡 @nightly"
         }
       ]
     },
@@ -6881,12 +6881,12 @@
       "domain": "工作组",
       "title": "成员校验与错误路径（重复别名、别名含 @/逗号/空白、human 必须是活跃用户、引用不存在的 agent）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-11 成员校验：重复别名 / @ / 逗号 / 空白当场拦住且一次保存都不发；human 必须活跃、agent 必须真实存在（服务端同样拦）"
+          "test": "WG-11 成员校验：重复别名 / @ / 逗号 / 空白当场拦住且一次保存都不发；human 必须活跃、agent 必须真实存在（服务端同样拦） @nightly"
         }
       ]
     },
@@ -6895,12 +6895,12 @@
       "domain": "工作组",
       "title": "配置字段落库（instructions / outputContract / 三开关 / maxRounds / completionGate / clarifyBudget / fanOut）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-07 / WG-13 配置自动保存：版本只在回执落地后前进，七个字段逐个落库并在刷新后回读"
+          "test": "WG-07 / WG-13 配置自动保存：版本只在回执落地后前进，七个字段逐个落库并在刷新后回读 @nightly"
         }
       ]
     },
@@ -6909,12 +6909,12 @@
       "domain": "工作组",
       "title": "启动就绪性提示与启动按钮门（no-agent-member / leader-missing / no-non-leader-worker）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-10 / WG-14 成员增删与 leader 指派：就绪性提示逐条消失、启动按钮随之解禁、移除后焦点交给邻卡"
+          "test": "WG-10 / WG-14 成员增删与 leader 指派：就绪性提示逐条消失、启动按钮随之解禁、移除后焦点交给邻卡 @nightly"
         }
       ]
     },
@@ -6932,12 +6932,12 @@
       "domain": "工作组",
       "title": "重命名工作组（名称+描述原子保存，重名冲突）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-16 重命名：名称+描述一次原子落库，撞上同 owner 重名时整笔回退"
+          "test": "WG-16 重命名：名称+描述一次原子落库，撞上同 owner 重名时整笔回退 @nightly"
         }
       ]
     },
@@ -6946,12 +6946,12 @@
       "domain": "工作组",
       "title": "删除工作组（输入名称确认 + 版本 fence + 非终态任务引用拒删）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-18 删除：输入名称确认 + 版本 fence + 非终态任务引用拒删"
+          "test": "WG-18 删除：输入名称确认 + 版本 fence + 非终态任务引用拒删 @nightly"
         }
       ]
     },
@@ -6960,16 +6960,16 @@
       "domain": "工作组",
       "title": "工作组 ACL 面板（可见性切换 public/private + 逐用户授权）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-19a ACL 面板的可见性开关：public→private→public 双向生效，read 档与 write 档的面板全程只读"
+          "test": "WG-19a ACL 面板的可见性开关：public→private→public 双向生效，read 档与 write 档的面板全程只读 @nightly"
         },
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-19b ACL 面板的逐用户授权：加人默认落 read、提到 write 才拿到内容写、移出后彻底看不见"
+          "test": "WG-19b ACL 面板的逐用户授权：加人默认落 read、提到 write 才拿到内容写、移出后彻底看不见 @nightly"
         }
       ]
     },
@@ -6978,12 +6978,12 @@
       "domain": "工作组",
       "title": "私有工作组对无关用户完全不可见（列表过滤 + 详情 404 与不存在同形）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-20 私有工作组对无关用户完全不可见：列表过滤 + 详情/ACL/写面与「不存在」逐字节同形"
+          "test": "WG-20 私有工作组对无关用户完全不可见：列表过滤 + 详情/ACL/写面与「不存在」逐字节同形 @nightly"
         }
       ]
     },
@@ -6992,12 +6992,12 @@
       "domain": "工作组",
       "title": "非 owner 的写操作被拒（PUT / DELETE / rename → 403）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-21 read 档看得见改不动、write 档只够得着内容：四条写路径按门分流成三个拒绝码，界面同步收口"
+          "test": "WG-21 read 档看得见改不动、write 档只够得着内容：四条写路径按门分流成三个拒绝码，界面同步收口 @nightly"
         }
       ]
     },
@@ -7006,12 +7006,12 @@
       "domain": "工作组",
       "title": "新增成员引用不可见的私有 agent → 422 acl-missing-refs（存量引用豁免）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-22 新增成员引用不可见的私有代理 → 422 acl-missing-refs；存量引用豁免，可见引用照常加得上"
+          "test": "WG-22 新增成员引用不可见的私有代理 → 422 acl-missing-refs；存量引用豁免，可见引用照常加得上 @nightly"
         }
       ]
     },
@@ -7128,12 +7128,12 @@
       "domain": "工作组",
       "title": "【补漏】用 Intent Builder 创建 / 修改工作组（列表头 workgroups-intent-entry、详情 More 里的 workgroup-intent-entry → /intent?create&mountType=workgroup&mountId=…）",
       "risk": "P2",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-X1 意图构建器入口：有 intent:write 时列表/详情各挂一个且导航参数正确，没有时整体不挂载"
+          "test": "WG-X1 意图构建器入口：有 intent:write 时列表/详情各挂一个且导航参数正确，没有时整体不挂载 @nightly"
         }
       ]
     },
@@ -7198,12 +7198,12 @@
       "domain": "代理",
       "title": "删除被其它代理 dependsOn 引用的代理 → 409 agent-dependency-still-referenced",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-10 删除被其它代理 dependsOn 引用的代理：409 agent-dependency-still-referenced；解依赖后可删"
+          "test": "AGENT-10 删除被其它代理 dependsOn 引用的代理：409 agent-dependency-still-referenced；解依赖后可删 @nightly"
         }
       ]
     },
@@ -7212,12 +7212,12 @@
       "domain": "代理",
       "title": "删除有非终态单代理任务 / 正在启动中的代理 → 409",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-active；任务落终态后可删"
+          "test": "AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-active；任务落终态后可删 @nightly"
         }
       ]
     },
@@ -7226,12 +7226,12 @@
       "domain": "代理",
       "title": "删除被定时任务引用的代理 → 409 agent-scheduled-referenced",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-12 删除被定时任务引用的代理：409 agent-scheduled-referenced；删掉定时任务后可删"
+          "test": "AGENT-12 删除被定时任务引用的代理：409 agent-scheduled-referenced；删掉定时任务后可删 @nightly"
         }
       ]
     },
@@ -7240,12 +7240,12 @@
       "domain": "代理",
       "title": "端口名校验：必填 / 格式非法 / 超长 / 同向重名 → 对话框内报错且保存禁用",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-16: 端口名必填/格式/长度/同向重名——对话框内报错且保存禁用，改对了就能存"
+          "test": "RFC-319 AGENT-16: 端口名必填/格式/长度/同向重名——对话框内报错且保存禁用，改对了就能存 @nightly"
         }
       ]
     },
@@ -7254,12 +7254,12 @@
       "domain": "代理",
       "title": "端口对话框开着时底层数据被后台刷新（stale target）→ 拒绝提交",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-17: 对话框开着时底层端口被别人改了——拒绝提交，重开才放行"
+          "test": "RFC-319 AGENT-17: 对话框开着时底层端口被别人改了——拒绝提交，重开才放行 @nightly"
         }
       ]
     },
@@ -7268,12 +7268,12 @@
       "domain": "代理",
       "title": "聚合器代理的 wrapperPortName 编辑与重名校验",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-18: 聚合器 wrapperPortName 的编辑与重名——重名不许存，改名后落库"
+          "test": "RFC-319 AGENT-18: 聚合器 wrapperPortName 的编辑与重名——重名不许存，改名后落库 @nightly"
         }
       ]
     },
@@ -7282,12 +7282,12 @@
       "domain": "代理",
       "title": "孤儿 sidecar 清理：outputKinds / outputWrapperPortNames 残留无对应端口的键",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-20: 孤儿 sidecar 清理只删被点的那一条，且真的从库里消失"
+          "test": "RFC-319 AGENT-20: 孤儿 sidecar 清理只删被点的那一条，且真的从库里消失 @nightly"
         }
       ]
     },
@@ -7424,12 +7424,12 @@
       "domain": "代理",
       "title": "代理列表加载失败 → 列表区 ErrorBanner + 重试恢复",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
-          "test": "AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成「你还没有代理」"
+          "test": "AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成「你还没有代理」 @nightly"
         }
       ]
     },
@@ -7456,12 +7456,12 @@
       "domain": "代理",
       "title": "代理表单五个页签的角标：端口数 / 阻断错误数 / 引用数 / 引用问题数 / 非法 JSON 数",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-agent-ports.spec.ts",
-          "test": "RFC-319 AGENT-X5: 代理表单五个页签角标——端口数/阻断错误数/引用数/引用问题数/非法 JSON 数"
+          "test": "RFC-319 AGENT-X5: 代理表单五个页签角标——端口数/阻断错误数/引用数/引用问题数/非法 JSON 数 @nightly"
         }
       ]
     },
@@ -7470,12 +7470,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "/settings 分区导航与 ?tab= 深链接",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-01：?tab= 是设置分区的唯一事实源——深链接直达、导航改 URL、脏值回落默认分区"
+          "test": "RFC-319 CFG-01：?tab= 是设置分区的唯一事实源——深链接直达、导航改 URL、脏值回落默认分区 @nightly"
         }
       ]
     },
@@ -7511,12 +7511,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "离开有未保存改动的设置分区时的拦截",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-sections.spec.ts",
-          "test": "RFC-319 CFG-09：带着未保存改动离开设置页会被拦下；没有改动时不拦，同页换分区也不拦"
+          "test": "RFC-319 CFG-09：带着未保存改动离开设置页会被拦下；没有改动时不拦，同页换分区也不拦 @nightly"
         }
       ]
     },
@@ -7525,12 +7525,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "编辑已注册运行时的二进制路径 / profile / config-dir 覆盖",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 config-dir 覆盖真的落库，且旧的冒烟结论随之失效"
+          "test": "RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 config-dir 覆盖真的落库，且旧的冒烟结论随之失效 @nightly"
         }
       ]
     },
@@ -7539,12 +7539,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "对已注册运行时点 Test 重新 smoke，并处理探测期间被改的 409",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-settings-runtimes.spec.ts",
-          "test": "RFC-319 CFG-13：对已注册运行时重测会留下新结论；探测期间那一行被改掉，结论必须作废而不是贴到新配置上"
+          "test": "RFC-319 CFG-13：对已注册运行时重测会留下新结论；探测期间那一行被改掉，结论必须作废而不是贴到新配置上 @nightly"
         }
       ]
     },
@@ -7607,12 +7607,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "Network 分区到 API 文档页的跳转",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档页"
+          "test": "CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档页 @nightly"
         }
       ]
     },
@@ -7630,12 +7630,12 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首次运行分支：空环境显示 Onboarding，有资源后显示 Dashboard",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-overview-and-docs.spec.ts",
-          "test": "CFG-43 首次运行分支：空实例给 Onboarding，建出资源后换成 Dashboard，且引导只给动得了手的人"
+          "test": "CFG-43 首次运行分支：空实例给 Onboarding，建出资源后换成 Dashboard，且引导只给动得了手的人 @nightly"
         }
       ]
     },
@@ -7802,12 +7802,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "定时任务详情页的运行历史",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-44 详情页运行历史：从「还没跑过」变成两行，每行对得上服务端的任务清单，点进去就是那个任务"
+          "test": "EVENT-44 详情页运行历史：从「还没跑过」变成两行，每行对得上服务端的任务清单，点进去就是那个任务 @nightly"
         }
       ]
     },
@@ -7816,12 +7816,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "定时任务列表的搜索 / 视图切换（全部·已暂停）/ 稠密行 / 无横向溢出",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-45 定时任务列表：搜索只留下命中的行，「已暂停」视图只留下关掉的那条，行高保持稠密且整页不横向溢出"
+          "test": "EVENT-45 定时任务列表：搜索只留下命中的行，「已暂停」视图只留下关掉的那条，行高保持稠密且整页不横向溢出 @nightly"
         }
       ]
     },
@@ -7830,12 +7830,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "降级 / 需修复的历史定时任务：禁用「立即运行」并给出可修复提示",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-47 配置已经读不出来的定时任务：列表禁掉「立即运行」并说明原因，详情页给出具体的解析理由，同列表其它行照常渲染"
+          "test": "EVENT-47 配置已经读不出来的定时任务：列表禁掉「立即运行」并说明原因，详情页给出具体的解析理由，同列表其它行照常渲染 @nightly"
         }
       ]
     },
@@ -7867,12 +7867,12 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "删除定时任务（详情页二次确认 → DELETE）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-scheduled-tasks.spec.ts",
-          "test": "EVENT-X3 删除定时任务：第一次点击只是待确认（服务端仍在），第二次才真的删掉并回到列表"
+          "test": "EVENT-X3 删除定时任务：第一次点击只是待确认（服务端仍在），第二次才真的删掉并回到列表 @nightly"
         }
       ]
     },
@@ -7917,20 +7917,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清详情的分片切换器：同一 clarify 节点多个待答分片时页内横跳（正向经工作组 worker park 覆盖；负向「只剩一份不显示」另有一条。工作流 fan-out 那条路至今到不了——内层节点收不到 clarify 邀请，见 docs/audit-backlog.md）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-shard-switcher.spec.ts",
-          "test": "两个分片同时在等人回答：这一屏要把兄弟分片摆出来并且真的跳得过去"
+          "test": "两个分片同时在等人回答：这一屏要把兄弟分片摆出来并且真的跳得过去 @nightly"
         },
         {
           "file": "e2e/clarify-shard-switcher.spec.ts",
-          "test": "答掉其中一份之后：只剩一份在等，切换器就该收起来"
+          "test": "答掉其中一份之后：只剩一份在等，切换器就该收起来 @nightly"
         },
         {
           "file": "e2e/clarify-detail-states.spec.ts",
-          "test": "不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器"
+          "test": "不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器 @nightly"
         }
       ]
     },
@@ -7939,16 +7939,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清截断告警：agent 超发题目/选项时页面显式提示被截断",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-detail-states.spec.ts",
-          "test": "agent 超发题目时，页面必须说「被截断了」——否则人以为自己看到的就是全部"
+          "test": "agent 超发题目时，页面必须说「被截断了」——否则人以为自己看到的就是全部 @nightly"
         },
         {
           "file": "e2e/clarify-detail-states.spec.ts",
-          "test": "不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器"
+          "test": "不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器 @nightly"
         }
       ]
     },
@@ -7957,16 +7957,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "已处理待确认 → 完成（confirm），含跨任务 entryId 的 404 边界",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-questions-board.spec.ts",
-          "test": "承接 run 跑完之后：条目进「已处理待确认」，确认一下才收尾"
+          "test": "承接 run 跑完之后：条目进「已处理待确认」，确认一下才收尾 @nightly"
         },
         {
           "file": "e2e/task-questions-board.spec.ts",
-          "test": "跨任务的条目 id：确认 / 暂存都必须 404，而不是悄悄成功"
+          "test": "跨任务的条目 id：确认 / 暂存都必须 404，而不是悄悄成功 @nightly"
         }
       ]
     },
@@ -7975,16 +7975,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审页键盘快捷键 A / R / I，且不被 Cmd+A 等组合键误触发、不在输入框内劫持",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-single-doc-keyboard-download.spec.ts",
-          "test": "A / R / I：单键能开，但组合键、输入框里打字、历史版本都不许触发"
+          "test": "A / R / I：单键能开，但组合键、输入框里打字、历史版本都不许触发 @nightly"
         },
         {
           "file": "e2e/review-single-doc-keyboard-download.spec.ts",
-          "test": "驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词"
+          "test": "驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词 @nightly"
         }
       ]
     },
@@ -7993,16 +7993,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审文档下载为 markdown（含文件名清洗与空正文禁用）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-single-doc-keyboard-download.spec.ts",
-          "test": "下载：文件名把标题里的斜杠冒号清干净，存下来的就是页面上那一篇"
+          "test": "下载：文件名把标题里的斜杠冒号清干净，存下来的就是页面上那一篇 @nightly"
         },
         {
           "file": "e2e/review-single-doc-keyboard-download.spec.ts",
-          "test": "正文是空的时候，下载按钮必须是禁的 —— 否则存下来一个 0 字节的 .md"
+          "test": "正文是空的时候，下载按钮必须是禁的 —— 否则存下来一个 0 字节的 .md @nightly"
         }
       ]
     },
@@ -8011,16 +8011,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审门空文档自动通过（无 doc_version 时不困住用户）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-empty-list-auto-approve.spec.ts",
-          "test": "上游零份文档：评审门自动放行，任务往前走，而不是停在一个谁也点不开的空轮上"
+          "test": "上游零份文档：评审门自动放行，任务往前走，而不是停在一个谁也点不开的空轮上 @nightly"
         },
         {
           "file": "e2e/review-empty-list-auto-approve.spec.ts",
-          "test": "对照：上游有一份文档时，这道门照常拦住人工评审"
+          "test": "对照：上游有一份文档时，这道门照常拦住人工评审 @nightly"
         }
       ]
     },
@@ -8029,20 +8029,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务反馈（人对任务的书面反馈 → 记忆蒸馏任务），含限流与不可见任务 404 同形",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-feedback-distill.spec.ts",
-          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着"
+          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着 @nightly"
         },
         {
           "file": "e2e/task-feedback-distill.spec.ts",
-          "test": "连点要被拦住：一次手抖不该往同一个任务里灌两条一样的笔记"
+          "test": "连点要被拦住：一次手抖不该往同一个任务里灌两条一样的笔记 @nightly"
         },
         {
           "file": "e2e/task-feedback-distill.spec.ts",
-          "test": "正文校验，以及「看不见」与「不存在」必须逐字节同形"
+          "test": "正文校验，以及「看不见」与「不存在」必须逐字节同形 @nightly"
         }
       ]
     },
@@ -8051,20 +8051,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清 / 评审的归属展示（谁提交、每题最后谁编辑、决策人及角色）且绝不进 prompt",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-detail-states.spec.ts",
-          "test": "答完之后：页面写清是谁提交的"
+          "test": "答完之后：页面写清是谁提交的 @nightly"
         },
         {
           "file": "e2e/review-single-doc-keyboard-download.spec.ts",
-          "test": "驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词"
+          "test": "驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词 @nightly"
         },
         {
           "file": "e2e/clarify-collab-draft.spec.ts",
-          "test": "同一题再写一次：后写的赢，且逐题归属跟着更新"
+          "test": "同一题再写一次：后写的赢，且逐题归属跟着更新 @nightly"
         }
       ]
     },
@@ -8073,20 +8073,20 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "首页 Inbox 预览区块在真实待办数据下的呈现与跳转",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/home-inbox-preview.spec.ts",
-          "test": "首页「等你处理」要把两类待办都摆出来，而不是只显示其中一类"
+          "test": "首页「等你处理」要把两类待办都摆出来，而不是只显示其中一类 @nightly"
         },
         {
           "file": "e2e/home-inbox-preview.spec.ts",
-          "test": "点一行要落到那条待办自己的详情页——落错页面比不给点更糟"
+          "test": "点一行要落到那条待办自己的详情页——落错页面比不给点更糟 @nightly"
         },
         {
           "file": "e2e/home-inbox-preview.spec.ts",
-          "test": "一条 feed 挂了：要说清是哪条、能重试，而另一条的待办照常显示"
+          "test": "一条 feed 挂了：要说清是哪条、能重试，而另一条的待办照常显示 @nightly"
         }
       ]
     },
@@ -8095,12 +8095,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "多文档评审的 UI 逐篇接受 / 不接受与 q / w 键盘快捷键（审计原文写作 A / N，源码实为 q / w，见 lib/review/multiDocHotkeys.ts）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/review-multidoc-round-history.spec.ts",
-          "test": "逐篇接受 / 不接受：界面按钮与 q / w 快捷键，且带修饰键一律不接管"
+          "test": "逐篇接受 / 不接受：界面按钮与 q / w 快捷键，且带修饰键一律不接管 @nightly"
         }
       ]
     },
@@ -8109,12 +8109,12 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清详情页的加载态 / 错误态与两条查询各自的重试（session 与 peers）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/clarify-detail-states.spec.ts",
-          "test": "两条查询各自坏掉：本轮坏了要整页报错可重试，同伴坏了不许把整页拖垮"
+          "test": "两条查询各自坏掉：本轮坏了要整页报错可重试，同伴坏了不许把整页拖垮 @nightly"
         }
       ]
     },
@@ -8123,16 +8123,16 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务反馈的深链锚点定位与「已蒸馏」状态呈现",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/task-feedback-distill.spec.ts",
-          "test": "深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路"
+          "test": "深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路 @nightly"
         },
         {
           "file": "e2e/task-feedback-distill.spec.ts",
-          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着"
+          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着 @nightly"
         }
       ]
     },
@@ -8217,12 +8217,12 @@
       "domain": "意图构建器",
       "title": "空白 composer 的示例提示语（examples）一键填入并聚焦",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-03 空 composer 的示例语：一键填入、焦点与光标跟过去，且不在弹窗里重复出现"
+          "test": "INTENT-03 空 composer 的示例语：一键填入、焦点与光标跟过去，且不在弹窗里重复出现 @nightly"
         }
       ]
     },
@@ -8231,12 +8231,12 @@
       "domain": "意图构建器",
       "title": "目标文本 16 KiB 上限与字数计数器",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-06 目标 16 KiB 上限：计数器如实计数，键盘打不进第 16385 个字符，服务端按同一个数拒收"
+          "test": "INTENT-06 目标 16 KiB 上限：计数器如实计数，键盘打不进第 16385 个字符，服务端按同一个数拒收 @nightly"
         }
       ]
     },
@@ -8245,12 +8245,12 @@
       "domain": "意图构建器",
       "title": "/intent 列表空态",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-intent-create-and-list.spec.ts",
-          "test": "INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全"
+          "test": "INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全 @nightly"
         }
       ]
     },
@@ -8295,12 +8295,12 @@
       "domain": "意图构建器",
       "title": "融合发起的前置校验：未选技能 / 未选记忆 → 本地错误提示",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-50: 未选记忆 / 未选技能时，发起融合被本地拦下——不发请求、不清空已写的意图"
+          "test": "RFC-319 INTENT-50: 未选记忆 / 未选技能时，发起融合被本地拦下——不发请求、不清空已写的意图 @nightly"
         }
       ]
     },
@@ -8354,12 +8354,12 @@
       "domain": "意图构建器",
       "title": "【原审计漏项】记忆页「融合」页签徽章计数（/api/fusions/pending-count）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/fusion-review-surface.spec.ts",
-          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情"
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情 @nightly"
         }
       ]
     },
@@ -8368,12 +8368,12 @@
       "domain": "记忆",
       "title": "记忆表单校验拦截（标题/正文空或超长、非 global 缺 scopeId、tag 超限）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-03: 空/超长标题、空/超长正文、非 global 缺目标、超长标签——都在本地拦下且不发请求"
+          "test": "RFC-319 MEM-03: 空/超长标题、空/超长正文、非 global 缺目标、超长标签——都在本地拦下且不发请求 @nightly"
         }
       ]
     },
@@ -8382,12 +8382,12 @@
       "domain": "记忆",
       "title": "编辑弹窗的详情加载失败 / 重试（列表只有 summary，弹窗自己拉 detail）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-06: 编辑弹窗的详情拉不到时只给错误与重试，绝不摆出一个能写空值的保存按钮"
+          "test": "RFC-319 MEM-06: 编辑弹窗的详情拉不到时只给错误与重试，绝不摆出一个能写空值的保存按钮 @nightly"
         }
       ]
     },
@@ -8396,12 +8396,12 @@
       "domain": "记忆",
       "title": "编辑无改动时不发 PATCH、直接关闭（幂等无 version bump）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-07: 编辑弹窗里什么都没改就保存 —— 不发 PATCH、version 不动，改一个字才发"
+          "test": "RFC-319 MEM-07: 编辑弹窗里什么都没改就保存 —— 不发 PATCH、version 不动，改一个字才发 @nightly"
         }
       ]
     },
@@ -8410,12 +8410,12 @@
       "domain": "记忆",
       "title": "编辑终态记忆被拒（superseded / rejected / fused → 409 memory-terminal-status 专属文案）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/memory-access.spec.ts",
-          "test": "RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited"
+          "test": "RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited @nightly"
         }
       ]
     },
@@ -8453,12 +8453,12 @@
       "domain": "记忆",
       "title": "/memory 分区导航与 ?tab= 深链（含未知 tab 回落 all、hash 保留、标题获焦）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-23: /memory 的分区由 URL 决定——默认落在 All、深链直达、未知 tab 静默回落且保住 hash"
+          "test": "RFC-319 MEM-23: /memory 的分区由 URL 决定——默认落在 All、深链直达、未知 tab 静默回落且保住 hash @nightly"
         }
       ]
     },
@@ -8467,12 +8467,12 @@
       "domain": "记忆",
       "title": "蒸馏任务整行点击跳详情页（Retry / Cancel 按钮不触发跳转）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-28 整行点击进详情，而 Retry / Cancel 是行内操作、不许顺带把人跳走"
+          "test": "MEM-28 整行点击进详情，而 Retry / Cancel 是行内操作、不许顺带把人跳走 @nightly"
         }
       ]
     },
@@ -8481,12 +8481,12 @@
       "domain": "记忆",
       "title": "会话查询失败不拖垮详情页（session 报错时其余五段仍可读 + 段内重试）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-32 会话查询挂掉时：错误只落在第六段，前五段照常可读，并且能就地重试"
+          "test": "MEM-32 会话查询挂掉时：错误只落在第六段，前五段照常可读，并且能就地重试 @nightly"
         }
       ]
     },
@@ -8513,12 +8513,12 @@
       "domain": "记忆",
       "title": "daemon 重启后中断的蒸馏任务被回收（running → pending 重排，attempts 不清零）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-distill-jobs.spec.ts",
-          "test": "MEM-47 daemon 重启：中断在 running 的蒸馏任务被重排回 pending，且 attempts 不许被清零"
+          "test": "MEM-47 daemon 重启：中断在 running 的蒸馏任务被重排回 pending，且 attempts 不许被清零 @nightly"
         }
       ]
     },
@@ -8527,12 +8527,12 @@
       "domain": "记忆",
       "title": "记忆列表的搜索 / 标签 / scope 过滤与非法过滤值 422",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/memory-access.spec.ts",
-          "test": "RFC-319 MEM-48: list filters narrow the result set, and an invalid filter value is refused rather than silently ignored"
+          "test": "RFC-319 MEM-48: list filters narrow the result set, and an invalid filter value is refused rather than silently ignored @nightly"
         }
       ]
     },
@@ -8550,16 +8550,16 @@
       "domain": "记忆",
       "title": "【补漏】六个记忆面板的加载失败态与重试（列表 500 → ErrorBanner + Retry，缓存数据不被清空）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-X6: 五个记忆面板拉取失败时都给错误 + 重试，绝不冒充空态；重试成功后恢复原样"
+          "test": "RFC-319 MEM-X6: 五个记忆面板拉取失败时都给错误 + 重试，绝不冒充空态；重试成功后恢复原样 @nightly"
         },
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-X6: 已经加载出来的行不会被一次失败的后台刷新清空——错误横幅与列表同时在场"
+          "test": "RFC-319 MEM-X6: 已经加载出来的行不会被一次失败的后台刷新清空——错误横幅与列表同时在场 @nightly"
         }
       ]
     },
@@ -8568,12 +8568,12 @@
       "domain": "记忆",
       "title": "【补漏】All 库的两个空态（approved 空 / archived 空，文案不同）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-memory-panels.spec.ts",
-          "test": "RFC-319 MEM-X7: 空库时「已批准」与「已归档」各说各的话，不是同一句套话，也不是错误态假扮的空"
+          "test": "RFC-319 MEM-X7: 空库时「已批准」与「已归档」各说各的话，不是同一句套话，也不是错误态假扮的空 @nightly"
         }
       ]
     },
@@ -8828,12 +8828,12 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 游标分页「加载更多」",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-10 超过一页时给出「加载更多」，按下去经游标续取而不是从头重来"
+          "test": "REPO-10 超过一页时给出「加载更多」，按下去经游标续取而不是从头重来 @nightly"
         }
       ]
     },
@@ -8842,16 +8842,16 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 首次空态与「无匹配」空态",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-11 首次进入 /repos：空态引导取代空表格，工具条与表头一并让位"
+          "test": "REPO-11 首次进入 /repos：空态引导取代空表格，工具条与表头一并让位 @nightly"
         },
         {
           "file": "e2e/rfc319-repos-list-and-import.spec.ts",
-          "test": "REPO-11 搜索无命中时给的是「无匹配 + 清除筛选」，不是首次空态"
+          "test": "REPO-11 搜索无命中时给的是「无匹配 + 清除筛选」，不是首次空态 @nightly"
         }
       ]
     },
@@ -9022,12 +9022,12 @@
       "domain": "任务启动、执行与生命周期操作",
       "title": "任务列表空态（全新安装）与「无匹配」态（过滤过窄）的区分",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-19：全新安装的空列表教用户开工，而过滤过窄的空列表给的是退回全量的出口"
+          "test": "RFC-319 TASK-19：全新安装的空列表教用户开工，而过滤过窄的空列表给的是退回全量的出口 @nightly"
         }
       ]
     },
@@ -9308,12 +9308,12 @@
       "domain": "工作流定义与画布编辑器",
       "title": "逐节点显示名（NodeTitleField）：自定义标题、清空回落到 kind 派生名",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-X3 显示名：自定义标题落库并改写画布卡片，清空则删掉字段本身并回落到 kind 派生名"
+          "test": "WF-X3 显示名：自定义标题落库并改写画布卡片，清空则删掉字段本身并回落到 kind 派生名 @nightly"
         }
       ]
     },
@@ -9340,12 +9340,12 @@
       "domain": "工作组",
       "title": "工作组列表画廊渲染（模式 chip / 成员数 / leader / 人类成员 / 可见性徽章 / 归属人）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-01 列表画廊：模式/成员数/leader/人类成员/可见性/归属人逐格对账，未就绪的组不给启动入口"
+          "test": "WG-01 列表画廊：模式/成员数/leader/人类成员/可见性/归属人逐格对账，未就绪的组不给启动入口 @nightly"
         }
       ]
     },
@@ -9354,12 +9354,12 @@
       "domain": "工作组",
       "title": "列表搜索过滤与清空搜索",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-02 列表搜索：按卡片可见事实过滤、无匹配给空态、清空搜索复原列表并把焦点还回搜索框"
+          "test": "WG-02 列表搜索：按卡片可见事实过滤、无匹配给空态、清空搜索复原列表并把焦点还回搜索框 @nightly"
         }
       ]
     },
@@ -9368,12 +9368,12 @@
       "domain": "工作组",
       "title": "列表空态与空态主行动按钮",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-03 列表空态：主行动按钮随建组权限出现，有数据后空态消失且按钮搬回页头"
+          "test": "WG-03 列表空态：主行动按钮随建组权限出现，有数据后空态消失且按钮搬回页头 @nightly"
         }
       ]
     },
@@ -9391,12 +9391,12 @@
       "domain": "工作组",
       "title": "三种模式切换在编辑器里的 UI 后果（free_collab 三开关强制 ON+提示、dynamic_workflow 隐藏开关段与「加人类成员」）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-12 模式切换的 UI 后果：free_collab 把三开关显示成强制 ON 却不改存储、dynamic_workflow 抹掉开关段与「加人类成员」"
+          "test": "WG-12 模式切换的 UI 后果：free_collab 把三开关显示成强制 ON 却不改存储、dynamic_workflow 抹掉开关段与「加人类成员」 @nightly"
         }
       ]
     },
@@ -9405,12 +9405,12 @@
       "domain": "工作组",
       "title": "复制工作组为私有副本（exact-revision copy，自动取 -copy 名）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-crud.spec.ts",
-          "test": "WG-17 复制：exact-revision 复制出 -copy 私有副本，陈旧版本一律拒绝"
+          "test": "WG-17 复制：exact-revision 复制出 -copy 私有副本，陈旧版本一律拒绝 @nightly"
         }
       ]
     },
@@ -9419,12 +9419,12 @@
       "domain": "工作组",
       "title": "未保存离开守卫（含成员面板的临时草稿）",
       "risk": "P3",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-editor.spec.ts",
-          "test": "WG-23 未保存离开守卫：干净时不打扰，成员面板的半截草稿拦住侧栏跳转与刷新，「留下」保住草稿、「放弃」才放行"
+          "test": "WG-23 未保存离开守卫：干净时不打扰，成员面板的半截草稿拦住侧栏跳转与刷新，「留下」保住草稿、「放弃」才放行 @nightly"
         }
       ]
     },

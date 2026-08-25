@@ -167,7 +167,7 @@ test.afterAll(async () => {
   }
 })
 
-test('正向对照：工作树健在时，决策响应里不带任何 resume 警告', async () => {
+test('正向对照：工作树健在时，决策响应里不带任何 resume 警告 @nightly', async () => {
   const { task, review } = await launchAndAwaitReview(`rfc319-resumefail-ok-${++sequence}`)
   const done = await decide(review.nodeRunId, review.reviewIteration)
   expect(done.status).toBe(200)
@@ -181,7 +181,7 @@ test('正向对照：工作树健在时，决策响应里不带任何 resume 警
   ).toBe(false)
 })
 
-test('工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑', async () => {
+test('工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑 @nightly', async () => {
   const { task, review } = await launchAndAwaitReview(`rfc319-resumefail-gone-${++sequence}`)
   const detail = await api<{ worktreePath: string }>(`/api/tasks/${task}`)
   expect(detail.worktreePath, '任务没有工作树路径 ⇒ 下面的删除构造不出那条失败').toBeTruthy()

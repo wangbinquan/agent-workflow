@@ -326,7 +326,7 @@ test('RFC-319 MEM-34: candidate rows stay invisible to non-bypass actors until t
 // MEM-04 —— 对没有管理权的 scope 建记忆被拒
 // ---------------------------------------------------------------------------
 
-test('RFC-319 MEM-04: creating a memory on a scope you do not manage is refused', async () => {
+test('RFC-319 MEM-04: creating a memory on a scope you do not manage is refused @nightly', async () => {
   // 建记忆是**写面**动作：它决定了往后哪些内容会被注入进别人的 prompt。
   // 读得到 ≠ 写得进——这条锁的就是这个不对称（memories.ts:193 的 canManageMemory 前置）。
   const outsider = await plainUser()
@@ -387,7 +387,7 @@ test('RFC-319 MEM-04: creating a memory on a scope you do not manage is refused'
 // MEM-10 / MEM-08 —— 驳回候选（终态），以及终态不可再编辑
 // ---------------------------------------------------------------------------
 
-test('RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited', async () => {
+test('RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never becomes visible and can no longer be edited @nightly', async () => {
   const id = await seedMemory('global', null, `rfc319-reject-${++sequence}`, /* promote */ false)
 
   const rejected = await jsonOf<{ memory: { status: string; approvedAt: number | null } }>(
@@ -429,7 +429,7 @@ test('RFC-319 MEM-10 & MEM-08: rejecting a candidate is terminal — it never be
 // MEM-19 —— 删除的双重确认门（?confirm=true；token 调用方还要回显标题）
 // ---------------------------------------------------------------------------
 
-test('RFC-319 MEM-19: deleting a memory needs ?confirm=true, and a token caller must additionally echo the title', async () => {
+test('RFC-319 MEM-19: deleting a memory needs ?confirm=true, and a token caller must additionally echo the title @nightly', async () => {
   // 删记忆没有回收站。两道门是**分层**的，且刻意不对称（RFC-247 T20）：
   //   * 人走 UI：一个 `?confirm=true` 就够了——他刚点过对话框；
   //   * token 走 REST/MCP：额外回显标题——它背后没有对话框，「模型决定调用它」
@@ -493,7 +493,7 @@ test('RFC-319 MEM-19: deleting a memory needs ?confirm=true, and a token caller 
 // MEM-48 —— 列表过滤（search / tag / scope），非法过滤值 422
 // ---------------------------------------------------------------------------
 
-test('RFC-319 MEM-48: list filters narrow the result set, and an invalid filter value is refused rather than silently ignored', async () => {
+test('RFC-319 MEM-48: list filters narrow the result set, and an invalid filter value is refused rather than silently ignored @nightly', async () => {
   const marker = `rfc319-filter-${++sequence}`
   const matching = await seedMemory('global', null, `${marker}-match`)
   const other = await seedMemory('global', null, `rfc319-unrelated-${sequence}`)

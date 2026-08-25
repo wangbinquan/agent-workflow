@@ -190,7 +190,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('两个任务各自成节、行不串组，「打开」落在正确的那一轮', async ({ page }) => {
+test('两个任务各自成节、行不串组，「打开」落在正确的那一轮 @nightly', async ({ page }) => {
   await openList(page)
 
   const groupA = page.getByTestId(`clarify-group-${alpha.taskId}`)
@@ -216,7 +216,9 @@ test('两个任务各自成节、行不串组，「打开」落在正确的那�
   await expect(page.getByTestId('clarify-question-q-db')).toBeVisible()
 })
 
-test('答过的那一轮：从「待回答」里消失、在「已回答」里出现，「全部」两条都在', async ({ page }) => {
+test('答过的那一轮：从「待回答」里消失、在「已回答」里出现，「全部」两条都在 @nightly', async ({
+  page,
+}) => {
   // 只答 alpha，beta 留着当对照——否则「页签根本没生效、永远返回全部」也能让
   // 「已回答里有 alpha」成立。
   const res = await fetch(`${daemon.baseUrl}/api/clarify/${alpha.nodeRunId}/answers`, {
@@ -269,7 +271,7 @@ test('答过的那一轮：从「待回答」里消失、在「已回答」里�
   await expect(page.getByTestId(`clarify-row-${beta.roundId}`)).toHaveCount(1)
 })
 
-test('列表读不到时报故障并可重试，绝不画成「没有待回答的问题」', async ({ page }) => {
+test('列表读不到时报故障并可重试，绝不画成「没有待回答的问题」 @nightly', async ({ page }) => {
   let failing = true
   await page.route('**/api/clarify?status=*', async (route) => {
     if (failing) {

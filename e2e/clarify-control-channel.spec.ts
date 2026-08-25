@@ -205,7 +205,7 @@ test.afterAll(async () => {
   }
 })
 
-test('快速通道上带子集上限被当场拒绝，而不是「过滤掉再往下走」', async () => {
+test('快速通道上带子集上限被当场拒绝，而不是「过滤掉再往下走」 @nightly', async () => {
   const before = await board()
   const rejected = await rawPost(`/api/clarify/${nodeRunId}/answers`, {
     answers: ANSWERS,
@@ -221,7 +221,7 @@ test('快速通道上带子集上限被当场拒绝，而不是「过滤掉再�
   expect(await taskStatus()).toBe('awaiting_human')
 })
 
-test('快速通道上带重答声明同样被拒（两条组合各有各的 code）', async () => {
+test('快速通道上带重答声明同样被拒（两条组合各有各的 code） @nightly', async () => {
   const before = await board()
   const rejected = await rawPost(`/api/clarify/${nodeRunId}/answers`, {
     answers: ANSWERS,
@@ -236,7 +236,7 @@ test('快速通道上带重答声明同样被拒（两条组合各有各的 code
   expect(await taskStatus()).toBe('awaiting_human')
 })
 
-test('控制通道只封存不下发：被点名那题进待下发，另一题不动，任务仍停在等人上', async () => {
+test('控制通道只封存不下发：被点名那题进待下发，另一题不动，任务仍停在等人上 @nightly', async () => {
   const accepted = await rawPost(`/api/clarify/${nodeRunId}/answers`, {
     answers: ANSWERS,
     defer: true,

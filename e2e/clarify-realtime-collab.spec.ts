@@ -273,7 +273,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('同事改了某题：这一屏不刷新就要看见提示，并把那题的值接过来', async ({ page }) => {
+test('同事改了某题：这一屏不刷新就要看见提示，并把那题的值接过来 @nightly', async ({ page }) => {
   await openClarify(page, live.nodeRunId)
   await plantSentinel(page)
   // 正向对照：此刻还没有任何人动过，提示条不该在。
@@ -305,7 +305,7 @@ test('同事改了某题：这一屏不刷新就要看见提示，并把那题�
   expect(await sentinelAlive(page), '哨兵不在了 ⇒ 这一屏被重载过，上面两条就不成立').toBe(1)
 })
 
-test('同事把整轮提交了：这一屏必须自己转成只读，而不是继续让我打字', async ({ page }) => {
+test('同事把整轮提交了：这一屏必须自己转成只读，而不是继续让我打字 @nightly', async ({ page }) => {
   await openClarify(page, sealed.nodeRunId)
   await plantSentinel(page)
   await expect(page.getByTestId('clarify-submit-continue')).toBeEnabled()

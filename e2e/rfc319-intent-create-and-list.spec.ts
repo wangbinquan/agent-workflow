@@ -218,7 +218,7 @@ async function settleNavigationAttempt(page: Page): Promise<void> {
 // INTENT-03
 // ---------------------------------------------------------------------------
 
-test('INTENT-03 空 composer 的示例语：一键填入、焦点与光标跟过去，且不在弹窗里重复出现', async ({
+test('INTENT-03 空 composer 的示例语：一键填入、焦点与光标跟过去，且不在弹窗里重复出现 @nightly', async ({
   page,
 }) => {
   await authPage(page)
@@ -279,7 +279,7 @@ test('INTENT-03 空 composer 的示例语：一键填入、焦点与光标跟过
 // INTENT-06
 // ---------------------------------------------------------------------------
 
-test('INTENT-06 目标 16 KiB 上限：计数器如实计数，键盘打不进第 16385 个字符，服务端按同一个数拒收', async ({
+test('INTENT-06 目标 16 KiB 上限：计数器如实计数，键盘打不进第 16385 个字符，服务端按同一个数拒收 @nightly', async ({
   page,
 }) => {
   await authPage(page)
@@ -339,7 +339,7 @@ test('INTENT-06 目标 16 KiB 上限：计数器如实计数，键盘打不进�
 // INTENT-04
 // ---------------------------------------------------------------------------
 
-test('INTENT-04 创建失败（服务端 422 / 断网）：报错读得懂、composer 立刻解锁、服务端不留僵尸会话', async ({
+test('INTENT-04 创建失败（服务端 422 / 断网）：报错读得懂、composer 立刻解锁、服务端不留僵尸会话 @nightly', async ({
   page,
 }) => {
   await authPage(page)
@@ -430,7 +430,7 @@ test('INTENT-04 创建失败（服务端 422 / 断网）：报错读得懂、com
 // INTENT-05 —— 内联 composer：侧边栏 / 前进后退 / 刷新 + 防重复提交
 // ---------------------------------------------------------------------------
 
-test('INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷新全被锁死，重复提交只发一次 POST', async ({
+test('INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷新全被锁死，重复提交只发一次 POST @nightly', async ({
   page,
 }) => {
   await authPage(page)
@@ -543,7 +543,7 @@ test('INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷�
 // INTENT-05 —— 弹窗版 composer：所有关闭路径
 // ---------------------------------------------------------------------------
 
-test('INTENT-05 创建进行中：新建弹窗的关闭按钮 / Esc / 点遮罩 / 取消四条路径全被封死', async ({
+test('INTENT-05 创建进行中：新建弹窗的关闭按钮 / Esc / 点遮罩 / 取消四条路径全被封死 @nightly', async ({
   page,
 }) => {
   await authPage(page)
@@ -599,7 +599,7 @@ test('INTENT-05 创建进行中：新建弹窗的关闭按钮 / Esc / 点遮罩 
 // INTENT-07 + INTENT-09
 // ---------------------------------------------------------------------------
 
-test('INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全', async ({
+test('INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，13 条会话由两页按服务端顺序拼全 @nightly', async ({
   page,
 }) => {
   test.setTimeout(240_000)
@@ -691,7 +691,7 @@ test('INTENT-07 / INTENT-09 最近会话列表：空态只在真空时出现，1
 // INTENT-08
 // ---------------------------------------------------------------------------
 
-test('INTENT-08 最近会话卡片：状态 chip 随真实进度从 Generate 走到 Review 再到 Apply，轮次/提交计数逐条独立', async ({
+test('INTENT-08 最近会话卡片：状态 chip 随真实进度从 Generate 走到 Review 再到 Apply，轮次/提交计数逐条独立 @nightly', async ({
   page,
 }) => {
   test.setTimeout(240_000)

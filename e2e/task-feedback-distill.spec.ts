@@ -254,7 +254,7 @@ test.afterAll(async () => {
   if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true })
 })
 
-test('写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着', async ({ page }) => {
+test('写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着 @nightly', async ({ page }) => {
   await seedAuth(page)
   await openFeedbackTab(page)
   await expect(page.getByTestId('task-feedback-empty')).toBeVisible()
@@ -273,7 +273,7 @@ test('写下一条反馈：它要真的排进蒸馏，而不是只在列表里�
   expect(rows[0]!.distillJobId, '置了位却没有 job id —— 那条笔记不会被任何人处理').not.toBeNull()
 })
 
-test('连点要被拦住：一次手抖不该往同一个任务里灌两条一样的笔记', async ({ page }) => {
+test('连点要被拦住：一次手抖不该往同一个任务里灌两条一样的笔记 @nightly', async ({ page }) => {
   await seedAuth(page)
 
   // ——为什么这一条**不能**靠墙钟等待（旧写法在 CI 上真红过，commit 188dda224）——
@@ -365,7 +365,7 @@ test('连点要被拦住：一次手抖不该往同一个任务里灌两条一�
   )
 })
 
-test('正文校验，以及「看不见」与「不存在」必须逐字节同形', async () => {
+test('正文校验，以及「看不见」与「不存在」必须逐字节同形 @nightly', async () => {
   // 空正文 / 超长都要被拒——不然蒸馏那头会收到一条没有信息量的作业。
   const empty = await apiFetch(`/api/tasks/${taskId}/feedback`, {
     method: 'POST',
@@ -392,7 +392,9 @@ test('正文校验，以及「看不见」与「不存在」必须逐字节同�
   )
 })
 
-test('深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路', async ({ page }) => {
+test('深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路 @nightly', async ({
+  page,
+}) => {
   await seedAuth(page)
   const rows = await feedbackRows()
   // 挑**最后**那一条：落在第一条上可能只是「本来就在视口里」，说明不了定位真的发生过。

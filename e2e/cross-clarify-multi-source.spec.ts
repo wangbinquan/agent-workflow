@@ -250,7 +250,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('答完一家不算数：designer 不许重跑，页面要点名还差谁', async ({ page }) => {
+test('答完一家不算数：designer 不许重跑，页面要点名还差谁 @nightly', async ({ page }) => {
   const rounds = await awaitingRounds()
   const a = rounds.find((r) => r.intermediaryNodeId === 'cross_a')!
   const designerRunsBefore = (await runsOf('designer')).length
@@ -301,7 +301,7 @@ test('答完一家不算数：designer 不许重跑，页面要点名还差谁',
   expect((await awaitingRounds()).map((r) => r.intermediaryNodeId)).toEqual(['cross_b'])
 })
 
-test('两家都答完之后：栅栏放行，任务必须往前走而不是无声卡死', async ({ page }) => {
+test('两家都答完之后：栅栏放行，任务必须往前走而不是无声卡死 @nightly', async ({ page }) => {
   const b = (await awaitingRounds())[0]!
   expect(b.intermediaryNodeId, '此刻应当只剩 B 那一家').toBe('cross_b')
 

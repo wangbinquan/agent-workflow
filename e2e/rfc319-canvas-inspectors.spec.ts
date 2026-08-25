@@ -325,7 +325,7 @@ test.afterAll(async () => {
 // WF-26 —— agent-single 检查器
 // ---------------------------------------------------------------------------
 
-test('WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{ref}} 被点名，参数选择器按光标插入端口 token', async ({
+test('WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{ref}} 被点名，参数选择器按光标插入端口 token @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -436,7 +436,7 @@ test('WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{re
 // WF-27 —— input 节点检查器
 // ---------------------------------------------------------------------------
 
-test('WF-27 input 检查器：五种字段类型逐一落库，enum 选项与 upload 的 targetDir / onConflict 一并落库', async ({
+test('WF-27 input 检查器：五种字段类型逐一落库，enum 选项与 upload 的 targetDir / onConflict 一并落库 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -531,7 +531,7 @@ test('WF-27 input 检查器：五种字段类型逐一落库，enum 选项与 up
   ).toBe('inputs/refs')
 })
 
-test('WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改成合法值则整棵定义同步改名', async ({
+test('WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改成合法值则整棵定义同步改名 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -609,7 +609,7 @@ test('WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改
 // WF-28 —— output 节点检查器
 // ---------------------------------------------------------------------------
 
-test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步', async ({
+test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -670,7 +670,7 @@ test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列�
 // WF-29 —— review（人工门）检查器
 // ---------------------------------------------------------------------------
 
-test('WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库', async ({
+test('WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -785,7 +785,7 @@ test('WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集
 // WF-30 —— clarify / clarify-cross-agent 检查器
 // ---------------------------------------------------------------------------
 
-test('WF-30 clarify 检查器：绑定的提问代理与 loop 内外状态如实呈现，会话模式两个方向都落库', async ({
+test('WF-30 clarify 检查器：绑定的提问代理与 loop 内外状态如实呈现，会话模式两个方向都落库 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -851,7 +851,7 @@ test('WF-30 clarify 检查器：绑定的提问代理与 loop 内外状态如实
   ).toContainText('Not inside a wrapper-loop')
 })
 
-test('WF-30 cross-clarify 检查器：提问者与被问设计者双向绑定如实呈现，缺一方当场报错', async ({
+test('WF-30 cross-clarify 检查器：提问者与被问设计者双向绑定如实呈现，缺一方当场报错 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -921,7 +921,9 @@ test('WF-30 cross-clarify 检查器：提问者与被问设计者双向绑定如
 // WF-31 —— wrapper-git / wrapper-loop 检查器
 // ---------------------------------------------------------------------------
 
-test('WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出现任何循环旋钮', async ({ page }) => {
+test('WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出现任何循环旋钮 @nightly', async ({
+  page,
+}) => {
   const workflowId = await seedWorkflow({
     nodes: [
       agentNode('inside', 'rfc319-ins-worker', 40, 120),
@@ -949,7 +951,7 @@ test('WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出�
   ).toContainText('inside')
 })
 
-test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库', async ({
+test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -1057,7 +1059,7 @@ test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只�
 // WF-32 —— wrapper-fanout 检查器
 // ---------------------------------------------------------------------------
 
-test('WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现', async ({
+test('WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({
@@ -1149,7 +1151,7 @@ test('WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，
 // WF-X3 —— 逐节点显示名（NodeTitleField）
 // ---------------------------------------------------------------------------
 
-test('WF-X3 显示名：自定义标题落库并改写画布卡片，清空则删掉字段本身并回落到 kind 派生名', async ({
+test('WF-X3 显示名：自定义标题落库并改写画布卡片，清空则删掉字段本身并回落到 kind 派生名 @nightly', async ({
   page,
 }) => {
   const workflowId = await seedWorkflow({

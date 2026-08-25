@@ -261,7 +261,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('首页「等你处理」要把两类待办都摆出来，而不是只显示其中一类', async ({ page }) => {
+test('首页「等你处理」要把两类待办都摆出来，而不是只显示其中一类 @nightly', async ({ page }) => {
   await seedAuth(page)
   await page.goto(`${daemon.baseUrl}/`)
   const clarifyRow = page.getByTestId(`inbox-preview-clarify-${clarifyRoundId}`)
@@ -274,7 +274,7 @@ test('首页「等你处理」要把两类待办都摆出来，而不是只显�
   await expect(page.getByTestId('inbox-preview-empty')).toHaveCount(0)
 })
 
-test('点一行要落到那条待办自己的详情页——落错页面比不给点更糟', async ({ page }) => {
+test('点一行要落到那条待办自己的详情页——落错页面比不给点更糟 @nightly', async ({ page }) => {
   await seedAuth(page)
   await page.goto(`${daemon.baseUrl}/`)
   await page.getByTestId(`inbox-preview-clarify-${clarifyRoundId}`).click()
@@ -285,7 +285,7 @@ test('点一行要落到那条待办自己的详情页——落错页面比不�
   await expect(page).toHaveURL(new RegExp(`/reviews/${reviewNodeRunId}$`))
 })
 
-test('一条 feed 挂了：要说清是哪条、能重试，而另一条的待办照常显示', async ({ page }) => {
+test('一条 feed 挂了：要说清是哪条、能重试，而另一条的待办照常显示 @nightly', async ({ page }) => {
   await seedAuth(page)
   // 只打掉评审那条 feed；澄清那条放行。
   await page.route('**/api/reviews?status=pending', async (route) => {

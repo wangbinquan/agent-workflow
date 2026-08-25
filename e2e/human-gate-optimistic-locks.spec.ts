@@ -197,7 +197,7 @@ async function launch(d: DaemonHandle, workflowId: string, name: string): Promis
   return task.id
 }
 
-test('HUMAN-08 澄清：拿过期轮次号提交被 409 拒绝，且服务端状态一个字节不变', async () => {
+test('HUMAN-08 澄清：拿过期轮次号提交被 409 拒绝，且服务端状态一个字节不变 @nightly', async () => {
   const d = daemons.clarify as DaemonHandle
   const workflowId = await seedDesignerWorkflow(d, 'rfc319-human08', true)
   const taskId = await launch(d, workflowId, 'rfc319-human08-task')
@@ -271,7 +271,7 @@ test('HUMAN-08 澄清：拿过期轮次号提交被 409 拒绝，且服务端状
   expect(fresh.status, `正确轮次号也被拒（code=${fresh.code ?? 'null'}）`).toBe(200)
 })
 
-test('HUMAN-31 评审：拿过期轮次号决策被 409 拒绝，任务仍停在等人评审上', async () => {
+test('HUMAN-31 评审：拿过期轮次号决策被 409 拒绝，任务仍停在等人评审上 @nightly', async () => {
   const d = daemons.review as DaemonHandle
   const workflowId = await seedDesignerWorkflow(d, 'rfc319-human31', false)
   const taskId = await launch(d, workflowId, 'rfc319-human31-task')

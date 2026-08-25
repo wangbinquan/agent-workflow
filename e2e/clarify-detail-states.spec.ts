@@ -230,7 +230,9 @@ test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'wait' })
 })
 
-test('agent 超发题目时，页面必须说「被截断了」——否则人以为自己看到的就是全部', async ({ page }) => {
+test('agent 超发题目时，页面必须说「被截断了」——否则人以为自己看到的就是全部 @nightly', async ({
+  page,
+}) => {
   await seedAuth(page)
   // 截断发生在**解析**那一层（超上限即截断 + 记 warning），stub 固定只发 2 题；真造一次
   // 超发就得改 stub，而那会废掉 RFC-254 的 shell↔TS 差分基线。这里改在请求层注入
@@ -267,7 +269,9 @@ test('agent 超发题目时，页面必须说「被截断了」——否则人�
   await expect(warning).toContainText('had 9 options, truncated to 6')
 })
 
-test('不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器', async ({ page }) => {
+test('不注入截断时不许出现告警条；只有一份待答时也不许出现分片切换器 @nightly', async ({
+  page,
+}) => {
   await seedAuth(page)
   await openClarify(page, nodeRunId)
   await expect(page.getByTestId('clarify-question-q-db')).toBeVisible()
@@ -278,7 +282,9 @@ test('不注入截断时不许出现告警条；只有一份待答时也不许�
   await expect(page.getByTestId('clarify-shard-switcher')).toHaveCount(0)
 })
 
-test('两条查询各自坏掉：本轮坏了要整页报错可重试，同伴坏了不许把整页拖垮', async ({ page }) => {
+test('两条查询各自坏掉：本轮坏了要整页报错可重试，同伴坏了不许把整页拖垮 @nightly', async ({
+  page,
+}) => {
   await seedAuth(page)
 
   // ① 本轮查询坏掉 ⇒ 整页错误 + 重试；放行后必须真的恢复（只出错不给路走等于死页）。
@@ -339,7 +345,7 @@ test('两条查询各自坏掉：本轮坏了要整页报错可重试，同伴�
   await expect(page.getByTestId('clarify-submit-continue')).toBeEnabled()
 })
 
-test('答完之后：页面写清是谁提交的', async ({ page }) => {
+test('答完之后：页面写清是谁提交的 @nightly', async ({ page }) => {
   await seedAuth(page)
   await api(`/api/clarify/${nodeRunId}/answers`, {
     method: 'POST',

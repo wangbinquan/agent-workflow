@@ -262,7 +262,7 @@ test.afterAll(async () => {
 // INTENT-45
 // ---------------------------------------------------------------------------
 
-test('INTENT-45 非成员看他人会话与看不存在的会话：状态码、响应体、页面文案逐字节同形', async ({
+test('INTENT-45 非成员看他人会话与看不存在的会话：状态码、响应体、页面文案逐字节同形 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({
@@ -342,7 +342,7 @@ test('INTENT-45 非成员看他人会话与看不存在的会话：状态码、�
 // INTENT-44
 // ---------------------------------------------------------------------------
 
-test('INTENT-44 管理员审计视图：历史一条不少，变更控件一个不剩，写面照样 404', async ({
+test('INTENT-44 管理员审计视图：历史一条不少，变更控件一个不剩，写面照样 404 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({
@@ -478,7 +478,9 @@ test('INTENT-44 管理员审计视图：历史一条不少，变更控件一个�
 // INTENT-43
 // ---------------------------------------------------------------------------
 
-test('INTENT-43 归档：整页转只读且写接口 409，重新打开后控件原样回来', async ({ browser }) => {
+test('INTENT-43 归档：整页转只读且写接口 409，重新打开后控件原样回来 @nightly', async ({
+  browser,
+}) => {
   const alice = await createUserAndLogin({
     username: 'rfc319-i43-alice',
     password: 'longEnoughPassword',
@@ -572,7 +574,7 @@ test('INTENT-43 归档：整页转只读且写接口 409，重新打开后控件
 // INTENT-27
 // ---------------------------------------------------------------------------
 
-test('INTENT-27 挂载不可见资源与挂载不存在资源回同一个 404，可见的照常挂得上', async ({
+test('INTENT-27 挂载不可见资源与挂载不存在资源回同一个 404，可见的照常挂得上 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({
@@ -712,7 +714,7 @@ async function assertEntryVisibility(
   }
 }
 
-test('INTENT-X1 没有 intent:write：六类资源页的「用 AI 构建 / 修改」入口整体不挂载', async ({
+test('INTENT-X1 没有 intent:write：六类资源页的「用 AI 构建 / 修改」入口整体不挂载 @nightly', async ({
   browser,
 }) => {
   // guest 是产品里唯一「登录了、看得见资源、但没有 intent:*」的档位
@@ -845,7 +847,9 @@ test('INTENT-X1 没有 intent:write：六类资源页的「用 AI 构建 / 修�
   await assertEntryVisibility(browser, writer.sessionToken, surfaces, 1)
 })
 
-test('INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:write 收放', async ({ browser }) => {
+test('INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:write 收放 @nightly', async ({
+  browser,
+}) => {
   // 这两处**不在**画廊页上，其中工作组详情用的是手写的 `canWriteIntent &&`
   // （routes/workgroups.detail.tsx:929），不是共享的 IntentEntryButton——
   // 只断言共享组件的用例覆盖不到它。工作流编辑器走共享组件，但入口藏在编辑器
@@ -936,7 +940,7 @@ test('INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:wr
 // 的都是同名代理 `e2e-auditor`，提交第二次会撞占用名。
 // ---------------------------------------------------------------------------
 
-test('INTENT-11 provenance 徽章：源会话可见者点得回去，不可见者 DOM 里一个都没有', async ({
+test('INTENT-11 provenance 徽章：源会话可见者点得回去，不可见者 DOM 里一个都没有 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({

@@ -160,7 +160,7 @@ test.afterAll(async () => {
   if (stateDir !== undefined) rmSync(stateDir, { recursive: true, force: true })
 })
 
-test('上游零份文档：评审门自动放行，任务往前走，而不是停在一个谁也点不开的空轮上', async () => {
+test('上游零份文档：评审门自动放行，任务往前走，而不是停在一个谁也点不开的空轮上 @nightly', async () => {
   const wfId = await makeWorkflow('rfc319-b65-empty', 1)
   const taskId = await launch(wfId, 'rfc319-b65-empty-task')
 
@@ -206,7 +206,7 @@ test('上游零份文档：评审门自动放行，任务往前走，而不是�
   expect(Object.keys(parsed)).not.toContain('decidedBy')
 })
 
-test('对照：上游有一份文档时，这道门照常拦住人工评审', async () => {
+test('对照：上游有一份文档时，这道门照常拦住人工评审 @nightly', async () => {
   // 少了这条，「评审门永远自动放行」也能让上一条成立——那就等于把人工门整个废掉了。
   const wfId = await makeWorkflow('rfc319-b65-nonempty', 0)
   const taskId = await launch(wfId, 'rfc319-b65-nonempty-task')

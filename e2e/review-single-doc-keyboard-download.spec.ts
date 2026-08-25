@@ -254,7 +254,9 @@ test.afterAll(async () => {
   if (stateDir !== undefined) rmSync(stateDir, { recursive: true, force: true })
 })
 
-test('下载：文件名把标题里的斜杠冒号清干净，存下来的就是页面上那一篇', async ({ page }) => {
+test('下载：文件名把标题里的斜杠冒号清干净，存下来的就是页面上那一篇 @nightly', async ({
+  page,
+}) => {
   await openReview(page)
   const button = page.locator('.review-detail__download')
   await expect(button).toBeEnabled()
@@ -273,7 +275,9 @@ test('下载：文件名把标题里的斜杠冒号清干净，存下来的就�
   expect(saved, '下载下来的必须就是页面上那一篇正文').toContain('Quality gate blocked')
 })
 
-test('正文是空的时候，下载按钮必须是禁的 —— 否则存下来一个 0 字节的 .md', async ({ page }) => {
+test('正文是空的时候，下载按钮必须是禁的 —— 否则存下来一个 0 字节的 .md @nightly', async ({
+  page,
+}) => {
   // 正文来自详情接口。这里在**导航之前**就把它换成空串，并且从**预先取好的**真实
   // 载荷里造响应（handler 内不再 `route.fetch()`）——否则「取上游 → 再 fulfill」
   // 中间那段异步窗口会和页面 8s 轮询、以及测试收尾撞上，报 `Route is already handled`。
@@ -298,7 +302,9 @@ test('正文是空的时候，下载按钮必须是禁的 —— 否则存下来
   ).toBeDisabled()
 })
 
-test('A / R / I：单键能开，但组合键、输入框里打字、历史版本都不许触发', async ({ page }) => {
+test('A / R / I：单键能开，但组合键、输入框里打字、历史版本都不许触发 @nightly', async ({
+  page,
+}) => {
   await openReview(page)
   const dialog = page.getByTestId('review-decision-dialog')
 
@@ -355,7 +361,9 @@ test('A / R / I：单键能开，但组合键、输入框里打字、历史版�
   // （与 `?round=` 同款折叠），所以真正的历史版本只有在这一轮被决定、v2 生成之后才存在。
 })
 
-test('驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词', async ({ page }) => {
+test('驳回之后：页面写清是谁、什么角色做的决定；而这份归属绝不进重跑的提示词 @nightly', async ({
+  page,
+}) => {
   await openReview(page)
   const before = await api<{ currentVersion: { id: string } }>(`/api/reviews/${nodeRunId}`)
 

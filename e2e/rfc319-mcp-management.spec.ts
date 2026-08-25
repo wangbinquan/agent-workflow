@@ -427,7 +427,7 @@ test.afterAll(async () => {
 // RES-16 —— 新建表单：必填校验挡在请求之前 + local/remote 分段切换
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-16: 新建 MCP 的必填校验挡在请求之前，local ↔ remote 分段切换换掉整组必填字段', async ({
+test('RFC-319 RES-16: 新建 MCP 的必填校验挡在请求之前，local ↔ remote 分段切换换掉整组必填字段 @nightly', async ({
   page,
 }) => {
   await primeAdmin(page)
@@ -531,7 +531,7 @@ test('RFC-319 RES-16: 新建 MCP 的必填校验挡在请求之前，local ↔ r
 // RES-17 / RES-22 —— 改配置真的落库；旧探测结果当场作废
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废', async ({
+test('RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废 @nightly', async ({
   page,
 }) => {
   const mcp = await seedLocalMcp({
@@ -613,7 +613,7 @@ test('RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上�
 // RES-23 —— 草稿未保存时的两个探测按钮，各自用的是哪一份配置
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-23: 草稿未保存时「用已保存版本探测」与「保存并探测」用的是两份不同的配置', async ({
+test('RFC-319 RES-23: 草稿未保存时「用已保存版本探测」与「保存并探测」用的是两份不同的配置 @nightly', async ({
   page,
 }) => {
   // 已保存版本 = 通的；草稿 = 一条不存在的可执行文件。两者结果相反，用错版本立刻穿帮。
@@ -678,7 +678,7 @@ test('RFC-319 RES-23: 草稿未保存时「用已保存版本探测」与「保�
 // RES-21 —— 四种错误码（含 connect-failed 的两条判定分支）各自渲染自己的事实与详情
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partial 各自渲染自己的错误码与详情', async ({
+test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partial 各自渲染自己的错误码与详情 @nightly', async ({
   page,
 }) => {
   const unauthenticatedHttpEndpoint = `${requiredEnv('AW_SYSTEM_MOCK_GITHUB_API_BASE_URL')}/mcp`
@@ -867,7 +867,7 @@ test('RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪�
 // RES-37 —— exact-operation 陈旧冲突（MCP 探测 + 插件保存）
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-37: MCP 探测与插件保存都必须认出「这条资源已经被人改过」，而不是拿旧版本继续', async ({
+test('RFC-319 RES-37: MCP 探测与插件保存都必须认出「这条资源已经被人改过」，而不是拿旧版本继续 @nightly', async ({
   page,
 }) => {
   // ---- MCP：页面手里的 hash 已经不是当前版本，探测必须被拒 ----
@@ -959,7 +959,7 @@ test('RFC-319 RES-37: MCP 探测与插件保存都必须认出「这条资源已
 // RES-X3 —— enabled 开关：MCP 关掉后不可探测；插件关掉后引用它的代理存不下
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-X3: 关掉 enabled 之后 MCP 不再可探测，插件让引用它的代理保存被拒', async ({
+test('RFC-319 RES-X3: 关掉 enabled 之后 MCP 不再可探测，插件让引用它的代理保存被拒 @nightly', async ({
   page,
 }) => {
   // ---- MCP ----

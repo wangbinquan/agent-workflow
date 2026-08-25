@@ -181,7 +181,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('正向对照：没被别处动过时，两题都可答', async ({ page }) => {
+test('正向对照：没被别处动过时，两题都可答 @nightly', async ({ page }) => {
   // 没有这一段，「所有题永远变灰」也能让后面每条断言成立。
   await openClarify(page)
   for (const qid of ['q-db', 'q-lang']) {
@@ -192,7 +192,7 @@ test('正向对照：没被别处动过时，两题都可答', async ({ page }) 
   ).toBeEnabled()
 })
 
-test('别处封存过的那题：变灰、动不了、且不被这次提交带走', async ({ page }) => {
+test('别处封存过的那题：变灰、动不了、且不被这次提交带走 @nightly', async ({ page }) => {
   // 同事走控制通道，只封存 q-db（`defer:true` + `questionIds` 子集，见 B36）。
   const sealed = await fetch(`${daemon.baseUrl}/api/clarify/${nodeRunId}/answers`, {
     method: 'POST',

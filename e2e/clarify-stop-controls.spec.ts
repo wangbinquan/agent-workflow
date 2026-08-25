@@ -242,7 +242,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('画布开关只认「提问 agent 节点」：挂到 clarify / io 节点上必须被拒，且不留下任何记录', async () => {
+test('画布开关只认「提问 agent 节点」：挂到 clarify / io 节点上必须被拒，且不留下任何记录 @nightly', async () => {
   const path = (nodeId: string) =>
     `/api/tasks/${toggle.taskId}/nodes/${encodeURIComponent(nodeId)}/clarify-directive`
   const before = await api<Record<string, string>>(`/api/tasks/${toggle.taskId}/clarify-directives`)
@@ -271,7 +271,7 @@ test('画布开关只认「提问 agent 节点」：挂到 clarify / io 节点�
   expect(after['designer'], '设置完要读得回来').toBe('stop')
 })
 
-test('开关一旦置 stop：即使用户按的是「继续追问」，下一轮也不再带追问协议块', async () => {
+test('开关一旦置 stop：即使用户按的是「继续追问」，下一轮也不再带追问协议块 @nightly', async () => {
   // 上一条已经把 designer 置成了 stop。这里用户在澄清页按的是「继续追问」——
   // 两者冲突时，画布开关赢（`nodeStopOverride` 强制关掉追问）。
   // 只断言接口 200 的话，这条覆盖是空的：真正的用户后果是「下一轮还会不会问」。
@@ -318,7 +318,7 @@ test('开关一旦置 stop：即使用户按的是「继续追问」，下一轮
   )
 })
 
-test('澄清页的「提交并停止澄清」必须先问一句；取消掉就什么都不发', async ({ page }) => {
+test('澄清页的「提交并停止澄清」必须先问一句；取消掉就什么都不发 @nightly', async ({ page }) => {
   const decisionCalls: string[] = []
   await page.route('**/api/clarify/*/answers', async (route) => {
     decisionCalls.push(route.request().method())

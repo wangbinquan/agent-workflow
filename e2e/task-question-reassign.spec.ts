@@ -218,7 +218,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('改派到非 agent 节点必须被拒 —— 那种目标永远不会回答，任务会安静地卡死', async () => {
+test('改派到非 agent 节点必须被拒 —— 那种目标永远不会回答，任务会安静地卡死 @nightly', async () => {
   const before = await board()
   // clarify / input 节点都在图上、都有 id，看起来是完全合法的目标；它们没有的是
   // 提示词与产出契约。守卫失守时界面上一切正常，只是任务再也不会动。
@@ -241,7 +241,7 @@ test('改派到非 agent 节点必须被拒 —— 那种目标永远不会回�
   expect(handlersOf(await board()), '被拒的改派不该改动任何承接人').toEqual(handlersOf(before))
 })
 
-test('人工提问改派到「从没跑过」的节点也要被拒 —— 下发永远铸不出重跑', async () => {
+test('人工提问改派到「从没跑过」的节点也要被拒 —— 下发永远铸不出重跑 @nightly', async () => {
   const before = await board()
   // `spare` 是图上货真价实的 agent 节点（canReassign 放行），但任务停在澄清门上时
   // 它一次都没跑过。人工提问靠「重跑承接节点」落地，改派过去等于把任务停在一个
@@ -254,7 +254,7 @@ test('人工提问改派到「从没跑过」的节点也要被拒 —— 下发
   expect(handlersOf(await board()), '被拒的改派不该改动任何承接人').toEqual(handlersOf(before))
 })
 
-test('正向对照：改派到跑过的 agent 节点是允许的', async () => {
+test('正向对照：改派到跑过的 agent 节点是允许的 @nightly', async () => {
   // 少了这一条，「改派对任何目标都拒」也能让上面两条成立——而那等于功能不存在。
   const res = await raw(`/api/tasks/${taskId}/questions/${manualEntryId}/reassign`, {
     targetNodeId: 'designer',

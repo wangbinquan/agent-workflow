@@ -212,7 +212,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('五列都在、顺序固定，且卡片按阶段落在对的那一列', async ({ page }) => {
+test('五列都在、顺序固定，且卡片按阶段落在对的那一列 @nightly', async ({ page }) => {
   const rows = await board()
   expect(rows.length, '两个提问节点各两题 ⇒ 看板上应有 4 条').toBe(4)
   expect(
@@ -270,7 +270,7 @@ test('五列都在、顺序固定，且卡片按阶段落在对的那一列', as
   await expect(colOf(page, 'pending').locator('[data-testid^="tq-card-"]')).toHaveCount(2)
 })
 
-test('按承接节点过滤：点一个节点只剩它的卡，「全部」把两边都放回来', async ({ page }) => {
+test('按承接节点过滤：点一个节点只剩它的卡，「全部」把两边都放回来 @nightly', async ({ page }) => {
   await openBoard(page)
   const filter = page.getByTestId('tq-node-filter')
   await expect(filter).toBeVisible()

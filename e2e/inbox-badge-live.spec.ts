@@ -189,7 +189,9 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('真有一条待办时：角标亮出真实计数，抽屉列得出它，点进去落在那一屏', async ({ page }) => {
+test('真有一条待办时：角标亮出真实计数，抽屉列得出它，点进去落在那一屏 @nightly', async ({
+  page,
+}) => {
   await openShell(page)
 
   const badge = page.getByTestId('inbox-footer-badge')
@@ -210,7 +212,7 @@ test('真有一条待办时：角标亮出真实计数，抽屉列得出它，�
   await expect(page.getByTestId('clarify-question-q-db')).toBeVisible()
 })
 
-test('待办没了：角标自己消失，不用刷新页面', async ({ page }) => {
+test('待办没了：角标自己消失，不用刷新页面 @nightly', async ({ page }) => {
   await openShell(page)
   await expect(page.getByTestId('inbox-footer-badge')).toHaveText('1', { timeout: 30_000 })
 

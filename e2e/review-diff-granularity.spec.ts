@@ -203,7 +203,7 @@ test.afterAll(async () => {
   if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true })
 })
 
-test('四段切换：选哪一段，渲染出来的就必须是哪一段的粒度', async ({ page }) => {
+test('四段切换：选哪一段，渲染出来的就必须是哪一段的粒度 @nightly', async ({ page }) => {
   await openReview(page)
   await expect(page.locator('.diff-mode-segmented'), '第二版之后才有 diff 工具条').toBeVisible()
 
@@ -230,7 +230,7 @@ test('四段切换：选哪一段，渲染出来的就必须是哪一段的粒�
   await expect(diffView(page)).toHaveCount(0)
 })
 
-test('Cmd/Ctrl+1/2/3 切粒度；裸的 1/2/3 不许动它', async ({ page }) => {
+test('Cmd/Ctrl+1/2/3 切粒度；裸的 1/2/3 不许动它 @nightly', async ({ page }) => {
   await openReview(page)
   await seg(page, 'Word').click()
   await expect(diffView(page)).toHaveAttribute('data-granularity', 'word')
@@ -253,7 +253,7 @@ test('Cmd/Ctrl+1/2/3 切粒度；裸的 1/2/3 不许动它', async ({ page }) =>
   await expect(diffView(page), '裸的 2/3 把视图切走了').toHaveAttribute('data-granularity', 'word')
 })
 
-test('上一版正文取不到时要报出来，而不是画成「什么都没改」', async ({ page }) => {
+test('上一版正文取不到时要报出来，而不是画成「什么都没改」 @nightly', async ({ page }) => {
   // diff 的一侧来自上一版。那一侧失败若被无声吞掉，人看到的是一份「无改动」的 diff
   // ——他会据此通过一版其实改了很多的稿子。
   await page.route('**/api/reviews/*/versions/*', async (route) => {
@@ -273,7 +273,9 @@ test('上一版正文取不到时要报出来，而不是画成「什么都没�
   await expect(diffView(page)).toHaveCount(0)
 })
 
-test('版本列表本身取不到时，报的是另一条错，而不是含糊地「没有上一版」', async ({ page }) => {
+test('版本列表本身取不到时，报的是另一条错，而不是含糊地「没有上一版」 @nightly', async ({
+  page,
+}) => {
   // 三种失败态各有各的 testid（`reviews.detail.tsx:494-506`）。共用一条的话，
   // 「服务端挂了」与「这份文档确实只有一版」在界面上无法区分，而两者该做的事完全不同。
   await page.route('**/api/reviews/*/versions', async (route) => {

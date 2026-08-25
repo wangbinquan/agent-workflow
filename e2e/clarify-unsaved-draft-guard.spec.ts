@@ -261,7 +261,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('草稿还没落盘就想离开：拦下来；选「留下」则停在原地且答案还在', async ({ page }) => {
+test('草稿还没落盘就想离开：拦下来；选「留下」则停在原地且答案还在 @nightly', async ({ page }) => {
   await openDirty(page, MARKER_STAY)
 
   await page.getByTestId('clarify-detail-task-name').click()
@@ -280,7 +280,7 @@ test('草稿还没落盘就想离开：拦下来；选「留下」则停在原�
   await releaseAcks(page)
 })
 
-test('「保存并离开」必须先确认落盘：落盘回执没到之前不许跳走', async ({ page }) => {
+test('「保存并离开」必须先确认落盘：落盘回执没到之前不许跳走 @nightly', async ({ page }) => {
   await openDirty(page, MARKER_SAVE)
   await page.getByTestId('clarify-detail-task-name').click()
   await expect(page.getByTestId('unsaved-guard-dialog')).toBeVisible()
@@ -299,7 +299,7 @@ test('「保存并离开」必须先确认落盘：落盘回执没到之前不�
   await expect(page).toHaveURL(new RegExp(`/tasks/${taskId}(\\?|$)`), { timeout: 15_000 })
 })
 
-test('「放弃」放行：不再拦，直接走到目标页', async ({ page }) => {
+test('「放弃」放行：不再拦，直接走到目标页 @nightly', async ({ page }) => {
   await openDirty(page, MARKER_DISCARD)
   await page.getByTestId('clarify-detail-task-name').click()
   await expect(page.getByTestId('unsaved-guard-dialog')).toBeVisible()

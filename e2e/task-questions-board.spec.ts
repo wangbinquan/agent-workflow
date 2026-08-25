@@ -214,7 +214,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('人工提问进得了看板：带来源标记、建出来就待下发，并且把任务扣住', async () => {
+test('人工提问进得了看板：带来源标记、建出来就待下发，并且把任务扣住 @nightly', async () => {
   const before = await board(main.taskId)
   const created = await api<{ id: string }>(`/api/tasks/${main.taskId}/questions/manual`, {
     method: 'POST',
@@ -236,7 +236,7 @@ test('人工提问进得了看板：带来源标记、建出来就待下发，�
   expect(await taskStatus(main.taskId), '人工提问必须把任务扣在等人上').toBe('awaiting_human')
 })
 
-test('暂存不等于下发：任务必须仍停在等人上，直到真的下发', async () => {
+test('暂存不等于下发：任务必须仍停在等人上，直到真的下发 @nightly', async () => {
   // 先把整轮封存进看板（控制通道：只封存不下发，见 B36）。
   const entriesBefore = await board(main.taskId)
   const sealed = await raw(`/api/clarify/${main.nodeRunId}/answers`, {
@@ -279,7 +279,7 @@ test('暂存不等于下发：任务必须仍停在等人上，直到真的下�
     .not.toBe('awaiting_human')
 })
 
-test('跨任务的条目 id：确认 / 暂存都必须 404，而不是悄悄成功', async () => {
+test('跨任务的条目 id：确认 / 暂存都必须 404，而不是悄悄成功 @nightly', async () => {
   const mine = (await board(main.taskId))[0]
   expect(mine, '主任务看板不该是空的').toBeDefined()
 
@@ -294,7 +294,7 @@ test('跨任务的条目 id：确认 / 暂存都必须 404，而不是悄悄成�
   expect(await taskStatus(other.taskId), '越界操作不该动到别的任务').toBe('awaiting_human')
 })
 
-test('承接 run 跑完之后：条目进「已处理待确认」，确认一下才收尾', async () => {
+test('承接 run 跑完之后：条目进「已处理待确认」，确认一下才收尾 @nightly', async () => {
   // 上一条用例已经下发过，等承接 run 跑完。
   let target: BoardEntry | undefined
   await expect
@@ -323,7 +323,7 @@ test('承接 run 跑完之后：条目进「已处理待确认」，确认一下
   ).toBe(true)
 })
 
-test('没答过的题不许推进「待下发」；答过之后撤回是**题**级的，动一题不该拖下另一题', async () => {
+test('没答过的题不许推进「待下发」；答过之后撤回是**题**级的，动一题不该拖下另一题 @nightly', async () => {
   // 用另一个任务，避免动到上面那条已经下发过的链。
   const rows = await board(other.taskId)
   const qDb = rows.find((e) => e.questionId === 'q-db')

@@ -367,7 +367,7 @@ test.afterAll(async () => {
 // AGENT-40
 // ---------------------------------------------------------------------------
 
-test('AGENT-40 代理列表：计数 / 卡片徽章逐格 / 按卡片可见事实搜索 / 无匹配空态 / 真空态', async ({
+test('AGENT-40 代理列表：计数 / 卡片徽章逐格 / 按卡片可见事实搜索 / 无匹配空态 / 真空态 @nightly', async ({
   browser,
 }) => {
   const tag = nextTag('a40')
@@ -578,7 +578,9 @@ test('AGENT-40 代理列表：计数 / 卡片徽章逐格 / 按卡片可见事�
 // AGENT-X2
 // ---------------------------------------------------------------------------
 
-test('AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成「你还没有代理」', async ({ browser }) => {
+test('AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成「你还没有代理」 @nightly', async ({
+  browser,
+}) => {
   const tag = nextTag('ax2')
   const owner = await seedUser(tag)
   const prefix = `rfc319-a-${tag}`
@@ -653,7 +655,7 @@ test('AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成�
 // AGENT-08 / AGENT-13
 // ---------------------------------------------------------------------------
 
-test('AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表', async ({
+test('AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完 204 并回到空态列表 @nightly', async ({
   browser,
 }) => {
   const tag = nextTag('a08')
@@ -823,7 +825,7 @@ test('AGENT-08 / AGENT-13 删除代理：确认名逐字对上才放行，删完
 // AGENT-09
 // ---------------------------------------------------------------------------
 
-test('AGENT-09 删除被工作流引用的代理：409 agent-in-use 并点名引用它的工作流；解引用后可删', async ({
+test('AGENT-09 删除被工作流引用的代理：409 agent-in-use 并点名引用它的工作流；解引用后可删 @nightly', async ({
   browser,
 }) => {
   const tag = nextTag('a09')
@@ -950,7 +952,7 @@ test('AGENT-09 删除被工作流引用的代理：409 agent-in-use 并点名引
 // AGENT-10
 // ---------------------------------------------------------------------------
 
-test('AGENT-10 删除被其它代理 dependsOn 引用的代理：409 agent-dependency-still-referenced；解依赖后可删', async ({
+test('AGENT-10 删除被其它代理 dependsOn 引用的代理：409 agent-dependency-still-referenced；解依赖后可删 @nightly', async ({
   browser,
 }) => {
   const tag = nextTag('a10')
@@ -1026,7 +1028,7 @@ test('AGENT-10 删除被其它代理 dependsOn 引用的代理：409 agent-depen
 // AGENT-11
 // ---------------------------------------------------------------------------
 
-test('AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-active；任务落终态后可删', async ({
+test('AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-active；任务落终态后可删 @nightly', async ({
   browser,
 }) => {
   // 这条用例要真的起一个任务并把它扣在运行中，比其余用例慢得多。
@@ -1147,7 +1149,7 @@ test('AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-a
 // AGENT-12
 // ---------------------------------------------------------------------------
 
-test('AGENT-12 删除被定时任务引用的代理：409 agent-scheduled-referenced；删掉定时任务后可删', async ({
+test('AGENT-12 删除被定时任务引用的代理：409 agent-scheduled-referenced；删掉定时任务后可删 @nightly', async ({
   browser,
 }) => {
   const tag = nextTag('a12')

@@ -524,7 +524,7 @@ async function seedFixtures(): Promise<void> {
 // MEM-25（空态）—— 必须跑在任何夹具落库之前
 // ---------------------------------------------------------------------------
 
-test('MEM-25 空队列：给的是「没有蒸馏任务」的说明，不是一张空表格', async ({ page }) => {
+test('MEM-25 空队列：给的是「没有蒸馏任务」的说明，不是一张空表格 @nightly', async ({ page }) => {
   await seedAuth(page)
   await page.goto(`${daemon.baseUrl}/memory`)
 
@@ -561,7 +561,7 @@ test('MEM-25 空队列：给的是「没有蒸馏任务」的说明，不是一�
 test.describe('队列里有任务之后', () => {
   test.beforeAll(seedFixtures)
 
-  test('MEM-25 列表六列：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误各自读的是行上的真值', async ({
+  test('MEM-25 列表六列：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误各自读的是行上的真值 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -658,7 +658,7 @@ test.describe('队列里有任务之后', () => {
     await expect(page.getByTestId(`distill-job-row-${JOB_DONE}-cancel`)).toHaveCount(0)
   })
 
-  test('MEM-28 整行点击进详情，而 Retry / Cancel 是行内操作、不许顺带把人跳走', async ({
+  test('MEM-28 整行点击进详情，而 Retry / Cancel 是行内操作、不许顺带把人跳走 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -691,7 +691,7 @@ test.describe('队列里有任务之后', () => {
     expect(new URL(page.url()).pathname, '点 Retry 顺带跳进了详情页 ⇒ 同上').toBe('/memory')
   })
 
-  test('MEM-27 取消待执行的蒸馏任务：pending → canceled，且取消后不再提供任何操作', async ({
+  test('MEM-27 取消待执行的蒸馏任务：pending → canceled，且取消后不再提供任何操作 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -732,7 +732,7 @@ test.describe('队列里有任务之后', () => {
     ).toHaveCount(0)
   })
 
-  test('MEM-29 蒸馏任务详情页：六段各自有内容，且每一段读的是这条 job 自己的数据', async ({
+  test('MEM-29 蒸馏任务详情页：六段各自有内容，且每一段读的是这条 job 自己的数据 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -840,7 +840,7 @@ test.describe('队列里有任务之后', () => {
     ).toBeVisible()
   })
 
-  test('MEM-30 失败诊断卡：attempts / exitCode / lastError / stderr 摘录四样齐全，且不该出现时不出现', async ({
+  test('MEM-30 失败诊断卡：attempts / exitCode / lastError / stderr 摘录四样齐全，且不该出现时不出现 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -879,7 +879,7 @@ test.describe('队列里有任务之后', () => {
     ).toHaveCount(0)
   })
 
-  test('MEM-33 候选行的「在审批队列中打开」深链：带着 memoryId 落到记忆页且参数不被吃掉', async ({
+  test('MEM-33 候选行的「在审批队列中打开」深链：带着 memoryId 落到记忆页且参数不被吃掉 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -917,7 +917,7 @@ test.describe('队列里有任务之后', () => {
     ).toBe(candidateMemoryId)
   })
 
-  test('MEM-32 会话查询挂掉时：错误只落在第六段，前五段照常可读，并且能就地重试', async ({
+  test('MEM-32 会话查询挂掉时：错误只落在第六段，前五段照常可读，并且能就地重试 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -971,7 +971,7 @@ test.describe('队列里有任务之后', () => {
     await expect(page.getByTestId('distill-session-load-error')).toHaveCount(0)
   })
 
-  test('MEM-26 重试失败的蒸馏任务：attempts 归零、状态真的流转，并且模型进程被重新拉起来了', async ({
+  test('MEM-26 重试失败的蒸馏任务：attempts 归零、状态真的流转，并且模型进程被重新拉起来了 @nightly', async ({
     page,
   }) => {
     await seedAuth(page)
@@ -1062,7 +1062,7 @@ test.describe('队列里有任务之后', () => {
 // MEM-47 —— daemon 重启后的中断回收（自带一对 daemon，和上面的队列互不干扰）
 // ---------------------------------------------------------------------------
 
-test('MEM-47 daemon 重启：中断在 running 的蒸馏任务被重排回 pending，且 attempts 不许被清零', async ({
+test('MEM-47 daemon 重启：中断在 running 的蒸馏任务被重排回 pending，且 attempts 不许被清零 @nightly', async ({
   page,
 }) => {
   const interrupted = fixtureId('JBRUNNNG')

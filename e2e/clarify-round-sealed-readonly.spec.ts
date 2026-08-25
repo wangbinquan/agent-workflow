@@ -192,7 +192,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('任务走到终态时，开着的那一轮反问必须被封存并说明原因，而不是继续挂着等人', async ({
+test('任务走到终态时，开着的那一轮反问必须被封存并说明原因，而不是继续挂着等人 @nightly', async ({
   page,
 }) => {
   // ── 正向对照：封存之前，这一屏确实是能答的 ──────────────────────────────

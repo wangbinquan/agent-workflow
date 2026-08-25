@@ -154,7 +154,7 @@ test.afterAll(async () => {
   if (stateDir !== undefined) rmSync(stateDir, { recursive: true, force: true })
 })
 
-test('最后一个人类成员被移出后：这一轮反问必须被撤销、页面要说清是被撤了、迟到的答案要被拒', async ({
+test('最后一个人类成员被移出后：这一轮反问必须被撤销、页面要说清是被撤了、迟到的答案要被拒 @nightly', async ({
   page,
 }) => {
   // ── 正向对照：撤销之前这一屏确实能答 ────────────────────────────────────
@@ -239,7 +239,7 @@ test('最后一个人类成员被移出后：这一轮反问必须被撤销、�
   await expect(sealed).not.toContainText(COPY_GENERIC)
 })
 
-test('撤销之后任务不能继续停在「等人回答」上——那正是这个开关存在的理由', async () => {
+test('撤销之后任务不能继续停在「等人回答」上——那正是这个开关存在的理由 @nightly', async () => {
   // RFC-181 A2 的原话：不撤销，开关对一个**已经在**提问的任务就是空操作。撤销之后
   // 引擎必须被踢醒、任务离开 awaiting_human。
   //

@@ -176,7 +176,7 @@ test.afterAll(async () => {
   if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true })
 })
 
-test('一条意见都没有就要迭代：弹窗必须说「agent 会收到一份空清单」，并预告谁会重跑', async ({
+test('一条意见都没有就要迭代：弹窗必须说「agent 会收到一份空清单」，并预告谁会重跑 @nightly', async ({
   page,
 }) => {
   await openReview(page, withComment.nodeRunId)
@@ -194,7 +194,7 @@ test('一条意见都没有就要迭代：弹窗必须说「agent 会收到一�
   await expect(dialog).toHaveCount(0)
 })
 
-test('驳回不写理由：弹窗当场拦下，一个决策请求都不许发出去', async ({ page }) => {
+test('驳回不写理由：弹窗当场拦下，一个决策请求都不许发出去 @nightly', async ({ page }) => {
   const decisionCalls: string[] = []
   await page.route('**/api/reviews/*/decision', async (route) => {
     decisionCalls.push(route.request().method())
@@ -218,7 +218,7 @@ test('驳回不写理由：弹窗当场拦下，一个决策请求都不许发�
   await expect(dialog).toHaveCount(0)
 })
 
-test('带着已提交的意见按「通过」：弹窗要点明这些意见不会被处理', async ({ page }) => {
+test('带着已提交的意见按「通过」：弹窗要点明这些意见不会被处理 @nightly', async ({ page }) => {
   const detail = await api<{ currentBody: string }>(`/api/reviews/${withComment.nodeRunId}`)
   const word = detail.currentBody.trim().split(/\s+/)[0] ?? ''
   const at = detail.currentBody.indexOf(word)
@@ -256,7 +256,7 @@ test('带着已提交的意见按「通过」：弹窗要点明这些意见不�
   ).toBe(true)
 })
 
-test('反向对照：没有意见也没有草稿时按「通过」，不弹窗、直接过', async ({ page }) => {
+test('反向对照：没有意见也没有草稿时按「通过」，不弹窗、直接过 @nightly', async ({ page }) => {
   await openReview(page, clean.nodeRunId)
   await page.getByRole('button', { name: 'Approve' }).click()
   // 这条是上面三条的地基：如果「永远弹窗」，上面每条都照样绿，而永远弹窗会训练人

@@ -427,7 +427,9 @@ async function closeBatchImportDialog(page: Page): Promise<void> {
 // REPO-11（首次空态）—— 必须第一个跑
 // ===========================================================================
 
-test('REPO-11 首次进入 /repos：空态引导取代空表格，工具条与表头一并让位', async ({ page }) => {
+test('REPO-11 首次进入 /repos：空态引导取代空表格，工具条与表头一并让位 @nightly', async ({
+  page,
+}) => {
   await openRepos(page)
 
   await expect(
@@ -464,7 +466,9 @@ test('REPO-11 首次进入 /repos：空态引导取代空表格，工具条与�
 // REPO-01 —— 批量导入（混合合法 + 非法 URL）
 // ===========================================================================
 
-test('REPO-01 批量导入：合法行各自落库、非法行当场判失败，一行坏的不拖垮整批', async ({ page }) => {
+test('REPO-01 批量导入：合法行各自落库、非法行当场判失败，一行坏的不拖垮整批 @nightly', async ({
+  page,
+}) => {
   importedPlainUrl = fixtureRemote('plain')
   // 同一个远端的两种写法：用户粘进去的那份带凭据，界面上该出现的那份不带。
   const credentialRemote = fixtureRemote('cred')
@@ -532,7 +536,7 @@ test('REPO-01 批量导入：合法行各自落库、非法行当场判失败，
 // REPO-03 —— 进度经 /ws/repo-imports/{batchId} 实时推送
 // ===========================================================================
 
-test('REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也会自己走到完成', async ({
+test('REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也会自己走到完成 @nightly', async ({
   page,
 }) => {
   const remote = fixtureRemote('ws')
@@ -611,7 +615,7 @@ test('REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也
 // REPO-02 —— 失败行的「改 URL 重试」
 // ===========================================================================
 
-test('REPO-02 导入失败的那一行可以就地改 URL 重试，并且只重跑它自己', async ({ page }) => {
+test('REPO-02 导入失败的那一行可以就地改 URL 重试，并且只重跑它自己 @nightly', async ({ page }) => {
   const good = fixtureRemote('retry-good')
   const typo = 'https://git.example.invalid/rfc319/typo repo.git'
 
@@ -731,7 +735,7 @@ test.describe('REPO-08 / REPO-09 / REPO-11（无匹配）', () => {
     seedReferencingTask(REF_TASK, ALPHA)
   })
 
-  test('REPO-08 主表逐列渲染真后端数据：脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标', async ({
+  test('REPO-08 主表逐列渲染真后端数据：脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标 @nightly', async ({
     page,
   }) => {
     await waitForRepoFacets(
@@ -822,7 +826,7 @@ test.describe('REPO-08 / REPO-09 / REPO-11（无匹配）', () => {
     ).toBe(false)
   })
 
-  test('REPO-09 搜索 / 视图 / 高级过滤全部下推服务端，不是在已加载的那一页里挑', async ({
+  test('REPO-09 搜索 / 视图 / 高级过滤全部下推服务端，不是在已加载的那一页里挑 @nightly', async ({
     page,
   }) => {
     const listQueries: string[] = []
@@ -963,7 +967,9 @@ test.describe('REPO-08 / REPO-09 / REPO-11（无匹配）', () => {
     ).toBeVisible()
   })
 
-  test('REPO-11 搜索无命中时给的是「无匹配 + 清除筛选」，不是首次空态', async ({ page }) => {
+  test('REPO-11 搜索无命中时给的是「无匹配 + 清除筛选」，不是首次空态 @nightly', async ({
+    page,
+  }) => {
     await openRepos(page)
     await page.getByTestId('repos-search').fill('rfc319-no-such-repository')
 
@@ -1004,7 +1010,9 @@ const PAGING_MARK = 'rfc319-paging'
 const PAGING_ROWS = 60
 const PAGE_SIZE = 50
 
-test('REPO-10 超过一页时给出「加载更多」，按下去经游标续取而不是从头重来', async ({ page }) => {
+test('REPO-10 超过一页时给出「加载更多」，按下去经游标续取而不是从头重来 @nightly', async ({
+  page,
+}) => {
   const base = Date.now() - 30 * 24 * 60 * 60 * 1000
   seedRepoRows(
     Array.from({ length: PAGING_ROWS }, (_, index) => ({
@@ -1112,7 +1120,7 @@ test('REPO-10 超过一页时给出「加载更多」，按下去经游标续取
 // REPO-33 —— 写权限门
 // ===========================================================================
 
-test('REPO-33 只有 repos:read 的账号：读得到全部镜像，四个写入口一个都不渲染、一条请求都不发', async ({
+test('REPO-33 只有 repos:read 的账号：读得到全部镜像，四个写入口一个都不渲染、一条请求都不发 @nightly', async ({
   page,
 }) => {
   // `user` 预设正好是这条用例要的形状：repos:read 在用户基线里，

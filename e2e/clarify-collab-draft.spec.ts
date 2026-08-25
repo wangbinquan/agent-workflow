@@ -180,7 +180,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('草稿是**逐题**的：写第二题不该把第一题冲掉', async () => {
+test('草稿是**逐题**的：写第二题不该把第一题冲掉 @nightly', async () => {
   const before = await detail()
   expect(before.draftAnswers ?? {}, '一开始还没有任何草稿').toEqual({})
 
@@ -195,7 +195,7 @@ test('草稿是**逐题**的：写第二题不该把第一题冲掉', async () =
   expect(after.draftAnswers?.['q-lang']?.selectedOptionIndices).toEqual([1])
 })
 
-test('同一题再写一次：后写的赢，且逐题归属跟着更新', async () => {
+test('同一题再写一次：后写的赢，且逐题归属跟着更新 @nightly', async () => {
   const before = await detail()
   const beforeStamp = before.answerAttributions?.['q-db']?.updatedAt
   expect(beforeStamp, '写过草稿之后该题就应当有归属记录').toBeGreaterThan(0)
@@ -220,7 +220,7 @@ test('同一题再写一次：后写的赢，且逐题归属跟着更新', async
   expect(after.draftAnswers?.['q-lang']?.customText).toBe(DRAFT_LANG)
 })
 
-test('提交之后草稿必须冻住：否则它会把已封存的答案盖回去', async () => {
+test('提交之后草稿必须冻住：否则它会把已封存的答案盖回去 @nightly', async () => {
   const res = await fetch(`${daemon.baseUrl}/api/clarify/${nodeRunId}/answers`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'application/json' },

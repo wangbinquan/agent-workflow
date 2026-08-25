@@ -243,7 +243,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('只提交我真填了的那一题：没填的不许被当成「已答成空」封掉', async ({ page }) => {
+test('只提交我真填了的那一题：没填的不许被当成「已答成空」封掉 @nightly', async ({ page }) => {
   const submits: SubmitFrame[] = []
   await captureSubmits(page, submits)
   await openPane(page)
@@ -286,7 +286,7 @@ test('只提交我真填了的那一题：没填的不许被当成「已答成�
   expect(await taskStatus(), '控制通道不推进任务').toBe('awaiting_human')
 })
 
-test('重答一道已封存的题：必须带上显式的重答声明，否则会被 exactly-once 守卫整批拒掉', async ({
+test('重答一道已封存的题：必须带上显式的重答声明，否则会被 exactly-once 守卫整批拒掉 @nightly', async ({
   page,
 }) => {
   // 前置：把那题从「待下发」**撤回**。面板会把 staged 的题整个排除

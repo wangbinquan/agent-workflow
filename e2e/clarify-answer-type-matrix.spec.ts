@@ -249,7 +249,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('多选并入与单选「其他」文本，都要原样穿到下一轮提示词里', async ({ page }) => {
+test('多选并入与单选「其他」文本，都要原样穿到下一轮提示词里 @nightly', async ({ page }) => {
   const { taskId, session } = await launchAndAwaitClarify(workflowIdFilled, 'rfc319-answermatrix-a')
   await openClarifyPage(page, session.intermediaryNodeRunId)
 
@@ -285,7 +285,9 @@ test('多选并入与单选「其他」文本，都要原样穿到下一轮提�
   expect(prompt).not.toContain('User did not answer this question.')
 })
 
-test('空答如实上报、越界 index 退化成没答、客户端伪造的标签一律不算数', async ({ page }) => {
+test('空答如实上报、越界 index 退化成没答、客户端伪造的标签一律不算数 @nightly', async ({
+  page,
+}) => {
   const { taskId, session } = await launchAndAwaitClarify(workflowIdRaw, 'rfc319-answermatrix-b')
   // 这一段的语义全在服务端（标签重算 / 越界过滤 / 空答放行），所以直接打端点：
   // 界面根本没有「伪造标签」这个入口，走 UI 反而测不到那道门。

@@ -227,7 +227,7 @@ function smokeChip(page: Page, name: string) {
   return row(page, name).locator('.status-chip--with-dot')
 }
 
-test('RFC-319 CFG-10：运行时表把「会拉起哪个二进制」逐行摊开，且每一格都对得上服务端', async ({
+test('RFC-319 CFG-10：运行时表把「会拉起哪个二进制」逐行摊开，且每一格都对得上服务端 @nightly', async ({
   page,
 }) => {
   await openRuntimeTab(page)
@@ -308,7 +308,7 @@ test('RFC-319 CFG-10：运行时表把「会拉起哪个二进制」逐行摊开
   ).toHaveCount(1)
 })
 
-test('RFC-319 CFG-11：新增自定义运行时时，保存前真的把那个二进制拉起来跑了一遍', async ({
+test('RFC-319 CFG-11：新增自定义运行时时，保存前真的把那个二进制拉起来跑了一遍 @nightly', async ({
   page,
 }) => {
   await openRuntimeTab(page)
@@ -384,7 +384,7 @@ test('RFC-319 CFG-11：新增自定义运行时时，保存前真的把那个二
   ).toHaveText(DEFAULT_BINARY_LABEL)
 })
 
-test('RFC-319 CFG-17：模型下拉能列能刷新；探测不出清单时降级成可输入并说明原因，而不是给一个空下拉', async ({
+test('RFC-319 CFG-17：模型下拉能列能刷新；探测不出清单时降级成可输入并说明原因，而不是给一个空下拉 @nightly', async ({
   page,
 }) => {
   await openRuntimeTab(page)
@@ -469,7 +469,7 @@ test('RFC-319 CFG-17：模型下拉能列能刷新；探测不出清单时降级
   await forkDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
 })
 
-test('RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 config-dir 覆盖真的落库，且旧的冒烟结论随之失效', async ({
+test('RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 config-dir 覆盖真的落库，且旧的冒烟结论随之失效 @nightly', async ({
   page,
 }) => {
   await openRuntimeTab(page)
@@ -562,7 +562,7 @@ test('RFC-319 CFG-12：编辑已注册运行时——身份锁死、路径与 co
   ).toHaveText(OTHER_BINARY)
 })
 
-test('RFC-319 CFG-14：在表内「设为默认」既要改界面，也要真的写进 config.defaultRuntime', async ({
+test('RFC-319 CFG-14：在表内「设为默认」既要改界面，也要真的写进 config.defaultRuntime @nightly', async ({
   page,
 }) => {
   await openRuntimeTab(page)
@@ -614,7 +614,7 @@ test('RFC-319 CFG-14：在表内「设为默认」既要改界面，也要真的
   ).toHaveCount(1)
 })
 
-test('RFC-319 CFG-15：非默认运行时能真停用；有效默认停不掉——按钮拦一层，服务端还要再拦一层', async ({
+test('RFC-319 CFG-15：非默认运行时能真停用；有效默认停不掉——按钮拦一层，服务端还要再拦一层 @nightly', async ({
   page,
 }) => {
   await openRuntimeTab(page)
@@ -682,7 +682,7 @@ test('RFC-319 CFG-15：非默认运行时能真停用；有效默认停不掉—
     .toBe(true)
 })
 
-test('RFC-319 CFG-13：对已注册运行时重测会留下新结论；探测期间那一行被改掉，结论必须作废而不是贴到新配置上', async ({
+test('RFC-319 CFG-13：对已注册运行时重测会留下新结论；探测期间那一行被改掉，结论必须作废而不是贴到新配置上 @nightly', async ({
   page,
 }) => {
   // 夹具复位（不是本条要验的面）：把 FORK 的二进制指回可探测的 stub。
@@ -771,7 +771,7 @@ test('RFC-319 CFG-13：对已注册运行时重测会留下新结论；探测期
   ).toHaveText(SMOKE_UNTESTED)
 })
 
-test('RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代理引用 / 是默认 / 被 config 功能字段引用', async ({
+test('RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代理引用 / 是默认 / 被 config 功能字段引用 @nightly', async ({
   page,
 }) => {
   // 夹具：一个代理指向 NO_PATH；一个 config 功能字段指向 claude-code。
@@ -855,7 +855,7 @@ test('RFC-319 CFG-16（一）：删除的三条引用型拒绝分支——被代
   })
 })
 
-test('RFC-319 CFG-16（二）：没有引用的运行时确实删得掉；删到只剩一行时必须停手', async ({
+test('RFC-319 CFG-16（二）：没有引用的运行时确实删得掉；删到只剩一行时必须停手 @nightly', async ({
   page,
 }) => {
   expect(

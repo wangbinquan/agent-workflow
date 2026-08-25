@@ -235,7 +235,9 @@ test.afterAll(async () => {
   if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true })
 })
 
-test('看旧版本时：只读横幅在，决策按钮**不在 DOM**；回到当前版按钮才回来', async ({ page }) => {
+test('看旧版本时：只读横幅在，决策按钮**不在 DOM**；回到当前版按钮才回来 @nightly', async ({
+  page,
+}) => {
   // 正向对照先做：当前版上三个决策按钮都在。少了这一段，
   // 「这三个按钮在任何情况下都不渲染」也能让下面的断言成立。
   await openReview(page, main.nodeRunId)
@@ -264,7 +266,7 @@ test('看旧版本时：只读横幅在，决策按钮**不在 DOM**；回到当
   }
 })
 
-test('版本号不存在时要说出来，而不是默默给你看当前稿', async ({ page }) => {
+test('版本号不存在时要说出来，而不是默默给你看当前稿 @nightly', async ({ page }) => {
   await openReview(page, main.nodeRunId, '?version=dv_rfc319_does_not_exist')
   await expect(
     page.getByTestId('review-invalid-version-warning'),
@@ -277,7 +279,7 @@ test('版本号不存在时要说出来，而不是默默给你看当前稿', as
   }
 })
 
-test('拿别条评审的版本号来问：不许把那份文档渲染出来', async ({ page }) => {
+test('拿别条评审的版本号来问：不许把那份文档渲染出来 @nightly', async ({ page }) => {
   await openReview(page, main.nodeRunId, `?version=${encodeURIComponent(other.v1Id)}`)
   // 与「不存在」同形处理即可——重要的是**不能**进入历史模式去渲染别人的正文。
   await expect(page.getByTestId('review-invalid-version-warning')).toBeVisible()

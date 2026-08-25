@@ -189,7 +189,7 @@ test.afterAll(async () => {
   if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true })
 })
 
-test('逐行展开取的是自己那一行的版本史，另一行不受影响', async ({ page }) => {
+test('逐行展开取的是自己那一行的版本史，另一行不受影响 @nightly', async ({ page }) => {
   await openList(page)
 
   const rowA = rowOf(page, alpha).first()
@@ -217,7 +217,9 @@ test('逐行展开取的是自己那一行的版本史，另一行不受影响',
   await expect(page.locator('.reviews-version-panel')).toHaveCount(0)
 })
 
-test('决策过的那一条：待评审里消失、已通过里出现、已驳回里没有，全部两条都在', async ({ page }) => {
+test('决策过的那一条：待评审里消失、已通过里出现、已驳回里没有，全部两条都在 @nightly', async ({
+  page,
+}) => {
   // 只通过 alpha，beta 留着当对照。
   const res = await fetch(`${daemon.baseUrl}/api/reviews/${alpha.nodeRunId}/decision`, {
     method: 'POST',
@@ -258,7 +260,7 @@ test('决策过的那一条：待评审里消失、已通过里出现、已驳�
   await expect(rowOf(page, beta)).toHaveCount(1)
 })
 
-test('列表读不到时报故障并可重试，绝不画成「没有待评审」', async ({ page }) => {
+test('列表读不到时报故障并可重试，绝不画成「没有待评审」 @nightly', async ({ page }) => {
   let failing = true
   await page.route('**/api/reviews?status=*', async (route) => {
     if (failing) {

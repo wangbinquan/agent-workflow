@@ -295,7 +295,7 @@ test.afterAll(async () => {
 // CFG-43 —— 必须第一个跑：它要的前提是「这个实例上用户什么都没建过」。
 // ---------------------------------------------------------------------------
 
-test('CFG-43 首次运行分支：空实例给 Onboarding，建出资源后换成 Dashboard，且引导只给动得了手的人', async ({
+test('CFG-43 首次运行分支：空实例给 Onboarding，建出资源后换成 Dashboard，且引导只给动得了手的人 @nightly', async ({
   browser,
 }) => {
   // 先建 guest：guest 没有 agents:create / workflows:create / tasks:execute，
@@ -380,7 +380,7 @@ test('CFG-43 首次运行分支：空实例给 Onboarding，建出资源后换�
 // CFG-41
 // ---------------------------------------------------------------------------
 
-test('CFG-41 能力网格的计数按人算：两个账号同一时刻看到不同的数字，改成公开后当场跟上', async ({
+test('CFG-41 能力网格的计数按人算：两个账号同一时刻看到不同的数字，改成公开后当场跟上 @nightly', async ({
   browser,
 }) => {
   const alice = await createUserAndLogin({ username: 'rfc319-cfg41-alice', role: 'user' })
@@ -449,7 +449,7 @@ test('CFG-41 能力网格的计数按人算：两个账号同一时刻看到不�
   }
 })
 
-test('CFG-41 没有读权限的分区整块不渲染，有权限的磁贴点进去落在自己的列表页', async ({
+test('CFG-41 没有读权限的分区整块不渲染，有权限的磁贴点进去落在自己的列表页 @nightly', async ({
   browser,
 }) => {
   // guest 预设只有六个资源 :read（permission.ts:915-923），没有 memory:read /
@@ -582,7 +582,7 @@ function seedTasks(ownerUserId: string, specs: readonly SeedTaskSpec[]): void {
 
 const DAY_MS = 86_400_000
 
-test('CFG-42 任务脉冲行：只数 7 天内的终态、只数自己看得见的任务', async ({ browser }) => {
+test('CFG-42 任务脉冲行：只数 7 天内的终态、只数自己看得见的任务 @nightly', async ({ browser }) => {
   const alice = await createUserAndLogin({ username: 'rfc319-cfg42-alice', role: 'user' })
   const bystander = await createUserAndLogin({ username: 'rfc319-cfg42-bystander', role: 'user' })
 
@@ -652,7 +652,7 @@ test('CFG-42 任务脉冲行：只数 7 天内的终态、只数自己看得见�
   }
 })
 
-test('CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消失，首页其余部分仍然能用', async ({
+test('CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消失，首页其余部分仍然能用 @nightly', async ({
   browser,
 }) => {
   const side = await openAs(browser, daemon.token)
@@ -733,7 +733,7 @@ test('CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消�
 const MISSING_RUNTIME = 'rfc319-cfg20-missing'
 const RETIRED_RUNTIME = 'rfc319-cfg20-retired-fork'
 
-test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的默认运行时必须是红点', async ({
+test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的默认运行时必须是红点 @nightly', async ({
   browser,
 }) => {
   // 造出三行、且只有三行 —— HomepageGreeting.tsx:86 的 AGGREGATE_THRESHOLD=3，
@@ -871,7 +871,7 @@ test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的�
   }
 })
 
-test('CFG-20 protocol-incompatible 这一档：与「没装」必须是两句不同的话，当默认时同样是红点', async ({
+test('CFG-20 protocol-incompatible 这一档：与「没装」必须是两句不同的话，当默认时同样是红点 @nightly', async ({
   browser,
 }) => {
   // 诚实说明：这个状态在**当前构建里服务端产不出来**。routes/runtimes.ts:207-211
@@ -987,7 +987,7 @@ async function docTableRows(page: Page): Promise<string[][]> {
   )
 }
 
-test('CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：低权账号读不到写端点清单', async ({
+test('CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：低权账号读不到写端点清单 @nightly', async ({
   browser,
 }) => {
   const guest = await createUserAndLogin({ username: 'rfc319-cfg39-guest', role: 'guest' })
@@ -1109,7 +1109,7 @@ test('CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：
 // CFG-34
 // ---------------------------------------------------------------------------
 
-test('CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档页', async ({ browser }) => {
+test('CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档页 @nightly', async ({ browser }) => {
   const side = await openAs(browser, daemon.token)
   try {
     const { page } = side
@@ -1149,7 +1149,7 @@ test('CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档�
 // 「删掉某个键」的语义，写进去就撤不掉。
 // ---------------------------------------------------------------------------
 
-test('CFG-40 /.well-known/mcp：无凭据可读，endpoint 用调用者真正到得了的 origin', async () => {
+test('CFG-40 /.well-known/mcp：无凭据可读，endpoint 用调用者真正到得了的 origin @nightly', async () => {
   // (0) 无凭据可读 —— 一份需要鉴权才能读的发现文档，做不到它存在的唯一一件事。
   const anonymous = await wellKnown()
   expect(anonymous.version).toBe('1')

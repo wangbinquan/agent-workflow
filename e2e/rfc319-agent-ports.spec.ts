@@ -211,7 +211,7 @@ test.afterAll(async () => {
 // AGENT-14 —— 输出端口的增 / 改 / 删，落到服务端为准
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-14: 输出端口的增/改/删经保存后落库，kind sidecar 跟着端口名一起搬家', async ({
+test('RFC-319 AGENT-14: 输出端口的增/改/删经保存后落库，kind sidecar 跟着端口名一起搬家 @nightly', async ({
   page,
 }) => {
   const agent = await seedAgent({ name: `rfc319-out-${++sequence}`, outputs: [] })
@@ -306,7 +306,7 @@ test('RFC-319 AGENT-14: 输出端口的增/改/删经保存后落库，kind side
 // AGENT-15 —— 输入端口的增 / 改 / 删，含 required 与描述
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-15: 输入端口的增/改/删落库，required 开关与描述各自按语义持久化', async ({
+test('RFC-319 AGENT-15: 输入端口的增/改/删落库，required 开关与描述各自按语义持久化 @nightly', async ({
   page,
 }) => {
   const agent = await seedAgent({ name: `rfc319-in-${++sequence}`, outputs: ['answer'] })
@@ -399,7 +399,7 @@ test('RFC-319 AGENT-15: 输入端口的增/改/删落库，required 开关与描
 // AGENT-16 —— 端口名校验矩阵（必填 / 格式 / 长度 / 同向重名）
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-16: 端口名必填/格式/长度/同向重名——对话框内报错且保存禁用，改对了就能存', async ({
+test('RFC-319 AGENT-16: 端口名必填/格式/长度/同向重名——对话框内报错且保存禁用，改对了就能存 @nightly', async ({
   page,
 }) => {
   const agent = await seedAgent({
@@ -497,7 +497,9 @@ test('RFC-319 AGENT-16: 端口名必填/格式/长度/同向重名——对话�
 // AGENT-17 —— 对话框开着时底层数据被刷新（stale target）
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-17: 对话框开着时底层端口被别人改了——拒绝提交，重开才放行', async ({ page }) => {
+test('RFC-319 AGENT-17: 对话框开着时底层端口被别人改了——拒绝提交，重开才放行 @nightly', async ({
+  page,
+}) => {
   const agent = await seedAgent({
     name: `rfc319-stale-${++sequence}`,
     outputs: ['answer'],
@@ -570,7 +572,7 @@ test('RFC-319 AGENT-17: 对话框开着时底层端口被别人改了——拒�
 // AGENT-18 —— 聚合器的 wrapperPortName
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-18: 聚合器 wrapperPortName 的编辑与重名——重名不许存，改名后落库', async ({
+test('RFC-319 AGENT-18: 聚合器 wrapperPortName 的编辑与重名——重名不许存，改名后落库 @nightly', async ({
   page,
 }) => {
   const agent = await seedAgent({
@@ -641,7 +643,9 @@ test('RFC-319 AGENT-18: 聚合器 wrapperPortName 的编辑与重名——重名
 // AGENT-20 —— 孤儿 sidecar 清理
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-20: 孤儿 sidecar 清理只删被点的那一条，且真的从库里消失', async ({ page }) => {
+test('RFC-319 AGENT-20: 孤儿 sidecar 清理只删被点的那一条，且真的从库里消失 @nightly', async ({
+  page,
+}) => {
   // 两张 sidecar 表里各有一条不对应任何已声明端口的残留，外加一个同名 key
   // 同时出现在两张表里——清理必须按 (表, key) 定位，不能按 key 一把梭。
   const agent = await seedAgent({
@@ -733,7 +737,7 @@ test('RFC-319 AGENT-20: 孤儿 sidecar 清理只删被点的那一条，且真�
 // AGENT-X5 —— 五个页签角标
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-X5: 代理表单五个页签角标——端口数/阻断错误数/引用数/引用问题数/非法 JSON 数', async ({
+test('RFC-319 AGENT-X5: 代理表单五个页签角标——端口数/阻断错误数/引用数/引用问题数/非法 JSON 数 @nightly', async ({
   page,
 }) => {
   const mcp = await post<{ id: string }>('/api/mcps', {
@@ -835,7 +839,7 @@ test('RFC-319 AGENT-X5: 代理表单五个页签角标——端口数/阻断错�
 // AGENT-19 —— 分支端口：勾选之后运行期真的关得掉这条分支
 // ---------------------------------------------------------------------------
 
-test('RFC-319 AGENT-19: 勾上「分支端口」才让运行期真的关得掉分支——同一个工作流勾选前后各跑一次', async ({
+test('RFC-319 AGENT-19: 勾上「分支端口」才让运行期真的关得掉分支——同一个工作流勾选前后各跑一次 @nightly', async ({
   page,
 }) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-rfc319-ports-repo-'))

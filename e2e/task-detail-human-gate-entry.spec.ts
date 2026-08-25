@@ -179,7 +179,7 @@ test.afterAll(async () => {
   if (stubState !== undefined) rmSync(stubState, { recursive: true, force: true })
 })
 
-test('任务卡在等人回答时：节点表里那一行有「Answer」，别的行没有，点下去落在那一轮', async ({
+test('任务卡在等人回答时：节点表里那一行有「Answer」，别的行没有，点下去落在那一轮 @nightly', async ({
   page,
 }) => {
   await openTask(page)
@@ -198,7 +198,9 @@ test('任务卡在等人回答时：节点表里那一行有「Answer」，别�
   await expect(page.getByTestId('clarify-question-q-db')).toBeVisible()
 })
 
-test('答完之后任务卡在等人评审：那一行换成「Review」，「Answer」不再出现', async ({ page }) => {
+test('答完之后任务卡在等人评审：那一行换成「Review」，「Answer」不再出现 @nightly', async ({
+  page,
+}) => {
   const res = await fetch(`${daemon.baseUrl}/api/clarify/${clarifyNodeRunId}/answers`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'application/json' },

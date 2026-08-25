@@ -275,7 +275,9 @@ async function injectSlots(page: Page, make: (opId: string) => SlotDto[]): Promi
 
 // ── INTENT-35：secret 槽 ─────────────────────────────────────────────────────
 
-test('INTENT-35 提交明细步：密码型 secret 槽没填满就进不了复核，也提交不了', async ({ page }) => {
+test('INTENT-35 提交明细步：密码型 secret 槽没填满就进不了复核，也提交不了 @nightly', async ({
+  page,
+}) => {
   await authPage(page, daemon)
   await injectSlots(page, (opId) => [
     {
@@ -322,7 +324,9 @@ test('INTENT-35 提交明细步：密码型 secret 槽没填满就进不了复�
 
 // ── INTENT-36：凭据豁免 ──────────────────────────────────────────────────────
 
-test('INTENT-36 提交明细步：凭据豁免必须逐项显式勾选，未勾选一律挡在复核之前', async ({ page }) => {
+test('INTENT-36 提交明细步：凭据豁免必须逐项显式勾选，未勾选一律挡在复核之前 @nightly', async ({
+  page,
+}) => {
   await authPage(page, daemon)
   await injectSlots(page, (opId) => [
     {
@@ -369,7 +373,7 @@ test('INTENT-36 提交明细步：凭据豁免必须逐项显式勾选，未勾�
 
 // ── INTENT-37：humanBinding ─────────────────────────────────────────────────
 
-test('INTENT-37 提交明细步：占位真人成员用 UserPicker 绑定，不绑就是「默认丢弃」', async ({
+test('INTENT-37 提交明细步：占位真人成员用 UserPicker 绑定，不绑就是「默认丢弃」 @nightly', async ({
   page,
 }) => {
   await authPage(page, daemon)
@@ -409,7 +413,7 @@ test('INTENT-37 提交明细步：占位真人成员用 UserPicker 绑定，不�
 
 // ── INTENT-30：阻断性校验错误 ────────────────────────────────────────────────
 
-test('INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审页签红计数、Commit 入口禁用、服务端同样拒收', async ({
+test('INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审页签红计数、Commit 入口禁用、服务端同样拒收 @nightly', async ({
   page,
 }) => {
   await authPage(page, updateDaemon)
@@ -552,7 +556,7 @@ test('INTENT-30 草稿含阻断性校验错误：红横幅逐条列出、评审�
   expect(after?.description, '被拒的草稿不得改到目标资源').toBe('original description')
 })
 
-test('INTENT-30 负向对照：目标已挂载、草稿无错误时，横幅与徽章都不许出现，Commit 入口可用', async ({
+test('INTENT-30 负向对照：目标已挂载、草稿无错误时，横幅与徽章都不许出现，Commit 入口可用 @nightly', async ({
   page,
 }) => {
   await authPage(page, updateDaemon)
@@ -592,7 +596,7 @@ test('INTENT-30 负向对照：目标已挂载、草稿无错误时，横幅与�
 
 // ── INTENT-41：四种提交冲突拒绝 ──────────────────────────────────────────────
 
-test('INTENT-41 提交冲突：草稿哈希不匹配时拒收；不篡改时同一向导必须能提交成功', async ({
+test('INTENT-41 提交冲突：草稿哈希不匹配时拒收；不篡改时同一向导必须能提交成功 @nightly', async ({
   page,
 }) => {
   await authPage(page, daemon)
@@ -632,7 +636,9 @@ test('INTENT-41 提交冲突：草稿哈希不匹配时拒收；不篡改时同�
   expect(await agentNames(daemon)).toContain(landedName)
 })
 
-test('INTENT-41 提交冲突：确认的修订已被更新的修订取代时拒收（旧标签页形态）', async ({ page }) => {
+test('INTENT-41 提交冲突：确认的修订已被更新的修订取代时拒收（旧标签页形态） @nightly', async ({
+  page,
+}) => {
   await authPage(page, daemon)
   const sessionId = await createSessionAndAwaitDraft(page, daemon, 'build me an auditor agent')
 
@@ -669,7 +675,7 @@ test('INTENT-41 提交冲突：确认的修订已被更新的修订取代时拒�
   expect(await agentNames(daemon)).not.toContain('e2e-auditor')
 })
 
-test('INTENT-41 提交冲突：会话已归档时拒收', async ({ page }) => {
+test('INTENT-41 提交冲突：会话已归档时拒收 @nightly', async ({ page }) => {
   await authPage(page, daemon)
   const sessionId = await createSessionAndAwaitDraft(page, daemon, 'build me an auditor agent')
 
@@ -700,7 +706,7 @@ test('INTENT-41 提交冲突：会话已归档时拒收', async ({ page }) => {
   expect(await agentNames(daemon)).not.toContain('e2e-auditor')
 })
 
-test('INTENT-41 提交冲突：生成轮次还在跑时拒收', async ({ page }) => {
+test('INTENT-41 提交冲突：生成轮次还在跑时拒收 @nightly', async ({ page }) => {
   await authPage(page, daemon)
   const sessionId = await createSessionAndAwaitDraft(page, daemon, 'build me an auditor agent')
 
@@ -738,7 +744,9 @@ test('INTENT-41 提交冲突：生成轮次还在跑时拒收', async ({ page })
 // 放在最后：本条会长期占用 `e2e-auditor` 这个名字（stub 固定提议它），
 // 之后任何不改名的提交都会撞冲突。
 
-test('INTENT-38 提交明细步：重名被服务端挡下，用 finalName 槽改名后才落地', async ({ page }) => {
+test('INTENT-38 提交明细步：重名被服务端挡下，用 finalName 槽改名后才落地 @nightly', async ({
+  page,
+}) => {
   await authPage(page, daemon)
   await seedAgent(daemon, 'e2e-auditor', 'seeded by rfc319 to occupy the name')
   await createSessionAndAwaitDraft(page, daemon, 'build me an auditor agent')
