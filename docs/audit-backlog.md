@@ -2836,3 +2836,57 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `clarify-or-delivery` 时，一条黑板留言才真的唤醒 leader；停在 `leader-clarify` 时
    `services/workgroup/wake.ts:249` 的 `leaderClarifyParked` 会结构性抑制 leader，此时发言不唤醒任何人。
    照字面理解成「任何 awaiting_human 都能被唤醒」会写出一条不成立的期望。
+
+## RFC-319 B91 起草期撞到的产品缺陷（2026-08-26，仓库域 + 数字员工配置域）
+
+1. **【中】评审 / 预览 markdown 里的工作树图片今天一律是破图。**
+   `packages/frontend/src/components/prose/imageHref.ts:17` 把相对图片重写成
+   `/api/worktree-files/{taskId}/{path}`，`ProseImage.tsx:46` 用普通 `<img src>` 加载它；
+   而 RFC-285 B4 之后 REST 面**只认 `Authorization: Bearer`**（`auth/session.ts:246-257`，
+   `?token=` 已收窄到只剩 WS 升级面），`<img>` 发不了自定义头。实测：不带头 401、
+   带 `?token=` 也 401。`worktree-files.ts` 顶部注释宣称的用途（"the frontend resolves these
+   to this endpoint so the browser can fetch them"）在今天的鉴权面下不成立。失败是 fail-closed
+   （无安全风险）但功能已死。修法：给这条路由开受控的 query/cookie 通道，或让 `ProseImage` 走 blob 取数。
+2. **【中】数字员工的「编辑」写门自相矛盾，且 govern 门可被通用端点绕过（实测确认）。**
+   同一份员工、同一段内容、同一个 `write` 授权者：
+   `PUT /api/code/digital-employees/:id/playbook`（**业务 UI 唯一的保存路径**，
+   `routes/developmentConfig.ts:635` 用 `requireGovernable`）→ **403 `resource-govern-owner-only`**；
+   而通用 CRUD `PUT /api/code/digital-employees/:id`（`:520` 用 `requireEditable`）→ **200**。
+   后果两面：①「授予编辑权」在唯一的界面里等于没授（`code.config.detail.tsx:163` 的
+   `canEditDraft = canUpdate` 只看 `canEdit`，那个人**看得见**「编辑草稿」按钮、填完保存吃 403）；
+   ②若 `/playbook` 的 govern 门是有意的，它被通用端点原样绕过。其余四类配置资源都是
+   `requireEditable`，只有员工这一族是 govern——形态上像是漏改。
+3. **【低】`pre_snapshot` 是一列没有生产写点的纵深防御。**
+   `util/git.ts:2388` 的 `gitStashSnapshot` 在 `packages/*/src/**` 里**零调用方**（只有 6 个测试文件引它）；
+   `services/scheduler.ts:6093-6098` 明确记载 RFC-130 删掉了快照写入。于是 `resumeKick` / `retryNode`
+   每次都拿 `preSnapshot=null` 走一遍恒等于「什么都不做」的回滚。回滚代码本身是好的
+   （B91 的用例把快照按真实形态种进去后，它确实把工作树带回了那一刻），但**今天没有任何真实运行
+   会喂给它一个非空值**。要么补写点、要么删列，不该继续悬着。
+4. **【低】能力模板的复制与上游合并没有任何界面入口。**
+   `packages/frontend/src/components/code/TemplateUpstreamPanel.tsx:54` 是全仓**零调用方**的组件；
+   `routes/code.executors.tsx:6-11` 已在 RFC-323 退成一条 redirect。后端 7 条端点仍在装配并可用。
+   账本 DE-45 的措辞在 UI 层不成立——B91 按源码实际把它写成接口面用例。删组件还是补 UI 入口是产品裁决。
+5. **【低】`mount-path-*` 这一族错误码掉进 `misc` 域，用户看到最泛化的「Request failed」。**
+   `packages/frontend/src/i18n/errors.ts:73-90` 的 `repo` 域前缀表里有 `repo-` / `git-` / `path-` /
+   `worktree-`，**没有 `mount-path-`**；于是 `schemas/repoGroup.ts:11-17` 的五个码全落到 `misc`，
+   而同一个保存动作的 `repo-group-*` 拒绝却落在 `repo` 域拿到正常标题。**路径逃逸这类最该说清楚的
+   拒绝反而拿到最弱的标题。**
+6. **【低-中】仓库组的 OCC 详情行永远不渲染。** `services/repoGroup.ts:576` 的 details 用
+   `{ expectedVersion, actualVersion }`，而 `components/ErrorDetails.tsx:150-160` 只在
+   `expectedVersion` **和 `currentVersion`** 同时是 number 时才渲染那条版本对照。全仓其余四个 OCC
+   发射点（`services/task.ts:1555`、`multipartTaskStart.ts:117`、`workgroup/launch.ts:210`、
+   `routes/tasks.ts:830`）用的都是 `currentVersion`——`repoGroup.ts` 是**唯一**的异类。
+7. **【低】`write` 授权者的改名入口没被禁用。** `resourceAccessPolicy.ts:175-187` 对非 owner 的改名
+   回 403 `resource-rename-owner-only`，而 `code.config.detail.tsx:803` 的 `config-edit-name`
+   对同一个人是**可编辑**的——改完点保存才被拒。
+8. **【低】仓库组重名保护有两层，服务层挂掉时用户拿到裸 500。**
+   `services/repoGroup.ts:492-504` 的 `assertNameFree` 之外还有 `0131_rfc248_repo_groups.sql:37`
+   的 `lower(name)` 唯一索引；后者触发时不经 `ConflictError`，直接 500。今天两层都在、不是缺陷，
+   记下来是让后来者知道「可读的 409 只有服务层那道能给」。
+9. **【低】`/api/capability-templates/:id` 的 404 正文回显调用方给的 id**
+   （`routes/capabilityTemplates.ts:64`），与同仓其余五类配置资源的
+   `NotFoundError('resource-not-found','not found')`（正文不带 id）口径不一致。
+   回显的是调用方自己提供的 id，不构成存在性泄露。
+10. **【低，UX】切页签会把规则的展开态吃掉**：`PolicyRuleBuilder.tsx:235` 的 `expanded` 是组件内部
+    state，而 `code.policies.$id.tsx:286-325` 是条件渲染——去「模拟」跑一次再回「规则」，
+    刚展开的谓词面自己收起来了。

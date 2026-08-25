@@ -1684,8 +1684,13 @@
       "title": "【拆自 REPO-14】任务详情页对**含凭据**远端 URL 的脱敏渲染 —— 现有 fixture 的本地 URL 无凭据，脱敏在那条链路上是 no-op",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-14b: 带凭据的远端 URL 在接口与任务详情页都只剩脱敏形态，原始凭据在整个 DOM 里一次都不出现"
+        }
+      ]
     },
     {
       "id": "REPO-18",
@@ -1837,8 +1842,13 @@
       "title": "【拆自 REPO-38】任务取消后工作树保留在盘上 —— e2e 里 existsSync 与 worktree 同现零命中",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-38b: 取消任务之后工作树连同内容仍在 worktrees/{repo-slug}/{task-id} 上，产品自己也还读得到它"
+        }
+      ]
     },
     {
       "id": "REPO-38c",
@@ -1846,8 +1856,13 @@
       "title": "【拆自 REPO-38】恢复时把重试节点回滚到 pre_snapshot —— e2e 里 pre_snapshot / preSnapshot 零命中",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-38c: 恢复失败任务时，重试节点的工作树被 pre_snapshot 带回快照那一刻——快照后的改动与新文件一并消失"
+        }
+      ]
     },
     {
       "id": "REPO-41",
@@ -3615,8 +3630,13 @@
       "title": "/code/config/{kind} 三类非 Adapter 配置资源的列表、空态与创建对话框",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-32: /code/config 三族配置资源的空态各说各话，创建对话框只对动作模板要能力、对员工在没有已发布规则集时拒绝放行 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-33",
@@ -3624,8 +3644,13 @@
       "title": "配置资源详情页发布（含 422 违规逐条列出）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-33: 员工发布被闭包校验拦下时五条违规各自成行、code/位置/详情都在，补齐引用后同一颗按钮发出 v1 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-35",
@@ -3633,8 +3658,17 @@
       "title": "配置资源的 ACL 共享面板（RFC-099 行级授权）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-35: 私有配置资源对未授权账号既不在列表也不在详情，接口回的 404 与「这个 id 从来不存在」逐字同形 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-35: ACL 面板授 read 只给只读、升 write 才给编辑与发布，归档始终留给所有者 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-36",
@@ -3642,8 +3676,17 @@
       "title": "/code/policies 规则集列表、创建与规则构建器发布",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-36: 从列表新建规则集后，规则构建器里的顺序改动经保存与刷新仍在，发布后列表与页头同时给出 rev 1 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-36: 规则集发布被拦时三类违规逐条可读，而不是一句「校验失败」 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-38",
@@ -3651,8 +3694,13 @@
       "title": "/code/assignments 指派的新增 / 编辑 / 删除（按 scope 分组）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-38: 指派按 scope 分组呈现、编辑钉住已发布修订、删除只带走被点的那一条 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-44",
@@ -6268,8 +6316,13 @@
       "title": "手动刷新一个缓存镜像（git fetch --all --prune --tags）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-04 行内「Refresh」真的跑了 git fetch --all --prune --tags：新分支/新 tag 进来、已删分支被剪掉、列表随即自刷新 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-05",
@@ -6277,8 +6330,13 @@
       "title": "刷新失败的错误提示（fetch 失败 / 镜像损坏 / 尚未取回内容 / URL 不可读 / file:// 拒绝）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-05 刷新失败的五种原因在界面上各说各的：抓取失败 / 目录损坏 / 尚未取回 / URL 读不出 / file:// 被拒 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-06",
@@ -6286,8 +6344,13 @@
       "title": "删除一个无任务引用的缓存镜像（不弹确认框直删）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-06 / REPO-X5 无引用镜像直删不弹确认框；被仓库组引用的镜像 409 后界面上没有任何强删出口 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-08",
@@ -6323,8 +6386,13 @@
       "title": "子模块同步状态徽标与「需关注」视图（真实带子模块的仓）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-12 真带子模块的仓：克隆后徽标为「同步成功」，子模块拉不动后翻红并进「需关注」，而刷新请求本身仍成功 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-15",
@@ -6332,8 +6400,13 @@
       "title": "启动时填了不可达 / 格式非法的仓库 URL 的报错",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-15 启动时地址写错：格式非法当场红字拦住，格式合法但拉不动则留下一条可看可重试的失败任务 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-16",
@@ -6341,8 +6414,13 @@
       "title": "以非默认基线分支启动任务",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-16 向导里填了非默认基线分支，任务就真的开在那条线上（不是悄悄落回默认分支）@nightly"
+        }
+      ]
     },
     {
       "id": "REPO-17",
@@ -6350,8 +6428,13 @@
       "title": "自动 commit & push 成功路径",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-17: 自动提交推送落在远端的那笔提交——内容、LLM 生成的信息、提交人身份逐项对得上 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-22",
@@ -6373,8 +6456,13 @@
       "title": "仓库组保存的乐观并发（expectedVersion 过期 → 409）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-25: 别人先保存过一次，我的仓库组保存被 409 挡下、草稿不丢、对方的改动不被覆盖 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-26",
@@ -6382,8 +6470,13 @@
       "title": "仓库组定义的校验拒绝（自引用成环 / 挂载点冲突 / 超深度 / 非法 subdir / 重名 409）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-26: 仓库组定义的五类校验拒绝各有自己可辨的原因与状态码 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-27",
@@ -6391,8 +6484,13 @@
       "title": "仓库组页签：搜索、空态、无匹配、展开行看展平布局",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-27: 仓库组页签的空态 / 名称与描述搜索 / 无匹配 / 展开行看展平布局，四种状态各说各的话 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-29",
@@ -6400,8 +6498,13 @@
       "title": "仓库组节点的批量操作条（标记只读 / 可写 / 摘除 / 移动到目录 / 删除）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-29: 勾选仓库组节点后的批量操作条：只读 / 可写 / 摘除 / 移动到目录 / 删除子树 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-30",
@@ -6409,8 +6512,13 @@
       "title": "组内单仓设置：ref、subdir（sparse）、只读，并在任务工作树里生效",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-30: 组内单仓的 ref / subdir / 只读在界面上设完之后，一路落到任务工作树里 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-32",
@@ -6446,8 +6554,13 @@
       "title": "配置代码平台连接（GitLab / GitHub）并测试连通性",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-34: 在设置页配置 GitLab / GitHub 连接并测试连通性，token 只进不出、草稿探活不盖已存结果 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-37",
@@ -6455,8 +6568,13 @@
       "title": "工作树文件字节代理 /api/worktree-files/:taskId/*（评审 markdown 引用的图片、越界拒绝、成员 ACL）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-37: 工作树字节代理只把工作树内的文件按真实类型交出来——越界与非成员各自被挡在门外 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-44",
@@ -6464,8 +6582,13 @@
       "title": "仓库内省接口 /api/repos/refs 与 /files 的路径白名单 + 向导里的分支下拉",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-44 /api/repos/refs 与 /files 只认缓存镜像内的路径，向导的分支下拉正是从它取的数 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-X1",
@@ -6473,8 +6596,13 @@
       "title": "任务详情「工作目录」页签：懒加载目录树 + 文件预览 + 超大文件提示 + 原始字节下载",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-X1: 工作目录页签逐层懒加载、预览真实内容、超过 2 MiB 只给提示但仍可下载原始字节 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-X2",
@@ -6482,8 +6610,13 @@
       "title": "任务详情「变更 / Worktree diff」页签渲染真实 git diff",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-X2: 变更页签渲染的是真工作树算出来的 git diff——改动、新增、未跟踪三类文件都在，正文是真实新增行 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-X4",
@@ -6491,8 +6624,13 @@
       "title": "从向导下拉里复用一个已缓存镜像启动任务（cachedRepoId 路径）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-X4 从下拉里挑一个已缓存镜像启动：任务绑回同一行镜像，盘上不会多出第二份 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-X5",
@@ -6500,8 +6638,13 @@
       "title": "删除一个「零任务引用、但被仓库组引用」的镜像（409 后 UI 无强删出口）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-mirrors-and-launch.spec.ts",
+          "test": "REPO-06 / REPO-X5 无引用镜像直删不弹确认框；被仓库组引用的镜像 409 后界面上没有任何强删出口 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-01",
@@ -9119,8 +9262,13 @@
       "title": "配置资源详情页归档（ConfirmDialog 二次确认）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-34: 归档要二次确认——取消时一个归档请求都不发，确认后详情页与列表同时标记已归档且归档入口消失 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-37",
@@ -9128,8 +9276,13 @@
       "title": "策略模拟器（preview-decision）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-37: 同一份事实夹具下，模拟器的判决随编辑中的规则而变——命中、改成不命中、再换能力 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-39",
@@ -9182,8 +9335,17 @@
       "title": "能力模板（capability templates）的复制与上游合并",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-45: 复制能力模板产出私有副本并记下上游链接，脚本随副本带走但对没有 scripts:author 的复制者仍然脱敏 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-de-config-and-policies.spec.ts",
+          "test": "RFC-319 DE-45: 上游更新只合并「本地没动过」的字段，冲突原样留给人，没有 scripts:author 的人一律拒绝合并 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-05",
@@ -10553,8 +10715,13 @@
       "title": "无净变更时的 commit&push 空跑（skipped-empty）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-19: 任务没有产生任何净改动时，既不生成 commit&push 行，也不往远端推出任何分支 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-28",
@@ -10562,8 +10729,13 @@
       "title": "往仓库组里批量加仓 / 粘贴 URL 现场导入",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-28: 编辑器里批量勾选缓存仓、粘贴 URL 现场导入，非法行按行号点名、重复行只算一次 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-36",
@@ -10571,8 +10743,13 @@
       "title": "GitLab 专属连接选项：repositoryUrlPrefixes 标签校验与 rejectUnauthorized 开关",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repo-groups-and-hosts.spec.ts",
+          "test": "RFC-319 REPO-36: GitLab 专属的仓库 URL 前缀校验与 HTTPS 证书校验开关，GitHub 上既不渲染也不接受 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-39",
@@ -10607,8 +10784,13 @@
       "title": "自动提交排除模式（taskCommitExcludePatterns）配置并影响实际提交内容",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-X3: 配置了排除模式之后，被排除的文件真的进不了提交——同一份改动在开关两侧结局相反 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-02",
@@ -11315,9 +11497,6 @@
     "DE-16b",
     "DE-31b",
     "OPS-044b",
-    "REPO-14b",
-    "REPO-38b",
-    "REPO-38c",
     "REPO-43",
     "UX-35b",
     "AGENT-28",
@@ -11346,11 +11525,6 @@
     "DE-28",
     "DE-29",
     "DE-30",
-    "DE-32",
-    "DE-33",
-    "DE-35",
-    "DE-36",
-    "DE-38",
     "DE-44",
     "DE-X2",
     "DE-X4",
@@ -11395,25 +11569,6 @@
     "OPS-X3",
     "OPS-X4",
     "OPS-X5",
-    "REPO-04",
-    "REPO-05",
-    "REPO-06",
-    "REPO-12",
-    "REPO-15",
-    "REPO-16",
-    "REPO-17",
-    "REPO-25",
-    "REPO-26",
-    "REPO-27",
-    "REPO-29",
-    "REPO-30",
-    "REPO-34",
-    "REPO-37",
-    "REPO-44",
-    "REPO-X1",
-    "REPO-X2",
-    "REPO-X4",
-    "REPO-X5",
     "RES-18",
     "RES-19",
     "RES-24",
@@ -11506,14 +11661,11 @@
     "DE-02",
     "DE-15",
     "DE-20",
-    "DE-34",
-    "DE-37",
     "DE-39",
     "DE-40",
     "DE-41",
     "DE-42",
     "DE-43",
-    "DE-45",
     "EVENT-16",
     "EVENT-28",
     "EVENT-34",
@@ -11534,13 +11686,9 @@
     "OPS-007",
     "OPS-X7",
     "OPS-X9",
-    "REPO-19",
-    "REPO-28",
-    "REPO-36",
     "REPO-39",
     "REPO-40",
     "REPO-42",
-    "REPO-X3",
     "RES-04",
     "RES-06",
     "RES-20",
