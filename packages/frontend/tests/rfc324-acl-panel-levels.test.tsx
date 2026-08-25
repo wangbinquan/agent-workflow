@@ -32,6 +32,7 @@ vi.mock('../src/api/client', async () => {
 
 import { api } from '../src/api/client'
 import { AclPanel } from '../src/components/AclPanel'
+import { Dialog } from '../src/components/Dialog'
 import { useResourceAccess } from '../src/hooks/useResourceAccess'
 import { setToken } from '../src/stores/auth'
 import '../src/i18n'
@@ -118,7 +119,7 @@ describe('RFC-324 AclPanel —— 逐人档位', () => {
     await screen.findByTestId(`acl-grant-${ALICE.id}`)
 
     const input = screen.getByTestId('acl-members-input')
-    fireEvent.focus(input)
+    fireEvent.mouseDown(input)
     fireEvent.click(await screen.findByTestId('acl-members-option-carol'))
 
     const carolRow = await screen.findByTestId(`acl-grant-${CAROL.id}`)
@@ -182,6 +183,44 @@ describe('RFC-324 AclPanel —— 逐人档位', () => {
 
     const warning = screen.getByTestId('acl-execution-risk')
     expect(warning.textContent !== null && warning.textContent.trim().length > 30).toBe(true)
+  })
+
+  // 红→绿对：把 UserPicker 的 `onFocus` 改回无条件 `setOpen(true)`，本条立刻红。
+  //
+  // 实撞（`e2e-webkit-nightly`，`rfc099-ownership-acl.spec.ts:232` 报
+  // `<ul class="user-picker__results"> intercepts pointer events`）：三件事串起来
+  // 就是「一打开权限弹窗，下拉自动展开、盖住弹窗自己的按钮」——
+  //   ① `Dialog.resolveInitialDialogFocus` 把初始焦点给 `.dialog__body` 里第一个
+  //      可聚焦元素；
+  //   ② AclPanel 里那正是加人搜索框（<UserPicker> 排在「转让所有者」按钮前面）；
+  //   ③ 旧 UserPicker 的 onFocus 无条件展开列表。
+  // chromium 上侥幸点得中，webkit 上稳定拦截——所以单测里锁住这条比锁 e2e 更划算。
+  test('装进 Dialog 后：加人搜索框拿到焦点也不展开列表（否则盖住转让 / 保存）', async () => {
+    installGet(acl())
+    wrap(
+      <Dialog open onClose={() => {}} title="acl">
+        <AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />
+      </Dialog>,
+    )
+    const input = await screen.findByTestId('acl-members-input')
+
+    // 分工说明（不是偷懒）：jsdom 没有布局，`isAvailableFocusTarget` 会把这个 input
+    // 判成不可聚焦，于是 Dialog 的初始焦点退回 `.dialog__panel`——**在 jsdom 里复现
+    // 不出「焦点自动落到搜索框」这一步**，这也正是它只在真浏览器（且只在 webkit）
+    // 暴露的原因。所以这里锁的是**规则**：焦点到了也不许展开。整条链路的集成锁在
+    // `e2e/rfc099-ownership-acl.spec.ts`（转让弹窗那一段）。
+    fireEvent.focus(input)
+
+    expect(input.getAttribute('aria-expanded'), '拿到焦点不等于用户要看列表').toBe('false')
+    expect(
+      screen.queryByRole('listbox'),
+      '弹窗一打开就挂出一个门户列表，它会盖住下面的转让 / 保存按钮——那是个点不动的弹窗',
+    ).toBeNull()
+    expect(screen.getByTestId('acl-transfer-owner')).toBeTruthy()
+
+    // 对照：用户真的点下去就该展开，否则上面三条可能只是「列表永远打不开」。
+    fireEvent.mouseDown(input)
+    expect(input.getAttribute('aria-expanded')).toBe('true')
   })
 
   test('只读态：档位以文字呈现，没有任何可点的档位控件', async () => {

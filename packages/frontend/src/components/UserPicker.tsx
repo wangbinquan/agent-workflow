@@ -81,22 +81,7 @@ export function UserPicker({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  // A single-select option lives in a portal. Selecting it removes the focused
-  // option; Dialog's focus trap then returns focus to this input. Without this
-  // one-shot guard, onFocus immediately reopens the list we just closed, so a
-  // completed add still looks unfinished in a real browser.
-  const suppressNextFocusOpenRef = useRef(false)
-  const suppressFocusTimerRef = useRef<number | null>(null)
   const listId = useId()
-
-  useEffect(
-    () => () => {
-      if (suppressFocusTimerRef.current !== null) {
-        window.clearTimeout(suppressFocusTimerRef.current)
-      }
-    },
-    [],
-  )
 
   useEffect(() => {
     const handle = setTimeout(() => setDebounced(input.trim()), 200)
@@ -207,20 +192,7 @@ export function UserPicker({
     onChange(single ? [user] : [...value, user])
     setInput('')
     setActiveUserId(null)
-    if (single) {
-      suppressNextFocusOpenRef.current = true
-      if (suppressFocusTimerRef.current !== null) {
-        window.clearTimeout(suppressFocusTimerRef.current)
-      }
-      // The Dialog trap's focus recovery is queued as a microtask after the
-      // portaled option unmounts. Clear the guard on the following task so it
-      // covers that recovery but never swallows a later intentional click.
-      suppressFocusTimerRef.current = window.setTimeout(() => {
-        suppressNextFocusOpenRef.current = false
-        suppressFocusTimerRef.current = null
-      }, 0)
-      setOpen(false)
-    }
+    if (single) setOpen(false)
   }
 
   function remove(id: string) {
@@ -246,8 +218,11 @@ export function UserPicker({
           if (e.target !== inputRef.current) {
             e.preventDefault()
             inputRef.current?.focus()
-            setOpen(true)
           }
+          // 展开挂在**按下去**这一下，不挂 onFocus —— 见下面 input 上的注释。
+          // 门户里的选项是 `.user-picker` 的 React 子节点、不是本行的，所以选人时
+          // 的 mousedown 不会冒泡到这里，选完不会把刚关掉的列表又弹开。
+          setOpen(true)
         }}
       >
         {value.map((u) => (
@@ -283,13 +258,18 @@ export function UserPicker({
           aria-required={ariaRequired}
           aria-invalid={ariaInvalid}
           data-testid={testidPrefix ? `${testidPrefix}-input` : undefined}
-          onFocus={() => {
-            if (suppressNextFocusOpenRef.current) {
-              suppressNextFocusOpenRef.current = false
-              return
-            }
-            setOpen(true)
-          }}
+          // 这里**没有** onFocus 展开，是有意的（WAI-ARIA combobox 也是这个约定：
+          // 展开靠点击 / 打字 / ArrowDown，不靠「拿到焦点」）。
+          //
+          // 反例是实撞出来的：`Dialog.resolveInitialDialogFocus` 会把初始焦点给
+          // `.dialog__body` 里第一个可聚焦元素（Dialog.tsx:163-175）。权限面板里
+          // 那正是这个加人搜索框（AclPanel.tsx 的 <UserPicker> 排在「转让所有者」
+          // 按钮前面），于是**一打开权限弹窗，下拉就自动展开、盖住弹窗自己的按钮**。
+          // chromium 上侥幸点得中，webkit 上稳定拦截——
+          // `e2e/rfc099-ownership-acl.spec.ts:232` 报
+          // `<ul class="user-picker__results"> intercepts pointer events`。
+          // 从前那套 suppressNextFocusOpen 一次性守卫只是在补这条规则的漏，
+          // 规则本身去掉之后它就是死代码，已一并删除。
           onKeyDown={onInputKeyDown}
           onChange={(e) => {
             setInput(e.target.value)

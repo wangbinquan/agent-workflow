@@ -185,7 +185,9 @@ describe('TaskMembersPanel manage-session loss', () => {
     installReads({ a: members('a') })
     const { client } = renderPanel()
     fireEvent.click(await screen.findByTestId('members-transfer-owner'))
-    fireEvent.focus(await screen.findByTestId('members-transfer-input'))
+    // RFC-324：UserPicker 不再因为「拿到焦点」展开列表（Dialog 的初始焦点会让它
+    // 盖住弹窗自己的按钮），展开挂在用户按下去那一刻——所以这里发 mouseDown。
+    fireEvent.mouseDown(await screen.findByTestId('members-transfer-input'))
     fireEvent.click(await screen.findByTestId('members-transfer-option-carol'))
     const staleTransfer = screen.getByTestId('members-transfer-confirm') as HTMLButtonElement
     expect(staleTransfer.disabled).toBe(false)

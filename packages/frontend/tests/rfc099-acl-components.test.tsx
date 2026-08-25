@@ -84,7 +84,7 @@ describe('UserPicker', () => {
     mockedGet.mockResolvedValue([user('u1', 'alice'), user('u2', 'bob')])
     const onChange = vi.fn()
     wrap(<UserPicker value={[]} onChange={onChange} testidPrefix="tp" />)
-    fireEvent.focus(screen.getByTestId('tp-input'))
+    fireEvent.mouseDown(screen.getByTestId('tp-input'))
     await waitFor(() => expect(screen.queryByTestId('tp-option-alice')).toBeTruthy())
     fireEvent.click(screen.getByTestId('tp-option-alice'))
     expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ id: 'u1' })])
@@ -120,7 +120,7 @@ describe('UserPicker', () => {
         testidPrefix="tp"
       />,
     )
-    fireEvent.focus(screen.getByTestId('tp-input'))
+    fireEvent.mouseDown(screen.getByTestId('tp-input'))
     await waitFor(() => expect(screen.queryByTestId('tp-option-bob')).toBeTruthy())
     expect(screen.queryByTestId('tp-option-alice')).toBeNull()
     expect(screen.queryByTestId('tp-option-carol')).toBeNull()
@@ -143,7 +143,7 @@ describe('UserPicker', () => {
       />,
     )
     const input = screen.getByTestId('active-input')
-    fireEvent.focus(input)
+    fireEvent.mouseDown(input)
     await waitFor(() => expect(screen.queryByTestId('active-option-alice')).toBeTruthy())
     expect(screen.queryByTestId('active-option-disabled-bob')).toBeNull()
     expect(input.getAttribute('aria-label')).toBe('Required local user')
@@ -161,7 +161,7 @@ describe('UserPicker', () => {
     const onChange = vi.fn()
     wrap(<UserPicker value={[]} onChange={onChange} single testidPrefix="keyboard" />)
     const input = screen.getByTestId('keyboard-input')
-    fireEvent.focus(input)
+    fireEvent.mouseDown(input)
     const alice = await screen.findByTestId('keyboard-option-alice')
     const carol = screen.getByTestId('keyboard-option-carol')
     expect((screen.getByTestId('keyboard-option-disabled-bob') as HTMLButtonElement).disabled).toBe(
@@ -185,15 +185,23 @@ describe('UserPicker', () => {
     // The selected portaled option disappears in a real Dialog, whose focus
     // trap immediately restores focus to the input. That recovery must not
     // reopen a single-select list that just completed its choice.
+    //
+    // RFC-324：这条以前靠一个一次性 suppressNextFocusOpen 守卫成立，现在靠**规则**
+    // 成立——UserPicker 不再因为「拿到焦点」而展开（展开只挂点击 / 打字 / ArrowDown）。
+    // 所以这里发的必须是 focus 而不是 mouseDown：mouseDown 是用户主动点，本来就该
+    // 重新展开，用它断言「不展开」会把一条正确行为锁成 bug。
     fireEvent.focus(input)
     expect(input.getAttribute('aria-expanded')).toBe('false')
+    // 对照：真的点一下就该展开——否则上面那条可能只是「列表永远打不开」。
+    fireEvent.mouseDown(input)
+    expect(input.getAttribute('aria-expanded')).toBe('true')
   })
 
   test('Escape closes only the portaled listbox and clears aria-activedescendant', async () => {
     mockedGet.mockResolvedValue([user('u1', 'alice')])
     wrap(<UserPicker value={[]} onChange={() => {}} testidPrefix="escape" />)
     const input = screen.getByTestId('escape-input')
-    fireEvent.focus(input)
+    fireEvent.mouseDown(input)
     await screen.findByTestId('escape-option-alice')
     await waitFor(() => expect(input.getAttribute('aria-activedescendant')).not.toBeNull())
 

@@ -215,7 +215,7 @@ describe('AclPanel manage-session loss', () => {
 
     fireEvent.click(await screen.findByTestId('acl-transfer-owner'))
     const transferInput = await screen.findByTestId('acl-transfer-input')
-    fireEvent.focus(transferInput)
+    fireEvent.mouseDown(transferInput)
     fireEvent.click(await screen.findByTestId('acl-transfer-option-dave'))
     expect((screen.getByTestId('acl-transfer-confirm') as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getByTestId('acl-transfer-remove-dave')).toBeTruthy()

@@ -646,7 +646,8 @@ describe('human add flow (§9.5)', () => {
     fireEvent.click(await screen.findByTestId('workgroup-add-human-member'))
     await screen.findByTestId('workgroup-panel-add')
 
-    fireEvent.focus(screen.getByTestId('workgroup-member-user-input'))
+    // RFC-324：展开挂 mouseDown，不挂 focus（见 UserPicker 里 input 上的注释）。
+    fireEvent.mouseDown(screen.getByTestId('workgroup-member-user-input'))
     fireEvent.click(await screen.findByTestId('workgroup-member-user-option-bob'))
     // alias auto-followed the picked user's display name (sanitized)
     const alias = screen.getByTestId('workgroup-member-displayname-input') as HTMLInputElement

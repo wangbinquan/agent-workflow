@@ -459,7 +459,8 @@ describe('RFC-168 §8.1 — member dialog shell contract (mid-run)', () => {
     fireEvent.click(await screen.findByTestId('wg-config-add-human'))
     await screen.findByTestId('workgroup-add-human-dialog')
 
-    fireEvent.focus(screen.getByTestId('workgroup-member-user-input'))
+    // RFC-324：展开挂 mouseDown，不挂 focus（见 UserPicker 里 input 上的注释）。
+    fireEvent.mouseDown(screen.getByTestId('workgroup-member-user-input'))
     fireEvent.click(await screen.findByTestId('workgroup-member-user-option-bob'))
     // alias auto-followed the picked user's sanitized display name
     const alias = screen.getByTestId('workgroup-member-displayname-input') as HTMLInputElement
