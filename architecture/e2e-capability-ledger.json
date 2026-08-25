@@ -3991,8 +3991,13 @@
       "title": "我的账号 → 安全：会话列表与逐条吊销",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-14: 安全页列出全部活跃会话，吊销一条只杀掉被点的那一条，当前这条毫发无伤 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-15",
@@ -4009,8 +4014,13 @@
       "title": "我的账号 → 令牌：通过界面创建 PAT 并一次性显示明文",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-16: 在界面上签发 PAT —— 明文当场可用，点完「完成」之后 DOM 与浏览器存储里都不再有它 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-17",
@@ -4040,8 +4050,13 @@
       "title": "/users：目录搜索、状态/角色筛选、筛空态与 URL 同步",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-28: /users 的搜索与状态/角色筛选真的在过滤，筛空有出路，筛选条件写进 URL 且深链与后退都还原得回来 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-29",
@@ -4049,8 +4064,13 @@
       "title": "/users：无 users:read 时的无权限空态，无 users:write 时隐藏一切写入口",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-29: 没有 users:read 的人得到一句说明而不是空目录；只有读权的人看得见目录却摸不到任何写入口，且服务端同样拒绝 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-33",
@@ -4085,8 +4105,13 @@
       "title": "会话失效/凭据被撤后的自愈：401 清凭据回登录页，以及「令牌无权限」的孤儿兜底",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-44: 会话在别处被吊销后，下一次真实请求的 401 就把凭据清掉并送回登录页；令牌够不着账号面时留一个能自己脱身的兜底 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-X1",
@@ -4112,8 +4137,13 @@
       "title": "凭据被吊销/权限被撤时，已建立的 WebSocket 被服务端主动关闭",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-X3: 权限被撤只关掉那一条通道（4403），凭据被吊销则连服务端主动关掉（4401）—— 两次都是服务端关的，不是前端自己断开 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-X4",
@@ -6466,36 +6496,56 @@
       "domain": "工作流定义与画布编辑器",
       "title": "工作流列表卡片信息（节点数 / 版本 / 可见性徽章 / updatedAt 倒序）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-03 工作流列表卡片：节点数 / 版本 / 私有徽章 / 归属人逐格正确，保存一次后节点数与版本跟着变且该卡排到最前"
+        }
+      ]
     },
     {
       "id": "WF-04",
       "domain": "工作流定义与画布编辑器",
       "title": "列表搜索过滤与「无匹配」空态",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-04 工作流列表搜索：按名称 / 描述 / 卡片可见事实过滤，无匹配给空态与「清空搜索」"
+        }
+      ]
     },
     {
       "id": "WF-06",
       "domain": "工作流定义与画布编辑器",
       "title": "卡片「启动」深链把工作流预选进任务向导",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-06 卡片「启动」深链：跳到任务向导且工作流已预选，不用再挑一次"
+        }
+      ]
     },
     {
       "id": "WF-08",
       "domain": "工作流定义与画布编辑器",
       "title": "无 workflows:create/update 权限时的只读列表与只读编辑器",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-08 无 workflows:create/update 权限：列表没有新建入口，编辑器只读且整场零写请求"
+        }
+      ]
     },
     {
       "id": "WF-11",
@@ -6511,27 +6561,42 @@
       "domain": "工作流定义与画布编辑器",
       "title": "撤销 / 重做（Ctrl+Z、Ctrl+Shift+Z、头部按钮）与选择恢复",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-13 撤销 / 重做：头部按钮与快捷键走同一条历史，撤销后落库、并把选择还回被撤销的那个节点"
+        }
+      ]
     },
     {
       "id": "WF-14",
       "domain": "工作流定义与画布编辑器",
       "title": "画布复制粘贴切片（Ctrl+C / Ctrl+V）与全选（Ctrl+A）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-14 画布剪贴板：复制一个 wrapper 会连内层节点与内部连线整片复制，粘贴出的副本自成一组，一次撤销全收回"
+        }
+      ]
     },
     {
       "id": "WF-17",
       "domain": "工作流定义与画布编辑器",
       "title": "删除含内层节点的 wrapper 的确认对话框",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-17 删除含内层节点的 wrapper：确认框如实报出内层数量，取消什么都不发生，确认才连内层一起删"
+        }
+      ]
     },
     {
       "id": "WF-20",
@@ -6539,8 +6604,13 @@
       "title": "连线中点「插入节点」内联动作",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-20 连线中点「插入节点」：新节点接在中间，原来那条边被顶掉而不是并存 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-21",
@@ -6548,8 +6618,13 @@
       "title": "wrapper 内联「在里面添加」动作",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-21 wrapper 内联「在里面添加」：新节点真的进了成员表，而不是压在 wrapper 上面 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-22",
@@ -6557,17 +6632,27 @@
       "title": "自动布局（全部 / 仅选中）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-22 自动布局：「整理所选」一个像素都不碰没选中的节点，「整理全图」把整条链按拓扑排开 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-24",
       "domain": "工作流定义与画布编辑器",
       "title": "空画布引导：「添加第一个节点」与「从模板开始」",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-24 空画布引导：「添加第一个节点」落下第一步，「从模板开始」把整套审计模板一次接好且一次撤销退得回来"
+        }
+      ]
     },
     {
       "id": "WF-25",
@@ -6730,8 +6815,13 @@
       "title": "连线检查器（EdgeInspector）：重命名目标端口、删除连线、重新接线",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-38 连线检查器：撞名的目标端口被当场拒绝、删除连线真的删掉、重新接线交回连线弹窗 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-40",
@@ -6756,9 +6846,14 @@
       "domain": "工作流定义与画布编辑器",
       "title": "离开未保存草稿的导航拦截（UnsavedChangesGuard）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-46 离开未保存草稿：保存失败时导航被拦下，「留在本页」原地不动、「放弃更改」才真的走"
+        }
+      ]
     },
     {
       "id": "WF-47",
@@ -6776,27 +6871,42 @@
       "domain": "工作流定义与画布编辑器",
       "title": "复制工作流为私有副本（精确修订版围栏）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-48 只读授权者另存为私有副本：精确修订版围栏拦下陈旧复制，成功的副本归自己且原作者看不见"
+        }
+      ]
     },
     {
       "id": "WF-50",
       "domain": "工作流定义与画布编辑器",
       "title": "删除被引用工作流的拒绝路径（运行中任务 / 定时任务引用）",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-50 删除被引用的工作流：非终态任务与定时任务各自拒绝并说明原因，解引用后才放行"
+        }
+      ]
     },
     {
       "id": "WF-51",
       "domain": "工作流定义与画布编辑器",
       "title": "工作流权限面板（ACL）：查看/授予/移交归属，以及被授权者的可见性变化",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-51 工作流权限面板：授权让对方看得见但改不动、移交归属把治理权换手、撤销后回到与不存在同形"
+        }
+      ]
     },
     {
       "id": "WF-52",
@@ -6813,8 +6923,13 @@
       "title": "选中节点的悬浮工具条：+ 添加下一步 / 连接下一步 / 复制 / ⋯ 更多",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-canvas-editing-ops.spec.ts",
+          "test": "WF-X1 选中节点的悬浮工具条：+ 加下一步落在右侧、连接下一步在没有输出时禁用、复制填得进剪贴板、⋯ 交出更多动作 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-04",
@@ -8162,8 +8277,13 @@
       "title": "用户选择器（users:search）：搜索、排除已选/owner、公开字段裁剪",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-41: 用户选择器只拿得到公开字段，且 owner 与已授权的人不会再出现在候选里 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-42",
@@ -8171,8 +8291,13 @@
       "title": "在线状态（users:presence）：有权限者看得到在线点，无权限者界面逐字节不变",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-42: 有 users:presence 的人看得到在线点；权限被收回后同一屏逐字节回到没有点的样子，且不再建立 presence 连接 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-45",
@@ -8200,8 +8325,13 @@
       "title": "我的账号 → 概览：角色/状态 chip、已绑定身份列表、本地账号 vs SSO 托管标识",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-users-and-account.spec.ts",
+          "test": "RFC-319 IAM-X5: 概览面板一屏说清「我是谁、什么档、什么状态、账号归谁管」，本地账号不冒充 SSO 托管 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-02",
@@ -9220,9 +9350,14 @@
       "domain": "工作流定义与画布编辑器",
       "title": "工作流列表真空态与加载/错误态",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-05 工作流列表的加载 / 读不到 / 真空三态：各自长得不一样，且重试真的把列表拉回来"
+        }
+      ]
     },
     {
       "id": "WF-07",
@@ -9263,9 +9398,14 @@
       "domain": "工作流定义与画布编辑器",
       "title": "内置工作流（aw-skill-fusion）在列表隐藏且只读、不可删改",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-list-and-acl.spec.ts",
+          "test": "WF-53 内置工作流 aw-skill-fusion：列表隐藏、改 / 删 / 复制 / 改权限一律拒绝，同名的用户自建工作流照常可见"
+        }
+      ]
     },
     {
       "id": "WF-55",
@@ -9583,18 +9723,12 @@
     "IAM-09",
     "IAM-10",
     "IAM-11",
-    "IAM-14",
     "IAM-15",
-    "IAM-16",
-    "IAM-28",
-    "IAM-29",
     "IAM-33",
     "IAM-34",
     "IAM-35",
-    "IAM-44",
     "IAM-X1",
     "IAM-X2",
-    "IAM-X3",
     "IAM-X4",
     "INTENT-10",
     "INTENT-12",
@@ -9728,32 +9862,15 @@
     "UX-X2",
     "UX-X7",
     "WF-02",
-    "WF-03",
-    "WF-04",
-    "WF-06",
-    "WF-08",
     "WF-11",
-    "WF-13",
-    "WF-14",
-    "WF-17",
-    "WF-20",
-    "WF-21",
-    "WF-22",
-    "WF-24",
     "WF-25",
     "WF-33",
     "WF-34",
     "WF-35",
     "WF-37",
-    "WF-38",
     "WF-40",
     "WF-45",
-    "WF-46",
-    "WF-48",
-    "WF-50",
-    "WF-51",
     "WF-52",
-    "WF-X1",
     "WG-05",
     "WG-09",
     "WG-15",
@@ -9821,10 +9938,7 @@
     "EVENT-X6",
     "EVENT-X7",
     "IAM-22",
-    "IAM-41",
-    "IAM-42",
     "IAM-48",
-    "IAM-X5",
     "INTENT-02",
     "INTENT-20",
     "INTENT-25",
@@ -9894,9 +10008,7 @@
     "UX-45",
     "UX-X3",
     "UX-X4",
-    "WF-05",
     "WF-15",
-    "WF-53",
     "WF-55",
     "WF-56",
     "WF-57",

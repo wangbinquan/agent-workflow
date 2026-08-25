@@ -2500,3 +2500,53 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
 
 修法方向：`mcpProbe` 在归类为 `connect-failed` 时把自己知道的 `command[0]` 拼进 `errorDetail`，
 不要依赖运行时错误文本里恰好带路径。
+
+## RFC-319 B80 起草期撞到的产品缺陷（2026-08-25，均未写成断言）
+
+**工作流编辑器**
+
+1. **【P2】编辑器 More 里的「删除」对非 owner 的被授权者照常渲染。** `workflows.edit.tsx:312` 是
+   `const canDelete = usePermission('workflows:delete')`——**只看方法级权限点**，而该点在 user 预设里
+   人人都有。对比同段 `:310` 的 `canUpdate = canManageAcl && workflowAccess.canEdit` 已经纳入行级档位。
+   结果：只读（甚至可编辑）被授权者打开别人的工作流，能看到「删除」、能把名字逐字敲对、能点确认，
+   直到服务端回 403 `resource-govern-owner-only` 才被拦下。RFC-324 修掉的正是这类「看起来能做、做了才吃 403」。
+   建议与 `canUpdate` 同形：`usePermission('workflows:delete') && workflowAccess.canManage`。
+2. **【P3】`workflow-in-use` 的 `details.referenceCount` 在界面上不显示。** 服务端刻意只给聚合计数
+   （`services/workflow.ts:716-719`，任务 ACL 保护），但 `ErrorDetails.tsx:118-129` 的白名单里没有这个
+   **标量**键，于是用户只看到「Tasks still reference this workflow」，看不到还剩几条。
+3. **（非缺陷，但值得记）编辑器内的 `ErrorBanner` 没有 `role="alert"`。** `NoticeBanner.tsx:103` 在
+   `ManagedLiveRegionProvider` 上下文里**故意**不挂 role（改由统一 live region 播报），而编辑器整棵树
+   都在该 provider 内（含 portal 出去的 Dialog——React context 跟树走不跟 DOM 走）。任何在编辑器内用
+   `getByRole('alert')` 找错误横幅的 e2e 都会稳定落空，失败信息还只是「element not found」。
+   同一个组件在列表页（无 provider）又能按 role 取到——这种「同组件两种可及性形态」最容易写出空洞绿。
+
+**画布编辑**
+
+4. **【P2】Ctrl+A 与右键菜单「Select all」都是空操作。** `WorkflowCanvas.tsx:1921-1927` 的 `selectAll`
+   只写 React 的 `selection` 状态、不动 xyflow 自己的选中标记；`:2903-2921` 的 `onSelectionChange` 在下一次
+   store 更新时用 xyflow 那份**空**选择集把它覆盖回去。实测：Ctrl+A 后 `workflow-layout-selection` 连采
+   8 次全 disabled；同一页面同一时刻 Shift 多选 → enabled。**用户影响**：全选之后 Ctrl+C、Delete、
+   「整理所选」全部无效，而画布上没有任何选中反馈，用户完全不知道自己没选中。
+5. **【P3】自动贴合尺寸的 wrapper 一旦有成员，「在里面添加」按钮就被内层卡片盖住、点不到。**
+   无显式 `size` 时 `coordProjection.ts:111-118` 用内层 bbox 反推 wrapper 矩形，顶部留白（实测 62 逻辑 px）
+   小于「头部 + 配置摘要」的高度（实测 67 px），第一个内层节点压住按钮下部。实测按钮中心
+   `elementFromPoint` 命中的是内层 icon。而「wrapper 里已经有节点」恰恰是最常用的场景。
+6. **【P3 文案】删 wrapper 的确认框写「This cannot be undone.」，但它其实可撤销。**
+   文案 `en-US.ts:7024-7025`；实现 `WorkflowCanvas.tsx:2241-2257` 走 `commitTransition` + `history.delete`，
+   一次 Ctrl+Z 就能完整还原。吓唬用户，或让人放弃一个本可随时撤销的操作。
+7. **【待定夺】保存收到 5xx 时页面永远不显示「Save failed」。** `workflow-editor-draft.ts:659-663` 把
+   `>= 500` 归为「结果不确定」→ 转 `reconciling` 并反复重试，相位在 `Saving` / `Checking save result`
+   之间来回跳。语义说得通（5xx 不能证明服务端没提交），但一个明确回了 500 的服务端在界面上表现成
+   「一直在检查」，没有终态也没有可操作出口。
+
+**用户与账号**
+
+8. **【P2】`/api/users/search` 隐藏停用账号的规则挂在一个无人调用的参数上。**
+   `services/users.ts:283` 的 `.filter((r) => input.status !== undefined || r.status !== 'disabled' || excluded.size === 0)`
+   ——「不显式指定 status 时是否隐藏 disabled」取决于调用方有没有传 `excludeIds`；而 `excludeIds` 在全仓是
+   `UserPicker` 的**组件 prop**，排除在客户端做（`UserPicker.tsx:139-143`），发给服务端的只有 `q/limit/status`。
+   于是 `excluded.size === 0` 恒真、这条隐藏规则**永远不生效**，`routes/users.ts:63` 解析的 `excludeIds` 是死参数。
+9. **【P3】`/api/users/search` 的 `q` 未转义 LIKE 通配符**（`services/users.ts:266,273`）：输入 `%` 匹配到
+   全部账号，输入 `a_c` 匹配 `abc`。有参数化、不是注入；是「搜索结果与你输入的不是一回事」。
+10. **【P3】`account.patsDesc` 是一条与现实相反的遗留文案**：`en-US.ts:1992` 写「Personal access token
+    creation is retired.」，而 RFC-247 D1 早已重开签发。该 key 已无任何渲染方，属死文案，建议直接删。
