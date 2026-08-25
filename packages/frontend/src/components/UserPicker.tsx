@@ -41,6 +41,15 @@ interface UserPickerProps {
   placeholder?: string
   /** Single-select mode (owner transfer): picking replaces the selection. */
   single?: boolean
+  /**
+   * 挂载时就展开列表。**只给「这个弹窗存在的唯一目的就是选人」的场合**——典型是
+   * 转让所有者：弹窗里除了这个 picker 什么都没有，展开就是它要做的事，`rfc099-
+   * ownership-acl` 的两段式 Escape 契约（第一下关列表、第二下关内层弹窗）也依赖它。
+   *
+   * 反面例子是权限面板的加人搜索框：那个弹窗里还有转让 / 保存 / 可见性，展开会把它们
+   * 盖住（见下面 input 上的注释）。所以默认关，要开必须在调用点写出来。
+   */
+  openOnMount?: boolean
   /** Hide disabled accounts when the target must be an active principal. */
   activeOnly?: boolean
   'aria-label'?: AriaAttributes['aria-label']
@@ -64,6 +73,7 @@ export function UserPicker({
   disabled,
   placeholder,
   single,
+  openOnMount,
   activeOnly,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
@@ -76,7 +86,9 @@ export function UserPicker({
   const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [open, setOpen] = useState(false)
+  // `openOnMount` 只影响**初值**，不再挂到 onFocus 上——挂 onFocus 就会在每次
+  // Dialog 焦点恢复时重开列表，那正是被删掉的 suppressNextFocusOpen 守卫在补的洞。
+  const [open, setOpen] = useState(openOnMount === true)
   const [activeUserId, setActiveUserId] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)

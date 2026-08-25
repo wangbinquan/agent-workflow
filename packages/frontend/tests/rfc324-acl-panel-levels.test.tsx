@@ -223,6 +223,29 @@ describe('RFC-324 AclPanel —— 逐人档位', () => {
     expect(input.getAttribute('aria-expanded')).toBe('true')
   })
 
+  // 与上一条成对：**转让弹窗的 picker 必须一打开就展开**。
+  //
+  // 这半边契约此前只活在 `e2e/rfc099-ownership-acl.spec.ts:290` 里，于是我把
+  // 「聚焦不展开」做成全局规则时当场把它改坏了——chromium / macos / windows 四个
+  // e2e 分片一起红。两条断言写在一起，是为了让下一个人一眼看见这不是「展开好还是
+  // 不展开好」，而是**两个场合各有各的答案**：
+  //   · 权限面板的加人搜索框：弹窗里还有转让 / 保存 / 可见性，展开会盖住它们；
+  //   · 转让弹窗的 picker：弹窗里除了它什么都没有，展开就是它要做的事，而且
+  //     两段式 Escape（第一下关列表、第二下关内层弹窗）依赖它一开始就是展开的。
+  // 红→绿对：拿掉 AclPanel 传给转让 picker 的 `openOnMount`，本条立刻红。
+  test('转让弹窗的 picker 一打开就展开（两段式 Escape 依赖它）', async () => {
+    installGet(acl())
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await screen.findByTestId(`acl-grant-${ALICE.id}`)
+
+    fireEvent.click(screen.getByTestId('acl-transfer-owner'))
+    const transferInput = await screen.findByTestId('acl-transfer-input')
+    expect(
+      transferInput.getAttribute('aria-expanded'),
+      '这个弹窗存在的唯一目的就是选人；不展开等于让用户再点一下才开始',
+    ).toBe('true')
+  })
+
   test('只读态：档位以文字呈现，没有任何可点的档位控件', async () => {
     installGet(acl({ canManage: false, canEdit: false }))
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)

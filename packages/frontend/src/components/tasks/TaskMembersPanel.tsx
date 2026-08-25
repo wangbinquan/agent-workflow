@@ -376,6 +376,10 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
             if (sessionIsCurrent()) setTransferTo(next)
           }}
           single
+          // 同 AclPanel 的转让弹窗：这个 Dialog 里除了这个 picker 什么都没有，
+          // 展开就是它要做的事。（对照：MemberFields 里的 picker 是大编辑器中的一个
+          // 字段，不能自动展开——会盖住它下面的别名 / 角色描述。）
+          openOnMount
           excludeIds={data.ownerUserId !== null ? [data.ownerUserId] : []}
           testidPrefix="members-transfer"
         />

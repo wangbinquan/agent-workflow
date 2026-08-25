@@ -668,6 +668,9 @@ export function AclPanel({
             if (sessionIsCurrent()) setTransferTo(next)
           }}
           single
+          // 这个弹窗除了这个 picker 什么都没有，展开就是它要做的事；`rfc099-ownership-acl`
+          // 的两段式 Escape（第一下关列表、第二下关内层弹窗）也依赖它一开始就是展开的。
+          openOnMount
           excludeIds={acl.ownerUserId !== null ? [acl.ownerUserId] : []}
           testidPrefix="acl-transfer"
         />
