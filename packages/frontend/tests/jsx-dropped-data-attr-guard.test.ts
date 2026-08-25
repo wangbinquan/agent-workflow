@@ -90,23 +90,80 @@ function accepts(componentFile: string, attr: string): boolean {
   )
 }
 
+/**
+ * 扫描判据（**纯函数**）：给定一份源码，报出其中所有「传给接不住它的自研组件」的
+ * 连字符属性。真实语料与负 fixture 走的是**同一个**函数——各留一份拷贝的话，
+ * fixture 证明的只是拷贝还活着（RFC-317 T14 的原话）。
+ */
+export function findDroppedAttrs(
+  file: string,
+  text: string,
+  resolve: (tag: string) => string | undefined,
+  acceptsAttr: (definitionFile: string, attr: string) => boolean,
+): string[] {
+  const dead: string[] = []
+  for (const a of text.matchAll(/\b((?:data|aria)-[a-z-]+)=/g)) {
+    const attr = a[1]!
+    const tag = enclosingTag(text, a.index!)
+    if (tag === null || !/^[A-Z]/.test(tag)) continue
+    const def = resolve(tag)
+    if (def === undefined || acceptsAttr(def, attr)) continue
+    const line = text.slice(0, a.index).split('\n').length
+    dead.push(`${file}:${line} <${tag} ${attr}=…> —— ${def} 接不住它，属性会被静默丢弃`)
+  }
+  return dead
+}
+
 describe('JSX 连字符属性不得传给接不住它的自研组件', () => {
+  test('语料非空：确实扫得到一批 .tsx（扫成 0 说明扫描根失效，此刻零预言力）', () => {
+    expect(FILES.length).toBeGreaterThanOrEqual(300)
+  })
+
   test('每一处 <Component data-*|aria-*> 都必须真的落进 DOM', () => {
     const dead: string[] = []
     for (const [file, text] of TEXT) {
-      for (const a of text.matchAll(/\b((?:data|aria)-[a-z-]+)=/g)) {
-        const attr = a[1]!
-        const tag = enclosingTag(text, a.index!)
-        if (tag === null || !/^[A-Z]/.test(tag)) continue
-        const def = DEFS.get(tag)
-        if (def === undefined || accepts(def, attr)) continue
-        const line = text.slice(0, a.index).split('\n').length
-        dead.push(
-          `${file.slice(file.indexOf('src/'))}:${line} <${tag} ${attr}=…> —— ` +
-            `${def.slice(def.indexOf('src/'))} 接不住它，属性会被静默丢弃`,
-        )
-      }
+      dead.push(
+        ...findDroppedAttrs(
+          file.slice(file.indexOf('src/')),
+          text,
+          (tag) => {
+            const d = DEFS.get(tag)
+            return d === undefined ? undefined : d.slice(d.indexOf('src/'))
+          },
+          (def, attr) => accepts(join(SRC, '..', def), attr),
+        ),
+      )
     }
     expect(dead).toEqual([])
+  })
+
+  test('负 fixture：把伪造的违规喂给同一份判据，它必须报（matcher 停止工作就红）', () => {
+    const fabricated = [
+      'export function Demo(): ReactElement {',
+      '  return (',
+      '    <NoticeBanner tone="warning" data-testid="fabricated-dead-anchor">',
+      '      <button data-testid="native-tag-is-fine">ok</button>',
+      '    </NoticeBanner>',
+      '  )',
+      '}',
+    ].join('\n')
+    const reported = findDroppedAttrs(
+      'src/fabricated.tsx',
+      fabricated,
+      () => 'src/components/Fabricated.tsx',
+      () => false,
+    )
+    expect(reported).toHaveLength(1)
+    expect(reported[0]).toContain('<NoticeBanner data-testid=…>')
+
+    // 反向一半：同一份判据在「组件接得住」时必须闭嘴，否则它只是恒报。
+    expect(
+      findDroppedAttrs(
+        'src/fabricated.tsx',
+        fabricated,
+        () => 'src/x.tsx',
+        () => true,
+      ),
+    ).toEqual([])
   })
 })
