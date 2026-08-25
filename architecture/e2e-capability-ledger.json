@@ -7246,8 +7246,21 @@
       "title": "任务反馈（人对任务的书面反馈 → 记忆蒸馏任务），含限流与不可见任务 404 同形",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着"
+        },
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "连点要被拦住：一次手抖不该往同一个任务里灌两条一样的笔记"
+        },
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "正文校验，以及「看不见」与「不存在」必须逐字节同形"
+        }
+      ]
     },
     {
       "id": "HUMAN-48",
@@ -7314,8 +7327,17 @@
       "title": "任务反馈的深链锚点定位与「已蒸馏」状态呈现",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路"
+        },
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着"
+        }
+      ]
     },
     {
       "id": "IAM-22",
@@ -8715,9 +8737,7 @@
     "EVENT-X7",
     "HUMAN-15",
     "HUMAN-43",
-    "HUMAN-47",
     "HUMAN-X3",
-    "HUMAN-X6",
     "IAM-02",
     "IAM-07",
     "IAM-09",
