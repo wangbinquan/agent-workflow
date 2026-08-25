@@ -504,7 +504,7 @@
       "domain": "事件自动化：Webhook / 事件中心 / 定时任务",
       "title": "到点自动触发：轮询认领 → CAS 推进下次触发时间 → 启动任务并记录结果",
       "risk": "P1",
-      "tier": "pr",
+      "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
@@ -2269,7 +2269,7 @@
       "domain": "代理",
       "title": "删除代理：More → Delete → 输入名称确认 → 204 → 回到空态列表",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2283,7 +2283,7 @@
       "domain": "代理",
       "title": "删除被工作流引用的代理 → 409 agent-in-use 并列出引用它的工作流",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2297,7 +2297,7 @@
       "domain": "代理",
       "title": "删除确认名不匹配时拒绝执行",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2311,7 +2311,7 @@
       "domain": "代理",
       "title": "输出端口的新增 / 编辑 / 删除（卡片 + 事务式对话框）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2325,7 +2325,7 @@
       "domain": "代理",
       "title": "输入端口的新增 / 编辑 / 删除，含 required 开关与描述",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2339,7 +2339,7 @@
       "domain": "代理",
       "title": "把输出端口标记为「分支端口」并让运行期真的能关闭该分支",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2402,7 +2402,7 @@
       "domain": "代理",
       "title": "代理列表：搜索过滤 / 计数 / 空态 / 卡片徽章（runtime、端口数、private、owner、builtin、aggregator）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2434,7 +2434,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "非 admin 直接输入 /settings URL 被重定向",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2448,7 +2448,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "设置保存被服务端拒绝时的错误呈现",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2462,7 +2462,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "设置项被他人并发改动后的 stale 横幅与「放弃本地」",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2476,7 +2476,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "运行时列表渲染（默认标记 / 协议 / 启停 / smoke 结果 / 二进制路径）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2490,7 +2490,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "新增自定义运行时（含保存前 smoke 预检）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2504,7 +2504,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "在运行时表内「设为默认」（写 config.defaultRuntime）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2518,7 +2518,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "启用/禁用运行时；有效默认不可被禁用",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2532,7 +2532,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "删除运行时及其拒绝分支（被引用 / 是默认 / 被 config 字段引用 / 最后一行）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2550,7 +2550,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "运行时模型下拉与 Refresh，及探测失败的 502 提示",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2573,7 +2573,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首页 hero 的运行时状态行（ready / not-found / protocol-incompatible）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2600,7 +2600,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "并发与配额六项保存后立即热生效（无需重启）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2623,7 +2623,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "Git 分区：任务提交排除模式的校验与保存",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2637,7 +2637,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "GC 分区：worktree 自动回收、事件归档阈值、保留期三项",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2669,7 +2669,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "外观分区：主题切换（system / light / dark）保存并应用",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2683,7 +2683,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "外观分区：语言切换保存并落地（含 onSaved 立即 setLanguage）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2706,7 +2706,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "/docs/api 从实时注册表生成，且按调用者权限裁剪",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2720,7 +2720,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "/.well-known/mcp 公开发现文档与 publicOrigin 推导（配置 / X-Forwarded-* / Host）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2734,7 +2734,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首页能力网格：六类资源的按人可见计数与跳转（含无权限时的占位）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -2752,7 +2752,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首页任务脉冲行（7 天统计）与 /api/overview 失败时的软降级",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3310,7 +3310,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "跨节点澄清多源等齐：等待横幅点名到具体节点、答完一家不放行、两家答完后任务往前走（服务端 readiness 栅栏本身需 continue 作答才可观测，另计）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3328,7 +3328,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清页「提交并停止澄清」的二次确认弹窗（自澄清；跨节点文案另计）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3342,7 +3342,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清答案的乐观锁：iteration 过期时提交被拒（clarify-iteration-mismatch 409）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3356,7 +3356,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "反问逐题协作草稿：逐题 last-write-wins、逐题归属记录、提交后冻结",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3389,7 +3389,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清页的实时协作提示与多标签同步（clarify.draft.updated / clarify.answered WS）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3407,7 +3407,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清收件箱列表页：三态过滤、按任务分组、空态与错误重试、打开按钮",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3429,7 +3429,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清 / 评审待办角标与 Inbox 抽屉入口（pending-count 聚合）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3447,7 +3447,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "轮次被任务终态清扫封存后的只读态与原因说明（sealedCause=task-done / task-canceled）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3461,7 +3461,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "轮次被工作组自主关闭反问撤销后的只读态与原因说明（sealedCause=wg-clarify-disabled）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3479,7 +3479,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "答案/决策已落库但后续 resume 失败时的警示（不假装成功跳走）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3497,7 +3497,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清的 defer 控制通道：只封存不下发，以及 questionIds / resubmitQuestionIds 的非法组合被拒",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3519,7 +3519,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务问题看板：按来源节点过滤、按阶段（待指派/待下发/处理中/待确认/完成）分列展示",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3537,7 +3537,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "手动新增问题（用户自主提问；「复制」已于 2026-07-02 按用户拍板移除）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3551,7 +3551,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "改派问题处理节点：moved-manual 与两道防死锁守卫（目标须为 agent 节点 / 人工提问目标须跑过；added/removed-designer 另计）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3573,7 +3573,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "暂存/取消暂存 + 批量下发（释放 deferred park，任务离开 awaiting_human）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3591,7 +3591,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "集中回答面板：跨轮多题一次性作答、逐题服务端草稿、重答已封存题",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3609,7 +3609,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "跨通道协调：已被别处封存/下发的题在澄清详情页变灰只读并排除出提交",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3627,7 +3627,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "画布上的「继续反问 / 停止反问」开关（per task+asking node，含非提问节点 422）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3656,7 +3656,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审决策的乐观锁：reviewIteration 过期时决策被拒（review-iteration-mismatch 409）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3670,7 +3670,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审意见（comments）的新增 / 编辑 / 删除与锚点定位",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3684,7 +3684,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审意见随迭代/驳回进入重跑 prompt（意见 → agent 修改依据）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3698,7 +3698,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审决策确认弹窗：有未提交草稿/已有意见时的二次确认、驳回必填理由、重跑节点预告",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3724,7 +3724,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审 diff 视图：原文/词/行/块四段切换、Cmd+1/2/3 粒度快捷键、两种首次加载失败态（版本列表 / 上一版正文；「陈旧刷新失败」与上一版意见侧栏另计）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3750,7 +3750,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "历史版本只读视图（?version=）：横幅、返回当前版、决策按钮不在 DOM、非法版本告警与跨评审版本 404",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3772,7 +3772,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "多文档评审的轮次历史（?round=）、陈旧徽标、整轮驳回理由与列表多文档徽标",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3794,7 +3794,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审收件箱列表：五态过滤、逐行版本历史展开、加载失败重试、空态",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3827,7 +3827,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清页离开时的未保存草稿拦截（保存并离开 / 放弃）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3849,7 +3849,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务详情内进入人工门的入口：node-runs 表的「去评审 / 去回答」跳转按钮（画布待答角标另计）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -3867,7 +3867,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清作答的答案类型矩阵：多选并入、单选「其他」自定义文本，以及空答/越界 index/伪造标签的服务端归一化（必填 chip 已废弃，submit 接受空答）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4069,7 +4069,7 @@
       "domain": "意图构建器",
       "title": "创建请求失败（422 / 网络错）→ ErrorBanner + composer 解锁 + 不产生僵尸会话",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4083,7 +4083,7 @@
       "domain": "意图构建器",
       "title": "创建进行中锁死所有离开路径（弹窗关闭 / 侧边栏跳转 / 浏览器前进后退 / 刷新）+ 防重复提交",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4101,7 +4101,7 @@
       "domain": "意图构建器",
       "title": "最近会话卡片展示四阶段业务状态 chip（goal/generate/review/apply）与轮次/提交计数",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4115,7 +4115,7 @@
       "domain": "意图构建器",
       "title": "最近会话 keyset 分页「Load more tasks」",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4138,7 +4138,7 @@
       "domain": "意图构建器",
       "title": "已提交资源上的 provenance 徽章：可见者可点回源会话；不可见者 DOM 里完全没有",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4244,7 +4244,7 @@
       "domain": "意图构建器",
       "title": "挂载不可见/不存在的资源被拒（404，与不存在同形）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4267,7 +4267,7 @@
       "domain": "意图构建器",
       "title": "草稿含阻断性校验错误时：红色横幅列出错误、评审页签红色计数徽章、Commit 按钮禁用",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4303,7 +4303,7 @@
       "domain": "意图构建器",
       "title": "提交明细步：secret slot（密码输入）必须填满才能进复核/提交",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4317,7 +4317,7 @@
       "domain": "意图构建器",
       "title": "提交明细步：secretWaiver（凭据豁免）必须逐项显式勾选",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4331,7 +4331,7 @@
       "domain": "意图构建器",
       "title": "提交明细步：humanBinding slot 用 UserPicker 指定真人",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4345,7 +4345,7 @@
       "domain": "意图构建器",
       "title": "提交明细步：finalName slot 解决重名冲突（改名后提交）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4368,7 +4368,7 @@
       "domain": "意图构建器",
       "title": "提交冲突拒绝：草稿哈希不匹配 / 轮次在跑 / 会话已归档 / 修订被取代",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4394,7 +4394,7 @@
       "domain": "意图构建器",
       "title": "归档 / 重新打开会话（含归档后只读横幅）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4408,7 +4408,7 @@
       "domain": "意图构建器",
       "title": "管理员审计只读视图（?all=1）：完整历史可见但零变更控件",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4422,7 +4422,7 @@
       "domain": "意图构建器",
       "title": "非成员访问他人会话与不存在会话完全同形（404）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4465,7 +4465,7 @@
       "domain": "意图构建器",
       "title": "记忆页「融合」页签：待审批融合列表 / 空态 / 错误重试 / 点行进详情",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4483,7 +4483,7 @@
       "domain": "意图构建器",
       "title": "融合详情：运行中提示条 + 指向澄清收件箱的链接 + 2s 轮询自动进入待审批",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4497,7 +4497,7 @@
       "domain": "意图构建器",
       "title": "融合驳回：填写反馈 → 重跑下一轮迭代（iteration+1）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4511,7 +4511,7 @@
       "domain": "意图构建器",
       "title": "融合取消（带二次确认）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4525,7 +4525,7 @@
       "domain": "意图构建器",
       "title": "融合失败态：显示失败原因，且不再提供审批按钮",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4557,7 +4557,7 @@
       "domain": "意图构建器",
       "title": "【原审计漏项】没有 intent:write 权限时，六类资源页上的「用 AI 构建 / 修改」入口按钮整体不渲染",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4604,7 +4604,7 @@
       "domain": "记忆",
       "title": "新建记忆时选择非 global scope（agent / workflow / repo / repo_group）并从下拉选中具体资源",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4618,7 +4618,7 @@
       "domain": "记忆",
       "title": "新建记忆被服务端权限拒绝（对无管理权的 scope 创建 → 403）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4643,7 +4643,7 @@
       "domain": "记忆",
       "title": "审批候选：Reject 拒绝（candidate → rejected，不写 approvedAt，永不注入）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4657,7 +4657,7 @@
       "domain": "记忆",
       "title": "冲突候选的 Compare 对比弹窗与「批准并取代」（approve_and_supersede + supersede 链）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4671,7 +4671,7 @@
       "domain": "记忆",
       "title": "审批操作失败时的错误反馈（promote 5xx → memory-approve-error 横幅）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4707,7 +4707,7 @@
       "domain": "记忆",
       "title": "删除的双重确认门：缺 ?confirm=true → 422；token 调用方还须回显标题",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4721,7 +4721,7 @@
       "domain": "记忆",
       "title": "按 scope 浏览（五档分组 + 每档计数 + 每档空态 + 行内编辑）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4753,7 +4753,7 @@
       "domain": "记忆",
       "title": "蒸馏任务列表：状态 / 来源 / 尝试次数 / 创建时间 / 最后错误 + 空态",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4771,7 +4771,7 @@
       "domain": "记忆",
       "title": "重试失败的蒸馏任务（failed → pending，attempts 归零并重新拉起模型进程）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4785,7 +4785,7 @@
       "domain": "记忆",
       "title": "取消待执行的蒸馏任务（pending → canceled）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4799,7 +4799,7 @@
       "domain": "记忆",
       "title": "蒸馏任务详情页六段内容（头部元信息 / 失败诊断 / 源事件 / scope + 去重快照 / 产出候选 / 模型会话）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4813,7 +4813,7 @@
       "domain": "记忆",
       "title": "蒸馏失败诊断卡（attempts / exitCode / lastError / stderr 摘录）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4827,7 +4827,7 @@
       "domain": "记忆",
       "title": "从蒸馏候选行「在审批队列中打开」的深链（?focus=<memoryId>）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -4958,7 +4958,7 @@
       "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
       "title": "start --host / --port 覆盖 config.json 里的 bindHost/bindPort",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5172,7 +5172,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "批量导入远端仓库（/repos 弹窗，混合合法 + 非法 URL）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5186,7 +5186,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "批量导入失败行的「改 URL 重试」",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5200,7 +5200,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "批量导入进度经 /ws/repo-imports/{batchId} 实时推送",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5241,7 +5241,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 主表用真后端数据渲染仓库行（脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5255,7 +5255,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 服务端搜索、业务视图（全部 / 被引用 / 需关注 / 闲置）与高级过滤弹窗",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5372,7 +5372,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 的写权限门（无 create/update/delete/execute 时按钮不渲染且请求不发出）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5496,7 +5496,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "在 /mcps/new 新建 MCP（local/remote 分段切换 + 必填校验）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5510,7 +5510,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "编辑并保存 MCP 配置（写入严格绑定所选的 id）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5542,7 +5542,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "探测失败的错误码与详情渲染（connect-failed / auth-required / timeout / partial）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5560,7 +5560,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "探测结果随配置保存失效（needs re-probe 状态与过期空态）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5574,7 +5574,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "草稿未保存时的探测选择：「保存并探测」/「用已保存版本探测」",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5669,7 +5669,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "MCP / 插件的 exact-operation 陈旧冲突提示（resource-operation-stale）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -5755,7 +5755,7 @@
       "domain": "技能 / 插件 / MCP 三类资源管理",
       "title": "MCP / 插件的 enabled 开关及「引用了 disabled 插件的 agent 保存被拒」",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6473,7 +6473,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "agent-single 检查器：选代理、prompt 模板、参数选择器插入 token、缺失 {{ref}} 诊断",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6487,7 +6487,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "input 节点检查器：五种输入类型及 upload 的 targetDir / onConflict 编辑",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6505,7 +6505,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "output 节点检查器：输出端口列表与 bind 绑定",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6519,7 +6519,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "review（人工门）检查器：内容来源与端口、驳回/迭代可重跑集合、文件回滚开关",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6533,7 +6533,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "clarify / clarify-cross-agent 检查器：绑定提问代理与被问设计者、迭代上限、loop 内警告",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6551,7 +6551,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "wrapper-git / wrapper-loop 检查器：最大迭代数、退出条件、触顶继续开关、输出绑定",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6569,7 +6569,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "wrapper-fanout 检查器：分片来源（shardSource 单例不变量）与入站类型/广播角色",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6711,7 +6711,7 @@
       "domain": "工作组",
       "title": "快速新建工作组对话框（名称+描述 → 201 → 跳详情）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6734,7 +6734,7 @@
       "domain": "工作组",
       "title": "详情页配置自动保存（编辑 → 债务化 PUT → 版本自增 → header 与状态 chip 同步）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6757,7 +6757,7 @@
       "domain": "工作组",
       "title": "成员增删与 leader 指派（agent 成员 / human 成员 / 设为 leader / 移除后焦点交接）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6771,7 +6771,7 @@
       "domain": "工作组",
       "title": "成员校验与错误路径（重复别名、别名含 @/逗号/空白、human 必须是活跃用户、引用不存在的 agent）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6785,7 +6785,7 @@
       "domain": "工作组",
       "title": "配置字段落库（instructions / outputContract / 三开关 / maxRounds / completionGate / clarifyBudget / fanOut）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6799,7 +6799,7 @@
       "domain": "工作组",
       "title": "启动就绪性提示与启动按钮门（no-agent-member / leader-missing / no-non-leader-worker）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6822,7 +6822,7 @@
       "domain": "工作组",
       "title": "重命名工作组（名称+描述原子保存，重名冲突）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6836,7 +6836,7 @@
       "domain": "工作组",
       "title": "删除工作组（输入名称确认 + 版本 fence + 非终态任务引用拒删）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6850,7 +6850,7 @@
       "domain": "工作组",
       "title": "工作组 ACL 面板（可见性切换 public/private + 逐用户授权）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6868,7 +6868,7 @@
       "domain": "工作组",
       "title": "私有工作组对无关用户完全不可见（列表过滤 + 详情 404 与不存在同形）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6882,7 +6882,7 @@
       "domain": "工作组",
       "title": "非 owner 的写操作被拒（PUT / DELETE / rename → 403）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -6896,7 +6896,7 @@
       "domain": "工作组",
       "title": "新增成员引用不可见的私有 agent → 422 acl-missing-refs（存量引用豁免）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7018,7 +7018,7 @@
       "domain": "工作组",
       "title": "【补漏】用 Intent Builder 创建 / 修改工作组（列表头 workgroups-intent-entry、详情 More 里的 workgroup-intent-entry → /intent?create&mountType=workgroup&mountId=…）",
       "risk": "P2",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7088,7 +7088,7 @@
       "domain": "代理",
       "title": "删除被其它代理 dependsOn 引用的代理 → 409 agent-dependency-still-referenced",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7102,7 +7102,7 @@
       "domain": "代理",
       "title": "删除有非终态单代理任务 / 正在启动中的代理 → 409",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7116,7 +7116,7 @@
       "domain": "代理",
       "title": "删除被定时任务引用的代理 → 409 agent-scheduled-referenced",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7130,7 +7130,7 @@
       "domain": "代理",
       "title": "端口名校验：必填 / 格式非法 / 超长 / 同向重名 → 对话框内报错且保存禁用",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7144,7 +7144,7 @@
       "domain": "代理",
       "title": "端口对话框开着时底层数据被后台刷新（stale target）→ 拒绝提交",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7158,7 +7158,7 @@
       "domain": "代理",
       "title": "聚合器代理的 wrapperPortName 编辑与重名校验",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7172,7 +7172,7 @@
       "domain": "代理",
       "title": "孤儿 sidecar 清理：outputKinds / outputWrapperPortNames 残留无对应端口的键",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7314,7 +7314,7 @@
       "domain": "代理",
       "title": "代理列表加载失败 → 列表区 ErrorBanner + 重试恢复",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7346,7 +7346,7 @@
       "domain": "代理",
       "title": "代理表单五个页签的角标：端口数 / 阻断错误数 / 引用数 / 引用问题数 / 非法 JSON 数",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7360,7 +7360,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "/settings 分区导航与 ?tab= 深链接",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7401,7 +7401,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "离开有未保存改动的设置分区时的拦截",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7415,7 +7415,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "编辑已注册运行时的二进制路径 / profile / config-dir 覆盖",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7429,7 +7429,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "对已注册运行时点 Test 重新 smoke，并处理探测期间被改的 409",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7497,7 +7497,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "Network 分区到 API 文档页的跳转",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7520,7 +7520,7 @@
       "domain": "设置、运行时管理、文档与总览",
       "title": "首次运行分支：空环境显示 Onboarding，有资源后显示 Dashboard",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7777,7 +7777,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清详情的分片切换器：同一 clarify 节点多个待答分片时页内横跳（正向经工作组 worker park 覆盖；负向「只剩一份不显示」另有一条。工作流 fan-out 那条路至今到不了——内层节点收不到 clarify 邀请，见 docs/audit-backlog.md）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7799,7 +7799,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清截断告警：agent 超发题目/选项时页面显式提示被截断",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7817,7 +7817,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "已处理待确认 → 完成（confirm），含跨任务 entryId 的 404 边界",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7835,7 +7835,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审页键盘快捷键 A / R / I，且不被 Cmd+A 等组合键误触发、不在输入框内劫持",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7853,7 +7853,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审文档下载为 markdown（含文件名清洗与空正文禁用）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7871,7 +7871,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "评审门空文档自动通过（无 doc_version 时不困住用户）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7889,7 +7889,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务反馈（人对任务的书面反馈 → 记忆蒸馏任务），含限流与不可见任务 404 同形",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7911,7 +7911,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清 / 评审的归属展示（谁提交、每题最后谁编辑、决策人及角色）且绝不进 prompt",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7933,7 +7933,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "首页 Inbox 预览区块在真实待办数据下的呈现与跳转",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7955,7 +7955,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "多文档评审的 UI 逐篇接受 / 不接受与 q / w 键盘快捷键（审计原文写作 A / N，源码实为 q / w，见 lib/review/multiDocHotkeys.ts）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7969,7 +7969,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "澄清详情页的加载态 / 错误态与两条查询各自的重试（session 与 peers）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -7983,7 +7983,7 @@
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
       "title": "任务反馈的深链锚点定位与「已蒸馏」状态呈现",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8077,7 +8077,7 @@
       "domain": "意图构建器",
       "title": "空白 composer 的示例提示语（examples）一键填入并聚焦",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8091,7 +8091,7 @@
       "domain": "意图构建器",
       "title": "目标文本 16 KiB 上限与字数计数器",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8105,7 +8105,7 @@
       "domain": "意图构建器",
       "title": "/intent 列表空态",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8155,7 +8155,7 @@
       "domain": "意图构建器",
       "title": "融合发起的前置校验：未选技能 / 未选记忆 → 本地错误提示",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8214,7 +8214,7 @@
       "domain": "意图构建器",
       "title": "【原审计漏项】记忆页「融合」页签徽章计数（/api/fusions/pending-count）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8228,7 +8228,7 @@
       "domain": "记忆",
       "title": "记忆表单校验拦截（标题/正文空或超长、非 global 缺 scopeId、tag 超限）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8242,7 +8242,7 @@
       "domain": "记忆",
       "title": "编辑弹窗的详情加载失败 / 重试（列表只有 summary，弹窗自己拉 detail）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8256,7 +8256,7 @@
       "domain": "记忆",
       "title": "编辑无改动时不发 PATCH、直接关闭（幂等无 version bump）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8270,7 +8270,7 @@
       "domain": "记忆",
       "title": "编辑终态记忆被拒（superseded / rejected / fused → 409 memory-terminal-status 专属文案）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8313,7 +8313,7 @@
       "domain": "记忆",
       "title": "/memory 分区导航与 ?tab= 深链（含未知 tab 回落 all、hash 保留、标题获焦）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8327,7 +8327,7 @@
       "domain": "记忆",
       "title": "蒸馏任务整行点击跳详情页（Retry / Cancel 按钮不触发跳转）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8341,7 +8341,7 @@
       "domain": "记忆",
       "title": "会话查询失败不拖垮详情页（session 报错时其余五段仍可读 + 段内重试）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8373,7 +8373,7 @@
       "domain": "记忆",
       "title": "daemon 重启后中断的蒸馏任务被回收（running → pending 重排，attempts 不清零）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8387,7 +8387,7 @@
       "domain": "记忆",
       "title": "记忆列表的搜索 / 标签 / scope 过滤与非法过滤值 422",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8410,7 +8410,7 @@
       "domain": "记忆",
       "title": "【补漏】六个记忆面板的加载失败态与重试（列表 500 → ErrorBanner + Retry，缓存数据不被清空）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8428,7 +8428,7 @@
       "domain": "记忆",
       "title": "【补漏】All 库的两个空态（approved 空 / archived 空，文案不同）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8658,7 +8658,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 游标分页「加载更多」",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -8672,7 +8672,7 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "/repos 首次空态与「无匹配」空态",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9074,7 +9074,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "相机：可读聚焦 / 全景两模式、聚焦选中、缩放控件、隐藏面板揭示后重适配",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9133,7 +9133,7 @@
       "domain": "工作流定义与画布编辑器",
       "title": "逐节点显示名（NodeTitleField）：自定义标题、清空回落到 kind 派生名",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9165,7 +9165,7 @@
       "domain": "工作组",
       "title": "工作组列表画廊渲染（模式 chip / 成员数 / leader / 人类成员 / 可见性徽章 / 归属人）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9179,7 +9179,7 @@
       "domain": "工作组",
       "title": "列表搜索过滤与清空搜索",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9193,7 +9193,7 @@
       "domain": "工作组",
       "title": "列表空态与空态主行动按钮",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9216,7 +9216,7 @@
       "domain": "工作组",
       "title": "三种模式切换在编辑器里的 UI 后果（free_collab 三开关强制 ON+提示、dynamic_workflow 隐藏开关段与「加人类成员」）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9230,7 +9230,7 @@
       "domain": "工作组",
       "title": "复制工作组为私有副本（exact-revision copy，自动取 -copy 名）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {
@@ -9244,7 +9244,7 @@
       "domain": "工作组",
       "title": "未保存离开守卫（含成员面板的临时草稿）",
       "risk": "P3",
-      "tier": "nightly",
+      "tier": "pr",
       "status": "covered",
       "evidence": [
         {

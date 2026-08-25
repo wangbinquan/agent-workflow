@@ -96,6 +96,52 @@ export function unreachableEvidence(repoRoot: string, ledger: CapabilityLedger):
   return bad
 }
 
+/**
+ * RFC-319 B73 —— `tier` 必须**描述事实**，不是描述建议。
+ *
+ * 这个字段的语义是「PR 档进 PR 腿，nightly 档只在 e2e-full-nightly 跑」，而 CI 分档
+ * 的唯一开关是 Playwright 的 `--grep-invert '@nightly'`（见 rfc319-ci-topology 守卫）
+ * ——也就是说，**一条用例跑在哪条腿，完全由它的标题里有没有 `@nightly` 决定**，与账本
+ * 里写什么无关。
+ *
+ * 2026-08-25 实测：243 条证据写着 `tier: nightly`，而它们的用例根本没打标签、每次 PR
+ * 都在跑。这个字段自落档起就在无声地说谎——它记的是审计当初的**建议档位**，从来没有
+ * 人把它和实际接线对齐过，也没有任何守卫会因此变红。于是「PR 门到底在跑什么」这件事，
+ * 账本给不出答案，读的人还以为给得出。
+ *
+ * 判据因此只对 `covered` 行成立（只有它们有可执行证据可对账）：
+ * 全部证据都带 `@nightly` ⇔ `tier: 'nightly'`。`gap` / `covered-unverified` 行没有
+ * 用例可查，它们的 tier 保持审计的建议值不动。
+ *
+ * 注意这里**不判断档位分得对不对**——那是 CI 维护者按实测墙钟做的取舍（他们 2026-08-25
+ * 选的是扩分片而不是把用例推去夜跑）。这条守卫只保证账本说的和实际接的是同一件事。
+ */
+export function tierWiringMismatches(ledger: CapabilityLedger): string[] {
+  const NIGHTLY_TAG = '@nightly'
+  const bad: string[] = []
+  for (const row of ledger.rows) {
+    if (row.status !== 'covered') continue
+    const evidence = row.evidence ?? []
+    if (evidence.length === 0) continue
+    const tagged = evidence.filter((ev) => ev.test.includes(NIGHTLY_TAG)).length
+    if (tagged !== 0 && tagged !== evidence.length) {
+      bad.push(
+        `${row.id}: ${evidence.length} 条证据里只有 ${tagged} 条带 ${NIGHTLY_TAG} —— ` +
+          '同一条能力被劈在两条腿上，这一行的 tier 无论填什么都是错的',
+      )
+      continue
+    }
+    const wired = tagged === evidence.length ? 'nightly' : 'pr'
+    if (row.tier !== wired) {
+      bad.push(
+        `${row.id}: 账本写 tier=${row.tier}，而它的用例实际跑在 ${wired} 腿` +
+          `（标题里${wired === 'nightly' ? '带' : '没有'} ${NIGHTLY_TAG}）`,
+      )
+    }
+  }
+  return bad
+}
+
 /** 状态与证据字段的互斥约束被破坏的条目。 */
 export function statusShapeViolations(ledger: CapabilityLedger): string[] {
   const bad: string[] = []

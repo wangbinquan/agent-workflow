@@ -24,6 +24,7 @@ import {
   countByStatus,
   readCapabilityLedger,
   statusShapeViolations,
+  tierWiringMismatches,
   unreachableEvidence,
   type CapabilityLedger,
 } from './capabilityLedger'
@@ -83,6 +84,14 @@ describe('RFC-319 R3 —— 证据必须逐字可达', () => {
 
   test('状态与证据字段互斥约束成立', () => {
     expect(statusShapeViolations(LEDGER)).toEqual([])
+  })
+
+  test('covered 行的 tier 描述的是实际跑在哪条腿，不是审计当初的建议', () => {
+    // 这一条的意义：CI 分档的唯一开关是 `--grep-invert '@nightly'`，所以「跑在哪条腿」
+    // 完全由用例标题决定。账本里的 tier 若与之脱节，读的人会以为 PR 门覆盖了某条能力，
+    // 而它其实一天只跑一次（反过来也一样：以为在夜跑，其实每次提交都在付它的时间）。
+    // 2026-08-25 立这条时，账本里有 243 条证据正处在前一种状态。
+    expect(tierWiringMismatches(LEDGER)).toEqual([])
   })
 })
 
@@ -209,6 +218,85 @@ describe('RFC-319 R3 —— 负 fixture：判据自己咬得动吗', () => {
       ]),
     )
     expect(bad.map((line) => line.split(':')[0])).toEqual(['FAKE-3', 'FAKE-4', 'FAKE-5'])
+  })
+
+  test('tier 与实际接线不符 ⇒ 报；一条能力被劈在两条腿上 ⇒ 也报', () => {
+    const bad = tierWiringMismatches(
+      fake([
+        // 写着 nightly，用例却没打标签 —— 它每次 PR 都在跑。
+        {
+          id: 'FAKE-T1',
+          domain: 'f',
+          title: 'f',
+          risk: 'P2',
+          tier: 'nightly',
+          status: 'covered',
+          evidence: [{ file: 'e2e/agent-authoring.spec.ts', test: 'plain title' }],
+        },
+        // 写着 pr，用例却打了标签 —— PR 门其实没在守它。
+        {
+          id: 'FAKE-T2',
+          domain: 'f',
+          title: 'f',
+          risk: 'P1',
+          tier: 'pr',
+          status: 'covered',
+          evidence: [{ file: 'e2e/agent-authoring.spec.ts', test: 'slow one @nightly' }],
+        },
+        // 两条证据一条带标签一条不带 —— 这一行的 tier 填什么都是错的。
+        {
+          id: 'FAKE-T3',
+          domain: 'f',
+          title: 'f',
+          risk: 'P2',
+          tier: 'pr',
+          status: 'covered',
+          evidence: [
+            { file: 'e2e/agent-authoring.spec.ts', test: 'fast one' },
+            { file: 'e2e/agent-authoring.spec.ts', test: 'slow one @nightly' },
+          ],
+        },
+      ]),
+    )
+    expect(bad.map((line) => line.split(':')[0])).toEqual(['FAKE-T1', 'FAKE-T2', 'FAKE-T3'])
+    expect(bad[2]!).toContain('劈在两条腿')
+  })
+
+  test('接线一致的行不误报（两个方向各一条）', () => {
+    expect(
+      tierWiringMismatches(
+        fake([
+          {
+            id: 'FAKE-T4',
+            domain: 'f',
+            title: 'f',
+            risk: 'P1',
+            tier: 'pr',
+            status: 'covered',
+            evidence: [{ file: 'e2e/agent-authoring.spec.ts', test: 'plain title' }],
+          },
+          {
+            id: 'FAKE-T5',
+            domain: 'f',
+            title: 'f',
+            risk: 'P2',
+            tier: 'nightly',
+            status: 'covered',
+            evidence: [{ file: 'e2e/agent-authoring.spec.ts', test: 'slow one @nightly' }],
+          },
+          // gap 行没有用例可查，tier 保持审计的建议值，不该被这条守卫碰。
+          {
+            id: 'FAKE-T6',
+            domain: 'f',
+            title: 'f',
+            risk: 'P3',
+            tier: 'nightly',
+            status: 'gap',
+            gapSince: 'RFC-999',
+          },
+        ]),
+      ),
+    ).toEqual([])
   })
 
   test('形状正确的行不误报', () => {
