@@ -2488,6 +2488,23 @@ cd packages/backend && AW_E2E_ROUTE_JOURNAL="$PWD/../../route-hits" \
 **一个时序上的坑**：journal 采自某个具体 SHA，所以它只反映**那时**的覆盖面。刚合进去的那批 spec
 要等下一次夜跑才会体现——下次再报一批可降的差额是账本在正常还债，不是新的红。
 
+**别等它红——可以预对账。**「正常还债」在机制上仍然是**一次夜跑红**（R1 的判据是逐条相等，
+多覆盖了也红）。要把下一次的红一起消掉：把新合进去的那几份 spec 在本地按同一个开关跑一遍，
+生成的 journal 与夜跑那份**并到一个目录里**再对账——并集就是下一次夜跑会测到的命中面。
+
+```
+mkdir -p union-hits && cp route-hits/*.jsonl union-hits/
+AW_E2E_ROUTE_JOURNAL=$PWD/new-hits bunx playwright test <本批新增的 spec…> --project=chromium
+i=0; for f in new-hits/*.jsonl; do i=$((i+1)); cp "$f" "union-hits/local-new-$i-$(basename $f)"; done
+cd packages/backend && AW_E2E_ROUTE_JOURNAL="$PWD/../../union-hits" \
+  bun test tests/architecture/rfc319-endpoint-coverage.test.ts tests/architecture/rfc319-route-coverage.test.ts
+```
+
+实测（2026-08-25，B84）：只按夜跑 journal 对账销掉 6 条（178 → 172），并上 6 份新 spec 的命中后
+又销掉 8 条（172 → 164）——后面这 8 条就是不做预对账时下一次夜跑必然报的那一批红。
+**残余风险**：本地是 macOS/chromium 单机跑、夜跑是 ubuntu 四分片，理论上可能有命中差异；
+真差了下次夜跑会以 `+ "…"` 的形式报出来（比不做预对账多一步，但少一次必然的红）。
+
 ## 要证明「置灰的东西真的点不动」，必须 `click({ force: true })`（2026-08-25 实撞）
 
 Playwright 的**可操作性检查**把 `aria-disabled="true"` 的元素判为 not enabled，普通 `click()`
