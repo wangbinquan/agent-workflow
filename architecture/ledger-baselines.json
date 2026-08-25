@@ -268,13 +268,6 @@
       "symbol": "unverifiedIds",
       "baseline": 0,
       "why": "RFC-319 R3：审计判定有 e2e 防护、但证据仍是散文（path:line + 说明）而没归一成可校验 {file, test} 的存量条目（开工时 141）。只许降——它衡量的是「账本还有多少话是不可验证的」。这个状态是存量专用，新增行不许用它（守卫另有一条上界断言）。（2026-08-25：RFC-319 B65-DE 将真实数字员工复验触达的 EVENT-07 / HUMAN-28 / HUMAN-29 归一为可执行测试标题，141 → 138。）（2026-08-25：RFC-319 B81 —— 剩余 138 条全部逐条回源核查完毕，138 → **0**。这个状态自此清空：新增行本就不许用它，存量也不再有，账本里每一条「已覆盖」从此都指向逐字可达的 {file,test}。）"
-    },
-    {
-      "id": "rfc326-exempt-review-routes",
-      "file": "packages/backend/tests/architecture/rfc326-review-tool-route-guard.test.ts",
-      "symbol": "EXEMPT_REVIEW_ROUTES",
-      "baseline": 1,
-      "why": "RFC-326：/api/reviews* 路由里**有意不给 MCP 工具**的名单（今天只有 pending-count 徽章计数）。每加一条都是在把评审面从 MCP 上抠掉一块，只许降；守卫同时钉死名单里的路由确实没有工具、且路由确实存在（过期条目也红）"
     }
   ]
 }
