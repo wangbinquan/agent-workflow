@@ -2550,3 +2550,26 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    全部账号，输入 `a_c` 匹配 `abc`。有参数化、不是注入；是「搜索结果与你输入的不是一回事」。
 10. **【P3】`account.patsDesc` 是一条与现实相反的遗留文案**：`en-US.ts:1992` 写「Personal access token
     creation is retired.」，而 RFC-247 D1 早已重开签发。该 key 已无任何渲染方，属死文案，建议直接删。
+
+## RFC-319 B82 起草期撞到的产品缺陷（2026-08-25，均未写成断言）
+
+1. **【P2】`disabled` 置灰在 MCP / Plugin / dependsOn 三个选择器里结构性不可达，只有 Skills 成立。**
+   `ResourcePicker.tsx:85-92` 只在 `selected.has(option.value)` 时才并入 `selectedOptions`，而
+   `MultiSelect.tsx:350` 的 `rowDisabled = !selected && disabled`——**选着的时候不灰（为了能摘掉，
+   这是对的），一摘掉选项就整个从候选里消失**，永远不存在「灰着的选项」这一态。只有
+   `SkillsPicker.tsx:80-84` 无条件并入，置灰才可达。
+   **更糟的一半**：插件被停用时 `/api/plugins` 仍返回该行（因为它被选中而被 `pass(item) ||
+   selected.has(item.id)` 放行），于是 resource-status 那份 actor-safe 的「(disabled or unavailable)」
+   标签**一次都不会显示**——用户在 Plugins 选择器里看到的是它的原名，没有任何迹象表明这条引用已经死了。
+2. **【P3】`/api/execution-contracts` 里 v1 契约的 `displayName` 装的是「输入材料」的描述，不是这项工作的名字。**
+   实测：`development.analyze-implement@1` → `"Requirement context, repository snapshot, and existing
+   diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionContractPicker.tsx:63` 直接把它
+   当选项标题渲染，于是 Ports 页那个下拉里混着一半读不懂的长句。属契约注册表的数据编写问题，不是 UI。
+3. **【P3】转让归属后，前任的编辑面在 WS 断线时会一直停在「可编辑」。** `useResourceAccess` 用独立 key
+   `['resource-access', …]`，而 `AclPanel` 的保存只失效 `['agents']` 与 `['acl', …]`；恢复完全依赖
+   `useWebSocket.ts:200-202` 的 `resource-acl.changed` 帧。socket 不通时前任会看到一个点下去必吃 403 的保存键。
+4. **【账本文案与实现不符】AGENT-X3 写的是「切 Preview 页签」，而 `MarkdownEditor.tsx:34-57` 是固定的
+   编辑/预览双栏并排，没有页签可切。** 覆盖已改为「预览栏随正文实时渲染」，建议改账本措辞。
+5. **【已知但值得记】`agents.new.tsx:185-192` 的创建键 disabled 条件只含 `draft.name === ''`**，
+   非法名格式没有前置闸（`AgentForm.tsx:528` 的 HTML5 `pattern` 没有 submit 事件可拦）。
+   用例因此**刻意没有**断言「非法名时按钮禁用」——那会把不存在的行为写成期望。

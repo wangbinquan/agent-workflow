@@ -2487,3 +2487,24 @@ cd packages/backend && AW_E2E_ROUTE_JOURNAL="$PWD/../../route-hits" \
 
 **一个时序上的坑**：journal 采自某个具体 SHA，所以它只反映**那时**的覆盖面。刚合进去的那批 spec
 要等下一次夜跑才会体现——下次再报一批可降的差额是账本在正常还债，不是新的红。
+
+## 要证明「置灰的东西真的点不动」，必须 `click({ force: true })`（2026-08-25 实撞）
+
+Playwright 的**可操作性检查**把 `aria-disabled="true"` 的元素判为 not enabled，普通 `click()`
+会一直等它变可用、然后超时。于是一条本想断言「这一行灰着、点它没反应」的用例，实际得到的是
+**自己造出来的超时**——它可能"红"，但红的原因是 Playwright 拒绝派发点击，而不是产品真的拦住了；
+反过来如果用例把超时当成预期，那就更糟：产品哪天把 `if (!rowDisabled)` 那层真实守卫删掉，
+`aria-disabled` 还画在那儿，用例照样"通过"。
+
+正确写法是两条断言分开：
+
+```ts
+// ① 灰着这件事本身（可及性契约）
+await expect(row).toHaveAttribute('aria-disabled', 'true')
+// ② 灰着的行**点下去也不生效**（真实守卫）—— 必须 force 才能真的把事件打进去
+await row.click({ force: true })
+await expect(row).toHaveAttribute('aria-selected', 'false')
+```
+
+不加 `force` 时第②条锁不到任何东西；只有 ① 时，「aria-disabled 只是画上去的」这种退化不会红。
+两条一起，才能分辨「灰得对」与「灰得只是好看」。

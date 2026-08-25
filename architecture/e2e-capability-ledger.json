@@ -2997,8 +2997,13 @@
       "title": "代理所有者转让（真正完成一次转让）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-33: 代理所有者真转让一次 —— 新主拿到治理权，前任降级为只读 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-37",
@@ -3051,8 +3056,13 @@
       "title": "切换左栏代理卡片时详情面板重挂载（草稿不串到另一个代理）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-42: 切换左栏代理卡片时详情重挂载 —— 草稿绝不许串到另一个代理 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-X1",
@@ -8198,8 +8208,13 @@
       "title": "创建校验失败：空名 / 非法名格式挡住创建",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-02: 空名点不动创建键，非法名被服务端逐条说明地拒收且一条记录都不落库 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-03",
@@ -8207,8 +8222,13 @@
       "title": "创建重名代理 → 409 冲突并在页面上可读",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-03: 同名代理再建一次吃 409，冲突在页面上读得到且库里仍只有一条 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-05",
@@ -8230,8 +8250,13 @@
       "title": "Runtime 注册表加载失败 → 选择器冻结 + 错误条 + 重试",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-06: Runtime 注册表读不到时选择器冻结、错误条自报、重试后恢复可选 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-10",
@@ -8337,8 +8362,13 @@
       "title": "选择平台执行契约 → 自动物化 agent-result 端口；取消最后一个契约 → 端口与 sidecar 一并清除",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-21: 选中平台执行契约自动物化受管端口，取消最后一个契约把端口与 kind sidecar 一并清除 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-22",
@@ -8346,8 +8376,13 @@
       "title": "Advanced 页 permission / frontmatterExtra JSON 非法 → 校验摘要 + 一键跳转聚焦 + 保存禁用",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-22: Advanced 页非法 JSON 挡住创建，摘要的「去修复」把焦点真的送到那个字段 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-24",
@@ -8418,8 +8453,13 @@
       "title": "离开有未保存改动的代理编辑页时的未保存守卫（留下 / 放弃）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-41: 带着未保存草稿离开新建页 —— 留下保住草稿，放弃则一条记录都不落库 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-43",
@@ -8483,11 +8523,16 @@
     {
       "id": "AGENT-X3",
       "domain": "代理",
-      "title": "Prompt 页 Markdown 编辑器：写正文、切 Preview 预览、内容随保存往返",
+      "title": "Prompt 页 Markdown 编辑器：写正文、预览栏实时渲染（双栏并排，产品无页签可切）、内容随保存往返",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-X3: Prompt 页写 Markdown 正文实时出预览，并随保存逐字节往返 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-X4",
@@ -8495,8 +8540,13 @@
       "title": "引用的资源不可用时，在 Skills / MCP / Plugins 选择器里以置灰选项呈现（不可被再次选中）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-authoring.spec.ts",
+          "test": "RFC-319 AGENT-X4: 引用的技能不可用时在 Skills 选择器里置灰，摘掉之后不能被重新选中 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-X5",
@@ -10633,9 +10683,7 @@
     "REPO-43",
     "UX-35b",
     "AGENT-28",
-    "AGENT-33",
     "AGENT-39",
-    "AGENT-42",
     "AGENT-X1",
     "CFG-18",
     "CFG-21",
@@ -10854,11 +10902,6 @@
     "WG-45",
     "WG-X3",
     "WG-X5",
-    "AGENT-02",
-    "AGENT-03",
-    "AGENT-06",
-    "AGENT-21",
-    "AGENT-22",
     "AGENT-24",
     "AGENT-25",
     "AGENT-26",
@@ -10866,12 +10909,9 @@
     "AGENT-30",
     "AGENT-36",
     "AGENT-38",
-    "AGENT-41",
     "AGENT-44",
     "AGENT-45",
     "AGENT-46",
-    "AGENT-X3",
-    "AGENT-X4",
     "CFG-03",
     "CFG-06",
     "CFG-08",

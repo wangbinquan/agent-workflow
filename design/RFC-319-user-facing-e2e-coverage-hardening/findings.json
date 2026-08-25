@@ -5784,7 +5784,7 @@
     {
       "id": "AGENT-X3",
       "domain": "代理",
-      "title": "Prompt 页 Markdown 编辑器：写正文、切 Preview 预览、内容随保存往返",
+      "title": "Prompt 页 Markdown 编辑器：写正文、预览栏实时渲染（双栏并排，产品无页签可切）、内容随保存往返",
       "coverage": "browser-e2e",
       "gapKind": "partial-happy-path-only",
       "risk": "P3",
