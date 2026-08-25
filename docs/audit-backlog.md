@@ -3420,3 +3420,38 @@ MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-3
 
 **另记一条账本自身的重复**：**TASK-44 与 CFG-29 是同一条能力的两行**（措辞不同、内容重合，证据同为
 `rfc319-ops-settings-panels.spec.ts` 的 OPS-037）。本次两行都销了，是否合并成一行待定。
+
+## RFC-319 B106 起草期撞到的缺陷（2026-08-26，数字员工 + 资源生命周期）
+
+1. **【测试基建缺陷，非产品，已在后续提交修掉】`packages/system-mocks/src/mcp/server.ts:44-53` 的 SSE
+   分支 close 无限递归。**
+   `transport.onclose` 里调 `server.close()`，而 `Protocol.close()`
+   （`@modelcontextprotocol/sdk/.../shared/protocol.js:492-494`）会再次 `transport.close()`，
+   `SSEServerTransport.close()`（`.../server/sse.js:145-149`）又无条件触发 `onclose?.()`——两者互相重入
+   直到爆栈。`Protocol.connect` 的 `_onclose` 是**链式包裹**而非覆盖，所以自定义 handler 一直在。
+   实测：单跑 RES-04 = 0 条错误，单跑 RES-20 = **154 条** `RangeError: Maximum call stack size exceeded`
+   （打在 global-setup 的**共享** mock 进程里）。进程能活下来（混跑 18 条全绿），但这是整条夜跑里一份
+   持续的噪声源，会掩盖真错误。**B106 是全仓第一次有 e2e 走到这条分支，所以它一直没被发现。**
+2. **【实现细节，非缺陷，已按源码实际写】`services/mcpProbe.ts:568-571` 的 stdio 探测
+   `protocolVersion` 恒为 `null`。** 取值方式是 `'protocolVersion' in activeTransport`，而 SDK 的
+   `StdioClientTransport` 没有这个字段。「协议版本」这一栏对本地 MCP 永远为空。用例只在 Streamable HTTP
+   那条上断言它非空。
+3. **【账本核对：一条假 gap + 两条文案偏差】**
+   - **RES-24 是假 gap**：`e2e/mcp-runtime-playground.spec.ts:89` 已把该行的五小节全部覆盖（开对话框、
+     两种 runtime 都在选项里、发首条消息、失败诊断、ESC 关闭后 `GET /runtime-test-session` 仍为 null）。
+     **建议改 covered 并指向该文件**（本批未动 status）。
+   - **RES-19 的「两种传输」有一半已被覆盖**：stdio 那半在
+     `e2e/rfc319-mcp-management.spec.ts:534-586`（RES-17/RES-22）。真缺口只有 Streamable HTTP——全仓 e2e
+     从未对 `AW_SYSTEM_MOCK_MCP_URL` 发过探测（既有 remote 夹具要么指 `127.0.0.1:1`，要么指
+     `${GITHUB_API_BASE}/mcp`，而后者按 `packages/system-mocks/src/suite.ts:467` 的 `serviceFor` 路由到
+     code-host mock 而非 MCP mock）。用例仍把两条传输放进同一条，stdio 那半作为**对照组**——没有它，
+     一个「所有探测都回 ok」的实现照样能过。
+   - **RES-46 的一半是假 gap**：`rfc319-intent-access-boundaries.spec.ts:806-846` 已锁「六个入口按
+     `intent:write` 收放」，`rfc319-intent-fusion-and-gates.spec.ts:695` 已锁「无权时没有融合按钮」。
+     真没人碰过的是**点下去之后**：全仓没有任何 e2e 点过 `skill/mcp/plugin-intent-entry`，也没有任何
+     一条从**技能详情**发起过融合（发起融合的用例走的都是 `/memory` 的 `memory-fuse-button`）。
+4. **【测试判据自身的弱点，起草侧自查后已修强】** RES-46（融合）原本用
+   `dialog.getByLabel('Target skill')` 断言字段不出现——而 `getByLabel` **只认可标注的表单控件**，
+   该字段在 `from-skill` 下渲染的是 `fusion.noManagedSkills` 的 `<p>`，于是「字段渲染了但里面是空态」
+   这一整类回归会被漏掉（变异实测 NO-BITE）。已改成 `getByText('Target skill', {exact:false})`
+   + `toHaveCount(0)`，改后同一变异当场红。

@@ -3591,8 +3591,13 @@
       "title": "泳道优先级拖拽重排（临时目标序、动画、落库）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 DE-10: 泳道优先级键盘与拖拽都能重排，拖动中先给临时目标序，落手后落库且刷新仍在 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-11",
@@ -3656,8 +3661,13 @@
       "title": "权限不足时数字员工授权控件消失（update / archive / create）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 DE-21: 没有数字员工写权限点的账号——哪怕东西是他的，新建 / 编辑 / 发布 / 归档四个入口一个都不渲染，接口同口径 403 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-23",
@@ -7041,8 +7051,13 @@
       "title": "MCP 连通性探测：Streamable HTTP 与 stdio 两种传输真协议握手",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 RES-19: Streamable HTTP 与 stdio 各自真握手——回执里的 serverInfo 指认用的正是那条传输 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-21",
@@ -7290,8 +7305,17 @@
       "title": "从技能/MCP/插件详情发起 Intent 修改与从技能发起融合任务",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 RES-46: 技能 / MCP / 插件详情的「用 Intent 修改」各自带着自己的挂载目标进会话 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 RES-46: 从技能详情发起融合——目标锁死在这一条技能，没选记忆时一个请求都不发 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-X1",
@@ -9819,8 +9843,13 @@
       "title": "分类工作台三页签切换与 URL search 的保留 / 清空",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 DE-02: 分类工作台切页签——去工具箱保留职责与工具槽，回员工 / 岗位一律清空 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-15",
@@ -9930,8 +9959,13 @@
       "title": "零配置上手引导（setup-journey 下一步动作投影）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 DE-43: 上手引导的「下一步」随四个阶段逐格前移，每一步给的都是这一步该去的地方 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-45",
@@ -11471,8 +11505,13 @@
       "title": "ZIP 选择阶段的本地校验：非 zip 类型 / 超出体积上限",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 RES-04: 选文件阶段的两条本地校验各说各话，被拒的文件既不留在选择区也不会发出一次 parse @nightly"
+        }
+      ]
     },
     {
       "id": "RES-06",
@@ -11480,8 +11519,13 @@
       "title": "ZIP 提交阶段失败后停在审阅页可改可重试",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 RES-06: 提交失败后停在审阅页——文件与逐行决策一字不丢，改一处再提交真的落库 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-20",
@@ -11489,8 +11533,13 @@
       "title": "remote MCP 的 SSE 回退传输（Streamable HTTP 失败后降级）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-and-resource-lifecycle.spec.ts",
+          "test": "RFC-319 RES-20: Streamable HTTP 打不通时降级到 SSE——探通了，而且回执指认的是 SSE 那台 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-34",
@@ -12262,8 +12311,6 @@
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
-    "DE-10",
-    "DE-21",
     "DE-44",
     "DE-X2",
     "EVENT-20",
@@ -12278,14 +12325,12 @@
     "MEM-X4",
     "OPS-X3",
     "OPS-X5",
-    "RES-19",
     "RES-24",
     "RES-25",
     "RES-26",
     "RES-30",
     "RES-32",
     "RES-33",
-    "RES-46",
     "TASK-34",
     "TASK-35",
     "TASK-39",
@@ -12312,10 +12357,8 @@
     "CFG-08",
     "CFG-32",
     "CFG-X5",
-    "DE-02",
     "DE-39",
     "DE-41",
-    "DE-43",
     "EVENT-28",
     "EVENT-X4",
     "EVENT-X5",
@@ -12328,9 +12371,6 @@
     "OPS-X7",
     "OPS-X9",
     "REPO-42",
-    "RES-04",
-    "RES-06",
-    "RES-20",
     "UX-06",
     "UX-28",
     "UX-36",
