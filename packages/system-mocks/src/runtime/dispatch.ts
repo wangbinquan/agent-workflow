@@ -20,6 +20,7 @@ import { run as runCrossClarify } from './mode-cross-clarify'
 import { run as runDevelopment } from './mode-development'
 import { run as runFusion } from './mode-fusion'
 import { run as runIntent } from './mode-intent'
+import { run as runReviewDoc } from './mode-review-doc'
 import { run as runRuntimeScenario } from './mode-runtime-scenario'
 import { run as runSlow } from './mode-slow'
 import { run as runWorkflowMatrix } from './mode-workflow-matrix'
@@ -39,6 +40,7 @@ const MODES: Record<string, ModeRunner> = {
   development: runDevelopment,
   fusion: runFusion,
   intent: runIntent,
+  'review-doc': runReviewDoc,
   'runtime-scenario': runRuntimeScenario,
   slow: runSlow,
   'workflow-matrix': runWorkflowMatrix,

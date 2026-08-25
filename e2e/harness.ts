@@ -188,6 +188,10 @@ export type StubMode =
   // 技能文件与 `.agent-workflow/fusion/result.json` 清单，审批面才有东西可看。
   | 'fusion'
   | 'intent'
+  // RFC-326 — every declared port gets the same markup-rich design document
+  // (title / inline code / repeated word / fenced code / HTML comment), so the
+  // review-gate MCP + highlight e2e has a real document to anchor into.
+  | 'review-doc'
   | 'runtime-scenario'
   | 'slow'
   | 'workflow-matrix'

@@ -129,6 +129,30 @@ describe('RFC-247 AC-22 — the docs are DERIVED, not written', () => {
     // "this needs tasks:execute" without anyone retyping it.
     expect(docs.tools.find((t) => t.name === 'launch_task')?.permissions).toEqual(['tasks:execute'])
   })
+
+  // RFC-326 AC-26: the review gate tools appear on the docs page with their
+  // tier, straight from the registry — nobody retypes the tool table.
+  test('the review gate tools are documented with their permission tier', () => {
+    const docs = buildApiDocs('admin')
+    const byName = new Map(docs.tools.map((t) => [t.name, t]))
+    for (const name of [
+      'list_reviews',
+      'get_review',
+      'get_review_document',
+      'list_review_history',
+    ]) {
+      expect(byName.get(name)?.permissions, name).toEqual([])
+    }
+    for (const name of [
+      'add_review_comment',
+      'update_review_comment',
+      'delete_review_comment',
+      'set_review_document_selection',
+      'submit_review',
+    ]) {
+      expect(byName.get(name)?.permissions, name).toEqual(['tasks:execute'])
+    }
+  })
 })
 
 describe('RFC-247 D17 — the docs are trimmed to the reader’s role', () => {

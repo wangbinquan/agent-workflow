@@ -45,7 +45,18 @@ const FINDINGS = JSON.parse(
     ),
     'utf8',
   ),
-) as { rows: ReadonlyArray<{ id: string }> }
+) as {
+  total: number
+  rows: ReadonlyArray<{
+    id: string
+    domain: string
+    title: string
+    coverage: string
+    gapKind: string
+    risk: string
+    verdict: string
+  }>
+}
 
 describe('RFC-319 R3 —— 语料非空（账本被清空 / 挪走时必须红）', () => {
   test('账本里有足够多的行', () => {
@@ -59,6 +70,41 @@ describe('RFC-319 R3 —— 语料非空（账本被清空 / 挪走时必须红�
   test('id 唯一', () => {
     const ids = LEDGER.rows.map((row) => row.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  // RFC-326 T19：findings.json 的 `total` 与 rows 长度、每行的必填键与枚举值——此前只核对
+  // id 集合，一行缺 verdict / 写错 coverage 的新能力行会静默混进台账。
+  test('findings.json：total 与 rows 长度相等，每行键齐全、枚举值在集合内', () => {
+    expect(FINDINGS.total).toBe(FINDINGS.rows.length)
+    // The value sets are the ones findings.md defines (a new value is a
+    // deliberate taxonomy change, made here on purpose, not a typo that slips in).
+    const COVERAGE = new Set(['backend-system-mock-e2e', 'browser-e2e', 'none', 'other-test-only'])
+    const GAP_KIND = new Set([
+      'covered',
+      'no-e2e-but-unit',
+      'no-test-at-all',
+      'partial-happy-path-only',
+    ])
+    const VERDICT = new Set([
+      'confirmed-covered',
+      'confirmed-gap',
+      'downgraded',
+      'over-claimed-coverage',
+      'refuted-already-covered',
+      'upgraded',
+    ])
+    const RISK = new Set(['P1', 'P2', 'P3'])
+    const bad: string[] = []
+    for (const row of FINDINGS.rows) {
+      for (const key of ['id', 'domain', 'title', 'coverage', 'gapKind', 'risk', 'verdict'] as const) {
+        if (typeof row[key] !== 'string' || row[key].length === 0) bad.push(`${row.id}: ${key} 缺失`)
+      }
+      if (!COVERAGE.has(row.coverage)) bad.push(`${row.id}: coverage=${row.coverage}`)
+      if (!GAP_KIND.has(row.gapKind)) bad.push(`${row.id}: gapKind=${row.gapKind}`)
+      if (!VERDICT.has(row.verdict)) bad.push(`${row.id}: verdict=${row.verdict}`)
+      if (!RISK.has(row.risk)) bad.push(`${row.id}: risk=${row.risk}`)
+    }
+    expect(bad).toEqual([])
   })
 
   test('与审计台账**两向**相等（既不许悄悄删条目，也不许凭空长出来）', () => {

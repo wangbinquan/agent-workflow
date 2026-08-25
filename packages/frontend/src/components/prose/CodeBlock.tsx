@@ -18,11 +18,110 @@
 //       supported lang     → ShikiPre (lazy shiki)
 //       unsupported lang   → plain <pre><code> fallback
 import type { ReactNode } from 'react'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { MermaidBlock } from '../review/MermaidBlock'
 import { PlantUmlBlock } from '../review/PlantUmlBlock'
 import { getHighlighter } from './highlighter'
+import type { CodeAnchorRange } from './rehypeWrapAnchors'
 import { useResolvedTheme } from '@/hooks/useTheme'
+
+// -----------------------------------------------------------------------------
+// RFC-326 D5 / P15 — review comment anchors inside fenced code.
+//
+// `rehypeWrapAnchors` cannot wrap text inside a fence (shiki replaces the
+// whole block's innerHTML after mount), so it hands the code element the
+// ranges as `data-anchor-ranges` (JSON, relative to the code text) and this
+// file renders them: shiki `decorations` for the highlighted output, `<mark>`
+// slices for the plain fallback. Shiki refuses CROSSING decorations
+// (`intersect` in @shikijs/core), so ranges are first cut into non-crossing
+// atomic segments; a segment covered by several comments carries the
+// earliest-starting one as `data-comment-id` and every id in
+// `data-comment-ids` (the sidebar / scroll-spy look marks up by the former).
+// -----------------------------------------------------------------------------
+
+export interface CodeAnchorSegment {
+  start: number
+  end: number
+  commentId: string
+  commentIds: string[]
+}
+
+/** Cut possibly overlapping ranges into non-crossing segments (containment allowed to nest → flattened). */
+export function atomicAnchorSegments(
+  ranges: ReadonlyArray<CodeAnchorRange>,
+  length: number,
+): CodeAnchorSegment[] {
+  const clipped = ranges
+    .map((r) => ({
+      start: Math.max(0, Math.min(length, r.start)),
+      end: Math.max(0, Math.min(length, r.end)),
+      commentId: r.commentId,
+    }))
+    .filter((r) => r.end > r.start)
+  if (clipped.length === 0) return []
+  const bounds = [...new Set(clipped.flatMap((r) => [r.start, r.end]))].sort((a, b) => a - b)
+  const out: CodeAnchorSegment[] = []
+  for (let i = 0; i + 1 < bounds.length; i++) {
+    const start = bounds[i]!
+    const end = bounds[i + 1]!
+    const covering = clipped.filter((r) => r.start <= start && r.end >= end)
+    if (covering.length === 0) continue
+    const earliest = covering.reduce((best, r) => (r.start < best.start ? r : best), covering[0]!)
+    const ids = covering.map((r) => r.commentId)
+    const prev = out[out.length - 1]
+    if (
+      prev !== undefined &&
+      prev.end === start &&
+      prev.commentId === earliest.commentId &&
+      prev.commentIds.join('\u0000') === ids.join('\u0000')
+    ) {
+      prev.end = end
+      continue
+    }
+    out.push({ start, end, commentId: earliest.commentId, commentIds: ids })
+  }
+  return out
+}
+
+function parseAnchorRanges(raw: unknown): CodeAnchorRange[] {
+  if (typeof raw !== 'string' || raw.length === 0) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (r): r is CodeAnchorRange =>
+        typeof r === 'object' &&
+        r !== null &&
+        typeof (r as CodeAnchorRange).start === 'number' &&
+        typeof (r as CodeAnchorRange).end === 'number' &&
+        typeof (r as CodeAnchorRange).commentId === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+/** Plain-text rendering of `source` with `<mark>`s over the atomic segments. */
+function markedSlices(source: string, segments: ReadonlyArray<CodeAnchorSegment>): ReactNode[] {
+  const out: ReactNode[] = []
+  let cursor = 0
+  for (const seg of segments) {
+    if (seg.start > cursor) out.push(source.slice(cursor, seg.start))
+    out.push(
+      <mark
+        key={`${seg.start}-${seg.end}`}
+        className="comment-anchor"
+        data-comment-id={seg.commentId}
+        data-comment-ids={seg.commentIds.join(' ')}
+      >
+        {source.slice(seg.start, seg.end)}
+      </mark>,
+    )
+    cursor = seg.end
+  }
+  if (cursor < source.length) out.push(source.slice(cursor))
+  return out
+}
 
 export function PassThroughPre({ children }: { children?: ReactNode }) {
   // Strip react-markdown's wrapping <pre> — fenced-code overrides own their
@@ -50,9 +149,15 @@ export function makeCode() {
       // Heuristic: if children contains a newline, it's a block.
       const text = childrenToString(children)
       if (text.includes('\n')) {
+        // RFC-326:无语言围栏块**也**要带锚 mark。此前这里在读 data-anchor-ranges
+        // 之前就 return 了,于是 ```（无 info string）里的代码锚被静默丢掉——
+        // 高亮不亮、气泡掉 orphan,而 rehype 那边照常算出了区间。
+        const source = text.replace(/\n$/, '')
+        const ranges = parseAnchorRanges(rest['data-anchor-ranges'])
+        const segments = atomicAnchorSegments(ranges, source.length)
         return (
           <pre className="prose__code-fallback" data-prose-code-fallback="plain">
-            <code>{text}</code>
+            <code>{segments.length > 0 ? markedSlices(source, segments) : text}</code>
           </pre>
         )
       }
@@ -63,9 +168,11 @@ export function makeCode() {
       )
     }
     const source = childrenToString(children).replace(/\n$/, '')
+    // Diagrams are never highlighted (design §9.4) — the ranges are dropped.
     if (lang === 'mermaid') return <MermaidDiagram source={source} />
     if (lang === 'plantuml') return <PlantUmlDiagram source={source} />
-    return <ShikiPre source={source} lang={lang} />
+    const ranges = parseAnchorRanges(rest['data-anchor-ranges'])
+    return <ShikiPre source={source} lang={lang} ranges={ranges} />
   }
 }
 
@@ -133,6 +240,8 @@ function PlantUmlDiagram({ source }: { source: string }) {
 interface ShikiPreProps {
   source: string
   lang: string
+  /** RFC-326: review anchors inside this block, relative to `source` (already `\n`-trimmed). */
+  ranges?: ReadonlyArray<CodeAnchorRange>
 }
 
 const SUPPORTED_LANGS = new Set([
@@ -160,10 +269,17 @@ function normalizeLang(lang: string): string {
   return lang
 }
 
-function ShikiPre({ source, lang }: ShikiPreProps) {
+function ShikiPre({ source, lang, ranges }: ShikiPreProps) {
   const [highlighted, setHighlighted] = useState<string | null>(null)
   const normalized = normalizeLang(lang)
   const supported = normalized.length > 0 && SUPPORTED_LANGS.has(normalized)
+  // Stable identity for the effect: the same ranges must not re-run shiki.
+  const segmentsKey = JSON.stringify(ranges ?? [])
+  const segments = useMemo(
+    () => atomicAnchorSegments(ranges ?? [], source.length),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the serialised ranges
+    [segmentsKey, source],
+  )
 
   useEffect(() => {
     if (!supported) return
@@ -176,6 +292,20 @@ function ShikiPre({ source, lang }: ShikiPreProps) {
           lang: normalized,
           themes: { light: 'github-light', dark: 'github-dark' },
           defaultColor: false,
+          ...(segments.length > 0
+            ? {
+                decorations: segments.map((seg) => ({
+                  start: seg.start,
+                  end: seg.end,
+                  tagName: 'mark',
+                  properties: {
+                    class: 'comment-anchor',
+                    'data-comment-id': seg.commentId,
+                    'data-comment-ids': seg.commentIds.join(' '),
+                  },
+                })),
+              }
+            : {}),
         })
         if (!cancelled) setHighlighted(html)
       } catch {
@@ -185,7 +315,7 @@ function ShikiPre({ source, lang }: ShikiPreProps) {
     return () => {
       cancelled = true
     }
-  }, [source, normalized, supported])
+  }, [source, normalized, supported, segments])
 
   if (supported && highlighted !== null) {
     return (
@@ -203,7 +333,9 @@ function ShikiPre({ source, lang }: ShikiPreProps) {
       className="prose__code-fallback"
       data-prose-code-fallback={supported ? normalized : normalized || 'plain'}
     >
-      <code className={normalized.length > 0 ? `language-${normalized}` : undefined}>{source}</code>
+      <code className={normalized.length > 0 ? `language-${normalized}` : undefined}>
+        {segments.length > 0 ? markedSlices(source, segments) : source}
+      </code>
     </pre>
   )
 }

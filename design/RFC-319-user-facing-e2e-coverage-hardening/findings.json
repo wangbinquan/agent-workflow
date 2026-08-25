@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-08-24",
   "note": "逐条依据/证据/补测建议见同目录 findings.md；本文件只是它的机器索引",
-  "total": 835,
+  "total": 840,
   "rows": [
     {
       "id": "AGENT-01",
@@ -6302,6 +6302,51 @@
       "gapKind": "no-test-at-all",
       "risk": "P3",
       "verdict": "confirmed-gap"
+    },
+    {
+      "id": "HUMAN-49",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "外部代理经 MCP 读取待评审文档：list_pending_gates / get_review / list_review_history（RFC-326 US1）",
+      "coverage": "browser-e2e",
+      "gapKind": "covered",
+      "risk": "P1",
+      "verdict": "confirmed-covered"
+    },
+    {
+      "id": "HUMAN-50",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "外部代理按引文提交意见（标题 / 行内代码 / 代码块），网页按源文偏移把三条意见各自高亮在原处（RFC-326 US2 / US8）",
+      "coverage": "browser-e2e",
+      "gapKind": "covered",
+      "risk": "P1",
+      "verdict": "confirmed-covered"
+    },
+    {
+      "id": "HUMAN-51",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "坏引文被拒且零写入：歧义引文返回候选（全文序号），未命中引文返回 not-found（RFC-326 US3）",
+      "coverage": "browser-e2e",
+      "gapKind": "covered",
+      "risk": "P1",
+      "verdict": "confirmed-covered"
+    },
+    {
+      "id": "HUMAN-52",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "打包决策：submit_review iterated 携带意见让门重开（设计者重跑、第二版待审），approved 收口任务（RFC-326 US6）",
+      "coverage": "browser-e2e",
+      "gapKind": "covered",
+      "risk": "P1",
+      "verdict": "confirmed-covered"
+    },
+    {
+      "id": "HUMAN-53",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "只读 PAT 的 MCP 面：tools/list 不含评审写工具，硬调写工具是 SDK unknown-tool 而非 403（RFC-326 D8 / AC-23）",
+      "coverage": "browser-e2e",
+      "gapKind": "covered",
+      "risk": "P2",
+      "verdict": "confirmed-covered"
     },
     {
       "id": "IAM-22",

@@ -14,6 +14,7 @@
 // 调用方须保证 headerEls 数组引用稳定(useMemo / 模块常量),否则每次
 // render 都重跑测量 effect。
 
+import { anchorMarkSelector } from '@/lib/review/anchorMarks'
 import { useLayoutEffect, useState } from 'react'
 import type { ReviewComment } from '@agent-workflow/shared'
 import { BUBBLE_GAP_PX, computeBubbleLayout } from '@/lib/review/bubbleLayout'
@@ -82,7 +83,8 @@ export function useCommentBubbles(params: UseCommentBubblesParams): {
       for (const c of sortedComments) {
         const bubble = col.querySelector<HTMLElement>(`.comment-bubble[data-comment-id="${c.id}"]`)
         const h = bubble?.getBoundingClientRect().height ?? 0
-        const el = root.querySelector<HTMLElement>(`${markSelector}[data-comment-id="${c.id}"]`)
+        // RFC-326:重叠代码锚的共享原子段只在 data-comment-ids 里带后开始的那条 id。
+        const el = root.querySelector<HTMLElement>(anchorMarkSelector(markSelector, c.id))
         if (el === null) {
           orphans.push({ id: c.id, height: h })
           continue

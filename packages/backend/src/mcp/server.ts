@@ -75,6 +75,11 @@ export function buildMcpServer(
           },
           signal: extra.signal,
         }
+        // RFC-326 (P7): a tool may declare what its audit row names; the
+        // converged tools keep reading `kind` / `id` from their arguments.
+        const identity = tool.audit?.(args)
+        const resourceKind = identity?.kind ?? stringArg(args.kind)
+        const resourceId = identity?.id ?? stringArg(args.id)
         try {
           const result = await tool.handler(args, ctx)
           // Audited per TOOL, not per HTTP request: every MCP call is the same
@@ -83,8 +88,8 @@ export function buildMcpServer(
           // identity do.
           audit?.({
             toolName: tool.name,
-            resourceKind: stringArg(args.kind),
-            resourceId: stringArg(args.id),
+            resourceKind,
+            resourceId,
             statusCode: 200,
             deletedSnapshot,
           })
@@ -94,8 +99,8 @@ export function buildMcpServer(
         } catch (err) {
           audit?.({
             toolName: tool.name,
-            resourceKind: stringArg(args.kind),
-            resourceId: stringArg(args.id),
+            resourceKind,
+            resourceId,
             statusCode: err instanceof McpCallError ? err.status : 400,
           })
           return toolError(err)

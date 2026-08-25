@@ -1826,6 +1826,18 @@
       "negativeFixture": true,
       "classified": true,
       "lines": 150
+    },
+    {
+      "id": "rfc326-review-tool-route-guard",
+      "file": "packages/backend/tests/architecture/rfc326-review-tool-route-guard.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 196
     }
   ],
   "recordedAtShaNote": "本轮采数在 0d4010e53 的工作树上跑，随后与「收紧 corpusFloor 判据」的那次提交一起落盘——故这里钉的是那次提交的**父提交**（守卫要求采数 SHA 在当前历史上可达，尚未存在的提交填不进来）。要复算请用含本文件的那次提交的树：判据（packages/backend/tests/architecture/census.ts）与语料必须同树，分开取会得到不同的数。上一版记的是 b04cf0eb0。"

@@ -19,7 +19,7 @@
 // T2 adds: remark-github-blockquote-alert + remark-math/rehype-katex +
 // medium-zoom on <img>. T3 swaps the existing MarkdownView / MarkdownEditor
 // consumers over and deletes the old renderers.
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import rehypeExternalLinks from 'rehype-external-links'
@@ -53,7 +53,7 @@ export interface ProseProps {
   anchors?: ReadonlyArray<AnchorWrapInput>
 }
 
-export function Prose({ body, taskId, className, anchors }: ProseProps) {
+function ProseImpl({ body, taskId, className, anchors }: ProseProps) {
   const components = useMemo<Components>(
     () =>
       ({
@@ -98,11 +98,16 @@ export function Prose({ body, taskId, className, anchors }: ProseProps) {
     // contract for non-review callers (anchors omitted OR passed as []) is
     // preserved. The legacy DOM-mutation utility ran behind a `length === 0`
     // short-circuit too — empty anchors means "no high-light work to do".
+    // RFC-326 D5: the plugin projects the stored SOURCE offsets onto the
+    // rendered text, so it needs the body the anchors were resolved against —
+    // and the plugin chain must be rebuilt when the body changes (the memo
+    // used to depend on `anchors` only, which is exactly how a body swap kept
+    // highlighting the previous document's offsets).
     if (anchors !== undefined && anchors.length > 0) {
-      base.push([rehypeWrapAnchors, { anchors }])
+      base.push([rehypeWrapAnchors, { anchors, mode: 'source-offset', sourceBody: body }])
     }
     return base as unknown as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins']
-  }, [anchors])
+  }, [anchors, body])
 
   const wrapperClass = 'prose' + (className !== undefined ? ' ' + className : '')
 
@@ -118,3 +123,11 @@ export function Prose({ body, taskId, className, anchors }: ProseProps) {
     </div>
   )
 }
+
+/**
+ * RFC-326: memoised — the review pane re-renders on every sidebar interaction
+ * (active comment, editing state) while `body` / `anchors` are stable, and a
+ * markdown re-parse per keystroke is what the offset projection must not cost.
+ */
+export const Prose = memo(ProseImpl)
+Prose.displayName = 'Prose'

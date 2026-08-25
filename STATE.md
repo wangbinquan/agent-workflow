@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（In Progress，2026-08-25 用户批准 v4；三件套已过三轮五路设计门；PR-A〔T1–T12：锚点解析 + 决策事务化 + REST 打包〕已落地并过实现门，PR-B〔T13–T22：MCP 工具 + 网页偏移高亮 + e2e + 账本〕待做）：[RFC-326 评审门的 MCP / API 完整面](design/RFC-326-review-gate-mcp-api-surface/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-25；PR-A `430717cae` + CI 修复 `1d886e43e`（推后 CI 现形的两条守卫红，已修）+ PR-B 本笔；三件套过三轮五路设计门，PR-A / PR-B 各过一轮 Codex 实现门，记录在 plan §3）：[RFC-326 评审门的 MCP / API 完整面](design/RFC-326-review-gate-mcp-api-surface/proposal.md)**
 > —— 起于用户「MCP 和 API 没有检视设计文档的接口，没法让设计在本地检视文档并提交意见」。研究结论：仓内的「设计文档检视」就是
 > RFC-005 的人工评审门；REST `/api/reviews/*` 十条端点齐全（`routes/reviews.ts:137-460`），**MCP 只有三个门工具且 `submit_review`
 > 只送决策**（`mcp/tools.ts:410-505`）——RFC-247 D11 / plan T18 写着「逐文档评论 + 通过/打回」并打了勾，评论那一半从未落地，
@@ -23,7 +23,7 @@
 > best-effort（不进事务）、代码块高亮纳入 D5。第三轮（只审修复的闭合与回归）27 closed / 7 partial / 0 missed，新 0 P0 / 6 P1 / 2 P2 已全部
 > 纳入 v4（候选上限不改 occurrence 语义、`decode-named-character-reference` 加前端直接依赖、成员锁内重读 owner、RFC-303 判据导出共用、
 > 重复 docVersionId 422、Shiki 交叉范围原子化、KaTeX 一律不高亮）。
-> **接手须知**：两个 PR（A：解析 + 事务 + REST = plan T1–T12，**已推**；B：MCP + 前端 + e2e = T13–T22，**待做**），都直接推 main 并按 exact SHA 盯 CI；PR-A 的改动记录 / 唯一改动的既有锁测 / AC 证据表在 `plan.md §3–§4`；
+> **接手须知**：两个 PR 都已直接推 main（A：解析 + 事务 + REST = plan T1–T12；B：MCP + 前端 + e2e + 账本 = T13–T22）；改动记录 / 改过的既有锁测 / 八条变异实证 / AC 证据表（每 AC 一行）在 `plan.md §3–§4`；两条已登记的残留债在 `docs/audit-backlog.md`（任务工具审计行无资源类别、网页选词偏移仍是启发式）；
 > 工作树里 `e2e/rfc319-*.spec.ts` / `packages/system-mocks` 的未提交改动属并发 RFC-319 session，勿动。
 
 > ✅ **已完成 RFC（Done，2026-08-25；主实现 `72e648327`）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**

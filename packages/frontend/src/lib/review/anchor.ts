@@ -11,25 +11,14 @@
 // selection submit) and CommentSidebar (re-anchor for scroll-spy).
 
 import type { ReviewCommentAnchor } from '@agent-workflow/shared'
+import { findAllOccurrences } from '@agent-workflow/shared'
+
+// RFC-326: ONE occurrence counter for the whole product (non-overlapping,
+// 1-based when stored) — the backend resolver, the canonicalisation, this
+// selection math and the page's highlighter all import it from shared.
+export { findAllOccurrences }
 
 const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6'
-
-/**
- * Find every occurrence of `needle` in `haystack`. Mirrors the backend
- * helper in services/review.ts so the math agrees.
- */
-export function findAllOccurrences(haystack: string, needle: string): number[] {
-  if (needle.length === 0) return []
-  const out: number[] = []
-  let from = 0
-  while (true) {
-    const idx = haystack.indexOf(needle, from)
-    if (idx < 0) break
-    out.push(idx)
-    from = idx + needle.length
-  }
-  return out
-}
 
 /**
  * Compose the breadcrumb path of headings reachable from `target` by

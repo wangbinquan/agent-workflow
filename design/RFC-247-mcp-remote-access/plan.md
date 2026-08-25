@@ -92,7 +92,12 @@
 - [x] **RFC-247-T17**：`watch_task` —— ≤240s 阻塞、**≤10s 心跳 progress**（design §2.4 实测
       推出的硬要求）、超时返回快照 + `stillRunning`。
 - [x] **RFC-247-T18**：人工门工具完整面（`list_pending_gates` / `answer_clarify` 逐题+提交 /
-      `submit_review` 逐文档评论+通过打回）。
+      `submit_review` 逐文档评论+通过打回）。**勘误（RFC-326，2026-08-25）**：本条勾选时评论那一半从未落地——
+      `submit_review` 只送决策、没有任何评论工具，三个门工具在 tests / e2e 里零引用；完整面由 RFC-326 补齐
+      （`list_reviews` / `get_review_document` / `list_review_history` / `add_review_comment` /
+      `update_review_comment` / `delete_review_comment` / `set_review_document_selection` + `submit_review`
+      的 `comments[]` / `selections[]`），并以 `tests/architecture/rfc326-review-tool-route-guard.test.ts`
+      把「`/api/reviews*` 路由 ⟷ 门工具分发路径」两向钉死。
 - [x] **RFC-247-T19**：`resource_read` / `resource_write` + `method` 收敛工具；
       `describe_resource` 由 zod 派生 JSON Schema；`describe_capabilities`。
 - [x] **RFC-247-T20**：删除工具接 `assertDeleteConfirm`，并把它从 7 条**补到 11 条**

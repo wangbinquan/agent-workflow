@@ -24,8 +24,17 @@ import { z } from 'zod'
 import {
   type MatrixResource,
   type Permission,
+  REVIEW_ANCHOR_QUOTE_MAX_CHARS,
+  REVIEW_ANCHOR_SECTION_MAX_CHARS,
+  REVIEW_COMMENT_TEXT_MAX_CHARS,
+  REVIEW_DECISION_BATCH_COMMENTS_MAX,
+  REVIEW_DECISION_BATCH_SELECTIONS_MAX,
+  REVIEW_LIST_STATUS,
+  ReviewBatchSelectionSchema,
+  ReviewDecisionKindSchema,
   type Role,
   type StartTaskSchema,
+  type SubmitReviewDecisionSchema,
   type WorkflowInput,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -51,6 +60,14 @@ export interface McpToolDef {
   readonly permissions: ReadonlyArray<Permission>
   readonly inputSchema: z.ZodRawShape
   readonly handler: (args: Record<string, unknown>, ctx: McpToolContext) => Promise<unknown>
+  /**
+   * RFC-326 (P7) — what the audit row should name for this call. The converged
+   * resource tools carry `kind` / `id` in their arguments and need nothing here;
+   * a named tool whose identity lives under another argument name (the review
+   * tools: `nodeRunId`) declares it, so `token_audit.resource_kind/id` stop being
+   * blank for every call on a human gate.
+   */
+  readonly audit?: (args: Record<string, unknown>) => { kind: string; id?: string }
 }
 
 // -----------------------------------------------------------------------------
@@ -405,6 +422,114 @@ async function assertNoUploadInputs(workflowId: string, ctx: McpToolContext): Pr
 // Human gates (D11 T18) — the moments a run stops and waits for a person
 // -----------------------------------------------------------------------------
 
+// RFC-326 — the review gate is a complete surface over MCP: every
+// `/api/reviews*` route has a named tool (the two-way guard in
+// tests/architecture/rfc326-review-tool-route-guard.test.ts pins it, with
+// `EXEMPT_REVIEW_ROUTES` naming the deliberate exceptions). Anchors are the
+// simplified locator resolved server-side (design §2); writes carry the same
+// wire shape as the REST route they dispatch to, so the service's refusals
+// (candidates for an ambiguous quote, the missing-document rule of a
+// multi-document round) reach the model verbatim through McpCallError.
+
+const reviewNodeRunId = z
+  .string()
+  .min(1)
+  .describe('Review node run id — the `nodeRunId` from list_pending_gates / list_reviews')
+
+const reviewAudit = (args: Record<string, unknown>): { kind: string; id?: string } => ({
+  kind: 'reviews',
+  ...(typeof args.nodeRunId === 'string' && args.nodeRunId !== '' ? { id: args.nodeRunId } : {}),
+})
+
+/** The simplified locator (design §2.1) as tool arguments; all absent = document-level. */
+const REVIEW_LOCATOR_INPUT_SCHEMA = {
+  quote: z
+    .string()
+    .trim()
+    .min(1)
+    .max(REVIEW_ANCHOR_QUOTE_MAX_CHARS)
+    .optional()
+    .describe(
+      'Verbatim text copied from the document body (markdown markers included, e.g. the backticks of inline code). ' +
+        'Omit every locator field to attach the comment to the document as a whole (its title line).',
+    ),
+  occurrence: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      '1-based occurrence number of `quote` counted over the WHOLE document (non-overlapping). ' +
+        'Required only when the quote is ambiguous — the refusal lists every candidate with this number.',
+    ),
+  section: z
+    .string()
+    .trim()
+    .min(1)
+    .max(REVIEW_ANCHOR_SECTION_MAX_CHARS)
+    .optional()
+    .describe(
+      'Narrow the quote to one section: a heading text, a `#`-prefixed breadcrumb segment, or the full ' +
+        '`# A > ## B` breadcrumb. The refusal names the sections the quote does occur under.',
+    ),
+  docVersionId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Which document, in a multi-document round (get_review lists them under `documents`). ' +
+        'REQUIRED there — even for a one-item round. On a single-document review it is optional, ' +
+        'but if you do pass one it must be THAT document: a value naming any other pending ' +
+        'document is refused (404 doc-version-not-found), not ignored.',
+    ),
+}
+
+const REVIEW_COMMENT_TEXT = z
+  .string()
+  .min(1)
+  .max(REVIEW_COMMENT_TEXT_MAX_CHARS)
+  .describe('The comment body (markdown)')
+
+/**
+ * RFC-284 T28 discipline (see LAUNCH_TASK_INPUT_SCHEMA): the key set mirrors the
+ * shared SubmitReviewDecisionSchema plus the tool's own `nodeRunId`, so a wire
+ * key renamed in shared is a compile error here — the `decision` enum drifted
+ * once (`iterate` vs the REST `iterated`) and made iterate-over-MCP impossible.
+ */
+const SUBMIT_REVIEW_INPUT_SCHEMA = {
+  nodeRunId: reviewNodeRunId,
+  decision: ReviewDecisionKindSchema.describe(
+    'approved | iterated | rejected — the same values the REST route accepts (`iterate` is not one)',
+  ),
+  rejectReason: z.string().min(1).optional().describe('Required when decision is "rejected"'),
+  reviewIteration: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('The `reviewIteration` get_review returned; a stale value is refused with 409'),
+  comments: z
+    .array(
+      z.object({
+        commentText: REVIEW_COMMENT_TEXT,
+        ...REVIEW_LOCATOR_INPUT_SCHEMA,
+      }),
+    )
+    .max(REVIEW_DECISION_BATCH_COMMENTS_MAX)
+    .optional()
+    .describe(
+      'Comments written in the SAME transaction as the decision (same fields as add_review_comment). ' +
+        'One invalid anchor refuses the whole call and nothing is written.',
+    ),
+  selections: z
+    .array(ReviewBatchSelectionSchema)
+    .max(REVIEW_DECISION_BATCH_SELECTIONS_MAX)
+    .optional()
+    .describe(
+      'Multi-document rounds: accept / reject individual documents in the same transaction. ' +
+        '`approved` requires every document to be decided (here or earlier).',
+    ),
+} satisfies Record<keyof z.input<typeof SubmitReviewDecisionSchema> | 'nodeRunId', z.ZodTypeAny>
+
 const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
   {
     name: 'list_pending_gates',
@@ -414,6 +539,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       'watch_task returns as soon as one reaches this state.',
     permissions: [],
     inputSchema: {},
+    audit: () => ({ kind: 'human-gates' }),
     handler: async (_args, ctx) => {
       const [reviews, clarify] = await Promise.all([
         ctx.dispatch({ method: 'GET', path: '/api/reviews' }),
@@ -467,28 +593,198 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       ),
   },
   {
+    name: 'list_reviews',
+    title: 'List reviews, pending or decided',
+    description:
+      'Reviews across tasks, filtered by status (pending by default; `all`, `approved`, `rejected`, `iterated`), ' +
+      'task or workflow. Use it to find the review of a specific task, including ones already decided; ' +
+      'list_pending_gates is the shortcut for "everything waiting on me right now".',
+    permissions: [],
+    inputSchema: {
+      status: z.enum(REVIEW_LIST_STATUS).optional().describe('Default: pending'),
+      taskId: z.string().min(1).optional(),
+      workflowId: z.string().min(1).optional(),
+      limit: z.number().int().positive().max(500).optional().describe('Default 100, max 500'),
+    },
+    audit: () => ({ kind: 'reviews' }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: '/api/reviews',
+          query: {
+            status: typeof args.status === 'string' ? args.status : undefined,
+            taskId: typeof args.taskId === 'string' ? args.taskId : undefined,
+            workflowId: typeof args.workflowId === 'string' ? args.workflowId : undefined,
+            limit: typeof args.limit === 'number' ? String(args.limit) : undefined,
+          },
+        }),
+      ),
+  },
+  {
     name: 'get_review',
     title: 'Read a pending review',
     description:
-      'The documents awaiting review plus the current `reviewIteration` — pass that back to submit_review.',
+      'The document awaiting review (`currentBody`), its comments so far and the current `reviewIteration` — ' +
+      'pass that back to submit_review. In a multi-document round `currentBody` is only the FIRST document: ' +
+      '`documents[]` lists every item with its `docVersionId`; read the others with get_review_document.',
     permissions: [],
-    inputSchema: { nodeRunId: z.string().min(1) },
+    inputSchema: { nodeRunId: reviewNodeRunId },
+    audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(await ctx.dispatch({ method: 'GET', path: `/api/reviews/${enc(args.nodeRunId)}` })),
+  },
+  {
+    name: 'get_review_document',
+    title: 'Read one review document version',
+    description:
+      'The full body of one document of a review — any item of a multi-document round, or any earlier version ' +
+      'from list_review_history — together with the comments that were attached to it at the time.',
+    permissions: [],
+    inputSchema: {
+      nodeRunId: reviewNodeRunId,
+      docVersionId: z
+        .string()
+        .min(1)
+        .describe('A `docVersionId` from get_review or list_review_history'),
+    },
+    audit: reviewAudit,
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: `/api/reviews/${enc(args.nodeRunId)}/versions/${enc(args.docVersionId)}`,
+        }),
+      ),
+  },
+  {
+    name: 'list_review_history',
+    title: 'List the earlier versions and rounds of a review',
+    description:
+      'Every document version this review has seen (each with its decision and archived comments) and, for ' +
+      'multi-document reviews, the per-round grouping. Read a version body with get_review_document.',
+    permissions: [],
+    inputSchema: { nodeRunId: reviewNodeRunId },
+    audit: reviewAudit,
+    handler: async (args, ctx) => {
+      const base = `/api/reviews/${enc(args.nodeRunId)}`
+      const [versions, rounds] = await Promise.all([
+        ctx.dispatch({ method: 'GET', path: `${base}/versions` }),
+        ctx.dispatch({ method: 'GET', path: `${base}/rounds` }),
+      ])
+      return { versions: unwrap(versions), rounds: unwrap(rounds) }
+    },
+  },
+  {
+    name: 'add_review_comment',
+    title: 'Comment on a passage of a review document',
+    description:
+      'Attach a comment to a passage. Locate it by copying the text VERBATIM from the document body into `quote` ' +
+      '(markdown markers included); add `occurrence` (the global 1-based number) or `section` when the quote ' +
+      'is ambiguous — the refusal lists the candidates. No locator at all = a document-level comment on the ' +
+      'title. A multi-document round requires `docVersionId`. The response carries `warnings` when the quote sits ' +
+      'in a code block, spans blocks, or lies in a link target / HTML comment (then the web page cannot ' +
+      'highlight it, though the comment still counts).',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: reviewNodeRunId,
+      commentText: REVIEW_COMMENT_TEXT,
+      ...REVIEW_LOCATOR_INPUT_SCHEMA,
+    },
+    audit: reviewAudit,
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/reviews/${enc(args.nodeRunId)}/comments`,
+          body: {
+            commentText: args.commentText,
+            quote: args.quote,
+            occurrence: args.occurrence,
+            section: args.section,
+            docVersionId: args.docVersionId,
+          },
+        }),
+      ),
+  },
+  {
+    name: 'update_review_comment',
+    title: 'Edit the text of a review comment',
+    description:
+      'Replace the body of a comment while the review is still pending. Only the author may edit it ' +
+      '(the task owner and administrators excepted); the anchor is kept as it was.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: reviewNodeRunId,
+      commentId: z.string().min(1).describe('The comment `id` from get_review'),
+      commentText: REVIEW_COMMENT_TEXT,
+    },
+    audit: reviewAudit,
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'PATCH',
+          path: `/api/reviews/${enc(args.nodeRunId)}/comments/${enc(args.commentId)}`,
+          body: { commentText: args.commentText },
+        }),
+      ),
+  },
+  {
+    name: 'delete_review_comment',
+    title: 'Delete a review comment',
+    description:
+      'Remove a comment from a pending review. Only the author may delete it (the task owner and ' +
+      'administrators excepted). Comments already archived by a decision cannot be deleted.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: reviewNodeRunId,
+      commentId: z.string().min(1).describe('The comment `id` from get_review'),
+    },
+    audit: reviewAudit,
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'DELETE',
+          path: `/api/reviews/${enc(args.nodeRunId)}/comments/${enc(args.commentId)}`,
+        }),
+      ),
+  },
+  {
+    name: 'set_review_document_selection',
+    title: 'Accept or reject one document of a multi-document review',
+    description:
+      'Multi-document rounds only: mark one document `accepted` or `not_accepted`. This does not advance the ' +
+      'task — submit_review does, and `approved` needs every document decided. The same choice can ride on ' +
+      'submit_review as `selections[]` in one transaction.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: reviewNodeRunId,
+      docVersionId: z.string().min(1).describe('A `docVersionId` from get_review'),
+      selection: z.enum(['accepted', 'not_accepted']),
+    },
+    audit: reviewAudit,
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'PATCH',
+          path: `/api/reviews/${enc(args.nodeRunId)}/documents/${enc(args.docVersionId)}/selection`,
+          body: { selection: args.selection },
+        }),
+      ),
   },
   {
     name: 'submit_review',
     title: 'Approve, iterate or reject a review',
     description:
-      'Decide a pending review. `rejected` requires a reason. `reviewIteration` must match what get_review ' +
-      'returned, so a decision made against a stale version is refused rather than applied.',
+      'Decide a pending review, optionally with comments and per-document selections in the same transaction: ' +
+      'one invalid entry refuses the whole call and nothing is written. `rejected` requires `rejectReason`; ' +
+      '`iterated` sends the comments back to the authoring agent for another round. `reviewIteration` must ' +
+      'match what get_review returned, so a decision made against a stale version is refused rather than ' +
+      'applied. If the call fails after a worktree rollback, re-issue the SAME decision — the rollback is ' +
+      'idempotent and the documents are still pending.',
     permissions: ['tasks:execute'],
-    inputSchema: {
-      nodeRunId: z.string().min(1),
-      decision: z.enum(['approved', 'rejected', 'iterate']),
-      rejectReason: z.string().min(1).optional().describe('Required when decision is "rejected"'),
-      reviewIteration: z.number().int().nonnegative(),
-    },
+    inputSchema: SUBMIT_REVIEW_INPUT_SCHEMA,
+    audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
         await ctx.dispatch({
@@ -498,6 +794,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
             decision: args.decision,
             rejectReason: args.rejectReason,
             reviewIteration: args.reviewIteration,
+            comments: args.comments,
+            selections: args.selections,
           },
         }),
       ),

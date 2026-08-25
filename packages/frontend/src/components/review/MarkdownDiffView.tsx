@@ -94,6 +94,10 @@ export function MarkdownDiffView({
           strictOccurrence: true,
           excludeClasses: PRIOR_ANCHOR_EXCLUDE_CLASSES,
           tableGuard: granularity === 'word',
+          // RFC-326: the merged diff document is NOT the document the prior
+          // anchors were resolved against — their source offsets mean nothing
+          // here, so this path stays on text matching explicitly.
+          mode: 'text',
         },
       ])
     }

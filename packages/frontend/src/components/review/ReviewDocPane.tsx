@@ -209,12 +209,17 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     return m
   }, [body, comments])
 
+  // RFC-326 D5: the stored offsets travel with the anchor so `Prose` can project
+  // them onto the rendered text (no text heuristics — repeated words, inline
+  // code, escapes and entities all land where the comment was made).
   const proseAnchors = useMemo(
     () =>
       sortedComments.map((c) => ({
         commentId: c.id,
         selectedText: c.anchor.selectedText,
         occurrenceIndex: c.anchor.occurrenceIndex,
+        offsetStart: c.anchor.offsetStart,
+        offsetEnd: c.anchor.offsetEnd,
       })),
     [sortedComments],
   )
@@ -402,6 +407,8 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
       },
       { rootMargin: '-20% 0px -60% 0px' },
     )
+    // RFC-326:重叠代码锚的共享原子段两个属性都有(data-comment-id = 最早开始的
+    // 那条),枚举 [data-comment-id] 即可覆盖到它;scroll-spy 报出的 id 也就是它。
     const anchors = markdownRef.current.querySelectorAll('[data-comment-id]')
     anchors.forEach((a) => observer.observe(a))
     return () => observer.disconnect()
