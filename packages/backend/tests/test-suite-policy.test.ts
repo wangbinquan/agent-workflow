@@ -69,6 +69,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // pre-release package script; ordinary CI must keep both drivers skipped.
   'e2e/release-runtime.spec.ts#skip': 2,
   'e2e/rfc250-visual-states.spec.ts#skip': 1,
+  // RFC-319 B80（5e7e08f0f）WF-22：xyflow 的 Shift+click 多选在 Playwright webkit 上不稳，
+  // 与 workflow-editor.spec.ts#skip 同一条上游问题；那笔的 CI run 被后续 push 取消，
+  // 这条登记在下一笔的 run 上才补（2026-08-25）。
+  'e2e/rfc319-canvas-editing-ops.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,
   'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 1,

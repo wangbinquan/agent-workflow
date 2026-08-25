@@ -121,6 +121,11 @@ describe('RFC 索引状态漂移守卫', () => {
     'RFC-306-workflow-conditional-branching': 1,
     'RFC-310-rule-driven-development-digital-employee': 0,
     'RFC-323-employee-scoped-adapter-cards': 0,
+    // RFC-326（047e175ba 落档，In Progress）：proposal 35 条 AC，plan §4 验收表按组写行
+    // （`AC-1…8` / `AC-9、10` / `AC-34（文档）、35`），本守卫只认每行第一个编号，于是 12 行
+    // 只覆盖 12 条。挂账 23 是登记现状不是豁免：实现期填证据时要么拆成每 AC 一行，要么
+    // 把这个数一起改小（三件套那笔的 CI run 被后续 push 取消，红到下一笔才现形，2026-08-25）。
+    'RFC-326-review-gate-mcp-api-surface': 23,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {
