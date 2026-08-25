@@ -2640,3 +2640,35 @@ expect(state.reducedMotion, '浏览器没有报告 reduced-motion ⇒ 这条用�
 `test.setTimeout()` 改不到它。所以「明明设了 240s 却在 90s 断」的现象，先看红在
 hook 里还是 test 体里，再决定是 `test.describe.configure({ timeout })` 还是
 `test.setTimeout()`。**不要**因为这个现象去删别人文件里本来正确的文件级设置。
+
+## `git diff --cached --stat` 只给行数、不给归属——共享账本文件必须逐 hunk 认领（2026-08-25 实撞，主干红）
+
+CLAUDE.md §提交纪律 要求「推之前 `git diff --cached --stat` 看一眼暂存区，出现任何你
+没打算提的路径就停下」。这条挡得住**多出来的文件**，挡不住**同一个文件里多出来的行**。
+
+实撞：我提交 `architecture/ledger-baselines.json`（我要改的是 RFC-319 的 gap 基线），
+stat 那行显示 `11 +-`，我把它整个算作自己的改动。实际上里面混着并发 session 尚未提交的
+一条 `rfc326-exempt-review-routes`，它点名的守卫文件 `…/rfc326-review-tool-route-guard.test.ts`
+在 main 上并不存在——推上去之后清点脚本 ENOENT，RFC-317 T16 两条断言当场红。
+同一笔还顺走了 `e2e-capability-ledger.json` 里对方新加的 5 行能力（证据指向一个同样
+不在 main 上的 spec 文件），而配套的 `findings.json` 我没提，账本与审计台账条数也对不上。
+
+**根因不在「忘了看」，在「看的东西粒度不够」**，再加一条容易被忽略的机制：
+`git commit -- <path>` 提交的是那些路径的**工作树内容**，不是你 `git add` 的那一份。
+所以「我只 add 了自己的 hunk」并不能保护你——`git add -p` 的选择会被随后的
+`git commit -- <path>` 整个覆盖掉。
+
+**规矩**：凡是**多人共写**的文件（本仓典型是 `architecture/*.json`、
+`design/*/plan.md`、`design/*/findings.json`、`docs/*.md`、`STATE.md`），提交前一律
+
+```
+git diff --cached -- <file>      # 逐 hunk 读，不是 --stat
+```
+
+认领不出来的 hunk 一律先问，别猜。**账本类文件还要多问一句**：我这一笔里新增的条目
+所**指向的文件**，在 `origin/main` 上存在吗？账本条目与它点名的文件必须同批落地，
+少一个就是一条 ENOENT 型的红，而且红的信息里不会提「谁把它带上来的」。
+
+**误发布别人在制内容之后怎么办**：撤销自己发布的那部分（把文件恢复成对方未提交时的
+样子），**不要**替对方把缺的文件一起补提——那是在替别人决定「他的工作可以发布了」。
+撤完立刻告诉对方哪几处被撤了、他们重提时要连带哪些文件。

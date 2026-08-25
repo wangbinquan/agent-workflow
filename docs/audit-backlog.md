@@ -2717,3 +2717,34 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    **首拍在 4 分钟**（`services/daemonCadence.ts:94` 的 `MAINTENANCE_PHASE.worktreeGc = 4 * MINUTE_MS`，
    硬常量、无 config 旋钮、也无 HTTP 手动入口）。按「小时级」去写等待预算会白等 56 分钟，
    或直接把这条判成不可测。这也是该 spec 单文件墙钟 ~6.9 分钟的唯一来源。
+
+## RFC-319 B88 起草期撞到的产品缺陷（2026-08-25，doctor / migrate / db 维护域）
+
+1. **【中】`db compact` 的回执永远报「freed 0.0 MiB」。**
+   `packages/backend/src/cli/dbCompact.ts:57` 的 `const after = statSync(dbPath).size` 读在
+   `finally { sqlite.close() }` **之前**，而 WAL 下 `VACUUM` 的结果要到 close 触发 checkpoint
+   才落回主库。实测 21,602,304 → 3,137,536 字节（真回收 17.6 MiB），回执却打
+   `file size: 20.6 MiB → 20.6 MiB (freed 0.0 MiB)`。功能是对的、回执在说谎——运维专门停一次机，
+   读到「一个字节都没省」。修法：把 `after` 挪到 close 之后。
+   B88 的用例**刻意没有断言那半行回执**（锁进去等于把 bug 固化），改断言磁盘上的真实收缩。
+2. **【覆盖缺口，非缺陷】OPS-007（stop 超时 / 强杀以非零退出码诚实上报）在当前实现下无法端到端覆盖。**
+   `main.ts:79` 调 `stopCommand()` 不传 options，CLI 没有 `--timeout` 旋钮，等待预算写死 30s
+   （`cli/stop.ts:79`）；而 e2e 唯一允许的子进程边界 `e2e/command.ts` 硬超时 15s，到点子进程被打死、
+   拿回 `status:-1` + 空输出——那是 harness 行为不是产品契约。`forced` 档
+   （`cli/stop.ts:95`）又明写 `platform === 'win32'`，而 `@nightly` 只在 ubuntu 腿跑。
+   放宽 `runCommandResult` 超时会撞 `root-test-entrypoint.test.ts` 里
+   「`timeout: COMMAND_TIMEOUT_MS` 恰好出现 3 次」的守卫，属跨文件改动。
+   **建议**：产品侧加 `stop --timeout <ms>`（本身也是真实运维需求），或 e2e 侧连同该守卫一起放开
+   per-call 超时。在此之前 OPS-007 保持 gap。
+3. **【已修，交叉印证】`migrate` / `migration-report` / `backup` / `package` 在发行单二进制上一跑就挂**
+   ——起草方独立复现到与我同一条 P0（已由主干 `f565b1cb7` 修复），并额外记下一个副作用：
+   失败前已把一个 4096 字节的空 `db.sqlite` 留在盘上，导致随后的 `downgrade-audit` 从
+   `(no database)` 变成 `ERROR: no such table: workflows`。**新增的 OPS-012 / OPS-013 两条正是
+   这条修复的回归网**：把 `migrate.ts` 倒回旧写法，两条立刻红。
+4. **【账本文案偏差，已按实现处置】OPS-014 行只写「daemon 在跑时拒绝」**，而实现里
+   `no-db` 与 `daemon-running` 都以退出码 1 收场、`db` 子命令写错是退出码 2
+   （`main.ts:105-114`）——覆盖按源码实际分开断言。
+5. **【测试基建，两条值得记】**①`e2e/` 不在 workspace typecheck 内：一个 helper 声明了
+   `{code:number}` 却返回 `runCommandResult` 的 `{status}`，lint 与构建全绿、运行时拿到
+   `undefined`。②**同步子进程边界与同进程 HTTP 服务端会死锁**：`execFileSync` 堵死事件循环，
+   git 的请求 15s 内一次都不被 accept；最后把探针服务端挪进 worker 线程才成立。

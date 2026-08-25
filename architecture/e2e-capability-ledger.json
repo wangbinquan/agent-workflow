@@ -5910,8 +5910,13 @@
       "title": "启动时自动 resume 上一代 interrupted 任务（config 驱动）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-026: autoResumeOnBoot 开着才自动续跑上一代 interrupted 任务，关着就原地不动 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-027",
@@ -5919,8 +5924,13 @@
       "title": "启动闸门：DB 损坏时拒绝服务并打印可行动的恢复指引",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-027: 数据库损坏时拒绝服务，并把库路径、quick_check 原因、可用备份与 restore 命令一并交到运维手上 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-031",
@@ -6012,8 +6022,13 @@
       "title": "小时级后台任务：事件归档（events → JSONL）与归档后读回",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-039: 超阈值的节点事件被归档成 JSONL 并从库里删除，而事件接口仍然一条不少地读回来 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-040",
@@ -6021,8 +6036,13 @@
       "title": "小时级后台任务：worktree 自动 GC（清理终态任务的旧工作区）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-040: 终态任务的旧工作区被小时级 GC 清掉，而未到龄的与还在跑的都不动 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-041",
@@ -6030,8 +6050,13 @@
       "title": "资源限额 1Hz 巡检：超时 / 超 token 的任务被自动取消",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-041: 1Hz 巡检把超时与超 token 的任务各自取消，并留下可归因的原因与恢复审计 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X10",
@@ -10037,8 +10062,13 @@
       "title": "启动闸门：schema 漂移 / 被改写的历史迁移时拒绝启动",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-028: 被改写的历史迁移与凭空多出的表都让启动止步，且各自点名是哪一条 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-029",
@@ -10046,8 +10076,13 @@
       "title": "启动闸门：git < 2.38 时拒绝启动并点名版本与地板",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-029: git 低于 2.38 时拒绝启动，并把实测版本与地板版本一起说出来 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-030",
@@ -10055,8 +10090,13 @@
       "title": "升级启动前自动做一份 pre-migration 原始备份（可 opt-out）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-030: 库落后于二进制时先做一份 pre-migration 原始备份，且 backupOnMigration=false 时确实不做 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-032",
@@ -10092,8 +10132,13 @@
       "title": "小时级后台任务：终态任务自动归档 sweeper（含 boot 首拍与崩溃续跑）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-042: 终态任务树在 boot 首拍被归档出库，且崩在半路的 .tmp- 残留按库里还有没有行各走各的收尾 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-043",
@@ -10101,8 +10146,13 @@
       "title": "自动备份调度与保留策略（按份数 / 天数 / 总体积裁剪，受保护家族不被裁）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts",
+          "test": "RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族各自轮换，且到点自动产出一份新备份 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X6",
@@ -11000,11 +11050,6 @@
     "MEM-X4",
     "MEM-X8",
     "MEM-X9",
-    "OPS-026",
-    "OPS-027",
-    "OPS-039",
-    "OPS-040",
-    "OPS-041",
     "OPS-X10",
     "OPS-X3",
     "OPS-X4",
@@ -11171,11 +11216,6 @@
     "OPS-013",
     "OPS-014",
     "OPS-015",
-    "OPS-028",
-    "OPS-029",
-    "OPS-030",
-    "OPS-042",
-    "OPS-043",
     "OPS-X7",
     "OPS-X9",
     "REPO-19",
