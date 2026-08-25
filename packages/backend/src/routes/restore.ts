@@ -15,7 +15,7 @@ import type { Hono } from 'hono'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import {
   clearPendingRestore,
   listFailedRestores,

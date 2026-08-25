@@ -2,7 +2,7 @@
 
 import { createSecretBox } from '@/auth/secretBox'
 import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { createBackup } from '@/services/backup'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { Paths } from '@/util/paths'

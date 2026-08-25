@@ -3,7 +3,7 @@
 
 import { existsSync, readdirSync } from 'node:fs'
 import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/auth/loginPolicy'
 import { Paths } from '@/util/paths'
 

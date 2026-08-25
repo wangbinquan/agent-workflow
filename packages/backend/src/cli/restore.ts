@@ -4,7 +4,7 @@
 // stops (so a fat-fingered restore can't overwrite data); --yes applies it.
 
 import { existsSync } from 'node:fs'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { planRestore, restoreBackup, validateBackupForStage } from '@/services/restore'
 import { stagePendingRestore } from '@/services/pendingRestore'
 import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'

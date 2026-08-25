@@ -9,7 +9,7 @@
 // `--type --name` 在那种情况下选不中确定的一行。
 
 import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
 import { buildCurrentActor, type Actor } from '@/auth/actor'
 import { createSecretBox } from '@/auth/secretBox'

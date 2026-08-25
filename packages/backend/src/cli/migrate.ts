@@ -4,7 +4,7 @@
 // a failed migration that needs inspection.
 
 import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
 
 export async function migrateCommand(): Promise<{ output: string }> {

@@ -6,7 +6,7 @@
 // materialize 步骤显式触发。daemon 无需在跑（直接开 db，与 migrate 同姿势）。
 
 import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/db/migrationsFolder'
+import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
 import {
   analyzeLegacyAssets,
