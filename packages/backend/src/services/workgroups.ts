@@ -12,6 +12,7 @@ import type {
   SaveWorkgroupReceipt,
   UpdateWorkgroup,
   Workgroup,
+  ResourceAccess,
   WorkgroupDetail,
   WorkgroupDraftMember,
   WorkgroupDraftSnapshot,
@@ -52,13 +53,16 @@ import {
 } from '@/ws/broadcaster'
 import {
   assertInitialResourceOwner,
-  canViewResource,
+  assertNameUnchangedForEditor,
+  canEditAccess,
+  canGovernAccess,
+  canViewAccess,
   canViewResourceInTx,
   discloseScheduleRefs,
   initialPrivateResourceAcl,
-  hasResourceAclBypass,
-  isResourceOwner,
   listResourceGrantUserIdsInTx,
+  resolveResourceAccessFor,
+  resolveResourceAccessForInTx,
 } from './resourceAcl'
 import { nextResourceCopyName } from './resourceCopyName'
 import { assertNoMissingRefs, assertRefsUsableInTx, resolveRefsUsableById } from './resourceRefs'
@@ -348,7 +352,7 @@ export async function prepareWorkgroupSave(
   // the persisted contract instead of letting a schema default rewrite it.
   const snapshot = normalizeWorkgroupSnapshot(parsed.data.snapshot, preflight.outputContract)
   const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
-  await assertPrincipalCanWritePreflight(db, principal, preflight)
+  await assertPrincipalCanEditPreflight(db, principal, preflight)
   const currentMembers = await db
     .select()
     .from(workgroupMembers)
@@ -379,7 +383,7 @@ export function commitWorkgroupSaveInTx(
   const { id, principal, parsed, snapshot, submittedBytes, preparedAgents } = p
   const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
   if (currentRow === undefined) throwWorkgroupNotFound(id)
-  assertPrincipalCanWriteInTx(tx, principal, currentRow)
+  const access = assertPrincipalCanEditInTx(tx, principal, currentRow)
   // The async preflight is not the authorization/validity linearization point: an administrator
   // can disable a mapped human during a long package pre-stage. Recheck in the same transaction
   // that writes the replacement roster, matching the create path's final fence.
@@ -435,6 +439,8 @@ export function commitWorkgroupSaveInTx(
     }
   }
 
+  // RFC-324 —— 改名是治理动作：先判资格，再判 owner 名字域是否撞车。
+  assertNameUnchangedForEditor(access, current.name, snapshot.name)
   assertNameChangeAllowedInTx(tx, current, snapshot.name)
   const rosterChanged = rosterBytes(currentSnapshot) !== rosterBytes(snapshot)
   const now = Date.now()
@@ -545,7 +551,7 @@ export async function deleteWorkgroup(
   }>(db, (tx) => {
     const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
     if (currentRow === undefined) throwWorkgroupNotFound(id)
-    assertPrincipalCanWriteInTx(tx, principal, currentRow)
+    assertPrincipalCanGovernInTx(tx, principal, currentRow)
     if (currentRow.version !== parsed.data.expectedVersion) {
       const members = tx
         .select()
@@ -845,41 +851,56 @@ async function getWorkgroupDetailByRow(db: DbClient, row: WorkgroupRow): Promise
   return workgroupToDetail(rowToWorkgroup(row, members))
 }
 
-async function assertPrincipalCanWritePreflight(
+/** RFC-324 —— 保存面的预检门：内容写；返回 access 供改名围栏用。 */
+async function assertPrincipalCanEditPreflight(
   db: DbClient,
   principal: WorkgroupWritePrincipal,
   row: WorkgroupRow,
-): Promise<void> {
-  if (principal.kind === 'system') return
-  if (!(await canViewResource(db, principal.actor, 'workgroup', row))) {
-    throwWorkgroupNotFound(row.id)
-  }
-  if (!isResourceOwner(principal.actor, row)) {
-    throw new ForbiddenError(
-      'forbidden',
-      'only the workgroup owner or an actor with resource-acl:bypass can modify it',
-    )
-  }
+): Promise<ResourceAccess> {
+  if (principal.kind === 'system') return 'own'
+  const access = await resolveResourceAccessFor(db, principal.actor, 'workgroup', row)
+  if (!canViewAccess(access)) throwWorkgroupNotFound(row.id)
+  if (!canEditAccess(access)) throw workgroupReadOnlyError()
+  return access
 }
 
-function assertPrincipalCanWriteInTx(
+/** In-tx twin of the save gate — the authoritative one. */
+function assertPrincipalCanEditInTx(
+  tx: DbTxSync,
+  principal: WorkgroupWritePrincipal,
+  row: WorkgroupRow,
+): ResourceAccess {
+  if (principal.kind === 'system') return 'own'
+  // RFC-282 D1 — visibility and edit right come off ONE resolved verdict;
+  // 404 before 403 is contract.
+  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workgroup', row)
+  if (!canViewAccess(access)) throwWorkgroupNotFound(row.id)
+  if (!canEditAccess(access)) throw workgroupReadOnlyError()
+  return access
+}
+
+/** RFC-324 —— 删除面的 in-tx 门：治理写，编辑授权不覆盖。 */
+function assertPrincipalCanGovernInTx(
   tx: DbTxSync,
   principal: WorkgroupWritePrincipal,
   row: WorkgroupRow,
 ): void {
   if (principal.kind === 'system') return
-  const actor = principal.actor
-  const hasAclBypass = hasResourceAclBypass(actor)
-  const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
-  // RFC-282 D1 — visibility is the shared predicate; hasAclBypass/isOwner stay
-  // local for the 403 below (404 before 403 is contract).
-  if (!canViewResourceInTx(tx, actor, 'workgroup', row)) throwWorkgroupNotFound(row.id)
-  if (!hasAclBypass && !isOwner) {
+  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workgroup', row)
+  if (!canViewAccess(access)) throwWorkgroupNotFound(row.id)
+  if (!canGovernAccess(access)) {
     throw new ForbiddenError(
-      'forbidden',
-      'only the workgroup owner or an actor with resource-acl:bypass can modify it',
+      'resource-govern-owner-only',
+      'deleting, renaming, transferring or re-granting a workgroup is reserved for its owner',
     )
   }
+}
+
+function workgroupReadOnlyError(): ForbiddenError {
+  return new ForbiddenError(
+    'resource-read-only',
+    'you have read-only access to this workgroup; ask its owner for an edit grant or make your own copy',
+  )
 }
 
 function assertNameChangeAllowedInTx(tx: DbTxSync, current: Workgroup, nextName: string): void {

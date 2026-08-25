@@ -6,7 +6,12 @@
 // rights as the owner (cancel / retry / resume) — only member management,
 // owner transfer and task deletion stay with the owner or explicit permission holders.
 
-import type { TaskActorRole, TaskMembers, UserPublic } from '@agent-workflow/shared'
+import type {
+  AssignableTaskMemberRole,
+  TaskActorRole,
+  TaskMembers,
+  UserPublic,
+} from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
@@ -69,6 +74,10 @@ export async function assertCanReplaySourceTask(
   }
 }
 
+/**
+ * Any membership row at all — including RFC-324's `observer`. This is the
+ * VISIBILITY predicate: an observer was added precisely so they could watch.
+ */
 export async function hasMembership(
   db: DbClient,
   taskId: string,
@@ -80,6 +89,25 @@ export async function hasMembership(
     .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
     .limit(1)
   return rows.length > 0
+}
+
+/**
+ * RFC-324 —— 行动权成员：owner 或 collaborator，**不含 observer**。
+ *
+ * 这是「回答评审 / 反问」与「cancel / resume / diagnose」共用的判据。与
+ * `hasMembership` 分开命名，是因为 RFC-324 之前它们是同一个问题，而现在把它们
+ * 混起来正好会让观察者拿回他被明确排除的那些操作。
+ */
+export async function hasActingMembership(
+  db: DbClient,
+  taskId: string,
+  userId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ role: taskCollaborators.role })
+    .from(taskCollaborators)
+    .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
+  return rows.some((r) => r.role === 'owner' || r.role === 'collaborator')
 }
 
 export async function listCollaborators(
@@ -100,12 +128,34 @@ export async function requireTaskMember(
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskActorRole> {
-  const member = await hasMembership(db, task.id, actor.user.id)
+  // RFC-324 —— observer 看得见任务，但不是回答权主体，所以这里问的是行动权成员。
+  const member = await hasActingMembership(db, task.id, actor.user.id)
   const role = resolveTaskRole(actor, task.ownerUserId ?? null, member)
   if (role !== null) return role
   throw new ForbiddenError(
     'not-task-member',
     'only task members or an actor with the required global task authority can do this',
+  )
+}
+
+/**
+ * RFC-324 —— 操作面的门：cancel / resume / diagnose / retry / repair /
+ * change-narrative 生成。
+ *
+ * 与 `requireTaskMember`（回答权）判据相同、命名不同：两者在产品上是两件事
+ * （「能不能替这个任务做决定」与「能不能推动这个任务」），今天恰好同档，
+ * 分开命名让将来任一侧单独演进时不必先把调用点摘开。
+ */
+export async function requireTaskOperator(
+  db: DbClient,
+  actor: Actor,
+  task: TaskRowForVisibility,
+): Promise<void> {
+  const member = await hasActingMembership(db, task.id, actor.user.id)
+  if (resolveTaskRole(actor, task.ownerUserId ?? null, member) !== null) return
+  throw new ForbiddenError(
+    'task-observer-read-only',
+    'you are an observer on this task; cancelling, resuming and retrying are reserved for its members',
   )
 }
 
@@ -131,7 +181,9 @@ export async function getTaskMembers(
   task: TaskRowForVisibility,
 ): Promise<TaskMembers> {
   const collabRows = await listCollaborators(db, task.id)
-  const collaboratorIds = collabRows.filter((r) => r.role === 'collaborator').map((r) => r.userId)
+  // RFC-324 —— 面板列出两档成员；owner 行由 ownerUserId 表达，不进列表。
+  const memberRows = collabRows.filter((r) => r.role === 'collaborator' || r.role === 'observer')
+  const collaboratorIds = memberRows.map((r) => r.userId)
   const wanted = [...new Set([...(task.ownerUserId ? [task.ownerUserId] : []), ...collaboratorIds])]
   const userRows =
     wanted.length === 0 ? [] : await db.select().from(users).where(inArray(users.id, wanted))
@@ -140,32 +192,43 @@ export async function getTaskMembers(
     task.ownerUserId != null && task.ownerUserId !== SYSTEM_USER_ID
       ? (byId.get(task.ownerUserId) ?? null)
       : null
-  const memberUsers = collaboratorIds
-    .map((id) => byId.get(id))
-    .filter((u): u is UserRow => u !== undefined)
-    .map(toUserPublic)
-  const canManage =
-    hasResourceAclBypass(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
+  const members = memberRows
+    .map((r) => ({ user: byId.get(r.userId), role: r.role }))
+    .filter(
+      (m): m is { user: UserRow; role: 'collaborator' | 'observer' } =>
+        m.user !== undefined && m.role !== 'owner',
+    )
+    .map((m) => ({ user: toUserPublic(m.user), role: m.role }))
+  const isOwner = task.ownerUserId != null && task.ownerUserId === actor.user.id
+  const canManage = hasResourceAclBypass(actor) || isOwner
+  // RFC-324 —— 面板据此禁用 cancel / resume / 回答控件，而不是让点击撞上 403。
+  const canOperate =
+    canManage || memberRows.some((r) => r.role === 'collaborator' && r.userId === actor.user.id)
   return {
     taskId: task.id,
     ownerUserId: task.ownerUserId ?? null,
     owner: ownerRow ? toUserPublic(ownerRow) : null,
-    users: memberUsers,
+    members,
     canManage,
+    canOperate,
   }
 }
 
 /**
- * PUT members — task owner or `resource-acl:bypass`. `userIds` is full-replace of the
- * collaborator set. On owner transfer the previous human owner is kept as a
- * collaborator so they don't lose sight of their own task (mirror of the
- * resource-ACL rule).
+ * PUT members — task owner or `resource-acl:bypass`. `members` is full-replace of
+ * the non-owner member set, each entry carrying its RFC-324 grade. On owner
+ * transfer the previous human owner is kept as a COLLABORATOR so they don't lose
+ * their own task's controls (mirror of the resource-ACL rule, which keeps the
+ * previous owner as a grantee).
  */
 export async function updateTaskMembers(
   db: DbClient,
   actor: Actor,
   task: TaskRowForVisibility,
-  body: { ownerUserId?: string; userIds?: string[] },
+  body: {
+    ownerUserId?: string
+    members?: Array<{ userId: string; role: AssignableTaskMemberRole }>
+  },
 ): Promise<TaskMembers> {
   const canManage =
     hasResourceAclBypass(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
@@ -176,7 +239,7 @@ export async function updateTaskMembers(
     )
   }
 
-  const referenced = new Set<string>(body.userIds ?? [])
+  const referenced = new Set<string>((body.members ?? []).map((m) => m.userId))
   if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
   if (referenced.size > 0) {
     const rows = await db
@@ -195,7 +258,7 @@ export async function updateTaskMembers(
   const prevOwner = task.ownerUserId ?? null
   const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : prevOwner
   let beforeCollaborators: (typeof taskCollaborators.$inferSelect)[] = []
-  let nextUserIds: string[] = []
+  let nextMembers = new Map<string, AssignableTaskMemberRole>()
 
   const now = Date.now()
   dbTxSync(db, (tx) => {
@@ -207,19 +270,26 @@ export async function updateTaskMembers(
       .from(taskCollaborators)
       .where(eq(taskCollaborators.taskId, task.id))
       .all()
-    nextUserIds =
-      body.userIds !== undefined
-        ? [...new Set(body.userIds)]
-        : beforeCollaborators.filter((r) => r.role === 'collaborator').map((r) => r.userId)
+    // A user appearing twice collapses to the LAST entry (same dedupe the old
+    // `new Set(userIds)` gave); the table's PK is (task,user,role), so writing
+    // both grades for one user would produce two rows and an ambiguous member.
+    nextMembers =
+      body.members !== undefined
+        ? new Map(body.members.map((m) => [m.userId, m.role] as const))
+        : new Map(
+            beforeCollaborators
+              .filter((r) => r.role === 'collaborator' || r.role === 'observer')
+              .map((r) => [r.userId, r.role as AssignableTaskMemberRole] as const),
+          )
     if (
       nextOwner !== prevOwner &&
       prevOwner !== null &&
       prevOwner !== SYSTEM_USER_ID &&
-      !nextUserIds.includes(prevOwner)
+      !nextMembers.has(prevOwner)
     ) {
-      nextUserIds.push(prevOwner)
+      nextMembers.set(prevOwner, 'collaborator')
     }
-    nextUserIds = nextUserIds.filter((id) => id !== nextOwner)
+    if (nextOwner !== null) nextMembers.delete(nextOwner)
 
     if (nextOwner !== prevOwner) {
       tx.update(tasksTable).set({ ownerUserId: nextOwner }).where(eq(tasksTable.id, task.id)).run()
@@ -235,11 +305,11 @@ export async function updateTaskMembers(
         addedAt: now,
       })
     }
-    for (const userId of nextUserIds) {
+    for (const [userId, role] of nextMembers) {
       values.push({
         taskId: task.id,
         userId,
-        role: 'collaborator',
+        role,
         addedBy: actor.user.id,
         addedAt: now,
       })
@@ -258,7 +328,7 @@ export async function updateTaskMembers(
   if (prevOwner !== null) visibleUserIds.add(prevOwner)
   if (nextOwner !== null) visibleUserIds.add(nextOwner)
   for (const row of beforeCollaborators) visibleUserIds.add(row.userId)
-  for (const userId of nextUserIds) visibleUserIds.add(userId)
+  for (const userId of nextMembers.keys()) visibleUserIds.add(userId)
   tasksListBroadcaster.broadcast(
     TASKS_LIST_CHANNEL,
     { type: 'task.members.changed', taskId: task.id },

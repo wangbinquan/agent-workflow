@@ -42,6 +42,7 @@ import {
 import { WorkgroupMemberGallery } from '@/components/workgroup/WorkgroupMemberGallery'
 import { useOwnedEditScope } from '@/hooks/useOwnedEditScope'
 import { useActor, usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { useWorkgroupAutosave, type WorkgroupSaveContext } from '@/hooks/useWorkgroupAutosave'
 import { useWorkgroupSync } from '@/hooks/useWorkgroupSync'
 import {
@@ -179,9 +180,14 @@ export function WorkgroupEditor(props: {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const actor = useActor()
-  const canUpdate = usePermission('workgroups:update')
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档。权限点在 user 预设里人人都有，
+  // 所以只看它等于「看得见就编辑得动」：非 owner 一路填完表单，保存才吃 403
+  // （docs/audit-backlog.md:108 记的就是这个）。删除挂 canManage 而不是 canEdit：
+  // 删除是治理动作，可编辑授权不覆盖。
+  const resourceAccess = useResourceAccess(`/api/workgroups/${props.resourceId}`)
+  const canUpdate = usePermission('workgroups:update') && resourceAccess.canEdit
   const canCreate = usePermission('workgroups:create')
-  const canDelete = usePermission('workgroups:delete')
+  const canDelete = usePermission('workgroups:delete') && resourceAccess.canManage
   const canExecuteTasks = usePermission('tasks:execute')
   const canWriteIntent = usePermission('intent:write')
   const config = useOwnedEditScope(workgroupToConfigDraft(props.initial))

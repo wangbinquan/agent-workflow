@@ -11,6 +11,7 @@
 import {
   CreateScheduledTaskSchema,
   rejectRetiredStartTaskKeys,
+  UpdateScheduleAclBodySchema,
   UpdateScheduledTaskSchema,
 } from '@agent-workflow/shared'
 import type { ScheduledTask } from '@agent-workflow/shared'
@@ -23,29 +24,69 @@ import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import {
-  canViewScheduledTask,
   createScheduledTask,
   deleteScheduledTask,
   getScheduledTask,
+  getScheduleAcl,
   listScheduledTaskItems,
+  resolveScheduleAccessFor,
   runScheduleNow,
+  updateScheduleAcl,
   updateScheduledTask,
 } from '@/services/scheduledTasks'
+import { canEditAccess, canGovernAccess } from '@/services/resourceAcl'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { loadConfig } from '@/config'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 
-/** Write authority: owner or explicit resource ACL bypass. */
-function requireWriteAccess(actor: Actor, row: ScheduledTask): void {
-  if (row.ownerUserId === actor.user.id) return
-  if (actor.permissions.has('resource-acl:bypass')) return
-  throw new ForbiddenError('scheduled-task-forbidden', `not permitted to modify '${row.id}'`)
+/**
+ * RFC-324 —— 排期写权：owner / `write` 授权 / ACL bypass。
+ *
+ * 覆盖「改 cron、启停、立即运行」。**不覆盖改绑目标**，见下面的
+ * `requireScheduleGovern`。
+ */
+async function requireScheduleEdit(deps: AppDeps, actor: Actor, row: ScheduledTask): Promise<void> {
+  const access = await resolveScheduleAccessFor(deps.db, actor, row)
+  if (canEditAccess(access)) return
+  throw new ForbiddenError(
+    'resource-read-only',
+    `you have read-only access to scheduled task '${row.id}'`,
+  )
+}
+
+/**
+ * RFC-324 —— 治理写：删除、改名、改绑启动目标、改授权。
+ *
+ * **改绑目标为什么不是内容写**：定时任务到点是以 **owner 的身份**发起的
+ * （`services/scheduledTasks.ts` 的 `buildInheritedActor(db, row.ownerUserId, 'schedule')`），
+ * 所以「谁能改 launchKind / launchPayload」等于「谁能借 owner 的身份跑任意东西」。
+ * 这正是 `db/schema.ts` 记的设计门 F-9 当初把定时任务与资源 ACL grants 划开的理由；
+ * RFC-324 引入授权面时保留了那条结论，只把不涉及执行身份的那半边（节奏与启停）
+ * 开放给 `write` 授权。
+ */
+async function requireScheduleGovern(
+  deps: AppDeps,
+  actor: Actor,
+  row: ScheduledTask,
+): Promise<void> {
+  const access = await resolveScheduleAccessFor(deps.db, actor, row)
+  if (canGovernAccess(access)) return
+  throw new ForbiddenError(
+    'resource-govern-owner-only',
+    `deleting, renaming, re-targeting or re-granting scheduled task '${row.id}' is reserved for its owner`,
+  )
 }
 
 async function loadVisible(deps: AppDeps, actor: Actor, id: string): Promise<ScheduledTask> {
   const row = await getScheduledTask(deps.db, id)
   // Invisible == missing (same 404) so a non-owner can't probe existence.
-  if (row === null || !canViewScheduledTask(actor, row)) {
+  // RFC-324 —— 判定必须查一次授权表：只判 owner 会让被授权者看不见自己被授权的
+  // 那条调度，于是「授权了却 404」——比拒绝更难排查。
+  if (row === null) {
+    throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
+  }
+  const access = await resolveScheduleAccessFor(deps.db, actor, row)
+  if (access === 'none') {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
   return row
@@ -154,7 +195,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisible(deps, actor, c.req.param('id'))
-      requireWriteAccess(actor, existing)
+      await requireScheduleEdit(deps, actor, existing)
       const rawPatch = await safeJsonOrThrowInvalid(c.req.raw)
       {
         const retired = rejectRetiredStartTaskKeys(
@@ -176,6 +217,15 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
+      // RFC-324 —— 改名与改绑目标是治理动作（后者等于换执行身份的用途，见
+      // requireScheduleGovern 的注释）；节奏与启停留在编辑档。
+      if (
+        parsed.data.name !== undefined ||
+        parsed.data.launchKind !== undefined ||
+        parsed.data.launchPayload !== undefined
+      ) {
+        await requireScheduleGovern(deps, actor, existing)
+      }
       const updated = await updateScheduledTask(deps.db, existing.id, parsed.data, {
         actor,
         defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
@@ -196,7 +246,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisible(deps, actor, c.req.param('id'))
-      requireWriteAccess(actor, existing)
+      await requireScheduleGovern(deps, actor, existing)
       // RFC-247 T20 — a token must name what it deletes; the web flow keeps its
       // lighter yes/no confirmation (see services/deleteConfirm.ts).
       assertTokenDeleteConfirm(
@@ -228,7 +278,9 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       requireLaunchPermission(actorOf(c))
       const actor = actorOf(c)
       const existing = await loadVisible(deps, actor, c.req.param('id'))
-      requireWriteAccess(actor, existing)
+      // RFC-324 —— run-now 触发的是 owner 已经选定的目标，属于「推动」而不是
+      // 「改绑」，因此归编辑档；改目标仍需 owner（requireScheduleGovern）。
+      await requireScheduleEdit(deps, actor, existing)
       const launch = deps.buildScheduleLaunch ?? buildScheduleLaunch(deps.db, deps.configPath)
       const result = await runScheduleNow(
         deps.db,
@@ -237,6 +289,48 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
         loadConfig(deps.configPath).defaultRuntime,
       )
       return c.json(result, 201)
+    },
+  )
+
+  // RFC-324 §7 —— 定时任务的授权面。与 13 类 ACL 资源的 `/acl` 端点同形，但由本
+  // 文件自己挂载而不是走 `mountAclEndpoints`：那个挂载器的键域是 `AclResourceType`
+  // （带 visibility / builtin / owner×name 唯一域），定时任务三样都没有。
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/scheduled-tasks/:id/acl',
+      permissions: ['scheduled-tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Read the grant list of one scheduled task',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const existing = await loadVisible(deps, actor, c.req.param('id'))
+      return c.json(await getScheduleAcl(deps.db, actor, existing))
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/scheduled-tasks/:id/acl',
+      // RFC-247 D5 —— 与其他 ACL 写面同规矩：token 永远不得改授权。
+      permissions: ['scheduled-tasks:update'],
+      tokenAccess: 'never',
+      summary: 'Replace the grant list of one scheduled task',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      const existing = await loadVisible(deps, actor, c.req.param('id'))
+      const parsed = UpdateScheduleAclBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
+      if (!parsed.success) {
+        throw new ValidationError('acl-invalid', 'invalid acl payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      return c.json(await updateScheduleAcl(deps.db, actor, existing, parsed.data))
     },
   )
 }

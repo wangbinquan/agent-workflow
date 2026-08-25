@@ -8,6 +8,7 @@ import type {
   CopyWorkflowRequest,
   CreateWorkflow,
   DeleteWorkflow,
+  ResourceAccess,
   ResourceVisibility,
   SaveWorkflowReceipt,
   UpdateWorkflow,
@@ -70,13 +71,16 @@ import {
 } from './resourceRefs'
 import {
   assertInitialResourceOwner,
-  canViewResource,
+  assertNameUnchangedForEditor,
+  canEditAccess,
+  canGovernAccess,
+  canViewAccess,
   canViewResourceInTx,
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
-  hasResourceAclBypass,
-  isResourceOwner,
   listResourceGrantUserIdsInTx,
+  resolveResourceAccessFor,
+  resolveResourceAccessForInTx,
 } from './resourceAcl'
 import { nextResourceCopyName } from './resourceCopyName'
 import { assertNotBuiltin } from './systemResources'
@@ -393,7 +397,7 @@ export async function prepareWorkflowSave(
   // those are restored from the stored row below, before the author gates run.
   let normalizedSnapshot = submittedSnapshot
   if (preflightRow !== null) {
-    await assertPrincipalCanWritePreflight(db, principal, preflightRow)
+    const preflightAccess = await assertPrincipalCanEditPreflight(db, principal, preflightRow)
     const preflightWorkflow = rowToWorkflow(preflightRow)
     // RFC-270 §2.3 — REHYDRATE BEFORE THE GATES.
     //
@@ -419,6 +423,9 @@ export async function prepareWorkflowSave(
     if (rehydratedDefinition !== submittedSnapshot.definition) {
       normalizedSnapshot = { ...submittedSnapshot, definition: rehydratedDefinition }
     }
+    // RFC-324 —— 先判「你有没有资格改名」，再判「新名字合不合法」：一个只读授权者
+    // 提交的改名不应该收到一条关于命名规则的报错。
+    assertNameUnchangedForEditor(preflightAccess, preflightWorkflow.name, normalizedSnapshot.name)
     assertChangedWorkflowName(preflightWorkflow.name, normalizedSnapshot.name)
     // RFC-253 — the save path's script gate. Compares the sensitive projection
     // of the STORED definition against the submitted one, so an author without
@@ -512,8 +519,10 @@ export function commitWorkflowSaveInTx(
   const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
   if (currentRow === undefined) throwWorkflowNotFound(id)
 
-  assertPrincipalCanWriteInTx(tx, principal, currentRow)
+  const access = assertPrincipalCanEditInTx(tx, principal, currentRow)
   const current = rowToWorkflow(currentRow)
+  // RFC-324 —— 权威的一次：事务内读到的当前名字，防并发改名把编辑者的改名放进来。
+  assertNameUnchangedForEditor(access, current.name, normalizedSnapshot.name)
   assertChangedWorkflowName(current.name, normalizedSnapshot.name)
 
   // Import reference selectors are initially resolved for preview/mapping,
@@ -684,7 +693,7 @@ export async function deleteWorkflow(
   }>(db, (tx) => {
     const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
     if (currentRow === undefined) throwWorkflowNotFound(id)
-    assertPrincipalCanWriteInTx(tx, principal, currentRow)
+    assertPrincipalCanGovernInTx(tx, principal, currentRow)
 
     if (currentRow.version !== parsed.data.expectedVersion) {
       throw staleConflictError(
@@ -1000,28 +1009,52 @@ async function loadRawWorkflow(db: DbClient, id: string): Promise<WorkflowRow | 
   return rows[0] ?? null
 }
 
-async function assertPrincipalCanWritePreflight(
+/**
+ * RFC-324 —— 保存面的预检门：内容写。返回 access，调用方据此决定「改名许不许」。
+ * 系统主体（导入 / 内部改写）不走 ACL，按 `own` 处理。
+ */
+async function assertPrincipalCanEditPreflight(
   db: DbClient,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
-): Promise<void> {
+): Promise<ResourceAccess> {
   if (principal.kind === 'system') {
     assertNotBuiltin('workflow', row)
-    return
+    return 'own'
   }
-  if (!(await canViewResource(db, principal.actor, 'workflow', row))) {
-    throwWorkflowNotFound(row.id)
-  }
+  const access = await resolveResourceAccessFor(db, principal.actor, 'workflow', row)
+  if (!canViewAccess(access)) throwWorkflowNotFound(row.id)
   assertNotBuiltin('workflow', row)
-  if (!isResourceOwner(principal.actor, row)) {
-    throw new ForbiddenError(
-      'forbidden',
-      'only the workflow owner or an actor with resource-acl:bypass can modify it',
-    )
-  }
+  if (!canEditAccess(access)) throw workflowReadOnlyError()
+  return access
 }
 
-function assertPrincipalCanWriteInTx(
+/** In-tx twin of the save gate — the authoritative one (the preflight is UX). */
+function assertPrincipalCanEditInTx(
+  tx: DbTxSync,
+  principal: WorkflowWritePrincipal,
+  row: WorkflowRow,
+): ResourceAccess {
+  if (principal.kind === 'system') {
+    assertNotBuiltin('workflow', row)
+    return 'own'
+  }
+  // RFC-282 D1 — visibility, edit right and the 404 → builtin → 403 order all
+  // come off ONE resolved verdict; the order itself is contract.
+  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workflow', row)
+  if (!canViewAccess(access)) throwWorkflowNotFound(row.id)
+  assertNotBuiltin('workflow', row)
+  if (!canEditAccess(access)) throw workflowReadOnlyError()
+  return access
+}
+
+/**
+ * RFC-324 —— 删除面的 in-tx 门：治理写。
+ *
+ * 与保存面分开是本 RFC 的核心区分：可编辑授权覆盖内容，不覆盖「让这份工作流不再
+ * 存在」。路由层已经判过一次（routes/workflows.ts），这里是事务内的权威复检。
+ */
+function assertPrincipalCanGovernInTx(
   tx: DbTxSync,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
@@ -1030,20 +1063,22 @@ function assertPrincipalCanWriteInTx(
     assertNotBuiltin('workflow', row)
     return
   }
-
-  const actor = principal.actor
-  const hasAclBypass = hasResourceAclBypass(actor)
-  const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
-  // RFC-282 D1 — visibility is the shared predicate; hasAclBypass/isOwner stay
-  // local for the 403 below, and the 404 → builtin → 403 order is contract.
-  if (!canViewResourceInTx(tx, actor, 'workflow', row)) throwWorkflowNotFound(row.id)
+  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workflow', row)
+  if (!canViewAccess(access)) throwWorkflowNotFound(row.id)
   assertNotBuiltin('workflow', row)
-  if (!hasAclBypass && !isOwner) {
+  if (!canGovernAccess(access)) {
     throw new ForbiddenError(
-      'forbidden',
-      'only the workflow owner or an actor with resource-acl:bypass can modify it',
+      'resource-govern-owner-only',
+      'deleting, renaming, transferring or re-granting a workflow is reserved for its owner',
     )
   }
+}
+
+function workflowReadOnlyError(): ForbiddenError {
+  return new ForbiddenError(
+    'resource-read-only',
+    'you have read-only access to this workflow; ask its owner for an edit grant or save your own copy',
+  )
 }
 
 function assertChangedWorkflowName(currentName: string, submittedName: string): void {

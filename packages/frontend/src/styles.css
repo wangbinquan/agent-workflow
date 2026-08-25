@@ -20022,6 +20022,37 @@ fieldset.settings-card {
   margin: -6px 0 0 calc(72px + var(--space-4, 16px));
 }
 
+/* RFC-324 — the grant list plus its per-member level control, which rides
+   inside each picked chip (UserPicker's adornment slot). */
+.acl-panel__grants {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.acl-panel__grant-note {
+  font-size: 12px;
+  cursor: help;
+}
+
+.acl-panel__grants .acl-panel__hint {
+  margin: 0;
+}
+
+/* A chip is a tight space: shrink the segmented control to match its type
+   scale instead of letting it set the chip's height. */
+.segmented--compact {
+  font-size: 11px;
+}
+
+.segmented--compact .segmented__option {
+  padding: 1px 6px;
+  min-height: 0;
+  line-height: 1.6;
+}
+
 .acl-panel__footer {
   display: flex;
   justify-content: flex-end;

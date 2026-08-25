@@ -12,7 +12,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TaskMembers, UserPublic } from '@agent-workflow/shared'
+import type {
+  AssignableTaskMemberRole,
+  TaskMember,
+  TaskMembers,
+  UserPublic,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { currentActorAtRequest, useActor, useAuthSessionRevision } from '@/hooks/useActor'
@@ -20,6 +25,7 @@ import { getAuthSessionRevision } from '@/stores/auth'
 import { PresenceDot } from '@/components/PresenceDot'
 import { usePresenceOf } from '@/hooks/usePresence'
 import { Dialog } from '../Dialog'
+import { Segmented } from '../Segmented'
 import { UserPicker } from '../UserPicker'
 
 interface TaskMembersPanelProps {
@@ -33,7 +39,10 @@ interface TaskMembersPanelProps {
 interface MembersSaveRequest {
   session: number
   authRevision: number
-  body: { userIds?: string[]; ownerUserId?: string }
+  body: {
+    members?: Array<{ userId: string; role: AssignableTaskMemberRole }>
+    ownerUserId?: string
+  }
 }
 
 /**
@@ -101,7 +110,10 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
     enabled: actorIsSettledHuman,
   })
 
-  const [members, setMembers] = useState<UserPublic[]>([])
+  // RFC-324 —— 成员带档位：collaborator 与 owner 同权（cancel / resume / 回答评审），
+  // observer 只能看。新加的人默认 collaborator——这是 RFC-324 之前加人的唯一含义，
+  // 保持它意味着既有操作习惯不变，想要只读的人显式选 observer。
+  const [members, setMembers] = useState<TaskMember[]>([])
   const [dirty, setDirty] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferTo, setTransferTo] = useState<UserPublic[]>([])
@@ -173,7 +185,7 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
     if (data !== undefined) responseTaskIdRef.current = data.taskId
     if (lostManage || taskChanged || authChanged || responseTaskChanged) {
       manageSessionRef.current += 1
-      if (data !== undefined) setMembers(data.users)
+      if (data !== undefined) setMembers(data.members)
       setDirty(false)
       setTransferOpen(false)
       setTransferTo([])
@@ -181,13 +193,13 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
     }
     if (data === undefined) return
     if (!liveCanManage) {
-      setMembers(data.users)
+      setMembers(data.members)
       setDirty(false)
       setTransferOpen(false)
       setTransferTo([])
       return
     }
-    if (!dirty && !transferOpen) setMembers(data.users)
+    if (!dirty && !transferOpen) setMembers(data.members)
   }, [authRevision, dirty, liveCanManage, query.data, taskId, transferOpen])
 
   if (!actorIsSettledHuman) {
@@ -234,27 +246,66 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
         <span className="acl-panel__label">{t('members.users')}</span>
         {canManage ? (
           <UserPicker
-            value={members}
+            value={members.map((m) => m.user)}
             onChange={(next) => {
               if (!sessionIsCurrent()) return
-              setMembers(next)
+              const byId = new Map(members.map((m) => [m.user.id, m]))
+              setMembers(
+                next.map((u) => byId.get(u.id) ?? { user: u, role: 'collaborator' as const }),
+              )
               setDirty(true)
             }}
             excludeIds={data.ownerUserId !== null ? [data.ownerUserId] : []}
             testidPrefix="members-users"
             // RFC-312 —— 可管理分支的成员由 UserPicker 渲染，只接面板会让 owner 看不到点。
-            renderAdornment={(userId) => <MemberPresenceDot userId={userId} />}
+            // RFC-324 —— 档位控件与在线点共用这个装饰槽：另起一份成员名单会让同一个人
+            // 在面板里出现两次，两份还各自跟着 dirty 状态走。
+            renderAdornment={(userId) => {
+              const member = members.find((m) => m.user.id === userId)
+              return (
+                <>
+                  <MemberPresenceDot userId={userId} />
+                  {member !== undefined && (
+                    <Segmented<AssignableTaskMemberRole>
+                      className="segmented--compact"
+                      value={member.role}
+                      onChange={(role) => {
+                        if (!sessionIsCurrent()) return
+                        setMembers((prev) =>
+                          prev.map((x) => (x.user.id === userId ? { ...x, role } : x)),
+                        )
+                        setDirty(true)
+                      }}
+                      options={(['collaborator', 'observer'] as const).map((v) => ({
+                        value: v,
+                        label: t(`members.roleValue.${v}`),
+                        testid: `member-role-${v}-${userId}`,
+                      }))}
+                      ariaLabel={t('members.role')}
+                    />
+                  )}
+                </>
+              )
+            }}
           />
-        ) : data.users.length === 0 ? (
+        ) : data.members.length === 0 ? (
           <span className="muted">{t('members.noUsers')}</span>
         ) : (
           <span className="acl-panel__value">
-            {data.users.map((u) => (
-              <MemberChip key={u.id} userId={u.id} displayName={u.displayName} />
+            {data.members.map((m) => (
+              <MemberChip
+                key={m.user.id}
+                userId={m.user.id}
+                displayName={`${m.user.displayName} · ${t(`members.roleValue.${m.role}`)}`}
+              />
             ))}
           </span>
         )}
       </div>
+
+      {canManage && members.length > 0 && (
+        <p className="acl-panel__hint page__hint">{t('members.roleHint')}</p>
+      )}
 
       <p className="acl-panel__hint page__hint">{t('members.hint')}</p>
 
@@ -277,7 +328,7 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
               save.mutate({
                 session: manageSession,
                 authRevision,
-                body: { userIds: members.map((u) => u.id) },
+                body: { members: members.map((m) => ({ userId: m.user.id, role: m.role })) },
               })
             }}
           >

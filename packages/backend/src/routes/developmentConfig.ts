@@ -70,13 +70,15 @@ import {
 } from '@/modules/development-automation/domain/digitalEmployee'
 import { projectEmployeeSetupJourney } from '@/modules/development-automation/domain/journeyProjection'
 import {
+  assertNameUnchangedForEditor,
   canViewResource,
   filterVisibleRows,
-  isResourceOwner,
+  canEditResource,
   listGrantedResourceIds,
-  requireResourceOwner,
+  requireResourceEdit,
+  requireResourceGovern,
 } from '@/services/resourceAcl'
-import type { AclResourceType } from '@agent-workflow/shared'
+import type { AclResourceType, ResourceAccess } from '@agent-workflow/shared'
 import type { AppDeps } from '@/server'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -270,23 +272,33 @@ async function requireVisible<T extends AclVisibleRow>(
  * 策略与适配器定义。同一份 permission 文件的注释却写着「per-row check 是
  * resource ACL，和这里其他类型一样」——名实不符。
  *
- * 现在与其余七类 ACL 资源走同一个公共判据 `requireResourceOwner`：它先做
- * `requireResourceView`（不可见 ⇒ 404，与不存在同形，守 RFC-248 H9 反枚举），
- * 再判 owner-or-bypass（可见但非 owner ⇒ 403）。
+ * 现在与其余十二类 ACL 资源走同一套公共判据：先做 `requireResourceView`
+ * （不可见 ⇒ 404，与不存在同形，守 RFC-248 H9 反枚举），再按动作分档。
  *
- * **注意 grant 不含写权**：`resource_grants` 只进 `canViewResource`，不进
- * `isResourceOwner`（`services/resourceAcl.ts`）。所以「授权给某人」只授可见与
- * 可用；非 owner 要写只有三条路——由 owner 操作、授 `resource-acl:bypass`
- * （manager+ 才有此点）、或转移 owner。
+ * **RFC-324 起 grant 分两档**：`read` 仍然只授可见与可用（这是 RFC-317 C1 修好的
+ * 那条边界，没有回退）；`write` 额外授「改内容」，覆盖 revise 与 publish。
+ * archive 属于治理面，与删除同级，仍然只有 owner / `resource-acl:bypass`。
  */
-async function requireOwned<T extends AclVisibleRow>(
+async function requireEditable<T extends AclVisibleRow>(
+  deps: AppDeps,
+  actor: Actor,
+  aclType: AclResourceType,
+  row: T | null,
+): Promise<{ row: T; access: ResourceAccess }> {
+  if (row === null) throw new NotFoundError('resource-not-found', 'not found')
+  const access = await requireResourceEdit(deps.db, actor, aclType, row)
+  return { row, access }
+}
+
+/** RFC-324 —— 治理写（archive）：与删除同级，编辑授权不覆盖。 */
+async function requireGovernable<T extends AclVisibleRow>(
   deps: AppDeps,
   actor: Actor,
   aclType: AclResourceType,
   row: T | null,
 ): Promise<T> {
   if (row === null) throw new NotFoundError('resource-not-found', 'not found')
-  await requireResourceOwner(deps.db, actor, aclType, row)
+  await requireResourceGovern(deps.db, actor, aclType, row)
   return row
 }
 
@@ -376,21 +388,28 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       revise: async (actor, id, body) => {
-        await requireOwned(deps, actor, 'action_template', templateStore.getById(id))
+        const { row: current, access } = await requireEditable(
+          deps,
+          actor,
+          'action_template',
+          templateStore.getById(id),
+        )
+        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
+        assertNameUnchangedForEditor(access, current.name, body.name)
         reviseActionTemplateDraft(
           { store: templateStore, now },
           { id, draft: body.draft ?? {}, ...(body.name === undefined ? {} : { name: body.name }) },
         )
       },
       publish: async (actor, id) => {
-        await requireOwned(deps, actor, 'action_template', templateStore.getById(id))
+        await requireEditable(deps, actor, 'action_template', templateStore.getById(id))
         return publishActionTemplate(
           { store: templateStore, now },
           { id, actorUserId: actor.user.id },
         )
       },
       archive: async (actor, id) => {
-        await requireOwned(deps, actor, 'action_template', templateStore.getById(id))
+        await requireGovernable(deps, actor, 'action_template', templateStore.getById(id))
         archiveActionTemplate({ store: templateStore, now }, { id })
       },
     },
@@ -425,21 +444,28 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           ),
         ),
       revise: async (actor, id, body) => {
-        await requireOwned(deps, actor, 'verification_profile', profileStore.getById(id))
+        const { row: current, access } = await requireEditable(
+          deps,
+          actor,
+          'verification_profile',
+          profileStore.getById(id),
+        )
+        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
+        assertNameUnchangedForEditor(access, current.name, body.name)
         reviseVerificationProfileDraft(
           { store: profileStore, now },
           { id, draft: body.draft ?? {}, ...(body.name === undefined ? {} : { name: body.name }) },
         )
       },
       publish: async (actor, id) => {
-        await requireOwned(deps, actor, 'verification_profile', profileStore.getById(id))
+        await requireEditable(deps, actor, 'verification_profile', profileStore.getById(id))
         return publishVerificationProfile(
           { store: profileStore, now },
           { id, actorUserId: actor.user.id },
         )
       },
       archive: async (actor, id) => {
-        await requireOwned(deps, actor, 'verification_profile', profileStore.getById(id))
+        await requireGovernable(deps, actor, 'verification_profile', profileStore.getById(id))
         archiveVerificationProfile({ store: profileStore, now }, { id })
       },
     },
@@ -492,7 +518,14 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           }),
         ),
       revise: async (actor, id, body) => {
-        await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+        const { row: current, access } = await requireEditable(
+          deps,
+          actor,
+          'digital_employee',
+          await getDigitalEmployee(deps.db, id),
+        )
+        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
+        assertNameUnchangedForEditor(access, current.name, body.name)
         await reviseDigitalEmployeeDraft(deps.db, {
           id,
           draft: body.draft ?? {},
@@ -500,7 +533,12 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         })
       },
       publish: async (actor, id) => {
-        await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+        await requireEditable(
+          deps,
+          actor,
+          'digital_employee',
+          await getDigitalEmployee(deps.db, id),
+        )
         return publishDigitalEmployee(deps.db, {
           id,
           publishedBy: actor.user.id,
@@ -508,7 +546,12 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         })
       },
       archive: async (actor, id) => {
-        await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+        await requireGovernable(
+          deps,
+          actor,
+          'digital_employee',
+          await getDigitalEmployee(deps.db, id),
+        )
         await archiveDigitalEmployee(deps.db, id)
       },
     },
@@ -589,7 +632,12 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const id = c.req.param('id')
-      await requireOwned(deps, actor, 'digital_employee', await getDigitalEmployee(deps.db, id))
+      await requireGovernable(
+        deps,
+        actor,
+        'digital_employee',
+        await getDigitalEmployee(deps.db, id),
+      )
       const body = employeePlaybookBody.parse(await safeJsonOrEmpty(c.req.raw))
       // Reject an incomplete browser write before replacing the previous draft;
       // cross-resource closure violations remain visible and publish-blocking.
@@ -724,7 +772,14 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
           }),
         ),
       revise: async (actor, id, body) => {
-        await requireOwned(deps, actor, 'automation_policy', await getAutomationPolicy(deps.db, id))
+        const { row: current, access } = await requireEditable(
+          deps,
+          actor,
+          'automation_policy',
+          await getAutomationPolicy(deps.db, id),
+        )
+        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
+        assertNameUnchangedForEditor(access, current.name, body.name)
         await reviseAutomationPolicyDraft(deps.db, {
           id,
           draft: body.draft ?? {},
@@ -732,11 +787,21 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         })
       },
       publish: async (actor, id) => {
-        await requireOwned(deps, actor, 'automation_policy', await getAutomationPolicy(deps.db, id))
+        await requireEditable(
+          deps,
+          actor,
+          'automation_policy',
+          await getAutomationPolicy(deps.db, id),
+        )
         return publishAutomationPolicy(deps.db, { id, publishedBy: actor.user.id })
       },
       archive: async (actor, id) => {
-        await requireOwned(deps, actor, 'automation_policy', await getAutomationPolicy(deps.db, id))
+        await requireGovernable(
+          deps,
+          actor,
+          'automation_policy',
+          await getAutomationPolicy(deps.db, id),
+        )
         await archiveAutomationPolicy(deps.db, id)
       },
     },
@@ -759,7 +824,15 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         const hasTechnicalAuthority =
           actor.permissions.has('adapter-definitions:update') &&
           actor.permissions.has('scripts:author')
-        if (row !== null && hasTechnicalAuthority && isResourceOwner(actor, row)) {
+        // RFC-324 —— draft 里带的是可执行与密钥投影，读它的资格与「能不能改这份
+        // Adapter」同级：owner 之外，`write` 授权者也要看得到，否则「可编辑
+        // Adapter」名存实亡。技术权限（adapter-definitions:update + scripts:author）
+        // 仍是独立的第二道门，本 RFC 不动它。
+        if (
+          row !== null &&
+          hasTechnicalAuthority &&
+          (await canEditResource(deps.db, actor, 'development_adapter', row))
+        ) {
           return {
             ...identityView(row),
             purpose: (row as { purpose?: unknown }).purpose,
@@ -812,7 +885,14 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       revise: async (actor, id, body) => {
-        await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
+        const { row: current, access } = await requireEditable(
+          deps,
+          actor,
+          'development_adapter',
+          adapterStore.getById(id),
+        )
+        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
+        assertNameUnchangedForEditor(access, current.name, body.name)
         reviseDevelopmentAdapterDraft(
           adapterStore,
           { userId: actor.user.id, actorHasScriptsAuthor: actor.permissions.has('scripts:author') },
@@ -820,7 +900,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       publish: async (actor, id) => {
-        await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
+        await requireEditable(deps, actor, 'development_adapter', adapterStore.getById(id))
         return publishDevelopmentAdapter(
           adapterStore,
           { userId: actor.user.id, actorHasScriptsAuthor: actor.permissions.has('scripts:author') },
@@ -828,7 +908,7 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
         )
       },
       archive: async (actor, id) => {
-        await requireOwned(deps, actor, 'development_adapter', adapterStore.getById(id))
+        await requireGovernable(deps, actor, 'development_adapter', adapterStore.getById(id))
         archiveDevelopmentAdapter(adapterStore, { id, now: now() })
       },
     },

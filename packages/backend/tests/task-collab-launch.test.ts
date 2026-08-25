@@ -180,15 +180,17 @@ describe('taskCollab — RFC-099 membership model', () => {
     const task = { id: 'task-4', ownerUserId: bob }
     // carol (plain member) cannot manage members
     await expect(
-      updateTaskMembers(db, actorFor(carol, 'user'), task, { userIds: [dave] }),
+      updateTaskMembers(db, actorFor(carol, 'user'), task, {
+        members: [{ userId: dave, role: 'collaborator' as const }],
+      }),
     ).rejects.toBeInstanceOf(ForbiddenError)
     // owner transfers to carol; bob auto-kept as collaborator
     const after = await updateTaskMembers(db, actorFor(bob, 'user'), task, {
       ownerUserId: carol,
-      userIds: [dave],
+      members: [{ userId: dave, role: 'collaborator' as const }],
     })
     expect(after.ownerUserId).toBe(carol)
-    expect(after.users.map((u) => u.id).sort()).toEqual([bob, dave].sort())
+    expect(after.members.map((m) => m.user.id).sort()).toEqual([bob, dave].sort())
     const taskRow = (await db.select().from(tasks).where(eq(tasks.id, 'task-4')))[0]!
     expect(taskRow.ownerUserId).toBe(carol)
     // membership flipped: bob is now role 'user'
@@ -210,11 +212,14 @@ describe('taskCollab — RFC-099 membership model', () => {
     expect(adminView.canManage).toBe(true)
     const carolView = await getTaskMembers(db, actorFor(carol, 'user'), task)
     expect(carolView.canManage).toBe(false)
-    expect(carolView.users.map((u) => u.id)).toEqual([carol])
+    expect(carolView.members.map((m) => m.user.id)).toEqual([carol])
     const updated = await updateTaskMembers(db, actorFor(admin, 'admin'), task, {
-      userIds: [carol, dave],
+      members: [
+        { userId: carol, role: 'collaborator' as const },
+        { userId: dave, role: 'collaborator' as const },
+      ],
     })
-    expect(updated.users.map((u) => u.id).sort()).toEqual([carol, dave].sort())
+    expect(updated.members.map((m) => m.user.id).sort()).toEqual([carol, dave].sort())
   })
 
   test('member notification waits for revalidation and carries the before/after audience union', async () => {
@@ -254,7 +259,7 @@ describe('taskCollab — RFC-099 membership model', () => {
         db,
         actorFor(bob, 'user'),
         { id: 'task-audience', ownerUserId: bob },
-        { ownerUserId: dave, userIds: [] },
+        { ownerUserId: dave, members: [] },
       )
       await revalidationStarted
       expect(order).toEqual(['revalidation-start'])
@@ -284,10 +289,14 @@ describe('taskCollab — RFC-099 membership model', () => {
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, dave))
     const task = { id: 'task-6', ownerUserId: bob }
     await expect(
-      updateTaskMembers(db, actorFor(bob, 'user'), task, { userIds: [dave] }),
+      updateTaskMembers(db, actorFor(bob, 'user'), task, {
+        members: [{ userId: dave, role: 'collaborator' as const }],
+      }),
     ).rejects.toThrow(/not active/)
     await expect(
-      updateTaskMembers(db, actorFor(bob, 'user'), task, { userIds: ['__system__'] }),
+      updateTaskMembers(db, actorFor(bob, 'user'), task, {
+        members: [{ userId: '__system__', role: 'collaborator' as const }],
+      }),
     ).rejects.toThrow(/not active/)
   })
 })

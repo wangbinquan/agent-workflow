@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { ResourceAccess } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { z } from 'zod'
 
@@ -11,7 +12,8 @@ import { mountAclEndpoints } from '@/routes/resourceAcl'
 import type { AppDeps } from '@/server'
 import {
   filterVisibleRows,
-  requireResourceOwner,
+  assertNameUnchangedForEditor,
+  requireResourceEdit,
   resourceAclAudienceAuthority,
 } from '@/services/resourceAcl'
 import { NotFoundError } from '@/util/errors'
@@ -85,7 +87,12 @@ export function mountDigitalEmployeeRoutes(
   const loadVisibleEmployee = async (
     c: Parameters<typeof actorOf>[0],
     id: string,
-  ): Promise<{ id: string; ownerUserId: string | null; visibility: 'private' | 'public' }> => {
+  ): Promise<{
+    id: string
+    name: string
+    ownerUserId: string | null
+    visibility: 'private' | 'public'
+  }> => {
     const row = module.queries.getEmployeeAcl(id)
     if (row === null) {
       throw new NotFoundError('employee-definition-not-found', 'digital employee not found')
@@ -97,13 +104,19 @@ export function mountDigitalEmployeeRoutes(
     return visible
   }
 
-  /** 写路径：先 404 同形，再 owner-or-bypass ⇒ 403。 */
-  const requireOwnedEmployee = async (
+  /**
+   * 写路径：先 404 同形，再 RFC-324 内容写判据（owner / `write` 授权 / bypass）⇒ 403。
+   *
+   * 保存同时会原子创建下一个可执行 revision——按 RFC-324 D8，发布与编辑同档，
+   * 所以这条路由整体归内容写。返回当前行与判定，供调用方做改名围栏。
+   */
+  const requireEditableEmployee = async (
     c: Parameters<typeof actorOf>[0],
     id: string,
-  ): Promise<void> => {
+  ): Promise<{ name: string; access: ResourceAccess }> => {
     const row = await loadVisibleEmployee(c, id)
-    await requireResourceOwner(deps.db, actorOf(c), 'employee_definition', row)
+    const access = await requireResourceEdit(deps.db, actorOf(c), 'employee_definition', row)
+    return { name: row.name, access }
   }
 
   registerRoute(
@@ -664,11 +677,19 @@ export function mountDigitalEmployeeRoutes(
     },
     async (c) => {
       const id = c.req.param('id')
-      await requireOwnedEmployee(c, id)
+      const { name, access } = await requireEditableEmployee(c, id)
+      const body = await safeJsonOrEmpty(c.req.raw)
+      // RFC-324 —— 保存 body 带 name（updateEmployeeDefinitionBodySchema），改名归 owner。
+      const submittedName = (body as { name?: unknown }).name
+      assertNameUnchangedForEditor(
+        access,
+        name,
+        typeof submittedName === 'string' ? submittedName : undefined,
+      )
       return c.json(
         module.commands.updateEmployee({
           id,
-          body: await safeJsonOrEmpty(c.req.raw),
+          body,
           actorUserId: actorId(c),
           adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),

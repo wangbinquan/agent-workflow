@@ -21,6 +21,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 import { AclPanel } from '@/components/AclPanel'
 import { usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { DevelopmentConfigEditor } from '@/components/code/DevelopmentConfigEditor'
 import { JourneyNextAction, type JourneyProjection } from '@/components/code/JourneyNextAction'
 import {
@@ -87,8 +88,10 @@ function ConfigDetailPage(): ReactElement {
   const kind: ConfigKind = isConfigKind(params.kind) ? params.kind : 'employees'
   const spec = CONFIG_KIND_SPECS[kind]
   const qc = useQueryClient()
-  const canUpdate = usePermission(`${spec.permissionPrefix}:update`)
-  const canArchive = usePermission(`${spec.permissionPrefix}:archive`)
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档；archive 与删除同级，归治理档。
+  const resourceAccess = useResourceAccess(`${spec.apiBase}/${encodeURIComponent(params.id)}`)
+  const canUpdate = usePermission(`${spec.permissionPrefix}:update`) && resourceAccess.canEdit
+  const canArchive = usePermission(`${spec.permissionPrefix}:archive`) && resourceAccess.canManage
   const canAuthorScripts = usePermission('scripts:author')
   const canEditDraft = canUpdate
 

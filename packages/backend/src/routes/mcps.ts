@@ -34,7 +34,12 @@ import {
   mcpOperationConfigHashOf,
   withMcpOperationConfigHash,
 } from '@/services/mcpOperationRevision'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { serializeMcpFor } from '@/services/tokenRedaction'
 import { mountAclEndpoints } from './resourceAcl'
@@ -378,7 +383,12 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       const resolved = await loadVisibleMcp(actor, id)
       const updated = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisibleMcp(actor, resolved.id)
-        await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+        // RFC-324: content write. An MCP's content IS its config — command,
+        // args, env — so an edit grantee can change what this server runs in the
+        // daemon's environment. That is the RFC-324 D7/I6 ruling; the RFC-242 env save
+        // gate and every `scripts:author` field fence still apply unchanged.
+        // The patch schema carries no `name` (rename is its own route below).
+        await requireResourceEdit(deps.db, actor, 'mcp', fresh)
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
         const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
         return updateMcp(deps.db, fresh.id, patch, {
@@ -414,7 +424,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       }
       await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisibleMcp(actor, resolved.id)
-        await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+        await requireResourceGovern(deps.db, actor, 'mcp', fresh)
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
         // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
         // section, so a concurrent rename is caught as a mismatch.
@@ -452,7 +462,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       const resolved = await loadVisibleMcp(actor, id)
       const renamed = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisibleMcp(actor, resolved.id)
-        await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+        await requireResourceGovern(deps.db, actor, 'mcp', fresh)
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
         const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
         return renameMcp(deps.db, fresh.id, rename, {

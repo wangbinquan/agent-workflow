@@ -35,13 +35,16 @@ import { agentRefFenceGroups, resolveAgentRefsUsable } from './agentRefs'
 import {
   filterVisibleRows,
   assertInitialResourceOwner,
-  canViewResourceInTx,
   discloseRefsSync,
   discloseScheduleRefs,
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
+  canEditAccess,
+  canGovernAccess,
+  canViewAccess,
   hasResourceAclBypass,
   listGrantedResourceIds,
+  resolveResourceAccessForInTx,
 } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import { getRuntime } from './runtimeRegistry'
@@ -564,7 +567,7 @@ export function commitAgentUpdateInTx(tx: DbTxSync, p: PreparedAgentUpdate): voi
   const resolvedRefs = { matchedManagedSkillIds: p.matchedManagedSkillIds }
   const revisionFenced = fence !== undefined && actor !== undefined && actor !== null
   const currentRow = revisionFenced
-    ? requireAgentMutationRevision(tx, id, actor, fence)
+    ? requireAgentMutationRevision(tx, id, actor, fence, 'edit')
     : tx.select().from(agents).where(eq(agents.id, id)).get()
   if (currentRow === undefined) {
     throw new NotFoundError('agent-not-found', 'agent not found')
@@ -650,7 +653,7 @@ export async function deleteAgent(
         throw new NotFoundError('agent-not-found', 'agent not found')
       }
     } else {
-      requireAgentMutationRevision(tx, id, actor, fence)
+      requireAgentMutationRevision(tx, id, actor, fence, 'govern')
     }
 
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
@@ -789,7 +792,7 @@ export async function renameAgent(
   if (input.newName === existing.name) {
     if (opts !== undefined) {
       dbTxSync(db, (tx) => {
-        requireAgentMutationRevision(tx, id, opts.actor, opts)
+        requireAgentMutationRevision(tx, id, opts.actor, opts, 'govern')
       })
     }
     return existing
@@ -805,7 +808,7 @@ export async function renameAgent(
       const current =
         opts === undefined
           ? tx.select().from(agents).where(eq(agents.id, id)).get()
-          : requireAgentMutationRevision(tx, id, opts.actor, opts)
+          : requireAgentMutationRevision(tx, id, opts.actor, opts, 'govern')
       if (current === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
 
       const collision = tx
@@ -865,25 +868,32 @@ function requireAgentMutationRevision(
   id: string,
   actor: Actor,
   expected: { expectedUpdatedAt: number; expectedAclRevision: number },
+  // RFC-324 —— 这道 in-tx 门服务三个调用方，而它们不再同档：内容更新是 `edit`，
+  // 删除与改名是 `govern`。参数是必填的：加默认值等于给未来的第四个调用方一个
+  // 「不想就不填」的选项，而这里恰恰是最不该猜的地方。
+  need: 'edit' | 'govern',
 ): AgentRow {
   const current = tx.select().from(agents).where(eq(agents.id, id)).get()
   if (current === undefined) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
 
-  const hasAclBypass = hasResourceAclBypass(actor)
-  const isOwner = current.ownerUserId !== null && current.ownerUserId === actor.user.id
-  // RFC-282/RFC-305 — visibility is shared; ACL-bypass/owner stay
-  // local because the 403 decision below reuses them, and the error order
-  // (404 before 403 before stale) is part of the route contract.
-  if (!canViewResourceInTx(tx, actor, 'agent', current)) {
+  // RFC-282/RFC-305/RFC-324 — 可见性与档位来自同一次判定；错误顺序
+  // （404 先于 403 先于 stale）是路由契约的一部分。
+  const access = resolveResourceAccessForInTx(tx, actor, 'agent', current)
+  if (!canViewAccess(access)) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
-  if (!hasAclBypass && !isOwner) {
-    throw new ForbiddenError(
-      'forbidden',
-      'only the agent owner or an actor with resource-acl:bypass can modify it',
-    )
+  if (need === 'edit' ? !canEditAccess(access) : !canGovernAccess(access)) {
+    throw need === 'edit'
+      ? new ForbiddenError(
+          'resource-read-only',
+          'you have read-only access to this agent; ask its owner for an edit grant or make your own copy',
+        )
+      : new ForbiddenError(
+          'resource-govern-owner-only',
+          'deleting, renaming, transferring or re-granting an agent is reserved for its owner',
+        )
   }
   if (
     current.updatedAt !== expected.expectedUpdatedAt ||

@@ -733,7 +733,7 @@ import {
   canViewResource,
   filterVisibleRows,
   hasResourceAclBypass,
-  isResourceOwner,
+  canEditResource,
   type AclRow,
 } from '@/services/resourceAcl'
 
@@ -813,7 +813,9 @@ export async function canManageMemory(
   }
   const row = await loadScopeAclRow(db, scope)
   if (row === null) return false
-  return isResourceOwner(actor, row)
+  // RFC-324 D9 —— 「随 scope 资源写权」现在包含 `write` 授权档：能改这个 agent /
+  // workflow 的人，也能管它名下的记忆。读面（canViewMemory）不受影响。
+  return canEditResource(db, actor, scope.scopeType === 'agent' ? 'agent' : 'workflow', row)
 }
 
 /**

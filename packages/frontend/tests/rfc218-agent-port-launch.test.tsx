@@ -96,9 +96,10 @@ const RELAUNCH_PORTED_TASK = {
   maxDurationMs: null,
   maxTotalTokens: null,
 }
+// RFC-324 —— 成员列表带档位；重启只继承 collaborator（观察者不该被升成协作者）。
 const RELAUNCH_MEMBERS = {
   owner: { id: 'me', username: 'me', displayName: 'Me', role: 'user', status: 'active' },
-  users: [],
+  members: [],
 }
 
 interface FetchCall {

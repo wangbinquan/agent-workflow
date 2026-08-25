@@ -549,6 +549,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
       const row = db
         .select({
           id: employeeDefinitions.id,
+          name: employeeDefinitions.name,
           ownerUserId: employeeDefinitions.ownerUserId,
           visibility: employeeDefinitions.visibility,
           archivedAt: employeeDefinitions.archivedAt,

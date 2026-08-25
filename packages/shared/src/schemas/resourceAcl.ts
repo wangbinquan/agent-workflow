@@ -4,8 +4,10 @@
 // owner + a per-user grant list + a 'public' switch.
 // (RFC-317 T66 — this line used to name six types by hand while the list had
 // already grown to thirteen. The roster is one `as const` array a few lines
-// down; a header that restates it can only ever be a second copy that rots.) Granted users can view
-// and use; owner and `resource-acl:bypass` holders can modify / delete /
+// down; a header that restates it can only ever be a second copy that rots.)
+// RFC-324 — each grant now carries a LEVEL: `read` grantees can view and use;
+// `write` grantees can additionally change the resource's CONTENT; owner and
+// `resource-acl:bypass` holders can modify / delete /
 // transfer / manage grants. Non-granted actors without bypass must not observe the resource at all
 // (lists filter, detail 404s).
 //
@@ -129,6 +131,57 @@ export function asIntentResourceType(value: AclResourceType): IntentResourceType
 export const AclResourceTypeSchema = z.enum(ACL_RESOURCE_TYPES)
 export type AclResourceType = z.infer<typeof AclResourceTypeSchema>
 
+/**
+ * The resource types the GRANT TABLE can address.
+ *
+ * A superset of `AclResourceType`, and a separate constant for the same reason
+ * `BUNDLE_RESOURCE_TYPES` is one: "has row-level ACL columns" and "can appear in
+ * resource_grants" stopped being the same claim in RFC-324. A scheduled task has
+ * an owner and can be granted, but it has no visibility column, no builtin
+ * marker, no owner×name unique index, and it is neither packaged nor created by
+ * Intent — folding it into `ACL_RESOURCE_TYPES` would have bought one shared
+ * enum at the price of an exception branch in each of those four places.
+ *
+ * Keeping the two apart is what lets the compiler refuse
+ * `canViewResource(db, actor, 'scheduled_task', row)`: the visibility oracle
+ * takes `AclResourceType`, the grant lookups take `GrantResourceType`.
+ */
+export const GRANT_RESOURCE_TYPES = [...ACL_RESOURCE_TYPES, 'scheduled_task'] as const
+export const GrantResourceTypeSchema = z.enum(GRANT_RESOURCE_TYPES)
+export type GrantResourceType = z.infer<typeof GrantResourceTypeSchema>
+
+/**
+ * RFC-324 — how deep one grant reaches.
+ *
+ * `read` is what every grant meant before RFC-324 and what every migrated row
+ * still means: see it, use it, reference it, launch it, copy it. `write` adds
+ * exactly one thing on top — change its CONTENT. Renaming, deleting,
+ * transferring ownership and editing the grant list are NOT expressible here;
+ * they stay with the owner (and `resource-acl:bypass`), which is why this
+ * domain is two values rather than three.
+ */
+export const ResourceGrantLevelSchema = z.enum(['read', 'write'])
+export type ResourceGrantLevel = z.infer<typeof ResourceGrantLevelSchema>
+
+/**
+ * The resolved verdict for one actor against one row: `own > write > read > none`.
+ *
+ * This exists so the three questions the codebase actually asks — can they SEE
+ * it, can they CHANGE it, can they GOVERN it — are three reads of one value
+ * instead of three predicates that can drift apart. The four-value shape is the
+ * single source; `canViewAccess` / `canEditAccess` / `canGovernAccess` are pure
+ * projections of it.
+ */
+export const ResourceAccessSchema = z.enum(['none', 'read', 'write', 'own'])
+export type ResourceAccess = z.infer<typeof ResourceAccessSchema>
+
+/** One entry of a resource's grant list: who, and how deep. */
+export const ResourceGrantSchema = z.object({
+  user: UserPublicSchema,
+  level: ResourceGrantLevelSchema,
+})
+export type ResourceGrant = z.infer<typeof ResourceGrantSchema>
+
 export const ResourceVisibilitySchema = z.enum(['private', 'public'])
 export type ResourceVisibility = z.infer<typeof ResourceVisibilitySchema>
 
@@ -145,9 +198,21 @@ export const ResourceAclSchema = z.object({
   /** Public projection of the owner row; null when owner is '__system__' or the user row vanished. */
   owner: UserPublicSchema.nullable(),
   visibility: ResourceVisibilitySchema,
-  users: z.array(UserPublicSchema),
+  /**
+   * RFC-324 — the grant list, each entry carrying its level. This replaced a
+   * bare `users: UserPublic[]`: a list of people with no depth attached is
+   * precisely the shape that left both sides of a grant guessing what it gave.
+   */
+  grants: z.array(ResourceGrantSchema),
   /** True when the current actor may PUT this ACL (owner or `resource-acl:bypass`). */
   canManage: z.boolean(),
+  /**
+   * RFC-324 — true when the current actor may change this resource's CONTENT
+   * (owner, `write` grantee, or `resource-acl:bypass`). Distinct from
+   * `canManage`, which is about the ACL itself; the detail pages and the
+   * workflow editor read THIS one to decide whether they render read-only.
+   */
+  canEdit: z.boolean(),
   /**
    * RFC-170 §8 — monotonic ACL revision. The client holds this from GET and
    * echoes it as `expectedAclRevision` on PUT; the server CAS-rejects (409) a
@@ -160,15 +225,23 @@ export const ResourceAclSchema = z.object({
 export type ResourceAcl = z.infer<typeof ResourceAclSchema>
 
 /**
- * PUT /api/{res}/:id/acl body. `userIds` is full-replace semantics. At least
+ * PUT /api/{res}/:id/acl body. `grants` is full-replace semantics. At least
  * one field must be present. Owner transfer keeps the previous owner in the
- * grant list (server-side) so they don't lock themselves out.
+ * grant list (server-side, at `read`) so they don't lock themselves out.
+ *
+ * RFC-324 replaced `userIds: string[]` outright rather than adding a parallel
+ * optional field: two ways to express one list would have meant deciding what
+ * `{userIds, grants}` together means on every request. This endpoint is
+ * `tokenAccess: 'never'`, so no PAT could have been calling it.
  */
 export const UpdateResourceAclBodySchema = z
   .object({
     ownerUserId: z.string().min(1).optional(),
     visibility: ResourceVisibilitySchema.optional(),
-    userIds: z.array(z.string().min(1)).max(256).optional(),
+    grants: z
+      .array(z.object({ userId: z.string().min(1), level: ResourceGrantLevelSchema }))
+      .max(256)
+      .optional(),
     /**
      * RFC-223 — mandatory OCC fence. Every mutation must bind the immutable
      * resource id and the exact ACL revision observed by the client. Optional
@@ -179,8 +252,8 @@ export const UpdateResourceAclBodySchema = z
     expectedAclRevision: z.number().int().nonnegative(),
   })
   .refine(
-    (b) => b.ownerUserId !== undefined || b.visibility !== undefined || b.userIds !== undefined,
-    { message: 'at least one of ownerUserId / visibility / userIds is required' },
+    (b) => b.ownerUserId !== undefined || b.visibility !== undefined || b.grants !== undefined,
+    { message: 'at least one of ownerUserId / visibility / grants is required' },
   )
 export type UpdateResourceAclBody = z.infer<typeof UpdateResourceAclBodySchema>
 

@@ -18,10 +18,13 @@
 // 本文件锁死修复后的语义。**红→绿对**：把 `developmentConfig.ts` 里的
 // `requireOwned` 换回 `requireVisible`，本文件的 403 组必须立刻全红。
 //
-// 顺带锁住一个容易想当然的事实：**grant 不含写权**。`resource_grants` 只进
-// `canViewResource`，不进 `isResourceOwner`（`services/resourceAcl.ts`）。所以
-// 「授权给某人」只授可见与可用；被授权者写仍然 403。这条如果哪天被改成「grant 也能
-// 写」，那是产品决策，必须先改这里的断言，而不是悄悄放行。
+// 顺带锁住一个容易想当然的事实：**`read` 档的 grant 不含写权**。
+//
+// RFC-324 就是那个「产品决策」（本注释此前预告过它，措辞是「必须先改这里的断言，
+// 而不是悄悄放行」）：授权从此分两档。`read` 是迁移后每一条存量授权的档位，语义与
+// RFC-324 之前逐字相同——只授可见与可用，写仍然 403，下面那组断言原样保留、含义
+// 未变。`write` 档是新增的第二档，它放行 revise / publish，**但不放行 archive**
+// （归档与删除同级，属治理面）。两侧都在本文件里锁着。
 //
 // 行是直接种进 DB 的，不走各自的 create 端点：写门只 `load()` 一行，种子化让本文件
 // 不必背负每种类型创建时的特有约束（草稿 schema、能力引用闭包……），那些与被测边界无关。
@@ -251,7 +254,7 @@ describe('RFC-317 C1 —— 配置资源写门只认 owner', () => {
       }
     })
 
-    test(`${subject.type}：被 grant 的非 owner 写仍 403——grant 只授可见，不授写`, async () => {
+    test(`${subject.type}：read 档 grant 的非 owner 写仍 403——只授可见，不授写`, async () => {
       const harness = await buildHarness()
       const id = await seed(harness.db, subject, harness.owner.id, 'private')
       await harness.db
@@ -282,6 +285,66 @@ describe('RFC-317 C1 —— 配置资源写门只认 owner', () => {
         expect(res.status, `${subject.type} ${attempt.label}：被授权者仍不得写`).toBe(403)
         expect(await readRow(harness.db, subject, id)).toEqual(before)
       }
+    })
+
+    // RFC-324 —— 第二档。与上一条用例逐字对照：同样的人、同样的三个入口，唯一的
+    // 差别是 grant 的 `level`。revise / publish 从 403 变成放行，archive 仍是 403。
+    test(`${subject.type}：write 档 grant 能 revise/publish，archive 仍 403（治理面不放行）`, async () => {
+      const harness = await buildHarness()
+      const id = await seed(harness.db, subject, harness.owner.id, 'private')
+      await harness.db
+        .insert(resourceGrants)
+        .values({
+          resourceType: subject.type,
+          resourceId: id,
+          userId: harness.grantee.id,
+          level: 'write',
+          addedBy: harness.owner.id,
+          addedAt: NOW,
+        })
+        .run()
+      const before = await readRow(harness.db, subject, id)
+
+      const revise = await req(harness.app, harness.grantee.token, `${subject.base}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ draft: { revisedBy: 'write-grantee' } }),
+      })
+      expect(
+        [403, 404],
+        `${subject.type}：write 档必须被写门放行（放行后是 200 还是该类型自己的 422 由领域规则决定）`,
+      ).not.toContain(revise.status)
+      const afterRevise = await readRow(harness.db, subject, id)
+      if (revise.status === 200) {
+        expect(afterRevise.draftJson, 'write 档放行后的写必须真的落库').not.toBe(before.draftJson)
+      } else {
+        expect(revise.status, '非 200 时只接受内容校验 422').toBe(422)
+        expect(afterRevise, '内容校验失败不得留下持久写入').toEqual(before)
+      }
+
+      const publish = await req(
+        harness.app,
+        harness.grantee.token,
+        `${subject.base}/${id}/publish`,
+        { method: 'POST' },
+      )
+      expect([403, 404], `${subject.type}：发布与编辑同档（RFC-324 D8）`).not.toContain(
+        publish.status,
+      )
+
+      const beforeArchive = await readRow(harness.db, subject, id)
+      const archive = await req(
+        harness.app,
+        harness.grantee.token,
+        `${subject.base}/${id}/archive`,
+        { method: 'POST' },
+      )
+      expect(archive.status, `${subject.type}：archive 属治理面，write 档不得放行`).toBe(403)
+      expect((await archive.json()) as { code: string }).toMatchObject({
+        code: 'resource-govern-owner-only',
+      })
+      expect(await readRow(harness.db, subject, id), 'archive 被拒后不得留下任何持久写入').toEqual(
+        beforeArchive,
+      )
     })
 
     test(`${subject.type}：private 行对陌生人是 404，与不存在同形（不泄漏存在性）`, async () => {

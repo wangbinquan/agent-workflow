@@ -186,6 +186,8 @@ export interface DigitalEmployeeAuthoringStore {
    */
   getEmployeeDefinitionAcl(id: string): {
     readonly id: string
+    /** RFC-324 —— 改名围栏要比对「事务外看到的当前名字」，这是同一行上的零成本一列。 */
+    readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly archivedAt: number | null

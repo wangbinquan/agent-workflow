@@ -34,7 +34,12 @@ import {
 } from '@/services/pluginOperationRevision'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
 import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -48,12 +53,28 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     return plugin
   }
 
-  async function loadFreshOwned(actor: Actor, stableId: string): Promise<Plugin> {
+  /**
+   * RFC-324 —— 内容写用的「重取 + 判据」：安装内容、版本升级、上游检查。
+   *
+   * 与治理版分开，是因为这个 helper 此前一个人服务全部写路由，于是「改插件内容」
+   * 与「删掉这个插件」共用同一道 owner 门；分档之后这两件事不再同级。
+   */
+  async function loadFreshEditable(actor: Actor, stableId: string): Promise<Plugin> {
     const plugin = await getPluginById(deps.db, stableId)
     if (plugin === null || !(await canViewResource(deps.db, actor, 'plugin', plugin))) {
       throw new NotFoundError('plugin-not-found', `plugin '${stableId}' not found`)
     }
-    await requireResourceOwner(deps.db, actor, 'plugin', plugin)
+    await requireResourceEdit(deps.db, actor, 'plugin', plugin)
+    return plugin
+  }
+
+  /** RFC-324 —— 治理写用的同款 helper：删除与改名。 */
+  async function loadFreshGovernable(actor: Actor, stableId: string): Promise<Plugin> {
+    const plugin = await getPluginById(deps.db, stableId)
+    if (plugin === null || !(await canViewResource(deps.db, actor, 'plugin', plugin))) {
+      throw new NotFoundError('plugin-not-found', `plugin '${stableId}' not found`)
+    }
+    await requireResourceGovern(deps.db, actor, 'plugin', plugin)
     return plugin
   }
 
@@ -151,7 +172,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       try {
         const updated = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-          const fresh = await loadFreshOwned(actor, initial.id)
+          const fresh = await loadFreshEditable(actor, initial.id)
           assertExpectedHash(fresh, parsed.data.expectedConfigHash)
           const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
           return updatePlugin(deps.db, initial.id, patch)
@@ -184,7 +205,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-        const fresh = await loadFreshOwned(actor, initial.id)
+        const fresh = await loadFreshGovernable(actor, initial.id)
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
         // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
         assertDeleteConfirm(parsed.data, fresh.name, 'plugin')
@@ -214,7 +235,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       const renamed = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-        const fresh = await loadFreshOwned(actor, initial.id)
+        const fresh = await loadFreshGovernable(actor, initial.id)
         assertExpectedHash(fresh, parsed.data.expectedConfigHash)
         const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
         return renamePlugin(deps.db, initial.id, rename)
@@ -241,7 +262,10 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'plugin', initial)
+      // RFC-324: checking upstream is part of maintaining the plugin's content
+      // (it feeds the upgrade this same grantee may perform), so it sits on the
+      // edit gate alongside PUT and upgrade.
+      await requireResourceEdit(deps.db, actor, 'plugin', initial)
       assertOperationSupported(initial)
 
       try {
@@ -253,7 +277,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
               const captured = await pluginOperationCoordinator.runExclusive(
                 initial.id,
                 async () => {
-                  const fresh = await loadFreshOwned(actor, initial.id)
+                  const fresh = await loadFreshEditable(actor, initial.id)
                   assertExpectedHash(fresh, parsed.data.expectedConfigHash)
                   assertOperationSupported(fresh)
                   return fresh
@@ -261,7 +285,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
               )
               const result = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
               return pluginOperationCoordinator.runExclusive(captured.id, async () => {
-                const current = await loadFreshOwned(actor, captured.id)
+                const current = await loadFreshEditable(actor, captured.id)
                 assertExpectedHash(current, parsed.data.expectedConfigHash)
                 return {
                   available: result.available,
@@ -302,7 +326,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
         const receipt = await pluginOperationCoordinator.runExclusive<PluginUpgradeResult>(
           initial.id,
           async () => {
-            const captured = await loadFreshOwned(actor, initial.id)
+            const captured = await loadFreshEditable(actor, initial.id)
             assertExpectedHash(captured, parsed.data.expectedConfigHash)
             assertOperationSupported(captured)
 

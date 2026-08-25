@@ -43,6 +43,7 @@ import {
 } from '@/lib/plugin-form'
 import { stableStringify } from '@/lib/stable-stringify'
 import { usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { Route as pluginsRoute } from './plugins'
 
 export const Route = createRoute({
@@ -74,8 +75,13 @@ function PluginDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
-  const canUpdate = usePermission('plugins:update')
-  const canDelete = usePermission('plugins:delete')
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档。权限点在 user 预设里人人都有，
+  // 所以只看它等于「看得见就编辑得动」：非 owner 一路填完表单，保存才吃 403
+  // （docs/audit-backlog.md:108 记的就是这个）。删除挂 canManage 而不是 canEdit：
+  // 删除是治理动作，可编辑授权不覆盖。
+  const resourceAccess = useResourceAccess(`/api/plugins/${id}`)
+  const canUpdate = usePermission('plugins:update') && resourceAccess.canEdit
+  const canDelete = usePermission('plugins:delete') && resourceAccess.canManage
   const canExecute = usePermission('plugins:execute')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tab, setTab] = useState<PluginTab>('config')

@@ -40,6 +40,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { validateAgentPortState } from '@/lib/agent-ports'
 import { Route as agentsRoute } from './agents'
 import type { AgentResourceStatus } from '@/lib/agent-resource-status'
@@ -58,8 +59,13 @@ function AgentDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
-  const canUpdate = usePermission('agents:update')
-  const canDelete = usePermission('agents:delete')
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档。权限点在 user 预设里人人都有，
+  // 所以只看它等于「看得见就编辑得动」：非 owner 一路填完表单，保存才吃 403
+  // （docs/audit-backlog.md:108 记的就是这个）。删除挂 canManage 而不是 canEdit：
+  // 删除是治理动作，可编辑授权不覆盖。
+  const resourceAccess = useResourceAccess(`/api/agents/${id}`)
+  const canUpdate = usePermission('agents:update') && resourceAccess.canEdit
+  const canDelete = usePermission('agents:delete') && resourceAccess.canManage
   const canExecuteTasks = usePermission('tasks:execute')
   const canReadRuntime = usePermission('runtime:read')
   const tour = useTour()

@@ -55,7 +55,7 @@ import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
-import { canViewResource, hasResourceAclBypass, isResourceOwner } from '@/services/resourceAcl'
+import { canEditResource, canViewResource, hasResourceAclBypass } from '@/services/resourceAcl'
 import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
@@ -564,7 +564,9 @@ export async function createFusion(
   if (skill.sourceKind !== 'managed') {
     throw new ConflictError('fusion-skill-not-managed', 'can only fuse into a managed skill')
   }
-  if (!hasResourceAclBypass(actor) && !isResourceOwner(actor, skill)) {
+  // RFC-324: fusion writes the target skill's content, so an edit grant reaches
+  // it — same door as POST /api/skills/:id/save.
+  if (!(await canEditResource(db, actor, 'skill', skill))) {
     throw new ConflictError('fusion-skill-forbidden', 'you cannot write this skill')
   }
 
@@ -1225,7 +1227,7 @@ async function requireCurrentSkillWritable(
       'the target skill no longer exists; re-initiate the fusion',
     )
   }
-  if (!hasResourceAclBypass(actor) && !isResourceOwner(actor, skill)) {
+  if (!(await canEditResource(db, actor, 'skill', skill))) {
     throw new ConflictError(
       'fusion-skill-forbidden',
       'you no longer have write access to the target skill',

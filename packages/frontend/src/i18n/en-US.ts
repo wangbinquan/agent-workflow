@@ -8078,6 +8078,15 @@ export const enUS: Resources = {
     'admin-required': 'This action requires an elevated permission.',
     'permission-required': 'Your account is missing a required permission.',
     'not-task-member': 'Only task members or an actor with global task authority can do this.',
+    // --- RFC-324 graded resource grants ---
+    'resource-read-only':
+      'You have read-only access to this resource: view it, use it, reference it, launch it and save your own copy — but not change its content. Ask the owner for an edit grant, or work from a copy.',
+    'resource-govern-owner-only':
+      'Deleting, renaming, transferring and permission changes are reserved for the resource owner.',
+    'resource-rename-owner-only':
+      'Renaming is reserved for the resource owner — an edit grant covers content, not the name.',
+    'task-observer-read-only':
+      'You are an observer on this task: you can follow progress, logs and changes, but cancelling, resuming, retrying and answering reviews or clarifications stay with the task members.',
     'acl-invalid': 'Invalid sharing payload.',
     'acl-missing-refs': 'You lack access to some referenced resources.',
     'acl-revision-conflict': 'The sharing settings changed; reload and retry.',
@@ -8767,6 +8776,13 @@ export const enUS: Resources = {
     noMembers: 'No authorized users yet',
     privateHint:
       'Private resources are visible and usable only by the owner, authorized users, or an account with resource-acl:bypass.',
+    level: 'Grant level',
+    levelValue: { read: 'Read-only', write: 'Can edit' },
+    levelHint:
+      'Read-only means see it, use it, reference it, launch it and copy it. Can edit adds changing its content. Renaming, deleting, transferring and permissions always stay with the owner.',
+    levelAdminHint:
+      'This user is an administrator and can change any resource; read-only does not bind them.',
+    readOnlyBadge: 'Read-only access',
     save: 'Save permissions',
     transferOwner: 'Transfer',
     transferTitle: 'Transfer ownership',
@@ -8792,7 +8808,11 @@ export const enUS: Resources = {
     title: 'Task members',
     users: 'Task users',
     noUsers: 'No other members yet',
-    hint: "Task users share the owner's operational rights (cancel/retry/resume, answer reviews & clarifications); only member management and transfer stay with the owner and admins.",
+    role: 'Member level',
+    roleValue: { collaborator: 'Collaborator', observer: 'Observer' },
+    roleHint:
+      "Collaborators share the owner's operational rights (cancel/retry/resume, answer reviews & clarifications). Observers can only watch progress, logs and changes — no operations, and no answering reviews or clarifications.",
+    hint: "Collaborators share the owner's operational rights (cancel/retry/resume, answer reviews & clarifications); only member management and transfer stay with the owner and admins.",
     transferHint: 'After the transfer you stay a task user.',
   },
   userPicker: {

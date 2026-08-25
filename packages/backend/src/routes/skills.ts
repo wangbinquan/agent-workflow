@@ -29,7 +29,12 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
 import {
   assertDeleteConfirm,
   assertTokenDeleteConfirm,
@@ -226,7 +231,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'skill', existing)
+      // RFC-324: deletion is governance — an edit grant does not reach it.
+      await requireResourceGovern(deps.db, actor, 'skill', existing)
       const deleteBody = await readDeleteBody(c)
       assertDeleteConfirm(deleteBody, existing.name, 'skill')
       const parsed = DeleteSkillSchema.safeParse(deleteBody)
@@ -299,7 +305,10 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'skill', existing)
+      // RFC-324: content write. A skill's save body carries no `name` by design
+      // (`UpdateSkillContentSchema` says so in as many words), so an edit grant
+      // cannot rename through this route and needs no name fence.
+      await requireResourceEdit(deps.db, actor, 'skill', existing)
       const { expectedToken, ...patch } = parsed.data
       return c.json(
         await saveSkillWithToken(
@@ -369,7 +378,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'skill', existing)
+      await requireResourceEdit(deps.db, actor, 'skill', existing)
       await writeSkillFile(
         deps.db,
         fsOpts,
@@ -403,7 +412,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'skill', existing)
+      await requireResourceEdit(deps.db, actor, 'skill', existing)
       const path = requirePath(c.req.query('path'))
       // RFC-247 T20 — a token echoes the file PATH (the thing being destroyed);
       // the skill name would confirm the wrong noun here.
@@ -491,7 +500,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'skill', existing)
+      await requireResourceEdit(deps.db, actor, 'skill', existing)
       const v = parseVersionParam(c.req.param('v'), 'v')
       const result = restoreSkillVersion(
         deps.db,

@@ -9,9 +9,16 @@
 // 资源。整套门禁全绿，因为**没有任何规则要求一个 ACL 资源族必须使用 owner 判据**。
 //
 // 本文件把那条缺失的规则补上，两条断言：
-//   ① 凡**消费** `mountAclEndpoints` 的路由文件，必须同时用到 `requireResourceOwner`；
-//   ② 凡在 `routes/**` 里用到 `canViewResource` 的文件，也必须用到
-//      `requireResourceOwner`——除非它在显式 allowlist 里并写清为什么它只读。
+//   ① 凡**消费** `mountAclEndpoints` 的路由文件，必须同时用到一道真写门；
+//   ② 凡在 `routes/**` 里用到 `canViewResource` 的文件，也必须用到真写门
+//      ——除非它在显式 allowlist 里并写清为什么它只读。
+//
+// RFC-324 起「真写门」有两个：`requireResourceGovern`（删除 / 改名 / 转移 / 改授权，
+// 即改名前的 `requireResourceOwner`）与 `requireResourceEdit`（改内容，owner 或
+// `write` 授权）。**两者都满足本守卫的意图**——它防的是「看得见 ⇒ 写得动」，而
+// edit 门要求的是授权档位，不是可见性。只认 govern 会把本 RFC 全部合规的内容写
+// 路由报成违规；只认 edit 则会放过把删除降级成内容写的改动，所以两者都列、且
+// 各自的语义由 §4 的分类表与矩阵测试保证，不由本文件区分。
 //
 // 两条都配 stale 检查：allowlist 条目一旦不再成立（文件没了 / 它其实已经用上了
 // owner 判据）也要红，免得豁免变成永久免死金牌（findings.md RT-02 就是这么烂掉的）。
@@ -37,7 +44,7 @@ const ACL_MOUNTER_DEFINITION = 'packages/backend/src/routes/resourceAcl.ts'
  */
 const READ_ONLY_VISIBILITY_ALLOWLIST: Readonly<Record<string, string>> = {
   [ACL_MOUNTER_DEFINITION]:
-    '它就是 mountAclEndpoints 的定义处。模板化处理器自己只调 canViewResource 做「不可见 ⇒ 404 同形」；PUT /acl 的写权由它委托的 updateResourceAcl 在服务层判（services/resourceAcl.ts:588 的 requireResourceOwner），所以路由文件本身没有 owner 调用是设计，不是缺口。',
+    '它就是 mountAclEndpoints 的定义处。模板化处理器自己只调 canViewResource 做「不可见 ⇒ 404 同形」；PUT /acl 的写权由它委托的 updateResourceAcl 在服务层判（services/resourceAcl.ts 的 requireResourceGovern——RFC-324 起授权面是治理档，编辑授权不含改授权），所以路由文件本身没有写门调用是设计，不是缺口。',
   'packages/backend/src/routes/tasks.ts':
     '跨域只读：判「这个 actor 看不看得见本任务引用的那个 workflow」来决定 sync 预览是否可用（tasks.ts:822），不是任何资源的写门。',
 }
@@ -96,10 +103,28 @@ const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
 
 const usesMountAclEndpoints = (source: RouteSource): boolean =>
   source.rel !== ACL_MOUNTER_DEFINITION && source.calledNames.has('mountAclEndpoints')
+/** RFC-324 —— 真写门：治理档或内容档，两者都不是「看得见就写得动」。 */
+const WRITE_GATES = ['requireResourceGovern', 'requireResourceEdit'] as const
 const usesOwnerGate = (source: RouteSource): boolean =>
-  source.calledNames.has('requireResourceOwner')
+  WRITE_GATES.some((gate) => source.calledNames.has(gate))
 const usesVisibilityOracle = (source: RouteSource): boolean =>
   source.calledNames.has('canViewResource')
+const usesEditGate = (source: RouteSource): boolean =>
+  source.calledNames.has('requireResourceEdit')
+
+/**
+ * RFC-324 —— 挂了 `/acl` 却一个 `requireResourceEdit` 都没有的路由文件，意味着这
+ * 类资源的**内容写仍然全部锁在 owner 判据上**：面板上可以把它授权成「可编辑」，
+ * 而那个档位对它没有任何效果。这种失败不报错、不变红，只留下一个不生效的开关。
+ *
+ * 每条豁免必须写清「那这类资源的内容写门在哪」。
+ */
+const EDIT_GATE_ELSEWHERE_ALLOWLIST: Readonly<Record<string, string>> = {
+  [ACL_MOUNTER_DEFINITION]:
+    '它是 /acl 端点的模板定义处，本身不承载任何资源的内容写；写门在各资源自己的路由或服务里。',
+  'packages/backend/src/routes/workflows.ts':
+    '工作流的保存不在路由层判档：PUT 把 body 交给 services/workflow.ts，写门是那里的 assertPrincipalCanEditInTx——它必须拿事务内的当前名字做改名围栏，路由层做不到。本文件里的 requireResourceGovern 是 DELETE 的治理门。',
+}
 
 describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () => {
   test('语料非空：确实扫到了路由文件（扫到 0 个说明目录变了，本文件此刻零预言力）', () => {
@@ -111,7 +136,7 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
     expect(SOURCES.filter(usesMountAclEndpoints).length).toBeGreaterThan(5)
   })
 
-  test('①凡挂载 /acl 端点的路由文件，都必须用到 requireResourceOwner', () => {
+  test('①凡挂载 /acl 端点的路由文件，都必须用到一道真写门（govern 或 edit）', () => {
     const offenders = SOURCES.filter(
       (source) => usesMountAclEndpoints(source) && !usesOwnerGate(source),
     ).map((source) => source.rel)
@@ -122,7 +147,7 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
     ).toEqual([])
   })
 
-  test('②routes/ 里用 canViewResource 的文件，要么也用 owner 判据，要么进只读 allowlist', () => {
+  test('②routes/ 里用 canViewResource 的文件，要么也用真写门，要么进只读 allowlist', () => {
     const offenders = SOURCES.filter(
       (source) =>
         usesVisibilityOracle(source) &&
@@ -136,6 +161,36 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
     ).toEqual([])
   })
 
+  test('③挂 /acl 的路由文件必须有内容写门，否则「可编辑」档对该资源形同虚设', () => {
+    const offenders = SOURCES.filter(
+      (source) =>
+        usesMountAclEndpoints(source) &&
+        !usesEditGate(source) &&
+        EDIT_GATE_ELSEWHERE_ALLOWLIST[source.rel] === undefined,
+    ).map((source) => source.rel)
+    expect(
+      offenders,
+      '这些文件把资源挂成了 ACL 族，却没有任何 requireResourceEdit：' +
+        'RFC-324 的 write 档在它们身上不产生任何效果，而权限面板照样让 owner 选',
+    ).toEqual([])
+  })
+
+  test('内容写门 allowlist 无过期条目（它已经用上 requireResourceEdit ⇒ 删掉这一行）', () => {
+    const byRel = new Map(SOURCES.map((source) => [source.rel, source]))
+    const stale: string[] = []
+    for (const rel of Object.keys(EDIT_GATE_ELSEWHERE_ALLOWLIST)) {
+      const source = byRel.get(rel)
+      if (source === undefined) {
+        stale.push(`${rel}（文件不存在）`)
+        continue
+      }
+      if (usesEditGate(source) && rel !== ACL_MOUNTER_DEFINITION) {
+        stale.push(`${rel}（已用上 requireResourceEdit，不再需要豁免）`)
+      }
+    }
+    expect(stale, '豁免只能缩、不能涨').toEqual([])
+  })
+
   test('allowlist 无过期条目（文件没了 / 它已经用上 owner 判据 ⇒ 必须删掉这一行）', () => {
     const byRel = new Map(SOURCES.map((source) => [source.rel, source]))
     const stale: string[] = []
@@ -147,7 +202,7 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
       }
       if (!usesVisibilityOracle(source)) stale.push(`${rel}（已不再使用 canViewResource）`)
       else if (usesOwnerGate(source) && rel !== ACL_MOUNTER_DEFINITION) {
-        stale.push(`${rel}（已用上 requireResourceOwner，不再需要豁免）`)
+        stale.push(`${rel}（已用上写门判据，不再需要豁免）`)
       }
     }
     expect(stale, '豁免只能缩、不能涨；过期条目必须删，否则它会变成永久免死金牌').toEqual([])
@@ -174,24 +229,24 @@ describe('RFC-317 T14 —— matcher 自证：调用名提取的边界', () => {
     const fabricated =
       "app.get('/api/x/:id', async (c) => {\n" +
       '  const row = loadVisibleThing(deps, id)\n' +
-      '  await requireResourceOwner(deps.db, actor, "thing", row)\n' +
+      '  await requireResourceGovern(deps.db, actor, "thing", row)\n' +
       '  return c.json(await deps.store.listThings())\n' +
       '})\n'
     const names = calledIdentifierNames('probe.ts', fabricated)
-    for (const expected of ['get', 'loadVisibleThing', 'requireResourceOwner', 'json', 'listThings'])
+    for (const expected of ['get', 'loadVisibleThing', 'requireResourceGovern', 'json', 'listThings'])
       expect(names.has(expected), `没提取到 ${expected}`).toBe(true)
   })
 
   test('注释里出现的名字不算调用（正向检查被注释满足是本 RFC 实撞过的事故形态）', () => {
     const fabricated =
-      '// 这里以前调用 requireResourceOwner，RFC-XXX 之后改走别的门\n' +
-      "const doc = 'requireResourceOwner 的说明'\n" +
+      '// 这里以前调用 requireResourceGovern，RFC-XXX 之后改走别的门\n' +
+      "const doc = 'requireResourceGovern 的说明'\n" +
       'const x = 1\n'
-    expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceOwner')).toBe(false)
+    expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceGovern')).toBe(false)
   })
 
-  test('只是引用而不调用也不算（`const f = requireResourceOwner` 不构成一道门）', () => {
-    const fabricated = 'const gate = requireResourceOwner\nexport { gate }\n'
-    expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceOwner')).toBe(false)
+  test('只是引用而不调用也不算（`const f = requireResourceGovern` 不构成一道门）', () => {
+    const fabricated = 'const gate = requireResourceGovern\nexport { gate }\n'
+    expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceGovern')).toBe(false)
   })
 })

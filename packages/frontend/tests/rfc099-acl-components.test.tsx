@@ -219,7 +219,8 @@ describe('AclPanel', () => {
           ownerUserId: 'owner-1',
           owner: user('owner-1', 'alice'),
           visibility: 'public',
-          users: [user('u2', 'bob')],
+          grants: [{ user: user('u2', 'bob'), level: 'read' as const }],
+          canEdit: true,
           canManage: opts.canManage,
           aclRevision: 3, // RFC-170 §8
         })
@@ -236,7 +237,8 @@ describe('AclPanel', () => {
       ownerUserId: 'owner-1',
       owner: user('owner-1', 'alice'),
       visibility: 'private',
-      users: [],
+      grants: [],
+      canEdit: true,
       canManage: true,
       aclRevision: 4,
     })
@@ -251,7 +253,7 @@ describe('AclPanel', () => {
     await waitFor(() => expect(mockedPut).toHaveBeenCalled())
     expect(mockedPut).toHaveBeenCalledWith('/api/agents/x/acl', {
       visibility: 'private',
-      userIds: ['u2'],
+      grants: [{ userId: 'u2', level: 'read' }],
       // RFC-170 §8: the panel echoes its held composite OCC precondition.
       expectedResourceId: 'a1',
       expectedAclRevision: 3,
@@ -268,9 +270,10 @@ describe('AclPanel', () => {
   })
 
   test('read-only view uses the ACL snapshot after an unsaved manager draft', async () => {
-    // Regression: `members` is the editable draft and deliberately stops syncing while dirty.
-    // If access changes during that window, the read-only branch must render authoritative
-    // `acl.users`; otherwise it leaks the stale draft after management access is revoked.
+    // Regression: the grant list is the editable draft and deliberately stops syncing while
+    // dirty. If access changes during that window, the read-only branch must render the
+    // authoritative `acl.grants`; otherwise it leaks the stale draft after management access
+    // is revoked.
     setupGet({ canManage: true })
     const qc = makeQueryClient()
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />, qc)
@@ -287,7 +290,8 @@ describe('AclPanel', () => {
         ownerUserId: 'owner-1',
         owner: user('owner-1', 'alice'),
         visibility: 'public',
-        users: [user('u3', 'carol')],
+        grants: [{ user: user('u3', 'carol'), level: 'read' as const }],
+        canEdit: true,
         canManage: false,
         aclRevision: 4,
       })
@@ -314,7 +318,8 @@ describe('AclPanel', () => {
       ownerUserId: 'owner-1',
       owner: user('owner-1', 'alice'),
       visibility: 'private',
-      users: [user('u2', 'bob')],
+      grants: [{ user: user('u2', 'bob'), level: 'read' as const }],
+      canEdit: true,
       canManage: true,
       aclRevision: 5,
     })
@@ -331,7 +336,8 @@ describe('AclPanel', () => {
         ownerUserId: 'owner-1',
         owner: user('owner-1', 'alice'),
         visibility: 'public',
-        users: [user('u3', 'carol')],
+        grants: [{ user: user('u3', 'carol'), level: 'read' as const }],
+        canEdit: true,
         canManage: true,
         aclRevision: 4,
       })
@@ -341,7 +347,7 @@ describe('AclPanel', () => {
     await waitFor(() => expect(mockedPut).toHaveBeenCalled())
     expect(mockedPut).toHaveBeenCalledWith('/api/agents/x/acl', {
       visibility: 'private',
-      userIds: ['u2'],
+      grants: [{ userId: 'u2', level: 'read' }],
       expectedResourceId: 'a1',
       expectedAclRevision: 3,
     })
@@ -393,7 +399,8 @@ describe('AclPanel', () => {
       ownerUserId: 'owner-1',
       owner: user('owner-1', 'alice'),
       visibility: 'private',
-      users: [],
+      grants: [],
+      canEdit: true,
       canManage: true,
       aclRevision: 4,
     })

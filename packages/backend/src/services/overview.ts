@@ -14,7 +14,7 @@
 // routes/tasks.ts scope decision): read:all → unscoped; read:own →
 // owner∨collaborator; neither → null.
 
-import { isNull, and, count, eq, gte, inArray, type SQL } from 'drizzle-orm'
+import { isNull, and, count, eq, gte, inArray, or, type SQL } from 'drizzle-orm'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type {
   AclResourceType,
@@ -28,6 +28,7 @@ import {
   agents as agentsTable,
   mcps as mcpsTable,
   plugins as pluginsTable,
+  resourceGrants,
   scheduledTasks,
   skills as skillsTable,
   tasks,
@@ -162,16 +163,32 @@ export async function buildOverview(
     ),
     gatedCount(actor, 'repos:read', () => countCachedRepos(db)),
     gatedCount(actor, 'scheduled-tasks:read', async () => {
-      // canViewScheduledTask ≡ tasks:read:all ∨ owner=me (its SYSTEM branch is
-      // a subset of owner=me), so the count pushes down to one indexed query
-      // instead of materializing every row's launch_payload JSON.
+      // resolveScheduleAccess ≡ bypass ∨ owner=me ∨ 任意档 grant ∨ tasks:read:all
+      // （其 SYSTEM 分支是 owner=me 的子集），所以计数仍能下推成一条带索引的查询，
+      // 不必把每行的 launch_payload JSON 都物化出来。
+      // RFC-324 —— grant 子查询是新加的那一项：漏掉它，概览计数会比列表少，
+      // 而两者本应逐条同口径（RFC-190 的 oracle）。
       const rows = await db
         .select({ n: count() })
         .from(scheduledTasks)
         .where(
-          actor.permissions.has('tasks:read:all')
+          actor.permissions.has('tasks:read:all') || actor.permissions.has('resource-acl:bypass')
             ? undefined
-            : eq(scheduledTasks.ownerUserId, actor.user.id),
+            : or(
+                eq(scheduledTasks.ownerUserId, actor.user.id),
+                inArray(
+                  scheduledTasks.id,
+                  db
+                    .select({ resourceId: resourceGrants.resourceId })
+                    .from(resourceGrants)
+                    .where(
+                      and(
+                        eq(resourceGrants.resourceType, 'scheduled_task'),
+                        eq(resourceGrants.userId, actor.user.id),
+                      ),
+                    ),
+                ),
+              ),
         )
       return rows[0]?.n ?? 0
     }),

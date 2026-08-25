@@ -668,7 +668,10 @@ describe('RFC-170 T6 — fusion precondition token', () => {
         /requireCurrentSkillWritable\(db, actor, row\.skillId, row\.preconditionToken\)/g,
       ) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2) // approve + reject
-    expect(src).toMatch(/!isResourceOwner\(actor, skill\)/) // helper gates on current owner
+    // RFC-324 —— 判据从「当前 owner」放宽为「当前**写得动**」：owner、`write` 授权
+    // 或 ACL bypass。锁的东西没变——helper 必须对**当前**行重新判一次写权，而不是
+    // 沿用融合发起时的那次判定（发起后 owner 可能已转移、授权可能已撤销）。
+    expect(src).toMatch(/!\(await canEditResource\(db, actor, 'skill', skill\)\)/)
   })
 
   // RFC-170 T6 (Codex re-review F8): the owner recheck is ALSO folded into the

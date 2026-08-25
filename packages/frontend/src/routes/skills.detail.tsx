@@ -53,6 +53,7 @@ import {
 } from '@/lib/skill-composite-draft'
 import { classifyWriteOutcome } from '@/lib/write-outcome'
 import { usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
@@ -91,8 +92,13 @@ function SkillDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
-  const canUpdate = usePermission('skills:update')
-  const canDelete = usePermission('skills:delete')
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档。权限点在 user 预设里人人都有，
+  // 所以只看它等于「看得见就编辑得动」：非 owner 一路填完表单，保存才吃 403
+  // （docs/audit-backlog.md:108 记的就是这个）。删除挂 canManage 而不是 canEdit：
+  // 删除是治理动作，可编辑授权不覆盖。
+  const resourceAccess = useResourceAccess(`/api/skills/${id}`)
+  const canUpdate = usePermission('skills:update') && resourceAccess.canEdit
+  const canDelete = usePermission('skills:delete') && resourceAccess.canManage
   const canExecuteTasks = usePermission('tasks:execute')
   const remoteReadEpochRef = useRef(0)
   const contentResponseEpochsRef = useRef(new WeakMap<SkillContent, number>())

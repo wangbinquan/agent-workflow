@@ -6,9 +6,14 @@
 // access can be revoked in between (design.md §3/§5, R2-b/R3-1).
 import type {
   CreateScheduledTask,
+  ResourceAccess,
+  ResourceGrantLevel,
+  ScheduleAcl,
+  UserPublic,
   ScheduledTask,
   ScheduledTaskListItem,
   ScheduleSpec,
+  UpdateScheduleAclBody,
   UpdateScheduledTask,
 } from '@agent-workflow/shared'
 import {
@@ -23,21 +28,31 @@ import {
   wallClockAt,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
 import { buildInheritedActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents, scheduledTasks, workflows, workgroups } from '@/db/schema'
+import { agents, resourceGrants, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
-import { canViewResource, canViewResourceInTx } from '@/services/resourceAcl'
+import {
+  canEditAccess,
+  canGovernAccess,
+  canViewResource,
+  canViewResourceInTx,
+  grantsOfResourceWhere,
+  listGrantedResourceIds,
+  listResourceGrants,
+  loadGrantLevel,
+} from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { runGit } from '@/util/git'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
@@ -204,16 +219,51 @@ export async function listScheduledTasks(db: DbClient): Promise<ScheduledTask[]>
 }
 
 /**
- * Read visibility: actors with `tasks:read:all` see all; otherwise owner only.
- * Single source shared by the list/detail routes and /api/overview counting
- * (RFC-190) — scheduled tasks are member-based-private like tasks, NOT the
- * RFC-099 five-type ACL.
+ * RFC-324 —— 定时任务的访问级别。
+ *
+ * 沿用资源侧的四值梯子，但**没有 visibility 分支**：定时任务没有「全员可见」这一
+ * 档，未被授权者与不存在同形。`tasks:read:all` 留在最后，等价于 RFC-324 之前的
+ * 全局只读，不因新增授权面而收缩。
+ *
+ * 判据是纯函数（grant 由调用方取），列表面因此可以一次预取、逐行判定。
  */
-export function canViewScheduledTask(actor: Actor, row: ScheduledTask): boolean {
-  if (actor.permissions.has('tasks:read:all')) return true
-  if (row.ownerUserId === actor.user.id) return true
-  if (row.ownerUserId === SYSTEM_USER_ID && actor.user.id === SYSTEM_USER_ID) return true
-  return false
+export function resolveScheduleAccess(
+  actor: Actor,
+  row: Pick<ScheduledTask, 'ownerUserId'>,
+  grant: ResourceGrantLevel | null,
+): ResourceAccess {
+  if (actor.permissions.has('resource-acl:bypass')) return 'own'
+  if (row.ownerUserId === actor.user.id) return 'own'
+  if (row.ownerUserId === SYSTEM_USER_ID && actor.user.id === SYSTEM_USER_ID) return 'own'
+  if (grant === 'write') return 'write'
+  if (grant === 'read') return 'read'
+  return actor.permissions.has('tasks:read:all') ? 'read' : 'none'
+}
+
+/** Async form: resolves this actor's grant on one schedule, then the ladder. */
+export async function resolveScheduleAccessFor(
+  db: DbClient,
+  actor: Actor,
+  row: Pick<ScheduledTask, 'id' | 'ownerUserId'>,
+): Promise<ResourceAccess> {
+  if (actor.permissions.has('resource-acl:bypass') || row.ownerUserId === actor.user.id) {
+    return resolveScheduleAccess(actor, row, null)
+  }
+  const grant = await loadGrantLevel(db, 'scheduled_task', row.id, actor.user.id)
+  return resolveScheduleAccess(actor, row, grant)
+}
+
+/**
+ * Read visibility. Single source shared by the list/detail routes and
+ * /api/overview counting (RFC-190) — scheduled tasks stay member-private, NOT
+ * the RFC-099 resource ACL, but RFC-324 lets their owner grant them out.
+ */
+export function canViewScheduledTask(
+  actor: Actor,
+  row: ScheduledTask,
+  grant: ResourceGrantLevel | null = null,
+): boolean {
+  return resolveScheduleAccess(actor, row, grant) !== 'none'
 }
 
 /** RFC-232 — HTTP list rows after canonical mapping and visibility filtering. */
@@ -221,7 +271,13 @@ export async function listScheduledTaskItems(
   db: DbClient,
   actor: Actor,
 ): Promise<ScheduledTaskListItem[]> {
-  const visible = (await listScheduledTasks(db)).filter((row) => canViewScheduledTask(actor, row))
+  // RFC-324 —— 一次取回本人在定时任务上的授权集合，逐行判定不再各查一次。
+  const granted = actor.permissions.has('resource-acl:bypass')
+    ? new Set<string>()
+    : await listGrantedResourceIds(db, actor, 'scheduled_task')
+  const visible = (await listScheduledTasks(db)).filter((row) =>
+    canViewScheduledTask(actor, row, granted.has(row.id) ? 'read' : null),
+  )
   const owners = await loadOwnerIdentities(
     db,
     visible.map((row) => row.ownerUserId),
@@ -657,6 +713,147 @@ export async function updateScheduledTask(
     ownerUserId: updated.ownerUserId,
   })
   return updated
+}
+
+/**
+ * RFC-324 §7 —— 定时任务的授权面读取。
+ *
+ * 与 13 类 ACL 资源的 `getResourceAcl` 同形，少一个 visibility（定时任务没有
+ * public 这一档），并且**不支持转移 owner**：fire 以 owner 身份执行，换 owner 等于
+ * 换执行身份，那是另一件事，本 RFC 不开这个口子。
+ */
+export async function getScheduleAcl(
+  db: DbClient,
+  actor: Actor,
+  row: ScheduledTask,
+): Promise<ScheduleAcl> {
+  const grantRows = await listResourceGrants(db, 'scheduled_task', row.id)
+  const wanted = [...new Set([row.ownerUserId, ...grantRows.map((g) => g.userId)])]
+  const userRows = await db.select().from(users).where(inArray(users.id, wanted))
+  const byId = new Map(userRows.map((u) => [u.id, toSchedulePublicUser(u)] as const))
+  const revRows = await db
+    .select({ aclRevision: scheduledTasks.aclRevision })
+    .from(scheduledTasks)
+    .where(eq(scheduledTasks.id, row.id))
+    .limit(1)
+  const grants = grantRows
+    .map((g) => ({ user: byId.get(g.userId), level: g.level }))
+    .filter((g): g is { user: UserPublic; level: ResourceGrantLevel } => g.user !== undefined)
+  const selfGrant = grantRows.find((g) => g.userId === actor.user.id)?.level ?? null
+  const access = resolveScheduleAccess(actor, row, selfGrant)
+  return {
+    resourceType: 'scheduled_task',
+    resourceId: row.id,
+    ownerUserId: row.ownerUserId,
+    owner: row.ownerUserId === SYSTEM_USER_ID ? null : (byId.get(row.ownerUserId) ?? null),
+    grants,
+    canManage: canGovernAccess(access),
+    canEdit: canEditAccess(access),
+    aclRevision: revRows[0]?.aclRevision ?? 0,
+  }
+}
+
+function toSchedulePublicUser(row: typeof users.$inferSelect): UserPublic {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.displayName,
+    role: row.role,
+    status: row.status,
+  }
+}
+
+/**
+ * RFC-324 §7 —— 授权面写入：owner / `resource-acl:bypass`，`aclRevision` CAS。
+ *
+ * CAS、被授权用户存活检查与全量替换在同一个写事务里，与 `updateResourceAcl`
+ * 同款：分开做会留下「先判后写」的缝，一个暂停在编辑态的面板足以把已撤销的授权
+ * 写回去。
+ */
+export async function updateScheduleAcl(
+  db: DbClient,
+  actor: Actor,
+  row: ScheduledTask,
+  body: UpdateScheduleAclBody,
+): Promise<ScheduleAcl> {
+  const access = await resolveScheduleAccessFor(db, actor, row)
+  if (!canGovernAccess(access)) {
+    throw new ForbiddenError(
+      'resource-govern-owner-only',
+      'granting a scheduled task is reserved for its owner',
+    )
+  }
+  const referenced = new Set(body.grants.map((g) => g.userId))
+  const now = Date.now()
+
+  dbTxSync(db, (tx) => {
+    const cur = tx
+      .select({ aclRevision: scheduledTasks.aclRevision, ownerUserId: scheduledTasks.ownerUserId })
+      .from(scheduledTasks)
+      .where(eq(scheduledTasks.id, row.id))
+      .get()
+    if (cur === undefined) {
+      throw new NotFoundError('scheduled-task-not-found', `scheduled task '${row.id}' not found`)
+    }
+    if (body.expectedResourceId !== row.id) {
+      throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
+    }
+    if (cur.aclRevision !== body.expectedAclRevision) {
+      throw new ConflictError(
+        'acl-revision-conflict',
+        `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+      )
+    }
+    if (!actor.permissions.has('resource-acl:bypass') && cur.ownerUserId !== actor.user.id) {
+      throw new ForbiddenError(
+        'resource-govern-owner-only',
+        'granting a scheduled task is reserved for its owner',
+      )
+    }
+    if (referenced.size > 0) {
+      const urows = tx
+        .select({ id: users.id, status: users.status })
+        .from(users)
+        .where(inArray(users.id, [...referenced]))
+        .all()
+      const active = new Set(urows.filter((r) => r.status === 'active').map((r) => r.id))
+      const bad = [...referenced].filter((id) => id === SYSTEM_USER_ID || !active.has(id))
+      if (bad.length > 0) {
+        throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
+          userIds: bad,
+        })
+      }
+    }
+    // Last entry wins on a duplicated userId, same as the resource ACL path.
+    const next = new Map(body.grants.map((g) => [g.userId, g.level] as const))
+    next.delete(cur.ownerUserId)
+    tx.delete(resourceGrants).where(grantsOfResourceWhere('scheduled_task', row.id)).run()
+    if (next.size > 0) {
+      tx.insert(resourceGrants)
+        .values(
+          [...next].map(([userId, level]) => ({
+            resourceType: 'scheduled_task' as const,
+            resourceId: row.id,
+            userId,
+            level,
+            addedBy: actor.user.id,
+            addedAt: now,
+          })),
+        )
+        .run()
+    }
+    tx.update(scheduledTasks)
+      .set({ aclRevision: cur.aclRevision + 1, updatedAt: now })
+      .where(eq(scheduledTasks.id, row.id))
+      .run()
+  })
+
+  triggerRevalidation(db, 'resource-acl-changed')
+  const fresh = await getScheduledTask(db, row.id)
+  if (fresh === null) {
+    throw new NotFoundError('scheduled-task-not-found', `scheduled task '${row.id}' not found`)
+  }
+  return getScheduleAcl(db, actor, fresh)
 }
 
 export async function deleteScheduledTask(db: DbClient, id: string): Promise<void> {

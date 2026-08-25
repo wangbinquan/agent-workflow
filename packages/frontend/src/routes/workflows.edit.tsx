@@ -66,6 +66,7 @@ import {
 } from '@/hooks/useWorkflowEditorDraft'
 import { useWorkflowSync } from '@/hooks/useWorkflowSync'
 import { useActor, usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { planWorkflowIssueNavigation } from '@/lib/workflow-inspector-target'
 import {
   useWorkflowEditorWorkspaceMode,
@@ -291,7 +292,19 @@ export function WorkflowEditorLoaded({
   const qc = useQueryClient()
   const navigate = useNavigate()
   const actor = useActor()
-  const canUpdate = usePermission('workflows:update')
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档。
+  //
+  // 在此之前这里只有权限点，而 `workflows:update` 在 user 预设里人人都有，于是
+  // **任何**看得见这份工作流的人打开编辑器都拿到完整可编辑态：画布随便拖、
+  // Inspector 随便改，直到第一次自动保存吃 403（文案还写着「可能已删除」）。
+  // 那正是 docs/audit-backlog.md:489-499 记的缺陷。`canUpdate` 一旦纳入行级判定，
+  // 底下所有 `canUpdate &&` 分支（画布 readOnly、Inspector、保存/删除入口、
+  // commitDefinition 的早返回）一并跟着收敛。
+  //
+  // ACL 未解析时 canEdit 为 false（fail closed）：宁可 owner 首屏短暂只读，也不能
+  // 让只读授权者先编辑一通再被拒。
+  const workflowAccess = useResourceAccess(`/api/workflows/${workflowId}`)
+  const canUpdate = usePermission('workflows:update') && workflowAccess.canEdit
   const canCreate = usePermission('workflows:create')
   const canDelete = usePermission('workflows:delete')
   const canValidate = usePermission('workflows:execute')
@@ -372,6 +385,14 @@ export function WorkflowEditorLoaded({
   const commitDraft = controller.commit
   useEffect(() => {
     if (healedInitialRef.current) return
+    // RFC-324 —— 这发提交不经过 commitDefinition，所以它需要自己的写权守卫；
+    // 少了它，只读授权者一打开编辑器就会发出一个必然 403 的 PUT
+    // （docs/audit-backlog.md:489-499 的那一发）。
+    //
+    // 这里要的是**已解析**的判定，不是 `canUpdate` 的乐观值：ACL 尚未回来就 heal，
+    // 等于把那发 PUT 又发了一次。ref 只在真正执行时置位，所以判定到达后这条
+    // effect 会再跑一次并正常 heal。
+    if (!workflowAccess.isResolved || !canUpdate) return
     healedInitialRef.current = true
     const healed = healLoadedDefinition(initial.definition)
     if (healed === initial.definition) return
@@ -388,7 +409,7 @@ export function WorkflowEditorLoaded({
         historyMode: 'reset',
       },
     )
-  }, [commitDraft, initial])
+  }, [canUpdate, commitDraft, initial, workflowAccess.isResolved])
 
   // Query results are observations. A clean controller may adopt them; a
   // dirty controller may enter conflict; active reconciliation gets first
@@ -882,6 +903,13 @@ export function WorkflowEditorLoaded({
   const headerActions = (
     <>
       <IntentProvenanceBadge resourceType="workflow" resourceId={workflowId} />
+      {/* RFC-324 —— 只读授权者需要知道自己为什么拖不动画布；沉默的只读态与
+          「界面坏了」在体感上没有区别。另存为副本的入口走 canCreate，不受影响。 */}
+      {workflowAccess.isResolved && !workflowAccess.canEdit && (
+        <span className="chip" data-testid="workflow-readonly-badge">
+          {t('acl.readOnlyBadge')}
+        </span>
+      )}
       <IntentEntryButton
         variant="modify"
         size="sm"
@@ -1427,6 +1455,25 @@ export function WorkflowEditorLoaded({
   )
 }
 
+/**
+ * RFC-324 —— 403 不再一律算「访问丢失」。
+ *
+ * 此前 403|404 一起被判成 `inaccessible`，于是「你只有只读授权」这件事被显示成
+ * 「此工作流可能已删除或权限已变化」——两条都不成立（工作流还在，他的权限也没变过，
+ * 他从来就没有写权）。分档之后，只读 / 治理档的拒绝有自己的错误码，它们**不是**
+ * 访问丢失：工作流仍然可读、编辑器应当继续显示它的只读态。
+ *
+ * 其他 403（例如账号缺 `workflows:read` 权限点）仍然是真的访问丢失。
+ */
+const READ_ONLY_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  'resource-read-only',
+  'resource-govern-owner-only',
+  'resource-rename-owner-only',
+])
+
 function isWorkflowAccessLoss(error: unknown): error is ApiError {
-  return error instanceof ApiError && (error.status === 403 || error.status === 404)
+  if (!(error instanceof ApiError)) return false
+  if (error.status === 404) return true
+  if (error.status !== 403) return false
+  return !READ_ONLY_REFUSAL_CODES.has(error.code)
 }

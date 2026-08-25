@@ -47,8 +47,9 @@ function acl(overrides: Partial<ResourceAcl> = {}): ResourceAcl {
     ownerUserId: ALICE.id,
     owner: ALICE,
     visibility: 'public',
-    users: [BOB],
+    grants: [{ user: BOB, level: 'read' as const }],
     canManage: true,
+    canEdit: true,
     aclRevision: 3,
     ...overrides,
   }
@@ -156,7 +157,13 @@ describe('AclPanel manage-session loss', () => {
 
   test('dirty visibility and members are discarded; restored access starts clean on the fresh OCC baseline', async () => {
     installReads(acl())
-    mockedPut.mockResolvedValue(acl({ visibility: 'private', users: [CAROL], aclRevision: 8 }))
+    mockedPut.mockResolvedValue(
+      acl({
+        visibility: 'private',
+        grants: [{ user: CAROL, level: 'read' as const }],
+        aclRevision: 8,
+      }),
+    )
     const { queryClient } = renderPanel()
 
     const initialSave = (await screen.findByTestId('acl-save')) as HTMLButtonElement
@@ -169,7 +176,7 @@ describe('AclPanel manage-session loss', () => {
 
     const downgraded = acl({
       visibility: 'public',
-      users: [CAROL],
+      grants: [{ user: CAROL, level: 'read' as const }],
       canManage: false,
       aclRevision: 7,
     })
@@ -196,7 +203,7 @@ describe('AclPanel manage-session loss', () => {
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1))
     expect(mockedPut).toHaveBeenCalledWith(ACL_URL, {
       visibility: 'private',
-      userIds: [CAROL.id],
+      grants: [{ userId: CAROL.id, level: 'read' }],
       expectedResourceId: 'a1',
       expectedAclRevision: 7,
     })
@@ -213,7 +220,11 @@ describe('AclPanel manage-session loss', () => {
     expect((screen.getByTestId('acl-transfer-confirm') as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getByTestId('acl-transfer-remove-dave')).toBeTruthy()
 
-    const downgraded = acl({ users: [CAROL], canManage: false, aclRevision: 8 })
+    const downgraded = acl({
+      grants: [{ user: CAROL, level: 'read' as const }],
+      canManage: false,
+      aclRevision: 8,
+    })
     publishAcl(queryClient, downgraded)
     await waitFor(() => expect(screen.queryByTestId('acl-transfer-dialog')).toBeNull())
 
@@ -228,9 +239,13 @@ describe('AclPanel manage-session loss', () => {
   test('a save already in flight cannot overwrite the downgrade or close a restored clean session', async () => {
     installReads(acl())
     const staleSave = deferred<ResourceAcl>()
-    mockedPut
-      .mockReturnValueOnce(staleSave.promise as never)
-      .mockResolvedValueOnce(acl({ visibility: 'private', users: [CAROL], aclRevision: 10 }))
+    mockedPut.mockReturnValueOnce(staleSave.promise as never).mockResolvedValueOnce(
+      acl({
+        visibility: 'private',
+        grants: [{ user: CAROL, level: 'read' as const }],
+        aclRevision: 10,
+      }),
+    )
     const onSaved = vi.fn()
     const { queryClient } = renderPanel({ onSaved })
 
@@ -240,7 +255,7 @@ describe('AclPanel manage-session loss', () => {
 
     const authoritative = acl({
       visibility: 'public',
-      users: [CAROL],
+      grants: [{ user: CAROL, level: 'read' as const }],
       canManage: false,
       aclRevision: 9,
     })
@@ -254,7 +269,7 @@ describe('AclPanel manage-session loss', () => {
       staleSave.resolve(
         acl({
           visibility: 'private',
-          users: [BOB],
+          grants: [{ user: BOB, level: 'read' as const }],
           canManage: true,
           aclRevision: 4,
         }),
@@ -279,7 +294,7 @@ describe('AclPanel manage-session loss', () => {
       ACL_URL,
       {
         visibility: 'private',
-        userIds: [CAROL.id],
+        grants: [{ userId: CAROL.id, level: 'read' }],
         expectedResourceId: 'a1',
         expectedAclRevision: 9,
       },
@@ -380,7 +395,12 @@ describe('AclPanel manage-session loss', () => {
   test('switching to a cached resource ends the old dirty session and re-baselines OCC', async () => {
     installReads(acl())
     mockedPut.mockResolvedValue(
-      acl({ resourceId: 'a2', users: [CAROL], visibility: 'private', aclRevision: 13 }),
+      acl({
+        resourceId: 'a2',
+        grants: [{ user: CAROL, level: 'read' as const }],
+        visibility: 'private',
+        aclRevision: 13,
+      }),
     )
     const { queryClient, rerenderPanel } = renderPanel()
     fireEvent.click(await screen.findByTestId('acl-visibility-private'))
@@ -389,7 +409,12 @@ describe('AclPanel manage-session loss', () => {
     const siblingUrl = '/api/agents/y/acl'
     queryClient.setQueryData(
       ['acl', siblingUrl, getAuthSessionRevision()],
-      acl({ resourceId: 'a2', users: [CAROL], visibility: 'public', aclRevision: 12 }),
+      acl({
+        resourceId: 'a2',
+        grants: [{ user: CAROL, level: 'read' as const }],
+        visibility: 'public',
+        aclRevision: 12,
+      }),
     )
     rerenderPanel('/api/agents/y')
 
@@ -403,7 +428,7 @@ describe('AclPanel manage-session loss', () => {
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1))
     expect(mockedPut).toHaveBeenCalledWith(siblingUrl, {
       visibility: 'private',
-      userIds: [CAROL.id],
+      grants: [{ userId: CAROL.id, level: 'read' }],
       expectedResourceId: 'a2',
       expectedAclRevision: 12,
     })

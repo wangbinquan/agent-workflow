@@ -23,8 +23,22 @@
 > session**（`schemas/resourceAcl.ts` 摘掉 `users` 的跨文件重构半截态），与本 RFC 无关、勿代为修改。
 > 当前只剩共享 main 上的精确提交/推送与 exact-SHA hosted CI 终态。
 
-> 📝 **待批 RFC（Draft，2026-08-25；三轮澄清完成，尚未取得实现许可，零生产改动）：[RFC-324 资源授权分档（只读 / 可编辑）](design/RFC-324-graded-resource-grants/proposal.md)**
+> 🚧 **进行中 RFC（Implementation Complete，2026-08-25；用户已批准，待发布与 exact-SHA CI）：[RFC-324 资源授权分档（只读 / 可编辑）](design/RFC-324-graded-resource-grants/proposal.md)**
 > —— 起于用户「想把工作流授权给别人用但不想让他改，现在没有好的权限设置方式」。**先证伪了「现在的授权都是可改授权」这个前提**：`resource_grants` 主键就是 `(type,id,user)`、没有任何档位列（`db/schema.ts:502-538`），写面一律 `requireResourceOwner`（`services/resourceAcl.ts:481-499`），后端的 grant **本来就是只读**。真正的缺口有两个：①前台从不表达档位，且详情页与工作流编辑器**没有只读态**——非 owner 打开就能随便拖改、第一次自动保存才吃 403 且文案是「可能已删除」（`docs/audit-backlog.md:108` 与 `:489-499` 两条早已登记）；②反过来**没有可编辑授权**，想让第二个人能改只能转移 owner 或把他升成 manager（拿全局 `resource-acl:bypass`，能改全站）。终态：grants 增 `level ∈ {read, write}`（存量全迁 read，零行为变化），ACL 判据升为四值 `ResourceAccess`，纯判据抽成零依赖模块；13 类资源写门按「内容写 / 治理写」分流（可编辑只覆盖内容，改名 / 删除 / 转移 / 授权仍 owner-only）；任务补 `observer` 纯观察者档；定时任务接入同一张 grants 表 + 新增 ACL 端点；前端补齐逐人档位、8 个详情页与编辑器只读态、403 文案分流。用户裁定：bypass 不动、public 仍只表示全员只读可用、只读者照常复制导出、执行面字段（MCP command/env 等）可编辑者可改且既有 `scripts:author` 字段门不变、发布类动作归可编辑、记忆管理随可编辑档。
+>
+> **实现已完成**（提交前的本地状态）：迁移 `0209` 两列 + journal；判据抽成零依赖的
+> `services/resourceAccessPolicy.ts`（四值梯子 own>write>read>none），`isResourceOwner` →
+> `canGovernResource`、`requireResourceOwner` → `requireResourceGovern` 全仓改名并新增
+> `requireResourceEdit`；13 类资源约 30 处写门按内容/治理分档（含 `services/agent.ts` 那道**事务内**
+> 的第二道门——只改路由层会让 write 档在 HTTP 放行后被旧门拦下，症状是「授权了却仍然 403」）；
+> 任务补 `observer`（`hasActingMembership` + 新的 `requireTaskOperator` 接进 7 条操作路由）；
+> 定时任务接入 grants + 新增 `/acl` 端点，并把**改绑启动目标留给 owner**（它以 owner 身份 fire，
+> 改目标 = 借身份提权，对齐 `db/schema.ts:1267-1269` 记的设计门 F-9）；前端权限面板逐人档位
+> （控件挂进 UserPicker 既有的 chip 装饰槽，不另起第二份名单）、7 个详情页 + 工作流编辑器只读态、
+> 三条 403 文案分流。**清掉 `docs/audit-backlog.md:108` 与 `:489-499` 两条既有缺陷**。
+> 测试：后端 6 个新文件 45 例（含 872 断言的穷举等价性——它机器证明了「存量全迁 read ⇒ 判定逐位
+> 不变」）、前端 2 个新文件 13 例、架构守卫新增「挂 /acl 的路由必须有内容写门」一条；前端全量
+> 6807 全绿。**未做**：e2e 旅程（AC-15，去向见该 RFC `plan.md` §7）与 Codex 实现门。
 >
 > ✅ **已完成 RFC（Done，本地收尾；待发布后复验/回填最终 run，2026-08-25）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在

@@ -44,7 +44,13 @@ import {
   mergeFromUpstream,
   readUpstreamReport,
 } from '@/modules/code-capability/application/templateUpstreamStatus'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  assertNameUnchangedForEditor,
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
 import type { AppDeps } from '@/server'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -157,8 +163,12 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisibleTemplate(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'capability_template', existing)
+      // RFC-324: content write. Unlike agents/skills/MCPs, a template's update
+      // body DOES carry its name (the write schema is the whole document), so
+      // the rename fence has to run here.
+      const access = await requireResourceEdit(deps.db, actor, 'capability_template', existing)
       const input = await parseWrite(await safeJsonOrEmpty(c.req.raw), actor, existing)
+      assertNameUnchangedForEditor(access, existing.name, input.name)
       // The field-level gate lives in the service, so the bundle path gets it
       // too — a route-only check would make an import a way around the rule.
       const row = await updateTemplate(deps.db, existing, input, actor)
@@ -201,7 +211,7 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const existing = await loadVisibleTemplate(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'capability_template', existing)
+      await requireResourceGovern(deps.db, actor, 'capability_template', existing)
       await deleteTemplate(deps.db, existing)
       return c.body(null, 204)
     },
@@ -241,7 +251,7 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const row = await loadVisibleTemplate(actor, c.req.param('id'))
-      await requireResourceOwner(deps.db, actor, 'capability_template', row)
+      await requireResourceEdit(deps.db, actor, 'capability_template', row)
       // The `scripts:author` check lives in the command, not here: the merge
       // can carry SCRIPTS across and those run as the daemon, so a route-only
       // check would make any second caller a way around the rule.

@@ -15,7 +15,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ResourceAcl, ResourceVisibility, UserPublic } from '@agent-workflow/shared'
+import type {
+  ResourceAcl,
+  ResourceGrant,
+  ResourceGrantLevel,
+  ResourceVisibility,
+  UserPublic,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { meQueryOptions, useActor, useAuthSessionRevision, type MeResponse } from '@/hooks/useActor'
@@ -44,7 +50,7 @@ interface AclPanelProps {
 
 type AclSaveBody = {
   visibility?: ResourceVisibility
-  userIds?: string[]
+  grants?: Array<{ userId: string; level: ResourceGrantLevel }>
   ownerUserId?: string
 }
 
@@ -137,7 +143,9 @@ export function AclPanel({
   })
 
   const [visibility, setVisibility] = useState<ResourceVisibility>('public')
-  const [members, setMembers] = useState<UserPublic[]>([])
+  // RFC-324 —— 授权名单带档位。新加的人一律落 `read`：安全默认，且与本 RFC 之前
+  // 「授权 = 可见可用」的语义逐字相同，所以给既有资源加人不会悄悄多发编辑权。
+  const [grants, setGrants] = useState<ResourceGrant[]>([])
   const [dirty, setDirty] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferTo, setTransferTo] = useState<UserPublic[]>([])
@@ -283,7 +291,7 @@ export function AclPanel({
       // flash or revive the values from the ended manager session.
       draftBaselineRef.current = null
       setVisibility(acl.visibility)
-      setMembers(acl.users)
+      setGrants(acl.grants)
       setDirty(false)
       setTransferOpen(false)
       setTransferTo([])
@@ -291,7 +299,7 @@ export function AclPanel({
     }
     if (!dirty && !transferOpen) {
       setVisibility(acl.visibility)
-      setMembers(acl.users)
+      setGrants(acl.grants)
       draftBaselineRef.current = {
         resourceId: acl.resourceId,
         aclRevision: acl.aclRevision,
@@ -387,23 +395,69 @@ export function AclPanel({
       <div className="acl-panel__row acl-panel__row--members">
         <span className="acl-panel__label">{t('acl.members')}</span>
         {canManage ? (
-          <UserPicker
-            value={members}
-            onChange={(next) => {
-              if (!beginManagedDraft()) return
-              setMembers(next)
-              setDirty(true)
-            }}
-            excludeIds={acl.ownerUserId !== null ? [acl.ownerUserId] : []}
-            testidPrefix="acl-members"
-          />
-        ) : acl.users.length === 0 ? (
+          <div className="acl-panel__grants">
+            <UserPicker
+              value={grants.map((g) => g.user)}
+              onChange={(next) => {
+                if (!beginManagedDraft()) return
+                // Keep the level of anyone already in the list; a newly picked
+                // user starts read-only.
+                const byId = new Map(grants.map((g) => [g.user.id, g]))
+                setGrants(next.map((u) => byId.get(u.id) ?? { user: u, level: 'read' }))
+                setDirty(true)
+              }}
+              excludeIds={acl.ownerUserId !== null ? [acl.ownerUserId] : []}
+              testidPrefix="acl-members"
+              // RFC-324 —— 档位控件挂进已选 chip 自己的装饰槽（RFC-312 为在线点
+              // 开的那个）。做成 chip 外的第二份名单会让同一个人在面板里出现两次，
+              // 而这两份还得各自跟着 dirty 状态走。
+              renderAdornment={(userId) => {
+                const grant = grants.find((g) => g.user.id === userId)
+                if (grant === undefined) return null
+                return (
+                  <>
+                    <Segmented<ResourceGrantLevel>
+                      className="segmented--compact"
+                      value={grant.level}
+                      onChange={(level) => {
+                        if (!beginManagedDraft()) return
+                        setGrants((prev) =>
+                          prev.map((x) => (x.user.id === userId ? { ...x, level } : x)),
+                        )
+                        setDirty(true)
+                      }}
+                      options={(['read', 'write'] as const).map((v) => ({
+                        value: v,
+                        label: t(`acl.levelValue.${v}`),
+                        testid: `acl-level-${v}-${userId}`,
+                      }))}
+                      ariaLabel={t('acl.level')}
+                    />
+                    {(grant.user.role === 'admin' || grant.user.role === 'manager') && (
+                      <span
+                        className="acl-panel__grant-note muted"
+                        title={t('acl.levelAdminHint')}
+                        data-testid={`acl-level-admin-note-${userId}`}
+                      >
+                        ⚠
+                      </span>
+                    )}
+                  </>
+                )
+              }}
+            />
+            {grants.length > 0 && (
+              <p className="acl-panel__hint page__hint">{t('acl.levelHint')}</p>
+            )}
+          </div>
+        ) : acl.grants.length === 0 ? (
           <span className="muted">{t('acl.noMembers')}</span>
         ) : (
           <span className="acl-panel__value">
-            {acl.users.map((u) => (
-              <span key={u.id} className="chip">
-                {u.displayName}
+            {acl.grants.map((g) => (
+              <span key={g.user.id} className="chip">
+                {g.user.displayName}
+                <span className="user-picker__username">{t(`acl.levelValue.${g.level}`)}</span>
               </span>
             ))}
           </span>
@@ -433,7 +487,10 @@ export function AclPanel({
               save.mutate({
                 session: manageSession,
                 authRevision,
-                body: { visibility, userIds: members.map((u) => u.id) },
+                body: {
+                  visibility,
+                  grants: grants.map((g) => ({ userId: g.user.id, level: g.level })),
+                },
               })
             }}
           >

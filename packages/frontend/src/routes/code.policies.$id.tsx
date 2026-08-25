@@ -35,6 +35,7 @@ import {
   POLICY_HARD_CAPS,
 } from '@/data/policyFactCatalog'
 import { usePermission } from '@/hooks/useActor'
+import { useResourceAccess } from '@/hooks/useResourceAccess'
 import { Route as RootRoute } from './__root'
 import type { PolicyIdentity } from './code.policies'
 
@@ -91,7 +92,11 @@ function PolicyDetailPage(): ReactElement {
   const { t } = useTranslation()
   const { policyId } = Route.useParams()
   const qc = useQueryClient()
-  const canUpdate = usePermission('automation-policies:update')
+  // RFC-324 —— 写权 = 方法级权限点 ∧ 行级授权档。
+  const resourceAccess = useResourceAccess(
+    `/api/code/automation-policies/${encodeURIComponent(policyId)}`,
+  )
+  const canUpdate = usePermission('automation-policies:update') && resourceAccess.canEdit
 
   const detail = useQuery<PolicyDetail>({
     queryKey: ['code-policy', policyId],

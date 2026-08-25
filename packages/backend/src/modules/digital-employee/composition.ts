@@ -217,6 +217,8 @@ export interface DigitalEmployeeQueries {
    */
   getEmployeeAcl(id: string): {
     readonly id: string
+    /** RFC-324 —— 供改名围栏比对；仍是同一条窄查询，不物化 revision。 */
+    readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
   } | null
@@ -662,7 +664,12 @@ export function composeDigitalEmployee(
         // 500 甚至绕过判据。archived 仍按「已消失」处理，与详情面 404 同形。
         const record = store.getEmployeeDefinitionAcl(id)
         if (record === null || record.archivedAt !== null) return null
-        return { id: record.id, ownerUserId: record.ownerUserId, visibility: record.visibility }
+        return {
+          id: record.id,
+          name: record.name,
+          ownerUserId: record.ownerUserId,
+          visibility: record.visibility,
+        }
       },
       getExecutionPolicy: policyView,
       getMigrationStatus: () =>

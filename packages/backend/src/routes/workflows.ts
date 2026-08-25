@@ -29,7 +29,7 @@ import {
 import {
   canViewResource,
   filterVisibleRows,
-  requireResourceOwner,
+  requireResourceGovern,
   requireResourceView,
 } from '@/services/resourceAcl'
 import { assertDeleteConfirm } from '@/services/deleteConfirm'
@@ -243,7 +243,8 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       }
       await requireResourceView(deps.db, actor, 'workflow', row)
       assertNotBuiltin('workflow', row) // RFC-104: built-ins are read-only
-      await requireResourceOwner(deps.db, actor, 'workflow', row)
+      // RFC-324: deletion is governance — an edit grant does not reach it.
+      await requireResourceGovern(deps.db, actor, 'workflow', row)
       const parsed = DeleteWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {

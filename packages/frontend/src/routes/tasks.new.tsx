@@ -807,7 +807,12 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
       const launcherId = actor.data?.source !== 'daemon' ? actor.data?.user.id : undefined
       const seen = new Set<string>()
       setCollaborators(
-        [members.owner, ...members.users].filter(
+        // RFC-324 —— 只继承协作者：启动 body 的 collaborators 没有档位维度，把
+        // 观察者一并带过去等于把他升成协作者。观察者在新任务里由发起人重新指定。
+        [
+          members.owner,
+          ...members.members.filter((m) => m.role === 'collaborator').map((m) => m.user),
+        ].filter(
           (u): u is UserPublic =>
             u != null && u.id !== launcherId && (seen.has(u.id) ? false : (seen.add(u.id), true)),
         ),

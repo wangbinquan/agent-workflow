@@ -6460,6 +6460,11 @@ export interface Resources {
     members: string
     noMembers: string
     privateHint: string
+    level: string
+    levelValue: { read: string; write: string }
+    levelHint: string
+    levelAdminHint: string
+    readOnlyBadge: string
     save: string
     transferOwner: string
     transferTitle: string
@@ -6478,6 +6483,9 @@ export interface Resources {
     title: string
     users: string
     noUsers: string
+    role: string
+    roleValue: { collaborator: string; observer: string }
+    roleHint: string
     hint: string
     transferHint: string
   }
@@ -14031,6 +14039,14 @@ export const zhCN: Resources = {
     'admin-required': '该操作需要对应的高权限能力。',
     'permission-required': '当前账号缺少所需权限。',
     'not-task-member': '只有任务成员或具备全局任务权限的操作者可以执行该操作。',
+    // --- RFC-324 资源授权分档 ---
+    'resource-read-only':
+      '你对此资源只有只读授权：可以查看、使用、引用、启动任务与另存为副本，但不能修改内容。需要修改请向所有者申请「可编辑」授权，或复制一份自己的副本。',
+    'resource-govern-owner-only': '删除、改名、转让与权限设置只有资源所有者可以操作。',
+    'resource-rename-owner-only':
+      '重命名只有资源所有者可以操作——「可编辑」授权只覆盖内容，不覆盖名字。',
+    'task-observer-read-only':
+      '你在这个任务里是观察者：可以查看进展、日志与改动，但取消 / 恢复 / 重试与评审、反问的回答保留给任务成员。',
     'acl-invalid': '授权参数不合法。',
     'acl-missing-refs': '你没有其中部分引用资源的访问权限。',
     'acl-revision-conflict': '授权配置已被他人更新，请刷新后重试。',
@@ -14691,6 +14707,12 @@ export const zhCN: Resources = {
     members: '授权用户',
     noMembers: '暂无授权用户',
     privateHint: '私有资源仅所有者、授权用户或持有 resource-acl:bypass 的账户可见可用。',
+    level: '授权档位',
+    levelValue: { read: '只读', write: '可编辑' },
+    levelHint:
+      '只读＝可见、可用、可引用、可启动任务、可复制副本；可编辑＝在此之上可以改内容。改名、删除、转让与权限设置始终只有所有者可做。',
+    levelAdminHint: '该用户是管理员，可改任何资源，只读档对其无效。',
+    readOnlyBadge: '只读授权',
     save: '保存权限',
     transferOwner: '转让',
     transferTitle: '转让所有者',
@@ -14709,7 +14731,11 @@ export const zhCN: Resources = {
     title: '任务成员',
     users: '任务用户',
     noUsers: '暂无其他成员',
-    hint: '任务用户与所有者同权（可取消/重试/恢复、回答评审与反问）；仅成员管理与转让保留给所有者和管理员。',
+    role: '成员档位',
+    roleValue: { collaborator: '协作者', observer: '观察者' },
+    roleHint:
+      '协作者与所有者同权（可取消/重试/恢复、回答评审与反问）；观察者只能查看任务进展、日志与改动，不能操作、也不参与评审与反问的回答。',
+    hint: '协作者与所有者同权（可取消/重试/恢复、回答评审与反问）；仅成员管理与转让保留给所有者和管理员。',
     transferHint: '转让后你将保留为任务用户。',
   },
   userPicker: {

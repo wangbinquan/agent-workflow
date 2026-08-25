@@ -522,6 +522,10 @@ export const resourceGrants = sqliteTable(
         'development_adapter',
         // RFC-317 T8 —— 数字员工 OS 的员工定义（第 13 类）。
         'employee_definition',
+        // RFC-324 —— 定时任务借用这张表存授权，但它**不是** ACL 资源（没有
+        // visibility / builtin / owner×name 唯一域，不进配置包也不由 Intent 创建）。
+        // 类型域因此比 ACL_RESOURCE_TYPES 宽一格，见 shared 的 GRANT_RESOURCE_TYPES。
+        'scheduled_task',
       ],
     }).notNull(),
     resourceId: text('resource_id').notNull(),
@@ -530,6 +534,16 @@ export const resourceGrants = sqliteTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     addedBy: text('added_by').notNull(),
     addedAt: integer('added_at').notNull(),
+    /**
+     * RFC-324 —— 授权深度。`read` 是这张表在 RFC-324 之前的唯一含义（可见 + 可用
+     * + 可引用 + 可启动任务 + 可复制），`write` 在其之上再加「可以改内容」。
+     * 改名 / 删除 / 转移 owner / 改授权名单仍然只有 owner，不由本列表达。
+     * 与 `resource_type` 不同，这一列在 SQL 里带 CHECK：它是刻意封闭的两值域
+     * （RFC-324 选了两档而不是三档），第三个值只可能是 raw SQL 写错。
+     */
+    level: text('level', { enum: ['read', 'write'] })
+      .notNull()
+      .default('read'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.resourceType, t.resourceId, t.userId] }),
@@ -1246,6 +1260,12 @@ export const scheduledTasks = sqliteTable(
     lastError: text('last_error'), // reason a fire produced NO task (ACL/owner/etc.)
     lastTaskId: text('last_task_id'), // best-effort pointer to the most recent launched task
     consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    /**
+     * RFC-324 §7 —— 定时任务接入 resource_grants 后需要与 13 类 ACL 资源同形的
+     * OCC 围栏（RFC-170 §8）：客户端从 GET /acl 拿到它、PUT 时回填，服务端 CAS
+     * 拒绝落后的写，避免一个暂停在编辑态的页面把已撤销的授权写回去。
+     */
+    aclRevision: integer('acl_revision').notNull().default(0),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -2823,7 +2843,10 @@ export const taskCollaborators = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
     role: text('role', {
-      enum: ['owner', 'collaborator'],
+      // RFC-324 —— 'observer' 是第三档：看得见任务全部只读面（详情 / node-runs /
+      // diff / 变更叙事），但既不能 cancel/resume/diagnose，也不是评审与反问的
+      // 回答权主体。存量行只有 owner / collaborator，语义逐条不变。
+      enum: ['owner', 'collaborator', 'observer'],
     }).notNull(),
     addedBy: text('added_by').notNull(),
     addedAt: integer('added_at').notNull(),

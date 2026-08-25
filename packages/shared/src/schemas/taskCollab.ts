@@ -1,13 +1,35 @@
 // RFC-036 — task collaboration schemas. RFC-099 (D6) removed the node-level
 // assignment mechanism (NodeAssignment*): task membership is the answer-rights
 // boundary, and the role tags collapsed to 'owner' | 'collaborator'.
+// RFC-324 added a third tag, 'observer' — membership still decides visibility,
+// but only owner/collaborator carry answer and operation rights.
 
 import { z } from 'zod'
 import { UserPublicSchema } from './user'
 
-export const TaskCollaboratorRoleSchema = z.enum(['owner', 'collaborator'])
+/**
+ * RFC-324 added `observer`, the read-only third grade.
+ *
+ * A collaborator holds the owner's operational rights (cancel / retry / resume)
+ * and is the answer-rights boundary for reviews and clarifications. That was the
+ * ONLY grade a member could have, so "let them watch this task" and "let them
+ * steer it" were the same act. An observer sees every read-only face of the task
+ * — detail, node runs, diff, change narrative — and can do none of the above.
+ */
+export const TaskCollaboratorRoleSchema = z.enum(['owner', 'collaborator', 'observer'])
 
 export type TaskCollaboratorRole = z.infer<typeof TaskCollaboratorRoleSchema>
+
+/** The grades a member can be ASSIGNED — owner is expressed by `ownerUserId`, not here. */
+export const AssignableTaskMemberRoleSchema = z.enum(['collaborator', 'observer'])
+export type AssignableTaskMemberRole = z.infer<typeof AssignableTaskMemberRoleSchema>
+
+/** One member row as the panel renders it. */
+export const TaskMemberSchema = z.object({
+  user: UserPublicSchema,
+  role: AssignableTaskMemberRoleSchema,
+})
+export type TaskMember = z.infer<typeof TaskMemberSchema>
 
 export const TaskCollaboratorSchema = z.object({
   taskId: z.string().min(1),
@@ -24,19 +46,34 @@ export const TaskMembersSchema = z.object({
   taskId: z.string().min(1),
   ownerUserId: z.string().nullable(),
   owner: UserPublicSchema.nullable(),
-  users: z.array(UserPublicSchema),
+  /** RFC-324 — members with their grade; was a bare `users: UserPublic[]`. */
+  members: z.array(TaskMemberSchema),
   /** True when the current actor may PUT members (owner or admin). */
   canManage: z.boolean(),
+  /**
+   * RFC-324 — true when the current actor may ACT on the task (cancel / resume /
+   * diagnose, answer reviews and clarifications). False for observers, which is
+   * what the task UI reads to disable those controls instead of letting the
+   * click land on a 403.
+   */
+  canOperate: z.boolean(),
 })
 export type TaskMembers = z.infer<typeof TaskMembersSchema>
 
-/** PUT /api/tasks/:id/members body — full-replace userIds; both optional but at least one. */
+/**
+ * PUT /api/tasks/:id/members body — full-replace `members`; both optional but at
+ * least one. RFC-324 replaced `userIds: string[]`; `role` deliberately cannot be
+ * `owner`, so ownership has exactly one wire representation (`ownerUserId`).
+ */
 export const UpdateTaskMembersBodySchema = z
   .object({
     ownerUserId: z.string().min(1).optional(),
-    userIds: z.array(z.string().min(1)).max(256).optional(),
+    members: z
+      .array(z.object({ userId: z.string().min(1), role: AssignableTaskMemberRoleSchema }))
+      .max(256)
+      .optional(),
   })
-  .refine((b) => b.ownerUserId !== undefined || b.userIds !== undefined, {
-    message: 'at least one of ownerUserId / userIds is required',
+  .refine((b) => b.ownerUserId !== undefined || b.members !== undefined, {
+    message: 'at least one of ownerUserId / members is required',
   })
 export type UpdateTaskMembersBody = z.infer<typeof UpdateTaskMembersBodySchema>

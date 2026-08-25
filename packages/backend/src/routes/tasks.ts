@@ -31,6 +31,7 @@ import {
   assertCanReplaySourceTask,
   canViewTask,
   getTaskMembers,
+  requireTaskOperator,
   updateTaskMembers,
 } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
@@ -403,6 +404,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Cancel a task',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       const task = await cancelTask(deps.db, c.req.param('id'))
       return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
     },
@@ -526,6 +529,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Generate the change narrative (model call)',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       const body = (await safeJsonOrEmpty(c.req.raw)) as { scope?: string } | null
       const scope = body?.scope ?? 'task'
       if (scope !== 'task') {
@@ -716,6 +721,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Clear recovery suspension',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       await clearAutoRecoverySuspension(deps.db, c.req.param('id'))
       return c.json({ ok: true })
     },
@@ -739,6 +746,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Run diagnosis',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       const taskId = c.req.param('id')
       const result = await runLifecycleInvariants({
         db: deps.db,
@@ -781,6 +790,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Resume a task',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
@@ -923,6 +934,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Apply an alert repair',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       const bodyJson = (await c.req.json().catch(() => ({}))) as unknown
       const parsed = RepairRequestSchema.safeParse(bodyJson)
       if (!parsed.success) {
@@ -975,6 +988,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Retry a node (rolls back to pre_snapshot, cascades downstream)',
     },
     async (c) => {
+      // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
+      await requireTaskOperatorFromRoute(c, deps)
       await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
       // flag-audit W0：统一布尔解析（此前 `!== 'false'` 双重否定——任何拼错值静默当
       // true）。产品语义保留默认级联。
@@ -1182,6 +1197,27 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       return c.json({ path: rel, ...result })
     },
   )
+}
+
+/**
+ * RFC-324 —— 操作面的路由门。
+ *
+ * `visibilityCheck` 中间件已经把「看不见 ⇒ 404」办完了，但它对**观察者**是放行的
+ * ——那正是观察者这一档存在的意义。推动任务的那几条路由因此需要第二道门；它们此前
+ * 只有 `tasks:execute` 这个方法级粗门，成员边界完全没进来过（RFC-324 之前不需要，
+ * 因为加进任务的人本来就是同权协作者）。
+ */
+async function requireTaskOperatorFromRoute(c: Context, deps: AppDeps): Promise<void> {
+  const id = c.req.param('id') ?? ''
+  const rows = await deps.db
+    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
+    .from(tasksTable)
+    .where(eq(tasksTable.id, id))
+    .limit(1)
+  const task = rows[0]
+  // 不存在时交给各路由自己的 404 分支，避免两处 404 文案分叉。
+  if (task === undefined) return
+  await requireTaskOperator(deps.db, actorOf(c), task)
 }
 
 async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {

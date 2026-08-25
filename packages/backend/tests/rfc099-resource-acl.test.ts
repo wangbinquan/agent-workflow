@@ -14,10 +14,10 @@ import { agents, resourceGrants, workflows } from '../src/db/schema'
 import {
   canViewResource,
   filterVisibleRows,
-  isResourceOwner,
+  canGovernResource,
   isVisibleRow,
   listGrantedResourceIds,
-  requireResourceOwner,
+  requireResourceGovern,
   requireResourceView,
   resolveTaskRole,
   type AclRow,
@@ -115,7 +115,7 @@ describe('resourceAcl — visibility matrix', () => {
     expect(await canViewResource(db, guest, 'agent', privateAgent)).toBe(false)
     expect(await canViewResource(db, guest, 'agent', publicAgent)).toBe(true)
     expect(
-      isResourceOwner(guest, {
+      canGovernResource(guest, {
         id: privateAgent.id,
         ownerUserId: guestId,
         visibility: 'private',
@@ -128,7 +128,7 @@ describe('resourceAcl — visibility matrix', () => {
     }
     expect(await canViewResource(db, upgraded, 'agent', privateAgent)).toBe(true)
     expect(
-      isResourceOwner(upgraded, {
+      canGovernResource(upgraded, {
         id: privateAgent.id,
         ownerUserId: guestId,
         visibility: 'private',
@@ -198,28 +198,28 @@ describe('resourceAcl — visibility matrix', () => {
     ).resolves.toBeUndefined()
   })
 
-  test('requireResourceOwner: owner + admin pass; granted non-owner → 403; stranger → 404', async () => {
+  test('requireResourceGovern: owner + admin pass; granted non-owner → 403; stranger → 404', async () => {
     await expect(
-      requireResourceOwner(db, actorOfUser(ownerId, 'user'), 'agent', privateAgent),
+      requireResourceGovern(db, actorOfUser(ownerId, 'user'), 'agent', privateAgent),
     ).resolves.toBeUndefined()
     await expect(
-      requireResourceOwner(db, actorOfUser(adminId, 'admin'), 'agent', privateAgent),
+      requireResourceGovern(db, actorOfUser(adminId, 'admin'), 'agent', privateAgent),
     ).resolves.toBeUndefined()
     await expect(
-      requireResourceOwner(db, actorOfUser(grantedId, 'user'), 'agent', privateAgent),
+      requireResourceGovern(db, actorOfUser(grantedId, 'user'), 'agent', privateAgent),
     ).rejects.toBeInstanceOf(ForbiddenError)
     await expect(
-      requireResourceOwner(db, actorOfUser(strangerId, 'user'), 'agent', privateAgent),
+      requireResourceGovern(db, actorOfUser(strangerId, 'user'), 'agent', privateAgent),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
-  test('isResourceOwner: owner / admin true; granted + stranger false; null owner only admin', () => {
-    expect(isResourceOwner(actorOfUser(ownerId, 'user'), privateAgent)).toBe(true)
-    expect(isResourceOwner(actorOfUser(adminId, 'admin'), privateAgent)).toBe(true)
-    expect(isResourceOwner(actorOfUser(grantedId, 'user'), privateAgent)).toBe(false)
+  test('canGovernResource: owner / admin true; granted + stranger false; null owner only admin', () => {
+    expect(canGovernResource(actorOfUser(ownerId, 'user'), privateAgent)).toBe(true)
+    expect(canGovernResource(actorOfUser(adminId, 'admin'), privateAgent)).toBe(true)
+    expect(canGovernResource(actorOfUser(grantedId, 'user'), privateAgent)).toBe(false)
     const orphan: AclRow = { id: 'x', ownerUserId: null, visibility: 'private' }
-    expect(isResourceOwner(actorOfUser(ownerId, 'user'), orphan)).toBe(false)
-    expect(isResourceOwner(actorOfUser(adminId, 'admin'), orphan)).toBe(true)
+    expect(canGovernResource(actorOfUser(ownerId, 'user'), orphan)).toBe(false)
+    expect(canGovernResource(actorOfUser(adminId, 'admin'), orphan)).toBe(true)
   })
 })
 

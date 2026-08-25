@@ -218,7 +218,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
       {
         expectedResourceId: row.id,
         expectedAclRevision: 0,
-        userIds: [],
+        grants: [],
       },
       {
         updatedAt: 2,

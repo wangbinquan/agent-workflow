@@ -210,7 +210,7 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
       'agent',
       { ...source, ownerUserId: 'owner-b', visibility: 'private' },
       {
-        userIds: [],
+        grants: [],
         expectedResourceId: source.id,
         expectedAclRevision: 1,
       },

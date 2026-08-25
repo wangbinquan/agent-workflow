@@ -40,7 +40,12 @@ import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { resolveRefsUsableById } from '@/services/resourceRefs'
 import { resolveAgentImportRefs } from '@/services/importRefs'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
 import {
   assertNotBuiltin,
   excludeBuiltinAgents,
@@ -264,12 +269,16 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       // RFC-117: built-in framework agents (aw-skill-merger) stay read-only EXCEPT a
       // runtime-ONLY patch — an admin may point fusion's merger at a runtime profile
       // (the "select a runtime" parity user agents have). Any other field, or a mixed
-      // patch, on a built-in is still rejected (RFC-104). requireResourceOwner below
+      // patch, on a built-in is still rejected (RFC-104). The write gate below
       // still gates it (built-ins are SYSTEM-owned → admin only).
       if (!(isBuiltinRow(existing) && isRuntimeOnlyAgentPatch(body))) {
         assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
       }
-      await requireResourceOwner(deps.db, actor, 'agent', existing)
+      // RFC-324: content write — an edit grantee may patch an agent's body,
+      // frontmatter and runtime. Renaming is NOT reachable from here (the patch
+      // schema carries no `name`; POST /rename is the only rename path and it
+      // stays owner-only), so no name fence is needed on this route.
+      await requireResourceEdit(deps.db, actor, 'agent', existing)
       // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
       // enforced INSIDE updateAgent, bound to the same single resolution that
       // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
@@ -298,7 +307,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const existing = await loadVisibleAgent(actor, id)
       assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-      await requireResourceOwner(deps.db, actor, 'agent', existing)
+      await requireResourceGovern(deps.db, actor, 'agent', existing)
       const deleteBody = await readDeleteBody(c)
       // Preserve RFC-222's confirmation precedence: a missing/wrong confirm is
       // reported before the independent revision-fence validation.
@@ -426,7 +435,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const existing = await loadVisibleAgent(actor, id)
       assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-      await requireResourceOwner(deps.db, actor, 'agent', existing)
+      // RFC-324: renaming is governance — the owner-scoped name domain is the
+      // owner's to spend (agents_owner_name_unique).
+      await requireResourceGovern(deps.db, actor, 'agent', existing)
       const { expectedUpdatedAt, expectedAclRevision, ...rename } = parsed.data
       const renamed = await renameAgent(deps.db, id, rename, {
         actor,

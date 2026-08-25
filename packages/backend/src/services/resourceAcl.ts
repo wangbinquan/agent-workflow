@@ -49,7 +49,10 @@
 
 import type {
   AclResourceType,
+  GrantResourceType,
+  ResourceAccess,
   ResourceAcl,
+  ResourceGrantLevel,
   ResourceVisibility,
   TaskActorRole,
   UpdateResourceAclBody,
@@ -78,23 +81,38 @@ import {
   employeeDefinitions,
 } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  canEditAccess,
+  canGovernAccess,
+  canViewAccess,
+  hasPrivateResourceAccess,
+  hasResourceAclBypass,
+  resolveAccessFrom,
+  resolveResourceAccess,
+  resourceAclAudienceAuthority,
+  type AclRow,
+  type ResourceAclAudienceAuthority,
+} from '@/services/resourceAccessPolicy'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
-/**
- * Minimal row shape every ACL check accepts; full resource rows AND mapped
- * DTOs superset it. The two ACL fields are optional so shared DTOs (which
- * declare them optional for fixture back-compat) plug in directly; absent
- * visibility means 'public' (the D2 legacy semantics) and absent owner means
- * "no owner yet" (platform-managed).
- */
-export interface AclRow {
-  id: string
-  ownerUserId?: string | null
-  visibility?: ResourceVisibility
-  /** RFC-104 — built-in marker; present on agent/workflow DTOs, absent (→ not
-   *  built-in) on skill/mcp/plugin rows. Read by assertNotBuiltin. */
-  builtin?: boolean | null
-}
+// RFC-324 — the decision layer moved to `resourceAccessPolicy.ts` (pure, no DB).
+// It is re-exported here because this module has been THE import path for ACL
+// judgement since RFC-099 and ~300 call sites name it; moving the file should
+// not move the door. New call sites may import either.
+export {
+  assertNameUnchangedForEditor,
+  canEditAccess,
+  canEditRow,
+  canGovernAccess,
+  canViewAccess,
+  hasPrivateResourceAccess,
+  hasResourceAclBypass,
+  resolveAccessFrom,
+  resolveResourceAccess,
+  resourceAclAudienceAuthority,
+  type AclRow,
+  type ResourceAclAudienceAuthority,
+} from '@/services/resourceAccessPolicy'
 
 /** RFC-231 product default for every newly-created user ACL resource. */
 export const DEFAULT_USER_RESOURCE_VISIBILITY = 'private' as const
@@ -183,33 +201,10 @@ export function canAuditIntentSessions(actor: Actor): boolean {
   return actor.permissions.has('intent:audit')
 }
 
-/** Single source for the row-level resource ACL bypass. */
-export function hasResourceAclBypass(actor: Actor): boolean {
-  return actor.permissions.has('resource-acl:bypass')
-}
-
-/** Account-range capability for owner/grant visibility on private ACL rows. */
-export function hasPrivateResourceAccess(actor: Actor): boolean {
-  return actor.permissions.has('resource-acl:private')
-}
-
-export interface ResourceAclAudienceAuthority {
-  readonly bypass: boolean
-  readonly private: boolean
-}
-
-/** Snapshot-friendly projection of the only two resource-ACL authority points. */
-export function resourceAclAudienceAuthority(actor: Actor): ResourceAclAudienceAuthority {
-  return {
-    bypass: hasResourceAclBypass(actor),
-    private: hasPrivateResourceAccess(actor),
-  }
-}
-
 /** The one WHERE shape for "all grants of `type` for this user" — both the
  *  async and the in-tx variant below build from it (RFC-282 D2: the grant-set
  *  query exists once; importRefs used to carry a literal copy). */
-function grantsOfUserWhere(type: AclResourceType, userId: string) {
+function grantsOfUserWhere(type: GrantResourceType, userId: string) {
   return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, userId))
 }
 
@@ -217,7 +212,7 @@ function grantsOfUserWhere(type: AclResourceType, userId: string) {
 export async function listGrantedResourceIds(
   db: DbClient,
   actor: Actor,
-  type: AclResourceType,
+  type: GrantResourceType,
 ): Promise<Set<string>> {
   const rows = await db
     .select({ resourceId: resourceGrants.resourceId })
@@ -231,7 +226,7 @@ export async function listGrantedResourceIds(
 export function listGrantedResourceIdsInTx(
   tx: DbTxSync,
   actor: Actor,
-  type: AclResourceType,
+  type: GrantResourceType,
 ): Set<string> {
   const rows = tx
     .select({ resourceId: resourceGrants.resourceId })
@@ -244,14 +239,14 @@ export function listGrantedResourceIdsInTx(
 /** RFC-284 T10（§2.3）——by-resource 半边：与 grantsOfUserWhere 对称的唯一
  *  WHERE 形状。此前五处（本文件 ×2、workflow / workgroups 删除审计受众、
  *  mcpRuntimeTestTransitions 的 grant 集）各写一份字面 and(eq,eq)。 */
-export function grantsOfResourceWhere(type: AclResourceType, resourceId: string) {
+export function grantsOfResourceWhere(type: GrantResourceType, resourceId: string) {
   return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, resourceId))
 }
 
 /** All granted user ids of one resource（audience 快照 / 成员清单用）。 */
 export async function listResourceGrantUserIds(
   db: DbClient,
-  type: AclResourceType,
+  type: GrantResourceType,
   resourceId: string,
 ): Promise<string[]> {
   const rows = await db
@@ -261,10 +256,38 @@ export async function listResourceGrantUserIds(
   return rows.map((r) => r.userId)
 }
 
+/** RFC-324 —— 一份资源的授权名单**带档位**（ACL 面板 / 全量替换写入用）。 */
+export async function listResourceGrants(
+  db: DbClient,
+  type: GrantResourceType,
+  resourceId: string,
+): Promise<Array<{ userId: string; level: ResourceGrantLevel }>> {
+  return db
+    .select({ userId: resourceGrants.userId, level: resourceGrants.level })
+    .from(resourceGrants)
+    .where(grantsOfResourceWhere(type, resourceId))
+}
+
+/** Sync twin of {@link listResourceGrants}, as a userId→level map. */
+export function listResourceGrantsInTx(
+  tx: DbTxSync,
+  type: GrantResourceType,
+  resourceId: string,
+): Map<string, ResourceGrantLevel> {
+  return new Map(
+    tx
+      .select({ userId: resourceGrants.userId, level: resourceGrants.level })
+      .from(resourceGrants)
+      .where(grantsOfResourceWhere(type, resourceId))
+      .all()
+      .map((r) => [r.userId, r.level] as const),
+  )
+}
+
 /** Sync twin of `listResourceGrantUserIds` for services already inside dbTxSync. */
 export function listResourceGrantUserIdsInTx(
   tx: DbTxSync,
-  type: AclResourceType,
+  type: GrantResourceType,
   resourceId: string,
 ): string[] {
   return tx
@@ -273,6 +296,60 @@ export function listResourceGrantUserIdsInTx(
     .where(grantsOfResourceWhere(type, resourceId))
     .all()
     .map((r) => r.userId)
+}
+
+/**
+ * RFC-324 —— 该用户在这一类资源上**拿到 `write` 档**的全部资源 id。
+ *
+ * 与 `listGrantedResourceIds`（任意档，可见性用）配对：批量写判据的调用点在同步
+ * map/filter 里（技能 ZIP 的覆盖候选就是），预取一次即可，配 `canEditRow` 使用。
+ */
+export async function listWritableGrantedResourceIds(
+  db: DbClient,
+  actor: Actor,
+  type: GrantResourceType,
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ resourceId: resourceGrants.resourceId })
+    .from(resourceGrants)
+    .where(and(grantsOfUserWhere(type, actor.user.id), eq(resourceGrants.level, 'write')))
+  return new Set(rows.map((r) => r.resourceId))
+}
+
+/**
+ * RFC-324 —— 一行一人的授权档位，`null` 表示没有授权行。
+ *
+ * 可见性判定只需要「有没有」，所以列表面继续走 `listGrantedResourceIds`（Set）；
+ * 需要**深度**的是详情面与写门，它们每次只问一行，用这个单行查询即可，不必让每个
+ * 列表调用都背上一个用不到的档位维度。
+ */
+export async function loadGrantLevel(
+  db: DbClient,
+  type: GrantResourceType,
+  resourceId: string,
+  userId: string,
+): Promise<ResourceGrantLevel | null> {
+  const rows = await db
+    .select({ level: resourceGrants.level })
+    .from(resourceGrants)
+    .where(and(grantsOfResourceWhere(type, resourceId), eq(resourceGrants.userId, userId)))
+    .limit(1)
+  return rows[0]?.level ?? null
+}
+
+/** Sync twin of {@link loadGrantLevel} for services already inside dbTxSync. */
+export function loadGrantLevelInTx(
+  tx: DbTxSync,
+  type: GrantResourceType,
+  resourceId: string,
+  userId: string,
+): ResourceGrantLevel | null {
+  const row = tx
+    .select({ level: resourceGrants.level })
+    .from(resourceGrants)
+    .where(and(grantsOfResourceWhere(type, resourceId), eq(resourceGrants.userId, userId)))
+    .get()
+  return row?.level ?? null
 }
 
 /**
@@ -292,20 +369,22 @@ export function isVisibleToAudienceSnapshot(
     grantedUserIds: ReadonlySet<string>
   },
 ): boolean {
-  if (authority.bypass) return true
-  if (snapshot.visibility === 'public') return true
-  if (!authority.private) return false
-  if (snapshot.ownerUserId !== null && snapshot.ownerUserId === userId) return true
-  return snapshot.grantedUserIds.has(userId)
+  // RFC-324 — the audience snapshot answers visibility only, so a present grant
+  // enters the ladder at its shallowest level; depth cannot change a `view`
+  // verdict, and the snapshot deliberately carries ids rather than levels.
+  return canViewAccess(
+    resolveAccessFrom(
+      authority,
+      userId,
+      snapshot,
+      snapshot.grantedUserIds.has(userId) ? 'read' : null,
+    ),
+  )
 }
 
 /** Pure visibility predicate against a pre-fetched grant set. */
 export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<string>): boolean {
-  if (hasResourceAclBypass(actor)) return true
-  if ((row.visibility ?? 'public') === 'public') return true
-  if (!hasPrivateResourceAccess(actor)) return false
-  if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
-  return grantedIds.has(row.id)
+  return canViewAccess(resolveResourceAccess(actor, row, grantedIds.has(row.id) ? 'read' : null))
 }
 
 /** Column handles a count-only caller passes to {@link visibleRowsCondition}. */
@@ -419,6 +498,48 @@ export async function filterVisibleRows<T extends AclRow>(
   return rows.filter((r) => isVisibleRow(actor, r, granted))
 }
 
+/**
+ * RFC-324 — the one place that turns (actor, row) into a verdict by consulting
+ * the grant table. Everything else in this section projects it.
+ *
+ * The two short-circuits are pure query avoidance and must not change any
+ * verdict: an ACL-bypass actor resolves to `own` regardless of grants, and an
+ * actor without the account-range `resource-acl:private` point cannot observe a
+ * grant at all — the ladder ignores the argument in both cases.
+ */
+export async function resolveResourceAccessFor(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+): Promise<ResourceAccess> {
+  const authority = resourceAclAudienceAuthority(actor)
+  if (authority.bypass || !authority.private) {
+    return resolveAccessFrom(authority, actor.user.id, row, null)
+  }
+  const grant = await loadGrantLevel(db, type, row.id, actor.user.id)
+  return resolveAccessFrom(authority, actor.user.id, row, grant)
+}
+
+/** Sync twin of {@link resolveResourceAccessFor} for services inside dbTxSync. */
+export function resolveResourceAccessForInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+): ResourceAccess {
+  const authority = resourceAclAudienceAuthority(actor)
+  if (authority.bypass || !authority.private) {
+    return resolveAccessFrom(authority, actor.user.id, row, null)
+  }
+  return resolveAccessFrom(
+    authority,
+    actor.user.id,
+    row,
+    loadGrantLevelInTx(tx, type, row.id, actor.user.id),
+  )
+}
+
 /** Single-row visibility check (detail / reference sites). */
 export async function canViewResource(
   db: DbClient,
@@ -426,16 +547,7 @@ export async function canViewResource(
   type: AclResourceType,
   row: AclRow,
 ): Promise<boolean> {
-  if (hasResourceAclBypass(actor)) return true
-  if ((row.visibility ?? 'public') === 'public') return true
-  if (!hasPrivateResourceAccess(actor)) return false
-  if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
-  const rows = await db
-    .select({ resourceId: resourceGrants.resourceId })
-    .from(resourceGrants)
-    .where(and(grantsOfResourceWhere(type, row.id), eq(resourceGrants.userId, actor.user.id)))
-    .limit(1)
-  return rows.length > 0
+  return canViewAccess(await resolveResourceAccessFor(db, actor, type, row))
 }
 
 /** Fresh synchronous visibility oracle for services already inside dbTxSync. */
@@ -445,17 +557,32 @@ export function canViewResourceInTx(
   type: AclResourceType,
   row: AclRow,
 ): boolean {
-  if (hasResourceAclBypass(actor)) return true
-  if ((row.visibility ?? 'public') === 'public') return true
-  if (!hasPrivateResourceAccess(actor)) return false
-  if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
-  return (
-    tx
-      .select({ resourceId: resourceGrants.resourceId })
-      .from(resourceGrants)
-      .where(and(grantsOfResourceWhere(type, row.id), eq(resourceGrants.userId, actor.user.id)))
-      .get() !== undefined
-  )
+  return canViewAccess(resolveResourceAccessForInTx(tx, actor, type, row))
+}
+
+/**
+ * RFC-324 — may this actor change the resource's CONTENT?
+ *
+ * True for the owner, for a `write` grantee, and for `resource-acl:bypass`.
+ * NOT true for a `read` grantee, which is what every grant was before RFC-324.
+ */
+export async function canEditResource(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+): Promise<boolean> {
+  return canEditAccess(await resolveResourceAccessFor(db, actor, type, row))
+}
+
+/** Sync twin of {@link canEditResource} for services already inside dbTxSync. */
+export function canEditResourceInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+): boolean {
+  return canEditAccess(resolveResourceAccessForInTx(tx, actor, type, row))
 }
 
 /**
@@ -472,29 +599,63 @@ export async function requireResourceView(
   throw new NotFoundError('not-found', `${type} not found`)
 }
 
-export function isResourceOwner(actor: Actor, row: AclRow): boolean {
-  if (hasResourceAclBypass(actor)) return true
-  if ((row.visibility ?? 'public') === 'private' && !hasPrivateResourceAccess(actor)) return false
-  return row.ownerUserId != null && row.ownerUserId === actor.user.id
+/**
+ * Governance predicate: owner or ACL bypass. Renamed from `isResourceOwner` by
+ * RFC-324 — it never was a plain identity comparison (bypass has been folded in
+ * since RFC-099), and once an edit grant exists next to it, a name that reads
+ * like "is the owner" invites using it as the content-write gate.
+ *
+ * Stays SYNCHRONOUS on purpose: a grant can never produce `own`, so governance
+ * needs no grant lookup, and dozens of call sites depend on it being sync.
+ */
+export function canGovernResource(actor: Actor, row: AclRow): boolean {
+  return canGovernAccess(resolveResourceAccess(actor, row, null))
 }
 
 /**
- * Write-route gate (modify / delete / ACL management): owner or ACL bypass.
- * A granted-but-not-owner user CAN see the resource, so a plain 403 here
+ * Governance gate (delete / rename / transfer / ACL management): owner or ACL
+ * bypass. A granted-but-not-owner user CAN see the resource, so a plain 403 here
  * leaks nothing new; an invisible caller still gets the view-404 first
- * (routes call requireResourceView before requireResourceOwner).
+ * (routes call requireResourceView before this).
  */
-export async function requireResourceOwner(
+export async function requireResourceGovern(
   db: DbClient,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
 ): Promise<void> {
   await requireResourceView(db, actor, type, row)
-  if (isResourceOwner(actor, row)) return
+  if (canGovernResource(actor, row)) return
   throw new ForbiddenError(
-    'forbidden',
-    `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
+    'resource-govern-owner-only',
+    `deleting, renaming, transferring or re-granting a ${type} is reserved for its owner`,
+  )
+}
+
+/**
+ * RFC-324 content-write gate: owner, `write` grantee, or ACL bypass.
+ *
+ * Order is contract, same as the governance gate: invisible → 404 (existence
+ * must not leak), visible-but-read-only → 403 with a code the frontend can turn
+ * into "you have read-only access", never the "may have been deleted" copy that
+ * `docs/audit-backlog.md:489-499` recorded as actively misleading.
+ */
+export async function requireResourceEdit(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+): Promise<ResourceAccess> {
+  const access = await resolveResourceAccessFor(db, actor, type, row)
+  if (!canViewAccess(access)) throw new NotFoundError('not-found', `${type} not found`)
+  // Returns the verdict rather than void: a resource whose update body carries
+  // its `name` needs `assertNameUnchangedForEditor(access, ...)` right after
+  // this gate, and re-resolving would be a second query answering a question
+  // this call already answered.
+  if (canEditAccess(access)) return access
+  throw new ForbiddenError(
+    'resource-read-only',
+    `you have read-only access to this ${type}; ask its owner for an edit grant or make your own copy`,
   )
 }
 
@@ -551,8 +712,10 @@ export async function getResourceAcl(
     .where(eq(table.id, row.id))
     .limit(1)
   const aclRevision = revRows[0]?.aclRevision ?? 0
-  const grantIds = await listResourceGrantUserIds(db, type, row.id)
-  const wantedIds = [...new Set([...(row.ownerUserId ? [row.ownerUserId] : []), ...grantIds])]
+  const grantRows = await listResourceGrants(db, type, row.id)
+  const wantedIds = [
+    ...new Set([...(row.ownerUserId ? [row.ownerUserId] : []), ...grantRows.map((g) => g.userId)]),
+  ]
   const userRows =
     wantedIds.length === 0 ? [] : await db.select().from(users).where(inArray(users.id, wantedIds))
   const byId = new Map(userRows.map((u) => [u.id, u]))
@@ -560,18 +723,23 @@ export async function getResourceAcl(
     row.ownerUserId != null && row.ownerUserId !== SYSTEM_USER_ID
       ? (byId.get(row.ownerUserId) ?? null)
       : null
-  const grantUsers = grantIds
-    .map((id) => byId.get(id))
-    .filter((u): u is UserRow => u !== undefined)
-    .map(toUserPublic)
+  const grants = grantRows
+    .map((g) => ({ user: byId.get(g.userId), level: g.level }))
+    .filter((g): g is { user: UserRow; level: ResourceGrantLevel } => g.user !== undefined)
+    .map((g) => ({ user: toUserPublic(g.user), level: g.level }))
+  // RFC-324 — the caller's own verdict comes from the list we just loaded, so
+  // reading an ACL still costs exactly the queries it did before.
+  const selfGrant = grantRows.find((g) => g.userId === actor.user.id)?.level ?? null
+  const selfAccess = resolveResourceAccess(actor, row, selfGrant)
   return {
     resourceType: type,
     resourceId: row.id,
     ownerUserId: row.ownerUserId ?? null,
     owner: ownerRow ? toUserPublic(ownerRow) : null,
     visibility: row.visibility ?? 'public',
-    users: grantUsers,
-    canManage: isResourceOwner(actor, row),
+    grants,
+    canManage: canGovernAccess(selfAccess),
+    canEdit: canEditAccess(selfAccess),
     aclRevision,
   }
 }
@@ -602,9 +770,9 @@ export async function updateResourceAcl(
     ) => void
   } = {},
 ): Promise<ResourceAcl> {
-  await requireResourceOwner(db, actor, type, row)
+  await requireResourceGovern(db, actor, type, row)
 
-  const referenced = new Set<string>(body.userIds ?? [])
+  const referenced = new Set<string>((body.grants ?? []).map((g) => g.userId))
   if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
 
   const table = ACL_TABLES[type]
@@ -695,23 +863,28 @@ export async function updateResourceAcl(
       }
     }
 
-    let nextGrantIds: string[]
-    if (body.userIds !== undefined) {
-      nextGrantIds = [...new Set(body.userIds)]
+    let nextGrants: Map<string, ResourceGrantLevel>
+    if (body.grants !== undefined) {
+      // Duplicate userIds collapse to the LAST entry, matching the old
+      // `new Set(userIds)` dedupe; a body that names one user twice is a client
+      // bug either way, and last-wins keeps the write deterministic.
+      nextGrants = new Map(body.grants.map((g) => [g.userId, g.level] as const))
     } else {
-      nextGrantIds = listResourceGrantUserIdsInTx(tx, type, row.id)
+      nextGrants = listResourceGrantsInTx(tx, type, row.id)
     }
     // Owner transfer keeps the previous human owner visible (server-side rule).
+    // RFC-324 —— 落在 `read` 档：这与 RFC-324 之前「转移后前任只剩一条 grant」的
+    // 实际权限逐字相同，而给他 `write` 会让一次转移悄悄多发一份编辑权。
     if (
       nextOwner !== prevOwner &&
       prevOwner !== null &&
       prevOwner !== SYSTEM_USER_ID &&
-      !nextGrantIds.includes(prevOwner)
+      !nextGrants.has(prevOwner)
     ) {
-      nextGrantIds.push(prevOwner)
+      nextGrants.set(prevOwner, 'read')
     }
     // The owner is never a grant row.
-    nextGrantIds = nextGrantIds.filter((id) => id !== nextOwner)
+    if (nextOwner !== null) nextGrants.delete(nextOwner)
 
     try {
       tx.update(table)
@@ -739,13 +912,14 @@ export async function updateResourceAcl(
       throw error
     }
     tx.delete(resourceGrants).where(grantsOfResourceWhere(type, row.id)).run()
-    if (nextGrantIds.length > 0) {
+    if (nextGrants.size > 0) {
       tx.insert(resourceGrants)
         .values(
-          nextGrantIds.map((userId) => ({
+          [...nextGrants].map(([userId, level]) => ({
             resourceType: type,
             resourceId: row.id,
             userId,
+            level,
             addedBy: actor.user.id,
             addedAt: now,
           })),
@@ -756,7 +930,7 @@ export async function updateResourceAcl(
       resourceId: row.id,
       ownerUserId: nextOwner,
       visibility: nextVisibility,
-      grantedUserIds: new Set(nextGrantIds),
+      grantedUserIds: new Set(nextGrants.keys()),
       now,
     })
     return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }

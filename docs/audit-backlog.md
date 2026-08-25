@@ -105,7 +105,7 @@ RFC-099 资源 ACL + 任务成员制 + auth 层全面审计。骨架扎实（单
 - WS 连接 actor 升级期钉死：撤销/降权/移出成员不断开在连，clarify 帧含全量问答（→ RFC-212 方案 D 处理）。
 - ✅ 导入单向放宽 visibility——**已被 RFC-231 修复（2026-08-12 RFC-285 设计门对账销账）**：skill zip 导入走 `initialPrivateResourceAcl`（`skill-zip.ts:198,327`，:622 注释明写 owner+private）、workflow YAML 导入经 `createWorkflow` 同走单点（`workflow.ts:844`）；原登记两锚（workflow.ts:54 / skill-zip.ts:430）在 HEAD 均已不含 public 字面量。RFC-285 T8 补三路回归锁——**已落（2026-08-13）**：rfc285-b6-import-visibility-locks.test.ts（三路装配路径在场锁）。
 - memory 前端门与后端不一致——**2026-08-12 RFC-285 设计门对账改写（原记载方向反了）**：原文的 `usePermission('memory:approve') 恒 true` 用法在 HEAD 已不存在（实调用为零）；现状是 `memory.tsx:85` / `memory.distill-jobs.$jobId.tsx:47` 用 `useIsAdmin()`（仅 admin），**窄于**后端 `canManageMemory` 的 admin+manager（`memory.ts:764-782` 首行 `isResourceAdminActor`）。修法=前端换 admin+manager 谓词——**RFC-285 T9 已修（2026-08-13）**：新 useIsResourceAdmin 两点换用，锁 memory-admin-gate-role.test.ts。
-- 前端详情页(agents/skills/mcps/plugins/workgroups.detail)不按 owner 做写门 → 非 owner 可编辑、编辑器拖动即撞 403；`acl-*` 错误码全无 i18n（英文裸串）；`AclPanel` 409 后知情整表覆盖；builtin 前端零感知。
+- ~~前端详情页(agents/skills/mcps/plugins/workgroups.detail)不按 owner 做写门 → 非 owner 可编辑、编辑器拖动即撞 403~~ **✅ RFC-324 已修（2026-08-25）**：这七个详情页的 `canUpdate` 从「只看方法级权限点」改为「权限点 ∧ 行级授权档」（`usePermission('X:update') && useResourceAccess(...).canEdit`），`canDelete` 挂 `canManage`；页面里所有 `canUpdate &&` 分支（表单 disabled、保存/删除/改名入口）随之一并收敛。根因是 `workflows:update` 这类点在 user 预设里人人都有，只看它等于「看得见 = 编辑得动」。**其余三项仍未做**：`acl-*` 错误码 i18n（RFC-324 只补了自己新增的三条 `resource-*` 码，`acl-invalid` 等旧码仍是英文裸串）、`AclPanel` 409 后知情整表覆盖、builtin 前端零感知。
 - workgroup confirm/dw-confirm 门决策不落决策人归属（对照 review D7）。
 
 ### ⏳ 未决 P3（选摘）
@@ -486,7 +486,7 @@ new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自�
   一致，可以确定判据就是「机器满载 ⇒ 那条 MutationObserver 效果链吃不下 5s」。按仓规登记而不是拿
   「重跑就过」当结论。建议 owner 换成事件驱动的等待锚点（或再提预算），不宜由无关改动顺手改测试。
 
-- ⏳ **非 owner 打开别人的工作流：编辑器完全可交互，第一次自动保存才 403，且文案是错的**
+- ✅ **RFC-324 已修（2026-08-25）：非 owner 打开别人的工作流，编辑器完全可交互，第一次自动保存才 403，且文案是错的**
   （2026-08-08 用户实报，**非 RFC-270 引入** —— `assertPrincipalCanWritePreflight` 的
   `only the workflow owner or an admin can modify it` 在 `7174013b` 及更早就在，两处）。
   后端逻辑是对的：普通用户能看别人的公共工作流，但不能改。错的是前台没对齐这条边界 ——
@@ -497,6 +497,15 @@ new theme` 在一次 `gate:local` 里红（耗时 ~5050ms，恰好压在它自�
   ②`forbidden` 这一码单独分流出自己的文案（「你没有修改此工作流的权限，可另存为副本」），
   别再复用「可能已删除」。**注意**：修的时候要连 `workflows.edit.tsx:1400` 的
   `isWorkflowAccessLoss`（GET 侧 `403 || 404`）一起想清楚 —— 那里的 403 也可能是「看得见但改不了」。
+
+  **RFC-324 的实修（三处，全部按上面这段的处方）**：①`canUpdate` 纳入行级授权档，编辑器既有的
+  `readOnly={!canUpdate}` 整条只读链路（画布三 flag、Inspector、保存/删除入口、`commitDefinition`
+  早返回）随之生效；②`healLoadedDefinition` 那发自动保存**单独加了闸门**——它直接调
+  `controller.commit`、绕过 `commitDefinition`，正是「一打开就 403」的那一发，现在要求
+  `workflowAccess.isResolved && canUpdate`（等已解析的判定，不骑乐观值）；③`isWorkflowAccessLoss`
+  把 `resource-read-only` / `resource-govern-owner-only` / `resource-rename-owner-only` 三个码
+  从「访问丢失」里剥出来，只读拒绝不再显示「可能已删除」。源码层三条锁在
+  `packages/frontend/tests/rfc324-editor-readonly-source-lock.test.ts`。
 
 - ⏳ **RFC-270 遗留：被遮蔽读者的 `snapshotHash` 不对称（已知、显式不修）**。后端
   `workflowSnapshotHashOf` 与前端 `hashWorkflowDraftSnapshot` 是同一个算法，脱敏之后被遮用户

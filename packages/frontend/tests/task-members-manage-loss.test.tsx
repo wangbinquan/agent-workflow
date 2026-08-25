@@ -39,8 +39,9 @@ function members(taskId: string, overrides: Partial<TaskMembers> = {}): TaskMemb
     taskId,
     ownerUserId: OWNER.id,
     owner: OWNER,
-    users: [BOB],
+    members: [{ user: BOB, role: 'collaborator' as const }],
     canManage: true,
+    canOperate: true,
     ...overrides,
   }
 }
@@ -135,12 +136,25 @@ describe('TaskMembersPanel manage-session loss', () => {
     expect((screen.getByTestId('members-save') as HTMLButtonElement).disabled).toBe(false)
 
     act(() =>
-      client.setQueryData(membersKey('a'), members('a', { canManage: false, users: [CAROL] })),
+      client.setQueryData(
+        membersKey('a'),
+        members('a', {
+          canManage: false,
+          members: [{ user: CAROL, role: 'collaborator' as const }],
+        }),
+      ),
     )
     await waitFor(() => expect(screen.queryByTestId('members-save')).toBeNull())
-    expect(screen.getByText('DN carol')).toBeTruthy()
+    // RFC-324 —— 只读分支的 chip 现在带档位后缀（「DN carol · 协作者」），
+    // 断言改成子串匹配：这里锁的是「降权后仍看得见成员」，不是文案的确切字节。
+    expect(screen.getByText(/DN carol/)).toBeTruthy()
 
-    act(() => client.setQueryData(membersKey('a'), members('a', { users: [CAROL] })))
+    act(() =>
+      client.setQueryData(
+        membersKey('a'),
+        members('a', { members: [{ user: CAROL, role: 'collaborator' as const }] }),
+      ),
+    )
     const restored = (await screen.findByTestId('members-save')) as HTMLButtonElement
     expect(restored.disabled).toBe(true)
     expect(screen.getByTestId('members-users-remove-carol')).toBeTruthy()
@@ -198,7 +212,10 @@ describe('TaskMembersPanel manage-session loss', () => {
     fireEvent.click(screen.getByTestId('members-save'))
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1))
 
-    const denied = members('a', { canManage: false, users: [CAROL] })
+    const denied = members('a', {
+      canManage: false,
+      members: [{ user: CAROL, role: 'collaborator' as const }],
+    })
     act(() => client.setQueryData(membersKey('a'), denied))
     await waitFor(() => expect(screen.queryByTestId('members-save')).toBeNull())
     act(() => client.setQueryData(membersKey('a'), { ...denied, canManage: true }))
@@ -206,7 +223,7 @@ describe('TaskMembersPanel manage-session loss', () => {
     expect(restored.disabled).toBe(true)
 
     await act(async () => {
-      pending.resolve(members('a', { users: [], canManage: true }))
+      pending.resolve(members('a', { members: [], canManage: true }))
       await pending.promise
     })
     expect(client.getQueryData(membersKey('a'))).toEqual({ ...denied, canManage: true })
@@ -214,11 +231,17 @@ describe('TaskMembersPanel manage-session loss', () => {
   })
 
   test('switching to a cached sibling task clears the old draft and old URL is never written', async () => {
-    installReads({ a: members('a'), b: members('b', { users: [CAROL] }) })
+    installReads({
+      a: members('a'),
+      b: members('b', { members: [{ user: CAROL, role: 'collaborator' as const }] }),
+    })
     const { client, rerenderTask } = renderPanel('a')
     fireEvent.click(await screen.findByTestId('members-users-remove-bob'))
     expect((screen.getByTestId('members-save') as HTMLButtonElement).disabled).toBe(false)
-    client.setQueryData(membersKey('b'), members('b', { users: [CAROL] }))
+    client.setQueryData(
+      membersKey('b'),
+      members('b', { members: [{ user: CAROL, role: 'collaborator' as const }] }),
+    )
 
     rerenderTask('b')
     const cleanSave = (await screen.findByTestId('members-save')) as HTMLButtonElement

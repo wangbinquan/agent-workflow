@@ -27,7 +27,12 @@ import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
 import { assertDeleteConfirm } from '@/services/deleteConfirm'
 import {
   copyWorkgroup,
@@ -192,7 +197,10 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      await requireResourceOwner(deps.db, actor, 'workgroup', existing)
+      // RFC-324: content write. Renaming through this body is refused inside the
+      // save transaction (assertNameUnchangedForEditor), not here — the fence has
+      // to see the in-transaction current name to be race-free.
+      await requireResourceEdit(deps.db, actor, 'workgroup', existing)
       return c.json(
         await saveWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor }),
       )
@@ -212,7 +220,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       const id = c.req.param('id')
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      await requireResourceOwner(deps.db, actor, 'workgroup', existing)
+      await requireResourceGovern(deps.db, actor, 'workgroup', existing)
       const parsed = DeleteWorkgroupSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
@@ -247,7 +255,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      await requireResourceOwner(deps.db, actor, 'workgroup', existing)
+      await requireResourceGovern(deps.db, actor, 'workgroup', existing)
       return c.json(
         await renameWorkgroup(deps.db, existing.id, parsed.data, {
           kind: 'actor',

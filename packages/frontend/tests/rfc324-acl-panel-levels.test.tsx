@@ -1,0 +1,184 @@
+// RFC-324 —— 权限面板的档位控件，以及 useResourceAccess 的乐观/严格双语义。
+//
+// 用户对现状的原话是「没有档位可选、心里没底」：后端的 grant 一直只授「可见可用」，
+// 而面板上只有所有者 / 可见性 / 授权用户三项，没有任何地方告诉授权者他给出去的是
+// 什么。所以本 RFC 的前端交付不是"加一个下拉"，而是让档位在面板里成为可见、可选、
+// 默认安全的东西。
+//
+// 本文件锁 proposal.md §7 的 AC-12，外加 hook 的两条语义（design.md §10.1）：
+//   - 判定未到达时**乐观**（UI 保持今天的可交互形态，不为一次网络抖动把 owner
+//     锁在自己的资源外面）；
+//   - `isResolved` 才是无人值守写入的依据（工作流编辑器的 heal 自动保存据此闸门）。
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { renderHook, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type * as ApiClientModule from '../src/api/client'
+
+vi.mock('../src/api/client', async () => {
+  const actual = await vi.importActual<typeof ApiClientModule>('../src/api/client')
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      patch: vi.fn(),
+    },
+  }
+})
+
+import { api } from '../src/api/client'
+import { AclPanel } from '../src/components/AclPanel'
+import { useResourceAccess } from '../src/hooks/useResourceAccess'
+import { setToken } from '../src/stores/auth'
+import '../src/i18n'
+
+const mockedGet = vi.mocked(api.get)
+const mockedPut = vi.mocked(api.put)
+
+function makeQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+}
+
+function wrap(node: React.ReactElement, qc = makeQueryClient()) {
+  return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
+}
+
+function user(id: string, username: string, role: 'user' | 'manager' = 'user') {
+  return { id, username, displayName: `DN ${username}`, role, status: 'active' }
+}
+
+const ALICE = user('u-alice', 'alice')
+const BOSS = user('u-boss', 'boss', 'manager')
+
+function acl(overrides: Record<string, unknown> = {}) {
+  return {
+    resourceType: 'agent',
+    resourceId: 'a1',
+    ownerUserId: 'u-owner',
+    owner: user('u-owner', 'owner'),
+    visibility: 'private',
+    grants: [{ user: ALICE, level: 'read' }],
+    canManage: true,
+    canEdit: true,
+    aclRevision: 3,
+    ...overrides,
+  }
+}
+
+/** 面板会请求 /me 与 /acl；除 ACL 外一律给一个合法的人类 actor。 */
+function installGet(aclBody: Record<string, unknown>): void {
+  mockedGet.mockImplementation(async (url: string) => {
+    if (url.endsWith('/acl')) return aclBody
+    return { source: 'session', user: user('u-owner', 'owner'), permissions: [] }
+  })
+}
+
+beforeEach(() => {
+  setToken('aws_s_test-token')
+  mockedGet.mockReset()
+  mockedPut.mockReset()
+})
+afterEach(() => cleanup())
+
+describe('RFC-324 AclPanel —— 逐人档位', () => {
+  test('管理态：每个被授权人有一个档位控件，选中值来自服务端', async () => {
+    installGet(acl())
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+
+    const read = screen.getByTestId(`acl-level-read-${ALICE.id}`)
+    const write = screen.getByTestId(`acl-level-write-${ALICE.id}`)
+    expect(read.getAttribute('aria-checked'), '服务端说是 read，控件就得显示 read').toBe('true')
+    expect(write.getAttribute('aria-checked')).toBe('false')
+  })
+
+  test('改档位 → 保存：PUT body 里带的是 grants，每项一个 level', async () => {
+    installGet(acl())
+    mockedPut.mockResolvedValue(acl({ grants: [{ user: ALICE, level: 'write' }], aclRevision: 4 }))
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+
+    const save = screen.getByTestId('acl-save') as HTMLButtonElement
+    expect(save.disabled, '未改动时保存不可用').toBe(true)
+
+    fireEvent.click(screen.getByTestId(`acl-level-write-${ALICE.id}`))
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+
+    await waitFor(() => expect(mockedPut).toHaveBeenCalled())
+    expect(mockedPut).toHaveBeenCalledWith('/api/agents/x/acl', {
+      visibility: 'private',
+      grants: [{ userId: ALICE.id, level: 'write' }],
+      expectedResourceId: 'a1',
+      expectedAclRevision: 3,
+    })
+  })
+
+  test('管理员被授权人带提示：只读档对他无效，面板得说出来', async () => {
+    installGet(acl({ grants: [{ user: BOSS, level: 'read' }] }))
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+    expect(
+      screen.getByTestId(`acl-level-admin-note-${BOSS.id}`),
+      '给管理员设只读却不提示，等于让 owner 以为锁住了他',
+    ).toBeTruthy()
+  })
+
+  test('普通被授权人没有那条提示（提示只在真的无效时出现）', async () => {
+    installGet(acl())
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+    expect(screen.queryByTestId(`acl-level-admin-note-${ALICE.id}`)).toBeNull()
+  })
+
+  test('只读态：档位以文字呈现，没有任何可点的档位控件', async () => {
+    installGet(acl({ canManage: false, canEdit: false }))
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+    expect(screen.queryByTestId('acl-save')).toBeNull()
+    expect(screen.queryByTestId(`acl-level-read-${ALICE.id}`)).toBeNull()
+    expect(screen.getByText('DN alice')).toBeTruthy()
+  })
+})
+
+describe('RFC-324 useResourceAccess —— 乐观 UI，严格自动写', () => {
+  function renderAccess(qc = makeQueryClient()) {
+    return renderHook(() => useResourceAccess('/api/agents/x'), {
+      wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
+    })
+  }
+
+  test('判定未到达：canEdit 乐观为真，但 isResolved 为假', async () => {
+    // /acl 永不 resolve：模拟一次网络挂起。
+    mockedGet.mockImplementation(async (url: string) => {
+      if (url.endsWith('/acl')) return new Promise(() => {}) as never
+      return { source: 'session', user: user('u-owner', 'owner'), permissions: [] }
+    })
+    const { result } = renderAccess()
+    await waitFor(() => expect(result.current.isResolved).toBe(false))
+    expect(
+      result.current.canEdit,
+      '失败关闭会凭空造出一种新故障：owner 因为一次抖动就编辑不了自己的资源',
+    ).toBe(true)
+  })
+
+  test('判定到达：canEdit / canManage 逐字来自服务端，isResolved 为真', async () => {
+    installGet(acl({ canEdit: false, canManage: false }))
+    const { result } = renderAccess()
+    await waitFor(() => expect(result.current.isResolved).toBe(true))
+    expect(result.current.canEdit).toBe(false)
+    expect(result.current.canManage).toBe(false)
+  })
+
+  test('响应里没有布尔判定（例如被一个通用 mock 接管）时，不算已解析', async () => {
+    mockedGet.mockImplementation(async () => ({ anything: true }) as never)
+    const { result } = renderAccess()
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled())
+    expect(result.current.isResolved, '不是 ACL 的形状就不该被当成判定').toBe(false)
+    expect(result.current.canEdit).toBe(true)
+  })
+})

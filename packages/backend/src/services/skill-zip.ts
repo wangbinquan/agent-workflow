@@ -35,7 +35,12 @@ import { createManagedSkillWithFiles, getSkillById } from '@/services/skill'
 import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
 import { decodeSkillToken, encodeSkillToken, skillTokenMatches } from '@/services/skillToken'
 import { commitSkillVersion } from '@/services/skillVersion'
-import { canViewResource, isResourceOwner } from '@/services/resourceAcl'
+import {
+  canEditResource,
+  canEditRow,
+  canViewResource,
+  listWritableGrantedResourceIds,
+} from '@/services/resourceAcl'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { stringifyFrontmatter } from '@/util/frontmatter'
@@ -413,6 +418,9 @@ export async function parseSkillZipBuffer(
     db,
     parsed.skills.map((candidate) => candidate.name),
   )
+  // RFC-324 —— 覆盖候选的判据从「我是不是 owner」变成「我改不改得动」，而这里是
+  // 同步 filter，所以先把这一类里我拿到 `write` 档的 id 预取一次。
+  const writableSkillIds = await listWritableGrantedResourceIds(db, actor, 'skill')
   const byName = new Map<string, SkillZipTargetRow[]>()
   for (const row of existing) {
     const rows = byName.get(row.name) ?? []
@@ -424,7 +432,7 @@ export async function parseSkillZipBuffer(
     const sameName = byName.get(c.name) ?? []
     const ownSlotOccupied = sameName.some((row) => row.ownerUserId === actor.user.id)
     const overwriteCandidates = sameName
-      .filter((row) => targetIsAvailable(row) && isResourceOwner(actor, row))
+      .filter((row) => targetIsAvailable(row) && canEditRow(actor, row, writableSkillIds))
       .sort((a, b) => {
         const ownerOrder = (a.ownerUserId ?? '').localeCompare(b.ownerUserId ?? '')
         return ownerOrder !== 0 ? ownerOrder : a.id.localeCompare(b.id)
@@ -544,7 +552,7 @@ export async function commitSkillZipBuffer(
         })
         continue
       }
-      if (!isResourceOwner(aclOpts.actor, target)) {
+      if (!(await canEditResource(db, aclOpts.actor, 'skill', target))) {
         outcome.failed.push({
           name: candidate.name,
           code: 'skill-overwrite-forbidden',

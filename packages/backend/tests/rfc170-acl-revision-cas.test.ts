@@ -110,14 +110,14 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
     // A request that still believes it is at revision 0 must be rejected.
     await expect(
       updateResourceAcl(db, owner, 'agent', agentRow, {
-        userIds: [OTHER],
+        grants: [{ userId: OTHER, level: 'read' as const }],
         expectedResourceId: agentRow.id,
         expectedAclRevision: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
     // The stale write did NOT apply — no grant to OTHER.
     const acl = await getResourceAcl(db, owner, 'agent', agentRow)
-    expect(acl.users.map((u) => u.id)).not.toContain(OTHER)
+    expect(acl.grants.map((g) => g.user.id)).not.toContain(OTHER)
     expect(acl.aclRevision).toBe(1)
   })
 
@@ -167,7 +167,7 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, OTHER)).run()
     await expect(
       updateResourceAcl(db, owner, 'agent', agentRow, {
-        userIds: [OTHER],
+        grants: [{ userId: OTHER, level: 'read' as const }],
         expectedResourceId: agentRow.id,
         expectedAclRevision: 0,
       }),

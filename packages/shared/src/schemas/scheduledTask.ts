@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { StartAgentTaskSchema, StartTaskSchema } from './task'
 import { AgentNameSchema } from './agent'
 import { StartWorkgroupTaskSchema, WorkgroupNameSchema } from './workgroup'
-import { OwnerIdentitySchema } from './user'
+import { OwnerIdentitySchema, UserPublicSchema } from './user'
+import { ResourceGrantLevelSchema, ResourceGrantSchema } from './resourceAcl'
 import { isValidIanaTz } from '../scheduleTime'
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/ // 'HH:MM' 24h
@@ -216,6 +217,37 @@ export type CreateScheduledTask = z.infer<typeof CreateScheduledTaskSchema>
 
 /** PUT /api/scheduled-tasks/:id body（strict partial）。`launchKind` 不可变——
  *  提供时必须等于既有值（服务层 422 scheduled-kind-immutable）。 */
+/**
+ * RFC-324 —— 定时任务的授权面。
+ *
+ * 与 13 类 ACL 资源共用 `resource_grants` 与档位值域，但**没有 visibility**：
+ * 定时任务从来没有「全员可见」这一档，未被授权者一律 404。所以它有自己的响应
+ * 形状，而不是复用 `ResourceAclSchema` 再把 visibility 填个假值。
+ */
+export const ScheduleAclSchema = z.object({
+  resourceType: z.literal('scheduled_task'),
+  resourceId: z.string().min(1),
+  ownerUserId: z.string().min(1),
+  owner: UserPublicSchema.nullable(),
+  grants: z.array(ResourceGrantSchema),
+  /** True when the current actor may PUT this ACL (owner or `resource-acl:bypass`). */
+  canManage: z.boolean(),
+  /** True when the current actor may change the schedule (cron / enable / run now). */
+  canEdit: z.boolean(),
+  aclRevision: z.number().int().nonnegative(),
+})
+export type ScheduleAcl = z.infer<typeof ScheduleAclSchema>
+
+/** PUT /api/scheduled-tasks/:id/acl body — `grants` is full-replace. */
+export const UpdateScheduleAclBodySchema = z.object({
+  grants: z
+    .array(z.object({ userId: z.string().min(1), level: ResourceGrantLevelSchema }))
+    .max(256),
+  expectedResourceId: z.string().min(1),
+  expectedAclRevision: z.number().int().nonnegative(),
+})
+export type UpdateScheduleAclBody = z.infer<typeof UpdateScheduleAclBodySchema>
+
 export const UpdateScheduledTaskSchema = z
   .object({
     name: ScheduledTaskNameSchema.optional(),
