@@ -1617,8 +1617,13 @@
       "title": "【拆自 OPS-044】单二进制冒烟跑通 doctor —— 唯一守卫是 CI 的一个步骤，不是可校验的 {file,test}",
       "risk": "P1",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-010: doctor 在编译二进制上跑完整套诊断——十一项逐条给结论、全绿退出 0，且不启动 daemon、不写回数据库 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X1",
@@ -3105,8 +3110,17 @@
       "title": "设置页「系统代理」：管理员给内置 aw-skill-merger 换 runtime 并保存（全系统唯一被许可的 builtin 写路径）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-21：System agents 一次保存落齐运行时 + 语言 + 数值参数，且只写本分区自己的键 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-22：只改融合就不再 PUT config；config 被拒时融合一格都不写 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-02",
@@ -3346,8 +3360,13 @@
       "title": "终态任务归档手动执行：dryRun 预览 → 二次确认 → 真删",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-037：批量归档先给 dry-run 预览且一行不删，确认后才真删、留审计行，未超期的任务不受牵连 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-33",
@@ -5914,8 +5933,17 @@
       "title": "融合（Fusion）分区列表：待审融合行 + 跳转 /fusions/:id + 空态 / 错误态",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 没有待审融合时是空态且无徽章；列表拉取失败时给得出重试，且绝不冒充空态 @nightly"
+        },
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-51 / INTENT-X9: 待审融合出现在记忆页「融合」页签，徽章与服务端计数一致，点行进得去详情 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-22",
@@ -6061,8 +6089,13 @@
       "title": "任务反馈（dear-future-me）提交 → 自动排入蒸馏队列并打上「已送蒸馏」标",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-45",
@@ -6116,8 +6149,13 @@
       "title": "【补漏】融合详情页：带反馈驳回并触发下一轮迭代（POST reject { feedback }）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 INTENT-55: 驳回并写下反馈 → 融合带着反馈重跑下一轮（iteration+1），上一轮提案不再摆在审批位上 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X3",
@@ -7639,8 +7677,21 @@
       "title": "任务反馈：写入反馈 → 排队蒸馏 → 列表显示已蒸馏标记 / 限流 / 错误",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "写下一条反馈：它要真的排进蒸馏，而不是只在列表里躺着 @nightly"
+        },
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "连点要被拦住：一次手抖不该往同一个任务里灌两条一样的笔记 @nightly"
+        },
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "正文校验，以及「看不见」与「不存在」必须逐字节同形 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-39",
@@ -7675,8 +7726,13 @@
       "title": "终态任务批量归档：设置页手动入口的 dry-run 预览 → 确认执行 → 审计行",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-037：批量归档先给 dry-run 预览且一行不删，确认后才真删、留审计行，未超期的任务不受牵连 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-45",
@@ -8080,8 +8136,29 @@
       "title": "事件中心 /events 页面（四页签 + 分页 + 过滤 + 确认删除）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-29: 事件总览的来源树按观察方式分出三种健康态，四张汇总卡片各自的口径都咬得住——已取消的订阅不再计入、已确认的投递退出待处理 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-X6: 老的 /webhooks 三个页签各自落到事件中心对应的页签上，且不在浏览历史里留下一个会把人弹回来的中转页 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-25: 投递审计按事件类型与仓库分别收窄且两者可叠加，仓库下拉列的是投递里出现过的仓库（含没落在当前页的那一个），翻页前后两页互不相交 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-33: 投递记录的四档处理状态各自筛出互不重叠的子集，消费者筛选与状态筛选可叠加，失败原因跟着死信一起显示 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-event-center-views.spec.ts",
+          "test": "RFC-319 EVENT-24: 关掉触发规则的开关后同样的事件不再点火，重新打开又能点，删除规则连带清掉它的点火历史与熔断计数 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-41",
@@ -8098,8 +8175,13 @@
       "title": "仓库批量导入的实时进度表（/ws/repo-imports/{batchId} 驱动的逐行状态）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也会自己走到完成 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-43",
@@ -9649,8 +9731,13 @@
       "title": "可回收空间报告与删除退役运行时目录",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-036：可回收空间照实盘点退役目录，开确认框不删、点取消不删，确认后目录真消失且按钮转灰 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-32",
@@ -9709,8 +9796,13 @@
       "title": "CLI：agent-workflow config get / set",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-016: config get/set 在发行二进制上闭环——值按 JSON 解析、越界与枚举一律拒绝、未知 key 永不落盘 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-X5",
@@ -11480,8 +11572,13 @@
       "title": "工作组任务向导（goal 输入 → leader_worker 引擎收敛）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-launch-and-config.spec.ts",
+          "test": "RFC-319 WG-24: 从卡片与详情页启动：深链带上组 id 与版本 fence，向导预选到这个组，目标一路落进房间并跑到 done @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-15",
@@ -11622,8 +11719,13 @@
       "title": "从 /settings?tab=appearance 的界面改主题 → 无需刷新即时生效并持久",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-sections.spec.ts",
+          "test": "RFC-319 CFG-35：主题保存后当场换肤、刷新仍在，选「跟随系统」则真的跟随系统 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-28",
@@ -11640,8 +11742,13 @@
       "title": "读取失败三态：列表 GET 失败 → ErrorBanner + Retry → 重试成功回到数据态",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-delete-and-refs.spec.ts",
+          "test": "AGENT-X2 代理列表读不到时自报故障并可重试，绝不画成「你还没有代理」 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-36",
@@ -11690,8 +11797,17 @@
       "title": "侧栏 Memory 待办徽标（候选 + 融合数聚合，按 canManage 过滤）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-41: 导航徽标是「可管候选 + 待审融合」之和，批准一条候选当场少一个 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-memory-fusion-and-badges.spec.ts",
+          "test": "RFC-319 MEM-14: 未经人审的候选不进普通用户的读面——他的审批队列给的是空态说明，不是空白也不是一直转圈 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-44",
@@ -12140,12 +12256,9 @@
     }
   ],
   "gapIds": [
-    "OPS-044b",
     "REPO-43",
     "UX-35b",
     "AGENT-39",
-    "AGENT-X1",
-    "CFG-29",
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
@@ -12159,11 +12272,8 @@
     "IAM-X2",
     "IAM-X4",
     "INTENT-X8",
-    "MEM-21",
-    "MEM-43",
     "MEM-49",
     "MEM-X10",
-    "MEM-X2",
     "MEM-X3",
     "MEM-X4",
     "OPS-X3",
@@ -12178,16 +12288,12 @@
     "RES-46",
     "TASK-34",
     "TASK-35",
-    "TASK-38",
     "TASK-39",
-    "TASK-44",
     "TASK-X4b",
     "UX-05",
     "UX-19",
     "UX-24",
-    "UX-33",
     "UX-41",
-    "UX-42",
     "UX-47",
     "UX-X5b",
     "WF-02",
@@ -12204,9 +12310,7 @@
     "AGENT-46",
     "CFG-03",
     "CFG-08",
-    "CFG-30",
     "CFG-32",
-    "CFG-44",
     "CFG-X5",
     "DE-02",
     "DE-39",
@@ -12227,15 +12331,11 @@
     "RES-04",
     "RES-06",
     "RES-20",
-    "TASK-03",
     "UX-06",
-    "UX-26",
     "UX-28",
-    "UX-34",
     "UX-36",
     "UX-37",
     "UX-39",
-    "UX-40",
     "UX-45",
     "UX-46",
     "WF-55",

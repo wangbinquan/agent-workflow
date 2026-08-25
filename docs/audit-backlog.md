@@ -3380,3 +3380,43 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
      并用「快照接口只被读过 1 次」排除轮询解释——比账本对 UX-42 的描述覆盖得更严。
    - **OPS-044b**（单二进制冒烟跑通 doctor）已被 `e2e/rfc319-ops-doctor-and-migrate.spec.ts:247`（OPS-010）
      覆盖；唯一分歧是「跑的是 `dist/agent-workflow-e2e-*` 而非 release 产物」，属产物命名口径。
+
+## RFC-319 账本对账批（2026-08-26）：16 条假 gap 已销，10 条部分覆盖 + 7 条 tier 不一致待决
+
+前五批起草者在开工前 grep 既有 e2e 时，反复撞见「标着 `status:'gap'` 其实已有真覆盖」的行，累计点名
+33 条。本次**逐条读 test 正文**核实（不是关键字匹配——那种做法我先试过一次，把 MEM-21 匹配到了毫不
+相干的 INTENT-50 上，是彻底的假阳性），结论如下。
+
+**已销 16 条**（改 covered + 挂逐字 evidence，gap 105 → 89）：AGENT-X1、CFG-29、CFG-30、CFG-44、
+MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-33、UX-34、UX-40、UX-42。
+
+**待你决定的三类残留：**
+
+1. **部分覆盖（10 条，仍是 gap，缺的那一片已写清）**——补它们只需在既有 spec 上加断言，成本远低于新写：
+   - UX-24：点行后**没断言抽屉关闭**；只走 clarify 行、review 行没走；徽标的三路求和口径没验。
+   - UX-41：只有「显式冲突不静默覆盖」，**正向的跨标签实时传播整片缺失**。
+   - MEM-X3：两步确认 + 停引擎 + 服务端拒 approve 都有；**`applying` 中不许取消那一支零覆盖**
+     （`services/fusion.ts:1755-1775` 的 CAS，全仓 e2e 无 `fusion-terminal` 命中）。
+   - MEM-X10：只对 **GET** 做了 missing/invisible 逐字节同形；**POST 用外人 token 的 404 同形没验**。
+   - TASK-34：懒加载 / 预览 / 下载 / >2MiB 四片都在；**`worktree-files-refresh` 按钮全仓 e2e 零命中**。
+   - TASK-39：四片行为都验了，但**全走 REST 驱动**；界面上的 `tq-add-question` / `tq-stage-{id}` /
+     `tq-batch-dispatch` 三个控件全仓 e2e 零命中，而账本行写的是「task-questions 页签」。
+   - CFG-32：**bindHost 的保存没有任何用例**（只有 `ux-consistency` 的可见性断言）。
+   - CFG-03：窄屏折叠有，**「并可切换」缺**——`rfc319-settings-sections.spec.ts:147-156` 的 compact 分支
+     因所有用例都在 1280 宽跑而从不执行。
+   - UX-05：密码登录与 OIDC 都有，**一次性 token 登录缺**（`auth.tsx:341` 的 `auth-token-form` 与
+     `auth-bootstrap-handoff` 全仓 e2e 零命中）。
+   - INTENT-X8：SIGKILL 重启那半有，**「排队中的上下文后继被恢复」整片缺失**。
+2. **内容核实通过、但 tier 与用例标签不一致（7 条，一行未动）**——改 covered 会当场触发
+   `tierWiringMismatches`。账本写 `tier:'nightly'` 而线索用例**没有** `@nightly`（即它们每次 PR 都在跑）：
+   AGENT-39、UX-06、UX-36、CFG-08、WF-X2、WF-25，外加 UX-05 / UX-41 / CFG-03（这三条内容也不完整）。
+   **两条出路**：把账本 tier 改成 `pr`（承认它们跑在 PR 腿），或给那些用例补 `@nightly`（会把它们移出
+   PR 腿，削弱现有防护）。**倾向前者**——那些用例本来就跑在 PR 腿上，账本该跟实现走。
+3. **线索被推翻、仍是真 gap（1 条）**：**UX-39**「在线状态圆点随 `/ws/presence` 实时增删」。
+   线索指向的 `rfc319-users-and-account.spec.ts` 的 IAM-42 锁的是**权限门**（有 `users:presence` 有点、
+   收回后逐字节只少那几个 span、无权限不建连接），圆点消失是**权限被撤 4403 关连接**造成的，**不是
+   presence 事件**——三个被观察账号全程从不登录，没有任何上线/下线事件被推过。而且那条 test **已经是
+   IAM-42 行的证据**。全仓 `.presence-dot` 只出现在两个 spec，**没有任何用例观察过圆点的实时增删**。
+
+**另记一条账本自身的重复**：**TASK-44 与 CFG-29 是同一条能力的两行**（措辞不同、内容重合，证据同为
+`rfc319-ops-settings-panels.spec.ts` 的 OPS-037）。本次两行都销了，是否合并成一行待定。
