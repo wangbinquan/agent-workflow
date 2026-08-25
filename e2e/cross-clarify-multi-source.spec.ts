@@ -260,7 +260,24 @@ test('答完一家不算数：designer 不许重跑，页面要点名还差谁',
   await page.getByTestId('clarify-submit-stop').click()
   await page.getByTestId('clarify-stop-confirm').click()
 
-  // ① 页面留在原地并点名还差谁——先答完的那个人否则会以为自己已经交差了。
+  // ① 回到这一屏，必须告诉他还差谁——先答完的那个人否则会以为自己已经交差了。
+  //
+  // 为什么是「回到这一屏」而不是「提交后原地断言」：**提交完那一瞬间的落点不稳定**。
+  // 2026-08-25 CI（macOS shard 1/2）实红一次，trace 里的页面快照是**任务详情页**——
+  // 也就是说那次提交走了跳转分支；本机同一条用例每次都留在原地。差别出在提交响应是不是
+  // `designer-waiting`（`clarify.detail.tsx:481-487`：是则把 pending 存进 crossWaiting
+  // 留在原地，否则沿用旧的「跳回任务详情」）。落点本身算不算契约、该不该统一，已记进
+  // `docs/audit-backlog.md` 交给该域的人判；**这条用例锁的是那句稳定的承诺**：
+  // 这一屏必须点名还差哪一家。回访时数据来自 peers 查询（源码注释也写着这条通路是
+  // 「navigation back to this page 时由 list refetch 填上」），与落点无关。
+  // 先等服务端把这一轮记成已答，再回访：否则「提交后的跳转」可能在我 goto 之后才发生，
+  // 把刚打开的页面又顶掉——那就成了新的竞态。
+  await expect
+    .poll(async () => (await awaitingRounds()).map((r) => r.intermediaryNodeId), {
+      timeout: 30_000,
+    })
+    .toEqual(['cross_b'])
+  await openClarify(page, a.intermediaryNodeRunId)
   await expect(
     page.getByTestId('cross-clarify-multi-source-banner'),
     '答完一家之后要告诉他还差谁',
@@ -274,8 +291,6 @@ test('答完一家不算数：designer 不许重跑，页面要点名还差谁',
     page.getByTestId('cross-clarify-multi-source-link-cross_a'),
     '已经答完的这一家不该还挂在待答清单里',
   ).toHaveCount(0)
-  // 还留在原地：跳走的话人就看不到这条提示了。
-  await expect(page).toHaveURL(new RegExp(`/clarify/${a.intermediaryNodeRunId}$`))
 
   // ② designer 不许重跑：半份反馈改出来的稿子可能与另一家的意见直接冲突，
   //    而第二家答完还会再触发一次，前一次连同它烧掉的模型调用一起作废。

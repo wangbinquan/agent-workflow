@@ -2296,3 +2296,23 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
 框架回读」的链路都可能同形。`PLATFORM_RUNS_DIR` / `PLATFORM_PIPELINE_DIR` /
 `PLATFORM_REQUIREMENTS_DIR` 各自的读写两端需要逐条对照，确认它们要么不跨隔离边界，
 要么已进 force-include 名册。
+
+## 跨节点澄清提交后的落点不一致（RFC-319 B58 实测，2026-08-25）
+
+同一条 cross-clarify 用例，**提交后停在哪一屏在不同环境下不一样**：本机每次都留在澄清详情页
+（多源等待横幅就地渲染）；2026-08-25 的 CI（macOS，Playwright shard 1/2，run 32797…）trace 里的
+页面快照是**任务详情页**，即那次走了跳转分支。
+
+机制上两条路都存在且都是有意为之：`packages/frontend/src/routes/clarify.detail.tsx:481-487` 里，
+提交响应是 `designer-waiting` 时把 pending 存进 `crossWaiting` 并**留在原地**，否则沿用
+self-clarify 的旧行为「跳回任务详情」。所以落点取决于**提交那一刻服务端算出的多源就绪状态**，
+而那受兄弟轮次的时序影响。
+
+未决问题（留给该域的人判）：
+
+1. 这个落点算不算用户面契约？「答完一家之后停在哪」直接决定人看不看得到「还差谁」那条提示——
+   跳走了就看不到，得自己想起来回去翻。
+2. 若算契约，应统一到哪一边（cross 一律留在原地？还是一律跳回任务详情并把提示搬到那一屏）？
+
+E2E 侧的现状：`e2e/cross-clarify-multi-source.spec.ts` 已不再断言落点，改为**显式回访**该页再断言
+「横幅点名还差谁」——那句承诺与落点无关，两条路上都成立。落点本身没有任何用例锁定。
