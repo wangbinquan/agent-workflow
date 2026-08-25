@@ -3577,8 +3577,21 @@
       "title": "多文档评审的轮次历史（?round=）、陈旧徽标、整轮驳回理由与列表多文档徽标",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-multidoc-round-history.spec.ts",
+          "test": "评审列表：多文档看得出是多文档，展开的是「轮」而不是版本"
+        },
+        {
+          "file": "e2e/review-multidoc-round-history.spec.ts",
+          "test": "历史轮：只读、点名第几轮、并写清那一轮为什么被打回"
+        },
+        {
+          "file": "e2e/review-multidoc-round-history.spec.ts",
+          "test": "上一轮接受过、这一轮内容变了的文档，必须打「已变更」"
+        }
+      ]
     },
     {
       "id": "HUMAN-41",
@@ -7209,11 +7222,16 @@
     {
       "id": "HUMAN-X4",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "多文档评审的 UI 逐项接受 / 不接受与 A/N 键盘快捷键",
+      "title": "多文档评审的 UI 逐篇接受 / 不接受与 q / w 键盘快捷键（审计原文写作 A / N，源码实为 q / w，见 lib/review/multiDocHotkeys.ts）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-multidoc-round-history.spec.ts",
+          "test": "逐篇接受 / 不接受：界面按钮与 q / w 快捷键，且带修饰键一律不接管"
+        }
+      ]
     },
     {
       "id": "HUMAN-X5",
@@ -8632,13 +8650,11 @@
     "HUMAN-15",
     "HUMAN-16",
     "HUMAN-36",
-    "HUMAN-40",
     "HUMAN-42",
     "HUMAN-43",
     "HUMAN-47",
     "HUMAN-48",
     "HUMAN-X3",
-    "HUMAN-X4",
     "HUMAN-X5",
     "HUMAN-X6",
     "IAM-02",
