@@ -59,7 +59,6 @@
     "GET /api/tasks/:id/nodes/:nodeRunId/stdout",
     "GET /api/tokens",
     "GET /api/tokens/audit",
-    "GET /api/workflows/:id/export-package",
     "GET /api/workgroups/:id/export-package",
     "GET /api/worktree-files/:taskId",
     "GET /api/worktree-files/:taskId/*",
