@@ -3851,8 +3851,13 @@
       "title": "数字员工各页面的可访问性（axe critical/serious 零违规）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 DE-44: 数字员工的四张工作面（类型列表 / 员工 / 岗位模板 / 工具箱）逐张过 axe，critical 与 serious 一条都不许有 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-X2",
@@ -3860,8 +3865,13 @@
       "title": "【漏项】岗位模板里的数字员工协作绑定与 dispatch 节点「工具 ↔ 员工协作」切换",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 DE-X2: 岗位模板把一条 dispatch 路由派给数字员工——协作路由不许绑工具、工具路由不许缺工具、协作绑定的工作项/契约/目标员工三层各自拦得住；界面上「处理方式」一切换，工具选择器与员工选择器整块互换 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-X3",
@@ -4051,8 +4061,13 @@
       "title": "四类启动目标：工作流 / 独立 Agent / 工作组 / 数字员工",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 EVENT-20: 事件自动化的四类启动目标——工作流 / Agent / 工作组 / 数字员工各自的分支字段都真的落库读得回来，只有数字员工那一类额外要一张启动许可；界面上四选一会把不属于本类的字段整块换掉 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-23",
@@ -7218,8 +7233,13 @@
       "title": "从 npm registry 安装插件（真实 registry 协议）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 RES-30: 从 npm registry 装插件——真的取了 packument 与那一版的 tarball，钉死的版本压过 latest 落进 resolvedVersion @nightly"
+        }
+      ]
     },
     {
       "id": "RES-31",
@@ -7241,8 +7261,13 @@
       "title": "插件「检查更新」的三种结果（有新版 / 已是最新 / 身份未知）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 RES-32: 插件检查更新的三种结果——已是最新 / 有新版且点名版本号 / 基线身份未知，三条通知互斥且各自决定升级按钮的文案与可用性 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-33",
@@ -7250,8 +7275,13 @@
       "title": "插件升级 / 重装基线（upgrade / reinstall baseline）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 RES-33: 插件升级换到新的不可变代次并把版本推进，身份未知时的「重装基线」装完真的把基线补回来 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-36",
@@ -10266,8 +10296,13 @@
       "title": "Webhook 任务工作区自动清理（webhookTaskWorkspaceAutoCleanup）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 EVENT-X5: webhook 起的任务终态后自动清工作区——开关关着一个字节都不动；开着之后只清「webhook 起的 + 一次性空间」那一类，手工任务与常驻本地仓一个都不许碰 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-X6",
@@ -11484,8 +11519,13 @@
       "title": "dev watcher 不得顶替常规 daemon / dev 替换前先排空上一代",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 OPS-X7: 同一个 home 上再起一个 dev 代次——在位的是手工启动的普通 daemon 时它一根汗毛都不许动，在位的是 dev 代次时才会被请去排空 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X9",
@@ -12293,8 +12333,13 @@
       "title": "导出工作组资源包（带 expectedVersion fence，脏/忙时禁用并给出原因）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 WG-06: 导出工作组资源包——干净时带着当前版本 fence 真的落一份 zip，陈旧与畸形 fence 各自被拒，半截草稿下按钮点不动也发不出请求 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-12",
@@ -12470,8 +12515,13 @@
       "title": "【补漏】成员画廊 ↔ 右侧上下文面板的三态选择（默认 config / 点卡进 member / add 草稿态；互斥、Esc 归位、id 重生后保持选中）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-plugin-registry-and-ops.spec.ts",
+          "test": "RFC-319 WG-X2: 成员画廊与右侧面板的三态互斥——默认 config、点卡进成员、加成员进草稿态；面板内 Esc 归位并把焦点还给触发它的那张卡；保存把成员 id 全换了一遍，选中仍钉在同一张卡上 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-X4",
@@ -12494,9 +12544,6 @@
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
-    "DE-44",
-    "DE-X2",
-    "EVENT-20",
     "IAM-02",
     "IAM-34",
     "IAM-X2",
@@ -12504,9 +12551,6 @@
     "MEM-49",
     "OPS-X3",
     "OPS-X5",
-    "RES-30",
-    "RES-32",
-    "RES-33",
     "TASK-35",
     "TASK-X4b",
     "UX-05",
@@ -12524,20 +12568,16 @@
     "DE-41",
     "EVENT-28",
     "EVENT-X4",
-    "EVENT-X5",
     "IAM-22",
     "IAM-45b",
     "INTENT-X5",
     "INTENT-X7",
     "OPS-007",
-    "OPS-X7",
     "OPS-X9",
     "REPO-42",
     "UX-39",
     "UX-45",
-    "UX-46",
-    "WG-06",
-    "WG-X2"
+    "UX-46"
   ],
   "unverifiedIds": []
 }

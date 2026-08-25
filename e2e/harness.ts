@@ -345,6 +345,27 @@ function removeOwnedHome(home: string, keepHome: boolean): void {
   }
 }
 
+/**
+ * RFC-319 —— 把 system-mock 的 npm registry 接进 daemon 的 npm 子进程。
+ *
+ * `services/pluginInstaller.ts` 装 npm / git 源插件时 spawn 的是**真的**
+ * `npm install`，环境直接继承 daemon 进程的 `process.env`
+ * （`pluginInstaller.ts` 的 `runCommand`）。globalSetup 早就把
+ * `AW_SYSTEM_MOCK_NPM_REGISTRY_URL` 放进了 worker 的 env，但 npm 只认
+ * `npm_config_*`——没有这一步翻译，任何走 npm 源的用例都会去打**真实的**
+ * registry.npmjs.org：既是网络依赖，也让 CI 上的结果不可复现。
+ *
+ * 两个变量都只在 mock 套件在跑时才出现，所以没开 mock 的调用方（以及今天
+ * 全部既有 spec——e2e 里没有任何一条会 spawn npm/npx）拿到的 env 逐字节不变。
+ * cache 落在本次 daemon 的临时 home 里：既不污染开发机 / CI runner 的
+ * `~/.npm`，也随 `removeOwnedHome` 一起清掉。
+ */
+function mockNpmRegistryEnv(home: string): Record<string, string> {
+  const registry = process.env.AW_SYSTEM_MOCK_NPM_REGISTRY_URL
+  if (registry === undefined || registry === '') return {}
+  return { npm_config_registry: registry, npm_config_cache: join(home, '.npm-cache') }
+}
+
 interface ReadyDaemon {
   baseUrl: string
   bootstrapToken: string | null
@@ -599,6 +620,7 @@ async function startDaemonWithPortAllocator(
             ...process.env,
             AGENT_WORKFLOW_HOME: home,
             LANG: 'en_US.UTF-8',
+            ...mockNpmRegistryEnv(home),
             ...(opts.extraEnv ?? {}),
             // LAST, so it wins. Placed first it was overridable by `extraEnv`,
             // which is the one remaining way to run a different stub than the

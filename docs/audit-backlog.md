@@ -3552,3 +3552,45 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
 7. **【冗余守卫，实测记录】`resumeQueuedIntentWorkingSets` 有两个生产者**——boot（`cli/start.ts:1041`）与
    小时级 ticker（`:1379`）。INTENT-X8 只掐 boot 那条仍然咬得动，因为 ticker 周期是小时级、用例窗口内
    不会触发；将来若写一条走 ticker 的用例，需要把两处一起掐。
+
+## RFC-319 B110（2026-08-26，npm 源插件 + 运维）：一条中高缺陷与三条基建结论
+
+1. **【真实缺陷，中高（开发体验），本机 3/3 稳定复现，未写成断言】dev-watch 锁交接有竞态：
+   上一代排空了、新一代却退出码 1，结果一个 daemon 都不剩。**
+   `packages/backend/src/cli/start.ts:205-215` 的 `requestShutdown(endpoint, …)` 返回非 `'accepted'`
+   就 `throw`；而 `packages/backend/src/services/controlListener.ts:100-106` 在**构造完 Response 之后**
+   就 `queueMicrotask(options.onShutdown)`——空闲 daemon 的 `shutdown()` 会在响应真正写进 socket 之前
+   跑掉 `server.stop(true)` ⇒ 客户端 fetch 抛异常 ⇒ `requestShutdown` 返回 `'unreachable'`。
+   复现：同一个 home 上先起一个带 `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS=20000` 的 daemon，再起第二个同样的。
+   观测：第二个 12ms 内打印 `another daemon is already running` 并 exit 1，而第一个的 `.daemon.control`
+   已经消失（说明它确实收到了 shutdown）；日志里 `requested previous dev daemon shutdown` **从不出现**。
+   影响：`bun --watch` 每次热重启都可能变成「旧的死了、新的没起来」。
+   OPS-X7 的第二条腿只断言「上一代确实被请去排空」（缺陷修好之后依然成立），未把缺陷现状写成期望。
+2. **【真实缺陷，挡住三条能力】`webhookDeliveryGc` 与 `retentionSweep` 没有 boot 首拍。**
+   `cli/start.ts:929` 与 `:933-940` 两处装配**都没传 `bootDelayMs`**，而 `services/maintenanceTicker.ts:133-134`
+   的 boot 拍是 opt-in；相位表 `services/daemonCadence.ts:96/:100` 让首拍分别落在 T0+8min / T0+16min。
+   全仓 `bootDelayMs` 只有 `eventsArchive` / `taskArchive` / `lifecycleInvariants` 三个使用者，而
+   `packages/backend/tests/rfc311-maintenance-boot-tick.test.ts` **已经为前两个修过、漏了这两个**。
+   后果：一台平均重启间隔短于 8 分钟的机器，投递 GC 一次都不会跑。
+   **EVENT-28 / EVENT-X4 / OPS-X9 因此本批做不了**——要覆盖得等 8 + 16 分钟墙钟（同一次 boot 内两拍都到，
+   不用重启、不用 sleep），或先给产品补首拍 / 补一个手动触发端点。
+   **顺带修正审计**：`design/RFC-319-.../findings.md:2559`（OPS-X9 行）写「`cli/start.ts:907-908` boot 时把
+   config 透传给 sweep」——行号已漂且**语义是错的**，boot 时不跑任何一拍。
+3. **【环境陷阱，线上不受影响但会坑到人】npm 源插件安装对「含软链的 `AGENT_WORKFLOW_HOME`」不成立。**
+   `services/pluginInstaller.ts:454-459` 只认 package-lock 的 `packages["node_modules/<name>"]` 键，而
+   npm 11 按 **realpath** 相对 lockfile 根算这个键——home 落在 macOS 的 `/var/folders/…`（`/var` →
+   `/private/var` 软链）时键变成 `../../../../../../private/var/…`，安装一律以 422
+   `plugin-install-failed: installed package is missing from package-lock` 收场，**错误文案完全指不到病因**。
+   生产默认 `~/.agent-workflow` 没有这层软链，所以线上不受影响；用户把 `AGENT_WORKFLOW_HOME` 指到任何
+   含软链的路径就会中招。B110 的处置是**在 spec 内**用 `realpathSync(mkdtempSync(...))` 造 home 并注释说明。
+4. **【前批结论复核，仍成立】OPS-007 依然不可覆盖**：`cli/stop.ts:85` 的 30s 预算硬编码、`main.ts:79` 调
+   `stopCommand()` 不传 options、CLI 无 `--timeout`，而 `e2e/command.ts:15` 的 `COMMAND_TIMEOUT_MS = 15_000`
+   会先把子进程打死；`forced` 那一档在 POSIX 上根本不可达（`stop.ts:104` 只在 win32 走硬杀）。
+5. **【调查所得，未实跑】OPS-X3 需要 ≥5.5 分钟墙钟**：唯一触发器是 `services/autoKill.ts:210` 的裸
+   `setInterval`，周期取自 `daemonCadence.ts:31` 的 `300_000`（被 `rfc284-daemon-cadence.test.ts:9` 锁死），
+   `cli/start.ts:1471-1472` 不传 `intervalMs`、无 boot 首拍、无 env 覆盖、无手动端点。
+   另注意 `autoKill.ts:149-156` **无论 outcome 是不是 `killed` 都会落一条 `heartbeat-kill` recovery event**
+   ——将来写这条用例时判据不能只看这条事件。
+6. **【账本假 gap】DE-39 已被覆盖**：`e2e/rfc310-digital-employee-journey.spec.ts:536-553` 已逐条断言
+   `/code/executors` / `/code/config/adapters` / `/code/config/adapters/retired-adapter` 三条深链重定向到
+   `/digital-employees` 且旧界面元素 `count(0)`。（DE-39 的 tier 是 `pr`，与该文件的标签一致。）
