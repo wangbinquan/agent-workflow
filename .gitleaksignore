@@ -60,3 +60,11 @@ a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:
 c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generic-api-key:889
 c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generic-api-key:908
 c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generic-api-key:909
+
+# RFC-319 B89（3589bc6c9）：e2e 夹具里给 agent 起的**名字**撞 generic-api-key。
+# 命中的串是 `rfc319-wg15-lead`——WG-15「成员 agent 的技能闭包坏掉」那条用例里
+# 那个注定坏掉的 leader 的名字。规则是靠近处的 `first.token` 标识符加熵值（3.75）
+# 命中的，串本身没有任何凭据含义：它只需要足够独特，好让「闭包坏了就禁启动」的
+# 断言能精确定位到这一个 agent。与本文件上面 B12 / B68 / B69 三段同因同处置——
+# 改当前文件消不掉，gitleaks detect 扫的是**全部历史**，所以这里钉历史指纹。
+3589bc6c9124ea514301d787b6cd2008b5801de6:e2e/rfc319-workgroup-launch-and-config.spec.ts:generic-api-key:494
