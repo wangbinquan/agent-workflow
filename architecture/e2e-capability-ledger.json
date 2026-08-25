@@ -8313,8 +8313,13 @@
       "title": "从配置包创建工作流（import package → preview → commit）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-02: 从配置包新建工作流——预览列出根工作流与它引用的代理，两项都选新建后落库的节点接的是新代理而不是源代理 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-03",
@@ -8693,8 +8698,17 @@
       "title": "WS 多标签页同步：他处保存后本页重新拉取且不抢走用户的相机/输入",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-45: 工作流在别处被删除——本页不刷新就从 Saved 翻成 Deleted 终态，并给出一条真的能走的返回列表 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-45: 编辑器开着时权限被收回——下一次自动保存把页面推进 inaccessible 终态，「重试访问」在恢复授权前后给出不同结果 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-46",
@@ -11782,8 +11796,13 @@
       "title": "管理员语言切换写 daemon 配置 + 写失败回滚并显示错误行",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 UX-28: 管理员切语言写进 daemon 配置；写被明确拒绝时先乐观切换、再回滚，并把服务端理由显示成 alert @nightly"
+        }
+      ]
     },
     {
       "id": "UX-34",
@@ -11814,8 +11833,13 @@
       "title": "浏览器前进/后退与滚动位置恢复",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 UX-37: 后退回到长页面时恢复的是离开前的滚动位置，再前进仍回到刚才那一页 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-38",
@@ -11994,8 +12018,13 @@
       "title": "启动准备期间的取消",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-55: 启动准备期点取消——中止在飞的精确校验、留在编辑器且不报错，迟到的成功响应也不会把人带走 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-56",
@@ -12017,8 +12046,13 @@
       "title": "执行合同目录与精确合同指南读取（/api/execution-contracts）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-57: 执行合同目录逐条都能按精确 ref 读回自洽的指南，非法 ref 与不存在的 ref 给出可分辨的拒绝，无权账号一条都读不到 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-X2",
@@ -12049,8 +12083,13 @@
       "title": "从工作流列表 / 编辑器进入 AI 意图构建（intent entry）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-X4: 工作流列表与编辑器的 AI 入口——列表带工件提示、编辑器把这份工作流当修改目标挂进创建请求 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-X5",
@@ -12058,8 +12097,13 @@
       "title": "code-round 节点的只读检查器说明面板",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-entries-and-shell-prefs.spec.ts",
+          "test": "RFC-319 WF-X5: code-round 节点的检查器只给只读说明——点名不可编辑、说清本轮能力，面板里一个可编辑控件都没有 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-01",
@@ -12341,9 +12385,7 @@
     "UX-41",
     "UX-47",
     "UX-X5b",
-    "WF-02",
     "WF-25",
-    "WF-45",
     "WF-47b",
     "WG-27",
     "WG-28",
@@ -12372,17 +12414,11 @@
     "OPS-X9",
     "REPO-42",
     "UX-06",
-    "UX-28",
     "UX-36",
-    "UX-37",
     "UX-39",
     "UX-45",
     "UX-46",
-    "WF-55",
-    "WF-57",
     "WF-X2",
-    "WF-X4",
-    "WF-X5",
     "WG-06",
     "WG-X2"
   ],

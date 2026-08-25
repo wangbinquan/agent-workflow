@@ -3455,3 +3455,31 @@ MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-3
    该字段在 `from-skill` 下渲染的是 `fusion.noManagedSkills` 的 `<p>`，于是「字段渲染了但里面是空态」
    这一整类回归会被漏掉（变异实测 NO-BITE）。已改成 `getByText('Target skill', {exact:false})`
    + `toHaveCount(0)`，改后同一变异当场红。
+
+## RFC-319 B107 起草期撞到的账本偏差与产品观察（2026-08-26，工作流入口 + 外壳偏好）
+
+1. **【审计文案写错了注入码，照抄会写出永远红的用例】UX-28 建议「拦 `PUT /api/config` 返回 503 → 断言
+   回滚」。** 实现里 `packages/frontend/src/lib/config-resource.ts:38-43` 的 `isDefinitiveWriteError`
+   **只把 4xx 当明确失败**；5xx 属「结果未知」，走的是 `ConfigAmbiguousWriteError` +
+   `reconcileAmbiguousConfigWrite` 那条**完全不同**的分支，**不执行**回滚。B107 改用 **400**。
+2. **【账本措辞与实现不符】WF-45 的「无权用户直接打开编辑器 → inaccessible」不成立。**
+   `routes/workflows.edit.tsx:238-246` 有一层更早的 gate：`query.data === undefined && query.error` 时
+   渲染的是 `PageHeader + ErrorBanner`，**根本进不到草稿控制器**，`workflow-draft-status-focus` 不存在
+   （起草侧实撞 `element(s) not found`）。inaccessible 终态**只在「已经加载过之后失去访问权」时可达**，
+   用例因此改成「开着编辑器 → 收回授权 → 下一次写请求 404」。
+   相关：ACL 撤销本身**不**驱动客户端进终态（`hooks/useWorkflowSync.ts:73-75` 明写
+   `workflow.acl.updated` 刻意不处理），要稳定复现只能靠一次真实写请求。
+3. **【账本措辞与实现不符】WF-57 的非法 ref 是 422 不是 400**：`ValidationError('execution-contract-ref-invalid')`
+   在本仓映射成 422；不存在的 ref 是 404 `execution-contract-not-found`。两者确实可分辨（这点账本说对了）。
+4. **【产品观察，P3 / 数据陈旧，未写成断言】配置包导入不重写 `agentName`。**
+   `services/resourcePackage/serialize.ts:437-442` 只把 `agentId` 抬成 `agentRef`、`agentName` 原样带走；
+   `bundle/lower.ts:277-281` 只把 `agentRef` 落回 `agentId`。于是**导入时给代理起了新名字**之后，新工作流
+   节点上的 `agentName` 仍是**源代理的名字**，与 `agentId` 指向的新代理不一致。运行期以 id 为准
+   （`nodeTitle` 走 agentLookup by id），目前只是陈旧冗余；但 `agentName` 在 call 目标那一族是**被当作
+   late-bound 名字域用的**，值得产品侧确认要不要一并重写。
+5. **【待确认，P3】目录里存在 `allowedExecutorKinds: []` 的执行合同**：`development.acknowledge-feedback@1`，
+   三种 transport 全 `null`。schema 允许（`.max(3)` 无下限），但这条合同在**任何**执行体选择器里都选不出来。
+   B107 因此没把「必须非空」写成逐条断言，改成目录级下限（至少一条允许 `agent`）。可能是有意的占位。
+6. **【刻意设计，记一笔免得再踩】edit 授权不能改名**：被授权者 PUT 改名得 403
+   `resource-rename-owner-only`（"an edit grant covers content only"）。这意味着**「重命名」不能当作
+   被授权者的脏化手段**——B107 因此改用「自动布局」这类内容改动。
