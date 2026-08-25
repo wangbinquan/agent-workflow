@@ -8192,8 +8192,13 @@
       "title": "特权节点（script / code-host-call）在调色板与检查器上的置灰与遮蔽",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-11: 没有 scripts:author / code-host-calls:author 的人——调色板里那两类节点置灰且点不动，检查器只给「已隐藏」而不是一排星号，服务端也没把正文送过来 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-13",
@@ -8418,8 +8423,13 @@
       "title": "call-workflow 节点：选子工作流、只读端口预览、不可用降级、上限设置",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-33: call-workflow 检查器——引用不可见时给中性占位，选中子工作流同时写下名字与 id 并按真实定义预览端口，自己绝不在候选里，上限清空即删字段 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-34",
@@ -8427,8 +8437,13 @@
       "title": "call-workgroup 节点：选工作组、目标模板、结果说明",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-34: call-workgroup 检查器——选中工作组同时写下名字与 id，目标模板落库且缺失的 {{ref}} 被当场点名，结果端口固定为 result 说清楚 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-35",
@@ -8436,8 +8451,13 @@
       "title": "script 节点检查器：语言、脚本正文（含全屏）、环境变量表、依赖固定版本、readonly",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-35: script 检查器——切语言只重写没动过的模板正文、全屏编辑器写的字照样落库、依赖必须精确固定版本、env 保留键当场报错、readonly 关掉是删字段 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-37",
@@ -8445,8 +8465,13 @@
       "title": "join 模式（RFC-306）：多入站节点上的 any / all 选择",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-37: join 模式只在有两条以上入站时才出现，默认停在 any，选 all 落库、选回 any 是删字段而不是存字面量 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-38",
@@ -8468,8 +8493,13 @@
       "title": "校验回执过期提示（草稿变更 / 资源清单变更）与「重新校验」",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-40: 校验回执在草稿改动后与资源清单变动后分别标为过期并说清原因，「重新校验」把结论重新签在当前修订版上 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-45",
@@ -8569,8 +8599,13 @@
       "title": "配置包导出（按已保存版本围栏，脏草稿时禁用）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-52: 配置包导出按已保存版本设围栏——干净草稿时点下去带的是当前版本号，服务端对陈旧版本回 package-root-changed，脏草稿时入口直接禁用并说明原因 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-X1",
@@ -11582,8 +11617,13 @@
       "title": "节点右键上下文菜单（删除 / 复制 / 包装等单层菜单）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-15: 节点右键菜单——wrapper 专属三项在普通节点上置灰、在 wrapper 上可用，Escape 什么都不做，复制 / 删除真的落库 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-23",
@@ -11628,8 +11668,13 @@
       "title": "校验面板的「自动适配 wrapper 尺寸」修复动作",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workflow-inspector-and-packages.spec.ts",
+          "test": "RFC-319 WF-56: 内层节点跑出 wrapper 边界时校验面板报警并挂出「自动适配」，点一下真的清掉 wrapper 的固定尺寸，重新校验后这条告警消失 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-57",
@@ -11972,16 +12017,9 @@
     "UX-47",
     "UX-X5b",
     "WF-02",
-    "WF-11",
     "WF-25",
-    "WF-33",
-    "WF-34",
-    "WF-35",
-    "WF-37",
-    "WF-40",
     "WF-45",
     "WF-47b",
-    "WF-52",
     "WG-27",
     "WG-28",
     "WG-42",
@@ -12044,9 +12082,7 @@
     "UX-40",
     "UX-45",
     "UX-46",
-    "WF-15",
     "WF-55",
-    "WF-56",
     "WF-57",
     "WF-X2",
     "WF-X4",

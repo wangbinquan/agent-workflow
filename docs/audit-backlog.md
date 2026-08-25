@@ -3180,3 +3180,36 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    - DE-08 的 program 工具授权门与**工作流里 script 节点的 `scripts:author` 字段门**
      （`services/scriptAuthorGate.ts:46`）是两道门；夹具必须由 admin 建合同工作流，否则这条用例
      证的是另一道门。
+
+## RFC-319 B101 起草期撞到的产品缺陷（2026-08-26，工作流检查器 / 画布右键）
+
+1. **【真实缺陷，中高，起草侧实跑复现 + 本人按源码复核】右键菜单不会把命中的节点真正纳入选择，
+   于是「删除」删错对象。**
+   `packages/frontend/src/components/canvas/WorkflowCanvas.tsx:2658-2661` 的 `handleNodeContextMenu`
+   在右键时写 `setSelection({nodes:[node.id],edges:[]})`，注释也写明「Make sure the right-clicked node
+   is part of the selection」；而 `:2903-2921` 的 `onSelectionChange` 会在**任何 node/edge 更新之后
+   重新触发**（该处注释自己写着这一点），用 xyflow 侧仍然只含**旧**节点的 `selected` 标志把
+   `selection` 盖回去——右键**不会**翻转 xyflow 的 `selected` 标志。于是 `:1967-1993` 的
+   `deleteSelected` 读到的是旧选择。
+   **复现**：先左键点中节点 `inner`，再**右键** `alpha` → 菜单 → Delete。落库结果是 `['alpha','box']`
+   ——被删掉的是 `inner`，`alpha` 还在。同一根因也解释了已记录的「Ctrl+A /『Select all』是空操作」
+   （`:1921-1927` 同样只写 React 侧选择态）；菜单里的 Copy 读同一份 `selection`，很可能同样错位。
+   **严重度中高**：删除不可逆，且用户没有任何视觉线索（右键不改任何 `selected` 类）。
+   B101 未把错位行为写成期望，WF-15 只验「右键命中的就是当前选中的那个」这条正常路径，并在用例
+   上方注释存证。
+2. **【账本与实现不符：两条假 gap，建议改账本而不是新写用例】**
+   - **WF-X2「聚焦选中」相机动作**已被 `e2e/rfc250-workflow-camera.spec.ts:1005` 完整覆盖（无选中时
+     按钮 disabled → 选中后 enabled → 点下去缩放真的上去且 `data-camera-mode='readable-focus'`），
+     只是那条 test 的标题挂的是 **WF-23**。建议把 WF-X2 的 evidence 指向同一条 test，或与 WF-23 合并。
+   - **WF-25「模板起步弹窗」**已被 `e2e/rfc319-canvas-editing-ops.spec.ts:872` 的 WF-24 用例覆盖到底
+     （选模板 → 逐字预览 `Creates 3 nodes and 2 connections.` → apply 后节点/边/inputs 全部回读落库
+     → 一次撤销退回空画布）。**唯一真正没覆盖的残余**是「画布非空时先要一次『替换』二次确认」
+     （`WorkflowStarterDialog.tsx:221-225`）。建议 WF-25 降为 partial 并把口径收窄到那条分支。
+   - **本批未据此改任何行的 status**——逐条核验证据标题是否逐字存在、tier 是否对得上，是一次独立的
+     对账工作。
+3. **【产品可达性，建议账本改挂】WF-X5「code-round 节点的只读检查器」在工作流编辑器里不可达。**
+   `packages/shared/src/schemas/workflow.ts:81` 的 `SYNTHESIZED_ONLY_NODE_KINDS` +
+   `workflow.validator.ts:1350` 明确拒绝任何用户提交的定义里出现 `code-round`，
+   `nodePalette.ts:241-248` 也把它归进 `internal` 段、`buildPalette` 不产出。它只在**已跑完的
+   code-round 任务快照**里可达。建议 WF-X5 的证据改挂到数字员工 / code-round 任务详情那条链
+   （`rfc319-digital-employee-*` 域），不属于 WF 前缀。
