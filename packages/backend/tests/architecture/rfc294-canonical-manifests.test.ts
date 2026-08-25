@@ -488,7 +488,7 @@ describe('RFC-294 N1a content-addressed current artifact provenance', () => {
       expect(replay.ok, replay.err).toBe(true)
       const replayValue = JSON.parse(replay.out) as Record<string, unknown>
       expect(artifactPayload(replayValue)).toEqual(artifactPayload(current))
-      expect(artifactContentDigest(replayValue)).toBe(provenance.contentDigest)
+      expect(artifactContentDigest(replayValue)).toBe(String(provenance.contentDigest))
     })
   }
 
