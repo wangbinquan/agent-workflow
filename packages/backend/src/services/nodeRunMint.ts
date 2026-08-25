@@ -27,7 +27,7 @@ import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import { isFresherNodeRun } from '@/services/freshness'
 import type { RuntimeKind } from '@/services/runtime'
@@ -251,27 +251,34 @@ export function buildMintNodeRunValues(
 }
 
 export async function mintNodeRun(db: DbClient, args: MintNodeRunArgs): Promise<string> {
-  const values = buildMintNodeRunValues(args)
   // RFC-144 D12 (stale-replay fix): abandoning the superseded generations'
   // in-flight merge_state and inserting the successor MUST commit atomically —
   // a crash between two separate statements would leave the old pending-merge
   // row replayable at the next runTask entry (the exact bug this closes), or
   // conversely a successor row whose predecessors were never retired.
-  dbTxSync(db, (tx) => {
-    abandonSupersededMergeStates({
-      db: tx,
-      taskId: values.taskId,
-      nodeId: values.nodeId,
-      iteration: values.iteration ?? 0,
-      supersededByRunId: values.id,
-      // RFC-172b (Codex impl-gate P1): the factory is the PRIMARY member-rerun path (scheduler
-      // borrow-mint). Scope supersede retirement to THIS mint's shard so minting member B's next
-      // turn does not abandon member A's still-running run. null (non-member) → undefined =
-      // node-wide, byte-identical to today (golden-lock).
-      shardKey: values.shardKey === null ? undefined : values.shardKey,
-    })
-    tx.insert(nodeRuns).values(values).run()
+  return dbTxSync(db, (tx) => mintNodeRunTx(tx, args))
+}
+
+/**
+ * RFC-326 — the transactional body of `mintNodeRun`, for callers that already
+ * hold a `dbTxSync` (the review decision mints its re-run rows together with the
+ * rows it archives and retires). Same retire-then-insert pair, same values.
+ */
+export function mintNodeRunTx(tx: DbTxSync, args: MintNodeRunArgs): string {
+  const values = buildMintNodeRunValues(args)
+  abandonSupersededMergeStates({
+    db: tx,
+    taskId: values.taskId,
+    nodeId: values.nodeId,
+    iteration: values.iteration ?? 0,
+    supersededByRunId: values.id,
+    // RFC-172b (Codex impl-gate P1): the factory is the PRIMARY member-rerun path (scheduler
+    // borrow-mint). Scope supersede retirement to THIS mint's shard so minting member B's next
+    // turn does not abandon member A's still-running run. null (non-member) → undefined =
+    // node-wide, byte-identical to today (golden-lock).
+    shardKey: values.shardKey === null ? undefined : values.shardKey,
   })
+  tx.insert(nodeRuns).values(values).run()
   return values.id
 }
 

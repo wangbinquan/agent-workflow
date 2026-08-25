@@ -8,8 +8,8 @@
 // 行级可见性是两回事（后者在 `walkExportClosure` 里，且**不**逐类校验 `*:read`，
 // 见决策 24 / AC-7d 的反向锁）。
 
-import type { Context, Hono, MiddlewareHandler } from 'hono'
-import { bodyLimit } from 'hono/body-limit'
+import type { Context, Hono } from 'hono'
+import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
 import { ulid } from 'ulid'
 import { SKILL_ZIP_LIMITS, type BundleResourceType } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
@@ -72,46 +72,12 @@ function packageBodyTooLarge(c: Context): Response {
   )
 }
 
-const honoResourcePackageBodyLimit = bodyLimit({
+// RFC-326: the understated/malformed Content-Length guard is shared with the
+// review write routes (routes/verifiedBodyLimit.ts); the semantics are unchanged.
+const resourcePackageBodyLimit = verifiedBodyLimit({
   maxSize: RESOURCE_PACKAGE_BODY_MAX_BYTES,
   onError: packageBodyTooLarge,
 })
-
-/**
- * Hono's built-in limit takes the fast path when Content-Length is present: it
- * rejects an oversized declaration, but otherwise trusts the declaration and
- * does not count the stream. Keep the fail-fast branch, then remove an accepted
- * length before delegating so Hono also counts actual bytes. This closes the
- * understated/malformed Content-Length bypass without duplicating its bounded
- * stream buffering and Request reconstruction.
- */
-const resourcePackageBodyLimit: MiddlewareHandler = async (c, next) => {
-  const raw = c.req.raw
-  const contentLength = raw.headers.get('content-length')
-  const hasTransferEncoding = raw.headers.has('transfer-encoding')
-  if (contentLength !== null && !hasTransferEncoding) {
-    const parsedLength = Number(contentLength)
-    if (
-      !/^\d+$/.test(contentLength) ||
-      !Number.isSafeInteger(parsedLength) ||
-      parsedLength > RESOURCE_PACKAGE_BODY_MAX_BYTES
-    ) {
-      return packageBodyTooLarge(c)
-    }
-
-    if (raw.body !== null) {
-      const headers = new Headers(raw.headers)
-      headers.delete('content-length')
-      const requestInit: RequestInit & { duplex: 'half' } = {
-        headers,
-        body: raw.body,
-        duplex: 'half',
-      }
-      c.req.raw = new Request(raw, requestInit)
-    }
-  }
-  return honoResourcePackageBodyLimit(c, next)
-}
 
 export interface ResourcePackageRouteDeps {
   db: DbClient

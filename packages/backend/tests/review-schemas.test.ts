@@ -17,9 +17,18 @@ import {
   NODE_KIND,
   NODE_RUN_STATUS,
   NodeRunSchema,
+  REVIEW_ANCHOR_QUOTE_MAX_CHARS,
+  REVIEW_ANCHOR_SECTION_MAX_CHARS,
+  REVIEW_COMMENT_TEXT_MAX_CHARS,
+  REVIEW_DECISION_BATCH_COMMENTS_MAX,
+  REVIEW_DECISION_BATCH_SELECTIONS_MAX,
+  ReviewAnchorRequestSchema,
+  ReviewBatchSelectionSchema,
+  ReviewCommentCreatedSchema,
   ReviewCommentSchema,
   ReviewNodeSchema,
   SubmitReviewCommentSchema,
+  SubmitReviewDecisionResponseSchema,
   SubmitReviewDecisionSchema,
   TASK_STATUS,
   TaskWsMessageSchema,
@@ -444,6 +453,182 @@ describe('RFC-005 SubmitReviewCommentSchema', () => {
           occurrenceIndex: 1,
         },
         commentText: '',
+      }),
+    ).toThrow()
+  })
+})
+
+describe('RFC-326 wire contract — simplified anchors + batched decisions', () => {
+  const ANCHOR = {
+    sectionPath: '## Foo',
+    paragraphIdx: 0,
+    offsetStart: 0,
+    offsetEnd: 5,
+    selectedText: 'hello',
+    contextBefore: '',
+    contextAfter: '',
+    occurrenceIndex: 1,
+  }
+
+  test('ReviewAnchorRequestSchema: every field optional, quote/section trimmed, occurrence 1-based', () => {
+    expect(ReviewAnchorRequestSchema.parse({})).toEqual({})
+    expect(ReviewAnchorRequestSchema.parse({ quote: '  enum ', section: ' Notes ' })).toEqual({
+      quote: 'enum',
+      section: 'Notes',
+    })
+    expect(() => ReviewAnchorRequestSchema.parse({ quote: 'x', occurrence: 0 })).toThrow()
+    expect(() => ReviewAnchorRequestSchema.parse({ quote: '   ' })).toThrow()
+  })
+
+  test('SubmitReviewCommentSchema accepts the simplified form and the document-level form', () => {
+    const simplified = SubmitReviewCommentSchema.parse({
+      quote: 'enum',
+      occurrence: 2,
+      section: 'Notes',
+      commentText: 'x',
+      docVersionId: 'dv1',
+    })
+    expect(simplified.anchor).toBeUndefined()
+    expect(simplified.quote).toBe('enum')
+    expect(simplified.occurrence).toBe(2)
+    const documentLevel = SubmitReviewCommentSchema.parse({ commentText: 'overall' })
+    expect(documentLevel).toEqual({ commentText: 'overall' })
+  })
+
+  test('SubmitReviewCommentSchema: both forms at once, or occurrence/section without a quote, are rejected', () => {
+    expect(() =>
+      SubmitReviewCommentSchema.parse({ anchor: ANCHOR, quote: 'hello', commentText: 'x' }),
+    ).toThrow()
+    expect(() => SubmitReviewCommentSchema.parse({ occurrence: 1, commentText: 'x' })).toThrow()
+    expect(() => SubmitReviewCommentSchema.parse({ section: 'Foo', commentText: 'x' })).toThrow()
+  })
+
+  test('SubmitReviewCommentSchema: length caps on quote / section / commentText', () => {
+    expect(
+      SubmitReviewCommentSchema.parse({
+        quote: 'q'.repeat(REVIEW_ANCHOR_QUOTE_MAX_CHARS),
+        section: 's'.repeat(REVIEW_ANCHOR_SECTION_MAX_CHARS),
+        commentText: 'c'.repeat(REVIEW_COMMENT_TEXT_MAX_CHARS),
+      }).commentText.length,
+    ).toBe(REVIEW_COMMENT_TEXT_MAX_CHARS)
+    expect(() =>
+      SubmitReviewCommentSchema.parse({
+        quote: 'q'.repeat(REVIEW_ANCHOR_QUOTE_MAX_CHARS + 1),
+        commentText: 'x',
+      }),
+    ).toThrow()
+    expect(() =>
+      SubmitReviewCommentSchema.parse({
+        quote: 'q',
+        section: 's'.repeat(REVIEW_ANCHOR_SECTION_MAX_CHARS + 1),
+        commentText: 'x',
+      }),
+    ).toThrow()
+    expect(() =>
+      SubmitReviewCommentSchema.parse({
+        quote: 'q',
+        commentText: 'c'.repeat(REVIEW_COMMENT_TEXT_MAX_CHARS + 1),
+      }),
+    ).toThrow()
+  })
+
+  test('ReviewCommentCreatedSchema = ReviewComment + warnings enum', () => {
+    const created = ReviewCommentCreatedSchema.parse({
+      id: 'c1',
+      docVersionId: 'dv1',
+      anchor: ANCHOR,
+      commentText: 'x',
+      author: 'local',
+      authorRole: null,
+      createdAt: 1,
+      warnings: ['quote-in-code-block'],
+    })
+    expect(created.warnings).toEqual(['quote-in-code-block'])
+    expect(() =>
+      ReviewCommentCreatedSchema.parse({
+        id: 'c1',
+        docVersionId: 'dv1',
+        anchor: ANCHOR,
+        commentText: 'x',
+        author: 'local',
+        authorRole: null,
+        createdAt: 1,
+        warnings: ['not-a-warning'],
+      }),
+    ).toThrow()
+  })
+
+  test('SubmitReviewDecisionSchema: optional comments[] / selections[] with size caps', () => {
+    const d = SubmitReviewDecisionSchema.parse({
+      decision: 'iterated',
+      reviewIteration: 0,
+      comments: [
+        { quote: 'enum', commentText: 'x' },
+        { anchor: ANCHOR, commentText: 'y' },
+      ],
+      selections: [{ docVersionId: 'a', selection: 'accepted' }],
+    })
+    expect(d.comments?.length).toBe(2)
+    expect(d.selections?.[0]).toEqual({ docVersionId: 'a', selection: 'accepted' })
+    expect(() =>
+      SubmitReviewDecisionSchema.parse({
+        decision: 'approved',
+        reviewIteration: 0,
+        comments: Array.from({ length: REVIEW_DECISION_BATCH_COMMENTS_MAX + 1 }, () => ({
+          commentText: 'x',
+        })),
+      }),
+    ).toThrow()
+    expect(() =>
+      SubmitReviewDecisionSchema.parse({
+        decision: 'approved',
+        reviewIteration: 0,
+        selections: Array.from({ length: REVIEW_DECISION_BATCH_SELECTIONS_MAX + 1 }, (_, i) => ({
+          docVersionId: `dv${i}`,
+          selection: 'accepted',
+        })),
+      }),
+    ).toThrow()
+  })
+
+  test('SubmitReviewDecisionSchema: a docVersionId repeated in selections[] is rejected', () => {
+    expect(() =>
+      SubmitReviewDecisionSchema.parse({
+        decision: 'approved',
+        reviewIteration: 0,
+        selections: [
+          { docVersionId: 'a', selection: 'accepted' },
+          { docVersionId: 'a', selection: 'not_accepted' },
+        ],
+      }),
+    ).toThrow()
+    expect(() =>
+      ReviewBatchSelectionSchema.parse({ docVersionId: 'a', selection: 'unselected' }),
+    ).toThrow()
+  })
+
+  test('SubmitReviewDecisionResponseSchema carries the batch counters and the optional resume failure', () => {
+    const ok = SubmitReviewDecisionResponseSchema.parse({
+      ok: true,
+      taskId: 't',
+      reviewIteration: 1,
+      resumeRequired: true,
+      commentsAdded: 2,
+      commentsSkippedAsDuplicate: 1,
+      selectionsApplied: 0,
+    })
+    expect(ok.resume).toBeUndefined()
+    const withResume = SubmitReviewDecisionResponseSchema.parse({
+      ...ok,
+      resume: { ok: false, code: 'worktree-gone', message: 'gc' },
+    })
+    expect(withResume.resume?.code).toBe('worktree-gone')
+    expect(() =>
+      SubmitReviewDecisionResponseSchema.parse({
+        ok: true,
+        taskId: 't',
+        reviewIteration: 0,
+        resumeRequired: true,
       }),
     ).toThrow()
   })

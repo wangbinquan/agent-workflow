@@ -62,7 +62,12 @@ const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES: ReadonlySet<NodeRunStatus> = new
   'awaiting_human',
 ])
 
-function assertNodeRunSourceTerminationAdmission(
+/**
+ * RFC-303 admission under a source-termination fence. RFC-326 exports it so the
+ * review decision's pre-check (before any worktree rollback) and the transactional
+ * helpers below apply ONE predicate instead of two copies that could drift.
+ */
+export function assertNodeRunSourceTerminationAdmission(
   taskId: string,
   fence: 'closed' | 'merged' | null,
   to: NodeRunStatus,
@@ -136,18 +141,36 @@ export async function transitionNodeRunStatus(args: {
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
-  const row = (
-    await args.db
-      .select({
-        status: nodeRuns.status,
-        taskId: nodeRuns.taskId,
-        sourceTerminationFence: tasks.sourceTerminationFence,
-      })
-      .from(nodeRuns)
-      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .limit(1)
-  )[0]
+  // RFC-326: a pure wrapper around the transactional companion — the ONLY
+  // status write for this event kind now lives in transitionNodeRunStatusTx, so
+  // the kernel's direct-write count (lifecycle-grep-guard) stays at three.
+  return dbTxSync(args.db, (tx) => transitionNodeRunStatusTx({ tx, ...args }))
+}
+
+/**
+ * Synchronous transaction companion of `transitionNodeRunStatus` (RFC-326): the
+ * same event table, the same fence admission, the same CAS — inside a caller's
+ * `dbTxSync` so a review decision can move the review row together with the
+ * rows it archives, mints and retires. Does not broadcast; the caller emits after
+ * commit (see the ordering rule at the top of this file).
+ */
+export function transitionNodeRunStatusTx(args: {
+  tx: DbTxSync
+  nodeRunId: string
+  event: NodeRunTransitionEvent
+  extra?: NodeRunStatusUpdateExtra
+}): { from: NodeRunStatus; to: NodeRunStatus } {
+  const row = args.tx
+    .select({
+      status: nodeRuns.status,
+      taskId: nodeRuns.taskId,
+      sourceTerminationFence: tasks.sourceTerminationFence,
+    })
+    .from(nodeRuns)
+    .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
+    .where(eq(nodeRuns.id, args.nodeRunId))
+    .limit(1)
+    .get()
   if (row === undefined) {
     throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
   }
@@ -157,12 +180,13 @@ export async function transitionNodeRunStatus(args: {
   // CAS: WHERE id = ? AND status = expectedFrom. Drizzle's bun-sqlite
   // returns the affected row(s) via .returning(); affectedRows.length === 0
   // means another writer changed status between our SELECT and UPDATE.
-  // rfc053-allow-direct-status-write -- single allowlisted writer
-  const updated = await args.db
+  // rfc053-allow-direct-status-write -- single allowlisted writer (RFC-326: Tx form)
+  const updated = args.tx
     .update(nodeRuns)
     .set({ status: to, ...(args.extra ?? {}) })
     .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
     .returning({ id: nodeRuns.id })
+    .all()
   if (updated.length === 0) {
     throw new ConcurrentNodeRunTransition(args.nodeRunId, from, args.event.kind)
   }

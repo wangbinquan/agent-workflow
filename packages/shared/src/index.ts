@@ -127,6 +127,10 @@ export * from './scheduleTime' // RFC-159
 export * from './worktree-files'
 // RFC-079 — review multi-document mode pure helpers.
 export * from './reviewMultiDoc'
+// RFC-326 — non-overlapping string occurrence primitives shared by the backend
+// anchor canonicaliser, the collaboration anchor resolver and the web highlighter
+// (one implementation of "which occurrence is the N-th"). Zero dependencies.
+export * from './textOccurrences'
 // RFC-079 — list wire-form splitter. Re-exported from its dependency-free
 // module (NOT outputKinds/list) so the barrel never pulls the parametric
 // handler registry into a module-init cycle (see listWire.ts header).

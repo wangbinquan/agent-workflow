@@ -381,6 +381,97 @@ export type ReviewComment = z.infer<typeof ReviewCommentSchema>
 // Schemas live here so frontend can statically type the API client.
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// RFC-326 — simplified anchors + batched decisions.
+//
+// A caller that is not the web page (an MCP tool, a script) cannot compute the
+// DOM-derived composite anchor above. It supplies a LOCATOR instead — verbatim
+// `quote` + optional global `occurrence` / `section` — and the server resolves it
+// against the markdown source (modules/collaboration). Everything empty = a
+// document-level comment anchored to the title line. The two forms are mutually
+// exclusive; `occurrence` / `section` without a `quote` is a client error.
+// -----------------------------------------------------------------------------
+
+export const REVIEW_ANCHOR_QUOTE_MAX_CHARS = 4000
+export const REVIEW_ANCHOR_SECTION_MAX_CHARS = 500
+export const REVIEW_COMMENT_TEXT_MAX_CHARS = 50_000
+export const REVIEW_DECISION_BATCH_COMMENTS_MAX = 200
+export const REVIEW_DECISION_BATCH_SELECTIONS_MAX = 500
+
+export const ReviewAnchorRequestSchema = z.object({
+  /** Verbatim text from the document body; trimmed, no case / whitespace folding. */
+  quote: z.string().trim().min(1).max(REVIEW_ANCHOR_QUOTE_MAX_CHARS).optional(),
+  /** 1-based GLOBAL occurrence number (= stored occurrenceIndex = candidate number). */
+  occurrence: z.number().int().positive().optional(),
+  /** Heading text, a `#`-prefixed breadcrumb segment, or the full breadcrumb. */
+  section: z.string().trim().min(1).max(REVIEW_ANCHOR_SECTION_MAX_CHARS).optional(),
+})
+export type ReviewAnchorRequest = z.infer<typeof ReviewAnchorRequestSchema>
+
+/** Warnings the resolver attaches to a successful simplified-anchor resolution. */
+export const REVIEW_ANCHOR_WARNINGS = [
+  'quote-in-code-block',
+  'quote-spans-blocks',
+  'quote-has-no-rendered-projection',
+] as const
+export const ReviewAnchorWarningSchema = z.enum(REVIEW_ANCHOR_WARNINGS)
+export type ReviewAnchorWarning = z.infer<typeof ReviewAnchorWarningSchema>
+
+function hasSimplifiedLocatorFields(d: {
+  quote?: string
+  occurrence?: number
+  section?: string
+}): boolean {
+  return d.quote !== undefined || d.occurrence !== undefined || d.section !== undefined
+}
+
+/**
+ * POST /api/reviews/:nodeRunId/comments.
+ *
+ * Two shapes, mutually exclusive:
+ *   · `anchor` — the web page's DOM-computed composite anchor (unchanged contract);
+ *   · `quote` / `occurrence` / `section` — the RFC-326 simplified locator, resolved
+ *     server-side. All three absent (and no `anchor`) = document-level comment.
+ */
+export const SubmitReviewCommentSchema = z
+  .object({
+    /** Client-computed anchor; backend canonicalises occurrenceIndex AND offsets. */
+    anchor: ReviewCommentAnchorSchema.optional(),
+    quote: ReviewAnchorRequestSchema.shape.quote,
+    occurrence: ReviewAnchorRequestSchema.shape.occurrence,
+    section: ReviewAnchorRequestSchema.shape.section,
+    commentText: z.string().min(1).max(REVIEW_COMMENT_TEXT_MAX_CHARS),
+    /**
+     * RFC-079: the document this comment anchors to, in a multi-document review
+     * round (several doc_versions pending at once). Omitted for single-document
+     * reviews (the one pending doc_version is used). RFC-326: REQUIRED in
+     * multi-document mode — the server refuses to pick a document for you.
+     */
+    docVersionId: z.string().optional(),
+  })
+  .refine((d) => !(d.anchor !== undefined && hasSimplifiedLocatorFields(d)), {
+    message: 'pass either `anchor` or `quote`/`occurrence`/`section`, not both',
+    path: ['anchor'],
+  })
+  .refine((d) => d.quote !== undefined || (d.occurrence === undefined && d.section === undefined), {
+    message: '`occurrence` / `section` require a `quote`',
+    path: ['quote'],
+  })
+export type SubmitReviewComment = z.infer<typeof SubmitReviewCommentSchema>
+
+/** 201 body of POST /api/reviews/:nodeRunId/comments (RFC-326: + resolver warnings). */
+export const ReviewCommentCreatedSchema = ReviewCommentSchema.extend({
+  warnings: z.array(ReviewAnchorWarningSchema),
+})
+export type ReviewCommentCreated = z.infer<typeof ReviewCommentCreatedSchema>
+
+/** RFC-326 batched selection carried on a decision. */
+export const ReviewBatchSelectionSchema = z.object({
+  docVersionId: z.string().min(1),
+  selection: z.enum(['accepted', 'not_accepted']),
+})
+export type ReviewBatchSelection = z.infer<typeof ReviewBatchSelectionSchema>
+
 /** POST /api/reviews/:nodeRunId/decision — approve / reject / iterate. */
 export const SubmitReviewDecisionSchema = z
   .object({
@@ -392,6 +483,16 @@ export const SubmitReviewDecisionSchema = z
      * when rendering the page; backend rejects with 409 if mismatched.
      */
     reviewIteration: z.number().int().nonnegative(),
+    /**
+     * RFC-326: comments to add in the SAME transaction as the decision. Any
+     * invalid anchor rejects the whole request; nothing is written.
+     */
+    comments: z.array(SubmitReviewCommentSchema).max(REVIEW_DECISION_BATCH_COMMENTS_MAX).optional(),
+    /** RFC-326: per-document selections applied before a multi-document decision. */
+    selections: z
+      .array(ReviewBatchSelectionSchema)
+      .max(REVIEW_DECISION_BATCH_SELECTIONS_MAX)
+      .optional(),
   })
   .refine(
     (d) =>
@@ -399,21 +500,28 @@ export const SubmitReviewDecisionSchema = z
       (d.rejectReason !== undefined && d.rejectReason.trim().length > 0),
     { message: 'rejectReason is required when decision = rejected', path: ['rejectReason'] },
   )
+  .refine(
+    (d) =>
+      d.selections === undefined ||
+      new Set(d.selections.map((s) => s.docVersionId)).size === d.selections.length,
+    { message: 'selections must not repeat a docVersionId', path: ['selections'] },
+  )
 export type SubmitReviewDecision = z.infer<typeof SubmitReviewDecisionSchema>
 
-/** POST /api/reviews/:nodeRunId/comments. */
-export const SubmitReviewCommentSchema = z.object({
-  /** Client-computed anchor; backend recomputes occurrenceIndex from canonical doc. */
-  anchor: ReviewCommentAnchorSchema,
-  commentText: z.string().min(1),
-  /**
-   * RFC-079: the document this comment anchors to, in a multi-document review
-   * round (several doc_versions pending at once). Omitted for single-document
-   * reviews (the one pending doc_version is used).
-   */
-  docVersionId: z.string().optional(),
+/** 200 body of POST /api/reviews/:nodeRunId/decision. */
+export const SubmitReviewDecisionResponseSchema = z.object({
+  ok: z.literal(true),
+  taskId: z.string(),
+  reviewIteration: z.number().int().nonnegative(),
+  resumeRequired: z.boolean(),
+  /** RFC-326 batch counters (all 0 for a plain decision). */
+  commentsAdded: z.number().int().nonnegative(),
+  commentsSkippedAsDuplicate: z.number().int().nonnegative(),
+  selectionsApplied: z.number().int().nonnegative(),
+  /** RFC-202: the resume kick's failure, when the decision landed but the resume did not. */
+  resume: z.object({ ok: z.literal(false), code: z.string(), message: z.string() }).optional(),
 })
-export type SubmitReviewComment = z.infer<typeof SubmitReviewCommentSchema>
+export type SubmitReviewDecisionResponse = z.infer<typeof SubmitReviewDecisionResponseSchema>
 
 /** PATCH /api/reviews/:nodeRunId/comments/:commentId — RFC-009. */
 export const UpdateReviewCommentBodySchema = z.object({

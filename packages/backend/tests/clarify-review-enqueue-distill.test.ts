@@ -160,15 +160,30 @@ describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回
   })
 })
 
-describe('source-code grep guard — review.ts enqueues distill on both decision paths', () => {
-  test('enqueueDistillJob appears twice in review.ts (once per return path)', async () => {
+describe('source-code grep guard — review.ts enqueues distill for every decision path', () => {
+  // RFC-326 (design §6.1): the decision path is one prepare / external /
+  // transaction / after-commit sequence, so approve and reject/iterate share a
+  // SINGLE post-commit enqueue instead of one per return branch. The guard now
+  // pins that shape: exactly one call site, inside `submitReviewDecisionUnlocked`,
+  // after the transaction (the `// ── after commit` marker) — and the behavioural
+  // lock that both paths really enqueue lives in
+  // rfc326-review-decision-transaction.test.ts (AC-17: approve / iterate / reject
+  // each insert a memory_distill_jobs row after the COMMIT).
+  test('enqueueDistillJob has exactly one call site, in the post-commit section of the decision', async () => {
     const fs = await import('node:fs')
     const src = fs.readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'review.ts'),
       'utf8',
     )
     const matches = src.match(/enqueueDistillJob\(/g) ?? []
-    // Two call sites: one for approve, one for reject/iterate.
-    expect(matches.length).toBeGreaterThanOrEqual(2)
+    expect(matches.length).toBe(1)
+    const fnStart = src.indexOf('async function submitReviewDecisionUnlocked(')
+    const afterCommit = src.indexOf('// ── after commit', fnStart)
+    const callAt = src.indexOf('enqueueDistillJob(', fnStart)
+    const fnEnd = src.indexOf('\nasync function planSingleDocApprove(', fnStart)
+    expect(fnStart).toBeGreaterThan(0)
+    expect(afterCommit).toBeGreaterThan(fnStart)
+    expect(callAt).toBeGreaterThan(afterCommit)
+    expect(callAt).toBeLessThan(fnEnd)
   })
 })

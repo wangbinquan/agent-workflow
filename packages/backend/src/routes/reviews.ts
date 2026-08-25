@@ -19,13 +19,19 @@ import {
   SubmitReviewDecisionSchema,
   UpdateReviewCommentBodySchema,
 } from '@agent-workflow/shared'
-import type { TaskActorRole } from '@agent-workflow/shared'
+import type {
+  ReviewAnchorRequest,
+  ReviewCommentAnchor,
+  SubmitReviewComment,
+  TaskActorRole,
+} from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { Hono } from 'hono'
+import type { Context, Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
@@ -49,6 +55,29 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
 const log = createLogger('reviews')
+
+/**
+ * RFC-326 P10 — the two write routes accept batched comments (≤ 200 × 50 000
+ * chars by schema) so they get an explicit byte ceiling; `verifiedBodyLimit`
+ * also refuses understated / malformed Content-Length declarations.
+ */
+export const REVIEW_WRITE_BODY_MAX_BYTES = 1024 * 1024
+
+function reviewBodyTooLarge(c: Context): Response {
+  return c.json(
+    {
+      ok: false as const,
+      code: 'review-body-too-large',
+      message: `review request body exceeds ${REVIEW_WRITE_BODY_MAX_BYTES} bytes`,
+    },
+    413,
+  )
+}
+
+const reviewWriteBodyLimit = verifiedBodyLimit({
+  maxSize: REVIEW_WRITE_BODY_MAX_BYTES,
+  onError: reviewBodyTooLarge,
+})
 
 /**
  * RFC-099 (D5/D7) — answer-rights gate for every review write (decision /
@@ -123,6 +152,32 @@ async function filterVisibleByTask<T extends { taskId: string }>(
   // per task (this ran on the 15s badge poll — audit L1-10).
   const visible = await visibleTaskIdsOf(deps.db, actor, taskIds)
   return rows.filter((r) => visible.has(r.taskId))
+}
+
+/**
+ * RFC-326 — split the wire shape of a comment into the service's tagged inputs:
+ * `anchor` (web) or `anchorRequest` (simplified locator; all fields absent =
+ * document-level). The schema already guarantees the two forms are exclusive.
+ */
+function toBatchComment(input: SubmitReviewComment): {
+  commentText: string
+  docVersionId?: string
+  anchor?: ReviewCommentAnchor
+  anchorRequest?: ReviewAnchorRequest
+} {
+  return {
+    commentText: input.commentText,
+    ...(input.docVersionId !== undefined ? { docVersionId: input.docVersionId } : {}),
+    ...(input.anchor !== undefined
+      ? { anchor: input.anchor }
+      : {
+          anchorRequest: {
+            ...(input.quote !== undefined ? { quote: input.quote } : {}),
+            ...(input.occurrence !== undefined ? { occurrence: input.occurrence } : {}),
+            ...(input.section !== undefined ? { section: input.section } : {}),
+          },
+        }),
+  }
 }
 
 function appHomeFor(_deps: AppDeps): string {
@@ -269,6 +324,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Submit a review decision (advances the task)',
     },
+    reviewWriteBodyLimit,
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
       const raw: unknown = await c.req.json().catch(() => null)
@@ -290,9 +346,17 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         expectedReviewIteration: parsed.data.reviewIteration,
         author: actor.user.id,
         authorRole: role,
+        // RFC-326 P16: the acting user, re-verified by the service before any
+        // worktree rollback and again at the commit point.
+        actor,
         ...(parsed.data.rejectReason !== undefined
           ? { rejectReason: parsed.data.rejectReason }
           : {}),
+        // RFC-326: batched comments / selections land in the decision's transaction.
+        ...(parsed.data.comments !== undefined
+          ? { comments: parsed.data.comments.map(toBatchComment) }
+          : {}),
+        ...(parsed.data.selections !== undefined ? { selections: parsed.data.selections } : {}),
       }
       const result = await submitReviewDecision(args)
       // RFC-202 T8: the resume kick is no longer pure fire-and-forget — real
@@ -331,7 +395,15 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
           }
         }
       }
-      return c.json({ ok: true, ...result, ...(resumeFailure ? { resume: resumeFailure } : {}) })
+      const { batch, ...decided } = result
+      return c.json({
+        ok: true,
+        ...decided,
+        commentsAdded: batch?.commentsAdded ?? 0,
+        commentsSkippedAsDuplicate: batch?.commentsSkippedAsDuplicate ?? 0,
+        selectionsApplied: batch?.selectionsApplied ?? 0,
+        ...(resumeFailure ? { resume: resumeFailure } : {}),
+      })
     },
   )
 
@@ -378,6 +450,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Add a review comment',
     },
+    reviewWriteBodyLimit,
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
       const raw: unknown = await c.req.json().catch(() => null)
@@ -394,13 +467,11 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         db: deps.db,
         appHome: appHomeFor(deps),
         nodeRunId,
-        anchor: parsed.data.anchor,
-        commentText: parsed.data.commentText,
+        // RFC-326: either the web page's composite anchor or the simplified
+        // locator (everything absent = document-level), never both (schema).
+        ...toBatchComment(parsed.data),
         author: actor.user.id,
         authorRole: role,
-        ...(parsed.data.docVersionId !== undefined
-          ? { docVersionId: parsed.data.docVersionId }
-          : {}),
       })
       return c.json(comment, 201)
     },

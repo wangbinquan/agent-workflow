@@ -16,7 +16,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
@@ -24,6 +24,7 @@ import { hasResourceAclBypass, resolveTaskRole } from '@/services/resourceAcl'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
 /** Row-shape that visibility checks accept. The full `tasks` row is supersets of this. */
 export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'ownerUserId'>
@@ -107,6 +108,20 @@ export async function hasActingMembership(
     .select({ role: taskCollaborators.role })
     .from(taskCollaborators)
     .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
+  return rows.some((r) => r.role === 'owner' || r.role === 'collaborator')
+}
+
+/**
+ * RFC-326 — synchronous twin of `hasActingMembership` for callers inside a
+ * `dbTxSync` (the review decision re-verifies the actor's membership at its
+ * commit point, linearised with `updateTaskMembers` by the shared task lock).
+ */
+export function hasActingMembershipTx(tx: DbTxSync, taskId: string, userId: string): boolean {
+  const rows = tx
+    .select({ role: taskCollaborators.role })
+    .from(taskCollaborators)
+    .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
+    .all()
   return rows.some((r) => r.role === 'owner' || r.role === 'collaborator')
 }
 
@@ -221,6 +236,14 @@ export async function getTaskMembers(
  * their own task's controls (mirror of the resource-ACL rule, which keeps the
  * previous owner as a grantee).
  */
+/** RFC-326 — what the locked section hands to the post-commit section. */
+interface MembersCommit {
+  prevOwner: string | null
+  nextOwner: string | null
+  beforeCollaborators: (typeof taskCollaborators.$inferSelect)[]
+  nextMembers: Map<string, AssignableTaskMemberRole>
+}
+
 export async function updateTaskMembers(
   db: DbClient,
   actor: Actor,
@@ -230,6 +253,58 @@ export async function updateTaskMembers(
     members?: Array<{ userId: string; role: AssignableTaskMemberRole }>
   },
 ): Promise<TaskMembers> {
+  // RFC-326 P13 — membership changes and review writes share the task's FIFO
+  // lock (`reviewMutationCoordinator`). Inside the lock the task row is re-read:
+  // the row the route loaded may be stale by the time this request reaches the
+  // front of the queue (owner transferred, member removed), and the authorization
+  // + prevOwner below must come from the fresh row, not the queued snapshot.
+  // The WS revalidation wait and the broadcast stay OUTSIDE the lock — they can
+  // take arbitrarily long and must not stall reviews / cancels on the same task.
+  const commit = await withTaskReviewMutationLock(task.id, async () => {
+    const fresh = (await db.select().from(tasksTable).where(eq(tasksTable.id, task.id)).limit(1))[0]
+    if (fresh === undefined)
+      throw new NotFoundError('task-not-found', `task '${task.id}' not found`)
+    const committed = await updateTaskMembersLocked(db, actor, fresh, body)
+    // The response is the state THIS commit produced, read while the lock still
+    // excludes the next writer — composing it after the (lock-free) revalidation
+    // wait from a fresh member query would pair this commit's owner with rows a
+    // later commit wrote (RFC-326 impl-gate P2).
+    const members = await getTaskMembers(db, actor, {
+      id: task.id,
+      ownerUserId: committed.nextOwner,
+    })
+    return { ...committed, members }
+  })
+  const { prevOwner, nextOwner, beforeCollaborators, nextMembers } = commit
+
+  // RFC-212 — AFTER the transaction commits: a member just lost access, so any
+  // WS they have open on this task must be re-checked. Triggering inside/before
+  // the tx would let the rescan read the pre-change membership and never close.
+  await triggerRevalidationAndWait(db, 'task-members-changed')
+
+  const visibleUserIds = new Set<string>()
+  if (prevOwner !== null) visibleUserIds.add(prevOwner)
+  if (nextOwner !== null) visibleUserIds.add(nextOwner)
+  for (const row of beforeCollaborators) visibleUserIds.add(row.userId)
+  for (const userId of nextMembers.keys()) visibleUserIds.add(userId)
+  tasksListBroadcaster.broadcast(
+    TASKS_LIST_CHANNEL,
+    { type: 'task.members.changed', taskId: task.id },
+    { kind: 'task.members-changed-audience', taskId: task.id, visibleUserIds },
+  )
+
+  return commit.members
+}
+
+async function updateTaskMembersLocked(
+  db: DbClient,
+  actor: Actor,
+  task: TaskRowForVisibility,
+  body: {
+    ownerUserId?: string
+    members?: Array<{ userId: string; role: AssignableTaskMemberRole }>
+  },
+): Promise<MembersCommit> {
   const canManage =
     hasResourceAclBypass(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
   if (!canManage) {
@@ -319,23 +394,7 @@ export async function updateTaskMembers(
     }
   })
 
-  // RFC-212 — AFTER the transaction commits: a member just lost access, so any
-  // WS they have open on this task must be re-checked. Triggering inside/before
-  // the tx would let the rescan read the pre-change membership and never close.
-  await triggerRevalidationAndWait(db, 'task-members-changed')
-
-  const visibleUserIds = new Set<string>()
-  if (prevOwner !== null) visibleUserIds.add(prevOwner)
-  if (nextOwner !== null) visibleUserIds.add(nextOwner)
-  for (const row of beforeCollaborators) visibleUserIds.add(row.userId)
-  for (const userId of nextMembers.keys()) visibleUserIds.add(userId)
-  tasksListBroadcaster.broadcast(
-    TASKS_LIST_CHANNEL,
-    { type: 'task.members.changed', taskId: task.id },
-    { kind: 'task.members-changed-audience', taskId: task.id, visibleUserIds },
-  )
-
-  return getTaskMembers(db, actor, { id: task.id, ownerUserId: nextOwner })
+  return { prevOwner, nextOwner, beforeCollaborators, nextMembers }
 }
 
 /**

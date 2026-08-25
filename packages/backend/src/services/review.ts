@@ -45,6 +45,8 @@ import type {
   AgentOutputKind,
   DocVersion,
   DocVersionDecision,
+  NodeRunStatus,
+  ReviewBatchSelection,
   ReviewComment,
   ReviewCommentAnchor,
   ReviewDecisionKind,
@@ -55,8 +57,11 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
+  type ReviewAnchorRequest,
+  type ReviewAnchorWarning,
   type TaskActorRole,
   buildWorkflowScopeParentMap,
+  findAllOccurrences,
   isMultiMarkdownUpstream,
   migrateWorkflowDefinitionToLatest,
   resolveWorkflowSourceRef,
@@ -92,6 +97,12 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
+  buildReviewAnchorDocument,
+  createReviewAnchorBudget,
+  resolveReviewAnchor,
+} from '@/modules/collaboration/public/queries'
+import type { ReviewAnchorFailure } from '@/modules/collaboration/public/types'
+import {
   agents as agentsTable,
   docVersions,
   nodeRunEvents,
@@ -106,17 +117,30 @@ import { taskAuthorizationCondition } from '@/services/taskAuthorization'
 import { chunkedAll } from '@/util/sqlChunk'
 import { pickFreshestRun, pickVisibleUpstreamRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
-import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
+import {
+  assertNodeRunSourceTerminationAdmission,
+  setNodeRunStatusTx,
+  transitionNodeRunStatus,
+  transitionNodeRunStatusTx,
+} from '@/services/lifecycle'
 import { snapshotNodeAgentWhere } from '@/services/agent'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
-import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
+import { nextRetryIndex, mintNodeRun, mintNodeRunTx } from '@/services/nodeRunMint'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import {
   withReviewNodeMutationLock,
   withTaskReviewMutationLock,
 } from '@/services/reviewMutationCoordinator'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/util/errors'
+import { hasActingMembership, hasActingMembershipTx } from '@/services/taskCollab'
+import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -130,23 +154,12 @@ const log = createLogger('review')
 // Anchor — pure functions.
 // ---------------------------------------------------------------------------
 
-/**
- * Find every occurrence of `needle` in `haystack` and return their 0-based
- * start offsets in the order they appear. Exposed (vs. inlined) so tests can
- * pin the contract.
- */
-export function findAllOccurrences(haystack: string, needle: string): number[] {
-  if (needle.length === 0) return []
-  const out: number[] = []
-  let from = 0
-  while (true) {
-    const idx = haystack.indexOf(needle, from)
-    if (idx < 0) break
-    out.push(idx)
-    from = idx + needle.length
-  }
-  return out
-}
+// RFC-326: the occurrence math is ONE shared implementation
+// (packages/shared/src/textOccurrences.ts) used by this canonicaliser, the
+// collaboration anchor resolver and the web highlighter — the number stored in
+// `occurrence_index` and the number the page counts must be the same number.
+// Re-exported so existing import sites and tests keep working.
+export { findAllOccurrences }
 
 export interface OccurrenceRecomputeResult {
   /** 1-based occurrence index in the full document body. */
@@ -174,12 +187,11 @@ export interface OccurrenceRecomputeResult {
  *
  * Throws ValidationError when `selectedText` is empty or not present at all.
  */
-export class AnchorValidationError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-  ) {
-    super(message)
+export class AnchorValidationError extends ValidationError {
+  constructor(code: string, message: string) {
+    // RFC-326 (P6): was a bare Error → the route surfaced a 500 for a made-up
+    // selectedText although the docstring above promised a ValidationError.
+    super(code, message)
     this.name = 'AnchorValidationError'
   }
 }
@@ -200,6 +212,22 @@ export function recomputeOccurrenceIndex(
       'anchor-selection-not-found',
       `anchor.selectedText '${truncate(anchor.selectedText, 40)}' not present in document`,
     )
+  }
+
+  // RFC-326 strategy 0 — a self-consistent anchor is taken as-is: `offsetStart`
+  // IS an occurrence (so the slice equals selectedText) and every non-empty
+  // context side matches there. Server-resolved anchors always satisfy this;
+  // web anchors do whenever the proportional heuristic landed on the right
+  // occurrence. Without it two occurrences with identical ±30-char contexts
+  // (repeated table rows) were both "resolved" to the first one, overriding
+  // the caller's explicit choice — the design-gate reproduction of RFC-326.
+  const exactIdx = offsets.indexOf(anchor.offsetStart)
+  if (exactIdx >= 0 && contextMatchesAt(docBody, anchor, anchor.offsetStart)) {
+    return {
+      occurrenceIndex: exactIdx + 1,
+      absoluteOffset: anchor.offsetStart,
+      contextMatched: true,
+    }
   }
 
   // Strategy 1: exact context match. Only applies if AT LEAST ONE context
@@ -279,17 +307,62 @@ export function recomputeOccurrenceIndex(
 /**
  * Server-side fixup applied before persisting a review_comment row: the
  * client-supplied anchor is replaced with one whose `occurrenceIndex` reflects
- * what the canonical document actually says. All other anchor fields stay as
- * the client posted them — the source of truth for which selection range a
- * comment refers to is `(sectionPath + paragraphIdx + offsetStart/End +
- * selectedText)`; only the occurrenceIndex disambiguates same-string repeats.
+ * what the canonical document actually says AND whose `offsetStart/End` point at
+ * that same occurrence (RFC-326 P5 — before, only the index was rewritten and
+ * the offsets stayed at the client's heuristic guess, so a stored row could
+ * name occurrence 3 while its offsets sat on occurrence 2; the web highlighter
+ * now locates comments by offset, which needs the row to be self-consistent).
+ * `sectionPath` / `paragraphIdx` / contexts stay as posted.
  */
 export function canonicalizeAnchor(
   docBody: string,
   anchor: ReviewCommentAnchor,
 ): ReviewCommentAnchor {
   const recomputed = recomputeOccurrenceIndex(docBody, anchor)
-  return { ...anchor, occurrenceIndex: recomputed.occurrenceIndex }
+  return {
+    ...anchor,
+    occurrenceIndex: recomputed.occurrenceIndex,
+    offsetStart: recomputed.absoluteOffset,
+    offsetEnd: recomputed.absoluteOffset + anchor.selectedText.length,
+  }
+}
+
+function contextMatchesAt(docBody: string, anchor: ReviewCommentAnchor, offset: number): boolean {
+  const before = docBody.slice(Math.max(0, offset - anchor.contextBefore.length), offset)
+  const end = offset + anchor.selectedText.length
+  const after = docBody.slice(end, end + anchor.contextAfter.length)
+  return (
+    (anchor.contextBefore.length === 0 || before === anchor.contextBefore) &&
+    (anchor.contextAfter.length === 0 || after === anchor.contextAfter)
+  )
+}
+
+/**
+ * RFC-326 — translate a resolver refusal into the 422 the route returns. The
+ * candidate keys ride in `message` (the MCP channel forwards only the message)
+ * and the structured lists in `details` (REST callers read them as-is).
+ */
+export function anchorResolutionError(failure: ReviewAnchorFailure): ValidationError {
+  return new ValidationError(failure.code, failure.message, {
+    candidates: failure.candidates,
+    total: failure.total,
+    truncated: failure.truncated,
+    suggestions: failure.suggestions,
+  })
+}
+
+/**
+ * RFC-326 AC-9 — a server-resolved anchor is persisted verbatim; the only check
+ * is that it still describes the body it was resolved against. A mismatch is a
+ * programming error (the resolver and this service disagree about the body),
+ * not a client error, hence a bare Error (500).
+ */
+export function assertResolvedAnchorConsistent(docBody: string, anchor: ReviewCommentAnchor): void {
+  if (docBody.slice(anchor.offsetStart, anchor.offsetEnd) !== anchor.selectedText) {
+    throw new Error(
+      `resolved review anchor is inconsistent with the document body at ${anchor.offsetStart}-${anchor.offsetEnd}`,
+    )
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1885,7 +1958,16 @@ export interface AddReviewCommentArgs {
   db: DbClient
   appHome: string
   nodeRunId: string
-  anchor: ReviewCommentAnchor
+  /**
+   * The web page's DOM-computed composite anchor (canonicalised here). Exactly
+   * one of `anchor` / `anchorRequest` must be given.
+   */
+  anchor?: ReviewCommentAnchor
+  /**
+   * RFC-326: the simplified locator (`quote` / `occurrence` / `section`; all
+   * absent = document-level) resolved server-side against the pending body.
+   */
+  anchorRequest?: ReviewAnchorRequest
   commentText: string
   author?: string
   /** RFC-099 (D7) — task-relationship role snapshot; UI/audit only. */
@@ -1931,36 +2013,85 @@ async function assertReviewRoundWritable(
   return run
 }
 
-export async function addReviewComment(args: AddReviewCommentArgs): Promise<ReviewComment> {
+/** RFC-326: the created comment plus the resolver's warnings (empty on the web path). */
+export interface AddReviewCommentResult extends ReviewComment {
+  warnings: ReviewAnchorWarning[]
+}
+
+export async function addReviewComment(
+  args: AddReviewCommentArgs,
+): Promise<AddReviewCommentResult> {
   return withReviewNodeMutationLock(args.db, args.nodeRunId, () => addReviewCommentUnlocked(args))
 }
 
-async function addReviewCommentUnlocked(args: AddReviewCommentArgs): Promise<ReviewComment> {
-  await assertReviewRoundWritable(args.db, args.nodeRunId)
-  // Pending doc_version for this review run. RFC-079: when docVersionId is given
-  // (multi-document), scope to that exact pending member.
-  const dvRows = await args.db
+/**
+ * RFC-326 P3 — pick the pending doc_version a comment / selection targets.
+ *
+ * Multi-document mode is decided by `resolveReviewRoundMode` (any member with an
+ * `itemIndex`), NOT by counting pending rows: a `list<path<md>>` round with one
+ * item is still multi-document, and silently attaching a comment to "the" row
+ * was exactly the data error this closes. Callers must name the document.
+ */
+export async function selectPendingDocVersion(
+  db: DbClient,
+  nodeRunId: string,
+  docVersionId: string | undefined,
+): Promise<DocVersion> {
+  const pendingRows = await db
     .select()
     .from(docVersions)
-    .where(
-      args.docVersionId !== undefined
-        ? and(
-            eq(docVersions.id, args.docVersionId),
-            eq(docVersions.reviewNodeRunId, args.nodeRunId),
-            eq(docVersions.decision, 'pending'),
-          )
-        : and(eq(docVersions.reviewNodeRunId, args.nodeRunId), eq(docVersions.decision, 'pending')),
-    )
-    .limit(1)
-  if (dvRows.length === 0) {
-    throw new ConflictError(
-      'review-not-awaiting',
-      `review ${args.nodeRunId} has no pending doc_version`,
+    .where(and(eq(docVersions.reviewNodeRunId, nodeRunId), eq(docVersions.decision, 'pending')))
+  if (pendingRows.length === 0) {
+    throw new ConflictError('review-not-awaiting', `review ${nodeRunId} has no pending doc_version`)
+  }
+  if (docVersionId !== undefined) {
+    const row = pendingRows.find((r) => r.id === docVersionId)
+    if (row === undefined) {
+      throw new NotFoundError(
+        'doc-version-not-found',
+        `doc_version ${docVersionId} is not a pending document of review ${nodeRunId}`,
+      )
+    }
+    return rowToDocVersion(row)
+  }
+  if (resolveReviewRoundMode(pendingRows) !== 'single') {
+    throw new ValidationError(
+      'review-doc-version-required',
+      `review ${nodeRunId} is a multi-document round; pass docVersionId to name the document the comment belongs to`,
     )
   }
-  const dv = rowToDocVersion(dvRows[0]!)
+  return rowToDocVersion(pendingRows[0]!)
+}
+
+/**
+ * RFC-326 — resolve whichever anchor form the caller gave against `body`.
+ * Web anchors are canonicalised (strategy 0 first, then the legacy context
+ * strategies); simplified locators go through the collaboration resolver and
+ * are persisted verbatim.
+ */
+export function resolveCommentAnchor(
+  body: string,
+  input: { anchor?: ReviewCommentAnchor; anchorRequest?: ReviewAnchorRequest },
+): { anchor: ReviewCommentAnchor; warnings: ReviewAnchorWarning[] } {
+  if ((input.anchor === undefined) === (input.anchorRequest === undefined)) {
+    throw new Error('addReviewComment: pass exactly one of `anchor` / `anchorRequest`')
+  }
+  if (input.anchorRequest !== undefined) {
+    const resolution = resolveReviewAnchor(buildReviewAnchorDocument(body), input.anchorRequest)
+    if (!resolution.ok) throw anchorResolutionError(resolution)
+    assertResolvedAnchorConsistent(body, resolution.anchor)
+    return { anchor: resolution.anchor, warnings: resolution.warnings }
+  }
+  return { anchor: canonicalizeAnchor(body, input.anchor!), warnings: [] }
+}
+
+async function addReviewCommentUnlocked(
+  args: AddReviewCommentArgs,
+): Promise<AddReviewCommentResult> {
+  await assertReviewRoundWritable(args.db, args.nodeRunId)
+  const dv = await selectPendingDocVersion(args.db, args.nodeRunId, args.docVersionId)
   const body = readDocVersionBody(args.appHome, dv)
-  const canonical = canonicalizeAnchor(body, args.anchor)
+  const { anchor: canonical, warnings } = resolveCommentAnchor(body, args)
 
   const id = ulid()
   const now = Date.now()
@@ -1991,7 +2122,7 @@ async function addReviewCommentUnlocked(args: AddReviewCommentArgs): Promise<Rev
     createdAt: now,
   }
   emitReviewCommentAddedEvent(dv.taskId, args.nodeRunId, dv.id, comment)
-  return comment
+  return { ...comment, warnings }
 }
 
 // RFC-009-T1: edit an existing review comment's body. Only allowed while the
@@ -2250,6 +2381,26 @@ export interface SubmitReviewDecisionArgs {
   author?: string
   /** RFC-099 (D7) — task-relationship role snapshot of the decider. */
   authorRole?: TaskActorRole
+  /**
+   * RFC-326 P16 — the acting user. When present, task membership is re-verified
+   * before the external (worktree rollback) phase and again inside the commit
+   * transaction, linearised with `updateTaskMembers` by the shared task lock.
+   * Absent = trusted internal caller (tests, system paths); the HTTP route ALWAYS
+   * passes it (locked by rfc326-mcp-review-tools.test.ts).
+   */
+  actor?: Actor
+  /** RFC-326 — comments written in the same transaction as the decision. */
+  comments?: ReadonlyArray<ReviewBatchComment>
+  /** RFC-326 — per-document selections applied before a multi-document decision. */
+  selections?: ReadonlyArray<ReviewBatchSelection>
+}
+
+/** One batched comment: exactly one of `anchor` / `anchorRequest`, like `addReviewComment`. */
+export interface ReviewBatchComment {
+  commentText: string
+  docVersionId?: string
+  anchor?: ReviewCommentAnchor
+  anchorRequest?: ReviewAnchorRequest
 }
 
 export interface SubmitReviewDecisionResult {
@@ -2260,111 +2411,12 @@ export interface SubmitReviewDecisionResult {
    * resumeTask(taskId); approve completes inline.
    */
   resumeRequired: boolean
-}
-
-/**
- * RFC-079: multi-document approve. Writes the curated subset (accepted items,
- * in item_index order) to the `accepted` output port as a newline-joined
- * list<path<md>>, plus an `approval_meta` blob, then transitions the review
- * node_run to done. The per-document doc_versions are already archived as
- * decision='approved' by the caller. The single-document approve path is
- * untouched — this is only reached when the round has item_index rows.
- */
-async function approveMultiDocReview(args: {
-  db: DbClient
-  appHome: string
-  nodeRunId: string
-  run: typeof nodeRuns.$inferSelect
-  dvs: DocVersion[]
-  author?: string
-}): Promise<SubmitReviewDecisionResult> {
-  const { db, appHome, nodeRunId, run, dvs } = args
-  const decidedAt = Date.now()
-  const acceptedItemIndices = dvs
-    .filter((d) => d.selection === 'accepted')
-    .map((d) => d.itemIndex)
-    .filter((i): i is number => i !== null && i !== undefined)
-    .sort((a, b) => a - b)
-  // RFC-081: a list<markdown> round archives items inline (item_path NULL) — the
-  // accepted subset is the accepted bodies (in item order) joined by
-  // MARKDOWN_DOC_BOUNDARY, emitted as list<markdown>. A list<path<md>> round
-  // joins accepted worktree paths by newline, emitted as list<path<md>>. Empty
-  // subset → empty content → downstream wrapper-fanout sees an empty list and
-  // completes immediately. Detect inline from the archived rows (RFC-149:
-  // via the round-mode oracle).
-  const itemsInline = resolveReviewRoundMode(dvs) === 'multi-inline'
-  let acceptedContent: string
-  let acceptedKind: string
-  if (itemsInline) {
-    const acceptedBodies = dvs
-      .filter((d) => d.selection === 'accepted')
-      .slice()
-      .sort((a, b) => (a.itemIndex ?? 0) - (b.itemIndex ?? 0))
-      .map((d) => readDocVersionBody(appHome, d))
-    acceptedContent = joinMarkdownDocs(acceptedBodies)
-    acceptedKind = 'list<markdown>'
-  } else {
-    acceptedContent = acceptedSubsetPaths(dvs).join('\n')
-    acceptedKind = 'list<path<md>>'
+  /** RFC-326 — present only when the request carried a batch. */
+  batch?: {
+    commentsAdded: number
+    commentsSkippedAsDuplicate: number
+    selectionsApplied: number
   }
-  const rep = dvs[0]!
-  // RFC-099 prompt isolation: approval_meta is a downstream-consumable PORT,
-  // so it must NOT carry the decider's identity. doc_versions.decided_by(_role)
-  // keeps the audit record for the UI.
-  const meta = JSON.stringify({
-    decision: 'approved',
-    decidedAt,
-    reviewIteration: run.reviewIteration,
-    sourceNodeId: rep.sourceNodeId,
-    sourcePortName: rep.sourcePortName,
-    itemCount: dvs.length,
-    acceptedCount: acceptedItemIndices.length,
-    acceptedItemIndices,
-  })
-  // RFC-193 D16: a path-list accepted subset is a projection of the upstream
-  // port — carry the matching slice of its archive reference so the accepted
-  // row stays artifact-readable after worktree GC. Inline rounds carry bodies
-  // verbatim (self-sufficient, no archive needed).
-  const acceptedArchiveJson = itemsInline
-    ? null
-    : subsetArchiveJson(
-        await upstreamPortArchiveJson(db, run, rep.sourceNodeId, rep.sourcePortName),
-        acceptedSubsetPaths(dvs),
-      )
-  await db
-    .insert(nodeRunOutputs)
-    .values({
-      nodeRunId,
-      portName: REVIEW_APPROVED_PORT_MULTI,
-      content: acceptedContent,
-      kind: acceptedKind,
-      archiveJson: acceptedArchiveJson,
-    })
-    .onConflictDoUpdate({
-      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: { content: acceptedContent, kind: acceptedKind, archiveJson: acceptedArchiveJson },
-    })
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId, portName: REVIEW_APPROVAL_META_PORT, content: meta })
-    .onConflictDoUpdate({
-      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: { content: meta },
-    })
-  await transitionNodeRunStatus({
-    db,
-    nodeRunId,
-    event: { kind: 'approve-review' },
-    extra: { finishedAt: decidedAt },
-  })
-  await enqueueDistillJob(db, {
-    sourceKind: 'review',
-    sourceEventId: rep.id,
-    taskId: rep.taskId,
-  }).catch(() => {
-    /* swallow — distill is async, must not affect the decision return path */
-  })
-  return { taskId: rep.taskId, reviewIteration: run.reviewIteration, resumeRequired: true }
 }
 
 export async function submitReviewDecision(
@@ -2375,57 +2427,112 @@ export async function submitReviewDecision(
   )
 }
 
-async function submitReviewDecisionUnlocked(
+// ---------------------------------------------------------------------------
+// RFC-326 D6 — the decision is four phases (design §6.1):
+//
+//   prepare   reads, pure computation and file reads only; every validation the
+//             request can fail (state, iteration, membership, fence, every batch
+//             anchor, every selection target, snapshot parsing, accepted bodies)
+//             runs HERE, so a refusal leaves nothing behind — not even a worktree
+//             rollback.
+//   external  the worktree rollback (reject / iterate with the rollback flag),
+//             idempotent, before the transaction (its outcome is a persisted fact
+//             on the retired row — see design §6.3 for the residual form).
+//   commit    ONE dbTxSync: re-check, batch selections, batch comments, archive,
+//             outputs / status / re-run mints / sibling cascade.
+//   after     WS events and the best-effort distill enqueue (N10 / P14).
+//
+// Before this, archiving (the first write) preceded snapshot parsing and
+// accepted-body reads, so a corrupt snapshot or a GC'd body left "document
+// decided, run still awaiting" — a state no later request could repair.
+// ---------------------------------------------------------------------------
+
+interface PreparedSelection {
+  docVersionId: string
+  selection: 'accepted' | 'not_accepted'
+}
+
+interface PreparedComment {
+  docVersion: DocVersion
+  anchor: ReviewCommentAnchor
+  commentText: string
+}
+
+interface PreparedOutput {
+  portName: string
+  content: string
+  kind: string | null
+  archiveJson: string | null
+}
+
+interface PreparedRerunUpstream {
+  nodeId: string
+  latest: typeof nodeRuns.$inferSelect
+  nextRetry: number
+  /** True when the external phase actually rolled at least one worktree back. */
+  rolledBack: boolean
+}
+
+interface PreparedSibling {
+  runId: string
+  reviewIteration: number
+  pendingDocVersionIds: string[]
+}
+
+interface PreparedRerun {
+  rerunPolicy: ReviewRerunPolicy
+  rollbackFlag: boolean
+  rollbackTarget: Awaited<ReturnType<typeof loadRollbackTarget>>
+  upstreams: PreparedRerunUpstream[]
+  cascadeReason: 'rejected' | 'iterated' | null
+  siblings: PreparedSibling[]
+}
+
+/**
+ * Returns the actor's task role as of the rows just read (null for a trusted
+ * internal caller without an actor). RFC-326 impl-gate P1: the commit point
+ * must RECORD this fresh role — an owner whose task was transferred while the
+ * decision queued is a collaborator by the time it commits, and the archived
+ * `decidedByRole` / batch `authorRole` say so, not the route's snapshot.
+ */
+function assertActingMember(
+  actor: Actor | undefined,
+  taskId: string,
+  ownerUserId: string | null,
+  isMember: boolean,
+): TaskActorRole | null {
+  if (actor === undefined) return null
+  const role = resolveTaskRole(actor, ownerUserId, isMember)
+  if (role !== null) return role
+  throw new ForbiddenError(
+    'not-task-member',
+    `only task members or an actor with the required global task authority can decide review gates of task ${taskId}`,
+  )
+}
+
+/**
+ * The validations that must hold at three points: prepare (fast fail), before
+ * the external phase (nothing destructive on a stale view), and inside the
+ * transaction (the commit point). One function, called with the row just read.
+ */
+function assertDecisionAdmissible(
   args: SubmitReviewDecisionArgs,
-): Promise<SubmitReviewDecisionResult> {
-  // Re-read the review node_run + pending doc_version.
-  const runRows = await args.db
-    .select()
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, args.nodeRunId))
-    .limit(1)
-  if (runRows.length === 0) {
-    throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
+  run: { status: string; reviewIteration: number; taskId: string },
+  task: {
+    status: string
+    ownerUserId: string | null
+    sourceTerminationFence: 'closed' | 'merged' | null
+  },
+  isMember: boolean,
+  targetSelfStatus: NodeRunStatus,
+): TaskActorRole | null {
+  // RFC-202's hard seal is deliberately the UNREVIVABLE pair only.
+  if (task.status === 'done' || task.status === 'canceled') {
+    throw new ConflictError(
+      'task-terminal',
+      `task ${run.taskId} is '${task.status}'; this review round is closed and no longer accepts decisions`,
+    )
   }
-  const run = runRows[0]!
-  // RFC-202 T2 write-path guard (Codex impl-gate P1 hardening): refuse
-  // decisions on a task that is already done/canceled. The check runs INSIDE
-  // one synchronous transaction together with a re-read of the run row, so a
-  // concurrent cancel+terminal-sweep (now reachable — T3 made awaiting_review
-  // cancelable) cannot slip between "task looked alive" and "run looked
-  // awaiting": both facts are observed atomically. Residual window: the
-  // decision mutations below are NOT yet inside this transaction — a sweep
-  // landing mid-mutation still loses the run-flip CAS at the end (design
-  // §2.9-5 documents the follow-up to transactionalize the whole path).
-  // failed/interrupted stay decidable (revivable, design §1).
-  dbTxSync(args.db, (tx) => {
-    const owningTask = tx
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, run.taskId))
-      .all()[0]
-    if (
-      owningTask !== undefined &&
-      (owningTask.status === 'done' || owningTask.status === 'canceled')
-    ) {
-      throw new ConflictError(
-        'task-terminal',
-        `task ${run.taskId} is '${owningTask.status}'; this review round is closed and no longer accepts decisions`,
-      )
-    }
-    const liveRun = tx
-      .select({ status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .all()[0]
-    if (liveRun !== undefined && liveRun.status !== 'awaiting_review') {
-      // The sweep (or another decider) already closed this run.
-      throw new ConflictError(
-        'review-not-awaiting',
-        `review ${args.nodeRunId} not awaiting_review (status=${liveRun.status})`,
-      )
-    }
-  })
   if (run.status !== 'awaiting_review') {
     throw new ConflictError(
       'review-not-awaiting',
@@ -2438,13 +2545,37 @@ async function submitReviewDecisionUnlocked(
       `review_iteration changed under you (server=${run.reviewIteration}, client=${args.expectedReviewIteration})`,
     )
   }
+  const role = assertActingMember(args.actor, run.taskId, task.ownerUserId, isMember)
+  // RFC-303: the review row itself moves to `done` (approve) or back to `pending`
+  // (reject / iterate); a fenced task refuses the latter — checked before any
+  // worktree is touched, with the SAME predicate the Tx helpers apply.
+  assertNodeRunSourceTerminationAdmission(run.taskId, task.sourceTerminationFence, targetSelfStatus)
+  return role
+}
+
+async function submitReviewDecisionUnlocked(
+  args: SubmitReviewDecisionArgs,
+): Promise<SubmitReviewDecisionResult> {
+  const { db } = args
+
+  // ── prepare A: rows + admission ────────────────────────────────────────────
+  const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, args.nodeRunId)).limit(1))[0]
+  if (run === undefined) {
+    throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
+  }
+  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, run.taskId)).limit(1))[0]
+  if (taskRow === undefined) {
+    throw new NotFoundError('task-not-found', `task ${run.taskId} not found`)
+  }
+  const policy = REVIEW_DECISION_POLICY[args.decision]
+  const targetSelfStatus: NodeRunStatus = args.decision === 'approved' ? 'done' : 'pending'
+  const memberBefore =
+    args.actor === undefined ? false : await hasActingMembership(db, run.taskId, args.actor.user.id)
+  assertDecisionAdmissible(args, run, taskRow, memberBefore, targetSelfStatus)
 
   // RFC-079: a multi-document round has N pending doc_versions (one per list
   // item, item_index set); single-document has exactly one (item_index NULL).
-  // Single-document behavior is preserved exactly: with one pending row the
-  // loop + branches below collapse to the legacy path. (`.limit(1)` is dropped
-  // in favor of ordering by item_index so every member of a round is decided.)
-  const dvRows = await args.db
+  const dvRows = await db
     .select()
     .from(docVersions)
     .where(
@@ -2463,198 +2594,582 @@ async function submitReviewDecisionUnlocked(
   const dv = dvs[0]!
   const isMultiDoc = resolveReviewRoundMode(dvs) !== 'single'
 
-  // RFC-079: a multi-document approve requires every document decided
-  // (accepted / not_accepted) — reject an undecided round before any mutation.
-  if (isMultiDoc && args.decision === 'approved' && !allDocumentsDecided(dvs)) {
+  // ── prepare B: batch selections → effective view ──────────────────────────
+  const selections: PreparedSelection[] = []
+  for (const s of args.selections ?? []) {
+    const target = dvs.find((d) => d.id === s.docVersionId)
+    if (target === undefined) {
+      throw new NotFoundError(
+        'doc-version-not-found',
+        `doc_version ${s.docVersionId} is not a pending document of review ${args.nodeRunId}`,
+      )
+    }
+    if (target.itemIndex === null || target.itemIndex === undefined) {
+      throw new ConflictError(
+        'review-not-multi-doc',
+        `doc_version ${s.docVersionId} is not a multi-document item`,
+      )
+    }
+    selections.push({ docVersionId: s.docVersionId, selection: s.selection })
+  }
+  const selectionById = new Map(selections.map((s) => [s.docVersionId, s.selection] as const))
+  // Every approve computation below reads THIS view (design §6.1: completeness,
+  // accepted subset, bodies, paths, archive, meta), never the pre-batch rows.
+  const effectiveDvs: DocVersion[] = dvs.map((d) => {
+    const overlay = selectionById.get(d.id)
+    return overlay === undefined ? d : { ...d, selection: overlay, selectionStale: false }
+  })
+
+  // ── prepare C: batch comments → resolved anchors ──────────────────────────
+  const bodyCache = new Map<string, string>()
+  const readBody = (d: DocVersion): string => {
+    let body = bodyCache.get(d.id)
+    if (body === undefined) {
+      body = readDocVersionBody(args.appHome, d)
+      bodyCache.set(d.id, body)
+    }
+    return body
+  }
+  const docModelCache = new Map<string, ReturnType<typeof buildReviewAnchorDocument>>()
+  const budget = createReviewAnchorBudget()
+  const comments: PreparedComment[] = []
+  const batchComments = args.comments ?? []
+  for (let index = 0; index < batchComments.length; index++) {
+    const c = batchComments[index]!
+    let target: DocVersion
+    if (c.docVersionId !== undefined) {
+      const found = dvs.find((d) => d.id === c.docVersionId)
+      if (found === undefined) {
+        throw new NotFoundError(
+          'doc-version-not-found',
+          `doc_version ${c.docVersionId} is not a pending document of review ${args.nodeRunId}`,
+          { index },
+        )
+      }
+      target = found
+    } else if (isMultiDoc) {
+      throw new ValidationError(
+        'review-doc-version-required',
+        `review ${args.nodeRunId} is a multi-document round; comments[${index}] must name its document via docVersionId`,
+        { index },
+      )
+    } else {
+      target = dv
+    }
+    const body = readBody(target)
+    try {
+      if ((c.anchor === undefined) === (c.anchorRequest === undefined)) {
+        throw new ValidationError(
+          'review-comment-invalid',
+          `comments[${index}]: pass exactly one of anchor / quote-occurrence-section`,
+          { index },
+        )
+      }
+      let anchor: ReviewCommentAnchor
+      if (c.anchorRequest !== undefined) {
+        let model = docModelCache.get(target.id)
+        if (model === undefined) {
+          model = buildReviewAnchorDocument(body)
+          docModelCache.set(target.id, model)
+        }
+        const resolution = resolveReviewAnchor(model, c.anchorRequest, budget)
+        if (!resolution.ok) throw anchorResolutionError(resolution)
+        assertResolvedAnchorConsistent(body, resolution.anchor)
+        anchor = resolution.anchor
+      } else {
+        anchor = canonicalizeAnchor(body, c.anchor!)
+      }
+      comments.push({ docVersion: target, anchor, commentText: c.commentText })
+    } catch (err) {
+      // Name the offending entry so a 200-comment batch is actionable.
+      if (err instanceof DomainError) {
+        const details = (err.details ?? {}) as Record<string, unknown>
+        throw new ValidationError(err.code, `comments[${index}]: ${err.message}`, {
+          ...details,
+          index,
+        })
+      }
+      throw err
+    }
+  }
+
+  // ── prepare D: decision preconditions on the effective view ──────────────
+  if (isMultiDoc && args.decision === 'approved' && !allDocumentsDecided(effectiveDvs)) {
     throw new ConflictError(
       'review-selection-incomplete',
       `review ${args.nodeRunId} has undecided documents; decide every document before approving`,
     )
   }
 
-  // RFC-149: every per-decision policy dimension below reads from THE table
-  // row — the remaining `args.decision === …` branches are path skeleton only.
-  const policy = REVIEW_DECISION_POLICY[args.decision]
-
-  // 1. Archive each pending doc_version's comments into its snapshot + drop the
-  //    row-side comments. Single-document = exactly one iteration. For iterate,
-  //    each document's own comments render into its decisionReason (carried,
-  //    with a File header, into the aggregated re-run prompt by
-  //    buildReviewPromptContext).
-  for (const d of dvs) {
-    const commentRows = await args.db
-      .select()
-      .from(reviewComments)
-      .where(eq(reviewComments.docVersionId, d.id))
-      .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-    const commentsArr = commentRows.map(rowToReviewComment)
-    const claimed = await args.db
-      .update(docVersions)
-      .set({
-        decision: args.decision,
-        decisionReason:
-          policy.decisionReason === 'reject-reason'
-            ? (args.rejectReason ?? null)
-            : policy.decisionReason === 'render-comments'
-              ? renderCommentsForPrompt(commentsArr, {
-                  ...(d.sourceFilePath ? { sourceFilePath: d.sourceFilePath } : {}),
-                })
-              : null,
-        decidedAt: Date.now(),
-        decidedBy: args.author ?? LOCAL_DECIDER,
-        decidedByRole: args.authorRole ?? null,
-        commentsJson: JSON.stringify(commentsArr),
-      })
-      .where(and(eq(docVersions.id, d.id), eq(docVersions.decision, 'pending')))
-      .returning({ id: docVersions.id })
-    if (claimed.length === 0) {
-      throw new ConflictError(
-        'review-decision-conflict',
-        `doc_version ${d.id} was decided concurrently; review ${args.nodeRunId} decision claim lost`,
-      )
-    }
-    await args.db.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id))
+  // ── prepare E: approve payload ────────────────────────────────────────────
+  const decidedAt = Date.now()
+  let outputs: PreparedOutput[] | null = null
+  let distillSourceEventId = dv.id
+  if (args.decision === 'approved') {
+    outputs = isMultiDoc
+      ? await planMultiDocApprove(db, run, effectiveDvs, readBody, decidedAt)
+      : await planSingleDocApprove(db, run, dv, readBody, decidedAt)
+    distillSourceEventId = isMultiDoc ? effectiveDvs[0]!.id : dv.id
   }
 
-  // 2. Per-decision state mutation. The decision WS event is deliberately
-  // deferred until the branch's outputs/rerun rows and final lifecycle CAS are
-  // complete. Broadcasting here used to expose a success fact before a later
-  // filesystem/output/status failure returned an HTTP error.
-  if (args.decision === 'approved') {
-    if (isMultiDoc) {
-      // RFC-079: multi-document approve emits the curated subset (accepted
-      // items, in item order) on the `accepted` port instead of approved_doc.
-      const result = await approveMultiDocReview({
-        db: args.db,
-        appHome: args.appHome,
-        nodeRunId: args.nodeRunId,
-        run,
-        dvs,
-        author: args.author,
-      })
-      emitReviewDecisionEvent(
-        dv.taskId,
-        args.nodeRunId,
-        args.decision,
-        run.reviewIteration,
-        args.decision,
-      )
-      return result
-    }
-    // Publish the two declared output ports (`approved_doc`, `approval_meta`)
-    // into node_run_outputs so downstream output bindings + the task-detail
-    // TaskOutputPanel can resolve them. Without these rows downstream
-    // consumers see no output for the review run and render "等待中…" forever
-    // even though the review is `done` and the upstream content exists. The
-    // workflow.validator already promises these ports exist (RFC-005
-    // design.md §2.2, workflow.validator.ts approved_doc / approval_meta).
-    //
-    // approved_doc must mirror the *shape* upstream emitted, not the
-    // resolved body — otherwise a downstream agent declared to consume
-    // `markdown_file` paths would receive raw markdown text and break. When
-    // the doc_version carries a sourceFilePath (= upstream port was kind
-    // 'markdown_file'), pass the same worktree-relative path through so
-    // downstream's resolvePortContent re-reads the file. Inline markdown
-    // (no sourceFilePath) still publishes the body verbatim.
-    const decidedAt = Date.now()
-    const sourcePath = dv.sourceFilePath ?? null
-    const hasSourcePath = sourcePath !== null && sourcePath.trim().length > 0
-    const approvedDocContent = hasSourcePath
-      ? (sourcePath as string)
-      : readDocVersionBody(args.appHome, dv)
-    // RFC-072: when the approved doc is a passed-through file path (upstream
-    // port was a markdownish file kind → sourceFilePath set), persist that kind
-    // so the task-detail Outputs tab offers a Download button. Inline-markdown
-    // approvals carry the body verbatim → no file kind, no download.
-    // flag-audit §8 决策：写 canonical 'path<md>'，不再向新行倒灌 legacy 别名
-    // 'markdown_file'（kindParser 约定 stringifyKind 永不输出别名；存量行由
-    // migration 0075 清洗，读侧 parse 时两者本就等价折叠）。
-    const approvedDocKind = hasSourcePath ? 'path<md>' : null
-    // RFC-193 D16: path-shaped approved_doc projects the upstream port —
-    // carry its archive slice (inline-markdown approvals are self-sufficient).
-    const approvedArchiveJson = hasSourcePath
-      ? subsetArchiveJson(
-          await upstreamPortArchiveJson(args.db, run, dv.sourceNodeId, dv.sourcePortName),
-          [sourcePath as string],
+  // ── prepare F: re-run plan (reject / iterate) ─────────────────────────────
+  let rerun: PreparedRerun | null = null
+  if (args.decision !== 'approved') {
+    rerun = await planRerun(args, run, taskRow, dv)
+  }
+
+  // ── external phase: worktree rollback (idempotent) ────────────────────────
+  if (rerun !== null && rerun.rollbackFlag && rerun.rollbackTarget !== null) {
+    for (const up of rerun.upstreams) {
+      if (up.latest.preSnapshot === null && up.latest.preSnapshotReposJson === null) continue
+      // RFC-098 B1 (audit S-9 / ⑥-10): write-lock + shared multi-repo rollback;
+      // `rolledBack` (the '-rollback' supersede-marker suffix) means "at least one
+      // worktree actually rolled back with zero failures".
+      try {
+        const outcome = await getTaskWriteSem(taskRow.id).run(() =>
+          rollbackNodeRunWorktrees(
+            rerun!.rollbackTarget!,
+            up.latest,
+            { resetOnEmptySnapshot: false },
+            log,
+          ),
         )
-      : null
-    // RFC-099 prompt isolation: no decider identity in the port payload.
-    const meta = JSON.stringify({
-      decision: 'approved',
-      decidedAt,
-      reviewIteration: run.reviewIteration,
-      versionIndex: dv.versionIndex,
-      sourceNodeId: dv.sourceNodeId,
-      sourcePortName: dv.sourcePortName,
-    })
-    // RFC-052: upsert outputs instead of plain insert. The original code threw
-    // SqliteError(UNIQUE) on the (nodeRunId, portName) PK when the user
-    // approved a phantom v(n+1) that the buggy dispatchReviewNode had minted
-    // after a first approve — and the throw skipped the `status='done'`
-    // update + `resumeRequired` return, leaving the node_run in a half-
-    // decided middle state forever. With T1 + T2 in place this path
-    // shouldn't be re-entered with already-existing outputs, but keep upsert
-    // as a defense-in-depth: any future edge that reaches the approved
-    // branch twice no longer corrupts node_run state.
-    await args.db
-      .insert(nodeRunOutputs)
-      .values({
-        nodeRunId: args.nodeRunId,
-        portName: REVIEW_APPROVED_PORT_SINGLE,
-        content: approvedDocContent,
-        kind: approvedDocKind,
-        archiveJson: approvedArchiveJson,
+        up.rolledBack = outcome.attempted && outcome.failures.length === 0
+      } catch (err) {
+        log.warn('review rollback failed', {
+          nodeRunId: up.latest.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  // ── commit: one transaction ───────────────────────────────────────────────
+  const nextIter = policy.bumpsIteration ? run.reviewIteration + 1 : run.reviewIteration
+  const committed = dbTxSync(db, (tx) => {
+    // 0. Re-check at the commit point: a concurrent cancel / decision / member
+    //    removal that slipped past the lock-free prepare loses here.
+    const liveRun = tx
+      .select({
+        status: nodeRuns.status,
+        reviewIteration: nodeRuns.reviewIteration,
+        taskId: nodeRuns.taskId,
       })
-      .onConflictDoUpdate({
-        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: {
-          content: approvedDocContent,
-          kind: approvedDocKind,
-          archiveJson: approvedArchiveJson,
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, args.nodeRunId))
+      .get()
+    const liveTask = tx
+      .select({
+        status: tasks.status,
+        ownerUserId: tasks.ownerUserId,
+        sourceTerminationFence: tasks.sourceTerminationFence,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, run.taskId))
+      .get()
+    if (liveRun === undefined || liveTask === undefined) {
+      throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
+    }
+    const memberNow =
+      args.actor === undefined ? false : hasActingMembershipTx(tx, run.taskId, args.actor.user.id)
+    const freshRole = assertDecisionAdmissible(args, liveRun, liveTask, memberNow, targetSelfStatus)
+    // The role written to every row of this decision: the one just re-resolved
+    // when an actor is known, the caller's snapshot otherwise (internal paths).
+    const effectiveRole: TaskActorRole | null =
+      args.actor !== undefined ? freshRole : (args.authorRole ?? null)
+
+    // 1. Batch selections (RFC-129: judging the current content clears stale).
+    let selectionsApplied = 0
+    for (const s of selections) {
+      const changed = tx
+        .update(docVersions)
+        .set({ selection: s.selection, selectionStale: false })
+        .where(
+          and(
+            eq(docVersions.id, s.docVersionId),
+            eq(docVersions.reviewNodeRunId, args.nodeRunId),
+            eq(docVersions.decision, 'pending'),
+          ),
+        )
+        .returning({ id: docVersions.id })
+        .all()
+      if (changed.length === 0) {
+        throw new ConflictError(
+          'review-doc-decided',
+          `doc_version ${s.docVersionId} already decided`,
+        )
+      }
+      selectionsApplied += 1
+    }
+
+    // 2. Batch comments — deduplicated on (document, range, text) so a retry after
+    //    a rolled-back attempt cannot double-post.
+    const inserted: Array<{ docVersion: DocVersion; comment: ReviewComment }> = []
+    let skipped = 0
+    for (const c of comments) {
+      const dup = tx
+        .select({ id: reviewComments.id })
+        .from(reviewComments)
+        .where(
+          and(
+            eq(reviewComments.docVersionId, c.docVersion.id),
+            eq(reviewComments.anchorOffsetStart, c.anchor.offsetStart),
+            eq(reviewComments.anchorOffsetEnd, c.anchor.offsetEnd),
+            eq(reviewComments.selectedText, c.anchor.selectedText),
+            eq(reviewComments.commentText, c.commentText),
+          ),
+        )
+        .get()
+      if (dup !== undefined) {
+        skipped += 1
+        continue
+      }
+      const id = ulid()
+      const createdAt = Date.now()
+      const author = args.author ?? LOCAL_DECIDER
+      const authorRole = effectiveRole
+      tx.insert(reviewComments)
+        .values({
+          id,
+          docVersionId: c.docVersion.id,
+          anchorSectionPath: c.anchor.sectionPath,
+          anchorParagraphIdx: c.anchor.paragraphIdx,
+          anchorOffsetStart: c.anchor.offsetStart,
+          anchorOffsetEnd: c.anchor.offsetEnd,
+          selectedText: c.anchor.selectedText,
+          contextBefore: c.anchor.contextBefore,
+          contextAfter: c.anchor.contextAfter,
+          occurrenceIndex: c.anchor.occurrenceIndex,
+          commentText: c.commentText,
+          author,
+          authorRole,
+          createdAt,
+        })
+        .run()
+      inserted.push({
+        docVersion: c.docVersion,
+        comment: {
+          id,
+          docVersionId: c.docVersion.id,
+          anchor: c.anchor,
+          commentText: c.commentText,
+          author,
+          authorRole,
+          createdAt,
         },
       })
-    await args.db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: args.nodeRunId, portName: REVIEW_APPROVAL_META_PORT, content: meta })
-      .onConflictDoUpdate({
-        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: meta },
-      })
-    // RFC-053: approve-review enforces awaiting_review → done at the helper.
-    // Pre-check at line ~1045 also catches non-awaiting; this is the
-    // belt-and-suspenders write.
-    await transitionNodeRunStatus({
-      db: args.db,
-      nodeRunId: args.nodeRunId,
-      event: { kind: policy.lifecycleEvent },
-      extra: { finishedAt: decidedAt },
-    })
-    // RFC-041: feed the approved decision into the memory distill queue.
-    // Best-effort — never blocks the decision return path.
-    await enqueueDistillJob(args.db, {
-      sourceKind: 'review',
-      sourceEventId: dv.id,
-      taskId: dv.taskId,
-    }).catch(() => {
-      /* swallow — distill is async, downstream broken queue must not affect decision */
-    })
-    emitReviewDecisionEvent(
-      dv.taskId,
-      args.nodeRunId,
-      args.decision,
-      run.reviewIteration,
-      args.decision,
-    )
-    return { taskId: dv.taskId, reviewIteration: run.reviewIteration, resumeRequired: true }
-  }
+    }
 
-  // reject / iterate: reset upstream + sibling reviews (reject only), bump
-  // this review's reviewIteration, set status back to pending so scheduler
-  // re-runs the node (which will create v(n+1) doc_version).
-  const taskRow = (await args.db.select().from(tasks).where(eq(tasks.id, dv.taskId)).limit(1))[0]
-  if (taskRow === undefined) {
-    throw new NotFoundError('task-not-found', `task ${dv.taskId} not found`)
+    // 3. Archive each pending doc_version's comments (batch included) into its
+    //    snapshot + drop the row-side comments. For iterate, each document's own
+    //    comments render into its decisionReason (carried, with a File header,
+    //    into the aggregated re-run prompt by buildReviewPromptContext).
+    for (const d of dvs) {
+      const commentRows = tx
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.docVersionId, d.id))
+        .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
+        .all()
+      const commentsArr = commentRows.map(rowToReviewComment)
+      const claimed = tx
+        .update(docVersions)
+        .set({
+          decision: args.decision,
+          decisionReason:
+            policy.decisionReason === 'reject-reason'
+              ? (args.rejectReason ?? null)
+              : policy.decisionReason === 'render-comments'
+                ? renderCommentsForPrompt(commentsArr, {
+                    ...(d.sourceFilePath ? { sourceFilePath: d.sourceFilePath } : {}),
+                  })
+                : null,
+          decidedAt,
+          decidedBy: args.author ?? LOCAL_DECIDER,
+          decidedByRole: effectiveRole,
+          commentsJson: JSON.stringify(commentsArr),
+        })
+        .where(and(eq(docVersions.id, d.id), eq(docVersions.decision, 'pending')))
+        .returning({ id: docVersions.id })
+        .all()
+      if (claimed.length === 0) {
+        throw new ConflictError(
+          'review-decision-conflict',
+          `doc_version ${d.id} was decided concurrently; review ${args.nodeRunId} decision claim lost`,
+        )
+      }
+      tx.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id)).run()
+    }
+
+    if (outputs !== null) {
+      // 4a. approve — publish the declared output ports into node_run_outputs so
+      //     downstream bindings + the task-detail Outputs tab can resolve them.
+      //     Upsert (RFC-052): defense-in-depth against a re-entered approve.
+      for (const out of outputs) {
+        tx.insert(nodeRunOutputs)
+          .values({
+            nodeRunId: args.nodeRunId,
+            portName: out.portName,
+            content: out.content,
+            kind: out.kind,
+            archiveJson: out.archiveJson,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: out.content, kind: out.kind, archiveJson: out.archiveJson },
+          })
+          .run()
+      }
+      // RFC-053: approve-review enforces awaiting_review → done at the helper.
+      transitionNodeRunStatusTx({
+        tx,
+        nodeRunId: args.nodeRunId,
+        event: { kind: policy.lifecycleEvent },
+        extra: { finishedAt: decidedAt },
+      })
+    } else if (rerun !== null) {
+      // 4b. reject / iterate — retire the superseded upstream rows, mint their
+      //     re-runs, cascade to sibling reviews, and re-open this review row.
+      for (const up of rerun.upstreams) {
+        // RFC-145: the marker string is HUMAN BREADCRUMBS only — the machine
+        // facts land on superseded_by_review / rolled_back in the same write.
+        // RFC-095: the prefix is a LOAD-BEARING dispatch contract (isDispatchable
+        // keeps canceled rows carrying it parked).
+        const supersedeMarker = `${REVIEW_SUPERSEDE_MARKER_PREFIX}${rerun.rerunPolicy.supersededByReview}${up.rolledBack ? '-rollback' : ''}`
+        // RFC-053: supersede must be able to cancel BOTH live rows AND a `done`
+        // row (typical — the agent finished before the decision). allowTerminal
+        // documents the intentional terminal-rewrite.
+        setNodeRunStatusTx({
+          tx,
+          nodeRunId: up.latest.id,
+          to: 'canceled',
+          allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
+          allowTerminal: true,
+          reason: supersedeMarker,
+          extra: {
+            finishedAt: up.latest.finishedAt ?? Date.now(),
+            errorMessage: `${supersedeMarker}: Replaced by retry_index ${up.nextRetry} due to review ${rerun.rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
+            supersededByReview: rerun.rerunPolicy.supersededByReview,
+            rolledBack: up.rolledBack,
+          },
+        })
+        // RFC-011: a fresh node_run row at retry_index+1 keeps the old row's
+        // promptText / outputs for the Prompt tab attempts switcher. No
+        // inheritFrom: only preSnapshot is carried, plus an explicit top-level
+        // parent; startedAt null = "no timing until it actually runs"
+        // (RFC-074 PR-C: no clarifyIteration inherit, see
+        // review-iterate-inherits-clarify-iteration.test.ts).
+        mintNodeRunTx(tx, {
+          taskId: dv.taskId,
+          nodeId: up.nodeId,
+          status: 'pending',
+          cause: rerun.rerunPolicy.mintCause,
+          retryIndex: up.nextRetry,
+          iteration: up.latest.iteration,
+          overrides: { parentNodeRunId: null, preSnapshot: up.latest.preSnapshot, startedAt: null },
+        })
+      }
+      // Sibling cascade (RFC-005 A2 reject: always; RFC-014 iterate: only when the
+      // upstream agent syncs ≥ 2 markdown outputs — decided in prepare).
+      for (const sibling of rerun.siblings) {
+        for (const pendingId of sibling.pendingDocVersionIds) {
+          tx.update(docVersions)
+            .set({
+              decision: 'rejected',
+              decisionReason: 'invalidated by sibling reject (RFC-005 A2)',
+              decidedAt: Date.now(),
+              decidedBy: SYSTEM_DECIDER,
+            })
+            .where(eq(docVersions.id, pendingId))
+            .run()
+        }
+        setNodeRunStatusTx({
+          tx,
+          nodeRunId: sibling.runId,
+          to: 'pending',
+          allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
+          allowTerminal: true,
+          reason: 'review-sibling-cascade',
+          extra: { reviewIteration: sibling.reviewIteration + 1 },
+        })
+      }
+      // Bump this review's reviewIteration + status=pending so the scheduler
+      // re-runs it (RFC-053: iterate-review / reject-review enforce
+      // awaiting_review → pending).
+      transitionNodeRunStatusTx({
+        tx,
+        nodeRunId: args.nodeRunId,
+        event: { kind: policy.lifecycleEvent },
+        extra: { reviewIteration: nextIter },
+      })
+    }
+
+    return { inserted, skipped, selectionsApplied }
+  })
+
+  // ── after commit: events + best-effort distill ────────────────────────────
+  for (const s of selections) {
+    emitReviewSelectionChanged(dv.taskId, args.nodeRunId, s.docVersionId, s.selection)
   }
+  for (const { docVersion, comment } of committed.inserted) {
+    emitReviewCommentAddedEvent(dv.taskId, args.nodeRunId, docVersion.id, comment)
+  }
+  emitReviewDecisionEvent(dv.taskId, args.nodeRunId, args.decision, nextIter, args.decision)
+  // RFC-041: feed the decision into the memory distill queue. Best-effort by
+  // design (N10 / P14): its own write, after the decision committed; a failure
+  // here never blocks or reverts the decision.
+  await enqueueDistillJob(db, {
+    sourceKind: 'review',
+    sourceEventId: distillSourceEventId,
+    taskId: dv.taskId,
+  }).catch(() => {
+    /* swallow — distill is async, downstream broken queue must not affect decision */
+  })
+
+  const hasBatch = args.comments !== undefined || args.selections !== undefined
+  return {
+    taskId: dv.taskId,
+    reviewIteration: nextIter,
+    resumeRequired: true,
+    ...(hasBatch
+      ? {
+          batch: {
+            commentsAdded: committed.inserted.length,
+            commentsSkippedAsDuplicate: committed.skipped,
+            selectionsApplied: committed.selectionsApplied,
+          },
+        }
+      : {}),
+  }
+}
+
+/**
+ * Single-document approve payload: `approved_doc` mirrors the SHAPE upstream
+ * emitted (a worktree-relative path for markdown_file ports, so downstream's
+ * resolvePortContent re-reads the file; the body verbatim for inline markdown)
+ * plus the `approval_meta` blob. RFC-072: a path-shaped doc persists kind
+ * 'path<md>' (canonical, never the legacy alias) so the Outputs tab offers a
+ * Download; RFC-193 D16: it also carries the upstream port's archive slice.
+ * RFC-099 prompt isolation: no decider identity in the port payload.
+ */
+async function planSingleDocApprove(
+  db: DbClient,
+  run: typeof nodeRuns.$inferSelect,
+  dv: DocVersion,
+  readBody: (d: DocVersion) => string,
+  decidedAt: number,
+): Promise<PreparedOutput[]> {
+  const sourcePath = dv.sourceFilePath ?? null
+  const hasSourcePath = sourcePath !== null && sourcePath.trim().length > 0
+  const approvedDocContent = hasSourcePath ? (sourcePath as string) : readBody(dv)
+  const approvedDocKind = hasSourcePath ? 'path<md>' : null
+  const approvedArchiveJson = hasSourcePath
+    ? subsetArchiveJson(
+        await upstreamPortArchiveJson(db, run, dv.sourceNodeId, dv.sourcePortName),
+        [sourcePath as string],
+      )
+    : null
+  const meta = JSON.stringify({
+    decision: 'approved',
+    decidedAt,
+    reviewIteration: run.reviewIteration,
+    versionIndex: dv.versionIndex,
+    sourceNodeId: dv.sourceNodeId,
+    sourcePortName: dv.sourcePortName,
+  })
+  return [
+    {
+      portName: REVIEW_APPROVED_PORT_SINGLE,
+      content: approvedDocContent,
+      kind: approvedDocKind,
+      archiveJson: approvedArchiveJson,
+    },
+    { portName: REVIEW_APPROVAL_META_PORT, content: meta, kind: null, archiveJson: null },
+  ]
+}
+
+/**
+ * RFC-079: multi-document approve payload — the curated subset (accepted items,
+ * in item_index order) on the `accepted` port. RFC-081: a list<markdown> round
+ * archives items inline, so the subset is the accepted bodies joined by
+ * MARKDOWN_DOC_BOUNDARY (kind list<markdown>); a list<path<md>> round joins the
+ * accepted worktree paths by newline (kind list<path<md>>). Empty subset →
+ * empty content → downstream wrapper-fanout completes immediately. RFC-193 D16:
+ * a path-list subset carries the matching slice of the upstream archive so it
+ * stays artifact-readable after worktree GC. Reads the EFFECTIVE (batch-applied)
+ * view — RFC-326 design §6.1.
+ */
+async function planMultiDocApprove(
+  db: DbClient,
+  run: typeof nodeRuns.$inferSelect,
+  effectiveDvs: DocVersion[],
+  readBody: (d: DocVersion) => string,
+  decidedAt: number,
+): Promise<PreparedOutput[]> {
+  const acceptedItemIndices = effectiveDvs
+    .filter((d) => d.selection === 'accepted')
+    .map((d) => d.itemIndex)
+    .filter((i): i is number => i !== null && i !== undefined)
+    .sort((a, b) => a - b)
+  const itemsInline = resolveReviewRoundMode(effectiveDvs) === 'multi-inline'
+  let acceptedContent: string
+  let acceptedKind: string
+  if (itemsInline) {
+    const acceptedBodies = effectiveDvs
+      .filter((d) => d.selection === 'accepted')
+      .slice()
+      .sort((a, b) => (a.itemIndex ?? 0) - (b.itemIndex ?? 0))
+      .map((d) => readBody(d))
+    acceptedContent = joinMarkdownDocs(acceptedBodies)
+    acceptedKind = 'list<markdown>'
+  } else {
+    acceptedContent = acceptedSubsetPaths(effectiveDvs).join('\n')
+    acceptedKind = 'list<path<md>>'
+  }
+  const rep = effectiveDvs[0]!
+  // RFC-099 prompt isolation: approval_meta is a downstream-consumable PORT, so
+  // it must NOT carry the decider's identity.
+  const meta = JSON.stringify({
+    decision: 'approved',
+    decidedAt,
+    reviewIteration: run.reviewIteration,
+    sourceNodeId: rep.sourceNodeId,
+    sourcePortName: rep.sourcePortName,
+    itemCount: effectiveDvs.length,
+    acceptedCount: acceptedItemIndices.length,
+    acceptedItemIndices,
+  })
+  const acceptedArchiveJson = itemsInline
+    ? null
+    : subsetArchiveJson(
+        await upstreamPortArchiveJson(db, run, rep.sourceNodeId, rep.sourcePortName),
+        acceptedSubsetPaths(effectiveDvs),
+      )
+  return [
+    {
+      portName: REVIEW_APPROVED_PORT_MULTI,
+      content: acceptedContent,
+      kind: acceptedKind,
+      archiveJson: acceptedArchiveJson,
+    },
+    { portName: REVIEW_APPROVAL_META_PORT, content: meta, kind: null, archiveJson: null },
+  ]
+}
+
+/**
+ * Everything a reject / iterate needs to know BEFORE it writes: the parsed
+ * snapshot, the re-run set, the freshest row per upstream, the rollback target
+ * and the sibling cascade. Every deterministic failure of the old path
+ * (`workflow-snapshot-corrupt`, `review-node-missing-from-snapshot`) now happens
+ * here, ahead of the external phase and the transaction.
+ */
+async function planRerun(
+  args: SubmitReviewDecisionArgs,
+  run: typeof nodeRuns.$inferSelect,
+  taskRow: typeof tasks.$inferSelect,
+  dv: DocVersion,
+): Promise<PreparedRerun> {
+  const { db } = args
   let definition: WorkflowDefinition | null = null
   try {
     definition = JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition
@@ -2671,8 +3186,7 @@ async function submitReviewDecisionUnlocked(
       `review node ${dv.reviewNodeId} not in task workflow snapshot`,
     )
   }
-  // RFC-149: the rerun half of the policy row. approved cannot reach this
-  // block (early return above) — the undefined guard is defensive only.
+  // RFC-149: the rerun half of the policy row. approved never reaches here.
   const rerunPolicy = (REVIEW_DECISION_POLICY[args.decision] as ReviewDecisionPolicy).rerun
   if (rerunPolicy === undefined) {
     throw new Error(
@@ -2687,13 +3201,9 @@ async function submitReviewDecisionUnlocked(
   rerunSet.add(dv.sourceNodeId) // direct upstream always rerunnable, regardless of config
   const rollbackFlag = readBool(reviewNode, rerunPolicy.rollbackKey, rerunPolicy.rollbackDefault)
 
-  // RFC-011: mint a fresh node_run row at retry_index+1 for each rerunnable
-  // upstream node instead of resetting the latest row in place — this
-  // preserves the old row's promptText (and outputs) for the Prompt tab
-  // attempts switcher. Old row goes to a terminal canceled state with an
-  // errorSummary that machine-identifies the supersede reason.
+  const upstreams: PreparedRerunUpstream[] = []
   for (const nodeId of rerunSet) {
-    const upRuns = await args.db
+    const upRuns = await db
       .select()
       .from(nodeRuns)
       .where(
@@ -2704,156 +3214,63 @@ async function submitReviewDecisionUnlocked(
         ),
       )
     // Pick the freshest top-level upstream row with the same comparator the
-    // scheduler / dispatchReviewNode use (clarifyIteration → retryIndex → ulid).
-    // A plain desc(retryIndex) sort silently shadows the clarify-rerun row
-    // (clarifyIteration=N, retryIndex=0) behind any stale process-retry row
-    // (clarifyIteration=0, retryIndex=M>0). When that happens the new pending
-    // row inherits the WRONG clarifyIteration and loses the latestPerNode
-    // race in scheduler.runScope, so the agent never re-runs and review
-    // immediately reads the stale upstream output to mint v(n+1) — i.e. iterate
-    // looks like "version refreshed, no agent run". Locked by
-    // review-iterate-inherits-clarify-iteration.test.ts.
-    // RFC-096: shared picker; intentionally no status filter — supersede must
-    // be able to cancel live rows AND the typical done row alike.
+    // scheduler / dispatchReviewNode use (clarifyIteration → retryIndex → ulid);
+    // a plain desc(retryIndex) sort shadows the clarify-rerun row (locked by
+    // review-iterate-inherits-clarify-iteration.test.ts). RFC-096: intentionally
+    // no status filter — supersede must cancel live rows AND the typical done row.
     const latest = pickFreshestRun(upRuns, { topLevelOnly: true })
     if (latest === undefined) continue
-    // Worktree rollback per the review-node config. Track whether rollback
-    // *actually completed* so the supersede marker can distinguish "files
-    // rolled back, this attempt is truly canceled" from "files kept, this
-    // attempt is just superseded by a newer retry" — UI uses this to pick
-    // between the 'Canceled' and 'Superseded' labels.
-    let rolledBack = false
-    // RFC-098 B1 (audit S-9 / ⑥-10): write-lock + shared multi-repo rollback;
-    // `rolledBack` (the '-rollback' supersede-marker suffix) now means "at
-    // least one worktree actually rolled back with zero failures".
-    if (rollbackFlag && (latest.preSnapshot !== null || latest.preSnapshotReposJson !== null)) {
-      const target = await loadRollbackTarget(args.db, taskRow.id)
-      if (target !== null) {
-        try {
-          const outcome = await getTaskWriteSem(taskRow.id).run(() =>
-            rollbackNodeRunWorktrees(target, latest, { resetOnEmptySnapshot: false }, log),
-          )
-          rolledBack = outcome.attempted && outcome.failures.length === 0
-        } catch (err) {
-          log.warn('review rollback failed', {
-            nodeRunId: latest.id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-    }
     // RFC-284 T21：latest 单行口径 = 单元素集特例，收编 nextRetryIndex。
-    const nextRetry = nextRetryIndex([latest])
-    // RFC-145: the marker string is HUMAN BREADCRUMBS only — the machine
-    // facts land on superseded_by_review / rolled_back in the same write.
-    // The prefix constant lives here (message builder) now that
-    // isReviewSupersededRow reads the column instead of parsing it.
-    // The optional `-rollback` suffix marks "worktree was actually reset to
-    // preSnapshot". Substring matches like `.toContain('superseded-by-review-iterated')`
-    // still work either way. RFC-095: the prefix is now a LOAD-BEARING dispatch
-    // contract — isDispatchable keeps canceled rows carrying it parked while
-    // plain canceled rows are revival-dispatchable; build it from the shared
-    // constant so the two sides cannot drift.
-    const supersedeMarker = `${REVIEW_SUPERSEDE_MARKER_PREFIX}${rerunPolicy.supersededByReview}${rolledBack ? '-rollback' : ''}`
-    // RFC-053: supersede must be able to cancel BOTH live rows (pending /
-    // running / awaiting_*) AND a `done` row (typical case — agent already
-    // finished before the review decision triggered an iterate). We use
-    // setNodeRunStatus with an explicit allowedFrom including 'done' +
-    // allowTerminal=true to document the intentional terminal-rewrite —
-    // future readers see the semantic exception explicitly rather than
-    // hidden behind a raw db.update.
-    await setNodeRunStatus({
-      db: args.db,
-      nodeRunId: latest.id,
-      to: 'canceled',
-      allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
-      allowTerminal: true,
-      reason: supersedeMarker,
-      extra: {
-        finishedAt: latest.finishedAt ?? Date.now(),
-        // RFC-145: errorMessage keeps the human-readable marker string
-        // (breadcrumbs; substring test locks stay green), but the MACHINE
-        // facts land structured — isReviewSupersededRow / clarifyRerunLedger /
-        // the frontend decode read these columns, never the prefix.
-        errorMessage: `${supersedeMarker}: Replaced by retry_index ${nextRetry} due to review ${rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
-        supersededByReview: rerunPolicy.supersededByReview,
-        rolledBack,
-      },
-    })
-    await mintNodeRun(args.db, {
-      taskId: dv.taskId,
-      nodeId,
-      status: 'pending',
-      cause: rerunPolicy.mintCause,
-      retryIndex: nextRetry,
-      iteration: latest.iteration,
-      // No inheritFrom: this mint historically carried ONLY preSnapshot from
-      // the superseded row (reviewIteration / shardKey stay at their column
-      // defaults) plus an explicit top-level parent — keep that byte-for-byte.
-      // startedAt: null preserves the legacy "no timing until it actually
-      // runs" shape of this rerun row.
-      overrides: { parentNodeRunId: null, preSnapshot: latest.preSnapshot, startedAt: null },
-      // RFC-074 PR-C: no clarifyIteration inherit. This fresh insert is the
-      // latest id, so isFresherNodeRun (pure id-order) ranks it above the prior
-      // clarify-rerun done row automatically — the scheduler runs the agent
-      // before dispatchReviewNode reads its output, so the "version refreshed
-      // without rerun" bug (task 01KS1N8WVZWE8FTR4K9WSETRNW 贪吃蛇) stays fixed.
-      // Locked by review-iterate-inherits-clarify-iteration.test.ts.
-    })
+    upstreams.push({ nodeId, latest, nextRetry: nextRetryIndex([latest]), rolledBack: false })
   }
+  const needsRollback =
+    rollbackFlag &&
+    upstreams.some((u) => u.latest.preSnapshot !== null || u.latest.preSnapshotReposJson !== null)
+  const rollbackTarget = needsRollback ? await loadRollbackTarget(db, taskRow.id) : null
 
-  // Sibling cascade:
-  //  - reject (RFC-005 A2): always cascade; all sibling reviews invalidated.
-  //  - iterate (RFC-014 §2.1 #3): cascade only when the upstream agent has
-  //    `syncOutputsOnIterate: true` AND declares ≥ 2 markdown[_file] outputs.
-  //    Already-approved siblings get pulled back to awaiting_review with a
-  //    bumped reviewIteration — locked by review-iterate-sibling-cascade.test.ts.
   let cascadeReason: 'rejected' | 'iterated' | null = null
   if (rerunPolicy.cascade === 'always') {
     cascadeReason = rerunPolicy.supersededByReview
   } else if (rerunPolicy.cascade === 'sibling-sync-conditional') {
     const triggered = await iterateSiblingCascadeApplies({
-      db: args.db,
+      db,
       upstreamNodeId: dv.sourceNodeId,
       definition,
     })
     if (triggered) cascadeReason = rerunPolicy.supersededByReview
   }
+  const siblings: PreparedSibling[] = []
   if (cascadeReason !== null) {
-    await cascadeSiblingReviews({
-      db: args.db,
-      definition,
-      taskId: dv.taskId,
-      iteration: run.iteration,
-      upstreamNodeId: dv.sourceNodeId,
-      exceptReviewNodeId: dv.reviewNodeId,
-      triggeredBy: cascadeReason,
-    })
+    for (const n of definition.nodes) {
+      if (n.kind !== 'review') continue
+      if (n.id === dv.reviewNodeId) continue
+      const inputSource = readPortRef(n, 'inputSource')
+      if (inputSource === null || inputSource.nodeId !== dv.sourceNodeId) continue
+      const siblingRuns = await db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, dv.taskId),
+            eq(nodeRuns.nodeId, n.id),
+            eq(nodeRuns.iteration, run.iteration),
+          ),
+        )
+      for (const s of siblingRuns) {
+        if (s.parentNodeRunId !== null) continue
+        const pending = await db
+          .select({ id: docVersions.id })
+          .from(docVersions)
+          .where(and(eq(docVersions.reviewNodeRunId, s.id), eq(docVersions.decision, 'pending')))
+        siblings.push({
+          runId: s.id,
+          reviewIteration: s.reviewIteration,
+          pendingDocVersionIds: pending.map((p) => p.id),
+        })
+      }
+    }
   }
-
-  // Bump this review's reviewIteration + status=pending so scheduler re-runs.
-  // RFC-053: iterate-review / reject-review enforce awaiting_review → pending.
-  const nextIter = run.reviewIteration + 1
-  await transitionNodeRunStatus({
-    db: args.db,
-    nodeRunId: args.nodeRunId,
-    event: { kind: policy.lifecycleEvent },
-    extra: { reviewIteration: nextIter },
-  })
-
-  // RFC-041: same as the approve path — feed the (reject / iterate)
-  // decision into the distill queue. Best-effort.
-  await enqueueDistillJob(args.db, {
-    sourceKind: 'review',
-    sourceEventId: dv.id,
-    taskId: dv.taskId,
-  }).catch(() => {
-    /* swallow — see comment above */
-  })
-
-  emitReviewDecisionEvent(dv.taskId, args.nodeRunId, args.decision, nextIter, args.decision)
-
-  return { taskId: dv.taskId, reviewIteration: nextIter, resumeRequired: true }
+  return { rerunPolicy, rollbackFlag, rollbackTarget, upstreams, cascadeReason, siblings }
 }
 
 /**
@@ -2930,25 +3347,6 @@ function emitReviewSelectionChanged(
   })
 }
 
-interface CascadeSiblingArgs {
-  db: DbClient
-  definition: WorkflowDefinition
-  taskId: string
-  iteration: number
-  upstreamNodeId: string
-  exceptReviewNodeId: string
-  /**
-   * RFC-014: which decision triggered this cascade. Pre-RFC-014 callers only
-   * fired this on reject; the optional default keeps that backward compat.
-   */
-  triggeredBy?: 'rejected' | 'iterated'
-}
-
-/**
- * RFC-014 §2.2: check whether an iterate decision should trigger the same
- * sibling-review cascade reject already does. True iff the upstream agent has
- * `syncOutputsOnIterate: true` AND declares ≥ 2 markdown[_file] outputs.
- */
 async function iterateSiblingCascadeApplies(args: {
   db: DbClient
   upstreamNodeId: string
@@ -2995,62 +3393,6 @@ async function iterateSiblingCascadeApplies(args: {
     syncOutputsOnIterate: agentRow.syncOutputsOnIterate,
   })
   return trigger
-}
-
-async function cascadeSiblingReviews(args: CascadeSiblingArgs): Promise<void> {
-  for (const n of args.definition.nodes) {
-    if (n.kind !== 'review') continue
-    if (n.id === args.exceptReviewNodeId) continue
-    const inputSource = readPortRef(n, 'inputSource')
-    if (inputSource === null || inputSource.nodeId !== args.upstreamNodeId) continue
-    // Reset sibling review node_run for this iteration back to pending so
-    // scheduler creates a new doc_version when the upstream produces new
-    // content.
-    const siblings = await args.db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, args.taskId),
-          eq(nodeRuns.nodeId, n.id),
-          eq(nodeRuns.iteration, args.iteration),
-        ),
-      )
-    for (const s of siblings) {
-      if (s.parentNodeRunId !== null) continue
-      // Mark the sibling's currently-pending doc_version (if any) as rejected
-      // so the new run creates a fresh v(n+1); historical decisions stay.
-      const dvPending = await args.db
-        .select()
-        .from(docVersions)
-        .where(and(eq(docVersions.reviewNodeRunId, s.id), eq(docVersions.decision, 'pending')))
-      for (const d of dvPending) {
-        await args.db
-          .update(docVersions)
-          .set({
-            decision: 'rejected',
-            decisionReason: 'invalidated by sibling reject (RFC-005 A2)',
-            decidedAt: Date.now(),
-            decidedBy: SYSTEM_DECIDER,
-          })
-          .where(eq(docVersions.id, d.id))
-      }
-      // RFC-053: sibling cascade can pull a sibling back from any prior
-      // state — typically awaiting_review, but also `done` if the sibling
-      // was already approved when reject hit. Use setNodeRunStatus with
-      // allowTerminal=true so the intentional "overwrite a terminal" is
-      // visible in code.
-      await setNodeRunStatus({
-        db: args.db,
-        nodeRunId: s.id,
-        to: 'pending',
-        allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
-        allowTerminal: true,
-        reason: 'review-sibling-cascade',
-        extra: { reviewIteration: s.reviewIteration + 1 },
-      })
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

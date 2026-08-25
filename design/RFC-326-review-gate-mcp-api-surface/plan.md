@@ -40,21 +40,76 @@
 
 > 任何一条既有锁测因本 RFC 而必须修改，都要在这里写明是哪条、原本锁什么、为什么不再成立——不得静默改测试。变异实证的还原用绝对路径 `cp` + `diff` 逐字核对（`docs/dev-gotchas.md`）。
 
-（待实现）
+### PR-A（2026-08-25，T1–T12）
+
+**既有锁测的改动（仅一条）**
+
+| 测试                                                                                                                      | 原本锁什么                                                                                             | 为什么不再成立                                                                                                                                                                                                                                                                                                                              | 改成什么                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/backend/tests/clarify-review-enqueue-distill.test.ts` › `source-code grep guard — review.ts enqueues distill …` | `review.ts` 里 `enqueueDistillJob(` **≥ 2** 处——approve 与 reject/iterate 各一个 return 分支各入队一次 | design §6.1 把决策路径改成「准备 / 外部效果 / 单事务 / 提交后」四段，approve 与 reject/iterate 共用**同一个**提交后段，于是只剩 1 个调用点；旧判据「≥ 2」对新形状必然红，而它真正想锁的「两条路径都入队」现在由 `rfc326-review-decision-transaction.test.ts` AC-17 用例用行为锁（三种决策各插一行 `memory_distill_jobs`，且在 COMMIT 之后） | 判据改为：**恰好 1** 个调用点，且位于 `submitReviewDecisionUnlocked` 的 `// ── after commit` 标记之后、函数结束之前（形状锁）；行为锁见上 |
+
+其余既有评审测试（`review-decision-full-asserts` / `review-multidoc*` / `review-iterate-*` / `review-refresh-supersede` / `review-cancel-concurrency` / `review-state-machine` / `reviews-*` 等 52 个文件 409 例）在重构后**未改一字**全绿——事务化重构的等价性证据。
+
+**新增测试**：`packages/shared/tests/text-occurrences.test.ts`、`packages/backend/tests/rfc326-review-anchor-domain.test.ts`、`rfc326-anchor-canonicalize.test.ts`、`rfc326-tx-primitives-equivalence.test.ts`、`rfc326-review-comment-simplified-anchor.test.ts`、`rfc326-review-decision-batch.test.ts`、`rfc326-review-decision-transaction.test.ts`；`review-schemas.test.ts` 追加 RFC-326 wire 契约一组。
+
+**守卫账本**：`rfc-index-status-drift.test.ts` 的 `AC_EVIDENCE_GAP['RFC-326-…']` 由 23（另一 session 于 abea42bef 登记的现状）改为 0——§4 验收表拆成每 AC 一行；PR-B 尚未落地的 AC 行以「PR-B」标注证据待填，行本身已存在。
+
+**实现门（Codex gpt-5.6-sol，read-only 沙箱，限定 PR-A 路径；2026-08-25）**：结论 NOT-CLEAN → 3 P1 / 4 P2，全部修复后限定套件与既有评审套件全绿；处置逐条：
+
+| #   | 档  | 发现                                                                                                                                       | 处置                                                                                                                                                                                                                                                                             |
+| --- | --- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | P1  | 扫描预算只按每次 resolve 扣 1× `body.length`，not-found 的大小写 / 空白折叠扫描（2× + 首次建索引 2×）未计费，64 MiB 上限约束不到真实工作量 | `chargeSuggestionScan`：建议扫描前按实际字符数扣（首次含索引构建），扣不起就返回 not-found **且不附建议**（消息注明），精确扫描扣不起才 `review-anchor-budget-exceeded`；`rfc326-review-anchor-domain` 新增两例：9.5× 定额的四步精确算术 + 默认上限下 200 次未命中不超 64 MiB    |
+| 2   | P1  | 列表项内缩进的 `#`（`- item\n  ## Nested`）被登记成全局标题（违反 AC-6），跨该行的引文误报 crosses-heading                                 | 线扫遇到「当前块是 list 且行以 ≥2 空格缩进」即视为列表项续行、不进 ATX 判定；列首 `#` 仍结束列表并开标题；新增用例                                                                                                                                                               |
+| 3   | P1  | 提交点用新鲜 owner / membership 算了 `resolveTaskRole` 却丢弃结果，`decidedByRole` 与批意见 `authorRole` 仍写路由排队前的快照              | `assertActingMember` / `assertDecisionAdmissible` 返回新鲜 `TaskActorRole`；事务第 0 步得到 `effectiveRole`（有 actor 取新鲜值，否则取调用方快照），统一写入 `review_comments.authorRole` 与 `doc_versions.decidedByRole`；新增 owner 转移竞态用例（归档为 `user` 而非 `owner`） |
+| 4   | P2  | `review-anchor-section-not-found` 收满 50 个章节后停止计数，返回 `total: 50, truncated: false`                                             | 另设不封顶的章节集合计数；`total` 为精确唯一章节数、`truncated` 如实；消息带「showing the first N」；新增 57 章节用例                                                                                                                                                            |
+| 5   | P2  | `updateTaskMembers` 锁外等 revalidation 后用本次的旧 `nextOwner` 拼当下成员行，可返回库中从未存在的混合状态                                | 响应快照在锁内、紧接提交后读取（`getTaskMembers`），锁外只做 revalidation 与广播；新增「A→B 提交后阻塞在 revalidation，B→C 期间落地」竞态用例，断言第一个响应仍是它自己那次提交的形态                                                                                            |
+| 6   | P2  | AC-17 事务计数 / 故障注入只用单文档夹具，看不出「第二篇归档被移出事务」                                                                    | `rfc326-review-decision-transaction` 新增多文档（两篇 inline）三种决策 + 批的单事务计数（两次归档都落在 BEGIN/COMMIT 之间）与「第一篇归档后注入失败 ⇒ 两篇都回到 pending、六面零写入、事件 0」                                                                                   |
+| 7   | P2  | 批决策测试比较 `commentsJson` 前 `.sort()`，抹掉了归档排序语义                                                                             | 改为按夹具真实偏移逐项断言顺序（`(anchorParagraphIdx, anchorOffsetStart)`）                                                                                                                                                                                                      |
+
+门还核对为正确的面：单 / 多文档 approve payload、`effectiveDvs`、iterate / reject 重铸与 `-rollback` / `rolledBack`、兄弟级联、归档清理、单事务无 `await`、WS 与蒸馏在提交后、§6.3 残留形态、策略 0 与偏移重写、shared schema 与两条写路由 + 413 四形态、`updateTaskMembers` 锁形状、`KERNEL_DIRECT_WRITES = 3` / s10 / 模块边界 / 路由契约 / `AC_EVIDENCE_GAP = 0`。修复后的复核并入 PR-B 的实现门（同一 session，显式要求复核这 7 条的处置）。
+
+**变异实证（design §13 末段八条中 PR-A 覆盖的五条；每条改动→跑→还原→`diff` 为空）**
+
+（PR-B 实现门前一并做）
 
 ## 4. 验收清单（对照 proposal §7）
 
-| AC                            | 证据（实现后填 文件:test 标题）                                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| AC-1…8                        | `packages/backend/tests/rfc326-review-anchor-domain.test.ts`                                                                      |
-| AC-9、10                      | `packages/backend/tests/rfc326-anchor-canonicalize.test.ts`                                                                       |
-| AC-11、12、13、16             | `packages/backend/tests/rfc326-review-comment-simplified-anchor.test.ts`                                                          |
-| AC-14、15                     | `packages/backend/tests/rfc326-review-decision-batch.test.ts`                                                                     |
-| AC-17、18、19、20             | `packages/backend/tests/rfc326-review-decision-transaction.test.ts`、`rfc326-tx-primitives-equivalence.test.ts`                   |
-| AC-21–25、27                  | `packages/backend/tests/rfc326-mcp-review-tools.test.ts`、`rfc247-token-audit.test.ts`                                            |
-| AC-23（反向）、31、34（grep） | `packages/backend/tests/architecture/rfc326-review-tool-route-guard.test.ts` + `guard-manifest.json` + `ledger-baselines.json`    |
-| AC-26                         | `packages/backend/tests/rfc247-api-docs.test.ts`                                                                                  |
-| AC-28、29                     | `packages/frontend/tests/rehype-wrap-anchors-offset.test.tsx`                                                                     |
-| AC-30、32                     | `e2e/rfc326-mcp-review-tools.spec.ts` + 两套账本 + `total` + 端点账本                                                             |
-| AC-33                         | `rfc317-module-boundary.test.ts`（沿用）                                                                                          |
-| AC-34（文档）、35             | RFC-247 plan 标注、`docs/dev-gotchas.md`、`docs/audit-backlog.md`；设计门记录（proposal §8）/ 实现门记录（本文件 §3）（人工证据） |
+> 每 AC 一行（`rfc-index-status-drift.test.ts` 只认每行第一个编号）。PR-A 行填的是已落地证据；标「PR-B」的行在 PR-B 落地时替换为 文件:test 标题。
+
+| AC    | 证据（文件:test 标题）                                                                                                 |
+| ----- | ---------------------------------------------------------------------------------------------------------------------- |
+| AC-1  | `packages/backend/tests/rfc326-review-anchor-domain.test.ts` › 唯一命中 / 整篇级 / 各块类 paragraphIdx                 |
+| AC-2  | `rfc326-review-anchor-domain.test.ts` › 歧义候选（全文序号、截断 + 精确 total）                                        |
+| AC-3  | `rfc326-review-anchor-domain.test.ts` › occurrence 校验（越界 / 1001 / 后部章节 section 命中）                         |
+| AC-4  | `rfc326-review-anchor-domain.test.ts` › section 三种错误 / not-found 结构化建议                                        |
+| AC-5  | `rfc326-review-anchor-domain.test.ts` › 跨标题 / 空文档 / 三种 warnings                                                |
+| AC-6  | `rfc326-review-anchor-domain.test.ts` › 围栏 / `~~~` / 未闭合 / ATX 变体 / `#######` / 引用块 / CRLF / 面包屑清层      |
+| AC-7  | `rfc326-review-anchor-domain.test.ts` › 上下文截断 / 文档级各形态                                                      |
+| AC-8  | `rfc326-review-anchor-domain.test.ts` › 1 MB 单字引文的截断与预算 / 同请求共用文档模型                                 |
+| AC-9  | `rfc326-anchor-canonicalize.test.ts` › server-resolved anchors are persisted verbatim                                  |
+| AC-10 | `rfc326-anchor-canonicalize.test.ts` › strategy 0 / F2 / offsets are corrected                                         |
+| AC-11 | `rfc326-review-comment-simplified-anchor.test.ts` › simplified anchors over REST / refusals / verified body limit      |
+| AC-12 | `rfc326-review-comment-simplified-anchor.test.ts` › quote → 201 … GET hands it back / warnings ride on the 201         |
+| AC-13 | `rfc326-review-comment-simplified-anchor.test.ts` › multi-document rounds name their document                          |
+| AC-14 | `rfc326-review-decision-batch.test.ts` › refusals write nothing (six surfaces + WS count) / POST decision with a batch |
+| AC-15 | `rfc326-review-decision-batch.test.ts` › batched iterate / selections[] + approved curate the round                    |
+| AC-16 | `rfc326-anchor-canonicalize.test.ts` › AC-16；`rfc326-review-comment-simplified-anchor.test.ts` › AC-16                |
+| AC-17 | `rfc326-review-decision-transaction.test.ts` › one transaction per decision / injected failures leave no trace         |
+| AC-18 | `rfc326-review-decision-transaction.test.ts` › injected failures leave no trace（事件 0）                              |
+| AC-19 | `rfc326-tx-primitives-equivalence.test.ts`                                                                             |
+| AC-20 | `rfc326-review-decision-transaction.test.ts` › membership changes and rollback-bearing decisions                       |
+| AC-21 | PR-B：`packages/backend/tests/rfc326-mcp-review-tools.test.ts`                                                         |
+| AC-22 | PR-B：`rfc326-mcp-review-tools.test.ts`                                                                                |
+| AC-23 | PR-B：`rfc326-mcp-review-tools.test.ts`；反向：`tests/architecture/rfc326-review-tool-route-guard.test.ts`             |
+| AC-24 | PR-B：`rfc326-mcp-review-tools.test.ts`                                                                                |
+| AC-25 | PR-B：`rfc326-mcp-review-tools.test.ts`、`rfc247-token-audit.test.ts`                                                  |
+| AC-26 | PR-B：`rfc247-api-docs.test.ts`                                                                                        |
+| AC-27 | PR-B：`rfc326-mcp-review-tools.test.ts`                                                                                |
+| AC-28 | PR-B：`packages/frontend/tests/rehype-wrap-anchors-offset.test.tsx`                                                    |
+| AC-29 | PR-B：`packages/frontend/tests/rehype-wrap-anchors-offset.test.tsx`                                                    |
+| AC-30 | PR-B：`e2e/rfc326-mcp-review-tools.spec.ts`                                                                            |
+| AC-31 | PR-B：`tests/architecture/rfc326-review-tool-route-guard.test.ts` + `guard-manifest.json` + `ledger-baselines.json`    |
+| AC-32 | PR-B：两套账本 + `total` + 端点账本                                                                                    |
+| AC-33 | `rfc317-module-boundary.test.ts`（沿用；PR-A 已过）                                                                    |
+| AC-34 | PR-B：RFC-247 plan 标注 + `tests/architecture/rfc326-review-tool-route-guard.test.ts` grep                             |
+| AC-35 | 设计门记录（proposal §8）/ 实现门记录（本文件 §3）（人工证据）                                                         |
