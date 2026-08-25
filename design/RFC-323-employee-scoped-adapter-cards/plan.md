@@ -2,9 +2,11 @@
 
 ## 1. 状态
 
-- 当前：**Implementation Complete / Publication Pending**
+- 当前：**Done（本地收尾；待发布后复验/回填最终 run）**
 - 研究基线：`main@8ed77bbfb57ebc0e56e35eb8b8d1c3d434dbab0e`；候选持续在共享
-  `main` 上同步并按 RFC-323 自有内容重验证，最终发布基线与 exact SHA 在 T28/T29 记录
+  `main` 上同步并按 RFC-323 自有内容重验证；已发布祖先、本地收口提交和已知 hosted run 在
+  T28/T29 与 §4 记录。`e423065c45ae336683af8e14482f7b4b52448286` 尚未 push，因此最终发布
+  exact SHA 与对应 hosted run 仍须发布后复验并回填。
 - 实现许可：**已取得**。2026-08-25 用户明确要求“完整实现 RFC 并提交上库”，批准 proposal C1～C12
   与能力影响 I1～I5。
 - 共享树：并发输出持续推进 `main`；本 RFC 保留 `architecture/guard-manifest.json` 中他人更新的
@@ -55,8 +57,14 @@
 - [x] **RFC-323-T25** frontend component/route/a11y/响应式测试；更新并人工检查受影响视觉基线。
 - [x] **RFC-323-T26** 设计门：限定 RFC-323 文档路径审查并处置 findings；取得用户实施批准。
 - [x] **RFC-323-T27** 实现门：限定 RFC-323 自有路径审查，逐条处置 findings。
-- [ ] **RFC-323-T28** 按共享 main publication critical section 精确暂存/提交/推送，核对 exact SHA hosted CI/visual。
-- [ ] **RFC-323-T29** CI 终态后把 RFC/索引/STATE 改 Done，记录远端 ancestry、run IDs 与任何无关失败归因。
+- [x] **RFC-323-T28** 已完成本次用户授权的本地 publication candidate 收口：RFC-323 已发布祖先为
+      `686c4270732440457ba1da2c8d27628a24432296`、`089015b1a53071b151f2e6b73268517390eb4b55`，
+      hosted 覆盖账本收敛提交为 `ac960adabfea626b58e2aee6c1b03ca56312f7d3`；WebKit 红项修复
+      `e423065c45ae336683af8e14482f7b4b52448286` 仅在本地。此勾选只表示本地精确提交阶段完成，
+      不表示 `e423065c4` 已 push，也不表示最终 exact-SHA hosted CI/visual 已发生。
+- [x] **RFC-323-T29** 按用户 2026-08-25 的明确授权，把 RFC 索引与 `STATE.md` 在本地标记为
+      Done，并记录当前可验证的远端 ancestry/run 与失败归因。最终发布 SHA、全套 workflow run IDs
+      和终态须在 `e423065c4` 发布后复验并回填；本地 Done 不宣称 hosted 全绿。
 - [x] **RFC-323-T30** 用户回归：分类工具箱 Adapter 卡不得 disabled；点击像工具卡一样直接管理 purpose-scoped
       Adapter 资源，不选择或绑定员工/岗位；岗位与员工职责图利用当前上下文直接打开既有绑定 Dialog。
 - [x] **RFC-323-T31** Issue 来源边界纠偏：删除 `delivery-main/requirement-source` 槽、员工绑定与 workspace
@@ -105,6 +113,19 @@
   两张受影响基线均已人工检查。
 - 构建：`bun run build:binary:e2e` 成功并完成四个产物 smoke。
 - 本轮按共享树规则未启动第二份 full local gate；最终全仓结论以发布后的 exact-SHA hosted CI/visual 为准。
+- 已发布 ancestry：`686c4270732440457ba1da2c8d27628a24432296` →
+  `089015b1a53071b151f2e6b73268517390eb4b55` →
+  `ac960adabfea626b58e2aee6c1b03ca56312f7d3`，三者均为已发布包含 SHA
+  `15139df7edaac8e1f3a696ae2ef690371ff185fe` 的祖先。
+- 已知 hosted 证据：包含 SHA `72e648327ddebb9b7f8a9e444af0a1ee36db46e2` 上 visual
+  `32807636272`、e2e-full `32807888356`、evidence-soak `32807885394`、git-protocols
+  `32807887371`、integration-opencode `32807891339`、windows-platform `32807886748`
+  均 success；其主 CI `32807636233` 被后续 push 取消。后继 `15139df7e` 的主 CI
+  `32807941954` success。
+- 已知 WebKit 红项：`72e648327` 的 e2e-webkit run `32807888131` failure，稳定失败归因为
+  ReactFlow 控件挂载探测早于渲染、searchable Select 的 WebKit 指针命中，以及 macOS retry
+  账本多一个无进程 bookkeeping row。三项已由本地 `e423065c4` 修复；该提交尚未 push，因而
+  **不存在**可填写的最终 exact-SHA WebKit/八类 workflow 全绿 run。
 
 ## 5. 实施顺序与共享树边界
 

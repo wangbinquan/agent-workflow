@@ -26,15 +26,19 @@
 > 📝 **待批 RFC（Draft，2026-08-25；三轮澄清完成，尚未取得实现许可，零生产改动）：[RFC-324 资源授权分档（只读 / 可编辑）](design/RFC-324-graded-resource-grants/proposal.md)**
 > —— 起于用户「想把工作流授权给别人用但不想让他改，现在没有好的权限设置方式」。**先证伪了「现在的授权都是可改授权」这个前提**：`resource_grants` 主键就是 `(type,id,user)`、没有任何档位列（`db/schema.ts:502-538`），写面一律 `requireResourceOwner`（`services/resourceAcl.ts:481-499`），后端的 grant **本来就是只读**。真正的缺口有两个：①前台从不表达档位，且详情页与工作流编辑器**没有只读态**——非 owner 打开就能随便拖改、第一次自动保存才吃 403 且文案是「可能已删除」（`docs/audit-backlog.md:108` 与 `:489-499` 两条早已登记）；②反过来**没有可编辑授权**，想让第二个人能改只能转移 owner 或把他升成 manager（拿全局 `resource-acl:bypass`，能改全站）。终态：grants 增 `level ∈ {read, write}`（存量全迁 read，零行为变化），ACL 判据升为四值 `ResourceAccess`，纯判据抽成零依赖模块；13 类资源写门按「内容写 / 治理写」分流（可编辑只覆盖内容，改名 / 删除 / 转移 / 授权仍 owner-only）；任务补 `observer` 纯观察者档；定时任务接入同一张 grants 表 + 新增 ACL 端点；前端补齐逐人档位、8 个详情页与编辑器只读态、403 文案分流。用户裁定：bypass 不动、public 仍只表示全员只读可用、只读者照常复制导出、执行面字段（MCP command/env 等）可编辑者可改且既有 `scripts:author` 字段门不变、发布类动作归可编辑、记忆管理随可编辑档。
 >
-> 🚧 **进行中 RFC（实现完成 / 待发布与 hosted CI）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
+> ✅ **已完成 RFC（Done，本地收尾；待发布后复验/回填最终 run，2026-08-25）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在
 > 最前方显示一张**非 WorkItem、不可调度**的紧凑配置卡（流水线、审批）。岗位模板提供默认 Adapter，具体数字员工可覆盖，员工发布
 > revision 冻结 exact Adapter revision，流水线采集与外部审批运行时消费同一冻结绑定。Issue provider 差异由
 > Integration 归一化为标准 `code-host.issue.*` 事件，经 Event Center 直接进入 WorkStart，不配置员工来源 Adapter。默认 Dialog 只显示
 > 继承/覆盖、连接选择与状态；资源创建/管理进入权限受控的二级 Dialog。旧 `/code/executors` 与
 > `/code/config/adapters[/<id>]` UI 退役并只保留重定向，Integration Adapter API/ACL/revision 保留。
-> 2026-08-25 用户已批准完整 RFC 并要求提交上库，并追加确认 Issue 全部走标准协议；当前候选已按该边界删除
-> `delivery-main/requirement-source` 卡与运行接线。当前只剩 shared-main 精确提交、推送与 exact-SHA hosted CI/visual 终态。
+> 2026-08-25 用户已批准完整 RFC 并要求提交上库，并追加确认 Issue 全部走标准协议；候选已按该边界删除
+> `delivery-main/requirement-source` 卡与运行接线。已发布祖先为 `686c42707` / `089015b1a` /
+> `ac960adab`；包含它们的 `15139df7e` 上主 CI `32807941954` success。包含 SHA `72e648327` 的
+> WebKit `32807888131` 有三类真实红项，已由本地提交 `e423065c4` 修复，但该提交尚未 push、尚无
+> final exact-SHA hosted 结果。按用户明确授权，本次只完成本地 Done 收尾；发布后仍须重跑全部可执行
+> workflow，并回填最终 SHA/run IDs，不在此冒充 hosted 全绿。
 
 > ✅ **已完成 RFC（Done，2026-08-25；含本笔的 superseding commit `817b54a7b` 上 CI 31/31 全绿）：[RFC-322 维护节奏错峰与停顿归因](design/RFC-322-maintenance-cadence-stagger/proposal.md)**
 > —— 起于生产「每隔一段时间全站冻结约 30 秒、随后自行恢复」。**先证伪了「慢查询」这个前提**：
