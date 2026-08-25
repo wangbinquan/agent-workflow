@@ -47,3 +47,16 @@ bf12afdcd6c5769aba60bcc01bd6dbae99835486:.gitleaksignore:generic-api-key:8
 a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:299
 a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:312
 a8e4d77daf7ffe4239f347fb67ee3706e3b7446d:e2e/repo-governance.spec.ts:gitlab-pat:393
+
+# RFC-319 B68（188dda22）/ B69（c85b252c）：e2e 夹具的**名字**撞 generic-api-key。
+# 五条全是给 createAgent / createWorkgroup 起的资源名——
+# `rfc319-cfg41-alice-secret-a` / `-b`、`rfc319-wg21-throwaway`、
+# `rfc319-wg22-bob-existing` / `-new`。规则是靠变量名（secret… / throwaway…）加
+# 熵值命中的，串本身没有任何凭据含义：它们只需要足够长且独特，好让「私有资源的
+# 名字不许漏进别人的页面」那类断言能精确定位。改当前文件消不掉——gitleaks detect
+# 扫的是全部历史，所以这里钉历史指纹（同 B12 那段的处置）。
+188dda224f4476ec8e3233155ea672efd1878dfa:e2e/rfc319-overview-and-docs.spec.ts:generic-api-key:390
+188dda224f4476ec8e3233155ea672efd1878dfa:e2e/rfc319-overview-and-docs.spec.ts:generic-api-key:391
+c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generic-api-key:889
+c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generic-api-key:908
+c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generic-api-key:909
