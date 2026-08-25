@@ -407,9 +407,26 @@ export class DigitalEmployeeAuthoringService {
     }
   }
 
+  /**
+   * The package **compiled into the running build** — the only one that can be
+   * authored or executed. Every other registered revision is frozen history:
+   * still readable (see the store-backed list queries below), never writable.
+   */
   #runtime(ref: EmployeeTypeRef): EmployeeTypeRuntimePackage {
     const runtime = this.#types.get(typeKey(ref))
     if (runtime === undefined) {
+      if (this.#store.getTypePackage(ref) !== null) {
+        const executable = [...this.#types.values()]
+          .map((candidate) => candidate.descriptor.typeRef)
+          .filter((candidate) => candidate.typeId === ref.typeId)
+          .map((candidate) => typeKey(candidate))
+        throw new ConflictError(
+          'employee-type-revision-not-executable',
+          `employee type revision is frozen history: ${typeKey(ref)} is still registered but this build executes ${
+            executable.length === 0 ? 'no revision of it' : executable.join(', ')
+          }`,
+        )
+      }
       throw new NotFoundError('employee-type-not-found', `employee type not found: ${typeKey(ref)}`)
     }
     return runtime
@@ -1705,7 +1722,9 @@ export class DigitalEmployeeAuthoringService {
   }
 
   listTools(typeRef: EmployeeTypeRef, workItemRef: string): ToolDraftRecord[] {
-    const item = findWorkItem(this.#runtime(typeRef).descriptor, workItemRef)
+    // Store-backed on purpose: a Case frozen on an older revision deep-links
+    // this panel, and listing rows needs the frozen descriptor, not a codec.
+    const item = findWorkItem(this.#descriptor(typeRef), workItemRef)
     if (item === null) {
       throw new NotFoundError('employee-work-item-not-found', `work item not found: ${workItemRef}`)
     }
@@ -2409,7 +2428,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   listJobTemplates(typeRef: EmployeeTypeRef): JobTemplateRecord[] {
-    this.#runtime(typeRef)
+    this.#descriptor(typeRef)
     return this.#store.listJobTemplates(typeRef)
   }
 
@@ -2613,7 +2632,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   listEmployeeDefinitions(typeRef?: EmployeeTypeRef): EmployeeDefinitionRecord[] {
-    if (typeRef !== undefined) this.#runtime(typeRef)
+    if (typeRef !== undefined) this.#descriptor(typeRef)
     return this.#store
       .listEmployeeDefinitions(typeRef)
       .filter((employee) => employee.currentRevision !== null)

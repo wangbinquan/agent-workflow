@@ -454,3 +454,226 @@ const unreachableExecutionContracts: ExecutionContractParticipant = {
     throw new Error('drift aborts before output validation')
   },
 }
+
+/**
+ * Regression (2026-08-25): the deep link a frozen EmployeeCase renders —
+ * `/digital-employees/development@8?view=jobs&jobTemplateId=…`, produced by
+ * `employee-cases.$caseId.tsx` and `TaskDigitalEmployeeSourceLink.tsx` from the
+ * Case's pinned typeRef — answered 200 for the type header and the
+ * responsibility map (both store-backed) yet 404
+ * `employee type not found: development@8` for every panel on that page.
+ *
+ * `listTools` / `listJobTemplates` / `listEmployeeDefinitions` gated on
+ * `#types`, the in-memory registry holding only the package **compiled into the
+ * running build**, so each revision bump orphaned the rows of every older
+ * revision even though `employee_type_packages` still carries them. Reading
+ * frozen rows needs no runtime codec — only authoring and execution do.
+ */
+describe('frozen employee type revisions', () => {
+  const historicalDescriptor = () => {
+    const historical = structuredClone(descriptor)
+    historical.typeRef.revision = descriptor.typeRef.revision - 1
+    return historical
+  }
+
+  function seedFrozenRevision(store: ReturnType<typeof newStore>) {
+    const historical = historicalDescriptor()
+    const historicalRef = historical.typeRef
+    store.ensureTypePackage({
+      descriptor: historical,
+      descriptorDigest: packageDigest(historical),
+      state: 'published',
+      registeredAt: 900,
+    })
+
+    const workItem = historical.authoringManifest.workItems[0]
+    if (workItem === undefined) throw new Error('missing work item fixture')
+    const roleGroup = workItem.toolRoleGroups[0]
+    if (roleGroup === undefined) throw new Error('missing tool role fixture')
+    const workContractRef = roleGroup.workContractRef ?? workItem.workContractRef
+
+    store.createTool({
+      id: 'frozen-tool',
+      typeRef: historicalRef,
+      workItemRef: workItem.workItemRef,
+      content: {
+        schemaVersion: 1,
+        typeRef: historicalRef,
+        workItemRef: workItem.workItemRef,
+        workContractRef,
+        roleRef: roleGroup.roleRef,
+        displayName: 'Frozen tool',
+        description: '',
+        implementation: { kind: 'agent', agentRef: { id: 'frozen-agent', revision: 1 } },
+        connectionRef: null,
+      },
+      validationReceipt: {
+        schemaVersion: 1,
+        status: 'valid',
+        contractRef: workContractRef,
+        implementationDigest: '0'.repeat(64),
+        checks: [{ code: 'frozen', ok: true, detail: 'seeded' }],
+        checkedAt: 900,
+        receiptDigest: '1'.repeat(64),
+      },
+      publishedRevision: null,
+      ownerUserId: null,
+      createdAt: 900,
+      updatedAt: 900,
+      retiredAt: null,
+    })
+
+    const jobDraft = {
+      schemaVersion: 1 as const,
+      typeRef: historicalRef,
+      description: '',
+      defaultToolBindings: [],
+      defaultAdapterBindings: [],
+      defaultCollaborationBindings: [],
+      orderedDispatchConfigurations: [],
+      reactionLaneOrder: [],
+    }
+    store.createJobTemplate({
+      id: 'frozen-job',
+      typeRef: historicalRef,
+      name: 'Frozen job template',
+      draft: jobDraft,
+      publishedRevision: 1,
+      ownerUserId: null,
+      createdAt: 900,
+      updatedAt: 900,
+      archivedAt: null,
+    })
+    store.publishJobTemplate({
+      ref: { id: 'frozen-job', revision: 1 },
+      content: jobDraft,
+      contentDigest: '2'.repeat(64),
+      publishedAt: 900,
+      publishedBy: null,
+    })
+
+    const configuration = {
+      schemaVersion: 1 as const,
+      typeRef: historicalRef,
+      jobTemplateRef: { id: 'frozen-job', revision: 1 },
+      displayName: 'Frozen employee',
+      workScope: {},
+      toolOverrides: [],
+      adapterOverrides: [],
+      collaborationOverrides: [],
+    }
+    store.saveEmployeeDefinition({
+      revision: {
+        ref: { id: 'frozen-employee', revision: 1 },
+        content: {
+          schemaVersion: 1,
+          typeRef: historicalRef,
+          jobTemplateRef: { id: 'frozen-job', revision: 1 },
+          displayName: 'Frozen employee',
+          workScopeRef: { id: 'frozen-scope', revision: 1 },
+          workScopeSummary: 'frozen scope',
+          exactToolBindings: [],
+          exactAdapterBindings: [],
+          exactCollaborationBindings: [],
+          exactOrderedDispatchConfigurations: [],
+          exactReactionLaneOrder: [],
+          enabledWorkItemRefs: [],
+          compiledClosureDigest: '3'.repeat(64),
+        },
+        contentDigest: '4'.repeat(64),
+        createdAt: 900,
+        createdBy: null,
+      },
+      workScope: {
+        ref: { id: 'frozen-scope', revision: 1 },
+        typeRef: historicalRef,
+        encodedScope: {},
+        displaySummary: 'frozen scope',
+        contentDigest: '5'.repeat(64),
+        createdAt: 900,
+        createdBy: null,
+      },
+      definitionMutation: {
+        kind: 'create',
+        record: {
+          id: 'frozen-employee',
+          name: 'Frozen employee',
+          typeRef: historicalRef,
+          configuration,
+          currentRevision: 1,
+          ownerUserId: null,
+          visibility: 'private',
+          createdAt: 900,
+          updatedAt: 900,
+          archivedAt: null,
+        },
+      },
+    })
+
+    return { historicalRef, workItemRef: workItem.workItemRef }
+  }
+
+  function serviceOver(store: ReturnType<typeof newStore>) {
+    return new DigitalEmployeeAuthoringService({
+      store,
+      typePackages: [runtimePackage()],
+      connectionCatalog: stubConnectionCatalog,
+      programArtifacts: stubProgramArtifacts,
+      executionContracts: unreachableExecutionContracts,
+      now: () => 2_000,
+    })
+  }
+
+  test('the panels of a frozen revision read back its own rows', () => {
+    const store = newStore()
+    const { historicalRef, workItemRef } = seedFrozenRevision(store)
+    const service = serviceOver(store)
+
+    expect(service.listJobTemplates(historicalRef).map((job) => job.id)).toEqual(['frozen-job'])
+    expect(
+      service
+        .listTools(historicalRef, workItemRef)
+        .filter((tool) => tool.origin !== 'platform')
+        .map((tool) => tool.id),
+    ).toEqual(['frozen-tool'])
+    expect(service.listEmployeeDefinitions(historicalRef).map((employee) => employee.id)).toEqual([
+      'frozen-employee',
+    ])
+    // The executable revision keeps answering for its own (empty) rows.
+    expect(service.listJobTemplates(descriptor.typeRef)).toEqual([])
+  })
+
+  test('a type revision this build never compiled is still an ordinary 404', () => {
+    const store = newStore()
+    seedFrozenRevision(store)
+    const service = serviceOver(store)
+    const unknown = { typeId: descriptor.typeRef.typeId, revision: 9_999 }
+
+    expect(() => service.listJobTemplates(unknown)).toThrow(
+      `employee type not found: ${unknown.typeId}@${unknown.revision}`,
+    )
+  })
+
+  test('authoring on a frozen revision names the revision this build executes', () => {
+    // Refusing the write is correct — a superseded revision must not grow new
+    // job templates. Saying "not found" about a revision the read APIs answer
+    // for is what made the failure unreadable.
+    const store = newStore()
+    const { historicalRef } = seedFrozenRevision(store)
+    const service = serviceOver(store)
+
+    const error = (() => {
+      try {
+        service.createJobTemplate({ typeRef: historicalRef, body: {}, ownerUserId: null })
+      } catch (caught) {
+        expect(caught).toBeInstanceOf(DomainError)
+        return caught as DomainError
+      }
+      throw new Error('expected a frozen-revision refusal')
+    })()
+
+    expect(error.code).toBe('employee-type-revision-not-executable')
+    expect(error.message).toContain(`${historicalRef.typeId}@${historicalRef.revision}`)
+    expect(error.message).toContain(`${descriptor.typeRef.typeId}@${descriptor.typeRef.revision}`)
+  })
+})

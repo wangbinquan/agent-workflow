@@ -23,6 +23,7 @@ import {
   effectiveReactionPriority,
   employeeTypePackageDescriptorSchema,
   mergeExactAdapterBindings,
+  packageDigest,
   reactionLaneIds,
   type LaneAdapterBinding,
   validateTypePackage,
@@ -667,6 +668,81 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       { method: 'POST', headers: authorization, body: '{}' },
     )
     expect(removedEmployeeUpgrade.status).toBe(404)
+  })
+
+  test('HTTP serves a frozen type revision read-only and refuses to author on it', async () => {
+    // Regression (2026-08-25): `/digital-employees/development@8?view=jobs` —
+    // the deep link an EmployeeCase pinned to an older revision renders — showed
+    // `employee type not found: development@8` on every panel of the page. The
+    // type header and the responsibility map answered 200 from the store while
+    // the job / tool / employee lists gated on the package compiled into the
+    // **running build**, so a revision bump orphaned rows that are still there.
+    const db = createInMemoryDb(MIGRATIONS)
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-frozen-type-revision-'))
+    roots.push(appHome)
+    const app = createApp({
+      token: 'a'.repeat(64),
+      configPath: join(appHome, 'config.json'),
+      appHome,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db,
+    })
+    const admin = await createUser(db, {
+      username: 'frozen-revision-admin',
+      displayName: 'Frozen Revision Admin',
+      role: 'admin',
+      password: 'longEnoughPassword',
+    })
+    const session = await createSession({ db, userId: admin.id })
+    const authorization = { Authorization: `Bearer ${session.token}` }
+
+    const current = employeeTypePackageDescriptorSchema.parse(
+      JSON.parse(developmentEmployeeTypePackage.descriptorJson) as unknown,
+    )
+    const frozen = structuredClone(current)
+    frozen.typeRef.revision = current.typeRef.revision - 1
+    db.insert(employeeTypePackages)
+      .values({
+        typeId: frozen.typeRef.typeId,
+        revision: frozen.typeRef.revision,
+        descriptorJson: JSON.stringify(frozen),
+        descriptorDigest: packageDigest(frozen),
+        state: 'published',
+        registeredAt: 900,
+      })
+      .run()
+
+    const frozenRef = `${frozen.typeRef.typeId}@${frozen.typeRef.revision}`
+    const workItemRef = frozen.authoringManifest.workItems[0]?.workItemRef
+    expect(workItemRef).toBeString()
+    const paths = [
+      `/api/digital-employee-types/${encodeURIComponent(frozenRef)}`,
+      `/api/digital-employee-types/${encodeURIComponent(frozenRef)}/authoring-manifest`,
+      `/api/digital-employee-types/${encodeURIComponent(frozenRef)}/job-templates`,
+      `/api/digital-employee-types/${encodeURIComponent(frozenRef)}/employees`,
+      `/api/digital-employee-types/${encodeURIComponent(frozenRef)}/work-items/${encodeURIComponent(workItemRef ?? '')}/tools`,
+    ]
+    const statuses = await Promise.all(
+      paths.map(async (path) => [
+        path,
+        (await app.request(path, { headers: authorization })).status,
+      ]),
+    )
+    expect(statuses).toEqual(paths.map((path) => [path, 200]))
+
+    // Refusing the write is correct — a superseded revision must not grow new
+    // job templates — but it has to say so instead of claiming the revision the
+    // reads above just served does not exist.
+    const authored = await app.request(
+      `/api/digital-employee-types/${encodeURIComponent(frozenRef)}/job-templates`,
+      { method: 'POST', headers: authorization, body: JSON.stringify({ name: 'nope' }) },
+    )
+    expect(authored.status).toBe(409)
+    const refusal = (await authored.json()) as { code: string; message: string }
+    expect(refusal.code).toBe('employee-type-revision-not-executable')
+    expect(refusal.message).toContain(frozenRef)
+    expect(refusal.message).toContain(`${current.typeRef.typeId}@${current.typeRef.revision}`)
   })
 
   test('pure migrations stay resource-empty and daemon seeding installs Agent templates once', async () => {
