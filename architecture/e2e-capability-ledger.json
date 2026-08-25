@@ -6617,8 +6617,17 @@
       "title": "工作组 ACL 面板（可见性切换 public/private + 逐用户授权）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-acl.spec.ts",
+          "test": "WG-19a ACL 面板的可见性开关：public→private→public 双向生效，非 owner 的面板全程只读"
+        },
+        {
+          "file": "e2e/rfc319-workgroup-acl.spec.ts",
+          "test": "WG-19b ACL 面板的逐用户授权：私有工作组加一个人，服务端名单与对方的可见性同时变"
+        }
+      ]
     },
     {
       "id": "WG-20",
@@ -6626,8 +6635,13 @@
       "title": "私有工作组对无关用户完全不可见（列表过滤 + 详情 404 与不存在同形）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-acl.spec.ts",
+          "test": "WG-20 私有工作组对无关用户完全不可见：列表过滤 + 详情/ACL/写面与「不存在」逐字节同形"
+        }
+      ]
     },
     {
       "id": "WG-21",
@@ -6635,8 +6649,13 @@
       "title": "非 owner 的写操作被拒（PUT / DELETE / rename → 403）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-acl.spec.ts",
+          "test": "WG-21 非 owner 看得见但改不动：PUT / DELETE / rename / 改权限全 403，同样几条对 owner 是通的"
+        }
+      ]
     },
     {
       "id": "WG-22",
@@ -6644,8 +6663,13 @@
       "title": "新增成员引用不可见的私有 agent → 422 acl-missing-refs（存量引用豁免）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-acl.spec.ts",
+          "test": "WG-22 新增成员引用不可见的私有代理 → 422 acl-missing-refs；存量引用豁免，可见引用照常加得上"
+        }
+      ]
     },
     {
       "id": "WG-24",
@@ -6761,8 +6785,13 @@
       "title": "【补漏】用 Intent Builder 创建 / 修改工作组（列表头 workgroups-intent-entry、详情 More 里的 workgroup-intent-entry → /intent?create&mountType=workgroup&mountId=…）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-acl.spec.ts",
+          "test": "WG-X1 意图构建器入口：有 intent:write 时列表/详情各挂一个且导航参数正确，没有时整体不挂载"
+        }
+      ]
     },
     {
       "id": "WG-X3",
@@ -9435,10 +9464,6 @@
     "WG-06",
     "WG-09",
     "WG-15",
-    "WG-19",
-    "WG-20",
-    "WG-21",
-    "WG-22",
     "WG-24",
     "WG-27",
     "WG-28",
@@ -9460,7 +9485,6 @@
     "WG-44",
     "WG-45",
     "WG-46",
-    "WG-X1",
     "WG-X2",
     "WG-X3",
     "WG-X4",

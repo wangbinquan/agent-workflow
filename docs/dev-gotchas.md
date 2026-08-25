@@ -2356,16 +2356,34 @@ session 的在制品躺在工作树里（实撞当天 58 个 ` M` + 若干未追
 ```
 SANDBOX=$(mktemp -d)
 git archive origin/main | tar -x -C "$SANDBOX"
-ln -s "$PWD/node_modules" "$SANDBOX/node_modules"
-for d in packages/backend packages/frontend packages/shared packages/system-mocks; do
-  ln -s "$PWD/$d/node_modules" "$SANDBOX/$d/node_modules"
-done
+(cd "$SANDBOX" && bun install --frozen-lockfile)   # ← 必须；理由见下一段
 (cd "$SANDBOX" && bun run build:binary:e2e)
 AGENT_WORKFLOW_E2E_BINARY="$SANDBOX/dist/agent-workflow-e2e-<plat>-<arch>" bunx playwright test <spec…>
 ```
 
 `git archive` 解出来的是一棵**普通目录**，不是 `git worktree`，不触犯本仓「禁开发用 worktree」那条硬规则：
-它没有分支、不接收提交、只读用于构建。node_modules 用软链复用，省掉一次全量安装。
+它没有分支、不接收提交、只读用于构建。
+
+**沙箱的 `node_modules` 绝不能软链回主仓——那会把「干净」当场作废（2026-08-25 实撞，本节配方的第一版就是错的）。**
+本仓是 bun workspaces：`packages/*/node_modules/@agent-workflow/*` 是指向**同棵树内** `packages/<name>` 的
+workspace 链接。把主仓的 `node_modules` 软链进沙箱，这些链接就会**经软链解析回主仓**，于是沙箱编出来的二进制
+是个杂交体——`packages/backend` / `packages/frontend` 是 `origin/main` 的源码，`@agent-workflow/shared`
+却是**脏工作树**的。这一层比上面那两个坑更阴，因为 `git status` 干净的目录看起来无可指摘。
+
+实撞的具体形态：当天脏树里躺着别人 RFC-324 改过的 `packages/shared/src/schemas/resourceAcl.ts`，于是那个
+「干净」二进制上 `PUT /resources/:type/:id/acl` 用 `{userIds:[…]}` 被 RFC-324 的 zod 判 **422**、用
+`{grants:[…]}` 回 **200 且 `aclRevision` 前进**、但回读 `users` **恒为空**——**「给资源授权」整体是一次静默
+no-op**。任何「先授权、再验证对方看得见」的用例在它上面要么红、要么假绿，且从测试侧无法绕过。软链的另一个
+附带风险同样致命：在软链进去的沙箱里跑 `bun install`，会**写穿软链**改到主仓的 `node_modules`。
+
+判据（跑之前花两秒确认，比事后归因便宜得多）：
+
+```
+R=$(readlink -f "$SANDBOX/packages/backend/node_modules/@agent-workflow/shared")
+case "$R" in "$SANDBOX"/*) echo "✅ 在沙箱内";; *) echo "❌ 逃出沙箱，重来";; esac
+```
+
+省下的那次 `bun install` 不值这个风险——有全局缓存兜着，实测 **991ms / 1546 个包**。
 
 **并行跑用例时还有一层**：多个 agent / session 同时跑 e2e 会争 `dist/` 这一个共享产物——一边在 rebuild、
 另一边跑的就是半截构建。把干净构建**复制一份钉住**，各自 `AGENT_WORKFLOW_E2E_BINARY` 指过去即可；但要记住
