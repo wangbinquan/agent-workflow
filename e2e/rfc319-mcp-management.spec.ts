@@ -821,7 +821,15 @@ test('RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partia
 // RES-21（续）—— 60 秒总时限那一档
 // ---------------------------------------------------------------------------
 
-test('RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败', async ({ page }) => {
+// **为什么这一条打 `@nightly`（风险是 P2，档位却在夜跑）**：它的判据本身要求真等满
+// `HARD_TOTAL_TIMEOUT_MS = 60_000`（services/mcpProbe.ts:52）——per-MCP 的 `timeoutMs` 永远
+// 到不了这个天花板（握手超时的文案会先被 :394 判成 handshake-failed），所以「撞上总时限」
+// 这件事没有任何测试技巧能缩短，除非改生产代码给天花板加旋钮，而本 RFC 是零生产改动。
+// 把它放进 PR 腿等于给每一次提交加一分多钟，换不来更早的反馈：这一档的分类逻辑是纯常量比较，
+// 不是会被日常改动碰坏的东西。同域先例见 e2e/scheduled-task-firing.spec.ts:81 的同类取舍。
+test('RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败 @nightly', async ({
+  page,
+}) => {
   // 单次调用超时故意配得比 60s 天花板还长（services/mcpProbe.ts:52），
   // 于是先触发的必然是**总时限**——这是 timeout 这一档唯一的真实来源。
   const mcp = await seedLocalMcp({

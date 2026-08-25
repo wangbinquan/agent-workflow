@@ -5610,7 +5610,7 @@
     {
       "id": "RES-21",
       "domain": "技能 / 插件 / MCP 三类资源管理",
-      "title": "探测失败的错误码与详情渲染（connect-failed / auth-required / timeout / partial）",
+      "title": "探测失败的错误码渲染（connect-failed / handshake-failed / auth-required / partial；60 秒总时限那一档见 RES-21b）",
       "risk": "P2",
       "tier": "pr",
       "status": "covered",
@@ -5618,10 +5618,20 @@
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
           "test": "RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partial 各自渲染自己的错误码与详情"
-        },
+        }
+      ]
+    },
+    {
+      "id": "RES-21b",
+      "domain": "技能 / 插件 / MCP 三类资源管理",
+      "title": "【拆自 RES-21】探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败",
+      "risk": "P2",
+      "tier": "nightly",
+      "status": "covered",
+      "evidence": [
         {
           "file": "e2e/rfc319-mcp-management.spec.ts",
-          "test": "RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败"
+          "test": "RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败 @nightly"
         }
       ]
     },
