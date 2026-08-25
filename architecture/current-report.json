@@ -1,0 +1,255 @@
+{
+  "kind": "current-architecture-report",
+  "manifestDenominators": {
+    "ambientWiring": 437,
+    "architectureExceptions": 839,
+    "backgroundJobs": 180,
+    "crossContextImports": 859,
+    "facades": 366,
+    "governedFieldSurfaces": 5,
+    "moduleSymbolOwners": 17083,
+    "mutationEntrypoints": 842,
+    "nodeRunInsertSites": 2,
+    "publicSurfaces": 235,
+    "transactionExternalEffects": 231
+  },
+  "metrics": {
+    "ambientWiringEntries": 437,
+    "appDepsConsumers": [
+      "packages/backend/src/mcp/dispatch.ts",
+      "packages/backend/src/mcp/server.ts",
+      "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
+      "packages/backend/src/routes/agents.ts",
+      "packages/backend/src/routes/auth.ts",
+      "packages/backend/src/routes/backup.ts",
+      "packages/backend/src/routes/cached-repos.ts",
+      "packages/backend/src/routes/capabilityTemplates.ts",
+      "packages/backend/src/routes/clarify.ts",
+      "packages/backend/src/routes/code.ts",
+      "packages/backend/src/routes/codeHosts.ts",
+      "packages/backend/src/routes/config.ts",
+      "packages/backend/src/routes/daemon.ts",
+      "packages/backend/src/routes/developmentConfig.ts",
+      "packages/backend/src/routes/developmentMissions.ts",
+      "packages/backend/src/routes/digitalEmployees.ts",
+      "packages/backend/src/routes/docs.ts",
+      "packages/backend/src/routes/fusions.ts",
+      "packages/backend/src/routes/health.ts",
+      "packages/backend/src/routes/intentSessions.ts",
+      "packages/backend/src/routes/maintenanceDisk.ts",
+      "packages/backend/src/routes/mcps.ts",
+      "packages/backend/src/routes/memories.ts",
+      "packages/backend/src/routes/memoryDistillJobs.ts",
+      "packages/backend/src/routes/missionInputUploads.ts",
+      "packages/backend/src/routes/oidc-auth.ts",
+      "packages/backend/src/routes/oidc.ts",
+      "packages/backend/src/routes/overview.ts",
+      "packages/backend/src/routes/plantuml.ts",
+      "packages/backend/src/routes/plugins.ts",
+      "packages/backend/src/routes/port-artifacts.ts",
+      "packages/backend/src/routes/repoGroups.ts",
+      "packages/backend/src/routes/repos.ts",
+      "packages/backend/src/routes/resourceAcl.ts",
+      "packages/backend/src/routes/restore.ts",
+      "packages/backend/src/routes/reviews.ts",
+      "packages/backend/src/routes/runtime.ts",
+      "packages/backend/src/routes/runtimes.ts",
+      "packages/backend/src/routes/scheduledTasks.ts",
+      "packages/backend/src/routes/skills.ts",
+      "packages/backend/src/routes/taskArchive.ts",
+      "packages/backend/src/routes/taskClarifyDirective.ts",
+      "packages/backend/src/routes/taskFeedback.ts",
+      "packages/backend/src/routes/taskQuestions.ts",
+      "packages/backend/src/routes/tasks.ts",
+      "packages/backend/src/routes/users.ts",
+      "packages/backend/src/routes/webhookDeliveries.ts",
+      "packages/backend/src/routes/webhookEndpoints.ts",
+      "packages/backend/src/routes/webhookTriggers.ts",
+      "packages/backend/src/routes/webhooks.ts",
+      "packages/backend/src/routes/workflows.ts",
+      "packages/backend/src/routes/workgroupTasks.ts",
+      "packages/backend/src/routes/workgroups.ts",
+      "packages/backend/src/routes/worktree-files.ts"
+    ],
+    "backendProductionFiles": 810,
+    "backendValueSccs": [
+      [
+        "packages/backend/src/mcp/dispatch.ts",
+        "packages/backend/src/mcp/server.ts",
+        "packages/backend/src/server.ts"
+      ],
+      [
+        "packages/backend/src/services/agent.ts",
+        "packages/backend/src/services/agentDeps.ts",
+        "packages/backend/src/services/agentResourceIntegrity.ts"
+      ],
+      [
+        "packages/backend/src/services/agentLaunch.ts",
+        "packages/backend/src/services/execution/executor.ts",
+        "packages/backend/src/services/execution/outcome.ts",
+        "packages/backend/src/services/gc.ts",
+        "packages/backend/src/services/scheduler.ts",
+        "packages/backend/src/services/structuralDiff/callGraph/expandService.ts",
+        "packages/backend/src/services/task.ts",
+        "packages/backend/src/services/workgroup/launch.ts"
+      ],
+      [
+        "packages/backend/src/services/gitRepoCache.ts",
+        "packages/backend/src/services/gitSubmodule.ts",
+        "packages/backend/src/services/gitVersion.ts",
+        "packages/backend/src/services/repoGroup.ts",
+        "packages/backend/src/util/git.ts"
+      ],
+      [
+        "packages/backend/src/services/workflow.ts",
+        "packages/backend/src/services/workflow.validator.ts"
+      ]
+    ],
+    "backgroundEntries": 180,
+    "directNativeIntervalFiles": [
+      "packages/backend/src/cli/start.ts",
+      "packages/backend/src/modules/digital-employee/application/osWorker.ts",
+      "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
+      "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
+      "packages/backend/src/services/autoKill.ts",
+      "packages/backend/src/services/autoRepair.ts",
+      "packages/backend/src/services/backupScheduler.ts",
+      "packages/backend/src/services/execution/childBudget.ts",
+      "packages/backend/src/services/execution/executionWatch.ts",
+      "packages/backend/src/services/fusion.ts",
+      "packages/backend/src/services/limits.ts",
+      "packages/backend/src/services/maintenanceTicker.ts",
+      "packages/backend/src/services/mcpRuntimeTest.ts",
+      "packages/backend/src/services/memoryDistillScheduler.ts",
+      "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
+      "packages/backend/src/services/scheduledTaskScheduler.ts",
+      "packages/backend/src/services/scheduler.ts",
+      "packages/backend/src/services/stuckTaskDetector.ts"
+    ],
+    "directNativeIntervals": 19,
+    "directNativeTimers": 56,
+    "inboundBoundaryEdges": 94,
+    "knownViolations": 37,
+    "moduleContexts": [
+      {
+        "context": "code-capability",
+        "files": 19
+      },
+      {
+        "context": "collaboration",
+        "files": 3
+      },
+      {
+        "context": "development-automation",
+        "files": 113
+      },
+      {
+        "context": "digital-employee",
+        "files": 23
+      },
+      {
+        "context": "event-center",
+        "files": 20
+      },
+      {
+        "context": "execution-contract",
+        "files": 7
+      },
+      {
+        "context": "identity-access",
+        "files": 33
+      },
+      {
+        "context": "integration",
+        "files": 31
+      },
+      {
+        "context": "intent",
+        "files": 1
+      },
+      {
+        "context": "source-control",
+        "files": 22
+      },
+      {
+        "context": "task-catalog",
+        "files": 4
+      },
+      {
+        "context": "task-execution",
+        "files": 24
+      }
+    ],
+    "moduleFiles": 300,
+    "nodeRunInsertSites": [
+      {
+        "file": "packages/backend/src/services/nodeRunMint.ts",
+        "guard": "rfc098-node-run-mint-grep-guard",
+        "id": "node-runs-insert:packages/backend/src/services/nodeRunMint.ts#281",
+        "line": 281,
+        "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#mintNodeRunTx",
+        "removeAfterWave": null,
+        "status": "canonical-writer",
+        "symbol": "mintNodeRunTx"
+      },
+      {
+        "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+        "guard": "rfc098-node-run-mint-grep-guard",
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1009",
+        "line": 1009,
+        "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
+        "removeAfterWave": "W2/W7",
+        "status": "reviewed-dispatch-exception",
+        "symbol": "commitDispatchPlan"
+      }
+    ],
+    "outboundBoundaryEdges": 23,
+    "repoValueSccs": [
+      [
+        "packages/backend/src/mcp/dispatch.ts",
+        "packages/backend/src/mcp/server.ts",
+        "packages/backend/src/server.ts"
+      ],
+      [
+        "packages/backend/src/services/agent.ts",
+        "packages/backend/src/services/agentDeps.ts",
+        "packages/backend/src/services/agentResourceIntegrity.ts"
+      ],
+      [
+        "packages/backend/src/services/agentLaunch.ts",
+        "packages/backend/src/services/execution/executor.ts",
+        "packages/backend/src/services/execution/outcome.ts",
+        "packages/backend/src/services/gc.ts",
+        "packages/backend/src/services/scheduler.ts",
+        "packages/backend/src/services/structuralDiff/callGraph/expandService.ts",
+        "packages/backend/src/services/task.ts",
+        "packages/backend/src/services/workgroup/launch.ts"
+      ],
+      [
+        "packages/backend/src/services/gitRepoCache.ts",
+        "packages/backend/src/services/gitSubmodule.ts",
+        "packages/backend/src/services/gitVersion.ts",
+        "packages/backend/src/services/repoGroup.ts",
+        "packages/backend/src/util/git.ts"
+      ],
+      [
+        "packages/backend/src/services/workflow.ts",
+        "packages/backend/src/services/workflow.validator.ts"
+      ],
+      [
+        "packages/frontend/src/components/node-session/ConversationFlow.tsx",
+        "packages/frontend/src/components/node-session/SubagentBlock.tsx"
+      ],
+      [
+        "packages/shared/src/outputKinds/list.ts",
+        "packages/shared/src/outputKinds/registry.ts"
+      ]
+    ],
+    "routeToDbEdges": 15,
+    "serviceFiles": 366,
+    "transportToDbEdges": 2,
+    "unresolvedFirstParty": []
+  },
+  "schemaVersion": 1,
+  "sourceDigest": "sha256:576da9dfeb545e887eb8fb830327356c137668291123252776709e1f9c50cf43"
+}

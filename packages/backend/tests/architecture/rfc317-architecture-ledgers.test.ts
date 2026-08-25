@@ -64,11 +64,17 @@ interface GuardEntry {
   readonly mechanism: 'ast' | 'behaviour' | 'source-text'
 }
 
+interface ManifestProvenance {
+  readonly originSha: string
+  readonly currentSnapshotSha: string
+  readonly contentDigest: string
+}
+
 function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(resolve(REPO_ROOT, relativePath), 'utf8')) as T
 }
 
-const commons = readJson<{ kernels: CommonsKernel[]; recordedAtSha?: string }>(
+const commons = readJson<{ kernels: CommonsKernel[]; provenance?: ManifestProvenance }>(
   'architecture/commons-manifest.json',
 )
 const debt = readJson<{
@@ -76,12 +82,12 @@ const debt = readJson<{
     inboundEdges: number
     outboundEdges: number
     registeredFindings: number
-    recordedAtSha?: string
   }
   entries: DebtEntry[]
   registeredFindings: RegisteredFinding[]
+  provenance?: ManifestProvenance
 }>('architecture/commons-debt.json')
-const guardManifest = readJson<{ guards: GuardEntry[]; recordedAtSha?: string }>(
+const guardManifest = readJson<{ guards: GuardEntry[]; provenance?: ManifestProvenance }>(
   'architecture/guard-manifest.json',
 )
 
@@ -224,12 +230,12 @@ describe('RFC-317 — 账本的采数 SHA 必须可复算', () => {
   }
   const shallow = git('rev-parse', '--is-shallow-repository').out === 'true'
   const shas = [
-    commons.recordedAtSha,
-    guardManifest.recordedAtSha,
-    debt.baseline.recordedAtSha,
+    commons.provenance?.currentSnapshotSha,
+    guardManifest.provenance?.currentSnapshotSha,
+    debt.provenance?.currentSnapshotSha,
   ].filter((sha): sha is string => typeof sha === 'string' && sha.length > 0)
 
-  test('三份账本都记了采数 SHA', () => {
+  test('三份 RFC-317 subset 账本都记了 current snapshot SHA', () => {
     expect(shas.length).toBe(3)
   })
 

@@ -11,11 +11,11 @@
     "dev": "bun run --filter '*' dev",
     "build": "bun run --filter '*' build",
     "lint": "bun run --filter '*' lint && bun run lint:repo-ui",
-    "lint:repo-ui": "eslint playwright.config.ts \"e2e/**/*.ts\" scripts/local-gate.ts scripts/test-backend-sharded.ts --max-warnings=0 --cache --cache-strategy content --cache-location node_modules/.cache/eslint/repo-ui",
+    "lint:repo-ui": "eslint playwright.config.ts \"e2e/**/*.ts\" scripts/architecture-census.ts scripts/local-gate.ts scripts/test-backend-sharded.ts --max-warnings=0 --cache --cache-strategy content --cache-location node_modules/.cache/eslint/repo-ui",
     "lint:fix": "bun run --filter '*' lint:fix",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,json,md}\" --cache --cache-strategy content --cache-location node_modules/.cache/prettier/packages && bun run format:check:repo-ui",
-    "format:check:repo-ui": "prettier --check package.json playwright.config.ts \"e2e/**/*.{ts,md}\" \".github/workflows/*.{yml,yaml}\" scripts/local-gate.ts scripts/test-backend-sharded.ts --cache --cache-strategy content --cache-location node_modules/.cache/prettier/repo-ui",
+    "format:check:repo-ui": "prettier --check package.json playwright.config.ts \"e2e/**/*.{ts,md}\" \".github/workflows/*.{yml,yaml}\" scripts/architecture-census.ts scripts/local-gate.ts scripts/test-backend-sharded.ts --cache --cache-strategy content --cache-location node_modules/.cache/prettier/repo-ui",
     "typecheck": "bun run --filter '*' typecheck",
     "gate:local": "bun run scripts/local-gate.ts",
     "test": "bun run test:backend && bun run test:shared && bun run test:frontend && bun run test:system-mocks",
@@ -33,6 +33,8 @@
     "e2e:install": "playwright install --with-deps chromium",
     "record:opencode": "bun run scripts/record-opencode.ts",
     "audit:gate": "bun run scripts/audit-gate.ts",
+    "architecture:report": "bun run scripts/architecture-census.ts",
+    "architecture:write": "bun run scripts/architecture-census.ts --write",
     "depcheck": "bun run scripts/depcheck.ts"
   },
   "devDependencies": {

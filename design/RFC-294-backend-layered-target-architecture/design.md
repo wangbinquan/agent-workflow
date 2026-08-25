@@ -3,7 +3,8 @@
 > 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
 > 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～326 的已发布批次已在其后
 > 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
-> 2026-08-25 刷新为准。本文件中的终局接口是 target contract，不得反推为当前实现已经具备。共享工作树中未发布的
+> 2026-08-26 刷新为准。N1a/N1b 的 provenance、canonical manifests、global FK 与 lifecycle/public-surface 分母已经落地；
+> 本文件中的终局业务接口仍是 target contract，不得把治理账本反推为 production consumer 已切换。共享工作树中未发布的
 > RFC-319 后续批次、RFC-326 PR-B 与 RFC-327 WIP 不计入 landed shape。
 
 ## 1. 设计原则
@@ -163,17 +164,14 @@ EmployeeCase/Context/Attention/Reaction/Channel，中者拥有 catalog/subscript
 `design/RFC-310-rule-driven-development-digital-employee/os-architecture-manifest.json` 与
 `rfc310-digital-employee-os-architecture.test.ts` 双向锁定，跨 context internal import 与宽 public port 继续由本 RFC
 preflight gate 阻断。统一任务创建另落 `task-catalog`：它只合并 task-execution/digital-employee 的 actor-filtered source page，
-业务启动仍由来源 owner 的 command 完成。该专项账本证明“新增纵切有自己的局部门”，不把 W0-R 七份全仓 canonical manifest
-伪报为完成。
+业务启动仍由来源 owner 的 command 完成。该专项账本现作为 N1 全仓 canonical owner/import/public projection 的受约束子集，
+不能成为平行真值，也不能把专项纵切误报为 production cutover 完成。
 
 RFC-317 已 Done：`commons-manifest.json` 登记 82 个公共 kernel（31 core），`commons-debt.json` 逐条锁住 legacy
 inbound→module internal 94 条边/28 文件与 module→legacy outbound 23 条边/13 文件；R1/R2 exact equality、R3 模块形状、
-R12 type 语料扩面、账本高水位、guard classification 与 negative fixture 均已落，当前 `guard-manifest.json` 分母为 152，
-governed ledger 分母为 38。旧 `efc1bdb01` 非祖先 provenance debt 已解除，但四份账本的 `recordedAtSha` 仍是历史 origin/seed
-pin，不是 current content-addressed snapshot：`commons-debt` 的第 23 条 outbound 晚于 `b04cf0eb0`，38 份 ledger 晚于
-`13a9cc035`，152 条 guard 晚于 `0d4010e53`；ancestor-only 检查不能复原当前内容。W0-R 必须统一重钉 matching published full
-SHA + digest，或显式拆 origin 与 current snapshot 字段，并对四份账本做 replay/tamper equality。T10～T73/AC-1～14 是后续必须
-保持的 oracle，不再作为 RFC-294 下一批重开。
+R12 type 语料扩面、账本高水位、guard classification 与 negative fixture 均已落。N1a 已把四份账本升级为
+`originSha + currentSnapshotSha + sha256 payload digest`，pin-tree replay/tamper gate 取代 ancestor-only 判据；历史短 SHA 只保留为
+origin，不再冒充 current snapshot。T10～T73/AC-1～14 是后续必须保持的 oracle，不再作为 RFC-294 下一批重开。
 
 RFC-318～326 又增加了若干必须继承、但不能误算为 wave exit 的纵切：`development@9` 引入九份最小 v2 工具合同，当前
 `development@10` 继承它们并加入 RFC-323 的 exact-lane adapter binding；RFC-320/321/324 分别落 `0207` creator identity、
@@ -181,10 +179,16 @@ RFC-318～326 又增加了若干必须继承、但不能误算为 wave exit 的�
 adapter revision + DE frozen binding；RFC-326 PR-A 落 review persistence transaction 与 `collaboration` seed。RFC-319 只扩测试/治理
 账本，RFC-325 只改前端 Select，均不给 backend ownership wave 计 credit；RFC-326 PR-B、RFC-327 尚未发布。
 
-这些资产仍只是未来 `module-symbol-owners/cross-context-imports+facades` 的 subset/projection 与补充性 guard registry，不是七份
-canonical manifest 的平行真值。全局 owner/symbol/edge foreign key、mutation/tx/background/public-surface inventory、全模块
-required-port liveness、ambient wiring 与最终 consumer cutover 尚未完成；W0-R 必须把 subset 生成/投影进唯一 canonical 真值，
-不能复制一套新 owner/debt。
+N1b 已把这些资产生成/投影进唯一 `module-symbol-owners/cross-context-imports/facades/public-surfaces` 真值，guard 只保留补充
+registry。global owner/symbol/edge FK、mutation/transaction/background/public-surface inventory、required-port liveness 分类与
+ambient wiring 全分母已闭合；当前 20 条 required-port `declared-debt` 与最终 consumer/provider cutover 仍归 W4/W5/W9，不能复制
+一套新 owner/debt，也不能把“已建账”误写成“已迁完”。
+
+N1 current report 的机器分母为：810 个 backend production 文件、300 个 module 文件、17083 个 production file/top-level symbol
+owner、842 个 mutation entrypoint、231 个 transaction callback、180 个 background entry、437 个 ambient seam、859 条 observed
+cross-context edge、64 条 target edge、23 个 required port（3 active/20 declared debt）、839 条 exact exception、366 个 facade、
+235 个 public symbol（1001 recursive leaf、132 method、5 类精确 opaque allowlist）与 5 条 edge-neutral field-growth ledger；
+target implementation SCC=0，unresolved first-party=0。数字只从 committed manifests/report 重放，不在本文另设分母。
 
 RFC-317 已落的 P1/P2 修复是目标架构的行为 oracle，但不是边界 cutover credit：
 
@@ -3743,7 +3747,7 @@ RFC-288 已于 2026-08-14 关闭，未实现且零生产改动。三轮门后其
 修订、不再执行、不再作为 gate。`b6d325a4` 已把六条 depcheck ledger 的 owner 转给 RFC-294 W2；关闭文档保留的九条
 结论是 successor 的输入，不是第二套 authority。
 
-批准路径固定为：W0-R + P0-D 先落 canonical durable ownership/fence；随后另立新号轻量 W2 implementation RFC，迁
+批准路径固定为：N1/W0-R canonical governance 已落；下一步先落 P0-D durable ownership/fence，随后另立新号轻量 W2 implementation RFC，迁
 `TaskRuntimeRegistry/TaskOwnershipPort/SchedulerDriverPort/TaskStatusPublisher` 的 owner/consumer/import topology，复用
 P0-D authority，不新建第二套 lease/schema。先线程化同一 `TaskExecutionContext`，再替换 registry backing；四个 kick、
 非可选 abort reason、bootstrap fail-fast 与两刀销六账必须保真。最小 `TaskExecutionModule` instance 在 P0-D/W2 落到
@@ -3759,35 +3763,34 @@ aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实�
 
 ## 17. 架构不变量与终局指标
 
-| 不变量                                                                                                           |                                                                                当前基线 |                                     终局 |
-| ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------: | ---------------------------------------: |
-| backend 值级 SCC                                                                                                 |                                                                                       5 |                                        0 |
-| 全仓值级 SCC                                                                                                     |                                                                                       7 |                                        0 |
-| `KNOWN_VIOLATIONS`                                                                                               |                                                                                      37 |                                        0 |
-| route→DB 值级文件                                                                                                |                                                                                      15 |                                        0 |
-| transport→DB 值级边                                                                                              |                                                                                       2 |                                        0 |
-| route/MCP 反向 import `server.AppDeps`                                                                           |                                                                                      54 |                                        0 |
-| `modules/**` production TS / 已存在 context                                                                      |                                                                                300 / 12 |                    全量 owner/layer 100% |
-| direct native `setInterval`（AST Identifier call）                                                               |                                                                           19 / 18 files | 由 managed background manifest 解释 100% |
-| injected timer-port `setInterval`                                                                                |                                                                                       1 |        100% registered + lifecycle-owned |
-| production ambient wiring seam                                                                                   |                                                                        未建正式机器分母 |                                        0 |
-| 通用 AtomicApply lifecycle 实现                                                                                  |                                                                                       2 |                                        1 |
-| resource visible loader/canonical catalog                                                                        |                                                      6 route loaders + 2 Intent catalog |                             1 query port |
-| task ownership authority                                                                                         |                                                       active Map + lease Map + CAS 约定 |               1 durable epoch/lease port |
-| route human-gate resume saga                                                                                     |                                                                                       3 |                                        0 |
-| review durable persistence transaction                                                                           |                                                          RFC-326 PR-A review slice 已落 |     三类 gate 共用 continuation contract |
-| transaction 内外发事件                                                                                           |                                                                                存量存在 |                                        0 |
-| background work lifecycle（job/worker/local timer）声明覆盖                                                      |                                                                                  非完整 |                                     100% |
-| business mutation trusted authority / internal family capability + fence/OCC（适用时）+ audit + classified event |                                                                                  非完整 |                                     100% |
-| 跨 context / inbound non-exact import                                                                            | RFC-317 census：inbound 94/28 files、outbound 23/13 files；其他边待 canonical inventory |                                        0 |
+| 不变量                                                                    |                           当前基线 |                                     终局 |
+| ------------------------------------------------------------------------- | ---------------------------------: | ---------------------------------------: |
+| backend 值级 SCC                                                          |                                  5 |                                        0 |
+| 全仓值级 SCC                                                              |                                  7 |                                        0 |
+| `KNOWN_VIOLATIONS`                                                        |                                 37 |                                        0 |
+| route→DB 值级文件                                                         |                                 15 |                                        0 |
+| transport→DB 值级边                                                       |                                  2 |                                        0 |
+| route/MCP 反向 import `server.AppDeps`                                    |                                 54 |                                        0 |
+| `modules/**` production TS / 已存在 context                               |                           300 / 12 |                    全量 owner/layer 100% |
+| direct native `setInterval`（AST Identifier call）                        |                      19 / 18 files | 由 managed background manifest 解释 100% |
+| injected timer-port `setInterval`                                         |                                  1 |        100% registered + lifecycle-owned |
+| production ambient wiring seam                                            |                                437 |                                        0 |
+| 通用 AtomicApply lifecycle 实现                                           |                                  2 |                                        1 |
+| resource visible loader/canonical catalog                                 | 6 route loaders + 2 Intent catalog |                             1 query port |
+| task ownership authority                                                  |  active Map + lease Map + CAS 约定 |               1 durable epoch/lease port |
+| route human-gate resume saga                                              |                                  3 |                                        0 |
+| review durable persistence transaction                                    |     RFC-326 PR-A review slice 已落 |     三类 gate 共用 continuation contract |
+| transaction callback / co-located external-effect candidate               |                           231 / 38 |                               risk set 0 |
+| background work lifecycle（periodic/long-running/local/disabled）声明覆盖 |                      180 / 24/17/7 |                                     100% |
+| business mutation control inventory / unreviewed `node_runs INSERT`       |                            842 / 0 |                                     100% |
+| observed cross-context edge / exact architecture exception                |                          859 / 839 |                                        0 |
 
 中间指标只能下降，不能通过新增 `KNOWN_VIOLATIONS`、pathNot 或 dynamic import 把违规藏起来。
 
-表中“存量存在/非完整/未设门”不能长期作为基线。RFC-317 Done 的公共内核 subset 账本是第一批真实沉积，但 W0-R 仍必须生成
-下列机器可复算 canonical manifests，并让 subset 通过稳定外键或生成投影引用它们：
+N1 已生成下列机器可复算 canonical manifests，并让 RFC-317 subset 通过稳定 FK/生成投影引用它们：
 
 - `mutation-entrypoints.json`：所有生产 mutation 入口为分母，逐项标 request/effect authority、authorization、OCC/fence、tx、audit、event；
-- `tx-external-effects.json`：所有 transaction callback 为分母，列 publish/broadcast/send/FS/process 调用；
+- `transaction-external-effects.json`：所有 transaction callback 为分母，列 publish/broadcast/send/FS/process 调用；
 - `background-jobs.json`：所有 production background execution entrypoint 全量分类（periodic job、long-running
   loop/worker、execution-local timer、disabled），并记录 `lifetime=daemon|execution-local`、kind/phase/dependencies/
   start-run/stop/health/owner；只有 daemon lifetime 进入 managed registry，execution-local 验 owner+lifecycle；
@@ -3795,7 +3798,7 @@ aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实�
 - `public-surfaces.json`：exact entrypoint/symbol/method/field/consumer/authority/transaction/data-class/API snapshot；
 - `module-symbol-owners.json`：每个 production file/symbol 的唯一 context+layer，以及 legacy facade 的 target/remove wave。
 
-W0-R 后上述指标使用确切 `N/M`，每波只能改善；终局按 manifest 证明 `0` 或 `100%`，不能以抽样和人工宣称验收。
+从 N1 起上述指标使用确切 `N/M`，每波只能改善；终局按 manifest 证明 `0` 或 `100%`，不能以抽样和人工宣称验收。
 
 ## 18. 现有能力到目标 owner 的映射
 
@@ -3813,7 +3816,7 @@ W0-R 后上述指标使用确切 `N/M`，每波只能改善；终局按 manifest
 | RFC-310 unified task creation / task source registry           | `task-catalog` 只读 federation + 各来源 command owner                                                | behavior Done；W4-E10 public/authority/adapter cutover                                                   | typed catalog query + one `TaskCatalogSource` adapter per source；无万能启动命令                    |
 | task catalog membership (`0203`)                               | `task-execution` 单写 `public` / `internal`；`task-catalog` 只消费 public projection                 | 所有 public feed behavior landed；W2 保 launch/继承，W4-E10 收 exact source seam                         | visibility 不进 transport/filter；item/facets/hierarchy/cursor 共用 public predicate                |
 | Task↔EmployeeCase link / Case name (`0205/0206`)               | TE 单写 Task provenance ref；DE 单写 EmployeeCase/name                                               | behavior landed；W4-E1/E9 reader/authority，W7 identity mapping                                          | Task detail 只经 actor-filtered DE projection取最小 link；expand-only rollback保列                  |
-| RFC-317 T10～T73 / AC-1～14                                    | 各业务 owner + architecture governance                                                               | RFC-317 Done；W0-R 统一 current provenance/canonical RI，W4/W9 迁边界                                    | 82/31 kernels、94/23 debt、152 guards、38 ledgers 作为 machine oracle；不重开 RFC-317               |
+| RFC-317 T10～T73 / AC-1～14                                    | 各业务 owner + architecture governance                                                               | RFC-317 Done；N1 current provenance/canonical RI Done，W4/W9 迁边界                                      | 82/31 kernels、94/23 debt、155 guards、52 ledgers 作为 machine oracle；不重开 RFC-317               |
 | mission preview/keyset paging                                  | `development-automation/application` + query projection                                              | behavior/index/UI consumer Done；W4-E8 public-query cutover                                              | preview 与 launch 共用 selector；route 不再 deep import infrastructure                              |
 | RFC-310 evidence、decision trace、effect intent、MR care       | `development-automation`                                                                             | behavior Done；W3/W4/W9 mechanism cutover                                                                | mission tx + typed effect receipt/reconcile                                                         |
 | 五条 spawn/iso/merge 装配线                                    | `task-execution/engine/kernel/assembly`                                                              | RFC-287 behavior Done；W2-A 归位                                                                         | `RunAssembly`                                                                                       |

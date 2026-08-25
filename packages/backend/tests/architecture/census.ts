@@ -486,6 +486,7 @@ const CORPUS_ENUMERATION_CALLEES = new Set([
   'globSync',
   'guardTestFiles',
   'backendUnits',
+  'buildCanonicalArtifacts',
   'packageSrcUnits',
   'moduleShapes',
 ])

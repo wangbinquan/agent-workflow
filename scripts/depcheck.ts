@@ -65,6 +65,10 @@ export type KnownViolation = {
   why: string
   /** 什么时候会消失——必须指向具体工作包 / RFC，不允许写「以后再说」。 */
   removeWhen: string
+  /** RFC-294 N1: high-risk boundary debt has an explicit target owner. */
+  owner?: string
+  /** RFC-294 N1: canonical removal wave, separate from explanatory prose. */
+  removeWave?: string
 }
 
 const B = 'packages/backend/src'
@@ -314,7 +318,9 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     to: `${B}/db/schema.ts`,
     why: 'WS registry 的 frameGate 直接 import 6 张业务表（memories / nodeRunEvents / nodeRuns / tasks / workflows / workgroups）跑 Drizzle select 做逐帧可见性判定。这是 RFC-152 把三份手抄 per-frame 块收敛成单一管道时一并搬过来的形状，不是本次引入的。',
     removeWhen:
-      'RFC-317 B10（传输/平台批次）把逐帧可见性判定下沉为各域 public query port（tasks / workflows / workgroups / memories 各一条），registry 只留 gate 组合逻辑。',
+      'RFC-294 W4 inbound/WS visibility port cutover：把逐帧可见性判定下沉为各域 actor-filtered public query port（tasks / workflows / workgroups / memories 各一条），registry 只留 transport gate 组合逻辑。',
+    owner: 'identity-access + owning visibility contexts',
+    removeWave: 'W4',
   },
   {
     rule: 'no-transport-to-db',
@@ -322,7 +328,9 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     to: `${B}/db/client.ts`,
     why: 'server.ts 取的是 `allowsLegacyDaemonTestAccess`（连接握手期的测试后门判据），不是业务表——它恰好住在 db/client.ts 里。危害与「传输层绕过 service 直查表」不同级，但规则按路径匹配，故照实入账而不是给规则开路径豁免（按文件排除会连带放过未来经过同一文件的新边）。',
     removeWhen:
-      '把 allowsLegacyDaemonTestAccess 迁出 db/client.ts（它是鉴权判据，不是数据库客户端的职责）——RFC-317 B10 传输批次顺带处理。',
+      'RFC-294 W9 bootstrap/auth-helper 收口：把 allowsLegacyDaemonTestAccess 迁出 db/client.ts；它是启动鉴权兼容判据，不是数据库客户端职责。',
+    owner: 'identity-access + bootstrap',
+    removeWave: 'W9',
   },
 ]
 

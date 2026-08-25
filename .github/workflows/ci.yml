@@ -89,6 +89,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          # RFC-294 N1 provenance guards replay the canonical architecture
+          # payload from its published snapshot.  A depth-1 checkout makes a
+          # tampered current file indistinguishable from an unavailable pin.
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

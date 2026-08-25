@@ -21,7 +21,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:e0e397cf3e7f5b43fd42"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/identity-access/composition.ts#composeIdentityAccess"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -34,7 +42,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a62b1e37cc4f34274e93",
+        "import:b36f8fdb24e494af771b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/migrationReport.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/migrationAnalyzer.ts#analyzeLegacyAssets",
+        "owner:packages/backend/src/modules/development-automation/application/migrationAnalyzer.ts#printMigrationReport"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -47,7 +65,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:93726bb86e6b5442f8f1"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/migrationReport.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#collectLegacyAssets"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -60,7 +86,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:96b1be7adb34feb15777"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -73,7 +107,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0a67cf2ab956deb9eb42"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#missionIdOfExecutionRef"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -86,7 +128,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:05b70e46658dd39847f6"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts#createSqliteTaskLifecycleEventPublisher"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -99,7 +149,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0977800bb99e026abc28",
+        "import:d883a3aa10763e9d15be"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#mergeFromUpstream",
+        "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#readUpstreamReport"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -112,7 +172,21 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:7d6a91ae383300d4e1fe",
+        "import:904adb91b23a1f4535d2",
+        "import:c48cf7ffac07b2f3875e",
+        "import:f0f9061c56f91ef08daf"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeDeliveryChainQuery",
+        "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeMatrixQuery",
+        "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeRoundAttemptsQuery",
+        "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeWorkItemProjectionQuery"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -125,7 +199,15 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:20300da70d62cd321a94"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts#createCodeMetricsQuery"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -138,7 +220,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:dd8229e9a40f6b18968d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/domain/capabilityRegistry.ts#lookupStageContract"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -151,7 +241,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:e1e829a2490f537e3cc6",
+        "import:f22bb98e5200fd5e9e30"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#CODE_CAPABILITIES",
+        "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#parseCodeCapabilityId"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -164,7 +264,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a9c4957b4cd2f27223cc"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#projectStageGraph"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -177,7 +285,21 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:1ce59ca0515776cc6043",
+        "import:3a5b7e78e1e6a444ff15",
+        "import:69193bb47ca5bb2c3076",
+        "import:d64e12890e434d257459"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#archiveActionTemplate",
+        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#createActionTemplate",
+        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#publishActionTemplate",
+        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#reviseActionTemplateDraft"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -190,7 +312,21 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2a018a0034e4f8c0003f",
+        "import:586922194f99d5fd5a92",
+        "import:593b930c084c3d44449c",
+        "import:6eea49e7b815460dc0b2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#archiveVerificationProfile",
+        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#createVerificationProfile",
+        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#publishVerificationProfile",
+        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#reviseVerificationProfileDraft"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -203,7 +339,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:edcbca50c79f87d2021a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/decision.ts#nextDecisionSchema"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -216,7 +360,19 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:85efdd070ec0248d3630",
+        "import:d9c359d42b9671cb258e",
+        "import:fb274db227e3d18a85d4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/digitalEmployee.ts#compileEmployeePlaybook",
+        "owner:packages/backend/src/modules/development-automation/domain/digitalEmployee.ts#digitalEmployeeContentSchema",
+        "owner:packages/backend/src/modules/development-automation/domain/digitalEmployee.ts#validateDigitalEmployeeForPublish"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -229,7 +385,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:e022363ce0f3a3d270b8"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/factCell.ts#factCellSchema"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -242,7 +406,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2b0d5cc66e11a6df3d89"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/facts.ts#buildFactSnapshot"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -255,7 +427,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:211ae8e1973da32afca9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/journeyProjection.ts#projectEmployeeSetupJourney"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -268,7 +448,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:7e451ee6136f68e6e981"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/predicate.ts#factPredicateSchema"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -281,7 +469,15 @@
       "why": "engine 是模块内的执行内核，按 RFC-294 §G3 不对外；调用方绕过 application 直接消费了引擎。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d9c02a1bc60b98bc2cac"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/engine/policy/evaluatePolicy.ts#evaluatePolicy"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -294,7 +490,15 @@
       "why": "engine 是模块内的执行内核，按 RFC-294 §G3 不对外；调用方绕过 application 直接消费了引擎。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0539c8445ea39548b82c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/engine/policy/workSelection.ts#resolveEmployeeSelection"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -307,7 +511,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:77ec939456ca757a9555"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/publishLookup.ts#createEmployeePublishLookup"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -320,7 +532,19 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a109b3318a5467248c21",
+        "import:a1451870fe19ce1f061a",
+        "import:bb4eceeae2d562593172"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore.ts#deleteAssignment",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore.ts#listAssignments",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore.ts#upsertAssignment"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -333,7 +557,17 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:78a9f9ddb4431476508d",
+        "import:e2090e7e7e08eeb8cf07"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteActionTemplateStore",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteVerificationProfileStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -346,7 +580,37 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:100d734b1b01c5b6576b",
+        "import:16d3b391c05972e0cf9d",
+        "import:17b8845d4eca808d7b6b",
+        "import:1b77f32e9aad74d5a8ae",
+        "import:3b517a088820f992ec4f",
+        "import:4417c0c3e0dac396a400",
+        "import:565c019dd5d352b97190",
+        "import:5c9aec86a1df9ced3986",
+        "import:a2f120efd3a3a60684a9",
+        "import:a3e549020028a196aeec",
+        "import:af59bff35064bc806eb8",
+        "import:d23b41589b7739d6f931"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#archiveAutomationPolicy",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#archiveDigitalEmployee",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#createAutomationPolicy",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#createDigitalEmployee",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#getAutomationPolicy",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#getDigitalEmployee",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listAutomationPolicies",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listDigitalEmployees",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#publishAutomationPolicy",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#publishDigitalEmployee",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#reviseAutomationPolicyDraft",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#reviseDigitalEmployeeDraft"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -359,7 +623,21 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2fe6397a59472557c62a",
+        "import:5272834e56cecb1de311",
+        "import:aa33440a8d34b3267394",
+        "import:b4e77ec70ed2b1922b6e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#archiveDevelopmentAdapter",
+        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#createDevelopmentAdapter",
+        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#publishDevelopmentAdapter",
+        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#reviseDevelopmentAdapterDraft"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -372,7 +650,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:77839a71c85af199a6c3"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -385,7 +671,27 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5c30b66441ca9671b30a",
+        "import:7d74e68fa38236bb4920",
+        "import:83c986cebe267f1d07b3",
+        "import:9bb3281620480873bb88",
+        "import:baca2202d61b96005808",
+        "import:e8fb088373d08e40a872",
+        "import:f64f923355c82dfd4c8a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#cancelMission",
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#launchMission",
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#launchMissionInputSchema",
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#previewDirectInput",
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#previewMissionAdmission",
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#retryBlockedMission",
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#selectMissionRequirementSource"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -398,7 +704,15 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:ee2addd06f2b45af4ec4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#LaunchDeps"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -411,7 +725,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:92ab761e5a3ad2f61a2a",
+        "import:9cb8750389ab52ea21d5"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/cutover.ts#adoptActiveMr",
+        "owner:packages/backend/src/modules/development-automation/application/cutover.ts#runCutoverCommand"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -424,7 +748,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9445481b2f28691e48c4",
+        "import:f819cf66aa720a7670df"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/pipelineEvidenceRead.ts#EVIDENCE_READ_MAX_BYTES",
+        "owner:packages/backend/src/modules/development-automation/application/pipelineEvidenceRead.ts#readEvidenceFileRange"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -437,7 +771,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:52b69364e61fee437ba4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomation"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -450,7 +792,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:3f958870072d35d05232"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/journeyProjection.ts#projectMissionJourney"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -463,7 +813,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:db0e6b6bfc2db5a53db9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/operationFailure.ts#OperationFailureReceipt"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -476,7 +834,15 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b7039ff72b3f95865e2f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/pipelineManifest.ts#pipelineEvidenceManifestV1Schema"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -489,7 +855,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:1ea05bd306944affb007"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryBaselineResolver"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -502,7 +876,19 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:11bc2d5b9cd2ddaa0524",
+        "import:1d14dc519da6e9d7c2d1",
+        "import:f4991588b7518a68266d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#materializeMigrationCandidates",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#readPersistedMigrationRun",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#runMigrationAnalysis"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -515,7 +901,27 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0504090f8b4ede9f8620",
+        "import:1cea2e80331dd2c8791c",
+        "import:1df5fd9fa7775af0e238",
+        "import:2e6fa5d1fdd5a6eb6811",
+        "import:2f3bab22074487fdef23",
+        "import:5b07d6c45ff09aeb6e25",
+        "import:ab928791fbfe565cf0d3"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getDecisionTrace",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getMissionDetail",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getMissionMergeRequestView",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionEffects",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionSummaries",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionSummariesPage",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionTerminalOutcomeGroups"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -528,7 +934,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:217730c12ecc31e14922"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#MissionPageCursor"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -541,7 +955,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:6faa1a904b5cdfdf5dc2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAdmissionLookup.ts#createSqliteAdmissionLookup"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -554,7 +976,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:bb2faa67db36434c21f5"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteCutoverStore.ts#createSqliteCutoverStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -567,7 +997,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c72616f527c7fef28628"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -580,7 +1018,17 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:363fb54245cb45d827ca",
+        "import:749e87473eab54d567a8"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#createSqliteFactSnapshotReader",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#missionIdOfExecutionRef"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -593,7 +1041,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c1dd6a6c64677284e8c1"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadPlanStore.ts#insertUploadPlan"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -606,7 +1062,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9c4432f6332cda18b274"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#createSqliteUploadSessionStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -619,7 +1083,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a8937fbac4eebe83af88"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/approvalGateway.ts#composeApprovalGatewayRunner"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -632,7 +1104,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:104de0e807d6281bab31"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/requirementSource.ts#composeRequirementSourceRunner"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -645,7 +1125,19 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0a1dbb1fb93903fa7edd",
+        "import:136084f56dfaa607e7cc",
+        "import:b02950821e26bbef104d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindCandidateDeliveryParticipant",
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindChangeCandidateParticipant",
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindConflictMergeParticipant"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -658,7 +1150,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:27c370dc221c9651a5ef"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/agentActionExecution.ts#composeAgentActionExecution"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -671,7 +1171,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a3204707b260cccb9a0e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts#composeScriptActionExecution"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -684,7 +1192,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b96635ebcc3c67991b81"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/digital-employee/composition.ts#DigitalEmployeeModule"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -697,7 +1213,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:828e7789c12fab213f81"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -710,7 +1234,15 @@
       "why": "inbound 是模块自己的入站适配层（RFC-317 D3 承认），不对外提供合同；此处被 legacy 层当作入口调用。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:425ee8c9db80ce9cf874"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/fusions.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts#directTaskInitiatorFromActorSource"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -723,7 +1255,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b502f489235bec903668"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/missionInputUploads.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts#EvidenceStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -736,7 +1276,15 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:923f1225aa9ce76ad1e9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/missionInputUploads.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#createSqliteUploadSessionStore"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -749,7 +1297,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:e89cb7b100a8627faf79"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/taskCatalog.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-catalog/composition.ts#TaskCatalogModule"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -762,7 +1318,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9de32c5b7c0cf6bf0ab9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/webhookDeliveries.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/webhookTerminalControl.ts#composeVerifiedWebhookDeliveryAcceptance"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -775,7 +1339,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:6388909ed377dc4678ae"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/webhookTerminalControl.ts#composeVerifiedWebhookDeliveryAcceptance"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -788,7 +1360,15 @@
       "why": "public 目录存在但入口名不在 exact 五入口内，等于用 public 之名开了第六个自由入口（rfc294-architecture-preflight 已单独记账此条）。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d5ed350a8f7621b90252"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#MrTerminalControl"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -801,7 +1381,15 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:ede9833e1043656a8054"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts#composeTaskExecutionCatalogSources"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -814,7 +1402,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:56550580f373f7d5c350"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/domain/templateLayers.ts#canWriteFramework"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/capabilityTemplates.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -827,7 +1425,20 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2a61e5ff161827e13a4c",
+        "import:99d354cc905aa33fa06b",
+        "import:dd7679a3fe25cbd1b67f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/source-control/composition.ts#$file",
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindRepositoryCommitParticipant"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/commitPushRunner.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -840,7 +1451,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0a7232c4f607c00c6223"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/demoSeed.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/code-capability/domain/capabilityRegistry.ts#lookupStageContract"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/demoSeed.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -853,7 +1474,21 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0ec5fbcb6a5080d45b84",
+        "import:a2f7b9522199b0a664b5",
+        "import:b9745e0cebd5cb181aab"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts#MergeRequestFactsCollectorPort",
+        "owner:packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts#PipelineEvidencePort",
+        "owner:packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts#RepoRemotePort"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -866,7 +1501,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5ca0115215c7a518be82"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/canonicalJson.ts#canonicalDigest"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -879,7 +1524,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:112d5c2af5ed098a1919"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/domain/mrFacts.ts#projectMrCells"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -892,7 +1547,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:ecc6def497b174e798e5"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/application/mrFacts.ts#collectMergeRequestFacts"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -905,7 +1570,19 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:01dba655daadcdaabf51",
+        "import:6b23c460a2c6fb0330cd"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/codeHostEffects.ts#composeDevelopmentMrEffects",
+        "owner:packages/backend/src/modules/integration/composition/codeHostEffects.ts#matchRepoProvider"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -918,7 +1595,17 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:63d523c54d1a697476d0"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/codeHostEffects.ts#DevelopmentMrEffects"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -931,7 +1618,17 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:56163660c1cf3c469950"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/composition/pipelineEvidence.ts#composePipelineEvidenceRunner"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -944,7 +1641,17 @@
       "why": "inbound 是模块自己的入站适配层（RFC-317 D3 承认），不对外提供合同；此处被 legacy 层当作入口调用。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:ab23dfa3c61b1425a759"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts#directTaskInitiatorFromActorSource"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/execution/executor.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -957,7 +1664,19 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:3bd00dd7d050ac133fda",
+        "import:a142fcc2e08ae599e572"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant",
+        "owner:packages/backend/src/modules/source-control/composition.ts#ensureBoundPlatformWorkspaceDirectory"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/fusion.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -970,7 +1689,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:e5fde5facc8f80195fc8"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#DirectTaskInitiator"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/fusion.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -983,7 +1712,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:403bdd685989ecee6a2f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/turnEngine.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/workflowCreateLayout.ts#normalizeIntentWorkflowCreateLayouts"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/turnEngine.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -996,7 +1735,19 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:95de9e8bf86b90716021",
+        "import:c3ed5dbae7f72f811c95"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/source-control/composition.ts#$file",
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduler.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1009,7 +1760,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:94e0d817bdd66e18a226"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#resolveNodeActivationForDispatch"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduler.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1022,7 +1783,21 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:364d20bf78bbb1ab7b21",
+        "import:a4a1eb64e0e2535aeef4",
+        "import:d0f9587c4d94710e7884"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#collectDataflowInboundEdges",
+        "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#collectImplicitInboundRefs",
+        "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#nodeKindIndex"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduler.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1035,7 +1810,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:dbcaaf9c3ce16520a1dd"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/sourceTermination.ts#taskStopProjection"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduler.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1048,7 +1833,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:4aeb9b2d4becb9caa66a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/sourceTermination.ts#TaskStopCause"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduler.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1061,7 +1856,17 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:de17d18a53431aaefb1a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1074,7 +1879,17 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9fabe1c5d40f0886cfef"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/branchTrace.ts#branchTraceForTask"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1087,7 +1902,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:479eaa00c4b9275815fd"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/sourceTermination.ts#sourceTerminationRevivalError"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1100,7 +1925,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fe30b04e89398c214603"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/sourceTermination.ts#TaskStopCause"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1113,7 +1948,19 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:3bf779c696831f7e9dde",
+        "import:8d868818826de17ee1d8"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#deriveTaskLaunchOrigin",
+        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#taskLaunchAdmissionIssue"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1126,7 +1973,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b20c5073febb0f2fcfbe"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#TaskLaunchProvenance"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1139,7 +1996,17 @@
       "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:ef92d05132b81ce3796f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor.ts#InMemoryTaskDriverSupervisor"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1152,7 +2019,19 @@
       "why": "ports 是 application 自有的 SPI 声明，不是跨层合同；调用方直接引用了端口类型。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d4190aa032f92049ffc3",
+        "import:f35235c21ac7d7597388"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/ports/taskDriverSupervisor.ts#TaskDriverStopResult",
+        "owner:packages/backend/src/modules/task-execution/ports/taskDriverSupervisor.ts#TaskDriverStopTicket"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1165,7 +2044,17 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:8efba10420c1e80e2347"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/users.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/identity-access/composition.ts#composeIdentityAccess"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/users.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1178,7 +2067,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:aae4e8210f4dfc0b5baa"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/matching.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#webhookStreamKeyOf"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/webhook/matching.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1191,7 +2090,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:139778ff64f70937014b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#decideProtectedLaunch"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1204,7 +2113,17 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d24dafb7ab9ed6195eda"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#MrStreamState"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1217,7 +2136,19 @@
       "why": "public 目录存在但入口名不在 exact 五入口内，等于用 public 之名开了第六个自由入口（rfc294-architecture-preflight 已单独记账此条）。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0611979cc179875aaf5f",
+        "import:bdedc3ec8cb1796f7c6b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#MrTerminalControl",
+        "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#ProtectedMrLaunchGuard"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1230,7 +2161,15 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:41ca7fd93e0320e1cde3"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/identity-access/composition.ts#composeIdentityAccess"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1243,7 +2182,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:15fdd5e59bb1137c2603"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1256,7 +2203,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:82f611076c543641c66d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1269,7 +2224,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:974421fa0219bd66c010"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1282,7 +2245,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/codeReviewAgentCaller；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:42d89734b6b119c4553c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/readinessFacts.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/codeReviewAgentCaller.ts#resolveAgentForBinding"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1295,7 +2266,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:b65b7b32dc028a3e1830"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/readinessFacts.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1308,7 +2287,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:73a2e5331e6a741caac5"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/resolveRepoEndpoint.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1321,7 +2308,21 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/capabilityTemplates；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:625ccd7e3fec5dd6755c",
+        "import:6956b55fbc6a6065c879",
+        "import:6bb67c1470eb81264750",
+        "import:886f0e9f538fecb98e2e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/capabilityTemplates.ts#MERGEABLE_FIELDS",
+        "owner:packages/backend/src/services/capabilityTemplates.ts#mayReadScripts",
+        "owner:packages/backend/src/services/capabilityTemplates.ts#mergeableSnapshot",
+        "owner:packages/backend/src/services/capabilityTemplates.ts#templateDigest"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1334,7 +2335,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/capabilityTemplates；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:00024f7372c0b222888c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/capabilityTemplates.ts#MergeableField"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1347,7 +2356,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W9-D（兼容资源岛退役；RFC-310 已把写模型切走，残留只作历史查询）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:e9235f4ccc265bc43b98"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1360,7 +2377,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:3d9af2993c79ab5def7e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/codeHost/call.ts#executeCodeHostCall"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1373,7 +2398,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:1f4820f4d51ace59375c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/codeHost/call.ts#CodeHostCallDeps"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1386,7 +2419,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:1647cef249d621cadc77"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrFacts.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/codeHost/call.ts#executeCodeHostCall"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1399,7 +2440,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/connections（`probeCodeHostConnection`）。与同文件既有的 @/services/codeHost/call 那条同形、同波次。**本条由 RFC-310 T232/T233（`70ddac983`）引入，不是存量**——该提交自身未跑过 CI，第一次带上它的 run 由 RFC-317 T73 记账止血；替代它的 public 合同由 integration context 的 owner 决定。",
       "introducedByRFC": "RFC-310 T232/T233",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:b07701ac84de0088b782"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrFacts.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/codeHost/connections.ts#probeCodeHostConnection"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1412,7 +2461,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:2379680e141b8399d7a2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrLaunchGuard.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1425,7 +2482,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:22e7b4f6ccd57b34a67c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1438,7 +2503,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/taskOperations；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:211e043d10ae220b4764"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/taskOperations.ts#listTaskOperationsPage"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1451,7 +2524,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/lifecycle；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:52b6f287fd8c62b9046f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/lifecycle.ts#setTaskStatus"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1464,7 +2545,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/reviewMutationCoordinator；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:b9cabb7c45979f600d9c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/reviewMutationCoordinator.ts#withTaskReviewMutationLock"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1477,7 +2566,23 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/task；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:248d07243c59a2fbb7e8",
+        "import:3b52e445c192f6770b7e",
+        "import:497c58b235fda20e2b2b",
+        "import:85a3ce8baee3c25ea585",
+        "import:ebed8174827bc5a4fa78"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/task.ts#awaitTaskDriverStopped",
+        "owner:packages/backend/src/services/task.ts#emitTaskStatus",
+        "owner:packages/backend/src/services/task.ts#finalizeCanceledTaskWithoutDriver",
+        "owner:packages/backend/src/services/task.ts#getTask",
+        "owner:packages/backend/src/services/task.ts#requestTaskDriverStop"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1490,7 +2595,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:4a32ac717a207d7690d2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1503,7 +2616,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:1bf8985ee55c244f3ff2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/branchTrace.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1516,7 +2637,15 @@
       "why": "application 层反向依赖 legacy 横向模块 @/services/freshness；该能力尚无 port/public 合同可替代。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:2d99741bb1571ecf6678"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/freshness.ts#pickUpstreamSourceRun"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -1529,7 +2658,15 @@
       "why": "application 层直接持有 ORM 查询构造器；按 RFC-294 §G1 持久化细节只能出现在 infrastructure，application 经 port 消费。",
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:8758af61ef21526e52b4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:external:drizzle-orm#$package"
+      ],
+      "canonicalFacadeIds": []
     }
   ],
   "registeredFindings": [
@@ -2708,5 +3845,11 @@
       "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
       "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
     }
-  ]
+  ],
+  "canonicalProjection": {
+    "sourceDigest": "sha256:576da9dfeb545e887eb8fb830327356c137668291123252776709e1f9c50cf43",
+    "importManifest": "architecture/cross-context-imports.json",
+    "facadeManifest": "architecture/facades.json",
+    "ownerManifest": "architecture/module-symbol-owners.json"
+  }
 }
