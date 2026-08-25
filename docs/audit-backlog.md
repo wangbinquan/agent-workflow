@@ -2364,3 +2364,49 @@ RFC-060 PR-D 推迟到 PR-D2，至今未落地。
    `focus` 透传，全仓**没有任何组件消费 `search.focus`**；且 `CandidatesList.tsx:55` 用 `search={{ focus }}`
    **整体替换**了 search，`tab` 因而回落到默认值。深链既不进审批队列，也不滚动/高亮那条候选。
    MEM-33 因此只锁「链接带对了 memoryId、点开不白屏、参数不被 `validateSearch` 吃掉」。
+
+## RFC-319 B72 起草期撞到的产品缺陷（2026-08-25，均未写成断言）
+
+行号按 `origin/main`。凡「未写成断言」的都是同一个理由：把缺陷锁进测试等于把它固化。
+
+1. **`read` 档在工作组域拿到一个死按钮。** `workgroups.detail.tsx` 的权限入口挂 `canManageAcl`
+   （纯方法级权限点），而承载面板的 Dialog 仍挂 `canUpdate`（= 权限点 ∧ `resourceAccess.canEdit`）。
+   于是 `read` 档看得见「Permissions」按钮，点下去什么都不弹。`workflows.edit.tsx:1263 / 1294` 是同一形状；
+   `agents / mcps / plugins / skills` 走 `AclDialogButton`（自带 Dialog）没有这个问题。
+   两个修法：把 Dialog 也降到 `canManageAcl`（推荐），或把按钮升回 `canUpdate`（会撞 `rfc099-ownership-acl.spec.ts`）。
+2. **MCP 探测的 stdio stderr 采集在失败路径上完全失效。** `services/mcpProbe.ts:477` 的 `stderrBuf` 活在
+   `defaultOpenClient` 的闭包里，只通过 `:570` 构造的客户端对象暴露；而 connect / handshake 失败时
+   `openClient` 在 `:636` 直接抛，那个对象根本没被构造，于是 `:235` 的 `client?.capturedStderr() ?? ''`
+   恒为空串。实测：`crash` 档子进程明明往 stderr 写了东西，界面只剩 `MCP error -32000: Connection closed`。
+   **最需要 stderr 的那一档恰好没有**，而 `:22` 的文件头注释与 `errorDetail` 的设计都明文承诺会带上它。
+3. **数字员工的作用域摘要写死中文且暴露裸 ULID。** `authoringService.ts:2766` 调
+   `summarizeWorkScope(encodedScope, 'zh-CN')`——locale 硬编码；`employeeTypePackage.ts:3018-3030`
+   对 repository / repository-group 直接拼 `仓库：${repositoryId}`。英文 UI 的用户在员工卡片上看到的
+   就是一行中文 + 一串 ULID，无法辨认自己选的是哪个仓库/组。
+4. **`retireTool` 零校验，且能把已停用的工具绑进新岗位模板。** `authoringService.ts:1818-1821` 只做
+   `#exactTool` + `retireTool`。`getToolRevision`（`sqliteAuthoringStore.ts:195-206`）不看 `retiredAt`，
+   而 `listTools`（`:333-348`）才过滤——所以在跑的案例不会断（危害小于直觉），但 `#validateBinding`
+   （`authoringService.ts:1839-1840`）同样走 `#toolRevision`，于是**经 API 仍可把已停用的工具绑进新模板**，
+   而 UI 因为 `listTools` 过滤根本看不到它。停用时也零提示。
+5. **`development` system-mock stub 没跟上 RFC-318 v2 工具合同，连带一条空洞绿。** v2 执行路径组的
+   prompt 是 `… INPUT_JSON` + 普通 workflow-output 端口（`digitalEmployeeExecution.ts:195-215`），
+   而 stub 只认 RFC-310 老协议的 `<agent-result nonce="…">` 帧（`mode-development.ts:68-81, :142-158`）。
+   实测 `analyze-implement` 每轮都失败重试：`stub-development-agent: prompt is missing the RFC-310
+   agent-result identity`。**而 `rfc310-digital-employee-journey.spec.ts` 的
+   `body and repository-bound files enter a stateful employee case and the unified task list` 一直是绿的**
+   ——它对时间线只断言「第一步存在」（那是 `prepare-materials` 这个平台节点），从未断言
+   `analyze-implement` 轮次成功。属 RFC-319 §1.1① 的「空洞绿」。
+6. **`SubmoduleBadge` 的「有子模块但从未同步」与「同步成功」在可见文案上无法区分。**
+   `repos.submodule.labelOk` 与 `labelPending` 都是 `'has submodule'`，只有 `title` 与 chip 颜色不同，
+   且 pending 那一支**没有 `data-testid`**（`SubmoduleBadge.tsx:42-49`，另两支都有）。RFC-210 当初把
+   pending 从绿改成中性正是为了不再「宣称一次没发生过的成功」，但文案没跟着改。
+7. **`main.spec.ts:570-573` 的注释与产品实际打架。** 那里写「批量导入现在也拒 `file://`」，但
+   `StartBatchImportRequestSchema`（`shared/src/schemas/repoBatchImport.ts:69-74`）只 refine 了
+   `noQueryCredentialUrl`，全链路无 scheme 检查——而该 schema 顶部的 RFC-287 G5 注释明确说这是**刻意**不拒
+   （真正的收口在 `services/task.ts` 的 `resolveRepoSourceSingle`）。`main.spec.ts` 那条注释是过期的。
+8. **导入弹窗里两个按钮的无障碍名同为 "Close"**（`Dialog.tsx:425` 的 `aria-label="Close"` vs
+   `repos.batchImport.close`）。读屏用户在同一个对话框里听到两个同名按钮。属共享 `<Dialog>` 层面的问题，
+   影响所有带 "Close" footer 的弹窗。
+9. **`repos.tsx:534` 的空态分支与 `PageHeader` 争同一个 `data-testid`**（`repos-batch-import-button`，
+   互斥出现）。`e2e/keyboard-flows.spec.ts` 的四条 Dialog 用例正是靠「零仓时按钮落在空态里」拿到它——
+   一旦有人给页头补上「空态也显示导入按钮」，那四条会 strict-mode 撞车。埋着的 testid 唯一性地雷。

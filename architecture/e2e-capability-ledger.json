@@ -187,8 +187,13 @@
       "title": "停用已发布工具 / 删除工具草稿（Retire）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-digital-employee-p1.spec.ts",
+          "test": "DE-07：对已发布工具点「停用」、对草稿点「删除草稿」，二次确认后它们从职责工具列表里消失且刷新后不回来"
+        }
+      ]
     },
     {
       "id": "DE-09",
@@ -229,8 +234,13 @@
       "title": "创建数字员工时选择仓库 / 仓库组作用域（scope picker）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-digital-employee-p1.spec.ts",
+          "test": "DE-17：作用域选择器里选仓库和选仓库组，分别落成 repository 与 repository-group 两种 workScope"
+        }
+      ]
     },
     {
       "id": "DE-18",
@@ -238,8 +248,13 @@
       "title": "编辑已存在的数字员工，并在职责泳道覆盖 / 恢复岗位 Adapter",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-digital-employee-p1.spec.ts",
+          "test": "DE-18：员工卡片「编辑」回填当前岗位与作用域，只改名字保存后作用域与岗位逐字段不变、revision 递增"
+        }
+      ]
     },
     {
       "id": "DE-22",
@@ -269,8 +284,13 @@
       "title": "案例被阻塞（blocked）后的「已处理，继续工作」恢复",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-digital-employee-p1.spec.ts",
+          "test": "DE-27：案例阻塞后页头给出「已处理，继续工作」，点击后案例离开阻塞态"
+        }
+      ]
     },
     {
       "id": "DE-31",
@@ -289,8 +309,17 @@
       "title": "【漏项】发起任务时逐任务开关人工评审（「先评审方案 / 直接实现」）及其不可用门控",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-digital-employee-p1.spec.ts",
+          "test": "DE-X1：任务向导把「先评审方案」打开后随 launch 请求上行，且案例真的长出人工评审门禁"
+        },
+        {
+          "file": "e2e/rfc319-digital-employee-p1.spec.ts",
+          "test": "DE-X1：员工没有绑定方案编写工具时，「先评审方案」不可选并给出原因"
+        }
+      ]
     },
     {
       "id": "EVENT-02",
@@ -5144,8 +5173,13 @@
       "title": "批量导入远端仓库（/repos 弹窗，混合合法 + 非法 URL）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-01 批量导入：合法行各自落库、非法行当场判失败，一行坏的不拖垮整批"
+        }
+      ]
     },
     {
       "id": "REPO-02",
@@ -5153,8 +5187,13 @@
       "title": "批量导入失败行的「改 URL 重试」",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-02 导入失败的那一行可以就地改 URL 重试，并且只重跑它自己"
+        }
+      ]
     },
     {
       "id": "REPO-03",
@@ -5162,8 +5201,13 @@
       "title": "批量导入进度经 /ws/repo-imports/{batchId} 实时推送",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-03 导入进度由 /ws/repo-imports 推上来，界面不靠轮询也会自己走到完成"
+        }
+      ]
     },
     {
       "id": "REPO-04",
@@ -5198,8 +5242,13 @@
       "title": "/repos 主表用真后端数据渲染仓库行（脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-08 主表逐列渲染真后端数据：脱敏 URL、本地路径、默认分支、抓取时间、引用数、子模块徽标"
+        }
+      ]
     },
     {
       "id": "REPO-09",
@@ -5207,8 +5256,13 @@
       "title": "/repos 服务端搜索、业务视图（全部 / 被引用 / 需关注 / 闲置）与高级过滤弹窗",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-09 搜索 / 视图 / 高级过滤全部下推服务端，不是在已加载的那一页里挑"
+        }
+      ]
     },
     {
       "id": "REPO-12",
@@ -5319,8 +5373,13 @@
       "title": "/repos 的写权限门（无 create/update/delete/execute 时按钮不渲染且请求不发出）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-33 只有 repos:read 的账号：读得到全部镜像，四个写入口一个都不渲染、一条请求都不发"
+        }
+      ]
     },
     {
       "id": "REPO-34",
@@ -5438,8 +5497,13 @@
       "title": "在 /mcps/new 新建 MCP（local/remote 分段切换 + 必填校验）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-16: 新建 MCP 的必填校验挡在请求之前，local ↔ remote 分段切换换掉整组必填字段"
+        }
+      ]
     },
     {
       "id": "RES-17",
@@ -5447,8 +5511,13 @@
       "title": "编辑并保存 MCP 配置（写入严格绑定所选的 id）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废"
+        }
+      ]
     },
     {
       "id": "RES-18",
@@ -5474,8 +5543,17 @@
       "title": "探测失败的错误码与详情渲染（connect-failed / auth-required / timeout / partial）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-21: connect-failed / handshake-failed / auth-required / partial 各自渲染自己的错误码与详情"
+        },
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-21: 探测撞上 60 秒总时限时报 timeout，而不是伪装成握手失败"
+        }
+      ]
     },
     {
       "id": "RES-22",
@@ -5483,8 +5561,13 @@
       "title": "探测结果随配置保存失效（needs re-probe 状态与过期空态）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-17/RES-22: 改完 MCP 配置保存后字段真的落库，上一版探测结果当场作废"
+        }
+      ]
     },
     {
       "id": "RES-23",
@@ -5492,8 +5575,13 @@
       "title": "草稿未保存时的探测选择：「保存并探测」/「用已保存版本探测」",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-23: 草稿未保存时「用已保存版本探测」与「保存并探测」用的是两份不同的配置"
+        }
+      ]
     },
     {
       "id": "RES-24",
@@ -5582,8 +5670,13 @@
       "title": "MCP / 插件的 exact-operation 陈旧冲突提示（resource-operation-stale）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-37: MCP 探测与插件保存都必须认出「这条资源已经被人改过」，而不是拿旧版本继续"
+        }
+      ]
     },
     {
       "id": "RES-38",
@@ -5663,8 +5756,13 @@
       "title": "MCP / 插件的 enabled 开关及「引用了 disabled 插件的 agent 保存被拒」",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-mcp-management.spec.ts",
+          "test": "RFC-319 RES-X3: 关掉 enabled 之后 MCP 不再可探测，插件让引用它的代理保存被拒"
+        }
+      ]
     },
     {
       "id": "RES-X4",
@@ -6757,11 +6855,11 @@
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-19a ACL 面板的可见性开关：public→private→public 双向生效，非 owner 的面板全程只读"
+          "test": "WG-19a ACL 面板的可见性开关：public→private→public 双向生效，read 档与 write 档的面板全程只读"
         },
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-19b ACL 面板的逐用户授权：私有工作组加一个人，服务端名单与对方的可见性同时变"
+          "test": "WG-19b ACL 面板的逐用户授权：加人默认落 read、提到 write 才拿到内容写、移出后彻底看不见"
         }
       ]
     },
@@ -6789,7 +6887,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-workgroup-acl.spec.ts",
-          "test": "WG-21 非 owner 看得见但改不动：PUT / DELETE / rename / 改权限全 403，同样几条对 owner 是通的"
+          "test": "WG-21 read 档看得见改不动、write 档只够得着内容：四条写路径按门分流成三个拒绝码，界面同步收口"
         }
       ]
     },
@@ -8561,8 +8659,13 @@
       "title": "/repos 游标分页「加载更多」",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-10 超过一页时给出「加载更多」，按下去经游标续取而不是从头重来"
+        }
+      ]
     },
     {
       "id": "REPO-11",
@@ -8570,8 +8673,17 @@
       "title": "/repos 首次空态与「无匹配」空态",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-11 首次进入 /repos：空态引导取代空表格，工具条与表头一并让位"
+        },
+        {
+          "file": "e2e/rfc319-repos-list-and-import.spec.ts",
+          "test": "REPO-11 搜索无命中时给的是「无匹配 + 清除筛选」，不是首次空态"
+        }
+      ]
     },
     {
       "id": "REPO-19",
@@ -9242,11 +9354,6 @@
     }
   ],
   "gapIds": [
-    "DE-07",
-    "DE-17",
-    "DE-18",
-    "DE-27",
-    "DE-X1",
     "REPO-43",
     "AGENT-28",
     "AGENT-33",
@@ -9382,14 +9489,9 @@
     "OPS-X4",
     "OPS-X5",
     "OPS-X8",
-    "REPO-01",
-    "REPO-02",
-    "REPO-03",
     "REPO-04",
     "REPO-05",
     "REPO-06",
-    "REPO-08",
-    "REPO-09",
     "REPO-12",
     "REPO-15",
     "REPO-16",
@@ -9399,7 +9501,6 @@
     "REPO-27",
     "REPO-29",
     "REPO-30",
-    "REPO-33",
     "REPO-34",
     "REPO-37",
     "REPO-44",
@@ -9411,13 +9512,8 @@
     "RES-05",
     "RES-11",
     "RES-12",
-    "RES-16",
-    "RES-17",
     "RES-18",
     "RES-19",
-    "RES-21",
-    "RES-22",
-    "RES-23",
     "RES-24",
     "RES-25",
     "RES-26",
@@ -9427,7 +9523,6 @@
     "RES-32",
     "RES-33",
     "RES-36",
-    "RES-37",
     "RES-38",
     "RES-40",
     "RES-41",
@@ -9436,7 +9531,6 @@
     "RES-46",
     "RES-X1",
     "RES-X2",
-    "RES-X3",
     "TASK-04",
     "TASK-05",
     "TASK-06",
@@ -9621,8 +9715,6 @@
     "OPS-X6",
     "OPS-X7",
     "OPS-X9",
-    "REPO-10",
-    "REPO-11",
     "REPO-19",
     "REPO-28",
     "REPO-36",
