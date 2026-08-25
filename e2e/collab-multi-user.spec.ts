@@ -408,6 +408,13 @@ test('RFC-319: task owner grants a collaborator through the members panel, then 
   // 落定时**静默丢弃**用户的选择，症状是「选了但保存按钮一直灰着」。满载并行下这个
   // 窗口是真实存在的（这条用例单跑绿、全量跑红，就是这么红的）。
   // `members-transfer-owner` 只在 canManage 为真时渲染，用它当就绪信号。
+  //
+  // B81 查到的真机制（CI run 32835038793，Windows 分片 1）：「会话未落定」不只发生在
+  // 打开面板那一刻——面板的编辑快照 key 曾落在 `['tasks', id]` 之下，而 useTaskSync 每次
+  // WS 建连（reconcileOnOpen）与任务在跑时的每一帧 task.status 都失效这个前缀，把快照打成
+  // fetching ⇒ 面板按「失去管理权」整体重置：Save 先从 DOM 消失、再以 disabled 回来，刚选
+  // 的 chip 被冲掉。key 已挪出前缀（`lib/query-keys.ts` TASK_QUERY_KEYS.members，单测
+  // `task-members-manage-loss` / `task-sync-rules` 锁住）；上面的就绪等待仍然保留。
   await expect(panel.getByTestId('members-transfer-owner')).toBeVisible()
   await panel.getByTestId('members-users-input').click()
   await panel.getByTestId('members-users-input').fill('dave')

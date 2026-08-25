@@ -124,6 +124,52 @@ describe('buildTaskSyncRules — child-task list re-validation (RFC-245)', () =>
   })
 })
 
+// RFC-319 B81 —— 成员面板的编辑快照必须在这张表的失效面之外。
+//
+// TaskMembersPanel 把「管理会话仍有效」定义为它的 members query
+// `status === 'success' && fetchStatus === 'idle'`（与 AclPanel / useActor 同一条
+// 「后台 refetch 期间保留的数据不算当前授权」不变量）。它的 key 曾是
+// ['tasks', id, 'members', rev] —— 恰好在 TASK_QUERY_KEYS.detail(id) 之下，而 detail(id)
+// 是这张表的 reconcileOnOpen 前缀、也是 task.status / task.done 等帧的失效键：任务在跑
+// 的几秒里每一帧都把打开着的面板打成 fetching ⇒ 草稿整体重置、Save 变灰、picker 的
+// 选择被静默丢弃。e2e `collab-multi-user.spec.ts`「grants a collaborator」在 Windows
+// 分片上就是这样红的（单跑绿、全量红，CI run 32835038793）。key 已挪到 'task-members'
+// 前缀下；这里钉死「这张表发出的任何键都不是它的前缀」，让下一次「顺手收编回
+// ['tasks', id] 家族」在单测里就现形。
+describe("buildTaskSyncRules — the members editing snapshot is out of this table's reach (RFC-319 B81)", () => {
+  const membersKey = TASK_QUERY_KEYS.members(TASK, 0) as readonly unknown[]
+  const isPrefixOf = (prefix: readonly unknown[], key: readonly unknown[]): boolean =>
+    prefix.length <= key.length && prefix.every((part, i) => Object.is(part, key[i]))
+
+  test('the members key does not live under the task family prefixes', () => {
+    expect(isPrefixOf(TASK_QUERY_KEYS.root() as readonly unknown[], membersKey)).toBe(false)
+    expect(isPrefixOf(TASK_QUERY_KEYS.detail(TASK) as readonly unknown[], membersKey)).toBe(false)
+  })
+
+  test('no frame in the table emits a prefix of the members key', () => {
+    const rules = buildTaskSyncRules(TASK) as Record<
+      string,
+      ((m: TaskWsMessage) => readonly unknown[] | void) | undefined
+    >
+    const types = Object.keys(rules)
+    expect(types.length).toBeGreaterThan(0)
+    for (const type of types) {
+      // 规则只读 msg.type / msg.nodeRunId；其余字段按最宽形状给。
+      const frame = {
+        id: 0,
+        type,
+        nodeRunId: 'r1',
+        nodeId: 'n1',
+        status: 'running',
+      } as unknown as TaskWsMessage
+      const keys = (rules[type]?.(frame) ?? []) as readonly (readonly unknown[])[]
+      for (const key of keys) {
+        expect(isPrefixOf(key, membersKey), `${type} → ${JSON.stringify(key)}`).toBe(false)
+      }
+    }
+  })
+})
+
 // ---------------------------------------------------------------------------
 // RFC-286 F4 —— 规则表零字面锁：三张 WS 失效规则表（useTaskSync / useTasksSync /
 // useClarifyWs）里不得再出现字符串字面 queryKey（['tasks'… / ['reviews'… /

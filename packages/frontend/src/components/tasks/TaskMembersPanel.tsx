@@ -22,6 +22,7 @@ import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { currentActorAtRequest, useActor, useAuthSessionRevision } from '@/hooks/useActor'
 import { getAuthSessionRevision } from '@/stores/auth'
+import { TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { PresenceDot } from '@/components/PresenceDot'
 import { usePresenceOf } from '@/hooks/usePresence'
 import { Dialog } from '../Dialog'
@@ -96,7 +97,10 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
   const actor = useActor()
   const authRevision = useAuthSessionRevision()
   const url = `/api/tasks/${encodeURIComponent(taskId)}/members`
-  const queryKey = ['tasks', taskId, 'members', authRevision] as const
+  // 编辑快照的 key 刻意不在 `['tasks', taskId]` 之下——理由见 TASK_QUERY_KEYS.members 的注释
+  // （useTaskSync 的 reconcile 前缀会把它打成 fetching，下面的 liveCanManage 就会误判「失去
+  // 管理权」并把草稿整体重置；task-members-manage-loss.test.tsx 锁着这两面）。
+  const queryKey = TASK_QUERY_KEYS.members(taskId, authRevision)
   const actorIsSettledHuman =
     actor.status === 'success' &&
     actor.fetchStatus === 'idle' &&
@@ -132,7 +136,7 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
   const hasCurrentManageAuthority = (expectedAuthRevision: number): boolean => {
     if (getAuthSessionRevision() !== expectedAuthRevision) return false
     const liveActor = currentActorAtRequest(qc)
-    const expectedQueryKey = ['tasks', taskId, 'members', expectedAuthRevision] as const
+    const expectedQueryKey = TASK_QUERY_KEYS.members(taskId, expectedAuthRevision)
     const membersState = qc.getQueryState(expectedQueryKey)
     const liveMembers = qc.getQueryData<TaskMembers>(expectedQueryKey)
     return (

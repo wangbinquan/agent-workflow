@@ -20,6 +20,23 @@ export const TASK_QUERY_KEYS = {
   nodeRuns: (taskId: string | null): QueryKey => ['tasks', taskId, 'node-runs'],
   questions: (taskId: string | null): QueryKey => ['task-questions', taskId],
   clarifyDirectives: (taskId: string | null): QueryKey => ['task-clarify-directives', taskId],
+  /**
+   * 成员面板（TaskMembersPanel）的**编辑快照**。刻意不在 `['tasks', taskId]` 之下：
+   * 面板把「管理会话仍有效」定义为这个 query `status === 'success' && fetchStatus === 'idle'`
+   * （沿用 AclPanel / useActor 的「后台 refetch 期间保留的数据不算当前授权」不变量），
+   * 于是任何把它打成 fetching 的失效都会被当成「失去管理权」——草稿整体重置、Save 变灰、
+   * UserPicker 的 onChange 静默丢弃选择。而 `['tasks', taskId]` 是 useTaskSync 的
+   * reconcile 前缀（每次 WS 建连 + 每一帧 task.status / task.done / review / clarify 都会
+   * 失效它），任务在跑的几秒里必然命中打开着的面板：e2e `collab-multi-user.spec.ts` 的
+   * 「grants a collaborator」在 Windows 分片上就是这样红的（单跑绿、全量红）。
+   * 与 `['acl', …]`（useWebSocket.ts 刻意不碰它）和上面 questions / clarifyDirectives
+   * 的出前缀是同一条规则；task-sync-rules.test.ts 钉死它不会被这张表触达。
+   */
+  members: (taskId: string | null, authRevision: number): QueryKey => [
+    'task-members',
+    taskId,
+    authRevision,
+  ],
 } as const
 
 export const REVIEW_QUERY_KEYS = {

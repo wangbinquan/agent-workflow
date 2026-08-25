@@ -20,11 +20,11 @@ import { TaskMembersPanel } from '../src/components/tasks/TaskMembersPanel'
 import { meQueryOptions, type MeResponse } from '../src/hooks/useActor'
 import i18n from '../src/i18n'
 import { getAuthSessionRevision, setToken } from '../src/stores/auth'
+import { TASK_QUERY_KEYS } from '../src/lib/query-keys'
 
 const mockedGet = vi.mocked(api.get)
 const mockedPut = vi.mocked(api.put)
-const membersKey = (taskId: string) =>
-  ['tasks', taskId, 'members', getAuthSessionRevision()] as const
+const membersKey = (taskId: string) => TASK_QUERY_KEYS.members(taskId, getAuthSessionRevision())
 
 function user(id: string, username: string): UserPublic {
   return { id, username, displayName: `DN ${username}`, role: 'user', status: 'active' }
@@ -267,5 +267,54 @@ describe('TaskMembersPanel manage-session loss', () => {
     expect(screen.getByTestId('members-users-remove-bob')).toBeTruthy()
     fireEvent.click(restored)
     expect(mockedPut).not.toHaveBeenCalled()
+  })
+
+  // RFC-319 B81 —— e2e `collab-multi-user.spec.ts`「grants a collaborator」在 Windows 分片
+  // 上的红（CI run 32835038793）：面板的编辑快照 key 曾落在 `['tasks', taskId]` 之下，
+  // useTaskSync 每次 WS 建连（reconcileOnOpen）与每一帧 task.status 都失效这个前缀，
+  // 把快照打成 fetching ⇒ `liveCanManage` 为假 ⇒ 面板按「失去管理权」整体重置：Save
+  // 先从 DOM 消失再以 disabled 回来、刚选的 chip 被冲掉、picker 的 onChange 静默丢弃。
+  // 这条锁两面：无关的任务家族失效碰不到草稿（连一次 members 读都不许发出）；而**直接**
+  // 失效快照本身仍然结束草稿——那是上面各条锁着的授权不变量，不能被这次修复顺手放松。
+  test('an unrelated task-family invalidation neither refetches the snapshot nor ends the draft', async () => {
+    installReads({ a: members('a') })
+    const { client } = renderPanel()
+    fireEvent.click(await screen.findByTestId('members-users-remove-bob'))
+    expect((screen.getByTestId('members-save') as HTMLButtonElement).disabled).toBe(false)
+
+    // 后续的 members 读一律悬着：真实 CI 上 refetch 在飞的窗口正是草稿被冲掉的窗口。
+    const inflight = deferred<TaskMembers>()
+    const membersReads = () =>
+      mockedGet.mock.calls.filter(([path]) => path === '/api/tasks/a/members').length
+    const before = membersReads()
+    mockedGet.mockImplementation((path: string) =>
+      path === '/api/tasks/a/members'
+        ? (inflight.promise as never)
+        : (Promise.resolve([CAROL]) as never),
+    )
+
+    // useTaskSync 的 reconcile 前缀 + 列表面的根前缀：两者都不该触达编辑快照。
+    void client.invalidateQueries({ queryKey: TASK_QUERY_KEYS.detail('a') })
+    void client.invalidateQueries({ queryKey: TASK_QUERY_KEYS.root() })
+    expect(membersReads()).toBe(before)
+    // 给 react-query 的通知调度（setTimeout 0）一个 tick，再断言草稿原封不动。
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(screen.queryByTestId('members-users-remove-bob')).toBeNull()
+    expect((screen.getByTestId('members-save') as HTMLButtonElement).disabled).toBe(false)
+
+    // 正向对照：直接失效快照本身仍旧结束草稿（fetching 期间管理面整体让位）……
+    void client.invalidateQueries({ queryKey: membersKey('a') })
+    expect(membersReads()).toBe(before + 1)
+    await waitFor(() => expect(screen.queryByTestId('members-save')).toBeNull())
+    // ……refetch 落定后回到干净会话：bob 回来了、Save 变灰。
+    await act(async () => {
+      inflight.resolve(members('a'))
+      await inflight.promise
+    })
+    const restored = (await screen.findByTestId('members-save')) as HTMLButtonElement
+    expect(restored.disabled).toBe(true)
+    expect(screen.getByTestId('members-users-remove-bob')).toBeTruthy()
   })
 })

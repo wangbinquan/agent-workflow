@@ -8,7 +8,7 @@
 // a real Basic-authenticated Git smart-HTTP remote so removing the refresh lease
 // makes both cases deterministically red.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { readdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -24,6 +24,18 @@ import {
 } from './helpers/gitHttpRemote'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+// 墙钟预算：每条用例的 body 都在真跑 git（init / commit / bare clone / 经 smart-HTTP 的冷
+// clone / 再一次 fetch），绿的时候就要 2.7–4.6s（CI run 32835038793 的 Ubuntu 分片 3.4s、
+// macOS 分片 4.0–4.6s），静息已贴着 bun 默认 5s 的 55–92%；macOS 分片 3 在 2026-08-25 以
+// `timed out after 5000ms` 翻红，随后 bun 回收还在飞的 git 子进程（`killed 1 dangling
+// process`）、afterEach 删掉夹具目录、被判超时的 body 继续跑到 `expect` 时抛成
+// 「Unhandled error between tests」——三行报错点名的全是 git，主语其实是「没声明预算」。
+// 定式见 docs/dev-gotchas.md §测试 / CI（「凡是真的建仓 / 真的拉子进程的用例，文件顶上写
+// setDefaultTimeout(60_000)」；先例 git-repo-cache / rfc199-start-task-workflow-race）。
+// 这是墙钟允许量，不是对 refresh 变慢的容忍。
+setDefaultTimeout(60_000)
+
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
 const roots: string[] = []
 
