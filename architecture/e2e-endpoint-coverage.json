@@ -100,7 +100,6 @@
     "POST /api/employee-cases/:id/terminate",
     "POST /api/employee-cases/policy-upgrade-apply",
     "POST /api/employee-cases/worker/run-one",
-    "POST /api/event-center/observers/run-due",
     "POST /api/event-center/sources/:id/retire",
     "POST /api/integrations/development-adapters/:id/archive",
     "POST /api/intent-sessions/:id/answers",
