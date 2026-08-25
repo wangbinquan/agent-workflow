@@ -7237,8 +7237,17 @@
       "title": "评审门空文档自动通过（无 doc_version 时不困住用户）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/review-empty-list-auto-approve.spec.ts",
+          "test": "上游零份文档：评审门自动放行，任务往前走，而不是停在一个谁也点不开的空轮上"
+        },
+        {
+          "file": "e2e/review-empty-list-auto-approve.spec.ts",
+          "test": "对照：上游有一份文档时，这道门照常拦住人工评审"
+        }
+      ]
     },
     {
       "id": "HUMAN-47",
@@ -8749,7 +8758,6 @@
     "EVENT-X6",
     "EVENT-X7",
     "HUMAN-15",
-    "HUMAN-43",
     "IAM-02",
     "IAM-07",
     "IAM-09",
