@@ -2852,3 +2852,24 @@ mirror: git fetch --all --prune          # 不带 --tags
 同理适用于 `STATE.md` / `design/plan.md` / `docs/*.md` 等共享索引：那些文件用
 「HEAD 内容 + 只有我这几行」的覆盖副本入库（`commit-mine.py` 的 `路径=覆盖文件` 形式），
 从根上绕开这个窗口。账本类因为要跟着测试结果走，绕不开，只能靠「立刻提交 + 回读复核」。
+
+## `architecture/ledger-baselines.json` 同时被两套机制盯着：改它之前先知道会踩到谁
+
+2026-08-26 起，这个文件有**两个互相不知道对方存在**的看门人：
+
+1. **RFC-317 的高水位棘轮** —— 要求每条 `baseline` 与来源账本的条目数**逐字相等**，且只许降。
+   RFC-319 每落一批 e2e 就必须改它（夜跑的覆盖账本对账是逐条相等断言，来源改小了不同批改基线就必红）。
+2. **RFC-294 N1a 的 content-addressed provenance** —— 把这个文件的**内容摘要**也 pin 进了 canonical
+   snapshot（`packages/backend/tests/architecture/rfc294Canonical.ts` 的受管文件清单）。
+
+于是「RFC-319 改一次基线」＝「RFC-294 的 pin 失效一次」，需要对方 repin。今晚实际发生过：
+`f848bc130`（我改基线）→ `6e5c16be6`（对方 repin）。
+
+**动它之前**：
+
+* 只改**自己那几条**的 `baseline` 与 `why`，**绝不重排 `ledgers` 数组**——数组当前不是按 id 排序的
+  （53 条，`ids == sorted(ids)` 为 False），任何重排都会同时打到两套守卫，且 diff 大到无法归因。
+* 改完**立刻提交并回读 committed 内容对数**（见上一节的窗口期陷阱）。
+* 改完顺手知会 RFC-294 那条线去 repin；对方若把这个文件从 digest pin 里排除，这一步才可以省掉。
+* 排查红项时注意区分**内容差异**与**顺序差异**：RFC-294 的 projection 报的 diff 可能只是同一条目
+  出现在数组不同位置（`-` 与 `+` 两侧内容逐字相同、位置不同），那与你的数值改动无关。
