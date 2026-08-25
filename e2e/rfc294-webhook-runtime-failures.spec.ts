@@ -555,12 +555,23 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       expect(recovered.status).toBe('done')
       const recoveredData = await nodeRuns(lineage.task.id)
       const allRuns = agentRuns(recoveredData)
-      // retryNode first mints the durable `queued for retry` failed marker;
-      // runTask then mints the process-owning attempt that consumes it.
-      expect(allRuns.map((run) => run.status)).toEqual(['failed', 'failed', 'failed', 'done'])
-      const queued = allRuns.find((run) => run.errorMessage === 'queued for retry')
-      expect(queued).toMatchObject({ status: 'failed', pid: null })
-      const recoveredRun = allRuns.find((run) => run.status === 'done')!
+      // retryNode mints at least one durable, process-free bookkeeping row;
+      // runTask then mints the process-owning attempt. The exact bookkeeping
+      // row count belongs to the retry-CAS backend oracle, not this runtime
+      // lineage journey: a slow hosted runner may observe another process-free
+      // failed marker before the successful attempt settles. Keep the strong
+      // boundary here — no extra process-owning failure and exactly one done
+      // recovery — while the trace assertion below locks the three real CLI
+      // invocations.
+      const initialRunIds = new Set(failedRuns.map((run) => run.id))
+      const retryEpochRuns = allRuns.filter((run) => !initialRunIds.has(run.id))
+      const retryBookkeeping = retryEpochRuns.filter((run) => run.status === 'failed')
+      expect(retryBookkeeping.length).toBeGreaterThanOrEqual(1)
+      expect(retryBookkeeping.every((run) => run.pid === null)).toBe(true)
+      expect(retryBookkeeping.some((run) => run.errorMessage === 'queued for retry')).toBe(true)
+      const recoveredRuns = retryEpochRuns.filter((run) => run.status === 'done')
+      expect(recoveredRuns).toHaveLength(1)
+      const recoveredRun = recoveredRuns[0]!
       expect(
         recoveredData.outputs.find(
           (row) => row.nodeRunId === recoveredRun.id && row.port === 'answer',

@@ -42,6 +42,13 @@ interface Described extends Rect {
  * 拦截者就是那 15 秒超时会碰到的同一个。
  */
 export async function clickCanvasControl(page: Page, testId: string): Promise<void> {
+  // Keep Playwright's normal render wait before the synchronous hit probe.
+  // ReactFlow mounts its controls after the canvas becomes visible; probing
+  // document.querySelector immediately made slower WebKit runners report a
+  // missing control even though the real locator would have waited for it.
+  const control = page.getByTestId(testId)
+  await expect(control, `画布控件 [data-testid=${testId}] 未在等待窗口内挂载`).toBeAttached()
+
   const probe = await page.evaluate((id: string): HitProbe => {
     const describe = (e: Element | null): Described | null => {
       if (e === null) return null
@@ -85,5 +92,5 @@ export async function clickCanvasControl(page: Page, testId: string): Promise<vo
       `两个绝对定位的浮层撞在一起时，z-index 大的那个赢——把这两个矩形贴进 issue 即可定位。`,
   ).toBe(true)
 
-  await page.getByTestId(testId).click()
+  await control.click()
 }

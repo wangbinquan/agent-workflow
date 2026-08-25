@@ -42,6 +42,21 @@ async function primeAuth(page: Page): Promise<void> {
   )
 }
 
+async function chooseActiveSelectOption(page: Page, name: RegExp): Promise<void> {
+  const option = page.getByRole('option', { name })
+  await expect(option).toBeVisible()
+  const optionId = await option.getAttribute('id')
+  expect(optionId).not.toBeNull()
+  await expect(page.getByRole('listbox')).toHaveAttribute('aria-activedescendant', optionId!)
+
+  // The searchable Select deliberately focuses its search input. WebKit can
+  // choose a stale pointer coordinate while the portaled list scrolls, so use
+  // the component's real accessible Enter contract once the intended option
+  // is the active descendant.
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+}
+
 test.beforeAll(async () => {
   daemon = await startDaemon({ stubMode: 'development' })
 })
@@ -416,9 +431,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
     .filter({ hasText: 'Choose from Agent library' })
     .getByRole('combobox')
     .click()
-  await page
-    .getByRole('option', { name: /^Built in · Pipeline failure classification Compatible/ })
-    .click()
+  await chooseActiveSelectOption(page, /^Built in · Pipeline failure classification Compatible/)
   await toolDialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
   await expect(toolDialog).toHaveCount(0)
 
@@ -465,7 +478,7 @@ test('pipeline failure types expand into equal-width required nodes and only sho
     .filter({ hasText: 'Choose from Agent library' })
     .getByRole('combobox')
     .click()
-  await page.getByRole('option', { name: /^Built in · Pipeline failure repair Compatible/ }).click()
+  await chooseActiveSelectOption(page, /^Built in · Pipeline failure repair Compatible/)
   await toolDialog.getByRole('button', { name: 'Check contract and add', exact: true }).click()
   await expect(toolDialog).toHaveCount(0)
 
