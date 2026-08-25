@@ -15,10 +15,7 @@
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "symbol": "ALLOWLIST",
       "baseline": 14,
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表",
-      "allowGrowth": {
-        "why": "RFC-323 为已冻结的 legacy development program 生成一次性兼容包装器；两处文本命中归入同一显式治理条目"
-      }
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
     },
     {
       "id": "ux-role-dialog-allowlist",
