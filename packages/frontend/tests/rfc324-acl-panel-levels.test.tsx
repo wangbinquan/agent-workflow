@@ -53,6 +53,7 @@ function user(id: string, username: string, role: 'user' | 'manager' = 'user') {
 
 const ALICE = user('u-alice', 'alice')
 const BOSS = user('u-boss', 'boss', 'manager')
+const CAROL = user('u-carol', 'carol')
 
 function acl(overrides: Record<string, unknown> = {}) {
   return {
@@ -69,10 +70,14 @@ function acl(overrides: Record<string, unknown> = {}) {
   }
 }
 
-/** 面板会请求 /me 与 /acl；除 ACL 外一律给一个合法的人类 actor。 */
-function installGet(aclBody: Record<string, unknown>): void {
+/** 面板会请求 /me、/acl 与用户搜索；三类响应必须保持各自的 wire shape。 */
+function installGet(
+  aclBody: Record<string, unknown>,
+  searchUsers: ReturnType<typeof user>[] = [],
+): void {
   mockedGet.mockImplementation(async (url: string) => {
     if (url.endsWith('/acl')) return aclBody
+    if (url === '/api/users/search') return searchUsers
     return { source: 'session', user: user('u-owner', 'owner'), permissions: [] }
   })
 }
@@ -94,6 +99,36 @@ describe('RFC-324 AclPanel —— 逐人档位', () => {
     const write = screen.getByTestId(`acl-level-write-${ALICE.id}`)
     expect(read.getAttribute('aria-checked'), '服务端说是 read，控件就得显示 read').toBe('true')
     expect(write.getAttribute('aria-checked')).toBe('false')
+  })
+
+  test('既有成员是一人一行，不再塞进“添加成员”的搜索框', async () => {
+    installGet(acl())
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    const grantRow = await screen.findByTestId(`acl-grant-${ALICE.id}`)
+    const searchInput = screen.getByTestId('acl-members-input')
+
+    expect(grantRow.textContent).toContain('DN alice')
+    expect(screen.getByTestId(`acl-level-read-${ALICE.id}`)).toBeTruthy()
+    expect(searchInput.closest('.chips-input__row')?.textContent).not.toContain('DN alice')
+  })
+
+  test('添加成员是一次完整动作：选中后下拉关闭，新成员独立成行且默认只读', async () => {
+    installGet(acl(), [CAROL])
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await screen.findByTestId(`acl-grant-${ALICE.id}`)
+
+    const input = screen.getByTestId('acl-members-input')
+    fireEvent.focus(input)
+    fireEvent.click(await screen.findByTestId('acl-members-option-carol'))
+
+    const carolRow = await screen.findByTestId(`acl-grant-${CAROL.id}`)
+    expect(carolRow.textContent).toContain('DN carol')
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByTestId(`acl-level-read-${CAROL.id}`).getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    expect(screen.getByTestId('acl-members-remove-carol')).toBeTruthy()
+    expect((screen.getByTestId('acl-save') as HTMLButtonElement).disabled).toBe(false)
   })
 
   test('改档位 → 保存：PUT body 里带的是 grants，每项一个 level', async () => {
@@ -122,10 +157,12 @@ describe('RFC-324 AclPanel —— 逐人档位', () => {
     installGet(acl({ grants: [{ user: BOSS, level: 'read' }] }))
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
     await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+    const note = screen.getByTestId(`acl-level-admin-note-${BOSS.id}`)
+    expect(note, '给管理员设只读却不提示，等于让 owner 以为锁住了他').toBeTruthy()
     expect(
-      screen.getByTestId(`acl-level-admin-note-${BOSS.id}`),
-      '给管理员设只读却不提示，等于让 owner 以为锁住了他',
-    ).toBeTruthy()
+      note.textContent !== null && note.textContent.trim().length > 20,
+      '提示必须直接说清平台级权限例外，不能退回只有悬浮 title 的警告符号',
+    ).toBe(true)
   })
 
   test('普通被授权人没有那条提示（提示只在真的无效时出现）', async () => {
@@ -133,6 +170,18 @@ describe('RFC-324 AclPanel —— 逐人档位', () => {
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
     await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
     expect(screen.queryByTestId(`acl-level-admin-note-${ALICE.id}`)).toBeNull()
+  })
+
+  test('执行面资源切到可编辑时，立刻显示明确的运行风险提示', async () => {
+    installGet(acl({ resourceType: 'mcp' }))
+    wrap(<AclPanel resourceBaseUrl="/api/mcps/x" invalidateKey={['mcps']} />)
+    await screen.findByTestId(`acl-grant-${ALICE.id}`)
+    expect(screen.queryByTestId('acl-execution-risk')).toBeNull()
+
+    fireEvent.click(screen.getByTestId(`acl-level-write-${ALICE.id}`))
+
+    const warning = screen.getByTestId('acl-execution-risk')
+    expect(warning.textContent !== null && warning.textContent.trim().length > 30).toBe(true)
   })
 
   test('只读态：档位以文字呈现，没有任何可点的档位控件', async () => {

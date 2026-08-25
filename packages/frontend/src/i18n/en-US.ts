@@ -8767,21 +8767,38 @@ export const enUS: Resources = {
   // RFC-099 — ownership ACL + attribution UI
   acl: {
     title: 'Permissions',
+    description: 'Control who can access this resource and who can change its content.',
     owner: 'Owner',
     systemOwner: 'System (no owner)',
     unknownOwner: 'Unknown owner',
-    visibility: 'Visibility',
+    visibility: 'General access',
     visibilityValue: { public: 'Everyone', private: 'Private' },
-    members: 'Authorized users',
-    noMembers: 'No authorized users yet',
+    visibilityHint: {
+      public:
+        'Every signed-in user has read-only access; only members marked Can edit may change it.',
+      private:
+        'Only the owner, members above, and administrators with resource bypass can access it.',
+    },
+    members: 'Member access',
+    membersHint: 'Add people, then choose Read-only or Can edit for each person.',
+    addMember: 'Add people',
+    addMemberPlaceholder: 'Search and add a user…',
+    noMembers: 'No other members',
+    noMembersDescription: 'No one else has been granted individual access.',
     privateHint:
       'Private resources are visible and usable only by the owner, authorized users, or an account with resource-acl:bypass.',
     level: 'Grant level',
     levelValue: { read: 'Read-only', write: 'Can edit' },
-    levelHint:
-      'Read-only means see it, use it, reference it, launch it and copy it. Can edit adds changing its content. Renaming, deleting, transferring and permissions always stay with the owner.',
+    levelDescription: {
+      read: 'View, use, reference, launch and copy this resource',
+      write: 'Includes read-only access and may change its content',
+    },
+    levelHint: 'Renaming, deleting, transferring and permission changes stay with the owner.',
     levelAdminHint:
-      'This user is an administrator and can change any resource; read-only does not bind them.',
+      'This user has platform-level resource management privileges; Read-only does not limit those administrator rights.',
+    executionRiskTitle: 'Edit access affects execution',
+    executionRiskHint:
+      'This resource connects to execution capabilities. Editors can change its configuration, so later runs may use new settings; grant this only to trusted people.',
     readOnlyBadge: 'Read-only access',
     save: 'Save permissions',
     transferOwner: 'Transfer',

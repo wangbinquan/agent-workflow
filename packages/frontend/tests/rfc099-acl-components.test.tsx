@@ -181,6 +181,12 @@ describe('UserPicker', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ id: 'u3' })])
     expect(input.getAttribute('aria-expanded')).toBe('false')
+
+    // The selected portaled option disappears in a real Dialog, whose focus
+    // trap immediately restores focus to the input. That recovery must not
+    // reopen a single-select list that just completed its choice.
+    fireEvent.focus(input)
+    expect(input.getAttribute('aria-expanded')).toBe('false')
   })
 
   test('Escape closes only the portaled listbox and clears aria-activedescendant', async () => {

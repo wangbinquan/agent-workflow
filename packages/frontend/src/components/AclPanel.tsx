@@ -1,12 +1,12 @@
-// RFC-099/RFC-164 — shared permissions panel for the six ACL'd resource types
-// (agents / skills / mcps / plugins / workflows / workgroups).
+// RFC-099/RFC-164/RFC-324 — shared resource ACL panel. Frontend surfaces that
+// expose the standard resource `/acl` contract reuse this body, either directly
+// in their own Dialog or through AclDialogButton. Some backend ACL resource
+// types do not yet have a user-facing permission entry. Account roles, task
+// membership and token scopes are separate permission systems by design.
 //
-// The ONE sanctioned entry point is AclDialogButton: a header button that
-// opens the panel inside a Dialog — every surface looks identical. The panel
-// itself renders WITHOUT its own title/border chrome (the Dialog provides
-// both) and ends in a footer-styled action row: 取消 closes, 保存权限 saves
-// AND closes on success (user feedback: the dialog must not linger after a
-// successful save).
+// The panel renders WITHOUT its own title/border chrome (the Dialog provides
+// both) and ends in a footer-styled action row: 取消 closes, 保存权限 saves AND
+// closes on success (user feedback: the dialog must not linger after save).
 //
 // Visibility rules: owner + visibility + member list are readable by every
 // viewer (D16); only the owner and admins edit (D9). Hidden entirely under
@@ -25,9 +25,15 @@ import type {
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { meQueryOptions, useActor, useAuthSessionRevision, type MeResponse } from '@/hooks/useActor'
+import { accountInitials } from '@/lib/account-user-presentation'
 import { getAuthSessionRevision, getToken } from '@/stores/auth'
 import { Dialog } from './Dialog'
+import { EmptyState } from './EmptyState'
+import { ErrorBanner } from './ErrorBanner'
+import { LoadingState } from './LoadingState'
+import { NoticeBanner } from './NoticeBanner'
 import { Segmented } from './Segmented'
+import { StatusChip } from './StatusChip'
 import { UserPicker } from './UserPicker'
 
 interface AclPanelProps {
@@ -46,6 +52,14 @@ interface AclPanelProps {
    * available. Defaults to true (unrestricted — every other resource type).
    */
   canTransferOwner?: boolean
+}
+
+function aclInitials(user: Pick<UserPublic, 'displayName' | 'username'>): string {
+  // Parenthetical qualifiers such as "Bob (mock)" should not turn into the
+  // punctuation avatar "B(". Keep letters/numbers from the display label and
+  // let the shared account helper handle scripts, words and username fallback.
+  const displayName = user.displayName.replace(/[^\p{L}\p{N}\s]+/gu, ' ').trim()
+  return accountInitials(displayName, user.username)
 }
 
 type AclSaveBody = {
@@ -316,10 +330,33 @@ export function AclPanel({
   ) {
     return null
   }
-  if (query.isLoading) return null
-  if (query.error !== null && query.error !== undefined) return null
+  if (query.data === undefined) {
+    if (query.error !== null && query.error !== undefined) {
+      return (
+        <div className="acl-panel acl-panel--state">
+          <ErrorBanner
+            error={query.error}
+            onRetry={() => void query.refetch()}
+            testid="acl-load-error"
+          />
+          <div className="acl-panel__footer">
+            <button type="button" className="btn" onClick={() => onCancel?.()}>
+              {t('common.close')}
+            </button>
+          </div>
+        </div>
+      )
+    }
+    if (query.isLoading) {
+      return (
+        <div className="acl-panel acl-panel--state">
+          <LoadingState size="compact" data-testid="acl-loading" />
+        </div>
+      )
+    }
+    return null
+  }
   const acl = query.data
-  if (acl === undefined) return null
 
   const canManage = liveCanManage
   const manageSession = manageSessionRef.current
@@ -337,136 +374,227 @@ export function AclPanel({
     }
     return true
   }
+  const renderedVisibility = canManage ? visibility : acl.visibility
+  const renderedGrants = canManage ? grants : acl.grants
+  const hasExecutionRisk =
+    (acl.resourceType === 'mcp' || acl.resourceType === 'development_adapter') &&
+    renderedGrants.some((grant) => grant.level === 'write')
 
   return (
     <div className="acl-panel" data-testid="acl-panel">
-      <div className="acl-panel__row">
-        <span className="acl-panel__label">{t('acl.owner')}</span>
-        <span className="acl-panel__value">
-          {acl.owner !== null ? (
-            <span className="chip">
-              {acl.owner.displayName}
-              <span className="user-picker__username">@{acl.owner.username}</span>
-            </span>
-          ) : (
-            <span className="muted">{t('acl.systemOwner')}</span>
-          )}
-          {canManage && canTransferOwner && (
-            <button
-              ref={transferBtnRef}
-              type="button"
-              className="btn btn--sm"
-              onClick={() => {
-                if (!beginManagedDraft()) return
-                setTransferOpen(true)
-              }}
-              data-testid="acl-transfer-owner"
-            >
-              {t('acl.transferOwner')}
-            </button>
-          )}
-        </span>
-      </div>
+      <p className="acl-panel__intro">{t('acl.description')}</p>
 
-      <div className="acl-panel__row">
-        <span className="acl-panel__label">{t('acl.visibility')}</span>
-        {canManage ? (
-          // RFC-150: migrating to <Segmented> also fixes the a11y drift this
-          // site had (role="group" without aria-checked → radiogroup/radio).
-          <Segmented<ResourceVisibility>
-            value={visibility}
-            onChange={(v) => {
-              if (!beginManagedDraft()) return
-              setVisibility(v)
-              setDirty(true)
-            }}
-            options={(['public', 'private'] as const).map((v) => ({
-              value: v,
-              label: t(`acl.visibilityValue.${v}`),
-              testid: `acl-visibility-${v}`,
-            }))}
-            ariaLabel={t('acl.visibility')}
-          />
-        ) : (
-          <span className="acl-panel__value">{t(`acl.visibilityValue.${acl.visibility}`)}</span>
-        )}
-      </div>
+      <section className="acl-panel__section">
+        <div className="acl-panel__section-header">
+          <div>
+            <h3>{t('acl.members')}</h3>
+            <p>{t('acl.membersHint')}</p>
+          </div>
+        </div>
 
-      <div className="acl-panel__row acl-panel__row--members">
-        <span className="acl-panel__label">{t('acl.members')}</span>
-        {canManage ? (
-          <div className="acl-panel__grants">
+        {canManage && (
+          <div className="acl-panel__add-member">
+            <span className="acl-panel__field-label">{t('acl.addMember')}</span>
             <UserPicker
-              value={grants.map((g) => g.user)}
+              value={[]}
               onChange={(next) => {
+                const picked = next[0]
+                if (picked === undefined || grants.some((grant) => grant.user.id === picked.id)) {
+                  return
+                }
                 if (!beginManagedDraft()) return
-                // Keep the level of anyone already in the list; a newly picked
-                // user starts read-only.
-                const byId = new Map(grants.map((g) => [g.user.id, g]))
-                setGrants(next.map((u) => byId.get(u.id) ?? { user: u, level: 'read' }))
+                // Adding a member is a single, complete action. Keep selected
+                // people out of the search field and default every new grant
+                // to the safe read-only level.
+                setGrants((prev) => [...prev, { user: picked, level: 'read' }])
                 setDirty(true)
               }}
-              excludeIds={acl.ownerUserId !== null ? [acl.ownerUserId] : []}
+              single
+              activeOnly
+              excludeIds={[
+                ...(acl.ownerUserId !== null ? [acl.ownerUserId] : []),
+                ...grants.map((grant) => grant.user.id),
+              ]}
+              placeholder={t('acl.addMemberPlaceholder')}
+              aria-label={t('acl.addMember')}
               testidPrefix="acl-members"
-              // RFC-324 —— 档位控件挂进已选 chip 自己的装饰槽（RFC-312 为在线点
-              // 开的那个）。做成 chip 外的第二份名单会让同一个人在面板里出现两次，
-              // 而这两份还得各自跟着 dirty 状态走。
-              renderAdornment={(userId) => {
-                const grant = grants.find((g) => g.user.id === userId)
-                if (grant === undefined) return null
-                return (
-                  <>
-                    <Segmented<ResourceGrantLevel>
-                      className="segmented--compact"
-                      value={grant.level}
-                      onChange={(level) => {
-                        if (!beginManagedDraft()) return
-                        setGrants((prev) =>
-                          prev.map((x) => (x.user.id === userId ? { ...x, level } : x)),
-                        )
-                        setDirty(true)
-                      }}
-                      options={(['read', 'write'] as const).map((v) => ({
-                        value: v,
-                        label: t(`acl.levelValue.${v}`),
-                        testid: `acl-level-${v}-${userId}`,
-                      }))}
-                      ariaLabel={t('acl.level')}
-                    />
-                    {(grant.user.role === 'admin' || grant.user.role === 'manager') && (
-                      <span
-                        className="acl-panel__grant-note muted"
-                        title={t('acl.levelAdminHint')}
-                        data-testid={`acl-level-admin-note-${userId}`}
-                      >
-                        ⚠
-                      </span>
-                    )}
-                  </>
-                )
-              }}
             />
-            {grants.length > 0 && (
-              <p className="acl-panel__hint page__hint">{t('acl.levelHint')}</p>
+          </div>
+        )}
+
+        <div className="acl-panel__people-list">
+          <div
+            className="acl-panel__person-row acl-panel__person-row--owner"
+            data-testid="acl-owner-row"
+          >
+            <div className="acl-panel__person-identity">
+              <span className="acl-panel__avatar" aria-hidden="true">
+                {acl.owner !== null ? aclInitials(acl.owner) : 'S'}
+              </span>
+              <span className="acl-panel__person-copy">
+                <span className="acl-panel__person-name">
+                  {acl.owner?.displayName ?? t('acl.systemOwner')}
+                  <StatusChip kind="info" size="sm">
+                    {t('acl.ownerBadge')}
+                  </StatusChip>
+                </span>
+                {acl.owner !== null && (
+                  <span className="acl-panel__person-username">@{acl.owner.username}</span>
+                )}
+              </span>
+            </div>
+            {canManage && canTransferOwner && (
+              <div className="acl-panel__person-actions">
+                <button
+                  ref={transferBtnRef}
+                  type="button"
+                  className="btn btn--sm btn--ghost"
+                  onClick={() => {
+                    if (!beginManagedDraft()) return
+                    setTransferOpen(true)
+                  }}
+                  data-testid="acl-transfer-owner"
+                >
+                  {t('acl.transferOwner')}
+                </button>
+              </div>
             )}
           </div>
-        ) : acl.grants.length === 0 ? (
-          <span className="muted">{t('acl.noMembers')}</span>
-        ) : (
-          <span className="acl-panel__value">
-            {acl.grants.map((g) => (
-              <span key={g.user.id} className="chip">
-                {g.user.displayName}
-                <span className="user-picker__username">{t(`acl.levelValue.${g.level}`)}</span>
-              </span>
-            ))}
-          </span>
-        )}
-      </div>
 
-      {(canManage ? visibility : acl.visibility) === 'private' && (
-        <p className="acl-panel__hint page__hint">{t('acl.privateHint')}</p>
+          {renderedGrants.length === 0 ? (
+            <EmptyState
+              title={t('acl.noMembers')}
+              description={t('acl.noMembersDescription')}
+              size="compact"
+              data-testid="acl-members-empty"
+            />
+          ) : (
+            renderedGrants.map((grant) => (
+              <div
+                key={grant.user.id}
+                className="acl-panel__person-row"
+                data-testid={`acl-grant-${grant.user.id}`}
+              >
+                <div className="acl-panel__person-main">
+                  <div className="acl-panel__person-identity">
+                    <span className="acl-panel__avatar" aria-hidden="true">
+                      {aclInitials(grant.user)}
+                    </span>
+                    <span className="acl-panel__person-copy">
+                      <span className="acl-panel__person-name">{grant.user.displayName}</span>
+                      <span className="acl-panel__person-username">@{grant.user.username}</span>
+                    </span>
+                  </div>
+                  {(grant.user.role === 'admin' || grant.user.role === 'manager') && (
+                    <p
+                      className="acl-panel__grant-warning"
+                      data-testid={`acl-level-admin-note-${grant.user.id}`}
+                    >
+                      {t('acl.levelAdminHint')}
+                    </p>
+                  )}
+                </div>
+                <div className="acl-panel__person-actions">
+                  {canManage ? (
+                    <>
+                      <Segmented<ResourceGrantLevel>
+                        className="segmented--compact"
+                        value={grant.level}
+                        onChange={(level) => {
+                          if (!beginManagedDraft()) return
+                          setGrants((prev) =>
+                            prev.map((current) =>
+                              current.user.id === grant.user.id ? { ...current, level } : current,
+                            ),
+                          )
+                          setDirty(true)
+                        }}
+                        options={(['read', 'write'] as const).map((level) => ({
+                          value: level,
+                          label: t(`acl.levelValue.${level}`),
+                          testid: `acl-level-${level}-${grant.user.id}`,
+                        }))}
+                        ariaLabel={`${grant.user.displayName} · ${t('acl.level')}`}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--ghost btn--danger"
+                        aria-label={t('userPicker.remove', { name: grant.user.displayName })}
+                        data-testid={`acl-members-remove-${grant.user.username}`}
+                        onClick={() => {
+                          if (!beginManagedDraft()) return
+                          setGrants((prev) =>
+                            prev.filter((current) => current.user.id !== grant.user.id),
+                          )
+                          setDirty(true)
+                        }}
+                      >
+                        {t('common.remove')}
+                      </button>
+                    </>
+                  ) : (
+                    <StatusChip kind={grant.level === 'write' ? 'info' : 'neutral'} size="sm">
+                      {t(`acl.levelValue.${grant.level}`)}
+                    </StatusChip>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="acl-panel__level-guide">
+          {(['read', 'write'] as const).map((level) => (
+            <div key={level} className="acl-panel__level-guide-item">
+              <strong>{t(`acl.levelValue.${level}`)}</strong>
+              <span>{t(`acl.levelDescription.${level}`)}</span>
+            </div>
+          ))}
+          <p>{t('acl.levelHint')}</p>
+        </div>
+      </section>
+
+      {hasExecutionRisk && (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          title={t('acl.executionRiskTitle')}
+          testid="acl-execution-risk"
+        >
+          {t('acl.executionRiskHint')}
+        </NoticeBanner>
       )}
+
+      <section className="acl-panel__section">
+        <div className="acl-panel__section-header">
+          <h3>{t('acl.visibility')}</h3>
+          {canManage ? (
+            // RFC-150: radiogroup semantics make arrow-key selection and the
+            // current value explicit to assistive technology.
+            <Segmented<ResourceVisibility>
+              value={visibility}
+              onChange={(nextVisibility) => {
+                if (!beginManagedDraft()) return
+                setVisibility(nextVisibility)
+                setDirty(true)
+              }}
+              options={(['public', 'private'] as const).map((value) => ({
+                value,
+                label: t(`acl.visibilityValue.${value}`),
+                testid: `acl-visibility-${value}`,
+              }))}
+              ariaLabel={t('acl.visibility')}
+            />
+          ) : (
+            <StatusChip kind={acl.visibility === 'public' ? 'info' : 'neutral'} size="sm">
+              {t(`acl.visibilityValue.${acl.visibility}`)}
+            </StatusChip>
+          )}
+        </div>
+        <p className="acl-panel__visibility-hint">
+          {t(`acl.visibilityHint.${renderedVisibility}`)}
+        </p>
+      </section>
 
       {canManage && mutationBelongsToSession && save.error !== null && save.error !== undefined && (
         <p className="form-actions__error">{describeApiError(save.error)}</p>

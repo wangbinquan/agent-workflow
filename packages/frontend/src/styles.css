@@ -19993,6 +19993,199 @@ fieldset.settings-card {
   padding-top: 4px;
 }
 
+.acl-panel--state {
+  min-height: 112px;
+  justify-content: center;
+}
+
+/* RFC-324 — permission configuration follows the familiar sharing-dialog
+   sequence: invite, review people with access, then choose general access.
+   A person is always one stable row; the search field is add-only and never
+   doubles as the current grant list. */
+.acl-panel__intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-md);
+  line-height: 1.5;
+}
+
+.acl-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
+}
+
+.acl-panel__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.acl-panel__section-header h3 {
+  margin: 0;
+  font-size: var(--font-md);
+  line-height: 1.35;
+}
+
+.acl-panel__section-header p {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.45;
+}
+
+.acl-panel__add-member {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.acl-panel__field-label {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.acl-panel__people-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.acl-panel__person-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 58px;
+  padding: var(--space-3);
+}
+
+.acl-panel__person-row + .acl-panel__person-row,
+.acl-panel__person-row + .empty-state {
+  border-top: 1px solid var(--border);
+}
+
+.acl-panel__person-row--owner {
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+
+.acl-panel__person-main,
+.acl-panel__person-copy {
+  min-width: 0;
+}
+
+.acl-panel__person-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.acl-panel__avatar {
+  display: inline-flex;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  color: var(--accent);
+  font-size: var(--font-sm);
+  font-weight: 700;
+}
+
+.acl-panel__person-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acl-panel__person-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+  font-size: var(--font-md);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.acl-panel__person-username {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acl-panel__person-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.acl-panel__grant-warning {
+  margin: var(--space-1) 0 0 44px;
+  color: var(--warn);
+  font-size: var(--font-xs);
+  line-height: 1.4;
+}
+
+.acl-panel__people-list > .empty-state {
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+}
+
+.acl-panel__level-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+}
+
+.acl-panel__level-guide-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acl-panel__level-guide-item strong {
+  font-size: var(--font-sm);
+}
+
+.acl-panel__level-guide-item span,
+.acl-panel__level-guide > p,
+.acl-panel__visibility-hint {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.45;
+}
+
+.acl-panel__level-guide > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.acl-panel__visibility-hint {
+  margin: 0;
+}
+
 .acl-panel__row {
   display: flex;
   align-items: center;
@@ -20051,6 +20244,34 @@ fieldset.settings-card {
   padding: 1px 6px;
   min-height: 0;
   line-height: 1.6;
+}
+
+@media (max-width: 42rem) {
+  .acl-panel__section {
+    padding: var(--space-3);
+  }
+
+  .acl-panel__section-header,
+  .acl-panel__person-row {
+    align-items: flex-start;
+  }
+
+  .acl-panel__person-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acl-panel__person-actions {
+    justify-content: flex-start;
+    margin-left: 44px;
+  }
+
+  .acl-panel__level-guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acl-panel__level-guide > p {
+    grid-column: auto;
+  }
 }
 
 .acl-panel__footer {

@@ -6452,18 +6452,27 @@ export interface Resources {
   // RFC-099 — ownership ACL + attribution UI
   acl: {
     title: string
+    description: string
     owner: string
     systemOwner: string
     unknownOwner: string
     visibility: string
     visibilityValue: { public: string; private: string }
+    visibilityHint: { public: string; private: string }
     members: string
+    membersHint: string
+    addMember: string
+    addMemberPlaceholder: string
     noMembers: string
+    noMembersDescription: string
     privateHint: string
     level: string
     levelValue: { read: string; write: string }
+    levelDescription: { read: string; write: string }
     levelHint: string
     levelAdminHint: string
+    executionRiskTitle: string
+    executionRiskHint: string
     readOnlyBadge: string
     save: string
     transferOwner: string
@@ -14699,19 +14708,34 @@ export const zhCN: Resources = {
   // RFC-099 — 资源级权限 + 归属展示
   acl: {
     title: '权限',
+    description: '控制谁可以访问此资源，以及每位成员能否修改内容。',
     owner: '所有者',
     systemOwner: '系统（无所有者）',
     unknownOwner: '未知归属',
-    visibility: '可见性',
+    visibility: '通用访问',
     visibilityValue: { public: '全员可用', private: '私有' },
-    members: '授权用户',
-    noMembers: '暂无授权用户',
+    visibilityHint: {
+      public: '所有登录用户都可以只读使用；只有上方标记为“可编辑”的成员可以修改。',
+      private: '只有所有者、上方成员和拥有资源绕过权限的管理员可以访问。',
+    },
+    members: '成员权限',
+    membersHint: '添加成员后，可为每个人单独选择只读或可编辑。',
+    addMember: '添加成员',
+    addMemberPlaceholder: '搜索并添加用户…',
+    noMembers: '暂无其他成员',
+    noMembersDescription: '尚未向其他用户单独授权。',
     privateHint: '私有资源仅所有者、授权用户或持有 resource-acl:bypass 的账户可见可用。',
     level: '授权档位',
     levelValue: { read: '只读', write: '可编辑' },
-    levelHint:
-      '只读＝可见、可用、可引用、可启动任务、可复制副本；可编辑＝在此之上可以改内容。改名、删除、转让与权限设置始终只有所有者可做。',
-    levelAdminHint: '该用户是管理员，可改任何资源，只读档对其无效。',
+    levelDescription: {
+      read: '可查看、使用、引用、启动任务和复制副本',
+      write: '包含只读能力，并可修改资源内容',
+    },
+    levelHint: '改名、删除、转让和权限设置仍由所有者管理。',
+    levelAdminHint: '该用户具备平台级资源管理能力；这里选择只读不会限制其管理员权限。',
+    executionRiskTitle: '可编辑权限会影响执行',
+    executionRiskHint:
+      '此资源连接执行能力。可编辑成员能够修改其配置，后续运行可能使用新配置；请只授予可信用户。',
     readOnlyBadge: '只读授权',
     save: '保存权限',
     transferOwner: '转让',

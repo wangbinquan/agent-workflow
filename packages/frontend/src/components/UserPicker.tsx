@@ -81,7 +81,22 @@ export function UserPicker({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  // A single-select option lives in a portal. Selecting it removes the focused
+  // option; Dialog's focus trap then returns focus to this input. Without this
+  // one-shot guard, onFocus immediately reopens the list we just closed, so a
+  // completed add still looks unfinished in a real browser.
+  const suppressNextFocusOpenRef = useRef(false)
+  const suppressFocusTimerRef = useRef<number | null>(null)
   const listId = useId()
+
+  useEffect(
+    () => () => {
+      if (suppressFocusTimerRef.current !== null) {
+        window.clearTimeout(suppressFocusTimerRef.current)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     const handle = setTimeout(() => setDebounced(input.trim()), 200)
@@ -192,7 +207,20 @@ export function UserPicker({
     onChange(single ? [user] : [...value, user])
     setInput('')
     setActiveUserId(null)
-    if (single) setOpen(false)
+    if (single) {
+      suppressNextFocusOpenRef.current = true
+      if (suppressFocusTimerRef.current !== null) {
+        window.clearTimeout(suppressFocusTimerRef.current)
+      }
+      // The Dialog trap's focus recovery is queued as a microtask after the
+      // portaled option unmounts. Clear the guard on the following task so it
+      // covers that recovery but never swallows a later intentional click.
+      suppressFocusTimerRef.current = window.setTimeout(() => {
+        suppressNextFocusOpenRef.current = false
+        suppressFocusTimerRef.current = null
+      }, 0)
+      setOpen(false)
+    }
   }
 
   function remove(id: string) {
@@ -255,7 +283,13 @@ export function UserPicker({
           aria-required={ariaRequired}
           aria-invalid={ariaInvalid}
           data-testid={testidPrefix ? `${testidPrefix}-input` : undefined}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (suppressNextFocusOpenRef.current) {
+              suppressNextFocusOpenRef.current = false
+              return
+            }
+            setOpen(true)
+          }}
           onKeyDown={onInputKeyDown}
           onChange={(e) => {
             setInput(e.target.value)
