@@ -155,6 +155,11 @@ wire 是破坏性变更，**批次 1 必须前后端同批**，否则 main 上�
 - **`digital-employees.$typeRef` 的逐卡只读态**（design §14 X9）：后端写门已按档位生效，缺的只是
   该页面的视觉只读态。它是**员工类型**页、一页对多行 ACL 资源，`useResourceAccess` 的「一页一资源」
   形状套不上，需要逐卡判定——留给数字员工侧的下一个 RFC。
+- **定时任务两个 ACL 端点没有 e2e 打**（`GET` / `PUT /api/scheduled-tasks/:id/acl`）：已按 RFC-319
+  R1 的规矩登记进 `architecture/e2e-endpoint-coverage.json`。理由——本 RFC 的 e2e 预算全押在**用户
+  真正抱怨的那条路径**上（把工作流授权给别人用但不想让他改），定时任务的档位判定由后端
+  `rfc324-scheduled-task-acl` 一组用例覆盖，端到端只差「面板点得开」这一层。补 e2e 时把它从账本里
+  同批删掉，别只加不减。
 
 ## 8. e2e 逼出来的三件事（写在这里，因为它们都不是设计时能想到的）
 
