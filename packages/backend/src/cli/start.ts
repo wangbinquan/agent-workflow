@@ -48,7 +48,8 @@ import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { nodeRuns } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
-import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
+import { IS_EMBEDDED } from '@/embed'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
 import { startLimitsTicker } from '@/services/limits'
@@ -343,22 +344,24 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // live inside the executable. drizzle's migrator needs a filesystem path,
   // so we extract them once per start into ~/.agent-workflow/runtime/migrations
   // and point the migrator there.
-  let migrationsFolder = Paths.migrationsDir
-  if (IS_EMBEDDED) {
-    migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-    // `ms` is deliberate: this step is O(number of migrations) filesystem
-    // writes and grows with every migration added. It once reached ~23.5s on a
-    // Windows CI runner and blew the e2e harness's 30s daemon-ready budget
-    // while being completely invisible in the logs — the duration is what makes
-    // that trend observable before it breaks something again.
-    const extractStartedAt = Date.now()
-    const extracted = await extractMigrationsTo(migrationsFolder)
-    log.info('extracted embedded migrations', {
-      count: extracted,
-      ms: Date.now() - extractStartedAt,
-      dir: migrationsFolder,
-    })
-  }
+  // `ms` is deliberate: this step is O(number of migrations) filesystem
+  // writes and grows with every migration added. It once reached ~23.5s on a
+  // Windows CI runner and blew the e2e harness's 30s daemon-ready budget
+  // while being completely invisible in the logs — the duration is what makes
+  // that trend observable before it breaks something again.
+  const extractStartedAt = Date.now()
+  const migrationsFolder = await resolveMigrationsFolder({
+    // `force`: boot has always re-extracted unconditionally; keeping that keeps
+    // an interrupted previous extraction from surviving into this boot.
+    force: true,
+    onExtracted: (count, dir) => {
+      log.info('extracted embedded migrations', {
+        count,
+        ms: Date.now() - extractStartedAt,
+        dir,
+      })
+    },
+  })
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
   // catch below only guards truly unexpected filesystem-level throws.

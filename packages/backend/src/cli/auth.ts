@@ -2,18 +2,13 @@
 // Deliberately no command can reopen the retired daemon bootstrap token.
 
 import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import { openDb } from '@/db/client'
-import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/auth/loginPolicy'
 import { Paths } from '@/util/paths'
 
 async function openPolicyDb() {
-  let migrationsFolder = Paths.migrationsDir
-  if (IS_EMBEDDED) {
-    migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-    if (!existsSync(migrationsFolder)) await extractMigrationsTo(migrationsFolder)
-  }
+  const migrationsFolder = await resolveMigrationsFolder()
   if (!existsSync(migrationsFolder) || readdirSync(migrationsFolder).length === 0) {
     throw new Error(`migrations not found: ${migrationsFolder}`)
   }

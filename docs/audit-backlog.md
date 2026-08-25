@@ -2613,3 +2613,23 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    而 bypass 操作者的每一行都被盖成 `canManage: true`（`services/memory.ts:882-883` 短路）。
    「看得见但管不了的候选」这一态在产品里不存在。该符号的守卫在前端单测
    （`packages/frontend/tests/memory-admin-gate-role.test.ts:31-42`），e2e 照不到它是应然。
+
+## RFC-319 B85 起草期撞到的产品缺陷（2026-08-25）
+
+1. **【已修，记录在案】发行单二进制上 `backup` / `migrate` / `migration-report` / `package` 四条命令全部当场失败。**
+   见 `packages/backend/src/db/migrationsFolder.ts` 的文件头与
+   `packages/backend/tests/cli-embedded-migrations.test.ts`。留在这里是为了记住**它是怎么躲过所有门禁的**：
+   源码树上跑的单测里 `Paths.migrationsDir` 是个真目录、`IS_EMBEDDED` 是 false，四条命令全绿；
+   而二进制 smoke 只跑 `version`。与 RFC-311 P0-1（backup worker 在发行版 ModuleNotFound）同形。
+   **待办**：单二进制 smoke 的覆盖面值得单独扩一轮——今天它只证明「二进制能启动」。
+   **修完之后又露出一层**：同一条命令在发行二进制上仍打印
+   `backup vacuum worker unavailable; falling back to the main thread`
+   `error="ModuleNotFound resolving \"/$bunfs/root/backupVacuumWorker.ts\" (entry point)"`
+   ——即 RFC-311 P0-1 的 worker 在发行版上**至今仍解析不到**，只是现在有了主线程兜底所以不再致命。
+   代价是 VACUUM 回到主线程、备份期间 daemon 会被阻塞（本次实测 104ms / 空库，随库增长）。
+   这一层不在本次修复范围内（本次只让命令跑得起来），建议单独立一条。
+2. **【P2】`config set <未知键> <值>` 以退出码 0 收场并打印 `<键> = undefined`。**
+   `ConfigPatchSchema`（`packages/shared/src/schemas/config.ts:756`）不是 strict，未知键被静默剥掉
+   （**不落盘这一点是对的**，B85 的 e2e 已锁住），但 `cli/config-cli.ts:38-41` 随后读回
+   `updated[key]` 得到 `undefined`，回执成了 `bogusKey = undefined`、exit 0。
+   脚本里一个拼错的键名会被记成「配好了」。用例**没有**把 exit 0 写成期望——那是缺陷不是契约。

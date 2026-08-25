@@ -6,6 +6,7 @@
 // materialize 步骤显式触发。daemon 无需在跑（直接开 db，与 migrate 同姿势）。
 
 import { openDb } from '@/db/client'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import { Paths } from '@/util/paths'
 import {
   analyzeLegacyAssets,
@@ -15,7 +16,7 @@ import { collectLegacyAssets } from '@/modules/development-automation/infrastruc
 
 export async function migrationReportCommand(args: readonly string[]): Promise<{ output: string }> {
   const asJson = args.includes('--json')
-  const db = openDb({ path: Paths.db, migrationsFolder: Paths.migrationsDir })
+  const db = openDb({ path: Paths.db, migrationsFolder: await resolveMigrationsFolder() })
   try {
     const report = analyzeLegacyAssets(await collectLegacyAssets(db), Date.now())
     return {

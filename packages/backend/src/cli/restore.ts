@@ -4,8 +4,7 @@
 // stops (so a fat-fingered restore can't overwrite data); --yes applies it.
 
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import { planRestore, restoreBackup, validateBackupForStage } from '@/services/restore'
 import { stagePendingRestore } from '@/services/pendingRestore'
 import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
@@ -29,11 +28,9 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
   }
 
   // Resolve the migrations folder (the version gate reads its _journal.json).
-  let migrationsFolder = Paths.migrationsDir
-  if (IS_EMBEDDED) {
-    migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-    await extractMigrationsTo(migrationsFolder)
-  }
+  // `force`: this path validates a FOREIGN tarball's migration generation, so
+  // the local set must be known-complete rather than "whatever is on disk".
+  const migrationsFolder = await resolveMigrationsFolder({ force: true })
 
   try {
     const plan = await planRestore(tarball, { migrationsFolder })

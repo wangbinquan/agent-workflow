@@ -15,7 +15,7 @@ import type { Hono } from 'hono'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import {
   clearPendingRestore,
   listFailedRestores,
@@ -89,11 +89,9 @@ export function mountRestoreRoutes(app: Hono, _deps: AppDeps): void {
       try {
         writeFileSync(tmpTar, Buffer.from(await file.arrayBuffer()))
 
-        let migrationsFolder = Paths.migrationsDir
-        if (IS_EMBEDDED) {
-          migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-          await extractMigrationsTo(migrationsFolder)
-        }
+        // `force`: same reason as cli/restore.ts — an uploaded tarball's
+        // downgrade gate is only as trustworthy as the local migration set.
+        const migrationsFolder = await resolveMigrationsFolder({ force: true })
 
         // Impl-gate P1-1: full stage-depth validation (db.sqlite present +
         // quick_check + downgrade gate) — NOT just the manifest read. Staging an

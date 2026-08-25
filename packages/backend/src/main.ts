@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     }
 
     case 'migrate': {
-      const { output } = migrateCommand()
+      const { output } = await migrateCommand()
       process.stdout.write(output)
       break
     }

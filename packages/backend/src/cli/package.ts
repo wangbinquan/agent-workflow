@@ -9,6 +9,7 @@
 // `--type --name` 在那种情况下选不中确定的一行。
 
 import { openDb } from '@/db/client'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import { Paths } from '@/util/paths'
 import { buildCurrentActor, type Actor } from '@/auth/actor'
 import { createSecretBox } from '@/auth/secretBox'
@@ -105,7 +106,7 @@ export async function packageCommand(
     }
   }
 
-  const db = openDb({ path: Paths.db, migrationsFolder: Paths.migrationsDir })
+  const db = openDb({ path: Paths.db, migrationsFolder: await resolveMigrationsFolder() })
   const row = db.select().from(users).where(eq(users.username, username)).get()
   if (row === undefined) return { output: `user '${username}' not found\n`, status: 'error' }
   // ⚠️ 与 HTTP 同构的**第二半**：HTTP 侧 session lookup 对非 active 用户返回 null，

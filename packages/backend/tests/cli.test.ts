@@ -86,10 +86,10 @@ describe('CLI subcommands (P-1-05)', () => {
 
   // --- migrate ---
 
-  test('migrate creates db.sqlite + applies migrations', () => {
+  test('migrate creates db.sqlite + applies migrations', async () => {
     const dbPath = join(tmp, 'db.sqlite')
     expect(existsSync(dbPath)).toBe(false)
-    const { output } = migrateCommand()
+    const { output } = await migrateCommand()
     expect(output).toContain(dbPath)
     expect(existsSync(dbPath)).toBe(true)
   })
@@ -246,7 +246,7 @@ describe('CLI subcommands (P-1-05)', () => {
   })
 
   test('RFC-300 boot resumes an already-authorized scratch prune before serving', async () => {
-    migrateCommand()
+    await migrateCommand()
     const scratch = join(tmp, 'claimed-scratch')
     mkdirSync(scratch)
     writeFileSync(join(scratch, 'ephemeral.txt'), 'delete me')

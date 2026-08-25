@@ -2,9 +2,8 @@
 // HTTP. The CLI is a break-glass path for admin / first-time bootstrap.
 
 import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import { openDb } from '@/db/client'
-import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
+import { resolveMigrationsFolder } from '@/db/migrationsFolder'
 import { Paths } from '@/util/paths'
 import { hashPassword } from '@/auth/passwords'
 import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/auth/loginPolicy'
@@ -69,13 +68,7 @@ function parseFlags(argv: string[]): ParsedFlags {
 }
 
 async function ensureDb() {
-  let migrationsFolder = Paths.migrationsDir
-  if (IS_EMBEDDED) {
-    migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-    if (!existsSync(migrationsFolder)) {
-      await extractMigrationsTo(migrationsFolder)
-    }
-  }
+  const migrationsFolder = await resolveMigrationsFolder()
   const dbVersion = existsSync(migrationsFolder)
     ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
     : 0
