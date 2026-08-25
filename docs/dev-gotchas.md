@@ -2672,3 +2672,50 @@ git diff --cached -- <file>      # 逐 hunk 读，不是 --stat
 **误发布别人在制内容之后怎么办**：撤销自己发布的那部分（把文件恢复成对方未提交时的
 样子），**不要**替对方把缺的文件一起补提——那是在替别人决定「他的工作可以发布了」。
 撤完立刻告诉对方哪几处被撤了、他们重提时要连带哪些文件。
+
+**如果你改用 `commit-tree` 绕开共享 index，记得回头把 index 对齐。**
+临时索引（`GIT_INDEX_FILE` + `read-tree HEAD` + `update-index` + `commit-tree` +
+`update-ref`）是这棵共享树上最干净的提交姿势——工作树与共享 index 全程不动，别人的
+在制品不可能被带走。但它有个**必须收尾的副作用**：HEAD 前进之后，共享 index 对这些
+路径仍停在旧内容上，于是 `git status` 里新文件显示成 `D `（暂存删除）、改过的文件显示成
+`MM` 且 index 落后于 HEAD。**任何 session 一次裸 `git commit` 就会把它们按旧内容提回去**，
+等于当场回退你刚推的东西。收尾一句就够：
+
+```
+git reset -q HEAD -- <你刚提交的那些路径>
+```
+
+它只把 index 对齐到 HEAD，**不碰工作树**，所以别人未提交的编辑原样保留。
+（2026-08-25 实撞：两笔 commit-tree 之后 status 里出现两条 `D  e2e/rfc319-ops-*.spec.ts`。）
+
+## 「固定 sleep 之后直接断言终态」是一枚定时炸弹，忙碌的 runner 上必然响（2026-08-25 主干实撞）
+
+`Backend tests (ubuntu-latest shard 3/4)` 红在
+`change-narrative.test.ts` 的「RFC-239 config: deps.runtimeName selects the per-feature
+runtime row」，`Expected: "ready" / Received: "generating"`。成因不是产品回归，是那条用例
+`await new Promise((r) => setTimeout(r, 80))` 之后就断言异步生成已经落定——80ms 是**在本机
+量出来的经验值**，CI runner 一忙就不够。这类红与提交者的改动毫无关系，只会让下一个人先
+花时间排除自己。
+
+**修法是轮询到终态，不是把 80 改成 800**（改大只是把炸弹推远，而且让快的时候也白等）：
+
+```ts
+async function settleX(id: string): Promise<void> {
+  const deadline = Date.now() + 10_000
+  for (;;) {
+    const s = await getXStatus(id)
+    if (s?.status !== 'generating') return          // 终态就返回
+    if (Date.now() > deadline) throw new Error('10s 内没有落定，仍停在 generating')
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}
+```
+
+**怎么证明这个修法真的有效**（别只跑三遍绿就宣布好了——本机快，跑一万遍也绿）：把被等的那段
+人为放慢（例如给 `runFn` 加 `await sleep(300)`），然后**同一文件、同一条件**下比新旧两种写法：
+实测旧写法 `10 pass / 1 fail`（`Received: undefined`），新写法 `11 pass / 0 fail`。
+这条对照才是证据，三次本机绿不是。
+
+顺带一提：`setTimeout` 本身不是罪——用在「模拟被测对象要跑多久」（放在 `runFn` 里）是对的，
+罪在「用它替代对终态的等待」。全仓 `packages/backend/tests/` 下还有十来个文件带固定 sleep，
+逐个甄别成本不低，但**下次谁的分片红在这类断言上，先照上面的对照实验判一次**，别急着重跑。

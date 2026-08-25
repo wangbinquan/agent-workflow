@@ -150,6 +150,31 @@ function okRun(json: unknown): SystemAgentRunResult {
   }
 }
 
+/**
+ * 等这条任务的导读生成**落定**（离开 `generating`）。
+ *
+ * 为什么不再用固定 sleep：`triggerChangeNarrative` 是 fire-and-forget 的，本文件
+ * 此前一律 `await new Promise((r) => setTimeout(r, 50~80))` 之后就断言 `ready`。
+ * 那个 80ms 是本机的经验值，在忙碌的 CI runner 上不够——2026-08-25 主干实撞：
+ * `Backend tests (ubuntu-latest shard 3/4)` 红在
+ * 「RFC-239 config: deps.runtimeName selects the per-feature runtime row」，
+ * `Expected: "ready" / Received: "generating"`。这类红与提交者的改动毫无关系，
+ * 只会让下一个人先花时间排除自己（本仓禁止「重跑就过了」当通过依据）。
+ *
+ * 轮询到终态而不是等一个猜出来的时长：快的时候更快，慢的时候不会假红。
+ */
+async function settleNarrative(taskId: string): Promise<void> {
+  const deadline = Date.now() + 10_000
+  for (;;) {
+    const status = await getChangeNarrativeStatus(taskId)
+    if (status?.status !== 'generating') return
+    if (Date.now() > deadline) {
+      throw new Error(`导读生成 10s 内没有落定，仍停在 generating（task=${taskId}）`)
+    }
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}
+
 const GOOD_OUTPUT = {
   overview: '把 A.m 的返回值改为 2,并补充了说明文档。',
   groups: [
@@ -248,7 +273,7 @@ describe('triggerChangeNarrative', () => {
     const state = await triggerChangeNarrative(deps(db, runFn), w.task, w.collaborator)
     expect(state.status).toBe('generating')
     // wait for the async generation to settle, then admin can re-trigger
-    await new Promise((r) => setTimeout(r, 50))
+    await settleNarrative(w.task.id)
     const ready = await getChangeNarrativeStatus(w.task.id)
     expect(ready?.status).toBe('ready')
     const again = await triggerChangeNarrative(deps(db, runFn), w.task, w.admin)
@@ -270,7 +295,7 @@ describe('triggerChangeNarrative', () => {
     ])
     expect(a.status).toBe('generating')
     expect(b.startedAt).toBe(a.startedAt)
-    await new Promise((r) => setTimeout(r, 80))
+    await settleNarrative(w.task.id)
     expect(runs).toBe(1)
   })
 
@@ -283,7 +308,7 @@ describe('triggerChangeNarrative', () => {
       return okRun(GOOD_OUTPUT)
     }
     await triggerChangeNarrative(deps(db, runFn), w.task, w.owner)
-    await new Promise((r) => setTimeout(r, 80))
+    await settleNarrative(w.task.id)
     const status = await getChangeNarrativeStatus(w.task.id)
     if (status?.status !== 'ready') throw new Error(`expected ready, got ${JSON.stringify(status)}`)
     // digest equality with the backend structural response
@@ -306,7 +331,7 @@ describe('triggerChangeNarrative', () => {
       throw new Error('boom')
     }
     await triggerChangeNarrative(deps(db, runFn), w.task, w.owner)
-    await new Promise((r) => setTimeout(r, 50))
+    await settleNarrative(w.task.id)
     const status = await getChangeNarrativeStatus(w.task.id)
     expect(status?.status).toBe('failed')
     expect(existsSync(join(home, 'structural-diffs', w.task.id, 'narrative-task.json'))).toBe(false)
@@ -321,7 +346,7 @@ describe('triggerChangeNarrative', () => {
       return okRun(GOOD_OUTPUT)
     }
     await triggerChangeNarrative(deps(db, runFn), w.task, w.owner)
-    await new Promise((r) => setTimeout(r, 80))
+    await settleNarrative(w.task.id)
     expect(existsSync(join(home, 'structural-diffs', w.task.id))).toBe(false)
   })
 
@@ -345,7 +370,7 @@ describe('triggerChangeNarrative', () => {
       w.task,
       w.owner,
     )
-    await new Promise((r) => setTimeout(r, 80))
+    await settleNarrative(w.task.id)
     expect(seen.protocol).toBe('claude-code')
     expect(seen.model).toBe('claude-sonnet-5')
     expect((await getChangeNarrativeStatus(w.task.id))?.status).toBe('ready')
