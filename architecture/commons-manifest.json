@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "note": "RFC-317 \u516c\u5171\u5185\u6838\u6e05\u5355\u3002core:true \u7684\u5185\u6838\u6309 RFC-317 D4 \u4e1a\u52a1\u8eab\u4efd\u5b57\u9762\u91cf\u9884\u7b97\u4e3a 0\u3002files \u5fc5\u987b\u5b58\u5728\uff08\u5b88\u536b\u4e24\u5411\u95ed\u5408\uff09\uff1bclaimAudit \u8bb0\u5f55 2026-08-23 \u5ba1\u8ba1\u5bf9\u300c\u5355\u4e00\u4e8b\u5b9e\u6e90\u58f0\u660e\u662f\u5426\u6210\u7acb\u300d\u7684\u5224\u5b9a\uff0c\u662f\u63a5\u624b\u8005\u7684\u7b2c\u4e00\u624b\u8b66\u793a\u3002",
-  "recordedAtSha": "b04cf0eb0",
   "kernels": [
     {
       "id": "at-rest-sealing-kernel",
@@ -1412,9 +1411,15 @@
       ]
     }
   ],
-  "recordedAtShaNote": "\u91c7\u6570\u5728\u672c\u5730 SHA efc1bdb01 \u4e0a\u8dd1\uff1b\u8be5\u63d0\u4ea4\u7ecf rebase \u540e\u4ee5 b04cf0eb0 \u53d1\u5e03\u5230 origin/main\uff0cefc1bdb01 \u672c\u8eab\u4ece\u672a\u8fdb\u8fdc\u7aef\u3002\u6b64\u5904\u8bb0**\u5df2\u53d1\u5e03**\u7684 b04cf0eb0\uff1a\u4e24\u8005\u5728\u91c7\u6570\u76f8\u5173\u5185\u5bb9\u4e0a\u9010\u5b57\u4e00\u81f4\uff08git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared \u4e3a\u7a7a\uff09\uff0c\u5dee\u5f02\u53ea\u5728 f57394d82 \u5e26\u6765\u7684\u4e00\u884c e2e \u6539\u52a8\u3002",
   "canonicalProjection": {
     "sourceDigest": "sha256:576da9dfeb545e887eb8fb830327356c137668291123252776709e1f9c50cf43",
     "ownerManifest": "architecture/module-symbol-owners.json"
+  },
+  "provenance": {
+    "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
+    "currentSnapshotSha": "aeebaf5dcb9a68d3353bbe2ae178da5cf17eded2",
+    "contentDigest": "sha256:35b1cfc297014c5a9f4533b45ec95d242c8fa04a5290776744cc84f822222a84",
+    "digestAlgorithm": "sha256",
+    "digestScope": "canonical-json-without-provenance"
   }
 }

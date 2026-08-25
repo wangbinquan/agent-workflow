@@ -3,7 +3,6 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-08-23",
-    "recordedAtSha": "b04cf0eb0",
     "inboundEdges": 94,
     "outboundEdges": 23,
     "registeredFindings": 79,
@@ -3851,5 +3850,12 @@
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
+  },
+  "provenance": {
+    "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
+    "currentSnapshotSha": "aeebaf5dcb9a68d3353bbe2ae178da5cf17eded2",
+    "contentDigest": "sha256:bd6f395f4170265b05614a48645a2f975ff5dc30b6589bb9b19762b41cf90cfb",
+    "digestAlgorithm": "sha256",
+    "digestScope": "canonical-json-without-provenance"
   }
 }

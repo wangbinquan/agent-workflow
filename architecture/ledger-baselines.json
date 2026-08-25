@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。",
-  "recordedAtSha": "13a9cc035",
   "ledgers": [
     {
       "id": "depcheck-known-violations",
@@ -379,5 +378,12 @@
       "architecture/public-surfaces.json",
       "architecture/module-symbol-owners.json"
     ]
+  },
+  "provenance": {
+    "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
+    "currentSnapshotSha": "aeebaf5dcb9a68d3353bbe2ae178da5cf17eded2",
+    "contentDigest": "sha256:7c6fc616f71d3c63a5c514a4554a441a5109f50e5d616d026c74c6353cd1b309",
+    "digestAlgorithm": "sha256",
+    "digestScope": "canonical-json-without-provenance"
   }
 }
