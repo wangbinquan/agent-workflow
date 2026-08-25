@@ -4,28 +4,18 @@
   "recordedAtSha": "00289395c24e85832279694368b0e772670fea22",
   "routeTotal": 60,
   "uncovered": [
-    "/code",
     "/code/assignments",
-    "/code/missions",
     "/code/missions/$missionId",
-    "/code/missions/new",
-    "/code/outcomes",
     "/code/policies",
     "/code/policies/$policyId",
-    "/outcomes",
     "/workflows/new",
     "/workgroups/launch"
   ],
   "mentionedButNeverLoaded": [
-    "/code",
     "/code/assignments",
-    "/code/missions",
     "/code/missions/$missionId",
-    "/code/missions/new",
-    "/code/outcomes",
     "/code/policies",
     "/code/policies/$policyId",
-    "/outcomes",
     "/workflows/new"
   ]
 }
