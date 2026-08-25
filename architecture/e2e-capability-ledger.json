@@ -6785,8 +6785,13 @@
       "title": "删除 MCP（键入名字确认）后列表移除、详情 404",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-18: 删除 MCP 的三道闸——名字打错点不动、背后被人改过就 409、还被代理引用着就不许删 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-19",
@@ -6886,8 +6891,13 @@
       "title": "MCP stdio 子进程环境变量的安全闸（拒绝 LD_PRELOAD 等动态加载变量）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-27: MCP 的 env 只拒动态加载变量，LD_PRELOAD 连请求都发不出去，API_KEY 这类合法名字必须放行 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-30",
@@ -6904,8 +6914,13 @@
       "title": "插件安装失败后就地改 spec 重试",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-31: 插件装不上时停在新建页、表单一字不丢，就地改对 spec 再建就能成 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-32",
@@ -6931,8 +6946,13 @@
       "title": "删除插件（键入名字 + expectedConfigHash 双重确认）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-36: 删除插件的键入名字与 expectedConfigHash 双闸各自都拦得住 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-37",
@@ -6954,8 +6974,13 @@
       "title": "技能 / MCP / 插件的配置包导出（export-package，带所见即所得 fence）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-38: 有未保存改动时导出入口按不动，保存后导出的包能落盘；空 fence 422、陈旧 fence 409 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-40",
@@ -6963,8 +6988,13 @@
       "title": "配置包导入时的密钥补录与脱敏输入",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-40: 导入时密钥以密码框补录，必填的没填就提交不了，跳过的那条绝不会把占位符写进库 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-41",
@@ -6972,8 +7002,13 @@
       "title": "配置包根类型与当前入口不匹配的提示",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-41: 在插件新建页导入 MCP 包会明说根类型不符，提交后落到真正的那类资源上 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-43",
@@ -10876,11 +10911,16 @@
     {
       "id": "RES-34",
       "domain": "技能 / 插件 / MCP 三类资源管理",
-      "title": "file: 源插件（外部托管）禁用 Check / Upgrade 并给出说明",
+      "title": "file: 源插件（外部托管）不提供 Check / Upgrade——按钮区整块换成说明，直打端点亦 422",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-34: file: 源插件不给 Check / Upgrade 两颗按钮，绕过界面直打端点同样被 422 拒 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-35",
@@ -10888,8 +10928,13 @@
       "title": "插件 options JSON 非法时回到 Config 页并聚焦出错字段",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-resource-management-rest.spec.ts",
+          "test": "RFC-319 RES-35: options JSON 非法时跳回 Config 页并聚焦出错字段，一个保存请求都不发 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-42",
@@ -11602,20 +11647,13 @@
     "OPS-X3",
     "OPS-X4",
     "OPS-X5",
-    "RES-18",
     "RES-19",
     "RES-24",
     "RES-25",
     "RES-26",
-    "RES-27",
     "RES-30",
-    "RES-31",
     "RES-32",
     "RES-33",
-    "RES-36",
-    "RES-38",
-    "RES-40",
-    "RES-41",
     "RES-46",
     "RES-X1",
     "RES-X2",
@@ -11724,8 +11762,6 @@
     "RES-04",
     "RES-06",
     "RES-20",
-    "RES-34",
-    "RES-35",
     "RES-X6",
     "TASK-03",
     "TASK-15",

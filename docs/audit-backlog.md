@@ -2919,3 +2919,26 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
      改成先跑一段非终态案例的对照腿（计数必须涨到 ≥3）当尺子，再在同长度窗口里断言终态计数一格不涨。
    - DE-23：findings 说夹具已给 `prepare-materials` 配了工具，实际**没有任何内置 Agent 声明
      `development.prepare-materials@3`**，只能落 `program` 执行体，且其 stdout 在发布前会被平台真跑一遍校验。
+
+## RFC-319 B93 起草期撞到的产品缺陷（2026-08-26，资源管理：MCP / 插件 / 配置包）
+
+1. **【真实缺陷，P2 / 可用性】MCP 表单的「schema 兜底」校验错误在界面上看不见，详情页更是全程无声。**
+   `packages/frontend/src/lib/mcp-form.ts:166` 把 schema 兜底错误按**完整路径**做 key（形如
+   `config.env.LD_PRELOAD`），而 `packages/frontend/src/components/mcp/McpFields.tsx:24-27` 只读
+   `name` / `command` / `url` / `timeoutMs` 四个扁平 key。于是路径型 key 一个都渲染不出来：
+   - `/mcps/new` 上用户只能看到页签上一颗 `!` 徽标，**没有任何文字说明哪一项非法**；
+   - **详情页连徽标都没有**——`packages/frontend/src/routes/mcps.detail.tsx:193-196` 压根没配徽标，
+     用户点保存后是「按钮点了没反应」，与 RES-35 在插件页修好的那类问题同形。
+   B93 未就此写断言（会锁死一个错误形态）；RES-27 只断言了**请求根本没发出去**这条硬事实。
+2. **【真实缺陷，P3 / 数据整洁】导入配置包时跳过可选密钥，会在库里留下一个空的承载对象。**
+   `packages/backend/src/services/resourcePackage/secretInputs.ts:113-122` 跳过的密钥走
+   `delete slot.parent[slot.key]`，删的是**叶子键**；当该密钥是某个对象下的唯一一项时，父对象
+   会以 `config.headers: {}` 的形态留在库里。功能无害（不会误当成凭据），但存量数据会逐渐积累
+   空壳字段。RES-40 断言的是「`Authorization` 这个键整个消失、绝不留 `<REDACTED:SECRET>` 字面量」，
+   对空壳父对象未作判断。
+3. **【账本措辞偏差，两处，已按源码实际改/写】**
+   - RES-34：账本原文「**禁用** Check / Upgrade 两颗按钮」，实现是把**整块按钮区换成一条说明**
+     （`plugins.detail.tsx`），按钮压根不渲染。照字面写 `toBeDisabled()` 会得到一条永远红的用例；
+     用例写成 `toHaveCount(0)` + 说明可见，**并已把账本标题改准**（本批同一提交）。
+   - RES-41：账本说的「提示」确实只是**提示**，不是拒绝——根类型不符时照样能提交，最终落到真正
+     那类资源上。用例按这个实际形态写（info 通知 + 提交后落点断言），未把它当成一道闸。
