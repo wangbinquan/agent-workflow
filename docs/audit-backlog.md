@@ -3213,3 +3213,37 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `nodePalette.ts:241-248` 也把它归进 `internal` 段、`buildPalette` 不产出。它只在**已跑完的
    code-round 任务快照**里可达。建议 WF-X5 的证据改挂到数字员工 / code-round 任务详情那条链
    （`rfc319-digital-employee-*` 域），不属于 WF 前缀。
+
+## RFC-319 B102 起草期撞到的产品缺陷（2026-08-26，代理编辑与资源配置）
+
+1. **【账本措辞与实现不符 + 一条真缺口，P3】AGENT-28 的「体积上限」在实现里根本不存在。**
+   `packages/frontend/src/lib/agent-import-preview.ts:193-196` 的 `validateAgentMarkdownFile`
+   **只判扩展名**；`components/FileDropzone.tsx` 没有 `maxBytes`；`AgentImportDialog.tsx:276` 直接
+   `await file.text()` 把整个文件读进内存。照账本字面写「超出体积上限」会得到一条**永远红**的用例，
+   B102 因此只锁扩展名闸。严重度 P3（纯前端本地读取、无服务端放大），但「一个 800MB 的 .md 会让
+   标签页卡死」这条路今天确实敞着。建议把账本这一行的措辞改成「扩展名」，或另立产品 issue。
+2. **【实测记录，非缺陷，防未来误删】`isRuntimeOnlyAgentPatch` 是内置代理写面的唯一防线，没有第二条腿。**
+   起草侧变异实测：把 `routes/agents.ts:274` 的
+   `if (!(isBuiltinRow(existing) && isRuntimeOnlyAgentPatch(body)))` 放宽成 `if (!isBuiltinRow(existing))`
+   之后，一发 `{runtime, description}` 的混合补丁**真的把 `description` 写进了 `aw-skill-merger` 行**。
+   与下面第 3 条形成对照：这条没有任何兜底，AGENT-45 的价值因此高于起初估计。
+3. **【实测记录，非缺陷，防未来误删】`agent-name-in-use` 的 409 靠两条腿，两条都删会降级成 500。**
+   `services/agent.ts:826-828` 的事务内重名预检 + `:840-846` 把 `agents_owner_name_unique` 违例
+   重映射成同一个 `ConflictError`。变异实测：只删预检仍 409（DB 兜住）；两条腿都删，用户拿到
+   `{"code":"internal-error"}` **500**。记此以免未来「清理冗余」的重构把它当死代码删掉。
+4. **【e2e 基建缺口，挡住三条能力，需单列任务】RES-30 / RES-32 / RES-33（npm registry 安装 / 检查更新 /
+   升级基线）今天无法覆盖。** `services/pluginInstaller.ts:236-280` 走的是**真 `npm install`**
+   （PATH 没有 npm 就 `npm-unavailable`），而 `e2e/harness.ts:596-610` **没有**把
+   `AW_SYSTEM_MOCK_NPM_REGISTRY_URL` 接成 `npm_config_registry`——直接写用例会去打真实 registry
+   （网络依赖 + 不确定性，CI 上大概率红）。要覆盖必须先给 harness 加一行 registry env 接线，
+   属 e2e 基建改动，超出本批「零生产改动」授权。**建议单列一条 harness 任务后再回填这三行。**
+5. **【账本核对，未改状态】两条疑似假 gap**（与 B98 §8 同类，仍留待独立对账）：
+   - **AGENT-39「从配置包创建代理」**——`e2e/config-package-import.spec.ts` 三条用例整条流水线都在
+     `/agents/new` 的导入配置包页签上跑（预览干跑 + 两项新建 + 复用既有），只是证据登记在 RES-39 名下。
+   - **AGENT-X1「设置页给内置 aw-skill-merger 换 runtime 并保存」**——
+     `e2e/rfc319-settings-config-sections.spec.ts` 的 CFG-21 / CFG-22 已走完整条界面路径并回读
+     `/api/agents/00000000000000000000000001` 断言 `runtime` 落库。
+   B102 因此**没有**写重复用例，改去补它们没碰的写面边界（AGENT-45）。
+6. **【按源码实际改写的断言】`resolveRefsUsableById` 的 `missing` 回显的是输入 token 而非展示名**
+   （`services/resourceRefs.ts:411`，正确行为）：实测形状是 `[{type:'agent', name:'<输入的 id>'}]`。
+   顺手把「响应体里不得出现那条私有资源的展示名」锁成断言——这条 D1 隐私性质此前在 e2e 侧无人看守。

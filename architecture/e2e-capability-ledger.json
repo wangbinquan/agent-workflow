@@ -3018,8 +3018,13 @@
       "title": "agent.md 导入（文件上传路径）与文件校验失败（扩展名 / 体积）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-28: 上传非 .md 文件当场被拒且检查键按不动，换成真 .md 后文件名兜底填进 Name @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-33",
@@ -7191,8 +7196,13 @@
       "title": "在 agent 表单里挂载技能 / MCP / 插件（三类 Picker）并保存后仍然生效",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 RES-X1: 技能 / MCP / 插件三个选择器挂完一次保存 —— 三类都落库，且引用状态端点逐条认得出来 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-X2",
@@ -7200,8 +7210,13 @@
       "title": "三类资源的 owner 转移（Permissions 弹窗里的 Transfer owner）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 RES-X2: 技能 / MCP / 插件各自转让一次 —— 只有被转的那类换主，前任降级为只读 @nightly"
+        }
+      ]
     },
     {
       "id": "RES-X3",
@@ -9212,8 +9227,13 @@
       "title": "dependsOn 依赖选择与依赖闭包树预览",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-24: 在依赖选择器里挑一条代理 —— 预览当场长出二级闭包，保存后落库且重载仍在 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-25",
@@ -9221,8 +9241,13 @@
       "title": "dependsOn 非法：自依赖 / 成环 / 引用不可见代理 → closure-preview 返回 ok:false 提示",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-25: 成环 / 自依赖 / 引用看不见的代理 —— 预览一律 ok:false 并说明，保存也写不进去 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-26",
@@ -9230,8 +9255,13 @@
       "title": "依赖自动探测：扫描 Prompt 正文匹配库存 → 勾选后合并进 dependsOn/skills/mcp/plugins",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-26: 自动探测只捞正文里真提到的库存，勾掉的那一条不许合并，勾上的保存后落库 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-29",
@@ -9257,8 +9287,13 @@
       "title": "引用失效时禁用「启动任务」按钮并给出原因 tooltip",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-36: 引用失效前后 —— 启动任务从可点链接变成带原因 tooltip 的禁用按钮 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-38",
@@ -9307,8 +9342,13 @@
       "title": "代理重命名（POST /api/agents/:id/rename）——目前只有 API，没有任何前端入口",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-44/RES-X6: 代理 / MCP / 插件改名后引用按 id 全程不断，重名与陈旧 fence 各自被拒 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-45",
@@ -9316,8 +9356,13 @@
       "title": "框架内置代理（aw-skill-merger）不出现在代理列表，且除 runtime-only 补丁外只读",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-45: 内置代理只放行 runtime-only 补丁 —— 混进任何第二个键就 403，且被拒那次一个字都没写 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-46",
@@ -11301,8 +11346,13 @@
       "title": "MCP / 插件的 rename 端点（只有 API 面，前端零调用方）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-agent-and-resource-config.spec.ts",
+          "test": "RFC-319 AGENT-44/RES-X6: 代理 / MCP / 插件改名后引用按 id 全程不断，重名与陈旧 fence 各自被拒 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-03",
@@ -11953,7 +12003,6 @@
     "OPS-044b",
     "REPO-43",
     "UX-35b",
-    "AGENT-28",
     "AGENT-39",
     "AGENT-X1",
     "CFG-29",
@@ -12000,8 +12049,6 @@
     "RES-32",
     "RES-33",
     "RES-46",
-    "RES-X1",
-    "RES-X2",
     "TASK-34",
     "TASK-35",
     "TASK-38",
@@ -12025,15 +12072,9 @@
     "WG-42",
     "WG-X3",
     "WG-X5",
-    "AGENT-24",
-    "AGENT-25",
-    "AGENT-26",
     "AGENT-29",
     "AGENT-30",
-    "AGENT-36",
     "AGENT-38",
-    "AGENT-44",
-    "AGENT-45",
     "AGENT-46",
     "CFG-03",
     "CFG-06",
@@ -12070,7 +12111,6 @@
     "RES-04",
     "RES-06",
     "RES-20",
-    "RES-X6",
     "TASK-03",
     "UX-06",
     "UX-26",
