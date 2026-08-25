@@ -3247,3 +3247,40 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
 6. **【按源码实际改写的断言】`resolveRefsUsableById` 的 `missing` 回显的是输入 token 而非展示名**
    （`services/resourceRefs.ts:411`，正确行为）：实测形状是 `[{type:'agent', name:'<输入的 id>'}]`。
    顺手把「响应体里不得出现那条私有资源的展示名」锁成断言——这条 D1 隐私性质此前在 e2e 侧无人看守。
+
+## RFC-319 B103 起草期撞到的产品缺陷（2026-08-26，记忆注入 + 工作组房间）
+
+1. **【真实缺陷，P2 / i18n，本人复核确认】注入快照卡的 `repo_group` 分档没有文案，界面直接打出原始 key。**
+   `packages/frontend/src/lib/injected-memories-card.ts:40` 的 `SCOPE_ORDER` 自 RFC-248 起是**五档**
+   （`agent / workflow / repo / repo_group / global`），而
+   `packages/frontend/src/i18n/en-US.ts:6729-6732` 与 `zh-CN.ts:12855-12858` 只有**四条**
+   （agent / workflow / repo / global，本人 grep 确认无 `repo_group`）。
+   `components/node-session/InjectedMemoriesCard.tsx:66-72,100-106` 按
+   `nodeDrawer.injectedMemoriesGroup_${scope}` 取文案，于是该档的 chip 与小标题直接显示
+   `nodeDrawer.injectedMemoriesGroup_repo_group`。旁证：组件里那两处 `as` 联合类型也只列了四个字面量。
+   复现：仓库组启动 + 一条 `repo_group` scope 的已批准记忆 → 跑完 → `/tasks/:id` 点 agent 节点 →
+   展开 Injected memories。B103 因此只断言结构 class（`.injected-memories-card__group--repo_group`），
+   **没有**把这个文案写进断言。
+2. **【死分支，如实登记，不为可测而改产品】MEM-49 的「候选行语言徽标」在产品里够不到。**
+   `components/memory/MemoryRow.tsx:70-79` 的徽标只在 `memory.status === 'candidate'` 时渲染，而
+   `MemoryRow` 全仓三个消费方**全部只拉 approved/archived**：`MemoryAllList.tsx:81`（`status: view`，
+   `view` 类型即 `'approved' | 'archived'`）、`MemoryByScopeBrowser.tsx:24`、`MemoryScopedList.tsx:30`。
+   候选行走的是 `MemoryApprovalQueue`，根本不用 `MemoryRow`。`services/memory.ts:266-274` 那段专门为
+   候选行算 `outputLang` 的代码同样没有用户面读点。
+3. **【覆盖边界，如实登记】WG-40 的「同批 ×N」徽记在现有 showcase 夹具下够不到正向。**
+   `FcTaskListCard.tsx:56` 要求两张卡共用同一个 `nodeRunId`，而该场景跑出的三张卡各自独占一个 run
+   （批量认领都是 batch of 1）。判据因此写成「徽记数 == 共用 run 的卡数」——它锁的是**反方向**
+   （改成 `>= 1` 会给每张卡挂「同批 ×1」，变异当场红），正向那一半如实登记为未覆盖。
+4. **【账本核对：八处假 gap，本批据此换掉了原定条目，未改任何行的 status】**
+   - MEM-21 / MEM-X2 / MEM-X3 → `e2e/fusion-review-surface.spec.ts:285/427/469/521` 已完整覆盖
+     （融合分区列表 + 徽章 + 空/错态互斥 + 点行进详情、带反馈驳回 → iteration+1、两步确认取消）。
+   - MEM-43 / MEM-X10 → `e2e/task-feedback-distill.spec.ts`（登记在 HUMAN-47 / HUMAN-X6 名下）四条
+     用例已锁「写下去真的排进蒸馏 + 已送蒸馏标」「3 秒节流」「看不见与不存在逐字节同形」「深链落到
+     具体那一条」。B103 只补 MEM-44 剩下的半边（失败横幅 + 草稿不丢）。
+   - MEM-49 的设置页半边 → `e2e/rfc319-settings-config-sections.spec.ts` 的 CFG-21 已走过
+     `Memory distill runtime` 选择器与语言选择，一次保存落库 + 落盘 + 重载回显。
+   与 B98 §8、B102 §5 同类，仍留待一次独立的账本对账。
+5. **【三层冗余守卫，实测记录】动态工作流组「没有聊天室」由三层保证，只掐前两层不红。**
+   `lib/task-detail-tabs.ts:263` 的 capability、`DYNAMIC_WORKGROUP_TAB_ORDER`（不含 chatroom）、
+   以及 `routes/tasks.detail.tsx:376` 的硬编码 `chatroom: false`。本人变异实测：前两层同时掐死，
+   WG-X3 仍绿——决定性的是路由层那一处覆盖。记此以免未来重构误判前两层是死代码。

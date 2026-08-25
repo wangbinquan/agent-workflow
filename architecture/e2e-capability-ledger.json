@@ -5985,8 +5985,13 @@
       "title": "节点会话页的「本次注入了哪些记忆」快照卡（含预算裁剪结果与 followup 继承标记）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 MEM-40: 会话页的注入快照卡摆的是**裁剪之后**的真结果——超预算的那条不出现，条数与分档跟着走 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-41",
@@ -6112,8 +6117,13 @@
       "title": "【补漏】反问（clarify）完成与评审（review）决定也会排入蒸馏任务（另外两类 sourceKind）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 MEM-X8: 反问答完与评审决定各自排进一条蒸馏任务，来源类别与来源事件都指得回去 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X9",
@@ -6121,8 +6131,13 @@
       "title": "【补漏】非 global scope 的记忆注入：agent 闭包 / workflow / repo / repo_group 四档都进 prompt",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 MEM-X9: agent 闭包 / workflow / repo / repo_group 四档记忆都进了这次运行的注入面，挨不着边的一条都不进 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-002",
@@ -9027,8 +9042,13 @@
       "title": "【补漏】工作组任务详情页的页签集合（chatroom 首位且为默认、dw-orchestration 仅动态组、outputs 恒隐藏、宿主画布对回合引擎组不挂载）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 WG-X3: 回合引擎组的页签以聊天室为默认、没有宿主画布也没有 outputs；动态工作流组反过来——多一张编排页、没有聊天室 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-X5",
@@ -10695,8 +10715,13 @@
       "title": "任务反馈的 3 秒限流提示与提交失败横幅（草稿不丢）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 MEM-44: 反馈提交失败时把失败摆出来、草稿一个字都不丢，重试成功之后才清空并落库 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-47",
@@ -11959,8 +11984,13 @@
       "title": "awaiting_human 停机成因说明卡（区分「等回答」与 max-rounds 收尾停机）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 WG-39: awaiting_human 的成因卡把「等回答」和「触顶收尾」说成两件事，成因认不出来时整张卡不出现 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-40",
@@ -11968,8 +11998,13 @@
       "title": "free_collab 预算显示与 fc 共享任务列表卡（open/active/done 分组、批次徽章）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 WG-40: 自由协作房间给的是成员回合预算而不是「最大轮数」，共享任务列表按 open/进行中/已完成 分组并给同批徽记 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-46",
@@ -11977,8 +12012,13 @@
       "title": "终态任务的房间只读（composer 禁用 + POST /messages 409 workgroup-task-terminal）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 WG-46: 任务收场之前房间可写、收场之后整块只读——composer 禁用换成终态说明，服务端同一条路径 409 workgroup-task-terminal @nightly"
+        }
+      ]
     },
     {
       "id": "WG-X2",
@@ -11995,8 +12035,13 @@
       "title": "【补漏】任务列表/详情上冻结的工作组名（freeze-at-launch：改组名不改已启动任务显示的组名；坏配置降级为 null 而不 5xx）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-memory-and-workgroup-ops.spec.ts",
+          "test": "RFC-319 WG-X4: 任务显示的组名冻在启动那一刻——事后改组名不动它；冻结配置坏掉时降级成破折号而不是让整张列表 5xx @nightly"
+        }
+      ]
     }
   ],
   "gapIds": [
@@ -12028,15 +12073,12 @@
     "INTENT-46",
     "INTENT-X8",
     "MEM-21",
-    "MEM-40",
     "MEM-43",
     "MEM-49",
     "MEM-X10",
     "MEM-X2",
     "MEM-X3",
     "MEM-X4",
-    "MEM-X8",
-    "MEM-X9",
     "OPS-X10",
     "OPS-X3",
     "OPS-X4",
@@ -12070,7 +12112,6 @@
     "WG-27",
     "WG-28",
     "WG-42",
-    "WG-X3",
     "WG-X5",
     "AGENT-29",
     "AGENT-30",
@@ -12100,7 +12141,6 @@
     "INTENT-X5",
     "INTENT-X6",
     "INTENT-X7",
-    "MEM-44",
     "MEM-X11",
     "OPS-007",
     "OPS-X7",
@@ -12128,11 +12168,7 @@
     "WF-X4",
     "WF-X5",
     "WG-06",
-    "WG-39",
-    "WG-40",
-    "WG-46",
-    "WG-X2",
-    "WG-X4"
+    "WG-X2"
   ],
   "unverifiedIds": []
 }
