@@ -12,7 +12,6 @@
     "/code/outcomes",
     "/code/policies",
     "/code/policies/$policyId",
-    "/memory/distill-jobs/$jobId",
     "/outcomes",
     "/tasks/$id/preview",
     "/workflows/new",

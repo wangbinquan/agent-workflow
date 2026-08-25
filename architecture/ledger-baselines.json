@@ -245,15 +245,15 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 206,
-      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。"
+      "baseline": 178,
+      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。（2026-08-25：RFC-319 B76 —— 夜跑 `d366ed4f2` 的实测 journal 显示 B70/B72 那两批 spec 已真实打到 28 条，206 → 178。**这两份账本只在夜跑对账**，前几批只改了 R3 能力账本、漏了这里，是本次红的成因。）"
     },
     {
       "id": "rfc319-e2e-route-coverage",
       "file": "architecture/e2e-route-coverage.json",
       "symbol": "uncovered",
-      "baseline": 13,
-      "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。RFC-323 浏览器用例直达 /code/executors 与两个 Adapter 配置深链并验证重定向，16 → 13。"
+      "baseline": 12,
+      "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。RFC-323 浏览器用例直达 /code/executors 与两个 Adapter 配置深链并验证重定向，16 → 13。（2026-08-25：RFC-319 B76 —— `rfc319-memory-distill-jobs.spec.ts` 的 MEM-29 真加载了蒸馏任务详情页，13 → 12。）"
     },
     {
       "id": "rfc319-capability-gaps",

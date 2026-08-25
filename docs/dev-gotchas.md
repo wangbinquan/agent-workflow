@@ -2453,3 +2453,34 @@ CI 跑的是 `gitleaks detect --source . --no-banner --redact --verbose`，即**
 - **误报的正解是 `.gitleaksignore`，不是改代码**。git 模式扫的是历史，夹具名一旦入库就永远在那儿，
   事后改名救不了已有的提交（指纹形如 `<commit-sha>:<file>:<rule>:<line>`，与那一笔绑死）。仓库根的
   `.gitleaksignore` 是官方机制，会被自动加载；每加一条写清它是什么，别攒成一张无人认领的清单。
+
+## RFC-319 有三份账本，其中两份**只在夜跑对账**——补完 e2e 只改能力账本会把主干推红（2026-08-25 实撞）
+
+`architecture/` 下三份机器账本问的是三个不同的问题：
+
+| 账本 | 分子从哪来 | 什么时候对账 |
+| --- | --- | --- |
+| `e2e-capability-ledger.json`（R3） | 人工填 `{file, test}`，守卫验证标题逐字存在 | **本地 / PR 腿都跑** |
+| `e2e-endpoint-coverage.json`（R1） | **运行期实测**：daemon 请求日志 → `route-hits/*.jsonl` | **只有夜跑** |
+| `e2e-route-coverage.json`（R2） | **运行期实测**：浏览器 `framenavigated` | **只有夜跑** |
+
+后两份的守卫是 `describe.skipIf(JOURNAL_DIR === null)`——没有 journal 就整段跳过（这本身是对的：
+没有语料就不该假装能对账）。**净效果是：你补了一批 e2e、只改了 R3，本地全绿、PR 腿全绿，
+然后当晚的 `e2e-full-nightly` 红在「RFC-319 覆盖账本对账」上**，而红的原因是「你的用例覆盖得比账本
+记的多」——账本没跟着改小，差额会变成下一个人的免费槽位。
+
+**订正不要靠猜**，把夜跑的实测语料拉下来在本地复现：
+
+```
+RUN=$(gh run list --workflow=e2e-full-nightly.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run download "$RUN" --pattern 'route-hits-shard*' --dir journals
+mkdir -p route-hits && find journals -name '*.jsonl' -exec cp {} route-hits/ \;
+cd packages/backend && AW_E2E_ROUTE_JOURNAL="$PWD/../../route-hits" \
+  bun test tests/architecture/rfc319-endpoint-coverage.test.ts tests/architecture/rfc319-route-coverage.test.ts
+```
+
+失败输出里的 `- "…"` 就是**可以从账本里删掉**的条目（已被真实打到），`+ "…"` 是**新出现的未覆盖**
+（新挂端点没人测）。删完别忘了同步 `architecture/ledger-baselines.json` 里对应的 `baseline` 数字。
+
+**一个时序上的坑**：journal 采自某个具体 SHA，所以它只反映**那时**的覆盖面。刚合进去的那批 spec
+要等下一次夜跑才会体现——下次再报一批可降的差额是账本在正常还债，不是新的红。
