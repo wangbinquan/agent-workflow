@@ -69,7 +69,8 @@ interface HealthPayload {
  *
  * 走 `e2e/command.ts` 的受限边界而不是在 spec 里自己起进程：所有 e2e 子进程都必须
  * 带上那份硬超时，否则一个挂住的探针会把整个 shard 卡死；`root-test-entrypoint.test.ts`
- * 对每份 spec 源码做纯子串检查来强制这条（禁止出现 `child_process` / `execFileSync(`）。
+ * 对每份 spec 源码做**纯子串检查**来强制这条。注意那条判据禁的是几个具体的字面量，
+ * 所以连注释里提到它们都会把守卫打红——这里因此只描述规则、不复述被禁的词。
  */
 function runCli(home: string, args: string[]): { out: string; code: number } {
   const result = runCommandResult(defaultBinaryPath(), args, {

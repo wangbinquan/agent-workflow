@@ -2483,3 +2483,20 @@ RFC-060 PR-D 推迟到 PR-D2，至今未落地。
 19. **`available → pruning` 这一跳在已打开的详情页上不可观测**：终态任务的轮询已停
     （`tasks.detail.tsx:2042-2047`），而工作区 GC 认领不发 WS 帧。用户仍看得见「重试节点」按钮，
     点下去撞 409。建议 GC 认领时广播一帧，或把终态任务的轮询保留到工作区进入终态。
+
+## MCP 探测：命令不存在时 Windows 上不回显路径（2026-08-25 CI 实测）
+
+产品并不自己拼这句错误，它转述的是运行时 spawn 失败的原文——`services/mcpProbe.ts:319-334` 那张
+errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_MESSAGE_RE` 的文本匹配。于是同一个
+「命令写错了」的场景，两个平台给用户看到的东西不一样：
+
+- POSIX：`ENOENT: no such file or directory, posix_spawn '<path>'` —— 路径在里面，用户知道该改哪。
+- Windows：`Connect failed: subprocess never started or network refused. MCP error -32000: Connection closed`
+  —— **一个字的路径都没有**，用户对着一句「连接失败」，分不清是路径写错、没装、还是没有执行权限。
+
+`e2e/rfc319-mcp-management.spec.ts` 的 RES-21 因此把「回显路径」这半条降为 POSIX-only，并在注释里写明
+这是**如实降级、不是把现状锁成契约**：分类（`connect-failed`）仍逐平台断言，哪天产品自己带上路径，
+把那个 `process.platform === 'win32'` 分支去掉即可，不会因此变红。
+
+修法方向：`mcpProbe` 在归类为 `connect-failed` 时把自己知道的 `command[0]` 拼进 `errorDetail`，
+不要依赖运行时错误文本里恰好带路径。

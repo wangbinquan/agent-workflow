@@ -527,11 +527,23 @@ test('INTENT-05 创建进行中：侧边栏跳转、浏览器前进后退、刷�
     const after = await apiListSessions(daemon)
     expect(after.length - before.length, '锁了一路，最后建出的会话不是恰好一条').toBe(1)
 
+    // 守卫是**异步**释放的（创建落地 → 状态回写 → 卸载守卫）。这里必须先等它真的松开
+    // 再离开本页：若还锁着就直接 `page.goto`，浏览器会弹 beforeunload，而 Playwright 对
+    // 未注册 handler 的对话框默认按「取消」处理 —— 于是这次跳转**静默失败**，页面根本没动，
+    // 后面每一条断言都跑在旧页面上，最终以「waitForURL 超时」这种指不到原因的形态红。
+    // 2026-08-25 的 Windows CI 实测就是这个形态（macOS / ubuntu 因为释放得更快而侥幸绿）。
+    // 用 expect.poll 等真实信号，而不是靠机器够快。
+    await expect.poll(async () => beforeUnloadIsGuarded(page), { timeout: 15_000 }).toBe(false)
     await page.goto(`${daemon.baseUrl}/intent`)
     expect(
       await beforeUnloadIsGuarded(page),
       '创建完成后仍拦刷新 ⇒ 用户此后每次离开都被无谓打断',
     ).toBe(false)
+    await expect(
+      skillsNav,
+      '侧栏里的 Skills 入口够不到 —— 这一步是「解锁后导航恢复正常」的正向对照，' +
+        '入口本身不可见时应当在这里报出来，而不是让下面的 waitForURL 静默等满超时',
+    ).toBeVisible()
     await skillsNav.click()
     await page.waitForURL(/\/skills$/, { timeout: 15_000 })
   } finally {
