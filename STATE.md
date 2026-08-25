@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（Draft v2，2026-08-25；三件套已过两路设计门并修订，待用户批准后实现）：[RFC-326 评审门的 MCP / API 完整面](design/RFC-326-review-gate-mcp-api-surface/proposal.md)**
+> 🚧 **进行中 RFC（In Progress，2026-08-25 用户批准 v4；三件套已过三轮五路设计门；PR-A 实现中）：[RFC-326 评审门的 MCP / API 完整面](design/RFC-326-review-gate-mcp-api-surface/proposal.md)**
 > —— 起于用户「MCP 和 API 没有检视设计文档的接口，没法让设计在本地检视文档并提交意见」。研究结论：仓内的「设计文档检视」就是
 > RFC-005 的人工评审门；REST `/api/reviews/*` 十条端点齐全（`routes/reviews.ts:137-460`），**MCP 只有三个门工具且 `submit_review`
 > 只送决策**（`mcp/tools.ts:410-505`）——RFC-247 D11 / plan T18 写着「逐文档评论 + 通过/打回」并打了勾，评论那一半从未落地，
@@ -15,7 +15,15 @@
 > 整条决策路径收进单个 `dbTxSync`（准备段 / 外部回滚段 / 事务段 / 提交后事件段，需补 `transitionNodeRunStatusTx` / `mintNodeRunTx` /
 > `hasActingMembershipTx`）、解析器落 `modules/collaboration/domain` + exact public、只读令牌硬调保持 SDK unknown-tool。设计门还抓出
 > 一条既有 P0：`mcp/tools.ts:488` 的 `submit_review` 枚举写成 `iterate`，REST 认 `iterated`——**iterate 经 MCP 今天打不通**。
-> **接手须知**：用户批准后才动代码；两个 PR（A：解析 + 事务 + REST；B：MCP + 前端 + e2e）；
+> 第二轮设计门（Codex 闭合审计 23/12/0 + 新 5 P0 / 7 P1 / 3 P2；子代理可实现性视角 1 P0 / 6 P1 / 12 P2）全部纳入 v3：
+> 成员端点进评审锁 + 外部效果前预检（撤权不能落在回滚之后）、`effectiveDvs` 叠加批采纳、分词感知的实体 / 转义对齐、
+> 无可渲染投影的锚点保持未定位、围栏代码块经 Shiki `decorations` 保留 `<mark>`、有界出现计数 + 每请求扫描预算、
+> 经校验的 body 上限包装、`actor?` 可选契约（保住 134 处既有测试调用）、T3 移出 `tests/architecture/`（该目录即守卫声明）、
+> `EXEMPT_REVIEW_ROUTES` 进高水位账本、两套能力账本各按自身 schema 登记。**两处范围澄清待用户确认**：蒸馏入队保持提交后
+> best-effort（不进事务）、代码块高亮纳入 D5。第三轮（只审修复的闭合与回归）27 closed / 7 partial / 0 missed，新 0 P0 / 6 P1 / 2 P2 已全部
+> 纳入 v4（候选上限不改 occurrence 语义、`decode-named-character-reference` 加前端直接依赖、成员锁内重读 owner、RFC-303 判据导出共用、
+> 重复 docVersionId 422、Shiki 交叉范围原子化、KaTeX 一律不高亮）。
+> **接手须知**：两个 PR（A：解析 + 事务 + REST = plan T1–T12；B：MCP + 前端 + e2e = T13–T22），都直接推 main 并按 exact SHA 盯 CI；
 > 工作树里 `e2e/rfc319-*.spec.ts` / `packages/system-mocks` 的未提交改动属并发 RFC-319 session，勿动。
 
 > ✅ **已完成 RFC（Done，2026-08-25；主实现 `72e648327`）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**
