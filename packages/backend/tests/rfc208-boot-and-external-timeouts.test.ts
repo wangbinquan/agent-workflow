@@ -112,12 +112,14 @@ describe('RFC-208 · git cache work is killable, not just race-able', () => {
     // the same timeoutMs, across multi-line calls. The lock's point — the git
     // child is time-bounded — holds; pin the whitespace-normalised fragment
     // (`…cloneArgs], { timeoutMs`) instead of the exact old single-line call, and
-    // count the `'fetch', '--all', …], { timeoutMs` fragment which survives the
-    // leadingArgs prefix on both fetch paths (warm reuse + manual refresh).
+    // pin the centralized fetch helper's child timeout and prove both warm reuse
+    // and manual/background refresh call that same bounded helper.
     const collapsed = cacheSource.replace(/\s+/g, ' ')
     expect(collapsed).toContain('...cloneArgs], { timeoutMs,')
-    const fetches = collapsed.match(/'fetch', '--all', '--prune', '--tags'\], \{ timeoutMs/g)
-    expect(fetches?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(collapsed).toContain(
+      "'fetch', '--all', '--prune', '--tags'], { timeoutMs: input.timeoutMs",
+    )
+    expect(cacheSource.match(/await fetchSanitizedOrigin\(\{/g)).toHaveLength(2)
   })
 
   test('spawnGit kills the whole process group, like runGit', () => {

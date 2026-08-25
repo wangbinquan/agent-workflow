@@ -92,6 +92,8 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       const r = await refreshCachedRepo(
         {
           db: deps.db,
+          ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
+          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
         },
         id,
@@ -170,6 +172,8 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       const result = startBatchImport(
         {
           db: deps.db,
+          ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
+          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           concurrency: cfg.repoBatchImportConcurrency,
           retentionMs: cfg.repoBatchImportRetentionMs,
         },
@@ -224,7 +228,16 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
         }
         body = parsed.data
       }
-      const snap = retryBatchRow({ db: deps.db }, batchId, rowId, body)
+      const snap = retryBatchRow(
+        {
+          db: deps.db,
+          ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
+          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+        },
+        batchId,
+        rowId,
+        body,
+      )
       return c.json(snap)
     },
   )

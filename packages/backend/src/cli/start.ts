@@ -982,6 +982,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     () => loadConfig(Paths.config),
     undefined,
     Paths.root,
+    secretBox,
   )
   const unregisterSubmoduleRefreshConfig = registerConfigAppliedListener(Paths.config, () => {
     submoduleRefreshTicker.reconfigure()

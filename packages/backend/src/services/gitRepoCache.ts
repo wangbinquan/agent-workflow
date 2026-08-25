@@ -221,6 +221,59 @@ async function spawnGit(
   }
 }
 
+/**
+ * Fetch one cached mirror without ever persisting the usable credentialed URL.
+ *
+ * Cold clone and task-launch reuse already use the one-shot RFC-321 credential
+ * lease. Manual/background refresh must use the same boundary: their cache row
+ * only exposes a sanitized `origin`, while the sealed URL supplies credentials
+ * to this one Git process through a target-bound helper lease.
+ */
+async function fetchSanitizedOrigin(input: {
+  repoPath: string
+  redactedUrl: string
+  credentialUrl: string
+  appHome: string
+  timeoutMs: number
+  signal?: AbortSignal
+}): Promise<Awaited<ReturnType<typeof runGit>>> {
+  await runGit(input.repoPath, ['remote', 'set-url', 'origin', input.redactedUrl], {
+    signal: input.signal,
+  }).catch(() => null)
+  // runGit resolves non-zero exits, so prove the persisted origin is clean
+  // before any network operation. A failed set-url must never leave a legacy
+  // plaintext token in .git/config.
+  const originNow = await runGit(input.repoPath, ['remote', 'get-url', 'origin'], {
+    signal: input.signal,
+  })
+  const originUrl = originNow.stdout.trim()
+  if (originNow.exitCode !== 0 || redactGitUrl(originUrl) !== originUrl) {
+    throw new DomainError(
+      'repo-origin-not-sanitized',
+      `refusing to fetch the mirror for ${input.redactedUrl}: stripping the credential from its ` +
+        `origin failed (.git/config may be read-only, locked, or corrupt), so a plaintext token ` +
+        `may remain in .git/config`,
+      500,
+      { url: input.redactedUrl },
+    )
+  }
+
+  const lease = leaseGitCredential(input.credentialUrl, input.appHome)
+  try {
+    return await runGit(
+      input.repoPath,
+      [...(lease?.leadingArgs ?? []), 'fetch', '--all', '--prune', '--tags'],
+      {
+        timeoutMs: input.timeoutMs,
+        signal: input.signal,
+        ...(lease !== null ? { env: lease.env } : {}),
+      },
+    )
+  } finally {
+    lease?.cleanup()
+  }
+}
+
 export interface GitRepoCacheDeps {
   db: DbClient
   /** Override app home (tests). Defaults to Paths.root. */
@@ -627,43 +680,14 @@ export async function resolveCachedRepo(
         // idempotently normalise origin to the redacted URL (also the one-time
         // scrub for pre-RFC-205 mirrors), then feed the credential through a
         // one-shot askpass lease for THIS fetch only.
-        await runGit(row.localPath, ['remote', 'set-url', 'origin', redacted], {
-          signal: deps.signal,
-        }).catch(() => null)
-        // Impl-gate P0-6 (Codex 2026-07-22): runGit does NOT reject on a nonzero
-        // git exit, so the `.catch()` above silently masked a FAILED set-url
-        // (read-only / locked / corrupt config). We must not then fetch off an
-        // origin that STILL holds a plaintext token. Verify the origin is
-        // credential-free; if it can't be proven clean, refuse the mirror.
-        const originNow = await runGit(row.localPath, ['remote', 'get-url', 'origin'], {
+        const r = await fetchSanitizedOrigin({
+          repoPath: row.localPath,
+          redactedUrl: redacted,
+          credentialUrl: input.url,
+          appHome,
+          timeoutMs,
           signal: deps.signal,
         })
-        const originUrl = originNow.stdout.trim()
-        if (originNow.exitCode !== 0 || redactGitUrl(originUrl) !== originUrl) {
-          throw new DomainError(
-            'repo-origin-not-sanitized',
-            `refusing to reuse the mirror for ${redacted}: stripping the credential from its ` +
-              `origin failed (.git/config may be read-only, locked, or corrupt), so a plaintext ` +
-              `token may remain in .git/config`,
-            500,
-            { url: redacted },
-          )
-        }
-        const lease = leaseGitCredential(input.url)
-        let r: Awaited<ReturnType<typeof runGit>>
-        try {
-          r = await runGit(
-            row.localPath,
-            [...(lease?.leadingArgs ?? []), 'fetch', '--all', '--prune', '--tags'],
-            {
-              timeoutMs,
-              signal: deps.signal,
-              ...(lease !== null ? { env: lease.env } : {}),
-            },
-          )
-        } finally {
-          lease?.cleanup()
-        }
         if (r.exitCode !== 0) {
           fetchOk = false
           fetchError = redactGitUrl(r.stderr.trim())
@@ -759,9 +783,18 @@ export async function resolveCachedRepo(
       // may still refresh submodule diagnostics, but must not make stale code
       // look freshly synchronized in the repository UI.
       const ts = fetchOk ? now() : row.lastFetchedAt
+      const refreshedUrlEnc =
+        fetchOnReuse && fetchOk && deps.secretBox !== undefined
+          ? deps.secretBox.seal(input.url)
+          : row.urlEnc
+      if (fetchOnReuse && fetchOk && deps.secretBox === undefined) {
+        rememberVolatileRepoUrl(deps.db, row.id, input.url)
+      }
       deps.db
         .update(cachedRepos)
         .set({
+          urlEnc: refreshedUrlEnc,
+          urlRedacted: redacted,
           lastFetchedAt: ts,
           hasSubmodules: sub.hasGitmodules,
           lastSubmoduleSyncOk: sub.ok,
@@ -771,6 +804,8 @@ export async function resolveCachedRepo(
         .run()
       const updated = {
         ...row,
+        urlEnc: refreshedUrlEnc,
+        urlRedacted: redacted,
         lastFetchedAt: ts,
         hasSubmodules: sub.hasGitmodules,
         lastSubmoduleSyncOk: sub.ok,
@@ -1523,8 +1558,14 @@ export async function refreshCachedRepo(
     // Promise.race) was never applied here, and even where it is applied it only
     // rejects the caller: the git child keeps running and the per-URL queue
     // stays held. Bounding the child itself is what actually frees both.
-    const r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'], {
+    const credentialUrl = unsealRepoUrl(row, deps.secretBox, deps.db) ?? redacted
+    const r = await fetchSanitizedOrigin({
+      repoPath: row.localPath,
+      redactedUrl: redacted,
+      credentialUrl,
+      appHome: deps.appHome ?? Paths.root,
       timeoutMs: deps.cloneTimeoutMs ?? DEFAULT_CLONE_TIMEOUT_MS,
+      signal: deps.signal,
     })
     const ts = now()
     let fetchOk = true

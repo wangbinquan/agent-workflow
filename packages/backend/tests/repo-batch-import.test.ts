@@ -7,6 +7,7 @@
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   __resetBatchImportForTests,
@@ -284,5 +285,38 @@ describe('startBatchImport (RFC-033-T2)', () => {
       const s = JSON.stringify(msg)
       expect(s).not.toContain('s3cr3t')
     }
+  })
+
+  test('threads the SecretBox into the cache resolver so imported credentials are durable', async () => {
+    const h = makeHarness()
+    const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 27))
+    let receivedSecretBox = false
+    const resolver: StubResolver = (async (cacheDeps, input) => {
+      receivedSecretBox = cacheDeps.secretBox === secretBox
+      return {
+        cached: {
+          id: 'cr-sealed-import',
+          urlRedacted: input.url,
+          localPath: '/tmp/cr-sealed-import',
+          defaultBranch: 'main',
+          lastFetchedAt: '2026-08-25T00:00:00.000Z',
+          createdAt: '2026-08-25T00:00:00.000Z',
+          referencingTaskCount: 0,
+        },
+        cold: true,
+        fetchOk: true,
+        fetchError: null,
+      } as Awaited<ReturnType<typeof resolveCachedRepo>>
+    }) as StubResolver
+    const importDeps = deps(h, resolver)
+    importDeps.secretBox = secretBox
+    const result = startBatchImport(
+      importDeps,
+      { urls: ['https://refresh-bot:secret@example.test/repo.git'] },
+      { userId: 'u_batch_owner' },
+    )
+
+    await waitForBatchCompleted(result.batchId)
+    expect(receivedSecretBox).toBe(true)
   })
 })

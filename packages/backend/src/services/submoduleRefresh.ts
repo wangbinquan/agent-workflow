@@ -13,6 +13,7 @@
 import { and, eq, gte, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { isFileSchemeUrl, type Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import type { SecretBox } from '@/auth/secretBox'
 import { cachedRepos } from '@/db/schema'
 import { refreshCachedRepo } from '@/services/gitRepoCache'
 import { createLogger } from '@/util/log'
@@ -97,7 +98,7 @@ export async function selectDueRepos(
 export async function refreshDueRepos(
   db: DbClient,
   cfg: RefreshConfig,
-  opts?: { now?: () => number; appHome?: string },
+  opts?: { now?: () => number; appHome?: string; secretBox?: SecretBox },
 ): Promise<{ refreshed: number; failed: number }> {
   const enabled = cfg.submoduleAutoRefresh?.enabled ?? true
   if (!enabled) return { refreshed: 0, failed: 0 }
@@ -117,7 +118,12 @@ export async function refreshDueRepos(
         // selection cut-off, last_auto_refresh_at, and refreshCachedRepo's own
         // internal `now` — shares a single source. In production `now` is
         // Date.now, so behaviour is unchanged; tests can drive time deterministically.
-        { db, now, ...(opts?.appHome !== undefined ? { appHome: opts.appHome } : {}) },
+        {
+          db,
+          now,
+          ...(opts?.appHome !== undefined ? { appHome: opts.appHome } : {}),
+          ...(opts?.secretBox !== undefined ? { secretBox: opts.secretBox } : {}),
+        },
         repo.id,
         // RFC-210 G7 self-renewal fix: advance the mirror WITHOUT touching
         // last_fetched_at, else this loop keeps its own selection alive forever
@@ -171,10 +177,14 @@ export function startSubmoduleRefreshLoop(
   loadConfig: () => RefreshConfig,
   intervalMs: number = HOUR_MS,
   appHome?: string,
+  secretBox?: SecretBox,
 ): { stop: () => void; reconfigure: () => boolean } {
   const job = createManagedPeriodicJob({
     run: async () => {
-      await refreshDueRepos(db, loadConfig(), appHome !== undefined ? { appHome } : {})
+      await refreshDueRepos(db, loadConfig(), {
+        ...(appHome !== undefined ? { appHome } : {}),
+        ...(secretBox !== undefined ? { secretBox } : {}),
+      })
     },
     minPositiveMs: intervalMs < 60_000 ? 1 : 60_000,
     onInvalid: (value) => log.error('submodule refresh interval invalid; loop disabled', { value }),

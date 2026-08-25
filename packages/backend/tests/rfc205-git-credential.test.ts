@@ -298,8 +298,10 @@ describe('source locks — the mirror never re-disks the credential', () => {
     )
     expect(src).toContain('cloneArgs.push(redacted, tmpDir)')
     expect(src).not.toContain('cloneArgs.push(input.url, tmpDir)')
-    expect(src).toContain("['remote', 'set-url', 'origin', redacted]")
+    expect(src).toContain("['remote', 'set-url', 'origin', input.redactedUrl]")
     expect(src).toContain('leaseGitCredential(input.url)')
+    expect(src).toContain('leaseGitCredential(input.credentialUrl, input.appHome)')
+    expect(src.match(/await fetchSanitizedOrigin\(\{/g)).toHaveLength(2)
     // The credential.helper wiring must ride on the git argv, not just env.
     expect(src).toContain('lease?.leadingArgs')
   })

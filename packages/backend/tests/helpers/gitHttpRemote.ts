@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os'
 
 let server: Server | null = null
 let port: number | null = null
+const basicAuthRules = new Map<string, string>()
 
 function root(): string {
   return realpathSync(tmpdir())
@@ -30,6 +31,17 @@ export async function startGitHttpRemote(): Promise<number> {
   const projectRoot = root()
   const srv = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+    const requiredAuthorization = [...basicAuthRules.entries()].find(
+      ([path]) => url.pathname === path || url.pathname.startsWith(`${path}/`),
+    )?.[1]
+    if (
+      requiredAuthorization !== undefined &&
+      req.headers.authorization !== requiredAuthorization
+    ) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="agent-workflow-test-git"' })
+      res.end()
+      return
+    }
     const child = spawn('git', ['http-backend'], {
       env: {
         ...process.env,
@@ -93,6 +105,7 @@ export function stopGitHttpRemote(): void {
   server?.close()
   server = null
   port = null
+  basicAuthRules.clear()
 }
 
 /**
@@ -112,4 +125,20 @@ export function remoteUrlFor(repoPath: string): string {
   }
   const rel = real.slice(base.length).replace(/\\/g, '/').replace(/^\/+/, '')
   return `http://127.0.0.1:${String(port)}/${rel}`
+}
+
+/** Register one repository path as Basic-authenticated and return its userinfo URL. */
+export function credentialedRemoteUrlFor(
+  repoPath: string,
+  username: string,
+  password: string,
+): string {
+  const url = new URL(remoteUrlFor(repoPath))
+  basicAuthRules.set(
+    url.pathname,
+    `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`,
+  )
+  url.username = username
+  url.password = password
+  return url.toString()
 }
