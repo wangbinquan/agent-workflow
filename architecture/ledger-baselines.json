@@ -275,6 +275,109 @@
       "symbol": "EXEMPT_REVIEW_ROUTES",
       "baseline": 1,
       "why": "RFC-326：/api/reviews* 路由里**有意不给 MCP 工具**的名单（今天只有 pending-count 徽章计数）。每加一条都是在把评审面从 MCP 上抠掉一块，只许降；守卫同时钉死名单里的路由确实没有工具、且路由确实存在（过期条目也红）"
+    },
+    {
+      "id": "rfc294-mutation-entrypoints",
+      "file": "architecture/mutation-entrypoints.json",
+      "symbol": "entries",
+      "baseline": 842,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+    },
+    {
+      "id": "rfc294-node-run-insert-sites",
+      "file": "architecture/mutation-entrypoints.json",
+      "symbol": "nodeRunInsertSites",
+      "baseline": 2,
+      "why": "RFC-294 N1：node_runs INSERT 的 exact single-writer/显式 dispatch 例外分母；任何未登记新写点直接阻断。"
+    },
+    {
+      "id": "rfc294-transaction-callbacks",
+      "file": "architecture/transaction-external-effects.json",
+      "symbol": "entries",
+      "baseline": 231,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+    },
+    {
+      "id": "rfc294-background-jobs",
+      "file": "architecture/background-jobs.json",
+      "symbol": "entries",
+      "baseline": 180,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+    },
+    {
+      "id": "rfc294-ambient-wiring",
+      "file": "architecture/background-jobs.json",
+      "symbol": "ambientWiringEntries",
+      "baseline": 437,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+    },
+    {
+      "id": "rfc294-cross-context-observed-imports",
+      "file": "architecture/cross-context-imports.json",
+      "symbol": "observedEdges",
+      "baseline": 859,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+    },
+    {
+      "id": "rfc294-target-context-edges",
+      "file": "architecture/cross-context-imports.json",
+      "symbol": "targetEdges",
+      "baseline": 64,
+      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。"
+    },
+    {
+      "id": "rfc294-required-port-liveness",
+      "file": "architecture/cross-context-imports.json",
+      "symbol": "requiredPorts",
+      "baseline": 23,
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
+    },
+    {
+      "id": "rfc294-architecture-exceptions",
+      "file": "architecture/cross-context-imports.json",
+      "symbol": "architectureExceptions",
+      "baseline": 839,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+    },
+    {
+      "id": "rfc294-facades",
+      "file": "architecture/facades.json",
+      "symbol": "entries",
+      "baseline": 366,
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
+    },
+    {
+      "id": "rfc294-public-surfaces",
+      "file": "architecture/public-surfaces.json",
+      "symbol": "entries",
+      "baseline": 235,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+    },
+    {
+      "id": "rfc294-governed-field-surfaces",
+      "file": "architecture/public-surfaces.json",
+      "symbol": "governedFieldSurfaces",
+      "baseline": 5,
+      "why": "RFC-294 N1：TaskCatalog membership 与 DigitalEmployee Case link 两组 edge-neutral field growth 的 owner/writer/consumer/rollback 账本。"
+    },
+    {
+      "id": "rfc294-module-symbol-owners",
+      "file": "architecture/module-symbol-owners.json",
+      "symbol": "entries",
+      "baseline": 17083,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
-  ]
+  ],
+  "canonicalProjection": {
+    "sourceDigest": "sha256:576da9dfeb545e887eb8fb830327356c137668291123252776709e1f9c50cf43",
+    "manifests": [
+      "architecture/mutation-entrypoints.json",
+      "architecture/transaction-external-effects.json",
+      "architecture/background-jobs.json",
+      "architecture/cross-context-imports.json",
+      "architecture/facades.json",
+      "architecture/public-surfaces.json",
+      "architecture/module-symbol-owners.json"
+    ]
+  }
 }

@@ -13,7 +13,6 @@
     "/code/policies",
     "/code/policies/$policyId",
     "/outcomes",
-    "/tasks/$id/preview",
     "/workflows/new",
     "/workgroups/launch"
   ],
