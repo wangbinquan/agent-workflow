@@ -5794,8 +5794,13 @@
       "title": "【原审计漏项】daemon 重启后：孤儿 in-flight 轮次被结算、排队中的上下文后继被恢复（用户不会看到永远转圈的会话）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-timeline-and-turns.spec.ts",
+          "test": "RFC-319 INTENT-X8: daemon 崩在生成中时，排队中的工作上下文后继在重启后被接着跑完——会话不会永远停在「生成中」 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-01",
@@ -6164,8 +6169,13 @@
       "title": "【补漏】任务反馈的存在性隔离：对看不见的任务读/写反馈返回与「任务不存在」逐字节相同的 404",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-feedback-distill.spec.ts",
+          "test": "正文校验，以及「看不见」与「不存在」必须逐字节同形 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X2",
@@ -6187,8 +6197,13 @@
       "title": "【补漏】融合详情页：取消进行中的融合（两步确认按钮；applying 中不允许取消）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/fusion-review-surface.spec.ts",
+          "test": "RFC-319 MEM-X3: 提交中的融合取消不掉——界面上那一下被服务端顶回来，状态一个字节都不动 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X4",
@@ -7702,8 +7717,13 @@
       "title": "Worktree 文件浏览页签：目录树展开、文件预览、下载、超大文件降级、刷新",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-worktree-and-commit.spec.ts",
+          "test": "RFC-319 REPO-X1: 工作目录页签逐层懒加载、预览真实内容、超过 2 MiB 只给提示但仍可下载原始字节 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-35",
@@ -7764,8 +7784,13 @@
       "title": "任务问题板（task-questions 页签）：查看待答问题、手动提问、逐题指派/暂存、一键分发",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/task-questions-board-ui.spec.ts",
+          "test": "看板上的三个控件真的通到服务端：手写一题、逐题暂存、一键下发 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-41",
@@ -8112,8 +8137,17 @@
       "title": "Inbox 行点击 → 跳到对应评审/反问详情并关闭抽屉；徽标聚合真实待办数",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/inbox-badge-live.spec.ts",
+          "test": "真有一条待办时：角标亮出真实计数，抽屉列得出它，点进去落在那一屏 @nightly"
+        },
+        {
+          "file": "e2e/inbox-badge-live.spec.ts",
+          "test": "角标是三路求和，抽屉里的评审行也点得进去、点完抽屉自己收起来 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-25",
@@ -8230,9 +8264,14 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "多标签页对同一资源的并发编辑：显式冲突而非静默覆盖；以及正向的跨标签实时传播",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc199-save-reliability.spec.ts",
+          "test": "a clean second tab adopts the other tab’s save live and stays writable"
+        }
+      ]
     },
     {
       "id": "UX-42",
@@ -9856,8 +9895,13 @@
       "title": "Network 分区：bindHost/bindPort 保存 +「使用当前端口」建议",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-intent-task-and-settings.spec.ts",
+          "test": "RFC-319 CFG-32: 监听 host 改完保存要真的落盘、重新进页面读得回来，且只动它自己那个键 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-34",
@@ -12457,23 +12501,16 @@
     "IAM-34",
     "IAM-X2",
     "IAM-X4",
-    "INTENT-X8",
     "MEM-49",
-    "MEM-X10",
-    "MEM-X3",
     "OPS-X3",
     "OPS-X5",
     "RES-30",
     "RES-32",
     "RES-33",
-    "TASK-34",
     "TASK-35",
-    "TASK-39",
     "TASK-X4b",
     "UX-05",
     "UX-19",
-    "UX-24",
-    "UX-41",
     "UX-47",
     "UX-X5b",
     "WF-47b",
@@ -12482,7 +12519,6 @@
     "WG-42",
     "WG-X5",
     "CFG-03",
-    "CFG-32",
     "CFG-X5",
     "DE-39",
     "DE-41",

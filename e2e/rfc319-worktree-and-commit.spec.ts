@@ -877,6 +877,58 @@ test('RFC-319 REPO-X1: 工作目录页签逐层懒加载、预览真实内容、
   await expect(body, '选中文件后没有渲染预览').toBeVisible()
   await expect(body.locator('pre'), '预览里的不是文件的真实内容').toHaveText(HELLO)
 
+  // ③b 「刷新」（TASK-34 补漏）。这个按钮是这块面板上唯一能把缓存打掉的东西，
+  //     而工作树是**活的**：agent 在页面开着的时候还在往里写。目录树用
+  //     `staleTime/gcTime: Infinity`（`WorktreeFilesPanel.tsx:143-155`），预览虽然
+  //     `staleTime: 0` 但全局 `refetchOnWindowFocus: false`
+  //     （`lib/query-client.ts:47-49`）——两者都不会自己回头看一眼磁盘。
+  //     所以按钮空转的形态是：人点了、什么都没变，而他以为自己看到的就是最新的。
+  //     `refresh()` 一次失效两个 key（同文件 100-104），下面两条断言各咬一个。
+  const HELLO_EDITED = `${HELLO}// edited on disk after the tree was cached\n`
+  writeIntoWorktree(task.worktreePath, 'src/late.ts', "export const late = 'rfc-319 late'\n")
+  writeIntoWorktree(task.worktreePath, 'src/hello.ts', HELLO_EDITED)
+
+  // 服务端先自证：这两处改动确实已经在接口输出里了。否则下面「界面还没跟上」
+  // 测的是磁盘写没写进去，而不是缓存。
+  const srcTree = await api<{ entries: Array<{ name: string }> }>(
+    runDaemon,
+    `/api/tasks/${taskId}/worktree-tree?path=${encodeURIComponent('src')}`,
+  )
+  expect(
+    srcTree.entries.map((entry) => entry.name),
+    '磁盘上写了 src/late.ts，接口却不返回它 ⇒ 这一段测的就不是缓存了',
+  ).toContain('late.ts')
+  expect(
+    (
+      await api<{ content: string }>(
+        runDaemon,
+        `/api/tasks/${taskId}/worktree-file?path=${encodeURIComponent('src/hello.ts')}`,
+      )
+    ).content,
+    '磁盘上改了 src/hello.ts，接口却还给旧内容',
+  ).toBe(HELLO_EDITED)
+
+  // 不点刷新就看不到——这一步同时让下一步有意义：新东西出现是**因为**点了刷新，
+  // 而不是本来就在那儿。
+  await expect(
+    page.getByTestId('worktree-tree-file-src/late.ts'),
+    '没点刷新，缓存住的目录层却自己变了 ⇒ 下面那条「刷新生效」是恒真的',
+  ).toHaveCount(0)
+  await expect(
+    body.locator('pre'),
+    '没点刷新，预览却自己变了 ⇒ 下面那条「刷新生效」是恒真的',
+  ).toHaveText(HELLO)
+
+  await page.getByTestId('worktree-files-refresh').click()
+  await expect(
+    page.getByTestId('worktree-tree-file-src/late.ts'),
+    '点了刷新，目录树还是缓存那一份 ⇒ agent 新写的文件在这一屏上永远不出现',
+  ).toBeVisible({ timeout: 20_000 })
+  await expect(
+    body.locator('pre'),
+    '点了刷新，预览还是缓存那一份 ⇒ 人对着一份过期内容做判断，而界面没有任何提示',
+  ).toHaveText(HELLO_EDITED, { timeout: 20_000 })
+
   // ④ 超限文件：给的是带**真实字节数**的提示，而不是把 3 MiB 灌进 <pre>。
   await page.getByTestId('worktree-tree-file-big.bin').click()
   const oversized = page.getByTestId('worktree-files-preview-oversized')

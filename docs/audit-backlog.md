@@ -3521,3 +3521,34 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
 **观察到但未写成断言**：`AgentImportDialog.tsx:695-745` 的端口 sidecar 冲突横幅只在
 `blockingWarning === undefined` 时渲染——一份既 YAML 解析失败、又会造成端口冲突的 agent.md，用户要
 **修完 YAML 再导一次**才看得到第二个问题。两段式暴露，属设计选择。
+
+## RFC-319 B109（2026-08-26，八条「部分覆盖」补完）：真实缺陷与账本对照
+
+1. **【真实缺陷，P3，未写成期望形态】`applying` 中仍然渲染「Cancel fusion」按钮。**
+   `packages/frontend/src/routes/fusions.detail.tsx:127-137` 的判据是
+   `!['done','failed','canceled'].includes(f.status)`，把 `applying` 漏在外面。用户在提交窗口里按下去，
+   拿到的是一个必然 409 的错误横幅。服务端 CAS 守住了数据（`services/fusion.ts:1755-1775`，不会把赢家的
+   提交抽走），所以只是「给了一个永远不成立的入口」——与 INTENT-56/57 已锁住的「终态不给取消按钮」是同一条
+   产品口径的漏项。MEM-X3 **按源码实际写**（断言按钮在场、按下去被顶回来），没写成期望的正确形态。
+2. **【陈旧注释，会误导】`components/WorktreeFilesPanel.tsx:150-155` 的注释说
+   "a refresh requires leaving the tab and coming back; that re-mount busts the cache naturally"——不成立。**
+   同一个查询同时带 `staleTime: Infinity` 与 `gcTime: Infinity`，且全局 `refetchOnWindowFocus: false`
+   （`lib/query-client.ts:47-49`）：离开页签再回来**不会**让缓存失效，唯一能刷新的就是那颗按钮。
+   代码没问题，注释会让下一个人以为按钮可有可无。
+3. **【测试锚点缺口】`routes/settings.tsx:1588-1592` 的 `bindHost` `<TextInput>` 没有 `data-testid`**，
+   而紧邻的 `bindPort` 有（`settings-bind-port`）。CFG-32 只能用 `getByLabel('Bind host')` 定位——
+   下次谁改这个 Field 的 label 文案，用例会以「找不到元素」的形态红。
+4. **【tier 裁决，第三次同款】UX-41 的账本 tier 从 `nightly` 改成 `pr`。**
+   它的既有证据 `two tabs converge to an explicit conflict without overwriting either draft` 与本批新增的
+   `a clean second tab adopts the other tab's save live and stays writable` 都在
+   `e2e/rfc199-save-reliability.spec.ts`——**该文件五条用例一条都不带 `@nightly`**，即整文件跑在 PR 腿上。
+   与前两批同样的取舍：账本跟实现走；给它们补 `@nightly` 会把它们移出 PR 腿、削弱现有防护。
+   起草者**没有**混着写标签——`tierWiringMismatches` 会把「同一条能力的证据一半带一半不带」直接判红。
+5. **【账本可读性，非缺陷】TASK-34 的能力 `title` 列了「刷新」，而承载它的 REPO-X1 用例标题里没这两个字**
+   （规则要求不改既有标题）。能力本身现已完整覆盖，只是读账本的人从证据标题上看不出「刷新」也在里面。
+6. **【覆盖边界，如实登记】UX-24 的三路求和里，工作组那一路数值上仍是 0**——用例只证明了「这一路的计数
+   端点确实被请求过」，没有证明它的数值真的进了加法。要补需要造一条工作组人工投递卡 / 完成确认门。
+   `total > 99 ⇒ '99+'` 与 `allFailed ⇒ 藏徽标` 两个分支也未覆盖。
+7. **【冗余守卫，实测记录】`resumeQueuedIntentWorkingSets` 有两个生产者**——boot（`cli/start.ts:1041`）与
+   小时级 ticker（`:1379`）。INTENT-X8 只掐 boot 那条仍然咬得动，因为 ticker 周期是小时级、用例窗口内
+   不会触发；将来若写一条走 ticker 的用例，需要把两处一起掐。

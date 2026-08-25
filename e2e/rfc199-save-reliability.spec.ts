@@ -455,4 +455,75 @@ test.describe('RFC-199 G1 — weak-network save reliability', () => {
       await second.close()
     }
   })
+
+  // The case above locks the CONFLICT half of multi-tab editing. Its mirror
+  // image — the one that happens far more often — had no coverage at all: two
+  // tabs open on the same workflow, only ONE of them editing. A clean editor
+  // must FOLLOW the other tab's save by itself.
+  //
+  // Both failure directions are silent and both are expensive:
+  //   * not following at all — the second tab keeps showing a revision that no
+  //     longer exists. Everything the user does there is authored against a
+  //     stale definition, and they only find out at the next save (a conflict
+  //     out of nowhere) or, worse, at the next launch.
+  //   * following by declaring a conflict — a tab with ZERO local edits gets
+  //     locked into "pick a side", and the only honest answer ("take theirs")
+  //     is exactly what the reducer was supposed to do on its own
+  //     (workflow-editor-draft.ts:797-806, adoptRemote when clean).
+  //
+  // Adoption must also move `serverRevision`, not just the rendering — hence
+  // the final "and can still save" step: if only the display followed, the very
+  // next PUT from this tab carries a stale `expectedVersion` and lands in the
+  // conflict state the user never caused.
+  test('a clean second tab adopts the other tab’s save live and stays writable', async ({
+    page,
+  }) => {
+    const initialName = 'rfc199-two-tab-live-base'
+    const remoteName = 'rfc199-two-tab-live-remote'
+    const followUpName = 'rfc199-two-tab-live-followup'
+    const workflowId = await seedWorkflow(initialName)
+    const second = await page.context().newPage()
+    await openEditor(page, workflowId, initialName)
+    await openEditor(second, workflowId, initialName)
+
+    try {
+      // Sentinel: while it survives, this tab has not been reloaded. "It is
+      // right after a refresh" and "it keeps itself right" are different
+      // products, and the user does not refresh.
+      await page.evaluate(() => {
+        ;(window as unknown as { __rfc199CrossTab?: number }).__rfc199CrossTab = 1
+      })
+
+      await renameDraft(second, remoteName)
+      await expect(second.getByTestId('workflow-draft-phase')).toHaveText('Saved')
+      await expect.poll(async () => (await readWorkflow(workflowId)).name).toBe(remoteName)
+
+      // Nothing happens in this tab. The heading must follow on its own.
+      await expect(
+        page.getByRole('heading', { level: 1, name: remoteName }),
+        'the untouched tab still shows the previous revision — everything authored here from now on is against a definition that no longer exists',
+      ).toBeVisible({ timeout: 30_000 })
+      await expect(
+        page.getByTestId('workflow-draft-phase'),
+        'a tab with no local edits was pushed into a conflict — there is nothing to reconcile, and the user never made a choice to be asked about',
+      ).toHaveText('Saved')
+      expect(
+        await page.evaluate(
+          () => (window as unknown as { __rfc199CrossTab?: number }).__rfc199CrossTab ?? null,
+        ),
+        'the sentinel is gone — this tab reloaded, so the assertion above proved nothing',
+      ).toBe(1)
+
+      // Adoption has to move the authoritative revision too, not just the view.
+      await renameDraft(page, followUpName)
+      await expect(
+        page.getByTestId('workflow-draft-phase'),
+        'the adopted tab cannot save any more — adoption updated the rendering but not the expected version, so the next PUT conflicts out of nowhere',
+      ).toHaveText('Saved')
+      await expect.poll(async () => (await readWorkflow(workflowId)).name).toBe(followUpName)
+      expect((await readWorkflow(workflowId)).version).toBe(3)
+    } finally {
+      await second.close()
+    }
+  })
 })

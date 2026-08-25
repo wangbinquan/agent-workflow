@@ -1303,3 +1303,136 @@ test('RFC-319 INTENT-X4: 翻历史时新 turn 不抢滚动位置，「回到最�
   // 那条：贴底状态没恢复时 scrollTop 会**一动不动**（正如前面「读历史时新一轮
   // 到达」那一步观测到的 0）。
 })
+
+// ---------------------------------------------------------------------------
+// INTENT-X8 补漏 —— 「排队中的上下文后继」这一半。
+//
+// INTENT-21 已经锁住了另一半：daemon 崩在轮次中间，重启把孤儿轮结算掉、捕获降级
+// 为 incomplete。但那条链路只走到「把死掉的那一轮收尾」为止。真正会让用户看到
+// **永远转圈**的是它的后半段：
+//
+//   人在生成中打开工作上下文，选了「排队到下一轮」（`IntentMountDialog.tsx:160-168`
+//   的 `after-current`）。这条变更落成一行 `state='queued'`，它的执行时机被挂在
+//   **当前轮跑完时的那次唤醒上**（`dispatcher.ts:130-137` 的 finally）。进程要是
+//   在这中间死掉，那次唤醒就永远不会发生——排队的那条变更没有任何人再碰它，会话
+//   的旅程停在 `working-set-queued`（`journey.ts:38-39` 的 step 2「生成中」），
+//   界面上是一枚「Refresh queued」的芯片和一条不会结束的生成。
+//
+// 兜住它的是 boot 上的 `resumeQueuedIntentWorkingSets`（`cli/start.ts:1041`，
+// 实现在 `dispatcher.ts:148-171`）：它把所有 `queued` 行重新领一遍并派发后继。
+// 这条用例锁的就是这一步——判据不是「没报错」，而是**排队时选的那个资源最后
+// 真的挂上了、而且是重启之后自己挂上的**。
+//
+// 顺序上有一处必须成立：孤儿轮先结算、后继才领得走（`activateIntentWorkingSetChange`
+// 在 `session.inFlightTurnId !== null` 时直接返回 null，workingSet.ts:300/333）。
+// 这两步在 boot 上就是相邻两行（start.ts:1039-1041），谁被挪到前面都会让这条用例红。
+// ---------------------------------------------------------------------------
+
+test('RFC-319 INTENT-X8: daemon 崩在生成中时，排队中的工作上下文后继在重启后被接着跑完——会话不会永远停在「生成中」 @nightly', async ({
+  page,
+}) => {
+  const queuedHome = mkdtempSync(join(tmpdir(), 'aw-rfc319-intent-queued-'))
+  const queuedHold = join(scratchDir, 'queued.hold')
+  writeFileSync(queuedHold, 'held')
+  let queuedDaemon = await startDaemon({
+    stubMode: 'intent',
+    home: queuedHome,
+    extraEnv: { STUB_INTENT_HOLD_FILE: queuedHold },
+  })
+
+  /** 这条会话当前那行工作上下文变更的状态（`routes/intentSessions.ts:488-489`）。 */
+  const workingSetState = async (d: DaemonHandle, sessionId: string): Promise<string | null> => {
+    const detail = await apiJson<{ workingSetChange: { state: string } | null }>(
+      d,
+      `/api/intent-sessions/${sessionId}`,
+    )
+    return detail.workingSetChange?.state ?? null
+  }
+
+  try {
+    await authPage(page, queuedDaemon)
+    const contextAgent = `e2e-intent-queued-${Date.now().toString(36)}`
+    await seedAgent(queuedDaemon, contextAgent, 'queued successor fixture')
+    const sessionId = await createSession(queuedDaemon, 'rfc319 queued working context')
+    await page.goto(`${queuedDaemon.baseUrl}/intent/${sessionId}`)
+
+    const before = await detailOf(queuedDaemon, sessionId)
+    expect(before.session.inFlight, '排队的前提是有一轮正在飞').toBe(true)
+    expect(before.mounts, '会话一开始不该挂着资源 —— 否则下面的「挂上了」是恒真的').toHaveLength(0)
+    const turnsBefore = before.turns.length
+
+    // ---- 排队（而不是打断）----
+    await page.getByTestId('intent-add-mount').click()
+    const dialog = page.getByRole('dialog')
+    const picker = dialog.getByTestId('intent-mount-picker')
+    await picker.focus()
+    await page.getByRole('option', { name: new RegExp(contextAgent) }).click()
+    await picker.press('Escape')
+    // 选中后弹窗会重渲染一次；等它落定再点，否则会撞上「element was detached」。
+    await expect(dialog.getByText(new RegExp(contextAgent))).toBeVisible({ timeout: 15_000 })
+    await dialog.getByRole('button', { name: 'Refresh after this turn', exact: true }).click()
+
+    // 落成一行 queued，而且当前那一轮**没有**被打断——「排队」与「立即刷新」是
+    // 弹窗里并排的两个按钮，接错线的话用户点的是「不打断」、发生的却是「打断」。
+    await expect
+      .poll(async () => workingSetState(queuedDaemon, sessionId), {
+        timeout: 30_000,
+        message: '选了「排队到下一轮」，服务端却没有一行排队中的变更',
+      })
+      .toBe('queued')
+    expect(
+      (await detailOf(queuedDaemon, sessionId)).session.inFlight,
+      '「排队到下一轮」把当前轮打断了 ⇒ 用户点的是不打断的那个按钮',
+    ).toBe(true)
+    await expect(
+      page.getByText('Refresh queued', { exact: true }),
+      '排上队了界面却不说 ⇒ 人不知道自己那次改动到底进没进去',
+    ).toBeVisible({ timeout: 30_000 })
+
+    // ---- 崩在这里：那次「当前轮跑完时的唤醒」永远不会发生 ----
+    await queuedDaemon.killChild('SIGKILL')
+    rmSync(queuedHold, { force: true })
+    queuedDaemon = await startDaemon({ stubMode: 'intent', home: queuedHome })
+
+    // ① 排队的那条变更被接着做完，选的那个资源真的挂上了。
+    //    没人接手时它会一直是 'queued'，而 mounts 永远是空的。
+    await expect
+      .poll(async () => workingSetState(queuedDaemon, sessionId), {
+        timeout: 120_000,
+        message: '重启之后那行变更还停在排队中 ⇒ 没有任何东西会再碰它，会话就永远停在「生成中」',
+      })
+      .toBe('applied')
+    const recovered = await waitForSettled(
+      queuedDaemon,
+      sessionId,
+      '重启之后这条会话一直停在生成中 ⇒ 用户看到的就是一个永远转圈的会话',
+    )
+    expect(
+      recovered.mounts.map((mount) => mount.displayName),
+      '排队时选的那个资源没有挂上 ⇒ 那次改动被静默丢弃，而用户以为它已经生效了',
+    ).toContain(contextAgent)
+    // ② 后继**真的跑了一轮**，不是只把 DB 里的挂载表改了一下就算数：
+    //    排队的语义是「下一轮带着新上下文重跑」，少了这一半用户还得自己再发一次。
+    expect(
+      recovered.turns.length,
+      '重启之后没有任何新轮次 ⇒ 上下文换了、却没有人拿它重跑，等于什么都没发生',
+    ).toBeGreaterThan(turnsBefore)
+
+    // ③ 界面这一路：重新进这一页，排队芯片不见了、挂载芯片在，而这一切用户
+    //    一步都没有操作过。
+    await authPage(page, queuedDaemon)
+    await page.goto(`${queuedDaemon.baseUrl}/intent/${sessionId}`)
+    await expect(
+      page.locator('.intent-working-context-chip'),
+      '恢复之后页面上仍看不到那个挂载 ⇒ 用户只能靠自己重新加一遍',
+    ).toHaveText([contextAgent])
+    await expect(
+      page.getByText('Refresh queued', { exact: true }),
+      '已经做完了还挂着「Refresh queued」⇒ 界面停在一个不存在的等待上',
+    ).toHaveCount(0)
+  } finally {
+    rmSync(queuedHold, { force: true })
+    await queuedDaemon.stop()
+    rmSync(queuedHome, { recursive: true, force: true })
+  }
+})

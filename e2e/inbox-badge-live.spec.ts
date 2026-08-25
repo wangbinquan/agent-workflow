@@ -210,6 +210,14 @@ test('真有一条待办时：角标亮出真实计数，抽屉列得出它，�
   await expect(page).toHaveURL(new RegExp(`/clarify/${nodeRunId}$`))
   // 落地页真的是那一轮，而不是一个空壳。
   await expect(page.getByTestId('clarify-question-q-db')).toBeVisible()
+  // 点完行抽屉必须自己收起来（`InboxDrawer.tsx:96-102` 的 navigateAndClose 先 onClose
+  // 再 navigate）。不收的话，人落到详情页上还盖着一层 modal：焦点被 Dialog 的 trap
+  // 圈着、背景滚动被锁着，得先想明白「先按 ESC」才能开始回答——而这一屏本来就是
+  // 他被角标叫过来要做的那件事。
+  await expect(
+    page.getByTestId('inbox-drawer'),
+    '点进详情之后抽屉还盖在上面 ⇒ 落地页被 modal 罩着，人动不了',
+  ).toHaveCount(0)
 })
 
 test('待办没了：角标自己消失，不用刷新页面 @nightly', async ({ page }) => {
@@ -243,4 +251,338 @@ test('待办没了：角标自己消失，不用刷新页面 @nightly', async ({
     await page.evaluate(() => (window as unknown as { __rfc319B41?: number }).__rfc319B41 ?? null),
     '哨兵不在了 ⇒ 这一页其实被重载过，上面那条断言就不成立',
   ).toBe(1)
+})
+
+// ---------------------------------------------------------------------------
+// UX-24 补漏 —— 上面两条只走了 clarify 一路，于是三件事没验到：
+//   ① 角标是**三路求和**（`InboxFooterButton.tsx:52-56`）。只有一路非零时，
+//      「只念了 clarify 那一路」与「三路求和」完全同形——角标照样是 1。
+//   ② 抽屉里的 **review 行**（`lib/inbox-view.ts:105-115`）。它与 clarify 行的
+//      rowKey / navigationId 取法不同（review 两者都是 nodeRunId，clarify 是
+//      round.id 与 intermediaryNodeRunId 两个不同的值），所以 clarify 那一路绿
+//      并不能说明 review 这一路也接对了。
+//   ③ 点行之后抽屉要收起来（已在上面第一条用例里补了 clarify 一路，这里再验
+//      review 一路——两条行的 onOpen 是**同一个** navigateAndClose，但导航目标不同，
+//      而 close 与 navigate 的顺序错了只会在其中一路上暴露）。
+// 所以这条用例同时造出「一条待评审 + 一条待反问」，让求和的两个非零项互相区分。
+// ---------------------------------------------------------------------------
+
+/** 造一个「先反问一轮、答完再停在评审上」的任务；返回它的评审行标识。 */
+async function seedReviewGate(slug: string): Promise<{
+  taskId: string
+  taskName: string
+  reviewNodeRunId: string
+}> {
+  const agentName = `rfc319-inbox-${slug}`
+  const agent = await api<{ id: string }>('/api/agents', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: agentName,
+      description: 'RFC-319 inbox review fixture',
+      outputs: ['design'],
+      outputKinds: { design: 'markdown' },
+      readonly: true,
+      bodyMd: '',
+    }),
+  })
+  const wf = await api<{ id: string }>('/api/workflows', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: `rfc319-inbox-${slug}-wf`,
+      description: 'RFC-319 inbox review fixture',
+      definition: {
+        $schema_version: 3,
+        inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+        nodes: [
+          { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+          {
+            id: 'designer',
+            kind: 'agent-single',
+            agentId: agent.id,
+            agentName,
+            promptTemplate: 'Design for {{topic}}.',
+            position: { x: 320, y: 0 },
+          },
+          {
+            id: 'clarify_1',
+            kind: 'clarify',
+            title: 'Clarify design',
+            position: { x: 560, y: 180 },
+          },
+          {
+            id: 'review_1',
+            kind: 'review',
+            title: 'Review design',
+            inputSource: { nodeId: 'designer', portName: 'design' },
+            rerunnableOnReject: [],
+            rerunnableOnIterate: [],
+            position: { x: 640, y: 0 },
+          },
+        ],
+        edges: [
+          {
+            id: 'e_in_designer',
+            source: { nodeId: 'in_1', portName: 'topic' },
+            target: { nodeId: 'designer', portName: 'topic' },
+          },
+          {
+            id: 'e_clarify_ask',
+            source: { nodeId: 'designer', portName: '__clarify__' },
+            target: { nodeId: 'clarify_1', portName: 'questions' },
+          },
+          {
+            id: 'e_clarify_ans',
+            source: { nodeId: 'clarify_1', portName: 'answers' },
+            target: { nodeId: 'designer', portName: '__clarify_response__' },
+          },
+          {
+            id: 'e_designer_review',
+            source: { nodeId: 'designer', portName: 'design' },
+            target: { nodeId: 'review_1', portName: '__review_input__' },
+          },
+        ],
+      },
+    }),
+  })
+  const taskName = `rfc319-inbox-${slug}-task`
+  const task = await api<{ id: string }>('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: taskName,
+      workflowId: wf.id,
+      repoUrl: repoRemoteUrl(repoDir),
+      ref: 'main',
+      inputs: { topic: `${slug} order_status enum` },
+    }),
+  })
+
+  // clarify stub 的第一轮必然是反问；答掉它，designer 才会吐出 design、评审门才立得起来。
+  interface Session {
+    intermediaryNodeRunId: string
+    iteration: number
+  }
+  let session: Session | null = null
+  await expect
+    .poll(
+      async () => {
+        const rows = await api<Session[]>(
+          `/api/clarify?status=awaiting_human&taskId=${encodeURIComponent(task.id)}`,
+        )
+        session = rows[0] ?? null
+        return session !== null
+      },
+      { timeout: 180_000, message: `${slug}: 任务没有停在反问上` },
+    )
+    .toBe(true)
+  await api(`/api/clarify/${session!.intermediaryNodeRunId}/answers`, {
+    method: 'POST',
+    body: JSON.stringify({
+      answers: [
+        {
+          questionId: 'q-db',
+          selectedOptionIndices: [0],
+          selectedOptionLabels: [],
+          customText: '',
+        },
+        {
+          questionId: 'q-lang',
+          selectedOptionIndices: [0],
+          selectedOptionLabels: [],
+          customText: '',
+        },
+      ],
+      directive: 'stop',
+      ifMatchIteration: session!.iteration,
+    }),
+  })
+
+  interface ReviewRow {
+    taskId: string
+    nodeRunId: string
+    awaitingReview: boolean
+  }
+  let review: ReviewRow | null = null
+  await expect
+    .poll(
+      async () => {
+        const rows = await api<ReviewRow[]>('/api/reviews?status=pending')
+        review = rows.find((row) => row.taskId === task.id && row.awaitingReview) ?? null
+        return review !== null
+      },
+      { timeout: 180_000, message: `${slug}: 任务没有停在评审上` },
+    )
+    .toBe(true)
+  return { taskId: task.id, taskName, reviewNodeRunId: review!.nodeRunId }
+}
+
+/** 造一个停在反问上的任务，只为让 clarify 那一路也非零。 */
+async function seedClarifyGate(slug: string): Promise<{ roundId: string; taskName: string }> {
+  const agentName = `rfc319-inbox-${slug}`
+  const agent = await api<{ id: string }>('/api/agents', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: agentName,
+      description: 'RFC-319 inbox clarify fixture',
+      outputs: ['design'],
+      outputKinds: { design: 'markdown' },
+      readonly: true,
+      bodyMd: '',
+    }),
+  })
+  const wf = await api<{ id: string }>('/api/workflows', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: `rfc319-inbox-${slug}-wf`,
+      description: 'RFC-319 inbox clarify fixture',
+      definition: {
+        $schema_version: 3,
+        inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+        nodes: [
+          { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+          {
+            id: 'designer',
+            kind: 'agent-single',
+            agentId: agent.id,
+            agentName,
+            promptTemplate: 'Design for {{topic}}.',
+            position: { x: 320, y: 0 },
+          },
+          {
+            id: 'clarify_1',
+            kind: 'clarify',
+            title: 'Clarify design',
+            position: { x: 560, y: 160 },
+          },
+        ],
+        edges: [
+          {
+            id: 'e_in_designer',
+            source: { nodeId: 'in_1', portName: 'topic' },
+            target: { nodeId: 'designer', portName: 'topic' },
+          },
+          {
+            id: 'e_clarify_ask',
+            source: { nodeId: 'designer', portName: '__clarify__' },
+            target: { nodeId: 'clarify_1', portName: 'questions' },
+          },
+          {
+            id: 'e_clarify_ans',
+            source: { nodeId: 'clarify_1', portName: 'answers' },
+            target: { nodeId: 'designer', portName: '__clarify_response__' },
+          },
+        ],
+      },
+    }),
+  })
+  const taskName = `rfc319-inbox-${slug}-task`
+  const task = await api<{ id: string }>('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: taskName,
+      workflowId: wf.id,
+      repoUrl: repoRemoteUrl(repoDir),
+      ref: 'main',
+      inputs: { topic: `${slug} order_status enum` },
+    }),
+  })
+  interface Session {
+    id: string
+  }
+  let session: Session | null = null
+  await expect
+    .poll(
+      async () => {
+        const rows = await api<Session[]>(
+          `/api/clarify?status=awaiting_human&taskId=${encodeURIComponent(task.id)}`,
+        )
+        session = rows[0] ?? null
+        return session !== null
+      },
+      { timeout: 180_000, message: `${slug}: 任务没有停在反问上` },
+    )
+    .toBe(true)
+  return { roundId: session!.id, taskName }
+}
+
+test('角标是三路求和，抽屉里的评审行也点得进去、点完抽屉自己收起来 @nightly', async ({ page }) => {
+  const reviewGate = await seedReviewGate('reviewee')
+  const clarifyGate = await seedClarifyGate('asker2')
+
+  // 前提对账：两路各恰好一条。任何一路是 0 或 2，下面「角标=2」这条判据就退化了。
+  interface Counts {
+    reviews: number
+    clarify: number
+    workgroups: number
+  }
+  const readCounts = async (): Promise<Counts> => ({
+    reviews: (await api<{ count: number }>('/api/reviews/pending-count')).count,
+    clarify: (await api<{ count: number }>('/api/clarify/pending-count')).count,
+    workgroups: (await api<{ total: number }>('/api/workgroup-tasks/pending-count')).total,
+  })
+  await expect
+    .poll(async () => JSON.stringify(await readCounts()), {
+      timeout: 60_000,
+      message: '两路待办没有各自落到 1 ⇒ 求和判据退化成「念了其中一路」也成立',
+    })
+    .toBe(JSON.stringify({ reviews: 1, clarify: 1, workgroups: 0 }))
+
+  // 三个计数端点都要被真的问过一遍。第三路（工作组）在本夹具里恒为 0，数字上
+  // 分辨不出来，但「这一路的查询还在不在」是分辨得出来的——查询被删掉时这里当场红。
+  const countHits = new Set<string>()
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url())
+    if (pathname.endsWith('/pending-count')) countHits.add(pathname)
+  })
+
+  await openShell(page)
+
+  const badge = page.getByTestId('inbox-footer-badge')
+  await expect(
+    badge,
+    '一条待评审 + 一条待反问 ⇒ 角标必须是 2。显示 1 说明它只念了其中一路，' +
+      '另一路的待办在导航上完全没有痕迹',
+  ).toHaveText('2', { timeout: 30_000 })
+
+  const counts = await readCounts()
+  expect(Number(await badge.innerText()), '角标与三路计数之和对不上 ⇒ 它念的不是这三路').toBe(
+    counts.reviews + counts.clarify + counts.workgroups,
+  )
+  const BADGE_FEEDS = [
+    '/api/clarify/pending-count',
+    '/api/reviews/pending-count',
+    '/api/workgroup-tasks/pending-count',
+  ]
+  await expect
+    .poll(() => BADGE_FEEDS.filter((feed) => countHits.has(feed)), {
+      timeout: 30_000,
+      message: '三路里有一路的计数端点从未被请求 ⇒ 那一路的待办永远不进角标',
+    })
+    .toEqual(BADGE_FEEDS)
+
+  await page.getByTestId('inbox-footer-button').click()
+  await expect(page.getByTestId('inbox-drawer')).toBeVisible()
+
+  // 两类行必须同时在场：只有 clarify 行时，「review 那一路的投影根本没接上」
+  // 与「接上了」在单一路夹具下同形。
+  const clarifyRow = page.getByTestId(`inbox-row-clarify-${clarifyGate.roundId}`)
+  await expect(clarifyRow, '抽屉里没有那条待反问').toBeVisible()
+  const reviewRow = page.getByTestId(`inbox-row-review-${reviewGate.reviewNodeRunId}`)
+  await expect(
+    reviewRow,
+    '抽屉里没有那条待评审 ⇒ 评审这一路在收件箱上等于不存在，人只能自己想起来去 /reviews 翻',
+  ).toBeVisible()
+  await expect(reviewRow.getByTestId('inbox-row-task-name')).toHaveText(reviewGate.taskName)
+
+  // review 行的 rowKey 与 navigationId 是同一个 nodeRunId，但导航目标是另一条路由；
+  // 写混时行照样画得出来，只是点进去落在别处。
+  await reviewRow.click()
+  await expect(page).toHaveURL(new RegExp(`/reviews/${reviewGate.reviewNodeRunId}$`))
+  await expect(
+    page.getByTestId('review-detail-task-link'),
+    '落地页不是这条评审 ⇒ 点进去看的是别人的文档',
+  ).toHaveText(reviewGate.taskName)
+  await expect(
+    page.getByTestId('inbox-drawer'),
+    '点评审行之后抽屉还盖在上面 ⇒ 落地页被 modal 罩着，人动不了',
+  ).toHaveCount(0)
 })

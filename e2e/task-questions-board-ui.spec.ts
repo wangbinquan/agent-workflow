@@ -303,3 +303,135 @@ test('按承接节点过滤：点一个节点只剩它的卡，「全部」把�
   await filter.getByRole('button', { name: /All nodes/i }).click()
   await expect(allCards).toHaveCount(4)
 })
+
+// ---------------------------------------------------------------------------
+// TASK-39 补漏 —— 看板上的三个**控件**。
+//
+// B49 把四段生命周期都验过了，但**全部走 REST**：`tq-add-question` /
+// `tq-stage-{id}` / `tq-batch-dispatch` 三个按钮在全仓 e2e 里一次都没被点过。
+// 「后端对、按钮没接上」正是这块板最容易坏的形态，而且它的失效完全静默：
+//
+//   * 新增问题的表单少拷一个字段（handler 没绑上 state），Save 永远灰着，
+//     或者存进去的是一条没有承接节点的题——那句话谁也不会处理；
+//   * 「加入待下发 / 移出」按错行（组卡取 `rep.id` 而不是整组 handler），
+//     人以为整题都进了待下发，实际只进了一半；
+//   * 「一键下发」把当前视图的 staged 卡全展开成 entryIds（TaskQuestionList.tsx:317）。
+//     它空转的话，题目永远停在「待下发」那一列——没有报错、没有日志，
+//     任务再也不会动，而看板上一切看起来都「已经处理过了」。
+//
+// 判据取自源码单一事实源：
+//   components/tasks/TaskQuestionList.tsx:250-262   「+ 新增问题」按钮
+//   components/tasks/QuestionAuthorForm.tsx:74-77   title/body/handler 三者齐全才放行
+//   components/tasks/QuestionAuthorForm.tsx:59-70   成功后失效看板查询并关闭弹窗
+//   components/tasks/TaskQuestionList.tsx:455-473   组级 stage / unstage 的 id 取法
+//   components/tasks/TaskQuestionList.tsx:315-318   staged 卡 → entryIds 展开
+//   components/tasks/TaskQuestionList.tsx:359-372   一键下发按钮与它的计数
+//   services/taskQuestions.ts:1382-1387            人工提问建出来就是 staged
+// ---------------------------------------------------------------------------
+
+const MANUAL_TITLE = 'rfc319-boardui-manual-question'
+const MANUAL_BODY = 'rfc319-boardui-also-write-the-migration-note'
+const HANDLER_LABEL = 'rfc319-boardui-alpha'
+
+test('看板上的三个控件真的通到服务端：手写一题、逐题暂存、一键下发 @nightly', async ({ page }) => {
+  await openBoard(page)
+  const before = await board()
+
+  // ---- ① 「+ 新增问题」----------------------------------------------------
+  await page.getByTestId('tq-add-question').click()
+  const form = page.getByTestId('question-author-form')
+  await expect(form, '点了「+ 新增问题」没有弹出表单').toBeVisible()
+
+  const save = page.getByTestId('question-author-save')
+  await expect(save, '空表单就能提交 ⇒ 会往任务里塞一条没有内容的题').toBeDisabled()
+  await page.getByTestId('question-author-title').fill(MANUAL_TITLE)
+  await page.getByTestId('question-author-body').fill(MANUAL_BODY)
+  // §15 的硬契约：人工提问**必须**指定承接节点。只填标题正文就能存的话，
+  // 那条题没有任何人会处理，而人以为自己交代过了。
+  await expect(save, '没选承接节点就能保存 ⇒ 建出来一条没人接的题，它永远不会被下发').toBeDisabled()
+
+  await page.getByRole('combobox', { name: 'Handler node', exact: true }).click()
+  const listbox = page.locator('ul[role="listbox"].select__listbox--portal')
+  await expect(listbox, '承接节点下拉没有打开').toBeVisible()
+  await listbox.getByRole('option', { name: HANDLER_LABEL, exact: true }).click()
+  await expect(save, '三项都填齐了保存还是灰的 ⇒ 这个表单交不出去').toBeEnabled()
+
+  await save.click()
+  await expect(form, '保存成功后弹窗没关 ⇒ 人不知道到底存没存进去').toHaveCount(0)
+
+  // 服务端对账：真的多出一条 manual 条目，正文与承接节点都对得上。
+  const afterCreate = await board()
+  expect(afterCreate.length, '点了保存，看板上没有多出那一条').toBe(before.length + 1)
+  const manual = afterCreate.find((entry) => !before.some((old) => old.id === entry.id))
+  expect(manual, '新增的那条在看板接口里找不到').toBeDefined()
+  expect(
+    manual!.effectiveTargetNodeId,
+    '弹窗里选的承接节点没有跟着存进去 ⇒ 这条题会挂在一个没人认领的位置上',
+  ).toBe('designer_a')
+  expect(manual!.phase, '人工提问建出来就该在「待下发」（§15：有 handler ⇒ 直接可下发）').toBe(
+    'staged',
+  )
+
+  // 界面上也要看得见——建进了库却不进这块板，等于那句话消失了。
+  const manualCard = page.getByTestId(`tq-card-${manual!.id}`)
+  await expect(manualCard, '新建的那条没有出现在看板上').toBeVisible()
+  await expect(colOf(page, 'staged').getByTestId(`tq-card-${manual!.id}`)).toHaveCount(1)
+  await expect(manualCard, '卡上不是刚写的那个标题').toContainText(MANUAL_TITLE)
+
+  // ---- ② 「加入待下发 / 移出」-------------------------------------------
+  // 人工提问建出来就是 staged，所以这个按钮此刻是「移出」。一来一回两次都要
+  // 真的改到服务端：只改界面的话，人以为撤回了，下一次一键下发照样把它发出去。
+  const stageButton = page.getByTestId(`tq-stage-${manual!.id}`)
+  await expect(stageButton, '待下发的卡上没有「移出」按钮').toHaveText('Unstage')
+  await stageButton.click()
+  await expect
+    .poll(async () => (await board()).find((e) => e.id === manual!.id)?.phase, {
+      timeout: 30_000,
+      message: '点了「移出」服务端还停在 staged ⇒ 撤回只是界面上的错觉',
+    })
+    .toBe('pending')
+  await expect(colOf(page, 'pending').getByTestId(`tq-card-${manual!.id}`)).toHaveCount(1)
+
+  await expect(stageButton, '移出之后按钮没有变回「加入待下发」').toHaveText('Stage')
+  await stageButton.click()
+  await expect
+    .poll(async () => (await board()).find((e) => e.id === manual!.id)?.phase, {
+      timeout: 30_000,
+      message: '点了「加入待下发」服务端没有跟上 ⇒ 这一题永远进不了下发批次',
+    })
+    .toBe('staged')
+
+  // ---- ③ 「一键下发」-----------------------------------------------------
+  const stagedIds = (await board()).filter((entry) => entry.phase === 'staged').map((e) => e.id)
+  expect(
+    stagedIds.length,
+    '待下发列是空的 ⇒ 下面那颗按钮压根不该出现，这一段测不到东西',
+  ).toBeGreaterThan(0)
+  const dispatch = page.getByTestId('tq-batch-dispatch')
+  await expect(
+    dispatch,
+    '按钮上的条数与服务端「待下发」的条数对不上 ⇒ 人点下去发出的不是他以为的那一批',
+  ).toHaveText(`Dispatch all (${stagedIds.length})`)
+
+  await dispatch.click()
+  // 真正要锁的是**条目真的离开了「待下发」**，而不是「请求返回 200 了」——
+  // 这一段的所有失效形态都返回 200。
+  await expect
+    .poll(
+      async () => {
+        const rows = await board()
+        return stagedIds.filter((id) => rows.find((e) => e.id === id)?.phase === 'staged').length
+      },
+      {
+        timeout: 120_000,
+        message: '点了一键下发，条目还停在「待下发」⇒ 任务再也不会动，而看板上看起来一切正常',
+      },
+    )
+    .toBe(0)
+  // 下发之后这颗按钮要自己消失（没有 staged 卡 ⇒ 不渲染下发条），
+  // 否则人会对着一颗只会 422 的按钮反复点。
+  await expect(
+    page.getByTestId('tq-batch-dispatch-bar'),
+    '全部下发完了还留着下发条 ⇒ 再点一次只会得到「entry-ids-required」',
+  ).toHaveCount(0, { timeout: 30_000 })
+})

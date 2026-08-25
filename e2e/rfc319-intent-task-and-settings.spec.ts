@@ -454,6 +454,67 @@ test.describe('RFC-319 settings', () => {
   })
 
   // -------------------------------------------------------------------------
+  // CFG-32 P3 —— 监听 host 的保存往返
+  //
+  // 网络分区一共两个持久键，`bindPort` 被 OPS-032（有效端口 / Pin current port）
+  // 与上面的 CFG-06（重启横幅）盖住了，`bindHost` 却一条用例都没有。它偏偏是这一
+  // 分区里**唯一一个纯文本输入**：`SettingsNumberInput` 有 `data-testid`、有
+  // placeholder 联动，而 `bindHost` 只是一个裸 `<TextInput>`（settings.tsx:1588-1592），
+  // 少拷一个字段、绑错一个 state 都不会有任何症状。
+  //
+  // 它的失效形态还特别贵：用户把 host 从 127.0.0.1 改成对外地址、看见「已保存」+
+  // 「需要重启」，于是去重启守护进程——重启读的是 config.json。那一行要是没落盘，
+  // 重启就是原地回滚，而用户此刻正对着一个「配好了」的界面等同事来连。
+  // -------------------------------------------------------------------------
+
+  test('RFC-319 CFG-32: 监听 host 改完保存要真的落盘、重新进页面读得回来，且只动它自己那个键 @nightly', async ({
+    page,
+  }) => {
+    await seedConfig({ bindHost: '127.0.0.1', bindPort: 0 })
+    const before = await readConfig()
+    await openSettings(page, 'network')
+
+    const bindHost = page.getByLabel('Bind host')
+    await expect(bindHost, '网络分区没有把持久值念回输入框 ⇒ 下面改的是一张白表').toHaveValue(
+      '127.0.0.1',
+    )
+
+    await bindHost.fill('0.0.0.0')
+    await expect(
+      saveButton(page),
+      '改了 host 之后分区仍显示「无改动」⇒ 保存按钮点不动，改了等于没改',
+    ).toBeEnabled()
+    await saveButton(page).click()
+    await expect(receipt(page), 'host 保存没有回执').toBeVisible({ timeout: 20_000 })
+
+    // ① 真的落库，而且**落盘**。bindHost 是重启才生效的键，重启读的正是 config.json：
+    //    只写内存的话，那一次重启就是原地回滚。
+    const after = await readConfig()
+    expect(after['bindHost'], 'host 没有真的落库').toBe('0.0.0.0')
+    expect(readConfigFile(daemon)['bindHost'], 'host 只写进了内存没落盘').toBe('0.0.0.0')
+
+    // ② 只动它自己那一个键——分区白名单漏了别的键时，一次改 host 会顺手把同分区
+    //    里别人刚改的设置一起写回旧值。
+    expect(changedTopLevelKeys(before, after), '保存 host 顺手改了别的顶层键').toEqual(['bindHost'])
+
+    // ③ 重启横幅：bindHost 与 bindPort 是全仓仅有的两个重启键，CFG-06 只验过后者。
+    await expect(
+      restartBanner(page),
+      '改了 bindHost 却不提示重启 ⇒ 用户以为已经对外可达了，同事连不上也查不出原因',
+    ).toHaveCount(1)
+
+    // ④ 读得回来：重新进这一页，输入框里必须是刚存下去的那个值。
+    await page.reload()
+    await expect(
+      page.getByLabel('Bind host'),
+      '重新进页面 host 又回到旧值 ⇒ 回执是假的，这一步存了个寂寞',
+    ).toHaveValue('0.0.0.0')
+
+    // 还原：别把后续用例留在一个对外监听的配置上。
+    await seedConfig({ bindHost: '127.0.0.1' })
+  })
+
+  // -------------------------------------------------------------------------
   // CFG-X2 P2 —— Git 分区的子模块检出策略与后台刷新
   // -------------------------------------------------------------------------
 

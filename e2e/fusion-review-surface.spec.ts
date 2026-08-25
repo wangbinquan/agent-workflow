@@ -48,7 +48,9 @@
 //   packages/system-mocks/src/runtime/mode-fusion.ts                    唯一能推到待审批的 stub
 
 import { expect, test, type Page } from '@playwright/test'
+import { join } from 'node:path'
 
+import { querySqlite, runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 test.describe.configure({ mode: 'serial' })
@@ -629,4 +631,103 @@ test('RFC-319 INTENT-57: 融合失败时把失败原因摆在页面上，且不�
   const refused = await req(`/api/fusions/${fusionBId}/approve`, { method: 'POST' })
   expect(refused.status, '失败的融合还能被批准 ⇒ 一份没跑完的提案会被写进技能正文').toBe(409)
   expect(((await refused.json()) as { code?: string }).code).toBe('fusion-not-awaiting')
+})
+
+// ---------------------------------------------------------------------------
+// MEM-X3 补漏 —— 「applying 中不允许取消」这一支。
+//
+// INTENT-56 走的是 `running` 那一支（二次确认 + 连引擎任务一起停）。取消这条路
+// 上真正危险的分支却是另一支：`services/fusion.ts:1755-1775` 的 CAS **只从**
+// `running` / `awaiting_approval` 放行，因为 `applying` 是 approve 独占持有的
+// 提交窗口——那一刻正有人在改写技能正文、递增版本、把记忆翻成 fused
+// （同文件 1446-1451 领取，1490/1509 收尾）。取消若能从底下把它抽走，赢家的提交
+// 会写进一个已经被判「取消」的融合里：技能正文变了、版本涨了，而记忆页上那条
+// 融合写着「已取消」，两边再也对不上，而且没有任何报错。
+//
+// `applying` 在真实时间里只存在几十毫秒（approve 的同一条链路里领取又收尾），
+// e2e 抢不到那个窗口，所以按它的**真实形态**把状态种进库里，其余全部走公共
+// HTTP 面与真实界面。反向对照（放回 running 之后同一个请求必须成功）是这条
+// 用例的判据核心：没有它，409 也可能只是「取消这条路根本不通」。
+// ---------------------------------------------------------------------------
+
+test('RFC-319 MEM-X3: 提交中的融合取消不掉——界面上那一下被服务端顶回来，状态一个字节都不动 @nightly', async ({
+  page,
+}) => {
+  const dbFile = join(daemon.home, 'db.sqlite')
+  const fusionCId = (
+    await api<{ id: string }>('/api/fusions', {
+      method: 'POST',
+      body: JSON.stringify({
+        skillId,
+        memoryIds: [keepMemoryId],
+        intent: 'RFC-319 applying-cancel fixture',
+      }),
+    })
+  ).id
+  expect(
+    (await fusionOf(fusionCId)).status,
+    '新建的融合不是 running ⇒ 下面「放回 running 就能取消」的反向对照不成立',
+  ).toBe('running')
+
+  // 种状态。`runSqlite` 对多语句里的约束错误**不抛异常**（docs/dev-gotchas.md），
+  // 所以种完必须自己回读——库里没落上的话，下面测的就是 running 那一支了。
+  runSqlite(dbFile, `UPDATE fusions SET status = 'applying' WHERE id = '${fusionCId}';`)
+  expect(
+    querySqlite<{ status: string }>(dbFile, 'SELECT status FROM fusions WHERE id = ?', [
+      fusionCId,
+    ])[0]?.status,
+    '状态没有种进库里',
+  ).toBe('applying')
+  expect(
+    (await fusionOf(fusionCId)).status,
+    '接口念不到刚种进去的状态 ⇒ 后面每一条断言都在测另一个状态',
+  ).toBe('applying')
+
+  // ① 界面这一路：详情页此刻**仍然**给取消按钮（`fusions.detail.tsx:127-137` 只排除
+  //    done/failed/canceled），所以用户真的按得下去——这条用例锁的正是「按下去之后
+  //    产品顶得住」。
+  await openApp(page, `/fusions/${fusionCId}`)
+  await expect(
+    page.locator('.chip--fusion-applying'),
+    '页面没有停在「提交中」⇒ 这一屏不是本条用例要测的那个状态',
+  ).toHaveText('Applying')
+  const cancelButton = page.getByRole('button', { name: 'Cancel fusion', exact: true })
+  await expect(
+    cancelButton,
+    '提交中的融合详情页连取消按钮都没有 ⇒ 这条分支在界面上不可达',
+  ).toBeVisible()
+  await cancelButton.click()
+  await page.getByRole('button', { name: 'Cancel this fusion?', exact: true }).click()
+
+  await expect(
+    page.locator('.notice-banner--error'),
+    '取消被服务端拒了，界面上却一声不吭 ⇒ 用户以为已经取消了，转头去干别的',
+  ).toBeVisible({ timeout: 30_000 })
+  await expect(
+    page.locator('.chip--fusion-applying'),
+    '提交中的融合被取消掉了 ⇒ 赢家的提交会写进一个已判「取消」的融合，技能正文与记忆页从此对不上',
+  ).toHaveText('Applying')
+
+  // ② 服务端这一路：拒绝要落在 CAS 那条分支上，而不是早退的终态分支。两条分支同码
+  //    （`fusion-terminal`），只有文案分得开——终态那条写 `is already '<status>'`
+  //    （fusion.ts:1747-1749），CAS 那条写 `no longer cancelable`（1770-1774）。
+  const refused = await req(`/api/fusions/${fusionCId}/cancel`, { method: 'POST' })
+  expect(refused.status, '提交中的融合还能被取消').toBe(409)
+  const refusedBody = (await refused.json()) as { code?: string; message?: string }
+  expect(refusedBody.code).toBe('fusion-terminal')
+  expect(
+    refusedBody.message ?? '',
+    '拒绝没有落在 applying 那条 CAS 上 ⇒ 它挡住的是别的东西，applying 这一支仍然没人守',
+  ).toContain('no longer cancelable')
+  expect((await fusionOf(fusionCId)).status, '被拒的取消还是把状态改了').toBe('applying')
+
+  // ③ 反向对照：同一条融合、同一个请求，回到 running 就必须成功。少了这一步，
+  //    上面那个 409 也可能来自权限 / 路由 / id 认不出，与 applying 毫无关系。
+  runSqlite(dbFile, `UPDATE fusions SET status = 'running' WHERE id = '${fusionCId}';`)
+  const accepted = await req(`/api/fusions/${fusionCId}/cancel`, { method: 'POST' })
+  expect(
+    accepted.status,
+    '回到 running 之后仍取消不掉 ⇒ 上面那个 409 与 applying 无关，这条用例什么也没证明',
+  ).toBe(200)
+  expect((await fusionOf(fusionCId)).status).toBe('canceled')
 })

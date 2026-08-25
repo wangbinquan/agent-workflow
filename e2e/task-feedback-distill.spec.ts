@@ -390,6 +390,40 @@ test('正文校验，以及「看不见」与「不存在」必须逐字节同�
   expect(invisibleBody, '两个 404 的响应体不一样 —— 拿任务 id 就能探测它到底存不存在').toBe(
     missingBody,
   )
+
+  // ——**写**面同样要同形（HUMAN-47 的另一半，此前只验了读）——
+  //
+  // 只把读面同形化，探测面一点没少：外人换个动词（POST 而不是 GET）照样能逐个 id
+  // 试出「这个任务是不是真的存在」。而写面比读面更容易漏——读面往往被列表过滤顺手
+  // 挡住，写面却常常先落一层「参数校验 / 找不到条目」的分支，于是「不存在」返回
+  // 404，「存在但看不见」返回 403 或另一段文案。这里逐字节比对两条 POST 的响应体。
+  const probeBody = JSON.stringify({ bodyMd: 'RFC-319 B63: outsider write probe.' })
+  const missingPost = await apiFetch(
+    `/api/tasks/${missingId}/feedback`,
+    { method: 'POST', body: probeBody },
+    outsiderToken,
+  )
+  const invisiblePost = await apiFetch(
+    `/api/tasks/${taskId}/feedback`,
+    { method: 'POST', body: probeBody },
+    outsiderToken,
+  )
+  expect(missingPost.status, '往不存在的任务写反馈必须 404').toBe(404)
+  expect(invisiblePost.status, '往别人的私有任务写反馈必须也是 404，而不是 403').toBe(404)
+  const missingPostBody = (await missingPost.text()).replace(missingId, '<id>')
+  const invisiblePostBody = (await invisiblePost.text()).replace(taskId, '<id>')
+  expect(
+    invisiblePostBody,
+    '两条 POST 的 404 响应体不一样 —— 换个动词就能拿任务 id 探测它到底存不存在',
+  ).toBe(missingPostBody)
+
+  // 被拒的那一次不许留下任何痕迹：状态码同形但行照落，等于换个地方泄露同一件事
+  // （而且这条笔记会挂在一个外人根本看不见的任务上，谁都不会再发现它）。
+  const rows = await feedbackRows()
+  expect(
+    rows.map((row) => row.bodyMd),
+    '外人被 404 挡住了，反馈却还是落进了任务里',
+  ).not.toContain('RFC-319 B63: outsider write probe.')
 })
 
 test('深链要落到具体那一条：蒸馏出来的记忆指回来时，追溯不能断在半路 @nightly', async ({
