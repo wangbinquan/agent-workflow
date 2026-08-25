@@ -169,7 +169,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 169
+      "lines": 176
     },
     {
       "id": "lifecycle-grep-guard",

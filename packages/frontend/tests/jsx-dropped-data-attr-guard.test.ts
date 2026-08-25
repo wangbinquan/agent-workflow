@@ -28,12 +28,20 @@
 //     写死名字会把它误判成死锚点，而 e2e 里 `[data-task-detail-section-link=…]`
 //     的点击全绿，证明它确实转发了。宁可漏报也绝不误报。
 //   * 原生小写标签（`<div data-testid>`）天然接得住，不在判据内。
+//   * 路径一律先转成 `src/…` 形式的 **POSIX 相对路径**再参与比较与展示。用绝对路径
+//     切 `'src/'` 会在 Windows 上失效（分隔符是 `\`，`indexOf('src/')` 恒 -1），
+//     整份语料会被误判成「组件接不住」而全量报红——2026-08-26 实撞，windows shard 红。
 import { describe, expect, test } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src')
+
+/** 绝对路径 → `src/…` 的 POSIX 相对路径（Windows 上把 `\` 换成 `/`）。 */
+function rel(abs: string): string {
+  return `src/${relative(SRC, abs).split(sep).join('/')}`
+}
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -45,7 +53,8 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const FILES = walk(SRC)
-const TEXT = new Map(FILES.map((f) => [f, readFileSync(f, 'utf8')]))
+/** key 是 `src/…` 相对路径，value 是源码。读盘只在这里发生一次。 */
+const TEXT = new Map(FILES.map((f) => [rel(f), readFileSync(f, 'utf8')]))
 
 /** 组件名 → 定义文件。只认顶格定义，避开函数体内的动态标签变量。 */
 const DEFS = new Map<string, string>()
@@ -119,20 +128,18 @@ describe('JSX 连字符属性不得传给接不住它的自研组件', () => {
     expect(FILES.length).toBeGreaterThanOrEqual(300)
   })
 
+  test('语料 key 一律是 src/ 开头的 POSIX 相对路径（Windows 上分隔符不得漏网）', () => {
+    const malformed = [...TEXT.keys()].filter((k) => !k.startsWith('src/') || k.includes('\\'))
+    expect(
+      malformed.slice(0, 5),
+      '出现了非 POSIX 相对 key ⇒ 组件定义查不到、整份语料会被误判成「接不住」而全量报红',
+    ).toEqual([])
+  })
+
   test('每一处 <Component data-*|aria-*> 都必须真的落进 DOM', () => {
     const dead: string[] = []
     for (const [file, text] of TEXT) {
-      dead.push(
-        ...findDroppedAttrs(
-          file.slice(file.indexOf('src/')),
-          text,
-          (tag) => {
-            const d = DEFS.get(tag)
-            return d === undefined ? undefined : d.slice(d.indexOf('src/'))
-          },
-          (def, attr) => accepts(join(SRC, '..', def), attr),
-        ),
-      )
+      dead.push(...findDroppedAttrs(file, text, (tag) => DEFS.get(tag), accepts))
     }
     expect(dead).toEqual([])
   })
