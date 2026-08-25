@@ -1,6 +1,7 @@
 # RFC-321 — 用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析
 
-- 状态：Implemented，等待 exact-SHA hosted CI/visual 终态（用户于 2026-08-24 批准 C1–C14、I1–I8 与 S1）
+- 状态：Done（2026-08-25；用户于 2026-08-24 批准 C1–C14、I1–I8 与 S1；包含最终发布批次的
+  `089015b1a` 上 hosted CI 31/31、visual 1/1 全绿）
 - 发起：用户，2026-08-24
 - 批准：用户，2026-08-24
 - 前置：RFC-204 / RFC-205（仓库凭据密封与一次性 helper）、RFC-269（全局代码平台连接）、
@@ -267,6 +268,8 @@ connection 的允许集合；若 API 不可用，则只接受管理员配置的�
 2. RFC-320 不再写入本 RFC 的重叠文件，且其完整/目标验证证据可追溯；
 3. 开工时重新 fetch/sync、核对 migration journal、共享 dirty paths 与 RFC-294 目标边界。
 
-用户已确认 RFC-320 已推送，并明确要求两个会话继续各管各的阶段。因此 RFC-321 处于
-**In Progress / Phase 2**：实现仅接管 repository push credential 与 transport；RFC-320 的后端
-profile、task identity snapshot、author/committer 裁决仍由其原会话负责。
+用户已确认 RFC-320 已推送，并明确要求两个会话继续各管各的阶段。RFC-321 已于 2026-08-25
+**Done / Phase 2**：实现仅接管 repository push credential 与 transport；RFC-320 的后端 profile、
+task identity snapshot、author/committer 裁决仍由其原会话负责。最终发布批次 `cde92d4c6`、
+`3a0e237c9` 均为托管验收 SHA `089015b1a` 的祖先；该 SHA 的 CI run `32806211369` 31/31 全绿，
+visual-regression run `32806211353` 1/1 全绿。

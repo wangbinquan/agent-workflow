@@ -1,6 +1,6 @@
 # RFC-321 — 技术设计：用户级代码平台推送凭据与 SSH→HTTP(S) 传输解析
 
-- 状态：Implemented / Phase 2；等待 exact-SHA hosted CI/visual 终态
+- 状态：Done / Phase 2（2026-08-25；包含最终发布批次的 `089015b1a` 上 hosted CI 31/31、visual 1/1 全绿）
 - 实施边界：只接管 repository push credential/transport；RFC-320 后端合同不由本会话修改
 - 产品裁决：以 `proposal.md §5 C1–C14`、`§6 I1–I8` 与追加裁决 S1 为准
 
@@ -759,7 +759,7 @@ redacted authority，但用户响应只看到面向修复的稳定错误，不�
 1. proposal C1–C14、I1–I8 与 S1 已获用户明确批准；
 2. RFC-320 已 Done、生产候选已提交并同步，且不再写重叠文件；
 3. `plan.md` 所有任务映射到 AC，零“设计写了但计划没接”的条目；
-4. targeted 与一次完整 local gate 全绿；
+4. targeted 证据闭合；按用户 2026-08-24 裁决不运行本地 Bun gate，以托管 CI 为唯一权威门禁；
 5. 普通用户浏览器真行为、PAT 拒绝、缓存隔离、管理员兼容有证据；
-6. exact-SHA hosted CI/visual terminal-green；
+6. 包含最终发布批次的 `089015b1a` 上 exact-SHA hosted CI 31/31、visual 1/1 terminal-green；
 7. shared `main` 只精确提交本 RFC 路径和确属本 RFC 的共享文件，保留所有并发输出。

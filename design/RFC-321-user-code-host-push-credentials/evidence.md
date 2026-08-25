@@ -4,6 +4,9 @@
 源码中的完整或稳定前缀记录。`rfc321-repository-publication-ratchet.test.ts` 会反向锁定 AC-1–AC-14
 与 T1–T20 均恰好出现一次，防止新增任务或验收项变成游离散文。
 
+RFC-321 已于 2026-08-25 Done：最终发布批次 `cde92d4c6`、`3a0e237c9` 均为 `089015b1a` 的祖先；
+该 SHA 的 hosted CI run `32806211369` 31/31 全绿，visual-regression run `32806211353` 1/1 全绿。
+
 ## AC evidence
 
 | AC    | 生产实现                                                                                                                                                                                   | 正向证据                                                                                                                                                                               | 拒绝/禁用证据                                                                                                                                                  |
@@ -60,5 +63,5 @@
 | browser WebKit     | RFC-321 spec，`PLAYWRIGHT_WEBKIT=1`                                                       | 3 pass / 0 fail                   |
 | local visual       | RFC-321 四个场景，Chromium Darwin                                                         | 4 pass / 0 fail；四图人工检查通过 |
 | local Bun gate     | 用户明确禁止本地 `bun` 测试、类型检查、构建、gate 与 E2E                                  | 未运行；以 GitHub CI 为准         |
-| hosted CI          | 最终 `origin/main` exact SHA                                                              | 待推送                            |
-| hosted visual      | 最终 `origin/main` exact SHA；Ubuntu authoritative baselines                              | 待推送与 artifact 收口            |
+| hosted CI          | `cde92d4c6`,`3a0e237c9` ⊆ `089015b1a`；run `32806211369`                                 | 31/31 jobs success                |
+| hosted visual      | `089015b1a`；visual-regression run `32806211353`                                           | 1/1 job success                   |
