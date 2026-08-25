@@ -264,7 +264,12 @@ describe('RFC-311 slow-statement telemetry', () => {
       .all() as { n: number }[]
     expect(rows[0]?.n).toBe(300_000)
     expect(seen.length).toBeGreaterThanOrEqual(1)
-    expect(seen[0]?.sql).toContain('WITH RECURSIVE')
+    // 断的是「这条慢语句到没到 sink」，**不是**「它排第几」。原写法取 `seen[0]`，
+    // 而 `exec()` 同样被计时（db/client.ts:137-139）——机器一忙，上面那句
+    // `CREATE TABLE` 自己就超了 1ms 阈值、占住 seen[0]，断言当场红。
+    // 2026-08-25 在 macOS shard 1/4 上实红一次（run 32793503221）；本机把阈值压到
+    // 0.0000001 可确定性复现同一形态。顺序不是这条测试的判据，改成存在性。
+    expect(seen.some((e) => e.sql.includes('WITH RECURSIVE'))).toBe(true)
     const before = seen.length
     sqlite.prepare('SELECT 1 AS one').get()
     // A point query must not trip a 1ms threshold under normal conditions;
