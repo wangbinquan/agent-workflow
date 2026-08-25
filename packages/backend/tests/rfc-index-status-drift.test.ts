@@ -125,6 +125,8 @@ describe('RFC 索引状态漂移守卫', () => {
     // 标「PR-B」占位，行本身已在），缺口归零；此前按组写行时本守卫只认每行第一个编号，
     // 曾挂账 23（abea42bef）。
     'RFC-326-review-gate-mcp-api-surface': 0,
+    // RFC-327：16 条 AC 全部在 plan §4 有证据行，缺口为零。
+    'RFC-327-memory-scope-tag-discovery': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

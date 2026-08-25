@@ -782,6 +782,8 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- memories (RFC-041 / RFC-043 / RFC-045) ----
   { method: 'GET', path: '/api/memories' },
+  // RFC-327：标签 facets（读面，与 list 同权限档）。
+  { method: 'GET', path: '/api/memories/facets' },
   { method: 'POST', path: '/api/memories' },
   { method: 'GET', path: '/api/memories/:id' },
   { method: 'PATCH', path: '/api/memories/:id' },
