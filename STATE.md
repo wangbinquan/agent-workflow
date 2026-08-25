@@ -2,6 +2,18 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ✅ **已完成 RFC（Done，2026-08-25，单笔提交）：[RFC-327 按 scope 与标签检索知识](design/RFC-327-memory-scope-tag-discovery/proposal.md)**
+> —— 起于用户「现在有增加知识的 MCP 和 API 吗，还有按照 scope、标签来过滤知识的 MCP 和 API 吗」。源码对账的答案是**写有、筛半有**：
+> 增加知识 REST（`POST /api/memories`）与 MCP（`resource_write kind=memory method=create`）都有；按 scope 过滤只有 REST 有；
+> 按标签过滤 REST 只收**单个** `tag`（`services/memory.ts` 内存精确匹配），MCP 的 `resource_read` 只收 `{kind,method,id}`、
+> **一个查询参数都不收**，于是本地代理要按 scope / 标签找知识只能全量拉回来自己筛、正文还要逐条 get；「有哪些标签可选」全仓无端点。
+> 用户四选一拍板：不做独立的「所有 scope」端点（MCP 上已能列出 agents / workflows / repos / repo-groups 四类 scope 资源）/
+> 统一 facets 端点、缺省只统计 approved（与注入链路一致）/ 多标签 `tags` + `tagMode=any|all`（缺省 any，legacy 单值 `tag` 保留）/
+> MCP 走扩 `resource_read`（`query` 透传 + `method:'facets'`）。**不可商量的约束**：facets 的统计面恰好是调用者的可见面
+> （先过 `filterMemoriesByScopeVisibility` + candidate 收紧再聚合），否则标签名本身就是私有 scope 的存在性泄露——有专测。
+> 落位：标签语义提成共享纯函数 `packages/shared/src/memoryTags.ts`；`describe_resource` 从路由自己的 zod 生成 `querySchema`。
+> 复跑：shared 38 例、backend rfc327 13 例 + 相邻 109 例全绿。
+
 > ✅ **已完成 RFC（Done，2026-08-25；PR-A `430717cae` + CI 修复 `1d886e43e`（推后 CI 现形的两条守卫红，已修）+ PR-B 本笔；三件套过三轮五路设计门，PR-A / PR-B 各过一轮 Codex 实现门，记录在 plan §3）：[RFC-326 评审门的 MCP / API 完整面](design/RFC-326-review-gate-mcp-api-surface/proposal.md)**
 > —— 起于用户「MCP 和 API 没有检视设计文档的接口，没法让设计在本地检视文档并提交意见」。研究结论：仓内的「设计文档检视」就是
 > RFC-005 的人工评审门；REST `/api/reviews/*` 十条端点齐全（`routes/reviews.ts:137-460`），**MCP 只有三个门工具且 `submit_review`

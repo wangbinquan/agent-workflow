@@ -32,6 +32,7 @@ import {
   CreateWorkflowSchema,
   CreateWorkgroupSchema,
   MemoryCreateRequestSchema,
+  MemoryListFilterSchema,
   MemoryPatchRequestSchema,
   UpdateAgentRequestSchema,
   UpdateMcpRequestSchema,
@@ -65,6 +66,20 @@ const KIND_SCHEMAS: Partial<Record<McpResourceKind, KindSchemas>> = {
   // RFC-248: 建组 / 改组同一套 body（成员数组 + 布局），改组另需 expectedVersion。
   'repo-groups': { create: CreateRepoGroupSchema, update: UpdateRepoGroupSchema },
   memory: { create: MemoryCreateRequestSchema, update: MemoryPatchRequestSchema },
+}
+
+/**
+ * RFC-327 —— 一个 kind 的 **list 查询参数**契约。`resource_read` 现在能透传 query,
+ * 但「透传什么」在此之前无处可查:模型只能猜一个参数名再读 422。与 body 一样,
+ * 这里挂的就是路由自己校验用的那个 zod 对象,不是手抄的一份。
+ */
+const KIND_QUERY_SCHEMAS: Partial<Record<McpResourceKind, ZodTypeAny>> = {
+  memory: MemoryListFilterSchema,
+}
+
+export function querySchemaFor(kind: McpResourceKind): unknown | undefined {
+  const schema = KIND_QUERY_SCHEMAS[kind]
+  return schema === undefined ? undefined : zodToJsonSchema(schema, { $refStrategy: 'none' })
 }
 
 export interface ResourceBodySchemas {

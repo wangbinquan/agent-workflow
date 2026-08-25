@@ -1356,7 +1356,10 @@ describe('RFC-254 T28b — dispatcher', () => {
    *            three behaviours and the fusion never leaves `running`
    *            (or reconcile reports a missing manifest) and the spec goes red.
    */
-  const POST_PORT_MODES = new Set(['branch', 'development', 'fusion'])
+  // 移植之后**新增**的模式:它们从来没有过 shell 版,录不出 golden——豁免的是
+  // 「差分回放」这一档,不是「有没有测试」(各自在自己的 RFC 里有专测:review-doc 见
+  // packages/system-mocks/tests/rfc326-review-doc-mode.test.ts 与 e2e/rfc326-*)。
+  const POST_PORT_MODES = new Set(['branch', 'development', 'fusion', 'review-doc'])
 
   test('every ported mode has a golden, and every golden has a mode', () => {
     // A mode with no recording is unproven; a recording with no mode is a

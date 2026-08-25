@@ -32,7 +32,7 @@ import type {
   MemorySummary,
   MemoryWsMessage,
 } from '@agent-workflow/shared'
-import { MemorySchema } from '@agent-workflow/shared'
+import { MemorySchema, matchesTagFilter } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { memories, memoryDistillJobs } from '@/db/schema'
@@ -246,10 +246,9 @@ export async function listMemories(
       Omit<MemoryRow, 'bodyMd'>
     >
     let summaries = narrow.map((r) => ({ row: r, tags: parseTags(r.tags) }))
-    if (filter.tag !== undefined) {
-      const needle = filter.tag
-      summaries = summaries.filter((x) => x.tags.includes(needle))
-    }
+    // RFC-327: 单值 `tag` 与多值 `tags` 走同一条语义（any/all，缺省 any）。
+    // 标签是 JSON 列，SQL 没法可靠 AND/OR，仍在内存里判——与下面的整行读法同一实现。
+    summaries = summaries.filter((x) => matchesTagFilter(x.tags, filter))
     const jobIds = new Set<string>()
     for (const { row } of summaries) {
       if (row.status === 'candidate' && row.distillJobId !== null) jobIds.add(row.distillJobId)
@@ -279,11 +278,7 @@ export async function listMemories(
   const rows = (await (where
     ? db.select().from(memories).where(where).orderBy(desc(memories.createdAt))
     : db.select().from(memories).orderBy(desc(memories.createdAt)))) as MemoryRow[]
-  let items = rows.map(rowToMemory)
-  if (filter.tag !== undefined) {
-    const needle = filter.tag
-    items = items.filter((m) => m.tags.includes(needle))
-  }
+  const items = rows.map(rowToMemory).filter((m) => matchesTagFilter(m.tags, filter))
   return items
 }
 

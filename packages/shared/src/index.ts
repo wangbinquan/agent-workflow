@@ -30,6 +30,7 @@ export * from './schemas/mcpProbe'
 export * from './schemas/mcpRuntimeTest' // RFC-238
 export * from './schemas/fusion'
 export * from './schemas/memory'
+export * from './memoryTags' // RFC-327
 export * from './schemas/plugin'
 export * from './schemas/repoBatchImport'
 export * from './schemas/skill'

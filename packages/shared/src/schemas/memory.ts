@@ -352,11 +352,45 @@ export const InjectedMemorySnapshotSchema = z.object({
 })
 export type InjectedMemorySnapshot = z.infer<typeof InjectedMemorySnapshotSchema>
 
+// RFC-327: 多标签过滤的匹配模式——any = 命中任一，all = 全部命中。缺省 any
+// （在 service 层兜底，schema 不给 default，保住 `parse({})` 恒等于 `{}` 的旧锁）。
+export const MemoryTagModeSchema = z.enum(['any', 'all'])
+
 export const MemoryListFilterSchema = z.object({
   status: MemoryStatusSchema.optional(),
   scopeType: MemoryScopeSchema.optional(),
   scopeId: z.string().min(1).optional(),
   search: z.string().trim().min(1).max(200).optional(),
   tag: z.string().min(1).max(40).optional(),
+  // RFC-327: 多标签。wire 上 `tags=a,b`（或重复 `tags=a&tags=b`）由路由拆成数组；
+  // 与 legacy 单值 `tag` 同时给时合并成一个集合再按 tagMode 判（shared/memoryTags.ts）。
+  tags: z.array(z.string().min(1).max(40)).max(16).optional(),
+  tagMode: MemoryTagModeSchema.optional(),
 })
 export type MemoryListFilter = z.infer<typeof MemoryListFilterSchema>
+
+// RFC-327: `GET /api/memories/facets` 的查询面——在调用者可见的记忆集合上聚合标签。
+// status 缺省 approved（路由兜底，与注入链路只取 approved 一致）。
+export const MemoryFacetsQuerySchema = z.object({
+  status: MemoryStatusSchema.optional(),
+  scopeType: MemoryScopeSchema.optional(),
+  scopeId: z.string().min(1).optional(),
+})
+export type MemoryFacetsQuery = z.infer<typeof MemoryFacetsQuerySchema>
+
+export const MemoryTagFacetSchema = z.object({
+  tag: z.string(),
+  count: z.number().int().positive(),
+})
+
+export const MemoryFacetsResponseSchema = z.object({
+  /** 实际参与统计的状态（缺省 approved）。 */
+  status: MemoryStatusSchema,
+  scopeType: MemoryScopeSchema.nullable(),
+  scopeId: z.string().nullable(),
+  /** 参与统计的可见记忆条数（不是标签条数）。 */
+  total: z.number().int().nonnegative(),
+  /** count 降序、tag 升序（shared/memoryTags.ts aggregateTagFacets）。 */
+  tags: z.array(MemoryTagFacetSchema),
+})
+export type MemoryFacetsResponse = z.infer<typeof MemoryFacetsResponseSchema>

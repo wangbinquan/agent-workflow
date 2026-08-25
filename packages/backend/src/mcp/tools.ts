@@ -39,7 +39,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DispatchResult, Dispatcher } from '@/mcp/dispatch'
-import { bodySchemasFor, type ResourceBodySchemas } from '@/mcp/resourceSchemas'
+import { bodySchemasFor, querySchemaFor, type ResourceBodySchemas } from '@/mcp/resourceSchemas'
 
 export interface McpToolContext {
   readonly actor: Actor
@@ -839,6 +839,11 @@ interface ResourceOp {
 interface ResourceRoutes {
   readonly list: ResourceOp
   readonly get?: ResourceOp
+  /**
+   * RFC-327 —— 这个 kind 的「有什么可筛」目录(今天只有 memory:标签 + 计数)。
+   * 没有它时 `resource_read(method:'facets')` 明确拒绝,而不是悄悄退回 list。
+   */
+  readonly facets?: ResourceOp
   readonly create?: ResourceOp
   readonly update?: ResourceOp
   readonly delete?: ResourceOp
@@ -966,6 +971,8 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
   },
   memory: {
     list: { method: 'GET', path: '/api/memories' },
+    // RFC-327：标签 / scope 目录。读面,与 list 同权限档。
+    facets: { method: 'GET', path: '/api/memories/facets' },
     get: { method: 'GET', path: '/api/memories/:id' },
     create: { method: 'POST', path: '/api/memories' },
     update: { method: 'PATCH', path: '/api/memories/:id' },
@@ -1013,15 +1020,37 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: {
       kind: z.enum(RESOURCE_KINDS).describe('Resource type'),
-      method: z.enum(['list', 'get']).describe('list = all visible; get = one by id'),
+      method: z
+        .enum(['list', 'get', 'facets'])
+        .describe(
+          'list = all visible (narrow it with `query`); get = one by id; ' +
+            'facets = what there is to filter BY (memory: its tags with counts)',
+        ),
       id: z.string().min(1).optional().describe('Required when method is "get"'),
+      // RFC-327：过滤参数直通到 REST 的查询串。之前这个工具一个参数都不收,于是
+      // 「按 scope / 标签找知识」在 MCP 上只能全量拉回来自己筛——正文还要逐条 get。
+      query: z
+        .record(z.string())
+        .optional()
+        .describe(
+          'Filters, passed straight through as the query string. Call describe_resource for the ' +
+            'ones a kind accepts — memory takes scopeType / scopeId / status / search / tags ' +
+            '(comma-separated) / tagMode (any|all). Unknown keys are refused by the route, not ignored.',
+        ),
     },
     handler: async (args, ctx) => {
       const routes = routesFor(args.kind)
-      const op = args.method === 'get' ? routes.get : routes.list
+      const op =
+        args.method === 'get' ? routes.get : args.method === 'facets' ? routes.facets : routes.list
       if (op === undefined)
         throw new Error(`resource_read: ${String(args.kind)} has no ${String(args.method)}`)
-      return unwrap(await ctx.dispatch({ method: op.method, path: fillId(op.path, args.id) }))
+      return unwrap(
+        await ctx.dispatch({
+          method: op.method,
+          path: fillId(op.path, args.id),
+          query: args.query as Record<string, string> | undefined,
+        }),
+      )
     },
   },
   {
@@ -1142,12 +1171,14 @@ export function describeResource(kind: McpResourceKind): {
   kind: McpResourceKind
   operations: Array<{ operation: string; method: string; path: string; permission: string | null }>
   bodySchemas: ResourceBodySchemas
+  /** RFC-327: `resource_read`'s `query` contract for this kind, when it has one. */
+  querySchema?: unknown
   note?: string
 } {
   const routes = routesFor(kind)
   const ops: Array<{ operation: string; method: string; path: string; permission: string | null }> =
     []
-  for (const operation of ['list', 'get', 'create', 'update', 'delete'] as const) {
+  for (const operation of ['list', 'facets', 'get', 'create', 'update', 'delete'] as const) {
     const op = routes[operation]
     if (op === undefined) continue
     ops.push({
@@ -1158,7 +1189,7 @@ export function describeResource(kind: McpResourceKind): {
       // RFC-248 T30c: 权限点用**权限域**拼，不是 kind——`repo-groups` 的写点
       // 是 `repos:update` 之类，不存在 `repo-groups:update` 这个点。
       permission:
-        operation === 'list' || operation === 'get'
+        operation === 'list' || operation === 'get' || operation === 'facets'
           ? null
           : `${permissionDomainFor(kind)}:${operation}`,
     })
@@ -1167,9 +1198,10 @@ export function describeResource(kind: McpResourceKind): {
   // with. `resource_write` points callers here for it; before this it was the
   // one question this tool could not answer.
   const bodySchemas = bodySchemasFor(kind)
-  return routes.note === undefined
-    ? { kind, operations: ops, bodySchemas }
-    : { kind, operations: ops, bodySchemas, note: routes.note }
+  const querySchema = querySchemaFor(kind)
+  const base = { kind, operations: ops, bodySchemas }
+  const withQuery = querySchema === undefined ? base : { ...base, querySchema }
+  return routes.note === undefined ? withQuery : { ...withQuery, note: routes.note }
 }
 
 // -----------------------------------------------------------------------------

@@ -12,10 +12,14 @@
 import {
   MemoryCandidatePromoteSchema,
   MemoryCreateRequestSchema,
+  MemoryFacetsQuerySchema,
   MemoryListFilterSchema,
   MemoryPatchRequestSchema,
   MemoryScopeSchema,
   MemoryStatusSchema,
+  MemoryTagModeSchema,
+  aggregateTagFacets,
+  normalizeTagList,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import type { AppDeps } from '@/server'
@@ -85,6 +89,7 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
         scopeId: c.req.query('scopeId'),
         search: c.req.query('search'),
         tag: c.req.query('tag'),
+        tagMode: c.req.query('tagMode'),
       }
       // Pre-parse each known field so we surface 422 with field name when the
       // caller sends e.g. ?status=bogus rather than dropping silently.
@@ -103,6 +108,16 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
       if (raw.scopeId !== undefined && raw.scopeId !== '') filter.scopeId = raw.scopeId
       if (raw.search !== undefined && raw.search.trim() !== '') filter.search = raw.search.trim()
       if (raw.tag !== undefined && raw.tag !== '') filter.tag = raw.tag
+      // RFC-327: `?tags=a,b` 与重复 `?tags=a&tags=b` 都收，归一成一个保序去重数组。
+      // 空串等于没给（`?tags=` 不该变成一条 min(1) 校验红）。
+      const tags = normalizeTagList(c.req.queries('tags')?.flatMap((v) => v.split(',')) ?? [])
+      if (tags.length > 0) filter.tags = tags
+      if (raw.tagMode !== undefined && raw.tagMode !== '') {
+        const r = MemoryTagModeSchema.safeParse(raw.tagMode)
+        if (!r.success)
+          throw new ValidationError('invalid-filter', `invalid tagMode: ${raw.tagMode}`)
+        filter.tagMode = r.data
+      }
       const parsed = MemoryListFilterSchema.safeParse(filter)
       if (!parsed.success) {
         throw new ValidationError(
@@ -137,6 +152,67 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
       const visible = await filterMemoriesByScopeVisibility(deps.db, actor, items)
       return c.json({
         items: await annotateMemoryManageRights(deps.db, actor, dropCandidates(visible)),
+      })
+    },
+  )
+
+  // RFC-327 —— 标签 facets。挂在 `/api/memories/:id` **之前**：注册顺序决定匹配，
+  // 反过来 `facets` 会被当成一个 id 走进详情路由并 404。
+  //
+  // 统计面**恰好是调用者的可见面**：先按同一条 ACL 链路（scope 可见性 + candidate
+  // 收紧）滤过，再聚合——否则标签名本身就会泄露私有 scope 里有哪些记忆存在。
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/memories/facets',
+      permissions: ['memory:read'],
+      tokenAccess: 'allow',
+      summary: 'List memory tag facets',
+    },
+    async (c) => {
+      const raw = {
+        status: c.req.query('status'),
+        scopeType: c.req.query('scopeType'),
+        scopeId: c.req.query('scopeId'),
+      }
+      const query: Record<string, unknown> = {}
+      if (raw.status !== undefined && raw.status !== '') {
+        const r = MemoryStatusSchema.safeParse(raw.status)
+        if (!r.success) throw new ValidationError('invalid-filter', `invalid status: ${raw.status}`)
+        query.status = r.data
+      }
+      if (raw.scopeType !== undefined && raw.scopeType !== '') {
+        const r = MemoryScopeSchema.safeParse(raw.scopeType)
+        if (!r.success)
+          throw new ValidationError('invalid-filter', `invalid scopeType: ${raw.scopeType}`)
+        query.scopeType = r.data
+      }
+      if (raw.scopeId !== undefined && raw.scopeId !== '') query.scopeId = raw.scopeId
+      const parsed = MemoryFacetsQuerySchema.safeParse(query)
+      if (!parsed.success) {
+        throw new ValidationError(
+          'invalid-filter',
+          'invalid query parameters',
+          parsed.error.format(),
+        )
+      }
+      // 缺省 approved：与注入链路（services/memoryInject.ts 只取 approved）一致——
+      // 一个外部代理问「有哪些标签」，想要的是能被注入的事实，不是未审的候选。
+      const status = parsed.data.status ?? 'approved'
+      const actor = actorOf(c)
+      const rows = await listMemories(deps.db, { ...parsed.data, status })
+      const visible = await filterMemoriesByScopeVisibility(deps.db, actor, rows)
+      const items =
+        status === 'candidate' && !hasResourceAclBypass(actor)
+          ? visible.filter((r) => r.status !== 'candidate')
+          : visible
+      return c.json({
+        status,
+        scopeType: parsed.data.scopeType ?? null,
+        scopeId: parsed.data.scopeId ?? null,
+        total: items.length,
+        tags: aggregateTagFacets(items),
       })
     },
   )
