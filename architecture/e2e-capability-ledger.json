@@ -5846,8 +5846,13 @@
       "title": "agent-workflow backup [--include-worktrees]：命令行产出 tar.gz 快照",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-018: backup 说「写好了」当且仅当盘上真有一个可用的 tar.gz，失败也不许留下残骸 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-019",
@@ -5855,8 +5860,17 @@
       "title": "agent-workflow restore <tarball>：计划打印 / --dry-run / --yes 冷恢复 / --stage / 各类拒绝",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-019: restore 默认只打印计划——daemon 在跑时拒绝冷恢复，降级包与非备份包连 --stage 都不许武装 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-019: restore --yes 冷恢复把库换回备份时点，并按 --no-safety-backup 决定留不留反悔的余地 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-021",
@@ -5864,8 +5878,17 @@
       "title": "agent-workflow user create/list/reset-password/disable/enable（含首个管理员 bootstrap）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-021: 首个管理员必须是带密码的 admin，被拒的 bootstrap 一行都不许写库，且只能成功一次 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-021: user 的五个子命令在无 daemon 的机器上闭环，未知用户与非法角色一律拒绝且不写库 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-023",
@@ -5873,8 +5896,13 @@
       "title": "agent-workflow package export/import：配置包破窗导出导入（强制 --as-user）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-023: package export/import 一律以 --as-user 的身份发生，缺了它在碰盘之前就拒绝 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-026",
@@ -5914,8 +5942,13 @@
       "title": "设置页「备份」卡片：一键创建备份并回显路径与体积",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-033：点「创建备份」真的产出一个文件，回显的路径与 MB 与磁盘逐字对得上 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-034",
@@ -5923,8 +5956,13 @@
       "title": "设置页「恢复」：选文件 → 二次确认后才上传 → staged 提示 → 重启才生效",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-034：选备份文件不上传、取消不上传，确认后才 staged；坏包被拒不 arm；重启才真正生效 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-036",
@@ -5932,8 +5970,13 @@
       "title": "设置页「可回收空间」卡片：盘点退役 runtime 目录 + DB freelist，并可不可逆删除",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-036：可回收空间照实盘点退役目录，开确认框不删、点取消不删，确认后目录真消失且按钮转灰 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-037",
@@ -5941,8 +5984,13 @@
       "title": "设置页「按条件批量归档终态任务」：dry-run 预览 → 二次确认 → 真删并留审计行",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-037：批量归档先给 dry-run 预览且一行不删，确认后才真删、留审计行，未超期的任务不受牵连 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-038",
@@ -5950,8 +5998,13 @@
       "title": "运维端点的权限边界（backup:run / settings:write）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-038：只有 settings:read 的账号进得了设置页，但看不见运维入口、直调七个运维端点全 403 且零副作用 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-039",
@@ -7176,9 +7229,14 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "【拆自 UX-14】Segmented 单选组的单 Tab 停靠点（roving tabindex）—— 全仓 e2e 对 tabindex 零断言，改成全部 tabindex=0 也不会红",
       "risk": "P2",
-      "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "nightly",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-14b: Segmented 单选组只有选中项是 Tab 停靠点，方向键换选中项时停靠点跟着搬家 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-15",
@@ -7186,8 +7244,13 @@
       "title": "Select 自绘下拉的键盘选择（方向键 / Home·End / type-ahead / Enter 确认）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-15: 自绘下拉用方向键 / Home / End / 首字母跳转选行，Enter 确认后列表真的被筛掉 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-16",
@@ -7195,8 +7258,17 @@
       "title": "TabBar：roving tabindex + 方向键换页签 + 溢出滚动（含 reduced-motion 立即滚动）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-16: 页签条只有选中页签是 Tab 停靠点，方向键与 Home/End 换页签并同步搬走停靠点 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-16: 窄容器下页签条长出两个翻页键，reduced-motion 下点一次就整屏滚到位（不做动画） @nightly"
+        }
+      ]
     },
     {
       "id": "UX-18",
@@ -7462,8 +7534,13 @@
       "title": "Pagination + FilterBar 两个公共原语在产品路径上的实机覆盖",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-X7: 投递审计的分页键与跳页表单真的换页，筛选栏按状态收窄并能一键清除 @nightly"
+        }
+      ]
     },
     {
       "id": "WF-02",
@@ -9301,6 +9378,76 @@
       ]
     },
     {
+      "id": "HUMAN-49",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "外部代理经 MCP 读取待评审文档：list_pending_gates / get_review / list_review_history（RFC-326 US1）",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc326-mcp-review-tools.spec.ts",
+          "test": "RFC-326 HUMAN-49: an MCP token reads the pending review — list_pending_gates / get_review / list_review_history"
+        }
+      ]
+    },
+    {
+      "id": "HUMAN-50",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "外部代理按引文提交意见（标题 / 行内代码 / 代码块），网页按源文偏移把三条意见各自高亮在原处（RFC-326 US2 / US8）",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc326-mcp-review-tools.spec.ts",
+          "test": "RFC-326 HUMAN-50: add_review_comment anchors by quote (title / inline code / code block) and the page highlights each at its offset"
+        }
+      ]
+    },
+    {
+      "id": "HUMAN-51",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "坏引文被拒且零写入：歧义引文返回候选（全文序号），未命中引文返回 not-found（RFC-326 US3）",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc326-mcp-review-tools.spec.ts",
+          "test": "RFC-326 HUMAN-51: an ambiguous quote is refused with its candidates and writes nothing"
+        }
+      ]
+    },
+    {
+      "id": "HUMAN-52",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "打包决策：submit_review iterated 携带意见让门重开（设计者重跑、第二版待审），approved 收口任务（RFC-326 US6）",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc326-mcp-review-tools.spec.ts",
+          "test": "RFC-326 HUMAN-52: submit_review iterated with a batched comment re-opens the gate; approved closes it"
+        }
+      ]
+    },
+    {
+      "id": "HUMAN-53",
+      "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
+      "title": "只读 PAT 的 MCP 面：tools/list 不含评审写工具，硬调写工具是 SDK unknown-tool 而非 403（RFC-326 D8 / AC-23）",
+      "risk": "P2",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc326-mcp-review-tools.spec.ts",
+          "test": "RFC-326 HUMAN-53: a read-only token neither lists nor can call the review write tools"
+        }
+      ]
+    },
+    {
       "id": "IAM-22",
       "domain": "身份、认证、用户与资源权限",
       "title": "平台级令牌清单与调用审计（users:read 只读）",
@@ -9932,8 +10079,13 @@
       "title": "agent-workflow config get/set：命令行读改配置（含 JSON 值解析与 schema 校验）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-backup-restore-cli.spec.ts",
+          "test": "RFC-319 OPS-016: config get/set 在发行二进制上闭环——值按 JSON 解析、越界与枚举一律拒绝、未知 key 永不落盘 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-017",
@@ -9982,8 +10134,13 @@
       "title": "GET /api/daemon：设置页「网络」标签展示 daemon 当前有效绑定地址",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-032：网络分区念的是 daemon 当前真在监听的端口，而不是 config 里那份持久值 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-035",
@@ -9991,8 +10148,13 @@
       "title": "设置页：撤销已 arm 的 staged restore / 展示失败恢复的隔离目录",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-035：已 arm 的回滚在设置页亮成告警条并能两击撤销，失败恢复的隔离目录照实列出 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-042",
@@ -10018,8 +10180,13 @@
       "title": "任务详情页「系统恢复」审计横幅 + 解除隔离按钮",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-settings-panels.spec.ts",
+          "test": "RFC-319 OPS-X6：被熔断隔离的任务在详情页亮出恢复横幅、展开列出可读的事件，点「解除隔离」后翻回普通历史 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X7",
@@ -10313,8 +10480,17 @@
       "title": "Dialog 遮罩点击关闭 / body 滚动锁 / dismissDisabled 事务期锁死",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-13: 弹窗打开时 body 滚动被锁住、点面板内部不关、点遮罩空白处才关且滚动原样归还 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-13: 创建用户的事务在飞时弹窗三条退出路径全部锁死，请求落地后才自行关闭 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-17",
@@ -10322,8 +10498,17 @@
       "title": "MultiSelect / ChipsInput：自由文本添加、chip 删除、去重、校验拒绝",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-17: 标签输入 Enter 与逗号都能提交，重复与超长被逐条说明地拒收，× 与 Backspace 各删一枚 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-17: 技能多选框接受自由文本提交为项目技能，chip 可删、已选行再点是取消而不是加第二遍 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-20",
@@ -10331,8 +10516,13 @@
       "title": "aria-live 托管播报区：画布 / 选择器 / 操作结果对屏幕阅读器可闻",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-20: 托管播报区随节点选择器的筛选逐次改写内容，读屏用户听得到「还剩几项」 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-26",
@@ -10439,8 +10629,13 @@
       "title": "移动端最小触摸目标（44px）与交互控件不触发横向溢出",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ui-primitives-a11y.spec.ts",
+          "test": "RFC-319 UX-X3: 390px 下页签 / 分段控件 / 下拉 / 输入框 / 导航项都不小于 44px，且三处产品面都不横向溢出 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-X4",
@@ -10875,17 +11070,8 @@
     "MEM-X4",
     "MEM-X8",
     "MEM-X9",
-    "OPS-018",
-    "OPS-019",
-    "OPS-021",
-    "OPS-023",
     "OPS-026",
     "OPS-027",
-    "OPS-033",
-    "OPS-034",
-    "OPS-036",
-    "OPS-037",
-    "OPS-038",
     "OPS-039",
     "OPS-040",
     "OPS-041",
@@ -10954,9 +11140,6 @@
     "UX-05",
     "UX-09",
     "UX-11",
-    "UX-14b",
-    "UX-15",
-    "UX-16",
     "UX-19",
     "UX-24",
     "UX-32",
@@ -10967,7 +11150,6 @@
     "UX-47",
     "UX-X2",
     "UX-X5b",
-    "UX-X7",
     "WF-02",
     "WF-11",
     "WF-25",
@@ -11059,15 +11241,11 @@
     "OPS-013",
     "OPS-014",
     "OPS-015",
-    "OPS-016",
     "OPS-028",
     "OPS-029",
     "OPS-030",
-    "OPS-032",
-    "OPS-035",
     "OPS-042",
     "OPS-043",
-    "OPS-X6",
     "OPS-X7",
     "OPS-X9",
     "REPO-19",
@@ -11088,9 +11266,6 @@
     "TASK-36",
     "TASK-X2",
     "UX-06",
-    "UX-13",
-    "UX-17",
-    "UX-20",
     "UX-26",
     "UX-28",
     "UX-34",
@@ -11102,7 +11277,6 @@
     "UX-44",
     "UX-45",
     "UX-46",
-    "UX-X3",
     "UX-X4",
     "WF-15",
     "WF-55",

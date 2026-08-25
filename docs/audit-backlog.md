@@ -395,6 +395,22 @@ Seatbelt 的 appHome deny 不影响 allow 子树内的目录枚举 / `realpath` 
 
 ## 其他 backlog
 
+- ⏳ **任务域 MCP 工具的审计行 `resource_kind` / `resource_id` 为空（RFC-326 实现期登记，2026-08-25）**：
+  `token_audit` 的资源身份来自工具参数里的 `kind` / `id`（`mcp/server.ts` 的 `stringArg(args.kind)`），
+  收敛工具天然带这两个参数；具名工具里 RFC-326 给评审 / 人工门工具加了 `McpToolDef.audit` 钩子
+  （`{kind:'reviews', id: nodeRunId}` / `{kind:'human-gates'}`），但 `launch_task` / `watch_task` /
+  `cancel_task` / `resume_task` 这一族仍走参数回退——它们的 id 参数名是 `id`，`kind` 缺失，于是
+  审计行只有工具名、没有资源类别。**建议处置**：给任务工具补 `audit: (args) => ({ kind: 'tasks', id })`，
+  同批把 `rfc247-token-audit.test.ts` 的断言从「toolName 对」扩到「resourceKind 对」。不在 RFC-326 内做：
+  它是任务域的审计契约改动，应随任务域下一个 RFC 一起过实现门。
+- ⏳ **网页选词的 `offsetStart` 仍是按比例位置的启发式（RFC-326 D5 后的残留，2026-08-25）**：
+  `packages/frontend/src/lib/review/anchor.ts` `computeAnchorFromSelection` 用「渲染文本进度 × 源文长度」猜
+  所选出现的源偏移，再由服务端 `canonicalizeAnchor`（策略 0 → 上下文策略）修正并把 `offsetStart/End`
+  改到真实出现；高亮已改按源偏移投影（`rehypeWrapAnchors` `mode:'source-offset'`），所以这条启发式
+  只影响「服务端要修正多少」，不再影响高亮位置。**根治**是前端也按源文位置反解选区（hast `position`
+  已在渲染树里，投影表可以反向查），留给下一个评审 UI 的 RFC；届时把 `rfc326-anchor-canonicalize.test.ts`
+  里「策略 0 需要上下文匹配」那组用例作为兼容基线。
+
 - ⏳ **被任务终态封存的澄清轮，作答被拒时的错误码把原因说反了（RFC-319 B40 实测，2026-08-25）**：
   任务走到 done/canceled 时，终态清扫把开着的 self 轮封成 `canceled`
   （`services/terminalSweep.ts:76-110`）。此后再作答会被拒——但拒它的是外层那道
@@ -2633,3 +2649,71 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    （**不落盘这一点是对的**，B85 的 e2e 已锁住），但 `cli/config-cli.ts:38-41` 随后读回
    `updated[key]` 得到 `undefined`，回执成了 `bogusKey = undefined`、exit 0。
    脚本里一个拼错的键名会被记成「配好了」。用例**没有**把 exit 0 写成期望——那是缺陷不是契约。
+
+## RFC-319 B86 起草期撞到的产品缺陷（2026-08-25，均未写成断言）
+
+1. **【中低，可访问性回归】`.repo-kind-tabs` 把移动端 44px 触摸目标压成 38px。**
+   `packages/frontend/src/styles.css:25674-25677` 的 `.repo-kind-tabs .tabs__tab { min-height: 38px }`
+   特异度 (0,2,0)，压过 `styles.css:23516-23528` 里 `@media (max-width: 720px)` 的
+   `.tabs__tab { min-height: 44px }`(0,1,0)——**媒体查询不加特异度**。实测：390px 下 `/events`
+   的四个页签（Overview / Sources / Subscriptions / Deliveries）高度全部是 38。
+   受影响的是所有用 `repo-kind-tabs` 的 TabBar。同族坑仓内已被识别并显式修补过一次：
+   `styles.css:23533-23538` 给 `.auth-page .tabs--segment .tabs__tab` 补了 44px，注释原话是
+   「路由级选择器比上面那条共享的 `.tabs__tab` 移动端规则更强」——说明团队意图就是 44，
+   `repo-kind-tabs` 漏了。UX-X3 的用例改到 `/agents/new` 量页签（那里实测 44），
+   **没有把 38px 写成期望**。
+2. **【低，可能是刻意的密度选择，请裁决】`.list-view-switch .segmented__option { min-height: 36px }`**
+   （`styles.css:25709-25717`）同形压过 44px：390px 下 `/memory` 的 Approved/Archived 分段控件
+   实测 36。但 36 与产品明示的紧凑档（`.btn--sm` / `.btn--xs` / `.tasks-toolbar .segmented__option`）
+   一致，可能是有意的。同样没有断言。
+3. **【低】MultiSelect 的「新增自定义项」判重比错了对象，能造出两枚同名 chip。**
+   `packages/frontend/src/components/MultiSelect.tsx:129` 的 `showCustom` 拿**裸 `trimmed`**
+   去比 `rows[].value`，而 `SkillsPicker.tsx:29-31` 存进 `value` 的是**带前缀**的 token
+   （`project:foo` / `managed:<id>`）。实测复现：`/agents/new` → Skills 输入 `dupskill` → Enter
+   （1 枚 chip）→ 再输入 `dupskill` → **ArrowDown**（跳过高亮的已选行）→ Enter ⇒ 出现两枚同名 chip。
+   服务端保存时会去重（`POST /api/agents` 传两条相同 `{kind:'project',name:'dup'}` 返回 201、
+   回体只剩一条），所以只是保存后其中一枚静默消失。同一处不对称还让「与某个受管技能重名」的
+   自由文本被当成新的项目技能提供、无任何提示。
+4. **【账本文案偏差，已按实现处置】UX-20 的「画布 / 选择器 / 操作结果」三个来源里，
+   托管播报区实际只挂在两条路由**：`workflows.edit.tsx:1038` 与 `tasks.tsx:156` 挂了
+   `ManagedLiveRegionProvider`，其它页面 `useManagedLiveRegion()` 一律返回 `null` 并退回各自的
+   局部 `aria-live`。B86 覆盖的是「选择器」那一支；画布支与 `/tasks` 的「操作结果」支未覆盖。
+5. **【账本文案偏差】UX-X7 说「两个公共原语」，但 Pagination 与 FilterBar 同处一屏的地方
+   产品里只有 `DeliveriesPanel`**（`events.tsx` 里另外三处 Pagination 与 FilterBar 是分开组合的）。
+   覆盖按实现选了 `/events?tab=deliveries`（`/webhooks` 现在只是重定向到 `/events`，
+   见 `routes/webhooks.tsx:38-53`）。
+
+## RFC-319 B87 起草期撞到的产品缺陷（2026-08-25，启动闸门 / 后台清扫域）
+
+1. **【高】库损坏导致启动失败时，产品会顺手生成一份「内容就是那个坏库」的 pre-migration 备份，
+   并把它排在恢复指引的第一位。** 链条：`backupManifest.ts:64-66` 对坏库返回 null →
+   `backupScheduler.ts:318` 得到 `dbMax = -1 < binaryMax`（判成「需要迁移」）→ `rawCopyDb`
+   字节拷贝（它**刻意**容忍损坏）→ 随后 `openDb` 抛 `DbCorruptionError` →
+   `formatDbCorruptionGuidance` 按 mtime 倒序列备份，这份刚出炉的坏备份排第一，
+   `Recover with:` 指的就是它。实测输出：
+   `Recover with: agent-workflow restore …/backups/pre-migration--1-….tar.gz`。
+   **运维照着做，恢复回来的还是那个坏库**，而真正可用的旧备份被挤到后面。
+   两个可选修法（未做）：①`rawCopyDb` 在 manifest 读不出代次时不产出「pre-migration」名义的备份；
+   ②`formatDbCorruptionGuidance` 排序时跳过本次启动刚写出的那一份。
+2. **【低】`rawCopyDb` 对副本做的 `quick_check` 校验恒定失败、形同虚设。**
+   `rawDbSnapshot.ts:140-147` 校验时 staging 目录里只有 `db.sqlite`（`-wal`/`-shm` 在其后几行才拷），
+   而 `quickCheckDbFile` 用只读连接打开（`db/integrity.ts:43`）；WAL 库缺 `-shm` 时只读打开必然
+   `unable to open database file`。实测每次 pre-migration 备份都打一行
+   `WARN [rawDbSnapshot] raw db copy fails quick_check … errors=["unable to open database file"]`。
+   只是 warn 不影响功能，但那道「防止拷出被截断副本」的校验从未真正生效，只剩文件大小比对。
+3. **【低】`__drizzle_migrations.id` 在 SQLite 上全是 NULL。** drizzle 建表用 `SERIAL PRIMARY KEY`，
+   在 SQLite 里不是 rowid 别名。任何按 `id` 定位收据行的运维 / 修复脚本都会**静默无操作**；
+   `schemaAdmission.ts:210` 用它拼 `migration-extra` 的 tag，那条差异永远显示成 `receipt-null`。
+4. **【低，仅源码判读，未实跑复现】零字节 `db.sqlite` 会让启动以未捕获异常收场。**
+   零字节文件是合法的空 SQLite 库（`touch db.sqlite` 或一次中断的拷贝就会产生）。
+   `rawDbSnapshot.ts:136-138` 的 `copySize === 0` 直接 `throw`，而 `cli/start.ts:443` 那次
+   `await maybePreMigrationBackup(...)` 没有 try——异常会逃出 `startCommand`，用户拿到堆栈
+   而不是可读拒绝。
+5. **【账本文案偏差，已按实现处置】OPS-043「受保护家族不被裁」照抄会写出永远红的断言。**
+   受保护家族（`agent-workflow-*` 手动、各 `pre-*` 族）确实不受**份数 / 天数 / 总体积**裁剪，
+   但会被 `backupProtectedKeepCount`（RFC-311 C4，默认 10）**按家族各自轮换**裁掉。
+   覆盖写成「不受份数与天数约束，只按各自家族的份数轮换」。
+6. **【账本文案偏差】OPS-040 的「小时级」容易误导**：周期确实是 1 小时，但因为 RFC-322 的相位表，
+   **首拍在 4 分钟**（`services/daemonCadence.ts:94` 的 `MAINTENANCE_PHASE.worktreeGc = 4 * MINUTE_MS`，
+   硬常量、无 config 旋钮、也无 HTTP 手动入口）。按「小时级」去写等待预算会白等 56 分钟，
+   或直接把这条判成不可测。这也是该 spec 单文件墙钟 ~6.9 分钟的唯一来源。

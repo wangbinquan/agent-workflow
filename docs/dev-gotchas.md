@@ -52,6 +52,14 @@
 
 ## 测试 / CI
 
+- **事务测试的故障注入用 SQLite 触发器，不用模块 mock**（2026-08-25 实测，RFC-326 PR-A）：本仓测试零 `mock.module`（bun 的模块 mock 是**全进程**生效，会污染同进程后跑的其它文件），而「事务中途失败 ⇒ 六表整体回滚」这种断言又必须在**事务内的某个指定写点**引爆。做法：`db.$client.exec("CREATE TRIGGER inject BEFORE UPDATE OF status ON node_runs FOR EACH ROW WHEN NEW.status = 'done' BEGIN SELECT RAISE(ABORT, 'injected'); END")`——触发器只对那张表那个写点生效，抛在同一个 `dbTxSync` 里，正好落在「归档之后、提交之前」；`DROP TRIGGER` 后重放同一请求，还能顺手证明「失败可修复」。同一手法能把**提交后的 best-effort 写入**（蒸馏入队 `memory_distill_jobs`）打断而一行生产代码不碰。数「到底开了几个事务」用 `tests/helpers/statementRecorder.ts`：drizzle bun-sqlite 的事务走 `exec`，录到的就是裸 `BEGIN DEFERRED` / `COMMIT` / `ROLLBACK`，按位置还能断言「某条 insert 在 COMMIT 之后」。
+  - 判据：想验证的是「哪个写点之后失败」就在**那个写点的下一条语句**上挂触发器；触发器挂在读语句上无效（`SELECT` 不触发）。
+- **`rfc247-route-registry` 与 `rfc317-route-contract-oracle` 不能放进同一个 `bun test` 进程**（2026-08-25 实撞）：registry 用例向全局 route-meta registry 挂了一条 `GET /api/__registry_fixture_public__`，它每个 case 前 `resetRouteMetaRegistry()`，但**最后一个 case 留下的挂载活到进程结束**；oracle 扫的是同一个全局 registry，于是多出一条「无契约端点」假红（`+ "GET /api/__registry_fixture_public__"`）。CI 分片碰巧把两者分开，本地按关键词批量跑（`bun test rfc247 rfc317`）就会撞。判定同族假红的定式同上一条「单跑绿 + 改动面无关」：oracle 单独跑即绿。
+- **计划里打了勾却没有一条测试 / e2e 引用它的能力，就当它不存在**（RFC-326 实测，2026-08-25）：RFC-247 plan T18「人工门工具完整面（… `submit_review` 逐文档评论+通过打回）」自 2026-08 起一直是 `[x]`，而 `mcp/tools.ts` 里只有三个门工具、`submit_review` 只送决策，三个门工具在 tests / e2e 里零引用——评论那一半从未落地，还带着一个把 `iterate` 当决策值的枚举（REST 只认 `iterated`，iterate 经 MCP 根本打不通）。这不是某个人的疏忽，是「勾」这个动作本身没有机器判据。定式：**声明「某个面完整」的地方必须有一条从代码两边各自派生、两向相等的守卫**（本仓例：`tests/architecture/rfc326-review-tool-route-guard.test.ts` 用 `mountReviewRoutes` 填的注册表 ⟷ 每个工具真实分发到的路径），豁免名单显式入账；打勾的 plan 条目要么指向那条守卫，要么指向一条会红的测试。
+- **单条语句的 CAS 不要为「统一形状」套一层事务**（RFC-326 PR-A 推红实撞，2026-08-25）：把 `transitionNodeRunStatus` 改成 `dbTxSync(...)` 包装同步版，看起来只是形状统一，实际给每次状态转移多了一对 BEGIN/COMMIT；`runner.test.ts` 用「下一个事务失败一次」的代理模拟 SQLITE_BUSY 时，先咬到的是这层多余事务而不是租约事务——本地限定套件全绿、CI 分片红。判据：一条 `UPDATE … WHERE … RETURNING` 本身原子，包装层只该复用同一段代码（把连接当作同步面传进去），不该开事务；测试里凡是「计数 / 拦截事务」的桩都在提醒你这层语义。
+- **stub 的 `<port>` 内容会被信封解析器去掉尾部换行**（RFC-326 e2e 实测）：e2e 把 stub 常量与 `get_review` 的 `currentBody` 逐字比较时红了一行——只差最后一个 `\n`。比较正文用 `trimEnd()`；偏移断言不受影响（只有尾部被裁）。顺带：`review-doc` stub 模式（`packages/system-mocks/src/runtime/mode-review-doc.ts`）会把提示词协议块里**声明的每个端口**都填成同一份文档，新 e2e 要评审一份「有标题 / 行内代码 / 重复词 / 代码块 / HTML 注释」的真文档时直接用它，别再造夹具。
+- **react-markdown 的 hast `position` 不是处处都有**（RFC-326 D5 实测，2026-08-25）：段落 / 标题 / 行内代码（区间**含反引号**、值不含）/ 转义 / 实体 / 表格 / 列表项文本都带源文偏移；**围栏代码的文字、KaTeX 输出、GitHub alert 的首段、硬换行、脚注引用**没有。按源偏移高亮时这些节点各走各的回退（代码块交给 shiki `decorations`，公式一律不高亮，alert 首段在相邻两个带位置片段之间做窗口文本匹配），而且 shiki 4 对**交叉**的 decorations 直接抛 `intersect`——先切成互不交叉的原子段再喂。
+
 - **门禁在跑的时候别在同一台机器上另跑 `bun test`——有 5s 硬超时的用例会成批假红**（2026-08-20 实撞三次）：同一轮里先后收到 `rfc098-process-governance`、`scheduler-clarify-dispatch`、`rfc193-port-artifacts`（archive-at-emit）的红，**三条单跑全绿**，且失败耗时都是 ~5.2s——正好压在那些用例的 5s 超时上。成因是 backend 四分片本来就吃满 CPU，我又在共享树里并行跑单文件测试。
   - 判据：失败耗时高度一致且贴着某个硬超时 + 改动面与该用例无关 + 单跑绿 ⇒ 资源竞争，不是回归。**但别就此放行**：先单跑确认，再看这一轮门禁里有没有同族的真红被淹没（RFC-304 PR-2 那条「并发红与自己的红同时出现」是同一个坑的另一半）。
   - 定式：门禁跑起来之后就等它，要验证别的用例就等门禁结束，或者把它放进另一台机器/另一棵树并接受它同样会互相抢。
@@ -2569,3 +2577,66 @@ await expect(row).toHaveAttribute('aria-selected', 'false')
 `git diff --stat`，纯追加应当是「N insertions, 0 deletions」；出现 deletions 就说明
 碰了存量。校验 prettier 状态时也注意**把文件拷到仓外再 `--check` 会用默认配置**，
 结论不可信（仓内有 `.prettierrc`）。
+
+## `test.use({ reducedMotion })` 在本仓不生效，只有 `page.emulateMedia()` 有用（2026-08-25 实测，带对照）
+
+按 `test.use({ reducedMotion: 'reduce' })` 写的用例，页面里
+`window.matchMedia('(prefers-reduced-motion: reduce)').matches` 读出来是 **false**——
+也就是 reduced-motion 那条分支**根本没被走到**，用例是恒绿的假保护。
+
+对照实验（同一个 page、同一段 `setContent`）：
+
+| 写法 | matchMedia 结果 |
+| --- | --- |
+| `test.use({ reducedMotion: 'reduce' })` | `false` |
+| `await page.emulateMedia({ reducedMotion: 'reduce' })` | `true` |
+
+仓内既有的 5 处（`rfc250-interaction-integrity` / `rfc250-workflow-camera` /
+`rfc229-workgroup-message-quotes` / `ux-consistency` / `rfc250-visual-states`）本来就
+都用的 `emulateMedia`，所以没有存量假绿；这条是给后来人立的。
+
+**写法**：`emulateMedia` 之后**再加一条常驻断言**，把「媒体特性真的落下去了」本身钉住——
+否则哪天换 Playwright 版本或换 project 配置又静默退化成假绿：
+
+```ts
+await page.emulateMedia({ reducedMotion: 'reduce' })
+const state = await page.evaluate(() => ({
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  // …顺便把要断言的那个观测量一起取回来
+}))
+expect(state.reducedMotion, '浏览器没有报告 reduced-motion ⇒ 这条用例根本没走到那一支').toBe(true)
+```
+
+同类推论：任何「靠环境开关才成立」的断言（媒体特性、时区、语言、权限），都要先断言
+**开关本身生效了**，再断言产品行为。少了前半句，开关失效时你得到的是一条永远绿的用例。
+
+## 变异工装解析 Playwright 失败清单时，别按「N) 」找——真红会被误报成 NO-BITE（2026-08-25 实撞）
+
+`line` / `list` reporter 的失败摘要**不带序号**：先一行 `4 failed`，再缩进逐条列
+`[chromium] › e2e/x.spec.ts:241:1 › 标题`，最后才是 `3 passed (35.8s)`。
+按 `^\s*\d+\)\s+\[` 匹配（那是 `--reporter=list` 详细段里失败**详情**的形状）会一条都
+扫不到，于是 4 条真红被判成 4 条 **NO-BITE**。
+
+这个方向的错比反过来危险得多：NO-BITE 的标准反应是「这条用例是假的，去改用例」或
+「这个分支不可达」，而真相是**用例好好的、工装瞎了**。差一点就把四条真能咬人的用例
+判成假绿并去动它们。
+
+两条处置，缺一不可：
+1. 匹配放宽成 `^\s*(\d+\)\s+)?\[[a-z]+\]\s+›`，把带序号与不带序号两种形状都收进来；
+2. **把变异跑的完整 stdout 落盘**，别只在结果 JSON 里留个几百字的 tail——判定存疑时
+   要能回看原文，而不是靠截断的尾巴猜。
+
+判别法（不依赖解析）：拿 `passed` 的条数与文件里的用例总数对一下，对不上就说明有红/未跑，
+无论解析器说了什么。
+
+## 更正一条流传的说法：文件级 `test.setTimeout()` **是**生效的（2026-08-25 实测）
+
+有报告称「文件作用域的 `test.setTimeout()` 对本文件不生效，超时预算仍是 config 里的 90s」，
+并据此建议去改 `rfc319-task-list-and-filters.spec.ts` / `rfc319-settings-sections.spec.ts`。
+实测证伪：一个文件顶层写 `test.setTimeout(3_000)`、用例里睡 6 秒，报的是
+`Test timeout of 3000ms exceeded`——**文件级调用确实作用于本文件的用例**。
+
+真正会踩到的是**另一件事**：hook（`beforeAll` / `beforeEach`）有自己独立的超时预算，
+`test.setTimeout()` 改不到它。所以「明明设了 240s 却在 90s 断」的现象，先看红在
+hook 里还是 test 体里，再决定是 `test.describe.configure({ timeout })` 还是
+`test.setTimeout()`。**不要**因为这个现象去删别人文件里本来正确的文件级设置。
