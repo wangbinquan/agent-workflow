@@ -1086,10 +1086,12 @@ test('RFC-319 TASK-11：提交结果未知时向导冻结并弹对账横幅，�
 
   // ① 对账横幅：必须点名是哪一次提交（任务名），否则用户对着一堆任务无从核对。
   //
-  // 刻意**不**按 `wizard-outcome-unknown` 定位：`tasks.new.tsx:2072` 把它写成
-  // `data-testid=` 传给 `<NoticeBanner>`，而那个组件只认 `testid=` prop
-  // （`components/NoticeBanner.tsx:29`）——带连字符的 JSX 属性名 TS 不做 props 校验，
-  // 于是这个锚点被静默丢弃、从来没有出现在 DOM 上。按源码实际写（§5 有回报）。
+  // 不按 `wizard-outcome-unknown` 定位，改按文案 + `.notice-banner`：本用例落地时
+  // `tasks.new.tsx:2072` 把该锚点写成 `data-testid=` 传给只认 `testid=` 的
+  // `<NoticeBanner>`（带连字符的 JSX 属性名 TS 不做 props 校验），锚点从未进 DOM。
+  // 该缺陷已在随后一提交里修好（连同另外三处），并由
+  // `packages/frontend/tests/jsx-dropped-data-attr-guard.test.ts` 上锁；这里保留按
+  // 文案定位不改——它锁的是「横幅必须点名是哪一次提交」这件事，比锚点本身更接近用户。
   const banner = page
     .locator('.notice-banner')
     .filter({ hasText: 'Task request result is unknown' })

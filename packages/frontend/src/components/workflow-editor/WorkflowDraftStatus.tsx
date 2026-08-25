@@ -162,7 +162,7 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
           tone="warning"
           size="compact"
           title={t('editor.draftStatus.authorForbiddenTitle')}
-          data-testid="draft-status-author-forbidden"
+          testid="draft-status-author-forbidden"
         >
           {t('editor.draftStatus.authorForbiddenBody', {
             permission:

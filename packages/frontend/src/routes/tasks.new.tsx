@@ -1993,7 +1993,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
           )}
 
           {draftWarning !== null && (
-            <NoticeBanner tone="warning" size="compact" data-testid="wizard-draft-warning">
+            <NoticeBanner tone="warning" size="compact" testid="wizard-draft-warning">
               {t(draftWarning)}
             </NoticeBanner>
           )}
@@ -2027,7 +2027,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
               tone="warning"
               size="compact"
               title={t('taskWizard.draftReentryTitle')}
-              data-testid="wizard-draft-reentry"
+              testid="wizard-draft-reentry"
             >
               {t('taskWizard.draftReentryBody', {
                 inputs: inputReentryKeys.length,
@@ -2069,7 +2069,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                   </button>
                 </div>
               }
-              data-testid="wizard-outcome-unknown"
+              testid="wizard-outcome-unknown"
             >
               {t('taskWizard.outcomeUnknownBody', {
                 name: outcomeUnknown.taskName || t('taskWizard.unnamedTask'),
