@@ -2890,3 +2890,32 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
 10. **【低，UX】切页签会把规则的展开态吃掉**：`PolicyRuleBuilder.tsx:235` 的 `expanded` 是组件内部
     state，而 `code.policies.$id.tsx:286-325` 是条件渲染——去「模拟」跑一次再回「规则」，
     刚展开的谓词面自己收起来了。
+
+## RFC-319 B92 起草期撞到的产品缺陷（2026-08-26，数字员工向导与案例页）
+
+1. **【低-中】评审页「Approve」点下去后立刻导航会静默丢掉这次决定。**
+   `packages/frontend/src/routes/reviews.detail.tsx:294-315` 的 `onApprove` 在无评论无草稿时直接
+   `submitDecision.mutateAsync`，按钮只靠 `submitDecision.isPending` 置灰，但**不拦导航**；请求在飞时
+   离开页面就被浏览器 abort，评审停在 `awaiting_review` 而界面什么都不说。
+   实撞：点完 Approve 直接 `page.goto` 回案例页 ⇒ 门禁 60s 都没变成已批准。
+   要求用户在 ~50ms 内离开才会踩到，但形态是「**用户以为批了、实际没批**」。
+   用例改成先 `waitForResponse('/decision')` 再导航，**没有**把它写成断言（那会锁住缺陷）。
+2. **【中，夹具缺口而非产品缺陷】`development` stub 无法执行 `development.plan-implementation@2`，
+   整条「方案评审」分支在浏览器 e2e 里原本不可达。**
+   `packages/system-mocks/src/runtime/mode-development.ts:302-303` 只认「交付三件套」形状，而方案合同是
+   `outputMode: 'artifact-path'`（`digitalEmployeeToolContractsV2.ts:455`），prompt 里没有
+   `OUTPUT_SCHEMA_EXAMPLE_JSON`，于是每一轮都 `fail(...)` 退避重试。这解释了既有的
+   `e2e/rfc319-digital-employee-p1.spec.ts:691` 为什么断言完门禁卡就必须 `forceBlockedCase` 收摊。
+   B92 没有改 `packages/system-mocks/src/**`，改用自建 Agent 把 `analysis-plan` 声明成 `markdown`
+   + `review-doc` stub 绕开。**建议后续单独授权给 `mode-development.ts` 补一个 artifact-path 分支
+   （写文件 + 回路径）**，否则产品主干的这一段在浏览器层长期没有可执行现场。
+3. **【findings 措辞偏差，四处，已按源码实际写】**
+   - DE-24：findings 说断言分段控件里没有 `'Input ID'`，而向导里那个选项的实际文案是
+     **`Requirement / issue ID`**（`TaskCreationSubjectDescriptorContract.tsx:435-437`）；
+     `Input ID` 是**能力图 ingress 卡片**上的文案，两处不是同一个字符串。
+   - DE-19：findings 建议 `toContainText('Merged1')`——它对 `Merged10` 同样成立，也管不住四格顺序被换掉；
+     改成逐格读 `[label, value]` 数组做 `toEqual`。
+   - DE-30：findings 建议「等 10 秒后断言计数仍为 1」——**裸等分不清「轮询停了」和「轮询压根没起来」**；
+     改成先跑一段非终态案例的对照腿（计数必须涨到 ≥3）当尺子，再在同长度窗口里断言终态计数一格不涨。
+   - DE-23：findings 说夹具已给 `prepare-materials` 配了工具，实际**没有任何内置 Agent 声明
+     `development.prepare-materials@3`**，只能落 `program` 执行体，且其 stdout 在发布前会被平台真跑一遍校验。

@@ -3558,8 +3558,13 @@
       "title": "员工卡片的运行成效计数（已合入 / 无需修改 / 其他结束 / 执行失败）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-19: 员工卡片的已合入 / 无需修改 / 其他结束 / 执行失败四类计数各自成桶，且不把别的员工的案例算进来 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-21",
@@ -3576,8 +3581,13 @@
       "title": "数字员工任务向导：需求 / 问题 ID（external-id）入口",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-23: 向导用需求 / 问题 ID 发起任务，外部编号随 launch 上行并落到案例的工作上下文里 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-24",
@@ -3585,8 +3595,13 @@
       "title": "未启用的工作材料形式提示 + 去配置获取工具的链接",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-24: 没配材料准备工具的员工看不到 ID 入口，提示里的链接直接落到该职责的配置对话框 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-25",
@@ -3594,8 +3609,13 @@
       "title": "任务发起失败时的错误呈现、草稿保留与已上传文件的补偿删除",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-25: 发起被拒时报错、已 staged 的上传被逐个删干净、草稿还在且重试能真的成功 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-28",
@@ -3603,8 +3623,13 @@
       "title": "案例的人工评审移交：「继续人工评审」链接与评审完成后的回流",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-28: 案例等待人工评审时给出「继续人工评审」直达链接，评审提交后案例页当场回流成已批准 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-29",
@@ -3612,8 +3637,13 @@
       "title": "案例页的事件队列 / 关注范围 / 协作子案例三个面板",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-29: 案例页的事件队列按待处理 / 优先级 / 时间三级排序，关注范围与协作子案例各自成列 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-30",
@@ -3621,8 +3651,13 @@
       "title": "案例终态展示（已合入 / 已结束）与轮询停止",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-30: 案例走到终态后显示已合入 / 已结束并停止轮询，非终态案例仍在轮询 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-32",
@@ -9253,8 +9288,13 @@
       "title": "从员工卡片一键「创建任务」（带 employeeId 预填）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-case-and-wizard.spec.ts",
+          "test": "RFC-319 DE-20: 员工卡片的「创建任务」直接带着该员工进向导、跳过选人步骤，回到第一步时选择器已经是这个员工 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-34",
@@ -11517,14 +11557,7 @@
     "DE-08",
     "DE-10",
     "DE-14",
-    "DE-19",
     "DE-21",
-    "DE-23",
-    "DE-24",
-    "DE-25",
-    "DE-28",
-    "DE-29",
-    "DE-30",
     "DE-44",
     "DE-X2",
     "DE-X4",
@@ -11660,7 +11693,6 @@
     "CFG-X5",
     "DE-02",
     "DE-15",
-    "DE-20",
     "DE-39",
     "DE-40",
     "DE-41",
