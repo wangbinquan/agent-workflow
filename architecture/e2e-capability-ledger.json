@@ -6118,8 +6118,17 @@
       "title": "agent-workflow __git-credential：隐藏的 git 凭据助手协议子命令",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-X8: __git-credential 只回答协议 / 主机 / 仓库路径三者全中的那一次 get @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-X8: __git-credential 不出现在用法里，且对 get 以外的操作一个字节都不输出 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-01",
@@ -9980,8 +9989,17 @@
       "title": "agent-workflow doctor：编译二进制上的整套诊断跑通并按结果给退出码",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-010: doctor 在编译二进制上跑完整套诊断——十一项逐条给结论、全绿退出 0，且不启动 daemon、不写回数据库 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出恢复命令，其余读库项降级为「读不到」而不是跟着报警 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-011",
@@ -9989,8 +10007,37 @@
       "title": "doctor 各诊断项的判定（git 版本地板、ssh、secret 权限、migrations、db 完整性、备份健康、密封凭据可解密、lifecycle）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-011: git 版本低于 2.38 地板 / 版本行读不懂时，doctor 各自点名并让整条命令以退出码 1 收场 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-011: ssh 只是可选前置——缺了要说清后果与装法，但绝不把 doctor 判红 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-011: at-rest 密钥文件权限被放宽时 doctor 点名到具体文件与实际 mode @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-011: 备份健康读数只数 .tar.gz、报出最新一份的时间与总占用 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出恢复命令，其余读库项降级为「读不到」而不是跟着报警 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-011: 密封的仓库凭据解不开 / secret.key 丢失，doctor 必须吵——这正是跨机恢复把库变砖的那一格 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-011: lifecycle 把停放 / 中断 / 隔离的任务与未解决告警逐项数出来，但不把 doctor 判红 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-012",
@@ -9998,8 +10045,13 @@
       "title": "agent-workflow migrate：手工补跑待应用迁移",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-012: migrate 在发行二进制上真的把库建起来，应用条数与二进制自称嵌的条数逐一对上，且重跑不重复应用 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-013",
@@ -10007,8 +10059,13 @@
       "title": "agent-workflow migration-report [--json]：legacy 资产迁移分析报告",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-013: migration-report 把每条 legacy 资产逐项定性，--json 给出同一份数字，且全程不落库 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-014",
@@ -10016,8 +10073,17 @@
       "title": "agent-workflow db compact：停机 VACUUM 回收 DB 空洞，daemon 在跑时拒绝",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-014: daemon 在跑时 db compact 拒绝执行，并且一页空洞都没动 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-014: 停机后 db compact 真把空洞还给文件系统；无库时明说，子命令写错以退出码 2 拒绝 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-015",
@@ -10025,8 +10091,17 @@
       "title": "agent-workflow downgrade-audit rfc-295：回滚前只读兼容性闸门",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-015: downgrade-audit 全清时报 OK 并退出 0，且全程只读——连一个空库都不会建出来 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
+          "test": "RFC-319 OPS-015: downgrade-audit 逐条点名阻断项、只审在途任务，且没有任何绕过开关 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-016",
@@ -11054,7 +11129,6 @@
     "OPS-X3",
     "OPS-X4",
     "OPS-X5",
-    "OPS-X8",
     "REPO-04",
     "REPO-05",
     "REPO-06",
@@ -11210,12 +11284,6 @@
     "MEM-44",
     "MEM-X11",
     "OPS-007",
-    "OPS-010",
-    "OPS-011",
-    "OPS-012",
-    "OPS-013",
-    "OPS-014",
-    "OPS-015",
     "OPS-X7",
     "OPS-X9",
     "REPO-19",
