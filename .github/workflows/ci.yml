@@ -402,7 +402,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-binary:
-    name: Build production binary + e2e artifact (smoke)
+    name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
     # This job consumes only the checkout; it does not consume lint/test output.
     # Keep it at the workflow root so compilation overlaps the unit matrices and
     # e2e can start as soon as its artifact exists. Six successful main runs on
@@ -417,13 +417,17 @@ jobs:
     # still cancels the whole run via workflow concurrency.
     # See design/test-guard-audit-2026-07-21 §2 逃逸机制⑥.
     if: ${{ !cancelled() }}
+    # Keep one build job per platform so each e2e platform waits only for the
+    # artifact it actually consumes. A single three-OS matrix is one logical
+    # dependency to Actions, so the old `e2e -> build-binary` edge held every
+    # browser shard until the slowest/most-queued build leg completed.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    steps:
+    steps: &build-binary-steps
       - uses: actions/checkout@v5
 
       - name: Setup Bun
@@ -525,6 +529,28 @@ jobs:
             dist/system-mock-tool-*
           if-no-files-found: error
 
+  build-binary-macos:
+    name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps: *build-binary-steps
+
+  build-binary-windows:
+    name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps: *build-binary-steps
+
   e2e:
     # Playwright runs against the compile-time-isolated e2e artifact that
     # `build-binary` already produced and uploaded. The same job separately
@@ -549,7 +575,7 @@ jobs:
     # built-in `--shard=N/M` flag (which distributes test files round-robin
     # at file granularity, so a single file's tests stay co-located and
     # `test.beforeAll` semantics hold).
-    name: Playwright e2e (shard ${{ matrix.shard }}/${{ matrix.shards }})
+    name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: build-binary
     # Same reasoning as build-binary's `if`: a red unit shard must not silently
     # skip the only layer that exercises real layout and browser a11y. If
@@ -560,28 +586,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            shard: 1
-            shards: 2
-          - os: ubuntu-latest
-            shard: 2
-            shards: 2
-          - os: macos-latest
-            shard: 1
-            shards: 2
-          - os: macos-latest
-            shard: 2
-            shards: 2
-          - os: windows-latest
-            shard: 1
-            shards: 3
-          - os: windows-latest
-            shard: 2
-            shards: 3
-          - os: windows-latest
-            shard: 3
-            shards: 3
+        os: [ubuntu-latest]
+        shard: [1, 2]
+        shards: [2]
     runs-on: ${{ matrix.os }}
     # Cold browser/system-dependency installation needs more headroom than the
     # unit jobs, but must not inherit Actions' six-hour default.
@@ -591,7 +598,7 @@ jobs:
       # is identical across Linux/macOS (defaults differ: ~/.cache/ms-playwright
       # vs ~/Library/Caches/ms-playwright). Playwright honors this on all OSes.
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
-    steps:
+    steps: &e2e-steps
       - uses: actions/checkout@v5
 
       - name: Setup Bun
@@ -719,3 +726,100 @@ jobs:
             test-results/
             playwright-report/
           if-no-files-found: ignore
+
+  e2e-macos:
+    name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary-macos
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        shard: [1, 2]
+        shards: [2]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+    steps: *e2e-steps
+
+  e2e-windows:
+    name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary-windows
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        shard: [1, 2, 3]
+        shards: [3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+    steps: *e2e-steps
+
+  ci-required:
+    # One stable, unique terminal context for branch protection. It waits for
+    # every gate (including all matrix legs through their parent job result) and
+    # treats failure, cancellation, skip, an empty result, or any future unknown
+    # result as non-success. Keep the explicit list locked by the topology test.
+    name: CI required
+    if: ${{ always() }}
+    needs:
+      - lint
+      - test-backend
+      - test-frontend
+      - scans
+      - perf
+      - docs
+      - build-binary
+      - build-binary-macos
+      - build-binary-windows
+      - e2e
+      - e2e-macos
+      - e2e-windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      LINT_RESULT: ${{ needs['lint'].result }}
+      TEST_BACKEND_RESULT: ${{ needs['test-backend'].result }}
+      TEST_FRONTEND_RESULT: ${{ needs['test-frontend'].result }}
+      SCANS_RESULT: ${{ needs['scans'].result }}
+      PERF_RESULT: ${{ needs['perf'].result }}
+      DOCS_RESULT: ${{ needs['docs'].result }}
+      BUILD_BINARY_RESULT: ${{ needs['build-binary'].result }}
+      BUILD_BINARY_MACOS_RESULT: ${{ needs['build-binary-macos'].result }}
+      BUILD_BINARY_WINDOWS_RESULT: ${{ needs['build-binary-windows'].result }}
+      E2E_RESULT: ${{ needs['e2e'].result }}
+      E2E_MACOS_RESULT: ${{ needs['e2e-macos'].result }}
+      E2E_WINDOWS_RESULT: ${{ needs['e2e-windows'].result }}
+    steps:
+      - name: Require every CI job to succeed
+        shell: bash
+        run: |
+          failed=0
+          check() {
+            local name result
+            name="$1"
+            result="$2"
+            if [ "$result" != "success" ]; then
+              echo "::error::${name} concluded '${result:-missing}', expected 'success'"
+              failed=1
+            fi
+          }
+
+          check lint "$LINT_RESULT"
+          check test-backend "$TEST_BACKEND_RESULT"
+          check test-frontend "$TEST_FRONTEND_RESULT"
+          check scans "$SCANS_RESULT"
+          check perf "$PERF_RESULT"
+          check docs "$DOCS_RESULT"
+          check build-binary "$BUILD_BINARY_RESULT"
+          check build-binary-macos "$BUILD_BINARY_MACOS_RESULT"
+          check build-binary-windows "$BUILD_BINARY_WINDOWS_RESULT"
+          check e2e "$E2E_RESULT"
+          check e2e-macos "$E2E_MACOS_RESULT"
+          check e2e-windows "$E2E_WINDOWS_RESULT"
+
+          exit "$failed"

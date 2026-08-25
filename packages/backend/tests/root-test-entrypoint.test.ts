@@ -255,6 +255,28 @@ describe('repository test entrypoint', () => {
     const frontendJob = workflowJob(ciWorkflow, 'test-frontend')
     const buildBinaryJob = workflowJob(ciWorkflow, 'build-binary')
     const e2eJob = workflowJob(ciWorkflow, 'e2e')
+    const buildPlatforms = [
+      { job: 'build-binary', os: 'ubuntu-latest', steps: '&build-binary-steps' },
+      { job: 'build-binary-macos', os: 'macos-latest', steps: '*build-binary-steps' },
+      { job: 'build-binary-windows', os: 'windows-latest', steps: '*build-binary-steps' },
+    ] as const
+    const e2ePlatforms = [
+      { job: 'e2e', build: 'build-binary', os: 'ubuntu-latest', shards: '[1, 2]', total: 2 },
+      {
+        job: 'e2e-macos',
+        build: 'build-binary-macos',
+        os: 'macos-latest',
+        shards: '[1, 2]',
+        total: 2,
+      },
+      {
+        job: 'e2e-windows',
+        build: 'build-binary-windows',
+        os: 'windows-latest',
+        shards: '[1, 2, 3]',
+        total: 3,
+      },
+    ] as const
 
     // A denominator in the command is not enough: accidentally shortening the
     // matrix (for example, [1, 2, 3] with /4) makes CI green while one quarter
@@ -279,43 +301,38 @@ describe('repository test entrypoint', () => {
     // with the last two failing on POSIX as well, while the backend suite still
     // has ~386 failures and does not finish inside 90 minutes there. Flipping
     // `test-backend` before that triage lands would make main red for everyone.
-    expect(buildBinaryJob).toContain('fail-fast: false')
-    expect(buildBinaryJob).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
+    for (const platform of buildPlatforms) {
+      const job = workflowJob(ciWorkflow, platform.job)
+      expect(job).toContain('fail-fast: false')
+      expect(job).toContain(`os: [${platform.os}]`)
+      expect(job).toContain(`steps: ${platform.steps}`)
+      expect(job).toContain(
+        'name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})',
+      )
+    }
     // The RFC-224 supervisor smoke drives the BWRAP supervisor with
     // `/usr/bin/true`; neither exists on Windows, so the windows leg takes the
     // artifact and skips that step. `windows-platform.yml` drives `doctor` and
     // the compiled stub there instead.
     expect(buildBinaryJob).toContain("if: runner.os != 'Windows'")
 
-    expect(e2eJob).toContain('needs: build-binary')
-    expect(e2eJob).toContain('fail-fast: false')
-    const e2eShardMatrix = `matrix:
-        include:
-          - os: ubuntu-latest
-            shard: 1
-            shards: 2
-          - os: ubuntu-latest
-            shard: 2
-            shards: 2
-          - os: macos-latest
-            shard: 1
-            shards: 2
-          - os: macos-latest
-            shard: 2
-            shards: 2
-          - os: windows-latest
-            shard: 1
-            shards: 3
-          - os: windows-latest
-            shard: 2
-            shards: 3
-          - os: windows-latest
-            shard: 3
-            shards: 3`
-    expect(e2eJob).toContain(e2eShardMatrix)
+    for (const platform of e2ePlatforms) {
+      const job = workflowJob(ciWorkflow, platform.job)
+      expect(job).toContain(`needs: ${platform.build}`)
+      expect(job).toContain('fail-fast: false')
+      expect(job).toContain(`os: [${platform.os}]`)
+      expect(job).toContain(`shard: ${platform.shards}`)
+      expect(job).toContain(`shards: [${platform.total}]`)
+      expect(job).toContain(
+        'name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})',
+      )
+    }
+    expect(e2eJob).toContain('steps: &e2e-steps')
+    expect(workflowJob(ciWorkflow, 'e2e-macos')).toContain('steps: *e2e-steps')
+    expect(workflowJob(ciWorkflow, 'e2e-windows')).toContain('steps: *e2e-steps')
     // TWO invocations — the windows branch and the POSIX one — and both must
-    // read the denominator from the same row that declares each platform's
-    // complete shard set.
+    // read the denominator from the matrix that declares each platform's
+    // complete shard set. The anchored steps are reused byte-for-byte.
     expect(occurrenceCount(e2eJob, '--shard=${{ matrix.shard }}/${{ matrix.shards }}')).toBe(2)
     expect(e2eJob).toContain('AW_E2E_WINDOWS_EXCLUDE')
   })
@@ -561,7 +578,12 @@ describe('repository test entrypoint', () => {
       ['perf', 15],
       ['docs', 15],
       ['build-binary', 15],
+      ['build-binary-macos', 15],
+      ['build-binary-windows', 15],
       ['e2e', 20],
+      ['e2e-macos', 20],
+      ['e2e-windows', 20],
+      ['ci-required', 5],
     ])
     expect(workflowJobNames(ciWorkflow)).toEqual([...expectedCiDeadlines.keys()])
     for (const [name, minutes] of expectedCiDeadlines) {
@@ -617,21 +639,54 @@ describe('repository test entrypoint', () => {
     // shard used to take the shipped-binary smoke, the Playwright suite, the
     // axe a11y sweep and the focus-ring geometry audit down with it — while the
     // run still looked like "those guards had nothing to say".
-    for (const job of ['build-binary', 'e2e']) {
+    for (const job of [
+      'build-binary',
+      'build-binary-macos',
+      'build-binary-windows',
+      'e2e',
+      'e2e-macos',
+      'e2e-windows',
+    ]) {
       const source = workflowJob(ciWorkflow, job)
       expect(`${job}: ${source.includes('if: ${{ !cancelled() }}')}`).toBe(`${job}: true`)
     }
   })
 
   test('binary build overlaps unit matrices instead of serializing the CI critical path', () => {
-    const buildBinaryJob = workflowJob(ciWorkflow, 'build-binary')
-    const e2eJob = workflowJob(ciWorkflow, 'e2e')
+    const platformEdges = [
+      ['build-binary', 'e2e'],
+      ['build-binary-macos', 'e2e-macos'],
+      ['build-binary-windows', 'e2e-windows'],
+    ] as const
 
-    // build-binary consumes only the checkout, so waiting for lint/backend/
-    // frontend adds their complete wall time before the build and e2e can even
-    // start. Keep only the real artifact edge: e2e -> build-binary.
-    expect(buildBinaryJob).not.toMatch(/^ {4}needs:/m)
-    expect(e2eJob).toContain('needs: build-binary')
+    // Every build consumes only the checkout, so waiting for lint/backend/
+    // frontend adds their complete wall time before compilation can even start.
+    // Every e2e platform consumes exactly one platform-matched artifact; making
+    // it depend on all builds recreates the slowest-build barrier this topology
+    // exists to remove.
+    for (const [build, e2e] of platformEdges) {
+      expect(workflowJob(ciWorkflow, build)).not.toMatch(/^ {4}needs:/m)
+      expect(workflowJob(ciWorkflow, e2e)).toContain(`needs: ${build}`)
+    }
+  })
+
+  test('the stable required context waits for and fails closed on every CI job', () => {
+    const requiredJob = workflowJob(ciWorkflow, 'ci-required')
+    const expectedNeeds = workflowJobNames(ciWorkflow).filter((job) => job !== 'ci-required')
+    const needsBlock = requiredJob.match(/^ {4}needs:\n((?: {6}- [\w-]+\n)+)/m)?.[1] ?? ''
+    const actualNeeds = [...needsBlock.matchAll(/^ {6}- ([\w-]+)$/gm)].map((match) => match[1]!)
+
+    expect(requiredJob).toContain('name: CI required')
+    expect(requiredJob).toContain('if: ${{ always() }}')
+    expect(actualNeeds).toEqual(expectedNeeds)
+
+    for (const dependency of expectedNeeds) {
+      const resultEnv = `${dependency.replaceAll('-', '_').toUpperCase()}_RESULT`
+      expect(requiredJob).toContain(`${resultEnv}: \${{ needs['${dependency}'].result }}`)
+      expect(requiredJob).toContain(`check ${dependency} "$${resultEnv}"`)
+    }
+    expect(requiredJob).toContain('if [ "$result" != "success" ]; then')
+    expect(requiredJob).toContain('exit "$failed"')
   })
 
   test('OpenCode admission and CI define no version floor or ceiling', () => {

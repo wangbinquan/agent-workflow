@@ -74,7 +74,7 @@ describe('RFC-319 —— 语料非空（文件被挪走 / 改名时必须红，�
   })
 
   test('ci.yml 里确实有那个 e2e job（找不到就不该有下面的断言）', () => {
-    expect(CI_YML).toContain('Playwright e2e (shard')
+    expect(CI_YML).toContain('Playwright e2e (${{ matrix.os }} shard')
     expect(CI_CODE).toContain('bun run e2e --')
   })
 })
