@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（实现完成 / 待推送与 hosted CI）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-25；主实现 `72e648327`）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**
 > —— 起于用户诉求「给平台所有的下拉框都要配置搜索能力」。源码实测：自建 `Select`（RFC-036 popover）共 **153 处**
 > 调用，`searchable` 是 opt-in，**只有 25 处显式传、128 处没有搜索**；`MultiSelect`（17 处）默认已带搜索、
 > `UserPicker` 走服务端搜索、`RuntimeParameterPicker` 自带搜索框，原生 `<select>` 全仓已为 0。最痛的一个是

@@ -1,6 +1,6 @@
 # RFC-325 全平台下拉框搜索能力
 
-状态：Draft
+状态：Done（2026-08-25）
 关联：RFC-036（Select 自定义 popover 起源）、RFC-165（`searchable` opt-in 首次引入）、RFC-173（MultiSelect / usePopoverPosition 抽取）、RFC-250（Select 禁用项与三态空行契约）、RFC-198（前端源码棘轮）
 
 ## 1. 背景
