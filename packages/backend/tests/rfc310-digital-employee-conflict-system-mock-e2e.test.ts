@@ -36,6 +36,7 @@ import { ExecutionContractService } from '@/modules/execution-contract/applicati
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
+import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -131,6 +132,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         appHome,
         reactionRounds: createEmployeeReactionRoundQueries(db),
         inputArtifacts,
+        repositoryPreparation: staticCachedRepositoryPreparation(db),
         sourceControl: bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
         conflictMerge: bindConflictMergeParticipant(),
       })

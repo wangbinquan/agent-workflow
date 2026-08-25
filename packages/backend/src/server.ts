@@ -109,6 +109,7 @@ import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/developme
 import { createDevelopmentMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import {
   buildDevelopmentDeliveryDeps,
+  buildDevelopmentWorkspaceRepositoryPreparation,
   resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
 import {
@@ -549,6 +550,11 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     appHome,
     reactionRounds: createEmployeeReactionRoundQueries(deps.db),
     inputArtifacts,
+    repositoryPreparation: buildDevelopmentWorkspaceRepositoryPreparation(
+      deps.db,
+      deps.secretBox,
+      appHome,
+    ),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
     }),

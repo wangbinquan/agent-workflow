@@ -479,6 +479,19 @@ const changedWorkspaceValidationSchema = z
   })
   .passthrough()
 
+interface RepositoryPreparationPort {
+  /**
+   * Make the cached repository current before a new Case freezes its immutable
+   * baseline. The provider owns credentials, fetching and cache locking; this
+   * consumer receives only the prepared local repository identity.
+   */
+  prepare(input: { readonly repositoryId: string }): Promise<{
+    readonly id: string
+    readonly localPath: string
+    readonly defaultBranch: string | null
+  }>
+}
+
 export function composeDevelopmentEmployeeWorkspace(input: {
   readonly db: DbClient
   readonly appHome: string
@@ -491,6 +504,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
   readonly inputArtifacts: {
     copyBlobTo(blobRef: string, absoluteTargetPath: string): void
   }
+  readonly repositoryPreparation: RepositoryPreparationPort
   readonly sourceControl: {
     resolveBaseline(request: {
       readonly baselineRepoPath: string
@@ -660,17 +674,13 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         .where(eq(employeeCaseWorkspaces.caseId, plan.caseRef.id))
         .get()
       if (row === undefined) {
-        const repository = input.db
-          .select({
-            id: cachedRepos.id,
-            localPath: cachedRepos.localPath,
-            defaultBranch: cachedRepos.defaultBranch,
-          })
-          .from(cachedRepos)
-          .where(eq(cachedRepos.id, issue.repositoryRef))
-          .get()
-        if (repository === undefined) {
-          throw new Error(`cached repository is unavailable: ${issue.repositoryRef}`)
+        const repository = await input.repositoryPreparation.prepare({
+          repositoryId: issue.repositoryRef,
+        })
+        if (repository.id !== issue.repositoryRef) {
+          throw new Error(
+            `prepared repository identity changed: expected ${issue.repositoryRef}, got ${repository.id}`,
+          )
         }
         const baseline = await sourceControl.resolveBaseline({
           baselineRepoPath: repository.localPath,

@@ -3,8 +3,10 @@
 //
 // 这里是唯一允许把平台横层能力（cachedRepos 凭据 URL 解封、RFC-269 code-host
 // connections）翻译成 DA 结构同形端口的地方：repoRemote（repositoryId →
-// remote URL + default branch）与 mrEffects（repositoryId → provider/project/
-// call 绑定 → integration 的 ensure/observe）。模块内部不 import 这里。
+// remote URL + default branch）、repositoryPreparation（repositoryId →
+// credential-safe fetch + local mirror）与 mrEffects（repositoryId →
+// provider/project/call 绑定 → integration 的 ensure/observe）。模块内部不
+// import 这里。
 
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
@@ -30,9 +32,132 @@ import {
   type DevelopmentMrEffects,
 } from '@/modules/integration/composition/codeHostEffects'
 import { resolveCodeHostConnectionsFromKeyFile } from '@/services/codeHost/connections'
+import { resolveCachedRepo } from '@/services/gitRepoCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
+import { DomainError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { eq } from 'drizzle-orm'
+
+export function assertDevelopmentWorkspaceRepositoryFreshness(input: {
+  readonly repositoryId: string
+  readonly urlRedacted: string
+  readonly configuredDefaultBranch: string | null
+  readonly preparedDefaultBranch: string | null
+  readonly ffOutcomes: readonly {
+    readonly branch: string
+    readonly warning: string | null
+  }[]
+}): string {
+  const defaultBranch = input.preparedDefaultBranch
+  if (defaultBranch === null || defaultBranch.length === 0) {
+    throw new DomainError(
+      'cached-repo-default-branch-unavailable',
+      `cached repo '${input.repositoryId}' has no resolvable default branch after refresh`,
+      409,
+      { url: input.urlRedacted },
+    )
+  }
+  const missingConfiguredBranch = input.ffOutcomes.some(
+    (outcome) =>
+      outcome.branch === input.configuredDefaultBranch && outcome.warning === 'origin-ref-missing',
+  )
+  if (missingConfiguredBranch) {
+    throw new DomainError(
+      'repo-ref-not-found',
+      `default branch '${input.configuredDefaultBranch}' no longer exists in ${input.urlRedacted}; refusing to freeze the stale local branch`,
+      400,
+      { url: input.urlRedacted, ref: input.configuredDefaultBranch },
+    )
+  }
+  return defaultBranch
+}
+
+/**
+ * Prepare the repository exactly once, immediately before a Digital Employee
+ * Case freezes its baseline. Fetch failures are fatal: continuing from a stale
+ * mirror would manufacture avoidable conflicts and make Issue intake depend on
+ * the age of an unrelated earlier task's cache.
+ */
+export function buildDevelopmentWorkspaceRepositoryPreparation(
+  db: DbClient,
+  secretBox: SecretBox | undefined,
+  appHome: string = Paths.root,
+): {
+  readonly prepare: (input: { readonly repositoryId: string }) => Promise<{
+    readonly id: string
+    readonly localPath: string
+    readonly defaultBranch: string | null
+  }>
+} {
+  return {
+    async prepare(input) {
+      const row = db
+        .select({
+          id: cachedRepos.id,
+          urlEnc: cachedRepos.urlEnc,
+          localPath: cachedRepos.localPath,
+          defaultBranch: cachedRepos.defaultBranch,
+        })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, input.repositoryId))
+        .get()
+      if (row === undefined) {
+        throw new NotFoundError(
+          'cached-repo-not-found',
+          `cached repo '${input.repositoryId}' not found`,
+        )
+      }
+      const url = unsealRepoUrl(row, secretBox, db)
+      if (url === null) {
+        throw new DomainError(
+          'cached-repo-credential-unavailable',
+          `cached repo '${input.repositoryId}' has no readable URL (sealed with a different secret.key?)`,
+          409,
+        )
+      }
+      const prepared = await resolveCachedRepo(
+        {
+          db,
+          appHome,
+          secretBox,
+          syncBranches:
+            row.defaultBranch === null || row.defaultBranch.length === 0 ? [] : [row.defaultBranch],
+        },
+        { url },
+      )
+      if (!prepared.fetchOk) {
+        throw new DomainError(
+          'repo-fetch-failed',
+          `repository fetch failed for ${prepared.cached.urlRedacted}; refusing to freeze a stale Digital Employee baseline`,
+          502,
+          {
+            url: prepared.cached.urlRedacted,
+            stderr: prepared.fetchError,
+          },
+        )
+      }
+      if (prepared.cached.id !== row.id) {
+        throw new DomainError(
+          'cached-repo-identity-mismatch',
+          `cached repository identity changed while preparing '${row.id}'`,
+          409,
+        )
+      }
+      const defaultBranch = assertDevelopmentWorkspaceRepositoryFreshness({
+        repositoryId: row.id,
+        urlRedacted: prepared.cached.urlRedacted,
+        configuredDefaultBranch: row.defaultBranch,
+        preparedDefaultBranch: prepared.cached.defaultBranch,
+        ffOutcomes: prepared.ffOutcomes,
+      })
+      return {
+        id: prepared.cached.id,
+        localPath: prepared.cached.localPath,
+        defaultBranch,
+      }
+    },
+  }
+}
 
 export function buildDevelopmentDeliveryDeps(
   db: DbClient,
@@ -188,8 +313,8 @@ export function resolveDevelopmentRepoBinding(
   const connections = resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)
   if (connections === null) return null
   const candidates = (['gitlab', 'github'] as const)
-    .map((p) => connections.resolve(p))
-    .filter((c) => c !== null)
+    .map((provider) => connections.resolve(provider))
+    .filter((connection) => connection !== null)
   const matched = matchRepoProvider(url, candidates)
   if (matched === null) return null
   const connection = connections.resolve(matched.provider)

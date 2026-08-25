@@ -37,6 +37,7 @@ import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
+  buildDevelopmentWorkspaceRepositoryPreparation,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
   resolveDevelopmentRepoBinding,
@@ -1220,6 +1221,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     reactionRounds: createEmployeeReactionRoundQueries(db),
     inputArtifacts: employeeInputArtifacts,
+    repositoryPreparation: buildDevelopmentWorkspaceRepositoryPreparation(
+      db,
+      secretBox,
+      Paths.root,
+    ),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
     }),

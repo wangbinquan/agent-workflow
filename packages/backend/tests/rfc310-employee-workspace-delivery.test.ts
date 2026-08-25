@@ -29,6 +29,7 @@ import {
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
 import type { ReactionExecutionPlan as EmployeeReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
+import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
 
 setDefaultTimeout(120_000)
 
@@ -259,6 +260,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
       inputArtifacts: artifactStore,
+      repositoryPreparation: staticCachedRepositoryPreparation(db),
       sourceControl: bindEmployeeCaseWorkspaceParticipant(),
       conflictMerge: bindConflictMergeParticipant(),
       now: () => 10,

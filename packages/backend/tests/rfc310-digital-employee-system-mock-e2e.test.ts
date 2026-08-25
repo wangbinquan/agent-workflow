@@ -51,6 +51,7 @@ import { createPipelineEvidenceAdapter } from '@/modules/integration/infrastruct
 import type { AdapterFailureReceipt } from '@/modules/integration/infrastructure/developmentAdapterRunner'
 import { createDbAdapterBindingResolver } from '@/modules/integration/infrastructure/developmentRequirementSourceAdapter'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
+import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
 import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
@@ -252,6 +253,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
       inputArtifacts,
+      repositoryPreparation: staticCachedRepositoryPreparation(db),
       sourceControl: bindEmployeeCaseWorkspaceParticipant(),
       conflictMerge: bindConflictMergeParticipant(),
     })
