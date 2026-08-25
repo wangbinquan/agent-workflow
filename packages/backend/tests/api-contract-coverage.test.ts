@@ -18,6 +18,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { ENDPOINTS, type HttpMethod } from './contracts/registry'
 import { CALL_WILDCARD, callIsRegistered, compilePatterns } from './architecture/routeMatch'
+import { EXEMPT_MOUNTS } from '../src/routes/registry'
 
 const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
 
@@ -310,6 +311,18 @@ describe('API contract registry coverage', () => {
       if (inInit) return inInit[1]!.toUpperCase()
       return 'GET'
     }
+    // RFC-319 B74 —— `EXEMPT_MOUNTS` 里的路径**按构造**进不了这份注册表：它们是
+    // 「有意不作为 API 端点」的挂载（`src/routes/registry.ts` 的名单），没有声明、
+    // 也就没有合同条目。于是 e2e 里一旦出现它们的 URL，这条守卫必然误报——而误报的
+    // 修法只有两种：往注册表里塞一条与那份名单直接矛盾的假条目，或者把 spec 里的
+    // 字面量拆开躲过正则。两种都是拿判据换绿。
+    //
+    // 实撞（2026-08-25）：RFC-319 的 CFG-40 用例断言 `/.well-known/mcp` 广告出来的
+    // endpoint 等于 `${daemon.baseUrl}/api/mcp`——它**根本没有发起这个调用**，只是在
+    // 核对广告值。而 `/api/mcp` 是 EXEMPT_MOUNTS 的一员（RFC-247 §4.1：它是管道，
+    // 授权按 TOOL 逐个发生，不是带能力的端点）。守卫报了三条不存在的「打了已删端点」。
+    //
+    // 判据因此从名单本身取豁免，而不是再写一张手抄清单——那张清单会和名单分叉。
     const offenders: string[] = []
     let scannedCalls = 0
     for (const spec of specs) {
@@ -322,6 +335,7 @@ describe('API contract registry coverage', () => {
           .split('/')
           .map((seg) => (seg.includes('${') ? WILDCARD : seg))
         const method = methodOf(src, m.index!, m.index! + m[0].length)
+        if (EXEMPT_MOUNTS.has(raw.replace(/\/+$/, ''))) continue
         if (!known(method, called)) offenders.push(`${basename(spec)}: ${method} ${raw}`)
       }
     }

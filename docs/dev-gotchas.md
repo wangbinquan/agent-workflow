@@ -2436,3 +2436,20 @@ Error: "route.fetch: Target page, context or browser has been closed
 **怎么确认自己真修掉了而不是碰巧躲过去**：人为把第二次 callback 延后（`await new Promise(r=>setTimeout(r,500))`
 塞进 handler）。旧写法下这会**稳定复现**同一条报错、同一个行号；两把锁都上之后应当仍然绿，且那条用例的
 耗时会明显变长——那正是锁 B 在等它跑完。
+
+## gitleaks 的 git 模式与文件模式判定不一致——查它的红时别用 `--no-git` 复现（2026-08-25 实测）
+
+CI 跑的是 `gitleaks detect --source . --no-banner --redact --verbose`，即**git 模式**（扫的是
+每个提交的 patch，所以 checkout 要全历史）。本机想复现时很自然会顺手加 `--no-git` 只扫工作树，
+**那会得到不同的答案**：同一份 `e2e/rfc319-*.spec.ts`，`--no-git` 报 5 条 `generic-api-key`，
+而 git 模式扫完 4111 个提交（含引入这些行的那几笔）**一条都不报**。两边都不是 bug，是判定面不同——
+按错的那个改，要么白改，要么把真红当成假红。
+
+顺带两个会让人白跑一轮的细节：
+
+- **`-i /dev/null` 不等于「绕过 `.gitleaksignore`」**。`--gitleaks-ignore-path` 期望的是「.gitleaksignore
+  文件或含它的目录」，给个字符设备会被静默忽略、退回默认的 `.`，于是你以为在裸跑，其实 ignore 全程生效。
+  真要绕过就 `-i "$(mktemp -d)"` 指一个空目录。
+- **误报的正解是 `.gitleaksignore`，不是改代码**。git 模式扫的是历史，夹具名一旦入库就永远在那儿，
+  事后改名救不了已有的提交（指纹形如 `<commit-sha>:<file>:<rule>:<line>`，与那一笔绑死）。仓库根的
+  `.gitleaksignore` 是官方机制，会被自动加载；每加一条写清它是什么，别攒成一张无人认领的清单。
