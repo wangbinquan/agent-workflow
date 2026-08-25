@@ -2611,6 +2611,13 @@ function n1LedgerSpecs(artifacts: CanonicalArtifacts): N1LedgerSpec[] {
       why: 'RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。',
     },
     {
+      id: 'rfc294-public-surface-opaque-type-allowlist',
+      file: 'packages/backend/tests/architecture/rfc294Canonical.ts',
+      symbol: 'PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST',
+      baseline: PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST.length,
+      why: 'RFC-294 N1：递归 public surface 仍无法在仓内解析的精确 opaque type reference；每一项必须有意保留且不得静默扩张。',
+    },
+    {
       id: 'rfc294-governed-field-surfaces',
       file: CANONICAL_MANIFEST_PATHS.publicSurfaces,
       symbol: 'governedFieldSurfaces',
