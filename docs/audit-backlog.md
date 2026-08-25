@@ -3123,3 +3123,60 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    `rfc319-users-and-account.spec.ts`；UX-40 → `rfc319-memory-fusion-and-badges.spec.ts`；UX-41 →
    `rfc199-save-reliability.spec.ts`；UX-33 → `rfc319-event-center-views.spec.ts`）。**本批没有据此
    改状态**——逐条核验证据标题是否逐字存在、tier 是否对得上，是一次独立的对账工作，留给后续批次。
+
+## RFC-319 B99 / B100 起草期撞到的产品缺陷（2026-08-26，数字员工授权 + 身份与权限）
+
+1. **【真实缺陷，P2 / 授权边界，本人按源码复核 + 起草侧实跑复现】仓库组作用域只在前端收窄，
+   服务端不校验组成员资格。**
+   `packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts:3730-3739`
+   里那道「目标仓库必须落在员工职责范围内」的判据**只覆盖 `scope.kind === 'repository'`**；
+   `repository-group` 分支直接 `repositoryRef = requestedRepositoryRef`，**没有任何组成员校验**。
+   起草侧实跑复现：给一个 `workScope = {kind:'repository-group', repositoryGroupId: G}` 的员工直接
+   `POST /api/digital-employees/{id}/cases`，`target.repositoryId` 填一个**组外**仓库 → **HTTP 201，
+   案例正常建立**。用户面影响：任何能发起任务的人（含脚本 / PAT 路径）可以让一名「只负责 A 组」的
+   员工去改 A 组之外的仓库，而它的连接 / 策略 / 岗位配置对那个仓库并不适用。
+   **不对称本身就是判据**：单仓那半边是严格校验的，组那半边不是。
+   B99 **未写成断言**（写 403 是假期望、写 201 是把缺陷固化），DE-X5 只锁前端清单收窄那半边。
+   **修法需要决定语义**（在 intake 处按哪一份组快照校验成员资格），不属「单行 bug 修复」例外，
+   建议单独立 RFC 或至少呈用户裁决后再动。
+2. **【真实缺陷，P2】前端对 `forcePasswordChange` 零消费——「强制改密」只活在数据库列里。**
+   后端三处信号齐全（`routes/auth.ts:121` 登录回执带 `mustChangePassword`、`:294-310` 置位期间放行
+   省略的 `oldPassword` 并在改完后清零、用户行有列），而
+   `grep -rn "mustChangePassword\|forcePasswordChange" packages/frontend/src` **零命中**：登录页拿到
+   回执直接 `setToken` + 跳转（`routes/auth.tsx:201-206`），`GET /api/auth/me` 也不回这个字段。
+   复现：`/users` → Manage → Reset password → 勾「Require another password change at next sign-in」
+   （**默认就是开**）→ 该用户用临时口令登录 → 直接进 `/agents`，界面自始至终不提改密。后果是管理员
+   发出去的临时口令会被长期使用。IAM-X1 **只锁后端三处信号、刻意不锁跳转目的地**，将来补引导页时
+   这条用例应当依旧全绿。
+3. **【真实缺陷，P2】`AclPanel` 把 409 静默吞掉：用户的改动被丢弃且零反馈。**
+   `components/AclPanel.tsx:599` 的错误段要求 `mutationBelongsToSession`；而 `onError` 自己触发的
+   `invalidateQueries`（`:271`）会把 `fetchStatus` 变成 `'fetching'` ⇒ `liveCanManage` 转假（`:186-196`）
+   ⇒ `lostManage` 判真（`:275,290`）⇒ `manageSessionRef += 1` + `setDirty(false)` + `save.reset()`。
+   起草侧实测：409 之后 4 秒内 40 次采样，`.form-actions__error` **恒空**、`acl-save` **恒 disabled**。
+   同段注释（`:264-272`）写着「The error text shows via describeApiError」——**这句承诺现在不成立**。
+   服务端没有被覆盖（`aclRevision` 仍是并发写者的），所以是反馈缺失而非数据损坏。
+4. **【真实缺陷，P3】内置资源的权限弹窗仍提供一个必然失败的保存入口。**
+   `services/resourceAcl.ts:741` 的 `canManage` 只看 `canGovernAccess`、不看 `builtin`，而
+   `routes/resourceAcl.ts:184-185` 的 `assertNotBuiltin` 一定把保存打回 `builtin-readonly`。
+5. **【真实缺陷，P3 / 死代码】OIDC「把第二个身份绑到已登录账号」这条路径没有入口。**
+   `auth/oidc/flow.ts:50` 的 `linkUserId` 与 `routes/oidc-auth.ts:185-208` 的整段 link 分支存在，
+   但全仓没有任何调用方传 `linkUserId`，`/account` 上也没有「关联身份提供方」按钮。
+6. **【真实缺陷，P3 / i18n】`workScopeSummary` 被硬编码冻结成中文。**
+   `modules/digital-employee/application/authoringService.ts:2785` 写死
+   `runtime.summarizeWorkScope(encodedScope, 'zh-CN')`，与查看者语言无关；英文界面的员工卡片摘要
+   会念出「任务启动时指定仓库」。DE-16b 因此改断言「卡片里不得出现具体仓库 URL」（语言无关）。
+7. **【测试判据自身的缺口，已就地修好】IAM-48 的「内置代理不进用户面列表」原本是一条恒真断言。**
+   起草版写 `getByRole('link', { name: 'aw-skill-merger', exact: true })` → `toHaveCount(0)`，而
+   `ResourceSplitPage` 的卡片是整块 `<Link>`，可访问名是卡内全部可见文字拼起来的（名字 + 描述 +
+   徽标），`exact: true` **在场也匹配不到**。本人变异实测：把 `routes/agents.ts:113` 的
+   `excludeBuiltinAgents` 整个摘掉，用例照样绿。已改成按卡片自己的 testid
+   （`split-card-${BUILTIN_MERGER_AGENT_ID}`）定位，改后同一变异当场红。工作流那半边用的是真 testid
+   （`workflow-card-aw-skill-fusion`），本来就是好的。
+8. **【账本措辞与实现不符，已按源码实际写】**
+   - IAM-35 的标题「配置资源写门只认 owner」在 RFC-324 之后不再成立：`write` 档授权者**可以**
+     revise / publish（`services/resourceAcl.ts:643-660`），只有治理面（archive / 改名 / 转让 / 再授权）
+     仍只认 owner（`:621-633`）。用例写成 public → read → write 三档矩阵。
+   - DE-X4 的「体积上限校验」实现回的是 **422 `employee-upload-too-large`**，不是直觉上的 400/413。
+   - DE-08 的 program 工具授权门与**工作流里 script 节点的 `scripts:author` 字段门**
+     （`services/scriptAuthorGate.ts:46`）是两道门；夹具必须由 admin 建合同工作流，否则这条用例
+     证的是另一道门。

@@ -265,8 +265,13 @@
       "title": "【拆自 DE-16】创建数字员工时默认落 task 作用域 —— POST /employees 的 workScope 从未被任何 e2e 断言过",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-16b: 新建数字员工时不碰作用域下拉，落库的就是「任务启动时指定仓库」而不是列表里的头一个仓库"
+        }
+      ]
     },
     {
       "id": "DE-17",
@@ -358,8 +363,13 @@
       "title": "【拆自 DE-31】统一任务列表 type=digital-employee 过滤的排他性 —— 现有用例只做正向存在断言，过滤器退化成返回全量照样绿",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-31b: 统一任务列表选「数字员工」类别后只剩员工案例，Agent 任务必须消失，反向亦然"
+        }
+      ]
     },
     {
       "id": "DE-X1",
@@ -3533,8 +3543,13 @@
       "title": "非 Agent 类工具（program / workflow）的授权与发布",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-08: program 工具要 scripts:author 才能写，workflow 工具不要——两条非 Agent 路各自能发布 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-10",
@@ -3579,8 +3594,13 @@
       "title": "修改已发布岗位模板并发布新版本（v2）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-14: 改一个已发布岗位模板并发布 v2，已在岗的员工仍钉在 v1 的工具上 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-19",
@@ -3805,8 +3825,13 @@
       "title": "【漏项】上传文件的落点选择（仓库内 / 临时）、重复路径与体积上限校验",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-X4: 上传文件的落点二选一、两个入库文件撞路径必须当场拦下，体积上限前后端是同一个数 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-X5",
@@ -3814,8 +3839,13 @@
       "title": "【漏项】task / repository-group 作用域员工在发起时选择本次工作的仓库",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-X5: 仓库组范围的员工只能选组内仓库，任务范围的员工在全量清单里选一个并随 launch 上行 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-01",
@@ -4815,8 +4845,13 @@
       "title": "OIDC 授权码登录（自动开户）走完整浏览器回环",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-07: 从 /auth 点身份提供方按钮走完授权码回环，浏览器落回应用且自动开出一个 active 账号 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-09",
@@ -4824,8 +4859,13 @@
       "title": "OIDC 邀请绑定：管理员建 SSO 用户 → 本人首次 SSO 登录被绑定并激活",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-09: 管理员在 /users 建的 SSO 账号，本人首次 SSO 登录被绑定并激活而不是另开一个号 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-10",
@@ -4833,8 +4873,13 @@
       "title": "OIDC 回调的失败态友好页：state 过期 / provider 被停用 / 端点解析失败 / 换 token 失败",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-10: 回调的四种失败各自落在能区分成因的友好页上，而且都不发会话 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-11",
@@ -4842,8 +4887,13 @@
       "title": "设置 → 身份认证：OIDC provider 的新增 / 编辑 / 删除 / 连接测试",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-11: 设置页新增的 provider 立刻能起真实登录流，留空 secret 的编辑不清空密封值，连接测试两种结论分得开，删除后彻底消失 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-14",
@@ -4865,8 +4915,13 @@
       "title": "OIDC 托管账号不得在本站改密码",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-15: OIDC 托管账号的改密面在界面与服务端两层都关死，管理员也不能替它重置 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-16",
@@ -4944,8 +4999,13 @@
       "title": "资源权限并发冲突（409 acl-revision-conflict）在面板上的表现",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-33: 权限面板撞上并发 ACL 改动时保存被 409 挡住——弹窗不关、面板刷回权威快照、陈旧草稿没有覆盖对方 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-34",
@@ -4962,8 +5022,13 @@
       "title": "配置资源写门只认 owner：不能改别人的 public 资源（RFC-317 P1 教训）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-35: 持有 action-templates 写权限点的普通用户改不动别人的 public 模板，read 授权也不行，升到 write 才放开内容而治理面仍然锁死 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-44",
@@ -4985,8 +5050,13 @@
       "title": "强制改密（forcePasswordChange）：后端发信号、前端零消费，整条链无人守",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-X1: 管理员勾了「下次登录必须改密」之后，后端三处信号（用户行 / 登录回执 / 免旧密码改密）确实成立 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-X2",
@@ -9501,8 +9571,13 @@
       "title": "岗位模板的基本信息（名称 / 描述）在编辑态修改",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-15: 编辑态改岗位模板的名称与说明，保存后列表与员工创建下拉里都是新名字 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-20",
@@ -9561,8 +9636,13 @@
       "title": "遗留任务发起向导 /code/missions/new 在单写切换后是一条可达但必败的死路",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-40: 遗留发起向导仍打得开，平台在提交处给出机器码与去处而不是无声失败 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-41",
@@ -9579,8 +9659,13 @@
       "title": "/code、/code/outcomes、/outcomes、/code/missions 的兼容重定向",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-42: 四条老 URL 各自把人送到今天真正在用的那一屏，而不是 404 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-43",
@@ -10154,8 +10239,13 @@
       "title": "内置（built-in）资源的权限只读",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-48: 框架内置的代理与工作流既不出现在用户面列表里，管理员也改不动它们的权限 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-X5",
@@ -11815,8 +11905,6 @@
     }
   ],
   "gapIds": [
-    "DE-16b",
-    "DE-31b",
     "OPS-044b",
     "REPO-43",
     "UX-35b",
@@ -11829,29 +11917,17 @@
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
-    "DE-08",
     "DE-10",
-    "DE-14",
     "DE-21",
     "DE-44",
     "DE-X2",
-    "DE-X4",
-    "DE-X5",
     "EVENT-08",
     "EVENT-20",
     "EVENT-23",
     "EVENT-36",
     "EVENT-X2",
     "IAM-02",
-    "IAM-07",
-    "IAM-09",
-    "IAM-10",
-    "IAM-11",
-    "IAM-15",
-    "IAM-33",
     "IAM-34",
-    "IAM-35",
-    "IAM-X1",
     "IAM-X2",
     "IAM-X4",
     "INTENT-10",
@@ -11931,11 +12007,8 @@
     "CFG-44",
     "CFG-X5",
     "DE-02",
-    "DE-15",
     "DE-39",
-    "DE-40",
     "DE-41",
-    "DE-42",
     "DE-43",
     "EVENT-16",
     "EVENT-28",
@@ -11944,7 +12017,6 @@
     "EVENT-X5",
     "IAM-22",
     "IAM-45b",
-    "IAM-48",
     "INTENT-02",
     "INTENT-X5",
     "INTENT-X6",
