@@ -3594,3 +3594,30 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
 6. **【账本假 gap】DE-39 已被覆盖**：`e2e/rfc310-digital-employee-journey.spec.ts:536-553` 已逐条断言
    `/code/executors` / `/code/config/adapters` / `/code/config/adapters/retired-adapter` 三条深链重定向到
    `/digital-employees` 且旧界面元素 `count(0)`。（DE-39 的 tier 是 `pr`，与该文件的标签一致。）
+
+## RFC-319 B111（2026-08-26，身份交接与手册）：两条产品缺口 + 一条账本措辞
+
+1. **【产品缺口，P3】后端有 `/acl` 合同、前端没有权限弹窗入口的资源类型不少。**
+   逐个 grep `AclPanel` / `DetailHeaderActions` 的消费者，全仓只有：agents / skills / mcps / plugins
+   （走 `DetailHeaderActions`）、workflows / workgroups / code-host configs / 数字员工的
+   `LaneAdapterBindingDialog`（各自直挂 `AclPanel`）。**`scheduled.$id.tsx` 没有任何 ACL 入口**
+   （`grep -n "acl"` 零命中），capability-templates / action-templates / verification-profiles /
+   event-sources / automation-policies / repos / repo-groups 同样没有。
+   所以账本 IAM-34 说的「其余 11 类没走过浏览器」里，有相当一部分**不是覆盖缺口而是产品缺口**。
+   `AclPanel.tsx:1-5` 的 RFC-099 原注即写明「Some backend ACL resource types do not yet have a
+   user-facing permission entry」。B111 覆盖 skills / mcps / plugins 三类，其余如实留白。
+2. **【产品缺口，P3】`/api/tokens` 与 `/api/tokens/audit` 在前端零消费。**
+   `packages/backend/src/routes/users.ts:107-133` 注册了这两条 `users:read` 只读路由，而
+   `grep -rn "tokens/audit\|/api/tokens" packages/frontend/src` **零命中**——平台级令牌清单与调用
+   审计**没有任何界面**，运维只能自己 curl（RFC-247 D16/T27 的后端半边落地了、前端半边没做）。
+   IAM-22 因此写成 HTTP 断言而非浏览器断言。
+3. **【账本措辞过宽】UX-X5b 的「宽块（table / pre）」里 `table` 那一半在这一页恒不成立。**
+   `components/prose/prose.css:48` 的 `.prose { overflow-wrap: anywhere }` 让表格单元格折行，
+   390px 下 `/docs/api` 的 **15 张表全部 `overflows:false`**。照字面写「必须有一张能横滚的表」会得到
+   一条永远红的用例。已改成断言在 `pre` 上，并保留两条对任何块都成立的兜底
+   （`overflows ⇒ scrolled>0`、`boxFits`）。不是缺陷，是措辞问题。
+4. **【自查工具本身失效的教训，已修】起草初稿里误写进两个裸 NUL 字节**（`` `${a}\x00${b}` ``），
+   于是 `file(1)` 把整份 spec 判成 `data`、grep 的 `-I` 直接跳过它——**所有「本文件有没有
+   `test.skip` / `waitForTimeout`」的 grep 自查都会静默返回「无命中」，全是假的**。
+   已改成结构化对比；现在 `NUL: 0`、`file` 报 UTF-8，自查重新有效。
+   **教训**：自查 grep 报「零命中」时，先确认文件本身是文本。

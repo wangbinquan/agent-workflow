@@ -2538,8 +2538,13 @@
       "title": "【拆自 UX-35】未保存改动守卫的 beforeunload（刷新 / 关标签页）半边 —— PR 档无任何断言，既有 helper 只注册 dialog handler 后 reload，守卫武装与否都一样过",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 UX-35b: 未保存的草稿会武装刷新 / 关标签页的原生守卫，丢弃之后当场解除"
+        }
+      ]
     },
     {
       "id": "UX-X1",
@@ -4929,8 +4934,13 @@
       "title": "首次安装：/auth 的 setup-token 方式与 handoff",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-02/IAM-X4/UX-05: daemon 打印的 ?token= 链接落地即被消费并转交交接页；/auth 的一次性 token 表单认票不认人；交接完成后 token 方式退役、密码表单把人送进应用 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-07",
@@ -5106,8 +5116,13 @@
       "title": "权限弹窗只对 agents / workflows 走过真浏览器；其余 11 类 ACL 资源没有",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-34: 技能 / MCP / 插件三类资源的权限弹窗在真浏览器里加人保存后，被授权者当场看得见，而资源仍然是 private @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-35",
@@ -5157,8 +5172,13 @@
       "title": "记忆条目的 scope 级读/管权限（资源 scope 随资源；repo/repo_group/global 全员读、仅资源管理员管）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-X2: 工作流 scope 的记忆随工作流可见性进出读面；管理权随 scope 资源的写权——write 档改得动、read 档改不动 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-X3",
@@ -5180,8 +5200,13 @@
       "title": "首启 handoff：daemon 打印的 ?token=… URL 落地即被消费并转交 /auth?bootstrap=token",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-02/IAM-X4/UX-05: daemon 打印的 ?token= 链接落地即被消费并转交交接页；/auth 的一次性 token 表单认票不认人；交接完成后 token 方式退役、密码表单把人送进应用 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-04",
@@ -7999,8 +8024,13 @@
       "title": "浏览器登录表单提交（密码 / 一次性 token / OIDC）→ 进入应用",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-02/IAM-X4/UX-05: daemon 打印的 ?token= 链接落地即被消费并转交交接页；/auth 的一次性 token 表单认票不认人；交接完成后 token 方式退役、密码表单把人送进应用 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-09",
@@ -8378,8 +8408,13 @@
       "title": "【拆自 UX-X5】/docs/api 的宽块（table / pre）在自身容器内横向滚动而非撑横页面 —— 现有断言近似恒真（谓词含 scrollWidth > 0，任何已渲染元素都成立）",
       "risk": "P2",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 UX-X5b: 390px 下 /docs/api 的宽块真的能在自己的容器里横向滚动，滚到底之后页面本身仍然不横滚"
+        }
+      ]
     },
     {
       "id": "UX-X6",
@@ -8864,8 +8899,13 @@
       "title": "【拆自 WF-47】重命名工作流的描述字段与名称折叠（normalizeResourceDisplayName）—— e2e 零覆盖，仅 shared 单测",
       "risk": "P2",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 WF-47b: 工作流重命名弹窗同时提交描述，并把名称按空白折叠规则落定——重开弹窗看到的是折叠后的值，不是刚敲进去的原文"
+        }
+      ]
     },
     {
       "id": "WF-48",
@@ -10074,8 +10114,14 @@
       "title": "旧 /code/executors 与 Adapter 配置深链重定向到数字员工 owner surface",
       "risk": "P3",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "gapSince": "RFC-319",
+      "evidence": [
+        {
+          "file": "e2e/rfc310-digital-employee-journey.spec.ts",
+          "test": "RFC-323 DE-18/39: employee Adapter override and restore live in the lane while retired URLs redirect"
+        }
+      ]
     },
     {
       "id": "DE-40",
@@ -10632,8 +10678,13 @@
       "title": "平台级令牌清单与调用审计（users:read 只读）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-22: users:read 看得见全平台的令牌与它们打过的每一次调用，但吊销不了别人的令牌；这两张表还整体拒绝令牌通道 @nightly"
+        }
+      ]
     },
     {
       "id": "IAM-39",
@@ -10697,8 +10748,13 @@
       "title": "【拆自 IAM-45】/docs/api 按当前身份裁剪权限目录 —— notAvailableToYou 分支从未在浏览器里被渲染过（整份 spec 只用管理员打开）",
       "risk": "P3",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-identity-handoff-and-docs.spec.ts",
+          "test": "RFC-319 IAM-45b: /docs/api 用低权账号打开时，够不着的 MCP 工具被逐条标注、够不着的端点整行消失，而管理员那份两样都没有"
+        }
+      ]
     },
     {
       "id": "IAM-48",
@@ -12540,36 +12596,25 @@
   ],
   "gapIds": [
     "REPO-43",
-    "UX-35b",
     "CFG-X3",
     "CFG-X4",
     "CFG-X6",
-    "IAM-02",
-    "IAM-34",
-    "IAM-X2",
-    "IAM-X4",
     "MEM-49",
     "OPS-X3",
     "OPS-X5",
     "TASK-35",
     "TASK-X4b",
-    "UX-05",
     "UX-19",
     "UX-47",
-    "UX-X5b",
-    "WF-47b",
     "WG-27",
     "WG-28",
     "WG-42",
     "WG-X5",
     "CFG-03",
     "CFG-X5",
-    "DE-39",
     "DE-41",
     "EVENT-28",
     "EVENT-X4",
-    "IAM-22",
-    "IAM-45b",
     "INTENT-X5",
     "INTENT-X7",
     "OPS-007",

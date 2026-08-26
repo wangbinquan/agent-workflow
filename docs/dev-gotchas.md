@@ -2801,11 +2801,11 @@ mirror: git fetch --all --prune          # 不带 --tags
 2026-08-26 实撞：往 `packages/frontend/tests/` 加了一个扫源码的守卫，没登记，
 **backend 四个分片一起红七条**——RFC-317 的三套棘轮同时开火：
 
-* `rfc317-architecture-ledgers.test.ts` ——「清单与磁盘逐条相等：删守卫 / 改守卫名 /
+- `rfc317-architecture-ledgers.test.ts` ——「清单与磁盘逐条相等：删守卫 / 改守卫名 /
   **加守卫不登记**，三种都红」；
-* `rfc317-guard-corpus-floor.test.ts`（T13）——扫语料的守卫必须自带
+- `rfc317-guard-corpus-floor.test.ts`（T13）——扫语料的守卫必须自带
   `expect(<语料>.length).toBeGreaterThanOrEqual(N)`，且 N 与清单的 `minCorpusFiles` 两向相等；
-* `rfc317-guard-negative-fixture.test.ts`（T14）——「扫语料 + 断言不存在」的守卫必须配负
+- `rfc317-guard-negative-fixture.test.ts`（T14）——「扫语料 + 断言不存在」的守卫必须配负
   fixture：把伪造的违规喂给**扫描用的同一份判据**并断言它报。
 
 **三个容易漏的点**：
@@ -2841,9 +2841,9 @@ mirror: git fetch --all --prune          # 不带 --tags
 
 **处置（两条，缺一不可）**：
 
-* **账本 / 生成物这类「多 session 都会写」的文件，改完立刻提交**，别在中间插入长耗时步骤。
+- **账本 / 生成物这类「多 session 都会写」的文件，改完立刻提交**，别在中间插入长耗时步骤。
   中间要跑全量守卫的话，跑完**回到第 1 步重跑一遍写入**再提交。
-* **提交后回读 committed 内容复核**，不要只信提交前的测试：
+- **提交后回读 committed 内容复核**，不要只信提交前的测试：
   ```
   git show HEAD:architecture/ledger-baselines.json | python3 -c '…' # 与来源逐条对数
   ```
@@ -2867,9 +2867,25 @@ mirror: git fetch --all --prune          # 不带 --tags
 
 **动它之前**：
 
-* 只改**自己那几条**的 `baseline` 与 `why`，**绝不重排 `ledgers` 数组**——数组当前不是按 id 排序的
+- 只改**自己那几条**的 `baseline` 与 `why`，**绝不重排 `ledgers` 数组**——数组当前不是按 id 排序的
   （53 条，`ids == sorted(ids)` 为 False），任何重排都会同时打到两套守卫，且 diff 大到无法归因。
-* 改完**立刻提交并回读 committed 内容对数**（见上一节的窗口期陷阱）。
-* 改完顺手知会 RFC-294 那条线去 repin；对方若把这个文件从 digest pin 里排除，这一步才可以省掉。
-* 排查红项时注意区分**内容差异**与**顺序差异**：RFC-294 的 projection 报的 diff 可能只是同一条目
+- 改完**立刻提交并回读 committed 内容对数**（见上一节的窗口期陷阱）。
+- 改完顺手知会 RFC-294 那条线去 repin；对方若把这个文件从 digest pin 里排除，这一步才可以省掉。
+- 排查红项时注意区分**内容差异**与**顺序差异**：RFC-294 的 projection 报的 diff 可能只是同一条目
   出现在数组不同位置（`-` 与 `+` 两侧内容逐字相同、位置不同），那与你的数值改动无关。
+
+## 一个文件里塞多个变异时，Playwright 的「did not run」会伪造出 NO-BITE
+
+2026-08-26 实撞：往同一份 8 条用例的 spec 打三个变异，跑完只见「1 failed / 7 did not run」——
+后两个变异看上去都没咬人。**实际是三个全咬**：第一条红把 worker 打掉之后，同文件剩下的用例
+根本没执行（既有 gotcha「Playwright 在失败后丢弃 worker」的直接后果），于是它们的变异**连
+被检验的机会都没有**。
+
+**判据**：报告里出现 `did not run` 就说明这一轮的归因**不完整**，不能据此写 NO-BITE。
+
+**处置**：把每个变异**单独**注入，并用 `-g '<能力 id>'` 只跑它的目标用例——一次一枚、各自成局。
+慢一些，但归因是确定的。批量注入仍然适用于**变异分散在不同 spec 文件**的场景（跨文件不会互相
+带倒），只有「同一文件多枚」这一种形态必须拆开。
+
+顺带：`mode: 'serial'` 会让这个问题更严重（第一条红之后**整个 describe** 剩余全部 skip），
+所以本仓的 RFC-319 spec 一律不加 serial —— 那条约定的另一半理由就在这里。
