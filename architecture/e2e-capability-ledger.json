@@ -6221,11 +6221,16 @@
     {
       "id": "MEM-49",
       "domain": "记忆",
-      "title": "设置页的蒸馏器运行时 / 输出语言选择，及其在候选行上的语言徽标",
+      "title": "设置页的蒸馏器运行时 / 输出语言选择",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-config-sections.spec.ts",
+          "test": "RFC-319 CFG-21：System agents 一次保存落齐运行时 + 语言 + 数值参数，且只写本分区自己的键 @nightly"
+        }
+      ]
     },
     {
       "id": "MEM-X10",
@@ -12708,7 +12713,6 @@
     }
   ],
   "gapIds": [
-    "MEM-49",
     "OPS-X3",
     "OPS-X5",
     "UX-19",

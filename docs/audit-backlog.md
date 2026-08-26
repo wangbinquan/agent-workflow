@@ -3711,3 +3711,55 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    且两行都带「1 child tasks」计数。看代码这是**按来源镜头分行**的有意设计，不是 bug，但对用户而言
    「同一条任务列了两遍」确实费解。TASK-X4b 因此把定位器显式收窄到「带子树的那一行」并注明原因。
    参见 `routes/tasks.tsx:183-185` + `services/taskOperations.ts:676-726`。
+
+## RFC-319 收尾改判（2026-08-26）：四条「做不了」里三条其实做得了，一条是不可达的产品缺口
+
+四条能力此前挂着「做不了」，逐条对源码复核后，**三条的理由本身是错的**：
+
+1. **OPS-007（stop 非零退出码）—— 理由「e2e 覆盖不了」成立，但结论错了。**
+   e2e harness 的 `COMMAND_TIMEOUT_MS` 是 15s，CLI 的 stop 预算是 30s，命令会先被
+   harness 掐断——所以确实做不成 e2e。但 `stopCommand(opts: StopOptions = {})` 一直
+   收 `timeoutMs`，`packages/backend/tests/cli.test.ts` 早就在用
+   `stopCommand({ timeoutMs: 10_000 })`。改落后端用例即可，见
+   `packages/backend/tests/rfc319-stop-not-graceful.test.ts`。
+   教训：「e2e 做不了」不等于「做不了」，换一层断言面之前别下结论。
+
+2. **REPO-42（SSH 仓库接入）—— 前提性错误。**
+   `e2e/git-protocols.spec.ts` 头部写着「要等 daemon 支持把自定义 GIT_SSH_COMMAND /
+   私钥穿到 git clone」，据此留了一个只有注释、没有断言的 `describe.skip` 空壳，还占着
+   跳过棘轮一格。事实是 `util/git.ts:38-44` 一直在层叠保留环境里的 GIT_SSH_COMMAND，
+   `parseGitUrl` 把 ssh-uri / ssh-scp 当一等形态（`shared/git-url.ts:59-84`、:140），
+   `doctor.ts:307-324` 也早把 ssh 列为「ssh:// 远端需要」的可选前置。缺的是用例不是能力。
+   **通用手法**：git 的 ssh 传输就是把 `git-upload-pack <path>` 交给 GIT_SSH_COMMAND
+   执行，所以一个**桩 ssh**（就地执行那条命令）能在没有任何 sshd 的情况下跑通整条
+   ssh transport。见 `packages/backend/tests/rfc319-ssh-repo-access.test.ts`。
+   顺带纠正一条本仓长期误记：**本产品没有「按仓登记 deploy key」这个功能**
+   （`deploy_key` / `deployKey` 全仓零命中），运维交付私钥的唯一途径就是给 daemon
+   环境设 `GIT_SSH_COMMAND="ssh -i <key>"`。
+
+3. **DE-41（遗留任务详情的运维动作）—— 「已退役」这个判断只对了一半。**
+   新建那道门确实焊死了：`cli/start.ts:798` 调
+   `activateDigitalEmployeeOsWriter(db, legacyMissionDrain)` 不传 options ⇒
+   `writerCutover.ts:64` 取 `legacyAdmissionsEnabled = false`，全仓再无第二个开关，
+   于是 `POST /api/code/missions` 永远 409 `legacy-mission-admission-retired`
+   （这一条已由 DE-40 覆盖）。**但 `/api/code/missions/:id` 之下的 20 个运维端点
+   （cancel / retry / handoff / attach-mr / source-refresh / answers /
+   decision-trace / pipeline-evidence / resume …）一个都没被这道门挡住**——
+   整个 developmentMissions.ts 里 `legacyAdmissionsEnabled()` 只出现 1 次，就在创建那处。
+   这是刻意的：升级上来的部署里存量 Mission 必须还能被排干。所以 DE-41 不是退役面，
+   是**排干路径**，仍然欠一条覆盖（需要 e2e 里用 sqlite 直接播一行 mission 才能到达）。
+
+4. **MEM-49（蒸馏器运行时 / 输出语言 + 候选行语言徽标）—— 前半已覆盖，后半是不可达缺口。**
+   设置那半由 CFG-21 逐字覆盖（`Memory distill runtime` 与
+   `settings-memory-distill-lang-select` 都在它的一次保存里落库并回读）。
+   **后半是一处真的产品缺口**：`components/memory/MemoryRow.tsx:70-79` 的语言徽标
+   只在 `memory.status === 'candidate'` 时渲染，而 MemoryRow 全仓只有三个消费点
+   （`MemoryScopedList` / `MemoryByScopeBrowser` / `MemoryAllList`），前两个写死
+   `status: 'approved'`，第三个的 `MemoryAllView = 'approved' | 'archived'`
+   （`MemoryAllList.tsx:35`）——**没有任何一条路径会把 candidate 交给 MemoryRow**。
+   唯一渲染候选的 `MemoryApprovalQueue` 不用 MemoryRow，自己也没有语言徽标。
+   净效果：**用户永远看不到候选记忆的蒸馏输出语言**，而审批恰恰是最需要它的时刻
+   （`MemoryApprovalQueue.tsx:30` 的注释自己写着「否则管理员是盲批」）。
+   徽标本身有单测在守（`packages/frontend/tests/memory-row-lang-chip.test.tsx`），
+   所以它不会烂掉，只是没人看得见。MEM-49 的能力定义已收窄到设置那半；
+   **这一条缺口未修，待决**：要么让审批队列改用 MemoryRow，要么给它补一个自己的徽标。
