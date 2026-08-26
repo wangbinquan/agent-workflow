@@ -3803,8 +3803,8 @@
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "cc29ecc6d607b13a37b8fc4139eac18fd2f43404",
-    "contentDigest": "sha256:3d7acc40a31cdd995d2252ee33f89d8d458d6304a980b77d8392643caabb370a",
+    "currentSnapshotSha": "1e1980a6965c0bcd38b41c4e35986346526ee157",
+    "contentDigest": "sha256:e8f95dfd17f8613dfa07cc4daf1bb4b66ed1909ee940043c697c51dcad8cd279",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
