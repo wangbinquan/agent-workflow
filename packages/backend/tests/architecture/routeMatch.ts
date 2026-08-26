@@ -45,14 +45,21 @@ export function compilePatterns(patterns: readonly RoutePattern[]): CompiledPatt
     return {
       ...p,
       segments,
-      literals: segments.filter((s) => !s.startsWith(':')).length,
+      literals: segments.filter((s) => !s.startsWith(':') && s !== '*').length,
     }
   })
 }
 
 function segmentsMatch(pattern: readonly string[], called: readonly string[]): boolean {
-  if (pattern.length !== called.length) return false
-  return pattern.every((seg, i) => {
+  // Hono's trailing `*` consumes the rest of the path, including embedded
+  // slashes. Treating it as one literal segment made every real request to
+  // `/api/worktree-files/:taskId/*` look like an undeclared zombie.
+  const trailingWildcard = pattern.at(-1) === '*'
+  const comparable = trailingWildcard ? pattern.slice(0, -1) : pattern
+  if (trailingWildcard ? called.length < comparable.length : pattern.length !== called.length) {
+    return false
+  }
+  return comparable.every((seg, i) => {
     const other = called[i]!
     return seg.startsWith(':') || other === CALL_WILDCARD || seg === other
   })

@@ -579,9 +579,33 @@ async function runKindsTask(name: string): Promise<{ taskId: string; producerRun
 test('RFC-319 TASK-33: Outputs 页签按声明顺序列出全部端口，只有「单行文件路径」端口才给下载与预览，复制/下载拿到的是真内容 @nightly', async ({
   page,
   context,
+  browserName,
 }) => {
   const { taskId } = await runKindsTask('rfc319-task33')
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  if (browserName === 'chromium') {
+    // Chromium can prove the real system clipboard boundary. Playwright's
+    // WebKit backend rejects both clipboard permissions before the page even
+    // opens, so give that engine an observable Clipboard API instead; UX-X2
+    // separately exercises the execCommand fallback with no Clipboard API.
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  } else {
+    await page.addInitScript(() => {
+      let copied = ''
+      const clipboard = {
+        writeText(text: string): Promise<void> {
+          copied = text
+          return Promise.resolve()
+        },
+        readText(): Promise<string> {
+          return Promise.resolve(copied)
+        },
+      }
+      Object.defineProperty(window.navigator, 'clipboard', {
+        get: () => clipboard,
+        configurable: true,
+      })
+    })
+  }
   await primePage(page, matrixDaemon)
   await page.goto(`${matrixDaemon.baseUrl}/tasks/${taskId}?tab=outputs`)
 

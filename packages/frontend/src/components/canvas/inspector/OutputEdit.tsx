@@ -1,6 +1,7 @@
 // output-node inspector branch (RFC-007 form↔edge sync) — extracted verbatim
 // from the NodeInspector EditForm switch by RFC-146 T3.
 
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
 import { Select } from '@/components/Select'
@@ -26,6 +27,7 @@ export function OutputEdit({
   onHistoryBoundary,
 }: EditProps) {
   const { t } = useTranslation()
+  const outputPortsLabelId = useId()
   const rec = node as unknown as Record<string, unknown>
   const ports = Array.isArray(rec.ports)
     ? (rec.ports as Array<{ name: string; bind: { nodeId: string; portName: string } }>)
@@ -48,7 +50,12 @@ export function OutputEdit({
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <InspectorFieldAnchor nodeId={node.id} field="output-binding">
-        <Field label={t('inspector.fieldOutputPorts')} hint={t('inspector.fieldOutputPortsHint')}>
+        <Field
+          label={t('inspector.fieldOutputPorts')}
+          hint={t('inspector.fieldOutputPortsHint')}
+          group
+          labelId={outputPortsLabelId}
+        >
           <ul className="inspector__output-ports">
             {ports.map((p, i) => {
               const selectedNode = upstreamCandidates.find(
@@ -71,6 +78,7 @@ export function OutputEdit({
                   >
                     <input
                       className="form-input"
+                      aria-label={t('inspector.portNamePlaceholder')}
                       value={p.name}
                       onChange={(e) => {
                         const copy = [...ports]

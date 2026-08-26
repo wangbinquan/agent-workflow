@@ -723,6 +723,14 @@ describe('RFC-199 composite workflow draft', () => {
     })
     expect(deleted.state.error).toBeNull()
 
+    const lateNotFound = transitionWorkflowEditorDraft(deleted.state, {
+      type: 'REMOTE_INACCESSIBLE',
+      workflowId: 'wf-1',
+      failure: { kind: 'http', status: 404, message: 'query invalidated after delete' },
+    })
+    expect(lateNotFound.state).toBe(deleted.state)
+    expect(lateNotFound.state.phase).toBe('deleted')
+
     const hiddenAfterGet = transitionWorkflowEditorDraft(uncertainSave(initial()), {
       type: 'RECONCILE_FAILED',
       clientMutationId: MUTATION_A,

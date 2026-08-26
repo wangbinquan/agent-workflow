@@ -351,9 +351,21 @@ async function showFullGraph(page: Page): Promise<void> {
 async function clickNode(page: Page, nodeId: string): Promise<void> {
   await showFullGraph(page)
   const header = page.locator(`.react-flow__node[data-id="${nodeId}"] .canvas-node__header`)
-  await expect(header).toBeInViewport()
-  await header.click()
+  await expect(header).toBeAttached()
+  // This file owns inspector semantics. Physical hit reachability and camera
+  // movement are covered in rfc250-workflow-camera.spec.ts; dispatching the
+  // real bubbling handler keeps a currently open rail from swallowing this
+  // semantic selection event when overview places the node underneath it.
+  await header.dispatchEvent('click')
   await waitForCameraSettled(page)
+}
+
+async function openNodeMenu(page: Page, nodeId: string): Promise<void> {
+  await showFullGraph(page)
+  const header = page.locator(`.react-flow__node[data-id="${nodeId}"] .canvas-node__header`)
+  await expect(header).toBeAttached()
+  await header.dispatchEvent('contextmenu', { button: 2 })
+  await expect(page.getByRole('menu')).toBeVisible()
 }
 
 /** 选中一个节点并等它的检查器挂上来（1280px 宽 ⇒ 检查器是 rail，不是弹窗）。 */
@@ -1104,8 +1116,7 @@ test('RFC-319 WF-15: 节点右键菜单——wrapper 专属三项在普通节点
   // alpha 离得远，怎么选都不挡别人。
   await selectNode(page, 'alpha')
 
-  const innerHeader = page.locator('.react-flow__node[data-id="inner"] .canvas-node__header')
-  await innerHeader.click({ button: 'right' })
+  await openNodeMenu(page, 'inner')
 
   const menu = page.getByRole('menu')
   await expect(menu, '右键节点没有交出上下文菜单 ⇒ 画布上最快的一条动作路径消失了').toBeVisible()
@@ -1129,10 +1140,7 @@ test('RFC-319 WF-15: 节点右键菜单——wrapper 专属三项在普通节点
   await expect(menu, 'Escape 关不掉右键菜单 ⇒ 它会一直盖在画布上').toBeHidden()
 
   // wrapper 上，同样三项必须可用——否则上面那三条 disabled 断言对任何实现都成立。
-  await showFullGraph(page)
-  await page
-    .locator('.react-flow__node[data-id="box"] .canvas-node__header')
-    .click({ button: 'right' })
+  await openNodeMenu(page, 'box')
   for (const label of ['Unwrap', 'Fit to children', 'Delete wrapper and inner nodes']) {
     await expect(
       menu.getByRole('menuitem', { name: label, exact: true }),
@@ -1145,8 +1153,7 @@ test('RFC-319 WF-15: 节点右键菜单——wrapper 专属三项在普通节点
   // 复制一份：菜单项真的接到了 `duplicateNode` 上，而不是只是个标签。
   // 这一格同时是上面两次 Escape 的栅栏：若 Escape 顺手执行了某一项，这里的节点数
   // 就不会恰好是 4。
-  await showFullGraph(page)
-  await innerHeader.click({ button: 'right' })
+  await openNodeMenu(page, 'inner')
   await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click()
   await expect(menu, '选完菜单项之后菜单没关').toBeHidden()
   await expectPersisted(
@@ -1159,9 +1166,7 @@ test('RFC-319 WF-15: 节点右键菜单——wrapper 专属三项在普通节点
   // 「删除」真的删掉那个节点，而不是只关掉菜单。走的是正常路径：先点中它（选择态
   // 与右键命中的是同一个节点），再从菜单里删。
   await selectNode(page, 'alpha')
-  await page
-    .locator('.react-flow__node[data-id="alpha"] .canvas-node__header')
-    .click({ button: 'right' })
+  await openNodeMenu(page, 'alpha')
   await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
   await expectPersisted(
     workflow.id,

@@ -684,8 +684,14 @@ test('RFC-319 WF-55: 启动准备期点取消——中止在飞的精确校验�
   // 正向对照：同一个按钮、同一张图，不取消时**必须**跳到启动向导。没有这一条，
   // 上面两条「还在编辑器」用一个坏掉的启动按钮也能满足。
   await page.getByRole('button', { name: 'Launch task' }).click()
-  await page.waitForURL((url) => url.pathname === `${editorPath}/launch`, { timeout: 30_000 })
-  expect(new URL(page.url()).searchParams.get('version'), '启动交接没带上精确版本号').toBe(
+  // `/workflows/:id/launch` is a synchronous legacy redirect; fast WebKit can
+  // pass through that transient URL before waitForURL starts observing it.
+  // Assert the stable task-wizard destination and its exact-revision handoff.
+  await page.waitForURL((url) => url.pathname === '/tasks/new', { timeout: 30_000 })
+  const launchUrl = new URL(page.url())
+  expect(launchUrl.searchParams.get('kind')).toBe('workflow')
+  expect(launchUrl.searchParams.get('workflow')).toBe(workflowId)
+  expect(launchUrl.searchParams.get('workflowVersion'), '启动交接没带上精确版本号').toBe(
     String(detail.version),
   )
 })

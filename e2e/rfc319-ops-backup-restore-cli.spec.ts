@@ -64,6 +64,11 @@ interface CliResult {
 function runCli(home: string, args: string[]): CliResult {
   const result = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home },
+    // Argon2id is intentionally memory-hard. Four saturated WebKit workers can
+    // push a password command past the generic 15s fixture fence even though
+    // the same command completes normally on retry. Keep every other probe on
+    // the shared deadline and give only password-bearing invocations 30s.
+    ...(args.includes('--password') ? { timeoutMs: 30_000 } : {}),
   })
   return { out: result.output, code: result.status }
 }

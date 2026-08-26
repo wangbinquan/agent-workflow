@@ -84,6 +84,8 @@ declare global {
     __rfc319Sockets?: RecordedSocket[]
     /** UX-32 —— 置真时，指向 `/ws/memories` 的新连接一律构造失败，模拟链路仍然断着。 */
     __rfc319BlockMemoryWs?: boolean
+    /** UX-X2 —— WebKit 无系统剪贴板权限时，记录 execCommand 真正选中的字节。 */
+    __rfc319ExecCommandCopied?: string | null
   }
 }
 
@@ -643,6 +645,7 @@ test('RFC-319 UX-44: 首启欢迎屏上那个唯一的主行动真的通到三�
 
 test('RFC-319 UX-X2: 局域网 http 部署上没有剪贴板 API 时，「复制」仍然真的复制、焦点回到按钮上、不留下任何残渣 @nightly', async ({
   page,
+  browserName,
 }) => {
   // 纯 http 的 LAN 部署不是安全上下文，浏览器**根本不暴露** navigator.clipboard。
   // Playwright 没法让 127.0.0.1 变成不安全上下文，所以按 e2e/insecure-context-save.spec.ts
@@ -652,6 +655,21 @@ test('RFC-319 UX-X2: 局域网 http 部署上没有剪贴板 API 时，「复制
       get: () => undefined,
       configurable: true,
     })
+    window.__rfc319ExecCommandCopied = null
+    window.addEventListener(
+      'copy',
+      () => {
+        const active = document.activeElement
+        if (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) {
+          const start = active.selectionStart ?? 0
+          const end = active.selectionEnd ?? start
+          window.__rfc319ExecCommandCopied = active.value.slice(start, end)
+          return
+        }
+        window.__rfc319ExecCommandCopied = window.getSelection()?.toString() ?? ''
+      },
+      true,
+    )
   })
   await primeToken(page, daemon.token)
   await page.goto(`${daemon.baseUrl}/account?section=tokens`)
@@ -676,16 +694,23 @@ test('RFC-319 UX-X2: 局域网 http 部署上没有剪贴板 API 时，「复制
     '预置没生效 ⇒ 这条用例其实在测安全上下文那条路，兜底一行都没跑到',
   ).toBe(true)
 
-  // 先把系统剪贴板写成一个已知的哨兵值。不这么做的话，「读回来正好是明文」这件事
-  // 也可能是上一条用例留下的残值。
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
-    origin: daemon.baseUrl,
-  })
-  const reader = await page.context().newPage()
-  try {
+  // Chromium 能直接证明系统剪贴板边界，并先写哨兵排除上一条用例的残值。
+  // Playwright WebKit 不认识 clipboard-read/write 权限；那条腿改读上面的 copy
+  // 事件探针，仍逐字节证明 execCommand 复制的是当前隐藏 textarea 的完整选区。
+  let reader: Page | null = null
+  let readCopied: () => Promise<string | null>
+  if (browserName === 'chromium') {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: daemon.baseUrl,
+    })
+    reader = await page.context().newPage()
     await reader.goto(`${daemon.baseUrl}/auth`)
     await reader.evaluate(() => navigator.clipboard.writeText('rfc319-ux-x2-sentinel'))
-
+    readCopied = () => reader!.evaluate(() => navigator.clipboard.readText())
+  } else {
+    readCopied = () => page.evaluate(() => window.__rfc319ExecCommandCopied ?? null)
+  }
+  try {
     await page.getByTestId('token-copy').click()
 
     // ① 复制真的成功了。失败态是另一段文案（clipboard.ts 返回 false 时），
@@ -699,7 +724,7 @@ test('RFC-319 UX-X2: 局域网 http 部署上没有剪贴板 API 时，「复制
     // ①b 「回执说成功」还不够——回执只反映 execCommand 的返回值。真正要问的是
     //     系统剪贴板里现在到底是什么：贴出来必须是那条明文，不是哨兵、也不是空串。
     await expect
-      .poll(() => reader.evaluate(() => navigator.clipboard.readText()), {
+      .poll(readCopied, {
         message:
           '按钮报了「已复制」，剪贴板里却不是那条明文 ⇒ 用户去粘贴时才发现什么都没有，' +
           '而这条 PAT 只显示这一次',
@@ -707,7 +732,7 @@ test('RFC-319 UX-X2: 局域网 http 部署上没有剪贴板 API 时，「复制
       })
       .toBe(secret)
   } finally {
-    await reader.close()
+    if (reader !== null) await reader.close()
   }
 
   // ② 焦点回到用户按下的那个按钮上。兜底要往 DOM 里塞一个 <textarea> 并 select()，

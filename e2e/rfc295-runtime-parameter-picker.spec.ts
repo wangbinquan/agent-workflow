@@ -65,6 +65,15 @@ async function chooseParameter(page: Page, pickerTestId: string, query: string):
   await expect(popover).toBeHidden()
 }
 
+async function selectWorkflowNode(page: Page, nodeId: string): Promise<void> {
+  const header = page.locator(`.react-flow__node[data-id="${nodeId}"] .canvas-node__header`)
+  await expect(header).toBeAttached()
+  // This spec owns the picker/autosave contract. Dispatch the real bubbling node handler so a
+  // transient camera/rail overlap cannot turn that semantic assertion into a physical hit test.
+  await header.dispatchEvent('click')
+  await expect(page.locator(`[id="workflow-inspector-field-${nodeId}-title"]`)).toBeVisible()
+}
+
 test.beforeAll(async () => {
   daemon = await startDaemon()
   const agent = await postJson<{ id: string }>('/api/agents', {
@@ -112,7 +121,7 @@ test('Workflow Agent picker autosaves through the real PUT and reloads the token
   await primeAuth(page)
   await page.goto(`${daemon.baseUrl}/workflows/${workflowId}`)
   await expect(page.locator('.react-flow__node[data-id="picker_agent"]')).toBeVisible()
-  await page.locator('.react-flow__node[data-id="picker_agent"]').click()
+  await selectWorkflowNode(page, 'picker_agent')
   await expect(page.getByTestId('agent-runtime-parameter-picker')).toBeVisible()
   await expect(page.getByText('{{trigger.webhook.comment_text}}', { exact: true })).toHaveCount(0)
   const prompt = page.getByRole('textbox', { name: 'Prompt template' })
@@ -142,7 +151,7 @@ test('Workflow Agent picker autosaves through the real PUT and reloads the token
 
   await page.reload()
   await expect(page.locator('.react-flow__node[data-id="picker_agent"]')).toBeVisible()
-  await page.locator('.react-flow__node[data-id="picker_agent"]').click()
+  await selectWorkflowNode(page, 'picker_agent')
   await expect(page.getByRole('textbox', { name: 'Prompt template' })).toHaveValue(
     'Use {{__repo_path__}}',
   )

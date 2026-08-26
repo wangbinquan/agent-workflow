@@ -108,6 +108,20 @@ export function canvasFocusPointWithRightOcclusion(
   return { x: point.x + coveredScreenWidth / (2 * zoom), y: point.y }
 }
 
+export function canvasNodesHaveMeasuredGeometry(
+  nodes: readonly {
+    width?: number
+    height?: number
+    measured?: { width?: number; height?: number }
+  }[],
+): boolean {
+  return nodes.every(
+    (node) =>
+      (node.measured?.width ?? node.width ?? 0) > 0 &&
+      (node.measured?.height ?? node.height ?? 0) > 0,
+  )
+}
+
 /**
  * Initial camera policy: fit the whole graph only when that fit remains
  * readable. Complex graphs instead open on one stable business entry point.

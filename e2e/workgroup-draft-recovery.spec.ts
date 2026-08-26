@@ -261,6 +261,35 @@ test('发不出去的保存排队重发：同一次尝试原样重来，期间�
 
 test('响应丢了但服务端其实写成功了：按版本对账收敛，不重复写第二遍', async ({ page }) => {
   const detail = await seedWorkgroup(`rfc319-wg08-lost-${++sequence}`)
+  let droppedEchoMutationId: string | null = null
+
+  // This case owns the HTTP-reconciliation branch. An out-of-band PUT also
+  // emits a legitimate own WS echo; drop only that exact echo so it cannot
+  // settle the attempt before the browser observes the lost HTTP response.
+  await page.routeWebSocket(/\/ws\/workgroups(?:\?.*)?$/, (browserSocket) => {
+    const serverSocket = browserSocket.connectToServer()
+    serverSocket.onMessage((message) => {
+      try {
+        const frame = JSON.parse(
+          typeof message === 'string' ? message : message.toString('utf8'),
+        ) as {
+          type?: string
+          workgroupId?: string
+          clientMutationId?: string
+        }
+        if (
+          frame.type === 'workgroup.updated' &&
+          frame.workgroupId === detail.id &&
+          frame.clientMutationId === droppedEchoMutationId
+        ) {
+          return
+        }
+      } catch {
+        // Non-JSON frames still pass through unchanged.
+      }
+      browserSocket.send(message)
+    })
+  })
   await openEditor(page, detail.id)
 
   const endpoint = `${daemon.baseUrl}/api/workgroups/${encodeURIComponent(detail.id)}`
@@ -271,6 +300,7 @@ test('响应丢了但服务端其实写成功了：按版本对账收敛，不�
     const method = route.request().method()
     if (method === 'PUT' && dropFirstResponse) {
       dropFirstResponse = false
+      droppedEchoMutationId = readSave(route.request().postData()).clientMutationId
       // 从 Node 侧独立连接真正提交，再把浏览器那次请求掐断——这正是
       // 「服务端写成功了、回执丢在路上」的形态。
       const response = await fetch(endpoint, {

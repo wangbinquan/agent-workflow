@@ -173,6 +173,7 @@ import {
   canShowCanvasInlineActions,
   canvasEdgeFocusPoint,
   canvasFocusPointWithRightOcclusion,
+  canvasNodesHaveMeasuredGeometry,
   canvasNodeFocusPoint,
   chooseCanvasFocalNode,
   planInitialCanvasCamera,
@@ -877,6 +878,11 @@ function CanvasInner({
     }
     const liveNodeIds = new Set(liveNodes.map((node) => node.id))
     if (definition.nodes.some((node) => !liveNodeIds.has(node.id))) return false
+    // WebKit can publish `useNodesInitialized() === true` one React turn before the
+    // controlled node array receives its positive ResizeObserver measurements. Claiming the
+    // owner in that gap makes fitView a permanent no-op, so let the dimensions change rerender
+    // retry this owner instead.
+    if (!canvasNodesHaveMeasuredGeometry(liveNodes)) return false
     const bounds = rf.getNodesBounds(liveNodes)
     const fitViewport = getViewportForBounds(bounds, rect.width, rect.height, 0.2, 2, 0.18)
     const plan = planInitialCanvasCamera({

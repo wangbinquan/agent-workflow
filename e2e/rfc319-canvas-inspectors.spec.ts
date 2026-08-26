@@ -396,6 +396,13 @@ test('WF-26 agent 检查器：选代理同时写下 id 与 name，缺失的 {{re
 
   // 去掉那个不存在的引用：诊断必须消失（正向对照——否则它就是个常亮的假警报）。
   await prompt.fill('Summarise  now.')
+  await expect(prompt, '输入框没有接受删掉缺失引用后的完整文本').toHaveValue('Summarise  now.')
+  await expectPersisted(
+    workflowId,
+    (definition) => node(definition, 'worker').promptTemplate,
+    'Summarise  now.',
+    '删掉缺失引用后的模板没有落库 ⇒ 随后的诊断观察撞在上一笔自动保存上',
+  )
   await expect(missing, '删掉不存在的 {{ref}} 后诊断还在 ⇒ 这条警告是常亮的，等于没有').toBeHidden()
 
   // 参数选择器按**光标位置**插入。这里插的是由入边派生的本地端口 token
@@ -622,10 +629,10 @@ test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列�
   await selectNode(page, 'out')
 
   const binding = fieldAnchor(page, 'out', 'output-binding')
-  // 这些按钮**不能**按 role+name 定位：`Field` 无 group 时渲染成 <label>
-  // （Form.tsx:84-95），按钮是它的第一个 labelable 后代，于是 Chromium 把整段
-  // label 文本（"Output ports Each port = …"）算成了按钮的可及名。按文本定位。
-  await binding.locator('button').filter({ hasText: 'Add port' }).click()
+  // 这是一组输入、下拉和按钮，必须由 <Field group> 承载。若退回包住整组控件的
+  // <label>，WebKit 会在 Remove 删除当前首控件后把同一次 label 激活转发给此按钮，
+  // 结果刚删空又立刻添回 port_1；逐字可及名同时锁住正确的分组语义。
+  await binding.getByRole('button', { name: 'Add port', exact: true }).click()
 
   const row = binding.locator('li.inspector__output-port-row').first()
   const nodeSelect = row.getByRole('combobox', { name: 'upstream nodeId' })
@@ -657,7 +664,7 @@ test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列�
     '表单绑好了但没生成对应的边 ⇒ 画布上看不出数据在流，任务详情页也不会有这张结果卡',
   )
 
-  await row.locator('button').filter({ hasText: 'Remove' }).click()
+  await row.getByRole('button', { name: 'Remove', exact: true }).click()
   await expectPersisted(
     workflowId,
     (definition) => ({ ports: node(definition, 'out').ports, edges: edgeSignatures(definition) }),

@@ -19,7 +19,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { allRouteMeta } from '@/routes/registry'
+import { EXEMPT_MOUNTS, allRouteMeta } from '@/routes/registry'
 
 import { buildContractHarness } from '../contracts/harness'
 import { buildHitReport, parseLedger, readJournalDir } from './routeHitLedger'
@@ -103,7 +103,13 @@ describe.skipIf(JOURNAL_DIR === null)('RFC-319 R1 —— 全量跑后的逐条�
   test('反方向：日志里不该出现注册表没有的 /api 路径', async () => {
     await buildContractHarness()
     const report = buildHitReport(declaredRoutes(), readJournalDir(JOURNAL_DIR!))
-    const apiZombies = report.unresolved.filter((k) => k.includes(' /api/'))
+    const apiZombies = report.unresolved.filter((key) => {
+      const path = key.slice(key.indexOf(' ') + 1).split('?')[0]!
+      // `/api/mcp` is deliberately mounted as an ALL transport rather than a
+      // REST RouteMeta; authorization is per tool. Keep this reverse check on
+      // the same explicit exemption set as the forward mount gate.
+      return path.startsWith('/api/') && !EXEMPT_MOUNTS.has(path)
+    })
     expect(
       apiZombies,
       '有 /api 请求对不上任何注册路由：要么归一器写错了，要么有路径绕过了 allRouteMeta()。' +

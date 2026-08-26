@@ -566,11 +566,18 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--dragging/)
   await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--drop-target/)
   // The source follows the captured pointer and occupies exact slot zero before release.
-  const movedHandleBox = await dragHandle.boundingBox()
-  expect(movedHandleBox).not.toBeNull()
-  expect(
-    Math.abs((movedHandleBox?.y ?? 0) + (movedHandleBox?.height ?? 0) / 2 - pointerFirstSlotY),
-  ).toBeLessThanOrEqual(1)
+  // WebKit exposes the new priority/class before its FLIP transform reaches the final frame,
+  // so observe the geometry itself until it converges instead of sampling mid-animation.
+  await expect
+    .poll(
+      async () => {
+        const movedHandleBox = await dragHandle.boundingBox()
+        if (movedHandleBox === null) return Number.POSITIVE_INFINITY
+        return Math.abs(movedHandleBox.y + movedHandleBox.height / 2 - pointerFirstSlotY)
+      },
+      { message: 'dragged Pipeline gates handle never reached exact slot zero' },
+    )
+    .toBeLessThanOrEqual(1)
   await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P1')
   await expect(reviewLane.locator('.employee-toolbox-lane__priority')).toHaveText('P2')
   await page.mouse.up()

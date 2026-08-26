@@ -367,6 +367,11 @@ export function transitionWorkflowEditorDraft(
       return terminalState(state, 'deleted', null)
     case 'REMOTE_INACCESSIBLE':
       if (event.workflowId !== state.workflowId) return unchanged(state)
+      // A query invalidated by workflow.deleted may win the HTTP race and
+      // report 404 after the explicit WS tombstone. The tombstone is stronger
+      // evidence; never demote the distinct deleted terminal state to the
+      // recoverable inaccessible state just because that follow-up GET lost.
+      if (state.phase === 'deleted') return unchanged(state)
       return terminalState(
         state,
         'inaccessible',

@@ -9,6 +9,7 @@ import {
   canShowCanvasInlineActions,
   canvasEdgeFocusPoint,
   canvasFocusPointWithRightOcclusion,
+  canvasNodesHaveMeasuredGeometry,
   canvasNodeFocusPoint,
   chooseCanvasFocalNode,
   planInitialCanvasCamera,
@@ -16,6 +17,21 @@ import {
 } from '../src/components/canvas/canvasCamera'
 
 describe('RFC-250 canvas camera planner', () => {
+  test('does not claim the initial camera before every live node has positive geometry', () => {
+    expect(
+      canvasNodesHaveMeasuredGeometry([
+        { measured: { width: 240, height: 105 } },
+        { measured: { width: 0, height: 105 } },
+      ]),
+    ).toBe(false)
+    expect(
+      canvasNodesHaveMeasuredGeometry([
+        { measured: { width: 240, height: 105 } },
+        { width: 280, height: 140 },
+      ]),
+    ).toBe(true)
+  })
+
   test('fits all only when the computed fit remains readable', () => {
     expect(
       planInitialCanvasCamera({

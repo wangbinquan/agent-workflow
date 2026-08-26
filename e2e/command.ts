@@ -46,6 +46,8 @@ export function runGit(args: string[], cwd?: string): string {
 export interface RunCommandOptions {
   /** Overlaid on the parent environment. */
   readonly env?: NodeJS.ProcessEnv
+  /** Explicit budget for a known bounded slow command; defaults to the shared 15s fence. */
+  readonly timeoutMs?: number
 }
 
 export interface RunCommandResult {
@@ -76,7 +78,7 @@ export function runCommandResult(
       encoding: 'utf8',
       ...(options.env === undefined ? {} : { env: { ...process.env, ...options.env } }),
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: COMMAND_TIMEOUT_MS,
+      timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
     })
     return { output: stdout, status: 0 }
   } catch (error) {

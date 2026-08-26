@@ -190,6 +190,12 @@ async function waitForSave(
     revision: { version: number }
     workgroup: WorkgroupDetail
   }
+  // The HTTP receipt can arrive before React has consumed the matching save
+  // event. Callers commonly open the next modal immediately; wait for the UI
+  // receipt and that exact server revision so the next action observes the
+  // committed mode/member set rather than an older `Saved` chip.
+  await expect(page.getByTestId('workgroup-draft-phase')).toHaveText('Saved')
+  await expect(headerMeta(page)).toContainText(`${workgroupId} · v${receipt.revision.version}`)
   return { version: receipt.revision.version, workgroup: receipt.workgroup }
 }
 
@@ -904,6 +910,7 @@ test('WG-12 模式切换的 UI 后果：free_collab 把三开关显示成强制 
   await page.getByTestId('workgroup-add-human-member').click()
   await page.getByTestId('workgroup-member-user-input').fill(HUMAN_USERNAME)
   await page.getByTestId(`workgroup-member-user-option-${HUMAN_USERNAME}`).click()
+  await expect(page.getByTestId('workgroup-add-human-confirm')).toBeEnabled()
   await waitForSave(page, group.id, async () => {
     await page.getByTestId('workgroup-add-human-confirm').click()
   })

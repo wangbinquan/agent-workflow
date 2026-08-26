@@ -28,6 +28,7 @@ const PATTERNS = compilePatterns([
   { method: 'GET', path: '/api/workflows/:id' },
   { method: 'GET', path: '/api/workflows/new' },
   { method: 'GET', path: '/api/:resource/:id/acl' },
+  { method: 'GET', path: '/api/worktree-files/:taskId/*' },
 ])
 
 describe('RFC-319 · 具体路径归一（账本的分子）', () => {
@@ -54,6 +55,18 @@ describe('RFC-319 · 具体路径归一（账本的分子）', () => {
     expect(routeKey(resolveConcretePath(PATTERNS, 'GET', '/api/agents?tab=all')!)).toBe(
       'GET /api/agents',
     )
+  })
+
+  test('注册侧尾通配一次吞掉任意深度的文件路径', () => {
+    expect(
+      routeKey(
+        resolveConcretePath(
+          PATTERNS,
+          'GET',
+          '/api/worktree-files/01JD0000000000000000000000/docs/images/a.png',
+        )!,
+      ),
+    ).toBe('GET /api/worktree-files/:taskId/*')
   })
 
   test('对不上时返回 null 而不是静默丢弃（反方向的 zombie 信号靠它）', () => {

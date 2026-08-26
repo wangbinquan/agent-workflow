@@ -538,11 +538,12 @@ test('RFC-319 INTENT-16: 取消生成——服务端轮次落成 intent-run-abor
   await page.goto(`${holdDaemon.baseUrl}/intent/${sessionId}`)
 
   // ---- 进行中的界面 ----
+  const runningTurn = page.getByTestId('intent-turn-running')
+  await expect(runningTurn, '在跑的轮次不进时间线 ⇒ 用户看不到「它正在做」').toHaveCount(1)
   await expect(
-    page.getByTestId('intent-turn-running'),
-    '在跑的轮次不进时间线 ⇒ 用户看不到「它正在做」',
-  ).toHaveCount(1)
-  await expect(page.getByTestId('loading-state')).toBeVisible()
+    runningTurn.getByTestId('loading-state'),
+    '在跑轮次自己的加载状态没有显示',
+  ).toBeVisible()
   const cancel = page.getByRole('button', { name: 'Cancel generation' })
   await expect(cancel, '生成中不给取消入口 ⇒ 一轮跑错只能干等到超时').toBeVisible()
   await page.getByTestId('intent-composer').fill('should stay blocked')
@@ -1007,6 +1008,17 @@ test('RFC-319 INTENT-21: 每轮的执行详情面板——live/complete/incomple
     // 先刷新：`IntentTurnSession` 的展开态是 `useState(props.defaultOpen)`（只认
     // 首次挂载），刚才那条轮次是**在跑的时候**挂载的，所以此刻仍然开着——这是
     // 产品行为，不是缺陷。折叠默认值只有在重新进入页面时才观察得到。
+    // 先收起从 live 态继承下来的面板并让它卸载查询。否则在安装 route 与 reload
+    // 之间赶到的最后一拍终态 refetch 也会被计入，错判成「刷新后的折叠面板偷拉」。
+    const liveToggle = donePanel.getByRole('button', { name: /Execution/ })
+    await expect(liveToggle, '从 live 态落定的同一挂载不该自行收起').toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    await liveToggle.click()
+    await expect(liveToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(donePanel.locator('.intent-turn-session__content')).toHaveCount(0)
+
     const sessionViewPath = `/api/intent-sessions/${sessionId}/turns/${agentTurn.id}/session`
     const fetched: string[] = []
     await page.route(

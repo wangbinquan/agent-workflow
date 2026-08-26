@@ -1356,11 +1356,27 @@ test('RFC-319 EVENT-24: 关掉触发规则的开关后同样的事件不再点�
   await expect(card).toBeVisible()
   const toggle = page.getByTestId(`webhook-trigger-enable-${toggleTriggerId}`)
   await expect(toggle).toBeChecked()
+  const setEnabledFromUi = async (enabled: boolean): Promise<void> => {
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (candidate) =>
+          candidate.request().method() === 'PUT' &&
+          new URL(candidate.url()).pathname === `/api/webhook-triggers/${toggleTriggerId}`,
+        { timeout: 60_000 },
+      ),
+      toggle.click(),
+    ])
+    expect(response.ok(), `启停规则的 PUT 返回 ${response.status()}`).toBe(true)
+    expect(
+      ((await response.json()) as { enabled: boolean }).enabled,
+      '启停规则的写回执与用户刚点的目标态不一致',
+    ).toBe(enabled)
+  }
 
   // --- (a) 关掉开关 ⇒ 同一条事件不再点火 -------------------------------------
   // 用 click 而不是 uncheck：这个开关是**受控**的，勾选态要等 PUT 回来 + 列表
   // invalidate 之后才翻转，`uncheck()` 会在点完的下一拍就判定「状态没变」而失败。
-  await toggle.click()
+  await setEnabledFromUi(false)
   await expect
     .poll(
       async () =>
@@ -1383,7 +1399,7 @@ test('RFC-319 EVENT-24: 关掉触发规则的开关后同样的事件不再点�
   ).toBe(1)
 
   // --- (b) 打开开关 ⇒ 又能点火 ----------------------------------------------
-  await toggle.click()
+  await setEnabledFromUi(true)
   await expect
     .poll(
       async () =>
@@ -1499,7 +1515,11 @@ test('RFC-319 EVENT-X6: 老的 /webhooks 三个页签各自落到事件中心对
   await page.goto(`${daemon.baseUrl}/events?tab=overview`)
   await expect(page.getByTestId('event-source-tree')).toBeVisible()
   await page.goto(`${daemon.baseUrl}/webhooks?tab=triggers`)
-  expect(new URL(page.url()).search).toBe('?tab=subscriptions')
+  await expect
+    .poll(() => new URL(page.url()).pathname + new URL(page.url()).search, {
+      message: '旧 triggers 地址没有稳定落到 subscriptions 页签',
+    })
+    .toBe('/events?tab=subscriptions')
   await page.goBack()
   await expect(page.getByTestId('event-center-page')).toBeVisible()
   expect(

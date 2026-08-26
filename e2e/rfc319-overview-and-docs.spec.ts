@@ -987,6 +987,10 @@ async function docTableRows(page: Page): Promise<string[][]> {
   )
 }
 
+async function docTableHas(page: Page, method: string, path: string): Promise<boolean> {
+  return (await docTableRows(page)).some((row) => row[0] === method && row[1] === path)
+}
+
 test('CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：低权账号读不到写端点清单 @nightly', async ({
   browser,
 }) => {
@@ -1071,22 +1075,27 @@ test('CFG-39 /docs/api 由实时注册表生成，并按调用者权限裁剪：
     await expect(
       adminSide.page.getByRole('heading', { name: 'API & MCP access', exact: true }),
     ).toBeVisible({ timeout: 30_000 })
-    const adminRows = await docTableRows(adminSide.page)
-    expect(
-      adminRows.some((r) => r[0] === 'POST' && r[1] === '/api/agents'),
-      '管理员页面上没有创建代理那一行 ⇒ 页面没在渲染后端给的清单',
-    ).toBe(true)
+    // The heading is static shell content; it can render before the docs query
+    // has populated any rows. Wait on the registry-derived row itself.
+    await expect
+      .poll(() => docTableHas(adminSide.page, 'POST', '/api/agents'), {
+        message: '管理员页面上没有创建代理那一行 ⇒ 页面没在渲染后端给的清单',
+        timeout: 30_000,
+      })
+      .toBe(true)
 
     await guestSide.page.goto(`${daemon.baseUrl}/docs/api`)
     await expect(
       guestSide.page.getByRole('heading', { name: 'API & MCP access', exact: true }),
       'guest 的文档页整个没渲染 ⇒ 下面的「没有写端点行」是恒真断言',
     ).toBeVisible({ timeout: 30_000 })
+    await expect
+      .poll(() => docTableHas(guestSide.page, 'GET', '/api/agents'), {
+        message: 'guest 页面上连读端点都没渲染 ⇒ 页面是空的，证明不了裁剪',
+        timeout: 30_000,
+      })
+      .toBe(true)
     const guestRows = await docTableRows(guestSide.page)
-    expect(
-      guestRows.some((r) => r[0] === 'GET' && r[1] === '/api/agents'),
-      'guest 页面上连读端点都没渲染 ⇒ 页面是空的，证明不了裁剪',
-    ).toBe(true)
     expect(
       guestRows.filter((r) => r[0] === 'POST' && r[1] === '/api/agents'),
       'guest 页面渲染出了写端点行 ⇒ 后端裁过、前端又发回去了',

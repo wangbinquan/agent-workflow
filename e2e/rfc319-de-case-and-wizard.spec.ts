@@ -438,6 +438,11 @@ test('RFC-319 DE-19: 员工卡片的已合入 / 无需修改 / 其他结束 / �
       employeeId: outcomeEmployeeId,
       name: `Outcome ${label} ${RUN_TAG}`,
     })
+    // The development worker starts as soon as launch returns. On a saturated WebKit shard it can
+    // terminalize this tiny fixture before the explicit terminate call, and terminate is correctly
+    // idempotent for an already-terminal case. Quiesce first so this outcome-projection test owns
+    // the terminal vocabulary it is seeding instead of racing the unrelated execution worker.
+    await forceQuietCase(caseId, 'blocked')
     await api(`/api/employee-cases/${encodeURIComponent(caseId)}/terminate`, {
       method: 'POST',
       body: { terminalKind },
@@ -450,6 +455,7 @@ test('RFC-319 DE-19: 员工卡片的已合入 / 无需修改 / 其他结束 / �
     employeeId: neighbourEmployeeId,
     name: `Neighbour merged ${RUN_TAG}`,
   })
+  await forceQuietCase(neighbourCase, 'blocked')
   await api(`/api/employee-cases/${encodeURIComponent(neighbourCase)}/terminate`, {
     method: 'POST',
     body: { terminalKind: 'merged' },

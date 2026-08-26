@@ -1560,21 +1560,28 @@ test('RFC-319 IAM-X1: 管理员勾了「下次登录必须改密」之后，后�
   try {
     await page.goto(`${daemon.baseUrl}/auth`)
     const daemonOrigin = new URL(daemon.baseUrl).origin
-    const loginResponse = page.waitForResponse((res) => {
-      const url = new URL(res.url())
-      return url.origin === daemonOrigin && url.pathname === '/api/auth/login'
-    })
     // 本文件前面的用例会在同一个 daemon 上留下启用的 provider，于是登录页的首选
     // 方法变成 OIDC（auth.tsx:40-46 把 oidc 排在 password 之前）。方法选择器只在
-    // 「不止一种方法」时渲染，所以这里按存在与否切换，随后那句可见性断言才是判据。
-    const passwordTab = page.getByRole('tab', { name: 'Password', exact: true })
-    if ((await passwordTab.count()) > 0) await passwordTab.click()
+    // 「不止一种方法」时渲染。先等 discovery 真把密码表单挂上；立即 count tab 会在
+    // loading 首帧读到 0，然后把隐藏的密码表单一直等到超时。
     const passwordForm = page.getByTestId('auth-password-form')
+    await expect(passwordForm, '密码登录已启用，discovery 却没有挂出密码表单').toBeAttached()
+    const passwordTab = page.getByRole('tab', { name: 'Password', exact: true })
+    if (!(await passwordForm.isVisible())) {
+      await expect(passwordTab, 'OIDC 是首选方法时没有密码切换页签').toBeVisible()
+      await passwordTab.click()
+    }
     await expect(passwordForm, '密码登录仍然开着，登录页却拿不出密码表单').toBeVisible()
     await passwordForm.getByRole('textbox', { name: /^Username/ }).fill(target.username)
     await passwordForm.locator('input[type="password"]').fill(NEW_PASSWORD)
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-    const receipt = (await (await loginResponse).json()) as { mustChangePassword?: boolean }
+    const [loginResponse] = await Promise.all([
+      page.waitForResponse((res) => {
+        const url = new URL(res.url())
+        return url.origin === daemonOrigin && url.pathname === '/api/auth/login'
+      }),
+      passwordForm.getByRole('button', { name: 'Sign in', exact: true }).click(),
+    ])
+    const receipt = (await loginResponse.json()) as { mustChangePassword?: boolean }
     expect(
       receipt.mustChangePassword,
       '登录回执没有带上 mustChangePassword ⇒ 前端将来想做强制改密引导也无从判断',
