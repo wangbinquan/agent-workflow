@@ -564,6 +564,37 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 `ledger-baselines.json` 里还有各自的 baseline 条目，**那是第三处**。所以加一个 top-level 符号
 要同时改：entries 数组、该文件的 denominator、ledger baseline（若上涨还要写 `allowGrowth`）。
 
+### `sourceDigest` 的算-提-推竞态：必须在 `merge --ff-only` **之后**算
+
+这是本仓直推 main 工作流下的结构性竞态，和算法对不对无关：
+
+```
+算 sourceDigest        ← 基于此刻的 HEAD
+git commit
+git fetch && git merge --ff-only   ← 把别人刚推的源码改动拉了进来
+git push                            ← 推上去的 commit 已含它们，你的 digest 当场作废
+```
+
+RFC-329 实撞：算完之后 merge 进了并发 session 的四个前端文件（Select.tsx / MultiSelect.tsx /
+UserPicker.tsx / usePopoverPosition.ts），N1b 因此红，而本地怎么看都是对的。
+
+**正确顺序**：`git fetch && git merge --ff-only origin/main` → **算 digest** → 改 artifact →
+commit → repin provenance → **立刻 push**。推之前再 `git fetch` 确认 `HEAD~n == origin/main`，
+不等就说明又有人推了，digest 要重算。中间不要插入任何耗时操作（跑测试、写文档），
+窗口越短越好。
+
+### 别人改了代码没同步 artifact 时，能不能代做
+
+判据是**这部分账本会不会被并发在制品污染**，不是"是不是我的改动"。
+
+RFC-329 实测：并发 session 改了前端代码却没更新 `module-symbol-owners.json`（缺 1 条符号 +
+19 条过期 signatureDigest），而工作树里另一个 session 的 RFC-328 在制品**全在 backend**——
+所以生成器输出的**前端部分不受污染**，可以整组机械同步。反过来，backend 的符号账本在那种
+工作树上就不能代做，只能同步自己改过的文件。
+
+同步前先逐文件核对一次（`current=4939 / generator=4940`，差异全落在前端），并在 commit
+message 里写明「这一段是替谁补的、为什么能安全代做」。
+
 ### `docs/` 不在 format 门里，别对它跑 prettier
 
 `format:check` 的范围是 `packages/**/*.{ts,tsx,json,md}` 加上几个具名文件（见 package.json），
