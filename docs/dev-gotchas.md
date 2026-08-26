@@ -522,8 +522,31 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 **替代做法（RFC-329 实测可行）**：
 
-1. `sourceDigest`（第 3 条）：**从 CI 日志里读**。N1b 失败输出会同时给出 committed 与
-   generated 两个值，generated 就是干净树上的正确答案，直接手工写进 12 处。
+1. `sourceDigest`（第 3 条）：**可以本地算准，不必等 CI**（2026-08-26 修正——原先以为只能从
+   CI 反读）。它的输入面只有 `packages/{backend,shared,frontend}/src/**/*.{c,m}ts{,x}`
+   （`census.ts` 的 `walkTsFiles` / `packageSrcUnits`）加 `.dependency-cruiser.cjs` 与
+   `scripts/depcheck.ts` 两个 extraPaths——**`tests/` 不在其中**。所以用 `git ls-tree` +
+   `git show HEAD:` 取内容（而不是读磁盘）就得到干净树的 units：别人未追踪的在制品不在
+   ls-tree 里，别人对已追踪文件的未提交改动被 HEAD 版本盖掉。算法就是
+   ``digest(sorted(`${path}\0${digest(text)}`).join('\n'))``，`digest` = `sha256:` + hex。
+
+   ```bash
+   # 干净树的 sourceDigest（在脏工作树上也算得准）
+   bun -e '
+   import { createHash } from "node:crypto"; import { execFileSync } from "node:child_process"
+   const d = (t) => `sha256:${createHash("sha256").update(t).digest("hex")}`
+   const show = (p) => execFileSync("git", ["show", `HEAD:${p}`], { encoding: "utf8", maxBuffer: 6e7 })
+   const files = execFileSync("git", ["ls-files", "packages/backend/src", "packages/shared/src", "packages/frontend/src"],
+     { encoding: "utf8" }).split("\n").filter((p) => /\.[cm]?tsx?$/.test(p))
+   const parts = files.sort().map((p) => `${p}\0${d(show(p))}`)
+   for (const e of [".dependency-cruiser.cjs", "scripts/depcheck.ts"]) { try { parts.push(`${e}\0${d(show(e))}`) } catch {} }
+   console.log(d(parts.sort().join("\n")))'
+   ```
+
+   **务必先自验一次**：拿一个已知答案的历史 commit（某次 N1b 红时 CI 给过 Expected 的那个）
+   用 `git ls-tree -r --name-only <ref>` + `git show <ref>:` 复算，对上了再用。RFC-329 就是
+   这么验的（在 `7131812a4` 上复算 = CI 的 `5d55ae91…`，逐字节相等）。第二个交叉信号：
+   units 数应当等于 `module-symbol-owners.json` 的 `denominator.productionFiles`。
 2. `signatureDigest`（第 6 条）：**可以本地算**——它只依赖单文件内容，不受别人的在制品影响。
    跑生成器 → 按 `id` 精确挑出**只属于自己改过的文件**的条目 → 逐字段应用到 HEAD 版本 →
    其余全部 `git checkout --` 回退。RFC-329 用这法子把 89+223 条里的 6 条摘了出来，
