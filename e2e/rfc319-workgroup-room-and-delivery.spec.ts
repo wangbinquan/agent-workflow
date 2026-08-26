@@ -870,6 +870,17 @@ test('RFC-319 WG-35: 房间右栏花名册 —— 四种状态各按自己的数
   // owner：两张真的人类待办卡 ⇒ 排队中 + ×2。
   await dispatchHumanCard(taskId, 'roster card one')
   await dispatchHumanCard(taskId, 'roster card two')
+  // RFC-329 exposes the rows behind the inbox count so list_pending_gates can
+  // name workgroup tasks instead of returning only a number. Exercise the real
+  // HTTP route here (the MCP tool's in-process dispatch is intentionally absent
+  // from the nightly HTTP journal) and pin the same two-card user truth.
+  const pending = await api<{
+    items: Array<{ taskId: string; awaitingConfirmation: boolean; pendingDeliveries: number }>
+  }>('/api/workgroup-tasks/pending')
+  expect(pending.items.find((item) => item.taskId === taskId)).toMatchObject({
+    awaitingConfirmation: false,
+    pendingDeliveries: 2,
+  })
   const room = await roomOf(taskId)
   // builder / researcher：running 与 awaiting_human 两态在本夹具里没有稳定的自然造法
   // （真跑的 stub 成员回合 150ms 就结束，抓不住），直接把卡按这两个状态种进库——
