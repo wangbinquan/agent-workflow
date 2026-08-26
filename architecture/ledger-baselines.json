@@ -294,10 +294,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 438,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-329 PR-B：新增 GET /api/workgroup-tasks/pending 一条路由，registerRoute 的 ambient wiring 因此 +1。让工作组门在 MCP 上可列（list_pending_gates 的第三路）所必需。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -359,10 +356,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 17084,
+      "baseline": 17085,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-329 PR-B：services/workgroup/room.ts 新增一个 top-level 类型 WorkgroupPendingRow（pendingRows 的行投影）。它刻意不 export（无消费方，路由靠类型推导、测试用 Awaited<ReturnType<>>），但 top-level 声明本身仍进符号账本，故 +1。"
+        "why": "两处来源：① RFC-329 PR-B 在 services/workgroup/room.ts 新增 top-level 类型 WorkgroupPendingRow（刻意不 export，但 top-level 声明本身仍进符号账本）；② 并发 session 的 9d9804782 在 canvasCamera.ts 新增 canvasNodesHaveMeasuredGeometry，其符号与另外 19 条前端 signatureDigest 未随该笔同步，本笔一并机械补齐。"
       }
     },
     {
@@ -402,7 +399,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6419816724f6aaa75490bbbf32ac2c2e20f99fa907dfff9c104a8e91fdff2ea4",
+    "sourceDigest": "sha256:184ed2aabf96be9f67a872cd90d46667dbbc3c393d09a837cc0193cdd8fa1bab",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
