@@ -50924,7 +50924,7 @@
       "file": "packages/backend/src/routes/digitalEmployees.ts",
       "id": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
       "removeAfterWave": "W5",
-      "signatureDigest": "sha256:567783436df55237672ca547dd1e2fa7547e12ad896b99c29582355462685034",
+      "signatureDigest": "sha256:f0d6d30d8206bfacc66543f04e7f3074d6eb45b1702be0dea7baebfa80045601",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "source-control",
@@ -50976,7 +50976,7 @@
       "file": "packages/backend/src/routes/digitalEmployees.ts",
       "id": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W5",
-      "signatureDigest": "sha256:e8d4251b07fb488a4b21aebe7fb3214d59508b564e0d2fe9bde7a72e6f94ad6d",
+      "signatureDigest": "sha256:a1f80d9f10db8ab0ad47dbdce02ce90aeee0dbcd92e84b369b17e1777c445e85",
       "status": "legacy-target",
       "symbol": "mountDigitalEmployeeRoutes",
       "targetContext": "source-control",
@@ -227409,5 +227409,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:39b59c4d6281d0a9b07df3693337bf6f8f0e4e8e3324c49d141373f43bd1b68a"
+  "sourceDigest": "sha256:41495d114925fd9b02d38ddf416c885170e00a34e9113a83022c257e9a56859a"
 }
