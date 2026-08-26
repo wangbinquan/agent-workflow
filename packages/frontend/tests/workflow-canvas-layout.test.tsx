@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { ReactFlowInstance } from '@xyflow/react'
+import type { NodeChange, ReactFlowInstance } from '@xyflow/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createRef, StrictMode, type ComponentType } from 'react'
 
@@ -23,6 +23,7 @@ type CapturedReactFlowProps = {
     },
   ) => void
   onMove?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void
+  onNodesChange?: (changes: NodeChange[]) => void
   onNodeClick?: (event: unknown, node: { id: string }) => void
   onEdgeClick?: (event: unknown, edge: { id: string }) => void
 }
@@ -110,6 +111,18 @@ const definition: WorkflowDefinition = {
       target: { nodeId: 'b', portName: 'input' },
     },
   ],
+}
+
+function publishMeasuredNodeGeometry(): void {
+  act(() => {
+    currentReactFlowProps().onNodesChange?.(
+      definition.nodes.map((node) => ({
+        id: node.id,
+        type: 'dimensions',
+        dimensions: { width: 200, height: 100 },
+      })),
+    )
+  })
 }
 
 const connectDefinition: WorkflowDefinition = { ...definition, edges: [] }
@@ -597,6 +610,13 @@ describe('RFC-199 canvas auto-layout adapter', () => {
       </I18nextProvider>,
     )
 
+    // The harness fixes useNodesInitialized() at true, so explicitly publish the
+    // positive ResizeObserver dimensions that xyflow would pair with that state.
+    // Until those measurements arrive, the owner must remain retryable rather
+    // than claiming a camera action against hidden, zero-sized nodes.
+    expect(xyflowHarness.setCenter).not.toHaveBeenCalled()
+    publishMeasuredNodeGeometry()
+
     await waitFor(() => expect(xyflowHarness.setCenter).toHaveBeenCalledTimes(1))
     expect(xyflowHarness.setCenter.mock.calls[0]?.[2]?.zoom).toBeGreaterThanOrEqual(
       READABLE_MIN_ZOOM,
@@ -613,6 +633,7 @@ describe('RFC-199 canvas auto-layout adapter', () => {
         />
       </I18nextProvider>,
     )
+    publishMeasuredNodeGeometry()
     await Promise.resolve()
     expect(xyflowHarness.setCenter).toHaveBeenCalledTimes(1)
 
@@ -627,6 +648,7 @@ describe('RFC-199 canvas auto-layout adapter', () => {
         />
       </I18nextProvider>,
     )
+    publishMeasuredNodeGeometry()
     await waitFor(() => expect(xyflowHarness.setCenter).toHaveBeenCalledTimes(2))
 
     rerender(
@@ -640,6 +662,7 @@ describe('RFC-199 canvas auto-layout adapter', () => {
         />
       </I18nextProvider>,
     )
+    publishMeasuredNodeGeometry()
     await Promise.resolve()
     expect(xyflowHarness.setCenter).toHaveBeenCalledTimes(2)
 
@@ -654,6 +677,7 @@ describe('RFC-199 canvas auto-layout adapter', () => {
         />
       </I18nextProvider>,
     )
+    publishMeasuredNodeGeometry()
     await waitFor(() => expect(xyflowHarness.setCenter).toHaveBeenCalledTimes(3))
   })
 
