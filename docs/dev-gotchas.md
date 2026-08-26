@@ -2889,3 +2889,109 @@ mirror: git fetch --all --prune          # 不带 --tags
 
 顺带：`mode: 'serial'` 会让这个问题更严重（第一条红之后**整个 describe** 剩余全部 skip），
 所以本仓的 RFC-319 spec 一律不加 serial —— 那条约定的另一半理由就在这里。
+
+## `page.waitForRequest` 在**请求刚发出**时就 resolve——别拿它当「写入已完成」（2026-08-26 主干红）
+
+```ts
+const req = page.waitForRequest((r) => r.method() === 'POST' && …)
+await saveButton.click()
+await req                       // ← 这里只保证「请求出门了」
+const rows = await api('/api/…') // ← 慢机器上这一读会跑在写入完成之前
+expect(rows.find(…)).toBeDefined() // ← 于是断言成「没落库」，而库里几十毫秒后就有了
+```
+
+`waitForRequest` 等的是**请求发出**，不是响应回来。只要后面紧跟着「去服务端读一下确认
+落库了」，这就是一枚在慢 runner 上必响的定时炸弹——`windows-latest` 分片实测红，**两次
+重试都红**（所以它不会被 Playwright 的 retry 掩盖成 flaky，而是直接把主干推红）。
+
+改法是等**响应**，请求体照样拿得到：
+
+```ts
+const res = page.waitForResponse((r) => r.request().method() === 'POST' && …)
+await saveButton.click()
+const done = await res
+expect(done.ok(), `POST 以 ${done.status()} 收场：${await done.text()}`).toBe(true)
+const body = done.request().postDataJSON()   // 请求体一样能读
+```
+
+顺带把「界面显示成功但请求其实失败了」提前一层暴露：不加 `res.ok()` 那条时，POST 被服务端
+拒了也只会在后面报「没落库」，把人引向错误的方向。
+
+**本机复现方法**（用来验证修法，而不是靠「重跑就过了」）：给那条请求人为加延迟，旧写法当场红、
+新写法绿。
+
+```ts
+await page.route('**/employees', async (route) => {
+  if (route.request().method() !== 'POST') return route.fallback()
+  await new Promise((r) => setTimeout(r, 1500))
+  await route.continue()
+})
+```
+
+判断自己有没有踩：`waitForRequest` 本身没问题——**只有当它后面跨越了「写入完成」这条线**
+（紧接着读服务端 / 读库）才是坑。只拿请求体做断言的用法不受影响。
+
+## `git archive` 出来的沙箱**不是 git 仓**，`git checkout -- <file>` 在那里静默失败（2026-08-26 实撞，一整轮变异验证作废）
+
+洁净沙箱的标准做法是 `git archive origin/main | tar -x -C $SBX`（见本文件「沙箱重新同步」一节）。
+它给的是一棵**没有 `.git` 的普通目录树**。于是变异脚本里这一行：
+
+```sh
+perl -pi -e 's/…/…/' $SBX/packages/backend/src/…    # 注入
+bun run build:binary:e2e && bunx playwright test …  # 跑
+git checkout -- packages/backend/src/…              # ← 还原：fatal，但脚本继续往下走
+```
+
+`git checkout` 报 `fatal: not a git repository` 之后**脚本照跑**（除非 `set -e` 且没被管道吃掉），
+第一条变异于是一路带进第二条的跑——两条变异叠在一起，第二条的红无法归因，整轮结论作废。
+
+三条纪律：
+
+1. 沙箱里还原用**从源仓重新取那一个文件**：`git -C $REPO show origin/main:$REL > $SBX/$REL`；
+2. 还原之后**立刻核对**（`grep -q '<原文特征>' && echo ok || exit 1`），别信「命令跑过了」；
+3. 注入之前也核对一次注入确实生效——注入失败 + 还原失败会合谋造出一个「全绿」的假结论。
+
+同一条也适用于主工作树：那里 `git checkout` 能用，但**共享工作树上它会连别人的改动一起还原**，
+所以自己备份、按字节还原（`cp` 到临时目录，跑完 `cp` 回来，再 `shasum` 对一遍）更安全。
+
+## 给守卫加语料下限时，`readdirSync` 必须写在**断言所在的作用域**里（2026-08-26 实撞）
+
+`census.ts` 的 `corpusFloor` 沿着**本作用域**把被断言的量追回枚举调用（`readdirSync` 一族）。
+隔一层局部 helper 它就追不回来：
+
+```ts
+const baselines = (dir: string) => readdirSync(dir).filter((f) => f.endsWith('.png'))
+test('…', () => {
+  expect(baselines(DIR).length).toBeGreaterThanOrEqual(100)  // ← corpusFloor 记成「没有下界」
+})
+```
+
+于是 RFC-317 T13 报「扫语料却没声明语料下限」，而你明明写了。把枚举调用挪进同一个 test：
+
+```ts
+test('…', () => {
+  const files = readdirSync(resolve(ROOT, DIR)).filter((f) => f.endsWith('.png'))
+  expect(files.length).toBeGreaterThanOrEqual(100)           // ← 这样才认
+})
+```
+
+顺带两条同族规则：下界的阈值必须是**数字字面量**（变量不认，`toBeGreaterThan(N)` 记成 `N+1`）；
+`guard-manifest.json` 的 `minCorpusFiles` 要填**同一个文件里最大的那个下界**。不确定就直接调
+`sourceUnit` + `corpusFloor` / `isCorpusScanner` / `assertsAbsence` / `negativeFixtureAssertions`
+问一遍它自己，比照着猜快得多。
+
+## 往 `ledger-baselines.json` 加条目要插在 **RFC-294 N1 spec 段之前**（2026-08-26 实撞）
+
+`rfc294Canonical.ts` 的 `projectGovernanceArtifacts` 会把所有 N1 spec 条目**重排到队尾**
+（非 spec 条目保持原相对顺序），然后 N1b 断言「投影 === 磁盘」逐字节相等。所以顺手 `append`
+到数组末尾会红在 N1b 上，而报错看起来像「你加的条目内容不对」，其实只是**位置**不对。
+
+插到最后一条非 `rfc294-` 条目之后即可：
+
+```python
+rest = [l for l in ledgers if l['id'] not in mine]
+anchor = max(i for i, l in enumerate(rest) if not l['id'].startswith('rfc294-'))
+ledgers = rest[:anchor + 1] + mine + rest[anchor + 1:]
+```
+
+这条与本文件「`ledger-baselines.json` 同时被两套机制盯着」是同一族：改它之前先想清楚会踩到谁。
