@@ -1486,7 +1486,7 @@
       "corpusScanner": false,
       "minCorpusFiles": null,
       "assertsAbsence": true,
-      "negativeFixture": true,
+      "negativeFixture": false,
       "classified": true,
       "lines": 338
     },

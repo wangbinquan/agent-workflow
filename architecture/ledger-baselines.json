@@ -290,34 +290,6 @@
       "why": "存在、无参、但不在 axe wcag2a/2aa 整页扫描里的页面。只许缩。axe 的语料比焦点环还小（10 页 / 39 页）：/tasks、/users、/scheduled、/reviews 这些每天在用的主屏从来没被扫过"
     },
     {
-      "id": "rfc294-mutation-entrypoints",
-      "file": "architecture/mutation-entrypoints.json",
-      "symbol": "entries",
-      "baseline": 842,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
-    },
-    {
-      "id": "rfc294-node-run-insert-sites",
-      "file": "architecture/mutation-entrypoints.json",
-      "symbol": "nodeRunInsertSites",
-      "baseline": 2,
-      "why": "RFC-294 N1：node_runs INSERT 的 exact single-writer/显式 dispatch 例外分母；任何未登记新写点直接阻断。"
-    },
-    {
-      "id": "rfc294-transaction-callbacks",
-      "file": "architecture/transaction-external-effects.json",
-      "symbol": "entries",
-      "baseline": 231,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
-    },
-    {
-      "id": "rfc294-background-jobs",
-      "file": "architecture/background-jobs.json",
-      "symbol": "entries",
-      "baseline": 180,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
-    },
-    {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
@@ -393,6 +365,34 @@
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
       "baseline": 389,
       "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
+    },
+    {
+      "id": "rfc294-mutation-entrypoints",
+      "file": "architecture/mutation-entrypoints.json",
+      "symbol": "entries",
+      "baseline": 842,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+    },
+    {
+      "id": "rfc294-node-run-insert-sites",
+      "file": "architecture/mutation-entrypoints.json",
+      "symbol": "nodeRunInsertSites",
+      "baseline": 2,
+      "why": "RFC-294 N1：node_runs INSERT 的 exact single-writer/显式 dispatch 例外分母；任何未登记新写点直接阻断。"
+    },
+    {
+      "id": "rfc294-transaction-callbacks",
+      "file": "architecture/transaction-external-effects.json",
+      "symbol": "entries",
+      "baseline": 231,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+    },
+    {
+      "id": "rfc294-background-jobs",
+      "file": "architecture/background-jobs.json",
+      "symbol": "entries",
+      "baseline": 180,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     }
   ],
   "canonicalProjection": {
