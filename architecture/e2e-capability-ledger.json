@@ -3555,8 +3555,13 @@
       "title": "codeHosts 分区：GitLab/GitHub 出站凭据的保存 / 测试连接 / 删除 / TLS 校验开关 / 仓库 URL 前缀",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 CFG-X3：删除 GitLab 连接会连带吊销别人的个人推送凭据——第一次确认只换来影响摘要，第二次确认才真的删，凭据同时消失 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-X4",
@@ -3564,8 +3569,17 @@
       "title": "authentication 分区：OIDC provider 的新增 / 编辑 / 删除 / 连接测试（经 UI）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-iam-oidc-and-acl.spec.ts",
+          "test": "RFC-319 IAM-11: 设置页新增的 provider 立刻能起真实登录流，留空 secret 的编辑不清空密封值，连接测试两种结论分得开，删除后彻底消失 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 CFG-X4：关掉密码登录之后，最后一个已启用的 OIDC provider 在界面与服务端两层都删不掉也停不掉；把密码登录打开，同一个按钮当场松开 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-X6",
@@ -3573,8 +3587,13 @@
       "title": "反代部署下配置 publicBaseUrl（webhook ingress URL / MCP endpoint / 文档片段的 origin 来源）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 CFG-X6：没配 publicBaseUrl 时 webhook 端点老实说「还给不出完整 URL」并给出路径，配上之后同一张卡片换成可复制的完整地址；转发头改不动它 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-06",
@@ -7786,8 +7805,17 @@
       "title": "Changes 页签：worktree 累积 diff、结构化 diff 作用域切换、变更叙述、diff 截断提示",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 TASK-35：变更页签的作用域下拉切到某个节点时，换上来的是那个节点自己写的那一份改动——别的节点的文件不在里面 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 TASK-35：工作树累积 diff 超过 1 MiB 时，接口在正好 1 MiB 处截断并如实标注，变更页签把这件事写在脸上 @nightly"
+        }
+      ]
     },
     {
       "id": "TASK-37",
@@ -9815,8 +9843,13 @@
       "title": "窄屏设置分区折叠为 compact select 并可切换",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 CFG-03：窄屏把设置分区导航整条折叠成下拉，从下拉里选一个分区真的换页并改 URL，回到宽屏时选中的还是它 @nightly"
+        }
+      ]
     },
     {
       "id": "CFG-06",
@@ -10035,8 +10068,13 @@
       "title": "设置分区导航上的「脏 / 结果未知 / 服务端已变」徽标",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 CFG-X5：分区导航的三种徽标各挂各的分区、互相分得开——脏是圆点，服务端已变与结果未知都是感叹号但语气/文案不同 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-02",
@@ -10944,8 +10982,13 @@
       "title": "【原审计漏项】评审区六种空状态（goal / generating / clarifying / error / applied / archived）按 journey.reason 切换文案",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 INTENT-X5：没有候选可评审时，评审区按 journey.reason 换四段文案——正在生成 / 等你作答 / 生成失败 / 已归档，各说各的话 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X6",
@@ -10967,8 +11010,13 @@
       "title": "【原审计漏项】工作上下文弹窗重新打开时，把已排队/失败的 delta 回填进表单供编辑（replacesChangeId）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 INTENT-X7：工作上下文弹窗重开时把已排队的那条 delta 原样回填进表单，接着加一个再提交是**顶掉**旧的那条而不是撞上「已有未决变更」 @nightly"
+        }
+      ]
     },
     {
       "id": "INTENT-X9",
@@ -12091,8 +12139,13 @@
       "title": "在线状态圆点随 /ws/presence 实时增删",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-settings-identity-and-diffs.spec.ts",
+          "test": "RFC-319 UX-39：另一个账号上线 / 下线时，管理员**不刷新**的用户目录上那颗圆点当场改变，且只改他那一颗 @nightly"
+        }
+      ]
     },
     {
       "id": "UX-40",
@@ -12596,13 +12649,9 @@
   ],
   "gapIds": [
     "REPO-43",
-    "CFG-X3",
-    "CFG-X4",
-    "CFG-X6",
     "MEM-49",
     "OPS-X3",
     "OPS-X5",
-    "TASK-35",
     "TASK-X4b",
     "UX-19",
     "UX-47",
@@ -12610,17 +12659,12 @@
     "WG-28",
     "WG-42",
     "WG-X5",
-    "CFG-03",
-    "CFG-X5",
     "DE-41",
     "EVENT-28",
     "EVENT-X4",
-    "INTENT-X5",
-    "INTENT-X7",
     "OPS-007",
     "OPS-X9",
     "REPO-42",
-    "UX-39",
     "UX-45",
     "UX-46"
   ],

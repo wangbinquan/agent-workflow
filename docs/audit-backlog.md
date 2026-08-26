@@ -3621,3 +3621,38 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    `test.skip` / `waitForTimeout`」的 grep 自查都会静默返回「无命中」，全是假的**。
    已改成结构化对比；现在 `NUL: 0`、`file` 报 UTF-8，自查重新有效。
    **教训**：自查 grep 报「零命中」时，先确认文件本身是文本。
+
+## RFC-319 B112（2026-08-26，设置 / 身份 / 差异）：两条真缺陷 + 四处账本对照
+
+1. **【真实缺陷，中】`node_runs.pre_snapshot` 没有任何生产写点 ⇒「结构化 diff 按节点作用域」
+   在真实部署里恒为空。**
+   `gitStashSnapshot`（`packages/backend/src/util/git.ts:2388`）全仓**只有 backend 单测在调用**
+   （RFC-130 删掉 stash 快照之后遗留下来的死写点）。于是
+   `services/structuralDiff/refSelect.ts:26` 的 `resolveNodeScope` 对每个节点都返回 `readonly`，
+   `getNodeStructuralDiff` 回一份 `emptyNodeDiff(..., 'readonly-node-no-snapshot')`。
+   复现：跑任意多节点任务 → 变更页签 → 作用域下拉切到任一节点 → 文件数**恒 0**。
+   这也解释了为什么至今只有 `e2e/rfc250-*` 用 `page.route` 灌假数据点过那个下拉。
+   B112 **未写成断言**；TASK-35(a) 按生产**会**写的形态把快照种进 DB 再走公共读接口
+   （与 `rfc319-worktree-and-commit.spec.ts` REPO-38c 同一套做法），锁住解析链本身。
+2. **【真实缺陷，低 / 死代码】意图评审区的 `applied` 空态永不出现，刚提交完的会话被告知「先描述目标」。**
+   `routes/intent.detail.tsx:1197` 用 `reason === 'applied'` 选 applied 文案，而
+   `services/intent/journey.ts:34-70`（`journey.reason` 的**唯一**产地）从不产出 `'applied'`
+   ——applied 那一档的 reason 是 `checkpoint-ready`（:64）。于是提交完成、无候选时落到 `else` 的
+   `'goal'`，屏幕上写 `Start with the outcome`。下方还有 `checkpointReadyTitle` 卡片兜底，所以严重度低，
+   但 `intent.draftEmptyState.applied.*` 两条 i18n 与那条分支都永不执行。
+   顺带：`shared/src/schemas/intentSession.ts:282-301` 的 `IntentJourneyReasonSchema` 里
+   `applied` / `draft-refining` / `draft-regenerating` / `generation-retrying` 四个值同样没有生产者。
+3. **【账本 / 任务简报有误，已按实际改写】四处**：
+   - **CFG-X6 的「MCP endpoint origin」是假 gap**（我给起草者的简报就是错的）：
+     `e2e/rfc319-overview-and-docs.spec.ts:1152` 的 CFG-40 已完整覆盖，**含 `publicBaseUrl` 压过转发头
+     与子路径拼接**（:1227-1243）。B112 改补真正缺的那格：**没配 `publicBaseUrl` 时 webhook 端点卡片的
+     诚实降级**，并把 `webhookEndpoints.ts:87-97`（只认 config）与 `routes/publicOrigin.ts:17-24`
+     （可回落转发头）**两条故意不同的规则**放进同一次带 `X-Forwarded-*` 的请求里对照。
+   - **CFG-X4 的「新增/编辑/删除/连接测试（经 UI）」四件事已被 IAM-11 全覆盖**。B112 那条守的是
+     IAM-11 没碰的**防自锁**（关掉密码登录后最后一个 OIDC provider 删不掉也停不掉）。
+     该行的 evidence 因此**同时列 IAM-11 与本批那条**（两条都 @nightly，tier 一致）。
+   - **CFG-X3 只有「删除」是真缺口**：保存 / 测试连接 / TLS 开关 / 仓库 URL 前缀已由
+     `rfc319-repo-groups-and-hosts.spec.ts` 的 REPO-34（:1465）与 REPO-36（:1550）覆盖。
+   - **INTENT-X5 的「六种空状态」只有四种可驱动**：按第 2 条，`applied` 不可达；`goal` 在产品里只作为
+     fallback 出现，照字面驱动会得到一条永远红或恒真的用例。B112 只锁 generating / clarifying /
+     error / archived 四种。
