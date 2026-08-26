@@ -6,7 +6,7 @@
     "moduleFiles": 300,
     "productionFiles": 1574,
     "sharedFiles": 151,
-    "symbolsIncludingFileRoots": 17083
+    "symbolsIncludingFileRoots": 17084
   },
   "entries": [
     {
@@ -6893,7 +6893,7 @@
       "file": "packages/backend/src/mcp/tools.ts",
       "id": "owner:packages/backend/src/mcp/tools.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:17abc0b9fdd2c38570eab653e956a88ec9846f1d2b17b3ac974d85d297f8fcc4",
+      "signatureDigest": "sha256:9197d4dda029cee6ab268294410c7fc2146fee71ef88fe128d0a0ef2859701a3",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "resource-catalog",
@@ -6984,7 +6984,7 @@
       "file": "packages/backend/src/mcp/tools.ts",
       "id": "owner:packages/backend/src/mcp/tools.ts#GATE_TOOLS",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:6ddefe12c61bde4c4de4ff5ae9ceb1bfea9640ee4dfd7d809d26763383710843",
+      "signatureDigest": "sha256:e91c1a8fd1b8a44d8c7cbafd4e68718e74d3b03e10919f2de15060e1cb876ac9",
       "status": "legacy-target",
       "symbol": "GATE_TOOLS",
       "targetContext": "resource-catalog",
@@ -108647,6 +108647,19 @@
       "signatureDigest": "sha256:7a456184d4b4d04c0b2f5d0ff6b103a1fa3436f2717fceb4a3bfbc1f7094f72a",
       "status": "legacy-target",
       "symbol": "runKindOf",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/workgroup/room.ts",
+      "id": "owner:packages/backend/src/services/workgroup/room.ts#WorkgroupPendingRow",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:79178fdf1fd8e34ce1cbf79388c68137ba50b47819272aff5d8ef2393fc16524",
+      "status": "legacy-target",
+      "symbol": "WorkgroupPendingRow",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
