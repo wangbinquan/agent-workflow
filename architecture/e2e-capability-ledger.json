@@ -7710,14 +7710,14 @@
     {
       "id": "TASK-21",
       "domain": "任务启动、执行与生命周期操作",
-      "title": "任务列表实时刷新：WS 推送后出现「已更新，点击刷新」横幅",
+      "title": "任务列表实时刷新：WS 推送后就地更新（新行自己进来、状态就地翻面、不整表重建）",
       "risk": "P2",
       "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-task-list-and-filters.spec.ts",
-          "test": "RFC-319 TASK-21：别处新建的任务通过 WS 推出「已更新」横幅，点刷新才把新行取回来 @nightly"
+          "test": "RFC-319 TASK-21：别处新建的任务自己进列表、状态就地翻面，全程不空屏也不换行节点 @nightly"
         }
       ]
     },

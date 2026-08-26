@@ -3780,8 +3780,6 @@ export interface Resources {
     /** RFC-244: dense task operations list. */
     operations: {
       subtitle: string
-      updated: string
-      refresh: string
       viewAria: string
       views: { all: string; active: string; attention: string; finished: string }
       searchPlaceholder: string
@@ -11188,8 +11186,6 @@ export const zhCN: Resources = {
     childTaskUnavailable: '子任务不可见或已删除',
     operations: {
       subtitle: '跟踪执行、处理阻塞，并回看历史结果',
-      updated: '任务列表已有更新',
-      refresh: '刷新列表',
       viewAria: '任务业务视图',
       views: {
         all: '全部',

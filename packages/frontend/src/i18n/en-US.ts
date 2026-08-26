@@ -4947,8 +4947,6 @@ export const enUS: Resources = {
     childTaskUnavailable: 'Child task not visible or deleted',
     operations: {
       subtitle: 'Track execution, handle blockers, and review task history',
-      updated: 'The task list has updates',
-      refresh: 'Refresh list',
       viewAria: 'Task business view',
       views: {
         all: 'All',

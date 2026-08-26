@@ -40,7 +40,6 @@ import { Field } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { ManagedLiveRegionProvider, useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { MultiSelect } from '@/components/MultiSelect'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import {
   OperationsChevronIcon,
   OperationsExpandButton,
@@ -187,7 +186,6 @@ function taskCatalogItemKey(item: Pick<TaskCatalogListItem, 'sourceId' | 'id'>):
 const EMPTY_FACETS = { all: 0, active: 0, attention: 0, finished: 0 } as const
 
 function TasksPage() {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   // Canonicalize only the last committed /tasks URL. During navigation,
   // state.location becomes the pending destination while this component is
@@ -324,7 +322,9 @@ function TasksPage() {
   )
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
   const facets = query.data?.pages[0]?.facets ?? EMPTY_FACETS
-  const sync = useTaskOperationsSync()
+  // 列表就地跟随 WS：状态帧 / 新任务 / 删除都在后台重取后原地替换，不空屏、
+  // 不回顶部、不折叠已展开的分支（见 useTaskOperationsSync 的注释）。
+  useTaskOperationsSync()
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   useEffect(() => {
@@ -358,22 +358,6 @@ function TasksPage() {
         isLoading={query.isLoading}
         error={query.error}
         onRetry={() => void query.refetch()}
-        feedback={
-          sync.dirty ? (
-            <NoticeBanner
-              tone="info"
-              size="compact"
-              testid="tasks-dirty-banner"
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void sync.refresh()}>
-                  {t('tasks.operations.refresh')}
-                </button>
-              }
-            >
-              {t('tasks.operations.updated')}
-            </NoticeBanner>
-          ) : null
-        }
         filters={filters}
         sourceId={selectedSource?.id}
         search={search}
@@ -421,7 +405,6 @@ function RegisteredTasksSurface(props: {
   isLoading: boolean
   error: unknown
   onRetry: () => void
-  feedback: ReactNode
   filters: TaskOperationsFilters
   sourceId?: TaskSourceId
   search: TasksSearch
@@ -470,7 +453,6 @@ function RegisteredTasksSurface(props: {
 
   return (
     <div className="page page--operations page--task-operations">
-      <FeedbackStack variant="section">{props.feedback}</FeedbackStack>
       <div className="operations-surface">
         <PageHeader
           title={t('tasks.title')}

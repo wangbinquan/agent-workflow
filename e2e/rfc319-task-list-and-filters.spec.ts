@@ -10,12 +10,16 @@
 //     打完字对着旧结果看，以为搜的东西不存在。状态过滤不经 URL 往返，用户就无法把
 //     「我现在看的这一屏」发给同事——那是运维协作里最常见的一个动作。
 //   * TASK-17 分页是列表唯一的翻页手段（RFC-311 之后根层显式按钮独占翻页，滚动哨兵已撤，
-//     见 tasks.tsx:673-684 的注记）。根层与子分支各有各的游标：任何一侧把另一侧的翻页
+//     见 tasks.tsx:655-666 的注记）。根层与子分支各有各的游标：任何一侧把另一侧的翻页
 //     状态踩掉，症状都是「点了展开的子任务突然折回去」或「翻到第二页根任务列表回到第一页」。
 //   * TASK-19 两个空态形状不同：全新安装的空态要**教用户下一步做什么**；「无匹配」要给出
 //     **退回全量**的出口。把后者渲染成前者，用户会以为自己的任务全部消失了。
-//   * TASK-21 列表打开着不动的时候，别处（另一个人、定时任务、事件中心）会造出新任务。
-//     推送断了，界面就那么静止着——不报错、不空白、不转圈，用户以为「还没开始」。
+//   * TASK-21 列表打开着不动的时候，别处（另一个人、定时任务、事件中心）会造出新任务、
+//     手上这些任务也在自己推进状态。推送断了，界面就那么静止着——不报错、不空白、不转圈，
+//     用户以为「还没开始」。反过来，同步做得太粗同样是缺陷：2026-08-26 用户报「每次任务
+//     状态更新都会刷新整个任务列表，导致任务列表一直在闪」——当时收到帧只置脏，靠 15 秒
+//     一次的 `resetQueries` 整表重建（缓存清空 ⇒ 整屏 loading ⇒ 滚动位置回顶 ⇒ 展开的
+//     子分支全塌）。现在两头都要成立：**新行自己进来，且屏幕不许闪**。
 //   * TASK-24 取消是运行中任务唯一的用户面刹车。二次确认没了 = 误点一下就杀掉别人跑了
 //     半小时的任务；二次确认坏成「点一下就发请求」同理。
 //   * TASK-45 工作区回收后，任务记录仍在、但盘上的东西没了。界面若不降级，用户会去点一个
@@ -25,20 +29,20 @@
 //
 // 判据源码位置（纯文本引用，禁 GitHub 外链——外链会被 CI 的 markdown link check 逐条请求，
 // 见 CLAUDE.md §opencode 源码自取规则）：
-//   packages/frontend/src/routes/tasks.tsx:72-118        URL 契约：view / q / statuses / type / scope / origin 六个自有键
-//   packages/frontend/src/routes/tasks.tsx:216-232       actor 就绪后把 URL 规范化（默认值键被删掉）
-//   packages/frontend/src/routes/tasks.tsx:249-267       搜索去抖：350ms，触发 replace 导航
-//   packages/frontend/src/routes/tasks.tsx:284-290       filterDimensionCount / hasAnyFilter 的判据
-//   packages/frontend/src/routes/tasks.tsx:292-296       清除过滤 = 导航到裸 /tasks + 焦点回搜索框
-//   packages/frontend/src/routes/tasks.tsx:297-312       应用过滤：默认值不写进 URL
-//   packages/frontend/src/routes/tasks.tsx:445-451       initialEmpty / noMatches 两个空态的判据
-//   packages/frontend/src/routes/tasks.tsx:480-511       initialEmpty 时连工具条都不渲染
-//   packages/frontend/src/routes/tasks.tsx:517-536       tasks-empty / tasks-no-matches 两个空态
-//   packages/frontend/src/routes/tasks.tsx:556-641       筛选弹窗四个维度：类别 / 状态 / 范围 / 来源
-//   packages/frontend/src/routes/tasks.tsx:723-746       根层「加载更多」尾注（不 disabled，见 RFC-311 注记）
-//   packages/frontend/src/routes/tasks.tsx:876-895       子分支「加载更多子任务」，独立游标
+//   packages/frontend/src/routes/tasks.tsx:71-117        URL 契约：view / q / statuses / type / scope / origin 六个自有键
+//   packages/frontend/src/routes/tasks.tsx:214-230       actor 就绪后把 URL 规范化（默认值键被删掉）
+//   packages/frontend/src/routes/tasks.tsx:247-265       搜索去抖：350ms，触发 replace 导航
+//   packages/frontend/src/routes/tasks.tsx:282-288       filterDimensionCount / hasAnyFilter 的判据
+//   packages/frontend/src/routes/tasks.tsx:290-294       清除过滤 = 导航到裸 /tasks + 焦点回搜索框
+//   packages/frontend/src/routes/tasks.tsx:295-310       应用过滤：默认值不写进 URL
+//   packages/frontend/src/routes/tasks.tsx:428-434       initialEmpty / noMatches 两个空态的判据
+//   packages/frontend/src/routes/tasks.tsx:462-493       initialEmpty 时连工具条都不渲染
+//   packages/frontend/src/routes/tasks.tsx:499-518       tasks-empty / tasks-no-matches 两个空态
+//   packages/frontend/src/routes/tasks.tsx:538-623       筛选弹窗四个维度：类别 / 状态 / 范围 / 来源
+//   packages/frontend/src/routes/tasks.tsx:705-728       根层「加载更多」尾注（不 disabled，见 RFC-311 注记）
+//   packages/frontend/src/routes/tasks.tsx:858-877       子分支「加载更多子任务」，独立游标
 //   packages/frontend/src/hooks/useTaskOperationsPage.ts:16-44   每页 limit=50，游标来自 nextCursor
-//   packages/frontend/src/hooks/useTaskOperationsSync.ts:8-45    DIRTY_TYPES 收到即置脏（refetchType:'none'，不自动重取）
+//   packages/frontend/src/hooks/useTaskOperationsSync.ts:32-67   六类帧 → 保留数据的 invalidateQueries（就地重取，绝不清缓存）
 //   packages/frontend/src/components/operations/OperationsToolbar.tsx:66-125  页签 / 搜索 / 筛选 / 清除的 testid 与角色
 //   packages/frontend/src/components/ConfirmButton.tsx:70-99     两击确认：第一击只换文案，不发请求
 //   packages/frontend/src/routes/tasks.detail.tsx:526-531        cancelable 的四个状态
@@ -74,7 +78,7 @@
 //     （直接 POST /cancel）。本文件的 TASK-24 锁的是用户真正走的那条路：详情页按钮 + 二次
 //     确认，重点在「第一击不能发请求」。
 //   · `e2e/live-list-updates.spec.ts` 的 UX-30 锁的是 `/memory` 的实时刷新。任务列表走的是
-//     另一条通道（`/ws/tasks` + 置脏横幅，不是自动重取），本文件的 TASK-21 单独覆盖。
+//     另一条通道（`/ws/tasks` + 就地重取），本文件的 TASK-21 单独覆盖。
 //
 // 本文件**不用 `page.route` 拦任何 API**（因此也不需要 `unrouteAll`）：整条链路跑真 daemon +
 // 真 SQLite。所有夹具要么走产品自己的写接口，要么直连落库（下面每处都注明了为什么只能直连）。
@@ -1153,59 +1157,88 @@ test('RFC-319 TASK-17：根层「加载更多」与子分支「加载更多子�
 })
 
 // ---------------------------------------------------------------------------
-// TASK-21 —— WS 推送后的「已更新，点击刷新」横幅
+// TASK-21 —— WS 推送后的就地更新（不空屏、不换行节点）
+//
+// 2026-08-26 契约变更：此前这里锁的是「置脏横幅 + 点刷新才取回新行」。用户实测反馈
+// 「每次任务状态更新都会刷新整个任务列表，导致任务列表一直在闪」——那个横幅背后是
+// 15 秒一次的 `resetQueries` 整表重建：缓存清空 ⇒ 整屏换成 tasks-loading ⇒ VirtualList
+// 连滚动位置一起重挂 ⇒ 展开着的子分支全塌。用户当日拍板：状态就地更新、新行也自动
+// 进来、横幅取消。于是本用例改锁新契约的两头——**该进的行自己进来，且屏幕不许闪**。
 // ---------------------------------------------------------------------------
 
-test('RFC-319 TASK-21：别处新建的任务通过 WS 推出「已更新」横幅，点刷新才把新行取回来 @nightly', async ({
+test('RFC-319 TASK-21：别处新建的任务自己进列表、状态就地翻面，全程不空屏也不换行节点 @nightly', async ({
   page,
 }) => {
   await openTasks(page)
-  await expect(
-    page.getByTestId('task-row-rfc319tl-run'),
-    '列表没渲染出来 ⇒ WS 订阅也不会建立，这条用例后面全是空转',
-  ).toBeVisible()
-  await expect(
-    page.getByTestId('tasks-dirty-banner'),
-    '什么都还没发生就挂着「已更新」横幅 ⇒ 用户会习惯性忽略它，真正有更新时也不看了',
-  ).toHaveCount(0)
+  const anchorRow = page.getByTestId('task-row-rfc319tl-run')
+  await expect(anchorRow, '列表没渲染出来 ⇒ WS 订阅也不会建立，这条用例后面全是空转').toBeVisible()
+
+  // 判据①：给一条**与本次推送无关**的既有行打标记。整表重建会把它连同整棵列表
+  // 卸载重建，标记随之消失；就地更新则复用同一个 DOM 节点。用户能感知到的差别就是
+  // 滚动位置、展开的子分支保不保得住。
+  await anchorRow.evaluate((el) => {
+    ;(el as unknown as Record<string, unknown>).__task21Mark = true
+  })
+  // 判据②：全程盯着整表 loading 有没有被插入过一次——那一下就是用户说的「闪」。
+  await page.evaluate(() => {
+    const bag = window as unknown as { __task21Flash?: number }
+    bag.__task21Flash = 0
+    const hit = (node: Node): boolean =>
+      node instanceof HTMLElement &&
+      (node.matches('[data-testid="tasks-loading"]') ||
+        node.querySelector('[data-testid="tasks-loading"]') !== null)
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of Array.from(record.addedNodes)) {
+          if (hit(node)) bag.__task21Flash = (bag.__task21Flash ?? 0) + 1
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true })
+  })
 
   // 触发是**确定性**的：走产品自己的 POST /api/tasks，它在任务落库后同步广播
   // task.created（services/task.ts:3265-3268）。不靠任何后台定时任务碰巧跑。
   const liveName = `RFC-319 taskline live ${Date.now().toString(36)}`
   const liveTaskId = await launchLiveTask(liveName)
 
+  const liveRow = page.getByTestId(`task-row-${liveTaskId}`)
   await expect(
-    page.getByTestId('tasks-dirty-banner'),
-    '别处新建了任务，已经打开的列表没有收到推送 ⇒ 界面就那么静止着：不报错、不空白、' +
-      '不转圈，用户以为任务还没开始（/ws/tasks 的 task.created 属于 DIRTY_TYPES，' +
-      'useTaskOperationsSync.ts:8-19）',
+    liveRow,
+    '别处新建了任务，已经打开的列表没有把它显示出来 ⇒ 界面就那么静止着：不报错、' +
+      '不空白、不转圈，用户以为任务还没开始（/ws/tasks 的 task.created 在 ' +
+      'useTaskOperationsSync.ts:32-39 的规则表里）',
   ).toBeVisible({ timeout: 30_000 })
   await expect(
-    page.getByTestId('tasks-dirty-banner'),
-    '横幅没有说清楚发生了什么 ⇒ 一条没有正文的提示条，用户不知道该不该点',
-  ).toContainText('The task list has updates')
-
-  // 契约的另一半：置脏**不自动重取**（refetchType: 'none'，useTaskOperationsSync.ts:28-31）。
-  // 用户正在读的这一屏不能在他眼皮底下自己跳动——那是最容易点错行的一种交互。
-  await expect(
-    page.getByTestId(`task-row-${liveTaskId}`),
-    '新任务没等用户点刷新就自己插进了列表 ⇒ 用户正在读的行会在指针底下位移，' +
-      '误点的代价是打开 / 取消错的任务；横幅也就失去了存在意义',
-  ).toHaveCount(0)
-
-  await page.getByTestId('tasks-dirty-banner').getByRole('button', { name: 'Refresh list' }).click()
-  await expect(
-    page.getByTestId(`task-row-${liveTaskId}`),
-    '点了刷新新任务仍然没出现 ⇒ 横幅是在骗人：它说有更新，点了却什么都不给',
-  ).toBeVisible({ timeout: 30_000 })
-  await expect(
-    page.getByTestId(`task-row-${liveTaskId}`),
-    '新行拿回来了但标题不对 ⇒ 用户在列表上认不出刚才启动的是哪一条',
+    liveRow,
+    '新行进来了但标题不对 ⇒ 用户在列表上认不出刚才启动的是哪一条',
   ).toContainText(liveName)
+
+  // 这条 live 任务会走到 failed（同 TASK-45 的语料）。用它锁「状态就地翻面」：
+  // 服务端到终态之后，列表上那一行必须自己变，且**不是**靠整表重建变的。
+  await waitForTaskStatus(
+    liveTaskId,
+    'failed',
+    '任务没有走到终态 ⇒ 「状态就地翻面」这半个契约无从判定',
+  )
   await expect(
-    page.getByTestId('tasks-dirty-banner'),
-    '刷新之后横幅还挂着 ⇒ 用户无从判断「这一屏到底是不是最新的」，只能反复点',
-  ).toHaveCount(0)
+    liveRow.locator('.status-chip', { hasText: /^failed$/i }),
+    '服务端已经失败，列表上那一行还挂着旧状态 ⇒ 用户照着一屏过期状态分诊',
+  ).toBeVisible({ timeout: 30_000 })
+
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __task21Flash?: number }).__task21Flash ?? -1,
+    ),
+    '同步期间整张列表被 loading 顶替过 ⇒ 这就是用户报的「任务列表一直在闪」：' +
+      '每次状态更新都空屏一下，滚动位置回顶，展开的子分支全塌',
+  ).toBe(0)
+  expect(
+    await anchorRow.evaluate(
+      (el) => (el as unknown as Record<string, unknown>).__task21Mark === true,
+    ),
+    '与这次推送无关的行也被换成了新的 DOM 节点 ⇒ 列表是整表重建出来的，' +
+      '用户手上的滚动位置和展开态每同步一次就丢一次',
+  ).toBe(true)
 })
 
 // ---------------------------------------------------------------------------

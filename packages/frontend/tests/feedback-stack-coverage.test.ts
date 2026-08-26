@@ -27,9 +27,14 @@ const COVERAGE: ReadonlyArray<readonly [file: string, minimumStacks: number]> = 
   ['routes/mcps.new.tsx', 1],
   ['routes/plugins.detail.tsx', 1],
   ['routes/plugins.new.tsx', 1],
-  // User-reported regression (2026-08-15): the live-update banner above the
-  // task operations surface also needs the standard section gap.
-  ['routes/tasks.tsx', 2],
+  // Was 2 for the live-update banner above the task operations surface
+  // (user-reported spacing regression, 2026-08-15). That banner is gone as of
+  // 2026-08-26: the list now syncs in place on every WS frame instead of going
+  // dirty and rebuilding itself, so there is no second feedback group left to
+  // space (user report: "每次任务状态更新都会刷新整个任务列表，一直在闪").
+  // The remaining stack is the error group — it still must not sit in a bare,
+  // zero-gap page container, which is what this row keeps locking.
+  ['routes/tasks.tsx', 1],
   ['routes/reviews.tsx', 1],
   ['routes/clarify.tsx', 1],
   ['routes/scheduled.tsx', 1],

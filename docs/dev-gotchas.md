@@ -2995,3 +2995,34 @@ ledgers = rest[:anchor + 1] + mine + rest[anchor + 1:]
 ```
 
 这条与本文件「`ledger-baselines.json` 同时被两套机制盯着」是同一族：改它之前先想清楚会踩到谁。
+
+## WS 驱动的列表刷新一律用 `invalidateQueries`；`resetQueries` 会把用户正在看的那一屏清空（2026-08-26 用户实报）
+
+用户报 `/tasks`：「每次任务状态更新都会刷新整个任务列表，导致任务列表一直在闪」。根因不是
+渲染性能，是**刷新姿势**：`useTaskOperationsSync` 收到 WS 帧后只置脏（`refetchType:'none'`），
+再由一个 15 秒定时器调 `queryClient.resetQueries` 整表重建（RFC-244 §5.3 的原设计）。
+
+`resetQueries` 的语义是**把查询清回初始态**，不是「重新取一遍」：
+
+- `data` 变 `undefined` ⇒ `isLoading` 翻 true ⇒ 页面里 `{isLoading && <LoadingState/>}` 那一支
+  接管，整屏换成转圈；
+- `{items.length > 0 ? <List/> : null}` 这类写法会把列表整个**卸载**，`VirtualList` 重挂后
+  滚动位置回到顶部，展开着的子分支（同前缀 key 的子查询）也各自塌成 spinner；
+- 对 `useInfiniteQuery` 还额外**丢掉已翻的页**，塌回第 1 页（RFC-311 的
+  `audit-2026-08-18.md:165` 当时就记下了这一条，但没人把它当缺陷处理）。
+
+`invalidateQueries`（默认 `refetchType: 'active'`）则保留 `data`：后台把已加载的各页重取一遍，
+全部到齐后**原子替换**，React 按 key 复用行的 DOM 节点 ⇒ 状态 chip / 耗时就地变，滚动位置、
+展开态、翻出来的页全留着。列表面的实时同步要的是后者；`resetQueries` 只适合「换了身份 / 换了
+筛选维度，旧数据必须当场作废」的场景。
+
+**测这件事的判据比结论更容易写错**：
+
+- 组件测里如果 mock 的 `fetch` 立即 resolve，「清空 → 重填」会被合并进同一个 React 批次，
+  中间那一帧空态**根本不会提交到 DOM**——把实现换回 `resetQueries`，用例照样全绿（2026-08-26
+  实测，两条断言当场作废）。mock 必须能**挂住**请求（`hold()` / `release()`），在「请求已发出、
+  响应还没回」的那一刻断言，才复现得出用户看到的那一下。
+- 有效的判据有两条，都对着用户真正感知的东西：①用 `MutationObserver` 数整表 loading 有没有被
+  插入过一次；②更新前给某个**与本次推送无关**的行元素挂一个标记属性，更新后看标记还在不在
+  ——整表重建会换掉 DOM 节点，就地更新不会。两条在真浏览器 e2e 里同样成立（本次
+  `rfc319-task-list-and-filters.spec.ts` TASK-21 即按此改写，变异实证咬中）。

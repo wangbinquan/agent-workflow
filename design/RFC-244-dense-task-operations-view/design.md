@@ -563,6 +563,16 @@ identity 解析或用 title 替代正文。
 
 ### 5.3 Operations-specific dirty channel
 
+> **2026-08-26 已被取代（缺陷修复，非 RFC）**：用户实测报「每次任务状态更新都会刷新整个任务
+> 列表，导致任务列表一直在闪」。本节第 1–2 点描述的「置脏横幅 + 15 秒 `resetQueries` 整表
+> 重建」正是那个现象的来源——`resetQueries` 把缓存清回初始态，于是整屏换成 loading、
+> `VirtualList` 连滚动位置一起重挂、展开着的子分支全塌、已翻的页塌回第 1 页。用户当日拍板
+> 改为：**任一帧到达即做保留数据的 `invalidateQueries` 就地重取，新行也自动进来，横幅与手动
+> 刷新按钮取消**。现行实现见 `packages/frontend/src/hooks/useTaskOperationsSync.ts` 的文件注释；
+> 判据在 `packages/frontend/tests/{task-operations-sync,tasks-list-live-update}.test.tsx` 与
+> `e2e/rfc319-task-list-and-filters.spec.ts` 的 TASK-21。本节其余部分（frame 集合、授权可见性、
+> URL filters / expansion 保留、live region 播报）不变，仅供历史对照。
+
 `/tasks` 不再调用 `useTasksSync()`，改用 `useTaskOperationsSync()`。它复用同一 `/ws/tasks` 物理
 连接，但 rules 对下列 frame 只做 side effect（return void），绝不直接 invalidate query：
 
