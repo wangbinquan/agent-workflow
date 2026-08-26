@@ -6523,7 +6523,7 @@
       ],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:688",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:686",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6537,7 +6537,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:688",
+      "symbol": "$setTimeout:686",
       "targetContext": "integration"
     },
     {
@@ -6546,7 +6546,7 @@
       ],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:730",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:728",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6560,7 +6560,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:730",
+      "symbol": "$setTimeout:728",
       "targetContext": "integration"
     },
     {
@@ -6569,7 +6569,7 @@
       ],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:777",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:775",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6583,7 +6583,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:777",
+      "symbol": "$setTimeout:775",
       "targetContext": "integration"
     },
     {
@@ -9660,5 +9660,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d"
+  "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19"
 }

@@ -5545,23 +5545,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
-      "fromPath": "packages/backend/src/services/taskExecutionParticipants.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4e3ab3a31b322a2eebf0",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createTaskExecutionContext",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "createTaskExecutionContext",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts",
       "fromSymbol": "$file",
@@ -8248,23 +8231,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
-      "fromPath": "packages/backend/src/services/taskExecutionParticipants.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7d556abe2f2627b638fe",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createProcessEffectAttemptObserver",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "createProcessEffectAttemptObserver",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
       "fromPath": "packages/backend/src/routes/code.ts",
       "fromSymbol": "$file",
@@ -10813,6 +10779,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
+      "fromPath": "packages/backend/src/services/taskExecutionParticipants.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a53830967e380aa35491",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createTaskExecutionContext",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "createTaskExecutionContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -13057,20 +13040,20 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
+      "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "fromPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "fromSymbol": "$file",
-      "id": "exception:import:d12e564d8f73260bcda4",
+      "id": "exception:import:d1363fa7a1b360a87ce7",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
       "owner": "task-execution",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#taskExecutionModule",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createProcessEffectAttemptObserver",
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "taskExecutionModule",
+      "toSymbol": "createProcessEffectAttemptObserver",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -15078,6 +15061,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeChangeCandidates",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
+      "fromPath": "packages/backend/src/services/taskExecutionParticipants.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f0f61dc055dab82c8722",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#taskExecutionModule",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "taskExecutionModule",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -20793,22 +20793,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/taskExecutionParticipants.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
-      "id": "import:4e3ab3a31b322a2eebf0",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "createTaskExecutionContext",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createTaskExecutionContext"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts#$file",
@@ -23530,22 +23514,6 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/taskExecutionParticipants.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
-      "id": "import:7d556abe2f2627b638fe",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "createProcessEffectAttemptObserver",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createProcessEffectAttemptObserver"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/code.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
       "id": "import:7d6a91ae383300d4e1fe",
@@ -26072,6 +26040,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/required-ports.ts#EventRoutingSubscriptionDirectoryPort"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/taskExecutionParticipants.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
+      "id": "import:a53830967e380aa35491",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "createTaskExecutionContext",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createTaskExecutionContext"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
@@ -28456,20 +28440,20 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#collectDataflowInboundEdges"
     },
     {
-      "edgeKind": "value",
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/taskExecutionParticipants.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
-      "id": "import:d12e564d8f73260bcda4",
+      "id": "import:d1363fa7a1b360a87ce7",
       "owner": "task-execution",
       "removeAfterWave": "W4/W9",
       "role": "legacy-inbound",
       "specifier": "@/modules/task-execution/public/participants",
       "syntax": "static-import",
-      "targetSymbol": "taskExecutionModule",
+      "targetSymbol": "createProcessEffectAttemptObserver",
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#taskExecutionModule"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createProcessEffectAttemptObserver"
     },
     {
       "edgeKind": "value",
@@ -30456,6 +30440,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeChangeCandidates"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/taskExecutionParticipants.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
+      "id": "import:f0f61dc055dab82c8722",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "taskExecutionModule",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#taskExecutionModule"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/code.ts",
@@ -31730,7 +31730,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d",
+  "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

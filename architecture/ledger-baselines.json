@@ -14,10 +14,7 @@
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "symbol": "ALLOWLIST",
       "baseline": 15,
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表",
-      "allowGrowth": {
-        "why": "RFC-328 为 process effect 增加 pre-activation managed launcher；它保留全部既有进程能力，同时确保 durable receipt 先于目标命令执行。"
-      }
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
     },
     {
       "id": "rfc328-capability-factory-call-sites",
@@ -311,10 +308,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 898,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-328 新增 durable ownership、effect attempt 与 exact participant mutation entrypoints；全部由 canonical writer/effect 守卫逐项分类，不能通过删除清单掩盖真实写面。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -335,10 +329,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 215,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-328 把 recovery、process/effect observer 与 execution participant 纳入 daemon lifecycle 清点；新增项均有 exact owner，不是放宽后台任务策略。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -380,20 +371,14 @@
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 369,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-328 增加唯一 legacy task-execution participant facade，把潜在 internal ingress 收敛为 exact public edge；新增 facade 是清债而非新增越界。"
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 286,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-328 将 execution context、attempt observer、maintenance 与 recovery 的 provider-facing names 归位到 exact public/participants，并保持 capability factory 调用点白名单。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -414,14 +399,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 17440,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-328 新增 effect-resource wait、platform query vocabulary 与 exact participant facade，并把 capability declarations 归到 task-execution owner；每个新增 symbol 都有唯一 owner。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d",
+    "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -434,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9a1f6f642570969f0dd71489b000db68d08d6645",
-    "contentDigest": "sha256:b898e8fd91434d4b8474a0687159550f10c016fe3ad1c27ee06d249a753af9e4",
+    "currentSnapshotSha": "b0aa3fadb080c02e3e22de361b4d1dd29f5a7e1f",
+    "contentDigest": "sha256:97d106d5487903c0fd60b8c742a0820fb5e15c328c0849e9d1b71bb644ac7839",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
